@@ -1,0 +1,31 @@
+name: harness-ci
+
+on:
+  push:
+    paths:
+      - "harness/**"
+      - ".github/workflows/harness-ci.yml"
+  pull_request:
+    paths:
+      - "harness/**"
+      - ".github/workflows/harness-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Type check (mypy strict)
+        run: uv run mypy src tests
+      - name: Tests (excluding live)
+        run: uv run pytest -m "not live" -q

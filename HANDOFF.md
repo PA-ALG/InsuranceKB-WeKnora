@@ -33,7 +33,8 @@
 
 ## 四、下一步计划（按序）
 
-1. ✅ SDD 已启动（2026-07-11 业务方确认开工）：第一个 change `openspec/changes/001-harness-scaffold/`（harness 脚手架 + WeKnora 适配层）**提案已写好，待业务方过目后开发**；
+1. ✅ change 001 **开发完成并验收**（2026-07-11）：`harness/` src 布局脚手架 + WeKnora REST 适配层（httpx 客户端、错误分型、slug 串行化锁、指数退避重试、Langfuse no-op 降级）+ 23 个契约/单元测试 + harness CI。验证：ruff/mypy(strict)/pytest 全绿（21 passed，2 live 跳过）。**注意 git 提交均留在本地分支 `feature/insurance-kb-foundation`：GitHub 账号 `yiyinianhua` 对本仓库暂无写权限（push 403），业务方决定权限到位后统一推送**；
+1a. ✅ change 002（金标 S0）提案已获业务方确认（2026-07-11），开发中；
 2. **S0：金标与评估子系统**（change 002，`harness/goldenset`，设计见 05）——用 `dataset/shouxian_product/` 13 产品跑出金标 v0.1；注意每个产品的 `product_meta.json` 含 planCode/versionNo/备案文号/销售状态/生效日期，是产品主数据与 B-1/B-2 字段的 ground truth；
 3. S1（master plan P0-1）：产品主数据/别名 + 文档分类与产品路由（change 003）；
 4. 向腾讯上游开 3 个 Issue/PR（02 §5 补丁清单）。
@@ -49,7 +50,8 @@
 5. **"未抽取到"绝不能写成"不存在"**——三态字段是硬约束（03），豁免类字段尤其如此。
 6. **GPL 边界**：nashsu/llm_wiki 及 LLM-wiki-black 代码不得复制进本仓库；字段字典等自研数据可迁移（06 §合规），最终需法务确认一次。
 7. **本仓库 git 历史是压平的单提交**；`upstream` remote 指官方 Tencent/WeKnora，跟版走版本列车（02 §8），不要直接跟 main。
-8. 样本 PDF、金标数据含公司资料，**不入 git**；注意 .gitignore。
+8. 样本语料经业务方确认已入库（`dataset/shouxian_product/`）；但金标产物含模型输出，release 前检查敏感信息。
+9. **本机 shell 有 SOCKS 代理环境变量（ALL_PROXY 等），曾导致 httpx 全部请求挂掉**——适配层已用 `trust_env=False` 修复；新写任何 HTTP 客户端都要注意这一点。GitHub 访问也受此影响（SSL 间歇性失败，重试即可）。
 
 ## 六、工作方式约定（业务方明确要求）
 

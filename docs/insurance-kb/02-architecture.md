@@ -128,14 +128,16 @@ master plan 的优先级（P0→P3）与切片（S1→S7）**保持不变**，�
 ```
 InsuranceKB-WeKnora/
 ├── internal/ docreader/ frontend/ ...   # WeKnora 上游原样（不动）
-├── harness/                             # ★ 寿险知识编译 Harness（Python）
-│   ├── pyproject.toml
-│   ├── compiler/        # 抽取/校验/合并/发布管道（04）
-│   ├── goldenset/       # 金标注 Agent + eval runner（05）
-│   ├── workbench/       # 审核/仪表盘工作台
-│   ├── mcp/             # insurance MCP server
-│   ├── adapters/weknora/ # WeKnora REST 适配层（唯一 API 感知点）
-│   ├── schemas/         # schema 注册表（YAML，版本化）
+├── harness/                             # ★ 寿险知识编译 Harness（Python，src 布局）
+│   ├── pyproject.toml   # uv 管理；ruff/mypy/pytest 配置
+│   ├── src/insurance_harness/
+│   │   ├── config.py    # Pydantic Settings（HARNESS_ 前缀，零硬编码）
+│   │   ├── compiler/    # 抽取/校验/合并/发布管道（04）
+│   │   ├── goldenset/   # 金标注 Agent + eval runner（05）
+│   │   ├── workbench/   # 审核/仪表盘工作台
+│   │   ├── mcp/         # insurance MCP server
+│   │   ├── adapters/weknora/ # WeKnora REST 适配层（唯一 API 感知点）
+│   │   └── schemas/     # schema 注册表（YAML，版本化）
 │   ├── migrations/      # Harness 自有 DB 迁移
 │   └── tests/
 ├── deploy/patches/                      # 未上游化补丁（≤3）
