@@ -26,3 +26,10 @@ class HarnessSettings(BaseSettings):
 
     # --- HTTP ---
     http_timeout_s: float = 30.0
+
+    # --- 金标注（change 002；均可选，仅 LiteLLMClient 需要） ---
+    goldenset_model: str | None = None
+    goldenset_api_base: str | None = None
+    goldenset_api_key: str | None = None
+    # 单次标注调用送入的文档文本上限（字符）；超限按页窗口过滤（spec G2.6）
+    goldenset_doc_char_budget: int = 30_000

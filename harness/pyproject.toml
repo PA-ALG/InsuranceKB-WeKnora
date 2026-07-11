@@ -8,7 +8,13 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "tenacity>=8.3",
+    "pyyaml>=6.0",
+    "pdfplumber>=0.11",
 ]
+
+[project.optional-dependencies]
+# 金标注真实模型调用（spec G5：CI 不装此组，LiteLLMClient 延迟导入）
+llm = ["litellm>=1.40"]
 
 [dependency-groups]
 dev = [
@@ -17,6 +23,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.6",
     "mypy>=1.11",
+    "types-PyYAML>=6.0",
 ]
 
 [build-system]
@@ -39,6 +46,10 @@ python_version = "3.12"
 
 [[tool.mypy.overrides]]
 module = "langfuse.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pdfplumber.*", "litellm.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
