@@ -1,0 +1,23 @@
+# Harness 自有开发数据库（与上游 WeKnora compose 完全独立，端口错开）。
+# 启动：docker compose -f docker-compose.harness.yml up -d
+# 连接串：postgresql+psycopg://harness:harness@localhost:5442/insurance_kb
+services:
+  harness-postgres:
+    image: postgres:16
+    container_name: insurance-harness-postgres
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: insurance_kb
+    ports:
+      - "5442:5432"
+    volumes:
+      - harness_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d insurance_kb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  harness_pg_data:

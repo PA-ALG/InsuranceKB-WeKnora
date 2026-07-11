@@ -1,7 +1,13 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-11（架构讨论定稿 + 首批设计文档产出）
+> 最后更新：2026-07-12（金标标注 11/13 后因 token 限额搁置，现场已固化；003 为 WIP）
+
+## ⓪ 当前最优先事项（接手先看这里）
+
+1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
+2. **change 003 是半成品**（开发 fork 同因 token 限额中断）：`harness/src/insurance_harness/{db,product}/`、migrations、docker-compose.harness.yml、4 个测试文件已写出；当前 `pytest`＝**76 passed / 1 failed**（`test_product_aliases.py::test_short_strips_type_suffix`，断在 TDD 红绿循环中途）。接手者按 `openspec/changes/003-product-master-routing/specs/routing.md` P1~P5 继续，修复该测试并补齐 CLI 与验收报告。
+3. **git push 仍被挡**：账号 `yiyinianhua` 无写权限（403），全部提交在本地分支 `feature/insurance-kb-foundation`，权限到位后统一推送。
 
 ## 一、我们在做什么
 

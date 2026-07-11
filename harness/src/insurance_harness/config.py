@@ -27,6 +27,9 @@ class HarnessSettings(BaseSettings):
     # --- HTTP ---
     http_timeout_s: float = 30.0
 
+    # --- Harness 自有数据库（change 003；生产 Postgres，SQLite 仅测试） ---
+    db_url: str | None = None
+
     # --- 金标注（change 002；均可选，仅 LiteLLMClient 需要） ---
     goldenset_model: str | None = None
     goldenset_api_base: str | None = None

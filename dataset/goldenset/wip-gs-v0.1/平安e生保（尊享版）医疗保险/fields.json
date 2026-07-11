@@ -1,0 +1,575 @@
+{
+ "line_key": "medical",
+ "sheet": "医疗保险（医疗险）",
+ "schema_version": "v1.1+b31a411c621c",
+ "fields": [
+  {
+   "field_id": "zh_fd9a0b9fa3",
+   "name": "险种简称",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_1a3227c6ce",
+   "name": "险种名称",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_8bd90889d3",
+   "name": "开始使用时间",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_f1de0de938",
+   "name": "结束使用时间",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_ad4a95859a",
+   "name": "产品类别",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_0b3894ed2a",
+   "name": "产品类型",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_789479e2d4",
+   "name": "销售渠道",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_346f0dac8c",
+   "name": "发布外网",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_5162df17d8",
+   "name": "销售状态",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_67ee7025ef",
+   "name": "主附加险",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_89e518b987",
+   "name": "产品简介",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "Kimichat生成"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_6a3bd6cdbf",
+   "name": "产品特色",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品说明书"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_a271d96039",
+   "name": "保单权益",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_f8cc996739",
+   "name": "可享服务",
+   "description": "臻享RUN健康管理服务、居家养老、高端康养",
+   "value_type": "short",
+   "allowed_sources": [
+    "三大服务对应的产品清单"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_14b93ce275",
+   "name": "交费期限",
+   "description": "10/15/20/30年交",
+   "value_type": "short",
+   "allowed_sources": [
+    "口袋E"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_17a83223e4",
+   "name": "交费方式",
+   "description": "趸交、年交、半年交、季交、月交",
+   "value_type": "short",
+   "allowed_sources": [
+    "口袋E",
+    "产品说明书包含部分内容"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_313cabffd8",
+   "name": "犹豫期",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_f558f0a88f",
+   "name": "等待期",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_d62301d84c",
+   "name": "宽限期",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_540e1969e3",
+   "name": "可覆盖风险",
+   "description": "需要确定映射规则：保险金-风险",
+   "value_type": "short",
+   "allowed_sources": [
+    "保障内容来做映射？"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_0c5a8e59e2",
+   "name": "产品搭配规则",
+   "description": "主要针对聚财宝、或者固定产品组合",
+   "value_type": "short",
+   "allowed_sources": [
+    "来自口袋E？"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_7598a3116c",
+   "name": "保障期间",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品说明书"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_1a5675a37a",
+   "name": "保障期间分类",
+   "description": "短期、长期、终身",
+   "value_type": "short",
+   "allowed_sources": [
+    "根据保障期间计算"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_c4f4b0d48a",
+   "name": "投保年龄",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品说明书"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_7fe8603c08",
+   "name": "费用",
+   "description": "指的是什么费用",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_b7ceabc3c0",
+   "name": "产品档次",
+   "description": "和收入保留一个",
+   "value_type": "short",
+   "allowed_sources": [
+    "根据适用人群收入计算"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_17e15e0c5a",
+   "name": "保单件数",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品芯平台同步"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_a17bd1c3f3",
+   "name": "退保率",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_dcae594f8b",
+   "name": "理赔件数",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_23a2625781",
+   "name": "理赔金额",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_7bf05bc576",
+   "name": "保险期间和续保",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品说明书重要字段",
+    "文本较长"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_1ec5e3f2cc",
+   "name": "犹豫期及合同解除（退保）",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_b4b770e114",
+   "name": "投保范围",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "regulatory_filing_no",
+   "name": "条款备案/批复文号",
+   "description": "条款首页必有；多产品文档路由的确定性锚点",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "clause_version",
+   "name": "条款版本标识",
+   "description": "与条款生效日期共同构成版本身份，区别于\"开始使用时间\"（销售口径）",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "high"
+  },
+  {
+   "field_id": "clause_effective_date",
+   "name": "条款生效日期",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "high"
+  },
+  {
+   "field_id": "exclusions_official",
+   "name": "责任免除",
+   "description": "完整结构化免责清单，非亮点式字段",
+   "value_type": "long",
+   "allowed_sources": [
+    "免责条款"
+   ],
+   "risk_level": "high"
+  },
+  {
+   "field_id": "waiting_period_claim_handling",
+   "name": "等待期内出险处理",
+   "description": "返还保费 vs 现金价值",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "high"
+  },
+  {
+   "field_id": "reinstatement",
+   "name": "复效条款",
+   "description": "效力中止与复效条件",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "medium"
+  },
+  {
+   "field_id": "claim_filing_requirements",
+   "name": "理赔申请时效与申请材料",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "medium"
+  },
+  {
+   "field_id": "reduced_paid_up",
+   "name": "减额缴清",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "medium"
+  },
+  {
+   "field_id": "zh_7d7fe38f09",
+   "name": "癌症医疗",
+   "description": "保障责任内的癌症相关保险金，如无则非癌症医疗",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_09a5d9e54e",
+   "name": "保什么",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_58d313ee26",
+   "name": "保障人群",
+   "description": "儿童（0-17岁）\n成人（18-60岁）\n老人（60岁以上）",
+   "value_type": "short",
+   "allowed_sources": [
+    "根据投保年龄映射"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_74aa1b9c93",
+   "name": "保证续保",
+   "description": "续保规则",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_ca6e0226c2",
+   "name": "保证续保期",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_2df7d6256c",
+   "name": "高危职业",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "根据投保职业推断"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_c588207763",
+   "name": "投保职业",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品核保数据"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_0612362268",
+   "name": "免赔额",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_c5187f228e",
+   "name": "报销门诊住院范围",
+   "description": "仅门诊、仅住院、门诊+住院",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_74fd5a9469",
+   "name": "津贴",
+   "description": "大多在附录里",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_3a3e6520a3",
+   "name": "给付限额",
+   "description": "一般医疗保险金200万、恶性肿瘤医疗保险金200万",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任",
+    "一般在附表中"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_4a789b1d6f",
+   "name": "报销范围",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_3d8424595d",
+   "name": "报销比例",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_f32c510a5e",
+   "name": "医院范围",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款对医院的定义"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_e1bea0527a",
+   "name": "特殊免责",
+   "description": "自杀可赔、猝死可赔",
+   "value_type": "short",
+   "allowed_sources": [
+    "免责条款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "zh_52548821b9",
+   "name": "费率可调",
+   "description": "支持费率调整",
+   "value_type": "short",
+   "allowed_sources": [
+    "根据产品名判断",
+    "在售的有两款"
+   ],
+   "risk_level": "low"
+  },
+  {
+   "field_id": "pre_existing_conditions",
+   "name": "既往症定义与处理",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "high"
+  },
+  {
+   "field_id": "external_drug_coverage",
+   "name": "外购药/特药责任",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "保险责任"
+   ],
+   "risk_level": "medium"
+  },
+  {
+   "field_id": "discontinuation_renewal",
+   "name": "停售后续保安排",
+   "description": "",
+   "value_type": "short",
+   "allowed_sources": [
+    "产品条款"
+   ],
+   "risk_level": "high"
+  }
+ ]
+}
