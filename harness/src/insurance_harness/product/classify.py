@@ -7,7 +7,7 @@
 
 import json
 import re
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
@@ -15,7 +15,7 @@ from insurance_harness.goldenset.annotator import ModelClient
 from insurance_harness.goldenset.pdf import PageText
 
 
-class DocumentType(str, Enum):
+class DocumentType(StrEnum):
     TERMS = "条款"
     BROCHURE = "产品说明书"
     RATE_TABLE = "费率表"
@@ -71,6 +71,12 @@ def detect_product_line(text: str) -> str | None:
         if keyword in text:
             return line_key
     return None
+
+
+def doc_type_from_filename(file_name: str) -> DocumentType | None:
+    """按文件名关键词判型（也用作样本自评的真值来源，P3.2/P4.5）。"""
+    hit = _classify_by_filename(file_name)
+    return hit[0] if hit else None
 
 
 def _classify_by_filename(file_name: str) -> tuple[DocumentType, str] | None:
@@ -149,5 +155,8 @@ async def classify_document(
         )
 
     return Classification(
-        doc_type=DocumentType.UNKNOWN, product_line=line, confidence="low", basis=("无确定性特征命中",)
+        doc_type=DocumentType.UNKNOWN,
+        product_line=line,
+        confidence="low",
+        basis=("无确定性特征命中",),
     )

@@ -53,7 +53,8 @@ class ProductAlias(TimestampMixin, Base):
         String(36), ForeignKey("insurance_products.id"), index=True
     )
     alias: Mapped[str] = mapped_column(String(255), index=True)
-    alias_type: Mapped[str] = mapped_column(String(32))  # no_paren/no_prefix/short/registration_no/manual
+    # no_paren / no_prefix / short / registration_no / manual
+    alias_type: Mapped[str] = mapped_column(String(32))
     source: Mapped[str] = mapped_column(String(64), default="auto")
 
 

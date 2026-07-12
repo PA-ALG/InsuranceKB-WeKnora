@@ -7,6 +7,7 @@
 import re
 
 _PAREN_RE = re.compile(r"[（(][^（）()]*[）)]")
+_TRAILING_PAREN_RE = re.compile(r"[（(][^（）()]*[）)]\s*$")
 _COMPANY_PREFIX = "平安"
 # 从名称尾部逐层剥离的险种/形态后缀（顺序无关，循环剥离直到不再变化）
 _TYPE_SUFFIXES = (
@@ -46,9 +47,11 @@ def _strip_type_suffix(name: str) -> str:
                 name = name[: -len(suffix)].rstrip()
                 changed = True
                 break
-            # 形如 "……终身寿险（分红型）"：先剥尾部括号组再试
+            # 形如 "……终身寿险（分红型）"：只剥【尾部】括号组再试。
+            # 不能剥中间括号——"盛世金越（尊享版26）终身寿险" 的 （尊享版26）
+            # 是区分产品版本的关键信息，剥掉会把不同产品折叠成同一歧义别名。
             if name.endswith("）") or name.endswith(")"):
-                inner = _PAREN_RE.sub("", name).rstrip()
+                inner = _TRAILING_PAREN_RE.sub("", name).rstrip()
                 if inner.endswith(suffix):
                     name = inner[: -len(suffix)].rstrip()
                     changed = True

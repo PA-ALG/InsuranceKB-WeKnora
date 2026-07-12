@@ -6,8 +6,9 @@
 ## ⓪ 当前最优先事项（接手先看这里）
 
 1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
-2. **change 003 是半成品**（开发 fork 同因 token 限额中断）：`harness/src/insurance_harness/{db,product}/`、migrations、docker-compose.harness.yml、4 个测试文件已写出；当前 `pytest`＝**76 passed / 1 failed**（`test_product_aliases.py::test_short_strips_type_suffix`，断在 TDD 红绿循环中途）。接手者按 `openspec/changes/003-product-master-routing/specs/routing.md` P1~P5 继续，修复该测试并补齐 CLI 与验收报告。
-3. **git push 仍被挡**：账号 `yiyinianhua` 无写权限（403），全部提交在本地分支 `feature/insurance-kb-foundation`，权限到位后统一推送。
+2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
+3. **change 004（抽取管道 MVP）开发中**：提案已获业务方确认（含文档族指纹与按族出分）；设计权威见 docs/insurance-kb/04 与 11。**待业务方提供弱模型网关凭据**（new-api 地址 + qwen/minimax/DeepSeek key），无凭据则 T8 只能以录制回放验证管道逻辑，真实基线分待补。
+4. git push 已恢复（写权限 + 网络解法见坑清单 #9）。
 
 ## 一、我们在做什么
 

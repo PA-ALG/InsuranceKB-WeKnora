@@ -17,7 +17,9 @@ TERMS_PAGE = PageText(
     text="平安人寿〔2026〕年金保险013号\n平安盛世金越养老年金保险（分红型）\n阅读指引\n……条款……",
 )
 BROCHURE_PAGE = PageText(page_no=1, text="平安盛世金越养老年金保险（分红型）产品说明书\n重要提示……")
-RATE_PAGE = PageText(page_no=1, text="《平安盛世金越》基本保险金额表\n（每万元趸交或年交保费）\n投保年龄……")
+RATE_PAGE = PageText(
+    page_no=1, text="《平安盛世金越》基本保险金额表\n（每万元趸交或年交保费）\n投保年龄……"
+)
 PLAIN_PAGE = PageText(page_no=1, text="这是一段没有任何特征的文本。")
 
 
