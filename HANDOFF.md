@@ -40,6 +40,9 @@
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 11 产品 long 字段要点清单（强模型一次性产出，替换 005 的 rule-split 小样） | 逐产品读 `dataset/goldenset/wip-gs-v0.1/<产品>/golden.jsonl`，对 present 且归一化 ≥30 字的字段产出要点清单，写同目录 `keypoints.jsonl`（行格式 `goldenset/keypoints.py KeypointEntry`，`golden_value_sha` 用 `value_sha(金标值)`；可从 `harness/scripts/eval_005.py gen-keypoints` 的规则版起步做人工/强模型精修） | ~1×10万 token（强模型） |
 | B7 | 005 路由修复后的真实弱模型对比出分（before/after 基线回归） | `cd harness && uv run python scripts/baseline_004.py run --products 平安盛世金越（尊享版26）终身寿险,平安e生保（尊享版）医疗保险,平安守护百分百（2026）两全保险`（新 run 目录或备份旧 runs/ 后跑），完成后 `uv run python scripts/baseline_004.py report` + `uv run python scripts/eval_005.py report` 对比 | 网关 ~6-12万 token/产品 ×3 |
+| B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
+| B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
+| B10 | WeKnora 测试实例搭建 + live 契约测试 | docker compose 起 WeKnora，双 KB 策略按 02 §4.1；跑 `pytest -m live`（001 适配层与 007 发布器 live 用例） | 部署+联调 |
 
 > 以上任务的验收都以既有门禁与 report 为准，不需要新设计。设计类工作（005+ change 提案、架构文档）由架构会话产出。
 
