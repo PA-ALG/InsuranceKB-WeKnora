@@ -15,6 +15,7 @@
 | [08-tech-selection.md](08-tech-selection.md) | 技术选型：逐组件的开源框架清单、备选对比、许可证核对、版本锁定策略 | ✅ |
 | [09-llm-wiki-feature-migration.md](09-llm-wiki-feature-migration.md) | LLM Wiki 功能迁移对照表：27 项功能逐一标注承接方（WeKnora 已有/Harness 重写/不迁移）与排期 | ✅ |
 | [10-development-guide.md](10-development-guide.md) | 开发规范：SDD/OpenSpec 流程、TDD 分层约定、代码边界纪律、HANDOFF 维护义务、示范项目质量清单 | ✅ |
+| [11-parsing-templates-multimodal.md](11-parsing-templates-multimodal.md) | 解析组件分层升级链、模板抽取三层设计（族识别/模板归纳/fast path）、图表 caption-first 处理与证据风控 | ✅ |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 上位文档：[../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（唯一主清单）· [/HANDOFF.md](../../HANDOFF.md)（交接文档）

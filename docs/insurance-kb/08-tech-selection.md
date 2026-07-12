@@ -16,7 +16,9 @@
 | 任务队列 | 起步：**Postgres 队列（SELECT … FOR UPDATE SKIP LOCKED）**；上量后：**arq**（Redis） | Celery（重、配置面大）；直接上 Redis 队列（起步阶段多一个依赖） | 与 04 §限流分片配合；升级路径明确，接口先抽象 |
 | 模型网关 | **new-api**（团队已有使用经验）；库内调用统一走 **litellm** 客户端抽象 | 直连各厂商 SDK（切换模型/统计成本困难） | 统一接入 minimax/qwen/DeepSeek/Claude，限流、计费、故障切换集中处理；金标（Claude）与生产（弱模型）同一网关不同通道 |
 | 文档解析 | **复用 WeKnora docreader**（含 OCR/表格） | — | 平台已有，不重复建设 |
-| 复杂 PDF 备选解析 | **MinerU**（对照/兜底解析器） | Marker/olmOCR（表格与中文条款效果不及） | 04 §解析质量抽检需要第二解析器做对照；仅在 docreader 失败/低质时启用 |
+| 复杂 PDF 备选解析 | **MinerU 2.5**（对照/兜底解析器） | Marker/olmOCR（表格与中文条款效果不及） | 04 §解析质量抽检需要第二解析器做对照；仅在低质时启用（分层升级链见 11 §2） |
+| 版面/表格结构识别 | **PaddleOCR 3.x / PP-StructureV3** | camelot（仅矢量表）、table-transformer（中文弱） | 费率表/利益演示表→markdown 结构化；OmniDocBench v1.6 中文综合领先（11 §2） |
+| 图表理解 VLM | **qwen-VL（生产已有）**；备选 DeepSeek-OCR-2 | GPT-4V 级云端（合规不确定） | caption-first：图表→结构化描述 JSON 进文本管道；高风险字段禁止仅图表证据（11 §3） |
 | 结构化抽取输出 | **Pydantic schema + 自研对抗性解析器**（04 §对抗解析） | instructor/outlines（依赖 function-calling 质量，弱模型上不稳） | 弱模型 function-calling 不可靠，逐行状态机解析 + 重试更稳（llm_wiki 经验） |
 | 向量/检索 | **复用 WeKnora**（向量+BM25+GraphRAG） | 自建 faiss/qdrant | Harness 不建向量库；语义检索需求走 WeKnora API |
 | 可观测 | **Langfuse**（与 WeKnora 共用实例） | 自研日志 | 以 knowledge_id / harness_job_id / change_set_id 关联端到端链路 |
