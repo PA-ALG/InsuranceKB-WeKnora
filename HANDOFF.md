@@ -9,7 +9,19 @@
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
 3. ✅ **change 004（抽取管道 MVP）完成并验收**（2026-07-12）：compiler/ 全链路（切分→7组路由→分批抽取→回验→清洗→补漏→投票→置信分级），langgraph 可恢复编排+死信；门禁 135 tests 全绿。**首个真实弱模型基线**（deepseek-v4-flash vs gs-v0.1，3 代表产品，含 Claude 裁决回写）：micro F1 0.184 / 幻觉率 8.2% / **evidence 准确率 100%** / high 桶三态正确率 92%——反幻觉链已验证有效，失分主因是长文本字段的"值粒度/表述差异"被 eval 逐字等价误判 + present→unknown 漏抽 25 条（validation-report.md 有全量明细）。
 4. **下一步（005 候选，两条主线）**：① eval 长文本字段等价判定升级（关键要点匹配/judge 评分）——先修尺子再优化，否则分数失真误导方向；② 抽取召回改进（漏抽 25 条的路由/prompt 归因）。模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
-5. 全量 13 产品基线一键可跑：`uv run python scripts/baseline_004.py run --products <逗号分隔> --resume`（成本参考：约 6~12 万 est_tokens/产品），待业务方触发。
+5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
+
+## ⓪-B 遗留执行任务清单（交由其他模型推进，按优先级）
+
+| # | 任务 | 怎么做 | 预估成本 |
+|---|---|---|---|
+| B1 | 金标 T8 收尾：剩 2 产品标注 + gs-v0.1 打包 | `openspec/changes/002-goldenset-s0/T8-HANDOVER.md` 四步走 | ~2×10万 token（标注模型） |
+| B2 | 全量 13 产品弱模型基线 | `cd harness && uv run python scripts/baseline_004.py run --products <逗号分隔剩余10个> --resume`，跑完 `report`；进程要 nohup 脱离会话（坑清单 #9 网络注意） | 网关 ~6-12万 token/产品 |
+| B3 | B2 产生的 judge-queue 批处理 | 各 run 目录 judge-queue.jsonl → 强模型逐条裁决出 judgements.jsonl（格式见 compiler/models.py Judgement，evidence 页码需从原 PDF 定位保证回验）→ `python -m insurance_harness.compiler.cli apply-judgements <run_dir> <judgements.jsonl>` → 重出 report | 视队列量，单条很小 |
+| B4 | 死信复跑 | e生保尊享 coverage 组 s016+s017 截断死信：调大 max_tokens 或分段后 `--resume` | 极小 |
+| B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
+
+> 以上任务的验收都以既有门禁与 report 为准，不需要新设计。设计类工作（005+ change 提案、架构文档）由架构会话产出。
 
 ## 一、我们在做什么
 
