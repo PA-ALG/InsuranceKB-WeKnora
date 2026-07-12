@@ -52,6 +52,10 @@ class HarnessSettings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_timeout_s: float = 180.0
 
+    # --- 表格结构识别 provider（change 006，spec F5.3 配置位） ---
+    # pdfplumber（默认，零新增依赖）；pp-structure-v3 为预留位（重依赖部署见 HANDOFF ⓪-B）
+    table_provider: str = "pdfplumber"
+
     # --- 增量合并审核门禁（change 007，spec K4.4）---
     # 默认关闭自动通过=全部走审核（保守）；开启后仅 risk=low 且 confidence≥阈值 的 enrich 自动应用
     merge_auto_apply_enrich: bool = False

@@ -28,10 +28,12 @@ from .extract import (
     build_windows,
     with_transport_retry,
 )
+from .feedability import score_feedability
 from .gapfill import gapfill_field
 from .judge import JudgeDispatcher, make_judge_request, write_judge_queue
 from .llm import CallStats, MeteredClient, ModelClient
 from .models import (
+    DataQuality,
     DeadLetter,
     DocManifestEntry,
     DocPayload,
@@ -43,6 +45,8 @@ from .models import (
 from .prompts import PROMPT_VERSION
 from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
+from .templates import TemplateRegistry, run_fastpath
+from .templates.tables import TableStructureProvider
 from .voting import vote_field
 
 
@@ -94,9 +98,11 @@ def _doc_rank(doc: str) -> int:
 
 def merge_candidates(cands: list[FieldCandidate]) -> dict[str, FieldCandidate]:
     """按 field_id 合并多 (doc, window) 候选：present>absent>unknown、
-    vote/judge>gapfill>extract、证据多/值长者优先、条款优先于说明书。"""
+    judge>fastpath>vote>gapfill>extract、证据多/值长者优先、条款优先于说明书。
+
+    fastpath 是确定性直取（006 F3.4），可信度仅次于裁决。"""
     tri_rank = {"present": 0, "absent_explicitly": 1, "unknown": 2}
-    origin_rank = {"judge": 0, "vote": 1, "gapfill": 2, "extract": 3}
+    origin_rank = {"judge": 0, "fastpath": 1, "vote": 2, "gapfill": 3, "extract": 4}
 
     def rank(c: FieldCandidate) -> tuple[int, int, int, int, int, int]:
         return (
@@ -131,6 +137,8 @@ class ExtractionPipeline:
         judge: JudgeDispatcher | None = None,
         sleep: Sleeper | None = None,
         page_loader: Callable[[Path], list[PageText]] | None = None,
+        template_registry: TemplateRegistry | None = None,
+        table_provider: TableStructureProvider | None = None,
     ) -> None:
         self._client = client
         self._registry = registry
@@ -139,6 +147,9 @@ class ExtractionPipeline:
         self._judge = judge or JudgeDispatcher(mode=self._cfg.judge_mode)
         self._sleep: Sleeper = sleep if sleep is not None else asyncio.sleep
         self._page_loader = page_loader or extract_pages
+        # 006 F3：模板注册表未提供/为空 → fast path 整体旁路（004 行为不变）
+        self._templates = template_registry
+        self._table_provider = table_provider
 
     # --- 节点 ---
 
@@ -206,6 +217,8 @@ class ExtractionPipeline:
             payload.sections = sections
             payload.by_group = {g: list(ids) for g, ids in routing.by_group.items()}
             payload.family_id = family_fingerprint(sections)
+            # 006 F4.2：可喂性评分记入 manifest（只报告不拦截；硬门禁待升级链 L1+）
+            feed = score_feedability(payload.doc, payload.pages)
             manifest.docs.append(
                 DocManifestEntry(
                     doc=payload.doc,
@@ -215,6 +228,8 @@ class ExtractionPipeline:
                     routed_pairs=routing.routed_pairs,
                     total_pairs=routing.total_pairs,
                     compression_ratio=routing.compression_ratio,
+                    feedability_score=feed.score,
+                    feedability_ok=feed.feedable,
                 )
             )
             docs.append(payload.model_dump(mode="json"))
@@ -263,6 +278,32 @@ class ExtractionPipeline:
                         for f in fields
                     ]
 
+        # 006 F3：fast path 先行——命中字段确定性直取并退出通用抽取（战场缩小）
+        fastpath_covered: set[str] = set()
+        if self._templates is not None:
+            fields_by_id = {f.field_id: f for f in line.extractable_fields}
+            for raw in state["docs"]:
+                payload = DocPayload.model_validate(raw)
+                template = self._templates.find(payload.family_id, payload.doc)
+                if template is None:
+                    continue
+                fp_cands = run_fastpath(
+                    template,
+                    fields_by_id,
+                    payload.doc,
+                    payload.pages,
+                    pdf_path=Path(state["product_dir"]) / payload.doc,
+                    provider=self._table_provider,
+                    sections=payload.sections,
+                )
+                candidates.extend(fp_cands)
+                fastpath_covered |= {c.field_id for c in fp_cands}
+                for entry in manifest.docs:
+                    if entry.doc == payload.doc:
+                        entry.fastpath_fields = len(fp_cands)
+            manifest.template_registry_version = self._templates.version
+            manifest.fastpath_fields = len(fastpath_covered)
+
         tasks: list[asyncio.Task[list[FieldCandidate]]] = []
         for raw in state["docs"]:
             payload = DocPayload.model_validate(raw)
@@ -273,7 +314,9 @@ class ExtractionPipeline:
             )
             for group in GROUP_ORDER:
                 fields = [
-                    f for f in line.extractable_fields if group_of_field(f.name) == group
+                    f
+                    for f in line.extractable_fields
+                    if group_of_field(f.name) == group and f.field_id not in fastpath_covered
                 ]
                 sec_ids = payload.by_group.get(group, [])
                 if not fields or not sec_ids:
@@ -370,13 +413,15 @@ class ExtractionPipeline:
                 except TransportRetryError:
                     return cand.model_copy(update={"confidence": "low"})
 
-        # 投票只对 risk_level=high 且已有 present 候选的字段发生（E4.2/E4.3）
+        # 投票只对 risk_level=high 且已有 present 候选的字段发生（E4.2/E4.3）；
+        # fastpath 确定性直取字段退出投票（006 F3.4，12 #1：数字类字段退出投票）
         vote_targets = [
             (f, merged[f.field_id])
             for f in line.extractable_fields
             if f.risk_level == "high"
             and f.field_id in merged
             and merged[f.field_id].tri_state == "present"
+            and merged[f.field_id].origin != "fastpath"
         ]
         voted = await asyncio.gather(*(do_vote(f, c) for f, c in vote_targets))
         for (_field, _), cand in zip(vote_targets, voted, strict=True):
@@ -560,7 +605,15 @@ def _to_pred(
     confidence = cand.confidence
     if cand.origin == "extract" and cand.tri_state in ("present", "absent_explicitly"):
         confidence = "high"  # 出场即已通过回验（校验链保证）
+    # 006 F3.5（12 #2）：来源可信度分级——fastpath 由锚点类型决定，其余为模型抽取
+    dq_raw = cand.metadata.get("data_quality")
+    data_quality: DataQuality = (
+        cast(DataQuality, dq_raw)
+        if dq_raw in ("structured_direct", "table_parsed", "llm_extracted", "llm_inferred")
+        else "llm_extracted"
+    )
     return PredRecord(
+        data_quality=data_quality,
         product_id=state["product_id"],
         product_name=state["product_name"],
         doc=cand.doc or "-",

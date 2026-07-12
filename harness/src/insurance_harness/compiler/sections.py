@@ -239,16 +239,76 @@ def _dense_enough(
     return len(hits) >= need and len(set(hits)) >= distinct_min
 
 
-# --- 文档族结构指纹（11 §1.1） ---
+# --- 文档族结构指纹（11 §1.1；006 F6 无标题 fallback） ---
 
 _DIGITS_WS_RE = re.compile(r"[\s0-9０-９]+")
+
+# 文档类型特征（fallback 指纹用；顺序即优先级：先匹配更具体的）
+_DOC_TYPE_RE = re.compile(r"(产品说明书|利益演示|投保须知|保险条款|费率表|说明书|条款)")
+_CJK_RE = re.compile(r"[一-鿿]")
+# 页数桶：同族文档页数近似（费率表 2 页、说明书 7~10 页、条款几十页），
+# 精确页数会把同版式不同排版密度的文档拆散，取对数级桶
+_PAGE_BUCKETS: tuple[tuple[int, str], ...] = ((2, "xs"), (16, "s"), (40, "m"))
+
+
+def _page_bucket(page_count: int) -> str:
+    for limit, name in _PAGE_BUCKETS:
+        if page_count <= limit:
+            return name
+    return "l"
+
+
+def _header_tokens(page_texts: Sequence[str]) -> list[str]:
+    """表头 token 集合（fallback 指纹特征之一，F6.2 "表格列名"）。
+
+    表头行启发式：≥3 个空白分隔 token 且 ≥80% 为短 token（≤6 字）——
+    费率表列名行（"趸交 3年 6年 …"）命中，正文长句不命中。
+    token 归一化去数字（"3年"→"年"），只保留含中文的短 token。
+    """
+    tokens: set[str] = set()
+    for text in page_texts:
+        for line in text.splitlines():
+            parts = line.split()
+            if len(parts) < 3 or sum(1 for p in parts if len(p) <= 6) < 0.8 * len(parts):
+                continue
+            for part in parts:
+                norm = _DIGITS_WS_RE.sub("", part)
+                if norm and len(norm) <= 6 and _CJK_RE.search(norm):
+                    tokens.add(norm)
+    return sorted(tokens)
+
+
+def _fallback_fingerprint(sections: Sequence[DocSection]) -> str:
+    """无标题文档的 fallback 指纹（006 F6.2）。
+
+    004 疑点修复：章节标题序列为空时旧算法退化为空串哈希 fam-e3b0c44298fc，
+    说明书/费率表全部混为一族。fallback 用 文档类型特征 + 页数桶 + 表头 token
+    集合 哈希，保证无标题文档按版式分族且与空串指纹必不相同。
+    """
+    by_page: dict[int, list[str]] = {}
+    for sec in sections:
+        for frag in sec.fragments:
+            by_page.setdefault(frag.page_no, []).append(frag.text)
+    page_nos = sorted(by_page)
+    page_texts = ["\n".join(by_page[p]) for p in page_nos]
+    first_page = _DIGITS_WS_RE.sub("", page_texts[0]) if page_texts else ""
+    m = _DOC_TYPE_RE.search(first_page)
+    doc_type = m.group(1) if m else "unknown"
+    payload = "\x01".join(
+        ["fallback", doc_type, _page_bucket(len(page_nos)), *_header_tokens(page_texts)]
+    )
+    return "fam-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def family_fingerprint(sections: Sequence[DocSection]) -> str:
     """章节标题序列 → 结构指纹：同版式文档（族）得到相同 family_id。
 
     归一化去掉空白与数字（同模板不同序号/年份不影响族归属），哈希取前 12 位。
+    标题序列非空时算法与 004 完全一致（既有族 id 不漂移）；为空时走
+    fallback（F6.2：文档类型 + 页数桶 + 表头 token），修复空串指纹退化。
     """
     titles = [h for s in sections for h in s.headings]
+    if not titles:
+        return _fallback_fingerprint(sections)
     normalized = "\x00".join(_DIGITS_WS_RE.sub("", t) for t in titles)
     return "fam-" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:12]

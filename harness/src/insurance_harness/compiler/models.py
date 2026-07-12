@@ -24,7 +24,12 @@ UnknownReason = Literal[
     "missing_in_response",  # 模型未返回该字段
 ]
 
-CandidateOrigin = Literal["extract", "gapfill", "vote", "judge"]
+CandidateOrigin = Literal["extract", "gapfill", "vote", "judge", "fastpath"]
+
+# 来源可信度分级（12-dayu #2；与 confidence=过程可信度 正交）：
+# structured_direct=确定性文本直取（正则锚点）；table_parsed=表格结构化列直取；
+# llm_extracted=通用管道模型抽取（既有默认）；llm_inferred=模型推断（无直接证据，预留）
+DataQuality = Literal["structured_direct", "table_parsed", "llm_extracted", "llm_inferred"]
 
 
 class FieldCandidate(BaseModel):
@@ -87,10 +92,14 @@ class DocManifestEntry(BaseModel):
     doc: str
     doc_pages: int
     sections: int
-    family_id: str  # 章节标题序列结构指纹（11 §1.1）
+    family_id: str  # 章节标题序列结构指纹（11 §1.1；006 F6 无标题 fallback）
     routed_pairs: int
     total_pairs: int
     compression_ratio: float
+    # 006 F4.2 可喂性评分（split_route 记录，只报告不拦截；默认值兼容旧 manifest）
+    feedability_score: float = 1.0
+    feedability_ok: bool = True
+    fastpath_fields: int = 0  # 006 F3：该文档 fast path 命中并通过校验链的字段数
 
 
 class RunManifest(BaseModel):
@@ -112,6 +121,8 @@ class RunManifest(BaseModel):
     docs: list[DocManifestEntry] = Field(default_factory=list)
     dead_letters: list[DeadLetter] = Field(default_factory=list)
     pending_judge_count: int = 0
+    template_registry_version: str = ""  # 006 F3：空 = 未启用 fast path
+    fastpath_fields: int = 0  # fast path 命中并通过校验链的字段总数
 
 
 class DocPayload(BaseModel):
@@ -130,3 +141,5 @@ class PredRecord(GoldenRecord):
     confidence: Confidence = "low"
     pending_judge: bool = False
     unknown_reason: UnknownReason | None = None
+    # 006 F3.5（12-dayu #2）：来源可信度分级；007 Claim 端已留位，导入器透传
+    data_quality: DataQuality = "llm_extracted"

@@ -1,0 +1,50 @@
+template_id: tpl-04b9c55dc31e-费率表
+family_id: fam-04b9c55dc31e
+doc: 费率表.pdf
+template_version: v1
+status: published
+induced_from:
+  products:
+  - 平安盛世金越（尊享版26）终身寿险（分红型）
+  - 平安创享盛世金越（尊享版26）终身寿险（分红型）
+  golden_release: wip-gs-v0.1
+fields:
+- field_id: zh_14b93ce275
+  field_name: 交费期限
+  anchors:
+    section_title: null
+    pages:
+    - 1
+    table_columns:
+      op: join_headers
+      header_contains: 趸交
+      join: 、
+      row_label: null
+      column: null
+    regex: null
+  few_shots:
+  - product: 平安盛世金越（尊享版26）终身寿险（分红型）
+    page: 1
+    quote: 趸交 3年 6年 10年 15年 20年
+    value: 趸交、3年、6年、10年、15年、20年
+  - product: 平安创享盛世金越（尊享版26）终身寿险（分红型）
+    page: 1
+    quote: 趸交 3年 6年 10年 15年 20年
+    value: 趸交、3年、6年、10年、15年、20年
+- field_id: zh_67ee7025ef
+  field_name: 主附加险
+  anchors:
+    section_title: null
+    pages:
+    - 1
+    table_columns: null
+    regex: 注\s*[\s、，,/；;:：]*\s*若\s*本(主\s*险)
+  few_shots:
+  - product: 平安盛世金越（尊享版26）终身寿险（分红型）
+    page: 1
+    quote: 注：若本主险合同被保险人为两人，按年龄较小被保人的年龄性别计算保费。
+    value: 主险
+  - product: 平安创享盛世金越（尊享版26）终身寿险（分红型）
+    page: 1
+    quote: 注：若本主险合同被保险人为两人，按年龄较小被保人的年龄性别计算保费。
+    value: 主险

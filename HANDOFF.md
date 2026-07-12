@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-12（005 评测尺子升级与召回归因完成；金标标注 11/13 后因 token 限额搁置，现场已固化）
+> 最后更新：2026-07-12（006 模板 fast path 完成；005 评测尺子升级与召回归因完成；金标标注 11/13 后因 token 限额搁置，现场已固化）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -26,6 +26,19 @@
    `GROUP_KEYWORD_SUPPLEMENTS_005`（趸交/费率表→basic_info；入出院记录/出院小结/结算清单→claim_service），
    routing_miss 3→1、13 条款压缩比仍 ≤0.40；清洗白名单经证据判定不需要改（cleaning_kill=0）。
    报告：`openspec/changes/005-eval-refinement-recall/validation-report.md`（004 报告已附"尺子修正后"章节）。
+3c. ✅ **change 006（模板抽取 fast path 与表格结构识别）完成并验收**（2026-07-12，零真实模型调用）：
+   `harness/compiler/templates/` 新包——模板 schema（YAML 数据，注册表机制对齐 schemas，发布目录
+   `dataset/templates/`）+ **确定性模板归纳器**（族内 ≥2 产品金标挖锚点：表格列名/引文上下文正则，
+   全产品回放验证 hit_rate=1.0 才发布；LLM 润色留 claude-session 队列 stub）+ 运行时 fast path
+   （族命中 → 锚点直取 → 既有校验链，未命中降级通用管道；命中字段退出通用抽取/补漏/投票）+
+   `TableStructureProvider` Protocol（pdfplumber 首实现，费率表数字走列定位直取 12 #1；
+   PP-StructureV3 留接口+配置位 `HARNESS_TABLE_PROVIDER`）+ 可喂性评分（12 #4，manifest 记录+
+   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2，007 Claim 端衔接）。
+   **修复 004 族指纹疑点**：无标题文档（说明书/费率表）曾全部退化为空串指纹 fam-e3b0c44298fc，
+   现走 fallback（文档类型+页数桶+表头 token），有标题文档指纹零漂移。**留出验证**（盛世金越族，
+   两分红产品归纳 → 尊享26终身寿留出）：fast path 命中字段正确率 1.00 vs 通用管道 0.00
+   （交费期限 unknown→列直取全对），预估节省 1 次调用/产品（锚定字段尚少；随模板铺开增长）；
+   发现分红说明书两版式不同构（归纳报告与 validation-report.md 有全量明细）。门禁 239 passed 全绿。
 4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
@@ -39,7 +52,8 @@
 | B4 | 死信复跑 | e生保尊享 coverage 组 s016+s017 截断死信：调大 max_tokens 或分段后 `--resume` | 极小 |
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 11 产品 long 字段要点清单（强模型一次性产出，替换 005 的 rule-split 小样） | 逐产品读 `dataset/goldenset/wip-gs-v0.1/<产品>/golden.jsonl`，对 present 且归一化 ≥30 字的字段产出要点清单，写同目录 `keypoints.jsonl`（行格式 `goldenset/keypoints.py KeypointEntry`，`golden_value_sha` 用 `value_sha(金标值)`；可从 `harness/scripts/eval_005.py gen-keypoints` 的规则版起步做人工/强模型精修） | ~1×10万 token（强模型） |
-| B7 | 005 路由修复后的真实弱模型对比出分（before/after 基线回归） | `cd harness && uv run python scripts/baseline_004.py run --products 平安盛世金越（尊享版26）终身寿险,平安e生保（尊享版）医疗保险,平安守护百分百（2026）两全保险`（新 run 目录或备份旧 runs/ 后跑），完成后 `uv run python scripts/baseline_004.py report` + `uv run python scripts/eval_005.py report` 对比 | 网关 ~6-12万 token/产品 ×3 |
+| B7 | 005 路由修复后的真实弱模型对比出分（before/after 基线回归） | `cd harness && uv run python scripts/baseline_004.py run --products 平安盛世金越（尊享版26）终身寿险,平安e生保（尊享版）医疗保险,平安守护百分百（2026）两全保险`（新 run 目录或备份旧 runs/ 后跑），完成后 `uv run python scripts/baseline_004.py report` + `uv run python scripts/eval_005.py report` 对比；重跑盛世金越时可加 `--templates-dir dataset/templates` 验证 fast path 实跑效果（006） | 网关 ~6-12万 token/产品 ×3 |
+| B8 | PP-StructureV3 表格结构识别部署（006 遗留） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`，用金标回归 A/B 验证（11 §2）后替换默认 | 部署人工 + 金标回归 |
 | B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
 | B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
 | B10 | WeKnora 测试实例搭建 + live 契约测试 | docker compose 起 WeKnora，双 KB 策略按 02 §4.1；跑 `pytest -m live`（001 适配层与 007 发布器 live 用例） | 部署+联调 |
