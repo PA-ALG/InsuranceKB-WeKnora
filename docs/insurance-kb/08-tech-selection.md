@@ -14,7 +14,8 @@
 | Web/API 框架 | **FastAPI + Pydantic v2** | Flask/Django（异步与 schema 校验弱） | Pydantic 同时是抽取 schema 校验器，一套模型两用 |
 | Harness 数据库 | **PostgreSQL 15+ + Alembic** 迁移 | MySQL（JSONB/行级锁/SKID LOCKED 生态弱） | 与 WeKnora 同栈（部署一套 PG 两个库），运维统一 |
 | 任务队列 | 起步：**Postgres 队列（SELECT … FOR UPDATE SKIP LOCKED）**；上量后：**arq**（Redis） | Celery（重、配置面大）；直接上 Redis 队列（起步阶段多一个依赖） | 与 04 §限流分片配合；升级路径明确，接口先抽象 |
-| 模型网关 | **new-api**（团队已有使用经验）；库内调用统一走 **litellm** 客户端抽象 | 直连各厂商 SDK（切换模型/统计成本困难） | 统一接入 minimax/qwen/DeepSeek/Claude，限流、计费、故障切换集中处理；金标（Claude）与生产（弱模型）同一网关不同通道 |
+| 模型网关 | **百炼 DashScope OpenAI 兼容端点**（2026-07-12 定，复用 yingxiaoguihua 配置）；库内统一 model_client 抽象 | new-api 自建网关（暂无必要）；直连各厂商 SDK | 弱模型主力 **deepseek-v4-flash**，备选 MiniMax-M2.5；注意推理型模型返回 reasoning_content，需给足 max_tokens 且只取 content |
+| 裁决/金标模型 | **Claude（Opus/Fable 级，经 Claude Code 会话批处理）**——`HARNESS_JUDGE_MODE=claude-session`：管道产出裁决队列 JSONL，会话 agent 批量裁决回写 | 网关自动兜底 deepseek-v4-pro（`claude-session` 不可用时） | 裁决与金标同一把尺子（2026-07-12 业务方定）；未来 Claude API 通道接入后可切全自动 |
 | 文档解析 | **复用 WeKnora docreader**（含 OCR/表格） | — | 平台已有，不重复建设 |
 | 复杂 PDF 备选解析 | **MinerU 2.5**（对照/兜底解析器） | Marker/olmOCR（表格与中文条款效果不及） | 04 §解析质量抽检需要第二解析器做对照；仅在低质时启用（分层升级链见 11 §2） |
 | 版面/表格结构识别 | **PaddleOCR 3.x / PP-StructureV3** | camelot（仅矢量表）、table-transformer（中文弱） | 费率表/利益演示表→markdown 结构化；OmniDocBench v1.6 中文综合领先（11 §2） |

@@ -8,7 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class HarnessSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="HARNESS_", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="HARNESS_", extra="ignore", env_file=".env", env_file_encoding="utf-8"
+    )
 
     # --- WeKnora（必填） ---
     weknora_base_url: str
@@ -36,3 +38,16 @@ class HarnessSettings(BaseSettings):
     goldenset_api_key: str | None = None
     # 单次标注调用送入的文档文本上限（字符）；超限按页窗口过滤（spec G2.6）
     goldenset_doc_char_budget: int = 30_000
+
+    # --- 弱模型网关（change 004；百炼 OpenAI 兼容端点，凭据在 harness/.env，勿入库） ---
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model_weak: str | None = None  # 主力弱模型（deepseek-v4-flash；MiniMax-M2.5 为备选）
+    llm_model_judge: str | None = None  # （历史字段）网关裁决模型；judge_mode=gateway 时的旧配置
+    # 裁决可插拔（08 选型更新 2026-07-12）：claude-session=裁决请求落 judge-queue.jsonl
+    # 由主会话 Claude 批处理回写；gateway=直接调 llm_model_judge_fallback
+    judge_mode: str = "claude-session"
+    llm_model_judge_fallback: str | None = None
+    # 推理型模型（reasoning_content）会大量消耗输出 token，max_tokens 必须给足
+    llm_max_tokens: int = 4096
+    llm_timeout_s: float = 180.0

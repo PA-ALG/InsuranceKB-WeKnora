@@ -1,0 +1,1 @@
+{"product":"平安e生保（尊享版）医疗保险","doc":"产品说明书.pdf","group":"coverage","window_ref":"s016+s017","field_ids":["zh_a271d96039","zh_540e1969e3","zh_7d7fe38f09","zh_09a5d9e54e","zh_74fd5a9469","zh_f32c510a5e","external_drug_coverage"],"error":"重试 3 次后仍失败：TruncatedOutputError('模型 deepseek-v4-flash 输出正文为空（finish_reason=length）——疑似 reasoning 耗尽 max_tokens，按截断重试')","attempts":3}

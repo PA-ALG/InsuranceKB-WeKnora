@@ -7,8 +7,9 @@
 
 1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
-3. **change 004（抽取管道 MVP）开发中**：提案已获业务方确认（含文档族指纹与按族出分）；设计权威见 docs/insurance-kb/04 与 11。**待业务方提供弱模型网关凭据**（new-api 地址 + qwen/minimax/DeepSeek key），无凭据则 T8 只能以录制回放验证管道逻辑，真实基线分待补。
-4. git push 已恢复（写权限 + 网络解法见坑清单 #9）。
+3. ✅ **change 004（抽取管道 MVP）完成并验收**（2026-07-12）：compiler/ 全链路（切分→7组路由→分批抽取→回验→清洗→补漏→投票→置信分级），langgraph 可恢复编排+死信；门禁 135 tests 全绿。**首个真实弱模型基线**（deepseek-v4-flash vs gs-v0.1，3 代表产品，含 Claude 裁决回写）：micro F1 0.184 / 幻觉率 8.2% / **evidence 准确率 100%** / high 桶三态正确率 92%——反幻觉链已验证有效，失分主因是长文本字段的"值粒度/表述差异"被 eval 逐字等价误判 + present→unknown 漏抽 25 条（validation-report.md 有全量明细）。
+4. **下一步（005 候选，两条主线）**：① eval 长文本字段等价判定升级（关键要点匹配/judge 评分）——先修尺子再优化，否则分数失真误导方向；② 抽取召回改进（漏抽 25 条的路由/prompt 归因）。模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
+5. 全量 13 产品基线一键可跑：`uv run python scripts/baseline_004.py run --products <逗号分隔> --resume`（成本参考：约 6~12 万 est_tokens/产品），待业务方触发。
 
 ## 一、我们在做什么
 

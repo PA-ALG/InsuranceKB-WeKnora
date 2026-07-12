@@ -4,18 +4,28 @@
 失败重试一次、再失败该批字段全部记 unknown+disputed——绝不静默丢弃。
 """
 
-import hashlib
-import json
-import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
+from ..compiler.llm import LiteLLMClient as _GenericLiteLLMClient
+
+# 对抗性解析 / 模型客户端已提升为 compiler 公共模块（004 T1），此处保留再导出以稳定 002 接口
+from ..compiler.llm import ModelClient, ReplayClient, request_key
+from ..compiler.parsing import extract_json_array
 from ..config import HarnessSettings
 from ..schemas import FieldSpec, ProductLineSchema, SchemaRegistry
 from .pdf import PageText
 from .records import Evidence, GoldenRecord, TriState
+
+__all__ = [
+    "GoldenAnnotator",
+    "LiteLLMClient",
+    "ModelClient",
+    "ReplayClient",
+    "extract_json_array",
+    "request_key",
+]
 
 _BATCH_SIZE = 10
 
@@ -33,96 +43,21 @@ _SYSTEM_PROMPT = """你是寿险产品条款标注专家，为知识抽取系统
 - 只输出 JSON 数组，不要任何其他文字。"""
 
 
-class ModelClient(Protocol):
-    async def complete(self, system: str, user: str) -> str: ...
-
-
-def request_key(system: str, user: str) -> str:
-    return hashlib.sha256((system + "\x00" + user).encode("utf-8")).hexdigest()[:16]
-
-
-class ReplayClient:
-    """从夹具目录回放录制响应（测试用，spec G5.1）。文件名 = request_key + .txt。"""
-
-    def __init__(self, fixture_dir: Path) -> None:
-        self._dir = fixture_dir
-        self.calls = 0
-
-    async def complete(self, system: str, user: str) -> str:
-        self.calls += 1
-        path = self._dir / f"{request_key(system, user)}.txt"
-        if not path.exists():
-            raise FileNotFoundError(
-                f"ReplayClient 缺少夹具 {path.name}（system/user 变更会导致 key 变化）"
-            )
-        return path.read_text(encoding="utf-8")
-
-
 class LiteLLMClient:
-    """经模型网关的真实调用（08 选型：new-api + litellm）。依赖可选 extra ``llm``。"""
+    """金标注真实调用：compiler 通用 LiteLLMClient 的 settings 包装（004 T1 重构）。"""
 
     def __init__(self, settings: HarnessSettings) -> None:
         if not settings.goldenset_model:
             raise ValueError("缺少 HARNESS_GOLDENSET_MODEL 配置")
-        try:
-            import litellm
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError(
-                "litellm 未安装：请 `uv sync --extra llm` 后再使用真实模型标注"
-            ) from exc
-        self._litellm = litellm
-        self._settings = settings
+        self._inner = _GenericLiteLLMClient(
+            model=settings.goldenset_model,
+            api_base=settings.goldenset_api_base,
+            api_key=settings.goldenset_api_key,
+            temperature=0.0,
+        )
 
     async def complete(self, system: str, user: str) -> str:  # pragma: no cover - 需真实网关
-        resp = await self._litellm.acompletion(
-            model=self._settings.goldenset_model,
-            api_base=self._settings.goldenset_api_base,
-            api_key=self._settings.goldenset_api_key,
-            temperature=0.0,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        )
-        return cast(str, resp.choices[0].message.content or "")
-
-
-def extract_json_array(raw: str) -> list[dict[str, Any]] | None:
-    """容错提取模型输出中的 JSON 数组：剥代码围栏、取首个 '[' 到配对 ']'。"""
-    text = raw.strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
-    start = text.find("[")
-    if start == -1:
-        return None
-    depth = 0
-    in_str = False
-    escape = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if in_str:
-            if escape:
-                escape = False
-            elif ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_str = False
-            continue
-        if ch == '"':
-            in_str = True
-        elif ch == "[":
-            depth += 1
-        elif ch == "]":
-            depth -= 1
-            if depth == 0:
-                candidate = text[start : i + 1]
-                try:
-                    data = json.loads(candidate)
-                except json.JSONDecodeError:
-                    return None
-                if isinstance(data, list) and all(isinstance(x, dict) for x in data):
-                    return cast(list[dict[str, Any]], data)
-                return None
-    return None
+        return await self._inner.complete(system, user)
 
 
 def _pages_block(pages: Sequence[PageText]) -> str:
