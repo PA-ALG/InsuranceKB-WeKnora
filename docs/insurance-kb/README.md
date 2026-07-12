@@ -16,6 +16,7 @@
 | [09-llm-wiki-feature-migration.md](09-llm-wiki-feature-migration.md) | LLM Wiki 功能迁移对照表：27 项功能逐一标注承接方（WeKnora 已有/Harness 重写/不迁移）与排期 | ✅ |
 | [10-development-guide.md](10-development-guide.md) | 开发规范：SDD/OpenSpec 流程、TDD 分层约定、代码边界纪律、HANDOFF 维护义务、示范项目质量清单 | ✅ |
 | [11-parsing-templates-multimodal.md](11-parsing-templates-multimodal.md) | 解析组件分层升级链、模板抽取三层设计（族识别/模板归纳/fast path）、图表 caption-first 处理与证据风控 | ✅ |
+| [12-dayu-borrowings.md](12-dayu-borrowings.md) | dayu-agent（财报）弱模型准确性机制的借鉴决策：缩小模型战场、data_quality 来源分级、断链硬门禁、可喂性评分、dry-run 治理、保险算术校验器 | ✅ |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 上位文档：[../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（唯一主清单）· [/HANDOFF.md](../../HANDOFF.md)（交接文档）
