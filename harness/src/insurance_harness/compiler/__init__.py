@@ -21,11 +21,19 @@ from .models import (
 from .parsing import extract_json_array
 from .pipeline import ExtractionPipeline, PipelineConfig, RunResult, merge_candidates
 from .prompts import PROMPT_VERSION
+from .recall_attribution import (
+    AttributionReport,
+    MissAttribution,
+    attribute_misses,
+    dataset_routing_lookup,
+    render_attribution,
+)
 from .sections import DocSection, family_fingerprint, route_groups, split_sections
 from .verification import all_quotes_verified, quote_verified
 
 __all__ = [
     "PROMPT_VERSION",
+    "AttributionReport",
     "CallStats",
     "CleanResult",
     "DeadLetter",
@@ -35,6 +43,7 @@ __all__ = [
     "JudgeRequest",
     "Judgement",
     "MeteredClient",
+    "MissAttribution",
     "ModelClient",
     "OpenAICompatClient",
     "PipelineConfig",
@@ -44,11 +53,14 @@ __all__ = [
     "RunResult",
     "TruncatedOutputError",
     "all_quotes_verified",
+    "attribute_misses",
     "clean_value",
+    "dataset_routing_lookup",
     "extract_json_array",
     "family_fingerprint",
     "merge_candidates",
     "quote_verified",
+    "render_attribution",
     "request_key",
     "route_groups",
     "split_sections",

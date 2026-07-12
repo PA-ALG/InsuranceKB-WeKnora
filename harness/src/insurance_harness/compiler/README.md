@@ -18,6 +18,7 @@
 | `gapfill.py` | 定向补漏：aliases 检索候选章节 + 判断题式三态提问 |
 | `voting.py` | 高风险字段 3 采样（3 prompt 变体）多数票 |
 | `judge.py` | 可插拔裁决：claude-session（judge-queue.jsonl）/ gateway |
+| `recall_attribution.py` | 漏抽归因（005 V5，纯确定性零模型）：routing_miss / extract_empty / cleaning_kill；`scripts/eval_005.py report` 出统计 |
 | `pipeline.py` | LangGraph 状态图 + AsyncSqliteSaver checkpoint + 死信 + run manifest |
 | `prompts/` | 全部 prompt + `PROMPT_VERSION`（E6.1） |
 | `cli.py` | `extract` / `apply-judgements` |

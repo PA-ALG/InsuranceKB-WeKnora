@@ -1,14 +1,32 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-12（金标标注 11/13 后因 token 限额搁置，现场已固化；003 为 WIP）
+> 最后更新：2026-07-12（005 评测尺子升级与召回归因完成；金标标注 11/13 后因 token 限额搁置，现场已固化）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
 1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
 3. ✅ **change 004（抽取管道 MVP）完成并验收**（2026-07-12）：compiler/ 全链路（切分→7组路由→分批抽取→回验→清洗→补漏→投票→置信分级），langgraph 可恢复编排+死信；门禁 135 tests 全绿。**首个真实弱模型基线**（deepseek-v4-flash vs gs-v0.1，3 代表产品，含 Claude 裁决回写）：micro F1 0.184 / 幻觉率 8.2% / **evidence 准确率 100%** / high 桶三态正确率 92%——反幻觉链已验证有效，失分主因是长文本字段的"值粒度/表述差异"被 eval 逐字等价误判 + present→unknown 漏抽 25 条（validation-report.md 有全量明细）。
-4. **下一步（005 候选，两条主线）**：① eval 长文本字段等价判定升级（关键要点匹配/judge 评分）——先修尺子再优化，否则分数失真误导方向；② 抽取召回改进（漏抽 25 条的路由/prompt 归因）。模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
+3a. ✅ **change 007（Claim 落库/增量合并/审核门禁/WeKnora 发布，S2→S3 主链）完成**（2026-07-12）：
+   `harness/src/insurance_harness/knowledge/` 新包 + Alembic 0002（claims/claim_evidence/claim_revisions/
+   change_sets/change_items/conflicts/review_items/release_snapshots/snapshot_claims/current_release）。
+   pred JSONL 导入器（记录级+批级幂等）、五种 ChangeItem 合并引擎（裁决序严格 03 §6.2，④=claude-session
+   judge-queue 占位零模型调用）、ReviewItem 稳定 ID + approve/reject/defer、页面编译（分组渲染+证据角标）、
+   发布器（03 §7 契约，respx 全 mock）+ 快照回滚。端到端两批材料故事（说明书→条款）验收通过；
+   门禁 192 passed 全绿。live 发布契约用例（-m live）待测试实例。文档 03 已同步修订
+   （pending_judge/schema_version 串/source_kind/rendered_pages 物化/④队列化）。
+3b. ✅ **change 005（评测尺子升级与召回归因）完成**（2026-07-12，零真实模型调用）：
+   ① eval v2 "关键要点匹配"（`--metric v1|v2` 可切换；金标旁挂 keypoints.jsonl，3 基线产品 59 条
+   rule-split 小样已入库，全量强模型要点列 B6）——3 产品离线重评 micro F1 **0.184(v1) → 0.216(v2)**，
+   long 字段逐字等价误判被修正、真实缺口（值粒度 54 条）凸显；② 报告五类错误归因
+   （值粒度/漏抽/幻觉/三态混淆/证据错位）+ 工单化明细；③ eval-judge-queue 落盘（默认关，格式对齐
+   compiler JudgeRequest/Judgement）；④ 漏抽归因工具 `compiler/recall_attribution.py`（纯确定性）：
+   26 条漏抽 = routing_miss 3 / extract_empty 23 / cleaning_kill 0；⑤ 零成本路由修复
+   `GROUP_KEYWORD_SUPPLEMENTS_005`（趸交/费率表→basic_info；入出院记录/出院小结/结算清单→claim_service），
+   routing_miss 3→1、13 条款压缩比仍 ≤0.40；清洗白名单经证据判定不需要改（cleaning_kill=0）。
+   报告：`openspec/changes/005-eval-refinement-recall/validation-report.md`（004 报告已附"尺子修正后"章节）。
+4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
 ## ⓪-B 遗留执行任务清单（交由其他模型推进，按优先级）
@@ -20,6 +38,8 @@
 | B3 | B2 产生的 judge-queue 批处理 | 各 run 目录 judge-queue.jsonl → 强模型逐条裁决出 judgements.jsonl（格式见 compiler/models.py Judgement，evidence 页码需从原 PDF 定位保证回验）→ `python -m insurance_harness.compiler.cli apply-judgements <run_dir> <judgements.jsonl>` → 重出 report | 视队列量，单条很小 |
 | B4 | 死信复跑 | e生保尊享 coverage 组 s016+s017 截断死信：调大 max_tokens 或分段后 `--resume` | 极小 |
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
+| B6 | gs-v0.1 全量 11 产品 long 字段要点清单（强模型一次性产出，替换 005 的 rule-split 小样） | 逐产品读 `dataset/goldenset/wip-gs-v0.1/<产品>/golden.jsonl`，对 present 且归一化 ≥30 字的字段产出要点清单，写同目录 `keypoints.jsonl`（行格式 `goldenset/keypoints.py KeypointEntry`，`golden_value_sha` 用 `value_sha(金标值)`；可从 `harness/scripts/eval_005.py gen-keypoints` 的规则版起步做人工/强模型精修） | ~1×10万 token（强模型） |
+| B7 | 005 路由修复后的真实弱模型对比出分（before/after 基线回归） | `cd harness && uv run python scripts/baseline_004.py run --products 平安盛世金越（尊享版26）终身寿险,平安e生保（尊享版）医疗保险,平安守护百分百（2026）两全保险`（新 run 目录或备份旧 runs/ 后跑），完成后 `uv run python scripts/baseline_004.py report` + `uv run python scripts/eval_005.py report` 对比 | 网关 ~6-12万 token/产品 ×3 |
 
 > 以上任务的验收都以既有门禁与 report 为准，不需要新设计。设计类工作（005+ change 提案、架构文档）由架构会话产出。
 

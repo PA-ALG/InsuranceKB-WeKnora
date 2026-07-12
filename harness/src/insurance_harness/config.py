@@ -51,3 +51,8 @@ class HarnessSettings(BaseSettings):
     # 推理型模型（reasoning_content）会大量消耗输出 token，max_tokens 必须给足
     llm_max_tokens: int = 4096
     llm_timeout_s: float = 180.0
+
+    # --- 增量合并审核门禁（change 007，spec K4.4）---
+    # 默认关闭自动通过=全部走审核（保守）；开启后仅 risk=low 且 confidence≥阈值 的 enrich 自动应用
+    merge_auto_apply_enrich: bool = False
+    merge_enrich_auto_min_confidence: float = 0.8

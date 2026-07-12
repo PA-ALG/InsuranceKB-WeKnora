@@ -111,10 +111,14 @@ def read_jsonl(path: Path) -> list[GoldenRecord]:
 
 
 def load_release(release_dir: Path) -> list[GoldenRecord]:
-    """读一个金标 release 目录的全部记录（不含 disputed.jsonl，那是复核清单副本）。"""
+    """读一个金标 release 目录的全部记录。
+
+    跳过非金标记录文件：disputed.jsonl（复核清单副本）与 keypoints.jsonl
+    （long 字段要点清单，005 V1.2）。
+    """
     records: list[GoldenRecord] = []
     for p in sorted(release_dir.glob("*.jsonl")):
-        if p.name == "disputed.jsonl":
+        if p.name in ("disputed.jsonl", "keypoints.jsonl"):
             continue
         records.extend(read_jsonl(p))
     if not records:

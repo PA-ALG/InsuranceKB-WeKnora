@@ -29,20 +29,55 @@ GROUP_ORDER: Final[tuple[str, ...]] = (
     "disease_definition",
 )
 
-# 组关键词路由正则（GROUP_KEYWORDS 数据翻译；None = 扫描全部章节）。
+# 组关键词路由正则源（GROUP_KEYWORDS 数据翻译；None = 扫描全部章节）。
 # 实测效果：无关章节不进该组 LLM 调用，旧系统降约 70% 调用量（06 §3.3）。
-GROUP_KEYWORDS: Final[dict[str, re.Pattern[str] | None]] = {
-    "basic_info": re.compile(
+_GROUP_KEYWORD_SOURCES_004: Final[dict[str, str | None]] = {
+    "basic_info": (
         r"险种|产品|保险期|保险期间|交费|保障期|保障期间|投保|承保|年龄|简称|代码|主险|附加"
         r"|公司|计划|等待期|无等待期|犹豫期|宽限期|豁免|重新投保|届满|合同解除|退保"
     ),
     "coverage": None,  # 保险责任分布最广，扫描全部章节
-    "cost_rules": re.compile(r"免赔|费率|保费|费用|赔付|比例|限额|给付|计算|上浮|社保"),
-    "exclusion_uw": re.compile(r"免除|免责|除外|既往|告知|核保|拒保|加费|延期|健康"),
-    "claim_service": re.compile(r"理赔|报案|材料|垫付|绿通|就医|服务|赔付|给付|申请"),
-    "contract_admin": re.compile(r"退保|复效|变更|受益人|投保人|解除|犹豫|终止|中止"),
-    "disease_definition": re.compile(r"疾病|释义|定义|恶性|肿瘤|心肌|脑|重大|中症|轻度|轻症"),
+    "cost_rules": r"免赔|费率|保费|费用|赔付|比例|限额|给付|计算|上浮|社保",
+    "exclusion_uw": r"免除|免责|除外|既往|告知|核保|拒保|加费|延期|健康",
+    "claim_service": r"理赔|报案|材料|垫付|绿通|就医|服务|赔付|给付|申请",
+    "contract_admin": r"退保|复效|变更|受益人|投保人|解除|犹豫|终止|中止",
+    "disease_definition": r"疾病|释义|定义|恶性|肿瘤|心肌|脑|重大|中症|轻度|轻症",
 }
+
+# 005 V6.1：漏抽归因驱动的零成本路由关键词补充（openspec/changes/005 validation-report
+# 有 before/after 对比）。与 004 基线分开存放，保证归因工具能复算修复前路由：
+# - basic_info：费率表首页的"交费期限"证据（趸交/年交费率表版式）密度不足未路由；
+# - claim_service："保险金申请材料"条目式短章节（材料/申请仅 2 个不同关键词）未过
+#   distinct_min=3——补充理赔材料清单的强特征词（入出院记录/出院小结/结算清单）。
+# 补充后 13 份样本条款压缩比仍全部 ≤0.40（E2.2 预算复验见 005 报告，V6.2）。
+GROUP_KEYWORD_SUPPLEMENTS_005: Final[dict[str, tuple[str, ...]]] = {
+    "basic_info": ("趸交", "费率表"),
+    "claim_service": ("入出院记录", "出院小结", "结算清单"),
+}
+
+
+def compile_group_keywords(
+    supplements: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, re.Pattern[str] | None]:
+    """由 004 基线关键词源（可选叠加补充词）编译组路由正则（005 V6.1）。"""
+    out: dict[str, re.Pattern[str] | None] = {}
+    for group, source in _GROUP_KEYWORD_SOURCES_004.items():
+        if source is None:
+            out[group] = None
+            continue
+        extra = (supplements or {}).get(group, ())
+        pattern = "|".join((source, *extra)) if extra else source
+        out[group] = re.compile(pattern)
+    return out
+
+
+# 004 基线路由（漏抽归因工具复算"修复前"用）
+GROUP_KEYWORDS_004: Final[dict[str, re.Pattern[str] | None]] = compile_group_keywords()
+
+# 当前生效路由 = 004 基线 + 005 补充
+GROUP_KEYWORDS: Final[dict[str, re.Pattern[str] | None]] = compile_group_keywords(
+    GROUP_KEYWORD_SUPPLEMENTS_005
+)
 
 # 字段名（schema 基线 v1.1 中文名）→ 抽取组桥接。
 # 依据旧系统模块分组（product-catalog-modules.ts）：字段随其归属模块的组走；

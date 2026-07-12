@@ -195,17 +195,21 @@ def route_groups(
     min_hits: int = 4,
     per_chars: int = 400,
     distinct_min: int = 3,
+    keywords: dict[str, re.Pattern[str] | None] | None = None,
 ) -> RoutingResult:
     """7 组 × GROUP_KEYWORDS 关键词路由：无关章节不进该组 LLM 调用（E2.2）。
 
     命中判定用密度阈值而非单次命中（源资产是 chunk 级过滤；本管道章节更大，
     单关键词误命中率高）：总命中 ≥ max(min_hits, 字数/per_chars) 且不同关键词
     ≥ distinct_min。参数在 13 份样本条款上标定（压缩比 ≤40%，validation-report）。
+
+    ``keywords`` 可注入其他版本的组关键词（005 V6.1：归因工具复算修复前路由）。
     """
+    kw = keywords if keywords is not None else GROUP_KEYWORDS
     by_group: dict[str, tuple[str, ...]] = {}
     routed = 0
     for group in GROUP_ORDER:
-        pattern = GROUP_KEYWORDS[group]
+        pattern = kw[group]
         if pattern is None:  # coverage：扫描全部章节
             hit_ids = tuple(s.section_id for s in sections)
         else:

@@ -68,8 +68,10 @@ Claim:
   status: draft | candidate | published | superseded | retracted
   confidence: float                  # 抽取置信度（多证据一致会提升）
   extraction_method: llm | structured_import | manual | derived
-  schema_version_id: uuid            # 抽取时依据的 schema 版本
+  schema_version: string             # 抽取时依据的 schema 注册表版本串（如 v1.1+hash）；
+                                     # schema_registry 表落库后升级为 schema_version_id uuid
   current_revision: int              # 修订号，见第5节
+  pending_judge: bool                # 抽取管道在途裁决标记（judge-queue 未回写前禁止自动通过门禁）
 ```
 
 **2.3.1 三态语义（必须严格执行）**
@@ -255,6 +257,7 @@ ReleaseSnapshot:
   id: uuid
   label: string                 # 如 2026-07-15-r1
   claim_set: 冻结的 (claim_id, revision_no) 集合   # 物化或按水位线记录
+  rendered_pages: 物化的页面渲染产物（slug/title/content/refs/metadata）  # 回滚=按快照重发布的直接依据
   published_at, published_by, notes
 ```
 
@@ -285,7 +288,9 @@ ReleaseSnapshot:
 ① 权威等级：高权威直接胜出（低权威新值只能进 conflict 记录，不能 supersede 高权威旧值）
 ② 生效时间：同权威级别，生效日期新者胜（需两边都有可靠 effective_from）
 ③ 完整度：仅作排序参考，永不压过①②
-④ LLM 裁决：最强模型（DeepSeek v4 级）比对双方证据出裁决 + 理由，写入 decision_basis
+④ LLM 裁决：最强模型比对双方证据出裁决 + 理由，写入 decision_basis
+   （当前实现按 08 选型更新为 claude-session 裁决队列：请求落 judge-queue.jsonl 离线批处理回写，
+     不在线调模型；回写前冲突停在 pending_judge）
 ⑤ 人工/强模型审核：④仍不确定 → ReviewItem
 ```
 
@@ -325,10 +330,10 @@ ReleaseSnapshot:
 | `product_aliases` | id, product_id FK, alias, alias_type, source | (alias) trgm；(product_id) |
 | `product_versions` | id, product_id FK, version_label, terms_revision, effective_from/to, channels[], regions[] | (product_id, effective_from)；UQ(product_id, version_label) |
 | `concepts` | id, slug UQ, canonical_name, definition_claim_id, aliases[] | slug 唯一；name trgm |
-| `claims` | 见 2.3；+ superseded_by FK | UQ **部分唯一索引** (subject_ref, predicate, effective_from) WHERE status='published'——同主语同谓词同生效期只允许一条已发布；(status)；(schema_version_id) |
+| `claims` | 见 2.3；+ superseded_by FK | UQ **部分唯一索引** (subject_ref, predicate, effective_from) WHERE status='published'——同主语同谓词同生效期只允许一条已发布（NULL 维度不去重，由合并引擎应用层兜底）；(status)；(schema_version) |
 | `claim_revisions` | claim_id FK, revision_no, before/after jsonb, change_item_id, actor, at | UQ(claim_id, revision_no) |
 | `claim_evidence` | 见 2.4 | (claim_id)；(knowledge_id)——来源删除时反查 |
-| `change_sets` / `change_items` | 见 2.5 | UQ(source_system, external_record_id, source_revision)——结构化导入幂等键；(change_set_id) |
+| `change_sets` / `change_items` | 见 2.5 | UQ(source_kind, external_record_id, source_revision)——批次导入幂等键；(change_set_id) |
 | `conflicts` | change_item_id FK, existing_claim_id, proposed jsonb, decision_basis, status | (status='open') 部分索引 |
 | `review_items` | 见 2.6 | UQ(review_key)；(status, risk_level) |
 | `qa_items` (+`qa_revisions`) | 见第 3 节 | question_intent trgm（相似问合并）；GIN(related_entities) |

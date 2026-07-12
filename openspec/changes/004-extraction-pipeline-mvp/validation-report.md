@@ -110,3 +110,11 @@
 - pending_judge 字段待主会话 Claude 批处理 judge-queue.jsonl 后经 `apply-judgements` 回写，回写后分数会进一步变化（本报告为裁决前基线）；
 - 其余 10 产品基线：`uv run python scripts/baseline_004.py run --products …` 一键可跑，待业务方触发（成本控制决定）；
 - confidence 分层准确率见上表：分层单调性（high>medium>low）是置信度路由（低置信不自动发布）的前提，后续 change 以此调 auto_threshold。
+
+## 尺子修正后（005 eval v2）
+
+005 change 修正了 long 字段逐字等价过苛的问题（关键要点匹配，`--metric v2`），对本报告同一批 pred 离线重评：
+
+- 合计 micro F1：v1 0.184 → **v2 0.216**（尺子修正后）；
+- 漏抽 25 条已全部归因（路由缺失/抽取为空/清洗误杀），路由关键词零成本修复已合入（`routing_data.GROUP_KEYWORD_SUPPLEMENTS_005`）；
+- 明细见 `openspec/changes/005-eval-refinement-recall/validation-report.md`。
