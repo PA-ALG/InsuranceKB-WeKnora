@@ -57,3 +57,6 @@ fix-docker.sh
 
 # WeChat Mini Program local/private configuration
 miniprogram/project.private.config.json
+
+# 项目约定文件入库（AI 会话自动加载）
+!CLAUDE.md
