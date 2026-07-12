@@ -42,7 +42,9 @@
 4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-## ⓪-B 遗留执行任务清单（交由其他模型推进，按优先级）
+**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；里程碑见 `16-roadmap.md`（当前 M1：关键路径 B10→L6）。认领 B 项请在下表加"认领人"并保持更新。
+
+## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
 | # | 任务 | 怎么做 | 预估成本 |
 |---|---|---|---|

@@ -20,6 +20,8 @@
 | [13-blueprint-status.md](13-blueprint-status.md) | 整体蓝图现状：change 001~012 状态一张图、LLM Wiki 27 项引入状态复盘与缺口 G1~G8、下一批规划 | ✅ |
 | [14-deployment-runbook.md](14-deployment-runbook.md) | 部署与联调 Runbook：WeKnora 双库初始化、Harness 启动、L1~L6 联调验收路径、live 契约测试约定、B10 完成定义 | ✅ |
 | [15-solutions-traceability.md](15-solutions-traceability.md) | 业务九问对账：需求→方案→状态追踪矩阵（六问已实现、三问条款级待执行） | ✅ |
+| [16-roadmap.md](16-roadmap.md) | Roadmap：M1 可演示闭环 / M2 形态完整 / M3 规模化提准 / M4 智能演进，含关键路径与完成定义 | ✅ |
+| [17-team-collaboration.md](17-team-collaboration.md) | 三人协作规范：模块所有权分工、Git/PR 双查流程、HANDOFF 同步纪律、主航道守护清单、决策升级路径 | ✅ |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 上位文档：[../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（唯一主清单）· [/HANDOFF.md](../../HANDOFF.md)（交接文档）
