@@ -1,6 +1,8 @@
 # 保险知识编译能力：主迭代更新清单
 
 > 本文合并 `2026-07-insurance-knowledge-compiler.md` 与 `2026-07-insurance-knowledge-compiler-feedback-backlog.md`，去除重复事项并识别依赖关系。后续产品排期、技术设计与开发任务均以本文为唯一主清单；前两份文档保留为调研与反馈来源。
+>
+> **架构修订（2026-07-11，ADR-001）**：经讨论定为插件式架构——WeKnora 原样跟随官方上游，本文中"Go 与数据层/前端"条目的落点调整为独立 Python Harness（`harness/`）与其自有数据库/工作台；gRPC 契约降级为 Harness 内部 API。优先级与验收标准不变。落点映射表与决策记录见 [`docs/insurance-kb/02-architecture.md`](../insurance-kb/02-architecture.md) §6；另新增切片 **S0：金标与评估子系统**（先于 S1 启动，见 [`docs/insurance-kb/05-golden-set-eval.md`](../insurance-kb/05-golden-set-eval.md)）。
 
 ## 1. 目标、范围与成功标准
 

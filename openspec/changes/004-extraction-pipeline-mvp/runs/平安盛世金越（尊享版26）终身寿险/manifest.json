@@ -1,0 +1,50 @@
+{
+  "run_id": "平安盛世金越（尊享版26）终身寿险",
+  "product_dir": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险",
+  "product_id": "1824",
+  "product_name": "平安盛世金越（尊享版26）终身寿险",
+  "line_key": "whole-life",
+  "schema_version": "v1.1+b31a411c621c",
+  "model_id": "deepseek-v4-flash",
+  "judge_mode": "claude-session",
+  "prompt_version": "ep-v1.0",
+  "started_at": "2026-07-12T03:13:05.960042Z",
+  "finished_at": "2026-07-12T03:15:53.856214Z",
+  "duration_s": 167.896172,
+  "stats": {
+    "calls": 59,
+    "prompt_chars": 199009,
+    "completion_chars": 33536
+  },
+  "docs": [
+    {
+      "doc": "产品说明书.pdf",
+      "doc_pages": 7,
+      "sections": 3,
+      "family_id": "fam-e3b0c44298fc",
+      "routed_pairs": 10,
+      "total_pairs": 21,
+      "compression_ratio": 0.47619047619047616
+    },
+    {
+      "doc": "保险条款.pdf",
+      "doc_pages": 9,
+      "sections": 20,
+      "family_id": "fam-e460ade8ea5a",
+      "routed_pairs": 37,
+      "total_pairs": 140,
+      "compression_ratio": 0.2642857142857143
+    },
+    {
+      "doc": "费率表.pdf",
+      "doc_pages": 2,
+      "sections": 3,
+      "family_id": "fam-e3b0c44298fc",
+      "routed_pairs": 3,
+      "total_pairs": 21,
+      "compression_ratio": 0.14285714285714285
+    }
+  ],
+  "dead_letters": [],
+  "pending_judge_count": 0
+}

@@ -57,3 +57,11 @@ fix-docker.sh
 
 # WeChat Mini Program local/private configuration
 miniprogram/project.private.config.json
+
+# 项目约定文件入库（AI 会话自动加载）
+!CLAUDE.md
+
+# 上游 Go 二进制名 WeKnora 会误伤本项目的 python 包目录（大小写不敏感文件系统）——例外
+!harness/**/weknora/
+!harness/**/weknora/**
+__pycache__/

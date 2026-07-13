@@ -1,0 +1,68 @@
+{
+  "run_id": "平安e生保（尊享版）医疗保险",
+  "product_dir": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安e生保（尊享版）医疗保险",
+  "product_id": "596",
+  "product_name": "平安e生保（尊享版）医疗保险",
+  "line_key": "medical",
+  "schema_version": "v1.1+b31a411c621c",
+  "model_id": "deepseek-v4-flash",
+  "judge_mode": "claude-session",
+  "prompt_version": "ep-v1.0",
+  "started_at": "2026-07-12T03:13:21.770536Z",
+  "finished_at": "2026-07-12T03:22:40.534642Z",
+  "duration_s": 558.764106,
+  "stats": {
+    "calls": 122,
+    "prompt_chars": 478961,
+    "completion_chars": 99455
+  },
+  "docs": [
+    {
+      "doc": "产品说明书.pdf",
+      "doc_pages": 27,
+      "sections": 19,
+      "family_id": "fam-0ac9a6cf61a8",
+      "routed_pairs": 59,
+      "total_pairs": 133,
+      "compression_ratio": 0.44360902255639095
+    },
+    {
+      "doc": "保险条款.pdf",
+      "doc_pages": 39,
+      "sections": 79,
+      "family_id": "fam-b64af4d770df",
+      "routed_pairs": 148,
+      "total_pairs": 553,
+      "compression_ratio": 0.26763110307414106
+    },
+    {
+      "doc": "费率表.pdf",
+      "doc_pages": 2,
+      "sections": 7,
+      "family_id": "fam-5f16830219a5",
+      "routed_pairs": 9,
+      "total_pairs": 49,
+      "compression_ratio": 0.1836734693877551
+    }
+  ],
+  "dead_letters": [
+    {
+      "product": "平安e生保（尊享版）医疗保险",
+      "doc": "产品说明书.pdf",
+      "group": "coverage",
+      "window_ref": "s016+s017",
+      "field_ids": [
+        "zh_a271d96039",
+        "zh_540e1969e3",
+        "zh_7d7fe38f09",
+        "zh_09a5d9e54e",
+        "zh_74fd5a9469",
+        "zh_f32c510a5e",
+        "external_drug_coverage"
+      ],
+      "error": "重试 3 次后仍失败：TruncatedOutputError('模型 deepseek-v4-flash 输出正文为空（finish_reason=length）——疑似 reasoning 耗尽 max_tokens，按截断重试')",
+      "attempts": 3
+    }
+  ],
+  "pending_judge_count": 2
+}

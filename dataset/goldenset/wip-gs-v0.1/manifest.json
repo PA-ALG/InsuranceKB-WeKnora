@@ -1,0 +1,304 @@
+{
+ "schema_version": "v1.1+b31a411c621c",
+ "products": [
+  {
+   "product": "平安e生保（尊享版）医疗保险",
+   "line_key": "medical",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 27,
+     "chars": 22221
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 39,
+     "chars": 43585
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 1460
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安e生保（尊享版）医疗保险/product_meta.json"
+  },
+  {
+   "product": "平安e生保（悦享版）医疗保险",
+   "line_key": "medical",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "E保险条款.pdf",
+     "pages": 56,
+     "chars": 61440
+    },
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 30,
+     "chars": 20762
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 3,
+     "chars": 2070
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安e生保（悦享版）医疗保险/product_meta.json"
+  },
+  {
+   "product": "平安e生保（惠享版）长期医疗保险（费率可调）",
+   "line_key": "medical",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 17,
+     "chars": 13363
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 44,
+     "chars": 47186
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 7,
+     "chars": 4310
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安e生保（惠享版）长期医疗保险（费率可调）/product_meta.json"
+  },
+  {
+   "product": "平安创享盛世金越（尊享版26）终身寿险（分红型）",
+   "line_key": "whole-life",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 10,
+     "chars": 7797
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 15,
+     "chars": 16167
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 8388
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安创享盛世金越（尊享版26）终身寿险（分红型）/product_meta.json"
+  },
+  {
+   "product": "平安守护百分百（2026）两全保险",
+   "line_key": "endowment",
+   "n_fields": 61,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 7,
+     "chars": 5044
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 9,
+     "chars": 10406
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 6,
+     "chars": 20801
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安守护百分百（2026）两全保险/product_meta.json"
+  },
+  {
+   "product": "平安爱满分（2026）两全保险",
+   "line_key": "endowment",
+   "n_fields": 61,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 8,
+     "chars": 5350
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 9,
+     "chars": 10258
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 3323
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安爱满分（2026）两全保险/product_meta.json"
+  },
+  {
+   "product": "平安盛世金越养老年金保险（分红型）",
+   "line_key": "annuity",
+   "n_fields": 59,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 10,
+     "chars": 7687
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 11,
+     "chars": 12436
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 11,
+     "chars": 257235
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安盛世金越养老年金保险（分红型）/product_meta.json"
+  },
+  {
+   "product": "平安盛世金越（尊享版26）终身寿险",
+   "line_key": "whole-life",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 7,
+     "chars": 4420
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 9,
+     "chars": 10037
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 4638
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险/product_meta.json"
+  },
+  {
+   "product": "平安盛世金越（尊享版26）终身寿险（分红型）",
+   "line_key": "whole-life",
+   "n_fields": 60,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 10,
+     "chars": 7710
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 15,
+     "chars": 16158
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 8384
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险（分红型）/product_meta.json"
+  },
+  {
+   "product": "平安盛世金越（至尊版26）年金保险（分红型）",
+   "line_key": "annuity",
+   "n_fields": 59,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 10,
+     "chars": 7620
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 11,
+     "chars": 12422
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 68,
+     "chars": 1116803
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安盛世金越（至尊版26）年金保险（分红型）/product_meta.json"
+  },
+  {
+   "product": "平安福满分（2026）养老年金保险",
+   "line_key": "annuity",
+   "n_fields": 59,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 8,
+     "chars": 5495
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 10,
+     "chars": 10485
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 17878
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安福满分（2026）养老年金保险/product_meta.txt"
+  },
+  {
+   "product": "平安附加（2026）失能收入损失保险",
+   "line_key": "disability-income",
+   "n_fields": 62,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 8,
+     "chars": 5685
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 44,
+     "chars": 48907
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 2,
+     "chars": 2509
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安附加（2026）失能收入损失保险/product_meta.json"
+  },
+  {
+   "product": "平安附加（2026）意外伤害保险",
+   "line_key": "accident",
+   "n_fields": 55,
+   "docs": [
+    {
+     "doc": "产品说明书.pdf",
+     "pages": 12,
+     "chars": 9415
+    },
+    {
+     "doc": "保险条款.pdf",
+     "pages": 12,
+     "chars": 14963
+    },
+    {
+     "doc": "费率表.pdf",
+     "pages": 10,
+     "chars": 86550
+    }
+   ],
+   "meta": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安附加（2026）意外伤害保险/product_meta.json"
+  }
+ ]
+}

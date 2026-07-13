@@ -1,0 +1,39 @@
+schema_version: v1.1-extensions
+状态: 业务方于 2026-07-11 确认全部接受（18 条扩展提案，见 ../07-schema-baseline.md §3）
+说明: 以下字段并入对应险种 schema；开发中若发现某字段在样本中确实无法抽取，降级或移除需留痕。
+
+基础字段扩展:  # 全险种通用
+  - {字段名: 条款备案/批复文号, field_id: regulatory_filing_no, 取值来源: 产品条款, risk_level: low, 说明: 条款首页必有；多产品文档路由的确定性锚点}
+  - {字段名: 条款版本标识, field_id: clause_version, 取值来源: 产品条款, risk_level: high, 说明: 与条款生效日期共同构成版本身份，区别于"开始使用时间"（销售口径）}
+  - {字段名: 条款生效日期, field_id: clause_effective_date, 取值来源: 产品条款, risk_level: high}
+  - {字段名: 责任免除, field_id: exclusions_official, 取值来源: 免责条款, risk_level: high, value_type: long, 说明: 完整结构化免责清单，非亮点式字段}
+  - {字段名: 等待期内出险处理, field_id: waiting_period_claim_handling, 取值来源: 产品条款, risk_level: high, 说明: 返还保费 vs 现金价值}
+  - {字段名: 复效条款, field_id: reinstatement, 取值来源: 产品条款, risk_level: medium, 说明: 效力中止与复效条件}
+  - {字段名: 理赔申请时效与申请材料, field_id: claim_filing_requirements, 取值来源: 产品条款, risk_level: medium}
+  - {字段名: 销售地区限制, field_id: sales_region_limit, 取值来源: 人工填充/运营数据, risk_level: medium, extractable: false}
+  - {字段名: 减额缴清, field_id: reduced_paid_up, 取值来源: 产品条款, risk_level: medium, 适用: 长期险}
+
+险种级扩展:
+  疾病保险（重疾险）:
+    - {字段名: 疾病定义标准版本, field_id: disease_definition_standard, 取值来源: 产品条款, risk_level: high, 说明: 如2020重疾新定义}
+    - {字段名: 身故责任, field_id: death_benefit, 取值来源: 保险责任, risk_level: high}
+    - {字段名: 多次赔付间隔期, field_id: multi_claim_interval, 取值来源: 保险责任, risk_level: high}
+    - {字段名: 恶性肿瘤二次赔条件, field_id: cancer_second_claim, 取值来源: 保险责任, risk_level: high}
+    - {字段名: 健康告知, field_id: health_disclosure, 取值来源: 人工填充, 说明: 对齐寿险/两全表已有字段}
+  护理保险（新）:
+    - {字段名: 健康告知, field_id: health_disclosure, 取值来源: 人工填充}
+  失能收入损失保险（新）:
+    - {字段名: 健康告知, field_id: health_disclosure, 取值来源: 人工填充}
+  医疗保险（医疗险）:
+    - {字段名: 既往症定义与处理, field_id: pre_existing_conditions, 取值来源: 产品条款, risk_level: high}
+    - {字段名: 外购药/特药责任, field_id: external_drug_coverage, 取值来源: 保险责任, risk_level: medium}
+    - {字段名: 停售后续保安排, field_id: discontinuation_renewal, 取值来源: 产品条款, risk_level: high}
+  年金保险（年金险）与补充养老保险（新）:
+    - {字段名: 年金领取起始年龄, field_id: annuity_start_age, 取值来源: 保险责任, risk_level: high, 说明: 自"领取规则"拆分}
+    - {字段名: 身故保险金口径, field_id: death_benefit_basis, 取值来源: 保险责任, risk_level: high, 说明: 已交保费/现金价值取大等}
+  意外伤害保险（意外险）:
+    - {字段名: 伤残评定标准, field_id: disability_assessment_standard, 取值来源: 产品条款, risk_level: medium}
+    - {字段名: 公共交通意外额外给付, field_id: public_transport_extra, 取值来源: 保险责任, risk_level: medium}
+  分红型产品（跨险种）:
+    - {字段名: 红利分配方式, field_id: dividend_distribution, 取值来源: 产品条款, risk_level: high}
+    - {字段名: 演示利率口径, field_id: illustrated_rate_basis, 取值来源: 产品说明书, risk_level: high, 说明: 合规敏感，销售话术强约束}

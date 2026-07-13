@@ -1,0 +1,50 @@
+{
+  "run_id": "平安守护百分百（2026）两全保险",
+  "product_dir": "/Users/houjing/code/kb_LLMwiki/InsuranceKB-WeKnora/dataset/shouxian_product/平安守护百分百（2026）两全保险",
+  "product_id": "1826",
+  "product_name": "平安守护百分百（2026）两全保险",
+  "line_key": "endowment",
+  "schema_version": "v1.1+b31a411c621c",
+  "model_id": "deepseek-v4-flash",
+  "judge_mode": "claude-session",
+  "prompt_version": "ep-v1.0",
+  "started_at": "2026-07-12T03:08:26.720856Z",
+  "finished_at": "2026-07-12T03:15:07.911291Z",
+  "duration_s": 401.190435,
+  "stats": {
+    "calls": 75,
+    "prompt_chars": 275400,
+    "completion_chars": 49629
+  },
+  "docs": [
+    {
+      "doc": "产品说明书.pdf",
+      "doc_pages": 7,
+      "sections": 3,
+      "family_id": "fam-e3b0c44298fc",
+      "routed_pairs": 11,
+      "total_pairs": 21,
+      "compression_ratio": 0.5238095238095238
+    },
+    {
+      "doc": "保险条款.pdf",
+      "doc_pages": 9,
+      "sections": 12,
+      "family_id": "fam-7e3de45515c1",
+      "routed_pairs": 31,
+      "total_pairs": 84,
+      "compression_ratio": 0.36904761904761907
+    },
+    {
+      "doc": "费率表.pdf",
+      "doc_pages": 6,
+      "sections": 11,
+      "family_id": "fam-e3b0c44298fc",
+      "routed_pairs": 15,
+      "total_pairs": 77,
+      "compression_ratio": 0.19480519480519481
+    }
+  ],
+  "dead_letters": [],
+  "pending_judge_count": 1
+}
