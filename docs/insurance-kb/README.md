@@ -23,6 +23,7 @@
 | [16-roadmap.md](16-roadmap.md) | Roadmap：M1 可演示闭环 / M2 形态完整 / M3 规模化提准 / M4 智能演进，含关键路径与完成定义 | ✅ |
 | [17-team-collaboration.md](17-team-collaboration.md) | 三人协作规范：模块所有权分工、Git/PR 双查流程、HANDOFF 同步纪律、主航道守护清单、决策升级路径 | ✅ |
 | [18-ai-collaboration.md](18-ai-collaboration.md) | AI Coding 协作机制：会话生命周期、文件域声明制、门禁等化器、token 预算纪律、反模式清单（001~007 实战验证） | ✅ |
+| [19-weknora-utilization.md](19-weknora-utilization.md) | WeKnora 能力利用清单：三层利用率盘点、早期调研结论修订记录、选型结论复核 | ✅ |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 上位文档：[../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（唯一主清单）· [/HANDOFF.md](../../HANDOFF.md)（交接文档）
