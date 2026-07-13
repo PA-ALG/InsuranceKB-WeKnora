@@ -1,9 +1,11 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-12（006 模板 fast path 完成；005 评测尺子升级与召回归因完成；金标标注 11/13 后因 token 限额搁置，现场已固化）
+> 最后更新：2026-07-13（**PR #1 已合入 main**；上游 docker workflow 已禁用；CI 三连坑修复后 harness-ci 全绿）
 
 ## ⓪ 当前最优先事项（接手先看这里）
+
+0. **基础建设已合入 main（PR #1，2026-07-13）**：此后一律按 17 号规范从 main 切 `feat/NNN-*` 分支，PR 双查 + **CI 绿才算绿**（坑 9a）。上游 workflow "Build and Push Docker Image" 已在 GitHub 界面手动禁用（fork 无腾讯 registry 凭据必失败，属继承性噪音）；其余上游 workflow 有路径/标签过滤暂无干扰，误触发照此禁用，不影响版本列车跟版。
 
 1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
