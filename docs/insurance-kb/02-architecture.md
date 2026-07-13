@@ -160,3 +160,9 @@ InsuranceKB-WeKnora/
 - 模型接入：生产弱模型（minimax 2.5 / qwen 3.6 / qwen-VL），裁决与升级模型 DeepSeek v4，金标模型为可用的最强模型（见 05）；模型网关统一封装，可切换；
 - 可观测：与 WeKnora 共用 Langfuse 实例，以 `knowledge_id` / `harness_job_id` / `change_set_id` 关联端到端链路；
 - 许可证：WeKnora MIT；nashsu/llm_wiki 及其 fork 为 GPL-3.0，**只借鉴思想，不复制代码**（详见 06-asset-migration.md §合规）。
+
+## 10. 澄清：两种"抽取"与两种"Wiki"的关系（2026-07-13 补）
+
+**两种抽取 = 单向依赖 + 双轨检索。** harness 抽取（本项目核心：schema/模板/八步管道）只消费 WeKnora 的解析产物（chunk/页文本，用于证据定位），**不依赖**其任何语义加工；WeKnora 的自动 QA 生成、GraphRAG、内置 wiki 生成在本部署中关闭。WeKnora 侧保留的检索价值是**兜底轨**：未被 harness 编译的长尾片段靠 KB-RAW 原文 RAG 可检索（低保真全覆盖），已编译知识走 KB-WIKI（Claim 级精度）——harness 的使命就是持续把内容从兜底轨升级到编译轨。一句话：WeKnora 抽取管"检索得到"，harness 抽取管"答得准、可治理"。
+
+**两种 Wiki = 同一范式两代实现，拆开用。** WeKnora 内置 Wiki 本身是 nashsu/llm_wiki 理念的平台化产物（见其 LLM_WIKI_FROM_NASHSU 演进文档）。我们的取舍：**生成管线弃用**（无 schema/三态/权威序/审核/Claim 证据/回滚，不满足寿险治理）→ 由 harness 编译器替代（= 该范式的企业治理版，思想吸收对照见 09）；**载体完整复用**（页面存储/渲染/互链/目录/结构 lint/阅读界面）。wiki 形态路线：007 产品页 ✅ → 009 概念页/义项 → 008 审核 → 011 健康 → 015 飞轮；内置生成管线保持关闭，唯一重估点是版本列车升级时上游若补齐 schema/审核能力。
