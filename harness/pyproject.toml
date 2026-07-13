@@ -42,6 +42,11 @@ packages = ["src/insurance_harness"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+src = ["src", "."]
+
+[tool.ruff.lint.isort]
+# 显式声明第一方包：ruff 的 src 自动探测在 CI 与本地可能漂移（CI 曾把 insurance_harness 判为第三方致 I001 误报）
+known-first-party = ["insurance_harness", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
