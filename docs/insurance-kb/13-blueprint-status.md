@@ -33,7 +33,7 @@
 | 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 提案（B15~B16）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
 | 015 | 数据飞轮 | 📋 提案（B17） |
 | 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
-| 017 | WeKnora SourceDocument Bridge/Evidence lineage | 🚧 T1–T7 已完成并通过双审/全量复验，当前进入 T8 live E2E（B19） |
+| 017 | WeKnora SourceDocument Bridge/Evidence lineage | ⚠️ T1–T8 软件完成并通过双审/全量复验；真实 WeKnora/PostgreSQL live 为 NOT RUN（B19） |
 | 018 | SnapshotFact/统一读取/可恢复发布 | ✅ 规格 review 通过，待 016+017（B20） |
 | 019 | Golden 工具/QualityProfile/在线 Gate | ✅ 设计与计划 review 通过，待 TDD（B21） |
 | 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过，待 019+run-admission（B22） |

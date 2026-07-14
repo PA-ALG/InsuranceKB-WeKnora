@@ -1,6 +1,6 @@
 # 20 · 企业运行基础：作用域、来源桥接、发布快照与质量闸门
 
-> 状态：设计已形成，按 OpenSpec 016～020 分段实施。016 已完成并通过规格/质量双审与主代理验收；017 T1–T6 已完成并进入 T7，018～020 尚未完成。本文是方案 A 的总设计；各 change 的 `specs/` 是验收权威。
+> 状态：设计已形成，按 OpenSpec 016～021 分段实施。016 已完成；017 T1–T8 软件实施已通过规格/质量双审与主代理验收，但真实 WeKnora/PostgreSQL live 为 `NOT RUN`；018～021 尚未完成。本文是方案 A 的总设计；各 change 的 `specs/` 是验收权威。
 
 ## 1. 目标与结论
 
@@ -85,7 +85,7 @@ PDF 页码来自下载的原文件；chunk 引用通过 evidence quote 与 chunk
 
 Evidence 额外冻结 `source_revision`、`file_hash`、`parser_version` 与可选的 `chunk_hash`。同一 `knowledge_id` 修订变化时，旧 Evidence 标记 stale 并产生 recompile ChangeSet，不静默覆盖。
 
-017 T5 已实现纯 whitespace-only quote→chunk 映射、同 `SourceDocument` 来源校验，以及 `linked|page_only|ambiguous` 三态 lineage；T6 已以 0004 迁移持久化完整 audit/stale 字段，并交付生产 `SourceImportContext`、显式 legacy replay、按 source revision 分区、pending recompile 复用、全分区 savepoint 与 validated non-stale refs。来源变化后的 stale mutation、并发 recompile get-or-create 和 scoped retract 仍属于 T7。
+017 T5 已实现纯 whitespace-only quote→chunk 映射、同 `SourceDocument` 来源校验，以及 `linked|page_only|ambiguous` 三态 lineage；T6 已以 0004 迁移持久化完整 audit/stale 字段，并交付生产 `SourceImportContext`、显式 legacy replay、按 source revision 分区、pending recompile 复用、全分区 savepoint 与 validated non-stale refs；T7 已完成 stale mutation、同 revision 并发 recompile get-or-create 与 scoped retract。T8 已交付真实端点 existing-knowledge gate、严格 linked 回链、deterministic Compiler、PostgreSQL import/rollback、Runbook 与双审；由于环境前置缺失，真实 live 运行记录为 `NOT RUN`，且当前不覆盖 upload 创建。
 
 ## 5. ReleaseSnapshot：单一在线事实视图
 
@@ -157,8 +157,9 @@ Golden 工作拆成四层：
 | 018 | SnapshotFact、统一读取、发布/回滚一致性 | 007、016、017（硬依赖） |
 | 019 | Golden 工具、QualityProfile 与发布闸门（确定性软件） | 002、004、005、007；merge 接入在 016 后 |
 | 020 | gs-v0.1 收尾、13 产品 baseline、judge/dead-letter/keypoints（真实数据运行） | 002、019；运行准入记录 |
+| 021 | SourceHead、不同 revision ordering 与统一 per-source lock/CAS | 017；与 018 迁移串行协调 |
 
-016 是所有后续企业能力的前置，现已完成；本地实现证据见 `openspec/changes/016-enterprise-knowledge-scope/validation-report.md`。017 T1～T6 已完成并进入 T7，整体仍在实施；018 硬依赖 016+017。019 的 Golden 工具部分可独立推进，merge gate 接入的 016 前置已满足；020 是受模型环境与预算约束的可恢复数据运行。018、019 和必要的 020 质量画像完成后再启用生产自动发布。B10 的 live WeKnora 部署与契约测试作为 017/018 的最终验收，不再只是演示附加项。
+016 是所有后续企业能力的前置，现已完成；本地实现证据见 `openspec/changes/016-enterprise-knowledge-scope/validation-report.md`。017 T1～T8 软件实施已完成，真实 live gate 因环境缺失为 `NOT RUN`；018 硬依赖 016+017，进入生产前仍需补真实 WeKnora/PostgreSQL 证据。019 的 Golden 工具部分可独立推进，merge gate 接入的 016 前置已满足；020 是受模型环境与预算约束的可恢复数据运行；021 承接不同 revision 顺序安全。018、019 和必要的 020 质量画像完成后再启用生产自动发布。B10 的 live WeKnora 部署与契约测试仍是 017/018 的最终运行验收，不因软件门禁完成而自动关闭。
 
 ## 10. 非目标
 

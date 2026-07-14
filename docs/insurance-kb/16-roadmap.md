@@ -17,7 +17,7 @@
 
 **关键路径**：016 → 017 → 018；019 工具可文件域隔离推进，020 等 019 与运行准入；021 是 017 后续生产并发强化，不阻塞 T8 live 验收但阻塞不同 revision 并发开放。
 
-进度（2026-07-14）：016 T1～T8 已完成并通过双审/主代理验收；017 T1 adapter contract、T2 SourceDocument/Directory replay、T3 WeKnora materializer、T4 Compiler source boundary、T5 quote→chunk/source-aware Evidence、T6 Evidence migration/persistence/import 与 T7 stale/recompile/scoped retract 已按 TDD 完成并分别通过双审。最新主代理门禁为 201 T7 focused（2 skipped）/ 903 non-live / 4 deselected，Ruff、mypy 138 files 与 diff check 全绿，当前进入 T8 live E2E。018～020 均未因此自动完成；021 仅 proposed/pending，尚未实现不同 revision ordering；017 整体与真实 WeKnora/PostgreSQL live 验收也尚未完成。skip/deselected 不代表 live 成功，M0 仍在进行。
+进度（2026-07-14）：016 T1～T8 已完成并通过双审/主代理验收；017 T1 adapter contract、T2 SourceDocument/Directory replay、T3 WeKnora materializer、T4 Compiler source boundary、T5 quote→chunk/source-aware Evidence、T6 Evidence migration/persistence/import、T7 stale/recompile/scoped retract 与 T8 live gate/Runbook/handoff 已按 TDD 完成并通过双审。最新主代理门禁为 12 T8 non-live（1 deselected）/ 49 source standalone / 915 non-live / 5 deselected，Ruff、mypy 139 files 与 diff check 全绿。真实 WeKnora/PostgreSQL 因六项环境前置缺失为 `NOT RUN`（1 skipped/12 deselected），existing-knowledge 分支不代表 upload 创建覆盖。018～020 均未因此自动完成；021 仅 proposed/pending，尚未实现不同 revision ordering。skip/deselected 不代表 live 成功，M0 仍在进行。
 
 ## M1 · 可演示闭环
 

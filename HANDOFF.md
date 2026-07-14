@@ -1,13 +1,13 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-14（方案 A 按 Subagent-Driven 实施；OpenSpec 017 T7 已完成并通过规格/质量双审及最终全量门禁，当前进入 T8 live E2E）
+> 最后更新：2026-07-14（方案 A 按 Subagent-Driven 实施；OpenSpec 017 T1～T8 软件收尾完成并通过双审/全量门禁；真实 WeKnora/PostgreSQL live 因环境缺失为 NOT RUN）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
 0. **基础建设已合入 main（PR #1，2026-07-13）**：此后一律按 17 号规范从 main 切 `feat/NNN-*` 分支，PR 双查 + **CI 绿才算绿**（坑 9a）。上游 workflow "Build and Push Docker Image" 已在 GitHub 界面手动禁用（fork 无腾讯 registry 凭据必失败，属继承性噪音）；其余上游 workflow 有路径/标签过滤暂无干扰，误触发照此禁用，不影响版本列车跟版。
 
-0a. **016 企业 KnowledgeSpace 已完成，017 SourceDocument Bridge 正在实施**：架构审计确认 WeKnora/Harness 分工方向正确；生产链仍缺单一 ReleaseSnapshot 读取模型和 Golden 质量闸门。总设计见 `docs/insurance-kb/20-enterprise-runtime-foundation.md`；已拆成 016～021。隔离工作区：`../.worktrees/insurancekb-enterprise-foundation`，分支 `codex/016-enterprise-foundation`。016 已完成并通过双审/主代理验收；017 T1～T7 已完成并分别通过规格/质量双审。T7 已实现 stale mutation、同 revision 并发 recompile get-or-create、scoped retract/tombstone，以及 legacy/source-aware 强隔离、source ChangeSet/tombstone aggregate 校验和 bounded live-PG harness；所有审查 finding 已按 TDD 闭合，最终 fresh quality rereview 为 `Quality approved: yes`，T7 已勾选。当前扩大 focused 为 **201 passed / 2 skipped**，最终全量 non-live 为 **903 passed / 4 deselected**，Ruff、mypy 138 files 与 diff check 全绿；skip 中真实 PostgreSQL 并发用例因未配置 `HARNESS_LIVE_POSTGRES_URL` 未运行，不能解释为 live 成功。**重要边界：T7 仅保证同 revision 幂等，不保证不同 revision 并发/乱序；021 已提出 durable SourceHead + processed_at/generation + per-source lock/CAS，但当前仅 proposed/pending。在 021 落地前，只允许同一 Space/source 串行 lifecycle，notification 必须来自当次实时读取的当前 metadata。下一步是 T8 live E2E；当前结果不代表 017 整体完成。**
+0a. **016 企业 KnowledgeSpace 与 017 SourceDocument Bridge 软件实施已收尾**：总设计见 `docs/insurance-kb/20-enterprise-runtime-foundation.md`，分支 `codex/016-enterprise-foundation`。017 T1～T8 已按 TDD 完成，最终规格复审 `Spec compliant: yes`、质量复审 `Quality approved: yes`，无剩余 finding；主代理 T8 non-live **12 passed / 1 deselected**、source standalone **49 passed**、最终全量 non-live **915 passed / 5 deselected**，Ruff、mypy 139 files 与 diff check 全绿。T8 live gate 已实现真实 `wait_for_parsed → bridge → deterministic Compiler → pred/import → Evidence backlink`，但六项 live 变量与本机 WeKnora/PostgreSQL 实例均缺失，运行结果明确为 **NOT RUN：1 skipped / 12 deselected**；当前 adapter 无 uploader，因此 existing-knowledge 分支也不代表 upload 创建覆盖。**重要边界：T7 仅保证同 revision 幂等，不保证不同 revision 并发/乱序；021 仍仅 proposed/pending。在 021 落地前只允许同一 Space/source 串行 lifecycle。018/019/020/021 均未随 017 自动完成，本轮未启动下一事项。**
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -71,7 +71,7 @@
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
-| B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage（当前）** | `openspec/changes/017-weknora-source-bridge/`；T1～T7 已完成并通过双审/全量门禁；不同 revision 乱序由 021 承接；live 验收仍待 T8 | 开发型，中大 + live |
+| B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 因六项环境前置缺失为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | `openspec/changes/018-release-snapshot-read-model/`；硬依赖 007+016+017 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | 已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；工具部分可与 016 文件域隔离推进 | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 统一承接 B1/B2/B3/B4/B6/B7；未完成 run-admission 前零模型调用 | 高 token 数据任务 |

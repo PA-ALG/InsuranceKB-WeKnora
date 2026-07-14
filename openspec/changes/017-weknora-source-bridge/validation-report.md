@@ -2,7 +2,7 @@
 
 更新时间：2026-07-14
 
-当前状态：实施中；T1–T7 已完成，并通过规格/质量双审与主代理全量复验；当前进入 T8，live E2E 尚未完成。本报告不代表 017 整体完成，也不代表真实 WeKnora/PostgreSQL live 验收成功。
+当前状态：T1–T8 软件实施完成，并通过规格/质量双审与主代理全量复验；真实 WeKnora/PostgreSQL live 执行因六项环境前置缺失记录为 `NOT RUN`。本报告不把 skip/deselected 解释为 live 验收成功。
 
 ## T1 · WeKnora metadata / chunks / download
 
@@ -300,8 +300,55 @@ cd harness
 
 明确 residual：017 只保证同 revision 幂等，**不保证不同 revision 的并发或乱序安全**。revision 是不可排序的 SHA-256；不得用 hash 比较新旧。SourceImportIdentity/Evidence/ChangeSet 也没有 durable current-head/代际 CAS，因此旧 B notification 可能在 C 之后把 C 的 Evidence 标 stale，import/delete 仍存在跨 key 竞争。在 change 021 的 durable SourceHead、`processed_at`/generation 与统一 per-source lock/CAS 落地前，生产只允许同一 Space/source 串行 lifecycle，并且 notification 必须来自当次实时读取的当前 metadata；缓存或延迟旧 metadata、并发不同 revision、import/delete 竞争均不在支持范围。
 
+## T8 · Live source bridge E2E / Runbook / handoff（软件实施完成，真实 live NOT RUN）
+
+实现范围：
+
+- live gate 要求六个显式变量：真实 WeKnora URL/API key、已迁移 PostgreSQL URL、bound Space、existing PDF knowledge ID 与 parser fingerprint；配置不全逐名 skip，SQLite 直接拒绝，绝无 Directory/mock fallback；
+- 当前 adapter 无上传 API，按已批准计划走 existing-knowledge 分支并调用真实 `wait_for_parsed`；因此覆盖 parse wait→download/pages/chunks→bridge→Compiler→pred/import，不把该分支写成 upload 创建覆盖；
+- Compiler 使用本地确定性 scripted client，零真实 LLM/模型凭据；live Evidence 必须由真实页锚点唯一 linked 到非空真实 chunk；
+- RunManifest 与物化 `SourceDocument` 按文档集合一一对应，并闭合 scope/source/knowledge/revision/hash/digest/parser；Importer 后的 Evidence 直接对照物化文档与真实 chunk；
+- Harness PostgreSQL 临时产品、ChangeSet、Claim 与 Evidence 全部在测试事务内回滚；client/session/engine、物化文件和 run 目录在成功/失败路径清理；
+- 修复 source standalone eager-import cycle：compiler pipeline 公共导出改为 lazy resolve，`from insurance_harness.compiler import ExtractionPipeline` 与 star import 兼容。
+
+TDD 与独立审查：
+
+1. 初始编排 RED 为 `5 failed`（缺 prerequisite/anchor/context/scripted helper）；产品/version parent flush 补充 RED 为 `1 failed`，实现后 T8 non-live 为 `6 passed, 1 deselected`；
+2. 第一轮规格审查 `Spec compliant: yes`；第一轮质量审查未批准，指出 permissive page-only、manifest self-oracle、standalone import cycle，并建议补双凭据脱敏与失败清理；
+3. strict anchor RED `2 failed`、manifest attestation RED `3 failed`、subprocess import-order RED `1 failed`、cleanup registration RED `1 failed`；最小修复后 T8 non-live 扩大为 `12 passed, 1 deselected`，source standalone 为 `49 passed`；
+4. 修复后规格复审 `Spec compliant: yes`、质量复审 `Quality approved: yes`，均无 Critical/Important/Minor。
+
+主代理最终命令与证据：
+
+```text
+cd harness
+.venv/bin/pytest tests/test_source_bridge_live_017.py -m 'not live' -q
+12 passed, 1 deselected in 2.77s
+
+.venv/bin/pytest tests/test_source_weknora_017.py -q
+49 passed in 2.04s
+
+/usr/bin/env -u HARNESS_LIVE_BASE_URL -u HARNESS_LIVE_API_KEY -u HARNESS_LIVE_DB_URL -u HARNESS_LIVE_SPACE_ID -u HARNESS_LIVE_KNOWLEDGE_ID -u HARNESS_LIVE_PARSER_FINGERPRINT .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -rs
+1 skipped, 12 deselected in 0.89s
+
+.venv/bin/pytest -m 'not live' -q
+915 passed, 5 deselected, 209 warnings in 68.29s
+
+.venv/bin/ruff check . --no-cache
+All checks passed!
+
+.venv/bin/mypy --no-incremental src tests
+Success: no issues found in 139 source files
+
+git diff --check
+passed
+```
+
+live 状态：`NOT RUN`。skip 精确列出 `HARNESS_LIVE_BASE_URL`、`HARNESS_LIVE_API_KEY`、`HARNESS_LIVE_DB_URL`、`HARNESS_LIVE_SPACE_ID`、`HARNESS_LIVE_KNOWLEDGE_ID`、`HARNESS_LIVE_PARSER_FINGERPRINT`；没有真实端点成功证据，也没有 upload 创建证据。
+
 ## 尚未验证
 
-- T8 live E2E；
-- 真实 WeKnora live 环境与真实 PostgreSQL 并发用例；
+- 真实 WeKnora existing-knowledge bridge E2E 与真实 PostgreSQL import（T8 gate 已实现但环境缺失，`NOT RUN`）；
+- WeKnora upload 创建分支（当前 adapter 无 uploader，不在已实现分支内）；
+- 真实 PostgreSQL T7 并发用例（未配置 `HARNESS_LIVE_POSTGRES_URL`）；
 - 021 不同 revision lifecycle ordering（当前仅 proposed/pending，未实现）。

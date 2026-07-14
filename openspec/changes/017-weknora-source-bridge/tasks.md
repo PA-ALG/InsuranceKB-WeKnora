@@ -7,9 +7,9 @@
 - [x] T5 先写 quote→chunk 唯一/零/多命中测试，再实现 lineage mapper（B4）
 - [x] T6 先写 Evidence migration/import 测试，再持久化 source revision 与 lineage
 - [x] T7 先写 source revision 变化与删除测试，再实现 stale/recompile/retract（B5）
-- [ ] T8 增加 live E2E、Runbook、validation-report 与 HANDOFF 对账
+- [x] T8 增加 live E2E、Runbook、validation-report 与 HANDOFF 对账
 
-状态：实施中；依赖 016 已完成；T1–T7 已通过规格/质量双审与主代理全量复验，当前进入 T8；T8 live E2E 待实施。
+状态：T1–T8 软件实施完成，并通过规格/质量双审与主代理全量复验；真实 WeKnora/PostgreSQL live 执行因环境前置缺失记录为 `NOT RUN`，不视为 live 验收成功。
 
 ## T1 验证证据（2026-07-13）
 
@@ -77,3 +77,15 @@
 - 主代理扩大 focused：`201 passed, 2 skipped`；最终全量 non-live：`903 passed, 4 deselected, 209 warnings in 111.95s`；Ruff `All checks passed!`；mypy `138 source files`；`git diff --check` 通过；
 - 真实 PostgreSQL 并发用例因未配置 `HARNESS_LIVE_POSTGRES_URL` 未运行，真实 WeKnora live E2E 也未运行；skip/deselected 不代表 live 成功；
 - T7 只保证同 revision 幂等。不同 revision 并发/乱序、import/delete 竞争由 021 的 durable SourceHead、generation/processed_at 与 per-source lock/CAS 承接；021 当前仅为 proposed/pending，未实现。
+
+## T8 验证证据（2026-07-14）
+
+- 新增真实端点 `test_source_bridge_live_017.py`：只接受显式 WeKnora URL/API key、已迁移 PostgreSQL、bound Space、existing PDF knowledge ID 与 parser fingerprint；禁止 SQLite、Directory 与 mock/respx fallback；
+- existing-knowledge 分支先对真实端点执行 `wait_for_parsed`，再完成 materialize→deterministic scripted Compiler→`pred.jsonl`→source-aware import→`ClaimEvidence` 回链断言；当前 adapter 无 uploader，因此不宣称覆盖 upload 创建；
+- live 锚点必须来自真实 PDF 页并唯一命中非空真实 chunk；manifest 与实际物化 `SourceDocument` 做一一对应及完整身份互证，Evidence 直接对照物化文档，而非以 manifest 自证；
+- client/session/engine、物化临时文件与 run 目录均有显式清理；Harness PostgreSQL 写入在断言后 rollback；API key 与数据库密码不进入 repr/error；
+- 初始 TDD RED：5 个缺失编排 helper 失败，产品/version flush 补充 RED 1 个；第一轮质量审查未批准后，strict anchor `2 failed`、manifest attestation `3 failed`、独立 import-order subprocess `1 failed`、cleanup registration `1 failed` 均先 RED 后 GREEN；
+- 017 source standalone 的既有 eager-import cycle 已以 compiler pipeline lazy re-export 最小修复，保持公共 API；独立运行 `49 passed`；
+- 最终独立规格复审 `Spec compliant: yes`，最终独立质量复审 `Quality approved: yes`，均无 Critical/Important/Minor；
+- 主代理 fresh T8 non-live：`12 passed, 1 deselected in 2.77s`；最终全量 non-live：`915 passed, 5 deselected, 209 warnings in 68.29s`；Ruff `All checks passed!`；mypy `139 source files`；`git diff --check` 通过；
+- 主代理显式清空六个 live 变量后运行 live gate：`1 skipped, 12 deselected in 0.89s`，skip 精确列出 `HARNESS_LIVE_BASE_URL`、`HARNESS_LIVE_API_KEY`、`HARNESS_LIVE_DB_URL`、`HARNESS_LIVE_SPACE_ID`、`HARNESS_LIVE_KNOWLEDGE_ID`、`HARNESS_LIVE_PARSER_FINGERPRINT`。该结果记录为 `NOT RUN`，不是 live 成功。

@@ -50,6 +50,27 @@ L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验�
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。
 
+### 5.1 OpenSpec 017 T8：Source Bridge → Compiler → pred/import
+
+T8 专用用例只接受显式 live 配置：
+
+- `HARNESS_LIVE_BASE_URL`
+- `HARNESS_LIVE_API_KEY`
+- `HARNESS_LIVE_DB_URL`（必须是已迁移的真实 PostgreSQL，SQLite 会被拒绝）
+- `HARNESS_LIVE_SPACE_ID`（数据库中已绑定的 Space）
+- `HARNESS_LIVE_KNOWLEDGE_ID`（该 Space 的 KB-RAW 内一份真实、可下载 PDF knowledge）
+- `HARNESS_LIVE_PARSER_FINGERPRINT`
+
+当前 Harness adapter 没有上传 API，因此本用例走规格允许的“显式 knowledge ID”分支：先对真实端点执行 `wait_for_parsed`，再下载 PDF、读取 chunks、物化 bridge、用本地确定性 scripted client 跑 Compiler，并把 `pred.jsonl` 导入 Harness PostgreSQL。它不调用真实 LLM，也不把既有 knowledge 分支解释成 upload 创建覆盖。测试通过事务回滚清理临时产品、ChangeSet、Claim 与 Evidence；client、Session、Engine、物化文件及 run 目录均显式关闭/清理。
+
+从仓库根目录运行精确命令：
+
+```bash
+cd harness && .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -rs
+```
+
+缺少变量时只允许 `pytest.skip`，输出会逐项列出缺失变量；不得用 respx/mock、Directory source 或 SQLite 代替 live 证据。API key 不写入日志、断言或测试产物。
+
 ## 6. 已知风险与规避
 
 1. **KB-WIKI 误传文档** → 内置 wiki ingest 会与发布器争用 slug：除纪律约束外，Harness 发布器启动时校验该 KB 文档数为 0，非 0 告警拒发（实现挂在 B10）；

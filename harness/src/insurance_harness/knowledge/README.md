@@ -48,3 +48,15 @@ change 007 落点；数据模型/权威序/发布契约以 `docs/insurance-kb/03
 - retract 继续记录 `source_kind="document"`，但 `source_revision` 使用固定 64 字符的 `retract:` 事件键；同一 knowledge/revision 删除事件精确复用原 applied ChangeSet，不新增 ChangeItem，重新上传的新 source revision 会形成新事件键。即使首次删除时 scoped Evidence 为零，也会记录零 ChangeItem 的 applied tombstone；replay/import 在复用前共同校验 tombstone 的 scoped parent/child aggregate，包括唯一 Claim、`retract + auto_applied`、dict proposal 与严格正整数 `removed_evidence`。T6 source-aware importer 在任何分区写入前拒绝同 source revision 的迟到导入，防止旧数据复活。整个操作使用 savepoint，且不改发布快照或 current pointer。
 - pending/applied source ChangeSet 不能只凭唯一键复用：共享 parent aggregate validator 还要求 Space、source kind、external record、source revision 与 `knowledge_ids == [identity.knowledge_id]` 精确闭合；调用方再分别约束 state 与 ChangeItem 数量。applied duplicate 返回 no-op 前还会遍历全部 ChangeItem，并复用 merge 层 action-aware scoped aggregate guard 校验 item 的 claim、existing/placeholder、proposal、Conflict 与 product-version 引用；合法零 item 及 winner-existing `claim_id=NULL` conflict 保持可重放。不完整、跨 knowledge 或任一 child 跨 Space 均在写入前 fail closed。
 - **顺序边界**：017 T7 的唯一键只解决“同一 revision”幂等，不提供不同 revision 的新旧排序；SHA-256 revision 不可比较，也不得按 hash 排序。当前 tombstone preflight 与 import/delete 也分属不同数据库 key。因此在后续 source-head/代际 CAS 方案落地前，生产只允许同一 Space/source 的 lifecycle 串行执行，且 notification 必须来自当次实时读取的当前 metadata；禁止并发 B/C revision、缓存/延迟旧 metadata 回放及 import/delete 竞争。该残余风险由 change 021 的 durable SourceHead、`processed_at`/generation 与统一 per-source lock/CAS 方案承接。
+
+## 017 T8 live pred/import 回链检查
+
+`tests/test_source_bridge_live_017.py` 用真实 WeKnora knowledge 生成 source-aware `pred.jsonl`，再在 `HARNESS_LIVE_DB_URL` 指向的真实 PostgreSQL 中导入并查询 `ClaimEvidence`，闭合 `knowledge_id/raw_kb_id/source_revision/file_hash/original_digest/parser_version/page`；lineage 为 `linked` 时还要求 quote 只命中一个真实 chunk，并核对 `chunk_id/chunk_hash`。所有 Harness DB 写入在断言后回滚，不产生可复用业务数据。
+
+运行需要 `HARNESS_LIVE_BASE_URL`、`HARNESS_LIVE_API_KEY`、`HARNESS_LIVE_DB_URL`、`HARNESS_LIVE_SPACE_ID`、`HARNESS_LIVE_KNOWLEDGE_ID`、`HARNESS_LIVE_PARSER_FINGERPRINT`。精确命令：
+
+```bash
+cd harness && .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -rs
+```
+
+该用例不允许 SQLite、Directory source 或 mock fallback；缺少 live 前置条件时只报告逐名 skip。Compiler 使用本地确定性 scripted client，不需要或读取 LLM API key。
