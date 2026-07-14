@@ -1,6 +1,6 @@
 # 022-review-hardening 验证报告
 
-> 日期：2026-07-14。本文只记录可复现的本地证据；未提交 working tree 不借用旧 commit 的外部 CI 结果。
+> 日期：2026-07-14。本文记录可复现的本地证据与实现 commit `e316487f` 的 GitHub CI；不借用更早 commit 的外部结果。
 
 ## 1. 当前状态
 
@@ -10,10 +10,11 @@
 | 本地 deterministic 软件门禁 | PASS | Ruff、mypy strict、deterministic pytest 均 exit 0 |
 | task-level 独立审查 | PASS | RH1～RH6 的 spec review 与 quality review 均在返修复审后 `Approved` |
 | 整包独立审查 | PASS | 整包 spec review `Approved`；quality review 的唯一 Important 已按 TDD 修复并复审 `Approved` |
-| PostgreSQL 16 integration | `PENDING HUMAN PUSH/CI` | 当前变更未提交/未推送；旧 commit 的 PostgreSQL job 不覆盖本 working tree |
+| GitHub deterministic | PASS | commit `e316487f` 的 required check 成功 |
+| PostgreSQL 16 integration | PASS | commit `e316487f` 的 PostgreSQL 16 job 与 zero-skip JUnit guard 成功 |
 | WeKnora live | `NOT RUN` | 没有受控 `harness-live` run URL、最终 commit、时间与零 skip JUnit 证据 |
 
-整包本地软件实现与独立双审已完成；本报告仍不声称已提交、已推送或 PR 已更新。
+整包软件实现、独立双审、提交推送与 PR #5 更新已完成；本报告不声称 WeKnora live 已运行。
 
 ## 2. 客观复审裁决
 
@@ -129,8 +130,10 @@ OpenSpec 命令随后尝试 flush PostHog telemetry 时出现 `ENOTFOUND edge.op
 
 ## 6. 外部证据与仓库状态
 
-- PostgreSQL 16：`PENDING HUMAN PUSH/CI`。当前 working tree 尚未形成最终 commit，不能用 PR #5 旧 SHA 的成功 job 覆盖这些变更。
+- 实现 commit：`e316487f391b944d08b010b7d4cf538e7430ed0b`，已推送至 `codex/016-enterprise-foundation` 并更新 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5)。
+- GitHub deterministic：[PASS](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326117805/job/87062728898)，run 对应 head `e316487f`。
+- PostgreSQL 16 integration：[PASS](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326117805/job/87062729019)，zero-skip JUnit guard 同步通过。
 - WeKnora：`NOT RUN`。existing-knowledge live E2E 未受控运行，且当前 adapter 不提供 uploader，所以不能表述成 upload 覆盖。
-- AI 未执行 commit/push，未声称 PR 已更新。
-- 最终仓库检查：`git diff --check` exit 0；`git status --short` exit 0，真实状态为 **16 个 tracked modified**，另有 untracked implementation plan 与 `022-review-hardening/` 目录；`git diff --diff-filter=D -- harness/tests` exit 0 且无输出，确认未删除测试。
-- 上述检查、整包双审与所有本地门禁均满足后，T7 已勾选。这里的“完成”只指未提交 working tree 的本地软件交付；外部状态仍为 PostgreSQL `PENDING HUMAN PUSH/CI`、WeKnora `NOT RUN`。
+- 本次 commit/push/PR 更新由用户在会话中明确授权；没有 force-push。
+- 提交前仓库检查：`git diff --check` exit 0；`git diff --diff-filter=D -- harness/tests` exit 0 且无输出，确认未删除测试。实现提交后 working tree clean。
+- 上述检查、整包双审、本地门禁与实现 commit 外部 CI 均满足后，T7 已勾选；PR 后续文档类提交仍须保持 required checks 全绿。

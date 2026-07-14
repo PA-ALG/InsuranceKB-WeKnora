@@ -7,7 +7,7 @@
 - [x] T4 RH3：Directory eval-only 合同与大小写 PDF discovery RED→GREEN + 双审
 - [x] T5 RH4：字段感知 KB identity RED→GREEN + 双审
 - [x] T6 RH5/RH6：冻结 live 现状、修正 CLAUDE deterministic lane 合同 + 双审
-- [x] T7 全量门禁、整包复审、validation/HANDOFF/外部 PR 状态对账（未提交 working tree；外部 CI 待人类 push）
+- [x] T7 全量门禁、整包复审、validation/HANDOFF/外部 PR 状态对账（实现 commit `e316487f` 的 deterministic / PostgreSQL 16 CI 均通过；WeKnora `NOT RUN`）
 
 ## 裁决记录
 
