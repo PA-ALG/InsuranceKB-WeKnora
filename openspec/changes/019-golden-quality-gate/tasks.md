@@ -47,7 +47,9 @@
   （MergePolicy.auto_apply_supersede_low_risk 默认 → False）、`knowledge/merge.py`
   （三条自动路径经同一 gate）、`knowledge/importer.py`（透传 quality_gate/run_fingerprint）；
 - 测试 `test_goldenset_{assemble,validate,baseline,profile}_019.py`、`test_quality_gate_019.py`
-  （共 83 个新用例 = 11+10+13+18+31，全部严格 test-first，纯 fixture/replay，零真实模型/PDF 凭据）。
+  （共 98 个新用例 = 11+12+19+22+34，全部严格 test-first，纯 fixture/replay，零真实模型/PDF 凭据）。
+- codex review 返工新增测试替身 `tests/kbhelpers.green_gate` / `allow_all_gate`，并迁移 ~60 个存量
+  auto_apply 用例注入 gate（fail-closed 契约收紧，见文末返工记录）。
 
 ## 裁决记录（设计判断与依据）
 
@@ -76,3 +78,27 @@
 - 本 change 仅确定性软件验收；未产出真实 gs-v0.1/13 产品 baseline（020）。
 - `openspec validate 019 --strict` 在本机 CLI 未识别该 item（change 目录已含 proposal/design/
   specs/tasks）；以门禁（ruff/mypy strict/pytest）与本报告为准。
+
+## codex review 返工裁决（PR #8）
+
+codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业设计核实**全部成立**，全量返工：
+
+1. **fail-open → fail-closed**（P1#1，最严重，根因）：初版把 QualityGate 做成"可选注入，None 放行"，
+   为的是不改动 ~20 存量 `MergePolicy` 测试——但 design.md:17「布尔开关不能绕过 Gate，缺画像统一走
+   ReviewItem」明确要求 fail-closed。裁决：`_gate_ok` 无 gate 返回 False，auto_apply 布尔位不能单独
+   自动发布。这是刻意的契约收紧；存量用例用 `green_gate`/`allow_all_gate` 显式注入"已批准自动化"。
+2. **批准链绑定**（P1#2）：ApprovalRecord 增 `profile_hash`，gate 用 `ApprovalRecord`（非裸 bool）并校验
+   `approval.profile_hash == profile.content_hash()`；`approve_baseline` 消费回归 verdict（Q4.6 闭环）。
+3. **产物齐全性**（P1#3）：`ProductRunStatus.completeness_blockers` — pred=0 / keypoints 非 ready-done /
+   缺 eval 报告任一阻断批准。
+4. **零观测不给满分**（P1#4）：value/evidence 零分母记 0.0（失格）；`_evidence_verified` 无 dataset_root
+   返回 False（不拿 CI 代理证据冒充回验）。
+5. **staleness 六维**（P1#5）：`is_stale` 补 template/source profile；spec Q3.2 文字同步订正（原仅列四维，
+   与 design.md:13 冲突——规格自身 bug，一并修）。git_sha 属溯源、非 staleness 维。
+6. **validator 收紧**（P1#6）：`max_disputed_rate` 默认 0.05（企业设计 20-runtime line127 ≤5%）；默认强制
+   证据回验，无 dataset_root 判 self-eval 失败（`require_evidence=False` 仅供无 PDF 的结构性 CI，显式留痕）。
+7. **release_hash 完整**（P2#7）：覆盖 evidence(page+quote)/schema/annotator/disputed 全部语义字段。
+8. **supersede risk**（P2#8）：非自动 supersede 进审核保留真实 risk，不硬编码 high_risk_change。
+9. **文档一致**（P2#9）：HANDOFF B21 更新 1060 passed + fail-closed 表述；validation-report 计数与 Q 表订正。
+
+返工后门禁：ruff/mypy(161) 全绿，non-live **1060 passed**；所有修复先补失败用例（复现 codex 反例）再改实现。

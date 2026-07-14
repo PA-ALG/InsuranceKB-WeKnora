@@ -93,6 +93,7 @@ def _check_extractable_coverage(
 def _check_self_eval(
     records: list[GoldenRecord],
     dataset_root: Path | None,
+    require_evidence: bool,
 ) -> ValidationCheck:
     usable = [r for r in records if not r.disputed]
     result = evaluate(records, usable, dataset_root=dataset_root)
@@ -101,13 +102,18 @@ def _check_self_eval(
         "recall": result.micro.recall,
         "f1": result.micro.f1,
     }
-    failed = {k: round(v, 4) for k, v in metrics.items() if v != 1.0}
+    failed: dict[str, object] = {k: round(v, 4) for k, v in metrics.items() if v != 1.0}
     evidence_note = ""
     if dataset_root is not None:
         if result.evidence_accuracy is None or result.evidence_accuracy != 1.0:
-            failed["evidence"] = result.evidence_accuracy  # type: ignore[assignment]
+            failed["evidence"] = result.evidence_accuracy
         else:
             evidence_note = " evidence=1.0"
+    elif require_evidence:
+        # Q1.4：证据必须回验。无 dataset_root 时无法回验——不得静默跳过（codex #6）。
+        failed["evidence"] = "未回验（缺 dataset_root）"
+    else:
+        evidence_note = " evidence=SKIPPED(require_evidence=False)"
     return ValidationCheck(
         name="self_eval",
         passed=not failed,
@@ -130,8 +136,11 @@ def validate_release(
     registry: SchemaRegistry,
     expected: list[ExpectedProduct],
     dataset_root: Path | None = None,
-    max_disputed_rate: float = 0.2,
+    max_disputed_rate: float = 0.05,
+    require_evidence: bool = True,
 ) -> ValidationResult:
+    """校验一个已发布 release。默认 max_disputed_rate=0.05（企业设计：每产品 ≤5%），
+    默认强制证据回验；`require_evidence=False` 仅供无 PDF 的结构性 CI 校验，且显式留痕。"""
     records = load_release(release_dir)
     by_product: dict[str, list[GoldenRecord]] = defaultdict(list)
     for record in records:
@@ -142,6 +151,6 @@ def validate_release(
         _check_products_complete(dict(by_product), expected),
         _check_disputed_rate(dict(by_product), max_disputed_rate),
         _check_extractable_coverage(dict(by_product), expected, registry),
-        _check_self_eval(records, dataset_root),
+        _check_self_eval(records, dataset_root, require_evidence),
     ]
     return ValidationResult(passed=all(c.passed for c in checks), checks=checks)

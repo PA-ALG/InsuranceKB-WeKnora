@@ -12,12 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope
-from insurance_harness.goldenset import (
-    Evidence,
-    GoldenRecord,
-    RunFingerprint,
-    build_profile,
-)
+from insurance_harness.goldenset import RunFingerprint
+from insurance_harness.goldenset.baseline import ApprovalRecord
 from insurance_harness.goldenset.profile import (
     AutomationThresholds,
     FieldMetrics,
@@ -59,18 +55,26 @@ def _profile(
     return QualityProfile(profile_version=1, fingerprint=fp or _fp(), fields=fields)
 
 
+def _approval_for(profile: QualityProfile, *, by: str = "claude") -> ApprovalRecord:
+    """批准记录绑定被批准画像的内容哈希（Q4.3）。"""
+    return ApprovalRecord(
+        baseline_id="b1", version=1, approved_by=by, approved_at=_AT,
+        fingerprint=profile.fingerprint, profile_hash=profile.content_hash(),
+    )
+
+
 def _gate(
     metrics: FieldMetrics | None = None,
     *,
-    approved: bool = True,
+    approval: ApprovalRecord | None | str = "auto",
     fp: RunFingerprint | None = None,
     thresholds: AutomationThresholds | None = None,
 ) -> QualityGate:
-    return QualityGate(
-        _profile(metrics if metrics is not None else _metrics(), fp),
-        approved=approved,
-        thresholds=thresholds,
-    )
+    """approval='auto' 生成与画像绑定的批准记录；None=未批准；显式记录=用于错绑测试。"""
+    profile = _profile(metrics if metrics is not None else _metrics(), fp)
+    appr = _approval_for(profile) if approval == "auto" else approval
+    assert not isinstance(appr, str)
+    return QualityGate(profile, approval=appr, thresholds=thresholds)
 
 
 # --------------------------------------------------------- 达标 / 动作维度
@@ -109,7 +113,7 @@ def test_q4_3_medium_risk_denied() -> None:
 # --------------------------------------------------------- 画像存在/批准/指纹
 
 def test_q4_5_missing_profile_denied() -> None:
-    gate = QualityGate(None, approved=True)
+    gate = QualityGate(None, approval=None)
     decision = gate.decide(_FIELD, "low", "add", _fp())
     assert not decision.eligible and "缺字段画像" in decision.reason
 
@@ -123,8 +127,17 @@ def test_q4_5_field_absent_from_profile_denied() -> None:
 
 def test_q4_3_unapproved_profile_denied() -> None:
     fp = _fp()
-    decision = _gate(approved=False, fp=fp).decide(_FIELD, "low", "add", fp)
+    decision = _gate(approval=None, fp=fp).decide(_FIELD, "low", "add", fp)
     assert not decision.eligible and "未批准" in decision.reason
+
+
+def test_q4_3_approval_bound_to_other_profile_denied() -> None:
+    """codex #2：批准记录必须与画像内容哈希匹配；拿别的画像的批准冒充 → 拒绝。"""
+    fp = _fp()
+    other_profile = _profile(_metrics(support=999), fp)  # 不同内容 → 不同哈希
+    stale_approval = _approval_for(other_profile)
+    decision = _gate(approval=stale_approval, fp=fp).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and "内容不匹配" in decision.reason
 
 
 def test_q4_3_missing_run_fingerprint_denied() -> None:
@@ -141,6 +154,8 @@ def test_q4_3_missing_run_fingerprint_denied() -> None:
         {"schema_version": "v9"},
         {"model_id": "m2"},
         {"prompt_version": "p2"},
+        {"template_profile": "t9"},
+        {"source_profile": "s9"},
     ],
 )
 def test_q4_5_stale_on_each_staleness_dim(drift: dict[str, str]) -> None:
@@ -151,10 +166,11 @@ def test_q4_5_stale_on_each_staleness_dim(drift: dict[str, str]) -> None:
 
 
 def test_q4_5_non_staleness_dim_does_not_stale() -> None:
-    """git_sha/template/source 不在 Q3.2 staleness 维度内，差异不应判 stale。"""
+    """git_sha 是溯源信息、非数据/模型维（design.md:13），差异不判 stale；
+    但 template/source profile 变化必须 stale（见上一参数化用例）。"""
     built_fp = _fp()
     gate = _gate(fp=built_fp)
-    decision = gate.decide(_FIELD, "low", "add", _fp(git_sha="zzz", template_profile="t9"))
+    decision = gate.decide(_FIELD, "low", "add", _fp(git_sha="zzz"))
     assert decision.eligible
 
 
@@ -223,17 +239,13 @@ def test_q4_1_supersede_low_risk_default_off() -> None:
 
 # --------------------------------------------------------- merge 接入（Q4.2/Q4.5）
 
-def _passing_profile_from_records(field_id: str, fp: RunFingerprint) -> QualityProfile:
-    golden = [
-        GoldenRecord(
-            product_id=f"P{i}", product_name=f"产品{i}", doc="d.pdf",
-            field_id=field_id, field_name=field_id, value=f"值{i}", tri_state="present",
-            evidence=[Evidence(page=1, quote=f"值{i}")],
-            annotator_model="m", schema_version="v1.1+x", created_at=_AT,
-        )
-        for i in range(12)
-    ]
-    return build_profile(golden, golden, fp)
+def _passing_profile(field_id: str, fp: RunFingerprint) -> QualityProfile:
+    """直接构造一份达标画像（gate 逻辑测试关注判定，不关注指标派生）。"""
+    metrics = FieldMetrics(
+        field_id=field_id, support=12, value_accuracy=1.0,
+        hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={},
+    )
+    return QualityProfile(profile_version=1, fingerprint=fp, fields={field_id: metrics})
 
 
 def _scope(session: Session) -> KnowledgeScope:
@@ -258,7 +270,8 @@ def test_q4_2_gate_gates_auto_apply_per_field(kb_session: Session) -> None:
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     fp = _fp()
-    gate = QualityGate(_passing_profile_from_records("waiting_period", fp), approved=True)
+    profile = _passing_profile("waiting_period", fp)
+    gate = QualityGate(profile, approval=_approval_for(profile))
     engine = MergeEngine(
         kb_session, scope=scope,
         policy=MergePolicy(auto_apply_add=True),
@@ -286,8 +299,9 @@ def test_q4_2_gate_gates_auto_apply_per_field(kb_session: Session) -> None:
     assert any(claims["grace_period"].id in str(r.subject) for r in reviews)
 
 
-def test_q4_2_no_gate_falls_back_to_policy_flags(kb_session: Session) -> None:
-    """未注入 gate = 在线治理未启用：policy 布尔位单独决定（legacy 兼容）。"""
+def test_q4_2_no_gate_fails_closed(kb_session: Session) -> None:
+    """codex #1 / design.md:17：无 gate（缺已批准画像）时**fail-closed**——policy 布尔位
+    不能绕过 gate 自动发布；候选进 candidate + ReviewItem，不丢弃、不静默发布。"""
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     engine = MergeEngine(
@@ -298,4 +312,10 @@ def test_q4_2_no_gate_falls_back_to_policy_flags(kb_session: Session) -> None:
     claim = kb_session.execute(
         select(Claim).where(Claim.space_id == scope.space_id)
     ).scalar_one()
-    assert claim.status == "published"  # 无 gate 时 flag 直接放行
+    assert claim.status == "candidate"  # 无 gate → 不自动发布
+    reviews = list(
+        kb_session.execute(
+            select(ReviewItem).where(ReviewItem.space_id == scope.space_id)
+        ).scalars()
+    )
+    assert any(claim.id in str(r.subject) for r in reviews)  # 候选进审核，未丢弃

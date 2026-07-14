@@ -10,7 +10,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from insurance_harness.goldenset.baseline import RunFingerprint
+from insurance_harness.goldenset.baseline import ApprovalRecord, RunFingerprint
 from insurance_harness.goldenset.profile import (
     AutomationThresholds,
     QualityProfile,
@@ -37,11 +37,13 @@ class QualityGate:
         self,
         profile: QualityProfile | None,
         *,
-        approved: bool,
+        approval: ApprovalRecord | None,
         thresholds: AutomationThresholds | None = None,
     ) -> None:
         self.profile = profile
-        self.approved = approved
+        # 批准以 ApprovalRecord 表达，且必须与画像内容哈希绑定——裸 bool 无法验证
+        # "批的到底是不是这份画像"，会被任意临时画像冒充（Q4.3）。
+        self.approval = approval
         self.thresholds = thresholds or AutomationThresholds()
 
     def decide(
@@ -64,8 +66,10 @@ class QualityGate:
             return deny(f"风险等级 {risk} 非 low，不自动发布")
         if self.profile is None:
             return deny("缺字段画像")
-        if not self.approved:
+        if self.approval is None:
             return deny("画像未批准")
+        if self.approval.profile_hash != self.profile.content_hash():
+            return deny("批准记录与画像内容不匹配（画像可能被替换）")
         if run_fingerprint is None:
             return deny("缺当前 run 指纹，无法核对画像")
         if self.profile.is_stale(run_fingerprint):

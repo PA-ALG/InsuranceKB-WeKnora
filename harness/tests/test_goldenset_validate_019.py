@@ -49,7 +49,9 @@ def _check(result: object, name: str) -> object:
 
 def test_q1_valid_release_passes(tmp_path: Path) -> None:
     build_release(_full(), tmp_path / "gs")
-    result = validate_release(tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED)
+    result = validate_release(
+        tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED, require_evidence=False
+    )
     assert result.passed, result.failures()
     assert {c.name for c in result.checks} == {
         "release_immutable", "products_complete", "disputed_rate",
@@ -108,9 +110,32 @@ def test_q1_3_missing_extractable_field_fails(tmp_path: Path) -> None:
 
 def test_q1_4_self_eval_is_one_on_consistent_release(tmp_path: Path) -> None:
     build_release(_full(), tmp_path / "gs")
-    result = validate_release(tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED)
+    result = validate_release(
+        tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED, require_evidence=False
+    )
     check = _check(result, "self_eval")
     assert check.passed and "P/R/F1=1.0" in check.detail  # type: ignore[attr-defined]
+
+
+def test_q1_4_evidence_required_by_default_without_dataset_root_fails(tmp_path: Path) -> None:
+    """codex #6：默认强制证据回验；无 dataset_root 无法回验 → self_eval 失败，不静默跳过。"""
+    build_release(_full(), tmp_path / "gs")
+    result = validate_release(tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED)
+    check = _check(result, "self_eval")
+    assert not check.passed and "未回验" in check.detail  # type: ignore[attr-defined]
+    assert not result.passed
+
+
+def test_q1_3_disputed_default_threshold_is_five_percent(tmp_path: Path) -> None:
+    """codex #6：默认 max_disputed_rate=0.05；10% disputed 的产品应判失败。"""
+    records = [_rec("hesitation_period", "20日", disputed=True)] + [
+        _rec("waiting_period", f"{i}天") for i in range(9)
+    ]  # 1/10 = 0.10 > 0.05
+    build_release(records, tmp_path / "gs")
+    result = validate_release(
+        tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED, require_evidence=False
+    )
+    assert not _check(result, "disputed_rate").passed  # type: ignore[attr-defined]
 
 
 def test_q1_4_missing_manifest_flags_not_immutable(tmp_path: Path) -> None:
@@ -123,6 +148,8 @@ def test_q1_4_missing_manifest_flags_not_immutable(tmp_path: Path) -> None:
 
 def test_q1_failures_helper_returns_only_failed(tmp_path: Path) -> None:
     build_release([_rec("hesitation_period", "20日")], tmp_path / "gs")  # 缺 waiting_period
-    result = validate_release(tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED)
+    result = validate_release(
+        tmp_path / "gs", registry=_REGISTRY, expected=_EXPECTED, require_evidence=False
+    )
     names = {c.name for c in result.failures()}
     assert names == {"extractable_coverage"}

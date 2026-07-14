@@ -691,15 +691,16 @@ class MergeEngine:
         self.policy = policy or MergePolicy()
         self.risk_of: RiskResolver = risk_of or (lambda predicate: "low")
         self.created_by = created_by
-        # 019 Q4.2：注入后 gate 是自动发布唯一权威；未注入=在线治理未启用，回退 policy 布尔位。
+        # 019 Q4.2：gate 是自动发布的唯一权威，policy 布尔位只表达"运营是否允许自动化"。
         self.quality_gate = quality_gate
         self.run_fingerprint = run_fingerprint
         self.judge_queue: list[ConflictJudgeRequest] = []
 
     def _gate_ok(self, prop: ProposedClaim, risk: str, action: str) -> bool:
-        """Q4.2/Q4.5：注入 gate 时按画像判定；未注入则不阻断（legacy 布尔位单独决定）。"""
+        """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
+        走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。"""
         if self.quality_gate is None:
-            return True
+            return False
         return self.quality_gate.decide(
             prop.predicate, risk, action, self.run_fingerprint
         ).eligible
@@ -1029,11 +1030,12 @@ class MergeEngine:
                     reason="auto supersede（裁决序①/②）", superseding=existing,
                 )
             else:
-                # 高风险字段 supersede 一律进审核（03 §2.5/§6.2）
+                # 未自动发布的 supersede 进审核：保留**真实 risk**——低风险候选不得被
+                # 误标成 high_risk_change（否则污染审核优先级与审计语义，codex #8）。
                 conflict = self._new_conflict(item, existing, prop, basis, status="open")
                 self._gate(
-                    item, prop, "high", report,
-                    new_claim_id=claim.id, conflict_id=conflict.id, type_="high_risk_change",
+                    item, prop, risk, report,
+                    new_claim_id=claim.id, conflict_id=conflict.id,
                 )
             report.bump("supersede")
             return

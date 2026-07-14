@@ -16,7 +16,7 @@ from insurance_harness.knowledge import (
     render_product_page,
 )
 from insurance_harness.knowledge.tables import ClaimEvidence
-from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
 
 
 def _scope(session: Session) -> KnowledgeScope:
@@ -65,10 +65,13 @@ def _publish_all(
     version_id: str,
     props: list[ProposedClaim],
 ) -> None:
+    gate, fp = green_gate([p.predicate for p in props])
     engine = MergeEngine(
         session,
         scope=scope,
         policy=MergePolicy(auto_apply_add=True),
+        quality_gate=gate,
+        run_fingerprint=fp,
     )
     change_set, _ = engine.open_change_set(source_kind="document")
     engine.apply_batch(change_set, props)

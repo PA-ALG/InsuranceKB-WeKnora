@@ -1,5 +1,6 @@
 """change 007 测试构件：产品种子与 PredRecord 工厂（specs K2~K6）。"""
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -7,10 +8,85 @@ from sqlalchemy.orm import Session
 from insurance_harness.compiler.models import Confidence, PredRecord
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, load_scope
+from insurance_harness.goldenset.baseline import ApprovalRecord, RunFingerprint
+from insurance_harness.goldenset.profile import FieldMetrics, QualityProfile
 from insurance_harness.goldenset.records import Evidence, TriState
+from insurance_harness.knowledge.quality_gate import GateDecision, QualityGate
 
 BROCHURE = "产品说明书.pdf"  # official_desc，权威 2
 TERMS = "保险条款.pdf"  # terms，权威 1
+
+
+def green_gate(
+    predicates: Iterable[str],
+) -> tuple[QualityGate, RunFingerprint]:
+    """测试用绿灯闸门 + 指纹（019 fail-closed 后自动发布必须过 gate）。
+
+    对给定谓词构造一份**达标且已批准**的 QualityProfile：批准记录绑定画像内容哈希、
+    指纹匹配，故低风险 add/enrich/supersede 会被判 eligible。种子/前置数据发布用它。
+    """
+    fp = RunFingerprint(
+        git_sha="test-sha", schema_version="v1.1+test", model_id="test-model",
+        prompt_version="p1", template_profile="tpl1", source_profile="src1",
+        golden_release_hash="rh-test",
+    )
+    fields = {
+        p: FieldMetrics(
+            field_id=p, support=12, value_accuracy=1.0, hallucination_rate=0.0,
+            evidence_accuracy=1.0, tri_state_confusion={},
+        )
+        for p in set(predicates)
+    }
+    profile = QualityProfile(profile_version=1, fingerprint=fp, fields=fields)
+    approval = ApprovalRecord(
+        baseline_id="test-baseline", version=1, approved_by="test",
+        approved_at=datetime.now(UTC), fingerprint=fp,
+        profile_hash=profile.content_hash(),
+    )
+    return QualityGate(profile, approval=approval), fp
+
+
+class _AllowLowRiskGate(QualityGate):
+    """测试替身：低风险且可自动化的动作放行；仍拒绝高风险/不可自动化，保持真实 gate 安全语义。
+
+    供**不针对 gate 本身**、只需"自动化已获批"前置数据的合并/发布测试做种子。真实 gate 的
+    画像/批准/staleness/阈值判定由 test_quality_gate_019.py 用真实画像全覆盖。
+    """
+
+    def __init__(self) -> None:  # 无需画像/批准
+        pass
+
+    def decide(
+        self, field_id: str, risk: str, action: str, run_fingerprint: object
+    ) -> "GateDecision":
+        from insurance_harness.knowledge.quality_gate import (
+            _AUTOMATABLE_ACTIONS,
+            GateDecision,
+        )
+
+        if action not in _AUTOMATABLE_ACTIONS:
+            return GateDecision(
+                eligible=False, reason=f"动作 {action} 不可自动化",
+                field_id=field_id, action=action,
+            )
+        if risk != "low":
+            return GateDecision(
+                eligible=False, reason=f"风险 {risk} 非 low",
+                field_id=field_id, action=action,
+            )
+        return GateDecision(
+            eligible=True, reason="测试替身放行", field_id=field_id, action=action
+        )
+
+
+def allow_all_gate() -> tuple[QualityGate, RunFingerprint]:
+    """返回 (低风险放行的测试替身 gate, 任意匹配指纹)。用于种子发布，不测 gate 本身。"""
+    fp = RunFingerprint(
+        git_sha="test-sha", schema_version="v1.1+test", model_id="test-model",
+        prompt_version="p1", template_profile="tpl1", source_profile="src1",
+        golden_release_hash="rh-test",
+    )
+    return _AllowLowRiskGate(), fp
 
 
 def seed_bound_scope(

@@ -30,7 +30,16 @@ from insurance_harness.knowledge.tables import (
     ReviewItem,
 )
 from tests.conftest import BASE_URL
-from tests.kbhelpers import BROCHURE, TERMS, pred, seed_bound_scope, seed_product
+from tests.kbhelpers import (
+    BROCHURE,
+    TERMS,
+    allow_all_gate,
+    pred,
+    seed_bound_scope,
+    seed_product,
+)
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后低风险 supersede 自动裁决须过 gate
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
@@ -134,8 +143,9 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
     report2 = import_pred_records(
         kb_session, batch2, scope=scope, product_id=product.product_code,
         product_version_id=version.id, risk_of=RISK, legacy_replay=True,
-        # 019 Q4.1：故事断言低风险 supersede 自动裁决，显式开启（无 gate=legacy 布尔位）。
+        # 019 Q4.1/Q4.2：低风险 supersede 自动裁决须同时(开关 + 过 gate)——fail-closed。
         policy=MergePolicy(auto_apply_supersede_low_risk=True),
+        quality_gate=_GATE, run_fingerprint=_FP,
     )
     assert report2.imported == 4
     assert report2.merge.actions.get("enrich") == 1  # 补全

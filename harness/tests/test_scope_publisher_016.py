@@ -39,7 +39,7 @@ from insurance_harness.knowledge.tables import (
     SnapshotClaim,
 )
 from tests.conftest import BASE_URL
-from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
 
 
 def _scopes(session: Session) -> tuple[KnowledgeScope, KnowledgeScope]:
@@ -60,10 +60,13 @@ def _scopes(session: Session) -> tuple[KnowledgeScope, KnowledgeScope]:
 
 
 def _publish_claim(session: Session, scope: KnowledgeScope, version_id: str) -> Claim:
+    gate, fp = green_gate(["waiting_period"])
     engine = MergeEngine(
         session,
         scope=scope,
         policy=MergePolicy(auto_apply_add=True),
+        quality_gate=gate,
+        run_fingerprint=fp,
     )
     change_set, _ = engine.open_change_set(source_kind="document")
     engine.apply_batch(

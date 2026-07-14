@@ -36,7 +36,9 @@ from insurance_harness.knowledge.tables import (
     Conflict,
     ReviewItem,
 )
-from tests.kbhelpers import pred, seed_bound_scope, seed_product
+from tests.kbhelpers import allow_all_gate, pred, seed_bound_scope, seed_product
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
 
 def _scope(session: Session, label: str) -> KnowledgeScope:
@@ -108,7 +110,8 @@ def _pending_conflict(
     label: str,
 ) -> tuple[Conflict, ChangeItem, Claim, Claim]:
     _, version = seed_product(session, scope=scope, code=f"CODE-{label}")
-    engine = MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True))
+    engine = MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP)
     _apply(
         engine,
         _proposal(scope, version.id, value="90天"),
@@ -216,8 +219,10 @@ def test_s2_5_merge_active_claims_and_actions_are_scoped(session: Session) -> No
     _, version_a = seed_product(session, scope=scope_a)
     _, version_b = seed_product(session, scope=scope_b)
     policy = MergePolicy(auto_apply_add=True, auto_apply_enrich=True)
-    engine_a = MergeEngine(session, scope=scope_a, policy=policy)
-    engine_b = MergeEngine(session, scope=scope_b, policy=policy)
+    engine_a = MergeEngine(session, scope=scope_a, policy=policy,
+                           quality_gate=_GATE, run_fingerprint=_FP)
+    engine_b = MergeEngine(session, scope=scope_b, policy=policy,
+                           quality_gate=_GATE, run_fingerprint=_FP)
 
     _apply(engine_b, _proposal(scope_b, version_b.id), external_record_id="batch-b")
     assert engine_a._active_claim(version_b.id, "waiting_period") is None
@@ -323,7 +328,8 @@ def test_s2_3_retract_source_hides_cross_scope_source_with_scoped_tombstone(
     scope_a = _scope(session, "a")
     scope_b = _scope(session, "b")
     _, version_b = seed_product(session, scope=scope_b)
-    engine_b = MergeEngine(session, scope=scope_b, policy=MergePolicy(auto_apply_add=True))
+    engine_b = MergeEngine(session, scope=scope_b, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP)
     _apply(
         engine_b,
         _proposal(scope_b, version_b.id, knowledge_id="knowledge-only-in-b"),
@@ -624,7 +630,8 @@ def test_s2_3_claim_evidence_rejects_cross_scope_bare_claim_id(
     scope_a = _scope(session, "a")
     scope_b = _scope(session, "b")
     _, version_b = seed_product(session, scope=scope_b)
-    engine_b = MergeEngine(session, scope=scope_b, policy=MergePolicy(auto_apply_add=True))
+    engine_b = MergeEngine(session, scope=scope_b, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP)
     _apply(
         engine_b,
         _proposal(scope_b, version_b.id),
@@ -954,7 +961,8 @@ def test_s2_2_change_item_rejects_same_scope_conflict_parent_mismatch(
         code=f"OTHER-{operation}-{corruption}",
     )
     _apply(
-        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True)),
+        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP),
         _proposal(scope, other_version.id, predicate="grace_period"),
         external_record_id=f"other-{operation}-{corruption}",
     )
@@ -1004,7 +1012,8 @@ def test_s2_2_conflict_existing_winner_rejects_jointly_tampered_old_subject(
     )
     assert candidate.product_version_id is not None
     _apply(
-        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True)),
+        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP),
         _proposal(
             scope,
             candidate.product_version_id,
@@ -1251,7 +1260,8 @@ def test_s2_2_publish_rejects_same_scope_superseding_subject_mismatch(
         unrelated_version_id = unrelated_version.id
         unrelated_predicate = candidate.predicate
     _apply(
-        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True)),
+        MergeEngine(session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP),
         _proposal(
             scope,
             unrelated_version_id,

@@ -14,7 +14,11 @@ from insurance_harness.goldenset import (
     build_profile,
     check_regression,
 )
-from insurance_harness.goldenset.profile import QualityProfile, RegressionThresholds
+from insurance_harness.goldenset.profile import (
+    FieldMetrics,
+    QualityProfile,
+    RegressionThresholds,
+)
 
 _AT = datetime(2026, 7, 14, tzinfo=UTC)
 
@@ -26,6 +30,23 @@ def _fp(**overrides: str) -> RunFingerprint:
     )
     base.update(overrides)
     return RunFingerprint(**base)
+
+
+def _passing_metrics(field_id: str = "f1", **ov: object) -> FieldMetrics:
+    """一份达标指标；verdict 测试直接构造指标（不经 build_profile 的证据回验）。"""
+    base: dict[str, object] = dict(
+        field_id=field_id, support=12, value_accuracy=1.0,
+        hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={},
+    )
+    base.update(ov)
+    return FieldMetrics(**base)  # type: ignore[arg-type]
+
+
+def _profile_of(*metrics: FieldMetrics, fp: RunFingerprint | None = None) -> QualityProfile:
+    return QualityProfile(
+        profile_version=1, fingerprint=fp or _fp(),
+        fields={m.field_id: m for m in metrics},
+    )
 
 
 def _rec(
@@ -54,9 +75,32 @@ def test_q3_1_field_metrics_perfect_replay() -> None:
     assert m.support == 10
     assert m.value_accuracy == 1.0
     assert m.hallucination_rate == 0.0
-    assert m.evidence_accuracy == 1.0
+    # 无 dataset_root 无法回验引文 → evidence 不可信记 0.0（codex #4：不给 CI 代理满分）。
+    assert m.evidence_accuracy == 0.0
     assert m.tri_state_confusion == {"present>present": 10}
     assert profile.profile_version == 1
+
+
+def test_q3_1_evidence_verified_with_dataset_root(tmp_path: object) -> None:
+    """有 dataset_root 且引文可回验时 evidence_accuracy 才可能为 1.0（本用例无 PDF → 仍 0.0）。"""
+    from pathlib import Path
+    golden = _golden("f1", 3)
+    profile = build_profile(golden, golden, _fp(), dataset_root=Path(str(tmp_path)))
+    m = profile.field("f1")
+    assert m is not None and m.evidence_accuracy == 0.0  # PDF 不存在 → 回验失败
+
+
+def test_q4_3_zero_observation_field_is_not_eligible() -> None:
+    """codex #4：10 条金标但 0 条 present 预测 → 不得零分母默认满分而获自动资格。"""
+    golden = _golden("f1", 10)
+    pred: list[GoldenRecord] = []  # 模型什么都没抽到
+    m = build_profile(golden, pred, _fp()).field("f1")
+    assert m is not None
+    assert m.support == 10
+    assert m.value_accuracy == 0.0  # 无配对 → 0.0，不是 1.0
+    assert m.evidence_accuracy == 0.0
+    verdict = _profile_of(m).field_verdict("f1")
+    assert not verdict.eligible
 
 
 def test_q3_1_partial_value_accuracy_is_fraction() -> None:
@@ -77,7 +121,7 @@ def test_q3_1_hallucination_and_missing_evidence_lower_metrics() -> None:
     assert m is not None
     assert m.support == 4
     assert m.hallucination_rate == 0.25  # 4 present 预测里 1 个幻觉
-    assert m.evidence_accuracy == 0.75  # 4 present 里 P1 无证据
+    assert m.evidence_accuracy == 0.0  # 无 dataset_root：证据全不可回验
     assert m.tri_state_confusion["absent_explicitly>present"] == 1
 
 
@@ -104,21 +148,28 @@ def test_q3_1_unknown_field_returns_none() -> None:
 
 # ------------------------------------------------------------- Q3.2 staleness
 
-def test_q3_2_staleness_on_each_of_four_dims() -> None:
+def test_q3_2_staleness_on_each_of_six_dims() -> None:
     profile = build_profile(_golden("f1"), _golden("f1"), _fp())
     assert not profile.is_stale(_fp())
     assert profile.is_stale(_fp(golden_release_hash="rh2"))
     assert profile.is_stale(_fp(schema_version="v9"))
     assert profile.is_stale(_fp(model_id="m2"))
     assert profile.is_stale(_fp(prompt_version="p2"))
+    assert profile.is_stale(_fp(template_profile="t9"))
+    assert profile.is_stale(_fp(source_profile="s9"))
 
 
-def test_q3_2_non_staleness_dims_do_not_trigger() -> None:
-    # git_sha / template_profile / source_profile 变化不视为 stale（仅 4 维）
+def test_q3_2_staleness_includes_template_and_source() -> None:
+    # design.md:13 —— template/source profile 变化必须 stale（codex #5）。
+    profile = build_profile(_golden("f1"), _golden("f1"), _fp())
+    assert profile.is_stale(_fp(template_profile="t9"))
+    assert profile.is_stale(_fp(source_profile="s9"))
+
+
+def test_q3_2_git_sha_is_not_a_staleness_dim() -> None:
+    # git_sha 属溯源信息、非数据/模型维（design.md:13）→ 不判 stale。
     profile = build_profile(_golden("f1"), _golden("f1"), _fp())
     assert not profile.is_stale(_fp(git_sha="zzz"))
-    assert not profile.is_stale(_fp(template_profile="t9"))
-    assert not profile.is_stale(_fp(source_profile="s9"))
 
 
 # --------------------------------------------------------- Q3.3 field verdict
@@ -148,13 +199,13 @@ def test_q3_3_hallucination_and_evidence_failures_listed() -> None:
 
 
 def test_q3_3_passing_field_is_eligible() -> None:
-    profile = build_profile(_golden("f1", 12), _golden("f1", 12), _fp())
+    profile = _profile_of(_passing_metrics())
     verdict = profile.field_verdict("f1", AutomationThresholds())
     assert verdict.eligible and verdict.failures == ()
 
 
 def test_q3_3_custom_thresholds_relax_support() -> None:
-    profile = build_profile(_golden("f1", 3), _golden("f1", 3), _fp())
+    profile = _profile_of(_passing_metrics(support=3))
     verdict = profile.field_verdict("f1", AutomationThresholds(support_min=2))
     assert verdict.eligible
 
@@ -190,6 +241,14 @@ def test_q4_6_no_regression_is_eligible() -> None:
     candidate = build_profile(_golden("f1", 12), _golden("f1", 12), _fp(model_id="m2"))
     verdict = check_regression(approved, candidate)
     assert verdict.eligible and verdict.failures == ()
+
+
+def test_q4_3_content_hash_is_stable_and_sensitive() -> None:
+    """codex #2：内容哈希稳定且对任一指标敏感——批准记录据此绑定画像。"""
+    a = _profile_of(_passing_metrics())
+    assert a.content_hash() == _profile_of(_passing_metrics()).content_hash()
+    assert a.content_hash() != _profile_of(_passing_metrics(support=11)).content_hash()
+    assert a.content_hash() != _profile_of(_passing_metrics(), fp=_fp(model_id="m2")).content_hash()
 
 
 def test_q4_6_tolerance_absorbs_small_drop() -> None:

@@ -30,7 +30,7 @@ from insurance_harness.knowledge.tables import (
     Conflict,
     ReviewItem,
 )
-from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.kbhelpers import allow_all_gate, seed_bound_scope, seed_product
 
 
 def _prop(
@@ -84,6 +84,12 @@ def _scope(session: Session) -> KnowledgeScope:
 def _engine(
     session: Session, scope: KnowledgeScope, **kwargs: object
 ) -> MergeEngine:
+    # 默认注入低风险放行的测试替身 gate（fail-closed 后自动发布须过 gate）；
+    # 发布仍需 policy 的 auto_apply_* 位为真，故不影响"默认保守→审核"的用例。
+    if "quality_gate" not in kwargs:
+        gate, fp = allow_all_gate()
+        kwargs.setdefault("quality_gate", gate)
+        kwargs.setdefault("run_fingerprint", fp)
     return MergeEngine(session, scope=scope, **kwargs)  # type: ignore[arg-type]
 
 
@@ -422,6 +428,29 @@ def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
     kb_session.refresh(old)
     assert old.status == "superseded"
     assert _published(kb_session, "waiting_period").value == {"text": "180天"}
+
+
+def test_k3_2_low_risk_supersede_review_is_not_mislabeled_high(kb_session: Session) -> None:
+    """codex #8：低风险 supersede 未自动应用而进审核时，应标 low_confidence/low，
+    不得硬编码 high_risk_change（否则污染审核优先级与审计语义）。"""
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    # 默认 auto_apply_supersede_low_risk=False → 低风险 supersede 进审核；risk_of 默认 low
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id))  # gate 放行 add → 直接 published
+    assert _published(kb_session, "waiting_period").status == "published"
+    _apply(
+        engine,
+        _prop(
+            scope, version.id, value="180天",
+            doc_role="terms", authority=1, knowledge_id="k-terms",
+        ),
+    )
+    review = kb_session.execute(
+        select(ReviewItem).where(ReviewItem.status == "open")
+    ).scalar_one()
+    assert review.type == "low_confidence"  # 不是 high_risk_change
+    assert review.risk_level == "low"
 
 
 def test_k3_3_revisions_and_immutable_changeset(kb_session: Session) -> None:

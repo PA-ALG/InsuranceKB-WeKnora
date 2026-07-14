@@ -8,6 +8,7 @@
 画像是只读 artifact；真实 13 产品画像由 020 用同一 API 产出。
 """
 
+import hashlib
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -16,6 +17,16 @@ from pydantic import BaseModel, ConfigDict
 from .baseline import RunFingerprint
 from .normalize import quote_in_page, values_equal
 from .records import GoldenRecord, TriState
+
+# design.md:13 —— 数据/模型维指纹，任一变化都要求重跑或重新批准（git_sha 属溯源，不计）。
+_STALENESS_FIELDS = (
+    "golden_release_hash",
+    "schema_version",
+    "model_id",
+    "prompt_version",
+    "template_profile",
+    "source_profile",
+)
 
 
 class FieldMetrics(BaseModel):
@@ -64,13 +75,29 @@ class QualityProfile(BaseModel):
     def field(self, field_id: str) -> FieldMetrics | None:
         return self.fields.get(field_id)
 
+    def content_hash(self) -> str:
+        """画像内容的确定性哈希——批准记录据此绑定被批准的画像（Q4.3）。"""
+        parts = [f"v={self.profile_version}"]
+        for fid in sorted(self.fields):
+            m = self.fields[fid]
+            confusion = ";".join(f"{k}={m.tri_state_confusion[k]}" for k in sorted(
+                m.tri_state_confusion))
+            parts.append(
+                f"{fid}|{m.support}|{m.value_accuracy:.6f}|{m.hallucination_rate:.6f}"
+                f"|{m.evidence_accuracy:.6f}|{confusion}"
+            )
+        for f in _STALENESS_FIELDS:
+            parts.append(f"{f}={getattr(self.fingerprint, f)}")
+        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
     def is_stale(self, current: RunFingerprint) -> bool:
-        """Q3.2：golden hash / schema / model / prompt 任一不匹配即 stale。"""
-        return (
-            self.fingerprint.golden_release_hash != current.golden_release_hash
-            or self.fingerprint.schema_version != current.schema_version
-            or self.fingerprint.model_id != current.model_id
-            or self.fingerprint.prompt_version != current.prompt_version
+        """Q3.2 + design：golden hash/schema/model/prompt/template/source 任一不匹配即 stale。
+
+        （git_sha 是溯源信息、非数据维，按 design.md 不作为 staleness 触发。）
+        """
+        return any(
+            getattr(self.fingerprint, f) != getattr(current, f)
+            for f in _STALENESS_FIELDS
         )
 
     def field_verdict(
@@ -147,11 +174,15 @@ def check_regression(
 def _evidence_verified(
     record: GoldenRecord, page_cache: dict[Path, dict[int, str]], dataset_root: Path | None
 ) -> bool:
-    """present 预测是否有可信证据：至少一条 evidence，且有 dataset_root 时引文回验通过。"""
+    """present 预测是否有可信证据：至少一条 evidence 且引文经 PDF 回验通过。
+
+    无 dataset_root 时**无法回验**——不得把未回验的引文当作可信证据（否则生产自动资格
+    会被 CI 代理证据蒙混）。真实自动化用画像必须带 dataset_root（Q3.1/Q5.1）。
+    """
     if not record.evidence:
         return False
     if dataset_root is None:
-        return True
+        return False
     pdf = dataset_root / record.product_name / record.doc
     if not pdf.exists():
         return False
@@ -213,9 +244,11 @@ def build_profile(
         fields[field_id] = FieldMetrics(
             field_id=field_id,
             support=support,
-            value_accuracy=(value_hits / value_pairs) if value_pairs else 1.0,
+            # 零观测不给满分：无 present 预测配对 = 无正确抽取证据 → 0.0（失格），
+            # 绝不用零分母默认 1.0 让"什么都没抽到"的字段获得自动资格（Q4.3）。
+            value_accuracy=(value_hits / value_pairs) if value_pairs else 0.0,
             hallucination_rate=(hallucinated / pred_present) if pred_present else 0.0,
-            evidence_accuracy=(evidence_ok / evidence_total) if evidence_total else 1.0,
+            evidence_accuracy=(evidence_ok / evidence_total) if evidence_total else 0.0,
             tri_state_confusion=dict(confusion),
         )
     return QualityProfile(
