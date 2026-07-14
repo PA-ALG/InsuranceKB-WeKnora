@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-14（OpenSpec 022-review-hardening 已更新 PR #5；实现 commit `e316487f` 的 deterministic / PostgreSQL 16 CI 均通过）
+> 最后更新：2026-07-14（PR #5 已合入 `main`，merge commit `2615b260`；下一执行主线固定为：合并后收尾 → 018 → 019 → 021）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -13,9 +13,33 @@
 
 0c. **PR #4 复审收口**：已修复空库 0003→0002 downgrade 被错误拒绝，以及 `SourceChunk` 默认 metadata 未深度冻结；migration/source focused `69 passed`，全库 non-live `916 passed / 5 deselected`，Ruff、mypy 139 files、diff check 全绿。其余评论中 revision 含 `processed_at`、numeric WeKnora identity 与新 revision recompile 均为 017 明文规格；rollback 外部写补偿仍按既有边界归 018。
 
-0d. **OpenSpec 022 测试组合再平衡（P0～P3）完成，PR #5 待合并**：修复 `test_live.py` 提前 close/dispose 导致 scope Engine attestation 在用例前失效；pytest 拆为 deterministic / `integration_postgres` / WeKnora `live` 三条互斥 lane，PR 新增 PostgreSQL 16 service job，受控 `harness-live` 手工 workflow 冻结七变量且用 JUnit 拒绝 tests=0 或 skipped≠0 的伪绿；含 secrets 的 workflow actions 与 uv 均固定不可变版本，publisher live 页面在任何失败路径均尝试删除且不覆盖主异常。bridge 已拆为 12 contract + 1 live；pipeline 88 与 revision 51 个规范化 identity/marker 全保留，最大测试文件 739 行。coverage-context audit 已用真实 scope suite 产物验证（208 passed；193 contexts / 1946 production lines / 999 advisory candidates at 0.8），候选不自动删测。本地最终 deterministic `933/938 collected`、exit 0，Ruff 全绿、mypy 151 files 全绿。`integration verified` 已由 commit `ed46df78fb975c5ef7963e49dd1e208dba31fdaa` 的 [PostgreSQL 16.14 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29312423361/job/87018894440) 证明：`1 passed / 937 deselected`、JUnit `tests=1 skipped=0`，run 于 2026-07-14T06:47:21Z～06:49:53Z 成功；WeKnora `live verified` 无受控 workflow 证据，继续 **NOT RUN**。
+0d. **OpenSpec 022 测试组合再平衡（P0～P3）完成并随 PR #5 合入 `main`**：修复 `test_live.py` 提前 close/dispose 导致 scope Engine attestation 在用例前失效；pytest 拆为 deterministic / `integration_postgres` / WeKnora `live` 三条互斥 lane，PR 新增 PostgreSQL 16 service job，受控 `harness-live` 手工 workflow 冻结七变量且用 JUnit 拒绝 tests=0 或 skipped≠0 的伪绿；含 secrets 的 workflow actions 与 uv 均固定不可变版本，publisher live 页面在任何失败路径均尝试删除且不覆盖主异常。bridge 已拆为 12 contract + 1 live；pipeline 88 与 revision 51 个规范化 identity/marker 全保留，最大测试文件 739 行。coverage-context audit 已用真实 scope suite 产物验证（208 passed；193 contexts / 1946 production lines / 999 advisory candidates at 0.8），候选不自动删测。本地最终 deterministic `933/938 collected`、exit 0，Ruff 全绿、mypy 151 files 全绿。`integration verified` 已由 commit `ed46df78fb975c5ef7963e49dd1e208dba31fdaa` 的 [PostgreSQL 16.14 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29312423361/job/87018894440) 证明：`1 passed / 937 deselected`、JUnit `tests=1 skipped=0`，run 于 2026-07-14T06:47:21Z～06:49:53Z 成功；WeKnora `live verified` 无受控 workflow 证据，继续 **NOT RUN**。
 
-0e. **OpenSpec `022-review-hardening` 已提交并更新 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5)**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。实现 commit `e316487f391b944d08b010b7d4cf538e7430ed0b` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326117805/job/87062728898) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326117805/job/87062729019) 均通过；PR 最新 head 在合并前仍须保持两项 required checks 全绿。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。`harness/README.md` 的旧 deterministic 命令另作非本 change 文档 follow-up。
+0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
+
+0f. **当前唯一执行主线：合并后收尾 → 018 → 019 → 021。不得跳序并行修改共享 schema/发布链。** 每一阶段继续遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁；上一阶段未完成 validation/HANDOFF 对账，不进入下一阶段。
+
+   **阶段 1 — 合并后收尾（当前）**
+   - [x] PR #5 已合并，最新 `origin/main` 已确认指向 `2615b260`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
+   - [ ] 修正文档陈旧口径：`docs/insurance-kb/README.md` 的 017 T1～T6、`docs/insurance-kb/20-enterprise-runtime-foundation.md` 的 PostgreSQL integration / WeKnora live 边界、`harness/README.md` 的 deterministic marker。
+   - [ ] 对账旧 ledger：001/002/003/004 的未勾项只做完成证据回填，不重做已验收功能；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
+   - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
+
+   **阶段 2 — 018 ReleaseSnapshot 统一读模型与可恢复发布（0/7）**
+   - [ ] 按 `openspec/changes/018-release-snapshot-read-model/` 顺序完成 T1～T7；018 独占 Alembic `0005`。
+   - [ ] 交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback。
+   - [ ] 验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。无真实环境时 live 必须记 `NOT RUN`，不得伪绿。
+
+   **阶段 3 — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
+   - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。
+   - [ ] 本阶段只做工具、fixture/replay 与门禁，不改写真实 11/13 现场、不调用大模型；为 020 提供 run-admission 和稳定 artifact 合同。
+
+   **阶段 4 — 021 Source lifecycle ordering（0/10）**
+   - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
+   - [ ] 迁移编号排在 018 的 `0005` 之后；交付 SourceHead/SourceEvent、`processed_at/generation`、per-source lock/CAS、delete/import/notify 竞争处理与 PostgreSQL 双会话证据。
+   - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
+
+   **主线外边界**：020 真实金标/baseline 高 token 运行必须等待 019 的 run-admission，且本排期中放在 021 收尾之后再启动；B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与主线共享代码分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -54,7 +78,7 @@
 4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；里程碑见 `16-roadmap.md`（当前 M0：016→017→018/019→live E2E）。认领 B 项请在下表加"认领人"并保持更新。
+**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前主线以 ⓪-0f 为唯一准绳：**合并后收尾 → 018 → 019 → 021**。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行，020 在 021 后启动。
 
 ## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
@@ -80,10 +104,10 @@
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
-| B20 | 018 SnapshotFact/统一读取/可恢复发布 | `openspec/changes/018-release-snapshot-read-model/`；硬依赖 007+016+017 | 开发型，中大 + live |
-| B21 | 019 Golden 工具/QualityProfile/在线 Gate | 已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；工具部分可与 016 文件域隔离推进 | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 统一承接 B1/B2/B3/B4/B6/B7；未完成 run-admission 前零模型调用 | 高 token 数据任务 |
-| B23 | 021 Source lifecycle ordering | durable SourceHead、processed_at/generation、per-source lock/CAS；当前仅 proposed/pending，未实现 | 开发型，中大 |
+| B20 | 018 SnapshotFact/统一读取/可恢复发布 | **主线阶段 2**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005` | 开发型，中大 + live |
+| B21 | 019 Golden 工具/QualityProfile/在线 Gate | **主线阶段 3**；已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；完成前 020 不得运行 | 开发型，中 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **主线 021 收尾后启动**；统一承接 B1/B2/B3/B4/B6/B7，未完成 019 run-admission 前零模型调用 | 高 token 数据任务 |
+| B23 | 021 Source lifecycle ordering | **主线阶段 4**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，当前仅 proposed/pending | 开发型，中大 |
 
 > 016～021 已有条款级规格；验收以各 change spec、测试与 validation-report 为准。020 是环境/预算约束的数据运行，软件门禁绿不等于真实运行完成；021 规格存在不等于 ordering 能力已落地。
 
@@ -102,7 +126,7 @@
    - 上游 nashsu/llm_wiki（GPL-3.0）设计思想提炼 10 条，只借鉴不抄码。
 2. **架构定稿（ADR-001，业务方确认）**：插件式路线 B。WeKnora 不动（补丁≤3 且提 PR 回上游），保险能力全在 `harness/`（尚未创建），自有 PostgreSQL。详见 `docs/insurance-kb/02-architecture.md`。
 3. **设计文档集**：`docs/insurance-kb/` 00~10 全部完成（见该目录 README）：需求/架构/知识模型/抽取管道/金标评估/资产移植/schema 基线，外加 **08 技术选型**（逐组件开源框架与许可证核对）、**09 LLM Wiki 功能迁移对照表**（27 项功能的承接方与排期）、**10 开发规范**（SDD/TDD/边界纪律）。master plan 顶部已加架构修订说明。
-4. **Schema 基线接入**：业务方 Excel（2026-07-10）已转成 `docs/insurance-kb/schema-baseline/` 13 个 YAML；我方扩展字段提案在 07 §3，**待业务方逐条确认**。
+4. **Schema 基线接入**：业务方 Excel（2026-07-10）已转成 `docs/insurance-kb/schema-baseline/` 13 个 YAML；07 §3 的 18 条扩展字段提案已由业务方全部接受并并入 schema v1.1。
 5. **样本材料**：13 产品（说明书+条款+费率表+meta）已解压到仓库外 `../samples/`（**不入 git**，公司资料）。
 
 ## 三、已拍板决策（2026-07-11 业务方确认）与剩余卡点
@@ -117,11 +141,11 @@
 
 ## 四、下一步计划（按序）
 
-1. ✅ change 001 **开发完成并验收**（2026-07-11）：`harness/` src 布局脚手架 + WeKnora REST 适配层（httpx 客户端、错误分型、slug 串行化锁、指数退避重试、Langfuse no-op 降级）+ 23 个契约/单元测试 + harness CI。验证：ruff/mypy(strict)/pytest 全绿（21 passed，2 live 跳过）。**注意 git 提交均留在本地分支 `feature/insurance-kb-foundation`：GitHub 账号 `yiyinianhua` 对本仓库暂无写权限（push 403），业务方决定权限到位后统一推送**；
-1a. ✅ change 002（金标 S0）提案已获业务方确认（2026-07-11），开发中；
-2. **S0：金标与评估子系统**（change 002，`harness/goldenset`，设计见 05）——用 `dataset/shouxian_product/` 13 产品跑出金标 v0.1；注意每个产品的 `product_meta.json` 含 planCode/versionNo/备案文号/销售状态/生效日期，是产品主数据与 B-1/B-2 字段的 ground truth；
-3. S1（master plan P0-1）：产品主数据/别名 + 文档分类与产品路由（change 003）；
-4. 向腾讯上游开 3 个 Issue/PR（02 §5 补丁清单）。
+1. **合并后收尾**：完成 ⓪-0f 的文档口径、旧 ledger、OpenSpec archive 与 strict/link/status 对账；只做收尾，不夹带 018 功能。
+2. **018**：完成 SnapshotFact、统一 SnapshotReader、可恢复发布/回滚与 live/NOT RUN 证据。
+3. **019**：完成 Golden assembler/validator、artifact approval、QualityProfile 与在线 QualityGate；不在本阶段跑真实大模型。
+4. **021**：完成 source lifecycle ordering、并发/乱序/删除竞争及 PostgreSQL 双会话验证。
+5. **随后再排 020**：消费 019 的 run-admission 完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，执行前登记模型、预算与断点。B10 WeKnora 环境准备可在 1～4 期间由独立负责人并行。
 
 样本语料：业务方 2026-07-11 提供 `shouxian_product`（13 产品，39 PDF + 12 meta json）并确认拷入仓库 → `dataset/shouxian_product/`，作为测试验证集原料。仓库外 `../samples/` 的早期解压副本作废，以 dataset 内为准。
 
