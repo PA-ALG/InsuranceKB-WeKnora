@@ -7,10 +7,10 @@
 | 状态 | 结论 | 证据 |
 |---|---|---|
 | `software complete` | PASS | deterministic `933/938 collected`、exit 0；Ruff PASS；mypy 151 files PASS |
-| `integration verified` | NOT VERIFIED | 等待本分支 PostgreSQL 16 GitHub Actions job URL/commit SHA/时间；本地未冒充 |
+| `integration verified` | PASS | [run 29312423361](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29312423361) / [job 87018894440](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29312423361/job/87018894440)，commit `ed46df78fb975c5ef7963e49dd1e208dba31fdaa`，2026-07-14T06:47:23Z～06:47:54Z |
 | `live verified` | NOT RUN | 未触发受控 `harness-live` workflow；无 WeKnora JUnit/run URL |
 
-只有 PostgreSQL job 的 JUnit 满足 tests > 0、skipped = 0 后才能更新第二行；只有受控 WeKnora workflow 满足同一条件后才能更新第三行。
+PostgreSQL 证据来自 GitHub 托管 PostgreSQL 16.14 service：`1 passed, 937 deselected`，JUnit guard 输出 `tests=1 skipped=0`；[JUnit artifact](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29312423361/artifacts/8302579856) SHA-256 为 `d75bdd1eb3666e4a1ca5ed33b12cdca3cd967565c8c2b5d5bd08ea3a1af2d47a`。只有受控 WeKnora workflow 满足同一非零、零 skip 条件后才能更新第三行。
 
 ## 2. 风险—证明层—执行 lane
 
@@ -109,7 +109,7 @@ marker 多重集保持：`parametrize=66`、`asyncio+parametrize=28`、`none=25`
 | P3 audit | Approved after traversal fix | Approved | 无剩余 finding |
 | 整包差异 | Approved | Approved after live cleanup fix | AST/全量门禁复核无剩余代码 finding |
 
-## 7. 尚未伪造的外部证据
+## 7. 外部证据边界
 
-- PostgreSQL：本地只完成 collection/契约检查；在 PostgreSQL 16 Actions job 成功前保持 `NOT VERIFIED`。
+- PostgreSQL：`integration verified`，GitHub Actions run/job、commit、时间、JUnit 计数与 artifact 摘要见 §1；deterministic job 同一 run 亦成功。
 - WeKnora：本机没有七变量受控环境；在手工 workflow 成功前保持 `NOT RUN`。
