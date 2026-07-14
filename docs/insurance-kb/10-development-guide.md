@@ -36,6 +36,41 @@
 - LLM 的不确定性不进单元测试：管道逻辑用固定夹具测，模型质量用金标评测——**两者严格分离**；
 - CI 门禁：ruff + mypy + 单元/契约测试全绿才可合并；金标回归在升级模型/prompt/WeKnora 版本时强制执行。
 
+### 2.1 测试组合证据与重叠审计
+
+测试按依赖分成互斥的三条执行 lane：
+
+| Lane | pytest 选择式 | 合并证据 |
+|---|---|---|
+| deterministic | `not live and not integration_postgres` | 每个 PR 必跑 |
+| PostgreSQL integration | `integration_postgres` | PostgreSQL 16 Actions job，tests > 0 且 skipped = 0 |
+| WeKnora live | `live` | 受控 environment 手工 workflow；未运行必须写 `NOT RUN` |
+
+使用 coverage context 检查“多个测试是否执行了大量相同生产代码”，不得按文件行数、异常文案或 passed 数量机械删测试。标准采集与报告命令为：
+
+```bash
+cd harness
+uv run pytest -m "not live and not integration_postgres" \
+  --cov=insurance_harness --cov-context=test --cov-report=
+uv run coverage json --show-contexts -o .coverage-contexts.json
+uv run python scripts/test_portfolio_audit.py .coverage-contexts.json \
+  --threshold 0.8 --minimum-shared-lines 5
+```
+
+audit 只消费 `src/insurance_harness/**/*.py`，忽略空/default context，并把 setup/run/teardown 归并为同一个 pytest identity。它固定报告有效 context 数、production line 数、候选数和阈值；解析失败或空证据非零退出，发现候选仍为零退出。候选只触发人工复审：只有输入、public boundary、失败阶段和副作用断言都同构时才可合并。核心 capability 与 consumer 接线/零副作用证明默认属于不同层。
+
+每个 validation report 必须包含以下表格；`passed N` 不能替代风险—证据映射：
+
+| Risk ID | Primary layer | Test node/pattern | Distinct failure surface | Execution lane |
+|---|---|---|---|---|
+| 示例：R-SCOPE | capability / consumer | `test_*_scope_*` | 越权输入在 query/I/O 前失败 | deterministic |
+
+完成状态采用受证据约束的固定术语：
+
+- `software complete`：deterministic 门禁通过；
+- `integration verified`：PostgreSQL 16 Actions job 通过，JUnit tests > 0、skipped = 0，并保存 run URL、commit SHA、时间；本地运行只作调试；
+- `live verified`：受控 WeKnora workflow 通过，JUnit tests > 0、skipped = 0，并保存 run URL、commit SHA、时间。没有该证据时只能写 `NOT RUN`。
+
 ## 3. 代码结构与风格
 
 - 目录布局见 02 §7；每个 `harness/` 子包必须有 `README.md`（职责、入口、与其他包的关系）；

@@ -26,6 +26,7 @@ llm = ["litellm>=1.40"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "respx>=0.21",
     "ruff>=0.6",
     "mypy>=1.11",
@@ -68,4 +69,5 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "live: 打真实 WeKnora 测试实例的契约测试（需 HARNESS_LIVE_* 环境变量，默认跳过）",
+    "integration_postgres: 使用 CI PostgreSQL service 的真实并发集成测试",
 ]
