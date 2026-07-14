@@ -30,6 +30,7 @@
 - 质量审查第一轮的五个 Important/两个 Minor通过安全 snapshot、`asyncio.to_thread`、页码/metadata/batch/dead-letter 强校验关闭；第二轮两个 Important 通过 `O_NONBLOCK+fstat` 与 PAGE_PARSE 包装关闭，最终 `Quality approved`；
 - focused：`.venv/bin/pytest tests/test_source_models_017.py tests/test_compiler_pipeline.py -q` → `51 passed`；
 - 主代理最终复验：`560 passed, 3 deselected`，Ruff 全量通过，mypy `128 source files`，`git diff --check` 通过。
+- 2026-07-14 · PR #4 复审：默认 `metadata={}` 绕过字段 validator、可在 frozen `SourceChunk` 上原地修改；先把默认值 mutation 加入既有深度不可变测试并得到 RED，再用 `Field(..., validate_default=True)` 统一默认值与显式输入的递归冻结路径。
 
 ## T3 验证证据（2026-07-13）
 

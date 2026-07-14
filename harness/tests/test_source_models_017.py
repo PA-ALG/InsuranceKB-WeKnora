@@ -71,6 +71,7 @@ def _document(**changes: Any) -> SourceDocument:
 def test_models_are_frozen_and_nested_collections_are_deeply_immutable() -> None:
     revision = _revision()
     chunk = _document().chunks[0]
+    default_chunk = SourceChunk(chunk_id="chunk-default", content="default metadata")
     document = _document()
 
     with pytest.raises(ValidationError):
@@ -81,6 +82,8 @@ def test_models_are_frozen_and_nested_collections_are_deeply_immutable() -> None
         chunk.content_hash = "d" * 64
     with pytest.raises(TypeError):
         chunk.metadata["new"] = "value"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        default_chunk.metadata["new"] = "value"  # type: ignore[index]
     with pytest.raises(TypeError):
         chunk.metadata["origin"]["kind"] = "changed"
     with pytest.raises(AttributeError):

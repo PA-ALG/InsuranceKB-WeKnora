@@ -1,6 +1,6 @@
 # 016 · 企业 KnowledgeScope 验证报告
 
-> 验证日期：2026-07-13
+> 原始验证日期：2026-07-13；PR #4 增量补验：2026-07-14
 > 验证范围：OpenSpec 016 本地确定性实现与 SQLite migration 语义
 > 结论：本地门禁与规格证据齐备，规格/质量复审及主代理独立验收通过；未执行 live WeKnora 或真实 PostgreSQL 验证。
 
@@ -12,9 +12,9 @@
 
 最终质量复审仅保留一个非阻断生命周期建议：pending-bind marker 在外层事务结束后惰性保留到同 Space 下次 `load_scope` 或 Session 回收。短生命周期管理 CLI 不受影响，inactive transaction 不会被误判为 pending；若未来引入长期复用的批量 admin Session，可改为 `after_transaction_end` 或 transaction weak reference 主动清理。
 
-## 2. 门禁证据
+## 2. 原始门禁证据（2026-07-13）
 
-工作目录：`harness/`；使用仓库既有 `.venv`。
+以下是 016 首次收尾时的历史结果，不是 PR #4 修复后的 fresh 重跑计数。工作目录：`harness/`；使用仓库既有 `.venv`。
 
 | 门禁 | 命令 | 真实结果 |
 |---|---|---|
@@ -26,6 +26,13 @@
 | diff whitespace | `git diff --check`（仓库根） | 无输出，退出码 0 |
 
 warning 均为 Python 3.12 `sqlite3` 默认 datetime adapter 的弃用提示，不是测试失败。3 个 deselected 是 `live` 标记用例；没有把它们记录为已验证。
+
+### 2.1 PR #4 复审补验（2026-07-14）
+
+- RED：`test_s3_3_empty_install_round_trips_0003_to_0002` 在修复前稳定抛出 `expected exactly one knowledge space`；放宽为零 Space 或唯一 `legacy-default` 后转绿；
+- migration + Source model focused：`69 passed`；
+- 全库 non-live：`916 passed, 5 deselected, 209 warnings in 113.68s`；
+- Ruff：`All checks passed!`；mypy：`Success: no issues found in 139 source files`；`git diff --check` 无输出。
 
 ## 3. Migration round-trip
 
@@ -42,7 +49,7 @@ warning 均为 Python 3.12 `sqlite3` 默认 datetime adapter 的弃用提示，�
   check
 ```
 
-结果：upgrade 成功；`alembic check` 输出 `No new upgrade operations detected.`。空库没有自动创建 `legacy-default`，由 `test_s3_3_empty_install_does_not_create_default_space` 证明。
+结果：upgrade 成功；`alembic check` 输出 `No new upgrade operations detected.`。空库没有自动创建 `legacy-default`，由 `test_s3_3_empty_install_does_not_create_default_space` 证明；`test_s3_3_empty_install_round_trips_0003_to_0002` 进一步证明零 Space 的 0003 空库可无损回退到 0002。
 
 ### 3.2 Legacy 数据往返
 
@@ -58,6 +65,8 @@ warning 均为 Python 3.12 `sqlite3` 默认 datetime adapter 的弃用提示，�
 复审补充的 DB scope closure 由 `test_s2_2_product_document_rejects_cross_space_version` 与 `test_s2_2_claim_rejects_cross_space_superseded_by` 在 `PRAGMA foreign_keys=ON` 下验证：`ProductDocument(space_id, version_id)` 必须指向同 Space ProductVersion，`Claim(space_id, superseded_by)` 必须指向同 Space Claim。ORM/migrated schema 测试同时检查两条命名复合 FK。0001/0002 原单列 FK保留为兼容冗余；downgrade 只删除 0003 新增复合 FK并恢复旧结构。
 
 ### 3.3 Unsafe downgrade 必须在 DDL 前失败
+
+零 Space 是可安全回退状态，不属于 unsafe downgrade。其余拒绝场景包括：
 
 - 多 Space：`test_s3_4_downgrade_rejects_multiple_spaces_before_ddl`；
 - 唯一一个但不是 `legacy-default`：`test_s3_4_downgrade_rejects_single_non_legacy_space`；

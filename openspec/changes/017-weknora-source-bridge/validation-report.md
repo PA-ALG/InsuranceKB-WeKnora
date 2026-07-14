@@ -72,6 +72,8 @@ passed
 - pages 连续 1-based，metadata JSON-safe；空/扫描/损坏 PDF 与无文件均为 typed all-or-nothing dead-letter；
 - dead-letter canonical key 使用不碰撞的 null/identity 编码，错误消息不泄露部署绝对路径。
 
+PR #4 复审补验发现默认 `metadata={}` 未触发 validator，冻结模型仍可原地修改默认 dict。新增默认值 mutation RED 后，以 `validate_default=True` 让默认值进入同一递归冻结链；该用例随 Source model focused 与全库 non-live `916 passed, 5 deselected` 通过。
+
 验证命令与结果：
 
 ```text
@@ -190,6 +192,7 @@ passed
 - linked chunk hash 固定为原始 chunk content UTF-8 的 SHA-256；mapper 不接收或产出 page，也不读取 `chunk_index/start_at/end_at` 推导页码；
 - Compiler finalize 保留 PDF 已验证的原 page/quote，只按 `cand.doc` 对应的 runtime `SourceDocument` 匹配 chunks；任何预载 source/chunk audit 先剥离，doc 未命中、unknown 或 quote 未回验时只能保留 bare page evidence；
 - scoped verified evidence 冻结 knowledge/raw KB、source revision、file hash、original digest、parser version 与可选唯一 chunk；Directory replay 不制造 knowledge/chunk identity；page-only/ambiguous 仍可作为 page evidence 输出；
+- Directory `extract-replay` 的 revision/page audit 是 Golden/评估产物，不具备生产 identity，也不得降格为 legacy import；两条 importer 均拒绝是有意的 fail-closed 边界；
 - Evidence audit 使用明确状态矩阵：legacy 全部 audit/status 为 null；unscoped replay 必须有完整 revision audit 且无 knowledge/raw/chunk；scoped 必须有成对非空 knowledge/raw 与完整 revision audit；只有 linked 允许且要求唯一非空 chunk ID + SHA-256；
 - `SourceDocument` 在 lineage 前拒绝重复 `chunk_id`；public `ExtractionPipeline.run()` 回归覆盖 materialize→ContextVar→graph→finalize→pred 与 batch cleanup；
 - 保留历史 Evidence 的 page 与 extra-field 宽容输入，只收紧 017 新增 audit 字段；`LineageResult` 保持 frozen/extra-forbid。

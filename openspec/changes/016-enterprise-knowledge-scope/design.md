@@ -16,7 +16,7 @@
 2. 若存在历史数据，创建固定 ID 的 `legacy-default` unbound Space 并回填；空库不创建；
 3. 重建唯一约束、设 `space_id NOT NULL`，将 `current_release` 改为以 space_id 唯一。
 
-SQLite migration 测试覆盖 upgrade/downgrade；downgrade 在多 Space 或全局键冲突时先拒绝，不尝试有损折叠。生产启动检查发现 unbound Space 时只禁止 live bridge/publish，不阻止管理员执行 bind。
+SQLite migration 测试覆盖 upgrade/downgrade；空库可以无损回退，多 Space、非 legacy Space 或全局键冲突则在 DDL 前拒绝，不尝试有损折叠。生产启动检查发现 unbound Space 时，产品注册、路由、live bridge、publish 等所有普通业务入口均 fail closed，但管理员仍可执行 list/show/bind。
 
 ## 服务改造顺序
 

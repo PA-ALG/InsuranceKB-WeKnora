@@ -148,7 +148,7 @@ class SourceChunk(BaseModel):
     end_at: StrictInt | None = None
     content: str
     content_hash: str = ""
-    metadata: Mapping[str, Any] = Field(default_factory=dict)
+    metadata: Mapping[str, Any] = Field(default_factory=dict, validate_default=True)
 
     _validate_chunk_id = field_validator("chunk_id")(_non_empty)
 

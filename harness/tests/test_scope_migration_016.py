@@ -293,6 +293,25 @@ def test_s3_3_empty_install_does_not_create_default_space(tmp_path: Path) -> Non
         assert connection.scalar(text("SELECT count(*) FROM knowledge_spaces")) == 0
 
 
+def test_s3_3_empty_install_round_trips_0003_to_0002(tmp_path: Path) -> None:
+    url, engine = _database(tmp_path, "empty-downgrade")
+    command.upgrade(_alembic_cfg(url), "0003")
+
+    _assert_scoped_schema(engine)
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM knowledge_spaces")) == 0
+
+    command.downgrade(_alembic_cfg(url), "0002")
+
+    inspector = inspect(engine)
+    assert "knowledge_spaces" not in inspector.get_table_names()
+    assert "space_id" not in {
+        column["name"] for column in inspector.get_columns("insurance_products")
+    }
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+
+
 def test_s1_1_bound_space_requires_all_three_bindings(tmp_path: Path) -> None:
     url, engine = _database(tmp_path, "binding-shape")
     command.upgrade(_alembic_cfg(url), "head")

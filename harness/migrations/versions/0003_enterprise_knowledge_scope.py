@@ -380,10 +380,10 @@ def _validate_downgrade() -> None:
     space_ids = list(
         connection.scalars(sa.text("SELECT id FROM knowledge_spaces ORDER BY id"))
     )
-    if space_ids != [LEGACY_SPACE_ID]:
+    if space_ids and space_ids != [LEGACY_SPACE_ID]:
         raise CommandError(
-            "cannot downgrade 0003 before DDL: expected exactly one knowledge space "
-            f"named {LEGACY_SPACE_ID!r}; found {space_ids!r}"
+            "cannot downgrade 0003 before DDL: expected no knowledge space or exactly "
+            f"one named {LEGACY_SPACE_ID!r}; found {space_ids!r}"
         )
     conflicts = _downgrade_conflicts()
     if conflicts:

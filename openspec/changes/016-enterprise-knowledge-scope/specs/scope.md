@@ -19,7 +19,7 @@
 - S3.1 0001/0002 现有库升级到新 migration 后数据不丢失，历史行归入唯一 `legacy-default` Space；
 - S3.2 legacy Space 默认为 unbound 且三个绑定字段为 NULL；CLI `scope bind` 要求 tenant/raw/wiki 三项显式输入，在单事务中校验唯一、写三项并切为 bound，任一步失败保持原 unbound；
 - S3.3 新装空库不自动创建可用于生产的默认 Space；
-- S3.4 downgrade 只支持“数据库中仅有 legacy-default 一个 Space，且 scoped 业务键折叠后满足 0002 全局唯一约束”的状态；否则迁移在执行 DDL 前给出冲突清单并拒绝，绝不丢数据。满足前置条件时可恢复 0002 结构。
+- S3.4 downgrade 只支持“数据库中没有 Space”或“仅有 legacy-default 一个 Space，且 scoped 业务键折叠后满足 0002 全局唯一约束”的状态；否则迁移在执行 DDL 前给出冲突清单并拒绝，绝不丢数据。满足前置条件时可恢复 0002 结构。
 
 ## S4 API 与安全
 

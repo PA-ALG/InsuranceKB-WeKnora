@@ -12,7 +12,9 @@
 - `KnowledgeSpace` 是产品域和知识域共享的租户隔离根；bound Space 固定映射一个 tenant、KB-RAW 与 KB-WIKI。运行时服务必须接收由 `load_scope(session, space_id)` 从 bound 行加载的不可变 `KnowledgeScope`，并用 `require_current_scope` 证明 capability 来自当前 Session 的同一 Engine、当前行仍为相同 bound 值；不得从设置补默认 tenant/KB。
 - private attestation 只在进程内保存 sentinel、Engine object identity 的弱引用与四元值，不序列化、不入日志。deep `model_copy` 保持 provenance，但 scope 不阻止 Engine 回收；弱引用失效后 capability fail closed。Engine 身份按 `KnowledgeSpace` mapper 解析并把 Connection 归一到 Engine：共享同一 mapper Engine 的不同 Session 可使用同一 loaded scope，不同 mapper Engine 即使默认 Engine、URL和数据相同也必须 reload。
 - loader/当前值验证共用 `no_autoflush` 纯列查询，绕过 identity map 且不 refresh caller ORM entity；目标 Space 在 new/dirty/deleted UoW 中按 inspected persistent identity + current id 零业务查询拒绝并保留 pending state。该查询不是任意 committed-only 保证：绕过 admin service 的 direct SQL 或手工 flush 写入仍可能在同一事务可见，不属于 capability API 边界。
-- migration 0003 只在历史业务行存在时创建 unbound `legacy-default` 并回填；空库不会创建默认 Space。downgrade 只允许唯一 `legacy-default` 且折叠到 0002 后无全局键冲突，否则在 DDL 前拒绝。
+- migration 0003 只在历史业务行存在时创建 unbound `legacy-default` 并回填；空库不会创建默认 Space。空库可直接 downgrade；非空 Space 只允许唯一 `legacy-default` 且折叠到 0002 后无全局键冲突，否则在 DDL 前拒绝。
+- 历史非空库升级后，`legacy-default` 会保持 `unbound`，所有普通业务 loader 都会 fail closed；管理员必须先执行下方 `scope_cli bind legacy-default ...` 完成 tenant/KB-RAW/KB-WIKI 三项绑定，提交后才能由运行时重新 `load_scope`。
+- 新装空库需要受控管理员 provisioning 创建 bound Space；当前 CLI 不提供 create，禁止业务进程把直接写表当作默认初始化路径。幂等 Space/双 KB 初始化脚本由部署 Runbook 的 B10 交付物承接。
 - DB 可表达的 child closure 包含 `ProductDocument(space_id, version_id) → ProductVersion(space_id, id)` 与 `Claim(space_id, superseded_by) → Claim(space_id, id)`；0001/0002 的单列 FK 保留为兼容冗余，0003 downgrade 删除复合 FK 后自然恢复旧 schema。
 - `bind_space()` 是 caller-owned clean outer transaction 内的 mutation command，返回 `None`；成功写入后记录 caller outer `SessionTransaction` marker，marker active 时 `load_scope` 在查询前 fail closed。commit 后 marker 失效并允许重新加载；rollback 后重新加载仍为 unbound。PostgreSQL 使用 `FOR UPDATE`；SQLite CLI 因 legacy transaction control 显式建立物理 `BEGIN`，这不是生产并发语义替代品。
 

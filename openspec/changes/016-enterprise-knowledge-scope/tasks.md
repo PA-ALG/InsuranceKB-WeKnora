@@ -18,7 +18,7 @@
 - 2026-07-13 · T1：测试 `bound_scope` 是必须显式传 tenant/raw/wiki 的 pytest factory fixture，不提供任何默认作用域。代码质量复审确认 fixture 被真实测试消费。
 - 2026-07-13 · T2：0001/0002 历史非空库升级时统一回填到 `legacy-default` unbound Space；空库不创建默认 Space。聚合根直接持有 `space_id`，计划列明的跨聚合引用使用 shadow `space_id` + 复合外键。
 - 2026-07-13 · T2：`CurrentRelease` 使用 `(space_id, id)` 复合主键并对 `space_id` 唯一，保留每空间一条指针且可无损回退旧 `id='current'` 结构。
-- 2026-07-13 · T2：downgrade 先校验恰好一个 `legacy-default`，再枚举所有恢复到 0002 的全局唯一键冲突；错误包含实际键值和计数并在任何 DDL 前抛 `CommandError`。发布态 Claim 仅在旧唯一索引的所有可空列均非 NULL 时判冲突，保持 SQLite/PostgreSQL 的 NULL unique 语义。
+- 2026-07-13 · T2：downgrade 允许空库或恰好一个 `legacy-default`，再枚举所有恢复到 0002 的全局唯一键冲突；其他 Space 形态与键冲突都在任何 DDL 前抛 `CommandError`，错误包含实际键值和计数。发布态 Claim 仅在旧唯一索引的所有可空列均非 NULL 时判冲突，保持 SQLite/PostgreSQL 的 NULL unique 语义。
 - 2026-07-13 · T3：产品注册、版本/文档幂等查询与路由索引都显式接收 `KnowledgeScope`；`ProductAlias` 通过 join 父 Product 并按 `space_id` 过滤，避免跨空间全表读取和大型 `IN` 参数列表。
 - 2026-07-13 · T3：`RouteResult`/`UnassignedDraft` 冻结携带 `space_id`；unassigned 写入前先校验 draft scope，再校验候选 Product 的 scoped id/code/name，任一不符统一抛不泄漏对象信息的 `ScopeViolation`，且在 `session.add()` 前零写失败。
 - 2026-07-13 · T3：产品 `register-products`/`classify` CLI 均强制 `--space-id`，先迁移 schema，再从数据库 `load_scope`；missing/unbound 均 fail closed，不读取配置或默认 KB 补 scope。
@@ -38,6 +38,7 @@
 - 2026-07-13 · T7：`scope bind/list/show` 只接受显式 `--db-url` 或 `HARNESS_DB_URL`，bind 强制四个 opaque ID；CLI 在提交前完成读取和 JSON 序列化，提交后输出失败仍返回成功，避免自动重试误判。SQLite 命令路径因 legacy transaction control 显式建立物理 `BEGIN`；生产 service 仍保持标准 outer transaction + SAVEPOINT + PostgreSQL `FOR UPDATE`。
 - 2026-07-13 · T7：Alembic 同时写入转义后的 main option 与原始 `x db_url`，保证 percent-encoded DSN 保真且 flag 高于环境变量；标识符拒绝首尾空白和 Unicode C 类控制/不可见字符，同时保留合法 Unicode opaque ID。list/show/bind 均输出稳定 JSON，不创建默认 SQLite 或默认 Space。
 - 2026-07-13 · T8：真实临时 SQLite 覆盖 fresh `upgrade head + alembic check`，以及含十个 legacy 聚合根的 0002→head→0002→head 往返；安全 downgrade 的 Space/全局键前置校验会在 DDL 前拒绝并保持 revision、schema 与冲突数据不变。真实 PostgreSQL 与 live WeKnora 未验证，明确留给部署验收及 017/018。
+- 2026-07-14 · PR #4 复审修复：先以 `test_s3_3_empty_install_round_trips_0003_to_0002` 复现空库无 `legacy-default` 时 downgrade 被错误拒绝，再放宽前置条件只接受“零 Space”或“唯一 legacy-default”；存量非空库 upgrade 后必须 bind 的运维步骤同步进入 Runbook、HANDOFF 与 DB README。
 - 2026-07-13 · T8：查询审计确认 public 产品/知识/发布入口显式 scope；ProductAlias/ClaimEvidence/ClaimRevision/ChangeItem/Conflict 等 child 查询必须依赖先行 scoped 父聚合 guard。`scope_cli`/migration 是需要访问 unbound/全局 Space 的 admin 例外；既有 Wiki CRUD 是 free-form KB 的低层 transport primitive，016 publisher 是唯一生产调用点且只传 `scope.wiki_kb_id`；若新增 runtime consumer，018 必须提供 scoped facade。
 - 2026-07-13 · T8：ExtractionPipeline 保留完全 unscoped 的离线回放/Golden legacy 模式；一旦以 scope 构造，fresh/resume/checkpoint/state patch/manifest 全程闭合，017 live bridge 再强制在线来源链始终 scoped。该兼容边界不得被描述成“所有 pipeline run 已强制 scope”。
 - 2026-07-13 · T8 复审修复：`KnowledgeScope` private attestation 增加不可序列化、不入日志的进程内 Engine identity。共享 `require_current_scope(session, scope)` 先拒绝 forged/修改 copy/不同 Engine capability，再以 `no_autoflush` 纯列查询当前数据库 bound 行闭合四元值；同 Engine 的不同 Session 与未修改 copy 可用，不同 Engine 即使 URL/数据相同也必须 reload。目标 KnowledgeSpace 处于 new/dirty/deleted UoW 时零查询拒绝且不 refresh/覆盖 caller pending state。
