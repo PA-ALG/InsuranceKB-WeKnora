@@ -22,7 +22,8 @@
    **阶段 1 — 合并后收尾（当前）**
    - [x] PR #5 已合并，最新 `origin/main` 已确认指向 `2615b260`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
    - [ ] 修正文档陈旧口径：`docs/insurance-kb/README.md` 的 017 T1～T6、`docs/insurance-kb/20-enterprise-runtime-foundation.md` 的 PostgreSQL integration / WeKnora live 边界、`harness/README.md` 的 deterministic marker。
-   - [ ] 对账旧 ledger：001/002/003/004 的未勾项只做完成证据回填，不重做已验收功能；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
+   - [ ] 对账执行顺序：修正 `docs/insurance-kb/16-roadmap.md` 与 `docs/insurance-kb/20-enterprise-runtime-foundation.md` 中“019 可独立推进”的旧表述，以本节串行主线为准。
+   - [ ] 对账旧 ledger：001/003/004 的未勾项只做完成证据回填，不重做已验收功能；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交 020；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
    - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
 
    **阶段 2 — 018 ReleaseSnapshot 统一读模型与可恢复发布（0/7）**
@@ -32,14 +33,14 @@
 
    **阶段 3 — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
    - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。
-   - [ ] 本阶段只做工具、fixture/replay 与门禁，不改写真实 11/13 现场、不调用大模型；为 020 提供 run-admission 和稳定 artifact 合同。
+   - [ ] 本阶段只做工具、fixture/replay 与门禁，不改写真实 11/13 现场、不调用大模型；为 020 提供稳定 artifact 工具与合同。`run-admission` 属于 020 T1，只能在 021 收尾后由 020 自己执行。
 
    **阶段 4 — 021 Source lifecycle ordering（0/10）**
    - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
    - [ ] 迁移编号排在 018 的 `0005` 之后；交付 SourceHead/SourceEvent、`processed_at/generation`、per-source lock/CAS、delete/import/notify 竞争处理与 PostgreSQL 双会话证据。
    - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
 
-   **主线外边界**：020 真实金标/baseline 高 token 运行必须等待 019 的 run-admission，且本排期中放在 021 收尾之后再启动；B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与主线共享代码分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
+   **主线外边界**：020 真实金标/baseline 高 token 运行必须等待 019 的 artifact 工具与合同，且本排期中放在 021 收尾之后再启动；启动后的第一项是 020 T1 `run-admission`。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与主线共享代码分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -75,7 +76,7 @@
    两分红产品归纳 → 尊享26终身寿留出）：fast path 命中字段正确率 1.00 vs 通用管道 0.00
    （交费期限 unknown→列直取全对），预估节省 1 次调用/产品（锚定字段尚少；随模板铺开增长）；
    发现分红说明书两版式不同构（归纳报告与 validation-report.md 有全量明细）。门禁 239 passed 全绿。
-4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
+4. **非当前主线 backlog**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单），不得抢占 ⓪-0f 的执行顺序；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
 **协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前主线以 ⓪-0f 为唯一准绳：**合并后收尾 → 018 → 019 → 021**。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行，020 在 021 后启动。
@@ -96,7 +97,7 @@
 | B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
 | B10 | WeKnora 测试实例搭建 + live 契约测试 | **完整 Runbook 已备好：`docs/insurance-kb/14-deployment-runbook.md`**（双库初始化/L1~L6 验收路径/完成定义清单） | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |
-| B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | `openspec/changes/010-structured-import/proposal.md`；建议最先做（见效最快） | 开发型，中等 |
+| B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | `openspec/changes/010-structured-import/proposal.md`；属后续 backlog，不抢占 ⓪-0f 主线 | 开发型，中等 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立） | `openspec/changes/011-knowledge-health/proposal.md` | 开发型，中小 |
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | `openspec/changes/012-qa-objects/proposal.md`，依赖 B12 | 开发型，中等 |
 | B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | `openspec/changes/013-insurance-mcp/proposal.md` | 开发型，中小 |
@@ -105,8 +106,8 @@
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **主线阶段 2**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005` | 开发型，中大 + live |
-| B21 | 019 Golden 工具/QualityProfile/在线 Gate | **主线阶段 3**；已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；完成前 020 不得运行 | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **主线 021 收尾后启动**；统一承接 B1/B2/B3/B4/B6/B7，未完成 019 run-admission 前零模型调用 | 高 token 数据任务 |
+| B21 | 019 Golden 工具/QualityProfile/在线 Gate | **主线阶段 3**；已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；为 020 提供 artifact 工具/合同，不承接 run-admission | 开发型，中 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **主线 021 收尾后启动**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
 | B23 | 021 Source lifecycle ordering | **主线阶段 4**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，当前仅 proposed/pending | 开发型，中大 |
 
 > 016～021 已有条款级规格；验收以各 change spec、测试与 validation-report 为准。020 是环境/预算约束的数据运行，软件门禁绿不等于真实运行完成；021 规格存在不等于 ordering 能力已落地。
@@ -143,9 +144,9 @@
 
 1. **合并后收尾**：完成 ⓪-0f 的文档口径、旧 ledger、OpenSpec archive 与 strict/link/status 对账；只做收尾，不夹带 018 功能。
 2. **018**：完成 SnapshotFact、统一 SnapshotReader、可恢复发布/回滚与 live/NOT RUN 证据。
-3. **019**：完成 Golden assembler/validator、artifact approval、QualityProfile 与在线 QualityGate；不在本阶段跑真实大模型。
+3. **019**：完成 Golden assembler/validator、artifact approval、QualityProfile 与在线 QualityGate；不在本阶段跑真实大模型，也不提前执行属于 020 T1 的 run-admission。
 4. **021**：完成 source lifecycle ordering、并发/乱序/删除竞争及 PostgreSQL 双会话验证。
-5. **随后再排 020**：消费 019 的 run-admission 完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，执行前登记模型、预算与断点。B10 WeKnora 环境准备可在 1～4 期间由独立负责人并行。
+5. **随后再排 020**：消费 019 的 artifact 工具/合同，先完成 020 T1 run-admission，再完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，执行前登记模型、预算与断点。B10 WeKnora 环境准备可在 1～4 期间由独立负责人并行。
 
 样本语料：业务方 2026-07-11 提供 `shouxian_product`（13 产品，39 PDF + 12 meta json）并确认拷入仓库 → `dataset/shouxian_product/`，作为测试验证集原料。仓库外 `../samples/` 的早期解压副本作废，以 dataset 内为准。
 
