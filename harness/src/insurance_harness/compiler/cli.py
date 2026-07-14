@@ -1,9 +1,16 @@
 """抽取管道 CLI（004 T8；006 T6/T7 增补）。
 
 用法：
-    # 单产品抽取（真实网关配置读 harness/.env；或 --replay-dir 用录制回放）
-    uv run python -m insurance_harness.compiler.cli extract <product_dir> --run-dir out/run1 \
-        [--templates-dir dataset/templates]
+    # 生产抽取：数据库绑定的 WeKnora knowledge IDs（真实网关配置读 harness/.env）
+    uv run python -m insurance_harness.compiler.cli extract --source weknora \
+        --space-id <space_id> --parser-fingerprint <parser_version> \
+        --knowledge-id <knowledge_id> --product-id <product_id> \
+        --product-name <product_name> --run-dir out/run1
+
+    # 离线目录/Golden 回放（唯一接受 product_dir 的抽取命令）
+    uv run python -m insurance_harness.compiler.cli extract-replay <product_dir> \
+        --replay-identity <fixture_identity> --parser-fingerprint <parser_version> \
+        --run-dir out/replay1
 
     # 应用主会话 Claude 批处理后的裁决结果（judge_mode=claude-session）
     uv run python -m insurance_harness.compiler.cli apply-judgements <run_dir> <judgements.jsonl>
@@ -20,13 +27,24 @@
 
 import argparse
 import asyncio
+from contextlib import AsyncExitStack
 from pathlib import Path
 
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
+from ..adapters.weknora import WeKnoraClient
 from ..config import HarnessSettings
+from ..db import make_engine
+from ..db.scope import load_scope
 from ..goldenset.pdf import extract_pages
 from ..schemas import load_schema_registry
+from ..sources import (
+    DirectoryDocumentSource,
+    DirectorySourceRequest,
+    WeKnoraDocumentSource,
+    WeKnoraSourceRequest,
+)
 from .feedability import render_feedability, score_feedability, write_quarantine
 from .judge import JudgeDispatcher, read_judgements
 from .llm import ModelClient, OpenAICompatClient, ReplayClient
@@ -47,8 +65,26 @@ from .templates.induce import load_wip_goldens
 _DEFAULT_SCHEMA_DIR = Path(__file__).resolve().parents[4] / "docs/insurance-kb/schema-baseline"
 
 
-def load_settings() -> HarnessSettings:
-    """加载配置；compiler CLI 不依赖 WeKnora，缺 WeKnora 配置时以占位值降级。"""
+async def _aclose_if_supported(resource: object) -> None:
+    aclose = getattr(resource, "aclose", None)
+    if callable(aclose):
+        await aclose()
+
+
+def _positive_int(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a positive integer") from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
+
+
+def load_settings(*, require_weknora: bool = False) -> HarnessSettings:
+    """加载配置；仅离线子命令可在缺 WeKnora 配置时使用占位值。"""
+    if require_weknora:
+        return HarnessSettings()  # type: ignore[call-arg]  # required env configuration
     try:
         return HarnessSettings()  # type: ignore[call-arg]  # weknora_* 经环境变量注入
     except ValidationError:
@@ -77,41 +113,126 @@ def build_client(
 
 
 async def _cmd_extract(args: argparse.Namespace) -> int:
-    settings = load_settings()
-    client, model_id = build_client(settings, args.replay_dir, args.model)
-    registry = load_schema_registry(args.schema_dir)
-    judge: JudgeDispatcher
-    if settings.judge_mode == "gateway":
-        fallback = settings.llm_model_judge_fallback
-        if not (settings.llm_base_url and settings.llm_api_key and fallback):
-            raise SystemExit("judge_mode=gateway 需要 HARNESS_LLM_MODEL_JUDGE_FALLBACK 配置")
-        judge_client = OpenAICompatClient(
-            base_url=settings.llm_base_url,
-            api_key=settings.llm_api_key,
-            model=fallback,
-            max_tokens=settings.llm_max_tokens,
-            timeout_s=settings.llm_timeout_s,
+    async with AsyncExitStack() as resources:
+        settings = load_settings(require_weknora=True)
+        client, model_id = build_client(settings, args.replay_dir, args.model)
+        resources.push_async_callback(_aclose_if_supported, client)
+        registry = load_schema_registry(args.schema_dir)
+        judge: JudgeDispatcher
+        if settings.judge_mode == "gateway":
+            fallback = settings.llm_model_judge_fallback
+            if not (settings.llm_base_url and settings.llm_api_key and fallback):
+                raise SystemExit(
+                    "judge_mode=gateway 需要 HARNESS_LLM_MODEL_JUDGE_FALLBACK 配置"
+                )
+            judge_client = OpenAICompatClient(
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key,
+                model=fallback,
+                max_tokens=settings.llm_max_tokens,
+                timeout_s=settings.llm_timeout_s,
+            )
+            resources.push_async_callback(_aclose_if_supported, judge_client)
+            judge = JudgeDispatcher(mode="gateway", client=judge_client)
+        else:
+            judge = JudgeDispatcher(mode="claude-session")
+        # 006 F3：--templates-dir 提供且非空时启用 fast path；否则 004 行为不变
+        template_registry = load_template_registry(args.templates_dir)
+        db_url = args.db_url or settings.db_url
+        if not db_url:
+            raise SystemExit("生产抽取需要 --db-url 或 HARNESS_DB_URL")
+        engine = make_engine(db_url)
+        resources.callback(engine.dispose)
+        source_client = WeKnoraClient(settings)
+        resources.push_async_callback(_aclose_if_supported, source_client)
+        with Session(engine) as session:
+            scope = load_scope(session, args.space_id)
+        source = WeKnoraDocumentSource(
+            client=source_client,
+            scope=scope,
+            parser_fingerprint=args.parser_fingerprint,
+            source_max_documents_per_batch=settings.source_max_documents_per_batch,
+            source_max_batch_bytes=settings.source_max_batch_bytes,
+            source_max_batch_pages=settings.source_max_batch_pages,
+            source_max_batch_chunks=settings.source_max_batch_chunks,
         )
-        judge = JudgeDispatcher(mode="gateway", client=judge_client)
-    else:
-        judge = JudgeDispatcher(mode="claude-session")
-    # 006 F3：--templates-dir 提供且非空时启用 fast path；否则 004 行为不变
-    template_registry = load_template_registry(args.templates_dir)
-    pipeline = ExtractionPipeline(
-        client=client,
-        registry=registry,
-        model_id=model_id,
-        config=PipelineConfig(judge_mode=judge.mode, concurrency=args.concurrency),
-        judge=judge,
-        template_registry=template_registry if template_registry.templates else None,
-        table_provider=select_table_provider(settings.table_provider),
+        pipeline = ExtractionPipeline(
+            client=client,
+            registry=registry,
+            model_id=model_id,
+            source=source,
+            config=PipelineConfig(judge_mode=judge.mode, concurrency=args.concurrency),
+            judge=judge,
+            template_registry=template_registry if template_registry.templates else None,
+            table_provider=select_table_provider(settings.table_provider),
+            scope=scope,
+        )
+        result = await pipeline.run(
+            product_dir=None,
+            product_id=args.product_id,
+            product_name=args.product_name,
+            run_dir=args.run_dir,
+            source_request=WeKnoraSourceRequest(
+                knowledge_ids=tuple(args.knowledge_ids)
+            ),
+            line_key=args.line_key,
+            resume=args.resume,
+        )
+    m = result.manifest
+    print(
+        f"run={m.run_id} model={m.model_id} 字段={len(result.records)} "
+        f"调用={m.stats.calls} est_tokens={m.stats.est_tokens} "
+        f"死信={len(m.dead_letters)} pending_judge={m.pending_judge_count} "
+        f"→ {result.pred_path}"
     )
-    result = await pipeline.run(
-        product_dir=args.product_dir,
-        run_dir=args.run_dir,
-        line_key=args.line_key,
-        resume=args.resume,
-    )
+    return 0
+
+
+async def _cmd_extract_replay(args: argparse.Namespace) -> int:
+    async with AsyncExitStack() as resources:
+        settings = load_settings()
+        client, model_id = build_client(settings, args.replay_dir, args.model)
+        resources.push_async_callback(_aclose_if_supported, client)
+        registry = load_schema_registry(args.schema_dir)
+        if settings.judge_mode == "gateway":
+            fallback = settings.llm_model_judge_fallback
+            if not (settings.llm_base_url and settings.llm_api_key and fallback):
+                raise SystemExit(
+                    "judge_mode=gateway 需要 HARNESS_LLM_MODEL_JUDGE_FALLBACK 配置"
+                )
+            judge_client = OpenAICompatClient(
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key,
+                model=fallback,
+                max_tokens=settings.llm_max_tokens,
+                timeout_s=settings.llm_timeout_s,
+            )
+            resources.push_async_callback(_aclose_if_supported, judge_client)
+            judge = JudgeDispatcher(mode="gateway", client=judge_client)
+        else:
+            judge = JudgeDispatcher(mode="claude-session")
+        template_registry = load_template_registry(args.templates_dir)
+        source = DirectoryDocumentSource(
+            replay_identity=args.replay_identity,
+            parser_fingerprint=args.parser_fingerprint,
+        )
+        pipeline = ExtractionPipeline(
+            client=client,
+            registry=registry,
+            model_id=model_id,
+            source=source,
+            config=PipelineConfig(judge_mode=judge.mode, concurrency=args.concurrency),
+            judge=judge,
+            template_registry=template_registry if template_registry.templates else None,
+            table_provider=select_table_provider(settings.table_provider),
+        )
+        result = await pipeline.run(
+            product_dir=args.product_dir,
+            run_dir=args.run_dir,
+            source_request=DirectorySourceRequest(product_dir=args.product_dir),
+            line_key=args.line_key,
+            resume=args.resume,
+        )
     m = result.manifest
     print(
         f"run={m.run_id} model={m.model_id} 字段={len(result.records)} "
@@ -229,16 +350,40 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="弱模型抽取管道（004；006 模板 fast path）")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_ext = sub.add_parser("extract", help="对一个产品目录跑全管道")
-    p_ext.add_argument("product_dir", type=Path)
+    p_ext = sub.add_parser("extract", help="从 WeKnora 生产来源运行全管道")
+    p_ext.add_argument("--source", choices=("weknora",), required=True)
+    p_ext.add_argument("--space-id", required=True)
+    p_ext.add_argument("--parser-fingerprint", required=True)
+    p_ext.add_argument(
+        "--knowledge-id", dest="knowledge_ids", action="append", required=True
+    )
+    p_ext.add_argument("--product-id", required=True)
+    p_ext.add_argument("--product-name", required=True)
+    p_ext.add_argument("--db-url", default=None)
     p_ext.add_argument("--run-dir", type=Path, required=True)
     p_ext.add_argument("--line-key", default=None)
     p_ext.add_argument("--schema-dir", type=Path, default=_DEFAULT_SCHEMA_DIR)
     p_ext.add_argument("--replay-dir", type=Path, default=None, help="录制回放夹具目录")
     p_ext.add_argument("--model", default=None, help="覆盖 HARNESS_LLM_MODEL_WEAK")
-    p_ext.add_argument("--concurrency", type=int, default=6)
+    p_ext.add_argument("--concurrency", type=_positive_int, default=6)
     p_ext.add_argument("--resume", action="store_true", help="从 checkpoint 续跑")
     p_ext.add_argument(
+        "--templates-dir", type=Path, default=None,
+        help="模板注册表目录（如 dataset/templates）；缺省不启用 fast path",
+    )
+
+    p_replay = sub.add_parser("extract-replay", help="从显式本地目录回放全管道")
+    p_replay.add_argument("product_dir", type=Path)
+    p_replay.add_argument("--replay-identity", required=True)
+    p_replay.add_argument("--parser-fingerprint", required=True)
+    p_replay.add_argument("--run-dir", type=Path, required=True)
+    p_replay.add_argument("--line-key", default=None)
+    p_replay.add_argument("--schema-dir", type=Path, default=_DEFAULT_SCHEMA_DIR)
+    p_replay.add_argument("--replay-dir", type=Path, default=None, help="录制回放夹具目录")
+    p_replay.add_argument("--model", default=None, help="覆盖 HARNESS_LLM_MODEL_WEAK")
+    p_replay.add_argument("--concurrency", type=_positive_int, default=6)
+    p_replay.add_argument("--resume", action="store_true", help="从 checkpoint 续跑")
+    p_replay.add_argument(
         "--templates-dir", type=Path, default=None,
         help="模板注册表目录（如 dataset/templates）；缺省不启用 fast path",
     )
@@ -263,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "extract":
         return asyncio.run(_cmd_extract(args))
+    if args.cmd == "extract-replay":
+        return asyncio.run(_cmd_extract_replay(args))
     if args.cmd == "induce-template":
         return _cmd_induce_template(args)
     if args.cmd == "feedability":

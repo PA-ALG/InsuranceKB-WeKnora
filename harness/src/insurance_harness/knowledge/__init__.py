@@ -34,11 +34,14 @@ from insurance_harness.knowledge.models import (
     ALLOWED_REVIEW_ACTIONS,
     ConflictJudgement,
     ConflictJudgeRequest,
+    ImportPartitionReport,
     ImportReport,
     MergePolicy,
     MergeReport,
     ProposedClaim,
     ProposedEvidence,
+    SourceImportContext,
+    SourceImportIdentity,
     value_hash,
 )
 from insurance_harness.knowledge.pages import (
@@ -61,6 +64,10 @@ from insurance_harness.knowledge.review import (
     ensure_review_item,
     get_review_item,
 )
+from insurance_harness.knowledge.source_revision import (
+    SourceRevisionReport,
+    notify_source_revision,
+)
 
 __all__ = [
     "ALLOWED_REVIEW_ACTIONS",
@@ -69,12 +76,16 @@ __all__ = [
     "ConflictJudgeRequest",
     "ConflictJudgement",
     "ImportReport",
+    "ImportPartitionReport",
     "MergeEngine",
     "MergeError",
     "MergePolicy",
     "MergeReport",
     "ProposedClaim",
     "ProposedEvidence",
+    "SourceImportContext",
+    "SourceImportIdentity",
+    "SourceRevisionReport",
     "PublishResult",
     "RenderedPage",
     "RollbackResult",
@@ -91,6 +102,7 @@ __all__ = [
     "import_pred_jsonl",
     "import_pred_records",
     "load_pred_records",
+    "notify_source_revision",
     "overturn_review",
     "policy_from_settings",
     "product_page_slug",

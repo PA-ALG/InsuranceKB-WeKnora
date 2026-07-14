@@ -20,6 +20,7 @@ from insurance_harness.compiler.templates import (
 )
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegistry
+from insurance_harness.sources import DirectoryDocumentSource, DirectorySourceRequest
 
 RATE_PAGES = [
     PageText(
@@ -215,9 +216,13 @@ def _pipeline(
         client=client,
         registry=REGISTRY,
         model_id="scripted-test",
+        source=DirectoryDocumentSource(
+            replay_identity="template-fastpath-test",
+            parser_fingerprint="fixture-parser-v1",
+            page_loader=lambda _: list(RATE_PAGES),
+        ),
         config=PipelineConfig(concurrency=2, transport_attempts=2, backoff_base_s=0.0),
         sleep=_fast_sleep,
-        page_loader=lambda _: list(RATE_PAGES),
         template_registry=registry_templates,
         table_provider=FakeProvider([GRID]),
     )
@@ -228,8 +233,12 @@ async def test_f3_4_f3_5_pipeline_fastpath_end_to_end(tmp_path: Path) -> None:
         version="tpl-v1+test", templates=(_template(TABLE_ANCHORS),)
     )
     client = ScriptedClient()
+    product_dir = _make_product_dir(tmp_path)
     result = await _pipeline(client, template_registry).run(
-        product_dir=_make_product_dir(tmp_path), run_dir=tmp_path / "run", line_key="t"
+        product_dir=product_dir,
+        source_request=DirectorySourceRequest(product_dir=product_dir),
+        run_dir=tmp_path / "run",
+        line_key="t",
     )
     by_id = {r.field_id: r for r in result.records}
 
@@ -261,8 +270,12 @@ async def test_f3_4_f3_5_pipeline_fastpath_end_to_end(tmp_path: Path) -> None:
 
 async def test_f3_3_without_registry_behavior_unchanged(tmp_path: Path) -> None:
     client = ScriptedClient()
+    product_dir = _make_product_dir(tmp_path)
     result = await _pipeline(client, None).run(
-        product_dir=_make_product_dir(tmp_path), run_dir=tmp_path / "run", line_key="t"
+        product_dir=product_dir,
+        source_request=DirectorySourceRequest(product_dir=product_dir),
+        run_dir=tmp_path / "run",
+        line_key="t",
     )
     by_id = {r.field_id: r for r in result.records}
     assert by_id["pay_term"].tri_state == "unknown"  # 无模板 → 通用管道（模型不会答）

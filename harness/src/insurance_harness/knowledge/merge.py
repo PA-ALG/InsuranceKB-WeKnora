@@ -6,24 +6,47 @@ decision_basis 可翻案（翻案 = 新 ChangeSet）。裁决序④不实调模�
 claude-session 队列（复用 compiler judge-queue 的 JSONL 形态），回写后按 llm_verdict 裁决。
 """
 
+import hashlib
+import json
+import re
 from collections.abc import Callable
+from datetime import UTC
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from insurance_harness.config import HarnessSettings
 from insurance_harness.db.base import utcnow
+from insurance_harness.db.models import InsuranceProduct, ProductVersion
+from insurance_harness.db.scope import (
+    KnowledgeScope,
+    ScopeViolation,
+    require_current_scope,
+)
 from insurance_harness.knowledge.models import (
     ConflictJudgement,
     ConflictJudgeRequest,
+    LineageStatus,
     MergePolicy,
     MergeReport,
     ProposedClaim,
+    ProposedEvidence,
+    SourceImportIdentity,
     normalize_value,
 )
-from insurance_harness.knowledge.review import derive_review_key, ensure_review_item
+from insurance_harness.knowledge.review import (
+    _require_scoped_review_subject,
+    derive_review_key,
+    ensure_review_item,
+)
+from insurance_harness.knowledge.source_revision import (
+    derive_retract_event_key,
+    validate_retract_tombstone,
+)
 from insurance_harness.knowledge.tables import (
     ChangeItem,
     ChangeSet,
@@ -41,6 +64,322 @@ _STATUS_RANK = {"published": 0, "candidate": 1, "draft": 2}
 
 class MergeError(RuntimeError):
     pass
+
+
+def _scope_mismatch() -> ScopeViolation:
+    return ScopeViolation("scope mismatch")
+
+
+def _claim_business_subject(claim: Claim) -> tuple[str | None, str | None, str]:
+    return claim.product_version_id, claim.concept_id, claim.predicate
+
+
+def _proposal_business_subject(
+    proposed: dict[str, Any],
+) -> tuple[str | None, str | None, str | None]:
+    product_version_id = proposed.get("product_version_id")
+    concept_id = proposed.get("concept_id")
+    predicate = proposed.get("predicate")
+    return (
+        str(product_version_id) if product_version_id is not None else None,
+        str(concept_id) if concept_id is not None else None,
+        str(predicate) if predicate is not None else None,
+    )
+
+
+def _sort_evidence(
+    evidence: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return sorted(
+        evidence,
+        key=lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True),
+    )
+
+
+def _canonical_fact_proposal(proposed: dict[str, Any]) -> dict[str, Any]:
+    """Canonical persisted/adjudicated proposal fields.
+
+    ``field_name`` and evidence ``doc_title`` are display-only: neither is persisted
+    on Claim/ClaimEvidence nor used by adjudication, so they are intentionally ignored.
+    Evidence ordering is also non-semantic and is normalized before comparison.
+    """
+    try:
+        parsed = ProposedClaim.model_validate(proposed)
+    except ValidationError as exc:
+        raise _scope_mismatch() from exc
+    canonical = parsed.model_dump(mode="json", exclude={"field_name"})
+    canonical["concept_id"] = proposed.get("concept_id")
+    evidence: list[dict[str, Any]] = []
+    for raw_evidence in canonical["evidence"]:
+        row = dict(raw_evidence)
+        row.pop("doc_title", None)
+        evidence.append(row)
+    canonical["evidence"] = _sort_evidence(evidence)
+    return canonical
+
+
+def _require_claim_matches_proposal(
+    session: Session,
+    claim: Claim,
+    proposed: dict[str, Any],
+) -> None:
+    claim_fact = {
+        "space_id": claim.space_id,
+        "product_version_id": claim.product_version_id,
+        "concept_id": claim.concept_id,
+        "predicate": claim.predicate,
+        "value_state": claim.value_state,
+        "value": claim_value_text(claim),
+        "effective_from": (
+            claim.effective_from.isoformat() if claim.effective_from else None
+        ),
+        "confidence": claim.confidence,
+        "extraction_method": claim.extraction_method,
+        "schema_version": claim.schema_version,
+        "pending_judge": claim.pending_judge,
+    }
+    proposal_fact = {key: proposed[key] for key in claim_fact}
+    if claim_fact != proposal_fact:
+        raise _scope_mismatch()
+    evidence = _sort_evidence(
+        [
+            ProposedEvidence(
+                knowledge_id=row.knowledge_id,
+                raw_kb_id=row.raw_kb_id,
+                source_revision=row.source_revision,
+                file_hash=row.file_hash,
+                original_digest=row.original_digest,
+                parser_version=row.parser_version,
+                chunk_id=row.chunk_id,
+                chunk_hash=row.chunk_hash,
+                lineage_status=cast(LineageStatus | None, row.lineage_status),
+                stale_at=(
+                    row.stale_at.replace(tzinfo=UTC)
+                    if row.stale_at is not None and row.stale_at.tzinfo is None
+                    else row.stale_at
+                ),
+                quote=row.quote,
+                page=row.page,
+                doc_role=row.doc_role,
+                authority_level=row.authority_level,
+                extraction_method=row.extraction_method,
+            ).model_dump(mode="json", exclude={"doc_title"})
+            for row in _evidence_for_claim(session, claim)
+        ]
+    )
+    if evidence != proposed["evidence"]:
+        raise _scope_mismatch()
+
+
+def _require_scoped_product_version(
+    session: Session, scope: KnowledgeScope, product_version_id: str
+) -> None:
+    found = session.execute(
+        select(ProductVersion.id)
+        .join(InsuranceProduct, InsuranceProduct.id == ProductVersion.product_id)
+        .where(
+            ProductVersion.id == product_version_id,
+            ProductVersion.space_id == scope.space_id,
+            InsuranceProduct.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if found is None:
+        raise _scope_mismatch()
+
+
+def _require_scoped_claim(
+    session: Session, scope: KnowledgeScope, claim_or_id: Claim | str
+) -> Claim:
+    claim_id = claim_or_id.id if isinstance(claim_or_id, Claim) else claim_or_id
+    claim = session.execute(
+        select(Claim).where(
+            Claim.id == claim_id,
+            Claim.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if claim is None:
+        raise _scope_mismatch()
+    return claim
+
+
+def _require_scoped_change_set(
+    session: Session, scope: KnowledgeScope, change_set_or_id: ChangeSet | str
+) -> ChangeSet:
+    change_set_id = (
+        change_set_or_id.id
+        if isinstance(change_set_or_id, ChangeSet)
+        else change_set_or_id
+    )
+    change_set = session.execute(
+        select(ChangeSet).where(
+            ChangeSet.id == change_set_id,
+            ChangeSet.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if change_set is None:
+        raise _scope_mismatch()
+    return change_set
+
+
+def _require_scoped_change_item(
+    session: Session, scope: KnowledgeScope, item_or_id: ChangeItem | str
+) -> ChangeItem:
+    item_id = item_or_id.id if isinstance(item_or_id, ChangeItem) else item_or_id
+    item = session.execute(
+        select(ChangeItem)
+        .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+        .where(
+            ChangeItem.id == item_id,
+            ChangeSet.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise _scope_mismatch()
+    return item
+
+
+def _require_scoped_conflict(
+    session: Session, scope: KnowledgeScope, conflict_id: str
+) -> Conflict:
+    conflict = session.execute(
+        select(Conflict)
+        .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
+        .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+        .where(
+            Conflict.id == conflict_id,
+            ChangeSet.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if conflict is None:
+        raise _scope_mismatch()
+    if conflict.existing_claim_id is not None:
+        _require_scoped_claim(session, scope, conflict.existing_claim_id)
+    proposed_space_id = conflict.proposed.get("space_id")
+    if proposed_space_id is not None and proposed_space_id != scope.space_id:
+        raise _scope_mismatch()
+    return conflict
+
+
+def _require_conflict_parent_semantics(
+    item: ChangeItem,
+    conflict: Conflict,
+) -> None:
+    if conflict.change_item_id != item.id:
+        raise _scope_mismatch()
+    if conflict.existing_claim_id != item.proposed.get("existing_claim_id"):
+        raise _scope_mismatch()
+    item_claim = item.proposed.get("claim")
+    if not isinstance(item_claim, dict):
+        raise _scope_mismatch()
+    if _canonical_fact_proposal(item_claim) != _canonical_fact_proposal(
+        conflict.proposed
+    ):
+        raise _scope_mismatch()
+
+
+def _require_scoped_item_aggregate(
+    session: Session, scope: KnowledgeScope, item_or_id: ChangeItem | str
+) -> tuple[ChangeItem, Claim | None, Claim | None, tuple[Conflict, ...]]:
+    """Guard a child ChangeItem through its ChangeSet and every referenced Claim."""
+    item = _require_scoped_change_item(session, scope, item_or_id)
+    claim = (
+        _require_scoped_claim(session, scope, item.claim_id)
+        if item.claim_id is not None
+        else None
+    )
+    existing_id = item.proposed.get("existing_claim_id")
+    placeholder_id = item.proposed.get("placeholder_claim_id")
+    existing = (
+        _require_scoped_claim(session, scope, str(existing_id))
+        if existing_id
+        else None
+    )
+    placeholder = (
+        _require_scoped_claim(session, scope, str(placeholder_id))
+        if placeholder_id
+        else None
+    )
+    old = existing or placeholder
+    proposed_claim = item.proposed.get("claim")
+    canonical_proposed: dict[str, Any] | None = None
+    if isinstance(proposed_claim, dict):
+        canonical_proposed = _canonical_fact_proposal(proposed_claim)
+        proposed_space_id = proposed_claim.get("space_id")
+        if proposed_space_id is not None and proposed_space_id != scope.space_id:
+            raise _scope_mismatch()
+        proposed_version_id = proposed_claim.get("product_version_id")
+        if proposed_version_id:
+            _require_scoped_product_version(
+                session, scope, str(proposed_version_id)
+            )
+        if claim is not None:
+            _require_claim_matches_proposal(
+                session,
+                claim,
+                canonical_proposed,
+            )
+    if old is not None:
+        subject = (
+            _claim_business_subject(claim)
+            if claim is not None
+            else _proposal_business_subject(proposed_claim)
+            if isinstance(proposed_claim, dict)
+            else None
+        )
+        if subject is None or subject != _claim_business_subject(old):
+            raise _scope_mismatch()
+    conflicts = tuple(
+        session.execute(
+            select(Conflict)
+            .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
+            .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+            .where(
+                Conflict.change_item_id == item.id,
+                ChangeSet.space_id == scope.space_id,
+            )
+        ).scalars()
+    )
+    for conflict in conflicts:
+        _require_conflict_parent_semantics(item, conflict)
+        if conflict.existing_claim_id is not None:
+            _require_scoped_claim(session, scope, conflict.existing_claim_id)
+        proposed_space_id = conflict.proposed.get("space_id")
+        if proposed_space_id is not None and proposed_space_id != scope.space_id:
+            raise _scope_mismatch()
+        proposed_version_id = conflict.proposed.get("product_version_id")
+        if proposed_version_id:
+            _require_scoped_product_version(session, scope, str(proposed_version_id))
+    return item, claim, old, conflicts
+
+
+def validate_scoped_change_set_items(
+    session: Session,
+    scope: KnowledgeScope,
+    change_set: ChangeSet,
+) -> int:
+    """Validate every child item and its referenced aggregate in one scope."""
+    require_current_scope(session, scope)
+    change_set = _require_scoped_change_set(session, scope, change_set)
+    items = tuple(
+        session.scalars(
+            select(ChangeItem).where(ChangeItem.change_set_id == change_set.id)
+        )
+    )
+    for item in items:
+        _require_scoped_item_aggregate(session, scope, item)
+    return len(items)
+
+
+def _require_scoped_conflict_aggregate(
+    session: Session,
+    scope: KnowledgeScope,
+    conflict_id: str,
+) -> tuple[Conflict, ChangeItem, Claim | None, Claim | None]:
+    conflict = _require_scoped_conflict(session, scope, conflict_id)
+    item, claim, old, _ = _require_scoped_item_aggregate(
+        session, scope, conflict.change_item_id
+    )
+    return conflict, item, claim, old
 
 
 def policy_from_settings(settings: HarnessSettings) -> MergePolicy:
@@ -68,7 +407,7 @@ def _snapshot(claim: Claim) -> dict[str, Any]:
     }
 
 
-def write_revision(
+def _write_revision(
     session: Session,
     claim: Claim,
     *,
@@ -98,7 +437,15 @@ def _evidence_rows(claim_id: str, prop: ProposedClaim) -> list[ClaimEvidence]:
         ClaimEvidence(
             claim_id=claim_id,
             knowledge_id=e.knowledge_id,
+            raw_kb_id=e.raw_kb_id,
+            source_revision=e.source_revision,
+            file_hash=e.file_hash,
+            original_digest=e.original_digest,
+            parser_version=e.parser_version,
             chunk_id=e.chunk_id,
+            chunk_hash=e.chunk_hash,
+            lineage_status=e.lineage_status,
+            stale_at=e.stale_at,
             quote=e.quote,
             page=e.page,
             authority_level=e.authority_level,
@@ -109,8 +456,9 @@ def _evidence_rows(claim_id: str, prop: ProposedClaim) -> list[ClaimEvidence]:
     ]
 
 
-def create_claim(session: Session, prop: ProposedClaim, *, status: str) -> Claim:
+def _create_claim(session: Session, prop: ProposedClaim, *, status: str) -> Claim:
     claim = Claim(
+        space_id=prop.space_id,
         subject_type="product_version",
         product_version_id=prop.product_version_id,
         predicate=prop.predicate,
@@ -138,35 +486,104 @@ def claim_value_text(claim: Claim) -> str | None:
     return None if text is None else str(text)
 
 
-def claim_evidence(session: Session, claim_id: str) -> list[ClaimEvidence]:
+def _evidence_for_claim(session: Session, claim: Claim) -> list[ClaimEvidence]:
     return list(
         session.execute(
-            select(ClaimEvidence).where(ClaimEvidence.claim_id == claim_id)
+            select(ClaimEvidence)
+            .join(Claim, Claim.id == ClaimEvidence.claim_id)
+            .where(
+                ClaimEvidence.claim_id == claim.id,
+                Claim.space_id == claim.space_id,
+            )
         ).scalars()
     )
 
 
-def claim_authority(session: Session, claim: Claim) -> int:
-    return min((e.authority_level for e in claim_evidence(session, claim.id)), default=6)
+def claim_evidence(
+    session: Session, scope: KnowledgeScope, claim_id: str
+) -> list[ClaimEvidence]:
+    require_current_scope(session, scope)
+    claim = _require_scoped_claim(session, scope, claim_id)
+    return _evidence_for_claim(session, claim)
 
 
-def publish_claim(
+def _authority_for_claim(session: Session, claim: Claim) -> int:
+    return min(
+        (e.authority_level for e in _evidence_for_claim(session, claim)),
+        default=6,
+    )
+
+
+def claim_authority(
+    session: Session, scope: KnowledgeScope, claim: Claim
+) -> int:
+    require_current_scope(session, scope)
+    claim = _require_scoped_claim(session, scope, claim)
+    return _authority_for_claim(session, claim)
+
+
+def _require_publish_context(
     session: Session,
+    scope: KnowledgeScope,
     claim: Claim,
     *,
     change_item_id: str | None,
-    actor: str,
-    reason: str | None = None,
     superseding: Claim | None = None,
-) -> None:
-    """candidate/draft → published；无 Evidence 不允许发布（03 原则 2）。
-
-    应用层兜底"同主语同谓词只允许一条已发布"（部分唯一索引的 NULL 维度不去重，K1.2）。
-    """
-    if not claim_evidence(session, claim.id):
+) -> tuple[Claim, Claim | None]:
+    """Validate the complete publish aggregate without mutating it."""
+    claim = _require_scoped_claim(session, scope, claim)
+    superseding = (
+        _require_scoped_claim(session, scope, superseding)
+        if superseding is not None
+        else None
+    )
+    if change_item_id is None:
+        raise _scope_mismatch()
+    item, item_claim, old, _ = _require_scoped_item_aggregate(
+        session, scope, change_item_id
+    )
+    if item_claim is None or item_claim.id != claim.id:
+        raise _scope_mismatch()
+    existing_id = item.proposed.get("existing_claim_id")
+    placeholder_id = item.proposed.get("placeholder_claim_id")
+    if item.action == "add":
+        if (
+            item.proposed.get("mode") == "unknown_placeholder"
+            or existing_id
+            or placeholder_id
+            or superseding is not None
+        ):
+            raise _scope_mismatch()
+    elif item.action == "enrich" and item.proposed.get("mode") == "fill_unknown":
+        if (
+            not placeholder_id
+            or existing_id
+            or old is None
+            or superseding is None
+            or superseding.id != old.id
+        ):
+            raise _scope_mismatch()
+    elif item.action in ("supersede", "conflict"):
+        if (
+            not existing_id
+            or placeholder_id
+            or old is None
+            or superseding is None
+            or superseding.id != old.id
+        ):
+            raise _scope_mismatch()
+    else:
+        raise _scope_mismatch()
+    if superseding is not None:
+        # effective_from/effective_to are version/adjudication dimensions: K3.2
+        # intentionally permits a newer effective_from to supersede an older fact.
+        if _claim_business_subject(claim) != _claim_business_subject(superseding):
+            raise _scope_mismatch()
+    if not _evidence_for_claim(session, claim):
         raise MergeError(f"claim {claim.id} 无证据，不允许发布")
     others = session.execute(
         select(Claim).where(
+            Claim.space_id == scope.space_id,
             Claim.product_version_id == claim.product_version_id,
             Claim.predicate == claim.predicate,
             Claim.status == "published",
@@ -179,18 +596,43 @@ def publish_claim(
                 f"({claim.product_version_id}, {claim.predicate}) 已有 published claim "
                 f"{other.id}，必须经 supersede/conflict 流程"
             )
+    return claim, superseding
+
+
+def publish_claim(
+    session: Session,
+    scope: KnowledgeScope,
+    claim: Claim,
+    *,
+    change_item_id: str | None,
+    actor: str,
+    reason: str | None = None,
+    superseding: Claim | None = None,
+) -> None:
+    """candidate/draft → published；无 Evidence 不允许发布（03 原则 2）。
+
+    应用层兜底"同主语同谓词只允许一条已发布"（部分唯一索引的 NULL 维度不去重，K1.2）。
+    """
+    require_current_scope(session, scope)
+    claim, superseding = _require_publish_context(
+        session,
+        scope,
+        claim,
+        change_item_id=change_item_id,
+        superseding=superseding,
+    )
     before = _snapshot(claim)
     claim.status = "published"
-    write_revision(
+    _write_revision(
         session, claim, before=before, change_item_id=change_item_id, actor=actor, reason=reason
     )
     if superseding is not None and superseding.status != "superseded":
-        supersede_claim(
+        _supersede_claim(
             session, superseding, claim, change_item_id=change_item_id, actor=actor, reason=reason
         )
 
 
-def supersede_claim(
+def _supersede_claim(
     session: Session,
     old: Claim,
     new: Claim,
@@ -202,12 +644,12 @@ def supersede_claim(
     before = _snapshot(old)
     old.status = "superseded"
     old.superseded_by = new.id
-    write_revision(
+    _write_revision(
         session, old, before=before, change_item_id=change_item_id, actor=actor, reason=reason
     )
 
 
-def retract_claim(
+def _retract_claim(
     session: Session,
     claim: Claim,
     *,
@@ -217,7 +659,7 @@ def retract_claim(
 ) -> None:
     before = _snapshot(claim)
     claim.status = "retracted"
-    write_revision(
+    _write_revision(
         session, claim, before=before, change_item_id=change_item_id, actor=actor, reason=reason
     )
 
@@ -232,11 +674,14 @@ class MergeEngine:
         self,
         session: Session,
         *,
+        scope: KnowledgeScope,
         policy: MergePolicy | None = None,
         risk_of: RiskResolver | None = None,
         created_by: str = "merge-engine",
     ) -> None:
+        require_current_scope(session, scope)
         self.session = session
+        self.scope = scope
         self.policy = policy or MergePolicy()
         self.risk_of: RiskResolver = risk_of or (lambda predicate: "low")
         self.created_by = created_by
@@ -254,9 +699,11 @@ class MergeEngine:
     ) -> tuple[ChangeSet, bool]:
         """批级幂等（K2.3）：同 (source_kind, external_record_id, source_revision)
         的已存在 ChangeSet 直接返回 (existing, False)。"""
+        require_current_scope(self.session, self.scope)
         if external_record_id is not None:
             existing = self.session.execute(
                 select(ChangeSet).where(
+                    ChangeSet.space_id == self.scope.space_id,
                     ChangeSet.source_kind == source_kind,
                     ChangeSet.external_record_id == external_record_id,
                     ChangeSet.source_revision == source_revision,
@@ -265,6 +712,7 @@ class MergeEngine:
             if existing is not None:
                 return existing, False
         change_set = ChangeSet(
+            space_id=self.scope.space_id,
             source_kind=source_kind,
             knowledge_ids=knowledge_ids,
             external_record_id=external_record_id,
@@ -279,6 +727,16 @@ class MergeEngine:
     # -- 批应用 --------------------------------------------------------------
 
     def apply_batch(self, change_set: ChangeSet, proposals: list[ProposedClaim]) -> MergeReport:
+        require_current_scope(self.session, self.scope)
+        change_set = _require_scoped_change_set(self.session, self.scope, change_set)
+        for prop in proposals:
+            if prop.space_id != self.scope.space_id:
+                raise _scope_mismatch()
+            _require_scoped_product_version(
+                self.session,
+                self.scope,
+                prop.product_version_id,
+            )
         report = MergeReport(change_set_id=change_set.id)
         for prop in proposals:
             self._apply_one(change_set, prop, report)
@@ -301,6 +759,7 @@ class MergeEngine:
     def _active_claim(self, product_version_id: str, predicate: str) -> Claim | None:
         rows = self.session.execute(
             select(Claim).where(
+                Claim.space_id == self.scope.space_id,
                 Claim.product_version_id == product_version_id,
                 Claim.predicate == predicate,
                 Claim.status.in_(("published", "candidate", "draft")),
@@ -330,7 +789,7 @@ class MergeEngine:
     # -- add ----------------------------------------------------------------
 
     def _add_unknown_placeholder(self, change_set: ChangeSet, prop: ProposedClaim) -> None:
-        claim = create_claim(self.session, prop, status="draft")
+        claim = _create_claim(self.session, prop, status="draft")
         item = self._new_item(
             change_set,
             action="add",
@@ -339,14 +798,14 @@ class MergeEngine:
             decision="auto_applied",
             basis={"note": "unknown 占位 draft，禁止发布，等待后批 enrich 补全（K2.2）"},
         )
-        write_revision(
+        _write_revision(
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="add unknown placeholder",
         )
 
     def _do_add(self, change_set: ChangeSet, prop: ProposedClaim, report: MergeReport) -> None:
         risk = self.risk_of(prop.predicate)
-        claim = create_claim(self.session, prop, status="candidate")
+        claim = _create_claim(self.session, prop, status="candidate")
         item = self._new_item(
             change_set,
             action="add",
@@ -355,7 +814,7 @@ class MergeEngine:
             decision="needs_review",
             basis=None,
         )
-        write_revision(
+        _write_revision(
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="add candidate",
         )
@@ -363,7 +822,7 @@ class MergeEngine:
         if auto:
             item.decision = "auto_applied"
             publish_claim(
-                self.session, claim, change_item_id=item.id,
+                self.session, self.scope, claim, change_item_id=item.id,
                 actor=self.created_by, reason="auto add",
             )
         else:
@@ -377,7 +836,7 @@ class MergeEngine:
     ) -> None:
         """补 unknown 占位（03 §2.5 enrich 的"补 unknown 字段"分支）。"""
         risk = self.risk_of(prop.predicate)
-        claim = create_claim(self.session, prop, status="candidate")
+        claim = _create_claim(self.session, prop, status="candidate")
         item = self._new_item(
             change_set,
             action="enrich",
@@ -390,14 +849,14 @@ class MergeEngine:
             decision="needs_review",
             basis=None,
         )
-        write_revision(
+        _write_revision(
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="enrich fill unknown",
         )
         if self._enrich_auto_ok(prop, risk):
             item.decision = "auto_applied"
             publish_claim(
-                self.session, claim, change_item_id=item.id, actor=self.created_by,
+                self.session, self.scope, claim, change_item_id=item.id, actor=self.created_by,
                 reason="auto enrich fill", superseding=placeholder,
             )
         else:
@@ -410,12 +869,29 @@ class MergeEngine:
         """同值追加证据，confidence 上调（03 §2.5 enrich）。"""
         risk = self.risk_of(prop.predicate)
         seen = {
-            (e.knowledge_id, e.page, normalize_value(e.quote))
-            for e in claim_evidence(self.session, existing.id)
+            (
+                e.knowledge_id,
+                e.source_revision,
+                e.chunk_id,
+                e.chunk_hash,
+                e.lineage_status,
+                e.page,
+                normalize_value(e.quote),
+            )
+            for e in _evidence_for_claim(self.session, existing)
         }
         new_evidence = [
             e for e in prop.evidence
-            if (e.knowledge_id, e.page, normalize_value(e.quote)) not in seen
+            if (
+                e.knowledge_id,
+                e.source_revision,
+                e.chunk_id,
+                e.chunk_hash,
+                e.lineage_status,
+                e.page,
+                normalize_value(e.quote),
+            )
+            not in seen
         ]
         new_confidence = min(0.99, max(existing.confidence, prop.confidence) + 0.05)
         if not new_evidence and new_confidence <= existing.confidence:
@@ -434,7 +910,7 @@ class MergeEngine:
         )
         if self._enrich_auto_ok(prop, risk):
             item.decision = "auto_applied"
-            _apply_enrich_append(self.session, item, actor=self.created_by)
+            _apply_enrich_append(self.session, self.scope, item, actor=self.created_by)
         else:
             self._gate(item, prop, risk, report, new_claim_id=existing.id)
         report.bump("enrich")
@@ -455,7 +931,7 @@ class MergeEngine:
     ) -> None:
         risk = self.risk_of(prop.predicate)
         new_auth = prop.best_authority
-        old_auth = claim_authority(self.session, existing)
+        old_auth = _authority_for_claim(self.session, existing)
         basis: dict[str, Any] = {
             "authority_cmp": f"proposed={new_auth} existing={old_auth}",
             "completeness_cmp": (
@@ -501,7 +977,7 @@ class MergeEngine:
             return
 
         if winner == "proposed":
-            claim = create_claim(self.session, prop, status="candidate")
+            claim = _create_claim(self.session, prop, status="candidate")
             item = self._new_item(
                 change_set,
                 action="supersede",
@@ -510,7 +986,7 @@ class MergeEngine:
                 decision="needs_review",
                 basis=basis,
             )
-            write_revision(
+            _write_revision(
                 self.session, claim, before=None, change_item_id=item.id,
                 actor=self.created_by, reason="supersede candidate",
             )
@@ -523,7 +999,8 @@ class MergeEngine:
                 item.decision = "auto_applied"
                 self._new_conflict(item, existing, prop, basis, status="resolved")
                 publish_claim(
-                    self.session, claim, change_item_id=item.id, actor=self.created_by,
+                    self.session, self.scope, claim, change_item_id=item.id,
+                    actor=self.created_by,
                     reason="auto supersede（裁决序①/②）", superseding=existing,
                 )
             else:
@@ -537,7 +1014,7 @@ class MergeEngine:
             return
 
         # 裁决序①②未分胜负：conflict（冲突未决期间旧 published 不动、新值停 candidate，K3.4）
-        claim = create_claim(self.session, prop, status="candidate")
+        claim = _create_claim(self.session, prop, status="candidate")
         item = self._new_item(
             change_set,
             action="conflict",
@@ -546,7 +1023,7 @@ class MergeEngine:
             decision="needs_review",
             basis=basis,
         )
-        write_revision(
+        _write_revision(
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="conflict candidate",
         )
@@ -570,7 +1047,7 @@ class MergeEngine:
                         "value_state": existing.value_state,
                         "evidence": [
                             {"knowledge_id": e.knowledge_id, "page": e.page, "quote": e.quote}
-                            for e in claim_evidence(self.session, existing.id)
+                            for e in _evidence_for_claim(self.session, existing)
                         ],
                     },
                     proposed=_prop_dump(prop),
@@ -640,6 +1117,7 @@ class MergeEngine:
         )
         _, created = ensure_review_item(
             self.session,
+            scope=self.scope,
             review_key=key,
             type_=review_type,
             subject={
@@ -667,25 +1145,41 @@ def _existing_value_hash(claim: Claim) -> str:
 # ------------------------------------------------------------------ 应用与审核动作
 
 
-def _apply_enrich_append(session: Session, item: ChangeItem, *, actor: str) -> None:
-    claim = session.get(Claim, item.claim_id)
-    assert claim is not None
+def _apply_enrich_append(
+    session: Session,
+    scope: KnowledgeScope,
+    item: ChangeItem,
+    *,
+    actor: str,
+) -> None:
+    if item.claim_id is None:
+        raise _scope_mismatch()
+    claim = _require_scoped_claim(session, scope, item.claim_id)
     before = _snapshot(claim)
     for e in item.proposed.get("evidence", []):
+        parsed = ProposedEvidence.model_validate(e)
         session.add(
             ClaimEvidence(
                 claim_id=claim.id,
-                knowledge_id=e["knowledge_id"],
-                chunk_id=e.get("chunk_id"),
-                quote=e["quote"],
-                page=e.get("page"),
-                authority_level=e.get("authority_level", 6),
-                doc_role=e.get("doc_role", "external"),
-                extraction_method=e.get("extraction_method", "llm"),
+                knowledge_id=parsed.knowledge_id,
+                raw_kb_id=parsed.raw_kb_id,
+                source_revision=parsed.source_revision,
+                file_hash=parsed.file_hash,
+                original_digest=parsed.original_digest,
+                parser_version=parsed.parser_version,
+                chunk_id=parsed.chunk_id,
+                chunk_hash=parsed.chunk_hash,
+                lineage_status=parsed.lineage_status,
+                stale_at=parsed.stale_at,
+                quote=parsed.quote,
+                page=parsed.page,
+                authority_level=parsed.authority_level,
+                doc_role=parsed.doc_role,
+                extraction_method=parsed.extraction_method,
             )
         )
     claim.confidence = float(item.proposed.get("confidence", claim.confidence))
-    write_revision(
+    _write_revision(
         session, claim, before=before, change_item_id=item.id,
         actor=actor, reason="enrich append evidence",
     )
@@ -693,6 +1187,7 @@ def _apply_enrich_append(session: Session, item: ChangeItem, *, actor: str) -> N
 
 def apply_change_item(
     session: Session,
+    scope: KnowledgeScope,
     item: ChangeItem,
     *,
     actor: str,
@@ -701,18 +1196,21 @@ def apply_change_item(
     llm_verdict: str | None = None,
 ) -> None:
     """采纳一个 needs_review/pending 的 ChangeItem（approve 或 ④ 裁决回写）。"""
+    require_current_scope(session, scope)
+    item, claim, old, conflicts = _require_scoped_item_aggregate(session, scope, item)
     if item.action == "enrich" and item.proposed.get("mode") == "append_evidence":
-        _apply_enrich_append(session, item, actor=actor)
+        _apply_enrich_append(session, scope, item, actor=actor)
     else:
-        assert item.claim_id is not None
-        claim = session.get(Claim, item.claim_id)
-        assert claim is not None
-        old_id = item.proposed.get("existing_claim_id") or item.proposed.get(
-            "placeholder_claim_id"
-        )
-        old = session.get(Claim, old_id) if old_id else None
+        if claim is None:
+            raise _scope_mismatch()
         publish_claim(
-            session, claim, change_item_id=item.id, actor=actor, reason=reason, superseding=old
+            session,
+            scope,
+            claim,
+            change_item_id=item.id,
+            actor=actor,
+            reason=reason,
+            superseding=old,
         )
     item.decision = decision
     basis = dict(item.decision_basis or {})
@@ -721,12 +1219,13 @@ def apply_change_item(
     if decision == "approved":
         basis["reviewer"] = actor
     item.decision_basis = basis
-    _resolve_conflicts_of(session, item, basis)
+    _resolve_conflicts(conflicts, basis)
     session.flush()
 
 
 def reject_change_item(
     session: Session,
+    scope: KnowledgeScope,
     item: ChangeItem,
     *,
     actor: str,
@@ -734,12 +1233,12 @@ def reject_change_item(
     llm_verdict: str | None = None,
 ) -> None:
     """驳回：候选 Claim → retracted，旧值保持 published（K4.2）。"""
-    if item.claim_id is not None:
-        claim = session.get(Claim, item.claim_id)
-        if claim is not None and claim.status in ("candidate", "draft"):
-            retract_claim(
-                session, claim, change_item_id=item.id, actor=actor, reason=reason or "rejected"
-            )
+    require_current_scope(session, scope)
+    item, claim, _, conflicts = _require_scoped_item_aggregate(session, scope, item)
+    if claim is not None and claim.status in ("candidate", "draft"):
+        _retract_claim(
+            session, claim, change_item_id=item.id, actor=actor, reason=reason or "rejected"
+        )
     item.decision = "rejected"
     basis = dict(item.decision_basis or {})
     basis["reviewer"] = actor
@@ -748,16 +1247,13 @@ def reject_change_item(
     if reason:
         basis["review_reason"] = reason
     item.decision_basis = basis
-    _resolve_conflicts_of(session, item, basis)
+    _resolve_conflicts(conflicts, basis)
     session.flush()
 
 
-def _resolve_conflicts_of(
-    session: Session, item: ChangeItem, basis: dict[str, Any]
+def _resolve_conflicts(
+    conflicts: tuple[Conflict, ...], basis: dict[str, Any]
 ) -> None:
-    conflicts = session.execute(
-        select(Conflict).where(Conflict.change_item_id == item.id)
-    ).scalars()
     for conflict in conflicts:
         conflict.status = "resolved"
         conflict.decision_basis = basis
@@ -765,6 +1261,7 @@ def _resolve_conflicts_of(
 
 def resolve_review(
     session: Session,
+    scope: KnowledgeScope,
     review_key: str,
     action: str,
     *,
@@ -772,11 +1269,16 @@ def resolve_review(
     reason: str | None = None,
 ) -> ReviewItem:
     """受限动作集 approve/reject/defer（K4.2）；已决项翻案走 overturn_review。"""
+    require_current_scope(session, scope)
     item = session.execute(
-        select(ReviewItem).where(ReviewItem.review_key == review_key)
+        select(ReviewItem).where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.review_key == review_key,
+        )
     ).scalar_one_or_none()
     if item is None:
-        raise KeyError(f"review item {review_key} 不存在")
+        raise _scope_mismatch()
+    subject = _require_scoped_review_subject(session, scope, item.subject)
     if action not in item.allowed_actions:
         raise ValueError(f"动作 {action!r} 不在受限动作集 {item.allowed_actions} 中")
     if item.status != "open":
@@ -785,12 +1287,20 @@ def resolve_review(
         )
     if action == "defer":
         return item  # 保持 open，不落 resolution
-    change_item = session.get(ChangeItem, item.subject["change_item_id"])
-    assert change_item is not None
+    if not subject.change_item_id:
+        raise _scope_mismatch()
+    change_item = _require_scoped_change_item(session, scope, subject.change_item_id)
     if action == "approve":
-        apply_change_item(session, change_item, actor=actor, decision="approved", reason=reason)
+        apply_change_item(
+            session,
+            scope,
+            change_item,
+            actor=actor,
+            decision="approved",
+            reason=reason,
+        )
     else:
-        reject_change_item(session, change_item, actor=actor, reason=reason)
+        reject_change_item(session, scope, change_item, actor=actor, reason=reason)
     item.status = "resolved"
     item.resolution = {
         "action": action,
@@ -804,6 +1314,7 @@ def resolve_review(
 
 def overturn_review(
     session: Session,
+    scope: KnowledgeScope,
     review_key: str,
     new_action: str,
     *,
@@ -811,17 +1322,30 @@ def overturn_review(
     reason: str,
 ) -> ChangeSet:
     """翻案 = 新 ChangeSet（K3.5）：原 ChangeSet 与原 decision_basis 不改写。"""
+    require_current_scope(session, scope)
     item = session.execute(
-        select(ReviewItem).where(ReviewItem.review_key == review_key)
+        select(ReviewItem).where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.review_key == review_key,
+        )
     ).scalar_one_or_none()
-    if item is None or item.status != "resolved" or item.resolution is None:
+    if item is None:
+        raise _scope_mismatch()
+    subject = _require_scoped_review_subject(session, scope, item.subject)
+    if item.status != "resolved" or item.resolution is None:
         raise ValueError(f"review item {review_key} 不是已决项，不能翻案")
     prev = str(item.resolution["action"])
     if new_action == prev or new_action not in ("approve", "reject"):
         raise ValueError(f"翻案动作 {new_action!r} 无效（原决定 {prev!r}）")
-    original = session.get(ChangeItem, item.subject["change_item_id"])
-    assert original is not None
+    original, adopted, old, _ = _require_scoped_item_aggregate(
+        session,
+        scope,
+        subject.change_item_id or "",
+    )
+    if new_action == "reject" and adopted is None:
+        raise _scope_mismatch()
     change_set = ChangeSet(
+        space_id=scope.space_id,
         source_kind="manual_edit",
         knowledge_ids=None,
         status="applied",
@@ -831,8 +1355,6 @@ def overturn_review(
     session.flush()
     if new_action == "reject":
         # 撤销先前采纳：新 Claim 撤回，被取代的旧 Claim 恢复 published
-        assert original.claim_id is not None
-        adopted = session.get(Claim, original.claim_id)
         assert adopted is not None
         reversal = ChangeItem(
             change_set_id=change_set.id,
@@ -844,16 +1366,14 @@ def overturn_review(
         )
         session.add(reversal)
         session.flush()
-        retract_claim(session, adopted, change_item_id=reversal.id, actor=actor, reason=reason)
-        old_id = original.proposed.get("existing_claim_id") or original.proposed.get(
-            "placeholder_claim_id"
+        _retract_claim(
+            session, adopted, change_item_id=reversal.id, actor=actor, reason=reason
         )
-        old = session.get(Claim, old_id) if old_id else None
         if old is not None and old.status == "superseded":
             before = _snapshot(old)
             old.status = "published"
             old.superseded_by = None
-            write_revision(
+            _write_revision(
                 session, old, before=before, change_item_id=reversal.id,
                 actor=actor, reason=f"翻案恢复：{reason}",
             )
@@ -869,16 +1389,22 @@ def overturn_review(
         )
         session.add(reversal)
         session.flush()
-        if original.claim_id is not None:
-            claim = session.get(Claim, original.claim_id)
-            if claim is not None and claim.status == "retracted":
-                before = _snapshot(claim)
-                claim.status = "candidate"
-                write_revision(
-                    session, claim, before=before, change_item_id=reversal.id,
+        if adopted is not None:
+            if adopted.status == "retracted":
+                before = _snapshot(adopted)
+                adopted.status = "candidate"
+                _write_revision(
+                    session, adopted, before=before, change_item_id=reversal.id,
                     actor=actor, reason=f"翻案恢复候选：{reason}",
                 )
-        apply_change_item(session, reversal, actor=actor, decision="approved", reason=reason)
+        apply_change_item(
+            session,
+            scope,
+            reversal,
+            actor=actor,
+            decision="approved",
+            reason=reason,
+        )
     item.resolution = {
         "action": new_action,
         "actor": actor,
@@ -909,85 +1435,324 @@ def read_conflict_judgements(path: Path) -> list[ConflictJudgement]:
 
 def apply_conflict_judgements(
     session: Session,
+    scope: KnowledgeScope,
     judgements: list[ConflictJudgement],
     *,
     actor: str = "claude-session",
 ) -> int:
     """④ 裁决回写：按 llm_verdict 裁决并留痕（K3.2）；只处理 pending_judge 的冲突。"""
-    applied = 0
+    require_current_scope(session, scope)
+    prepared: list[tuple[ConflictJudgement, Conflict, ChangeItem]] = []
+    seen_conflicts: set[str] = set()
+    seen_items: set[str] = set()
+    publication_targets: set[tuple[str | None, str]] = set()
     for judgement in judgements:
-        conflict = session.get(Conflict, judgement.conflict_id)
-        if conflict is None or conflict.status != "pending_judge":
+        if judgement.conflict_id in seen_conflicts:
+            raise _scope_mismatch()
+        seen_conflicts.add(judgement.conflict_id)
+        conflict, item, claim, old = _require_scoped_conflict_aggregate(
+            session, scope, judgement.conflict_id
+        )
+        if conflict.status != "pending_judge":
             continue
-        item = session.get(ChangeItem, conflict.change_item_id)
-        assert item is not None
+        if item.id in seen_items:
+            raise _scope_mismatch()
+        seen_items.add(item.id)
+        if judgement.winner == "proposed":
+            if claim is None:
+                raise _scope_mismatch()
+            _require_publish_context(
+                session,
+                scope,
+                claim,
+                change_item_id=item.id,
+                superseding=old,
+            )
+            target = (claim.product_version_id, claim.predicate)
+            if target in publication_targets:
+                raise _scope_mismatch()
+            publication_targets.add(target)
+        prepared.append((judgement, conflict, item))
+
+    for judgement, _, item in prepared:
         if judgement.winner == "proposed":
             apply_change_item(
-                session, item, actor=actor, decision="auto_applied",
+                session, scope, item, actor=actor, decision="auto_applied",
                 reason="④ LLM 裁决（claude-session 回写）", llm_verdict=judgement.reasoning,
             )
         else:
             reject_change_item(
-                session, item, actor=actor,
+                session, scope, item, actor=actor,
                 reason="④ LLM 裁决（claude-session 回写）", llm_verdict=judgement.reasoning,
             )
-        applied += 1
-    return applied
+    return len(prepared)
 
 
 # ------------------------------------------------------------------ retract（来源删除）
 
 
-def retract_source(
-    session: Session, knowledge_id: str, *, created_by: str = "retractor"
-) -> MergeReport:
-    """来源删除按证据引用计数（03 §2.4）：仍有其他证据 → 仅移除 Evidence；
-    证据清零 → Claim 转 retracted 并进 ChangeSet 留痕。"""
-    evidence = list(
-        session.execute(
-            select(ClaimEvidence).where(ClaimEvidence.knowledge_id == knowledge_id)
-        ).scalars()
+_LEGACY_RETRACT_EVENT = "legacy-replay"
+_SOURCE_REVISION_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _prepare_retract_source(
+    source: SourceImportIdentity | str,
+    scope: KnowledgeScope,
+    *,
+    legacy_replay: bool,
+) -> tuple[str, str, str, bool]:
+    """Validate a retract identity before any database access."""
+    if isinstance(source, SourceImportIdentity):
+        if legacy_replay:
+            raise _scope_mismatch()
+        try:
+            identity = SourceImportIdentity.model_validate(
+                source.model_dump(mode="python")
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+            raise _scope_mismatch() from exc
+        if identity.raw_kb_id != scope.raw_kb_id:
+            raise _scope_mismatch()
+        knowledge_id = identity.knowledge_id
+        event_revision = identity.source_revision
+        external_record_id = knowledge_id
+        source_aware = True
+    elif isinstance(source, str) and legacy_replay:
+        knowledge_id = source.strip()
+        if not knowledge_id:
+            raise _scope_mismatch()
+        event_revision = _LEGACY_RETRACT_EVENT
+        external_record_id = "legacy:" + hashlib.sha256(
+            knowledge_id.encode("utf-8")
+        ).hexdigest()[:57]
+        source_aware = False
+    else:
+        raise _scope_mismatch()
+    return (
+        knowledge_id,
+        external_record_id,
+        derive_retract_event_key(knowledge_id, event_revision),
+        source_aware,
     )
-    report = MergeReport()
-    if not evidence:
-        return report
-    change_set = ChangeSet(
+
+
+def _legacy_retract_has_source_aware_state(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    knowledge_id: str,
+) -> bool:
+    evidence_id = session.scalar(
+        select(ClaimEvidence.id)
+        .join(Claim, Claim.id == ClaimEvidence.claim_id)
+        .where(
+            Claim.space_id == scope.space_id,
+            ClaimEvidence.knowledge_id == knowledge_id,
+            ClaimEvidence.lineage_status.is_not(None),
+        )
+        .limit(1)
+    )
+    if evidence_id is not None:
+        return True
+    source_revisions = session.scalars(
+        select(ChangeSet.source_revision).where(
+            ChangeSet.space_id == scope.space_id,
+            ChangeSet.source_kind.in_(("document", "recompile")),
+            ChangeSet.external_record_id == knowledge_id,
+            ChangeSet.source_revision.is_not(None),
+        )
+    )
+    return any(
+        _SOURCE_REVISION_HEX.fullmatch(revision or "") is not None
+        for revision in source_revisions
+    )
+
+
+def _retract_replay_report(
+    session: Session,
+    scope: KnowledgeScope,
+    change_set: ChangeSet,
+    *,
+    knowledge_id: str,
+) -> MergeReport:
+    item_count = validate_retract_tombstone(
+        session,
+        scope,
+        change_set,
+        knowledge_id=knowledge_id,
+    )
+    return MergeReport(
+        change_set_id=change_set.id,
+        actions={"retract": item_count} if item_count else {},
+    )
+
+
+def _existing_retract_change_set(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    external_record_id: str,
+    source_revision: str,
+) -> ChangeSet | None:
+    return session.scalar(
+        select(ChangeSet).where(
+            ChangeSet.space_id == scope.space_id,
+            ChangeSet.source_kind == "document",
+            ChangeSet.external_record_id == external_record_id,
+            ChangeSet.source_revision == source_revision,
+        )
+    )
+
+
+def _insert_retract_change_set(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    knowledge_id: str,
+    external_record_id: str,
+    source_revision: str,
+    created_by: str,
+) -> tuple[ChangeSet, bool]:
+    candidate = ChangeSet(
+        space_id=scope.space_id,
         source_kind="document",
         knowledge_ids=[knowledge_id],
+        external_record_id=external_record_id,
+        source_revision=source_revision,
         status="applied",
         created_by=created_by,
     )
-    session.add(change_set)
-    session.flush()
-    report.change_set_id = change_set.id
-    by_claim: dict[str, list[ClaimEvidence]] = {}
-    for e in evidence:
-        by_claim.setdefault(e.claim_id, []).append(e)
-    for claim_id, rows in by_claim.items():
-        claim = session.get(Claim, claim_id)
-        assert claim is not None
-        removed_ids = {e.id for e in rows}
-        remaining = [e for e in claim_evidence(session, claim_id) if e.id not in removed_ids]
-        for e in rows:
-            session.delete(e)
-        item = ChangeItem(
-            change_set_id=change_set.id,
-            action="retract",
-            claim_id=claim_id,
-            proposed={"knowledge_id": knowledge_id, "removed_evidence": len(rows)},
-            decision="auto_applied",
-            decision_basis={
-                "note": f"来源删除；剩余证据 {len(remaining)} 条"
-                + ("→ Claim retracted" if not remaining else "，Claim 保留")
-            },
+    try:
+        with session.begin_nested():
+            session.add(candidate)
+            session.flush()
+    except IntegrityError:
+        winner = _existing_retract_change_set(
+            session,
+            scope,
+            external_record_id=external_record_id,
+            source_revision=source_revision,
         )
-        session.add(item)
-        session.flush()
-        if not remaining and claim.status in ("published", "candidate", "draft"):
-            retract_claim(
-                session, claim, change_item_id=item.id, actor=created_by,
-                reason=f"来源 {knowledge_id} 删除后证据清零",
+        if winner is None:
+            raise
+        return winner, False
+    return candidate, True
+
+
+def retract_source(
+    session: Session,
+    scope: KnowledgeScope,
+    source: SourceImportIdentity | str,
+    *,
+    legacy_replay: bool = False,
+    created_by: str = "retractor",
+) -> MergeReport:
+    """Delete one scoped source with an exact-event idempotency record."""
+    (
+        knowledge_id,
+        external_record_id,
+        source_revision,
+        source_aware,
+    ) = _prepare_retract_source(source, scope, legacy_replay=legacy_replay)
+    require_current_scope(session, scope)
+    with session.begin_nested():
+        if not source_aware and _legacy_retract_has_source_aware_state(
+            session,
+            scope,
+            knowledge_id=knowledge_id,
+        ):
+            raise ScopeViolation("source mode conflict")
+        existing = _existing_retract_change_set(
+            session,
+            scope,
+            external_record_id=external_record_id,
+            source_revision=source_revision,
+        )
+        if existing is not None:
+            return _retract_replay_report(
+                session,
+                scope,
+                existing,
+                knowledge_id=knowledge_id,
             )
-        report.bump("retract")
-    session.flush()
-    return report
+        evidence = list(
+            session.scalars(
+                select(ClaimEvidence)
+                .join(Claim, Claim.id == ClaimEvidence.claim_id)
+                .where(
+                    ClaimEvidence.knowledge_id == knowledge_id,
+                    Claim.space_id == scope.space_id,
+                    *(
+                        ()
+                        if source_aware
+                        else (ClaimEvidence.lineage_status.is_(None),)
+                    ),
+                )
+            )
+        )
+        change_set, created = _insert_retract_change_set(
+            session,
+            scope,
+            knowledge_id=knowledge_id,
+            external_record_id=external_record_id,
+            source_revision=source_revision,
+            created_by=created_by,
+        )
+        if not created:
+            return _retract_replay_report(
+                session,
+                scope,
+                change_set,
+                knowledge_id=knowledge_id,
+            )
+        report = MergeReport(change_set_id=change_set.id)
+        if not evidence:
+            return report
+        by_claim: dict[str, list[ClaimEvidence]] = {}
+        for row in evidence:
+            by_claim.setdefault(row.claim_id, []).append(row)
+        for claim_id, rows in by_claim.items():
+            claim = _require_scoped_claim(session, scope, claim_id)
+            removed_ids = {row.id for row in rows}
+            remaining_active = [
+                row
+                for row in _evidence_for_claim(session, claim)
+                if row.id not in removed_ids and row.stale_at is None
+            ]
+            for row in rows:
+                session.delete(row)
+            item = ChangeItem(
+                change_set_id=change_set.id,
+                action="retract",
+                claim_id=claim_id,
+                proposed={
+                    "knowledge_id": knowledge_id,
+                    "removed_evidence": len(rows),
+                },
+                decision="auto_applied",
+                decision_basis={
+                    "note": f"来源删除；剩余 active 证据 {len(remaining_active)} 条"
+                    + (
+                        "→ Claim retracted"
+                        if not remaining_active
+                        else "，Claim 保留"
+                    )
+                },
+            )
+            session.add(item)
+            session.flush()
+            if not remaining_active and claim.status in (
+                "published",
+                "candidate",
+                "draft",
+            ):
+                _retract_claim(
+                    session,
+                    claim,
+                    change_item_id=item.id,
+                    actor=created_by,
+                    reason=f"来源 {knowledge_id} 删除后 active 证据清零",
+                )
+            report.bump("retract")
+        session.flush()
+        return report

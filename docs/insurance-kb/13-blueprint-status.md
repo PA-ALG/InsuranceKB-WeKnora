@@ -31,8 +31,15 @@
 | 008 审核工作台 | 提案即交接物 | 📋 提案（实现=遗留 B8） |
 | 009~012 | 概念层/结构化直入/健康度/QA对象 | 📋 提案（specs 条款级，B11~B14） |
 | 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 提案（B15~B16）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
+| 015 | 数据飞轮 | 📋 提案（B17） |
+| 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
+| 017 | WeKnora SourceDocument Bridge/Evidence lineage | 🚧 T1–T7 已完成并通过双审/全量复验，当前进入 T8 live E2E（B19） |
+| 018 | SnapshotFact/统一读取/可恢复发布 | ✅ 规格 review 通过，待 016+017（B20） |
+| 019 | Golden 工具/QualityProfile/在线 Gate | ✅ 设计与计划 review 通过，待 TDD（B21） |
+| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过，待 019+run-admission（B22） |
+| 021 | Source lifecycle ordering | 📋 规格已提出，待实现 durable SourceHead、generation/processed_at 与 per-source lock/CAS（B23） |
 
-执行类遗留：HANDOFF ⓪-B（B1~B16）。master plan 切片对照：S0✅ S1✅ S2✅ S3✅（主链）→ S4（批量并发 P0.5）与 S5（P1 运营）部分在 008/011/012，S6/S7（P2/P3）未启动。
+执行类遗留：HANDOFF ⓪-B。2026-07-13 架构复核后新增企业运行前置 016～021；在 016/017/018 完成前，现有 007 应视为验证主链而非多租户生产闭环。
 
 ## 2. LLM Wiki 27 项功能引入状态复盘（对照 09 文档）
 

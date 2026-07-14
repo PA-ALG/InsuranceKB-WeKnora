@@ -8,7 +8,13 @@
 """
 
 import asyncio
-from collections.abc import Callable
+import fcntl
+import os
+import shutil
+import tempfile
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -16,10 +22,19 @@ from typing import Any, TypedDict, cast
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from ..goldenset.pdf import PageText, ScannedPdfError, extract_pages
+from ..adapters.weknora.scope import scope_log_context
+from ..db.scope import KnowledgeScope, ScopeViolation
+from ..goldenset.pdf import PageText
+from ..goldenset.records import Evidence
 from ..schemas import FieldSpec, ProductLineSchema, SchemaRegistry
+from ..sources import (
+    DocumentSource,
+    MaterializedBatch,
+    SourceDocument,
+    match_quote_to_chunks,
+)
 from .extract import (
     Sleeper,
     TransportRetryError,
@@ -47,30 +62,39 @@ from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
 from .templates import TemplateRegistry, run_fastpath
 from .templates.tables import TableStructureProvider
+from .verification import quote_verified
 from .voting import vote_field
 
 
 class PipelineConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    max_fields_per_call: int = 10  # E3.1
-    window_chars: int = 4_000
-    section_target_chars: int = 2_000
-    transport_attempts: int = 3  # E1.2（可配）
-    backoff_base_s: float = 1.0
-    gapfill_top_n: int = 3
-    concurrency: int = 6
+    max_fields_per_call: int = Field(default=10, strict=True, gt=0)  # E3.1
+    window_chars: int = Field(default=4_000, strict=True, gt=0)
+    section_target_chars: int = Field(default=2_000, strict=True, gt=0)
+    transport_attempts: int = Field(default=3, strict=True, gt=0)  # E1.2（可配）
+    backoff_base_s: float = Field(
+        default=1.0, strict=True, ge=0, allow_inf_nan=False
+    )
+    gapfill_top_n: int = Field(default=3, strict=True, gt=0)
+    concurrency: int = Field(default=6, strict=True, gt=0)
     judge_mode: str = "claude-session"
 
 
 class PipelineState(TypedDict, total=False):
     product_dir: str
     run_dir: str
+    checkpoint_path: str
     run_id: str
     line_key: str
     product_id: str
     product_name: str
+    model_id: str
+    schema_version: str
+    prompt_version: str
+    judge_mode: str
     fail_nodes: list[str]  # 测试用注入失败节点（E1.1 用例）
+    source_documents: list[dict[str, Any]]
     docs: list[dict[str, Any]]
     candidates: list[dict[str, Any]]
     dead_letters: list[dict[str, Any]]
@@ -86,7 +110,33 @@ class RunResult(BaseModel):
     judge_queue_path: Path
 
 
+class _RunIdentity(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    run_id: str
+    run_dir: str
+    checkpoint_path: str
+    product_dir: str
+    product_id: str
+    product_name: str
+    line_key: str
+    model_id: str
+    schema_version: str
+    prompt_version: str
+    judge_mode: str
+
+
 _DOC_PRIORITY = ("保险条款", "条款", "产品说明书", "说明书")  # 合并时的来源优先级
+_RUNTIME_SOURCE_PATHS: ContextVar[Mapping[str, Path] | None] = ContextVar(
+    "insurance_harness_compiler_source_paths", default=None
+)
+_RUNTIME_SOURCE_DOCUMENTS: ContextVar[tuple[SourceDocument, ...] | None] = ContextVar(
+    "insurance_harness_compiler_source_documents", default=None
+)
+_GRAPH_NODE_NAMES = frozenset(
+    {"load", "split_route", "extract", "gapfill", "vote", "finalize"}
+)
+_STATE_PATCH_KEYS = frozenset({"fail_nodes"})
 
 
 def _doc_rank(doc: str) -> int:
@@ -133,12 +183,13 @@ class ExtractionPipeline:
         client: ModelClient,
         registry: SchemaRegistry,
         model_id: str,
+        source: DocumentSource[Any],
         config: PipelineConfig | None = None,
         judge: JudgeDispatcher | None = None,
         sleep: Sleeper | None = None,
-        page_loader: Callable[[Path], list[PageText]] | None = None,
         template_registry: TemplateRegistry | None = None,
         table_provider: TableStructureProvider | None = None,
+        scope: KnowledgeScope | None = None,
     ) -> None:
         self._client = client
         self._registry = registry
@@ -146,15 +197,215 @@ class ExtractionPipeline:
         self._cfg = config or PipelineConfig()
         self._judge = judge or JudgeDispatcher(mode=self._cfg.judge_mode)
         self._sleep: Sleeper = sleep if sleep is not None else asyncio.sleep
-        self._page_loader = page_loader or extract_pages
+        self._source = source
         # 006 F3：模板注册表未提供/为空 → fast path 整体旁路（004 行为不变）
         self._templates = template_registry
         self._table_provider = table_provider
+        self._scope = scope
+        if scope is not None:
+            scope_log_context(scope)
 
     # --- 节点 ---
 
     def _line(self, state: PipelineState) -> ProductLineSchema:
         return self._registry.line(state["line_key"])
+
+    def _require_manifest_scope(self, raw_manifest: object) -> RunManifest:
+        manifest = _parse_run_manifest(raw_manifest)
+        if manifest is None:
+            raise ScopeViolation("scope mismatch")
+        if self._scope is None:
+            expected = {"space_id": "", "tenant_id": "", "raw_kb_id": ""}
+        else:
+            expected = scope_log_context(self._scope)
+        actual = {
+            "space_id": manifest.space_id,
+            "tenant_id": manifest.tenant_id,
+            "raw_kb_id": manifest.raw_kb_id,
+        }
+        if actual != expected:
+            raise ScopeViolation("scope mismatch")
+        return manifest
+
+    async def _require_checkpoint_identity(
+        self,
+        app: Any,
+        config: dict[str, Any],
+        documents: tuple[SourceDocument, ...],
+        identity: _RunIdentity,
+        *,
+        resume: bool,
+    ) -> None:
+        snapshot = await app.aget_state(config)
+        values = snapshot.values
+        if not values:
+            if resume:
+                raise ScopeViolation("run identity mismatch")
+            return
+        if not resume:
+            raise ScopeViolation("run identity mismatch")
+        if not isinstance(values, dict) or "manifest" not in values:
+            raise ScopeViolation("run identity mismatch")
+        manifest = self._require_manifest_sources(values["manifest"], documents)
+        if _checkpoint_source_identities(values.get("source_documents")) != [
+            _source_document_identity(document) for document in documents
+        ]:
+            raise ScopeViolation("source identity mismatch")
+        if (
+            _parse_state_run_identity(values) != identity
+            or _manifest_run_identity(manifest) != identity
+        ):
+            raise ScopeViolation("run identity mismatch")
+
+    def _require_manifest_sources(
+        self,
+        raw_manifest: object,
+        documents: tuple[SourceDocument, ...],
+    ) -> RunManifest:
+        manifest = self._require_manifest_scope(raw_manifest)
+        expected = [_source_document_identity(document)[:7] for document in documents]
+        actual = [
+            (
+                entry.doc,
+                entry.source_id,
+                entry.knowledge_id,
+                entry.source_revision,
+                entry.file_hash,
+                entry.original_digest,
+                entry.parser_fingerprint,
+            )
+            for entry in manifest.docs
+        ]
+        if not actual or actual != expected:
+            raise ScopeViolation("source identity mismatch")
+        return manifest
+
+    def _require_materialized_scope(
+        self,
+        documents: tuple[SourceDocument, ...],
+    ) -> None:
+        file_names = [document.file_name for document in documents]
+        if len(file_names) != len(set(file_names)):
+            raise ScopeViolation("source identity mismatch")
+        if self._scope is None:
+            if any(
+                document.scope is not None
+                or document.knowledge_id is not None
+                or document.raw_kb_id is not None
+                for document in documents
+            ):
+                raise ScopeViolation("scope mismatch")
+            return
+        expected = (
+            self._scope.space_id,
+            self._scope.tenant_id,
+            self._scope.raw_kb_id,
+            self._scope.wiki_kb_id,
+        )
+        for document in documents:
+            source_scope = document.scope
+            if (
+                source_scope is None
+                or not document.knowledge_id
+                or not document.raw_kb_id
+                or document.raw_kb_id != self._scope.raw_kb_id
+            ):
+                raise ScopeViolation("scope mismatch")
+            if (
+                source_scope.space_id,
+                source_scope.tenant_id,
+                source_scope.raw_kb_id,
+                source_scope.wiki_kb_id,
+            ) != expected:
+                raise ScopeViolation("scope mismatch")
+
+    def _canonicalize_state_patch(
+        self,
+        state_patch: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not set(state_patch).issubset(_STATE_PATCH_KEYS):
+            raise ScopeViolation("state patch mismatch")
+        canonical: dict[str, Any] = {}
+        if "fail_nodes" in state_patch:
+            fail_nodes = state_patch["fail_nodes"]
+            if not isinstance(fail_nodes, list) or any(
+                type(node) is not str or node not in _GRAPH_NODE_NAMES
+                for node in fail_nodes
+            ):
+                raise ScopeViolation("state patch mismatch")
+            canonical["fail_nodes"] = list(fail_nodes)
+        return canonical
+
+    def _resolve_run_identity(
+        self,
+        *,
+        run_dir: Path,
+        checkpoint_path: Path | None,
+        product_dir: Path | None,
+        product_id: str | None,
+        product_name: str | None,
+        line_key: str | None,
+        thread_id: str | None,
+    ) -> _RunIdentity:
+        from ..goldenset.runner import infer_line_key
+        from ..goldenset.verify import load_product_meta
+
+        canonical_run_dir = run_dir.expanduser().resolve()
+        canonical_checkpoint_path = (
+            checkpoint_path.expanduser().resolve()
+            if checkpoint_path is not None
+            else canonical_run_dir / "checkpoint.sqlite"
+        )
+        canonical_product_dir = (
+            None if product_dir is None else product_dir.expanduser().resolve()
+        )
+        explicit_product_id = (product_id or "").strip()
+        explicit_product_name = (product_name or "").strip()
+        if canonical_product_dir is None and (
+            not explicit_product_id or not explicit_product_name
+        ):
+            raise ValueError("product_id and product_name are required without product_dir")
+        if (explicit_product_id and not explicit_product_name) or (
+            explicit_product_name and not explicit_product_id
+        ):
+            raise ValueError("product_id and product_name must be provided together")
+        resolved_product_id = explicit_product_id
+        resolved_product_name = explicit_product_name
+        if not resolved_product_id or not resolved_product_name:
+            assert canonical_product_dir is not None
+            resolved_product_name = canonical_product_dir.name
+            meta = load_product_meta(canonical_product_dir)
+            resolved_product_id = str(
+                meta.get("planCode") or resolved_product_name
+            ).strip()
+        resolved_line_key = (line_key or "").strip() or infer_line_key(
+            resolved_product_name
+        )
+        self._registry.line(resolved_line_key)
+        default_run_id = (
+            explicit_product_id
+            or (
+                canonical_product_dir.name
+                if canonical_product_dir is not None
+                else resolved_product_id
+            )
+        )
+        resolved_run_id = (thread_id or "").strip() or default_run_id
+        return _RunIdentity(
+            run_id=resolved_run_id,
+            run_dir=str(canonical_run_dir),
+            checkpoint_path=str(canonical_checkpoint_path),
+            product_dir=(
+                "" if canonical_product_dir is None else str(canonical_product_dir)
+            ),
+            product_id=resolved_product_id,
+            product_name=resolved_product_name,
+            line_key=resolved_line_key,
+            model_id=self._model_id,
+            schema_version=self._registry.version,
+            prompt_version=PROMPT_VERSION,
+            judge_mode=self._judge.mode,
+        )
 
     async def _node_load(self, state: PipelineState) -> dict[str, Any]:
         # 延迟导入：goldenset 包 __init__ 会加载 annotator（其依赖 compiler.llm），
@@ -163,36 +414,69 @@ class ExtractionPipeline:
         from ..goldenset.verify import load_product_meta
 
         _maybe_fail("load", state)
-        product_dir = Path(state["product_dir"])
-        product_name = product_dir.name
-        meta = load_product_meta(product_dir)
-        product_id = str(meta.get("planCode") or product_name).strip()
+        product_dir_raw = state.get("product_dir", "")
+        product_dir = Path(product_dir_raw) if product_dir_raw else None
+        product_name = state.get("product_name", "").strip()
+        product_id = state.get("product_id", "").strip()
+        if not product_name or not product_id:
+            if product_dir is None:
+                raise ScopeViolation("source identity mismatch")
+            product_name = product_dir.name
+            meta = load_product_meta(product_dir)
+            product_id = str(meta.get("planCode") or product_name).strip()
         line_key = state.get("line_key") or infer_line_key(product_name)
+        runtime_documents = _RUNTIME_SOURCE_DOCUMENTS.get()
+        if runtime_documents is None:
+            source_documents = [
+                SourceDocument.model_validate(raw) for raw in state["source_documents"]
+            ]
+        else:
+            source_documents = list(runtime_documents)
+            if _checkpoint_source_identities(state.get("source_documents")) != [
+                _source_document_identity(document) for document in source_documents
+            ]:
+                raise ScopeViolation("source identity mismatch")
+        file_names = [document.file_name for document in source_documents]
+        if len(file_names) != len(set(file_names)):
+            raise ScopeViolation("source identity mismatch")
         docs: list[dict[str, Any]] = []
         dead: list[dict[str, Any]] = list(state.get("dead_letters") or [])
-        for pdf_path in sorted(product_dir.glob("*.pdf")):
-            try:
-                pages = self._page_loader(pdf_path)
-            except ScannedPdfError as exc:
-                dead.append(
-                    DeadLetter(
-                        product=product_name, doc=pdf_path.name, group="*",
-                        window_ref="*", field_ids=[], error=str(exc), attempts=0,
-                    ).model_dump(mode="json")
+        for document in source_documents:
+            docs.append(
+                DocPayload(doc=document.file_name, pages=list(document.pages)).model_dump(
+                    mode="json"
                 )
-                continue
-            docs.append(DocPayload(doc=pdf_path.name, pages=pages).model_dump(mode="json"))
+            )
+        scope_fields = scope_log_context(self._scope) if self._scope is not None else {}
         manifest = RunManifest(
             run_id=state["run_id"],
-            product_dir=str(product_dir),
+            product_dir=product_dir_raw,
+            run_dir=state.get("run_dir", ""),
+            checkpoint_path=state.get("checkpoint_path", ""),
+            space_id=scope_fields.get("space_id", ""),
+            tenant_id=scope_fields.get("tenant_id", ""),
+            raw_kb_id=scope_fields.get("raw_kb_id", ""),
             product_id=product_id,
             product_name=product_name,
             line_key=line_key,
-            schema_version=self._registry.version,
-            model_id=self._model_id,
-            judge_mode=self._judge.mode,
-            prompt_version=PROMPT_VERSION,
+            schema_version=state.get("schema_version", self._registry.version),
+            model_id=state.get("model_id", self._model_id),
+            judge_mode=state.get("judge_mode", self._judge.mode),
+            prompt_version=state.get("prompt_version", PROMPT_VERSION),
             started_at=datetime.now(UTC),
+            docs=[
+                DocManifestEntry(
+                    doc=document.file_name,
+                    source_id=document.source_id,
+                    knowledge_id=document.knowledge_id,
+                    source_revision=document.source_revision.value,
+                    file_hash=document.source_revision.file_hash,
+                    original_digest=document.original_digest,
+                    parser_fingerprint=document.source_revision.parser_fingerprint,
+                    doc_pages=len(document.pages),
+                )
+                for document in source_documents
+            ],
         )
         return {
             "product_id": product_id,
@@ -205,9 +489,9 @@ class ExtractionPipeline:
 
     async def _node_split_route(self, state: PipelineState) -> dict[str, Any]:
         _maybe_fail("split_route", state)
-        manifest = RunManifest.model_validate(state["manifest"])
+        manifest = self._require_manifest_scope(state.get("manifest"))
         docs: list[dict[str, Any]] = []
-        manifest.docs = []
+        manifest_by_doc = {entry.doc: entry for entry in manifest.docs}
         for raw in state["docs"]:
             payload = DocPayload.model_validate(raw)
             sections = split_sections(
@@ -219,25 +503,28 @@ class ExtractionPipeline:
             payload.family_id = family_fingerprint(sections)
             # 006 F4.2：可喂性评分记入 manifest（只报告不拦截；硬门禁待升级链 L1+）
             feed = score_feedability(payload.doc, payload.pages)
-            manifest.docs.append(
-                DocManifestEntry(
-                    doc=payload.doc,
-                    doc_pages=len(payload.pages),
-                    sections=len(sections),
-                    family_id=payload.family_id,
-                    routed_pairs=routing.routed_pairs,
-                    total_pairs=routing.total_pairs,
-                    compression_ratio=routing.compression_ratio,
-                    feedability_score=feed.score,
-                    feedability_ok=feed.feedable,
-                )
+            entry = manifest_by_doc.get(payload.doc)
+            if entry is None:
+                raise ScopeViolation("source identity mismatch")
+            manifest_by_doc[payload.doc] = entry.model_copy(
+                update={
+                    "doc_pages": len(payload.pages),
+                    "sections": len(sections),
+                    "family_id": payload.family_id,
+                    "routed_pairs": routing.routed_pairs,
+                    "total_pairs": routing.total_pairs,
+                    "compression_ratio": routing.compression_ratio,
+                    "feedability_score": feed.score,
+                    "feedability_ok": feed.feedable,
+                }
             )
             docs.append(payload.model_dump(mode="json"))
+        manifest.docs = [manifest_by_doc[entry.doc] for entry in manifest.docs]
         return {"docs": docs, "manifest": manifest.model_dump(mode="json")}
 
     async def _node_extract(self, state: PipelineState) -> dict[str, Any]:
         _maybe_fail("extract", state)
-        manifest = RunManifest.model_validate(state["manifest"])
+        manifest = self._require_manifest_scope(state.get("manifest"))
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
@@ -287,12 +574,19 @@ class ExtractionPipeline:
                 template = self._templates.find(payload.family_id, payload.doc)
                 if template is None:
                     continue
+                entries = [entry for entry in manifest.docs if entry.doc == payload.doc]
+                runtime_paths = _RUNTIME_SOURCE_PATHS.get()
+                if len(entries) != 1 or runtime_paths is None:
+                    raise ScopeViolation("source identity mismatch")
+                runtime_path = runtime_paths.get(entries[0].source_id)
+                if runtime_path is None:
+                    raise ScopeViolation("source identity mismatch")
                 fp_cands = run_fastpath(
                     template,
                     fields_by_id,
                     payload.doc,
                     payload.pages,
-                    pdf_path=Path(state["product_dir"]) / payload.doc,
+                    pdf_path=runtime_path,
                     provider=self._table_provider,
                     sections=payload.sections,
                 )
@@ -343,7 +637,7 @@ class ExtractionPipeline:
 
     async def _node_gapfill(self, state: PipelineState) -> dict[str, Any]:
         _maybe_fail("gapfill", state)
-        manifest = RunManifest.model_validate(state["manifest"])
+        manifest = self._require_manifest_scope(state.get("manifest"))
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
@@ -388,7 +682,7 @@ class ExtractionPipeline:
 
     async def _node_vote(self, state: PipelineState) -> dict[str, Any]:
         _maybe_fail("vote", state)
-        manifest = RunManifest.model_validate(state["manifest"])
+        manifest = self._require_manifest_scope(state.get("manifest"))
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
@@ -475,7 +769,16 @@ class ExtractionPipeline:
 
     async def _node_finalize(self, state: PipelineState) -> dict[str, Any]:
         _maybe_fail("finalize", state)
-        manifest = RunManifest.model_validate(state["manifest"])
+        manifest = self._require_manifest_scope(state.get("manifest"))
+        runtime_documents = _RUNTIME_SOURCE_DOCUMENTS.get()
+        documents_by_name: dict[str, SourceDocument] = {}
+        if runtime_documents is not None:
+            manifest = self._require_manifest_sources(
+                state.get("manifest"), runtime_documents
+            )
+            documents_by_name = {
+                document.file_name: document for document in runtime_documents
+            }
         line = self._line(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
         merged = merge_candidates(candidates)
@@ -488,6 +791,12 @@ class ExtractionPipeline:
                     field_id=f.field_id, field_name=f.name,
                     group=group_of_field(f.name), doc="", tri_state="unknown",
                 )
+            document = documents_by_name.get(cand.doc)
+            cand = cand.model_copy(
+                update={
+                    "evidence": _source_aware_evidence(cand, document),
+                }
+            )
             records.append(_to_pred(cand, state, self._model_id, manifest, created))
 
         manifest.dead_letters = [
@@ -500,20 +809,19 @@ class ExtractionPipeline:
 
         run_dir = Path(state["run_dir"])
         run_dir.mkdir(parents=True, exist_ok=True)
-        (run_dir / "pred.jsonl").write_text(
-            "".join(r.model_dump_json() + "\n" for r in records), encoding="utf-8"
-        )
-        (run_dir / "manifest.json").write_text(
-            manifest.model_dump_json(indent=2), encoding="utf-8"
-        )
-        # 裁决队列以 state 为准（resume 后 dispatcher 内存队列会丢）
-        write_judge_queue(
-            run_dir / "judge-queue.jsonl",
-            [JudgeRequest.model_validate(j) for j in state.get("judge_queue") or []],
-        )
-        (run_dir / "dead-letters.jsonl").write_text(
-            "".join(d.model_dump_json() + "\n" for d in manifest.dead_letters),
-            encoding="utf-8",
+        _commit_run_artifacts(
+            run_dir=run_dir,
+            pred_text="".join(
+                record.model_dump_json() + "\n" for record in records
+            ),
+            manifest_text=manifest.model_dump_json(indent=2),
+            judge_requests=[
+                JudgeRequest.model_validate(j)
+                for j in state.get("judge_queue") or []
+            ],
+            dead_letter_text="".join(
+                dead.model_dump_json() + "\n" for dead in manifest.dead_letters
+            ),
         )
         return {"manifest": manifest.model_dump(mode="json")}
 
@@ -536,10 +844,27 @@ class ExtractionPipeline:
         g.add_edge("finalize", END)
         return g.compile(checkpointer=checkpointer)
 
+    @asynccontextmanager
+    async def _materialize_locked_run(
+        self,
+        *,
+        run_dir: Path,
+        source_request: BaseModel,
+        resume: bool,
+    ) -> AsyncIterator[MaterializedBatch]:
+        async with _exclusive_run_directory(run_dir):
+            if not resume and (run_dir / "manifest.json").is_file():
+                raise ScopeViolation("run identity mismatch")
+            async with self._source.materialize(source_request) as batch:
+                yield batch
+
     async def run(
         self,
-        product_dir: Path,
         run_dir: Path,
+        source_request: BaseModel,
+        product_dir: Path | None = None,
+        product_id: str | None = None,
+        product_name: str | None = None,
         line_key: str | None = None,
         thread_id: str | None = None,
         checkpoint_path: Path | None = None,
@@ -548,42 +873,150 @@ class ExtractionPipeline:
         state_patch: dict[str, Any] | None = None,
     ) -> RunResult:
         """执行（或续跑）一个产品的抽取 run；checkpoint 落 SQLite（E1.1）。"""
-        run_dir.mkdir(parents=True, exist_ok=True)
-        ckpt = checkpoint_path or (run_dir / "checkpoint.sqlite")
-        tid = thread_id or product_dir.name
-        async with aiosqlite.connect(str(ckpt)) as conn:
-            saver = AsyncSqliteSaver(conn)
-            app = self._build(saver)
-            config = {"configurable": {"thread_id": tid}}
-            if state_patch:
-                await app.aupdate_state(config, state_patch)
-            initial: PipelineState | None
-            if resume:
-                initial = None
-            else:
-                initial = {
-                    "product_dir": str(product_dir),
-                    "run_dir": str(run_dir),
-                    "run_id": tid,
-                    "fail_nodes": fail_nodes or [],
-                }
-                if line_key:
-                    initial["line_key"] = line_key
-            out = cast(PipelineState, await app.ainvoke(initial, config=config))
-        manifest = RunManifest.model_validate(out["manifest"])
-        pred_path = run_dir / "pred.jsonl"
-        records = [
-            PredRecord.model_validate_json(line)
-            for line in pred_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        return RunResult(
-            manifest=manifest,
-            records=records,
-            pred_path=pred_path,
-            manifest_path=run_dir / "manifest.json",
-            judge_queue_path=run_dir / "judge-queue.jsonl",
+        identity = self._resolve_run_identity(
+            run_dir=run_dir,
+            checkpoint_path=checkpoint_path,
+            product_dir=product_dir,
+            product_id=product_id,
+            product_name=product_name,
+            line_key=line_key,
+            thread_id=thread_id,
         )
+        canonical_run_dir = Path(identity.run_dir)
+        canonical_run_dir.mkdir(parents=True, exist_ok=True)
+        ckpt = Path(identity.checkpoint_path)
+        async with self._materialize_locked_run(
+            run_dir=canonical_run_dir,
+            source_request=source_request,
+            resume=resume,
+        ) as batch:
+            self._require_materialized_scope(batch.documents)
+            runtime_token = _RUNTIME_SOURCE_PATHS.set(batch.local_paths)
+            document_token = _RUNTIME_SOURCE_DOCUMENTS.set(batch.documents)
+            try:
+                async with aiosqlite.connect(str(ckpt)) as conn:
+                    saver = AsyncSqliteSaver(conn)
+                    app = self._build(saver)
+                    config = {"configurable": {"thread_id": identity.run_id}}
+                    await self._require_checkpoint_identity(
+                        app,
+                        config,
+                        batch.documents,
+                        identity,
+                        resume=resume,
+                    )
+                    if state_patch:
+                        canonical_patch = self._canonicalize_state_patch(state_patch)
+                        await app.aupdate_state(config, canonical_patch)
+                        await self._require_checkpoint_identity(
+                            app,
+                            config,
+                            batch.documents,
+                            identity,
+                            resume=True,
+                        )
+                    initial: PipelineState | None
+                    if resume:
+                        initial = None
+                    else:
+                        initial = cast(
+                            PipelineState,
+                            {
+                                **identity.model_dump(),
+                                "fail_nodes": fail_nodes or [],
+                                "source_documents": [
+                                    document.model_dump(mode="json")
+                                    for document in batch.documents
+                                ],
+                            },
+                        )
+                    out = cast(PipelineState, await app.ainvoke(initial, config=config))
+                    if not isinstance(out, dict):
+                        raise ScopeViolation("scope mismatch")
+                    manifest = self._require_manifest_scope(out.get("manifest"))
+                    if _manifest_run_identity(manifest) != identity:
+                        raise ScopeViolation("run identity mismatch")
+            finally:
+                _RUNTIME_SOURCE_DOCUMENTS.reset(document_token)
+                _RUNTIME_SOURCE_PATHS.reset(runtime_token)
+            manifest = self._require_manifest_scope(manifest)
+            pred_path = canonical_run_dir / "pred.jsonl"
+            if not (canonical_run_dir / "manifest.json").is_file():
+                raise ScopeViolation("artifact commit mismatch")
+            records = [
+                PredRecord.model_validate_json(line)
+                for line in pred_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            return RunResult(
+                manifest=manifest,
+                records=records,
+                pred_path=pred_path,
+                manifest_path=canonical_run_dir / "manifest.json",
+                judge_queue_path=canonical_run_dir / "judge-queue.jsonl",
+            )
+
+
+@asynccontextmanager
+async def _exclusive_run_directory(run_dir: Path) -> AsyncIterator[None]:
+    lock_path = run_dir / ".run.lock"
+    file_descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    acquired = False
+    try:
+        os.fchmod(file_descriptor, 0o600)
+        while not acquired:
+            try:
+                fcntl.flock(
+                    file_descriptor,
+                    fcntl.LOCK_EX | fcntl.LOCK_NB,
+                )
+                acquired = True
+            except BlockingIOError:
+                await asyncio.sleep(0.01)
+        yield
+    finally:
+        if acquired:
+            fcntl.flock(file_descriptor, fcntl.LOCK_UN)
+        os.close(file_descriptor)
+
+
+def _commit_run_artifacts(
+    *,
+    run_dir: Path,
+    pred_text: str,
+    manifest_text: str,
+    judge_requests: list[JudgeRequest],
+    dead_letter_text: str,
+) -> None:
+    staging_dir = Path(
+        tempfile.mkdtemp(prefix=".artifacts-", suffix=".staging", dir=run_dir)
+    )
+    artifact_names = (
+        "pred.jsonl",
+        "judge-queue.jsonl",
+        "dead-letters.jsonl",
+        "manifest.json",
+    )
+    try:
+        (staging_dir / "pred.jsonl").write_text(pred_text, encoding="utf-8")
+        write_judge_queue(staging_dir / "judge-queue.jsonl", judge_requests)
+        (staging_dir / "dead-letters.jsonl").write_text(
+            dead_letter_text, encoding="utf-8"
+        )
+        (staging_dir / "manifest.json").write_text(manifest_text, encoding="utf-8")
+
+        commit_marker = run_dir / "manifest.json"
+        commit_marker.unlink(missing_ok=True)
+        try:
+            for name in artifact_names[:-1]:
+                os.replace(staging_dir / name, run_dir / name)
+            os.replace(staging_dir / artifact_names[-1], commit_marker)
+        except BaseException:
+            for name in artifact_names:
+                (run_dir / name).unlink(missing_ok=True)
+            raise
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def _merge_stats(a: CallStats, b: CallStats) -> CallStats:
@@ -592,6 +1025,97 @@ def _merge_stats(a: CallStats, b: CallStats) -> CallStats:
         prompt_chars=a.prompt_chars + b.prompt_chars,
         completion_chars=a.completion_chars + b.completion_chars,
     )
+
+
+def _parse_state_run_identity(values: dict[str, Any]) -> _RunIdentity:
+    try:
+        return _RunIdentity.model_validate(
+            {
+                field: values[field]
+                for field in _RunIdentity.model_fields
+            }
+        )
+    except (KeyError, TypeError, ValidationError):
+        raise ScopeViolation("run identity mismatch") from None
+
+
+def _manifest_run_identity(manifest: RunManifest) -> _RunIdentity:
+    return _RunIdentity(
+        run_id=manifest.run_id,
+        run_dir=manifest.run_dir,
+        checkpoint_path=manifest.checkpoint_path,
+        product_dir=manifest.product_dir,
+        product_id=manifest.product_id,
+        product_name=manifest.product_name,
+        line_key=manifest.line_key,
+        model_id=manifest.model_id,
+        schema_version=manifest.schema_version,
+        prompt_version=manifest.prompt_version,
+        judge_mode=manifest.judge_mode,
+    )
+
+
+def _source_document_identity(document: SourceDocument) -> tuple[object, ...]:
+    scope = document.scope
+    return (
+        document.file_name,
+        document.source_id,
+        document.knowledge_id,
+        document.source_revision.value,
+        document.source_revision.file_hash,
+        document.original_digest,
+        document.source_revision.parser_fingerprint,
+        None
+        if scope is None
+        else (scope.space_id, scope.tenant_id, scope.raw_kb_id, scope.wiki_kb_id),
+    )
+
+
+def _checkpoint_source_identities(raw_documents: object) -> list[tuple[object, ...]]:
+    if not isinstance(raw_documents, list):
+        raise ScopeViolation("source identity mismatch")
+    identities: list[tuple[object, ...]] = []
+    try:
+        for raw in raw_documents:
+            if not isinstance(raw, dict):
+                raise TypeError
+            revision = raw["source_revision"]
+            if not isinstance(revision, dict):
+                raise TypeError
+            raw_scope = raw["scope"]
+            if raw_scope is None:
+                scope: tuple[object, ...] | None = None
+            elif isinstance(raw_scope, dict):
+                scope = (
+                    raw_scope["space_id"],
+                    raw_scope["tenant_id"],
+                    raw_scope["raw_kb_id"],
+                    raw_scope["wiki_kb_id"],
+                )
+            else:
+                raise TypeError
+            identities.append(
+                (
+                    raw["file_name"],
+                    raw["source_id"],
+                    raw["knowledge_id"],
+                    revision["value"],
+                    revision["file_hash"],
+                    raw["original_digest"],
+                    revision["parser_fingerprint"],
+                    scope,
+                )
+            )
+    except (KeyError, TypeError):
+        raise ScopeViolation("source identity mismatch") from None
+    return identities
+
+
+def _parse_run_manifest(raw_manifest: object) -> RunManifest | None:
+    try:
+        return RunManifest.model_validate(raw_manifest)
+    except (ValidationError, TypeError):
+        return None
 
 
 def _to_pred(
@@ -629,3 +1153,54 @@ def _to_pred(
         pending_judge=cand.pending_judge,
         unknown_reason=cand.unknown_reason,
     )
+
+
+def _source_aware_evidence(
+    candidate: FieldCandidate,
+    document: SourceDocument | None,
+) -> list[Evidence]:
+    """Discard preloaded audit and rederive it only from a verified source quote."""
+    clean_evidence = [
+        Evidence(page=evidence.page, quote=evidence.quote)
+        for evidence in candidate.evidence
+    ]
+    if (
+        candidate.tri_state == "unknown"
+        or not clean_evidence
+        or document is None
+    ):
+        return clean_evidence
+
+    enriched: list[Evidence] = []
+    for evidence in clean_evidence:
+        if not quote_verified(evidence, document.pages):
+            enriched.append(evidence)
+            continue
+
+        lineage = match_quote_to_chunks(evidence.quote, document.chunks)
+        chunk_id = lineage.chunk_id
+        chunk_hash = lineage.chunk_hash
+        lineage_status = lineage.lineage_status
+        if document.knowledge_id is None:
+            # Directory replay chunks have no attested upstream identity.
+            chunk_id = None
+            chunk_hash = None
+            if lineage_status == "linked":
+                lineage_status = "page_only"
+        enriched.append(
+            Evidence.model_validate(
+                {
+                    **evidence.model_dump(mode="python"),
+                    "knowledge_id": document.knowledge_id,
+                    "raw_kb_id": document.raw_kb_id,
+                    "source_revision": document.source_revision.value,
+                    "file_hash": document.source_revision.file_hash,
+                    "original_digest": document.original_digest,
+                    "parser_version": document.source_revision.parser_fingerprint,
+                    "chunk_id": chunk_id,
+                    "chunk_hash": chunk_hash,
+                    "lineage_status": lineage_status,
+                }
+            )
+        )
+    return enriched

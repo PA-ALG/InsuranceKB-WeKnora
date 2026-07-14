@@ -1,5 +1,6 @@
 """P4：产品路由——exact/alias/fuzzy 分级、歧义与 fuzzy 不自动归属、一对多章节路由（T6）。"""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import InsuranceProduct, ProductAlias, UnassignedItem
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.product.aliases import generate_aliases
 from insurance_harness.product.routing import (
@@ -40,25 +42,45 @@ def session(tmp_path: Path) -> Session:
     cfg.set_main_option("script_location", str(HARNESS_ROOT / "migrations"))
     cfg.set_main_option("sqlalchemy.url", url)
     command.upgrade(cfg, "head")
-    s = Session(create_engine(url))
-    for code, name, filing, sccode in (PRODUCT_A, PRODUCT_B, PRODUCT_C):
-        product = InsuranceProduct(
-            product_code=code, canonical_name=name, category="whole-life", status="在售",
-            filing_no=filing,
-        )
-        s.add(product)
-        s.flush()
-        for alias, alias_type in generate_aliases(name):
-            s.add(ProductAlias(product_id=product.id, alias=alias, alias_type=alias_type))
-        if sccode:
-            s.add(ProductAlias(product_id=product.id, alias=sccode, alias_type="registration_no"))
-    s.commit()
-    return s
+    return Session(create_engine(url))
+
+
+@pytest.fixture
+def scope(bound_scope: Callable[..., KnowledgeScope]) -> KnowledgeScope:
+    return bound_scope(
+        tenant_id="tenant-product-routing",
+        raw_kb_id="raw-product-routing",
+        wiki_kb_id="wiki-product-routing",
+    )
 
 
 @pytest.fixture()
-def index(session: Session) -> MatchIndex:
-    return MatchIndex.from_session(session)
+def index(session: Session, scope: KnowledgeScope) -> MatchIndex:
+    for code, name, filing, sccode in (PRODUCT_A, PRODUCT_B, PRODUCT_C):
+        product = InsuranceProduct(
+            space_id=scope.space_id,
+            product_code=code,
+            canonical_name=name,
+            category="whole-life",
+            status="在售",
+            filing_no=filing,
+        )
+        session.add(product)
+        session.flush()
+        for alias, alias_type in generate_aliases(name):
+            session.add(
+                ProductAlias(product_id=product.id, alias=alias, alias_type=alias_type)
+            )
+        if sccode:
+            session.add(
+                ProductAlias(
+                    product_id=product.id,
+                    alias=sccode,
+                    alias_type="registration_no",
+                )
+            )
+    session.commit()
+    return MatchIndex.from_session(session, scope)
 
 
 def _pages(*texts: str) -> list[PageText]:
@@ -188,12 +210,20 @@ def test_t6_concatenated_sections_route_and_unassigned(index: MatchIndex) -> Non
 # --- P4.4 unassigned 池表 ---
 
 
-def test_p4_4_persist_unassigned_pool(session: Session, index: MatchIndex) -> None:
+def test_p4_4_persist_unassigned_pool(
+    session: Session, scope: KnowledgeScope, index: MatchIndex
+) -> None:
     result = route_document(index, "doc.pdf", _pages("盛世金越（尊享版26）怎么样"))
-    n = persist_unassigned(session, result.unassigned)
+    n = persist_unassigned(session, scope, result.unassigned)
     session.commit()
     assert n == 1
-    row = session.execute(select(UnassignedItem)).scalar_one()
+    row = session.execute(
+        select(UnassignedItem).where(UnassignedItem.space_id == scope.space_id)
+    ).scalar_one()
     assert row.doc_ref == "doc.pdf" and row.status == "open"
     assert row.candidates and {c["product_code"] for c in row.candidates} == {"1824", "1825"}
-    assert session.scalar(select(func.count()).select_from(UnassignedItem)) == 1
+    assert session.scalar(
+        select(func.count())
+        .select_from(UnassignedItem)
+        .where(UnassignedItem.space_id == scope.space_id)
+    ) == 1

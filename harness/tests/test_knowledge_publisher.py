@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.config import HarnessSettings
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge import (
     MergeEngine,
     MergePolicy,
@@ -24,19 +25,38 @@ from insurance_harness.knowledge import (
 )
 from insurance_harness.knowledge.tables import ChangeSet, ReleaseSnapshot
 from tests.conftest import BASE_URL
-from tests.kbhelpers import seed_product
+from tests.kbhelpers import seed_bound_scope, seed_product
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
 
 
-def _publish_claims(session: Session, version_id: str, *values: tuple[str, str, str]) -> None:
-    engine = MergeEngine(session, policy=MergePolicy(auto_apply_add=True))
+def _scope(session: Session, *, wiki_kb_id: str = KB) -> KnowledgeScope:
+    return seed_bound_scope(
+        session,
+        tenant_id=f"tenant-{uuid.uuid4().hex}",
+        raw_kb_id=f"raw-{uuid.uuid4().hex}",
+        wiki_kb_id=wiki_kb_id,
+    )
+
+
+def _publish_claims(
+    session: Session,
+    scope: KnowledgeScope,
+    version_id: str,
+    *values: tuple[str, str, str],
+) -> None:
+    engine = MergeEngine(
+        session,
+        scope=scope,
+        policy=MergePolicy(auto_apply_add=True),
+    )
     change_set, _ = engine.open_change_set(source_kind="document")
     engine.apply_batch(
         change_set,
         [
             ProposedClaim(
+                space_id=scope.space_id,
                 product_version_id=version_id,
                 predicate=predicate,
                 field_name=name,
@@ -65,8 +85,9 @@ def _page_resp(body: bytes | None = None) -> httpx.Response:
 async def test_k5_3_publish_creates_page_and_snapshot(
     kb_session: Session, client: WeKnoraClient
 ) -> None:
-    product, version = seed_product(kb_session)
-    _publish_claims(kb_session, version.id, ("waiting_period", "等待期", "90天"))
+    scope = _scope(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
+    _publish_claims(kb_session, scope, version.id, ("waiting_period", "等待期", "90天"))
     slug = f"product/{product.product_code}/{version.version_label}/overview"
 
     respx.get(f"{WIKI}/pages/{slug}").mock(return_value=httpx.Response(404, text="not found"))
@@ -74,7 +95,7 @@ async def test_k5_3_publish_creates_page_and_snapshot(
         side_effect=lambda request: _page_resp(request.content)
     )
     result = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="2026-07-12-r1"
+        kb_session, client, scope, product_version_id=version.id, label="2026-07-12-r1"
     )
     assert create.called
     sent = json.loads(create.calls[0].request.content)
@@ -84,17 +105,18 @@ async def test_k5_3_publish_creates_page_and_snapshot(
     snapshot = kb_session.get(ReleaseSnapshot, result.snapshot_id)
     assert snapshot is not None and snapshot.label == "2026-07-12-r1"
     assert snapshot.rendered_pages  # 物化渲染产物
-    claim_set = snapshot_claim_set(kb_session, result.snapshot_id)
+    claim_set = snapshot_claim_set(kb_session, scope, result.snapshot_id)
     assert len(claim_set) == 1 and claim_set[0][1] >= 1  # (claim_id, revision_no) 冻结
-    assert current_snapshot_id(kb_session) == result.snapshot_id  # 指针移动
+    assert current_snapshot_id(kb_session, scope) == result.snapshot_id  # 指针移动
 
 
 @respx.mock
 async def test_k5_3_second_publish_updates_existing_slug(
     kb_session: Session, client: WeKnoraClient
 ) -> None:
-    product, version = seed_product(kb_session)
-    _publish_claims(kb_session, version.id, ("waiting_period", "等待期", "90天"))
+    scope = _scope(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
+    _publish_claims(kb_session, scope, version.id, ("waiting_period", "等待期", "90天"))
     slug = f"product/{product.product_code}/{version.version_label}/overview"
 
     respx.get(f"{WIKI}/pages/{slug}").mock(return_value=_page_resp())
@@ -102,18 +124,19 @@ async def test_k5_3_second_publish_updates_existing_slug(
         side_effect=lambda request: _page_resp(request.content)
     )
     result = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="r2"
+        kb_session, client, scope, product_version_id=version.id, label="r2"
     )
     assert update.called  # 已存在 → update，不 create
-    assert current_snapshot_id(kb_session) == result.snapshot_id
+    assert current_snapshot_id(kb_session, scope) == result.snapshot_id
 
 
 @respx.mock
 async def test_k5_4_rollback_republishes_snapshot_and_leaves_trace(
     kb_session: Session, client: WeKnoraClient
 ) -> None:
-    product, version = seed_product(kb_session)
-    _publish_claims(kb_session, version.id, ("waiting_period", "等待期", "90天"))
+    scope = _scope(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
+    _publish_claims(kb_session, scope, version.id, ("waiting_period", "等待期", "90天"))
     slug = f"product/{product.product_code}/{version.version_label}/overview"
 
     respx.get(f"{WIKI}/pages/{slug}").mock(return_value=_page_resp())
@@ -121,24 +144,27 @@ async def test_k5_4_rollback_republishes_snapshot_and_leaves_trace(
         side_effect=lambda request: _page_resp(request.content)
     )
     first = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="r1"
+        kb_session, client, scope, product_version_id=version.id, label="r1"
     )
     second = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="r2"
+        kb_session, client, scope, product_version_id=version.id, label="r2"
     )
-    assert current_snapshot_id(kb_session) == second.snapshot_id
+    assert current_snapshot_id(kb_session, scope) == second.snapshot_id
 
     result = await rollback_to_snapshot(
-        kb_session, client, KB, snapshot_id=first.snapshot_id, actor="operator"
+        kb_session, client, scope, snapshot_id=first.snapshot_id, actor="operator"
     )
-    assert current_snapshot_id(kb_session) == first.snapshot_id  # 指针回切
+    assert current_snapshot_id(kb_session, scope) == first.snapshot_id  # 指针回切
     # 回滚重发布的内容与快照物化产物逐字一致
     last_sent = json.loads(update.calls[-1].request.content)
     assert last_sent["content"] == first.pages[0].content
     assert result.pages[0].page_metadata["snapshot_id"] == first.snapshot_id
     # rollback ChangeSet 留痕（回滚本身可审计）
     rollback_sets = kb_session.execute(
-        select(ChangeSet).where(ChangeSet.source_kind == "rollback")
+        select(ChangeSet).where(
+            ChangeSet.space_id == scope.space_id,
+            ChangeSet.source_kind == "rollback",
+        )
     ).scalars().all()
     assert len(rollback_sets) == 1 and rollback_sets[0].created_by == "operator"
 
@@ -159,21 +185,32 @@ async def test_k5_5_live_publish_and_rollback_roundtrip(kb_session: Session) -> 
     kb_id = os.environ["HARNESS_LIVE_KB_ID"]
     live_client = WeKnoraClient(settings)
     try:
+        scope = _scope(kb_session, wiki_kb_id=kb_id)
         product, version = seed_product(
-            kb_session, code=f"LIVE{uuid.uuid4().hex[:6]}", version_label="live"
+            kb_session,
+            scope=scope,
+            code=f"LIVE{uuid.uuid4().hex[:6]}",
+            version_label="live",
         )
-        _publish_claims(kb_session, version.id, ("waiting_period", "等待期", "90天"))
+        _publish_claims(
+            kb_session,
+            scope,
+            version.id,
+            ("waiting_period", "等待期", "90天"),
+        )
         first = await publish_product_version(
-            kb_session, live_client, kb_id,
+            kb_session, live_client, scope,
             product_version_id=version.id, label=f"live-{uuid.uuid4().hex[:8]}",
         )
-        fetched = await live_client.get_wiki_page(kb_id, first.pages[0].slug)
+        fetched = await live_client.get_wiki_page(scope.wiki_kb_id, first.pages[0].slug)
         assert fetched.content == first.pages[0].content
         rollback = await rollback_to_snapshot(
-            kb_session, live_client, kb_id, snapshot_id=first.snapshot_id
+            kb_session, live_client, scope, snapshot_id=first.snapshot_id
         )
-        refetched = await live_client.get_wiki_page(kb_id, rollback.pages[0].slug)
+        refetched = await live_client.get_wiki_page(
+            scope.wiki_kb_id, rollback.pages[0].slug
+        )
         assert refetched.content == first.pages[0].content
-        await live_client.delete_wiki_page(kb_id, first.pages[0].slug)
+        await live_client.delete_wiki_page(scope.wiki_kb_id, first.pages[0].slug)
     finally:
         await live_client.aclose()

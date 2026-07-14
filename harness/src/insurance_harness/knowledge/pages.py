@@ -5,16 +5,23 @@
 快照回放（rollback 渲染）按 claim_ids 白名单取数、不看当前 status。
 """
 
-from typing import Any
+from typing import Any, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.compiler.routing_data import GROUP_ORDER, group_of_field
 from insurance_harness.db.base import utcnow
-from insurance_harness.knowledge.merge import claim_evidence, claim_value_text
-from insurance_harness.knowledge.tables import Claim
+from insurance_harness.db.models import InsuranceProduct, ProductVersion
+from insurance_harness.db.scope import (
+    KnowledgeScope,
+    ScopeViolation,
+    require_current_scope,
+)
+from insurance_harness.knowledge.merge import _evidence_for_claim, claim_value_text
+from insurance_harness.knowledge.models import LineageStatus, ProposedEvidence
+from insurance_harness.knowledge.tables import Claim, ClaimEvidence
 from insurance_harness.schemas import SchemaRegistry
 
 GROUP_TITLES: dict[str, str] = {
@@ -36,6 +43,8 @@ class EvidenceView(BaseModel):
     chunk_id: str | None = None
     page: int | None = None
     quote: str
+    source_ref_verified: bool = False
+    chunk_ref_verified: bool = False
 
 
 class PageClaimView(BaseModel):
@@ -58,6 +67,53 @@ class RenderedPage(BaseModel):
     page_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+def _evidence_view(
+    evidence: ClaimEvidence,
+    *,
+    scope: KnowledgeScope,
+    doc_titles: dict[str, str] | None,
+    legacy_replay: bool,
+) -> EvidenceView:
+    source_verified = False
+    chunk_verified = False
+    if evidence.lineage_status is None:
+        source_verified = legacy_replay
+        chunk_verified = legacy_replay and bool(evidence.chunk_id)
+    elif evidence.stale_at is None and evidence.raw_kb_id == scope.raw_kb_id:
+        try:
+            validated = ProposedEvidence(
+                knowledge_id=evidence.knowledge_id,
+                raw_kb_id=evidence.raw_kb_id,
+                source_revision=evidence.source_revision,
+                file_hash=evidence.file_hash,
+                original_digest=evidence.original_digest,
+                parser_version=evidence.parser_version,
+                chunk_id=evidence.chunk_id,
+                chunk_hash=evidence.chunk_hash,
+                lineage_status=cast(LineageStatus, evidence.lineage_status),
+                stale_at=None,
+                quote=evidence.quote,
+                page=evidence.page,
+                doc_role=evidence.doc_role,
+                authority_level=evidence.authority_level,
+                extraction_method=evidence.extraction_method,
+            )
+        except ValidationError:
+            pass
+        else:
+            source_verified = True
+            chunk_verified = validated.lineage_status == "linked"
+    return EvidenceView(
+        knowledge_id=evidence.knowledge_id,
+        doc_title=(doc_titles or {}).get(evidence.knowledge_id, evidence.knowledge_id),
+        chunk_id=evidence.chunk_id,
+        page=evidence.page,
+        quote=evidence.quote,
+        source_ref_verified=source_verified,
+        chunk_ref_verified=chunk_verified,
+    )
+
+
 def field_name_of(predicate: str, registry: SchemaRegistry | None) -> str:
     if registry is not None:
         for line in registry.lines.values():
@@ -67,27 +123,64 @@ def field_name_of(predicate: str, registry: SchemaRegistry | None) -> str:
     return predicate
 
 
+def _validate_scope(session: Session, scope: KnowledgeScope) -> None:
+    require_current_scope(session, scope)
+
+
+def _require_scoped_product_version(
+    session: Session,
+    scope: KnowledgeScope,
+    product_version_id: str,
+) -> None:
+    row = session.execute(
+        select(ProductVersion.id)
+        .join(
+            InsuranceProduct,
+            (InsuranceProduct.id == ProductVersion.product_id)
+            & (InsuranceProduct.space_id == ProductVersion.space_id),
+        )
+        .where(
+            ProductVersion.id == product_version_id,
+            ProductVersion.space_id == scope.space_id,
+            InsuranceProduct.space_id == scope.space_id,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise ScopeViolation("scope mismatch")
+
+
 def build_page_claims(
     session: Session,
+    scope: KnowledgeScope,
     product_version_id: str,
     *,
     registry: SchemaRegistry | None = None,
     field_names: dict[str, str] | None = None,
     doc_titles: dict[str, str] | None = None,
     claim_ids: list[str] | None = None,
+    legacy_replay: bool = False,
 ) -> list[PageClaimView]:
     """取参与编译的 Claim 视图。
 
     - 默认：只取 published（K4.3，发布门禁）；
     - ``claim_ids`` 给定（快照回放）：按白名单取数、不看当前 status（K5.4）。
     """
-    stmt = select(Claim).where(Claim.product_version_id == product_version_id)
+    _validate_scope(session, scope)
+    _require_scoped_product_version(session, scope, product_version_id)
+    stmt = select(Claim).where(
+        Claim.space_id == scope.space_id,
+        Claim.product_version_id == product_version_id,
+    )
     if claim_ids is not None:
-        stmt = select(Claim).where(Claim.id.in_(claim_ids))
+        unique_claim_ids = set(claim_ids)
+        stmt = stmt.where(Claim.id.in_(unique_claim_ids))
     else:
         stmt = stmt.where(Claim.status == "published")
+    claims = list(session.execute(stmt).scalars())
+    if claim_ids is not None and {claim.id for claim in claims} != unique_claim_ids:
+        raise ScopeViolation("scope mismatch")
     views: list[PageClaimView] = []
-    for claim in session.execute(stmt).scalars():
+    for claim in claims:
         if claim.value_state == "unknown":
             continue  # unknown 禁止发布为"无"（03 §2.3.1）
         name = (field_names or {}).get(claim.predicate) or field_name_of(
@@ -103,15 +196,14 @@ def build_page_claims(
                 value=claim_value_text(claim),
                 confidence=claim.confidence,
                 evidence=[
-                    EvidenceView(
-                        knowledge_id=e.knowledge_id,
-                        doc_title=(doc_titles or {}).get(e.knowledge_id, e.knowledge_id),
-                        chunk_id=e.chunk_id,
-                        page=e.page,
-                        quote=e.quote,
+                    _evidence_view(
+                        e,
+                        scope=scope,
+                        doc_titles=doc_titles,
+                        legacy_replay=legacy_replay,
                     )
                     for e in sorted(
-                        claim_evidence(session, claim.id),
+                        _evidence_for_claim(session, claim),
                         key=lambda e: (e.knowledge_id, e.page or 0, e.quote),
                     )
                 ],
@@ -166,10 +258,14 @@ def render_product_page(
                 )
                 marks.append(f"[^{len(footnotes)}]")
                 ref = f"{e.knowledge_id}|{e.doc_title}"
-                if ref not in seen_sources:
+                if e.source_ref_verified and ref not in seen_sources:
                     seen_sources.add(ref)
                     source_refs.append(ref)
-                if e.chunk_id and e.chunk_id not in seen_chunks:
+                if (
+                    e.chunk_ref_verified
+                    and e.chunk_id
+                    and e.chunk_id not in seen_chunks
+                ):
                     seen_chunks.add(e.chunk_id)
                     chunk_refs.append(e.chunk_id)
             value_text = ABSENT_TEXT if view.value_state == "absent_explicitly" else (

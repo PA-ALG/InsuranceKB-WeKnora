@@ -1,13 +1,15 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-13（**PR #1 已合入 main**；上游 docker workflow 已禁用；CI 三连坑修复后 harness-ci 全绿）
+> 最后更新：2026-07-14（方案 A 按 Subagent-Driven 实施；OpenSpec 017 T7 已完成并通过规格/质量双审及最终全量门禁，当前进入 T8 live E2E）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
 0. **基础建设已合入 main（PR #1，2026-07-13）**：此后一律按 17 号规范从 main 切 `feat/NNN-*` 分支，PR 双查 + **CI 绿才算绿**（坑 9a）。上游 workflow "Build and Push Docker Image" 已在 GitHub 界面手动禁用（fork 无腾讯 registry 凭据必失败，属继承性噪音）；其余上游 workflow 有路径/标签过滤暂无干扰，误触发照此禁用，不影响版本列车跟版。
 
-1. **T8 金标标注剩 2 个产品未标**（因会话 token 限额搁置，业务方决定换模型接手）：完整交接文档在 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，按步骤执行即可；已完成的 11 份在 `dataset/goldenset/wip-gs-v0.1/`（dry-run 验证 disputed 率 3~5%，达标）。
+0a. **016 企业 KnowledgeSpace 已完成，017 SourceDocument Bridge 正在实施**：架构审计确认 WeKnora/Harness 分工方向正确；生产链仍缺单一 ReleaseSnapshot 读取模型和 Golden 质量闸门。总设计见 `docs/insurance-kb/20-enterprise-runtime-foundation.md`；已拆成 016～021。隔离工作区：`../.worktrees/insurancekb-enterprise-foundation`，分支 `codex/016-enterprise-foundation`。016 已完成并通过双审/主代理验收；017 T1～T7 已完成并分别通过规格/质量双审。T7 已实现 stale mutation、同 revision 并发 recompile get-or-create、scoped retract/tombstone，以及 legacy/source-aware 强隔离、source ChangeSet/tombstone aggregate 校验和 bounded live-PG harness；所有审查 finding 已按 TDD 闭合，最终 fresh quality rereview 为 `Quality approved: yes`，T7 已勾选。当前扩大 focused 为 **201 passed / 2 skipped**，最终全量 non-live 为 **903 passed / 4 deselected**，Ruff、mypy 138 files 与 diff check 全绿；skip 中真实 PostgreSQL 并发用例因未配置 `HARNESS_LIVE_POSTGRES_URL` 未运行，不能解释为 live 成功。**重要边界：T7 仅保证同 revision 幂等，不保证不同 revision 并发/乱序；021 已提出 durable SourceHead + processed_at/generation + per-source lock/CAS，但当前仅 proposed/pending。在 021 落地前，只允许同一 Space/source 串行 lifecycle，notification 必须来自当次实时读取的当前 metadata。下一步是 T8 live E2E；当前结果不代表 017 整体完成。**
+
+1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
 3. ✅ **change 004（抽取管道 MVP）完成并验收**（2026-07-12）：compiler/ 全链路（切分→7组路由→分批抽取→回验→清洗→补漏→投票→置信分级），langgraph 可恢复编排+死信；门禁 135 tests 全绿。**首个真实弱模型基线**（deepseek-v4-flash vs gs-v0.1，3 代表产品，含 Claude 裁决回写）：micro F1 0.184 / 幻觉率 8.2% / **evidence 准确率 100%** / high 桶三态正确率 92%——反幻觉链已验证有效，失分主因是长文本字段的"值粒度/表述差异"被 eval 逐字等价误判 + present→unknown 漏抽 25 条（validation-report.md 有全量明细）。
 3a. ✅ **change 007（Claim 落库/增量合并/审核门禁/WeKnora 发布，S2→S3 主链）完成**（2026-07-12）：
@@ -44,19 +46,19 @@
 4. **下一步**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单）；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；里程碑见 `16-roadmap.md`（当前 M1：关键路径 B10→L6）。认领 B 项请在下表加"认领人"并保持更新。
+**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；里程碑见 `16-roadmap.md`（当前 M0：016→017→018/019→live E2E）。认领 B 项请在下表加"认领人"并保持更新。
 
 ## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
 | # | 任务 | 怎么做 | 预估成本 |
 |---|---|---|---|
-| B1 | 金标 T8 收尾：剩 2 产品标注 + gs-v0.1 打包 | `openspec/changes/002-goldenset-s0/T8-HANDOVER.md` 四步走 | ~2×10万 token（标注模型） |
-| B2 | 全量 13 产品弱模型基线 | `cd harness && uv run python scripts/baseline_004.py run --products <逗号分隔剩余10个> --resume`，跑完 `report`；进程要 nohup 脱离会话（坑清单 #9 网络注意） | 网关 ~6-12万 token/产品 |
-| B3 | B2 产生的 judge-queue 批处理 | 各 run 目录 judge-queue.jsonl → 强模型逐条裁决出 judgements.jsonl（格式见 compiler/models.py Judgement，evidence 页码需从原 PDF 定位保证回验）→ `python -m insurance_harness.compiler.cli apply-judgements <run_dir> <judgements.jsonl>` → 重出 report | 视队列量，单条很小 |
-| B4 | 死信复跑 | e生保尊享 coverage 组 s016+s017 截断死信：调大 max_tokens 或分段后 `--resume` | 极小 |
+| B1 | 金标 T8 收尾：剩 2 产品标注 + gs-v0.1 打包 | 并入 **020 D2**；先完成 run-admission，再按 T8-HANDOVER 原地接续 | ~2×10万 token（标注模型） |
+| B2 | 全量 13 产品弱模型基线 | 并入 **020 D3**；必须消费 019 artifact/validator，断点运行 | 网关 ~6-12万 token/产品 |
+| B3 | B2 产生的 judge-queue 批处理 | 并入 **020 D3**；回写后重新出分，unresolved 不得静默丢弃 | 视队列量，单条很小 |
+| B4 | 死信复跑 | 并入 **020 D3**；保留最终失败原因 | 极小 |
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
-| B6 | gs-v0.1 全量 11 产品 long 字段要点清单（强模型一次性产出，替换 005 的 rule-split 小样） | 逐产品读 `dataset/goldenset/wip-gs-v0.1/<产品>/golden.jsonl`，对 present 且归一化 ≥30 字的字段产出要点清单，写同目录 `keypoints.jsonl`（行格式 `goldenset/keypoints.py KeypointEntry`，`golden_value_sha` 用 `value_sha(金标值)`；可从 `harness/scripts/eval_005.py gen-keypoints` 的规则版起步做人工/强模型精修） | ~1×10万 token（强模型） |
-| B7 | 005 路由修复后的真实弱模型对比出分（before/after 基线回归） | `cd harness && uv run python scripts/baseline_004.py run --products 平安盛世金越（尊享版26）终身寿险,平安e生保（尊享版）医疗保险,平安守护百分百（2026）两全保险`（新 run 目录或备份旧 runs/ 后跑），完成后 `uv run python scripts/baseline_004.py report` + `uv run python scripts/eval_005.py report` 对比；重跑盛世金越时可加 `--templates-dir dataset/templates` 验证 fast path 实跑效果（006） | 网关 ~6-12万 token/产品 ×3 |
+| B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
+| B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
 | B8 | PP-StructureV3 表格结构识别部署（006 遗留） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`，用金标回归 A/B 验证（11 §2）后替换默认 | 部署人工 + 金标回归 |
 | B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
 | B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
@@ -68,8 +70,14 @@
 | B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | `openspec/changes/013-insurance-mcp/proposal.md` | 开发型，中小 |
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
+| B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
+| B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage（当前）** | `openspec/changes/017-weknora-source-bridge/`；T1～T7 已完成并通过双审/全量门禁；不同 revision 乱序由 021 承接；live 验收仍待 T8 | 开发型，中大 + live |
+| B20 | 018 SnapshotFact/统一读取/可恢复发布 | `openspec/changes/018-release-snapshot-read-model/`；硬依赖 007+016+017 | 开发型，中大 + live |
+| B21 | 019 Golden 工具/QualityProfile/在线 Gate | 已有通过 review 的 spec 与 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`；工具部分可与 016 文件域隔离推进 | 开发型，中 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 统一承接 B1/B2/B3/B4/B6/B7；未完成 run-admission 前零模型调用 | 高 token 数据任务 |
+| B23 | 021 Source lifecycle ordering | durable SourceHead、processed_at/generation、per-source lock/CAS；当前仅 proposed/pending，未实现 | 开发型，中大 |
 
-> 以上任务的验收都以既有门禁与 report 为准，不需要新设计。设计类工作（005+ change 提案、架构文档）由架构会话产出。
+> 016～021 已有条款级规格；验收以各 change spec、测试与 validation-report 为准。020 是环境/预算约束的数据运行，软件门禁绿不等于真实运行完成；021 规格存在不等于 ordering 能力已落地。
 
 ## 一、我们在做什么
 

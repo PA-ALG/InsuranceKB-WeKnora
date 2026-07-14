@@ -6,6 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge import (
     ConflictJudgement,
     MergeEngine,
@@ -29,10 +30,11 @@ from insurance_harness.knowledge.tables import (
     Conflict,
     ReviewItem,
 )
-from tests.kbhelpers import seed_product
+from tests.kbhelpers import seed_bound_scope, seed_product
 
 
 def _prop(
+    scope: KnowledgeScope,
     version_id: str,
     predicate: str = "waiting_period",
     *,
@@ -48,6 +50,7 @@ def _prop(
     pending_judge: bool = False,
 ) -> ProposedClaim:
     return ProposedClaim(
+        space_id=scope.space_id,
         product_version_id=version_id,
         predicate=predicate,
         field_name=predicate,
@@ -69,8 +72,19 @@ def _prop(
     )
 
 
-def _engine(session: Session, **kwargs: object) -> MergeEngine:
-    return MergeEngine(session, **kwargs)  # type: ignore[arg-type]
+def _scope(session: Session) -> KnowledgeScope:
+    return seed_bound_scope(
+        session,
+        tenant_id="tenant-merge",
+        raw_kb_id="raw-merge",
+        wiki_kb_id="wiki-merge",
+    )
+
+
+def _engine(
+    session: Session, scope: KnowledgeScope, **kwargs: object
+) -> MergeEngine:
+    return MergeEngine(session, scope=scope, **kwargs)  # type: ignore[arg-type]
 
 
 def _apply(
@@ -89,9 +103,10 @@ def _published(session: Session, predicate: str) -> Claim:
 
 
 def test_k3_1_add_default_needs_review(kb_session: Session) -> None:
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session)
-    _apply(engine, _prop(version.id))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope)
+    _apply(engine, _prop(scope, version.id))
     claim = kb_session.execute(select(Claim)).scalar_one()
     item = kb_session.execute(select(ChangeItem)).scalar_one()
     assert item.action == "add" and item.decision == "needs_review"
@@ -100,22 +115,32 @@ def test_k3_1_add_default_needs_review(kb_session: Session) -> None:
 
 
 def test_k3_1_add_auto_policy_publishes(kb_session: Session) -> None:
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id))
     claim = kb_session.execute(select(Claim)).scalar_one()
     item = kb_session.execute(select(ChangeItem)).scalar_one()
     assert claim.status == "published" and item.decision == "auto_applied"
 
 
 def test_k3_1_enrich_appends_evidence_and_raises_confidence(kb_session: Session) -> None:
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True, auto_apply_enrich=True))
-    _apply(engine, _prop(version.id, confidence=0.6))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(
+        kb_session,
+        scope,
+        policy=MergePolicy(auto_apply_add=True, auto_apply_enrich=True),
+    )
+    _apply(engine, _prop(scope, version.id, confidence=0.6))
     _apply(
         engine,
         _prop(
-            version.id, knowledge_id="k-terms", doc_role="terms", authority=1,
+            scope,
+            version.id,
+            knowledge_id="k-terms",
+            doc_role="terms",
+            authority=1,
             quote="等待期为九十天", page=8, confidence=0.9,
         ),
     )
@@ -130,16 +155,17 @@ def test_k3_1_enrich_appends_evidence_and_raises_confidence(kb_session: Session)
 
 
 def test_k3_1_enrich_fills_unknown_placeholder(kb_session: Session) -> None:
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id, value=None, value_state="unknown"))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id, value=None, value_state="unknown"))
     placeholder = kb_session.execute(select(Claim)).scalar_one()
     assert placeholder.status == "draft"
 
-    report = _apply(engine, _prop(version.id))
+    report = _apply(engine, _prop(scope, version.id))
     assert report.actions.get("enrich") == 1
     key = report.review_keys[0]
-    resolve_review(kb_session, key, "approve", actor="tester")
+    resolve_review(kb_session, scope, key, "approve", actor="tester")
     kb_session.refresh(placeholder)
     new_claim = _published(kb_session, "waiting_period")
     assert placeholder.status == "superseded" and placeholder.superseded_by == new_claim.id
@@ -147,15 +173,20 @@ def test_k3_1_enrich_fills_unknown_placeholder(kb_session: Session) -> None:
 
 def test_k3_2_authority_wins_auto_supersede(kb_session: Session) -> None:
     """① 高权威直接胜出：条款(1) 取代 说明书(2)，全留痕（K6.2 核心语义）。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id, value="90天"))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id, value="90天"))
     old = _published(kb_session, "waiting_period")
 
     _apply(
         engine,
         _prop(
-            version.id, value="180天", doc_role="terms", authority=1,
+            scope,
+            version.id,
+            value="180天",
+            doc_role="terms",
+            authority=1,
             knowledge_id="k-terms", quote="等待期为180天",
         ),
     )
@@ -175,14 +206,31 @@ def test_k3_2_authority_wins_auto_supersede(kb_session: Session) -> None:
 
 def test_k3_2_low_authority_only_conflict_record(kb_session: Session) -> None:
     """① 低权威新值只能进 conflict 记录，不能 supersede 高权威旧值。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id, doc_role="terms", authority=1, knowledge_id="k-terms"))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(
+        engine,
+        _prop(
+            scope,
+            version.id,
+            doc_role="terms",
+            authority=1,
+            knowledge_id="k-terms",
+        ),
+    )
     old = _published(kb_session, "waiting_period")
 
     _apply(
         engine,
-        _prop(version.id, value="30天", doc_role="sales", authority=5, knowledge_id="k-flyer"),
+        _prop(
+            scope,
+            version.id,
+            value="30天",
+            doc_role="sales",
+            authority=5,
+            knowledge_id="k-flyer",
+        ),
     )
     kb_session.refresh(old)
     assert old.status == "published"  # 旧值不动
@@ -195,13 +243,17 @@ def test_k3_2_low_authority_only_conflict_record(kb_session: Session) -> None:
 
 def test_k3_2_effective_date_breaks_tie(kb_session: Session) -> None:
     """② 同权威级别，生效日期新者胜。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id, effective_from=date(2023, 1, 1)))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id, effective_from=date(2023, 1, 1)))
     _apply(
         engine,
         _prop(
-            version.id, value="180天", knowledge_id="k-brochure-2024",
+            scope,
+            version.id,
+            value="180天",
+            knowledge_id="k-brochure-2024",
             quote="2024起等待期180天", effective_from=date(2024, 1, 1),
         ),
     )
@@ -218,15 +270,17 @@ def test_k3_2_completeness_never_decides_tie_goes_to_judge_queue(
     kb_session: Session, tmp_path: Path
 ) -> None:
     """③ 完整度仅排序参考；④ 平局进 claude-session 队列（零模型调用）。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id, value="90天"))
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id, value="90天"))
     old = _published(kb_session, "waiting_period")
 
     # 同权威、无生效期，新值更"完整"（更长）——完整度不得决定胜负
     _apply(
         engine,
         _prop(
+            scope,
             version.id,
             value="90天（等待期自合同生效之日起算，含节假日，期间出险不赔）",
             knowledge_id="k-brochure-b", quote="等待期自合同生效……",
@@ -261,7 +315,9 @@ def test_k3_2_completeness_never_decides_tie_goes_to_judge_queue(
         encoding="utf-8",
     )
     applied = apply_conflict_judgements(
-        kb_session, read_conflict_judgements(judgement_path)
+        kb_session,
+        scope,
+        read_conflict_judgements(judgement_path),
     )
     assert applied == 1
     kb_session.refresh(old)
@@ -278,21 +334,29 @@ def test_k3_2_completeness_never_decides_tie_goes_to_judge_queue(
 
 def test_k3_2_high_risk_skips_judge_straight_to_review(kb_session: Session) -> None:
     """高风险字段跳过④直接⑤（03 §6.2）。"""
-    _, version = seed_product(kb_session)
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
     engine = _engine(
         kb_session,
+        scope,
         policy=MergePolicy(auto_apply_add=True),
         risk_of=lambda p: "high" if p == "exclusion_clause" else "low",
     )
-    first = _apply(engine, _prop(version.id, predicate="exclusion_clause", value="十项免责"))
+    first = _apply(
+        engine,
+        _prop(scope, version.id, predicate="exclusion_clause", value="十项免责"),
+    )
     # 高风险 add 也不自动：先审核通过第一批
-    resolve_review(kb_session, first.review_keys[0], "approve", actor="agent")
+    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     assert _published(kb_session, "exclusion_clause").value == {"text": "十项免责"}
 
     _apply(
         engine,
         _prop(
-            version.id, predicate="exclusion_clause", value="八项免责",
+            scope,
+            version.id,
+            predicate="exclusion_clause",
+            value="八项免责",
             knowledge_id="k-b2", quote="免责八项",
         ),
     )
@@ -307,15 +371,26 @@ def test_k3_2_high_risk_skips_judge_straight_to_review(kb_session: Session) -> N
 
 def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
     """权威分出胜负但高风险字段：supersede 一律进审核，旧值保持 published。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True), risk_of=lambda p: "high")
-    first = _apply(engine, _prop(version.id))
-    resolve_review(kb_session, first.review_keys[0], "approve", actor="agent")
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(
+        kb_session,
+        scope,
+        policy=MergePolicy(auto_apply_add=True),
+        risk_of=lambda p: "high",
+    )
+    first = _apply(engine, _prop(scope, version.id))
+    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     old = _published(kb_session, "waiting_period")
     _apply(
         engine,
         _prop(
-            version.id, value="180天", doc_role="terms", authority=1, knowledge_id="k-terms"
+            scope,
+            version.id,
+            value="180天",
+            doc_role="terms",
+            authority=1,
+            knowledge_id="k-terms",
         ),
     )
     kb_session.refresh(old)
@@ -329,19 +404,33 @@ def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
     ).scalar_one()
     assert review.type == "high_risk_change"
 
-    resolve_review(kb_session, review.review_key, "approve", actor="strong-model-agent")
+    resolve_review(
+        kb_session,
+        scope,
+        review.review_key,
+        "approve",
+        actor="strong-model-agent",
+    )
     kb_session.refresh(old)
     assert old.status == "superseded"
     assert _published(kb_session, "waiting_period").value == {"text": "180天"}
 
 
 def test_k3_3_revisions_and_immutable_changeset(kb_session: Session) -> None:
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True))
-    _apply(engine, _prop(version.id), external_id="batch-1")
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    _apply(engine, _prop(scope, version.id), external_id="batch-1")
     _apply(
         engine,
-        _prop(version.id, value="180天", doc_role="terms", authority=1, knowledge_id="k-terms"),
+        _prop(
+            scope,
+            version.id,
+            value="180天",
+            doc_role="terms",
+            authority=1,
+            knowledge_id="k-terms",
+        ),
         external_id="batch-2",
     )
     revisions = kb_session.execute(select(ClaimRevision)).scalars().all()
@@ -359,24 +448,42 @@ def test_k3_3_revisions_and_immutable_changeset(kb_session: Session) -> None:
 
 def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
     """翻案=新 ChangeSet：撤销采纳后旧值恢复 published、原变更集不改写。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True), risk_of=lambda p: "high")
-    first = _apply(engine, _prop(version.id), external_id="b1")
-    resolve_review(kb_session, first.review_keys[0], "approve", actor="agent")
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(
+        kb_session,
+        scope,
+        policy=MergePolicy(auto_apply_add=True),
+        risk_of=lambda p: "high",
+    )
+    first = _apply(engine, _prop(scope, version.id), external_id="b1")
+    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     second = _apply(
         engine,
-        _prop(version.id, value="180天", doc_role="terms", authority=1, knowledge_id="k-terms"),
+        _prop(
+            scope,
+            version.id,
+            value="180天",
+            doc_role="terms",
+            authority=1,
+            knowledge_id="k-terms",
+        ),
         external_id="b2",
     )
     review = kb_session.execute(
         select(ReviewItem).where(ReviewItem.review_key == second.review_keys[0])
     ).scalar_one()
-    resolve_review(kb_session, review.review_key, "approve", actor="agent")
+    resolve_review(kb_session, scope, review.review_key, "approve", actor="agent")
     adopted = _published(kb_session, "waiting_period")
     sets_before = len(kb_session.execute(select(ChangeSet)).scalars().all())
 
     overturn = overturn_review(
-        kb_session, review.review_key, "reject", actor="human", reason="条款版本核对有误"
+        kb_session,
+        scope,
+        review.review_key,
+        "reject",
+        actor="human",
+        reason="条款版本核对有误",
     )
     assert overturn.source_kind == "manual_edit"
     assert len(kb_session.execute(select(ChangeSet)).scalars().all()) == sets_before + 1
@@ -388,13 +495,21 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
 
 def test_k3_1_retract_by_evidence_refcount(kb_session: Session) -> None:
     """retract：仍有其他证据只移除 Evidence；证据清零 → Claim retracted（03 §2.4）。"""
-    _, version = seed_product(kb_session)
-    engine = _engine(kb_session, policy=MergePolicy(auto_apply_add=True, auto_apply_enrich=True))
-    _apply(engine, _prop(version.id))  # 单证据（k-brochure）
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(
+        kb_session,
+        scope,
+        policy=MergePolicy(auto_apply_add=True, auto_apply_enrich=True),
+    )
+    _apply(engine, _prop(scope, version.id))  # 单证据（k-brochure）
     _apply(
         engine,
         _prop(
-            version.id, predicate="grace_period", value="60天",
+            scope,
+            version.id,
+            predicate="grace_period",
+            value="60天",
             quote="宽限期60日", knowledge_id="k-brochure",
         ),
     )
@@ -402,11 +517,19 @@ def test_k3_1_retract_by_evidence_refcount(kb_session: Session) -> None:
     _apply(
         engine,
         _prop(
-            version.id, predicate="grace_period", value="60天",
+            scope,
+            version.id,
+            predicate="grace_period",
+            value="60天",
             quote="宽限期为60日", knowledge_id="k-terms", doc_role="terms", authority=1,
         ),
     )
-    report = retract_source(kb_session, "k-brochure")
+    report = retract_source(
+        kb_session,
+        scope,
+        "k-brochure",
+        legacy_replay=True,
+    )
     assert report.actions.get("retract") == 2
     waiting = kb_session.execute(
         select(Claim).where(Claim.predicate == "waiting_period")

@@ -13,6 +13,7 @@ from insurance_harness.db.models import (
     ProductDocument,
     ProductVersion,
 )
+from insurance_harness.db.scope import KnowledgeScope, require_current_scope
 from insurance_harness.product.aliases import generate_aliases
 from insurance_harness.product.classify import DocumentType, detect_product_line
 from insurance_harness.product.meta import MetaParseError, ProductMeta, load_product_meta
@@ -53,7 +54,10 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def register_products(session: Session, root: Path) -> RegisterReport:
+def register_products(
+    session: Session, root: Path, *, scope: KnowledgeScope
+) -> RegisterReport:
+    require_current_scope(session, scope)
     report = RegisterReport()
     for product_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         try:
@@ -61,23 +65,32 @@ def register_products(session: Session, root: Path) -> RegisterReport:
         except MetaParseError as exc:
             report.skipped.append(str(exc))
             continue
-        _register_one(session, product_dir, meta, report)
+        _register_one(session, product_dir, meta, report, scope=scope)
     session.commit()
     return report
 
 
 def _register_one(
-    session: Session, product_dir: Path, meta: ProductMeta, report: RegisterReport
+    session: Session,
+    product_dir: Path,
+    meta: ProductMeta,
+    report: RegisterReport,
+    *,
+    scope: KnowledgeScope,
 ) -> None:
     category = detect_product_line(meta.clause_name) or "unknown"
     raw_meta = meta.model_dump(mode="json", by_alias=True)
 
     product = session.execute(
-        select(InsuranceProduct).where(InsuranceProduct.product_code == meta.plan_code)
+        select(InsuranceProduct).where(
+            InsuranceProduct.space_id == scope.space_id,
+            InsuranceProduct.product_code == meta.plan_code,
+        )
     ).scalar_one_or_none()
 
     if product is None:
         product = InsuranceProduct(
+            space_id=scope.space_id,
             product_code=meta.plan_code,
             canonical_name=meta.clause_name,
             category=category,
@@ -107,12 +120,14 @@ def _register_one(
     # 版本（UQ product_id+version_label 幂等）
     version = session.execute(
         select(ProductVersion).where(
+            ProductVersion.space_id == scope.space_id,
             ProductVersion.product_id == product.id,
             ProductVersion.version_label == meta.version_no,
         )
     ).scalar_one_or_none()
     if version is None:
         version = ProductVersion(
+            space_id=scope.space_id,
             product_id=product.id,
             version_label=meta.version_no,
             effective_from=meta.start_date,
@@ -126,7 +141,10 @@ def _register_one(
     existing_sha = {
         row.sha256
         for row in session.execute(
-            select(ProductDocument).where(ProductDocument.product_id == product.id)
+            select(ProductDocument).where(
+                ProductDocument.space_id == scope.space_id,
+                ProductDocument.product_id == product.id,
+            )
         ).scalars()
     }
     for pdf in sorted(product_dir.glob("*.pdf")):
@@ -135,6 +153,7 @@ def _register_one(
             continue
         session.add(
             ProductDocument(
+                space_id=scope.space_id,
                 product_id=product.id,
                 version_id=version.id,
                 file_name=pdf.name,

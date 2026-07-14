@@ -6,6 +6,7 @@ import respx
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.adapters.weknora.tracing import NoopTracer, build_tracer
 from insurance_harness.config import HarnessSettings
+from insurance_harness.db.scope import KnowledgeScope
 from tests.conftest import BASE_URL
 
 
@@ -29,13 +30,25 @@ def test_s2_7_config_without_package_degrades_to_noop() -> None:
 
 
 @respx.mock
-async def test_s2_7_client_works_with_noop_tracer(settings: HarnessSettings) -> None:
+async def test_s2_7_client_works_with_noop_tracer(
+    settings: HarnessSettings,
+    adapter_scope: KnowledgeScope,
+) -> None:
     respx.get(f"{BASE_URL}/api/v1/knowledge/k-1").mock(
         return_value=httpx.Response(
-            200, json={"data": {"id": "k-1", "parse_status": "completed"}, "success": True}
+            200,
+            json={
+                "data": {
+                    "id": "k-1",
+                    "tenant_id": "tenant-1",
+                    "knowledge_base_id": "kb-1",
+                    "parse_status": "completed",
+                },
+                "success": True,
+            },
         )
     )
     client = WeKnoraClient(settings, harness_job_id="job-42")
-    knowledge = await client.get_knowledge("k-1")
+    knowledge = await client.get_knowledge(adapter_scope, "k-1")
     assert knowledge.id == "k-1"
     await client.aclose()
