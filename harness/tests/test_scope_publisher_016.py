@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 import respx
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
@@ -908,6 +908,152 @@ async def test_s2_4_rollback_persists_reason_and_allows_repeated_operation(
         for row in rows
     )
     assert len({row.external_record_id for row in rows}) == 2
+
+
+@respx.mock
+async def test_rh1_1_rollback_flush_failure_performs_zero_wiki_mutations(
+    kb_session: Session,
+    client: WeKnoraClient,
+) -> None:
+    scope, _ = _scopes(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
+    _publish_claim(kb_session, scope, version.id)
+    base = f"{BASE_URL}/api/v1/knowledgebase/{scope.wiki_kb_id}/wiki"
+    slug = f"product/{product.product_code}/{version.version_label}/overview"
+    get = respx.get(f"{base}/pages/{slug}")
+    get.mock(return_value=httpx.Response(404, text="not found"))
+    respx.post(f"{base}/pages").mock(
+        side_effect=lambda request: _page_response(request.content)
+    )
+    respx.put(f"{base}/pages/{slug}").mock(
+        side_effect=lambda request: _page_response(request.content)
+    )
+    first = await publish_product_version(
+        kb_session,
+        client,
+        scope,
+        product_version_id=version.id,
+        label="release-1",
+    )
+    get.mock(return_value=_page_response())
+    second = await publish_product_version(
+        kb_session,
+        client,
+        scope,
+        product_version_id=version.id,
+        label="release-2",
+    )
+    calls_before = len(respx.calls)
+    rollback_ids_before = list(
+        kb_session.scalars(
+            select(ChangeSet.id).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "rollback",
+            )
+        )
+    )
+
+    def fail_rollback_flush(
+        session: Session,
+        _context: object,
+        _instances: object,
+    ) -> None:
+        if any(
+            isinstance(row, ChangeSet) and row.source_kind == "rollback"
+            for row in session.new
+        ):
+            raise RuntimeError("injected rollback flush failure")
+
+    event.listen(kb_session, "before_flush", fail_rollback_flush)
+    try:
+        with pytest.raises(RuntimeError, match="injected rollback flush failure"):
+            await rollback_to_snapshot(
+                kb_session,
+                client,
+                scope,
+                snapshot_id=first.snapshot_id,
+                actor="operator",
+            )
+    finally:
+        event.remove(kb_session, "before_flush", fail_rollback_flush)
+
+    kb_session.commit()
+    assert len(respx.calls) - calls_before == 0
+    assert current_snapshot_id(kb_session, scope) == second.snapshot_id
+    assert list(
+        kb_session.scalars(
+            select(ChangeSet.id).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "rollback",
+            )
+        )
+    ) == rollback_ids_before
+
+
+@respx.mock
+async def test_rh1_2_rollback_wiki_failure_rolls_back_savepoint_after_outer_commit(
+    kb_session: Session,
+    client: WeKnoraClient,
+) -> None:
+    scope, _ = _scopes(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
+    _publish_claim(kb_session, scope, version.id)
+    base = f"{BASE_URL}/api/v1/knowledgebase/{scope.wiki_kb_id}/wiki"
+    slug = f"product/{product.product_code}/{version.version_label}/overview"
+    get = respx.get(f"{base}/pages/{slug}")
+    get.mock(return_value=httpx.Response(404, text="not found"))
+    respx.post(f"{base}/pages").mock(
+        side_effect=lambda request: _page_response(request.content)
+    )
+    update = respx.put(f"{base}/pages/{slug}").mock(
+        side_effect=lambda request: _page_response(request.content)
+    )
+    first = await publish_product_version(
+        kb_session,
+        client,
+        scope,
+        product_version_id=version.id,
+        label="release-1",
+    )
+    get.mock(return_value=_page_response())
+    second = await publish_product_version(
+        kb_session,
+        client,
+        scope,
+        product_version_id=version.id,
+        label="release-2",
+    )
+    update_calls_before = update.call_count
+    rollback_ids_before = list(
+        kb_session.scalars(
+            select(ChangeSet.id).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "rollback",
+            )
+        )
+    )
+    update.mock(return_value=httpx.Response(500, text="failed"))
+
+    with pytest.raises(WeKnoraError):
+        await rollback_to_snapshot(
+            kb_session,
+            client,
+            scope,
+            snapshot_id=first.snapshot_id,
+            actor="operator",
+        )
+
+    kb_session.commit()
+    assert update.call_count > update_calls_before
+    assert current_snapshot_id(kb_session, scope) == second.snapshot_id
+    assert list(
+        kb_session.scalars(
+            select(ChangeSet.id).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "rollback",
+            )
+        )
+    ) == rollback_ids_before
 
 
 @respx.mock

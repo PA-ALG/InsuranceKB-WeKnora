@@ -22,10 +22,11 @@ def _scope(
     bound_scope: Callable[..., KnowledgeScope],
     *,
     tenant_id: str = "tenant-016",
+    raw_kb_id: str = "raw-016",
 ) -> KnowledgeScope:
     return bound_scope(
         tenant_id=tenant_id,
-        raw_kb_id="raw-016",
+        raw_kb_id=raw_kb_id,
         wiki_kb_id="wiki-016",
     )
 
@@ -86,6 +87,27 @@ async def test_s4_2_numeric_response_tenant_matches_string_scope(
     knowledge = await client.get_knowledge(scope, KID)
 
     assert knowledge.id == KID
+
+
+@respx.mock
+async def test_rh4_2_metadata_numeric_knowledge_base_id_fails_closed(
+    client: WeKnoraClient,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    scope = _scope(bound_scope, tenant_id="5", raw_kb_id="5")
+    route = respx.get(KNOWLEDGE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"data": _knowledge(tenant_id=5, kb_id=5)},
+        )
+    )
+
+    with pytest.raises(ScopeViolation) as error:
+        await client.get_knowledge(scope, KID)
+
+    assert str(error.value) == "scope mismatch"
+    assert repr(error.value) == "ScopeViolation('scope mismatch')"
+    assert route.call_count == 1
 
 
 @respx.mock
@@ -249,6 +271,36 @@ async def test_s4_2_list_chunks_fails_closed_on_cross_scope_or_missing_fields(
     with pytest.raises(ScopeViolation, match="^scope mismatch$"):
         await client.list_chunks(scope, KID)
 
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_rh4_2_chunk_numeric_knowledge_base_id_fails_closed(
+    client: WeKnoraClient,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    scope = _scope(bound_scope, tenant_id="5", raw_kb_id="5")
+    route = respx.get(CHUNKS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "chunk-1",
+                        "tenant_id": 5,
+                        "knowledge_id": KID,
+                        "knowledge_base_id": 5,
+                    }
+                ]
+            },
+        )
+    )
+
+    with pytest.raises(ScopeViolation) as error:
+        await client.list_chunks(scope, KID)
+
+    assert str(error.value) == "scope mismatch"
+    assert repr(error.value) == "ScopeViolation('scope mismatch')"
     assert route.call_count == 1
 
 

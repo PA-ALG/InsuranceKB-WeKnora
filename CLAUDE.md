@@ -19,8 +19,10 @@
 ## 门禁（交付定义）
 
 ```bash
-cd harness && uv run ruff check . && uv run mypy src tests && uv run pytest -m "not live" -q
+cd harness && uv run ruff check . && uv run mypy src tests && uv run pytest -m "not live and not integration_postgres" -q
 ```
+默认门禁仅运行 deterministic lane。PostgreSQL `integration_postgres` 由 `.github/workflows/harness-ci.yml` 的独立 PostgreSQL 16 job 验证；WeKnora `live` 由 `.github/workflows/harness-live.yml` 的受控手工 workflow 验证，未运行时记为 `NOT RUN`。
+
 全绿才算完成；不许破坏既有测试。uv 在 `/Users/houjing/.local/bin/uv`。
 
 ## 高频坑（完整清单见 HANDOFF §五）

@@ -448,23 +448,24 @@ async def rollback_to_snapshot(
         raise ScopeViolation("scope mismatch") from exc
     _validate_rollback_pages(session, scope, snapshot, pages)
 
-    for page in pages:
-        await _upsert_page(client, scope, page)
+    with session.begin_nested():
+        change_set = ChangeSet(
+            space_id=scope.space_id,
+            source_kind="rollback",
+            knowledge_ids=None,
+            # Keep the target snapshot queryable without making repeat rollback
+            # operations collide with the scoped ChangeSet source-key constraint.
+            external_record_id=f"{snapshot.id}:{uuid.uuid4().hex}",
+            source_revision=reason,
+            status="applied",
+            created_by=actor,
+        )
+        session.add(change_set)
+        _move_pointer(session, scope, snapshot.id)
+        session.flush()
 
-    change_set = ChangeSet(
-        space_id=scope.space_id,
-        source_kind="rollback",
-        knowledge_ids=None,
-        # Keep the target snapshot queryable without making repeat rollback
-        # operations collide with the scoped ChangeSet source-key constraint.
-        external_record_id=f"{snapshot.id}:{uuid.uuid4().hex}",
-        source_revision=reason,
-        status="applied",
-        created_by=actor,
-    )
-    session.add(change_set)
-    _move_pointer(session, scope, snapshot.id)
-    session.flush()
+        for page in pages:
+            await _upsert_page(client, scope, page)
 
     return RollbackResult(
         snapshot_id=snapshot.id, change_set_id=change_set.id, pages=pages

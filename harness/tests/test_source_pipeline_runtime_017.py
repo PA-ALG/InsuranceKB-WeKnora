@@ -5,6 +5,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from types import MethodType
 
@@ -12,7 +13,12 @@ import pytest
 from pydantic import ValidationError
 
 import insurance_harness.compiler.pipeline as pipeline_module
-from insurance_harness.compiler.models import DocPayload
+from insurance_harness.compiler.models import (
+    DocPayload,
+    FieldCandidate,
+    PredRecord,
+    RunManifest,
+)
 from insurance_harness.compiler.pipeline import ExtractionPipeline, PipelineConfig
 from insurance_harness.compiler.sections import family_fingerprint, split_sections
 from insurance_harness.compiler.templates import ExtractionTemplate, TemplateRegistry
@@ -26,6 +32,47 @@ from tests.support.source_pipeline import (
     assert_no_committed_artifacts,
     source_document,
 )
+
+
+@pytest.mark.parametrize(
+    ("scoped", "expected_mode"),
+    [
+        (True, "weknora"),
+        (False, "directory_replay"),
+    ],
+)
+def test_rh3_1_pipeline_emits_explicit_weknora_and_directory_source_modes(
+    scoped: bool,
+    expected_mode: str,
+) -> None:
+    candidate = FieldCandidate(
+        field_id="waiting_period",
+        field_name="waiting_period",
+        group="basic_info",
+        doc="policy.pdf",
+        tri_state="unknown",
+    )
+    manifest = RunManifest(
+        run_id="rh3-source-mode",
+        product_dir="/runtime-only",
+        schema_version="v1.1+rh3",
+        space_id="space-rh3" if scoped else "",
+        tenant_id="tenant-rh3" if scoped else "",
+        raw_kb_id="raw-rh3" if scoped else "",
+    )
+
+    record = pipeline_module._to_pred(  # noqa: SLF001 - pipeline artifact contract
+        candidate,
+        {"product_id": "PRODUCT-RH3", "product_name": "RH3 product"},
+        "test-model",
+        manifest,
+        datetime(2026, 7, 14, tzinfo=UTC),
+    )
+
+    assert record.source_mode == expected_mode
+    legacy_payload = record.model_dump(mode="json")
+    legacy_payload.pop("source_mode", None)
+    assert PredRecord.model_validate(legacy_payload).source_mode == "legacy"
 
 
 async def test_node_load_consumes_source_documents_without_glob(

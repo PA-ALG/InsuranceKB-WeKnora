@@ -30,6 +30,7 @@ CandidateOrigin = Literal["extract", "gapfill", "vote", "judge", "fastpath"]
 # structured_direct=确定性文本直取（正则锚点）；table_parsed=表格结构化列直取；
 # llm_extracted=通用管道模型抽取（既有默认）；llm_inferred=模型推断（无直接证据，预留）
 DataQuality = Literal["structured_direct", "table_parsed", "llm_extracted", "llm_inferred"]
+SourceMode = Literal["legacy", "weknora", "directory_replay"]
 
 
 class FieldCandidate(BaseModel):
@@ -154,3 +155,5 @@ class PredRecord(GoldenRecord):
     unknown_reason: UnknownReason | None = None
     # 006 F3.5（12-dayu #2）：来源可信度分级；007 Claim 端已留位，导入器透传
     data_quality: DataQuality = "llm_extracted"
+    # 022 RH3.1：新产物显式标记来源；缺字段的历史 JSONL 保持 legacy 兼容。
+    source_mode: SourceMode = "legacy"

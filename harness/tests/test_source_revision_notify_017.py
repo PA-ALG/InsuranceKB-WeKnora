@@ -1,23 +1,28 @@
 """Source revision notification and race contracts."""
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import event
+from sqlalchemy import event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
+from insurance_harness.knowledge import MergePolicy, import_pred_records
 from insurance_harness.knowledge import source_revision as revision_service
-from insurance_harness.knowledge.models import SourceImportIdentity
+from insurance_harness.knowledge.models import SourceImportContext, SourceImportIdentity
 from insurance_harness.knowledge.source_revision import SourceRevisionReport
 from insurance_harness.knowledge.tables import (
     ChangeItem,
     ChangeSet,
+    Claim,
     ClaimEvidence,
     CurrentRelease,
     ReleaseSnapshot,
     SnapshotClaim,
 )
+from tests.kbhelpers import pred, seed_product
 from tests.support.source_revision import (
     EARLIER,
     NOW,
@@ -83,6 +88,366 @@ def test_t7_same_active_revision_is_a_noop(kb_session: Session) -> None:
     )
     assert evidence[0].stale_at is None
     assert count_rows(kb_session, ChangeSet) == 0
+
+
+@pytest.mark.parametrize("source_kind", ["document", "recompile"])
+def test_rh2_1_applied_unknown_only_revision_is_same_revision_without_evidence(
+    kb_session: Session,
+    source_kind: str,
+) -> None:
+    scope = bound_scope(kb_session, f"rh2-1-{source_kind}")
+    product, version = seed_product(
+        kb_session,
+        scope=scope,
+        code=f"RH2-1-{source_kind}",
+        name=f"RH2.1 {source_kind}",
+    )
+    identity = source_identity(scope, revision_char="a")
+    document_name = f"unknown-{source_kind}.pdf"
+    context = SourceImportContext(
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        documents={document_name: identity},
+    )
+    record = pred(
+        "unknown_only_revision",
+        value=None,
+        tri_state="unknown",
+        doc=document_name,
+    )
+    assert record.evidence == []
+
+    if source_kind == "recompile":
+        pending = revision_service.notify_source_revision(
+            kb_session,
+            scope,
+            identity,
+            observed_at=NOW,
+        )
+        assert pending.created is True
+        assert pending.change_set_id is not None
+
+    imported = import_pred_records(
+        kb_session,
+        [record],
+        scope=scope,
+        product_id=product.product_code,
+        product_version_id=version.id,
+        source_context=context,
+        policy=MergePolicy(auto_apply_add=True),
+    )
+
+    aggregate = kb_session.get(ChangeSet, imported.change_set_id)
+    assert aggregate is not None
+    assert aggregate.source_kind == source_kind
+    assert aggregate.status == "applied"
+    items = list(
+        kb_session.scalars(
+            select(ChangeItem).where(ChangeItem.change_set_id == aggregate.id)
+        )
+    )
+    assert len(items) == 1
+    assert items[0].proposed.get("mode") == "unknown_placeholder"
+    placeholder = kb_session.get(Claim, items[0].claim_id)
+    assert placeholder is not None
+    assert placeholder.value_state == "unknown"
+    assert placeholder.status == "draft"
+    assert count_rows(kb_session, ClaimEvidence) == 0
+    baseline_change_sets = count_rows(kb_session, ChangeSet)
+
+    report = revision_service.notify_source_revision(
+        kb_session,
+        scope,
+        identity,
+        observed_at=NOW,
+    )
+
+    assert report == SourceRevisionReport(
+        same_revision=True,
+        created=False,
+        reused=False,
+        stale_count=0,
+        change_set_id=None,
+    )
+    assert count_rows(kb_session, ChangeSet) == baseline_change_sets
+
+
+def test_rh2_2_zero_evidence_new_revision_creates_then_reuses_one_recompile(
+    kb_session: Session,
+) -> None:
+    scope = bound_scope(kb_session, "rh2-2-new-revision")
+    product, version = seed_product(
+        kb_session,
+        scope=scope,
+        code="RH2-2-NEW-REVISION",
+        name="RH2.2 new revision",
+    )
+    revision_a = source_identity(scope, revision_char="a")
+    document_name = "unknown-revision-a.pdf"
+    imported_a = import_pred_records(
+        kb_session,
+        [
+            pred(
+                "unknown_only_revision",
+                value=None,
+                tri_state="unknown",
+                doc=document_name,
+            )
+        ],
+        scope=scope,
+        product_id=product.product_code,
+        product_version_id=version.id,
+        source_context=SourceImportContext(
+            space_id=scope.space_id,
+            tenant_id=scope.tenant_id,
+            raw_kb_id=scope.raw_kb_id,
+            documents={document_name: revision_a},
+        ),
+        policy=MergePolicy(auto_apply_add=True),
+    )
+    applied_a = kb_session.get(ChangeSet, imported_a.change_set_id)
+    assert applied_a is not None
+    assert applied_a.status == "applied"
+    assert applied_a.source_revision == revision_a.source_revision
+    assert count_rows(kb_session, ClaimEvidence) == 0
+
+    revision_b = source_identity(scope, revision_char="b")
+    first = revision_service.notify_source_revision(
+        kb_session,
+        scope,
+        revision_b,
+        observed_at=NOW,
+    )
+    second = revision_service.notify_source_revision(
+        kb_session,
+        scope,
+        revision_b,
+        observed_at=NOW,
+    )
+
+    assert first.created is True and first.reused is False
+    assert second.created is False and second.reused is True
+    assert first.stale_count == second.stale_count == 0
+    assert first.change_set_id == second.change_set_id
+    pending_b = list(
+        kb_session.scalars(
+            select(ChangeSet).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "recompile",
+                ChangeSet.external_record_id == revision_b.knowledge_id,
+                ChangeSet.source_revision == revision_b.source_revision,
+                ChangeSet.status == "pending",
+            )
+        )
+    )
+    assert len(pending_b) == 1
+    assert pending_b[0].id == first.change_set_id
+    assert count_rows(kb_session, ChangeSet) == 2
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        "malformed_parent",
+        "malformed_child",
+        "conflicting_document_recompile",
+        "illegal_status",
+        "nonempty_pending",
+        "illegal_action",
+        "applied_needs_review",
+        "non_object_proposed",
+    ],
+)
+def test_rh2_2_zero_evidence_malformed_or_conflicting_aggregate_fails_closed_without_mutation(
+    kb_session: Session,
+    corruption: str,
+) -> None:
+    scope = bound_scope(kb_session, f"rh2-2-fail-closed-{corruption}")
+    control_identity = source_identity(
+        scope,
+        knowledge_id="knowledge-control",
+        revision_char="c",
+    )
+    claim_with_evidence(
+        kb_session,
+        scope,
+        predicate=f"control_{corruption}",
+        identities=[control_identity],
+    )
+    product, version = seed_product(
+        kb_session,
+        scope=scope,
+        code=f"RH2-2-FAIL-{corruption}",
+        name=f"RH2.2 fail closed {corruption}",
+    )
+    revision_a = source_identity(scope, revision_char="a")
+    document_name = f"unknown-{corruption}.pdf"
+    import_pred_records(
+        kb_session,
+        [
+            pred(
+                "unknown_only_revision",
+                value=None,
+                tri_state="unknown",
+                doc=document_name,
+            )
+        ],
+        scope=scope,
+        product_id=product.product_code,
+        product_version_id=version.id,
+        source_context=SourceImportContext(
+            space_id=scope.space_id,
+            tenant_id=scope.tenant_id,
+            raw_kb_id=scope.raw_kb_id,
+            documents={document_name: revision_a},
+        ),
+        policy=MergePolicy(auto_apply_add=True),
+    )
+    revision_b = source_identity(scope, revision_char="b")
+
+    def blocked_change_set(
+        source_kind: str,
+        status: str,
+        *,
+        knowledge_ids: list[str] | None = None,
+    ) -> ChangeSet:
+        return ChangeSet(
+            space_id=scope.space_id,
+            source_kind=source_kind,
+            knowledge_ids=(
+                [revision_b.knowledge_id]
+                if knowledge_ids is None
+                else knowledge_ids
+            ),
+            external_record_id=revision_b.knowledge_id,
+            source_revision=revision_b.source_revision,
+            status=status,
+            created_by="test",
+        )
+
+    if corruption == "malformed_parent":
+        kb_session.add(
+            blocked_change_set(
+                "recompile",
+                "pending",
+                knowledge_ids=["knowledge-other"],
+            )
+        )
+    elif corruption == "malformed_child":
+        blocked = blocked_change_set("document", "applied")
+        kb_session.add(blocked)
+        kb_session.flush()
+        placeholder = kb_session.scalar(
+            select(Claim).where(
+                Claim.space_id == scope.space_id,
+                Claim.predicate == "unknown_only_revision",
+            )
+        )
+        assert placeholder is not None
+        kb_session.add(
+            ChangeItem(
+                change_set_id=blocked.id,
+                action="add",
+                claim_id=placeholder.id,
+                proposed={"claim": {"space_id": scope.space_id}},
+                decision="auto_applied",
+            )
+        )
+    elif corruption == "conflicting_document_recompile":
+        kb_session.add_all(
+            [
+                blocked_change_set("document", "applied"),
+                blocked_change_set("recompile", "pending"),
+            ]
+        )
+    elif corruption == "illegal_status":
+        kb_session.add(blocked_change_set("recompile", "rejected"))
+    elif corruption in {"illegal_action", "applied_needs_review"}:
+        blocked = blocked_change_set("document", "applied")
+        kb_session.add(blocked)
+        kb_session.flush()
+        source_item = kb_session.scalar(
+            select(ChangeItem)
+            .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+            .where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.external_record_id == revision_a.knowledge_id,
+                ChangeSet.source_revision == revision_a.source_revision,
+            )
+        )
+        assert source_item is not None
+        assert source_item.claim_id is not None
+        kb_session.add(
+            ChangeItem(
+                change_set_id=blocked.id,
+                action=(
+                    "illegal_action" if corruption == "illegal_action" else "add"
+                ),
+                claim_id=source_item.claim_id,
+                proposed=dict(source_item.proposed),
+                decision=(
+                    "auto_applied"
+                    if corruption == "illegal_action"
+                    else "needs_review"
+                ),
+            )
+        )
+    elif corruption == "non_object_proposed":
+        blocked = blocked_change_set("document", "applied")
+        kb_session.add(blocked)
+        kb_session.flush()
+        kb_session.add(
+            ChangeItem(
+                change_set_id=blocked.id,
+                action="add",
+                proposed=cast(dict[str, Any], []),
+                decision="auto_applied",
+            )
+        )
+    else:
+        blocked = blocked_change_set("recompile", "pending")
+        kb_session.add(blocked)
+        kb_session.flush()
+        kb_session.add(
+            ChangeItem(
+                change_set_id=blocked.id,
+                action="add",
+                proposed={"interrupted": True},
+                decision="needs_review",
+            )
+        )
+    kb_session.flush()
+    baseline_counts = {
+        table: count_rows(kb_session, table)
+        for table in (ChangeSet, ChangeItem, Claim, ClaimEvidence)
+    }
+    baseline_stale = [
+        (row.id, row.stale_at)
+        for row in kb_session.scalars(
+            select(ClaimEvidence).order_by(ClaimEvidence.id)
+        )
+    ]
+
+    with pytest.raises(ScopeViolation):
+        revision_service.notify_source_revision(
+            kb_session,
+            scope,
+            revision_b,
+            observed_at=NOW,
+        )
+
+    kb_session.commit()
+    assert {
+        table: count_rows(kb_session, table) for table in baseline_counts
+    } == baseline_counts
+    assert [
+        (row.id, row.stale_at)
+        for row in kb_session.scalars(
+            select(ClaimEvidence).order_by(ClaimEvidence.id)
+        )
+    ] == baseline_stale
+    assert count_rows(kb_session, ChangeSet) == baseline_counts[ChangeSet]
 
 
 def test_t7_new_revision_marks_only_scoped_matching_source_aware_evidence_stale(
