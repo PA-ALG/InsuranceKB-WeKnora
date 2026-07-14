@@ -175,7 +175,11 @@ def test_k3_2_authority_wins_auto_supersede(kb_session: Session) -> None:
     """① 高权威直接胜出：条款(1) 取代 说明书(2)，全留痕（K6.2 核心语义）。"""
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
-    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    # 019 Q4.1：supersede 自动应用默认关；本用例测 auto-supersede 语义，显式开启布尔位。
+    engine = _engine(
+        kb_session, scope,
+        policy=MergePolicy(auto_apply_add=True, auto_apply_supersede_low_risk=True),
+    )
     _apply(engine, _prop(scope, version.id, value="90天"))
     old = _published(kb_session, "waiting_period")
 
@@ -245,7 +249,11 @@ def test_k3_2_effective_date_breaks_tie(kb_session: Session) -> None:
     """② 同权威级别，生效日期新者胜。"""
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
-    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    # 019 Q4.1：显式开启 supersede 自动应用以测裁决序②的 auto 路径。
+    engine = _engine(
+        kb_session, scope,
+        policy=MergePolicy(auto_apply_add=True, auto_apply_supersede_low_risk=True),
+    )
     _apply(engine, _prop(scope, version.id, effective_from=date(2023, 1, 1)))
     _apply(
         engine,
@@ -419,7 +427,11 @@ def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
 def test_k3_3_revisions_and_immutable_changeset(kb_session: Session) -> None:
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
-    engine = _engine(kb_session, scope, policy=MergePolicy(auto_apply_add=True))
+    # 019 Q4.1：本用例断言 supersede 留痕，需显式开启 supersede 自动应用。
+    engine = _engine(
+        kb_session, scope,
+        policy=MergePolicy(auto_apply_add=True, auto_apply_supersede_low_risk=True),
+    )
     _apply(engine, _prop(scope, version.id), external_id="batch-1")
     _apply(
         engine,

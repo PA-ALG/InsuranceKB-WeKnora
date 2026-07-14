@@ -131,5 +131,5 @@ def test_manifest_is_valid_json(tmp_path: Path) -> None:
     out = tmp_path / "gs"
     build_release(GOLDEN, out)
     data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    assert data["schema_version"] == "v1.1+testtesttest"
-    assert data["annotator_model"] == "claude-test"
+    assert data["schema_versions"] == ["v1.1+testtesttest"]
+    assert data["annotator_models"] == ["claude-test"]

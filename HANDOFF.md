@@ -106,7 +106,7 @@
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **并行轨 A**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005`，完成后解锁 021 | 开发型，中大 + live |
-| B21 | 019 Golden 工具/QualityProfile/在线 Gate | **并行轨 B，价值优先级不低于 018**；无 018 前置，可独立或并行；为 020 提供 artifact 工具/合同，不承接 run-admission | 开发型，中 |
+| B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成**（feat/019-golden-quality-gate，T1～T6 TDD，+32 用例，全库 non-live 993 passed / ruff / mypy 161 files 全绿）：portable assembler+validator、BaselineArtifact/不可变 approval、QualityProfile+staleness、统一 QualityGate（三路径不可绕过、supersede 默认关）。真实 baseline/画像由 020 用同一 API 产出；online gate 默认未启用（可注入）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
 | B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，完成后与 019 共同解锁 020 | 开发型，中大 |
 

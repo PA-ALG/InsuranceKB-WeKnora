@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge import (
+    MergePolicy,
     current_snapshot_id,
     import_pred_records,
     publish_product_version,
@@ -133,6 +134,8 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
     report2 = import_pred_records(
         kb_session, batch2, scope=scope, product_id=product.product_code,
         product_version_id=version.id, risk_of=RISK, legacy_replay=True,
+        # 019 Q4.1：故事断言低风险 supersede 自动裁决，显式开启（无 gate=legacy 布尔位）。
+        policy=MergePolicy(auto_apply_supersede_low_risk=True),
     )
     assert report2.imported == 4
     assert report2.merge.actions.get("enrich") == 1  # 补全

@@ -12,7 +12,11 @@ import re
 from collections.abc import Callable
 from datetime import UTC
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from insurance_harness.goldenset.baseline import RunFingerprint
+    from insurance_harness.knowledge.quality_gate import QualityGate
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -678,6 +682,8 @@ class MergeEngine:
         policy: MergePolicy | None = None,
         risk_of: RiskResolver | None = None,
         created_by: str = "merge-engine",
+        quality_gate: "QualityGate | None" = None,
+        run_fingerprint: "RunFingerprint | None" = None,
     ) -> None:
         require_current_scope(session, scope)
         self.session = session
@@ -685,7 +691,18 @@ class MergeEngine:
         self.policy = policy or MergePolicy()
         self.risk_of: RiskResolver = risk_of or (lambda predicate: "low")
         self.created_by = created_by
+        # 019 Q4.2：注入后 gate 是自动发布唯一权威；未注入=在线治理未启用，回退 policy 布尔位。
+        self.quality_gate = quality_gate
+        self.run_fingerprint = run_fingerprint
         self.judge_queue: list[ConflictJudgeRequest] = []
+
+    def _gate_ok(self, prop: ProposedClaim, risk: str, action: str) -> bool:
+        """Q4.2/Q4.5：注入 gate 时按画像判定；未注入则不阻断（legacy 布尔位单独决定）。"""
+        if self.quality_gate is None:
+            return True
+        return self.quality_gate.decide(
+            prop.predicate, risk, action, self.run_fingerprint
+        ).eligible
 
     # -- ChangeSet ---------------------------------------------------------
 
@@ -818,7 +835,12 @@ class MergeEngine:
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="add candidate",
         )
-        auto = self.policy.auto_apply_add and risk != "high" and not prop.pending_judge
+        auto = (
+            self.policy.auto_apply_add
+            and risk != "high"
+            and not prop.pending_judge
+            and self._gate_ok(prop, risk, "add")
+        )
         if auto:
             item.decision = "auto_applied"
             publish_claim(
@@ -916,12 +938,14 @@ class MergeEngine:
         report.bump("enrich")
 
     def _enrich_auto_ok(self, prop: ProposedClaim, risk: str) -> bool:
-        """K4.4：默认关闭；开启后仅 risk=low 且 confidence≥阈值 且非 pending_judge。"""
+        """K4.4 + 019 Q4.2：默认关闭；开启后仅 risk=low、confidence≥阈值、非 pending_judge，
+        且过 QualityGate（注入时）。"""
         return (
             self.policy.auto_apply_enrich
             and risk == "low"
             and prop.confidence >= self.policy.enrich_auto_min_confidence
             and not prop.pending_judge
+            and self._gate_ok(prop, risk, "enrich")
         )
 
     # -- 冲突裁决序（03 §6.2 逐级短路） -----------------------------------------
@@ -994,6 +1018,7 @@ class MergeEngine:
                 risk != "high"
                 and self.policy.auto_apply_supersede_low_risk
                 and not prop.pending_judge
+                and self._gate_ok(prop, risk, "supersede")
             )
             if auto:
                 item.decision = "auto_applied"
