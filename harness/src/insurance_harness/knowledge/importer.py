@@ -51,12 +51,21 @@ from insurance_harness.knowledge.source_revision import (
 from insurance_harness.knowledge.tables import ChangeSet, Claim, ClaimEvidence
 
 
-def load_pred_records(path: Path) -> list[PredRecord]:
+def _parse_pred_records(raw: str) -> list[PredRecord]:
     return [
         PredRecord.model_validate_json(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
+        for line in raw.splitlines()
         if line.strip()
     ]
+
+
+def load_pred_records(path: Path) -> list[PredRecord]:
+    return _parse_pred_records(path.read_text(encoding="utf-8"))
+
+
+def _reject_directory_replay(records: list[PredRecord]) -> None:
+    if any(record.source_mode == "directory_replay" for record in records):
+        raise ScopeViolation("directory replay cannot be imported")
 
 
 def _record_import_key(product_id: str, record: PredRecord) -> str:
@@ -484,6 +493,7 @@ def import_pred_records(
     legacy_replay: bool = False,
 ) -> ImportReport:
     """Import compiler output, source-aware by default and legacy only by opt-in."""
+    _reject_directory_replay(records)
     require_current_scope(session, scope)
     canonical_product_id = _require_scoped_product_version(
         session,
@@ -574,14 +584,15 @@ def import_pred_jsonl(
     legacy_replay: bool = False,
 ) -> ImportReport:
     """Import pred JSONL; file-content revision exists only in explicit replay mode."""
-    require_current_scope(session, scope)
     raw = path.read_text(encoding="utf-8")
+    records = _parse_pred_records(raw)
+    _reject_directory_replay(records)
+    require_current_scope(session, scope)
     source_revision = (
         hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
         if legacy_replay
         else None
     )
-    records = load_pred_records(path)
     return import_pred_records(
         session,
         records,

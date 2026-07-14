@@ -20,7 +20,7 @@ docker-compose.harness.yml : Harness Postgres（003 已提供）
    - **KB-RAW 原始资料库**：`wiki_enabled=false`；解析/分块/向量按默认；所有原始文档只进这里；
    - **KB-WIKI 寿险知识 Wiki**：`wiki_enabled=true`；**纪律：此库永不上传任何原始文档**（内置 wiki ingest 无从触发，规避 P-3 补丁缺位——02 §4.1 过渡方案），只接受 Harness 发布器写入；
 3. 签发 Harness 专用 Tenant API Key：能力域 `retrieve + ingest`（最小权限）；
-4. 把 base_url / api_key / 两个 KB id 写入 `harness/.env`（`HARNESS_WEKNORA_*`，样例见 `.env.example`——**接手时需补建该样例文件，含全部变量名与注释、不含真实密钥**）。
+4. 把 base_url / api_key / 两个 KB id 写入 `harness/.env`（`HARNESS_WEKNORA_*`，变量名与无密钥示例见已纳入仓库的 `.env.example`）。
 
 ## 3. Harness 启动
 
@@ -80,11 +80,15 @@ uv run python -m insurance_harness.product.cli register-products \
 
 L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验收形态。
 
-## 5. live 契约测试约定
+## 5. integration / live 契约测试约定
 
-- 触发：`uv run pytest -m live`，从 env 读实例地址；CI 不跑（无实例则 skip，001 已实现）；
+- deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
+- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；缺 `HARNESS_TEST_POSTGRES_URL` 时测试失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
+- WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。
+
+三条 pytest collection 必须互斥且并集等于全量 collection。状态语言固定为：deterministic 绿可记 `software complete`；只有带 run URL/commit SHA/时间且零 skip 的 PostgreSQL 16 Actions job 可记 `integration verified`；只有带同等证据的受控 WeKnora workflow 可记 `live verified`。本地通过、skip 或 `NOT RUN` 均不得升级状态。
 
 ### 5.1 OpenSpec 017 T8：Source Bridge → Compiler → pred/import
 
@@ -96,6 +100,7 @@ T8 专用用例只接受显式 live 配置：
 - `HARNESS_LIVE_SPACE_ID`（数据库中已绑定的 Space）
 - `HARNESS_LIVE_KNOWLEDGE_ID`（该 Space 的 KB-RAW 内一份真实、可下载 PDF knowledge）
 - `HARNESS_LIVE_PARSER_FINGERPRINT`
+- `HARNESS_LIVE_KB_ID`（publisher roundtrip 使用的真实 KB-WIKI ID）
 
 当前 Harness adapter 没有上传 API，因此本用例走规格允许的“显式 knowledge ID”分支：先对真实端点执行 `wait_for_parsed`，再下载 PDF、读取 chunks、物化 bridge、用本地确定性 scripted client 跑 Compiler，并把 `pred.jsonl` 导入 Harness PostgreSQL。它不调用真实 LLM，也不把既有 knowledge 分支解释成 upload 创建覆盖。测试通过事务回滚清理临时产品、ChangeSet、Claim 与 Evidence；client、Session、Engine、物化文件及 run 目录均显式关闭/清理。
 
@@ -105,7 +110,7 @@ T8 专用用例只接受显式 live 配置：
 cd harness && .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -rs
 ```
 
-缺少变量时只允许 `pytest.skip`，输出会逐项列出缺失变量；不得用 respx/mock、Directory source 或 SQLite 代替 live 证据。API key 不写入日志、断言或测试产物。
+本地调试缺少变量时用例可 `pytest.skip` 并逐项列出缺失变量；受控 workflow 的 preflight 则必须失败且只输出缺失变量名，不得回显值。不得用 respx/mock、Directory source、SQLite 或 PostgreSQL service job 代替 WeKnora live 证据。API key 不写入日志、断言或测试产物。
 
 ## 6. 已知风险与规避
 
@@ -119,6 +124,6 @@ cd harness && .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -
 - [ ] `.env.example`（全变量注释版）
 - [ ] 双 KB + bound KnowledgeSpace 初始化脚本（幂等，API/admin provisioning 版）
 - [ ] L1~L5 演示脚本（一条命令跑通并输出断言结果）
-- [ ] live 套件全绿记录 + 双库 ACL 检查
+- [ ] 受控 `harness-live` workflow 全绿记录（run URL/commit SHA/时间、tests > 0、skipped = 0）+ 双库 ACL 检查
 - [ ] 发布器"KB 文档数为 0"守卫
 - [ ] 本文档按实际情况修订（发现与设计不符先改文档）

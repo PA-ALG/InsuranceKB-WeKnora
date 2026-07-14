@@ -1,0 +1,1092 @@
+[
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_artifact_commit_failure_leaves_no_partial_outputs_or_staging",
+    "parameter_id": "replace",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_artifact_commit_failure_leaves_no_partial_outputs_or_staging",
+    "parameter_id": "stage_write",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_cancelling_run_lock_waiter_closes_its_file_descriptor",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_cli_rejects_zero_concurrency_before_dispatch",
+    "parameter_id": "extract",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_cli_rejects_zero_concurrency_before_dispatch",
+    "parameter_id": "extract-replay",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_completed_run_rejects_alternate_fresh_checkpoint_pre_source",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_concurrent_fresh_writers_are_serialized_by_run_directory",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_concurrent_runs_on_one_pipeline_keep_runtime_paths_isolated",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_duplicate_file_names_fail_closed_before_graph",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_extract_replay_constructs_only_directory_source",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_extract_replay_is_the_only_cli_command_with_directory_input",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_fastpath_uses_the_run_owned_source_id_path",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_graph_cancellation_cleans_materialized_batch",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_graph_failure_cleans_materialized_batch",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_node_load_consumes_source_documents_without_glob",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_non_resume_rejects_reusing_existing_thread_state_pre_model",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_finite_nonnegative_backoff",
+    "parameter_id": "-0.1",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_finite_nonnegative_backoff",
+    "parameter_id": "-inf",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_finite_nonnegative_backoff",
+    "parameter_id": "True",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_finite_nonnegative_backoff",
+    "parameter_id": "inf",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_finite_nonnegative_backoff",
+    "parameter_id": "nan",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-concurrency",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-gapfill_top_n",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-max_fields_per_call",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-section_target_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-transport_attempts",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "-1-window_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-concurrency",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-gapfill_top_n",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-max_fields_per_call",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-section_target_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-transport_attempts",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "0-window_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-concurrency",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-gapfill_top_n",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-max_fields_per_call",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-section_target_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-transport_attempts",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "1.5-window_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-concurrency",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-gapfill_top_n",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-max_fields_per_call",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-section_target_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-transport_attempts",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_pipeline_config_requires_strict_positive_integer_counts",
+    "parameter_id": "False-window_chars",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "engine_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "judge_aclose",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "judge_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "pipeline_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "run",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "schema",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "scope",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "source_aclose",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "source_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "weknora_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_loads_bound_scope_and_passes_all_source_limits",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_missing_source_identity_never_dispatches_or_falls_back",
+    "parameter_id": "--knowledge-id",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_missing_source_identity_never_dispatches_or_falls_back",
+    "parameter_id": "--parser-fingerprint",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_missing_source_identity_never_dispatches_or_falls_back",
+    "parameter_id": "--source",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_missing_source_identity_never_dispatches_or_falls_back",
+    "parameter_id": "--space-id",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_rejects_directory_source_value",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_production_extract_requires_and_dispatches_explicit_weknora_source",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "judge_aclose",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "judge_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "pipeline_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "run",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "schema",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_replay_extract_attempts_all_registered_resource_cleanup",
+    "parameter_id": "source_constructor",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "judge",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "line",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "model",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "product",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "prompt",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_execution_identity_drift_pre_model",
+    "parameter_id": "schema",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_checkpoint_from_a_different_run_directory_pre_model",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_copied_checkpoint_at_a_different_path_pre_model",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_non_allowlisted_patch_before_checkpoint_write",
+    "parameter_id": "runtime_paths",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_non_allowlisted_patch_before_checkpoint_write",
+    "parameter_id": "source_documents",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_patched_checkpoint_source_before_model_calls",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_source_identity_drift_before_model_calls",
+    "parameter_id": "original_digest",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_source_identity_drift_before_model_calls",
+    "parameter_id": "source_revision",
+    "markers": [
+      "asyncio",
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_rejects_unknown_fail_node_before_checkpoint_write",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_resume_without_checkpoint_state_fails_closed_pre_model",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_run_rematerializes_and_holds_runtime_paths_for_the_whole_graph",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_run_requires_manifest_commit_marker_before_reading_artifacts",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_scoped_pipeline_rejects_unscoped_document_before_graph_and_cleans_batch",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_scoped_source_document_stays_runtime_attested_through_load",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_pipeline_017.py",
+    "function": "test_unscoped_pipeline_rejects_scoped_document_before_graph_and_cleans_batch",
+    "parameter_id": null,
+    "markers": [
+      "asyncio"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_duplicate_key_race_rejects_invalid_winner_and_rolls_back_stale",
+    "parameter_id": "pending-True",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_duplicate_key_race_rejects_invalid_winner_and_rolls_back_stale",
+    "parameter_id": "rejected-False",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_duplicate_key_race_rereads_exact_pending_winner",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_empty_tombstone_rejects_late_import_of_the_same_source_revision",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_accepts_applied_duplicate_with_scoped_winner_existing_conflict",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_applied_duplicate_with_cross_scope_conflict_refs",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_applied_duplicate_with_cross_scope_item_claim",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "None-applied",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "None-pending",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "knowledge_ids1-applied",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "knowledge_ids1-pending",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "knowledge_ids2-applied",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_writes",
+    "parameter_id": "knowledge_ids2-pending",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "duplicate_claim",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "foreign_claim",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "pending",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "proposed_list",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "proposed_null",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "proposed_string",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "rejected",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "removed_bool",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "removed_missing",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "removed_negative",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "removed_string",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "removed_zero",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "wrong_action",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "wrong_decision",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "wrong_knowledge_ids",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_late_import_fails_closed_on_malformed_source_tombstone",
+    "parameter_id": "wrong_proposed_knowledge",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_legacy_retract_cannot_delete_a_normal_source_aware_import",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_new_revision_marks_only_scoped_matching_source_aware_evidence_stale",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_and_import_failure_roll_back_as_one_caller_transaction",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_does_not_mutate_release_pointer_or_snapshot",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_flush_failure_rolls_back_stale_and_changeset",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_ignores_legacy_and_other_source_rows_on_mixed_claim",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_never_overwrites_an_existing_stale_timestamp",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_document_recompile_ambiguity",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_malformed_recompile_knowledge_ids_without_stale_leak",
+    "parameter_id": "None",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_malformed_recompile_knowledge_ids_without_stale_leak",
+    "parameter_id": "knowledge_ids1",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_malformed_recompile_knowledge_ids_without_stale_leak",
+    "parameter_id": "knowledge_ids2",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_nonempty_or_nonpending_recompile_without_stale_leak",
+    "parameter_id": "applied-False",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_nonempty_or_nonpending_recompile_without_stale_leak",
+    "parameter_id": "partially_applied-False",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_nonempty_or_nonpending_recompile_without_stale_leak",
+    "parameter_id": "pending-True",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_nonempty_or_nonpending_recompile_without_stale_leak",
+    "parameter_id": "rejected-False",
+    "markers": [
+      "parametrize"
+    ]
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_notification_rejects_raw_kb_mismatch_before_query_or_mutation",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_repeated_new_revision_notification_reuses_one_pending_recompile",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_same_active_revision_is_a_noop",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_source_revision_report_is_frozen_and_strict",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_stale_write_is_a_scoped_conditional_null_to_timestamp_update",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_t6_importer_populates_pending_recompile_without_document_changeset",
+    "parameter_id": null,
+    "markers": []
+  },
+  {
+    "path": "tests/test_source_revision_017.py",
+    "function": "test_t7_unrelated_integrity_error_is_not_misclassified_as_recompile_race",
+    "parameter_id": null,
+    "markers": []
+  }
+]

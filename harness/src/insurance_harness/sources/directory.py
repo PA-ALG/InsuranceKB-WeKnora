@@ -112,7 +112,10 @@ class DirectoryDocumentSource:
                 source_id=self._replay_identity,
             )
 
-        paths = sorted(root.glob("*.pdf"), key=lambda path: path.name)
+        paths = sorted(
+            (path for path in root.iterdir() if path.suffix.lower() == ".pdf"),
+            key=lambda path: (path.name.casefold(), path.name),
+        )
         if not paths:
             raise SourceMaterializationError(
                 "directory replay contains no PDF files",

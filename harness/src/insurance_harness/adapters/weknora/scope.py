@@ -35,7 +35,7 @@ def require_knowledge_scope(
         raise ScopeViolation(_SCOPE_ERROR)
     if not _identity_matches(getattr(knowledge, "tenant_id", None), scope.tenant_id):
         raise ScopeViolation(_SCOPE_ERROR)
-    if not _identity_matches(
+    if not _strict_kb_identity_matches(
         getattr(knowledge, "knowledge_base_id", None), scope.raw_kb_id
     ):
         raise ScopeViolation(_SCOPE_ERROR)
@@ -52,7 +52,7 @@ def require_chunk_scope(
         raise ScopeViolation(_SCOPE_ERROR)
     if not _identity_matches(getattr(chunk, "knowledge_id", None), knowledge_id):
         raise ScopeViolation(_SCOPE_ERROR)
-    if not _identity_matches(
+    if not _strict_kb_identity_matches(
         getattr(chunk, "knowledge_base_id", None), scope.raw_kb_id
     ):
         raise ScopeViolation(_SCOPE_ERROR)
@@ -70,3 +70,7 @@ def scope_log_context(scope: KnowledgeScope) -> dict[str, str]:
 
 def _identity_matches(value: object, expected: str) -> bool:
     return type(value) in (str, int) and str(value) == expected
+
+
+def _strict_kb_identity_matches(value: object, expected: str) -> bool:
+    return isinstance(value, str) and value == expected

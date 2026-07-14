@@ -7,13 +7,14 @@ HARNESS_LIVE_DB_URL / HARNESS_LIVE_SPACE_ID。
 
 import os
 import uuid
+from collections.abc import Iterator
 
 import pytest
 
 from insurance_harness.adapters.weknora import WeKnoraClient, WeKnoraWikiPage
 from insurance_harness.config import HarnessSettings
-from insurance_harness.db.base import make_engine, make_session_factory
-from insurance_harness.db.scope import KnowledgeScope, load_scope
+from insurance_harness.db.scope import KnowledgeScope
+from tests.support.live import live_scope_context
 
 pytestmark = pytest.mark.live
 
@@ -43,15 +44,13 @@ def live() -> HarnessSettings:
 
 
 @pytest.fixture
-def live_scope(live: HarnessSettings) -> KnowledgeScope:
+def live_scope(live: HarnessSettings) -> Iterator[KnowledgeScope]:
     del live
-    engine = make_engine(os.environ["HARNESS_LIVE_DB_URL"])
-    session = make_session_factory(engine)()
-    try:
-        return load_scope(session, os.environ["HARNESS_LIVE_SPACE_ID"])
-    finally:
-        session.close()
-        engine.dispose()
+    with live_scope_context(
+        os.environ["HARNESS_LIVE_DB_URL"],
+        os.environ["HARNESS_LIVE_SPACE_ID"],
+    ) as scope:
+        yield scope
 
 
 async def test_live_wiki_page_crud_roundtrip(

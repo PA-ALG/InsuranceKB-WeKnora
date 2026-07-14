@@ -358,6 +358,75 @@ async def test_directory_source_sorts_pdfs_hashes_files_and_keeps_paths_runtime_
 
 
 @pytest.mark.asyncio
+async def test_rh3_2_directory_discovers_mixed_case_pdf_suffixes_in_stable_order(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "a.pdf").write_bytes(b"lowercase pdf")
+    (tmp_path / "B.PDF").write_bytes(b"uppercase pdf")
+    loaded: list[str] = []
+
+    def page_loader(path: Path) -> list[PageText]:
+        loaded.append(path.name)
+        return [PageText(page_no=1, text=path.name)]
+
+    source = DirectoryDocumentSource(
+        replay_identity="replay:rh3-mixed-case",
+        parser_fingerprint="fixture-parser-v1",
+        page_loader=page_loader,
+    )
+
+    async with source.materialize(DirectorySourceRequest(product_dir=tmp_path)) as batch:
+        assert [document.file_name for document in batch.documents] == [
+            "a.pdf",
+            "B.PDF",
+        ]
+        assert loaded == ["a.pdf", "B.PDF"]
+
+
+@pytest.mark.asyncio
+async def test_rh3_3_mixed_case_pdf_failure_is_typed_and_yields_no_partial_documents(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "a.pdf").write_bytes(b"valid pdf")
+    (tmp_path / "B.PDF").write_bytes(b"broken pdf")
+    loaded: list[str] = []
+    failures: list[SourceMaterializationError] = []
+
+    def page_loader(path: Path) -> list[PageText]:
+        loaded.append(path.name)
+        if path.name == "B.PDF":
+            raise ScannedPdfError("scanned")
+        return [PageText(page_no=1, text="valid")]
+
+    source = DirectoryDocumentSource(
+        replay_identity="replay:rh3-mixed-failure",
+        parser_fingerprint="fixture-parser-v1",
+        page_loader=page_loader,
+    )
+
+    for _ in range(2):
+        yielded = False
+        with pytest.raises(SourceMaterializationError) as caught:
+            async with source.materialize(
+                DirectorySourceRequest(product_dir=tmp_path)
+            ):
+                yielded = True
+        assert yielded is False
+        failures.append(caught.value)
+
+    assert loaded == ["a.pdf", "B.PDF", "a.pdf", "B.PDF"]
+    assert all(
+        failure.stage is MaterializationStage.PAGE_PARSE for failure in failures
+    )
+    assert all(
+        failure.source_id == "replay:rh3-mixed-failure/B.PDF"
+        for failure in failures
+    )
+    assert failures[0].source_revision is not None
+    assert failures[0].dead_letter_key == failures[1].dead_letter_key
+
+
+@pytest.mark.asyncio
 async def test_directory_hash_pages_and_runtime_path_share_one_snapshot(
     tmp_path: Path,
 ) -> None:

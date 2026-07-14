@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.compiler.models import PredRecord
@@ -102,6 +102,87 @@ def _source_pred(
             ]
         }
     )
+
+
+@pytest.mark.parametrize("entrypoint", ["records", "jsonl"])
+@pytest.mark.parametrize("legacy_replay", [True, False], ids=["legacy", "source-aware"])
+def test_rh3_1_directory_unknown_without_evidence_is_rejected_before_database_writes(
+    kb_session: Session,
+    tmp_path: Path,
+    entrypoint: str,
+    legacy_replay: bool,
+) -> None:
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    identity = _source_identity(knowledge_id="knowledge-rh3")
+    raw_record = pred(
+        "premium_waiver",
+        value=None,
+        tri_state="unknown",
+        doc="directory.pdf",
+    ).model_dump(mode="python")
+    raw_record["source_mode"] = "directory_replay"
+    record = PredRecord.model_validate(raw_record)
+    pred_path = tmp_path / "directory-pred.jsonl"
+    pred_path.write_text(record.model_dump_json() + "\n", encoding="utf-8")
+    tracked_tables = (ChangeSet, ChangeItem, Claim, ClaimEvidence)
+    before = {table: _count(kb_session, table) for table in tracked_tables}
+    statements: list[str] = []
+
+    def capture_sql(*args: object) -> None:
+        statements.append(str(args[2]))
+
+    bind = kb_session.get_bind()
+    event.listen(bind, "before_cursor_execute", capture_sql)
+    try:
+        with pytest.raises(ScopeViolation):
+            if entrypoint == "records" and legacy_replay:
+                import_pred_records(
+                    kb_session,
+                    [record],
+                    scope=scope,
+                    product_id="AXB001",
+                    product_version_id=version.id,
+                    legacy_replay=True,
+                )
+            elif entrypoint == "records":
+                import_pred_records(
+                    kb_session,
+                    [record],
+                    scope=scope,
+                    product_id="AXB001",
+                    product_version_id=version.id,
+                    source_context=_source_context(
+                        scope,
+                        {"directory.pdf": identity},
+                    ),
+                )
+            elif legacy_replay:
+                import_pred_jsonl(
+                    kb_session,
+                    pred_path,
+                    scope=scope,
+                    product_id="AXB001",
+                    product_version_id=version.id,
+                    legacy_replay=True,
+                )
+            else:
+                import_pred_jsonl(
+                    kb_session,
+                    pred_path,
+                    scope=scope,
+                    product_id="AXB001",
+                    product_version_id=version.id,
+                    source_context=_source_context(
+                        scope,
+                        {"directory.pdf": identity},
+                    ),
+                )
+    finally:
+        event.remove(bind, "before_cursor_execute", capture_sql)
+
+    assert statements == []
+    assert {table: _count(kb_session, table) for table in tracked_tables} == before
 
 
 def test_k2_1_import_binds_product_and_evidence(kb_session: Session) -> None:

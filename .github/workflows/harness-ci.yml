@@ -5,27 +5,78 @@ on:
     paths:
       - "harness/**"
       - ".github/workflows/harness-ci.yml"
+      - ".github/workflows/harness-live.yml"
   pull_request:
     paths:
       - "harness/**"
       - ".github/workflows/harness-ci.yml"
+      - ".github/workflows/harness-live.yml"
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  deterministic:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: harness
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           python-version: "3.12"
+          version: "0.9.26"
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Type check (mypy strict)
         run: uv run mypy src tests
-      - name: Tests (excluding live)
-        run: uv run pytest -m "not live" -q
+      - name: Tests (deterministic)
+        run: uv run pytest -m "not live and not integration_postgres" -q
+
+  integration-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: harness
+          POSTGRES_PASSWORD: harness
+          POSTGRES_DB: harness
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U harness -d harness"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HARNESS_TEST_POSTGRES_URL: postgresql+psycopg://harness:harness@127.0.0.1:5432/harness
+    defaults:
+      run:
+        working-directory: harness
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+          version: "0.9.26"
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Preflight PostgreSQL
+        run: |
+          test -n "$HARNESS_TEST_POSTGRES_URL"
+          pg_isready -h 127.0.0.1 -p 5432 -U harness -d harness
+      - name: Tests (PostgreSQL integration)
+        run: uv run pytest -m integration_postgres -q --junitxml=reports/postgres.xml
+      - name: Require executed zero-skip PostgreSQL tests
+        run: uv run python scripts/check_junit.py reports/postgres.xml
+      - name: Upload PostgreSQL JUnit
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: harness-postgres-junit
+          path: harness/reports/postgres.xml
+          if-no-files-found: ignore

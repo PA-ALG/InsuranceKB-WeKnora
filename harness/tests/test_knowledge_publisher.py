@@ -26,6 +26,7 @@ from insurance_harness.knowledge import (
 from insurance_harness.knowledge.tables import ChangeSet, ReleaseSnapshot
 from tests.conftest import BASE_URL
 from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.support.live import AsyncCleanup, run_cleanups_preserving_failure
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
@@ -184,6 +185,8 @@ async def test_k5_5_live_publish_and_rollback_roundtrip(kb_session: Session) -> 
     )
     kb_id = os.environ["HARNESS_LIVE_KB_ID"]
     live_client = WeKnoraClient(settings)
+    cleanup_slug: str | None = None
+    primary_error: BaseException | None = None
     try:
         scope = _scope(kb_session, wiki_kb_id=kb_id)
         product, version = seed_product(
@@ -198,10 +201,12 @@ async def test_k5_5_live_publish_and_rollback_roundtrip(kb_session: Session) -> 
             version.id,
             ("waiting_period", "等待期", "90天"),
         )
+        cleanup_slug = f"product/{product.product_code}/{version.version_label}/overview"
         first = await publish_product_version(
             kb_session, live_client, scope,
             product_version_id=version.id, label=f"live-{uuid.uuid4().hex[:8]}",
         )
+        assert first.pages[0].slug == cleanup_slug
         fetched = await live_client.get_wiki_page(scope.wiki_kb_id, first.pages[0].slug)
         assert fetched.content == first.pages[0].content
         rollback = await rollback_to_snapshot(
@@ -211,6 +216,19 @@ async def test_k5_5_live_publish_and_rollback_roundtrip(kb_session: Session) -> 
             scope.wiki_kb_id, rollback.pages[0].slug
         )
         assert refetched.content == first.pages[0].content
-        await live_client.delete_wiki_page(scope.wiki_kb_id, first.pages[0].slug)
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
-        await live_client.aclose()
+        cleanups: list[AsyncCleanup] = [live_client.aclose]
+        if cleanup_slug is not None:
+            registered_slug = cleanup_slug
+
+            async def delete_registered_page() -> None:
+                await live_client.delete_wiki_page(kb_id, registered_slug)
+
+            cleanups.insert(0, delete_registered_page)
+        await run_cleanups_preserving_failure(
+            cleanups,
+            primary_error=primary_error,
+        )

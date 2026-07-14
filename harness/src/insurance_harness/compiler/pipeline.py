@@ -1138,6 +1138,7 @@ def _to_pred(
     )
     return PredRecord(
         data_quality=data_quality,
+        source_mode="weknora" if manifest.space_id else "directory_replay",
         product_id=state["product_id"],
         product_name=state["product_name"],
         doc=cand.doc or "-",

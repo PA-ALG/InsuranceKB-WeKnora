@@ -19,6 +19,11 @@ from insurance_harness.db.scope import (
 from insurance_harness.knowledge.models import SourceImportIdentity
 from insurance_harness.knowledge.tables import ChangeItem, ChangeSet, Claim, ClaimEvidence
 
+_APPLIED_SOURCE_ITEM_ACTIONS = frozenset(
+    {"add", "enrich", "supersede", "conflict", "retract"}
+)
+_APPLIED_SOURCE_ITEM_DECISIONS = frozenset({"auto_applied", "approved"})
+
 
 class SourceRevisionReport(BaseModel):
     """Outcome of one source-revision notification."""
@@ -171,6 +176,71 @@ def _existing_recompile(
     return change_set
 
 
+def _existing_zero_evidence_source_change_set(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+) -> tuple[ChangeSet | None, bool]:
+    """Classify one same-identity source aggregate when no active evidence exists."""
+    rows = list(
+        session.scalars(
+            select(ChangeSet).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind.in_(("document", "recompile")),
+                ChangeSet.external_record_id == identity.knowledge_id,
+                ChangeSet.source_revision == identity.source_revision,
+            )
+        )
+    )
+    if not rows:
+        return None, False
+    if len(rows) != 1:
+        raise ScopeViolation("source change set is ambiguous")
+    change_set = rows[0]
+    item_count = validate_source_change_set_aggregate(
+        session,
+        scope,
+        identity,
+        change_set,
+        allowed_source_kinds=("document", "recompile"),
+    )
+    if change_set.status == "applied":
+        items = tuple(
+            session.scalars(
+                select(ChangeItem).where(
+                    ChangeItem.change_set_id == change_set.id
+                )
+            )
+        )
+        if any(
+            item.action not in _APPLIED_SOURCE_ITEM_ACTIONS
+            or item.decision not in _APPLIED_SOURCE_ITEM_DECISIONS
+            for item in items
+        ):
+            raise ScopeViolation("source change set cannot be replayed")
+        # Local import avoids the merge -> source_revision module cycle.
+        from insurance_harness.knowledge.merge import (
+            validate_scoped_change_set_items,
+        )
+
+        try:
+            validate_scoped_change_set_items(session, scope, change_set)
+        except ScopeViolation:
+            raise
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ScopeViolation(
+                "source change set cannot be replayed"
+            ) from exc
+        return change_set, True
+    if (
+        change_set.source_kind == "recompile"
+        and change_set.status == "pending"
+        and item_count == 0
+    ):
+        return change_set, False
+    raise ScopeViolation("source change set cannot be replayed")
+
+
 def _new_recompile_change_set(
     _session: Session,
     scope: KnowledgeScope,
@@ -247,7 +317,24 @@ def notify_source_revision(
         if identity.source_revision in active_revisions:
             raise ScopeViolation("source revision state is ambiguous")
 
-        change_set = _existing_recompile(session, scope, identity)
+        if active_revisions:
+            change_set = _existing_recompile(session, scope, identity)
+        else:
+            change_set, applied_same_revision = (
+                _existing_zero_evidence_source_change_set(
+                    session,
+                    scope,
+                    identity,
+                )
+            )
+            if applied_same_revision:
+                return SourceRevisionReport(
+                    same_revision=True,
+                    created=False,
+                    reused=False,
+                    stale_count=0,
+                    change_set_id=None,
+                )
         if change_set is None:
             change_set, created = _insert_recompile_or_reread(
                 session,

@@ -25,8 +25,8 @@ from insurance_harness.knowledge.tables import ChangeSet, Claim, ClaimEvidence
 from tests.kbhelpers import seed_bound_scope, seed_product
 
 NOW = datetime(2026, 7, 14, 10, 0, tzinfo=UTC)
-LIVE_POSTGRES_URL = os.getenv("HARNESS_LIVE_POSTGRES_URL")
-LIVE_FUTURE_TIMEOUT_S = 30
+TEST_POSTGRES_URL = os.getenv("HARNESS_TEST_POSTGRES_URL")
+POSTGRES_FUTURE_TIMEOUT_S = 30
 
 
 def _live_connect_args(schema: str | None = None) -> dict[str, object]:
@@ -73,20 +73,17 @@ def test_t7_postgresql_ddl_keeps_scoped_source_idempotency_constraint() -> None:
     assert "statement_timeout=15000" in options
     assert "lock_timeout=5000" in options
     assert "search_path=t7_test_schema,public" in options
-    assert LIVE_FUTURE_TIMEOUT_S == 30
+    assert POSTGRES_FUTURE_TIMEOUT_S == 30
 
 
-@pytest.mark.live
-@pytest.mark.skipif(
-    LIVE_POSTGRES_URL is None,
-    reason="HARNESS_LIVE_POSTGRES_URL is not configured for real concurrency",
-)
+@pytest.mark.integration_postgres
 def test_t7_live_postgresql_concurrent_notifications_create_one_recompile() -> None:
-    assert LIVE_POSTGRES_URL is not None
-    assert LIVE_POSTGRES_URL.startswith(("postgresql://", "postgresql+psycopg://"))
+    if not TEST_POSTGRES_URL:
+        pytest.fail("HARNESS_TEST_POSTGRES_URL is required for integration_postgres")
+    assert TEST_POSTGRES_URL.startswith(("postgresql://", "postgresql+psycopg://"))
     schema = f"t7_source_revision_{uuid.uuid4().hex}"
     admin_engine = create_engine(
-        LIVE_POSTGRES_URL,
+        TEST_POSTGRES_URL,
         future=True,
         connect_args=_live_connect_args(),
     )
@@ -97,7 +94,7 @@ def test_t7_live_postgresql_concurrent_notifications_create_one_recompile() -> N
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         schema_created = True
         engine = create_engine(
-            LIVE_POSTGRES_URL,
+            TEST_POSTGRES_URL,
             future=True,
             connect_args=_live_connect_args(schema),
         )
@@ -176,7 +173,7 @@ def test_t7_live_postgresql_concurrent_notifications_create_one_recompile() -> N
                 for _index in range(2)
             ]
             reports = [
-                future.result(timeout=LIVE_FUTURE_TIMEOUT_S)
+                future.result(timeout=POSTGRES_FUTURE_TIMEOUT_S)
                 for future in futures
             ]
 
