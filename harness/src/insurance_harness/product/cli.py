@@ -1,8 +1,9 @@
 """CLI（spec P5）：
 
-    python -m insurance_harness.product.cli register-products <dir> [--db-url URL]
+    python -m insurance_harness.product.cli register-products <dir> --space-id ID \
+        [--db-url URL]
     python -m insurance_harness.product.cli classify <dir> --report out.md \
-        [--db-url URL] [--unassigned-out out.jsonl]
+        --space-id ID [--db-url URL] [--unassigned-out out.jsonl]
 
 连接串解析顺序：--db-url > HarnessSettings.db_url（HARNESS_DB_URL）> sqlite 本地文件（提示测试用）。
 classify 对样本目录自动评分：文档类型以文件名为真值、产品归属以所在目录为真值（P4.5）。
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.config import HarnessSettings
 from insurance_harness.db import make_engine
+from insurance_harness.db.scope import load_scope
 from insurance_harness.goldenset.pdf import extract_pages
 from insurance_harness.product.classify import (
     DocumentType,
@@ -53,7 +55,8 @@ def _migrate(db_url: str) -> None:
     harness_root = Path(__file__).resolve().parents[3]
     cfg = Config(str(harness_root / "alembic.ini"))
     cfg.set_main_option("script_location", str(harness_root / "migrations"))
-    cfg.set_main_option("sqlalchemy.url", db_url)
+    cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
+    cfg.cmd_opts = argparse.Namespace(x=[f"db_url={db_url}"])
     command.upgrade(cfg, "head")
 
 
@@ -62,7 +65,8 @@ def cmd_register(args: argparse.Namespace) -> int:
     _migrate(db_url)
     engine = make_engine(db_url)
     with Session(engine) as session:
-        report = register_products(session, Path(args.directory))
+        scope = load_scope(session, args.space_id)
+        report = register_products(session, Path(args.directory), scope=scope)
     print(report.summary)
     for line in report.skipped:
         print(f"  skipped: {line}")
@@ -71,13 +75,15 @@ def cmd_register(args: argparse.Namespace) -> int:
 
 def cmd_classify(args: argparse.Namespace) -> int:
     db_url = _resolve_db_url(args.db_url)
+    _migrate(db_url)
     engine = make_engine(db_url)
     root = Path(args.directory)
 
     rows: list[dict[str, object]] = []
     unassigned_rows: list[dict[str, object]] = []
     with Session(engine) as session:
-        index = MatchIndex.from_session(session)
+        scope = load_scope(session, args.space_id)
+        index = MatchIndex.from_session(session, scope)
         for pdf in sorted(root.rglob("*.pdf")):
             pages = extract_pages(pdf)
             cls = asyncio.run(classify_document(pdf.name, pages))
@@ -106,7 +112,7 @@ def cmd_classify(args: argparse.Namespace) -> int:
                 }
             )
             # P4.4：unassigned 落池表 + 导出 JSONL
-            persist_unassigned(session, route.unassigned)
+            persist_unassigned(session, scope, route.unassigned)
             for u in route.unassigned:
                 unassigned_rows.append(json.loads(u.model_dump_json()))
         session.commit()
@@ -161,12 +167,14 @@ def main(argv: list[str] | None = None) -> int:
     p_reg = sub.add_parser("register-products", help="注册产品主数据（幂等）")
     p_reg.add_argument("directory")
     p_reg.add_argument("--db-url", default=None)
+    p_reg.add_argument("--space-id", required=True)
     p_reg.set_defaults(func=cmd_register)
 
     p_cls = sub.add_parser("classify", help="分类+路由并产出验证报告")
     p_cls.add_argument("directory")
     p_cls.add_argument("--report", required=True)
     p_cls.add_argument("--db-url", default=None)
+    p_cls.add_argument("--space-id", required=True)
     p_cls.add_argument("--unassigned-out", default=None)
     p_cls.set_defaults(func=cmd_classify)
 

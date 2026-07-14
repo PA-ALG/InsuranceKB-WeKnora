@@ -6,25 +6,56 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.compiler.models import Confidence, PredRecord
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
+from insurance_harness.db.scope import KnowledgeScope, load_scope
 from insurance_harness.goldenset.records import Evidence, TriState
 
 BROCHURE = "产品说明书.pdf"  # official_desc，权威 2
 TERMS = "保险条款.pdf"  # terms，权威 1
 
 
+def seed_bound_scope(
+    session: Session,
+    *,
+    tenant_id: str,
+    raw_kb_id: str,
+    wiki_kb_id: str,
+) -> KnowledgeScope:
+    from insurance_harness.db.models import KnowledgeSpace
+
+    space = KnowledgeSpace(
+        name=f"{tenant_id}:{raw_kb_id}:{wiki_kb_id}",
+        binding_status="bound",
+        tenant_id=tenant_id,
+        raw_kb_id=raw_kb_id,
+        wiki_kb_id=wiki_kb_id,
+    )
+    session.add(space)
+    session.flush()
+    return load_scope(session, space.id)
+
+
 def seed_product(
     session: Session,
     *,
+    scope: KnowledgeScope,
     code: str = "AXB001",
     name: str = "安心保两全保险",
     version_label: str = "2024版",
 ) -> tuple[InsuranceProduct, ProductVersion]:
     product = InsuranceProduct(
-        product_code=code, canonical_name=name, category="endowment", status="在售"
+        space_id=scope.space_id,
+        product_code=code,
+        canonical_name=name,
+        category="endowment",
+        status="在售",
     )
     session.add(product)
     session.flush()
-    version = ProductVersion(product_id=product.id, version_label=version_label)
+    version = ProductVersion(
+        space_id=scope.space_id,
+        product_id=product.id,
+        version_label=version_label,
+    )
     session.add(version)
     session.flush()
     return product, version

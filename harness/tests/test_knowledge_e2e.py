@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge import (
     current_snapshot_id,
     import_pred_records,
@@ -21,13 +22,14 @@ from insurance_harness.knowledge import (
     rollback_to_snapshot,
 )
 from insurance_harness.knowledge.tables import (
+    ChangeItem,
     ChangeSet,
     Claim,
     Conflict,
     ReviewItem,
 )
 from tests.conftest import BASE_URL
-from tests.kbhelpers import BROCHURE, TERMS, pred, seed_product
+from tests.kbhelpers import BROCHURE, TERMS, pred, seed_bound_scope, seed_product
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
@@ -41,12 +43,30 @@ FIELD_NAMES = {
 }
 
 
-def _approve_all_open(session: Session) -> int:
+def _scope(session: Session) -> KnowledgeScope:
+    return seed_bound_scope(
+        session,
+        tenant_id="tenant-e2e",
+        raw_kb_id="raw-e2e",
+        wiki_kb_id=KB,
+    )
+
+
+def _approve_all_open(session: Session, scope: KnowledgeScope) -> int:
     count = 0
     for item in session.execute(
-        select(ReviewItem).where(ReviewItem.status == "open")
+        select(ReviewItem).where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.status == "open",
+        )
     ).scalars().all():
-        resolve_review(session, item.review_key, "approve", actor="strong-model-agent")
+        resolve_review(
+            session,
+            scope,
+            item.review_key,
+            "approve",
+            actor="strong-model-agent",
+        )
         count += 1
     return count
 
@@ -59,7 +79,8 @@ def _echo(request: httpx.Request) -> httpx.Response:
 
 @respx.mock
 async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) -> None:
-    product, version = seed_product(kb_session)
+    scope = _scope(kb_session)
+    product, version = seed_product(kb_session, scope=scope)
     slug = f"product/{product.product_code}/{version.version_label}/overview"
 
     page_get = respx.get(f"{WIKI}/pages/{slug}")
@@ -77,22 +98,22 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
              quote="责任免除共八项", field_name="责任免除"),
     ]
     report1 = import_pred_records(
-        kb_session, batch1, product_id=product.product_code,
-        product_version_id=version.id, risk_of=RISK,
+        kb_session, batch1, scope=scope, product_id=product.product_code,
+        product_version_id=version.id, risk_of=RISK, legacy_replay=True,
     )
     assert report1.imported == 3 and report1.unknown_placeholders == 1
-    approved = _approve_all_open(kb_session)  # 默认保守：全走审核
+    approved = _approve_all_open(kb_session, scope)  # 默认保守：全走审核
     assert approved == 2  # unknown 占位不产生审核项
 
     first = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="r1",
+        kb_session, client, scope, product_version_id=version.id, label="r1",
         field_names=FIELD_NAMES, doc_titles={BROCHURE: "产品说明书"},
     )
     assert create.call_count == 1  # 首发 create
     body1 = json.loads(create.calls[0].request.content)
     assert "**等待期**：90天[^" in body1["content"]
     assert "宽限期" not in body1["content"]  # unknown 不得发布为"无"
-    assert current_snapshot_id(kb_session) == first.snapshot_id
+    assert current_snapshot_id(kb_session, scope) == first.snapshot_id
 
     # ---- K6.2 第二批：条款（terms，权威 1，权威更高） ----
     batch2 = [
@@ -110,8 +131,8 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
              quote="责任免除共十项", field_name="责任免除"),
     ]
     report2 = import_pred_records(
-        kb_session, batch2, product_id=product.product_code,
-        product_version_id=version.id, risk_of=RISK,
+        kb_session, batch2, scope=scope, product_id=product.product_code,
+        product_version_id=version.id, risk_of=RISK, legacy_replay=True,
     )
     assert report2.imported == 4
     assert report2.merge.actions.get("enrich") == 1  # 补全
@@ -124,13 +145,22 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
     waiting_claims = {
         c.status: c
         for c in kb_session.execute(
-            select(Claim).where(Claim.predicate == "waiting_period")
+            select(Claim).where(
+                Claim.space_id == scope.space_id,
+                Claim.predicate == "waiting_period",
+            )
         ).scalars()
     }
     assert waiting_claims["published"].value == {"text": "180天"}
     assert waiting_claims["superseded"].superseded_by == waiting_claims["published"].id
     auto_conflict = kb_session.execute(
-        select(Conflict).where(Conflict.status == "resolved")
+        select(Conflict)
+        .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
+        .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+        .where(
+            ChangeSet.space_id == scope.space_id,
+            Conflict.status == "resolved",
+        )
     ).scalar_one()
     assert auto_conflict.decision_basis is not None
     assert "proposed=1 existing=2" in auto_conflict.decision_basis["authority_cmp"]
@@ -138,25 +168,33 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
 
     # 高风险矛盾：旧值保持 published、新值 candidate、ReviewItem 待审
     exclusion_open = kb_session.execute(
-        select(Conflict).where(Conflict.status == "open")
+        select(Conflict)
+        .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
+        .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+        .where(
+            ChangeSet.space_id == scope.space_id,
+            Conflict.status == "open",
+        )
     ).scalar_one()
     assert exclusion_open.decision_basis is not None
     published_exclusion = kb_session.execute(
         select(Claim).where(
-            Claim.predicate == "exclusion_clause", Claim.status == "published"
+            Claim.space_id == scope.space_id,
+            Claim.predicate == "exclusion_clause",
+            Claim.status == "published",
         )
     ).scalar_one()
     assert published_exclusion.value == {"text": "八项免责"}  # 冲突未决生产不中断
 
     # 审核流：approve 补全/新增/高风险采信条款
-    assert _approve_all_open(kb_session) == 3
+    assert _approve_all_open(kb_session, scope) == 3
     kb_session.refresh(published_exclusion)
     assert published_exclusion.status == "superseded"
 
     # ---- K6.3 再发布：update 调用，内容含条款新值 ----
     page_get.mock(return_value=_echo(create.calls[0].request))  # 页面已存在
     second = await publish_product_version(
-        kb_session, client, KB, product_version_id=version.id, label="r2",
+        kb_session, client, scope, product_version_id=version.id, label="r2",
         field_names=FIELD_NAMES,
         doc_titles={BROCHURE: "产品说明书", TERMS: "保险条款"},
     )
@@ -165,17 +203,17 @@ async def test_k6_two_batch_story(kb_session: Session, client: WeKnoraClient) ->
     assert "**等待期**：180天[^" in body2["content"]  # 采信条款值
     assert "**宽限期**：60天[^" in body2["content"]  # 空字段被补全
     assert "**责任免除**：十项免责[^" in body2["content"]
-    assert current_snapshot_id(kb_session) == second.snapshot_id
+    assert current_snapshot_id(kb_session, scope) == second.snapshot_id
 
     # ---- K6.4 回滚到快照1：内容逐字一致恢复 + 指针回切 + rollback 留痕 ----
     rollback = await rollback_to_snapshot(
-        kb_session, client, KB, snapshot_id=first.snapshot_id, actor="operator"
+        kb_session, client, scope, snapshot_id=first.snapshot_id, actor="operator"
     )
     assert update.call_count == 2
     body3 = json.loads(update.calls[1].request.content)
     assert body3["content"] == body1["content"]  # 与首次发布逐字一致
     assert body3["page_metadata"]["snapshot_id"] == first.snapshot_id
-    assert current_snapshot_id(kb_session) == first.snapshot_id
+    assert current_snapshot_id(kb_session, scope) == first.snapshot_id
     assert rollback.change_set_id
     rollback_set = kb_session.get(ChangeSet, rollback.change_set_id)
     assert rollback_set is not None and rollback_set.source_kind == "rollback"

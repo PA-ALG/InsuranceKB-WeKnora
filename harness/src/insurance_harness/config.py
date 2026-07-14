@@ -4,6 +4,9 @@
 而不是等到运行时才失败（spec S2.1）。
 """
 
+from pathlib import Path
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +31,18 @@ class HarnessSettings(BaseSettings):
 
     # --- HTTP ---
     http_timeout_s: float = 30.0
+
+    # --- WeKnora 原件下载（change 017） ---
+    source_max_file_bytes: int = Field(default=100 * 1024 * 1024, gt=0)
+    source_download_chunk_bytes: int = Field(default=64 * 1024, gt=0)
+    source_max_chunk_pages: int = Field(default=1_000, gt=0)
+    source_max_chunks_per_knowledge: int = Field(default=100_000, gt=0)
+    source_max_documents_per_batch: int = Field(default=8, gt=0)
+    source_max_batch_bytes: int = Field(default=256 * 1024 * 1024, gt=0)
+    source_max_batch_pages: int = Field(default=20_000, gt=0)
+    source_max_batch_chunks: int = Field(default=200_000, gt=0)
+    # None 使用系统安全临时目录；测试/受控部署可显式覆盖。
+    source_temp_dir: Path | None = None
 
     # --- Harness 自有数据库（change 003；生产 Postgres，SQLite 仅测试） ---
     db_url: str | None = None

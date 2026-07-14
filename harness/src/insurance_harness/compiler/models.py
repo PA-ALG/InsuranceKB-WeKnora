@@ -90,12 +90,18 @@ class Judgement(BaseModel):
 
 class DocManifestEntry(BaseModel):
     doc: str
-    doc_pages: int
-    sections: int
-    family_id: str  # 章节标题序列结构指纹（11 §1.1；006 F6 无标题 fallback）
-    routed_pairs: int
-    total_pairs: int
-    compression_ratio: float
+    source_id: str
+    knowledge_id: str | None = None
+    source_revision: str
+    file_hash: str
+    original_digest: str
+    parser_fingerprint: str
+    doc_pages: int = 0
+    sections: int = 0
+    family_id: str = ""  # 章节标题序列结构指纹（11 §1.1；006 F6 无标题 fallback）
+    routed_pairs: int = 0
+    total_pairs: int = 0
+    compression_ratio: float = 0.0
     # 006 F4.2 可喂性评分（split_route 记录，只报告不拦截；默认值兼容旧 manifest）
     feedability_score: float = 1.0
     feedability_ok: bool = True
@@ -107,6 +113,11 @@ class RunManifest(BaseModel):
 
     run_id: str
     product_dir: str
+    run_dir: str = ""
+    checkpoint_path: str = ""
+    space_id: str = ""
+    tenant_id: str = ""
+    raw_kb_id: str = ""
     product_id: str = ""
     product_name: str = ""
     line_key: str = ""

@@ -17,6 +17,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import InsuranceProduct, ProductAlias, UnassignedItem
+from insurance_harness.db.scope import (
+    KnowledgeScope,
+    ScopeViolation,
+    require_current_scope,
+)
 from insurance_harness.goldenset.pdf import PageText
 
 Confidence = Literal["exact", "alias", "fuzzy"]
@@ -49,6 +54,7 @@ class ProductCandidate(BaseModel):
 class UnassignedDraft(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    space_id: str
     doc_ref: str
     section_ref: str | None
     excerpt: str
@@ -59,6 +65,7 @@ class UnassignedDraft(BaseModel):
 class RouteResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    space_id: str
     candidates: tuple[ProductCandidate, ...]
     unassigned: tuple[UnassignedDraft, ...]
 
@@ -76,11 +83,13 @@ class MatchIndex:
 
     def __init__(
         self,
+        space_id: str,
         products: list[_ProductRef],
         exact_keys: dict[str, tuple[_ProductRef, str]],
         alias_map: dict[str, set[str]],
         refs_by_id: dict[str, _ProductRef],
     ) -> None:
+        self._space_id = space_id
         self._products = products
         self._exact_keys = exact_keys  # 文号/注册号 → (product, 依据)
         self._alias_map = alias_map  # alias → product_id 集合
@@ -89,11 +98,14 @@ class MatchIndex:
         self._names_desc = sorted(products, key=lambda p: len(p.canonical_name), reverse=True)
 
     @classmethod
-    def from_session(cls, session: Session) -> "MatchIndex":
+    def from_session(cls, session: Session, scope: KnowledgeScope) -> "MatchIndex":
+        require_current_scope(session, scope)
         products: list[_ProductRef] = []
         exact_keys: dict[str, tuple[_ProductRef, str]] = {}
         refs_by_id: dict[str, _ProductRef] = {}
-        for row in session.execute(select(InsuranceProduct)).scalars():
+        for row in session.execute(
+            select(InsuranceProduct).where(InsuranceProduct.space_id == scope.space_id)
+        ).scalars():
             ref = _ProductRef(
                 product_id=row.id, product_code=row.product_code, canonical_name=row.canonical_name
             )
@@ -102,7 +114,14 @@ class MatchIndex:
             if row.filing_no:
                 exact_keys[row.filing_no] = (ref, "备案文号")
         alias_map: dict[str, set[str]] = defaultdict(set)
-        for alias_row in session.execute(select(ProductAlias)).scalars():
+        for alias_row in session.execute(
+            select(ProductAlias)
+            .join(
+                InsuranceProduct,
+                ProductAlias.product_id == InsuranceProduct.id,
+            )
+            .where(InsuranceProduct.space_id == scope.space_id)
+        ).scalars():
             alias_ref = refs_by_id.get(alias_row.product_id)
             if alias_ref is None:
                 continue
@@ -110,7 +129,7 @@ class MatchIndex:
                 exact_keys[alias_row.alias] = (alias_ref, "注册号")
             else:
                 alias_map[alias_row.alias].add(alias_row.product_id)
-        return cls(products, exact_keys, dict(alias_map), refs_by_id)
+        return cls(scope.space_id, products, exact_keys, dict(alias_map), refs_by_id)
 
     # --- 匹配 ---
 
@@ -186,14 +205,46 @@ def route_sections(index: MatchIndex, doc_ref: str, sections: list[Section]) -> 
         result = _route_pages(index, doc_ref, section.section_ref, list(section.pages))
         candidates.extend(result.candidates)
         unassigned.extend(result.unassigned)
-    return RouteResult(candidates=tuple(candidates), unassigned=tuple(unassigned))
+    return RouteResult(
+        space_id=index._space_id,
+        candidates=tuple(candidates),
+        unassigned=tuple(unassigned),
+    )
 
 
-def persist_unassigned(session: Session, drafts: tuple[UnassignedDraft, ...]) -> int:
+def persist_unassigned(
+    session: Session,
+    scope: KnowledgeScope,
+    drafts: tuple[UnassignedDraft, ...],
+) -> int:
     """把 unassigned 草稿落 unassigned_pool 表（P4.4）；返回写入条数。"""
+    require_current_scope(session, scope)
+    if any(draft.space_id != scope.space_id for draft in drafts):
+        raise ScopeViolation("scope mismatch")
+
+    candidates = [candidate for draft in drafts for candidate in draft.candidates]
+    candidate_ids = {candidate.product_id for candidate in candidates}
+    if candidate_ids:
+        scoped_products = {
+            product.id: (product.product_code, product.canonical_name)
+            for product in session.execute(
+                select(InsuranceProduct).where(
+                    InsuranceProduct.space_id == scope.space_id,
+                    InsuranceProduct.id.in_(candidate_ids),
+                )
+            ).scalars()
+        }
+        if any(
+            scoped_products.get(candidate.product_id)
+            != (candidate.product_code, candidate.canonical_name)
+            for candidate in candidates
+        ):
+            raise ScopeViolation("scope mismatch")
+
     for draft in drafts:
         session.add(
             UnassignedItem(
+                space_id=scope.space_id,
                 doc_ref=draft.doc_ref,
                 section_ref=draft.section_ref,
                 excerpt=draft.excerpt,
@@ -267,6 +318,7 @@ def _route_pages(
             )
             unassigned.append(
                 UnassignedDraft(
+                    space_id=index._space_id,
                     doc_ref=doc_ref,
                     section_ref=section_ref,
                     excerpt=full_text[:300],
@@ -287,6 +339,7 @@ def _route_pages(
             )
             unassigned.append(
                 UnassignedDraft(
+                    space_id=index._space_id,
                     doc_ref=doc_ref,
                     section_ref=section_ref,
                     excerpt=full_text[:300],
@@ -297,6 +350,7 @@ def _route_pages(
     elif ambiguous_aliases:
         unassigned.append(
             UnassignedDraft(
+                space_id=index._space_id,
                 doc_ref=doc_ref,
                 section_ref=section_ref,
                 excerpt="；".join(sorted(ambiguous_aliases))[:300],
@@ -305,4 +359,8 @@ def _route_pages(
             )
         )
 
-    return RouteResult(candidates=candidates, unassigned=tuple(unassigned))
+    return RouteResult(
+        space_id=index._space_id,
+        candidates=candidates,
+        unassigned=tuple(unassigned),
+    )

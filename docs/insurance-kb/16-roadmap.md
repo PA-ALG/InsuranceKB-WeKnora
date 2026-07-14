@@ -2,7 +2,24 @@
 
 > 与 13（蓝图现状）配套：13 讲"建到哪了"，本文讲"接下来按什么顺序建、每一站的完成定义"。排期按里程碑不按日历（团队自行映射到周）。
 
-## M1 · 可演示闭环（当前里程碑）
+## M0 · 企业运行基础（当前里程碑）
+
+**目标**：先消除“本地验证链 ≠ 企业生产链”，让租户隔离、WeKnora 来源、Evidence 血缘、发布快照与 Golden Gate 成为不可绕过的基础。
+
+| 事项 | Change | 完成定义 |
+|---|---|---|
+| KnowledgeSpace 与 tenant/双 KB 强制作用域 | 016 | 双租户同业务键互不影响；legacy bind；跨空间 fail closed |
+| WeKnora SourceDocument Bridge | 017 | upload→parse→download/chunks→compiler；Evidence 带 source revision/page/chunk |
+| SnapshotFact 与统一在线读取 | 018 | Wiki/MCP 同快照；失败不移动指针；补偿精确恢复 |
+| Golden 工具与自动发布质量闸门 | 019 | portable validator/profile；默认不自动 supersede；回归失败不能批准 |
+| gs-v0.1 与 13 产品真实基线 | 020 | run-admission 后 13/13、裁决/死信/keypoints/approved profile 齐 |
+| Source lifecycle ordering | 021 | durable current head；不同 revision 乱序/并发和 import/delete 竞争由统一 lock/CAS 裁决 |
+
+**关键路径**：016 → 017 → 018；019 工具可文件域隔离推进，020 等 019 与运行准入；021 是 017 后续生产并发强化，不阻塞 T8 live 验收但阻塞不同 revision 并发开放。
+
+进度（2026-07-14）：016 T1～T8 已完成并通过双审/主代理验收；017 T1 adapter contract、T2 SourceDocument/Directory replay、T3 WeKnora materializer、T4 Compiler source boundary、T5 quote→chunk/source-aware Evidence、T6 Evidence migration/persistence/import、T7 stale/recompile/scoped retract 与 T8 live gate/Runbook/handoff 已按 TDD 完成并通过双审。最新主代理门禁为 12 T8 non-live（1 deselected）/ 49 source standalone / 915 non-live / 5 deselected，Ruff、mypy 139 files 与 diff check 全绿。真实 WeKnora/PostgreSQL 因六项环境前置缺失为 `NOT RUN`（1 skipped/12 deselected），existing-knowledge 分支不代表 upload 创建覆盖。018～020 均未因此自动完成；021 仅 proposed/pending，尚未实现不同 revision ordering。skip/deselected 不代表 live 成功，M0 仍在进行。
+
+## M1 · 可演示闭环
 
 **目标**：给管理层/业务方演示"文档进 → 知识出 → 人可审 → Agent 可用 → 可回滚"的完整故事。
 
@@ -11,8 +28,8 @@
 | WeKnora 双库跑通 + live 契约 + L1~L5 演示脚本 | B10（14 号文档 Runbook） | 无 |
 | 结构化直入（存量 JSON/FAQ 变知识） | B12（010，specs 齐） | 007✅ |
 | 审核工作台四页 | B8（008，specs 齐） | 007✅ |
-| 金标收尾 gs-v0.1（13/13） | B1（T8-HANDOVER） | 无 |
-| 全量基线 + judge 批处理 + 死信复跑 | B2/B3/B4 | B1 |
+| 金标收尾 gs-v0.1（13/13） | 020 D2（承接 B1） | 019 + run-admission |
+| 全量基线 + judge 批处理 + 死信复跑 | 020 D3/D4（承接 B2/B3/B4/B6/B7） | gs-v0.1 |
 
 **完成定义**：L1~L6 演示一条命令跑通；13 产品金标+基线报告齐；工作台可完成一次真实审核与回滚。
 **关键路径**：B10 → L6（其余可并行）。

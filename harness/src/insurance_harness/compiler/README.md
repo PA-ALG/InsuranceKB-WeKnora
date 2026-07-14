@@ -19,19 +19,36 @@
 | `voting.py` | 高风险字段 3 采样（3 prompt 变体）多数票 |
 | `judge.py` | 可插拔裁决：claude-session（judge-queue.jsonl）/ gateway |
 | `recall_attribution.py` | 漏抽归因（005 V5，纯确定性零模型）：routing_miss / extract_empty / cleaning_kill；`scripts/eval_005.py report` 出统计 |
-| `pipeline.py` | LangGraph 状态图 + AsyncSqliteSaver checkpoint + 死信 + run manifest |
+| `pipeline.py` | LangGraph 状态图 + SourceDocument boundary + AsyncSqliteSaver checkpoint + source-aware run manifest/pred Evidence |
 | `prompts/` | 全部 prompt + `PROMPT_VERSION`（E6.1） |
-| `cli.py` | `extract` / `apply-judgements` |
+| `cli.py` | `extract --source weknora` / `extract-replay` / `apply-judgements` |
 
 ## 运行
 
 ```bash
-# 真实网关（配置在 harness/.env，勿入库）
-uv run python -m insurance_harness.compiler.cli extract ../dataset/shouxian_product/<产品> --run-dir out/<产品>
+# 生产：只接受数据库绑定 Space 下的 WeKnora knowledge IDs
+uv run python -m insurance_harness.compiler.cli extract --source weknora \
+  --space-id <space_id> --knowledge-id <knowledge_id> \
+  --parser-fingerprint <parser_version> --product-id <product_id> \
+  --product-name <product_name> --run-dir out/<产品>
+
+# 离线/Golden：显式 Directory replay；不会成为生产 fallback
+uv run python -m insurance_harness.compiler.cli extract-replay ../dataset/shouxian_product/<产品> \
+  --replay-identity <fixture_identity> --parser-fingerprint <parser_version> \
+  --run-dir out/replay/<产品>
 # 3 产品基线 + 报告
 uv run python scripts/baseline_004.py run && uv run python scripts/baseline_004.py report
 ```
 
 产物：`pred.jsonl`（与 goldenset eval 对齐 + confidence/pending_judge 扩展）、`manifest.json`、
 `judge-queue.jsonl`（主会话 Claude 批处理后 `apply-judgements` 回写）、`dead-letters.jsonl`、
-`checkpoint.sqlite`（kill 后 `--resume` 续跑）。
+`checkpoint.sqlite`（kill 后 `--resume` 续跑）。manifest/source/run/checkpoint identity 在模型调用前核验；
+临时原件路径只存在于当前 run context，不进入 checkpoint。产物先写 staging，`manifest.json` 最后提交。
+
+## Source-aware Evidence lineage
+
+- finalize 不信任候选结果里预载的 source/chunk audit；只有候选 quote 通过 PDF 回验且来源与当前 `SourceDocument` 一致时，才从运行时文档重新推导 lineage。
+- quote 在规范化后唯一命中 chunk 时写 `lineage_status=linked` 及 `chunk_id`/`chunk_hash`；零命中写 `page_only`，多命中写 `ambiguous`。chunk ID 重复、页码越界或来源不一致均 fail closed，且不得从 chunk 反推页码。
+- `pred.jsonl` 的审计矩阵为：legacy 行来源字段全空；未作用域行只允许完整 revision 三元组且不带 knowledge/raw/chunk；作用域行必须成对携带 knowledge/raw identity 与完整 revision；只有 `linked` 行可携带成对的 chunk ID/hash。任何残缺或越界组合都拒绝写入。
+
+这些规则描述 T5 的内存推导与产物落盘合同；Evidence 数据库迁移、持久化和导入仍由 T6 完成。

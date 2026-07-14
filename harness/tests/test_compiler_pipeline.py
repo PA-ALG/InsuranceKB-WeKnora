@@ -3,15 +3,19 @@
 全部用假文档 + 桩模型客户端（page_loader 注入），不碰真实 PDF 与网关。
 """
 
+import hashlib
 import json
 import re
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
 import pytest
 
 from insurance_harness.compiler import cli as compiler_cli
-from insurance_harness.compiler.llm import ReplayClient, request_key
+from insurance_harness.compiler.llm import ModelClient, ReplayClient, request_key
+from insurance_harness.compiler.models import DocManifestEntry, RunManifest
 from insurance_harness.compiler.pipeline import (
     ExtractionPipeline,
     PipelineConfig,
@@ -23,11 +27,21 @@ from insurance_harness.compiler.prompts import (
     PROMPT_VERSION,
     VOTE_VARIANT_SUFFIXES,
 )
+from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.goldenset.eval import evaluate
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.goldenset.records import GoldenRecord
 from insurance_harness.goldenset.runner import read_jsonl
 from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegistry
+from insurance_harness.sources import (
+    DIRECTORY_REPLAY_PROCESSED_AT,
+    DirectoryDocumentSource,
+    DirectorySourceRequest,
+    MaterializedBatch,
+    SourceDocument,
+    SourceRevision,
+    SourceScope,
+)
 
 # --- 小 schema + 假文档夹具（E5.3） ---
 
@@ -145,23 +159,111 @@ async def _fast_sleep(_: float) -> None:
     return None
 
 
+class _ScopedFixtureSource:
+    """Explicit scoped source used only by the 016 compiler boundary tests."""
+
+    def __init__(
+        self,
+        scope: KnowledgeScope,
+        page_loader: Callable[[Path], list[PageText]],
+    ) -> None:
+        self._scope = SourceScope.from_knowledge_scope(scope)
+        self._page_loader = page_loader
+
+    @asynccontextmanager
+    async def materialize(
+        self,
+        request: DirectorySourceRequest,
+    ) -> AsyncIterator[MaterializedBatch]:
+        digest = hashlib.sha256(b"").hexdigest()
+        revision = SourceRevision(
+            file_hash=digest,
+            processed_at=DIRECTORY_REPLAY_PROCESSED_AT,
+            parser_fingerprint="fixture-parser-v1",
+        )
+        path = request.product_dir / "保险条款.pdf"
+        source_id = "compiler-pipeline-test/保险条款.pdf"
+        document = SourceDocument(
+            source_id=source_id,
+            scope=self._scope,
+            knowledge_id="fixture-knowledge-1",
+            raw_kb_id=self._scope.raw_kb_id,
+            title=path.stem,
+            file_name=path.name,
+            file_type="application/pdf",
+            source_revision=revision,
+            original_digest=digest,
+            pages=tuple(self._page_loader(path)),
+            chunks=(),
+        )
+        yield MaterializedBatch(
+            documents=(document,),
+            local_paths={source_id: path},
+        )
+
+
 def _pipeline(
-    client: ScriptedClient | ReplayClient, page_loader: object = _loader
+    client: ModelClient,
+    page_loader: Callable[[Path], list[PageText]] = _loader,
+    *,
+    scope: KnowledgeScope | None = None,
 ) -> ExtractionPipeline:
+    source = (
+        DirectoryDocumentSource(
+            replay_identity="compiler-pipeline-test",
+            parser_fingerprint="fixture-parser-v1",
+            page_loader=page_loader,
+        )
+        if scope is None
+        else _ScopedFixtureSource(scope, page_loader)
+    )
     return ExtractionPipeline(
         client=client,
         registry=REGISTRY,
         model_id="scripted-test",
+        source=source,
         config=PipelineConfig(concurrency=2, transport_attempts=2, backoff_base_s=0.0),
         sleep=_fast_sleep,
-        page_loader=page_loader,  # type: ignore[arg-type]
+        scope=scope,
+    )
+
+
+async def _run_pipeline(
+    pipeline: ExtractionPipeline,
+    *,
+    product_dir: Path,
+    **kwargs: object,
+) -> RunResult:
+    return await pipeline.run(
+        product_dir=product_dir,
+        source_request=DirectorySourceRequest(product_dir=product_dir),
+        **kwargs,  # type: ignore[arg-type]
     )
 
 
 async def _run_ok(tmp_path: Path, client: ScriptedClient) -> RunResult:
     product_dir = _make_product_dir(tmp_path)
-    return await _pipeline(client).run(
+    return await _run_pipeline(
+        _pipeline(client),
         product_dir=product_dir, run_dir=tmp_path / "run", line_key="t"
+    )
+
+
+def _source_manifest_entry() -> DocManifestEntry:
+    digest = hashlib.sha256(b"").hexdigest()
+    revision = SourceRevision(
+        file_hash=digest,
+        processed_at=DIRECTORY_REPLAY_PROCESSED_AT,
+        parser_fingerprint="fixture-parser-v1",
+    )
+    return DocManifestEntry(
+        doc="保险条款.pdf",
+        source_id="compiler-pipeline-test/保险条款.pdf",
+        knowledge_id="fixture-knowledge-1",
+        source_revision=revision.value,
+        file_hash=digest,
+        original_digest=digest,
+        parser_fingerprint=revision.parser_fingerprint,
     )
 
 
@@ -210,6 +312,36 @@ async def test_e5_3_end_to_end_with_scripted_model(tmp_path: Path) -> None:
     assert req["field_id"] == "premium_waiver" and req["reason"] == "vote_disagreement"
 
 
+async def test_s4_3_scoped_run_writes_scope_ids_without_secrets(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    scope = bound_scope(
+        tenant_id="tenant-manifest",
+        raw_kb_id="raw-manifest",
+        wiki_kb_id="wiki-manifest",
+    )
+    product_dir = _make_product_dir(tmp_path)
+
+    result = await _run_pipeline(
+        _pipeline(ScriptedClient(), scope=scope),
+        product_dir=product_dir,
+        run_dir=tmp_path / "run-scoped",
+        line_key="t",
+    )
+
+    assert result.manifest.space_id == scope.space_id
+    assert result.manifest.tenant_id == "tenant-manifest"
+    assert result.manifest.raw_kb_id == "raw-manifest"
+    manifest_json = result.manifest_path.read_text(encoding="utf-8").lower()
+    assert "tenant-manifest" in manifest_json
+    assert "raw-manifest" in manifest_json
+    assert "api_key" not in manifest_json
+    assert "token" not in manifest_json
+    assert "secret" not in manifest_json
+    assert "wiki-manifest" not in manifest_json
+
+
 async def test_e5_1_pred_jsonl_feeds_eval_runner(tmp_path: Path) -> None:
     """pred JSONL 与 002 eval runner 输入格式对齐；confidence 扩展字段被容忍。"""
     result = await _run_ok(tmp_path, ScriptedClient())
@@ -249,10 +381,12 @@ async def test_e5_3_replay_client_reproduces_run(tmp_path: Path) -> None:
             (fixtures / f"{request_key(system, user)}.txt").write_text(out, encoding="utf-8")
             return out
 
-    rec_result = await _pipeline(RecordingClient(ScriptedClient())).run(  # type: ignore[arg-type]
+    rec_result = await _run_pipeline(
+        _pipeline(RecordingClient(ScriptedClient())),
         product_dir=_make_product_dir(tmp_path), run_dir=tmp_path / "run-rec", line_key="t"
     )
-    replay_result = await _pipeline(ReplayClient(fixtures)).run(
+    replay_result = await _run_pipeline(
+        _pipeline(ReplayClient(fixtures)),
         product_dir=tmp_path / "测试终身寿险产品", run_dir=tmp_path / "run-replay", line_key="t"
     )
     strip = {"created_at"}
@@ -272,7 +406,8 @@ async def test_e1_1_kill_and_resume_from_checkpoint(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
 
     with pytest.raises(RuntimeError, match="注入失败"):
-        await pipeline.run(
+        await _run_pipeline(
+            pipeline,
             product_dir=product_dir, run_dir=run_dir, line_key="t",
             fail_nodes=["gapfill"],
         )
@@ -280,7 +415,8 @@ async def test_e1_1_kill_and_resume_from_checkpoint(tmp_path: Path) -> None:
     calls_before = client.extract_batch_calls
     assert calls_before > 0  # extract 节点已完成
 
-    result = await pipeline.run(
+    result = await _run_pipeline(
+        pipeline,
         product_dir=product_dir, run_dir=run_dir, line_key="t",
         resume=True, state_patch={"fail_nodes": []},
     )
@@ -288,6 +424,356 @@ async def test_e1_1_kill_and_resume_from_checkpoint(tmp_path: Path) -> None:
     assert client.extract_batch_calls == calls_before
     assert {r.field_id for r in result.records} == {f.field_id for f in FIELDS}
     assert result.manifest.pending_judge_count == 1
+
+
+async def test_s4_3_scoped_pipeline_rejects_other_space_checkpoint_before_resume(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-cross-space"
+    scope_a = bound_scope(
+        tenant_id="tenant-checkpoint-a",
+        raw_kb_id="raw-checkpoint-a",
+        wiki_kb_id="wiki-checkpoint-a",
+    )
+    scope_b = bound_scope(
+        tenant_id="tenant-checkpoint-b",
+        raw_kb_id="raw-checkpoint-b",
+        wiki_kb_id="wiki-checkpoint-b",
+    )
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            _pipeline(ScriptedClient(), scope=scope_b),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    reader = ScriptedClient()
+
+    with pytest.raises(ScopeViolation, match="^scope mismatch$"):
+        await _run_pipeline(
+            _pipeline(reader, scope=scope_a),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={"fail_nodes": []},
+        )
+
+    assert reader.calls == 0
+
+
+async def test_s4_3_scoped_pipeline_rejects_legacy_unscoped_checkpoint(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-unscoped-to-scoped"
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            _pipeline(ScriptedClient()),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    scope = bound_scope(
+        tenant_id="tenant-checkpoint-scoped",
+        raw_kb_id="raw-checkpoint-scoped",
+        wiki_kb_id="wiki-checkpoint-scoped",
+    )
+    reader = ScriptedClient()
+
+    with pytest.raises(ScopeViolation, match="^scope mismatch$"):
+        await _run_pipeline(
+            _pipeline(reader, scope=scope),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={"fail_nodes": []},
+        )
+
+    assert reader.calls == 0
+
+
+async def test_s4_3_offline_pipeline_rejects_scoped_checkpoint(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-scoped-to-unscoped"
+    scope = bound_scope(
+        tenant_id="tenant-checkpoint-writer",
+        raw_kb_id="raw-checkpoint-writer",
+        wiki_kb_id="wiki-checkpoint-writer",
+    )
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            _pipeline(ScriptedClient(), scope=scope),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    reader = ScriptedClient()
+
+    with pytest.raises(ScopeViolation, match="^scope mismatch$"):
+        await _run_pipeline(
+            _pipeline(reader),
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={"fail_nodes": []},
+        )
+
+    assert reader.calls == 0
+
+
+@pytest.mark.parametrize("field", ["space_id", "tenant_id", "raw_kb_id"])
+async def test_s4_3_state_patch_cannot_change_manifest_scope(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+    field: str,
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / f"run-state-patch-{field}"
+    scope = bound_scope(
+        tenant_id=f"tenant-patch-{field}",
+        raw_kb_id=f"raw-patch-{field}",
+        wiki_kb_id=f"wiki-patch-{field}",
+    )
+    pipeline = _pipeline(ScriptedClient(), scope=scope)
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    manifest = RunManifest(
+        run_id=product_dir.name,
+        product_dir=str(product_dir),
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        docs=[_source_manifest_entry()],
+    ).model_dump(mode="json")
+    marker = f"forged-{field}"
+    manifest[field] = marker
+
+    with pytest.raises(ScopeViolation, match="^state patch mismatch$"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={"fail_nodes": [], "manifest": manifest},
+        )
+    assert marker.encode() not in (run_dir / "checkpoint.sqlite").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value", "checkpoint_marker"),
+    [
+        ("run_id", "forged-run-identity", b"forged-run-identity"),
+        ("product_dir", "/forged/product/directory", b"/forged/product/directory"),
+        ("product_id", "FORGED-PRODUCT-ID", b"FORGED-PRODUCT-ID"),
+        ("product_name", "Forged Product Name", b"Forged Product Name"),
+        ("model_id", "forged-model-id", b"forged-model-id"),
+        ("schema_version", "forged-schema-version", b"forged-schema-version"),
+        (
+            "stats",
+            {"calls": 987_654_321, "prompt_chars": 123, "completion_chars": 456},
+            b"987654321",
+        ),
+        ("started_at", "2099-01-02T03:04:05.123456+00:00", b"2099-01-02"),
+        ("finished_at", "2099-02-03T04:05:06.654321+00:00", b"2099-02-03"),
+    ],
+)
+async def test_resume_rejects_every_manifest_patch_before_checkpoint_write(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+    field: str,
+    forged_value: object,
+    checkpoint_marker: bytes,
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / f"run-forged-manifest-{field}"
+    scope = bound_scope(
+        tenant_id=f"tenant-forged-{field}",
+        raw_kb_id=f"raw-forged-{field}",
+        wiki_kb_id=f"wiki-forged-{field}",
+    )
+    pipeline = _pipeline(ScriptedClient(), scope=scope)
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    manifest = RunManifest(
+        run_id=product_dir.name,
+        product_dir=str(product_dir),
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        product_id="TEST01",
+        product_name=product_dir.name,
+        line_key="t",
+        schema_version=REGISTRY.version,
+        model_id="scripted-test",
+        judge_mode="claude-session",
+        prompt_version=PROMPT_VERSION,
+        docs=[_source_manifest_entry()],
+    ).model_dump(mode="json")
+    manifest[field] = forged_value
+
+    with pytest.raises(ScopeViolation, match="^state patch mismatch$"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={"fail_nodes": [], "manifest": manifest},
+        )
+
+    assert checkpoint_marker not in (run_dir / "checkpoint.sqlite").read_bytes()
+
+
+async def test_s4_3_malformed_manifest_patch_is_generic_and_secret_free(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-malformed-patch"
+    scope = bound_scope(
+        tenant_id="tenant-malformed",
+        raw_kb_id="raw-malformed",
+        wiki_kb_id="wiki-malformed",
+    )
+    pipeline = _pipeline(ScriptedClient(), scope=scope)
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+
+    with pytest.raises(ScopeViolation) as error:
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch={
+                "fail_nodes": [],
+                "manifest": {"space_id": {"api_key": "leak-me"}},
+            },
+        )
+
+    assert str(error.value) == "state patch mismatch"
+    assert repr(error.value) == "ScopeViolation('state patch mismatch')"
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+    assert "leak-me" not in repr(error.value)
+
+
+async def test_s4_3_manifest_patch_is_rejected_before_checkpoint_write(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    marker = "leak-me-checkpoint"
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-canonical-patch"
+    scope = bound_scope(
+        tenant_id="tenant-canonical",
+        raw_kb_id="raw-canonical",
+        wiki_kb_id="wiki-canonical",
+    )
+    pipeline = _pipeline(ScriptedClient(), scope=scope)
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    manifest: dict[str, object] = RunManifest(
+        run_id=product_dir.name,
+        product_dir=str(product_dir),
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        docs=[_source_manifest_entry()],
+    ).model_dump(mode="json")
+    manifest["api_key"] = marker
+    manifest["arbitrary_extra"] = {"secret": marker}
+    stats = manifest["stats"]
+    assert isinstance(stats, dict)
+    stats["api_key"] = marker
+    patch = {"fail_nodes": [], "manifest": manifest}
+
+    with pytest.raises(ScopeViolation, match="^state patch mismatch$"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            resume=True,
+            state_patch=patch,
+        )
+
+    assert manifest["api_key"] == marker, "caller-owned patch must not be mutated"
+    assert marker.encode() not in (run_dir / "checkpoint.sqlite").read_bytes()
+
+
+async def test_s4_3_same_scope_checkpoint_resumes_normally(
+    tmp_path: Path,
+    bound_scope: Callable[..., KnowledgeScope],
+) -> None:
+    product_dir = _make_product_dir(tmp_path)
+    run_dir = tmp_path / "run-same-scope"
+    scope = bound_scope(
+        tenant_id="tenant-same-scope",
+        raw_kb_id="raw-same-scope",
+        wiki_kb_id="wiki-same-scope",
+    )
+    client = ScriptedClient()
+    pipeline = _pipeline(client, scope=scope)
+    with pytest.raises(RuntimeError, match="注入失败"):
+        await _run_pipeline(
+            pipeline,
+            product_dir=product_dir,
+            run_dir=run_dir,
+            line_key="t",
+            fail_nodes=["gapfill"],
+        )
+    extract_calls = client.extract_batch_calls
+
+    result = await _run_pipeline(
+        pipeline,
+        product_dir=product_dir,
+        run_dir=run_dir,
+        line_key="t",
+        resume=True,
+        state_patch={"fail_nodes": []},
+    )
+
+    assert client.extract_batch_calls == extract_calls
+    assert result.manifest.space_id == scope.space_id
 
 
 async def test_e1_2_transport_failure_becomes_dead_letter_not_abort(tmp_path: Path) -> None:
