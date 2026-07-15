@@ -5,22 +5,25 @@ Q3.2 四维 staleness（且非四维不触发）、Q3.3 逐条失败列举、Q4.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from insurance_harness.goldenset import (
     AutomationThresholds,
     Evidence,
     GoldenRecord,
+    QualityProfile,
     RunFingerprint,
     build_profile,
-    check_regression,
+    compare_baselines,
 )
 from insurance_harness.goldenset.profile import (
     FieldMetrics,
-    QualityProfile,
+    GlobalMetrics,
     RegressionThresholds,
 )
 
 _AT = datetime(2026, 7, 14, tzinfo=UTC)
+_ART = "a" * 64
 
 
 def _fp(**overrides: str) -> RunFingerprint:
@@ -30,6 +33,14 @@ def _fp(**overrides: str) -> RunFingerprint:
     )
     base.update(overrides)
     return RunFingerprint(**base)
+
+
+def _bp(
+    golden: list[GoldenRecord], pred: list[GoldenRecord],
+    fp: RunFingerprint | None = None, *, dataset_root: Path | None = None,
+) -> QualityProfile:
+    """build_profile 的测试包装：补一个 artifact_sha256（派生绑定见 baseline 测试）。"""
+    return build_profile(golden, pred, fp or _fp(), artifact_sha256=_ART, dataset_root=dataset_root)
 
 
 def _passing_metrics(field_id: str = "f1", **ov: object) -> FieldMetrics:
@@ -44,8 +55,8 @@ def _passing_metrics(field_id: str = "f1", **ov: object) -> FieldMetrics:
 
 def _profile_of(*metrics: FieldMetrics, fp: RunFingerprint | None = None) -> QualityProfile:
     return QualityProfile(
-        profile_version=1, fingerprint=fp or _fp(),
-        fields={m.field_id: m for m in metrics},
+        profile_version="1", artifact_sha256=_ART, baseline_approval_sha256="",
+        fingerprint=fp or _fp(), fields={m.field_id: m for m in metrics},
     )
 
 
@@ -69,7 +80,7 @@ def _golden(field_id: str, n: int = 10) -> list[GoldenRecord]:
 
 def test_q3_1_field_metrics_perfect_replay() -> None:
     golden = _golden("f1", 10)
-    profile = build_profile(golden, golden, _fp())
+    profile = _bp(golden, golden)
     m = profile.field("f1")
     assert m is not None
     assert m.support == 10
@@ -78,14 +89,13 @@ def test_q3_1_field_metrics_perfect_replay() -> None:
     # 无 dataset_root 无法回验引文 → evidence 不可信记 0.0（codex #4：不给 CI 代理满分）。
     assert m.evidence_accuracy == 0.0
     assert m.tri_state_confusion == {"present>present": 10}
-    assert profile.profile_version == 1
+    assert profile.profile_version == "1"
 
 
 def test_q3_1_evidence_verified_with_dataset_root(tmp_path: object) -> None:
     """有 dataset_root 且引文可回验时 evidence_accuracy 才可能为 1.0（本用例无 PDF → 仍 0.0）。"""
-    from pathlib import Path
     golden = _golden("f1", 3)
-    profile = build_profile(golden, golden, _fp(), dataset_root=Path(str(tmp_path)))
+    profile = _bp(golden, golden, dataset_root=Path(str(tmp_path)))
     m = profile.field("f1")
     assert m is not None and m.evidence_accuracy == 0.0  # PDF 不存在 → 回验失败
 
@@ -94,7 +104,7 @@ def test_q4_3_zero_observation_field_is_not_eligible() -> None:
     """codex #4：10 条金标但 0 条 present 预测 → 不得零分母默认满分而获自动资格。"""
     golden = _golden("f1", 10)
     pred: list[GoldenRecord] = []  # 模型什么都没抽到
-    m = build_profile(golden, pred, _fp()).field("f1")
+    m = _bp(golden, pred).field("f1")
     assert m is not None
     assert m.support == 10
     assert m.value_accuracy == 0.0  # 无配对 → 0.0，不是 1.0
@@ -106,7 +116,7 @@ def test_q4_3_zero_observation_field_is_not_eligible() -> None:
 def test_q3_1_partial_value_accuracy_is_fraction() -> None:
     golden = _golden("f1", 4)
     pred = [_rec(f"P{i}", "f1", "错值" if i < 1 else f"值{i}") for i in range(4)]
-    m = build_profile(golden, pred, _fp()).field("f1")
+    m = _bp(golden, pred).field("f1")
     assert m is not None
     assert m.value_accuracy == 0.75  # 3/4 值对
 
@@ -117,7 +127,7 @@ def test_q3_1_hallucination_and_missing_evidence_lower_metrics() -> None:
         _rec("PX", "f1", "编造值"),  # 金标 absent → 幻觉
         *[_rec(f"P{i}", "f1", f"值{i}", with_evidence=(i != 1)) for i in range(3)],
     ]
-    m = build_profile(golden, pred, _fp()).field("f1")
+    m = _bp(golden, pred).field("f1")
     assert m is not None
     assert m.support == 4
     assert m.hallucination_rate == 0.25  # 4 present 预测里 1 个幻觉
@@ -128,7 +138,7 @@ def test_q3_1_hallucination_and_missing_evidence_lower_metrics() -> None:
 def test_q3_1_missing_pred_counts_as_unknown_in_confusion() -> None:
     golden = _golden("f1", 2)
     pred = [_rec("P0", "f1", "值0")]  # P1 无预测
-    m = build_profile(golden, pred, _fp()).field("f1")
+    m = _bp(golden, pred).field("f1")
     assert m is not None
     assert m.tri_state_confusion["present>unknown"] == 1
     assert m.value_accuracy == 1.0  # 唯一 present 预测值对
@@ -137,19 +147,19 @@ def test_q3_1_missing_pred_counts_as_unknown_in_confusion() -> None:
 def test_q3_1_disputed_golden_excluded_from_support() -> None:
     golden = _golden("f1", 3)
     golden[0].disputed = True
-    m = build_profile(golden, _golden("f1", 3), _fp()).field("f1")
+    m = _bp(golden, _golden("f1", 3)).field("f1")
     assert m is not None and m.support == 2  # disputed 金标不计
 
 
 def test_q3_1_unknown_field_returns_none() -> None:
-    profile = build_profile(_golden("f1", 2), _golden("f1", 2), _fp())
+    profile = _bp(_golden("f1", 2), _golden("f1", 2))
     assert profile.field("nope") is None
 
 
 # ------------------------------------------------------------- Q3.2 staleness
 
 def test_q3_2_staleness_on_each_of_six_dims() -> None:
-    profile = build_profile(_golden("f1"), _golden("f1"), _fp())
+    profile = _bp(_golden("f1"), _golden("f1"))
     assert not profile.is_stale(_fp())
     assert profile.is_stale(_fp(golden_release_hash="rh2"))
     assert profile.is_stale(_fp(schema_version="v9"))
@@ -161,21 +171,21 @@ def test_q3_2_staleness_on_each_of_six_dims() -> None:
 
 def test_q3_2_staleness_includes_template_and_source() -> None:
     # design.md:13 —— template/source profile 变化必须 stale（codex #5）。
-    profile = build_profile(_golden("f1"), _golden("f1"), _fp())
+    profile = _bp(_golden("f1"), _golden("f1"))
     assert profile.is_stale(_fp(template_profile="t9"))
     assert profile.is_stale(_fp(source_profile="s9"))
 
 
 def test_q3_2_git_sha_is_not_a_staleness_dim() -> None:
     # git_sha 属溯源信息、非数据/模型维（design.md:13）→ 不判 stale。
-    profile = build_profile(_golden("f1"), _golden("f1"), _fp())
+    profile = _bp(_golden("f1"), _golden("f1"))
     assert not profile.is_stale(_fp(git_sha="zzz"))
 
 
 # --------------------------------------------------------- Q3.3 field verdict
 
 def test_q3_3_low_support_field_lists_failure() -> None:
-    profile = build_profile(_golden("f1", 3), _golden("f1", 3), _fp())
+    profile = _bp(_golden("f1", 3), _golden("f1", 3))
     verdict = profile.field_verdict("f1")
     assert not verdict.eligible
     assert any("support=3<10" in f for f in verdict.failures)
@@ -184,7 +194,7 @@ def test_q3_3_low_support_field_lists_failure() -> None:
 def test_q3_3_value_accuracy_failure_listed() -> None:
     golden = _golden("f1", 12)
     pred = [_rec(f"P{i}", "f1", "错值" if i < 2 else f"值{i}") for i in range(12)]
-    verdict = build_profile(golden, pred, _fp()).field_verdict("f1")
+    verdict = _bp(golden, pred).field_verdict("f1")
     assert not verdict.eligible
     assert any("value_accuracy" in f for f in verdict.failures)
 
@@ -192,7 +202,7 @@ def test_q3_3_value_accuracy_failure_listed() -> None:
 def test_q3_3_hallucination_and_evidence_failures_listed() -> None:
     golden = [_rec(f"P{i}", "f1", None, "absent_explicitly") for i in range(12)]
     pred = [_rec(f"P{i}", "f1", "编造", with_evidence=False) for i in range(12)]
-    verdict = build_profile(golden, pred, _fp()).field_verdict("f1")
+    verdict = _bp(golden, pred).field_verdict("f1")
     assert not verdict.eligible
     assert any("hallucination_rate" in f for f in verdict.failures)
     assert any("evidence_accuracy" in f for f in verdict.failures)
@@ -211,7 +221,10 @@ def test_q3_3_custom_thresholds_relax_support() -> None:
 
 
 def test_q3_missing_field_verdict_not_eligible() -> None:
-    profile = QualityProfile(profile_version=1, fingerprint=_fp(), fields={})
+    profile = QualityProfile(
+        profile_version="1", artifact_sha256=_ART, baseline_approval_sha256="",
+        fingerprint=_fp(), fields={},
+    )
     verdict = profile.field_verdict("nope")
     assert not verdict.eligible and "无该字段画像" in verdict.failures[0]
 
@@ -219,28 +232,52 @@ def test_q3_missing_field_verdict_not_eligible() -> None:
 # ---------------------------------------------------------- Q4.6 regression
 
 def test_q4_6_regression_flags_accuracy_drop() -> None:
-    approved = build_profile(_golden("f1", 12), _golden("f1", 12), _fp())
+    approved = _bp(_golden("f1", 12), _golden("f1", 12))
     golden = _golden("f1", 12)
     pred = [_rec(f"P{i}", "f1", "错值" if i < 6 else f"值{i}") for i in range(12)]
-    candidate = build_profile(golden, pred, _fp(model_id="m2"))
-    verdict = check_regression(approved, candidate)
-    assert not verdict.eligible
-    assert any("value_accuracy 退化" in f for f in verdict.failures)
+    candidate = _bp(golden, pred, _fp(model_id="m2"))
+    result = compare_baselines(approved, candidate)
+    assert not result.eligible
+    metrics = {f.metric for f in result.failures}
+    assert "f1.value_accuracy" in metrics and "global.micro_f1" in metrics
+    # 结构化：每条给出 baseline/candidate/allowed
+    f = next(f for f in result.failures if f.metric == "f1.value_accuracy")
+    assert f.baseline == 1.0 and f.candidate == 0.5 and f.allowed == 1.0
+
+
+def test_q4_6_regression_flags_evidence_drop() -> None:
+    """复审 #4：已批准 evidence 高、候选 evidence 掉 → 必须判回归（此前被漏检）。"""
+    approved = _profile_of(_passing_metrics(evidence_accuracy=1.0))
+    approved = approved.model_copy(update={
+        "global_metrics": approved.global_metrics.model_copy(update={
+            "evidence_accuracy": 1.0, "micro_f1": 1.0, "macro_f1": 1.0})})
+    candidate = _profile_of(_passing_metrics(evidence_accuracy=0.0), fp=_fp(model_id="m2"))
+    result = compare_baselines(approved, candidate)
+    assert not result.eligible
+    assert any(f.metric == "f1.evidence_accuracy" for f in result.failures)
+
+
+def test_q4_6_regression_flags_unresolved_increase() -> None:
+    approved = _profile_of(_passing_metrics())
+    candidate = _profile_of(_passing_metrics(), fp=_fp(model_id="m2")).model_copy(update={
+        "global_metrics": GlobalMetrics(unresolved_count=3)})
+    result = compare_baselines(approved, candidate)
+    assert any(f.metric == "global.unresolved_count" for f in result.failures)
 
 
 def test_q4_6_regression_flags_missing_candidate_field() -> None:
-    approved = build_profile(_golden("f1", 12), _golden("f1", 12), _fp())
-    candidate = build_profile(_golden("f2", 12), _golden("f2", 12), _fp(model_id="m2"))
-    verdict = check_regression(approved, candidate)
-    assert not verdict.eligible
-    assert any("候选缺该字段画像" in f for f in verdict.failures)
+    approved = _bp(_golden("f1", 12), _golden("f1", 12))
+    candidate = _bp(_golden("f2", 12), _golden("f2", 12), _fp(model_id="m2"))
+    result = compare_baselines(approved, candidate)
+    assert not result.eligible
+    assert any(f.metric == "f1.missing" for f in result.failures)
 
 
 def test_q4_6_no_regression_is_eligible() -> None:
-    approved = build_profile(_golden("f1", 12), _golden("f1", 12), _fp())
-    candidate = build_profile(_golden("f1", 12), _golden("f1", 12), _fp(model_id="m2"))
-    verdict = check_regression(approved, candidate)
-    assert verdict.eligible and verdict.failures == ()
+    approved = _bp(_golden("f1", 12), _golden("f1", 12))
+    candidate = _bp(_golden("f1", 12), _golden("f1", 12), _fp(model_id="m2"))
+    result = compare_baselines(approved, candidate)
+    assert result.eligible and result.failures == ()
 
 
 def test_q4_3_content_hash_is_stable_and_sensitive() -> None:
@@ -252,9 +289,11 @@ def test_q4_3_content_hash_is_stable_and_sensitive() -> None:
 
 
 def test_q4_6_tolerance_absorbs_small_drop() -> None:
-    approved = build_profile(_golden("f1", 12), _golden("f1", 12), _fp())
+    approved = _bp(_golden("f1", 12), _golden("f1", 12))
     golden = _golden("f1", 12)
     pred = [_rec(f"P{i}", "f1", "错值" if i < 1 else f"值{i}") for i in range(12)]
-    candidate = build_profile(golden, pred, _fp(model_id="m2"))  # 1/12 掉点
-    lenient = RegressionThresholds(max_value_accuracy_drop=0.2)
-    assert check_regression(approved, candidate, lenient).eligible
+    candidate = _bp(golden, pred, _fp(model_id="m2"))  # 1/12 掉点
+    lenient = RegressionThresholds(
+        max_field_value_accuracy_drop=0.2, max_micro_f1_drop=0.2, max_macro_f1_drop=0.2,
+    )
+    assert compare_baselines(approved, candidate, lenient).eligible

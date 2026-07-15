@@ -8,13 +8,25 @@ from sqlalchemy.orm import Session
 from insurance_harness.compiler.models import Confidence, PredRecord
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, load_scope
-from insurance_harness.goldenset.baseline import ApprovalRecord, RunFingerprint
-from insurance_harness.goldenset.profile import FieldMetrics, QualityProfile
+from insurance_harness.goldenset.baseline import (
+    BaselineArtifact,
+    RunFingerprint,
+    approve_baseline,
+    build_product_artifacts,
+)
+from insurance_harness.goldenset.profile import (
+    FieldMetrics,
+    GlobalMetrics,
+    QualityProfile,
+)
 from insurance_harness.goldenset.records import Evidence, TriState
 from insurance_harness.knowledge.quality_gate import GateDecision, QualityGate
 
 BROCHURE = "产品说明书.pdf"  # official_desc，权威 2
 TERMS = "保险条款.pdf"  # terms，权威 1
+
+_HEX = "a" * 64
+_AT = datetime(2026, 7, 14, tzinfo=UTC)
 
 
 def green_gate(
@@ -22,28 +34,37 @@ def green_gate(
 ) -> tuple[QualityGate, RunFingerprint]:
     """测试用绿灯闸门 + 指纹（019 fail-closed 后自动发布必须过 gate）。
 
-    对给定谓词构造一份**达标且已批准**的 QualityProfile：批准记录绑定画像内容哈希、
-    指纹匹配，故低风险 add/enrich/supersede 会被判 eligible。种子/前置数据发布用它。
+    构造一条**完整可批准**的链：valid artifact → 达标候选画像 → approve → 已批准画像，
+    gate 校验画像回链该批准且同一 artifact，故低风险 add/enrich/supersede 会被判 eligible。
     """
     fp = RunFingerprint(
         git_sha="test-sha", schema_version="v1.1+test", model_id="test-model",
         prompt_version="p1", template_profile="tpl1", source_profile="src1",
         golden_release_hash="rh-test",
     )
+    shas = {k: _HEX for k in (
+        "run_manifest", "pred", "dead_letter", "judge_queue", "judgements",
+        "keypoints", "eval_report",
+    )}
+    product = build_product_artifacts("P1", shas=shas, pred_count=12)
+    artifact = BaselineArtifact(baseline_id="test-baseline", fingerprint=fp, products=(product,))
     fields = {
         p: FieldMetrics(
             field_id=p, support=12, value_accuracy=1.0, hallucination_rate=0.0,
-            evidence_accuracy=1.0, tri_state_confusion={},
+            evidence_accuracy=1.0, precision=1.0, recall=1.0, f1=1.0, tri_state_confusion={},
         )
         for p in set(predicates)
     }
-    profile = QualityProfile(profile_version=1, fingerprint=fp, fields=fields)
-    approval = ApprovalRecord(
-        baseline_id="test-baseline", version=1, approved_by="test",
-        approved_at=datetime.now(UTC), fingerprint=fp,
-        profile_hash=profile.content_hash(),
+    candidate = QualityProfile(
+        profile_version="1", artifact_sha256=artifact.sha256(),
+        baseline_approval_sha256="", fingerprint=fp, fields=fields,
+        global_metrics=GlobalMetrics(
+            micro_f1=1.0, macro_f1=1.0, hallucination_rate=0.0, evidence_accuracy=1.0,
+        ),
     )
-    return QualityGate(profile, approval=approval), fp
+    approval = approve_baseline(artifact, candidate, approved_by="test", approved_at=_AT)
+    approved = candidate.with_approval(approval)
+    return QualityGate(approved, approval=approval), fp
 
 
 class _AllowLowRiskGate(QualityGate):

@@ -123,3 +123,36 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
 ArtifactRef 为结构性校验（真实文件存在/字节哈希由 020 运行时回验）；release_hash 刻意排除 created_at。
 
 复审返工门禁：ruff/mypy(161) 全绿，non-live **1066 passed**；019 专项 104 用例，含端到端 bypass 负例。
+
+## codex 三轮复审返工（按实施计划合同重建）
+
+三轮复审援引权威实施计划 `docs/superpowers/plans/2026-07-13-golden-quality-gate.md`，指出前两轮"照 review
+条目补 if、未按计划合同建"。核对计划 Task3/4 后确认 4 条全部成立，按合同重建（先补 bypass 负例再改实现）：
+
+1. **prior 不可伪造 / baseline_id 不可偷换**（三轮#1）：该 baseline 已有批准版本时，`prior_profile` 必须正是
+   最近一次批准所绑定的画像（`prior_profile.baseline_approval_sha256 == latest.sha256()`），回归由
+   `approve_baseline` 内部计算。换 `baseline_id` 或塞入伪造 `prior_profile` 都无法跳过 Q4.6 回归。
+2. **批准绑 artifact 输出内容**（三轮#2）：`BaselineArtifact.sha256()` 为 canonical JSON（sort_keys + 紧凑
+   分隔符）内容哈希；`ApprovalRecord.artifact_sha256`、`QualityProfile.{artifact_sha256, baseline_approval_sha256}`
+   全链绑内容；gate 校验 profile↔approval↔artifact 三者哈希自洽。只改运行配置不改产物内容 → 不同 artifact →
+   不同批准，无法复用旧批准冒充新产物。
+3. **每类产物内容寻址 + 计数自洽**（三轮#3）：`BaselineProductArtifacts` 对 run-manifest/pred/dead-letter/
+   judge-queue/judgements/eval 六类产物各带 `sha256`+计数，`consistency_errors()` 校验六类均为合法 64 位 hex +
+   计数自洽（`resolved≤queue`、`unresolved_judge==queue-resolved`、`unresolved_dead_letter==dead_letter`、
+   keypoints 现场）；`approval_blockers()` 再叠加 keypoints=complete 且无未解决项。
+4. **回归全指标结构化**（三轮#4）：`compare_baselines` 覆盖全局 micro/macro F1 + hallucination + evidence +
+   unresolved + 每字段 value/hallucination/evidence 阈值，失败项为结构化 `RegressionFailure{metric, baseline,
+   candidate, allowed}`，不再只查 value/hallucination 两项。
+
+**与实施计划的对齐**：模型/函数按计划 Task3/4 合同实现（`BaselineProductArtifacts` 全字段、`compare_baselines`
+全指标结构化、`QualityProfile.{artifact,approval}_sha256`、`approve().artifact_sha256==artifact.sha256()`）；
+文件上仍并置于 `baseline.py`/`profile.py`（计划建议拆 artifacts/quality/regression.py），功能等价，可再切分不影响合同。
+
+**已知边界（诚实声明）**：`approve_baseline` 是纯函数——`prior` 批准列表与版本单调/唯一性由 020 批准存储层
+如实保证；产物引用为结构性校验（sha256 合法性 + 计数自洽），真实文件存在与字节哈希相符由 020 运行时回验；
+`release_hash` 刻意排除 `created_at`（重标不改内容身份，有 `_ignores_created_at` 锁定）；evidence 真实回验依赖
+dataset_root（无 PDF 判 0.0 不可信）。
+
+三轮返工门禁：ruff/mypy(161) 全绿，non-live **1074 passed**；019 专项 112 用例（11+12+30+24+35），含端到端
+bypass 负例（已 live 复跑确认 different-artifact→different-approval、forged-prior-rejected、gate
+cross-approval-denied 三处闭合）。

@@ -13,10 +13,16 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.goldenset import RunFingerprint
-from insurance_harness.goldenset.baseline import ApprovalRecord
+from insurance_harness.goldenset.baseline import (
+    ApprovalRecord,
+    BaselineArtifact,
+    approve_baseline,
+    build_product_artifacts,
+)
 from insurance_harness.goldenset.profile import (
     AutomationThresholds,
     FieldMetrics,
+    GlobalMetrics,
     QualityProfile,
 )
 from insurance_harness.knowledge import MergeEngine, MergePolicy
@@ -27,6 +33,7 @@ from tests.kbhelpers import seed_bound_scope, seed_product
 
 _AT = datetime(2026, 7, 14, tzinfo=UTC)
 _FIELD = "waiting_period"
+_HEX = "a" * 64
 
 
 def _fp(**overrides: str) -> RunFingerprint:
@@ -42,25 +49,43 @@ def _metrics(**overrides: object) -> FieldMetrics:
     """默认一份达标指标；用 overrides 单独调某一维做边界测试。"""
     base: dict[str, object] = dict(
         field_id=_FIELD, support=10, value_accuracy=1.0,
-        hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={},
+        hallucination_rate=0.0, evidence_accuracy=1.0,
+        precision=1.0, recall=1.0, f1=1.0, tri_state_confusion={},
     )
     base.update(overrides)
     return FieldMetrics(**base)  # type: ignore[arg-type]
 
 
-def _profile(
-    metrics: FieldMetrics | None = None, fp: RunFingerprint | None = None
+def _artifact(fp: RunFingerprint, *, baseline_id: str = "b1") -> BaselineArtifact:
+    shas = {k: _HEX for k in (
+        "run_manifest", "pred", "dead_letter", "judge_queue", "judgements",
+        "keypoints", "eval_report",
+    )}
+    product = build_product_artifacts("P1", shas=shas, pred_count=12)
+    return BaselineArtifact(baseline_id=baseline_id, fingerprint=fp, products=(product,))
+
+
+def _candidate(
+    metrics: FieldMetrics | None, fp: RunFingerprint, art_hash: str
 ) -> QualityProfile:
     fields = {} if metrics is None else {metrics.field_id: metrics}
-    return QualityProfile(profile_version=1, fingerprint=fp or _fp(), fields=fields)
-
-
-def _approval_for(profile: QualityProfile, *, by: str = "claude") -> ApprovalRecord:
-    """批准记录绑定被批准画像的内容哈希（Q4.3）。"""
-    return ApprovalRecord(
-        baseline_id="b1", version=1, approved_by=by, approved_at=_AT,
-        fingerprint=profile.fingerprint, profile_hash=profile.content_hash(),
+    return QualityProfile(
+        profile_version="1", artifact_sha256=art_hash, baseline_approval_sha256="",
+        fingerprint=fp, fields=fields,
+        global_metrics=GlobalMetrics(
+            micro_f1=1.0, macro_f1=1.0, hallucination_rate=0.0, evidence_accuracy=1.0,
+        ),
     )
+
+
+def _approved(
+    metrics: FieldMetrics | None, fp: RunFingerprint, *, baseline_id: str = "b1"
+) -> tuple[QualityProfile, ApprovalRecord]:
+    """一条完整链：valid artifact → 候选画像 → approve → 已批准画像。"""
+    artifact = _artifact(fp, baseline_id=baseline_id)
+    candidate = _candidate(metrics, fp, artifact.sha256())
+    approval = approve_baseline(artifact, candidate, approved_by="claude", approved_at=_AT)
+    return candidate.with_approval(approval), approval
 
 
 def _gate(
@@ -70,11 +95,14 @@ def _gate(
     fp: RunFingerprint | None = None,
     thresholds: AutomationThresholds | None = None,
 ) -> QualityGate:
-    """approval='auto' 生成与画像绑定的批准记录；None=未批准；显式记录=用于错绑测试。"""
-    profile = _profile(metrics if metrics is not None else _metrics(), fp)
-    appr = _approval_for(profile) if approval == "auto" else approval
+    """approval='auto' 生成绑定该画像的批准；None=未批准；显式记录=用于错绑测试。"""
+    fp = fp or _fp()
+    approved_profile, real_approval = _approved(
+        metrics if metrics is not None else _metrics(), fp
+    )
+    appr = real_approval if approval == "auto" else approval
     assert not isinstance(appr, str)
-    return QualityGate(profile, approval=appr, thresholds=thresholds)
+    return QualityGate(approved_profile, approval=appr, thresholds=thresholds)
 
 
 # --------------------------------------------------------- 达标 / 动作维度
@@ -131,22 +159,24 @@ def test_q4_3_unapproved_profile_denied() -> None:
     assert not decision.eligible and "未批准" in decision.reason
 
 
-def test_q4_3_approval_bound_to_other_profile_denied() -> None:
-    """codex #2：批准记录必须与画像内容哈希匹配；拿别的画像（同指纹）的批准冒充 → 拒绝。"""
+def test_q4_3_unapproved_candidate_profile_denied() -> None:
+    """候选画像（baseline_approval_sha256=""）配真实批准 → 未回链，拒绝。"""
     fp = _fp()
-    other_profile = _profile(_metrics(support=999), fp)  # 同指纹但不同内容 → 不同哈希
-    stale_approval = _approval_for(other_profile)
-    decision = _gate(approval=stale_approval, fp=fp).decide(_FIELD, "low", "add", fp)
-    assert not decision.eligible and "内容不匹配" in decision.reason
+    artifact = _artifact(fp)
+    candidate = _candidate(_metrics(), fp, artifact.sha256())  # 未 with_approval
+    approval = approve_baseline(artifact, candidate, approved_by="claude", approved_at=_AT)
+    decision = QualityGate(candidate, approval=approval).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and "未绑定该批准" in decision.reason
 
 
-def test_q4_3_approval_fingerprint_mismatch_denied() -> None:
-    """codex 复审 #1：批准指纹与画像指纹不同（跨 baseline 错绑）→ gate 拒绝。"""
+def test_q4_3_cross_approval_binding_denied() -> None:
+    """复审 #1：画像回链的是批准 A，却拿批准 B 去过闸 → 拒绝（内容哈希绑定，不可错绑）。"""
     fp = _fp()
-    other_run = _profile(_metrics(), _fp(model_id="other-model"))  # 不同指纹的画像
-    approval = _approval_for(other_run)  # 该批准绑到 other_run（指纹=other-model）
-    decision = _gate(approval=approval, fp=fp).decide(_FIELD, "low", "add", fp)
-    assert not decision.eligible and "指纹不匹配" in decision.reason
+    approved_a, _approval_a = _approved(_metrics(), fp, baseline_id="A")
+    _approved_b, approval_b = _approved(_metrics(), fp, baseline_id="B")
+    decision = QualityGate(approved_a, approval=approval_b).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and ("未绑定该批准" in decision.reason
+                                      or "artifact 不一致" in decision.reason)
 
 
 def test_q4_3_missing_run_fingerprint_denied() -> None:
@@ -248,13 +278,14 @@ def test_q4_1_supersede_low_risk_default_off() -> None:
 
 # --------------------------------------------------------- merge 接入（Q4.2/Q4.5）
 
-def _passing_profile(field_id: str, fp: RunFingerprint) -> QualityProfile:
-    """直接构造一份达标画像（gate 逻辑测试关注判定，不关注指标派生）。"""
+def _passing_gate(field_id: str, fp: RunFingerprint) -> QualityGate:
+    """一条完整达标已批准链上的 gate（供 merge 接入测试）。"""
     metrics = FieldMetrics(
-        field_id=field_id, support=12, value_accuracy=1.0,
-        hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={},
+        field_id=field_id, support=12, value_accuracy=1.0, hallucination_rate=0.0,
+        evidence_accuracy=1.0, precision=1.0, recall=1.0, f1=1.0, tri_state_confusion={},
     )
-    return QualityProfile(profile_version=1, fingerprint=fp, fields={field_id: metrics})
+    approved_profile, approval = _approved(metrics, fp)
+    return QualityGate(approved_profile, approval=approval)
 
 
 def _scope(session: Session) -> KnowledgeScope:
@@ -279,8 +310,7 @@ def test_q4_2_gate_gates_auto_apply_per_field(kb_session: Session) -> None:
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     fp = _fp()
-    profile = _passing_profile("waiting_period", fp)
-    gate = QualityGate(profile, approval=_approval_for(profile))
+    gate = _passing_gate("waiting_period", fp)
     engine = MergeEngine(
         kb_session, scope=scope,
         policy=MergePolicy(auto_apply_add=True),

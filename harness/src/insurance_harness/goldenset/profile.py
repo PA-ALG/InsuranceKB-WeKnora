@@ -1,22 +1,26 @@
-"""QualityProfile：按字段的质量画像与阈值判定（019 spec Q3）。
+"""QualityProfile：按字段的质量画像、全局指标与回归判定（019 spec Q3 + 实施计划 Task4）。
 
-- Q3.1 每 field_id 输出 support / value accuracy / tri-state confusion / hallucination rate /
-  evidence accuracy，并绑定 baseline 运行指纹；
-- Q3.2 画像版本化且可验证 golden manifest hash；hash/schema/model/prompt 任一不匹配视为 stale；
-- Q3.3 全局回归阈值与字段自动化阈值，判定结果逐条列出失败指标与实际值。
+- Q3.1 每 field_id 输出 support/value accuracy/tri-state confusion/hallucination/evidence/
+  precision/recall/f1，并绑定 baseline 运行指纹与其派生 artifact/approval 的内容哈希；
+- Q3.2 画像版本化 + 六维指纹 staleness；
+- Q3.3/Q4.6 `compare_baselines` 覆盖全局 micro/macro F1 + hallucination + evidence + unresolved
+  与字段阈值，结构化列出每个失败 `{metric, baseline, candidate, allowed}`。
 
-画像是只读 artifact；真实 13 产品画像由 020 用同一 API 产出。
+画像是只读 artifact；真实 13 产品画像由 020 用同一 API 从已批准 baseline 派生。
 """
 
-import hashlib
 from collections import Counter, defaultdict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from .baseline import RunFingerprint
+from .baseline import RunFingerprint, canonical_sha256
 from .normalize import quote_in_page, values_equal
 from .records import GoldenRecord, TriState
+
+if TYPE_CHECKING:
+    from .baseline import ApprovalRecord
 
 # design.md:13 —— 数据/模型维指纹，任一变化都要求重跑或重新批准（git_sha 属溯源，不计）。
 _STALENESS_FIELDS = (
@@ -29,6 +33,10 @@ _STALENESS_FIELDS = (
 )
 
 
+def _f1(precision: float, recall: float) -> float:
+    return (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+
+
 class FieldMetrics(BaseModel):
     """单字段确定性指标（Q3.1）。"""
 
@@ -39,7 +47,22 @@ class FieldMetrics(BaseModel):
     value_accuracy: float
     hallucination_rate: float
     evidence_accuracy: float
+    precision: float = 0.0
+    recall: float = 0.0
+    f1: float = 0.0
     tri_state_confusion: dict[str, int]
+
+
+class GlobalMetrics(BaseModel):
+    """跨字段的全局指标（回归判定用；实施计划 Task3 要求）。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    micro_f1: float = 0.0
+    macro_f1: float = 0.0
+    hallucination_rate: float = 0.0
+    evidence_accuracy: float = 0.0
+    unresolved_count: int = 0
 
 
 class AutomationThresholds(BaseModel):
@@ -64,31 +87,32 @@ class FieldVerdict(BaseModel):
 
 
 class QualityProfile(BaseModel):
-    """只读质量画像 artifact（Q3.1/Q3.2）。"""
+    """只读质量画像（Q3.1/Q3.2）；关联其派生 artifact 与批准记录的内容哈希（实施计划 Task4）。"""
 
     model_config = ConfigDict(frozen=True)
 
-    profile_version: int
+    profile_version: str
+    artifact_sha256: str
+    baseline_approval_sha256: str
     fingerprint: RunFingerprint
     fields: dict[str, FieldMetrics]
+    global_metrics: GlobalMetrics = GlobalMetrics()
 
     def field(self, field_id: str) -> FieldMetrics | None:
         return self.fields.get(field_id)
 
     def content_hash(self) -> str:
-        """画像内容的确定性哈希——批准记录据此绑定被批准的画像（Q4.3）。"""
-        parts = [f"v={self.profile_version}"]
-        for fid in sorted(self.fields):
-            m = self.fields[fid]
-            confusion = ";".join(f"{k}={m.tri_state_confusion[k]}" for k in sorted(
-                m.tri_state_confusion))
-            parts.append(
-                f"{fid}|{m.support}|{m.value_accuracy:.6f}|{m.hallucination_rate:.6f}"
-                f"|{m.evidence_accuracy:.6f}|{confusion}"
-            )
-        for f in _STALENESS_FIELDS:
-            parts.append(f"{f}={getattr(self.fingerprint, f)}")
-        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+        """画像内容的确定性哈希（覆盖版本/关联哈希/全局指标/各字段/指纹）。"""
+        return canonical_sha256(self.model_dump(mode="json"))
+
+    def with_approval(self, approval: "ApprovalRecord") -> "QualityProfile":
+        """由候选画像生成"已批准"画像：回链批准记录内容哈希（gate 据此验证绑定）。
+
+        批准必须绑定同一 artifact——否则无法用任意画像给别的 artifact 背书。
+        """
+        if approval.artifact_sha256 != self.artifact_sha256:
+            raise ValueError("approval.artifact_sha256 与画像 artifact_sha256 不一致")
+        return self.model_copy(update={"baseline_approval_sha256": approval.sha256()})
 
     def is_stale(self, current: RunFingerprint) -> bool:
         """Q3.2 + design：golden hash/schema/model/prompt/template/source 任一不匹配即 stale。
@@ -111,9 +135,7 @@ class QualityProfile(BaseModel):
             )
         failures: list[str] = []
         if metrics.support < thresholds.support_min:
-            failures.append(
-                f"support={metrics.support}<{thresholds.support_min}"
-            )
+            failures.append(f"support={metrics.support}<{thresholds.support_min}")
         if metrics.value_accuracy < thresholds.value_accuracy_min:
             failures.append(
                 f"value_accuracy={metrics.value_accuracy:.3f}"
@@ -135,40 +157,94 @@ class QualityProfile(BaseModel):
 
 
 class RegressionThresholds(BaseModel):
-    """全局回归阈值（Q3.3/Q4.6）：候选相对已批准 baseline 不得退化超过容差。"""
+    """回归容差（Q3.3/Q4.6 + 实施计划）：候选相对已批准基线在各指标上不得退化超过容差。"""
 
     model_config = ConfigDict(frozen=True)
 
-    max_value_accuracy_drop: float = 0.0
-    max_hallucination_increase: float = 0.0
+    # 全局
+    max_micro_f1_drop: float = 0.0
+    max_macro_f1_drop: float = 0.0
+    max_global_hallucination_increase: float = 0.0
+    max_global_evidence_drop: float = 0.0
+    max_unresolved_increase: int = 0
+    # 字段
+    max_field_value_accuracy_drop: float = 0.0
+    max_field_hallucination_increase: float = 0.0
+    max_field_evidence_drop: float = 0.0
 
 
-def check_regression(
-    approved: QualityProfile,
+class RegressionFailure(BaseModel):
+    """一条结构化回归失败：指标、已批准基线值、候选值、允许边界。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    metric: str
+    baseline: float
+    candidate: float
+    allowed: float
+
+
+class RegressionResult(BaseModel):
+    """回归判定结果；`failures` 为空才可批准（Q4.6）。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    failures: tuple[RegressionFailure, ...] = ()
+
+    @property
+    def eligible(self) -> bool:
+        return not self.failures
+
+    def summary(self) -> str:
+        return "；".join(
+            f"{f.metric}: {f.baseline:.4g}→{f.candidate:.4g}（允许≥/≤{f.allowed:.4g}）"
+            for f in self.failures
+        )
+
+
+def compare_baselines(
+    current: QualityProfile,
     candidate: QualityProfile,
     thresholds: RegressionThresholds | None = None,
-) -> FieldVerdict:
-    """Q4.6：候选画像相对已批准画像的退化检查；失败列出每个退化字段与实际差值。"""
-    thresholds = thresholds or RegressionThresholds()
-    failures: list[str] = []
-    for field_id, base in approved.fields.items():
+) -> RegressionResult:
+    """候选画像相对已批准画像的退化检查（Q3.3/Q4.6）：全局 micro/macro F1、hallucination、
+    evidence、unresolved-count 及每字段 value_accuracy/hallucination/evidence，逐条结构化返回。"""
+    t = thresholds or RegressionThresholds()
+    failures: list[RegressionFailure] = []
+    cg, dg = current.global_metrics, candidate.global_metrics
+
+    def drop(metric: str, base: float, cand: float, max_drop: float) -> None:
+        if base - cand > max_drop:
+            failures.append(RegressionFailure(
+                metric=metric, baseline=base, candidate=cand, allowed=base - max_drop))
+
+    def increase(metric: str, base: float, cand: float, max_inc: float) -> None:
+        if cand - base > max_inc:
+            failures.append(RegressionFailure(
+                metric=metric, baseline=base, candidate=cand, allowed=base + max_inc))
+
+    drop("global.micro_f1", cg.micro_f1, dg.micro_f1, t.max_micro_f1_drop)
+    drop("global.macro_f1", cg.macro_f1, dg.macro_f1, t.max_macro_f1_drop)
+    increase("global.hallucination_rate", cg.hallucination_rate, dg.hallucination_rate,
+             t.max_global_hallucination_increase)
+    drop("global.evidence_accuracy", cg.evidence_accuracy, dg.evidence_accuracy,
+         t.max_global_evidence_drop)
+    increase("global.unresolved_count", cg.unresolved_count, dg.unresolved_count,
+             t.max_unresolved_increase)
+
+    for field_id, base in current.fields.items():
         cand = candidate.fields.get(field_id)
         if cand is None:
-            failures.append(f"{field_id}: 候选缺该字段画像")
+            failures.append(RegressionFailure(
+                metric=f"{field_id}.missing", baseline=1.0, candidate=0.0, allowed=1.0))
             continue
-        acc_drop = base.value_accuracy - cand.value_accuracy
-        if acc_drop > thresholds.max_value_accuracy_drop:
-            failures.append(
-                f"{field_id}: value_accuracy 退化 {acc_drop:.3f}"
-            )
-        halluc_inc = cand.hallucination_rate - base.hallucination_rate
-        if halluc_inc > thresholds.max_hallucination_increase:
-            failures.append(
-                f"{field_id}: hallucination 上升 {halluc_inc:.3f}"
-            )
-    return FieldVerdict(
-        field_id="<regression>", eligible=not failures, failures=tuple(failures)
-    )
+        drop(f"{field_id}.value_accuracy", base.value_accuracy, cand.value_accuracy,
+             t.max_field_value_accuracy_drop)
+        increase(f"{field_id}.hallucination_rate", base.hallucination_rate,
+                 cand.hallucination_rate, t.max_field_hallucination_increase)
+        drop(f"{field_id}.evidence_accuracy", base.evidence_accuracy, cand.evidence_accuracy,
+             t.max_field_evidence_drop)
+    return RegressionResult(failures=tuple(failures))
 
 
 def _evidence_verified(
@@ -202,10 +278,16 @@ def build_profile(
     pred: list[GoldenRecord],
     fingerprint: RunFingerprint,
     *,
+    artifact_sha256: str,
+    unresolved_count: int = 0,
     dataset_root: Path | None = None,
-    version: int = 1,
+    version: str = "1",
 ) -> QualityProfile:
-    """从 golden vs pred 逐字段派生画像（确定性；disputed 金标排除）。"""
+    """从 golden vs pred 逐字段派生候选画像（确定性；disputed 金标排除）。
+
+    产出 baseline_approval_sha256="" 的**候选**画像；批准后由 `.with_approval(approval)` 回链。
+    `artifact_sha256` 必须等于派生自的 BaselineArtifact.sha256()（approve 时强制核对）。
+    """
     usable = [g for g in golden if not g.disputed]
     g_map = {(g.product_id, g.field_id): g for g in usable}
     p_map = {(p.product_id, p.field_id): p for p in pred}
@@ -216,18 +298,19 @@ def build_profile(
         by_field_keys[key[1]].append(key)
 
     fields: dict[str, FieldMetrics] = {}
+    tot_hits = tot_pred_present = tot_golden_present = 0
+    tot_hallucinated = tot_evidence_ok = tot_evidence_total = 0
+    f1s: list[float] = []
     for field_id, keys in by_field_keys.items():
         support = len(keys)
         confusion: Counter[str] = Counter()
-        value_hits = 0
-        value_pairs = 0
-        pred_present = 0
-        hallucinated = 0
-        evidence_ok = 0
-        evidence_total = 0
+        value_hits = value_pairs = pred_present = golden_present = 0
+        hallucinated = evidence_ok = evidence_total = 0
         for key in keys:
             g = g_map[key]
             p = p_map.get(key)
+            if g.tri_state == "present":
+                golden_present += 1
             p_tri: TriState = p.tri_state if p is not None else "unknown"
             confusion[f"{g.tri_state}>{p_tri}"] += 1
             if p is not None and p.tri_state == "present":
@@ -241,6 +324,16 @@ def build_profile(
                         value_hits += 1
                 else:
                     hallucinated += 1
+        precision = (value_hits / pred_present) if pred_present else 0.0
+        recall = (value_hits / golden_present) if golden_present else 0.0
+        field_f1 = _f1(precision, recall)
+        f1s.append(field_f1)
+        tot_hits += value_hits
+        tot_pred_present += pred_present
+        tot_golden_present += golden_present
+        tot_hallucinated += hallucinated
+        tot_evidence_ok += evidence_ok
+        tot_evidence_total += evidence_total
         fields[field_id] = FieldMetrics(
             field_id=field_id,
             support=support,
@@ -249,8 +342,25 @@ def build_profile(
             value_accuracy=(value_hits / value_pairs) if value_pairs else 0.0,
             hallucination_rate=(hallucinated / pred_present) if pred_present else 0.0,
             evidence_accuracy=(evidence_ok / evidence_total) if evidence_total else 0.0,
+            precision=precision,
+            recall=recall,
+            f1=field_f1,
             tri_state_confusion=dict(confusion),
         )
+    micro_p = (tot_hits / tot_pred_present) if tot_pred_present else 0.0
+    micro_r = (tot_hits / tot_golden_present) if tot_golden_present else 0.0
+    global_metrics = GlobalMetrics(
+        micro_f1=_f1(micro_p, micro_r),
+        macro_f1=(sum(f1s) / len(f1s)) if f1s else 0.0,
+        hallucination_rate=(tot_hallucinated / tot_pred_present) if tot_pred_present else 0.0,
+        evidence_accuracy=(tot_evidence_ok / tot_evidence_total) if tot_evidence_total else 0.0,
+        unresolved_count=unresolved_count,
+    )
     return QualityProfile(
-        profile_version=version, fingerprint=fingerprint, fields=fields
+        profile_version=version,
+        artifact_sha256=artifact_sha256,
+        baseline_approval_sha256="",
+        fingerprint=fingerprint,
+        fields=fields,
+        global_metrics=global_metrics,
     )

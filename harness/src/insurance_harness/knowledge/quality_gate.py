@@ -68,10 +68,11 @@ class QualityGate:
             return deny("缺字段画像")
         if self.approval is None:
             return deny("画像未批准")
-        if self.approval.fingerprint != self.profile.fingerprint:
-            return deny("批准记录指纹与画像指纹不匹配（批准与画像不属于同一次运行）")
-        if self.approval.profile_hash != self.profile.content_hash():
-            return deny("批准记录与画像内容不匹配（画像可能被替换）")
+        # 内容绑定（实施计划 Task4）：画像必须回链到该批准记录、且两者指向同一 artifact。
+        if self.profile.baseline_approval_sha256 != self.approval.sha256():
+            return deny("画像未绑定该批准记录（baseline_approval_sha256 不符）")
+        if self.profile.artifact_sha256 != self.approval.artifact_sha256:
+            return deny("画像与批准记录指向的 artifact 不一致")
         if run_fingerprint is None:
             return deny("缺当前 run 指纹，无法核对画像")
         if self.profile.is_stale(run_fingerprint):

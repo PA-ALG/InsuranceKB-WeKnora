@@ -11,12 +11,13 @@ from .assemble import (
 )
 from .baseline import (
     ApprovalRecord,
-    ArtifactRef,
     BaselineArtifact,
     BaselineNotApprovableError,
-    ProductRunStatus,
+    BaselineProductArtifacts,
     RunFingerprint,
     approve_baseline,
+    build_product_artifacts,
+    canonical_sha256,
     release_hash,
 )
 from .eval import EvalResult, evaluate, render_report
@@ -34,10 +35,13 @@ from .profile import (
     AutomationThresholds,
     FieldMetrics,
     FieldVerdict,
+    GlobalMetrics,
     QualityProfile,
+    RegressionFailure,
+    RegressionResult,
     RegressionThresholds,
     build_profile,
-    check_regression,
+    compare_baselines,
 )
 from .records import Evidence, GoldenRecord, TriState
 from .release import build_release
@@ -52,25 +56,29 @@ from .verify import compare_with_meta, load_product_meta, verify_quotes
 
 __all__ = [
     "ApprovalRecord",
-    "ArtifactRef",
     "AssembleReport",
     "AutomationThresholds",
     "BaselineArtifact",
     "BaselineNotApprovableError",
+    "BaselineProductArtifacts",
     "EvalResult",
     "FieldMetrics",
     "FieldVerdict",
+    "GlobalMetrics",
     "QualityProfile",
+    "RegressionFailure",
+    "RegressionResult",
     "RegressionThresholds",
+    "build_product_artifacts",
     "build_profile",
-    "check_regression",
+    "canonical_sha256",
+    "compare_baselines",
     "Evidence",
     "ExpectedProduct",
     "GoldenAnnotator",
     "GoldenRecord",
     "ProductAssembly",
     "ProductPlan",
-    "ProductRunStatus",
     "RunFingerprint",
     "ValidationCheck",
     "ValidationResult",

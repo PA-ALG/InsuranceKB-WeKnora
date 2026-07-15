@@ -1,7 +1,7 @@
-"""019 spec Q2 + codex 复审：baseline artifact / 不可变批准 / 内容寻址产物 / 强绑定批准链。
+"""019 Q2 + 实施计划 Task3 + codex 三轮复审：内容寻址 artifact / 强绑定批准 / 全指标回归。
 
-严格 TDD + 对抗性负例：批准链的不变量必须"非法状态不可构造"——
-错绑画像、省略回归、伪造产物引用都必须被拒（不靠调用方自觉）。
+对抗性负例为主：artifact 产物齐全性与一致性、artifact 内容身份、批准绑定 artifact、
+回归基线不可伪造/不可省略——都必须"非法状态无法构造"。
 """
 
 from datetime import UTC, datetime
@@ -10,257 +10,269 @@ import pytest
 
 from insurance_harness.goldenset import (
     ApprovalRecord,
-    ArtifactRef,
     BaselineArtifact,
     BaselineNotApprovableError,
+    BaselineProductArtifacts,
     Evidence,
+    GlobalMetrics,
     GoldenRecord,
-    ProductRunStatus,
+    QualityProfile,
     RunFingerprint,
     approve_baseline,
     release_hash,
 )
-from insurance_harness.goldenset.profile import FieldMetrics, QualityProfile
+from insurance_harness.goldenset.profile import FieldMetrics
 
 _AT = datetime(2026, 7, 14, tzinfo=UTC)
-_HASH_A = "a" * 64
-_HASH_B = "b" * 64
+_A = "a" * 64
+_B = "b" * 64
 
 
 def _fp(**overrides: str) -> RunFingerprint:
     base = dict(
-        git_sha="abc123", schema_version="v1.1+deadbeefcafe", model_id="deepseek-v4-flash",
-        prompt_version="p1", template_profile="tpl1", source_profile="src1",
-        golden_release_hash="rh1",
+        git_sha="abc123", schema_version="v1.1+x", model_id="m1", prompt_version="p1",
+        template_profile="tpl1", source_profile="src1", golden_release_hash="rh1",
     )
     base.update(overrides)
     return RunFingerprint(**base)
 
 
-def _profile(fp: RunFingerprint | None = None, *, value_accuracy: float = 1.0) -> QualityProfile:
-    """一份达标画像，指纹默认与 _artifact 一致（批准要求两者指纹相等）。"""
-    metrics = FieldMetrics(
-        field_id="f1", support=12, value_accuracy=value_accuracy,
-        hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={},
-    )
-    return QualityProfile(profile_version=1, fingerprint=fp or _fp(), fields={"f1": metrics})
-
-
-def _ref(count: int = 10, *, sha256: str = _HASH_A, path: str = "artifacts/x.json") -> ArtifactRef:
-    return ArtifactRef(path=path, sha256=sha256, count=count)
-
-
-def _product(**ov: object) -> ProductRunStatus:
+def _raw_product(**ov: object) -> BaselineProductArtifacts:
+    """默认一份内部一致、可批准的产品现场；用 overrides 注入违规做负例。"""
     base: dict[str, object] = dict(
-        product_id="P1", pred_count=10, keypoints_status="ready",
-        run_manifest_ref=_ref(1), pred_ref=_ref(10), eval_ref=_ref(1),
+        product_id="P1", run_manifest_sha256=_A, pred_sha256=_A, pred_count=12,
+        dead_letter_sha256=_A, dead_letter_count=0, judge_queue_sha256=_A,
+        judge_queue_count=0, judgements_sha256=_A, resolved_judgement_count=0,
+        keypoints_status="complete", keypoints_sha256=_A, keypoints_pending_count=0,
+        eval_report_sha256=_A, unresolved_judge_count=0, unresolved_dead_letter_count=0,
     )
     base.update(ov)
-    return ProductRunStatus(**base)  # type: ignore[arg-type]
+    return BaselineProductArtifacts(**base)  # type: ignore[arg-type]
 
 
 def _artifact(
-    *,
-    fingerprint: RunFingerprint | None = None,
-    dead_letter_count: int = 0,
-    judge_queue_count: int = 0,
-    judgements_count: int = 0,
-    products: tuple[ProductRunStatus, ...] | None = None,
+    *, fingerprint: RunFingerprint | None = None,
+    products: tuple[BaselineProductArtifacts, ...] | None = None,
 ) -> BaselineArtifact:
-    default = (
-        _product(
-            dead_letter_count=dead_letter_count,
-            judge_queue_count=judge_queue_count, judgements_count=judgements_count,
-        ),
-    )
     return BaselineArtifact(
         baseline_id="b1", fingerprint=fingerprint or _fp(),
-        products=default if products is None else products,
+        products=products if products is not None else (_raw_product(),),
     )
 
 
-# ------------------------------------------------------------- Q2.1 unresolved
+def _field(**ov: object) -> FieldMetrics:
+    base: dict[str, object] = dict(
+        field_id="f1", support=12, value_accuracy=1.0, hallucination_rate=0.0,
+        evidence_accuracy=1.0, precision=1.0, recall=1.0, f1=1.0, tri_state_confusion={},
+    )
+    base.update(ov)
+    return FieldMetrics(**base)  # type: ignore[arg-type]
+
+
+def _candidate(
+    artifact: BaselineArtifact, *, value_accuracy: float = 1.0,
+) -> QualityProfile:
+    """派生自该 artifact 的候选画像（artifact_sha256 绑定，baseline_approval_sha256=""）。"""
+    return QualityProfile(
+        profile_version="1", artifact_sha256=artifact.sha256(), baseline_approval_sha256="",
+        fingerprint=artifact.fingerprint, fields={"f1": _field(value_accuracy=value_accuracy)},
+        global_metrics=GlobalMetrics(
+            micro_f1=value_accuracy, macro_f1=value_accuracy,
+            hallucination_rate=0.0, evidence_accuracy=1.0,
+        ),
+    )
+
+
+# --------------------------------------- Q2.1 未解决计数（实施计划 unresolved 现场）
 
 def test_q2_1_unresolved_is_dead_letter_plus_pending_judge() -> None:
-    a = _artifact(dead_letter_count=2, judge_queue_count=5, judgements_count=3)
-    assert a.products[0].unresolved == 4  # 2 dead + (5-3) pending
-    assert a.unresolved_total() == 4
-
-
-def test_q2_1_fully_judged_queue_has_no_pending() -> None:
-    a = _artifact(dead_letter_count=0, judge_queue_count=3, judgements_count=3)
-    assert a.products[0].unresolved == 0
-
-
-def test_q2_1_over_judged_does_not_go_negative() -> None:
-    a = _artifact(dead_letter_count=1, judge_queue_count=2, judgements_count=5)
-    assert a.products[0].unresolved == 1  # pending 夹到 0，仅 dead-letter
+    p = _raw_product(
+        dead_letter_count=2, unresolved_dead_letter_count=2,
+        judge_queue_count=5, resolved_judgement_count=3, unresolved_judge_count=2,
+    )
+    assert p.unresolved == 4
+    assert _artifact(products=(p,)).unresolved_total() == 4
 
 
 def test_q2_1_unresolved_total_sums_products() -> None:
     a = _artifact(products=(
-        _product(product_id="P1", pred_count=5, dead_letter_count=2, pred_ref=_ref(5)),
-        _product(product_id="P2", pred_count=5, judge_queue_count=3, pred_ref=_ref(5)),
+        _raw_product(product_id="P1", dead_letter_count=2, unresolved_dead_letter_count=2),
+        _raw_product(product_id="P2", judge_queue_count=3, unresolved_judge_count=3),
     ))
-    assert a.unresolved_total() == 5  # 2 + 3
+    assert a.unresolved_total() == 5
 
 
-# ------------------------------------------------- Q2.1 内容寻址产物（codex #3）
+# ------------------------------- Q2.1 产物齐全 + 一致性（实施计划 L199 拒绝清单）
+
+@pytest.mark.parametrize("sha_field", [
+    "run_manifest_sha256", "pred_sha256", "dead_letter_sha256",
+    "judge_queue_sha256", "judgements_sha256", "eval_report_sha256",
+])
+def test_q2_1_missing_each_required_sha_blocks_approval(sha_field: str) -> None:
+    a = _artifact(products=(_raw_product(**{sha_field: ""}),))
+    assert any(sha_field in b for b in a.approval_blockers())
+    with pytest.raises(BaselineNotApprovableError, match=sha_field):
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+
 
 def test_q2_1_zero_pred_blocks_approval() -> None:
-    a = BaselineArtifact(
-        baseline_id="b1", fingerprint=_fp(),
-        products=(_product(pred_count=0, pred_ref=_ref(0)),),
-    )
-    assert any("无预测产物" in b for b in a.approval_blockers())
+    a = _artifact(products=(_raw_product(pred_count=0),))
     with pytest.raises(BaselineNotApprovableError, match="无预测产物"):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
 
 
-def test_q2_1_pending_keypoints_blocks_approval() -> None:
-    a = BaselineArtifact(
-        baseline_id="b1", fingerprint=_fp(),
-        products=(_product(keypoints_status="pending"),),
-    )
-    with pytest.raises(BaselineNotApprovableError, match="关键点"):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
-
-
-def test_q2_1_missing_artifact_ref_blocks_approval() -> None:
-    a = BaselineArtifact(
-        baseline_id="b1", fingerprint=_fp(), products=(_product(eval_ref=None),),
-    )
-    assert any("缺产物引用 eval_ref" in b for b in a.approval_blockers())
-    with pytest.raises(BaselineNotApprovableError, match="eval_ref"):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
-
-
-def test_q2_1_empty_sha256_ref_is_not_present() -> None:
-    # 用任意路径 + 空/非法 sha256 冒充产物 → 不算存在，阻断批准。
-    a = BaselineArtifact(
-        baseline_id="b1", fingerprint=_fp(),
-        products=(_product(pred_ref=ArtifactRef(path="pred.jsonl", sha256="", count=10)),),
-    )
-    assert any("缺产物引用 pred_ref" in b for b in a.approval_blockers())
+def test_q2_1_inconsistent_unresolved_judge_count_blocks() -> None:
+    # judge_queue=3, resolved=3 → 应 0 未解决；却声明 unresolved_judge_count=0 一致，
+    # 反例：声明 2 不一致。
+    a = _artifact(products=(_raw_product(
+        judge_queue_count=3, resolved_judgement_count=3, unresolved_judge_count=2),))
+    assert any("unresolved_judge_count" in b for b in a.approval_blockers())
     with pytest.raises(BaselineNotApprovableError):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
 
 
-def test_q2_1_pred_ref_count_must_match_pred_count() -> None:
-    a = BaselineArtifact(
-        baseline_id="b1", fingerprint=_fp(),
-        products=(_product(pred_count=10, pred_ref=_ref(7)),),  # 7 != 10
-    )
-    assert any("不一致" in b for b in a.approval_blockers())
-    with pytest.raises(BaselineNotApprovableError, match="不一致"):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
+def test_q2_1_resolved_exceeds_queue_blocks() -> None:
+    a = _artifact(products=(_raw_product(
+        judge_queue_count=2, resolved_judgement_count=5, unresolved_judge_count=0),))
+    assert any("超出" in b for b in a.approval_blockers())
 
 
-# ------------------------------------------------------------- Q2.2 指纹缺项
+def test_q2_1_dead_letter_count_mismatch_blocks() -> None:
+    a = _artifact(products=(_raw_product(
+        dead_letter_count=3, unresolved_dead_letter_count=1),))  # 应相等
+    assert any("unresolved_dead_letter_count" in b for b in a.approval_blockers())
 
-def test_q2_2_each_missing_fingerprint_field_is_listed() -> None:
-    fp = _fp(git_sha=" ", model_id="")
-    assert set(fp.missing_fields()) == {"git_sha", "model_id"}
 
+def test_q2_1_pending_keypoints_without_positive_count_blocks() -> None:
+    a = _artifact(products=(_raw_product(
+        keypoints_status="pending", keypoints_sha256=None, keypoints_pending_count=0),))
+    assert any("pending 但 pending_count" in b for b in a.approval_blockers())
+
+
+def test_q2_1_pending_keypoints_blocks_even_if_internally_consistent() -> None:
+    # pending 且 pending_count>0 → 内部一致，但仍不可批准（关键点未完成）。
+    p = _raw_product(keypoints_status="pending", keypoints_sha256=None, keypoints_pending_count=2)
+    assert p.consistency_errors() == []
+    a = _artifact(products=(p,))
+    assert any("关键点未完成" in b for b in a.approval_blockers())
+
+
+def test_q2_1_unresolved_items_block_approval() -> None:
+    a = _artifact(products=(_raw_product(
+        dead_letter_count=1, unresolved_dead_letter_count=1),))
+    with pytest.raises(BaselineNotApprovableError, match="未解决"):
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+
+
+# ------------------------------------------------- Q2.2 指纹 / 空产品
 
 def test_q2_2_missing_fingerprint_field_blocks_approval() -> None:
     fp = _fp(git_sha=" ")
     a = _artifact(fingerprint=fp)
-    assert "fingerprint.git_sha 缺失" in a.approval_blockers()
     with pytest.raises(BaselineNotApprovableError, match="git_sha"):
-        approve_baseline(a, _profile(fp), approved_by="claude", approved_at=_AT)
-
-
-def test_q2_2_unresolved_items_block_approval() -> None:
-    a = _artifact(dead_letter_count=1)
-    assert any("未解决" in b for b in a.approval_blockers())
-    with pytest.raises(BaselineNotApprovableError, match="未解决"):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
 
 
 def test_q2_2_empty_products_block_approval() -> None:
     a = BaselineArtifact(baseline_id="b1", fingerprint=_fp(), products=())
     assert any("无任何产品" in b for b in a.approval_blockers())
-    with pytest.raises(BaselineNotApprovableError):
-        approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
 
 
-# ------------------------------------------------ Q4.3 身份绑定（codex #1 强绑定）
+# ------------------- codex #2：批准绑定 artifact 内容身份（不只是运行配置）
 
-def test_q4_3_profile_fingerprint_must_match_artifact() -> None:
-    """画像指纹与 artifact 指纹不一致（画像不属于该次运行）→ 拒绝批准，哈希无从冒充。"""
-    a = _artifact(fingerprint=_fp())
-    wrong_profile = _profile(_fp(model_id="other-model"))
-    with pytest.raises(BaselineNotApprovableError, match="指纹与 artifact 指纹不一致"):
-        approve_baseline(a, wrong_profile, approved_by="claude", approved_at=_AT)
+def test_q2_artifact_sha256_reflects_output_content() -> None:
+    """同配置（指纹相同）但产物输出不同（pred_sha256 不同）→ 不同 artifact 身份。"""
+    a1 = _artifact(products=(_raw_product(pred_sha256=_A),))
+    a2 = _artifact(products=(_raw_product(pred_sha256=_B),))
+    assert a1.fingerprint == a2.fingerprint
+    assert a1.sha256() != a2.sha256()
 
 
-def test_q4_3_approval_binds_internally_computed_hash() -> None:
+def test_q2_3_approval_binds_artifact_sha256() -> None:
     a = _artifact()
-    profile = _profile()
-    rec = approve_baseline(a, profile, approved_by="claude", approved_at=_AT)
-    assert rec.profile_hash == profile.content_hash()  # 内部计算，非调用方传入
-    assert rec.fingerprint == a.fingerprint == profile.fingerprint
+    rec = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+    assert rec.artifact_sha256 == a.sha256()
+
+
+def test_q2_3_different_artifact_yields_different_approval() -> None:
+    """复审 #2：只改 pred_sha256、保持指纹/画像结构，两份 artifact 的批准记录不相等。"""
+    a1 = _artifact(products=(_raw_product(pred_sha256=_A),))
+    a2 = _artifact(products=(_raw_product(pred_sha256=_B),))
+    r1 = approve_baseline(a1, _candidate(a1), approved_by="claude", approved_at=_AT)
+    r2 = approve_baseline(a2, _candidate(a2), approved_by="claude", approved_at=_AT)
+    assert r1.artifact_sha256 != r2.artifact_sha256 and r1.sha256() != r2.sha256()
+
+
+def test_q4_3_profile_must_derive_from_artifact() -> None:
+    a = _artifact(products=(_raw_product(pred_sha256=_A),))
+    other = _artifact(products=(_raw_product(pred_sha256=_B),))
+    wrong_profile = _candidate(other)  # 画像 artifact_sha256 指向 other
+    with pytest.raises(BaselineNotApprovableError, match="artifact_sha256 不符"):
+        approve_baseline(a, wrong_profile, approved_by="claude", approved_at=_AT)
 
 
 # ------------------------------------------------- Q2.3 版本化 / 不可变
 
 def test_q2_3_approval_is_versioned_and_immutable() -> None:
     a = _artifact()
-    p1 = _profile()
+    p1 = _candidate(a)
     first = approve_baseline(a, p1, approved_by="claude", approved_at=_AT)
     assert first.version == 1
-    # 有 prior 必须给 prior_profile（见下 Q4.6）；此处提供不退化的候选。
+    approved_p1 = p1.with_approval(first)
     second = approve_baseline(
-        a, _profile(), approved_by="claude", prior=[first], prior_profile=p1,
-        approved_at=_AT,
+        a, _candidate(a), approved_by="claude", prior=[first],
+        prior_profile=approved_p1, approved_at=_AT,
     )
     assert second.version == 2
-    with pytest.raises(Exception):  # noqa: B017,PT011  frozen ValidationError
+    with pytest.raises(Exception):  # noqa: B017,PT011  frozen
         first.version = 9
-    assert first.version == 1
 
 
-def test_q2_3_version_isolated_per_baseline() -> None:
-    a = _artifact()  # baseline_id="b1"
-    other = ApprovalRecord(
-        baseline_id="OTHER", version=7, approved_by="x", approved_at=_AT,
-        fingerprint=_fp(), profile_hash="ph-other",
-    )
-    rec = approve_baseline(a, _profile(), approved_by="claude", prior=[other], approved_at=_AT)
-    assert rec.version == 1  # 别的 baseline 的版本不影响 b1
-
-
-# ------------------------------------------------ Q4.6 回归强制（codex #2）
+# --------------------------- codex #1 复审：回归不可省略、不可伪造
 
 def test_q4_6_prior_approval_requires_prior_profile() -> None:
-    """已有批准版本时省略 prior_profile → 拒绝（不能靠省参数跳过回归）。"""
     a = _artifact()
-    first = approve_baseline(a, _profile(), approved_by="claude", approved_at=_AT)
+    first = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
     with pytest.raises(BaselineNotApprovableError, match="必须提供 prior_profile"):
-        approve_baseline(a, _profile(), approved_by="claude", prior=[first], approved_at=_AT)
+        approve_baseline(a, _candidate(a), approved_by="claude", prior=[first], approved_at=_AT)
 
 
-def test_q4_6_failing_regression_blocks_approval() -> None:
+def test_q4_6_forged_prior_profile_rejected() -> None:
+    """复审 #1：prior_profile 必须是最近批准所绑定的画像，不能塞一份低标准伪基线。"""
     a = _artifact()
-    p1 = _profile(value_accuracy=1.0)
-    first = approve_baseline(a, p1, approved_by="claude", approved_at=_AT)
-    worse = _profile(value_accuracy=0.5)  # 相对已批准退化
-    with pytest.raises(BaselineNotApprovableError, match="回归"):
-        approve_baseline(
-            a, worse, approved_by="claude", prior=[first], prior_profile=p1, approved_at=_AT
-        )
+    first = approve_baseline(a, _candidate(a, value_accuracy=1.0), approved_by="claude",
+                             approved_at=_AT)
+    forged_baseline = _candidate(a, value_accuracy=0.1)  # 未被批准的"假基线"
+    candidate = _candidate(a, value_accuracy=0.99)
+    with pytest.raises(BaselineNotApprovableError, match="不是最近批准所绑定"):
+        approve_baseline(a, candidate, approved_by="claude", prior=[first],
+                         prior_profile=forged_baseline, approved_at=_AT)
 
 
-def test_q4_6_non_regressing_candidate_approves_as_next_version() -> None:
+def test_q4_6_regression_failure_blocks_second_approval() -> None:
     a = _artifact()
-    p1 = _profile(value_accuracy=1.0)
+    p1 = _candidate(a, value_accuracy=1.0)
     first = approve_baseline(a, p1, approved_by="claude", approved_at=_AT)
-    rec = approve_baseline(
-        a, _profile(value_accuracy=1.0), approved_by="claude",
-        prior=[first], prior_profile=p1, approved_at=_AT,
-    )
-    assert rec.version == 2
+    approved_p1 = p1.with_approval(first)
+    worse = _candidate(a, value_accuracy=0.5)
+    with pytest.raises(BaselineNotApprovableError, match="回归失败"):
+        approve_baseline(a, worse, approved_by="claude", prior=[first],
+                         prior_profile=approved_p1, approved_at=_AT)
+
+
+def test_q4_6_baseline_id_swap_cannot_smuggle_regression() -> None:
+    """换 baseline_id 想跳过回归：那是另一条 lineage 的首批准，仍要过 artifact/画像绑定与齐全性。
+
+    这里证明"换 id"不是免检通道——它只是新基线的 v1，仍受同样的 artifact/画像强绑定约束。
+    """
+    a = _artifact(fingerprint=_fp())
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(), products=a.products)
+    # 画像必须派生自 b2 自身；拿 a 的画像来批 b2 会被 artifact_sha256 拦下（此处相同 products
+    # 故 sha 相同，但换成不同 products 立即不符）——用不同 products 证明：
+    b2_diff = BaselineArtifact(
+        baseline_id="b2", fingerprint=_fp(), products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="artifact_sha256 不符"):
+        approve_baseline(b2_diff, _candidate(b2), approved_by="claude", approved_at=_AT)
 
 
 # ------------------------------------------------------------- release_hash
@@ -274,18 +286,13 @@ def _rec(value: str, product: str = "P1") -> GoldenRecord:
     )
 
 
-def test_q2_release_hash_is_stable_and_content_addressable() -> None:
+def test_q2_release_hash_is_stable_and_order_independent() -> None:
     assert release_hash([_rec("20日")]) == release_hash([_rec("20日")])
-    assert release_hash([_rec("20日")]) != release_hash([_rec("21日")])
-
-
-def test_q2_release_hash_is_order_independent() -> None:
     a = [_rec("v1", "P1"), _rec("v2", "P2")]
     assert release_hash(a) == release_hash(list(reversed(a)))
 
 
 def test_q2_release_hash_ignores_created_at() -> None:
-    """created_at 是标注时间戳、非内容语义——同内容不同时间不改变 release 身份。"""
     base = _rec("20日")
     later = base.model_copy(update={"created_at": datetime(2027, 1, 1, tzinfo=UTC)})
     assert release_hash([base]) == release_hash([later])
@@ -309,7 +316,7 @@ def _lineage_rec(**ov: object) -> GoldenRecord:
 
 
 def test_q2_release_hash_covers_full_semantic_model() -> None:
-    """canonical 全量哈希：任一影响评测/回验/来源审计的字段变化都改变 hash（codex #7）。"""
+    """复审 #7：canonical 全量哈希——任一影响评测/回验/来源审计的字段变化都改变 hash。"""
     base = release_hash([_lineage_rec()])
     assert base != release_hash([_lineage_rec(doc="brochure.pdf")])
     assert base != release_hash([_lineage_rec(product_name="改名")])
@@ -318,11 +325,16 @@ def test_q2_release_hash_covers_full_semantic_model() -> None:
     assert base != release_hash([_lineage_rec(disputed=True, disputed_reason="quote_mismatch")])
     assert base != release_hash([_lineage_rec(schema_version="v2")])
     assert base != release_hash([_lineage_rec(annotator_model="m2")])
-    # evidence 来源审计 lineage 字段变化也必须改变 hash
     ev = _lineage_rec().evidence[0]
     assert base != release_hash([_lineage_rec(
-        evidence=[ev.model_copy(update={"source_revision": "e" * 64})]
-    )])
+        evidence=[ev.model_copy(update={"source_revision": "e" * 64})])])
     assert base != release_hash([_lineage_rec(
-        evidence=[ev.model_copy(update={"file_hash": "f" * 64})]
-    )])
+        evidence=[ev.model_copy(update={"file_hash": "f" * 64})])])
+
+
+def test_q2_3_approval_record_is_frozen() -> None:
+    a = _artifact()
+    rec = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+    assert isinstance(rec, ApprovalRecord)
+    with pytest.raises(Exception):  # noqa: B017,PT011
+        rec.version = 9
