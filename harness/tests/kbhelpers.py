@@ -78,7 +78,8 @@ class _AllowLowRiskGate(QualityGate):
         pass
 
     def decide(
-        self, field_id: str, risk: str, action: str, run_fingerprint: object
+        self, field_id: str, risk: str, action: str, run_fingerprint: object,
+        *, pending_judge: bool = False,
     ) -> "GateDecision":
         from insurance_harness.knowledge.quality_gate import (
             _AUTOMATABLE_ACTIONS,
@@ -94,6 +95,10 @@ class _AllowLowRiskGate(QualityGate):
             return GateDecision(
                 eligible=False, reason=f"风险 {risk} 非 low",
                 field_id=field_id, action=action,
+            )
+        if pending_judge:  # 与真实 gate 一致：未裁决不放行
+            return GateDecision(
+                eligible=False, reason="pending_judge", field_id=field_id, action=action
             )
         return GateDecision(
             eligible=True, reason="测试替身放行", field_id=field_id, action=action

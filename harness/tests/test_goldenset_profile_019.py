@@ -184,7 +184,45 @@ def test_q4_3_global_metrics_reject_non_finite(bad: float) -> None:
         GlobalMetrics(micro_f1=bad, macro_f1=1.0, hallucination_rate=0.0, evidence_accuracy=1.0)
 
 
+@pytest.mark.parametrize("bad", [2.0, -0.1, 1.5])
+def test_q4_3_field_metrics_reject_out_of_range_rate(bad: float) -> None:
+    """codex 五轮 #2：比率越界 [0,1] 应无法构造——否则 value_accuracy=2.0 恒过阈值。"""
+    with pytest.raises(ValidationError):
+        FieldMetrics(field_id="f1", support=12, value_accuracy=bad,
+                     hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={})
+
+
+def test_q4_3_field_metrics_reject_negative_support() -> None:
+    with pytest.raises(ValidationError):
+        FieldMetrics(field_id="f1", support=-1, value_accuracy=1.0,
+                     hallucination_rate=0.0, evidence_accuracy=1.0, tri_state_confusion={})
+
+
+def test_q4_3_out_of_range_metrics_cannot_reach_eligible() -> None:
+    """端到端：越界指标无法构造 → 无法产出"看似达标"画像给 gate（不再是 field_verdict 放行）。"""
+    with pytest.raises(ValidationError):
+        FieldMetrics(field_id="f1", support=12, value_accuracy=2.0,
+                     hallucination_rate=-1.0, evidence_accuracy=2.0, tri_state_confusion={})
+
+
 # ---- 五轮红队自测（profile/regression 组）：幻觉稀释 / 证据语义 ----
+
+def test_q3_1_pred_only_fabrication_shows_in_field_metrics() -> None:
+    """codex 五轮 #1：本字段的 pred-only 伪造必须体现在字段幻觉率/F1 上，字段 gate 才拦得住
+    （此前全局已算对但字段画像为 0.0，在线 gate 只看字段指标会误放）。"""
+    golden = [_rec(f"P{i}", "f1", f"v{i}") for i in range(10)]
+    pred = ([_rec(f"P{i}", "f1", f"v{i}") for i in range(10)]
+            + [_rec(f"Q{i}", "f1", "伪造") for i in range(10)])  # 10 条覆盖面之外的 f1 伪造
+    prof = _bp(golden, pred)
+    m = prof.field("f1")
+    assert m is not None
+    assert m.support == 10               # support 仍只数金标观测
+    assert m.hallucination_rate == 0.5   # 20 present 预测里 10 条伪造
+    assert m.f1 < 1.0
+    verdict = prof.field_verdict("f1")
+    assert not verdict.eligible
+    assert any("hallucination_rate" in f for f in verdict.failures)  # 字段 gate 因幻觉拦下
+
 
 def test_q4_6_fabricated_fields_raise_global_hallucination_and_flag_regression() -> None:
     """红队 #1：候选伪造大量出界字段 → 全局幻觉率必须上升（计入分子）并被回归拦下，

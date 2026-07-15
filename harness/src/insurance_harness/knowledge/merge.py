@@ -698,11 +698,15 @@ class MergeEngine:
 
     def _gate_ok(self, prop: ProposedClaim, risk: str, action: str) -> bool:
         """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
-        走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。"""
+        走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。
+
+        pending_judge 一并交给 gate 裁定（不在 gate 外预检查）——gate 是唯一权威。
+        """
         if self.quality_gate is None:
             return False
         return self.quality_gate.decide(
-            prop.predicate, risk, action, self.run_fingerprint
+            prop.predicate, risk, action, self.run_fingerprint,
+            pending_judge=prop.pending_judge,
         ).eligible
 
     # -- ChangeSet ---------------------------------------------------------
@@ -839,8 +843,7 @@ class MergeEngine:
         auto = (
             self.policy.auto_apply_add
             and risk != "high"
-            and not prop.pending_judge
-            and self._gate_ok(prop, risk, "add")
+            and self._gate_ok(prop, risk, "add")  # pending_judge 由 gate 内部裁定
         )
         if auto:
             item.decision = "auto_applied"
@@ -945,8 +948,7 @@ class MergeEngine:
             self.policy.auto_apply_enrich
             and risk == "low"
             and prop.confidence >= self.policy.enrich_auto_min_confidence
-            and not prop.pending_judge
-            and self._gate_ok(prop, risk, "enrich")
+            and self._gate_ok(prop, risk, "enrich")  # pending_judge 由 gate 内部裁定
         )
 
     # -- 冲突裁决序（03 §6.2 逐级短路） -----------------------------------------
@@ -1018,8 +1020,7 @@ class MergeEngine:
             auto = (
                 risk != "high"
                 and self.policy.auto_apply_supersede_low_risk
-                and not prop.pending_judge
-                and self._gate_ok(prop, risk, "supersede")
+                and self._gate_ok(prop, risk, "supersede")  # pending_judge 由 gate 内部裁定
             )
             if auto:
                 item.decision = "auto_applied"

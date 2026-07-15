@@ -18,6 +18,10 @@ from insurance_harness.goldenset.profile import (
 
 _AUTOMATABLE_ACTIONS = frozenset({"add", "enrich", "supersede"})
 
+# gate 能理解的 QualityProfile 格式版本；不匹配则拒绝——内容哈希只能证明"这份 version=X 的画像
+# 被批准过"，不能证明当前代码理解该格式语义（实施计划 Task5：profile-version mismatch）。
+SUPPORTED_PROFILE_VERSION = "1"
+
 
 class GateDecision(BaseModel):
     """一次闸门判定；不资格时 reason 可读，字段/动作便于审计。"""
@@ -52,6 +56,8 @@ class QualityGate:
         risk: str,
         action: str,
         run_fingerprint: RunFingerprint | None,
+        *,
+        pending_judge: bool = False,
     ) -> GateDecision:
         def deny(reason: str) -> GateDecision:
             return GateDecision(
@@ -64,8 +70,17 @@ class QualityGate:
             return deny("高风险字段永不自动发布")
         if risk != "low":
             return deny(f"风险等级 {risk} 非 low，不自动发布")
+        # pending_judge 收回 gate：字段有未裁决争议不自动发布——由 gate 统一裁定，
+        # 不依赖每个调用方在 gate 外自觉预检查（实施计划 Task5：gate 接收 pending_judge）。
+        if pending_judge:
+            return deny("字段存在未裁决项（pending_judge），不自动发布")
         if self.profile is None:
             return deny("缺字段画像")
+        if self.profile.profile_version != SUPPORTED_PROFILE_VERSION:
+            return deny(
+                f"画像格式版本 {self.profile.profile_version!r} 不受支持"
+                f"（需 {SUPPORTED_PROFILE_VERSION!r}）"
+            )
         if self.approval is None:
             return deny("画像未批准")
         # 内容绑定（实施计划 Task4 + 四轮 #1/#2）：画像必须回链到该批准记录、两者指向同一

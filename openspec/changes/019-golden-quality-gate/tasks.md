@@ -182,3 +182,30 @@ cross-approval-denied 三处闭合）。
 `build_profile` 产出画像保证）；伪造 `ApprovalRecord` 属 020 存储/授权层，且 gate 仍要求其指向真实达标画像。
 
 四轮返工门禁：ruff/mypy(161) 全绿，non-live **1099 passed**；019 专项 136 用例（11+12+34+42+37）。
+
+## codex 五轮复审返工
+
+五轮再提 4 条（2×P1 + 2×P2）。照旧**先在四轮 head 跑 `repro_r6.py` 留"修复前"证据、确认 4 条全部成立 →
+按不变量重建 → 复跑关闭**；并接受"测试偏单点"的批评，补 `build_profile→approve→gate` 端到端负例：
+
+1. **每字段聚合并入 pred-only 幻觉**（五轮 #1，P1）：`build_profile` 字段聚合原只遍历 golden keys、`per_field`
+   不记 pred-only，同字段"10 正确+10 伪造"时 `field[f1].hallucination_rate=0.0`（全局却 0.5），字段 gate 对本
+   字段伪造全盲。修复：字段聚合并入该 field_id 的 pred-only present 键，`eval.py` 对**已知 field_id** 的
+   pred-only present 记 `per_field.fp`；`support` 仍只数金标观测。现 `field[f1]` 幻觉 0.5、`f1=0.667`，被拒。
+2. **领域类型合法域 + 逐项 blocker**（五轮 #2，P1）：`FieldMetrics(value_accuracy=2.0)` 原可构造且恒过阈值；
+   负 `dead_letter_count` 与正 judge 相消掩盖真实未解决。修复：`Rate=Field(ge=0,le=1,allow_inf_nan=False)`（全部
+   比率指标/阈值）+ `NonNegativeInt=Field(ge=0)`（support 与全部计数）**构造期**即拒；`approval_blockers()`
+   **逐项**查 unresolved judge/dead-letter，不再用合计 truthiness。
+3. **gate 校 profile 版本 + 收回 pending_judge**（五轮 #3，计划 Task5，P2）：`QualityGate` 增
+   `SUPPORTED_PROFILE_VERSION` 常量并拒不支持版本（内容哈希只证"这份 v999 被批准"、不证代码理解该格式）；
+   `decide` 增 `pending_judge` 形参并拒，`MergeEngine` 三条自动路径把 pending 判定**收回 gate**（删 gate 外
+   `not prop.pending_judge` 预检查），gate 成为唯一权威。
+4. **lineage_reset 须真新 lineage + reason**（五轮 #4，P2）：`allow_lineage_reset` 原是通用"关回归"开关。修复：
+   reset 须 (a) `artifact.baseline_id` 不在任何 prior 中（确是新 lineage、不能给同 lineage 降级）、(b) 提供
+   **非空 `lineage_reset_reason`**（记入 `ApprovalRecord`）；同 id+reset 直接拒。
+
+**裁决 / 边界**：`allow_lineage_reset` 明确为**结构约束 + 审计信号、非授权本身**（不再声称等于人工授权，真实
+不可伪造授权由 020 提供）；`Rate`/`NonNegativeInt` 让越界比率/负计数/NaN 在构造期即不可进入任何画像/artifact。
+
+五轮返工门禁：ruff/mypy(161) 全绿，non-live **1119 passed**；019 专项 156 用例（11+12+45+48+40，含
+`build_profile→approve→gate` 端到端 bypass 负例 `test_q4_2_fabricating_field_denied_end_to_end`）。

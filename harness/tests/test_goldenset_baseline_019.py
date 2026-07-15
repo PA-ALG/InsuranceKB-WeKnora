@@ -7,6 +7,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
 from insurance_harness.goldenset import (
     ApprovalRecord,
@@ -164,6 +165,36 @@ def test_q2_1_unresolved_items_block_approval() -> None:
         approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
 
 
+@pytest.mark.parametrize("count_field", [
+    "pred_count", "dead_letter_count", "judge_queue_count", "resolved_judgement_count",
+    "keypoints_pending_count", "unresolved_judge_count", "unresolved_dead_letter_count",
+])
+def test_q2_1_negative_counts_rejected_at_construction(count_field: str) -> None:
+    """codex 五轮 #2：计数不得为负——构造期即拒（NonNegativeInt）。"""
+    with pytest.raises(ValidationError):
+        _raw_product(**{count_field: -1})
+
+
+def test_q2_2_negative_count_cannot_mask_unresolved() -> None:
+    """codex 五轮 #2：负 dead-letter 不能与真实待裁决正负相消掩盖未解决（Q2.2 fail-closed）。
+
+    旧实现 `unresolved`=judge+dead-letter 合计的 truthiness 会被 -1 抵消 +1；现负数不可构造，
+    且 approval_blockers 逐项检查——双保险。
+    """
+    with pytest.raises(ValidationError):
+        _raw_product(dead_letter_count=-1, unresolved_dead_letter_count=-1,
+                     judge_queue_count=1, unresolved_judge_count=1)
+
+
+def test_q2_2_unresolved_judge_alone_blocks_approval() -> None:
+    """逐项检查：只有待裁决未解决（dead-letter=0）也必须阻断批准。"""
+    a = _artifact(products=(_raw_product(
+        judge_queue_count=1, resolved_judgement_count=0, unresolved_judge_count=1),))
+    assert any("待裁决未解决" in b for b in a.approval_blockers())
+    with pytest.raises(BaselineNotApprovableError, match="待裁决未解决"):
+        approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+
+
 # ------------------------------------------------- Q2.2 指纹 / 空产品
 
 def test_q2_2_missing_fingerprint_field_blocks_approval() -> None:
@@ -314,10 +345,36 @@ def test_q4_6_lineage_reset_is_explicit_and_auditable() -> None:
     b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
                           products=(_raw_product(pred_sha256=_B),))
     reset = approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human-lead",
-                             prior=[prod], allow_lineage_reset=True, approved_at=_AT)
+                             prior=[prod], allow_lineage_reset=True,
+                             lineage_reset_reason="启用 gs-v2 新 lineage", approved_at=_AT)
     assert reset.baseline_id == "b2"
     assert reset.version == 1
     assert reset.lineage_reset is True  # 跳过回归的重置在批准记录中留痕（可审计）
+    assert reset.lineage_reset_reason == "启用 gs-v2 新 lineage"
+
+
+def test_q4_6_lineage_reset_same_baseline_id_rejected() -> None:
+    """codex 五轮 #4：reset 不能给**同一** lineage 降级——同 baseline_id + reset=True 直接拒，
+    否则 reset 就成了通用"关闭回归"开关。"""
+    a = _artifact()
+    first = approve_baseline(a, _candidate(a, value_accuracy=1.0), approved_by="claude",
+                             approved_at=_AT)
+    with pytest.raises(BaselineNotApprovableError, match="必须开新 lineage"):
+        approve_baseline(a, _candidate(a, value_accuracy=0.1), approved_by="bot",
+                         prior=[first], allow_lineage_reset=True,
+                         lineage_reset_reason="想跳过回归", approved_at=_AT)
+
+
+def test_q4_6_lineage_reset_requires_reason() -> None:
+    """codex 五轮 #4：reset 必须带非空 reason（记入批准记录，可审计）。"""
+    b1 = _artifact(fingerprint=_fp())
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="非空 reason"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human",
+                         prior=[prod], allow_lineage_reset=True, approved_at=_AT)
 
 
 def test_q4_6_normal_first_approval_is_not_marked_lineage_reset() -> None:
@@ -325,6 +382,7 @@ def test_q4_6_normal_first_approval_is_not_marked_lineage_reset() -> None:
     a = _artifact()
     first = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
     assert first.lineage_reset is False
+    assert first.lineage_reset_reason is None
 
 
 # ------------------------------------------------------------- release_hash

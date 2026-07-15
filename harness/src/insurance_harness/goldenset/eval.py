@@ -238,6 +238,9 @@ def evaluate(
     # pred 中金标没有的键：多余预测按 false_present 计入 micro FP（覆盖面之外的幻觉）。
     # 这类"覆盖面之外的 present 预测"也是幻觉，必须同时计入幻觉率**分子**——否则伪造大量
     # 出界字段会把 hallucination_rate 稀释下降，让 Q4.6 的幻觉回归护栏形同虚设。
+    # 且**已知 field_id** 的出界 present 还要计入该字段 per_field FP——否则字段画像看不到本字段
+    # 的伪造，在线 gate 只看字段指标会误放（codex 五轮 #1）。
+    golden_field_ids = {k[1] for k in g_map}
     pred_only = 0
     for key, p in p_map.items():
         if key in g_map:
@@ -247,6 +250,8 @@ def evaluate(
             pred_present += 1
             hallucinated += 1
             micro.fp += 1
+            if key[1] in golden_field_ids:
+                per_field[key[1]].fp += 1
 
     if judge_queue_path is not None and judge_queue:  # 默认关（V4.1）
         write_eval_judge_queue(judge_queue_path, judge_queue)

@@ -7,12 +7,15 @@
 
 - `uv run ruff check .` → All checks passed
 - `uv run mypy src tests` → Success（161 source files，strict）
-- `uv run pytest -m "not live and not integration_postgres" -q` → **1099 passed / 5 deselected**
+- `uv run pytest -m "not live and not integration_postgres" -q` → **1119 passed / 5 deselected**
 - 019 专项：`test_goldenset_{assemble,validate,baseline,profile}_019.py` + `test_quality_gate_019.py`
-  → **136 passed**（11+12+34+42+37，含端到端 bypass 负例），纯 fixture/replay，零真实凭据（Q1.5/Q5.1）
-- **codex 四轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条 + 四轮 4 条（按实施计划
-  Task3/4 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造；四轮再补批准提交
-  **画像内容**哈希、gate 校指纹、换 id 不能跳回归、build_profile 复用 evaluate），见文末各返工小节。
+  → **156 passed**（11+12+45+48+40，含 build_profile→approve→gate 端到端 bypass 负例），纯 fixture/replay，
+  零真实凭据（Q1.5/Q5.1）
+- **codex 五轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条 + 四轮 4 条 + 五轮 4 条（按实施
+  计划 Task3/4/5 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造；四轮补批准提交
+  **画像内容**哈希、gate 校指纹、换 id 不能跳回归、build_profile 复用 evaluate；五轮补**领域类型合法域**
+  Rate/NonNegativeInt、每字段 pred-only 幻觉聚合、gate 校 profile 版本 + 收回 pending_judge、lineage_reset
+  须真新 lineage+reason），见文末各返工小节。
 
 ## 逐条验收（Q1~Q5）
 
@@ -163,3 +166,26 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
   它指向一份**真实达标**（field_verdict 通过）且内容哈希自洽的画像，伪造批准无法让不达标候选过闸。
 - **per-field evidence 为 profile 专属**（evaluate 无按字段证据）：与全局证据共用同一 `quote_in_page`+PDF
   回验原语，仅聚合粒度不同（按记录 vs 按引文）；真实回验仍依赖 dataset_root。
+
+## codex 五轮复审返工（head 已并入）
+
+四轮关闭后，五轮复审再提 4 条（2×P1 + 2×P2）。照旧**先在四轮 head 跑通 `repro_r6.py` 留"修复前"证据、
+确认 4 条全部成立（非误报），再按不变量重建、复跑关闭**。也接受 codex 对测试的批评（偏单点、缺组合不变量），
+本轮起补 `build_profile→approve→gate` **端到端**负例，并把"合法数值域"作为一类系统性领域约束而非逐个补 if。
+
+| 五轮# | 修复前复现（live, `repro_r6.py`） | 按不变量重建 | 修复后复现 | bypass 负例 |
+|---|---|---|---|---|
+| 1 (P1) | `field[f1].hallucination_rate=0.0`（全局 0.5）：10 正确+10 伪造同字段，`build_profile` 字段聚合只遍历 golden keys、`per_field` 不记 pred-only，字段 gate 对本字段伪造**全盲** | 字段聚合并入该 field_id 的 pred-only present 键；`eval.py` 对**已知 field_id** 的 pred-only present 记 `per_field.fp`；`support` 仍只数金标观测 | `=0.5`（`f1=0.667`，field_verdict 拒） | `test_q3_1_pred_only_fabrication_shows_in_field_metrics`、端到端 `test_q4_2_fabricating_field_denied_end_to_end` |
+| 2 (P1) | `FieldMetrics(value_accuracy=2.0)` 构造成功且 `≥0.98` 恒过阈值；负 `dead_letter_count` 与正 judge 相消，`approval_blockers()==[]` 掩盖真实未解决 | `Rate=Field(ge=0,le=1,allow_inf_nan=False)` 用于全部比率指标/阈值、`NonNegativeInt=Field(ge=0)` 用于 support 与全部计数——**构造期**即拒；`approval_blockers()` **逐项**查 unresolved judge/dead-letter（不再用合计 truthiness） | `ValidationError`（构造期拒） | `test_q4_3_field_metrics_reject_out_of_range_rate`（参数化 2.0/-0.1/1.5）、`test_q2_1_negative_counts_rejected_at_construction`（参数化 7 类计数）、`test_q2_2_negative_count_cannot_mask_unresolved`、`_unresolved_judge_alone_blocks_approval` |
+| 3 (P2) | 计划 Task5 要求的 profile-version mismatch / pending_judge 未进 gate：`profile_version="999"` 仍 eligible；merge 在 gate 外用 `not prop.pending_judge` 预检查 | gate 增 `SUPPORTED_PROFILE_VERSION` 常量，`decide` 拒不支持版本（内容哈希只证"这份 v999 被批准"、不证代码理解该格式）；`decide` 增 `pending_judge` 形参并拒，merge 三条自动路径把 pending 判定**收回 gate** | `999` 被拒；pending 被拒 | `test_q4_5_unsupported_profile_version_denied`、`test_q4_2_pending_judge_denied_by_gate` |
+| 4 (P2) | `allow_lineage_reset` 是通用"关回归"开关：同 `baseline_id` + reset 即跳过回归给同 lineage 降级 | reset 须 (a) `artifact.baseline_id` 不在任何 prior 中（**确是新 lineage**）、(b) 提供**非空 `lineage_reset_reason`**（记入 `ApprovalRecord`）；同 id+reset 直接拒 | 同 id reset 被拒 | `test_q4_6_lineage_reset_same_baseline_id_rejected`、`_requires_reason`、`_is_explicit_and_auditable` |
+
+### 五轮已知边界（诚实声明）
+
+- **`allow_lineage_reset` 是结构约束 + 审计信号、非授权本身**：五轮明确**不再声称**该 bool 等于人工授权；
+  它只保证"确开新 lineage 且留了非空理由并记入 ApprovalRecord"，真正不可伪造的授权输入由 020 提供。
+- **领域类型在构造期拒非法值**：`Rate`/`NonNegativeInt` 让越界比率、负计数、NaN/±inf **无法进入**任何画像/
+  artifact；配合 `approval_blockers()` 逐项检查，负数不能与正数相消掩盖真实未解决（Q2.2 fail-closed）。
+- **端到端负例覆盖字段级伪造**：`test_q4_2_fabricating_field_denied_end_to_end` 走完整
+  `build_profile→approve_baseline→with_approval→gate.decide` 链——证据可回验、值正确，仅因字段幻觉被拒，
+  证明字段级画像的伪造能一路传导到 gate 拒绝，而非只在 `compare_baselines` 单点断言。

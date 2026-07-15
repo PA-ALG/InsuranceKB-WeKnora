@@ -12,7 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope
-from insurance_harness.goldenset import RunFingerprint
+from insurance_harness.goldenset import (
+    Evidence,
+    GoldenRecord,
+    RunFingerprint,
+    build_profile,
+)
 from insurance_harness.goldenset.baseline import (
     ApprovalRecord,
     BaselineArtifact,
@@ -210,6 +215,70 @@ def test_q4_3_forged_profile_content_denied_at_gate() -> None:
     forged = approved.model_copy(update={"fields": {_FIELD: _metrics(value_accuracy=0.99)}})
     decision = QualityGate(forged, approval=approval).decide(_FIELD, "low", "add", fp)
     assert not decision.eligible and "内容" in decision.reason
+
+
+def test_q4_2_fabricating_field_denied_end_to_end(
+    monkeypatch: object, tmp_path: object
+) -> None:
+    """codex 五轮 #1 端到端：build_profile→approve→with_approval→gate 全链——某字段伪造出界值
+    （证据可回验、值正确）→ 字段幻觉率升高 → gate 拒；证明字段画像不再对本字段伪造视而不见。"""
+    from pathlib import Path
+
+    from insurance_harness.goldenset import pdf as pdfmod
+
+    class _Pg:
+        def __init__(self, n: int, t: str) -> None:
+            self.page_no = n
+            self.text = t
+
+    monkeypatch.setattr(pdfmod, "extract_pages", lambda _p: [_Pg(1, "QUOTE 命中")])  # type: ignore[attr-defined]
+    root = Path(str(tmp_path))
+
+    def _r(prod: str, val: str) -> GoldenRecord:
+        (root / f"产品{prod}").mkdir(parents=True, exist_ok=True)
+        (root / f"产品{prod}" / "d.pdf").write_text("x", encoding="utf-8")
+        return GoldenRecord(
+            product_id=prod, product_name=f"产品{prod}", doc="d.pdf", field_id=_FIELD,
+            field_name=_FIELD, value=val, tri_state="present",
+            evidence=[Evidence(page=1, quote="QUOTE")], annotator_model="m",
+            schema_version="v1.1+x", created_at=_AT,
+        )
+
+    fp = _fp()
+    golden = [_r(f"P{i}", f"v{i}") for i in range(10)]
+    pred = golden + [_r(f"Q{i}", "伪造") for i in range(10)]  # 10 条出界伪造（值/证据都"漂亮"）
+    artifact = _artifact(fp)
+    profile = build_profile(golden, pred, fp, artifact_sha256=artifact.sha256(),
+                            dataset_root=root)
+    approval = approve_baseline(artifact, profile, approved_by="claude", approved_at=_AT)
+    approved = profile.with_approval(approval)
+    decision = QualityGate(approved, approval=approval).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible
+    assert "hallucination" in decision.reason or "幻觉" in decision.reason
+
+
+def test_q4_5_unsupported_profile_version_denied() -> None:
+    """计划 Task5：画像格式版本不受支持 → gate 拒。内容哈希只证明"这份 v999 被批准"，
+    不证明当前代码理解该格式——即便完整批准链也不放行。"""
+    fp = _fp()
+    artifact = _artifact(fp)
+    candidate = QualityProfile(
+        profile_version="999", artifact_sha256=artifact.sha256(),
+        baseline_approval_sha256="", fingerprint=fp, fields={_FIELD: _metrics()},
+        global_metrics=GlobalMetrics(micro_f1=1.0, macro_f1=1.0,
+                                     hallucination_rate=0.0, evidence_accuracy=1.0),
+    )
+    approval = approve_baseline(artifact, candidate, approved_by="claude", approved_at=_AT)
+    approved = candidate.with_approval(approval)
+    decision = QualityGate(approved, approval=approval).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and "版本" in decision.reason
+
+
+def test_q4_2_pending_judge_denied_by_gate() -> None:
+    """计划 Task5：pending_judge 收回 gate——即便画像达标，未裁决也不自动发布。"""
+    fp = _fp()
+    decision = _gate(fp=fp).decide(_FIELD, "low", "add", fp, pending_judge=True)
+    assert not decision.eligible and "pending_judge" in decision.reason
 
 
 def test_q4_3_missing_run_fingerprint_denied() -> None:

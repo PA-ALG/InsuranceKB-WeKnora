@@ -11,20 +11,19 @@
 
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
-from .baseline import RunFingerprint, canonical_sha256
+from .baseline import FiniteFloat, NonNegativeInt, Rate, RunFingerprint, canonical_sha256
 from .normalize import quote_in_page, values_equal
 from .records import GoldenRecord, TriState
 
 if TYPE_CHECKING:
     from .baseline import ApprovalRecord
 
-# 指标必须是有限浮点：NaN 让所有 `value<阈值`/`base-cand>0` 比较恒 False（绕过门槛与回归），
-# ±inf 让下界比较恒真——在构造期即拒绝非有限值，让这类非法状态无法构造（五轮红队自测）。
-FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+# 指标合法域（构造期不可越界）：Rate=[0,1] 有限；NonNegativeInt≥0；FiniteFloat 仅拒 NaN/±inf。
+# 越界（如 value_accuracy=2.0、负计数）与 NaN 同属"应无法构造的非法状态"（codex 五轮 #2）。
 
 # design.md:13 —— 数据/模型维指纹，任一变化都要求重跑或重新批准（git_sha 属溯源，不计）。
 _STALENESS_FIELDS = (
@@ -43,15 +42,15 @@ class FieldMetrics(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     field_id: str
-    support: int
-    value_accuracy: FiniteFloat
-    hallucination_rate: FiniteFloat
+    support: NonNegativeInt
+    value_accuracy: Rate
+    hallucination_rate: Rate
     # None = 未回验（无 dataset_root 或引文无法定位），区别于"回验过但 0%"（0.0）——
     # 未回验不得当作 0% 参与回归（否则误报/漏报），但对自动资格仍 fail-closed（None→不达标）。
-    evidence_accuracy: FiniteFloat | None
-    precision: FiniteFloat = 0.0
-    recall: FiniteFloat = 0.0
-    f1: FiniteFloat = 0.0
+    evidence_accuracy: Rate | None
+    precision: Rate = 0.0
+    recall: Rate = 0.0
+    f1: Rate = 0.0
     tri_state_confusion: dict[str, int]
 
 
@@ -60,11 +59,11 @@ class GlobalMetrics(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    micro_f1: FiniteFloat = 0.0
-    macro_f1: FiniteFloat = 0.0
-    hallucination_rate: FiniteFloat = 0.0
-    evidence_accuracy: FiniteFloat | None = None  # None = 未回验（不参与回归）
-    unresolved_count: int = 0
+    micro_f1: Rate = 0.0
+    macro_f1: Rate = 0.0
+    hallucination_rate: Rate = 0.0
+    evidence_accuracy: Rate | None = None  # None = 未回验（不参与回归）
+    unresolved_count: NonNegativeInt = 0
 
 
 class AutomationThresholds(BaseModel):
@@ -72,10 +71,10 @@ class AutomationThresholds(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    support_min: int = 10
-    value_accuracy_min: FiniteFloat = 0.98
-    hallucination_rate_max: FiniteFloat = 0.01
-    evidence_accuracy_min: FiniteFloat = 1.0
+    support_min: NonNegativeInt = 10
+    value_accuracy_min: Rate = 0.98
+    hallucination_rate_max: Rate = 0.01
+    evidence_accuracy_min: Rate = 1.0
 
 
 class FieldVerdict(BaseModel):
@@ -175,15 +174,15 @@ class RegressionThresholds(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # 全局
-    max_micro_f1_drop: FiniteFloat = 0.0
-    max_macro_f1_drop: FiniteFloat = 0.0
-    max_global_hallucination_increase: FiniteFloat = 0.0
-    max_global_evidence_drop: FiniteFloat = 0.0
-    max_unresolved_increase: int = 0
+    max_micro_f1_drop: Rate = 0.0
+    max_macro_f1_drop: Rate = 0.0
+    max_global_hallucination_increase: Rate = 0.0
+    max_global_evidence_drop: Rate = 0.0
+    max_unresolved_increase: NonNegativeInt = 0
     # 字段
-    max_field_value_accuracy_drop: FiniteFloat = 0.0
-    max_field_hallucination_increase: FiniteFloat = 0.0
-    max_field_evidence_drop: FiniteFloat = 0.0
+    max_field_value_accuracy_drop: Rate = 0.0
+    max_field_hallucination_increase: Rate = 0.0
+    max_field_evidence_drop: Rate = 0.0
 
 
 class RegressionFailure(BaseModel):
@@ -320,31 +319,38 @@ def build_profile(
     # 空分母口径一致——避免"只遍历金标键"导致产生多余字段的模型被误判满分（四轮 #4）。
     result = evaluate(golden, pred, dataset_root=dataset_root)
 
+    golden_field_ids = {key[1] for key in g_map}
     by_field_keys: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for key in g_map:
         by_field_keys[key[1]].append(key)
+    # 已知 field_id 的 pred-only present 键也纳入该字段观察——本字段的伪造必须体现在字段画像上，
+    # 否则在线 gate 只看字段指标会误放（codex 五轮 #1）。
+    for key in p_map:
+        if key not in g_map and key[1] in golden_field_ids:
+            by_field_keys[key[1]].append(key)
 
     fields: dict[str, FieldMetrics] = {}
     for field_id, keys in by_field_keys.items():
-        support = len(keys)
+        support = sum(1 for k in keys if k in g_map)  # support = 金标观测数（不含 pred-only）
         confusion: Counter[str] = Counter()
         value_hits = value_pairs = pred_present = 0
         hallucinated = ev_ok = ev_total = 0
         for key in keys:
-            g = g_map[key]
+            g = g_map.get(key)  # None = pred-only（本字段覆盖面之外的伪造）
             p = p_map.get(key)
             p_tri: TriState = p.tri_state if p is not None else "unknown"
-            confusion[f"{g.tri_state}>{p_tri}"] += 1
+            if g is not None:
+                confusion[f"{g.tri_state}>{p_tri}"] += 1
             if p is not None and p.tri_state == "present":
                 pred_present += 1
                 vq, tq = _evidence_quote_counts(p, page_cache, dataset_root)
                 ev_ok += vq
                 ev_total += tq
-                if g.tri_state == "present":
+                if g is not None and g.tri_state == "present":
                     value_pairs += 1
                     if values_equal(g.value, p.value):
                         value_hits += 1
-                else:
+                else:  # g absent，或 g is None（pred-only）→ 幻觉
                     hallucinated += 1
         stats = result.per_field.get(field_id)  # evaluate 对每金标字段都建有条目
         fields[field_id] = FieldMetrics(

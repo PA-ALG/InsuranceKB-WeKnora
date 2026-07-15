@@ -14,14 +14,21 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .records import GoldenRecord
 
 if TYPE_CHECKING:
     from .profile import QualityProfile, RegressionThresholds
+
+# 领域数值合法域（让"越界即非法"在构造期不可构造，不只是拒 NaN/Inf）：
+# - Rate：比率/精度类指标与阈值恒在 [0,1] 且有限；
+# - NonNegativeInt：计数不得为负（否则正负相消会掩盖真实未解决项，违反 Q2.2 fail-closed）。
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+Rate = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+NonNegativeInt = Annotated[int, Field(ge=0)]
 
 _FINGERPRINT_FIELDS = (
     "git_sha",
@@ -88,19 +95,19 @@ class BaselineProductArtifacts(BaseModel):
     product_id: str
     run_manifest_sha256: str
     pred_sha256: str
-    pred_count: int
+    pred_count: NonNegativeInt
     dead_letter_sha256: str
-    dead_letter_count: int
+    dead_letter_count: NonNegativeInt
     judge_queue_sha256: str
-    judge_queue_count: int
+    judge_queue_count: NonNegativeInt
     judgements_sha256: str
-    resolved_judgement_count: int
+    resolved_judgement_count: NonNegativeInt
     keypoints_status: Literal["complete", "pending"]
     keypoints_sha256: str | None
-    keypoints_pending_count: int
+    keypoints_pending_count: NonNegativeInt
     eval_report_sha256: str
-    unresolved_judge_count: int
-    unresolved_dead_letter_count: int
+    unresolved_judge_count: NonNegativeInt
+    unresolved_dead_letter_count: NonNegativeInt
 
     @property
     def unresolved(self) -> int:
@@ -145,14 +152,21 @@ class BaselineProductArtifacts(BaseModel):
         return errors
 
     def approval_blockers(self) -> list[str]:
-        """可批准要求：内部一致 + keypoints 已完成 + 无未解决项。"""
+        """可批准要求：内部一致 + keypoints 已完成 + 无未解决项。
+
+        **逐项检查 judge/dead-letter 未解决数，不用合计 truthiness**——否则任一为负时正负相消
+        会掩盖真实未解决项（配合 NonNegativeInt 双保险，Q2.2 fail-closed）。
+        """
         blockers = self.consistency_errors()
         if self.keypoints_status != "complete":
             blockers.append(f"{self.product_id} 关键点未完成（keypoints=pending）")
-        if self.unresolved:
+        if self.unresolved_judge_count:
             blockers.append(
-                f"{self.product_id} 仍有 {self.unresolved} 项未解决"
-                "（dead-letter/待裁决）"
+                f"{self.product_id} 仍有 {self.unresolved_judge_count} 条待裁决未解决"
+            )
+        if self.unresolved_dead_letter_count:
+            blockers.append(
+                f"{self.product_id} 仍有 {self.unresolved_dead_letter_count} 条 dead-letter 未解决"
             )
         return blockers
 
@@ -202,8 +216,9 @@ class ApprovalRecord(BaseModel):
     artifact_sha256: str
     profile_content_sha256: str
     # 该批准是否为显式 lineage 重置（跳过了与上一生产基线的回归）——记录在案以便审计，
-    # 使"跳过回归"永不静默（回应 codex #3：reset 必须显式且可审计）。
+    # 使"跳过回归"永不静默（reset 必须显式、开新 lineage、带理由）。
     lineage_reset: bool = False
+    lineage_reset_reason: str | None = None
 
     def sha256(self) -> str:
         """批准记录自身的 canonical 内容哈希；QualityProfile 以此回链其批准基线。"""
@@ -243,6 +258,7 @@ def approve_baseline(
     prior_profile: "QualityProfile | None" = None,
     thresholds: "RegressionThresholds | None" = None,
     allow_lineage_reset: bool = False,
+    lineage_reset_reason: str | None = None,
     approved_at: datetime | None = None,
 ) -> ApprovalRecord:
     """对 (artifact, 派生画像) 产出一条不可改写、提交 artifact 与画像内容哈希的批准记录。
@@ -253,8 +269,10 @@ def approve_baseline(
       就必须与**当前生产基线**（`prior` 中最近一条，跨 baseline_id）比较——必须提供 `prior_profile`
       且其内容哈希正是该生产批准提交的画像（`content_hash() == latest.profile_content_sha256`，
       四轮 #1/#3），回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
-    - **新 lineage/bootstrap 只能显式授权**：`allow_lineage_reset=True`（人工、可审计）才跳过与
-      生产基线的回归；换 baseline_id 本身不构成免检通道；
+    - **lineage 重置只对真正的新 lineage 开放**：`allow_lineage_reset=True` 才跳过回归，且必须
+      (a) `artifact.baseline_id` 不在任何 prior 中（真新 lineage，不能借 reset 给同 lineage 降级）、
+      (b) 提供非空 `lineage_reset_reason`（记入 ApprovalRecord，可审计）。本 bool 只是 019 层的
+      **结构约束 + 审计信号**；真正的人工授权真实性由 020 提供不可伪造的授权输入（见文档边界）；
     - 指纹缺项 / 未解决 / 产物不齐或不一致（Q2.1）任一都阻断批准。
     """
     art_hash = artifact.sha256()
@@ -267,6 +285,16 @@ def approve_baseline(
         raise BaselineNotApprovableError(
             f"baseline {artifact.baseline_id} 不可批准：画像指纹与 artifact 指纹不一致"
         )
+    if allow_lineage_reset and prior:
+        if artifact.baseline_id in {r.baseline_id for r in prior}:
+            raise BaselineNotApprovableError(
+                f"lineage_reset 必须开新 lineage：baseline_id {artifact.baseline_id} 已存在于"
+                "生产批准中，不能用 reset 给同一 lineage 降级/跳过回归"
+            )
+        if not (lineage_reset_reason and lineage_reset_reason.strip()):
+            raise BaselineNotApprovableError(
+                "lineage_reset 必须提供非空 reason（记入批准记录以便审计）"
+            )
     blockers = artifact.approval_blockers()
     # 当前生产基线 = 全部 prior 中最近一条（跨 baseline_id；换 id 不能另起免检 lineage）。
     if prior and not allow_lineage_reset:
@@ -292,6 +320,7 @@ def approve_baseline(
         )
     same_baseline = [r for r in prior if r.baseline_id == artifact.baseline_id]
     next_version = max((r.version for r in same_baseline), default=0) + 1
+    is_reset = bool(prior) and allow_lineage_reset
     return ApprovalRecord(
         baseline_id=artifact.baseline_id,
         version=next_version,
@@ -300,7 +329,8 @@ def approve_baseline(
         fingerprint=artifact.fingerprint,
         artifact_sha256=art_hash,
         profile_content_sha256=profile.content_hash(),
-        lineage_reset=bool(prior) and allow_lineage_reset,
+        lineage_reset=is_reset,
+        lineage_reset_reason=lineage_reset_reason if is_reset else None,
     )
 
 
