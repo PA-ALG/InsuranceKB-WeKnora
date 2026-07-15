@@ -18,9 +18,7 @@ from insurance_harness.knowledge import (
     MergePolicy,
     current_snapshot_id,
     import_pred_records,
-    publish_product_version,
     resolve_review,
-    rollback_to_snapshot,
 )
 from insurance_harness.knowledge.tables import (
     ChangeItem,
@@ -40,6 +38,12 @@ from tests.kbhelpers import (
 )
 
 _GATE, _FP = allow_all_gate()  # fail-closed 后低风险 supersede 自动裁决须过 gate
+from tests.support.legacy_publisher_007 import (
+    legacy_publish_product_version as publish_product_version,
+)
+from tests.support.legacy_publisher_007 import (
+    legacy_rollback_to_snapshot as rollback_to_snapshot,
+)
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"

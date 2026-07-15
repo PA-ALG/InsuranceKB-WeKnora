@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.adapters.weknora.errors import WeKnoraError
+from insurance_harness.db.base import utcnow
 from insurance_harness.db.models import KnowledgeSpace
 from insurance_harness.db.scope import (
     KnowledgeScope,
@@ -26,8 +27,6 @@ from insurance_harness.knowledge import (
     build_page_claims,
     current_snapshot_id,
     default_snapshot_label,
-    publish_product_version,
-    rollback_to_snapshot,
     snapshot_claim_set,
 )
 from insurance_harness.knowledge.tables import (
@@ -40,6 +39,12 @@ from insurance_harness.knowledge.tables import (
 )
 from tests.conftest import BASE_URL
 from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
+from tests.support.legacy_publisher_007 import (
+    legacy_publish_product_version as publish_product_version,
+)
+from tests.support.legacy_publisher_007 import (
+    legacy_rollback_to_snapshot as rollback_to_snapshot,
+)
 
 
 def _scopes(session: Session) -> tuple[KnowledgeScope, KnowledgeScope]:
@@ -191,6 +196,55 @@ def _rendered_pages(snapshot: ReleaseSnapshot) -> list[dict[str, Any]]:
     return copy.deepcopy(pages)
 
 
+def _replace_current_with_malformed_snapshot(
+    session: Session,
+    scope: KnowledgeScope,
+    source: ReleaseSnapshot,
+    *,
+    rendered_pages: list[dict[str, Any]],
+    include_frozen_claims: bool = True,
+) -> ReleaseSnapshot:
+    """Insert malformed legacy-shaped data without mutating a published row."""
+
+    malformed = ReleaseSnapshot(
+        space_id=scope.space_id,
+        label=f"malformed-{source.id}",
+        rendered_pages=rendered_pages,
+        status="published",
+        read_model_version=1,
+        projection_frozen_at=utcnow(),
+        published_at=utcnow(),
+        published_by="test-fixture",
+    )
+    session.add(malformed)
+    session.flush()
+    if include_frozen_claims:
+        frozen_claims = session.scalars(
+            select(SnapshotClaim).where(
+                SnapshotClaim.space_id == scope.space_id,
+                SnapshotClaim.snapshot_id == source.id,
+            )
+        )
+        session.add_all(
+            [
+                SnapshotClaim(
+                    space_id=row.space_id,
+                    snapshot_id=malformed.id,
+                    claim_id=row.claim_id,
+                    revision_no=row.revision_no,
+                )
+                for row in frozen_claims
+            ]
+        )
+    current = session.scalar(
+        select(CurrentRelease).where(CurrentRelease.space_id == scope.space_id)
+    )
+    assert current is not None
+    current.snapshot_id = malformed.id
+    session.flush()
+    return malformed
+
+
 async def _assert_rollback_rejected_before_io(
     session: Session,
     client: WeKnoraClient,
@@ -239,19 +293,25 @@ def test_s2_2_current_snapshot_rejects_pointer_to_other_space_snapshot(
     kb_session: Session,
 ) -> None:
     scope_a, scope_b = _scopes(kb_session)
-    snapshot_b = ReleaseSnapshot(
-        space_id=scope_b.space_id,
-        label="release-b",
+    snapshot = ReleaseSnapshot(
+        space_id=scope_a.space_id,
+        label="release-a",
+        status="published",
+        read_model_version=1,
+        projection_frozen_at=utcnow(),
+        published_at=utcnow(),
         published_by="test",
     )
-    kb_session.add(snapshot_b)
+    kb_session.add(snapshot)
     kb_session.flush()
     kb_session.add(
         CurrentRelease(
             space_id=scope_a.space_id,
-            snapshot_id=snapshot_b.id,
+            snapshot_id=snapshot.id,
         )
     )
+    kb_session.flush()
+    snapshot.space_id = scope_b.space_id
     kb_session.flush()
 
     with pytest.raises(ScopeViolation, match="scope mismatch"):
@@ -262,12 +322,25 @@ def test_s2_2_current_snapshot_rejects_dangling_pointer(
     kb_session: Session,
 ) -> None:
     scope, _ = _scopes(kb_session)
+    snapshot = ReleaseSnapshot(
+        space_id=scope.space_id,
+        label="release-a",
+        status="published",
+        read_model_version=1,
+        projection_frozen_at=utcnow(),
+        published_at=utcnow(),
+        published_by="test",
+    )
+    kb_session.add(snapshot)
+    kb_session.flush()
     kb_session.add(
         CurrentRelease(
             space_id=scope.space_id,
-            snapshot_id="missing-snapshot",
+            snapshot_id=snapshot.id,
         )
     )
+    kb_session.flush()
+    kb_session.delete(snapshot)
     kb_session.flush()
 
     with pytest.raises(ScopeViolation, match="scope mismatch"):
@@ -419,12 +492,16 @@ async def test_s2_2_rollback_rejects_page_metadata_that_references_other_space_c
         product_version_id=version_a.id,
         label="release-1",
     )
-    snapshot = kb_session.get(ReleaseSnapshot, result_a.snapshot_id)
-    assert snapshot is not None and snapshot.rendered_pages
-    tampered_pages = copy.deepcopy(snapshot.rendered_pages)
+    source = kb_session.get(ReleaseSnapshot, result_a.snapshot_id)
+    assert source is not None and source.rendered_pages
+    tampered_pages = copy.deepcopy(source.rendered_pages)
     tampered_pages[0]["page_metadata"]["claim_ids"] = [claim_b.id]
-    snapshot.rendered_pages = tampered_pages
-    kb_session.flush()
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session,
+        scope_a,
+        source,
+        rendered_pages=tampered_pages,
+    )
     before = _counts(kb_session)
     calls_before = len(respx.calls)
 
@@ -433,11 +510,11 @@ async def test_s2_2_rollback_rejects_page_metadata_that_references_other_space_c
             kb_session,
             client,
             scope_a,
-            snapshot_id=result_a.snapshot_id,
+            snapshot_id=snapshot.id,
         )
 
     assert _counts(kb_session) == before
-    assert current_snapshot_id(kb_session, scope_a) == result_a.snapshot_id
+    assert current_snapshot_id(kb_session, scope_a) == snapshot.id
     assert len(respx.calls) == calls_before
 
 
@@ -447,9 +524,13 @@ async def test_s2_2_rollback_wraps_malformed_rendered_page_as_scope_violation(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    snapshot.rendered_pages = [{"slug": 123}]
-    kb_session.flush()
+    _, source = await _published_snapshot(kb_session, client, scope)
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session,
+        scope,
+        source,
+        rendered_pages=[{"slug": 123}],
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -460,11 +541,12 @@ async def test_s2_2_rollback_rejects_page_slug_outside_product_overview(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    pages = _rendered_pages(snapshot)
+    _, source = await _published_snapshot(kb_session, client, scope)
+    pages = _rendered_pages(source)
     pages[0]["slug"] = "admin/home"
-    snapshot.rendered_pages = pages
-    kb_session.flush()
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session, scope, source, rendered_pages=pages
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -475,10 +557,14 @@ async def test_s2_2_rollback_rejects_duplicate_page_slug(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    page = _rendered_pages(snapshot)[0]
-    snapshot.rendered_pages = [page, copy.deepcopy(page)]
-    kb_session.flush()
+    _, source = await _published_snapshot(kb_session, client, scope)
+    page = _rendered_pages(source)[0]
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session,
+        scope,
+        source,
+        rendered_pages=[page, copy.deepcopy(page)],
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -489,11 +575,12 @@ async def test_s2_2_rollback_rejects_duplicate_claim_within_page(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    claim, snapshot = await _published_snapshot(kb_session, client, scope)
-    pages = _rendered_pages(snapshot)
+    claim, source = await _published_snapshot(kb_session, client, scope)
+    pages = _rendered_pages(source)
     pages[0]["page_metadata"]["claim_ids"] = [claim.id, claim.id]
-    snapshot.rendered_pages = pages
-    kb_session.flush()
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session, scope, source, rendered_pages=pages
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -504,12 +591,16 @@ async def test_s2_2_rollback_rejects_claim_repeated_across_pages(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    page = _rendered_pages(snapshot)[0]
+    _, source = await _published_snapshot(kb_session, client, scope)
+    page = _rendered_pages(source)[0]
     repeated = copy.deepcopy(page)
     repeated["slug"] = "other/page"
-    snapshot.rendered_pages = [page, repeated]
-    kb_session.flush()
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session,
+        scope,
+        source,
+        rendered_pages=[page, repeated],
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -520,9 +611,10 @@ async def test_s2_2_rollback_rejects_empty_rendered_pages(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    snapshot.rendered_pages = []
-    kb_session.flush()
+    _, source = await _published_snapshot(kb_session, client, scope)
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session, scope, source, rendered_pages=[]
+    )
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -551,15 +643,14 @@ async def test_s2_2_rollback_rejects_snapshot_with_no_pages_and_no_claims(
     client: WeKnoraClient,
 ) -> None:
     scope, _ = _scopes(kb_session)
-    _, snapshot = await _published_snapshot(kb_session, client, scope)
-    snapshot.rendered_pages = []
-    kb_session.execute(
-        delete(SnapshotClaim).where(
-            SnapshotClaim.space_id == scope.space_id,
-            SnapshotClaim.snapshot_id == snapshot.id,
-        )
+    _, source = await _published_snapshot(kb_session, client, scope)
+    snapshot = _replace_current_with_malformed_snapshot(
+        kb_session,
+        scope,
+        source,
+        rendered_pages=[],
+        include_frozen_claims=False,
     )
-    kb_session.flush()
 
     await _assert_rollback_rejected_before_io(kb_session, client, scope, snapshot)
 
@@ -681,8 +772,7 @@ async def test_s2_3_publisher_uses_scope_wiki_kb_for_get_create_and_update(
     assert create.call_count == 1
     assert update.call_count == 1
     assert all(
-        f"/knowledgebase/{scope.wiki_kb_id}/" in str(call.request.url)
-        for call in respx.calls
+        f"/knowledgebase/{scope.wiki_kb_id}/" in str(call.request.url) for call in respx.calls
     )
 
 
@@ -906,8 +996,7 @@ async def test_s2_4_rollback_persists_reason_and_allows_repeated_operation(
     assert len(rows) == 2
     assert {row.source_revision for row in rows} == {"customer-request"}
     assert all(
-        row.external_record_id is not None
-        and row.external_record_id.startswith(f"{snapshot.id}:")
+        row.external_record_id is not None and row.external_record_id.startswith(f"{snapshot.id}:")
         for row in rows
     )
     assert len({row.external_record_id for row in rows}) == 2
@@ -925,9 +1014,7 @@ async def test_rh1_1_rollback_flush_failure_performs_zero_wiki_mutations(
     slug = f"product/{product.product_code}/{version.version_label}/overview"
     get = respx.get(f"{base}/pages/{slug}")
     get.mock(return_value=httpx.Response(404, text="not found"))
-    respx.post(f"{base}/pages").mock(
-        side_effect=lambda request: _page_response(request.content)
-    )
+    respx.post(f"{base}/pages").mock(side_effect=lambda request: _page_response(request.content))
     respx.put(f"{base}/pages/{slug}").mock(
         side_effect=lambda request: _page_response(request.content)
     )
@@ -961,10 +1048,7 @@ async def test_rh1_1_rollback_flush_failure_performs_zero_wiki_mutations(
         _context: object,
         _instances: object,
     ) -> None:
-        if any(
-            isinstance(row, ChangeSet) and row.source_kind == "rollback"
-            for row in session.new
-        ):
+        if any(isinstance(row, ChangeSet) and row.source_kind == "rollback" for row in session.new):
             raise RuntimeError("injected rollback flush failure")
 
     event.listen(kb_session, "before_flush", fail_rollback_flush)
@@ -983,14 +1067,17 @@ async def test_rh1_1_rollback_flush_failure_performs_zero_wiki_mutations(
     kb_session.commit()
     assert len(respx.calls) - calls_before == 0
     assert current_snapshot_id(kb_session, scope) == second.snapshot_id
-    assert list(
-        kb_session.scalars(
-            select(ChangeSet.id).where(
-                ChangeSet.space_id == scope.space_id,
-                ChangeSet.source_kind == "rollback",
+    assert (
+        list(
+            kb_session.scalars(
+                select(ChangeSet.id).where(
+                    ChangeSet.space_id == scope.space_id,
+                    ChangeSet.source_kind == "rollback",
+                )
             )
         )
-    ) == rollback_ids_before
+        == rollback_ids_before
+    )
 
 
 @respx.mock
@@ -1005,9 +1092,7 @@ async def test_rh1_2_rollback_wiki_failure_rolls_back_savepoint_after_outer_comm
     slug = f"product/{product.product_code}/{version.version_label}/overview"
     get = respx.get(f"{base}/pages/{slug}")
     get.mock(return_value=httpx.Response(404, text="not found"))
-    respx.post(f"{base}/pages").mock(
-        side_effect=lambda request: _page_response(request.content)
-    )
+    respx.post(f"{base}/pages").mock(side_effect=lambda request: _page_response(request.content))
     update = respx.put(f"{base}/pages/{slug}").mock(
         side_effect=lambda request: _page_response(request.content)
     )
@@ -1049,14 +1134,17 @@ async def test_rh1_2_rollback_wiki_failure_rolls_back_savepoint_after_outer_comm
     kb_session.commit()
     assert update.call_count > update_calls_before
     assert current_snapshot_id(kb_session, scope) == second.snapshot_id
-    assert list(
-        kb_session.scalars(
-            select(ChangeSet.id).where(
-                ChangeSet.space_id == scope.space_id,
-                ChangeSet.source_kind == "rollback",
+    assert (
+        list(
+            kb_session.scalars(
+                select(ChangeSet.id).where(
+                    ChangeSet.space_id == scope.space_id,
+                    ChangeSet.source_kind == "rollback",
+                )
             )
         )
-    ) == rollback_ids_before
+        == rollback_ids_before
+    )
 
 
 @respx.mock
@@ -1099,9 +1187,7 @@ async def test_s2_3_rollback_wiki_failure_does_not_move_pointer_or_add_trace(
     slug = f"product/{product.product_code}/{version.version_label}/overview"
     get = respx.get(f"{base}/pages/{slug}")
     get.mock(return_value=httpx.Response(404, text="not found"))
-    respx.post(f"{base}/pages").mock(
-        side_effect=lambda request: _page_response(request.content)
-    )
+    respx.post(f"{base}/pages").mock(side_effect=lambda request: _page_response(request.content))
     update = respx.put(f"{base}/pages/{slug}").mock(
         side_effect=lambda request: _page_response(request.content)
     )
@@ -1135,12 +1221,16 @@ async def test_s2_3_rollback_wiki_failure_does_not_move_pointer_or_add_trace(
 
     assert _counts(kb_session) == before
     assert current_snapshot_id(kb_session, scope) == second.snapshot_id
-    assert not kb_session.execute(
-        select(ChangeSet).where(
-            ChangeSet.space_id == scope.space_id,
-            ChangeSet.source_kind == "rollback",
+    assert (
+        not kb_session.execute(
+            select(ChangeSet).where(
+                ChangeSet.space_id == scope.space_id,
+                ChangeSet.source_kind == "rollback",
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 def test_s2_4_default_snapshot_label_is_counted_per_space(

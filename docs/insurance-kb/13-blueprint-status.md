@@ -34,12 +34,12 @@
 | 015 | 数据飞轮 | 📋 提案（B17） |
 | 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
 | 017 | WeKnora SourceDocument Bridge/Evidence lineage | ⚠️ T1–T8 软件完成并通过双审/全量复验；真实 WeKnora/PostgreSQL live 为 NOT RUN（B19） |
-| 018 | SnapshotFact/统一读取/可恢复发布 | ✅ 规格 review 通过，待 016+017（B20） |
+| 018 | SnapshotFact/统一读取/可恢复发布 | ⚠️ T1～T3/T5/T6 已实现；T4 软件与 PostgreSQL 节点已就绪、待真实 CI 证据；T7 live 节点已就绪但为 `NOT RUN`（B20） |
 | 019 | Golden 工具/QualityProfile/在线 Gate | ✅ 设计与计划 review 通过，待 TDD（B21） |
 | 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过，待 019+run-admission（B22） |
 | 021 | Source lifecycle ordering | 📋 规格已提出，待实现 durable SourceHead、generation/processed_at 与 per-source lock/CAS（B23） |
 
-执行类遗留：HANDOFF ⓪-B。2026-07-13 架构复核后新增企业运行前置 016～021；在 016/017/018 完成前，现有 007 应视为验证主链而非多租户生产闭环。
+执行类遗留：HANDOFF ⓪-B。2026-07-13 架构复核后新增企业运行前置 016～021；018 未取得 PostgreSQL CI 与受控 WeKnora live 证据前，现有 007 应视为验证主链而非完整生产发布闭环。
 
 ## 2. LLM Wiki 27 项功能引入状态复盘（对照 09 文档）
 
