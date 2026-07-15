@@ -355,15 +355,15 @@ def test_p0_3_live_workflow_freezes_environment_and_zero_skip_gate() -> None:
 
     test_step = _named_step(live, "Tests (WeKnora live)")
     assert_frozen_live_environment(test_step)
-    assert "pytest -m live" in _string(test_step["run"])
-    assert "--junitxml=reports/live.xml" in _string(test_step["run"])
-    guard = _named_step(live, "Require executed zero-skip live tests")
-    assert guard["run"] == "uv run python scripts/check_junit.py reports/live.xml"
+    assert "trusted-workflow/harness/scripts/run_live_gate.py" in _string(test_step["run"])
+    assert "--report reports/live.sanitized.xml" in _string(test_step["run"])
     upload = _named_step(live, "Upload live JUnit")
     assert upload["if"] == "always()"
-    assert _mapping(upload["with"])["path"] == "harness/reports/live.xml"
+    assert _mapping(upload["with"])["path"] == "harness/reports/live.sanitized.xml"
     steps = live["steps"]
     assert isinstance(steps, list)
+    test_index = steps.index(test_step)
+    assert steps[test_index + 1 :] == [upload]
     for raw_step in steps:
         step = _mapping(raw_step)
         if step.get("name") not in {

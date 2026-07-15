@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-15（019 PR #8 codex **七轮 APPROVED / 可合并**，七轮非阻断清理已并入 `6e3e5f9`；PR #6 已合入 `main`，merge commit `27c36641`；业务方最新排期裁决：合并后收尾优先，随后 018/019 可独立或并行，021 等 018，020 等 019+021）
+> 最后更新：2026-07-15（019 PR #8 已合入 `main`，merge commit `4d9c84e2`；OpenSpec 023 本机 WeKnora live 基础设施实施中；PR #9 的 018 T7 仍需最终 live 证据）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -18,6 +18,8 @@
 0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
 
 0f. **当前排期与依赖（业务方 2026-07-14 最新裁决）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
+
+0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-15 当前状态）**：独立分支 `codex/023-local-weknora-live-environment` 已对齐 `main@4d9c84e2`，尚未 push/PR。已完成四角色配置与探针、loopback Compose/随机 runtime env、真实 WeKnora REST provisioning primitives、受信 main exact-SHA 五节点 workflow/JUnit gate、ephemeral runner/cleanup 合同和 fail-closed CLI 骨架；Harness extraction 沿用 `HARNESS_LLM_BASE_URL` / `HARNESS_LLM_API_KEY` / `HARNESS_LLM_MODEL_WEAK`，默认支持百炼 `deepseek-v4-flash`，与 WeKnora Chat/Embedding/ReRank 三角色独立切换。最新软件证据：023 focused **105 passed**、deterministic **1247 passed / 5 deselected**、Ruff、mypy strict、OpenSpec strict 与 diff check 通过。六个服务镜像及 arm64 GitHub Runner 已锁 digest/checksum；本机 WeKnora app/frontend/docreader/PostgreSQL/Redis 与独立 Harness PostgreSQL 已启动，宿主仅 `127.0.0.1:8080/8081/5442`，app/frontend/内部请求已验证 HTTP 200（宿主 curl 必须 `--noproxy '*'`）。**尚未完成**：有效文件 `/Users/houjing/Documents/LLM_wiki/.worktrees/insurancekb-local-live-023/.env.local-live` 的 `LOCAL_LIVE_WEKNORA_CHAT_API_KEY`、`LOCAL_LIVE_WEKNORA_EMBEDDING_API_KEY`、`LOCAL_LIVE_WEKNORA_RERANK_API_KEY`、`HARNESS_LLM_API_KEY` 仍 EMPTY，因此四模型 probe、tenant/models/KB/Space/PDF provision、五节点 local live、可信 GitHub live 与 018 T7 均是 **NOT RUN**；默认 CLI 的真实 Space/Docker/GitHub mutation collaborator 仍需接线和安全复核。不得把容器 healthy 或软件测试绿写成 live 验收完成。
 
    **阶段 1 — 合并后收尾（当前）**
    - [x] PR #5、#6 已合并，最新 `origin/main` 已确认指向 `27c36641`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
@@ -95,7 +97,7 @@
 | B8 | PP-StructureV3 表格结构识别部署（006 遗留） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`，用金标回归 A/B 验证（11 §2）后替换默认 | 部署人工 + 金标回归 |
 | B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
 | B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
-| B10 | WeKnora 测试实例搭建 + live 契约测试 | **完整 Runbook 已备好：`docs/insurance-kb/14-deployment-runbook.md`**（双库初始化/L1~L6 验收路径/完成定义清单） | 部署+联调 |
+| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 实施中**：本机 5 个 WeKnora 核心服务 + 独立 Harness PostgreSQL 已按 digest 启动且 loopback-only；等待 `.env.local-live` 四个 API key 后执行模型 probe、幂等 provision、五节点 local/GitHub live | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |
 | B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | `openspec/changes/010-structured-import/proposal.md`；属后续 backlog，不抢占 ⓪-0f 主线 | 开发型，中等 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立） | `openspec/changes/011-knowledge-health/proposal.md` | 开发型，中小 |
@@ -162,6 +164,8 @@
 9a. **"本地绿 ≠ CI 绿"三连坑（2026-07-13 付费确认）**：① ruff 的 first-party 自动探测本地/CI 漂移→已显式 known-first-party；② mypy/ruff 本地缓存可产生假绿→验收复跑加 --no-cache / 删缓存；③ **上游 .gitignore 的 `WeKnora`（二进制名）曾吞掉 adapters/weknora/ 整个目录**，5 个核心文件从未进 git、CI 因此一直红而本地全绿→已加例外；**新增目录后必须查 `git status --ignored`，验收标准含"CI 绿"而不只是本地门禁**。
 9. **本机 shell 有 SOCKS 代理环境变量（ALL_PROXY 等），曾导致 httpx 全部请求挂掉**——适配层已用 `trust_env=False` 修复；新写任何 HTTP 客户端都要注意这一点。**git push 大提交会在 sideband 中途断连**——解法（已配置进本仓库）：`git config http.postBuffer 524288000` + `http.version HTTP/1.1`，并用 `env -u ALL_PROXY -u HTTPS_PROXY …` 绕开代理变量执行 push。
 10. **“基础设施测试被收集 ≠ 真的执行”**：过去 PR 只跑 `-m "not live"`，PostgreSQL/WeKnora 可全部 skip 仍绿色。现在显式三 lane、preflight、JUnit `tests > 0 && skipped = 0`；以后新增基础设施用例必须同步维护 lane collection 契约，不能只看 pytest exit code。
+11. **长时间无反馈是执行故障，不是“任务复杂”**：023 期间先后出现一次 reviewer spawn 约 30 分钟、一次只读安全审查 spawn 约 67 分钟阻塞。硬规则：任何 agent/tool **60 秒无新输出即轮询或中断**；主路径已有可测试产物后，不得再让可选 reviewer/spawn 阻塞收口；每 60 秒必须给业务方可验证进度。以后优先复用已存在 agent 或主线程审查，不在关键路径新建审查 agent。
+12. **子代理 GREEN 只是局部证据**：023 CLI 子线曾把 runtime env 错写成七个 `HARNESS_LIVE_*`，单模块 22 passed 仍无法真实运行；主线程组合复核后才改为复用四角色 `load_local_live_config`、八项 `ensure_runtime_environment` 与默认 `probe_all_models`。并行开发必须文件独占，但合并前主线程必须检查真实数据流并跑跨模块 focused + 全量 deterministic，不能把各轨测试数相加当集成完成。
 
 ## 六、工作方式约定（业务方明确要求）
 
