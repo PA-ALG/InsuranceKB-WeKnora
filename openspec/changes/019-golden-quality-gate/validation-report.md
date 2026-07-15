@@ -7,9 +7,9 @@
 
 - `uv run ruff check .` → All checks passed
 - `uv run mypy src tests` → Success（161 source files，strict）
-- `uv run pytest -m "not live and not integration_postgres" -q` → **1130 passed / 5 deselected**
+- `uv run pytest -m "not live and not integration_postgres" -q` → **1142 passed / 5 deselected**
 - 019 专项：`test_goldenset_{assemble,validate,baseline,profile}_019.py` + `test_quality_gate_019.py`
-  → **167 passed**（11+12+54+48+42，含 build_profile→approve→gate 端到端 bypass 负例），纯 fixture/replay，
+  → **179 passed**（11+12+65+49+42，含 build_profile→approve→gate 端到端 bypass 负例），纯 fixture/replay，
   零真实凭据（Q1.5/Q5.1）
 - **codex 五轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条 + 四轮 4 条 + 五轮 4 条（按实施
   计划 Task3/4/5 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造；四轮补批准提交
@@ -220,3 +220,38 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
 - **端到端负例覆盖字段级伪造**：`test_q4_2_fabricating_field_denied_end_to_end` 走完整
   `build_profile→approve_baseline→with_approval→gate.decide` 链——证据可回验、值正确，仅因字段幻觉被拒，
   证明字段级画像的伪造能一路传导到 gate 拒绝，而非只在 `compare_baselines` 单点断言。
+
+## codex 六轮复审返工 + R7 红队（head 已并入）
+
+codex 六轮确认五轮 4 条 + R6 两条正式关闭，独立复跑 179/1130/CI 全绿，再提 **2×P1 + 1×P2**。照旧先在
+R6 head 跑 `repro_codex6.py` 复现（2×P1 与 codex 报告数值完全一致）→ 按"单一权威原语"重建 → 复跑关闭；
+并接受 codex 根因批评——"哪些 key 可评测""什么是同一 SHA"必须集中建模，不在局部循环各自推导。
+
+| 六轮# | 修复前复现（live） | 按单一权威原语重建 | bypass 负例 |
+|---|---|---|---|
+| #1 (P1) | disputed 金标从 golden 侧排除，但**其预测**被五轮 pred-only 聚合重归类为幻觉：`field.hallucination 0→0.0909`（1/11）合格字段失格。disputed≤5% 但字段幻觉门槛 1%，1/13 产品即 ~7.7% | `eval.excluded_disputed_keys(golden)` **单一权威**（disputed 键−可用键），evaluate 与 build_profile 共用，pred-only/evidence 前统一过滤；同 key 另有可用金标则仍按可用金标评测 | `test_q3_1_disputed_key_prediction_not_counted_as_hallucination`（parity：加 disputed 样本不改任何指标/资格）+ 端到端 |
+| #2 (P1) | reset 用**未规范化** golden hash 字符串比较：同一 64-digest 仅**大写**变体即被判"新 golden 集"→ reset 洗白 1.0→0.99 → gate eligible | `Sha256Hex`（构造期 64hex+拒空白+规范小写）用于 `golden_release_hash`；`_canon_hash` 单一 canonical 原语在**比较点**再规范化（belt-and-suspenders） | `test_q4_6_reset_rejects_same_golden_hash_case_variant`、`test_q2_2_golden_release_hash_must_be_canonical_sha256`（参数化） |
+| #3 (P2) | `_gate_ok` 的 `except Exception: return False` 吞掉异常原因，运营无法区分"gate 故障"与"候选质量不足" | 保持 fail-closed，`logging.warning` 记异常类型+简短消息（不入业务数据、不带堆栈） | `test_q4_2_gate_error_fails_closed_not_crash`（caplog 断言） |
+
+**R7 提交前红队（2 支，非等 codex）**：修完再派红队攻新面。**E（disputed 完备性）2000 迭代+60 例攻不破**
+（加 disputed 样本不改任何指标；evaluate↔build_profile 零漂移；端到端资格不变）；**F（身份规范化）两个高危
+方向均攻不破**——F 枚举全部 11 处 hash 比较点，确认 reset 成员测试是**唯一** fail-open（已规范化），其余 10 处
+`==` 绑定 fail-closed、被 canonical 小写锚点交叉钉死。红队各挖出 1 个**低危残留并当场修掉**：
+
+- **[F, 已修] `model_copy`/`model_construct` 绕过 `Sha256Hex` 构造期规范化**（容器无 `revalidate_instances`）→
+  未规范化大写 digest 可达 reset 比较重开 #2。修复：`_canon_hash` 在**比较点**规范化，不依赖单一构造期不变量。
+  负例 `test_q4_6_reset_rejects_uppercase_hash_smuggled_via_model_copy`。
+- **[E, 已修] 非 reset 回归未校验候选与基线同 golden 集**（reset 强制 golden 集**不同**，非 reset 却不要求
+  **相同**）→ 候选借 disputed 削弱自身评测集（≤5% 过 validator）藏退化。修复：非 reset 回归要求
+  `candidate.golden_release_hash == 生产基线`（对称闭合），否则须走 `allow_lineage_reset`。负例
+  `test_q4_6_non_reset_regression_requires_same_golden_set`。
+
+### 六轮已知边界（诚实声明）
+
+- **未把 `Sha256Hex` 铺到所有 SHA 字段**：仅 `golden_release_hash`（唯一喂给 fail-open 成员测试的字段）；
+  其余 SHA 是 `==` 绑定、不符即 **fail-closed**（红队 F 逐点验证），未规范化只会极端情形**误拒**（可用性）、
+  不放行。铺开是一致性收敛、非安全必需，留作后续。
+- **disputed 隐藏退化的根仍在 020 金标可信**：E-3b 的对称护栏堵住"换 golden 集静默过非 reset 回归"，但
+  disputed 标注真实性（annotator 是否滥标）属 020 标注治理，019 只保证同评测基准比较。
+- **`allow_lineage_reset` 真实性仍属 020 授权边界**：reset 现要求真新 golden 集 + 非空 reason + 审计，但
+  "该 golden 集确对应真实新评测集"由 020 不可伪造授权输入保证。

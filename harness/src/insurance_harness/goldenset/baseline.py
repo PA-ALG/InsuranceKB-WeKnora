@@ -74,6 +74,27 @@ def _is_sha256(value: str | None) -> bool:
     return value is not None and _SHA256_HEX.fullmatch(value) is not None
 
 
+def _canon_hash(v: str) -> str:
+    """SHA 文本身份的规范形（去首尾空白 + 小写）——身份比较的**单一权威**。
+
+    构造期由 Sha256Hex 严格校验并规范化；此函数供**比较点**二次规范化，使身份比较不依赖
+    单一构造期不变量——防止绕过构造校验（model_copy/model_construct，无 revalidate_instances）
+    塞入的未规范化值制造"同 digest 两身份"、重开 reset 洗白（红队 F）。
+    """
+    return v.strip().lower()
+
+
+def _validate_sha256_hex(v: str) -> str:
+    if not _SHA256_HEX.fullmatch(v):
+        raise ValueError("必须是规范 SHA-256：64 位十六进制、无首尾空白")
+    return _canon_hash(v)  # 规范化为小写，使同一 digest 只有唯一文本身份
+
+
+# 内容身份哈希：构造期强制 64 位 hex 并规范化为小写（codex 六轮 #2）。
+# 同一 SHA 的大小写/空白变体不得成为两个"身份"——否则 reset 的"同 golden 集必回归"可被绕过。
+Sha256Hex = Annotated[str, AfterValidator(_validate_sha256_hex)]
+
+
 def canonical_sha256(data: object) -> str:
     """对任意 JSON 可序列化对象做 canonical JSON（sorted keys + 紧凑分隔符）后 sha256。"""
     payload = json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
@@ -91,7 +112,7 @@ class RunFingerprint(BaseModel):
     prompt_version: str
     template_profile: str
     source_profile: str
-    golden_release_hash: str
+    golden_release_hash: Sha256Hex  # 内容身份：64hex + 规范小写（六轮 #2；reset 比较依赖其唯一性）
 
     def missing_fields(self) -> list[str]:
         return [f for f in _FINGERPRINT_FIELDS if not str(getattr(self, f)).strip()]
@@ -312,13 +333,13 @@ def approve_baseline(
                 f"lineage_reset 必须开新 lineage：baseline_id {artifact.baseline_id} 已存在于"
                 "生产批准中，不能用 reset 给同一 lineage 降级/跳过回归"
             )
-        if artifact.fingerprint.golden_release_hash in {
-            r.fingerprint.golden_release_hash for r in prior
+        if _canon_hash(artifact.fingerprint.golden_release_hash) in {
+            _canon_hash(r.fingerprint.golden_release_hash) for r in prior
         }:
             raise BaselineNotApprovableError(
                 f"lineage_reset 必须是真正的新评测基准：golden 集 "
                 f"{artifact.fingerprint.golden_release_hash} 与现有生产基线相同——"
-                "同一 golden 集必须走零容差回归，不得借 reset（换 id/换模型）洗白降级"
+                "同一 golden 集必须走零容差回归，不得借 reset（换 id/换模型/大小写变体）洗白降级"
             )
         if not (lineage_reset_reason and lineage_reset_reason.strip()):
             raise BaselineNotApprovableError(
@@ -337,6 +358,17 @@ def approve_baseline(
             raise BaselineNotApprovableError(
                 f"baseline {artifact.baseline_id} 不可批准：prior_profile 不是当前生产基线所"
                 "批准的画像（内容哈希不符——回归基线被伪造/替换/靠换 id 绕过）"
+            )
+        # 零容差回归必须在**同一 golden 集**（评测基准一致）上比较——否则候选可借 disputed 削弱
+        # 自身评测面（≤5% 过 validator）藏退化，把非对称评测集偷渡过回归（红队 E/3b）。reset 路径
+        # 强制 golden 集必须**不同**且留审计；非 reset 路径对称地要求 golden 集必须**相同**。
+        if _canon_hash(artifact.fingerprint.golden_release_hash) != _canon_hash(
+            latest.fingerprint.golden_release_hash
+        ):
+            raise BaselineNotApprovableError(
+                f"baseline {artifact.baseline_id} 不可批准：候选与生产基线的 golden 集不同，"
+                "零容差回归无从在同一评测基准上比较——真正的新评测基准须走 allow_lineage_reset"
+                "（另起 lineage、留审计），不得靠换/削弱评测集静默通过回归"
             )
         from .profile import compare_baselines  # 延迟导入避免 baseline↔profile 循环
 

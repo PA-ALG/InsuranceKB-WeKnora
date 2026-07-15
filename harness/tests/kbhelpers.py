@@ -40,7 +40,7 @@ def green_gate(
     fp = RunFingerprint(
         git_sha="test-sha", schema_version="v1.1+test", model_id="test-model",
         prompt_version="p1", template_profile="tpl1", source_profile="src1",
-        golden_release_hash="rh-test",
+        golden_release_hash="a" * 64,
     )
     shas = {k: _HEX for k in (
         "run_manifest", "pred", "dead_letter", "judge_queue", "judgements",
@@ -110,7 +110,7 @@ def allow_all_gate() -> tuple[QualityGate, RunFingerprint]:
     fp = RunFingerprint(
         git_sha="test-sha", schema_version="v1.1+test", model_id="test-model",
         prompt_version="p1", template_profile="tpl1", source_profile="src1",
-        golden_release_hash="rh-test",
+        golden_release_hash="a" * 64,
     )
     return _AllowLowRiskGate(), fp
 

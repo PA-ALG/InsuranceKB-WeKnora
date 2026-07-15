@@ -5,6 +5,7 @@
 以及 merge 三路径接入（Q4.2/Q4.5）。
 """
 
+import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -44,7 +45,7 @@ _HEX = "a" * 64
 def _fp(**overrides: str) -> RunFingerprint:
     base = dict(
         git_sha="abc", schema_version="v1.1+x", model_id="m1", prompt_version="p1",
-        template_profile="t1", source_profile="s1", golden_release_hash="rh1",
+        template_profile="t1", source_profile="s1", golden_release_hash="a" * 64,
     )
     base.update(overrides)
     return RunFingerprint(**base)
@@ -291,7 +292,7 @@ def test_q4_3_missing_run_fingerprint_denied() -> None:
 @pytest.mark.parametrize(
     "drift",
     [
-        {"golden_release_hash": "rh2"},
+        {"golden_release_hash": "b" * 64},
         {"schema_version": "v9"},
         {"model_id": "m2"},
         {"prompt_version": "p2"},
@@ -507,9 +508,12 @@ def test_q4_2_pending_short_circuits_even_if_gate_ignores_it(kb_session: Session
     assert claim.status == "candidate"  # merge 层短路：pending 不自动发布，尽管 gate 想放行
 
 
-def test_q4_2_gate_error_fails_closed_not_crash(kb_session: Session) -> None:
+def test_q4_2_gate_error_fails_closed_not_crash(
+    kb_session: Session, caplog: pytest.LogCaptureFixture
+) -> None:
     """红队 R6/C-2a：注入不符新签名的 gate（decide 缺 pending_judge → 调用抛 TypeError）
-    不得崩整批——`_gate_ok` 兜成 fail-closed，候选进 candidate，apply_batch 不抛。"""
+    不得崩整批——`_gate_ok` 兜成 fail-closed，候选进 candidate，apply_batch 不抛。
+    codex 六轮 #3(P2)：异常须留可审计原因，让运营区分"gate 故障"与"候选质量不足"。"""
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     fp = _fp()
@@ -519,8 +523,11 @@ def test_q4_2_gate_error_fails_closed_not_crash(kb_session: Session) -> None:
         run_fingerprint=fp,
     )
     change_set, _ = engine.open_change_set(source_kind="document")
-    engine.apply_batch(change_set, [_add_prop(scope, version.id, "waiting_period")])  # 不抛
+    with caplog.at_level(logging.WARNING, logger="insurance_harness.knowledge.merge"):
+        engine.apply_batch(change_set, [_add_prop(scope, version.id, "waiting_period")])  # 不抛
     claim = kb_session.execute(
         select(Claim).where(Claim.space_id == scope.space_id)
     ).scalar_one()
     assert claim.status == "candidate"  # gate 异常 → fail-closed，不自动发布
+    # P2：异常类型进日志、可审计（区分 gate 故障 vs 候选质量不足），且不带堆栈/不入业务数据
+    assert any("TypeError" in r.getMessage() for r in caplog.records)

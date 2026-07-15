@@ -33,7 +33,7 @@ _ART = "a" * 64
 def _fp(**overrides: str) -> RunFingerprint:
     base = dict(
         git_sha="abc", schema_version="v1.1+x", model_id="m1", prompt_version="p1",
-        template_profile="t1", source_profile="s1", golden_release_hash="rh1",
+        template_profile="t1", source_profile="s1", golden_release_hash="a" * 64,
     )
     base.update(overrides)
     return RunFingerprint(**base)
@@ -66,13 +66,13 @@ def _profile_of(*metrics: FieldMetrics, fp: RunFingerprint | None = None) -> Qua
 
 def _rec(
     product: str, field_id: str, value: str | None, tri: str = "present",
-    *, with_evidence: bool = True,
+    *, with_evidence: bool = True, disputed: bool = False,
 ) -> GoldenRecord:
     return GoldenRecord(
         product_id=product, product_name=f"产品{product}", doc="d.pdf",
         field_id=field_id, field_name=field_id, value=value, tri_state=tri,  # type: ignore[arg-type]
         evidence=[Evidence(page=1, quote=value)] if (value and with_evidence) else [],
-        annotator_model="m", schema_version="v1.1+x", created_at=_AT,
+        annotator_model="m", schema_version="v1.1+x", created_at=_AT, disputed=disputed,
     )
 
 
@@ -224,6 +224,31 @@ def test_q3_1_pred_only_fabrication_shows_in_field_metrics() -> None:
     assert any("hallucination_rate" in f for f in verdict.failures)  # 字段 gate 因幻觉拦下
 
 
+def test_q3_1_disputed_key_prediction_not_counted_as_hallucination() -> None:
+    """codex 六轮 #1：disputed 金标已从评测集排除，模型对该 key 的预测既不可判真也不可判假——
+    不得被重归类为"覆盖面之外的伪造"而计入字段/全局幻觉、FP 或证据。**增加 disputed 样本及其
+    预测不应改变任何指标或资格**（"可评测键"由单一权威原语判定，global 与 field 口径一致）。"""
+    golden = [_rec(f"P{i}", "f1", f"v{i}") for i in range(10)]
+    pred = [_rec(f"P{i}", "f1", f"v{i}") for i in range(10)]
+    base = _bp(golden, pred)
+    # 增加 1 条 disputed 金标（同 field f1，新 product P10）+ 模型对该 key 的预测
+    disp_g = golden + [_rec("P10", "f1", "争议值", disputed=True)]
+    disp_p = pred + [_rec("P10", "f1", "对争议键的预测")]
+    withdisp = _bp(disp_g, disp_p)
+    b, w = base.field("f1"), withdisp.field("f1")
+    assert b is not None and w is not None
+    assert w.hallucination_rate == b.hallucination_rate == 0.0   # disputed 键预测不计幻觉
+    assert w.support == b.support == 10                          # disputed 不进 support
+    assert w.f1 == b.f1                                          # 字段 F1 不受影响
+    # evaluate parity：全局幻觉率也不变（global 与 field 用同一排除原语）
+    assert (withdisp.global_metrics.hallucination_rate
+            == base.global_metrics.hallucination_rate == 0.0)
+    # 关键：disputed 样本不新增任何 hallucination 失败项（此夹具无 dataset_root，两者都因
+    # evidence=None 非资格；但修复前 withdisp 会多一条 hallucination_rate>0.01 而"合格字段失格"）。
+    assert not any("hallucination" in f for f in base.field_verdict("f1").failures)
+    assert not any("hallucination" in f for f in withdisp.field_verdict("f1").failures)
+
+
 def test_q4_6_fabricated_fields_raise_global_hallucination_and_flag_regression() -> None:
     """红队 #1：候选伪造大量出界字段 → 全局幻觉率必须上升（计入分子）并被回归拦下，
     而非被稀释下降让 Q4.6 幻觉护栏失效。"""
@@ -332,7 +357,7 @@ def test_q3_1_per_field_prf_match_evaluator() -> None:
 def test_q3_2_staleness_on_each_of_six_dims() -> None:
     profile = _bp(_golden("f1"), _golden("f1"))
     assert not profile.is_stale(_fp())
-    assert profile.is_stale(_fp(golden_release_hash="rh2"))
+    assert profile.is_stale(_fp(golden_release_hash="b" * 64))
     assert profile.is_stale(_fp(schema_version="v9"))
     assert profile.is_stale(_fp(model_id="m2"))
     assert profile.is_stale(_fp(prompt_version="p2"))

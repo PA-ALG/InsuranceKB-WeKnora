@@ -8,6 +8,7 @@ claude-session 队列（复用 compiler judge-queue 的 JSONL 形态），回写
 
 import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC
@@ -62,6 +63,8 @@ from insurance_harness.knowledge.tables import (
 )
 
 RiskResolver = Callable[[str], str]
+
+_LOG = logging.getLogger(__name__)
 
 _STATUS_RANK = {"published": 0, "candidate": 1, "draft": 2}
 
@@ -713,7 +716,13 @@ class MergeEngine:
                 prop.predicate, risk, action, self.run_fingerprint,
                 pending_judge=prop.pending_judge,
             ).eligible
-        except Exception:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
+        except Exception as exc:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
+            # P2（codex 六轮 #3）：保留可审计原因，让运营能区分"gate 故障"与"候选质量不足"。
+            # 只记异常类型 + 简短消息到日志，不入业务数据、不带堆栈。
+            _LOG.warning(
+                "quality_gate.decide raised %s for predicate=%r action=%s → fail-closed: %s",
+                type(exc).__name__, prop.predicate, action, exc,
+            )
             return False
 
     # -- ChangeSet ---------------------------------------------------------

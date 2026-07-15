@@ -308,11 +308,13 @@ def build_profile(
     产出 baseline_approval_sha256="" 的**候选**画像；批准后由 `.with_approval(approval)` 回链。
     `artifact_sha256` 必须等于派生自的 BaselineArtifact.sha256()（approve 时强制核对）。
     """
-    from .eval import evaluate  # 复用权威 evaluator（四轮 #4：不重复实现指标口径）
+    # 复用权威 evaluator（四轮 #4：不重复实现指标口径）+ 共用"可评测键"权威（六轮 #1）。
+    from .eval import evaluate, excluded_disputed_keys
 
     usable = [g for g in golden if not g.disputed]
     g_map = {(g.product_id, g.field_id): g for g in usable}
     p_map = {(p.product_id, p.field_id): p for p in pred}
+    excluded_only = excluded_disputed_keys(golden)  # disputed-only 键：预测不可评测，不进字段聚合
     page_cache: dict[Path, dict[int, str]] = {}
 
     # 全局指标 + 每字段 P/R/F1 全部取自 evaluate：pred-only 多余字段计入 micro FP、
@@ -326,7 +328,9 @@ def build_profile(
     # 已知 field_id 的 pred-only present 键也纳入该字段观察——本字段的伪造必须体现在字段画像上，
     # 否则在线 gate 只看字段指标会误放（codex 五轮 #1）。
     for key in p_map:
-        if key not in g_map and key[1] in golden_field_ids:
+        if key in g_map or key in excluded_only:  # disputed-only 的预测不计入字段幻觉/证据
+            continue
+        if key[1] in golden_field_ids:
             by_field_keys[key[1]].append(key)
 
     fields: dict[str, FieldMetrics] = {}

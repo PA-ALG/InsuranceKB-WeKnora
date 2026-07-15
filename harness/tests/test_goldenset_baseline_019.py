@@ -32,7 +32,7 @@ _B = "b" * 64
 def _fp(**overrides: str) -> RunFingerprint:
     base = dict(
         git_sha="abc123", schema_version="v1.1+x", model_id="m1", prompt_version="p1",
-        template_profile="tpl1", source_profile="src1", golden_release_hash="rh1",
+        template_profile="tpl1", source_profile="src1", golden_release_hash=_A,
     )
     base.update(overrides)
     return RunFingerprint(**base)
@@ -343,7 +343,7 @@ def test_q4_6_lineage_reset_is_explicit_and_auditable() -> None:
     prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
                             approved_at=_AT)
     # 真新 lineage：新 baseline_id **且**新 golden 集（rh2）——回归无从比较，reset 才合法
-    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash="rh2"),
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash=_B),
                           products=(_raw_product(pred_sha256=_B),))
     reset = approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human-lead",
                              prior=[prod], allow_lineage_reset=True,
@@ -373,7 +373,7 @@ def test_q4_6_lineage_reset_requires_reason() -> None:
     b1 = _artifact(fingerprint=_fp())
     prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
                             approved_at=_AT)
-    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash="rh2"),
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash=_B),
                           products=(_raw_product(pred_sha256=_B),))
     with pytest.raises(BaselineNotApprovableError, match="非空 reason"):
         approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human",
@@ -441,6 +441,70 @@ def test_q2_1_baseline_id_rejects_surrounding_whitespace(bad_id: str) -> None:
     生产基线的 id 会污染审计，并可能绕过新 lineage 的精确串匹配。"""
     with pytest.raises(ValidationError):
         BaselineArtifact(baseline_id=bad_id, fingerprint=_fp(), products=(_raw_product(),))
+
+
+def test_q4_6_reset_rejects_same_golden_hash_case_variant() -> None:
+    """codex 六轮 #2：reset 判"新评测基准"须比较**规范化 digest**——同一 SHA-256 仅大小写不同
+    仍是同一 golden 集，不能靠大写变体冒充新 lineage 跳过零容差回归。"""
+    b1 = _artifact(fingerprint=_fp(golden_release_hash=_A))          # 生产：小写 digest
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    # 同一 digest 仅改大写 + 新 id + 退化画像
+    b2 = BaselineArtifact(baseline_id="gs-v2", fingerprint=_fp(golden_release_hash=_A.upper()),
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="新评测基准|golden"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=0.5), approved_by="attacker",
+                         prior=[prod], allow_lineage_reset=True,
+                         lineage_reset_reason="rebrand", approved_at=_AT)
+
+
+@pytest.mark.parametrize(
+    "bad", ["rh1", "xyz", "g" * 64, "a" * 63, "a" * 65, " " + "a" * 63, "a" * 63 + "\n"]
+)
+def test_q2_2_golden_release_hash_must_be_canonical_sha256(bad: str) -> None:
+    """codex 六轮 #2：golden_release_hash 是内容身份，须为规范 SHA-256（64 hex、无首尾空白）——
+    非法/带空白值构造期即拒，杜绝同一内容存在多个文本身份。"""
+    with pytest.raises(ValidationError):
+        _fp(golden_release_hash=bad)
+
+
+def test_q2_2_golden_release_hash_normalized_to_lowercase() -> None:
+    """codex 六轮 #2：大写 hex 在构造期规范化为小写，使 reset/绑定比较有唯一文本身份。"""
+    assert _fp(golden_release_hash=_A.upper()).golden_release_hash == _A
+
+
+def test_q4_6_reset_rejects_uppercase_hash_smuggled_via_model_copy() -> None:
+    """红队 F：即便用 model_copy 绕过 Sha256Hex 构造期规范化塞入大写 digest（容器无
+    revalidate_instances），reset 的 golden 集比较在**比较点**也规范化——同一 digest 仍被判同
+    评测基准、拒绝洗白（身份比较不依赖单一构造期不变量）。"""
+    b1 = _artifact(fingerprint=_fp(golden_release_hash=_A))
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    evil_fp = _fp().model_copy(update={"golden_release_hash": _A.upper()})  # 绕过 Sha256Hex 校验
+    assert evil_fp.golden_release_hash == _A.upper()  # 未规范化确实塞进去了
+    b2 = BaselineArtifact(baseline_id="gs-v3", fingerprint=evil_fp,
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="新评测基准|golden"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=0.99), approved_by="attacker",
+                         prior=[prod], allow_lineage_reset=True,
+                         lineage_reset_reason="rebrand", approved_at=_AT)
+
+
+def test_q4_6_non_reset_regression_requires_same_golden_set() -> None:
+    """红队 E/3b：非 reset 的零容差回归必须在**同一 golden 集**上比较——候选换/削弱评测集
+    （golden_release_hash 不同）不得静默走非 reset 回归，否则可借 disputed 削弱自身评测面（≤5%
+    过 validator）藏退化。真正的新评测基准须走 allow_lineage_reset（另起 lineage、留审计）；
+    reset 要求 golden 集必须**不同**，非 reset 对称地要求 golden 集必须**相同**。"""
+    b1 = _artifact(fingerprint=_fp(golden_release_hash=_A))
+    p1 = _candidate(b1, value_accuracy=1.0)
+    prod = approve_baseline(b1, p1, approved_by="claude", approved_at=_AT)
+    approved_p1 = p1.with_approval(prod)
+    # 候选换了 golden 集（_B≠_A）却走非 reset 回归 → 拒（须同 golden 集，或显式 lineage_reset）
+    b2 = BaselineArtifact(baseline_id="b1", fingerprint=_fp(golden_release_hash=_B),
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="golden 集不同|评测基准"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="claude",
+                         prior=[prod], prior_profile=approved_p1, approved_at=_AT)
 
 
 # ------------------------------------------------------------- release_hash

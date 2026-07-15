@@ -236,3 +236,30 @@ load-bearing）记 020 边界。
 R6 返工门禁：ruff/mypy(161) 全绿，non-live **1130 passed**；019 专项 167 用例（11+12+54+48+42，含
 `_reset_cannot_launder_same_goldenset_downgrade_end_to_end`、`_pending_short_circuits_even_if_gate_ignores_it`
 等端到端红队负例）。
+
+## codex 六轮复审返工 + R7 红队
+
+codex 六轮确认五轮 + R6 关闭，再提 2×P1 + 1×P2。先在 R6 head 跑 `repro_codex6.py` 复现（数值与 codex 一致）
+→ 按 codex 根因（"可评测键""同一 SHA"集中建模）用**单一权威原语**重建 → 复跑关闭：
+
+1. **#1(P1) disputed 键预测不计幻觉**：`eval.excluded_disputed_keys(golden)`（disputed 键−可用键）单一权威，
+   evaluate 与 build_profile 共用，pred-only/evidence 前统一过滤；同 key 另有可用金标仍按可用金标评测。修复前
+   `field.hallucination 0→0.0909`（合格字段失格），修复后加 disputed 样本不改任何指标/资格。
+2. **#2(P1) golden hash 规范身份**：`Sha256Hex`（构造期 64hex+拒空白+规范小写）用于 `golden_release_hash`；
+   `_canon_hash` 单一 canonical 原语在**比较点**再规范化；fixtures 的 rh1/rh2/rh-test 换真实 64-hex。修复前同
+   digest 大写变体绕过 reset 洗白，修复后拒。
+3. **#3(P2) gate 异常保留可审计原因**：`_gate_ok` 保持 fail-closed，`logging.warning` 记异常类型+简短消息
+   （不入业务数据、不带堆栈），运营可区分"gate 故障"与"候选质量不足"。
+
+**R7 提交前红队（2 支，非等 codex）**：E（disputed 完备性）2000 迭代+60 例攻不破；F（身份规范化）两个高危
+方向攻不破，且枚举 11 处 hash 比较点确认仅 reset 成员测试 fail-open（已规范化）、其余 fail-closed。红队各挖出
+1 低危残留并当场修：**[F] model_copy/model_construct 绕过 Sha256Hex 构造期规范化** → `_canon_hash` 比较点
+兜底；**[E] 非 reset 回归未校验候选与基线同 golden 集**（reset 要求 golden 集不同，非 reset 对称要求相同）→
+候选借 disputed 削弱评测集藏退化，修复：非 reset 回归要求 `golden_release_hash == 生产基线`。
+
+**裁决/边界**：Sha256Hex 只铺 `golden_release_hash`（唯一 fail-open 字段），其余 SHA 是 `==` 绑定 fail-closed
+（F 逐点验证）、铺开属一致性收敛非安全必需；disputed 标注真实性与 reset golden 集真实性仍属 020 治理/授权边界。
+
+R7 返工门禁：ruff/mypy(161) 全绿，non-live **1142 passed**；019 专项 179 用例（11+12+65+49+42，含
+`disputed_key_prediction_not_counted_as_hallucination`、`reset_rejects_same_golden_hash_case_variant`、
+`_smuggled_via_model_copy`、`non_reset_regression_requires_same_golden_set` 等端到端/红队负例）。
