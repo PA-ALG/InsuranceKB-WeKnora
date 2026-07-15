@@ -338,11 +338,12 @@ def test_q4_6_rotated_baseline_id_requires_prior_profile() -> None:
 
 def test_q4_6_lineage_reset_is_explicit_and_auditable() -> None:
     """真正的新 lineage/bootstrap 必须显式 allow_lineage_reset=True（人工授权、可审计），
-    而非靠换 baseline_id 隐式绕过。"""
-    b1 = _artifact(fingerprint=_fp())
+    而非靠换 baseline_id 隐式绕过。真新 lineage = **新评测基准**（golden_release_hash 变更）。"""
+    b1 = _artifact(fingerprint=_fp())  # golden rh1
     prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
                             approved_at=_AT)
-    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+    # 真新 lineage：新 baseline_id **且**新 golden 集（rh2）——回归无从比较，reset 才合法
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash="rh2"),
                           products=(_raw_product(pred_sha256=_B),))
     reset = approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human-lead",
                              prior=[prod], allow_lineage_reset=True,
@@ -366,11 +367,13 @@ def test_q4_6_lineage_reset_same_baseline_id_rejected() -> None:
 
 
 def test_q4_6_lineage_reset_requires_reason() -> None:
-    """codex 五轮 #4：reset 必须带非空 reason（记入批准记录，可审计）。"""
+    """codex 五轮 #4：reset 必须带非空 reason（记入批准记录，可审计）。
+
+    用一个"否则合法"的 reset（新 id + 新 golden 集 rh2）只缺 reason，隔离到 reason 校验。"""
     b1 = _artifact(fingerprint=_fp())
     prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
                             approved_at=_AT)
-    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(golden_release_hash="rh2"),
                           products=(_raw_product(pred_sha256=_B),))
     with pytest.raises(BaselineNotApprovableError, match="非空 reason"):
         approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human",
@@ -383,6 +386,61 @@ def test_q4_6_normal_first_approval_is_not_marked_lineage_reset() -> None:
     first = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
     assert first.lineage_reset is False
     assert first.lineage_reset_reason is None
+
+
+def test_q4_6_lineage_reset_same_golden_set_rejected() -> None:
+    """红队 R6/弱点1：reset 的"真新 lineage"不能只看 baseline_id——同一 golden 集
+    （golden_release_hash 相同）换个新 id 仍是同一评测基准，必须走零容差回归，
+    不得借 reset 洗白降级。否则 `baseline_id` 只是可随意更换的弱代理。"""
+    b1 = _artifact(fingerprint=_fp())  # golden rh1
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    # 新 baseline_id，但 golden 集不变（rh1）→ 同一评测基准；画像退化
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="新评测基准|golden"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=0.5), approved_by="human",
+                         prior=[prod], allow_lineage_reset=True,
+                         lineage_reset_reason="想借 reset 跳过回归", approved_at=_AT)
+
+
+def test_q4_6_reset_cannot_launder_same_goldenset_downgrade_end_to_end() -> None:
+    """红队 R6/弱点1 端到端：同 golden 集的退化候选，常规回归路径与 reset 逃生门**双双**被拒——
+    退化画像拿不到任何批准，自然到不了 gate（不再是"关回归"的旁路）。"""
+    b1 = _artifact(fingerprint=_fp())
+    p1 = _candidate(b1, value_accuracy=1.0)
+    prod = approve_baseline(b1, p1, approved_by="claude", approved_at=_AT)
+    approved_p1 = p1.with_approval(prod)
+    # 同 golden 集（rh1）+ 换品牌 id + 退化 1.0→0.98
+    b2 = BaselineArtifact(baseline_id="gs-v2-rebrand", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    degraded = _candidate(b2, value_accuracy=0.98)
+    with pytest.raises(BaselineNotApprovableError, match="回归失败"):  # 常规路径：回归拦下
+        approve_baseline(b2, degraded, approved_by="claude", prior=[prod],
+                         prior_profile=approved_p1, approved_at=_AT)
+    # reset 逃生门同样拦下（同 golden 集）
+    with pytest.raises(BaselineNotApprovableError, match="新评测基准|golden"):
+        approve_baseline(b2, degraded, approved_by="human", prior=[prod],
+                         allow_lineage_reset=True, lineage_reset_reason="rebrand",
+                         approved_at=_AT)
+
+
+def test_q4_6_lineage_reset_without_prior_is_rejected() -> None:
+    """红队 R6/弱点3：无 prior 生产批准却传 allow_lineage_reset=True 属调用方误用——应显式
+    报错，不静默吞掉 reset 意图与 reason（首批准本就无需 reset，避免审计信息丢失）。"""
+    a = _artifact()
+    with pytest.raises(BaselineNotApprovableError, match="无 prior|无生产批准|首批准"):
+        approve_baseline(a, _candidate(a, value_accuracy=1.0), approved_by="human",
+                         prior=[], allow_lineage_reset=True,
+                         lineage_reset_reason="紧急初始化", approved_at=_AT)
+
+
+@pytest.mark.parametrize("bad_id", ["b1 ", " b1", "b1\n", "b1\t", "  ", ""])
+def test_q2_1_baseline_id_rejects_surrounding_whitespace(bad_id: str) -> None:
+    """红队 R6/弱点2：baseline_id 带首尾空白/纯空白构造期即拒——否则 'prod-A ' 这类肉眼等同
+    生产基线的 id 会污染审计，并可能绕过新 lineage 的精确串匹配。"""
+    with pytest.raises(ValidationError):
+        BaselineArtifact(baseline_id=bad_id, fingerprint=_fp(), products=(_raw_product(),))
 
 
 # ------------------------------------------------------------- release_hash

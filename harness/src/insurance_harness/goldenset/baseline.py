@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from .records import GoldenRecord
 
@@ -29,6 +29,20 @@ if TYPE_CHECKING:
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 Rate = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
+
+
+def _validate_identifier(v: str) -> str:
+    if not v.strip():
+        raise ValueError("标识符不得为空/纯空白")
+    if v != v.strip():
+        raise ValueError(
+            "标识符不得带首尾空白（避免审计歧义，并防止 'x ' 之类空白变体绕过新 lineage 精确匹配）"
+        )
+    return v
+
+
+# baseline_id 等标识符：构造期即拒空/纯空白/带首尾空白（红队 R6/弱点2）。
+Identifier = Annotated[str, AfterValidator(_validate_identifier)]
 
 _FINGERPRINT_FIELDS = (
     "git_sha",
@@ -176,7 +190,7 @@ class BaselineArtifact(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    baseline_id: str
+    baseline_id: Identifier
     fingerprint: RunFingerprint
     products: tuple[BaselineProductArtifacts, ...]
 
@@ -208,7 +222,7 @@ class ApprovalRecord(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    baseline_id: str
+    baseline_id: Identifier
     version: int
     approved_by: str
     approved_at: datetime
@@ -269,9 +283,12 @@ def approve_baseline(
       就必须与**当前生产基线**（`prior` 中最近一条，跨 baseline_id）比较——必须提供 `prior_profile`
       且其内容哈希正是该生产批准提交的画像（`content_hash() == latest.profile_content_sha256`，
       四轮 #1/#3），回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
-    - **lineage 重置只对真正的新 lineage 开放**：`allow_lineage_reset=True` 才跳过回归，且必须
-      (a) `artifact.baseline_id` 不在任何 prior 中（真新 lineage，不能借 reset 给同 lineage 降级）、
-      (b) 提供非空 `lineage_reset_reason`（记入 ApprovalRecord，可审计）。本 bool 只是 019 层的
+    - **lineage 重置只对真正的新评测基准开放**：`allow_lineage_reset=True` 才跳过回归，且必须
+      (a) `prior` 非空（无生产基线无从 reset，首批准本就免回归——红队 R6/弱点3）、
+      (b) `artifact.baseline_id` 不在任何 prior 中（不能给同 id 降级）、
+      (c) **`golden_release_hash` 与所有 prior 不同**——golden 集才是评测基准；同一 golden 集换个
+      新 id 仍必须走零容差回归，不得借 reset（换 id/换模型）洗白降级（红队 R6/弱点1）、
+      (d) 提供非空 `lineage_reset_reason`（记入 ApprovalRecord，可审计）。本 bool 只是 019 层的
       **结构约束 + 审计信号**；真正的人工授权真实性由 020 提供不可伪造的授权输入（见文档边界）；
     - 指纹缺项 / 未解决 / 产物不齐或不一致（Q2.1）任一都阻断批准。
     """
@@ -285,11 +302,23 @@ def approve_baseline(
         raise BaselineNotApprovableError(
             f"baseline {artifact.baseline_id} 不可批准：画像指纹与 artifact 指纹不一致"
         )
-    if allow_lineage_reset and prior:
+    if allow_lineage_reset:
+        if not prior:
+            raise BaselineNotApprovableError(
+                "lineage_reset 无意义：无 prior 生产批准可重置（首批准本就免回归，属调用方误用）"
+            )
         if artifact.baseline_id in {r.baseline_id for r in prior}:
             raise BaselineNotApprovableError(
                 f"lineage_reset 必须开新 lineage：baseline_id {artifact.baseline_id} 已存在于"
                 "生产批准中，不能用 reset 给同一 lineage 降级/跳过回归"
+            )
+        if artifact.fingerprint.golden_release_hash in {
+            r.fingerprint.golden_release_hash for r in prior
+        }:
+            raise BaselineNotApprovableError(
+                f"lineage_reset 必须是真正的新评测基准：golden 集 "
+                f"{artifact.fingerprint.golden_release_hash} 与现有生产基线相同——"
+                "同一 golden 集必须走零容差回归，不得借 reset（换 id/换模型）洗白降级"
             )
         if not (lineage_reset_reason and lineage_reset_reason.strip()):
             raise BaselineNotApprovableError(

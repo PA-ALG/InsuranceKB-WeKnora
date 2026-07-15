@@ -460,3 +460,67 @@ def test_q4_2_no_gate_fails_closed(kb_session: Session) -> None:
         ).scalars()
     )
     assert any(claim.id in str(r.subject) for r in reviews)  # 候选进审核，未丢弃
+
+
+class _PendingIgnoringGate:
+    """红队 R6/C-2b：模拟 020 写错的 gate——接受 pending_judge 形参但**不 honor**，
+    低风险一律放行。用于验证 merge 层仍保留独立的 pending 短路（纵深防御）。"""
+
+    def decide(
+        self, field_id: str, risk: str, action: str, run_fingerprint: object = None,
+        *, pending_judge: bool = False,
+    ) -> GateDecision:
+        return GateDecision(
+            eligible=(risk == "low"), reason="ignores pending", field_id=field_id, action=action
+        )
+
+
+class _OldSignatureGate:
+    """红队 R6/C-2a：模拟 019 之前签名的 gate——decide **缺** pending_judge 形参，
+    被 `_gate_ok` 以 kwarg 调用即抛 TypeError。用于验证 gate 异常 fail-closed 不崩整批。"""
+
+    def decide(
+        self, field_id: str, risk: str, action: str, run_fingerprint: object = None,
+    ) -> GateDecision:
+        return GateDecision(eligible=True, reason="old", field_id=field_id, action=action)
+
+
+def test_q4_2_pending_short_circuits_even_if_gate_ignores_it(kb_session: Session) -> None:
+    """红队 R6/C-2b：pending 收回 gate 为权威后，merge 层仍保留独立 fail-closed 短路——
+    即便注入的 gate 不 honor pending_judge（020 写错），pending 候选也绝不自动发布。"""
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    fp = _fp()
+    engine = MergeEngine(
+        kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_PendingIgnoringGate(),  # type: ignore[arg-type]
+        run_fingerprint=fp,
+    )
+    change_set, _ = engine.open_change_set(source_kind="document")
+    prop = _add_prop(scope, version.id, "waiting_period").model_copy(
+        update={"pending_judge": True}
+    )
+    engine.apply_batch(change_set, [prop])
+    claim = kb_session.execute(
+        select(Claim).where(Claim.space_id == scope.space_id)
+    ).scalar_one()
+    assert claim.status == "candidate"  # merge 层短路：pending 不自动发布，尽管 gate 想放行
+
+
+def test_q4_2_gate_error_fails_closed_not_crash(kb_session: Session) -> None:
+    """红队 R6/C-2a：注入不符新签名的 gate（decide 缺 pending_judge → 调用抛 TypeError）
+    不得崩整批——`_gate_ok` 兜成 fail-closed，候选进 candidate，apply_batch 不抛。"""
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    fp = _fp()
+    engine = MergeEngine(
+        kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_OldSignatureGate(),  # type: ignore[arg-type]
+        run_fingerprint=fp,
+    )
+    change_set, _ = engine.open_change_set(source_kind="document")
+    engine.apply_batch(change_set, [_add_prop(scope, version.id, "waiting_period")])  # 不抛
+    claim = kb_session.execute(
+        select(Claim).where(Claim.space_id == scope.space_id)
+    ).scalar_one()
+    assert claim.status == "candidate"  # gate 异常 → fail-closed，不自动发布

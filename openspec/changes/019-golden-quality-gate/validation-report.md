@@ -7,15 +7,19 @@
 
 - `uv run ruff check .` → All checks passed
 - `uv run mypy src tests` → Success（161 source files，strict）
-- `uv run pytest -m "not live and not integration_postgres" -q` → **1119 passed / 5 deselected**
+- `uv run pytest -m "not live and not integration_postgres" -q` → **1130 passed / 5 deselected**
 - 019 专项：`test_goldenset_{assemble,validate,baseline,profile}_019.py` + `test_quality_gate_019.py`
-  → **156 passed**（11+12+45+48+40，含 build_profile→approve→gate 端到端 bypass 负例），纯 fixture/replay，
+  → **167 passed**（11+12+54+48+42，含 build_profile→approve→gate 端到端 bypass 负例），纯 fixture/replay，
   零真实凭据（Q1.5/Q5.1）
 - **codex 五轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条 + 四轮 4 条 + 五轮 4 条（按实施
   计划 Task3/4/5 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造；四轮补批准提交
   **画像内容**哈希、gate 校指纹、换 id 不能跳回归、build_profile 复用 evaluate；五轮补**领域类型合法域**
   Rate/NonNegativeInt、每字段 pred-only 幻觉聚合、gate 校 profile 版本 + 收回 pending_judge、lineage_reset
   须真新 lineage+reason），见文末各返工小节。
+- **提交前独立红队自测（R6）已并入本 head**：五轮修完后**不等 codex**、先派 4 支对抗性红队（领域类型
+  完备性 / 字段聚合口径 / gate·merge 自动路径 / 批准·lineage_reset）各自写脚本实跑攻击，挖出**1 个真绕过**
+  （reset 只查 baseline_id、不查 golden 集，同评测基准换 id 可洗白降级）+ **1 个我五轮自己引入的纵深防御
+  倒退**（删了 merge 层 pending 预检查），均已 TDD 复现→修→复跑关闭，见文末「R6」小节。
 
 ## 逐条验收（Q1~Q5）
 
@@ -166,6 +170,33 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
   它指向一份**真实达标**（field_verdict 通过）且内容哈希自洽的画像，伪造批准无法让不达标候选过闸。
 - **per-field evidence 为 profile 专属**（evaluate 无按字段证据）：与全局证据共用同一 `quote_in_page`+PDF
   回验原语，仅聚合粒度不同（按记录 vs 按引文）；真实回验仍依赖 dataset_root。
+
+## 提交前独立红队自测（R6，非 codex 触发，head 已并入）
+
+五轮修完后**不再等 codex**，先自派 4 支对抗性红队各写脚本 live 攻击这轮新面（"提交前完善自测"的落地）。
+结果：**2 支无绕过**（领域类型、字段聚合，均逐脚本证明守住），**2 支各挖出真问题**——含 1 个端到端真绕过
+与 1 个我五轮自己引入的纵深防御倒退。全部 TDD 复现→修→复跑关闭。
+
+| R6# | 严重度 | 修复前复现（live） | 按不变量重建 | bypass 负例 |
+|---|---|---|---|---|
+| D-弱点1 | 中（真绕过，端到端） | reset 的"真新 lineage"守卫只查 `baseline_id`；同一 golden 集（`fingerprint` 完全相同）换新 id + reset → 退化画像（value 1.0→0.98）跳过零容差回归，`QualityGate.decide→eligible=True` | reset 须 (a) prior 非空 (b) baseline_id 不在 prior (c) **`golden_release_hash` 与所有 prior 不同**（golden 集才是评测基准，同集必回归）(d) 非空 reason | `test_q4_6_lineage_reset_same_golden_set_rejected`、端到端 `_reset_cannot_launder_same_goldenset_downgrade_end_to_end`（常规回归 + reset 逃生门双双拒） |
+| C-2b | 中（五轮自引入的倒退） | 五轮删掉 merge 三路径 `not pending_judge` 预检查后，pending 安全 100% 押注入 gate；注入不 honor pending 的 gate → pending 候选 `status=published` | `_gate_ok` **恢复独立 pending 短路**做纵深防御（gate 仍权威，merge 保留 fail-closed 兜底） | `test_q4_2_pending_short_circuits_even_if_gate_ignores_it`（端到端 merge） |
+| C-2a | 低（健壮性） | `_gate_ok` 无条件传 `pending_judge=` 且无 try/except，注入旧签名 gate → `TypeError` 崩整批（fail-loud，非文档自称 fail-closed） | `_gate_ok` 对 gate 异常一律 fail-closed（走 ReviewItem），不崩批 | `test_q4_2_gate_error_fails_closed_not_crash`（端到端 merge，旧签名 gate） |
+| D-弱点2 | 低-中（审计卫生） | `baseline_id` 精确串匹配，`'prod-A '`/`'PROD-A'` 被当新 lineage（安全面已被 D-弱点1 覆盖，但审计歧义） | `Identifier` 约束：`baseline_id` 构造期拒空/纯空白/带首尾空白 | `test_q2_1_baseline_id_rejects_surrounding_whitespace`（参数化 6 类） |
+| D-弱点3 | 低（审计卫生） | `prior=[]` 传 `allow_lineage_reset=True` 静默吞掉意图、reason 落 None | `allow_lineage_reset and not prior` 直接报错（调用方误用） | `test_q4_6_lineage_reset_without_prior_is_rejected` |
+
+### R6 只文档、不改（附理由，非"已全闭环"的空话）
+
+- **D-弱点4（latest 选取被 `approved_at`+id 字典序操纵）**：依赖弱点1 或伪造 prior 先注入弱基线；弱点1 已修
+  堵死注入入口，伪造 prior 属 020 存储完整性边界（本层 `prior` 视为可信）。故不改序，记为放大器边界。
+- **B-B（首基线批准不查全局指标）**：`approve_baseline` 仅 `prior` 非空才跑回归，首基线只过结构性 blocker，
+  可批准全局幻觉高的画像；但在线 `QualityGate.decide` 是**逐字段** fail-closed，脏字段仍被 `field_verdict`
+  绝对阈值拦下，好字段本就应可发——全局指标只用于相对回归。加"全局绝对下限"可能误杀难产品的合法首基线，
+  故不加、记为分层设计边界。
+- **A-1（`ApprovalRecord.version:int` 可负）**：仅 `prior` 排序 tiebreaker，非指标/计数阈值，且 `prior` 可信；
+  非数值假通过，记卫生项。**A-2（bool→int 强转）**：0/1 在域内、无害。**A-3（020 加载画像/artifact 须
+  `model_validate` 而非 `model_construct`）**：属 020 运行时边界——领域类型仅在**验证式构造**时 load-bearing，
+  020 从磁盘反序列化必须走 `model_validate`，否则 Rate/NonNegativeInt/Identifier 约束不生效。
 
 ## codex 五轮复审返工（head 已并入）
 

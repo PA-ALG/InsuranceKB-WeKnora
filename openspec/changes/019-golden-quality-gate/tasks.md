@@ -209,3 +209,30 @@ cross-approval-denied 三处闭合）。
 
 五轮返工门禁：ruff/mypy(161) 全绿，non-live **1119 passed**；019 专项 156 用例（11+12+45+48+40，含
 `build_profile→approve→gate` 端到端 bypass 负例 `test_q4_2_fabricating_field_denied_end_to_end`）。
+
+## 提交前独立红队自测（R6，非 codex 触发）
+
+五轮修完后**不等 codex**，先派 4 支对抗性红队各写脚本 live 攻击（回应"提交前完善 TDD 自测、别再来回"）。
+2 支无绕过（领域类型、字段聚合），2 支各挖出真问题，全部 TDD 复现→修→复跑关闭：
+
+1. **D-弱点1（中，端到端真绕过）**：`approve_baseline` 的 lineage_reset"真新 lineage"守卫只查 `baseline_id`
+   字符串、不查 golden 集——同一 `golden_release_hash`（同评测基准）换个新 id + reset 即跳过零容差回归，
+   退化画像端到端拿到 `QualityGate.decide→eligible`。修复：reset 须 (a) prior 非空、(b) baseline_id 不在
+   prior、(c) **golden_release_hash 与所有 prior 不同**、(d) 非空 reason。`baseline_id` 是可随意更换的**弱
+   代理**，golden 集才是评测基准这一不变量。
+2. **C-2b（中，五轮自引入的纵深防御倒退）**：五轮把 merge 三路径 `not pending_judge` 预检查删净、safety
+   100% 押注入 gate；注入不 honor pending 的 gate → pending 候选自动发布。修复：`_gate_ok` **恢复独立 pending
+   短路**（gate 仍权威，merge 保留 fail-closed 兜底）——删冗余安全层违背 fail-closed 教训（019返工教训）。
+3. **C-2a（低，健壮性）**：`_gate_ok` 无 try/except，旧签名 gate → TypeError 崩整批。修复：gate 异常一律
+   fail-closed 走 ReviewItem、不崩批。
+4. **D-弱点2/3（低，审计卫生）**：`baseline_id` 构造期禁空/纯空白/首尾空白（`Identifier` 约束）；`prior=[]`
+   却 `allow_lineage_reset=True` 报错（不静默吞意图）。
+
+**裁决 / 边界（只文档不改）**：D-弱点4（latest 选取 tiebreak）依赖弱点1 或伪造 prior，弱点1 修完失去入口、
+伪造 prior 属 020 存储完整性；B-B（首基线不查全局指标）由在线逐字段 gate 兜底，加全局下限恐误杀合法难产品
+首基线；A-1（version 可负）仅可信 prior 的 tiebreaker；A-3（020 加载须 `model_validate` 才使领域约束
+load-bearing）记 020 边界。
+
+R6 返工门禁：ruff/mypy(161) 全绿，non-live **1130 passed**；019 专项 167 用例（11+12+54+48+42，含
+`_reset_cannot_launder_same_goldenset_downgrade_end_to_end`、`_pending_short_circuits_even_if_gate_ignores_it`
+等端到端红队负例）。

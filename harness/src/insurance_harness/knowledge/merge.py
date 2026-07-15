@@ -700,14 +700,21 @@ class MergeEngine:
         """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
         走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。
 
-        pending_judge 一并交给 gate 裁定（不在 gate 外预检查）——gate 是唯一权威。
+        pending_judge 交给 gate 裁定为权威，但 merge 层**保留独立短路做纵深防御**（红队 R6/C-2b）：
+        注入的 gate 万一不 honor pending，pending 候选也绝不自动发布。gate 抛异常/签名不符时同样
+        fail-closed（红队 R6/C-2a）——不得让一个坏 gate 崩掉整批 apply_batch。
         """
         if self.quality_gate is None:
             return False
-        return self.quality_gate.decide(
-            prop.predicate, risk, action, self.run_fingerprint,
-            pending_judge=prop.pending_judge,
-        ).eligible
+        if prop.pending_judge:  # 纵深防御：pending 不自动发布，不依赖注入 gate 是否 honor
+            return False
+        try:
+            return self.quality_gate.decide(
+                prop.predicate, risk, action, self.run_fingerprint,
+                pending_judge=prop.pending_judge,
+            ).eligible
+        except Exception:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
+            return False
 
     # -- ChangeSet ---------------------------------------------------------
 
@@ -843,7 +850,7 @@ class MergeEngine:
         auto = (
             self.policy.auto_apply_add
             and risk != "high"
-            and self._gate_ok(prop, risk, "add")  # pending_judge 由 gate 内部裁定
+            and self._gate_ok(prop, risk, "add")  # pending/异常 fail-closed 见 _gate_ok
         )
         if auto:
             item.decision = "auto_applied"
@@ -948,7 +955,7 @@ class MergeEngine:
             self.policy.auto_apply_enrich
             and risk == "low"
             and prop.confidence >= self.policy.enrich_auto_min_confidence
-            and self._gate_ok(prop, risk, "enrich")  # pending_judge 由 gate 内部裁定
+            and self._gate_ok(prop, risk, "enrich")  # pending/异常 fail-closed 见 _gate_ok
         )
 
     # -- 冲突裁决序（03 §6.2 逐级短路） -----------------------------------------
@@ -1020,7 +1027,7 @@ class MergeEngine:
             auto = (
                 risk != "high"
                 and self.policy.auto_apply_supersede_low_risk
-                and self._gate_ok(prop, risk, "supersede")  # pending_judge 由 gate 内部裁定
+                and self._gate_ok(prop, risk, "supersede")  # pending/异常 fail-closed 见 _gate_ok
             )
             if auto:
                 item.decision = "auto_applied"
