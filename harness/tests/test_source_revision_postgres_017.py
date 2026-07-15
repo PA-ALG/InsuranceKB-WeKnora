@@ -32,7 +32,7 @@ POSTGRES_FUTURE_TIMEOUT_S = 30
 def _live_connect_args(schema: str | None = None) -> dict[str, object]:
     options = ["-cstatement_timeout=15000", "-clock_timeout=5000"]
     if schema is not None:
-        options.append(f"-csearch_path={schema},public")
+        options.append(f"-csearch_path={schema}")
     return {
         "connect_timeout": 10,
         "options": " ".join(options),
@@ -72,7 +72,8 @@ def test_t7_postgresql_ddl_keeps_scoped_source_idempotency_constraint() -> None:
     assert isinstance(options, str)
     assert "statement_timeout=15000" in options
     assert "lock_timeout=5000" in options
-    assert "search_path=t7_test_schema,public" in options
+    assert "search_path=t7_test_schema" in options
+    assert "search_path=t7_test_schema,public" not in options
     assert POSTGRES_FUTURE_TIMEOUT_S == 30
 
 

@@ -362,6 +362,15 @@ RAW fallback SHALL 验证每个结果的 space_id/raw_kb_id 与 scope 完全一�
 
 OpenSpec strict、Ruff、mypy strict、非 live/非 integration_postgres pytest SHALL 全绿；PostgreSQL integration 与真实 Wiki live SHALL 独立报告，live SHALL 验证真实 upsert/rollback，skip/NOT RUN 不得描述为成功。
 
+PostgreSQL integration SHALL 将每次运行的对象和数据限制在本次随机 schema；测试连接的 `search_path` SHALL NOT 回退到 `public`，否则已迁移的公共表会造成伪隔离、跨运行污染和假绿。测试结束 SHALL 只清理其拥有的随机 schema。
+
+#### Scenario: PostgreSQL 随机 schema 不回退公共表
+
+- **WHEN** PostgreSQL lane 为 017/018 集成节点创建本次运行的随机 schema
+- **THEN** 建表、约束、触发器与业务数据均位于该随机 schema
+- **AND** 测试连接的 `search_path` 不包含 `public`
+- **AND** 失败或成功后的清理均只删除本次随机 schema
+
 #### Scenario: deterministic 通过但没有受控 live run
 
 - **WHEN** 本地 deterministic 门禁通过但没有 protected WeKnora workflow 的零 skip 证据

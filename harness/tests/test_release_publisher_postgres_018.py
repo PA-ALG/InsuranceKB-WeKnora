@@ -36,8 +36,16 @@ TEST_POSTGRES_URL = os.getenv("HARNESS_TEST_POSTGRES_URL")
 def _connect_args(schema: str | None = None) -> dict[str, object]:
     options = ["-cstatement_timeout=15000", "-clock_timeout=5000"]
     if schema is not None:
-        options.append(f"-csearch_path={schema},public")
+        options.append(f"-csearch_path={schema}")
     return {"connect_timeout": 10, "options": " ".join(options)}
+
+
+def test_r6_4_postgresql_schema_does_not_fallback_to_public() -> None:
+    options = _connect_args("release_018_test")["options"]
+
+    assert isinstance(options, str)
+    assert "search_path=release_018_test" in options
+    assert "search_path=release_018_test,public" not in options
 
 
 class _PostgresWiki:
