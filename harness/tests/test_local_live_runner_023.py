@@ -126,7 +126,31 @@ def test_r5_1_runner_image_is_non_root_ephemeral_and_one_job() -> None:
     )
     assert "USER runner" in dockerfile
     assert "sha256sum -c" in dockerfile
-    assert "github.com/actions/runner/releases/download" in dockerfile
+    assert (
+        "ARG RUNNER_RELEASE_BASE=https://github.com/actions/runner/releases/download"
+        in dockerfile
+    )
+    assert "ARG RUNNER_RELEASE_PROTO=https" in dockerfile
+    assert '--proto "=${RUNNER_RELEASE_PROTO}"' in dockerfile
+    assert "ARG RUNNER_DEBIAN_MIRROR=http://deb.debian.org/debian" in dockerfile
+    assert (
+        "ARG RUNNER_DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security"
+        in dockerfile
+    )
+    assert 'URIs: ${RUNNER_DEBIAN_MIRROR}' in dockerfile
+    assert 'URIs: ${RUNNER_DEBIAN_SECURITY_MIRROR}' in dockerfile
+    assert (
+        'grep --fixed-strings --line-regexp --quiet "URIs: ${RUNNER_DEBIAN_MIRROR}"'
+        in dockerfile
+    )
+    assert (
+        'grep --fixed-strings --line-regexp --quiet '
+        '"URIs: ${RUNNER_DEBIAN_SECURITY_MIRROR}"' in dockerfile
+    )
+    assert (
+        '"${RUNNER_RELEASE_BASE}/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"'
+        in dockerfile
+    )
     assert "ARG RUNNER_ARCH" in dockerfile
     assert "--ephemeral" in entrypoint
     assert "--disableupdate" in entrypoint

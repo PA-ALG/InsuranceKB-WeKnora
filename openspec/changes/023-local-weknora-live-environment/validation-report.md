@@ -9,7 +9,7 @@
 | T1～T5 软件实现 | PASS | 023 focused `123 passed`；Ruff/mypy/full deterministic 见最终门禁段 |
 | 本机 Compose | PASS | 固定 project 的六服务 healthy；app/frontend/Harness PostgreSQL published address 均为 `127.0.0.1` |
 | ephemeral PostgreSQL role | PASS | 实机 create→CONNECT/CREATE/USAGE 与非 superuser/createdb/createrole/noinherit 验明→drop→不存在复核 |
-| runner image build smoke | `NOT COMPLETED` | 基础镜像 digest 命中锁值；首次 arm64 Debian 依赖下载持续低速，约 7 分钟后主动中止，未进行 GitHub 注册/FIFO 实机 smoke |
+| runner image build + tmpfs FIFO smoke | PASS | `arm64` 镜像 `aa409bbf363b...` 实际构建；镜像层内 runner archive SHA-256 `OK`；无网络容器用真实 entrypoint 完成 FIFO 单次注入/删除、ephemeral 参数链与 exit 0，token 未进入 metadata/logs；未注册 GitHub |
 | 四模型探针 | BLOCKED | 三项 SiliconFlow profile 被 provider 以 HTTP 401 拒绝；当前可访问配置的 Harness 百炼 key 为空；无资源 mutation |
 | 本机 provision / 五节点 local | `NOT RUN` | 必须等待四模型探针全部成功 |
 | GitHub exact-SHA live | `NOT RUN` | workflow 尚未合入 `main`，未 dispatch；不得借用软件测试或本机容器状态 |
@@ -33,6 +33,8 @@
 6. 本机 `gh secret set --help` 证明只有省略 `--body` 才从 stdin 读取；`--body -` 会设置字面量 `-`。新增 R5.1 RED 后移除该参数，secret 只进入 subprocess stdin，不进入 argv。
 7. 已迁移数据库中，随机 schema 的 `create_all(checkfirst=True)` 会沿 `schema,public` 看到 public 表并错误跳过建表。实机诊断确认随机 schema 0 张/public 21 张后，integration fixture 改为在随机 schema 强制 DDL 并立即验表归属；复跑通过。
 8. 首次 push 后两条 deterministic CI 都稳定失败：测试用 `str(Path.home()) not in argument` 判断无宿主 mount，而 GitHub runner 的宿主 home `/home/runner` 与容器内合法 destination `/home/runner/actions-runner/_work` 同名。本机 home 不同因此假绿。修复只收紧测试语义：解析 `--mount` 并精确要求 anonymous `type=volume`，同时拒绝 `type=bind`、`-v`、`--volume` 与 Docker socket；以 `HOME=/home/runner` 本地复现环境后通过。
+9. runner 官方 archive 单连接约 `36 KB/s`，Debian 官方链路安装依赖也退化到约 `50 KB/s`。先按 GitHub API 公布的 `138527862` 字节分段下载并校验锁定 SHA，再用本机只读 mirror 提供同一 archive；Dockerfile 的 release base/protocol 与 Debian mirror 允许 build-time 覆盖，但默认仍为 GitHub HTTPS 与 Debian 官方源。最终镜像层再次输出 archive SHA-256 `OK`，Debian 包仍由 repository signature 校验。
+10. FIFO smoke 使用已构建镜像与真实 `/home/runner/entrypoint.sh`，容器 `--network none`、`--tmpfs /run/insurancekb:...uid=10001,gid=10001`；仅将 `config.sh/run.sh` 替换为不联网的参数探针。随机 registration token 只经 `docker exec --interactive` stdin 写 FIFO；FIFO 随即删除，Docker metadata/logs 均无 token，`run.sh --once` 后容器 exit 0。
 
 ## 4. 外部状态与下一步
 
@@ -74,6 +76,22 @@ HARNESS_TEST_POSTGRES_URL=<local loopback> .venv/bin/pytest \
 1 passed, 1269 deselected
 .venv/bin/python scripts/check_junit.py reports/postgres.local.xml
 junit counts: tests=1 skipped=0
+
+docker build <locked arm64 args + build-time mirror overrides> \
+  --tag insurancekb-live-runner:2.335.1-arm64 deploy/local-live/runner
+/tmp/actions-runner-linux-arm64-2.335.1.tar.gz: OK
+Successfully built aa409bbf363b
+
+docker image inspect insurancekb-live-runner:2.335.1-arm64
+arch=arm64 user=runner entrypoint=["/home/runner/entrypoint.sh"]
+env=["PATH=..."]
+
+python3 /private/tmp/insurancekb-runner-fifo-smoke/smoke.py
+tmpfs-fifo=VERIFIED
+entrypoint-contract=VERIFIED
+registration-token-metadata=ABSENT
+registration-token-logs=ABSENT
+container-exit=0
 ```
 
-OpenSpec validator 自身在返回 valid 后尝试发送 PostHog telemetry，因 `edge.openspec.dev` DNS 不可达产生 warning；命令 exit 0，属于非阻断 telemetry 失败。上述 deterministic 是 token FIFO 修复后的当前 working tree fresh 结果。runner 镜像首次构建已确认 Debian 基础镜像 digest 精确匹配，随后因外部镜像源低吞吐主动中止，exit 130，不表述为 build PASS；提交 SHA 与 GitHub CI 将在 push 后补充。真实 provider/provision/live 状态仍以 §1 为准。
+OpenSpec validator 自身在返回 valid 后尝试发送 PostHog telemetry，因 `edge.openspec.dev` DNS 不可达产生 warning；命令 exit 0，属于非阻断 telemetry 失败。上述 deterministic 是 token FIFO 修复后的 fresh 结果；runner build/FIFO 是本机实机证据，不冒充 GitHub 注册或真实 live。mirror 覆盖只改变下载位置，base image digest、runner archive size/SHA 与 Debian repository signature 均未放宽；默认构建来源仍是官方地址。新提交 SHA 与 GitHub CI 将在 push 后补充。真实 provider/provision/live 状态仍以 §1 为准。
