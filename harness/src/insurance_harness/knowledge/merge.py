@@ -703,9 +703,9 @@ class MergeEngine:
         """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
         走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。
 
-        pending_judge 交给 gate 裁定为权威，但 merge 层**保留独立短路做纵深防御**（红队 R6/C-2b）：
+        pending_judge 交给 gate 裁定为权威，但 merge 层**保留独立短路做纵深防御**：
         注入的 gate 万一不 honor pending，pending 候选也绝不自动发布。gate 抛异常/签名不符时同样
-        fail-closed（红队 R6/C-2a）——不得让一个坏 gate 崩掉整批 apply_batch。
+        fail-closed——不得让一个坏 gate 崩掉整批 apply_batch。
         """
         if self.quality_gate is None:
             return False
@@ -717,7 +717,7 @@ class MergeEngine:
                 pending_judge=prop.pending_judge,
             ).eligible
         except Exception as exc:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
-            # P2（codex 六轮 #3）：保留可审计原因，让运营能区分"gate 故障"与"候选质量不足"。
+            # 保留可审计原因，让运营能区分"gate 故障"与"候选质量不足"。
             # 只记异常类型 + 简短消息到日志，不入业务数据、不带堆栈。
             _LOG.warning(
                 "quality_gate.decide raised %s for predicate=%r action=%s → fail-closed: %s",

@@ -255,3 +255,7 @@ R6 head 跑 `repro_codex6.py` 复现（2×P1 与 codex 报告数值完全一致�
   disputed 标注真实性（annotator 是否滥标）属 020 标注治理，019 只保证同评测基准比较。
 - **`allow_lineage_reset` 真实性仍属 020 授权边界**：reset 现要求真新 golden 集 + 非空 reason + 审计，但
   "该 golden 集确对应真实新评测集"由 020 不可伪造授权输入保证。
+- **`_canon_hash`/`Sha256Hex` 只是文本身份归一化，不是来源真实性证明**（codex 七轮）：它保证"同一 digest
+  只有唯一文本身份"（消除大小写/空白变体），但**不**证明该 golden hash 对应真实 golden 文件、也不做文件回验；
+  `model_copy`/`model_construct` 仍可绕过构造校验（故安全比较在比较点二次归一化）。真实 artifact 文件↔release
+  hash 的对应关系属 020 集成边界，文档/后续集成不得把"canonicalize"表述成完整来源/文件回验。

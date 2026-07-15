@@ -14,14 +14,18 @@
 > 拒，脚本会在该处 raise）——这本身就是修复生效的表现。**可维护的回归证据是已提交的 `test_*` 用例**
 > （见下表"锁定用例"），红队脚本是历史复现物。
 
+> **归档收敛（codex 七轮建议，本次清理）**：raw/ 下 ~13 支探针脚本已删，仅留关键真绕过复现
+> `raw/s2_reset_downgrade.py` + 共享 `raw/fixtures.py`。下表"脚本"列与证据段中**其余**文件名是归档当时
+> 的探针，其对抗价值已固化为文末 `test_*` 锁定用例；需原始脚本见 `git show 8fdd696`。
+
 ## 四支红队与结论
 
-| 红队 | 攻击面 | 结论 | 脚本 |
+| 红队 | 攻击面 | 结论 | 锁定用例（脚本已收敛） |
 |---|---|---|---|
-| A | 领域类型合法域完备性（NaN/±inf/越界/负计数/bool 强转/宽松阈值渗入 verdict·回归·gate） | **无绕过**（每路径逐脚本证明构造期即挡） | `raw/probe1_constraints.py`、`probe2_endtoend.py`、`probe3_loose_ends.py` |
-| B | 字段聚合口径（未知 field_id pred-only 隐身、支撑/分母漂移、build_profile↔evaluate 漂移、evidence=None 交互） | **无绕过**（逐字段零漂移，端到端仍被 gate 拒） | `raw/attack_recon.py`、`attack_e2e.py`、`attack_drift2.py` |
-| C | gate·merge 自动路径（删预检查开窗、旧签名 gate、版本时序、pending 与其他 deny 顺序） | **发现 2 弱点**（C-2b 纵深防御倒退、C-2a 崩批），均需注入不合规 gate 才触发；已修 | `raw/attack_gate.py`、`attack_merge.py`、`attack_ungated.py` |
-| D | 批准·lineage_reset（空白 reason、跨 lineage 降级、首批准自洽、latest 操纵、伪造 prior_profile） | **发现 1 真绕过**（弱点1 reset 洗白降级，端到端）+ 3 弱点；已修 | `raw/s1_defended.py`、`s2_reset_downgrade.py`、`s3_first_approval.py`、`s4_tiebreak.py`、`fixtures.py` |
+| A | 领域类型合法域完备性（NaN/±inf/越界/负计数/bool 强转/宽松阈值渗入 verdict·回归·gate） | **无绕过**（每路径逐脚本证明构造期即挡） | 收敛入 `test_*` 领域类型/约束用例 |
+| B | 字段聚合口径（未知 field_id pred-only 隐身、支撑/分母漂移、build_profile↔evaluate 漂移、evidence=None 交互） | **无绕过**（逐字段零漂移，端到端仍被 gate 拒） | 收敛入 `test_*` 聚合/漂移用例 |
+| C | gate·merge 自动路径（删预检查开窗、旧签名 gate、版本时序、pending 与其他 deny 顺序） | **发现 2 弱点**（C-2b 纵深防御倒退、C-2a 崩批），均需注入不合规 gate 才触发；已修 | `test_q4_2_pending_short_circuits_even_if_gate_ignores_it`、`_gate_error_fails_closed_not_crash` |
+| D | 批准·lineage_reset（空白 reason、跨 lineage 降级、首批准自洽、latest 操纵、伪造 prior_profile） | **发现 1 真绕过**（弱点1 reset 洗白降级，端到端）+ 3 弱点；已修 | `raw/s2_reset_downgrade.py`（保留）+ `test_q4_6_*` |
 
 ## 两个真问题：before → after 证据
 
@@ -52,7 +56,7 @@
 五轮为"pending 收回 gate 单一权威"删净了 `MergeEngine` 三条自动路径的 `and not prop.pending_judge`——
 pending 安全从此 100% 押在注入 gate 正确 honor 上。
 
-**before（`raw/attack_merge.py` @ `51ad8aa`）**——注入不 honor pending 的 gate：
+**before（探针 `attack_merge.py` @ `51ad8aa`，脚本已收敛入锁定用例；输出存档如下）**——注入不 honor pending 的 gate：
 ```
 注入 decide(**kwargs) 但忽略 pending_judge 的 gate（模拟 020 写错）
   pending=True 候选 -> status=published   >>> BYPASS：pending 被自动发布
@@ -80,8 +84,9 @@ pending 安全从此 100% 押在注入 gate 正确 honor 上。
 cd harness
 uv run python ../openspec/changes/019-golden-quality-gate/redteam/raw/s2_reset_downgrade.py
 ```
-要复现 before（真绕过），先 `git checkout 51ad8aa`；当前 head 上脚本会展示修复（拒绝点前移）。
-维护的回归证据请直接跑锁定用例：
+要复现 before（真绕过），先 `git checkout 51ad8aa`；当前 head 上脚本**在构造期即 raise**（`fixtures.py`
+按 `51ad8aa` 原样保留 era 哈希 `'rh1'`，现被 `Sha256Hex` 于 `RunFingerprint` 构造处拒——拒绝点已前移，
+即修复生效）。可维护回归证据是锁定用例，直接跑：
 ```bash
 cd harness && uv run pytest tests/test_goldenset_baseline_019.py tests/test_quality_gate_019.py \
   -k "same_golden_set or launder_same_goldenset or pending_short_circuits or gate_error_fails_closed \

@@ -143,7 +143,7 @@ def excluded_disputed_keys(golden: list[GoldenRecord]) -> set[tuple[str, str]]:
     """因 disputed 被排除、且无可用金标覆盖同一 (product_id, field_id) 的键。
 
     disputed 金标不参与评测；模型对这类 key 的预测既不可判真也不可判假——不得计入 TP/FP/FN、
-    幻觉率或 evidence（codex 六轮 #1）。这是"哪些 key 可评测"的**单一权威**：evaluate 与
+    幻觉率或 evidence。这是"哪些 key 可评测"的**单一权威**：evaluate 与
     build_profile 共用，避免在 global/field 两处各自重新推导而产生边界漂移。
     同一 key 若另有**可用**金标，则不在此集合、仍按可用金标评测。
     """
@@ -253,7 +253,7 @@ def evaluate(
     # 这类"覆盖面之外的 present 预测"也是幻觉，必须同时计入幻觉率**分子**——否则伪造大量
     # 出界字段会把 hallucination_rate 稀释下降，让 Q4.6 的幻觉回归护栏形同虚设。
     # 且**已知 field_id** 的出界 present 还要计入该字段 per_field FP——否则字段画像看不到本字段
-    # 的伪造，在线 gate 只看字段指标会误放（codex 五轮 #1）。
+    # 的伪造，在线 gate 只看字段指标会误放。
     golden_field_ids = {k[1] for k in g_map}
     pred_only = 0
     for key, p in p_map.items():
@@ -270,7 +270,7 @@ def evaluate(
     if judge_queue_path is not None and judge_queue:  # 默认关（V4.1）
         write_eval_judge_queue(judge_queue_path, judge_queue)
 
-    # evidence 也排除 disputed-only 键的预测（同"可评测键"口径，codex 六轮 #1）。
+    # evidence 也排除 disputed-only 键的预测（同"可评测键"口径）。
     ev_pred = [p for p in pred if (p.product_id, p.field_id) not in excluded_only]
     evidence_accuracy = _evidence_accuracy(ev_pred, dataset_root) if dataset_root else None
     return EvalResult(

@@ -41,7 +41,7 @@ def _validate_identifier(v: str) -> str:
     return v
 
 
-# baseline_id 等标识符：构造期即拒空/纯空白/带首尾空白（红队 R6/弱点2）。
+# baseline_id 等标识符：构造期即拒空/纯空白/带首尾空白。
 Identifier = Annotated[str, AfterValidator(_validate_identifier)]
 
 _FINGERPRINT_FIELDS = (
@@ -79,7 +79,7 @@ def _canon_hash(v: str) -> str:
 
     构造期由 Sha256Hex 严格校验并规范化；此函数供**比较点**二次规范化，使身份比较不依赖
     单一构造期不变量——防止绕过构造校验（model_copy/model_construct，无 revalidate_instances）
-    塞入的未规范化值制造"同 digest 两身份"、重开 reset 洗白（红队 F）。
+    塞入的未规范化值制造"同 digest 两身份"、重开 reset 洗白。
     """
     return v.strip().lower()
 
@@ -90,7 +90,7 @@ def _validate_sha256_hex(v: str) -> str:
     return _canon_hash(v)  # 规范化为小写，使同一 digest 只有唯一文本身份
 
 
-# 内容身份哈希：构造期强制 64 位 hex 并规范化为小写（codex 六轮 #2）。
+# 内容身份哈希：构造期强制 64 位 hex 并规范化为小写。
 # 同一 SHA 的大小写/空白变体不得成为两个"身份"——否则 reset 的"同 golden 集必回归"可被绕过。
 Sha256Hex = Annotated[str, AfterValidator(_validate_sha256_hex)]
 
@@ -112,7 +112,7 @@ class RunFingerprint(BaseModel):
     prompt_version: str
     template_profile: str
     source_profile: str
-    golden_release_hash: Sha256Hex  # 内容身份：64hex + 规范小写（六轮 #2；reset 比较依赖其唯一性）
+    golden_release_hash: Sha256Hex  # 内容身份：64hex + 规范小写（reset 比较依赖其唯一性）
 
     def missing_fields(self) -> list[str]:
         return [f for f in _FINGERPRINT_FIELDS if not str(getattr(self, f)).strip()]
@@ -236,7 +236,7 @@ class ApprovalRecord(BaseModel):
     """独立、不可改写的批准记录（Q2.3）；**同时提交被批准 artifact 与画像的内容哈希**。
 
     - `artifact_sha256`：绑定被批准的 baseline 产物输出内容（实施计划 Task3）；
-    - `profile_content_sha256`：**提交被批准画像的内容哈希**（四轮 #1/#2）——批准即"提交这份
+    - `profile_content_sha256`：**提交被批准画像的内容哈希**——批准即"提交这份
       画像内容"，任何替换指标/指纹的画像 content_hash 必不同，无法用可复制的公开 approval
       哈希冒充"已批准画像"。两者都进入 `sha256()`，批准身份对 (artifact, 画像) 唯一。
     """
@@ -302,13 +302,13 @@ def approve_baseline(
     - **画像必须派生自该 artifact**：`profile.artifact_sha256 == artifact.sha256()` 且指纹一致；
     - **回归不可绕过、不可伪造、不可靠换 id 跳过**：只要系统已有生产批准（`prior` 非空），候选
       就必须与**当前生产基线**（`prior` 中最近一条，跨 baseline_id）比较——必须提供 `prior_profile`
-      且其内容哈希正是该生产批准提交的画像（`content_hash() == latest.profile_content_sha256`，
-      四轮 #1/#3），回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
+      且其内容哈希正是该生产批准提交的画像（`content_hash() == latest.profile_content_sha256`），
+      回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
     - **lineage 重置只对真正的新评测基准开放**：`allow_lineage_reset=True` 才跳过回归，且必须
-      (a) `prior` 非空（无生产基线无从 reset，首批准本就免回归——红队 R6/弱点3）、
+      (a) `prior` 非空（无生产基线无从 reset，首批准本就免回归）、
       (b) `artifact.baseline_id` 不在任何 prior 中（不能给同 id 降级）、
       (c) **`golden_release_hash` 与所有 prior 不同**——golden 集才是评测基准；同一 golden 集换个
-      新 id 仍必须走零容差回归，不得借 reset（换 id/换模型）洗白降级（红队 R6/弱点1）、
+      新 id 仍必须走零容差回归，不得借 reset（换 id/换模型）洗白降级、
       (d) 提供非空 `lineage_reset_reason`（记入 ApprovalRecord，可审计）。本 bool 只是 019 层的
       **结构约束 + 审计信号**；真正的人工授权真实性由 020 提供不可伪造的授权输入（见文档边界）；
     - 指纹缺项 / 未解决 / 产物不齐或不一致（Q2.1）任一都阻断批准。
@@ -360,7 +360,7 @@ def approve_baseline(
                 "批准的画像（内容哈希不符——回归基线被伪造/替换/靠换 id 绕过）"
             )
         # 零容差回归必须在**同一 golden 集**（评测基准一致）上比较——否则候选可借 disputed 削弱
-        # 自身评测面（≤5% 过 validator）藏退化，把非对称评测集偷渡过回归（红队 E/3b）。reset 路径
+        # 自身评测面（≤5% 过 validator）藏退化，把非对称评测集偷渡过回归。reset 路径
         # 强制 golden 集必须**不同**且留审计；非 reset 路径对称地要求 golden 集必须**相同**。
         if _canon_hash(artifact.fingerprint.golden_release_hash) != _canon_hash(
             latest.fingerprint.golden_release_hash

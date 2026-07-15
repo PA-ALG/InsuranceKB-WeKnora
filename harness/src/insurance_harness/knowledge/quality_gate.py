@@ -83,7 +83,7 @@ class QualityGate:
             )
         if self.approval is None:
             return deny("画像未批准")
-        # 内容绑定（实施计划 Task4 + 四轮 #1/#2）：画像必须回链到该批准记录、两者指向同一
+        # 内容绑定：画像必须回链到该批准记录、两者指向同一
         # artifact、**批准提交的画像内容哈希/指纹与本画像一致**——否则复制公开 approval 哈希
         # 就能把任意指标/新 model 指纹的画像伪装成"已批准"。
         if self.profile.baseline_approval_sha256 != self.approval.sha256():

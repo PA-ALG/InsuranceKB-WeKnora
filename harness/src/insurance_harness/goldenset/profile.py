@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .baseline import ApprovalRecord
 
 # 指标合法域（构造期不可越界）：Rate=[0,1] 有限；NonNegativeInt≥0；FiniteFloat 仅拒 NaN/±inf。
-# 越界（如 value_accuracy=2.0、负计数）与 NaN 同属"应无法构造的非法状态"（codex 五轮 #2）。
+# 越界（如 value_accuracy=2.0、负计数）与 NaN 同属"应无法构造的非法状态"。
 
 # design.md:13 —— 数据/模型维指纹，任一变化都要求重跑或重新批准（git_sha 属溯源，不计）。
 _STALENESS_FIELDS = (
@@ -116,7 +116,7 @@ class QualityProfile(BaseModel):
         """由候选画像生成"已批准"画像：回链批准记录内容哈希（gate 据此验证绑定）。
 
         批准必须绑定同一 artifact **且提交本画像内容**——否则无法用任意画像给别的
-        artifact/指标背书（四轮 #1/#2：批准提交的是内容哈希，不是可复制的公开 approval 哈希）。
+        artifact/指标背书（批准提交的是内容哈希，不是可复制的公开 approval 哈希）。
         """
         if approval.artifact_sha256 != self.artifact_sha256:
             raise ValueError("approval.artifact_sha256 与画像 artifact_sha256 不一致")
@@ -270,10 +270,10 @@ def _evidence_quote_counts(
     record: GoldenRecord, page_cache: dict[Path, dict[int, str]], dataset_root: Path | None
 ) -> tuple[int, int]:
     """该 present 预测的 (可回验引文数, 总引文数)，与 `eval._evidence_accuracy` 同一 **per-quote**
-    口径（消除 profile↔evaluator 的证据语义漂移，四轮红队 #2）。
+    口径（消除 profile↔evaluator 的证据语义漂移）。
 
     无证据 / 无 dataset_root / PDF 缺失都返回 (0,0)——即"未测量"，不当作"回验失败(0%)"：
-    未测量与测得 0% 必须区分（None vs 0.0），否则回归会误报/漏报（四轮红队 #3）。真实自动化
+    未测量与测得 0% 必须区分（None vs 0.0），否则回归会误报/漏报。真实自动化
     用画像必须带 dataset_root（Q3.1/Q5.1）。
     """
     if not record.evidence or dataset_root is None:
@@ -308,7 +308,7 @@ def build_profile(
     产出 baseline_approval_sha256="" 的**候选**画像；批准后由 `.with_approval(approval)` 回链。
     `artifact_sha256` 必须等于派生自的 BaselineArtifact.sha256()（approve 时强制核对）。
     """
-    # 复用权威 evaluator（四轮 #4：不重复实现指标口径）+ 共用"可评测键"权威（六轮 #1）。
+    # 复用权威 evaluator（不重复实现指标口径）+ 共用"可评测键"权威。
     from .eval import evaluate, excluded_disputed_keys
 
     usable = [g for g in golden if not g.disputed]
@@ -318,7 +318,7 @@ def build_profile(
     page_cache: dict[Path, dict[int, str]] = {}
 
     # 全局指标 + 每字段 P/R/F1 全部取自 evaluate：pred-only 多余字段计入 micro FP、
-    # 空分母口径一致——避免"只遍历金标键"导致产生多余字段的模型被误判满分（四轮 #4）。
+    # 空分母口径一致——避免"只遍历金标键"导致产生多余字段的模型被误判满分。
     result = evaluate(golden, pred, dataset_root=dataset_root)
 
     golden_field_ids = {key[1] for key in g_map}
@@ -326,7 +326,7 @@ def build_profile(
     for key in g_map:
         by_field_keys[key[1]].append(key)
     # 已知 field_id 的 pred-only present 键也纳入该字段观察——本字段的伪造必须体现在字段画像上，
-    # 否则在线 gate 只看字段指标会误放（codex 五轮 #1）。
+    # 否则在线 gate 只看字段指标会误放。
     for key in p_map:
         if key in g_map or key in excluded_only:  # disputed-only 的预测不计入字段幻觉/证据
             continue
@@ -364,7 +364,7 @@ def build_profile(
             # 绝不用零分母默认 1.0 让"什么都没抽到"的字段获得自动资格（Q4.3）。
             value_accuracy=(value_hits / value_pairs) if value_pairs else 0.0,
             hallucination_rate=(hallucinated / pred_present) if pred_present else 0.0,
-            # None = 未回验（无 dataset_root 或引文无法定位），区别于回验过的 0%（四轮红队 #2/#3）。
+            # None = 未回验（无 dataset_root 或引文无法定位），区别于回验过的 0%。
             evidence_accuracy=(ev_ok / ev_total) if ev_total else None,
             precision=stats.precision if stats else 0.0,
             recall=stats.recall if stats else 0.0,
