@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-15（019 PR #8 已合入 `main`；018 软件、本地 deterministic 门禁与 whole-change 双审完成：1035 passed，`Spec compliant: yes`、`Quality approved: yes`；T4/T7 仅余 PostgreSQL/WeKnora 外部证据；0g 事故规则已实际执行）
+> 最后更新：2026-07-15（019 PR #8 已合入 `main`；018 软件、本地/CI deterministic、PostgreSQL 16 与 whole-change 双审完成：1035 passed，PG `tests=2 skipped=0`，`Spec compliant: yes`、`Quality approved: yes`；仅 T7 真实 WeKnora live 因环境配置缺失保持 `NOT RUN`；0g 事故规则已实际执行）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -41,17 +41,17 @@
    - [ ] 对账旧 ledger：001/003/004 的未勾项只做完成证据回填，不重做已验收功能；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交 020；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
    - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
 
-   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（5/7；T4 余 PostgreSQL 证据，T7 进行中）**
+   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（6/7；仅 T7 真实 WeKnora live 进行中）**
    - [x] 完整 Space 快照方案、service-owned Session、lease recovery 等裁决已写入标准 OpenSpec；strict validator 与独立规格/计划复审最终 Approved。
-   - [ ] 按 `openspec/changes/018-release-snapshot-read-model/` 完成 T1～T7；018 独占 Alembic `0005`。当前 T1～T3/T5/T6 完成；T4 的最终 commit 不确定性已覆盖，仅余 PostgreSQL caller-transaction 证据后勾选；T7 的 integration/live/Runbook/report 待收口。
+   - [ ] 按 `openspec/changes/018-release-snapshot-read-model/` 完成 T1～T7；018 独占 Alembic `0005`。当前 T1～T6、Runbook/report、deterministic 与 PostgreSQL 证据完成；仅 T7 真实 WeKnora live 待收口。
    - [x] T1：`0005`、SnapshotFact/operation/attempt/job ORM、SQLite/PostgreSQL freeze trigger、legacy v0 保留/安全降级、完整 Space source-aware projection 已实现；审计问题已补 raw INSERT 默认 v1、metadata create_all 幂等与 016 读侧防御回归。
    - [x] T2：SnapshotReader 只沿 current v1 SnapshotFact 读取，五类 typed gap、过滤优先级、日期开端/闭区间、稳定排序及 scope fail-closed 已实现；SQL spy 明确禁止查询 mutable Claim/Evidence。
    - [x] T3：SnapshotFact-only Wiki renderer 已实现，页面 ownership metadata 完整；产品/Claim/Evidence 后续变化不影响相同 frozen facts 重渲染。
-   - [ ] T4：canonical PublishPlan、完整 Space 发布、strict ownership、写后回读、legacy 双匹配、response-loss、Engine+Space 局部串行、service-owned Session 状态机、lease/retry/attempt/job 与最终 DB commit 失败恢复已实现；仅余 PostgreSQL caller-transaction 零 skip 验收后勾完。
+   - [x] T4：canonical PublishPlan、完整 Space 发布、strict ownership、写后回读、legacy 双匹配、response-loss、Engine+Space 局部串行、service-owned Session 状态机、lease/retry/attempt/job 与最终 DB commit 失败恢复已实现；PR #9 implementation commit `a70bf025` 的 [PostgreSQL 16 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386028676/job/87259377677) 通过，JUnit `tests=2 skipped=0`。
    - [x] T5：V1/V2 pointer-last rollback、失败 retry、执行时 current 精确 reconciliation、DELETE 404、reconcile child requeue/lease identity、successor child、legacy 首发失败、历史/new managed slug 清理与 R6.1～R6.3 组合故事均已覆盖。
    - [x] T6：curated facts 永不调用 RAW；五类 typed gap 可显式触发 provider；所有 hit 强制同 `space_id/raw_kb_id`，跨 scope 整体失败，统一标记 `unreviewed_raw`，无写回/合并/搜索引擎。
    - [x] 已交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback；旧 caller-Session publish/rollback 已完全移至 test support，生产模块、包入口与 `__all__` 均无旁路；本地 deterministic 全量为 **1035 passed / 7 deselected**。
-   - [ ] 验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。无真实环境时 live 必须记 `NOT RUN`，不得伪绿。
+   - [ ] T7 真实验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。2026-07-15 已触发 [harness-live run 29386058916](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386058916)，preflight 因 `harness-live` environment 的 7 个变量/secret 全部为空而 fail closed，故仍为 `NOT RUN`，不得伪绿。
 
    **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
    - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。

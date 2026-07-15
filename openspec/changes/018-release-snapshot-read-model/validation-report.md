@@ -7,12 +7,12 @@
 | 层级 | 状态 | 证据/下一步 |
 |---|---|---|
 | T1～T3 | PASS | `0005`/SnapshotFact/guard、pointer-only Reader、frozen renderer 已完成 |
-| T4 | 软件实现完成，外部证据待跑 | publish state machine、attempt/job、retry/lease、Engine+Space lock、write-readback 与 final commit failure 已覆盖；新增 PostgreSQL caller-transaction 节点 |
+| T4 | PASS | publish state machine、attempt/job、retry/lease、Engine+Space lock、write-readback 与 final commit failure 已覆盖；PostgreSQL 16 service-owned Session/DB guards 零 skip 验收通过 |
 | T5 | PASS | rollback/reconciliation、legacy/successor/historical slug 与 R6.1～R6.3 组合故事已完成 |
 | T6 | PASS | typed gap-only RAW、same-scope、`unreviewed_raw`、零 writeback |
-| PostgreSQL 16 integration | `NOT RUN` | 本机未提供 `HARNESS_TEST_POSTGRES_URL`；不得把显式 fail 或 collection 当成功，待当前 SHA 的 CI job |
-| WeKnora live | `NOT RUN` | 本机缺受控 `HARNESS_LIVE_*`；精确节点结果为 skip，待 `harness-live` workflow 零 skip 证据 |
-| T7 文档/本地门禁 | PASS | Runbook、13/16/20/HANDOFF 已对账；OpenSpec strict、Ruff、mypy strict、deterministic 全量门禁通过；whole-change spec/quality 双审通过，待外部 lane |
+| PostgreSQL 16 integration | PASS | PR #9 implementation commit `a70bf025` 的 job 通过；JUnit `tests=2 skipped=0` |
+| WeKnora live | `NOT RUN` | workflow 已触发，但 `harness-live` environment 的 7 个必需变量/secret 全为空，preflight 按设计失败；未执行测试 |
+| T7 文档/本地门禁 | PASS | Runbook、13/16/20/HANDOFF 已对账；OpenSpec strict、Ruff、mypy strict、deterministic 与 PostgreSQL 门禁通过；whole-change spec/quality 双审通过，仅待真实 WeKnora lane |
 
 ## 2. 实现与风险闭环
 
@@ -66,10 +66,10 @@ pytest tests/test_release_snapshot_live_018.py -q -rs
 1 skipped（缺 HARNESS_LIVE_*；NOT RUN）
 ```
 
-PostgreSQL 节点在缺 URL 时被 lane contract 验证为显式失败而非 skip。尚无当前 SHA 的 PostgreSQL 16 run URL，也无受控 WeKnora live run URL，因此两层均保持 `NOT RUN`。
+PR #9 implementation commit `a70bf025` 的 [deterministic job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386028676/job/87259377704) 与 [PostgreSQL 16 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386028676/job/87259377677) 均通过；PostgreSQL JUnit 为 `tests=2 skipped=0`，因此 T4 完成。受控 [WeKnora live run 29386058916](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386058916) 在 preflight 明确列出 7 个缺失配置后退出，测试未执行，继续记为 `NOT RUN`。
 
 ## 5. 独立复审与待完成
 
 whole-change 规格复审：`Spec compliant: yes`。最终只读质量复审：`Quality approved: yes`，无剩余 Critical、Important 或 Minor。
 
-仅余推送后等待当前 SHA 的 deterministic 与 PostgreSQL 16 zero-skip CI；真实 WeKnora 仍需单独手工受控 workflow。
+仅余为 GitHub `harness-live` environment 配置 `HARNESS_LIVE_BASE_URL`、`HARNESS_LIVE_API_KEY`、`HARNESS_LIVE_DB_URL`、`HARNESS_LIVE_SPACE_ID`、`HARNESS_LIVE_KNOWLEDGE_ID`、`HARNESS_LIVE_PARSER_FINGERPRINT`、`HARNESS_LIVE_KB_ID`，随后重跑受控 workflow 并取得零 skip 证据。
