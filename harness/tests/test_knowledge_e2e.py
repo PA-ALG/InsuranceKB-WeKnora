@@ -36,14 +36,14 @@ from tests.kbhelpers import (
     seed_bound_scope,
     seed_product,
 )
-
-_GATE, _FP = allow_all_gate()  # fail-closed 后低风险 supersede 自动裁决须过 gate
 from tests.support.legacy_publisher_007 import (
     legacy_publish_product_version as publish_product_version,
 )
 from tests.support.legacy_publisher_007 import (
     legacy_rollback_to_snapshot as rollback_to_snapshot,
 )
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后低风险 supersede 自动裁决须过 gate
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
