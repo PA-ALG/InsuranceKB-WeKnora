@@ -132,12 +132,21 @@ def test_q4_3_unapproved_profile_denied() -> None:
 
 
 def test_q4_3_approval_bound_to_other_profile_denied() -> None:
-    """codex #2：批准记录必须与画像内容哈希匹配；拿别的画像的批准冒充 → 拒绝。"""
+    """codex #2：批准记录必须与画像内容哈希匹配；拿别的画像（同指纹）的批准冒充 → 拒绝。"""
     fp = _fp()
-    other_profile = _profile(_metrics(support=999), fp)  # 不同内容 → 不同哈希
+    other_profile = _profile(_metrics(support=999), fp)  # 同指纹但不同内容 → 不同哈希
     stale_approval = _approval_for(other_profile)
     decision = _gate(approval=stale_approval, fp=fp).decide(_FIELD, "low", "add", fp)
     assert not decision.eligible and "内容不匹配" in decision.reason
+
+
+def test_q4_3_approval_fingerprint_mismatch_denied() -> None:
+    """codex 复审 #1：批准指纹与画像指纹不同（跨 baseline 错绑）→ gate 拒绝。"""
+    fp = _fp()
+    other_run = _profile(_metrics(), _fp(model_id="other-model"))  # 不同指纹的画像
+    approval = _approval_for(other_run)  # 该批准绑到 other_run（指纹=other-model）
+    decision = _gate(approval=approval, fp=fp).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and "指纹不匹配" in decision.reason
 
 
 def test_q4_3_missing_run_fingerprint_denied() -> None:

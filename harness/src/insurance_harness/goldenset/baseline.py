@@ -10,6 +10,8 @@
 """
 
 import hashlib
+import json
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -19,7 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from .records import GoldenRecord
 
 if TYPE_CHECKING:
-    from .profile import FieldVerdict
+    from .profile import QualityProfile, RegressionThresholds
 
 _FINGERPRINT_FIELDS = (
     "git_sha",
@@ -33,6 +35,31 @@ _FINGERPRINT_FIELDS = (
 
 # Q2.1：可批准的 baseline 要求关键点标注完成、eval 报告存在、且至少有预测产物。
 _APPROVABLE_KEYPOINTS = frozenset({"ready", "done"})
+
+# release_hash 不纳入的易变字段：created_at 是标注时间戳、非内容语义（同内容重标不应改变身份）。
+_VOLATILE_RECORD_FIELDS = frozenset({"created_at"})
+
+_SHA256_HEX = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+class ArtifactRef(BaseModel):
+    """产物的内容寻址引用（Q2.1）：path + sha256 (+ count)，据此证明产物真实存在且可重放。
+
+    只有 path 非空且 sha256 为合法 64 位十六进制才算"存在"——防止用任意路径字符串冒充产物。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    path: str
+    sha256: str
+    count: int = 0
+
+    def is_present(self) -> bool:
+        return bool(self.path.strip()) and _SHA256_HEX.fullmatch(self.sha256) is not None
+
+
+# Q2.1：批准前必须齐备的内容寻址产物（020 产出真实 path+hash；本层做结构性合同校验）。
+_REQUIRED_ARTIFACTS = ("run_manifest_ref", "pred_ref", "eval_ref")
 
 
 class RunFingerprint(BaseModel):
@@ -63,7 +90,10 @@ class ProductRunStatus(BaseModel):
     judge_queue_count: int = 0
     judgements_count: int = 0
     keypoints_status: str = "pending"
-    eval_report_path: str | None = None
+    # 内容寻址产物引用（Q2.1）：020 产出真实 path+sha256；缺失/空 hash 不能批准。
+    run_manifest_ref: ArtifactRef | None = None
+    pred_ref: ArtifactRef | None = None
+    eval_ref: ArtifactRef | None = None
 
     @property
     def unresolved(self) -> int:
@@ -72,7 +102,7 @@ class ProductRunStatus(BaseModel):
         return self.dead_letter_count + pending_judge
 
     def completeness_blockers(self) -> list[str]:
-        """Q2.1：产物齐全性检查——缺预测/关键点未完成/无 eval 报告都阻断批准。"""
+        """Q2.1：产物齐全性——缺预测/关键点未完成/产物引用缺失或不一致都阻断批准。"""
         blockers: list[str] = []
         if self.pred_count <= 0:
             blockers.append(f"{self.product_id} 无预测产物（pred_count=0）")
@@ -80,8 +110,18 @@ class ProductRunStatus(BaseModel):
             blockers.append(
                 f"{self.product_id} 关键点未完成（keypoints={self.keypoints_status}）"
             )
-        if not (self.eval_report_path or "").strip():
-            blockers.append(f"{self.product_id} 缺 eval 报告（eval_report_path 为空）")
+        for name in _REQUIRED_ARTIFACTS:
+            ref = getattr(self, name)
+            if ref is None or not ref.is_present():
+                blockers.append(
+                    f"{self.product_id} 缺产物引用 {name}（需非空 path + 64 位 sha256）"
+                )
+        # pred 产物条数须与 pred_count 一致——防止计数与实际产物脱节。
+        if self.pred_ref is not None and self.pred_ref.count != self.pred_count:
+            blockers.append(
+                f"{self.product_id} pred_ref.count={self.pred_ref.count} 与 "
+                f"pred_count={self.pred_count} 不一致"
+            )
         return blockers
 
 
@@ -131,55 +171,67 @@ class BaselineNotApprovableError(Exception):
     """artifact 有批准阻断项（指纹缺项 / 未解决项 / 产物不齐 / 回归失败）时拒绝批准。"""
 
 
-def _record_hash_payload(record: GoldenRecord) -> str:
-    """一条金标记录的全语义序列化：改动任一语义字段都会改变 release hash（Q3.2）。"""
-    evidence = ";".join(
-        f"{ev.page}|{ev.quote}"
-        for ev in sorted(record.evidence, key=lambda e: (e.page, e.quote))
-    )
-    return "\t".join(
-        [
-            record.product_id,
-            record.field_id,
-            record.tri_state,
-            record.value or "",
-            evidence,
-            record.schema_version,
-            record.annotator_model,
-            "1" if record.disputed else "0",
-        ]
-    )
+def _canonical_record(record: GoldenRecord) -> str:
+    """一条金标记录的 canonical 全量序列化：对完整模型（含嵌套 evidence lineage）做
+    去易变字段的 canonical JSON——任一影响评测/回验/来源审计的字段变化都会改变结果。"""
+    data = record.model_dump(mode="json")
+    for field in _VOLATILE_RECORD_FIELDS:
+        data.pop(field, None)
+    return json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 def release_hash(records: Sequence[GoldenRecord]) -> str:
-    """内容寻址的 golden release 指纹：覆盖值/证据/schema/标注者/disputed 等全部语义字段。"""
-    payload = "\n".join(sorted(_record_hash_payload(r) for r in records))
+    """内容寻址的 golden release 指纹：对每条记录做 canonical 全量序列化后排序 sha256。
+
+    覆盖 GoldenRecord/Evidence 的**全部内容字段**（product/doc/field/value/tri_state/
+    disputed(+reason)/reasoning/schema/annotator + evidence 的 page/quote/来源审计 lineage），
+    仅排除 created_at（标注时间戳，非内容语义）。新增字段自动纳入，无需手工补。
+    """
+    payload = "\n".join(sorted(_canonical_record(r) for r in records))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def approve_baseline(
     artifact: BaselineArtifact,
+    profile: "QualityProfile",
     *,
     approved_by: str,
-    profile_hash: str,
     prior: Sequence[ApprovalRecord] = (),
-    regression: "FieldVerdict | None" = None,
+    prior_profile: "QualityProfile | None" = None,
+    regression_thresholds: "RegressionThresholds | None" = None,
     approved_at: datetime | None = None,
 ) -> ApprovalRecord:
-    """产出一条新版本批准记录并绑定画像内容哈希；有阻断项/回归失败则拒绝。
+    """对 (artifact, profile) 产出一条不可改写的新版本批准记录（Q2.3/Q4.3/Q4.6）。
 
-    `profile_hash` 由调用方对被批准画像取 `QualityProfile.content_hash()`；
-    `regression` 为候选相对上一个已批准画像的回归判定（Q4.6），失败即阻断批准。
-    绝不改写既有记录（Q2.3）。
+    让非法状态无法构造，而非信任调用方：
+    - **身份绑定**：`profile.fingerprint` 必须等于 `artifact.fingerprint`，画像哈希由本函数
+      内部计算（调用方无法传入错绑的 hash）；
+    - **回归强制**：该 baseline 已有批准版本时，必须提供 `prior_profile`，由本函数内部跑
+      `check_regression`，退化即拒（调用方无法靠省略参数跳过 Q4.6）；
+    - 指纹缺项 / 未解决项 / 产物不齐（Q2.1）任一都阻断批准。
     """
+    if profile.fingerprint != artifact.fingerprint:
+        raise BaselineNotApprovableError(
+            f"baseline {artifact.baseline_id} 不可批准：画像指纹与 artifact 指纹不一致"
+            "（画像不属于该次运行）"
+        )
+    same_baseline = [r for r in prior if r.baseline_id == artifact.baseline_id]
     blockers = artifact.approval_blockers()
-    if regression is not None and not regression.eligible:
-        blockers.append("回归 gate 失败：" + "；".join(regression.failures))
+    if same_baseline and prior_profile is None:
+        raise BaselineNotApprovableError(
+            f"baseline {artifact.baseline_id} 已有批准版本，必须提供 prior_profile "
+            "做回归检查（Q4.6 不可省略）"
+        )
+    if prior_profile is not None:
+        from .profile import check_regression  # 延迟导入避免 baseline↔profile 循环
+
+        verdict = check_regression(prior_profile, profile, regression_thresholds)
+        if not verdict.eligible:
+            blockers.append("回归 gate 失败：" + "；".join(verdict.failures))
     if blockers:
         raise BaselineNotApprovableError(
             f"baseline {artifact.baseline_id} 不可批准：{blockers}"
         )
-    same_baseline = [r for r in prior if r.baseline_id == artifact.baseline_id]
     next_version = max((r.version for r in same_baseline), default=0) + 1
     return ApprovalRecord(
         baseline_id=artifact.baseline_id,
@@ -187,5 +239,5 @@ def approve_baseline(
         approved_by=approved_by,
         approved_at=approved_at or datetime.now(UTC),
         fingerprint=artifact.fingerprint,
-        profile_hash=profile_hash,
+        profile_hash=profile.content_hash(),
     )

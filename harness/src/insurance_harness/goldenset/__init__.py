@@ -11,6 +11,7 @@ from .assemble import (
 )
 from .baseline import (
     ApprovalRecord,
+    ArtifactRef,
     BaselineArtifact,
     BaselineNotApprovableError,
     ProductRunStatus,
@@ -51,6 +52,7 @@ from .verify import compare_with_meta, load_product_meta, verify_quotes
 
 __all__ = [
     "ApprovalRecord",
+    "ArtifactRef",
     "AssembleReport",
     "AutomationThresholds",
     "BaselineArtifact",

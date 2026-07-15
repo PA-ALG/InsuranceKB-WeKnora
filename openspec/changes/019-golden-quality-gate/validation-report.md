@@ -7,11 +7,12 @@
 
 - `uv run ruff check .` → All checks passed
 - `uv run mypy src tests` → Success（161 source files，strict）
-- `uv run pytest -m "not live and not integration_postgres" -q` → **1060 passed / 5 deselected**
+- `uv run pytest -m "not live and not integration_postgres" -q` → **1066 passed / 5 deselected**
 - 019 专项：`test_goldenset_{assemble,validate,baseline,profile}_019.py` + `test_quality_gate_019.py`
-  → **98 passed**（11+12+19+22+34，全部严格 test-first：先桩→RED→实现→GREEN），
+  → **104 passed**（11+12+24+22+35，全部严格 test-first：先桩→RED→实现→GREEN），
   纯 fixture/replay，零真实模型/PDF 凭据（Q1.5/Q5.1）
-- **codex review 返工已并入本 head**：9 条（6×P1 + 3×P2）全部修复，见文末「codex review 返工」。
+- **codex 两轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条（#1/#2/#3 强绑定重设计 + #7 canonical 哈希），
+  见文末「codex review 返工」与「codex 复审二轮返工」。
 
 ## 逐条验收（Q1~Q5）
 
@@ -24,8 +25,8 @@
 | Q1.5 | 普通 CI 最小 fixture 跑成功 + 各失败分支，无真实凭据 | 全 019 用例无网络/模型/PDF |
 | Q2.1 | artifact 记录 run/pred/dead-letter/judge/keypoints/eval，未解决数量不省略 | `baseline.py` `ProductRunStatus.unresolved` + `test_q2_1_*` |
 | Q2.2 | 绑定指纹（git/schema/model/prompt/template+source/golden hash）；缺项不能批准 | `test_q2_2_missing_fingerprint_field_blocks_approval` |
-| Q2.1 补 | **产物齐全性阻断批准**：pred=0 / keypoints 未 ready-done / 缺 eval 报告任一都拒批 | `ProductRunStatus.completeness_blockers` + `test_q2_1_{zero_pred,pending_keypoints,missing_eval_report}_blocks_approval` |
-| Q2.3 | 批准记录独立、不可改写，只能追加新版本；**绑定 profile 内容哈希 + 消费回归 verdict** | `test_q2_3_approval_is_versioned_and_immutable` / `_carries_...profile_hash` / `test_q4_6_failing_regression_blocks_approval` |
+| Q2.1 补 | **产物内容寻址 + 齐全性阻断批准**：pred=0 / keypoints 未 ready-done / 产物引用缺失或空 sha256 或 count 不符任一都拒批 | `ProductRunStatus.completeness_blockers` + `ArtifactRef` + `test_q2_1_{zero_pred,pending_keypoints,missing_artifact_ref,empty_sha256_ref,pred_ref_count_must_match}_*` |
+| Q2.3 | 批准记录独立、不可改写，只能追加新版本；**内部算内容哈希+指纹绑定 + 强制消费回归 verdict** | `test_q2_3_approval_is_versioned_and_immutable` / `test_q4_3_approval_binds_internally_computed_hash` / `test_q4_6_failing_regression_blocks_approval` |
 | Q3.1 | 每 field_id 输出 support/value acc/tri-state confusion/hallucination/evidence，绑定指纹；**零观测不给满分**（value/evidence 无观测记 0.0，失格） | `profile.py` `build_profile` + `test_q3_1_*` / `test_q4_3_zero_observation_field_is_not_eligible` |
 | Q3.2 | 版本化 + golden hash/schema/model/prompt/**template/source profile** 六维任一不匹配即 stale（git_sha 非 staleness 维） | `test_q3_2_staleness_on_each_of_six_dims` / `_git_sha_is_not_a_staleness_dim` |
 | Q3.3 | 全局回归阈值 + 字段自动化阈值；判定逐条列失败指标与实际值 | `test_q3_3_*` + `check_regression` |
@@ -60,11 +61,33 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
 | 4 | 零观测/未回验证据得满分 | value/evidence 零分母记 0.0（失格）；无 dataset_root 证据不可信 | `test_q4_3_zero_observation_field_is_not_eligible` |
 | 5 | staleness 漏 source/template profile | is_stale 补全六维（git_sha 除外） | `test_q3_2_staleness_on_each_of_six_dims` |
 | 6 | validator 跳过 evidence、disputed 阈值过松 | 默认强制证据回验 + `max_disputed_rate=0.05` | `test_q1_4_evidence_required_by_default_without_dataset_root_fails` |
-| 7 | release_hash 不完整 | 覆盖 evidence/schema/annotator/disputed 全语义字段 | `test_q2_release_hash_covers_all_semantic_fields` |
+| 7 | release_hash 不完整 | 见复审二轮：改 canonical 全量序列化 | `test_q2_release_hash_covers_full_semantic_model` |
 | 8 | 低风险 supersede 误标 high | 非自动 supersede 保留真实 risk | `test_k3_2_low_risk_supersede_review_is_not_mislabeled_high` |
-| 9 | HANDOFF 数字陈旧 + 自相矛盾 | 更新 B21（1060 passed，fail-closed）+ 本报告 | — |
+| 9 | HANDOFF 数字陈旧 + 自相矛盾 | 更新 B21（fail-closed）+ 本报告 | — |
 
 **fail-closed 的存量迁移**：自动发布契约收紧后，原先靠 `auto_apply_*` 布尔位自动发布的 ~60 个存量用例
 需注入 gate 才继续自动发布。这是**刻意的契约收紧**（非降级）：测试用 `tests/kbhelpers.green_gate`
 （真实达标已批准画像）或 `allow_all_gate`（低风险放行的测试替身，仍拒高风险/不可自动化）显式表达
 "自动化已获批"，gate 自身判定逻辑由 `test_quality_gate_019.py` 用真实画像全覆盖。
+
+## codex 复审二轮返工（head 已并入）
+
+复审确认首轮 6 项实质关闭，但 #2/#3/#7 只部分关闭（可稳定复现绕过）。核心批评正确：**首轮是"按条目
+补 if"，未从"非法状态不可构造"重设计接口**。本轮按此重设计，并补对抗性（bypass）负例：
+
+| 复审# | 可复现的绕过 | 重设计（让非法状态无法构造） | bypass 负例 |
+|---|---|---|---|
+| 1 | approval 可错绑到别的 baseline/profile（裸 profile_hash + gate 只比 hash） | `approve_baseline(artifact, profile)` **内部**算 hash 并强制 `profile.fingerprint==artifact.fingerprint`；gate 再校验 `approval.fingerprint==profile.fingerprint` | `test_q4_3_profile_fingerprint_must_match_artifact`、`test_q4_3_approval_fingerprint_mismatch_denied` |
+| 2 | 省略 `regression` 参数即可跳过回归 | 该 baseline 已有批准版本时**必须**提供 `prior_profile`，回归由函数**内部**跑，不接受调用方跳过 | `test_q4_6_prior_approval_requires_prior_profile`、`_failing_regression_blocks_approval` |
+| 3 | 计数+任意路径字符串即可批准（产物无法证明存在） | `ArtifactRef(path+sha256+count)` 取代裸路径；run_manifest/pred/eval 必须齐备且 `pred_ref.count==pred_count` | `test_q2_1_{missing_artifact_ref,empty_sha256_ref,pred_ref_count_must_match}_*` |
+| 7 | 手工拼字段，漏 `doc`/`source_revision`/lineage | 改为对完整模型 `model_dump` 做 **canonical JSON**（sort_keys，JSON 转义避免分隔符碰撞），除易变 `created_at` 外全纳入；新字段自动覆盖 | `test_q2_release_hash_covers_full_semantic_model`、`_ignores_created_at` |
+
+### 已知边界（诚实声明，非"已全部闭环"的空话）
+
+- **approve_baseline 是纯函数**：`prior` 批准列表由调用方（020 的批准存储）如实提供；版本单调/唯一性
+  由存储层保证，本层只保证"给定 prior 时不变量成立"（有 prior 无 prior_profile→拒、指纹/内容错绑→拒）。
+- **ArtifactRef 校验是结构性的**：本确定性层校验 path 非空 + sha256 为合法 64 位 hex + `pred_ref.count`
+  一致；产物文件真实存在、字节哈希与 sha256 相符由 020 运行时回验，非本层职责。
+- **release_hash 排除 `created_at`**：标注时间戳属溯源、非内容语义（同内容重标不应改变 release 身份）；
+  这是**刻意**排除并有 `_ignores_created_at` 用例锁定，非遗漏。
+- **evidence 真实回验**依赖 dataset_root（真实 PDF）：无 dataset_root 判不可信（0.0）。

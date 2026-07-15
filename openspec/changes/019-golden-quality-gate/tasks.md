@@ -101,4 +101,25 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
 8. **supersede risk**（P2#8）：非自动 supersede 进审核保留真实 risk，不硬编码 high_risk_change。
 9. **文档一致**（P2#9）：HANDOFF B21 更新 1060 passed + fail-closed 表述；validation-report 计数与 Q 表订正。
 
-返工后门禁：ruff/mypy(161) 全绿，non-live **1060 passed**；所有修复先补失败用例（复现 codex 反例）再改实现。
+首轮返工门禁：ruff/mypy(161) 全绿，non-live 1060 passed。
+
+## codex 复审二轮返工
+
+复审确认首轮 6 项实质关闭，但 **#2/#3/#7 只部分关闭**——批评正确：首轮是"按 review 条目补 if"，
+未从"非法状态不可构造"重设计接口。本轮按不变量重设计 + 补 bypass 负例：
+
+1. **approval 强绑定**：`approve_baseline(artifact, profile)` 内部计算 `profile.content_hash()`（不再收
+   裸 hash），强制 `profile.fingerprint == artifact.fingerprint`；`QualityGate` 增
+   `approval.fingerprint == profile.fingerprint` 校验。错绑跨 baseline/profile 无法构造。
+2. **回归强制**：该 baseline 已有批准版本时**必须**提供 `prior_profile`，回归由函数内部跑，
+   不接受调用方省略参数跳过 Q4.6。
+3. **产物内容寻址**：新增 `ArtifactRef(path+sha256+count)`，run_manifest/pred/eval 必须齐备且
+   `pred_ref.count==pred_count`；空 sha256 / 计数不符阻断批准。取代原"任意路径字符串即可批准"。
+4. **release_hash canonical**：改为对完整模型 `model_dump` 做 canonical JSON（sort_keys + JSON 转义
+   避免分隔符碰撞），除 `created_at`（易变时间戳，有用例锁定）外全字段纳入，含 evidence lineage；
+   新增字段自动覆盖。取代原手工拼字段（漏 doc/source_revision）。
+
+**已知边界（诚实声明）**：approve_baseline 纯函数，`prior` 由存储层如实提供、版本唯一性由存储层保证；
+ArtifactRef 为结构性校验（真实文件存在/字节哈希由 020 运行时回验）；release_hash 刻意排除 created_at。
+
+复审返工门禁：ruff/mypy(161) 全绿，non-live **1066 passed**；019 专项 104 用例，含端到端 bypass 负例。

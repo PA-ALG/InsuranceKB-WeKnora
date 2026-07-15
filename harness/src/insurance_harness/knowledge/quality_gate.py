@@ -68,6 +68,8 @@ class QualityGate:
             return deny("缺字段画像")
         if self.approval is None:
             return deny("画像未批准")
+        if self.approval.fingerprint != self.profile.fingerprint:
+            return deny("批准记录指纹与画像指纹不匹配（批准与画像不属于同一次运行）")
         if self.approval.profile_hash != self.profile.content_hash():
             return deny("批准记录与画像内容不匹配（画像可能被替换）")
         if run_fingerprint is None:
