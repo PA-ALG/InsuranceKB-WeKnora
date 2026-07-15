@@ -184,7 +184,13 @@ class BaselineArtifact(BaseModel):
 
 
 class ApprovalRecord(BaseModel):
-    """独立、不可改写的批准记录（Q2.3）；**绑定被批准 artifact 的内容哈希**（实施计划 Task3）。"""
+    """独立、不可改写的批准记录（Q2.3）；**同时提交被批准 artifact 与画像的内容哈希**。
+
+    - `artifact_sha256`：绑定被批准的 baseline 产物输出内容（实施计划 Task3）；
+    - `profile_content_sha256`：**提交被批准画像的内容哈希**（四轮 #1/#2）——批准即"提交这份
+      画像内容"，任何替换指标/指纹的画像 content_hash 必不同，无法用可复制的公开 approval
+      哈希冒充"已批准画像"。两者都进入 `sha256()`，批准身份对 (artifact, 画像) 唯一。
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -194,6 +200,10 @@ class ApprovalRecord(BaseModel):
     approved_at: datetime
     fingerprint: RunFingerprint
     artifact_sha256: str
+    profile_content_sha256: str
+    # 该批准是否为显式 lineage 重置（跳过了与上一生产基线的回归）——记录在案以便审计，
+    # 使"跳过回归"永不静默（回应 codex #3：reset 必须显式且可审计）。
+    lineage_reset: bool = False
 
     def sha256(self) -> str:
         """批准记录自身的 canonical 内容哈希；QualityProfile 以此回链其批准基线。"""
@@ -232,15 +242,19 @@ def approve_baseline(
     prior: Sequence[ApprovalRecord] = (),
     prior_profile: "QualityProfile | None" = None,
     thresholds: "RegressionThresholds | None" = None,
+    allow_lineage_reset: bool = False,
     approved_at: datetime | None = None,
 ) -> ApprovalRecord:
-    """对 (artifact, 派生画像) 产出一条不可改写、绑定 artifact 内容哈希的批准记录。
+    """对 (artifact, 派生画像) 产出一条不可改写、提交 artifact 与画像内容哈希的批准记录。
 
     让非法状态无法构造，而非信任调用方：
     - **画像必须派生自该 artifact**：`profile.artifact_sha256 == artifact.sha256()` 且指纹一致；
-    - **回归不可绕过且不可伪造**：该 baseline 已有批准版本时必须提供 `prior_profile`，且它必须
-      正是最近批准所绑定的画像（`prior_profile.baseline_approval_sha256 == latest.sha256()`），
-      回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
+    - **回归不可绕过、不可伪造、不可靠换 id 跳过**：只要系统已有生产批准（`prior` 非空），候选
+      就必须与**当前生产基线**（`prior` 中最近一条，跨 baseline_id）比较——必须提供 `prior_profile`
+      且其内容哈希正是该生产批准提交的画像（`content_hash() == latest.profile_content_sha256`，
+      四轮 #1/#3），回归由本函数内部跑 `compare_baselines`，退化即拒（Q4.6）；
+    - **新 lineage/bootstrap 只能显式授权**：`allow_lineage_reset=True`（人工、可审计）才跳过与
+      生产基线的回归；换 baseline_id 本身不构成免检通道；
     - 指纹缺项 / 未解决 / 产物不齐或不一致（Q2.1）任一都阻断批准。
     """
     art_hash = artifact.sha256()
@@ -254,18 +268,18 @@ def approve_baseline(
             f"baseline {artifact.baseline_id} 不可批准：画像指纹与 artifact 指纹不一致"
         )
     blockers = artifact.approval_blockers()
-    same_baseline = [r for r in prior if r.baseline_id == artifact.baseline_id]
-    if same_baseline:
-        latest = max(same_baseline, key=lambda r: r.version)
+    # 当前生产基线 = 全部 prior 中最近一条（跨 baseline_id；换 id 不能另起免检 lineage）。
+    if prior and not allow_lineage_reset:
+        latest = max(prior, key=lambda r: (r.approved_at, r.version, r.baseline_id))
         if prior_profile is None:
             raise BaselineNotApprovableError(
-                f"baseline {artifact.baseline_id} 已有批准版本，必须提供 prior_profile "
-                "做回归检查（Q4.6 不可省略）"
+                f"baseline {artifact.baseline_id} 已有生产基线，必须提供 prior_profile "
+                "做回归检查（Q4.6 不可省略；换 baseline_id 也不例外）"
             )
-        if prior_profile.baseline_approval_sha256 != latest.sha256():
+        if prior_profile.content_hash() != latest.profile_content_sha256:
             raise BaselineNotApprovableError(
-                f"baseline {artifact.baseline_id} 不可批准：prior_profile 不是最近批准所绑定的"
-                "画像（回归基线被伪造/替换）"
+                f"baseline {artifact.baseline_id} 不可批准：prior_profile 不是当前生产基线所"
+                "批准的画像（内容哈希不符——回归基线被伪造/替换/靠换 id 绕过）"
             )
         from .profile import compare_baselines  # 延迟导入避免 baseline↔profile 循环
 
@@ -276,6 +290,7 @@ def approve_baseline(
         raise BaselineNotApprovableError(
             f"baseline {artifact.baseline_id} 不可批准：{blockers}"
         )
+    same_baseline = [r for r in prior if r.baseline_id == artifact.baseline_id]
     next_version = max((r.version for r in same_baseline), default=0) + 1
     return ApprovalRecord(
         baseline_id=artifact.baseline_id,
@@ -284,6 +299,8 @@ def approve_baseline(
         approved_at=approved_at or datetime.now(UTC),
         fingerprint=artifact.fingerprint,
         artifact_sha256=art_hash,
+        profile_content_sha256=profile.content_hash(),
+        lineage_reset=bool(prior) and allow_lineage_reset,
     )
 
 

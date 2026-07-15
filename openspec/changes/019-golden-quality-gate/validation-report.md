@@ -7,11 +7,12 @@
 
 - `uv run ruff check .` → All checks passed
 - `uv run mypy src tests` → Success（161 source files，strict）
-- `uv run pytest -m "not live and not integration_postgres" -q` → **1074 passed / 5 deselected**
+- `uv run pytest -m "not live and not integration_postgres" -q` → **1099 passed / 5 deselected**
 - 019 专项：`test_goldenset_{assemble,validate,baseline,profile}_019.py` + `test_quality_gate_019.py`
-  → **112 passed**（11+12+30+24+35，含端到端 bypass 负例），纯 fixture/replay，零真实凭据（Q1.5/Q5.1）
-- **codex 三轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条（按实施计划
-  Task3/4 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造），见文末各返工小节。
+  → **136 passed**（11+12+34+42+37，含端到端 bypass 负例），纯 fixture/replay，零真实凭据（Q1.5/Q5.1）
+- **codex 四轮 review 返工已并入本 head**：首轮 9 条 + 复审 4 条 + 三轮 4 条 + 四轮 4 条（按实施计划
+  Task3/4 重建 artifact 合同、批准绑 artifact 内容、回归全指标、prior 不可伪造；四轮再补批准提交
+  **画像内容**哈希、gate 校指纹、换 id 不能跳回归、build_profile 复用 evaluate），见文末各返工小节。
 
 ## 逐条验收（Q1~Q5）
 
@@ -26,7 +27,7 @@
 | Q2.2 | 绑定指纹（git/schema/model/prompt/template+source/golden hash）；缺项不能批准 | `test_q2_2_missing_fingerprint_field_blocks_approval` |
 | Q2.1 补 | **产物内容寻址 + 齐全性阻断批准**：pred=0 / keypoints 未 ready-done / 产物引用缺失或空 sha256 或 count 不符任一都拒批 | `ProductRunStatus.completeness_blockers` + `ArtifactRef` + `test_q2_1_{zero_pred,pending_keypoints,missing_artifact_ref,empty_sha256_ref,pred_ref_count_must_match}_*` |
 | Q2.3 | 批准记录独立、不可改写，只能追加新版本；**内部算内容哈希+指纹绑定 + 强制消费回归 verdict** | `test_q2_3_approval_is_versioned_and_immutable` / `test_q2_3_approval_binds_artifact_sha256` / `test_q4_6_regression_failure_blocks_second_approval` |
-| Q3.1 | 每 field_id 输出 support/value acc/tri-state confusion/hallucination/evidence，绑定指纹；**零观测不给满分**（value/evidence 无观测记 0.0，失格） | `profile.py` `build_profile` + `test_q3_1_*` / `test_q4_3_zero_observation_field_is_not_eligible` |
+| Q3.1 | 每 field_id 输出 support/value acc/tri-state confusion/hallucination/evidence，绑定指纹；**零观测不给满分**（value 无观测记 0.0；evidence 未回验记 None，均失格） | `profile.py` `build_profile` + `test_q3_1_*` / `test_q4_3_{zero_observation_field,unmeasured_evidence_field}_is_not_eligible` |
 | Q3.2 | 版本化 + golden hash/schema/model/prompt/**template/source profile** 六维任一不匹配即 stale（git_sha 非 staleness 维） | `test_q3_2_staleness_on_each_of_six_dims` / `_git_sha_is_not_a_staleness_dim` |
 | Q3.3 | 全局回归阈值 + 字段自动化阈值；判定逐条列失败指标与实际值 | `test_q3_3_*` + `check_regression` |
 | Q4.1 | `auto_apply_supersede_low_risk` 默认 false | `test_q4_1_supersede_low_risk_default_off` |
@@ -43,8 +44,9 @@
 - **online gate 为 fail-closed**：`MergeEngine`/importer 未注入 `quality_gate`+`run_fingerprint` 时，
   auto_apply_* 布尔位**不能**触发自动发布，候选一律进 ReviewItem（design.md:17）。启用自动发布需 020
   产出并批准 QualityProfile 后接线；在此之前系统安全地退化为"全人工审核"，不会静默自动发布。
-- **evidence 真实回验**依赖 dataset_root（真实 PDF）：无 dataset_root 时证据判为不可信（0.0 / validator
-  self-eval 失败），不再用"是否带证据"的 CI 软件代理冒充回验通过。020 接真实 PDF 后为唯一可信来源。
+- **evidence 真实回验**依赖 dataset_root（真实 PDF）：无 dataset_root 时证据判为**未回验（None）**，对自动资格
+  fail-closed（不达标），但不当作"测得 0%"参与回归（区分未测量与测得 0，避免回归误报/漏报，四轮红队 #7）；
+  不再用"是否带证据"的 CI 软件代理冒充回验通过。020 接真实 PDF 后为唯一可信来源。
 - `openspec validate 019 --strict` 本机 CLI 未识别该 item；以门禁 + 本报告为准。
 
 ## codex review 返工（PR #8，head 已并入）
@@ -109,3 +111,55 @@ codex 对 f25e738 提 9 条（6×P1 + 3×P2），逐条对照 spec/design/企业
 - **release_hash 排除 `created_at`**：标注时间戳属溯源、非内容语义（同内容重标不应改变 release 身份）；
   刻意排除并有 `_ignores_created_at` 用例锁定，非遗漏。
 - **evidence 真实回验**依赖 dataset_root（真实 PDF）：无 dataset_root 判不可信（0.0）。
+
+## codex 四轮复审返工 + 自测闭环（head 已并入）
+
+四轮复审沿调用链复现 4 条 P1，逐条**先在当前 head 跑通复现脚本（"修复前"证据）、按不变量重建、再复跑
+证明关闭**——不是"改到测试变绿"，而是让绕过无法构造。四条复现值与 codex 报告一致：
+
+| 四轮# | 修复前复现（live） | 按不变量重建 | 修复后复现（live）| bypass 负例 |
+|---|---|---|---|---|
+| 1 | `forged_prior_profile_approved=True`：伪 prior 复制公开 `approval.sha256()` 即冒充生产基线 | `ApprovalRecord.profile_content_sha256` **提交画像内容哈希**；`content_hash()` 排除 approval 回指故批准前后稳定；prior 校 `content_hash()==latest.profile_content_sha256` | `=False`（内容哈希不符） | `test_q4_6_forged_prior_copying_public_approval_hash_rejected` |
+| 2 | `old_approval_authorizes_new_model_profile=True`：旧 model 批准授权新 model 满分画像 | gate 增校 `approval.profile_content_sha256==profile.content_hash()` 且 `approval.fingerprint==profile.fingerprint` | `=False` | `test_q4_2_old_approval_cannot_authorize_new_model_profile`、`test_q4_3_forged_profile_content_denied_at_gate` |
+| 3 | `rotated_baseline_id_skips_regression=True (v1)`：换 `baseline_id` 把退化候选偷渡成新 lineage v1 | 只要 `prior` 非空即须与**当前生产基线**（跨 id 的最近批准）回归；`allow_lineage_reset=True`（人工可审计）才是唯一逃生 | `=False`（须提供 prior_profile 并过回归） | `test_q4_6_rotated_baseline_id_still_regresses_against_production`、`_requires_prior_profile`、`_lineage_reset_is_explicit_and_auditable` |
+| 4 | `pred-only micro_f1: evaluate=0.667 / profile=1.0`；`absent-only: 1.0 / 0.0` | `build_profile` 全局 micro/macro F1+幻觉+证据与每字段 P/R/F1 **全部取自 `eval.evaluate`**（含 pred-only FP、空分母口径）；删除重复实现的 `_f1` | `0.667/0.667`、`1.0/1.0` 完全一致 | `test_q3_1_global_micro_f1_matches_evaluator_{with_pred_only_fields,absent_only}`、`_global_metrics_match_evaluator_mixed`、`_per_field_prf_match_evaluator` |
+
+**自测闭环（回应"别再来回，提交前把问题自测修复"）**：除上表逐条复现→关闭外，提交前另跑两组独立对抗性红队
+（构造非法状态试破批准链 / 试造 build_profile↔evaluate 语义漂移）。红队**发现并当场修复了 codex 尚未报告的第
+5 个洞**（见下），这正是"提交前自测"的价值——不是等下一轮 review 再挨批。
+
+两组红队共报 6 个问题，**已修 4、按理据文档化 2**（均先 live 复现再处置）：
+
+- **[红队 #5，已修] 非有限指标（NaN/±inf）绕过所有数值门槛**：`FieldMetrics`/`GlobalMetrics` 原样接受 NaN；
+  `value_accuracy < 0.98`、`base - NaN > 0` 等比较对 NaN 恒 False → `field_verdict` 判"达标"、`compare_baselines`
+  判"无回归"，NaN 候选可被批准并进 auto_eligible；`content_hash` 仍确定（JSON 序列化 NaN）故绑定检查全过。
+  **修复**：`FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]` 用于所有指标/阈值浮点，**构造期**即拒
+  NaN/±inf（让非法状态无法构造）。负例 `test_q4_3_{field,global}_metrics_reject_non_finite*`。
+- **[红队 #6，已修] 幻觉率可被伪造字段稀释**：`eval.evaluate` 里"覆盖面之外的 present 预测"只计入 micro FP 与
+  幻觉率**分母**、不计分子，伪造大量出界字段反而把 hallucination_rate 拉低，架空 Q4.6 幻觉护栏。**修复**：
+  pred-only present 同时计入幻觉分子（`eval.py`）。负例 `test_g4_pred_only_present_counts_as_hallucination`、
+  `test_q4_6_fabricated_fields_raise_global_hallucination_and_flag_regression`。
+- **[红队 #7，已修] 证据"未测量"与"测得 0%"混同 → 回归误报/漏报**：原 evidence 无 dataset_root 记 0.0，导致
+  已测基线 vs 未测候选被误判回归、未测基线掩盖候选真实退化。**修复**：evidence 改 `float | None`，未测记 None、
+  回归两侧任一 None 即跳过该维（候选证据绝对达标仍由 gate `field_verdict` fail-closed 兜底）。负例
+  `test_q4_6_unmeasured_evidence_not_falsely_flagged`、`test_q4_3_unmeasured_evidence_field_is_not_eligible`。
+- **[红队 #8，已修] 每字段证据口径与 evaluator 漂移**：per-field 用 per-record all-or-nothing，global 用 per-quote。
+  **修复**：per-field 改用同一 `_evidence_quote_counts` per-quote 原语。负例 `test_q3_1_per_field_evidence_is_per_quote`。
+- **[红队 #9，已文档化] 零观测字段 `f1=1.0`（evaluator 空分母约定）与 `value_accuracy=0.0` 并存**：属 `eval` 既有
+  三态分类约定，且字段集由**金标**决定、候选无法增删金标字段来刷 macro，故不可对抗性利用；作为约定记录，不改
+  evaluator 口径。
+- **[红队 #10，已文档化] `support` 含 absent 记录**：Q3.1 定义 support=该字段全部金标观测数（含 absent），是既有
+  契约；"present 值观测下限"属 020 可调门槛（enterprise runtime），非本确定性层的正确性 bug。加固用例
+  `test_q4_6_per_field_drop_caught_even_when_global_faked_perfect`（伪造满分 global 仍被 per-field 回归拦）。
+
+### 四轮已知边界（诚实声明，不treat为已闭环）
+
+- **在线自动发布路径永不铸造批准**：`approve_baseline`/`allow_lineage_reset` 仅存在于 goldenset 离线层；
+  `knowledge`（merge/importer）只**消费** `QualityGate`+`ApprovalRecord`，运行时无法触达 lineage-reset。
+- **approve_baseline 信任传入画像的指标数值**：本确定性层绑定"画像↔artifact 身份 + 回归 + 阈值"，但不
+  从 artifact 的 pred 原始内容**重算**指标以证其真实——真实性由 020 用 `build_profile(该 artifact 的
+  golden/pred)` 产出画像来保证，本层用 `artifact_sha256`/`profile_content_sha256` 把这份画像钉死到该 artifact。
+- **ApprovalRecord 可被直接构造**：伪造一条批准记录属存储/授权层（020）完整性范畴；即便如此，gate 仍要求
+  它指向一份**真实达标**（field_verdict 通过）且内容哈希自洽的画像，伪造批准无法让不达标候选过闸。
+- **per-field evidence 为 profile 专属**（evaluate 无按字段证据）：与全局证据共用同一 `quote_in_page`+PDF
+  回验原语，仅聚合粒度不同（按记录 vs 按引文）；真实回验仍依赖 dataset_root。

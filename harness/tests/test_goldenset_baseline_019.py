@@ -238,15 +238,30 @@ def test_q4_6_prior_approval_requires_prior_profile() -> None:
 
 
 def test_q4_6_forged_prior_profile_rejected() -> None:
-    """复审 #1：prior_profile 必须是最近批准所绑定的画像，不能塞一份低标准伪基线。"""
+    """复审 #1：prior_profile 必须是最近批准所绑定的画像，不能塞一份低标准伪基线（裸对象）。"""
     a = _artifact()
     first = approve_baseline(a, _candidate(a, value_accuracy=1.0), approved_by="claude",
                              approved_at=_AT)
     forged_baseline = _candidate(a, value_accuracy=0.1)  # 未被批准的"假基线"
     candidate = _candidate(a, value_accuracy=0.99)
-    with pytest.raises(BaselineNotApprovableError, match="不是最近批准所绑定"):
+    with pytest.raises(BaselineNotApprovableError, match="不是当前生产基线|不是最近批准"):
         approve_baseline(a, candidate, approved_by="claude", prior=[first],
                          prior_profile=forged_baseline, approved_at=_AT)
+
+
+def test_q4_6_forged_prior_copying_public_approval_hash_rejected() -> None:
+    """四轮 #1（更强）：伪 prior 复制公开的 approval.sha256() 也不行——批准提交的是画像**内容**哈希，
+    低标准伪基线的 content_hash 与被批准画像不符，无法冒充当前生产基线。"""
+    a = _artifact()
+    first = approve_baseline(a, _candidate(a, value_accuracy=1.0), approved_by="claude",
+                             approved_at=_AT)
+    # 攻击者复制公开 approval 哈希，试图让伪 prior 通过"绑定"检查
+    forged = _candidate(a, value_accuracy=0.1).model_copy(
+        update={"baseline_approval_sha256": first.sha256()})
+    candidate = _candidate(a, value_accuracy=0.99)
+    with pytest.raises(BaselineNotApprovableError, match="不是当前生产基线"):
+        approve_baseline(a, candidate, approved_by="claude", prior=[first],
+                         prior_profile=forged, approved_at=_AT)
 
 
 def test_q4_6_regression_failure_blocks_second_approval() -> None:
@@ -260,19 +275,56 @@ def test_q4_6_regression_failure_blocks_second_approval() -> None:
                          prior_profile=approved_p1, approved_at=_AT)
 
 
-def test_q4_6_baseline_id_swap_cannot_smuggle_regression() -> None:
-    """换 baseline_id 想跳过回归：那是另一条 lineage 的首批准，仍要过 artifact/画像绑定与齐全性。
+def test_q4_6_rotated_baseline_id_still_regresses_against_production() -> None:
+    """四轮 #3：换 baseline_id（b1→b2）不能把退化候选偷渡成"新 lineage v1"跳过回归。
 
-    这里证明"换 id"不是免检通道——它只是新基线的 v1，仍受同样的 artifact/画像强绑定约束。
+    只要系统已有生产批准，候选就必须与当前生产基线比较；换 id 不是免检通道。
     """
-    a = _artifact(fingerprint=_fp())
-    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(), products=a.products)
-    # 画像必须派生自 b2 自身；拿 a 的画像来批 b2 会被 artifact_sha256 拦下（此处相同 products
-    # 故 sha 相同，但换成不同 products 立即不符）——用不同 products 证明：
-    b2_diff = BaselineArtifact(
-        baseline_id="b2", fingerprint=_fp(), products=(_raw_product(pred_sha256=_B),))
-    with pytest.raises(BaselineNotApprovableError, match="artifact_sha256 不符"):
-        approve_baseline(b2_diff, _candidate(b2), approved_by="claude", approved_at=_AT)
+    b1 = _artifact(fingerprint=_fp())
+    p1 = _candidate(b1, value_accuracy=1.0)
+    prod = approve_baseline(b1, p1, approved_by="claude", approved_at=_AT)
+    approved_p1 = p1.with_approval(prod)
+    # 攻击者把 id 换成 b2、指标退化到 0.1，试图绕过回归
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    degraded = _candidate(b2, value_accuracy=0.1)
+    with pytest.raises(BaselineNotApprovableError, match="回归失败"):
+        approve_baseline(b2, degraded, approved_by="claude", prior=[prod],
+                         prior_profile=approved_p1, approved_at=_AT)
+
+
+def test_q4_6_rotated_baseline_id_requires_prior_profile() -> None:
+    """四轮 #3：换 id 且省略 prior_profile 同样被拒（有生产基线即须提供回归基线）。"""
+    b1 = _artifact(fingerprint=_fp())
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    with pytest.raises(BaselineNotApprovableError, match="必须提供 prior_profile"):
+        approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="claude", prior=[prod],
+                         approved_at=_AT)
+
+
+def test_q4_6_lineage_reset_is_explicit_and_auditable() -> None:
+    """真正的新 lineage/bootstrap 必须显式 allow_lineage_reset=True（人工授权、可审计），
+    而非靠换 baseline_id 隐式绕过。"""
+    b1 = _artifact(fingerprint=_fp())
+    prod = approve_baseline(b1, _candidate(b1, value_accuracy=1.0), approved_by="claude",
+                            approved_at=_AT)
+    b2 = BaselineArtifact(baseline_id="b2", fingerprint=_fp(),
+                          products=(_raw_product(pred_sha256=_B),))
+    reset = approve_baseline(b2, _candidate(b2, value_accuracy=1.0), approved_by="human-lead",
+                             prior=[prod], allow_lineage_reset=True, approved_at=_AT)
+    assert reset.baseline_id == "b2"
+    assert reset.version == 1
+    assert reset.lineage_reset is True  # 跳过回归的重置在批准记录中留痕（可审计）
+
+
+def test_q4_6_normal_first_approval_is_not_marked_lineage_reset() -> None:
+    """首次批准（无 prior）不是 lineage 重置——lineage_reset 仅标记"有生产基线却显式跳过回归"。"""
+    a = _artifact()
+    first = approve_baseline(a, _candidate(a), approved_by="claude", approved_at=_AT)
+    assert first.lineage_reset is False
 
 
 # ------------------------------------------------------------- release_hash

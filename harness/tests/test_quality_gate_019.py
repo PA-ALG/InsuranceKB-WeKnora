@@ -179,6 +179,39 @@ def test_q4_3_cross_approval_binding_denied() -> None:
                                       or "artifact 不一致" in decision.reason)
 
 
+def test_q4_2_old_approval_cannot_authorize_new_model_profile() -> None:
+    """四轮 #2：旧 model 的 approval 不能授权一份新 model 指纹的"完美"画像。
+
+    构造 model-1 的 artifact/approval，再伪造一份指纹=model-2、复制其公开哈希的达标画像，
+    当前 run 也设为 model-2（绕过 stale）——gate 必须因指纹/内容不符拒绝。
+    """
+    fp1 = _fp(model_id="m1")
+    _approved_1, approval_1 = _approved(_metrics(), fp1)
+    fp2 = _fp(model_id="m2")
+    forged = QualityProfile(
+        profile_version="1", artifact_sha256=approval_1.artifact_sha256,
+        baseline_approval_sha256=approval_1.sha256(), fingerprint=fp2,
+        fields={_FIELD: _metrics()},
+        global_metrics=GlobalMetrics(micro_f1=1.0, macro_f1=1.0,
+                                     hallucination_rate=0.0, evidence_accuracy=1.0),
+    )
+    decision = QualityGate(forged, approval=approval_1).decide(_FIELD, "low", "add", fp2)
+    assert not decision.eligible
+
+
+def test_q4_3_forged_profile_content_denied_at_gate() -> None:
+    """四轮 #1（gate 层）：拿真实 approval，却把画像指标偷换（仍达阈值、复制回链哈希）。
+
+    value_accuracy=0.99 仍过 0.98 阈值 → field_verdict 仍 eligible；唯一能拒它的是
+    "批准提交的是画像内容哈希" 这条绑定——证明拒绝来自内容绑定而非阈值。
+    """
+    fp = _fp()
+    approved, approval = _approved(_metrics(value_accuracy=1.0), fp)
+    forged = approved.model_copy(update={"fields": {_FIELD: _metrics(value_accuracy=0.99)}})
+    decision = QualityGate(forged, approval=approval).decide(_FIELD, "low", "add", fp)
+    assert not decision.eligible and "内容" in decision.reason
+
+
 def test_q4_3_missing_run_fingerprint_denied() -> None:
     decision = _gate().decide(_FIELD, "low", "add", None)
     assert not decision.eligible and "指纹" in decision.reason

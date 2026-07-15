@@ -156,3 +156,29 @@ dataset_root（无 PDF 判 0.0 不可信）。
 三轮返工门禁：ruff/mypy(161) 全绿，non-live **1074 passed**；019 专项 112 用例（11+12+30+24+35），含端到端
 bypass 负例（已 live 复跑确认 different-artifact→different-approval、forged-prior-rejected、gate
 cross-approval-denied 三处闭合）。
+
+## codex 四轮复审返工 + 提交前自测闭环
+
+四轮沿调用链复现 4 条 P1，**先跑复现脚本留"修复前"证据 → 按不变量重建 → 复跑证明关闭**（不是改到测试变绿）：
+
+1. **批准提交画像内容哈希**（四轮 #1/#2）：`ApprovalRecord.profile_content_sha256` 提交被批准画像的内容哈希；
+   `QualityProfile.content_hash()` 排除 `baseline_approval_sha256` 回指，使其批准前后稳定、可被提交。
+   `approve_baseline` 存该哈希；`with_approval` 与 `QualityGate` 校验 `approval.profile_content_sha256 ==
+   profile.content_hash()`，gate 再校 `approval.fingerprint == profile.fingerprint`。复制公开 `approval.sha256()`
+   已不能冒充"已批准画像"；旧 model 批准也不能授权新 model 指纹画像。
+2. **prior 绑到当前生产批准内容 + 换 id 不能跳回归**（四轮 #1/#3）：prior_profile 校 `content_hash() ==
+   latest.profile_content_sha256`（不可伪造）；只要 `prior` 非空即须与**当前生产基线**（跨 baseline_id 的最近
+   批准）回归——换 `baseline_id` 不再另起免检 lineage；真正的新 lineage/bootstrap 只能显式 `allow_lineage_reset=
+   True`（人工、可审计）。
+3. **build_profile 复用权威 evaluator**（四轮 #4）：全局 micro/macro F1 + 幻觉 + 证据 与每字段 P/R/F1 全部取自
+   `eval.evaluate`（含 pred-only 多余字段计 micro FP、空分母口径一致），删除重复实现的 `_f1`。产生多余字段的模型
+   不再被画像误判满分；absent-only 空分母口径与 evaluator 一致。
+
+**自测（回应"提交前完善自测修复、别再来回"）**：逐条 live 复现→关闭，另跑两组独立对抗性红队审计（试破批准链 /
+试造 build_profile↔evaluate 漂移）；加固用例 `test_q4_6_per_field_drop_caught_even_when_global_faked_perfect`。
+
+**裁决 / 边界**：`allow_lineage_reset` 只在离线 `approve_baseline`，在线 merge/importer 只消费 gate，运行时无法
+触达；`approve_baseline` 绑定画像↔artifact 身份+回归+阈值，但不从 pred 原始内容重算指标（真实性由 020 用
+`build_profile` 产出画像保证）；伪造 `ApprovalRecord` 属 020 存储/授权层，且 gate 仍要求其指向真实达标画像。
+
+四轮返工门禁：ruff/mypy(161) 全绿，non-live **1099 passed**；019 专项 136 用例（11+12+34+42+37）。

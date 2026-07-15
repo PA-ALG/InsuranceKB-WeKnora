@@ -11,9 +11,9 @@
 
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from .baseline import RunFingerprint, canonical_sha256
 from .normalize import quote_in_page, values_equal
@@ -21,6 +21,10 @@ from .records import GoldenRecord, TriState
 
 if TYPE_CHECKING:
     from .baseline import ApprovalRecord
+
+# 指标必须是有限浮点：NaN 让所有 `value<阈值`/`base-cand>0` 比较恒 False（绕过门槛与回归），
+# ±inf 让下界比较恒真——在构造期即拒绝非有限值，让这类非法状态无法构造（五轮红队自测）。
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 # design.md:13 —— 数据/模型维指纹，任一变化都要求重跑或重新批准（git_sha 属溯源，不计）。
 _STALENESS_FIELDS = (
@@ -33,10 +37,6 @@ _STALENESS_FIELDS = (
 )
 
 
-def _f1(precision: float, recall: float) -> float:
-    return (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
-
-
 class FieldMetrics(BaseModel):
     """单字段确定性指标（Q3.1）。"""
 
@@ -44,12 +44,14 @@ class FieldMetrics(BaseModel):
 
     field_id: str
     support: int
-    value_accuracy: float
-    hallucination_rate: float
-    evidence_accuracy: float
-    precision: float = 0.0
-    recall: float = 0.0
-    f1: float = 0.0
+    value_accuracy: FiniteFloat
+    hallucination_rate: FiniteFloat
+    # None = 未回验（无 dataset_root 或引文无法定位），区别于"回验过但 0%"（0.0）——
+    # 未回验不得当作 0% 参与回归（否则误报/漏报），但对自动资格仍 fail-closed（None→不达标）。
+    evidence_accuracy: FiniteFloat | None
+    precision: FiniteFloat = 0.0
+    recall: FiniteFloat = 0.0
+    f1: FiniteFloat = 0.0
     tri_state_confusion: dict[str, int]
 
 
@@ -58,10 +60,10 @@ class GlobalMetrics(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    micro_f1: float = 0.0
-    macro_f1: float = 0.0
-    hallucination_rate: float = 0.0
-    evidence_accuracy: float = 0.0
+    micro_f1: FiniteFloat = 0.0
+    macro_f1: FiniteFloat = 0.0
+    hallucination_rate: FiniteFloat = 0.0
+    evidence_accuracy: FiniteFloat | None = None  # None = 未回验（不参与回归）
     unresolved_count: int = 0
 
 
@@ -71,9 +73,9 @@ class AutomationThresholds(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     support_min: int = 10
-    value_accuracy_min: float = 0.98
-    hallucination_rate_max: float = 0.01
-    evidence_accuracy_min: float = 1.0
+    value_accuracy_min: FiniteFloat = 0.98
+    hallucination_rate_max: FiniteFloat = 0.01
+    evidence_accuracy_min: FiniteFloat = 1.0
 
 
 class FieldVerdict(BaseModel):
@@ -102,16 +104,25 @@ class QualityProfile(BaseModel):
         return self.fields.get(field_id)
 
     def content_hash(self) -> str:
-        """画像内容的确定性哈希（覆盖版本/关联哈希/全局指标/各字段/指纹）。"""
-        return canonical_sha256(self.model_dump(mode="json"))
+        """画像**内容**的确定性哈希（版本/artifact 绑定/全局指标/各字段/指纹）。
+
+        **排除 baseline_approval_sha256 回指**——使其在批准前后稳定，从而可被 ApprovalRecord
+        提交（`profile_content_sha256`）；批准即"提交这份内容"，任意替换指标的画像哈希必然不同。
+        """
+        return canonical_sha256(
+            self.model_dump(mode="json", exclude={"baseline_approval_sha256"})
+        )
 
     def with_approval(self, approval: "ApprovalRecord") -> "QualityProfile":
         """由候选画像生成"已批准"画像：回链批准记录内容哈希（gate 据此验证绑定）。
 
-        批准必须绑定同一 artifact——否则无法用任意画像给别的 artifact 背书。
+        批准必须绑定同一 artifact **且提交本画像内容**——否则无法用任意画像给别的
+        artifact/指标背书（四轮 #1/#2：批准提交的是内容哈希，不是可复制的公开 approval 哈希）。
         """
         if approval.artifact_sha256 != self.artifact_sha256:
             raise ValueError("approval.artifact_sha256 与画像 artifact_sha256 不一致")
+        if approval.profile_content_sha256 != self.content_hash():
+            raise ValueError("approval 未提交该画像内容（profile_content_sha256 不符）")
         return self.model_copy(update={"baseline_approval_sha256": approval.sha256()})
 
     def is_stale(self, current: RunFingerprint) -> bool:
@@ -146,7 +157,9 @@ class QualityProfile(BaseModel):
                 f"hallucination_rate={metrics.hallucination_rate:.3f}"
                 f">{thresholds.hallucination_rate_max}"
             )
-        if metrics.evidence_accuracy < thresholds.evidence_accuracy_min:
+        if metrics.evidence_accuracy is None:  # 未回验 → 不达标（fail-closed，Q4.3）
+            failures.append("evidence 未回验（无 dataset_root 或引文不可回验）")
+        elif metrics.evidence_accuracy < thresholds.evidence_accuracy_min:
             failures.append(
                 f"evidence_accuracy={metrics.evidence_accuracy:.3f}"
                 f"<{thresholds.evidence_accuracy_min}"
@@ -162,15 +175,15 @@ class RegressionThresholds(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # 全局
-    max_micro_f1_drop: float = 0.0
-    max_macro_f1_drop: float = 0.0
-    max_global_hallucination_increase: float = 0.0
-    max_global_evidence_drop: float = 0.0
+    max_micro_f1_drop: FiniteFloat = 0.0
+    max_macro_f1_drop: FiniteFloat = 0.0
+    max_global_hallucination_increase: FiniteFloat = 0.0
+    max_global_evidence_drop: FiniteFloat = 0.0
     max_unresolved_increase: int = 0
     # 字段
-    max_field_value_accuracy_drop: float = 0.0
-    max_field_hallucination_increase: float = 0.0
-    max_field_evidence_drop: float = 0.0
+    max_field_value_accuracy_drop: FiniteFloat = 0.0
+    max_field_hallucination_increase: FiniteFloat = 0.0
+    max_field_evidence_drop: FiniteFloat = 0.0
 
 
 class RegressionFailure(BaseModel):
@@ -179,9 +192,9 @@ class RegressionFailure(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     metric: str
-    baseline: float
-    candidate: float
-    allowed: float
+    baseline: FiniteFloat
+    candidate: FiniteFloat
+    allowed: FiniteFloat
 
 
 class RegressionResult(BaseModel):
@@ -223,12 +236,19 @@ def compare_baselines(
             failures.append(RegressionFailure(
                 metric=metric, baseline=base, candidate=cand, allowed=base + max_inc))
 
+    def drop_opt(metric: str, base: float | None, cand: float | None, max_drop: float) -> None:
+        # 任一侧未回验（None）就跳过——未测量维度不参与回归，避免"未测量→0"造成误报/漏报；
+        # 候选的证据绝对达标由 gate 的 field_verdict（evidence≥1.0）兜底，与回归分层。
+        if base is None or cand is None:
+            return
+        drop(metric, base, cand, max_drop)
+
     drop("global.micro_f1", cg.micro_f1, dg.micro_f1, t.max_micro_f1_drop)
     drop("global.macro_f1", cg.macro_f1, dg.macro_f1, t.max_macro_f1_drop)
     increase("global.hallucination_rate", cg.hallucination_rate, dg.hallucination_rate,
              t.max_global_hallucination_increase)
-    drop("global.evidence_accuracy", cg.evidence_accuracy, dg.evidence_accuracy,
-         t.max_global_evidence_drop)
+    drop_opt("global.evidence_accuracy", cg.evidence_accuracy, dg.evidence_accuracy,
+             t.max_global_evidence_drop)
     increase("global.unresolved_count", cg.unresolved_count, dg.unresolved_count,
              t.max_unresolved_increase)
 
@@ -242,35 +262,36 @@ def compare_baselines(
              t.max_field_value_accuracy_drop)
         increase(f"{field_id}.hallucination_rate", base.hallucination_rate,
                  cand.hallucination_rate, t.max_field_hallucination_increase)
-        drop(f"{field_id}.evidence_accuracy", base.evidence_accuracy, cand.evidence_accuracy,
-             t.max_field_evidence_drop)
+        drop_opt(f"{field_id}.evidence_accuracy", base.evidence_accuracy,
+                 cand.evidence_accuracy, t.max_field_evidence_drop)
     return RegressionResult(failures=tuple(failures))
 
 
-def _evidence_verified(
+def _evidence_quote_counts(
     record: GoldenRecord, page_cache: dict[Path, dict[int, str]], dataset_root: Path | None
-) -> bool:
-    """present 预测是否有可信证据：至少一条 evidence 且引文经 PDF 回验通过。
+) -> tuple[int, int]:
+    """该 present 预测的 (可回验引文数, 总引文数)，与 `eval._evidence_accuracy` 同一 **per-quote**
+    口径（消除 profile↔evaluator 的证据语义漂移，四轮红队 #2）。
 
-    无 dataset_root 时**无法回验**——不得把未回验的引文当作可信证据（否则生产自动资格
-    会被 CI 代理证据蒙混）。真实自动化用画像必须带 dataset_root（Q3.1/Q5.1）。
+    无证据 / 无 dataset_root / PDF 缺失都返回 (0,0)——即"未测量"，不当作"回验失败(0%)"：
+    未测量与测得 0% 必须区分（None vs 0.0），否则回归会误报/漏报（四轮红队 #3）。真实自动化
+    用画像必须带 dataset_root（Q3.1/Q5.1）。
     """
-    if not record.evidence:
-        return False
-    if dataset_root is None:
-        return False
+    if not record.evidence or dataset_root is None:
+        return 0, 0
     pdf = dataset_root / record.product_name / record.doc
     if not pdf.exists():
-        return False
+        return 0, 0
     if pdf not in page_cache:
         from .pdf import extract_pages
 
         page_cache[pdf] = {p.page_no: p.text for p in extract_pages(pdf)}
     pages = page_cache[pdf]
-    return all(
-        ev.page in pages and quote_in_page(ev.quote, pages[ev.page])
-        for ev in record.evidence
+    ok = sum(
+        1 for ev in record.evidence
+        if ev.page in pages and quote_in_page(ev.quote, pages[ev.page])
     )
+    return ok, len(record.evidence)
 
 
 def build_profile(
@@ -288,52 +309,44 @@ def build_profile(
     产出 baseline_approval_sha256="" 的**候选**画像；批准后由 `.with_approval(approval)` 回链。
     `artifact_sha256` 必须等于派生自的 BaselineArtifact.sha256()（approve 时强制核对）。
     """
+    from .eval import evaluate  # 复用权威 evaluator（四轮 #4：不重复实现指标口径）
+
     usable = [g for g in golden if not g.disputed]
     g_map = {(g.product_id, g.field_id): g for g in usable}
     p_map = {(p.product_id, p.field_id): p for p in pred}
     page_cache: dict[Path, dict[int, str]] = {}
+
+    # 全局指标 + 每字段 P/R/F1 全部取自 evaluate：pred-only 多余字段计入 micro FP、
+    # 空分母口径一致——避免"只遍历金标键"导致产生多余字段的模型被误判满分（四轮 #4）。
+    result = evaluate(golden, pred, dataset_root=dataset_root)
 
     by_field_keys: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for key in g_map:
         by_field_keys[key[1]].append(key)
 
     fields: dict[str, FieldMetrics] = {}
-    tot_hits = tot_pred_present = tot_golden_present = 0
-    tot_hallucinated = tot_evidence_ok = tot_evidence_total = 0
-    f1s: list[float] = []
     for field_id, keys in by_field_keys.items():
         support = len(keys)
         confusion: Counter[str] = Counter()
-        value_hits = value_pairs = pred_present = golden_present = 0
-        hallucinated = evidence_ok = evidence_total = 0
+        value_hits = value_pairs = pred_present = 0
+        hallucinated = ev_ok = ev_total = 0
         for key in keys:
             g = g_map[key]
             p = p_map.get(key)
-            if g.tri_state == "present":
-                golden_present += 1
             p_tri: TriState = p.tri_state if p is not None else "unknown"
             confusion[f"{g.tri_state}>{p_tri}"] += 1
             if p is not None and p.tri_state == "present":
                 pred_present += 1
-                evidence_total += 1
-                if _evidence_verified(p, page_cache, dataset_root):
-                    evidence_ok += 1
+                vq, tq = _evidence_quote_counts(p, page_cache, dataset_root)
+                ev_ok += vq
+                ev_total += tq
                 if g.tri_state == "present":
                     value_pairs += 1
                     if values_equal(g.value, p.value):
                         value_hits += 1
                 else:
                     hallucinated += 1
-        precision = (value_hits / pred_present) if pred_present else 0.0
-        recall = (value_hits / golden_present) if golden_present else 0.0
-        field_f1 = _f1(precision, recall)
-        f1s.append(field_f1)
-        tot_hits += value_hits
-        tot_pred_present += pred_present
-        tot_golden_present += golden_present
-        tot_hallucinated += hallucinated
-        tot_evidence_ok += evidence_ok
-        tot_evidence_total += evidence_total
+        stats = result.per_field.get(field_id)  # evaluate 对每金标字段都建有条目
         fields[field_id] = FieldMetrics(
             field_id=field_id,
             support=support,
@@ -341,19 +354,18 @@ def build_profile(
             # 绝不用零分母默认 1.0 让"什么都没抽到"的字段获得自动资格（Q4.3）。
             value_accuracy=(value_hits / value_pairs) if value_pairs else 0.0,
             hallucination_rate=(hallucinated / pred_present) if pred_present else 0.0,
-            evidence_accuracy=(evidence_ok / evidence_total) if evidence_total else 0.0,
-            precision=precision,
-            recall=recall,
-            f1=field_f1,
+            # None = 未回验（无 dataset_root 或引文无法定位），区别于回验过的 0%（四轮红队 #2/#3）。
+            evidence_accuracy=(ev_ok / ev_total) if ev_total else None,
+            precision=stats.precision if stats else 0.0,
+            recall=stats.recall if stats else 0.0,
+            f1=stats.f1 if stats else 0.0,
             tri_state_confusion=dict(confusion),
         )
-    micro_p = (tot_hits / tot_pred_present) if tot_pred_present else 0.0
-    micro_r = (tot_hits / tot_golden_present) if tot_golden_present else 0.0
     global_metrics = GlobalMetrics(
-        micro_f1=_f1(micro_p, micro_r),
-        macro_f1=(sum(f1s) / len(f1s)) if f1s else 0.0,
-        hallucination_rate=(tot_hallucinated / tot_pred_present) if tot_pred_present else 0.0,
-        evidence_accuracy=(tot_evidence_ok / tot_evidence_total) if tot_evidence_total else 0.0,
+        micro_f1=result.micro.f1,
+        macro_f1=result.macro_f1,
+        hallucination_rate=result.hallucination_rate,
+        evidence_accuracy=result.evidence_accuracy,  # None 透传（未回验不参与回归）
         unresolved_count=unresolved_count,
     )
     return QualityProfile(
