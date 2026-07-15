@@ -6,12 +6,12 @@ import json
 from dataclasses import replace
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import respx
 from pydantic import SecretStr
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import Table, create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from insurance_harness.db.models import KnowledgeSpace
@@ -135,6 +135,65 @@ async def test_r3_1_admin_client_bootstraps_first_user_then_authenticates() -> N
     assert session.tenant_id == 1
     assert register.call_count == login.call_count == 1
     assert "secret" not in repr(session)
+
+
+@respx.mock
+async def test_r3_1_repeated_provision_restores_recorded_tenant_before_discovery() -> None:
+    provision = import_module("insurance_harness.live_env.local_provisioning")
+    admin = import_module("insurance_harness.adapters.weknora.admin_client")
+    client = admin.WeKnoraAdminClient("https://weknora.example/api/v1")
+    session = admin.AdminSession(
+        user_id="user-1",
+        tenant_id=1,
+        token=SecretStr("initial-jwt"),
+        refresh_token=SecretStr("initial-refresh"),
+    )
+    switch = respx.post(
+        "https://weknora.example/api/v1/auth/switch-tenant"
+    ).respond(
+        json={
+            "success": True,
+            "user": {"id": "user-1"},
+            "active_tenant": {"id": 7, "name": "insurancekb-local-live"},
+            "token": "tenant-jwt",
+            "refresh_token": "tenant-refresh",
+        }
+    )
+    try:
+        restored = await provision._restore_runtime_tenant(
+            client,
+            session,
+            {"LOCAL_LIVE_TENANT_ID": "7"},
+        )
+    finally:
+        await client.aclose()
+
+    assert restored.tenant_id == 7
+    assert json.loads(switch.calls[0].request.content) == {
+        "tenant_id": 7,
+        "refresh_token": "initial-refresh",
+    }
+
+
+async def test_r3_1_repeated_provision_rejects_invalid_recorded_tenant() -> None:
+    provision = import_module("insurance_harness.live_env.local_provisioning")
+    admin = import_module("insurance_harness.adapters.weknora.admin_client")
+    client = admin.WeKnoraAdminClient("https://weknora.example/api/v1")
+    session = admin.AdminSession(
+        user_id="user-1",
+        tenant_id=1,
+        token=SecretStr("initial-jwt"),
+        refresh_token=SecretStr("initial-refresh"),
+    )
+    try:
+        with pytest.raises(ValueError, match="LOCAL_LIVE_TENANT_ID"):
+            await provision._restore_runtime_tenant(
+                client,
+                session,
+                {"LOCAL_LIVE_TENANT_ID": "not-an-integer"},
+            )
+    finally:
+        await client.aclose()
 
 
 @respx.mock
@@ -312,6 +371,27 @@ async def test_r3_1_created_tenant_switch_mints_scoped_contributor_key() -> None
         "knowledge_base_ids": ["kb-raw", "kb-wiki"],
         "capabilities": ["retrieve", "ingest"],
     }
+
+
+@respx.mock
+async def test_r5_2_admin_client_revokes_scoped_tenant_key() -> None:
+    module = import_module("insurance_harness.adapters.weknora.admin_client")
+    client = module.WeKnoraAdminClient("https://weknora.example/api/v1")
+    session = module.AdminSession(
+        user_id="user-1",
+        tenant_id=7,
+        token=SecretStr("tenant-jwt"),
+        refresh_token=SecretStr("tenant-refresh"),
+    )
+    route = respx.delete(
+        "https://weknora.example/api/v1/tenants/7/api-keys/42"
+    ).respond(json={"success": True})
+    try:
+        await client.delete_tenant_api_key(session, tenant_id=7, key_id=42)
+    finally:
+        await client.aclose()
+
+    assert route.calls[0].request.headers["authorization"] == "Bearer tenant-jwt"
 
 
 @respx.mock
@@ -570,7 +650,7 @@ async def test_r3_1_harness_space_backend_persists_owned_binding(
     except ModuleNotFoundError:
         pytest.fail("R3.1 Harness KnowledgeSpace backend is missing")
     engine = create_engine(f"sqlite:///{tmp_path / 'space.db'}")
-    KnowledgeSpace.__table__.create(engine)
+    cast(Table, KnowledgeSpace.__table__).create(engine)
     factory: sessionmaker[Session] = sessionmaker(
         bind=engine,
         expire_on_commit=False,
@@ -610,7 +690,7 @@ async def test_r3_1_harness_space_backend_rejects_foreign_same_name(
     space_module = import_module("insurance_harness.live_env.space")
     module = _provision_module()
     engine = create_engine(f"sqlite:///{tmp_path / 'space.db'}")
-    KnowledgeSpace.__table__.create(engine)
+    cast(Table, KnowledgeSpace.__table__).create(engine)
     factory: sessionmaker[Session] = sessionmaker(
         bind=engine,
         expire_on_commit=False,

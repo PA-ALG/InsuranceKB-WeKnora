@@ -434,6 +434,19 @@ class WeKnoraAdminClient:
             )
         return keys
 
+    async def delete_tenant_api_key(
+        self,
+        session: AdminSession,
+        *,
+        tenant_id: int,
+        key_id: int,
+    ) -> None:
+        await self._request(
+            "DELETE",
+            f"/tenants/{tenant_id}/api-keys/{key_id}",
+            headers=self._bearer(session),
+        )
+
 
 def _ownership(marker: str, role: str, dimension: int | None) -> str:
     return json.dumps(

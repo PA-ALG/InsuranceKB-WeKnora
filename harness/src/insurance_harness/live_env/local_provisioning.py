@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from insurance_harness.adapters.weknora.admin_client import (
     AdminCredentials,
+    AdminSession,
     WeKnoraAdminClient,
     WeKnoraProvisioningBackend,
 )
@@ -84,6 +85,24 @@ def _model_payload(
     }
 
 
+async def _restore_runtime_tenant(
+    client: WeKnoraAdminClient,
+    session: AdminSession,
+    runtime_values: Mapping[str, str],
+) -> AdminSession:
+    """Restore the persisted local-live tenant before ownership discovery."""
+
+    recorded = runtime_values.get("LOCAL_LIVE_TENANT_ID")
+    if recorded is None:
+        return session
+    if not recorded.isdecimal() or int(recorded) <= 0:
+        raise ValueError("invalid LOCAL_LIVE_TENANT_ID in runtime state")
+    tenant_id = int(recorded)
+    if tenant_id == session.tenant_id:
+        return session
+    return await client.switch_tenant(session, tenant_id)
+
+
 class RealProvisioningOperation:
     """Own the real Alembic, WeKnora REST and Harness DB mutation sequence."""
 
@@ -134,6 +153,7 @@ class RealProvisioningOperation:
                     password=runtime_values["WEKNORA_ADMIN_PASSWORD"],
                 )
             )
+            admin = await _restore_runtime_tenant(client, admin, runtime_values)
             backend = WeKnoraProvisioningBackend(
                 client,
                 admin,

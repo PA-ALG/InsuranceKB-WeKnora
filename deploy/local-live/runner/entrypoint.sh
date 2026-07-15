@@ -3,7 +3,6 @@ set -euo pipefail
 
 required=(
   RUNNER_REPOSITORY_URL
-  RUNNER_REGISTRATION_TOKEN
   RUNNER_NAME
   RUNNER_LABEL
 )
@@ -13,6 +12,20 @@ for name in "${required[@]}"; do
     exit 2
   fi
 done
+
+token_pipe=/run/insurancekb/registration-token
+cleanup_token_pipe() {
+  rm -f "$token_pipe"
+}
+trap cleanup_token_pipe EXIT
+mkfifo -m 0600 "$token_pipe"
+RUNNER_REGISTRATION_TOKEN="$(cat "$token_pipe")"
+cleanup_token_pipe
+trap - EXIT
+if [[ -z "$RUNNER_REGISTRATION_TOKEN" ]]; then
+  printf 'runner registration token is empty\n' >&2
+  exit 2
+fi
 
 ./config.sh \
   --unattended \

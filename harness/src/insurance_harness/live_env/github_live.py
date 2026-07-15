@@ -7,6 +7,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Literal, NamedTuple, Protocol, cast
 
+from pydantic import SecretStr
+
 _NONCE = re.compile(r"[0-9a-f]{16}")
 _SHA = re.compile(r"[0-9a-f]{40}")
 _VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
@@ -240,10 +242,10 @@ def cleanup_plan(resources: EphemeralResources) -> tuple[CleanupAction, ...]:
             CleanupAction("revoke_tenant_key", resources.tenant_key),
             CleanupAction("drop_db_role", resources.db_role),
             CleanupAction("remove_runner_registration", resources.runner_registration),
-            CleanupAction("remove_container", resources.container),
-            CleanupAction("remove_volume", resources.volume),
             CleanupAction("remove_workspace", resources.workspace),
             CleanupAction("remove_logs", resources.logs),
+            CleanupAction("remove_container", resources.container),
+            CleanupAction("remove_volume", resources.volume),
         )
     )
     return tuple(actions)
@@ -294,3 +296,119 @@ def execute_with_cleanup[Result](
     if failures:
         raise CleanupFailure(failures)
     return result
+
+
+class LiveRunRequest(NamedTuple):
+    repository: str
+    pr_number: int
+    head_sha: str
+    nonce: str
+
+
+class PersistentLiveState(NamedTuple):
+    base_url: str
+    space_id: str
+    knowledge_id: str
+    parser_fingerprint: str
+    kb_id: str
+
+
+class TemporaryCredentials(NamedTuple):
+    tenant_key_id: str
+    tenant_token: SecretStr
+    db_role: str
+    db_url: SecretStr
+
+
+class LiveRunResult(NamedTuple):
+    url: str
+    conclusion: str
+
+
+class LiveMutationBackend(CleanupExecutor, Protocol):
+    def approve(self, request: LiveRunRequest) -> PullRequest: ...
+
+    def mint_credentials(
+        self, resources: EphemeralResources
+    ) -> TemporaryCredentials: ...
+
+    def set_live_value(self, name: str, value: str, *, secret: bool) -> None: ...
+
+    def build_runner(self, plan: RunnerPlan) -> None: ...
+
+    def registration_token(self, repository: str) -> SecretStr: ...
+
+    def start_runner(self, plan: RunnerPlan, token: SecretStr) -> None: ...
+
+    def dispatch(self, request: LiveRunRequest) -> None: ...
+
+    def wait(self, request: LiveRunRequest) -> LiveRunResult: ...
+
+
+def _require_approved(request: LiveRunRequest, pull: PullRequest) -> None:
+    if (
+        _SHA.fullmatch(request.head_sha) is None
+        or pull.number != request.pr_number
+        or pull.state != "open"
+        or pull.base_repository != request.repository
+        or pull.head_repository != request.repository
+        or pull.head_sha != request.head_sha
+    ):
+        raise ValueError("PR is not an open same-repository exact-SHA request")
+
+
+def run_github_live(
+    backend: LiveMutationBackend,
+    *,
+    request: LiveRunRequest,
+    state: PersistentLiveState,
+    lock: RunnerPackageLock,
+) -> LiveRunResult:
+    """Execute one exact-SHA live run and unconditionally clean every resource."""
+
+    identity = RunnerIdentity.from_nonce(request.nonce)
+    _require_approved(request, backend.approve(request))
+    if not request.repository or request.pr_number <= 0 or any(not value for value in state):
+        raise ValueError("live run request is incomplete")
+    resources = EphemeralResources.for_nonce(request.nonce)
+
+    def operation() -> LiveRunResult:
+        credentials = backend.mint_credentials(resources)
+        if (
+            not credentials.tenant_key_id
+            or credentials.db_role != resources.db_role
+            or not credentials.tenant_token.get_secret_value()
+            or not credentials.db_url.get_secret_value()
+        ):
+            raise ValueError("temporary credentials are invalid")
+        live_values = {
+            "HARNESS_LIVE_API_KEY": credentials.tenant_token.get_secret_value(),
+            "HARNESS_LIVE_DB_URL": credentials.db_url.get_secret_value(),
+            "HARNESS_LIVE_BASE_URL": state.base_url,
+            "HARNESS_LIVE_SPACE_ID": state.space_id,
+            "HARNESS_LIVE_KNOWLEDGE_ID": state.knowledge_id,
+            "HARNESS_LIVE_PARSER_FINGERPRINT": state.parser_fingerprint,
+            "HARNESS_LIVE_KB_ID": state.kb_id,
+        }
+        plan = build_runner_plan(
+            nonce=request.nonce,
+            live_values=live_values,
+            lock=lock,
+        )
+        if plan.identity != identity:
+            raise ValueError("runner identity mismatch")
+        for name in LIVE_SECRET_NAMES:
+            backend.set_live_value(name, live_values[name], secret=True)
+        for name in LIVE_VARIABLE_NAMES:
+            backend.set_live_value(name, live_values[name], secret=False)
+        backend.build_runner(plan)
+        registration_token = backend.registration_token(request.repository)
+        backend.start_runner(plan, registration_token)
+        backend.dispatch(request)
+        result = backend.wait(request)
+        if result.conclusion != "success" or not result.url:
+            raise RuntimeError("trusted live workflow failed")
+        _require_approved(request, backend.approve(request))
+        return result
+
+    return execute_with_cleanup(operation, backend, resources)
