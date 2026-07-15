@@ -27,6 +27,23 @@ _RUNTIME_KEYS = (
     "SYSTEM_AES_KEY",
     "HARNESS_POSTGRES_PASSWORD",
     "WEKNORA_VERSION",
+    "WEKNORA_ADMIN_USERNAME",
+    "WEKNORA_ADMIN_EMAIL",
+    "WEKNORA_ADMIN_PASSWORD",
+)
+_LEGACY_RUNTIME_KEYS = _RUNTIME_KEYS[:8]
+_RUNTIME_STATE_KEYS = (
+    "LOCAL_LIVE_TENANT_ID",
+    "LOCAL_LIVE_CHAT_MODEL_ID",
+    "LOCAL_LIVE_EMBEDDING_MODEL_ID",
+    "LOCAL_LIVE_RERANK_MODEL_ID",
+    "LOCAL_LIVE_RAW_KB_ID",
+    "LOCAL_LIVE_WIKI_KB_ID",
+    "LOCAL_LIVE_API_KEY_ID",
+    "LOCAL_LIVE_API_KEY",
+    "LOCAL_LIVE_SPACE_ID",
+    "LOCAL_LIVE_KNOWLEDGE_ID",
+    "LOCAL_LIVE_PARSER_FINGERPRINT",
 )
 _RUNTIME_SECRET_KEYS = frozenset(
     {
@@ -35,6 +52,7 @@ _RUNTIME_SECRET_KEYS = frozenset(
         "JWT_SECRET",
         "SYSTEM_AES_KEY",
         "HARNESS_POSTGRES_PASSWORD",
+        "WEKNORA_ADMIN_PASSWORD",
     }
 )
 _KNOWN_RUNTIME_EXAMPLES = frozenset(
@@ -93,7 +111,9 @@ def ensure_runtime_environment(path: Path) -> RuntimeEnvironmentResult:
     if path.name != _RUNTIME_ENVIRONMENT_NAME:
         raise RuntimeEnvironmentError("runtime environment is invalid: unexpected path")
     if path.exists() or path.is_symlink():
-        _validate_runtime_environment(path)
+        values = _validate_runtime_environment(path)
+        if set(values) == set(_LEGACY_RUNTIME_KEYS):
+            _upgrade_runtime_environment(path, values)
         return RuntimeEnvironmentResult(created=False)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,12 +126,17 @@ def ensure_runtime_environment(path: Path) -> RuntimeEnvironmentResult:
         "SYSTEM_AES_KEY": secrets.token_hex(16),
         "HARNESS_POSTGRES_PASSWORD": secrets.token_urlsafe(32),
         "WEKNORA_VERSION": "v0.6.3",
+        "WEKNORA_ADMIN_USERNAME": "insurancekb-local-admin",
+        "WEKNORA_ADMIN_EMAIL": "insurancekb-local-admin@example.invalid",
+        "WEKNORA_ADMIN_PASSWORD": secrets.token_urlsafe(32),
     }
     payload = "".join(f"{name}={values[name]}\n" for name in _RUNTIME_KEYS)
     try:
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        _validate_runtime_environment(path)
+        values = _validate_runtime_environment(path)
+        if set(values) == set(_LEGACY_RUNTIME_KEYS):
+            _upgrade_runtime_environment(path, values)
         return RuntimeEnvironmentResult(created=False)
     try:
         os.fchmod(descriptor, 0o600)
@@ -123,7 +148,7 @@ def ensure_runtime_environment(path: Path) -> RuntimeEnvironmentResult:
     return RuntimeEnvironmentResult(created=True)
 
 
-def _validate_runtime_environment(path: Path) -> None:
+def _validate_runtime_environment(path: Path) -> dict[str, str]:
     try:
         if path.is_symlink() or S_IMODE(path.stat().st_mode) != 0o600:
             raise RuntimeEnvironmentError("runtime environment is invalid: permission")
@@ -142,20 +167,94 @@ def _validate_runtime_environment(path: Path) -> None:
         if not separator or not name or name in values:
             raise RuntimeEnvironmentError("runtime environment is invalid: syntax")
         values[name] = value
-    if set(values) != set(_RUNTIME_KEYS):
+    field_set = set(values)
+    if field_set not in (
+        set(_RUNTIME_KEYS),
+        set(_LEGACY_RUNTIME_KEYS),
+        set((*_RUNTIME_KEYS, *_RUNTIME_STATE_KEYS)),
+    ):
         raise RuntimeEnvironmentError("runtime environment is invalid: fields")
     if values["DB_USER"] != "weknora" or values["DB_NAME"] != "weknora":
         raise RuntimeEnvironmentError("runtime environment is invalid: database identity")
     if values["WEKNORA_VERSION"] != "v0.6.3":
         raise RuntimeEnvironmentError("runtime environment is invalid: version")
+    if set(_RUNTIME_KEYS).issubset(values) and (
+        values["WEKNORA_ADMIN_USERNAME"] != "insurancekb-local-admin"
+        or values["WEKNORA_ADMIN_EMAIL"]
+        != "insurancekb-local-admin@example.invalid"
+    ):
+        raise RuntimeEnvironmentError("runtime environment is invalid: admin identity")
     if any(
         len(values[name]) < 32
         or values[name].casefold() in _KNOWN_RUNTIME_EXAMPLES
         for name in _RUNTIME_SECRET_KEYS
+        if name in values
     ):
         raise RuntimeEnvironmentError("runtime environment is invalid: secret")
     if len(values["SYSTEM_AES_KEY"].encode("utf-8")) != 32:
         raise RuntimeEnvironmentError("runtime environment is invalid: AES key")
+    if set(_RUNTIME_STATE_KEYS).issubset(values) and any(
+        not values[name] for name in _RUNTIME_STATE_KEYS
+    ):
+        raise RuntimeEnvironmentError("runtime environment is invalid: state")
+    return values
+
+
+def _upgrade_runtime_environment(path: Path, legacy: Mapping[str, str]) -> None:
+    values = dict(legacy)
+    values.update(
+        {
+            "WEKNORA_ADMIN_USERNAME": "insurancekb-local-admin",
+            "WEKNORA_ADMIN_EMAIL": "insurancekb-local-admin@example.invalid",
+            "WEKNORA_ADMIN_PASSWORD": secrets.token_urlsafe(32),
+        }
+    )
+    _write_runtime_environment(path, values, _RUNTIME_KEYS)
+
+
+def _write_runtime_environment(
+    path: Path,
+    values: Mapping[str, str],
+    fields: tuple[str, ...],
+) -> None:
+    payload = "".join(f"{name}={values[name]}\n" for name in fields)
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def read_runtime_environment(path: Path) -> dict[str, str]:
+    """Return a defensive copy for trusted local controllers only."""
+
+    ensure_runtime_environment(path)
+    return dict(_validate_runtime_environment(path))
+
+
+def update_runtime_state(path: Path, state: Mapping[str, str]) -> None:
+    """Atomically persist one complete provisioned identity graph."""
+
+    if set(state) != set(_RUNTIME_STATE_KEYS) or any(
+        not isinstance(value, str) or not value for value in state.values()
+    ):
+        raise RuntimeEnvironmentError("runtime state must be complete")
+    values = read_runtime_environment(path)
+    for name in _RUNTIME_STATE_KEYS:
+        values[name] = state[name]
+    _write_runtime_environment(
+        path,
+        values,
+        (*_RUNTIME_KEYS, *_RUNTIME_STATE_KEYS),
+    )
+    _validate_runtime_environment(path)
 
 
 def verify_rendered_compose(

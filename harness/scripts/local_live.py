@@ -7,13 +7,23 @@ import argparse
 import asyncio
 import json
 import re
+import subprocess
 import sys
 from collections.abc import Callable, Coroutine, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, Protocol, TextIO, cast
 
-from insurance_harness.live_env.compose import ensure_runtime_environment
+from insurance_harness.live_env.compose import (
+    ensure_runtime_environment,
+    verify_harness_compose,
+    verify_weknora_compose,
+)
 from insurance_harness.live_env.config import LocalLiveConfig, load_local_live_config
+from insurance_harness.live_env.local_gate import LocalGateCollaborator
+from insurance_harness.live_env.local_provisioning import (
+    ProvisionCollaborator,
+    RealProvisioningOperation,
+)
 from insurance_harness.live_env.model_probe import probe_all_models
 
 Phase = Literal[
@@ -60,6 +70,7 @@ _SENSITIVE_KEY_PARTS = (
 class PhaseRequest(NamedTuple):
     phase: Phase
     delete_volumes: bool
+    pdf_path: Path | None = None
 
 
 class PhaseAdapter(Protocol):
@@ -98,6 +109,7 @@ DEFAULT_LOCAL_PATHS = LocalLivePaths(
     runtime=REPO_ROOT / ".env.local-live.runtime",
 )
 
+
 class PhaseCollaborator(Protocol):
     def run(self, request: PhaseRequest) -> object: ...
 
@@ -105,6 +117,205 @@ class PhaseCollaborator(Protocol):
 ConfigLoader = Callable[[Path], LocalLiveConfig]
 RuntimeEnsurer = Callable[[Path], object]
 ModelProbe = Callable[[LocalLiveConfig], Coroutine[Any, Any, object]]
+ComposeVerifier = Callable[[Mapping[str, object], Mapping[str, str]], None]
+
+
+class CommandRunner(Protocol):
+    def __call__(
+        self,
+        arguments: tuple[str, ...],
+        *,
+        cwd: Path,
+        capture_output: bool,
+    ) -> subprocess.CompletedProcess[str]: ...
+
+
+def _run_command(
+    arguments: tuple[str, ...],
+    *,
+    cwd: Path,
+    capture_output: bool,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        arguments,
+        cwd=cwd,
+        check=False,
+        capture_output=capture_output,
+        text=True,
+    )
+
+
+class ComposeCollaborator:
+    """Render/attest both Compose projects before starting their six services."""
+
+    __slots__ = (
+        "_harness_verifier",
+        "_image_lock_path",
+        "_repo_root",
+        "_runner",
+        "_runtime_path",
+        "_weknora_verifier",
+    )
+
+    def __init__(
+        self,
+        *,
+        repo_root: Path,
+        runtime_path: Path,
+        image_lock_path: Path,
+        runner: CommandRunner | None = None,
+        weknora_verifier: ComposeVerifier | None = None,
+        harness_verifier: ComposeVerifier | None = None,
+    ) -> None:
+        self._repo_root = repo_root
+        self._runtime_path = runtime_path
+        self._image_lock_path = image_lock_path
+        self._runner = _run_command if runner is None else runner
+        self._weknora_verifier = (
+            verify_weknora_compose
+            if weknora_verifier is None
+            else weknora_verifier
+        )
+        self._harness_verifier = (
+            verify_harness_compose if harness_verifier is None else harness_verifier
+        )
+
+    def _compose(self, group: Literal["weknora", "harness"]) -> tuple[str, ...]:
+        base = (
+            "docker",
+            "compose",
+            "--env-file",
+            str(self._runtime_path),
+        )
+        if group == "weknora":
+            return (
+                *base,
+                "--project-name",
+                "insurancekb-local-live",
+                "-f",
+                "docker-compose.yml",
+                "-f",
+                "deploy/local-live/docker-compose.weknora.override.yml",
+            )
+        return (
+            *base,
+            "--project-name",
+            "insurancekb-harness-live",
+            "-f",
+            "docker-compose.harness.yml",
+            "-f",
+            "deploy/local-live/docker-compose.harness.override.yml",
+        )
+
+    def _command(
+        self,
+        arguments: tuple[str, ...],
+        *,
+        capture_output: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        result = self._runner(
+            arguments,
+            cwd=self._repo_root,
+            capture_output=capture_output,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("local Compose command failed")
+        return result
+
+    def _lock(self) -> dict[str, str]:
+        document: object = json.loads(self._image_lock_path.read_text())
+        if not isinstance(document, dict) or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in document.items()
+        ):
+            raise ValueError("image lock is invalid")
+        return {
+            str(key): str(value)
+            for key, value in document.items()
+            if key != "_status"
+        }
+
+    def _render(
+        self,
+        group: Literal["weknora", "harness"],
+    ) -> Mapping[str, object]:
+        result = self._command(
+            (*self._compose(group), "config", "--format", "json"),
+            capture_output=True,
+        )
+        document: object = json.loads(result.stdout)
+        if not isinstance(document, dict):
+            raise ValueError("rendered Compose configuration is invalid")
+        return cast(Mapping[str, object], document)
+
+    def _verify_before_up(self) -> None:
+        lock = self._lock()
+        self._weknora_verifier(self._render("weknora"), lock)
+        self._harness_verifier(self._render("harness"), lock)
+
+    def _verify_runtime_port(
+        self,
+        group: Literal["weknora", "harness"],
+        service: str,
+        target: int,
+    ) -> None:
+        result = self._command(
+            (*self._compose(group), "port", service, str(target)),
+            capture_output=True,
+        )
+        addresses = tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+        if not addresses or any(
+            not address.startswith("127.0.0.1:") for address in addresses
+        ):
+            raise RuntimeError("local Compose port is not loopback-only")
+
+    def run(self, request: PhaseRequest) -> object:
+        if request.phase == "up":
+            self._verify_before_up()
+            self._command(
+                (
+                    *self._compose("weknora"),
+                    "up",
+                    "-d",
+                    "--wait",
+                    "--wait-timeout",
+                    "180",
+                    "app",
+                    "frontend",
+                    "postgres",
+                    "redis",
+                    "docreader",
+                )
+            )
+            self._command(
+                (
+                    *self._compose("harness"),
+                    "up",
+                    "-d",
+                    "--wait",
+                    "--wait-timeout",
+                    "180",
+                    "harness-postgres",
+                )
+            )
+            self._verify_runtime_port("weknora", "app", 8080)
+            self._verify_runtime_port("weknora", "frontend", 80)
+            self._verify_runtime_port("harness", "harness-postgres", 5432)
+            return {"status": "started", "services": 6}
+        if request.phase == "down":
+            suffix = ("--volumes",) if request.delete_volumes else ()
+            failures = 0
+            for group in ("weknora", "harness"):
+                try:
+                    self._command(
+                        (*self._compose(group), "down", "--remove-orphans", *suffix)
+                    )
+                except RuntimeError:
+                    failures += 1
+            if failures:
+                raise RuntimeError("local Compose cleanup failed")
+            return {"status": "stopped", "volumes_deleted": request.delete_volumes}
+        raise ValueError("unsupported Compose phase")
 
 
 class LocalLiveAdapter:
@@ -112,6 +323,7 @@ class LocalLiveAdapter:
 
     __slots__ = (
         "_config_loader",
+        "_default_collaborators",
         "_model_probe",
         "_paths",
         "_provision",
@@ -128,6 +340,7 @@ class LocalLiveAdapter:
         model_probe: ModelProbe | None = None,
         subprocess_collaborator: PhaseCollaborator | None = None,
         provision_collaborator: PhaseCollaborator | None = None,
+        default_collaborators: bool = False,
     ) -> None:
         self._paths = paths
         self._config_loader = (
@@ -139,6 +352,7 @@ class LocalLiveAdapter:
         self._model_probe = probe_all_models if model_probe is None else model_probe
         self._subprocess = subprocess_collaborator
         self._provision = provision_collaborator
+        self._default_collaborators = default_collaborators
 
     def run(self, request: PhaseRequest) -> object:
         try:
@@ -162,6 +376,34 @@ class LocalLiveAdapter:
             if request.phase in {"provision", "verify"}
             else self._subprocess
         )
+        if collaborator is None and self._default_collaborators:
+            if request.phase in {"provision", "verify"}:
+                collaborator = cast(
+                    PhaseCollaborator,
+                    ProvisionCollaborator(
+                        config=config,
+                        runtime_path=self._paths.runtime,
+                        operation=RealProvisioningOperation(
+                            repo_root=self._paths.config.parent,
+                        ),
+                    ),
+                )
+            elif request.phase == "run-local":
+                collaborator = cast(
+                    PhaseCollaborator,
+                    LocalGateCollaborator(
+                        harness_root=self._paths.config.parent / "harness",
+                        runtime_path=self._paths.runtime,
+                    ),
+                )
+            else:
+                collaborator = ComposeCollaborator(
+                    repo_root=self._paths.config.parent,
+                    runtime_path=self._paths.runtime,
+                    image_lock_path=(
+                        self._paths.config.parent / "deploy/local-live/images.lock"
+                    ),
+                )
         if collaborator is None:
             raise CollaboratorUnavailable(f"collaborator unavailable for {request.phase}")
         try:
@@ -222,6 +464,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("phase", choices=PHASES)
     parser.add_argument("--delete-volumes", action="store_true")
     parser.add_argument("--confirm-delete-volumes", action="store_true")
+    parser.add_argument("--pdf", type=Path)
     return parser
 
 
@@ -241,6 +484,7 @@ def main(
     phase = cast("Phase", namespace.phase)
     delete_volumes = bool(namespace.delete_volumes)
     confirmed = bool(namespace.confirm_delete_volumes)
+    pdf_path = cast(Path | None, namespace.pdf)
 
     if (delete_volumes or confirmed) and phase != "down":
         print("local-live: volume options are valid only for down", file=error_stream)
@@ -251,6 +495,9 @@ def main(
     if confirmed and not delete_volumes:
         print("local-live: confirmation requires --delete-volumes", file=error_stream)
         return 2
+    if pdf_path is not None and phase != "provision":
+        print("local-live: --pdf is valid only for provision", file=error_stream)
+        return 2
 
     verifier = FileLockVerifier(DEFAULT_LOCK_PATHS) if lock_verifier is None else lock_verifier
     try:
@@ -259,11 +506,19 @@ def main(
         print("local-live: runtime locks are unresolved", file=error_stream)
         return 2
 
-    selected_adapter = LocalLiveAdapter(DEFAULT_LOCAL_PATHS) if adapter is None else adapter
+    selected_adapter = (
+        LocalLiveAdapter(DEFAULT_LOCAL_PATHS, default_collaborators=True)
+        if adapter is None
+        else adapter
+    )
 
     try:
         result = selected_adapter.run(
-            PhaseRequest(phase=phase, delete_volumes=delete_volumes)
+            PhaseRequest(
+                phase=phase,
+                delete_volumes=delete_volumes,
+                pdf_path=pdf_path,
+            )
         )
     except (LocalConfigurationError, CollaboratorUnavailable) as configuration_error:
         print(f"local-live: {configuration_error}", file=error_stream)

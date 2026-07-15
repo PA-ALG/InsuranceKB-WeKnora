@@ -11,6 +11,10 @@ from typing import Any
 import pytest
 import respx
 from pydantic import SecretStr
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from insurance_harness.db.models import KnowledgeSpace
 
 
 def _provision_module() -> Any:
@@ -114,7 +118,7 @@ async def test_r3_1_admin_client_bootstraps_first_user_then_authenticates() -> N
         json={
             "success": True,
             "user": {"id": "user-1"},
-            "tenant": {"id": 1, "name": "admin workspace"},
+            "active_tenant": {"id": 1, "name": "admin workspace"},
             "token": "jwt-secret",
             "refresh_token": "refresh-secret",
         }
@@ -465,6 +469,7 @@ async def test_r3_1_real_backend_selects_exact_reused_embedding_and_key() -> Non
         keys = await backend.list_resources("api-key")
         key = next(item for item in keys if item.id == "2")
         await backend.select_resource(key)
+        assert backend.live_api_key().get_secret_value() == "owned-key"
         assert await backend.list_wiki_pages("kb-wiki") == []
     finally:
         await client.aclose()
@@ -555,6 +560,89 @@ async def test_r3_1_space_backend_is_injected_not_weknora_rest(tmp_path: Path) -
     assert result.space_id.startswith("space-")
     assert "space" not in weknora.created
     assert spaces.created == ["space"]
+
+
+async def test_r3_1_harness_space_backend_persists_owned_binding(
+    tmp_path: Path,
+) -> None:
+    try:
+        space_module = import_module("insurance_harness.live_env.space")
+    except ModuleNotFoundError:
+        pytest.fail("R3.1 Harness KnowledgeSpace backend is missing")
+    engine = create_engine(f"sqlite:///{tmp_path / 'space.db'}")
+    KnowledgeSpace.__table__.create(engine)
+    factory: sessionmaker[Session] = sessionmaker(
+        bind=engine,
+        expire_on_commit=False,
+    )
+    plan = _plan(tmp_path / "policy.pdf")
+    plan.pdf_path.write_bytes(b"life insurance PDF")
+    weknora = FakeBackend()
+    spaces = space_module.HarnessSpaceBackend(factory, marker=plan.marker)
+
+    first = await _provision_module().provision_local_live(
+        weknora,
+        plan,
+        space_backend=spaces,
+    )
+    second = await _provision_module().provision_local_live(
+        weknora,
+        plan,
+        space_backend=spaces,
+    )
+
+    assert first.space_id == second.space_id
+    with factory() as session:
+        row = session.get(KnowledgeSpace, first.space_id)
+        assert row is not None
+        assert row.name == plan.space_name
+        assert row.binding_status == "bound"
+        assert row.tenant_id == first.tenant_id
+        assert row.raw_kb_id == first.raw_kb_id
+        assert row.wiki_kb_id == first.wiki_kb_id
+        assert session.scalar(select(func.count()).select_from(KnowledgeSpace)) == 1
+    engine.dispose()
+
+
+async def test_r3_1_harness_space_backend_rejects_foreign_same_name(
+    tmp_path: Path,
+) -> None:
+    space_module = import_module("insurance_harness.live_env.space")
+    module = _provision_module()
+    engine = create_engine(f"sqlite:///{tmp_path / 'space.db'}")
+    KnowledgeSpace.__table__.create(engine)
+    factory: sessionmaker[Session] = sessionmaker(
+        bind=engine,
+        expire_on_commit=False,
+    )
+    plan = _plan(tmp_path / "policy.pdf")
+    plan.pdf_path.write_bytes(b"life insurance PDF")
+    with factory() as session:
+        session.add(
+            KnowledgeSpace(
+                id="foreign-space-id",
+                name=plan.space_name,
+                binding_status="bound",
+                tenant_id="foreign-tenant",
+                raw_kb_id="foreign-raw",
+                wiki_kb_id="foreign-wiki",
+            )
+        )
+        session.commit()
+
+    with pytest.raises(module.OwnershipMismatch, match="space"):
+        await module.provision_local_live(
+            FakeBackend(),
+            plan,
+            space_backend=space_module.HarnessSpaceBackend(
+                factory,
+                marker=plan.marker,
+            ),
+        )
+
+    with factory() as session:
+        assert session.scalar(select(func.count()).select_from(KnowledgeSpace)) == 1
+    engine.dispose()
 
 
 async def test_r3_2_pdf_sha_reuse_upload_once_and_wiki_unknown_fail_closed(

@@ -118,13 +118,24 @@ class WeKnoraAdminClient:
         )
         login.raise_for_status()
         document = login.json()
-        user = document["user"]
-        tenant = document["tenant"]
+        user = document.get("user")
+        tenant = document.get("active_tenant")
+        token = document.get("token")
+        refresh_token = document.get("refresh_token")
+        if (
+            not isinstance(user, dict)
+            or not isinstance(tenant, dict)
+            or not isinstance(token, str)
+            or not token
+            or not isinstance(refresh_token, str)
+            or not refresh_token
+        ):
+            raise ValueError("invalid login response")
         return AdminSession(
             user_id=str(user["id"]),
             tenant_id=int(tenant["id"]),
-            token=SecretStr(str(document["token"])),
-            refresh_token=SecretStr(str(document["refresh_token"])),
+            token=SecretStr(token),
+            refresh_token=SecretStr(refresh_token),
         )
 
     async def list_tenants(self, session: AdminSession) -> list[dict[str, Any]]:
@@ -627,6 +638,11 @@ class WeKnoraProvisioningBackend:
         if self._api_key is None:
             raise RuntimeError("scoped tenant API key is not provisioned")
         return self._api_key.token
+
+    def live_api_key(self) -> SecretStr:
+        """Expose the selected scoped token only to the trusted local controller."""
+
+        return self._key()
 
     async def list_knowledge(self, kb_id: str) -> list[KnowledgeRecord]:
         records: list[KnowledgeRecord] = []

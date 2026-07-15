@@ -16,7 +16,8 @@ services:
     ports: !override
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     env_file: !override
-      - .env.local-live.runtime
+      - path: .env
+        required: false
 
   docreader:
     image: wechatopenai/weknora-docreader:v0.6.3@sha256:7f09b7581150cec73a206460c859abfd3671ae13697450d6b533db5484c1276c

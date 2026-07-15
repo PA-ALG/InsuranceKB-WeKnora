@@ -230,7 +230,8 @@ def test_r2_1_overrides_pin_only_the_six_service_minimum() -> None:
 
     assert service_names(weknora) == {"app", "frontend", "postgres", "redis", "docreader"}
     assert service_names(harness) == {"harness-postgres"}
-    assert ".env.local-live.runtime" in weknora
+    assert ".env.local-live.runtime" not in weknora
+    assert "required: false" in weknora
     assert "name: local-live-weknora" in weknora
     assert "REDISCLI_AUTH: ${REDIS_PASSWORD:?" in weknora
     assert 'redis-cli -a' not in weknora
@@ -268,10 +269,17 @@ def test_r2_1_runtime_environment_is_random_mode_0600_and_redacted(
         "SYSTEM_AES_KEY",
         "HARNESS_POSTGRES_PASSWORD",
         "WEKNORA_VERSION",
+        "WEKNORA_ADMIN_USERNAME",
+        "WEKNORA_ADMIN_EMAIL",
+        "WEKNORA_ADMIN_PASSWORD",
     }
     assert values["DB_USER"] == "weknora"
     assert values["DB_NAME"] == "weknora"
     assert values["WEKNORA_VERSION"] == "v0.6.3"
+    assert values["WEKNORA_ADMIN_USERNAME"] == "insurancekb-local-admin"
+    assert values["WEKNORA_ADMIN_EMAIL"] == (
+        "insurancekb-local-admin@example.invalid"
+    )
     assert len(values["SYSTEM_AES_KEY"].encode()) == 32
     secrets = {
         values[name]
@@ -281,9 +289,10 @@ def test_r2_1_runtime_environment_is_random_mode_0600_and_redacted(
             "JWT_SECRET",
             "SYSTEM_AES_KEY",
             "HARNESS_POSTGRES_PASSWORD",
+            "WEKNORA_ADMIN_PASSWORD",
         )
     }
-    assert len(secrets) == 5
+    assert len(secrets) == 6
     assert all(len(secret) >= 32 for secret in secrets)
     representation = repr(result)
     assert result.created is True
@@ -305,6 +314,79 @@ def test_r2_1_runtime_environment_reuses_valid_file_idempotently(
     assert second.created is False
     assert path.read_bytes() == original
     assert S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_r3_1_runtime_environment_upgrades_legacy_file_atomically(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".env.local-live.runtime"
+    legacy = {
+        "DB_USER": "weknora",
+        "DB_NAME": "weknora",
+        "DB_PASSWORD": "d" * 32,
+        "REDIS_PASSWORD": "r" * 32,
+        "JWT_SECRET": "j" * 32,
+        "SYSTEM_AES_KEY": "a" * 32,
+        "HARNESS_POSTGRES_PASSWORD": "h" * 32,
+        "WEKNORA_VERSION": "v0.6.3",
+    }
+    path.write_text("".join(f"{name}={value}\n" for name, value in legacy.items()))
+    path.chmod(0o600)
+
+    result = compose_module.ensure_runtime_environment(path)
+
+    values = _runtime_values(path)
+    assert result.created is False
+    assert {name: values[name] for name in legacy} == legacy
+    assert values["WEKNORA_ADMIN_USERNAME"] == "insurancekb-local-admin"
+    assert values["WEKNORA_ADMIN_EMAIL"].endswith("@example.invalid")
+    assert len(values["WEKNORA_ADMIN_PASSWORD"]) >= 32
+    assert S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_r3_1_runtime_state_is_complete_atomic_and_preserves_credentials(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".env.local-live.runtime"
+    compose_module.ensure_runtime_environment(path)
+    before = _runtime_values(path)
+    state = {
+        "LOCAL_LIVE_TENANT_ID": "tenant-1",
+        "LOCAL_LIVE_CHAT_MODEL_ID": "chat-1",
+        "LOCAL_LIVE_EMBEDDING_MODEL_ID": "embedding-1",
+        "LOCAL_LIVE_RERANK_MODEL_ID": "rerank-1",
+        "LOCAL_LIVE_RAW_KB_ID": "raw-1",
+        "LOCAL_LIVE_WIKI_KB_ID": "wiki-1",
+        "LOCAL_LIVE_API_KEY_ID": "key-1",
+        "LOCAL_LIVE_API_KEY": "local-tenant-secret",
+        "LOCAL_LIVE_SPACE_ID": "space-1",
+        "LOCAL_LIVE_KNOWLEDGE_ID": "knowledge-1",
+        "LOCAL_LIVE_PARSER_FINGERPRINT": "weknora-v0.6.3",
+    }
+
+    compose_module.update_runtime_state(path, state)
+
+    after = _runtime_values(path)
+    assert {name: after[name] for name in before} == before
+    assert {name: after[name] for name in state} == state
+    assert S_IMODE(path.stat().st_mode) == 0o600
+    assert compose_module.ensure_runtime_environment(path).created is False
+
+
+def test_r3_1_partial_runtime_state_is_rejected_without_overwrite(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / ".env.local-live.runtime"
+    compose_module.ensure_runtime_environment(path)
+    original = path.read_bytes()
+
+    with pytest.raises(ValueError, match="runtime state.*complete"):
+        compose_module.update_runtime_state(
+            path,
+            {"LOCAL_LIVE_TENANT_ID": "tenant-1"},
+        )
+
+    assert path.read_bytes() == original
 
 
 @pytest.mark.parametrize("invalid", ["insecure", "malformed", "example"])
