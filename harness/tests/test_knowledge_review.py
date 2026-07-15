@@ -18,7 +18,9 @@ from insurance_harness.knowledge import (
     resolve_review,
 )
 from insurance_harness.knowledge.tables import Claim, ReviewItem
-from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.kbhelpers import allow_all_gate, seed_bound_scope, seed_product
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
 
 def _scope(session: Session) -> KnowledgeScope:
@@ -141,7 +143,10 @@ def test_k4_2_reject_keeps_nothing_published(kb_session: Session) -> None:
 def test_k4_3_only_published_compiles(kb_session: Session) -> None:
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
-    engine = MergeEngine(kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True))
+    engine = MergeEngine(
+        kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP,
+    )
     change_set, _ = engine.open_change_set(source_kind="document")
     engine.apply_batch(change_set, [_prop(scope, version.id, "waiting_period")])  # published
     engine2 = MergeEngine(kb_session, scope=scope)  # 默认保守 → candidate
@@ -156,7 +161,10 @@ def test_k4_4_enrich_auto_threshold_configurable(kb_session: Session) -> None:
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     # 默认关闭：同值第二证据也走审核
-    engine = MergeEngine(kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True))
+    engine = MergeEngine(
+        kb_session, scope=scope, policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE, run_fingerprint=_FP,
+    )
     cs1, _ = engine.open_change_set(source_kind="document", external_record_id="b1")
     engine.apply_batch(cs1, [_prop(scope, version.id)])
     prop2 = _prop(scope, version.id)
@@ -179,7 +187,10 @@ def test_k4_4_enrich_auto_threshold_configurable(kb_session: Session) -> None:
     policy = policy_from_settings(settings)
     assert policy.auto_apply_enrich is True and policy.enrich_auto_min_confidence == 0.8
 
-    engine3 = MergeEngine(kb_session, scope=scope, policy=policy)
+    engine3 = MergeEngine(
+        kb_session, scope=scope, policy=policy,
+        quality_gate=_GATE, run_fingerprint=_FP,
+    )
     prop3 = _prop(scope, version.id)
     prop3 = prop3.model_copy(
         update={

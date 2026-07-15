@@ -59,4 +59,5 @@ AI 产出质量有方差，靠门禁拉齐而不是靠"这个模型强"：
 - ❌ 采信 AI 自报测试通过不复跑（→ 独立复跑）；
 - ❌ AI 会话里做了关键取舍没写裁决记录（→ tasks.md 强制）；
 - ❌ 大批量模型调用不做预算和断点设计（→ token 事故 ×2）；
-- ❌ 让 AI 直接 commit/push 主干（→ 人是闸门）。
+- ❌ 让 AI 直接 commit/push 主干（→ 人是闸门）；
+- ❌ 按 review 条目补 `if` 就当修完、送复审前不自派红队（→ 同类 bug 反复返工，019 栽了 7 轮；复审前自测 gauntlet + 反复返工问题清单见 [21-selftest-before-submit](21-selftest-before-submit.md)）。

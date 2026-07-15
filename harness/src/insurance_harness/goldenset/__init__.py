@@ -1,6 +1,25 @@
 """金标注 Agent 与 eval runner（docs/insurance-kb/05；spec openspec/changes/002、005）。"""
 
 from .annotator import GoldenAnnotator, LiteLLMClient, ModelClient, ReplayClient
+from .assemble import (
+    AssembleReport,
+    ProductAssembly,
+    ProductPlan,
+    assemble_records,
+    assemble_release,
+    load_product_plans,
+)
+from .baseline import (
+    ApprovalRecord,
+    BaselineArtifact,
+    BaselineNotApprovableError,
+    BaselineProductArtifacts,
+    RunFingerprint,
+    approve_baseline,
+    build_product_artifacts,
+    canonical_sha256,
+    release_hash,
+)
 from .eval import EvalResult, evaluate, render_report
 from .keypoints import (
     KeypointEntry,
@@ -12,16 +31,63 @@ from .keypoints import (
     write_keypoints,
 )
 from .pdf import PageText, ScannedPdfError, extract_pages
+from .profile import (
+    AutomationThresholds,
+    FieldMetrics,
+    FieldVerdict,
+    GlobalMetrics,
+    QualityProfile,
+    RegressionFailure,
+    RegressionResult,
+    RegressionThresholds,
+    build_profile,
+    compare_baselines,
+)
 from .records import Evidence, GoldenRecord, TriState
 from .release import build_release
 from .runner import annotate_product, infer_line_key, load_release, read_jsonl, write_jsonl
+from .validate import (
+    ExpectedProduct,
+    ValidationCheck,
+    ValidationResult,
+    validate_release,
+)
 from .verify import compare_with_meta, load_product_meta, verify_quotes
 
 __all__ = [
+    "ApprovalRecord",
+    "AssembleReport",
+    "AutomationThresholds",
+    "BaselineArtifact",
+    "BaselineNotApprovableError",
+    "BaselineProductArtifacts",
     "EvalResult",
+    "FieldMetrics",
+    "FieldVerdict",
+    "GlobalMetrics",
+    "QualityProfile",
+    "RegressionFailure",
+    "RegressionResult",
+    "RegressionThresholds",
+    "build_product_artifacts",
+    "build_profile",
+    "canonical_sha256",
+    "compare_baselines",
     "Evidence",
+    "ExpectedProduct",
     "GoldenAnnotator",
     "GoldenRecord",
+    "ProductAssembly",
+    "ProductPlan",
+    "RunFingerprint",
+    "ValidationCheck",
+    "ValidationResult",
+    "approve_baseline",
+    "assemble_records",
+    "assemble_release",
+    "load_product_plans",
+    "release_hash",
+    "validate_release",
     "KeypointEntry",
     "KeypointScore",
     "LiteLLMClient",

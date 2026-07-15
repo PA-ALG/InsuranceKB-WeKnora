@@ -27,7 +27,16 @@ from insurance_harness.knowledge.tables import (
     ClaimEvidence,
     ReviewItem,
 )
-from tests.kbhelpers import BROCHURE, TERMS, pred, seed_bound_scope, seed_product
+from tests.kbhelpers import (
+    BROCHURE,
+    TERMS,
+    allow_all_gate,
+    pred,
+    seed_bound_scope,
+    seed_product,
+)
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
 
 def _count(session: Session, table: type) -> int:
@@ -859,6 +868,8 @@ def test_t6_enrich_dedupe_keeps_same_quote_from_new_source_revision(
             product_version_id=version.id,
             source_context=_source_context(scope, {"a.pdf": identity}),
             policy=policy,
+            quality_gate=_GATE,
+            run_fingerprint=_FP,
         )
 
     rows = kb_session.execute(select(ClaimEvidence)).scalars().all()

@@ -10,7 +10,11 @@ pending_judge 原样保留。幂等：
 import hashlib
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from insurance_harness.goldenset.baseline import RunFingerprint
+    from insurance_harness.knowledge.quality_gate import QualityGate
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -315,6 +319,8 @@ def _apply_partition(
     created_by: str,
     existing_change_set: ChangeSet | None,
     duplicate: bool,
+    quality_gate: "QualityGate | None" = None,
+    run_fingerprint: "RunFingerprint | None" = None,
 ) -> ImportPartitionReport:
     risk_map = risk_of or {}
     engine = MergeEngine(
@@ -323,6 +329,8 @@ def _apply_partition(
         policy=policy,
         risk_of=lambda predicate: risk_map.get(predicate, "low"),
         created_by=created_by,
+        quality_gate=quality_gate,
+        run_fingerprint=run_fingerprint,
     )
     change_set = existing_change_set
     if change_set is None:
@@ -416,6 +424,8 @@ def _import_legacy_records(
     risk_of: dict[str, str] | None,
     created_by: str,
     source_revision: str | None,
+    quality_gate: "QualityGate | None" = None,
+    run_fingerprint: "RunFingerprint | None" = None,
 ) -> ImportReport:
     report = ImportReport(total_records=len(records))
     if not records:
@@ -433,6 +443,8 @@ def _import_legacy_records(
         policy=policy,
         risk_of=lambda predicate: risk_map.get(predicate, "low"),
         created_by=created_by,
+        quality_gate=quality_gate,
+        run_fingerprint=run_fingerprint,
     )
     docs = sorted({record.doc for record in records})
     change_set, created = engine.open_change_set(
@@ -491,6 +503,8 @@ def import_pred_records(
     source_revision: str | None = None,
     source_context: SourceImportContext | dict[str, Any] | None = None,
     legacy_replay: bool = False,
+    quality_gate: "QualityGate | None" = None,
+    run_fingerprint: "RunFingerprint | None" = None,
 ) -> ImportReport:
     """Import compiler output, source-aware by default and legacy only by opt-in."""
     _reject_directory_replay(records)
@@ -517,6 +531,8 @@ def import_pred_records(
             risk_of=risk_of,
             created_by=created_by,
             source_revision=source_revision,
+            quality_gate=quality_gate,
+            run_fingerprint=run_fingerprint,
         )
     if knowledge_ids is not None or source_revision is not None:
         raise ScopeViolation("legacy source arguments require legacy replay")
@@ -560,6 +576,8 @@ def import_pred_records(
                 created_by=created_by,
                 existing_change_set=source_states[key][0],
                 duplicate=source_states[key][1],
+                quality_gate=quality_gate,
+                run_fingerprint=run_fingerprint,
             )
             for key in keys
         ]
@@ -582,6 +600,8 @@ def import_pred_jsonl(
     created_by: str = "pred-importer",
     source_context: SourceImportContext | dict[str, Any] | None = None,
     legacy_replay: bool = False,
+    quality_gate: "QualityGate | None" = None,
+    run_fingerprint: "RunFingerprint | None" = None,
 ) -> ImportReport:
     """Import pred JSONL; file-content revision exists only in explicit replay mode."""
     raw = path.read_text(encoding="utf-8")
@@ -608,4 +628,6 @@ def import_pred_jsonl(
         source_revision=source_revision,
         source_context=source_context,
         legacy_replay=legacy_replay,
+        quality_gate=quality_gate,
+        run_fingerprint=run_fingerprint,
     )

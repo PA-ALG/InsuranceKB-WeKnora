@@ -8,11 +8,16 @@ claude-session 队列（复用 compiler judge-queue 的 JSONL 形态），回写
 
 import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from insurance_harness.goldenset.baseline import RunFingerprint
+    from insurance_harness.knowledge.quality_gate import QualityGate
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -58,6 +63,8 @@ from insurance_harness.knowledge.tables import (
 )
 
 RiskResolver = Callable[[str], str]
+
+_LOG = logging.getLogger(__name__)
 
 _STATUS_RANK = {"published": 0, "candidate": 1, "draft": 2}
 
@@ -678,6 +685,8 @@ class MergeEngine:
         policy: MergePolicy | None = None,
         risk_of: RiskResolver | None = None,
         created_by: str = "merge-engine",
+        quality_gate: "QualityGate | None" = None,
+        run_fingerprint: "RunFingerprint | None" = None,
     ) -> None:
         require_current_scope(session, scope)
         self.session = session
@@ -685,7 +694,36 @@ class MergeEngine:
         self.policy = policy or MergePolicy()
         self.risk_of: RiskResolver = risk_of or (lambda predicate: "low")
         self.created_by = created_by
+        # 019 Q4.2：gate 是自动发布的唯一权威，policy 布尔位只表达"运营是否允许自动化"。
+        self.quality_gate = quality_gate
+        self.run_fingerprint = run_fingerprint
         self.judge_queue: list[ConflictJudgeRequest] = []
+
+    def _gate_ok(self, prop: ProposedClaim, risk: str, action: str) -> bool:
+        """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
+        走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。
+
+        pending_judge 交给 gate 裁定为权威，但 merge 层**保留独立短路做纵深防御**：
+        注入的 gate 万一不 honor pending，pending 候选也绝不自动发布。gate 抛异常/签名不符时同样
+        fail-closed——不得让一个坏 gate 崩掉整批 apply_batch。
+        """
+        if self.quality_gate is None:
+            return False
+        if prop.pending_judge:  # 纵深防御：pending 不自动发布，不依赖注入 gate 是否 honor
+            return False
+        try:
+            return self.quality_gate.decide(
+                prop.predicate, risk, action, self.run_fingerprint,
+                pending_judge=prop.pending_judge,
+            ).eligible
+        except Exception as exc:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
+            # 保留可审计原因，让运营能区分"gate 故障"与"候选质量不足"。
+            # 只记异常类型 + 简短消息到日志，不入业务数据、不带堆栈。
+            _LOG.warning(
+                "quality_gate.decide raised %s for predicate=%r action=%s → fail-closed: %s",
+                type(exc).__name__, prop.predicate, action, exc,
+            )
+            return False
 
     # -- ChangeSet ---------------------------------------------------------
 
@@ -818,7 +856,11 @@ class MergeEngine:
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="add candidate",
         )
-        auto = self.policy.auto_apply_add and risk != "high" and not prop.pending_judge
+        auto = (
+            self.policy.auto_apply_add
+            and risk != "high"
+            and self._gate_ok(prop, risk, "add")  # pending/异常 fail-closed 见 _gate_ok
+        )
         if auto:
             item.decision = "auto_applied"
             publish_claim(
@@ -916,12 +958,13 @@ class MergeEngine:
         report.bump("enrich")
 
     def _enrich_auto_ok(self, prop: ProposedClaim, risk: str) -> bool:
-        """K4.4：默认关闭；开启后仅 risk=low 且 confidence≥阈值 且非 pending_judge。"""
+        """K4.4 + 019 Q4.2：默认关闭；开启后仅 risk=low、confidence≥阈值、非 pending_judge，
+        且过 QualityGate（注入时）。"""
         return (
             self.policy.auto_apply_enrich
             and risk == "low"
             and prop.confidence >= self.policy.enrich_auto_min_confidence
-            and not prop.pending_judge
+            and self._gate_ok(prop, risk, "enrich")  # pending/异常 fail-closed 见 _gate_ok
         )
 
     # -- 冲突裁决序（03 §6.2 逐级短路） -----------------------------------------
@@ -993,7 +1036,7 @@ class MergeEngine:
             auto = (
                 risk != "high"
                 and self.policy.auto_apply_supersede_low_risk
-                and not prop.pending_judge
+                and self._gate_ok(prop, risk, "supersede")  # pending/异常 fail-closed 见 _gate_ok
             )
             if auto:
                 item.decision = "auto_applied"
@@ -1004,11 +1047,12 @@ class MergeEngine:
                     reason="auto supersede（裁决序①/②）", superseding=existing,
                 )
             else:
-                # 高风险字段 supersede 一律进审核（03 §2.5/§6.2）
+                # 未自动发布的 supersede 进审核：保留**真实 risk**——低风险候选不得被
+                # 误标成 high_risk_change（否则污染审核优先级与审计语义，codex #8）。
                 conflict = self._new_conflict(item, existing, prop, basis, status="open")
                 self._gate(
-                    item, prop, "high", report,
-                    new_claim_id=claim.id, conflict_id=conflict.id, type_="high_risk_change",
+                    item, prop, risk, report,
+                    new_claim_id=claim.id, conflict_id=conflict.id,
                 )
             report.bump("supersede")
             return

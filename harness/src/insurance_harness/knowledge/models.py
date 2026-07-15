@@ -229,8 +229,9 @@ class MergePolicy(BaseModel):
     auto_apply_add: bool = False
     auto_apply_enrich: bool = False
     enrich_auto_min_confidence: float = 0.8
-    # 权威序①②分出胜负后的低风险 supersede 自动应用（03 §2.5/§6.2：高风险一律进审核）
-    auto_apply_supersede_low_risk: bool = True
+    # 019 Q4.1：默认关闭低风险 supersede 自动应用（保守）；开启后仍须过 QualityGate。
+    # 权威序①②分出胜负后的低风险 supersede（03 §2.5/§6.2：高风险一律进审核）。
+    auto_apply_supersede_low_risk: bool = False
 
 
 class ConflictJudgeRequest(BaseModel):

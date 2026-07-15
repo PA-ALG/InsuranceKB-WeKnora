@@ -17,7 +17,7 @@
 ## Q3 QualityProfile
 
 - Q3.1 按 field_id 输出 support、value accuracy、tri-state confusion、hallucination rate、evidence accuracy，并绑定 Q2.2 指纹；
-- Q3.2 profile 版本化且可验证 golden manifest hash；hash/schema/model/prompt 不匹配视为 stale；
+- Q3.2 profile 版本化且可验证 golden manifest hash；golden hash/schema/model/prompt/template profile/source profile 任一不匹配即视为 stale（与 design.md「指纹任一项变化都要求重跑或重新批准」一致；git_sha 属溯源信息、非数据/模型维，不作 staleness 触发）；
 - Q3.3 支持全局回归阈值与字段自动化阈值，判定结果列出每个失败指标和实际值。
 
 ## Q4 在线门禁

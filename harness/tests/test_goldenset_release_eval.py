@@ -103,6 +103,19 @@ def test_g4_2_error_types_and_metrics() -> None:
     assert "三态混淆矩阵" in report and "value_mismatch" in report and "高风险字段" in report
 
 
+def test_g4_pred_only_present_counts_as_hallucination() -> None:
+    """四轮红队 #1：预测多出的、金标覆盖面之外的 present 字段也是幻觉，必须计入幻觉率**分子**
+    （否则伪造大量出界字段会把 hallucination_rate 稀释下降，让 Q4.6 幻觉护栏形同虚设）。"""
+    golden = [_rec("P1", "waiting_period", "30天")]
+    clean = evaluate(golden, [_rec("P1", "waiting_period", "30天")])
+    fabricating = evaluate(golden, [
+        _rec("P1", "waiting_period", "30天"),
+        _rec("P1", "made_up_a", "X"), _rec("P1", "made_up_b", "Y"),  # 金标没有的字段
+    ])
+    assert clean.hallucination_rate == 0.0
+    assert fabricating.hallucination_rate > 0.0  # 伪造字段抬高幻觉率，而非稀释
+
+
 def test_g4_1_cli_end_to_end(tmp_path: Path) -> None:
     golden_dir = tmp_path / "gs"
     build_release(GOLDEN, golden_dir)
@@ -131,5 +144,5 @@ def test_manifest_is_valid_json(tmp_path: Path) -> None:
     out = tmp_path / "gs"
     build_release(GOLDEN, out)
     data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    assert data["schema_version"] == "v1.1+testtesttest"
-    assert data["annotator_model"] == "claude-test"
+    assert data["schema_versions"] == ["v1.1+testtesttest"]
+    assert data["annotator_models"] == ["claude-test"]

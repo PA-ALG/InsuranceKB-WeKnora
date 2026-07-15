@@ -25,7 +25,7 @@ from insurance_harness.knowledge import (
 )
 from insurance_harness.knowledge.tables import ChangeSet, ReleaseSnapshot
 from tests.conftest import BASE_URL
-from tests.kbhelpers import seed_bound_scope, seed_product
+from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
 from tests.support.live import AsyncCleanup, run_cleanups_preserving_failure
 
 KB = "kb-wiki"
@@ -47,10 +47,13 @@ def _publish_claims(
     version_id: str,
     *values: tuple[str, str, str],
 ) -> None:
+    gate, fp = green_gate([predicate for predicate, _name, _value in values])
     engine = MergeEngine(
         session,
         scope=scope,
         policy=MergePolicy(auto_apply_add=True),
+        quality_gate=gate,
+        run_fingerprint=fp,
     )
     change_set, _ = engine.open_change_set(source_kind="document")
     engine.apply_batch(

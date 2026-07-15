@@ -139,6 +139,19 @@ def _evidence_pages_adjacent(g: GoldenRecord, p: GoldenRecord) -> bool:
     return any(abs(gp - pp) <= 1 for gp in g_pages for pp in p_pages)
 
 
+def excluded_disputed_keys(golden: list[GoldenRecord]) -> set[tuple[str, str]]:
+    """因 disputed 被排除、且无可用金标覆盖同一 (product_id, field_id) 的键。
+
+    disputed 金标不参与评测；模型对这类 key 的预测既不可判真也不可判假——不得计入 TP/FP/FN、
+    幻觉率或 evidence。这是"哪些 key 可评测"的**单一权威**：evaluate 与
+    build_profile 共用，避免在 global/field 两处各自重新推导而产生边界漂移。
+    同一 key 若另有**可用**金标，则不在此集合、仍按可用金标评测。
+    """
+    usable_keys = {(g.product_id, g.field_id) for g in golden if not g.disputed}
+    disputed_keys = {(g.product_id, g.field_id) for g in golden if g.disputed}
+    return disputed_keys - usable_keys
+
+
 def evaluate(
     golden: list[GoldenRecord],
     pred: list[GoldenRecord],
@@ -151,6 +164,7 @@ def evaluate(
     excluded = len(golden) - len(usable)
     g_map = {(g.product_id, g.field_id): g for g in usable}
     p_map = {(p.product_id, p.field_id): p for p in pred}
+    excluded_only = excluded_disputed_keys(golden)  # disputed-only 键：预测不可评测，全程排除
 
     per_field: dict[str, FieldStats] = defaultdict(FieldStats)
     micro = FieldStats()
@@ -235,20 +249,30 @@ def evaluate(
                 )
             )
 
-    # pred 中金标没有的键：多余预测按 false_present 计入 micro FP（覆盖面之外的幻觉）
+    # pred 中金标没有的键：多余预测按 false_present 计入 micro FP（覆盖面之外的幻觉）。
+    # 这类"覆盖面之外的 present 预测"也是幻觉，必须同时计入幻觉率**分子**——否则伪造大量
+    # 出界字段会把 hallucination_rate 稀释下降，让 Q4.6 的幻觉回归护栏形同虚设。
+    # 且**已知 field_id** 的出界 present 还要计入该字段 per_field FP——否则字段画像看不到本字段
+    # 的伪造，在线 gate 只看字段指标会误放。
+    golden_field_ids = {k[1] for k in g_map}
     pred_only = 0
     for key, p in p_map.items():
-        if key in g_map:
+        if key in g_map or key in excluded_only:  # disputed-only：不可评测，不计幻觉/FP
             continue
         pred_only += 1
         if p.tri_state == "present":
             pred_present += 1
+            hallucinated += 1
             micro.fp += 1
+            if key[1] in golden_field_ids:
+                per_field[key[1]].fp += 1
 
     if judge_queue_path is not None and judge_queue:  # 默认关（V4.1）
         write_eval_judge_queue(judge_queue_path, judge_queue)
 
-    evidence_accuracy = _evidence_accuracy(pred, dataset_root) if dataset_root else None
+    # evidence 也排除 disputed-only 键的预测（同"可评测键"口径）。
+    ev_pred = [p for p in pred if (p.product_id, p.field_id) not in excluded_only]
+    evidence_accuracy = _evidence_accuracy(ev_pred, dataset_root) if dataset_root else None
     return EvalResult(
         per_field=dict(per_field),
         micro=micro,

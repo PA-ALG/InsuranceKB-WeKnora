@@ -17,7 +17,7 @@ from insurance_harness.knowledge.tables import (
     ClaimEvidence,
     Conflict,
 )
-from tests.kbhelpers import seed_product
+from tests.kbhelpers import allow_all_gate, seed_product
 from tests.support.source_revision import (
     NOW,
     bound_scope,
@@ -26,6 +26,8 @@ from tests.support.source_revision import (
     source_identity,
     source_record,
 )
+
+_GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
 
 def test_t7_t6_importer_populates_pending_recompile_without_document_changeset(
@@ -503,6 +505,8 @@ def test_t7_legacy_retract_cannot_delete_a_normal_source_aware_import(
             },
         },
         policy=MergePolicy(auto_apply_add=True),
+        quality_gate=_GATE,
+        run_fingerprint=_FP,
     )
     baseline = {
         table: count_rows(kb_session, table)

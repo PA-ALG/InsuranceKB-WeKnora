@@ -25,6 +25,10 @@ cd harness && uv run ruff check . && uv run mypy src tests && uv run pytest -m "
 
 全绿才算完成；不许破坏既有测试。uv 在 `/Users/houjing/.local/bin/uv`。
 
+## 复审前自测（治理/安全攸关变更，避免多轮返工）
+
+会被 codex/同伴复审的变更，**送复审前先按 `docs/insurance-kb/21-selftest-before-submit.md` 自测**（提交前 gauntlet + 反复返工问题清单 + 红队配方）：从不变量重设计而非补 if、自派红队 live 复现、逐条自查（身份别绑可变标签、判定别两处推导、构造期校验器要在比较点二次规范化、护栏成对想、别删冗余安全层、fail-closed 默认）。019 因反应式返工被拉扯 7 轮，此为教训固化。
+
 ## 高频坑（完整清单见 HANDOFF §五）
 
 - 本机 shell 有 SOCKS 代理变量：新 HTTP 客户端一律 `trust_env=False`；git push 断连解法见 HANDOFF 坑 #9

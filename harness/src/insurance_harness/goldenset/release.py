@@ -33,9 +33,12 @@ def build_release(
 
     tri_counts = Counter(r.tri_state for r in records)
     disputed_reasons = Counter(r.disputed_reason for r in disputed if r.disputed_reason)
+    # Q1.2：manifest 汇总实际 annotator 集合，混合标注不得被全局常量覆盖。
+    schema_versions = sorted({r.schema_version for r in records})
+    annotator_models = sorted({r.annotator_model for r in records})
     manifest: dict[str, object] = {
-        "schema_version": records[0].schema_version,
-        "annotator_model": records[0].annotator_model,
+        "schema_versions": schema_versions,
+        "annotator_models": annotator_models,
         "dataset_root": dataset_root,
         "products": {
             pid: {
@@ -43,6 +46,7 @@ def build_release(
                 "records": len(recs),
                 "disputed": sum(1 for r in recs if r.disputed),
                 "docs": sorted({r.doc for r in recs}),
+                "annotator_models": sorted({r.annotator_model for r in recs}),
             }
             for pid, recs in sorted(by_product.items())
         },

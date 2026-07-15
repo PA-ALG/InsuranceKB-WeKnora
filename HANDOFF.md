@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-14（PR #6 已合入 `main`，merge commit `27c36641`；业务方最新排期裁决：合并后收尾优先，随后 018/019 可独立或并行，021 等 018，020 等 019+021）
+> 最后更新：2026-07-15（019 PR #8 codex **七轮 APPROVED / 可合并**，七轮非阻断清理已并入 `6e3e5f9`；PR #6 已合入 `main`，merge commit `27c36641`；业务方最新排期裁决：合并后收尾优先，随后 018/019 可独立或并行，021 等 018，020 等 019+021）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -106,7 +106,7 @@
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **并行轨 A**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005`，完成后解锁 021 | 开发型，中大 + live |
-| B21 | 019 Golden 工具/QualityProfile/在线 Gate | **并行轨 B，价值优先级不低于 018**；无 018 前置，可独立或并行；为 020 提供 artifact 工具/合同，不承接 run-admission | 开发型，中 |
+| B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
 | B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，完成后与 019 共同解锁 020 | 开发型，中大 |
 
