@@ -32,6 +32,7 @@
 5. Compose 首轮若由 worktree 自动派生 project name，会与固定 container name 冲突并遗留空卷；controller 现固定两个 project。遗留卷不自动删除，任何 volume 删除仍要求双显式确认。
 6. 本机 `gh secret set --help` 证明只有省略 `--body` 才从 stdin 读取；`--body -` 会设置字面量 `-`。新增 R5.1 RED 后移除该参数，secret 只进入 subprocess stdin，不进入 argv。
 7. 已迁移数据库中，随机 schema 的 `create_all(checkfirst=True)` 会沿 `schema,public` 看到 public 表并错误跳过建表。实机诊断确认随机 schema 0 张/public 21 张后，integration fixture 改为在随机 schema 强制 DDL 并立即验表归属；复跑通过。
+8. 首次 push 后两条 deterministic CI 都稳定失败：测试用 `str(Path.home()) not in argument` 判断无宿主 mount，而 GitHub runner 的宿主 home `/home/runner` 与容器内合法 destination `/home/runner/actions-runner/_work` 同名。本机 home 不同因此假绿。修复只收紧测试语义：解析 `--mount` 并精确要求 anonymous `type=volume`，同时拒绝 `type=bind`、`-v`、`--volume` 与 Docker socket；以 `HOME=/home/runner` 本地复现环境后通过。
 
 ## 4. 外部状态与下一步
 

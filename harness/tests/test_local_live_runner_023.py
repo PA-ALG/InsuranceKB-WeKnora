@@ -509,8 +509,18 @@ def test_r5_1_concrete_backend_keeps_secrets_out_of_argv_and_host_mounts(
     assert "--network" in create_arguments
     assert "local-live-weknora" in create_arguments
     assert "-v" not in create_arguments
+    assert "--volume" not in create_arguments
     assert all("docker.sock" not in argument for argument in create_arguments)
-    assert all(str(Path.home()) not in argument for argument in create_arguments)
+    mount_specs = [
+        create_arguments[index + 1]
+        for index, argument in enumerate(create_arguments[:-1])
+        if argument == "--mount"
+    ]
+    assert mount_specs == [
+        "type=volume,volume-nocopy,"
+        "destination=/home/runner/actions-runner/_work"
+    ]
+    assert all("type=bind" not in mount for mount in mount_specs)
     assert any(
         arguments[:4]
         == ("docker", "network", "connect", "local-live-harness-db")

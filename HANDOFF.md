@@ -168,6 +168,7 @@
 12. **子代理 GREEN 只是局部证据**：023 CLI 子线曾把 runtime env 错写成七个 `HARNESS_LIVE_*`，单模块 22 passed 仍无法真实运行；主线程组合复核后才改为复用四角色 `load_local_live_config`、八项 `ensure_runtime_environment` 与默认 `probe_all_models`。并行开发必须文件独占，但合并前主线程必须检查真实数据流并跑跨模块 focused + 全量 deterministic，不能把各轨测试数相加当集成完成。
 13. **真实 adapter 要尽早做最小闭环**：023 在实机才发现 worktree 派生 Compose project 会撞固定 container name，以及 PostgreSQL `CREATE ROLE ... PASSWORD %s` 不支持该位置的 bind 参数。以后 concrete adapter 完成第一版即跑最小、可逆、无敏感输出的 create→verify→cleanup；不要等大量 mock 测试结束才碰真实 handler/DDL。Compose project、REST 响应字段、DDL 语法和清理后不存在都必须单独验明。
 14. **已知无效凭据不做循环重试**：provider 401 是外部认证阻塞，不是代码“继续跑就会好”。只记录角色、HTTP 状态和 `BLOCKED`，不打印 URL/key/body；等本地 0600 文件更新后再从 probe 开始。软件 PASS、容器 healthy、provider probe、provision、local live、GitHub live 六层状态必须分开报告。
+15. **安全测试要断言结构，不能做宿主字符串猜测**：023 runner 测试曾用“Docker argv 不含 `Path.home()`”证明无宿主 mount；CI 宿主 home 与容器 destination 都是 `/home/runner`，导致本地绿、CI 稳定红。正确检查是解析 `--mount`，精确允许 anonymous `type=volume`，拒绝 `type=bind/-v/--volume/docker.sock`。以后跨平台隔离测试不得用路径子串、用户名或本机目录布局代替配置结构。
 
 ## 六、工作方式约定（业务方明确要求）
 
