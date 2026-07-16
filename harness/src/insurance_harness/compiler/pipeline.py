@@ -62,6 +62,7 @@ from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
 from .templates import TemplateRegistry, run_fastpath
 from .templates.tables import TableStructureProvider
+from .variants import VARIANT_METADATA_KEY, VariantRegistry, select_variant
 from .verification import quote_verified
 from .voting import vote_field
 
@@ -169,6 +170,17 @@ def merge_candidates(cands: list[FieldCandidate]) -> dict[str, FieldCandidate]:
         cur = best.get(c.field_id)
         if cur is None or rank(c) < rank(cur):
             best[c.field_id] = c
+    # E2.2：每个最终 pred SHALL 记录所用变体的版本化标识（020 D4 A/B 以此对账）。
+    # gapfill 候选已自带（值相同）；首轮/fastpath/vote/judge/dead_letter 在此按
+    # (组, field_id) 确定性补齐——与 gapfill `_variant_for` 同一注册表（gauntlet F7：
+    # 此前仅 gapfill 路径 stamp，其余 pred 元数据为空，违反"每次抽取的 pred"）。
+    for c in best.values():
+        c.metadata.setdefault(
+            VARIANT_METADATA_KEY,
+            select_variant(
+                VariantRegistry.default(), group=c.group, field_id=c.field_id
+            ).version,
+        )
     return best
 
 

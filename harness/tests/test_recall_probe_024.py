@@ -91,7 +91,7 @@ PROBE_CASES: Final[tuple[_ProbeCase, ...]] = (
         _P1, "probe_fee", "费用说明",
         "费用说明：退保可能产生损失。",
         _resp("probe_fee", "退保时可能遭受一定损失", "present", 1, "退保可能产生损失"),
-        "unknown", None, "not_found",  # 兼容性拒入（E6/Q012）→ not_found
+        "unknown", None, "incompatible_value",  # 兼容性拒入（E6/Q012）→ 可审计原因（F6）
     ),
     _ProbeCase(
         _P2, "probe_ref", "责任免除说明",
@@ -136,7 +136,8 @@ PROBE_CASES: Final[tuple[_ProbeCase, ...]] = (
 # ---------------------------------------------------------------------------
 
 PINNED_MANIFEST_SHA256: Final[str] = (
-    "1c71f8049f70da079f3fdb7f98b563b64f6f5b9d03b2fdf8a65dab92eb3243f8"
+    # 有意重钉（F6）：probe_fee 兼容性拒绝原因 not_found→incompatible_value（可审计）
+    "1f95a70ac17a158c871cd8f3120f871dabc982d37ea5f4f1608efc0d698a8284"
 )
 
 PINNED_REQUEST_KEYS: Final[dict[str, str]] = {
@@ -173,13 +174,21 @@ def _manifest_sha256() -> str:
 
 
 class _FrozenClient:
-    """按字段返回冻结录制；prompt 漂移由 key 钉桩单独断言（探针显式失效）。"""
+    """按字段返回冻结录制。F5：出站 prompt 的 request_key 必须等于钉桩 key，把
+    冻结回放**绑定到真实调用路径**——控制变体 prompt 漂移（如默认变体获得定向
+    模板）时探针显式 fail，而非静默复用录制（此前 complete 忽略 user，钉桩只校验
+    测试内重建的 prompt，漂移可绕过）。"""
 
     def __init__(self, case: _ProbeCase) -> None:
         self._case = case
 
     async def complete(self, system: str, user: str) -> str:
         assert system == GAPFILL_SYSTEM
+        actual = request_key(system, user)
+        assert actual == PINNED_REQUEST_KEYS[self._case.field.field_id], (
+            f"{self._case.field.field_id}: 出站 prompt key={actual} 与钉桩不符——"
+            "control 路径漂移，冻结录制随之失效，探针按设计显式 fail（E5.1）"
+        )
         return self._case.response
 
 
@@ -204,6 +213,31 @@ def test_e5_1_prompt_request_key_pinned(case: _ProbeCase) -> None:
         f"{case.field.field_id}: default 路径 prompt 组装漂移（实际 key={actual}）——"
         "录制集随之失效，探针按设计显式 fail"
     )
+
+
+def test_e5_1_frozen_client_rejects_prompt_drift() -> None:
+    """F5：出站 prompt 的 request_key 与钉桩不符时 _FrozenClient 显式失败——把
+    冻结回放绑定到真实调用路径，控制变体漂移（如默认变体获得定向模板）不可静默
+    复用录制（此前 complete 忽略 user，漂移可绕过所有钉桩）。"""
+    client = _FrozenClient(PROBE_CASES[0])
+    with pytest.raises(AssertionError):
+        asyncio.run(client.complete(GAPFILL_SYSTEM, "drifted-control-prompt-not-pinned"))
+
+
+def test_e5_1_control_prompt_drift_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F5 端到端回归：默认变体一旦带上定向模板（控制 prompt 漂移，未 bump 版本），
+    gapfill 外发 prompt 变化，冻结回放的 request_key 绑定使非退化探针显式 fail——
+    不得静默换基线（此前钉桩只校验测试内重建 prompt，此漂移可绕过全部钉桩）。"""
+    from insurance_harness.compiler import variants as _variants
+    from insurance_harness.compiler.variants import TARGETED_SHORT_ANSWER, PromptVariant
+
+    drifted = PromptVariant(
+        variant_id="default", version=DEFAULT_VARIANT_VERSION,
+        targeted_template=TARGETED_SHORT_ANSWER, is_default=True,
+    )
+    monkeypatch.setattr(_variants, "DEFAULT_VARIANT", drifted)
+    with pytest.raises(AssertionError):
+        test_e5_1_postprocess_nonregression_score_floor()
 
 
 def test_e5_1_postprocess_nonregression_score_floor() -> None:

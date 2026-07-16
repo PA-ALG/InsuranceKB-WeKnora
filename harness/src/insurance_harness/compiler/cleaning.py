@@ -88,8 +88,11 @@ _SOURCE_ONLY_RE: Final[re.Pattern[str]] = re.compile(
     "^(?:" + "|".join(SOURCE_ONLY_PATTERNS) + ")(?:[:：\\s]|$)",
     re.IGNORECASE,
 )
+#: 弱值文案要求"整值即弱表述"（允许 ≤6 字尾注），与 _REFERENCE_ONLY_RE 同一
+#: 整值锚定纪律：避免吞掉"弱前缀 + 实值"的长句（如"按合同约定的年利率3.5%复利
+#: 递增"）——原先裸前缀 .match 会把含数字实值的模型输出清成 placeholder（gauntlet F4）。
 _WEAK_UNACTIONABLE_RE: Final[re.Pattern[str]] = re.compile(
-    "^(?:" + "|".join(WEAK_UNACTIONABLE_PATTERNS) + ")"
+    "^(?:" + "|".join(WEAK_UNACTIONABLE_PATTERNS) + ")[^，。；]{0,6}[。；]?$"
 )
 #: 引用型要求"整值即指针"（允许 ≤6 字尾注），避免吞掉含实值的长句。
 _REFERENCE_ONLY_RE: Final[re.Pattern[str]] = re.compile(

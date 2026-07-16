@@ -7,9 +7,9 @@
 | 项 | 结果 |
 |---|---|
 | ruff | All checks passed |
-| mypy | Success，185 files |
-| deterministic lane | **1314 passed / 5 deselected**（基线 1265，新增 49，既有零破坏） |
-| 024 focused | `test_recall_uplift_024.py` 38 passed + `test_recall_probe_024.py` 11 passed |
+| mypy | Success，187 files |
+| deterministic lane | **1326 passed / 5 deselected**（gauntlet 返工后：+误杀防线/审计/变体归属回归，既有零破坏） |
+| 024 focused | uplift 38 + probe 13 + accept-side 6 + audit 4 passed |
 
 ## 2. 工单状态表（E1.1 / E5.3）
 
@@ -20,7 +20,7 @@
 
 ## 3. 后处理非退化结果（E5.1）
 
-冻结录制集（9 条，覆盖 verified-present / 占位 / 弱值 / 引用型 / 兼容性拒入 / 回验失败 / absent / unknown 全分支）三重钉桩下评分：**探针产品甲/乙/丙 = 1.0 / 1.0 / 1.0（== 基线）**。钉桩：control 变体 `default@v1`、9 条 request_key、manifest `1c71f804…3243f8`——prompt 组装漂移或录制/预期改动将使探针**显式失败**，不得静默换基线。
+冻结录制集（9 条，覆盖 verified-present / 占位 / 弱值 / 引用型 / 兼容性拒入 / 回验失败 / absent / unknown 全分支）三重钉桩下评分：**探针产品甲/乙/丙 = 1.0 / 1.0 / 1.0（== 基线）**。钉桩：control 变体 `default@v1`、9 条 request_key、manifest `1f95a70a…8a8284`——prompt 组装漂移或录制/预期改动将使探针**显式失败**，不得静默换基线。**F5 加固**：`_FrozenClient` 在真实调用路径上断言出站 prompt 的 `request_key` 等于钉桩值，控制变体一旦携带定向模板（漂移）探针即 fail（回归 `test_e5_1_control_prompt_drift_is_caught`）——此前 `complete` 忽略 `user`，钉桩只校验测试内重建 prompt，漂移可绕过。
 
 ## 4. 变体版本清单（020 D4 A/B 对账钩子）
 
@@ -39,5 +39,23 @@
 
 ## 6. 残留与边界
 
-- 抽取主 prompt 未接变体（裁决记录 #4）：E2.2 盖章目前限 gapfill 路径——变体扩展到抽取路径时同步，不影响 020 A/B（treatment 生效面=定向补漏）。
+- 抽取主 prompt 未接变体模板（裁决记录 #4）：首轮走基线 extraction prompt，**treatment 生效面=定向补漏（gapfill）**——控制/treatment 两臂首轮一致，A/B 信号在 gapfill。但 **E2.2 变体标识已覆盖每个 pred**（gauntlet F7）：首轮在 `extract.py:_extract_batch` 按 (组,field_id) stamp，fastpath/vote/judge/dead_letter 在 `pipeline.merge_candidates` finalize 兜底 stamp，均与 gapfill 同一注册表——020 D4 A/B 可对账全部 pred 的变体归属，不再限 gapfill 路径。
 - `incompatible_value` 归因入桶：005 归因器按 `placeholder` 字符串分桶，新原因落入通用桶——020 重跑归因时如需细分再在归因器加映射（一行）。
+
+## 7. Gauntlet 红队返工（2026-07-17，独立 fresh-eyes agent + live 复现）
+
+送验前 gauntlet 由独立红队 agent 执行，抓到 9 项、7 项已修（2 项经真金标 live 复现）：
+
+| # | 级别 | 缺陷 | 修复 | 证据 |
+|---|---|---|---|---|
+| **F1** | **严重** | compat 规则 3 误杀真金标 `保证续保期="20年"`（时长字段被"是/否保证续保"规则子串误伤） | 规则 3 加 `field_not="保证续保期"` | accept 侧钉桩 + goldenset 全集扫描 |
+| **F2** | **严重** | compat 规则 1 误杀真金标 `费用="…提前退保影响…"`（含"退保"即杀） | 规则 1 值形态收紧为退保损失签名 `^退保\|退保…损失` | 同上 |
+| F3 | 高 | 年龄字段带职业限定被误杀（与 E4"保留限定"自相矛盾） | 规则 2 加 `value_not=年龄单位` 放行 | accept 侧钉桩 |
+| F4 | 高 | WEAK 清洗裸前缀吞掉"按合同约定的年利率3.5%…" | 加整值锚定（对齐 REFERENCE_ONLY 纪律） | goldenset 全集零误吞 |
+| F5 | 高 | E5 探针钉桩未绑定真实调用路径，控制变体可静默漂移 | `_FrozenClient` 断言出站 `request_key`==钉桩 | `test_e5_1_control_prompt_drift_is_caught` |
+| F6 | 中 | gapfill 兼容性拒绝原因丢失（记 not_found，违 E6.3） | 记 `incompatible_value` + `metadata.compat_reject` | `test_e6_3_gapfill_compat_reject_records_auditable_reason` |
+| F7 | 中 | 首轮/fastpath/vote/judge pred 无变体标识（违 E2.2"每次抽取的 pred"） | 首轮 `_extract_batch` + finalize `merge_candidates` 双 stamp | `test_e2_2_*` 三条 |
+
+**新增"误杀防线"**（此前缺失，正是漏 F1/F2 的根因）：`test_recall_accept_side_024.py` 扫描整个 13 产品 goldenset，断言每个 present 金标值 compatible 且不被清洗——从此任何 compat/cleaning 误杀真金标即红。拒绝侧 Q012 三案仍全绿（护栏未被削弱）。
+
+**教训固化**：写自己想到的测试 ≠ 红队；护栏（防 Q012）与召回目标（防误杀）是成对约束，只测拒绝侧不测接受侧 = 半个护栏。probe_fee 拒绝原因 not_found→incompatible_value 触发 manifest 有意重钉（`1c71f804…`→`1f95a70a…`），E5 三重钉桩按设计要求显式确认。

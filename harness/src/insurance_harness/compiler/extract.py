@@ -23,6 +23,7 @@ from .models import FieldCandidate, UnknownReason
 from .parsing import extract_json_array
 from .prompts import EXTRACTION_SYSTEM, PARSE_RETRY_SUFFIX, build_extraction_user
 from .routing_data import group_of_field
+from .variants import VARIANT_METADATA_KEY, VariantRegistry, select_variant
 from .verification import all_quotes_verified
 
 MAX_FIELDS_PER_CALL = 10  # spec E3.1：单次 LLM 调用 ≤10 字段
@@ -264,4 +265,15 @@ class WindowExtractor:
                         e.model_dump() for e in cand2.evidence
                     ]
                     results[f.field_id] = failed
+        # E2.2：每次抽取的 pred 记录所用变体的版本化标识（gauntlet F7）。首轮走基线
+        # extraction prompt（不接变体模板），按 (组, field_id) 记其注册变体——与
+        # gapfill `_variant_for`、finalize 合并 stamp 同一注册表，020 D4 A/B 据此对账。
+        for f in batch:
+            results[f.field_id].metadata.setdefault(
+                VARIANT_METADATA_KEY,
+                select_variant(
+                    VariantRegistry.default(),
+                    group=group_of_field(f.name), field_id=f.field_id,
+                ).version,
+            )
         return [results[f.field_id] for f in batch]

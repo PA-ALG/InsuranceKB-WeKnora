@@ -84,6 +84,7 @@ async def gapfill_field(
         return _stamp_variant(_unknown(field, doc="", reason="no_candidate_sections"), variant)
 
     keywords = gapfill_keywords(field)
+    compat_reject_reason: str | None = None  # E6.3：补漏路径的兼容性拒绝原因（可审计）
     for doc, sec in candidates:
         if variant.targeted_template == TARGETED_SHORT_ANSWER:
             user = build_targeted_gapfill_user(
@@ -107,10 +108,18 @@ async def gapfill_field(
         if cand.tri_state == "present" and cand.value is not None:
             verdict = check_field_value(field, cand.value)
             if not verdict.compatible:
-                continue  # 不兼容值不得入 pred（024 E6）：当作该段无线索
+                # 不兼容值不得入 pred（024 E6）：当作该段无线索，但记原因供审计
+                compat_reject_reason = verdict.reason
+                continue
         if not all_quotes_verified(cand.evidence, pages_by_doc.get(doc, ())):
             continue  # 未验证引文不得出场（E3.2），当作无线索处理
         out = cand.model_copy(update={"origin": "gapfill", "confidence": "medium"})
         return _stamp_variant(out, variant)
 
+    if compat_reject_reason is not None:
+        # 找到了值但因语义不兼容被拒（E6.3 可审计）——与 extract.py 校验链同构，
+        # 不得笼统记 not_found（gauntlet F6：补漏路径拒绝原因此前丢失）。
+        rejected = _unknown(field, doc="", reason="incompatible_value")
+        rejected.metadata["compat_reject"] = compat_reject_reason
+        return _stamp_variant(rejected, variant)
     return _stamp_variant(_unknown(field, doc="", reason="not_found"), variant)
