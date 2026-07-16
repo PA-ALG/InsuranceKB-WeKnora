@@ -58,6 +58,8 @@
 
 ### 3.1 服务边界
 
+> ⚠️ **历史文本**：本节所述"独立 `knowledge-compiler/` 服务、Go 经 gRPC 调用、Go Ingest Orchestrator"为 ADR-001（见文档顶部修订说明）之前的原方案，**已被插件式 Harness 架构取代**（保险能力全在 `harness/`、自有 PostgreSQL、只走 REST/MCP；gRPC 契约降级为 Harness 内部 API 形状参考）。本节保留作方案演进存档，不作实施依据；现行权威见 `docs/insurance-kb/02-architecture.md`。
+
 新建独立 `knowledge-compiler/` Python 服务，通过 gRPC 被 Go 调用：
 
 ```text

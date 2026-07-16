@@ -1,6 +1,6 @@
 # 16 · Roadmap（里程碑与关键路径）
 
-> 与 13（蓝图现状）配套：13 讲"建到哪了"，本文讲"接下来按什么顺序建、每一站的完成定义"。排期按里程碑不按日历（团队自行映射到周）。
+> 与 13（蓝图现状）配套：13 讲"建到哪了"，本文讲"接下来按什么顺序建、每一站的完成定义"。排期按里程碑不按日历（团队自行映射到周）。**并行轨道结构与分工见 22（并行执行蓝图）**。
 
 ## M0 · 企业运行基础（当前里程碑）
 
@@ -18,6 +18,8 @@
 **当前排期与硬依赖（业务方 2026-07-14 裁决）**：合并后收尾优先；随后 018 与 019 无相互前置，可独立或并行推进，019 是解锁真实基线的工具轨，价值优先级不低于 018。硬依赖为 018 → 021、019 → 020、021 → 020；020 在 019、021 均完成后先执行自身 T1 run-admission。021 不阻塞 T8 live 验收，但阻塞不同 revision 并发开放。
 
 进度（2026-07-14）：016 T1～T8 已完成并通过双审/主代理验收；017 T1 adapter contract、T2 SourceDocument/Directory replay、T3 WeKnora materializer、T4 Compiler source boundary、T5 quote→chunk/source-aware Evidence、T6 Evidence migration/persistence/import、T7 stale/recompile/scoped retract 与 T8 live gate/Runbook/handoff 已按 TDD 完成并通过双审。最新主代理门禁为 12 T8 non-live（1 deselected）/ 49 source standalone / 915 non-live / 5 deselected，Ruff、mypy 139 files 与 diff check 全绿。真实 WeKnora/PostgreSQL 因六项环境前置缺失为 `NOT RUN`（1 skipped/12 deselected），existing-knowledge 分支不代表 upload 创建覆盖。018～020 均未因此自动完成；021 仅 proposed/pending，尚未实现不同 revision ordering。skip/deselected 不代表 live 成功，M0 仍在进行。
+
+更新（2026-07-16）：**019 已随 PR #8 合入 main**；**023（本机 live 环境+受信 workflow）已随 PR #10 合入**；018 T1～T6 软件与两轮复审完成（PR #9）、PostgreSQL 16 job 通过，T7 真实 live 凭据已补齐、收口中；021 仍 pending。多轨并行拆分（008/010/013/024 就绪）见 22 号蓝图与 HANDOFF ⓪-0h。
 
 ## M1 · 可演示闭环
 
@@ -42,7 +44,7 @@
 | QA 一等对象 | B14（012） | 010 |
 | 知识健康度巡检（含同类对比缺口 H1.6） | B13（011） | 007✅ |
 | 数据飞轮（Langfuse 信号→缺口工单） | B17（015） | 007✅、009（概念对齐） |
-| insurance MCP server（版本敏感问答） | B15（013） | 007✅ |
+| insurance MCP server（版本敏感问答） | B15（013） | 007✅ + 018 读模型；**业务方 2026-07-16 拍板提前（轨道 L3）：规格就绪，实现等 PR #9 合入** |
 | 上游 3 Issue/PR（乐观锁/webhook/ingest_mode） | B5 | 无 |
 
 **完成定义**：六能力审计（13 §4）全部转 ✅；"在线问诊"式概念页上线；Agent 能答历史版本问题。

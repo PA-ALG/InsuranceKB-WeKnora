@@ -1,5 +1,7 @@
 # 010 规格（验收条款，每条对应 pytest 用例）
 
+> **2026-07-16 基础对齐修订**：本规格原写于 016/017 落地之前。新增 I6（Space 作用域与结构化来源身份）。原条款 ID 不变。
+
 ## I1 映射器
 
 - I1.1 映射规则为 YAML（source_field → field_id + 变换器名），加载 fail-fast：未知 field_id / 未知变换器 / 重复映射即报错并定位；
@@ -30,3 +32,10 @@
 - I5.2 冲突用例：构造 planSalesStatus 变更的新 revision → supersede/conflict 按权威序产生并留痕；
 - I5.3 CLI：`python -m insurance_harness.knowledge.import_cli structured <file|dir> [--mapping X] [--apply]`；
 - I5.4 零模型调用；门禁全绿（既有测试不破坏）。
+
+## I6 Space 作用域与结构化来源身份（016/017 对齐）
+
+- I6.1 导入一律在显式 KnowledgeSpace 内执行（016 fail-closed）；批次、ChangeSet、qa_staging 记录均带 space；跨 space 业务键互不可见；
+- I6.2 结构化来源身份：`source_kind=structured`，来源身份即 I2.1 幂等键（source_system + external_record_id + source_revision）；Evidence 定位 = 记录定位（jsonpath/行号）+ 内容哈希，**不伪造页码/chunk 锚点**；不经 WeKnora bridge，Evidence lineage 按 017 结构落 structured 变体，不得复用 WeKnora revision 字段语义；
+- I6.3 Alembic 迁移占号 **0007**（openspec/changes/README.md 注册表已预分配）；若合入时 021（0006）尚未合入，与其负责人协调 down_revision 链序；
+- I6.4 021 落地前，同一 source_system + external_record_id 的 revision 更替仅允许**串行导入**（对齐 HANDOFF ⓪-0a 边界）；CLI 帮助文本标注此限制。

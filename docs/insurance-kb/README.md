@@ -24,8 +24,9 @@
 | [17-team-collaboration.md](17-team-collaboration.md) | 三人协作规范：模块所有权分工、Git/PR 双查流程、HANDOFF 同步纪律、主航道守护清单、决策升级路径 | ✅ |
 | [18-ai-collaboration.md](18-ai-collaboration.md) | AI Coding 协作机制：会话生命周期、文件域声明制、门禁等化器、token 预算纪律、反模式清单（001~007 实战验证） | ✅ |
 | [19-weknora-utilization.md](19-weknora-utilization.md) | WeKnora 能力利用清单：三层利用率盘点、早期调研结论修订记录、选型结论复核 | ✅ |
-| [20-enterprise-runtime-foundation.md](20-enterprise-runtime-foundation.md) | 企业运行基础：KnowledgeSpace、WeKnora SourceDocument Bridge、SnapshotFact、curated-first 与 Golden 质量闸门 | 🚧 016 已完成；017 T1–T6 已完成并进入 T7 stale/recompile/retract；018～020 待实施 |
+| [20-enterprise-runtime-foundation.md](20-enterprise-runtime-foundation.md) | 企业运行基础：KnowledgeSpace、WeKnora SourceDocument Bridge、SnapshotFact、curated-first 与 Golden 质量闸门 | 🚧 016/017 软件完成（017 live NOT RUN）；019 已合入；018 PR #9 live 收口中；020 等 019+021 |
 | [21-selftest-before-submit.md](21-selftest-before-submit.md) | 复审前自测方法论：提交前 gauntlet、反复返工问题清单（身份绑可变标签/判定两处推导/构造期校验器可绕过/对称路径/冗余安全层…）、并行红队配方；源自 019 七轮返工教训固化 | ✅ |
+| [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md) | 并行执行蓝图：L0~L6 轨道拆分、优先级与执行者、合并基线政策、编号占号护栏（配 `openspec/changes/README.md` 注册表）、里程碑映射与波次 | ✅ 2026-07-16 |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 上位文档：[../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（唯一主清单）· [/HANDOFF.md](../../HANDOFF.md)（交接文档）
