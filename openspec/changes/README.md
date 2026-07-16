@@ -32,7 +32,7 @@
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
 | 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
-| 025 | merge-weak-value-guard | 🔒 已占号（目录未开） | 合并前置弱值门槛：更粗略新值不开冲突（Q026 防审核队列垃圾）；小型，PR #9 合入后提案；可与 024 同一执行者顺手接 |
+| 025 | merge-weak-value-guard | 📂 目录已开（提案+规格+任务定稿，可认领） | 合并前置弱值门槛：更粗略新值不开冲突（Q026 防审核队列垃圾）+ informationScore 仅排序信号非替换判据；G1~G6 strict 规格；迁移 0011；**实现候 021（PR #9）**，可与 024 同一执行者顺手接 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027+ | （空闲） | | 先占号再开目录 |
 
@@ -49,7 +49,9 @@
 | 0007 | 010 structured-import（qa_staging 等） | 预分配 |
 | 0008 | 009 concept-layer | 预分配 |
 | 0009 | 012 qa-objects | 预分配 |
-| 0010+ | （空闲；011/014/015 如需建表先来占号） | |
+| 0010 | 011 knowledge-health（PR #12 认领；避让） | 预分配 |
+| 0011 | 025 merge-weak-value-guard（抑制事件表，append-only） | 预分配 |
+| 0012+ | （空闲；014/015 如需建表先来占号） | |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 
