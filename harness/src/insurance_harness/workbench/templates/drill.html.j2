@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>字段下钻</title></head>
+<body>
+<h1>{{ drill.predicate }}</h1>
+<p>值：{{ drill.value }}（{{ drill.value_state }} / {{ drill.status }}）</p>
+<h2>证据</h2>
+<ul>
+{% for e in drill.evidence %}
+  <li>{{ e.knowledge_id }} 第{{ e.page }}页：「{{ e.quote }}」</li>
+{% endfor %}
+</ul>
+<h2>版本历史</h2>
+<table border="1">
+  <thead><tr><th>何时</th><th>谁</th><th>值</th><th>原因</th></tr></thead>
+  <tbody>
+  {% for r in drill.revisions %}
+    <tr><td>{{ r.at }}</td><td>{{ r.actor }}</td><td>{{ r.after_value }}</td><td>{{ r.reason or "-" }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

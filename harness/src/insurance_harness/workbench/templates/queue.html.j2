@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>审核队列</title></head>
+<body>
+<h1>审核队列</h1>
+<p>space：{{ space_id }}（共 {{ page.total }} 条待审）</p>
+<table border="1">
+  <thead>
+    <tr><th>review_key</th><th>类型</th><th>风险</th><th>字段</th><th>动作</th></tr>
+  </thead>
+  <tbody>
+  {% for item in page.items %}
+    <tr id="row-{{ item.review_key }}">
+      <td>{{ item.review_key }}</td>
+      <td><span class="badge type-{{ item.type }}">{{ item.type }}</span></td>
+      <td><span class="badge risk-{{ item.risk_level }}">{{ item.risk_level }}</span></td>
+      <td>{{ item.predicate or "-" }}</td>
+      <td>
+        <form method="post"
+              hx-post="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action"
+              hx-target="#row-{{ item.review_key }}"
+              action="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action">
+          <input type="hidden" name="action" value="approve">
+          <button>approve</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

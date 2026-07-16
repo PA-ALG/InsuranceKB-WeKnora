@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>ChangeSet 明细</title></head>
+<body>
+<h1>ChangeSet {{ detail.change_set_id }}</h1>
+<p>来源 {{ detail.source_kind }} · 状态 {{ detail.status }} · 发起 {{ detail.created_by }}</p>
+<table border="1">
+  <thead><tr><th>动作</th><th>字段</th><th>提案值</th><th>决定</th><th>冲突对照</th></tr></thead>
+  <tbody>
+  {% for item in detail.items %}
+    <tr>
+      <td><span class="badge action-{{ item.action }}">{{ item.action }}</span></td>
+      <td>{{ item.predicate or "-" }}</td>
+      <td>{{ item.proposed_value or "-" }}</td>
+      <td>{{ item.decision }}</td>
+      <td>
+        {% if item.conflict %}
+          <div class="conflict">
+            <div>现值：{{ item.conflict.existing_value }}</div>
+            <div>新值：{{ item.conflict.proposed_value }}</div>
+            <div>裁决依据：
+              {% for k, v in item.conflict.decision_basis.items() %}
+                <code>{{ k }}={{ v }}</code>
+              {% endfor %}
+              （{{ item.conflict.status }}）
+            </div>
+          </div>
+        {% else %}-{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

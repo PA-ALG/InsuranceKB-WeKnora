@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>冲突与变更</title></head>
+<body>
+<h1>冲突与变更</h1>
+<table border="1">
+  <thead><tr><th>ChangeSet</th><th>来源</th><th>状态</th><th>发起</th><th>动作计数</th></tr></thead>
+  <tbody>
+  {% for cs in sets %}
+    <tr>
+      <td><a href="/spaces/{{ space_id }}/changes/{{ cs.change_set_id }}">{{ cs.change_set_id }}</a></td>
+      <td>{{ cs.source_kind }}</td>
+      <td>{{ cs.status }}</td>
+      <td>{{ cs.created_by }}</td>
+      <td>
+        {% for action, n in cs.action_counts.items() %}
+          <span class="badge action-{{ action }}">{{ action }}×{{ n }}</span>
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

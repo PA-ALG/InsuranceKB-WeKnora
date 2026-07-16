@@ -104,7 +104,7 @@
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
 | B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
-| B8 | **008 审核工作台实现** | **已条款化（正式 delta）可认领（轨道 L2，2026-07-16 二版）**：`openspec/changes/008-review-workbench/`（W1–W7 + T1–T8；FastAPI+Jinja2+HTMX，复用 007/016/019 服务层与夹具；**token→Space 授权绑定**；**W4 整页等 PR #9**）；Owner 复审=A | 开发型任务，中等 |
+| B8 | **008 审核工作台实现** | 🟢 **T1~T5/T7 波次完成（认领人=Claude 架构会话，2026-07-16，分支 `feat/008-review-workbench`）**：四页三动作齐（队列/冲突变更+翻案+G8 时间线/矩阵+下钻+导出）；token→principal+Space 绑定、审计签名级不可伪造、路由白名单全等断言、W5.1 静态零写扫描；28 用例（21 红→绿+7 守卫钉）+gauntlet 补钉跨路径探测 404；**全量 1293 passed（基线零破坏）、ruff/mypy 全绿**。**T6/W4（发布回滚页）候 PR #9**；Owner-A 复审待 PR | 开发型任务，中等 |
 | B9 | PP-StructureV3 表格结构识别服务部署接入（006 遗留；原重复的两行 B8/B9 已合并于此） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署（AGPL 隔离，08 §2）；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`；接入后跑费率表对比，用金标回归 A/B 验证（11 §2）替换默认；接入时证据元数据补记表格行列坐标（同事实证反馈 2026-07-16，见 19 号实证补强） | 部署人工 + 金标回归 + 联调 |
 | B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023**：六服务 loopback-only 与 PostgreSQL 临时角色闭环实机通过；百炼五角色 direct probe 已通过。官方 v0.6.3 app 缺 scoped Tenant API Key route；T6d.1 已完成 clean source lock + checksum patch + trusted-main GHCR provenance/SBOM workflow，待人工合入 main 后执行 T6d.2 build/digest write-back，再跑 provision、VLM smoke 与五节点 local/GitHub live | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |

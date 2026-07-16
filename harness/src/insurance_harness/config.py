@@ -67,6 +67,11 @@ class HarnessSettings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_timeout_s: float = 180.0
 
+    # --- 审核工作台鉴权（change 008，spec W6：token→principal+Space 集合绑定） ---
+    # JSON：{"<token>": {"principal": "审核人标识", "space_ids": ["<space-id>", ...]}}
+    # 未配置 = 拒绝一切请求（fail-closed 默认）；operator 一律取 token 绑定 principal
+    workbench_tokens_json: str | None = None
+
     # --- 表格结构识别 provider（change 006，spec F5.3 配置位） ---
     # pdfplumber（默认，零新增依赖）；pp-structure-v3 为预留位（重依赖部署见 HANDOFF ⓪-B）
     table_provider: str = "pdfplumber"

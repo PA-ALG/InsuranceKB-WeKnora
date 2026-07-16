@@ -67,6 +67,28 @@ uv run python -m insurance_harness.product.cli register-products \
   ../dataset/shouxian_product --space-id "$HARNESS_SPACE_ID"
 ```
 
+### 3.4 审核工作台启动（change 008，T1~T5/T7 波次）
+
+```bash
+# 1) 配置 token→(principal + 允许 Space 集合)：未配置=拒绝一切（fail-closed）
+export HARNESS_WORKBENCH_TOKENS_JSON='{"<随机token>": {"principal": "审核人甲", "space_ids": ["'$HARNESS_SPACE_ID'"]}}'
+# 2) 起服（loopback；生产置于内网反代之后）
+uv run uvicorn --factory --host 127.0.0.1 --port 8090 \
+  'insurance_harness.workbench.app:create_app' 2>/dev/null || \
+  uv run python -c "
+import os, uvicorn
+from insurance_harness.config import HarnessSettings
+from insurance_harness.db.base import make_engine, make_session_factory
+from insurance_harness.workbench.app import create_app
+s = HarnessSettings()  # 读 HARNESS_DB_URL / HARNESS_WORKBENCH_TOKENS_JSON
+app = create_app(session_factory=make_session_factory(make_engine(s.db_url)),
+                 tokens_config=s.workbench_tokens_json)
+uvicorn.run(app, host='127.0.0.1', port=8090)
+"
+```
+
+页面：`/spaces/<space>/queue`（审核队列，approve/reject/defer/批量）、`/spaces/<space>/changes`（冲突与变更+翻案）、`/spaces/<space>/timeline`（G8 变更流）、`/spaces/<space>/matrix`（完整度五态格+下钻+CSV/JSONL 导出）。请求头 `Authorization: Bearer <token>`。**W4 发布/回滚页候 018 合入后交付。**
+
 ## 4. 联调验收路径（按序，每步都有断言）
 
 | 步 | 动作 | 断言 |

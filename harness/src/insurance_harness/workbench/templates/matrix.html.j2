@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><title>完整度矩阵</title></head>
+<body>
+<h1>完整度矩阵</h1>
+<p><a href="/spaces/{{ space_id }}/matrix/export?fmt=csv">导出 CSV</a> ·
+   <a href="/spaces/{{ space_id }}/matrix/export?fmt=jsonl">导出 JSONL</a></p>
+<table border="1">
+  <thead><tr><th>产品</th><th>版本</th><th>字段格</th></tr></thead>
+  <tbody>
+  {% for row in matrix.rows %}
+    <tr>
+      <td>{{ row.product_code }} {{ row.product_name }}</td>
+      <td>{{ row.version_label }}</td>
+      <td>
+        {% for field, state in row.cells.items() %}
+          <a class="cell state-{{ state }}"
+             href="/spaces/{{ space_id }}/matrix/{{ row.version_id }}/{{ field }}">
+            {{ field }}:{{ state }}
+          </a>
+        {% endfor %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>
