@@ -1,24 +1,33 @@
-# 010 · 结构化知识直入通道（JSON/FAQ → Claim/QA）
+# 010 · 结构化知识直入通道（双通道：产品主数据 bootstrap / 可信业务源 → Claim/QA）
 
-> 状态：**已条款化，可认领**（2026-07-16 基础对齐修订：新增 I6 Space 作用域与结构化来源身份；迁移占号 0007；轨道 L4 首件，见 docs/insurance-kb/22）。
-> 依赖：007/016/017 已合入 main；不依赖 018（不触发布读路径）。设计权威：master plan P0-2、02 §6 落点映射、13 §2 G4、20（企业运行约束）。业务方需求②原文："已有 JSON 产品知识库/FAQ，要跳过文档解析流程直接融入 wiki，快速补全知识页面（含知识融合与冲突处理）"。
+> 状态：**已条款化（正式 delta 格式），可认领**（2026-07-16 二版：按 PR #11 复审拆分双通道，修复 Q020 证据资格冲突与结构化 lineage 数据模型缺失；轨道 L4 首件，见 docs/insurance-kb/22）。
+> 依赖：003/007/016/017 已合入 main；不依赖 018（不触发布读路径）。执行者=会话 C3；**Owner 复审=C（新包）+ A（涉及 claim_evidence DDL 与迁移 0007，按 17 §1"动 Owner 目录必须该 Owner 审核"）**。
+> 设计权威：master plan P0-2、02 §6、13 §2 G4、20（企业运行约束）、**06 §4 Q020（元数据文件≠证据来源）**。业务方需求②原文："已有 JSON 产品知识库/FAQ，要跳过文档解析流程直接融入 wiki，快速补全知识页面（含知识融合与冲突处理）"。
 
 ## 为什么做
 
 业务方存量最大、最干净的知识是结构化产品库与 FAQ；直入通道是见效最快的补全路径，且其产物走 007 合并引擎即可自动获得冲突处理与审核。
 
+## 为什么拆双通道（2026-07-16 裁决记录）
+
+一版提案以 13 份 `product_meta.json` 直入 Claim 作核心验收，与仓库既有裁决 **Q020（"`product_meta.json` 不算有效源资料，Evidence 必须指向真实业务文档"，06 §4 与"明确不带走清单"两处）直接冲突**——把路由/注册元数据包装成 `structured_direct` Claim 会破坏 Evidence 资格边界。二版拆为：
+
+- **通道一 · 产品主数据 bootstrap**：`product_meta.json` 类元数据 → **只进 003 产品注册**（产品/版本/备案文号/销售状态/渠道登记），**零 Claim、零 Evidence**。这是 Q020 的合规用法；
+- **通道二 · 可信结构化业务源 → Claim**：真实业务系统数据（官方产品库导出、核心系统接口数据等）经**来源登记**（source registry：权威等级/数据责任人/记录 schema）后才可产 Claim，Evidence 为结构化 lineage（原始记录留存 + 稳定定位 + 内容哈希）；
+- 若业务方将来要把某份 meta 文件升格为权威业务源，必须**先在 06 §4 显式修订 Q020 并留裁决记录**，不得在本 change 内静默绕过。
+
 ## 做什么
 
-1. **输入**：JSON/JSONL/CSV/Excel 的产品记录与 FAQ；`product_meta.json` 形态优先支持（已有 13 份样例）；
-2. **映射器**：字段映射规则（源字段 → schema field_id，YAML 可配）；内置映射：产品主数据（planCode/versionNo/备案文号…→ 003 产品注册）、产品字段（→ Claim，data_quality=structured_direct，权威等级=官网同步/系统数据）、FAQ（→ QA 候选，012 前先落 qa_staging 表）；
-3. **未知 schema 处理**：对未见过的 JSON 结构自动生成候选映射草案（字段名相似度+值类型推断，确定性；LLM 建议可选）→ 人工确认后入映射库复用；
-4. **幂等与批次**：`source_system + external_record_id + source_revision` 幂等键（master plan §1.3 指标）；每批次 = 一个 ChangeSet，dry-run 预检（记录数/产品匹配率/缺字段/预计新增更新冲突）默认开启，`--apply` 才生效（12 #5）；
-5. **规范化**：日期/金额/年龄段/百分比/枚举统一归一（复用 goldenset/normalize + cleaning）。
-
-## 验收
-
-13 份 product_meta 直入：产品匹配 100%、重复导入零新增；构造一份与已发布 Claim 冲突的 JSON（如销售状态变更）→ 走权威序产生 supersede/conflict 且留痕；dry-run 报告字段齐全。零模型调用。门禁全绿。
+1. 通道一：meta 映射器 → 003 注册（幂等、dry-run）；
+2. 通道二：来源登记表 + 字段映射（YAML）+ 规范化 + 结构化证据数据模型（新表 `structured_source_records` + `claim_evidence` structured lineage 变体，迁移 0007）+ 走 007 合并；
+3. FAQ → qa_staging 暂存（012 前不产出对外 QA）；
+4. 未知 JSON 结构 → 候选映射草案（人工确认后才可用）；
+5. 幂等/批次/错误隔离/dry-run 默认。
 
 ## 不做什么
 
-datasource 自动同步（WeKnora 已有入口，对接后续）、FAQ 语义去重（012）。
+datasource 自动同步（WeKnora 已有入口，对接后续）、FAQ 语义去重（012）、Q020 的修订本身（业务方裁决事项）。
+
+## 影响
+
+文件域：新包（导入模块）+ 迁移 0007；**其中 `claim_evidence` 表扩展属 knowledge/ 共享域 DDL——须 Owner-A 复审**（数据模型见 spec I4）。021 落地前同 source 串行导入限制见 I6。

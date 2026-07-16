@@ -14,12 +14,12 @@
 | 005 | eval-refinement-recall | ✅ 已交付 | 归因清单由 024 承接 |
 | 006 | template-fastpath | ✅ 已交付 | PP-StructureV3 遗留 B9 |
 | 007 | claims-changeset-publish | ✅ 已交付 | |
-| 008 | review-workbench | 📋 已条款化，可认领 | 轨道 L2；W4 依赖 018 |
+| 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
 | 009 | concept-layer | 📋 提案（待基础对齐修订） | 轨道 L4；迁移预分配 0008 |
-| 010 | structured-import | 📋 已条款化，可认领 | 轨道 L4 首件；迁移预分配 0007 |
+| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）；迁移预分配 0007；claim_evidence DDL 须 Owner-A 复审 |
 | 011 | knowledge-health | 📋 提案（待基础对齐修订） | 轨道 L4 收尾 |
 | 012 | qa-objects | 📋 提案（待基础对齐修订） | 依赖 010；迁移预分配 0009 |
-| 013 | insurance-mcp | 📋 已条款化，可认领 | 轨道 L3；实现等 PR #9 合并 |
+| 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
 | 015 | feedback-flywheel | 📋 提案 | M2，依赖 009 |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
@@ -50,7 +50,7 @@
 | 0009 | 012 qa-objects | 预分配 |
 | 0010+ | （空闲；011/014/015 如需建表先来占号） | |
 
-> 迁移链是全局串行的：占了号的 change 若先于前号合入，须在 PR 中与前号 change 负责人协调 down_revision 顺序（原则：合入 main 的先后决定链序，注册表随之更新）。
+> **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 
 ## 并行开工基线（2026-07-16 裁决）
 

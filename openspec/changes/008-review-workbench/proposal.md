@@ -1,7 +1,7 @@
 # 008 · 审核工作台最小版（workbench MVP）
 
-> 状态：**已条款化，可认领**（2026-07-16 基础对齐修订：新增 W6 Space 作用域、W7 018/019 联动；轨道 L2，见 docs/insurance-kb/22）。
-> 依赖：007/016/019 已合入 main；仅 W4 回滚动作（W7.2）等 PR #9（018）合入。
+> 状态：**已条款化（正式 delta 格式），可认领**（2026-07-16 二版：按 PR #11 复审——W6 升级为 token→Space 授权绑定、**W4 整页推迟至 PR #9 合入后**（消除与"读取一律经 SnapshotReader"的自相矛盾）；轨道 L2，见 docs/insurance-kb/22）。
+> 依赖：007/016/019 已合入 main；W4 整页等 PR #9（018）。执行者 C1，Owner 复审=A（workbench/ 属 A 域）。
 > 设计权威：docs/insurance-kb/03（ReviewItem/ChangeSet/权威序）、08（选型：FastAPI + Jinja2 + HTMX）、20（企业运行约束）、master plan P0-5/P1-1。
 
 ## 为什么做
@@ -18,7 +18,7 @@
 ## 技术要求
 
 - FastAPI + Jinja2 + HTMX（08 已选型），落点 `harness/src/insurance_harness/workbench/`（001 已占位）；只读 harness DB + 调用 007 的服务层函数，**不得绕过服务层直写表**；
-- 鉴权 MVP：单一共享 token（企业 SSO 对接列后续）；审计：每个动作记 operator 字段；
+- 鉴权 MVP：**token→Space 授权绑定**（配置映射，MVP 允许单 token→单 Space；越 Space 一律 403 fail-closed；企业 SSO 对接列后续）；审计：每个动作记 operator+space+时间；
 - 测试：服务层动作用例复用 007 的夹具；页面用 FastAPI TestClient 断言关键元素；门禁同既有标准；
 - 零模型调用。
 

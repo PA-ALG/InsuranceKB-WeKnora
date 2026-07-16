@@ -1,7 +1,7 @@
 # 013 · insurance MCP server（版本敏感问答通道）
 
-> 状态：**规格就绪**（2026-07-16 基础对齐修订：新增 M4 快照读取与 Space 对齐；业务方同日拍板从 M2 提前，轨道 L3，见 docs/insurance-kb/22）。**实现等 PR #9（018）合入后开工**——读路径走 SnapshotReader。
-> 设计权威：02 §2 插件2、03（Claim/版本模型）、20（企业运行约束）、14 §4 L6。
+> 状态：**规格就绪（正式 delta 格式）**（2026-07-16 二版：新增 M3 快照/Space 对齐 + **M4 传输修正**——一版"stdio+SSE 都吃"与 WeKnora 事实不符，`internal/mcp/manager.go` 禁用 stdio、只收 SSE/HTTP Streamable，故主传输改 **HTTP Streamable**；业务方同日拍板从 M2 提前，轨道 L3，见 docs/insurance-kb/22）。**实现等 PR #9（018）合入后开工**——读路径走 SnapshotReader。
+> 设计权威：02 §2 插件2、03（Claim/版本模型）、20（企业运行约束）、14 §4 L6、MCP transports 规范（Streamable HTTP 为远程主路径）。
 
 ## 为什么做
 
@@ -20,7 +20,7 @@
 - 每个响应带 `as_of_date`、schema_version、免责声明字段（"以条款原文为准"，purpose 配置注入）；
 - 权限：MCP 连接鉴权（token）+ 租户隔离（只读该租户 Claim）；未发布/候选知识一律不可见；
 - 拒答语义：查无产品/日期无适用版本时返回明确的 not_found 结构而非空猜（Agent 端统一拒答口径，master plan"统一 Agent 引用和拒答策略"）；
-- 传输 stdio + SSE 双支持（WeKnora MCP client 两者都吃）。
+- 传输：**HTTP Streamable 主路径**（WeKnora `MCPManager` 禁用 stdio、只收 SSE/HTTP Streamable），SSE 仅兼容层，stdio 仅本地 SDK 单测（M4）。
 
 ## 验收
 

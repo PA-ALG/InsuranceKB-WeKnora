@@ -96,14 +96,14 @@
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
 | B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
-| B8 | **008 审核工作台实现** | **已条款化可认领（轨道 L2，2026-07-16）**：`openspec/changes/008-review-workbench/`（W1–W7 条款 + T1–T8 任务；四页面+四动作，FastAPI+Jinja2+HTMX，复用 007/016/019 服务层与夹具）；仅 W4 回滚动作（W7.2）等 PR #9 | 开发型任务，中等 |
+| B8 | **008 审核工作台实现** | **已条款化（正式 delta）可认领（轨道 L2，2026-07-16 二版）**：`openspec/changes/008-review-workbench/`（W1–W7 + T1–T8；FastAPI+Jinja2+HTMX，复用 007/016/019 服务层与夹具；**token→Space 授权绑定**；**W4 整页等 PR #9**）；Owner 复审=A | 开发型任务，中等 |
 | B9 | PP-StructureV3 表格结构识别服务部署接入（006 遗留；原重复的两行 B8/B9 已合并于此） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署（AGPL 隔离，08 §2）；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`；接入后跑费率表对比，用金标回归 A/B 验证（11 §2）替换默认；接入时证据元数据补记表格行列坐标（同事实证反馈 2026-07-16，见 19 号实证补强） | 部署人工 + 金标回归 + 联调 |
-| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 Draft PR #10**：T1～T5 软件闭环；六服务 loopback-only 与 PostgreSQL 临时角色闭环实机通过。三项 SiliconFlow key 被 provider 以 401 拒绝，当前 Harness 百炼 key 不可访问/为空；有效凭据补齐后再执行四模型 probe、幂等 provision、五节点 local/GitHub live | 部署+联调 |
+| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 已随 PR #10 合入 main（2026-07-16）**：软件与本机六服务/PostgreSQL 临时角色闭环完成；**模型凭据已补齐（2026-07-16，见 0h）**，由 codex 执行四模型 probe→幂等 provision→五节点 local/GitHub live→018 T7 exact-SHA；完成前 live 状态保持 `NOT RUN`（历史阻塞记录 SiliconFlow 401/key 为空见 0g，仅存档） | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |
-| B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | **已条款化可认领（轨道 L4 首件，2026-07-16 解除"后续 backlog"定位）**：`openspec/changes/010-structured-import/`（I1–I6 条款 + T1–T11 任务；迁移占号 0007，021 前同 source 串行导入限制见 I6.4） | 开发型，中等 |
+| B12 | 010 结构化直入通道实现（**双通道**：meta bootstrap→003 零 Claim / 可信业务源→Claim/QA） | **已条款化（正式 delta）可认领（轨道 L4 首件，2026-07-16 二版：Q020 合规拆分）**：`openspec/changes/010-structured-import/`（I1–I8 + T1–T11；迁移 0007 含 structured_source_records + claim_evidence structured 变体，**该 DDL 须 Owner-A 复审**；021 前同 source 串行见 I6） | 开发型，中等 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立） | `openspec/changes/011-knowledge-health/proposal.md` | 开发型，中小 |
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | `openspec/changes/012-qa-objects/proposal.md`，依赖 B12 | 开发型，中等 |
-| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪（轨道 L3，业务方 2026-07-16 拍板从 M2 提前）**：`openspec/changes/013-insurance-mcp/`（M1–M4 条款 + T1–T8 任务）；读路径走 018 SnapshotReader，**实现等 PR #9 合入后开工** | 开发型，中小 |
+| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪（正式 delta；轨道 L3，业务方 2026-07-16 拍板从 M2 提前）**：`openspec/changes/013-insurance-mcp/`（M1–M5 + T1–T8；**HTTP Streamable 主传输**——WeKnora 禁用 stdio；读路径走 018 SnapshotReader），**实现等 PR #9 合入后开工** | 开发型，中小 |
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
