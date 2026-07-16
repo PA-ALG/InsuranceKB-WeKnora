@@ -28,16 +28,19 @@
 | 005 评测尺子v2+召回归因 | 值粒度 54 为最大失分项 | ✅ 已验收 |
 | 006 模板 fastpath+可喂性评分 | 费率表列直取留出验证 1.00；族指纹修复 | ✅ 已验收 |
 | 007 Claim/合并/审核/发布主链 | 端到端故事通过 | ✅ 已验收 |
-| 008 审核工作台 | 提案即交接物 | 📋 提案（实现=遗留 B8） |
-| 009~012 | 概念层/结构化直入/健康度/QA对象 | 📋 提案（specs 条款级，B11~B14） |
-| 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 提案（B15~B16）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
+| 008 审核工作台 | W1–W7 条款 + T1–T8 任务（2026-07-16 基础对齐修订） | 📋 **已条款化可认领**（轨道 L2，B8；仅 W4 回滚等 018） |
+| 009~012 | 概念层/结构化直入/健康度/QA对象 | 📋 提案（B11~B14）；**010 已条款化可认领**（轨道 L4 首件，I1–I6+迁移 0007）；009/011/012 待基础对齐修订（Wave 2） |
+| 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 B15~B16；**013 规格就绪并提前**（M1–M4，轨道 L3，实现等 PR #9）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
 | 015 | 数据飞轮 | 📋 提案（B17） |
 | 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
 | 017 | WeKnora SourceDocument Bridge/Evidence lineage | ⚠️ T1–T8 软件完成并通过双审/全量复验；真实 WeKnora/PostgreSQL live 为 NOT RUN（B19） |
-| 018 | SnapshotFact/统一读取/可恢复发布 | ✅ 规格 review 通过，待 016+017（B20） |
-| 019 | Golden 工具/QualityProfile/在线 Gate | ✅ 设计与计划 review 通过，待 TDD（B21） |
-| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过，待 019+run-admission（B22） |
-| 021 | Source lifecycle ordering | 📋 规格已提出，待实现 durable SourceHead、generation/processed_at 与 per-source lock/CAS（B23） |
+| 018 | SnapshotFact/统一读取/可恢复发布 | ⏳ T1～T6 软件+两轮复审完成（PR #9，deterministic 1224 passed）；T7 真实 live 收口中（凭据已补，023 受信 workflow 执行）（B20） |
+| 019 | Golden 工具/QualityProfile/在线 Gate | ✅ **已完成并合入 main**（PR #8，merge `4d9c84e`，非-live 1142 passed）（B21） |
+| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过；019 已就绪，待 021 + 020 T1 run-admission（B22） |
+| 021 | Source lifecycle ordering | 📋 规格已提出，待实现 durable SourceHead、generation/processed_at 与 per-source lock/CAS（B23；迁移预分配 0006） |
+| 022×2 | 测试组合再平衡 / 复审收口 | ✅ 均已随 PR #5 合入（编号冲突已在 `openspec/changes/README.md` 注册表记案冻结） |
+| 023 | 本机 WeKnora live 环境+受信门禁 | ✅ 已随 PR #10 合入 main（2026-07-16）；T7/T8 live 执行随凭据推进 |
+| 024 | 抽取召回提升（extract_empty+值粒度） | 📋 **新开可认领**（轨道 L5，E1–E5，零真实模型调用，B24） |
 
 执行类遗留：HANDOFF ⓪-B。2026-07-13 架构复核后新增企业运行前置 016～021；在 016/017/018 完成前，现有 007 应视为验证主链而非多租户生产闭环。
 

@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-15（OpenSpec 023 Draft PR #10 实施中；T1～T5 软件闭环，T7 受外部模型凭据阻塞；PR #9 的 018 T7 仍需最终 live 证据）
+> 最后更新：2026-07-16（023 已随 PR #10 合入 main；模型凭据已补齐、codex 处理 018 T7 live 收口中；**并行执行蓝图落地**见 ⓪-0h 与 `docs/insurance-kb/22`：008/010/024 已条款化可认领、013 规格就绪）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -17,9 +17,9 @@
 
 0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
 
-0f. **当前排期与依赖（业务方 2026-07-14 最新裁决）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
+0f. **当前排期与依赖（业务方 2026-07-14 裁决；2026-07-16 扩展为多轨并行，见 0h）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
 
-0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-15 当前状态）**：分支 `codex/023-local-weknora-live-environment`、[Draft PR #10](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/10)，基于 `main@4d9c84e2`。T1～T5 已闭环：四角色可切换配置/零泄漏探针、loopback Compose/随机 0600 runtime、真实 WeKnora+Harness Space 幂等 provisioning、受信 main exact-SHA 五节点 workflow/JUnit gate，以及 `gh`+Docker concrete ephemeral runner/controller。runner 非 root、固定 checksum、无宿主/Docker socket mount、唯一 label、双内网、单 job；registration token 只经 stdin+tmpfs FIFO 单次传递，不进 argv/container config；controller 创建 per-run scoped Tenant key 和最小权限 PostgreSQL role，只暂存 2 secret + 5 variable，并在所有退出路径尝试完整 cleanup。真实六服务 `up` 已通过，宿主仅 `127.0.0.1:8080/8081/5442`；本机 PostgreSQL 临时角色的 create→最小权限验明→drop→不存在复核通过；023 focused **123 passed**、deterministic **1265 passed / 5 deselected**、PostgreSQL integration **1 passed / 1269 deselected，JUnit tests=1 skipped=0**，Ruff/mypy/OpenSpec strict 全绿。runner 镜像首次 build 已确认基础镜像 digest 命中，随后因 Debian 源持续低吞吐主动中止，不能记 build PASS。**外部状态必须分层**：三项已填 SiliconFlow profile 的真实 probe 均被 provider 以 HTTP 401 拒绝，当前可访问的 `.env.local-live` 中 `HARNESS_LLM_API_KEY` 仍为空，因此不得重试/不得 mutation；四模型全绿、tenant/models/KB/Space/PDF provision、五节点 local live、GitHub dispatch 与 018 T7 均未完成。有效凭据补齐前状态是 **BLOCKED/NOT RUN**，不是 live verified。T6 还差独立双审、push 后 CI 与 PR 更新；T8 必须等 023 workflow 合入 `main` 后才可对 PR #9 执行。
+0g. **【2026-07-15 历史快照——现状以 0h 与 B10 为准（023 已合入、凭据已补）】OpenSpec 023 本机 WeKnora live 环境**：分支 `codex/023-local-weknora-live-environment`、[Draft PR #10](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/10)，基于 `main@4d9c84e2`。T1～T5 已闭环：四角色可切换配置/零泄漏探针、loopback Compose/随机 0600 runtime、真实 WeKnora+Harness Space 幂等 provisioning、受信 main exact-SHA 五节点 workflow/JUnit gate，以及 `gh`+Docker concrete ephemeral runner/controller。runner 非 root、固定 checksum、无宿主/Docker socket mount、唯一 label、双内网、单 job；registration token 只经 stdin+tmpfs FIFO 单次传递，不进 argv/container config；controller 创建 per-run scoped Tenant key 和最小权限 PostgreSQL role，只暂存 2 secret + 5 variable，并在所有退出路径尝试完整 cleanup。真实六服务 `up` 已通过，宿主仅 `127.0.0.1:8080/8081/5442`；本机 PostgreSQL 临时角色的 create→最小权限验明→drop→不存在复核通过；023 focused **123 passed**、deterministic **1265 passed / 5 deselected**、PostgreSQL integration **1 passed / 1269 deselected，JUnit tests=1 skipped=0**，Ruff/mypy/OpenSpec strict 全绿。runner 镜像首次 build 已确认基础镜像 digest 命中，随后因 Debian 源持续低吞吐主动中止，不能记 build PASS。**外部状态必须分层**：三项已填 SiliconFlow profile 的真实 probe 均被 provider 以 HTTP 401 拒绝，当前可访问的 `.env.local-live` 中 `HARNESS_LLM_API_KEY` 仍为空，因此不得重试/不得 mutation；四模型全绿、tenant/models/KB/Space/PDF provision、五节点 local live、GitHub dispatch 与 018 T7 均未完成。有效凭据补齐前状态是 **BLOCKED/NOT RUN**，不是 live verified。T6 还差独立双审、push 后 CI 与 PR 更新；T8 必须等 023 workflow 合入 `main` 后才可对 PR #9 执行。
 
    **阶段 1 — 合并后收尾（当前）**
    - [x] PR #5、#6 已合并，最新 `origin/main` 已确认指向 `27c36641`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
@@ -28,14 +28,14 @@
    - [ ] 对账旧 ledger：001/003/004 的未勾项只做完成证据回填，不重做已验收功能；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交 020；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
    - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
 
-   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（0/7）**
-   - [ ] 按 `openspec/changes/018-release-snapshot-read-model/` 顺序完成 T1～T7；018 独占 Alembic `0005`。
-   - [ ] 交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback。
-   - [ ] 验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。无真实环境时 live 必须记 `NOT RUN`，不得伪绿。
+   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（PR #9 复审通过，live 收口中）**
+   - [x] T1～T6 软件完成并通过两轮独立复审（`d38dfb2` 全部发现关闭；deterministic 1224 passed / mypy 181 files 全绿，见 PR #9 复审记录）；018 独占 Alembic `0005`。
+   - [ ] T7 真实 WeKnora live：凭据已补齐（2026-07-16），由 023 受信 workflow 对 PR #9 exact-SHA 执行五节点；无证据前保持 `NOT RUN`，不得伪绿。
+   - [ ] PR #9 合入后解锁：021（迁移 0006）、013 实现、008 W4 回滚动作。
 
-   **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
-   - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。
-   - [ ] 本轨不依赖 018，可独立或与 018 并行；只做工具、fixture/replay 与门禁，不改写真实 11/13 现场、不调用大模型，为 020 提供稳定 artifact 工具与合同。`run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行。
+   **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（✅ 已完成并合入 main）**
+   - [x] T1～T6 严格 TDD 完成，codex 七轮 APPROVED，随 PR #8 合入（merge commit `4d9c84e`，2026-07-15）；证据见 B21 与 `openspec/changes/019-golden-quality-gate/validation-report.md`。
+   - `run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行（边界不变）。
 
    **收敛轨 — 021 Source lifecycle ordering（0/10，硬依赖 018）**
    - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
@@ -43,6 +43,8 @@
    - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
 
    **价值出口 — 020 真实金标/baseline 运行（硬依赖 019+021）**：019 提供 artifact 工具/合同，021 关闭 source ordering 风险；两者完成后，020 才从 T1 `run-admission` 开始，未准入前零模型调用。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与代码轨共享分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
+
+0h. **并行执行蓝图（总设计师制定，业务方 2026-07-16 拍板）**：全轨道结构（L0 解阻塞 / L1 关键路径 021→020 / L2 工作台 008 / L3 MCP 013 / L4 知识形态 010→009→012 / L5 抽取提准 024 / L6 治理）、优先级与护栏见 `docs/insurance-kb/22-parallel-execution-blueprint.md`；**change 号与 Alembic 迁移号一律先在 `openspec/changes/README.md` 注册表占号**（022 撞号教训；0006=021、0007=010、0008=009、0009=012 已预分配）。当日拍板三条：①模型凭据已补齐，交 codex 处理 023 T7/T8 → 018 T7；②013 MCP 从 M2 提前（规格就绪，实现等 PR #9 合入）；③规格工作与不触 knowledge 域的实现（008 W1–W3、010 T1~T4 通道一/登记映射、024）**不等 PR #9**，即刻从 main 开工；**010 的 knowledge 域段（T5 起，structured 证据全消费链+冻结合同）排在 021 之后**（三轮复审裁决：关键路径 018→021→020 不因新功能插队而改变）。Wave 2（009/011/012）待架构会话完成基础对齐修订后放行。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -72,7 +74,7 @@
    （族命中 → 锚点直取 → 既有校验链，未命中降级通用管道；命中字段退出通用抽取/补漏/投票）+
    `TableStructureProvider` Protocol（pdfplumber 首实现，费率表数字走列定位直取 12 #1；
    PP-StructureV3 留接口+配置位 `HARNESS_TABLE_PROVIDER`）+ 可喂性评分（12 #4，manifest 记录+
-   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2，007 Claim 端衔接）。
+   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2；**2026-07-16 对账：该字段至今只在 pred 侧，Claim 主链/快照/MCP 未持久化——端到端落地已占号 change 026**，010/013 不预支承诺）。
    **修复 004 族指纹疑点**：无标题文档（说明书/费率表）曾全部退化为空串指纹 fam-e3b0c44298fc，
    现走 fallback（文档类型+页数桶+表头 token），有标题文档指纹零漂移。**留出验证**（盛世金越族，
    两分红产品归纳 → 尊享26终身寿留出）：fast path 命中字段正确率 1.00 vs 通用管道 0.00
@@ -81,7 +83,7 @@
 4. **非当前主线 backlog**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单），不得抢占 ⓪-0f 的执行顺序；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前排期以 ⓪-0f 为准：先收尾，018/019 可独立或并行，021 等 018，020 等 019+021。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行。
+**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前排期以 ⓪-0f/0h 为准：先收尾，018/019 可独立或并行，021 等 018，020 等 019+021；**并行轨道结构与开工基线见 `docs/insurance-kb/22-parallel-execution-blueprint.md`（L0–L6），编号占用见 `openspec/changes/README.md` 注册表**。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行。
 
 ## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
@@ -94,15 +96,14 @@
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
 | B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
-| B8 | PP-StructureV3 表格结构识别部署（006 遗留） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`，用金标回归 A/B 验证（11 §2）后替换默认 | 部署人工 + 金标回归 |
-| B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
-| B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
-| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 Draft PR #10**：T1～T5 软件闭环；六服务 loopback-only 与 PostgreSQL 临时角色闭环实机通过。三项 SiliconFlow key 被 provider 以 401 拒绝，当前 Harness 百炼 key 不可访问/为空；有效凭据补齐后再执行四模型 probe、幂等 provision、五节点 local/GitHub live | 部署+联调 |
+| B8 | **008 审核工作台实现** | **已条款化（正式 delta）可认领（轨道 L2，2026-07-16 二版）**：`openspec/changes/008-review-workbench/`（W1–W7 + T1–T8；FastAPI+Jinja2+HTMX，复用 007/016/019 服务层与夹具；**token→Space 授权绑定**；**W4 整页等 PR #9**）；Owner 复审=A | 开发型任务，中等 |
+| B9 | PP-StructureV3 表格结构识别服务部署接入（006 遗留；原重复的两行 B8/B9 已合并于此） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署（AGPL 隔离，08 §2）；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`；接入后跑费率表对比，用金标回归 A/B 验证（11 §2）替换默认；接入时证据元数据补记表格行列坐标（同事实证反馈 2026-07-16，见 19 号实证补强） | 部署人工 + 金标回归 + 联调 |
+| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 已随 PR #10 合入 main（2026-07-16）**：软件与本机六服务/PostgreSQL 临时角色闭环完成；**模型凭据已补齐（2026-07-16，见 0h）**，由 codex 执行四模型 probe→幂等 provision→五节点 local/GitHub live→018 T7 exact-SHA；完成前 live 状态保持 `NOT RUN`（历史阻塞记录 SiliconFlow 401/key 为空见 0g，仅存档） | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |
-| B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | `openspec/changes/010-structured-import/proposal.md`；属后续 backlog，不抢占 ⓪-0f 主线 | 开发型，中等 |
+| B12 | 010 结构化直入通道实现（**双通道**：meta bootstrap→003 零 Claim / 可信业务源→Claim/QA） | **已条款化（正式 delta）可认领（轨道 L4 首件，2026-07-16 四版：+冻结 provenance 合同）**：`openspec/changes/010-structured-import/`（I1–I8 + T1–T12；正交 source_kind + FrozenEvidence 变体/发布时去引用/读侧零回查 + canonical hash 防篡改 + 双轴幂等（record_hash×mapping_version）+ 同键异 hash fail-closed + space 一致性；**knowledge 域清单 tables/models/merge/pages/snapshots+迁移 0007 全部 Owner-A 复审**；T1~T4 即刻、**T5 起排在 021 之后**——关键路径 018→021→020 不变） | 开发型，中等偏大 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立） | `openspec/changes/011-knowledge-health/proposal.md` | 开发型，中小 |
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | `openspec/changes/012-qa-objects/proposal.md`，依赖 B12 | 开发型，中等 |
-| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | `openspec/changes/013-insurance-mcp/proposal.md` | 开发型，中小 |
+| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪（正式 delta；轨道 L3，业务方 2026-07-16 拍板从 M2 提前）**：`openspec/changes/013-insurance-mcp/`（M1–M5 + T1–T8；**HTTP Streamable 主传输**——WeKnora 禁用 stdio；读路径走 018 SnapshotReader），**实现等 PR #9 合入后开工** | 开发型，中小 |
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
@@ -110,7 +111,10 @@
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **并行轨 A**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005`，完成后解锁 021 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
-| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，完成后与 019 共同解锁 020 | 开发型，中大 |
+| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后（注册表预分配 0006），完成后与 019 共同解锁 020 | 开发型，中大 |
+| B24 | 024 抽取召回提升（extract_empty 主攻 + 值粒度指引 + A10 弱值/兼容性护栏） | **可认领（轨道 L5，2026-07-16 新开）**：`openspec/changes/024-extraction-recall-uplift/`（E1–E6 条款 + T1–T7 任务）；005 归因工单→回放 RED 用例，零真实模型调用；E6 承接 LLM-wiki-black A10 唯一未迁移真空（Q012/Q026 历史 bug 固化）；真实回归归 020 D4 | 开发型，中小 |
+| B25 | 025 合并前置弱值门槛（已占号未开目录） | 更粗略新值不开冲突（Q026 防审核队列被垃圾冲突淹没）+ informationScore 仅作 008 排序信号不作替换判据；小型，PR #9 合入后提案（knowledge/ 域），可与 B24 同一执行者顺手接 | 开发型，小 |
+| B26 | 026 data_quality 端到端持久化（已占号未开目录） | 12 号 #2 采纳项对账发现只落了 pred 侧：需 Claim/Revision/Snapshot/MCP 全链字段+迁移+回填设计；业务确需时立项，落地前 010/013 等不得预支该字段承诺 | 开发型，中小 |
 
 > 016～021 已有条款级规格；验收以各 change spec、测试与 validation-report 为准。020 是环境/预算约束的数据运行，软件门禁绿不等于真实运行完成；021 规格存在不等于 ordering 能力已落地。
 

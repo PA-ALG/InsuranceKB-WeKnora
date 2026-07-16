@@ -8,7 +8,7 @@
 | # | 机制 | 采纳决策 | 落点 |
 |---|---|---|---|
 | 1 | **数值确定性直取，模型不碰原始数字** | 采纳并升级为原则：费率表/利益演示表数字走表格结构识别（PP-StructureV3）→ 结构化直取；product_meta.json 字段直取（003 已做）；LLM 只做定位与语义字段 | 006（表格结构化后，费率类字段从"LLM 抽"改为"列定位直取"）；04 补原则条款 |
-| 2 | **`data_quality` 来源可信度分级** | 采纳：每个 Claim 增加 `data_quality ∈ {structured_direct, table_parsed, llm_extracted, llm_inferred}`，与现有 confidence 正交（confidence=过程可信度，data_quality=来源等级）；审核/发布门禁按二者联合分流 | 007 验收时并入 Claim 模型（03 §7 claims 表加列，07 导入器写入）；验收阶段由主会话补 |
+| 2 | **`data_quality` 来源可信度分级** | 采纳：每个 Claim 增加 `data_quality ∈ {structured_direct, table_parsed, llm_extracted, llm_inferred}`，与现有 confidence 正交（confidence=过程可信度，data_quality=来源等级）；审核/发布门禁按二者联合分流 | ⚠️ **2026-07-16 对账：未落地**——至今只在 compiler pred 侧，Claim 主链/快照/MCP 未持久化（原"007 验收时并入"未执行）；端到端落地已占号 **change 026**，落地前任何 change 不得预支该字段承诺 |
 | 3 | **引用断链硬门禁** | 采纳：发布前校验每条 Evidence 的 chunk_id/页码可反向解引用（WeKnora chunk 存在、页码在文档范围内），断链 → 拒绝发布该 Claim 并进复核，**不是降级而是硬拦** | 007 发布器门禁；已有的"chunk_refs 服务端不校验"规避措施（02 §4.3）升级为此 |
 | 4 | **文档"可喂性"确定性评分 + 硬门禁** | 采纳：解析产物在进抽取管道前打分（章节完整性/表格列名合法/截断检测/乱码检测/超大 section），不达标走解析升级链（11 §2），仍不达标进隔离区不进管道 | 006（与解析升级链的质量检测合并实现）；评分维度定义进 11 §2 |
 | 5 | **`.rejections` 隔离区 + dry-run/apply 治理** | 采纳：抽取/合并的拒绝样本落隔离目录（留原始产物+meta 审计痕迹，可救回）；所有批量治理脚本默认 dry-run、显式 `--apply` 才生效 | 007 合并引擎 CLI 与 unassigned 池治理；10 开发规范补"批量写操作默认 dry-run"条款 |

@@ -17,7 +17,7 @@
 
 ## 2. Git 与变更流程
 
-1. **一 change 一分支**：`feat/NNN-<change-slug>`，从 `feature/insurance-kb-foundation`（当前主干）切出；禁止直接推主干；
+1. **一 change 一分支**：`feat/NNN-<change-slug>`，从 **`main`**（当前主干，基础建设已随 PR #1 合入，2026-07-16 修正旧口径）切出；禁止直接推主干；开工前先在 `openspec/changes/README.md` 注册表占号（change 号与迁移号）；
 2. PR 必须包含：对应 openspec change 的 specs 条款 → 测试映射说明、门禁截图/输出（ruff+mypy+pytest 全绿）、HANDOFF 更新（若改变状态）；
 3. **评审双查**：功能由模块 Owner 查；**边界纪律任何评审者都查**（见 §4 清单）；两人 approve 才合（3 人团队=另外两人至少一人 approve + Owner approve，Owner 自己的 PR 由另两人之一 approve）；
 4. 合并即推送远端；每次合并后合并者负责确认 CI 绿；
