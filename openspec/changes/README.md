@@ -16,7 +16,7 @@
 | 007 | claims-changeset-publish | ✅ 已交付 | |
 | 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
 | 009 | concept-layer | 📋 提案（待基础对齐修订） | 轨道 L4；迁移预分配 0008 |
-| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据**全消费链**（正交 source_kind，models/merge/pages 同 PR 闭合）；迁移预分配 0007；knowledge 域改动 Owner-A 复审；T1~T4 即刻、knowledge 域段候 PR #9 且**先于 021** |
+| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据**全消费链+冻结 provenance 合同**（正交 source_kind；models/merge/pages/snapshots 同 PR 闭合；双轴幂等 record_hash×mapping_version）；迁移预分配 0007；knowledge 域改动 Owner-A 复审；T1~T4 即刻、**knowledge 域段排在 021 之后**（关键路径不变） |
 | 011 | knowledge-health | 📋 提案（待基础对齐修订） | 轨道 L4 收尾 |
 | 012 | qa-objects | 📋 提案（待基础对齐修订） | 依赖 010；迁移预分配 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
@@ -52,9 +52,10 @@
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 并行开工基线（2026-07-16 裁决）
+## 并行开工基线（2026-07-16 裁决，三轮复审修订）
 
 - 规格/文档工作：一律以当前 `main` 为基，**不等 PR #9**；
-- 实现工作：不触碰 `knowledge/` 发布与快照读取路径的轨道（008 的 W1–W3、010、024）即刻可从 `main` 开工；
+- 实现工作：不触碰 `knowledge/` 的部分（008 的 W1–W3、**010 T1~T4（通道一/登记/映射）**、024）即刻可从 `main` 开工；
 - 触碰读模型/回滚/发布语义的部分（013 实现、008 W4、021 全部）在 **PR #9 合入后**从新 main 开工；
+- **010 的 knowledge 域段（T5 起，structured 证据全消费链+冻结合同）基于 021 合入后的 main**——关键路径 018→021→020 不因新功能插队而改变；
 - 总蓝图与轨道分工见 `docs/insurance-kb/22-parallel-execution-blueprint.md`，实时状态以 `HANDOFF.md` ⓪ 为准。

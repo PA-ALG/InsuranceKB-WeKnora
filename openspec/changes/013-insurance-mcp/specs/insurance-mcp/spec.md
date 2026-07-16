@@ -6,7 +6,7 @@
 
 ### Requirement: M1 四个只读工具
 
-server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_of_date?)`（exact→alias→candidates 三级，绝不单选猜测；as_of_date 过滤版本生效区间，无适用版本返回 not_found(reason=no_version_at_date)）；`get_product_facts(product_id, as_of_date?, fields?)`（仅日期适用的已发布事实，每项含 value/tri_state/data_quality/confidence/evidence_summary/claim_id）；`get_claim_evidence(claim_id)`（全证据链：引文/页码/来源文档/权威等级/审核摘要/revision 列表；非 published 一律 not_found，不泄露存在性）；`compare_products(product_ids≤5, fields)`（产品×字段矩阵，缺值显式 unknown 并注明"未收录≠不存在"）。
+server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_of_date?)`（exact→alias→candidates 三级，绝不单选猜测；as_of_date 过滤版本生效区间，无适用版本返回 not_found(reason=no_version_at_date)）；`get_product_facts(product_id, as_of_date?, fields?)`（仅日期适用的已发布事实，每项含 value/tri_state/data_quality/confidence/evidence_summary/claim_id）；`get_claim_evidence(claim_id)`（全证据链，按 source_kind 分支呈现：weknora ⇒ 引文/页码/来源文档；**structured ⇒ source_system/external_record_id/source_revision/record_locator/record_hash/mapping_version，SHALL NOT 呈现伪页码/伪 chunk**；两种均含权威等级/审核摘要/revision 列表，且全部取自 018 冻结 Evidence JSON；非 published 一律 not_found，不泄露存在性）；`compare_products(product_ids≤5, fields)`（产品×字段矩阵，缺值显式 unknown 并注明"未收录≠不存在"）。
 
 #### Scenario: 产品解析绝不猜测
 
@@ -22,6 +22,12 @@ server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_o
 
 - **WHEN** 请求 draft/candidate Claim 的证据链
 - **THEN** 返回 not_found（与"不存在"不可区分）
+
+#### Scenario: 结构化证据链无伪页码
+
+- **WHEN** 请求一条 source_kind=structured 证据支撑的 published Claim 证据链
+- **THEN** 返回 source_system/external_record_id/revision/locator/record_hash/mapping_version（取自冻结 Evidence JSON，零回查可变源表）
+- **AND** 响应不含任何页码/chunk 字段的伪值（缺省即缺省，不编造）
 
 ### Requirement: M2 响应信封与拒答语义
 
