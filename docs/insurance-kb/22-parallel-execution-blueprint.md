@@ -18,7 +18,7 @@
 | **L1 关键路径** | 021 ordering → 020 真实基线（run-admission → D2/D3/D4） | codex | 021=A（knowledge/迁移）；020=B（goldenset/数据） | 018 合并；020 另需 019✅ | PR #9 合并后 | `sources/`+`knowledge/` ordering、迁移 0006；020 = `dataset/` |
 | **L2 审核面** | 008 审核工作台 | C1 | **A**（workbench/ 属 A 域） | 007/016/019 ✅；**W4 整页等 018** | **即刻**（W4 除外） | `workbench/`（新） |
 | **L3 Agent 出口** | 013 insurance MCP | C2 | C（MCP 新包） | 003/007 ✅ + 018 读模型 | 规格已就绪；**实现等 PR #9** | `mcp/`（新） |
-| **L4 知识形态** | 010 直入 → 009 概念层 → 012 QA →（011 健康度） | C3 | C（新包）；**010 的 knowledge 域改动（tables/models/merge/pages/snapshots+迁移 0007）加 A** | 007 ✅；**010 的 knowledge 域段前置 018+021**；012 依赖 010 | 010 **通道一/登记映射（T1~T4）即刻**；knowledge 域段（T5 起）**基于 021 合入后的 main**（不插入关键路径，三轮复审裁决 2026-07-16）；009/012 待基础对齐修订 | 导入新包、`concepts/`（新）、QA 模块（新）；迁移 0007/0008/0009；**010 例外：触及 knowledge 域含冻结合同（见其 proposal 影响节）** |
+| **L4 知识形态** | 010 直入 → 009 概念层 → 012 QA →（011 健康度） | C3 | C（新包）；**010 的 knowledge 域改动（tables/models/merge/pages/snapshots/reader+迁移 0007）加 A** | 007 ✅；**010 的 knowledge 域段前置 018+021**；012 依赖 010 | 010 **通道一/登记映射（T1~T4）即刻**；knowledge 域段（T5 起）**基于 021 合入后的 main**（不插入关键路径，三轮复审裁决 2026-07-16）；009/012 待基础对齐修订 | 导入新包、`concepts/`（新）、QA 模块（新）；迁移 0007/0008/0009；**010 例外：触及 knowledge 域含冻结合同（见其 proposal 影响节）** |
 | **L5 抽取提准** | 024 recall uplift（005 归因清单主攻） | B | B（compiler/ 域，另一人 approve） | 004/005 ✅ | **即刻**（零真实模型调用） | `compiler/`（extract/gapfill/prompts） |
 | **L6 治理** | 编号注册表、文档对账、已交付 change 归档流程 | 架构会话 | 双查任一 | — | 本轮完成 | docs + openspec 元数据 |
 

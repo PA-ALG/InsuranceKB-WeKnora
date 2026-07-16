@@ -12,7 +12,7 @@
 工具面（首批 4 个，全部只读、确定性）：
 
 1. `resolve_product(query, as_of_date?)`：产品名/别名/planCode → 产品 + 适用版本（复用 003 别名索引；as_of_date 命中 version 生效区间）；多义返回候选列表不猜；
-2. `get_product_facts(product_id, as_of_date?, fields?)`：按日期取当时 published 的 Claim 集（默认今天=当前有效）；每个值带 data_quality/confidence/证据摘要；
+2. `get_product_facts(product_id, as_of_date?, fields?)`：按日期取当时 published 的 Claim 集（默认今天=当前有效）；每个值带 confidence/权威等级/source_kind/证据摘要（data_quality 待 026 端到端落地后再纳入）；
 3. `get_claim_evidence(claim_id)`：完整证据链（原文引文、页码、来源文档、权威等级、审核记录、版本历史）；
 4. `compare_products(product_ids, fields)`：同字段跨产品对照表（结构化返回，供 Agent 生成对比回答）。
 

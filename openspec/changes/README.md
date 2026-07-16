@@ -16,7 +16,7 @@
 | 007 | claims-changeset-publish | ✅ 已交付 | |
 | 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
 | 009 | concept-layer | 📋 提案（待基础对齐修订） | 轨道 L4；迁移预分配 0008 |
-| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据**全消费链+冻结 provenance 合同**（正交 source_kind；models/merge/pages/snapshots 同 PR 闭合；双轴幂等 record_hash×mapping_version）；迁移预分配 0007；knowledge 域改动 Owner-A 复审；T1~T4 即刻、**knowledge 域段排在 021 之后**（关键路径不变） |
+| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据全消费链：**快照 v2 判别联合、batch_fingerprint 批次身份、mapping_manifest 四元组、双轴幂等**（tables/models/merge/pages/snapshots/reader 同 PR 闭合）；迁移预分配 0007；knowledge 域 Owner-A 复审；T1~T4 即刻、**knowledge 域段排在 021 之后**（关键路径不变） |
 | 011 | knowledge-health | 📋 提案（待基础对齐修订） | 轨道 L4 收尾 |
 | 012 | qa-objects | 📋 提案（待基础对齐修订） | 依赖 010；迁移预分配 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
@@ -33,7 +33,8 @@
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
 | 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
 | 025 | merge-weak-value-guard | 🔒 已占号（目录未开） | 合并前置弱值门槛：更粗略新值不开冲突（Q026 防审核队列垃圾）；小型，PR #9 合入后提案；可与 024 同一执行者顺手接 |
-| 026+ | （空闲） | | 先占号再开目录 |
+| 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
+| 027+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

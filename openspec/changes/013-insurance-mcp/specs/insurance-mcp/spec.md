@@ -6,7 +6,7 @@
 
 ### Requirement: M1 四个只读工具
 
-server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_of_date?)`（exact→alias→candidates 三级，绝不单选猜测；as_of_date 过滤版本生效区间，无适用版本返回 not_found(reason=no_version_at_date)）；`get_product_facts(product_id, as_of_date?, fields?)`（仅日期适用的已发布事实，每项含 value/tri_state/data_quality/confidence/evidence_summary/claim_id）；`get_claim_evidence(claim_id)`（全证据链，按 source_kind 分支呈现：weknora ⇒ 引文/页码/来源文档；**structured ⇒ source_system/external_record_id/source_revision/record_locator/record_hash/mapping_version，SHALL NOT 呈现伪页码/伪 chunk**；两种均含权威等级/审核摘要/revision 列表，且全部取自 018 冻结 Evidence JSON；非 published 一律 not_found，不泄露存在性）；`compare_products(product_ids≤5, fields)`（产品×字段矩阵，缺值显式 unknown 并注明"未收录≠不存在"）。
+server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_of_date?)`（exact→alias→candidates 三级，绝不单选猜测；as_of_date 过滤版本生效区间，无适用版本返回 not_found(reason=no_version_at_date)）；`get_product_facts(product_id, as_of_date?, fields?)`（仅日期适用的已发布事实，每项含 value/tri_state/confidence/evidence_summary（含权威等级与 source_kind）/claim_id——**SHALL NOT 承诺 Claim 主链尚不存在的 `data_quality` 字段**，该字段端到端落地见 change 026 占号）；`get_claim_evidence(claim_id)`（全证据链，按 source_kind 分支呈现：weknora ⇒ 引文/页码/来源文档；**structured ⇒ source_system/external_record_id/source_revision/record_locator/record_hash/mapping_version，SHALL NOT 呈现伪页码/伪 chunk**；两种均含权威等级/审核摘要/revision 列表，且全部取自 018 冻结 Evidence JSON；非 published 一律 not_found，不泄露存在性）；`compare_products(product_ids≤5, fields)`（产品×字段矩阵，缺值显式 unknown 并注明"未收录≠不存在"）。
 
 #### Scenario: 产品解析绝不猜测
 

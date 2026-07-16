@@ -35,7 +35,7 @@
 
 ### Requirement: I3 可信业务源登记与权威等级
 
-通道二的每个来源 SHALL 在来源登记配置（source registry，YAML/表均可但须单一权威来源）中声明：source_system 标识、权威等级（对齐 03 §6.1 数值序）、数据责任人、记录 schema/映射引用；导入产生的 Claim 候选 SHALL 携带该登记权威等级（data_quality=structured_direct），由 007 权威序统一裁决，SHALL NOT 在导入侧特判覆盖。
+通道二的每个来源 SHALL 在来源登记配置（source registry，YAML/表均可但须单一权威来源）中声明：source_system 标识、权威等级（对齐 03 §6.1 数值序）、数据责任人、记录 schema/映射引用；导入产生的 Claim 候选 SHALL 以 `source_kind=structured` + `extraction_method=structured_import` + 登记的 `authority_level`（已落库字段）表达来源可信度，由 007 权威序统一裁决，SHALL NOT 在导入侧特判覆盖；**SHALL NOT 引入 Claim 主链尚不存在的 `data_quality` 字段**（该字段的端到端持久化另立 change 026，见注册表）。
 
 #### Scenario: 登记来源的权威等级进入合并裁决
 
@@ -46,18 +46,22 @@
 
 **正交来源轴**：证据 SHALL 新增 `source_kind ∈ {legacy, weknora, structured}`，与表示链接质量的 `lineage_status` 正交——`lineage_status` 值域**不变**（linked/page_only/ambiguous），且仅对 source_kind=weknora 有意义；SHALL NOT 把来源种类塞进 lineage_status。
 
-迁移 0007 SHALL：新建 `structured_source_records` 表（space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、batch_id、imported_at；唯一键=space_id+source_system+external_record_id+source_revision），该表 **insert-only**——服务层无更新路径且数据库边界拒绝 UPDATE（对齐 018 不可变触发器风格，SQLite/PostgreSQL 双方言）；`claim_evidence` 新增 `source_kind`（回填既有行：lineage_status 非空→weknora、空→legacy）、可空 `structured_record_id`（FK）与可空 `mapping_version`；CHECK 约束按 kind 分支——weknora ⇒ 017 审计组齐全（既有语义不变）；structured ⇒ structured_record_id 与 mapping_version 非空 ∧ WeKnora 审计组/chunk 字段/page 全空；legacy ⇒ 全空；downgrade 干净可逆。
+迁移 0007 SHALL 按以下 schema 固定（不留实现者二选一）：
+- `structured_source_records`：`id`（36-char PK）+ space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、`batch_id`（FK→`change_sets.id`）、imported_at；UNIQUE(space_id, source_system, external_record_id, source_revision)；**insert-only**——服务层无 UPDATE/DELETE 路径，SQLite/PostgreSQL 均以 DB trigger 拒绝 UPDATE **与 DELETE**（合规删除须另立显式 purge change，本 change 不暗开口子）；
+- `claim_evidence`：新增**非空** `source_kind ∈ {legacy, weknora, structured}`、可空 `structured_record_id`（FK）、可空 `mapping_version`；迁移顺序 SHALL 为"先加 nullable/临时 default → 按'lineage 审计组完整→weknora，否则→legacy'回填 → 再收紧 NOT NULL/CHECK"；CHECK 按 kind 分支——weknora ⇒ 017 审计组齐全（既有语义不变）；structured ⇒ structured_record_id 与 mapping_version 非空 ∧ 禁止伪 page/chunk/raw_kb lineage；legacy ⇒ 全空、**仅存量兼容且不得冻结发布**；
+- **downgrade 有条件**：仅当库中无 structured 行、无 structured Evidence、无 v2 快照时允许降级；发现任一项即 fail-closed——SHALL NOT 以"可逆"为名销毁 provenance。
 
-**record_hash 语义（比较对象定死，防恒真）**：record_hash = canonical raw record（键排序、UTF-8、无多余空白的 JSON 序列化）的 SHA-256；任何"一致性"校验 SHALL 以 raw_payload **重算** canonical hash 与落库值比对（探测绕库改写），SHALL NOT 把表中 record_hash 与其自身比较。**mapping_version 语义**：映射规则内容哈希（YAML canonical SHA-256），单一权威来源；导入批次与证据（及其冻结副本）SHALL 携带——来源内容版本（record_hash）与转换版本（mapping_version）是两条独立轴。
+**record_hash 语义（比较对象定死，防恒真）**：record_hash = canonical raw record（键排序、UTF-8、minified JSON 序列化）的 SHA-256；任何"一致性"校验 SHALL 以 raw_payload **重算** canonical hash 与落库值比对（探测绕库改写），SHALL NOT 把表中 record_hash 与其自身比较。
 
-**`knowledge_id` 语义**：SHALL 保持非空，定义为"来源容器标识"——weknora=WeKnora knowledge id（既有）；structured=**source_system 标识**（供页面展示回退名与按来源分组），SHALL NOT 用空串/sentinel。
+**mapping_version 语义（覆盖全部会改变输出的行为，防"YAML 未变代码变"错误 no-op）**：`mapping_manifest = {parsed_mapping, transformer_registry_version, normalizer_version, target_schema_version}`——YAML 先 parse 为 JSON 兼容树再 canonicalize（sorted-key、minified、UTF-8；注释/缩进/键序不影响结果）；`effective_mapping_version = SHA-256(canonical(mapping_manifest))`；ChangeSet SHALL 持久化 canonical manifest，Evidence 与快照冻结副本携带 digest；transformer/normalizer 行为变更 SHALL bump 对应版本，SHALL NOT 只改代码不改 manifest 版本。来源内容版本（record_hash）与转换版本（effective_mapping_version）是两条独立轴。
+
+**`knowledge_id` 语义**：SHALL 保持非空，定义为"来源容器标识"——weknora=WeKnora knowledge id（既有）；structured=**source_system 标识**（供页面展示回退名与按来源分组），SHALL NOT 用空串/sentinel；**真正的证据身份只认 `structured_record_id`**（knowledge_id 仅展示/分组用途，不参与身份判定）。
 
 **全消费链 SHALL 在同一实现 PR 内闭合**（不是只改表；以下均属 knowledge 域、Owner-A 复审）：
 - `ProposedEvidence`：新增 source_kind、structured_record_id 与 mapping_version，校验按 kind 分支——structured 必须携带已登记记录身份+映射版本且 WeKnora 审计组全空；weknora/legacy **既有输入继续可解析、校验/裁决行为不变**（接受/拒绝结果与理由一致；不承诺序列化输出字节级不变，兼容策略见下）；
 - `merge`：`_evidence_rows` 持久化新字段；enrich 追加与 proposal aggregate 去重 SHALL 保留 structured 身份（去重键含 structured_record_id+mapping_version）；merge 时 SHALL 校验 `ProposedClaim.space_id == structured_source_record.space_id`，不一致在任何写入前 fail-closed（单列 FK 不构成 Space 保证）；
 - `pages._evidence_view`：新增 structured 验证分支——验证发生在**发布/冻结时**：structured_record_id 可解析到留存记录 ∧ 以 raw_payload 重算 canonical hash 等于落库 record_hash ⇒ source_verified=true；chunk_verified 恒 false；source_ref 呈现 source_system+external_record_id+revision，SHALL NOT 产生伪 chunk/page 引用；记录缺失或 hash 不匹配 ⇒ 发布在任何 Wiki mutation 前失败（对齐 018 R1.3 stale/不完整证据拒发语义）；
-- **冻结合同（018 对齐，文件域含 `snapshots.py` 与 reader 合同）**：`FrozenEvidence` SHALL 扩展为按 source_kind 分支的变体——weknora 组必填集不变；structured ⇒ **发布时去引用冻结** source_system/external_record_id/source_revision/record_locator/record_hash/mapping_version 于 Evidence JSON；SnapshotReader、页面渲染与 013 证据链 SHALL 只读冻结值，发布后 SHALL NOT 回查可变的 structured_source_records（018"发布时事实冻结"语义不破坏）；
-- **序列化兼容策略**：冻结/对外 JSON 采用追加式演进——新增字段带默认值、既有 consumer 对未知字段的容忍策略显式声明；weknora/legacy 冻结形态不变。
+- **冻结合同 = 快照正式升级 v2（018 对齐；文件域含 `snapshots.py` 与 `reader.py`）**：`ReleaseSnapshot.read_model_version` CHECK SHALL 由 (0,1) 扩为 **(0,1,2)**（0 仍为 coverage gap 不可发布）；**v1 原模型完全不变**；v2 Evidence 为严格判别联合——`weknora`（冻结既有 v1 lineage 字段并显式带 source_kind）/ `structured`（冻结 source_system/external_record_id/source_revision/record_locator/record_hash/mapping_version，禁止制造 page/chunk）——**不提供可发布的 legacy 分支**；010 上线后的新快照统一写 v2，历史 v1 不迁写；Reader SHALL 严格读取 v1 与 v2 两种（判别校验，**禁止用全局 extra=ignore 掩盖 schema 错误**）；**v2 writer 只能在所有线上 reader 已支持 v2 后启用**（rollout gate 有测试或显式部署检查）；回滚只切 current pointer、SHALL NOT 改写历史快照；SnapshotReader、页面渲染与 013 证据链只读 FrozenEvidence，发布后 SHALL NOT 回查可变的 structured_source_records。
 
 #### Scenario: 领域模型按 kind 分支且既有行为不变
 
@@ -82,15 +86,21 @@
 - **WHEN** ProposedClaim.space_id 与其 structured 证据指向记录的 space_id 不一致
 - **THEN** merge 在任何写入前 fail-closed（错误指明两个 space），不产生 Claim/ChangeItem
 
-#### Scenario: 迁移回填与 downgrade
+#### Scenario: 迁移回填与有条件 downgrade
 
-- **WHEN** 迁移 0007 应用于含 017 lineage 证据与 007 legacy 证据的库
-- **THEN** 既有行回填 source_kind=weknora/legacy 且语义零漂移（017 成组约束照旧）
-- **AND** downgrade 移除新增列/表后既有数据完好
+- **WHEN** 迁移 0007 应用于含 017 lineage 证据与 007 legacy 证据的库（先 nullable 回填后收紧）
+- **THEN** 既有行回填 source_kind=weknora/legacy 且校验/裁决语义不变（017 成组约束照旧）
+- **AND** 空 structured 数据时 downgrade 干净；库中存在任一 structured 行/structured Evidence/v2 快照时 downgrade fail-closed（SQLite 与 PostgreSQL 双方言均验证）
+
+#### Scenario: v1/v2 混合历史与回滚兼容
+
+- **WHEN** 升级后库中同时存在历史 v1 快照与新发布 v2 快照，且 current 从 v2 回滚到 v1
+- **THEN** Reader 对 v1/v2 均严格可读（判别校验，无 extra=ignore）、混合历史可枚举、回滚仅移动指针不改写历史
+- **AND** legacy Evidence 参与发布被拒（无可发布 legacy 分支）
 
 ### Requirement: I5 幂等、身份不变量、批次与 dry-run
 
-通道二幂等键 SHALL 为 source_system + external_record_id + source_revision，且**身份绑内容、内容与转换分轴**：幂等 no-op 的条件 SHALL 为**（record_hash, mapping_version）双轴均未变**；**同键同 hash 但 mapping_version 变化** ⇒ 显式受控重算（以新映射重导出 ChangeItem 经 007 合并产生新 revision，非 collision、SHALL NOT 静默 no-op——否则映射修正后既无法安全重算、也无法解释历史 Claim 按哪版映射产生）；**同键不同 hash** ⇒ revision collision，在任何副作用前 fail-closed（错误指明幂等键与两个 hash），SHALL NOT 报 unchanged 或静默吞掉内容变化；revision 变化 SHALL 走 007 合并（enrich/supersede/conflict）而非重复建 Claim。每批次 SHALL 生成一个 ChangeSet，批内记录级失败隔离（单条坏记录入错误清单不中断批次）；dry-run SHALL 为默认（输出记录数/产品匹配率/未匹配清单/缺字段/预计 ChangeItem 计数，不落库），`--apply` 执行结果与 dry-run 预测 SHALL 一致（同一输入差异=0）。
+通道二幂等键 SHALL 为 source_system + external_record_id + source_revision，且**身份绑内容、内容与转换分轴**：幂等 no-op 的条件 SHALL 为**（record_hash, effective_mapping_version）双轴均未变**；**同键同 hash 但 mapping 变化** ⇒ 显式受控重算——即使 Claim 值相同，也 SHALL **enrich 追加带新 mapping_version 的 Evidence，不得 skip**（否则无法解释历史 Claim 按哪版映射产生）；值变化则走正常 ChangeItem/人工裁决；**同键不同 hash** ⇒ revision collision，在任何副作用前 fail-closed（错误指明幂等键与两个 hash），SHALL NOT 报 unchanged 或静默吞掉内容变化；revision 变化 SHALL 走 007 合并（enrich/supersede/conflict）而非重复建 Claim。每批次 SHALL 生成一个 ChangeSet，批内记录级失败隔离（单条坏记录入错误清单不中断批次）；dry-run SHALL 为默认（输出记录数/产品匹配率/未匹配清单/缺字段/预计 ChangeItem 计数，不落库），`--apply` 执行结果与 dry-run 预测 SHALL 一致（同一输入差异=0）。
 
 #### Scenario: 同键同 hash 同映射版本重导零副作用
 
@@ -99,8 +109,8 @@
 
 #### Scenario: 映射修正触发受控重算而非静默 no-op
 
-- **WHEN** 同一记录（同幂等键、同 record_hash）在映射规则修正（mapping_version 变化）后重导
-- **THEN** 产生新 ChangeSet 经 007 合并（值未变则 enrich/跳过、值变则 supersede/conflict 留痕），新证据携带新 mapping_version
+- **WHEN** 同一记录（同幂等键、同 record_hash）在映射行为变更（effective_mapping_version 变化）后重导
+- **THEN** 产生新 ChangeSet 经 007 合并：**值相同 ⇒ enrich 追加带新 mapping_version 的 Evidence（不得 skip）**；值变化 ⇒ 正常 ChangeItem/人工裁决留痕
 - **AND** 不报 unchanged、不判 collision
 
 #### Scenario: 同键不同 hash 碰撞 fail-closed
@@ -113,6 +123,26 @@
 
 - **WHEN** 同一输入先 dry-run 后 `--apply`
 - **THEN** apply 产生的 ChangeItem 计数与 dry-run 预测逐类相等
+
+### Requirement: I9 批次与 ChangeSet 身份（batch_fingerprint 合同）
+
+一个 structured import batch SHALL 同 space_id + source_system + effective_mapping_version，包含 N 条记录并对应**一个** ChangeSet；该 ChangeSet 的 `source_kind` SHALL 固定为 `structured_import`（与 Evidence 的 `source_kind="structured"` 是两个不同字段域，SHALL NOT 混用）。`batch_fingerprint = SHA-256(canonical({space_id, source_system, effective_mapping_version, sorted[(external_record_id, source_revision, record_hash)]}))`。`change_sets` SHALL 新增可空 `batch_fingerprint / mapping_version / mapping_manifest`；structured batch 以 batch_fingerprint 唯一打开/复用 ChangeSet，记录表 `batch_id` 指向它。迁移 SHALL 把现有 source 唯一约束改为**两条 partial unique index** 并在 SQLite 与 PostgreSQL migration tests 中同时验证：非 structured ⇒ 维持 UNIQUE(space_id, source_kind, external_record_id, source_revision)（既有行为不变）；structured ⇒ UNIQUE(space_id, source_kind, batch_fingerprint)。重试相同 fingerprint SHALL 返回原 ChangeSet/no-op；mapping 变化改变 fingerprint SHALL 创建新 ChangeSet。
+
+#### Scenario: 一批 N 记录一个 ChangeSet 且重试幂等
+
+- **WHEN** 同一批（同 space/source_system/mapping，N 条记录）导入两次
+- **THEN** 首次恰好产生一个 source_kind=structured_import 的 ChangeSet（batch_fingerprint 唯一），记录表 batch_id 全部指向它
+- **AND** 重试命中相同 fingerprint 返回原 ChangeSet、零新副作用
+
+#### Scenario: mapping 变化产生新 ChangeSet 而不撞唯一键
+
+- **WHEN** 同一批记录在 effective_mapping_version 变化后重导
+- **THEN** fingerprint 变化 ⇒ 创建新 ChangeSet（不与原批唯一键冲突），受控重算按 I5 执行
+
+#### Scenario: 非 structured 批次唯一性不变
+
+- **WHEN** document/manual_edit/recompile/rollback 等既有 source_kind 的 ChangeSet 创建与复用流程重放
+- **THEN** 维持既有 UNIQUE(space_id, source_kind, external_record_id, source_revision) 行为，既有用例全部通过（SQLite 与 PostgreSQL 双方言迁移测试验证）
 
 ### Requirement: I6 Space 作用域与并发序保证
 
