@@ -98,7 +98,20 @@ def test_t7_live_postgresql_concurrent_notifications_create_one_recompile() -> N
             future=True,
             connect_args=_live_connect_args(schema),
         )
-        Base.metadata.create_all(engine)
+        # The isolated schema intentionally falls back to public for extensions.
+        # ``checkfirst=True`` would therefore see migrated public tables and skip
+        # creating this run's tables, so force DDL into current_schema instead.
+        Base.metadata.create_all(engine, checkfirst=False)
+        with engine.connect() as connection:
+            assert connection.scalar(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = :schema AND table_name = 'knowledge_spaces'"
+                    ")"
+                ),
+                {"schema": schema},
+            ) is True
         factory = sessionmaker(bind=engine, expire_on_commit=False, future=True)
         with factory() as seed_session:
             scope = seed_bound_scope(

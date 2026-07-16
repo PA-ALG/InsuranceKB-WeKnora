@@ -1,0 +1,28 @@
+# R2.1 fail-closed override. The password must be generated locally for each
+# environment; it has no example fallback.
+services:
+  harness-postgres:
+    image: postgres:16@sha256:eb4759788a2182f08257135e61a34f2cfc3c2914079f3465d64ee62350f4d081
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: ${HARNESS_POSTGRES_PASSWORD:?set a random local Harness PostgreSQL password}
+      POSTGRES_DB: insurance_kb
+    ports: !override
+      - "127.0.0.1:${HARNESS_POSTGRES_PORT:-5442}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    networks:
+      - harness-db
+    volumes:
+      - harness-postgres-data:/var/lib/postgresql/data
+
+networks:
+  harness-db:
+    name: local-live-harness-db
+
+volumes:
+  harness-postgres-data:

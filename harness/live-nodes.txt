@@ -1,0 +1,5 @@
+tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip
+tests/test_live.py::test_live_knowledge_endpoint_shape
+tests/test_live.py::test_live_wiki_page_crud_roundtrip
+tests/test_release_snapshot_live_018.py::test_r6_4_live_release_v1_v2_rollback_roundtrip
+tests/test_source_bridge_live_017.py::test_live_source_bridge_compiler_import_evidence_backlink
