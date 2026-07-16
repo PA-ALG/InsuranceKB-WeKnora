@@ -8,8 +8,8 @@
 |---|---|
 | ruff | All checks passed |
 | mypy | Success，184 files |
-| deterministic lane | **1293 passed / 5 deselected**（基线 1265，新增 28，既有零破坏） |
-| 008 focused | 28 passed（21 红→绿 + 7 守卫钉） |
+| deterministic lane | **1301 passed / 5 deselected**（gauntlet 返工后：+8 红队回归钉，既有零破坏） |
+| 008 focused | 28（W 条款）+ 8（红队回归 `test_redteam_008_findings.py`）passed |
 
 ## 2. 条款 → 证据（测试名）
 
@@ -31,6 +31,18 @@
 ## 3. 21 号 gauntlet 结果
 
 逐行过表：构造期约束在模型（Grant principal 非空白 validator、space_ids 非空）✓；判定单源（幂等判定读同一 DB 行，服务层"已决拒绝"保留为第二层）✓；对称路径——**补钉 1 条**（跨路径对象探测 404，见 W6.2 行）；fail-open 无（四类异常处理器 + 零配置拒绝）✓；无后门（路由白名单全等）✓；文档不过度声称（本报告范围声明与 ticket_source 空列）✓。
+
+## 3.5 Fresh-eyes 红队返工（2026-07-17，独立 agent + live 复现）
+
+逐行过表外补独立红队，抓到 3 项 HTTP 可达缺陷，均已修 + 8 条回归钉（`test_redteam_008_findings.py`）。根因统一：**路由只预期服务层抛 `ValueError`，而真实异常谱系为 `{ScopeViolation(ValueError), MergeError(RuntimeError)}`**——过窄（MergeError 漏网→500）且对 ScopeViolation 过宽（子类被 `except ValueError` 吞成 400 泄露）。
+
+| # | 级别 | 缺陷 | 修复 |
+|---|---|---|---|
+| **A** | **高** | 同字段二次 approve →未处理 `MergeError`→**500**；批量撞冲突→**整批回滚**丢失已成功项（违 W1） | `except MergeError`→**409 常量体**（不回显内含的他项 claim id）；批量每条 `begin_nested` savepoint→部分成功 |
+| A2 | 中 | 无证据候选 approve →同样 500 | 同 A（MergeError→409） |
+| F1 | 中 | overturn 越权探测返回 `400 "scope mismatch"`（泄露原因，W6.1 违例） | 补 `get_review_item` 预检→404（与 action/读路径对称）+ `except ScopeViolation: raise` |
+
+回归钉断言修复后正确行为：双 approve→409 常量体（`vid` 不泄露）、批量部分成功 published==1、overturn 外键→404 不泄露、以及对照组（畸形 id 无 500 / 空 Bearer 401 / operator 不可伪造 / 字符串 space_ids fail-closed）。**红队一处判断有误**（称 overturn 越权→403），由本地 live 复现纠正为实际 400——"逐条对源验证、送审前 live 复现"当场兑现。
 
 ## 4. 残留与交接
 

@@ -21,6 +21,7 @@
 5. **G8 数据源**：直接投影 ClaimRevision 不可变链，不另建时间线表（一个事实一处存储）。
 6. **导出 ticket_source 空列**：011 H1.6/015 未交付，列保留为空而非编造来源（诚实边界）。
 7. **依赖引入**：fastapi/jinja2/python-multipart 进 pyproject（共享文件，PR 描述显式声明）；模板 PackageLoader+autoescape。
+8. **Gauntlet 返工（2026-07-17，独立红队）**：抓到 3 项 HTTP 可达缺陷（详表见 validation-report §3.5），根因统一=**工作台边界未完整翻译服务层异常谱系**：`MergeError(RuntimeError)` 漏网→500（同字段双 approve / 无证据 / 批量整批回滚丢失已成功项，违 W1），`ScopeViolation(ValueError)` 被路由 `except ValueError` 吞成 400 泄露（overturn 越权，违 W6.1）。修法从异常谱系重设计：write 路由 `except ScopeViolation: raise`（→403 常量体）+ `except MergeError`（→409 常量体，不回显内含 id）+ 批量 savepoint 部分成功 + overturn 补 `get_review_item` 预检→404 对称。红队一处判断有误（overturn→403）由 live 复现纠正为 400——**规格自测的价值在找我没想到的失败模式，不是复述我想到的**。
 
 约束：零模型调用；不改 compiler/goldenset/adapters；对 knowledge/ 只经服务层（W5.1 静态断言钉住）。
-状态：**T1~T5/T7/T8(波次) 完成，门禁全绿；T6 候 PR #9**。依赖：007/016/019 已合入。
+状态：**T1~T5/T7/T8(波次) 完成 + gauntlet 返工闭合，门禁全绿（deterministic 1301 passed 零破坏）；T6 候 PR #9**。依赖：007/016/019 已合入。

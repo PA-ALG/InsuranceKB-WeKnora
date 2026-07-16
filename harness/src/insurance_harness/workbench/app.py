@@ -20,7 +20,11 @@ from insurance_harness.db.scope import (
     UnboundKnowledgeSpace,
     load_scope,
 )
-from insurance_harness.knowledge.merge import overturn_review, resolve_review
+from insurance_harness.knowledge.merge import (
+    MergeError,
+    overturn_review,
+    resolve_review,
+)
 from insurance_harness.knowledge.review import get_review_item
 
 from .auth import AuthDenied, Grant, SpaceForbidden, authorize, parse_tokens_config
@@ -35,6 +39,9 @@ from .queries import (
 )
 
 _FORBIDDEN_BODY = "forbidden"  # 常量响应：不回显目标 space/业务细节（W6 零泄露）
+# 服务层 MergeError（域冲突/证据不足）→ 409 常量体：绝不回显 str(exc)，
+# 因其含他项 claim id / product_version_id / predicate（W6 零泄露 + W1 干净拒绝）。
+_CONFLICT_BODY = "该字段已有生效声明或候选证据不足，请刷新队列后重试"
 
 _jinja = Environment(
     loader=PackageLoader("insurance_harness.workbench", "templates"),
@@ -113,6 +120,11 @@ def create_app(
                     session, scope, review_key, action,
                     actor=grant.principal, reason=reason,
                 )
+            except ScopeViolation:
+                raise  # 越权→app 403 常量体；ScopeViolation⊂ValueError，须先于下捕获
+            except MergeError:
+                # 域冲突（同字段已有 published）/ 无证据：W1 干净拒绝，常量体不泄露内部 id
+                return HTMLResponse(_CONFLICT_BODY, status_code=409)
             except ValueError as exc:
                 return HTMLResponse(str(exc), status_code=400)
             session.commit()
@@ -131,11 +143,20 @@ def create_app(
         """翻案（W2.3）：新 ChangeSet 走审核，原决定不改写；理由必填。"""
         with session_factory() as session:
             grant, scope = _authed_scope(request, space_id, session)
+            if get_review_item(session, scope, review_key) is None:
+                # 与 action 路径对称：外空间/不存在的 key → 404（零泄露存在性）。
+                # 同时避免 overturn_review 的 ScopeViolation 被下方 except ValueError
+                # 降级成 400「scope mismatch」（泄露原因，见 gauntlet F1）。
+                return HTMLResponse("not found", status_code=404)
             try:
                 change_set = overturn_review(
                     session, scope, review_key, new_action,
                     actor=grant.principal, reason=reason,
                 )
+            except ScopeViolation:
+                raise  # 深层聚合越权 → app 403 常量体（防御纵深）
+            except MergeError:
+                return HTMLResponse(_CONFLICT_BODY, status_code=409)
             except ValueError as exc:
                 return HTMLResponse(str(exc), status_code=400)
             session.commit()
@@ -239,6 +260,7 @@ def create_app(
             approved: list[str] = []
             excluded_high: list[str] = []
             skipped: list[str] = []
+            conflicted: list[str] = []
             for key in keys:
                 item = get_review_item(session, scope, key)
                 if item is None or item.status != "open":
@@ -247,14 +269,28 @@ def create_app(
                 if item.risk_level == "high":
                     excluded_high.append(key)
                     continue
-                resolve_review(
-                    session, scope, key, "approve", actor=grant.principal
-                )
+                # 每条独立 savepoint：单条域冲突/证据不足只回滚该条，其余低风险
+                # 条目照常生效（W1「其余正常生效」——绝不因一条冲突整批回滚丢失已成功项）。
+                sp = session.begin_nested()
+                try:
+                    resolve_review(
+                        session, scope, key, "approve", actor=grant.principal
+                    )
+                except ScopeViolation:
+                    sp.rollback()
+                    raise  # 越权 → app 403（正常不可达：key 已经 scope 过滤）
+                except (MergeError, ValueError):
+                    sp.rollback()
+                    conflicted.append(key)
+                    continue
+                sp.commit()
                 approved.append(key)
             session.commit()
             parts = [f"批量通过 {len(approved)} 条"]
             if excluded_high:
                 parts.append(f"高风险已排除（须单条人审）：{'、'.join(excluded_high)}")
+            if conflicted:
+                parts.append(f"域冲突/证据不足已跳过（须单条核对）：{'、'.join(conflicted)}")
             if skipped:
                 parts.append(f"跳过（不存在/已决）：{'、'.join(skipped)}")
             return HTMLResponse("；".join(parts))
