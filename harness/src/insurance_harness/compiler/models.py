@@ -22,6 +22,7 @@ UnknownReason = Literal[
     "not_found",  # 所有候选章节均"未提及" E4.1
     "dead_letter",  # 传输级失败超重试上限 E1.2
     "missing_in_response",  # 模型未返回该字段
+    "incompatible_value",  # 字段-值语义不兼容（024 E6，Q012 护栏）
 ]
 
 CandidateOrigin = Literal["extract", "gapfill", "vote", "judge", "fastpath"]

@@ -17,6 +17,7 @@ from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, TriState
 from ..schemas import FieldSpec
 from .cleaning import clean_value
+from .compat import check_field_value
 from .llm import ModelClient, TruncatedOutputError
 from .models import FieldCandidate, UnknownReason
 from .parsing import extract_json_array
@@ -163,6 +164,20 @@ def run_validation_chain(
             }
         )
         return out, None
+    # 2.5) 字段-值语义兼容性（024 E6）：不兼容转 unknown（可审计，不打回不重试）
+    if cand.tri_state == "present" and cand.value is not None:
+        verdict = check_field_value(field, cand.value)
+        if not verdict.compatible:
+            out = cand.model_copy(
+                update={
+                    "value": None,
+                    "tri_state": "unknown",
+                    "evidence": [],
+                    "unknown_reason": "incompatible_value",
+                    "metadata": {**cand.metadata, "compat_reject": verdict.reason},
+                }
+            )
+            return out, None
     # 3) Pydantic/类型校验（E3.4）
     if cand.tri_state == "present" and cand.value is not None:
         err = validate_typed_value(field, cand.value)
