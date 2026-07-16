@@ -3,10 +3,22 @@
 > 五版（2026-07-16，按 PR #11 四轮封板清单固定）：快照 v2 正式版本化 + 批次指纹 + mapping manifest。**T1~T4 即刻；T5 起基于 021 合入后的 main**（018→021→020 关键路径不变）。执行者 C3；knowledge 域全量 **Owner-A 复审**。
 > **实现文件域（固定清单）**：`knowledge/tables.py`、`knowledge/models.py`、`knowledge/merge.py`、`knowledge/pages.py`、`knowledge/snapshots.py`、`knowledge/reader.py`、迁移 `0007`、structured importer/mapping 新模块，及对应 SQLite+PostgreSQL migration tests / domain tests / snapshot tests / MCP tests。
 
-- [ ] T1 Space 作用域接线：显式 space fail-closed 与跨 space 不可见（I6）
-- [ ] T2 通道一 bootstrap：meta → 003 注册（幂等、dry-run），零 Claim/Evidence 断言（I1）
-- [ ] T3 来源登记表：加载 fail-fast + 未登记来源拒绝（I1/I3；authority_level 表达可信度，无 data_quality）
-- [ ] T4 映射加载 + 规范化 + 候选草案 + **mapping_manifest 四元组与 effective_mapping_version**（I2/I4）
+- [x] T1 Space 作用域接线：显式 space fail-closed 与跨 space 不可见（I6）——服务与 CLI 双层（CLI 非零退出且不泄露 space 细节）
+- [x] T2 通道一 bootstrap：meta → 003 注册（幂等、dry-run），零 Claim/Evidence 断言（I1）——含真实 13 产品数据集用例（注册 100%/skipped=0/零 Claim）
+- [x] T3 来源登记表：加载 fail-fast + 未登记来源拒绝（I1/I3；authority_level 表达可信度，无 data_quality）——已登记来源亦显式 `ChannelTwoNotAvailableError`（指明前置 018+021），零落库
+- [x] T4 映射加载 + 规范化接线基座 + 候选草案 + **mapping_manifest 四元组与 effective_mapping_version**（I2/I4）——变换器注册表 v1（identity；日期/金额/枚举归一在 T8 消费时扩充）
+
+### T1~T4 波次实施与裁决记录（2026-07-16，执行者=Claude 架构会话，worktree `ikb-010`）
+
+红绿：19 条 RED（16 行为断言 + 3 gauntlet 加固）→ 全绿；全量 deterministic **1284 passed / 5 deselected**（基线 1265 零破坏，含 003 既有测试）；ruff / mypy 188 files 全绿。
+
+1. **通道一=003 薄编排**：不重造注册逻辑——003 是产品主数据单一权威，010 只加合同（space fail-closed / dry-run 默认 / 零 Claim 断言）。`register_products` 加法式 `commit=True` 参数（既有调用零变化），dry-run 与 apply 走**同一代码路径**（flush→回滚/提交），预测一致是结构性质而非两套逻辑对账。
+2. **通道二诚实门**：本波次零落库能力——未登记 `SourceNotRegisteredError`；已登记也 `ChannelTwoNotAvailableError`（显式指明 T5+ 前置 018+021），杜绝"注册了就静默成功"的假绿。
+3. **构造期约束在模型上**（21 号 gauntlet 抓出后修复）：`authority_level Field(ge=1,le=6)`、空白标识 validator、`DraftRule.confidence [0,1]`——loader 检查保留为第二层错误语境（不删冗余安全层）。
+4. **草案宁缺勿假**：未匹配键不产生规则（负断言钉住）；`confirmed` 缺省与显式 false 都拒（fail-closed 默认，参数化双测）。
+5. **transformers 版本纪律**：`TRANSFORMER_REGISTRY_VERSION`/`NORMALIZER_VERSION` 常量即 I4 manifest 轴——行为变更必须 bump 已写入模块 docstring。
+6. **已知边界**：空目录 bootstrap 报 created=0 不报错（summary 可见）；I5 批次/ChangeSet 语义不在本波次（T8/T9，候 021）。
+7. **自测教训**："门禁绿≠自测毕"——gauntlet 为独立步骤，本波次由业务方点名后补跑并抓出第 3 条真伤，此后交付宣告前显式跑完。
 - [ ] T5 迁移 0007（**基于 021 后 main**）：structured_source_records（id PK、无批次外键、UPDATE+DELETE 双方言触发器拒绝）+ **structured_import_batch_records 关联表（append-only，双方言拒 UPDATE/DELETE）** + claim_evidence 三值 source_kind（nullable→回填→收紧）+ **ChangeSet 增列、CHECK（structured_import ⇒ 三字段非空）与两条精确 predicate 的 partial unique index** + **read_model_version CHECK (0,1,2)** + 有条件 downgrade（I4/I9）
 - [ ] T6 领域模型：ProposedEvidence kind 分支 + 既有 weknora/legacy 行为不变回归；merge 接线（持久化/去重键含 structured 身份+mapping_version/space 一致性 fail-closed）（I4）
 - [ ] T7 发布/冻结 v2：pages structured 验证（canonical hash 重算；篡改/缺失拒发；legacy 不可发布）+ FrozenEvidence v2 判别联合 + Reader 严格读 v1/v2（无 extra=ignore）+ **v2 writer rollout gate** + 回滚仅指针 + 冻结后源表不可访问仍可读（I4）

@@ -55,8 +55,9 @@ def _sha256(path: Path) -> str:
 
 
 def register_products(
-    session: Session, root: Path, *, scope: KnowledgeScope
+    session: Session, root: Path, *, scope: KnowledgeScope, commit: bool = True
 ) -> RegisterReport:
+    """注册 meta 目录树。``commit=False`` 供调用方管理事务（010 dry-run 编排）。"""
     require_current_scope(session, scope)
     report = RegisterReport()
     for product_dir in sorted(p for p in root.iterdir() if p.is_dir()):
@@ -66,7 +67,8 @@ def register_products(
             report.skipped.append(str(exc))
             continue
         _register_one(session, product_dir, meta, report, scope=scope)
-    session.commit()
+    if commit:
+        session.commit()
     return report
 
 
