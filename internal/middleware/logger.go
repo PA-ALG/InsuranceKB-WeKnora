@@ -47,9 +47,22 @@ var sensitiveFieldRegex = regexp.MustCompile(
 		`client[_-]?secret|private[_-]?key|secret)")\s*:\s*"[^"]*"`,
 )
 
+var modelDebugPathRegex = regexp.MustCompile(`^/api/v1/models/[^/]+/debug$`)
+
 // sanitizeBody 清理敏感信息
 func sanitizeBody(body string) string {
 	return sensitiveFieldRegex.ReplaceAllString(body, `$1:"***"`)
+}
+
+// sanitizeResponseBodyForLog omits the complete model-debug envelope. That
+// response deliberately contains the probe prompt, provider errors, model
+// output and reasoning, none of which belong in the HTTP access log.
+func sanitizeResponseBodyForLog(path string, body string) string {
+	cleanPath := strings.SplitN(path, "?", 2)[0]
+	if modelDebugPathRegex.MatchString(cleanPath) {
+		return "[model debug response omitted]"
+	}
+	return sanitizeBody(body)
 }
 
 // readRequestBody 读取请求体（限制大小用于日志，但完整读取用于重置）
@@ -189,7 +202,7 @@ func Logger() gin.HandlerFunc {
 				} else {
 					responseBodyStr = string(bodyBytes)
 				}
-				responseBodyStr = sanitizeBody(responseBodyStr)
+				responseBodyStr = sanitizeResponseBodyForLog(path, responseBodyStr)
 			} else {
 				responseBodyStr = "[非文本类型，已跳过]"
 			}
