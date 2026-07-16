@@ -59,14 +59,19 @@
 - **WHEN** 静态检查 workbench/ 包
 - **THEN** 不存在对业务表的直接 INSERT/UPDATE/DELETE（只经服务层函数）
 
-### Requirement: W6 鉴权与 Space 授权绑定（016 对齐）
+### Requirement: W6 鉴权、身份归属与 Space 授权绑定（016 对齐）
 
-鉴权 SHALL 为 token→Space 授权绑定：部署配置将每个 token 映射到允许的 Space 集合（MVP 允许单 token→单 Space 的最简配置）；无 token 401；请求路径中的 space SHALL ∈ 该 token 的允许集，否则 403 且响应不泄露任何业务数据（fail-closed）；所有页面/查询只呈现该 space 数据，同业务键跨 space 互不可见；全部写动作审计含 space + operator + 时间。
+鉴权 SHALL 为 token→(principal + 允许 Space 集合) 绑定：部署配置将每个 token 映射到**操作者身份（principal/operator 标识）与允许的 Space 集合**（MVP 允许单 token→单 principal→单 Space 的最简配置）；无 token 401；请求路径中的 space SHALL ∈ 该 token 的允许集，否则 403 且响应不泄露任何业务数据（fail-closed）；所有页面/查询只呈现该 space 数据，同业务键跨 space 互不可见；全部写动作审计的 operator SHALL 取自 token 绑定的 principal，SHALL NOT 接受客户端自报的 operator 字段（共享匿名 token 无法归属审计，不允许）。
 
 #### Scenario: token 不能越 Space
 
 - **WHEN** 绑定 Space A 的 token 请求 Space B 的任意页面或动作
 - **THEN** 403 拒绝，响应体不含 B 空间任何业务数据
+
+#### Scenario: 审计归属不可伪造
+
+- **WHEN** 以绑定 principal P 的 token 执行 approve，且请求体夹带 operator=Q
+- **THEN** 审计记录 operator=P（space+时间齐备），客户端自报的 Q 被忽略或拒绝
 
 #### Scenario: 跨 space 数据不可见
 

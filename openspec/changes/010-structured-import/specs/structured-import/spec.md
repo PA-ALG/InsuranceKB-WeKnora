@@ -42,30 +42,52 @@
 - **WHEN** 已登记来源（权威=系统数据级）的记录与已发布的低权威 Claim 值冲突
 - **THEN** 007 按权威序产生 supersede/conflict 并留痕，导入侧无任何绕过裁决的写路径
 
-### Requirement: I4 结构化证据数据模型（迁移 0007，claim_evidence 扩展须 Owner-A 复审）
+### Requirement: I4 结构化证据数据模型与全消费链闭合（迁移 0007；knowledge 域改动须 Owner-A 复审）
 
-迁移 0007 SHALL 新建 `structured_source_records` 表：space_id、source_system、external_record_id、source_revision、record_locator（jsonpath/行号）、record_hash（规范化记录内容 SHA-256）、raw_payload（原始记录留存）、authority_level、batch_id、imported_at，唯一键=（space_id, source_system, external_record_id, source_revision）；并 SHALL 扩展 `claim_evidence`：新增可空 `structured_record_id`（FK→structured_source_records）、`lineage_status` 合法值增加 `structured`，CHECK 约束修订为三态互斥——WeKnora lineage 组（既有语义不变）/ structured（structured_record_id 非空且 WeKnora lineage 组与 chunk 字段全空、page 为空、quote=原始记录摘录）/ 007 legacy（全空）。该 DDL 属 knowledge/ 共享域，PR SHALL 由 Owner-A 复审；downgrade SHALL 干净可逆。
+**正交来源轴**：证据 SHALL 新增 `source_kind ∈ {legacy, weknora, structured}`，与表示链接质量的 `lineage_status` 正交——`lineage_status` 值域**不变**（linked/page_only/ambiguous），且仅对 source_kind=weknora 有意义；SHALL NOT 把来源种类塞进 lineage_status。
 
-#### Scenario: 结构化 Evidence 完整可追溯
+迁移 0007 SHALL：新建 `structured_source_records` 表（space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、batch_id、imported_at；唯一键=space_id+source_system+external_record_id+source_revision）；`claim_evidence` 新增 `source_kind`（回填既有行：lineage_status 非空→weknora、空→legacy）与可空 `structured_record_id`（FK）；CHECK 约束按 kind 分支——weknora ⇒ 017 审计组齐全（既有语义零漂移）；structured ⇒ structured_record_id 非空 ∧ WeKnora 审计组/chunk 字段/page 全空；legacy ⇒ 全空；downgrade 干净可逆。
 
-- **WHEN** 通道二导入产生 Claim
-- **THEN** 其 ClaimEvidence 的 lineage_status=structured 且 structured_record_id 指向留存记录（locator+record_hash+raw_payload 齐备）
-- **AND** WeKnora lineage 字段与 chunk 字段全为空（数据库 CHECK 拒绝混填）
+**`knowledge_id` 语义**：SHALL 保持非空，定义为"来源容器标识"——weknora=WeKnora knowledge id（既有）；structured=**source_system 标识**（供页面展示回退名与按来源分组），SHALL NOT 用空串/sentinel。
 
-#### Scenario: 既有 WeKnora/legacy 证据形态零漂移
+**全消费链 SHALL 在同一实现 PR 内闭合**（不是只改表；以下均属 knowledge 域、Owner-A 复审）：
+- `ProposedEvidence`：新增 source_kind 与 structured_record_id，校验按 kind 分支——structured 必须携带已登记记录身份且 WeKnora 审计组全空；weknora/legacy 既有校验**零漂移**（既有夹具原样通过）；
+- `merge`：`_evidence_rows` 持久化新字段；enrich 追加与 proposal aggregate 去重 SHALL 保留 structured 身份（去重键含 structured_record_id）；
+- `pages._evidence_view`：新增 structured 验证分支——structured_record_id 可解析到留存记录且 record_hash 一致 ⇒ source_verified=true；chunk_verified 恒 false；source_ref 呈现 source_system+external_record_id+revision，SHALL NOT 产生伪 chunk/page 引用；记录缺失或 hash 不一致 ⇒ 显式 unverified；
+- 证据序列化与快照冻结（018 SnapshotFact 的 Evidence JSON）及 013 证据链读取 SHALL 包含新字段——**knowledge 域接线基于 PR #9 合入后的 main**，且 SHALL 先于 021 开工合入（或与 021 负责人显式协调链序与文件域）。
+
+#### Scenario: 领域模型按 kind 分支且既有形态零漂移
+
+- **WHEN** 以 structured kind 构造携带已登记记录身份的 ProposedEvidence，并以既有 weknora/legacy 夹具重放全部既有校验用例
+- **THEN** structured 构造成功且 WeKnora 审计组必须全空（混填被拒）
+- **AND** weknora/legacy 既有用例输出逐字不变
+
+#### Scenario: 页面验证不产伪引用
+
+- **WHEN** structured 证据进入页面编译：一条其留存记录存在且 record_hash 一致，另一条记录缺失或 hash 不一致
+- **THEN** 前者 source_verified=true、source_ref=source_system+external_record_id+revision、chunk_verified=false 且无任何 chunk/page 引用
+- **AND** 后者显式呈现为 unverified（不静默降级为 legacy 语义）
+
+#### Scenario: 迁移回填与 downgrade
 
 - **WHEN** 迁移 0007 应用于含 017 lineage 证据与 007 legacy 证据的库
-- **THEN** 既有行不变、既有 CHECK 语义保持（017 成组约束照旧生效）
-- **AND** downgrade 移除新增列/值域后既有数据完好
+- **THEN** 既有行回填 source_kind=weknora/legacy 且语义零漂移（017 成组约束照旧）
+- **AND** downgrade 移除新增列/表后既有数据完好
 
-### Requirement: I5 幂等、批次与 dry-run
+### Requirement: I5 幂等、身份不变量、批次与 dry-run
 
-通道二幂等键 SHALL 为 source_system + external_record_id + source_revision：同键重导零新增（返回 unchanged 计数）；revision 变化 SHALL 走 007 合并（enrich/supersede/conflict）而非重复建 Claim；每批次 SHALL 生成一个 ChangeSet，批内记录级失败隔离（单条坏记录入错误清单不中断批次）；dry-run SHALL 为默认（输出记录数/产品匹配率/未匹配清单/缺字段/预计 ChangeItem 计数，不落库），`--apply` 执行结果与 dry-run 预测 SHALL 一致（同一输入差异=0）。
+通道二幂等键 SHALL 为 source_system + external_record_id + source_revision，且**身份绑内容**：同键重导 SHALL 先比对 record_hash——**同键同 hash** ⇒ 幂等 no-op（unchanged 计数）；**同键不同 hash** ⇒ revision collision，在任何副作用前 fail-closed（错误指明幂等键与两个 hash），SHALL NOT 报 unchanged 或静默吞掉内容变化；revision 变化 SHALL 走 007 合并（enrich/supersede/conflict）而非重复建 Claim。每批次 SHALL 生成一个 ChangeSet，批内记录级失败隔离（单条坏记录入错误清单不中断批次）；dry-run SHALL 为默认（输出记录数/产品匹配率/未匹配清单/缺字段/预计 ChangeItem 计数，不落库），`--apply` 执行结果与 dry-run 预测 SHALL 一致（同一输入差异=0）。
 
-#### Scenario: 同键重导零副作用
+#### Scenario: 同键同 hash 重导零副作用
 
-- **WHEN** 同一记录（同幂等键）导入两次
+- **WHEN** 同一记录（同幂等键、同 record_hash）导入两次
 - **THEN** 第二次零新增且 unchanged 计数+1
+
+#### Scenario: 同键不同 hash 碰撞 fail-closed
+
+- **WHEN** 重导记录的幂等键与已留存记录相同但 record_hash 不同（上游错误复用 revision）
+- **THEN** 导入在任何落库/合并副作用前 fail-closed，错误含幂等键与新旧 hash
+- **AND** 不产生 unchanged 计数、不产生 ChangeItem
 
 #### Scenario: dry-run 与 apply 一致
 
@@ -90,12 +112,18 @@ FAQ 输入（问题/答案/关联产品）SHALL 落 qa_staging 表（迁移 0007
 - **WHEN** FAQ 批次导入完成
 - **THEN** qa_staging 有记录且幂等，发布/读模型/检索路径查无任何 FAQ 内容
 
-### Requirement: I8 端到端验收
+### Requirement: I8 端到端验收（含发布与证据读模型回溯）
 
-CLI SHALL 为 `python -m` 形态（bootstrap 与通道二子命令分离）；端到端 SHALL 覆盖：13 份 meta bootstrap（注册 100%、零 Claim）、构造的已登记业务源夹具（含销售状态变更 revision → supersede/conflict 留痕）、FAQ 暂存；全程零模型调用，门禁全绿且不破坏既有测试。
+CLI SHALL 为 `python -m` 形态（bootstrap 与通道二子命令分离）；端到端 SHALL 覆盖：13 份 meta bootstrap（注册 100%、零 Claim）、构造的已登记业务源夹具（含销售状态变更 revision → supersede/conflict 留痕、同键异 hash 碰撞）、FAQ 暂存，以及**结构化证据的发布链回溯**；全程零模型调用，门禁全绿且不破坏既有测试。
 
 #### Scenario: 双通道端到端
 
 - **WHEN** 依次执行 meta bootstrap、已登记业务源导入（两个 revision）、FAQ 导入
 - **THEN** 003 注册齐备且零 Claim 来自通道一；通道二产生带 structured Evidence 的 Claim 且冲突按权威序留痕；qa_staging 就位
 - **AND** 全程零真实模型调用
+
+#### Scenario: 结构化证据发布链全程可回溯
+
+- **WHEN** 已登记记录 → ProposedClaim → 007 merge/approve → 发布 → 页面与证据读模型读取
+- **THEN** 页面 EvidenceView 对该证据 source_verified=true，可按 record_locator+record_hash 回溯到留存记录
+- **AND** 全链无伪 chunk/page/source_ref 产生（快照冻结的 Evidence JSON 含 source_kind 与 structured 身份）

@@ -65,6 +65,7 @@
 
 - **WHEN** 本 change 全部改动落地后，在未变更的既有录制集上重跑回放评分
 - **THEN** 每产品分数 ≥ 改动前（下界断言失败即门禁失败）
+- **AND** 该探针钉住两个前置并在用例内断言：使用 control/default prompt 变体（非新变体）+ fixture manifest 内容哈希与基线一致（manifest 变化即探针失效并 fail，不得静默换基线）
 
 #### Scenario: 报告不得暗示提升
 

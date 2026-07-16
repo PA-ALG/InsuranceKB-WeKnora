@@ -18,7 +18,7 @@
 ## 技术要求
 
 - FastAPI + Jinja2 + HTMX（08 已选型），落点 `harness/src/insurance_harness/workbench/`（001 已占位）；只读 harness DB + 调用 007 的服务层函数，**不得绕过服务层直写表**；
-- 鉴权 MVP：**token→Space 授权绑定**（配置映射，MVP 允许单 token→单 Space；越 Space 一律 403 fail-closed；企业 SSO 对接列后续）；审计：每个动作记 operator+space+时间；
+- 鉴权 MVP：**token→(principal + 允许 Space 集合) 绑定**（配置映射，MVP 允许单 token→单 principal→单 Space；越 Space 一律 403 fail-closed；企业 SSO 对接列后续）；审计：operator 取自 token 绑定 principal（客户端自报无效），记 operator+space+时间；
 - 测试：服务层动作用例复用 007 的夹具；页面用 FastAPI TestClient 断言关键元素；门禁同既有标准；
 - 零模型调用。
 

@@ -30,4 +30,4 @@ datasource 自动同步（WeKnora 已有入口，对接后续）、FAQ 语义去
 
 ## 影响
 
-文件域：新包（导入模块）+ 迁移 0007；**其中 `claim_evidence` 表扩展属 knowledge/ 共享域 DDL——须 Owner-A 复审**（数据模型见 spec I4）。021 落地前同 source 串行导入限制见 I6。
+文件域（三版修正，2026-07-16 二轮复审）：新包（导入模块）+ **knowledge 域改动清单 = `tables.py`/`models.py`/`merge.py`/`pages.py`/证据序列化 + 迁移 0007**——structured 证据必须闭合全消费链（领域模型校验→合并持久化→页面验证→快照冻结/证据 API），不是只改表；全部 knowledge 域改动须 **Owner-A 复审**（17 §1），**基于 PR #9 合入后的 main 接线，且先于 021 开工合入（或与 021 显式协调）**。021 落地前同 source 串行导入限制见 I6。

@@ -2,7 +2,7 @@
 
 > 二版（2026-07-16，按 PR #11 复审修订）：W4 **整页**推迟至 PR #9（018）合入后；鉴权升级为 token→Space 授权绑定。轨道 L2；T1~T5、T7 即刻可做。执行者 C1，**Owner 复审=A**（workbench/ 属 A 域，17 §1）。
 
-- [ ] T1 包骨架：FastAPI app 工厂 + HarnessSettings 接线 + **token→Space 授权绑定**（配置映射；无 token 401；"token A 请求 Space B → 403 且零数据泄露"RED 用例先行）（W5/W6）
+- [ ] T1 包骨架：FastAPI app 工厂 + HarnessSettings 接线 + **token→(principal+Space 集合) 授权绑定**（配置映射；无 token 401；"token A 请求 Space B → 403 且零数据泄露"与"审计 operator=token principal、客户端自报无效"两条 RED 用例先行）（W5/W6）
 - [ ] T2 只读查询模块：审核队列 / ChangeSet 列表 / 完整度聚合 三类查询（只读会话；W1/W2/W3 数据形状用例先行）
 - [ ] T3 审核队列页：列表/筛选/详情/approve-reject-defer/批量（仅非 high）；幂等与乐观并发用例（W1）
 - [ ] T4 冲突与变更页：分色明细、权威序依据、翻案不改历史、变更时间线（W2，G8）

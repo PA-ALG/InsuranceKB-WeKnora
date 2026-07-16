@@ -16,7 +16,7 @@
 | 007 | claims-changeset-publish | ✅ 已交付 | |
 | 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
 | 009 | concept-layer | 📋 提案（待基础对齐修订） | 轨道 L4；迁移预分配 0008 |
-| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）；迁移预分配 0007；claim_evidence DDL 须 Owner-A 复审 |
+| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据**全消费链**（正交 source_kind，models/merge/pages 同 PR 闭合）；迁移预分配 0007；knowledge 域改动 Owner-A 复审；T1~T4 即刻、knowledge 域段候 PR #9 且**先于 021** |
 | 011 | knowledge-health | 📋 提案（待基础对齐修订） | 轨道 L4 收尾 |
 | 012 | qa-objects | 📋 提案（待基础对齐修订） | 依赖 010；迁移预分配 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |

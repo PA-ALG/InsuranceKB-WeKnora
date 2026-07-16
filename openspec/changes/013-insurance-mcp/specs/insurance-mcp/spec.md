@@ -62,7 +62,12 @@ server SHALL 提供四个只读、确定性工具：`resolve_product(query, as_o
 
 ### Requirement: M5 端到端验收
 
-在 007/018 夹具库上，SDK 测试客户端 SHALL 走通完整故事："2023-06-01 投保的产品等待期" → resolve(as_of_date) → get_facts 返回当时版本值与证据；停售产品返回历史版本+销售状态标注；多义名返回候选；draft/candidate 不可见；零模型调用、门禁全绿；真实 WeKnora Agent 挂载联调登记 L6/B10（须真实实例，不计入本 change 验收）。
+在 007/018 夹具库上，SDK 测试客户端 SHALL 走通完整故事："2023-06-01 投保的产品等待期" → resolve(as_of_date) → get_facts 返回当时版本值与证据；停售产品返回历史版本+销售状态标注；多义名返回候选；draft/candidate 不可见；零模型调用、门禁全绿。**诚实边界**：M4 的 SDK 往返合同是 Python SDK client 对 Python SDK server 的 non-live contract，SHALL NOT 表述为 WeKnora integration verified；validation-report SHALL 把真实 WeKnora Agent 挂载明确记为 `NOT RUN`（除非附真实实例证据），封板归 B10/L6。
+
+#### Scenario: 验收报告诚实标注
+
+- **WHEN** 本 change 在无真实 WeKnora 实例的环境下收尾
+- **THEN** validation-report 将 WeKnora Agent 挂载记为 `NOT RUN`，SDK 合同测试单独列为 non-live 证据
 
 #### Scenario: 版本敏感问答端到端
 
