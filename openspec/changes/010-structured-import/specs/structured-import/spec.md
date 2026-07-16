@@ -47,7 +47,8 @@
 **正交来源轴**：证据 SHALL 新增 `source_kind ∈ {legacy, weknora, structured}`，与表示链接质量的 `lineage_status` 正交——`lineage_status` 值域**不变**（linked/page_only/ambiguous），且仅对 source_kind=weknora 有意义；SHALL NOT 把来源种类塞进 lineage_status。
 
 迁移 0007 SHALL 按以下 schema 固定（不留实现者二选一）：
-- `structured_source_records`：`id`（36-char PK）+ space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、`batch_id`（FK→`change_sets.id`）、imported_at；UNIQUE(space_id, source_system, external_record_id, source_revision)；**insert-only**——服务层无 UPDATE/DELETE 路径，SQLite/PostgreSQL 均以 DB trigger 拒绝 UPDATE **与 DELETE**（合规删除须另立显式 purge change，本 change 不暗开口子）；
+- `structured_source_records`：`id`（36-char PK）+ space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、imported_at；UNIQUE(space_id, source_system, external_record_id, source_revision)；**insert-only**——服务层无 UPDATE/DELETE 路径，SQLite/PostgreSQL 均以 DB trigger 拒绝 UPDATE **与 DELETE**（合规删除须另立显式 purge change，本 change 不暗开口子）；**本表只保存不可变的 raw source identity/content，不含任何批次外键**——一条不可变记录必须能参加多个 mapping batch（单值 batch_id 与重算语义矛盾，五轮复审定案）；
+- `structured_import_batch_records`（**append-only 关联表**，记录↔批次 M:N）：`change_set_id`（FK→`change_sets.id`）+ `structured_record_id`（FK→`structured_source_records.id`），PK/UNIQUE(change_set_id, structured_record_id)；服务层无 UPDATE/DELETE，SQLite/PostgreSQL 双方言 trigger 拒绝 UPDATE 与 DELETE；
 - `claim_evidence`：新增**非空** `source_kind ∈ {legacy, weknora, structured}`、可空 `structured_record_id`（FK）、可空 `mapping_version`；迁移顺序 SHALL 为"先加 nullable/临时 default → 按'lineage 审计组完整→weknora，否则→legacy'回填 → 再收紧 NOT NULL/CHECK"；CHECK 按 kind 分支——weknora ⇒ 017 审计组齐全（既有语义不变）；structured ⇒ structured_record_id 与 mapping_version 非空 ∧ 禁止伪 page/chunk/raw_kb lineage；legacy ⇒ 全空、**仅存量兼容且不得冻结发布**；
 - **downgrade 有条件**：仅当库中无 structured 行、无 structured Evidence、无 v2 快照时允许降级；发现任一项即 fail-closed——SHALL NOT 以"可逆"为名销毁 provenance。
 
@@ -126,18 +127,19 @@
 
 ### Requirement: I9 批次与 ChangeSet 身份（batch_fingerprint 合同）
 
-一个 structured import batch SHALL 同 space_id + source_system + effective_mapping_version，包含 N 条记录并对应**一个** ChangeSet；该 ChangeSet 的 `source_kind` SHALL 固定为 `structured_import`（与 Evidence 的 `source_kind="structured"` 是两个不同字段域，SHALL NOT 混用）。`batch_fingerprint = SHA-256(canonical({space_id, source_system, effective_mapping_version, sorted[(external_record_id, source_revision, record_hash)]}))`。`change_sets` SHALL 新增可空 `batch_fingerprint / mapping_version / mapping_manifest`；structured batch 以 batch_fingerprint 唯一打开/复用 ChangeSet，记录表 `batch_id` 指向它。迁移 SHALL 把现有 source 唯一约束改为**两条 partial unique index** 并在 SQLite 与 PostgreSQL migration tests 中同时验证：非 structured ⇒ 维持 UNIQUE(space_id, source_kind, external_record_id, source_revision)（既有行为不变）；structured ⇒ UNIQUE(space_id, source_kind, batch_fingerprint)。重试相同 fingerprint SHALL 返回原 ChangeSet/no-op；mapping 变化改变 fingerprint SHALL 创建新 ChangeSet。
+一个 structured import batch SHALL 同 space_id + source_system + effective_mapping_version，包含 N 条记录并对应**一个** ChangeSet；该 ChangeSet 的 `source_kind` SHALL 固定为 `structured_import`（与 Evidence 的 `source_kind="structured"` 是两个不同字段域，SHALL NOT 混用）。`batch_fingerprint = SHA-256(canonical({space_id, source_system, effective_mapping_version, sorted[(external_record_id, source_revision, record_hash)]}))`。`change_sets` SHALL 新增可空 `batch_fingerprint / mapping_version / mapping_manifest`，并加 CHECK：`source_kind='structured_import'` 时三者**全部非空**；structured batch 以 batch_fingerprint 唯一打开/复用 ChangeSet，记录与批次经 `structured_import_batch_records` 关联（I4）。**批次关联语义**：首次导入 ⇒ 创建一个 ChangeSet，插入/复用 N 条 source record，再插入 N 条关联行；相同 batch 重试 ⇒ 复用 ChangeSet 且关联零新增；**mapping 变化 ⇒ 创建新 ChangeSet，复用原 source record，为新 ChangeSet 追加关联行——SHALL NOT 复制或修改 raw record**。迁移 SHALL 把现有 source 唯一约束改为**两条 partial unique index**（predicate 写精确值，消除"structured"指 Evidence 还是 ChangeSet 的歧义）并在 SQLite 与 PostgreSQL migration tests 中同时验证：`WHERE source_kind <> 'structured_import'` ⇒ 维持 UNIQUE(space_id, source_kind, external_record_id, source_revision)（既有行为不变）；`WHERE source_kind = 'structured_import'` ⇒ UNIQUE(space_id, source_kind, batch_fingerprint)。
 
 #### Scenario: 一批 N 记录一个 ChangeSet 且重试幂等
 
 - **WHEN** 同一批（同 space/source_system/mapping，N 条记录）导入两次
-- **THEN** 首次恰好产生一个 source_kind=structured_import 的 ChangeSet（batch_fingerprint 唯一），记录表 batch_id 全部指向它
-- **AND** 重试命中相同 fingerprint 返回原 ChangeSet、零新副作用
+- **THEN** 首次恰好产生一个 source_kind=structured_import 的 ChangeSet（batch_fingerprint 唯一）+ N 条源记录 + N 条批次关联行
+- **AND** 重试命中相同 fingerprint 返回原 ChangeSet、关联零新增、零新副作用
 
-#### Scenario: mapping 变化产生新 ChangeSet 而不撞唯一键
+#### Scenario: 同一源记录参加两个 mapping 批次而记录不可变
 
-- **WHEN** 同一批记录在 effective_mapping_version 变化后重导
-- **THEN** fingerprint 变化 ⇒ 创建新 ChangeSet（不与原批唯一键冲突），受控重算按 I5 执行
+- **WHEN** 同一批记录在 effective_mapping_version 变化后重导（受控重算，I5）
+- **THEN** fingerprint 变化 ⇒ 创建新 ChangeSet（不与原批唯一键冲突），**复用原 source record 并为新 ChangeSet 追加关联行**
+- **AND** 该源记录经关联表同时挂在两个 ChangeSet 下，其 id/raw_payload/record_hash 逐字不变（未被复制、未被修改）
 
 #### Scenario: 非 structured 批次唯一性不变
 
