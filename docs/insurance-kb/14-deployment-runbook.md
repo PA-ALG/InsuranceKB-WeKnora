@@ -131,6 +131,45 @@ uv run pytest tests/test_release_snapshot_live_018.py -m live -q -rs
 ```
 
 用例使用 `HARNESS_LIVE_DB_URL` 的随机 PostgreSQL schema 建立隔离 Space，并绑定真实 `HARNESS_LIVE_KB_ID`，执行完整 Space V1→V2→rollback V1；同时核对 SnapshotReader 的 V1 值/Evidence、远端 `managed_by/space_id/snapshot_id` 与回滚页面内容。退出时删除随机 Wiki 页并 `DROP SCHEMA ... CASCADE`；数据库账号同样需要 schema 权限。缺受控变量时本地结果只能记录 `NOT RUN`，正式 `live verified` 仍只认 `harness-live` environment 的 run URL、commit SHA、时间与零 skip JUnit。
+### 5.3 OpenSpec 023：本机真实环境与受信 exact-SHA gate
+
+023 取代本章 §2/§3.2 中尚未自动化的本机初始化步骤。所有命令从仓库根目录执行；填值文件与生成的 runtime 文件都必须保持 mode `0600`，不得提交。
+
+```bash
+cp .env.local-live.example .env.local-live
+chmod 600 .env.local-live
+harness/.venv/bin/python harness/scripts/local_live.py check
+harness/.venv/bin/python harness/scripts/local_live.py probe-models
+harness/.venv/bin/python harness/scripts/local_live.py up
+harness/.venv/bin/python harness/scripts/local_live.py provision \
+  --pdf 'dataset/shouxian_product/平安创享盛世金越（尊享版26）终身寿险（分红型）/产品说明书.pdf'
+harness/.venv/bin/python harness/scripts/local_live.py verify
+harness/.venv/bin/python harness/scripts/local_live.py run-local
+```
+
+四个模型角色必须分别探测成功，且 `provision` 会在任何资源 mutation 前再次探测。Harness extraction 使用独立的百炼 OpenAI-compatible profile；切换 `HARNESS_LLM_BASE_URL/API_KEY/MODEL_WEAK` 不改变 WeKnora 三角色、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
+
+`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、三模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+
+只有 023 workflow 已合入 `main`、本机 `run-local` 五节点 `tests=5 skipped=0 failures=0 errors=0`，且目标 PR 是 open same-repository PR 时，才允许发起 GitHub gate：
+
+```bash
+harness/.venv/bin/python harness/scripts/github_live.py \
+  --pr-number 9 \
+  --head-sha '<40位PR head SHA>' \
+  --runner-nonce '<16位小写十六进制随机值>' \
+  --confirm-dispatch
+```
+
+controller 会在写入临时值前验 PR，并在 workflow 完成后再次验 head；workflow 固定从 `main` 读取受信定义，只 detached checkout 指定 SHA。一次性 runner 不挂宿主目录或 Docker socket，只接收两项 secret 与五项 variable。成功、失败和取消都应尝试删除七项 GitHub environment 值、撤销 per-run Tenant key/DB role、注销 runner，并删除容器与匿名卷；如 cleanup 不完整，命令必须失败并只列 sanitized cleanup kind。run URL、SHA、时间、JUnit 计数与 cleanup 状态写 PR comment/check summary，不再为最终证据修改 head。
+
+日常停止默认保留持久卷：
+
+```bash
+harness/.venv/bin/python harness/scripts/local_live.py down
+```
+
+删除持久卷是破坏性操作，必须同时给出 `--delete-volumes --confirm-delete-volumes`。不要手工删除同名资源、改 runtime state 或绕过 ownership 校验。
 
 ## 6. 已知风险与规避
 

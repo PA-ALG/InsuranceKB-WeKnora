@@ -10,10 +10,10 @@
 | T4 | PASS | publish state machine、attempt/job、retry/lease、Engine+Space lock、write-readback 与 final commit failure 已覆盖；PostgreSQL 16 service-owned Session/DB guards 零 skip 验收通过 |
 | T5 | PASS | rollback/reconciliation、legacy/successor/historical slug 与 R6.1～R6.3 组合故事已完成 |
 | T6 | PASS | typed gap-only RAW、same-scope、`unreviewed_raw`、零 writeback |
-| PostgreSQL 16 integration | PASS（本地工作树） | `postgres:16` healthy 容器上两节点零 skip：`2 passed, 1229 deselected`；最终 PR head 仍须 CI 重跑 |
+| PostgreSQL 16 integration | PASS（main 同步工作树） | `postgres:16` healthy 容器上两节点零 skip：`2 passed, 1352 deselected`；最终 PR head 仍须 CI 重跑 |
 | PR review hardening RH1～RH5 | PASS | retired helper boundary、SQLite FK、stale-base retry、collision/recovery、migration/live schema isolation 均按 TDD 完成并通过 task-level spec/quality 双审 |
-| WeKnora live | `NOT RUN` | PR #10 仍为 Draft/open；本批未在最终 PR #9 head 上运行受控 5-node live，PostgreSQL 与本机 deterministic 不替代该证据 |
-| T7 文档/本地门禁 | PARTIAL | Runbook/report/HANDOFF 与 software/PostgreSQL 门禁已刷新；T7/RH6 继续等待 PR #10 合入和最终 head 的真实 WeKnora `tests=5 skipped=0` |
+| WeKnora live | `NOT RUN` | PR #10 已合入 `main`；本机 live 配置仅 extraction API key 为空，config check 在 mutation 前 fail closed，尚未 provision/run-local/dispatch；PostgreSQL 与本机 deterministic 不替代该证据 |
+| T7 文档/本地门禁 | PARTIAL | Runbook/report/HANDOFF 与 main 同步工作树的 software/PostgreSQL 门禁已刷新；T7/RH6 继续等待新 head CI、完整配置和真实 WeKnora `tests=5 skipped=0` |
 
 ## 2. 实现与风险闭环
 
@@ -44,7 +44,7 @@ whole-change 规格复核发现旧 caller-Session `publish_product_version/rollb
 
 ## 4. 当前本地证据
 
-以下均为分支 `codex/018-release-snapshot-read-model`、base HEAD `8df6c3cf` 上未提交工作树的 fresh 本地证据；因此可用于提交前验收，不能冒充远端 PR #9 新 SHA 的 CI 结果：
+以下均为分支 `codex/018-release-snapshot-read-model` 将 head `d38dfb26` 与 `origin/main@773f3d1d` 合并后的未提交工作树 fresh 证据；因此可用于新 merge commit 提交前验收，不能冒充尚未产生的新 PR head CI 结果：
 
 ```text
 openspec validate 018-release-snapshot-read-model --strict
@@ -54,22 +54,22 @@ Change '018-release-snapshot-read-model' is valid
 All checks passed
 
 .venv/bin/python -m mypy src tests
-Success: no issues found in 181 source files
+Success: no issues found in 200 source files
 
 .venv/bin/python -m pytest -m "not live and not integration_postgres" -q
-1224 passed, 7 deselected, 235 warnings in 96.78s
+1347 passed, 7 deselected, 235 warnings in 101.18s
 
 HARNESS_TEST_POSTGRES_URL=<redacted> .venv/bin/python -m pytest -m integration_postgres -q
-2 passed, 1229 deselected in 1.75s
+2 passed, 1352 deselected in 1.80s
 
 focused RH1/RH2/RH3/RH4/RH5
 45 passed + 1 existing skip；14 passed；13 passed；27 passed；9 passed + 1 live deselected
 ```
 
-GitHub PR #9 当前仍为 Draft，远端 head 为旧 SHA `8df6c3cf`；其 deterministic/integration checks 虽为绿灯，但不覆盖本批工作树。PR #10 当前也为 Draft/open。提交并 push 新 SHA 后必须等待 PR #9 两个新 checks 通过；PR #10 合入后再从受控 workflow 运行精确 5-node live 并取得 `tests=5 skipped=0`，才可把 T7/live 从 `NOT RUN` 改为 PASS。
+GitHub PR #9 当前仍为 Draft；head `d38dfb26` 的两组 deterministic 与两组 integration checks 均通过，Claude Code 跟进复审也确认上轮 finding 全部关闭，但 PR #10 合入 `main` 后该 head 与 base 冲突，不能沿用旧检查覆盖正在形成的 main 同步 merge commit。PR #10 已以 merge commit `773f3d1d` 合入。提交并 push 新 SHA 后必须等待 PR #9 新 checks 通过；随后完成本机五节点零 skip并从受控 workflow 取得 `tests=5 skipped=0`，才可把 T7/live 从 `NOT RUN` 改为 PASS。
 
 ## 5. 独立复审与待完成
 
-RH1～RH5 及 016 corruption fixture 修正均已通过 task-level spec compliance 与 code quality review。最终 whole-change 规格复核结论为 `Spec compliant`：RH1～RH5 与 018 条款一致，RH6 仍如实保留外部门禁未完成。最终 whole-change 质量复核结论为 `Approved`，无剩余 Critical、Important 或 Minor finding；复核聚焦回归为 `82 passed, 1 deselected`。该结论只覆盖当前本地工作树的软件改动，不替代 PR #9 新 SHA CI、PR #10 合入或真实 WeKnora live 证据。
+RH1～RH5 及 016 corruption fixture 修正均已通过 task-level spec compliance 与 code quality review。最终 whole-change 规格复核结论为 `Spec compliant`：RH1～RH5 与 018 条款一致，RH6 仍如实保留外部门禁未完成。最终 whole-change 质量复核结论为 `Approved`，无剩余 Critical、Important 或 Minor finding；Claude Code 对 `d38dfb26` 的跟进复审逐条确认上轮发现均已关闭。该结论不替代 main 同步后新 SHA CI 或真实 WeKnora live 证据。
 
-剩余顺序：人工复核工作树 → commit/push PR #9 新 SHA → 新 deterministic/integration checks 全绿 → PR #10 合入 → 受控 5-node WeKnora live `tests=5 skipped=0` → 更新最终证据且 Ready for review。任何 preflight failure、skip 或旧 SHA 绿灯都不能跳过该顺序。
+剩余顺序：commit/push main 同步 merge commit → 新 deterministic/integration checks 全绿 → 补齐本机 extraction API key → `check/probe/up/provision/verify/run-local` 五节点零 skip → 受控 exact-SHA WeKnora live `tests=5 skipped=0` → Ready for review。run URL、SHA、JUnit 计数与 cleanup 状态写入 PR comment/check summary，不再为最终证据修改 head；任何 preflight failure、skip 或旧 SHA 绿灯都不能跳过该顺序。

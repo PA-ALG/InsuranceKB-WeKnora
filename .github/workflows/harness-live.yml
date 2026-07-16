@@ -1,20 +1,109 @@
 name: harness-live
+run-name: 'harness-live PR #${{ inputs.pr_number }} ${{ inputs.head_sha }} runner-${{ inputs.runner_nonce }}'
 
 on:
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Same-repository open PR number
+        required: true
+        type: string
+      head_sha:
+        description: Exact full PR head SHA approved for this run
+        required: true
+        type: string
+      runner_nonce:
+        description: Random 16-character lowercase hexadecimal runner nonce
+        required: true
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  live:
+  preflight:
     runs-on: ubuntu-latest
+    outputs:
+      approved-sha: ${{ steps.approve.outputs.approved-sha }}
+      runner-label: ${{ steps.approve.outputs.runner-label }}
+      workflow-sha: ${{ steps.approve.outputs.workflow-sha }}
+    steps:
+      - name: Approve same-repository exact SHA
+        id: approve
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REQUESTED_SHA: ${{ inputs.head_sha }}
+          RUNNER_NONCE: ${{ inputs.runner_nonce }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DISPATCH_REF: ${{ github.ref }}
+        with:
+          script: |
+            const expectedRepository = 'PA-ALG/InsuranceKB-WeKnora';
+            const actualRepository = `${context.repo.owner}/${context.repo.repo}`;
+            if (actualRepository !== expectedRepository) {
+              core.setFailed('unexpected repository');
+              return;
+            }
+            if (process.env.DISPATCH_REF !== 'refs/heads/main' ||
+                !process.env.WORKFLOW_REF.endsWith('@refs/heads/main')) {
+              core.setFailed('github.workflow_ref must come from refs/heads/main');
+              return;
+            }
+            const requestedSha = process.env.REQUESTED_SHA || '';
+            const nonce = process.env.RUNNER_NONCE || '';
+            const prNumber = process.env.PR_NUMBER || '';
+            if (!/^[0-9a-f]{40}$/.test(requestedSha) ||
+                !/^[a-f0-9]{16}$/.test(nonce) ||
+                !/^[1-9][0-9]*$/.test(prNumber)) {
+              core.setFailed('invalid dispatch input format');
+              return;
+            }
+            const {data: pull} = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(prNumber),
+            });
+            if (pull.state !== 'open' ||
+                pull.head.repo.full_name !== expectedRepository ||
+                pull.head.sha !== requestedSha) {
+              core.setFailed('PR is not an open same-repository exact-SHA request');
+              return;
+            }
+            core.setOutput('approved-sha', requestedSha);
+            core.setOutput('runner-label', `insurancekb-live-${nonce}`);
+            core.setOutput('workflow-sha', process.env.WORKFLOW_SHA);
+
+  live:
+    needs: preflight
+    runs-on:
+      - self-hosted
+      - ${{ needs.preflight.outputs.runner-label }}
     environment: harness-live
     defaults:
       run:
         working-directory: harness
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Checkout approved PR SHA
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.preflight.outputs.approved-sha }}
+          persist-credentials: false
+      - name: Assert detached approved SHA
+        run: |
+          test "$(git rev-parse HEAD)" = '${{ needs.preflight.outputs.approved-sha }}'
+          test -z "$(git symbolic-ref -q HEAD || true)"
+      - name: Checkout trusted live gate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.preflight.outputs.workflow-sha }}
+          path: trusted-workflow
+          persist-credentials: false
+          sparse-checkout: |
+            harness/live-nodes.txt
+            harness/scripts/run_live_gate.py
       - name: Preflight live environment
         env:
           HARNESS_LIVE_API_KEY: ${{ secrets.HARNESS_LIVE_API_KEY }}
@@ -59,13 +148,40 @@ jobs:
           HARNESS_LIVE_KNOWLEDGE_ID: ${{ vars.HARNESS_LIVE_KNOWLEDGE_ID }}
           HARNESS_LIVE_PARSER_FINGERPRINT: ${{ vars.HARNESS_LIVE_PARSER_FINGERPRINT }}
           HARNESS_LIVE_KB_ID: ${{ vars.HARNESS_LIVE_KB_ID }}
-        run: uv run pytest -m live -q --junitxml=reports/live.xml
-      - name: Require executed zero-skip live tests
-        run: uv run python scripts/check_junit.py reports/live.xml
+        run: |
+          # Raw pytest XML is sanitized by the trusted script before it leaves the runner.
+          uv run python ../trusted-workflow/harness/scripts/run_live_gate.py \
+            --manifest ../trusted-workflow/harness/live-nodes.txt \
+            --report reports/live.sanitized.xml
       - name: Upload live JUnit
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: harness-live-junit
-          path: harness/reports/live.xml
+          path: harness/reports/live.sanitized.xml
           if-no-files-found: ignore
+
+  postflight:
+    needs:
+      - preflight
+      - live
+    if: ${{ always() && needs.preflight.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm PR head stability
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.approved-sha }}
+        with:
+          script: |
+            const {data: pull} = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(process.env.PR_NUMBER),
+            });
+            if (pull.state !== 'open' ||
+                pull.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+                pull.head.sha !== process.env.EXPECTED_SHA) {
+              core.setFailed('PR head changed or PR is no longer eligible');
+            }
