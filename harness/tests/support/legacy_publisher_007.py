@@ -3,36 +3,215 @@
 import uuid
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.db.base import utcnow
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.knowledge.pages import (
+    PageClaimView,
     RenderedPage,
     build_page_claims,
+    product_page_slug,
     render_product_page,
 )
 from insurance_harness.knowledge.publisher import (
     PublishResult,
     RollbackResult,
-    _move_pointer,
     _require_label_available,
     _require_scoped_product_version,
     _require_scoped_snapshot,
-    _snapshot_claims_for_publish,
     _upsert_page,
     _validate_publish_metadata,
     _validate_rollback_metadata,
-    _validate_rollback_pages,
     _validate_scope,
 )
 from insurance_harness.knowledge.tables import (
     ChangeSet,
+    Claim,
+    ClaimEvidence,
+    ClaimRevision,
+    CurrentRelease,
     ReleaseSnapshot,
     SnapshotClaim,
 )
 from insurance_harness.schemas import SchemaRegistry
+
+
+def _snapshot_claims_for_publish(
+    session: Session,
+    scope: KnowledgeScope,
+    product_version_id: str,
+    views: list[PageClaimView],
+) -> list[Claim]:
+    claim_ids = {view.claim_id for view in views}
+    if not claim_ids:
+        return []
+    claims = list(
+        session.execute(
+            select(Claim).where(
+                Claim.space_id == scope.space_id,
+                Claim.product_version_id == product_version_id,
+                Claim.id.in_(claim_ids),
+                Claim.status == "published",
+            )
+        ).scalars()
+    )
+    if {claim.id for claim in claims} != claim_ids:
+        raise ScopeViolation("scope mismatch")
+    view_by_claim = {view.claim_id: view for view in views}
+    if any(not view_by_claim[claim.id].evidence for claim in claims):
+        raise ScopeViolation("scope mismatch")
+    revision_pairs = set(
+        session.execute(
+            select(ClaimRevision.claim_id, ClaimRevision.revision_no)
+            .join(Claim, Claim.id == ClaimRevision.claim_id)
+            .where(
+                Claim.space_id == scope.space_id,
+                ClaimRevision.claim_id.in_(claim_ids),
+            )
+        ).all()
+    )
+    if any(
+        (claim.id, claim.current_revision) not in revision_pairs for claim in claims
+    ):
+        raise ScopeViolation("scope mismatch")
+    return claims
+
+
+def _validate_rollback_pages(
+    session: Session,
+    scope: KnowledgeScope,
+    snapshot: ReleaseSnapshot,
+    pages: list[RenderedPage],
+) -> None:
+    frozen_rows = list(
+        session.execute(
+            select(SnapshotClaim).where(
+                SnapshotClaim.space_id == scope.space_id,
+                SnapshotClaim.snapshot_id == snapshot.id,
+            )
+        ).scalars()
+    )
+    frozen_by_claim = {row.claim_id: row.revision_no for row in frozen_rows}
+    claim_ids = set(frozen_by_claim)
+    if not pages or not claim_ids:
+        raise ScopeViolation("scope mismatch")
+    claims = (
+        list(
+            session.execute(
+                select(Claim).where(
+                    Claim.space_id == scope.space_id,
+                    Claim.id.in_(claim_ids),
+                )
+            ).scalars()
+        )
+        if claim_ids
+        else []
+    )
+    if {claim.id for claim in claims} != claim_ids:
+        raise ScopeViolation("scope mismatch")
+
+    claims_by_id = {claim.id: claim for claim in claims}
+    page_claim_ids: set[str] = set()
+    page_slugs: set[str] = set()
+    for page in pages:
+        if page.slug in page_slugs:
+            raise ScopeViolation("scope mismatch")
+        page_slugs.add(page.slug)
+        metadata = page.page_metadata
+        if metadata.get("snapshot_id") != snapshot.id:
+            raise ScopeViolation("scope mismatch")
+        entity_ids = metadata.get("entity_ids")
+        if not isinstance(entity_ids, dict):
+            raise ScopeViolation("scope mismatch")
+        version_id = entity_ids.get("product_version_id")
+        product_id = entity_ids.get("product_id")
+        if not isinstance(version_id, str) or not isinstance(product_id, str):
+            raise ScopeViolation("scope mismatch")
+        version, product = _require_scoped_product_version(session, scope, version_id)
+        if product.id != product_id:
+            raise ScopeViolation("scope mismatch")
+        if page.slug != product_page_slug(product.product_code, version.version_label):
+            raise ScopeViolation("scope mismatch")
+        raw_claim_ids = metadata.get("claim_ids")
+        if not isinstance(raw_claim_ids, list) or not all(
+            isinstance(claim_id, str) for claim_id in raw_claim_ids
+        ):
+            raise ScopeViolation("scope mismatch")
+        claim_ids_for_page = set(raw_claim_ids)
+        if (
+            not claim_ids_for_page
+            or len(claim_ids_for_page) != len(raw_claim_ids)
+            or page_claim_ids.intersection(claim_ids_for_page)
+        ):
+            raise ScopeViolation("scope mismatch")
+        page_claim_ids.update(claim_ids_for_page)
+        for claim_id in claim_ids_for_page:
+            claim = claims_by_id.get(claim_id)
+            if (
+                claim is None
+                or claim.space_id != scope.space_id
+                or claim.product_version_id != version_id
+            ):
+                raise ScopeViolation("scope mismatch")
+
+    if page_claim_ids != claim_ids:
+        raise ScopeViolation("scope mismatch")
+    revision_pairs = (
+        set(
+            session.execute(
+                select(ClaimRevision.claim_id, ClaimRevision.revision_no)
+                .join(Claim, Claim.id == ClaimRevision.claim_id)
+                .where(
+                    Claim.space_id == scope.space_id,
+                    ClaimRevision.claim_id.in_(claim_ids),
+                )
+            ).all()
+        )
+        if claim_ids
+        else set()
+    )
+    if any(
+        (claim_id, revision_no) not in revision_pairs
+        for claim_id, revision_no in frozen_by_claim.items()
+    ):
+        raise ScopeViolation("scope mismatch")
+    evidence_claim_ids = (
+        set(
+            session.execute(
+                select(ClaimEvidence.claim_id)
+                .join(Claim, Claim.id == ClaimEvidence.claim_id)
+                .where(
+                    Claim.space_id == scope.space_id,
+                    ClaimEvidence.claim_id.in_(claim_ids),
+                )
+            ).scalars()
+        )
+        if claim_ids
+        else set()
+    )
+    if evidence_claim_ids != claim_ids:
+        raise ScopeViolation("scope mismatch")
+
+
+def _move_pointer(
+    session: Session,
+    scope: KnowledgeScope,
+    snapshot_id: str,
+) -> None:
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    if pointer is None:
+        session.add(
+            CurrentRelease(
+                space_id=scope.space_id,
+                id="current",
+                snapshot_id=snapshot_id,
+            )
+        )
+    else:
+        pointer.snapshot_id = snapshot_id
 
 
 async def legacy_publish_product_version(

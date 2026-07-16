@@ -136,6 +136,7 @@ snapshot SHALL 只允许 building→publishing→published 或 failed；failed �
 - **WHEN** retry 时 CurrentRelease 不再等于 plan 的 base current
 - **THEN** 系统拒绝执行旧 plan
 - **AND** 要求 reconcile 后重新构建 release
+- **AND** 不递增 retry_no、不创建新 attempt、不执行 Wiki action，也不修改 current
 
 #### Scenario: 进程终止留下过期 running operation
 
@@ -200,7 +201,7 @@ snapshot SHALL 只允许 building→publishing→published 或 failed；failed �
 
 ### Requirement: R3.4 外部失败不得前移真相指针
 
-任一外部写入失败时 CurrentRelease SHALL 不移动，operation 及正常发布的新 snapshot SHALL 记为 failed，并 SHALL 产生以 source_operation_id 唯一的 ReconciliationJob；rollback target snapshot SHALL 保持 published。非 Harness 管理的同 slug 页面 SHALL 在覆盖前触发 collision。
+任一已经发生或结果未知的外部写入失败时 CurrentRelease SHALL 不移动，operation 及正常发布的新 snapshot SHALL 记为 failed，并 SHALL 产生以 source_operation_id 唯一的 ReconciliationJob；rollback target snapshot SHALL 保持 published。非 Harness 管理的同 slug 页面 SHALL 在覆盖前触发 collision。ownership preflight 只有在同一 operation 的全部 retry/attempt 历史都能证明零 mutation 时，系统才 SHALL NOT 创建无恢复工作的 ReconciliationJob。
 
 #### Scenario: 多页发布第二页失败
 
@@ -213,6 +214,8 @@ snapshot SHALL 只允许 building→publishing→published 或 failed；failed �
 - **WHEN** ownership preflight 发现同 slug 页面没有合法 Harness scope metadata
 - **THEN** operation 以 collision 失败
 - **AND** 该页面从未被更新或删除
+- **AND** 若同一 operation 的全部 retry 历史均没有 succeeded、started 或结果 unknown 的 mutation，则不创建 ReconciliationJob
+- **AND** 若任一历史 retry 已有 succeeded、started 或结果 unknown 的 mutation，则创建 ReconciliationJob 恢复 current 投影
 
 #### Scenario: Wiki 写完但最终 DB commit 失败
 
@@ -240,6 +243,21 @@ ReleasePublisher SHALL 由应用注入 SessionFactory，并为每个 DB 阶段�
 - **THEN** 无论 saga 成功或因数据库并发隔离失败，都不得 commit 调用方事务
 - **AND** 调用方 rollback 后其业务写入不存在；PostgreSQL integration 证明成功 saga 只提交 service-owned Session 的 release 状态
 
+### Requirement: R3.7 退休发布 helper 不得保留在 production boundary
+
+production publisher module SHALL NOT 暴露仅供 007 characterization 使用、且已被 018
+发布架构淘汰的 `_snapshot_claims_for_publish`、`_validate_rollback_pages` 与
+`_move_pointer`。测试 support SHALL 对这三个 helper 自包含，但 MAY
+复用仍有真实 production caller 的 shared primitives。007 的旧 rollback 空页、重复页校验
+SHALL NOT 迁入 018 production；018 的合法零事实/零页面快照与冻结 PublishPlan 语义优先。
+
+#### Scenario: 007 characterization 与 018 production boundary 分离
+
+- **WHEN** 007 characterization tests 运行并复用退休行为
+- **THEN** 三个退休 helper 只存在于 test support
+- **AND** production publisher module 不暴露它们
+- **AND** 018 零事实发布与冻结 rollback 计划行为保持不变
+
 ### Requirement: R4.1 回滚必须使用独立 operation 且 pointer-last
 
 回滚 SHALL 只允许该 Space 的 published snapshot；系统 SHALL 冻结 base current 和目标计划，先重放目标页面，成功且 base current 未变化后移动指针，不得改变目标 snapshot 的 published 状态。
@@ -262,6 +280,12 @@ ReleasePublisher SHALL 由应用注入 SessionFactory，并为每个 DB 阶段�
 - **WHEN** 回滚已重放第一页但第二页失败
 - **THEN** current 仍指向回滚前 snapshot
 - **AND** operation/audit 不得显示 succeeded/applied
+
+#### Scenario: 回滚 running lease 过期被恢复
+
+- **WHEN** rollback operation 为 running 或存在 started attempt，且 lease_expires_at 已过期
+- **THEN** recovery 将 operation 标为 failed 并创建或复用 ReconciliationJob
+- **AND** 对应 ChangeSet 统一标为 partially_applied，不得遗留 pending 或显示 applied
 
 ### Requirement: R4.3 Reconciliation 必须恢复执行时 current 的精确投影
 
@@ -364,12 +388,22 @@ OpenSpec strict、Ruff、mypy strict、非 live/非 integration_postgres pytest 
 
 PostgreSQL integration SHALL 将每次运行的对象和数据限制在本次随机 schema；测试连接的 `search_path` SHALL NOT 回退到 `public`，否则已迁移的公共表会造成伪隔离、跨运行污染和假绿。测试结束 SHALL 只清理其拥有的随机 schema。
 
+deterministic SQLite fixture SHALL 在创建 018 metadata 前显式启用 foreign key enforcement，
+并以不被 CurrentRelease trigger 遮蔽、可失败的复合 FK 场景证明 scope ownership 约束真实
+生效，不得仅依赖 ORM guard。CurrentRelease 的真实跨 Space target 另按 R2.1 验收。
+
 #### Scenario: PostgreSQL 随机 schema 不回退公共表
 
 - **WHEN** PostgreSQL lane 为 017/018 集成节点创建本次运行的随机 schema
 - **THEN** 建表、约束、触发器与业务数据均位于该随机 schema
 - **AND** 测试连接的 `search_path` 不包含 `public`
 - **AND** 失败或成功后的清理均只删除本次随机 schema
+
+#### Scenario: deterministic SQLite fixture 启用外键
+
+- **WHEN** 018 deterministic schema/guard tests 使用共享 kb_session fixture
+- **THEN** `PRAGMA foreign_keys` 等于 1
+- **AND** 插入不被 trigger 遮蔽的跨 Space 复合外键引用在数据库层失败
 
 #### Scenario: deterministic 通过但没有受控 live run
 

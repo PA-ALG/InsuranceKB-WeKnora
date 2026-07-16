@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-15（019 PR #8 已合入 `main`；018 软件、本地/CI deterministic、PostgreSQL 16 与 whole-change 双审完成：1035 passed，PG `tests=2 skipped=0`，`Spec compliant: yes`、`Quality approved: yes`；仅 T7 真实 WeKnora live 因环境配置缺失保持 `NOT RUN`；0g 事故规则已实际执行）
+> 最后更新：2026-07-16（019 PR #8 已合入 `main`；PR #9 review hardening RH1～RH5 已在未提交工作树完成，whole-change spec compliant、quality Approved 且无剩余 finding；fresh 本地门禁为 deterministic `1224 passed / 7 deselected`、PostgreSQL 16 `2 passed / 1229 deselected`、Ruff/OpenSpec/mypy 181 files 全绿；PR #9 远端仍是旧 SHA `8df6c3cf`，PR #10 仍 Draft/open，T7 真实 WeKnora 5-node live 保持 `NOT RUN`）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -34,6 +34,8 @@
    - **全量门禁回归复盘（2026-07-15）**：018 聚焦测试全绿后仍执行完整 deterministic，发现新增 `0005` 会在 `head → 0002` 的 `0003` 兼容性拒绝之前先删除四张 018 表。没有删旧测试或接受半降级，而是保留 7 个 RED，令 `0005` 在最终目标跨过 `0003` 时先做兼容性预检；拒绝后 schema 与 `alembic_version` 都留在 head，直接 `0005 → 0004` 仍可用。whole-change 规格复核又发现旧 session 式 publish/rollback 仍公开可绕过 saga；历史行为现已完全移到 `tests/support/legacy_publisher_007.py`，生产模块、包 import 与 `__all__` 均不再包含可执行旧旁路，只暴露 service-owned `ReleasePublisher`。最终 OpenSpec strict 有效、Ruff 全绿、mypy strict **171 source files**、018 focused **73 passed / 2 deselected**、deterministic **1035 passed / 7 deselected**。教训：聚焦绿不等于全库绿；多 revision downgrade 必须在首个 DDL 前完成所有下游拒绝条件预检；测试不得硬编码不断前移的 head revision；新安全入口上线时必须枚举并封死旧公开旁路。
    - **最终质量硬化复盘（2026-07-15）**：独立 quality review 的五项意见均先复现再修复：新快照默认改为 `building` 且无默认 `published_at`，pointer 只允许 `published + read_model_version=1 + projection_frozen_at`；同 Space 锁覆盖 build/activate/Wiki/finalize 整个 saga；退休发布实现移出生产代码；成功 reconciliation 始终返回原 plan 对应 snapshot pages；既有 PostgreSQL integration 节点追加 pointer/fact/operation/published-snapshot 触发器验收。全量首次复跑由此暴露两个 017 fixture 仍隐式依赖“新快照即发布”，现已显式声明发布态并用精确回归固定；最终只读复审为 `Quality approved: yes`，无剩余 Critical/Important/Minor。教训：安全状态默认值改变后，必须全库搜索并修正依赖隐式默认的 fixture，不能只跑本 change。
 
+0h. **PR #9 review hardening（2026-07-16，待人工 commit/push）**：Claude review 的 merge-relevant 项已统一按现有 018 change 走 SDD/TDD。RH1 将三个 007-only helper 移至 test support；RH2 在 `kb_session` 每个 SQLite 连接启用 FK，并补真实跨 Space pointer/复合 FK；RH3 用临时 mutation 证明 stale-base retry 测试可拦截副作用；RH4 修正首动作纯 collision 的零工单语义和 rollback lease recovery ChangeSet；RH5 固定 0005 合约 revision 并移除 live `search_path` 的 `public` fallback。开启 FK 后保留两个 016 application fail-closed 测试：仅在局部 context 显式关闭 FK 制造历史损坏态，`finally` 恢复 FK=1。每项 spec/quality 双审均 Approved；最终 whole-change 规格复核 `Spec compliant`、质量复核 `Approved`，无剩余 Critical/Important/Minor；fresh 最终本地证据为 OpenSpec strict、Ruff、mypy **181 files**、deterministic **1224 passed / 7 deselected**、PostgreSQL 16 **2 passed / 1229 deselected**。这些结论只覆盖本地工作树，PR #9 与 PR #10 当前均 Draft/open，旧 SHA checks 不覆盖本批。固定收口顺序：人工复核 → commit/push PR #9 新 SHA → 新 deterministic/integration checks 全绿 → PR #10 merge → 受控 5-node live `tests=5 skipped=0` → Ready for review。
+
    **阶段 1 — 合并后收尾（当前）**
    - [x] PR #5、#6 已合并，最新 `origin/main` 已确认指向 `27c36641`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
    - [ ] 修正文档陈旧口径：`docs/insurance-kb/README.md` 的 017 T1～T6、`docs/insurance-kb/20-enterprise-runtime-foundation.md` 的 PostgreSQL integration / WeKnora live 边界、`harness/README.md` 的 deterministic marker。
@@ -50,8 +52,8 @@
    - [x] T4：canonical PublishPlan、完整 Space 发布、strict ownership、写后回读、legacy 双匹配、response-loss、Engine+Space 局部串行、service-owned Session 状态机、lease/retry/attempt/job 与最终 DB commit 失败恢复已实现；PR #9 implementation commit `a70bf025` 的 [PostgreSQL 16 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386028676/job/87259377677) 通过，JUnit `tests=2 skipped=0`。
    - [x] T5：V1/V2 pointer-last rollback、失败 retry、执行时 current 精确 reconciliation、DELETE 404、reconcile child requeue/lease identity、successor child、legacy 首发失败、历史/new managed slug 清理与 R6.1～R6.3 组合故事均已覆盖。
    - [x] T6：curated facts 永不调用 RAW；五类 typed gap 可显式触发 provider；所有 hit 强制同 `space_id/raw_kb_id`，跨 scope 整体失败，统一标记 `unreviewed_raw`，无写回/合并/搜索引擎。
-   - [x] 已交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback；旧 caller-Session publish/rollback 已完全移至 test support，生产模块、包入口与 `__all__` 均无旁路；本地 deterministic 全量为 **1035 passed / 7 deselected**。
-   - [ ] T7 真实验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。2026-07-15 已触发 [harness-live run 29386058916](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386058916)，preflight 因 `harness-live` environment 的 7 个变量/secret 全部为空而 fail closed，故仍为 `NOT RUN`，不得伪绿。
+   - [x] 已交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback；review hardening RH1～RH5 task-level 双审均 Approved；本地 deterministic 全量为 **1224 passed / 7 deselected**，PostgreSQL 16 为 **2 passed / 1229 deselected**。
+   - [ ] T7 真实验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。PR #10 仍为 Draft/open，本批尚未在 PR #9 新 SHA 上运行受控 5-node live，故继续 `NOT RUN`；旧 preflight failure/skip/PostgreSQL 结果均不得伪装 live 通过。
 
    **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
    - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。

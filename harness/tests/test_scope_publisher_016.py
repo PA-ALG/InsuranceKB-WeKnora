@@ -3,12 +3,14 @@
 import copy
 import inspect
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
 import pytest
 import respx
-from sqlalchemy import delete, event, func, select
+from sqlalchemy import delete, event, func, select, text, update
 from sqlalchemy.orm import Session
 
 from insurance_harness.adapters.weknora import WeKnoraClient
@@ -129,6 +131,24 @@ def _counts(session: Session) -> tuple[int, int, int]:
         session.scalar(select(func.count()).select_from(CurrentRelease)) or 0,
         session.scalar(select(func.count()).select_from(ChangeSet)) or 0,
     )
+
+
+@contextmanager
+def _sqlite_foreign_keys_disabled(session: Session) -> Iterator[None]:
+    """Allow a test to model legacy corruption, then restore FK enforcement."""
+
+    session.commit()
+    assert not session.in_transaction()
+    try:
+        session.execute(text("PRAGMA foreign_keys = OFF"))
+        assert session.scalar(text("PRAGMA foreign_keys")) == 0
+        yield
+    finally:
+        session.rollback()
+        assert not session.in_transaction()
+        session.execute(text("PRAGMA foreign_keys = ON"))
+        assert session.scalar(text("PRAGMA foreign_keys")) == 1
+        session.commit()
 
 
 def test_page_read_rejects_forged_scope_with_matching_bound_values(
@@ -311,11 +331,17 @@ def test_s2_2_current_snapshot_rejects_pointer_to_other_space_snapshot(
         )
     )
     kb_session.flush()
-    snapshot.space_id = scope_b.space_id
-    kb_session.flush()
+    with _sqlite_foreign_keys_disabled(kb_session):
+        kb_session.execute(
+            update(ReleaseSnapshot)
+            .where(ReleaseSnapshot.id == snapshot.id)
+            .values(space_id=scope_b.space_id)
+        )
+        kb_session.commit()
+        kb_session.expire_all()
 
-    with pytest.raises(ScopeViolation, match="scope mismatch"):
-        current_snapshot_id(kb_session, scope_a)
+        with pytest.raises(ScopeViolation, match="scope mismatch"):
+            current_snapshot_id(kb_session, scope_a)
 
 
 def test_s2_2_current_snapshot_rejects_dangling_pointer(
@@ -340,11 +366,15 @@ def test_s2_2_current_snapshot_rejects_dangling_pointer(
         )
     )
     kb_session.flush()
-    kb_session.delete(snapshot)
-    kb_session.flush()
+    with _sqlite_foreign_keys_disabled(kb_session):
+        kb_session.execute(
+            delete(ReleaseSnapshot).where(ReleaseSnapshot.id == snapshot.id)
+        )
+        kb_session.commit()
+        kb_session.expire_all()
 
-    with pytest.raises(ScopeViolation, match="scope mismatch"):
-        current_snapshot_id(kb_session, scope)
+        with pytest.raises(ScopeViolation, match="scope mismatch"):
+            current_snapshot_id(kb_session, scope)
 
 
 @respx.mock

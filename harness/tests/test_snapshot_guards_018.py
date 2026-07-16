@@ -45,7 +45,11 @@ def _seed_product(session: Session) -> tuple[str, str, str]:
         channels=None,
         regions=None,
     )
-    session.add_all([space, product, version])
+    session.add(space)
+    session.flush()
+    session.add(product)
+    session.flush()
+    session.add(version)
     session.flush()
     return space.id, product.id, version.id
 
@@ -113,12 +117,13 @@ def _snapshot(
     snapshot_id: str,
     *,
     status: str,
+    space_id: str = "space-1",
     read_model_version: int = 1,
     frozen_at: datetime | None = None,
 ) -> ReleaseSnapshot:
     return ReleaseSnapshot(
         id=snapshot_id,
-        space_id="space-1",
+        space_id=space_id,
         label=snapshot_id,
         rendered_pages=[],
         status=status,
@@ -219,7 +224,9 @@ def test_r1_2_frozen_publish_plan_rejects_change_or_unfreeze(
         retry_no=0,
         actor="test",
     )
-    kb_session.add_all([snapshot, operation])
+    kb_session.add(snapshot)
+    kb_session.flush()
+    kb_session.add(operation)
     kb_session.commit()
 
     with pytest.raises(IntegrityError, match="publish plan is frozen"):
@@ -235,21 +242,93 @@ def test_r1_2_frozen_publish_plan_rejects_change_or_unfreeze(
     kb_session.rollback()
 
 
+def test_r6_4_kb_session_enforces_sqlite_foreign_keys(kb_session: Session) -> None:
+    assert kb_session.scalar(text("PRAGMA foreign_keys")) == 1
+    _seed_product(kb_session)
+    space_b = KnowledgeSpace(
+        id="space-b",
+        tenant_id="tenant-b",
+        raw_kb_id="raw-b",
+        wiki_kb_id="wiki-b",
+        name="Space B",
+        binding_status="bound",
+    )
+    kb_session.add(space_b)
+    kb_session.flush()
+    kb_session.add(
+        _snapshot(
+            "snapshot-b",
+            space_id=space_b.id,
+            status="published",
+            frozen_at=utcnow(),
+        )
+    )
+    kb_session.commit()
+
+    kb_session.add(
+        ReleaseOperation(
+            id="operation-cross-space",
+            space_id="space-1",
+            kind="rollback",
+            status="building",
+            target_snapshot_id="snapshot-b",
+            retry_no=0,
+            actor="test",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        kb_session.commit()
+    kb_session.rollback()
+
+
 def test_r2_1_current_pointer_rejects_legacy_failed_and_cross_space_targets(
     kb_session: Session,
 ) -> None:
     _seed_product(kb_session)
+    space_b = KnowledgeSpace(
+        id="space-b",
+        tenant_id="tenant-b",
+        raw_kb_id="raw-b",
+        wiki_kb_id="wiki-b",
+        name="Space B",
+        binding_status="bound",
+    )
+    kb_session.add(space_b)
+    kb_session.flush()
     kb_session.add_all(
         [
             _snapshot("snapshot-current", status="published", frozen_at=utcnow()),
             _snapshot("snapshot-unfrozen", status="published"),
             _snapshot("snapshot-legacy", status="published", read_model_version=0),
             _snapshot("snapshot-failed", status="failed"),
+            _snapshot(
+                "snapshot-b",
+                space_id=space_b.id,
+                status="published",
+                frozen_at=utcnow(),
+            ),
         ]
     )
     kb_session.commit()
 
-    kb_session.add(CurrentRelease(space_id="space-1", id="current", snapshot_id="snapshot-legacy"))
+    kb_session.add(
+        CurrentRelease(
+            space_id="space-1",
+            id="current",
+            snapshot_id="snapshot-b",
+        )
+    )
+    with pytest.raises(IntegrityError, match="current release target is unavailable"):
+        kb_session.commit()
+    kb_session.rollback()
+
+    kb_session.add(
+        CurrentRelease(
+            space_id="space-1",
+            id="current",
+            snapshot_id="snapshot-legacy",
+        )
+    )
     with pytest.raises(IntegrityError, match="current release target is unavailable"):
         kb_session.commit()
     kb_session.rollback()
@@ -265,7 +344,13 @@ def test_r2_1_current_pointer_rejects_legacy_failed_and_cross_space_targets(
         kb_session.commit()
     kb_session.rollback()
 
-    kb_session.add(CurrentRelease(space_id="space-1", id="current", snapshot_id="snapshot-current"))
+    kb_session.add(
+        CurrentRelease(
+            space_id="space-1",
+            id="current",
+            snapshot_id="snapshot-current",
+        )
+    )
     kb_session.commit()
 
     with pytest.raises(IntegrityError, match="current release target is unavailable"):

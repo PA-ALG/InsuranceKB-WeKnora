@@ -127,6 +127,15 @@ ReconciliationJob。若全部 Wiki 写成功但最终 DB commit 失败，
 相同行为。最终 published/pointer/operation succeeded 在一个 DB 事务内提交，因此该事务
 成功时无需补偿，失败时 current 仍旧且 durable pre-I/O operation 可被发现。
 
+ReconciliationJob 只表达“远端可能已偏离 current，需要恢复”的事实，而不是所有失败的
+通用审计附件。ownership preflight 发现第三方 collision 时，只有检查同一 operation 的全部
+retry/attempt 历史后仍能证明从未发生 succeeded、started/结果 unknown mutation，才只持久化
+collision attempt 和 failed operation/snapshot 而不创建工单；只要 operation 生命周期内已有
+任一可能 mutation 的历史，就仍必须创建工单。rollback operation 因 lease 过期从
+running/started 恢复为 failed 时，
+对应 ChangeSet 必须与进程内 action 失败保持同一审计语义，统一记为 `partially_applied`，不得
+遗留为 `pending`。
+
 Publisher 只管理 metadata 同时包含
 `managed_by=insurance-harness`、`space_id`、`snapshot_id` 的 slug；同名非 Harness 页面
 在覆盖前触发 collision。首次 018 接管时，只允许收养“slug 在 current legacy snapshot
@@ -156,8 +165,15 @@ gap 时才调用 provider，并校验每个结果的 `space_id/raw_kb_id` 与 sc
 - migration：`0004→0005` legacy upgrade、DB immutability、downgrade、PostgreSQL offline DDL；
 - Reader：五类 gap、包含式有效期、重叠事实、跨 Space fail-closed；
 - renderer：修改/撤回 mutable Claim/Evidence/Product 后，页面仍由 frozen facts 生成；
-- saga：多页第二页失败、collision、response loss、final DB failure、same-plan retry；
+- saga：多页第二页失败、首动作/后续 collision、response loss、final DB failure、
+  same-plan retry，以及 base current 已变化时零副作用拒绝旧 plan；
 - rollback/reconcile：V1→V2→rollback V1，新增 slug 与历史非 current managed slug 清理；
 - scope：两个 Space 相同 label/slug 隔离，同 Space 串行、跨 Space 可并行；
+- schema：deterministic `kb_session` 显式启用 SQLite foreign key，并用复合 FK 失败证明约束
+  实际生效；current pointer guard 必须构造真实跨 Space target；
+- production boundary：007 legacy characterization support 对三个退休 helper 自包含；已由
+  018 淘汰的旧发布 helper 不得继续由 production module 暴露或仅靠测试 import 存活；
+- migration/live：`0005` 合约测试固定升级到 `0005`，current-head smoke 才使用 `head`；018
+  PostgreSQL/live helper 的随机 schema `search_path` 仅包含该 schema，不得回退 `public`；
 - gates：OpenSpec strict、Ruff、mypy strict、deterministic pytest；真实 PostgreSQL 与
   WeKnora 证据分别报告，skip/NOT RUN 不得宣称 live verified。

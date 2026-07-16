@@ -33,8 +33,17 @@ _REQUIRED = (
 def _connect_args(schema: str | None = None) -> dict[str, object]:
     options = ["-cstatement_timeout=30000", "-clock_timeout=5000"]
     if schema is not None:
-        options.append(f"-csearch_path={schema},public")
+        options.append(f"-csearch_path={schema}")
     return {"connect_timeout": 10, "options": " ".join(options)}
+
+
+def test_r6_4_live_postgresql_schema_does_not_fallback_to_public() -> None:
+    connect_args = _connect_args("release_live_018_test")
+
+    options = connect_args["options"]
+    assert isinstance(options, str)
+    assert "search_path=release_live_018_test" in options
+    assert ",public" not in options
 
 
 def _factory(engine: Engine) -> sessionmaker[Session]:

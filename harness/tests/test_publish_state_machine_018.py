@@ -18,8 +18,9 @@ from insurance_harness.adapters.weknora import (
 )
 from insurance_harness.db.base import make_session_factory
 from insurance_harness.db.models import ProductVersion
-from insurance_harness.db.scope import KnowledgeScope
+from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.knowledge.publisher import PublishResult, ReleasePublisher
+from insurance_harness.knowledge.release_plan import PageOwnershipCollision
 from insurance_harness.knowledge.tables import (
     Claim,
     CurrentRelease,
@@ -43,6 +44,12 @@ def test_r3_6_package_publish_api_requires_service_owned_session() -> None:
     assert "publish_product_version" not in knowledge_api.__all__
     assert set(knowledge_api.__all__) <= vars(knowledge_api).keys()
     assert not hasattr(publisher_module, "_legacy_publish_product_version")
+
+
+def test_r3_7_retired_007_helpers_are_not_exported_by_production_publisher() -> None:
+    assert not hasattr(publisher_module, "_snapshot_claims_for_publish")
+    assert not hasattr(publisher_module, "_validate_rollback_pages")
+    assert not hasattr(publisher_module, "_move_pointer")
 
 
 def test_r4_1_package_rollback_api_requires_release_publisher() -> None:
@@ -291,6 +298,194 @@ async def test_r3_4_failed_second_page_is_durable_and_same_plan_retry_succeeds(
     assert pointer is not None and pointer.snapshot_id == snapshot.id
 
 
+async def test_r3_4_first_action_ownership_collision_skips_reconciliation(
+    kb_session: Session,
+) -> None:
+    scope, _version_a, version_b = _seed_two_products(kb_session)
+    wiki = _SagaWiki()
+    slug = "product/A/V1/overview"
+    third_party = WeKnoraWikiPage(
+        slug=slug,
+        page_metadata={"managed_by": "third-party"},
+    )
+    wiki.pages[(scope.wiki_kb_id, slug)] = third_party
+    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+
+    with pytest.raises(PageOwnershipCollision, match="page ownership collision"):
+        await publisher.publish_product_version(
+            scope,
+            product_version_id=version_b.id,
+            label="release-collision",
+        )
+
+    kb_session.expire_all()
+    assert kb_session.get(CurrentRelease, (scope.space_id, "current")) is None
+    operation = kb_session.scalar(select(ReleaseOperation))
+    snapshot = kb_session.scalar(select(ReleaseSnapshot))
+    attempt = kb_session.scalar(select(PublishAttempt))
+    assert operation is not None and operation.status == "failed"
+    assert snapshot is not None and snapshot.status == "failed"
+    assert attempt is not None and attempt.status == "collision"
+    assert attempt.created_new is None
+    assert wiki.pages[(scope.wiki_kb_id, slug)] == third_party
+    assert kb_session.scalar(select(func.count()).select_from(ReconciliationJob)) == 0
+
+
+async def test_r3_4_retry_collision_uses_operation_wide_mutation_history(
+    kb_session: Session,
+) -> None:
+    scope, _version_a, version_b = _seed_two_products(kb_session)
+    wiki = _SagaWiki()
+    wiki.fail_slug = "product/B/V1/overview"
+    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+
+    with pytest.raises(WeKnoraTransientError, match="planned write failure"):
+        await publisher.publish_product_version(
+            scope,
+            product_version_id=version_b.id,
+            label="release-retry-collision",
+        )
+
+    kb_session.expire_all()
+    operation = kb_session.scalar(select(ReleaseOperation))
+    job = kb_session.scalar(select(ReconciliationJob))
+    assert operation is not None and operation.status == "failed"
+    assert job is not None and job.source_operation_id == operation.id
+    operation_id = operation.id
+    kb_session.delete(job)
+    kb_session.commit()
+    assert kb_session.scalar(select(func.count()).select_from(ReconciliationJob)) == 0
+
+    slug = "product/A/V1/overview"
+    wiki.pages[(scope.wiki_kb_id, slug)] = WeKnoraWikiPage(
+        slug=slug,
+        page_metadata={"managed_by": "third-party"},
+    )
+    wiki.fail_slug = None
+
+    with pytest.raises(PageOwnershipCollision, match="page ownership collision"):
+        await publisher.retry_operation(scope, operation_id=operation_id)
+
+    kb_session.expire_all()
+    retried_operation = kb_session.get(ReleaseOperation, operation_id)
+    assert retried_operation is not None and retried_operation.status == "failed"
+    attempts = list(
+        kb_session.scalars(
+            select(PublishAttempt)
+            .where(PublishAttempt.operation_id == operation_id)
+            .order_by(PublishAttempt.retry_no, PublishAttempt.action_no)
+        )
+    )
+    assert [attempt.status for attempt in attempts] == [
+        "succeeded",
+        "failed",
+        "collision",
+    ]
+    jobs = list(
+        kb_session.scalars(
+            select(ReconciliationJob).where(
+                ReconciliationJob.source_operation_id == operation_id
+            )
+        )
+    )
+    assert len(jobs) == 1
+
+
+async def test_r3_1_retry_rejects_failed_plan_after_current_changes_without_side_effects(
+    kb_session: Session,
+) -> None:
+    scope, version_a, version_b = _seed_two_products(kb_session)
+    factory = _factory(kb_session)
+    wiki = _SagaWiki()
+    wiki_mutations: list[str] = []
+    wiki.on_mutation = wiki_mutations.append
+    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+
+    release_x = await publisher.publish_product_version(
+        scope,
+        product_version_id=version_a.id,
+        label="release-x",
+    )
+    wiki.fail_slug = "product/B/V1/overview"
+    with pytest.raises(WeKnoraTransientError, match="planned write failure"):
+        await publisher.publish_product_version(
+            scope,
+            product_version_id=version_a.id,
+            label="release-a",
+        )
+
+    kb_session.expire_all()
+    failed_operation_a = kb_session.scalar(
+        select(ReleaseOperation).where(ReleaseOperation.status == "failed")
+    )
+    assert failed_operation_a is not None
+    assert failed_operation_a.base_snapshot_id == release_x.snapshot_id
+    operation_a_id = failed_operation_a.id
+
+    wiki.fail_slug = None
+    release_y = await publisher.publish_product_version(
+        scope,
+        product_version_id=version_b.id,
+        label="release-y",
+    )
+    assert release_y.snapshot_id != release_x.snapshot_id
+
+    kb_session.expire_all()
+    operation_a = kb_session.get(ReleaseOperation, operation_a_id)
+    assert operation_a is not None
+    retry_no_before = operation_a.retry_no
+    attempts_before = kb_session.scalar(
+        select(func.count())
+        .select_from(PublishAttempt)
+        .where(PublishAttempt.operation_id == operation_a_id)
+    )
+    wiki_mutations_before = len(wiki_mutations)
+    current_before = kb_session.scalar(
+        select(CurrentRelease.snapshot_id).where(
+            CurrentRelease.space_id == scope.space_id
+        )
+    )
+    jobs_before = kb_session.scalar(
+        select(func.count())
+        .select_from(ReconciliationJob)
+        .where(ReconciliationJob.source_operation_id == operation_a_id)
+    )
+    assert current_before == release_y.snapshot_id
+    assert jobs_before == 1
+
+    with pytest.raises(ScopeViolation):
+        await publisher.retry_operation(scope, operation_id=operation_a_id)
+
+    kb_session.expire_all()
+    operation_a = kb_session.get(ReleaseOperation, operation_a_id)
+    assert operation_a is not None and operation_a.retry_no == retry_no_before
+    assert (
+        kb_session.scalar(
+            select(func.count())
+            .select_from(PublishAttempt)
+            .where(PublishAttempt.operation_id == operation_a_id)
+        )
+        == attempts_before
+    )
+    assert len(wiki_mutations) == wiki_mutations_before
+    assert (
+        kb_session.scalar(
+            select(CurrentRelease.snapshot_id).where(
+                CurrentRelease.space_id == scope.space_id
+            )
+        )
+        == current_before
+    )
+    assert (
+        kb_session.scalar(
+            select(func.count())
+            .select_from(ReconciliationJob)
+            .where(ReconciliationJob.source_operation_id == operation_a_id)
+        )
+        == jobs_before
+    )
+
+
 async def test_r3_5_wrong_upsert_readback_fails_before_pointer_and_creates_job(
     kb_session: Session,
 ) -> None:
@@ -423,7 +618,9 @@ async def test_r3_1_recovery_distinguishes_pre_io_building_from_running(
             heartbeat_at=NOW - timedelta(seconds=2),
             actor="test",
         )
-        kb_session.add_all([snapshot, operation])
+        kb_session.add(snapshot)
+        kb_session.flush()
+        kb_session.add(operation)
     kb_session.commit()
     publisher = ReleasePublisher(factory, _SagaWiki(), now=lambda: NOW)
 

@@ -86,7 +86,7 @@ def test_r1_1_0005_creates_release_read_model_tables_and_columns(
     tmp_path: Path,
 ) -> None:
     url, engine = _db(tmp_path, "schema")
-    command.upgrade(_cfg(url), "head")
+    command.upgrade(_cfg(url), "0005")
     inspector = inspect(engine)
 
     assert NEW_TABLES <= set(inspector.get_table_names())
@@ -120,7 +120,7 @@ def test_r1_1_0005_creates_release_read_model_tables_and_columns(
 
 def test_r1_2_0005_installs_release_immutability_guards(tmp_path: Path) -> None:
     url, engine = _db(tmp_path, "release-guards")
-    command.upgrade(_cfg(url), "head")
+    command.upgrade(_cfg(url), "0005")
 
     with engine.connect() as connection:
         triggers = set(
@@ -207,7 +207,7 @@ def test_r3_1_post_migration_raw_snapshot_defaults_to_building_version_one(
     tmp_path: Path,
 ) -> None:
     url, engine = _db(tmp_path, "new-default")
-    command.upgrade(_cfg(url), "head")
+    command.upgrade(_cfg(url), "0005")
     now = datetime.now(UTC)
     with engine.begin() as connection:
         connection.execute(

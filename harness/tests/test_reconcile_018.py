@@ -217,6 +217,43 @@ async def test_r4_2_failed_rollback_keeps_current_and_retry_reuses_operation(
     assert pointer is not None and pointer.snapshot_id == v1_id
 
 
+async def test_r4_2_expired_running_rollback_marks_change_set_partially_applied(
+    kb_session: Session,
+) -> None:
+    scope, _wiki, publisher, v1_id, v2_id = await _published_v1_v2(kb_session)
+    operation_id = publisher._build_rollback_operation(
+        scope,
+        snapshot_id=v1_id,
+        actor="test",
+        reason="lease expiry",
+    )
+    publisher._activate(scope, operation_id)
+    with _factory(kb_session)() as session:
+        operation = session.get(ReleaseOperation, operation_id)
+        assert operation is not None and operation.status == "running"
+        operation.lease_expires_at = NOW - timedelta(seconds=1)
+        session.commit()
+
+    assert await publisher.recover_expired(scope) == (operation_id,)
+
+    kb_session.expire_all()
+    operation = kb_session.get(ReleaseOperation, operation_id)
+    assert operation is not None and operation.status == "failed"
+    assert kb_session.scalar(select(func.count()).select_from(ReconciliationJob)) == 1
+    pointer = kb_session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None and pointer.snapshot_id == v2_id
+    snapshots = list(kb_session.scalars(select(ReleaseSnapshot)))
+    assert {snapshot.id for snapshot in snapshots} == {v1_id, v2_id}
+    assert all(snapshot.status == "published" for snapshot in snapshots)
+    change_set = kb_session.scalar(
+        select(ChangeSet).where(
+            ChangeSet.source_kind == "rollback",
+            ChangeSet.external_record_id == operation_id,
+        )
+    )
+    assert change_set is not None and change_set.status == "partially_applied"
+
+
 async def test_r1_4_legacy_rollback_rejected_before_wiki_or_operation(
     kb_session: Session,
 ) -> None:
