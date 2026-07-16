@@ -1,6 +1,7 @@
 # 012 · QA 一等知识对象
 
-> 状态：提案（2026-07-12）。实现交其他模型（遗留 B14）。设计权威：03 §2（权威 QA / 派生 QA，答案必须由 Claim 支持）、master plan P1-2、13 §2 G5。
+> 状态：**已条款化（正式 delta；三版 2026-07-18 按 codex PR #12 复审收口：断言级绑定/qa_revisions/冻结投影扩展），规格复审收口前不可认领**（轨道 L4 第三件；前置 010 域段 qa_staging + 021）。迁移占号 0009。执行者 C3；Owner=C + A（qa 表/绑定/冻结投影/发布接线点）。
+> 设计权威：03 §2（权威 QA / 派生 QA，答案必须由 Claim 支持）、master plan P1-2、13 §2 G5、20（企业运行约束）。
 
 ## 为什么做
 
@@ -8,7 +9,7 @@
 
 ## 做什么
 
-1. **qa_items 表**：问题、标准化意图（归一后的问题指纹，用于相似问合并）、答案文本、`answer_claim_ids[]`（**必填**，答案的每个事实断言必须绑定 published Claim）、关联实体（产品/概念）、类型（authoritative/derived）、状态（复用 007 审核门禁）、有效期、来源；
+1. **QA 数据模型**：`qa_items`（稳定身份）+ 不可变 `qa_revisions`（问题/答案/指纹/状态，修改一律追加）+ `qa_assertions`（答案拆断言）+ `qa_assertion_claim_bindings`（规范化关联，复合 FK 在数据库边界闭 Space——**每个断言必须绑定 published Claim**，绑定不可用 JSON 列表冒充）；
 2. **权威 QA 通道**：010 的 FAQ 直入 → qa_staging → 答案与 Claim 对齐（确定性：答案中的值与 Claim 值匹配；对不上的进审核，禁止无 Claim 支撑发布）→ 审核 → 发布；
 3. **派生 QA 编译器**：从高价值字段模板化生成（"X产品的等待期是多久？"←waiting_period Claim），标注 derived；**源 Claim 变更（supersede/retract）自动触发重编或下架**——这是防口径分叉的机制核心；
 4. **相似问合并**：意图指纹（归一化+关键词集）确定性聚类，同簇多问指向同一答案；语义级合并留 LLM 接口（默认关）；
