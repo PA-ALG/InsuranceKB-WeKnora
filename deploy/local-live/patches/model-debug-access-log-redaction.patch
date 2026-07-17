@@ -27,7 +27,7 @@ diff --git a/docker/Dockerfile.app b/docker/Dockerfile.app
      python3 -m pip install --break-system-packages --upgrade pip setuptools wheel && \
      mkdir -p /home/appuser/.local/bin && \
 -    curl -LsSf https://astral.sh/uv/install.sh | CARGO_HOME=/home/appuser/.cargo UV_INSTALL_DIR=/home/appuser/.local/bin sh && \
-+    UV_INSTALLER_SHA256=446a6087825fa73eadb045e5a2e9e2adf7df241b571228187728191d961dda1f && \
++    UV_INSTALLER_SHA256=09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18 && \
 +    curl -LsSf --proto '=https' --tlsv1.2 https://astral.sh/uv/0.9.26/install.sh -o /tmp/uv-install.sh && \
 +    printf '%s  %s\n' "$UV_INSTALLER_SHA256" /tmp/uv-install.sh | sha256sum -c - && \
 +    CARGO_HOME=/home/appuser/.cargo UV_INSTALL_DIR=/home/appuser/.local/bin \

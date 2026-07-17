@@ -1,21 +1,21 @@
 # 023 本机 WeKnora live 环境验证报告
 
-> 最后更新：2026-07-16。本文严格区分软件门禁、本机基础设施、供应商模型、WeKnora app 制品与真实 live；失败、skip、dirty-worktree provisional 与 `NOT RUN` 均不记为成功。
+> 最后更新：2026-07-17。本文严格区分软件门禁、本机基础设施、供应商模型、WeKnora app 制品与真实 live；失败、skip、dirty-worktree provisional 与 `NOT RUN` 均不记为成功。
 
 ## 1. 当前状态
 
-当前 follow-up 分支为 `codex/023-live-model-supply-chain`，基于 `origin/main@9d84f942`。PR #10 已将 T1～T5 合入 main；本分支承接后续五角色/VLM、双 AES key、供应链 app 制品与最终 live 收口。当前仍是未提交 worktree，因此下列本机软件/模型证据是 provisional，不是 final-SHA acceptance。
+当前 follow-up 分支为 `codex/023-live-model-supply-chain`，PR #16 初始 head 为 `b5ab3ebd`，基于 `origin/main@9d84f942`。PR #10 已将 T1～T5 合入 main；本分支承接后续五角色/VLM、双 AES key、供应链 app 制品与最终 live 收口。2026-07-17 review hardening 的本机门禁已通过；在 GitHub deterministic/PostgreSQL CI 覆盖同一提交 SHA 前仍只作 provisional 软件证据，不是 final-SHA acceptance。
 
 | 层级 | 状态 | 证据/下一步 |
 |---|---|---|
 | PR #10 T1～T5 | PASS / 已合入 | loopback Compose、原 provisioning/controller、受信 exact-SHA 五节点 gate、ephemeral runner/FIFO 均已在 PR #10 合入 |
 | 百炼五角色 direct probe | PASS / provisional | Chat/extraction `deepseek-v4-flash`、Embedding `qwen3.7-text-embedding`（1024 维）、ReRank `qwen3-rerank`、VLLM `qwen3.7-plus`；`trust_env=False`，未输出 key/body |
-| 本机 Compose 与 Harness PostgreSQL | PASS / provisional | WeKnora 服务与 Harness PostgreSQL healthy；宿主仅 `127.0.0.1:8080/8081/5442`；integration PostgreSQL `1 passed / 1400 deselected` |
+| 本机 Compose 与 Harness PostgreSQL | PASS / provisional | WeKnora 服务与 Harness PostgreSQL healthy；宿主仅 `127.0.0.1:8080/8081/5442`；integration PostgreSQL `1 passed / 1416 deselected`，JUnit `tests=1 skipped=0` |
 | 双 AES bootstrap | PASS / provisional | runtime 独立持久 `TENANT_AES_KEY`/`SYSTEM_AES_KEY`，均 exact 32-byte；旧 runtime 原子迁移，rendered app 实机验明 32/32 |
 | 官方 app digest | BLOCKED / 已定位 | 官方 v0.6.3 app 构建早于 scoped Tenant API Key routes；真实 `GET /tenants/10001/api-keys` 返回 404；禁止 legacy full-access key fallback |
-| T6d.1 source-lock/workflow | PASS / 未提交 | exact upstream/tree/Dockerfile/security ancestors/platform/patch lock；trusted-main GHCR workflow；供应链契约 6 passed；R3.3 Go test通过 |
+| T6d.1 source-lock/workflow | PASS / PR #16 加固中 | exact upstream/tree/Dockerfile/security ancestors/platform/patch lock；trusted-main GHCR workflow；供应链契约 7 passed；R3.3 Go test通过 |
 | T6d.2 GHCR app artifact | `NOT RUN` | 高权限 workflow 必须先人工复核并合入 main；尚无 manifest digest、provenance/SBOM/registry attestation，不得写回 `images.lock` |
-| 完整 provision | INCOMPLETE | 已幂等留下 `user=1 / tenants=2 / models=4 / KBs=2`；在 scoped-key route 404 处 fail closed；未完成 Space/PDF/live acceptance |
+| 完整 provision | INCOMPLETE | 较早 partial run 曾创建 `user=1 / tenants=2 / models=4 / KBs=2` 后在 scoped-key route 404 fail closed；当前旧 v0.6.3 runtime 只读可见 `tenant=1 / models=0 / KBs=0`，两者均不是 Space/PDF/live acceptance |
 | 独立 VLM smoke | `NOT RUN` | 等待 T6d.2 app digest 与完整 provision |
 | 本机冻结五节点 | `NOT RUN` | 等待 T6d.2 app digest 与完整 provision；不能用 deterministic/Compose healthy 替代 |
 | GitHub exact-SHA live / 018 T7 | `NOT RUN` | 等待 bootstrap workflow 合入 main、候选 SHA 冻结、T7 本机 acceptance |
@@ -56,7 +56,7 @@
 1. `/api/v1/models/:id/debug` response envelope 从 access log 整包省略；普通 response 保留既有字段脱敏。
 2. 实际 upstream Docker context 排除 `.env.*`，不是只修改 Harness fork 的无效防线。
 3. `golang-migrate` 固定为 go.mod 已声明的 `v4.19.1`。
-4. uv 固定 `0.9.26`，执行安装脚本前校验 SHA-256。
+4. uv 固定 `0.9.26`，执行安装脚本前校验 SHA-256。2026-07-17 从 `astral.sh/uv/0.9.26/install.sh` 与 uv 官方 GitHub release `uv-installer.sh` 双渠道下载，二者逐字节相同，SHA-256 均为 `09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18`；原错误常量已按 RED→GREEN 同步修正 patch/lock/test。
 
 ### 3.3 trusted workflow
 
@@ -70,11 +70,21 @@
 
 本次在沙箱内首次重跑 PostgreSQL 时，loopback 被 `Operation not permitted` 拒绝；psycopg exception 展开了本机 Harness 测试库密码。该值不是模型/API key且未进入 Git，但已经视为泄漏：随后用参数化 psycopg SQL原地轮换 `harness` role password，并原子更新 mode-0600 runtime。最终 integration 使用临时 mode-0600 `PGPASSFILE`、无密码 URL，测试后立即删除 passfile。
 
-候选差异审计扫描 33 个 modified/untracked files，对 12 个本机已知 secret 值结果为 `leaks=0`。后续所有数据库失败路径必须使用 passfile/无密码 URL，禁止让 DSN password进入异常 repr。
+初始候选差异曾执行一次本机 known-secret 扫描并未观察到泄漏，但该一次性扫描器未入库，因此不把“文件数/secret 数/leaks=0”作为可复核验收门禁，也不再用精确计数支持合并结论。可复核的主要控制仍是 ignored mode-0600 配置/runtime、`.dockerignore` 的 `.env`/`.env.*`、异常链清除与逐通道零泄漏测试。后续所有数据库失败路径必须使用 passfile/无密码 URL，禁止让 DSN password进入异常 repr。
+
+### 4.1 PR #16 独立复审裁决（2026-07-17）
+
+- **成立并修复**：CI shallow clone 不含 Tencent upstream object。deterministic 测试改用合成 Git repo 验明 repository/commit/tree/ancestor/Dockerfile/patch/fail-closed，真实 upstream checkout 和 patch apply 保留在 trusted main workflow；不使用 network，也不以 skip 冒充覆盖。
+- **成立并修复**：uv installer 错误 SHA-256；双官方渠道核验后改为 `09ace6a...9e18`。
+- **成立并修复**：非 VLM model payload 省略 `supports_vision=false`，而测试 mock 乐观补字段。锁定 upstream 的 `Model.Parameters` 为原样 map、没有服务端默认补值；现改为四模型都显式发送 bool，创建响应继续严格 attestation，不放宽缺字段比较。
+- **真实只读核对边界**：现存官方 v0.6.3 runtime 返回一个可见 tenant、零 model/KB，scoped key route 为 404；因此未伪称从旧 runtime 观察到了 model/KB field echo。最终判定使用目标锁定源码的响应结构：KB 的 `embedding_model_id`/`vlm_config` 无 `omitempty`，model `parameters` 原样回显输入 map；T6d.2 后仍须在新 digest 上重复真实 create/list attestation。
+- **成立并修复**：补 scoped route 404 禁 legacy fallback、direct probe `trust_env=False`、非 completed VLM CLI 非零退出、`pending/processing` 禁止 retry、marker permission/OSError 精确分类、GitHub output CR/LF/NUL 拒绝。
+- **不按建议改动**：R2.1 route 能力在服务启动前由受锁 security ancestors + provenance + digest attestation 验明；运行时再由 scoped endpoint 404 fail closed，不能为动态 HTTP 探测先启动未受验 artifact。GHA BuildKit cache 是内容寻址的构建加速，输入身份仍由 source lock、patch digest、Dockerfile digest 和 provenance 决定，删除 cache 不增加输入真实性。
+- **暂不重构**：ReRank 双处校验与 canary 两种加载方式属于维护性整理，不是当前正确性/安全阻断项，留待独立小变更，避免在供应链 PR 内扩大风险面。
 
 ## 5. Fresh 本机门禁
 
-在 `origin/main@9d84f942` 派生分支的当前未提交 worktree 上：
+在 `origin/main@9d84f942` 派生的 2026-07-17 review-hardening candidate 上；合并仍要求 GitHub CI 覆盖同一 committed SHA：
 
 ```text
 OpenSpec strict
@@ -87,16 +97,17 @@ mypy strict
 Success: no issues found in 181 source files
 
 023 focused（含供应链）
-232 passed
+248 passed
 
 供应链 focused
-6 passed
+7 passed
 
 deterministic
-1396 passed, 5 deselected
+1412 passed, 5 deselected
 
 PostgreSQL integration（临时 pgpass，无 password DSN）
-1 passed, 1400 deselected
+1 passed, 1416 deselected
+JUnit tests=1 skipped=0
 
 Go R3.3
 ok github.com/Tencent/WeKnora/internal/middleware
@@ -104,11 +115,11 @@ ok github.com/Tencent/WeKnora/internal/middleware
 workflow YAML / lock-patch digest / verifier emit / diff check
 PASS
 
-known-secret candidate scan
-files=33, known_secrets=12, leaks=0
+known-secret one-off scan
+not used as acceptance evidence because the scanner was not committed
 ```
 
-这些是 fresh 软件与本机 PostgreSQL证据。未运行项仍包括 GHCR build/attestation、manifest digest write-back、完整 provision、普通 PDF、VLM smoke、本机冻结五节点、GitHub exact-SHA live 与 018 T7。
+这些是 fresh 软件与本机 PostgreSQL 证据；不是 GHCR 或 live 证据。未运行项仍包括 GHCR build/attestation、manifest digest write-back、完整 provision、普通 PDF、VLM smoke、本机冻结五节点、GitHub exact-SHA live 与 018 T7。
 
 ## 6. 正确收口顺序
 

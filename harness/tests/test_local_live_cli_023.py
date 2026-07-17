@@ -6,6 +6,7 @@ import importlib.util
 import json
 import subprocess
 from hashlib import sha256
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from stat import S_IMODE
@@ -119,7 +120,14 @@ def test_r5_1_cli_dispatches_each_frozen_phase_through_injected_adapter(
     class Adapter:
         def run(self, request: PhaseRequestLike) -> object:
             requests.append(request)
-            return {"status": "ok", "phase": request.phase}
+            return {
+                "status": (
+                    "completed"
+                    if request.phase in {"smoke-vlm", "retry-vlm"}
+                    else "ok"
+                ),
+                "phase": request.phase,
+            }
 
     output = StringIO()
     arguments = [phase]
@@ -137,7 +145,62 @@ def test_r5_1_cli_dispatches_each_frozen_phase_through_injected_adapter(
     assert requests[0].knowledge_id == (
         "vlm-knowledge-1" if phase == "retry-vlm" else None
     )
-    assert '"status": "ok"' in output.getvalue()
+    expected_status = "completed" if phase in {"smoke-vlm", "retry-vlm"} else "ok"
+    assert f'"status": "{expected_status}"' in output.getvalue()
+
+
+@pytest.mark.parametrize("phase", ("smoke-vlm", "retry-vlm"))
+@pytest.mark.parametrize(
+    "status", ("failed", "cancelled", "incomplete", "pending", "processing")
+)
+def test_r3_3_vlm_cli_preserves_noncompleted_evidence_but_exits_nonzero(
+    phase: str,
+    status: str,
+) -> None:
+    module = _module()
+
+    class Adapter:
+        def run(self, request: PhaseRequestLike) -> object:
+            return {
+                "status": status,
+                "knowledge_id": request.knowledge_id or "vlm-knowledge-1",
+                "attempt": 1,
+            }
+
+    output = StringIO()
+    error = StringIO()
+    arguments = [phase]
+    if phase == "retry-vlm":
+        arguments.extend(("--knowledge-id", "vlm-knowledge-1"))
+
+    assert module.main(
+        arguments,
+        adapter=Adapter(),
+        lock_verifier=ResolvedLocks(),
+        output=output,
+        error=error,
+    ) == 1
+    assert f'"status": "{status}"' in output.getvalue()
+    assert "did not complete" in error.getvalue()
+
+
+def test_r3_3_retry_marker_permission_error_is_not_reported_as_consumed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = import_module("insurance_harness.live_env.local_provisioning")
+    collaborator = module.VLMSmokeCollaborator(
+        runtime_path=tmp_path / ".env.local-live.runtime"
+    )
+
+    def deny_marker(*args: object, **kwargs: object) -> int:
+        del args, kwargs
+        raise PermissionError("read-only filesystem")
+
+    monkeypatch.setattr(module.os, "open", deny_marker)
+
+    with pytest.raises(RuntimeError, match="could not be persisted"):
+        collaborator._consume_retry("vlm-knowledge-1")
 
 
 def test_r5_2_down_is_non_destructive_without_explicit_volume_confirmation() -> None:
@@ -392,7 +455,17 @@ def test_r3_3_retry_uses_real_span_attempt_and_rejects_missing_or_nonincremented
 
 @pytest.mark.parametrize(
     "mutation",
-    ("kb", "owner", "sha", "purpose", "vlm_model", "process_config", "completed"),
+    (
+        "kb",
+        "owner",
+        "sha",
+        "purpose",
+        "vlm_model",
+        "process_config",
+        "completed",
+        "pending",
+        "processing",
+    ),
 )
 def test_r3_3_retry_rejects_arbitrary_knowledge_before_marker_and_reparse(
     tmp_path: Path,
@@ -439,8 +512,8 @@ def test_r3_3_retry_rejects_arbitrary_knowledge_before_marker_and_reparse(
             **process_config,
             "vlm_config": {"enabled": True, "model_id": "other-vlm"},
         }
-    else:
-        record["parse_status"] = "completed"
+    elif mutation in {"completed", "pending", "processing"}:
+        record["parse_status"] = mutation
     calls: list[str] = []
 
     class Client:
@@ -456,6 +529,13 @@ def test_r3_3_retry_rejects_arbitrary_knowledge_before_marker_and_reparse(
         async def upload_file(self, *args: object, **kwargs: object) -> object:
             calls.append("upload")
             raise AssertionError("retry must not upload")
+
+        async def get_knowledge_parse_attempt(
+            self, key: object, knowledge_id: str
+        ) -> int:
+            del key, knowledge_id
+            calls.append("attempt")
+            raise AssertionError("non-retryable status must fail before attempt lookup")
 
         async def aclose(self) -> None:
             calls.append("close")

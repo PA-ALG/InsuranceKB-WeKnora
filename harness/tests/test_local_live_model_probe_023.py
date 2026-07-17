@@ -11,6 +11,7 @@ import pytest
 import respx
 from pydantic import SecretStr
 
+import insurance_harness.live_env.model_probe as model_probe
 from insurance_harness.live_env.config import LocalLiveConfig, ModelProfile
 from insurance_harness.live_env.model_probe import ModelProbeError, probe_all_models
 
@@ -96,6 +97,46 @@ def _config() -> LocalLiveConfig:
             "https://bailian.example/v1", "deepseek-v4-flash", "bailian-secret"
         ),
     )
+
+
+async def test_r1_2_model_probe_http_client_ignores_shell_proxy_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    constructor: dict[str, object] = {}
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"ok": True}
+
+    class Client:
+        def __init__(self, **kwargs: object) -> None:
+            constructor.update(kwargs)
+
+        async def __aenter__(self) -> "Client":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            del args
+
+        async def post(
+            self, url: str, *, json: dict[str, object]
+        ) -> Response:
+            del url, json
+            return Response()
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+
+    document = await model_probe._post(
+        _profile("https://chat.example/v1", "chat-model", "chat-secret"),
+        "https://chat.example/v1/chat/completions",
+        {"model": "chat-model"},
+    )
+
+    assert document == {"ok": True}
+    assert constructor["trust_env"] is False
 
 
 def _healthy_routes() -> dict[str, respx.Route]:

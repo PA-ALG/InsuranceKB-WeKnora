@@ -45,9 +45,7 @@ _PARSER_FINGERPRINT = "weknora-v0.6.3"
 _VLM_CANARY = "INSURANCEKBVLM023CANARY7F3A"
 _VLM_FIXTURE = Path(__file__).with_name("fixtures") / "vlm-canary.png"
 _VLM_PURPOSE = "vlm-smoke"
-_RETRYABLE_VLM_STATUSES = frozenset(
-    {"failed", "cancelled", "pending", "processing", "incomplete"}
-)
+_RETRYABLE_VLM_STATUSES = frozenset({"failed", "cancelled", "incomplete"})
 
 
 class ProvisionRequest(Protocol):
@@ -98,6 +96,7 @@ def _model_payload(
         "base_url": profile.base_url,
         "api_key": profile.api_key.get_secret_value(),
         "provider": profile.provider,
+        "supports_vision": supports_vision,
     }
     if dimension is not None:
         parameters["embedding_parameters"] = {
@@ -110,8 +109,6 @@ def _model_payload(
         "source": "remote",
         "parameters": parameters,
     }
-    if supports_vision:
-        parameters["supports_vision"] = True
     return payload
 
 
@@ -698,8 +695,10 @@ class VLMSmokeCollaborator:
         flags |= getattr(os, "O_NOFOLLOW", 0)
         try:
             descriptor = os.open(marker, flags, 0o600)
-        except OSError:
+        except FileExistsError:
             raise RuntimeError("VLM retry was already consumed") from None
+        except OSError:
+            raise RuntimeError("VLM retry marker could not be persisted") from None
         try:
             os.fchmod(descriptor, 0o600)
             os.write(descriptor, b"consumed\n")

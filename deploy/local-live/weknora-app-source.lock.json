@@ -17,7 +17,7 @@
   ],
   "patch": {
     "path": "deploy/local-live/patches/model-debug-access-log-redaction.patch",
-    "sha256": "284204245a25f04d28956e7bfa07044cbeb70829ddce70537a1ae6c1f8bff076"
+    "sha256": "6f6d8ad1e0e9ef26b5b06c9bb1984ce03b94b55967638d16edb94143eba1ff99"
   },
   "platform": "linux/arm64",
   "image_repository": "ghcr.io/pa-alg/insurancekb-weknora-app"

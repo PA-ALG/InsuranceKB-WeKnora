@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -90,6 +91,7 @@ def test_r2_1_source_lock_pins_real_app_dockerfile_and_security_ancestry() -> No
         "deploy/local-live/patches/model-debug-access-log-redaction.patch"
     )
     assert re.fullmatch(r"[0-9a-f]{64}", str(patch.get("sha256", "")))
+    assert patch.get("sha256") == hashlib.sha256(PATCH_PATH.read_bytes()).hexdigest()
 
 
 def test_r2_1_verifier_rejects_unknown_or_mutable_lock_fields(tmp_path: Path) -> None:
@@ -110,65 +112,105 @@ def test_r2_1_verifier_rejects_unknown_or_mutable_lock_fields(tmp_path: Path) ->
     with pytest.raises(module.SourceVerificationError, match="GHCR"):
         module.load_source_lock(mutable_path)
 
+    output_injection = dict(lock)
+    output_injection["patch"] = {
+        "path": "deploy/local-live/patches/reviewed.patch\nimage_repository=evil",
+        "sha256": "0" * 64,
+    }
+    injection_path = tmp_path / "output-injection.json"
+    injection_path.write_text(json.dumps(output_injection))
+    with pytest.raises(module.SourceVerificationError, match="single-line"):
+        module.load_source_lock(injection_path)
 
-def test_r2_1_verifier_checks_exact_checkout_patch_and_dockerfile(
+
+def test_r2_1_verifier_checks_hermetic_checkout_patch_and_dockerfile(
     tmp_path: Path,
 ) -> None:
     module = _load_verifier()
-    source_lock = module.load_source_lock(LOCK_PATH)
     checkout = tmp_path / "upstream"
+    checkout.mkdir()
 
-    subprocess.run(
-        ["git", "clone", "--shared", "--no-checkout", str(REPO_ROOT), str(checkout)],
-        check=True,
-        capture_output=True,
-        text=True,
+    def git(*arguments: str) -> str:
+        completed = subprocess.run(
+            ["git", "-C", str(checkout), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return completed.stdout.strip()
+
+    git("init")
+    git("config", "user.name", "OpenSpec 023 test")
+    git("config", "user.email", "openspec-023@example.invalid")
+    git("remote", "add", "origin", UPSTREAM_REPOSITORY)
+
+    dockerfile = checkout / DOCKERFILE_PATH
+    dockerfile.parent.mkdir(parents=True)
+    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+    git("add", DOCKERFILE_PATH)
+    git("commit", "-m", "synthetic security ancestor")
+    required_ancestor = git("rev-parse", "HEAD")
+
+    dockerfile.write_text("FROM scratch\nRUN echo locked\n", encoding="utf-8")
+    git("add", DOCKERFILE_PATH)
+    git("commit", "-m", "synthetic locked source")
+    commit = git("rev-parse", "HEAD")
+    tree = git("rev-parse", "HEAD^{tree}")
+
+    patch_path = tmp_path / "synthetic.patch"
+    patch_path.write_text(
+        """diff --git a/docker/Dockerfile.app b/docker/Dockerfile.app
+--- a/docker/Dockerfile.app
++++ b/docker/Dockerfile.app
+@@ -1,2 +1,3 @@
+ FROM scratch
+ RUN echo locked
++RUN echo patched
+""",
+        encoding="utf-8",
     )
-    subprocess.run(
-        ["git", "-C", str(checkout), "remote", "set-url", "origin", UPSTREAM_REPOSITORY],
-        check=True,
-        capture_output=True,
-        text=True,
+    source_lock = module.SourceLock(
+        schema_version=1,
+        repository=UPSTREAM_REPOSITORY,
+        commit=commit,
+        tree=tree,
+        dockerfile=module.LockedFile(
+            path=DOCKERFILE_PATH,
+            sha256=hashlib.sha256(dockerfile.read_bytes()).hexdigest(),
+        ),
+        required_ancestors=(required_ancestor,),
+        patch=module.LockedFile(
+            path=patch_path.name,
+            sha256=hashlib.sha256(patch_path.read_bytes()).hexdigest(),
+        ),
+        platform="linux/arm64",
+        image_repository=IMAGE_REPOSITORY,
     )
+
+    module.verify_checkout(source_lock, checkout, patch_path)
     subprocess.run(
-        ["git", "-C", str(checkout), "checkout", "--detach", UPSTREAM_COMMIT],
+        ["git", "-C", str(checkout), "apply", "--check", str(patch_path)],
         check=True,
         capture_output=True,
         text=True,
     )
 
-    module.verify_checkout(source_lock, checkout, PATCH_PATH)
-    subprocess.run(
-        ["git", "-C", str(checkout), "apply", "--check", str(PATCH_PATH)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(checkout), "apply", str(PATCH_PATH)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    patched_logger = (checkout / "internal/middleware/logger.go").read_text()
-    patched_test = (checkout / "internal/middleware/logger_test.go").read_text()
-    patched_dockerignore = (checkout / ".dockerignore").read_text().splitlines()
-    patched_dockerfile = (checkout / DOCKERFILE_PATH).read_text()
-    assert "[model debug response omitted]" in patched_logger
-    assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in patched_test
-    assert ".env" in patched_dockerignore
-    assert ".env.*" in patched_dockerignore
-    assert "golang-migrate/migrate/v4/cmd/migrate@v4.19.1" in patched_dockerfile
-    assert "@latest" not in patched_dockerfile
-    assert "https://astral.sh/uv/0.9.26/install.sh" in patched_dockerfile
-    assert "446a6087825fa73eadb045e5a2e9e2adf7df241b571228187728191d961dda1f" in (
-        patched_dockerfile
-    )
-    assert "sha256sum -c" in patched_dockerfile
-
-    (checkout / DOCKERFILE_PATH).write_text("FROM scratch\n")
+    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
     with pytest.raises(module.SourceVerificationError, match="Dockerfile"):
-        module.verify_checkout(source_lock, checkout, PATCH_PATH)
+        module.verify_checkout(source_lock, checkout, patch_path)
+
+
+def test_r2_1_locked_patch_pins_verified_uv_installer_and_security_changes() -> None:
+    patch = PATCH_PATH.read_text(encoding="utf-8")
+
+    assert "[model debug response omitted]" in patch
+    assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in patch
+    assert "+.env.*" in patch
+    assert "golang-migrate/migrate/v4/cmd/migrate@v4.19.1" in patch
+    assert "@latest" in patch, "the patch must explicitly remove the mutable version"
+    assert "https://astral.sh/uv/0.9.26/install.sh" in patch
+    assert "09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18" in patch
+    assert "sha256sum -c" in patch
 
 
 def test_r2_1_trusted_workflow_builds_only_locked_source_with_attestations() -> None:

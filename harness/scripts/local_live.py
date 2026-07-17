@@ -618,6 +618,9 @@ def main(
             print("local-live: implementation identity is unavailable", file=error_stream)
             return 1
     print(json.dumps(_redact(result), ensure_ascii=False, sort_keys=True), file=output_stream)
+    if phase in {"smoke-vlm", "retry-vlm"} and result.get("status") != "completed":
+        print("local-live: VLM operation did not complete", file=error_stream)
+        return 1
     return 0
 
 

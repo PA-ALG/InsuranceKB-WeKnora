@@ -64,6 +64,8 @@ def _expect_object(value: object, label: str) -> dict[str, object]:
 def _expect_string(value: object, label: str) -> str:
     if not isinstance(value, str) or not value:
         _fail(f"{label} must be a non-empty string")
+    if any(character in value for character in ("\n", "\r", "\x00")):
+        _fail(f"{label} must be a single-line string")
     return value
 
 

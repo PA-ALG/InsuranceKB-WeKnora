@@ -9,6 +9,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, cast
 
+import httpx
 import pytest
 import respx
 from pydantic import SecretStr
@@ -719,6 +720,30 @@ async def test_r3_1_created_tenant_switch_mints_scoped_contributor_key() -> None
         "knowledge_base_ids": ["kb-raw", "kb-wiki"],
         "capabilities": ["retrieve", "ingest"],
     }
+
+
+@respx.mock
+async def test_r3_1_scoped_api_key_404_fails_closed_without_legacy_fallback() -> None:
+    module = import_module("insurance_harness.adapters.weknora.admin_client")
+    client = module.WeKnoraAdminClient("https://weknora.example/api/v1")
+    session = module.AdminSession(
+        user_id="user-1",
+        tenant_id=7,
+        token=SecretStr("tenant-jwt"),
+        refresh_token=SecretStr("tenant-refresh"),
+    )
+    scoped_route = respx.get(
+        "https://weknora.example/api/v1/tenants/7/api-keys"
+    ).respond(status_code=404, json={"success": False})
+    try:
+        with pytest.raises(httpx.HTTPStatusError) as failure:
+            await client.list_tenant_api_keys(session, tenant_id=7)
+    finally:
+        await client.aclose()
+
+    assert failure.value.response.status_code == 404
+    assert scoped_route.call_count == 1
+    assert len(respx.calls) == 1
 
 
 @respx.mock
@@ -1462,10 +1487,7 @@ def test_r3_3_model_payloads_are_provider_aware_remote_resources(
     assert payload["type"] == model_type
     assert "supports_vision" not in payload
     parameters = cast(dict[str, object], payload["parameters"])
-    if supports_vision:
-        assert parameters["supports_vision"] is True
-    else:
-        assert "supports_vision" not in parameters
+    assert parameters["supports_vision"] is supports_vision
     assert parameters["provider"] == "aliyun"
     assert "siliconflow" not in repr(payload)
 
@@ -1499,14 +1521,12 @@ async def test_r3_3_model_create_and_response_attest_nested_vision_capability(
         ) -> dict[str, object]:
             del session
             captured.append(payload)
-            parameters = dict(cast(dict[str, object], payload["parameters"]))
-            parameters["supports_vision"] = supports_vision
             return {
                 "id": f"{role}-1",
                 "name": payload["name"],
                 "description": payload["description"],
                 "type": payload["type"],
-                "parameters": parameters,
+                "parameters": dict(cast(dict[str, object], payload["parameters"])),
             }
 
     session = admin.AdminSession(
@@ -1536,10 +1556,7 @@ async def test_r3_3_model_create_and_response_attest_nested_vision_capability(
     create_payload = captured[0]
     create_parameters = cast(dict[str, object], create_payload["parameters"])
     assert "supports_vision" not in create_payload
-    if supports_vision:
-        assert create_parameters["supports_vision"] is True
-    else:
-        assert "supports_vision" not in create_parameters
+    assert create_parameters["supports_vision"] is supports_vision
     assert desired.supports_vision is supports_vision
     assert created.supports_vision is supports_vision
     assert provision._same_resource(created, desired)
