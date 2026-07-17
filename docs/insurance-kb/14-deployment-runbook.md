@@ -67,6 +67,35 @@ uv run python -m insurance_harness.product.cli register-products \
   ../dataset/shouxian_product --space-id "$HARNESS_SPACE_ID"
 ```
 
+### 3.4 审核工作台启动（change 008，T1~T5/T7 波次）
+
+```bash
+# 1) 配置 token→(principal + 允许 Space 集合)：未配置=启动失败（fail-closed）
+export HARNESS_WORKBENCH_TOKENS_JSON='{"<随机token>": {"principal": "审核人甲", "space_ids": ["'$HARNESS_SPACE_ID'"]}}'
+# 2)（可选）显式指定 schema 基线目录；缺省时在仓库根/harness 目录下启动即可自动发现
+# export HARNESS_WORKBENCH_SCHEMA_BASELINE_DIR=docs/insurance-kb/schema-baseline
+# 3)（可选）会话签名密钥：不配则进程内随机（单进程可用；重启即全员重新登录）
+# export HARNESS_WORKBENCH_SESSION_SECRET=<随机长串，勿入库>
+# 4) 起服（loopback；生产置于内网反代之后。uvicorn 为声明依赖，uv sync --locked 后即有）
+uv run uvicorn --factory --host 127.0.0.1 --port 8090 \
+  insurance_harness.workbench.app:create_app_from_settings
+```
+
+`create_app_from_settings` 读取 `HARNESS_DB_URL` / `HARNESS_WORKBENCH_TOKENS_JSON` /
+schema 基线目录，**任一缺失/损坏启动即失败**（不吞错、不降级）。CI 的 `wheel-smoke`
+job 持续证明 wheel 装进空 venv 后模板与 HTMX 静态资源随包可用。
+
+使用方式两条通道：
+
+- **浏览器**：访问 `http://127.0.0.1:8090/login`，粘贴 token 登录（签发短期 HttpOnly
+  会话 cookie，内含 token 摘要而非明文；写操作带 CSRF 双提交防护）→ 首页列出可访问
+  Space。页面：`/spaces/<space>/queue`（审核队列：筛选/分页/approve/reject/defer/
+  批量/翻案入口）、`/spaces/<space>/changes`（冲突与变更+翻案）、`/spaces/<space>/timeline`
+  （G8 变更流）、`/spaces/<space>/matrix`（产品×schema 全字段五态格+下钻+缺口 CSV/JSONL 导出）。
+- **自动化**：直接带 `Authorization: Bearer <token>` 调页面/动作端点，无需登录与 CSRF。
+
+**W4 发布/回滚页：018 已合入 main（依赖解锁），以独立 follow-up PR 交付（跟踪：008 tasks.md T6）。**
+
 ## 4. 联调验收路径（按序，每步都有断言）
 
 | 步 | 动作 | 断言 |
@@ -83,7 +112,7 @@ L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验�
 ## 5. integration / live 契约测试约定
 
 - deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
-- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发与 018 service-owned Session 两个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时两者均失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
+- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发、018 service-owned Session 与 008 工作台双会话并发三个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
 - WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。

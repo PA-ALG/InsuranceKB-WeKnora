@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from insurance_harness.db.base import utcnow
 from insurance_harness.db.scope import (
     KnowledgeScope,
     ScopeViolation,
@@ -121,18 +122,29 @@ def ensure_review_item(
 ) -> tuple[ReviewItem, bool]:
     """幂等创建：已存在（含已决）直接返回，绝不重建/重置状态（K4.1）。
 
+    W1 触发计数：同一逻辑审核项每次再触发（pipeline 重跑/文档重传命中同 key）在
+    ``subject["trigger"]`` 递增 ``count`` 并刷新 ``last_at``——只累计元数据，
+    状态/resolution/其余 subject 键一概不动；队列默认按该计数倒序。
     返回 (item, created)。
     """
     require_current_scope(session, scope)
     _require_scoped_review_subject(session, scope, subject)
+    now_iso = utcnow().isoformat()
     existing = get_review_item(session, scope, review_key)
     if existing is not None:
+        renewed = dict(existing.subject or {})
+        trigger = dict(renewed.get("trigger") or {})
+        trigger["count"] = int(trigger.get("count") or 0) + 1
+        trigger["last_at"] = now_iso
+        renewed["trigger"] = trigger
+        existing.subject = renewed  # 整体重赋新 dict：JSON 列变更可靠入库
+        session.flush()
         return existing, False
     item = ReviewItem(
         space_id=scope.space_id,
         review_key=review_key,
         type=type_,
-        subject=subject,
+        subject={**subject, "trigger": {"count": 1, "last_at": now_iso}},
         allowed_actions=list(ALLOWED_REVIEW_ACTIONS),
         status="open",
         risk_level=risk_level,

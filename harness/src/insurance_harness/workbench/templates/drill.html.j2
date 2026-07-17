@@ -1,0 +1,64 @@
+{% extends "base.html.j2" %}
+{% block title %}字段下钻{% endblock %}
+{% block body %}
+<h1>{{ drill.predicate }}{% if drill.field_name %} · {{ drill.field_name }}{% endif %}</h1>
+<p><span class="badge state-{{ drill.state }}">{{ drill.state }}</span>
+   <span class="evidence">{{ drill.schema_version }}</span></p>
+
+{% if drill.state == "unknown" %}
+  <p class="notice">{{ drill.unknown_note }}</p>
+  <p class="evidence">来源：{{ drill.schema_source }}</p>
+{% endif %}
+
+{% if drill.conflict %}
+  <h2>冲突双方</h2>
+  <div>现值：<strong>{{ drill.conflict.existing.value if drill.conflict.existing else "∅" }}</strong>
+    {% if drill.conflict.existing %}{% for e in drill.conflict.existing.evidence %}
+      <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }}{% if e.page is not none %} 第{{ e.page }}页{% endif %} · {{ e.doc_role }} · 权威{{ e.authority_level }}</div>
+    {% endfor %}{% endif %}
+  </div>
+  <div>新值：<strong>{{ drill.conflict.proposed.value if drill.conflict.proposed else "∅" }}</strong>
+    {% if drill.conflict.proposed %}{% for e in drill.conflict.proposed.evidence %}
+      <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }}{% if e.page is not none %} 第{{ e.page }}页{% endif %} · {{ e.doc_role }} · 权威{{ e.authority_level }}</div>
+    {% endfor %}{% endif %}
+  </div>
+  <div>裁决依据：{% for k, v in drill.conflict.decision_basis.items() %}<code>{{ k }}={{ v }}</code> {% endfor %}（{{ drill.conflict.status }}）</div>
+{% endif %}
+
+{% if drill.pending %}
+  <h2>待审候选</h2>
+  <p>审核项 <a href="/spaces/{{ space_id }}/queue?status=open">{{ drill.pending.review_key }}</a>
+     · 类型 {{ drill.pending.type }} · 风险 {{ drill.pending.risk_level }}</p>
+  {% if drill.pending.change_item %}
+    <p>候选值：<strong>{{ drill.pending.change_item.proposed_value or "∅" }}</strong>
+       ({{ drill.pending.change_item.value_state or "-" }})</p>
+    {% set cand = drill.pending.change_item.candidate %}
+    {% for e in (cand.evidence if cand else drill.pending.change_item.appended_evidence) %}
+      <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }}{% if e.page is not none %} 第{{ e.page }}页{% endif %} · {{ e.doc_role }} · 权威{{ e.authority_level }}</div>
+    {% endfor %}
+  {% endif %}
+  {% for h in drill.pending.history %}
+    <div class="evidence">{{ h.at }} {{ h.actor }} {{ h.action }}{% if h.reason %}：{{ h.reason }}{% endif %}</div>
+  {% endfor %}
+{% endif %}
+
+{% if drill.published %}
+  <h2>已发布事实</h2>
+  <p>值：<strong>{{ drill.published.value or "∅" }}</strong>（{{ drill.published.value_state }} / {{ drill.published.status }}）</p>
+  <h3>证据</h3>
+  <ul>
+  {% for e in drill.published.evidence %}
+    <li class="evidence">{{ e.knowledge_id }}{% if e.page is not none %} 第{{ e.page }}页{% endif %}：「{{ e.quote }}」 · {{ e.doc_role }} · 权威{{ e.authority_level }}</li>
+  {% endfor %}
+  </ul>
+  <h3>版本历史</h3>
+  <table>
+    <thead><tr><th>何时</th><th>谁</th><th>值</th><th>原因</th></tr></thead>
+    <tbody>
+    {% for r in drill.revisions %}
+      <tr><td>{{ r.at }}</td><td>{{ r.actor }}</td><td>{{ r.after_value }}</td><td>{{ r.reason or "-" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

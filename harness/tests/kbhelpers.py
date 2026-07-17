@@ -21,9 +21,48 @@ from insurance_harness.goldenset.profile import (
 )
 from insurance_harness.goldenset.records import Evidence, TriState
 from insurance_harness.knowledge.quality_gate import GateDecision, QualityGate
+from insurance_harness.knowledge.tables import ReviewItem
 
 BROCHURE = "产品说明书.pdf"  # official_desc，权威 2
 TERMS = "保险条款.pdf"  # terms，权威 1
+
+
+def resolve_with_version(
+    session: Session,
+    scope: KnowledgeScope,
+    review_key: str,
+    action: str,
+    *,
+    actor: str,
+    reason: str | None = None,
+) -> "ReviewItem":
+    """W1 强制并发合同（codex R2-P1）下的便捷提交：读当前版本 + 随机 request_id。
+
+    open 项动作现在必须携带 expected_version/request_id；本 helper 供"单写者、
+    只想把动作做掉"的测试场景用——与生产客户端"从页面拿版本再提交"同构。
+    """
+    from uuid import uuid4
+
+    from sqlalchemy import select as _select
+
+    from insurance_harness.knowledge.merge import resolve_review
+
+    item = session.execute(
+        _select(ReviewItem).where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.review_key == review_key,
+        )
+    ).scalar_one()
+    return resolve_review(
+        session,
+        scope,
+        review_key,
+        action,
+        actor=actor,
+        reason=reason,
+        expected_version=item.updated_at.isoformat(),
+        request_id=uuid4().hex,
+    )
 
 _HEX = "a" * 64
 _AT = datetime(2026, 7, 14, tzinfo=UTC)
