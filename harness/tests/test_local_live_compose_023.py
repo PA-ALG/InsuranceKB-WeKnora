@@ -16,6 +16,11 @@ from insurance_harness.live_env.compose import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+T6D_2_APP_IMAGE = (
+    "ghcr.io/pa-alg/insurancekb-weknora-app:"
+    "src-5eefa70e6fc8-patch-6f6d8ad1e0e9@"
+    "sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5"
+)
 
 
 @pytest.fixture
@@ -725,3 +730,13 @@ def test_r2_1_six_image_lock_is_resolved_and_matches_overrides() -> None:
     assert all(
         value in override_text for key, value in lock.items() if key != "_status"
     )
+
+
+def test_t6d_2_r2_1_app_lock_and_compose_use_verified_manifest_digest() -> None:
+    lock = json.loads((REPO_ROOT / "deploy/local-live/images.lock").read_text())
+    override = (
+        REPO_ROOT / "deploy/local-live/docker-compose.weknora.override.yml"
+    ).read_text()
+
+    assert lock["app"] == T6D_2_APP_IMAGE
+    assert f"image: {T6D_2_APP_IMAGE}" in override
