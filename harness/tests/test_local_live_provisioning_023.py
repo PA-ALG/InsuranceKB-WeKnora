@@ -150,6 +150,88 @@ async def test_r3_1_admin_client_bootstraps_first_user_then_authenticates() -> N
 
 
 @respx.mock
+async def test_r3_1_admin_client_authenticates_after_existing_email_bad_request() -> None:
+    module = import_module("insurance_harness.adapters.weknora.admin_client")
+    register = respx.post("https://weknora.example/api/v1/auth/register").respond(
+        status_code=400,
+        json={
+            "success": False,
+            "error": {
+                "code": 1000,
+                "message": "user with this email already exists",
+            },
+        },
+    )
+    login = respx.post("https://weknora.example/api/v1/auth/login").respond(
+        json={
+            "success": True,
+            "user": {"id": "user-1"},
+            "active_tenant": {"id": 1, "name": "admin workspace"},
+            "token": "jwt-secret",
+            "refresh_token": "refresh-secret",
+        }
+    )
+    client = module.WeKnoraAdminClient("https://weknora.example/api/v1")
+    try:
+        session = await client.bootstrap_admin(
+            module.AdminCredentials("admin", "admin@example.com", "password-123")
+        )
+    finally:
+        await client.aclose()
+
+    assert session.user_id == "user-1"
+    assert session.tenant_id == 1
+    assert register.call_count == login.call_count == 1
+
+
+@respx.mock
+async def test_r3_1_registration_bad_request_still_requires_valid_login() -> None:
+    module = import_module("insurance_harness.adapters.weknora.admin_client")
+    register = respx.post("https://weknora.example/api/v1/auth/register").respond(
+        status_code=400,
+        json={"success": False, "error": {"message": "invalid registration"}},
+    )
+    login = respx.post("https://weknora.example/api/v1/auth/login").respond(
+        status_code=401,
+        json={"success": False, "error": {"message": "invalid credentials"}},
+    )
+    client = module.WeKnoraAdminClient("https://weknora.example/api/v1")
+    try:
+        with pytest.raises(httpx.HTTPStatusError, match="401 Unauthorized"):
+            await client.bootstrap_admin(
+                module.AdminCredentials("admin", "admin@example.com", "wrong-password")
+            )
+    finally:
+        await client.aclose()
+
+    assert register.call_count == login.call_count == 1
+
+
+@respx.mock
+async def test_r3_1_admin_client_accepts_wiki_pages_pagination() -> None:
+    module = import_module("insurance_harness.adapters.weknora.admin_client")
+    route = respx.get(
+        "https://weknora.example/api/v1/knowledgebase/kb-wiki/wiki/pages"
+    ).respond(
+        json={
+            "pages": [{"id": "page-1", "slug": "policy"}],
+            "total": 1,
+            "page": 1,
+            "page_size": 100,
+            "total_pages": 1,
+        }
+    )
+    client = module.WeKnoraAdminClient("https://weknora.example/api/v1")
+    try:
+        pages = await client.list_wiki_pages(SecretStr("tenant-key"), "kb-wiki")
+    finally:
+        await client.aclose()
+
+    assert pages == [{"id": "page-1", "slug": "policy"}]
+    assert route.call_count == 1
+
+
+@respx.mock
 async def test_r3_1_repeated_provision_restores_recorded_tenant_before_discovery() -> None:
     provision = import_module("insurance_harness.live_env.local_provisioning")
     admin = import_module("insurance_harness.adapters.weknora.admin_client")
@@ -1492,6 +1574,24 @@ def test_r3_3_model_payloads_are_provider_aware_remote_resources(
     assert "siliconflow" not in repr(payload)
 
 
+def test_r3_1_wiki_kb_payload_explicitly_enables_wiki_indexing() -> None:
+    local = import_module("insurance_harness.live_env.local_provisioning")
+
+    payloads = local._knowledge_base_payloads()
+
+    assert payloads["raw"] == {"type": "document"}
+    assert payloads["wiki"] == {
+        "type": "wiki",
+        "indexing_strategy": {
+            "vector_enabled": True,
+            "keyword_enabled": True,
+            "wiki_enabled": True,
+            "graph_enabled": False,
+        },
+        "wiki_config": {},
+    }
+
+
 @pytest.mark.parametrize(("role", "supports_vision"), (("chat", False), ("vlm", True)))
 async def test_r3_3_model_create_and_response_attest_nested_vision_capability(
     role: str,
@@ -2202,6 +2302,81 @@ async def test_r3_3_vlm_smoke_uploads_only_unmatched_fixture_and_attests_childre
     rendered = repr(result)
     assert "INSURANCEKBVLM023CANARY7F3A" not in rendered
     assert "content" not in rendered
+
+
+def test_r3_3_vlm_smoke_accepts_server_normalized_process_overrides() -> None:
+    local = import_module("insurance_harness.live_env.local_provisioning")
+    admin = import_module("insurance_harness.adapters.weknora.admin_client")
+    config = admin.KnowledgeProcessConfig(
+        enable_multimodel=True,
+        vlm_config=admin.VLMProcessConfig(enabled=True, model_id="vlm-model"),
+    )
+    metadata: dict[str, object] = dict(
+        local.VLMSmokeCollaborator._smoke_metadata(
+            fixture_digest="f" * 64,
+            vlm_model_id="vlm-model",
+            process_config=config,
+        )
+    )
+    metadata["process_overrides"] = {
+        "enable_multimodel": True,
+        "vlm_config": {
+            "enabled": True,
+            "model_id": "vlm-model",
+            "api_key": "***",
+            "base_url": "",
+            "interface_type": "",
+            "model_name": "",
+        },
+    }
+
+    assert local.VLMSmokeCollaborator._validate_smoke_identity(
+        {
+            "id": "existing-1",
+            "knowledge_base_id": "raw-kb",
+            "parse_status": "completed",
+            "metadata": metadata,
+        },
+        knowledge_id=None,
+        kb_id="raw-kb",
+        fixture_digest="f" * 64,
+        vlm_model_id="vlm-model",
+        process_config=config,
+        retry=False,
+    ) == ("existing-1", "completed")
+
+
+@pytest.mark.parametrize(
+    "observed",
+    (
+        {
+            "enable_multimodel": False,
+            "vlm_config": {"enabled": True, "model_id": "vlm-model"},
+        },
+        {
+            "enable_multimodel": True,
+            "vlm_config": {"enabled": False, "model_id": "vlm-model"},
+        },
+        {
+            "enable_multimodel": True,
+            "vlm_config": {"enabled": True, "model_id": "foreign-model"},
+        },
+    ),
+)
+def test_r3_3_vlm_smoke_rejects_normalized_security_key_mismatch(
+    observed: dict[str, object],
+) -> None:
+    local = import_module("insurance_harness.live_env.local_provisioning")
+    admin = import_module("insurance_harness.adapters.weknora.admin_client")
+    expected = admin.KnowledgeProcessConfig(
+        enable_multimodel=True,
+        vlm_config=admin.VLMProcessConfig(enabled=True, model_id="vlm-model"),
+    )
+
+    assert not local.VLMSmokeCollaborator._process_config_matches(
+        observed,
+        expected,
+    )
 
 
 @pytest.mark.parametrize("status", ("failed", "cancelled", "processing"))

@@ -112,6 +112,22 @@ def _model_payload(
     return payload
 
 
+def _knowledge_base_payloads() -> dict[str, dict[str, object]]:
+    return {
+        "raw": {"type": "document"},
+        "wiki": {
+            "type": "wiki",
+            "indexing_strategy": {
+                "vector_enabled": True,
+                "keyword_enabled": True,
+                "wiki_enabled": True,
+                "graph_enabled": False,
+            },
+            "wiki_config": {},
+        },
+    }
+
+
 def _runtime_model_state(
     configuration: LocalLiveConfig,
     result: ProvisionedEnvironment,
@@ -307,10 +323,7 @@ class RealProvisioningOperation:
                         supports_vision=True,
                     ),
                 },
-                knowledge_base_payloads={
-                    "raw": {"type": "document"},
-                    "wiki": {"type": "wiki"},
-                },
+                knowledge_base_payloads=_knowledge_base_payloads(),
             )
             result = await provision_local_live(
                 backend,
@@ -479,6 +492,21 @@ class VLMSmokeCollaborator:
         ).encode()
         return sha256(canonical).hexdigest()
 
+    @staticmethod
+    def _process_config_matches(
+        observed: object,
+        expected: KnowledgeProcessConfig,
+    ) -> bool:
+        if not isinstance(observed, Mapping):
+            return False
+        observed_vlm = observed.get("vlm_config")
+        return (
+            observed.get("enable_multimodel") is expected.enable_multimodel
+            and isinstance(observed_vlm, Mapping)
+            and observed_vlm.get("enabled") is expected.vlm_config.enabled
+            and observed_vlm.get("model_id") == expected.vlm_config.model_id
+        )
+
     @classmethod
     def _smoke_metadata(
         cls,
@@ -524,8 +552,7 @@ class VLMSmokeCollaborator:
             or item.get("knowledge_base_id") != kb_id
             or not isinstance(metadata, Mapping)
             or any(metadata.get(name) != value for name, value in expected_metadata.items())
-            or not isinstance(observed_config, Mapping)
-            or dict(observed_config) != process_config.as_payload()
+            or not cls._process_config_matches(observed_config, process_config)
         ):
             raise RuntimeError("VLM smoke knowledge identity mismatch")
         if retry:

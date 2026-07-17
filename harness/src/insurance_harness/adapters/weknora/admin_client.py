@@ -247,7 +247,7 @@ class WeKnoraAdminClient:
                 "password": credentials.password,
             },
         )
-        if registration.status_code not in {201, 409}:
+        if registration.status_code not in {201, 400, 409}:
             registration.raise_for_status()
         login = await self._client.post(
             "/auth/login",
@@ -721,7 +721,11 @@ class WeKnoraAdminClient:
             headers=self._api_key(api_key),
             params={"page": 1, "page_size": 100},
         )
-        items = data.get("items") if isinstance(data, dict) else data
+        items = (
+            data.get("items", data.get("pages"))
+            if isinstance(data, dict)
+            else data
+        )
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
             raise ValueError("invalid wiki page list response")
         return [dict(item) for item in items]
