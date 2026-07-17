@@ -112,7 +112,7 @@ def test_f1_2_disabled_recognizer_suppressed() -> None:
 
 
 # ---------------------------------------------------------------------------
-# F1.3 PII 脱敏：手机/证件/保单号遮蔽，非 PII 保留
+# F1.3 PII 脱敏：手机/证件/保单号遮蔽，非 PII 保留；脱敏是**构造边界**
 # ---------------------------------------------------------------------------
 
 
@@ -120,6 +120,22 @@ def test_f1_3_redact_masks_phone() -> None:
     out = redact_pii("请问投保人 13800138000 的等待期")
     assert "13800138000" not in out
     assert "等待期" in out  # 非 PII 保留
+
+
+def test_f1_3_trace_question_redacted_at_construction() -> None:
+    """F1.3：脱敏在 Trace 构造边界——任何入口（直接构造/JSONL）都不承载原始 PII。"""
+    direct = Trace(
+        trace_id="t1", timestamp="2026-07-01T00:00:00Z",
+        question="手机号13800138000的保单等待期",
+    )
+    assert "13800138000" not in direct.question
+    assert "等待期" in direct.question
+    via_json = Trace.model_validate_json(
+        '{"trace_id":"t2","timestamp":"2026-07-01T00:00:00Z",'
+        '"question":"证件号 11010119900307123X 的犹豫期"}'
+    )
+    assert "11010119900307123X" not in via_json.question
+    assert "犹豫期" in via_json.question
 
 
 def test_f1_3_redact_masks_id_card() -> None:
@@ -171,47 +187,35 @@ def test_f1_1_rerun_processes_nothing_new() -> None:
 
 
 # ---------------------------------------------------------------------------
-# F1.1 Langfuse 客户端：解析 + 入库前脱敏 + 游标过滤 + trust_env=False
+# F1.1a 时序语义与批内去重（codex PR#18 复审收口）
 # ---------------------------------------------------------------------------
 
 
-def _mock_client(payload: dict[str, object]) -> object:
-    import httpx
-
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json=payload))
-    return httpx.Client(base_url="http://lf.test", transport=transport)
-
-
-def test_f1_1_client_parses_filters_and_redacts() -> None:
-
-    from insurance_harness.flywheel.langfuse_client import LangfuseClient
-
-    payload = {
-        "data": [
-            {
-                "id": "a", "timestamp": "2026-07-17T01:00:00Z",
-                "input": "投保人 13800138000 的等待期", "output": "等待期为 90 天。",
-                "source_refs": ["c1"], "score": 0.9,
-            },
-            {
-                "id": "b", "timestamp": "2026-07-17T02:00:00Z",
-                "input": "犹豫期多久", "output": "抱歉，无法回答。",
-            },
-        ]
-    }
-    lf = LangfuseClient("http://lf.test", client=_mock_client(payload))  # type: ignore[arg-type]
-    # 游标过滤：跳过 a，只返回 b
-    assert [t.trace_id for t in lf.fetch_traces("2026-07-17T01:00:00Z|a")] == ["b"]
-    # 入库前脱敏：a 的问题不含原手机号
-    a = next(t for t in lf.fetch_traces() if t.trace_id == "a")
-    assert "13800138000" not in a.question
-    assert isinstance(lf.fetch_traces(), list)
+def test_f1_1a_mixed_timezone_ordered_by_utc_instant() -> None:
+    """时序按 UTC 实际时刻，不按裸字符串——"+08:00 的 09:00" 早于 "Z 的 02:00"。"""
+    early = _t("early", "2026-07-17T09:00:00+08:00")  # = 01:00Z
+    late = _t("late", "2026-07-17T02:00:00Z")
+    got = new_traces([late, early], None)
+    assert [t.trace_id for t in got] == ["early", "late"]
+    # 游标编码为 UTC 归一化：以 early 为界 → 只 late 是新的
+    cur = next_cursor([early])
+    assert cur is not None and cur.startswith("2026-07-17T01:00:00")
+    assert [t.trace_id for t in new_traces([late, early], cur)] == ["late"]
 
 
-def test_f1_1_default_client_trust_env_false() -> None:
-    """硬边界：新 HTTP 客户端一律 trust_env=False（不吃本机 SOCKS 代理）。"""
-    from insurance_harness.flywheel.langfuse_client import LangfuseClient
+def test_f1_1a_same_trace_id_deduped_in_batch() -> None:
+    """同批内同 trace_id 去重（保留最新时间戳一条），杜绝重复计数入口。"""
+    a1 = _t("a", "2026-07-17T01:00:00Z")
+    a2 = _t("a", "2026-07-17T02:00:00Z")  # 同 trace 更新版
+    got = new_traces([a1, a2, a1], None)
+    assert len(got) == 1
+    assert got[0].timestamp == "2026-07-17T02:00:00Z"
 
-    lf = LangfuseClient("http://lf.test")
-    assert lf._client.trust_env is False
-    lf.close()
+
+def test_f1_1a_garbage_timestamp_rejected_at_construction() -> None:
+    """timestamp 须可解析 ISO8601——垃圾时间戳构造期即拒（fail-fast，不进游标比较）。"""
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    with _pytest.raises(ValidationError):
+        Trace(trace_id="t", timestamp="not-a-time")

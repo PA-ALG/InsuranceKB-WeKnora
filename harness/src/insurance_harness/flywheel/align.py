@@ -8,6 +8,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 from ..goldenset.pdf import PageText
 from ..product.routing import MatchIndex, ProductCandidate, route_document
@@ -15,6 +18,18 @@ from .gaps import AlignedEntity
 
 #: 可自动归属的置信层（fuzzy/歧义别名进 unassigned，不入 candidates）。
 _ACTIONABLE = frozenset({"exact", "alias"})
+
+#: 未对齐原因（观察队列可消费明细，F2.1）。
+AlignmentReason = Literal["aligned", "no_actionable_match", "multi_product_ambiguity"]
+
+
+class AlignmentOutcome(BaseModel):
+    """对齐结果 + 原因：entity=None 时 reason 说明为何进观察队列。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    entity: AlignedEntity | None
+    reason: AlignmentReason
 
 #: 别名命中依据前缀（003 routing `_scan_alias` 产出 f"别名命中：{alias}"）。
 _ALIAS_BASIS_PREFIX = "别名命中："
@@ -32,18 +47,19 @@ def _match_field(question: str, field_names: Mapping[str, str]) -> str | None:
     return None
 
 
-def align_question(
+def align_outcome(
     index: MatchIndex,
     question: str,
     *,
     field_names: Mapping[str, str] | None = None,
-) -> AlignedEntity | None:
-    """对齐问题到 (product_id?, field_id?)；置信不足或歧义 → None（不开单）。
+) -> AlignmentOutcome:
+    """对齐问题到 (product_id?, field_id?)，附原因；置信不足或歧义 → entity=None（不开单）。
 
     复用 003 `route_document`：candidates 只含 exact/alias（可自动归属），fuzzy/歧义
     别名一律进 unassigned（不入 candidates）。故：
-    - candidates 空（fuzzy/歧义/无命中）→ None（观察队列）。
-    - **全部 actionable 命中唯一产品** → 对齐；≥2 个不同产品 → 歧义 → None（fail-safe 不误挂）。
+    - candidates 空（fuzzy/歧义/无命中）→ None（观察队列，reason=no_actionable_match）。
+    - **全部 actionable 命中唯一产品** → 对齐；≥2 个不同产品 → 歧义 → None
+      （fail-safe 不误挂，reason=multi_product_ambiguity）。
       不按置信层"取最强"再判唯一——那样"A 全名 + B 别名"会误挂 A，与"两个全名→None"不对称。
     字段级：先剔除已命中的产品名/别名表面串，再用注入词表匹配（否则字段名与产品名子串误配）；
     概念级（009 词表）暂缺 → concept_id 恒 None。
@@ -51,14 +67,29 @@ def align_question(
     result = route_document(index, "flywheel-question", [PageText(page_no=1, text=question)])
     actionable = [c for c in result.candidates if c.confidence in _ACTIONABLE]
     products = {c.product_id for c in actionable}
-    if len(products) != 1:
-        return None  # 空=置信不足；≥2=歧义。皆进观察队列不开单。
+    if not products:
+        return AlignmentOutcome(entity=None, reason="no_actionable_match")
+    if len(products) > 1:
+        return AlignmentOutcome(entity=None, reason="multi_product_ambiguity")
     field_id = (
         _match_field(_scrub_product_surface(question, actionable), field_names)
         if field_names
         else None
     )
-    return AlignedEntity(product_id=next(iter(products)), field_id=field_id)
+    return AlignmentOutcome(
+        entity=AlignedEntity(product_id=next(iter(products)), field_id=field_id),
+        reason="aligned",
+    )
+
+
+def align_question(
+    index: MatchIndex,
+    question: str,
+    *,
+    field_names: Mapping[str, str] | None = None,
+) -> AlignedEntity | None:
+    """便捷入口：只要 entity（语义同 align_outcome）。"""
+    return align_outcome(index, question, field_names=field_names).entity
 
 
 def _scrub_product_surface(question: str, candidates: Iterable[ProductCandidate]) -> str:

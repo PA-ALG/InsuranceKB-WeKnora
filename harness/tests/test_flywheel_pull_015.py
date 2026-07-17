@@ -17,9 +17,8 @@ from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import InsuranceProduct, ProductAlias
 from insurance_harness.db.scope import KnowledgeScope
-from insurance_harness.flywheel.cursor import _encode
 from insurance_harness.flywheel.gaps import AlignedEntity, stable_gap_key
-from insurance_harness.flywheel.models import Trace
+from insurance_harness.flywheel.models import SignalConfig, Trace
 from insurance_harness.flywheel.pull import run_pull
 from insurance_harness.product.aliases import generate_aliases
 from insurance_harness.product.routing import MatchIndex
@@ -100,10 +99,13 @@ def test_f3_3_pull_aligns_signals_into_gaps(index: MatchIndex, prod_ids: dict[st
     assert res.processed == 4
     assert res.report.total == 1  # 仅产品 A 一个缺口
     key_a = stable_gap_key(AlignedEntity(product_id=prod_ids["A"]))
-    assert res.report.top_unanswered == ((key_a, 2),)  # t1+t2 累计到同缺口
+    top = res.report.top_unanswered
+    assert [(t.gap_key, t.hit_count) for t in top] == [(key_a, 2)]  # t1+t2 累计到同缺口
+    assert top[0].sample_question  # TopN 携带脱敏问题（F3.1）
     assert res.report.by_product == {prod_ids["A"]: 1}
     assert res.unaligned_signals == 1  # t3 有信号但未对齐 → 观察队列
-    assert res.next_cursor == _encode(("2026-07-01T13:00:00", "t4"))  # 游标推进过全部新 trace
+    # 游标推进过全部新 trace（naive 时间戳按 UTC 归一化编码）
+    assert res.next_cursor == "2026-07-01T13:00:00Z|t4"
 
 
 def test_f3_3_pull_respects_incoming_cursor(index: MatchIndex) -> None:
@@ -111,7 +113,7 @@ def test_f3_3_pull_respects_incoming_cursor(index: MatchIndex) -> None:
         _trace("t1", "2026-07-01T10:00:00", f"{PRODUCT_A[1]} 等待期？", "抱歉，无法确定。"),
         _trace("t2", "2026-07-01T11:00:00", "无关问题", "抱歉，无法回答。"),
     ]
-    cursor = _encode(("2026-07-01T10:00:00", "t1"))  # 已处理到 t1
+    cursor = "2026-07-01T10:00:00Z|t1"  # 已处理到 t1（UTC 归一化编码）
     res = run_pull(traces, index, cursor=cursor)
 
     assert res.processed == 1  # 仅 t2 是新的
@@ -163,3 +165,39 @@ def test_f3_3_pull_declares_empty_knowledge_coverage(index: MatchIndex) -> None:
     traces = [_trace("t1", "2026-07-01T10:00:00", "问题", "答案")]
     assert run_pull(traces, index).empty_knowledge_active is False
     assert run_pull(traces, index, claim_lookup=lambda _k: True).empty_knowledge_active is True
+
+
+def test_f3_3_pull_empty_knowledge_inactive_when_disabled(index: MatchIndex) -> None:
+    """codex High-2：识别器配置关闭时即使接了 lookup 也不得宣称已评估。"""
+    traces = [_trace("t1", "2026-07-01T10:00:00", "问题", "答案")]
+    res = run_pull(
+        traces, index,
+        config=SignalConfig(empty_knowledge=False),
+        claim_lookup=lambda _k: True,
+    )
+    assert res.empty_knowledge_active is False
+
+
+def test_f3_3_pull_duplicate_trace_counted_once(
+    index: MatchIndex, prod_ids: dict[str, str]
+) -> None:
+    """codex 反例2：同批同 trace_id 只计一次 hit_count。"""
+    t = _trace("t1", "2026-07-01T10:00:00", f"{PRODUCT_A[1]} 的等待期？", "抱歉，无法确定。")
+    res = run_pull([t, t], index)
+    assert res.processed == 1  # 批内去重
+    assert res.report.top_unanswered[0].hit_count == 1
+
+
+def test_f2_1_pull_observations_carry_consumable_details(index: MatchIndex) -> None:
+    """F2.1：观察队列保留 trace_id/脱敏问题/信号/原因明细，不是只有计数（codex 阻断4）。"""
+    traces = [
+        _trace("t-un", "2026-07-01T10:00:00", "这类保险怎么退保？", "抱歉，无法回答。"),
+    ]
+    res = run_pull(traces, index)
+    assert res.unaligned_signals == 1
+    assert len(res.observations) == 1
+    obs = res.observations[0]
+    assert obs.trace_id == "t-un"
+    assert "退保" in obs.question
+    assert "low_confidence_refusal" in obs.signal_types
+    assert obs.reason == "no_actionable_match"

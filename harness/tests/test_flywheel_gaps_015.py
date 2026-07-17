@@ -64,13 +64,33 @@ def test_f2_2_distinct_entities_are_distinct_gaps() -> None:
     assert len(agg.gaps()) == 2
 
 
-def test_f2_2_samples_capped_at_five_but_count_unbounded() -> None:
+def test_f2_2_samples_are_most_recent_five() -> None:
+    """F2.2：样例=最近 ≤5 条（滚动替换最旧），不是冻结最早 5 条（codex 反例3）。"""
     agg = GapAggregator()
     for i in range(7):
-        agg.record(_e(), {"no_citation"}, f"tr-{i}")
+        agg.record(_e(), {"no_citation"}, f"tr-{i}", question=f"问题{i}")
     g = agg.gaps()[0]
     assert g.hit_count == 7
-    assert len(g.sample_trace_ids) == 5  # 样例上限 5
+    assert g.sample_trace_ids == ("tr-2", "tr-3", "tr-4", "tr-5", "tr-6")  # 最近 5 条
+    assert g.sample_questions == ("问题2", "问题3", "问题4", "问题5", "问题6")  # 平行滚动
+
+
+def test_f2_2_duplicate_trace_id_not_double_counted() -> None:
+    """F2.2：同一 trace_id 对同一缺口只计一次 hit_count（codex 反例2）。"""
+    agg = GapAggregator()
+    agg.record(_e(), {"no_citation"}, "tr-1")
+    g = agg.record(_e(), {"no_citation"}, "tr-1")  # 同 trace 重复触发
+    assert g.hit_count == 1
+    assert g.sample_trace_ids == ("tr-1",)
+
+
+def test_f2_2_first_and_last_seen_tracked() -> None:
+    """F3.1 闭环周期的时间基座：first_seen 固定于首触发，last_seen 随最新触发。"""
+    agg = GapAggregator()
+    agg.record(_e(), {"no_citation"}, "tr-1", timestamp="2026-07-01T10:00:00Z")
+    g = agg.record(_e(), {"no_citation"}, "tr-2", timestamp="2026-07-03T10:00:00Z")
+    assert g.first_seen == "2026-07-01T10:00:00Z"
+    assert g.last_seen == "2026-07-03T10:00:00Z"
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +108,20 @@ def test_f2_3_resolved_gap_reopens_on_retrigger() -> None:
     gap = agg.record(_e(), {"empty_knowledge"}, "tr-new")
     assert gap.status == "reopened"
     assert gap.hit_count == 4  # 在既有基础上累计
+
+
+def test_f2_3_reopen_preserves_first_seen_clears_resolved_at() -> None:
+    """F2.3：reopen 保留 first_seen（不重置首见），清 resolved_at（不再算已闭环）。"""
+    key = stable_gap_key(_e())
+    seeded = KnowledgeGap(
+        gap_key=key, entity=_e(), hit_count=3, status="resolved",
+        first_seen="2026-06-01T00:00:00Z", resolved_at="2026-06-20T00:00:00Z",
+    )
+    agg = GapAggregator(existing=[seeded])
+    gap = agg.record(_e(), {"no_citation"}, "tr-new", timestamp="2026-07-01T00:00:00Z")
+    assert gap.status == "reopened"
+    assert gap.first_seen == "2026-06-01T00:00:00Z"
+    assert gap.resolved_at is None
 
 
 def test_f2_3_open_gap_stays_open_on_retrigger() -> None:
