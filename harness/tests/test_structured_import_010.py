@@ -27,6 +27,7 @@ from insurance_harness.structured_import import (
     import_records,
 )
 from insurance_harness.structured_import.mapping import (
+    MappingRule,
     effective_mapping_version,
     load_mapping,
     mapping_manifest,
@@ -577,6 +578,47 @@ def test_i2_mapping_rule_typo_key_fail_fast(tmp_path: Path) -> None:
     )
     with pytest.raises(MappingLoadError):
         load_mapping(bad, _MINI_REGISTRY)
+
+
+def test_i2_mapping_top_level_typo_key_fail_fast(tmp_path: Path) -> None:
+    """二次复核：顶层未知键（confirmd）不得静默吞——严格 wire model，与 registry 对称。"""
+    bad = tmp_path / "top.yaml"
+    bad.write_text(
+        "mapping_id: probe\nconfirmed: true\nconfirmd: false\nrules:\n"
+        "  - source_field: wp\n    field_id: waiting_period\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(MappingLoadError, match="confirmd"):
+        load_mapping(bad, _MINI_REGISTRY)
+
+
+def test_i2_mapping_whitespace_source_field_fail_fast() -> None:
+    """二次复核：空白 source_field 构造期即拒（019：空白不成为身份；min_length 拦不住）。"""
+    from pydantic import ValidationError as PVE
+
+    with pytest.raises(PVE):
+        MappingRule(source_field="   ", field_id="waiting_period")
+
+
+def test_i2_mapping_normalized_duplicate_source_field_fail_fast(tmp_path: Path) -> None:
+    """二次复核：'wp' 与 ' wp ' 规范化后同一身份——重复检测须基于规范化值。"""
+    dup = tmp_path / "dup-norm.yaml"
+    dup.write_text(
+        "mapping_id: d\nconfirmed: true\nrules:\n"
+        "  - source_field: wp\n    field_id: waiting_period\n"
+        "  - source_field: ' wp '\n    field_id: hesitation_period\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(MappingLoadError, match="重复"):
+        load_mapping(dup, _MINI_REGISTRY)
+
+
+def test_i2_mapping_rule_identity_normalized_at_construction() -> None:
+    """二次复核：身份字段构造期 strip 归一（比较点用规范化值，与 SourceEntry 对称）。"""
+    r = MappingRule(source_field=" wp ", field_id=" waiting_period ", transformer=" identity ")
+    assert r.source_field == "wp"
+    assert r.field_id == "waiting_period"
+    assert r.transformer == "identity"
 
 
 def test_i6_cli_migrate_runs_from_arbitrary_cwd(

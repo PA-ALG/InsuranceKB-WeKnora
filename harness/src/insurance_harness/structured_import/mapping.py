@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from insurance_harness.schemas import FieldSpec, SchemaRegistry
 
@@ -34,6 +34,27 @@ class MappingRule(BaseModel):
     source_field: str = Field(min_length=1)
     field_id: str = Field(min_length=1)
     transformer: str = "identity"
+
+    @field_validator("source_field", "field_id", "transformer")
+    @classmethod
+    def _norm_identity(cls, v: str) -> str:
+        # 身份构造期 strip 归一（与 SourceEntry 对称；二次复核）：空白不成为身份，
+        # 且重复检测等比较点天然使用规范化值。
+        s = v.strip()
+        if not s:
+            raise ValueError("source_field/field_id/transformer 不得为空白（019：空白不成为身份）")
+        return s
+
+
+class MappingConfig(BaseModel):
+    """映射 YAML 顶层严格 wire model（二次复核）：未知键（如 confirmd）fail-fast，
+    不手工抽取已知键——与 registry 顶层严格键对称。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    mapping_id: str | None = None  # 缺省用文件 stem
+    confirmed: bool = False  # fail-closed 默认：缺省即草案
+    rules: tuple[Any, ...] = ()  # 条目级校验在 loader 循环内做（保留"定位到条目"语境）
 
 
 class MappingSpec(BaseModel):
@@ -82,25 +103,29 @@ def _known_field_ids(schema_registry: SchemaRegistry) -> set[str]:
 
 
 def load_mapping(path: Path, schema_registry: SchemaRegistry) -> MappingSpec:
-    """加载映射 YAML，fail-fast：未知 field_id / 未知变换器 / 重复 source_field
-    —— 报错并定位（I2）；``confirmed`` 非 true（草案/缺省）→ DraftNotConfirmedError。"""
+    """加载映射 YAML，fail-fast：顶层未知键（严格 wire model）/ 未知 field_id /
+    未知变换器 / 规范化后重复 source_field —— 报错并定位（I2/二次复核）；
+    ``confirmed`` 非 true（草案/缺省）→ DraftNotConfirmedError。"""
     raw: Any = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise MappingLoadError(f"{path.name}: 顶层须为映射对象")
-    if raw.get("confirmed") is not True:
+    try:
+        cfg = MappingConfig.model_validate(raw)  # 严格顶层：未知键（如 confirmd）即拒
+    except ValidationError as exc:
+        raise MappingLoadError(f"{path.name}: 顶层结构非法——{exc}") from exc
+    if cfg.confirmed is not True:
         raise DraftNotConfirmedError(
             f"{path.name}: 未确认草案不得用于正式导入（confirmed 必须为 true，I2）"
         )
-    rules_raw = raw.get("rules")
-    if not isinstance(rules_raw, list) or not rules_raw:
+    if not cfg.rules:
         raise MappingLoadError(f"{path.name}: rules 须为非空列表")
     known = _known_field_ids(schema_registry)
     rules: list[MappingRule] = []
-    seen_src: set[str] = set()
-    for idx, item in enumerate(rules_raw):
+    seen_src: set[str] = set()  # 规范化(构造期 strip 后)身份去重
+    for idx, item in enumerate(cfg.rules):
         where = f"{path.name} rules[{idx}]"
         try:
-            rule = MappingRule.model_validate(item)
+            rule = MappingRule.model_validate(item)  # extra=forbid + 身份归一
         except ValidationError as exc:
             raise MappingLoadError(f"{where}: 规则字段缺失/非法——{exc}") from exc
         if rule.field_id not in known:
@@ -110,11 +135,11 @@ def load_mapping(path: Path, schema_registry: SchemaRegistry) -> MappingSpec:
             )
         if rule.transformer not in TRANSFORMERS:
             raise MappingLoadError(f"{where}: 未知变换器 {rule.transformer!r}")
-        if rule.source_field in seen_src:
+        if rule.source_field in seen_src:  # 比较点用已规范化身份（'wp' == ' wp '.strip()）
             raise MappingLoadError(f"{where}: source_field 重复：{rule.source_field!r}")
         seen_src.add(rule.source_field)
         rules.append(rule)
-    mapping_id = str(raw.get("mapping_id") or path.stem)
+    mapping_id = (cfg.mapping_id or "").strip() or path.stem
     return MappingSpec(mapping_id=mapping_id, rules=tuple(rules))
 
 

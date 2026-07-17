@@ -17,7 +17,7 @@
 3. **构造期约束在模型上**（21 号 gauntlet 抓出后修复）：`authority_level Field(ge=1,le=6)`、空白标识 validator、`DraftRule.confidence [0,1]`——loader 检查保留为第二层错误语境（不删冗余安全层）。
 4. **草案宁缺勿假**：未匹配键不产生规则（负断言钉住）；`confirmed` 缺省与显式 false 都拒（fail-closed 默认，参数化双测）。
 5. **transformers 版本纪律**：`TRANSFORMER_REGISTRY_VERSION`/`NORMALIZER_VERSION` 常量即 I4 manifest 轴——行为变更必须 bump 已写入模块 docstring。
-6. **已知边界**：空目录 bootstrap 报 created=0 不报错（summary 可见）；I5 批次/ChangeSet 语义不在本波次（T8/T9，候 021）。
+6. **已知边界（2026-07-17 复审后修订）**：空目录/零注册 CLI **非零退出（码 2）**且打印 skipped 原因（指错目录可被自动化发现——首轮复审测试2 采纳，原"不报错"描述已过时）；I5 批次/ChangeSet 语义不在本波次（T8/T9，候 021）。
 7. **自测教训**："门禁绿≠自测毕"——gauntlet 为独立步骤，本波次由业务方点名后补跑并抓出第 3 条真伤，此后交付宣告前显式跑完。
 
 ### codex PR #14 复审收口（2026-07-17，执行者=Claude 架构会话，worktree `ikb-010`）
@@ -37,6 +37,17 @@ codex 对 PR #14 出 **Request changes**（6 阻断 + 3 测试/运营项）。�
 | 测试3 | `BootstrapReport.register` 遮蔽 BaseModel | **成立**（复现 UserWarning） | 字段改名 `registration`，warning 消除 |
 
 **跨 scope 说明**：阻断3 落在 003 的 `product/register.py`（既有共享助手），非 010 新增；因通道一 bootstrap 直接复用它并宣称 dry-run/apply 一致，故在本 PR 内一并修其报告诚实性（不重开 003），已复跑 003 既有用例零破坏。
+
+### codex 二次复核收口（2026-07-18，同执行者）
+
+codex 关闭首轮 8/9 项并接受"源码指纹属 I4 纪律模型之外"的反驳；剩一组 mapping fail-fast（3 反例独立复现全中）——**性质=首轮修复不对称**：registry 侧上了 extra=forbid+身份归一+规范化去重，mapping 侧顶层与 MappingRule 漏了同套护栏（doc-21"护栏成对想"再犯），且 tasks"顶层 YAML 严格键"声明只对 registry 成立。修复（RED 4 → GREEN）：
+
+- 顶层严格 wire model `MappingConfig(extra="forbid")`——`confirmd` 类 typo 即拒，不再手工抽取已知键；
+- `MappingRule` 身份字段（source_field/field_id/transformer）构造期 strip 归一，空白即拒（与 `SourceEntry._norm_identity` 对称）；
+- source_field 重复检测天然基于规范化值（'wp' 与 ' wp ' 判重）；mapping_id strip 后空回落 stem；
+- 修正裁决 6 过时描述（空目录已改非零退出）。
+
+**边界（codex 已裁）**：`record_schema_ref/mapping_ref` 引用存在性/resolver 随 T5 消费链定义，非 T1~T4 阻断；transformer 源码指纹不引入。
 
 - [ ] T5 迁移 0007（**基于 021 后 main**）：structured_source_records（id PK、无批次外键、UPDATE+DELETE 双方言触发器拒绝）+ **structured_import_batch_records 关联表（append-only，双方言拒 UPDATE/DELETE）** + claim_evidence 三值 source_kind（nullable→回填→收紧）+ **ChangeSet 增列、CHECK（structured_import ⇒ 三字段非空）与两条精确 predicate 的 partial unique index** + **read_model_version CHECK (0,1,2)** + 有条件 downgrade（I4/I9）
 - [ ] T6 领域模型：ProposedEvidence kind 分支 + 既有 weknora/legacy 行为不变回归；merge 接线（持久化/去重键含 structured 身份+mapping_version/space 一致性 fail-closed）（I4）
