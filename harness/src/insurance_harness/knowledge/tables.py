@@ -28,6 +28,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from insurance_harness.db.base import Base, utcnow
 from insurance_harness.db.models import TimestampMixin, _uuid
+from insurance_harness.knowledge.release_guard_ddl_018 import (
+    register_metadata_guards,
+)
 
 
 class Claim(TimestampMixin, Base):
@@ -244,6 +247,14 @@ class ReleaseSnapshot(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("space_id", "label", name="uq_snapshot_label"),
         UniqueConstraint("space_id", "id", name="uq_release_snapshots_space_id"),
+        CheckConstraint(
+            "status IN ('building', 'publishing', 'published', 'failed')",
+            name="ck_release_snapshots_status",
+        ),
+        CheckConstraint(
+            "read_model_version IN (0, 1)",
+            name="ck_release_snapshots_read_model_version",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -252,17 +263,93 @@ class ReleaseSnapshot(TimestampMixin, Base):
     )
     label: Mapped[str] = mapped_column(String(128))
     rendered_pages: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
-    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    status: Mapped[str] = mapped_column(String(16), default="building", index=True)
+    read_model_version: Mapped[int] = mapped_column(Integer, default=1)
+    projection_frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_by: Mapped[str] = mapped_column(String(128))
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class SnapshotFact(TimestampMixin, Base):
+    """不可变发布事实；Reader/页面均不得回查 mutable Claim 内容。"""
+
+    __tablename__ = "snapshot_facts"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id",
+            "snapshot_id",
+            "claim_id",
+            "revision_no",
+            name="uq_snapshot_fact_claim_revision",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_snapshot_facts_space_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "claim_id"],
+            ["claims.space_id", "claims.id"],
+            name="fk_snapshot_facts_space_claim",
+        ),
+        ForeignKeyConstraint(
+            ["claim_id", "revision_no"],
+            ["claim_revisions.claim_id", "claim_revisions.revision_no"],
+            name="fk_snapshot_facts_claim_revision",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "product_id"],
+            ["insurance_products.space_id", "insurance_products.id"],
+            name="fk_snapshot_facts_space_product",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "product_version_id"],
+            ["product_versions.space_id", "product_versions.id"],
+            name="fk_snapshot_facts_space_product_version",
+        ),
+        CheckConstraint(
+            "value_state IN ('present', 'absent_explicitly')",
+            name="ck_snapshot_facts_value_state",
+        ),
+        Index(
+            "ix_snapshot_facts_reader",
+            "space_id",
+            "snapshot_id",
+            "product_id",
+            "product_version_id",
+            "predicate",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_snapshot_facts_space")
+    )
+    snapshot_id: Mapped[str] = mapped_column(String(36))
+    claim_id: Mapped[str] = mapped_column(String(36))
+    revision_no: Mapped[int] = mapped_column(Integer)
+    product_id: Mapped[str] = mapped_column(String(36))
+    product_version_id: Mapped[str] = mapped_column(String(36))
+    product_code: Mapped[str] = mapped_column(String(64))
+    product_name: Mapped[str] = mapped_column(String(255))
+    version_label: Mapped[str] = mapped_column(String(64))
+    predicate: Mapped[str] = mapped_column(String(128))
+    field_name: Mapped[str] = mapped_column(String(255))
+    field_group: Mapped[str] = mapped_column(String(64))
+    value_state: Mapped[str] = mapped_column(String(32))
+    value: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    effective_from: Mapped[date | None] = mapped_column(Date)
+    effective_to: Mapped[date | None] = mapped_column(Date)
+    confidence: Mapped[float] = mapped_column(Float)
+    schema_version: Mapped[str] = mapped_column(String(64))
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
 
 
 class SnapshotClaim(TimestampMixin, Base):
     __tablename__ = "snapshot_claims"
     __table_args__ = (
-        UniqueConstraint(
-            "space_id", "snapshot_id", "claim_id", name="uq_snapshot_claim"
-        ),
+        UniqueConstraint("space_id", "snapshot_id", "claim_id", name="uq_snapshot_claim"),
         ForeignKeyConstraint(
             ["space_id", "snapshot_id"],
             ["release_snapshots.space_id", "release_snapshots.id"],
@@ -280,9 +367,7 @@ class SnapshotClaim(TimestampMixin, Base):
     space_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("knowledge_spaces.id", name="fk_snapshot_claims_space")
     )
-    snapshot_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("release_snapshots.id")
-    )
+    snapshot_id: Mapped[str] = mapped_column(String(36), ForeignKey("release_snapshots.id"))
     claim_id: Mapped[str] = mapped_column(String(36), ForeignKey("claims.id"))
     revision_no: Mapped[int] = mapped_column(Integer)
 
@@ -307,3 +392,154 @@ class CurrentRelease(TimestampMixin, Base):
     )
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default="current")
     snapshot_id: Mapped[str] = mapped_column(String(36), ForeignKey("release_snapshots.id"))
+
+
+class ReleaseOperation(TimestampMixin, Base):
+    """一次 publish/rollback/reconcile saga 的冻结身份与租约。"""
+
+    __tablename__ = "release_operations"
+    __table_args__ = (
+        UniqueConstraint("space_id", "id", name="uq_release_operations_space_id"),
+        ForeignKeyConstraint(
+            ["space_id", "base_snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_release_operations_space_base_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "target_snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_release_operations_space_target_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "parent_operation_id"],
+            ["release_operations.space_id", "release_operations.id"],
+            name="fk_release_operations_space_parent",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "previous_operation_id"],
+            ["release_operations.space_id", "release_operations.id"],
+            name="fk_release_operations_space_previous",
+        ),
+        CheckConstraint(
+            "kind IN ('publish', 'rollback', 'reconcile')",
+            name="ck_release_operations_kind",
+        ),
+        CheckConstraint(
+            "status IN ('building', 'running', 'succeeded', 'failed')",
+            name="ck_release_operations_status",
+        ),
+        CheckConstraint("retry_no >= 0", name="ck_release_operations_retry_no"),
+        Index("ix_release_operations_lease", "status", "lease_expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_release_operations_space")
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), default="building")
+    base_snapshot_id: Mapped[str | None] = mapped_column(String(36))
+    target_snapshot_id: Mapped[str | None] = mapped_column(String(36))
+    parent_operation_id: Mapped[str | None] = mapped_column(String(36))
+    previous_operation_id: Mapped[str | None] = mapped_column(String(36))
+    publish_plan: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    plan_digest: Mapped[str | None] = mapped_column(String(64))
+    plan_frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retry_no: Mapped[int] = mapped_column(Integer, default=0)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actor: Mapped[str] = mapped_column(String(128))
+    reason: Mapped[str | None] = mapped_column(Text)
+
+
+class PublishAttempt(TimestampMixin, Base):
+    """冻结计划中一个外部动作的一次可审计执行。"""
+
+    __tablename__ = "publish_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id",
+            "operation_id",
+            "retry_no",
+            "action_no",
+            name="uq_publish_attempt_action",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "operation_id"],
+            ["release_operations.space_id", "release_operations.id"],
+            name="fk_publish_attempts_space_operation",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_publish_attempts_space_snapshot",
+        ),
+        CheckConstraint(
+            "operation IN ('upsert', 'delete')",
+            name="ck_publish_attempts_operation",
+        ),
+        CheckConstraint(
+            "status IN ('started', 'succeeded', 'failed', 'collision')",
+            name="ck_publish_attempts_status",
+        ),
+        CheckConstraint("retry_no >= 0", name="ck_publish_attempts_retry_no"),
+        CheckConstraint("action_no >= 0", name="ck_publish_attempts_action_no"),
+        Index("ix_publish_attempts_operation", "operation_id", "retry_no"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_publish_attempts_space")
+    )
+    operation_id: Mapped[str] = mapped_column(String(36))
+    retry_no: Mapped[int] = mapped_column(Integer)
+    action_no: Mapped[int] = mapped_column(Integer)
+    operation: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), default="started")
+    error: Mapped[str | None] = mapped_column(Text)
+    snapshot_id: Mapped[str | None] = mapped_column(String(36))
+    slug: Mapped[str] = mapped_column(String(1024))
+    created_new: Mapped[bool | None] = mapped_column(Boolean)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReconciliationJob(TimestampMixin, Base):
+    """失败 operation 的唯一恢复工单。"""
+
+    __tablename__ = "reconciliation_jobs"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id",
+            "source_operation_id",
+            name="uq_reconciliation_jobs_source_operation",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "source_operation_id"],
+            ["release_operations.space_id", "release_operations.id"],
+            name="fk_reconciliation_jobs_space_source_operation",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "reconcile_operation_id"],
+            ["release_operations.space_id", "release_operations.id"],
+            name="fk_reconciliation_jobs_space_reconcile_operation",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed')",
+            name="ck_reconciliation_jobs_status",
+        ),
+        Index("ix_reconciliation_jobs_status", "space_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_reconciliation_jobs_space")
+    )
+    source_operation_id: Mapped[str] = mapped_column(String(36))
+    source_plan_digest: Mapped[str] = mapped_column(String(64))
+    reconcile_operation_id: Mapped[str | None] = mapped_column(String(36))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
+register_metadata_guards(Base.metadata)

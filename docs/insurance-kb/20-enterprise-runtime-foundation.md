@@ -1,6 +1,6 @@
 # 20 · 企业运行基础：作用域、来源桥接、发布快照与质量闸门
 
-> 状态：设计已形成，按 OpenSpec 016～021 分段实施。016 已完成；017 T1–T8 软件实施已通过规格/质量双审与主代理验收，但真实 WeKnora/PostgreSQL live 为 `NOT RUN`；018～021 尚未完成。本文是方案 A 的总设计；各 change 的 `specs/` 是验收权威。
+> 状态：设计已形成，按 OpenSpec 016～021 分段实施。016/017 软件已完成，017 真实 WeKnora live 仍为 `NOT RUN`；018 T1～T3/T5/T6 已实现，T4/T7 的 PostgreSQL 与真实 WeKnora 节点已就绪但尚无外部运行证据；019～021 未完成。本文是方案 A 的总设计；各 change 的 `specs/` 是验收权威。
 
 ## 1. 目标与结论
 
@@ -159,7 +159,7 @@ Golden 工作拆成四层：
 | 020 | gs-v0.1 收尾、13 产品 baseline、judge/dead-letter/keypoints（真实数据运行） | 002、019、021；先完成 020 T1 run-admission |
 | 021 | SourceHead、不同 revision ordering 与统一 per-source lock/CAS | 017、018；迁移在 018 `0005` 之后 |
 
-016 是所有后续企业能力的前置，现已完成；本地实现证据见 `openspec/changes/016-enterprise-knowledge-scope/validation-report.md`。017 T1～T8 软件实施已完成，真实 live gate 因环境缺失为 `NOT RUN`；018 硬依赖 016+017，进入生产前仍需补真实 WeKnora/PostgreSQL 证据。019 的 Golden 工具无 018 前置，merge gate 接入所需的 016 已完成，可与 018 独立或并行推进；其作为 020 前置工具轨，价值优先级不低于 018。021 在 018 migration `0005` 后实施；020 是受模型环境与预算约束的可恢复数据运行，必须等待 019+021 并先完成自身 T1 run-admission。018、019 和必要的 020 质量画像完成后再启用生产自动发布。B10 的 live WeKnora 部署与契约测试仍是 017/018 的最终运行验收，不因软件门禁完成而自动关闭。
+016 是所有后续企业能力的前置，现已完成；本地实现证据见 `openspec/changes/016-enterprise-knowledge-scope/validation-report.md`。017 软件已完成，真实 live gate 仍为 `NOT RUN`。018 已实现 migration `0005`、统一读模型和可恢复 saga，并新增 PostgreSQL service-owned Session 与真实 WeKnora V1→V2→rollback 节点；在对应 Actions/受控 workflow 产生零 skip 证据前仍不得宣称 integration/live verified。019 的 Golden 工具无 018 前置，可与 018 独立或并行推进；021 在 018 `0005` 后实施；020 必须等待 019+021 并先完成自身 T1 run-admission。018、019 和必要的 020 质量画像完成后再启用生产自动发布。B10 的 live WeKnora 部署与契约测试不因软件门禁完成而自动关闭。
 
 ## 10. 非目标
 

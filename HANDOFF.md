@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-17（023 已随 PR #10 合入 main；PR #16 的供应链 review hardening 已完成本机门禁，仍须新 SHA 的 GitHub CI 与人工复核；T6d.2/T7/T8 保持 `NOT RUN`。并行执行蓝图见 ⓪-0h 与 `docs/insurance-kb/22`，PR #9 的 018 T7 仍需最终 live 证据）
+> 最后更新：2026-07-17（023 供应链与真实环境已随 PR #16、#19、#20 合入 `main`；受信 app 固定为 `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`，真实 provision、普通 PDF 与 clean-SHA VLM smoke 已通过。PR #9 已同步最终 `main`，018 T7 的 5-node WeKnora live 仍待本次 exact-SHA 验收）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -19,7 +19,9 @@
 
 0f. **当前排期与依赖（业务方 2026-07-14 裁决；2026-07-16 扩展为多轨并行，见 0h）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
 
-0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-17 当前状态）**：PR #10 已合入 `main`；后续五角色/VLM 与制品收口位于 PR #16、分支 `codex/023-live-model-supply-chain`。百炼五角色已按独立 profile 实机通过：Chat/extraction `deepseek-v4-flash`、Embedding `qwen3.7-text-embedding`（实测维度 1024）、ReRank `qwen3-rerank`、VLLM `qwen3.7-plus`；所有探针保持 `trust_env=False` 与零 secret 输出。真实 WeKnora 五容器 + Harness PostgreSQL healthy，宿主只监听 `127.0.0.1:8080/8081/5442`。实机首次暴露并已 TDD 修复 `TENANT_AES_KEY` 缺失：runtime 现在独立持久两个 exact 32-byte AES key，旧 schema 原子迁移，容器实测 `32/32`；Compose/CLI focused **84 passed**、Ruff 全绿。旧 Harness 测试卷来自 018、`alembic_version=0005` 且非空，已先备份到 `/private/tmp/insurancekb-harness-pre023-20260716.dump`（SHA-256 `63330481d591982866c3abb9bf6a31fdccf9a54b48b6f7394c1fd57be9b66576`），再只重建 `insurancekb-harness-live` 卷，未删除 WeKnora 持久卷。
+0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-17 当前状态）**：PR #10、#16、#19、#20 均已合入 `main`。受信 main workflow 已从锁定的 Tencent upstream `5eefa70e...` 构建 `linux/arm64` app，OCI/GitHub attestation、SLSA provenance 与 SPDX SBOM 均已核验；`deploy/local-live/images.lock` 和 Compose 固定 subject digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`。本机六服务 healthy，宿主只监听 `127.0.0.1:8080/8081/5442`；百炼五角色 direct probe、幂等 provision、普通 PDF 与 clean-SHA VLM smoke 均通过，VLM 结果为 `status=completed / image_ocr_chunks=1 / image_caption_chunks=1 / dirty=false / evidence=exact`。PR #20 另以真实 API TDD 修复重复注册、Wiki indexing strategy、pages envelope 与服务端扩展 VLM overrides 四项合同差异。当前 023 本身无模型、Docker 或制品阻塞；剩余动作是对 PR #9 exact SHA 执行 5-node live，要求 `tests=5 skipped=0`。
+
+   以下“官方 v0.6.3 缺 scoped key / T6d.1 待制品”的段落仅保留为历史故障与供应链决策记录；其阻塞已由 PR #16、#19、#20 关闭，不得再用作当前状态。
 
    **当前唯一核心阻塞是 app artifact，不是模型或 Docker**：固定的官方 `wechatopenai/weknora-app:v0.6.3@sha256:7480...` 构建于 2026-06-26，早于 7 月新增的 scoped tenant API key routes。真实 provision 已创建 `user=1 / tenant=2 / models=4 / KB=2`，随后在 `GET /tenants/10001/api-keys` 得到 404；按最小权限合同正确 fail closed，禁止降级 legacy full-access key。实机同时发现官方镜像把 `/models/:id/debug` 的 prompt/raw response/reasoning/error 写 access log；当前源码已按 `test_r3_3_*` RED→GREEN，整个 debug response 在 access log 中省略。曾尝试的 dirty checkout + mutable local tag build 经安全复核已撤回。
 
@@ -47,6 +49,8 @@
    - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
 
    **价值出口 — 020 真实金标/baseline 运行（硬依赖 019+021）**：019 提供 artifact 工具/合同，021 关闭 source ordering 风险；两者完成后，020 才从 T1 `run-admission` 开始，未准入前零模型调用。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与代码轨共享分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
+
+0g.1. **018 执行事故与 PR #9 硬化（必须保留）**：2026-07-14～15 曾因三轮规格审查、三轮计划审查和一个过大的 T1 子任务，出现约 `23143s` 无 RED、无 diff、无可验证产出的执行故障。此后 018 强制拆成单闭环 TDD：15 分钟内首个 RED、30 分钟内可核验产物、工具 60 秒无输出主动轮询、普通命令 10 分钟硬中止、子任务 2 分钟无响应转主线程。PR #9 的 RH1～RH5 已补齐 test-support 隔离、SQLite FK、stale-base mutation、collision/lease recovery 与 0005/search_path 合同；两轮独立复审无剩余 finding。当前只差同步后 CI 与受控 5-node live，不得再扩张范围或重复审查已关闭事项。
 
 0h. **并行执行蓝图（总设计师制定，业务方 2026-07-16 拍板）**：全轨道结构（L0 解阻塞 / L1 关键路径 021→020 / L2 工作台 008 / L3 MCP 013 / L4 知识形态 010→009→012 / L5 抽取提准 024 / L6 治理）、优先级与护栏见 `docs/insurance-kb/22-parallel-execution-blueprint.md`；**change 号与 Alembic 迁移号一律先在 `openspec/changes/README.md` 注册表占号**（022 撞号教训；0006=021、0007=010、0008=009、0009=012 已预分配）。当日拍板三条：①模型凭据已补齐，交 codex 处理 023 T7/T8 → 018 T7；②013 MCP 从 M2 提前（规格就绪，实现等 PR #9 合入）；③规格工作与不触 knowledge 域的实现（008 W1–W3、010 T1~T4 通道一/登记映射、024）**不等 PR #9**，即刻从 main 开工；**010 的 knowledge 域段（T5 起，structured 证据全消费链+冻结合同）排在 021 之后**（三轮复审裁决：关键路径 018→021→020 不因新功能插队而改变）。Wave 2（009/011/012）待架构会话完成基础对齐修订后放行。
 
@@ -178,6 +182,10 @@
 14. **已知无效凭据不做循环重试**：provider 401 是外部认证阻塞，不是代码“继续跑就会好”。只记录角色、HTTP 状态和 `BLOCKED`，不打印 URL/key/body；等本地 0600 文件更新后再从 probe 开始。软件 PASS、容器 healthy、provider probe、provision、local live、GitHub live 六层状态必须分开报告。
 15. **安全测试要断言结构，不能做宿主字符串猜测**：023 runner 测试曾用“Docker argv 不含 `Path.home()`”证明无宿主 mount；CI 宿主 home 与容器 destination 都是 `/home/runner`，导致本地绿、CI 稳定红。正确检查是解析 `--mount`，精确允许 anonymous `type=volume`，拒绝 `type=bind/-v/--volume/docker.sock`。以后跨平台隔离测试不得用路径子串、用户名或本机目录布局代替配置结构。
 16. **数据库失败栈不得携带 password DSN**：023 在沙箱拒绝 loopback 时，psycopg traceback 展开了本机 Harness 测试库密码；已立即轮换数据库 role 与 mode-0600 runtime，并用临时 `PGPASSFILE` + 无密码 URL重跑通过。以后 PostgreSQL smoke/integration 一律用 passfile、service 或其他不把 password 放进 DSN repr 的方式；一旦异常输出展开凭据，先轮换再继续，不能只删日志。
+17. **新约束不能以丢旧防御测试为代价**：018 DB trigger 拒绝坏 pointer/published JSON 后，仍须用历史损坏态 fixture 保留 `current_snapshot_id` 读侧 fail-closed；migration backfill default 与新写 default 必须分开，metadata DDL 必须验证重复 `create_all()`。
+18. **saga 的锁、回读与恢复身份必须组合验收**：用两个 service 实例证明 `(Engine, space_id)` 共享锁；WeKnora 写成功后必须 GET 回读 `managed_by/space_id/snapshot_id`；recovery 与在线发布共锁，reconcile child 不得形成 job-of-job。
+19. **Alembic 多版本降级要做链级预检**：任何 `head → old` 路径在首个 DDL 前完成下游兼容性检查，并验证拒绝后 schema、数据和 `alembic_version` 全部不变；测试动态解析 head，禁止写死 revision。
+20. **新安全主链上线必须封死旧公开旁路**：package import、`__all__`、CLI/API 与生产调用点均须枚举；只为历史回归保留的实现移入 `tests/support`，生产代码不得继续暴露 caller-session 式 publish/rollback。
 
 ## 六、工作方式约定（业务方明确要求）
 

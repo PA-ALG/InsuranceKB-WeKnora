@@ -5,7 +5,12 @@
 快照回放（rollback 渲染）按 claim_ids 白名单取数、不看当前 status。
 """
 
-from typing import Any, cast
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
@@ -23,6 +28,9 @@ from insurance_harness.knowledge.merge import _evidence_for_claim, claim_value_t
 from insurance_harness.knowledge.models import LineageStatus, ProposedEvidence
 from insurance_harness.knowledge.tables import Claim, ClaimEvidence
 from insurance_harness.schemas import SchemaRegistry
+
+if TYPE_CHECKING:
+    from insurance_harness.knowledge.snapshots import SnapshotFactView
 
 GROUP_TITLES: dict[str, str] = {
     "basic_info": "基本信息",
@@ -298,3 +306,113 @@ def render_product_page(
             "schema_version": schema_version,
         },
     )
+
+
+def _snapshot_value_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, dict) and "text" in value:
+        text = value["text"]
+        return None if text is None else str(text)
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def render_snapshot_pages(
+    facts: Sequence[SnapshotFactView],
+    *,
+    space_id: str,
+    snapshot_id: str,
+    compiled_at: datetime,
+    harness_version: str = "insurance-harness/0.1.0",
+) -> tuple[RenderedPage, ...]:
+    """Render deterministic managed Wiki pages from frozen facts only."""
+
+    grouped: dict[tuple[str, str], list[SnapshotFactView]] = {}
+    for fact in facts:
+        if fact.space_id != space_id or fact.snapshot_id != snapshot_id:
+            raise ValueError("snapshot fact identity mismatch")
+        grouped.setdefault((fact.product_id, fact.product_version_id), []).append(
+            fact
+        )
+
+    pages: list[RenderedPage] = []
+    for product_key, product_facts in grouped.items():
+        product_id, product_version_id = product_key
+        product_codes = {fact.product_code for fact in product_facts}
+        product_names = {fact.product_name for fact in product_facts}
+        version_labels = {fact.version_label for fact in product_facts}
+        if (
+            len(product_codes) != 1
+            or len(product_names) != 1
+            or len(version_labels) != 1
+        ):
+            raise ValueError("snapshot fact identity mismatch")
+        views = [
+            PageClaimView(
+                claim_id=fact.claim_id,
+                predicate=fact.predicate,
+                field_name=fact.field_name,
+                group=fact.field_group,
+                value_state=fact.value_state,
+                value=_snapshot_value_text(fact.value),
+                confidence=fact.confidence,
+                evidence=[
+                    EvidenceView(
+                        knowledge_id=evidence.knowledge_id,
+                        doc_title=evidence.doc_title,
+                        chunk_id=evidence.chunk_id,
+                        page=evidence.page,
+                        quote=evidence.quote,
+                        source_ref_verified=True,
+                        chunk_ref_verified=evidence.lineage_status == "linked",
+                    )
+                    for evidence in fact.evidence
+                ],
+            )
+            for fact in product_facts
+        ]
+        views.sort(
+            key=lambda view: (
+                GROUP_ORDER.index(view.group),
+                view.field_name,
+                view.predicate,
+                view.claim_id,
+            )
+        )
+        schema_versions = sorted({fact.schema_version for fact in product_facts})
+        rendered = render_product_page(
+            views,
+            product_code=next(iter(product_codes)),
+            version_label=next(iter(version_labels)),
+            product_name=next(iter(product_names)),
+            product_id=product_id,
+            product_version_id=product_version_id,
+            snapshot_id=snapshot_id,
+            schema_version=",".join(schema_versions),
+            harness_version=harness_version,
+        )
+        pages.append(
+            rendered.model_copy(
+                update={
+                    "page_metadata": {
+                        **rendered.page_metadata,
+                        "managed_by": "insurance-harness",
+                        "space_id": space_id,
+                        "snapshot_id": snapshot_id,
+                        "compiled_at": compiled_at.isoformat(),
+                        "harness_version": harness_version,
+                        "schema_versions": schema_versions,
+                    }
+                }
+            )
+        )
+    pages.sort(
+        key=lambda page: (
+            page.slug,
+            str(page.page_metadata["entity_ids"]["product_id"]),
+            str(page.page_metadata["entity_ids"]["product_version_id"]),
+        )
+    )
+    return tuple(pages)

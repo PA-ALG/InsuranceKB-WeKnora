@@ -26,7 +26,7 @@ cd harness
 uv sync                        # 安装依赖（含 dev 组）
 uv run ruff check .            # 风格检查
 uv run mypy src tests          # 严格类型检查
-uv run pytest -m "not live" -q # 单元 + mock 契约测试
+uv run pytest -m "not live and not integration_postgres" -q # deterministic 软件门禁
 ```
 
 打真实 WeKnora 测试实例的契约测试（版本列车升级门禁，docs 02 §8）：
@@ -34,9 +34,14 @@ uv run pytest -m "not live" -q # 单元 + mock 契约测试
 ```bash
 export HARNESS_LIVE_BASE_URL=http://<weknora-host>
 export HARNESS_LIVE_API_KEY=sk-xxx
-export HARNESS_LIVE_KB_ID=<kb-id>
+export HARNESS_LIVE_DB_URL=postgresql+psycopg://<user>:<password>@<host>/<db>
+export HARNESS_LIVE_SPACE_ID=<bound-space-id>
+export HARNESS_LIVE_KB_ID=<wiki-kb-id>
 uv run pytest -m live
 ```
+
+PostgreSQL integration 与受控 WeKnora live 的零 skip 证据要求见
+[`14-deployment-runbook.md`](../docs/insurance-kb/14-deployment-runbook.md) §5；本地 skip 不代表 live 成功。
 
 ## 配置
 

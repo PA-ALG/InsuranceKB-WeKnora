@@ -19,13 +19,17 @@ from insurance_harness.knowledge import (
     ProposedClaim,
     ProposedEvidence,
     current_snapshot_id,
-    publish_product_version,
-    rollback_to_snapshot,
     snapshot_claim_set,
 )
 from insurance_harness.knowledge.tables import ChangeSet, ReleaseSnapshot
 from tests.conftest import BASE_URL
 from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
+from tests.support.legacy_publisher_007 import (
+    legacy_publish_product_version as publish_product_version,
+)
+from tests.support.legacy_publisher_007 import (
+    legacy_rollback_to_snapshot as rollback_to_snapshot,
+)
 from tests.support.live import AsyncCleanup, run_cleanups_preserving_failure
 
 KB = "kb-wiki"

@@ -997,6 +997,9 @@ def test_t7_notification_does_not_mutate_release_pointer_or_snapshot(
         space_id=scope.space_id,
         label="release-1",
         rendered_pages=rendered_pages,
+        status="published",
+        read_model_version=1,
+        projection_frozen_at=NOW,
         published_at=NOW,
         published_by="publisher",
     )
