@@ -90,6 +90,8 @@ def _register_one(
         )
     ).scalar_one_or_none()
 
+    created = product is None
+    changed = False  # 任一实体层（产品主行/版本/文档/别名）产生副作用即为真
     if product is None:
         product = InsuranceProduct(
             space_id=scope.space_id,
@@ -102,10 +104,8 @@ def _register_one(
         )
         session.add(product)
         session.flush()
-        report.created.append(meta.plan_code)
-        changed = True
     else:
-        changed = False
+        attrs_changed = False
         for attr, new in (
             ("canonical_name", meta.clause_name),
             ("category", category),
@@ -114,10 +114,10 @@ def _register_one(
         ):
             if getattr(product, attr) != new:
                 setattr(product, attr, new)
-                changed = True
-        if changed:
+                attrs_changed = True
+        if attrs_changed:
             product.meta = raw_meta
-            report.updated.append(meta.plan_code)
+            changed = True
 
     # 版本（UQ product_id+version_label 幂等）
     version = session.execute(
@@ -138,6 +138,7 @@ def _register_one(
         )
         session.add(version)
         session.flush()
+        changed = True  # 新增版本是真实副作用（阻断3：不得报 unchanged）
 
     # 文档登记（UQ product_id+sha256 幂等）
     existing_sha = {
@@ -164,6 +165,7 @@ def _register_one(
                 source_path=str(pdf),
             )
         )
+        changed = True  # 新增文档是真实副作用（阻断3）
 
     # 别名（确定性生成 + 注册号；UQ product_id+alias 幂等）
     existing_aliases = {
@@ -180,6 +182,12 @@ def _register_one(
             session.add(
                 ProductAlias(product_id=product.id, alias=alias, alias_type=alias_type)
             )
+            changed = True  # 新增别名是真实副作用（阻断3）
 
-    if not changed and meta.plan_code not in report.created:
+    # 分类以**整体聚合**副作用为准，绝不以产品主行未变代理整个注册未变（阻断3）
+    if created:
+        report.created.append(meta.plan_code)
+    elif changed:
+        report.updated.append(meta.plan_code)
+    else:
         report.unchanged.append(meta.plan_code)

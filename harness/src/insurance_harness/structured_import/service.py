@@ -31,12 +31,14 @@ class BootstrapReport(BaseModel):
 
     space_id: str
     applied: bool  # False = dry-run（未落库）
-    register: RegisterReport = Field(default_factory=RegisterReport)
+    # 字段名用 registration 而非 register——register 会遮蔽 BaseModel/ABCMeta.register
+    # 引发 Pydantic 属性遮蔽 warning（T3）。
+    registration: RegisterReport = Field(default_factory=RegisterReport)
 
     @property
     def summary(self) -> str:
         mode = "apply" if self.applied else "dry-run"
-        return f"[{mode}] space={self.space_id} {self.register.summary}"
+        return f"[{mode}] space={self.space_id} {self.registration.summary}"
 
 
 def bootstrap_from_dir(
@@ -44,17 +46,17 @@ def bootstrap_from_dir(
 ) -> BootstrapReport:
     """通道一：meta 目录 → 003 产品注册（I1）。
 
-    显式 space fail-closed（未绑定/不存在 → UnboundKnowledgeSpace，零写入）；
-    dry-run 默认：产出与 apply 完全一致的预测报告但不落库（I5 一致性）——
-    同一 003 注册逻辑在事务内跑到 flush，dry-run 回滚、apply 提交，预测天然一致。
+    显式 space fail-closed（未绑定/不存在 → UnboundKnowledgeSpace，零写入）。
+
+    **事务归 Session 所有者**：本服务只跑到 flush，**绝不** commit/rollback 它不
+    拥有的 Session（阻断1——否则会连带提交/回滚调用方无关的工作单元，破坏原子性）。
+    调用方（CLI/任务入口）须在 apply 时 ``commit``、dry-run 时 ``rollback``（见 cli.py）。
+    ``apply`` 仅用于登记报告模式；报告在内存生成，与是否提交无关，故 dry-run 预测与
+    apply 结果天然一致（I5）。
     """
     scope = load_scope(session, space_id)  # 016 fail-closed：任何写入前拒绝
     report = register_products(session, root, scope=scope, commit=False)
-    if apply:
-        session.commit()
-    else:
-        session.rollback()
-    return BootstrapReport(space_id=space_id, applied=apply, register=report)
+    return BootstrapReport(space_id=space_id, applied=apply, registration=report)
 
 
 def import_records(

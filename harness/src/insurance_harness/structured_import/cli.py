@@ -41,11 +41,17 @@ def _resolve_db_url(arg: str | None) -> str:
 
 
 def _migrate(db_url: str) -> None:
+    """对齐 product/cli._migrate：显式**绝对** script_location，避免 Alembic 把相对
+    ``migrations`` 解析到 CWD——从仓库根运行时找不到 env.py（阻断2）。db_url 做 ``%``
+    转义（ConfigParser 插值）并经 ``-x db_url=`` 传入。"""
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", db_url)
+    harness_root = Path(__file__).resolve().parents[3]
+    cfg = Config(str(harness_root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(harness_root / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
+    cfg.cmd_opts = argparse.Namespace(x=[f"db_url={db_url}"])
     command.upgrade(cfg, "head")
 
 
@@ -61,17 +67,35 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     db_url = _resolve_db_url(args.db_url)
     _migrate(db_url)
-    session_factory = make_session_factory(make_engine(db_url))
-    with session_factory() as session:
-        try:
-            report = bootstrap_from_dir(
-                session, args.root, space_id=args.space_id, apply=args.apply
-            )
-        except (UnboundKnowledgeSpace, ScopeViolation):
-            # fail-closed：不泄露 space 存在性/绑定细节（016 语义）
-            print("[fail-closed] KnowledgeSpace 校验未通过，未执行任何写入")
-            return 1
+    engine = make_engine(db_url)
+    try:
+        session_factory = make_session_factory(engine)
+        with session_factory() as session:
+            try:
+                report = bootstrap_from_dir(
+                    session, args.root, space_id=args.space_id, apply=args.apply
+                )
+            except (UnboundKnowledgeSpace, ScopeViolation):
+                # fail-closed：不泄露 space 存在性/绑定细节（016 语义）
+                session.rollback()  # 清理本操作半成品，不连带影响外部（此处为独占 Session）
+                print("[fail-closed] KnowledgeSpace 校验未通过，未执行任何写入")
+                return 1
+            # 事务归 CLI（Session 所有者）：apply 提交、dry-run 回滚（阻断1）
+            if args.apply:
+                session.commit()
+            else:
+                session.rollback()
+    finally:
+        engine.dispose()  # 释放连接池（阻断2 附带：CLI 退出前 dispose）
+
     print(report.summary)
+    for line in report.registration.skipped:  # 显式打印跳过原因，不只报计数（T2 诚实）
+        print(f"  skipped: {line}")
+    reg = report.registration
+    if not (reg.created or reg.updated or reg.unchanged):
+        # 空输入/零注册多半是指错目录：非零退出让自动化能发现（T2），不静默 exit 0
+        print("[空] 未发现可注册的产品目录（检查路径/结构）")
+        return 2
     return 0
 
 

@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Final
 
-#: 变换器注册表行为版本（I4 manifest 轴）。
+#: 变换器注册表行为版本（I4 manifest 轴）。**唯一权威来源**——mapping_manifest
+#: 直接读取本常量，调用方不得自由传字符串（阻断5：杜绝伪造 provenance）；
+#: 任何会改变变换器输出的行为变更 SHALL bump 本常量（spec I4 开发者纪律）。
 TRANSFORMER_REGISTRY_VERSION: Final[str] = "transformers@v1"
 
 #: 规范化行为版本（跟踪 goldenset.normalize 的行为；其行为变更须同步 bump）。
@@ -23,6 +26,11 @@ def _identity(value: str) -> str:
 
 
 #: 名称 → 变换器（T4 实现填充日期/金额/枚举归一；映射加载 fail-fast 校验名称）。
-TRANSFORMERS: Final[dict[str, Transformer]] = {
-    "identity": _identity,
-}
+#: 用 MappingProxyType 封装为**不可变映射**：运行时不可增删改，避免注册表被
+#: 就地篡改而 effective_mapping_version 不变（阻断5）。增删变换器须同步 bump
+#: TRANSFORMER_REGISTRY_VERSION（pin 测试锁定注册表形状）。
+TRANSFORMERS: Final[Mapping[str, Transformer]] = MappingProxyType(
+    {
+        "identity": _identity,
+    }
+)

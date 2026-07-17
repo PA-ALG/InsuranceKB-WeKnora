@@ -19,6 +19,25 @@
 5. **transformers 版本纪律**：`TRANSFORMER_REGISTRY_VERSION`/`NORMALIZER_VERSION` 常量即 I4 manifest 轴——行为变更必须 bump 已写入模块 docstring。
 6. **已知边界**：空目录 bootstrap 报 created=0 不报错（summary 可见）；I5 批次/ChangeSet 语义不在本波次（T8/T9，候 021）。
 7. **自测教训**："门禁绿≠自测毕"——gauntlet 为独立步骤，本波次由业务方点名后补跑并抓出第 3 条真伤，此后交付宣告前显式跑完。
+
+### codex PR #14 复审收口（2026-07-17，执行者=Claude 架构会话，worktree `ikb-010`）
+
+codex 对 PR #14 出 **Request changes**（6 阻断 + 3 测试/运营项）。以第一性原理独立复核（不采信 review 自述、亦不自护）：8/9 项**真伤，独立 live 复现后逐条 RED→GREEN 修复**；1 项部分过界，给出反馈。全量 deterministic **1295 passed / 5 deselected**（较基线 1284 净增 11 用例，零破坏）；ruff / mypy 188 files 全绿。
+
+| # | codex 项 | 裁决 | 处置 |
+|---|---|---|---|
+| 阻断1 | 服务 commit/rollback 调用方 Session | **成立** | service 只跑到 flush，绝不 commit/rollback 外部 Session；事务归 CLI（apply 提交/dry-run 回滚）。新增 `test_i5_service_does_not_commit_foreign_transaction` |
+| 阻断2 | CLI 相对 `script_location`，仓库根启动崩 | **成立**（`alembic.ini:4` 相对；product/cli 已用绝对） | `_migrate` 对齐 product/cli：绝对 script_location + `%` 转义 + `-x db_url` + engine.dispose。新增任意 CWD 用例 |
+| 阻断3 | dry-run 把新版本/文档/别名报成 unchanged | **成立**（复现：报 unchanged 但建了 2 版本） | `_register_one` 以**整体聚合副作用**分类：版本/文档/别名任一新增即 updated。新增 `test_i5_new_version_reported_updated_not_unchanged` |
+| 阻断4 | 草案对同名同分静默任选 field_id | **成立**（复现：健康告知静默选 health_disclosure） | 同分 ≥2 field_id 落 `ambiguities` 不产规则 + 可选 `line_key` 限定线消解跨线假歧义 + 删假"值类型加分"、诚实收窄为字段名启发式 |
+| 阻断5 | effective_mapping_version 未绑真实行为 | **部分成立** | 修真实洞：`mapping_manifest` 不再收调用方版本字符串，改读权威模块常量 + `SchemaRegistry.version`；`TRANSFORMERS` 改 MappingProxyType 不可变 + 形状 pin 测试。**过界反馈**：spec I4 是"行为变更 SHALL bump 版本"的开发者纪律模型，任何基于版本字符串的 digest 都无法自动侦测"改代码不 bump"（需源码指纹），此非 I4 所要求、属 T5+ 消费链闭合评估 |
+| 阻断6 | 配置未真 fail-fast / 缺 record schema | **成立** | SourceEntry `extra="forbid"` + 身份字段构造期 strip 归一（比较点二次规范化）+ 补必填 `record_schema_ref`（I3 明列）；MappingRule `extra="forbid"`（typo 不再静默回落 identity）；顶层 YAML 严格键 |
+| 测试1 | `assert ... or True` 恒真空断言 | **成立** | 去 `or True`，改为 missing/unbound 两路径**同形常量响应且不回显被查询标识**的防枚举断言 |
+| 测试2 | 空输入/全 skipped exit 0 | **采纳（收敛式）** | CLI 打印 skipped 原因（诚实）；空输入/零注册 → 非零退出码 2（指错目录可被自动化发现）；部分成功仍 exit 0 但 skip 已披露 |
+| 测试3 | `BootstrapReport.register` 遮蔽 BaseModel | **成立**（复现 UserWarning） | 字段改名 `registration`，warning 消除 |
+
+**跨 scope 说明**：阻断3 落在 003 的 `product/register.py`（既有共享助手），非 010 新增；因通道一 bootstrap 直接复用它并宣称 dry-run/apply 一致，故在本 PR 内一并修其报告诚实性（不重开 003），已复跑 003 既有用例零破坏。
+
 - [ ] T5 迁移 0007（**基于 021 后 main**）：structured_source_records（id PK、无批次外键、UPDATE+DELETE 双方言触发器拒绝）+ **structured_import_batch_records 关联表（append-only，双方言拒 UPDATE/DELETE）** + claim_evidence 三值 source_kind（nullable→回填→收紧）+ **ChangeSet 增列、CHECK（structured_import ⇒ 三字段非空）与两条精确 predicate 的 partial unique index** + **read_model_version CHECK (0,1,2)** + 有条件 downgrade（I4/I9）
 - [ ] T6 领域模型：ProposedEvidence kind 分支 + 既有 weknora/legacy 行为不变回归；merge 接线（持久化/去重键含 structured 身份+mapping_version/space 一致性 fail-closed）（I4）
 - [ ] T7 发布/冻结 v2：pages structured 验证（canonical hash 重算；篡改/缺失拒发；legacy 不可发布）+ FrozenEvidence v2 判别联合 + Reader 严格读 v1/v2（无 extra=ignore）+ **v2 writer rollout gate** + 回滚仅指针 + 冻结后源表不可访问仍可读（I4）
