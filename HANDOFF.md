@@ -186,6 +186,7 @@
 18. **saga 的锁、回读与恢复身份必须组合验收**：用两个 service 实例证明 `(Engine, space_id)` 共享锁；WeKnora 写成功后必须 GET 回读 `managed_by/space_id/snapshot_id`；recovery 与在线发布共锁，reconcile child 不得形成 job-of-job。
 19. **Alembic 多版本降级要做链级预检**：任何 `head → old` 路径在首个 DDL 前完成下游兼容性检查，并验证拒绝后 schema、数据和 `alembic_version` 全部不变；测试动态解析 head，禁止写死 revision。
 20. **新安全主链上线必须封死旧公开旁路**：package import、`__all__`、CLI/API 与生产调用点均须枚举；只为历史回归保留的实现移入 `tests/support`，生产代码不得继续暴露 caller-session 式 publish/rollback。
+21. **非 root runner 的“匿名卷”也必须实测可写**：R5.1 静态测试曾只证明没有 bind mount，却漏掉 `volume-nocopy` 会把 `_work` 挂成 `0:0 755`；runner 能注册、能接单，但在任何 step 前失败。修复必须同时保留非 root、匿名卷和零宿主挂载：镜像预建/chown `_work`，挂载允许 Docker copy-up ownership，并用真实 job 验收。外部 runner 包下载保留 checksum 终验，同时用有限 retry 抗 HTTP/2 瞬断。
 
 ## 六、工作方式约定（业务方明确要求）
 

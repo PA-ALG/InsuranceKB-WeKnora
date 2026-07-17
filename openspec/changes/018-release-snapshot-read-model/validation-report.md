@@ -32,6 +32,8 @@
 
 最终五节点第一次执行为 2 pass / 3 fail，三项失败都来自同一个真实 API 合同：WeKnora 创建 Wiki 页时把空 `in_links/out_links` 返回为 `null`，而 Harness 模型要求 list。先新增 `test_s2_4_wiki_response_normalizes_null_link_lists` 并得到精确 RED，再仅将这两个字段的 `null` 规范为 `[]`；非空值与错误类型仍由 Pydantic 校验。修复提交 `44d5d7df` 后，完整 deterministic、PostgreSQL、VLM 与五节点全部复跑。
 
+正式 GitHub live 首次 dispatch 的 preflight/postflight 均通过，但 self-hosted job 在 step 0 失败。最小实机复现证明匿名 `_work` volume 因 `volume-nocopy` 为 `0:0 755`，uid 10001 runner 无写权限。R5.1 RED 锁定“镜像预建/chown `_work` + 匿名 volume copy-up”，实现后 runner focused 17 passed；同时为官方 runner 包下载增加有限 retry，checksum 终验保持不变。收尾 PR 只有在修复后 exact-SHA workflow 真正执行五个节点并完成 cleanup 才允许合入。
+
 ## 4. 最终软件与本机证据
 
 ```text

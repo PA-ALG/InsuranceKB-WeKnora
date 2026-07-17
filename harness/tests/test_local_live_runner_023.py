@@ -125,6 +125,7 @@ def test_r5_1_runner_image_is_non_root_ephemeral_and_one_job() -> None:
         in dockerfile
     )
     assert "USER runner" in dockerfile
+    assert "mkdir -p /home/runner/actions-runner/_work" in dockerfile
     assert "sha256sum -c" in dockerfile
     assert (
         "ARG RUNNER_RELEASE_BASE=https://github.com/actions/runner/releases/download"
@@ -132,6 +133,7 @@ def test_r5_1_runner_image_is_non_root_ephemeral_and_one_job() -> None:
     )
     assert "ARG RUNNER_RELEASE_PROTO=https" in dockerfile
     assert '--proto "=${RUNNER_RELEASE_PROTO}"' in dockerfile
+    assert "--retry 5 --retry-all-errors --retry-delay 2" in dockerfile
     assert "ARG RUNNER_DEBIAN_MIRROR=http://deb.debian.org/debian" in dockerfile
     assert (
         "ARG RUNNER_DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security"
@@ -540,10 +542,7 @@ def test_r5_1_concrete_backend_keeps_secrets_out_of_argv_and_host_mounts(
         for index, argument in enumerate(create_arguments[:-1])
         if argument == "--mount"
     ]
-    assert mount_specs == [
-        "type=volume,volume-nocopy,"
-        "destination=/home/runner/actions-runner/_work"
-    ]
+    assert mount_specs == ["type=volume,destination=/home/runner/actions-runner/_work"]
     assert all("type=bind" not in mount for mount in mount_specs)
     assert any(
         arguments[:4]
