@@ -1,51 +1,69 @@
-# 008 验收报告——T1~T5/T7 波次（2026-07-16）
+# 008 验收报告——T1~T5/T7 波次（2026-07-17，PR#15 codex 评审返工后重开）
 
 > 范围声明：本波次交付 W1/W2/W3/W5/W6/W7.3；**W4（发布与回滚页，T6）按 spec 候 PR #9（018）合入后交付**，届时补充本报告 W4 部分。零模型调用。
+> 版本说明：2026-07-16 首版报告在 PR#15 codex 评审（7 项阻断全部核实属实）后**整体作废重写**——首版的"完成"结论建立在部分验证错误语义的测试上（扁平 proposed 种子/串行冒充并发/翻案即时改事实/缺口导出含 present），按"测试与文档同步纠偏"要求，本版全部证据来自返工后的正确语义测试。
 
-## 1. 门禁（fresh，worktree `ikb-008` @ feat/008-review-workbench）
+## 1. 门禁（fresh，worktree `ikb-008` @ feat/008-review-workbench 返工后）
 
 | 项 | 结果 |
 |---|---|
 | ruff | All checks passed |
-| mypy | Success，184 files |
-| deterministic lane | **1301 passed / 5 deselected**（gauntlet 返工后：+8 红队回归钉，既有零破坏） |
-| 008 focused | 28（W 条款）+ 8（红队回归 `test_redteam_008_findings.py`）passed |
+| mypy | Success，**188 files** |
+| deterministic lane | **1318 passed / 6 deselected**（返工净增 17；既有用例除 4 处语义连带更新外零破坏） |
+| PostgreSQL lane | **2 passed**（017 并发 + **008 双会话行锁**）——本机一次性 PG16 容器实跑；CI service lane 待 push 复证 |
+| wheel-smoke | 本地 PASS（uv build → 空 venv 装 wheel → PackageLoader/HTMX 静态/GET /login）；CI job `wheel-smoke` 已挂，待 push 复证 |
+| 008 focused | **52 passed / 1 deselected(PG)**：`test_review_workbench_008.py` 40 + `test_redteam_008_findings.py` 9 + `test_workbench_concurrency_008.py` 3（另 1 条 PG lane 本机实跑 passed） |
 
-## 2. 条款 → 证据（测试名）
+连带更新声明（非 008 文件域）：`knowledge/merge.py`（两阶段翻案/行锁并发/gate 结构化决定）、`knowledge/review.py`（trigger 计数）、`knowledge/projection.py`（**新**，只读投影）、`knowledge/__init__.py`（导出）、007 spec K3.5 对齐注记、`test_knowledge_merge/review`、`test_scope_knowledge_016`（`overturn_review`→`request_review_overturn`）、`test_ci_lanes_022`（PG lane 节点集+1）、`config.py`（+3 工作台设置）、`pyproject.toml`（+uvicorn）、CI（+wheel-smoke job）。**与 PR #9（018）的重叠面 = knowledge/merge.py，后合者需 rebase 对账。**
+
+## 2. 条款 → 证据（测试名；主正向用例全部经真实 MergeEngine 造数）
 
 | 条款 | 证据 |
 |---|---|
 | W5.2 鉴权 | `test_w5_2_no_token_401` / `_unknown_token_401` / `_no_tokens_configured_denies_all_fail_closed`（零配置=拒绝一切） |
-| W6.1 Space fail-closed | `test_w6_1_token_cannot_cross_space_403_zero_leak`（403 常量体，不回显目标 space）/ `_allowed_space_ok` / `_unbound_space_fail_closed_403`（016 语义）/ CLI 级同套 |
-| W6.2 跨空间不可见 | `test_w6_2_cross_space_same_business_key_invisible` + **gauntlet 补钉** `test_w6_2_cross_space_object_id_probe_404_not_leak`（双空间 token 用 A 对象 id 走 B 路径 → 404） |
-| W6.3 审计归属 | `test_w6_3_audit_actor_is_token_principal_not_client_field`——路由签名不收 operator（结构性不可伪造），塞 mallory 落库仍 alice |
-| W1.1 队列 | `test_w1_1_queue_query_filters_sorts_paginates`（risk 序/筛选/分页 total）+ `_queue_page_renders_items_with_badges` |
-| W1.3/W1.4 动作 | `test_w1_3_approve_publishes_and_resolves`（**真实 publish_claim**，published 恰 1）/ `_reject_and_defer`（defer 保持 open 零 resolution）/ `test_w1_4_same_action_resubmit_idempotent`（发布数不变）/ `_conflicting_action_on_resolved_409` / `test_w1_3_batch_approve_excludes_high`（排除项显式点名） |
-| W2.1/W2.2 | `test_w2_1_changes_page_lists_sets_with_counts` / `test_w2_2_detail_shows_conflict_both_sides_and_basis`（双方值并排 + decision_basis + action 分色） |
-| W2.3 翻案 | `test_w2_3_overturn_creates_new_changeset_history_intact`：理由必填（缺→422）；新 manual_edit ChangeSet 恰 1；原 ChangeItem 决定不变；被采纳 Claim 转 retracted |
-| W2.4/G8 | `test_w2_4_timeline_human_readable_rows`（ClaimRevision 投影：谁/何时/字段/旧→新/原因） |
-| W3.1~W3.3 | `test_w3_1_matrix_page_renders_state_cells`（五态分色）/ `test_w3_2_cell_drilldown_shows_claim_evidence_history`（值+引文+修订史）/ `test_w3_3_export_csv_and_jsonl`（含 ticket_source 空列——011/015 前不编造来源） |
-| W5.1 只读/零直写 | `test_w5_1_queries_readonly_no_pending_writes`（session 状态断言）+ `test_w5_1_static_no_direct_sql_writes_in_workbench`（源级扫描） |
-| W7.3 无绕过 | `test_w7_3_route_allowlist_no_bypass_endpoints`（路由表**全等**断言 + publish/force/rollback/release 关键词禁令）；gate 类型工单展示见 `test_w1_1_..._badges` |
+| W5 浏览器闭环 | `test_w5_browser_login_then_full_review_without_bearer`（login→cookie→点击队列→表单 approve **全程无 Authorization 头**、真实发布）/ `_logout_invalidates_browser_session` / `test_w5_htmx_vendored_and_loaded`（本地 vendor + 页面加载）/ `test_control_forged_session_cookie_rejected`（伪造签名→401） |
+| W6.1 Space fail-closed | `test_w6_1_token_cannot_cross_space_403_zero_leak` / `_allowed_space_ok` / `_unbound_space_fail_closed_403`（016 语义）/ `test_w6_browser_cookie_cannot_cross_space`（cookie 通道同语义） |
+| W6 CSRF | `test_w6_browser_session_csrf_required_on_writes`（cookie 写请求缺 CSRF→403 且零写；Bearer 豁免） |
+| W6.2 跨空间不可见 | `test_w6_2_cross_space_same_business_key_invisible` + `test_w6_2_cross_space_object_id_probe_404_not_leak` |
+| W6.3 审计归属 | `test_w6_3_audit_actor_is_token_principal_not_client_field` |
+| W1.1 队列 | `test_w1_1_queue_shows_real_candidate_value_and_evidence`（**真实合并数据**：候选值/引文/权威级/产品/ChangeSet 链接）/ `_queue_filters_and_pagination` / `test_w1_1_trigger_count_desc_is_default_order`（**触发计数倒序默认**——spec 原文，压过 risk 序） |
+| W1.3/W1.4 动作 | `test_w1_3_approve_publishes_and_resolves` / `test_w1_3_defer_keeps_open_but_audits`（defer 落 actor/时间/理由事件并**推进版本**）/ `test_w1_4_stale_version_rejected_409`（乐观并发：过期版本拒绝+带新版本成功）/ `_same_action_resubmit_idempotent` / `_request_id_replay_does_not_duplicate` / `_conflicting_action_on_resolved_409` / `test_w1_3_batch_approve_versioned_excludes_high`（逐项 `key@version`；高风险与 stale 项显式点名） |
+| W1.4 真并发 | `test_w1_4_live_postgresql_two_sessions_single_apply`（**PostgreSQL 双会话**：s2 阻塞于 FOR UPDATE，s1 提交后 s2 幂等；publish revision 恰 1；第三方异决定→冲突）+ 服务层状态机 3 用例（`test_workbench_concurrency_008.py`） |
+| W2.1/W2.2 | `test_w2_1_changes_page_lists_sets_with_counts` / `test_w2_2_detail_projects_real_merge_shapes`（真实 add/supersede/enrich-append 形态：predicate/提案值非 None、冲突双方值+证据+authority_cmp 依据并排） |
+| W2.3 翻案（两阶段） | `test_w2_3_overturn_two_phase_via_http`：登记后**旧事实仍 published、原 resolution 未变、新 ChangeSet pending、翻案审核项 open(risk=high)**；重复请求幂等；**批准翻案审核项后**事实才变化且原记录仍不可变。服务层双向：`test_k3_5_overturn_creates_new_changeset`（approve→reject 反向）/ `test_k3_5_overturn_reject_of_request_keeps_facts`（拒绝复议→事实不变） |
+| W2.4/G8 | `test_w2_4_timeline_human_readable_rows` |
+| W3.1 | `test_w3_1_matrix_full_schema_baseline_zero_claim_product`（**零 Claim 产品仍有全字段底图**）/ `test_w3_1_matrix_five_states_from_real_merge`（conflict_open>pending_review>三态；unknown=未收录） |
+| W3.2 | `test_w3_2_pending_and_conflict_drill_not_404`（待审/冲突格下钻可用：候选值/双方值）/ `test_w3_2_published_drill_and_unknown_drill`（published 值+引文+修订史；unknown 展示"未收录≠不存在"+schema 来源；非 schema 无数据→404） |
+| W3.3 | `test_w3_3_gap_export_excludes_present_and_labels_sources`（**缺口导出不含 present/absent**；ticket_source=`schema:<版>`/`review:<key>`/`conflict:<id>`） |
+| W5.1 只读/零直写 | `test_w5_1_queries_readonly_no_pending_writes` + `test_w5_1_static_no_direct_sql_writes_in_workbench` |
+| W7 gate 联动 | `test_w7_real_gate_denials_create_quality_gate_reviews`（**真实 QualityGate** missing/stale/threshold 三类拒绝→type=quality_gate+原因/画像/基线标识持久化）/ `test_w7_gate_reason_rendered_in_queue`（队列呈现原因+baseline 标识）/ `test_w7_policy_off_denial_is_not_quality_gate_type`（策略关→low_confidence，不伪造 gate 元数据）/ `test_w7_passing_gate_with_policy_auto_publishes`（达标对照组） |
+| W7.3 无绕过 | `test_w7_3_route_allowlist_no_bypass_endpoints`（含 login/logout/home 的白名单全等 + 关键词禁令） |
 
 ## 3. 21 号 gauntlet 结果
 
-逐行过表：构造期约束在模型（Grant principal 非空白 validator、space_ids 非空）✓；判定单源（幂等判定读同一 DB 行，服务层"已决拒绝"保留为第二层）✓；对称路径——**补钉 1 条**（跨路径对象探测 404，见 W6.2 行）；fail-open 无（四类异常处理器 + 零配置拒绝）✓；无后门（路由白名单全等）✓；文档不过度声称（本报告范围声明与 ticket_source 空列）✓。
+逐行过表：构造期约束在模型 ✓；判定单源（并发判定收口服务层行锁内，路由不再预读）✓；对称路径（跨路径对象探测 404；cookie/Bearer 双通道同 403 语义）✓；fail-open 无（五类异常处理器 + 零配置拒绝 + CSRF fail-closed + 生产工厂缺配置启动即死）✓；无后门（路由白名单全等）✓；文档不过度声称（本报告版本说明 + PG/CI 复证待 push 如实标注）✓。
 
 ## 3.5 Fresh-eyes 红队返工（2026-07-17，独立 agent + live 复现）
 
-逐行过表外补独立红队，抓到 3 项 HTTP 可达缺陷，均已修 + 8 条回归钉（`test_redteam_008_findings.py`）。根因统一：**路由只预期服务层抛 `ValueError`，而真实异常谱系为 `{ScopeViolation(ValueError), MergeError(RuntimeError)}`**——过窄（MergeError 漏网→500）且对 ScopeViolation 过宽（子类被 `except ValueError` 吞成 400 泄露）。
+（保留首轮红队记录：3 项 HTTP 可达缺陷已修 + 回归钉见 `test_redteam_008_findings.py`。根因：路由只预期 `ValueError`，真实谱系 `{ScopeViolation(ValueError), MergeError(RuntimeError)}`。修法：`except ScopeViolation: raise`→403 常量体；`except MergeError`→409 常量体；批量 savepoint 部分成功；overturn 预检 404 对称。）
 
-| # | 级别 | 缺陷 | 修复 |
-|---|---|---|---|
-| **A** | **高** | 同字段二次 approve →未处理 `MergeError`→**500**；批量撞冲突→**整批回滚**丢失已成功项（违 W1） | `except MergeError`→**409 常量体**（不回显内含的他项 claim id）；批量每条 `begin_nested` savepoint→部分成功 |
-| A2 | 中 | 无证据候选 approve →同样 500 | 同 A（MergeError→409） |
-| F1 | 中 | overturn 越权探测返回 `400 "scope mismatch"`（泄露原因，W6.1 违例） | 补 `get_review_item` 预检→404（与 action/读路径对称）+ `except ScopeViolation: raise` |
+## 3.6 PR#15 codex 评审返工（2026-07-17，7 项阻断全部属实、全部闭合）
 
-回归钉断言修复后正确行为：双 approve→409 常量体（`vid` 不泄露）、批量部分成功 published==1、overturn 外键→404 不泄露、以及对照组（畸形 id 无 500 / 空 Bearer 401 / operator 不可伪造 / 字符串 space_ids fail-closed）。**红队一处判断有误**（称 overturn 越权→403），由本地 live 复现纠正为实际 400——"逐条对源验证、送审前 live 复现"当场兑现。
+核实结论与修法逐项见 tasks.md 裁决记录 9；对应反例测试（codex 8 个失败反例的固化）：
+
+| 阻断 | 反例测试（返工后 GREEN） |
+|---|---|
+| 1 数据合同 | `test_w1_1_queue_shows_real_candidate_value_and_evidence` / `test_w2_2_detail_projects_real_merge_shapes` / `test_w3_1_matrix_five_states_from_real_merge` |
+| 2 两阶段翻案 | `test_w2_3_overturn_two_phase_via_http` / `test_k3_5_*` 双向 |
+| 3 并发+defer 审计 | `test_w1_4_stale_version_rejected_409` / `test_w1_3_defer_keeps_open_but_audits` / PG 双会话用例 |
+| 4 浏览器闭环 | `test_w5_browser_login_then_full_review_without_bearer` 等 5 条 |
+| 5 矩阵语义 | `test_w3_1_matrix_full_schema_baseline_zero_claim_product` / `test_w3_2_pending_and_conflict_drill_not_404` / `test_w3_3_gap_export_excludes_present_and_labels_sources` |
+| 6 gate 元数据 | `test_w7_real_gate_denials_create_quality_gate_reviews` 等 4 条 |
+| 7 可启动性 | `scripts/wheel_smoke_workbench.py` 本地 PASS + CI `wheel-smoke` job（push 后复证） |
 
 ## 4. 残留与交接
 
 - T6/W4：候 PR #9——SnapshotReader 读取 + 018 可恢复回滚全链，届时按 spec Scenario 补两用例并更新路由白名单断言；
-- 生产部署：`workbench_tokens_json` 配置见 config.py 注释与 14 号 Runbook §工作台；wheel 打包需确认 templates 随包（hatchling 默认含包内数据，CI 装包冒烟可在 T6 波次一并验证）；
-- HTMX 静态资源：当前模板为服务端渲染骨架（属性已挂），htmx.js 本地引入随 T6 波次完成（不引 CDN——自包含纪律）。
+- **与 PR #9 的合并次序**：本返工触及 `knowledge/merge.py`（服务层演进），018 亦在 knowledge/ 文件域——后合入者做一次 rebase 对账（预计冲突面小：018 主要新增 snapshots/reader）；
+- `resolution.events` 是免迁移的审计兼容方案（满足 W1 审计条款），**不是防篡改账本**——若合规要求不可变审计流水，按注册表占 0010+ 迁移号建 `review_action_events` 表，不在本 PR 私自抢号；
+- CI 复证：PostgreSQL lane（新增节点）与 wheel-smoke job 的绿色以 push 后 CI 为准（CI 绿才算绿）；本机等价实跑（一次性 PG16 容器 / 空 venv wheel）已通过。

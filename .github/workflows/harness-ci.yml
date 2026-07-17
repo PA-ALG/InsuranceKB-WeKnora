@@ -80,3 +80,24 @@ jobs:
           name: harness-postgres-junit
           path: harness/reports/postgres.xml
           if-no-files-found: ignore
+
+  # 008 W5（PR#15 阻断 7）：wheel 装进空 venv 后工作台必须可启动——
+  # 证明 templates 与 vendored HTMX 静态资源真随包分发，PackageLoader 可用。
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harness
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+          version: "0.9.26"
+      - name: Build wheel
+        run: uv build
+      - name: Install wheel into clean venv and smoke the workbench
+        run: |
+          uv venv /tmp/wheel-venv
+          uv pip install --python /tmp/wheel-venv/bin/python dist/*.whl
+          /tmp/wheel-venv/bin/python scripts/wheel_smoke_workbench.py

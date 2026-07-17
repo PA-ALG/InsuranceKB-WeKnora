@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}审核工作台{% endblock %}</title>
+  <script src="/static/vendor/htmx.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #bbb; padding: .35rem .5rem; vertical-align: top; font-size: .9rem; }
+    .badge { padding: .05rem .35rem; border-radius: .5rem; background: #eee; font-size: .8rem; }
+    .type-quality_gate { background: #ffe4b3; }
+    .type-overturn { background: #e2d5ff; }
+    .risk-high { background: #ffc9c9; }
+    .state-present { background: #d3f9d8; }
+    .state-absent_explicitly { background: #e9ecef; }
+    .state-unknown { background: #fff3bf; }
+    .state-pending_review { background: #d0ebff; }
+    .state-conflict_open { background: #ffc9c9; }
+    .cell { display: inline-block; margin: .1rem; padding: .1rem .3rem; border-radius: .3rem; text-decoration: none; color: inherit; }
+    .evidence { color: #555; font-size: .82rem; }
+    .notice { color: #c92a2a; }
+    nav a { margin-right: .8rem; }
+    form.inline { display: inline; }
+  </style>
+</head>
+<body>
+{% block nav %}{% if space_id is defined %}
+<nav>
+  <a href="/">首页</a>
+  <a href="/spaces/{{ space_id }}/queue">审核队列</a>
+  <a href="/spaces/{{ space_id }}/changes">冲突与变更</a>
+  <a href="/spaces/{{ space_id }}/timeline">变更时间线</a>
+  <a href="/spaces/{{ space_id }}/matrix">完整度矩阵</a>
+</nav>
+{% endif %}{% endblock %}
+{% block body %}{% endblock %}
+</body>
+</html>

@@ -79,6 +79,24 @@ def kb_session(tmp_path: Path) -> "Iterator[Session]":
     engine.dispose()
 
 
+# --- change 008：审核工作台夹具（文件型 sqlite，app 与测试共享同一 engine） ---
+
+
+@pytest.fixture
+def wb_env(tmp_path: Path) -> "Iterator[tuple[Callable[[], Session], Session]]":
+    from insurance_harness.db import models as _db_models  # noqa: F401
+    from insurance_harness.db.base import Base, make_engine, make_session_factory
+    from insurance_harness.knowledge import tables as _kb_tables  # noqa: F401
+
+    engine = make_engine(f"sqlite:///{tmp_path}/wb.db")
+    Base.metadata.create_all(engine)
+    factory = make_session_factory(engine)
+    session = factory()
+    yield factory, session
+    session.close()
+    engine.dispose()
+
+
 # --- change 016：显式 KnowledgeSpace / KnowledgeScope 测试夹具 ---
 
 

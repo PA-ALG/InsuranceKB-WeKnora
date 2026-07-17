@@ -1,23 +1,41 @@
-<!doctype html>
-<html lang="zh">
-<head><meta charset="utf-8"><title>ChangeSet 明细</title></head>
-<body>
+{% extends "base.html.j2" %}
+{% block title %}ChangeSet 明细{% endblock %}
+{% block body %}
 <h1>ChangeSet {{ detail.change_set_id }}</h1>
 <p>来源 {{ detail.source_kind }} · 状态 {{ detail.status }} · 发起 {{ detail.created_by }}</p>
-<table border="1">
-  <thead><tr><th>动作</th><th>字段</th><th>提案值</th><th>决定</th><th>冲突对照</th></tr></thead>
+<table>
+  <thead><tr><th>动作</th><th>字段</th><th>提案值</th><th>证据</th><th>决定</th><th>冲突对照</th><th>审核/翻案</th></tr></thead>
   <tbody>
   {% for item in detail.items %}
     <tr>
-      <td><span class="badge action-{{ item.action }}">{{ item.action }}</span></td>
+      <td><span class="badge action-{{ item.action }}">{{ item.action }}</span>
+          {% if item.mode %}<span class="evidence">{{ item.mode }}</span>{% endif %}
+          {% if item.overturn_mode %}<span class="evidence">{{ item.overturn_mode }}</span>{% endif %}</td>
       <td>{{ item.predicate or "-" }}</td>
-      <td>{{ item.proposed_value or "-" }}</td>
-      <td>{{ item.decision }}</td>
+      <td>{{ item.proposed_value or "-" }}
+          {% if item.value_state %}<span class="evidence">({{ item.value_state }})</span>{% endif %}</td>
+      <td>
+        {% set cand = item.candidate %}
+        {% for e in (cand.evidence if cand else item.appended_evidence) %}
+          <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }}
+            {% if e.page is not none %}第{{ e.page }}页{% endif %} · {{ e.doc_role }} · 权威{{ e.authority_level }}</div>
+        {% endfor %}
+      </td>
+      <td>{{ item.decision }}
+          {% if item.gate %}<div class="evidence">gate：{{ item.gate.reason }}</div>{% endif %}</td>
       <td>
         {% if item.conflict %}
           <div class="conflict">
-            <div>现值：{{ item.conflict.existing_value }}</div>
-            <div>新值：{{ item.conflict.proposed_value }}</div>
+            <div>现值：{{ item.conflict.existing.value if item.conflict.existing else "∅" }}
+              {% if item.conflict.existing %}{% for e in item.conflict.existing.evidence %}
+                <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }} · 权威{{ e.authority_level }}</div>
+              {% endfor %}{% endif %}
+            </div>
+            <div>新值：{{ item.conflict.proposed.value if item.conflict.proposed else "∅" }}
+              {% if item.conflict.proposed %}{% for e in item.conflict.proposed.evidence %}
+                <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }} · 权威{{ e.authority_level }}</div>
+              {% endfor %}{% endif %}
+            </div>
             <div>裁决依据：
               {% for k, v in item.conflict.decision_basis.items() %}
                 <code>{{ k }}={{ v }}</code>
@@ -27,9 +45,24 @@
           </div>
         {% else %}-{% endif %}
       </td>
+      <td>
+        {% set ref = detail.reviews.get(item.change_item_id) %}
+        {% if ref %}
+          <span class="badge">{{ ref.status }}{% if ref.resolution_action %}·{{ ref.resolution_action }}{% endif %}</span>
+          {% if ref.status == "resolved" and ref.resolution_action in ("approve", "reject") %}
+            <form method="post" class="inline"
+                  action="/spaces/{{ space_id }}/queue/{{ ref.review_key }}/overturn">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="new_action"
+                     value="{{ 'reject' if ref.resolution_action == 'approve' else 'approve' }}">
+              <input type="text" name="reason" placeholder="翻案理由（必填）" size="10" required>
+              <button>翻案（走审核）</button>
+            </form>
+          {% endif %}
+        {% else %}-{% endif %}
+      </td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
-</body>
-</html>
+{% endblock %}

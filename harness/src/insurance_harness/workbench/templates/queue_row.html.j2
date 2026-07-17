@@ -1,0 +1,90 @@
+<tr id="row-{{ item.review_key }}">
+  <td>
+    {% if item.risk_level != "high" and item.status == "open" and "approve" in item.allowed_actions %}
+      <input type="checkbox" name="keys" form="batch-form"
+             value="{{ item.review_key }}@{{ item.version_token }}">
+    {% elif item.risk_level == "high" %}
+      <input type="checkbox" disabled title="高风险须单条人审，不可批量">
+    {% endif %}
+  </td>
+  <td>{{ item.review_key }}<br>
+      <span class="evidence">触发 {{ item.trigger_count }} 次
+      {% if item.change_set_id %}· <a href="/spaces/{{ space_id }}/changes/{{ item.change_set_id }}">ChangeSet</a>{% endif %}
+      </span>
+      {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
+  </td>
+  <td><span class="badge type-{{ item.type }}">{{ item.type }}</span>
+      {% if item.gate %}
+        <div class="evidence">gate：{{ item.gate.reason }}
+        {% if item.gate.profile_version %}<br>画像 v{{ item.gate.profile_version }}
+          {{ (item.gate.profile_content_sha256 or "")[:12] }}{% endif %}
+        {% if item.gate.baseline_id %}<br>基线 {{ item.gate.baseline_id }}
+          {{ (item.gate.approval_sha256 or "")[:12] }}{% endif %}
+        </div>
+      {% endif %}
+      {% if item.type == "overturn" %}
+        <div class="evidence">复议 {{ item.overturn_of_review }}：
+          {{ item.prev_action if item.prev_action is defined else "" }}→{{ item.requested_action }}
+          （{{ item.overturn_reason }}）</div>
+      {% endif %}
+  </td>
+  <td><span class="badge risk-{{ item.risk_level }}">{{ item.risk_level }}</span></td>
+  <td>{{ item.product_code or "-" }} {{ item.product_name or "" }}
+      <span class="evidence">{{ item.version_label or "" }}</span></td>
+  <td>{{ item.predicate or "-" }}
+    {% if item.change_item %}
+      <div>候选值：<strong>{{ item.change_item.proposed_value or "∅" }}</strong>
+           <span class="evidence">({{ item.change_item.value_state or "-" }} /
+             {{ item.change_item.action }}{% if item.change_item.mode %}·{{ item.change_item.mode }}{% endif %})</span></div>
+      {% if item.change_item.existing and item.change_item.existing.value is not none %}
+        <div>现值：{{ item.change_item.existing.value }}</div>
+      {% endif %}
+    {% endif %}
+  </td>
+  <td>
+    {% if item.change_item %}
+      {% set cand = item.change_item.candidate %}
+      {% for e in (cand.evidence if cand else item.change_item.appended_evidence) %}
+        <div class="evidence">「{{ e.quote }}」{{ e.knowledge_id }}
+          {% if e.page is not none %}第{{ e.page }}页{% endif %}
+          · {{ e.doc_role }} · 权威{{ e.authority_level }}</div>
+      {% endfor %}
+      {% if item.change_item.conflict %}
+        <div class="evidence">冲突裁决依据：
+          {% for k, v in item.change_item.conflict.decision_basis.items() %}<code>{{ k }}={{ v }}</code> {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+    {% for h in item.history %}
+      <div class="evidence">{{ h.at }} {{ h.actor }} {{ h.action }}{% if h.reason %}：{{ h.reason }}{% endif %}</div>
+    {% endfor %}
+  </td>
+  <td>
+    {% if item.status == "open" %}
+      <form method="post" class="inline"
+            hx-post="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action"
+            hx-target="#row-{{ item.review_key }}" hx-swap="outerHTML"
+            action="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="expected_version" value="{{ item.version_token }}">
+        <input type="hidden" name="request_id" value="{{ request_id }}-{{ item.review_key }}">
+        <input type="text" name="reason" placeholder="理由（可选）" size="12">
+        {% for act in item.allowed_actions %}
+          <button name="action" value="{{ act }}">{{ act }}</button>
+        {% endfor %}
+      </form>
+    {% else %}
+      <span class="badge">{{ item.status }}{% if item.resolution_action %}·{{ item.resolution_action }}{% endif %}</span>
+      {% if item.status == "resolved" and item.resolution_action in ("approve", "reject") %}
+        <form method="post" class="inline"
+              action="/spaces/{{ space_id }}/queue/{{ item.review_key }}/overturn">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="new_action"
+                 value="{{ 'reject' if item.resolution_action == 'approve' else 'approve' }}">
+          <input type="text" name="reason" placeholder="翻案理由（必填）" size="12" required>
+          <button>发起翻案（走审核）</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </td>
+</tr>

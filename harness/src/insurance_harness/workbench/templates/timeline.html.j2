@@ -1,9 +1,8 @@
-<!doctype html>
-<html lang="zh">
-<head><meta charset="utf-8"><title>变更时间线</title></head>
-<body>
+{% extends "base.html.j2" %}
+{% block title %}变更时间线{% endblock %}
+{% block body %}
 <h1>变更时间线（G8）</h1>
-<table border="1">
+<table>
   <thead><tr><th>何时</th><th>谁</th><th>产品</th><th>字段</th><th>旧值 → 新值</th><th>原因</th></tr></thead>
   <tbody>
   {% for row in rows %}
@@ -18,5 +17,4 @@
   {% endfor %}
   </tbody>
 </table>
-</body>
-</html>
+{% endblock %}

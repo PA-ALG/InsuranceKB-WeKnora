@@ -20,6 +20,8 @@ dependencies = [
     "fastapi>=0.115",
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
+    # 运行时服务器：Runbook §3.4 uvicorn --factory 起服（干净环境可启动，PR#15 阻断7）
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]

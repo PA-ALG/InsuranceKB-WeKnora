@@ -21,9 +21,9 @@ from insurance_harness.knowledge import (
     ensure_review_item,
     get_review_item,
     import_pred_records,
-    overturn_review,
     publish_claim,
     reject_change_item,
+    request_review_overturn,
     resolve_review,
     retract_source,
 )
@@ -307,7 +307,7 @@ def test_s2_3_overturn_review_hides_cross_scope_item(session: Session) -> None:
     claim_b = session.execute(select(Claim)).scalar_one()
 
     _assert_generic_scope_error(
-        lambda: overturn_review(
+        lambda: request_review_overturn(
             session,
             scope_a,
             review_key_b,
@@ -755,7 +755,7 @@ def test_s2_2_overturn_review_revalidates_entire_subject_before_mutation(
     revision_before = claim_a.current_revision
 
     _assert_generic_scope_error(
-        lambda: overturn_review(
+        lambda: request_review_overturn(
             session,
             scope_a,
             review_key_a,
@@ -877,7 +877,7 @@ def test_s2_2_overturn_review_rejects_same_scope_mismatched_subject_aggregate(
     revision_before = claim.current_revision
 
     _assert_generic_scope_error(
-        lambda: overturn_review(
+        lambda: request_review_overturn(
             session,
             scope,
             review.review_key,

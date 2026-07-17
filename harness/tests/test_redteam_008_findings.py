@@ -6,141 +6,30 @@ MergeError(RuntimeError)}——过窄(MergeError→500)且对 ScopeViolation 过
 (子类被 except ValueError 吞成 400 泄露)。本文件把当时的"缺陷复现"转为
 "修复后正确行为"的回归断言。测试名引用条款号。
 
-修复见 app.py:review_action / review_overturn / batch_approve。
-使用与 test_review_workbench_008.py 相同的文件型 sqlite 夹具与种子风格。
+种子（PR#15 返工）：并行摄入竞态经 ``seed_parallel_open_review``——真实嵌套
+``proposed={"claim": …}`` 形态（顺序 MergeEngine 无法造出同字段双 open add，
+该形态正是两条并行会话互不可见时的真实落库产物）。
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from pathlib import Path
+from collections.abc import Callable
 
-import pytest
-from fastapi.testclient import TestClient
+from sqlalchemy import func as _func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from insurance_harness.db.base import Base, make_engine, make_session_factory
-from insurance_harness.db.models import KnowledgeSpace
-from insurance_harness.db.scope import bind_space
-
-
-@pytest.fixture
-def wb_env(tmp_path: Path) -> Iterator[tuple[Callable[[], Session], Session]]:
-    from insurance_harness.db import models as _db_models  # noqa: F401
-    from insurance_harness.knowledge import tables as _kb_tables  # noqa: F401
-
-    engine = make_engine(f"sqlite:///{tmp_path}/wb.db")
-    Base.metadata.create_all(engine)
-    factory = make_session_factory(engine)
-    session = factory()
-    yield factory, session
-    session.close()
-    engine.dispose()
-
-
-def _bound_space(session: Session, name: str, sfx: str) -> str:
-    row = KnowledgeSpace(name=name, binding_status="unbound")
-    session.add(row)
-    session.flush()
-    bind_space(
-        session, row.id,
-        tenant_id=f"tenant-{sfx}", raw_kb_id=f"raw-{sfx}", wiki_kb_id=f"wiki-{sfx}",
-    )
-    session.commit()
-    return str(row.id)
-
-
-def _client(
-    factory: Callable[[], Session],
-    space_a: str,
-    *,
-    extra: dict[str, object] | None = None,
-    raise_server_exceptions: bool = True,
-) -> TestClient:
-    from insurance_harness.workbench.app import create_app
-
-    tokens: dict[str, object] = {
-        "tok-alice": {"principal": "alice", "space_ids": [space_a]},
-    }
-    if extra:
-        tokens.update(extra)
-    return TestClient(
-        create_app(session_factory=factory, tokens_config=tokens),
-        raise_server_exceptions=raise_server_exceptions,
-    )
+from insurance_harness.knowledge.tables import Claim
+from tests.wbhelpers import (
+    bound_space,
+    make_client,
+    seed_parallel_open_review,
+    seed_wb_product,
+)
 
 
 def _auth() -> dict[str, str]:
     return {"Authorization": "Bearer tok-alice"}
-
-
-def _seed_product(session: Session, space: str, code: str, name: str) -> str:
-    from insurance_harness.db.models import InsuranceProduct, ProductVersion
-
-    p = InsuranceProduct(
-        space_id=space, product_code=code, canonical_name=name,
-        category="t", status="在售",
-    )
-    session.add(p)
-    session.flush()
-    v = ProductVersion(space_id=space, product_id=p.id, version_label="V1")
-    session.add(v)
-    session.flush()
-    return str(v.id)
-
-
-def _seed_review(
-    session: Session, space: str, version_id: str, *,
-    key: str, risk: str = "low", type_: str = "low_confidence",
-    predicate: str = "waiting_period", status: str = "open",
-    applyable: bool = False, with_evidence: bool = True,
-) -> str:
-    from insurance_harness.knowledge.tables import (
-        ChangeItem,
-        ChangeSet,
-        Claim,
-        ClaimEvidence,
-        ReviewItem,
-    )
-
-    claim_id: str | None = None
-    if applyable:
-        draft = Claim(
-            space_id=space, product_version_id=version_id, predicate=predicate,
-            value_state="present", value={"text": "90天"}, status="draft",
-        )
-        session.add(draft)
-        session.flush()
-        if with_evidence:
-            session.add(
-                ClaimEvidence(
-                    claim_id=draft.id, knowledge_id="doc-1", quote="等待期为90天",
-                    page=1, authority_level=2, doc_role="clause",
-                )
-            )
-            session.flush()
-        claim_id = str(draft.id)
-    cs = ChangeSet(space_id=space, source_kind="document", status="pending", created_by="t")
-    session.add(cs)
-    session.flush()
-    item = ChangeItem(
-        change_set_id=cs.id, action="add", claim_id=claim_id,
-        proposed={"predicate": predicate, "product_version_id": version_id},
-        decision="needs_review",
-    )
-    session.add(item)
-    session.flush()
-    r = ReviewItem(
-        space_id=space, review_key=key, type=type_,
-        subject={
-            "change_item_id": item.id, "predicate": predicate,
-            "new_claim_id": claim_id,
-        },
-        allowed_actions=["approve", "reject", "defer"], status=status, risk_level=risk,
-    )
-    session.add(r)
-    session.commit()
-    return key
 
 
 # ---------------------------------------------------------------------------
@@ -155,19 +44,21 @@ def test_w1_double_approve_same_field_clean_409_not_500(
     from insurance_harness.workbench.app import _CONFLICT_BODY
 
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="dup1", predicate="waiting_period", applyable=True)
-    _seed_review(session, space, vid, key="dup2", predicate="waiting_period", applyable=True)
-    client = _client(factory, space, raise_server_exceptions=False)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    seed_parallel_open_review(session, space, vid, "waiting_period", key="dup1")
+    seed_parallel_open_review(session, space, vid, "waiting_period", key="dup2")
+    client = make_client(factory, space, raise_server_exceptions=False)
 
     r1 = client.post(
-        f"/spaces/{space}/queue/dup1/action", headers=_auth(), data={"action": "approve"}
+        f"/spaces/{space}/queue/dup1/action", headers=_auth(),
+        data={"action": "approve"}, follow_redirects=False,
     )
-    assert r1.status_code == 200, "第一个 approve 正常发布"
+    assert r1.status_code == 303, "第一个 approve 正常发布"
 
     r2 = client.post(
-        f"/spaces/{space}/queue/dup2/action", headers=_auth(), data={"action": "approve"}
+        f"/spaces/{space}/queue/dup2/action", headers=_auth(),
+        data={"action": "approve"},
     )
     assert r2.status_code == 409, f"域冲突应干净拒绝为 409，实得 {r2.status_code}"
     # 零泄露:常量体,不得回显 MergeError 内含的 version_id / 他项 claim id。
@@ -180,17 +71,12 @@ def test_w1_batch_approve_collision_partial_success_no_full_rollback(
 ) -> None:
     """W1「其余低风险条目正常生效」:批量中一条域冲突只跳过该条,
     先成功的发布不被整批回滚丢弃(savepoint 部分成功)。"""
-    from sqlalchemy import func as _func
-    from sqlalchemy import select as _select
-
-    from insurance_harness.knowledge.tables import Claim
-
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="b1", predicate="waiting_period", applyable=True)
-    _seed_review(session, space, vid, key="b2", predicate="waiting_period", applyable=True)
-    client = _client(factory, space, raise_server_exceptions=False)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    seed_parallel_open_review(session, space, vid, "waiting_period", key="b1")
+    seed_parallel_open_review(session, space, vid, "waiting_period", key="b2")
+    client = make_client(factory, space, raise_server_exceptions=False)
     resp = client.post(
         f"/spaces/{space}/queue/batch-approve",
         headers=_auth(), data={"keys": ["b1", "b2"]},
@@ -198,7 +84,7 @@ def test_w1_batch_approve_collision_partial_success_no_full_rollback(
     assert resp.status_code == 200, f"批量整体应 200(部分成功),实得 {resp.status_code}"
     session.expire_all()
     n_pub = session.execute(
-        _select(_func.count()).select_from(Claim).where(
+        select(_func.count()).select_from(Claim).where(
             Claim.space_id == space, Claim.status == "published"
         )
     ).scalar_one()
@@ -214,24 +100,22 @@ def test_w1_approve_evidence_less_candidate_clean_409_not_500(
     from insurance_harness.workbench.app import _CONFLICT_BODY
 
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(
-        session, space, vid, key="noev", applyable=True, with_evidence=False,
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    seed_parallel_open_review(
+        session, space, vid, "waiting_period", key="noev", with_evidence=False
     )
-    client = _client(factory, space, raise_server_exceptions=False)
+    client = make_client(factory, space, raise_server_exceptions=False)
     resp = client.post(
-        f"/spaces/{space}/queue/noev/action", headers=_auth(), data={"action": "approve"}
+        f"/spaces/{space}/queue/noev/action", headers=_auth(),
+        data={"action": "approve"},
     )
     assert resp.status_code == 409, f"无证据应干净 409,实得 {resp.status_code}"
     assert resp.text == _CONFLICT_BODY, "409 常量体"
 
 
 # ---------------------------------------------------------------------------
-# F1（W6.1 零泄露）:overturn 是唯一无 get_review_item 预检的写路由,其
-# overturn_review 抛 ScopeViolation(⊂ValueError) 曾被 except ValueError 吞成
-# 400「scope mismatch」(泄露原因 + 状态码与其它路径不一致)。修复后:预检 → 404,
-# 与 action/读路径一致(外空间/不存在的对象一律 404 隐藏存在性)。
+# F1（W6.1 零泄露）:overturn 越权/不存在 → 404 对称（预检），不泄 scope 原因。
 # ---------------------------------------------------------------------------
 
 
@@ -239,9 +123,9 @@ def test_w6_1_overturn_foreign_key_404_not_400_scope_leak(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    space_b = _bound_space(session, "乙", "b")
-    client = _client(
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    client = make_client(
         factory, space_a,
         extra={"tok-both": {"principal": "carol", "space_ids": [space_a, space_b]}},
         raise_server_exceptions=False,
@@ -261,10 +145,11 @@ def test_w6_1_action_foreign_key_404(
 ) -> None:
     """回归护栏:action 写路径外键仍 404(get_review_item 预检)。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    client = _client(factory, space, raise_server_exceptions=False)
+    space = bound_space(session, "a")
+    client = make_client(factory, space, raise_server_exceptions=False)
     resp = client.post(
-        f"/spaces/{space}/queue/nope/action", headers=_auth(), data={"action": "approve"}
+        f"/spaces/{space}/queue/nope/action", headers=_auth(),
+        data={"action": "approve"},
     )
     assert resp.status_code == 404
 
@@ -278,8 +163,8 @@ def test_control_empty_bearer_still_401(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    client = make_client(factory, space)
     for hdr in ("", "Bearer ", "bearer tok-alice", "Basic tok-alice", "tok-alice"):
         resp = client.get(f"/spaces/{space}/queue", headers={"Authorization": hdr})
         assert resp.status_code == 401, f"header={hdr!r} 应 401,实得 {resp.status_code}"
@@ -290,8 +175,8 @@ def test_control_malformed_id_no_500(
 ) -> None:
     """String(36) 主键:畸形 id 不触发 DataError;返回 404 而非 500。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    client = _client(factory, space, raise_server_exceptions=False)
+    space = bound_space(session, "a")
+    client = make_client(factory, space, raise_server_exceptions=False)
     for bad in ("'; DROP TABLE claims;--", "../../etc", "null", "%00", "🙃" * 50):
         resp = client.get(f"/spaces/{space}/changes/{bad}", headers=_auth())
         assert resp.status_code == 404, f"id={bad!r} → {resp.status_code}"
@@ -308,3 +193,14 @@ def test_control_string_space_ids_config_fails_closed() -> None:
     assert "spaceA" not in grants["t"].space_ids, (
         "字符串被逐字符拆分或原样接受 → 可能放行错误 space"
     )
+
+
+def test_control_forged_session_cookie_rejected(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """伪造/篡改会话 cookie(错误签名)→ 401,绝不放行。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    client = make_client(factory, space)
+    client.cookies.set("wb_session", "eyJmYWtlIjogMX0.deadbeef")
+    assert client.get(f"/spaces/{space}/queue").status_code == 401

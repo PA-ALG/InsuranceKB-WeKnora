@@ -1,32 +1,53 @@
-<!doctype html>
-<html lang="zh">
-<head><meta charset="utf-8"><title>审核队列</title></head>
-<body>
+{% extends "base.html.j2" %}
+{% block title %}审核队列{% endblock %}
+{% block body %}
 <h1>审核队列</h1>
-<p>space：{{ space_id }}（共 {{ page.total }} 条待审）</p>
-<table border="1">
+<p>space：{{ space_id }}（共 {{ page.total }} 条 · 状态 {{ page.status }}）</p>
+<form method="get" action="/spaces/{{ space_id }}/queue">
+  状态 <select name="status">
+    {% for s in ("open", "resolved") %}
+      <option value="{{ s }}" {% if page.status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  风险 <select name="risk">
+    <option value="">全部</option>
+    {% for r in ("high", "medium", "low") %}
+      <option value="{{ r }}" {% if page.risk_level == r %}selected{% endif %}>{{ r }}</option>
+    {% endfor %}
+  </select>
+  类型 <select name="type">
+    <option value="">全部</option>
+    {% for t in ("low_confidence", "high_risk_change", "quality_gate", "conflict", "overturn") %}
+      <option value="{{ t }}" {% if page.type_ == t %}selected{% endif %}>{{ t }}</option>
+    {% endfor %}
+  </select>
+  产品 <input type="text" name="product" value="{{ page.product_code or '' }}" size="10">
+  <button>筛选</button>
+</form>
+<form id="batch-form" method="post" action="/spaces/{{ space_id }}/queue/batch-approve">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="request_id" value="{{ request_id }}">
+  <button>批量 approve（勾选项，仅非高风险）</button>
+</form>
+<table>
   <thead>
-    <tr><th>review_key</th><th>类型</th><th>风险</th><th>字段</th><th>动作</th></tr>
+    <tr><th></th><th>review_key</th><th>类型</th><th>风险</th><th>产品</th>
+        <th>字段/候选值</th><th>证据与历史</th><th>动作</th></tr>
   </thead>
   <tbody>
   {% for item in page.items %}
-    <tr id="row-{{ item.review_key }}">
-      <td>{{ item.review_key }}</td>
-      <td><span class="badge type-{{ item.type }}">{{ item.type }}</span></td>
-      <td><span class="badge risk-{{ item.risk_level }}">{{ item.risk_level }}</span></td>
-      <td>{{ item.predicate or "-" }}</td>
-      <td>
-        <form method="post"
-              hx-post="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action"
-              hx-target="#row-{{ item.review_key }}"
-              action="/spaces/{{ space_id }}/queue/{{ item.review_key }}/action">
-          <input type="hidden" name="action" value="approve">
-          <button>approve</button>
-        </form>
-      </td>
-    </tr>
+    {% include "queue_row.html.j2" %}
   {% endfor %}
   </tbody>
 </table>
-</body>
-</html>
+<p>
+  {% set prev_offset = page.offset - page.limit if page.offset - page.limit > 0 else 0 %}
+  {% if page.offset > 0 %}
+    <a href="/spaces/{{ space_id }}/queue?status={{ page.status }}&risk={{ page.risk_level or '' }}&type={{ page.type_ or '' }}&product={{ page.product_code or '' }}&limit={{ page.limit }}&offset={{ prev_offset }}">上一页</a>
+  {% endif %}
+  {% if page.offset + page.limit < page.total %}
+    <a href="/spaces/{{ space_id }}/queue?status={{ page.status }}&risk={{ page.risk_level or '' }}&type={{ page.type_ or '' }}&product={{ page.product_code or '' }}&limit={{ page.limit }}&offset={{ page.offset + page.limit }}">下一页</a>
+  {% endif %}
+  <span class="evidence">显示 {{ page.items | length }} / {{ page.total }} 条（offset {{ page.offset }}）</span>
+</p>
+{% endblock %}

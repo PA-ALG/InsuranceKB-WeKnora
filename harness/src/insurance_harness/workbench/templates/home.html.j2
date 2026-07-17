@@ -1,0 +1,23 @@
+{% extends "base.html.j2" %}
+{% block title %}首页 · 审核工作台{% endblock %}
+{% block nav %}{% endblock %}
+{% block body %}
+<h1>审核工作台</h1>
+<p>操作者：<strong>{{ principal }}</strong>（{{ "浏览器会话" if via == "session" else "Bearer" }}）
+{% if via == "session" %}
+<form class="inline" method="post" action="/logout">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button>退出登录</button>
+</form>
+{% endif %}
+</p>
+<h2>可访问的 Space</h2>
+<ul>
+{% for sid in space_ids %}
+  <li><a href="/spaces/{{ sid }}/queue">{{ sid }}</a>
+      （<a href="/spaces/{{ sid }}/changes">变更</a> ·
+       <a href="/spaces/{{ sid }}/matrix">矩阵</a> ·
+       <a href="/spaces/{{ sid }}/timeline">时间线</a>）</li>
+{% endfor %}
+</ul>
+{% endblock %}

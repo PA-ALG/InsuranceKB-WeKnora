@@ -14,8 +14,8 @@ from insurance_harness.knowledge import (
     ProposedClaim,
     ProposedEvidence,
     apply_conflict_judgements,
-    overturn_review,
     read_conflict_judgements,
+    request_review_overturn,
     resolve_review,
     retract_source,
     write_conflict_judge_queue,
@@ -488,7 +488,8 @@ def test_k3_3_revisions_and_immutable_changeset(kb_session: Session) -> None:
 
 
 def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
-    """翻案=新 ChangeSet：撤销采纳后旧值恢复 published、原变更集不改写。"""
+    """翻案=新 ChangeSet **走审核**（K3.5 + 008 W2.3 两阶段）：登记请求不改任何事实、
+    原 resolution 不改写；批准翻案审核项后才执行反向应用（旧值恢复 published）。"""
     scope = _scope(kb_session)
     _, version = seed_product(kb_session, scope=scope)
     engine = _engine(
@@ -516,9 +517,10 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
     ).scalar_one()
     resolve_review(kb_session, scope, review.review_key, "approve", actor="agent")
     adopted = _published(kb_session, "waiting_period")
+    original_resolution = dict(review.resolution or {})
     sets_before = len(kb_session.execute(select(ChangeSet)).scalars().all())
 
-    overturn = overturn_review(
+    overturn_set, overturn_item, created = request_review_overturn(
         kb_session,
         scope,
         review.review_key,
@@ -526,12 +528,63 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
         actor="human",
         reason="条款版本核对有误",
     )
-    assert overturn.source_kind == "manual_edit"
+    # —— 第一阶段：只登记，不改事实 ——
+    assert created and overturn_set.source_kind == "manual_edit"
+    assert overturn_set.status == "pending"
+    assert overturn_item.status == "open" and overturn_item.type == "overturn"
+    assert overturn_item.risk_level == "high", "翻案一律单条人审"
     assert len(kb_session.execute(select(ChangeSet)).scalars().all()) == sets_before + 1
+    kb_session.refresh(adopted)
+    assert adopted.status == "published", "登记翻案后旧事实必须原样"
+    kb_session.refresh(review)
+    assert dict(review.resolution or {}) == original_resolution, "原 resolution 不改写"
+    # 重复请求幂等：不再新建 ChangeSet
+    _, again, again_created = request_review_overturn(
+        kb_session, scope, review.review_key, "reject",
+        actor="human", reason="重复点击",
+    )
+    assert not again_created and again.review_key == overturn_item.review_key
+    assert len(kb_session.execute(select(ChangeSet)).scalars().all()) == sets_before + 1
+
+    # —— 第二阶段：批准翻案审核项后才执行反向应用 ——
+    resolve_review(
+        kb_session, scope, overturn_item.review_key, "approve", actor="human-2"
+    )
     kb_session.refresh(adopted)
     assert adopted.status == "retracted"
     restored = _published(kb_session, "waiting_period")
     assert restored.value == {"text": "90天"} and restored.superseded_by is None
+    kb_session.refresh(overturn_set)
+    assert overturn_set.status == "applied"
+    kb_session.refresh(review)
+    assert dict(review.resolution or {}) == original_resolution, (
+        "批准翻案也不得回写原 resolution（历史裁决不可变）"
+    )
+
+
+def test_k3_5_overturn_reject_of_request_keeps_facts(kb_session: Session) -> None:
+    """翻案审核项被 reject：当前事实不变、复议 ChangeSet 终态 rejected。"""
+    scope = _scope(kb_session)
+    _, version = seed_product(kb_session, scope=scope)
+    engine = _engine(
+        kb_session, scope,
+        policy=MergePolicy(auto_apply_add=True), risk_of=lambda p: "high",
+    )
+    report = _apply(engine, _prop(scope, version.id), external_id="b1")
+    resolve_review(kb_session, scope, report.review_keys[0], "approve", actor="agent")
+    adopted = _published(kb_session, "waiting_period")
+    overturn_set, overturn_item, _ = request_review_overturn(
+        kb_session, scope, report.review_keys[0], "reject",
+        actor="human", reason="复核一下",
+    )
+    resolve_review(
+        kb_session, scope, overturn_item.review_key, "reject", actor="human-2",
+        reason="原决定无误",
+    )
+    kb_session.refresh(adopted)
+    assert adopted.status == "published", "拒绝翻案 → 事实不变"
+    kb_session.refresh(overturn_set)
+    assert overturn_set.status == "rejected"
 
 
 def test_k3_1_retract_by_evidence_refcount(kb_session: Session) -> None:

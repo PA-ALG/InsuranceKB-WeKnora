@@ -1,88 +1,63 @@
 """008 审核工作台——分任务红绿（测试名引用条款号 W1~W7）。
 
-本文件按 tasks 顺序增量生长：T1（W5.2/W6.1 鉴权与 Space fail-closed）先行。
-零模型调用；对 knowledge/ 只经服务层（W5.1 由静态断言钉住，见 T7 波次）。
+PR#15 评审返工版：主正向用例一律经 **真实 MergeEngine** 造数（tests/wbhelpers），
+不再手写扁平 ``proposed``；翻案断言两阶段状态机；并发断言版本合同；W7 用真实
+QualityGate 三类拒绝；矩阵断言 schema 全字段底图与缺口导出语义。
+零模型调用；对 knowledge/ 只经服务层（W5.1 静态断言钉住）。
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+import json as _json
+from collections.abc import Callable
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func as _func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.db.models import KnowledgeSpace
-from insurance_harness.db.scope import bind_space
-
-# ---------------------------------------------------------------------------
-# 夹具：文件型 sqlite（知识域表齐），app 与测试共享同一 engine
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def wb_env(tmp_path: Path) -> Iterator[tuple[Callable[[], Session], Session]]:
-    from insurance_harness.db import models as _db_models  # noqa: F401
-    from insurance_harness.knowledge import tables as _kb_tables  # noqa: F401
-
-    engine = make_engine(f"sqlite:///{tmp_path}/wb.db")
-    Base.metadata.create_all(engine)
-    factory = make_session_factory(engine)
-    session = factory()
-    yield factory, session
-    session.close()
-    engine.dispose()
-
-
-def _bound_space(session: Session, name: str, sfx: str) -> str:
-    row = KnowledgeSpace(name=name, binding_status="unbound")
-    session.add(row)
-    session.flush()
-    bind_space(
-        session, row.id,
-        tenant_id=f"tenant-{sfx}", raw_kb_id=f"raw-{sfx}", wiki_kb_id=f"wiki-{sfx}",
-    )
-    session.commit()
-    return str(row.id)
-
-
-_TOKENS = {
-    "tok-alice": {"principal": "alice", "space_ids": ["__A__"]},
-}
-
-
-def _client(
-    factory: Callable[[], Session], space_a: str, extra: dict[str, object] | None = None
-) -> TestClient:
-    from insurance_harness.workbench.app import create_app
-
-    tokens: dict[str, object] = {
-        "tok-alice": {"principal": "alice", "space_ids": [space_a]},
-    }
-    if extra:
-        tokens.update(extra)
-    return TestClient(create_app(session_factory=factory, tokens_config=tokens))
-
+from insurance_harness.db.scope import load_scope
+from insurance_harness.knowledge import MergePolicy
+from insurance_harness.knowledge.tables import (
+    ChangeSet,
+    Claim,
+    ReviewItem,
+)
+from tests.wbhelpers import (
+    bound_space,
+    make_client,
+    open_review_key,
+    prop,
+    real_gate,
+    run_merge,
+    seed_parallel_open_review,
+    seed_wb_product,
+)
 
 # ---------------------------------------------------------------------------
 # T1 · W5.2/W6.1 鉴权与 Space fail-closed
 # ---------------------------------------------------------------------------
 
 
+def _auth() -> dict[str, str]:
+    return {"Authorization": "Bearer tok-alice"}
+
+
 def test_w5_2_no_token_401(wb_env: tuple[Callable[[], Session], Session]) -> None:
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    client = _client(factory, space_a)
-    resp = client.get(f"/spaces/{space_a}/queue")
-    assert resp.status_code == 401
+    space_a = bound_space(session, "a")
+    client = make_client(factory, space_a)
+    assert client.get(f"/spaces/{space_a}/queue").status_code == 401
 
 
-def test_w5_2_unknown_token_401(wb_env: tuple[Callable[[], Session], Session]) -> None:
+def test_w5_2_unknown_token_401(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    client = _client(factory, space_a)
+    space_a = bound_space(session, "a")
+    client = make_client(factory, space_a)
     resp = client.get(
         f"/spaces/{space_a}/queue", headers={"Authorization": "Bearer nope"}
     )
@@ -93,11 +68,18 @@ def test_w5_2_no_tokens_configured_denies_all_fail_closed(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     """未配置任何 token = 拒绝一切（fail-closed 默认，非放行）。"""
+    from fastapi.testclient import TestClient
+
     from insurance_harness.workbench.app import create_app
+    from tests.wbhelpers import wb_registry
 
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    client = TestClient(create_app(session_factory=factory, tokens_config={}))
+    space_a = bound_space(session, "a")
+    client = TestClient(
+        create_app(
+            session_factory=factory, tokens_config={}, schema_registry=wb_registry()
+        )
+    )
     resp = client.get(
         f"/spaces/{space_a}/queue", headers={"Authorization": "Bearer tok-alice"}
     )
@@ -107,609 +89,853 @@ def test_w5_2_no_tokens_configured_denies_all_fail_closed(
 def test_w6_1_token_cannot_cross_space_403_zero_leak(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    """token A 请求 Space B → 403 且响应零业务数据泄露（W6 Scenario）。"""
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    space_b = _bound_space(session, "乙", "b")
-    client = _client(factory, space_a)
-    resp = client.get(
-        f"/spaces/{space_b}/queue", headers={"Authorization": "Bearer tok-alice"}
-    )
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    client = make_client(factory, space_a)
+    resp = client.get(f"/spaces/{space_b}/queue", headers=_auth())
     assert resp.status_code == 403
-    body = resp.text
-    assert "乙" not in body and space_b not in body, "403 响应不得回显目标 space 细节"
+    assert space_b not in resp.text, "403 响应不得回显目标 space 细节"
 
 
-def test_w6_1_allowed_space_ok(wb_env: tuple[Callable[[], Session], Session]) -> None:
-    factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    client = _client(factory, space_a)
-    resp = client.get(
-        f"/spaces/{space_a}/queue", headers={"Authorization": "Bearer tok-alice"}
-    )
-    assert resp.status_code == 200
-    assert "审核队列" in resp.text
-
-
-# ---------------------------------------------------------------------------
-# T2 · W1.1/W2.1/W3.1 只读查询数据形状
-# ---------------------------------------------------------------------------
-
-
-def _seed_product(session: Session, space: str, code: str, name: str) -> str:
-    from insurance_harness.db.models import InsuranceProduct, ProductVersion
-
-    p = InsuranceProduct(
-        space_id=space, product_code=code, canonical_name=name,
-        category="t", status="在售",
-    )
-    session.add(p)
-    session.flush()
-    v = ProductVersion(space_id=space, product_id=p.id, version_label="V1")
-    session.add(v)
-    session.flush()
-    return str(v.id)
-
-
-def _seed_claim(
-    session: Session, space: str, version_id: str, predicate: str,
-    value_state: str = "present", status: str = "published",
-) -> str:
-    from insurance_harness.knowledge.tables import Claim
-
-    c = Claim(
-        space_id=space, product_version_id=version_id, predicate=predicate,
-        value_state=value_state, value={"text": "90天"}, status=status,
-    )
-    session.add(c)
-    session.flush()
-    return str(c.id)
-
-
-def _seed_review(
-    session: Session, space: str, version_id: str, *,
-    key: str, risk: str = "low", type_: str = "low_confidence",
-    predicate: str = "waiting_period", status: str = "open",
-    applyable: bool = False,
-) -> str:
-    """种子工单。``applyable=True`` 造全链（draft Claim+Evidence+claim_id），
-    使 approve 能走真实 publish_claim（T3 动作用例）。"""
-    from insurance_harness.knowledge.tables import (
-        ChangeItem,
-        ChangeSet,
-        Claim,
-        ClaimEvidence,
-        ReviewItem,
-    )
-
-    claim_id: str | None = None
-    if applyable:
-        draft = Claim(
-            space_id=space, product_version_id=version_id, predicate=predicate,
-            value_state="present", value={"text": "90天"}, status="draft",
-        )
-        session.add(draft)
-        session.flush()
-        session.add(
-            ClaimEvidence(
-                claim_id=draft.id, knowledge_id="doc-1", quote="等待期为90天",
-                page=1, authority_level=2, doc_role="clause",
-            )
-        )
-        session.flush()
-        claim_id = str(draft.id)
-    cs = ChangeSet(space_id=space, source_kind="document", status="pending", created_by="t")
-    session.add(cs)
-    session.flush()
-    item = ChangeItem(
-        change_set_id=cs.id, action="add", claim_id=claim_id,
-        proposed={"predicate": predicate, "product_version_id": version_id},
-        decision="needs_review",
-    )
-    session.add(item)
-    session.flush()
-    r = ReviewItem(
-        space_id=space, review_key=key, type=type_,
-        subject={
-            "change_item_id": item.id, "predicate": predicate,
-            "new_claim_id": claim_id,
-        },
-        allowed_actions=["approve", "reject", "defer"], status=status, risk_level=risk,
-    )
-    session.add(r)
-    session.commit()
-    return key
-
-
-def test_w1_1_queue_query_filters_sorts_paginates(
+def test_w6_1_allowed_space_ok(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from insurance_harness.db.scope import load_scope
+    factory, session = wb_env
+    space_a = bound_space(session, "a")
+    client = make_client(factory, space_a)
+    resp = client.get(f"/spaces/{space_a}/queue", headers=_auth())
+    assert resp.status_code == 200 and "审核队列" in resp.text
+
+
+def test_w6_1_unbound_space_fail_closed_403(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """space 在允许集内但未绑定（016 语义）→ 同样 fail-closed。"""
+    factory, session = wb_env
+    row = KnowledgeSpace(name="未绑定", binding_status="unbound")
+    session.add(row)
+    session.commit()
+    unbound = str(row.id)
+    client = make_client(factory, unbound)
+    resp = client.get(f"/spaces/{unbound}/queue", headers=_auth())
+    assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# W5/W6 · 浏览器纵向闭环：login → cookie 会话 → 完成审核（阻断 4 反例）
+# ---------------------------------------------------------------------------
+
+
+def _login(client: TestClient, token: str = "tok-alice") -> None:
+    page = client.get("/login")
+    assert page.status_code == 200
+    csrf = client.cookies.get("wb_csrf")
+    assert csrf, "GET /login 必须下发 CSRF cookie"
+    resp = client.post(
+        "/login", data={"token": token, "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, f"登录应 303，实得 {resp.status_code}"
+    assert client.cookies.get("wb_session"), "登录必须签发会话 cookie"
+
+
+def test_w5_browser_login_then_full_review_without_bearer(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """浏览器纵向流：login → 点击队列（不带 Authorization 头）→ 表单 approve 生效。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    _login(client)
+    # 全程不手工塞 Authorization —— 链接点击与原生表单必须能工作
+    queue = client.get(f"/spaces/{space}/queue")
+    assert queue.status_code == 200
+    assert key in queue.text and "90天" in queue.text, "队列须展示候选值"
+    csrf = client.cookies.get("wb_csrf")
+    resp = client.post(
+        f"/spaces/{space}/queue/{key}/action",
+        data={"action": "approve", "reason": "看过证据", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, "浏览器表单 POST 应 303 回队列"
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "resolved"
+    assert item.resolution is not None and item.resolution["actor"] == "alice"
+    published = session.execute(
+        select(_func.count()).select_from(Claim).where(Claim.status == "published")
+    ).scalar_one()
+    assert published == 1, "浏览器流必须真实发布"
+
+
+def test_w6_browser_session_csrf_required_on_writes(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """cookie 会话的写请求缺 CSRF → 403；Bearer 通道不受影响。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    _login(client)
+    resp = client.post(
+        f"/spaces/{space}/queue/{key}/action", data={"action": "approve"}
+    )
+    assert resp.status_code == 403, "无 CSRF 的 cookie 写请求必须拒绝"
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "open", "被拒请求不得产生任何写"
+
+
+def test_w6_browser_cookie_cannot_cross_space(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    factory, session = wb_env
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    client = make_client(factory, space_a)
+    _login(client)
+    assert client.get(f"/spaces/{space_b}/queue").status_code == 403
+
+
+def test_w5_logout_invalidates_browser_session(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    client = make_client(factory, space)
+    _login(client)
+    assert client.get(f"/spaces/{space}/queue").status_code == 200
+    csrf = client.cookies.get("wb_csrf")
+    assert client.post(
+        "/logout", data={"csrf_token": csrf}, follow_redirects=False
+    ).status_code == 303
+    assert client.get(f"/spaces/{space}/queue").status_code == 401
+
+
+def test_w5_htmx_vendored_and_loaded(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """HTMX 本地 vendor 并被页面加载（W5：不能只写 hx-* 却不加载运行库）。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    client = make_client(factory, space)
+    js = client.get("/static/vendor/htmx.min.js")
+    assert js.status_code == 200 and len(js.content) > 10_000
+    page = client.get(f"/spaces/{space}/queue", headers=_auth())
+    assert '/static/vendor/htmx.min.js' in page.text, "页面必须引用本地 htmx"
+
+
+# ---------------------------------------------------------------------------
+# T2/T3 · W1 队列（真实 MergeEngine 数据）与三动作
+# ---------------------------------------------------------------------------
+
+
+def test_w1_1_queue_shows_real_candidate_value_and_evidence(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """阻断 1 反例：真实合并造数后，队列必须展示候选值/证据/权威级/产品。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    body = client.get(f"/spaces/{space}/queue", headers=_auth()).text
+    assert key in body
+    assert "90天" in body, "候选值不得为 None（真实 proposed 形态解析）"
+    assert "等待期为90天" in body, "证据引文"
+    assert "权威2" in body, "权威等级"
+    assert "P001" in body, "产品标识"
+    assert "ChangeSet" in body, "关联 ChangeSet 链接"
+
+
+def test_w1_1_queue_filters_and_pagination(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    open_review_key(session, space, vid, "waiting_period", risk="low")
+    open_review_key(session, space, vid, "grace_period", value="60天", risk="high")
+    open_review_key(session, space, vid, "coverage_scope", value="身故", risk="low")
+    client = make_client(factory, space)
+    high_only = client.get(
+        f"/spaces/{space}/queue", params={"risk": "high"}, headers=_auth()
+    ).text
+    assert "grace_period" in high_only
+    assert "coverage_scope" not in high_only
+    paged = client.get(
+        f"/spaces/{space}/queue", params={"limit": 2, "offset": 2}, headers=_auth()
+    ).text
+    assert "共 3 条" in paged
+
+
+def test_w1_1_trigger_count_desc_is_default_order(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """W1.1 spec 原文「触发计数倒序默认」：同一审核项被重复触发排到最前。"""
     from insurance_harness.workbench.queries import list_review_queue
 
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="k1", risk="low", type_="low_confidence")
-    _seed_review(session, space, vid, key="k2", risk="high", type_="high_risk_change")
-    _seed_review(session, space, vid, key="k3", risk="high", type_="quality_gate")
-    _seed_review(session, space, vid, key="k4", risk="low", status="resolved")
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    open_review_key(session, space, vid, "grace_period", value="60天", risk="high")
     scope = load_scope(session, space)
-    page = list_review_queue(session, scope)
-    assert [i.risk_level for i in page.items[:2]] == ["high", "high"], "高风险默认排前"
-    assert all(i.status == "open" for i in page.items), "默认只列 open"
-    assert page.total == 3
-    only_gate = list_review_queue(session, scope, type_="quality_gate")
-    assert [i.review_key for i in only_gate.items] == ["k3"]
-    paged = list_review_queue(session, scope, limit=2, offset=2)
-    assert len(paged.items) == 1 and paged.total == 3
-
-
-def test_w2_1_changeset_list_with_action_counts(
-    wb_env: tuple[Callable[[], Session], Session],
-) -> None:
-    from insurance_harness.db.scope import load_scope
-    from insurance_harness.knowledge.tables import ChangeItem, ChangeSet
-    from insurance_harness.workbench.queries import list_change_sets
-
-    factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    cs = ChangeSet(space_id=space, source_kind="document", status="applied", created_by="t")
-    session.add(cs)
-    session.flush()
-    session.add_all([
-        ChangeItem(change_set_id=cs.id, action="add", proposed={}, decision="auto_applied"),
-        ChangeItem(change_set_id=cs.id, action="conflict", proposed={}, decision="needs_review"),
-    ])
-    session.commit()
-    scope = load_scope(session, space)
-    rows = list_change_sets(session, scope)
-    assert rows[0].source_kind == "document" and rows[0].status == "applied"
-    assert rows[0].action_counts == {"add": 1, "conflict": 1}
-
-
-def test_w3_1_completeness_matrix_five_states(
-    wb_env: tuple[Callable[[], Session], Session],
-) -> None:
-    """五态格：published present / absent / unknown / 冲突中 / 待审（W3.1）。"""
-    from insurance_harness.db.scope import load_scope
-    from insurance_harness.knowledge.tables import ChangeItem, ChangeSet, Conflict
-    from insurance_harness.workbench.queries import completeness_matrix
-
-    factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_claim(session, space, vid, "f_present", "present")
-    _seed_claim(session, space, vid, "f_absent", "absent_explicitly")
-    _seed_claim(session, space, vid, "f_unknown", "unknown")
-    # 冲突中：open Conflict 挂 f_conflict
-    cs = ChangeSet(space_id=space, source_kind="document", status="pending", created_by="t")
-    session.add(cs)
-    session.flush()
-    ci = ChangeItem(
-        change_set_id=cs.id, action="conflict",
-        proposed={"predicate": "f_conflict", "product_version_id": vid},
-        decision="needs_review",
-    )
-    session.add(ci)
-    session.flush()
-    session.add(Conflict(change_item_id=ci.id, proposed={"predicate": "f_conflict"}, status="open"))
-    session.commit()
-    # 待审：open ReviewItem 挂 f_review
-    _seed_review(session, space, vid, key="kr", predicate="f_review")
-    scope = load_scope(session, space)
-    matrix = completeness_matrix(session, scope)
-    row = next(r for r in matrix.rows if r.product_code == "P001")
-    assert row.cells["f_present"] == "present"
-    assert row.cells["f_absent"] == "absent_explicitly"
-    assert row.cells["f_unknown"] == "unknown"
-    assert row.cells["f_conflict"] == "conflict_open", "开放冲突优先于三态"
-    assert row.cells["f_review"] == "pending_review"
-
-
-def test_w5_1_queries_readonly_no_pending_writes(
-    wb_env: tuple[Callable[[], Session], Session],
-) -> None:
-    from insurance_harness.db.scope import load_scope
-    from insurance_harness.workbench.queries import (
-        completeness_matrix,
-        list_change_sets,
-        list_review_queue,
-    )
-
-    factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="k1")
-    scope = load_scope(session, space)
-    list_review_queue(session, scope)
-    list_change_sets(session, scope)
-    completeness_matrix(session, scope)
-    assert not session.dirty and not session.new and not session.deleted, (
-        "查询模块必须只读（W5.1）"
-    )
-
-
-# ---------------------------------------------------------------------------
-# T3 · W1 队列页与三动作（幂等/已决拒绝/审计归属）
-# ---------------------------------------------------------------------------
-
-
-def _auth() -> dict[str, str]:
-    return {"Authorization": "Bearer tok-alice"}
-
-
-def _review_status(
-    session: Session, space: str, key: str
-) -> tuple[str, dict[str, object] | None]:
-    from sqlalchemy import select as _select
-
-    from insurance_harness.knowledge.tables import ReviewItem
-
-    session.expire_all()
-    row = session.execute(
-        _select(ReviewItem).where(
-            ReviewItem.space_id == space, ReviewItem.review_key == key
+    # waiting_period 触发三次（同内容 → 同 review_key 计数递增）
+    for i in range(3):
+        run_merge(
+            session, space, [prop(scope, vid, "waiting_period")],
+            external_id=f"retrigger-{i}",
         )
-    ).scalar_one()
-    return row.status, row.resolution
-
-
-def test_w1_1_queue_page_renders_items_with_badges(
-    wb_env: tuple[Callable[[], Session], Session],
-) -> None:
-    factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kq1", risk="high", type_="quality_gate")
-    _seed_review(session, space, vid, key="kq2", risk="low")
-    client = _client(factory, space)
-    resp = client.get(f"/spaces/{space}/queue", headers=_auth())
-    assert resp.status_code == 200
-    body = resp.text
-    assert "kq1" in body and "kq2" in body
-    assert "quality_gate" in body, "gate 工单正常展示且带类型徽标（W7.3）"
-    assert "high" in body
+    page = list_review_queue(session, load_scope(session, space))
+    assert page.items[0].predicate == "waiting_period", "触发计数倒序压过风险序"
+    assert page.items[0].trigger_count == 3
+    assert page.items[1].risk_level == "high"
 
 
 def test_w1_3_approve_publishes_and_resolves(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from sqlalchemy import select as _select
-
-    from insurance_harness.knowledge.tables import Claim
-
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="ka1", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
     resp = client.post(
-        f"/spaces/{space}/queue/ka1/action",
+        f"/spaces/{space}/queue/{key}/action",
         headers=_auth(), data={"action": "approve", "reason": "看过证据"},
+        follow_redirects=False,
     )
-    assert resp.status_code == 200
-    status, resolution = _review_status(session, space, "ka1")
-    assert status == "resolved" and resolution and resolution["action"] == "approve"
+    assert resp.status_code == 303
     session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "resolved"
+    assert item.resolution is not None and item.resolution["action"] == "approve"
     published = session.execute(
-        _select(Claim).where(Claim.space_id == space, Claim.status == "published")
+        select(Claim).where(Claim.space_id == space, Claim.status == "published")
     ).scalars().all()
-    assert len(published) == 1, "approve 经服务层真实发布 draft Claim"
+    assert len(published) == 1, "approve 经服务层真实发布"
 
 
-def test_w1_3_reject_and_defer(
+def test_w1_3_defer_keeps_open_but_audits(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
+    """阻断 3 反例：defer 保持 open，但必须写 actor/时间/理由 审计事件并推进版本。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kr1", applyable=True)
-    _seed_review(session, space, vid, key="kd1", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    before = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one().updated_at.isoformat()
+    client = make_client(factory, space)
     assert client.post(
-        f"/spaces/{space}/queue/kr1/action", headers=_auth(), data={"action": "reject"}
-    ).status_code == 200
-    status, resolution = _review_status(session, space, "kr1")
-    assert status == "resolved" and resolution and resolution["action"] == "reject"
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(), data={"action": "defer", "reason": "等补充材料"},
+        follow_redirects=False,
+    ).status_code == 303
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "open", "defer 保持 open"
+    events = (item.resolution or {}).get("events") or []
+    assert len(events) == 1
+    assert events[0]["action"] == "defer" and events[0]["actor"] == "alice"
+    assert events[0]["reason"] == "等补充材料" and events[0]["at"]
+    assert item.updated_at.isoformat() != before, "defer 必须推进版本（乐观并发）"
+    assert (item.resolution or {}).get("action") is None, "defer 不落最终决定"
+
+
+def test_w1_4_stale_version_rejected_409(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """乐观并发（W1）：携带过期版本的提交被拒并提示刷新，不生效。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    stale_version = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one().updated_at.isoformat()
+    client = make_client(factory, space)
+    # defer 推进版本 → 原版本过期
+    client.post(
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(), data={"action": "defer"}, follow_redirects=False,
+    )
+    resp = client.post(
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(),
+        data={"action": "approve", "expected_version": stale_version},
+    )
+    assert resp.status_code == 409, "stale 版本必须拒绝"
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "open", "stale 提交不得生效"
+    # 带最新版本 → 生效
+    fresh = item.updated_at.isoformat()
     assert client.post(
-        f"/spaces/{space}/queue/kd1/action", headers=_auth(), data={"action": "defer"}
-    ).status_code == 200
-    status, resolution = _review_status(session, space, "kd1")
-    assert status == "open" and resolution is None, "defer 保持 open 不落 resolution"
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(),
+        data={"action": "approve", "expected_version": fresh},
+        follow_redirects=False,
+    ).status_code == 303
 
 
 def test_w1_4_same_action_resubmit_idempotent(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from sqlalchemy import func as _func
-    from sqlalchemy import select as _select
-
-    from insurance_harness.knowledge.tables import Claim
-
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="ki1", applyable=True)
-    client = _client(factory, space)
-    url = f"/spaces/{space}/queue/ki1/action"
-    assert client.post(url, headers=_auth(), data={"action": "approve"}).status_code == 200
-    second = client.post(url, headers=_auth(), data={"action": "approve"})
-    assert second.status_code == 200, "同决定重复提交幂等（W1.3）"
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    url = f"/spaces/{space}/queue/{key}/action"
+    assert client.post(
+        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    ).status_code == 303
+    second = client.post(
+        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    )
+    assert second.status_code == 303, "同决定重复提交幂等（W1.3）"
     session.expire_all()
     n_published = session.execute(
-        _select(_func.count()).select_from(Claim).where(
+        select(_func.count()).select_from(Claim).where(
             Claim.space_id == space, Claim.status == "published"
         )
     ).scalar_one()
     assert n_published == 1, "重复提交不得重复生效"
 
 
+def test_w1_4_request_id_replay_does_not_duplicate(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """同 request_id 同动作重放（如浏览器重试）不重复记事件、不重复生效。"""
+    from insurance_harness.knowledge import resolve_review
+
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    scope = load_scope(session, space)
+    resolve_review(
+        session, scope, key, "defer", actor="alice", request_id="req-1"
+    )
+    resolve_review(
+        session, scope, key, "defer", actor="alice", request_id="req-1"
+    )
+    resolve_review(
+        session, scope, key, "defer", actor="alice", request_id="req-2"
+    )
+    session.commit()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    events = (item.resolution or {}).get("events") or []
+    assert len(events) == 2, "req-1 重放不得重复记事件"
+
+
 def test_w1_4_conflicting_action_on_resolved_409(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kc1", applyable=True)
-    client = _client(factory, space)
-    url = f"/spaces/{space}/queue/kc1/action"
-    assert client.post(url, headers=_auth(), data={"action": "approve"}).status_code == 200
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    url = f"/spaces/{space}/queue/{key}/action"
+    assert client.post(
+        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    ).status_code == 303
     conflict = client.post(url, headers=_auth(), data={"action": "reject"})
-    assert conflict.status_code == 409, "异决定撞已决 → 409 提示刷新（乐观并发）"
+    assert conflict.status_code == 409, "异决定撞已决 → 409 提示刷新"
 
 
 def test_w6_3_audit_actor_is_token_principal_not_client_field(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kp1", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
     resp = client.post(
-        f"/spaces/{space}/queue/kp1/action",
+        f"/spaces/{space}/queue/{key}/action",
         headers=_auth(),
         data={"action": "approve", "operator": "mallory"},  # 客户端自报必须被无视
+        follow_redirects=False,
     )
-    assert resp.status_code == 200
-    _status, resolution = _review_status(session, space, "kp1")
-    assert resolution and resolution["actor"] == "alice", (
-        "审计 operator 只认 token principal（W6 Scenario：不可伪造）"
-    )
+    assert resp.status_code == 303
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.resolution is not None and item.resolution["actor"] == "alice"
 
 
-def test_w1_3_batch_approve_excludes_high(
+def test_w1_3_batch_approve_versioned_excludes_high(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
+    """批量逐项携带版本（阻断 3）；高风险排除显式提示；stale 项点名跳过。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kb-low", risk="low", applyable=True)
-    _seed_review(
-        session, space, vid, key="kb-high", risk="high",
-        predicate="f2", applyable=True,
-    )
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    k_low = open_review_key(session, space, vid, "waiting_period")
+    k_high = open_review_key(session, space, vid, "grace_period", value="60天", risk="high")
+    k_stale = open_review_key(session, space, vid, "coverage_scope", value="身故")
+    versions = {
+        r.review_key: r.updated_at.isoformat()
+        for r in session.execute(select(ReviewItem)).scalars()
+    }
+    client = make_client(factory, space)
     resp = client.post(
         f"/spaces/{space}/queue/batch-approve",
-        headers=_auth(), data={"keys": ["kb-low", "kb-high"]},
+        headers=_auth(),
+        data={
+            "keys": [
+                f"{k_low}@{versions[k_low]}",
+                f"{k_high}@{versions[k_high]}",
+                f"{k_stale}@1999-01-01T00:00:00+00:00",  # 过期版本
+            ],
+            "request_id": "batch-1",
+        },
     )
     assert resp.status_code == 200
-    assert "kb-high" in resp.text, "被排除的高风险项显式提示（不得静默跳过）"
-    low_status, _ = _review_status(session, space, "kb-low")
-    high_status, _ = _review_status(session, space, "kb-high")
-    assert low_status == "resolved" and high_status == "open", "批量仅非 high 生效"
+    assert "批量通过 1 条" in resp.text
+    assert k_high in resp.text, "高风险排除必须显式点名"
+    assert k_stale in resp.text and "版本已过期" in resp.text, "stale 项点名"
+    session.expire_all()
+    states = {
+        r.review_key: r.status
+        for r in session.execute(select(ReviewItem)).scalars()
+    }
+    assert states[k_low] == "resolved"
+    assert states[k_high] == "open" and states[k_stale] == "open"
 
 
 # ---------------------------------------------------------------------------
-# T4 · W2 冲突与变更页 + 翻案 + G8 时间线
+# T4 · W2 冲突与变更页 + 两阶段翻案 + G8 时间线
 # ---------------------------------------------------------------------------
 
 
 def test_w2_1_changes_page_lists_sets_with_counts(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from insurance_harness.knowledge.tables import ChangeItem, ChangeSet
-
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    cs = ChangeSet(space_id=space, source_kind="document", status="applied", created_by="t")
-    session.add(cs)
-    session.flush()
-    session.add_all([
-        ChangeItem(change_set_id=cs.id, action="add", proposed={}, decision="auto_applied"),
-        ChangeItem(change_set_id=cs.id, action="supersede", proposed={}, decision="approved"),
-    ])
-    session.commit()
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    open_review_key(session, space, vid)
+    client = make_client(factory, space)
     resp = client.get(f"/spaces/{space}/changes", headers=_auth())
     assert resp.status_code == 200
-    assert str(cs.id) in resp.text and "document" in resp.text
-    assert "add" in resp.text and "supersede" in resp.text, "动作计数用于分色展示"
+    assert "document" in resp.text and "add" in resp.text
 
 
-def test_w2_2_detail_shows_conflict_both_sides_and_basis(
+def test_w2_2_detail_projects_real_merge_shapes(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from insurance_harness.knowledge.tables import ChangeItem, ChangeSet, Conflict
-
+    """阻断 1 反例：真实 add/supersede(conflict)/enrich 形态在明细页可读——
+    predicate/提案值不得为 None，冲突双方值+证据+裁决依据并排。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    existing_id = _seed_claim(session, space, vid, "f_dispute", "present")  # 值=90天
-    cs = ChangeSet(space_id=space, source_kind="document", status="pending", created_by="t")
-    session.add(cs)
-    session.flush()
-    ci = ChangeItem(
-        change_set_id=cs.id, action="conflict",
-        proposed={
-            "predicate": "f_dispute", "product_version_id": vid,
-            "value": {"text": "180天"},
-        },
-        decision="needs_review",
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    scope = load_scope(session, space)
+    # 批1 add → approve 发布 90天
+    key = open_review_key(session, space, vid, external_id="doc-1")
+    client = make_client(factory, space)
+    assert client.post(
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    ).status_code == 303
+    # 批2 同谓词更高权威 180天 → supersede needs_review + Conflict(open)
+    report2 = run_merge(
+        session, space,
+        [prop(scope, vid, value="180天", doc_role="terms", authority=1,
+              knowledge_id="doc-terms", quote="等待期为一百八十天")],
+        external_id="doc-2",
     )
-    session.add(ci)
-    session.flush()
-    session.add(
-        Conflict(
-            change_item_id=ci.id, existing_claim_id=existing_id,
-            proposed={"value": {"text": "180天"}},
-            decision_basis={"rule": "authority_order", "existing": 2, "proposed": 5},
-            status="open",
-        )
+    assert report2.review_keys, "supersede 默认走审核"
+    # 批3 同值 90天 追加证据 → enrich append_evidence…… 已 superseded？否：批2未批，
+    # 现值仍 90天 published → 同值 → enrich append needs_review
+    run_merge(
+        session, space,
+        [prop(scope, vid, value="90天", knowledge_id="doc-faq",
+              doc_role="faq", authority=4, quote="产品等待期九十天")],
+        external_id="doc-3",
     )
-    session.commit()
-    client = _client(factory, space)
-    resp = client.get(f"/spaces/{space}/changes/{cs.id}", headers=_auth())
-    assert resp.status_code == 200
-    body = resp.text
-    assert "90天" in body and "180天" in body, "冲突双方值并排展示（W2.2）"
-    assert "authority_order" in body, "自动裁决依据（权威序比较）可见"
-    assert "action-conflict" in body, "动作分色标记"
+    sets = session.execute(
+        select(ChangeSet).where(ChangeSet.space_id == space).order_by(ChangeSet.created_at)
+    ).scalars().all()
+    # 批2：supersede 明细
+    body2 = client.get(
+        f"/spaces/{space}/changes/{sets[1].id}", headers=_auth()
+    ).text
+    assert "waiting_period" in body2, "predicate 不得为 None（真实形态解析）"
+    assert "180天" in body2 and "90天" in body2, "冲突双方值并排"
+    assert "authority_cmp" in body2, "自动裁决依据（权威序比较）可见"
+    assert "等待期为一百八十天" in body2, "候选证据引文"
+    # 批3：enrich append 明细
+    body3 = client.get(
+        f"/spaces/{space}/changes/{sets[2].id}", headers=_auth()
+    ).text
+    assert "enrich" in body3 and "产品等待期九十天" in body3, "追加证据可读"
 
 
-def test_w2_3_overturn_creates_new_changeset_history_intact(
+def test_w2_3_overturn_two_phase_via_http(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    from sqlalchemy import select as _select
-
-    from insurance_harness.knowledge.tables import ChangeItem, ChangeSet, Claim
-
+    """W2.3 两阶段（阻断 2 反例）：翻案请求后旧事实原样、原 resolution 不变、
+    新 ChangeSet pending、新审核项 open；批准新审核项后事实才变化。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="ko1", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
     assert client.post(
-        f"/spaces/{space}/queue/ko1/action", headers=_auth(), data={"action": "approve"}
-    ).status_code == 200
-    # 缺 reason → 400（翻案必须留理由）
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    ).status_code == 303
+    # 缺 reason → 422/400（翻案必须留理由）
     assert client.post(
-        f"/spaces/{space}/queue/ko1/overturn", headers=_auth(),
+        f"/spaces/{space}/queue/{key}/overturn", headers=_auth(),
         data={"new_action": "reject"},
     ).status_code in (400, 422)
     resp = client.post(
-        f"/spaces/{space}/queue/ko1/overturn", headers=_auth(),
+        f"/spaces/{space}/queue/{key}/overturn", headers=_auth(),
         data={"new_action": "reject", "reason": "证据不足"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 200 and "原决定与当前事实未变更" in resp.text
     session.expire_all()
-    manual_sets = session.execute(
-        _select(ChangeSet).where(
+    original = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert original.status == "resolved"
+    assert original.resolution is not None
+    assert original.resolution["action"] == "approve", "原 resolution 不得改写"
+    published = session.execute(
+        select(Claim).where(Claim.space_id == space, Claim.status == "published")
+    ).scalars().all()
+    assert len(published) == 1, "登记翻案后旧事实必须原样 published"
+    manual = session.execute(
+        select(ChangeSet).where(
             ChangeSet.space_id == space, ChangeSet.source_kind == "manual_edit"
         )
-    ).scalars().all()
-    assert len(manual_sets) == 1, "翻案 = 新 ChangeSet（W2.3）"
-    assert str(manual_sets[0].id) in resp.text
-    original_items = session.execute(
-        _select(ChangeItem).where(ChangeItem.action == "add")
-    ).scalars().all()
-    assert all(i.decision == "approved" for i in original_items), "原决定不改写"
-    retracted = session.execute(
-        _select(Claim).where(Claim.space_id == space, Claim.status == "retracted")
-    ).scalars().all()
-    assert len(retracted) == 1, "翻案 reject → 已采纳 Claim 撤回"
+    ).scalar_one()
+    assert manual.status == "pending", "复议 ChangeSet 走审核，不是即时 applied"
+    overturn_item = session.execute(
+        select(ReviewItem).where(ReviewItem.type == "overturn")
+    ).scalar_one()
+    assert overturn_item.status == "open" and overturn_item.risk_level == "high"
+    # 重复请求幂等
+    again = client.post(
+        f"/spaces/{space}/queue/{key}/overturn", headers=_auth(),
+        data={"new_action": "reject", "reason": "重复点击"},
+    )
+    assert again.status_code == 200 and "幂等" in again.text
+    # ——批准翻案审核项 → 反向应用生效——
+    assert client.post(
+        f"/spaces/{space}/queue/{overturn_item.review_key}/action",
+        headers=_auth(), data={"action": "approve", "reason": "同意复议"},
+        follow_redirects=False,
+    ).status_code == 303
+    session.expire_all()
+    assert session.execute(
+        select(_func.count()).select_from(Claim).where(
+            Claim.space_id == space, Claim.status == "retracted"
+        )
+    ).scalar_one() == 1, "批准翻案后已采纳 Claim 撤回"
+    original2 = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert original2.resolution is not None
+    assert original2.resolution["action"] == "approve", "历史裁决记录仍不可变"
 
 
 def test_w2_4_timeline_human_readable_rows(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    """G8：谁/何时/什么字段/旧值→新值/原因（按产品聚合）。"""
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kt1", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
     assert client.post(
-        f"/spaces/{space}/queue/kt1/action",
+        f"/spaces/{space}/queue/{key}/action",
         headers=_auth(), data={"action": "approve", "reason": "证据充分"},
-    ).status_code == 200
-    resp = client.get(f"/spaces/{space}/timeline", headers=_auth())
-    assert resp.status_code == 200
-    body = resp.text
-    assert "alice" in body, "谁"
-    assert "P001" in body, "按产品聚合"
-    assert "waiting_period" in body, "什么字段"
-    assert "90天" in body, "新值"
-    assert "证据充分" in body, "原因"
+        follow_redirects=False,
+    ).status_code == 303
+    body = client.get(f"/spaces/{space}/timeline", headers=_auth()).text
+    assert "alice" in body and "P001" in body
+    assert "waiting_period" in body and "90天" in body and "证据充分" in body
 
 
 # ---------------------------------------------------------------------------
-# T5 · W3 完整度矩阵页 + 下钻 + 导出
+# T5 · W3 完整度矩阵：schema 全字段底图 + 五态下钻 + 缺口导出（阻断 5 反例）
 # ---------------------------------------------------------------------------
 
 
-def _seed_matrix_env(session: Session, space: str) -> str:
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_claim(session, space, vid, "f_present", "present")
-    _seed_claim(session, space, vid, "f_unknown", "unknown")
-    _seed_review(session, space, vid, key="km1", predicate="f_review")
-    return vid
+def test_w3_1_matrix_full_schema_baseline_zero_claim_product(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """零 Claim 的产品仍有完整 schema 字段矩阵（全部 unknown）。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    seed_wb_product(session, space)
+    client = make_client(factory, space)
+    body = client.get(f"/spaces/{space}/matrix", headers=_auth()).text
+    for field in ("waiting_period", "grace_period", "coverage_scope",
+                  "premium_rate", "never_extracted"):
+        assert field in body, f"schema 字段 {field} 必须出现在底图"
+    assert body.count("state-unknown") >= 5, "未收录字段显示为 unknown"
 
 
-def test_w3_1_matrix_page_renders_state_cells(
+def test_w3_1_matrix_five_states_from_real_merge(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    _seed_matrix_env(session, space)
-    client = _client(factory, space)
-    resp = client.get(f"/spaces/{space}/matrix", headers=_auth())
-    assert resp.status_code == 200
-    body = resp.text
-    assert "P001" in body and "测试终身寿" in body
-    assert "state-present" in body and "state-unknown" in body
-    assert "state-pending_review" in body, "待审格分色（W3.1）"
-
-
-def test_w3_2_cell_drilldown_shows_claim_evidence_history(
-    wb_env: tuple[Callable[[], Session], Session],
-) -> None:
-    factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    vid = _seed_product(session, space, "P001", "测试终身寿")
-    _seed_review(session, space, vid, key="kd2", applyable=True)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    scope = load_scope(session, space)
+    client = make_client(factory, space)
+    # present：add → approve
+    k1 = open_review_key(session, space, vid, "waiting_period")
     assert client.post(
-        f"/spaces/{space}/queue/kd2/action",
-        headers=_auth(), data={"action": "approve", "reason": "ok"},
-    ).status_code == 200
-    resp = client.get(
+        f"/spaces/{space}/queue/{k1}/action",
+        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    ).status_code == 303
+    # pending_review：grace_period 待审
+    open_review_key(session, space, vid, "grace_period", value="60天")
+    # conflict_open：waiting_period 高风险同权威异值 → ⑤ conflict 审核
+    run_merge(
+        session, space,
+        [prop(scope, vid, value="180天", knowledge_id="doc-2", quote="等待期180天")],
+        external_id="doc-conflict",
+        risk_of=lambda _p: "high",
+    )
+    body = client.get(f"/spaces/{space}/matrix", headers=_auth()).text
+    assert "waiting_period:conflict_open" in body, "开放冲突优先于三态"
+    assert "grace_period:pending_review" in body
+    assert "never_extracted:unknown" in body
+
+
+def test_w3_2_pending_and_conflict_drill_not_404(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """阻断 5 反例：待审/冲突格下钻必须可用（原实现只查 published → 404）。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    scope = load_scope(session, space)
+    client = make_client(factory, space)
+    open_review_key(session, space, vid, "grace_period", value="60天")
+    pending = client.get(
+        f"/spaces/{space}/matrix/{vid}/grace_period", headers=_auth()
+    )
+    assert pending.status_code == 200, "pending 下钻不得 404"
+    assert "60天" in pending.text and "pending_review" in pending.text
+    # conflict：先发布 waiting_period，再造高风险冲突
+    k1 = open_review_key(session, space, vid, "waiting_period")
+    client.post(
+        f"/spaces/{space}/queue/{k1}/action",
+        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    )
+    run_merge(
+        session, space,
+        [prop(scope, vid, value="180天", knowledge_id="doc-2", quote="等待期180天")],
+        external_id="doc-conflict", risk_of=lambda _p: "high",
+    )
+    conflict = client.get(
         f"/spaces/{space}/matrix/{vid}/waiting_period", headers=_auth()
     )
-    assert resp.status_code == 200
-    body = resp.text
-    assert "90天" in body, "Claim 值"
-    assert "等待期为90天" in body, "证据引文（W3.2 下钻）"
-    assert "alice" in body, "版本历史（修订链）"
+    assert conflict.status_code == 200, "conflict 下钻不得 404"
+    assert "90天" in conflict.text and "180天" in conflict.text, "双方值并排"
+    assert "conflict_open" in conflict.text
 
 
-def test_w3_3_export_csv_and_jsonl(
+def test_w3_2_published_drill_and_unknown_drill(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    import json as _json
-
     factory, session = wb_env
-    space = _bound_space(session, "甲", "a")
-    _seed_matrix_env(session, space)
-    client = _client(factory, space)
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    client = make_client(factory, space)
+    key = open_review_key(session, space, vid)
+    client.post(
+        f"/spaces/{space}/queue/{key}/action",
+        headers=_auth(), data={"action": "approve", "reason": "ok"},
+        follow_redirects=False,
+    )
+    pub = client.get(
+        f"/spaces/{space}/matrix/{vid}/waiting_period", headers=_auth()
+    ).text
+    assert "90天" in pub and "等待期为90天" in pub and "alice" in pub
+    unknown = client.get(
+        f"/spaces/{space}/matrix/{vid}/never_extracted", headers=_auth()
+    )
+    assert unknown.status_code == 200, "schema 内未收录字段下钻不得 404"
+    assert "未收录 ≠ 不存在" in unknown.text
+    assert "v1.1+wbtest" in unknown.text, "schema 来源标注"
+    # 既无数据也不在 schema → 404
+    assert client.get(
+        f"/spaces/{space}/matrix/{vid}/no_such_field", headers=_auth()
+    ).status_code == 404
+
+
+def test_w3_3_gap_export_excludes_present_and_labels_sources(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """阻断 5 反例：缺口导出只含 unknown/pending/conflict；ticket_source 稳定标注。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    client = make_client(factory, space)
+    k1 = open_review_key(session, space, vid, "waiting_period")
+    client.post(
+        f"/spaces/{space}/queue/{k1}/action",
+        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    )
+    open_review_key(session, space, vid, "grace_period", value="60天")
+    jsonl = client.get(
+        f"/spaces/{space}/matrix/export", headers=_auth(), params={"fmt": "jsonl"}
+    )
+    rows = [_json.loads(ln) for ln in jsonl.text.strip().splitlines()]
+    states = {r["field"]: r for r in rows}
+    assert "waiting_period" not in states, "present 不得出现在缺口清单"
+    assert states["grace_period"]["state"] == "pending_review"
+    assert states["grace_period"]["ticket_source"].startswith("review:rv-")
+    assert states["never_extracted"]["state"] == "unknown"
+    assert states["never_extracted"]["ticket_source"] == "schema:v1.1+wbtest"
     csv_resp = client.get(
         f"/spaces/{space}/matrix/export", headers=_auth(), params={"fmt": "csv"}
     )
     assert csv_resp.status_code == 200
     assert "text/csv" in csv_resp.headers["content-type"]
     lines = [ln for ln in csv_resp.text.strip().splitlines() if ln]
-    assert lines[0].startswith("product_code,"), "CSV 表头"
-    assert any("f_present" in ln and "present" in ln for ln in lines[1:])
-    jsonl_resp = client.get(
-        f"/spaces/{space}/matrix/export", headers=_auth(), params={"fmt": "jsonl"}
+    assert lines[0].startswith("product_code,")
+    assert not any(",present," in ln for ln in lines[1:]), "CSV 同语义"
+
+
+# ---------------------------------------------------------------------------
+# W7 · 质量闸门联动：真实 QualityGate 三类拒绝（阻断 6 反例）
+# ---------------------------------------------------------------------------
+
+
+def _gate_denied_review(
+    session: Session, space: str, vid: str, kind: str
+) -> ReviewItem:
+    gate, fp = real_gate(kind)
+    scope = load_scope(session, space)
+    run_merge(
+        session, space, [prop(scope, vid)],
+        external_id=f"gate-{kind}",
+        policy=MergePolicy(auto_apply_add=True),
+        quality_gate=gate, run_fingerprint=fp,
     )
-    assert jsonl_resp.status_code == 200
-    rows = [_json.loads(ln) for ln in jsonl_resp.text.strip().splitlines()]
-    review_rows = [r for r in rows if r["field"] == "f_review"]
-    assert review_rows and review_rows[0]["state"] == "pending_review"
-    assert "ticket_source" in rows[0], "工单来源标注列（011/015 前允许为空，W3.3）"
+    return session.execute(
+        select(ReviewItem).where(ReviewItem.status == "open")
+    ).scalar_one()
+
+
+def test_w7_real_gate_denials_create_quality_gate_reviews(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """运营允许自动化但真实 QualityGate 拒绝（缺画像/stale/不达标）→
+    type=quality_gate 且拒绝原因持久化（不再手工造 gate 工单）。"""
+    factory, session = wb_env
+    for i, (kind, reason_part) in enumerate(
+        (("missing", "缺字段画像"),
+         ("stale", "指纹不匹配"),
+         ("threshold", "指标未达阈值")),
+    ):
+        space = bound_space(session, f"g{i}")
+        vid = seed_wb_product(session, space, code=f"P00{i + 1}")
+        item = _gate_denied_review(session, space, vid, kind)
+        assert item.type == "quality_gate", f"{kind}: 真实 gate 拒绝须标 quality_gate"
+        gate_meta = (item.subject or {}).get("gate") or {}
+        if kind == "stale":
+            assert "stale" in gate_meta.get("reason", "") or "指纹" in gate_meta.get(
+                "reason", ""
+            )
+        else:
+            assert reason_part in gate_meta.get("reason", ""), f"{kind} 原因持久化"
+        if kind != "missing":
+            assert gate_meta.get("profile_version") == "1", "画像标识"
+            assert gate_meta.get("baseline_id") == "wb-baseline", "基线标识"
+        # 清场：resolve 掉便于下一轮 scalar_one
+        from insurance_harness.knowledge import resolve_review
+
+        resolve_review(
+            session, load_scope(session, space), item.review_key, "reject",
+            actor="t",
+        )
+        session.commit()
+
+
+def test_w7_gate_reason_rendered_in_queue(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    _gate_denied_review(session, space, vid, "threshold")
+    client = make_client(factory, space)
+    body = client.get(f"/spaces/{space}/queue", headers=_auth()).text
+    assert "quality_gate" in body
+    assert "指标未达阈值" in body, "gate 原因在队列可读（W7）"
+    assert "wb-baseline" in body, "baseline 标识文本"
+
+
+def test_w7_policy_off_denial_is_not_quality_gate_type(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """运营策略未放行自动化（保守默认）→ 普通 low_confidence，不冒充 gate 拒绝。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    gate, fp = real_gate("passing")
+    scope = load_scope(session, space)
+    run_merge(
+        session, space, [prop(scope, vid)], external_id="no-policy",
+        quality_gate=gate, run_fingerprint=fp,  # policy 默认全审核
+    )
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.status == "open")
+    ).scalar_one()
+    assert item.type == "low_confidence"
+    assert "gate" not in (item.subject or {}), "未咨询 gate 不得伪造 gate 元数据"
+
+
+def test_w7_passing_gate_with_policy_auto_publishes(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """对照组：真实 gate 达标 + 策略放行 → 自动发布（gate 语义未被破坏）。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    gate, fp = real_gate("passing")
+    scope = load_scope(session, space)
+    run_merge(
+        session, space, [prop(scope, vid)], external_id="auto",
+        policy=MergePolicy(auto_apply_add=True),
+        quality_gate=gate, run_fingerprint=fp,
+    )
+    claim = session.execute(select(Claim)).scalar_one()
+    assert claim.status == "published"
+    assert session.execute(
+        select(_func.count()).select_from(ReviewItem)
+    ).scalar_one() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -721,13 +947,17 @@ def test_w6_2_cross_space_same_business_key_invisible(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    space_b = _bound_space(session, "乙", "b")
-    vid_a = _seed_product(session, space_a, "P001", "甲产品")
-    vid_b = _seed_product(session, space_b, "P001", "乙产品")
-    _seed_review(session, space_a, vid_a, key="same-key")
-    _seed_review(session, space_b, vid_b, key="same-key")
-    client = _client(
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    vid_a = seed_wb_product(session, space_a, code="P001", name="甲产品")
+    vid_b = seed_wb_product(session, space_b, code="P001", name="乙产品")
+    seed_parallel_open_review(
+        session, space_a, vid_a, "waiting_period", key="same-key"
+    )
+    seed_parallel_open_review(
+        session, space_b, vid_b, "waiting_period", key="same-key"
+    )
+    client = make_client(
         factory, space_a,
         extra={"tok-bob": {"principal": "bob", "space_ids": [space_b]}},
     )
@@ -736,7 +966,7 @@ def test_w6_2_cross_space_same_business_key_invisible(
         f"/spaces/{space_b}/queue", headers={"Authorization": "Bearer tok-bob"}
     ).text
     assert "same-key" in body_a and "same-key" in body_b
-    assert "乙产品" not in body_a and "甲产品" not in body_b, "同业务键跨 space 互不可见"
+    assert "乙产品" not in body_a and "甲产品" not in body_b
 
 
 def test_w7_3_route_allowlist_no_bypass_endpoints(
@@ -746,9 +976,12 @@ def test_w7_3_route_allowlist_no_bypass_endpoints(
     from fastapi.routing import APIRoute
 
     from insurance_harness.workbench.app import create_app
+    from tests.wbhelpers import wb_registry
 
     factory, _session = wb_env
-    app = create_app(session_factory=factory, tokens_config={})
+    app = create_app(
+        session_factory=factory, tokens_config={}, schema_registry=wb_registry()
+    )
     paths = {
         (r.path, m)
         for r in app.routes
@@ -757,6 +990,10 @@ def test_w7_3_route_allowlist_no_bypass_endpoints(
         if m != "HEAD"
     }
     allowlist = {
+        ("/login", "GET"),
+        ("/login", "POST"),
+        ("/logout", "POST"),
+        ("/", "GET"),
         ("/spaces/{space_id}/queue", "GET"),
         ("/spaces/{space_id}/queue/{review_key}/action", "POST"),
         ("/spaces/{space_id}/queue/{review_key}/overturn", "POST"),
@@ -776,17 +1013,17 @@ def test_w7_3_route_allowlist_no_bypass_endpoints(
 def test_w6_2_cross_space_object_id_probe_404_not_leak(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    """gauntlet 对称路径：持双空间授权的 token，用 A 的 ChangeSet id 走 B 路径
-    → 404（对象归属校验独立于 token 授权，不泄露存在性）。"""
-    from insurance_harness.knowledge.tables import ChangeSet
-
+    """gauntlet 对称路径：双空间授权 token 用 A 的 ChangeSet id 走 B 路径 → 404。"""
     factory, session = wb_env
-    space_a = _bound_space(session, "甲", "a")
-    space_b = _bound_space(session, "乙", "b")
-    cs = ChangeSet(space_id=space_a, source_kind="document", status="applied", created_by="t")
-    session.add(cs)
-    session.commit()
-    client = _client(
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    vid_a = seed_wb_product(session, space_a)
+    open_review_key(session, space_a, vid_a)
+    cs = session.execute(
+        select(ChangeSet).where(ChangeSet.space_id == space_a)
+    ).scalars().first()
+    assert cs is not None
+    client = make_client(
         factory, space_a,
         extra={"tok-both": {"principal": "carol", "space_ids": [space_a, space_b]}},
     )
@@ -794,7 +1031,7 @@ def test_w6_2_cross_space_object_id_probe_404_not_leak(
         f"/spaces/{space_b}/changes/{cs.id}",
         headers={"Authorization": "Bearer tok-both"},
     )
-    assert resp.status_code == 404, "A 的对象在 B 路径下必须 404（越权探测不可用）"
+    assert resp.status_code == 404
 
 
 def test_w5_1_static_no_direct_sql_writes_in_workbench() -> None:
@@ -812,19 +1049,24 @@ def test_w5_1_static_no_direct_sql_writes_in_workbench() -> None:
     assert not hits, f"W5.1 违例（直接 SQL 写）：{hits}"
 
 
-def test_w6_1_unbound_space_fail_closed_403(
+def test_w5_1_queries_readonly_no_pending_writes(
     wb_env: tuple[Callable[[], Session], Session],
 ) -> None:
-    """space 在允许集内但未绑定（016 语义）→ 同样 fail-closed，不落任何查询。"""
+    from insurance_harness.workbench.queries import (
+        completeness_matrix,
+        list_change_sets,
+        list_review_queue,
+    )
+    from tests.wbhelpers import wb_registry
+
     factory, session = wb_env
-    row = KnowledgeSpace(name="未绑定", binding_status="unbound")
-    session.add(row)
-    session.commit()
-    unbound = str(row.id)
-    client = _client(
-        factory, unbound,
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    open_review_key(session, space, vid)
+    scope = load_scope(session, space)
+    list_review_queue(session, scope)
+    list_change_sets(session, scope)
+    completeness_matrix(session, scope, wb_registry())
+    assert not session.dirty and not session.new and not session.deleted, (
+        "查询模块必须只读（W5.1）"
     )
-    resp = client.get(
-        f"/spaces/{unbound}/queue", headers={"Authorization": "Bearer tok-alice"}
-    )
-    assert resp.status_code == 403

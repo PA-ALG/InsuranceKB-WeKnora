@@ -70,24 +70,31 @@ uv run python -m insurance_harness.product.cli register-products \
 ### 3.4 审核工作台启动（change 008，T1~T5/T7 波次）
 
 ```bash
-# 1) 配置 token→(principal + 允许 Space 集合)：未配置=拒绝一切（fail-closed）
+# 1) 配置 token→(principal + 允许 Space 集合)：未配置=启动失败（fail-closed）
 export HARNESS_WORKBENCH_TOKENS_JSON='{"<随机token>": {"principal": "审核人甲", "space_ids": ["'$HARNESS_SPACE_ID'"]}}'
-# 2) 起服（loopback；生产置于内网反代之后）
+# 2)（可选）显式指定 schema 基线目录；缺省时在仓库根/harness 目录下启动即可自动发现
+# export HARNESS_WORKBENCH_SCHEMA_BASELINE_DIR=docs/insurance-kb/schema-baseline
+# 3)（可选）会话签名密钥：不配则进程内随机（单进程可用；重启即全员重新登录）
+# export HARNESS_WORKBENCH_SESSION_SECRET=<随机长串，勿入库>
+# 4) 起服（loopback；生产置于内网反代之后。uvicorn 为声明依赖，uv sync --locked 后即有）
 uv run uvicorn --factory --host 127.0.0.1 --port 8090 \
-  'insurance_harness.workbench.app:create_app' 2>/dev/null || \
-  uv run python -c "
-import os, uvicorn
-from insurance_harness.config import HarnessSettings
-from insurance_harness.db.base import make_engine, make_session_factory
-from insurance_harness.workbench.app import create_app
-s = HarnessSettings()  # 读 HARNESS_DB_URL / HARNESS_WORKBENCH_TOKENS_JSON
-app = create_app(session_factory=make_session_factory(make_engine(s.db_url)),
-                 tokens_config=s.workbench_tokens_json)
-uvicorn.run(app, host='127.0.0.1', port=8090)
-"
+  insurance_harness.workbench.app:create_app_from_settings
 ```
 
-页面：`/spaces/<space>/queue`（审核队列，approve/reject/defer/批量）、`/spaces/<space>/changes`（冲突与变更+翻案）、`/spaces/<space>/timeline`（G8 变更流）、`/spaces/<space>/matrix`（完整度五态格+下钻+CSV/JSONL 导出）。请求头 `Authorization: Bearer <token>`。**W4 发布/回滚页候 018 合入后交付。**
+`create_app_from_settings` 读取 `HARNESS_DB_URL` / `HARNESS_WORKBENCH_TOKENS_JSON` /
+schema 基线目录，**任一缺失/损坏启动即失败**（不吞错、不降级）。CI 的 `wheel-smoke`
+job 持续证明 wheel 装进空 venv 后模板与 HTMX 静态资源随包可用。
+
+使用方式两条通道：
+
+- **浏览器**：访问 `http://127.0.0.1:8090/login`，粘贴 token 登录（签发短期 HttpOnly
+  会话 cookie，内含 token 摘要而非明文；写操作带 CSRF 双提交防护）→ 首页列出可访问
+  Space。页面：`/spaces/<space>/queue`（审核队列：筛选/分页/approve/reject/defer/
+  批量/翻案入口）、`/spaces/<space>/changes`（冲突与变更+翻案）、`/spaces/<space>/timeline`
+  （G8 变更流）、`/spaces/<space>/matrix`（产品×schema 全字段五态格+下钻+缺口 CSV/JSONL 导出）。
+- **自动化**：直接带 `Authorization: Bearer <token>` 调页面/动作端点，无需登录与 CSRF。
+
+**W4 发布/回滚页候 018 合入后交付。**
 
 ## 4. 联调验收路径（按序，每步都有断言）
 

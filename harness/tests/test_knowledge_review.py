@@ -11,6 +11,7 @@ from insurance_harness.knowledge import (
     MergePolicy,
     ProposedClaim,
     ProposedEvidence,
+    ReviewDecisionConflict,
     build_page_claims,
     derive_review_key,
     ensure_review_item,
@@ -94,7 +95,10 @@ def test_k4_1_review_key_stable_and_state_preserved(kb_session: Session) -> None
     )
     assert not created2 and again.id == item.id
     assert again.status == "resolved"  # 已决状态不丢（K4.1）
-    assert again.subject == {"x": 1}  # 不重建不覆盖
+    assert again.subject["x"] == 1, "原 subject 键不重建不覆盖"
+    # W1 触发计数：再触发只累计 trigger 元数据（创建=1，再触发+1）
+    assert again.subject["trigger"]["count"] == 2
+    assert again.subject["trigger"]["last_at"]
 
 
 def test_k4_2_restricted_action_set(kb_session: Session) -> None:
@@ -117,7 +121,8 @@ def test_k4_2_restricted_action_set(kb_session: Session) -> None:
     claim = kb_session.execute(select(Claim)).scalar_one()
     assert claim.status == "published"
 
-    with pytest.raises(ValueError, match="翻案"):
+    # 异决定撞已决 → ReviewDecisionConflict（W1 乐观并发合同；翻案走 request_review_overturn）
+    with pytest.raises(ReviewDecisionConflict):
         resolve_review(kb_session, scope, review.review_key, "reject", actor="a")
 
 
