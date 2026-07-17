@@ -17,9 +17,9 @@
 
 **当前排期与硬依赖（业务方 2026-07-14 裁决）**：合并后收尾优先；随后 018 与 019 无相互前置，可独立或并行推进，019 是解锁真实基线的工具轨，价值优先级不低于 018。硬依赖为 018 → 021、019 → 020、021 → 020；020 在 019、021 均完成后先执行自身 T1 run-admission。021 不阻塞 T8 live 验收，但阻塞不同 revision 并发开放。
 
-进度（2026-07-15）：016 与 017 软件已完成；017 的受控 WeKnora live 仍无运行证据。018 已完成不可变 SnapshotFact、pointer-only Reader、frozen renderer、可恢复 publish/rollback/reconciliation 与 curated-first RAW policy；T4 的 PostgreSQL caller-transaction 节点和 T7 的真实 WeKnora V1→V2→rollback 节点已纳入互斥 lane，但当前本机 PostgreSQL/受控 live 均为 `NOT RUN`，不能把 collection、skip 或 mock 结果记成 integration/live 成功。019/020 未因此自动完成；021 仍 proposed/pending，尚未实现不同 revision ordering。M0 继续进行，最新精确测试数见 018 validation report 与 HANDOFF。
+进度（2026-07-17）：016/017/018 软件已完成；018 已交付不可变 SnapshotFact、pointer-only Reader、frozen renderer、可恢复 publish/rollback/reconciliation 与 curated-first RAW policy，并取得 PostgreSQL 零 skip和真实 WeKnora 5-node 证据。021 仍 proposed/pending，尚未实现不同 revision ordering；在 021 完成前仍只允许同一 Space/source 串行 lifecycle。最新精确证据见 018 validation report、HANDOFF 与收尾 PR check/comment。
 
-更新（2026-07-16）：**019 已随 PR #8 合入 main**；**023（本机 live 环境+受信 workflow）已随 PR #10 合入**；018 T1～T6 软件与两轮复审完成（PR #9）、PostgreSQL 16 job 通过，T7 真实 live 凭据已补齐、收口中；021 仍 pending。多轨并行拆分（008/010/013/024 就绪）见 22 号蓝图与 HANDOFF ⓪-0h。
+更新（2026-07-17）：**019 已随 PR #8 合入 main**；**023 已由 PR #10/#16/#19/#20 完成**；**018 已随 PR #9 合入**（merge `b093a447`），021/013/008 W4 已解锁。多轨并行拆分见 22 号蓝图与 HANDOFF ⓪-0h。
 
 ## M1 · 可演示闭环
 
@@ -44,7 +44,7 @@
 | QA 一等对象 | B14（012） | 010 |
 | 知识健康度巡检（含同类对比缺口 H1.6） | B13（011） | 007✅ |
 | 数据飞轮（Langfuse 信号→缺口工单） | B17（015） | 007✅、009（概念对齐） |
-| insurance MCP server（版本敏感问答） | B15（013） | 007✅ + 018 读模型；**业务方 2026-07-16 拍板提前（轨道 L3）：规格就绪，实现等 PR #9 合入** |
+| insurance MCP server（版本敏感问答） | B15（013） | 007✅ + 018✅；规格就绪，已可开工 |
 | 上游 3 Issue/PR（乐观锁/webhook/ingest_mode） | B5 | 无 |
 
 **完成定义**：六能力审计（13 §4）全部转 ✅；"在线问诊"式概念页上线；Agent 能答历史版本问题。
