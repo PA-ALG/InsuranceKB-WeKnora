@@ -27,8 +27,10 @@ from insurance_harness.knowledge import (
     resolve_review,
 )
 from insurance_harness.knowledge.tables import Claim, ClaimRevision, ReviewItem
+from tests.kbhelpers import resolve_with_version
 from tests.wbhelpers import (
     bound_space,
+    current_version,
     open_review_key,
     seed_wb_product,
 )
@@ -53,10 +55,11 @@ def test_w1_4_service_stale_version_raises(
     stale = session.execute(
         select(ReviewItem).where(ReviewItem.review_key == key)
     ).scalar_one().updated_at.isoformat()
-    resolve_review(session, scope, key, "defer", actor="a")  # 版本前进
+    resolve_with_version(session, scope, key, "defer", actor="a")  # 版本前进
     with pytest.raises(ReviewStale):
         resolve_review(
-            session, scope, key, "approve", actor="b", expected_version=stale
+            session, scope, key, "approve", actor="b",
+            expected_version=stale, request_id="stale-probe",
         )
     session.rollback()
     session.expire_all()
@@ -74,9 +77,9 @@ def test_w1_4_service_decision_conflict_after_resolved(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     scope = load_scope(session, space)
-    resolve_review(session, scope, key, "approve", actor="a")
+    resolve_with_version(session, scope, key, "approve", actor="a")
     session.commit()
-    # 同决定幂等返回；异决定 ReviewDecisionConflict
+    # 同决定幂等返回；异决定 ReviewDecisionConflict（已决判定先于前置校验，无需令牌）
     again = resolve_review(session, scope, key, "approve", actor="b")
     assert again.status == "resolved"
     with pytest.raises(ReviewDecisionConflict):
@@ -95,7 +98,7 @@ def test_w1_4_defer_then_actions_full_event_history(
     scope = load_scope(session, space)
     resolve_review(
         session, scope, key, "defer", actor="alice", reason="先挂起",
-        request_id="r1",
+        expected_version=current_version(session, space, key), request_id="r1",
     )
     item = session.execute(
         select(ReviewItem).where(ReviewItem.review_key == key)
@@ -162,7 +165,11 @@ def test_w1_4_live_postgresql_two_sessions_single_apply() -> None:
         def _first() -> str:
             with factory() as s1:
                 scope1 = load_scope(s1, space)
-                resolve_review(s1, scope1, key, "approve", actor="alice")
+                resolve_review(
+                    s1, scope1, key, "approve", actor="alice",
+                    expected_version=current_version(s1, space, key),
+                    request_id="alice-1",
+                )
                 first_locked.set()  # 行锁在手、发布已执行、事务未提交
                 assert release_first.wait(FUTURE_TIMEOUT_S)
                 s1.commit()
@@ -172,8 +179,14 @@ def test_w1_4_live_postgresql_two_sessions_single_apply() -> None:
             assert first_locked.wait(FUTURE_TIMEOUT_S)
             with factory() as s2:
                 scope2 = load_scope(s2, space)
-                # 在 s1 持锁期间进入：FOR UPDATE 阻塞至 s1 提交，随后读到已决
-                item = resolve_review(s2, scope2, key, "approve", actor="bob")
+                # s1 未提交，此处普通读仍看到旧版本——真实并发窗口
+                version_seen = current_version(s2, space, key)
+                # 在 s1 持锁期间进入：FOR UPDATE 阻塞至 s1 提交，随后读到已决，
+                # 已决+同决定 → 幂等返回（携带的旧版本令牌不再参与判定）
+                item = resolve_review(
+                    s2, scope2, key, "approve", actor="bob",
+                    expected_version=version_seen, request_id="bob-1",
+                )
                 s2.commit()
                 return f"idempotent:{item.status}"
 

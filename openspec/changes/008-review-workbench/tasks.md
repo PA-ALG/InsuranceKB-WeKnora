@@ -8,7 +8,7 @@
 - [x] T3 审核队列页：三动作+批量（仅非 high，排除项显式提示）；approve 走 `publish_claim` 真实发布；同决定重复→幂等 200 且发布数不变；异决定撞已决→409；**动作路由签名不收 operator 字段**——审计 actor 只认 token principal（W1/W6.3）
 - [x] T4 冲突与变更页：动作分色、conflict 双方值并排+decision_basis 逐键、翻案（理由必填→新 manual_edit ChangeSet，原决定与历史不改写）、G8 时间线（数据源=ClaimRevision 修订链：谁/何时/字段/旧→新/原因）（W2）
 - [x] T5 完整度矩阵页：五态分色格+下钻（Claim 值/证据引文/版本历史）+CSV/JSONL 导出（含 ticket_source 空列，011/015 交付后回填）（W3）
-- [ ] T6 发布与回滚页（**PR #9 合入后开工**）：SnapshotReader 读取 + 018 可恢复回滚 dry-run→确认→执行全链；合入前仅静态占位导航（W4）
+- [ ] T6 发布与回滚页（**018 已随 PR #9 合入 main，依赖已解锁（2026-07-18）**；按 codex R2 裁决**本 PR 不再扩大范围——T6/W4 以独立 follow-up PR 交付**，跟踪入口=本行 + HANDOFF B8）：SnapshotReader 读取 + 018 可恢复回滚 dry-run→确认→执行全链（W4）
 - [x] T7 守卫钉：跨 space 同业务键互不可见；**路由白名单全等断言**（无 publish/force/rollback/release 端点，W7.3）；W5.1 静态零写扫描（源级禁 session.add/delete/insert/update）；gauntlet 补钉双空间 token 跨路径对象探测→404
 - [x] T8 收尾（本波次）：validation-report（波次范围）→ HANDOFF 更新 → 14 号 Runbook 工作台段落；T6 完成后补 W4 部分
 
@@ -33,4 +33,10 @@
    - **测试同步纠偏**：扁平种子/串行"并发"/翻案即时改事实/导出含 present/badge 词断言全部替换为正确语义断言（非旁边补新测试）；仅并行摄入竞态保留 ORM 种子但强制真实嵌套形态（`seed_parallel_open_review`，字段与 Claim 行逐项一致）。连带更新：`test_knowledge_merge`（两阶段翻案）、`test_knowledge_review`（trigger 计数/异决定异常）、`test_scope_knowledge_016`（符号更名）、`test_ci_lanes_022`（PG lane 节点集+1）。
 
 约束：零模型调用；不改 compiler/goldenset/adapters；工作台对 knowledge/ 只经服务层（W5.1 静态断言钉住；本次返工按 codex 处方在 knowledge/ 新增投影/翻案/并发服务层能力，属服务层自身演进——与 018（PR #9）的 knowledge/ 文件域重叠面为 merge.py，合并时需一次 rebase 对账）。
-状态：**T1~T5/T7/T8(波次) 完成 + gauntlet 返工闭合 + PR#15 codex 七项阻断返工闭合；门禁全绿（ruff/mypy strict 188 files/deterministic 1318 passed；PostgreSQL lane 2 用例本机实跑通过；wheel-smoke 本地 PASS）；T6 候 PR #9**。依赖：007/016/019 已合入。
+10. **codex R2 复审返工（2026-07-18，2 P1+1 P2 全部核实属实并闭合，rebase main@9c4a1226）**：
+   - **P1 并发令牌强制**：expected_version/request_id 曾为可选（删掉隐藏字段即绕过 CAS）——`resolve_review` 对 open 项动作强制两令牌非空（缺失→`ReviewPreconditionRequired`，零写），HTTP 路由必填（缺失 422/服务层 428 双重强制），批量严格解析 `key@version`（裸 key/空版本按 malformed 显式拒绝不降级 None，request_id 必填）；已决同决定重放仍幂等、异决定仍 409，判定全留行锁内。全部调用方（含 007/016 测试）改为"取真实版本再提交"（tests/kbhelpers.resolve_with_version / wbhelpers.post_action），浏览器纵向测试的令牌**从页面 hidden 字段解析**。
+   - **P1 分页成本模型**：曾全量取出 space 内 ReviewItem 再逐条投影（20 条实测 123 SQL）——`subject` 增写 `product_version_id` 稳定维度（无迁移；本仓库无生产存量故不做 backfill，无该键旧行不参与产品过滤），筛选/COUNT/trigger 计数倒序/LIMIT 全部下沉 SQL（JSON 表达式跨方言），新增 `load_review_aggregates` 批量投影（固定 5 条 IN 预取）；`change_set_detail` 关联审核项、`cell_drill` 待审/冲突定位同步 SQL 化。SQL 预算测试钉死：limit=20 在总量 20 与 200 时查询数**完全相等且 ≤10**。
+   - **P2 投影边界**：`load_review_aggregate(s)`/`project_change_item` 曾不校验传入 ORM 对象归属——入口强制 `space_id`/经 ChangeSet 归属校验，跨 space 直接调用 → `ScopeViolation`（两条反例测试钉住）。
+   - **对账**：rebase 取并集（`knowledge/__init__.py` 008+018 导出、`POSTGRES_NODES` 三节点 017/018/008、HANDOFF 以 main 已合入 018 为基线）；W4/T6 依赖措辞随 018 合入更新（不扩大本 PR，follow-up PR 交付）；报告措辞对齐"已验证事实"（不再在复审结论前写"全部闭合"）。
+
+约束（同上）；状态：**T1~T5/T7/T8(波次) + R1 七项阻断 + R2 三项发现均已修复，rebase main 后门禁全绿（数字见 validation-report §1）；待 codex 终审；T6/W4 以 follow-up PR 交付（018 已解锁）**。依赖：007/016/018/019 已合入。

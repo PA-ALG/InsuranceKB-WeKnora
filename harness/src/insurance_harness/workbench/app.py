@@ -31,6 +31,7 @@ from insurance_harness.db.scope import (
 from insurance_harness.knowledge.merge import (
     MergeError,
     ReviewDecisionConflict,
+    ReviewPreconditionRequired,
     ReviewStale,
     request_review_overturn,
     resolve_review,
@@ -326,13 +327,16 @@ def create_app(
         space_id: str,
         review_key: str,
         action: Annotated[str, Form()],
+        expected_version: Annotated[str, Form(min_length=1)],
+        request_id: Annotated[str, Form(min_length=1)],
         reason: Annotated[str | None, Form()] = None,
-        expected_version: Annotated[str | None, Form()] = None,
-        request_id: Annotated[str | None, Form()] = None,
         csrf_token: Annotated[str | None, Form(alias=CSRF_FIELD)] = None,
     ) -> Response:
         """三动作（W1.3/W1.4）。operator 一律取授权 principal——路由签名
         刻意不接收任何客户端 operator 字段（W6 审计归属不可伪造）。
+        并发合同**强制**（codex R2-P1）：expected_version/request_id 为必填
+        表单字段——缺失/空由 FastAPI 校验拒为 422（零写），删掉隐藏字段不再是
+        关闭 CAS 的通道；服务层同一约束二次强制（ReviewPreconditionRequired→428）。
         并发裁定在服务层行锁内完成：stale/异决定 → 409 + 最新行片段。"""
         with session_factory() as session:
             ctx, scope = _authed_scope(request, space_id, session)
@@ -347,6 +351,12 @@ def create_app(
                 )
             except ScopeViolation:
                 raise  # 越权→app 403 常量体；ScopeViolation⊂ValueError，须先于下捕获
+            except ReviewPreconditionRequired as exc:
+                session.rollback()
+                return HTMLResponse(
+                    f"缺少必需前置条件 {exc.missing}（并发合同强制，请从最新页面提交）",
+                    status_code=428,
+                )
             except (ReviewStale, ReviewDecisionConflict) as exc:
                 session.rollback()
                 return _action_response(
@@ -415,12 +425,13 @@ def create_app(
         request: Request,
         space_id: str,
         keys: Annotated[list[str], Form()],
-        request_id: Annotated[str | None, Form()] = None,
+        request_id: Annotated[str, Form(min_length=1)],
         csrf_token: Annotated[str | None, Form(alias=CSRF_FIELD)] = None,
     ) -> Response:
         """批量 approve（W1.3）：仅 risk_level≠high；被排除项显式提示不静默。
-        每项携带 ``<review_key>@<expected_version>``，在 savepoint 内经服务层
-        行锁+版本判定（阻断 3：不靠预读 status）。"""
+        每项**必须**携带 ``<review_key>@<expected_version>``（codex R2-P1：裸 key /
+        空版本按 malformed 显式拒绝，绝不降级为 None 关闭 CAS）；``request_id``
+        必填；每项在 savepoint 内经服务层行锁+版本判定（不靠预读 status）。"""
         with session_factory() as session:
             ctx, scope = _authed_scope(request, space_id, session)
             _write_guard(request, ctx, csrf_token)
@@ -429,8 +440,12 @@ def create_app(
             skipped: list[str] = []
             conflicted: list[str] = []
             stale: list[str] = []
+            malformed: list[str] = []
             for raw in keys:
-                key, _, version = raw.partition("@")
+                key, sep, version = raw.partition("@")
+                if not sep or not key.strip() or not version.strip():
+                    malformed.append(raw or "<空>")
+                    continue
                 item = get_review_item(session, scope, key)
                 if item is None:
                     skipped.append(key)
@@ -445,13 +460,17 @@ def create_app(
                     resolve_review(
                         session, scope, key, "approve",
                         actor=ctx.grant.principal,
-                        expected_version=version or None,
-                        request_id=(f"{request_id}:{key}" if request_id else None),
+                        expected_version=version,
+                        request_id=f"{request_id}:{key}",
                     )
                 except ScopeViolation:
                     sp.rollback()
                     raise  # 越权 → app 403（正常不可达：key 已经 scope 过滤）
-                except (ReviewStale, ReviewDecisionConflict):
+                except (
+                    ReviewPreconditionRequired,
+                    ReviewStale,
+                    ReviewDecisionConflict,
+                ):
                     sp.rollback()
                     stale.append(key)
                     continue
@@ -463,6 +482,10 @@ def create_app(
                 approved.append(key)
             session.commit()
             parts = [f"批量通过 {len(approved)} 条"]
+            if malformed:
+                parts.append(
+                    f"格式错误已拒绝（须 key@version，缺版本不受理）：{'、'.join(malformed)}"
+                )
             if excluded_high:
                 parts.append(f"高风险已排除（须单条人审）：{'、'.join(excluded_high)}")
             if stale:

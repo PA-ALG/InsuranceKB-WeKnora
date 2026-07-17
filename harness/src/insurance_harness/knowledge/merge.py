@@ -97,6 +97,19 @@ class ReviewDecisionConflict(MergeError):
         self.current_action = current_action
 
 
+class ReviewPreconditionRequired(MergeError):
+    """W1 并发合同为**强制**而非可选（codex R2-P1）：open 项的任何动作缺
+    ``expected_version`` 或 ``request_id`` 一律拒绝（零写）——省略令牌不得成为
+    绕过 stale 拒绝/动作幂等的通道；由服务边界强制，不依赖模板诚实。"""
+
+    def __init__(self, review_key: str, *, missing: str) -> None:
+        super().__init__(
+            f"review item {review_key} 动作缺少必需前置条件 {missing}"
+        )
+        self.review_key = review_key
+        self.missing = missing
+
+
 def _scope_mismatch() -> ScopeViolation:
     return ScopeViolation("scope mismatch")
 
@@ -1261,6 +1274,9 @@ class MergeEngine:
             "new_claim_id": new_claim_id,
             "conflict_id": conflict_id,
             "predicate": prop.predicate,
+            # 稳定查询维度（codex R2-P1 分页）：队列的 SQL 级产品过滤/下钻定位
+            # 直接用 subject JSON，不再全量 Python 扫描
+            "product_version_id": prop.product_version_id,
         }
         if gate_payload is not None:
             subject["gate"] = gate_payload
@@ -1423,10 +1439,12 @@ def resolve_review(
 ) -> ReviewItem:
     """受限动作集 approve/reject/defer（K4.2）；已决项翻案走 request_review_overturn。
 
-    并发合同（W1）：行锁（PostgreSQL ``SELECT … FOR UPDATE``，SQLite 忽略无害）下判定；
-    ``expected_version``（= 页面渲染时的 ``updated_at`` isoformat）过期 → ReviewStale；
-    已决 + 同决定 → 幂等返回；已决 + 异决定 → ReviewDecisionConflict；
-    ``request_id`` 重放（同 id 同动作已在事件史）→ 幂等返回不重复生效。
+    并发合同（W1，**强制**——codex R2-P1）：行锁（PostgreSQL ``SELECT … FOR UPDATE``，
+    SQLite 忽略无害）下判定；open 项的任何动作 **必须** 携带非空 ``expected_version``
+    （= 页面渲染时的 ``updated_at`` isoformat）与 ``request_id``，缺失 →
+    ReviewPreconditionRequired（零写）——省略令牌不是关闭 CAS 的通道；
+    版本过期 → ReviewStale；已决 + 同决定 → 幂等返回；已决 + 异决定 →
+    ReviewDecisionConflict；``request_id`` 重放（同 id 同动作已在事件史）→ 幂等返回。
     全部动作（**含 defer**）追加 ``resolution.events`` 审计事件（actor/reason/at/request_id）。
     """
     require_current_scope(session, scope)
@@ -1458,7 +1476,12 @@ def resolve_review(
             current_status=item.status,
             current_action=str(prev) if prev is not None else None,
         )
-    if expected_version is not None and expected_version != item.updated_at.isoformat():
+    # open 项强制前置：两令牌缺一不可（在任何写发生之前拒绝）
+    if not (expected_version and expected_version.strip()):
+        raise ReviewPreconditionRequired(review_key, missing="expected_version")
+    if not (request_id and request_id.strip()):
+        raise ReviewPreconditionRequired(review_key, missing="request_id")
+    if expected_version != item.updated_at.isoformat():
         raise ReviewStale(
             review_key,
             current_status=item.status,
@@ -1645,6 +1668,7 @@ def request_review_overturn(
             "change_item_id": reversal.id,
             "new_claim_id": reversal.claim_id,
             "predicate": predicate,
+            "product_version_id": adopted.product_version_id,
             "change_set_id": change_set.id,
             "overturn_of_review": review_key,
             "prev_action": prev,

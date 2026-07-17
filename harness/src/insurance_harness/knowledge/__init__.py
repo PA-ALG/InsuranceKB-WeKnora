@@ -26,6 +26,7 @@ from insurance_harness.knowledge.merge import (
     MergeEngine,
     MergeError,
     ReviewDecisionConflict,
+    ReviewPreconditionRequired,
     ReviewStale,
     apply_change_item,
     apply_conflict_judgements,
@@ -65,6 +66,7 @@ from insurance_harness.knowledge.projection import (
     ReviewAggregate,
     claim_revisions,
     load_review_aggregate,
+    load_review_aggregates,
     project_change_item,
 )
 from insurance_harness.knowledge.publisher import (
@@ -132,6 +134,7 @@ __all__ = [
     "ProposedEvidence",
     "ReviewAggregate",
     "ReviewDecisionConflict",
+    "ReviewPreconditionRequired",
     "ReviewStale",
     "SourceImportContext",
     "SourceImportIdentity",
@@ -172,6 +175,7 @@ __all__ = [
     "import_pred_records",
     "load_pred_records",
     "load_review_aggregate",
+    "load_review_aggregates",
     "notify_source_revision",
     "policy_from_settings",
     "product_page_slug",

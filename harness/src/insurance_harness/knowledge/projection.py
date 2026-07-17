@@ -1,4 +1,4 @@
-"""知识域只读投影（008 阻断 1 修复）：工作台/导出消费的唯一 DTO 入口。
+"""知识域只读投影（008 阻断 1 修复；codex R2-P1 批量化 + R2-P2 边界强制）。
 
 `ChangeItem.proposed` 的真实持久化形态由 MergeEngine 决定（K3）：
 
@@ -11,10 +11,16 @@
 
 任何页面/导出**不得**自行读取 ``proposed`` 内部形态——一律经本模块投影
 （读取合同一处收口；形态演进只改这里）。本模块零写入（W5.1 语义同 workbench 查询）。
+
+成本模型（codex R2-P1）：批量入口 ``load_review_aggregates`` 用一次 ``_Prefetch``
+（5 条 IN 查询）投影任意多条 ReviewItem——查询量与条数无关；单条入口复用同一
+代码路径（1 条的批）。边界（codex R2-P2）：公共入口对**传入的 ORM 对象本身**
+校验归属 scope，不匹配抛 ``ScopeViolation``，绝不返回 foreign DTO。
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,7 +28,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
-from insurance_harness.db.scope import KnowledgeScope, require_current_scope
+from insurance_harness.db.scope import (
+    KnowledgeScope,
+    ScopeViolation,
+    require_current_scope,
+)
 from insurance_harness.knowledge.tables import (
     ChangeItem,
     ChangeSet,
@@ -167,7 +177,7 @@ def _value_text(value: Any) -> str | None:
     return str(value)
 
 
-def _evidence_from_rows(rows: list[ClaimEvidence]) -> tuple[EvidenceView, ...]:
+def _evidence_from_rows(rows: Sequence[ClaimEvidence]) -> tuple[EvidenceView, ...]:
     return tuple(
         EvidenceView(
             knowledge_id=e.knowledge_id,
@@ -199,20 +209,147 @@ def _evidence_from_dicts(rows: Any) -> tuple[EvidenceView, ...]:
     return tuple(out)
 
 
-def _claim_rows(session: Session, scope: KnowledgeScope, claim_id: str) -> Claim | None:
-    claim = session.get(Claim, claim_id)
-    if claim is None or claim.space_id != scope.space_id:
-        return None
-    return claim
+# ------------------------------------------------------------------ 批量预取
 
 
-def _claim_side(
-    session: Session, scope: KnowledgeScope, claim_id: str | None
-) -> ClaimSideView | None:
+def _claim_refs_of(proposed: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    for key in (
+        "existing_claim_id",
+        "placeholder_claim_id",
+        "adopted_claim_id",
+        "restore_claim_id",
+    ):
+        value = proposed.get(key)
+        if value:
+            refs.append(str(value))
+    return refs
+
+
+class _Prefetch:
+    """一批投影所需的全部行（固定 5 条 IN 查询，与条数无关——codex R2-P1）。
+
+    所有行都经 space 过滤载入：不在字典里 = 不在本 scope（fail-closed）。
+    """
+
+    def __init__(self) -> None:
+        self.change_items: dict[str, ChangeItem] = {}
+        self.conflicts_by_item: dict[str, Conflict] = {}
+        self.claims: dict[str, Claim] = {}
+        self.evidence_by_claim: dict[str, list[ClaimEvidence]] = {}
+        self.products_by_version: dict[str, tuple[str, str, str]] = {}
+
+
+def _build_prefetch(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    review_items: Sequence[ReviewItem] = (),
+    change_items: Sequence[ChangeItem] = (),
+) -> _Prefetch:
+    pf = _Prefetch()
+    change_item_ids: set[str] = set()
+    version_ids: set[str] = set()
+    for item in review_items:
+        subject = item.subject or {}
+        cid = subject.get("change_item_id")
+        if cid:
+            change_item_ids.add(str(cid))
+        pv = subject.get("product_version_id")
+        if pv:
+            version_ids.add(str(pv))
+    change_item_ids.update(str(ci.id) for ci in change_items)
+
+    if change_item_ids:
+        for row in session.execute(
+            select(ChangeItem)
+            .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+            .where(
+                ChangeItem.id.in_(change_item_ids),
+                ChangeSet.space_id == scope.space_id,
+            )
+        ).scalars():
+            pf.change_items[row.id] = row
+        for conflict in session.execute(
+            select(Conflict)
+            .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
+            .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
+            .where(
+                Conflict.change_item_id.in_(change_item_ids),
+                ChangeSet.space_id == scope.space_id,
+            )
+        ).scalars():
+            pf.conflicts_by_item.setdefault(conflict.change_item_id, conflict)
+
+    claim_ids: set[str] = set()
+    for ci in pf.change_items.values():
+        proposed = dict(ci.proposed or {})
+        if ci.claim_id:
+            claim_ids.add(str(ci.claim_id))
+        claim_ids.update(_claim_refs_of(proposed))
+        payload = proposed.get("claim")
+        if isinstance(payload, dict) and payload.get("product_version_id"):
+            version_ids.add(str(payload["product_version_id"]))
+    for conflict in pf.conflicts_by_item.values():
+        if conflict.existing_claim_id:
+            claim_ids.add(str(conflict.existing_claim_id))
+
+    if claim_ids:
+        for claim in session.execute(
+            select(Claim).where(
+                Claim.id.in_(claim_ids), Claim.space_id == scope.space_id
+            )
+        ).scalars():
+            pf.claims[claim.id] = claim
+            if claim.product_version_id:
+                version_ids.add(str(claim.product_version_id))
+        for evidence in session.execute(
+            select(ClaimEvidence).where(ClaimEvidence.claim_id.in_(claim_ids))
+        ).scalars():
+            pf.evidence_by_claim.setdefault(evidence.claim_id, []).append(evidence)
+
+    if version_ids:
+        for version, product in session.execute(
+            select(ProductVersion, InsuranceProduct)
+            .join(InsuranceProduct, ProductVersion.product_id == InsuranceProduct.id)
+            .where(
+                ProductVersion.id.in_(version_ids),
+                ProductVersion.space_id == scope.space_id,
+            )
+        ).all():
+            pf.products_by_version[str(version.id)] = (
+                product.product_code,
+                product.canonical_name,
+                version.version_label,
+            )
+    return pf
+
+
+def _claim_side_cached(pf: _Prefetch, claim_id: str | None) -> ClaimSideView | None:
     if not claim_id:
         return None
-    claim = _claim_rows(session, scope, str(claim_id))
+    claim = pf.claims.get(str(claim_id))
     if claim is None:
+        return None
+    return ClaimSideView(
+        claim_id=claim.id,
+        predicate=claim.predicate,
+        value=_value_text(claim.value),
+        value_state=claim.value_state,
+        status=claim.status,
+        confidence=claim.confidence,
+        evidence=_evidence_from_rows(pf.evidence_by_claim.get(claim.id, [])),
+    )
+
+
+def claim_side(
+    session: Session, scope: KnowledgeScope, claim_id: str | None
+) -> ClaimSideView | None:
+    """公开入口：一条 Claim 的展示侧（值+状态+证据）；跨 space/不存在 → None。"""
+    if not claim_id:
+        return None
+    claim = session.get(Claim, str(claim_id))
+    if claim is None or claim.space_id != scope.space_id:
         return None
     evidence = list(
         session.execute(
@@ -228,13 +365,6 @@ def _claim_side(
         confidence=claim.confidence,
         evidence=_evidence_from_rows(evidence),
     )
-
-
-def claim_side(
-    session: Session, scope: KnowledgeScope, claim_id: str | None
-) -> ClaimSideView | None:
-    """公开入口：一条 Claim 的展示侧（值+状态+证据）；跨 space/不存在 → None。"""
-    return _claim_side(session, scope, claim_id)
 
 
 def _proposal_side(proposed: dict[str, Any]) -> ClaimSideView:
@@ -269,24 +399,21 @@ def gate_view_from_payload(payload: Any) -> GateView | None:
     )
 
 
-def _conflict_view(
-    session: Session, scope: KnowledgeScope, conflict: Conflict
-) -> ConflictView:
-    existing = _claim_side(session, scope, conflict.existing_claim_id)
+def _conflict_view(pf: _Prefetch, conflict: Conflict) -> ConflictView:
     proposed_raw = conflict.proposed or {}
     return ConflictView(
         conflict_id=conflict.id,
         status=conflict.status,
-        existing=existing,
+        existing=_claim_side_cached(pf, conflict.existing_claim_id),
         proposed=_proposal_side(proposed_raw) if proposed_raw else None,
         decision_basis=dict(conflict.decision_basis or {}),
     )
 
 
-def project_change_item(
-    session: Session, scope: KnowledgeScope, item: ChangeItem
+def _project_change_item_cached(
+    pf: _Prefetch, item: ChangeItem
 ) -> ChangeItemProjection:
-    """按 action/mode 解析一条 ChangeItem（唯一读取合同入口）。
+    """按 action/mode 解析一条 ChangeItem（唯一读取合同入口；prefetch 内）。
 
     解析优先级：``proposed["claim"]``（提案原文）→ 持久化 Claim 行（claim_id /
     existing/placeholder id）→ 顶层扁平键（历史/降级容错）。
@@ -296,13 +423,11 @@ def project_change_item(
     claim_payload = proposed.get("claim")
     claim_dict = claim_payload if isinstance(claim_payload, dict) else None
 
-    candidate = _claim_side(session, scope, item.claim_id)
+    candidate = _claim_side_cached(pf, item.claim_id)
     existing_id = proposed.get("existing_claim_id") or proposed.get(
         "placeholder_claim_id"
     )
-    existing = _claim_side(
-        session, scope, str(existing_id) if existing_id else None
-    )
+    existing = _claim_side_cached(pf, str(existing_id) if existing_id else None)
     if mode == "append_evidence":
         # 目标 = 既有 Claim（claim_id 指向它），追加证据在 proposed["evidence"]
         existing = existing or candidate
@@ -333,7 +458,7 @@ def project_change_item(
         for cid in (item.claim_id, existing_id):
             if not cid:
                 continue
-            row = _claim_rows(session, scope, str(cid))
+            row = pf.claims.get(str(cid))
             if row is not None and row.product_version_id:
                 product_version_id = row.product_version_id
                 break
@@ -345,16 +470,7 @@ def project_change_item(
     if proposed_value is None and "value" in proposed and claim_dict is None:
         proposed_value = _value_text(proposed.get("value"))
 
-    conflict_row = session.execute(
-        select(Conflict)
-        .join(ChangeItem, ChangeItem.id == Conflict.change_item_id)
-        .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
-        .where(
-            Conflict.change_item_id == item.id,
-            ChangeSet.space_id == scope.space_id,
-        )
-    ).scalars().first()
-
+    conflict_row = pf.conflicts_by_item.get(item.id)
     basis = dict(item.decision_basis or {})
     return ChangeItemProjection(
         change_item_id=item.id,
@@ -389,13 +505,27 @@ def project_change_item(
             else None
         ),
         conflict=(
-            _conflict_view(session, scope, conflict_row)
-            if conflict_row is not None
-            else None
+            _conflict_view(pf, conflict_row) if conflict_row is not None else None
         ),
         gate=gate_view_from_payload(basis.get("gate")),
         decision_basis=basis,
     )
+
+
+def project_change_item(
+    session: Session,
+    scope: KnowledgeScope,
+    item: ChangeItem,
+    *,
+    prefetch: _Prefetch | None = None,
+) -> ChangeItemProjection:
+    """单条投影入口。**边界（codex R2-P2）**：传入的 ChangeItem 必须经其
+    ChangeSet 归属当前 scope，否则 ``ScopeViolation``——绝不产出 foreign DTO。"""
+    require_current_scope(session, scope)
+    pf = prefetch or _build_prefetch(session, scope, change_items=(item,))
+    if item.id not in pf.change_items:
+        raise ScopeViolation("scope mismatch")
+    return _project_change_item_cached(pf, item)
 
 
 def _history_events(resolution: dict[str, Any] | None) -> tuple[ReviewHistoryEvent, ...]:
@@ -421,48 +551,28 @@ def _history_events(resolution: dict[str, Any] | None) -> tuple[ReviewHistoryEve
     )
 
 
-def load_review_aggregate(
-    session: Session, scope: KnowledgeScope, item: ReviewItem
-) -> ReviewAggregate:
-    """一条 ReviewItem 的完整审阅上下文（W1 单条详情的数据源）。"""
-    require_current_scope(session, scope)
+def _aggregate_cached(pf: _Prefetch, item: ReviewItem) -> ReviewAggregate:
     subject = dict(item.subject or {})
     change_item_id = subject.get("change_item_id")
     projection: ChangeItemProjection | None = None
     if change_item_id:
-        change_item = session.execute(
-            select(ChangeItem)
-            .join(ChangeSet, ChangeSet.id == ChangeItem.change_set_id)
-            .where(
-                ChangeItem.id == str(change_item_id),
-                ChangeSet.space_id == scope.space_id,
-            )
-        ).scalar_one_or_none()
+        change_item = pf.change_items.get(str(change_item_id))
         if change_item is not None:
-            projection = project_change_item(session, scope, change_item)
+            projection = _project_change_item_cached(pf, change_item)
     predicate = subject.get("predicate") or (
         projection.predicate if projection is not None else None
     )
-    product_version_id = (
+    product_version_id = subject.get("product_version_id") or (
         projection.product_version_id if projection is not None else None
     )
     product_code: str | None = None
     product_name: str | None = None
     version_label: str | None = None
     if product_version_id:
-        row = session.execute(
-            select(ProductVersion, InsuranceProduct)
-            .join(InsuranceProduct, ProductVersion.product_id == InsuranceProduct.id)
-            .where(
-                ProductVersion.id == product_version_id,
-                ProductVersion.space_id == scope.space_id,
-            )
-        ).first()
-        if row is not None:
-            version, product = row
-            product_code = product.product_code
-            product_name = product.canonical_name
-            version_label = version.version_label
+        product_version_id = str(product_version_id)
+        info = pf.products_by_version.get(product_version_id)
+        if info is not None:
+            product_code, product_name, version_label = info
     trigger = subject.get("trigger") or {}
     resolution = dict(item.resolution or {})
     return ReviewAggregate(
@@ -478,9 +588,7 @@ def load_review_aggregate(
         product_code=product_code,
         product_name=product_name,
         version_label=version_label,
-        change_set_id=(
-            projection.change_set_id if projection is not None else None
-        ),
+        change_set_id=(projection.change_set_id if projection is not None else None),
         change_item=projection,
         gate=gate_view_from_payload(subject.get("gate")),
         allowed_actions=tuple(item.allowed_actions or ()),
@@ -495,13 +603,38 @@ def load_review_aggregate(
     )
 
 
+def load_review_aggregates(
+    session: Session, scope: KnowledgeScope, items: Sequence[ReviewItem]
+) -> tuple[ReviewAggregate, ...]:
+    """批量投影（codex R2-P1）：任意条数 = 固定 5 条 IN 查询的一次预取。
+
+    **边界（R2-P2）**：任一传入 ReviewItem 不属于当前 scope → ``ScopeViolation``。
+    """
+    require_current_scope(session, scope)
+    for item in items:
+        if item.space_id != scope.space_id:
+            raise ScopeViolation("scope mismatch")
+    pf = _build_prefetch(session, scope, review_items=items)
+    return tuple(_aggregate_cached(pf, item) for item in items)
+
+
+def load_review_aggregate(
+    session: Session, scope: KnowledgeScope, item: ReviewItem
+) -> ReviewAggregate:
+    """单条审核项的完整审阅上下文（W1 单条详情的数据源）。
+
+    **边界（R2-P2）**：传入 ReviewItem 不属于当前 scope → ``ScopeViolation``。
+    """
+    return load_review_aggregates(session, scope, (item,))[0]
+
+
 def claim_revisions(
     session: Session, scope: KnowledgeScope, claim_id: str
 ) -> tuple[RevisionView, ...]:
     """一条 Claim 的修订历史投影（下钻/时间线复用）。"""
     require_current_scope(session, scope)
-    claim = _claim_rows(session, scope, claim_id)
-    if claim is None:
+    claim = session.get(Claim, claim_id)
+    if claim is None or claim.space_id != scope.space_id:
         return ()
     return tuple(
         RevisionView(

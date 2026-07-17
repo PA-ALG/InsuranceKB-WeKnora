@@ -36,7 +36,13 @@ from insurance_harness.knowledge.tables import (
     Conflict,
     ReviewItem,
 )
-from tests.kbhelpers import allow_all_gate, pred, seed_bound_scope, seed_product
+from tests.kbhelpers import (
+    allow_all_gate,
+    pred,
+    resolve_with_version,
+    seed_bound_scope,
+    seed_product,
+)
 
 _GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
@@ -302,7 +308,9 @@ def test_s2_3_overturn_review_hides_cross_scope_item(session: Session) -> None:
         _proposal(scope_b, version_b.id),
         external_record_id="batch-b",
     )
-    resolve_review(session, scope_b, review_key_b, "approve", actor="reviewer-b")
+    resolve_with_version(
+        session, scope_b, review_key_b, "approve", actor="reviewer-b"
+    )
     changes_before = _count(session, ChangeSet)
     claim_b = session.execute(select(Claim)).scalar_one()
 
@@ -737,7 +745,9 @@ def test_s2_2_overturn_review_revalidates_entire_subject_before_mutation(
         _proposal(scope_a, version_a.id),
         external_record_id="overturn-a",
     )
-    resolve_review(session, scope_a, review_key_a, "approve", actor="reviewer-a")
+    resolve_with_version(
+        session, scope_a, review_key_a, "approve", actor="reviewer-a"
+    )
     review_a = get_review_item(session, scope_a, review_key_a)
     assert review_a is not None
     item_a = session.get(ChangeItem, review_a.subject["change_item_id"])
@@ -866,7 +876,9 @@ def test_s2_2_overturn_review_rejects_same_scope_mismatched_subject_aggregate(
     review, _, claim, conflict, conflict_claim = _same_scope_review_mismatch(
         session, scope, "overturn-aggregate"
     )
-    resolve_review(session, scope, review.review_key, "approve", actor="reviewer")
+    resolve_with_version(
+        session, scope, review.review_key, "approve", actor="reviewer"
+    )
     review.subject = {
         **review.subject,
         "new_claim_id": conflict_claim.id,

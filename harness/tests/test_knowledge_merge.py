@@ -16,7 +16,6 @@ from insurance_harness.knowledge import (
     apply_conflict_judgements,
     read_conflict_judgements,
     request_review_overturn,
-    resolve_review,
     retract_source,
     write_conflict_judge_queue,
 )
@@ -30,7 +29,12 @@ from insurance_harness.knowledge.tables import (
     Conflict,
     ReviewItem,
 )
-from tests.kbhelpers import allow_all_gate, seed_bound_scope, seed_product
+from tests.kbhelpers import (
+    allow_all_gate,
+    resolve_with_version,
+    seed_bound_scope,
+    seed_product,
+)
 
 
 def _prop(
@@ -171,7 +175,7 @@ def test_k3_1_enrich_fills_unknown_placeholder(kb_session: Session) -> None:
     report = _apply(engine, _prop(scope, version.id))
     assert report.actions.get("enrich") == 1
     key = report.review_keys[0]
-    resolve_review(kb_session, scope, key, "approve", actor="tester")
+    resolve_with_version(kb_session, scope, key, "approve", actor="tester")
     kb_session.refresh(placeholder)
     new_claim = _published(kb_session, "waiting_period")
     assert placeholder.status == "superseded" and placeholder.superseded_by == new_claim.id
@@ -361,7 +365,7 @@ def test_k3_2_high_risk_skips_judge_straight_to_review(kb_session: Session) -> N
         _prop(scope, version.id, predicate="exclusion_clause", value="十项免责"),
     )
     # 高风险 add 也不自动：先审核通过第一批
-    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
+    resolve_with_version(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     assert _published(kb_session, "exclusion_clause").value == {"text": "十项免责"}
 
     _apply(
@@ -394,7 +398,7 @@ def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
         risk_of=lambda p: "high",
     )
     first = _apply(engine, _prop(scope, version.id))
-    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
+    resolve_with_version(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     old = _published(kb_session, "waiting_period")
     _apply(
         engine,
@@ -418,7 +422,7 @@ def test_k3_2_high_risk_supersede_needs_review(kb_session: Session) -> None:
     ).scalar_one()
     assert review.type == "high_risk_change"
 
-    resolve_review(
+    resolve_with_version(
         kb_session,
         scope,
         review.review_key,
@@ -499,7 +503,7 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
         risk_of=lambda p: "high",
     )
     first = _apply(engine, _prop(scope, version.id), external_id="b1")
-    resolve_review(kb_session, scope, first.review_keys[0], "approve", actor="agent")
+    resolve_with_version(kb_session, scope, first.review_keys[0], "approve", actor="agent")
     second = _apply(
         engine,
         _prop(
@@ -515,7 +519,7 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
     review = kb_session.execute(
         select(ReviewItem).where(ReviewItem.review_key == second.review_keys[0])
     ).scalar_one()
-    resolve_review(kb_session, scope, review.review_key, "approve", actor="agent")
+    resolve_with_version(kb_session, scope, review.review_key, "approve", actor="agent")
     adopted = _published(kb_session, "waiting_period")
     original_resolution = dict(review.resolution or {})
     sets_before = len(kb_session.execute(select(ChangeSet)).scalars().all())
@@ -547,7 +551,7 @@ def test_k3_5_overturn_creates_new_changeset(kb_session: Session) -> None:
     assert len(kb_session.execute(select(ChangeSet)).scalars().all()) == sets_before + 1
 
     # —— 第二阶段：批准翻案审核项后才执行反向应用 ——
-    resolve_review(
+    resolve_with_version(
         kb_session, scope, overturn_item.review_key, "approve", actor="human-2"
     )
     kb_session.refresh(adopted)
@@ -571,13 +575,13 @@ def test_k3_5_overturn_reject_of_request_keeps_facts(kb_session: Session) -> Non
         policy=MergePolicy(auto_apply_add=True), risk_of=lambda p: "high",
     )
     report = _apply(engine, _prop(scope, version.id), external_id="b1")
-    resolve_review(kb_session, scope, report.review_keys[0], "approve", actor="agent")
+    resolve_with_version(kb_session, scope, report.review_keys[0], "approve", actor="agent")
     adopted = _published(kb_session, "waiting_period")
     overturn_set, overturn_item, _ = request_review_overturn(
         kb_session, scope, report.review_keys[0], "reject",
         actor="human", reason="复核一下",
     )
-    resolve_review(
+    resolve_with_version(
         kb_session, scope, overturn_item.review_key, "reject", actor="human-2",
         reason="原决定无误",
     )

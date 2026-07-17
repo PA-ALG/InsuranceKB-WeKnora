@@ -18,7 +18,6 @@ from insurance_harness.knowledge import (
     MergePolicy,
     current_snapshot_id,
     import_pred_records,
-    resolve_review,
 )
 from insurance_harness.knowledge.tables import (
     ChangeItem,
@@ -33,6 +32,7 @@ from tests.kbhelpers import (
     TERMS,
     allow_all_gate,
     pred,
+    resolve_with_version,
     seed_bound_scope,
     seed_product,
 )
@@ -74,7 +74,7 @@ def _approve_all_open(session: Session, scope: KnowledgeScope) -> int:
             ReviewItem.status == "open",
         )
     ).scalars().all():
-        resolve_review(
+        resolve_with_version(
             session,
             scope,
             item.review_key,

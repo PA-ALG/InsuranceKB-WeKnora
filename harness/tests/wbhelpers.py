@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import cast
 
 from fastapi.testclient import TestClient
+from httpx import Response
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope, load_scope
@@ -115,6 +117,66 @@ def make_client(
             session_secret=session_secret,
         ),
         raise_server_exceptions=raise_server_exceptions,
+    )
+
+
+def current_version(session: Session, space_id: str, review_key: str) -> str:
+    """读取审核项当前乐观并发版本（与页面 hidden expected_version 同源）。"""
+    from sqlalchemy import select as _select
+
+    session.expire_all()
+    item = session.execute(
+        _select(ReviewItem).where(
+            ReviewItem.space_id == space_id,
+            ReviewItem.review_key == review_key,
+        )
+    ).scalar_one()
+    return item.updated_at.isoformat()
+
+
+def post_action(
+    client: TestClient,
+    session: Session,
+    space_id: str,
+    review_key: str,
+    action: str,
+    *,
+    reason: str | None = None,
+    headers: dict[str, str] | None = None,
+    csrf: str | None = None,
+    expected_version: str | None = None,
+    request_id: str | None = None,
+    extra: dict[str, str] | None = None,
+    follow_redirects: bool = False,
+) -> Response:
+    """W1 强制并发合同（codex R2-P1）下的动作提交：默认取**最新真实版本**再提交。
+
+    正向用例不得再走"省略版本也成功"的路径；stale/缺失场景用
+    ``expected_version``/``request_id`` 显式覆盖。
+    """
+    from uuid import uuid4
+
+    if expected_version is None:
+        expected_version = current_version(session, space_id, review_key)
+    data: dict[str, str] = {
+        "action": action,
+        "expected_version": expected_version,
+        "request_id": request_id or uuid4().hex,
+    }
+    if reason is not None:
+        data["reason"] = reason
+    if csrf is not None:
+        data["csrf_token"] = csrf
+    if extra:
+        data = {**data, **extra}
+    return cast(
+        Response,
+        client.post(
+            f"/spaces/{space_id}/queue/{review_key}/action",
+            headers=headers,
+            data=data,
+            follow_redirects=follow_redirects,
+        ),
     )
 
 

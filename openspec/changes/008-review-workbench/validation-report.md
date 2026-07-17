@@ -1,18 +1,18 @@
-# 008 验收报告——T1~T5/T7 波次（2026-07-17，PR#15 codex 评审返工后重开）
+# 008 验收报告——T1~T5/T7 波次（2026-07-18，R1 七项阻断 + R2 三项发现返工后，rebase main@9c4a1226）
 
 > 范围声明：本波次交付 W1/W2/W3/W5/W6/W7.3；**W4（发布与回滚页，T6）按 spec 候 PR #9（018）合入后交付**，届时补充本报告 W4 部分。零模型调用。
 > 版本说明：2026-07-16 首版报告在 PR#15 codex 评审（7 项阻断全部核实属实）后**整体作废重写**——首版的"完成"结论建立在部分验证错误语义的测试上（扁平 proposed 种子/串行冒充并发/翻案即时改事实/缺口导出含 present），按"测试与文档同步纠偏"要求，本版全部证据来自返工后的正确语义测试。
 
-## 1. 门禁（fresh，worktree `ikb-008` @ feat/008-review-workbench 返工后）
+## 1. 门禁（fresh，worktree `ikb-008` @ feat/008-review-workbench，R2 返工 + rebase main 后）
 
 | 项 | 结果 |
 |---|---|
 | ruff | All checks passed |
-| mypy | Success，**188 files** |
-| deterministic lane | **1318 passed / 6 deselected**（返工净增 17；既有用例除 4 处语义连带更新外零破坏） |
-| PostgreSQL lane | **2 passed**（017 并发 + **008 双会话行锁**）——本机一次性 PG16 容器实跑；CI service lane 待 push 复证 |
-| wheel-smoke | 本地 PASS（uv build → 空 venv 装 wheel → PackageLoader/HTMX 静态/GET /login）；CI job `wheel-smoke` 已挂，待 push 复证 |
-| 008 focused | **52 passed / 1 deselected(PG)**：`test_review_workbench_008.py` 40 + `test_redteam_008_findings.py` 9 + `test_workbench_concurrency_008.py` 3（另 1 条 PG lane 本机实跑 passed） |
+| mypy | Success，**209 files** |
+| deterministic lane | **1562 passed / 8 deselected**（rebase 后基线含 018 全部用例；R2 净增 4 条验收测试） |
+| PostgreSQL lane | **3 passed**（017 并发 + 018 release publisher + **008 双会话行锁**）——本机一次性 PG16 容器实跑；CI service lane 以 push 后为准 |
+| wheel-smoke | 本地 PASS（uv build → 空 venv 装 wheel → PackageLoader/HTMX 静态/GET /login）；CI job 以 push 后为准 |
+| 008 focused | **56 passed / 1 deselected(PG)**：`test_review_workbench_008.py` 44 + `test_redteam_008_findings.py` 9 + `test_workbench_concurrency_008.py` 3（另 1 条 PG lane 本机实跑 passed） |
 
 连带更新声明（非 008 文件域）：`knowledge/merge.py`（两阶段翻案/行锁并发/gate 结构化决定）、`knowledge/review.py`（trigger 计数）、`knowledge/projection.py`（**新**，只读投影）、`knowledge/__init__.py`（导出）、007 spec K3.5 对齐注记、`test_knowledge_merge/review`、`test_scope_knowledge_016`（`overturn_review`→`request_review_overturn`）、`test_ci_lanes_022`（PG lane 节点集+1）、`config.py`（+3 工作台设置）、`pyproject.toml`（+uvicorn）、CI（+wheel-smoke job）。**与 PR #9（018）的重叠面 = knowledge/merge.py，后合者需 rebase 对账。**
 
@@ -61,9 +61,21 @@
 | 6 gate 元数据 | `test_w7_real_gate_denials_create_quality_gate_reviews` 等 4 条 |
 | 7 可启动性 | `scripts/wheel_smoke_workbench.py` 本地 PASS + CI `wheel-smoke` job（push 后复证） |
 
+## 3.7 codex R2 复审返工（2026-07-18，2 P1 + 1 P2 全部属实、全部闭合）
+
+核实结论与修法见 tasks.md 裁决记录 10；反例固化测试：
+
+| 发现 | 反例测试（返工后 GREEN） |
+|---|---|
+| P1 并发令牌可选可绕过 | `test_w1_4_missing_tokens_rejected_zero_write`（缺/空令牌 422 零写）/ `test_w1_4_service_layer_precondition_required`（服务层 428 分支）/ 批量 malformed 断言并入 `test_w1_3_batch_approve_versioned_excludes_high`；全部正向 HTTP 测试改"取真实版本再提交"（浏览器纵向流从页面 hidden 字段解析令牌） |
+| P1 分页库外执行 | `test_w1_1_queue_sql_budget_constant_wrt_total`：limit=20 在总量 20 与 200 时 SQL 数**完全相等且 ≤10**；产品过滤 total 语义保持正确 |
+| P2 投影缺 scope 校验 | `test_w6_projection_rejects_foreign_orm_objects`：`load_review_aggregate(s)`/`project_change_item` 传入跨 space ORM 对象 → `ScopeViolation` |
+
 ## 4. 残留与交接
 
-- T6/W4：候 PR #9——SnapshotReader 读取 + 018 可恢复回滚全链，届时按 spec Scenario 补两用例并更新路由白名单断言；
-- **与 PR #9 的合并次序**：本返工触及 `knowledge/merge.py`（服务层演进），018 亦在 knowledge/ 文件域——后合入者做一次 rebase 对账（预计冲突面小：018 主要新增 snapshots/reader）；
+- **T6/W4**：018 已随 PR #9 合入 main（依赖解锁）；按 codex R2 裁决**本 PR 不扩大范围——T6/W4 以独立 follow-up PR 交付**（跟踪：tasks.md T6 + HANDOFF B8）；
+- **rebase 已完成**（main@9c4a1226，018 并集对账：`knowledge/__init__.py` 双侧导出、`POSTGRES_NODES` 三节点、HANDOFF 以 main 事实为基线）；
 - `resolution.events` 是免迁移的审计兼容方案（满足 W1 审计条款），**不是防篡改账本**——若合规要求不可变审计流水，按注册表占 0010+ 迁移号建 `review_action_events` 表，不在本 PR 私自抢号；
-- CI 复证：PostgreSQL lane（新增节点）与 wheel-smoke job 的绿色以 push 后 CI 为准（CI 绿才算绿）；本机等价实跑（一次性 PG16 容器 / 空 venv wheel）已通过。
+- `subject.product_version_id` 为本版新写维度：本仓库无生产存量故不做 backfill；若未来出现无该键的历史行，其不参与产品过滤（已在查询 docstring 声明）；
+- CI 复证：PostgreSQL lane（三节点）与 wheel-smoke job 的绿色以 push 后 CI 为准（CI 绿才算绿）；本机等价实跑（一次性 PG16 容器 / 空 venv wheel）已通过；
+- 当前状态 = **待 codex 终审，未合入 main**。

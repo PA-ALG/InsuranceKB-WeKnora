@@ -9,6 +9,7 @@ QualityGate 三类拒绝；矩阵断言 schema 全字段底图与缺口导出语
 from __future__ import annotations
 
 import json as _json
+import re as _re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -27,8 +28,10 @@ from insurance_harness.knowledge.tables import (
 )
 from tests.wbhelpers import (
     bound_space,
+    current_version,
     make_client,
     open_review_key,
+    post_action,
     prop,
     real_gate,
     run_merge,
@@ -155,9 +158,17 @@ def test_w5_browser_login_then_full_review_without_bearer(
     assert queue.status_code == 200
     assert key in queue.text and "90天" in queue.text, "队列须展示候选值"
     csrf = client.cookies.get("wb_csrf")
+    # 版本与 request_id 从**页面 hidden 字段**取（与真实浏览器同源，不走 DB 捷径）
+    version_m = _re.search(r'name="expected_version" value="([^"]+)"', queue.text)
+    rid_m = _re.search(r'name="request_id" value="([^"]+)"', queue.text)
+    assert version_m and rid_m, "页面必须渲染并发令牌 hidden 字段"
     resp = client.post(
         f"/spaces/{space}/queue/{key}/action",
-        data={"action": "approve", "reason": "看过证据", "csrf_token": csrf},
+        data={
+            "action": "approve", "reason": "看过证据", "csrf_token": csrf,
+            "expected_version": version_m.group(1),
+            "request_id": rid_m.group(1),
+        },
         follow_redirects=False,
     )
     assert resp.status_code == 303, "浏览器表单 POST 应 303 回队列"
@@ -183,9 +194,7 @@ def test_w6_browser_session_csrf_required_on_writes(
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
     _login(client)
-    resp = client.post(
-        f"/spaces/{space}/queue/{key}/action", data={"action": "approve"}
-    )
+    resp = post_action(client, session, space, key, "approve", csrf=None)
     assert resp.status_code == 403, "无 CSRF 的 cookie 写请求必须拒绝"
     session.expire_all()
     item = session.execute(
@@ -308,10 +317,9 @@ def test_w1_3_approve_publishes_and_resolves(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    resp = client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "approve", "reason": "看过证据"},
-        follow_redirects=False,
+    resp = post_action(
+        client, session, space, key, "approve",
+        reason="看过证据", headers=_auth(),
     )
     assert resp.status_code == 303
     session.expire_all()
@@ -338,10 +346,9 @@ def test_w1_3_defer_keeps_open_but_audits(
         select(ReviewItem).where(ReviewItem.review_key == key)
     ).scalar_one().updated_at.isoformat()
     client = make_client(factory, space)
-    assert client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "defer", "reason": "等补充材料"},
-        follow_redirects=False,
+    assert post_action(
+        client, session, space, key, "defer",
+        reason="等补充材料", headers=_auth(),
     ).status_code == 303
     session.expire_all()
     item = session.execute(
@@ -369,14 +376,12 @@ def test_w1_4_stale_version_rejected_409(
     ).scalar_one().updated_at.isoformat()
     client = make_client(factory, space)
     # defer 推进版本 → 原版本过期
-    client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "defer"}, follow_redirects=False,
-    )
-    resp = client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(),
-        data={"action": "approve", "expected_version": stale_version},
+    assert post_action(
+        client, session, space, key, "defer", headers=_auth()
+    ).status_code == 303
+    resp = post_action(
+        client, session, space, key, "approve",
+        headers=_auth(), expected_version=stale_version,
     )
     assert resp.status_code == 409, "stale 版本必须拒绝"
     session.expire_all()
@@ -385,12 +390,8 @@ def test_w1_4_stale_version_rejected_409(
     ).scalar_one()
     assert item.status == "open", "stale 提交不得生效"
     # 带最新版本 → 生效
-    fresh = item.updated_at.isoformat()
-    assert client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(),
-        data={"action": "approve", "expected_version": fresh},
-        follow_redirects=False,
+    assert post_action(
+        client, session, space, key, "approve", headers=_auth()
     ).status_code == 303
 
 
@@ -402,12 +403,11 @@ def test_w1_4_same_action_resubmit_idempotent(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    url = f"/spaces/{space}/queue/{key}/action"
-    assert client.post(
-        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    assert post_action(
+        client, session, space, key, "approve", headers=_auth()
     ).status_code == 303
-    second = client.post(
-        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    second = post_action(
+        client, session, space, key, "approve", headers=_auth()
     )
     assert second.status_code == 303, "同决定重复提交幂等（W1.3）"
     session.expire_all()
@@ -430,14 +430,20 @@ def test_w1_4_request_id_replay_does_not_duplicate(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     scope = load_scope(session, space)
+    v1 = current_version(session, space, key)
     resolve_review(
-        session, scope, key, "defer", actor="alice", request_id="req-1"
+        session, scope, key, "defer", actor="alice",
+        expected_version=v1, request_id="req-1",
+    )
+    # 同 request_id 重放：连 stale 版本都不需要——重放判定先于前置校验
+    resolve_review(
+        session, scope, key, "defer", actor="alice",
+        expected_version=v1, request_id="req-1",
     )
     resolve_review(
-        session, scope, key, "defer", actor="alice", request_id="req-1"
-    )
-    resolve_review(
-        session, scope, key, "defer", actor="alice", request_id="req-2"
+        session, scope, key, "defer", actor="alice",
+        expected_version=current_version(session, space, key),
+        request_id="req-2",
     )
     session.commit()
     item = session.execute(
@@ -455,11 +461,12 @@ def test_w1_4_conflicting_action_on_resolved_409(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    url = f"/spaces/{space}/queue/{key}/action"
-    assert client.post(
-        url, headers=_auth(), data={"action": "approve"}, follow_redirects=False
+    assert post_action(
+        client, session, space, key, "approve", headers=_auth()
     ).status_code == 303
-    conflict = client.post(url, headers=_auth(), data={"action": "reject"})
+    conflict = post_action(
+        client, session, space, key, "reject", headers=_auth()
+    )
     assert conflict.status_code == 409, "异决定撞已决 → 409 提示刷新"
 
 
@@ -471,11 +478,9 @@ def test_w6_3_audit_actor_is_token_principal_not_client_field(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    resp = client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(),
-        data={"action": "approve", "operator": "mallory"},  # 客户端自报必须被无视
-        follow_redirects=False,
+    resp = post_action(
+        client, session, space, key, "approve", headers=_auth(),
+        extra={"operator": "mallory"},  # 客户端自报必须被无视
     )
     assert resp.status_code == 303
     session.expire_all()
@@ -495,6 +500,7 @@ def test_w1_3_batch_approve_versioned_excludes_high(
     k_low = open_review_key(session, space, vid, "waiting_period")
     k_high = open_review_key(session, space, vid, "grace_period", value="60天", risk="high")
     k_stale = open_review_key(session, space, vid, "coverage_scope", value="身故")
+    k_bare = open_review_key(session, space, vid, "never_extracted", value="占位")
     versions = {
         r.review_key: r.updated_at.isoformat()
         for r in session.execute(select(ReviewItem)).scalars()
@@ -508,6 +514,8 @@ def test_w1_3_batch_approve_versioned_excludes_high(
                 f"{k_low}@{versions[k_low]}",
                 f"{k_high}@{versions[k_high]}",
                 f"{k_stale}@1999-01-01T00:00:00+00:00",  # 过期版本
+                k_bare,  # 裸 key（无 @version）→ malformed 显式拒绝（R2-P1）
+                f"{k_bare}@",  # 空版本 → 同样拒绝，不降级为 None
             ],
             "request_id": "batch-1",
         },
@@ -516,6 +524,7 @@ def test_w1_3_batch_approve_versioned_excludes_high(
     assert "批量通过 1 条" in resp.text
     assert k_high in resp.text, "高风险排除必须显式点名"
     assert k_stale in resp.text and "版本已过期" in resp.text, "stale 项点名"
+    assert "格式错误" in resp.text, "裸 key/空版本必须显式拒绝，不得静默通过"
     session.expire_all()
     states = {
         r.review_key: r.status
@@ -523,6 +532,7 @@ def test_w1_3_batch_approve_versioned_excludes_high(
     }
     assert states[k_low] == "resolved"
     assert states[k_high] == "open" and states[k_stale] == "open"
+    assert states[k_bare] == "open", "malformed 项不得生效"
 
 
 # ---------------------------------------------------------------------------
@@ -555,9 +565,8 @@ def test_w2_2_detail_projects_real_merge_shapes(
     # 批1 add → approve 发布 90天
     key = open_review_key(session, space, vid, external_id="doc-1")
     client = make_client(factory, space)
-    assert client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    assert post_action(
+        client, session, space, key, "approve", headers=_auth()
     ).status_code == 303
     # 批2 同谓词更高权威 180天 → supersede needs_review + Conflict(open)
     report2 = run_merge(
@@ -603,9 +612,8 @@ def test_w2_3_overturn_two_phase_via_http(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    assert client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    assert post_action(
+        client, session, space, key, "approve", headers=_auth()
     ).status_code == 303
     # 缺 reason → 422/400（翻案必须留理由）
     assert client.post(
@@ -645,10 +653,9 @@ def test_w2_3_overturn_two_phase_via_http(
     )
     assert again.status_code == 200 and "幂等" in again.text
     # ——批准翻案审核项 → 反向应用生效——
-    assert client.post(
-        f"/spaces/{space}/queue/{overturn_item.review_key}/action",
-        headers=_auth(), data={"action": "approve", "reason": "同意复议"},
-        follow_redirects=False,
+    assert post_action(
+        client, session, space, overturn_item.review_key, "approve",
+        reason="同意复议", headers=_auth(),
     ).status_code == 303
     session.expire_all()
     assert session.execute(
@@ -671,10 +678,9 @@ def test_w2_4_timeline_human_readable_rows(
     vid = seed_wb_product(session, space)
     key = open_review_key(session, space, vid)
     client = make_client(factory, space)
-    assert client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "approve", "reason": "证据充分"},
-        follow_redirects=False,
+    assert post_action(
+        client, session, space, key, "approve",
+        reason="证据充分", headers=_auth(),
     ).status_code == 303
     body = client.get(f"/spaces/{space}/timeline", headers=_auth()).text
     assert "alice" in body and "P001" in body
@@ -711,9 +717,8 @@ def test_w3_1_matrix_five_states_from_real_merge(
     client = make_client(factory, space)
     # present：add → approve
     k1 = open_review_key(session, space, vid, "waiting_period")
-    assert client.post(
-        f"/spaces/{space}/queue/{k1}/action",
-        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
+    assert post_action(
+        client, session, space, k1, "approve", headers=_auth()
     ).status_code == 303
     # pending_review：grace_period 待审
     open_review_key(session, space, vid, "grace_period", value="60天")
@@ -747,10 +752,7 @@ def test_w3_2_pending_and_conflict_drill_not_404(
     assert "60天" in pending.text and "pending_review" in pending.text
     # conflict：先发布 waiting_period，再造高风险冲突
     k1 = open_review_key(session, space, vid, "waiting_period")
-    client.post(
-        f"/spaces/{space}/queue/{k1}/action",
-        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
-    )
+    post_action(client, session, space, k1, "approve", headers=_auth())
     run_merge(
         session, space,
         [prop(scope, vid, value="180天", knowledge_id="doc-2", quote="等待期180天")],
@@ -772,10 +774,8 @@ def test_w3_2_published_drill_and_unknown_drill(
     vid = seed_wb_product(session, space)
     client = make_client(factory, space)
     key = open_review_key(session, space, vid)
-    client.post(
-        f"/spaces/{space}/queue/{key}/action",
-        headers=_auth(), data={"action": "approve", "reason": "ok"},
-        follow_redirects=False,
+    post_action(
+        client, session, space, key, "approve", reason="ok", headers=_auth()
     )
     pub = client.get(
         f"/spaces/{space}/matrix/{vid}/waiting_period", headers=_auth()
@@ -802,10 +802,7 @@ def test_w3_3_gap_export_excludes_present_and_labels_sources(
     vid = seed_wb_product(session, space)
     client = make_client(factory, space)
     k1 = open_review_key(session, space, vid, "waiting_period")
-    client.post(
-        f"/spaces/{space}/queue/{k1}/action",
-        headers=_auth(), data={"action": "approve"}, follow_redirects=False,
-    )
+    post_action(client, session, space, k1, "approve", headers=_auth())
     open_review_key(session, space, vid, "grace_period", value="60天")
     jsonl = client.get(
         f"/spaces/{space}/matrix/export", headers=_auth(), params={"fmt": "jsonl"}
@@ -874,9 +871,9 @@ def test_w7_real_gate_denials_create_quality_gate_reviews(
             assert gate_meta.get("profile_version") == "1", "画像标识"
             assert gate_meta.get("baseline_id") == "wb-baseline", "基线标识"
         # 清场：resolve 掉便于下一轮 scalar_one
-        from insurance_harness.knowledge import resolve_review
+        from tests.kbhelpers import resolve_with_version
 
-        resolve_review(
+        resolve_with_version(
             session, load_scope(session, space), item.review_key, "reject",
             actor="t",
         )
@@ -1070,3 +1067,177 @@ def test_w5_1_queries_readonly_no_pending_writes(
     assert not session.dirty and not session.new and not session.deleted, (
         "查询模块必须只读（W5.1）"
     )
+
+
+# ---------------------------------------------------------------------------
+# codex R2 验收：并发令牌强制（P1）/ SQL 成本预算（P1）/ 投影边界（P2）
+# ---------------------------------------------------------------------------
+
+
+def test_w1_4_missing_tokens_rejected_zero_write(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """R2-P1 反例固化:删掉 expected_version / request_id 隐藏字段不再是通道——
+    路由层 422(FastAPI 必填校验,零写);空串同样拒绝。"""
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    client = make_client(factory, space)
+    url = f"/spaces/{space}/queue/{key}/action"
+    cases = (
+        {"action": "approve"},  # 双缺
+        {"action": "approve", "request_id": "r1"},  # 缺 expected_version
+        {"action": "approve", "expected_version": current_version(session, space, key)},
+        {"action": "approve", "expected_version": "", "request_id": "r1"},  # 空版本
+        {"action": "defer"},  # defer 同样强制(重复 defer 需 request_id 幂等)
+    )
+    for data in cases:
+        resp = client.post(url, headers=_auth(), data=data)
+        assert resp.status_code == 422, f"data={data} 应 422,实得 {resp.status_code}"
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "open" and item.resolution is None, "被拒请求零写"
+    published = session.execute(
+        select(_func.count()).select_from(Claim).where(Claim.status == "published")
+    ).scalar_one()
+    assert published == 0
+
+
+def test_w1_4_service_layer_precondition_required(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """服务边界二次强制(不依赖路由):open 项缺任一令牌 → ReviewPreconditionRequired,零写。"""
+    import pytest as _pytest
+
+    from insurance_harness.knowledge import (
+        ReviewPreconditionRequired,
+        resolve_review,
+    )
+
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    key = open_review_key(session, space, vid)
+    scope = load_scope(session, space)
+    with _pytest.raises(ReviewPreconditionRequired) as exc1:
+        resolve_review(session, scope, key, "approve", actor="a")
+    assert exc1.value.missing == "expected_version"
+    with _pytest.raises(ReviewPreconditionRequired) as exc2:
+        resolve_review(
+            session, scope, key, "approve", actor="a",
+            expected_version=current_version(session, space, key),
+        )
+    assert exc2.value.missing == "request_id"
+    with _pytest.raises(ReviewPreconditionRequired):
+        resolve_review(
+            session, scope, key, "defer", actor="a",
+            expected_version="  ", request_id="r1",  # 空白版本≠有效令牌
+        )
+    session.rollback()
+    session.expire_all()
+    item = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key)
+    ).scalar_one()
+    assert item.status == "open" and item.resolution is None, "零写"
+
+
+def test_w1_1_queue_sql_budget_constant_wrt_total(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """R2-P1 反例固化:limit=20 的队列查询量为常数(≤10 条 SQL),不随 space 内
+    ReviewItem 总量增长(20 条与 200 条完全等量)——筛选/COUNT/排序/LIMIT 在
+    SQL,当前页批量投影一次预取。"""
+    from sqlalchemy import event as _event
+
+    from insurance_harness.workbench.queries import list_review_queue
+
+    factory, session = wb_env
+    space = bound_space(session, "a")
+    vid = seed_wb_product(session, space)
+    scope = load_scope(session, space)
+
+    def _seed(n_from: int, n_to: int) -> None:
+        run_merge(
+            session, space,
+            [
+                prop(scope, vid, f"field_{i:04d}", value=f"值{i}",
+                     quote=f"证据{i}")
+                for i in range(n_from, n_to)
+            ],
+            external_id=f"bulk-{n_from}-{n_to}",
+        )
+
+    engine = session.get_bind()
+
+    def _count_queries(fn: Callable[[], object]) -> int:
+        counter = {"n": 0}
+
+        def _cb(*_args: object, **_kw: object) -> None:
+            counter["n"] += 1
+
+        _event.listen(engine, "before_cursor_execute", _cb)
+        try:
+            fn()
+        finally:
+            _event.remove(engine, "before_cursor_execute", _cb)
+        return counter["n"]
+
+    _seed(0, 20)
+    q_small = _count_queries(
+        lambda: list_review_queue(session, scope, limit=20)
+    )
+    _seed(20, 200)
+    q_large = _count_queries(
+        lambda: list_review_queue(session, scope, limit=20)
+    )
+    assert q_small == q_large, (
+        f"查询量必须与总量无关:20 条时 {q_small},200 条时 {q_large}"
+    )
+    assert q_large <= 10, f"单页查询预算 ≤10 条 SQL,实得 {q_large}(N+1 回归)"
+    page = list_review_queue(session, scope, limit=20)
+    assert page.total == 200 and len(page.items) == 20, "分页语义仍正确"
+    assert all(a.change_item is not None for a in page.items), "当前页投影完整"
+    # 产品过滤走 SQL(subject.product_version_id):total 正确
+    filtered = list_review_queue(session, scope, product_code="P001", limit=20)
+    assert filtered.total == 200
+    assert list_review_queue(
+        session, scope, product_code="NO-SUCH", limit=20
+    ).total == 0
+
+
+def test_w6_projection_rejects_foreign_orm_objects(
+    wb_env: tuple[Callable[[], Session], Session],
+) -> None:
+    """R2-P2 反例固化:知识域公共投影入口对传入 ORM 对象校验归属 scope——
+    跨 space 直接调用 → ScopeViolation,绝不返回 foreign DTO。"""
+    import pytest as _pytest
+
+    from insurance_harness.db.scope import ScopeViolation
+    from insurance_harness.knowledge.projection import (
+        load_review_aggregate,
+        load_review_aggregates,
+        project_change_item,
+    )
+    from insurance_harness.knowledge.tables import ChangeItem
+
+    factory, session = wb_env
+    space_a = bound_space(session, "a")
+    space_b = bound_space(session, "b")
+    vid_b = seed_wb_product(session, space_b, code="PB01", name="乙产品")
+    key_b = open_review_key(session, space_b, vid_b)
+    scope_a = load_scope(session, space_a)
+    item_b = session.execute(
+        select(ReviewItem).where(ReviewItem.review_key == key_b)
+    ).scalar_one()
+    with _pytest.raises(ScopeViolation):
+        load_review_aggregate(session, scope_a, item_b)
+    with _pytest.raises(ScopeViolation):
+        load_review_aggregates(session, scope_a, (item_b,))
+    change_item_b = session.execute(select(ChangeItem)).scalars().first()
+    assert change_item_b is not None
+    with _pytest.raises(ScopeViolation):
+        project_change_item(session, scope_a, change_item_b)
+    session.rollback()

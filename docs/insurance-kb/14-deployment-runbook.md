@@ -94,7 +94,7 @@ job 持续证明 wheel 装进空 venv 后模板与 HTMX 静态资源随包可用
   （G8 变更流）、`/spaces/<space>/matrix`（产品×schema 全字段五态格+下钻+缺口 CSV/JSONL 导出）。
 - **自动化**：直接带 `Authorization: Bearer <token>` 调页面/动作端点，无需登录与 CSRF。
 
-**W4 发布/回滚页候 018 合入后交付。**
+**W4 发布/回滚页：018 已合入 main（依赖解锁），以独立 follow-up PR 交付（跟踪：008 tasks.md T6）。**
 
 ## 4. 联调验收路径（按序，每步都有断言）
 
@@ -112,7 +112,7 @@ L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验�
 ## 5. integration / live 契约测试约定
 
 - deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
-- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发与 018 service-owned Session 两个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时两者均失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
+- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发、018 service-owned Session 与 008 工作台双会话并发三个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
 - WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。

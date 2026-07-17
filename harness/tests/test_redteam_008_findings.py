@@ -22,7 +22,9 @@ from sqlalchemy.orm import Session
 from insurance_harness.knowledge.tables import Claim
 from tests.wbhelpers import (
     bound_space,
+    current_version,
     make_client,
+    post_action,
     seed_parallel_open_review,
     seed_wb_product,
 )
@@ -50,16 +52,10 @@ def test_w1_double_approve_same_field_clean_409_not_500(
     seed_parallel_open_review(session, space, vid, "waiting_period", key="dup2")
     client = make_client(factory, space, raise_server_exceptions=False)
 
-    r1 = client.post(
-        f"/spaces/{space}/queue/dup1/action", headers=_auth(),
-        data={"action": "approve"}, follow_redirects=False,
-    )
+    r1 = post_action(client, session, space, "dup1", "approve", headers=_auth())
     assert r1.status_code == 303, "第一个 approve 正常发布"
 
-    r2 = client.post(
-        f"/spaces/{space}/queue/dup2/action", headers=_auth(),
-        data={"action": "approve"},
-    )
+    r2 = post_action(client, session, space, "dup2", "approve", headers=_auth())
     assert r2.status_code == 409, f"域冲突应干净拒绝为 409，实得 {r2.status_code}"
     # 零泄露:常量体,不得回显 MergeError 内含的 version_id / 他项 claim id。
     assert r2.text == _CONFLICT_BODY, "409 必须是常量体"
@@ -79,7 +75,14 @@ def test_w1_batch_approve_collision_partial_success_no_full_rollback(
     client = make_client(factory, space, raise_server_exceptions=False)
     resp = client.post(
         f"/spaces/{space}/queue/batch-approve",
-        headers=_auth(), data={"keys": ["b1", "b2"]},
+        headers=_auth(),
+        data={
+            "keys": [
+                f"b1@{current_version(session, space, 'b1')}",
+                f"b2@{current_version(session, space, 'b2')}",
+            ],
+            "request_id": "rt-batch",
+        },
     )
     assert resp.status_code == 200, f"批量整体应 200(部分成功),实得 {resp.status_code}"
     session.expire_all()
@@ -106,10 +109,7 @@ def test_w1_approve_evidence_less_candidate_clean_409_not_500(
         session, space, vid, "waiting_period", key="noev", with_evidence=False
     )
     client = make_client(factory, space, raise_server_exceptions=False)
-    resp = client.post(
-        f"/spaces/{space}/queue/noev/action", headers=_auth(),
-        data={"action": "approve"},
-    )
+    resp = post_action(client, session, space, "noev", "approve", headers=_auth())
     assert resp.status_code == 409, f"无证据应干净 409,实得 {resp.status_code}"
     assert resp.text == _CONFLICT_BODY, "409 常量体"
 
@@ -149,7 +149,10 @@ def test_w6_1_action_foreign_key_404(
     client = make_client(factory, space, raise_server_exceptions=False)
     resp = client.post(
         f"/spaces/{space}/queue/nope/action", headers=_auth(),
-        data={"action": "approve"},
+        data={
+            "action": "approve",
+            "expected_version": "probe", "request_id": "probe",
+        },
     )
     assert resp.status_code == 404
 

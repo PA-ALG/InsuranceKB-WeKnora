@@ -10,10 +10,8 @@ supersede/conflict/retract/overturn 的解析一处收口在知识域。
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
@@ -26,7 +24,7 @@ from insurance_harness.knowledge.projection import (
     RevisionView,
     claim_revisions,
     claim_side,
-    load_review_aggregate,
+    load_review_aggregates,
     project_change_item,
 )
 from insurance_harness.knowledge.tables import (
@@ -69,7 +67,14 @@ def list_review_queue(
     offset: int = 0,
 ) -> QueuePage:
     """W1.1：默认只列 open；**触发计数倒序默认**（spec 原文），次序 risk 序、更新时间倒序；
-    按产品/风险/类型筛选；分页返回总数。每条即完整审阅上下文（ReviewAggregate）。"""
+    按产品/风险/类型筛选；分页返回总数。每条即完整审阅上下文（ReviewAggregate）。
+
+    成本模型（codex R2-P1）：筛选/COUNT/排序/LIMIT 全部在 SQL 完成（trigger 计数与
+    产品维度经 ``subject`` JSON 表达式），只对**当前页**做批量投影（固定 5 条 IN
+    查询）——总查询量 O(1)，与 space 内 ReviewItem 总量无关。产品过滤依赖
+    ``subject.product_version_id``（本版起 ensure_review_item 写入；无该键的旧行
+    不参与产品过滤——本仓库无生产存量，无需 backfill）。
+    """
     require_current_scope(session, scope)
     stmt = select(ReviewItem).where(
         ReviewItem.space_id == scope.space_id, ReviewItem.status == status
@@ -78,24 +83,43 @@ def list_review_queue(
         stmt = stmt.where(ReviewItem.risk_level == risk_level)
     if type_:
         stmt = stmt.where(ReviewItem.type == type_)
-    rows = list(session.execute(stmt).scalars())
-    aggregates = [load_review_aggregate(session, scope, r) for r in rows]
     if product_code:
-        aggregates = [a for a in aggregates if a.product_code == product_code]
-
-    def _order(a: ReviewAggregate) -> tuple[int, int, float]:
-        try:
-            ts = datetime.fromisoformat(a.version_token).timestamp()
-        except ValueError:
-            ts = 0.0
-        return (-a.trigger_count, _RISK_ORDER.get(a.risk_level, 9), -ts)
-
-    aggregates.sort(key=_order)
-    total = len(aggregates)
-    window = tuple(aggregates[offset : offset + limit])
+        version_ids = (
+            select(ProductVersion.id)
+            .join(InsuranceProduct, ProductVersion.product_id == InsuranceProduct.id)
+            .where(
+                ProductVersion.space_id == scope.space_id,
+                InsuranceProduct.space_id == scope.space_id,
+                InsuranceProduct.product_code == product_code,
+            )
+        )
+        stmt = stmt.where(
+            ReviewItem.subject["product_version_id"].as_string().in_(version_ids)
+        )
+    total = session.execute(
+        select(func.count()).select_from(stmt.subquery())
+    ).scalar_one()
+    trigger_expr = func.coalesce(
+        ReviewItem.subject["trigger"]["count"].as_integer(), 0
+    )
+    risk_expr = case(
+        (ReviewItem.risk_level == "high", 0),
+        (ReviewItem.risk_level == "medium", 1),
+        else_=2,
+    )
+    rows = list(
+        session.execute(
+            stmt.order_by(
+                trigger_expr.desc(), risk_expr, ReviewItem.updated_at.desc()
+            )
+            .limit(limit)
+            .offset(offset)
+        ).scalars()
+    )
+    window = load_review_aggregates(session, scope, rows)
     return QueuePage(
         items=window,
-        total=total,
+        total=int(total),
         limit=limit,
         offset=offset,
         status=status,
@@ -194,13 +218,17 @@ def change_set_detail(
         ).scalars()
     )
     projections = tuple(project_change_item(session, scope, i) for i in items)
-    item_ids = {i.id for i in items}
+    item_ids = [i.id for i in items]
     reviews: dict[str, ReviewRef] = {}
-    for review in session.execute(
-        select(ReviewItem).where(ReviewItem.space_id == scope.space_id)
-    ).scalars():
-        cid = (review.subject or {}).get("change_item_id")
-        if cid in item_ids:
+    if item_ids:
+        # SQL 级过滤（codex R2-P1）：只取当前明细项关联的审核项，不扫全 space
+        for review in session.execute(
+            select(ReviewItem).where(
+                ReviewItem.space_id == scope.space_id,
+                ReviewItem.subject["change_item_id"].as_string().in_(item_ids),
+            )
+        ).scalars():
+            cid = (review.subject or {}).get("change_item_id")
             reviews[str(cid)] = ReviewRef(
                 review_key=review.review_key,
                 status=review.status,
@@ -387,13 +415,16 @@ def completeness_matrix(
                 claim.predicate,
                 MatrixCell(state=claim.value_state),
             )
-    # 待审（open ReviewItem）——覆盖三态；(version, predicate) 经投影解析真实形态
-    for item in session.execute(
-        select(ReviewItem).where(
-            ReviewItem.space_id == scope.space_id, ReviewItem.status == "open"
-        )
-    ).scalars():
-        aggregate = load_review_aggregate(session, scope, item)
+    # 待审（open ReviewItem）——覆盖三态；批量投影一次预取（R2-P1），
+    # (version, predicate) 经投影解析真实形态
+    open_reviews = list(
+        session.execute(
+            select(ReviewItem).where(
+                ReviewItem.space_id == scope.space_id, ReviewItem.status == "open"
+            )
+        ).scalars()
+    )
+    for aggregate in load_review_aggregates(session, scope, open_reviews):
         if aggregate.product_version_id and aggregate.predicate:
             _put(
                 aggregate.product_version_id,
@@ -548,38 +579,41 @@ def cell_drill(
         if published_claim is not None
         else ()
     )
+    # 定点定位（R2-P1）：subject/Conflict.proposed 均带稳定 (version, predicate)
+    # 维度，SQL 直取该格，不再全量循环投影
     pending: ReviewAggregate | None = None
-    for item in session.execute(
-        select(ReviewItem).where(
-            ReviewItem.space_id == scope.space_id, ReviewItem.status == "open"
+    pending_row = session.execute(
+        select(ReviewItem)
+        .where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.status == "open",
+            ReviewItem.subject["product_version_id"].as_string() == version_id,
+            ReviewItem.subject["predicate"].as_string() == predicate,
         )
-    ).scalars():
-        aggregate = load_review_aggregate(session, scope, item)
-        if (
-            aggregate.product_version_id == version_id
-            and aggregate.predicate == predicate
-        ):
-            pending = aggregate
-            break
+        .limit(1)
+    ).scalar_one_or_none()
+    if pending_row is not None:
+        pending = load_review_aggregates(session, scope, (pending_row,))[0]
     conflict_view: ConflictView | None = None
     if pending is not None and pending.change_item is not None:
         conflict_view = pending.change_item.conflict
     if conflict_view is None:
-        for _conflict, change_item in session.execute(
+        conflict_pair = session.execute(
             select(Conflict, ChangeItem)
             .join(ChangeItem, Conflict.change_item_id == ChangeItem.id)
             .join(ChangeSet, ChangeItem.change_set_id == ChangeSet.id)
             .where(Conflict.status.in_(("open", "pending_judge")))
             .where(ChangeSet.space_id == scope.space_id)
-        ).all():
+            .where(
+                Conflict.proposed["product_version_id"].as_string() == version_id,
+                Conflict.proposed["predicate"].as_string() == predicate,
+            )
+            .limit(1)
+        ).first()
+        if conflict_pair is not None:
+            _conflict, change_item = conflict_pair
             projection = project_change_item(session, scope, change_item)
-            if (
-                projection.product_version_id == version_id
-                and projection.predicate == predicate
-                and projection.conflict is not None
-            ):
-                conflict_view = projection.conflict
-                break
+            conflict_view = projection.conflict
     if conflict_view is not None and conflict_view.status in ("open", "pending_judge"):
         state = "conflict_open"
     elif pending is not None:
