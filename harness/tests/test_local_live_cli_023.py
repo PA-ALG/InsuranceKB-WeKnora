@@ -5,12 +5,16 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+from hashlib import sha256
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
+from stat import S_IMODE
 from types import ModuleType, SimpleNamespace
-from typing import Protocol
+from typing import Protocol, cast
 
 import pytest
+from pydantic import SecretStr
 
 from insurance_harness.live_env.compose import (
     read_runtime_environment,
@@ -19,12 +23,23 @@ from insurance_harness.live_env.compose import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CLI_PATH = REPO_ROOT / "harness/scripts/local_live.py"
-PHASES = ("check", "probe-models", "up", "provision", "verify", "run-local", "down")
+PHASES = (
+    "check",
+    "probe-models",
+    "up",
+    "provision",
+    "verify",
+    "smoke-vlm",
+    "retry-vlm",
+    "run-local",
+    "down",
+)
 
 
 class PhaseRequestLike(Protocol):
     phase: str
     delete_volumes: bool
+    knowledge_id: str | None
 
 
 class ProfileLike(Protocol):
@@ -56,15 +71,28 @@ def _write_local_envs(tmp_path: Path) -> tuple[Path, Path]:
         "LOCAL_LIVE_WEKNORA_CHAT_BASE_URL=https://chat.example/v1\n"
         "LOCAL_LIVE_WEKNORA_CHAT_API_KEY=chat-key\n"
         "LOCAL_LIVE_WEKNORA_CHAT_MODEL=chat-model\n"
+        "LOCAL_LIVE_WEKNORA_CHAT_PROVIDER=aliyun\n"
+        "LOCAL_LIVE_WEKNORA_CHAT_PROTOCOL=openai_compatible\n"
         "LOCAL_LIVE_WEKNORA_EMBEDDING_BASE_URL=https://embedding.example/v1\n"
         "LOCAL_LIVE_WEKNORA_EMBEDDING_API_KEY=embedding-key\n"
         "LOCAL_LIVE_WEKNORA_EMBEDDING_MODEL=embedding-model\n"
-        "LOCAL_LIVE_WEKNORA_RERANK_BASE_URL=https://rerank.example/v1\n"
+        "LOCAL_LIVE_WEKNORA_EMBEDDING_PROVIDER=aliyun\n"
+        "LOCAL_LIVE_WEKNORA_EMBEDDING_PROTOCOL=openai_compatible\n"
+        "LOCAL_LIVE_WEKNORA_RERANK_BASE_URL=https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank\n"
         "LOCAL_LIVE_WEKNORA_RERANK_API_KEY=rerank-key\n"
         "LOCAL_LIVE_WEKNORA_RERANK_MODEL=rerank-model\n"
+        "LOCAL_LIVE_WEKNORA_RERANK_PROVIDER=aliyun\n"
+        "LOCAL_LIVE_WEKNORA_RERANK_PROTOCOL=dashscope_native\n"
+        "LOCAL_LIVE_WEKNORA_VLLM_BASE_URL=https://vlm.example/v1\n"
+        "LOCAL_LIVE_WEKNORA_VLLM_API_KEY=vlm-key\n"
+        "LOCAL_LIVE_WEKNORA_VLLM_MODEL=vlm-model\n"
+        "LOCAL_LIVE_WEKNORA_VLLM_PROVIDER=aliyun\n"
+        "LOCAL_LIVE_WEKNORA_VLLM_PROTOCOL=openai_compatible\n"
         "HARNESS_LLM_BASE_URL=https://bailian.example/v1\n"
         "HARNESS_LLM_API_KEY=private-api-key\n"
         "HARNESS_LLM_MODEL_WEAK=deepseek-v4-flash\n"
+        "HARNESS_LLM_PROVIDER=aliyun\n"
+        "HARNESS_LLM_PROTOCOL=openai_compatible\n"
     )
     runtime = tmp_path / ".env.local-live.runtime"
     runtime.write_text(
@@ -92,19 +120,87 @@ def test_r5_1_cli_dispatches_each_frozen_phase_through_injected_adapter(
     class Adapter:
         def run(self, request: PhaseRequestLike) -> object:
             requests.append(request)
-            return {"status": "ok", "phase": request.phase}
+            return {
+                "status": (
+                    "completed"
+                    if request.phase in {"smoke-vlm", "retry-vlm"}
+                    else "ok"
+                ),
+                "phase": request.phase,
+            }
 
     output = StringIO()
+    arguments = [phase]
+    if phase == "retry-vlm":
+        arguments.extend(("--knowledge-id", "vlm-knowledge-1"))
     assert (
         module.main(
-            [phase], adapter=Adapter(), lock_verifier=ResolvedLocks(), output=output
+            arguments, adapter=Adapter(), lock_verifier=ResolvedLocks(), output=output
         )
         == 0
     )
     assert len(requests) == 1
     assert requests[0].phase == phase
     assert requests[0].delete_volumes is False
-    assert '"status": "ok"' in output.getvalue()
+    assert requests[0].knowledge_id == (
+        "vlm-knowledge-1" if phase == "retry-vlm" else None
+    )
+    expected_status = "completed" if phase in {"smoke-vlm", "retry-vlm"} else "ok"
+    assert f'"status": "{expected_status}"' in output.getvalue()
+
+
+@pytest.mark.parametrize("phase", ("smoke-vlm", "retry-vlm"))
+@pytest.mark.parametrize(
+    "status", ("failed", "cancelled", "incomplete", "pending", "processing")
+)
+def test_r3_3_vlm_cli_preserves_noncompleted_evidence_but_exits_nonzero(
+    phase: str,
+    status: str,
+) -> None:
+    module = _module()
+
+    class Adapter:
+        def run(self, request: PhaseRequestLike) -> object:
+            return {
+                "status": status,
+                "knowledge_id": request.knowledge_id or "vlm-knowledge-1",
+                "attempt": 1,
+            }
+
+    output = StringIO()
+    error = StringIO()
+    arguments = [phase]
+    if phase == "retry-vlm":
+        arguments.extend(("--knowledge-id", "vlm-knowledge-1"))
+
+    assert module.main(
+        arguments,
+        adapter=Adapter(),
+        lock_verifier=ResolvedLocks(),
+        output=output,
+        error=error,
+    ) == 1
+    assert f'"status": "{status}"' in output.getvalue()
+    assert "did not complete" in error.getvalue()
+
+
+def test_r3_3_retry_marker_permission_error_is_not_reported_as_consumed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = import_module("insurance_harness.live_env.local_provisioning")
+    collaborator = module.VLMSmokeCollaborator(
+        runtime_path=tmp_path / ".env.local-live.runtime"
+    )
+
+    def deny_marker(*args: object, **kwargs: object) -> int:
+        del args, kwargs
+        raise PermissionError("read-only filesystem")
+
+    monkeypatch.setattr(module.os, "open", deny_marker)
+
+    with pytest.raises(RuntimeError, match="could not be persisted"):
+        collaborator._consume_retry("vlm-knowledge-1")
 
 
 def test_r5_2_down_is_non_destructive_without_explicit_volume_confirmation() -> None:
@@ -139,6 +235,370 @@ def test_r5_2_down_is_non_destructive_without_explicit_volume_confirmation() -> 
         output=StringIO(),
     ) == 0
     assert requests[-1].delete_volumes is True
+
+
+def test_r3_3_knowledge_id_is_required_only_for_explicit_retry() -> None:
+    module = _module()
+    calls: list[PhaseRequestLike] = []
+
+    class Adapter:
+        def run(self, request: PhaseRequestLike) -> object:
+            calls.append(request)
+            return {"status": "failed", "knowledge_id": request.knowledge_id}
+
+    missing = StringIO()
+    assert module.main(
+        ["retry-vlm"],
+        adapter=Adapter(),
+        lock_verifier=ResolvedLocks(),
+        output=StringIO(),
+        error=missing,
+    ) == 2
+    assert calls == []
+    assert "--knowledge-id is required" in missing.getvalue()
+
+    invalid = StringIO()
+    assert module.main(
+        ["smoke-vlm", "--knowledge-id", "vlm-knowledge-1"],
+        adapter=Adapter(),
+        lock_verifier=ResolvedLocks(),
+        output=StringIO(),
+        error=invalid,
+    ) == 2
+    assert calls == []
+    assert "valid only for retry-vlm" in invalid.getvalue()
+
+
+def test_r3_3_retry_vlm_consumes_marker_after_identity_before_single_reparse(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    runtime = tmp_path / ".env.local-live.runtime"
+    runtime.write_text("opaque runtime\n")
+    runtime.chmod(0o600)
+    fixture = tmp_path / "vlm-canary.png"
+    fixture.write_bytes(b"safe visual fixture")
+    process_config = {
+        "enable_multimodel": True,
+        "vlm_config": {"enabled": True, "model_id": "vlm-model"},
+    }
+    config_digest = sha256(
+        json.dumps(process_config, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+    calls: list[str] = []
+    resolver_calls: list[str] = []
+    attempt_calls = 0
+
+    class Client:
+        async def get_knowledge(self, key: object, knowledge_id: str) -> dict[str, object]:
+            del key
+            calls.append(f"get:{knowledge_id}")
+            return {
+                "id": knowledge_id,
+                "knowledge_base_id": "raw-kb",
+                "parse_status": "failed",
+                "metadata": {
+                    "owner": "insurancekb-local-live-v1",
+                    "sha256": sha256(fixture.read_bytes()).hexdigest(),
+                    "purpose": "vlm-smoke",
+                    "vlm_model_id": "vlm-model",
+                    "process_config_sha256": config_digest,
+                    "process_overrides": process_config,
+                },
+                "error": "provider-secret raw provider response",
+            }
+
+        async def get_knowledge_parse_attempt(
+            self, key: object, knowledge_id: str
+        ) -> int:
+            nonlocal attempt_calls
+            del key
+            attempt_calls += 1
+            calls.append(f"attempt:{knowledge_id}:{attempt_calls}")
+            return attempt_calls
+
+        async def reparse_knowledge(
+            self,
+            key: object,
+            knowledge_id: str,
+            config: object,
+        ) -> dict[str, object]:
+            del key, config
+            calls.append(f"reparse:{knowledge_id}")
+            return {"id": knowledge_id}
+
+        async def aclose(self) -> None:
+            calls.append("close")
+
+    class Resolver:
+        async def resolve(self, values: object = None) -> SecretStr:
+            resolver_calls.append("resolve")
+            return SecretStr("tenant-key")
+
+    collaborator = module.VLMSmokeCollaborator(
+        runtime_path=runtime,
+        fixture_path=fixture,
+        runtime_loader=lambda path: {
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb",
+            "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-model",
+        },
+        client_factory=lambda url: Client(),
+        api_key_resolver=Resolver(),
+        poll_interval=0,
+    )
+    request = module.PhaseRequest("retry-vlm", False, None, "vlm-knowledge-1")
+
+    result = collaborator.run(request)
+    assert result["knowledge_id"] == "vlm-knowledge-1"
+    assert result["attempt"] == 2
+    assert result["error_class"] == "knowledge_parse_failed"
+    assert "provider-secret" not in repr(result)
+
+    assert sum(call.startswith("reparse:") for call in calls) == 1
+    assert resolver_calls == ["resolve"]
+    assert attempt_calls == 2
+    api_calls = tuple(calls)
+    marker = next(tmp_path.glob(".env.local-live.runtime.retry-vlm-*"))
+    assert S_IMODE(marker.stat().st_mode) == 0o600
+    with pytest.raises(RuntimeError, match="retry"):
+        collaborator.run(request)
+    assert tuple(calls) == api_calls
+    assert resolver_calls == ["resolve"]
+    assert attempt_calls == 2
+
+
+@pytest.mark.parametrize(
+    ("attempts", "expected_reparse_count"),
+    (([None], 0), ([2, 2], 1), ([2, 4], 1)),
+)
+def test_r3_3_retry_uses_real_span_attempt_and_rejects_missing_or_nonincremented_attempt(
+    tmp_path: Path,
+    attempts: list[int | None],
+    expected_reparse_count: int,
+) -> None:
+    module = _module()
+    runtime = tmp_path / ".env.local-live.runtime"
+    runtime.write_text("opaque runtime\n")
+    runtime.chmod(0o600)
+    fixture = tmp_path / "vlm-canary.png"
+    fixture.write_bytes(b"safe visual fixture")
+    process_config = {
+        "enable_multimodel": True,
+        "vlm_config": {"enabled": True, "model_id": "vlm-model"},
+    }
+    config_digest = sha256(
+        json.dumps(process_config, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+    calls: list[str] = []
+    remaining_attempts = list(attempts)
+
+    class Client:
+        async def get_knowledge(self, key: object, knowledge_id: str) -> dict[str, object]:
+            del key
+            calls.append(f"get:{knowledge_id}")
+            return {
+                "id": knowledge_id,
+                "knowledge_base_id": "raw-kb",
+                "parse_status": "failed",
+                "metadata": {
+                    "owner": "insurancekb-local-live-v1",
+                    "sha256": sha256(fixture.read_bytes()).hexdigest(),
+                    "purpose": "vlm-smoke",
+                    "vlm_model_id": "vlm-model",
+                    "process_config_sha256": config_digest,
+                    "process_overrides": process_config,
+                },
+            }
+
+        async def get_knowledge_parse_attempt(
+            self, key: object, knowledge_id: str
+        ) -> object:
+            del key
+            calls.append(f"attempt:{knowledge_id}")
+            return remaining_attempts.pop(0)
+
+        async def reparse_knowledge(
+            self, key: object, knowledge_id: str, config: object
+        ) -> dict[str, object]:
+            del key, config
+            calls.append(f"reparse:{knowledge_id}")
+            return {"id": knowledge_id}
+
+        async def aclose(self) -> None:
+            calls.append("close")
+
+    class Resolver:
+        async def resolve(self, values: object = None) -> SecretStr:
+            return SecretStr("tenant-key")
+
+    collaborator = module.VLMSmokeCollaborator(
+        runtime_path=runtime,
+        fixture_path=fixture,
+        runtime_loader=lambda path: {
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb",
+            "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-model",
+        },
+        client_factory=lambda url: Client(),
+        api_key_resolver=Resolver(),
+        poll_interval=0,
+    )
+
+    with pytest.raises(RuntimeError, match="retry"):
+        collaborator.run(
+            module.PhaseRequest("retry-vlm", False, None, "vlm-knowledge-1")
+        )
+
+    assert sum(call.startswith("reparse:") for call in calls) == expected_reparse_count
+    markers = tuple(tmp_path.glob(".env.local-live.runtime.retry-vlm-*"))
+    assert bool(markers) is bool(expected_reparse_count)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "kb",
+        "owner",
+        "sha",
+        "purpose",
+        "vlm_model",
+        "process_config",
+        "completed",
+        "pending",
+        "processing",
+    ),
+)
+def test_r3_3_retry_rejects_arbitrary_knowledge_before_marker_and_reparse(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    module = _module()
+    runtime = tmp_path / ".env.local-live.runtime"
+    runtime.write_text("opaque runtime\n")
+    runtime.chmod(0o600)
+    fixture = tmp_path / "vlm-canary.png"
+    fixture.write_bytes(b"safe visual fixture")
+    fixture_digest = sha256(fixture.read_bytes()).hexdigest()
+    process_config = {
+        "enable_multimodel": True,
+        "vlm_config": {"enabled": True, "model_id": "vlm-model"},
+    }
+    config_digest = sha256(
+        json.dumps(process_config, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+    metadata: dict[str, object] = {
+        "owner": "insurancekb-local-live-v1",
+        "sha256": fixture_digest,
+        "purpose": "vlm-smoke",
+        "vlm_model_id": "vlm-model",
+        "process_config_sha256": config_digest,
+    }
+    record: dict[str, object] = {
+        "id": "vlm-knowledge-1",
+        "knowledge_base_id": "raw-kb",
+        "parse_status": "failed",
+        "metadata": metadata,
+    }
+    metadata["process_overrides"] = process_config
+    if mutation == "kb":
+        record["knowledge_base_id"] = "other-kb"
+    elif mutation in {"owner", "purpose"}:
+        metadata[mutation] = "wrong"
+    elif mutation == "sha":
+        metadata["sha256"] = "0" * 64
+    elif mutation == "vlm_model":
+        metadata["vlm_model_id"] = "other-vlm"
+    elif mutation == "process_config":
+        metadata["process_overrides"] = {
+            **process_config,
+            "vlm_config": {"enabled": True, "model_id": "other-vlm"},
+        }
+    elif mutation in {"completed", "pending", "processing"}:
+        record["parse_status"] = mutation
+    calls: list[str] = []
+
+    class Client:
+        async def get_knowledge(self, key: object, knowledge_id: str) -> dict[str, object]:
+            del key
+            calls.append(f"get:{knowledge_id}")
+            return record
+
+        async def reparse_knowledge(self, *args: object, **kwargs: object) -> object:
+            calls.append("reparse")
+            raise AssertionError("arbitrary knowledge must not be reparsed")
+
+        async def upload_file(self, *args: object, **kwargs: object) -> object:
+            calls.append("upload")
+            raise AssertionError("retry must not upload")
+
+        async def get_knowledge_parse_attempt(
+            self, key: object, knowledge_id: str
+        ) -> int:
+            del key, knowledge_id
+            calls.append("attempt")
+            raise AssertionError("non-retryable status must fail before attempt lookup")
+
+        async def aclose(self) -> None:
+            calls.append("close")
+
+    class Resolver:
+        async def resolve(self, values: object = None) -> SecretStr:
+            return SecretStr("tenant-key")
+
+    collaborator = module.VLMSmokeCollaborator(
+        runtime_path=runtime,
+        fixture_path=fixture,
+        runtime_loader=lambda path: {
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb",
+            "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-model",
+        },
+        client_factory=lambda url: Client(),
+        api_key_resolver=Resolver(),
+        poll_interval=0,
+    )
+    request = module.PhaseRequest("retry-vlm", False, None, "vlm-knowledge-1")
+
+    with pytest.raises(RuntimeError, match="retry"):
+        collaborator.run(request)
+
+    assert calls == ["get:vlm-knowledge-1", "close"]
+    assert not tuple(tmp_path.glob(".env.local-live.runtime.retry-vlm-*"))
+
+
+def test_r3_3_dirty_implementation_evidence_hashes_tracked_and_untracked_content(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    subprocess.run(
+        ("git", "config", "user.email", "local@example.invalid"),
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(("git", "config", "user.name", "Local Test"), cwd=tmp_path, check=True)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("base\n")
+    subprocess.run(("git", "add", "tracked.txt"), cwd=tmp_path, check=True)
+    subprocess.run(("git", "commit", "-qm", "base"), cwd=tmp_path, check=True)
+    tracked.write_text("changed\n")
+    untracked = tmp_path / "untracked.txt"
+    untracked.write_text("first\n")
+
+    first = module._implementation_evidence(tmp_path)
+    untracked.write_text("second\n")
+    second = module._implementation_evidence(tmp_path)
+
+    assert first["head"] == second["head"]
+    assert first["dirty"] is True
+    assert first["evidence"] == "provisional"
+    assert first["diff_digest"] != second["diff_digest"]
+    tracked.write_text("base\n")
+    untracked.unlink()
+    clean = module._implementation_evidence(tmp_path)
+    assert clean == {
+        "implementation_sha": first["head"],
+        "dirty": False,
+        "evidence": "exact",
+    }
 
 
 def test_r5_1_unresolved_runtime_lock_fails_closed_before_adapter(tmp_path: Path) -> None:
@@ -395,12 +855,7 @@ def test_r3_1_compose_up_verifies_both_rendered_configs_before_mutation(
             capture_output: bool,
         ) -> subprocess.CompletedProcess[str]:
             assert cwd == tmp_path
-            assert arguments[:4] == (
-                "docker",
-                "compose",
-                "--env-file",
-                str(runtime),
-            )
+            assert arguments[:4] == ("docker", "compose", "--env-file", str(runtime))
             group = "harness" if "docker-compose.harness.yml" in arguments else "weknora"
             project_index = arguments.index("--project-name")
             assert arguments[project_index + 1] == (
@@ -459,7 +914,6 @@ def test_r3_1_compose_up_verifies_both_rendered_configs_before_mutation(
         "command:harness:port",
     ]
 
-
 def test_r3_1_compose_down_deletes_volumes_only_after_explicit_request(
     tmp_path: Path,
 ) -> None:
@@ -506,10 +960,14 @@ def test_r3_1_provision_collaborator_probes_before_operation_and_persists_state(
         "LOCAL_LIVE_CHAT_MODEL_ID": "chat-1",
         "LOCAL_LIVE_EMBEDDING_MODEL_ID": "embedding-1",
         "LOCAL_LIVE_RERANK_MODEL_ID": "rerank-1",
+        "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-1",
+        "LOCAL_LIVE_CHAT_ENDPOINT_FINGERPRINT": "a" * 64,
+        "LOCAL_LIVE_EMBEDDING_ENDPOINT_FINGERPRINT": "b" * 64,
+        "LOCAL_LIVE_RERANK_ENDPOINT_FINGERPRINT": "c" * 64,
+        "LOCAL_LIVE_VLLM_ENDPOINT_FINGERPRINT": "d" * 64,
         "LOCAL_LIVE_RAW_KB_ID": "raw-1",
         "LOCAL_LIVE_WIKI_KB_ID": "wiki-1",
         "LOCAL_LIVE_API_KEY_ID": "key-1",
-        "LOCAL_LIVE_API_KEY": "tenant-secret",
         "LOCAL_LIVE_SPACE_ID": "space-1",
         "LOCAL_LIVE_KNOWLEDGE_ID": "knowledge-1",
         "LOCAL_LIVE_PARSER_FINGERPRINT": "weknora-v0.6.3",
@@ -547,12 +1005,60 @@ def test_r3_1_provision_collaborator_probes_before_operation_and_persists_state(
     result = collaborator.run(module.PhaseRequest("provision", False, pdf))
 
     assert events == ["probe", "provision"]
-    assert result == {"status": "provisioned", "resources": 10}
+    assert result == {"status": "provisioned", "resources": 11}
     persisted = read_runtime_environment(runtime_path)
     assert {name: persisted[name] for name in state} == state
 
 
-def test_r4_2_local_gate_receives_only_the_exact_seven_live_values(
+def test_r3_3_real_pre_task4_runtime_is_atomically_scrubbed_and_requires_reprovision(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    config_path, runtime_path = _write_local_envs(tmp_path)
+    base = read_runtime_environment(runtime_path)
+    old_state = {
+        "LOCAL_LIVE_TENANT_ID": "tenant-1",
+        "LOCAL_LIVE_CHAT_MODEL_ID": "chat-1",
+        "LOCAL_LIVE_EMBEDDING_MODEL_ID": "embedding-1",
+        "LOCAL_LIVE_RERANK_MODEL_ID": "rerank-1",
+        "LOCAL_LIVE_RAW_KB_ID": "raw-1",
+        "LOCAL_LIVE_WIKI_KB_ID": "wiki-1",
+        "LOCAL_LIVE_API_KEY_ID": "key-1",
+        "LOCAL_LIVE_API_KEY": "pre-task4-tenant-secret",
+        "LOCAL_LIVE_SPACE_ID": "space-1",
+        "LOCAL_LIVE_KNOWLEDGE_ID": "knowledge-1",
+        "LOCAL_LIVE_PARSER_FINGERPRINT": "weknora-v0.6.3",
+    }
+    runtime_path.write_text(
+        "".join(
+            f"{name}={value}\n"
+            for name, value in {**base, **old_state}.items()
+        )
+    )
+    runtime_path.chmod(0o600)
+
+    assert module.ensure_runtime_environment(runtime_path).created is False
+
+    rewritten = read_runtime_environment(runtime_path)
+    assert rewritten == base
+    assert not any(name.startswith("LOCAL_LIVE_") for name in rewritten)
+    assert b"pre-task4-tenant-secret" not in runtime_path.read_bytes()
+    assert S_IMODE(runtime_path.stat().st_mode) == 0o600
+
+    class Operation:
+        async def provision(self, *args: object, **kwargs: object) -> object:
+            raise AssertionError("verify must fail before provisioning")
+
+    collaborator = module.ProvisionCollaborator(
+        config=module.load_local_live_config(config_path),
+        runtime_path=runtime_path,
+        operation=Operation(),
+    )
+    with pytest.raises(RuntimeError, match="not provisioned"):
+        collaborator.run(module.PhaseRequest("verify", False))
+
+
+def test_r3_3_local_gate_resolves_api_key_in_memory_for_exact_seven_live_values(
     tmp_path: Path,
 ) -> None:
     module = _module()
@@ -565,16 +1071,25 @@ def test_r4_2_local_gate_receives_only_the_exact_seven_live_values(
             "LOCAL_LIVE_CHAT_MODEL_ID": "chat-1",
             "LOCAL_LIVE_EMBEDDING_MODEL_ID": "embedding-1",
             "LOCAL_LIVE_RERANK_MODEL_ID": "rerank-1",
+            "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-1",
+            "LOCAL_LIVE_CHAT_ENDPOINT_FINGERPRINT": "a" * 64,
+            "LOCAL_LIVE_EMBEDDING_ENDPOINT_FINGERPRINT": "b" * 64,
+            "LOCAL_LIVE_RERANK_ENDPOINT_FINGERPRINT": "c" * 64,
+            "LOCAL_LIVE_VLLM_ENDPOINT_FINGERPRINT": "d" * 64,
             "LOCAL_LIVE_RAW_KB_ID": "raw-1",
             "LOCAL_LIVE_WIKI_KB_ID": "wiki-1",
             "LOCAL_LIVE_API_KEY_ID": "key-1",
-            "LOCAL_LIVE_API_KEY": "tenant-secret",
             "LOCAL_LIVE_SPACE_ID": "space-1",
             "LOCAL_LIVE_KNOWLEDGE_ID": "knowledge-1",
             "LOCAL_LIVE_PARSER_FINGERPRINT": "weknora-v0.6.3",
         },
     )
     captured: dict[str, str] = {}
+
+    class Resolver:
+        async def resolve(self, runtime: object) -> SecretStr:
+            assert "LOCAL_LIVE_API_KEY" not in cast(dict[str, str], runtime)
+            return SecretStr("tenant-secret")
 
     class Runner:
         def __call__(
@@ -606,6 +1121,7 @@ def test_r4_2_local_gate_receives_only_the_exact_seven_live_values(
     collaborator = module.LocalGateCollaborator(
         harness_root=tmp_path / "harness",
         runtime_path=runtime_path,
+        api_key_resolver=Resolver(),
         runner=Runner(),
     )
 

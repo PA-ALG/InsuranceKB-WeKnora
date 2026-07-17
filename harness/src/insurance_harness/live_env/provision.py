@@ -2,15 +2,56 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+from urllib.parse import unquote, urlsplit
 
 
 class OwnershipMismatch(RuntimeError):
     """A stable name belongs to a different environment or role."""
+
+
+def canonical_endpoint_fingerprint(url: str) -> str:
+    if "?" in url or "#" in url:
+        raise ValueError("invalid endpoint URL")
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        raise ValueError("invalid endpoint URL") from None
+    scheme = parsed.scheme.lower()
+    host = parsed.hostname.lower() if parsed.hostname is not None else ""
+    if (
+        scheme not in {"http", "https"}
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("invalid endpoint URL")
+    path = parsed.path or "/"
+    if "//" in path or re.search(r"%(?![0-9A-Fa-f]{2})", path):
+        raise ValueError("invalid endpoint URL")
+    for segment in path.split("/"):
+        if unquote(segment) in {".", ".."}:
+            raise ValueError("invalid endpoint URL")
+    path = re.sub(
+        r"%([0-9A-Fa-f]{2})",
+        lambda match: f"%{match.group(1).upper()}",
+        path,
+    )
+    if path != "/":
+        path = path.rstrip("/")
+    default_port = (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
+    rendered_host = f"[{host}]" if ":" in host else host
+    authority = rendered_host if port is None or default_port else f"{rendered_host}:{port}"
+    canonical = f"{scheme}://{authority}{path}"
+    return sha256(canonical.encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -22,6 +63,14 @@ class OwnedResource:
     marker: str
     role: str
     dimension: int | None = None
+    model_type: str | None = None
+    provider: str | None = None
+    model_name: str | None = None
+    endpoint_fingerprint: str | None = None
+    supports_vision: bool | None = None
+    embedding_model_id: str | None = None
+    vlm_enabled: bool | None = None
+    vlm_model_id: str | None = None
     capabilities: tuple[str, ...] = ()
     knowledge_base_ids: tuple[str, ...] = ()
 
@@ -34,6 +83,14 @@ class DesiredResource:
     marker: str
     role: str
     dimension: int | None = None
+    model_type: str | None = None
+    provider: str | None = None
+    model_name: str | None = None
+    endpoint_fingerprint: str | None = None
+    supports_vision: bool | None = None
+    embedding_model_id: str | None = None
+    vlm_enabled: bool | None = None
+    vlm_model_id: str | None = None
     capabilities: tuple[str, ...] = ()
     knowledge_base_ids: tuple[str, ...] = ()
 
@@ -62,6 +119,7 @@ class ProvisionPlan:
     chat_model: str
     embedding_model: str
     rerank_model: str
+    vlm_model: str
     embedding_dimension: int
     raw_kb_name: str
     wiki_kb_name: str
@@ -76,6 +134,7 @@ class ProvisionedEnvironment:
     chat_model_id: str
     embedding_model_id: str
     rerank_model_id: str
+    vlm_model_id: str
     raw_kb_id: str
     wiki_kb_id: str
     api_key_id: str
@@ -119,6 +178,20 @@ class ResourceSelectable(Protocol):
     async def select_resource(self, resource: OwnedResource) -> None: ...
 
 
+@runtime_checkable
+class DesiredResourceResolver(Protocol):
+    def resolve_desired_resource(self, desired: DesiredResource) -> DesiredResource: ...
+
+
+@runtime_checkable
+class ModelAttestor(Protocol):
+    async def attest_models(
+        self,
+        models: Mapping[str, OwnedResource],
+        embedding_dimension: int,
+    ) -> None: ...
+
+
 def _same_resource(existing: OwnedResource, desired: DesiredResource) -> bool:
     return (
         existing.kind == desired.kind
@@ -127,6 +200,14 @@ def _same_resource(existing: OwnedResource, desired: DesiredResource) -> bool:
         and existing.marker == desired.marker
         and existing.role == desired.role
         and existing.dimension == desired.dimension
+        and existing.model_type == desired.model_type
+        and existing.provider == desired.provider
+        and existing.model_name == desired.model_name
+        and existing.endpoint_fingerprint == desired.endpoint_fingerprint
+        and existing.supports_vision == desired.supports_vision
+        and existing.embedding_model_id == desired.embedding_model_id
+        and existing.vlm_enabled == desired.vlm_enabled
+        and existing.vlm_model_id == desired.vlm_model_id
         and existing.capabilities == desired.capabilities
         and existing.knowledge_base_ids == desired.knowledge_base_ids
     )
@@ -136,6 +217,8 @@ async def _ensure_resource(
     backend: SpaceBackend,
     desired: DesiredResource,
 ) -> OwnedResource:
+    if isinstance(backend, DesiredResourceResolver):
+        desired = backend.resolve_desired_resource(desired)
     named = [
         resource
         for resource in await backend.list_resources(desired.kind)
@@ -164,6 +247,14 @@ def _desired(
     *,
     role: str,
     dimension: int | None = None,
+    model_type: str | None = None,
+    provider: str | None = None,
+    model_name: str | None = None,
+    endpoint_fingerprint: str | None = None,
+    supports_vision: bool | None = None,
+    embedding_model_id: str | None = None,
+    vlm_enabled: bool | None = None,
+    vlm_model_id: str | None = None,
     capabilities: tuple[str, ...] = (),
     knowledge_base_ids: tuple[str, ...] = (),
 ) -> DesiredResource:
@@ -174,6 +265,14 @@ def _desired(
         marker=marker,
         role=role,
         dimension=dimension,
+        model_type=model_type,
+        provider=provider,
+        model_name=model_name,
+        endpoint_fingerprint=endpoint_fingerprint,
+        supports_vision=supports_vision,
+        embedding_model_id=embedding_model_id,
+        vlm_enabled=vlm_enabled,
+        vlm_model_id=vlm_model_id,
         capabilities=capabilities,
         knowledge_base_ids=knowledge_base_ids,
     )
@@ -227,10 +326,11 @@ async def provision_local_live(
     if isinstance(backend, TenantSelectable):
         await backend.select_tenant(tenant.id)
     models: dict[str, OwnedResource] = {}
-    for role, name, dimension in (
-        ("chat", plan.chat_model, None),
-        ("embedding", plan.embedding_model, plan.embedding_dimension),
-        ("rerank", plan.rerank_model, None),
+    for role, name, dimension, supports_vision in (
+        ("chat", plan.chat_model, None, False),
+        ("embedding", plan.embedding_model, plan.embedding_dimension, False),
+        ("rerank", plan.rerank_model, None, False),
+        ("vlm", plan.vlm_model, None, True),
     ):
         models[role] = await _ensure_resource(
             backend,
@@ -241,8 +341,11 @@ async def provision_local_live(
                 plan.marker,
                 role=role,
                 dimension=dimension,
+                supports_vision=supports_vision,
             ),
         )
+    if isinstance(backend, ModelAttestor):
+        await backend.attest_models(models, plan.embedding_dimension)
     raw = await _ensure_resource(
         backend,
         _desired(
@@ -252,6 +355,9 @@ async def provision_local_live(
             plan.marker,
             role="raw",
             dimension=plan.embedding_dimension,
+            embedding_model_id=models["embedding"].id,
+            vlm_enabled=False,
+            vlm_model_id="",
         ),
     )
     wiki = await _ensure_resource(
@@ -263,6 +369,9 @@ async def provision_local_live(
             plan.marker,
             role="wiki",
             dimension=plan.embedding_dimension,
+            embedding_model_id=models["embedding"].id,
+            vlm_enabled=False,
+            vlm_model_id="",
         ),
     )
     kb_ids = (raw.id, wiki.id)
@@ -298,6 +407,7 @@ async def provision_local_live(
         chat_model_id=models["chat"].id,
         embedding_model_id=models["embedding"].id,
         rerank_model_id=models["rerank"].id,
+        vlm_model_id=models["vlm"].id,
         raw_kb_id=raw.id,
         wiki_kb_id=wiki.id,
         api_key_id=api_key.id,
