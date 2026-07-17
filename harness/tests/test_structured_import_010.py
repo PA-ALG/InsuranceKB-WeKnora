@@ -613,6 +613,19 @@ def test_i2_mapping_normalized_duplicate_source_field_fail_fast(tmp_path: Path) 
         load_mapping(dup, _MINI_REGISTRY)
 
 
+@pytest.mark.parametrize("value", ['"true"', "1"], ids=["string-true", "int-one"])
+def test_i2_mapping_confirmed_requires_strict_bool(tmp_path: Path, value: str) -> None:
+    """P0：confirmed 只认真布尔——"true"/1 不得被宽松转换成已确认（I2 审批门禁 fail-closed）。"""
+    bad = tmp_path / "loose.yaml"
+    bad.write_text(
+        f"mapping_id: l\nconfirmed: {value}\nrules:\n"
+        "  - source_field: wp\n    field_id: waiting_period\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(MappingLoadError):
+        load_mapping(bad, _MINI_REGISTRY)
+
+
 def test_i2_mapping_rule_identity_normalized_at_construction() -> None:
     """二次复核：身份字段构造期 strip 归一（比较点用规范化值，与 SourceEntry 对称）。"""
     r = MappingRule(source_field=" wp ", field_id=" waiting_period ", transformer=" identity ")

@@ -49,6 +49,8 @@ codex 关闭首轮 8/9 项并接受"源码指纹属 I4 纪律模型之外"的反
 
 **边界（codex 已裁）**：`record_schema_ref/mapping_ref` 引用存在性/resolver 随 T5 消费链定义，非 T1~T4 阻断；transformer 源码指纹不引入。
 
+**合并前 P0（codex 三轮，2026-07-18）**：wire model 重构引入回归——`confirmed: bool` 被 Pydantic 宽松转换（`"true"`/`1`→True），弱化了旧实现 `raw.get("confirmed") is True` 的严格语义，审批门禁被放宽。修复：`confirmed: StrictBool`（仅收紧该字段）+ 参数化回归（`"true"`/`1` 均拒）。教训：**重构时旧代码里"看似随手"的 `is True` 可能是刻意的安全语义**——迁移到框架校验前须逐一确认其严格性有等价物承接。
+
 - [ ] T5 迁移 0007（**基于 021 后 main**）：structured_source_records（id PK、无批次外键、UPDATE+DELETE 双方言触发器拒绝）+ **structured_import_batch_records 关联表（append-only，双方言拒 UPDATE/DELETE）** + claim_evidence 三值 source_kind（nullable→回填→收紧）+ **ChangeSet 增列、CHECK（structured_import ⇒ 三字段非空）与两条精确 predicate 的 partial unique index** + **read_model_version CHECK (0,1,2)** + 有条件 downgrade（I4/I9）
 - [ ] T6 领域模型：ProposedEvidence kind 分支 + 既有 weknora/legacy 行为不变回归；merge 接线（持久化/去重键含 structured 身份+mapping_version/space 一致性 fail-closed）（I4）
 - [ ] T7 发布/冻结 v2：pages structured 验证（canonical hash 重算；篡改/缺失拒发；legacy 不可发布）+ FrozenEvidence v2 判别联合 + Reader 严格读 v1/v2（无 extra=ignore）+ **v2 writer rollout gate** + 回滚仅指针 + 冻结后源表不可访问仍可读（I4）

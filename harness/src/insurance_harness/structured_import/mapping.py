@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
 
 from insurance_harness.schemas import FieldSpec, SchemaRegistry
 
@@ -53,7 +53,9 @@ class MappingConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     mapping_id: str | None = None  # 缺省用文件 stem
-    confirmed: bool = False  # fail-closed 默认：缺省即草案
+    # StrictBool（合并前 P0）：审批门禁只认真 YAML 布尔——"true"/1 等宽松转换会把
+    # 未经人工确认的配置放进正式导入（I2 fail-closed 语义），须在结构校验层即拒。
+    confirmed: StrictBool = False  # fail-closed 默认：缺省即草案
     rules: tuple[Any, ...] = ()  # 条目级校验在 loader 循环内做（保留"定位到条目"语境）
 
 
