@@ -12,7 +12,7 @@ services:
       start_period: 10s
 
   app:
-    image: wechatopenai/weknora-app:v0.6.3@sha256:748097ccb5e9a66d46cfb94de9cd200de5a65dbd2ad7de917a5db0ffd4e56681
+    image: ghcr.io/pa-alg/insurancekb-weknora-app:src-5eefa70e6fc8-patch-6f6d8ad1e0e9@sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5
     ports: !override
       - "127.0.0.1:${APP_PORT:-8080}:8080"
     env_file: !override
