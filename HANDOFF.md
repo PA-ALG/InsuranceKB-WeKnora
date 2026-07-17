@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-16（019 PR #8 与 023 PR #10 已合入 `main`，PR #10 merge commit `773f3d1d`；PR #9 review hardening head `d38dfb26` 的 Claude 复审已关闭全部实质 finding，fresh deterministic/PostgreSQL CI 均绿，当前正同步最新 `main`；本机 `.env.local-live` 的 extraction API key 仍为空，因此 5-node WeKnora live 保持 `NOT RUN`，PR #9 继续 Draft）
+> 最后更新：2026-07-17（023 供应链与真实环境已随 PR #16、#19、#20 合入 `main`；受信 app 固定为 `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`，真实 provision、普通 PDF 与 clean-SHA VLM smoke 已通过。PR #9 已同步最终 `main`，018 T7 的 5-node WeKnora live 仍待本次 exact-SHA 验收）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -17,26 +17,15 @@
 
 0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
 
-0f. **当前排期与依赖（业务方 2026-07-14 最新裁决）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
+0f. **当前排期与依赖（业务方 2026-07-14 裁决；2026-07-16 扩展为多轨并行，见 0h）**：先完成合并后收尾；随后 018 与 019 是无相互前置的两条工作轨，可独立或并行推进，019 作为解锁真实基线的工具轨，价值优先级不低于 018。技术硬依赖只有 **018 → 021、019 → 020、021 → 020**；不得把 018 → 019 写成技术依赖。各 change 仍分别遵守 SDD（先条款与裁决）、TDD（测试名引用条目号）、task-level spec/quality 双审及 CLAUDE 门禁。
 
-0g. **018 开工长时间零代码产出事故（2026-07-14～15，必须避免复发）**：业务方确认开始实施后，AI 把必要的 OpenSpec 修正扩张为三轮规格审查 + 三轮计划审查，随后又把 migration、五表、双方言 trigger、legacy upgrade 和旧测试兼容塞进一个过大的 T1 子代理；最终子代理派发工具调用挂起约 `23143s`，期间没有 RED 测试、生产代码或可验证检查点。事故结论：技术设计修正有价值，但**六小时以上零代码产出不可接受**，属于任务拆分、超时止损与进度披露失败，不得用“审查中/推进中”掩盖。
-   - **首个 RED 截止**：规格和实施边界已确认后，15 分钟内必须运行第一个精确测试节点并得到可解释的 RED；未达到就停止继续读文档/扩计划，公开说明阻塞并把任务缩成一个测试闭环。禁止以“再完整理解一遍”为由重置计时。
-   - **产出时钟**：实现阶段每 30 分钟必须产生至少一项可核验产物（测试节点/正确 RED/代码 diff/GREEN 结果）；没有产物就立即停止当前路径并报告，不得继续笼统等待。
-   - **工具超时**：派发、测试或命令 60 秒无新输出必须主动轮询/中止/拆小；任何单次黑盒等待不得超过 10 分钟。长任务必须可恢复、可观测，不能把前台会话锁死数小时。
-   - **审查上限**：规格/计划已获业务方确认后，实施前最多一轮独立审查；同一层连续两轮仍有 blocker 必须向业务方报告或缩小任务，不得自行无限循环。代码阶段仍保留 task-level spec/quality 双审。
-   - **任务上限**：一个实现任务只交付一个闭环。018 T1 强制拆为 T1a ORM/schema RED、T1b `0005` upgrade/downgrade、T1c immutability trigger/regression；禁止一次代理承包整个 T1。
-   - **状态语言**：没有新增测试/生产代码时只能报告“设计/计划完成，实施未开始”；“正在实施”必须能给出文件 diff 或测试进程。代理/命令异常须在下一次状态更新直接披露。
-   - **执行调整**：018 后续由主会话控制 TDD 实现和超时，子代理只承担有界小任务或只读复审；每个 checkpoint 先交 RED→GREEN 证据再进入下一项。
-   - **本次执行验证**：主会话将 T1 拆成 schema、migration、trigger 三个 RED→GREEN，并在每个里程碑给出测试证据；唯一子代理只做 10 分钟上限的只读 T1 审计，按时发现 migration 默认值、metadata DDL 幂等、旧读侧覆盖丢失三项问题，主会话逐条补 RED 后修复。后续必须延续“实现者自检 + 有界独立审计”，审计不得再次替代实现。
-   - **新增工程教训**：migration 的 backfill 默认值与新写默认值必须分开，不能用永久 `server_default=0` 伪造新 legacy；`MetaData.after_create` 会在空操作 `create_all()` 时仍执行，触发器应绑定实际 Table 的 `after_create`；新增 DB guard 使旧坏数据不可写时，必须保留原读侧 fail-closed 覆盖，不能把测试悄悄改成只测写侧。
-   - **T4/T5 自检复盘（2026-07-15）**：主会话先交付 reconciliation `5 passed` 与 RAW fallback RED→GREEN，再让一个已完成代理做 10 分钟、只读、最多 5 项的 R3/R4 审计；审计发现并由主会话逐条复现修复：两个 publisher 实例的锁不共享、upsert 无写后回读、managed metadata 缺 `snapshot_id` 仍被认领、lease recovery 未取得相同 Space 锁、过期 reconcile child 错建嵌套工单。新增用例均引用条款号；018 聚焦回归为 **64 passed**，聚焦 Ruff 全绿、mypy strict 20 个相关 source/test 文件全绿。
-   - **强制工程规则补充**：①“每实例有锁”不等于 `(Engine, space_id)` 局部串行，构造两个 service 实例做并发验收；② WeKnora create/update 成功响应不能作为发布成功证据，必须 GET 回读并核对 `managed_by/space_id/snapshot_id` 后才允许 pointer 前移；③ recovery 必须与在线 plan 使用同一锁，reconcile child 过期只能更新原 source job，禁止 job-of-job；④测试 helper 禁止以 `object` + `type: ignore` 掩盖真实模型类型，strict mypy 报错必须通过真实类型修复。
-   - **全量门禁回归复盘（2026-07-15）**：018 聚焦测试全绿后仍执行完整 deterministic，发现新增 `0005` 会在 `head → 0002` 的 `0003` 兼容性拒绝之前先删除四张 018 表。没有删旧测试或接受半降级，而是保留 7 个 RED，令 `0005` 在最终目标跨过 `0003` 时先做兼容性预检；拒绝后 schema 与 `alembic_version` 都留在 head，直接 `0005 → 0004` 仍可用。whole-change 规格复核又发现旧 session 式 publish/rollback 仍公开可绕过 saga；历史行为现已完全移到 `tests/support/legacy_publisher_007.py`，生产模块、包 import 与 `__all__` 均不再包含可执行旧旁路，只暴露 service-owned `ReleasePublisher`。最终 OpenSpec strict 有效、Ruff 全绿、mypy strict **171 source files**、018 focused **73 passed / 2 deselected**、deterministic **1035 passed / 7 deselected**。教训：聚焦绿不等于全库绿；多 revision downgrade 必须在首个 DDL 前完成所有下游拒绝条件预检；测试不得硬编码不断前移的 head revision；新安全入口上线时必须枚举并封死旧公开旁路。
-   - **最终质量硬化复盘（2026-07-15）**：独立 quality review 的五项意见均先复现再修复：新快照默认改为 `building` 且无默认 `published_at`，pointer 只允许 `published + read_model_version=1 + projection_frozen_at`；同 Space 锁覆盖 build/activate/Wiki/finalize 整个 saga；退休发布实现移出生产代码；成功 reconciliation 始终返回原 plan 对应 snapshot pages；既有 PostgreSQL integration 节点追加 pointer/fact/operation/published-snapshot 触发器验收。全量首次复跑由此暴露两个 017 fixture 仍隐式依赖“新快照即发布”，现已显式声明发布态并用精确回归固定；最终只读复审为 `Quality approved: yes`，无剩余 Critical/Important/Minor。教训：安全状态默认值改变后，必须全库搜索并修正依赖隐式默认的 fixture，不能只跑本 change。
+0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-17 当前状态）**：PR #10、#16、#19、#20 均已合入 `main`。受信 main workflow 已从锁定的 Tencent upstream `5eefa70e...` 构建 `linux/arm64` app，OCI/GitHub attestation、SLSA provenance 与 SPDX SBOM 均已核验；`deploy/local-live/images.lock` 和 Compose 固定 subject digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`。本机六服务 healthy，宿主只监听 `127.0.0.1:8080/8081/5442`；百炼五角色 direct probe、幂等 provision、普通 PDF 与 clean-SHA VLM smoke 均通过，VLM 结果为 `status=completed / image_ocr_chunks=1 / image_caption_chunks=1 / dirty=false / evidence=exact`。PR #20 另以真实 API TDD 修复重复注册、Wiki indexing strategy、pages envelope 与服务端扩展 VLM overrides 四项合同差异。当前 023 本身无模型、Docker 或制品阻塞；剩余动作是对 PR #9 exact SHA 执行 5-node live，要求 `tests=5 skipped=0`。
 
-0h. **PR #9 review hardening（2026-07-16，更新基线中）**：Claude review 的 merge-relevant 项已统一按现有 018 change 走 SDD/TDD。RH1 将三个 007-only helper 移至 test support；RH2 在 `kb_session` 每个 SQLite 连接启用 FK，并补真实跨 Space pointer/复合 FK；RH3 用临时 mutation 证明 stale-base retry 测试可拦截副作用；RH4 修正首动作纯 collision 的零工单语义和 rollback lease recovery ChangeSet；RH5 固定 0005 合约 revision 并移除 live `search_path` 的 `public` fallback。开启 FK 后保留两个 016 application fail-closed 测试：仅在局部 context 显式关闭 FK 制造历史损坏态，`finally` 恢复 FK=1。每项 spec/quality 双审均 Approved；最终 whole-change 规格复核 `Spec compliant`、质量复核 `Approved`，无剩余 Critical/Important/Minor。head `d38dfb26` 的 fresh 本地证据为 OpenSpec strict、Ruff、mypy **181 files**、deterministic **1224 passed / 7 deselected**、PostgreSQL 16 **2 passed / 1229 deselected**，新 SHA 的两组 deterministic/两组 PostgreSQL CI 均绿；Claude 跟进复审确认上轮所有 finding 均已关闭。PR #10 已合入 `main`，当前需完成 main 同步、新 SHA CI 与受控 5-node live `tests=5 skipped=0`，再转 Ready。
+   以下“官方 v0.6.3 缺 scoped key / T6d.1 待制品”的段落仅保留为历史故障与供应链决策记录；其阻塞已由 PR #16、#19、#20 关闭，不得再用作当前状态。
 
-0i. **OpenSpec 023 本机 WeKnora live 环境（2026-07-16 当前状态）**：[PR #10](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/10) 已以 merge commit `773f3d1d` 合入 `main`。T1～T5 已闭环：四角色可切换配置/零泄漏探针、loopback Compose/随机 0600 runtime、真实 WeKnora+Harness Space 幂等 provisioning、受信 main exact-SHA 五节点 workflow/JUnit gate，以及 `gh`+Docker concrete ephemeral runner/controller。runner 非 root、固定 checksum、无宿主/Docker socket mount、唯一 label、双内网、单 job；registration token 只经 stdin+tmpfs FIFO 单次传递，不进 argv/container config；controller 创建 per-run scoped Tenant key 和最小权限 PostgreSQL role，只暂存 2 secret + 5 variable，并在所有退出路径尝试完整 cleanup。真实六服务 `up` 已通过，宿主仅 `127.0.0.1:8080/8081/5442`；本机 PostgreSQL 临时角色的 create→最小权限验明→drop→不存在复核通过；runner `arm64` 镜像 `aa409bbf…` 已实际 build，真实 entrypoint 的 tmpfs FIFO 单次注入/删除 smoke 通过，token 未进入 metadata/log；023 focused **123 passed**、deterministic **1265 passed / 5 deselected**、PostgreSQL integration **1 passed / 1269 deselected，JUnit tests=1 skipped=0**，Ruff/mypy/OpenSpec strict 全绿。**外部状态必须分层**：当前 live 工作树 `.env.local-live` 仅 `HARNESS_LLM_API_KEY` 为空，其余 11 个模型配置项非空；因此 config check 在任何外部 mutation 前 fail closed。四模型全绿、tenant/models/KB/Space/PDF provision、五节点 local live、GitHub dispatch 与 018 T7 均未完成；有效 extraction 凭据补齐前状态是 **BLOCKED/NOT RUN**，不是 live verified。
+   **当前唯一核心阻塞是 app artifact，不是模型或 Docker**：固定的官方 `wechatopenai/weknora-app:v0.6.3@sha256:7480...` 构建于 2026-06-26，早于 7 月新增的 scoped tenant API key routes。真实 provision 已创建 `user=1 / tenant=2 / models=4 / KB=2`，随后在 `GET /tenants/10001/api-keys` 得到 404；按最小权限合同正确 fail closed，禁止降级 legacy full-access key。实机同时发现官方镜像把 `/models/:id/debug` 的 prompt/raw response/reasoning/error 写 access log；当前源码已按 `test_r3_3_*` RED→GREEN，整个 debug response 在 access log 中省略。曾尝试的 dirty checkout + mutable local tag build 经安全复核已撤回。
+
+   T6d 已拆成 bootstrap 两段：**T6d.1 软件阶段已完成，T6d.2 制品阶段待执行**。`deploy/local-live/weknora-app-source.lock.json` 固定 Tencent upstream `5eefa70e...`、tree `a44f7eae...`、真实 `docker/Dockerfile.app` SHA-256、六个 scoped-key/security ancestor、`linux/arm64` 与 security patch digest；patch 同时把 model-debug response 整包从 access log 省略、在实际 upstream build context 排除 `.env.*`、固定 `golang-migrate@v4.19.1`，并校验 uv 0.9.26 安装脚本 SHA-256。`.github/workflows/weknora-app-local-live-image.yml` 仅允许 trusted `main` dispatch，不接受 caller repository/commit/platform，全部 action 固定完整 SHA，只用 `github.token` 发布 GHCR，并启用 max provenance、SBOM、registry attestation。Claude 对 PR #16 的 review 已按第一性原理裁决：CI hermetic checkout、官方 uv hash、`supports_vision=false` 省略、scoped 404、代理隔离、VLM CLI/retry/marker 与 output 控制字符均已 RED→GREEN；R2.1 pre-start 动态 HTTP 与删除 BuildKit cache 不改善既定安全不变量，未采纳；ReRank/canary 重构不属于本 PR 阻断项。2026-07-17 fresh 本机门禁：供应链 **7 passed**、023 focused **248 passed**、Ruff、mypy 181 files、deterministic **1412 passed / 5 deselected**、PostgreSQL **1 passed / 1416 deselected** 且 JUnit `tests=1 skipped=0`、OpenSpec strict。一次性 known-secret 扫描器未入库，故不再把旧精确计数当验收证据。由于高权限 workflow 必须先由人工复核并合入 main，GHCR build/manifest digest/provenance/SBOM/attestation、digest 写回、完整 provision、VLM 与 T7/T8 仍为 **NOT RUN**；本机结果在 GitHub CI 覆盖同一提交 SHA 前只作 provisional 证据。
 
    **阶段 1 — 合并后收尾（当前）**
    - [x] PR #5、#6 已合并，最新 `origin/main` 已确认指向 `27c36641`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
@@ -45,21 +34,14 @@
    - [ ] 对账旧 ledger：001/003/004 的未勾项只做完成证据回填，不重做已验收功能；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交 020；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
    - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
 
-   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（6/7；仅 T7 真实 WeKnora live 进行中）**
-   - [x] 完整 Space 快照方案、service-owned Session、lease recovery 等裁决已写入标准 OpenSpec；strict validator 与独立规格/计划复审最终 Approved。
-   - [ ] 按 `openspec/changes/018-release-snapshot-read-model/` 完成 T1～T7；018 独占 Alembic `0005`。当前 T1～T6、Runbook/report、deterministic 与 PostgreSQL 证据完成；仅 T7 真实 WeKnora live 待收口。
-   - [x] T1：`0005`、SnapshotFact/operation/attempt/job ORM、SQLite/PostgreSQL freeze trigger、legacy v0 保留/安全降级、完整 Space source-aware projection 已实现；审计问题已补 raw INSERT 默认 v1、metadata create_all 幂等与 016 读侧防御回归。
-   - [x] T2：SnapshotReader 只沿 current v1 SnapshotFact 读取，五类 typed gap、过滤优先级、日期开端/闭区间、稳定排序及 scope fail-closed 已实现；SQL spy 明确禁止查询 mutable Claim/Evidence。
-   - [x] T3：SnapshotFact-only Wiki renderer 已实现，页面 ownership metadata 完整；产品/Claim/Evidence 后续变化不影响相同 frozen facts 重渲染。
-   - [x] T4：canonical PublishPlan、完整 Space 发布、strict ownership、写后回读、legacy 双匹配、response-loss、Engine+Space 局部串行、service-owned Session 状态机、lease/retry/attempt/job 与最终 DB commit 失败恢复已实现；PR #9 implementation commit `a70bf025` 的 [PostgreSQL 16 job](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29386028676/job/87259377677) 通过，JUnit `tests=2 skipped=0`。
-   - [x] T5：V1/V2 pointer-last rollback、失败 retry、执行时 current 精确 reconciliation、DELETE 404、reconcile child requeue/lease identity、successor child、legacy 首发失败、历史/new managed slug 清理与 R6.1～R6.3 组合故事均已覆盖。
-   - [x] T6：curated facts 永不调用 RAW；五类 typed gap 可显式触发 provider；所有 hit 强制同 `space_id/raw_kb_id`，跨 scope 整体失败，统一标记 `unreviewed_raw`，无写回/合并/搜索引擎。
-   - [x] 已交付 immutable SnapshotFact、统一 SnapshotReader、Wiki snapshot render、PublishAttempt 状态机、补偿/reconciliation、curated-first/raw fallback；review hardening RH1～RH5 task-level 双审与 Claude 跟进复审均关闭。main 同步工作树 deterministic 全量为 **1347 passed / 7 deselected**、mypy 200 files、PostgreSQL 16 为 **2 passed / 1352 deselected**。
-   - [ ] T7 真实验收 publish V1 → V2 → rollback V1 后 Wiki/MCP/Agent 的事实与 Evidence 一致；多页失败不移动 current pointer，补偿可重放。PR #10 已合入，但本机 extraction API key 仍为空，尚未 provision/run-local/dispatch，故继续 `NOT RUN`；旧 preflight failure/skip/PostgreSQL 结果均不得伪装 live 通过。
+   **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（PR #9 复审通过，live 收口中）**
+   - [x] T1～T6 软件完成并通过两轮独立复审（`d38dfb2` 全部发现关闭；deterministic 1224 passed / mypy 181 files 全绿，见 PR #9 复审记录）；018 独占 Alembic `0005`。
+   - [ ] T7 真实 WeKnora live：凭据已补齐（2026-07-16），由 023 受信 workflow 对 PR #9 exact-SHA 执行五节点；无证据前保持 `NOT RUN`，不得伪绿。
+   - [ ] PR #9 合入后解锁：021（迁移 0006）、013 实现、008 W4 回滚动作。
 
-   **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（0/6）**
-   - [ ] 按 `openspec/changes/019-golden-quality-gate/` 顺序完成 T1～T6，先交付 portable assembler/validator，再交付 artifact approval、QualityProfile 与统一 QualityGate。
-   - [ ] 本轨不依赖 018，可独立或与 018 并行；只做工具、fixture/replay 与门禁，不改写真实 11/13 现场、不调用大模型，为 020 提供稳定 artifact 工具与合同。`run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行。
+   **并行轨 B — 019 Golden 工具、QualityProfile 与在线 Gate（✅ 已完成并合入 main）**
+   - [x] T1～T6 严格 TDD 完成，codex 七轮 APPROVED，随 PR #8 合入（merge commit `4d9c84e`，2026-07-15）；证据见 B21 与 `openspec/changes/019-golden-quality-gate/validation-report.md`。
+   - `run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行（边界不变）。
 
    **收敛轨 — 021 Source lifecycle ordering（0/10，硬依赖 018）**
    - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
@@ -67,6 +49,10 @@
    - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
 
    **价值出口 — 020 真实金标/baseline 运行（硬依赖 019+021）**：019 提供 artifact 工具/合同，021 关闭 source ordering 风险；两者完成后，020 才从 T1 `run-admission` 开始，未准入前零模型调用。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与代码轨共享分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
+
+0g.1. **018 执行事故与 PR #9 硬化（必须保留）**：2026-07-14～15 曾因三轮规格审查、三轮计划审查和一个过大的 T1 子任务，出现约 `23143s` 无 RED、无 diff、无可验证产出的执行故障。此后 018 强制拆成单闭环 TDD：15 分钟内首个 RED、30 分钟内可核验产物、工具 60 秒无输出主动轮询、普通命令 10 分钟硬中止、子任务 2 分钟无响应转主线程。PR #9 的 RH1～RH5 已补齐 test-support 隔离、SQLite FK、stale-base mutation、collision/lease recovery 与 0005/search_path 合同；两轮独立复审无剩余 finding。当前只差同步后 CI 与受控 5-node live，不得再扩张范围或重复审查已关闭事项。
+
+0h. **并行执行蓝图（总设计师制定，业务方 2026-07-16 拍板）**：全轨道结构（L0 解阻塞 / L1 关键路径 021→020 / L2 工作台 008 / L3 MCP 013 / L4 知识形态 010→009→012 / L5 抽取提准 024 / L6 治理）、优先级与护栏见 `docs/insurance-kb/22-parallel-execution-blueprint.md`；**change 号与 Alembic 迁移号一律先在 `openspec/changes/README.md` 注册表占号**（022 撞号教训；0006=021、0007=010、0008=009、0009=012 已预分配）。当日拍板三条：①模型凭据已补齐，交 codex 处理 023 T7/T8 → 018 T7；②013 MCP 从 M2 提前（规格就绪，实现等 PR #9 合入）；③规格工作与不触 knowledge 域的实现（008 W1–W3、010 T1~T4 通道一/登记映射、024）**不等 PR #9**，即刻从 main 开工；**010 的 knowledge 域段（T5 起，structured 证据全消费链+冻结合同）排在 021 之后**（三轮复审裁决：关键路径 018→021→020 不因新功能插队而改变）。Wave 2（009/011/012）待架构会话完成基础对齐修订后放行。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -96,7 +82,7 @@
    （族命中 → 锚点直取 → 既有校验链，未命中降级通用管道；命中字段退出通用抽取/补漏/投票）+
    `TableStructureProvider` Protocol（pdfplumber 首实现，费率表数字走列定位直取 12 #1；
    PP-StructureV3 留接口+配置位 `HARNESS_TABLE_PROVIDER`）+ 可喂性评分（12 #4，manifest 记录+
-   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2，007 Claim 端衔接）。
+   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2；**2026-07-16 对账：该字段至今只在 pred 侧，Claim 主链/快照/MCP 未持久化——端到端落地已占号 change 026**，010/013 不预支承诺）。
    **修复 004 族指纹疑点**：无标题文档（说明书/费率表）曾全部退化为空串指纹 fam-e3b0c44298fc，
    现走 fallback（文档类型+页数桶+表头 token），有标题文档指纹零漂移。**留出验证**（盛世金越族，
    两分红产品归纳 → 尊享26终身寿留出）：fast path 命中字段正确率 1.00 vs 通用管道 0.00
@@ -105,7 +91,7 @@
 4. **非当前主线 backlog**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单），不得抢占 ⓪-0f 的执行顺序；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前排期以 ⓪-0f 为准：先收尾，018/019 可独立或并行，021 等 018，020 等 019+021。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行。
+**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前排期以 ⓪-0f/0h 为准：先收尾，018/019 可独立或并行，021 等 018，020 等 019+021；**并行轨道结构与开工基线见 `docs/insurance-kb/22-parallel-execution-blueprint.md`（L0–L6），编号占用见 `openspec/changes/README.md` 注册表**。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行。
 
 ## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
@@ -118,15 +104,14 @@
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
 | B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
 | B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
-| B8 | PP-StructureV3 表格结构识别部署（006 遗留） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`，用金标回归 A/B 验证（11 §2）后替换默认 | 部署人工 + 金标回归 |
-| B8 | **008 审核工作台实现** | 提案即交接物：`openspec/changes/008-review-workbench/proposal.md`（四页面+四动作，FastAPI+Jinja2+HTMX，复用 007 服务层与夹具；先补 specs/tasks 再 TDD） | 开发型任务，中等 |
-| B9 | PP-StructureV3 表格结构识别服务部署接入 | 006 已留 TableStructureProvider 接口与配置位；部署独立服务进程（AGPL 隔离，08 §2）后接入并跑费率表对比 | 部署+联调 |
-| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023 PR #10 已合入 `main`**：软件与 trusted exact-SHA workflow 已交付，六服务 loopback-only healthy；当前 0600 配置仅 Harness extraction API key 为空，config check 在 mutation 前 fail closed。补齐后执行四模型 probe、幂等 provision、五节点 local/GitHub live | 部署+联调 |
+| B8 | **008 审核工作台实现** | **已条款化（正式 delta）可认领（轨道 L2，2026-07-16 二版）**：`openspec/changes/008-review-workbench/`（W1–W7 + T1–T8；FastAPI+Jinja2+HTMX，复用 007/016/019 服务层与夹具；**token→Space 授权绑定**；**W4 整页等 PR #9**）；Owner 复审=A | 开发型任务，中等 |
+| B9 | PP-StructureV3 表格结构识别服务部署接入（006 遗留；原重复的两行 B8/B9 已合并于此） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署（AGPL 隔离，08 §2）；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`；接入后跑费率表对比，用金标回归 A/B 验证（11 §2）替换默认；接入时证据元数据补记表格行列坐标（同事实证反馈 2026-07-16，见 19 号实证补强） | 部署人工 + 金标回归 + 联调 |
+| B10 | WeKnora 测试实例搭建 + live 契约测试 | **OpenSpec 023**：六服务 loopback-only 与 PostgreSQL 临时角色闭环实机通过；百炼五角色 direct probe 已通过。官方 v0.6.3 app 缺 scoped Tenant API Key route；T6d.1 已完成 clean source lock + checksum patch + trusted-main GHCR provenance/SBOM workflow，待人工合入 main 后执行 T6d.2 build/digest write-back，再跑 provision、VLM smoke 与五节点 local/GitHub live | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | `openspec/changes/009-concept-layer/proposal.md`，先补 specs/tasks 再 TDD | 开发型，中等 |
-| B12 | 010 结构化直入通道实现（JSON/FAQ→Claim/QA，幂等+dry-run） | `openspec/changes/010-structured-import/proposal.md`；属后续 backlog，不抢占 ⓪-0f 主线 | 开发型，中等 |
+| B12 | 010 结构化直入通道实现（**双通道**：meta bootstrap→003 零 Claim / 可信业务源→Claim/QA） | **已条款化（正式 delta）可认领（轨道 L4 首件，2026-07-16 四版：+冻结 provenance 合同）**：`openspec/changes/010-structured-import/`（I1–I8 + T1–T12；正交 source_kind + FrozenEvidence 变体/发布时去引用/读侧零回查 + canonical hash 防篡改 + 双轴幂等（record_hash×mapping_version）+ 同键异 hash fail-closed + space 一致性；**knowledge 域清单 tables/models/merge/pages/snapshots+迁移 0007 全部 Owner-A 复审**；T1~T4 即刻、**T5 起排在 021 之后**——关键路径 018→021→020 不变） | 开发型，中等偏大 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立） | `openspec/changes/011-knowledge-health/proposal.md` | 开发型，中小 |
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | `openspec/changes/012-qa-objects/proposal.md`，依赖 B12 | 开发型，中等 |
-| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | `openspec/changes/013-insurance-mcp/proposal.md` | 开发型，中小 |
+| B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪（正式 delta；轨道 L3，业务方 2026-07-16 拍板从 M2 提前）**：`openspec/changes/013-insurance-mcp/`（M1–M5 + T1–T8；**HTTP Streamable 主传输**——WeKnora 禁用 stdio；读路径走 018 SnapshotReader），**实现等 PR #9 合入后开工** | 开发型，中小 |
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
@@ -134,7 +119,10 @@
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **并行轨 A**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005`，完成后解锁 021 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
-| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后，完成后与 019 共同解锁 020 | 开发型，中大 |
+| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后（注册表预分配 0006），完成后与 019 共同解锁 020 | 开发型，中大 |
+| B24 | 024 抽取召回提升（extract_empty 主攻 + 值粒度指引 + A10 弱值/兼容性护栏） | **可认领（轨道 L5，2026-07-16 新开）**：`openspec/changes/024-extraction-recall-uplift/`（E1–E6 条款 + T1–T7 任务）；005 归因工单→回放 RED 用例，零真实模型调用；E6 承接 LLM-wiki-black A10 唯一未迁移真空（Q012/Q026 历史 bug 固化）；真实回归归 020 D4 | 开发型，中小 |
+| B25 | 025 合并前置弱值门槛（已占号未开目录） | 更粗略新值不开冲突（Q026 防审核队列被垃圾冲突淹没）+ informationScore 仅作 008 排序信号不作替换判据；小型，PR #9 合入后提案（knowledge/ 域），可与 B24 同一执行者顺手接 | 开发型，小 |
+| B26 | 026 data_quality 端到端持久化（已占号未开目录） | 12 号 #2 采纳项对账发现只落了 pred 侧：需 Claim/Revision/Snapshot/MCP 全链字段+迁移+回填设计；业务确需时立项，落地前 010/013 等不得预支该字段承诺 | 开发型，中小 |
 
 > 016～021 已有条款级规格；验收以各 change spec、测试与 validation-report 为准。020 是环境/预算约束的数据运行，软件门禁绿不等于真实运行完成；021 规格存在不等于 ordering 能力已落地。
 
@@ -188,17 +176,16 @@
 9a. **"本地绿 ≠ CI 绿"三连坑（2026-07-13 付费确认）**：① ruff 的 first-party 自动探测本地/CI 漂移→已显式 known-first-party；② mypy/ruff 本地缓存可产生假绿→验收复跑加 --no-cache / 删缓存；③ **上游 .gitignore 的 `WeKnora`（二进制名）曾吞掉 adapters/weknora/ 整个目录**，5 个核心文件从未进 git、CI 因此一直红而本地全绿→已加例外；**新增目录后必须查 `git status --ignored`，验收标准含"CI 绿"而不只是本地门禁**。
 9. **本机 shell 有 SOCKS 代理环境变量（ALL_PROXY 等），曾导致 httpx 全部请求挂掉**——适配层已用 `trust_env=False` 修复；新写任何 HTTP 客户端都要注意这一点。**git push 大提交会在 sideband 中途断连**——解法（已配置进本仓库）：`git config http.postBuffer 524288000` + `http.version HTTP/1.1`，并用 `env -u ALL_PROXY -u HTTPS_PROXY …` 绕开代理变量执行 push。
 10. **“基础设施测试被收集 ≠ 真的执行”**：过去 PR 只跑 `-m "not live"`，PostgreSQL/WeKnora 可全部 skip 仍绿色。现在显式三 lane、preflight、JUnit `tests > 0 && skipped = 0`；以后新增基础设施用例必须同步维护 lane collection 契约，不能只看 pytest exit code。
-11. **“审查很多 ≠ 实施推进；代理已派发 ≠ 有产出”**：018 曾连续六轮文档审查后仍无一条实现测试，且一次过大的子代理派发挂起约 6.4 小时。实现阶段必须按 0g 的产出时钟、60 秒无输出处理和 10 分钟黑盒硬上限执行；超过上限立即中止、拆分或主会话接管，并用实际 diff/RED/GREEN 汇报状态。
-12. **新约束不能以丢旧防御测试为代价**：018 DB trigger 提前拒绝坏 pointer/published JSON 后，旧 016 测试一度被改成只断言写侧失败，导致 `current_snapshot_id` 读侧 fail-closed 覆盖消失。正确做法是新增写侧 guard 测试，同时用历史/损坏态 fixture 保留读侧防御；同理 migration backfill default 必须及时切回新版本 default，metadata DDL 必须验证重复 `create_all()`。
-13. **saga 的锁、回读与恢复身份必须组合验收**：单 executor 的并发测试无法证明两个 service 实例共享锁；HTTP 成功无法证明远端 metadata 正确；recovery 若绕过在线锁会把仍在写 Wiki 的 attempt 提前判死；reconcile child 不能成为新工单 source。以后必须用多实例、静默错写、阻塞 action+过期时钟、失败 child requeue 四类用例覆盖。
-14. **Alembic 多版本降级要做链级预检**：SQLite 的 DDL/批量重建可能在后续 revision 拒绝前已经永久生效；新增 head migration 后，不能只依赖旧 revision 自己的 downgrade guard。任何 `head → old` 路径都要测试“失败后表/列/数据和 `alembic_version` 全部不变”，跨越的下游兼容性检查必须在第一个 DDL 前执行；测试中的 head 用脚本动态解析，禁止写死 `0004/0005`。
-15. **新安全主链上线必须封死旧公开旁路**：实现 `ReleasePublisher` 并把新测试写全，不代表 caller-Session 的旧函数式 publish/rollback 已自动消失。whole-change review 必须枚举包 import、`__all__`、CLI/API 与生产调用点；旧可执行实现若只为历史回归保留，必须移到 `tests/support`，不能以 `_legacy_*` 名义继续留在生产模块；并用 package contract 测试确保包属性、`__all__` 和生产模块均无旁路。
-16. **实施确认后，阅读和审查必须服从首个 RED**：不能把“上下文复杂”当成无限预研许可。15 分钟内无精确 RED、30 分钟内无 diff/GREEN、60 秒工具无输出时，分别触发缩小任务、主会话接管、主动轮询/中止；时间盒不能通过换代理、重写计划或再次审查归零。
-17. **长时间无反馈是执行故障，不是“任务复杂”**：023 期间先后出现一次 reviewer spawn 约 30 分钟、一次只读安全审查 spawn 约 67 分钟阻塞。硬规则：任何 agent/tool **60 秒无新输出即轮询或中断**；主路径已有可测试产物后，不得再让可选 reviewer/spawn 阻塞收口；每 60 秒必须给业务方可验证进度。以后优先复用已存在 agent 或主线程审查，不在关键路径新建审查 agent。
-18. **子代理 GREEN 只是局部证据**：023 CLI 子线曾把 runtime env 错写成七个 `HARNESS_LIVE_*`，单模块 22 passed 仍无法真实运行；主线程组合复核后才改为复用四角色 `load_local_live_config`、八项 `ensure_runtime_environment` 与默认 `probe_all_models`。并行开发必须文件独占，但合并前主线程必须检查真实数据流并跑跨模块 focused + 全量 deterministic，不能把各轨测试数相加当集成完成。
-19. **真实 adapter 要尽早做最小闭环**：023 在实机才发现 worktree 派生 Compose project 会撞固定 container name，以及 PostgreSQL `CREATE ROLE ... PASSWORD %s` 不支持该位置的 bind 参数。以后 concrete adapter 完成第一版即跑最小、可逆、无敏感输出的 create→verify→cleanup；不要等大量 mock 测试结束才碰真实 handler/DDL。Compose project、REST 响应字段、DDL 语法和清理后不存在都必须单独验明。
-20. **已知无效凭据不做循环重试**：provider 401 是外部认证阻塞，不是代码“继续跑就会好”。只记录角色、HTTP 状态和 `BLOCKED`，不打印 URL/key/body；等本地 0600 文件更新后再从 probe 开始。软件 PASS、容器 healthy、provider probe、provision、local live、GitHub live 六层状态必须分开报告。
-21. **安全测试要断言结构，不能做宿主字符串猜测**：023 runner 测试曾用“Docker argv 不含 `Path.home()`”证明无宿主 mount；CI 宿主 home 与容器 destination 都是 `/home/runner`，导致本地绿、CI 稳定红。正确检查是解析 `--mount`，精确允许 anonymous `type=volume`，拒绝 `type=bind/-v/--volume/docker.sock`。以后跨平台隔离测试不得用路径子串、用户名或本机目录布局代替配置结构。
+11. **长时间无反馈是执行故障，不是“任务复杂”**：023 期间先后出现 reviewer spawn 约 30/67 分钟，以及 2026-07-16 一次并行子任务调度调用异常挂起约两小时。硬规则升级：任何 agent/tool **60 秒无新输出即轮询**；普通测试/网络命令 **10 分钟硬中止**；spawn/follow-up 调度 **2 分钟无返回即中断并转主线程**。主路径已有可测试产物后，不得让可选 reviewer/spawn 阻塞收口；每 60 秒给业务方可验证进度。子代理方案必须由主线程安全复核，mutable tag、dirty build 或放宽 digest 合同不得因局部测试全绿直接进入 PR。
+12. **子代理 GREEN 只是局部证据**：023 CLI 子线曾把 runtime env 错写成七个 `HARNESS_LIVE_*`，单模块 22 passed 仍无法真实运行；主线程组合复核后才改为复用四角色 `load_local_live_config`、八项 `ensure_runtime_environment` 与默认 `probe_all_models`。并行开发必须文件独占，但合并前主线程必须检查真实数据流并跑跨模块 focused + 全量 deterministic，不能把各轨测试数相加当集成完成。
+13. **真实 adapter 要尽早做最小闭环**：023 在实机才发现 worktree 派生 Compose project 会撞固定 container name，以及 PostgreSQL `CREATE ROLE ... PASSWORD %s` 不支持该位置的 bind 参数。以后 concrete adapter 完成第一版即跑最小、可逆、无敏感输出的 create→verify→cleanup；不要等大量 mock 测试结束才碰真实 handler/DDL。Compose project、REST 响应字段、DDL 语法和清理后不存在都必须单独验明。
+14. **已知无效凭据不做循环重试**：provider 401 是外部认证阻塞，不是代码“继续跑就会好”。只记录角色、HTTP 状态和 `BLOCKED`，不打印 URL/key/body；等本地 0600 文件更新后再从 probe 开始。软件 PASS、容器 healthy、provider probe、provision、local live、GitHub live 六层状态必须分开报告。
+15. **安全测试要断言结构，不能做宿主字符串猜测**：023 runner 测试曾用“Docker argv 不含 `Path.home()`”证明无宿主 mount；CI 宿主 home 与容器 destination 都是 `/home/runner`，导致本地绿、CI 稳定红。正确检查是解析 `--mount`，精确允许 anonymous `type=volume`，拒绝 `type=bind/-v/--volume/docker.sock`。以后跨平台隔离测试不得用路径子串、用户名或本机目录布局代替配置结构。
+16. **数据库失败栈不得携带 password DSN**：023 在沙箱拒绝 loopback 时，psycopg traceback 展开了本机 Harness 测试库密码；已立即轮换数据库 role 与 mode-0600 runtime，并用临时 `PGPASSFILE` + 无密码 URL重跑通过。以后 PostgreSQL smoke/integration 一律用 passfile、service 或其他不把 password 放进 DSN repr 的方式；一旦异常输出展开凭据，先轮换再继续，不能只删日志。
+17. **新约束不能以丢旧防御测试为代价**：018 DB trigger 拒绝坏 pointer/published JSON 后，仍须用历史损坏态 fixture 保留 `current_snapshot_id` 读侧 fail-closed；migration backfill default 与新写 default 必须分开，metadata DDL 必须验证重复 `create_all()`。
+18. **saga 的锁、回读与恢复身份必须组合验收**：用两个 service 实例证明 `(Engine, space_id)` 共享锁；WeKnora 写成功后必须 GET 回读 `managed_by/space_id/snapshot_id`；recovery 与在线发布共锁，reconcile child 不得形成 job-of-job。
+19. **Alembic 多版本降级要做链级预检**：任何 `head → old` 路径在首个 DDL 前完成下游兼容性检查，并验证拒绝后 schema、数据和 `alembic_version` 全部不变；测试动态解析 head，禁止写死 revision。
+20. **新安全主链上线必须封死旧公开旁路**：package import、`__all__`、CLI/API 与生产调用点均须枚举；只为历史回归保留的实现移入 `tests/support`，生产代码不得继续暴露 caller-session 式 publish/rollback。
 
 ## 六、工作方式约定（业务方明确要求）
 

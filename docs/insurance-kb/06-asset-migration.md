@@ -190,6 +190,8 @@
 - 弱值判断链（思想重写）：`isFieldValueCompatible`（字段-值语义兼容，如 QA 必须含问答标记、"投保年龄"不得混入职业类别、"保证续保"不得填年限）→ `isLessSpecificThanExisting`（≤12 字且为旧值子串则拒绝）→ `shouldRejectMainFieldValue`（防"费用"被退保损失文案回填，Q012）。
 - `informationScore`（`:468-474`）：长度 + 列表标记×80 + 分隔符×20 + 领域关键词×30；`shouldReplaceFieldValue` 用它决定新值是否替换旧值，并对投保年龄做"取更宽范围"的数值特判（费率表年龄常窄于条款，Q008/费率表陷阱）。**移植时把这些判断连同触发它们的历史 bug 写成 pytest 用例。**
 
+> **落地对账（2026-07-16 代码级审计）**：本节 A6 部分（PLACEHOLDER+SOURCE_ONLY 两族 → 三态 unknown/source_pointer）已落码 `compiler/cleaning.py`；**A10 部分尚未落码**——`WEAK_UNACTIONABLE`/`REFERENCE_ONLY` 两族与字段-值兼容性链（Q012/Q026）由 **change 024 E6** 承接（抽取侧）；合并侧"更粗略新值不开冲突"门槛由 **change 025**（已占号）承接；`informationScore` **不再作为值替换判据**（merge 的权威序①②有意压制完整度信号，属设计取舍非遗漏），仅作 008 工作台审核排序的可选辅助信号（Q007 教训保留：权重须金标验证）。
+
 ### 3.5 桥接与聚合（A7）
 
 - `MODULE_TO_FIELD_BRIDGE`（`:2063-2077`）：14 个模块的关键字段确定性回填主字段表，如 犹豫期模块.犹豫期天数→犹豫期、年度免赔额.免赔额类型→0免赔、6年保证续保.保证续保期→保证续保期、减保.减保规则→部分领取。

@@ -144,12 +144,15 @@ harness/.venv/bin/python harness/scripts/local_live.py up
 harness/.venv/bin/python harness/scripts/local_live.py provision \
   --pdf 'dataset/shouxian_product/平安创享盛世金越（尊享版26）终身寿险（分红型）/产品说明书.pdf'
 harness/.venv/bin/python harness/scripts/local_live.py verify
+harness/.venv/bin/python harness/scripts/local_live.py smoke-vlm
 harness/.venv/bin/python harness/scripts/local_live.py run-local
 ```
 
-四个模型角色必须分别探测成功，且 `provision` 会在任何资源 mutation 前再次探测。Harness extraction 使用独立的百炼 OpenAI-compatible profile；切换 `HARNESS_LLM_BASE_URL/API_KEY/MODEL_WEAK` 不改变 WeKnora 三角色、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
+五个配置角色必须分别探测成功：WeKnora Chat/Embedding/ReRank/VLLM 四模型，加上 Harness extraction。`provision` 会在任何资源 mutation 前再次探测；切换 extraction profile 不改变 WeKnora 四模型、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
 
-`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、三模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、四模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+
+`smoke-vlm` 只对 visual canary 显式启用 VLM；普通 PDF 仍走文本解析。失败、取消、`incomplete`、`pending` 或 `processing` 都会保留 sanitized evidence JSON 并以非零退出；只有字面终态 `failed`、`cancelled`、`incomplete` 可由操作员执行一次 `retry-vlm --knowledge-id <id>`。`pending`/`processing` 不得 reparse，以免与在途解析竞态。retry marker 在 API 请求前以 mode `0600`、`O_EXCL` 持久化；若进程在 marker 成功后、请求结果确认前退出，该状态与“请求已发出但响应丢失”不可区分，因此不得自动删除 marker 或再次 reparse，应按 knowledge ID 和 WeKnora attempt 做人工事故核对。
 
 只有 023 workflow 已合入 `main`、本机 `run-local` 五节点 `tests=5 skipped=0 failures=0 errors=0`，且目标 PR 是 open same-repository PR 时，才允许发起 GitHub gate：
 

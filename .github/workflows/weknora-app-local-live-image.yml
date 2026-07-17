@@ -1,0 +1,125 @@
+name: WeKnora app trusted local-live image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - name: Checkout trusted workflow source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Read reviewed source lock
+        id: source
+        run: |
+          python3 harness/scripts/verify_weknora_app_source.py emit \
+            --lock deploy/local-live/weknora-app-source.lock.json \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Checkout exact Tencent upstream source
+        env:
+          UPSTREAM_REPOSITORY: ${{ steps.source.outputs.repository }}
+          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          git clone --filter=blob:none --no-checkout \
+            "$UPSTREAM_REPOSITORY" "${{ runner.temp }}/weknora-source"
+          git -C "${{ runner.temp }}/weknora-source" \
+            checkout --detach "$UPSTREAM_COMMIT"
+
+      - name: Verify source, Dockerfile, ancestors, and patch
+        env:
+          LOCKED_PATCH: ${{ steps.source.outputs.patch_path }}
+        run: |
+          python3 harness/scripts/verify_weknora_app_source.py verify \
+            --lock deploy/local-live/weknora-app-source.lock.json \
+            --checkout "${{ runner.temp }}/weknora-source" \
+            --patch "$GITHUB_WORKSPACE/$LOCKED_PATCH"
+
+      - name: Apply reviewed security patch
+        env:
+          LOCKED_PATCH: ${{ steps.source.outputs.patch_path }}
+        working-directory: ${{ runner.temp }}/weknora-source
+        run: |
+          git apply --check "$GITHUB_WORKSPACE/$LOCKED_PATCH"
+          git apply "$GITHUB_WORKSPACE/$LOCKED_PATCH"
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: ${{ runner.temp }}/weknora-source/go.mod
+          cache-dependency-path: ${{ runner.temp }}/weknora-source/go.sum
+
+      - name: Verify model-debug access-log redaction
+        working-directory: ${{ runner.temp }}/weknora-source
+        run: go test ./internal/middleware -run R3_3 -count=1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push locked app image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: ${{ runner.temp }}/weknora-source
+          file: ${{ runner.temp }}/weknora-source/docker/Dockerfile.app
+          platforms: ${{ steps.source.outputs.platform }}
+          push: true
+          tags: ${{ steps.source.outputs.image_repository }}:${{ steps.source.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=${{ steps.source.outputs.repository }}
+            org.opencontainers.image.revision=${{ steps.source.outputs.commit }}
+            io.insurancekb.source.tree=${{ steps.source.outputs.tree }}
+            io.insurancekb.patch.sha256=${{ steps.source.outputs.patch_sha256 }}
+          build-args: |
+            VERSION_ARG=0.6.3-insurancekb-023
+            COMMIT_ID_ARG=${{ steps.source.outputs.commit }}
+            BUILD_TIME_ARG=github-run-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=weknora-app-arm64
+          cache-to: type=gha,scope=weknora-app-arm64,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest immutable GHCR subject
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ${{ steps.source.outputs.image_repository }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record immutable artifact identity
+        env:
+          IMAGE_REPOSITORY: ${{ steps.source.outputs.image_repository }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+          SOURCE_TREE: ${{ steps.source.outputs.tree }}
+          PATCH_SHA256: ${{ steps.source.outputs.patch_sha256 }}
+        run: |
+          {
+            echo '### WeKnora app artifact'
+            echo
+            echo "- image: ${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "- source commit: ${SOURCE_COMMIT}"
+            echo "- source tree: ${SOURCE_TREE}"
+            echo "- patch sha256: ${PATCH_SHA256}"
+          } >> "$GITHUB_STEP_SUMMARY"

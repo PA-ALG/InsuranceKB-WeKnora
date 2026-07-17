@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable, Coroutine, Mapping, Sequence
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, Protocol, TextIO, cast
 
@@ -23,6 +24,8 @@ from insurance_harness.live_env.local_gate import LocalGateCollaborator
 from insurance_harness.live_env.local_provisioning import (
     ProvisionCollaborator,
     RealProvisioningOperation,
+    RuntimeAPIKeyResolver,
+    VLMSmokeCollaborator,
 )
 from insurance_harness.live_env.model_probe import probe_all_models
 
@@ -32,6 +35,8 @@ Phase = Literal[
     "up",
     "provision",
     "verify",
+    "smoke-vlm",
+    "retry-vlm",
     "run-local",
     "down",
 ]
@@ -41,6 +46,8 @@ PHASES: tuple[Phase, ...] = (
     "up",
     "provision",
     "verify",
+    "smoke-vlm",
+    "retry-vlm",
     "run-local",
     "down",
 )
@@ -71,6 +78,7 @@ class PhaseRequest(NamedTuple):
     phase: Phase
     delete_volumes: bool
     pdf_path: Path | None = None
+    knowledge_id: str | None = None
 
 
 class PhaseAdapter(Protocol):
@@ -329,6 +337,7 @@ class LocalLiveAdapter:
         "_provision",
         "_runtime_ensurer",
         "_subprocess",
+        "_vlm",
     )
 
     def __init__(
@@ -340,6 +349,7 @@ class LocalLiveAdapter:
         model_probe: ModelProbe | None = None,
         subprocess_collaborator: PhaseCollaborator | None = None,
         provision_collaborator: PhaseCollaborator | None = None,
+        vlm_collaborator: PhaseCollaborator | None = None,
         default_collaborators: bool = False,
     ) -> None:
         self._paths = paths
@@ -352,6 +362,7 @@ class LocalLiveAdapter:
         self._model_probe = probe_all_models if model_probe is None else model_probe
         self._subprocess = subprocess_collaborator
         self._provision = provision_collaborator
+        self._vlm = vlm_collaborator
         self._default_collaborators = default_collaborators
 
     def run(self, request: PhaseRequest) -> object:
@@ -371,11 +382,12 @@ class LocalLiveAdapter:
             except Exception as error:
                 raise LocalExecutionError("model probe failed") from error
 
-        collaborator = (
-            self._provision
-            if request.phase in {"provision", "verify"}
-            else self._subprocess
-        )
+        if request.phase in {"provision", "verify"}:
+            collaborator = self._provision
+        elif request.phase in {"smoke-vlm", "retry-vlm"}:
+            collaborator = self._vlm
+        else:
+            collaborator = self._subprocess
         if collaborator is None and self._default_collaborators:
             if request.phase in {"provision", "verify"}:
                 collaborator = cast(
@@ -388,12 +400,20 @@ class LocalLiveAdapter:
                         ),
                     ),
                 )
+            elif request.phase in {"smoke-vlm", "retry-vlm"}:
+                collaborator = cast(
+                    PhaseCollaborator,
+                    VLMSmokeCollaborator(runtime_path=self._paths.runtime),
+                )
             elif request.phase == "run-local":
                 collaborator = cast(
                     PhaseCollaborator,
                     LocalGateCollaborator(
                         harness_root=self._paths.config.parent / "harness",
                         runtime_path=self._paths.runtime,
+                        api_key_resolver=RuntimeAPIKeyResolver(
+                            runtime_path=self._paths.runtime,
+                        ),
                     ),
                 )
             else:
@@ -459,12 +479,65 @@ def _redact(value: object, *, key: str | None = None) -> object:
     return "<redacted>"
 
 
+def _git_output(repo_root: Path, arguments: tuple[str, ...]) -> str:
+    result = subprocess.run(
+        arguments,
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("implementation identity is unavailable")
+    return result.stdout
+
+
+def _implementation_evidence(repo_root: Path) -> dict[str, object]:
+    head = _git_output(repo_root, ("git", "rev-parse", "HEAD")).strip()
+    status = _git_output(
+        repo_root,
+        ("git", "status", "--porcelain=v1", "--untracked-files=all"),
+    )
+    if not status:
+        return {
+            "implementation_sha": head,
+            "dirty": False,
+            "evidence": "exact",
+        }
+    digest = sha256()
+    tracked = _git_output(repo_root, ("git", "diff", "--binary", "HEAD", "--"))
+    digest.update(b"tracked\0")
+    digest.update(tracked.encode("utf-8"))
+    untracked = _git_output(
+        repo_root,
+        ("git", "ls-files", "--others", "--exclude-standard", "-z"),
+    )
+    resolved_root = repo_root.resolve()
+    for relative in sorted(name for name in untracked.split("\0") if name):
+        path = (repo_root / relative).resolve()
+        if not path.is_relative_to(resolved_root) or not path.is_file():
+            raise RuntimeError("implementation identity is unavailable")
+        content = path.read_bytes()
+        digest.update(b"untracked\0")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return {
+        "head": head,
+        "dirty": True,
+        "diff_digest": digest.hexdigest(),
+        "evidence": "provisional",
+    }
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Operate the isolated local-live environment")
     parser.add_argument("phase", choices=PHASES)
     parser.add_argument("--delete-volumes", action="store_true")
     parser.add_argument("--confirm-delete-volumes", action="store_true")
     parser.add_argument("--pdf", type=Path)
+    parser.add_argument("--knowledge-id")
     return parser
 
 
@@ -485,6 +558,7 @@ def main(
     delete_volumes = bool(namespace.delete_volumes)
     confirmed = bool(namespace.confirm_delete_volumes)
     pdf_path = cast(Path | None, namespace.pdf)
+    knowledge_id = cast(str | None, namespace.knowledge_id)
 
     if (delete_volumes or confirmed) and phase != "down":
         print("local-live: volume options are valid only for down", file=error_stream)
@@ -497,6 +571,12 @@ def main(
         return 2
     if pdf_path is not None and phase != "provision":
         print("local-live: --pdf is valid only for provision", file=error_stream)
+        return 2
+    if knowledge_id is not None and phase != "retry-vlm":
+        print("local-live: --knowledge-id is valid only for retry-vlm", file=error_stream)
+        return 2
+    if phase == "retry-vlm" and not knowledge_id:
+        print("local-live: --knowledge-id is required for retry-vlm", file=error_stream)
         return 2
 
     verifier = FileLockVerifier(DEFAULT_LOCK_PATHS) if lock_verifier is None else lock_verifier
@@ -518,6 +598,7 @@ def main(
                 phase=phase,
                 delete_volumes=delete_volumes,
                 pdf_path=pdf_path,
+                knowledge_id=knowledge_id,
             )
         )
     except (LocalConfigurationError, CollaboratorUnavailable) as configuration_error:
@@ -527,7 +608,19 @@ def main(
         print(f"local-live: {_redact_text(str(adapter_error))}", file=error_stream)
         return 1
 
+    if phase in {"smoke-vlm", "retry-vlm"}:
+        if not isinstance(result, Mapping):
+            print("local-live: VLM result is invalid", file=error_stream)
+            return 1
+        try:
+            result = {**result, **_implementation_evidence(REPO_ROOT)}
+        except Exception:
+            print("local-live: implementation identity is unavailable", file=error_stream)
+            return 1
     print(json.dumps(_redact(result), ensure_ascii=False, sort_keys=True), file=output_stream)
+    if phase in {"smoke-vlm", "retry-vlm"} and result.get("status") != "completed":
+        print("local-live: VLM operation did not complete", file=error_stream)
+        return 1
     return 0
 
 
