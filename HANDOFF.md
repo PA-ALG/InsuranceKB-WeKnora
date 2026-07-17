@@ -105,7 +105,7 @@
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | `openspec/changes/012-qa-objects/proposal.md`，依赖 B12 | 开发型，中等 |
 | B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪（正式 delta；轨道 L3，业务方 2026-07-16 拍板从 M2 提前）**：`openspec/changes/013-insurance-mcp/`（M1–M5 + T1–T8；**HTTP Streamable 主传输**——WeKnora 禁用 stdio；读路径走 018 SnapshotReader），**实现等 PR #9 合入后开工** | 开发型，中小 |
 | B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
-| B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | `openspec/changes/015-feedback-flywheel/proposal.md`；依赖 007，008 展示 | 开发型，中小 |
+| B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | **unblocked 段实现完成（feat/015-feedback-flywheel，2026-07-17）**：`flywheel/` 新包——F1 信号提取（4 类识别器+脱敏+增量游标，`trust_env=False`）/ F2 对齐（复用 003 路由器，fail-safe 歧义不开单）+缺口聚合（稳定 ID/hit_count/reopen）/ F3 报表 + `flywheel pull` CLI 编排（默认 dry-run，`--open-tickets` 受阻非零退出）。**提交前独立红队 live 复现修 4+1 缺陷（字段名产品名子串误挂 / 混合 exact+alias 绕过歧义 / 空知识 CLI 静默少报 / 同长字段任意决胜 / 陈旧对齐键借道）后 52 用例，全量 1317 passed 零破坏，mypy 197+ruff 全绿**；validation-report（含 §5 gauntlet）+ 裁决记录（1–9）齐。**gated 未做**：ReviewItem(knowledge_gap) 投影候 PR#9+域协调（CLI 已埋位）、009 概念对齐 / 011 报告合流候 PR#12、空知识信号 CLI 路径需 claim 后端。依赖 007/003 已交付 | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | **并行轨 A**；`openspec/changes/018-release-snapshot-read-model/`，硬依赖 007+016+017，独占 migration `0005`，完成后解锁 021 | 开发型，中大 + live |
