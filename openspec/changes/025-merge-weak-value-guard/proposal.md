@@ -1,6 +1,6 @@
 # 025 · 合并前置弱值门槛（可证明弱值不开冲突 + informationScore 仅作排序信号）
 
-> 状态：**提案二版（2026-07-18，按 codex PR #17 复审收口重构：抑制=有资格前提的裁决，非中性过滤）**。轨道 L6 治理（见 docs/insurance-kb/22）。
+> 状态：**提案三版（2026-07-18，codex PR #17 两轮复审收口：一轮=抑制是裁决非过滤；二轮=E4 全权威时间切片+effective_to 贯通、root+events 双表、来源 revision 状态机、三类失败语义）**。轨道 L6 治理（见 docs/insurance-kb/22）。
 > 依赖：007 主链（合并/冲突语义）、018（PR #9 已合入 main，2026-07-17）、**021（规格已提出、尚未实现）——实现排在 021 之后**（合并策略接线点在 `knowledge/merge.py`，且 G8 锁序依赖 021 的 per-source lock 语义定稿）；提案与规格即刻定稿。
 > 设计权威：007 mainchain（K2/K3 合并与裁决序）、docs 03（§6.2 高风险清单、§8 表清单权威）、LLM-wiki-black PROJECT_HISTORY Q026、024 的弱值/兼容性护栏（抽取侧对称防线）、21（复审前自测）。
 
@@ -12,11 +12,11 @@
 
 ## 做什么
 
-1. **抑制资格前提（G1 E1~E5）**：双方 value_state 均 present；非高风险、无 pending_judge；候选权威不高于基线；同权威时生效区间完整且相等（否则生效时间裁决权还给 007 K3.2 ②）；基线为当前 published 且提交前锁内复核同 revision。任一不满足 → 不抑制。
+1. **抑制资格前提（G1 E1~E5）**：双方 value_state 均 present；非高风险、无 pending_judge；候选权威不高于基线；**全权威**要求 effective 区间逐端相等（一方有值一方无值/值不等 → 不抑制——不同时间切片不是弱投影；`effective_to` 加入 ProposedClaim 并贯通导入→合并→审计全链，贯通前 E4 不可判定即不抑制）；基线为当前 published 且提交前锁内复核同 revision。任一不满足 → 不抑制。
 2. **可证明弱化偏序（G2）**：`SpecificityRelation = strictly_weaker | equivalent | stronger | incomparable`，由 schema/value-type/predicate 级**版本化比较器**给出（附 rule_id）；自由文本默认 incomparable，仅白名单可证明关系（存在性=量化投影、枚举父子、严格子集投影）可判弱。与 informationScore（仅 008 排序信号）**彻底分离**——标量全序表达不了"不可比"，不得当语义证明用。
-3. **SuppressedObservation + append-only 审计（G5，迁移 0011）**：抑制不丢观察——保存候选完整快照 + Evidence/来源身份 + 基线 claim/revision + 双方权威/生效区间 + 判定依据（特征向量/两分/comparator_version/rule_id）；唯一约束 exact-once；服务层与 DB 权限双层 append-only。
-4. **可恢复生命周期（G7）**：基线 supersede/retract/stale → active 观察重新进入裁决；观察自身来源删除 → invalidation，不复活。防"强值来源删除后，仍有效的弱观察随之丢失"。
-5. **事务与并发（G8）**：claim business key advisory/row lock（021 per-source lock 不覆盖跨来源同键并发）；锁内复核基线；审计写入与 drop 决定同一事务，写失败整体回滚或 fail-open；PostgreSQL 双会话验收（suppress-vs-supersede/retract、重试、审计故障注入）。
+3. **root+events 双表 append-only 审计（G5，迁移 0011）**：`suppressed_observations`（root 不可变快照：候选完整快照 + Evidence/来源身份 + 基线 claim/revision + 双方权威/生效区间 + 判定依据）+ `suppressed_observation_events`（生命周期事件流：event_type/causation_id/ordering/event_fingerprint，状态仅由事件确定性折叠、乱序重放恒同态）；root 与 events 各自唯一约束 exact-once；**双方言触发器禁 UPDATE/DELETE**（018 release_guard 模式），pg 另 REVOKE 纵深。
+4. **可恢复生命周期 + 来源 revision 状态机（G7）**：基线 supersede/retract/stale → active 观察重评；重评在 021 per-source lock 内复核 SourceHead active、latest_revision 匹配、Evidence 非 stale；observation 的 source revision 不再是当前 active head（stale/supersede/retract/delete）→ 终态失效不复活；新 revision 观察独立入流程。防"强值来源删除后弱观察丢失"与"stale 旧 revision 复活"两个方向。
+5. **事务与并发（G8，三类失败语义）**：claim business key advisory/row lock（021 per-source lock 不覆盖跨来源同键并发）+ 锁内复核基线 + 审计写入与 drop 决定同一事务。失败分三类不混同：计算异常（写入前）→ 单候选 fail-open；持久化失败 → 整 merge unit-of-work abort 零部分提交、候选可重试（不在 failed 事务内继续 007）；唯一键冲突 → 同 payload 幂等/异 payload fail-closed。PostgreSQL 双会话验收。
 6. **008 消费合同（G9）**：informationScore + comparator_version 持久化（被抑制→observation；进 007→decision_basis 附加），008 W1.1 排序读持久化值不重算；抑制计数只读 API（Space 强制）。
 
 ## 不做什么
@@ -29,4 +29,4 @@
 
 ## 影响
 
-文件域（二版按 codex 复审扩展至自洽）：`harness/src/insurance_harness/knowledge/merge.py`（资格校验+比较器接线，K2 判定前）+ `knowledge/tables.py`（suppressed_observations ORM，docs 03 先行）+ `knowledge/models.py`（SpecificityRelation/observation 领域模型）+ `knowledge/` 只读查询 API（抑制计数/明细）+ 迁移 **0011**（含迁移测试）+ `docs/insurance-kb/03-knowledge-model.md` §8 表清单修订（**本 PR 已先行完成**，遵守 tables.py"文档先改"合同）+ 008 W1.1 消费口径（经 decision_basis 持久化分数，008 侧无表变更）。**实现排在 021 之后**（021 规格已提出、尚未实现；018 已随 PR #9 合入）；与 024（`compiler/`）文件域不相交。迁移号 0011 已在 `openspec/changes/README.md` 占号。
+文件域（三版按 codex 两轮复审扩展至自洽）：`harness/src/insurance_harness/knowledge/merge.py`（资格校验+比较器接线，K2 判定前；`_prop_dump`/`_create_claim` 的 effective_to 贯通）+ `knowledge/models.py`（ProposedClaim 增 `effective_to`；SpecificityRelation/observation 领域模型）+ `knowledge/importer.py`（导入输入 effective_to 贯通）+ `knowledge/tables.py`（suppressed_observations + suppressed_observation_events 双表 ORM，docs 03 先行）+ append-only 触发器 DDL（双方言，018 release_guard 模式）+ `knowledge/` 只读查询 API（抑制计数/明细）+ 迁移 **0011**（双表+触发器，含迁移测试）+ `docs/insurance-kb/03-knowledge-model.md` §8 表清单修订（**本 PR 已先行完成**，遵守 tables.py"文档先改"合同）+ 008 W1.1 消费口径（经 decision_basis 持久化分数，008 侧无表变更）。**实现排在 021 之后**（021 规格已提出、尚未实现；018 已随 PR #9 合入）；与 024（`compiler/`）文件域不相交。迁移号 0011 已在 `openspec/changes/README.md` 占号。

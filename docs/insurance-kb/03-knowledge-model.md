@@ -341,9 +341,10 @@ ReleaseSnapshot:
 | `release_snapshots` + `snapshot_claims` | 见 5.2 | 指针表 `current_release` 单行 |
 | `unassigned_pool` | 归属失败的候选事实 + 候选产品列表 + 失败原因 | (created_at)；处理后落 review_items |
 | `gap_tasks` | unknown 字段生成的缺口任务：subject, predicate, 候选证据, 重试建议, status | (status)；完整度矩阵直接由 claims 三态聚合，本表只管"待补"工作流 |
-| `suppressed_observations`（025 规划，迁移 0011） | 弱值门槛抑制的完整观察记录（append-only 事件流）：space_id, change_set_id, product_version_id, predicate, existing_claim_id+existing_revision_no, 候选快照（value/value_state/value_hash）+ Evidence/来源身份（knowledge_id/source_revision）, 双方 authority/effective 区间, 特征向量/两分/comparator_version/rule_id, actor, proposal_fingerprint；生命周期（active/readjudicated/invalidated）由追加事件折叠 | UQ(space_id, change_set_id, proposal_fingerprint, existing_claim_id, existing_revision_no, comparator_version)——exact-once；Space 复合 FK 闭合；(change_set_id) 批次计数 |
+| `suppressed_observations`（025 规划，迁移 0011） | 弱值门槛抑制的 root 不可变快照：space_id, change_set_id, product_version_id, predicate, existing_claim_id+existing_revision_no, 候选快照（value/value_state/value_hash）+ Evidence/来源身份（knowledge_id/source_revision）, 双方 authority/effective 区间, 特征向量/两分/comparator_version/rule_id, actor, proposal_fingerprint | UQ(space_id, change_set_id, proposal_fingerprint, existing_claim_id, existing_revision_no, comparator_version)——exact-once；Space 复合 FK 闭合；(change_set_id) 批次计数 |
+| `suppressed_observation_events`（025 规划，迁移 0011） | 观察生命周期事件流：observation_id FK, event_type（suppressed/readjudicated/invalidated/source_superseded）, causation_id（基线 revision 变更/021 SourceEvent/change_set）, reason, occurred_at, ordering, event_fingerprint；状态仅由事件确定性折叠（invalidated/source_superseded 终态），无可改写 status 列 | UQ(space_id, observation_id, event_type, causation_id)——事件防重放；root 与首条 suppressed 事件同事务 |
 
-通用约定：全表带 `created_at/updated_at`；不可变表（revisions、change_sets、snapshots、evidence、suppressed_observations）**无 UPDATE 权限**（数据库角色层面强制）；所有外键用实体 UUID。
+通用约定：全表带 `created_at/updated_at`；不可变表（revisions、change_sets、snapshots、evidence、suppressed_observations 及其 events）**无 UPDATE 权限**（数据库角色层面强制；suppressed 两表另以 sqlite/pg 双方言触发器拒绝 UPDATE/DELETE，对齐 018 release_guard 模式）；所有外键用实体 UUID。
 
 ---
 
