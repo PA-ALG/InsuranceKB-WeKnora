@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, GoldenRecord, TriState
@@ -135,6 +135,8 @@ class RunManifest(BaseModel):
     dead_letters: list[DeadLetter] = Field(default_factory=list)
     pending_judge_count: int = 0
     template_registry_version: str = ""  # 006 F3：空 = 未启用 fast path
+    # 024 E7：变体注册表+assignment policy 内容摘要（入 run/checkpoint 身份，resume 不一致即拒）
+    variant_digest: str = ""
     fastpath_fields: int = 0  # fast path 命中并通过校验链的字段总数
 
 
@@ -148,6 +150,26 @@ class DocPayload(BaseModel):
     family_id: str = ""
 
 
+class ExtractionAudit(BaseModel):
+    """024 E7：单条 pred 的抽取审计（随 pred.jsonl 持久化，020 D4 A/B 对账的唯一依据）。
+
+    - ``prompt_variant_used``：该值**实际经过**的模板标识（baseline@…/fastpath/
+      gapfill-default@v1/targeted@vN）——注册表 membership 不得冒充实际使用；
+    - ``variant_assignment``：实验分桶臂（control/treatment；实验关闭时 None）；
+    - ``winning_origin``：产生最终值的路径（extract/vote/judge/fastpath/gapfill）；
+    - ``compat_reject``：字段-值兼容性拒绝原因（E6.3，无则 None）；
+    - ``pointer_terms``：source_pointer 解析出的定向检索词（E6/补漏审计）。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    prompt_variant_used: str
+    variant_assignment: str | None = None
+    winning_origin: str = "extract"
+    compat_reject: str | None = None
+    pointer_terms: tuple[str, ...] = ()
+
+
 class PredRecord(GoldenRecord):
     """pred JSONL 行格式：GoldenRecord 对齐 + confidence 扩展（E5.1，eval 忽略未知字段）。"""
 
@@ -158,3 +180,5 @@ class PredRecord(GoldenRecord):
     data_quality: DataQuality = "llm_extracted"
     # 022 RH3.1：新产物显式标记来源；缺字段的历史 JSONL 保持 legacy 兼容。
     source_mode: SourceMode = "legacy"
+    # 024 E7：类型化抽取审计（历史 JSONL 缺字段 → None，向后兼容；eval 忽略未知字段）
+    extraction_audit: ExtractionAudit | None = None

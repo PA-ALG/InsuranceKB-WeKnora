@@ -35,7 +35,7 @@
 
 ### Requirement: E3 定向补漏的触发必须 schema 驱动且不降低反幻觉门槛
 
-第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望，首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节，且预算允许。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
+第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望（`FieldSpec.requiredness ∈ {required, expected}`——基线 Excel 无显式必填列时默认 expected，YAML 提供『必填』/requiredness 列时按列解析），首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节（检索无候选=零 LLM 调用），且预算允许（运行级补漏调用上限，配置注入，并发下原子扣减）。首轮 `source_pointer` 的解析词条 SHALL 参与补漏检索（被指向正文不含字段名也能命中）并入审计。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
 
 #### Scenario: schema 驱动触发（无金标参与）
 
@@ -92,3 +92,22 @@ cleaning SHALL 增补 `WEAK_UNACTIONABLE`（"以合同为准/按合同约定/需
 
 - **WHEN** 返回值与目标字段语义不兼容（夹具复现旧项目 bug：如"退保费用"说明文案回填"费用"类字段、"投保年龄"混入职业类别、"保证续保"填了年限）
 - **THEN** 该值拒入 pred、字段转 unknown 且拒绝原因可审计
+
+### Requirement: E7 实验归属、实际使用与审计必须进入最终 pred 产物（codex PR#13 裁决）
+
+三个概念 SHALL 分离且全部持久化：**variant_assignment**（运行前基于 experiment_id+seed+product+field 对同一 eligible population 确定性分桶 control/treatment；实验关闭为空；control 臂强制默认补漏模板）、**prompt_variant_used**（每条 pred 实际经过的模板标识——baseline/fastpath/default@v1/targeted@vN；注册表 membership SHALL NOT 冒充实际使用）、**winning_origin**（产生最终值的路径）。pred SHALL 携带类型化 `extraction_audit`（含上述三项 + 兼容性拒绝原因 + 指针词条）且经 pred.jsonl 序列化/反序列化不丢失（pred 值契约不变、eval 忽略未知字段、历史 JSONL 向后兼容）。变体注册表与 assignment policy SHALL 由管道配置注入（节点不得各取全局默认），其内容摘要 SHALL 进入 RunManifest 与 checkpoint 身份，resume 时不一致 SHALL fail-closed。
+
+#### Scenario: 审计穿过交付边界
+
+- **WHEN** 完整管道运行落盘 pred.jsonl 并反序列化
+- **THEN** 每条 pred 的 extraction_audit 完整可读，首轮抽取路径归因 baseline，targeted 标识只出自真实经过定向模板的调用
+
+#### Scenario: 分桶确定性且两臂同人群
+
+- **WHEN** 同一 (experiment_id, seed, product, field) 重复分桶
+- **THEN** 结果恒定；同一 eligible population 内 control 与 treatment 均可达；实验关闭时不分臂
+
+#### Scenario: 注册表变化后 resume 被拒
+
+- **WHEN** checkpoint 产生后变体注册表/assignment policy 内容变化（或旧 checkpoint 缺摘要）
+- **THEN** resume 身份校验 fail-closed（不得同 run 混用两套 prompt）

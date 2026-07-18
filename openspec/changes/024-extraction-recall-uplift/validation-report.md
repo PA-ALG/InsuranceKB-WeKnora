@@ -59,3 +59,10 @@
 **新增"误杀防线"**（此前缺失，正是漏 F1/F2 的根因）：`test_recall_accept_side_024.py` 扫描整个 13 产品 goldenset，断言每个 present 金标值 compatible 且不被清洗——从此任何 compat/cleaning 误杀真金标即红。拒绝侧 Q012 三案仍全绿（护栏未被削弱）。
 
 **教训固化**：写自己想到的测试 ≠ 红队；护栏（防 Q012）与召回目标（防误杀）是成对约束，只测拒绝侧不测接受侧 = 半个护栏。probe_fee 拒绝原因 not_found→incompatible_value 触发 manifest 有意重钉（`1c71f804…`→`1f95a70a…`），E5 三重钉桩按设计要求显式确认。
+
+## codex PR#13 复审返工后（2026-07-18，rebase main@dbc073c1）
+
+- 门禁 fresh：ruff 全绿；mypy strict **226 files**；deterministic **1668 passed / 8 deselected**；`openspec validate 024 --strict` valid。
+- 024 focused：58（原 55 中 3 条错误语义断言被替换）+ 新增 `test_recall_experiment_024.py` 10 条（E7 审计往返/分桶/摘要身份 + E3 触发负例正例 + E6 指针检索）。
+- **E5 状态更正（诚实边界）**：仓库无改动前真实录制，synthetic 探针只能证明后处理机制合同——E5「同录制集非退化」**未完成，显式让渡 020 D4**（differential replay：同一 raw responses 对 base/PR SHA 重放）；探针测试已改名 `test_e5_mechanism_*` 不再暗示非退化证明。
+- 真实召回/粒度改善结论仍完全留待 020 D4（E1 证明力边界不变）。

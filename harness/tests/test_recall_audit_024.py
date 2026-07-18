@@ -62,7 +62,8 @@ def test_e6_3_gapfill_compat_reject_records_auditable_reason() -> None:
 
 
 # ---------------------------------------------------------------------------
-# F7 · E2.2：每个最终 pred（不止 gapfill）都记录所用变体的版本化标识
+# F7 → E7（codex PR#13 阻断2 返工）：merge 不再按注册表 membership 盖标签；
+# prompt_variant_used 只在真实使用处记录，其余在 _to_pred 按 origin 如实归因。
 # ---------------------------------------------------------------------------
 
 
@@ -74,28 +75,37 @@ def _extract_pred(field_id: str, field_name: str, group: str) -> FieldCandidate:
     )
 
 
-def test_e2_2_first_round_pred_gets_default_variant_stamp() -> None:
-    """普通字段的首轮 pred 经 merge 后带 default@v1（此前元数据为空）。"""
-    pred = _extract_pred("zh_random_field", "某普通字段", "coverage")
-    assert pred.metadata.get(VARIANT_METADATA_KEY) is None  # 前提：首轮自身未 stamp
+def test_e7_merge_does_not_fabricate_variant_labels() -> None:
+    """merge 不得给未走 targeted prompt 的候选盖注册表标签（membership≠实际使用）。"""
+    pred = _extract_pred("zh_69f97f5c40", "意外身故", "coverage")  # 注册表内字段
     merged = merge_candidates([pred])
-    assert merged["zh_random_field"].metadata[VARIANT_METADATA_KEY] == DEFAULT_VARIANT_VERSION
-
-
-def test_e2_2_targeted_field_pred_gets_targeted_variant_stamp() -> None:
-    """定向工单字段（意外身故 zh_69f97f5c40 @ coverage）的 pred 记 targeted@v1。"""
-    pred = _extract_pred("zh_69f97f5c40", "意外身故", "coverage")
-    merged = merge_candidates([pred])
-    assert merged["zh_69f97f5c40"].metadata[VARIANT_METADATA_KEY] == "targeted@v1", (
-        "定向字段的最终 pred 须归属其注册变体（020 D4 A/B 对账）"
+    assert VARIANT_METADATA_KEY not in merged["zh_69f97f5c40"].metadata, (
+        "首轮 baseline 抽取的候选不得被盖 targeted 标签——A/B 归因不得被污染"
     )
 
 
-def test_e2_2_dead_letter_pred_also_stamped() -> None:
-    """dead_letter 等非常规 origin 的 pred 也必须带变体标识（E2.2 无遗漏）。"""
-    dead = FieldCandidate(
-        field_id="zh_x", field_name="某字段", group="basic_info",
-        doc=_DOC, tri_state="unknown", unknown_reason="dead_letter", origin="extract",
+def test_e7_gapfill_stamp_records_actual_template_and_arm() -> None:
+    """gapfill 是唯一真实使用变体模板的路径：stamp 记实际所用 + 实验臂。"""
+    field = FieldSpec(name="意外身故", field_id="zh_69f97f5c40", source_sheet="024")
+    page = PageText(page_no=1, text="等待期为90天。")
+    section = DocSection(section_id="s1", title="责任", headings=(), fragments=(page,))
+    resp = '[{"field_id":"zh_69f97f5c40","value":null,"tri_state":"unknown","evidence":[]}]'
+    cand = asyncio.run(
+        gapfill_field(
+            _FakeClient(resp), "测试产品", field,
+            [(_DOC, section)], {_DOC: [page]}, arm="control",
+        )
     )
-    merged = merge_candidates([dead])
-    assert merged["zh_x"].metadata.get(VARIANT_METADATA_KEY) == DEFAULT_VARIANT_VERSION
+    assert cand.metadata[VARIANT_METADATA_KEY] == DEFAULT_VARIANT_VERSION, (
+        "control 臂强制默认模板：实际使用=default@v1，即使字段在注册表内"
+    )
+    assert cand.metadata["variant_assignment"] == "control"
+    treat = asyncio.run(
+        gapfill_field(
+            _FakeClient(resp), "测试产品", field,
+            [(_DOC, section)], {_DOC: [page]}, arm="treatment",
+        )
+    )
+    assert treat.metadata[VARIANT_METADATA_KEY] == "targeted@v1", (
+        "treatment 臂对注册字段实际使用 targeted 模板"
+    )

@@ -35,6 +35,7 @@ from ..sources import (
     SourceDocument,
     match_quote_to_chunks,
 )
+from .experiment import AssignmentPolicy, assign_arm, experiment_digest
 from .extract import (
     Sleeper,
     TransportRetryError,
@@ -44,7 +45,7 @@ from .extract import (
     with_transport_retry,
 )
 from .feedability import score_feedability
-from .gapfill import gapfill_field
+from .gapfill import gapfill_eligibility, gapfill_field
 from .judge import JudgeDispatcher, make_judge_request, write_judge_queue
 from .llm import CallStats, MeteredClient, ModelClient
 from .models import (
@@ -52,6 +53,7 @@ from .models import (
     DeadLetter,
     DocManifestEntry,
     DocPayload,
+    ExtractionAudit,
     FieldCandidate,
     JudgeRequest,
     PredRecord,
@@ -62,7 +64,7 @@ from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
 from .templates import TemplateRegistry, run_fastpath
 from .templates.tables import TableStructureProvider
-from .variants import VARIANT_METADATA_KEY, VariantRegistry, select_variant
+from .variants import VARIANT_METADATA_KEY, VariantRegistry
 from .verification import quote_verified
 from .voting import vote_field
 
@@ -78,6 +80,12 @@ class PipelineConfig(BaseModel):
         default=1.0, strict=True, ge=0, allow_inf_nan=False
     )
     gapfill_top_n: int = Field(default=3, strict=True, gt=0)
+    # 024 E3：补漏 LLM 调用总预算（None=不限）；并发下原子扣减（单事件循环内
+    # 预约后再 await，不存在两任务同看余额的窗口）
+    gapfill_max_calls: int | None = Field(default=None, gt=0)
+    # 024 E7：变体注册表与实验分桶策略由此注入（节点不得各自取全局默认）
+    variant_registry: VariantRegistry = Field(default_factory=VariantRegistry.default)
+    assignment: AssignmentPolicy = Field(default_factory=AssignmentPolicy)
     concurrency: int = Field(default=6, strict=True, gt=0)
     judge_mode: str = "claude-session"
 
@@ -93,6 +101,7 @@ class PipelineState(TypedDict, total=False):
     model_id: str
     schema_version: str
     prompt_version: str
+    variant_digest: str
     judge_mode: str
     fail_nodes: list[str]  # 测试用注入失败节点（E1.1 用例）
     source_documents: list[dict[str, Any]]
@@ -125,6 +134,7 @@ class _RunIdentity(BaseModel):
     schema_version: str
     prompt_version: str
     judge_mode: str
+    variant_digest: str = ""
 
 
 _DOC_PRIORITY = ("保险条款", "条款", "产品说明书", "说明书")  # 合并时的来源优先级
@@ -170,17 +180,9 @@ def merge_candidates(cands: list[FieldCandidate]) -> dict[str, FieldCandidate]:
         cur = best.get(c.field_id)
         if cur is None or rank(c) < rank(cur):
             best[c.field_id] = c
-    # E2.2：每个最终 pred SHALL 记录所用变体的版本化标识（020 D4 A/B 以此对账）。
-    # gapfill 候选已自带（值相同）；首轮/fastpath/vote/judge/dead_letter 在此按
-    # (组, field_id) 确定性补齐——与 gapfill `_variant_for` 同一注册表（gauntlet F7：
-    # 此前仅 gapfill 路径 stamp，其余 pred 元数据为空，违反"每次抽取的 pred"）。
-    for c in best.values():
-        c.metadata.setdefault(
-            VARIANT_METADATA_KEY,
-            select_variant(
-                VariantRegistry.default(), group=c.group, field_id=c.field_id
-            ).version,
-        )
+    # E7（codex PR#13 阻断2）：merge 不再按注册表 membership 补盖变体标签——
+    # prompt_variant_used 只在真实使用处记录（gapfill/fastpath），其余路径在
+    # _to_pred 按 origin 如实落 baseline（首轮/vote/judge 都经 baseline prompt）。
     return best
 
 
@@ -417,6 +419,9 @@ class ExtractionPipeline:
             schema_version=self._registry.version,
             prompt_version=PROMPT_VERSION,
             judge_mode=self._judge.mode,
+            variant_digest=experiment_digest(
+                self._cfg.variant_registry, self._cfg.assignment
+            ),
         )
 
     async def _node_load(self, state: PipelineState) -> dict[str, Any]:
@@ -475,6 +480,10 @@ class ExtractionPipeline:
             model_id=state.get("model_id", self._model_id),
             judge_mode=state.get("judge_mode", self._judge.mode),
             prompt_version=state.get("prompt_version", PROMPT_VERSION),
+            variant_digest=state.get(
+                "variant_digest",
+                experiment_digest(self._cfg.variant_registry, self._cfg.assignment),
+            ),
             started_at=datetime.now(UTC),
             docs=[
                 DocManifestEntry(
@@ -660,13 +669,34 @@ class ExtractionPipeline:
         pages_by_doc: dict[str, list[PageText]] = {p.doc: p.pages for p in payloads}
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
+        # 024 E3：运行级补漏预算——单事件循环内"检查+扣减"间无 await，天然原子
+        budget_remaining = [self._cfg.gapfill_max_calls]
+
+        def _try_reserve() -> bool:
+            if budget_remaining[0] is None:
+                return True
+            if budget_remaining[0] <= 0:
+                return False
+            budget_remaining[0] -= 1
+            return True
+
         async def do_field(field: FieldSpec) -> FieldCandidate | None:
             async with sem:
+                prior = merged.get(field.field_id)
+                arm = assign_arm(
+                    self._cfg.assignment, state["product_id"], field.field_id
+                )
+                if not _try_reserve():
+                    return None  # 预算耗尽：零调用（E3）
                 try:
                     cand = await with_transport_retry(
                         lambda: gapfill_field(
                             metered, state["product_name"], field, section_pool,
                             pages_by_doc, top_n=self._cfg.gapfill_top_n,
+                            registry=self._cfg.variant_registry, arm=arm,
+                            source_pointer=(
+                                prior.source_pointer if prior is not None else None
+                            ),
                         ),
                         attempts=self._cfg.transport_attempts,
                         base_delay_s=self._cfg.backoff_base_s,
@@ -676,11 +706,15 @@ class ExtractionPipeline:
                     return None
                 return cand
 
-        # 补漏只针对 extractable 且当前 unknown 的字段（E4.1）
+        # E3 触发合同：字段属适用 schema（line 过滤）+ requiredness∈{required,
+        # expected} + 首轮空/unknown/source_pointer + 预算允许（纯函数判定，金标零参与）；
+        # 候选章节存在性由 gapfill_field 检索层裁定（无候选=零 LLM 调用）。
         targets = [
             f
             for f in line.extractable_fields
-            if (merged.get(f.field_id) is None or merged[f.field_id].tri_state == "unknown")
+            if gapfill_eligibility(
+                f, merged.get(f.field_id), budget_remaining=budget_remaining[0]
+            ).eligible
         ]
         results = await asyncio.gather(*(do_field(f) for f in targets))
         for cand in results:
@@ -1064,6 +1098,7 @@ def _manifest_run_identity(manifest: RunManifest) -> _RunIdentity:
         schema_version=manifest.schema_version,
         prompt_version=manifest.prompt_version,
         judge_mode=manifest.judge_mode,
+        variant_digest=manifest.variant_digest,
     )
 
 
@@ -1148,7 +1183,28 @@ def _to_pred(
         if dq_raw in ("structured_direct", "table_parsed", "llm_extracted", "llm_inferred")
         else "llm_extracted"
     )
+    # E7：prompt_variant_used 在真实使用处记录（gapfill stamp）；未 stamp 的
+    # 候选按 origin 如实归因——fastpath=确定性直取（无 prompt）、其余（extract/
+    # vote/judge/dead_letter）均经 baseline 抽取 prompt。注册表 membership 不参与。
+    used = cand.metadata.get(VARIANT_METADATA_KEY)
+    if not isinstance(used, str) or not used:
+        used = "fastpath" if cand.origin == "fastpath" else (
+            f"baseline@{manifest.prompt_version or PROMPT_VERSION}"
+        )
+    raw_arm = cand.metadata.get("variant_assignment")
+    raw_compat = cand.metadata.get("compat_reject")
+    raw_terms = cand.metadata.get("pointer_terms")
+    audit = ExtractionAudit(
+        prompt_variant_used=used,
+        variant_assignment=raw_arm if isinstance(raw_arm, str) else None,
+        winning_origin=cand.origin,
+        compat_reject=raw_compat if isinstance(raw_compat, str) else None,
+        pointer_terms=(
+            tuple(str(t) for t in raw_terms) if isinstance(raw_terms, list) else ()
+        ),
+    )
     return PredRecord(
+        extraction_audit=audit,
         data_quality=data_quality,
         source_mode="weknora" if manifest.space_id else "directory_replay",
         product_id=state["product_id"],

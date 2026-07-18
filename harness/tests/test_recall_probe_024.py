@@ -1,7 +1,10 @@
-"""024 E5.1 后处理非退化探针：未变更录制集上的回放评分下界。
+"""024 后处理**机制合同**探针（codex PR#13 发现 6 诚实化改名）。
 
-设计（tasks.md 裁决记录同步）：仓库不含真实模型的已提交录制集（005 基线为实跑），
-探针以**冻结响应常量**充当"未变更录制集"，并以三重钉桩保证 E5.1 语义：
+证明力边界：仓库不含改动前的真实历史录制（005 基线为实跑、未入库），本文件的
+fixture 与期望在改动后同时定义——**只能证明新代码对冻结 fixture 的确定性后处理
+合同，不能证明"改动前分数未下降"**（无 before 可比）。E5「同录制集非退化」的
+真实版本显式让渡给 020 D4（differential replay），见 validation-report。
+三重钉桩保留（fixture/prompt/manifest 漂移即 fail，不得静默换基线）：
 1. control 变体钉桩——探针字段不在 targeted 注册表，断言 metadata=default@v1；
 2. request_key 钉桩——default 路径 prompt 组装逐字节漂移即 key 断言失败（探针
    显式失效并 fail，不得静默换基线）；
@@ -199,7 +202,7 @@ def _expected_user_prompt(case: _ProbeCase) -> str:
     )
 
 
-def test_e5_1_probe_manifest_hash_pinned() -> None:
+def test_e5_mechanism_1_probe_manifest_hash_pinned() -> None:
     assert _manifest_sha256() == PINNED_MANIFEST_SHA256, (
         f"探针 manifest 变化（实际 {_manifest_sha256()}）——不得静默换基线：",
         "确认改动是有意的再更新钉桩",
@@ -207,7 +210,7 @@ def test_e5_1_probe_manifest_hash_pinned() -> None:
 
 
 @pytest.mark.parametrize("case", PROBE_CASES, ids=lambda c: c.field.field_id)
-def test_e5_1_prompt_request_key_pinned(case: _ProbeCase) -> None:
+def test_e5_mechanism_1_prompt_request_key_pinned(case: _ProbeCase) -> None:
     actual = request_key(GAPFILL_SYSTEM, _expected_user_prompt(case))
     assert actual == PINNED_REQUEST_KEYS[case.field.field_id], (
         f"{case.field.field_id}: default 路径 prompt 组装漂移（实际 key={actual}）——"
@@ -215,7 +218,7 @@ def test_e5_1_prompt_request_key_pinned(case: _ProbeCase) -> None:
     )
 
 
-def test_e5_1_frozen_client_rejects_prompt_drift() -> None:
+def test_e5_mechanism_1_frozen_client_rejects_prompt_drift() -> None:
     """F5：出站 prompt 的 request_key 与钉桩不符时 _FrozenClient 显式失败——把
     冻结回放绑定到真实调用路径，控制变体漂移（如默认变体获得定向模板）不可静默
     复用录制（此前 complete 忽略 user，漂移可绕过所有钉桩）。"""
@@ -224,7 +227,7 @@ def test_e5_1_frozen_client_rejects_prompt_drift() -> None:
         asyncio.run(client.complete(GAPFILL_SYSTEM, "drifted-control-prompt-not-pinned"))
 
 
-def test_e5_1_control_prompt_drift_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_e5_mechanism_1_control_prompt_drift_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
     """F5 端到端回归：默认变体一旦带上定向模板（控制 prompt 漂移，未 bump 版本），
     gapfill 外发 prompt 变化，冻结回放的 request_key 绑定使非退化探针显式 fail——
     不得静默换基线（此前钉桩只校验测试内重建 prompt，此漂移可绕过全部钉桩）。"""
@@ -237,10 +240,10 @@ def test_e5_1_control_prompt_drift_is_caught(monkeypatch: pytest.MonkeyPatch) ->
     )
     monkeypatch.setattr(_variants, "DEFAULT_VARIANT", drifted)
     with pytest.raises(AssertionError):
-        test_e5_1_postprocess_nonregression_score_floor()
+        test_e5_mechanism_1_postprocess_nonregression_score_floor()
 
 
-def test_e5_1_postprocess_nonregression_score_floor() -> None:
+def test_e5_mechanism_1_postprocess_nonregression_score_floor() -> None:
     """评分下界：每产品 matched/total == 1.0；control 变体钉桩 default@v1。"""
     per_product: dict[str, list[bool]] = {}
     for case in PROBE_CASES:

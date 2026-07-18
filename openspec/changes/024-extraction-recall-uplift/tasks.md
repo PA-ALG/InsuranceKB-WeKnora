@@ -26,3 +26,13 @@
 
 约束：文件域仅 compiler/ + tests；不调真实模型；不动 cleaning 白名单既有语义/尺子/knowledge/；金标只出现在测试评分；送审前过 21 号自测 gauntlet。
 状态：**T1~T7 全部完成 + gauntlet 返工闭合**，门禁全绿（ruff / mypy 187 files / deterministic **1326 passed** 零破坏）；待 PR 双查（Owner=B 域）。依赖：004/005 已合入。
+
+## codex PR#13 复审返工（2026-07-18，6 项发现全部核实属实并闭合；rebase main@dbc073c1）
+
+1. **审计断链（Blocking1）**：`PredRecord` 新增类型化 `extraction_audit`（prompt_variant_used/variant_assignment/winning_origin/compat_reject/pointer_terms），`_to_pred` 落值，pred.jsonl 序列化往返测试钉死；历史 JSONL 向后兼容（缺字段→None）。
+2. **标签≠实际使用（Blocking2）**：删除 extract/merge 的注册表 membership 盖章；新增 `compiler/experiment.py`（AssignmentPolicy 确定性分桶 control/treatment、experiment_digest）；注册表/策略经 PipelineConfig 注入；gapfill 按臂选模板（control 强制默认）并记录**实际所用**；fastpath/首轮在 _to_pred 按 origin 如实归因。E7 条款新增。
+3. **E3 触发未实现（Blocking3）**：`FieldSpec.requiredness`（YAML『必填』列可选解析，缺省 expected 与既有人群一致）+ `gapfill_eligibility` 纯函数（optional/已决/预算耗尽负例）+ `PipelineConfig.gapfill_max_calls` 运行级预算（单事件循环预约后 await，原子）；无候选章节=零调用保持。
+4. **source_pointer 未消费（High4）**：`parse_pointer_terms`（第X条/附表N/费率表等）并集入 `rank_sections` 计分；管道把首轮 merged 候选的指针传入 gapfill；"仅指针词条章节可命中"e2e 用例。
+5. **变体不入身份（High5）**：`experiment_digest` 进 RunManifest/`_RunIdentity`/PipelineState；旧 checkpoint 缺摘要→身份解析 fail-closed（测试钉死）；注册表内容变化=新摘要。
+6. **E5 synthetic 不能证明非退化（High6）**：探针测试改名 `test_e5_mechanism_*` 并在 docstring 声明证明力=后处理机制合同（fixture 与期望同批定义、无 before 可比）；**E5「同录制集非退化」显式让渡 020 D4 differential replay**，validation-report 同步。
+7. 错误语义断言替换：`test_recall_audit_024` 三条 merge 盖章断言改为"merge 不得冒充标签 + gapfill 记实际所用与臂"。
