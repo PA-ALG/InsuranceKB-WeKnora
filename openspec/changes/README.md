@@ -24,15 +24,15 @@
 | 015 | feedback-flywheel | 📋 提案 | M2，依赖 009 |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
 | 017 | weknora-source-bridge | ✅ 软件交付；live NOT RUN | |
-| 018 | release-snapshot-read-model | ⏳ PR #9（live 收口中） | 独占迁移 0005 |
+| 018 | release-snapshot-read-model | ✅ 已合入 main（PR #9，2026-07-17） | 独占迁移 0005 |
 | 019 | golden-quality-gate | ✅ 已合入 main（PR #8） | |
 | 020 | golden-v01-baseline-run | 📋 等 019✅+021 | 高 token 数据任务 |
-| 021 | source-lifecycle-ordering | 📋 等 018 | 迁移预分配 0006 |
+| 021 | source-lifecycle-ordering | 📋 018 已合入（PR #9），可开工 | 迁移预分配 0006 |
 | 022 | review-hardening | ✅ 已交付 | ⚠️ 编号冲突历史记录：与下行同号，两者均已合入，**目录不改名**，冲突就此冻结 |
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
 | 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
-| 025 | merge-weak-value-guard | 📂 目录已开（提案+规格+任务定稿，可认领） | 合并前置弱值门槛：更粗略新值不开冲突（Q026 防审核队列垃圾）+ informationScore 仅排序信号非替换判据；G1~G6 strict 规格；迁移 0011；**实现候 021（PR #9）**，可与 024 同一执行者顺手接 |
+| 025 | merge-weak-value-guard | 📂 二版定稿（codex PR #17 复审收口，可认领） | 合并前置弱值门槛：抑制=有资格前提的裁决（E1~E5：三态/高风险/权威/生效区间/基线复核）+ 可证明偏序 SpecificityRelation（score 仅 008 排序）+ SuppressedObservation 可恢复生命周期 + 事务/锁/exact-once；G1~G9 strict 规格；迁移 0011（docs 03 §8 已先行登记）；**实现候 021（规格已提出未实现）**，可与 024 同一执行者顺手接 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027+ | （空闲） | | 先占号再开目录 |
 
@@ -44,7 +44,7 @@
 | 0002 | 007 knowledge_domain | ✅ |
 | 0003 | 016 enterprise_knowledge_scope | ✅ |
 | 0004 | 017 source_evidence_lineage | ✅ |
-| 0005 | 018 release_snapshot_read_model | ⏳ PR #9 |
+| 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
 | 0006 | 021 source-lifecycle-ordering | 预分配 |
 | 0007 | 010 structured-import（qa_staging 等） | 预分配 |
 | 0008 | 009 concept-layer | 预分配 |
