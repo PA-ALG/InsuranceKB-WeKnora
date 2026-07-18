@@ -24,6 +24,10 @@ POSTGRES_NODE = (
 POSTGRES_NODES = {
     POSTGRES_NODE,
     (
+        "tests/test_flywheel_postgres_015.py::"
+        "test_f3_3_live_postgresql_two_sessions_apply_same_trace_exactly_once"
+    ),
+    (
         "tests/test_release_publisher_postgres_018.py::"
         "test_r3_6_postgresql_release_never_commits_caller_transaction"
     ),

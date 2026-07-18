@@ -112,7 +112,7 @@ L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验�
 ## 5. integration / live 契约测试约定
 
 - deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
-- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发、018 service-owned Session 与 008 工作台双会话并发三个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
+- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 008 工作台双会话、015 飞轮同批 exactly-once、017 source 并发与 018 service-owned Session 四个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
 - WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。
