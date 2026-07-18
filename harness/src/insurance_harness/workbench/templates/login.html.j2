@@ -1,0 +1,14 @@
+{% extends "base.html.j2" %}
+{% block title %}登录 · 审核工作台{% endblock %}
+{% block nav %}{% endblock %}
+{% block body %}
+<h1>审核工作台登录</h1>
+{% if error %}<p class="notice">{{ error }}</p>{% endif %}
+<form method="post" action="/login">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>访问 token：<input type="password" name="token" autocomplete="off" required></label>
+  <button>登录</button>
+</form>
+<p class="evidence">登录后签发短期 HttpOnly 会话 cookie（内含 token 摘要，非明文）；自动化调用请直接携带
+<code>Authorization: Bearer &lt;token&gt;</code>，无需登录。</p>
+{% endblock %}

@@ -21,10 +21,25 @@ POSTGRES_NODE = (
     "tests/test_source_revision_postgres_017.py::"
     "test_t7_live_postgresql_concurrent_notifications_create_one_recompile"
 )
+POSTGRES_NODES = {
+    POSTGRES_NODE,
+    (
+        "tests/test_release_publisher_postgres_018.py::"
+        "test_r3_6_postgresql_release_never_commits_caller_transaction"
+    ),
+    (
+        "tests/test_workbench_concurrency_008.py::"
+        "test_w1_4_live_postgresql_two_sessions_single_apply"
+    ),
+}
 WEKNORA_NODES = {
     "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
     "tests/test_live.py::test_live_knowledge_endpoint_shape",
     "tests/test_live.py::test_live_wiki_page_crud_roundtrip",
+    (
+        "tests/test_release_snapshot_live_018.py::"
+        "test_r6_4_live_release_v1_v2_rollback_roundtrip"
+    ),
     (
         "tests/test_source_bridge_live_017.py::"
         "test_live_source_bridge_compiler_import_evidence_backlink"
@@ -239,8 +254,11 @@ def test_p0_2_integration_marker_is_registered() -> None:
     assert any(marker.startswith("integration_postgres:") for marker in markers)
 
 
-def test_p0_2_explicit_postgres_without_url_fails_instead_of_skipping() -> None:
-    result = _pytest(POSTGRES_NODE, "-q", "-rs")
+@pytest.mark.parametrize("node", sorted(POSTGRES_NODES))
+def test_p0_2_explicit_postgres_without_url_fails_instead_of_skipping(
+    node: str,
+) -> None:
+    result = _pytest(node, "-q", "-rs")
 
     assert result.returncode != 0
     assert "HARNESS_TEST_POSTGRES_URL is required" in result.stdout
@@ -256,7 +274,7 @@ def test_p0_4_three_collections_are_disjoint_exhaustive_and_precise() -> None:
     assert deterministic.isdisjoint(live)
     assert integration.isdisjoint(live)
     assert deterministic | integration | live == full
-    assert integration == {POSTGRES_NODE}
+    assert integration == POSTGRES_NODES
     assert live == WEKNORA_NODES
 
 

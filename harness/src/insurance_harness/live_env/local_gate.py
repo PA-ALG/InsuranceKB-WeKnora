@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -9,6 +10,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import quote_plus
+
+from pydantic import SecretStr
 
 from insurance_harness.live_env.compose import read_runtime_environment
 
@@ -27,6 +30,12 @@ class GateRunner(Protocol):
     ) -> subprocess.CompletedProcess[str]: ...
 
 
+class APIKeyResolver(Protocol):
+    async def resolve(
+        self, runtime: Mapping[str, str] | None = None
+    ) -> SecretStr: ...
+
+
 def _run_gate(
     arguments: tuple[str, ...],
     *,
@@ -42,10 +51,13 @@ def _run_gate(
     )
 
 
-def _live_values(runtime: Mapping[str, str]) -> dict[str, str]:
+def _live_values(
+    runtime: Mapping[str, str],
+    api_key: SecretStr,
+) -> dict[str, str]:
     password = quote_plus(runtime["HARNESS_POSTGRES_PASSWORD"])
     return {
-        "HARNESS_LIVE_API_KEY": runtime["LOCAL_LIVE_API_KEY"],
+        "HARNESS_LIVE_API_KEY": api_key.get_secret_value(),
         "HARNESS_LIVE_DB_URL": (
             "postgresql+psycopg://harness:"
             f"{password}@127.0.0.1:5442/insurance_kb"
@@ -73,6 +85,7 @@ def _clean_environment() -> dict[str, str]:
         "JWT_SECRET",
         "REDIS_PASSWORD",
         "SYSTEM_AES_KEY",
+        "TENANT_AES_KEY",
     }
     return {
         name: value
@@ -90,10 +103,12 @@ class LocalGateCollaborator:
         *,
         harness_root: Path,
         runtime_path: Path,
+        api_key_resolver: APIKeyResolver,
         runner: GateRunner | None = None,
     ) -> None:
         self._harness_root = harness_root
         self._runtime_path = runtime_path
+        self._api_key_resolver = api_key_resolver
         self._runner = _run_gate if runner is None else runner
 
     def run(self, request: GateRequest) -> object:
@@ -101,7 +116,12 @@ class LocalGateCollaborator:
             raise ValueError("unsupported local gate phase")
         runtime = read_runtime_environment(self._runtime_path)
         environment = _clean_environment()
-        environment.update(_live_values(runtime))
+        environment.update(
+            _live_values(
+                runtime,
+                asyncio.run(self._api_key_resolver.resolve(runtime)),
+            )
+        )
         result = self._runner(
             (
                 sys.executable,

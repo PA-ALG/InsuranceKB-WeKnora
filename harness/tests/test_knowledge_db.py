@@ -19,8 +19,12 @@ KNOWLEDGE_TABLES = {
     "conflicts",
     "review_items",
     "release_snapshots",
+    "snapshot_facts",
     "snapshot_claims",
     "current_release",
+    "release_operations",
+    "publish_attempts",
+    "reconciliation_jobs",
 }
 PRODUCT_TABLES = {"insurance_products", "product_versions"}
 
@@ -87,6 +91,12 @@ def test_k1_2_constraints(migrated_db: str) -> None:
     ) in uq_columns("change_sets")
     assert ("space_id", "review_key") in uq_columns("review_items")
     assert ("space_id", "snapshot_id", "claim_id") in uq_columns("snapshot_claims")
+    assert (
+        "space_id",
+        "snapshot_id",
+        "claim_id",
+        "revision_no",
+    ) in uq_columns("snapshot_facts")
     assert ("space_id", "label") in uq_columns("release_snapshots")
     assert ("space_id",) in uq_columns("current_release")
     assert ("review_key",) not in uq_columns("review_items")
@@ -129,8 +139,12 @@ def test_k1_4_scoped_knowledge_columns(migrated_db: str) -> None:
         "change_sets",
         "review_items",
         "release_snapshots",
+        "snapshot_facts",
         "snapshot_claims",
         "current_release",
+        "release_operations",
+        "publish_attempts",
+        "reconciliation_jobs",
     ):
         columns = {column["name"]: column for column in inspector.get_columns(table)}
         assert "space_id" in columns

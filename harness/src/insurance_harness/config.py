@@ -67,6 +67,19 @@ class HarnessSettings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_timeout_s: float = 180.0
 
+    # --- 审核工作台鉴权（change 008，spec W6：token→principal+Space 集合绑定） ---
+    # JSON：{"<token>": {"principal": "审核人标识", "space_ids": ["<space-id>", ...]}}
+    # 未配置 = 拒绝一切请求（fail-closed 默认）；operator 一律取 token 绑定 principal
+    workbench_tokens_json: str | None = None
+    # 浏览器会话 cookie 签名密钥（HMAC-SHA256）。未配置=进程内随机（单进程可用，
+    # 重启即全员重登）；多 worker/重启保活需显式配置随机长串（勿入库）。
+    workbench_session_secret: str | None = None
+    # 会话有效期（秒）；到期须重新以 token 登录
+    workbench_session_ttl_s: int = 8 * 3600
+    # 完整度矩阵 schema 基线目录（W3 产品×schema 全字段底图）；生产工厂必需——
+    # 未配置且默认路径不存在时启动即失败（fail-closed，不空底图冒充全量）
+    workbench_schema_baseline_dir: Path | None = None
+
     # --- 表格结构识别 provider（change 006，spec F5.3 配置位） ---
     # pdfplumber（默认，零新增依赖）；pp-structure-v3 为预留位（重依赖部署见 HANDOFF ⓪-B）
     table_provider: str = "pdfplumber"

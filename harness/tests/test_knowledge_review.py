@@ -11,6 +11,7 @@ from insurance_harness.knowledge import (
     MergePolicy,
     ProposedClaim,
     ProposedEvidence,
+    ReviewDecisionConflict,
     build_page_claims,
     derive_review_key,
     ensure_review_item,
@@ -18,7 +19,12 @@ from insurance_harness.knowledge import (
     resolve_review,
 )
 from insurance_harness.knowledge.tables import Claim, ReviewItem
-from tests.kbhelpers import allow_all_gate, seed_bound_scope, seed_product
+from tests.kbhelpers import (
+    allow_all_gate,
+    resolve_with_version,
+    seed_bound_scope,
+    seed_product,
+)
 
 _GATE, _FP = allow_all_gate()  # fail-closed 后自动发布须过 gate；发布仍需 auto_apply 位
 
@@ -94,7 +100,10 @@ def test_k4_1_review_key_stable_and_state_preserved(kb_session: Session) -> None
     )
     assert not created2 and again.id == item.id
     assert again.status == "resolved"  # 已决状态不丢（K4.1）
-    assert again.subject == {"x": 1}  # 不重建不覆盖
+    assert again.subject["x"] == 1, "原 subject 键不重建不覆盖"
+    # W1 触发计数：再触发只累计 trigger 元数据（创建=1，再触发+1）
+    assert again.subject["trigger"]["count"] == 2
+    assert again.subject["trigger"]["last_at"]
 
 
 def test_k4_2_restricted_action_set(kb_session: Session) -> None:
@@ -107,17 +116,20 @@ def test_k4_2_restricted_action_set(kb_session: Session) -> None:
     with pytest.raises(ValueError, match="受限动作集"):
         resolve_review(kb_session, scope, review.review_key, "escalate", actor="a")
 
-    resolve_review(kb_session, scope, review.review_key, "defer", actor="a")
+    resolve_with_version(kb_session, scope, review.review_key, "defer", actor="a")
     kb_session.refresh(review)
     assert review.status == "open"  # defer 保持 open
 
-    resolve_review(kb_session, scope, review.review_key, "approve", actor="agent")
+    resolve_with_version(
+        kb_session, scope, review.review_key, "approve", actor="agent"
+    )
     kb_session.refresh(review)
     assert review.status == "resolved"
     claim = kb_session.execute(select(Claim)).scalar_one()
     assert claim.status == "published"
 
-    with pytest.raises(ValueError, match="翻案"):
+    # 异决定撞已决 → ReviewDecisionConflict（W1 乐观并发合同；翻案走 request_review_overturn）
+    with pytest.raises(ReviewDecisionConflict):
         resolve_review(kb_session, scope, review.review_key, "reject", actor="a")
 
 
@@ -126,7 +138,7 @@ def test_k4_2_reject_keeps_nothing_published(kb_session: Session) -> None:
     _, version = seed_product(kb_session, scope=scope)
     _merge(kb_session, scope, version.id)
     review = kb_session.execute(select(ReviewItem)).scalar_one()
-    resolve_review(
+    resolve_with_version(
         kb_session,
         scope,
         review.review_key,

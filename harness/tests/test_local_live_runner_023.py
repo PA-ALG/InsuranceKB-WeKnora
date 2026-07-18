@@ -125,6 +125,7 @@ def test_r5_1_runner_image_is_non_root_ephemeral_and_one_job() -> None:
         in dockerfile
     )
     assert "USER runner" in dockerfile
+    assert "mkdir -p /home/runner/actions-runner/_work" in dockerfile
     assert "sha256sum -c" in dockerfile
     assert (
         "ARG RUNNER_RELEASE_BASE=https://github.com/actions/runner/releases/download"
@@ -132,6 +133,7 @@ def test_r5_1_runner_image_is_non_root_ephemeral_and_one_job() -> None:
     )
     assert "ARG RUNNER_RELEASE_PROTO=https" in dockerfile
     assert '--proto "=${RUNNER_RELEASE_PROTO}"' in dockerfile
+    assert "--retry 5 --retry-all-errors --retry-delay 2" in dockerfile
     assert "ARG RUNNER_DEBIAN_MIRROR=http://deb.debian.org/debian" in dockerfile
     assert (
         "ARG RUNNER_DEBIAN_SECURITY_MIRROR=http://deb.debian.org/debian-security"
@@ -540,10 +542,7 @@ def test_r5_1_concrete_backend_keeps_secrets_out_of_argv_and_host_mounts(
         for index, argument in enumerate(create_arguments[:-1])
         if argument == "--mount"
     ]
-    assert mount_specs == [
-        "type=volume,volume-nocopy,"
-        "destination=/home/runner/actions-runner/_work"
-    ]
+    assert mount_specs == ["type=volume,destination=/home/runner/actions-runner/_work"]
     assert all("type=bind" not in mount for mount in mount_specs)
     assert any(
         arguments[:4]
@@ -606,10 +605,14 @@ def test_r5_2_concrete_backend_mints_and_revokes_both_ephemeral_credentials(
             "LOCAL_LIVE_CHAT_MODEL_ID": "chat-1",
             "LOCAL_LIVE_EMBEDDING_MODEL_ID": "embedding-1",
             "LOCAL_LIVE_RERANK_MODEL_ID": "rerank-1",
+            "LOCAL_LIVE_VLLM_MODEL_ID": "vlm-1",
+            "LOCAL_LIVE_CHAT_ENDPOINT_FINGERPRINT": "a" * 64,
+            "LOCAL_LIVE_EMBEDDING_ENDPOINT_FINGERPRINT": "b" * 64,
+            "LOCAL_LIVE_RERANK_ENDPOINT_FINGERPRINT": "c" * 64,
+            "LOCAL_LIVE_VLLM_ENDPOINT_FINGERPRINT": "d" * 64,
             "LOCAL_LIVE_RAW_KB_ID": "raw-1",
             "LOCAL_LIVE_WIKI_KB_ID": "wiki-1",
             "LOCAL_LIVE_API_KEY_ID": "key-1",
-            "LOCAL_LIVE_API_KEY": "persistent-key",
             "LOCAL_LIVE_SPACE_ID": "space-1",
             "LOCAL_LIVE_KNOWLEDGE_ID": "knowledge-1",
             "LOCAL_LIVE_PARSER_FINGERPRINT": "weknora-v0.6.3",

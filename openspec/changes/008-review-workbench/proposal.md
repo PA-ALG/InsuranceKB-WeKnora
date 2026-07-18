@@ -1,7 +1,7 @@
 # 008 · 审核工作台最小版（workbench MVP）
 
 > 状态：**已条款化（正式 delta 格式），可认领**（2026-07-16 二版：按 PR #11 复审——W6 升级为 token→Space 授权绑定、**W4 整页推迟至 PR #9 合入后**（消除与"读取一律经 SnapshotReader"的自相矛盾）；轨道 L2，见 docs/insurance-kb/22）。
-> 依赖：007/016/019 已合入 main；W4 整页等 PR #9（018）。执行者 C1，Owner 复审=A（workbench/ 属 A 域）。
+> 依赖：007/016/018/019 已合入 main（018 于 2026-07-18 随 PR #9 合入，W4 依赖已解锁——按 codex R2 裁决 W4/T6 以独立 follow-up PR 交付，不扩大 PR #15）。执行者 C1，Owner 复审=A（workbench/ 属 A 域）。
 > 设计权威：docs/insurance-kb/03（ReviewItem/ChangeSet/权威序）、08（选型：FastAPI + Jinja2 + HTMX）、20（企业运行约束）、master plan P0-5/P1-1。
 
 ## 为什么做

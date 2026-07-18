@@ -267,7 +267,7 @@ class ConcreteLiveBackend:
                     "mode=0700,uid=10001,gid=10001"
                 ),
                 "--mount",
-                "type=volume,volume-nocopy,destination=/home/runner/actions-runner/_work",
+                "type=volume,destination=/home/runner/actions-runner/_work",
                 "--env",
                 "RUNNER_REPOSITORY_URL",
                 "--env",

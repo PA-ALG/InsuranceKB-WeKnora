@@ -1,6 +1,7 @@
 # 009 · 概念层编译：概念主页、义项索引与 wikilink 互链
 
-> 状态：提案（2026-07-12）。实现交其他模型（遗留 B11）。设计权威：03 §3 三层页面模型、13 §2 G1/G2。
+> 状态：**已条款化（正式 delta；三版 2026-07-18 按 codex PR #12 复审收口），规格复审收口前不可认领**（轨道 L4 第二件，010 域段之后；概念页经 C6 冻结投影扩展合同发布）。含 C3.4 混源防护（同事 WeKnora 实证反馈吸收）。迁移占号 0008。执行者 C3；Owner=C + A（概念表/冻结投影/发布接线点）。
+> 设计权威：03 §3 三层页面模型、13 §2 G1/G2、20（企业运行约束）。
 
 ## 为什么做
 
@@ -8,11 +9,11 @@
 
 ## 做什么
 
-1. **概念注册表**：`concepts` 表（concept_id、名称、别名、定义、类别）；初始来源：schema 术语表（glossary.yaml：就医绿通/费用垫付等增值服务概念）+ 字段值中的服务/责任名词（确定性词表匹配优先，LLM 候选进审核）；
+1. **概念注册表**：`concepts`（UUID 身份，`(space_id, canonical_key)` 唯一）+ 不可变 `concept_revisions`（定义/审核口径版本化带 provenance——定义不放 concepts 行原地改写）+ 别名/关联/排除表；初始来源：schema 术语表（glossary.yaml：就医绿通/费用垫付等增值服务概念）+ 字段值中的服务/责任名词（确定性词表匹配优先，LLM 候选进审核）；
 2. **概念-Claim 关联**：Claim 打 concept 标签（值/字段含概念词 → 关联），形成"概念 → 各产品相关 Claim"倒排；
 3. **概念主页编译**：通用定义（术语表/审核后的口径）+ **跨产品差异表**（每行一产品：该概念下的关键 Claim 值 + 证据角标）+ 义项索引（链接到各产品限定页对应锚点）；
 4. **wikilink 互链**：产品页渲染时概念词替换为 `[[concept-slug]]`（WeKnora 原生互链消费）；概念页出链回产品页；发布经 007 发布器；
-5. **Purpose 配置**：KB 级 purpose.yaml（领域意图/合规口径原则/引用要求），注入抽取与编译的 system prompt（compiler/prompts 统一挂载点）；版本化。
+5. **Purpose 配置**：**Space-scoped** purpose（领域意图/合规口径原则/引用要求），注入抽取与编译的 system prompt（compiler/prompts 统一挂载点）；manifest 冻结 (space_id, purpose_version, digest)，跨 Space 隔离。
 
 ## 验收
 

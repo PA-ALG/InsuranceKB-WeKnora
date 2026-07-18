@@ -1,0 +1,20 @@
+{% extends "base.html.j2" %}
+{% block title %}变更时间线{% endblock %}
+{% block body %}
+<h1>变更时间线（G8）</h1>
+<table>
+  <thead><tr><th>何时</th><th>谁</th><th>产品</th><th>字段</th><th>旧值 → 新值</th><th>原因</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.at }}</td>
+      <td>{{ row.actor }}</td>
+      <td>{{ row.product_code }} {{ row.product_name }}</td>
+      <td>{{ row.predicate }}</td>
+      <td>{{ row.before_value or "∅" }} → {{ row.after_value or "∅" }}</td>
+      <td>{{ row.reason or "-" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
