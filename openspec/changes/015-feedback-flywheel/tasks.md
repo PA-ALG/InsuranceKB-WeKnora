@@ -4,25 +4,25 @@
 
 ## 依赖门控（诚实标注——不预支未合入的域；2026-07-17 复审后修订）
 
-- **T1（F1 信号提取）＝部分 gated**：识别器/脱敏/游标自包含；空知识信号用注入式 claim_lookup（DI），不硬依赖 knowledge。**F1.1b Langfuse 直连 gated**：WeKnora 生产者根 trace 无 Q/A（在 chat.completion 子 observation），直连须先落组装合同 + citation 合同 SDD 裁决（spec F1.1b）。
+- **T1（F1 信号提取）＝部分 gated**：识别器/脱敏/游标纯逻辑自包含；CLI 数据库路径把空知识信号接到 Space-scoped published Claim 查询。**F1.1b Langfuse 直连 gated**：WeKnora 生产者根 trace 无 Q/A（在 chat.completion 子 observation），直连须先落组装合同 + citation 合同 SDD 裁决（spec F1.1b）。
 - **T2（F2 对齐开单）＝部分 gated**：003 产品路由器**可用**；009 概念词表候 PR #12；`ReviewItem(type=knowledge_gap)` 投影（F2.4）——**PR #9 已合入（2026-07-17），剩余依赖是 knowledge_gap subject 形态与域主协调**（`_require_scoped_review_subject` 期望 change_item 语义，不单方改 knowledge/）。
 - **T3（F3 报表 CLI）＝部分 gated**：报表/CLI 自包含；011 报告合流候 PR #12。
 
 ## 任务
 
 - [~] **T1 · F1 信号提取器**（离线段完成；直连 gated）
-  - [x] F1.2 四类识别器（可配置启停）+ "拒答不误报为编造"判别；F1.3 证件→手机→保单号顺序脱敏（业务数字保留）——**脱敏为 Trace 构造边界**（before-validator，全入口一致；复审收口）；F1.1a 增量游标（UTC 语义时序 + 批内去重 + (ts,trace_id) 决胜/幂等/单调；持久化经 CLI `--apply` 写游标文件）。
+  - [x] F1.2 四类识别器（可配置启停）+ "拒答不误报为编造"判别；F1.3 证件→手机→保单号顺序脱敏（业务数字保留）——**脱敏为 Trace 构造边界**（before-validator，全入口一致）；F1.1a 已以 `(space_id, source_id)` checkpoint 落库，并与 observation/gap 在 caller-owned 单事务提交。
   - [ ] F1.1b Langfuse 直连（gated）：按 WeKnora 生产者合同组装根 trace+observations+named scores、完整分页/退避、citation 合同裁决——**合同 fixture 验证前不提供直连**（虚构合同的旧客户端已删除）。
 - [~] **T2 · F2 对齐与开单**（对齐+聚合核心完成；ReviewItem 落地段 gated）
   - [x] F2.2/F2.3 **缺口聚合核心**（`gaps.py`，纯逻辑 unblocked）：稳定 ID、hit_count 累计（同 trace_id 不重复计数）、**最近**样例≤5（滚动替换）+ 平行脱敏问题样例、first_seen/last_seen/resolved_at（reopen 保 first_seen 清 resolved_at）、幂等不重复开单、resolve→reopened。
   - [x] F2.1 产品级对齐（复用 003 路由器）（`align.py`，unblocked）：question 当单页文档路由；candidates 只含 exact/alias（可归属），fuzzy/歧义进 unassigned；全部 actionable 唯一产品→对齐，≥2 产品/无命中→None（观察队列不开单，fail-safe）；字段级先剔除产品名表面串再注入词表匹配；概念级候 009。**10 用例（护栏成对：对齐侧+拒绝侧+2 红队用例）**。
-  - [x] F2.1 **观察队列可消费**（复审收口）：未对齐信号保留 trace_id/脱敏问题/信号类型/原因（no_actionable_match|multi_product_ambiguity）明细，`--apply --observations-out` 可导出 JSONL 供人工归属——不再只留计数丢明细。
-  - [ ] F2.4 ReviewItem(type=knowledge_gap) 投影：`ensure_review_item` 收自由 type_ 但 `_require_scoped_review_subject` 期望 change_item 语义；knowledge_gap 无 change_item → **需 knowledge 域协调新 subject 形态**（边界，不单方改 knowledge/）。**PR#9 已合入（2026-07-17），此项剩余依赖=subject 设计协调**。CLI `--open-tickets` 已埋位，受阻期非零退出不假装开单；durable DB 缺口存储随本投影同批落地（见裁决 13）。
+  - [x] F2.1 **观察队列可消费**：每条 fresh trace 进入 `flywheel_observations` processed ledger；未对齐队列保留 trace_id/脱敏问题/信号类型/原因，并由 Space-scoped 查询隔离。
+  - [ ] F2.4 ReviewItem(type=knowledge_gap) 投影：当前 `resolve_review` 的 approve/reject 强制 ChangeItem 并执行 Claim 变更；knowledge_gap 三个业务动作尚无状态机。需独立 SDD 定义 Space-scoped subject 与“补材料重编/人工补录/库外问题”动作合同；此前 `--open-tickets` 前置非零退出。**durable DB 缺口存储不再被该投影阻塞，本轮独立落地**（见裁决 15）。
 - [~] **T3 · F3 报表与 CLI**（报表+CLI 编排完成；011 合流 pending）
   - [x] F3.1 **报表核心**（`report.py`，unblocked）：分状态计数 + TopN 答不上（**输出脱敏问题样例**，非仅内部 key）+ 新增 + **闭环平均周期**（first_seen/resolved_at，可复算；无已闭环缺口显式 None 不虚报）+ 产品分布。
-  - [x] F3.3 CLI `flywheel pull`（`pull.py` 纯编排 + `cli.py` I/O）：编排 F1(游标+信号)→F2(对齐+聚合)→F3(报表)；默认 dry-run **零副作用**（不写游标/状态/文件、不迁移 schema、DB 只读）；缺 DB 配置 **fail-closed**（无 SQLite 回退）；`--open-tickets` 在一切 I/O 前受阻退出；`--apply` 持久化游标+缺口状态文件（跨周期累计/reopened：上轮输出=下轮输入）+ 观察队列导出；space 校验 fail-closed 常量响应不泄标识。
+  - [x] F3.3 CLI `flywheel pull`（`pull.py` 纯编排 + `cli.py` I/O）：文件态真相源已移除，`source_id` 必填；迁移 0012 三表在 caller-owned 单事务中提交，真实 Claim lookup、Space 隔离、故障回滚/重试 exactly-once 与 PostgreSQL 双会话门禁均已实现。
   - [ ] F3.2 与 011 健康度报告合流：候 PR#12。
-- [ ] **T4 · 收尾**：validation-report（条款→测试名 + 依赖门控清单）+ HANDOFF B17。
+- [x] **T4 · 本地收尾**：validation-report 与 HANDOFF B17 已更新；Ruff、mypy、deterministic（1681 passed）与 PostgreSQL lane（tests=4 skipped=0）全绿。新 SHA push 后须以 GitHub deterministic/PostgreSQL CI 绿才可合并 PR #18。
 
 ## 裁决记录（设计判断及依据）
 
@@ -46,5 +46,9 @@ codex 出 **Request changes**（5 阻断 + 3 High）。第一性原理独立复�
 13. **durable 存储走文件态，DB 三表随 F2.4 投影同批落地（阻断4 裁决，与 codex 方案分歧点）**：codex 提议即刻占 migration 0010 建 flywheel 三表（checkpoints/observations/gaps）。裁决：**本 PR 用文件态闭环**——游标文件 + 缺口状态文件（跨周期累计/reopened：上轮输出=下轮输入）+ 观察队列导出，满足现行 spec 的持久化与可消费语义且保持 dry-run 优先的运维形态；**DB 化与 ReviewItem 投影是同一次域设计**（subject 形态 + 表 + 事务边界一起定，避免先建表后返工），随 F2.4 落地时正式占号迁移。此为有意识取舍，codex 可在复核中挑战。
 14. **诚实声明修正（High-3）**：validation-report §3 曾残留被红队推翻的"取最强置信层"旧设计描述（正文与裁决 7 矛盾）→ 改为跨层唯一终版；"候 PR#9" 全部改为"PR#9 已合入，剩余依赖=subject 设计"；F1.1/F3.1 完成度按实际重标。
 
+15. **文件态不满足企业 exactly-once，durable DB 与 ReviewItem 解耦（codex 接管裁决，2026-07-18）**：游标文件、gap JSON 和 observation JSONL 没有共同事务；进程在游标先写后 gap 失败会永久漏数，且文件不携 Space 身份，调用方复用路径即可跨租户污染。选择迁移 0012 三表作为唯一真相源，以 KnowledgeSpace 行锁串行同 Space apply，并在同一 caller-owned 事务写 observation/gap/checkpoint；任何持久化失败整批回滚、健康重试恰一次。ReviewItem 投影不再作为 durable DB 的前置：现有 approve/reject resolver 是 ChangeItem 专用，动作合同未定前继续 gated，避免创建“能看不能处理”的假工单。Langfuse 直连同理维持 F1.1b gated，不用赶进度为由恢复虚构 root trace 合同。
+16. **新 head 继承下游 downgrade 预检（全仓门禁裁决，2026-07-18）**：0012 首版仅验证 `0012→0005`，全仓 `head→0002` 复现出 0012 已删三表后 0003 才因多 Space/全局 key 冲突拒绝，破坏“首个 DDL 前失败”。不放宽 016 安全测试；在 0012 首个 DDL 前镜像 0003/0005 链级预检，并拒绝删除非空飞轮真相表。Alembic env 同时注册 flywheel ORM，保持 `alembic check` 无漂移。
+17. **PII 在消费点纵深再脱敏（提交前自检，2026-07-18）**：正常构造/JSONL 已由 Trace validator 脱敏，但 Pydantic `model_construct/model_copy` 可被内部代码误用而绕过。由于本轮新增 DB 持久化 sink，“原文不落库”不能只依赖调用纪律；`run_pull` 在对齐、信号、evaluation/observation/gap payload 共用的实际消费点幂等再脱敏。反例先以 `model_construct` RED，修复后 GREEN。
+
 约束：不改 WeKnora；新 HTTP 客户端 `trust_env=False`；批量开单默认 dry-run（`--open-tickets` 才落单）；问题原文脱敏后才入库；送审前过 21 号自测 gauntlet。
-状态：**T1 完成 + T2/T3 全部 unblocked 段完成 + 提交前红队自测收口（2026-07-17）**——F1 信号提取 / F2 缺口聚合+F2.1 对齐 / F3.1 报表 + F3.3 编排与 CLI，经独立红队 live 复现修 4+1 个缺陷后共 **52 用例**绿，全量 **1317 passed 零破坏**，mypy 197 文件 + ruff 全绿。剩余仅 gated 段：ReviewItem(knowledge_gap) 投影候 PR#9 + 域协调（CLI `--open-tickets` 已埋位、受阻非零退出）；009 概念对齐 / 011 报告合流候 PR#12；空知识信号 CLI 路径需 claim 后端（报表已自陈未评估）。依赖：007/003 已交付。
+状态：**PR #18 codex 接管实现与本地收口已完成（2026-07-18）**——migration 0012、DB durable unit-of-work、Space 隔离、真实 Claim lookup、故障回滚/重试与 PostgreSQL 双会话均已落地；本机 PostgreSQL lane `4 passed / tests=4 skipped=0`，Ruff/mypy 全绿，deterministic `1681 passed / 9 deselected`。gated 段保持：F1.1b Langfuse 直连、F2.4 ReviewItem 动作投影、009 概念对齐、011 报告合流；新 SHA 的 GitHub CI 通过前不得标记可合并。

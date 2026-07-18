@@ -20,8 +20,9 @@ from pydantic import BaseModel, ConfigDict
 from ..product.routing import MatchIndex
 from .align import AlignmentReason, align_outcome
 from .cursor import new_traces, next_cursor
-from .gaps import GapAggregator, KnowledgeGap, stable_gap_key
+from .gaps import AlignedEntity, GapAggregator, KnowledgeGap, stable_gap_key
 from .models import SignalConfig, SignalType, Trace
+from .redact import redact_pii
 from .report import FlywheelReport, build_report
 from .signals import DEFAULT_CONFIG, ClaimLookup, detect_signals
 
@@ -37,6 +38,20 @@ class UnalignedObservation(BaseModel):
     reason: AlignmentReason  # no_actionable_match | multi_product_ambiguity
 
 
+class TraceEvaluation(BaseModel):
+    """One immutable processed-ledger record for every fresh trace (F3.3)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    trace_id: str
+    timestamp: str
+    question: str  # Trace construction already enforces PII redaction.
+    signal_types: tuple[SignalType, ...]
+    reason: AlignmentReason
+    entity: AlignedEntity | None
+    gap_key: str | None
+
+
 class PullResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -45,6 +60,7 @@ class PullResult(BaseModel):
     processed: int  # 本轮游标过滤后的新 trace 数
     unaligned_signals: int  # 有信号但未对齐（进观察队列，未开单）
     observations: tuple[UnalignedObservation, ...] = ()  # 观察队列明细（可导出）
+    evaluations: tuple[TraceEvaluation, ...] = ()  # 每条 fresh trace 的不可变处理台账
     gaps: tuple[KnowledgeGap, ...] = ()  # 聚合后缺口全量（CLI --apply 持久化状态用）
     # 空知识信号是否被评估（识别器开启 且 接入 claim_lookup）；否则未评估，报表自陈。
     empty_knowledge_active: bool
@@ -64,31 +80,47 @@ def run_pull(
     fresh = new_traces(traces, cursor)  # F1.1a 增量：批内去重 + 只处理游标之后的新 trace
     aggregator = GapAggregator(existing_gaps)
     observations: list[UnalignedObservation] = []
+    evaluations: list[TraceEvaluation] = []
     for trace in fresh:
-        outcome = align_outcome(index, trace.question, field_names=field_names)  # F2.1
+        # Defense in depth at the persistence payload boundary: Pydantic's
+        # model_construct/model_copy can bypass field validators inside trusted code.
+        safe_trace = trace.model_copy(update={"question": redact_pii(trace.question)})
+        outcome = align_outcome(index, safe_trace.question, field_names=field_names)  # F2.1
         entity = outcome.entity
         # run_pull 对 aligned_entity 有权威：对齐→gap_key；未对齐→清空（忽略入站陈旧键，
         # 否则客户端伪造的对齐键可借道触发 empty_knowledge）。
-        stamped = trace.model_copy(
+        stamped = safe_trace.model_copy(
             update={"aligned_entity": stable_gap_key(entity) if entity is not None else None}
         )
         signals = detect_signals(stamped, config, claim_lookup=claim_lookup)  # F1.2
+        evaluation_gap_key = stable_gap_key(entity) if entity is not None and signals else None
+        evaluations.append(
+            TraceEvaluation(
+                trace_id=safe_trace.trace_id,
+                timestamp=safe_trace.timestamp,
+                question=safe_trace.question,
+                signal_types=tuple(sorted(signals)),
+                reason=outcome.reason,
+                entity=entity,
+                gap_key=evaluation_gap_key,
+            )
+        )
         if not signals:
             continue
         if entity is None:
             # 有信号但对齐不足 → 观察队列（可消费明细，不只计数），不开单（F2.1 fail-safe）
             observations.append(
                 UnalignedObservation(
-                    trace_id=trace.trace_id,
-                    question=trace.question,
+                    trace_id=safe_trace.trace_id,
+                    question=safe_trace.question,
                     signal_types=tuple(sorted(signals)),
                     reason=outcome.reason,
                 )
             )
             continue
         aggregator.record(  # F2.2/2.3：样例带脱敏问题与时间戳（TopN/闭环周期）
-            entity, signals, trace.trace_id,
-            question=trace.question, timestamp=trace.timestamp,
+            entity, signals, safe_trace.trace_id,
+            question=safe_trace.question, timestamp=safe_trace.timestamp,
         )
     previous_keys = frozenset(g.gap_key for g in (existing_gaps or []))
     all_gaps = aggregator.gaps()
@@ -99,6 +131,7 @@ def run_pull(
         processed=len(fresh),
         unaligned_signals=len(observations),
         observations=tuple(observations),
+        evaluations=tuple(evaluations),
         gaps=tuple(all_gaps),
         # codex High-2：识别器关闭时即使接了 lookup 也未评估——不虚报覆盖面
         empty_knowledge_active=config.empty_knowledge and claim_lookup is not None,

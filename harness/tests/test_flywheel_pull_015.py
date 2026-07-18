@@ -201,3 +201,61 @@ def test_f2_1_pull_observations_carry_consumable_details(index: MatchIndex) -> N
     assert "退保" in obs.question
     assert "low_confidence_refusal" in obs.signal_types
     assert obs.reason == "no_actionable_match"
+
+
+def test_f3_3_pull_emits_one_immutable_evaluation_per_fresh_trace(
+    index: MatchIndex, prod_ids: dict[str, str]
+) -> None:
+    """F3.3：包括无信号 trace 在内，每条 fresh trace 都进入 processed ledger。"""
+    traces = [
+        _trace(
+            "t-signal",
+            "2026-07-01T10:00:00",
+            f"{PRODUCT_A[1]} 的等待期？",
+            "抱歉，无法确定。",
+        ),
+        _trace(
+            "t-clean",
+            "2026-07-01T11:00:00",
+            f"{PRODUCT_B[1]} 的保额？",
+            "基本保额为五十万元。",
+            source_refs=("chunk-1",),
+            score=0.9,
+        ),
+        _trace("t-unaligned", "2026-07-01T12:00:00", "怎么退保？", "抱歉，无法回答。"),
+    ]
+
+    result = run_pull(traces, index)
+
+    assert [evaluation.trace_id for evaluation in result.evaluations] == [
+        "t-signal",
+        "t-clean",
+        "t-unaligned",
+    ]
+    by_id = {evaluation.trace_id: evaluation for evaluation in result.evaluations}
+    assert by_id["t-signal"].gap_key == f"{prod_ids['A']}||"
+    assert by_id["t-signal"].reason == "aligned"
+    assert by_id["t-clean"].signal_types == ()
+    assert by_id["t-clean"].gap_key is None
+    assert by_id["t-unaligned"].entity is None
+    assert by_id["t-unaligned"].reason == "no_actionable_match"
+
+
+def test_f1_3_pull_redacts_question_again_at_persistence_boundary(index: MatchIndex) -> None:
+    """F1.3：即使内部误用 model_construct 绕过模型校验，持久化 payload 仍无原文 PII。"""
+    phone = "13812345678"
+    bypassed = Trace.model_construct(
+        trace_id="t-bypass",
+        timestamp="2026-07-01T10:00:00Z",
+        question=f"手机号 {phone}，这类保险怎么退保？",
+        answer="抱歉，无法回答。",
+        source_refs=(),
+        score=None,
+        annotation=None,
+        aligned_entity=None,
+    )
+
+    result = run_pull([bypassed], index)
+
+    assert phone not in result.evaluations[0].question
+    assert phone not in result.observations[0].question

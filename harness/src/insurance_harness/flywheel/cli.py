@@ -1,16 +1,15 @@
 """F3.3 CLI：反馈飞轮 pull——编排 F1(信号)→F2(对齐/聚合)→F3(报表)。
 
     python -m insurance_harness.flywheel.cli pull \
-        --traces-file traces.jsonl --db-url URL --space-id ID \
-        [--cursor-file cur.txt] [--gaps-file gaps.json] \
-        [--observations-out obs.jsonl] [--field-vocab vocab.json] \
+        --traces-file traces.jsonl --db-url URL --space-id ID --source-id SOURCE \
+        [--field-vocab vocab.json] \
         [--apply] [--open-tickets]
 
 默认 **dry-run 零副作用**：只产出报表——不写游标/状态/导出文件、不执行 schema 迁移
-（迁移属部署流程；schema 缺失/过旧 → 诚实非零退出）、DB 只读（产品索引）。缺 DB 配置
-fail-closed 非零退出，**不**回退本地 SQLite（codex PR#18 阻断3）。`--apply` 才持久化：
-推进游标文件、写缺口状态文件（跨周期累计/reopened 的依据：上轮输出=下轮输入）、导出
-观察队列。`--open-tickets` 为**受阻能力**（F2.4 投影候 knowledge_gap subject 形态协调；
+（迁移属部署流程；schema 缺失/过旧 → 诚实非零退出）、DB 只读。缺 DB 配置 fail-closed
+非零退出，**不**回退本地 SQLite（codex PR#18 阻断3）。`--apply` 才在 caller-owned
+DB 事务中原子持久化 Space/source checkpoint、processed ledger 与 gap 聚合；文件不充当状态源。
+`--open-tickets` 为**受阻能力**（F2.4 投影候 knowledge_gap subject 形态协调；
 PR#9 已合入，剩余依赖是 subject 设计）：在任何 I/O 之前立即非零退出，绝不假装开单。
 离线源用 `--traces-file`（JSONL）；Langfuse 直连候生产者合同落地（spec F1.1b，gated）。
 """
@@ -24,17 +23,16 @@ import sys
 from pathlib import Path
 
 from pydantic import ValidationError
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from insurance_harness.config import HarnessSettings
 from insurance_harness.db import make_engine
 from insurance_harness.db.scope import ScopeViolation, UnboundKnowledgeSpace, load_scope
-from insurance_harness.product.routing import MatchIndex
 
-from .gaps import KnowledgeGap
 from .models import Trace
-from .pull import PullResult, run_pull
+from .pull import PullResult
+from .repository import FlywheelRepositoryError, apply_pull, preview_pull
 
 
 def _resolve_db_url(arg: str | None) -> str | None:
@@ -70,21 +68,6 @@ def _load_vocab(path: Path) -> dict[str, str]:
     """字段词表 JSON：{显示名: field_id}。"""
     data = json.loads(path.read_text(encoding="utf-8"))
     return {str(k): str(v) for k, v in data.items()}
-
-
-def _read_cursor(path: Path) -> str | None:
-    if not path.exists():
-        return None
-    text = path.read_text(encoding="utf-8").strip()
-    return text or None
-
-
-def _read_gaps(path: Path) -> list[KnowledgeGap]:
-    """缺口状态文件（JSON 数组）：上轮 --apply 的输出=本轮跨周期累计的输入。"""
-    if not path.exists():
-        return []
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return [KnowledgeGap.model_validate(item) for item in raw]
 
 
 def _render(res: PullResult) -> str:
@@ -163,50 +146,49 @@ def cmd_pull(args: argparse.Namespace) -> int:
 
     traces = _load_traces(Path(args.traces_file))
     field_names = _load_vocab(Path(args.field_vocab)) if args.field_vocab else None
-    cursor = _read_cursor(Path(args.cursor_file)) if args.cursor_file else None
-    existing_gaps = _read_gaps(Path(args.gaps_file)) if args.gaps_file else []
 
     engine = make_engine(db_url)
     try:
-        with Session(engine) as session:
-            try:
-                scope = load_scope(session, args.space_id)
-                index = MatchIndex.from_session(session, scope)
-            except (UnboundKnowledgeSpace, ScopeViolation):
-                # fail-closed：不泄露 space 存在性/绑定细节（016 语义）
-                print("[fail-closed] KnowledgeSpace 校验未通过，未执行任何操作")
-                return 1
-            except (OperationalError, ProgrammingError):
-                print(
-                    "[fail-closed] 数据库 schema 缺失/过旧（迁移属部署流程，本命令不迁移）",
-                    file=sys.stderr,
-                )
-                return 1
+        try:
+            if args.apply:
+                with Session(engine) as session, session.begin():
+                    scope = load_scope(session, args.space_id)
+                    result = apply_pull(
+                        session,
+                        scope,
+                        args.source_id,
+                        traces,
+                        field_names=field_names,
+                    )
+            else:
+                with Session(engine) as session:
+                    # Session close rolls back the read transaction; preview_pull has
+                    # no write path and therefore leaves all durable state untouched.
+                    scope = load_scope(session, args.space_id)
+                    result = preview_pull(
+                        session,
+                        scope,
+                        args.source_id,
+                        traces,
+                        field_names=field_names,
+                    )
+        except (UnboundKnowledgeSpace, ScopeViolation):
+            # fail-closed：不泄露 space 存在性/绑定细节（016 语义）
+            print("[fail-closed] KnowledgeSpace 校验未通过，未执行任何操作")
+            return 1
+        except (OperationalError, ProgrammingError):
+            print(
+                "[fail-closed] 数据库 schema 缺失/过旧（迁移属部署流程，本命令不迁移）",
+                file=sys.stderr,
+            )
+            return 1
+        except (FlywheelRepositoryError, IntegrityError):
+            print("[fail-closed] 飞轮批次校验或持久化失败，事务已回滚", file=sys.stderr)
+            return 1
     finally:
         engine.dispose()
 
-    result = run_pull(
-        traces, index, field_names=field_names, cursor=cursor, existing_gaps=existing_gaps
-    )
     print(_render(result))
-
-    if args.apply:
-        # 持久化（F3.3）：游标推进 + 缺口状态（跨周期累计依据）+ 观察队列导出。
-        if args.cursor_file and result.next_cursor:
-            Path(args.cursor_file).write_text(result.next_cursor + "\n", encoding="utf-8")
-        if args.gaps_file:
-            Path(args.gaps_file).write_text(
-                json.dumps(
-                    [g.model_dump(mode="json") for g in result.gaps],
-                    ensure_ascii=False, indent=1,
-                ),
-                encoding="utf-8",
-            )
-        if args.observations_out:
-            with Path(args.observations_out).open("w", encoding="utf-8") as f:
-                for obs in result.observations:
-                    f.write(obs.model_dump_json() + "\n")
-    # dry-run（默认）：预览不改状态——零文件写入、零游标推进（下轮可复现同报表）。
     return 0
 
 
@@ -218,16 +200,14 @@ def main(argv: list[str] | None = None) -> int:
     p_pull.add_argument("--traces-file", required=True, help="JSONL：每行一条 Trace")
     p_pull.add_argument("--db-url", default=None)
     p_pull.add_argument("--space-id", required=True)
-    p_pull.add_argument("--cursor-file", default=None, help="增量游标文件（--apply 才写）")
     p_pull.add_argument(
-        "--gaps-file", default=None, help="缺口状态文件（跨周期累计；--apply 才写）"
-    )
-    p_pull.add_argument(
-        "--observations-out", default=None, help="观察队列导出 JSONL（--apply 才写）"
+        "--source-id",
+        required=True,
+        help="稳定 trace 源标识（Space 内 checkpoint 键）",
     )
     p_pull.add_argument("--field-vocab", default=None, help="字段词表 JSON：{显示名: field_id}")
     p_pull.add_argument(
-        "--apply", action="store_true", help="持久化游标/缺口状态/观察队列（缺省 dry-run 零写入）"
+        "--apply", action="store_true", help="在数据库单事务持久化本批（缺省 dry-run 零写入）"
     )
     p_pull.add_argument(
         "--open-tickets",
