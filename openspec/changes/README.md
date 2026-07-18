@@ -15,10 +15,10 @@
 | 006 | template-fastpath | ✅ 已交付 | PP-StructureV3 遗留 B9 |
 | 007 | claims-changeset-publish | ✅ 已交付 | |
 | 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
-| 009 | concept-layer | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 轨道 L4 第二件（010 域段后）；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
+| 009 | concept-layer | 📋 已条款化（三版 2026-07-18），**规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领** | 轨道 L4 第二件（010 域段后）；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
 | 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据全消费链：**快照 v2 判别联合、batch_fingerprint 批次身份、mapping_manifest 四元组、双轴幂等**（tables/models/merge/pages/snapshots/reader 同 PR 闭合）；迁移预分配 0007；knowledge 域 Owner-A 复审；T1~T4 即刻、**knowledge 域段排在 021 之后**（关键路径不变） |
-| 011 | knowledge-health | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | H1.3a 三方对账（冻结/远端实读/重编）；H1.8 typed provider（缺数据 degraded 不虚报健康）；**迁移占号 0010（completeness_snapshots + health_runs/health_findings）**；typed subject 接线 Owner-A |
-| 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
+| 011 | knowledge-health | 📋 已条款化（三版 2026-07-18），**规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领** | H1.3a 三方对账（冻结/远端实读/重编）；H1.8 typed provider（缺数据 degraded 不虚报健康）；**迁移占号 0010（completeness_snapshots + health_runs/health_findings）**；typed subject 接线 Owner-A |
+| 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
 | 015 | feedback-flywheel | 📋 提案 | M2，依赖 009 |

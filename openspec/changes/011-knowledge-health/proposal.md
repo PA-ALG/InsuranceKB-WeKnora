@@ -1,6 +1,6 @@
 # 011 · 知识健康度巡检（语义 lint）
 
-> 状态：**已条款化（正式 delta；三版 2026-07-18 按 codex PR #12 复审收口：三方对账/typed provider/持久基准/typed subject），规格复审收口前不可认领**。含 H1.7 任务可靠性（同事 WeKnora 实证反馈吸收：死信/解析失败不得沉底）。迁移占号 0010（completeness_snapshots + health_runs/health_findings）。Owner=C；typed subject 接线与迁移 Owner-A 复审。
+> 状态：**已条款化（正式 delta；三版 2026-07-18 按 codex PR #12 复审收口：三方对账/typed provider/持久基准/typed subject），规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领**。含 H1.7 任务可靠性（同事 WeKnora 实证反馈吸收：死信/解析失败不得沉底）。迁移占号 0010（completeness_snapshots + health_runs/health_findings）。Owner=C；typed subject 接线与迁移 Owner-A 复审。
 > 设计权威：13 §2 G3、LLM Wiki #12 思想（结构性 lint 高频确定性 / 语义性低频审计分层）、master plan P1-1 质量与缺口、20（企业运行约束）。
 
 ## 为什么做

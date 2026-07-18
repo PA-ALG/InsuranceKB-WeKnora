@@ -26,7 +26,7 @@
 - **WHEN** 009 概念表尚未落地时运行扫描
 - **THEN** H1.5 报 not-applicable（报告显式呈现），零误报孤立、零误报 clean
 
-### Requirement: H1.3a 漂移三方对账（A/B/C，原因互斥）
+### Requirement: H1.3a 漂移三方对账（A/B/C，独立维度可并存）
 
 漂移检测 SHALL 为三方对账，SHALL NOT 只做两方比较：
 
@@ -34,12 +34,17 @@
 - **B** = 经现有 WeKnora adapter 只读回读的**实际远端页面**——A≠B ⇒ `remote_drift`（人工绕改/远端异常），这是唯一能观察到人工绕改的比较；
 - **C** = 按当前 mutable Claims + 显式 compiler/schema/purpose 版本重编译结果——A≠C ⇒ `pending_content_change`（待发布事实变化）或 `compiler_version_change`（以 run manifest 的版本 digest 区分，SHALL NOT 以"compiler version 相同 ⇒ 绕改"推断）。
 
-三类原因 SHALL 互斥归因；比较 hash SHALL 基于规范化 content/source_refs/chunk_refs/稳定 metadata（排除时间戳等易变字段）；**远端不可用/超时 SHALL 报 `unknown/unavailable`，SHALL NOT 计为 healthy**。
+A≠B 与 A≠C 是**两个独立观察维度，SHALL 独立评估、可并存**（远端被绕改与待发布内容变化在真实运行中可以同时发生——SHALL NOT 为归因唯一性而抑制任一维度的报告）；A≠C 内部以 run manifest 版本 digest 区分 `pending_content_change` 与 `compiler_version_change`。比较 hash SHALL 基于规范化 content/source_refs/chunk_refs/稳定 metadata（排除时间戳等易变字段）；**远端不可用/超时 SHALL 报 `unknown/unavailable`，SHALL NOT 计为 healthy**。
 
-#### Scenario: 三类原因互斥命中
+#### Scenario: 单变量夹具无串扰命中
 
 - **WHEN** 分别构造：仅改远端 B、仅改 mutable Claim、仅 bump compiler digest 三个夹具
 - **THEN** 依次仅命中 remote_drift / pending_content_change / compiler_version_change，互不串扰
+
+#### Scenario: B 与 C 同时变化两维并报
+
+- **WHEN** 同一页面既被远端人工改写（B 变）又有 Claim 变更未发布（C 变）
+- **THEN** remote_drift 与 pending_content_change **同时报告**（两维各自成立，零漏报）
 
 #### Scenario: 远端不可用不出干净报告
 
