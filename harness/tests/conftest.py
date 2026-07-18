@@ -1,9 +1,12 @@
+import sqlite3
 from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import event
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import ConnectionPoolEntry
 
 from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.config import HarnessSettings
@@ -59,9 +62,37 @@ def kb_session(tmp_path: Path) -> "Iterator[Session]":
     from insurance_harness.knowledge import tables as _kb_tables  # noqa: F401
 
     engine = make_engine(f"sqlite:///{tmp_path}/kb.db")
+
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_foreign_keys(
+        dbapi_connection: sqlite3.Connection,
+        _connection_record: ConnectionPoolEntry,
+    ) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     session = make_session_factory(engine)()
     yield session
+    session.close()
+    engine.dispose()
+
+
+# --- change 008：审核工作台夹具（文件型 sqlite，app 与测试共享同一 engine） ---
+
+
+@pytest.fixture
+def wb_env(tmp_path: Path) -> "Iterator[tuple[Callable[[], Session], Session]]":
+    from insurance_harness.db import models as _db_models  # noqa: F401
+    from insurance_harness.db.base import Base, make_engine, make_session_factory
+    from insurance_harness.knowledge import tables as _kb_tables  # noqa: F401
+
+    engine = make_engine(f"sqlite:///{tmp_path}/wb.db")
+    Base.metadata.create_all(engine)
+    factory = make_session_factory(engine)
+    session = factory()
+    yield factory, session
     session.close()
     engine.dispose()
 

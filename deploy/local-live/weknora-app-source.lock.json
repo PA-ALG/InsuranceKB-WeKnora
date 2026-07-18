@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/Tencent/WeKnora.git",
+  "commit": "5eefa70e6fc8f9ec27958779f91ece6cf685598c",
+  "tree": "a44f7eaeb40cf156d2893398046ffcb3094e5940",
+  "dockerfile": {
+    "path": "docker/Dockerfile.app",
+    "sha256": "be66005765bbc7db61851b07cd65529b0ee3c35d75f0eff84366d83a4cca3a32"
+  },
+  "required_ancestors": [
+    "505bc7ddec0feaef337610ad2f26d34a9e41a012",
+    "3f516d7f317d2dbba6d1e8e5170db9ff1d052ca7",
+    "94d18ea15a663974f0dc4dc4d9a43f20dca14d39",
+    "abcecc870a7850d33b4a0d71d3845d0f3c4a1ae5",
+    "800cea0826574f351141b6b3b7d615f5e0d837d6",
+    "def92bb74fcde45dfc1be84cd6d63cf47113aa0b"
+  ],
+  "patch": {
+    "path": "deploy/local-live/patches/model-debug-access-log-redaction.patch",
+    "sha256": "6f6d8ad1e0e9ef26b5b06c9bb1984ce03b94b55967638d16edb94143eba1ff99"
+  },
+  "platform": "linux/arm64",
+  "image_repository": "ghcr.io/pa-alg/insurancekb-weknora-app"
+}

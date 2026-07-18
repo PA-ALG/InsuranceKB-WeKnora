@@ -34,12 +34,14 @@ RUN test -n "${RUNNER_VERSION}" \
     && useradd --create-home --uid 10001 runner \
     && mkdir -p /home/runner/actions-runner \
     && curl --fail --location --proto "=${RUNNER_RELEASE_PROTO}" --tlsv1.2 \
+      --retry 5 --retry-all-errors --retry-delay 2 \
       --output "/tmp/${RUNNER_ARCHIVE}" \
       "${RUNNER_RELEASE_BASE}/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}" \
     && echo "${RUNNER_SHA256}  /tmp/${RUNNER_ARCHIVE}" | sha256sum -c - \
     && tar --extract --gzip --file "/tmp/${RUNNER_ARCHIVE}" \
       --directory /home/runner/actions-runner \
     && rm -f "/tmp/${RUNNER_ARCHIVE}" \
+    && mkdir -p /home/runner/actions-runner/_work \
     && chown -R runner:runner /home/runner/actions-runner \
     && rm -rf /var/lib/apt/lists/*
 

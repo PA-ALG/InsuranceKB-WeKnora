@@ -51,6 +51,22 @@ async def test_s2_4_create_and_get_roundtrip(client: WeKnoraClient) -> None:
 
 
 @respx.mock
+async def test_s2_4_wiki_response_normalizes_null_link_lists(
+    client: WeKnoraClient,
+) -> None:
+    page = WeKnoraWikiPage(slug="entity/null-links", title="Null links")
+    response = page.model_dump(mode="json")
+    response["in_links"] = None
+    response["out_links"] = None
+    respx.post(f"{WIKI}/pages").mock(return_value=_page_resp(response))
+
+    created = await client.create_wiki_page(KB, page)
+
+    assert created.in_links == []
+    assert created.out_links == []
+
+
+@respx.mock
 async def test_s2_4_update_delete_move_folders(client: WeKnoraClient) -> None:
     page = WeKnoraWikiPage(slug="entity/x", title="X", content="v2")
     update = respx.put(f"{WIKI}/pages/entity/x").mock(

@@ -46,7 +46,9 @@
   ChangeSet 的 source_batch 字段不可变（只允许 status 流转）。
 - K3.4 冲突未决期间旧 Claim 保持 published（生产不中断），新值停 candidate。
 - K3.5 可翻案：对已决审核项翻案 = 生成新 ChangeSet（manual_edit）执行反向/正向应用并留痕，
-  原 ChangeSet 与原 decision_basis 不改写。
+  原 ChangeSet 与原 decision_basis 不改写。（008 W2.3 对齐，2026-07-17：翻案入口为
+  **两阶段**——`request_review_overturn` 先登记 pending ChangeSet + 翻案审核项走审核，
+  原 ReviewItem.resolution 同样不改写；本条的反向/正向应用在翻案审核项被 approve 时执行。）
 
 ## K4 审核门禁（proposal 段 3）
 

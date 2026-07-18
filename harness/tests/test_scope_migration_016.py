@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import Connection, Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -20,6 +21,12 @@ def _alembic_cfg(db_url: str) -> Config:
     cfg.set_main_option("script_location", str(HARNESS_ROOT / "migrations"))
     cfg.set_main_option("sqlalchemy.url", db_url)
     return cfg
+
+
+def _alembic_head(db_url: str) -> str:
+    head = ScriptDirectory.from_config(_alembic_cfg(db_url)).get_current_head()
+    assert head is not None
+    return head
 
 
 def _database(tmp_path: Path, name: str) -> tuple[str, Engine]:
@@ -573,7 +580,9 @@ def test_s3_4_downgrade_rejects_multiple_spaces_before_ddl(tmp_path: Path) -> No
         column["name"] for column in inspect(engine).get_columns("insurance_products")
     } == before_product_columns
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            _alembic_head(url)
+        )
 
 
 def test_s3_4_downgrade_rejects_single_non_legacy_space(tmp_path: Path) -> None:
@@ -593,7 +602,9 @@ def test_s3_4_downgrade_rejects_single_non_legacy_space(tmp_path: Path) -> None:
         column["name"] for column in inspect(engine).get_columns("insurance_products")
     }
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            _alembic_head(url)
+        )
 
 
 @pytest.mark.parametrize(
@@ -708,7 +719,9 @@ def test_s3_4_downgrade_lists_global_key_conflicts_before_ddl(
         for scoped_table in before_space_columns
     } == before_space_columns
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            _alembic_head(url)
+        )
         assert connection.scalar(text("SELECT count(*) FROM knowledge_spaces")) == 1
         assert connection.execute(text(f"SELECT * FROM {table} ORDER BY id")).all() == before_rows
 
@@ -847,7 +860,9 @@ def test_s3_4_legacy_data_round_trips_head_to_0002_and_back_to_head(
         assert connection.scalar(text("SELECT count(*) FROM claims")) == 1
         assert connection.scalar(text("SELECT count(*) FROM snapshot_claims")) == 1
         assert connection.scalar(text("SELECT id FROM current_release")) == "current"
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            _alembic_head(url)
+        )
 
     scoped_product_uniques = {
         tuple(constraint["column_names"])

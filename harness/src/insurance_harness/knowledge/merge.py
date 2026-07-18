@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from insurance_harness.goldenset.baseline import RunFingerprint
-    from insurance_harness.knowledge.quality_gate import QualityGate
+    from insurance_harness.knowledge.quality_gate import GateDecision, QualityGate
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -71,6 +71,43 @@ _STATUS_RANK = {"published": 0, "candidate": 1, "draft": 2}
 
 class MergeError(RuntimeError):
     pass
+
+
+class ReviewStale(MergeError):
+    """乐观并发（W1）：提交所带 expected_version 已过期——拒绝并让调用方刷新。"""
+
+    def __init__(
+        self, review_key: str, *, current_status: str, current_action: str | None
+    ) -> None:
+        super().__init__(f"review item {review_key} 已被他人更新")
+        self.review_key = review_key
+        self.current_status = current_status
+        self.current_action = current_action
+
+
+class ReviewDecisionConflict(MergeError):
+    """异决定撞已决（W1）：条目已被其它决定终结，本次动作不生效。"""
+
+    def __init__(
+        self, review_key: str, *, current_status: str, current_action: str | None
+    ) -> None:
+        super().__init__(f"review item {review_key} 已决（{current_status}）")
+        self.review_key = review_key
+        self.current_status = current_status
+        self.current_action = current_action
+
+
+class ReviewPreconditionRequired(MergeError):
+    """W1 并发合同为**强制**而非可选（codex R2-P1）：open 项的任何动作缺
+    ``expected_version`` 或 ``request_id`` 一律拒绝（零写）——省略令牌不得成为
+    绕过 stale 拒绝/动作幂等的通道；由服务边界强制，不依赖模板诚实。"""
+
+    def __init__(self, review_key: str, *, missing: str) -> None:
+        super().__init__(
+            f"review item {review_key} 动作缺少必需前置条件 {missing}"
+        )
+        self.review_key = review_key
+        self.missing = missing
 
 
 def _scope_mismatch() -> ScopeViolation:
@@ -699,23 +736,34 @@ class MergeEngine:
         self.run_fingerprint = run_fingerprint
         self.judge_queue: list[ConflictJudgeRequest] = []
 
-    def _gate_ok(self, prop: ProposedClaim, risk: str, action: str) -> bool:
+    def _gate_decision(
+        self, prop: ProposedClaim, risk: str, action: str
+    ) -> "GateDecision | None":
         """Q4.2/Q4.5：自动发布必须过 gate；**fail-closed**——无 gate/画像/指纹一律不自动，
         走 ReviewItem（design.md:17「布尔开关不能绕过 Gate，缺画像统一走 ReviewItem」）。
 
+        返回结构化 GateDecision（W7：拒绝原因不得在进入 ReviewItem 前丢失）；
+        未注入 gate 时返回 None（无 gate 部署 ≠ gate 拒绝，审核类型走通用分类）。
         pending_judge 交给 gate 裁定为权威，但 merge 层**保留独立短路做纵深防御**：
         注入的 gate 万一不 honor pending，pending 候选也绝不自动发布。gate 抛异常/签名不符时同样
         fail-closed——不得让一个坏 gate 崩掉整批 apply_batch。
         """
+        from insurance_harness.knowledge.quality_gate import GateDecision
+
         if self.quality_gate is None:
-            return False
+            return None
         if prop.pending_judge:  # 纵深防御：pending 不自动发布，不依赖注入 gate 是否 honor
-            return False
+            return GateDecision(
+                eligible=False,
+                reason="字段存在未裁决项（pending_judge），不自动发布",
+                field_id=prop.predicate,
+                action=action,
+            )
         try:
             return self.quality_gate.decide(
                 prop.predicate, risk, action, self.run_fingerprint,
                 pending_judge=prop.pending_judge,
-            ).eligible
+            )
         except Exception as exc:  # noqa: BLE001 —— 坏 gate 一律 fail-closed（走 ReviewItem），不崩批
             # 保留可审计原因，让运营能区分"gate 故障"与"候选质量不足"。
             # 只记异常类型 + 简短消息到日志，不入业务数据、不带堆栈。
@@ -723,7 +771,33 @@ class MergeEngine:
                 "quality_gate.decide raised %s for predicate=%r action=%s → fail-closed: %s",
                 type(exc).__name__, prop.predicate, action, exc,
             )
-            return False
+            return GateDecision(
+                eligible=False,
+                reason=f"gate 判定异常（fail-closed）：{type(exc).__name__}",
+                field_id=prop.predicate,
+                action=action,
+            )
+
+    def _gate_reference(self) -> dict[str, Any]:
+        """画像/基线标识（W7：呈现 gate 原因须带 profile/baseline 标识文本）。
+
+        只取哈希与版本标识，不取任何指标内容——一处存储在画像/批准记录本身。
+        """
+        ref: dict[str, Any] = {}
+        gate = self.quality_gate
+        if gate is None:
+            return ref
+        # getattr：测试替身可不携带画像/批准（kbhelpers._AllowLowRiskGate）
+        profile = getattr(gate, "profile", None)
+        approval = getattr(gate, "approval", None)
+        if profile is not None:
+            ref["profile_version"] = profile.profile_version
+            ref["profile_content_sha256"] = profile.content_hash()
+            ref["artifact_sha256"] = profile.artifact_sha256
+        if approval is not None:
+            ref["baseline_id"] = approval.baseline_id
+            ref["approval_sha256"] = approval.sha256()
+        return ref
 
     # -- ChangeSet ---------------------------------------------------------
 
@@ -856,19 +930,20 @@ class MergeEngine:
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="add candidate",
         )
-        auto = (
-            self.policy.auto_apply_add
-            and risk != "high"
-            and self._gate_ok(prop, risk, "add")  # pending/异常 fail-closed 见 _gate_ok
-        )
-        if auto:
+        policy_allows = self.policy.auto_apply_add and risk != "high"
+        decision = self._gate_decision(prop, risk, "add") if policy_allows else None
+        if policy_allows and decision is not None and decision.eligible:
             item.decision = "auto_applied"
             publish_claim(
                 self.session, self.scope, claim, change_item_id=item.id,
                 actor=self.created_by, reason="auto add",
             )
         else:
-            self._gate(item, prop, risk, report, new_claim_id=claim.id)
+            # 运营允许自动化但被 gate 拒绝 → 该拒绝原因随 ReviewItem 持久化（W7）
+            self._gate(
+                item, prop, risk, report,
+                new_claim_id=claim.id, gate_denial=decision,
+            )
         report.bump("add")
 
     # -- enrich ---------------------------------------------------------------
@@ -895,14 +970,18 @@ class MergeEngine:
             self.session, claim, before=None, change_item_id=item.id,
             actor=self.created_by, reason="enrich fill unknown",
         )
-        if self._enrich_auto_ok(prop, risk):
+        auto, decision = self._enrich_auto(prop, risk)
+        if auto:
             item.decision = "auto_applied"
             publish_claim(
                 self.session, self.scope, claim, change_item_id=item.id, actor=self.created_by,
                 reason="auto enrich fill", superseding=placeholder,
             )
         else:
-            self._gate(item, prop, risk, report, new_claim_id=claim.id)
+            self._gate(
+                item, prop, risk, report,
+                new_claim_id=claim.id, gate_denial=decision,
+            )
         report.bump("enrich")
 
     def _do_enrich_append(
@@ -950,22 +1029,32 @@ class MergeEngine:
             decision="needs_review",
             basis=None,
         )
-        if self._enrich_auto_ok(prop, risk):
+        auto, decision = self._enrich_auto(prop, risk)
+        if auto:
             item.decision = "auto_applied"
             _apply_enrich_append(self.session, self.scope, item, actor=self.created_by)
         else:
-            self._gate(item, prop, risk, report, new_claim_id=existing.id)
+            self._gate(
+                item, prop, risk, report,
+                new_claim_id=existing.id, gate_denial=decision,
+            )
         report.bump("enrich")
 
-    def _enrich_auto_ok(self, prop: ProposedClaim, risk: str) -> bool:
+    def _enrich_auto(
+        self, prop: ProposedClaim, risk: str
+    ) -> tuple[bool, "GateDecision | None"]:
         """K4.4 + 019 Q4.2：默认关闭；开启后仅 risk=low、confidence≥阈值、非 pending_judge，
-        且过 QualityGate（注入时）。"""
-        return (
+        且过 QualityGate（注入时）。返回 (是否自动, gate 决定)——运营策略未放行时不问 gate，
+        决定为 None（区分「未咨询 gate」与「gate 拒绝」，W7 类型判定用）。"""
+        policy_allows = (
             self.policy.auto_apply_enrich
             and risk == "low"
             and prop.confidence >= self.policy.enrich_auto_min_confidence
-            and self._gate_ok(prop, risk, "enrich")  # pending/异常 fail-closed 见 _gate_ok
         )
+        if not policy_allows:
+            return False, None
+        decision = self._gate_decision(prop, risk, "enrich")
+        return bool(decision is not None and decision.eligible), decision
 
     # -- 冲突裁决序（03 §6.2 逐级短路） -----------------------------------------
 
@@ -1033,12 +1122,13 @@ class MergeEngine:
                 self.session, claim, before=None, change_item_id=item.id,
                 actor=self.created_by, reason="supersede candidate",
             )
-            auto = (
-                risk != "high"
-                and self.policy.auto_apply_supersede_low_risk
-                and self._gate_ok(prop, risk, "supersede")  # pending/异常 fail-closed 见 _gate_ok
+            policy_allows = (
+                risk != "high" and self.policy.auto_apply_supersede_low_risk
             )
-            if auto:
+            decision = (
+                self._gate_decision(prop, risk, "supersede") if policy_allows else None
+            )
+            if policy_allows and decision is not None and decision.eligible:
                 item.decision = "auto_applied"
                 self._new_conflict(item, existing, prop, basis, status="resolved")
                 publish_claim(
@@ -1053,6 +1143,7 @@ class MergeEngine:
                 self._gate(
                     item, prop, risk, report,
                     new_claim_id=claim.id, conflict_id=conflict.id,
+                    gate_denial=decision,
                 )
             report.bump("supersede")
             return
@@ -1153,23 +1244,52 @@ class MergeEngine:
         new_claim_id: str | None,
         conflict_id: str | None = None,
         type_: str | None = None,
+        gate_denial: "GateDecision | None" = None,
     ) -> None:
-        """审核门禁（K4.1）：needs_review 的 ChangeItem 挂稳定 ID ReviewItem。"""
-        review_type = type_ or ("high_risk_change" if risk == "high" else "low_confidence")
+        """审核门禁（K4.1）：needs_review 的 ChangeItem 挂稳定 ID ReviewItem。
+
+        W7：`gate_denial` 非空 = 运营策略允许自动化但 QualityGate 拒绝——审核类型标
+        `quality_gate`，拒绝原因 + 画像/基线标识随 subject 与 decision_basis 持久化，
+        进入 ReviewItem 前不丢失。gate 未部署/策略未放行时走通用分类。
+        """
+        gate_payload: dict[str, Any] | None = None
+        if gate_denial is not None and not gate_denial.eligible:
+            gate_payload = {
+                "reason": gate_denial.reason,
+                "field_id": gate_denial.field_id,
+                "action": gate_denial.action,
+                **self._gate_reference(),
+            }
+        if type_ is not None:
+            review_type = type_
+        elif gate_payload is not None:
+            review_type = "quality_gate"
+        else:
+            review_type = "high_risk_change" if risk == "high" else "low_confidence"
         key = derive_review_key(
             review_type, prop.product_version_id, prop.predicate, prop.value_hash
         )
+        subject: dict[str, Any] = {
+            "change_item_id": item.id,
+            "new_claim_id": new_claim_id,
+            "conflict_id": conflict_id,
+            "predicate": prop.predicate,
+            # 稳定查询维度（codex R2-P1 分页）：队列的 SQL 级产品过滤/下钻定位
+            # 直接用 subject JSON，不再全量 Python 扫描
+            "product_version_id": prop.product_version_id,
+        }
+        if gate_payload is not None:
+            subject["gate"] = gate_payload
+            item.decision_basis = {
+                **(item.decision_basis or {}),
+                "gate": gate_payload,
+            }
         _, created = ensure_review_item(
             self.session,
             scope=self.scope,
             review_key=key,
             type_=review_type,
-            subject={
-                "change_item_id": item.id,
-                "new_claim_id": new_claim_id,
-                "conflict_id": conflict_id,
-                "predicate": prop.predicate,
-            },
+            subject=subject,
             risk_level=risk,
         )
         if key not in report.review_keys:
@@ -1303,6 +1423,9 @@ def _resolve_conflicts(
         conflict.decision_basis = basis
 
 
+_OVERTURN_MODES = ("overturn_reject", "overturn_approve")
+
+
 def resolve_review(
     session: Session,
     scope: KnowledgeScope,
@@ -1311,30 +1434,87 @@ def resolve_review(
     *,
     actor: str,
     reason: str | None = None,
+    expected_version: str | None = None,
+    request_id: str | None = None,
 ) -> ReviewItem:
-    """受限动作集 approve/reject/defer（K4.2）；已决项翻案走 overturn_review。"""
+    """受限动作集 approve/reject/defer（K4.2）；已决项翻案走 request_review_overturn。
+
+    并发合同（W1，**强制**——codex R2-P1）：行锁（PostgreSQL ``SELECT … FOR UPDATE``，
+    SQLite 忽略无害）下判定；open 项的任何动作 **必须** 携带非空 ``expected_version``
+    （= 页面渲染时的 ``updated_at`` isoformat）与 ``request_id``，缺失 →
+    ReviewPreconditionRequired（零写）——省略令牌不是关闭 CAS 的通道；
+    版本过期 → ReviewStale；已决 + 同决定 → 幂等返回；已决 + 异决定 →
+    ReviewDecisionConflict；``request_id`` 重放（同 id 同动作已在事件史）→ 幂等返回。
+    全部动作（**含 defer**）追加 ``resolution.events`` 审计事件（actor/reason/at/request_id）。
+    """
     require_current_scope(session, scope)
     item = session.execute(
-        select(ReviewItem).where(
+        select(ReviewItem)
+        .where(
             ReviewItem.space_id == scope.space_id,
             ReviewItem.review_key == review_key,
         )
+        .with_for_update()
     ).scalar_one_or_none()
     if item is None:
         raise _scope_mismatch()
     subject = _require_scoped_review_subject(session, scope, item.subject)
     if action not in item.allowed_actions:
         raise ValueError(f"动作 {action!r} 不在受限动作集 {item.allowed_actions} 中")
+    resolution = dict(item.resolution or {})
+    events = [dict(e) for e in (resolution.get("events") or [])]
+    if request_id is not None and any(
+        e.get("request_id") == request_id and e.get("action") == action for e in events
+    ):
+        return item  # 同请求重放：不重复生效、不重复记事件
     if item.status != "open":
-        raise ValueError(
-            f"review item {review_key} 已决（{item.status}）；翻案请走 overturn_review"
+        prev = resolution.get("action")
+        if action == prev:
+            return item  # 同决定幂等（服务层第二道防线，路由层不再自行预读）
+        raise ReviewDecisionConflict(
+            review_key,
+            current_status=item.status,
+            current_action=str(prev) if prev is not None else None,
         )
+    # open 项强制前置：两令牌缺一不可（在任何写发生之前拒绝）
+    if not (expected_version and expected_version.strip()):
+        raise ReviewPreconditionRequired(review_key, missing="expected_version")
+    if not (request_id and request_id.strip()):
+        raise ReviewPreconditionRequired(review_key, missing="request_id")
+    if expected_version != item.updated_at.isoformat():
+        raise ReviewStale(
+            review_key,
+            current_status=item.status,
+            current_action=None,
+        )
+    event: dict[str, Any] = {
+        "action": action,
+        "actor": actor,
+        "reason": reason,
+        "at": utcnow().isoformat(),
+        "request_id": request_id,
+        "expected_version": expected_version,
+    }
     if action == "defer":
-        return item  # 保持 open，不落 resolution
+        # defer 保持 open，但必须留审计（谁/何时/理由）并推进版本（W1 三动作审计）
+        events.append(event)
+        resolution["events"] = events
+        item.resolution = resolution
+        item.updated_at = utcnow()
+        session.flush()
+        return item
     if not subject.change_item_id:
         raise _scope_mismatch()
     change_item = _require_scoped_change_item(session, scope, subject.change_item_id)
-    if action == "approve":
+    # 独立键 overturn_mode：不占用 "mode"（后者承载 fill_unknown/append_evidence 等
+    # 原始语义，reversal 复制原 proposed 时必须原样保留以过发布上下文校验）。
+    overturn_mode = (change_item.proposed or {}).get("overturn_mode")
+    if overturn_mode in _OVERTURN_MODES:
+        if action == "approve":
+            _apply_overturn(session, scope, change_item, actor=actor, reason=reason)
+        else:
+            _reject_overturn(session, scope, change_item, actor=actor, reason=reason)
+    elif action == "approve":
         apply_change_item(
             session,
             scope,
@@ -1345,18 +1525,28 @@ def resolve_review(
         )
     else:
         reject_change_item(session, scope, change_item, actor=actor, reason=reason)
+    events.append(event)
     item.status = "resolved"
     item.resolution = {
         "action": action,
         "actor": actor,
         "reason": reason,
-        "at": utcnow().isoformat(),
+        "at": event["at"],
+        "events": events,
     }
     session.flush()
     return item
 
 
-def overturn_review(
+def derive_overturn_key(
+    review_key: str, prev_action: str, decided_at: str, new_action: str
+) -> str:
+    """翻案审核项稳定 ID：原 review_key + 原决定（动作+时间）+ 目标动作派生（幂等）。"""
+    payload = f"{review_key}::{prev_action}::{decided_at}::{new_action}"
+    return "rv-ot-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:38]
+
+
+def request_review_overturn(
     session: Session,
     scope: KnowledgeScope,
     review_key: str,
@@ -1364,14 +1554,26 @@ def overturn_review(
     *,
     actor: str,
     reason: str,
-) -> ChangeSet:
-    """翻案 = 新 ChangeSet（K3.5）：原 ChangeSet 与原 decision_basis 不改写。"""
+) -> tuple[ChangeSet, ReviewItem, bool]:
+    """两阶段翻案第一步（W2.3 + K3.5）：只登记复议请求，**不改任何事实**。
+
+    产出：pending 的 manual_edit ChangeSet + needs_review 的 reversal ChangeItem +
+    open 的翻案 ReviewItem（risk=high，须单条人审，不可批量）。原 ReviewItem、原
+    ChangeSet、原 resolution、当前 published Claim 全部不动；K3.5 的反向/正向应用
+    发生在翻案 ReviewItem 被 approve 时（resolve_review 路由 ``_apply_overturn``）。
+    重复请求幂等：同一（原决定, 目标动作）派生同一 review_key，返回既有请求。
+    返回 (change_set, overturn_item, created)。
+    """
     require_current_scope(session, scope)
+    if not reason or not reason.strip():
+        raise ValueError("翻案必须给出理由")
     item = session.execute(
-        select(ReviewItem).where(
+        select(ReviewItem)
+        .where(
             ReviewItem.space_id == scope.space_id,
             ReviewItem.review_key == review_key,
         )
+        .with_for_update()  # 串行化同一原决定上的并发翻案请求
     ).scalar_one_or_none()
     if item is None:
         raise _scope_mismatch()
@@ -1381,83 +1583,186 @@ def overturn_review(
     prev = str(item.resolution["action"])
     if new_action == prev or new_action not in ("approve", "reject"):
         raise ValueError(f"翻案动作 {new_action!r} 无效（原决定 {prev!r}）")
+    decided_at = str(item.resolution.get("at") or "")
+    overturn_key = derive_overturn_key(review_key, prev, decided_at, new_action)
+    existing_item = session.execute(
+        select(ReviewItem).where(
+            ReviewItem.space_id == scope.space_id,
+            ReviewItem.review_key == overturn_key,
+        )
+    ).scalar_one_or_none()
+    if existing_item is not None:
+        change_set_id = str((existing_item.subject or {}).get("change_set_id") or "")
+        change_set = _require_scoped_change_set(session, scope, change_set_id)
+        return change_set, existing_item, False
     original, adopted, old, _ = _require_scoped_item_aggregate(
         session,
         scope,
         subject.change_item_id or "",
     )
-    if new_action == "reject" and adopted is None:
+    if adopted is None:
         raise _scope_mismatch()
+    # 当前事实前置校验：登记时就拒绝已失效的翻案，而不是等批准时才失败。
+    if new_action == "reject" and adopted.status != "published":
+        raise MergeError(
+            f"翻案目标 Claim 当前状态为 {adopted.status}（非 published，"
+            "可能已被后续变更取代），请刷新后重试"
+        )
+    if new_action == "approve" and adopted.status != "retracted":
+        raise MergeError(
+            f"翻案目标候选当前状态为 {adopted.status}（非 retracted），请刷新后重试"
+        )
     change_set = ChangeSet(
         space_id=scope.space_id,
         source_kind="manual_edit",
         knowledge_ids=None,
-        status="applied",
+        status="pending",
         created_by=actor,
     )
     session.add(change_set)
     session.flush()
+    basis = {
+        "overturn_requested_by": actor,
+        "overturn_reason": reason,
+        "prev_action": prev,
+        "original_review_key": review_key,
+    }
     if new_action == "reject":
-        # 撤销先前采纳：新 Claim 撤回，被取代的旧 Claim 恢复 published
-        assert adopted is not None
         reversal = ChangeItem(
             change_set_id=change_set.id,
             action="retract",
             claim_id=adopted.id,
-            proposed={"overturn_of": original.id},
-            decision="approved",
-            decision_basis={"reviewer": actor, "review_reason": reason},
+            proposed={
+                "overturn_mode": "overturn_reject",
+                "overturn_of": original.id,
+                "original_review_key": review_key,
+                "adopted_claim_id": adopted.id,
+                "restore_claim_id": old.id if old is not None else None,
+            },
+            decision="needs_review",
+            decision_basis=basis,
         )
-        session.add(reversal)
-        session.flush()
-        _retract_claim(
-            session, adopted, change_item_id=reversal.id, actor=actor, reason=reason
-        )
-        if old is not None and old.status == "superseded":
-            before = _snapshot(old)
-            old.status = "published"
-            old.superseded_by = None
-            _write_revision(
-                session, old, before=before, change_item_id=reversal.id,
-                actor=actor, reason=f"翻案恢复：{reason}",
-            )
     else:
-        # 撤销先前驳回：按原提案重新应用
         reversal = ChangeItem(
             change_set_id=change_set.id,
             action=original.action,
             claim_id=original.claim_id,
-            proposed=dict(original.proposed),
+            proposed={
+                **dict(original.proposed),
+                "overturn_mode": "overturn_approve",
+                "overturn_of": original.id,
+                "original_review_key": review_key,
+            },
             decision="needs_review",
-            decision_basis={"overturn_of": original.id},
+            decision_basis=basis,
         )
-        session.add(reversal)
-        session.flush()
-        if adopted is not None:
-            if adopted.status == "retracted":
-                before = _snapshot(adopted)
-                adopted.status = "candidate"
-                _write_revision(
-                    session, adopted, before=before, change_item_id=reversal.id,
-                    actor=actor, reason=f"翻案恢复候选：{reason}",
-                )
-        apply_change_item(
-            session,
-            scope,
-            reversal,
-            actor=actor,
-            decision="approved",
-            reason=reason,
-        )
-    item.resolution = {
-        "action": new_action,
-        "actor": actor,
-        "reason": reason,
-        "overturned_from": prev,
-        "at": utcnow().isoformat(),
-    }
+    session.add(reversal)
     session.flush()
-    return change_set
+    predicate = (item.subject or {}).get("predicate") or adopted.predicate
+    overturn_item, _created = ensure_review_item(
+        session,
+        scope=scope,
+        review_key=overturn_key,
+        type_="overturn",
+        subject={
+            "change_item_id": reversal.id,
+            "new_claim_id": reversal.claim_id,
+            "predicate": predicate,
+            "product_version_id": adopted.product_version_id,
+            "change_set_id": change_set.id,
+            "overturn_of_review": review_key,
+            "prev_action": prev,
+            "requested_action": new_action,
+            "overturn_reason": reason,
+            "requested_by": actor,
+        },
+        risk_level="high",  # 翻案推翻已决事实：一律单条人审，不进批量
+    )
+    session.flush()
+    return change_set, overturn_item, True
+
+
+def _apply_overturn(
+    session: Session,
+    scope: KnowledgeScope,
+    item: ChangeItem,
+    *,
+    actor: str,
+    reason: str | None,
+) -> None:
+    """两阶段翻案第二步（approve 翻案审核项时）：执行 K3.5 的反向/正向应用并留痕。"""
+    item = _require_scoped_change_item(session, scope, item)
+    overturn_mode = item.proposed.get("overturn_mode")
+    change_set = _require_scoped_change_set(session, scope, item.change_set_id)
+    if overturn_mode == "overturn_reject":
+        adopted = _require_scoped_claim(
+            session, scope, str(item.proposed["adopted_claim_id"])
+        )
+        if adopted.status != "published":
+            raise MergeError(
+                f"翻案目标已非 published（当前 {adopted.status}），事实已变化，请刷新"
+            )
+        _retract_claim(
+            session, adopted, change_item_id=item.id, actor=actor,
+            reason=reason or "翻案撤回",
+        )
+        restore_id = item.proposed.get("restore_claim_id")
+        if restore_id:
+            old = _require_scoped_claim(session, scope, str(restore_id))
+            if old.status == "superseded" and old.superseded_by == adopted.id:
+                before = _snapshot(old)
+                old.status = "published"
+                old.superseded_by = None
+                _write_revision(
+                    session, old, before=before, change_item_id=item.id,
+                    actor=actor, reason=f"翻案恢复：{reason}",
+                )
+        item.decision = "approved"
+        item.decision_basis = {
+            **(item.decision_basis or {}),
+            "reviewer": actor,
+            "review_reason": reason,
+        }
+        change_set.status = "applied"
+        session.flush()
+        return
+    if overturn_mode != "overturn_approve":
+        raise _scope_mismatch()
+    if item.claim_id:
+        candidate = _require_scoped_claim(session, scope, item.claim_id)
+        if candidate.status == "retracted":
+            before = _snapshot(candidate)
+            candidate.status = "candidate"
+            _write_revision(
+                session, candidate, before=before, change_item_id=item.id,
+                actor=actor, reason=f"翻案恢复候选：{reason}",
+            )
+    apply_change_item(
+        session, scope, item, actor=actor, decision="approved", reason=reason
+    )
+    change_set.status = "applied"
+    session.flush()
+
+
+def _reject_overturn(
+    session: Session,
+    scope: KnowledgeScope,
+    item: ChangeItem,
+    *,
+    actor: str,
+    reason: str | None,
+) -> None:
+    """翻案审核项被 reject：当前事实一律不动，只终结复议请求本身。"""
+    item = _require_scoped_change_item(session, scope, item)
+    change_set = _require_scoped_change_set(session, scope, item.change_set_id)
+    item.decision = "rejected"
+    item.decision_basis = {
+        **(item.decision_basis or {}),
+        "reviewer": actor,
+        "review_reason": reason,
+    }
+    change_set.status = "rejected"
+    session.flush()
 
 
 # ------------------------------------------------------------------ ④ claude-session 队列

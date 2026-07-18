@@ -67,6 +67,35 @@ uv run python -m insurance_harness.product.cli register-products \
   ../dataset/shouxian_product --space-id "$HARNESS_SPACE_ID"
 ```
 
+### 3.4 审核工作台启动（change 008，T1~T5/T7 波次）
+
+```bash
+# 1) 配置 token→(principal + 允许 Space 集合)：未配置=启动失败（fail-closed）
+export HARNESS_WORKBENCH_TOKENS_JSON='{"<随机token>": {"principal": "审核人甲", "space_ids": ["'$HARNESS_SPACE_ID'"]}}'
+# 2)（可选）显式指定 schema 基线目录；缺省时在仓库根/harness 目录下启动即可自动发现
+# export HARNESS_WORKBENCH_SCHEMA_BASELINE_DIR=docs/insurance-kb/schema-baseline
+# 3)（可选）会话签名密钥：不配则进程内随机（单进程可用；重启即全员重新登录）
+# export HARNESS_WORKBENCH_SESSION_SECRET=<随机长串，勿入库>
+# 4) 起服（loopback；生产置于内网反代之后。uvicorn 为声明依赖，uv sync --locked 后即有）
+uv run uvicorn --factory --host 127.0.0.1 --port 8090 \
+  insurance_harness.workbench.app:create_app_from_settings
+```
+
+`create_app_from_settings` 读取 `HARNESS_DB_URL` / `HARNESS_WORKBENCH_TOKENS_JSON` /
+schema 基线目录，**任一缺失/损坏启动即失败**（不吞错、不降级）。CI 的 `wheel-smoke`
+job 持续证明 wheel 装进空 venv 后模板与 HTMX 静态资源随包可用。
+
+使用方式两条通道：
+
+- **浏览器**：访问 `http://127.0.0.1:8090/login`，粘贴 token 登录（签发短期 HttpOnly
+  会话 cookie，内含 token 摘要而非明文；写操作带 CSRF 双提交防护）→ 首页列出可访问
+  Space。页面：`/spaces/<space>/queue`（审核队列：筛选/分页/approve/reject/defer/
+  批量/翻案入口）、`/spaces/<space>/changes`（冲突与变更+翻案）、`/spaces/<space>/timeline`
+  （G8 变更流）、`/spaces/<space>/matrix`（产品×schema 全字段五态格+下钻+缺口 CSV/JSONL 导出）。
+- **自动化**：直接带 `Authorization: Bearer <token>` 调页面/动作端点，无需登录与 CSRF。
+
+**W4 发布/回滚页：018 已合入 main（依赖解锁），以独立 follow-up PR 交付（跟踪：008 tasks.md T6）。**
+
 ## 4. 联调验收路径（按序，每步都有断言）
 
 | 步 | 动作 | 断言 |
@@ -83,7 +112,7 @@ L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验�
 ## 5. integration / live 契约测试约定
 
 - deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
-- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；缺 `HARNESS_TEST_POSTGRES_URL` 时测试失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
+- PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 017 source 并发、018 service-owned Session 与 008 工作台双会话并发三个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
 - WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
 - **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
 - 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。
@@ -112,7 +141,26 @@ cd harness && .venv/bin/pytest tests/test_source_bridge_live_017.py -m live -q -
 
 本地调试缺少变量时用例可 `pytest.skip` 并逐项列出缺失变量；受控 workflow 的 preflight 则必须失败且只输出缺失变量名，不得回显值。不得用 respx/mock、Directory source、SQLite 或 PostgreSQL service job 代替 WeKnora live 证据。API key 不写入日志、断言或测试产物。
 
-### 5.2 OpenSpec 023：本机真实环境与受信 exact-SHA gate
+### 5.2 OpenSpec 018：PostgreSQL Session 隔离与真实发布/回滚
+
+018 的 PostgreSQL integration 节点为：
+
+```bash
+cd harness
+uv run pytest tests/test_release_publisher_postgres_018.py -m integration_postgres -q -rs
+```
+
+用例在随机 schema 内建立完整 Harness 表，caller Session 先 `flush` 一条未提交业务写，再调用只接收 `SessionFactory` 的 `ReleasePublisher`。验收要求是 saga 成功提交 release pointer，而 caller rollback 后该业务写不存在；这条证据不能由 SQLite 或函数签名检查替代。用例创建/删除随机 schema，CI 数据库账号必须具备 `CREATE/DROP SCHEMA` 权限。
+
+018 的真实 WeKnora 节点为：
+
+```bash
+cd harness
+uv run pytest tests/test_release_snapshot_live_018.py -m live -q -rs
+```
+
+用例使用 `HARNESS_LIVE_DB_URL` 的随机 PostgreSQL schema 建立隔离 Space，并绑定真实 `HARNESS_LIVE_KB_ID`，执行完整 Space V1→V2→rollback V1；同时核对 SnapshotReader 的 V1 值/Evidence、远端 `managed_by/space_id/snapshot_id` 与回滚页面内容。退出时删除随机 Wiki 页并 `DROP SCHEMA ... CASCADE`；数据库账号同样需要 schema 权限。缺受控变量时本地结果只能记录 `NOT RUN`，正式 `live verified` 仍只认 `harness-live` environment 的 run URL、commit SHA、时间与零 skip JUnit。
+### 5.3 OpenSpec 023：本机真实环境与受信 exact-SHA gate
 
 023 取代本章 §2/§3.2 中尚未自动化的本机初始化步骤。所有命令从仓库根目录执行；填值文件与生成的 runtime 文件都必须保持 mode `0600`，不得提交。
 
@@ -125,12 +173,15 @@ harness/.venv/bin/python harness/scripts/local_live.py up
 harness/.venv/bin/python harness/scripts/local_live.py provision \
   --pdf 'dataset/shouxian_product/平安创享盛世金越（尊享版26）终身寿险（分红型）/产品说明书.pdf'
 harness/.venv/bin/python harness/scripts/local_live.py verify
+harness/.venv/bin/python harness/scripts/local_live.py smoke-vlm
 harness/.venv/bin/python harness/scripts/local_live.py run-local
 ```
 
-四个模型角色必须分别探测成功，且 `provision` 会在任何资源 mutation 前再次探测。Harness extraction 使用独立的百炼 OpenAI-compatible profile；切换 `HARNESS_LLM_BASE_URL/API_KEY/MODEL_WEAK` 不改变 WeKnora 三角色、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
+五个配置角色必须分别探测成功：WeKnora Chat/Embedding/ReRank/VLLM 四模型，加上 Harness extraction。`provision` 会在任何资源 mutation 前再次探测；切换 extraction profile 不改变 WeKnora 四模型、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
 
-`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、三模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、四模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+
+`smoke-vlm` 只对 visual canary 显式启用 VLM；普通 PDF 仍走文本解析。失败、取消、`incomplete`、`pending` 或 `processing` 都会保留 sanitized evidence JSON 并以非零退出；只有字面终态 `failed`、`cancelled`、`incomplete` 可由操作员执行一次 `retry-vlm --knowledge-id <id>`。`pending`/`processing` 不得 reparse，以免与在途解析竞态。retry marker 在 API 请求前以 mode `0600`、`O_EXCL` 持久化；若进程在 marker 成功后、请求结果确认前退出，该状态与“请求已发出但响应丢失”不可区分，因此不得自动删除 marker 或再次 reparse，应按 knowledge ID 和 WeKnora attempt 做人工事故核对。
 
 只有 023 workflow 已合入 `main`、本机 `run-local` 五节点 `tests=5 skipped=0 failures=0 errors=0`，且目标 PR 是 open same-repository PR 时，才允许发起 GitHub gate：
 

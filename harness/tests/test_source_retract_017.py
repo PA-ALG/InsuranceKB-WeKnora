@@ -161,6 +161,9 @@ def test_t7_source_aware_retract_is_scoped_deletes_all_target_evidence_and_prese
         space_id=scope_a.space_id,
         label="release-before-retract",
         rendered_pages=rendered_pages,
+        status="published",
+        read_model_version=1,
+        projection_frozen_at=NOW,
         published_at=NOW,
         published_by="publisher",
     )

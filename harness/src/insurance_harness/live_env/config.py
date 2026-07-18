@@ -11,17 +11,31 @@ _ROLE_PREFIXES = (
     "LOCAL_LIVE_WEKNORA_CHAT",
     "LOCAL_LIVE_WEKNORA_EMBEDDING",
     "LOCAL_LIVE_WEKNORA_RERANK",
+    "LOCAL_LIVE_WEKNORA_VLLM",
+)
+_ROLE_PROTOCOLS = {
+    "LOCAL_LIVE_WEKNORA_CHAT": "openai_compatible",
+    "LOCAL_LIVE_WEKNORA_EMBEDDING": "openai_compatible",
+    "LOCAL_LIVE_WEKNORA_RERANK": "dashscope_native",
+    "LOCAL_LIVE_WEKNORA_VLLM": "openai_compatible",
+    "HARNESS_LLM": "openai_compatible",
+}
+DASHSCOPE_RERANK_ENDPOINT = (
+    "https://dashscope.aliyuncs.com/api/v1/services/"
+    "rerank/text-rerank/text-rerank"
 )
 _REQUIRED_KEYS = frozenset(
     {
         *(
             f"{prefix}_{suffix}"
             for prefix in _ROLE_PREFIXES
-            for suffix in ("BASE_URL", "API_KEY", "MODEL")
+            for suffix in ("BASE_URL", "API_KEY", "MODEL", "PROVIDER", "PROTOCOL")
         ),
         "HARNESS_LLM_BASE_URL",
         "HARNESS_LLM_API_KEY",
         "HARNESS_LLM_MODEL_WEAK",
+        "HARNESS_LLM_PROVIDER",
+        "HARNESS_LLM_PROTOCOL",
     }
 )
 _SENSITIVE_SUFFIXES = ("_API_KEY", "_TOKEN", "_PASSWORD", "_SECRET")
@@ -32,6 +46,8 @@ class ModelProfile:
     base_url: str = field(repr=False)
     api_key: SecretStr
     model: str
+    provider: str
+    protocol: str
 
 
 @dataclass(frozen=True)
@@ -39,6 +55,7 @@ class LocalLiveConfig:
     weknora_chat: ModelProfile
     weknora_embedding: ModelProfile
     weknora_rerank: ModelProfile
+    weknora_vllm: ModelProfile
     extraction: ModelProfile
 
 
@@ -60,13 +77,32 @@ def _values(path: Path) -> dict[str, str]:
     return values
 
 
-def _profile(values: dict[str, str], prefix: str) -> ModelProfile:
+def _profile(
+    values: dict[str, str],
+    prefix: str,
+    *,
+    model_suffix: str = "MODEL",
+) -> ModelProfile:
     base_url_key = f"{prefix}_BASE_URL"
     base_url = _validated_base_url(base_url_key, values[base_url_key])
+    provider_key = f"{prefix}_PROVIDER"
+    provider = values[provider_key]
+    if provider != "aliyun":
+        raise ValueError(f"{provider_key} is invalid")
+    protocol_key = f"{prefix}_PROTOCOL"
+    protocol = values[protocol_key]
+    if protocol != _ROLE_PROTOCOLS[prefix]:
+        raise ValueError(f"{protocol_key} is invalid")
+    if prefix == "LOCAL_LIVE_WEKNORA_RERANK" and (
+        base_url != DASHSCOPE_RERANK_ENDPOINT
+    ):
+        raise ValueError(f"{base_url_key} is invalid")
     return ModelProfile(
         base_url=base_url,
         api_key=SecretStr(values[f"{prefix}_API_KEY"]),
-        model=values[f"{prefix}_MODEL"],
+        model=values[f"{prefix}_{model_suffix}"],
+        provider=provider,
+        protocol=protocol,
     )
 
 
@@ -100,16 +136,10 @@ def load_local_live_config(path: Path) -> LocalLiveConfig:
     empty = sorted(key for key in _REQUIRED_KEYS if not values.get(key, "").strip())
     if empty:
         raise ValueError(f"EMPTY required setting: {empty[0]}")
-    extraction_base_url = _validated_base_url(
-        "HARNESS_LLM_BASE_URL", values["HARNESS_LLM_BASE_URL"]
-    )
     return LocalLiveConfig(
         weknora_chat=_profile(values, "LOCAL_LIVE_WEKNORA_CHAT"),
         weknora_embedding=_profile(values, "LOCAL_LIVE_WEKNORA_EMBEDDING"),
         weknora_rerank=_profile(values, "LOCAL_LIVE_WEKNORA_RERANK"),
-        extraction=ModelProfile(
-            base_url=extraction_base_url,
-            api_key=SecretStr(values["HARNESS_LLM_API_KEY"]),
-            model=values["HARNESS_LLM_MODEL_WEAK"],
-        ),
+        weknora_vllm=_profile(values, "LOCAL_LIVE_WEKNORA_VLLM"),
+        extraction=_profile(values, "HARNESS_LLM", model_suffix="MODEL_WEAK"),
     )

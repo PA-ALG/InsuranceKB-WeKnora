@@ -137,6 +137,12 @@ class WeKnoraWikiPage(_LenientModel):
     page_metadata: dict[str, Any] | None = None
     version: int = 1
 
+    @field_validator("in_links", "out_links", mode="before")
+    @classmethod
+    def normalize_null_links(cls, value: object) -> object:
+        """WeKnora serializes an empty link relation as either null or []."""
+        return [] if value is None else value
+
 
 class WeKnoraWikiFolder(_LenientModel):
     id: str = ""
