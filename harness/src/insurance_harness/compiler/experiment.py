@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .variants import VariantRegistry
 
@@ -37,6 +37,13 @@ class AssignmentPolicy(BaseModel):
     enabled: bool = False
     experiment_id: str = ""
     seed: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _require_named_experiment(self) -> AssignmentPolicy:
+        # fail-closed（codex R2 P2）：匿名实验会让分桶身份不可解释
+        if self.enabled and not self.experiment_id.strip():
+            raise ValueError("enabled=True 时 experiment_id 不得为空白")
+        return self
 
 
 def assign_arm(

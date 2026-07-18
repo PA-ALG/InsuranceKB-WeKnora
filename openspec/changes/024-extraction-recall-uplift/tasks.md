@@ -7,7 +7,7 @@
 - [x] T2 prompt 变体机制：注册表 + 确定性选择 + **版本化**审计标识 + 默认回落零漂移（E2；`compiler/variants.py`，gapfill 三条返回路径盖 `metadata["prompt_variant"]`）
 - [x] T3 定向补漏：**schema 驱动触发**（触发器/组装签名审计不含金标）+ evidence 回验与反幻觉回归（E3；`build_targeted_gapfill_user` 短答形态，16 个工单字段精确注册）
 - [x] T4 值粒度字段级指引并入变体（E4；`GRANULARITY_GUIDANCE` 挂 10 个长文本工单字段，prompt 快照断言 + 契约零改动）
-- [x] T5 后处理非退化合同：冻结录制集回放评分下界断言进 deterministic 门禁（E5；`tests/test_recall_probe_024.py`——9 条冻结录制覆盖全后处理分支 + request_key/manifest/control 变体三重钉桩）
+- [x] T5 后处理非退化合同：冻结录制集回放评分下界断言进 deterministic 门禁（E5；`tests/test_recall_probe_024.py`——9 条冻结录制覆盖全后处理分支 + request_key/manifest/control 变体三重钉桩）（**R2 修订：交付=synthetic 机制合同探针；『同录制集非退化』未完成、已作为任务落入 020 D4**）
 - [x] T6 弱值/兼容性护栏：WEAK_UNACTIONABLE+REFERENCE_ONLY 两族入 cleaning + 字段-值兼容性校验 + Q012/Q026 历史 bug 用例（E6；占位清洗零漂移由全量回归实证）
 - [x] T7 收尾：validation-report（工单状态表 + 非退化结果 + 变体版本清单 + "真实召回结论留待 020 D4"显式声明，E5）→ HANDOFF 更新 → 020 D4 A/B 交接说明（按变体版本对账）
 
@@ -25,7 +25,7 @@
 9. **Gauntlet 返工（2026-07-17）**：独立 fresh-eyes 红队 + 真金标 live 复现抓到 7 项已修（详表见 validation-report §7）。**最严重 F1/F2**：compat 护栏用真金标复现误杀 `保证续保期="20年"`、`费用="…提前退保影响…"`——"召回提升"改动本会净召回回归。根因=只测拒绝侧（Q012 命中）、无接受侧（真金标不被误杀）。修法：规则按判别式收紧（`field_not`/`value_not`/退保损失签名）+ **新增 goldenset 全集"误杀防线"**（`test_recall_accept_side_024.py`）；拒绝侧 Q012 三案仍全绿。F5 探针绑定真实调用路径、F6 gapfill 拒绝原因可审计、F7 变体标识全覆盖（见 #4）。probe_fee 拒绝原因升级触发 manifest 有意重钉。**教训**：护栏与召回是成对约束；半个护栏（只拒绝侧）比没有更危险，因它伪装成"已防护"。
 
 约束：文件域仅 compiler/ + tests；不调真实模型；不动 cleaning 白名单既有语义/尺子/knowledge/；金标只出现在测试评分；送审前过 21 号自测 gauntlet。
-状态：**T1~T7 全部完成 + gauntlet 返工闭合**，门禁全绿（ruff / mypy 187 files / deterministic **1326 passed** 零破坏）；待 PR 双查（Owner=B 域）。依赖：004/005 已合入。
+状态：**T1~T7 完成（其中 E5 非退化部分让渡 020 D4，见 T5 注记；synthetic 探针=机制合同） + gauntlet 返工闭合**，门禁全绿（ruff / mypy 187 files / deterministic **1326 passed** 零破坏）；待 PR 双查（Owner=B 域）。依赖：004/005 已合入。
 
 ## codex PR#13 复审返工（2026-07-18，6 项发现全部核实属实并闭合；rebase main@dbc073c1）
 
@@ -36,3 +36,10 @@
 5. **变体不入身份（High5）**：`experiment_digest` 进 RunManifest/`_RunIdentity`/PipelineState；旧 checkpoint 缺摘要→身份解析 fail-closed（测试钉死）；注册表内容变化=新摘要。
 6. **E5 synthetic 不能证明非退化（High6）**：探针测试改名 `test_e5_mechanism_*` 并在 docstring 声明证明力=后处理机制合同（fixture 与期望同批定义、无 before 可比）；**E5「同录制集非退化」显式让渡 020 D4 differential replay**，validation-report 同步。
 7. 错误语义断言替换：`test_recall_audit_024` 三条 merge 盖章断言改为"merge 不得冒充标签 + gapfill 记实际所用与臂"。
+
+## codex R2 终审返工（2026-07-18，4 项全部属实并闭合）
+
+1. **预算硬上限（P1）**：permit 移到真实调用边界（`BudgetedClient` 每次出站 `complete()` 原子取 1，含 parse/transport retry）；`gapfill_max_calls ge=0`（0=合法零预算）；无候选零额度；已用量入 `PipelineState.gapfill_calls_used` 经 checkpoint 跨批次/resume 累计。6 组验收反例（top_n 放大/并发共享/重试/无候选/零预算/续传不复活）。
+2. **attempt 链审计（P1）**：`ExtractionAudit` 增 `attempts[]`（extract/extract_retry/vote/judge/gapfill 各真实调用点追加，含 request_key）+ `winning_attempt_id`；vote 多数改写→指向胜出采样、仅确证→保留原产生者；judge 改写→指向 judge attempt；fastpath winning=null；`prompt_variant_used` 由 winner 派生（stage 消歧），继承歧义消除。
+3. **E5 一致性（P1）**：spec E5 条款改写为机制合同+显式让渡（Scenario 同步）；proposal/tasks/validation-report/HANDOFF/PR body 全链对齐；020 tasks 增 D4 differential replay 未完成任务；不再存在"E5 SHALL 未满足"与"全完成"并立。
+4. **fail-closed 配置（P2）**：`AssignmentPolicy(enabled=True)` 强制非空白 experiment_id；`_parse_requiredness` 仅键缺失/空白默认 expected，非法值带文件+字段抛 `SchemaLoadError`。

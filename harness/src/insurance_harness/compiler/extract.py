@@ -18,10 +18,15 @@ from ..goldenset.records import Evidence, TriState
 from ..schemas import FieldSpec
 from .cleaning import clean_value
 from .compat import check_field_value
-from .llm import ModelClient, TruncatedOutputError
+from .llm import ModelClient, TruncatedOutputError, request_key
 from .models import FieldCandidate, UnknownReason
 from .parsing import extract_json_array
-from .prompts import EXTRACTION_SYSTEM, PARSE_RETRY_SUFFIX, build_extraction_user
+from .prompts import (
+    EXTRACTION_SYSTEM,
+    PARSE_RETRY_SUFFIX,
+    PROMPT_VERSION,
+    build_extraction_user,
+)
 from .routing_data import group_of_field
 from .verification import all_quotes_verified
 
@@ -53,14 +58,39 @@ async def with_transport_retry[T](
 
 
 async def call_and_parse(
-    client: ModelClient, system: str, user: str
+    client: ModelClient,
+    system: str,
+    user: str,
+    *,
+    attempt_log: list[dict[str, Any]] | None = None,
+    stage: str = "",
+    prompt_version: str = "",
 ) -> list[dict[str, Any]] | None:
-    """一次调用 + 对抗性解析；解析失败带反馈重试 1 次（E3.1）。"""
+    """一次调用 + 对抗性解析；解析失败带反馈重试 1 次（E3.1）。
+
+    E7 R2：``attempt_log`` 非空时，每次真实出站 complete() 追加一条 attempt
+    （含 parse retry——它也是一次出站调用、也计预算）。"""
+    key = request_key(system, user)
     raw = await client.complete(system, user)
     parsed = extract_json_array(raw)
+    if attempt_log is not None:
+        attempt_log.append({
+            "attempt_id": f"{stage}:{key[:12]}",
+            "stage": stage, "prompt_version": prompt_version,
+            "request_key": key,
+            "outcome": "parsed" if parsed is not None else "parse_failed",
+        })
     if parsed is None:
+        key2 = request_key(system, user + PARSE_RETRY_SUFFIX)
         raw = await client.complete(system, user + PARSE_RETRY_SUFFIX)
         parsed = extract_json_array(raw)
+        if attempt_log is not None:
+            attempt_log.append({
+                "attempt_id": f"{stage}_retry:{key2[:12]}",
+                "stage": f"{stage}_retry", "prompt_version": prompt_version,
+                "request_key": key2,
+                "outcome": "parsed" if parsed is not None else "parse_failed",
+            })
     return parsed
 
 
@@ -215,9 +245,17 @@ class WindowExtractor:
         self, window: Window, batch: Sequence[FieldSpec]
     ) -> list[FieldCandidate]:
         user = build_extraction_user(self._product, self._doc, batch, window.fragments)
-        parsed = await call_and_parse(self._client, EXTRACTION_SYSTEM, user)
+        attempt_log: list[dict[str, Any]] = []
+        parsed = await call_and_parse(
+            self._client, EXTRACTION_SYSTEM, user,
+            attempt_log=attempt_log, stage="extract",
+            prompt_version=f"baseline@{PROMPT_VERSION}",
+        )
         if parsed is None:  # 解析重试仍失败：该批全部 unknown+原因（E3.1）
-            return [_unknown(f, self._doc, "parse_failed") for f in batch]
+            failed_batch = [_unknown(f, self._doc, "parse_failed") for f in batch]
+            for fb in failed_batch:
+                fb.metadata["attempts"] = list(attempt_log)
+            return failed_batch
 
         by_id = {str(item.get("field_id")): item for item in parsed}
         results: dict[str, FieldCandidate] = {}
@@ -242,7 +280,11 @@ class WindowExtractor:
             user2 = build_extraction_user(
                 self._product, self._doc, retry_fields, window.fragments, feedback=feedback
             )
-            parsed2 = await call_and_parse(self._client, EXTRACTION_SYSTEM, user2)
+            parsed2 = await call_and_parse(
+                self._client, EXTRACTION_SYSTEM, user2,
+                attempt_log=attempt_log, stage="extract",
+                prompt_version=f"baseline@{PROMPT_VERSION}",
+            )
             by_id2 = {str(i.get("field_id")): i for i in parsed2 or []}
             for f, first_err in rejects:
                 reason: UnknownReason = (
@@ -264,7 +306,13 @@ class WindowExtractor:
                         e.model_dump() for e in cand2.evidence
                     ]
                     results[f.field_id] = failed
-        # E7（codex PR#13 阻断2）：首轮走 baseline extraction prompt——不再按注册表
-        # membership 盖变体标签（那不是"实际使用"）；实际使用标识由 _to_pred 按
-        # origin 如实落 baseline@…，gapfill/fastpath 在各自产生处记录。
+        # E7 R2：批内每个候选挂本批 attempt 链；产出值的候选 winning 指向
+        # 产生它的最后一次 extract attempt（打回重抽成功=第二条）。
+        for f in batch:
+            out_cand = results[f.field_id]
+            out_cand.metadata["attempts"] = list(attempt_log)
+            if attempt_log and out_cand.tri_state != "unknown":
+                out_cand.metadata.setdefault(
+                    "winning_attempt_id", attempt_log[-1]["attempt_id"]
+                )
         return [results[f.field_id] for f in batch]

@@ -177,6 +177,7 @@ async def gapfill_field(
 
     keywords = gapfill_keywords(field)
     compat_reject_reason: str | None = None  # E6.3：补漏路径的兼容性拒绝原因（可审计）
+    attempt_log: list[dict[str, object]] = []
     for doc, sec in candidates:
         if variant.targeted_template == TARGETED_SHORT_ANSWER:
             user = build_targeted_gapfill_user(
@@ -185,7 +186,12 @@ async def gapfill_field(
             )
         else:  # 未注册字段：既有组装零漂移（E2.3）
             user = build_gapfill_user(product_name, doc, field, sec.fragments, keywords)
-        parsed = await call_and_parse(client, GAPFILL_SYSTEM, user)
+        before = len(attempt_log)
+        parsed = await call_and_parse(
+            client, GAPFILL_SYSTEM, user,
+            attempt_log=attempt_log,
+            stage="gapfill", prompt_version=_used_version(variant),
+        )
         if not parsed:
             continue  # 解析失败视作该段无线索，换下一个候选段落
         item = next(
@@ -206,6 +212,8 @@ async def gapfill_field(
         if not all_quotes_verified(cand.evidence, pages_by_doc.get(doc, ())):
             continue  # 未验证引文不得出场（E3.2），当作无线索处理
         out = cand.model_copy(update={"origin": "gapfill", "confidence": "medium"})
+        out.metadata["attempts"] = list(attempt_log)
+        out.metadata["winning_attempt_id"] = attempt_log[before]["attempt_id"]
         return _stamp_variant(out, variant, arm, pointer_terms)
 
     if compat_reject_reason is not None:
@@ -213,7 +221,8 @@ async def gapfill_field(
         # 不得笼统记 not_found（gauntlet F6：补漏路径拒绝原因此前丢失）。
         rejected = _unknown(field, doc="", reason="incompatible_value")
         rejected.metadata["compat_reject"] = compat_reject_reason
+        rejected.metadata["attempts"] = list(attempt_log)
         return _stamp_variant(rejected, variant, arm, pointer_terms)
-    return _stamp_variant(
-        _unknown(field, doc="", reason="not_found"), variant, arm, pointer_terms
-    )
+    missed = _unknown(field, doc="", reason="not_found")
+    missed.metadata["attempts"] = list(attempt_log)
+    return _stamp_variant(missed, variant, arm, pointer_terms)

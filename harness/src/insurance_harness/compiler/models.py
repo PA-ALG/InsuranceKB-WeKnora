@@ -150,6 +150,18 @@ class DocPayload(BaseModel):
     family_id: str = ""
 
 
+class AuditAttempt(BaseModel):
+    """一次真实出站 LLM 调用（E7 attempt 链）：在调用点追加，随 pred 持久化。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    attempt_id: str
+    stage: str  # extract / extract_retry / vote / judge / gapfill
+    prompt_version: str
+    request_key: str
+    outcome: str  # parsed / parse_failed / no_value …
+
+
 class ExtractionAudit(BaseModel):
     """024 E7：单条 pred 的抽取审计（随 pred.jsonl 持久化，020 D4 A/B 对账的唯一依据）。
 
@@ -166,6 +178,11 @@ class ExtractionAudit(BaseModel):
     prompt_variant_used: str
     variant_assignment: str | None = None
     winning_origin: str = "extract"
+    # E7 R2：attempt 链——每次真实出站调用一条；winning_attempt_id 指向真正产生
+    # 最终值的 attempt（fastpath 等非 LLM 来源为 None）。prompt_variant_used 由
+    # winning attempt 派生（无 winner 时 fastpath/baseline 兜底），不再有继承歧义。
+    attempts: tuple[AuditAttempt, ...] = ()
+    winning_attempt_id: str | None = None
     compat_reject: str | None = None
     pointer_terms: tuple[str, ...] = ()
 

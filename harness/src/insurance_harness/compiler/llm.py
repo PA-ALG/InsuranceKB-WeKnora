@@ -178,3 +178,41 @@ class LiteLLMClient:
             ],
         )
         return cast(str, resp.choices[0].message.content or "")
+
+
+class GapfillBudgetExhausted(RuntimeError):
+    """024 E3 R2：补漏预算耗尽——出站前拒绝，绝不发请求。"""
+
+
+class GapfillCallBudget:
+    """运行级补漏调用预算：**每次出站 complete() 前**原子取 1 permit（含 parse
+    retry 与 transport retry 的每次真实出站）。单事件循环内 acquire 无 await，
+    检查+扣减天然原子；``used`` 由管道写回 checkpoint state 跨批次/resume 累计。
+    ``limit=None``=不限。"""
+
+    def __init__(self, limit: int | None, *, used: int = 0) -> None:
+        self.limit = limit
+        self.used = used
+
+    @property
+    def remaining(self) -> int | None:
+        if self.limit is None:
+            return None
+        return max(0, self.limit - self.used)
+
+    def acquire(self) -> None:
+        if self.limit is not None and self.used >= self.limit:
+            raise GapfillBudgetExhausted("gapfill 调用预算耗尽")
+        self.used += 1
+
+
+class BudgetedClient:
+    """把预算硬上限落到真实调用边界的包装（codex PR#13 R2 P1）。"""
+
+    def __init__(self, inner: ModelClient, budget: GapfillCallBudget) -> None:
+        self._inner = inner
+        self._budget = budget
+
+    async def complete(self, system: str, user: str) -> str:
+        self._budget.acquire()  # 余额为 0 → 异常，不出站
+        return await self._inner.complete(system, user)

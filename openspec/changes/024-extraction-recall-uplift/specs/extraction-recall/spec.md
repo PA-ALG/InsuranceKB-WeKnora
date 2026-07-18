@@ -35,7 +35,7 @@
 
 ### Requirement: E3 定向补漏的触发必须 schema 驱动且不降低反幻觉门槛
 
-第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望（`FieldSpec.requiredness ∈ {required, expected}`——基线 Excel 无显式必填列时默认 expected，YAML 提供『必填』/requiredness 列时按列解析），首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节（检索无候选=零 LLM 调用），且预算允许（运行级补漏调用上限，配置注入，并发下原子扣减）。首轮 `source_pointer` 的解析词条 SHALL 参与补漏检索（被指向正文不含字段名也能命中）并入审计。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
+第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望（`FieldSpec.requiredness ∈ {required, expected}`——基线 Excel 无显式必填列时默认 expected，YAML 提供『必填』/requiredness 列时按列解析），首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节（检索无候选=零 LLM 调用），且预算允许（运行级补漏预算，单位=**真实出站 `ModelClient.complete` 请求**——解析重试与传输重试的每次出站均计费；permit 在调用边界原子获取，余额为 0 不得出站；`gapfill_max_calls` 允许 0=合法零预算；已用量随 checkpoint state 跨批次/resume 累计，不得重置）。首轮 `source_pointer` 的解析词条 SHALL 参与补漏检索（被指向正文不含字段名也能命中）并入审计。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
 
 #### Scenario: schema 驱动触发（无金标参与）
 
@@ -57,15 +57,20 @@
 - **WHEN** 值粒度缺口字段经带指引的变体组装 prompt
 - **THEN** prompt 快照含该指引与变体版本标识，pred schema 与 eval 尺子文件零改动
 
-### Requirement: E5 回归合同——同录制集后处理非退化，禁止暗示真实提升
+### Requirement: E5 回归合同——后处理机制合同 + 非退化让渡 020 D4（R2 修订）
 
-在**未变更的既有录制响应集**上，清洗/兼容性/解析/编排的任何改动 SHALL 不使产出退化（3 基线产品既有回放评分不下降，作为后处理非退化断言进 deterministic 门禁）；prompt 变更导致 request_key 变化时，SHALL NOT 以人工新 fixture 的分数与旧分数对比作为改善证据。SHALL NOT 修改 cleaning 白名单既有语义、knowledge/、goldenset/、adapters/；routing 关键词补充须附压缩比不退化证据。validation-report SHALL 给出工单总数/机制覆盖数/未覆盖原因、非退化断言结果与 prompt 变体版本清单，SHALL NOT 宣称或暗示真实分数提升（真实提升由 020 D4 数据说话）。
+本仓库不存在改动前的真实历史录制（005 基线为实跑未入库），"同录制集非退化"在本 change 内**不可证明且 SHALL NOT 宣称**；本 change 交付的是 **synthetic 后处理机制合同探针**（冻结 fixture 上清洗/兼容/解析/编排的确定性行为 + 三重钉桩防静默换基线），真实非退化 SHALL 由 020 D4 以 differential replay（同一 raw responses 对 base/PR SHA 重放比分）建立——该未完成任务已登记进 020 tasks；prompt 变更导致 request_key 变化时，SHALL NOT 以人工新 fixture 的分数与旧分数对比作为改善证据。SHALL NOT 修改 cleaning 白名单既有语义、knowledge/、goldenset/、adapters/；routing 关键词补充须附压缩比不退化证据。validation-report SHALL 给出工单总数/机制覆盖数/未覆盖原因、非退化断言结果与 prompt 变体版本清单，SHALL NOT 宣称或暗示真实分数提升（真实提升由 020 D4 数据说话）。
 
-#### Scenario: 同录制集非退化
+#### Scenario: synthetic 机制合同探针（非"非退化证据"）
 
-- **WHEN** 本 change 全部改动落地后，在未变更的既有录制集上重跑回放评分
-- **THEN** 每产品分数 ≥ 改动前（下界断言失败即门禁失败）
-- **AND** 该探针钉住两个前置并在用例内断言：使用 control/default prompt 变体（非新变体）+ fixture manifest 内容哈希与基线一致（manifest 变化即探针失效并 fail，不得静默换基线）
+- **WHEN** 本 change 全部改动落地后，在冻结 synthetic fixture 上重跑后处理探针
+- **THEN** 探针（`test_e5_mechanism_*`）断言确定性后处理合同成立，其 docstring 显式声明证明力边界（fixture 与期望同批定义、无 before 可比）
+- **AND** 三重钉桩仍生效：control/default 变体 + request_key + manifest 内容哈希（任何漂移即 fail，不得静默换基线）
+
+#### Scenario: 真实非退化显式让渡
+
+- **WHEN** 需要"改动前后同录制集分数不下降"的真实证据
+- **THEN** 由 020 D4 differential replay 提供（其 tasks 已含该项）；本 change 的任何报告 SHALL NOT 以 synthetic 探针分数冒充该证据
 
 #### Scenario: 报告不得暗示提升
 
@@ -95,7 +100,7 @@ cleaning SHALL 增补 `WEAK_UNACTIONABLE`（"以合同为准/按合同约定/需
 
 ### Requirement: E7 实验归属、实际使用与审计必须进入最终 pred 产物（codex PR#13 裁决）
 
-三个概念 SHALL 分离且全部持久化：**variant_assignment**（运行前基于 experiment_id+seed+product+field 对同一 eligible population 确定性分桶 control/treatment；实验关闭为空；control 臂强制默认补漏模板）、**prompt_variant_used**（每条 pred 实际经过的模板标识——baseline/fastpath/default@v1/targeted@vN；注册表 membership SHALL NOT 冒充实际使用）、**winning_origin**（产生最终值的路径）。pred SHALL 携带类型化 `extraction_audit`（含上述三项 + 兼容性拒绝原因 + 指针词条）且经 pred.jsonl 序列化/反序列化不丢失（pred 值契约不变、eval 忽略未知字段、历史 JSONL 向后兼容）。变体注册表与 assignment policy SHALL 由管道配置注入（节点不得各取全局默认），其内容摘要 SHALL 进入 RunManifest 与 checkpoint 身份，resume 时不一致 SHALL fail-closed。
+三个概念 SHALL 分离且全部持久化：**variant_assignment**（运行前基于 experiment_id+seed+product+field 对同一 eligible population 确定性分桶 control/treatment；实验关闭为空；control 臂强制默认补漏模板）、**prompt_variant_used**（每条 pred 实际经过的模板标识——baseline/fastpath/default@v1/targeted@vN；注册表 membership SHALL NOT 冒充实际使用）、**winning_origin**（产生最终值的路径）。pred SHALL 携带类型化 `extraction_audit`：**attempt 链**（每次真实出站调用一条：attempt_id/stage/prompt_version/request_key/outcome）+ `winning_attempt_id`（指向真正产生最终值的 attempt；fastpath 等非 LLM 来源为 null；vote/judge 改写最终值时指向其自身 attempt，仅确证时保留原产生者）+ 上述三项 + 兼容性拒绝原因 + 指针词条；`prompt_variant_used` SHALL 由 winning attempt 派生（stage 消歧，无继承歧义）且经 pred.jsonl 序列化/反序列化不丢失（pred 值契约不变、eval 忽略未知字段、历史 JSONL 向后兼容）。变体注册表与 assignment policy SHALL 由管道配置注入（节点不得各取全局默认），其内容摘要 SHALL 进入 RunManifest 与 checkpoint 身份，resume 时不一致 SHALL fail-closed。
 
 #### Scenario: 审计穿过交付边界
 

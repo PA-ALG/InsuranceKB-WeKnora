@@ -10,3 +10,5 @@
 - [ ] T8 validation-report、HANDOFF/002/05/13/16/20 对账（D5）
 
 状态：待运行准入；未完成 admission 前不得触发真实模型调用。
+
+- [ ] D4b（024 R2 让渡承接）differential replay：以同一批不可变 raw responses 对 base SHA 与 candidate SHA 重放评分，建立"后处理改动非退化"真实证据（024 E5 的非退化半条在此完成；synthetic 机制探针不作数）

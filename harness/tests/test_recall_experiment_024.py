@@ -120,9 +120,20 @@ def test_e7_experiment_digest_tracks_registry_and_policy_content() -> None:
     )
     assert policy_changed != base
     seed_changed = experiment_digest(
-        VariantRegistry.default(), AssignmentPolicy(enabled=True, seed=7)
+        VariantRegistry.default(),
+        AssignmentPolicy(enabled=True, experiment_id="x", seed=7),
     )
     assert seed_changed not in (base, policy_changed), "seed 亦是内容成分"
+
+
+def test_e7_anonymous_enabled_experiment_rejected() -> None:
+    """fail-closed（codex R2 P2）：enabled=True 必须携带非空白 experiment_id。"""
+    import pytest
+
+    with pytest.raises(ValueError):
+        AssignmentPolicy(enabled=True, experiment_id="")
+    with pytest.raises(ValueError):
+        AssignmentPolicy(enabled=True, experiment_id="   ")
 
 
 async def test_e7_manifest_records_variant_digest(tmp_path: Path) -> None:
@@ -243,3 +254,157 @@ def test_e6_pointer_terms_reach_section_without_field_alias() -> None:
     )
     assert spy.calls == 1 and cand.tri_state == "present"
     assert cand.metadata.get("pointer_terms") == ["附表二"], "指针词条进审计"
+
+
+# ---------------------------------------------------------------------------
+# E3 R2 · 预算=真实出站调用硬上限（codex R2 P1 验收反例）
+# ---------------------------------------------------------------------------
+
+
+def _sections3() -> list[tuple[str, DocSection]]:
+    pages = [
+        PageText(page_no=i, text=f"等待期相关正文第{i}段。") for i in (1, 2, 3)
+    ]
+    return [
+        (_DOC, DocSection(section_id=f"s{i}", title="等待期", headings=(),
+                          fragments=(pages[i - 1],)))
+        for i in (1, 2, 3)
+    ]
+
+
+def test_e3_budget_caps_outbound_calls_across_topn_sections() -> None:
+    """max_calls=1 + top_n=3（前段全 unknown）→ 出站 complete 恰 1 次。"""
+    import pytest as _pytest
+
+    from insurance_harness.compiler.llm import (
+        BudgetedClient,
+        GapfillBudgetExhausted,
+        GapfillCallBudget,
+    )
+
+    field = FieldSpec(name="等待期", field_id="zh_wp")
+    spy = _SpyClient(
+        '[{"field_id":"zh_wp","value":null,"tri_state":"unknown","evidence":[]}]'
+    )
+    budget = GapfillCallBudget(1)
+    client = BudgetedClient(spy, budget)
+    pages = {_DOC: [s.fragments[0] for _, s in _sections3()]}
+    with _pytest.raises(GapfillBudgetExhausted):
+        asyncio.run(
+            gapfill_field(client, "产品", field, _sections3(), pages, top_n=3)
+        )
+    assert spy.calls == 1, f"预算=1 时出站只能 1 次，实得 {spy.calls}"
+    assert budget.used == 1
+
+
+def test_e3_budget_caps_parse_retry_outbound() -> None:
+    """解析重试也是出站调用：预算=1 时重试不得越过上界。"""
+    import pytest as _pytest
+
+    from insurance_harness.compiler.llm import (
+        BudgetedClient,
+        GapfillBudgetExhausted,
+        GapfillCallBudget,
+    )
+
+    field = FieldSpec(name="等待期", field_id="zh_wp")
+    spy = _SpyClient("这不是 JSON")  # 触发 parse retry
+    client = BudgetedClient(spy, GapfillCallBudget(1))
+    sections = _sections3()[:1]
+    pages = {_DOC: [sections[0][1].fragments[0]]}
+    with _pytest.raises(GapfillBudgetExhausted):
+        asyncio.run(gapfill_field(client, "产品", field, sections, pages))
+    assert spy.calls == 1, "parse retry 的第二次出站必须被预算拒绝"
+
+
+def test_e3_budget_shared_across_concurrent_fields() -> None:
+    """两字段并发共享 max_calls=1 → 总出站恰 1（permit 在调用边界原子获取）。"""
+    from insurance_harness.compiler.llm import (
+        BudgetedClient,
+        GapfillBudgetExhausted,
+        GapfillCallBudget,
+    )
+
+    f1 = FieldSpec(name="等待期", field_id="zh_wp")
+    f2 = FieldSpec(name="等待期", field_id="zh_wp2", aliases=("等待期",))
+    spy = _SpyClient(
+        '[{"field_id":"zh_x","value":null,"tri_state":"unknown","evidence":[]}]'
+    )
+    client = BudgetedClient(spy, GapfillCallBudget(1))
+    sections = _sections3()[:1]
+    pages = {_DOC: [sections[0][1].fragments[0]]}
+
+    async def _one(field: FieldSpec) -> str:
+        try:
+            await gapfill_field(client, "产品", field, sections, pages, top_n=1)
+            return "ok"
+        except GapfillBudgetExhausted:
+            return "exhausted"
+
+    async def _both() -> list[str]:
+        return list(await asyncio.gather(_one(f1), _one(f2)))
+
+    outcomes = asyncio.run(_both())
+    assert spy.calls == 1, f"并发共享预算=1 → 总出站恰 1，实得 {spy.calls}"
+    assert sorted(outcomes) == ["exhausted", "ok"]
+
+
+def test_e3_no_candidate_sections_consumes_zero_budget() -> None:
+    from insurance_harness.compiler.llm import BudgetedClient, GapfillCallBudget
+
+    field = FieldSpec(name="等待期", field_id="zh_wp")
+    spy = _SpyClient("[]")
+    budget = GapfillCallBudget(3)
+    page = PageText(page_no=1, text="与该字段完全无关。")
+    sec = DocSection(section_id="s1", title="无关", headings=(), fragments=(page,))
+    asyncio.run(
+        gapfill_field(BudgetedClient(spy, budget), "产品", field,
+                      [(_DOC, sec)], {_DOC: [page]})
+    )
+    assert spy.calls == 0 and budget.used == 0, "无候选：零调用且零额度消耗"
+
+
+def test_e3_zero_budget_is_legal_and_strictly_zero_calls() -> None:
+    """max_calls=0 合法（ge=0）且严格零出站；已用额度跨批次/resume 不复活。"""
+    import pytest as _pytest
+
+    from insurance_harness.compiler.llm import (
+        GapfillBudgetExhausted,
+        GapfillCallBudget,
+    )
+    from insurance_harness.compiler.pipeline import PipelineConfig
+
+    assert PipelineConfig(gapfill_max_calls=0).gapfill_max_calls == 0
+    zero = GapfillCallBudget(0)
+    with _pytest.raises(GapfillBudgetExhausted):
+        zero.acquire()
+    # 跨批次/resume：used 从 checkpoint state 传入，不得重置
+    carried = GapfillCallBudget(1, used=1)
+    assert carried.remaining == 0
+    with _pytest.raises(GapfillBudgetExhausted):
+        carried.acquire()
+    assert not gapfill_eligibility(
+        FieldSpec(name="等待期", field_id="zh_wp", requiredness="required"),
+        None, budget_remaining=carried.remaining,
+    ).eligible, "已耗尽额度经 state 续传后不得再触发补漏"
+
+
+def test_p2_requiredness_typo_fails_fast() -> None:
+    """loader fail-fast（codex R2 P2）：键存在但值非法 → SchemaLoadError 带定位。"""
+    import pytest as _pytest
+
+    from insurance_harness.schemas.loader import SchemaLoadError, _parse_requiredness
+
+    assert _parse_requiredness({}, file="f.yaml", name="等待期") == "expected"
+    assert _parse_requiredness(
+        {"必填": ""}, file="f.yaml", name="等待期"
+    ) == "expected"
+    for ok, expect in (("必填", "required"), ("是", "required"), ("required", "required"),
+                       ("可选", "optional"), ("否", "optional"), ("optional", "optional"),
+                       ("expected", "expected"), ("期望", "expected")):
+        assert _parse_requiredness(
+            {"requiredness": ok}, file="f.yaml", name="x"
+        ) == expect
+    for bad in ("requird", "TRUE", "1", "必须"):
+        with _pytest.raises(SchemaLoadError, match="等待期"):
+            _parse_requiredness({"必填": bad}, file="f.yaml", name="等待期")

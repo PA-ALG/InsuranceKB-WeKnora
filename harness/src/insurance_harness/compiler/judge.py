@@ -12,9 +12,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .llm import ModelClient
+from .llm import ModelClient, request_key
 from .models import FieldCandidate, Judgement, JudgeRequest
 from .parsing import extract_json_array
+from .prompts import PROMPT_VERSION
 
 JUDGE_SYSTEM = """你是寿险条款抽取结果的裁决者。你收到一个字段的多个候选值（含证据），\
 从中选出最可信的一个，或判定全部不可信。只输出 JSON 数组（恰好一个元素）：
@@ -48,9 +49,16 @@ class JudgeDispatcher:
             f"## 候选值\n{json.dumps(request.candidates, ensure_ascii=False, indent=1)}\n\n"
             f"## 上下文节选\n{request.context_excerpt}"
         )
+        key = request_key(JUDGE_SYSTEM, user)
+        self.last_attempt = {
+            "attempt_id": f"judge:{key[:12]}",
+            "stage": "judge", "prompt_version": f"judge@{PROMPT_VERSION}",
+            "request_key": key, "outcome": "parsed",
+        }
         raw = await self._client.complete(JUDGE_SYSTEM, user)
         parsed = extract_json_array(raw)
         if not parsed:
+            self.last_attempt = {**self.last_attempt, "outcome": "parse_failed"}
             return None
         item: dict[str, Any] = parsed[0]
         tri = str(item.get("tri_state", "unknown"))

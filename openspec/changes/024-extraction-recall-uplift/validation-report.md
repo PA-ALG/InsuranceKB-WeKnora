@@ -18,7 +18,7 @@
 - **未覆盖数**：0。
 - **诚实边界**：机制覆盖 ≠ 真实转化——脚本响应下用例转绿只证明"若模型给出可回验候选，链路正确接住并盖审计章"。
 
-## 3. 后处理非退化结果（E5.1）
+## 3. 后处理synthetic 机制合同探针结果（非『非退化』证据）（E5.1）
 
 冻结录制集（9 条，覆盖 verified-present / 占位 / 弱值 / 引用型 / 兼容性拒入 / 回验失败 / absent / unknown 全分支）三重钉桩下评分：**探针产品甲/乙/丙 = 1.0 / 1.0 / 1.0（== 基线）**。钉桩：control 变体 `default@v1`、9 条 request_key、manifest `1f95a70a…8a8284`——prompt 组装漂移或录制/预期改动将使探针**显式失败**，不得静默换基线。**F5 加固**：`_FrozenClient` 在真实调用路径上断言出站 prompt 的 `request_key` 等于钉桩值，控制变体一旦携带定向模板（漂移）探针即 fail（回归 `test_e5_1_control_prompt_drift_is_caught`）——此前 `complete` 忽略 `user`，钉桩只校验测试内重建 prompt，漂移可绕过。
 
@@ -66,3 +66,8 @@
 - 024 focused：58（原 55 中 3 条错误语义断言被替换）+ 新增 `test_recall_experiment_024.py` 10 条（E7 审计往返/分桶/摘要身份 + E3 触发负例正例 + E6 指针检索）。
 - **E5 状态更正（诚实边界）**：仓库无改动前真实录制，synthetic 探针只能证明后处理机制合同——E5「同录制集非退化」**未完成，显式让渡 020 D4**（differential replay：同一 raw responses 对 base/PR SHA 重放）；探针测试已改名 `test_e5_mechanism_*` 不再暗示非退化证明。
 - 真实召回/粒度改善结论仍完全留待 020 D4（E1 证明力边界不变）。
+
+## codex R2 终审返工后（2026-07-18）
+
+- 上文历史段落中涉及"`_extract_batch`/`merge_candidates` 变体盖章"与"synthetic 非退化"的表述为**已废弃口径（superseded）**，现行权威=R2 返工段与 spec E3/E5/E7 修订：预算=出站调用硬上限（6 组反例）、attempt 链+winning_attempt_id（继承歧义消除）、E5=机制合同+让渡 020 D4、实验/requiredness 配置 fail-closed。
+- 门禁 fresh（数字见 PR 回执）：ruff / mypy / deterministic / openspec strict / focused 全绿。

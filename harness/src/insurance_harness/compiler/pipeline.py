@@ -47,8 +47,16 @@ from .extract import (
 from .feedability import score_feedability
 from .gapfill import gapfill_eligibility, gapfill_field
 from .judge import JudgeDispatcher, make_judge_request, write_judge_queue
-from .llm import CallStats, MeteredClient, ModelClient
+from .llm import (
+    BudgetedClient,
+    CallStats,
+    GapfillBudgetExhausted,
+    GapfillCallBudget,
+    MeteredClient,
+    ModelClient,
+)
 from .models import (
+    AuditAttempt,
     DataQuality,
     DeadLetter,
     DocManifestEntry,
@@ -64,7 +72,7 @@ from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
 from .templates import TemplateRegistry, run_fastpath
 from .templates.tables import TableStructureProvider
-from .variants import VARIANT_METADATA_KEY, VariantRegistry
+from .variants import VariantRegistry
 from .verification import quote_verified
 from .voting import vote_field
 
@@ -82,7 +90,7 @@ class PipelineConfig(BaseModel):
     gapfill_top_n: int = Field(default=3, strict=True, gt=0)
     # 024 E3：补漏 LLM 调用总预算（None=不限）；并发下原子扣减（单事件循环内
     # 预约后再 await，不存在两任务同看余额的窗口）
-    gapfill_max_calls: int | None = Field(default=None, gt=0)
+    gapfill_max_calls: int | None = Field(default=None, ge=0)
     # 024 E7：变体注册表与实验分桶策略由此注入（节点不得各自取全局默认）
     variant_registry: VariantRegistry = Field(default_factory=VariantRegistry.default)
     assignment: AssignmentPolicy = Field(default_factory=AssignmentPolicy)
@@ -102,6 +110,7 @@ class PipelineState(TypedDict, total=False):
     schema_version: str
     prompt_version: str
     variant_digest: str
+    gapfill_calls_used: int
     judge_mode: str
     fail_nodes: list[str]  # 测试用注入失败节点（E1.1 用例）
     source_documents: list[dict[str, Any]]
@@ -669,16 +678,14 @@ class ExtractionPipeline:
         pages_by_doc: dict[str, list[PageText]] = {p.doc: p.pages for p in payloads}
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
-        # 024 E3：运行级补漏预算——单事件循环内"检查+扣减"间无 await，天然原子
-        budget_remaining = [self._cfg.gapfill_max_calls]
-
-        def _try_reserve() -> bool:
-            if budget_remaining[0] is None:
-                return True
-            if budget_remaining[0] <= 0:
-                return False
-            budget_remaining[0] -= 1
-            return True
+        # 024 E3 R2（codex P1）：预算单位=真实出站 complete() 调用（含 parse
+        # retry 与 transport retry 的每次出站）；permit 在**调用边界**原子获取
+        # （BudgetedClient），不在字段调度层；已用量经 state 跨批次/resume 累计。
+        budget = GapfillCallBudget(
+            self._cfg.gapfill_max_calls,
+            used=int(state.get("gapfill_calls_used") or 0),
+        )
+        budgeted = BudgetedClient(metered, budget)
 
         async def do_field(field: FieldSpec) -> FieldCandidate | None:
             async with sem:
@@ -686,12 +693,10 @@ class ExtractionPipeline:
                 arm = assign_arm(
                     self._cfg.assignment, state["product_id"], field.field_id
                 )
-                if not _try_reserve():
-                    return None  # 预算耗尽：零调用（E3）
                 try:
                     cand = await with_transport_retry(
                         lambda: gapfill_field(
-                            metered, state["product_name"], field, section_pool,
+                            budgeted, state["product_name"], field, section_pool,
                             pages_by_doc, top_n=self._cfg.gapfill_top_n,
                             registry=self._cfg.variant_registry, arm=arm,
                             source_pointer=(
@@ -702,18 +707,20 @@ class ExtractionPipeline:
                         base_delay_s=self._cfg.backoff_base_s,
                         sleep=self._sleep,
                     )
+                except GapfillBudgetExhausted:
+                    return None  # 预算耗尽：后续字段不再出站（E3）
                 except TransportRetryError:
                     return None
                 return cand
 
         # E3 触发合同：字段属适用 schema（line 过滤）+ requiredness∈{required,
         # expected} + 首轮空/unknown/source_pointer + 预算允许（纯函数判定，金标零参与）；
-        # 候选章节存在性由 gapfill_field 检索层裁定（无候选=零 LLM 调用）。
+        # 候选章节存在性由 gapfill_field 检索层裁定（无候选=零 LLM 调用零额度）。
         targets = [
             f
             for f in line.extractable_fields
             if gapfill_eligibility(
-                f, merged.get(f.field_id), budget_remaining=budget_remaining[0]
+                f, merged.get(f.field_id), budget_remaining=budget.remaining
             ).eligible
         ]
         results = await asyncio.gather(*(do_field(f) for f in targets))
@@ -722,6 +729,7 @@ class ExtractionPipeline:
                 candidates.append(cand)
         manifest.stats = _merge_stats(manifest.stats, stats)
         return {
+            "gapfill_calls_used": budget.used,
             "candidates": [c.model_dump(mode="json") for c in candidates],
             "manifest": manifest.model_dump(mode="json"),
         }
@@ -776,6 +784,14 @@ class ExtractionPipeline:
                     cand = cand.model_copy(update={"pending_judge": True})
                     judge_queue.append(req.model_dump(mode="json"))
                 else:
+                    judge_attempt = getattr(self._judge, "last_attempt", None)
+                    meta = dict(cand.metadata)
+                    if isinstance(judge_attempt, dict):
+                        meta["attempts"] = [
+                            *meta.get("attempts", []), judge_attempt
+                        ]
+                        # E7 R2：裁决改写最终值 → winning 指向 judge attempt
+                        meta["winning_attempt_id"] = judge_attempt["attempt_id"]
                     cand = cand.model_copy(
                         update={
                             "value": judgement.value,
@@ -783,6 +799,7 @@ class ExtractionPipeline:
                             "evidence": judgement.evidence,
                             "confidence": judgement.confidence,
                             "origin": "judge",
+                            "metadata": meta,
                         }
                     )
             candidates.append(cand)
@@ -1186,17 +1203,35 @@ def _to_pred(
     # E7：prompt_variant_used 在真实使用处记录（gapfill stamp）；未 stamp 的
     # 候选按 origin 如实归因——fastpath=确定性直取（无 prompt）、其余（extract/
     # vote/judge/dead_letter）均经 baseline 抽取 prompt。注册表 membership 不参与。
-    used = cand.metadata.get(VARIANT_METADATA_KEY)
-    if not isinstance(used, str) or not used:
-        used = "fastpath" if cand.origin == "fastpath" else (
-            f"baseline@{manifest.prompt_version or PROMPT_VERSION}"
-        )
+    raw_attempts = cand.metadata.get("attempts")
+    attempts = tuple(
+        AuditAttempt.model_validate(a)
+        for a in (raw_attempts if isinstance(raw_attempts, list) else [])
+        if isinstance(a, dict)
+    )
+    raw_winner = cand.metadata.get("winning_attempt_id")
+    winning_attempt_id = raw_winner if isinstance(raw_winner, str) else None
+    winner = next(
+        (a for a in attempts if a.attempt_id == winning_attempt_id), None
+    )
+    # E7 R2：prompt_variant_used 由 winning attempt 派生（stage 消歧）；无 winner
+    # 时按来源如实兜底——fastpath=非 LLM 直取、其余 unknown/未出值仍归 baseline。
+    if winner is not None:
+        used = winner.prompt_version
+    elif cand.origin == "fastpath":
+        used = "fastpath"
+    else:
+        used = f"baseline@{manifest.prompt_version or PROMPT_VERSION}"
     raw_arm = cand.metadata.get("variant_assignment")
     raw_compat = cand.metadata.get("compat_reject")
     raw_terms = cand.metadata.get("pointer_terms")
     audit = ExtractionAudit(
         prompt_variant_used=used,
         variant_assignment=raw_arm if isinstance(raw_arm, str) else None,
+        attempts=attempts,
+        winning_attempt_id=(
+            winning_attempt_id if cand.origin != "fastpath" else None
+        ),
         winning_origin=cand.origin,
         compat_reject=raw_compat if isinstance(raw_compat, str) else None,
         pointer_terms=(
