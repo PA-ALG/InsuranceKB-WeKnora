@@ -193,4 +193,4 @@
   - `uv run pytest -m "not live and not integration_postgres" -q`
   - controlled `integration_postgres` collection with non-zero tests and zero skips.
 
-- [ ] **Step 4: Commit, push to `feat/015-feedback-flywheel`, update PR #18, and wait for the new SHA checks**
+- [x] **Step 4: Commit, push to `feat/015-feedback-flywheel`, update PR #18, and wait for the new SHA checks**

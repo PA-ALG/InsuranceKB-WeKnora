@@ -22,7 +22,7 @@
   - [x] F3.1 **报表核心**（`report.py`，unblocked）：分状态计数 + TopN 答不上（**输出脱敏问题样例**，非仅内部 key）+ 新增 + **闭环平均周期**（first_seen/resolved_at，可复算；无已闭环缺口显式 None 不虚报）+ 产品分布。
   - [x] F3.3 CLI `flywheel pull`（`pull.py` 纯编排 + `cli.py` I/O）：文件态真相源已移除，`source_id` 必填；迁移 0012 三表在 caller-owned 单事务中提交，真实 Claim lookup、Space 隔离、故障回滚/重试 exactly-once 与 PostgreSQL 双会话门禁均已实现。
   - [ ] F3.2 与 011 健康度报告合流：候 PR#12。
-- [x] **T4 · 本地收尾**：validation-report 与 HANDOFF B17 已更新；Ruff、mypy、deterministic（1681 passed）与 PostgreSQL lane（tests=4 skipped=0）全绿。新 SHA push 后须以 GitHub deterministic/PostgreSQL CI 绿才可合并 PR #18。
+- [x] **T4 · 收尾**：validation-report 与 HANDOFF B17 已更新；Ruff、mypy、deterministic（1681 passed）与 PostgreSQL lane（tests=4 skipped=0）全绿；实现 commit `f5f7f3de` 已 push，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿。
 
 ## 裁决记录（设计判断及依据）
 
@@ -51,4 +51,4 @@ codex 出 **Request changes**（5 阻断 + 3 High）。第一性原理独立复�
 17. **PII 在消费点纵深再脱敏（提交前自检，2026-07-18）**：正常构造/JSONL 已由 Trace validator 脱敏，但 Pydantic `model_construct/model_copy` 可被内部代码误用而绕过。由于本轮新增 DB 持久化 sink，“原文不落库”不能只依赖调用纪律；`run_pull` 在对齐、信号、evaluation/observation/gap payload 共用的实际消费点幂等再脱敏。反例先以 `model_construct` RED，修复后 GREEN。
 
 约束：不改 WeKnora；新 HTTP 客户端 `trust_env=False`；批量开单默认 dry-run（`--open-tickets` 才落单）；问题原文脱敏后才入库；送审前过 21 号自测 gauntlet。
-状态：**PR #18 codex 接管实现与本地收口已完成（2026-07-18）**——migration 0012、DB durable unit-of-work、Space 隔离、真实 Claim lookup、故障回滚/重试与 PostgreSQL 双会话均已落地；本机 PostgreSQL lane `4 passed / tests=4 skipped=0`，Ruff/mypy 全绿，deterministic `1681 passed / 9 deselected`。gated 段保持：F1.1b Langfuse 直连、F2.4 ReviewItem 动作投影、009 概念对齐、011 报告合流；新 SHA 的 GitHub CI 通过前不得标记可合并。
+状态：**PR #18 codex 接管实现与收口已完成，可合并（2026-07-18）**——migration 0012、DB durable unit-of-work、Space 隔离、真实 Claim lookup、故障回滚/重试与 PostgreSQL 双会话均已落地；本机 PostgreSQL lane `4 passed / tests=4 skipped=0`，Ruff/mypy 全绿，deterministic `1681 passed / 9 deselected`；GitHub 新 SHA 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿。gated 段保持：F1.1b Langfuse 直连、F2.4 ReviewItem 动作投影、009 概念对齐、011 报告合流。

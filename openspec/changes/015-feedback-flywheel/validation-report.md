@@ -19,8 +19,9 @@ Langfuse 直连、F2.4 ReviewItem 投影、F3.2 健康度合流继续 gated；�
 | WeKnora live | NOT RUN；本变更无 WeKnora REST/模型调用，Langfuse 直连仍 gated |
 
 PostgreSQL 证据来自本机独立端口、tmpfs 数据盘的 PostgreSQL 16，四节点包含 008、017、
-018 与本变更的双会话同源并发。合并资格仍以新 SHA 的 GitHub deterministic 与
-integration-postgres CI 为准；本机结果不冒充 exact-SHA CI。
+018 与本变更的双会话同源并发。实现 commit `f5f7f3de` 已推送；GitHub 对该实现 SHA
+触发的两组 deterministic、integration-postgres、wheel-smoke 共六项均通过，本机结果未被
+冒充为 exact-SHA CI。
 
 ## 2. 条款到测试的溯源
 

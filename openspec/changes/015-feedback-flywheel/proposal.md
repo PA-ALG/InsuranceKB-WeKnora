@@ -1,6 +1,6 @@
 # 015 · 数据飞轮：Langfuse 问答信号 → 知识缺口工单
 
-> 状态：实施中（2026-07-18，PR #18 codex 接管收口）。离线 trace foundation 可实施；
+> 状态：durable foundation 已实现且 PR #18 CI 全绿、待合并（2026-07-18）。离线 trace foundation 已交付；
 > Langfuse 直连须以真实 WeKnora observation/citation 合同为前置，合同就绪前 fail-closed。
 > 补上"可进化"的主动半环：系统自己发现"答不好/答不上"，回流成知识工单。设计权威：01 §1#4（发现问题慢的痛点）、13 §2 G6 前置。
 

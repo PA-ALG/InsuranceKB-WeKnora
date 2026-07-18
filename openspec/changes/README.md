@@ -21,7 +21,7 @@
 | 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
-| 015 | feedback-flywheel | 🧪 PR #18 本地收口，待新 SHA CI | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
+| 015 | feedback-flywheel | ✅ PR #18 CI 全绿，待合并 | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
 | 017 | weknora-source-bridge | ✅ 软件交付；live NOT RUN | |
 | 018 | release-snapshot-read-model | ✅ 已合入 main（PR #9，2026-07-17） | 独占迁移 0005 |
