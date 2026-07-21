@@ -1,4 +1,4 @@
-# 14 · 部署与联调方案（WeKnora 双库 + Harness 全链路 Runbook）
+# 14 · 部署与联调方案（WeKnora RAW / STAGING / target 分阶段 + Harness Runbook）
 
 > 目标：让接手方从零把"WeKnora 平台 + Harness 插件"跑成一个可演示的整体，并打通 live 契约测试（遗留 B10 的执行指引）。架构与边界见 02；本文只讲怎么跑起来与怎么验。
 
@@ -16,11 +16,12 @@ docker-compose.harness.yml : Harness Postgres（003 已提供）
 ## 2. WeKnora 启动与初始化（一次性）
 
 1. `docker compose up -d`（仓库根上游 compose；固定镜像 digest，02 §8）；
-2. 建租户与两个 KB（管理界面或 API）：
+2. 建租户与安全分离的 KB（管理界面或 API）：
    - **KB-RAW 原始资料库**：`wiki_enabled=false`；解析/分块/向量按默认；所有原始文档只进这里；
-   - **KB-WIKI 寿险知识 Wiki**：`wiki_enabled=true`；**纪律：此库永不上传任何原始文档**（内置 wiki ingest 无从触发，规避 P-3 补丁缺位——02 §4.1 过渡方案），只接受 Harness 发布器写入；
+   - **KB-WIKI-STAGING（P-1 前）**：`wiki_enabled=true`，不上传原始文档；ACL 只给 release 管理员，禁普通用户/Agent/生产检索。Harness 只能把 snapshot 制品写到这里并由只读 current-release reader 预览；
+   - **KB-WIKI 寿险知识 Wiki（目标态）**：只有 P-1 release namespace/active alias 与 P-3 manual ingest 均合入并通过 live 契约后才启用。P-1 前禁止逐页写入这个生产 KB；“不上传原文”只规避内置 ingest，不能解决原子可见性；
 3. 签发 Harness 专用 Tenant API Key：能力域 `retrieve + ingest`（最小权限）；
-4. 把 base_url / api_key / 两个 KB id 写入 `harness/.env`（`HARNESS_WEKNORA_*`，变量名与无密钥示例见已纳入仓库的 `.env.example`）。
+4. 把 base_url/api_key、`HARNESS_RAW_KB_ID`、目标 `HARNESS_WIKI_KB_ID` 写入现有配置。NS-C 还必须新增独立的 `HARNESS_STAGING_WIKI_KB_ID`/`WikiPublicationCapability`；它必须与目标 Wiki ID 不同，并在签发 capability 时实测 ACL 隔离、普通 list/get/search/RAG 不可达。当前代码/`.env.example` 尚无该 capability，因此 P-1 前发布器应保持 production-disabled，不能把目标 ID 临时当 staging ID。
 
 ## 3. Harness 启动
 
@@ -47,18 +48,18 @@ uv run python -m insurance_harness.db.scope_cli bind legacy-default \
 export HARNESS_SPACE_ID=legacy-default
 ```
 
-三个绑定值必须对应第 2 节实际创建的同一租户、KB-RAW 与 KB-WIKI。`bind` 是一次性、事务化操作；失败时仍保持 unbound，不要通过直接 SQL 绕过。旧库没有任何业务行时不会创建 `legacy-default`，因此也不执行这一步。
+三个 Space 绑定值必须对应第 2 节实际创建的同一租户、KB-RAW 与**目标** KB-WIKI；数据库强制 `(tenant_id, target_wiki_kb_id)` 跨 Space 唯一。STAGING 不替代 `wiki_kb_id`，由单独、可撤销的 `WikiPublicationCapability(space_id, tenant_id, staging_wiki_kb_id, target_wiki_kb_id, mode, acl_probe_hash, retrieval_probe_hash)` 管理；有效 capability 还强制 `(tenant_id, staging_wiki_kb_id)` 唯一。P-1 前 publisher 只能接受 `mode=isolated_staging` 且两 ID 不同、归属/ACL/RAG 探针全绿的 capability。`bind` 是一次性、事务化操作；失败时仍保持 unbound，不要通过直接 SQL 绕过。
 
 ### 3.2 新装空库的 Space provisioning
 
-新装空库按设计不会创建默认 Space，当前 `scope_cli` 也只提供 `list/show/bind`，没有 `create`。因此在 B10 交付“幂等双 KB/Space 初始化脚本”前，必须由受控管理员 provisioning 创建一个 bound KnowledgeSpace，并把其 ID 写入 `HARNESS_SPACE_ID`；不得假设 `legacy-default` 存在，也不得让业务进程直接写表。完成后用以下命令验明 `binding_status=bound` 及三个绑定值，再继续：
+新装空库按设计不会创建默认 Space，当前 `scope_cli` 也只提供 `list/show/bind`，没有 `create`。因此在初始化脚本补齐 RAW/STAGING/WIKI 与 publication capability 前，必须由受控管理员 provisioning 创建一个 bound KnowledgeSpace，并把其 ID 写入 `HARNESS_SPACE_ID`；不得假设 `legacy-default` 存在，也不得让业务进程直接写表。完成后用以下命令验明 `binding_status=bound` 及目标绑定，再继续；这仍不代表 publisher 已获得 staging capability：
 
 ```bash
 uv run python -m insurance_harness.db.scope_cli show "$HARNESS_SPACE_ID" \
   --db-url "$HARNESS_DB_URL"
 ```
 
-这是一项仍未自动化的部署前置，不应被记录为“仓库可从零一键初始化完成”；自动创建/绑定由本文 §7 的双 KB 初始化脚本交付物承接。
+这是一项仍未自动化的部署前置，不应被记录为“仓库可从零一键初始化完成”；自动创建/绑定由本文 §7 的 RAW/STAGING/WIKI + publication capability 初始化脚本交付物承接。
 
 ### 3.3 绑定完成后注册产品
 
@@ -98,24 +99,28 @@ job 持续证明 wheel 装进空 venv 后模板与 HTMX 静态资源随包可用
 
 ## 4. 联调验收路径（按序，每步都有断言）
 
-| 步 | 动作 | 断言 |
-|---|---|---|
-| L1 | 上传 1 份样本 PDF 到 KB-RAW，`wait_for_parsed` 轮询 | parse_status=completed；chunk 可列取 |
-| L2 | `pytest -m live`（001 适配层用例，指向真实实例） | 全绿——REST 契约与真实 WeKnora 一致 |
-| L3 | 004 管道对该文档跑抽取（真实弱模型或 Replay） | pred 产出；evidence 的 chunk/页码可在 KB-RAW 解引用 |
-| L4 | 007 导入→合并→审核（CLI approve）→发布到 KB-WIKI | `pytest -m live` 发布器用例全绿；WeKnora 前端能看到产品限定页、source_refs 可跳原文 |
-| L5 | 第二批材料重复 L3-L4 | ChangeSet 产生 enrich/conflict；审核后页面更新；回滚快照后页面还原 |
-| L6 | WeKnora Agent 挂 KB-WIKI 问答 | 回答引用发布页；（MCP server 就绪后）历史版本问题走 harness 工具 |
+先分清两条互不冒充的路径：P-1 前只有隔离 staging/预览验证；P-1 + P-3 的 seal/active-alias live 合同通过后，才允许目标 KB、WeKnora UI/RAG/Agent 验收。
 
-L1~L5 即演示脚本；L6 是"给 Agent 用的知识基础设施"的最终验收形态。
+| 步 | 阶段 | 动作 | 断言 |
+|---|---|---|---|
+| L1 | 共用 | 上传 1 份样本 PDF 到 KB-RAW，`wait_for_parsed` 轮询 | parse_status=completed；chunk 可列取 |
+| L2 | 共用 | `pytest -m live`（001 适配层用例，指向真实实例） | REST 契约与真实 WeKnora 一致；不代表发布已生产就绪 |
+| L3 | 仅在 `NS-RIGHTS=recorded + 027 verified + applicable admission READY` 后 | 028 runtime 对该文档跑批准弱模型或独立 Replay | candidate/Evidence 产出；chunk/页码可在 KB-RAW 解引用；第一方旧能力只经 provenance/重构后的 TemplatePackage 加载 |
+| L4-pre | P-1 前 | 导入→合并→审核后，只把冻结制品写入 ACL 隔离 KB-WIKI-STAGING；由 Harness current-release reader/MCP 预览 | 普通 WeKnora UI/list/get/search/RAG/Agent 均不可达；target KB 不变。现有 018 逐页 publisher live 只算历史 adapter/staging 地基，不证明原子发布 |
+| L5-pre | P-1 前 | 第二批材料形成候选 ChangeSet，但不向 target KB 发布 | staging 失败不改变当前批准 snapshot；Harness 预览可比较差异；无“前端已上线”声明 |
+| L4-post | P-1 + P-3 后 | 在 target KB 的 release namespace staging→回读→`seal-release`→批准→`activate-release` | seal 后写/删被拒；active alias 单次 CAS；UI/RAG/MCP 同一 release；跨 Space/KB 与 TOCTOU 故障 fail closed |
+| L5-post | P-1 + P-3 后 | 第二批材料生成新 release；执行更新与旧 release 回滚 | 批准有效性、pin/GC 与物理 hash preflight 全绿；页面/QA/关系/目录/MCP/index 同步切换，不重新模型生成 |
+| L6 | P-1 + P-3 后 | WeKnora Agent 挂 target KB 问答 | 回答引用 active release 页；历史版本问题走同 snapshot Harness MCP |
+
+L1-L3 加 L4-pre/L5-pre 只是**预生产演示**；只有 L4-post～L6 的受控 live 证据才是“给人和 Agent 用的生产 Wiki”验收。
 
 ## 5. integration / live 契约测试约定
 
 - deterministic：每个 PR 运行 `pytest -m "not live and not integration_postgres"`；
 - PostgreSQL integration：每个 PR 的独立 PostgreSQL 16 service job 运行 `pytest -m integration_postgres`；当前精确包含 008 工作台双会话、015 飞轮同批 exactly-once、017 source 并发与 018 service-owned Session 四个节点；缺 `HARNESS_TEST_POSTGRES_URL` 时全部失败而非 skip，JUnit 必须证明 tests > 0 且 skipped = 0；
 - WeKnora live：本地可用 `uv run pytest -m live` 调试，无实例时保持 skip；正式证据只来自绑定 `harness-live` environment 的手工 `harness-live` workflow，preflight 缺变量会在 pytest 前失败，JUnit 必须证明 tests > 0 且 skipped = 0；
-- **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2/L4 的 live 套件是第一道门禁，金标回归（05）是第二道；
-- 双库 ACL 一致性检查纳入 L4（同租户同权限，02 §4.1）。
+- **版本列车挂钩**（02 §8）：升级 WeKnora tag 时，L2 与当前阶段对应的 L4-pre/L4-post live 套件是第一道门禁，金标回归（05）是第二道；
+- P-1 前验证 RAW/STAGING/target 三库权限与 staging 不可达；P-1 后再验证 Space 独占 target/staging 绑定、seal/active alias 与同快照读取。
 
 三条 pytest collection 必须互斥且并集等于全量 collection。状态语言固定为：deterministic 绿可记 `software complete`；只有带 run URL/commit SHA/时间且零 skip 的 PostgreSQL 16 Actions job 可记 `integration verified`；只有带同等证据的受控 WeKnora workflow 可记 `live verified`。本地通过、skip 或 `NOT RUN` 均不得升级状态。
 
@@ -129,7 +134,7 @@ T8 专用用例只接受显式 live 配置：
 - `HARNESS_LIVE_SPACE_ID`（数据库中已绑定的 Space）
 - `HARNESS_LIVE_KNOWLEDGE_ID`（该 Space 的 KB-RAW 内一份真实、可下载 PDF knowledge）
 - `HARNESS_LIVE_PARSER_FINGERPRINT`
-- `HARNESS_LIVE_KB_ID`（publisher roundtrip 使用的真实 KB-WIKI ID）
+- `HARNESS_LIVE_KB_ID`（017/018 历史逐页 roundtrip 专用、ACL 隔离且可销毁的 legacy test Wiki KB；绝不能填生产 target KB，也不等同 P-1 staging capability）
 
 当前 Harness adapter 没有上传 API，因此本用例走规格允许的“显式 knowledge ID”分支：先对真实端点执行 `wait_for_parsed`，再下载 PDF、读取 chunks、物化 bridge、用本地确定性 scripted client 跑 Compiler，并把 `pred.jsonl` 导入 Harness PostgreSQL。它不调用真实 LLM，也不把既有 knowledge 分支解释成 upload 创建覆盖。测试通过事务回滚清理临时产品、ChangeSet、Claim 与 Evidence；client、Session、Engine、物化文件及 run 目录均显式关闭/清理。
 
@@ -159,10 +164,10 @@ cd harness
 uv run pytest tests/test_release_snapshot_live_018.py -m live -q -rs
 ```
 
-用例使用 `HARNESS_LIVE_DB_URL` 的随机 PostgreSQL schema 建立隔离 Space，并绑定真实 `HARNESS_LIVE_KB_ID`，执行完整 Space V1→V2→rollback V1；同时核对 SnapshotReader 的 V1 值/Evidence、远端 `managed_by/space_id/snapshot_id` 与回滚页面内容。退出时删除随机 Wiki 页并 `DROP SCHEMA ... CASCADE`；数据库账号同样需要 schema 权限。缺受控变量时本地结果只能记录 `NOT RUN`，正式 `live verified` 仍只认 `harness-live` environment 的 run URL、commit SHA、时间与零 skip JUnit。
+用例使用随机 PostgreSQL schema 和上述**隔离 legacy test KB**执行逐页 V1→V2→rollback V1，只证明 018 adapter/saga 与 SnapshotReader 旧范围；它不证明 release namespace、seal、active alias、staging 不可见或生产回滚。退出时删除测试页并 `DROP SCHEMA ... CASCADE`。任何 ACL 探针显示普通用户/Agent/RAG 可达时立即失败；绝不允许把生产 target ID 传入该变量。
 ### 5.3 OpenSpec 023：本机真实环境与受信 exact-SHA gate
 
-023 取代本章 §2/§3.2 中尚未自动化的本机初始化步骤。所有命令从仓库根目录执行；填值文件与生成的 runtime 文件都必须保持 mode `0600`，不得提交。
+023 只取代本章 §2/§3.2 的**历史双库 live 地基**初始化，不交付独立 STAGING、`WikiPublicationCapability`、P-1 seal/alias 或三库生产 provisioning。所有命令从仓库根目录执行；填值文件与生成的 runtime 文件都必须保持 mode `0600`，不得提交。
 
 ```bash
 cp .env.local-live.example .env.local-live
@@ -177,9 +182,9 @@ harness/.venv/bin/python harness/scripts/local_live.py smoke-vlm
 harness/.venv/bin/python harness/scripts/local_live.py run-local
 ```
 
-五个配置角色必须分别探测成功：WeKnora Chat/Embedding/ReRank/VLLM 四模型，加上 Harness extraction。`provision` 会在任何资源 mutation 前再次探测；切换 extraction profile 不改变 WeKnora 四模型、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
+五个配置角色必须分别探测成功：WeKnora Chat/Embedding/ReRank/VLLM 四模型，加上 Harness extraction。该 probe 只证明连接性，不验证 027 allowlist/不可变 identity，也**不解除 027 或适用 admission**。`provision` 会在任何资源 mutation 前再次探测；切换 extraction profile 不改变 WeKnora 四模型、KB 或 Space identity。输出只允许角色状态、数量和 sanitized error；不得粘贴响应正文排错。
 
-`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。`provision` 幂等创建或复用带 ownership marker 的 tenant、四模型、KB-RAW、KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。
+`up` 在 mutation 前校验 Compose render、镜像 digest 与 runner checksum，固定使用 `insurancekb-local-live`、`insurancekb-harness-live` 两个 project；六个服务 healthy 后再复核 app、frontend、Harness PostgreSQL 的 published address 均为 `127.0.0.1`。当前 `provision` 只幂等创建历史 tenant、四模型、KB-RAW、单个 legacy KB-WIKI、scoped Tenant key、bound KnowledgeSpace 与 PDF SHA identity；同名但所有权不匹配时 fail closed。它没有创建独立 STAGING/target 一一绑定或签发 capability，因此不能用于 P-1 前生产发布；NS-C 必须补三库 provisioning 后才能取代这条限制。
 
 `smoke-vlm` 只对 visual canary 显式启用 VLM；普通 PDF 仍走文本解析。失败、取消、`incomplete`、`pending` 或 `processing` 都会保留 sanitized evidence JSON 并以非零退出；只有字面终态 `failed`、`cancelled`、`incomplete` 可由操作员执行一次 `retry-vlm --knowledge-id <id>`。`pending`/`processing` 不得 reparse，以免与在途解析竞态。retry marker 在 API 请求前以 mode `0600`、`O_EXCL` 持久化；若进程在 marker 成功后、请求结果确认前退出，该状态与“请求已发出但响应丢失”不可区分，因此不得自动删除 marker 或再次 reparse，应按 knowledge ID 和 WeKnora attempt 做人工事故核对。
 
@@ -205,16 +210,16 @@ harness/.venv/bin/python harness/scripts/local_live.py down
 
 ## 6. 已知风险与规避
 
-1. **KB-WIKI 误传文档** → 内置 wiki ingest 会与发布器争用 slug：除纪律约束外，Harness 发布器启动时校验该 KB 文档数为 0，非 0 告警拒发（实现挂在 B10）；
-2. Wiki REST 并发覆盖（P-1 缺位）：多 Harness 实例部署前必须确认 slug 串行化升级为跨进程锁（Postgres advisory lock，P0.5 项）；
+1. **KB-WIKI/STAGING 误传文档** → 内置 wiki ingest 会与发布器争用语义：P-3 前启动时校验文档数为 0，非 0 告警拒写；P-3 后强制 `ingest_mode=manual`；
+2. **P-1 缺位** → 当前逐页 REST、draft 状态和 slug 锁都不能原子隐藏/激活整套页面；只允许写 ACL 隔离的 KB-WIKI-STAGING。per-slug/advisory lock 仅防 staging 写竞争，不构成生产发布安全；
 3. 解析完成靠轮询（P-2 缺位）：批量导入时控制轮询并发与间隔（config 已有参数）；
 4. 本机代理变量坑（HANDOFF #9）同样影响容器内外网络排查，联调失败先查代理。
 
 ## 7. 交付物清单（B10 执行完成的定义）
 
 - [ ] `.env.example`（全变量注释版）
-- [ ] 双 KB + bound KnowledgeSpace 初始化脚本（幂等，API/admin provisioning 版）
+- [ ] RAW + ACL 隔离 STAGING + 目标 Wiki（P-1/P-3 后启用）与 bound KnowledgeSpace 初始化脚本
 - [ ] L1~L5 演示脚本（一条命令跑通并输出断言结果）
-- [ ] 受控 `harness-live` workflow 全绿记录（run URL/commit SHA/时间、tests > 0、skipped = 0）+ 双库 ACL 检查
+- [ ] 受控 `harness-live` workflow 全绿记录（run URL/commit SHA/时间、tests > 0、skipped = 0）+ RAW/STAGING/WIKI ACL 检查 + P-1 staging 不可见/active alias CAS/rollback/MCP alias 核对
 - [ ] 发布器"KB 文档数为 0"守卫
 - [ ] 本文档按实际情况修订（发现与设计不符先改文档）

@@ -1,19 +1,35 @@
-# 13 · 整体蓝图现状与 LLM Wiki 引入缺口（2026-07-12）
+# 13 · 整体蓝图现状与 LLM Wiki 引入缺口（2026-07-21）
 
-> 回答两个问题：**整个体系建到哪了**；**LLM Wiki 范式还有哪些事项需要引入**。滚动更新，每完成一个 change 修订一次。
+> 回答两个问题：**整个体系建到哪了**；**企业级 LLM Wiki 北极星还有哪些缺口**。滚动更新，每完成一个 change 修订一次。
+>
+> **治理声明**：本页是代码与 change 的状态账本，不是产品定义。最高产品与架构口径见 [企业级 LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)，执行顺序见 [16-roadmap.md](16-roadmap.md)。旧 change 的“完成/验收”只表示其当时规格范围通过，不能推导为企业级能力已经完成。
 
-## 1. 蓝图总览（一张图看建设状态）
+## 0. 当前总判断
+
+现有代码已经形成 WeKnora 平台底座、基础 schema/goldenset、抽取/Claim/审核/发布链和部分 MCP/结构化接入的工程地基；但项目整体仍未达到企业级 LLM Wiki 产品验收。当前必须补齐的北极星工作包为：
+
+1. **NS-RIGHTS（已记录）**：`LLM-wiki-black` 为项目方第一方资产，可按 provenance 迁移；`nashsu/llm_wiki` 等第三方许可证继续单独管理；
+2. **NS-0**：彻底封死生产强模型路径，并冻结每次调用的模型身份与策略 hash；
+3. **NS-A**：建立领域→险种→文档类型→产品/版本四级 `TemplatePackage` registry、准入、回滚和失配告警；
+4. **NS-B**：把现有管道升级为可恢复的多 Agent Harness，完整持久化 job/stage/attempt/receipt/event/alert；
+5. **NS-C**：补齐全制品 `ReleaseSnapshot`、授权人 `ReleaseApproval`、P-1 active alias receipt 与同快照回滚；
+6. **NS-D～NS-F**：可信结构化直入、多产品事实级路由、知识工作台以及百千文档并发治理。
+
+因此，以下表格中的 ✅ 均按“既有 change 范围”解读；它不代表当前生产准入。MVP 先按 027～030/032/010 thin 完成 23-source 真实闭环；完整 NS-A～NS-F、P-1 和 13 产品 baseline 通过后，才能宣称企业生产核心完成。
+
+## 1. 既有 change 蓝图（代码地基状态）
 
 ```
 原始文档 ──► WeKnora 解析/chunk ──► [003]分类路由 ──► [004]抽取管道 ──► [007]Claim落库
                                         ▲fastpath[006]        │
-结构化JSON/FAQ ──► [010 待建]直入通道 ────────────────────────┤
+结构化JSON/FAQ ──► [010 T1～T4；thin 待建]直入通道 ────────────┤
                                                               ▼
                         [007]增量合并/权威序裁决/审核门禁/ChangeSet
                                 │                    ▲
-                    [008 提案]审核工作台          [005]评测尺子/归因 ◄── [002]金标
+                    [008 核心已交付]审核工作台    [005]评测尺子/归因 ◄── [002]金标
                                 ▼
-                  [007]页面编译+发布器 ──► WeKnora 寿险Wiki ──► Agent/人
+           [029]批准快照 ──► [032]Human Reader / [013]MCP（P-1 前）
+                    [NS-C/P-1 seal+alias] ──► 生产 Wiki ──► Agent/人
                         │ [009 待建]概念页/义项/互链          ▲
                         ▼                                     │
                   [011 待建]知识健康度巡检          [012 待建]QA对象 · [P2]图谱/研究
@@ -24,29 +40,29 @@
 | 001 脚手架+WeKnora适配层 | | ✅ 已验收 |
 | 002 金标与评估子系统 | 金标 11/13（T8 遗留 B1） | ✅ 已验收 |
 | 003 产品主数据+分类路由 | 分类/exact 路由 100% | ✅ 已验收 |
-| 004 抽取管道 MVP | 基线 F1 0.184(v1)/0.216(v2)，evidence 100% | ✅ 已验收 |
+| 004 抽取管道 legacy MVP | 基线 F1 0.184(v1)/0.216(v2)，evidence 100% | ⚠️ 第一方旧规格/测试范围通过；可由 028 记录 provenance 后选择性重构，027/030 前 production-disabled |
 | 005 评测尺子v2+召回归因 | 值粒度 54 为最大失分项 | ✅ 已验收 |
-| 006 模板 fastpath+可喂性评分 | 费率表列直取留出验证 1.00；族指纹修复 | ✅ 已验收 |
-| 007 Claim/合并/审核/发布主链 | 端到端故事通过 | ✅ 已验收 |
+| 006 模板 fastpath+可喂性评分 | 费率表列直取留出验证 1.00；族指纹修复 | ⚠️ 第一方旧范围已验收；可作为 028 迁移输入，当前 production-disabled，不等于 NS-A 四级 TemplatePackage |
+| 007 Claim/合并/审核/发布主链 | 端到端故事通过 | ✅ 旧范围已验收；不含 NS-C/P-1 全制品人工批准与原子 serving alias |
 | 008 审核工作台 | W1–W7 条款 + T1–T8 任务（2026-07-16 基础对齐修订） | ✅ 核心 T1～T5/T7 已随 PR #15 合入；T6/W4 作为独立 follow-up |
 | 009~012 | 概念层/结构化直入/健康度/QA对象 | 🚧 **010 T1～T4 已合入（PR #14），021 已合入（PR #23），010 T5～T12 现可认领**；011 主规格+PR #22 fast-follow 收口后可独立认领；009/012 分别等待 010 域段/qa_staging，不作整波无条件放行 |
-| 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 B15~B16；**013 规格就绪且已由 PR #9 解锁**（M1–M4，轨道 L3）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
+| 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 B15~B16；013 规格就绪且已由 PR #9 解锁（轨道 L3），014 仍须正式 delta；规格覆盖不等于组件或产品已实现 |
 | 015 | 数据飞轮 | ✅ durable foundation 已随 PR #18 合入；Langfuse 直连与 ReviewItem 动作投影仍 gated |
 | 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
 | 017 | WeKnora SourceDocument Bridge/Evidence lineage | ⚠️ T1–T8 软件完成并通过双审/全量复验；真实 WeKnora/PostgreSQL live 为 NOT RUN（B19） |
-| 018 | SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；T1～T7、两轮复审、PostgreSQL 与 5-node live 已完成（B20） |
+| 018 | SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`），作为事实快照地基；不含 NS-C 的全 manifest 真人批准或 P-1 active alias |
 | 019 | Golden 工具/QualityProfile/在线 Gate | ✅ **已完成并合入 main**（PR #8，merge `4d9c84e`，非-live 1142 passed）（B21） |
-| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | 🚧 019/021 前置已完成；T1 零模型 run-admission 在 PR #24，D2～D4 真实运行尚未开始 |
+| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | 🚧 019/021 与 T1 零模型 run-admission 软件均已合入；canonical admission 仍 `BLOCKED`，且 NS-0 未 verified。它属于企业 M2，不阻塞 030 独立 MVP admission；T2～T7/D4b 未运行 |
 | 021 | Source lifecycle ordering | ✅ 已随 PR #23 合入；durable SourceHead/Event、generation/processed_at 与 per-source lock/CAS 已落地 |
 | 022×2 | 测试组合再平衡 / 复审收口 | ✅ 均已随 PR #5 合入（编号冲突已在 `openspec/changes/README.md` 注册表记案冻结） |
 | 023 | 本机 WeKnora live 环境+受信门禁 | ✅ PR #10/#16/#19/#20 已合入 main；受信 app digest、provenance/SBOM、真实 provision/PDF、clean-SHA VLM 与 018 五节点均已验证 |
-| 024 | 抽取召回提升（extract_empty+值粒度） | ✅ 软件已随 PR #13 合入；真实召回与非退化证据归 020 D4/D4b |
+| 024 | 抽取召回提升（extract_empty+值粒度） | ⚠️ 旧软件已随 PR #13 合入；因依赖 004 当前 production-disabled，真实召回与非退化证据归三门禁后的 020 D4/D4b |
 
-执行类遗留：HANDOFF ⓪-B。021 ordering 已完成；当前关键路径是 020 T1（PR #24）→ READY 后的 D2～D4 真实运行。软件/CI 通过不得表述为真实 baseline 或召回提升完成。
+执行类遗留：HANDOFF ⓪-B。当前关键路径是 027→028，并行 029+010 thin、013+032 和 030；只有 `NS-RIGHTS=recorded ∧ NS-0=verified ∧ applicable admission=READY` 才能运行相应真实模型切片。020 canonical 仍保持 BLOCKED，留企业 M2。软件/CI 通过不得表述为真实 baseline 或召回提升完成。
 
 ## 2. LLM Wiki 27 项功能引入状态复盘（对照 09 文档）
 
-**已引入**（设计+代码落地）：原子页存储/互链/目录/结构性lint/图可视化/问答（#1-3、11、15、16，WeKnora 原生）；三阶段编译→八步管道（#6，004）；确定性优先合并（#7，007）；产品别名对齐（#8，003）；矛盾裁决升级为权威序（#9，007）；Review 稳定ID+受限动作（#10，007）；sources溯源→Evidence（#14，007）；字段矩阵缺口主通道（#13 前半，005/008）；产品目录抽取器/字段字典/清洗/增量合并/覆盖率审计（#18-21、23）；schema 注册表（#4，002）。
+**已有代码地基**（只按旧 change 范围）：WeKnora 页面/互链/目录/结构 lint/链接图；007 的 Claim/ChangeSet/Review 基础；003 产品别名对齐；Evidence、字段矩阵与业务方 schema baseline。004/006/024 及其 routing/cleaning/局部 fast path 是第一方迁移输入，但在 027/028/030 重构与验证前保持 production-disabled。它们不能被合并表述为 Enterprise LLM Wiki 已完成：生产模型硬门禁、四级模板、完整 Harness receipts/Alert、全制品 release approval、P-1 原子 serving alias、概念/QA/健康/批量闭环仍按 NS-0～NS-F 补齐。
 
 **待引入（缺口，按价值排序）**——这就是"LLM Wiki 还需要引入的事项"：
 
@@ -72,10 +88,10 @@
 | **011 知识健康度巡检** | 定时任务：过期扫描（生效/失效日期）、长期 pending 冲突、完整度退化、发布页与 Claim 漂移检测；产出健康度报告+整改工单（进 ReviewItem） | 007 | 其他模型（B13） |
 | **012 QA 一等对象** | qa_items 表 + FAQ 抽取对齐（答案绑定 Claim id）+ 派生 QA 编译器（事实变更自动重编）+ 产品页聚合展示 | 007/010 | 其他模型（B14） |
 
-L4 顺序：**010 T5～T12 → 009 / 012**；011 的主体可并行认领，009 未落地时孤立扫描必须报告 not-applicable。全项目关键路径仍优先 020，不因 L4 开工而插队。
+L4 企业顺序：**010 T5～T12 → 009 / 012**；当前 MVP 只实施 010 已知 schema thin。004/routing/cleaning 可经 provenance + 028 重构，但任何旧测试产物都不得直接晋级生产。当前关键路径优先 027～030、032 与 030 admission，不因完整 L4 开工而插队。
 
-## 4. 能力审计与决策记录（2026-07-12 与业务方对齐）
+## 4. 能力审计与决策记录（2026-07-21 北极星校正）
 
-六能力状态：**有版本 ✅ / 可编译 ✅ / 结构化 ✅**（已实现+测试）；**可进化 ⚠️**（被动半环已通，主动半环=011+015）；**可关联 ⚠️**（Evidence/产品级已通，概念级=009）；**识别缺口 ⚠️**（归因能力已有，仪表盘=008、问答信号=015）。
+按旧 change 边界，版本、编译、结构化接入均已有可测试地基；按企业级北极星边界，六项能力仍须统一标为 **⚠️ 未完成产品验收**：版本尚缺全制品批准/原子指针不变量，编译尚缺四级模板与完整 Harness receipts，结构化接入尚缺统一可信来源治理，可进化尚缺自动健康闭环，可关联尚缺概念/关系完整编译，缺口识别尚缺面向产品的质量工作台与批量补全闭环。
 
-已拍板：① 飞轮信号源走 Langfuse（015，零 WeKnora 改造）；② 规则可执行化维持 P2 不提前；③ 排期维持 010 优先、009 紧随。
+既有决定继续有效：飞轮信号源走 Langfuse（015，零 WeKnora 改造），保险语义不进入 WeKnora Go/Vue。当前按 Integration-first MVP 先完成 NS-0 与最小 NS-A～NS-D 主链；完整 NS-C/P-1、NS-E/NS-F 和旧 009～012 企业范围后置，不能越过北极星门禁单独宣称产品完成。

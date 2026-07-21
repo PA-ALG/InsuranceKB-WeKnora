@@ -1,5 +1,8 @@
 # 020 Golden 与 Baseline 真实运行规格
 
+> [!CAUTION]
+> **本规格的 D1 admission 不能单独授权调用。** `NS-RIGHTS=recorded` 已满足；执行仍受 027/NS-0 与经 028 批准的 execution surface 约束，任一缺失即 fail closed。004/006 routing/template/cleaning 只可经 provenance/重构加载；本规格不授权 030 MVP。
+
 ## ADDED Requirements
 
 ### Requirement: D1 真实调用前必须通过可执行、可追溯且不可绕过的运行准入

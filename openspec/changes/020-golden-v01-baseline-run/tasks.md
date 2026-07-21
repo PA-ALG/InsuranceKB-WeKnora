@@ -1,5 +1,8 @@
 # 020 任务
 
+> [!CAUTION]
+> **T2～T7/D4b 当前全部冻结。** 只有 `NS-RIGHTS=recorded ∧ NS-0=verified ∧ canonical admission=READY` 且 execution surface 已按 027/028 验收后才可解冻；既有 T1 checkbox 不解除运行门禁，也不能恢复旧强 judge。
+
 - [x] T1.1 冻结类型化 admission、三模型角色、受信 provenance/approval、完整输入/execution-surface identity、durable budget reserve、安全 probe 与 runtime 重验条款（D1.1a～D1.5）
 - [x] T1.2 先写引用条目号的 RED 测试，覆盖角色/expected revision 漂移/依赖/完整输入与 dirty tree/签名 canonical bytes+domain/scope/run 防重放/凭据/HTTPS+TLS+trust_env=False/规范化 probe+redirect/脱敏/过期/退出码（D1.1a～D1.2b/D1.4）
 - [x] T1.3 实现最小 evaluator + CLI，生成 canonical JSON 与 `run-admission.md`；不得调用推理端点，不得信任 result 派生状态（D1.2a/D1.2b/D1.4/D1.5）

@@ -1,5 +1,8 @@
 # 024 抽取召回提升验收规格
 
+> [!CAUTION]
+> **历史机制规格，不构成生产许可。** 它依赖的 004 第一方路径须经 028 provenance/重构；027 与适用 admission/Golden Slice 前，回放测试不得晋级为真实模型或生产证据。
+
 > 二版（2026-07-16，按 PR #11 复审修订）：**证明力边界收紧**——`ReplayClient` 的 fixture key 是 system+user prompt 的哈希（`llm.py:request_key`），prompt 一变旧录制即失效；因此本 change 的零调用测试只能证明**编排/解析/护栏合同**，不能证明模型因新 prompt 抽得更好。真实召回改善只能由 020 D4 在固定模型/样本/预算下 A/B 证明。金标只作测试预言机（评分），SHALL NOT 出现在任何生产触发条件中。
 
 ## ADDED Requirements

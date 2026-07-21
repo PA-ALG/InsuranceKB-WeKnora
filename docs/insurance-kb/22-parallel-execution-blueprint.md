@@ -1,101 +1,150 @@
-# 22 · 并行执行蓝图（轨道拆分与分工）
+# 22 · 并行执行蓝图
 
-> 与 16（roadmap，讲**顺序**与里程碑）配套：本文讲**并行结构**——哪些 change 可以同时推进、按什么优先级、由谁执行、靠什么护栏不互相踩。实时进度以 `HANDOFF.md` ⓪ 为准（本文不放 checkbox，避免双份清单漂移）。编号占用以 `openspec/changes/README.md` 注册表为准。
-> 制定：2026-07-16（总设计师裁定 + 业务方当日拍板：模型凭据已补齐交 codex 处理、013 MCP 提前、规格工作不等 PR #9）。
+> 本文定义“谁做什么、哪些可以并行、哪些必须串行”。稳定里程碑见 [16-roadmap.md](16-roadmap.md)，冻结 MVP 范围见 [23-mvp-control-board.md](23-mvp-control-board.md)，实时进展以 `HANDOFF.md` 的 MVP-0 控制板为准。
+> 当前原则：**总体规划会话不写功能代码；一个 OpenSpec/PR 一个独立执行会话；评审会话不修代码。**
 
-## 1. 现状快照（2026-07-21）
+## 1. 当前事实
 
-- **已合入 main**：001–008、010 T1～T4、015～019、021～025（其中 022 两个历史同号 change 均已交付）；ReleaseSnapshot、durable feedback、source ordering、审核工作台、024 提准软件与本机 WeKnora live 地基均已落地。
-- **关键路径当前点**：021 已随 PR #23 合入；020 T1 零模型 run-admission 正由 PR #24 承载。T1 未形成 READY 前不得启动 D2～D4 真实模型运行。
-- **架构体检结论**：插件式边界保持；工作台已有核心实现，MCP/概念层/QA 仍无实现。010 T5～T12 的 ordering 前置已满足；011 可独立开工，009/012 继续等待 010 域段产物。
-- **诊断**：主线应先收口 020 T1；旁路可推进 010 T5+、011、013 和 008 W4，但不得混入同一分支。
+- 现有底座：001～008、015～019、021、023、024 有软件落点；010 只有 T1～T4；013 MCP 只有占位；020 只有 admission 软件且 13 产品 canonical run 仍 BLOCKED。
+- 业务方已批准 Integration-first MVP：23 来源、5 产品、7–10 工作日。
+- LLM-wiki-black 第一方权利已记录，可选择性迁移；第三方许可证继续单独管理。
+- 当前真实运行前置：027 NS-0 verified + 030 MVP admission READY。P-1 与完整 020 不阻塞 MVP。
+- 迁移号与共享 DB 域只能串行；其余按文件域并行。
 
-## 2. 轨道拆分（优先级即行序）
+## 2. 会话拓扑
 
-| 轨 | 内容（change） | 执行者（会话） | **Owner 复审**（17 §1 合并权） | 前置 | 开工条件 | 独占文件域 |
-|---|---|---|---|---|---|---|
-| **L0 解阻塞** | 018 live 收口 → PR #9 合并 | codex | A | 凭据 ✅ | **已完成** | 018 已合入 main |
-| **L1 关键路径** | 020 run-admission → D2/D3/D4 真实基线 | codex | B（goldenset/数据） | 019/021 ✅ | **PR #24 收口中；READY 前零模型** | `dataset/` + 020 admitted run artifacts |
-| **L2 审核面** | 008 W4/T6 follow-up | C1 | **A**（workbench/ 属 A 域） | 008 核心、018 ✅ | 可从最新 main 独立认领 | `workbench/` |
-| **L3 Agent 出口** | 013 insurance MCP | C2 | C（MCP 新包） | 003/007/018 ✅ | 可从最新 main 独立认领 | `mcp/`（新） |
-| **L4 知识形态** | 010 T5+ → 009 / 012；011 可并行 | C3 | C（新包）；010 knowledge 域改动加 A | 021 ✅；009/012 仍依赖 010 域段 | **010 T5～T12、011 可认领；009/012 等 010 相应产物** | 导入新包、`concepts/`、QA；迁移 0007/0008/0009/0010 |
-| **L5 抽取提准** | 024 软件完成；020 D4/D4b 真实验证 | B | B（compiler/ 域） | 024 ✅；真实验证等 020 READY | 软件已合入，禁止虚报真实 uplift | `compiler/`；真实产物归 020 |
-| **L6 治理** | 编号注册表、文档对账、已交付 change 归档流程 | 架构会话 | 双查任一 | — | 本轮完成 | docs + openspec 元数据 |
+| 会话 | 职责 | OpenSpec/计划 | 独占文件域 | 禁止修改 |
+|---|---|---|---|---|
+| **G · 总体规划/验收** | 范围、编号、依赖、任务卡、状态、PR/报告检查、最终放行 | 23 控制基准 + 本轮 plans | `docs/insurance-kb/{06,13,16,17,18,21,22,23}`、`HANDOFF.md`、注册表 | 所有功能代码；不跑重测试 |
+| **S0 · Model Gate** | 生产弱模型硬门禁 | 027 | `config.py`、模型/CLI/judge/fallback 入口及 027 tests | `knowledge/`、`structured_import/`、`mcp/`、`workbench/` |
+| **S1 · Template/Runtime** | TemplatePackage、可恢复 CompilationJob/StageRun/Attempt/Receipt/Alert | 028 | 新 `template_packages/`、新 `runtime/`；compiler 仅最小 adapter | `knowledge/`、`mcp/`、`workbench/` |
+| **K0 · Release Authority** | ReleaseManifest、完整 hash 真人批准、CAS CurrentRelease、逻辑回滚 | 029 | `knowledge/`、029 migration/tests | compiler/runtime/MCP/workbench |
+| **K1 · Structured Thin** | 已知 schema product_meta/FAQ 直入完整治理链 | 010 MVP 子集 | `structured_import/`；经批准的 knowledge 接线；010 migration/tests | runtime/MCP/workbench |
+| **M0 · Agent Reader** | MCP core 只读工具与 snapshot/hash envelope | 013 core | `mcp/`、MCP tests | `knowledge/`、compiler/runtime |
+| **M1 · Human Reader** | 独立只读产品 Wiki，与 MCP 共用批准快照 | 032 | 新 `human_reader/`、032 tests | `knowledge/`、`mcp/`、`workbench/` |
+| **I0 · Slice/Data** | 23-source manifest、fixtures、MVP admission | 030 T1–T3 | 新 `dataset/mvp-*`、030 artifacts/tests | 所有生产模块 |
+| **I1 · Integration QA** | 真实主链、更新/冲突/告警/同快照/回滚验收 | 030 T4+ | 新 E2E tests/runbook/validation report | 发现功能问题只退回原 Owner，不直接修 |
 
-> 执行者与 Owner 是两个角色：**谁写**（executor session）与**谁对质量负责/持合并权**（Owner reviewer）分列；跨模块执行受鼓励，但按 17 §1"动 Owner 目录必须该 Owner 审核"。
+### 总体规划会话保留的统一权
 
-延后（不排人）：014 批量调度（M3）、015 飞轮（M2、依赖 009）、B9 PP-StructureV3（部署型）、B5 上游 Issue（人工）。
+1. OpenSpec 与迁移号分配；
+2. 跨包 contract 裁决；
+3. 合入顺序和 integration baseline；
+4. MVP/企业里程碑最终放行。
 
-## 3. 依赖图
+执行会话不得顺手修改 `HANDOFF.md` 大段历史，只更新自己的控制板一行和证据链接；若改共享契约，先由 G 建立独立小 change。
 
+## 3. 依赖与并行波次
+
+```text
+NS-RIGHTS recorded ✅
+        │
+        ├─► 027 Model Gate ─► 028 Template/Runtime ─┐
+        │                                           │
+        ├─► 029 Release Authority ─► 010 thin ──────┼─► 030 Integration/E2E
+        │                                           │
+        └─► 013 MCP core ─► 032 Human Reader ──────┘
+
+030 source manifest/fixtures 可从 Day 1 开始；真实模型 run 等 027 + MVP admission READY。
 ```
-018/019/021✅ ─► 020 T1 run-admission(PR #24) ─► READY ─► 020 D2/D3/D4(真实基线)
-021✅ ─► 010 T5～T12 ─┬─► 009 概念层
-                      └─► 012 QA
-007/016/018✅ ─► 011 健康度（009 未落地时 H1.5=not-applicable）
-003/007/018✅ ─► 013 MCP；008核心✅+018✅ ─► 008 W4/T6
-020 D4/D4b ─► 024 真实召回/非退化验证（024 软件已合入）
-```
 
-当前串行约束：① 020 必须先 T1 READY，再运行 D2～D4；② 009/012 必须等待 010 T5～T12 的对应知识域/qa_staging 产物。021 已合入，历史上的 ordering 等待条件已经解除；011、013、008 W4 可旁路并行。
+### Wave 0 · 规划与占号（G，当前）
 
-## 4. 合并基线政策
+- 登记 027～030 与 032；031 保留给既有 operational admission；
+- 产出七份可独立认领的实施计划；030 计划内含跨包验收矩阵；
+- 独立 reviewer 复核计划；
+- 不写功能代码。
 
-1. 规格/文档：以当前 main 为基，不等 PR #9；
-2. 实现：不触碰 `knowledge/` → 即刻从 main 开工（008 W1–W3、**010 通道一/登记映射（T1~T4）**、024）；
-3. 触碰 knowledge 域/读模型/回滚/发布语义 → PR #9 合入后从新 main 开工（013 实现、008 W4、021）；**010 knowledge 域段（T5 起）再多等一步：基于 021 合入后的 main**（关键路径 018→021→020 不变）；
-4. 021 的迁移必须排 018 的 `0005` 之后（已预分配 0006）。
+### Wave 1 · 小 PR 建合同（Day 1–3）
 
-## 5. 并行安全护栏（多轨不互踩）
+- S0：027，先封模型入口；
+- K0：029 的模型/服务合同与 migration RED；
+- M0：013 core 基于 SnapshotReader protocol/fake 开发；
+- I0：固定 23-source manifest/hash、混合文档/更新/FAQ fixture。
 
-1. **先占号再开工**：change 号与迁移号一律先登记 `openspec/changes/README.md`（022 撞号教训）；
-2. **文件域独占**：每轨只写自己的独占目录（上表）；跨域需求以"新文件+最小接线"实现，接线点在 PR 描述中显式列出；**已批准的显式例外 = 010 的 knowledge 域改动**（范围以其 proposal"影响"节清单为准：tables/models/merge/pages/snapshots+迁移 0007；Owner-A 复审；**排在 021 之后**）；
-3. **共享底座只读**：`adapters/`、`db/base`、`config.py`、既有迁移对所有轨只读；要改共享底座 = 单独小 PR 先行，不夹带在功能 PR；
-4. **SDD/TDD 不变**：条款级 spec 先行；**凡实质改写或标"可认领"的 change 一律正式 delta 格式**（`specs/<capability>/spec.md` + `### Requirement:`/`#### Scenario:`，须过 `openspec validate <id> --strict`——008/010/013/024 已转，先例 023）；未被改写的存量轻量规格（009/011/012/014/015）在各自基础对齐修订时一并转正式；任何格式下**条款 ID 必须可被测试名引用**；
-5. **复审前自测**：每轨送审前过 `docs/insurance-kb/21-selftest-before-submit.md` 的 gauntlet（019 七轮返工教训）；PR 双查照旧（17 号规范）；
-6. **门禁统一**：CLAUDE.md 三件套（ruff/mypy/deterministic pytest）全绿才送审；live 缺环境一律诚实记 `NOT RUN`。
+027 与其他包文件域不相交，可并行；K0 是唯一迁移 Owner。
 
-## 6. 里程碑映射
+### Wave 2 · 主能力实现（Day 3–5）
 
-- **M1 可演示闭环** = L1 的 020（真实基线）+ L2 的 008（人可审）+ L4 的 010（存量直入）+ 023 已交付的 live 底座 → L1~L6 演示脚本；
-- **M1.5（新增，业务方 2026-07-16 拍板）**：013 MCP 从 M2 提前——它是"给 Agent 用的知识"北极星的第一个真实出口，且只读、风险低；
-- **M2** 剩余：009/012/011/015；**M3**：014、B9、024 的真实回归提分阶梯。
+- S1：027 合入后实现 028；
+- K0 → K1 串行：029 后实现 010 thin；
+- M0 与 M1 共享 029 serving contract：013 core 与 032 可并行，最后做同快照 contract integration；
+- I0 只跑零模型 admission/fixture contract。
 
-## 7. 波次
+### Wave 3 · 合流与真实运行（Day 5–8）
 
-- **Wave 1 当前**：008 核心与 024 软件已合入；010 T1～T4 已合入、T5～T12 可认领；013 可认领；008 W4/T6 独立 follow-up 可认领。
-- **Wave 2 当前**：011 在 PR #22 规格修订收口后可独立认领；009 等 010 knowledge 域段，012 等 010 qa_staging/冻结合同。三者均不得以“规格完成”冒充实现完成。
-- **Wave 3（触发条件制）**：014（千份级批量需求出现）、015（009 落地后）、B9（部署资源到位）。
+- 从当时最新 main 建 integration worktree；
+- 只由 I1 写跨包 E2E 和报告；
+- 功能失败分别退回 S/K/M Owner；
+- 027 + MVP admission READY 后才调用真实弱模型；
+- 验收 23 来源、更新、冲突、Alert、hash 人审、同快照和回滚。
 
-## 8. 认领方式
+### Wave 4 · 独立验收（Day 9–10）
 
-按 17 号规范在 `HANDOFF.md` ⓪-B 表登记认领人 + 开工分支（`feat/NNN-*` 从 main 切出）；每轨收尾义务照 CLAUDE.md（tasks 勾选+裁决记录 → validation-report → HANDOFF 更新）。
+- 规格 reviewer 一次性检查所有条款/退出条件；
+- 质量 reviewer 检查跨包数据流、权限、模型边界和同快照；
+- 各 Owner 修复自己文件域；
+- 只在 PR ready 跑一次完整 deterministic，CI 独立复跑；
+- G 根据实际七段时间决定放行并重估 M2。
 
-## 9. 并行执行形态（会话与 worktree 配方）
+## 4. PR 列车与合入顺序
 
-**原则：一个 change = 一个分支 = 一个执行会话 = 一个独立工作目录。** 并行度的上限不是算力，是**复审带宽**（PR 双查 + 21 号自测）；建议从 本机 2 轨 + 远端 1 轨 起步，节奏稳了再加。
+推荐 8–10 个小 PR，而不是 3 个大 PR：
 
-三种形态按场景选：
+1. 027 模型硬门禁；
+2. 029 ReleaseManifest/Approval 合同与迁移；
+3. 013 MCP core；
+4. 030 source manifest/fixtures/admission；
+5. 028a TemplatePackage；
+6. 028b Compilation runtime/orchestrator；
+7. 010 thin structured path；
+8. 032 Human Reader；
+9. 030 E2E contracts；
+10. 必要时单独 integration wiring/closeout。
 
-1. **远端会话（codex 等）**：自带隔离环境，从 main 切 `feat/NNN-*`，PR 为唯一同步点——L0/L1 关键路径现状即此，无需改变。
-2. **本机多会话 = git worktree（推荐）**：每个认领的 change 一个 worktree + 一个独立 AI 会话，互不共享上下文、互不切分支：
+约束：
 
-   ```bash
-   # 目录并列在主仓旁边，一轨一个
-   git worktree add ../ikb-008 -b feat/008-review-workbench origin/main
-   git worktree add ../ikb-024 -b feat/024-extraction-recall-uplift origin/main
+- 一个 PR 一个验收结果；目标 5–12 文件、300–800 行生产代码；
+- 数据库 migration PR 单独且串行，合入前重新确认实际 Alembic head；
+- `pyproject.toml`/`uv.lock` 只由一个指定 PR 修改；
+- 027 与 028 都可能触及模型/compiler 接线，必须顺序合入；
+- 029 与 010 thin 都可能触及 knowledge/迁移，必须顺序合入；
+- MCP/Human Reader 只消费公开 serving contract，不得跨域导入 ORM internals；008 workbench 不承担消费型产品页。
 
-   # 每个 worktree 独立 venv；.env 是 gitignore 的，须手动带过去（勿提交）
-   cd ../ikb-008/harness && uv sync && cp <主仓>/harness/.env .env
+## 5. TDD 与测试分级
 
-   # 每个 worktree 独立跑门禁（deterministic lane 用临时 SQLite，天然可并行）
-   uv run ruff check . && uv run mypy src tests && uv run pytest -m "not live and not integration_postgres" -q
+| 风险级 | 适用 | 每次 RED/GREEN | PR ready | 红队 |
+|---|---|---|---|---|
+| **A** | 权限、迁移、发布、批准、租户隔离 | 精确测试，目标 ≤90 秒 | focused + 相关 PG + 一次 full deterministic | 定向故障矩阵/对抗测试 |
+| **B** | 模板、抽取、路由、融合、冲突 | 精确测试 + 小 Golden Slice | 领域套件 + 一次 full deterministic | 只攻高风险不变量 |
+| **C** | UI、文档、只读接线 | 契约测试/smoke | focused + CI | 默认不跑通用红队 |
 
-   # PR 合入后清理
-   git worktree remove ../ikb-008
-   ```
+完整 2700+ deterministic 不得在每个小步骤或每轮 review 重复跑。Reviewer 首轮一次性汇总完整发现；第二轮只验关闭；第三轮不继续按条目补丁，由 G 裁决拆 PR、改接口或驳回 finding。
 
-   注意：`.venv` 不得跨 worktree 共享（uv 有硬链缓存，重建秒级）；PostgreSQL `integration_postgres` 与 WeKnora `live` lane 只在 CI/受信 workflow 跑，本机不并行；008 工作台本地起服端口自行错开。
-3. **同会话子代理（Agent worktree 隔离）**：只适合小粒度机械任务；**整条 change 的 TDD 实施一律独立会话**——spec 级工作需要完整上下文、裁决记录与复审对话。
+## 6. 每个执行会话的任务卡
 
-**共享文件冲突热点**：`HANDOFF.md`（认领/状态行）与 `openspec/changes/README.md`（注册表）是唯二多轨都会碰的文件——每个 PR 只改自己那一行，行级平凡冲突，按合入序 rebase 即解；除此之外各轨文件域不相交（§2 表；010 的 knowledge 域段是已批准的显式例外——Owner-A 复审且与 021 串行，见 §5.2），worktree 之间零耦合。
+任务卡必须包含：
+
+- 目标与明确不做；
+- 对应北极星 C1～C7 能力；
+- 允许/禁止文件域；
+- 输入、输出和稳定接口；
+- 弱模型/模板/Evidence/Alert/人审/同快照不变量；
+- 2–5 分钟级 TDD checklist 与精确测试命令；
+- PR 风险级与全量测试时点；
+- validation report 要报告的已验证事实和 NOT RUN；
+- 七段时间字段：design/coding/focused-test/review-wait/rework/full-CI/live。
+
+## 7. 会话与 worktree 纪律
+
+- 一个 change/PR 一个独立 worktree，从当时最新 `main` 建 `feat/NNN-*`；
+- `.venv`、临时 SQLite、run artifacts 不跨 worktree 共享；
+- `.env` 只手工复制到 gitignored 位置，不进入输出和提交；
+- 普通命令 60 秒无输出即轮询，10 分钟硬中止；子任务 2 分钟无有效结果转主线程；
+- AI 会话不 commit/push，由人验收后操作；
+- 规划会话只读代码和验证报告，不运行完整测试；
+- I1 集成会话不“顺手修”功能，避免失去文件域 Owner 和根因上下文。
+
+## 8. MVP 后的并行拓扑
+
+M2 再启动：P-1/完整 NS-C、完整 Template registry/runtime、完整 010/013/008、032 扩展、009/012、13 产品 020。M3 再启动：011/014/015、NS-E/NS-F、完整预算与运营。任何 Later 项目不得借“顺手”进入当前 PR。

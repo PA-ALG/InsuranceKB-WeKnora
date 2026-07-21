@@ -1,5 +1,8 @@
 # 024 任务（当前权威状态，2026-07-21）
 
+> [!CAUTION]
+> **以下 checkbox 仅记录旧软件范围。** 该运行路径 production-disabled；迁移须走 028，且 027/适用 admission/Golden Slice 齐备前不得执行或报告真实 uplift。
+
 > PR #13 软件收口完成后方可合并。零真实模型调用的测试只证明机制、审计和护栏；真实召回改善及同录制集非退化仍由 020 D4/D4b 证明。
 
 - [x] T1 将 005 的 24 条 extract_empty + 1 条 prompt 域工单固化为机制合同用例（E1）

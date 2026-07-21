@@ -1,7 +1,24 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-21（021/024/Wave 2 fast-follow 已分别随 PR #23/#13/#22 合入 `main`；020 T1 的 PR #24 合并前硬化已关闭四项 P1，canonical admission 仍按设计 BLOCKED。合流后最新本机证据为 focused 700、全仓 deterministic 2706、Ruff/mypy/OpenSpec；T2～T7/D4b 未运行，只有刷新为 READY 后才允许真实模型调用；见 0j/0k/B22/B23/B24。）
+> 最后更新：2026-07-21（业务方已批准 Integration-first MVP：23 份来源、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice。）
+
+> [!IMPORTANT]
+> **项目核心方向与 MVP 已于 2026-07-21 批准：Enterprise LLM Wiki 是产品本体，WeKnora 是企业底座，Harness 是弱模型知识编译与治理运行时。** 业务方已声明 LLM-wiki-black 为项目方完整著作权资产，可把其 TS 能力选择性迁移/重构到统一 Python 3.12 Harness；原 TS 不作为第二套生产 runtime，第三方许可证单独管理。当前 CLI/config 尚未硬禁强模型路径，MVP admission 也未 READY，因此不得真实生产运行。P-1 release namespace/原子 active alias 是直接 WeKnora 生产 Wiki UI 的前置，但不是 MVP 前置；MVP 使用 ACL 隔离 staging + Harness Reader/MCP 同快照。任何会话认领任务前先读[北极星设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)和[MVP 控制基准](docs/insurance-kb/23-mvp-control-board.md)。
+
+## MVP-0 实时控制板（唯一状态口径）
+
+| 字段 | 当前值 |
+|---|---|
+| 状态 / 截止 | `PLANNING READY`；目标 7–10 个工作日，起点以首个 OpenSpec 执行窗口认领日计 |
+| 冻结范围 | 23 来源、5 产品、医疗/终身寿险/年金；含混合产品、后续修订/冲突、FAQ JSON |
+| 当前 Gate | `NS-RIGHTS=recorded`；`NS-0=pending`；`MVP admission=pending`；P-1/13 产品 baseline 非 MVP 阻断 |
+| 当前 Wave | G：占号/任务卡；随后 S(027→028)、K(029+010 thin)、M(013+032)、I(030) |
+| 最多 3 个 blocker | 027 未完成；MVP source manifest/hash 未冻结；执行 OpenSpec 尚未通过独立计划复核 |
+| 完成定义 | 多文档归属、弱模型 Harness、Evidence、冲突、人审、hash 批准、Reader/MCP 同快照、结构化直入、更新/告警/回滚全部通过 |
+| 详细范围 | `docs/insurance-kb/23-mvp-control-board.md`；完整企业路线见 `16-roadmap.md` |
+
+本表只维护实时状态、blocker 和证据链接；23 号文档维护冻结范围、边界和任务拓扑，二者不重复记 checkbox。
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -17,7 +34,7 @@
 
 0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
 
-0f. **排期与依赖裁决（业务方 2026-07-14；2026-07-21 状态更新）**：既定技术依赖为 **018 → 021、019 → 020、021 → 020**，不得把 018 → 019 写成技术依赖；目前 018/019/021 均已合入，020 T1 已消费这些前置能力。当前关键路径不再是写 ordering 代码，而是完成 020 PR 后解除数据、provenance、审批、模型 identity/probe 与预算准入，再进入 T2～T7。各 change 继续遵守 SDD、TDD、独立复核与 CLAUDE 门禁。
+0f. **排期与依赖裁决（2026-07-21 更新）**：历史 13 产品 canonical run 仍按 018 → 021、019/021 → 020；MVP 不修改该 run，建立独立 23-source admission。第一方权利已记录，当前硬前置只有 NS-0 运行时模型门禁与适用 admission READY。各 change 继续遵守 SDD、风险分级 TDD、独立复核与 CLAUDE 门禁。
 
 0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-17 当前状态）**：PR #10、#16、#19、#20 均已合入 `main`。受信 main workflow 已从锁定的 Tencent upstream `5eefa70e...` 构建 `linux/arm64` app，OCI/GitHub attestation、SLSA provenance 与 SPDX SBOM 均已核验；`deploy/local-live/images.lock` 和 Compose 固定 subject digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`。本机六服务 healthy，宿主只监听 `127.0.0.1:8080/8081/5442`；百炼五角色 direct probe、幂等 provision、普通 PDF 与 clean-SHA VLM smoke 均通过，VLM 结果为 `status=completed / image_ocr_chunks=1 / image_caption_chunks=1 / dirty=false / evidence=exact`。PR #20 另以真实 API TDD 修复重复注册、Wiki indexing strategy、pages envelope 与服务端扩展 VLM overrides 四项合同差异；最终 live 又发现 Wiki 空关系返回 `null`，PR #9 以 `test_s2_4_*` RED→GREEN 仅规范化为 `[]`。018 的本机 5-node 已 `5 passed / skipped=0`；正式 GitHub exact-SHA gate 作为收尾 PR 的合并前门禁执行。
 
@@ -31,7 +48,7 @@
    - [x] PR #5、#6 已合并，最新 `origin/main` 已确认指向 `27c36641`；新基线 Ruff、mypy strict、deterministic **961 passed / 5 deselected**。
    - [ ] 修正文档陈旧口径：`docs/insurance-kb/README.md` 的 017 T1～T6、`docs/insurance-kb/20-enterprise-runtime-foundation.md` 的 PostgreSQL integration / WeKnora live 边界、`harness/README.md` 的 deterministic marker。
    - [x] 对账排期与依赖：`docs/insurance-kb/16-roadmap.md`、`docs/insurance-kb/20-enterprise-runtime-foundation.md` 与本节统一为 018/019 可独立或并行、018 → 021、019+021 → 020；详细 checkbox 只保留在 HANDOFF，避免双份清单漂移。
-   - [ ] 对账旧 ledger：001/003/004 的未勾项只做完成证据回填，不重做已验收功能；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交 020；消除“18 条扩展字段待确认”与“已全部接受”的冲突。
+   - [ ] 对账旧 ledger：001/003 的未勾项只做完成证据回填；004 仅由获授权的合规审计人员标注为历史隔离/production-disabled，禁止未来实现者打开正文或重做其中能力；002 仅对账已完成项，真实未完成的 T8/T9 明确保留并转交三门禁后的新 execution surface；消除历史状态冲突。
    - [ ] 归档已完成的 016、017、022-test-portfolio-rebalance、022-review-hardening，并运行 OpenSpec strict / 文档链接与状态检查。
 
    **并行轨 A — 018 ReleaseSnapshot 统一读模型与可恢复发布（✅ PR #9 已合入）**
@@ -50,56 +67,36 @@
    - [x] 最终 spec PASS、quality APPROVED；OpenSpec strict、Ruff、mypy 248 files、deterministic 1901 与 diff check 全绿。
    - [x] commit `f557fc94`、push、PR #23 六项 CI 全绿并合入 main（merge `cfefcc9b`）。
 
-   **价值出口 — 020 真实金标/baseline 运行（019+021 已满足）**：T1 零模型 `run-admission` 由 PR #24 承载；其结果仍为 BLOCKED，真实标注/baseline 尚未运行。只有 canonical admission 变为 READY 才能进入 D2～D4；不得用软件门禁或 PostgreSQL integration 冒充真实运行证据。
+   **企业基线出口 — 020 真实金标/baseline 运行**：T1 软件已随 PR #24 合入，canonical 结果仍为 BLOCKED，真实标注/baseline 尚未运行。该状态不得冒充完成，但不阻塞独立 MVP slice；020 D2～D4 进入企业生产化阶段。
 
 0g.1. **018 执行事故与 PR #9 硬化（必须保留）**：2026-07-14～15 曾因三轮规格审查、三轮计划审查和一个过大的 T1 子任务，出现约 `23143s` 无 RED、无 diff、无可验证产出的执行故障。此后 018 强制拆成单闭环 TDD：15 分钟内首个 RED、30 分钟内可核验产物、工具 60 秒无输出主动轮询、普通命令 10 分钟硬中止、子任务 2 分钟无响应转主线程。PR #9 的 RH1～RH5 已补齐 test-support 隔离、SQLite FK、stale-base mutation、collision/lease recovery 与 0005/search_path 合同；两轮独立复审无剩余 finding，最终 CI 与 5-node 已完成。该事故规则继续适用于 021 等后续 change，不得因 018 已合入而删除。
 
-0h. **并行执行蓝图（2026-07-21 对账）**：021 已随 PR #23、024 已随 PR #13、Wave 2 fast-follow 已随 PR #22 合入；当前关键路径是 PR #24 的 020 T1 run-admission → READY → D2～D4/D4b。旁路中，010 T5～T12、011、013 与 008 W4/T6 可分别从最新 `main` 认领；009 必须等待 010 knowledge 域段，012 必须等待 010 的 qa_staging/冻结合同。规格完成不得表述为整波实现可立即并发。
+0h. **并行执行蓝图（2026-07-21 新裁决）**：当前关键路径改为 027 NS-0 → 028 Runtime，以及并行的 029/010 thin、013/032、030 MVP slice/E2E。008 保持运营审核工作台，不承接消费型 Wiki Reader；完整 010、011、009/012、020、025、P-1 和千份并发进入后续阶段；执行拓扑见 23/22。
 
 0i. **OpenSpec 015 durable foundation 已随 PR #18 合入**：迁移 `0012` 的 Space-scoped checkpoint/processed ledger/gap 三表、caller-owned transaction 与 exactly-once 基础已落地；F1.1b Langfuse 直连、F2.4 ReviewItem 动作投影、009 concept 和 011 合流仍 gated，禁止因 durable foundation 完成而虚报完整飞轮闭环。
 
 0j. **OpenSpec 021 主流程已合入（2026-07-21）**：确定性链路已贯通 `SourceRevision → per-source advisory lock → SourceHead/append-only SourceEvent → notify/import/delete → stale-or-blocked audit no-op → strictly-newer reactivate`；历史 ordering 不可证明时只建唯一 open BackfillIssue，显式 resolver 与正常 lifecycle 共锁且 exact retry 返回原 resolution event。Task8 覆盖 13 个真实业务并发节点与 8 个真实 Alembic 节点；合并前 fresh 本地 deterministic **1901 passed/30 deselected**、PostgreSQL **25 passed/skipped=0**、OpenSpec/Ruff/mypy 全绿，PR #23 的两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，merge=`cfefcc9b`。021 已解除 020 的 source-ordering 依赖，但不会自动放行模型调用。
 
-0k. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-21，PR #24 合并前硬化）**：已按 SDD/TDD 实现类型化 admission/evaluator/CLI、签名 canonical identity、完整输入与 execution-surface 指纹、安全 provider probe、durable budget reservation/request-attempt ledger、每产品 runtime 重验、annotation/baseline 可恢复执行入口、提交前 exact-bytes/语义回验及 validation→settlement 同锁。最终高风险复核关闭四项 P1：删除可伪造的 provider `no_usage` 退款路径（历史态只按 uncertain/full-reserve 恢复）；同 run revision 只允许提高 account ceiling，禁止新增/删除/修改产品、请求或池；production Bailian 必须使用与真实请求 `model` 相同的 provider-guaranteed immutable deployment ID；019/021 固定实际 main merge `4d9c84e`/`cfefcc9b`，拒绝 feature head/cherry-equivalent 替代。初始 hardening 为 `2169c582`；最新 main 合流后将 024 新增/修改的 16 个 execution files 全部重新指纹化，最终 clean source-plan commit 为 `59695273`，canonical JSON/Markdown 再从该 SHA 生成，结果不含 dirty/dependency/identity drift blocker。合流后本地 focused **700 passed**、deterministic **2706 passed/30 deselected**、Ruff/mypy 297 files/OpenSpec 全绿。权威工件仍为零模型 **`BLOCKED`**，runtime capability=`budget-ledger-v3-canary-v1`，provider probe 全为 `not_attempted`，模型调用/token/费用均为 0；剩余阻塞只有预算、11 个产品历史 provenance、一个产品缺失/未消费输入、签名审批及三模型不可变 identity。**这只表示 T1 软件闭环完成，不表示 020 数据运行完成**：T2～T7/D4b 尚未运行，D5/T8 最终对账也未完成；得到 READY 后方可执行真实模型任务。
+0k. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-21，已随 PR #24 合入）**：已交付类型化 admission/evaluator/CLI、不可变 identity、输入与 execution-surface 指纹、provider probe、budget/request-attempt ledger、运行时重验和可恢复入口；focused 700、deterministic 2706、Ruff/mypy 与适用 OpenSpec strict 曾通过。权威 canonical 工件仍为零模型 **`BLOCKED`**，T2～T7/D4b 未运行。它是 13 产品企业 baseline 的历史资产，不是 MVP 运行前置；MVP 建立独立 admission，但同样必须等 NS-0 verified 才能调用真实模型。
 
-1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
+1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、离线分歧处理/dead-letter/冻结 keypoints。强模型只能可选离线提出候选，不能成为 CI/生产前置。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
-3. ✅ **change 004（抽取管道 MVP）完成并验收**（2026-07-12）：compiler/ 全链路（切分→7组路由→分批抽取→回验→清洗→补漏→投票→置信分级），langgraph 可恢复编排+死信；门禁 135 tests 全绿。**首个真实弱模型基线**（deepseek-v4-flash vs gs-v0.1，3 代表产品，含 Claude 裁决回写）：micro F1 0.184 / 幻觉率 8.2% / **evidence 准确率 100%** / high 桶三态正确率 92%——反幻觉链已验证有效，失分主因是长文本字段的"值粒度/表述差异"被 eval 逐字等价误判 + present→unknown 漏抽 25 条（validation-report.md 有全量明细）。
+3. ⚠️ **change 004 只完成旧规格/测试范围，不是当前生产证明**（2026-07-12）：routing/cleaning 属已确认权利的第一方迁移资产，可由 028 选择性重构；但强模型 judge/fallback、治理旁路和历史分数不满足当前北极星，NS-0/030 验收前不得作为当前 baseline。
 3a. ✅ **change 007（Claim 落库/增量合并/审核门禁/WeKnora 发布，S2→S3 主链）完成**（2026-07-12）：
    `harness/src/insurance_harness/knowledge/` 新包 + Alembic 0002（claims/claim_evidence/claim_revisions/
    change_sets/change_items/conflicts/review_items/release_snapshots/snapshot_claims/current_release）。
-   pred JSONL 导入器（记录级+批级幂等）、五种 ChangeItem 合并引擎（裁决序严格 03 §6.2，④=claude-session
-   judge-queue 占位零模型调用）、ReviewItem 稳定 ID + approve/reject/defer、页面编译（分组渲染+证据角标）、
+   pred JSONL 导入器（记录级+批级幂等）、五种 ChangeItem 合并引擎；当时 ④=claude-session
+   judge-queue 占位（零模型调用）的设计只作历史记录；当前只是 policy-disabled，须由 NS-0 硬封并由多弱模型建议+人工门禁的正式 OpenSpec 替换；ReviewItem 稳定 ID + approve/reject/defer、页面编译（分组渲染+证据角标）、
    发布器（03 §7 契约，respx 全 mock）+ 快照回滚。端到端两批材料故事（说明书→条款）验收通过；
    门禁 192 passed 全绿。live 发布契约用例（-m live）待测试实例。文档 03 已同步修订
    （pending_judge/schema_version 串/source_kind/rendered_pages 物化/④队列化）。
-3b. ✅ **change 005（评测尺子升级与召回归因）完成**（2026-07-12，零真实模型调用）：
-   ① eval v2 "关键要点匹配"（`--metric v1|v2` 可切换；金标旁挂 keypoints.jsonl，3 基线产品 59 条
-   rule-split 小样已入库，全量强模型要点列 B6）——3 产品离线重评 micro F1 **0.184(v1) → 0.216(v2)**，
-   long 字段逐字等价误判被修正、真实缺口（值粒度 54 条）凸显；② 报告五类错误归因
-   （值粒度/漏抽/幻觉/三态混淆/证据错位）+ 工单化明细；③ eval-judge-queue 落盘（默认关，格式对齐
-   compiler JudgeRequest/Judgement）；④ 漏抽归因工具 `compiler/recall_attribution.py`（纯确定性）：
-   26 条漏抽 = routing_miss 3 / extract_empty 23 / cleaning_kill 0；⑤ 零成本路由修复
-   `GROUP_KEYWORD_SUPPLEMENTS_005`（趸交/费率表→basic_info；入出院记录/出院小结/结算清单→claim_service），
-   routing_miss 3→1、13 条款压缩比仍 ≤0.40；清洗白名单经证据判定不需要改（cleaning_kill=0）。
-   报告：`openspec/changes/005-eval-refinement-recall/validation-report.md`（004 报告已附"尺子修正后"章节）。
-3c. ✅ **change 006（模板抽取 fast path 与表格结构识别）完成并验收**（2026-07-12，零真实模型调用）：
-   `harness/compiler/templates/` 新包——模板 schema（YAML 数据，注册表机制对齐 schemas，发布目录
-   `dataset/templates/`）+ **确定性模板归纳器**（族内 ≥2 产品金标挖锚点：表格列名/引文上下文正则，
-   全产品回放验证 hit_rate=1.0 才发布；LLM 润色留 claude-session 队列 stub）+ 运行时 fast path
-   （族命中 → 锚点直取 → 既有校验链，未命中降级通用管道；命中字段退出通用抽取/补漏/投票）+
-   `TableStructureProvider` Protocol（pdfplumber 首实现，费率表数字走列定位直取 12 #1；
-   PP-StructureV3 留接口+配置位 `HARNESS_TABLE_PROVIDER`）+ 可喂性评分（12 #4，manifest 记录+
-   隔离区目录，CLI 默认 dry-run）+ pred 增加 `data_quality`（12 #2；**2026-07-16 对账：该字段至今只在 pred 侧，Claim 主链/快照/MCP 未持久化——端到端落地已占号 change 026**，010/013 不预支承诺）。
-   **修复 004 族指纹疑点**：无标题文档（说明书/费率表）曾全部退化为空串指纹 fam-e3b0c44298fc，
-   现走 fallback（文档类型+页数桶+表头 token），有标题文档指纹零漂移。**留出验证**（盛世金越族，
-   两分红产品归纳 → 尊享26终身寿留出）：fast path 命中字段正确率 1.00 vs 通用管道 0.00
-   （交费期限 unknown→列直取全对），预估节省 1 次调用/产品（锚定字段尚少；随模板铺开增长）；
-   发现分红说明书两版式不同构（归纳报告与 validation-report.md 有全量明细）。门禁 239 passed 全绿。
-4. **非当前主线 backlog**：抽取召回主战场是 extract_empty 24 条（prompt 变体/补漏增强，见 005 归因清单），不得抢占 ⓪-0f 的执行顺序；模型配置：harness/.env（不入库）——弱模型 deepseek-v4-flash、裁决 claude-session 模式（judge-queue → apply-judgements CLI，本轮已实跑 3 条闭环）、兜底 deepseek-v4-pro。
+3b. ⚠️ **changes 005/006 是第一方历史试验记录，不是当前实现基线**（2026-07-12）：旧评测、召回归因、模板 fast path 与表格实验可以审计和迁移，但不得把旧“完成/验收”理解为 NS-A/NS-B 已交付；需按 028 的新接口、弱模型边界和 Golden Slice 重新验收。
+
+   执行窗口可查阅第一方历史 OpenSpec/代码，但迁移 PR 必须记录 provenance、明确接受/拒绝的旧行为，并以新的内容寻址 TemplateApproval 和 MVP 独立样本验收；第三方实现仍受单独许可证边界约束。
+4. **2026-07-12 历史模型记录（不得作为当前操作指引）**：旧闭环曾运行强模型抽取/judge/fallback。2026-07-21 ADR-002 已在政策上禁止这些路径，但当前 CLI/config 尚未硬实现；NS-0 完成前所有真实生产编译、judge、merge/release 均禁止。目标态只允许批准且身份冻结的 MiniMax/Qwen/Qwen-VL 能力档弱模型，多 Agent 无共识即 Alert + 人工审核。
 5. **分工定位（2026-07-12 业务方定）**：本会话（Claude）负责**整体架构、代码设计、功能规划、技术方案**（产出设计文档与 OpenSpec change 提案）；**大批量 token 消耗的执行任务一律进下方遗留清单，交由其他模型/会话推进**。
 
-**协作与排期**：三人分工与协作规范见 `docs/insurance-kb/17-team-collaboration.md`（模块所有权/PR 双查/认领制）；当前排期以 ⓪-0f/0h 为准：先收尾，018/019 可独立或并行，021 等 018，020 等 019+021；**并行轨道结构与开工基线见 `docs/insurance-kb/22-parallel-execution-blueprint.md`（L0–L6），编号占用见 `openspec/changes/README.md` 注册表**。认领 B 项请在下表加“认领人”并保持更新；B10 环境准备可独立并行。
+**协作与排期**：北极星和 Integration-first MVP 已获批准。总体规划窗口占号、写计划和验收；功能执行窗口从最新 main 建独立 worktree，按 23 号文件域工作。完整企业 NS-A～NS-F 保留在 16；当前只实现其 MVP 最小合同。**并行轨道见 `docs/insurance-kb/22-parallel-execution-blueprint.md`**。
 
 ## ⓪-B 遗留执行任务清单（按 17 号文档认领制推进，按优先级）
 
@@ -107,36 +104,36 @@
 |---|---|---|---|
 | B1 | 金标 T8 收尾：剩 2 产品标注 + gs-v0.1 打包 | 并入 **020 D2**；先完成 run-admission，再按 T8-HANDOVER 原地接续 | ~2×10万 token（标注模型） |
 | B2 | 全量 13 产品弱模型基线 | 并入 **020 D3**；必须消费 019 artifact/validator，断点运行 | 网关 ~6-12万 token/产品 |
-| B3 | B2 产生的 judge-queue 批处理 | 并入 **020 D3**；回写后重新出分，unresolved 不得静默丢弃 | 视队列量，单条很小 |
+| B3 | B2 产生的分歧/审核队列处理 | 并入 **020 D3**；生产只允许多弱模型证据建议 + 人工最终审核，既有 claude-session apply 路径 production-disabled；回写后重新出分，unresolved 不得静默丢弃 | 视队列量，单条很小 |
 | B4 | 死信复跑 | 并入 **020 D3**；保留最终失败原因 | 极小 |
 | B5 | 向腾讯上游提 3 个 Issue | 文案已备好：`deploy/patches/upstream-issues.md`，提交后回填链接 | 人工 |
-| B6 | gs-v0.1 全量 long 字段要点清单 | 并入 **020 D4**；使用 019 artifact 记录 complete/pending | ~1×10万 token（强模型） |
-| B7 | 005/006 before/after 基线回归 | 并入 **020 D4**；结果进入 approved baseline/QualityProfile | 网关 ~6-12万 token/产品 ×3 |
+| B6 | gs-v0.1 全量 long 字段冻结要点清单 | 并入 **020 D4**；生产/CI 只消费已冻结、已批准的离线 keypoints/comparator artifact。强模型可选用于离线候选，缺席不得阻塞；争议交人工，使用 019 artifact 记录 complete/pending | 离线标注模型/人工，按批准预算 |
+| B7 | 历史 005/006 before/after 回归 | 第一方能力可盘点迁移，但旧 execution surface 不直接作为当前 approved profile；按 028/030 新合同与 MVP slice 建 baseline | NS-0 + MVP admission 后运行 |
 | B8 | **008 审核工作台实现** | ✅ T1～T5/T7 核心工作台已随 PR #15 合入；并发令牌、SQL 分页、Scope 校验等阻断项已闭合。T6/W4 仍按既有裁决作为独立 follow-up，从最新 main 认领 | 开发型任务，中等 |
-| B9 | PP-StructureV3 表格结构识别服务部署接入（006 遗留；原重复的两行 B8/B9 已合并于此） | 重依赖（paddlepaddle/paddleocr）按 08 选型进程隔离部署（AGPL 隔离，08 §2）；实现 `compiler/templates/tables.py` `PPStructureV3Provider.extract_tables`（协议 F5.1），配置 `HARNESS_TABLE_PROVIDER=pp-structure-v3`；接入后跑费率表对比，用金标回归 A/B 验证（11 §2）替换默认；接入时证据元数据补记表格行列坐标（同事实证反馈 2026-07-16，见 19 号实证补强） | 部署人工 + 金标回归 + 联调 |
+| B9 | 表格结构识别生产能力 | 旧 006 可作为第一方能力输入，但 PP-Structure/完整多模态不是 MVP 主链 | 企业阶段按 NS-A 单独立项 |
 | B10 | WeKnora 测试实例搭建 + live 契约测试 | ✅ OpenSpec 023 已由 PR #10/#16/#19/#20/#21 收口：受信镜像、provenance/SBOM、loopback-only 六服务、真实 provision/PDF/VLM 与 018 五节点均已有证据；未来 WeKnora/镜像升级仍须重新验收 | 部署+联调 |
 | B11 | 009 概念层编译实现（概念主页/义项/wikilink/purpose） | 📋 规格已收口；**等待 010 T5～T12 knowledge 域段合入后认领**。021 已合入只解除 010 前置，不能替代 010 产物；迁移 0008 | 开发型，中等 |
 | B12 | 010 结构化直入通道实现（**双通道**：meta bootstrap→003 零 Claim / 可信业务源→Claim/QA） | 🚧 T1～T4 已随 PR #14 合入；021 已随 PR #23 合入，**T5～T12 knowledge 域段现可从最新 main 认领**。迁移 0007；Owner-A 复审 | 开发型，中等偏大 |
 | B13 | 011 知识健康度巡检实现（过期/积压/漂移/退化/孤立/同类缺口/**任务可靠性**） | 📋 PR #12 主规格与 PR #22 fast-follow 已写入：远端/输入/工具链独立证据轴，多信号并报，无法归因时 degraded；**011 本体可认领**。020 registry 未就绪与 009 未落地分别按 unavailable/not-applicable 处理，不伪报健康 | 开发型，中小 |
 | B14 | 012 QA 一等对象实现（权威/派生QA，Claim绑定硬门禁） | 📋 规格已收口；**等待 010 T5～T12 交付 qa_staging 与冻结合同后认领**；迁移 0009 | 开发型，中等 |
 | B15 | 013 insurance MCP server 实现（4 个只读工具：产品对齐/按日期取事实/证据链/跨产品对照） | **规格就绪且已解锁（轨道 L3）**：`openspec/changes/013-insurance-mcp/`（M1–M5 + T1–T8；HTTP Streamable 主传输，读路径走已合入的 018 SnapshotReader） | 开发型，中小 |
-| B16 | 014 批量并发调度实现（三级任务模型/分片advisory lock/五级限流/批次控制台API） | `openspec/changes/014-batch-orchestration/proposal.md`；同分片锁顺带解决 007 多实例发布竞争 | 开发型，中等 |
+| B16 | 014 批量并发调度实现（三级任务模型/Space 分片 advisory lock/五级限流/批次控制台 API） | `openspec/changes/014-batch-orchestration/proposal.md`；锁身份必须至少包含 `(space_id, product_id, version_id)`，并与 NS-F/NS-C 的同快照 finalize 对齐；不能沿用仅 `product_id` 的跨租户锁 | 开发型，中等 |
 | B17 | 015 数据飞轮实现（Langfuse 信号→缺口工单→回流报表） | ✅ durable foundation 已随 PR #18 合入：Space-scoped checkpoint/processed ledger/gap 与 exactly-once 基础可用；F1.1b Langfuse 直连、F2.4 ReviewItem 动作投影、009 concept、011 合流仍 gated | 开发型，中小 |
 | B18 | **016 KnowledgeSpace 与强制作用域** | ✅ T1～T8、validation report、规格/质量双审与主代理验收完成 | 开发型，大 |
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；`0005`、统一读模型、可恢复 publish/rollback 与 5-node live 已验收，021 已解锁 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 🚧 019/021 前置已满足；T1 零模型 run-admission 在 PR #24，canonical 结果仍 BLOCKED。T2～T7/D4b 未运行；READY 前禁止真实模型调用 | 高 token 数据任务 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 🚧 canonical admission 仍 BLOCKED；T2～T7/D4b 未运行。保留为企业生产化，不阻塞 030 的独立 23-source MVP slice | 高 token 数据任务，NEXT |
 | B23 | 021 Source lifecycle ordering | ✅ 已随 PR #23 合入；SourceHead/Event/BackfillIssue、per-source lock/CAS 与迁移 0006 已落地 | 开发型，中大 |
-| B24 | 024 抽取召回提升 | ✅ 软件已随 PR #13 合入：durable `llm-attempts.sqlite`、真实 producer 归因、实验/配置 fail-closed 已落地；**真实召回与非退化证据仍归 020 D4/D4b** | 开发型任务，中 |
-| B25 | 025 合并前置弱值门槛 | 📋 规格已随 PR #17 合入；021 前置已满足，现可从最新 main 认领实现；迁移 0011 | 开发型，小 |
+| B24 | 024 抽取召回提升 | ⚠️ 旧软件范围已随 PR #13 合入；第一方权利已记录，但真实召回与非退化仍未验证。028 可选择性复用，效果由 030 MVP slice 证明 | 开发型任务，中 |
+| B25 | 025 合并前置弱值门槛 | ⛔ 规格已合入但不是 MVP 主链阻断；排在 010 full 与企业 merge hardening 后 | 开发型，小，NEXT |
 | B26 | 026 data_quality 端到端持久化（已占号未开目录） | 12 号 #2 采纳项对账发现只落了 pred 侧：需 Claim/Revision/Snapshot/MCP 全链字段+迁移+回填设计；业务确需时立项，落地前 010/013 等不得预支该字段承诺 | 开发型，中小 |
 
 > 验收以各 change spec、测试与 validation-report 为准。021 已落地；020 是环境/预算约束的数据运行，软件门禁绿不等于 canonical admission READY，更不等于真实 baseline 完成。
 
 ## 一、我们在做什么
 
-为大型寿险企业建设企业级知识平台：以 **WeKnora（本仓库，官方 v0.6.3 零分岔 fork）为平台底座**，以**插件式 Python Harness** 承载全部寿险知识能力（抽取、校验、合并、冲突裁决、版本、审核、金标评估），把文档编译成原子化、有版本、可溯源的知识，供 Agent 与人共用。这是一个**示范性项目**（企业级 harness agent 标杆），文档与代码质量要求高于交付速度。
+为大型寿险企业建设 **Enterprise LLM Wiki**：以 WeKnora（本仓库，官方 v0.6.3 零分岔 fork）承载企业平台、权限、解析、检索和页面载体，以插件式 Python Harness 承载可恢复的知识编译与治理，把文档和结构化知识持续编译成原子化、有版本、可溯源、可关联、可进化的 Wiki。目标态 Wiki active release 与同快照 MCP 是人和 Agent 的默认消费权威；P-1 前由 Harness reader 安全承接人类读取，RAW 只作证据/兜底。这是一个**示范性项目**，文档与代码质量要求高于交付速度。
 
 5 分钟了解项目：读 `docs/insurance-kb/00-project-overview.md`。
 
@@ -144,41 +141,41 @@
 
 1. **三仓库深度调研**（2026-07-11）：
    - 本仓库 = 官方 WeKnora 0.6.3 原样 + 迭代规划文档，保险代码为零；Wiki 能力是官方自带（数据模型/管线/API 细节见调研结论，已固化进 02/03 文档）；
-   - 确认三个平台缺口：Wiki REST 写入无乐观锁（last-write-wins）、无解析完成 webhook、`WikiEnabled=false` 时 REST 写 wiki 也 400；
-   - LLM-wiki-black（旧寿险定制项目）资产盘点：可迁移的字段字典、抽取路由、清洗正则、Q001-Q027 踩坑档案 → 全部落入 `docs/insurance-kb/06-asset-migration.md`；
+   - 确认三个平台缺口：Wiki 无 release namespace/原子 active alias（逐页 last-write-wins 与 draft 状态不足以保证同快照）、无解析完成 webhook、`WikiEnabled=false` 时 REST 写 wiki 也 400；
+   - LLM-wiki-black（旧寿险定制项目）已由业务方/项目权利人声明为项目方完整著作权资产；允许按 provenance + OpenSpec + Python Harness 重构路线承接，详见 `docs/insurance-kb/06-asset-migration.md`；
    - 上游 nashsu/llm_wiki（GPL-3.0）设计思想提炼 10 条，只借鉴不抄码。
-2. **架构定稿（ADR-001，业务方确认）**：插件式路线 B。WeKnora 不动（补丁≤3 且提 PR 回上游），保险能力全在 `harness/`（尚未创建），自有 PostgreSQL。详见 `docs/insurance-kb/02-architecture.md`。
+2. **架构定稿（ADR-001，业务方确认）**：插件式路线 B。WeKnora 不动（补丁≤3 且提 PR 回上游），保险能力全在 `harness/`、自有 PostgreSQL；“尚未创建”只是 2026-07-11 的历史状态，当前 Harness 已落地。2026-07-21 的 ADR-002 进一步确立 Enterprise LLM Wiki 为产品本体。详见 `docs/insurance-kb/02-architecture.md`。
 3. **设计文档集**：`docs/insurance-kb/` 00~10 全部完成（见该目录 README）：需求/架构/知识模型/抽取管道/金标评估/资产移植/schema 基线，外加 **08 技术选型**（逐组件开源框架与许可证核对）、**09 LLM Wiki 功能迁移对照表**（27 项功能的承接方与排期）、**10 开发规范**（SDD/TDD/边界纪律）。master plan 顶部已加架构修订说明。
 4. **Schema 基线接入**：业务方 Excel（2026-07-10）已转成 `docs/insurance-kb/schema-baseline/` 13 个 YAML；07 §3 的 18 条扩展字段提案已由业务方全部接受并并入 schema v1.1。
-5. **样本材料**：13 产品（说明书+条款+费率表+meta）已解压到仓库外 `../samples/`（**不入 git**，公司资料）。
+5. **样本材料**：13 产品的权威运行输入现为仓内 `dataset/shouxian_product/`；仓库外 `../samples/` 只保留为早期历史副本，不得再用于 canonical run。
 
 ## 三、已拍板决策（2026-07-11 业务方确认）与剩余卡点
 
 已拍板：
-1. **范围 = 全险种覆盖，不做单险种试点**。按样本到位程度分波：第一波用现有 13 产品（终身寿/年金/两全/医疗/意外/失能），第二波（重疾/护理/补充养老/意外医疗）待样本到位并入（07 §4）。
+1. **完整企业范围 = 全险种覆盖；MVP 允许跨险种薄切，不是单险种 demo。** 已批准 MVP 使用 5 产品、23 来源、医疗/终身寿险/年金；完整 13 产品和后续险种仍按波次进入企业验收。
 2. **18 条扩展字段提案全部接受**，已并入 schema v1.1（`docs/insurance-kb/schema-baseline/extensions-v1.1.yaml`）。
-3. **金标模型 = Claude（Fable/Opus 级）**，S0 金标注 Agent 按此接入。
+3. **金标是独立离线评测资产**：2026-07-11 首选 Claude（Fable/Opus 级）构建候选；2026-07-21 北极星进一步明确可插拔最强可用模型/多模型/人工，且绝不能成为生产依赖或直接发布来源。
 
 剩余卡点（不阻塞开工）：
 - **待业务方补样本**：重疾/护理/补充养老产品各 2~3 个、多产品混合文档 3~5 份、扫描件 1~2 份、FAQ/结构化 JSON 一份。
 
 ## 四、下一步计划（按序）
 
-1. **合并后收尾**：完成 ⓪-0f 的文档口径、旧 ledger、OpenSpec archive 与 strict/link/status 对账；只做收尾，不夹带 018 功能。
-2. **先合入 020 T1 PR**：保持当前零模型 `BLOCKED` 工件，不把软件门禁通过误报为真实基线完成。
-3. **解除 020 准入阻塞**：补齐 11 个产品历史 provenance 与一个产品缺失/未消费输入，冻结三模型不可变 identity，完成签名审批、预算账户和 provider probe。
-4. **只有 canonical admission 为 READY 后执行 T2～T7**：完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，运行时持续登记成本、断点与审批 identity。B10 WeKnora 环境可独立并行维护。
+1. **总体规划窗口**：登记 027～030 与 032（保留既有 031 operational admission），完成七个可独立认领的实施计划与独立计划复核；只改规划/规格，不写功能代码。
+2. **窗口 S**：先完成 027 NS-0，再完成 028 TemplatePackage/Compilation runtime MVP。
+3. **窗口 K/M/I 并行**：029 + 010 thin；013 + 032；030 source manifest/fixtures/E2E。008 审核工作台不承担人类消费页。
+4. **Day 5 起合流**：用独立 MVP admission 运行 23 来源，完成更新、冲突、Alert、人/MCP 同快照与回滚；完整 020 留到企业阶段。
 
 样本语料：业务方 2026-07-11 提供 `shouxian_product`（13 产品，39 PDF + 12 meta json）并确认拷入仓库 → `dataset/shouxian_product/`，作为测试验证集原料。仓库外 `../samples/` 的早期解压副本作废，以 dataset 内为准。
 
 ## 五、踩过的坑（绝对不要再踩）
 
-1. **不要把保险逻辑写进 Go/Vue**——02 §3 三条硬边界是 code review 检查项；违反 = 每次跟版人肉解冲突。
-2. **`WikiEnabled=false` 会连 REST 写 wiki 一起封掉**（`validateWikiKB`）；"关自动生成、留 API 写入"必须等 P-3 补丁；过渡方案：Wiki KB 不上传任何原始文档。
-3. **Wiki REST 是 last-write-wins**，`version` 字段不做并发校验；P-1 合入前 Harness 必须自行对 slug 串行化写入。
-4. **旧项目（LLM-wiki-black）的教训**：抽取无重试机制导致 section 失败即丢数据（新管道必须指数退避+死信）；向量维度硬编码 384 vs 实际 1152 曾丢 768 维语义（凡模型返回维度一律运行时探测）；`product_meta.json` 不算有效源资料（Q020）。
+1. **不要把保险逻辑写进 Go/Vue**——02 §3 五条硬边界是 code review 检查项；违反 = 每次跟版人肉解冲突。
+2. **`WikiEnabled=false` 会连 REST 写 wiki 一起封掉**（`validateWikiKB`）；“关自动生成、留 API 写入”必须等 P-3。P-3 前“不上传原文”只能防内置 ingest，不能解决发布原子性。
+3. **P-1 是生产 Wiki UI 前置**：当前逐页 last-write-wins、`draft/published` 和 per-slug 锁均不能隐藏/原子切换整套 snapshot。P-1 前只写 ACL 隔离、禁生产检索的 STAGING KB，并由 Harness reader 服务批准快照；绝不写普通用户可见的生产 Wiki KB。
+4. **第一方旧项目能力可承接但必须收敛到 Python**：每项迁移记录 source commit/path，把 TS 行为重构为 Python Harness port/plugin；禁止 Node/TS 领域 sidecar、双 queue 或双事实状态。运行任务有重试/Alert，模型能力运行时探测；路由/注册元数据仍不具备业务事实 Evidence 资格。
 5. **"未抽取到"绝不能写成"不存在"**——三态字段是硬约束（03），豁免类字段尤其如此。
-6. **GPL 边界**：nashsu/llm_wiki 及 LLM-wiki-black 代码不得复制进本仓库；字段字典等自研数据可迁移（06 §合规），最终需法务确认一次。
+6. **第一方与第三方不可混淆**：LLM-wiki-black 已获项目权利人确认，可选择性迁移；nashsu/llm_wiki、WeKnora 与其他第三方继续按各自许可证。第一方声明不能覆盖第三方实现；历史 004/routing/cleaning 是否生产可用由新 OpenSpec/质量门禁决定。
 7. **本仓库 git 历史是压平的单提交**；`upstream` remote 指官方 Tencent/WeKnora，跟版走版本列车（02 §8），不要直接跟 main。
 8. 样本语料经业务方确认已入库（`dataset/shouxian_product/`）；但金标产物含模型输出，release 前检查敏感信息。
 9a. **"本地绿 ≠ CI 绿"三连坑（2026-07-13 付费确认）**：① ruff 的 first-party 自动探测本地/CI 漂移→已显式 known-first-party；② mypy/ruff 本地缓存可产生假绿→验收复跑加 --no-cache / 删缓存；③ **上游 .gitignore 的 `WeKnora`（二进制名）曾吞掉 adapters/weknora/ 整个目录**，5 个核心文件从未进 git、CI 因此一直红而本地全绿→已加例外；**新增目录后必须查 `git status --ignored`，验收标准含"CI 绿"而不只是本地门禁**。
@@ -202,5 +199,5 @@
 
 - 动手前先讨论；文档驱动：先设计文档 → OpenSpec（`openspec/changes/`）→ 开发；SDD/TDD。
 - Python 优先；能用成熟开源不自研。
-- 金标 = 最强模型标注（本阶段无人工），金标子系统必须独立可持续维护。
+- 金标 = 独立、冻结、可版本化的离线评测资产，可由最强可用模型/多模型/人工构建；强模型不是生产或 CI 实时前置，golden 不直接发布，争议可由人复核。
 - 每次重大变更更新本文。

@@ -1,6 +1,7 @@
 # 020 阶段验证报告：T1 run-admission
 
-> 状态：**T1 软件闭环已在 021 合入后的基线上验证；真实数据运行 BLOCKED。** 本报告不是 D2～D5 的最终运行报告，T2～T7 与 T8 最终对账均未完成。
+> [!CAUTION]
+> 状态：**T1 软件闭环已验证；真实数据运行 BLOCKED。** `NS-RIGHTS=recorded` 已满足，但 `READY` 仍不是充分授权；只有 `NS-0=verified ∧ canonical admission=READY ∧ execution-surface-approved` 才可执行，且旧 004/006 只能经 028 provenance/重构。本报告不是 D2～D5 的最终运行报告。
 
 ## 1. 当前准入结论
 
@@ -73,7 +74,7 @@
 
 - 019/021 designated merge pin 已进入 source plan，clean-SHA artifact 已按两阶段流程生成。下一步补齐 11 个产品的历史 provenance，并修复 `平安福满分（2026）养老年金保险` 的缺失/未消费输入。
 - 只有当 Bailian 能提供 provider-guaranteed invocable immutable deployment ID 时，才可将其逐角色冻结为与实际 `model_id` 相同的 identity；否则 admission 保持 typed `BLOCKED`。之后再取得 provenance/budget 签名审批，创建并准入 durable budget account，只运行准入 probe。
-- 重新生成 canonical admission；只有结果为 READY 才可按 T2→T7 执行，任何不明确状态继续 BLOCKED/暂停。
+- 重新生成 canonical admission；即使结果为 READY，也只有 027/028 execution surface 与 NS-0 验收同时通过才可执行 T2→T7。任何一项不明继续 BLOCKED。
 - PostgreSQL integration 与 WeKnora live 本阶段未运行；它们不是 T1 零模型准入软件的完成证据，也不得由 non-live 测试冒充。
 - 受当前执行沙箱的共享 uv cache 权限与审批额度限制，CLAUDE.md 中等价的 `uv run` 命令未执行；本报告使用工作树锁定的 `.venv` 运行同一 Ruff、mypy 与 pytest 目标并保留真实退出结果。不得把这一说明改写为 exact `uv run` 已通过。
 - 两轮复核仅留下 P3 future hardening：为 session lock 自身补 `st_nlink == 1`，以及审视非 checkpoint baseline 工件是否统一 single-link。当前私有 run directory/同 UID 威胁边界下不阻塞 T1，但后续应单独 TDD，不能静默扩大本 change。

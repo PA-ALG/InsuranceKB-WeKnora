@@ -1,5 +1,8 @@
 # 006 规格（验收条件）——模板抽取 Fast Path 与表格结构识别
 
+> [!CAUTION]
+> **历史验收规格，不再单独授权实现或生产执行。** 当前模板资产已有第一方权利确认，但不满足北极星不可变 TemplateApproval/lifecycle/CAS 合同；后续只可按 provenance 迁移到 028 新规格并重新验收。
+
 > 由 proposal.md 推导的可验证条款；测试名引用条款编号（10 §2 TDD 约定）。
 > 权威设计：docs/insurance-kb/11 §1（三层模板）、§2（解析升级链）、12-dayu-borrowings #1/#2/#4。
 > 影响面：`harness/compiler`（templates/ 新包、sections 指纹、feedability、pipeline/models/cli）；

@@ -1,5 +1,8 @@
 # 024 · 抽取召回提升（extract_empty 主攻 + 值粒度对齐）
 
+> [!CAUTION]
+> **“软件完成”仅是历史测试状态；当前 production-disabled。** 本 change 继承的 004 路径属于可审计第一方资产，但必须按 provenance 迁移到 028；027 完成运行时硬封且 030 MVP 或 020 canonical 的适用 admission READY 前，不得运行或宣称真实提准。
+
 > 状态：**软件实现完成（2026-07-21，PR #13 为集成载体）**。轨道 L5（见 docs/insurance-kb/22）；本 change 的软件验证零真实模型调用，真实效果结论仍由 020 D4 承接。
 > 设计权威：005 validation-report（归因清单=本 change 的工单来源）、04（管道结构）、11（模板/表格）、21（复审前自测）。
 

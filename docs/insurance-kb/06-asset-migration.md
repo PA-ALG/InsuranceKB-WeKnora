@@ -1,285 +1,127 @@
-# LLM-wiki-black 资产移植清单
+# 06 · LLM Wiki 资产迁移与许可证边界
 
-> **读者**：执行移植的 Python 工程师。
-> **目的**：过去 2 个多月在 `LLM-wiki-black`（`feature/product-catalog-domain` 分支）上沉淀的寿险定制成果，哪些带到新平台（WeKnora 底座 + Python Harness）、以什么形态带、哪些明确不带。
-> **源仓库**：`/Users/houjing/code/kb_LLMwiki/LLM-wiki-black`（本文所有行号以该分支当前代码为准，已逐一核对源文件）。
-> **关联文档**：[04-extraction-harness.md](04-extraction-harness.md)（抽取管道设计，本文多处引用其落点）、[03-knowledge-model.md](03-knowledge-model.md)（知识模型）。
+> **状态（2026-07-21）**：业务方/项目权利人已明确声明 `silvielala412-lab/LLM-wiki-black` 由项目方完整拥有著作权，并授权本项目审计和迁移其核心能力。第一方迁移不再需要 clean-room，也不再作为 MVP 阻断。
+> 本文是工程决策记录，不替代企业需要的正式法务签章。第三方项目与依赖仍按各自许可证管理。
 
----
+## 0. 权利与工程裁决
 
-## 1. 移植资产总表
+| 资产 | 当前身份 | 工程使用规则 |
+|---|---|---|
+| `LLM-wiki-black/feature/product-catalog-domain` | 项目方第一方资产 | 可直接阅读、审计、测试和选择性迁移；每项迁移记录 source commit/path 和新 Harness 落点 |
+| 当前仓库中由上述第一方项目迁入的 routing/cleaning/004/006/024 资产 | 第一方历史实现 | 权利不再阻断；进入生产前仍须新 OpenSpec、TDD、Golden Slice、Evidence/ChangeSet/Alert 门禁和架构复核 |
+| `nashsu/llm_wiki` | 第三方 GPL 项目 | 默认只借鉴产品思想；直接使用代码或表达必须另行记录许可证兼容决定 |
+| Tencent WeKnora | 第三方 MIT 平台底座 | 按 MIT 与上游版本列车使用；保险业务逻辑不进入 Go/Vue 核心 |
+| 其他库、模型 SDK、数据与 FAQ | 第三方或业务数据 | 逐项记录许可证/授权、版本、来源和内容 hash |
 
-| # | 资产 | 源文件位置 | 目标形态 | 移植方式 | 优先级 |
-|---|------|-----------|---------|---------|--------|
-| A1 | 6 险种业务字段字典（基础 37 + 专属字段） | `frontend/src/lib/product-catalog-modules.ts:83-249` | `harness/schemas/fields/*.yaml` | **数据翻译**（TS 常量 → YAML） | P0，S1 前置 |
-| A2 | 险种知识模块体系（27 基础模块 + 各险种专属模块、7 抽取组） | 同上 `:259-446` | `harness/schemas/modules/*.yaml` | 数据翻译 | P0，S1 前置 |
-| A3 | 险种级模块白名单（防越域） | 同上 `:389-453`（`CATEGORY_BASE_MODULE_NAMES` / `isModuleAllowedForCategory`） | 白名单配置 + 路由校验函数 | 数据翻译 + 思想重写 | P0 |
-| A4 | registry 层 3 个 schema（ProductOverview / ProductComparison / RateTable，含 importance 分级与 lintRules） | `frontend/src/lib/insurance-schema-registry.ts:1831-1934` | 并入 Claim 属性 schema 与 lint 规则 | 数据翻译 | P0 |
-| A5 | 7 组分轮抽取顺序 + 关键词路由正则 | `frontend/src/lib/product-catalog-extractor.ts:2923-2945`（`GROUP_ORDER` / `GROUP_KEYWORDS`） | 抽取路由配置（04 文档"分段定向抽取"） | 数据翻译 | P0 |
-| A6 | 占位值/弱值清洗正则（30+ 模式） | 同上 `:35-36`（`PLACEHOLDER_REGEX` / `SOURCE_ONLY_PLACEHOLDER_REGEX`） | `harness/extraction/cleaners.py` | 数据翻译 | P0 |
-| A7 | 模块→字段桥接与长字段聚合映射 | 同上 `:2063-2077`（`MODULE_TO_FIELD_BRIDGE`）、`:321-333`（`LONG_FIELD_MODULE_MAP`） | 确定性回填规则配置 | 数据翻译 | P0 |
-| A8 | 字段级抽取提示词库（hints / aliases / 证据关键词） | 同上 `:150-307`（`FIELD_EXTRACTION_HINTS` / `FIELD_NAME_ALIASES` / `FIELD_EVIDENCE_KEYWORDS` / `FIELD_DIRECT_EXTRACTION_HINTS` / `FIELD_PREFERRED_EVIDENCE_MODULES`） | prompt 片段库 + 定向补漏同义词库种子 | 数据翻译 | P0 |
-| A9 | 二次精炼字段映射 | 同上 `:236-266`（`REFINE_EXTRA_FIELDS_BY_MODULE`） | 补漏 pass 的模块→字段配置 | 数据翻译 | P1 |
-| A10 | 智能值替换/信息量评分/字段兼容性判断 | 同上 `:108-148, 468-522` | Python 重写（逻辑思想 + 测试用例固化） | **思想重写** | P0 |
-| A11 | 文档类型白名单路由（QA/说明书识别） | 同上 `:1367-1375` | 文档分类器的确定性前置规则 | 思想重写 | P0 |
-| A12 | 增量合并保旧值 + 冲突进 review + `value_sources` 溯源删除 | extractor 增量部分（`:2692-2760` 一带）+ `docs/PROJECT_HISTORY.md` v2.5/v2.6 | Claim 合并/ChangeSet 逻辑（03 文档） | 思想重写 | P0 |
-| A13 | Q001-Q027 决策档案 + 逐版本迭代史 | `docs/PROJECT_HISTORY.md:242-268` 及全文 | 本文 §4 摘录 + 设计约束清单 | 直接引用 | P0（读完再动手） |
-| A14 | RAG 保险证据评分/术语变体扩展设计 | `docs/ARCHITECTURE.md`（RAG 流程 148-177 行） | 检索调优思路（WeKnora 侧配置 + MCP 工具设计参考） | 思想重写 | P2 |
-| A15 | 服务端批量导入 API 契约（批次/duplicate_policy/SSE/重试） | `backend/src/handlers/ingest.rs` + `backend/worker/ingest-worker.ts`、PROJECT_HISTORY v2.8 | Harness 批量导入 API 设计参考 | 思想重写 | P1 |
-| A16 | 多模态图片抽取 spec（caption-first，未实施） | `docs/plans/multimodal-images.md` | P3 阶段设计输入 | 直接引用 | P3 |
+结论：以前以 `NS-LEGAL` 表示的“LLM-wiki-black 权利未决”已由项目权利人声明解除。后续使用 `NS-RIGHTS=recorded` 表示该决定已记录；它不是要求重新实现第一方代码的门禁。仍需完成的是非阻断的第三方 inventory，以及每个迁移 PR 的 provenance。
 
-**移植方式说明**：
-- **数据翻译**：内容是业务数据/配置（字段名、正则、映射表），照实翻译为 YAML/Python 常量，写单测保证与源一致；
-- **思想重写**：内容是代码逻辑，只继承设计思想，用 Python 按新架构重新实现，不复制 TS 源码（见 §6 许可证）；
-- **直接引用**：文档类资产，复制进新仓库文档树或在设计文档中引用。
+### 0.1 语言收敛：迁移能力，不保留第二套 TS 运行时
 
----
+权利确认表示可以完整阅读、测试、翻译和重构 TypeScript 源码；它不改变本项目的目标架构。`LLM-wiki-black` 不以 Node/TypeScript 服务、sidecar、npm workspace、TS queue 或 localStorage 知识库的形态进入生产。领域能力统一落到 Python 3.12 Harness：
 
-## 2. 字段字典详单（A1，已逐字段核对源码）
+1. 先记录 TS 来源 commit/path 与接受/拒绝行为；
+2. 把 schema、prompt、规则和测试向量转成内容寻址的声明式资产；
+3. 把算法行为重构为 Python ports/plugins，并复用现有 Scope/Source/Claim/Evidence/Review/Release 主链；
+4. 用 characterization tests 与当前 Golden Slice 证明语义，不建立 Python→Node 运行时桥；
+5. 自有 TypeScript 仅可存在于展示/API client 层，不拥有事实、任务、冲突或发布状态。
 
-> 源文件实际计数：基础字段 **37** 个（此前调研报告写 36，以本清单为准）、医疗险 24、重疾险 18、意外险 14、寿险 20、年金险 22。每险种完整字段 = 基础字段 + 专属字段（`PRODUCT_FIELDS`，`product-catalog-modules.ts:242-249`）；意外医疗险复用医疗险专属字段。
+因此，后文的“选择性迁移”统一指 **TS 能力 → Python Harness**，而不是在 WeKnora 旁长期运行两套领域后端。WeKnora 上游的 Go/Vue/TypeScript 仍按平台版本列车维护，不属于这次语言迁移范围。
 
-**字段属性含义**（`ProductField` 接口，`:67-80`）：
-- `source`（取值来源）：该字段权威数据从哪来——`产品条款`/`产品说明书`/`保险责任`/`免责条款`等指向文档抽取；`官网同步`/`口袋E`/`产品芯平台同步`/`运营数据`指向系统对接；`人工填写`/`人工填充`指向运营录入。**移植后映射为 Claim 的 evidence 来源类型与权威度等级**；
-- `valueType`：`short`=结构化短值（表格单行），`long`=独立长文本段落（在旧系统单独成页）；
-- `extractable`：能否从 PDF 自动抽取（`false` = 必须人工/系统对接填充）——**移植后即三态字段中"不适用自动抽取"的先验标记**；
-- `valueHint`：取值示例，直接进 prompt。
+## 1. 迁移原则：保留能力，重构边界
 
-### 2.1 基础字段（37，全险种通用）
+迁移目标不是把旧产品整体嵌入 WeKnora，而是把真正有价值的领域能力重构为稳定的 Python Harness 组件：
 
-| 字段名 | 来源 | 类型 | 可抽取 | 备注/取值示例 |
-|--------|------|------|--------|--------------|
-| 险种代码 | 官网同步 | short | 否 | |
-| 险种简称 | 产品条款 | short | 是 | |
-| 险种名称 | 产品条款 | short | 是 | |
-| 产品别称 | 产品条款/说明书/问答 | short | 是 | 简称、俗称、推广名（Q027 补入） |
-| 开始使用时间 | 官网同步 | short | 否 | |
-| 结束使用时间 | 官网同步 | short | 否 | |
-| 产品类别 | 产品条款 | short | 是 | |
-| 产品类型 | 产品条款 | short | 是 | |
-| 销售渠道 | 口袋E | short | 否 | |
-| 发布外网 | 官网同步 | short | 否 | |
-| 销售状态 | 官网同步 | short | 否 | |
-| 主附加险 | 产品条款 | short | 是 | |
-| 产品简介 | 产品说明书 | long | 是 | |
-| 产品特色 | 产品说明书 | long | 是 | 仅从说明书特色段落提炼 |
-| QA | 产品问答/销售问答/常见问答 | long | 是 | 仅从问答类文件抽，保留问答配对（Q027） |
-| 适用人群 | 人工填写 | short | 否 | 与客户收入相关 |
-| 保单权益 | 产品条款 | long | 是 | |
-| 可享服务 | 三大服务清单 | short | 否 | 如臻享RUN、居家养老、高端康养 |
-| 交费期限 | 口袋E/产品说明书 | short | 是 | 10/15/20/30年交 |
-| 交费方式 | 口袋E/产品说明书 | short | 是 | 趸交、年交、半年交、季交、月交 |
-| 犹豫期 | 产品条款 | short | 是 | |
-| 等待期 | 产品条款 | short | 是 | |
-| 宽限期 | 产品条款 | short | 是 | |
-| 可覆盖风险 | 保障内容映射 | short | 是 | 保险金-风险映射；有按险种的确定性兜底（`:2126-2134`） |
-| 产品搭配规则 | 口袋E | short | 否 | 聚财宝或固定组合 |
-| 保障期间 | 产品说明书 | short | 是 | |
-| 保障期间分类 | 按保障期间计算 | short | 是 | 短期/长期/终身（规则派生字段） |
-| 投保年龄 | 产品说明书 | short | 是 | |
-| 费用 | 产品条款 | short | 否 | 注意 Q012：曾被"退保费用"误回填 |
-| 产品档次 | 按适用人群计算 | short | 否 | |
-| 保单件数 | 产品芯平台同步 | short | 否 | 运营数据 |
-| 退保率 | 运营数据 | short | 否 | |
-| 理赔件数 | 运营数据 | short | 否 | |
-| 理赔金额 | 运营数据 | short | 否 | |
-| 保险期间和续保 | 产品说明书 | long | 是 | 文本较长 |
-| 犹豫期及合同解除（退保） | 产品条款 | long | 是 | |
-| 投保范围 | 产品条款 | long | 是 | |
+```text
+第一方能力盘点
+  → 明确输入/输出/失败模式
+  → 映射到北极星对象与接口
+  → OpenSpec + 条款级测试
+  → Python Harness 最小实现
+  → Golden Slice / E2E 验收
+  → 记录 source provenance 与取舍
+```
 
-### 2.2 医疗险专属字段（24，意外医疗险复用）
+每个迁移 PR 必须说明：
 
-| 字段名 | 来源 | 类型 | 可抽取 | 备注 |
-|--------|------|------|--------|------|
-| 0免赔 | 人工填充 | short | 是 | 是/否 |
-| 癌症医疗 | 产品条款 | short | 是 | 癌症相关保险金 |
-| 保什么 | 保险责任 | long | 是 | |
-| 保障人群 | 按投保年龄映射 | short | 是 | 儿童(0-17)/成人(18-60)/老人(60+) |
-| 保证续保 | 产品条款 | short | 是 | |
-| 保证续保期 | 产品条款 | short | 是 | |
-| 不限社保 | 人工填充 | short | 是 | |
-| 高危职业 | 按投保职业推断 | short | 否 | |
-| 投保职业 | 产品核保数据 | short | 是 | |
-| 额度类型 | 人工填充 | short | 是 | 小额医疗/百万医疗 |
-| 免赔额 | 产品条款 | short | 是 | |
-| 报销门诊住院范围 | 产品条款 | short | 是 | 仅门诊/仅住院/门诊+住院 |
-| 增值服务 | 人工填充 | short | 是 | 绿通、垫付、预赔、闪赔 |
-| 核保方式 | 人工填充 | short | 否 | 智能/人工核保 |
-| 津贴 | 保险责任 | short | 是 | 住院津贴、恶性肿瘤津贴 |
-| 给付限额 | 保险责任 | short | 是 | 如一般医疗保险金200万 |
-| 报销范围 | 保险责任 | long | 是 | |
-| 报销比例 | 保险责任 | short | 是 | |
-| 医院范围 | 产品条款 | short | 是 | |
-| 补偿原则 | 人工填充 | short | 是 | 能否重复理赔 |
-| 特殊免责 | 免责条款 | short | 是 | 自杀可赔、猝死可赔 |
-| 高端医疗 | 人工填充 | short | 否 | 特需病房、国际部 |
-| 险种转换 | 人工填充 | short | 是 | |
-| 费率可调 | 按产品名判断 | short | 是 | |
+1. 来源仓库、branch/commit/path；
+2. 迁移的是产品能力、规则、schema、prompt 还是测试向量；
+3. 新落点及为什么符合 WeKnora adapter / Harness compiler / Wiki governance 边界；
+4. 是否改变 Claim/Evidence/ChangeSet/ReleaseSnapshot 语义；
+5. 用什么独立业务样本和 Golden Slice 验证；
+6. 哪些旧行为明确没有迁移以及原因。
 
-### 2.3 重疾险专属字段（18）
+## 2. 第一批应迁移的核心能力
 
-| 字段名 | 来源 | 类型 | 可抽取 | 备注 |
-|--------|------|------|--------|------|
-| 保什么 | 保险责任 | long | 是 | |
-| 保障人群 | 关联投保年龄 | short | 是 | |
-| 投被保人豁免 | 保险条款 | short | 是 | **豁免类核心字段**（配合被保人/投保人保费豁免模块） |
-| 疾病分组 | 保险责任 | short | 是 | 分组/不分组 |
-| 赔付次数 | 保险责任 | short | 是 | 单次/多次赔付 |
-| 高危职业 | 按投保职业推断 | short | 否 | |
-| 满期返还 | 保险责任 | short | 是 | |
-| 投保职业 | 产品核保数据 | short | 是 | |
-| 核保方式 | 人工填充 | short | 否 | |
-| 轻中重症疾病种类 | 保险责任 | short | 是 | 轻症XX种，重症XX种 |
-| 重疾赔付 | 保险责任 | long | 是 | |
-| 运动达标涨保障 | 保险责任 | short | 是 | |
-| 特殊保额 | 保险责任 | short | 是 | 特定疾病3倍赔偿 |
-| 特疾 | 保险责任 | short | 是 | 少儿特疾、女性特疾 |
-| 购买限制 | 人工填充 | short | 是 | |
-| 起投金额 | 人工填充 | short | 否 | |
-| 保证续保 | 产品条款 | short | 是 | |
-| 保证续保期 | 产品条款 | short | 是 | |
+| 能力 ID | 第一方能力价值 | 新系统落点 | MVP 验收 |
+|---|---|---|---|
+| MIG-01 | 保险产品 schema、模块和文档类型约束 | `TemplatePackage` + `schemas/` | 3 类产品使用正确字段集合，越域字段不污染 |
+| MIG-02 | 长文档分段、章节分组、字段组路由和跨段合并 | `orchestration/` + compiler ports | 3 PDF/产品可恢复编译，失败阶段可重试 |
+| MIG-03 | 多产品材料的产品/版本归属与别名处理 | 现有 `product/` + Router stage | 混合文档事实归属正确，歧义进入 unassigned |
+| MIG-04 | 字段来源、值 provenance、缺失项和补抽 | `Evidence` + Gap stage + `AgentReceipt` | 已展示 Claim 全有可回验 Evidence；unknown 不变成不存在 |
+| MIG-05 | 实体身份、别名、去重和关系 | Claim subject/identity ports；完整关系层放企业阶段 | 普通/分红型和相似产品名不串知识 |
+| MIG-06 | 来源权威度、更新和冲突规则 | `ChangeSet/Conflict/ReviewItem` | add/enrich/supersede/conflict 不静默覆盖 |
+| MIG-07 | 批次 SHA、幂等、状态和重试 | `CompilationJob/StageRun/Attempt/Alert` | 同 run 重放不重复写，失败可恢复 |
+| MIG-08 | 审核动作语义 | 现有统一 ReviewItem/Workbench | approve/reject/defer/overturn 不再存在双审核模型 |
 
-### 2.4 意外险专属字段（14）
+## 3. 明确不整体迁移
 
-特殊免责、保什么、保障人群、不限社保、满期返还、生效时间、高危职业（不可抽）、投保职业、住院津贴、综合意外、意外身故、意外伤残、特殊保额（公共交通额外赔/自驾）、购买限制。除"高危职业"外均可抽取；"保什么"为 long。
+- 与浏览器、Zustand、localStorage、桌面端或旧文件系统布局耦合的领域逻辑；
+- 把 Markdown、目录、页面表格当作事实数据库的设计；
+- 两套互不一致的审核/版本体系；
+- 产品 fast-path 提前返回、绕过 identity/relation/audit/governance 的路径；
+- fire-and-forget 任务、静默空结果和页面级直接覆盖；
+- 4,000 行级巨型 extractor 或其他难以独立测试的单体模块；
+- `project_path` 类开放文件系统 API、开放 CORS、桌面剪藏、Deep Research 等非 MVP 能力。
 
-### 2.5 寿险专属字段（20）
+“不整体迁移”不等于禁止复用其中任何代码，而是必须先拆出单一职责、稳定接口和可独立验证的组件。
 
-保什么（身故/全残保额，long）、保障人群、健康告知（long）、免责少、全残保障、意外身故、疾病身故、满期返还、是否可加保、投保职业、最高保额（不可抽）、部分领取、保证利率、保单贷款（利率/比例/期限）、特殊免责、购买限制、有分红、现金价值（不可抽）、初始费用（万能险）、领取手续费（万能险）。
+## 4. Provenance 台账
 
-> 寿险有一组"责任辨析"字段（全残保障/意外身故/疾病身故/满期返还），prompt 里有严格的"仅原文明示才填写"约束（`FIELD_DIRECT_EXTRACTION_HINTS`），这是防幻觉的关键资产，必须一并移植。
+仓库内为每项迁移保存最小台账：
 
-### 2.6 年金险专属字段（22）
+```yaml
+migration_id: MIG-XX
+source_repository: silvielala412-lab/LLM-wiki-black
+source_branch: feature/product-catalog-domain
+source_commit: <immutable sha>
+source_paths: [<path>]
+source_language: typescript
+rights_status: project-owned
+target_openspec: <NNN>
+target_paths: [<path>]
+target_language: python
+translation_method: behavior_port_with_characterization_tests
+accepted_behaviors: [<behavior id>]
+rejected_behaviors: [<behavior id>]
+approved_by: <project owner>
+approved_at: <timestamp>
+```
 
-保什么（long）、保障人群、保证领取、高流动性（保单贷款/减保/部分领取特征）、教育金、领钱时间早、双被保人、投保门槛低、万能账户、养老金、有分红、部分领取、领取规则（月领/年领）、产品利率、保证利率、保单贷款、起投金额（不可抽）、现金价值（不可抽）、契调限制、初始费用、领取手续费、领取期间。
+第三方资产必须使用自己的 `rights_status/license`，不得继承 `project-owned`。对 nashsu、WeKnora 或其他依赖的许可证判断，与 LLM-wiki-black 第一方权利声明严格分开。
 
----
+## 5. 生产准入仍然存在
 
-## 3. 模块体系与抽取机制资产（A2~A11）
+第一方权利已确认不代表历史代码自动达到生产质量。任何迁移能力进入生产仍须：
 
-### 3.1 模块体系（A2）
+- 对应 OpenSpec 与条款级测试；
+- 生产只依赖批准的 MiniMax/Qwen/Qwen-VL 级弱模型；
+- Evidence 引文回验、三态和跨产品污染门禁；
+- ChangeSet/Conflict/ReviewItem，不直接写 Wiki；
+- 持久 Attempt/Alert，失败不伪装成功；
+- 授权人批准完整 ReleaseManifest hash；
+- 人和 Agent 读取同一 ReleaseSnapshot；
+- 固定 MVP Golden Slice 非退化。
 
-- **7 个抽取组**（`ModuleGroup`）：`basic_info`（基础信息/投保约束/时间周期）、`coverage`（保险责任）、`cost_rules`（免赔/费率/续保/赔付比例）、`exclusion_uw`（免责与核保）、`claim_service`（理赔与增值服务）、`contract_admin`（退保/复效/变更）、`disease_definition`（疾病释义，内容长、单独 token 预算）。
-- **基础模块 27 个**（覆盖产品基础信息、QA、投保约束×5、核保结论×6【标体/加费/除外/延期/拒保/健康告知】、等待期/犹豫期、免责×2、保全×4、理赔×2、费率表、疾病释义×3）。
-- **险种专属模块**：医疗险 20（一般住院医疗、特殊门诊、住前住后门急诊、门诊手术、重疾医疗、院外特药、质子重离子、赴日医疗、年度免赔额、有/无社保费率、6年保证续保、理赔材料×2、赔付比例×2、第三方分摊、垫付、绿通、医院限制）；重疾险 16（重疾/轻症/中症保险金、分组、多次赔付、特疾额外赔、身故金、**投保人/被保人保费豁免**、保费调整、加保/减保/保单贷款、理赔材料×2、现金价值表）；意外险 6；寿险 5；年金险 10（年金给付规则、领取期间、万能账户、保证利率、初始费用、领取手续费、贷款/减保/现价表、领取明细示例）。
-- 每个模块带 `sourceDocHints`（优先文档类型）、`required`（完整度计算基准）、`entityType`（英文实体类型名，可直接沿用为 Claim 的 predicate 命名空间）。
-- **文件命名规范** `{险种类别}-{产品名}-{模块名}`、字段页 `{类别}-{产品名}-字段-{字段名}`：新平台改用 slug + 产品实体 ID 关联（见 03 文档），命名规范仅作展示层参考，**不再作为身份标识**（master plan P0-1 已明确"不以 Wiki 路径作为身份"）。
+生产禁用如果仍存在，应明确写成“缺 OpenSpec/质量/模型/发布门禁”，不得再错误归因于 LLM-wiki-black 第一方权利未决。
 
-### 3.2 险种白名单（A3）——Q011 教训的固化
+## 6. 审查清单
 
-`CATEGORY_BASE_MODULE_NAMES` 按险种限定可生成的基础模块（如年金险不含健康告知/等待期/疾病释义组；意外险仅加投保职业与未成年人保额限制）。**背景**：年金险曾生成"孕妇投保限制"等越域模块污染检索。新平台落点：schema profile 的模块白名单 + 入库前确定性校验（04 文档"规则校验"步骤），越白名单内容一律进 extras 候选通道。
-
-### 3.3 抽取路由（A5）
-
-- `GROUP_ORDER`：basic_info → coverage → cost_rules → exclusion_uw → claim_service → contract_admin → disease_definition（组间串行、组内 chunk 并行；basic_info 优先因多在文首，疾病释义最后因最长）。
-- `GROUP_KEYWORDS` 正则（照抄源码，`:2937-2945`）：
-  - basic_info: `险种|产品|保险期|保险期间|交费|保障期|保障期间|投保|承保|年龄|简称|代码|主险|附加|公司|计划|等待期|无等待期|犹豫期|宽限期|豁免|重新投保|届满|合同解除|退保`
-  - coverage: `null`（扫描全部分块）
-  - cost_rules: `免赔|费率|保费|费用|赔付|比例|限额|给付|计算|上浮|社保`
-  - exclusion_uw: `免除|免责|除外|既往|告知|核保|拒保|加费|延期|健康`
-  - claim_service: `理赔|报案|材料|垫付|绿通|就医|服务|赔付|给付|申请`
-  - contract_admin: `退保|复效|变更|受益人|投保人|解除|犹豫|终止|中止`
-  - disease_definition: `疾病|释义|定义|恶性|肿瘤|心肌|脑|重大|中症|轻度|轻症`
-- 实测效果：只把含相关关键词的分块送入对应组，**降约 70% LLM 调用**。落点：04 文档"分段定向抽取"的 chunk 预筛配置。
-
-### 3.4 占位值/弱值清洗（A6、A10）
-
-- `PLACEHOLDER_REGEX`（`:35`）：`未明确|未提及|未提到|未说明|未在本|未在证据|未从证据|证据片段未|证据片段中未|证据片段没有|证据中未|该字段未|文中未|原文未|原文中未|材料未|未找到|未见|没有提到|证据不足|无明确|不涉及|暂无|暂未|无此信息|无相关|本章节未|条款未|不适用于本|N/A|n/a|无$`（行首锚定）。
-- `SOURCE_ONLY_PLACEHOLDER_REGEX`（`:36`）：`详见来源文件|详见费率表|详见(原文|附件|附表|条款|附录)|参见来源文件|请参见来源文件`。
-- **含义变化**：旧系统把占位值统一转空；新平台占位值应转为三态中的 `unknown`（不能等同 `absent_explicitly`），这是 master plan P0-3 的硬要求。
-- 弱值判断链（思想重写）：`isFieldValueCompatible`（字段-值语义兼容，如 QA 必须含问答标记、"投保年龄"不得混入职业类别、"保证续保"不得填年限）→ `isLessSpecificThanExisting`（≤12 字且为旧值子串则拒绝）→ `shouldRejectMainFieldValue`（防"费用"被退保损失文案回填，Q012）。
-- `informationScore`（`:468-474`）：长度 + 列表标记×80 + 分隔符×20 + 领域关键词×30；`shouldReplaceFieldValue` 用它决定新值是否替换旧值，并对投保年龄做"取更宽范围"的数值特判（费率表年龄常窄于条款，Q008/费率表陷阱）。**移植时把这些判断连同触发它们的历史 bug 写成 pytest 用例。**
-
-> **落地对账（2026-07-16 代码级审计）**：本节 A6 部分（PLACEHOLDER+SOURCE_ONLY 两族 → 三态 unknown/source_pointer）已落码 `compiler/cleaning.py`；**A10 部分尚未落码**——`WEAK_UNACTIONABLE`/`REFERENCE_ONLY` 两族与字段-值兼容性链（Q012/Q026）由 **change 024 E6** 承接（抽取侧）；合并侧"更粗略新值不开冲突"门槛由 **change 025**（已占号）承接；`informationScore` **不再作为值替换判据**（merge 的权威序①②有意压制完整度信号，属设计取舍非遗漏），仅作 008 工作台审核排序的可选辅助信号（Q007 教训保留：权重须金标验证）。
-
-### 3.5 桥接与聚合（A7）
-
-- `MODULE_TO_FIELD_BRIDGE`（`:2063-2077`）：14 个模块的关键字段确定性回填主字段表，如 犹豫期模块.犹豫期天数→犹豫期、年度免赔额.免赔额类型→0免赔、6年保证续保.保证续保期→保证续保期、减保.减保规则→部分领取。
-- `LONG_FIELD_MODULE_MAP`（`:321-333`）：长字段从多模块聚合，如"保什么"聚合 17 个责任类模块、"投保范围"聚合投保年龄/人群/职业。
-- 落点：这类"抽取后确定性组装"逻辑对应 04 文档的"字段桥接"阶段——**凡能用代码组装的绝不让 LLM 再写一遍**。
-
-### 3.6 Prompt 资产（A8、A9）
-
-- `FIELD_EXTRACTION_HINTS`：按模块×字段的精确抽取指令（如"犹豫期只抽天数""最高投保年龄警告不要从费率表推算""等待期豁免情形必须逐条列出不要只取第 1 条"）——这些是真实踩坑后写下的，全部保留；
-- `FIELD_NAME_ALIASES`：字段别名（"保什么"=保险责任/保障责任/保险金责任等）；
-- `FIELD_EVIDENCE_KEYWORDS`（`:206-234`）：约 30 个字段的证据关键词表——**这是 04 文档"定向补漏 pass"同义词库的现成种子**（如豁免/等待期相关：无等待期、等待期豁免、意外伤害、重新投保、上一保险期间、届满、60日、审核同意）；
-- `FIELD_DIRECT_EXTRACTION_HINTS`（含 EXTRA 合并）：字段级防幻觉约束（"仅原文明示才填写"系列）；
-- `FIELD_PREFERRED_EVIDENCE_MODULES`：字段优先证据模块（如现金价值优先看现价表/减保/保单贷款模块）；
-- `REFINE_EXTRA_FIELDS_BY_MODULE`（A9）：二次精炼时按模块补抽的字段清单（19 个模块条目）。
-
-### 3.7 文档类型路由（A11）——Q026/v2.9 教训
-
-`isQaDocumentName`（文件名含 QA/Q&A/FAQ/产品问答/销售问答/常见问答/常见问题/客户问答/问答手册/异议处理）与 `isProductDescriptionDocumentName`（产品说明书/介绍书/简介/手册）：**QA 字段只从问答类文档抽、产品特色只从说明书抽**。落点：文档分类器的确定性前置规则 + schema profile 的字段级文档白名单。
-
-### 3.8 增量合并与冲突（A12）
-
-旧系统行为：增量导入时已有非空值不被覆盖；新旧冲突进 review queue 并保留旧值；比旧值更粗略的新值直接忽略不产生冲突（Q026）；字段页维护 `value_sources`，删除源文件只清空"失去全部来源"的字段（Q025）。新平台落点：这套语义升级为 Claim 级 ChangeSet（add/enrich/supersede/conflict/retract）+ 证据引用计数降级（见 03 文档与 master plan P0-4），旧逻辑作为行为基准写进集成测试场景。
-
----
-
-## 4. Q001-Q027 决策档案摘录（A13）
-
-> 源：`docs/PROJECT_HISTORY.md:242-268`。每条 = 结论 + 对新平台的约束含义。**动手写 harness 前必读**，其中 🔲 项在新平台上必须重新验证。
-
-| # | 结论 | 对新平台的约束 |
-|---|------|---------------|
-| Q001 | 上传时手动选择险种类型 | 自动分类置信度不足时必须允许人工指定 profile；分类结果可覆盖 |
-| Q002 | 需要独立"产品库"浏览页 + 上传界面 | 产品维度是一等浏览入口（对应产品仪表盘需求⑥） |
-| Q003 | DEDUP_KEY_FIELDS 已确认 | 产品去重键以 product_code 为首选基准（registry schema 同此） |
-| Q004 | 险种产品与服务手册重叠：wikilink 关联，不合并 | 产品实体与服务权益实体分域，只建关系不混内容——对应"义项/限定页"模型 |
-| Q005 | LLM 推断型字段标注 `confidence: inferred` | 推断值与原文抽取值必须区分标记；推断值不得当作有证据的事实发布 |
-| Q006 | comparisons/synthesis 层 Phase 2 再做 | 对比页/综合页是编译产物，优先级低于原子事实 |
-| Q007 | informationScore 权重 🔲 待验证 | 移植后用金标集验证替换阈值，勿直接信任旧权重 |
-| Q008 | Refine 正则 `[^|]*` 可能误覆盖正确值 🔲 待验证 | 精炼回写必须有"不得降级已有值"防护 + 测试 |
-| Q009 | 寿险/年金字段已补齐，继续样本观察 | 字段字典未收敛，schema 必须版本化可增改 |
-| Q010 | 意外医疗险是否独立字段数组 🔲 待决定 | 暂沿用"复用医疗险字段"，schema 层留独立 profile 的口子 |
-| Q011 | 年金险越域生成（孕妇投保限制）已按白名单阻断 | **模块白名单是硬校验**，不是提示词约束（§3.2） |
-| Q012 | 寿险"费用"被"退保费用"误回填，已阻断 | 字段-值兼容性校验必须在合并前执行；同名/近名字段需显式辨析 |
-| Q013 | 编辑后预览/产品树不实时刷新，已修复 | 工作台 UI：写操作后的派生视图一致性要有明确刷新机制 |
-| Q014 | 删源后派生页残留，已修复（来源路径变体匹配 + orphan cleanup） | 溯源引用必须规范化存储，删除走引用计数收敛（03 文档） |
-| Q015 | 已删 md 的后端错误裸暴露前端，已修复 | API 错误规范化是基础要求 |
-| Q016 | 冲突采用新值只改摘要、字段页/主页未同步，已修复 | **一个事实多处投影时，采纳决策必须原子地同步所有投影**——新平台以 Claim 为唯一事实源、页面为编译产物，从架构上消除此类 bug |
-| Q017 | 模块冲突采用新值时因字段页缺失而中断，已修复 | 同上；投影缺失不应阻塞事实更新 |
-| Q018 | 采用新值无 UI 反馈，已修复 | 审核动作要有进行中/完成态 |
-| Q019 | 采用新值慢（同步做派生刷新），已优化为后台执行 | 审核决策落库与派生重建解耦（决策同步、重编译异步） |
-| Q020 | `product_meta.json` 不算有效源资料 | 元数据文件≠证据来源；Evidence 必须指向真实业务文档 |
-| Q021 | 删除后需手动刷新，已修复（乐观更新+后台校准） | UI 细节，工作台参考 |
-| Q022 | 列表过长难查找，已加本地搜索 | 工作台需要产品/文档搜索 |
-| Q023 | 冲突处理结果未进"知识演化"视图，已修复 | 审核决策必须进变更历史（changelog），与 ChangeSet 天然对齐 |
-| Q024 | 单文件删除慢（全库扫描），已走产品上下文快路径 | 删除/合并操作按产品分片定位，不做全库扫描（对应 P0.5 分片键设计） |
-| Q025 | 删单文件只清"该文件独占支撑"的字段值 | **证据引用计数语义**：多源支撑的事实在失去一个来源时降级而非删除 |
-| Q026 | 增量弱值产生过多冲突，已加弱值过滤 | 冲突检测前先过弱值/占位值门槛，否则审核队列被垃圾冲突淹没 |
-| Q027 | 基础字段补"产品别称""QA" | 字段字典演进实例；本清单 §2.1 已含最终态 |
-
----
-
-## 5. 明确不带走清单
-
-| 项 | 原因 | 替代 |
-|----|------|------|
-| 无 LLM 重试机制（section 失败仅 warn 后丢弃，`extractFromSection` catch 即返回空） | 旧系统最大工程缺陷，直接违背"覆盖率"目标 | 04 文档：指数退避重试 + 失败分块进死信可重放 |
-| 向量维度硬编码 384（实际模型返回 1152，高维静默截断） | 已被 `IMPLEMENTATION_PLAN.md` 列为 P0 bug | WeKnora 向量层配置化，天然规避；教训写入 05 评估文档（嵌入配置纳入回归检查） |
-| 全项目 46+ 历史 TypeScript 类型错误 | 技术债 | 新 harness 从第一天起 CI 强制 mypy/ruff 零告警 |
-| 浏览器端全量扫文件做全文检索/图谱 | I/O 瓶颈，架构性问题 | WeKnora（Postgres + 向量索引 + BM25）替代 |
-| Tauri 桌面壳、浏览器扩展、全部 React UI 组件 | 绑定桌面形态 | UI 交互思想（review 采用新值流程、删除级联体验）在工作台重新设计 |
-| Rust axum 后端 | 被 WeKnora Go 服务替代 | 其批量导入 API 契约语义（A15）与 PDF 4 级 OCR fallback 思想保留为设计参考（WeKnora docreader 已覆盖大部分） |
-| `product_meta.json` 机制 | Q020 已否定其证据资格 | 产品主数据走独立的产品主数据表（master plan P0-1） |
-
----
-
-## 6. 许可证合规说明
-
-- 上游 `nashsu/llm_wiki` 为 **GPL-3.0**，`LLM-wiki-black` 是其衍生仓库；
-- 本清单中标注"**数据翻译**"的资产（字段字典、模块清单、关键词正则、映射表、提示词文本、决策档案）为**团队自研的业务数据与事实性配置**，著作权属公司，且独创性表达集中在业务知识本身而非代码结构，移植风险低；
-- 标注"**思想重写**"的资产只继承算法思路与流程设计，在 Python Harness 中独立实现，**禁止复制粘贴 TS/Rust 源码**（包括改名式移植）；
-- InsuranceKB-WeKnora 底座为 MIT，Harness 为公司自有代码，二者均不受 GPL 传染——前提是守住上一条；
-- 建议在首个版本发布前请法务对"从 GPL 衍生仓库迁出自研数据资产"做一次性确认，本文可作为迁移物清单附件。
-
----
-
-## 7. 移植执行顺序建议
-
-1. **先固化测试**：把 §3.4 的清洗/兼容/替换行为和 §4 中 Q011/Q012/Q025/Q026 场景写成 pytest 用例（红）；
-2. **数据翻译**（A1~A9）：TS 常量 → YAML/Python，配一次性核对脚本（字段数、字段名逐一比对源文件）；
-3. **思想重写**（A10~A12）：实现使 §1 的测试变绿；
-4. **金标验证**：用 05 文档的金标集跑字段级 P/R，验证 Q007/Q008 两个待验证项后再调阈值。
+- [ ] 来源是第一方还是第三方已明确；
+- [ ] 第一方迁移记录了 source commit/path 与目标路径；
+- [ ] 领域实现已收敛到 Python Harness，未新增 Node/TS 生产服务或双写状态；
+- [ ] 第三方许可证没有被第一方声明覆盖；
+- [ ] 迁移能力被拆成 Python Harness 单一职责组件；
+- [ ] 未把保险业务逻辑写进 WeKnora Go/Vue；
+- [ ] 未绕过 Claim/Evidence/ChangeSet/ReleaseSnapshot；
+- [ ] 旧系统的静默失败、双审核、页面即事实库和单体耦合没有被带入；
+- [ ] Golden Slice 与真实多文档 E2E 证明了迁移后的能力，而不只是单测数量。

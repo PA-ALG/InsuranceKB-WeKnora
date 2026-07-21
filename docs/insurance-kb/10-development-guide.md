@@ -19,7 +19,7 @@
 ```
 
 规则：
-- proposal 必须声明影响面：动了哪个组件（02 §2 职责表）、是否触碰三条硬边界（02 §3）、是否影响 schema/金标版本；
+- proposal 必须声明影响面：动了哪个组件（02 §2 职责表）、是否触碰 02/AGENTS/CLAUDE 的全部硬边界（特别是 NS-RIGHTS/provenance、027、P-1 与生产弱模型约束）、是否影响 schema/模板/金标/release 版本；
 - 设计文档（docs/insurance-kb/）是唯一权威；change 内 design.md 只写增量，与 00~09 冲突时必须先修订权威文档；
 - 每个 change 合并时同步更新 `HANDOFF.md`（见 §4）。
 
@@ -79,7 +79,7 @@ audit 只消费 `src/insurance_harness/**/*.py`，忽略空/default context，�
   2. 只有 `adapters/weknora/` 允许出现 WeKnora API 细节；
   3. 只有模型网关模块允许出现具体模型名。
 - 风格：ruff 默认规则 + mypy strict；公共函数必须有类型标注与 docstring（说明"为什么"而非"是什么"）；
-- 所有 LLM prompt 集中在 `harness/compiler/prompts/`（版本化，禁止散落在业务代码里）；
+- 现有 LLM prompt 集中在 `harness/src/insurance_harness/compiler/prompts/`；NS-A 起必须封装进可冻结内容 hash 的四级 `TemplatePackage`，禁止新增 prompt 散落在业务代码里；
 - 配置一律 Pydantic Settings + 环境变量，禁止硬编码（教训：旧项目向量维度硬编码事故，HANDOFF §五）。
 
 ## 4. HANDOFF.md 维护义务

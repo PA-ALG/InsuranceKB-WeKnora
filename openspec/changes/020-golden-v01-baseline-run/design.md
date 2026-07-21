@@ -1,5 +1,8 @@
 # 020 运行设计
 
+> [!CAUTION]
+> **历史运行设计，当前不可执行。** `NS-RIGHTS=recorded` 已满足；`NS-0=verified ∧ canonical admission=READY ∧ execution-surface-approved` 缺一即零模型。004/006 只有经 028 provenance/重构后才可进入，旧强 judge不得恢复。
+
 权威设计：`docs/insurance-kb/20-enterprise-runtime-foundation.md` §7；工具契约：019。
 
 T1 admission 详细设计：`docs/superpowers/specs/2026-07-19-golden-run-admission-design.md`。

@@ -2,6 +2,7 @@
 
 > 状态：**规格就绪（正式 delta 格式）**（2026-07-16 二版：新增 M3 快照/Space 对齐 + **M4 传输修正**——一版"stdio+SSE 都吃"与 WeKnora 事实不符，`internal/mcp/manager.go` 禁用 stdio、只收 SSE/HTTP Streamable，故主传输改 **HTTP Streamable**；业务方同日拍板从 M2 提前，轨道 L3，见 docs/insurance-kb/22）。**实现等 PR #9（018）合入后开工**——读路径走 SnapshotReader。
 > 设计权威：02 §2 插件2、03（Claim/版本模型）、20（企业运行约束）、14 §4 L6、MCP transports 规范（Streamable HTTP 为远程主路径）。
+> 当前 MVP 子集：见 `mvp-profile.md`；只交付 resolve/facts/evidence 与批准快照合同，不把完整四工具/WeKnora live 冒充完成。
 
 ## 为什么做
 

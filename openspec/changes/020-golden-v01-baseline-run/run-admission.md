@@ -1,5 +1,7 @@
 # Run admission: BLOCKED
 
+> 此工件只表达 020 admission 状态。即使未来变为 `READY`，仍须验证 `NS-RIGHTS=recorded`、`NS-0=verified` 与经 027/028 批准的 execution surface；缺一即禁止模型调用。本报告不能授权直接加载旧 004/006 入口，也不能授权 030 MVP。
+
 - Canonical JSON commit marker: `6d715252034e2a1d1bbda0350cc77edb75f32acc9355577fa5f75faf8f19eef2`
 - This report is non-authoritative without the matching JSON artifact.
 - Plan payload: `798a148585d75a0545460c82d3df5be9cdff589116c730ba3fc1a20d38a6e69a`

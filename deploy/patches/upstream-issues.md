@@ -3,14 +3,18 @@
 > 02-architecture.md §5 的三个通用补丁，先以 Issue 形式提交上游讨论，认领后提 PR。
 > 状态跟踪：提交后把 Issue 链接回填到本文件与 02 §5 表格。
 
-## P-1 Wiki 页面更新支持乐观锁（防并发覆盖）
+## P-1 Wiki release namespace 与原子 active alias
 
-**标题**：feat(wiki): optimistic locking for wiki page updates (`expected_version` / `If-Match`)
+**标题**：feat(wiki): versioned release namespaces and atomic active-release activation
 
 **正文要点**（英文提交）：
-- 现状：`PUT /api/v1/knowledgebase/{kb}/wiki/pages/*slug` 为 last-write-wins；请求体中的 `version` 不参与冲突检查，仅作变更计数。内部 wiki ingest 有 Redis slug 锁保护，但外部 REST 写入方（自动化管线、多实例集成方）与内置管线并发写同一 slug 时会静默互相覆盖。
-- 提议：Update 请求支持可选 `expected_version`（或 `If-Match: <version>` 头）；不匹配返回 409 + 当前 version。向后兼容：不传则维持现行为。
-- 附带：创建/更新支持可选 `Idempotency-Key` 头，网络重试不产生重复页面。
+- 现状：页面唯一键是 `(kb, slug)`，REST 逐页 last-write-wins；`draft/published` 不能原子切换整套页面，且默认 Wiki 列表并不强制隐藏 draft。外部编译器发布多页知识时，普通 UI/RAG 可能在中途看到混合版本。
+- 提议：增加按 `(tenant_id, target_wiki_kb_id, release_id, logical_slug)` 定址的 namespace 与 release-scoped 幂等 staging/manifest API；同一 release 的页面、目录、关系和索引可在不可见状态完整构建、回读并校验 manifest hash。target KB 只能绑定一个 Space，staging KB 同样不得跨 Space 复用。
+- 提供 `seal-release(expected_write_etag, manifest_hash)`：在原子事务内重算页面/目录/关系/index generation 的物理 hash，成功后 namespace/index 禁止 PUT/DELETE，变更只能创建新 release；覆盖 seal-vs-write/delete race。
+- `WikiConfig` 增加 `active_release_id/manifest_hash/etag`，提供 `activate-release(expected_active_release, release_id, manifest_hash)` CAS；activate 必须再次验证 target KB 归属、sealed manifest 与物理 index hash，单次激活/回滚改变 serving alias并关闭 approval-to-activation TOCTOU。
+- 普通 list/get/search/index/graph/chunk/retrieval/UI 默认只解析 active release；staging 仅授权管理员通过显式管理 API 可见。activation 返回不可变 receipt/ETag，并产生通用审计/outbox 事件。
+- 当前及仍具有效回滚资格的 sealed release/index/artifacts 必须 pin。GC 只允许失败未激活 staging，或经显式授权失去回滚资格且过审计保留期的 release，并追加不可变 GC event/receipt；rollback 前执行物理 manifest/index hash preflight，不重新生成。
+- 向后兼容：未启用 release mode 的旧 KB 保持现有行为；release mode KB fail closed，不允许绕过 active alias 读取 staging。
 - 我们可以提 PR（含测试）。
 
 ## P-2 知识生命周期出站事件（Outbox/Webhook）

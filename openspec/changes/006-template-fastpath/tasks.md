@@ -1,5 +1,8 @@
 # 006 任务
 
+> [!CAUTION]
+> **以下 checkbox 仅是历史记录。** 旧模板/fast path 及润色入口全部 production-disabled；可按 provenance 选择性重构，但 027/028/适用 admission 未通过前不可用于真实运行。
+
 - [x] T1 specs/template.md（从 proposal + 11 §1-§2 + 12 #1/#4 推导可验证验收条款，SDD）
 - [x] T2 族指纹修复：`sections.family_fingerprint` 无标题 fallback（文档类型+页数桶+表头 token；有标题路径不变，004 族 id 不漂移）（F6）
 - [x] T3 表格结构 provider：`templates/tables.py` Protocol + `PdfplumberTableProvider`（表头行定位/列名枚举/列定位直取单元格）+ `PPStructureV3Provider` 接口与配置位 stub（F5）

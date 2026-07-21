@@ -1,5 +1,7 @@
 # 保险知识编译：产品使用反馈补充待办
 
+> **历史输入，已被合并**：当前唯一主 backlog 是 [2026-07-insurance-knowledge-compiler-master-plan.md](2026-07-insurance-knowledge-compiler-master-plan.md)，最高产品/架构口径是 [Enterprise LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。本文件保留原始反馈追溯；出现“自动发布”时一律按“低风险候选可自动推进，但每个生产 ReleaseSnapshot 仍须 Space 授权人最终批准”解释。
+
 ## 结论与优先级调整
 
 深度使用反馈表明，当前最高风险不是图谱展示或 Deep Research，而是“输入材料能否可靠归属到正确产品、以何种规则合并、是否可以追溯和回滚”。
@@ -42,7 +44,7 @@
 - [ ] 新增 `ResolveProducts` 阶段：规则（产品代码、统一名称）优先，向量召回和 LLM 判别仅用于候选排序。
 - [ ] 为每个 claim 输出 `product_candidates[]`，包括实体 ID、证据、分数、判别原因；支持一对多归属。
 - [ ] 新增跨产品拆分器：先按章节、表格、标题和产品锚点切分，再对段落/事实做产品对齐；不得以整篇文档只绑定一个产品为默认策略。
-- [ ] 定义低置信阈值和同分阈值，命中时产生 `product_routing_review`，不自动发布。
+- [ ] 定义低置信阈值和同分阈值，命中时产生 `product_routing_review`，不得自动推进候选。
 
 **Go 接入**
 
@@ -212,7 +214,7 @@
 ### P2-2 多产品文档的精度评估
 
 - [ ] 建立“单文档多产品”标注集，分别测试文档分类、产品归属、字段抽取和跨产品污染率。
-- [ ] 指标：产品归属 precision/recall、未归属率、错误自动发布率、字段级 recall、冲突发现率。
+- [ ] 指标：产品归属 precision/recall、未归属率、错误候选推进率、字段级 recall、冲突发现率。
 - [ ] 只有满足阈值的险种 profile 才能开启自动 merge；其他 profile 只产生候选变更集。
 
 ## P3：PPTX、音视频与其他多模态输入
@@ -242,7 +244,7 @@
 
 ## 上线门槛
 
-- 任何自动发布必须通过产品归属、版本有效期、来源权威度、证据存在和 Schema 校验五个门禁。
+- 任何低风险候选自动推进必须通过产品归属、版本有效期、来源权威度、证据存在和 Schema 校验五个门禁；进入生产还必须由 Space 授权人批准绑定完整制品 hash 的 ReleaseSnapshot。
 - 结构化导入必须支持 dry-run、幂等键、change set 和回滚后才允许接入生产产品库。
 - 对同一产品的并发 merge 必须有乐观锁或等价串行化保证，并通过故障重试测试。
 - 仪表盘质量分必须可解释至字段、来源和证据，不能作为黑盒分数。
