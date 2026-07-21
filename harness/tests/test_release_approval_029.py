@@ -284,7 +284,9 @@ def test_ra2_authorizer_decision_must_exactly_bind_authority_and_manifest(
         manifest_hash=manifest.manifest_sha256,
         authorization_receipt="iam:release-approver:alice:42",
     )
-    authorizer = _Authorizer(replace(base, **change))
+    authorizer = _Authorizer(
+        replace(base, **change)  # type: ignore[arg-type]  # parametrized invalid decisions
+    )
 
     with pytest.raises(ReleaseAuthorizationError, match=message):
         _approve(session, scope, manifest, authorizer=authorizer)
@@ -550,6 +552,11 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
         factory = make_session_factory(engine)
         with factory() as setup:
             scope, manifest = _frozen_manifest(setup, "postgres-race")
+            competing_scope, competing_manifest = _frozen_manifest(
+                setup, "postgres-race-competing"
+            )
+            persist_release_manifest(setup, competing_scope, competing_manifest)
+            setup.commit()
 
         manifest_barrier = Barrier(2)
 
@@ -576,9 +583,41 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
         with ThreadPoolExecutor(max_workers=2) as executor:
             approval_ids = list(executor.map(lambda _index: approve_worker(), range(2)))
         assert len(set(approval_ids)) == 1
+
+        competing_barrier = Barrier(2)
+
+        def competing_approval_worker(index: int) -> tuple[str, bool]:
+            with factory() as worker:
+                competing_barrier.wait(timeout=15)
+                try:
+                    _approve(
+                        worker,
+                        competing_scope,
+                        competing_manifest,
+                        reason=f"competing exact attestation {index}",
+                    )
+                    worker.commit()
+                    return "winner", worker.is_active
+                except ReleaseApprovalError as exc:
+                    assert "already approved" in str(exc)
+                    usable = worker.is_active and (
+                        worker.scalar(
+                            select(func.count()).select_from(ReleaseManifestRecord)
+                        )
+                        == 2
+                    )
+                    return "typed_error", usable
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            competing_results = list(executor.map(competing_approval_worker, range(2)))
+        assert sorted(status for status, _usable in competing_results) == [
+            "typed_error",
+            "winner",
+        ]
+        assert all(usable for _status, usable in competing_results)
         with factory() as verifier:
-            assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 1
-            assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 1
+            assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 2
+            assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 2
     finally:
         if engine is not None:
             engine.dispose()

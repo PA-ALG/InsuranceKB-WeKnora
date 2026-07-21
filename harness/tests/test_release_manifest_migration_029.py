@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
@@ -16,7 +18,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 HARNESS_ROOT = Path(__file__).resolve().parents[1]
 TABLES = {"release_manifests", "release_approvals"}
@@ -26,6 +28,13 @@ GUARDS = {
     "trg_release_approvals_update_guard_029",
     "trg_release_approvals_delete_guard_029",
 }
+
+
+@dataclass(frozen=True)
+class Postgres029Schema:
+    url: str
+    engine: Engine
+    schema_name: str
 
 
 def _cfg(url: str, *, output: StringIO | None = None) -> Config:
@@ -329,39 +338,314 @@ def test_ra2_0013_postgresql_offline_ddl_contains_guards_and_exact_fk() -> None:
     assert "guard_release_approvals_append_only_029" in ddl
 
 
-@pytest.mark.integration_postgres
-def test_ra2_0013_real_postgresql_schema_and_guards() -> None:
+@pytest.fixture
+def postgres_029_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[Postgres029Schema]:
     raw_url = os.getenv("HARNESS_TEST_POSTGRES_URL")
     if not raw_url:
         pytest.skip("HARNESS_TEST_POSTGRES_URL is required for real PostgreSQL RA2")
-    admin_url = make_url(raw_url).set(drivername="postgresql+psycopg")
-    database_name = f"ikb_029_{uuid.uuid4().hex}"
-    admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    monkeypatch.delenv("HARNESS_DB_URL", raising=False)
+    parsed_url = make_url(raw_url)
+    if parsed_url.get_backend_name() != "postgresql":
+        pytest.fail("HARNESS_TEST_POSTGRES_URL must use PostgreSQL")
+    admin_url = parsed_url.set(drivername="postgresql+psycopg")
+    schema_name = f"ikb_029_{uuid.uuid4().hex}"
+    admin = create_engine(
+        admin_url,
+        isolation_level="AUTOCOMMIT",
+        connect_args={"connect_timeout": 10},
+    )
     test_engine: Engine | None = None
+    schema_created = False
     try:
         with admin.connect() as connection:
-            connection.exec_driver_sql(f'CREATE DATABASE "{database_name}"')
-        test_url = admin_url.set(database=database_name)
-        test_engine = create_engine(test_url)
-        command.upgrade(_cfg(test_url.render_as_string(hide_password=False)), "head")
-        assert TABLES <= set(inspect(test_engine).get_table_names())
-        with test_engine.connect() as connection:
-            assert GUARDS <= set(
-                connection.scalars(
-                    text(
-                        "SELECT tgname FROM pg_trigger "
-                        "WHERE NOT tgisinternal AND tgname LIKE '%_029'"
-                    )
-                )
-            )
+            connection.exec_driver_sql(f'CREATE SCHEMA "{schema_name}"')
+        schema_created = True
+        options = (
+            f"-csearch_path={schema_name} "
+            "-cstatement_timeout=30000 -clock_timeout=15000"
+        )
+        test_url = admin_url.update_query_dict(
+            {
+                "application_name": "insurancekb_029_migration_test",
+                "connect_timeout": "10",
+                "options": options,
+            }
+        )
+        test_engine = create_engine(
+            test_url,
+            connect_args={"connect_timeout": 10, "options": options},
+            pool_pre_ping=True,
+        )
+        rendered_url = test_url.render_as_string(hide_password=False)
+        command.upgrade(_cfg(rendered_url), "head")
+        yield Postgres029Schema(
+            url=rendered_url,
+            engine=test_engine,
+            schema_name=schema_name,
+        )
     finally:
         if test_engine is not None:
             test_engine.dispose()
-        with admin.connect() as connection:
-            connection.execute(
-                text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                     "WHERE datname=:name AND pid<>pg_backend_pid()"),
-                {"name": database_name},
-            )
-            connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database_name}"')
+        if schema_created:
+            with admin.connect() as connection:
+                connection.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
         admin.dispose()
+
+
+def _seed_postgresql_release_authority(engine: Engine) -> tuple[str, str, str]:
+    from insurance_harness.knowledge.release_manifest import build_release_manifest
+
+    manifest = build_release_manifest(
+        schema_version="insurance-knowledge-v1",
+        space_id="space-pg-029",
+        snapshot_id="snapshot-pg-029",
+        read_model_version=1,
+        template_hashes=("a" * 64,),
+        model_plan_hash="b" * 64,
+        facts=(),
+        rendered_pages=(),
+        directory_entries=(),
+        relationships=(),
+    )
+    now = datetime.now(UTC)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """INSERT INTO knowledge_spaces
+                (id, tenant_id, raw_kb_id, wiki_kb_id, name, binding_status,
+                 created_at, updated_at)
+                VALUES (:space, 'tenant-pg-029', 'raw-pg-029', 'wiki-pg-029',
+                        'PostgreSQL 029', 'bound', :now, :now)"""
+            ),
+            {"space": manifest.space_id, "now": now},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_snapshots
+                (id, space_id, label, rendered_pages, status, read_model_version,
+                 projection_frozen_at, published_at, published_by, notes,
+                 created_at, updated_at)
+                VALUES (:snapshot, :space, :snapshot, CAST(:pages AS JSON),
+                        'published', 1, :now, :now, 'pg-test', NULL, :now, :now)"""
+            ),
+            {
+                "snapshot": manifest.snapshot_id,
+                "space": manifest.space_id,
+                "pages": json.dumps([]),
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_manifests
+                (id, space_id, snapshot_id, manifest_hash, payload, created_at, updated_at)
+                VALUES ('manifest-pg-029', :space, :snapshot, :hash,
+                        CAST(:payload AS JSON), :now, :now)"""
+            ),
+            {
+                "space": manifest.space_id,
+                "snapshot": manifest.snapshot_id,
+                "hash": manifest.manifest_sha256,
+                "payload": json.dumps(manifest.model_dump(mode="json")),
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_approvals
+                (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                 authorization_receipt, reason, approved_at, created_at)
+                VALUES ('approval-pg-029', :space, :snapshot, :hash,
+                        'alice@example.com', 'human', 'release_approver',
+                        'iam:alice:release-approver:029', 'reviewed exact manifest',
+                        :now, :now)"""
+            ),
+            {
+                "space": manifest.space_id,
+                "snapshot": manifest.snapshot_id,
+                "hash": manifest.manifest_sha256,
+                "now": now,
+            },
+        )
+    return manifest.space_id, manifest.snapshot_id, manifest.manifest_sha256
+
+
+def _postgresql_029_triggers(engine: Engine) -> tuple[str, ...]:
+    with engine.connect() as connection:
+        return tuple(
+            connection.scalars(
+                text(
+                    "SELECT tgname FROM pg_trigger "
+                    "WHERE NOT tgisinternal AND tgname LIKE '%_029' ORDER BY tgname"
+                )
+            )
+        )
+
+
+@pytest.mark.integration_postgres
+def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
+    postgres_029_schema: Postgres029Schema,
+) -> None:
+    engine = postgres_029_schema.engine
+    space_id, snapshot_id, manifest_hash = _seed_postgresql_release_authority(engine)
+    now = datetime.now(UTC)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """INSERT INTO release_snapshots
+                (id, space_id, label, rendered_pages, status, read_model_version,
+                 projection_frozen_at, published_at, published_by, notes,
+                 created_at, updated_at)
+                VALUES ('snapshot-pg-role', :space, 'snapshot-pg-role',
+                        CAST('[]' AS JSON), 'published', 1, :now, :now,
+                        'pg-test', NULL, :now, :now)"""
+            ),
+            {"space": space_id, "now": now},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_manifests
+                (id, space_id, snapshot_id, manifest_hash, payload, created_at, updated_at)
+                VALUES ('manifest-pg-role', :space, 'snapshot-pg-role', :hash,
+                        CAST(:payload AS JSON), :now, :now)"""
+            ),
+            {
+                "space": space_id,
+                "hash": "c" * 64,
+                "payload": json.dumps({"manifest_sha256": "c" * 64}),
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                """INSERT INTO knowledge_spaces
+                (id, tenant_id, raw_kb_id, wiki_kb_id, name, binding_status,
+                 created_at, updated_at)
+                VALUES ('space-pg-other', 'tenant-pg-other', 'raw-pg-other',
+                        'wiki-pg-other', 'Other PG Space', 'bound', :now, :now)"""
+            ),
+            {"now": now},
+        )
+    assert TABLES <= set(inspect(engine).get_table_names())
+    assert GUARDS <= set(_postgresql_029_triggers(engine))
+
+    statements = (
+        "UPDATE release_manifests SET manifest_hash='" + "c" * 64 + "'",
+        "DELETE FROM release_manifests",
+        "UPDATE release_approvals SET reason='tampered'",
+        "DELETE FROM release_approvals",
+    )
+    with engine.connect() as connection:
+        outer = connection.begin()
+        for statement in statements:
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(text(statement))
+            assert connection.scalar(text("SELECT 1")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
+            assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
+        invalid_approvals = (
+            (
+                """INSERT INTO release_approvals
+                (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                 authorization_receipt, reason, approved_at, created_at)
+                VALUES ('approval-wrong-role', :space, 'snapshot-pg-role', :role_hash,
+                        'alice@example.com', 'human', 'viewer', 'receipt-role',
+                        'wrong role', :now, :now)""",
+                {"space": space_id, "role_hash": "c" * 64, "now": now},
+            ),
+            (
+                """INSERT INTO release_approvals
+                (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                 authorization_receipt, reason, approved_at, created_at)
+                VALUES ('approval-wrong-hash', :space, :snapshot, :wrong_hash,
+                        'alice@example.com', 'human', 'release_approver', 'receipt-hash',
+                        'wrong hash', :now, :now)""",
+                {
+                    "space": space_id,
+                    "snapshot": snapshot_id,
+                    "wrong_hash": "d" * 64,
+                    "now": now,
+                },
+            ),
+            (
+                """INSERT INTO release_approvals
+                (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                 authorization_receipt, reason, approved_at, created_at)
+                VALUES ('approval-cross-space', 'space-pg-other', :snapshot, :hash,
+                        'alice@example.com', 'human', 'release_approver', 'receipt-space',
+                        'cross space', :now, :now)""",
+                {"snapshot": snapshot_id, "hash": manifest_hash, "now": now},
+            ),
+        )
+        for statement, parameters in invalid_approvals:
+            with pytest.raises(DBAPIError):
+                with connection.begin_nested():
+                    connection.execute(text(statement), parameters)
+            assert connection.scalar(text("SELECT 1")) == 1
+            assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
+            assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
+        outer.rollback()
+
+
+@pytest.mark.integration_postgres
+def test_ra2_0013_real_postgresql_nonempty_downgrade_fails_before_any_ddl(
+    postgres_029_schema: Postgres029Schema,
+) -> None:
+    engine = postgres_029_schema.engine
+    _seed_postgresql_release_authority(engine)
+    with engine.connect() as connection:
+        before_version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+        before_rows = (
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, payload::text "
+                        "FROM release_manifests ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, actor, actor_type, "
+                        "role, authorization_receipt, reason, approved_at, created_at "
+                        "FROM release_approvals ORDER BY id"
+                    )
+                )
+            ),
+        )
+    before_tables = tuple(sorted(inspect(engine).get_table_names()))
+    before_triggers = _postgresql_029_triggers(engine)
+
+    with pytest.raises(RuntimeError, match="0013 downgrade refused before DDL"):
+        command.downgrade(_cfg(postgres_029_schema.url), "0006")
+
+    assert tuple(sorted(inspect(engine).get_table_names())) == before_tables
+    assert _postgresql_029_triggers(engine) == before_triggers
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            before_version
+        ) == "0013"
+        after_rows = (
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, payload::text "
+                        "FROM release_manifests ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, actor, actor_type, "
+                        "role, authorization_receipt, reason, approved_at, created_at "
+                        "FROM release_approvals ORDER BY id"
+                    )
+                )
+            ),
+        )
+    assert after_rows == before_rows
