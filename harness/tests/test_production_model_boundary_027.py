@@ -12,13 +12,19 @@ from pydantic import ValidationError
 import insurance_harness.model_policy as model_policy_package
 from insurance_harness.model_policy import (
     AdmissionBinding,
+    AdmissionPolicyDenied,
     AdmissionVerificationReceipt,
     AdmissionVerifier,
     IssuedModelPermit,
+    ModelCallContext,
     ModelIdentity,
     ModelPermitView,
     ModelPolicyDenied,
+    PolicyDecision,
+    PolicyReceipt,
+    ProductionModelComposition,
     ProductionModelPolicy,
+    ReceiptSink,
     StrictAdmissionRequestBinding,
     VerifiedAdmission,
 )
@@ -28,6 +34,10 @@ from insurance_harness.model_policy.admission import (
     _issue_model_permit,
     _issue_verified_admission,
 )
+from insurance_harness.model_policy.composition import (
+    _build_production_model_composition,
+)
+from insurance_harness.model_policy.policy import _permit_matches_call_context
 
 
 def _identity(
@@ -562,3 +572,308 @@ def test_pwb4_permit_view_and_verification_receipt_normalize_times_to_utc() -> N
 
     assert view.expires_at.tzinfo is UTC
     assert receipt.verified_at.tzinfo is UTC
+
+
+_ACTUAL_EXPECTED_FIELDS = (
+    "purpose",
+    "run_schema_version",
+    "run_id",
+    "run_revision",
+    "space_id",
+    "admission_artifact_ref",
+    "admission_artifact_digest",
+    "manifest_hash",
+    "eligibility_hash",
+    "golden_slice_hash",
+    "routing_policy_hash",
+    "schema_hash",
+    "template_lock_hash",
+    "structured_dispatch_hash",
+    "model_plan_hash",
+    "deployment_roles_hash",
+    "resource_caps_hash",
+    "rights_hash",
+    "provenance_hash",
+    "clean_integration_sha",
+)
+
+
+@pytest.mark.parametrize("field", _ACTUAL_EXPECTED_FIELDS)
+def test_pwb4_admission_issuer_rejects_every_expected_actual_mismatch(
+    field: str,
+) -> None:
+    binding = _binding()
+    actual_field = f"actual_{field}"
+    old_value = getattr(binding, actual_field)
+    if field == "clean_integration_sha":
+        replacement = "0" * 40
+    elif field.endswith(("_digest", "_hash")):
+        replacement = "0" * 64
+    else:
+        replacement = f"different-{field}"
+    assert replacement != old_value
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        _issue_verified_admission(
+            _strict_request(),
+            binding.model_copy(update={actual_field: replacement}),
+            verifier_id="canonical-admission",
+            verifier_version="v1",
+            verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+        )
+
+    assert denied.value.reason_code == f"{field}_mismatch"
+
+
+def test_pwb4_mvp_030_request_cannot_borrow_020_admission() -> None:
+    borrowed = _binding().model_copy(
+        update={
+            "actual_purpose": "canonical-13-product-baseline",
+            "actual_run_id": "run-020",
+            "actual_run_revision": "revision-020",
+            "actual_admission_artifact_ref": "admission/020/canonical.json",
+        }
+    )
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        _issue_verified_admission(
+            _strict_request(),
+            borrowed,
+            verifier_id="canonical-admission",
+            verifier_version="v1",
+            verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+        )
+
+    assert denied.value.reason_code == "purpose_mismatch"
+
+
+class _CanonicalTestVerifier:
+    def verify(self, request: StrictAdmissionRequestBinding, /) -> VerifiedAdmission:
+        return _issue_verified_admission(
+            request,
+            _binding(),
+            verifier_id="test-only-canonical-verifier",
+            verifier_version="v1",
+            verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+        )
+
+
+def _composition() -> ProductionModelComposition:
+    identity = _identity()
+    return _build_production_model_composition(
+        canonical_verifiers={
+            ("production-compilation", "run-schema-v1"): _CanonicalTestVerifier()
+        },
+        approved_identity_keys=frozenset({identity.identity_key}),
+    )
+
+
+def test_pwb4_production_composition_selects_only_exact_purpose_schema_profile() -> None:
+    composition = _composition()
+
+    verified = composition.verify(_strict_request())
+
+    assert _is_verified_admission(verified)
+    for field, value in (
+        ("expected_purpose", "wrong-purpose"),
+        ("expected_run_schema_version", "unknown-schema"),
+    ):
+        with pytest.raises(AdmissionPolicyDenied) as denied:
+            composition.verify(_strict_request().model_copy(update={field: value}))
+        assert denied.value.reason_code == "unknown_admission_profile"
+
+
+def test_pwb4_production_composition_has_no_actual_only_or_verifier_override() -> None:
+    composition = _composition()
+    custom = _CanonicalTestVerifier()
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        composition.verify(_binding())  # type: ignore[arg-type]
+    assert denied.value.reason_code == "invalid_admission_request"
+    with pytest.raises(TypeError):
+        composition.verify(_strict_request(), verifier=custom)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        ProductionModelComposition(
+            canonical_verifiers={},
+            approved_identity_keys=frozenset(),
+        )
+
+
+def _call_context(verified: VerifiedAdmission) -> ModelCallContext:
+    binding = verified.binding
+    return ModelCallContext(
+        identity=binding.approved_identities[0],
+        purpose=binding.actual_purpose,
+        run_schema_version=binding.actual_run_schema_version,
+        space_id=binding.actual_space_id,
+        run_id=binding.actual_run_id,
+        run_revision=binding.actual_run_revision,
+        admission_hash=binding.actual_admission_artifact_digest,
+        verified_binding_digest=verified.verified_binding_digest,
+        template_hash=binding.approved_template_hashes[0],
+        model_plan_hash=binding.actual_model_plan_hash,
+        call_scope_hash="e" * 64,
+    )
+
+
+def test_pwb4_policy_allow_issues_opaque_permit_and_secret_free_receipt() -> None:
+    verified = _verified()
+    context = _call_context(verified)
+
+    decision = _policy_for(context.identity).evaluate_call(verified, context)
+
+    assert isinstance(decision, PolicyDecision)
+    assert decision.allowed
+    assert _is_issued_model_permit(decision._issued_permit)
+    assert isinstance(decision.receipt, PolicyReceipt)
+    assert decision.receipt.permit_view == decision._issued_permit.view
+    assert decision.receipt.request_digest == verified.request.request_digest
+    assert decision.receipt.space_id == verified.binding.actual_space_id
+    assert decision.receipt.verified_binding_digest == verified.verified_binding_digest
+    assert decision.receipt.call_scope_hash == context.call_scope_hash
+    serialized = decision.receipt.model_dump_json()
+    assert "api-key-secret-sentinel" not in serialized
+    assert "raw-prompt-secret-sentinel" not in serialized
+    assert "api_key" not in serialized
+    assert "raw_prompt" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "reason_code"),
+    [
+        ("purpose", "wrong-purpose", "purpose_mismatch"),
+        ("run_schema_version", "wrong-schema", "run_schema_version_mismatch"),
+        ("space_id", "other-space", "space_id_mismatch"),
+        ("run_id", "run-020", "run_id_mismatch"),
+        ("run_revision", "other-revision", "run_revision_mismatch"),
+        ("admission_hash", "0" * 64, "admission_artifact_digest_mismatch"),
+        ("verified_binding_digest", "0" * 64, "verified_binding_digest_mismatch"),
+        ("template_hash", "0" * 64, "template_not_approved"),
+        ("model_plan_hash", "0" * 64, "model_plan_hash_mismatch"),
+    ],
+)
+def test_pwb4_policy_denies_cross_scope_replay_with_receipt(
+    field: str,
+    replacement: str,
+    reason_code: str,
+) -> None:
+    verified = _verified()
+    context = _call_context(verified).model_copy(update={field: replacement})
+
+    decision = _policy_for(context.identity).evaluate_call(verified, context)
+
+    assert not decision.allowed
+    assert decision._issued_permit is None
+    assert decision.receipt.reason_code == reason_code
+    assert decision.receipt.decision == "DENY"
+    assert decision.receipt.request_digest == verified.request.request_digest
+    assert decision.receipt.verified_binding_digest == verified.verified_binding_digest
+
+
+def test_pwb4_issued_permit_cannot_replay_across_call_scope() -> None:
+    verified = _verified()
+    original_context = _call_context(verified)
+    decision = _policy_for(original_context.identity).evaluate_call(
+        verified,
+        original_context,
+    )
+    replay_context = original_context.model_copy(update={"call_scope_hash": "0" * 64})
+
+    assert _permit_matches_call_context(
+        decision._issued_permit,
+        verified,
+        original_context,
+    )
+    assert not _permit_matches_call_context(
+        decision._issued_permit,
+        verified,
+        replay_context,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("space_id", "other-space"),
+        ("manifest_hash", "0" * 64),
+        ("template_lock_hash", "0" * 64),
+        ("clean_integration_sha", "0" * 40),
+    ],
+)
+def test_pwb4_issued_permit_cannot_replay_across_full_binding(
+    field: str,
+    replacement: str,
+) -> None:
+    original_verified = _verified()
+    original_context = _call_context(original_verified)
+    original_decision = _policy_for(original_context.identity).evaluate_call(
+        original_verified,
+        original_context,
+    )
+    next_request = _strict_request().model_copy(
+        update={f"expected_{field}": replacement}
+    )
+    next_binding = _binding().model_copy(update={f"actual_{field}": replacement})
+    next_verified = _issue_verified_admission(
+        next_request,
+        next_binding,
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+
+    assert not _permit_matches_call_context(
+        original_decision._issued_permit,
+        next_verified,
+        _call_context(next_verified),
+    )
+
+
+def test_pwb4_policy_denies_identity_or_role_outside_admission() -> None:
+    verified = _verified()
+    gap_identity = _identity(role="gap")
+    context = _call_context(verified).model_copy(update={"identity": gap_identity})
+
+    decision = _policy_for(gap_identity).evaluate_call(verified, context)
+
+    assert not decision.allowed
+    assert decision.receipt.reason_code == "identity_not_admission_approved"
+
+
+def test_pwb4_policy_denies_expired_verified_scope_without_issuing_permit() -> None:
+    request = _strict_request()
+    binding = _binding().model_copy(
+        update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)}
+    )
+    verified = _issue_verified_admission(
+        request,
+        binding,
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2020, 7, 22, tzinfo=UTC),
+    )
+
+    decision = _policy_for(_identity()).evaluate_call(verified, _call_context(verified))
+
+    assert not decision.allowed
+    assert decision._issued_permit is None
+    assert decision.receipt.reason_code == "admission_expired"
+
+
+def test_pwb4_production_composition_rejects_custom_policy_or_guard_injection() -> None:
+    composition = _composition()
+    verified = composition.verify(_strict_request())
+    context = _call_context(verified)
+
+    with pytest.raises(TypeError):
+        composition.evaluate(
+            verified,
+            context,
+            policy=_policy_for(context.identity),
+        )
+    with pytest.raises(TypeError):
+        composition.evaluate(verified, context, guard=object())
+
+
+def test_pwb4_receipt_sink_protocol_records_receipt_only() -> None:
+    assert tuple(signature(ReceiptSink.record).parameters) == ("self", "receipt")

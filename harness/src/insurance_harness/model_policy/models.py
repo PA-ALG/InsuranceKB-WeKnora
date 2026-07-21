@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import UTC
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Protocol, Self
 
 from pydantic import (
     AwareDatetime,
@@ -96,3 +96,53 @@ class ModelPermitView(_ImmutableModel):
     @classmethod
     def normalize_expiry_to_utc(cls, value: AwareDatetime) -> AwareDatetime:
         return value.astimezone(UTC)
+
+
+class ModelCallContext(_ImmutableModel):
+    """Secret-free, exact scope for one proposed production model call."""
+
+    identity: ModelIdentity
+    purpose: NonBlankStr
+    run_schema_version: NonBlankStr
+    space_id: NonBlankStr
+    run_id: NonBlankStr
+    run_revision: NonBlankStr
+    admission_hash: Sha256Hex
+    verified_binding_digest: Sha256Hex
+    template_hash: Sha256Hex
+    model_plan_hash: Sha256Hex
+    call_scope_hash: Sha256Hex
+
+
+class PolicyReceipt(_ImmutableModel):
+    """Serializable audit data; it never grants transport authority."""
+
+    decision: Literal["ALLOW", "DENY"]
+    reason_code: NonBlankStr
+    identity_key: IdentityKey
+    purpose: NonBlankStr
+    run_schema_version: NonBlankStr
+    space_id: NonBlankStr
+    run_id: NonBlankStr
+    run_revision: NonBlankStr
+    admission_hash: Sha256Hex
+    request_digest: Sha256Hex
+    binding_digest: Sha256Hex
+    verified_binding_digest: Sha256Hex
+    template_hash: Sha256Hex
+    model_plan_hash: Sha256Hex
+    call_scope_hash: Sha256Hex
+    permit_digest: Sha256Hex | None = None
+    permit_view: ModelPermitView | None = None
+    evaluated_at: AwareDatetime
+
+    @field_validator("evaluated_at", mode="after")
+    @classmethod
+    def normalize_evaluated_at_to_utc(cls, value: AwareDatetime) -> AwareDatetime:
+        return value.astimezone(UTC)
+
+
+class ReceiptSink(Protocol):
+    """Port used by the guarded client to persist allow and deny receipts."""
+
+    def record(self, receipt: PolicyReceipt, /) -> None: ...

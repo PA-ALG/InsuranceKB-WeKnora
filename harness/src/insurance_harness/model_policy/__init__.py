@@ -2,27 +2,44 @@
 
 from .admission import (
     AdmissionBinding,
+    AdmissionPolicyDenied,
     AdmissionVerificationReceipt,
     AdmissionVerifier,
     IssuedModelPermit,
     StrictAdmissionRequestBinding,
     VerifiedAdmission,
 )
-from .models import IdentityKey, ModelFamily, ModelIdentity, ModelPermitView, ModelRole
-from .policy import ModelPolicyDenied, ProductionModelPolicy
+from .composition import ProductionModelComposition
+from .models import (
+    IdentityKey,
+    ModelCallContext,
+    ModelFamily,
+    ModelIdentity,
+    ModelPermitView,
+    ModelRole,
+    PolicyReceipt,
+    ReceiptSink,
+)
+from .policy import ModelPolicyDenied, PolicyDecision, ProductionModelPolicy
 
 __all__ = [
     "AdmissionBinding",
+    "AdmissionPolicyDenied",
     "AdmissionVerificationReceipt",
     "AdmissionVerifier",
     "IdentityKey",
     "IssuedModelPermit",
+    "ModelCallContext",
     "ModelFamily",
     "ModelIdentity",
     "ModelPermitView",
     "ModelPolicyDenied",
     "ModelRole",
+    "PolicyDecision",
+    "PolicyReceipt",
+    "ProductionModelComposition",
     "ProductionModelPolicy",
+    "ReceiptSink",
     "StrictAdmissionRequestBinding",
     "VerifiedAdmission",
 ]

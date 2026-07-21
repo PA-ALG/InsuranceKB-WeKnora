@@ -237,16 +237,43 @@ class AdmissionVerifier(Protocol):
     def verify(self, request: StrictAdmissionRequestBinding, /) -> VerifiedAdmission: ...
 
 
+class AdmissionPolicyDenied(ValueError):
+    """Stable, secret-free refusal raised at the admission capability boundary."""
+
+    _MESSAGES = {
+        "admission_not_ready": "admission binding is not READY",
+        "admission_roles_missing": "READY admission has no approved model roles",
+        "admission_templates_missing": "READY admission has no approved templates",
+        "admission_expired": "admission binding is expired",
+        "invalid_admission_request": "strict admission request is invalid",
+        "invalid_admission_binding": "admission binding is invalid",
+        "invalid_verified_admission": "verified admission capability is invalid",
+        "unknown_admission_profile": "admission purpose/schema profile is not registered",
+    }
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
+        super().__init__(self._MESSAGES.get(reason_code, "admission binding mismatch"))
+
+
+def _request_binding_mismatch_reason(
+    request: StrictAdmissionRequestBinding,
+    binding: AdmissionBinding,
+) -> str | None:
+    expected = request.model_dump(mode="python", round_trip=True)
+    actual = binding.model_dump(mode="python", round_trip=True)
+    for name, value in expected.items():
+        field = name.removeprefix("expected_")
+        if actual.get(f"actual_{field}") != value:
+            return f"{field}_mismatch"
+    return None
+
+
 def _request_matches_binding(
     request: StrictAdmissionRequestBinding,
     binding: AdmissionBinding,
 ) -> bool:
-    expected = request.model_dump(mode="python", round_trip=True)
-    actual = binding.model_dump(mode="python", round_trip=True)
-    return all(
-        actual.get(f"actual_{name.removeprefix('expected_')}") == value
-        for name, value in expected.items()
-    )
+    return _request_binding_mismatch_reason(request, binding) is None
 
 
 def _issue_verified_admission(
@@ -259,22 +286,30 @@ def _issue_verified_admission(
 ) -> VerifiedAdmission:
     """Internal composition hook; no public verifier implementation is provided here."""
 
-    request = _revalidate(StrictAdmissionRequestBinding, request)
-    binding = _revalidate(AdmissionBinding, binding)
+    try:
+        request = _revalidate(StrictAdmissionRequestBinding, request)
+    except ValueError:
+        raise AdmissionPolicyDenied("invalid_admission_request") from None
+    try:
+        binding = _revalidate(AdmissionBinding, binding)
+    except ValueError:
+        raise AdmissionPolicyDenied("invalid_admission_binding") from None
     try:
         normalized_verified_at = _AWARE_DATETIME.validate_python(verified_at).astimezone(UTC)
     except Exception:
         raise ValueError("verification time must be timezone-aware") from None
 
-    if (
-        binding.actual_state != "READY"
-        or not binding.approved_identities
-        or not binding.approved_template_hashes
-        or not _request_matches_binding(request, binding)
-    ):
-        raise ValueError("admission request does not match READY binding")
+    if binding.actual_state != "READY":
+        raise AdmissionPolicyDenied("admission_not_ready")
+    if not binding.approved_identities:
+        raise AdmissionPolicyDenied("admission_roles_missing")
+    if not binding.approved_template_hashes:
+        raise AdmissionPolicyDenied("admission_templates_missing")
+    mismatch = _request_binding_mismatch_reason(request, binding)
+    if mismatch is not None:
+        raise AdmissionPolicyDenied(mismatch)
     if binding.actual_expires_at <= normalized_verified_at:
-        raise ValueError("admission binding is expired")
+        raise AdmissionPolicyDenied("admission_expired")
     verified_binding_digest = _verified_digest(request, binding)
     receipt = AdmissionVerificationReceipt(
         verifier_id=verifier_id,
