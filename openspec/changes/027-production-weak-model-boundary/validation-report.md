@@ -1,8 +1,9 @@
 # 027 Validation Report
 
-> Status: T1 inventory refreshed after rebase onto `fde06802`; Task 2 frozen authority
-> contracts are implemented. Canonical verification/policy/gateway wiring and real-provider
-> validation are not claimed here.
+> Status: T1 inventory and Task 2 frozen authority contracts are complete. Task 3's
+> canonical policy, opaque permit/decision authority and receipt models are implemented;
+> Task 4 gateway/transport and production entrypoint wiring remain pending. Real-provider
+> validation is not claimed here.
 
 ## Focused deterministic baseline
 
@@ -13,12 +14,14 @@ PYTHONPATH=src /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.ve
   -m pytest -q tests/test_production_model_boundary_027.py
 ```
 
-Recorded focused result: **28 passed in 0.56s**. Focused Ruff and mypy checks were also
-clean. A fresh docs-correction rerun remained **28 passed in 0.29s**. These are focused
-Task 2 results, not a full deterministic-suite claim.
+Recorded corrective result: **102 passed in 0.53s**. Focused Ruff passed, and strict mypy
+over both `src/insurance_harness/model_policy` and the changed 027 test file reported no
+issues. `git diff --check` also passed. These are focused Task 2/3 results, not a full
+deterministic-suite claim.
 
 Real provider: **NOT RUN**. The focused baseline is deterministic and does not prove
-provider availability, canonical gateway readiness, or completion of PWB1-PWB5.
+provider availability, canonical gateway readiness, production entrypoint closure or
+completion of PWB1-PWB5.
 
 ## Admission binding decision
 
@@ -59,11 +62,29 @@ the exact approved identity and call scope, issue opaque process-local
 authority. Caller-supplied permit, policy, issuer or guard is forbidden. Missing,
 mismatched, expired, non-READY or cross-scope data SHALL fail closed before transport.
 
-Once the Task 3/4 verifier registry, internal policy/decision receipt and gateway are
-enforced, this design SHALL prevent borrowing 020 state for 030 even when model or template
-values overlap. Candidate-promotion orchestration SHALL validate receipts upstream; it
-SHALL NOT add `IssuedModelPermit`, `ModelPolicy`, `AdmissionBinding` or receipt parameters
-to zero-model product/knowledge functions.
+Task 3 implements policy/permit/decision authority as process-local identity side tables.
+Capability objects carry no mutable payload slots; registry snapshots store canonical JSON,
+primitive policy data and referenced capability identities. PID/process-nonce checks and
+child-fork registry rotation revoke copied, deserialized, restarted or fork-inherited
+objects. Public properties rebuild fresh audit DTOs, while authority predicates consume
+only canonical registry snapshots. The canonical policy snapshot digest is bound into both
+opaque `IssuedModelPermit` authority and receipt-only `ModelPermitView`. Approved identity
+keys are rebuilt from exact built-in tuple/string values; subclasses, duplicates, malformed
+roles and caller-iterator failures are rejected before a policy snapshot is registered.
+
+`PolicyReceipt` validates coherent ALLOW/DENY shapes. DENY receipts take readable scope only
+from verified admission facts and record attempted input solely as a domain-separated
+digest; raw attempted provider/deployment/policy/purpose/schema/Space/run/revision/call-scope
+values are not echoed. Expiry checks require aware datetimes and fail closed. Corrective
+tests cover coordinated payload mutation, cross-Space/full-binding/call-scope replay,
+policy/composition replacement, copied/constructed views, registry lifecycle, child-fork
+rotation and concurrent reads with zero authority transfer.
+
+Task 4 must still implement the canonical `GuardedModelClient`, transport boundary,
+production registry/entrypoint wiring and call-scope recomputation from trusted
+job/stage/input/prompt facts. Candidate-promotion orchestration SHALL validate receipts
+upstream; it SHALL NOT add `IssuedModelPermit`, `ModelPolicy`, `AdmissionBinding` or receipt
+parameters to zero-model product/knowledge functions.
 
 ## Scope and evidence status
 
@@ -73,9 +94,10 @@ to zero-model product/knowledge functions.
 - Task 2 frozen contracts: complete for strict request/rich binding,
   `AdmissionVerifier`, opaque `VerifiedAdmission`, verification receipt, opaque
   `IssuedModelPermit` and receipt-only `ModelPermitView`.
-- Task 3/4 remain pending for the canonical verifier registry, internal policy decision
-  receipt, `ModelCallContext`, `GuardedModelClient`, production composition and entrypoint
-  closure.
+- Task 3 policy/permit/decision evaluator and production composition authority are complete.
+  Task 4 remains pending for canonical verifier-registry integration,
+  `GuardedModelClient`, transport enforcement, trusted call-scope recomputation and
+  production entrypoint closure.
 - Provider contract or quality claim: none.
 - Product CLI and knowledge importer/merge/review/source-lifecycle/publisher exports:
   recorded as zero-model boundaries that keep their own governance/approval/snapshot

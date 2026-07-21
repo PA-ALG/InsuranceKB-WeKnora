@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import RLock
 from typing import Literal, Protocol, SupportsIndex
+from weakref import WeakKeyDictionary
 
 from pydantic import AwareDatetime, TypeAdapter, field_validator, model_validator
 
@@ -21,8 +26,10 @@ from .models import (
 _REQUEST_DIGEST_DOMAIN = b"insurancekb.model-policy.admission-request.v1\0"
 _BINDING_DIGEST_DOMAIN = b"insurancekb.model-policy.admission-binding.v1\0"
 _VERIFIED_DIGEST_DOMAIN = b"insurancekb.model-policy.verified-admission.v1\0"
-_PROCESS_SEAL = object()
+_CONSTRUCTION_SEAL = object()
 _AWARE_DATETIME = TypeAdapter(AwareDatetime)
+_AUTHORITY_PID = os.getpid()
+_AUTHORITY_NONCE = secrets.token_bytes(32)
 
 
 def _canonical_digest(domain: bytes, value: object) -> str:
@@ -49,10 +56,6 @@ def _revalidate[ModelT: _ImmutableModel](
         return model_type.model_validate(payload)
     except Exception:
         raise ValueError("invalid model-policy DTO") from None
-
-
-def _stored_equals_validated(stored: object, validated: _ImmutableModel) -> bool:
-    return type(stored) is type(validated) and stored == validated
 
 
 class StrictAdmissionRequestBinding(_ImmutableModel):
@@ -183,11 +186,7 @@ class AdmissionVerificationReceipt(_ImmutableModel):
 class VerifiedAdmission:
     """Opaque process-local proof returned only by a trusted admission verifier."""
 
-    __slots__ = ("_binding", "_receipt", "_request", "_seal")
-    _binding: AdmissionBinding
-    _receipt: AdmissionVerificationReceipt
-    _request: StrictAdmissionRequestBinding
-    _seal: object
+    __slots__ = ("__weakref__",)
 
     def __new__(
         cls,
@@ -195,7 +194,7 @@ class VerifiedAdmission:
         _seal: object | None = None,
         **_kwargs: object,
     ) -> VerifiedAdmission:
-        if cls is not VerifiedAdmission or _seal is not _PROCESS_SEAL:
+        if cls is not VerifiedAdmission or _seal is not _CONSTRUCTION_SEAL:
             raise TypeError("VerifiedAdmission cannot be constructed by callers")
         return super().__new__(cls)
 
@@ -216,19 +215,58 @@ class VerifiedAdmission:
 
     @property
     def request(self) -> StrictAdmissionRequestBinding:
-        return self._request
+        state = _get_verified_state(self)
+        if state is None:
+            raise TypeError("VerifiedAdmission authority is unavailable")
+        return StrictAdmissionRequestBinding.model_validate_json(state.request_json)
 
     @property
     def binding(self) -> AdmissionBinding:
-        return self._binding
+        state = _get_verified_state(self)
+        if state is None:
+            raise TypeError("VerifiedAdmission authority is unavailable")
+        return AdmissionBinding.model_validate_json(state.binding_json)
 
     @property
     def verified_binding_digest(self) -> str:
-        return self._receipt.verified_binding_digest
+        return self.receipt.verified_binding_digest
 
     @property
     def receipt(self) -> AdmissionVerificationReceipt:
-        return self._receipt
+        state = _get_verified_state(self)
+        if state is None:
+            raise TypeError("VerifiedAdmission authority is unavailable")
+        return AdmissionVerificationReceipt.model_validate_json(state.receipt_json)
+
+
+@dataclass(frozen=True, slots=True)
+class _VerifiedState:
+    request_json: str
+    binding_json: str
+    receipt_json: str
+    pid: int
+    process_nonce: bytes
+
+
+_VERIFIED_STATES: WeakKeyDictionary[VerifiedAdmission, _VerifiedState] = (
+    WeakKeyDictionary()
+)
+_VERIFIED_LOCK = RLock()
+
+
+def _get_verified_state(value: object) -> _VerifiedState | None:
+    if not isinstance(value, VerifiedAdmission):
+        return None
+    with _VERIFIED_LOCK:
+        state = _VERIFIED_STATES.get(value)
+        if (
+            state is None
+            or state.pid != _AUTHORITY_PID
+            or state.process_nonce != _AUTHORITY_NONCE
+            or os.getpid() != _AUTHORITY_PID
+        ):
+            return None
+        return state
 
 
 class AdmissionVerifier(Protocol):
@@ -248,6 +286,7 @@ class AdmissionPolicyDenied(ValueError):
         "admission_expired": "admission binding is expired",
         "invalid_admission_request": "strict admission request is invalid",
         "invalid_admission_binding": "admission binding is invalid",
+        "invalid_production_composition": "production model composition is unavailable",
         "invalid_verified_admission": "verified admission capability is invalid",
         "unknown_admission_profile": "admission purpose/schema profile is not registered",
     }
@@ -320,47 +359,68 @@ def _issue_verified_admission(
         binding_digest=binding.binding_digest,
         verified_binding_digest=verified_binding_digest,
     )
-    capability = VerifiedAdmission.__new__(VerifiedAdmission, _seal=_PROCESS_SEAL)
-    object.__setattr__(capability, "_request", request)
-    object.__setattr__(capability, "_binding", binding)
-    object.__setattr__(capability, "_receipt", receipt)
-    object.__setattr__(capability, "_seal", _PROCESS_SEAL)
+    capability = VerifiedAdmission.__new__(
+        VerifiedAdmission,
+        _seal=_CONSTRUCTION_SEAL,
+    )
+    state = _VerifiedState(
+        request_json=request.model_dump_json(),
+        binding_json=binding.model_dump_json(),
+        receipt_json=receipt.model_dump_json(),
+        pid=_AUTHORITY_PID,
+        process_nonce=_AUTHORITY_NONCE,
+    )
+    with _VERIFIED_LOCK:
+        _VERIFIED_STATES[capability] = state
     return capability
 
 
 def _is_verified_admission(value: object) -> bool:
-    if not isinstance(value, VerifiedAdmission):
-        return False
+    return _verified_authority_snapshot(value) is not None
+
+
+def _verified_authority_snapshot(
+    value: object,
+) -> tuple[
+    StrictAdmissionRequestBinding,
+    AdmissionBinding,
+    AdmissionVerificationReceipt,
+] | None:
     try:
-        request = _revalidate(StrictAdmissionRequestBinding, value._request)
-        binding = _revalidate(AdmissionBinding, value._binding)
-        receipt = _revalidate(AdmissionVerificationReceipt, value._receipt)
-        return (
-            value._seal is _PROCESS_SEAL
-            and _stored_equals_validated(value._request, request)
-            and _stored_equals_validated(value._binding, binding)
-            and _stored_equals_validated(value._receipt, receipt)
-            and binding.actual_state == "READY"
-            and bool(binding.approved_identities)
-            and bool(binding.approved_template_hashes)
-            and binding.actual_expires_at > receipt.verified_at
-            and _request_matches_binding(request, binding)
-            and receipt.request_digest == request.request_digest
-            and receipt.binding_digest == binding.binding_digest
-            and receipt.verified_binding_digest == _verified_digest(request, binding)
-        )
+        if not isinstance(value, VerifiedAdmission):
+            return None
+        with _VERIFIED_LOCK:
+            state = _VERIFIED_STATES.get(value)
+            if (
+                state is None
+                or state.pid != _AUTHORITY_PID
+                or state.process_nonce != _AUTHORITY_NONCE
+                or os.getpid() != _AUTHORITY_PID
+            ):
+                return None
+            request = StrictAdmissionRequestBinding.model_validate_json(state.request_json)
+            binding = AdmissionBinding.model_validate_json(state.binding_json)
+            receipt = AdmissionVerificationReceipt.model_validate_json(state.receipt_json)
+            if not (
+                binding.actual_state == "READY"
+                and bool(binding.approved_identities)
+                and bool(binding.approved_template_hashes)
+                and binding.actual_expires_at > receipt.verified_at
+                and _request_matches_binding(request, binding)
+                and receipt.request_digest == request.request_digest
+                and receipt.binding_digest == binding.binding_digest
+                and receipt.verified_binding_digest == _verified_digest(request, binding)
+            ):
+                return None
+            return request, binding, receipt
     except Exception:
-        return False
+        return None
 
 
 class IssuedModelPermit:
     """Opaque process-local model-call authority; its public view is only a receipt."""
 
-    __slots__ = ("_issued_at", "_seal", "_verified_admission", "_view")
-    _issued_at: datetime
-    _seal: object
-    _verified_admission: VerifiedAdmission
-    _view: ModelPermitView
+    __slots__ = ("__weakref__",)
 
     def __new__(
         cls,
@@ -368,7 +428,7 @@ class IssuedModelPermit:
         _seal: object | None = None,
         **_kwargs: object,
     ) -> IssuedModelPermit:
-        if cls is not IssuedModelPermit or _seal is not _PROCESS_SEAL:
+        if cls is not IssuedModelPermit or _seal is not _CONSTRUCTION_SEAL:
             raise TypeError("IssuedModelPermit cannot be constructed by callers")
         return super().__new__(cls)
 
@@ -389,28 +449,62 @@ class IssuedModelPermit:
 
     @property
     def view(self) -> ModelPermitView:
-        return self._view
+        state = _get_permit_state(self)
+        if state is None:
+            raise TypeError("IssuedModelPermit authority is unavailable")
+        return ModelPermitView.model_validate_json(state.view_json)
 
     @property
     def issued_at(self) -> datetime:
-        return self._issued_at
+        state = _get_permit_state(self)
+        if state is None:
+            raise TypeError("IssuedModelPermit authority is unavailable")
+        return _AWARE_DATETIME.validate_python(state.issued_at_iso).astimezone(UTC)
 
 
-def _view_matches_verified(view: ModelPermitView, verified: VerifiedAdmission) -> bool:
-    binding = verified.binding
-    return (
-        view.identity in binding.approved_identities
-        and view.purpose == binding.actual_purpose
-        and view.run_schema_version == binding.actual_run_schema_version
-        and view.space_id == binding.actual_space_id
-        and view.run_id == binding.actual_run_id
-        and view.run_revision == binding.actual_run_revision
-        and view.admission_hash == binding.actual_admission_artifact_digest
-        and view.verified_binding_digest == verified.verified_binding_digest
-        and view.template_hash in binding.approved_template_hashes
-        and view.model_plan_hash == binding.actual_model_plan_hash
-        and view.expires_at == binding.actual_expires_at
-    )
+@dataclass(frozen=True, slots=True)
+class _PermitState:
+    view_json: str
+    issued_at_iso: str
+    verified_admission: VerifiedAdmission
+    pid: int
+    process_nonce: bytes
+
+
+_PERMIT_STATES: WeakKeyDictionary[IssuedModelPermit, _PermitState] = WeakKeyDictionary()
+_PERMIT_LOCK = RLock()
+
+
+def _get_permit_state(value: object) -> _PermitState | None:
+    if not isinstance(value, IssuedModelPermit):
+        return None
+    with _PERMIT_LOCK:
+        state = _PERMIT_STATES.get(value)
+        if (
+            state is None
+            or state.pid != _AUTHORITY_PID
+            or state.process_nonce != _AUTHORITY_NONCE
+            or os.getpid() != _AUTHORITY_PID
+        ):
+            return None
+        return state
+
+
+def _reset_admission_authority_after_fork() -> None:
+    """Revoke inherited process-local capabilities and rotate their generation."""
+
+    global _AUTHORITY_NONCE, _AUTHORITY_PID
+    global _PERMIT_LOCK, _PERMIT_STATES, _VERIFIED_LOCK, _VERIFIED_STATES
+    _VERIFIED_LOCK = RLock()
+    _PERMIT_LOCK = RLock()
+    _VERIFIED_STATES = WeakKeyDictionary()
+    _PERMIT_STATES = WeakKeyDictionary()
+    _AUTHORITY_PID = os.getpid()
+    _AUTHORITY_NONCE = secrets.token_bytes(32)
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_admission_authority_after_fork)
 
 
 def _issue_model_permit(
@@ -426,32 +520,82 @@ def _issue_model_permit(
         normalized_issued_at = _AWARE_DATETIME.validate_python(issued_at).astimezone(UTC)
     except Exception:
         raise ValueError("permit issuance time must be timezone-aware") from None
-    if not _is_verified_admission(verified) or not _view_matches_verified(view, verified):
-        raise ValueError("permit view does not match verified admission")
-    if view.expires_at <= normalized_issued_at:
-        raise ValueError("model permit is expired")
-    capability = IssuedModelPermit.__new__(IssuedModelPermit, _seal=_PROCESS_SEAL)
-    object.__setattr__(capability, "_view", view)
-    object.__setattr__(capability, "_verified_admission", verified)
-    object.__setattr__(capability, "_issued_at", normalized_issued_at)
-    object.__setattr__(capability, "_seal", _PROCESS_SEAL)
+    with _VERIFIED_LOCK, _PERMIT_LOCK:
+        verified_snapshot = _verified_authority_snapshot(verified)
+        if verified_snapshot is None:
+            raise ValueError("permit view does not match verified admission")
+        _request, binding, receipt = verified_snapshot
+        if not (
+            view.identity in binding.approved_identities
+            and view.purpose == binding.actual_purpose
+            and view.run_schema_version == binding.actual_run_schema_version
+            and view.space_id == binding.actual_space_id
+            and view.run_id == binding.actual_run_id
+            and view.run_revision == binding.actual_run_revision
+            and view.admission_hash == binding.actual_admission_artifact_digest
+            and view.verified_binding_digest == receipt.verified_binding_digest
+            and view.template_hash in binding.approved_template_hashes
+            and view.model_plan_hash == binding.actual_model_plan_hash
+            and view.expires_at == binding.actual_expires_at
+        ):
+            raise ValueError("permit view does not match verified admission")
+        if view.expires_at <= normalized_issued_at:
+            raise ValueError("model permit is expired")
+        capability = IssuedModelPermit.__new__(
+            IssuedModelPermit,
+            _seal=_CONSTRUCTION_SEAL,
+        )
+        state = _PermitState(
+            view_json=view.model_dump_json(),
+            issued_at_iso=normalized_issued_at.isoformat(),
+            verified_admission=verified,
+            pid=_AUTHORITY_PID,
+            process_nonce=_AUTHORITY_NONCE,
+        )
+        _PERMIT_STATES[capability] = state
     return capability
 
 
 def _is_issued_model_permit(value: object) -> bool:
-    if not isinstance(value, IssuedModelPermit):
-        return False
+    return _permit_authority_snapshot(value) is not None
+
+
+def _permit_authority_snapshot(
+    value: object,
+) -> tuple[ModelPermitView, datetime, VerifiedAdmission] | None:
     try:
-        view = _revalidate(ModelPermitView, value._view)
-        issued_at = _AWARE_DATETIME.validate_python(value._issued_at).astimezone(UTC)
-        return (
-            value._seal is _PROCESS_SEAL
-            and _stored_equals_validated(value._view, view)
-            and value._issued_at.tzinfo is UTC
-            and value._issued_at == issued_at
-            and view.expires_at > issued_at
-            and _is_verified_admission(value._verified_admission)
-            and _view_matches_verified(view, value._verified_admission)
-        )
+        if not isinstance(value, IssuedModelPermit):
+            return None
+        with _VERIFIED_LOCK, _PERMIT_LOCK:
+            state = _PERMIT_STATES.get(value)
+            if (
+                state is None
+                or state.pid != _AUTHORITY_PID
+                or state.process_nonce != _AUTHORITY_NONCE
+                or os.getpid() != _AUTHORITY_PID
+            ):
+                return None
+            view = ModelPermitView.model_validate_json(state.view_json)
+            issued_at = _AWARE_DATETIME.validate_python(state.issued_at_iso).astimezone(UTC)
+            verified_snapshot = _verified_authority_snapshot(state.verified_admission)
+            if verified_snapshot is None:
+                return None
+            _request, binding, receipt = verified_snapshot
+            if not (
+                view.expires_at > issued_at
+                and view.identity in binding.approved_identities
+                and view.purpose == binding.actual_purpose
+                and view.run_schema_version == binding.actual_run_schema_version
+                and view.space_id == binding.actual_space_id
+                and view.run_id == binding.actual_run_id
+                and view.run_revision == binding.actual_run_revision
+                and view.admission_hash == binding.actual_admission_artifact_digest
+                and view.verified_binding_digest == receipt.verified_binding_digest
+                and view.template_hash in binding.approved_template_hashes
+                and view.model_plan_hash == binding.actual_model_plan_hash
+                and view.expires_at == binding.actual_expires_at
+            ):
+                return None
+            return view, issued_at, state.verified_admission
     except Exception:
-        return False
+        return None

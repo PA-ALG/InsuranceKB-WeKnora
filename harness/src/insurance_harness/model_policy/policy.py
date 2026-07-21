@@ -1,52 +1,98 @@
-"""Single fail-closed evaluator for production model identities."""
+"""Single fail-closed evaluator for production model identities and call authority."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import secrets
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import SupportsIndex
+from threading import RLock
+from typing import SupportsIndex, cast
+from weakref import WeakKeyDictionary
+
+from pydantic import AwareDatetime, TypeAdapter
 
 from .admission import (
+    AdmissionBinding,
+    AdmissionVerificationReceipt,
     IssuedModelPermit,
+    StrictAdmissionRequestBinding,
     VerifiedAdmission,
-    _is_issued_model_permit,
-    _is_verified_admission,
     _issue_model_permit,
+    _permit_authority_snapshot,
+    _verified_authority_snapshot,
 )
 from .models import (
     IdentityKey,
     ModelCallContext,
     ModelIdentity,
     ModelPermitView,
+    PolicyReasonCode,
     PolicyReceipt,
+    _model_permit_view_digest,
+    _normalize_identity_keys,
 )
 
 _APPROVED_FAMILIES = frozenset({"minimax", "qwen", "qwen-vl"})
 _STRONG_MODEL_MARKERS = frozenset(
-    {
-        "claude",
-        "deepseek",
-        "gemini",
-        "gpt-4",
-        "gpt-5",
-        "opus",
-        "sonnet",
-    }
+    {"claude", "deepseek", "gemini", "gpt-4", "gpt-5", "opus", "sonnet"}
 )
 _ROLLING_MARKERS = frozenset(
     {"latest", "rolling", "current", "default", "auto", "stable", "blue", "green", "canary"}
 )
-_UNVERSIONED_ALIASES = frozenset(
-    {
-        "minimax",
-        "qwen",
-        "qwen3",
-        "qwen-vl",
-    }
-)
+_UNVERSIONED_ALIASES = frozenset({"minimax", "qwen", "qwen3", "qwen-vl"})
+_POLICY_DIGEST_DOMAIN = b"insurancekb.model-policy.approved-identities.v1\0"
+_CONTEXT_DIGEST_DOMAIN = b"insurancekb.model-policy.call-context.v1\0"
+_DENY_SCOPE_DIGEST_DOMAIN = b"insurancekb.model-policy.deny-receipt-scope.v1\0"
+_DECISION_CONSTRUCTION_SEAL = object()
+_AWARE_DATETIME = TypeAdapter(AwareDatetime)
+_AUTHORITY_PID = os.getpid()
+_AUTHORITY_NONCE = secrets.token_bytes(32)
+
+
+def _canonical_digest(domain: bytes, value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(domain + encoded).hexdigest()
+
+
+def _approved_keys_digest(keys: frozenset[IdentityKey]) -> str:
+    return _canonical_digest(_POLICY_DIGEST_DOMAIN, sorted(keys))
+
+
+def _call_context_digest(context: ModelCallContext) -> str:
+    return _canonical_digest(
+        _CONTEXT_DIGEST_DOMAIN,
+        context.model_dump(mode="json", round_trip=True),
+    )
+
+
+def _deny_scope_digest(
+    request: StrictAdmissionRequestBinding,
+    binding: AdmissionBinding,
+    identity: ModelIdentity,
+    template_hash: str,
+) -> str:
+    """Create a readable DENY scope from trusted admission facts only."""
+
+    return _canonical_digest(
+        _DENY_SCOPE_DIGEST_DOMAIN,
+        {
+            "request_digest": request.request_digest,
+            "binding_digest": binding.binding_digest,
+            "identity_key": identity.identity_key,
+            "template_hash": template_hash,
+        },
+    )
 
 
 class ModelPolicyDenied(PermissionError):
@@ -58,6 +104,7 @@ class ModelPolicyDenied(PermissionError):
         "invalid_identity": "production model identity is invalid",
         "invalid_call_context": "production model call context is invalid",
         "invalid_verified_admission": "verified admission capability is invalid",
+        "invalid_production_policy": "production model policy is unavailable",
         "rolling_identity": "production model identity is not immutable",
         "identity_not_approved": "production model identity is not approved",
     }
@@ -67,42 +114,70 @@ class ModelPolicyDenied(PermissionError):
         super().__init__(self._MESSAGES.get(reason_code, "production model policy denied"))
 
 
-class ProductionModelPolicy:
-    """Evaluate identities against one constructor-injected exact approval set."""
+@dataclass(frozen=True, slots=True)
+class _PolicyState:
+    approved_identity_keys: frozenset[IdentityKey]
+    policy_snapshot_digest: str
+    pid: int
+    process_nonce: bytes
 
-    __slots__ = ("_approved_identity_keys",)
+
+_POLICY_STATES: WeakKeyDictionary[object, _PolicyState] = WeakKeyDictionary()
+_POLICY_LOCK = RLock()
+
+
+class ProductionModelPolicy:
+    """Immutable identity policy backed by a process-local canonical snapshot."""
+
+    __slots__ = ("__weakref__",)
 
     def __init__(self, approved_identity_keys: Iterable[IdentityKey]) -> None:
-        self._approved_identity_keys = frozenset(approved_identity_keys)
+        keys = _normalize_identity_keys(approved_identity_keys)
+        state = _PolicyState(
+            approved_identity_keys=keys,
+            policy_snapshot_digest=_approved_keys_digest(keys),
+            pid=_AUTHORITY_PID,
+            process_nonce=_AUTHORITY_NONCE,
+        )
+        with _POLICY_LOCK:
+            if self in _POLICY_STATES:
+                raise TypeError("ProductionModelPolicy is already initialized")
+            _POLICY_STATES[self] = state
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise TypeError("ProductionModelPolicy is immutable")
+
+    def __copy__(self) -> ProductionModelPolicy:
+        raise TypeError("ProductionModelPolicy cannot be copied")
+
+    def __deepcopy__(self, _memo: dict[int, object]) -> ProductionModelPolicy:
+        raise TypeError("ProductionModelPolicy cannot be copied")
+
+    def __reduce__(self) -> tuple[object, ...]:
+        raise TypeError("ProductionModelPolicy cannot be serialized")
+
+    def __reduce_ex__(self, _protocol: SupportsIndex) -> tuple[object, ...]:
+        raise TypeError("ProductionModelPolicy cannot be serialized")
 
     @property
     def approved_identity_keys(self) -> frozenset[IdentityKey]:
-        return self._approved_identity_keys
+        state = _get_policy_state(self)
+        if state is None:
+            raise ModelPolicyDenied("invalid_production_policy")
+        return state.approved_identity_keys
+
+    @property
+    def policy_snapshot_digest(self) -> str:
+        state = _get_policy_state(self)
+        if state is None:
+            raise ModelPolicyDenied("invalid_production_policy")
+        return state.policy_snapshot_digest
 
     def evaluate(self, identity: ModelIdentity) -> ModelIdentity:
-        """Return an approved identity or raise a stable typed refusal."""
-
-        try:
-            validated = ModelIdentity.model_validate(
-                identity.model_dump(mode="python", round_trip=True, warnings=False)
-            )
-        except (AttributeError, TypeError, ValueError):
-            raise ModelPolicyDenied("invalid_identity") from None
-
-        deployment = validated.deployment_id.casefold()
-        if validated.family not in _APPROVED_FAMILIES:
-            raise ModelPolicyDenied("family_not_approved")
-        if any(marker in deployment for marker in _STRONG_MODEL_MARKERS):
-            raise ModelPolicyDenied("strong_model")
-
-        tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
-        if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
-            raise ModelPolicyDenied("rolling_identity")
-
-        if validated.identity_key not in self._approved_identity_keys:
-            raise ModelPolicyDenied("identity_not_approved")
-
-        return validated
+        state = _get_policy_state(self)
+        if state is None:
+            raise ModelPolicyDenied("invalid_production_policy")
+        return _evaluate_identity(identity, state.approved_identity_keys)
 
     def _evaluate_call(
         self,
@@ -110,183 +185,278 @@ class ProductionModelPolicy:
         context: ModelCallContext,
         /,
     ) -> _PolicyDecision:
-        """Evaluate one exact call scope and issue authority only on full match."""
-
-        evaluated_at = datetime.now(UTC)
-        if not _is_verified_admission(verified_admission):
-            raise ModelPolicyDenied("invalid_verified_admission")
-        try:
-            context = ModelCallContext.model_validate(
-                context.model_dump(mode="python", round_trip=True, warnings=False)
-            )
-        except (AttributeError, TypeError, ValueError):
-            raise ModelPolicyDenied("invalid_call_context") from None
-
-        binding = verified_admission.binding
-        request = verified_admission.request
-        mismatch_checks = (
-            (context.purpose, binding.actual_purpose, "purpose_mismatch"),
-            (
-                context.run_schema_version,
-                binding.actual_run_schema_version,
-                "run_schema_version_mismatch",
-            ),
-            (context.space_id, binding.actual_space_id, "space_id_mismatch"),
-            (context.run_id, binding.actual_run_id, "run_id_mismatch"),
-            (
-                context.run_revision,
-                binding.actual_run_revision,
-                "run_revision_mismatch",
-            ),
-            (
-                context.admission_hash,
-                binding.actual_admission_artifact_digest,
-                "admission_artifact_digest_mismatch",
-            ),
-            (
-                context.verified_binding_digest,
-                verified_admission.verified_binding_digest,
-                "verified_binding_digest_mismatch",
-            ),
-            (
-                context.model_plan_hash,
-                binding.actual_model_plan_hash,
-                "model_plan_hash_mismatch",
-            ),
-        )
-        for candidate, approved, reason_code in mismatch_checks:
-            if candidate != approved:
-                return self._deny(
-                    verified_admission,
-                    context,
-                    reason_code=reason_code,
-                    evaluated_at=evaluated_at,
-                )
-        if binding.actual_expires_at <= evaluated_at:
-            return self._deny(
-                verified_admission,
-                context,
-                reason_code="admission_expired",
-                evaluated_at=evaluated_at,
-            )
-        if context.template_hash not in binding.approved_template_hashes:
-            return self._deny(
-                verified_admission,
-                context,
-                reason_code="template_not_approved",
-                evaluated_at=evaluated_at,
-            )
-        try:
-            identity = self.evaluate(context.identity)
-        except ModelPolicyDenied as denied:
-            return self._deny(
-                verified_admission,
-                context,
-                reason_code=denied.reason_code,
-                evaluated_at=evaluated_at,
-            )
-        if identity not in binding.approved_identities:
-            return self._deny(
-                verified_admission,
-                context,
-                reason_code="identity_not_admission_approved",
-                evaluated_at=evaluated_at,
-            )
-
-        permit_view = ModelPermitView(
-            identity=identity,
-            purpose=context.purpose,
-            run_schema_version=context.run_schema_version,
-            space_id=context.space_id,
-            run_id=context.run_id,
-            run_revision=context.run_revision,
-            admission_hash=context.admission_hash,
-            verified_binding_digest=verified_admission.verified_binding_digest,
-            template_hash=context.template_hash,
-            model_plan_hash=context.model_plan_hash,
-            call_scope_hash=context.call_scope_hash,
-            expires_at=binding.actual_expires_at,
-        )
-        issued_permit = _issue_model_permit(
-            permit_view,
-            verified_admission,
-            issued_at=evaluated_at,
-        )
-        permit_digest = _permit_view_digest(permit_view)
-        receipt = PolicyReceipt(
-            decision="ALLOW",
-            reason_code="policy_allowed",
-            identity_key=identity.identity_key,
-            purpose=context.purpose,
-            run_schema_version=context.run_schema_version,
-            space_id=context.space_id,
-            run_id=context.run_id,
-            run_revision=context.run_revision,
-            admission_hash=context.admission_hash,
-            request_digest=request.request_digest,
-            binding_digest=binding.binding_digest,
-            verified_binding_digest=verified_admission.verified_binding_digest,
-            template_hash=context.template_hash,
-            model_plan_hash=context.model_plan_hash,
-            call_scope_hash=context.call_scope_hash,
-            permit_digest=permit_digest,
-            permit_view=permit_view,
-            evaluated_at=evaluated_at,
-        )
-        return _issue_policy_decision(
-            receipt,
-            issued_permit,
-            verified_admission,
-            context,
-        )
-
-    @staticmethod
-    def _deny(
-        verified_admission: VerifiedAdmission,
-        context: ModelCallContext,
-        *,
-        reason_code: str,
-        evaluated_at: datetime,
-    ) -> _PolicyDecision:
-        binding = verified_admission.binding
-        receipt = PolicyReceipt(
-            decision="DENY",
-            reason_code=reason_code,
-            identity_key=context.identity.identity_key,
-            purpose=context.purpose,
-            run_schema_version=context.run_schema_version,
-            space_id=context.space_id,
-            run_id=context.run_id,
-            run_revision=context.run_revision,
-            admission_hash=context.admission_hash,
-            request_digest=verified_admission.request.request_digest,
-            binding_digest=binding.binding_digest,
-            verified_binding_digest=verified_admission.verified_binding_digest,
-            template_hash=context.template_hash,
-            model_plan_hash=context.model_plan_hash,
-            call_scope_hash=context.call_scope_hash,
-            evaluated_at=evaluated_at,
-        )
-        return _issue_policy_decision(
-            receipt,
-            None,
+        state = _get_policy_state(self)
+        if state is None:
+            raise ModelPolicyDenied("invalid_production_policy")
+        return _evaluate_call_with_snapshot(
+            state,
             verified_admission,
             context,
         )
 
 
-_PERMIT_VIEW_DIGEST_DOMAIN = b"insurancekb.model-policy.permit-view.v1\0"
+def _get_policy_state(value: object) -> _PolicyState | None:
+    if not isinstance(value, ProductionModelPolicy):
+        return None
+    with _POLICY_LOCK:
+        state = _POLICY_STATES.get(value)
+        if (
+            state is None
+            or state.pid != _AUTHORITY_PID
+            or state.process_nonce != _AUTHORITY_NONCE
+            or os.getpid() != _AUTHORITY_PID
+        ):
+            return None
+        return state
+
+
+def _evaluate_identity(
+    identity: ModelIdentity,
+    approved_identity_keys: frozenset[IdentityKey],
+) -> ModelIdentity:
+    try:
+        validated = ModelIdentity.model_validate(
+            identity.model_dump(mode="python", round_trip=True, warnings=False)
+        )
+    except (AttributeError, TypeError, ValueError):
+        raise ModelPolicyDenied("invalid_identity") from None
+    deployment = validated.deployment_id.casefold()
+    if validated.family not in _APPROVED_FAMILIES:
+        raise ModelPolicyDenied("family_not_approved")
+    if any(marker in deployment for marker in _STRONG_MODEL_MARKERS):
+        raise ModelPolicyDenied("strong_model")
+    tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
+    if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
+        raise ModelPolicyDenied("rolling_identity")
+    if validated.identity_key not in approved_identity_keys:
+        raise ModelPolicyDenied("identity_not_approved")
+    return validated
+
+
+def _evaluate_call_with_snapshot(
+    policy_state: _PolicyState,
+    verified_admission: VerifiedAdmission,
+    context: ModelCallContext,
+) -> _PolicyDecision:
+    evaluated_at = datetime.now(UTC)
+    verified_snapshot = _verified_authority_snapshot(verified_admission)
+    if verified_snapshot is None:
+        raise ModelPolicyDenied("invalid_verified_admission")
+    request, binding, verification_receipt = verified_snapshot
+    try:
+        context = ModelCallContext.model_validate(
+            context.model_dump(mode="python", round_trip=True, warnings=False)
+        )
+    except (AttributeError, TypeError, ValueError):
+        raise ModelPolicyDenied("invalid_call_context") from None
+
+    mismatch_checks: tuple[tuple[object, object, PolicyReasonCode], ...] = (
+        (context.purpose, binding.actual_purpose, "purpose_mismatch"),
+        (
+            context.run_schema_version,
+            binding.actual_run_schema_version,
+            "run_schema_version_mismatch",
+        ),
+        (context.space_id, binding.actual_space_id, "space_id_mismatch"),
+        (context.run_id, binding.actual_run_id, "run_id_mismatch"),
+        (context.run_revision, binding.actual_run_revision, "run_revision_mismatch"),
+        (
+            context.admission_hash,
+            binding.actual_admission_artifact_digest,
+            "admission_artifact_digest_mismatch",
+        ),
+        (
+            context.verified_binding_digest,
+            verification_receipt.verified_binding_digest,
+            "verified_binding_digest_mismatch",
+        ),
+        (
+            context.model_plan_hash,
+            binding.actual_model_plan_hash,
+            "model_plan_hash_mismatch",
+        ),
+    )
+    for candidate, approved, reason_code in mismatch_checks:
+        if candidate != approved:
+            return _deny(
+                policy_state,
+                verified_admission,
+                request,
+                binding,
+                verification_receipt,
+                context,
+                reason_code=reason_code,
+                evaluated_at=evaluated_at,
+            )
+    if binding.actual_expires_at <= evaluated_at:
+        return _deny(
+            policy_state,
+            verified_admission,
+            request,
+            binding,
+            verification_receipt,
+            context,
+            reason_code="admission_expired",
+            evaluated_at=evaluated_at,
+        )
+    if context.template_hash not in binding.approved_template_hashes:
+        return _deny(
+            policy_state,
+            verified_admission,
+            request,
+            binding,
+            verification_receipt,
+            context,
+            reason_code="template_not_approved",
+            evaluated_at=evaluated_at,
+        )
+    try:
+        identity = _evaluate_identity(
+            context.identity,
+            policy_state.approved_identity_keys,
+        )
+    except ModelPolicyDenied as denied:
+        return _deny(
+            policy_state,
+            verified_admission,
+            request,
+            binding,
+            verification_receipt,
+            context,
+            reason_code=cast(PolicyReasonCode, denied.reason_code),
+            evaluated_at=evaluated_at,
+        )
+    if identity not in binding.approved_identities:
+        return _deny(
+            policy_state,
+            verified_admission,
+            request,
+            binding,
+            verification_receipt,
+            context,
+            reason_code="identity_not_admission_approved",
+            evaluated_at=evaluated_at,
+        )
+
+    permit_view = ModelPermitView(
+        identity=identity,
+        purpose=binding.actual_purpose,
+        run_schema_version=binding.actual_run_schema_version,
+        space_id=binding.actual_space_id,
+        run_id=binding.actual_run_id,
+        run_revision=binding.actual_run_revision,
+        admission_hash=binding.actual_admission_artifact_digest,
+        verified_binding_digest=verification_receipt.verified_binding_digest,
+        template_hash=context.template_hash,
+        model_plan_hash=binding.actual_model_plan_hash,
+        policy_snapshot_digest=policy_state.policy_snapshot_digest,
+        call_scope_hash=context.call_scope_hash,
+        expires_at=binding.actual_expires_at,
+    )
+    issued_permit = _issue_model_permit(
+        permit_view,
+        verified_admission,
+        issued_at=evaluated_at,
+    )
+    receipt = PolicyReceipt(
+        decision="ALLOW",
+        reason_code="policy_allowed",
+        identity_key=identity.identity_key,
+        purpose=binding.actual_purpose,
+        run_schema_version=binding.actual_run_schema_version,
+        space_id=binding.actual_space_id,
+        run_id=binding.actual_run_id,
+        run_revision=binding.actual_run_revision,
+        admission_hash=binding.actual_admission_artifact_digest,
+        request_digest=request.request_digest,
+        binding_digest=binding.binding_digest,
+        verified_binding_digest=verification_receipt.verified_binding_digest,
+        template_hash=context.template_hash,
+        model_plan_hash=binding.actual_model_plan_hash,
+        call_scope_hash=context.call_scope_hash,
+        attempted_context_digest=_call_context_digest(context),
+        policy_snapshot_digest=policy_state.policy_snapshot_digest,
+        permit_digest=_model_permit_view_digest(permit_view),
+        permit_view=permit_view,
+        evaluated_at=evaluated_at,
+    )
+    return _issue_policy_decision(
+        receipt,
+        issued_permit,
+        verified_admission,
+        context,
+        policy_state.policy_snapshot_digest,
+    )
+
+
+def _trusted_identity(
+    binding_identities: tuple[ModelIdentity, ...],
+    attempted: ModelIdentity,
+) -> ModelIdentity:
+    return next(
+        (identity for identity in binding_identities if identity.role == attempted.role),
+        binding_identities[0],
+    )
+
+
+def _deny(
+    policy_state: _PolicyState,
+    verified_admission: VerifiedAdmission,
+    request: StrictAdmissionRequestBinding,
+    binding: AdmissionBinding,
+    verification_receipt: AdmissionVerificationReceipt,
+    context: ModelCallContext,
+    *,
+    reason_code: PolicyReasonCode,
+    evaluated_at: datetime,
+) -> _PolicyDecision:
+    identity = _trusted_identity(binding.approved_identities, context.identity)
+    template_hash = (
+        context.template_hash
+        if context.template_hash in binding.approved_template_hashes
+        else binding.approved_template_hashes[0]
+    )
+    receipt = PolicyReceipt(
+        decision="DENY",
+        reason_code=reason_code,
+        identity_key=identity.identity_key,
+        purpose=binding.actual_purpose,
+        run_schema_version=binding.actual_run_schema_version,
+        space_id=binding.actual_space_id,
+        run_id=binding.actual_run_id,
+        run_revision=binding.actual_run_revision,
+        admission_hash=binding.actual_admission_artifact_digest,
+        request_digest=request.request_digest,
+        binding_digest=binding.binding_digest,
+        verified_binding_digest=verification_receipt.verified_binding_digest,
+        template_hash=template_hash,
+        model_plan_hash=binding.actual_model_plan_hash,
+        call_scope_hash=_deny_scope_digest(request, binding, identity, template_hash),
+        attempted_context_digest=_call_context_digest(context),
+        policy_snapshot_digest=policy_state.policy_snapshot_digest,
+        evaluated_at=evaluated_at,
+    )
+    return _issue_policy_decision(
+        receipt,
+        None,
+        verified_admission,
+        context,
+        policy_state.policy_snapshot_digest,
+    )
 
 
 def _permit_view_digest(view: ModelPermitView) -> str:
-    encoded = json.dumps(
-        view.model_dump(mode="json", round_trip=True),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(_PERMIT_VIEW_DIGEST_DOMAIN + encoded).hexdigest()
+    """Backward-compatible package-private alias for tests and Task 4."""
+
+    return _model_permit_view_digest(view)
+
+
+def _normalize_checked_at(value: datetime | None) -> datetime | None:
+    candidate: object = datetime.now(UTC) if value is None else value
+    try:
+        return _AWARE_DATETIME.validate_python(candidate).astimezone(UTC)
+    except Exception:
+        return None
 
 
 def _permit_matches_call_context(
@@ -295,14 +465,12 @@ def _permit_matches_call_context(
     context: ModelCallContext,
     *,
     _checked_at: datetime | None = None,
+    _expected_policy_snapshot_digest: str | None = None,
 ) -> bool:
-    """Recheck the complete issued scope before Task 4 delegates transport."""
+    """Compare canonical registry snapshots immediately before transport."""
 
-    if not _is_issued_model_permit(permit) or not _is_verified_admission(
-        verified_admission
-    ):
-        return False
-    if not isinstance(permit, IssuedModelPermit):
+    checked_at = _normalize_checked_at(_checked_at)
+    if checked_at is None:
         return False
     try:
         validated_context = ModelCallContext.model_validate(
@@ -310,40 +478,56 @@ def _permit_matches_call_context(
         )
     except Exception:
         return False
-    view: ModelPermitView = permit.view
-    checked_at = datetime.now(UTC) if _checked_at is None else _checked_at
-    if not isinstance(checked_at, datetime) or checked_at.tzinfo is None:
+    snapshot = _permit_authority_snapshot(permit)
+    if snapshot is None:
         return False
-    checked_at = checked_at.astimezone(UTC)
+    view, _issued_at, issued_for = snapshot
     return (
-        view.expires_at > checked_at
-        and view.identity == validated_context.identity
-        and view.purpose == validated_context.purpose
-        and view.run_schema_version == validated_context.run_schema_version
-        and view.space_id == validated_context.space_id
-        and view.run_id == validated_context.run_id
-        and view.run_revision == validated_context.run_revision
-        and view.admission_hash == validated_context.admission_hash
-        and view.verified_binding_digest == validated_context.verified_binding_digest
-        and view.template_hash == validated_context.template_hash
-        and view.model_plan_hash == validated_context.model_plan_hash
-        and view.call_scope_hash == validated_context.call_scope_hash
-        and view.verified_binding_digest == verified_admission.verified_binding_digest
+        issued_for is verified_admission
+        and view.expires_at > checked_at
+        and _view_matches_context(view, validated_context)
+        and (
+            _expected_policy_snapshot_digest is None
+            or view.policy_snapshot_digest == _expected_policy_snapshot_digest
+        )
     )
 
 
-_DECISION_SEAL = object()
+def _view_matches_context(view: ModelPermitView, context: ModelCallContext) -> bool:
+    return (
+        view.identity == context.identity
+        and view.purpose == context.purpose
+        and view.run_schema_version == context.run_schema_version
+        and view.space_id == context.space_id
+        and view.run_id == context.run_id
+        and view.run_revision == context.run_revision
+        and view.admission_hash == context.admission_hash
+        and view.verified_binding_digest == context.verified_binding_digest
+        and view.template_hash == context.template_hash
+        and view.model_plan_hash == context.model_plan_hash
+        and view.call_scope_hash == context.call_scope_hash
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _DecisionState:
+    receipt_json: str
+    context_json: str
+    permit: IssuedModelPermit | None
+    verified_admission: VerifiedAdmission
+    policy_snapshot_digest: str
+    pid: int
+    process_nonce: bytes
+
+
+_DECISION_STATES: WeakKeyDictionary[object, _DecisionState] = WeakKeyDictionary()
+_DECISION_LOCK = RLock()
 
 
 class _PolicyDecision:
-    """Sealed package-local result consumed only by the canonical guarded client."""
+    """Sealed package-local handle; all authority lives in the weak registry."""
 
-    __slots__ = ("_context", "_permit", "_receipt", "_seal", "_verified_admission")
-    _context: ModelCallContext
-    _permit: IssuedModelPermit | None
-    _receipt: PolicyReceipt
-    _seal: object
-    _verified_admission: VerifiedAdmission
+    __slots__ = ("__weakref__",)
 
     def __new__(
         cls,
@@ -351,7 +535,7 @@ class _PolicyDecision:
         _seal: object | None = None,
         **_kwargs: object,
     ) -> _PolicyDecision:
-        if cls is not _PolicyDecision or _seal is not _DECISION_SEAL:
+        if cls is not _PolicyDecision or _seal is not _DECISION_CONSTRUCTION_SEAL:
             raise TypeError("policy decisions are issued only by canonical policy")
         return super().__new__(cls)
 
@@ -372,7 +556,25 @@ class _PolicyDecision:
 
     @property
     def receipt(self) -> PolicyReceipt:
-        return self._receipt
+        state = _get_decision_state(self)
+        if state is None:
+            raise TypeError("policy decision authority is unavailable")
+        return PolicyReceipt.model_validate_json(state.receipt_json)
+
+
+def _get_decision_state(value: object) -> _DecisionState | None:
+    if not isinstance(value, _PolicyDecision):
+        return None
+    with _DECISION_LOCK:
+        state = _DECISION_STATES.get(value)
+        if (
+            state is None
+            or state.pid != _AUTHORITY_PID
+            or state.process_nonce != _AUTHORITY_NONCE
+            or os.getpid() != _AUTHORITY_PID
+        ):
+            return None
+        return state
 
 
 def _issue_policy_decision(
@@ -380,9 +582,8 @@ def _issue_policy_decision(
     permit: IssuedModelPermit | None,
     verified_admission: VerifiedAdmission,
     context: ModelCallContext,
+    policy_snapshot_digest: str,
 ) -> _PolicyDecision:
-    """Issue one internally consistent decision; no caller-spliced parts accepted."""
-
     try:
         validated_receipt = PolicyReceipt.model_validate(
             receipt.model_dump(mode="python", round_trip=True, warnings=False)
@@ -392,101 +593,86 @@ def _issue_policy_decision(
         )
     except Exception:
         raise ValueError("invalid policy decision components") from None
-    if not _decision_components_match(
-        validated_receipt,
-        permit,
-        verified_admission,
-        validated_context,
-    ):
+    state = _DecisionState(
+        receipt_json=validated_receipt.model_dump_json(),
+        context_json=validated_context.model_dump_json(),
+        permit=permit,
+        verified_admission=verified_admission,
+        policy_snapshot_digest=policy_snapshot_digest,
+        pid=_AUTHORITY_PID,
+        process_nonce=_AUTHORITY_NONCE,
+    )
+    if not _decision_state_is_coherent(state):
         raise ValueError("policy decision components do not match")
-    decision = _PolicyDecision.__new__(_PolicyDecision, _seal=_DECISION_SEAL)
-    object.__setattr__(decision, "_receipt", validated_receipt)
-    object.__setattr__(decision, "_permit", permit)
-    object.__setattr__(decision, "_verified_admission", verified_admission)
-    object.__setattr__(decision, "_context", validated_context)
-    object.__setattr__(decision, "_seal", _DECISION_SEAL)
+    decision = _PolicyDecision.__new__(
+        _PolicyDecision,
+        _seal=_DECISION_CONSTRUCTION_SEAL,
+    )
+    with _DECISION_LOCK:
+        _DECISION_STATES[decision] = state
     return decision
 
 
-def _decision_components_match(
-    receipt: PolicyReceipt,
-    permit: IssuedModelPermit | None,
-    verified_admission: VerifiedAdmission,
-    context: ModelCallContext,
-) -> bool:
-    if not _is_verified_admission(verified_admission):
+def _decision_state_is_coherent(state: _DecisionState) -> bool:
+    try:
+        receipt = PolicyReceipt.model_validate_json(state.receipt_json)
+        context = ModelCallContext.model_validate_json(state.context_json)
+    except Exception:
         return False
-    binding = verified_admission.binding
-    common_matches = (
-        receipt.identity_key == context.identity.identity_key
-        and receipt.purpose == context.purpose
-        and receipt.run_schema_version == context.run_schema_version
-        and receipt.space_id == context.space_id
-        and receipt.run_id == context.run_id
-        and receipt.run_revision == context.run_revision
-        and receipt.admission_hash == context.admission_hash
-        and receipt.request_digest == verified_admission.request.request_digest
-        and receipt.binding_digest == binding.binding_digest
-        and receipt.verified_binding_digest == verified_admission.verified_binding_digest
-        and receipt.template_hash == context.template_hash
-        and receipt.model_plan_hash == context.model_plan_hash
-        and receipt.call_scope_hash == context.call_scope_hash
+    verified_snapshot = _verified_authority_snapshot(state.verified_admission)
+    if verified_snapshot is None:
+        return False
+    request, binding, verification_receipt = verified_snapshot
+    trusted_identity = _trusted_identity(binding.approved_identities, context.identity)
+    trusted_template = (
+        context.template_hash
+        if context.template_hash in binding.approved_template_hashes
+        else binding.approved_template_hashes[0]
     )
-    if not common_matches:
+    common = (
+        receipt.request_digest == request.request_digest
+        and receipt.binding_digest == binding.binding_digest
+        and receipt.verified_binding_digest == verification_receipt.verified_binding_digest
+        and receipt.attempted_context_digest == _call_context_digest(context)
+        and receipt.policy_snapshot_digest == state.policy_snapshot_digest
+    )
+    if not common:
         return False
     if receipt.decision == "DENY":
         return (
-            receipt.reason_code != "policy_allowed"
-            and permit is None
-            and receipt.permit_view is None
-            and receipt.permit_digest is None
+            state.permit is None
+            and receipt.identity_key == trusted_identity.identity_key
+            and receipt.purpose == binding.actual_purpose
+            and receipt.run_schema_version == binding.actual_run_schema_version
+            and receipt.space_id == binding.actual_space_id
+            and receipt.run_id == binding.actual_run_id
+            and receipt.run_revision == binding.actual_run_revision
+            and receipt.admission_hash == binding.actual_admission_artifact_digest
+            and receipt.template_hash == trusted_template
+            and receipt.model_plan_hash == binding.actual_model_plan_hash
+            and receipt.call_scope_hash
+            == _deny_scope_digest(request, binding, trusted_identity, trusted_template)
         )
-    if not isinstance(permit, IssuedModelPermit) or not _is_issued_model_permit(permit):
+    permit_snapshot = _permit_authority_snapshot(state.permit)
+    if permit_snapshot is None:
         return False
-    view = permit.view
+    view, issued_at, issued_for = permit_snapshot
     return (
-        receipt.reason_code == "policy_allowed"
+        issued_for is state.verified_admission
         and receipt.permit_view == view
-        and receipt.permit_digest == _permit_view_digest(view)
-        and receipt.evaluated_at == permit.issued_at
-        and view.identity.identity_key == receipt.identity_key
-        and view.purpose == receipt.purpose
-        and view.run_schema_version == receipt.run_schema_version
-        and view.space_id == receipt.space_id
-        and view.run_id == receipt.run_id
-        and view.run_revision == receipt.run_revision
-        and view.admission_hash == receipt.admission_hash
-        and view.verified_binding_digest == receipt.verified_binding_digest
-        and view.template_hash == receipt.template_hash
-        and view.model_plan_hash == receipt.model_plan_hash
-        and view.call_scope_hash == receipt.call_scope_hash
-        and view.expires_at > receipt.evaluated_at
+        and receipt.permit_digest == _model_permit_view_digest(view)
+        and receipt.evaluated_at == issued_at
+        and view.policy_snapshot_digest == state.policy_snapshot_digest
+        and _view_matches_context(view, context)
     )
 
 
 def _is_policy_decision(value: object) -> bool:
-    if not isinstance(value, _PolicyDecision):
+    state = _get_decision_state(value)
+    if state is None:
         return False
-    try:
-        receipt = PolicyReceipt.model_validate(
-            value._receipt.model_dump(mode="python", round_trip=True, warnings=False)
-        )
-        context = ModelCallContext.model_validate(
-            value._context.model_dump(mode="python", round_trip=True, warnings=False)
-        )
-        return (
-            value._seal is _DECISION_SEAL
-            and value._receipt == receipt
-            and value._context == context
-            and _decision_components_match(
-                receipt,
-                value._permit,
-                value._verified_admission,
-                context,
-            )
-        )
-    except Exception:
-        return False
+    with _DECISION_LOCK:
+        return _decision_state_is_coherent(state)
 
 
 def _decision_authorizes_call(
@@ -496,15 +682,36 @@ def _decision_authorizes_call(
     *,
     _checked_at: datetime | None = None,
 ) -> bool:
-    """Final package-private authorization predicate used immediately pre-transport."""
+    """Atomically consume canonical decision/permit snapshots for authorization."""
 
-    if not _is_policy_decision(decision) or not isinstance(decision, _PolicyDecision):
-        return False
-    if decision.receipt.decision != "ALLOW":
-        return False
-    return _permit_matches_call_context(
-        decision._permit,
-        verified_admission,
-        context,
-        _checked_at=_checked_at,
-    )
+    with _DECISION_LOCK:
+        state = _get_decision_state(decision)
+        if state is None or state.verified_admission is not verified_admission:
+            return False
+        if not _decision_state_is_coherent(state):
+            return False
+        receipt = PolicyReceipt.model_validate_json(state.receipt_json)
+        if receipt.decision != "ALLOW" or state.permit is None:
+            return False
+        return _permit_matches_call_context(
+            state.permit,
+            verified_admission,
+            context,
+            _checked_at=_checked_at,
+            _expected_policy_snapshot_digest=state.policy_snapshot_digest,
+        )
+
+
+def _reset_policy_authority_after_fork() -> None:
+    global _AUTHORITY_NONCE, _AUTHORITY_PID
+    global _DECISION_LOCK, _DECISION_STATES, _POLICY_LOCK, _POLICY_STATES
+    _POLICY_LOCK = RLock()
+    _DECISION_LOCK = RLock()
+    _POLICY_STATES = WeakKeyDictionary()
+    _DECISION_STATES = WeakKeyDictionary()
+    _AUTHORITY_PID = os.getpid()
+    _AUTHORITY_NONCE = secrets.token_bytes(32)
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_policy_authority_after_fork)

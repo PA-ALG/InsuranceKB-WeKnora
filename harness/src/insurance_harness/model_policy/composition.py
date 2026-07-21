@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
+import secrets
 from collections.abc import Iterable
+from dataclasses import dataclass
 from importlib import import_module
+from threading import RLock
 from typing import cast
+from weakref import WeakKeyDictionary
 
 from .admission import (
     AdmissionPolicyDenied,
@@ -13,19 +18,31 @@ from .admission import (
     VerifiedAdmission,
     _is_verified_admission,
 )
-from .models import IdentityKey, ModelCallContext
+from .models import IdentityKey, ModelCallContext, _normalize_identity_keys
 from .policy import ProductionModelPolicy, _PolicyDecision
 
 _COMPOSITION_SEAL = object()
 _CANONICAL_ADMISSION_MODULE = "insurance_harness.run_admission.evaluator"
 _CANONICAL_SELECTOR_NAME = "select_canonical_admission_verifier"
+_AUTHORITY_PID = os.getpid()
+_AUTHORITY_NONCE = secrets.token_bytes(32)
+
+
+@dataclass(frozen=True, slots=True)
+class _CompositionState:
+    approved_identity_keys: frozenset[IdentityKey]
+    pid: int
+    process_nonce: bytes
+
+
+_COMPOSITION_STATES: WeakKeyDictionary[object, _CompositionState] = WeakKeyDictionary()
+_COMPOSITION_LOCK = RLock()
 
 
 class ProductionModelComposition:
     """Fixed canonical verifier bridge and policy with no caller override ports."""
 
-    __slots__ = ("_policy",)
-    _policy: ProductionModelPolicy
+    __slots__ = ("__weakref__",)
 
     def __new__(
         cls,
@@ -47,6 +64,8 @@ class ProductionModelComposition:
     ) -> VerifiedAdmission:
         """Select the exact code-owned verifier using independent expectations."""
 
+        if _get_composition_state(self) is None:
+            raise AdmissionPolicyDenied("invalid_production_composition")
         try:
             validated = StrictAdmissionRequestBinding.model_validate(
                 request.model_dump(mode="python", round_trip=True, warnings=False)
@@ -79,7 +98,11 @@ class ProductionModelComposition:
     ) -> _PolicyDecision:
         """Package-local hook for the future canonical guarded client only."""
 
-        return self._policy._evaluate_call(verified_admission, context)
+        state = _get_composition_state(self)
+        if state is None:
+            raise AdmissionPolicyDenied("invalid_production_composition")
+        policy = ProductionModelPolicy(state.approved_identity_keys)
+        return policy._evaluate_call(verified_admission, context)
 
 
 def _build_production_model_composition(
@@ -92,12 +115,29 @@ def _build_production_model_composition(
         ProductionModelComposition,
         _seal=_COMPOSITION_SEAL,
     )
-    object.__setattr__(
-        composition,
-        "_policy",
-        ProductionModelPolicy(approved_identity_keys),
+    state = _CompositionState(
+        approved_identity_keys=_normalize_identity_keys(approved_identity_keys),
+        pid=_AUTHORITY_PID,
+        process_nonce=_AUTHORITY_NONCE,
     )
+    with _COMPOSITION_LOCK:
+        _COMPOSITION_STATES[composition] = state
     return composition
+
+
+def _get_composition_state(value: object) -> _CompositionState | None:
+    if not isinstance(value, ProductionModelComposition):
+        return None
+    with _COMPOSITION_LOCK:
+        state = _COMPOSITION_STATES.get(value)
+        if (
+            state is None
+            or state.pid != _AUTHORITY_PID
+            or state.process_nonce != _AUTHORITY_NONCE
+            or os.getpid() != _AUTHORITY_PID
+        ):
+            return None
+        return state
 
 
 def _select_canonical_admission_verifier(
@@ -125,3 +165,16 @@ def _select_canonical_admission_verifier(
     if not callable(getattr(verifier, "verify", None)):
         raise AdmissionPolicyDenied("canonical_verifier_unavailable")
     return cast(AdmissionVerifier, verifier)
+
+
+def _reset_composition_authority_after_fork() -> None:
+    global _AUTHORITY_NONCE, _AUTHORITY_PID
+    global _COMPOSITION_LOCK, _COMPOSITION_STATES
+    _COMPOSITION_LOCK = RLock()
+    _COMPOSITION_STATES = WeakKeyDictionary()
+    _AUTHORITY_PID = os.getpid()
+    _AUTHORITY_NONCE = secrets.token_bytes(32)
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_composition_authority_after_fork)
