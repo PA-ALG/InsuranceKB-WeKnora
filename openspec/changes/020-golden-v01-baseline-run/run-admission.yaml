@@ -1,0 +1,392 @@
+plan:
+  payload:
+    run_identity: gs-v0.1-run-001
+    purpose: gs-v0.1-baseline
+    model_roles:
+      annotator:
+        identity_status: pending_immutable_identity
+        provider: bailian
+        model_id: null
+        expected_model_revision: null
+        immutable_deployment_id: null
+        protocol: https
+        base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        provider_policy: bailian-deployment-detail-v1
+        credential_env_name: HARNESS_DASHSCOPE_API_KEY
+      weak_extractor:
+        identity_status: pending_immutable_identity
+        provider: bailian
+        model_id: deepseek-v4-flash
+        expected_model_revision: null
+        immutable_deployment_id: null
+        protocol: https
+        base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        provider_policy: bailian-deployment-detail-v1
+        credential_env_name: HARNESS_DASHSCOPE_API_KEY
+      judge:
+        identity_status: pending_immutable_identity
+        provider: bailian
+        model_id: null
+        expected_model_revision: null
+        immutable_deployment_id: null
+        protocol: https
+        base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        provider_policy: bailian-deployment-detail-v1
+        credential_env_name: HARNESS_DASHSCOPE_API_KEY
+    identity_contract_hash: 3570e7563e9dce74a889af39e67ca1c0df9a6e97e39a3ba6ec129886970dbef6
+    budget_contract_hash: null
+  approval_envelopes: []
+  observations: []
+  derived_state: null
+identity_request:
+  required_dependency_revisions:
+    019: 4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f
+    "021": cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35
+  source_products_root: dataset/shouxian_product
+  golden_products_root: dataset/goldenset/wip-gs-v0.1
+  products:
+  - product_id: 平安e生保（尊享版）医疗保险
+    line_key: medical
+    pdf_digests:
+      产品说明书.pdf: 5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279
+      保险条款.pdf: 88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc
+      费率表.pdf: 7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb
+    product_meta_path: product_meta.json
+    product_meta_digest: 0550999d9541722a38173ad25396878f0c9b3592dd590dd9999ad3f7d1b82979
+    fields_digest: 80bb15cf5157f5144c15ee2bf5a2a927675ed4007a59718c248f7fc55314158d
+    consumed_input_digests:
+      golden.jsonl: d5e129831e9384f797a18c9c940885c13eb2825fe22c1bfc335653f31b1a482d
+      keypoints.jsonl: a0ee57160d4a5bf6de495448ba3aaf1dfc8ac2e13feffbd31190c7daec090598
+  - product_id: 平安e生保（悦享版）医疗保险
+    line_key: medical
+    pdf_digests:
+      E保险条款.pdf: 9d93c137aac3520ade8438b898b6f6e1c687a007c64ca4bf719bad3d3c166d91
+      产品说明书.pdf: 658d3da18fd3cc9cb3e403cbaa7947a118c4d1e2d6da156a43881128695a0203
+      费率表.pdf: e8fdc926f34e417b09ba5d927b3729a38bfb6ff5c9ed521b475e2785a6f81ce1
+    product_meta_path: product_meta.json
+    product_meta_digest: 40a5a885329a74597249ed286e70131dbe7e4602839c19f91d69b6fdd4d6c638
+    fields_digest: 80bb15cf5157f5144c15ee2bf5a2a927675ed4007a59718c248f7fc55314158d
+    consumed_input_digests:
+      golden.jsonl: 7f2d3124b977379ba7599a22e1d0f84909a5f5514d90a938bf02cc1b156e56e0
+  - product_id: 平安e生保（惠享版）长期医疗保险（费率可调）
+    line_key: medical
+    pdf_digests:
+      产品说明书.pdf: 3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f
+      保险条款.pdf: 7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5
+      费率表.pdf: fbc9adca68254427541afa594508f7b2e9c75d7c9b23b4804f9436a3a35a0f44
+    product_meta_path: product_meta.json
+    product_meta_digest: 9bdde7c27c56b9034c88cce1ff288b1681cf6e3986a338c5ed3a3db0793c3c1d
+    fields_digest: 80bb15cf5157f5144c15ee2bf5a2a927675ed4007a59718c248f7fc55314158d
+    consumed_input_digests:
+      golden.jsonl: f22d55339404baa81a3508ecb6af8292ed7832fce5ce0e78abc7c63b606e9195
+  - product_id: 平安创享盛世金越（尊享版26）终身寿险（分红型）
+    line_key: whole-life
+    pdf_digests:
+      产品说明书.pdf: 38720048d356a9c0ece11c8cf35f175d3bd98115ad76c39533e7610db1823c80
+      保险条款.pdf: b2260a6162930fc01341ac988aa830116c6092efca079926556b3ce58d3718de
+      费率表.pdf: ac99d646fe63e8256c65dc0c38513cd03fe7001f446ee7f1fdfd2beb6fb8ebbf
+    product_meta_path: product_meta.json
+    product_meta_digest: 02f2ff44cb5481852b3ea495f4822030cccd7ac42762433d2bc1df8460b071d0
+    fields_digest: 677e97f6f155cb56c672a92ab50f503391a0916fd8f1a0eb8902500fa2beefd4
+    consumed_input_digests:
+      golden.jsonl: 3dd33212fcfc1e800eb413af6244a7fa9d375452c7a5b4c4c37c76ddc9da7082
+  - product_id: 平安守护百分百（2026）两全保险
+    line_key: endowment
+    pdf_digests:
+      产品说明书.pdf: d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a
+      保险条款.pdf: 829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007
+      费率表.pdf: 9ea421ad68d443e5e6572b7c2c91fcd2302ab18103a7b85f733c0ea29439ea19
+    product_meta_path: product_meta.json
+    product_meta_digest: e6f62472a211d408d02361e29117af0807a3d2c26c7277393b5b0d4827fd30cb
+    fields_digest: cd7072a2a1aaa5c6cbcff52980ebbb88ad8d1c8b6b11cb7cd66e9264d6227881
+    consumed_input_digests:
+      golden.jsonl: 83eb248a7a2477fa592e9e66b2d712e685b49c43646a6b7a4ba16dabd95b0dbb
+      keypoints.jsonl: 2f3fbdbcaea852d9743e06da9875d191c308dfc5b9088f5bd3780b9f280ecc40
+  - product_id: 平安爱满分（2026）两全保险
+    line_key: endowment
+    pdf_digests:
+      产品说明书.pdf: d2119896e15b0fed076db80a2f780fd08ffd2498b260eb95fc7f1957c5169208
+      保险条款.pdf: 2e31eaf4dd259c4a04c04d5870bc6f6fdc2f4e3019d2d93b273db3f4a16bb932
+      费率表.pdf: 48f4e5ba20c270947e9473a95bf12f4861d0ec6d3d9625565c94ac4f08e79ac4
+    product_meta_path: product_meta.json
+    product_meta_digest: 4cd29c76d84104720ba4a8be72372d3e0442b4c548de648e1e083cd8fc50ad17
+    fields_digest: cd7072a2a1aaa5c6cbcff52980ebbb88ad8d1c8b6b11cb7cd66e9264d6227881
+    consumed_input_digests: {}
+  - product_id: 平安盛世金越养老年金保险（分红型）
+    line_key: annuity
+    pdf_digests:
+      产品说明书.pdf: fb2e5cffee374f728fe8ea935292cff5c83091aba786fca9a8b1900d00b22007
+      保险条款.pdf: b242772f134dfcd75b6033fb7ed19f654b41875d8dfff09e276ff6c05d93a92f
+      费率表.pdf: 1456e4ba6c68d9d5cf64d5d513a44cc00069c7205eb9db718f111a617b5df6ae
+    product_meta_path: product_meta.json
+    product_meta_digest: df1a95b66232489bb4b1a98af4d8e09878c70ad0d355cfe43b06ad9cec42a99d
+    fields_digest: 203bdce146fcd7def863c663a659d9ae81dcf6de10fb2b1814bfff5e0ceff96d
+    consumed_input_digests:
+      golden.jsonl: 4efd2fe8db9307cf23c0c8ad306b54b717554e1d105b15bc4de8f31a371c2c7a
+  - product_id: 平安盛世金越（尊享版26）终身寿险
+    line_key: whole-life
+    pdf_digests:
+      产品说明书.pdf: a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6
+      保险条款.pdf: 42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911
+      费率表.pdf: 9811367acd0d3875260e926fe64901e3423c07569ae06bf1438926769860c66f
+    product_meta_path: product_meta.json
+    product_meta_digest: ec2cff56d3f67946272ffa45f10cac5bb29ca217c81460bbed808a4b610fc8d5
+    fields_digest: 677e97f6f155cb56c672a92ab50f503391a0916fd8f1a0eb8902500fa2beefd4
+    consumed_input_digests:
+      golden.jsonl: 1aa609ca6ec30ea641d93fcb10d2ba4009549cfb3cd2dcd0f225d41ff478e4f6
+      keypoints.jsonl: d30769bd3e9155a35e2886678035e64d68f5b11c4c4e437c8e27fbef3e4eda7a
+  - product_id: 平安盛世金越（尊享版26）终身寿险（分红型）
+    line_key: whole-life
+    pdf_digests:
+      产品说明书.pdf: 0c204b5c34746dfb77a6b2d04cbe85549bee7a2f961c5bec7723e15e88f97cc1
+      保险条款.pdf: d4a09a8005d03e7ce2ef122a632fb4fabf8613238e1f7ba6cca7b744a28f321d
+      费率表.pdf: 4055b6f4143110cd0ec8495b2f69383a434c0cca6a36bbd1d285bc253af98d4b
+    product_meta_path: product_meta.json
+    product_meta_digest: d14a47a2b37aad9db2acfab6e2d60776449c26b7dac6d63ff3c1138dbfc33c7b
+    fields_digest: 677e97f6f155cb56c672a92ab50f503391a0916fd8f1a0eb8902500fa2beefd4
+    consumed_input_digests:
+      golden.jsonl: 3b573e5ae8302790c5d9aa796992cf84884e6af3210e03b197438570de863818
+  - product_id: 平安盛世金越（至尊版26）年金保险（分红型）
+    line_key: annuity
+    pdf_digests:
+      产品说明书.pdf: 7025fd26e5c6e37c3f861a46036935bbc516b747a3f9074199599deed4afd5be
+      保险条款.pdf: ad56b02e0c25599e26cd409f9d5e216af9582ea95967ec81a14a236043b59c8c
+      费率表.pdf: bf8951ca84880229cef503191ce78db14b16fdfa4313dfb4deccfd4ff96683e9
+    product_meta_path: product_meta.json
+    product_meta_digest: 3b48b3d24151b7e972b21940321fd8a18e572e7964c891510bab022218a0f96b
+    fields_digest: 203bdce146fcd7def863c663a659d9ae81dcf6de10fb2b1814bfff5e0ceff96d
+    consumed_input_digests:
+      golden.jsonl: 27491eb3adfab693a92947845c85774729e1dc423e94e70eed8a1e89cedc3c52
+  - input_status: pending_required_input
+    product_id: 平安福满分（2026）养老年金保险
+    line_key: annuity
+    pdf_digests:
+      产品说明书.pdf: 1febb7571f4249d6ea45bfb8e833cb929c96050abd473ef3a6847472d2634934
+      保险条款.pdf: 3186c86986c0af2d3620001203eae88c0545a9b80ca8038452d93f26e8c66589
+      费率表.pdf: cb8a022d63a1a7aa063c68eac85f73927153c89eda856f02a861c8cc61feb08e
+    product_meta_path: product_meta.json
+    product_meta_digest: null
+    fields_digest: 203bdce146fcd7def863c663a659d9ae81dcf6de10fb2b1814bfff5e0ceff96d
+    consumed_input_digests:
+      golden.jsonl: 155a5c20641dff277d0bbe85cfc30fa69c7e98b5825f32a0bdf2d4b4fd312681
+  - product_id: 平安附加（2026）失能收入损失保险
+    line_key: disability-income
+    pdf_digests:
+      产品说明书.pdf: c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7
+      保险条款.pdf: 5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f
+      费率表.pdf: b081ec26d0f318921c0374bdf86da3a13e057c1b4fa41cb46fa8e6c53d95043a
+    product_meta_path: product_meta.json
+    product_meta_digest: 23c1a56861c1141a4c0388afdeab307e12ca28a2cffa50f613a478810530034c
+    fields_digest: 8f9c10278dfda887790e6b92bb09622526ec65f42365c7a2cb35d90619b5cd96
+    consumed_input_digests:
+      golden.jsonl: ba8fb31f3b824bdf5bf31f451d722486f4222b12a56dc5cbb269af6de34c13c5
+  - product_id: 平安附加（2026）意外伤害保险
+    line_key: accident
+    pdf_digests:
+      产品说明书.pdf: 68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf
+      保险条款.pdf: 0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c
+      费率表.pdf: 72224c36ed2455365fcbcd361444d3f26b50ee88d62aba7673d41525c27b99c7
+    product_meta_path: product_meta.json
+    product_meta_digest: 75e2c64f92760dd73f195f40254919f8f6e7908f8e26d619ca2f30b3db3ffca5
+    fields_digest: 3f16af3bff969d13705b6bf0ea0c51121a89b73ae170dd70b23114d203a36b96
+    consumed_input_digests:
+      build_golden.py: 41cb4d0de5b37ea83ab40003ac234bd9f76808ef36d9825748bd775cd1cf7583
+  shared_input_digests:
+    dataset/goldenset/wip-gs-v0.1/assemble_release.py: 13a66cba6d866cd3c99e6651d24271aa37cdcda063574f26025f6c41e25131f0
+    dataset/goldenset/wip-gs-v0.1/build_golden.py: 3c15188067a3be645fa35bce467ad829d50a4b28378b0bc9e242b62a0d4bfe3a
+    dataset/goldenset/wip-gs-v0.1/manifest.json: e4435358ee1e501b098a234770caa684fcfaf08d9cc65cdebad1717dc4706ca6
+    dataset/templates/tpl-04b9c55dc31e-费率表.yaml: b5229f435c9d91b9ac3360ee6ef1061a215901445be2c6e9429f8cb82ad62cb2
+    docs/insurance-kb/schema-baseline/accident-medical.yaml: ecca9f6ef772f12653c3cdf39e126d24d66d1036ca51bb2f4ce985ac648038b7
+    docs/insurance-kb/schema-baseline/accident.yaml: e757ab35fad53f8f5b64b8d266b8d7658f2472bdb4f0f43bc17da4bf09df58a8
+    docs/insurance-kb/schema-baseline/annuity.yaml: ddb257160fae0a262d508e574497a54d1f8922782cab91460255f73b3ad0f680
+    docs/insurance-kb/schema-baseline/base.yaml: df56f46fadd220324ef7622adb20a6b67e1944b4ba8ca621fe1e1f6f8202bab9
+    docs/insurance-kb/schema-baseline/critical-illness.yaml: 20818f5ebb91b5670a209366c5f09a180c2be39baec1e662901b9706f1cac362
+    docs/insurance-kb/schema-baseline/disability-income.yaml: 4436cd58327e274b74f15167164e9c6d592e70ddf4d6dcbc4af41a416ee36fb7
+    docs/insurance-kb/schema-baseline/endowment.yaml: d03ff2350683d618ddcfca547767a8d2c3c2a751a63a30c538a7da2e8ab95bc0
+    docs/insurance-kb/schema-baseline/extensions-v1.1.yaml: a570244ee423da4d709d25f7cee8738a4274cfefa00cbcd1d8a4edabf1b0bcfd
+    docs/insurance-kb/schema-baseline/glossary.yaml: 61f6db02324b0557f12cb51bdc0fbe512cf92349c6fa2f0712cdb631a9db16a5
+    docs/insurance-kb/schema-baseline/long-term-care.yaml: d26885f59bc461a63105357d34e8b860f6bac05e8176cd52792829266e182cc6
+    docs/insurance-kb/schema-baseline/medical.yaml: 145bc7878604ad067d8f43ddaf2e263d4427e1b21eb7fa4abafddeb5d9b69235
+    docs/insurance-kb/schema-baseline/supplementary-pension.yaml: 0ddb284353f331ed8192adee9fffaa64f801704942a2e31541b2d8c46132ea71
+    docs/insurance-kb/schema-baseline/term-life.yaml: d246c36a7b046d5bb6bfdda019bb0363dea5c4c76a74963b4fb9cf8c26fbb47a
+    docs/insurance-kb/schema-baseline/whole-life.yaml: dc123550e42e41dd36bb71b9bfae395569491512ad9687b75c6a67bd72a80439
+  execution_surface_digests:
+    harness/pyproject.toml: 2675ba103b6486dd10203c15ddae1b47324f784f0e5bc700101f0e5a122330b4
+    harness/uv.lock: 211eee186c7d3dc69295f0d9d4d5d3c1075853bdfb1fcf1ec39bfc6af9a05c25
+    harness/src/insurance_harness/__init__.py: b48887b1bc02bcc93f3bbf764f27bde25d3c870abe885305f1e4b82f04dbba91
+    harness/src/insurance_harness/adapters/README.md: 58e13e71bb58fa3414d1775f6bd2177abb50c4d0c2dd3b13542a80699ca2ee19
+    harness/src/insurance_harness/adapters/__init__.py: 1e288e03b0807ecdb62f3730e17e295bbb7b865aa894d3ec03ec911a1863a83f
+    harness/src/insurance_harness/adapters/weknora/__init__.py: 66bb1b769016ef2be3011f0d8454a6f172e3945e440256b118a3b6e24c3859eb
+    harness/src/insurance_harness/adapters/weknora/admin_client.py: f1565a5e4a9953d694233ad83e2cb44b1ffc36e14afdf8cf229c67f063b30ec8
+    harness/src/insurance_harness/adapters/weknora/client.py: 28f17cc5c52a6bab5c1aab5254a52c5bb8323e7ac29b60a6778dc611f18187ab
+    harness/src/insurance_harness/adapters/weknora/errors.py: 70d495143b248dee93331f7d68af1c53ca75dd9c23360c5df0e692ba3dfc675d
+    harness/src/insurance_harness/adapters/weknora/models.py: 3a8c2c027cee1670539f7c2495fb4984df4d0a9dd2afc7a9fcd86002b5a26d79
+    harness/src/insurance_harness/adapters/weknora/scope.py: 5c103c21fc78e4c8a160ee5ab4c5949bc75fc4224d694b5b90c1e87134000d52
+    harness/src/insurance_harness/adapters/weknora/tracing.py: 4ceaeae7711cb28d0b7e85c1867f121bd51ea4f0d8f9e4192033f79365c3e8ac
+    harness/src/insurance_harness/compiler/README.md: f88728444407da8575366f021a3a4a47f00ce41b044208c3764efffd363a5c09
+    harness/src/insurance_harness/compiler/__init__.py: f1457b7ee8b2e902fe25a5a98d2115083c4859b19ef826dc1a6fcf1324f3d83c
+    harness/src/insurance_harness/compiler/attempts.py: 9694acbdd6e49342dea8bcd7ca0a27a33482ad42bc1e5516ea8d556ce1abc69b
+    harness/src/insurance_harness/compiler/cleaning.py: 7e8419dc17db630997db66b50b2e773d65454f28df76ee58d1a4273dab1e3c36
+    harness/src/insurance_harness/compiler/cli.py: 2e1a3e9acfbc6823e810925a1131b67dc38f16e68a1eb748b3eecedd73dd6444
+    harness/src/insurance_harness/compiler/compat.py: c7926109c5bbb32efc27e17c046a0a80e6a84441452e52d8f590057907581069
+    harness/src/insurance_harness/compiler/experiment.py: 49b05742bda31c699bdbfdede838317d8bb15f54b9d9c8427467e1a1cb9d9fcd
+    harness/src/insurance_harness/compiler/extract.py: eebf32b8e6ca4304933b67dc873dab17cc8df3a5a00ac687a353c2c268335fa0
+    harness/src/insurance_harness/compiler/feedability.py: b491ffc65239f138e6c06b68d7847ce8fd130f8ec8fb0970f2a10673e1bc5a91
+    harness/src/insurance_harness/compiler/gapfill.py: fc82d2a525fd5a8a44897437c539790a3143cb3655807cb5030d4b21c7314879
+    harness/src/insurance_harness/compiler/judge.py: 015d2bcc0cad2cb5f12bb2ca85411c0d624b695aadc105f540179acdcd941eaa
+    harness/src/insurance_harness/compiler/llm.py: 980f22f4e9e53295156f5dc0afeff02f3323c5b3ec53909378c2b6bc7f0366be
+    harness/src/insurance_harness/compiler/models.py: ef504f7210f81757b10ea9ac16854e22fe20b037a6ac35bf71431bf645778f73
+    harness/src/insurance_harness/compiler/parsing.py: 4566f62310fde7a8e0a13c2cc8d2f3f303edb955d85a7b83ac81b2c5d4f3c61a
+    harness/src/insurance_harness/compiler/pipeline.py: 1001a6b185634c617a4082e11e833ca27bd8fce962dd4e7a23c9f49e8bed2b6a
+    harness/src/insurance_harness/compiler/prompts/__init__.py: 1205bc42f12208d79f5edc213adeda856ae1f71ae0cf26becce3d321acbed892
+    harness/src/insurance_harness/compiler/recall_attribution.py: f801485cb83a6c2e6e194fedfb8b38f8e96dedc44a3415d2cf7d74c2e08245df
+    harness/src/insurance_harness/compiler/routing_data.py: c805410bade91f2fe8c9eb167e92161348891764956220b1f38bb9b2add7e0bb
+    harness/src/insurance_harness/compiler/sections.py: 5b09d5768c0bd95e71f3c7e1ffb9f29dc29a2134f3ef7bf2081a3058f6ec75d0
+    harness/src/insurance_harness/compiler/templates/README.md: 9564621779625eae4cb5c8f3c781bf9dd66f915001a87c06a52156b80a78256f
+    harness/src/insurance_harness/compiler/templates/__init__.py: 34280561ed168ea3a832f5f6ba259de9dd6ea95c061d02dd77e5386ca561874a
+    harness/src/insurance_harness/compiler/templates/fastpath.py: 20fd029a814c6fa91b6ec4b272a5e996e34a2ee7a8eac23b3e8abaad3c59cde9
+    harness/src/insurance_harness/compiler/templates/induce.py: 66fd87bd653cdb295aba0c0aff0718965ddd022e6a881917724f2408edfbe52f
+    harness/src/insurance_harness/compiler/templates/loader.py: 286d81b0a805a2c3908c13d32a90c7dd2c7aeee2ec2e0573ae8746e5d142c84a
+    harness/src/insurance_harness/compiler/templates/models.py: 0cb3684d2942694da25b3394a3fd9fc9a9b0eed8f4141d07c97927e5276771db
+    harness/src/insurance_harness/compiler/templates/polish.py: 347810a64974d7d5aed152c97fb5e2013f41da07bc614a7e34c74b689b6541ed
+    harness/src/insurance_harness/compiler/templates/tables.py: 6ec97dd1d14c31164eefc5df510bd230d371d1e6f1b360629aa4ba8ba23688f9
+    harness/src/insurance_harness/compiler/verification.py: 4d7fa81634a769fa386c3d25789863019e61571d6621f2b527f3a08f5373c2bc
+    harness/src/insurance_harness/compiler/variants.py: 42348c6fa5acf56d52db54a8a71e835132d338a11b36f136526186c0be9a9758
+    harness/src/insurance_harness/compiler/voting.py: da3bc91466c579db32fabb163453bbecfdc7b03e8079290094ef4dc71b4f6dc7
+    harness/src/insurance_harness/config.py: 0b103beb3bb955abeeee64749b208ca6cdc58ff39cb8dea3ec3b6f7235a35afc
+    harness/src/insurance_harness/db/README.md: c2965e787b2d8761cf7103728dfa2e98cdb81d5617be9dbad52878650608619a
+    harness/src/insurance_harness/db/__init__.py: 9b006fd448d6ae3524160dd273906f04c2ccd6982da088760777730be5b91a8f
+    harness/src/insurance_harness/db/base.py: d4f9c2184b4383b0527eac4fc571b7d7495e7dee2eb223b4a47776632098dbaf
+    harness/src/insurance_harness/db/models.py: 15c1e758db458bfdfe7e986eb20bcfd4058157ff0ca70544e70dca1030bebe5e
+    harness/src/insurance_harness/db/scope.py: b6fcf9996005ca3f7744124e532cb1485ea879db93c47a2e2badbbf59d4ddb0c
+    harness/src/insurance_harness/db/scope_cli.py: 5be28e0ca2e77f5c211348a841316ee4f2fe7974ccf98f0be93b857272aad473
+    harness/src/insurance_harness/flywheel/__init__.py: f48dd4ce6e8b5de6676e700a2f88d29531246c2f75cc735151bb4d64f61af80b
+    harness/src/insurance_harness/flywheel/align.py: b96aaa814892307e0091f5f014f3a7d360c9f222b39015868fd0a84bb700254c
+    harness/src/insurance_harness/flywheel/cli.py: aad40b26055d7554fc73ab53962ae90827e36ebbee13d592ae0aeba4517709bf
+    harness/src/insurance_harness/flywheel/cursor.py: 3e1b5eda142d6ac493ba5bd3c50cef54bfe988a64b64aaac611e61ad0820d073
+    harness/src/insurance_harness/flywheel/gaps.py: 3cf732a51e63e3c0f582f93ccd4eaa1bb50f5e76400846ee417f39c6101b1fae
+    harness/src/insurance_harness/flywheel/models.py: 5f481b5eecf7378e31619af7dc47b332bdaa06a3058eceb9d0e2ddd0e7b50aa7
+    harness/src/insurance_harness/flywheel/pull.py: c84ea08ab5a5fe5c4c90410c1d7d5bcf95af7b61865ab5e000cf7c08459cdaea
+    harness/src/insurance_harness/flywheel/redact.py: 852ab699d9222e88cb8fbf0546ce0826ab8ed0d275d0a6a1c8de0a987396745a
+    harness/src/insurance_harness/flywheel/report.py: d080741cb4f5d4c5ff3fa8753525deaa63955f22d6ed3d8bc0d2c76d40db748e
+    harness/src/insurance_harness/flywheel/repository.py: e9a5fd2e3213ee646535a73496bcea19a646c5eddc1bfa7511d2747893442336
+    harness/src/insurance_harness/flywheel/signals.py: 07b7449e4953661e90fee10b352a7437972578d9edca3aaa12bd559bcf81853a
+    harness/src/insurance_harness/flywheel/tables.py: 1fe6e920ce245ca1f05105db6dd6b9a2681ebc94cfde5be3f5ef9d4e19da32cf
+    harness/src/insurance_harness/goldenset/README.md: 9180e038e72ba4d40cdd58fe1875be80f242de9e9cde274efab14c16f1fc5692
+    harness/src/insurance_harness/goldenset/__init__.py: 208dc50795e397bd015ea43eb4fe41fcd3281a3067eeca42d194bc55a0bdda02
+    harness/src/insurance_harness/goldenset/admission.py: ddfb0f27638f1071760eee7c84e9b22924331b2f93ee529477be19662fac2317
+    harness/src/insurance_harness/goldenset/admission_artifacts.py: cb0ef11048dc2aa250c69defb0a7180fb3fdee7970954017eb0d04e96388833d
+    harness/src/insurance_harness/goldenset/admission_budget.py: 33b9e741b9a9181417bf4bab56160542e2da13c5c00e9b6928a28696b2fa0e75
+    harness/src/insurance_harness/goldenset/admission_cli.py: abdedd2e5d15d3b50a7d0379a82a3e4b41a53639eee42275d8a37a4def8a336d
+    harness/src/insurance_harness/goldenset/admission_identity.py: adc708a948a74bd2e7554771ef2377cc864c443be639fba1794701e52e2351fc
+    harness/src/insurance_harness/goldenset/admission_models.py: 17941c368fc266f3d8b00b444a3f1d8f0b8c6e0303a86ef1f3bb1ba65a483442
+    harness/src/insurance_harness/goldenset/admission_probe.py: 522b0609714e8ee3883ad5b326cdc38d965345af9c35a9faea9ecfb6fd619999
+    harness/src/insurance_harness/goldenset/admission_runtime.py: 4cd3b2e3039b1448377634d0e459a449627adf232c9710380d57ba28b8a65e1c
+    harness/src/insurance_harness/goldenset/annotator.py: 5d32fb00e36d15798483cea0007e78d713df326575fa3646aeed6c215dfe43c8
+    harness/src/insurance_harness/goldenset/assemble.py: 0361a8a14107a44eddf9b42eefd1ccd25dc38dea629132a04b8f1fb5212f67f6
+    harness/src/insurance_harness/goldenset/baseline.py: 884cfffb9954b09ab844cafb8ffec0678f53ad01ace6ae75ed2e42e228c80624
+    harness/src/insurance_harness/goldenset/eval.py: bf8e5dc34f499167a79587eb9212401e201ec27d45ce2f4a18a085dc434cf20b
+    harness/src/insurance_harness/goldenset/execution_artifacts_020.py: 3abc177fe1deb068475d20fb0470a8b0753a89042f5fbdb9e9ce1d5513793100
+    harness/src/insurance_harness/goldenset/keypoints.py: 1ec9c287408e65b80cf87bc95b7eb3cdc4e66eb8119b259fa475b3685bec3e0a
+    harness/src/insurance_harness/goldenset/normalize.py: e19e4d9c5e47e47cc04edf480356ceb1783f5768035683030f8c08a6f894a591
+    harness/src/insurance_harness/goldenset/pdf.py: a564c4e7d0ade06ebe7e535c332ce11e69c58af32ed8e28efd766760aa057341
+    harness/src/insurance_harness/goldenset/profile.py: 4e5302f0ab660449a907186472271e36e9f52b491efba1493e7a5f66cd016a4b
+    harness/src/insurance_harness/goldenset/records.py: ff84a91fc0bfcb57fd6c6f9e819ce2fcbfda42d2928144b3553b11acbb07258c
+    harness/src/insurance_harness/goldenset/release.py: f5d31986afde13b93649ff03dc5bfc37757d1bc0a4f20feead0f5e6006b11329
+    harness/src/insurance_harness/goldenset/run_020.py: c76f2026bcf012f62c7465d355cfd8db2d117498f3d38416e13c63dfac3ef878
+    harness/src/insurance_harness/goldenset/runner.py: 6b273de9cad09381db88df07d7c30734b6d56201f01ae85ecf11670cf2245749
+    harness/src/insurance_harness/goldenset/validate.py: 3c8a35f89fabd2ec5dd5e7641f485c349594817fa5bd12e09f6d7e0057a7eb58
+    harness/src/insurance_harness/goldenset/verify.py: ddeeaaa3ef480f47c571ca3cb290f420c157eff50f17eace96f2961b363aedac
+    harness/src/insurance_harness/knowledge/README.md: e04f42fb70e8712afb5be3955f26fd7ae7929ebe88bc3e85977a3cfc7be6f384
+    harness/src/insurance_harness/knowledge/__init__.py: 68f105def6d6d423774254d8bde2709d711d6be38646e5773b2c7de04eda6c70
+    harness/src/insurance_harness/knowledge/authority.py: 1ff7a1a7e20b797ecf0d4dc2c41a661dbacf6be6311ed04d2a60db966eca08c9
+    harness/src/insurance_harness/knowledge/fallback.py: c7bb0b2c4e0be3bd4a477f5b05b3ecda52be242fed1def3fec8f7a6825276f35
+    harness/src/insurance_harness/knowledge/importer.py: d59c713e88069758e7677aaa33376e65951894869a09e0b4c2041cea49b01b37
+    harness/src/insurance_harness/knowledge/merge.py: daf12de6c13aa8f393f88793516e74970c729419b3b701fe07a08f368dd3e616
+    harness/src/insurance_harness/knowledge/models.py: 61caea15829d5cf4473b7f2d71a30d40770c144a2413ed870251bdd483a2fd76
+    harness/src/insurance_harness/knowledge/pages.py: 2bc80b38dd6160196e7663bbbd0b47134fb3c0b3e17502a19e581d5bccf1adaf
+    harness/src/insurance_harness/knowledge/projection.py: 80cb509ec008c31542b1b68f796b7f078337d7daf460ddd7e2dd8d9face3ff06
+    harness/src/insurance_harness/knowledge/publisher.py: 8d91eb111844beac6d4ff568caf916aa212a057edd848c23140542b899f96161
+    harness/src/insurance_harness/knowledge/quality_gate.py: d0f6fa105fcbbcb6f649fb57ad9c55688f52759f4a439c7378fb566e032359c7
+    harness/src/insurance_harness/knowledge/reader.py: 472a27cdbde3f885aee0440dacf87ed057e0e454e57db6c1fe8041232be009e5
+    harness/src/insurance_harness/knowledge/reconcile.py: ef440e65dc47649c40ad572068444a51b8ee5341623a69b39da2215baa425b4a
+    harness/src/insurance_harness/knowledge/release_guard_ddl_018.py: a306a5a641eebae4acd8cb4f1d2db880dba17c19cf482053c5369f40f77c693f
+    harness/src/insurance_harness/knowledge/release_plan.py: 64c096d744c93d372fc5b5a85c069a8d79c5bae5a664a831a4695a29359f835d
+    harness/src/insurance_harness/knowledge/review.py: 6af4662450c6702ec4d8b2ce7f5f8f1098b86e54c786d13cbbb80d43c13000e2
+    harness/src/insurance_harness/knowledge/snapshots.py: b90a61d33dfe775fdde3665849a7f8e8f8f9abe680d4b3838db62f69e7ecbde5
+    harness/src/insurance_harness/knowledge/source_aggregates.py: 42910f590475dcce795959123ca202f0e86736c328e394cda6c0ab1cd75124ce
+    harness/src/insurance_harness/knowledge/source_keys.py: 7cd0cc4b452659319a68ad26bdfb03f9564277ed5d5a2bfa402b96a58a6fb7b5
+    harness/src/insurance_harness/knowledge/source_lifecycle.py: b155bf05e4487e362c9b535dc20a72f163681d3c5470f8e88b529c46cf9ee487
+    harness/src/insurance_harness/knowledge/source_revision.py: 44a6f52fd966c7eae5f1e02a4b085122bc7d8944bfabf00551c2243c92000376
+    harness/src/insurance_harness/knowledge/tables.py: 592ff83146be7ca9d0ab5db0f4de66647231e75b0bfccb5d0a1f478827caff04
+    harness/src/insurance_harness/live_env/__init__.py: 994d20bc7f1a7dbf90dd70a7273641a0a23cda1285aa102fbc8feae45dd914a3
+    harness/src/insurance_harness/live_env/compose.py: fc712f94399e5835277f605a64cb6a5b487ae5dacec94defa90697a267d26630
+    harness/src/insurance_harness/live_env/config.py: 78cd3c6d2be27f087116c9e1effcac02a1bfdfb3fa34302084a5b112d30f0266
+    harness/src/insurance_harness/live_env/fixtures/vlm-canary.png: f390bac79f999f99dfe6b3839baccaaf2c92dc21c11066bd39b8cae6af29979b
+    harness/src/insurance_harness/live_env/github_backend.py: f55f9d20baf6a88c6b69b77be75f423f5f39e5dcd5ea222a5d8c736e62dc7808
+    harness/src/insurance_harness/live_env/github_live.py: 8f594bf0a686738afc63736f85f058037ac6c5f20bbde8346c0d680bdb01cefe
+    harness/src/insurance_harness/live_env/local_gate.py: ecc3248870da899170e98ddf35738c8db6c7abb910467144ac1fca3494042e63
+    harness/src/insurance_harness/live_env/local_provisioning.py: d61054982cee07c82f89867d64b0ff95d37e1461fdc3897a14f48dbccae0ab62
+    harness/src/insurance_harness/live_env/model_probe.py: 123b8060607fe186c2288bfad3e22b38a0a2091cb7eb9ce20a959d99bae9e5c9
+    harness/src/insurance_harness/live_env/provision.py: 6b47ca715cb603d148b02eb952c65aab5d3da95e44abd7bb059b2d3be0324b4c
+    harness/src/insurance_harness/live_env/space.py: 12bb72b7a937e79c3732d4a9f00e86f54a08089d93ef423b39d9fa2888936cb9
+    harness/src/insurance_harness/mcp/README.md: 51a1f7885f5ee73165425061849130eca03f92b51e4d58c32d4c380b60e92f13
+    harness/src/insurance_harness/mcp/__init__.py: a767c7b6f6ed98ebb514e7b0f431bdf507a13fdd2924c7ea34620805d75be8fb
+    harness/src/insurance_harness/product/README.md: c3d966b5949becab587acfd138602c13e66f9102d0cbec5170acdd069cb9e456
+    harness/src/insurance_harness/product/__init__.py: 4d5ac5946b9754ce6527a34a12948f7b047c704321404500b4fbb352721a1f11
+    harness/src/insurance_harness/product/aliases.py: c5437711026921fb77e9fae7a53d3af07f537a692d82d263a218949bb68a44eb
+    harness/src/insurance_harness/product/classify.py: 4eb27b0f2ae1f68cd744606e74230b69d640aadd38bac7a871d41f456497b93f
+    harness/src/insurance_harness/product/cli.py: 4ef9e4da48231ed298abf0b008834520d2707c777fb8d5759817b178a237805e
+    harness/src/insurance_harness/product/meta.py: 0feef6b4259679080ad6cdb8614633526dd3132eb04ed7ee068b880171e14ec4
+    harness/src/insurance_harness/product/register.py: b7cccf63b1170ce32ee357fa0b0522d12ce41a58327325b5f05cd4299a71932c
+    harness/src/insurance_harness/product/routing.py: e2508a951a98417726a76266fdcd486f282fd9c35fab4013efb5c5b449094fa2
+    harness/src/insurance_harness/py.typed: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    harness/src/insurance_harness/schemas/README.md: 4ff57736894d4df4aecab741ea8ece6d8d42b15b1cba15e4504bf03a04c5591d
+    harness/src/insurance_harness/schemas/__init__.py: 82114c232a0d17fc1c109a98a0005b0fa26e7c1646fb91c194578c98ce8a0aab
+    harness/src/insurance_harness/schemas/loader.py: 8eebbc06072bc5eb7e9b452d1b7ce1840ee464bcdbf8098c92cd7d3ad95f8582
+    harness/src/insurance_harness/schemas/models.py: 0daca3e8a7956438d70f260da6aa1be13a28855378bfb4df313744d1c181d94d
+    harness/src/insurance_harness/sources/__init__.py: fda6ad663dd767347d4c58e8b798fc920a6d17df7e7add06c535a0f96bb6d3aa
+    harness/src/insurance_harness/sources/directory.py: 62778f65c88583c816c970fc8c6660194ac1f0a3b72b612700ac12b58fec54b7
+    harness/src/insurance_harness/sources/lineage.py: e87a69cd39dda59c674dc944710a6c014e987d89a510d833060e4c3a67cb4ef7
+    harness/src/insurance_harness/sources/models.py: db370971e8cebd90667e42f05cacf8e273203f49df8a4c9267b8efccf074b326
+    harness/src/insurance_harness/sources/protocol.py: 971e950706f8af745a71304919f24c24ee5d02fccee0d3d45788f2d4f229697c
+    harness/src/insurance_harness/sources/weknora.py: 2b3f95114635e9ec4fc3da1e567c6cad141c2344bc5c5e08219b616db9ebba56
+    harness/src/insurance_harness/structured_import/__init__.py: 35faa75b64287a436533697f8b7be3afc1073379f3b7af3da340a8286bbb837b
+    harness/src/insurance_harness/structured_import/cli.py: cf1a628f189f3b58cdb0354677594b56d35ab5db09acae9ef434a7ec6e033208
+    harness/src/insurance_harness/structured_import/errors.py: e0ab2e5cf11fb306ac9ddf0367bfa8566e906bcbd2e6072d1fb5edfae4c6c8a7
+    harness/src/insurance_harness/structured_import/mapping.py: 8fe51a4756d8922faaae60f15364d54473a069e84afbbfd78a918adfac4a2eed
+    harness/src/insurance_harness/structured_import/registry.py: 548d5867ca414078e97f1f6cd54bd720837c3c7c0e2af91361474e83b6d1b955
+    harness/src/insurance_harness/structured_import/service.py: c55bdce37a07b319ec374c1d7c1558f3cca83f00fd9981048543a2c8c3775c90
+    harness/src/insurance_harness/structured_import/transformers.py: 05906e6b814bf33662718565822806be4221d16b3f4ebed7734221bf18301e3a
+    harness/src/insurance_harness/workbench/README.md: 425bd5e68e60e44ddea6a32d8af4e2dfebc468d681c591a4399dc72730c7b8c8
+    harness/src/insurance_harness/workbench/__init__.py: 6c26633b159f92d3deada3136e8b6a6f0b4a256b8650097d4c55c74d4795a4eb
+    harness/src/insurance_harness/workbench/app.py: 3ae4666ab97ba3be5fdbce79df755d9ef22fba629e3b3bc9eb6fba14959e7924
+    harness/src/insurance_harness/workbench/auth.py: 0ce1ab1ca96047ae4ea0ad45d928757355f9f720105f19b3f55dbd717fa37bc5
+    harness/src/insurance_harness/workbench/queries.py: 05e558f89a626b1a016758ce49abd0ebbf50032fc5e6aaac14f6f422755579f4
+    harness/src/insurance_harness/workbench/static/vendor/VENDOR.md: f93e053fc883b06c8f4925b1c14c6813dec3c606df3b11d0dbc4c7cfc805c150
+    harness/src/insurance_harness/workbench/static/vendor/htmx-LICENSE.txt: d3d2456f76414f2456104660ebd65aff1c04cd7966b942bdabd63f3cdb316a38
+    harness/src/insurance_harness/workbench/static/vendor/htmx.min.js: 449317ade7881e949510db614991e195c3a099c4c791c24dacec55f9f4a2a452
+    harness/src/insurance_harness/workbench/templates/base.html.j2: f43ecc419c26f79b0966ee95718cf5ccb9c2935c47fb2269915e02504f7c18c2
+    harness/src/insurance_harness/workbench/templates/changes.html.j2: c26e4440757e0b8c34a9edaaa0c7bc824be058bb7deda4e164e73ebf9ec51c9e
+    harness/src/insurance_harness/workbench/templates/changeset_detail.html.j2: c6bf369c58789b698e8d4fb3f0159c2dfe34b09495a57232352d871e5fd8f43e
+    harness/src/insurance_harness/workbench/templates/drill.html.j2: 9090569b7899609061174a75dc90cf7ce7e3ce274574b56c32096f1115f59189
+    harness/src/insurance_harness/workbench/templates/home.html.j2: 6064669b130b4683c6ec1dbb15abf390fe1c4c6da6c7a322e0880a00a13d568e
+    harness/src/insurance_harness/workbench/templates/login.html.j2: 5859066045375693d19adb990107479f89c001a202a8a07eda90fda8a76eeb2c
+    harness/src/insurance_harness/workbench/templates/matrix.html.j2: e6750be492f5c3889fe0f2ca00891c1e5de01a96f60953805df8d84002ce947a
+    harness/src/insurance_harness/workbench/templates/queue.html.j2: 695a593b8713e2d029db395a29989e16532d63850400a7d496f1879994655246
+    harness/src/insurance_harness/workbench/templates/queue_row.html.j2: ccc2360a98cd7270c72514b3f9d046d75648ee2ae386c2b2574e60fa3b3c3bd6
+    harness/src/insurance_harness/workbench/templates/timeline.html.j2: aa45bda0404cc2661a0d9ea4e3123e4c5c1f4595b1f14b4c345a83f7bb2793ef
+  historical_product_ids:
+  - 平安e生保（尊享版）医疗保险
+  - 平安e生保（悦享版）医疗保险
+  - 平安e生保（惠享版）长期医疗保险（费率可调）
+  - 平安创享盛世金越（尊享版26）终身寿险（分红型）
+  - 平安守护百分百（2026）两全保险
+  - 平安盛世金越养老年金保险（分红型）
+  - 平安盛世金越（尊享版26）终身寿险
+  - 平安盛世金越（尊享版26）终身寿险（分红型）
+  - 平安盛世金越（至尊版26）年金保险（分红型）
+  - 平安福满分（2026）养老年金保险
+  - 平安附加（2026）失能收入损失保险
+  historical_provenance: []
+budget_contract: null

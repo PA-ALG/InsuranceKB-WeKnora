@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "寿险知识编译 Harness——WeKnora 插件式扩展（docs/insurance-kb/02-architecture.md ADR-001）"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=49",
     "httpx>=0.27",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",

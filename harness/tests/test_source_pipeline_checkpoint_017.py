@@ -637,9 +637,15 @@ async def test_cancelling_run_lock_waiter_closes_its_file_descriptor(
     original_open = os.open
     original_close = os.close
 
-    def tracked_open(path: object, flags: int, mode: int = 0o777) -> int:
-        file_descriptor = original_open(path, flags, mode)  # type: ignore[arg-type]
-        if Path(path).name == ".run.lock":  # type: ignore[arg-type]
+    def tracked_open(
+        path: str | Path,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        file_descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        if Path(path).name == ".run.lock":
             opened.append(file_descriptor)
         return file_descriptor
 
