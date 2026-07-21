@@ -338,6 +338,10 @@ class ReleaseApproval(Base):
             name="ck_release_approvals_actor_type",
         ),
         CheckConstraint(
+            "role = 'release_approver'",
+            name="ck_release_approvals_role",
+        ),
+        CheckConstraint(
             "length(trim(actor)) > 0 AND length(trim(authorization_receipt)) > 0 "
             "AND length(trim(reason)) > 0",
             name="ck_release_approvals_named_attestation",
@@ -352,6 +356,7 @@ class ReleaseApproval(Base):
     manifest_hash: Mapped[str] = mapped_column(String(64))
     actor: Mapped[str] = mapped_column(String(128))
     actor_type: Mapped[str] = mapped_column(String(16))
+    role: Mapped[str] = mapped_column(String(32))
     authorization_receipt: Mapped[str] = mapped_column(String(512))
     reason: Mapped[str] = mapped_column(Text)
     approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

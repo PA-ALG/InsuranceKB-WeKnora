@@ -216,6 +216,7 @@ def test_ra2_authorized_named_human_approves_exact_hash_without_moving_current(
 
     assert approval.actor == "alice@example.com"
     assert approval.actor_type == "human"
+    assert approval.role == "release_approver"
     assert approval.manifest_hash == manifest.manifest_sha256
     assert approval.authorization_receipt == "iam:release-approver:alice:42"
     assert authorizer.calls == [

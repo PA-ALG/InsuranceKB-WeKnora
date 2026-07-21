@@ -138,6 +138,7 @@ def upgrade() -> None:
         sa.Column("manifest_hash", sa.String(64), nullable=False),
         sa.Column("actor", sa.String(128), nullable=False),
         sa.Column("actor_type", sa.String(16), nullable=False),
+        sa.Column("role", sa.String(32), nullable=False),
         sa.Column("authorization_receipt", sa.String(512), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=False),
@@ -157,6 +158,10 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "actor_type IN ('human', 'principal')",
             name="ck_release_approvals_actor_type",
+        ),
+        sa.CheckConstraint(
+            "role = 'release_approver'",
+            name="ck_release_approvals_role",
         ),
         sa.CheckConstraint(
             "length(trim(actor)) > 0 AND length(trim(authorization_receipt)) > 0 "

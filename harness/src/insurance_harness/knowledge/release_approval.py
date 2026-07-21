@@ -255,6 +255,7 @@ class ReleaseApprovalService:
                 existing.snapshot_id == snapshot_id
                 and existing.actor == actor
                 and existing.actor_type == actor_type
+                and existing.role == "release_approver"
                 and existing.authorization_receipt == authorization_receipt
                 and existing.reason == reason
             ):
@@ -267,6 +268,7 @@ class ReleaseApprovalService:
             manifest_hash=manifest_hash,
             actor=actor,
             actor_type=actor_type,
+            role="release_approver",
             authorization_receipt=authorization_receipt,
             reason=reason,
         )

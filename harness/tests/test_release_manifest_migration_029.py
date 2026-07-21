@@ -126,6 +126,7 @@ def test_ra2_0013_is_single_head_and_creates_exact_schema(tmp_path: Path) -> Non
         "manifest_hash",
         "actor",
         "actor_type",
+        "role",
         "authorization_receipt",
         "reason",
         "approved_at",
@@ -143,7 +144,7 @@ def test_ra2_0013_is_single_head_and_creates_exact_schema(tmp_path: Path) -> Non
         item["name"] for item in inspector.get_foreign_keys("release_approvals")
     }
     assert "fk_release_approvals_exact_manifest" in approval_fks
-    assert "ck_release_approvals_actor_type" in {
+    assert {"ck_release_approvals_actor_type", "ck_release_approvals_role"} <= {
         item["name"] for item in inspector.get_check_constraints("release_approvals")
     }
 
@@ -161,9 +162,10 @@ def test_ra2_0013_guards_manifest_immutable_and_approval_append_only(
         connection.execute(
             text(
                 """INSERT INTO release_approvals
-                (id, space_id, snapshot_id, manifest_hash, actor, actor_type,
+                (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
                  authorization_receipt, reason, approved_at, created_at)
                 VALUES ('approval-1', :space, :snapshot, :hash, 'alice', 'human',
+                        'release_approver',
                         'receipt', 'reviewed', :now, :now)"""
             ),
             {"space": space_id, "snapshot": snapshot_id, "hash": "a" * 64, "now": now},
@@ -205,9 +207,10 @@ def test_ra2_0013_rejects_cross_space_manifest_and_nonhuman_approval(
             connection.execute(
                 text(
                     """INSERT INTO release_approvals
-                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type,
+                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
                      authorization_receipt, reason, approved_at, created_at)
                     VALUES ('bad', :space, :snapshot, :hash, 'model-x', 'model',
+                            'release_approver',
                             'receipt', 'automated', :now, :now)"""
                 ),
                 {
@@ -221,9 +224,10 @@ def test_ra2_0013_rejects_cross_space_manifest_and_nonhuman_approval(
             connection.execute(
                 text(
                     """INSERT INTO release_approvals
-                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type,
+                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
                      authorization_receipt, reason, approved_at, created_at)
                     VALUES ('cross-space', :space, :snapshot, :hash, 'alice', 'human',
+                            'release_approver',
                             'receipt', 'reviewed', :now, :now)"""
                 ),
                 {
@@ -237,10 +241,27 @@ def test_ra2_0013_rejects_cross_space_manifest_and_nonhuman_approval(
             connection.execute(
                 text(
                     """INSERT INTO release_approvals
-                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type,
+                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
                      authorization_receipt, reason, approved_at, created_at)
                     VALUES ('anonymous', :space, :snapshot, :hash, '', 'human',
+                            'release_approver',
                             'receipt', 'reviewed', :now, :now)"""
+                ),
+                {
+                    "space": space_a,
+                    "snapshot": snapshot_a,
+                    "hash": "a" * 64,
+                    "now": datetime.now(UTC),
+                },
+            )
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                text(
+                    """INSERT INTO release_approvals
+                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                     authorization_receipt, reason, approved_at, created_at)
+                    VALUES ('wrong-role', :space, :snapshot, :hash, 'alice', 'human',
+                            'viewer', 'receipt', 'reviewed', :now, :now)"""
                 ),
                 {
                     "space": space_a,
