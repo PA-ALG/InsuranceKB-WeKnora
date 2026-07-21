@@ -1,12 +1,12 @@
 # 020 阶段验证报告：T1 run-admission
 
-> 状态：**T1 软件闭环已验证；真实数据运行 BLOCKED。** 本报告不是 D2～D5 的最终运行报告，T2～T7 与 T8 最终对账均未完成。
+> 状态：**T1 软件闭环已在 021 合入后的基线上验证；真实数据运行 BLOCKED。** 本报告不是 D2～D5 的最终运行报告，T2～T7 与 T8 最终对账均未完成。
 
 ## 1. 当前准入结论
 
 - 权威工件：`run-admission.json`；人读镜像：`run-admission.md`。
 - 状态：`BLOCKED`。
-- evaluated revision：`3a99f46b496baf7d6589ac80d992d0b2c512921b`。
+- evaluated revision：`62ce831c54490517d16cfe53e55b7d8476c80bbe`。
 - checker：`020.1`；runtime capability：`budget-ledger-v3-canary-v1`。
 - provider probe：annotator、weak_extractor、judge 均为 `not_attempted`。
 - 模型调用：0；token：0；费用：0。
@@ -16,23 +16,21 @@
 
 1. 预算：`budget_contract_missing`、`budget_not_admitted`。
 2. 审批：`approval_missing`。
-3. 依赖/输入 identity：`dependency_set_mismatch`、`identity_contract_mismatch`、`execution_surface_unpinned`、`digest_mismatch`、`dirty_consumed_file`、`untracked_consumed_file`、`missing_path`、`unconsumed_product_file`。
-4. provenance：`missing_historical_provenance`。
-5. 模型 identity/probe：三个角色均为 `model_identity_pending`，因此未发起 probe。
+3. 输入/provenance：11 个产品为 `missing_historical_provenance`；`平安福满分（2026）养老年金保险` 另有 `missing_path` 与 `unconsumed_product_file`。
+4. 模型 identity/probe：三个角色均为 `model_identity_pending`，因此未发起 probe。
 
-上述结果证明 fail-closed 路径生效，不代表这些前置条件已经满足。尤其 021 在当前基线仍为 proposed/pending，020 不得进入真实 annotation/baseline。
+上述结果证明 fail-closed 路径生效，不代表这些前置条件已经满足。021 已以 PR #23 合入，所需 revision `f557fc94` 已固定且为 evaluated revision 的祖先；`dependency_set_mismatch`、`identity_contract_mismatch`、`execution_surface_unpinned`、`digest_mismatch`、`dirty_consumed_file`、`untracked_consumed_file` 均已消失。其余阻塞解除前，020 仍不得进入真实 annotation/baseline。
 
 ## 2. 软件验证证据
 
-2026-07-20 在当前工作树执行：
+2026-07-21 在合并 021 后的当前工作树执行：
 
 | 门禁 | 结果 |
 |---|---|
 | 020 focused suite | `674 passed` |
-| 高风险组合回归 | `252 passed` |
-| 全量 non-live / non-PostgreSQL | `2361 passed, 9 deselected`，234.64 秒 |
+| 全量 non-live / non-PostgreSQL | `2581 passed, 30 deselected`，287.25 秒 |
 | Ruff | PASS，`All checks passed!` |
-| mypy strict | PASS，275 source files |
+| mypy strict | PASS，285 source files |
 | OpenSpec strict | PASS |
 | `git diff --check` | PASS |
 | 独立最终复核 | 两轮 APPROVE；无 P0/P1/P2 |
@@ -61,7 +59,7 @@
 
 ## 4. 已知边界与下一步
 
-- 先完成 021，再修复或正式重签输入/execution-surface identity 与历史 provenance。
+- 021 依赖与 execution-surface identity 已固定并通过；下一步补齐 11 个产品的历史 provenance，并修复 `平安福满分（2026）养老年金保险` 的缺失/未消费输入。
 - 冻结三模型不可变 identity，取得 provenance/budget 签名审批，创建并准入 durable budget account；随后只运行准入 probe。
 - 重新生成 canonical admission；只有结果为 READY 才可按 T2→T7 执行，任何不明确状态继续 BLOCKED/暂停。
 - PostgreSQL integration 与 WeKnora live 本阶段未运行；它们不是 T1 零模型准入软件的完成证据，也不得由 non-live 测试冒充。
