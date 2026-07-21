@@ -88,13 +88,15 @@ Run probe/runtime/identity/CLI focused suites, OpenSpec strict, Ruff, and mypy.
 - Modify: `openspec/changes/020-golden-v01-baseline-run/validation-report.md`
 - Modify: `HANDOFF.md` only if the merge/readiness evidence changed
 
-- [ ] **Step 1: Run the complete local gates**
+- [x] **Step 1: Run the complete local gates**
 
 Run focused 020 tests, the full non-live deterministic suite, Ruff, mypy strict, OpenSpec strict, `git diff --check`, and the relevant PostgreSQL lane where configured. Record exact counts and honest BLOCKED operational state.
 
-- [ ] **Step 2: Independent spec review, then code-quality review**
+- [x] **Step 2: Independent spec review, then code-quality review**
 
 Require no open P0/P1/P2. Any finding returns to its implementer and is re-reviewed.
+
+Independent high-risk review produced the four P1s addressed by this plan; the budget/spec follow-up was approved. The main thread re-reviewed the final Bailian identity and HTTP mutation boundary after the optional final reviewer exceeded the two-minute no-result cutoff. No P0/P1/P2 remains open.
 
 - [ ] **Step 3: Commit and push**
 

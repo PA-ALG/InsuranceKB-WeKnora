@@ -23,3 +23,11 @@
 - baseline checkpoint 只接受单链接 exact bytes，拒绝 WAL/SHM，并通过 SQLite deserialize 在内存校验；validation 到 settlement 始终持有同一 run lock。
 - 产品授权缺失或 fresh candidate 非 READY 返回类型化 `BLOCKED`/退出码 2；evaluator、I/O 或资源状态不明确则暂停，不得猜测为可执行。
 - 当前 `run-admission.json` 的 capability 为 `budget-ledger-v3-canary-v1`，所有 provider probe 均为 `not_attempted`，模型调用、token 与费用均为 0。
+
+## T1 合并前硬化裁决（2026-07-21）
+
+- 删除未完成信任链的 provider `no_usage` authority；release 只允许零 attempt，历史/篡改 `no_usage` 一律按 uncertain/full-reserve 恢复。未来若需要零费用 reconciliation，必须另立 OpenSpec 并同时交付 trust root、签名 schema、受控 loader 与 provider evidence lineage，不能用 caller 自报 proof 授权退款。
+- 同 run budget revision 只允许提高 account ceiling；product、exact request、request pool 及其 limits/rates 的增删改均属于新合同，必须拒绝，防止用“扩容”绕过原始签名范围。
+- production Bailian 只接受与真实 POST `model` 完全相同的 provider-guaranteed immutable deployment ID；revision-only/可变 alias 只能作为审计观察，不能授权推理。
+- 019/021 依赖身份固定为实际 main merge `4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f` / `cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35`，feature head、cherry-equivalent 或“仅为祖先”均不能替代 designated revision。
+- canonical 工件采用两阶段提交：先提交代码/source plan，再从 clean code SHA 运行 CLI 生成 JSON/Markdown。当前 evaluated revision=`2169c5821021dfc9513d3cc760dea4fc4e519112`，结果仍为零模型 `BLOCKED`，且已消除 dirty/dependency/identity drift 阻塞。

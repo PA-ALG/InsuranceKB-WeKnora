@@ -1,10 +1,10 @@
 # Run admission: BLOCKED
 
-- Canonical JSON commit marker: `3055f084e61825acf7347d60de5a901e2174e996b943e917da9616afc77ec1c9`
+- Canonical JSON commit marker: `ec7459bfef3538c97ecce35816ecd44e0fcd70207016f03750817513fc9ffc3f`
 - This report is non-authoritative without the matching JSON artifact.
-- Plan payload: `20acb5fbf5a58158f5d53e4007c629bba24946dfc1af97a3e1399ddff445d235`
-- Evaluated revision: `62ce831c54490517d16cfe53e55b7d8476c80bbe`
-- Evaluated at: `2026-07-21T02:51:11.250715+00:00`
+- Plan payload: `69b5f68c7613a42f09f232935b1460f86ac5a09ca4813b58a6c27d9b7269b7fb`
+- Evaluated revision: `2169c5821021dfc9513d3cc760dea4fc4e519112`
+- Evaluated at: `2026-07-21T05:06:59.830506+00:00`
 - Checker version: `020.1`
 - Runtime capability: `budget-ledger-v3-canary-v1`
 
@@ -34,7 +34,7 @@
 ## Identity evidence
 
 - Shared inputs: `1550782bb2cbd19a800f77dda7bb372f78283ce244b1fe0ca5fa63d2749963ad`
-- Execution surface: `bdd339e08aafbb0964025f026c697ccf3d0c2ab58934e61340b8b83ae61ea278`
+- Execution surface: `c54935574d8f5d116fee2802ffd4ecb7de4bccdbbfa0bd71b2d61158e5d9e92f`
 - Product fingerprints: 13
 - Blocker `missing_path` (`平安福满分（2026）养老年金保险`)
 - Blocker `unconsumed_product_file` (`平安福满分（2026）养老年金保险`)
