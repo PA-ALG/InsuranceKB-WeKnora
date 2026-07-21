@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import UTC
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, StrictStr, StringConstraints
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    StrictStr,
+    StringConstraints,
+    field_validator,
+)
 
 ModelFamily = Literal["minimax", "qwen", "qwen-vl"]
 ModelRole = Literal["classify", "extract", "gap", "verify", "consensus"]
@@ -26,7 +34,7 @@ CleanIntegrationSha = Annotated[
 
 
 class _ImmutableModel(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
 
     def copy(
         self,
@@ -48,10 +56,9 @@ class _ImmutableModel(BaseModel):
     ) -> Self:
         """Revalidate every update instead of trusting Pydantic's unchecked copy."""
 
-        if update is None:
-            return super().model_copy(deep=deep)
         values = self.model_dump(mode="python", round_trip=True)
-        values.update(update)
+        if update is not None:
+            values.update(update)
         return type(self).model_validate(values)
 
 
@@ -84,3 +91,8 @@ class ModelPermitView(_ImmutableModel):
     model_plan_hash: Sha256Hex
     call_scope_hash: Sha256Hex
     expires_at: AwareDatetime
+
+    @field_validator("expires_at", mode="after")
+    @classmethod
+    def normalize_expiry_to_utc(cls, value: AwareDatetime) -> AwareDatetime:
+        return value.astimezone(UTC)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import pickle
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from inspect import signature
 
 import pytest
@@ -34,12 +34,13 @@ def _identity(
     deployment_id: str = "qwen3.6-prod-20260715",
     *,
     family: str = "qwen",
+    role: str = "extract",
 ) -> ModelIdentity:
     return ModelIdentity(
         provider="bailian",
         deployment_id=deployment_id,
         family=family,
-        role="extract",
+        role=role,
         policy_version="pwb-v1",
     )
 
@@ -111,7 +112,7 @@ def test_pwb1_identity_key_is_exact_and_family_is_constrained() -> None:
     )
     with pytest.raises(ModelPolicyDenied) as denied:
         _policy_for(identity).evaluate(forged_family)
-    assert denied.value.reason_code == "family_not_approved"
+    assert denied.value.reason_code == "invalid_identity"
 
 
 def test_pwb1_identity_model_is_frozen_extra_forbid_and_copy_revalidates() -> None:
@@ -121,6 +122,31 @@ def test_pwb1_identity_model_is_frozen_extra_forbid_and_copy_revalidates() -> No
         identity.provider = "other"
     with pytest.raises(ValidationError):
         ModelIdentity.model_validate({**identity.model_dump(), "unexpected": "field"})
+
+
+def test_pwb1_policy_model_construct_malformed_identity_is_stable_denial() -> None:
+    valid = _identity().model_dump()
+    malformed_payloads = []
+    for field, value in (
+        ("deployment_id", None),
+        ("deployment_id", 123),
+        ("family", []),
+        ("provider", []),
+    ):
+        malformed_payloads.append({**valid, field: value})
+    malformed_payloads.append({key: value for key, value in valid.items() if key != "role"})
+    malformed_payloads.append({key: value for key, value in valid.items() if key != "provider"})
+
+    policy = ProductionModelPolicy(approved_identity_keys=frozenset())
+    for payload in malformed_payloads:
+        forged = ModelIdentity.model_construct(**payload)
+        with pytest.raises(ModelPolicyDenied) as denied:
+            policy.evaluate(forged)
+        assert denied.value.reason_code == "invalid_identity"
+
+    invalid_copy = ModelIdentity.model_construct(**{**valid, "deployment_id": None})
+    with pytest.raises(ValidationError):
+        invalid_copy.model_copy()
 
 
 _EXPECTED_HASH_FIELDS = (
@@ -184,6 +210,13 @@ def _verified() -> VerifiedAdmission:
     )
 
 
+def _raw_model_values(value: object) -> dict[str, object]:
+    return {
+        field: getattr(value, field)
+        for field in type(value).model_fields
+    }
+
+
 def _permit_view(verified: VerifiedAdmission) -> ModelPermitView:
     binding = verified.binding
     return ModelPermitView(
@@ -200,6 +233,15 @@ def _permit_view(verified: VerifiedAdmission) -> ModelPermitView:
         call_scope_hash="e" * 64,
         expires_at=binding.actual_expires_at,
     )
+
+
+def _issued_permit(
+    view: ModelPermitView,
+    verified: VerifiedAdmission,
+    *,
+    issued_at: datetime = datetime(2026, 7, 22, tzinfo=UTC),
+) -> IssuedModelPermit:
+    return _issue_model_permit(view, verified, issued_at=issued_at)
 
 
 def test_pwb4_strict_admission_request_requires_every_expected_field() -> None:
@@ -325,7 +367,7 @@ def test_pwb4_public_permit_is_view_only_and_legacy_authority_is_removed() -> No
 def test_pwb4_issued_permit_is_opaque_and_view_never_becomes_authority() -> None:
     verified = _verified()
     view = _permit_view(verified)
-    issued = _issue_model_permit(view, verified)
+    issued = _issued_permit(view, verified)
 
     assert _is_issued_model_permit(issued)
     assert issued.view == view
@@ -350,4 +392,173 @@ def test_pwb4_issued_permit_template_must_be_in_approved_exact_set() -> None:
     unapproved = _permit_view(verified).model_copy(update={"template_hash": "0" * 64})
 
     with pytest.raises(ValueError, match="permit view"):
-        _issue_model_permit(unapproved, verified)
+        _issued_permit(unapproved, verified)
+
+
+def test_pwb4_model_construct_invalid_admission_objects_never_gain_authority() -> None:
+    request = _strict_request()
+    binding = _binding()
+    forged_identity = ModelIdentity.model_construct(
+        **{**_identity().model_dump(), "deployment_id": None}
+    )
+    invalid_binding = AdmissionBinding.model_construct(
+        **{
+            **_raw_model_values(binding),
+            "approved_identities": (forged_identity,),
+        }
+    )
+    invalid_request = StrictAdmissionRequestBinding.model_construct(
+        **{**_raw_model_values(request), "expected_manifest_hash": "not-a-hash"}
+    )
+
+    for bad_request, bad_binding in (
+        (invalid_request, binding),
+        (request, invalid_binding),
+    ):
+        with pytest.raises(ValueError):
+            _issue_verified_admission(
+                bad_request,
+                bad_binding,
+                verifier_id="canonical-admission",
+                verifier_version="v1",
+                verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+            )
+
+    verified = _verified()
+    object.__setattr__(verified, "_binding", invalid_binding)
+    assert not _is_verified_admission(verified)
+
+    invalid_receipt = AdmissionVerificationReceipt.model_construct(
+        **{**_raw_model_values(_verified().receipt), "verifier_id": None}
+    )
+    verified_with_bad_receipt = _verified()
+    object.__setattr__(verified_with_bad_receipt, "_receipt", invalid_receipt)
+    assert not _is_verified_admission(verified_with_bad_receipt)
+
+    valid_verified = _verified()
+    valid_view = _permit_view(valid_verified)
+    invalid_view = ModelPermitView.model_construct(
+        **{**_raw_model_values(valid_view), "call_scope_hash": "not-a-hash"}
+    )
+    with pytest.raises(ValueError):
+        _issued_permit(invalid_view, valid_verified)
+
+    issued = _issued_permit(valid_view, valid_verified)
+    object.__setattr__(issued, "_view", invalid_view)
+    assert not _is_issued_model_permit(issued)
+
+    with pytest.raises(ValidationError):
+        invalid_binding.model_copy()
+    with pytest.raises(ValidationError):
+        invalid_receipt.model_copy()
+    with pytest.raises(ValidationError):
+        invalid_view.model_copy()
+
+
+@pytest.mark.parametrize(
+    "verified_at",
+    [
+        datetime(2026, 8, 1, tzinfo=UTC),
+        datetime(2026, 8, 2, tzinfo=UTC),
+    ],
+)
+def test_pwb4_expired_or_equal_expiry_cannot_issue_verified_admission(
+    verified_at: datetime,
+) -> None:
+    with pytest.raises(ValueError, match="expired"):
+        _issue_verified_admission(
+            _strict_request(),
+            _binding(),
+            verifier_id="canonical-admission",
+            verifier_version="v1",
+            verified_at=verified_at,
+        )
+
+    future = _issue_verified_admission(
+        _strict_request(),
+        _binding(),
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 31, 23, 59, 59, tzinfo=UTC),
+    )
+    assert _is_verified_admission(future)
+
+
+def test_pwb4_binding_canonicalizes_sets_and_equivalent_expiry_instants() -> None:
+    first = _binding().model_copy(
+        update={
+            "approved_identities": (
+                _identity(role="gap"),
+                _identity(role="extract"),
+            ),
+            "approved_template_hashes": ("f" * 64, "0" * 64),
+            "actual_expires_at": datetime(2026, 8, 1, tzinfo=UTC),
+        }
+    )
+    second = _binding().model_copy(
+        update={
+            "approved_identities": tuple(reversed(first.approved_identities)),
+            "approved_template_hashes": tuple(reversed(first.approved_template_hashes)),
+            "actual_expires_at": datetime(
+                2026,
+                8,
+                1,
+                8,
+                tzinfo=timezone(timedelta(hours=8)),
+            ),
+        }
+    )
+
+    assert first == second
+    assert first.binding_digest == second.binding_digest
+    assert first.actual_expires_at.tzinfo is UTC
+    assert first.approved_identities == tuple(
+        sorted(first.approved_identities, key=lambda identity: identity.identity_key)
+    )
+    assert first.approved_template_hashes == tuple(sorted(first.approved_template_hashes))
+
+    with pytest.raises(ValidationError, match="template"):
+        _binding().model_copy(update={"approved_template_hashes": ("f" * 64, "f" * 64)})
+
+
+@pytest.mark.parametrize(
+    "issued_at",
+    [
+        datetime(2026, 8, 1, tzinfo=UTC),
+        datetime(2026, 8, 2, tzinfo=UTC),
+    ],
+)
+def test_pwb4_expired_or_equal_expiry_cannot_issue_model_permit(
+    issued_at: datetime,
+) -> None:
+    verified = _verified()
+    with pytest.raises(ValueError, match="expired"):
+        _issue_model_permit(_permit_view(verified), verified, issued_at=issued_at)
+
+    future = _issue_model_permit(
+        _permit_view(verified),
+        verified,
+        issued_at=datetime(
+            2026,
+            7,
+            22,
+            8,
+            tzinfo=timezone(timedelta(hours=8)),
+        ),
+    )
+    assert _is_issued_model_permit(future)
+    assert future.issued_at.tzinfo is UTC
+
+
+def test_pwb4_permit_view_and_verification_receipt_normalize_times_to_utc() -> None:
+    verified = _verified()
+    offset = timezone(timedelta(hours=8))
+    view = _permit_view(verified).model_copy(
+        update={"expires_at": datetime(2026, 8, 1, 8, tzinfo=offset)}
+    )
+    receipt = verified.receipt.model_copy(
+        update={"verified_at": datetime(2026, 7, 22, 8, tzinfo=offset)}
+    )
+
+    assert view.expires_at.tzinfo is UTC
+    assert receipt.verified_at.tzinfo is UTC

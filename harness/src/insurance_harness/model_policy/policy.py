@@ -38,6 +38,7 @@ class ModelPolicyDenied(PermissionError):
     _MESSAGES = {
         "strong_model": "production model identity is outside the weak-model boundary",
         "family_not_approved": "production model family is not approved",
+        "invalid_identity": "production model identity is invalid",
         "rolling_identity": "production model identity is not immutable",
         "identity_not_approved": "production model identity is not approved",
     }
@@ -62,8 +63,15 @@ class ProductionModelPolicy:
     def evaluate(self, identity: ModelIdentity) -> ModelIdentity:
         """Return an approved identity or raise a stable typed refusal."""
 
-        deployment = identity.deployment_id.casefold()
-        if identity.family not in _APPROVED_FAMILIES:
+        try:
+            validated = ModelIdentity.model_validate(
+                identity.model_dump(mode="python", round_trip=True, warnings=False)
+            )
+        except (AttributeError, TypeError, ValueError):
+            raise ModelPolicyDenied("invalid_identity") from None
+
+        deployment = validated.deployment_id.casefold()
+        if validated.family not in _APPROVED_FAMILIES:
             raise ModelPolicyDenied("family_not_approved")
         if any(marker in deployment for marker in _STRONG_MODEL_MARKERS):
             raise ModelPolicyDenied("strong_model")
@@ -72,7 +80,7 @@ class ProductionModelPolicy:
         if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
             raise ModelPolicyDenied("rolling_identity")
 
-        if identity.identity_key not in self._approved_identity_keys:
+        if validated.identity_key not in self._approved_identity_keys:
             raise ModelPolicyDenied("identity_not_approved")
 
-        return identity
+        return validated

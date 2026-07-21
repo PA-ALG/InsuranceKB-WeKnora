@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from typing import Literal, Protocol, SupportsIndex
 
-from pydantic import AwareDatetime, model_validator
+from pydantic import AwareDatetime, TypeAdapter, field_validator, model_validator
 
 from .models import (
     CleanIntegrationSha,
@@ -21,6 +22,7 @@ _REQUEST_DIGEST_DOMAIN = b"insurancekb.model-policy.admission-request.v1\0"
 _BINDING_DIGEST_DOMAIN = b"insurancekb.model-policy.admission-binding.v1\0"
 _VERIFIED_DIGEST_DOMAIN = b"insurancekb.model-policy.verified-admission.v1\0"
 _PROCESS_SEAL = object()
+_AWARE_DATETIME = TypeAdapter(AwareDatetime)
 
 
 def _canonical_digest(domain: bytes, value: object) -> str:
@@ -32,6 +34,25 @@ def _canonical_digest(domain: bytes, value: object) -> str:
         allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(domain + encoded).hexdigest()
+
+
+def _revalidate[ModelT: _ImmutableModel](
+    model_type: type[ModelT],
+    value: object,
+) -> ModelT:
+    """Rebuild a DTO from raw fields so model_construct cannot cross the boundary."""
+
+    try:
+        if not isinstance(value, _ImmutableModel):
+            raise TypeError
+        payload = value.model_dump(mode="python", round_trip=True, warnings=False)
+        return model_type.model_validate(payload)
+    except Exception:
+        raise ValueError("invalid model-policy DTO") from None
+
+
+def _stored_equals_validated(stored: object, validated: _ImmutableModel) -> bool:
+    return type(stored) is type(validated) and stored == validated
 
 
 class StrictAdmissionRequestBinding(_ImmutableModel):
@@ -96,9 +117,30 @@ class AdmissionBinding(_ImmutableModel):
 
     @model_validator(mode="after")
     def require_one_exact_identity_per_role(self) -> AdmissionBinding:
-        roles = tuple(identity.role for identity in self.approved_identities)
+        try:
+            identities = tuple(
+                ModelIdentity.model_validate(
+                    identity.model_dump(mode="python", round_trip=True, warnings=False)
+                )
+                for identity in self.approved_identities
+            )
+        except Exception:
+            raise ValueError("approved model identities must be valid") from None
+
+        roles = tuple(identity.role for identity in identities)
         if len(set(roles)) != len(roles):
             raise ValueError("approved model identity roles must be unique")
+        templates = tuple(self.approved_template_hashes)
+        if len(set(templates)) != len(templates):
+            raise ValueError("approved template hashes must be unique")
+
+        object.__setattr__(
+            self,
+            "approved_identities",
+            tuple(sorted(identities, key=lambda identity: identity.identity_key)),
+        )
+        object.__setattr__(self, "approved_template_hashes", tuple(sorted(templates)))
+        object.__setattr__(self, "actual_expires_at", self.actual_expires_at.astimezone(UTC))
         return self
 
     @property
@@ -131,6 +173,11 @@ class AdmissionVerificationReceipt(_ImmutableModel):
     request_digest: Sha256Hex
     binding_digest: Sha256Hex
     verified_binding_digest: Sha256Hex
+
+    @field_validator("verified_at", mode="after")
+    @classmethod
+    def normalize_verified_at_to_utc(cls, value: AwareDatetime) -> AwareDatetime:
+        return value.astimezone(UTC)
 
 
 class VerifiedAdmission:
@@ -212,6 +259,13 @@ def _issue_verified_admission(
 ) -> VerifiedAdmission:
     """Internal composition hook; no public verifier implementation is provided here."""
 
+    request = _revalidate(StrictAdmissionRequestBinding, request)
+    binding = _revalidate(AdmissionBinding, binding)
+    try:
+        normalized_verified_at = _AWARE_DATETIME.validate_python(verified_at).astimezone(UTC)
+    except Exception:
+        raise ValueError("verification time must be timezone-aware") from None
+
     if (
         binding.actual_state != "READY"
         or not binding.approved_identities
@@ -219,11 +273,13 @@ def _issue_verified_admission(
         or not _request_matches_binding(request, binding)
     ):
         raise ValueError("admission request does not match READY binding")
+    if binding.actual_expires_at <= normalized_verified_at:
+        raise ValueError("admission binding is expired")
     verified_binding_digest = _verified_digest(request, binding)
     receipt = AdmissionVerificationReceipt(
         verifier_id=verifier_id,
         verifier_version=verifier_version,
-        verified_at=verified_at,
+        verified_at=normalized_verified_at,
         request_digest=request.request_digest,
         binding_digest=binding.binding_digest,
         verified_binding_digest=verified_binding_digest,
@@ -240,28 +296,32 @@ def _is_verified_admission(value: object) -> bool:
     if not isinstance(value, VerifiedAdmission):
         return False
     try:
+        request = _revalidate(StrictAdmissionRequestBinding, value._request)
+        binding = _revalidate(AdmissionBinding, value._binding)
+        receipt = _revalidate(AdmissionVerificationReceipt, value._receipt)
         return (
             value._seal is _PROCESS_SEAL
-            and type(value._request) is StrictAdmissionRequestBinding
-            and type(value._binding) is AdmissionBinding
-            and type(value._receipt) is AdmissionVerificationReceipt
-            and value._binding.actual_state == "READY"
-            and bool(value._binding.approved_identities)
-            and bool(value._binding.approved_template_hashes)
-            and _request_matches_binding(value._request, value._binding)
-            and value._receipt.request_digest == value._request.request_digest
-            and value._receipt.binding_digest == value._binding.binding_digest
-            and value._receipt.verified_binding_digest
-            == _verified_digest(value._request, value._binding)
+            and _stored_equals_validated(value._request, request)
+            and _stored_equals_validated(value._binding, binding)
+            and _stored_equals_validated(value._receipt, receipt)
+            and binding.actual_state == "READY"
+            and bool(binding.approved_identities)
+            and bool(binding.approved_template_hashes)
+            and binding.actual_expires_at > receipt.verified_at
+            and _request_matches_binding(request, binding)
+            and receipt.request_digest == request.request_digest
+            and receipt.binding_digest == binding.binding_digest
+            and receipt.verified_binding_digest == _verified_digest(request, binding)
         )
-    except (AttributeError, TypeError, ValueError):
+    except Exception:
         return False
 
 
 class IssuedModelPermit:
     """Opaque process-local model-call authority; its public view is only a receipt."""
 
-    __slots__ = ("_seal", "_verified_admission", "_view")
+    __slots__ = ("_issued_at", "_seal", "_verified_admission", "_view")
+    _issued_at: datetime
     _seal: object
     _verified_admission: VerifiedAdmission
     _view: ModelPermitView
@@ -295,6 +355,10 @@ class IssuedModelPermit:
     def view(self) -> ModelPermitView:
         return self._view
 
+    @property
+    def issued_at(self) -> datetime:
+        return self._issued_at
+
 
 def _view_matches_verified(view: ModelPermitView, verified: VerifiedAdmission) -> bool:
     binding = verified.binding
@@ -316,14 +380,24 @@ def _view_matches_verified(view: ModelPermitView, verified: VerifiedAdmission) -
 def _issue_model_permit(
     view: ModelPermitView,
     verified: VerifiedAdmission,
+    *,
+    issued_at: AwareDatetime,
 ) -> IssuedModelPermit:
     """Internal composition hook; gateway/call-scope evaluation belongs to later tasks."""
 
+    view = _revalidate(ModelPermitView, view)
+    try:
+        normalized_issued_at = _AWARE_DATETIME.validate_python(issued_at).astimezone(UTC)
+    except Exception:
+        raise ValueError("permit issuance time must be timezone-aware") from None
     if not _is_verified_admission(verified) or not _view_matches_verified(view, verified):
         raise ValueError("permit view does not match verified admission")
+    if view.expires_at <= normalized_issued_at:
+        raise ValueError("model permit is expired")
     capability = IssuedModelPermit.__new__(IssuedModelPermit, _seal=_PROCESS_SEAL)
     object.__setattr__(capability, "_view", view)
     object.__setattr__(capability, "_verified_admission", verified)
+    object.__setattr__(capability, "_issued_at", normalized_issued_at)
     object.__setattr__(capability, "_seal", _PROCESS_SEAL)
     return capability
 
@@ -332,11 +406,16 @@ def _is_issued_model_permit(value: object) -> bool:
     if not isinstance(value, IssuedModelPermit):
         return False
     try:
+        view = _revalidate(ModelPermitView, value._view)
+        issued_at = _AWARE_DATETIME.validate_python(value._issued_at).astimezone(UTC)
         return (
             value._seal is _PROCESS_SEAL
-            and type(value._view) is ModelPermitView
+            and _stored_equals_validated(value._view, view)
+            and value._issued_at.tzinfo is UTC
+            and value._issued_at == issued_at
+            and view.expires_at > issued_at
             and _is_verified_admission(value._verified_admission)
-            and _view_matches_verified(value._view, value._verified_admission)
+            and _view_matches_verified(view, value._verified_admission)
         )
-    except (AttributeError, TypeError, ValueError):
+    except Exception:
         return False
