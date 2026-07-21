@@ -21,7 +21,13 @@ from insurance_harness.adapters.weknora.models import is_safe_knowledge_id
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.goldenset.pdf import PageText, extract_pages
 
-from .models import SourceChunk, SourceDocument, SourceRevision, SourceScope
+from .models import (
+    ProcessedAtOrdering,
+    SourceChunk,
+    SourceDocument,
+    SourceRevision,
+    SourceScope,
+)
 from .protocol import MaterializationStage, MaterializedBatch, SourceMaterializationError
 
 _MD5_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -158,7 +164,7 @@ class WeKnoraDocumentSource:
         try:
             revision = SourceRevision(
                 file_hash=knowledge.file_hash,
-                processed_at=processed_at,
+                ordering=ProcessedAtOrdering(value=processed_at),
                 parser_fingerprint=self._parser_fingerprint,
             )
         except Exception as exc:

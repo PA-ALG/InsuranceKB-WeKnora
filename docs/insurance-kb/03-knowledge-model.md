@@ -265,6 +265,22 @@ ReleaseSnapshot:
 - 按批次回滚：`rolled_back` 的 ChangeSet 生成一个反向 ChangeSet（同样留痕），保证"回滚本身也可审计、也可再回滚"。
 - 回滚后一致性要求（master plan P0-4 验收）：Claim、Wiki 页、QA、检索索引四者一致——由回滚流程强制触发受影响页面重发布与索引刷新。
 
+### 5.3 来源级：SourceHead / SourceEvent（021）
+
+- 来源身份固定为 `(space_id, tenant_id, raw_kb_id, knowledge_id)`；不同 Space 即使
+  `knowledge_id` 相同也互不影响。
+- `SourceHead` 是当前已裁决 root，记录 revision、`generation | processed_at` ordering、
+  `active | deleted` state 与 CAS version；所有 notify/import/delete/reactivate 共用同一
+  PostgreSQL per-source advisory lock。
+- `SourceEvent` 是 append-only 裁决账本，记录 before/after head、desired state、decision、
+  causation 与业务聚合链接。stale、blocked、idempotent 也留审计事件，但不得执行不属于该
+  decision 的业务写入。
+- 同 identity 时 delete 胜过 active；旧 revision 不得复活；只有严格更新的 active revision
+  可以把 deleted head re-activate。业务写入与 head/event 位于 caller-owned nested transaction，
+  任一步失败整单回滚且调用方 Session 仍可继续使用。
+- 无法可靠还原 ordering 的历史来源只产生唯一 open `SourceLifecycleBackfillIssue`，不猜 head；
+  open issue 阻断正常 lifecycle，须在同一 source lock 下显式解决并留 resolution event。
+
 ---
 
 ## 6. 权威序与冲突裁决
@@ -344,6 +360,9 @@ ReleaseSnapshot:
 | `flywheel_checkpoints`（015，迁移 0012） | 主动反馈飞轮按 Space/source 的安全水位：space_id, source_id, cursor | UQ(space_id, source_id)；与 observation/gap 同一事务最后推进 |
 | `flywheel_observations`（015，迁移 0012） | 已处理 trace ledger：space_id, source_id, trace_id/timestamp, 脱敏问题, signals, alignment reason/entity, gap_id 可空 | UQ(space_id, source_id, trace_id)；gap 引用用 (space_id, gap_id) 复合 FK 闭合；未对齐队列按 Space 查询 |
 | `knowledge_gaps`（015，迁移 0012） | 主动反馈缺口真相源：space_id, gap_key, product/field/concept 粒度, hit_count, 最近样例≤5, first/last_seen/resolved_at, status | UQ(space_id, gap_key)；apply 失败时与 observation/checkpoint 整批回滚 |
+| `source_heads`（021，迁移 0006） | Space-scoped 来源当前 root：source identity、revision、ordering kind/value、active/deleted、CAS version、last_event_id | UQ(space_id, tenant_id, raw_kb_id, knowledge_id)；复合 FK 闭 Space；per-source advisory lock + CAS |
+| `source_events`（021，迁移 0006） | append-only 来源裁决：input identity、desired state、decision、before/after head、causation、聚合链接 | UQ(source identity, causation_id)；PostgreSQL trigger 拒绝 UPDATE/DELETE；按 source/decided_at 查询 |
+| `source_lifecycle_backfill_issues`（021，迁移 0006） | 无法从历史来源可靠推导 ordering 时的显式阻断项：observed revisions、open/resolved、resolution identity/event | 每 source 仅一个 open issue；resolver 与正常 lifecycle 共用 source lock，exact retry 返回原事件 |
 | `suppressed_observations`（025 规划，迁移 0011） | 弱值门槛抑制的 root 不可变快照：space_id, change_set_id, product_version_id, predicate, existing_claim_id+existing_revision_no, 候选快照（value/value_state/value_hash）+ Evidence/来源身份（knowledge_id/source_revision）, 双方 authority/effective 区间, 特征向量/两分/comparator_version/rule_id, actor, proposal_fingerprint | UQ(space_id, change_set_id, proposal_fingerprint, existing_claim_id, existing_revision_no, comparator_version)——exact-once；Space 复合 FK 闭合；(change_set_id) 批次计数 |
 | `suppressed_observation_events`（025 规划，迁移 0011） | 观察生命周期事件流：observation_id FK, event_type（suppressed/readjudicated/invalidated/source_superseded）, causation_id（基线 revision 变更/021 SourceEvent/change_set）, reason, occurred_at, ordering, event_fingerprint；状态仅由事件确定性折叠（invalidated/source_superseded 终态），无可改写 status 列 | UQ(space_id, observation_id, event_type, causation_id)——事件防重放；root 与首条 suppressed 事件同事务 |
 

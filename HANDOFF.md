@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-18（PR #18 由 codex 接管：文件态已替换为 migration 0012 的 Space-scoped durable unit-of-work；本机 PostgreSQL 16 四节点 `tests=4 skipped=0`、Ruff/mypy 全绿、deterministic `1681 passed / 9 deselected`；实现 commit `f5f7f3de` 已 push，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，见 0i/B17。018 已随 PR #9 合入 `main`；008 工作台 PR #15 仍待终审，见 B8。）
+> 最后更新：2026-07-19（当前关键路径 021 已串通 `notify → import → delete → blocked → strictly-newer reactivate`；独立 spec PASS、quality APPROVED，deterministic **1901 passed / 30 deselected**，本机 PostgreSQL 16 **25 passed / skipped=0**。软件已到人工 commit/push/PR 边界，见 0j/B23；合入后下一步只启动 020 T1 零模型 run-admission，不直接跑 13 产品。）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -43,10 +43,12 @@
    - [x] T1～T6 严格 TDD 完成，codex 七轮 APPROVED，随 PR #8 合入（merge commit `4d9c84e`，2026-07-15）；证据见 B21 与 `openspec/changes/019-golden-quality-gate/validation-report.md`。
    - `run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行（边界不变）。
 
-   **收敛轨 — 021 Source lifecycle ordering（0/10，硬依赖 018）**
-   - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
-   - [ ] 迁移编号排在 018 的 `0005` 之后；交付 SourceHead/SourceEvent、`processed_at/generation`、per-source lock/CAS、delete/import/notify 竞争处理与 PostgreSQL 双会话证据。
-   - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
+   **收敛轨 — 021 Source lifecycle ordering（T1～T10 全部完成；硬依赖 018✅）**
+   - [x] source ordering/delete/reactivation 状态机按 SDD/TDD 实施；`notify/import/delete/reactivate` 共用 per-source lock/CAS 与 append-only event。
+   - [x] 迁移 `0006` 实际接 main head `0012`；交付 SourceHead/SourceEvent/BackfillIssue resolver、`processed_at/generation` 与 caller-owned nested transaction。
+   - [x] 本机 PostgreSQL 16 逆序/并发/删除竞争与真实 Alembic lane：021 核心 21 passed，全部 PG 25 passed，JUnit skipped=0。
+   - [x] 最终 spec PASS、quality APPROVED；OpenSpec strict、Ruff、mypy 248 files、deterministic 1901 与 diff check 全绿。
+   - [ ] 人工 owner 复核后 commit/push/PR（AI 不越过 Git 边界）。
 
    **价值出口 — 020 真实金标/baseline 运行（硬依赖 019+021）**：019 提供 artifact 工具/合同，021 关闭 source ordering 风险；两者完成后，020 才从 T1 `run-admission` 开始，未准入前零模型调用。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与代码轨共享分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
 
@@ -55,6 +57,8 @@
 0h. **并行执行蓝图（总设计师制定，业务方 2026-07-16 拍板）**：全轨道结构（L0 解阻塞 / L1 关键路径 021→020 / L2 工作台 008 / L3 MCP 013 / L4 知识形态 010→009→012 / L5 抽取提准 024 / L6 治理）、优先级与护栏见 `docs/insurance-kb/22-parallel-execution-blueprint.md`；**change 号与 Alembic 迁移号一律先在 `openspec/changes/README.md` 注册表占号**（022 撞号教训；0006=021、0007=010、0008=009、0009=012 已预分配）。018/019/023 已完成，当前关键路径为 021→020；013 与 008 W4 已随 PR #9 解锁。010 的 knowledge 域段（T5 起）仍排在 021 之后。**Wave 2（009/011/012）已条款化（正式 delta 过 strict；迁移 0008/0009/0010 已占号），规格复审收口中（codex P0/P1：冻结投影边界/QA 断言级绑定/三方对账等，见 PR #12）——收口前不可认领**。
 
 0i. **PR #18 / OpenSpec 015 codex 接管（2026-07-18，当前）**：Claude 旧版以 cursor/gap/observation 文件充当 `--apply` 状态；该方案不能在三份文件间原子提交，也不携 Space 身份，无法满足企业多实例 exactly-once。codex 按 SDD/TDD 新增迁移 `0012` 的 `flywheel_checkpoints`、`flywheel_observations`、`knowledge_gaps`，以 KnowledgeSpace 行锁串行同 Space 的跨 source gap 聚合，在 caller-owned transaction 内写 processed ledger/gap 并最后推进 checkpoint；故障注入全回滚、健康重试恰一次、同 source 跨 Space 隔离。CLI 现必填 `--source-id`，dry-run 零写，`--apply` 落 DB；真实 Space-scoped published Claim 查询已接空知识信号。全仓首轮 deterministic 抓到新增 head 破坏 `head→0002` 的首 DDL 前预检，已在 0012 镜像 0003/0005 下游兼容性检查并新增非空飞轮表 downgrade 拒绝测试；Alembic env 已注册新 ORM。提交前自检另以 `model_construct` 复现 PII validator 绕过，已在 pull 消费点幂等再脱敏，确保 evaluation/queue/gap payload 不落原文。当前本机 PostgreSQL 16 lane **4 passed / JUnit tests=4 skipped=0**，Ruff PASS、mypy 238 files PASS，deterministic **1681 passed / 9 deselected**。实现 commit `f5f7f3de` 已 push PR #18，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，PR 已达可合并状态。F1.1b Langfuse 直连与 F2.4 ReviewItem 动作投影继续 gated，禁止因本轮 durable foundation 完成而虚报。
+
+0j. **OpenSpec 021 主流程收敛（2026-07-19，软件完成）**：确定性链路已贯通 `SourceRevision → per-source advisory lock → SourceHead/append-only SourceEvent → notify/import/delete → stale-or-blocked audit no-op → strictly-newer reactivate`；历史 ordering 不可证明时只建唯一 open BackfillIssue，显式 resolver 与正常 lifecycle 共锁且 exact retry 返回原 resolution event。Task8 新增 13 个真实业务并发节点与 8 个真实 Alembic 节点；本机 Compose 私网 PG16 核心 **21 passed/skipped=0**，最新全 `integration_postgres` **25 passed/skipped=0**，CI lane 合同 **39 passed**。最终 OpenSpec strict、Ruff、mypy **248 files**、deterministic **1901 passed/30 deselected**、single Alembic head `0006` 与 fresh SQLite roundtrip/check 全绿；独立 spec=PASS、quality=APPROVED。宿主 sandbox 拒绝 `127.0.0.1:5442` 后没有循环重试，而是复用已有 `python:3.12-slim` 作为临时 Compose runner，通过 `local-live-harness-db` 私网执行；该做法保留现有数据库且不打印 DSN。当前只等人工 Git；之后 020 先做 zero-model admission，P0 缺口是精确模型身份、可审计 runner、输入指纹、总预算硬闸与 checkpoint，未 READY 前禁止真实调用。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -121,7 +125,7 @@
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；`0005`、统一读模型、可恢复 publish/rollback 与 5-node live 已验收，021 已解锁 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
 | B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
-| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后（注册表预分配 0006），完成后与 019 共同解锁 020 | 开发型，中大 |
+| B23 | 021 Source lifecycle ordering | ✅ **T1～T10 软件完成，待人工 Git**：durable SourceHead/Event/BackfillIssue resolver、processed_at/generation、per-source lock/CAS、delete/import/notify/reactivate；迁移 0006 实际接 0012；spec PASS、quality APPROVED；deterministic 1901，PG25/skipped=0；人工提交合入后与 019 解锁 020 T1 | 开发型，中大 |
 | B24 | 024 抽取召回提升（extract_empty 主攻 + 值粒度指引 + A10 弱值/兼容性护栏） | **可认领（轨道 L5，2026-07-16 新开）**：`openspec/changes/024-extraction-recall-uplift/`（E1–E6 条款 + T1–T7 任务）；005 归因工单→回放 RED 用例，零真实模型调用；E6 承接 LLM-wiki-black A10 唯一未迁移真空（Q012/Q026 历史 bug 固化）；真实回归归 020 D4 | 开发型，中小 |
 | B25 | 025 合并前置弱值门槛（已占号未开目录） | 更粗略新值不开冲突（Q026）+ informationScore 仅作 008 排序信号不作替换判据；PR #9 已合入，现可提案，可与 B24 同一执行者推进 | 开发型，小 |
 | B26 | 026 data_quality 端到端持久化（已占号未开目录） | 12 号 #2 采纳项对账发现只落了 pred 侧：需 Claim/Revision/Snapshot/MCP 全链字段+迁移+回填设计；业务确需时立项，落地前 010/013 等不得预支该字段承诺 | 开发型，中小 |

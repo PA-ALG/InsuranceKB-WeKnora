@@ -1,7 +1,7 @@
 """OpenSpec 017 T7: source-aware, scoped and idempotent source retract."""
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import event, func, select
@@ -20,6 +20,7 @@ from insurance_harness.knowledge.tables import (
     ReleaseSnapshot,
     SnapshotClaim,
 )
+from insurance_harness.sources import ProcessedAtOrdering, SourceRevision
 from tests.kbhelpers import seed_bound_scope, seed_product
 
 NOW = datetime(2026, 7, 14, 9, 0, tzinfo=UTC)
@@ -44,14 +45,24 @@ def _identity(
     *,
     knowledge_id: str = "knowledge-1",
     revision_char: str = "a",
+    ordering_offset: int | None = None,
 ) -> SourceImportIdentity:
+    if ordering_offset is None:
+        ordering_offset = ord(revision_char) - ord("a")
+    processed_at = NOW + timedelta(seconds=ordering_offset)
+    revision = SourceRevision(
+        file_hash=revision_char * 32,
+        ordering=ProcessedAtOrdering(value=processed_at),
+        parser_fingerprint="pdfplumber@0.11:text-v1",
+    )
     return SourceImportIdentity(
         knowledge_id=knowledge_id,
         raw_kb_id=scope.raw_kb_id,
-        source_revision=revision_char * 64,
-        file_hash=revision_char * 32,
+        source_revision=revision.value,
+        ordering=revision.ordering,
+        file_hash=revision.file_hash,
         original_digest=revision_char * 64,
-        parser_version="pdfplumber@0.11:text-v1",
+        parser_version=revision.parser_fingerprint,
     )
 
 
@@ -123,8 +134,8 @@ def test_t7_source_aware_retract_is_scoped_deletes_all_target_evidence_and_prese
 ) -> None:
     scope_a = _scope(kb_session, "a")
     scope_b = _scope(kb_session, "b")
-    target_a = _identity(scope_a)
-    target_a_old = _identity(scope_a, revision_char="b")
+    target_a = _identity(scope_a, ordering_offset=1)
+    target_a_old = _identity(scope_a, revision_char="b", ordering_offset=0)
     target_b = _identity(scope_b)
     other_active = _identity(
         scope_a, knowledge_id="knowledge-other-active", revision_char="c"
@@ -132,6 +143,9 @@ def test_t7_source_aware_retract_is_scoped_deletes_all_target_evidence_and_prese
     other_stale = _identity(
         scope_a, knowledge_id="knowledge-other-stale", revision_char="d"
     )
+    assert isinstance(target_a.ordering, ProcessedAtOrdering)
+    assert isinstance(target_a_old.ordering, ProcessedAtOrdering)
+    assert target_a_old.ordering.value < target_a.ordering.value
     only_target, _ = _claim(
         kb_session,
         scope_a,
@@ -339,7 +353,7 @@ def test_t7_retract_reuploaded_new_revision_creates_a_new_event_key(
         identities=[(first_identity, None)],
     )
     first = retract_source(kb_session, scope, first_identity)
-    new_identity = _identity(scope, revision_char="b")
+    new_identity = _identity(scope, revision_char="b", ordering_offset=1)
     claim.status = "published"
     kb_session.add(
         ClaimEvidence(

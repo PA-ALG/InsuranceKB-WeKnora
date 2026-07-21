@@ -9,18 +9,20 @@ pending_judge 原样保留。幂等：
 
 import hashlib
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from insurance_harness.goldenset.baseline import RunFingerprint
     from insurance_harness.knowledge.quality_gate import QualityGate
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from insurance_harness.compiler.models import PredRecord
+from insurance_harness.db.base import utcnow
 from insurance_harness.db.models import InsuranceProduct, ProductVersion
 from insurance_harness.db.scope import (
     KnowledgeScope,
@@ -38,6 +40,7 @@ from insurance_harness.knowledge.merge import (
     validate_scoped_change_set_items,
 )
 from insurance_harness.knowledge.models import (
+    ImportLifecycleDecision,
     ImportPartitionReport,
     ImportReport,
     MergePolicy,
@@ -46,6 +49,14 @@ from insurance_harness.knowledge.models import (
     SourceImportContext,
     SourceImportIdentity,
     value_hash,
+)
+from insurance_harness.knowledge.source_aggregates import (
+    validate_applied_source_change_set,
+)
+from insurance_harness.knowledge.source_lifecycle import (
+    LifecycleBusinessOutcome,
+    LifecycleDecisionResult,
+    coordinate_source_lifecycle,
 )
 from insurance_harness.knowledge.source_revision import (
     derive_retract_event_key,
@@ -262,6 +273,16 @@ def _existing_source_change_set(
     if not rows:
         return None, False
     change_set = rows[0]
+    if change_set.status == "applied":
+        validate_applied_source_change_set(
+            session,
+            scope,
+            identity,
+            change_set,
+            allowed_source_kinds=("document", "recompile"),
+        )
+        validate_scoped_change_set_items(session, scope, change_set)
+        return change_set, True
     item_count = validate_source_change_set_aggregate(
         session,
         scope,
@@ -269,9 +290,6 @@ def _existing_source_change_set(
         change_set,
         allowed_source_kinds=("document", "recompile"),
     )
-    if change_set.status == "applied":
-        validate_scoped_change_set_items(session, scope, change_set)
-        return change_set, True
     if change_set.status == "pending" and item_count == 0:
         return change_set, False
     raise ScopeViolation("source change set cannot be replayed")
@@ -317,6 +335,7 @@ def _apply_partition(
     policy: MergePolicy | None,
     risk_of: dict[str, str] | None,
     created_by: str,
+    lifecycle_decision: ImportLifecycleDecision,
     existing_change_set: ChangeSet | None,
     duplicate: bool,
     quality_gate: "QualityGate | None" = None,
@@ -343,6 +362,7 @@ def _apply_partition(
     part = ImportPartitionReport(
         knowledge_id=identity.knowledge_id,
         source_revision=identity.source_revision,
+        lifecycle_decision=lifecycle_decision,
         source_kind=change_set.source_kind,
         change_set_id=change_set.id,
         duplicate_batch=duplicate,
@@ -385,12 +405,154 @@ def _apply_partition(
     return part
 
 
+_ACTIVE_IMPORT_DECISIONS = frozenset(
+    {
+        "accepted_create",
+        "accepted_advance",
+        "accepted_reactivate",
+        "idempotent",
+    }
+)
+_IMPORT_DECISIONS = _ACTIVE_IMPORT_DECISIONS | {"stale", "blocked_deleted"}
+
+
+def _typed_import_decision(value: str) -> ImportLifecycleDecision:
+    if value not in _IMPORT_DECISIONS:
+        raise ScopeViolation("source import lifecycle decision is invalid")
+    return cast(ImportLifecycleDecision, value)
+
+
+def _empty_partition(
+    records: list[PredRecord],
+    identity: SourceImportIdentity,
+    decision: ImportLifecycleDecision,
+) -> ImportPartitionReport:
+    return ImportPartitionReport(
+        knowledge_id=identity.knowledge_id,
+        source_revision=identity.source_revision,
+        lifecycle_decision=decision,
+        source_kind=None,
+        change_set_id=None,
+        total_records=len(records),
+    )
+
+
+def _stale_prior_source_evidence(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+) -> None:
+    target_ids = (
+        select(ClaimEvidence.id)
+        .join(Claim, Claim.id == ClaimEvidence.claim_id)
+        .where(
+            Claim.space_id == scope.space_id,
+            ClaimEvidence.knowledge_id == identity.knowledge_id,
+            ClaimEvidence.raw_kb_id == scope.raw_kb_id,
+            ClaimEvidence.lineage_status.is_not(None),
+            ClaimEvidence.source_revision.is_not(None),
+            ClaimEvidence.source_revision != identity.source_revision,
+            ClaimEvidence.stale_at.is_(None),
+        )
+    )
+    session.execute(
+        update(ClaimEvidence)
+        .where(
+            ClaimEvidence.id.in_(target_ids),
+            ClaimEvidence.stale_at.is_(None),
+        )
+        .values(stale_at=utcnow())
+        .execution_options(synchronize_session="fetch")
+    )
+
+
+def _active_source_revisions(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+) -> set[str]:
+    return set(
+        session.scalars(
+            select(ClaimEvidence.source_revision)
+            .join(Claim, Claim.id == ClaimEvidence.claim_id)
+            .where(
+                Claim.space_id == scope.space_id,
+                ClaimEvidence.knowledge_id == identity.knowledge_id,
+                ClaimEvidence.raw_kb_id == scope.raw_kb_id,
+                ClaimEvidence.lineage_status.is_not(None),
+                ClaimEvidence.source_revision.is_not(None),
+                ClaimEvidence.stale_at.is_(None),
+            )
+        )
+    )
+
+
+def _apply_lifecycle_partition(
+    session: Session,
+    decision: LifecycleDecisionResult,
+    records: list[PredRecord],
+    *,
+    scope: KnowledgeScope,
+    product_version_id: str,
+    identity: SourceImportIdentity,
+    doc_roles: dict[str, str] | None,
+    doc_titles: dict[str, str] | None,
+    policy: MergePolicy | None,
+    risk_of: dict[str, str] | None,
+    created_by: str,
+    quality_gate: "QualityGate | None",
+    run_fingerprint: "RunFingerprint | None",
+) -> LifecycleBusinessOutcome:
+    lifecycle_decision = _typed_import_decision(decision.decision)
+    if lifecycle_decision == "idempotent":
+        active_revisions = _active_source_revisions(session, scope, identity)
+        if active_revisions and active_revisions != {identity.source_revision}:
+            raise ScopeViolation("source revision state is ambiguous")
+    _reject_source_tombstone(session, scope, identity)
+    existing_change_set, duplicate = _existing_source_change_set(
+        session,
+        scope,
+        identity,
+    )
+    if lifecycle_decision == "idempotent" and existing_change_set is None:
+        raise ScopeViolation("source import requires an exact aggregate")
+    part = _apply_partition(
+        session,
+        records,
+        scope=scope,
+        product_version_id=product_version_id,
+        identity=identity,
+        doc_roles=doc_roles,
+        doc_titles=doc_titles,
+        policy=policy,
+        risk_of=risk_of,
+        created_by=created_by,
+        lifecycle_decision=lifecycle_decision,
+        existing_change_set=existing_change_set,
+        duplicate=duplicate,
+        quality_gate=quality_gate,
+        run_fingerprint=run_fingerprint,
+    )
+    if lifecycle_decision in ("accepted_advance", "accepted_reactivate"):
+        _stale_prior_source_evidence(session, scope, identity)
+    assert part.change_set_id is not None
+    return LifecycleBusinessOutcome(
+        payload=part,
+        aggregate_kind="source_revision",
+        change_set_id=part.change_set_id,
+    )
+
+
 def _aggregate_partitions(
     report: ImportReport,
     parts: list[ImportPartitionReport],
 ) -> ImportReport:
     report.partitions = parts
-    report.change_set_ids = [part.change_set_id for part in parts]
+    report.change_set_ids = [
+        part.change_set_id
+        for part in parts
+        if part.change_set_id is not None
+    ]
     report.imported = sum(part.imported for part in parts)
     report.skipped_duplicates = sum(part.skipped_duplicates for part in parts)
     report.skipped_no_evidence = sum(part.skipped_no_evidence for part in parts)
@@ -555,32 +717,46 @@ def import_pred_records(
             raise ScopeViolation("source partition identity mismatch")
         identities[key] = identity
         partitions[key].append(record)
-    keys = sorted(partitions)
-    for key in keys:
-        _reject_source_tombstone(session, scope, identities[key])
-    source_states = {
-        key: _existing_source_change_set(session, scope, identities[key]) for key in keys
-    }
+    keys = sorted(
+        partitions,
+        key=lambda key: (scope.space_id, key[0]),
+    )
     with session.begin_nested():
-        parts = [
-            _apply_partition(
+        parts: list[ImportPartitionReport] = []
+        for key in keys:
+            identity = identities[key]
+            lifecycle = coordinate_source_lifecycle(
                 session,
-                partitions[key],
-                scope=scope,
-                product_version_id=product_version_id,
-                identity=identities[key],
-                doc_roles=doc_roles,
-                doc_titles=doc_titles,
-                policy=policy,
-                risk_of=risk_of,
-                created_by=created_by,
-                existing_change_set=source_states[key][0],
-                duplicate=source_states[key][1],
-                quality_gate=quality_gate,
-                run_fingerprint=run_fingerprint,
+                scope,
+                identity,
+                "active",
+                actor=created_by,
+                apply_business=partial(
+                    _apply_lifecycle_partition,
+                    records=partitions[key],
+                    scope=scope,
+                    product_version_id=product_version_id,
+                    identity=identity,
+                    doc_roles=doc_roles,
+                    doc_titles=doc_titles,
+                    policy=policy,
+                    risk_of=risk_of,
+                    created_by=created_by,
+                    quality_gate=quality_gate,
+                    run_fingerprint=run_fingerprint,
+                ),
             )
-            for key in keys
-        ]
+            if lifecycle.business_payload is None:
+                part = _empty_partition(
+                    partitions[key],
+                    identity,
+                    _typed_import_decision(lifecycle.decision),
+                )
+            else:
+                part = ImportPartitionReport.model_validate(
+                    lifecycle.business_payload
+                )
+            parts.append(part)
         session.flush()
     return _aggregate_partitions(report, parts)
 

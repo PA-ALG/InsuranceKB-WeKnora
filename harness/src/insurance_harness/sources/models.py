@@ -8,7 +8,7 @@ import re
 from collections.abc import Mapping
 from datetime import UTC
 from types import MappingProxyType
-from typing import Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import (
     AwareDatetime,
@@ -104,27 +104,128 @@ class SourceScope(BaseModel):
         )
 
 
+class ProcessedAtOrdering(BaseModel):
+    """UTC-normalized source ordering issued as a processing timestamp."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        revalidate_instances="always",
+    )
+
+    kind: Literal["processed_at"] = "processed_at"
+    value: AwareDatetime
+
+    @model_validator(mode="after")
+    def _normalize_utc(self) -> "ProcessedAtOrdering":
+        object.__setattr__(self, "value", self.value.astimezone(UTC))
+        return self
+
+
+class GenerationOrdering(BaseModel):
+    """Strict monotonic generation issued by an upstream source service."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        revalidate_instances="always",
+    )
+
+    kind: Literal["generation"] = "generation"
+    value: StrictInt
+
+    @field_validator("value")
+    @classmethod
+    def _non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("generation must be non-negative")
+        return value
+
+
+SourceOrdering = Annotated[
+    ProcessedAtOrdering | GenerationOrdering,
+    Field(discriminator="kind"),
+]
+
+
+def source_ordering_identity_token(
+    ordering: SourceOrdering,
+) -> tuple[str, str | int]:
+    """Return a canonical equality token; lifecycle ordering uses a typed comparator."""
+    if isinstance(ordering, ProcessedAtOrdering):
+        return (
+            ordering.kind,
+            ordering.value.isoformat().replace("+00:00", "Z"),
+        )
+    return (ordering.kind, ordering.value)
+
+
 class SourceRevision(BaseModel):
     """Canonical source revision derived exclusively from its three inputs."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        revalidate_instances="always",
+    )
 
     file_hash: str
-    processed_at: AwareDatetime
+    ordering: SourceOrdering
+    processed_at: AwareDatetime | None = None
     parser_fingerprint: str
     value: str = ""
 
     _validate_components = field_validator("file_hash", "parser_fingerprint")(_non_empty)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_017_processed_at_input(cls, value: Any) -> Any:
+        if not isinstance(value, Mapping):
+            return value
+        normalized = dict(value)
+        ordering = normalized.get("ordering")
+        processed_at = normalized.get("processed_at")
+        if isinstance(ordering, (ProcessedAtOrdering, GenerationOrdering)):
+            # Nested BaseModel instances, including model_construct() products,
+            # must cross the same strict dict-validation boundary as wire input.
+            normalized["ordering"] = ordering.model_dump(mode="python")
+            ordering = normalized["ordering"]
+        if ordering is None:
+            if processed_at is None:
+                raise ValueError("source ordering is required")
+            normalized["ordering"] = {
+                "kind": "processed_at",
+                "value": processed_at,
+            }
+        return normalized
+
     @model_validator(mode="after")
     def _normalize_and_derive(self) -> "SourceRevision":
-        processed_at = self.processed_at.astimezone(UTC)
-        canonical = json.dumps(
-            {
+        if isinstance(self.ordering, ProcessedAtOrdering):
+            processed_at = self.ordering.value
+            if self.processed_at is not None:
+                supplied = self.processed_at.astimezone(UTC)
+                if supplied != processed_at:
+                    raise ValueError("source ordering mismatch")
+            # Compatibility boundary: preserve the exact OpenSpec 017 canonical
+            # JSON for processed-at revisions so installing 021 never rekeys them.
+            canonical_payload: dict[str, str | int] = {
                 "file_hash": self.file_hash,
                 "parser_fingerprint": self.parser_fingerprint,
                 "processed_at": processed_at.isoformat().replace("+00:00", "Z"),
-            },
+            }
+            object.__setattr__(self, "processed_at", processed_at)
+        else:
+            if self.processed_at is not None:
+                raise ValueError("generation ordering cannot carry processed_at")
+            canonical_payload = {
+                "file_hash": self.file_hash,
+                "generation": self.ordering.value,
+                "ordering_kind": self.ordering.kind,
+                "parser_fingerprint": self.parser_fingerprint,
+            }
+        canonical = json.dumps(
+            canonical_payload,
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -132,7 +233,6 @@ class SourceRevision(BaseModel):
         expected = hashlib.sha256(canonical).hexdigest()
         if self.value and not hmac.compare_digest(self.value, expected):
             raise ValueError("source revision mismatch")
-        object.__setattr__(self, "processed_at", processed_at)
         object.__setattr__(self, "value", expected)
         return self
 

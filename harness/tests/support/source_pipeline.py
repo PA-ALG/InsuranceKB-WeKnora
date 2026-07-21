@@ -14,6 +14,7 @@ from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegist
 from insurance_harness.sources import (
     DirectorySourceRequest,
     MaterializedBatch,
+    ProcessedAtOrdering,
     SourceDocument,
     SourceRevision,
 )
@@ -139,7 +140,7 @@ def source_document() -> SourceDocument:
         file_type="application/pdf",
         source_revision=SourceRevision(
             file_hash="a" * 64,
-            processed_at=datetime(1970, 1, 1, tzinfo=UTC),
+            ordering=ProcessedAtOrdering(value=datetime(1970, 1, 1, tzinfo=UTC)),
             parser_fingerprint="fixture-parser-v1",
         ),
         original_digest="b" * 64,
