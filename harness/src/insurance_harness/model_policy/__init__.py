@@ -20,7 +20,7 @@ from .models import (
     PolicyReceipt,
     ReceiptSink,
 )
-from .policy import ModelPolicyDenied, PolicyDecision, ProductionModelPolicy
+from .policy import ModelPolicyDenied, ProductionModelPolicy
 
 __all__ = [
     "AdmissionBinding",
@@ -35,7 +35,6 @@ __all__ = [
     "ModelPermitView",
     "ModelPolicyDenied",
     "ModelRole",
-    "PolicyDecision",
     "PolicyReceipt",
     "ProductionModelComposition",
     "ProductionModelPolicy",

@@ -7,6 +7,7 @@ import json
 import re
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import SupportsIndex
 
 from .admission import (
     IssuedModelPermit,
@@ -103,12 +104,12 @@ class ProductionModelPolicy:
 
         return validated
 
-    def evaluate_call(
+    def _evaluate_call(
         self,
         verified_admission: VerifiedAdmission,
         context: ModelCallContext,
         /,
-    ) -> PolicyDecision:
+    ) -> _PolicyDecision:
         """Evaluate one exact call scope and issue authority only on full match."""
 
         evaluated_at = datetime.now(UTC)
@@ -232,7 +233,12 @@ class ProductionModelPolicy:
             permit_view=permit_view,
             evaluated_at=evaluated_at,
         )
-        return PolicyDecision(receipt, issued_permit)
+        return _issue_policy_decision(
+            receipt,
+            issued_permit,
+            verified_admission,
+            context,
+        )
 
     @staticmethod
     def _deny(
@@ -241,7 +247,7 @@ class ProductionModelPolicy:
         *,
         reason_code: str,
         evaluated_at: datetime,
-    ) -> PolicyDecision:
+    ) -> _PolicyDecision:
         binding = verified_admission.binding
         receipt = PolicyReceipt(
             decision="DENY",
@@ -261,7 +267,12 @@ class ProductionModelPolicy:
             call_scope_hash=context.call_scope_hash,
             evaluated_at=evaluated_at,
         )
-        return PolicyDecision(receipt, None)
+        return _issue_policy_decision(
+            receipt,
+            None,
+            verified_admission,
+            context,
+        )
 
 
 _PERMIT_VIEW_DIGEST_DOMAIN = b"insurancekb.model-policy.permit-view.v1\0"
@@ -282,6 +293,8 @@ def _permit_matches_call_context(
     permit: object,
     verified_admission: VerifiedAdmission,
     context: ModelCallContext,
+    *,
+    _checked_at: datetime | None = None,
 ) -> bool:
     """Recheck the complete issued scope before Task 4 delegates transport."""
 
@@ -298,8 +311,13 @@ def _permit_matches_call_context(
     except Exception:
         return False
     view: ModelPermitView = permit.view
+    checked_at = datetime.now(UTC) if _checked_at is None else _checked_at
+    if not isinstance(checked_at, datetime) or checked_at.tzinfo is None:
+        return False
+    checked_at = checked_at.astimezone(UTC)
     return (
-        view.identity == validated_context.identity
+        view.expires_at > checked_at
+        and view.identity == validated_context.identity
         and view.purpose == validated_context.purpose
         and view.run_schema_version == validated_context.run_schema_version
         and view.space_id == validated_context.space_id
@@ -314,21 +332,179 @@ def _permit_matches_call_context(
     )
 
 
-class PolicyDecision:
-    """Result object whose receipt is public data and permit stays package-internal."""
+_DECISION_SEAL = object()
 
-    __slots__ = ("_issued_permit", "receipt")
 
-    def __init__(
-        self,
-        receipt: PolicyReceipt,
-        issued_permit: IssuedModelPermit | None,
-    ) -> None:
-        self.receipt = receipt
-        self._issued_permit = issued_permit
+class _PolicyDecision:
+    """Sealed package-local result consumed only by the canonical guarded client."""
+
+    __slots__ = ("_context", "_permit", "_receipt", "_seal", "_verified_admission")
+    _context: ModelCallContext
+    _permit: IssuedModelPermit | None
+    _receipt: PolicyReceipt
+    _seal: object
+    _verified_admission: VerifiedAdmission
+
+    def __new__(
+        cls,
+        *_args: object,
+        _seal: object | None = None,
+        **_kwargs: object,
+    ) -> _PolicyDecision:
+        if cls is not _PolicyDecision or _seal is not _DECISION_SEAL:
+            raise TypeError("policy decisions are issued only by canonical policy")
+        return super().__new__(cls)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise TypeError("policy decisions are immutable")
+
+    def __copy__(self) -> _PolicyDecision:
+        raise TypeError("policy decisions cannot be copied")
+
+    def __deepcopy__(self, _memo: dict[int, object]) -> _PolicyDecision:
+        raise TypeError("policy decisions cannot be copied")
+
+    def __reduce__(self) -> tuple[object, ...]:
+        raise TypeError("policy decisions cannot be serialized")
+
+    def __reduce_ex__(self, _protocol: SupportsIndex) -> tuple[object, ...]:
+        raise TypeError("policy decisions cannot be serialized")
 
     @property
-    def allowed(self) -> bool:
-        return self.receipt.decision == "ALLOW" and _is_issued_model_permit(
-            self._issued_permit
+    def receipt(self) -> PolicyReceipt:
+        return self._receipt
+
+
+def _issue_policy_decision(
+    receipt: PolicyReceipt,
+    permit: IssuedModelPermit | None,
+    verified_admission: VerifiedAdmission,
+    context: ModelCallContext,
+) -> _PolicyDecision:
+    """Issue one internally consistent decision; no caller-spliced parts accepted."""
+
+    try:
+        validated_receipt = PolicyReceipt.model_validate(
+            receipt.model_dump(mode="python", round_trip=True, warnings=False)
         )
+        validated_context = ModelCallContext.model_validate(
+            context.model_dump(mode="python", round_trip=True, warnings=False)
+        )
+    except Exception:
+        raise ValueError("invalid policy decision components") from None
+    if not _decision_components_match(
+        validated_receipt,
+        permit,
+        verified_admission,
+        validated_context,
+    ):
+        raise ValueError("policy decision components do not match")
+    decision = _PolicyDecision.__new__(_PolicyDecision, _seal=_DECISION_SEAL)
+    object.__setattr__(decision, "_receipt", validated_receipt)
+    object.__setattr__(decision, "_permit", permit)
+    object.__setattr__(decision, "_verified_admission", verified_admission)
+    object.__setattr__(decision, "_context", validated_context)
+    object.__setattr__(decision, "_seal", _DECISION_SEAL)
+    return decision
+
+
+def _decision_components_match(
+    receipt: PolicyReceipt,
+    permit: IssuedModelPermit | None,
+    verified_admission: VerifiedAdmission,
+    context: ModelCallContext,
+) -> bool:
+    if not _is_verified_admission(verified_admission):
+        return False
+    binding = verified_admission.binding
+    common_matches = (
+        receipt.identity_key == context.identity.identity_key
+        and receipt.purpose == context.purpose
+        and receipt.run_schema_version == context.run_schema_version
+        and receipt.space_id == context.space_id
+        and receipt.run_id == context.run_id
+        and receipt.run_revision == context.run_revision
+        and receipt.admission_hash == context.admission_hash
+        and receipt.request_digest == verified_admission.request.request_digest
+        and receipt.binding_digest == binding.binding_digest
+        and receipt.verified_binding_digest == verified_admission.verified_binding_digest
+        and receipt.template_hash == context.template_hash
+        and receipt.model_plan_hash == context.model_plan_hash
+        and receipt.call_scope_hash == context.call_scope_hash
+    )
+    if not common_matches:
+        return False
+    if receipt.decision == "DENY":
+        return (
+            receipt.reason_code != "policy_allowed"
+            and permit is None
+            and receipt.permit_view is None
+            and receipt.permit_digest is None
+        )
+    if not isinstance(permit, IssuedModelPermit) or not _is_issued_model_permit(permit):
+        return False
+    view = permit.view
+    return (
+        receipt.reason_code == "policy_allowed"
+        and receipt.permit_view == view
+        and receipt.permit_digest == _permit_view_digest(view)
+        and receipt.evaluated_at == permit.issued_at
+        and view.identity.identity_key == receipt.identity_key
+        and view.purpose == receipt.purpose
+        and view.run_schema_version == receipt.run_schema_version
+        and view.space_id == receipt.space_id
+        and view.run_id == receipt.run_id
+        and view.run_revision == receipt.run_revision
+        and view.admission_hash == receipt.admission_hash
+        and view.verified_binding_digest == receipt.verified_binding_digest
+        and view.template_hash == receipt.template_hash
+        and view.model_plan_hash == receipt.model_plan_hash
+        and view.call_scope_hash == receipt.call_scope_hash
+        and view.expires_at > receipt.evaluated_at
+    )
+
+
+def _is_policy_decision(value: object) -> bool:
+    if not isinstance(value, _PolicyDecision):
+        return False
+    try:
+        receipt = PolicyReceipt.model_validate(
+            value._receipt.model_dump(mode="python", round_trip=True, warnings=False)
+        )
+        context = ModelCallContext.model_validate(
+            value._context.model_dump(mode="python", round_trip=True, warnings=False)
+        )
+        return (
+            value._seal is _DECISION_SEAL
+            and value._receipt == receipt
+            and value._context == context
+            and _decision_components_match(
+                receipt,
+                value._permit,
+                value._verified_admission,
+                context,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _decision_authorizes_call(
+    decision: object,
+    verified_admission: VerifiedAdmission,
+    context: ModelCallContext,
+    *,
+    _checked_at: datetime | None = None,
+) -> bool:
+    """Final package-private authorization predicate used immediately pre-transport."""
+
+    if not _is_policy_decision(decision) or not isinstance(decision, _PolicyDecision):
+        return False
+    if decision.receipt.decision != "ALLOW":
+        return False
+    return _permit_matches_call_context(
+        decision._permit,
+        verified_admission,
+        context,
+        _checked_at=_checked_at,
+    )

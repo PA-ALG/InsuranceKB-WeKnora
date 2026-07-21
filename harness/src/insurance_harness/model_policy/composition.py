@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from types import MappingProxyType
+from collections.abc import Iterable
+from importlib import import_module
+from typing import cast
 
 from .admission import (
     AdmissionPolicyDenied,
@@ -13,18 +14,18 @@ from .admission import (
     _is_verified_admission,
 )
 from .models import IdentityKey, ModelCallContext
-from .policy import PolicyDecision, ProductionModelPolicy
+from .policy import ProductionModelPolicy, _PolicyDecision
 
-type AdmissionProfile = tuple[str, str]
 _COMPOSITION_SEAL = object()
+_CANONICAL_ADMISSION_MODULE = "insurance_harness.run_admission.evaluator"
+_CANONICAL_SELECTOR_NAME = "select_canonical_admission_verifier"
 
 
 class ProductionModelComposition:
-    """Code-owned verifier registry and policy with no caller override ports."""
+    """Fixed canonical verifier bridge and policy with no caller override ports."""
 
-    __slots__ = ("_policy", "_verifiers")
+    __slots__ = ("_policy",)
     _policy: ProductionModelPolicy
-    _verifiers: Mapping[AdmissionProfile, AdmissionVerifier]
 
     def __new__(
         cls,
@@ -52,13 +53,10 @@ class ProductionModelComposition:
             )
         except (AttributeError, TypeError, ValueError):
             raise AdmissionPolicyDenied("invalid_admission_request") from None
-        profile = (
+        verifier = _select_canonical_admission_verifier(
             validated.expected_purpose,
             validated.expected_run_schema_version,
         )
-        verifier = self._verifiers.get(profile)
-        if verifier is None:
-            raise AdmissionPolicyDenied("unknown_admission_profile")
         try:
             verified = verifier.verify(validated)
         except AdmissionPolicyDenied:
@@ -73,42 +71,57 @@ class ProductionModelComposition:
             raise AdmissionPolicyDenied("invalid_verified_admission")
         return verified
 
-    def evaluate(
+    def _evaluate_for_guard(
         self,
         verified_admission: VerifiedAdmission,
         context: ModelCallContext,
         /,
-    ) -> PolicyDecision:
-        """Evaluate through the single code-owned policy instance."""
+    ) -> _PolicyDecision:
+        """Package-local hook for the future canonical guarded client only."""
 
-        return self._policy.evaluate_call(verified_admission, context)
+        return self._policy._evaluate_call(verified_admission, context)
 
 
 def _build_production_model_composition(
     *,
-    canonical_verifiers: Mapping[AdmissionProfile, AdmissionVerifier],
     approved_identity_keys: Iterable[IdentityKey],
 ) -> ProductionModelComposition:
-    """Non-public assembly hook for the production composition root and tests."""
+    """Assemble policy only; verifier selection always follows the fixed bridge."""
 
-    normalized: dict[AdmissionProfile, AdmissionVerifier] = {}
-    for profile, verifier in canonical_verifiers.items():
-        if (
-            not isinstance(profile, tuple)
-            or len(profile) != 2
-            or not all(isinstance(item, str) and item.strip() for item in profile)
-            or not callable(getattr(verifier, "verify", None))
-        ):
-            raise ValueError("invalid canonical admission verifier registration")
-        normalized[(profile[0].strip(), profile[1].strip())] = verifier
     composition = ProductionModelComposition.__new__(
         ProductionModelComposition,
         _seal=_COMPOSITION_SEAL,
     )
-    object.__setattr__(composition, "_verifiers", MappingProxyType(normalized))
     object.__setattr__(
         composition,
         "_policy",
         ProductionModelPolicy(approved_identity_keys),
     )
     return composition
+
+
+def _select_canonical_admission_verifier(
+    purpose: str,
+    run_schema_version: str,
+    /,
+) -> AdmissionVerifier:
+    """Call the single code-owned 030 selector; no object can be caller-injected."""
+
+    try:
+        module = import_module(_CANONICAL_ADMISSION_MODULE)
+    except ModuleNotFoundError:
+        raise AdmissionPolicyDenied("canonical_verifier_unavailable") from None
+    selector = getattr(module, _CANONICAL_SELECTOR_NAME, None)
+    if not callable(selector):
+        raise AdmissionPolicyDenied("canonical_verifier_unavailable")
+    try:
+        verifier = selector(purpose, run_schema_version)
+    except AdmissionPolicyDenied:
+        raise
+    except LookupError:
+        raise AdmissionPolicyDenied("unknown_admission_profile") from None
+    except Exception:
+        raise AdmissionPolicyDenied("canonical_verifier_unavailable") from None
+    if not callable(getattr(verifier, "verify", None)):
+        raise AdmissionPolicyDenied("canonical_verifier_unavailable")
+    return cast(AdmissionVerifier, verifier)

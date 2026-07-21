@@ -244,6 +244,7 @@ class AdmissionPolicyDenied(ValueError):
         "admission_not_ready": "admission binding is not READY",
         "admission_roles_missing": "READY admission has no approved model roles",
         "admission_templates_missing": "READY admission has no approved templates",
+        "canonical_verifier_unavailable": "canonical admission verifier is unavailable",
         "admission_expired": "admission binding is expired",
         "invalid_admission_request": "strict admission request is invalid",
         "invalid_admission_binding": "admission binding is invalid",

@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 import insurance_harness.model_policy as model_policy_package
+import insurance_harness.model_policy.composition as composition_module
 from insurance_harness.model_policy import (
     AdmissionBinding,
     AdmissionPolicyDenied,
@@ -20,7 +21,6 @@ from insurance_harness.model_policy import (
     ModelIdentity,
     ModelPermitView,
     ModelPolicyDenied,
-    PolicyDecision,
     PolicyReceipt,
     ProductionModelComposition,
     ProductionModelPolicy,
@@ -37,7 +37,12 @@ from insurance_harness.model_policy.admission import (
 from insurance_harness.model_policy.composition import (
     _build_production_model_composition,
 )
-from insurance_harness.model_policy.policy import _permit_matches_call_context
+from insurance_harness.model_policy.policy import (
+    _decision_authorizes_call,
+    _is_policy_decision,
+    _permit_matches_call_context,
+    _PolicyDecision,
+)
 
 
 def _identity(
@@ -202,7 +207,7 @@ def _binding() -> AdmissionBinding:
     values.update(
         {
             "actual_state": "READY",
-            "actual_expires_at": datetime(2026, 8, 1, tzinfo=UTC),
+            "actual_expires_at": datetime(2099, 8, 1, tzinfo=UTC),
             "approved_identities": (_identity(),),
             "approved_template_hashes": ("f" * 64,),
         }
@@ -468,8 +473,8 @@ def test_pwb4_model_construct_invalid_admission_objects_never_gain_authority() -
 @pytest.mark.parametrize(
     "verified_at",
     [
-        datetime(2026, 8, 1, tzinfo=UTC),
-        datetime(2026, 8, 2, tzinfo=UTC),
+        datetime(2099, 8, 1, tzinfo=UTC),
+        datetime(2099, 8, 2, tzinfo=UTC),
     ],
 )
 def test_pwb4_expired_or_equal_expiry_cannot_issue_verified_admission(
@@ -489,7 +494,7 @@ def test_pwb4_expired_or_equal_expiry_cannot_issue_verified_admission(
         _binding(),
         verifier_id="canonical-admission",
         verifier_version="v1",
-        verified_at=datetime(2026, 7, 31, 23, 59, 59, tzinfo=UTC),
+        verified_at=datetime(2099, 7, 31, 23, 59, 59, tzinfo=UTC),
     )
     assert _is_verified_admission(future)
 
@@ -534,8 +539,8 @@ def test_pwb4_binding_canonicalizes_sets_and_equivalent_expiry_instants() -> Non
 @pytest.mark.parametrize(
     "issued_at",
     [
-        datetime(2026, 8, 1, tzinfo=UTC),
-        datetime(2026, 8, 2, tzinfo=UTC),
+        datetime(2099, 8, 1, tzinfo=UTC),
+        datetime(2099, 8, 2, tzinfo=UTC),
     ],
 )
 def test_pwb4_expired_or_equal_expiry_cannot_issue_model_permit(
@@ -648,7 +653,11 @@ def test_pwb4_mvp_030_request_cannot_borrow_020_admission() -> None:
 
 
 class _CanonicalTestVerifier:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def verify(self, request: StrictAdmissionRequestBinding, /) -> VerifiedAdmission:
+        self.calls += 1
         return _issue_verified_admission(
             request,
             _binding(),
@@ -661,19 +670,56 @@ class _CanonicalTestVerifier:
 def _composition() -> ProductionModelComposition:
     identity = _identity()
     return _build_production_model_composition(
-        canonical_verifiers={
-            ("production-compilation", "run-schema-v1"): _CanonicalTestVerifier()
-        },
         approved_identity_keys=frozenset({identity.identity_key}),
     )
 
 
-def test_pwb4_production_composition_selects_only_exact_purpose_schema_profile() -> None:
+def _install_test_canonical_bridge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> _CanonicalTestVerifier:
+    verifier = _CanonicalTestVerifier()
+
+    def select(purpose: str, run_schema_version: str) -> AdmissionVerifier:
+        if (purpose, run_schema_version) != (
+            "production-compilation",
+            "run-schema-v1",
+        ):
+            raise AdmissionPolicyDenied("unknown_admission_profile")
+        return verifier
+
+    monkeypatch.setattr(
+        composition_module,
+        "_select_canonical_admission_verifier",
+        select,
+    )
+    return verifier
+
+
+def test_pwb4_production_builder_cannot_register_mirror_or_custom_verifier() -> None:
+    assert tuple(signature(_build_production_model_composition).parameters) == (
+        "approved_identity_keys",
+    )
+    with pytest.raises(TypeError):
+        _build_production_model_composition(
+            canonical_verifiers={
+                ("attacker-purpose", "attacker-schema"): _CanonicalTestVerifier()
+            },
+            approved_identity_keys=frozenset({_identity().identity_key}),
+        )
+    assert "_build_production_model_composition" not in model_policy_package.__all__
+    assert not hasattr(ProductionModelComposition, "register_verifier")
+
+
+def test_pwb4_production_composition_selects_only_exact_purpose_schema_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier = _install_test_canonical_bridge(monkeypatch)
     composition = _composition()
 
     verified = composition.verify(_strict_request())
 
     assert _is_verified_admission(verified)
+    assert verifier.calls == 1
     for field, value in (
         ("expected_purpose", "wrong-purpose"),
         ("expected_run_schema_version", "unknown-schema"),
@@ -681,6 +727,21 @@ def test_pwb4_production_composition_selects_only_exact_purpose_schema_profile()
         with pytest.raises(AdmissionPolicyDenied) as denied:
             composition.verify(_strict_request().model_copy(update={field: value}))
         assert denied.value.reason_code == "unknown_admission_profile"
+    assert verifier.calls == 1
+
+
+def test_pwb4_missing_canonical_030_bridge_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing(_module_name: str) -> object:
+        raise ModuleNotFoundError("030 is not installed")
+
+    monkeypatch.setattr(composition_module, "import_module", missing)
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        _composition().verify(_strict_request())
+
+    assert denied.value.reason_code == "canonical_verifier_unavailable"
 
 
 def test_pwb4_production_composition_has_no_actual_only_or_verifier_override() -> None:
@@ -694,7 +755,6 @@ def test_pwb4_production_composition_has_no_actual_only_or_verifier_override() -
         composition.verify(_strict_request(), verifier=custom)  # type: ignore[call-arg]
     with pytest.raises(TypeError):
         ProductionModelComposition(
-            canonical_verifiers={},
             approved_identity_keys=frozenset(),
         )
 
@@ -720,13 +780,17 @@ def test_pwb4_policy_allow_issues_opaque_permit_and_secret_free_receipt() -> Non
     verified = _verified()
     context = _call_context(verified)
 
-    decision = _policy_for(context.identity).evaluate_call(verified, context)
+    decision = _composition()._evaluate_for_guard(verified, context)
 
-    assert isinstance(decision, PolicyDecision)
-    assert decision.allowed
-    assert _is_issued_model_permit(decision._issued_permit)
+    assert isinstance(decision, _PolicyDecision)
+    assert _is_policy_decision(decision)
+    assert _decision_authorizes_call(decision, verified, context)
+    assert not hasattr(decision, "_issued_permit")
+    assert "PolicyDecision" not in model_policy_package.__all__
+    assert not hasattr(model_policy_package, "PolicyDecision")
     assert isinstance(decision.receipt, PolicyReceipt)
-    assert decision.receipt.permit_view == decision._issued_permit.view
+    assert isinstance(decision.receipt.permit_view, ModelPermitView)
+    assert decision.receipt.permit_digest is not None
     assert decision.receipt.request_digest == verified.request.request_digest
     assert decision.receipt.space_id == verified.binding.actual_space_id
     assert decision.receipt.verified_binding_digest == verified.verified_binding_digest
@@ -760,10 +824,9 @@ def test_pwb4_policy_denies_cross_scope_replay_with_receipt(
     verified = _verified()
     context = _call_context(verified).model_copy(update={field: replacement})
 
-    decision = _policy_for(context.identity).evaluate_call(verified, context)
+    decision = _composition()._evaluate_for_guard(verified, context)
 
-    assert not decision.allowed
-    assert decision._issued_permit is None
+    assert not _decision_authorizes_call(decision, verified, context)
     assert decision.receipt.reason_code == reason_code
     assert decision.receipt.decision == "DENY"
     assert decision.receipt.request_digest == verified.request.request_digest
@@ -773,22 +836,14 @@ def test_pwb4_policy_denies_cross_scope_replay_with_receipt(
 def test_pwb4_issued_permit_cannot_replay_across_call_scope() -> None:
     verified = _verified()
     original_context = _call_context(verified)
-    decision = _policy_for(original_context.identity).evaluate_call(
+    decision = _composition()._evaluate_for_guard(
         verified,
         original_context,
     )
     replay_context = original_context.model_copy(update={"call_scope_hash": "0" * 64})
 
-    assert _permit_matches_call_context(
-        decision._issued_permit,
-        verified,
-        original_context,
-    )
-    assert not _permit_matches_call_context(
-        decision._issued_permit,
-        verified,
-        replay_context,
-    )
+    assert _decision_authorizes_call(decision, verified, original_context)
+    assert not _decision_authorizes_call(decision, verified, replay_context)
 
 
 @pytest.mark.parametrize(
@@ -806,7 +861,7 @@ def test_pwb4_issued_permit_cannot_replay_across_full_binding(
 ) -> None:
     original_verified = _verified()
     original_context = _call_context(original_verified)
-    original_decision = _policy_for(original_context.identity).evaluate_call(
+    original_decision = _composition()._evaluate_for_guard(
         original_verified,
         original_context,
     )
@@ -822,8 +877,8 @@ def test_pwb4_issued_permit_cannot_replay_across_full_binding(
         verified_at=datetime(2026, 7, 22, tzinfo=UTC),
     )
 
-    assert not _permit_matches_call_context(
-        original_decision._issued_permit,
+    assert not _decision_authorizes_call(
+        original_decision,
         next_verified,
         _call_context(next_verified),
     )
@@ -834,9 +889,11 @@ def test_pwb4_policy_denies_identity_or_role_outside_admission() -> None:
     gap_identity = _identity(role="gap")
     context = _call_context(verified).model_copy(update={"identity": gap_identity})
 
-    decision = _policy_for(gap_identity).evaluate_call(verified, context)
+    decision = _build_production_model_composition(
+        approved_identity_keys=frozenset({gap_identity.identity_key})
+    )._evaluate_for_guard(verified, context)
 
-    assert not decision.allowed
+    assert not _decision_authorizes_call(decision, verified, context)
     assert decision.receipt.reason_code == "identity_not_admission_approved"
 
 
@@ -853,26 +910,119 @@ def test_pwb4_policy_denies_expired_verified_scope_without_issuing_permit() -> N
         verified_at=datetime(2020, 7, 22, tzinfo=UTC),
     )
 
-    decision = _policy_for(_identity()).evaluate_call(verified, _call_context(verified))
+    context = _call_context(verified)
+    decision = _composition()._evaluate_for_guard(verified, context)
 
-    assert not decision.allowed
-    assert decision._issued_permit is None
+    assert not _decision_authorizes_call(decision, verified, context)
     assert decision.receipt.reason_code == "admission_expired"
 
 
-def test_pwb4_production_composition_rejects_custom_policy_or_guard_injection() -> None:
+def test_pwb4_production_composition_rejects_custom_policy_or_guard_injection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_test_canonical_bridge(monkeypatch)
     composition = _composition()
     verified = composition.verify(_strict_request())
     context = _call_context(verified)
 
+    assert not hasattr(composition, "evaluate")
+    assert not hasattr(ProductionModelPolicy, "evaluate_call")
     with pytest.raises(TypeError):
-        composition.evaluate(
+        composition._evaluate_for_guard(
             verified,
             context,
             policy=_policy_for(context.identity),
         )
     with pytest.raises(TypeError):
-        composition.evaluate(verified, context, guard=object())
+        composition._evaluate_for_guard(verified, context, guard=object())
+
+
+def test_pwb4_policy_decision_is_sealed_immutable_and_nontransferable() -> None:
+    verified = _verified()
+    context = _call_context(verified)
+    decision = _composition()._evaluate_for_guard(verified, context)
+
+    with pytest.raises(TypeError):
+        _PolicyDecision()
+    with pytest.raises(TypeError):
+        decision.receipt = decision.receipt
+    with pytest.raises(TypeError):
+        copy.copy(decision)
+    with pytest.raises(TypeError):
+        copy.deepcopy(decision)
+    with pytest.raises(TypeError):
+        pickle.dumps(decision)
+    forged = object.__new__(_PolicyDecision)
+    assert not _is_policy_decision(forged)
+
+    spliced = _composition()._evaluate_for_guard(verified, context)
+    object.__setattr__(
+        spliced,
+        "_receipt",
+        spliced.receipt.model_copy(update={"reason_code": "forged-allow"}),
+    )
+    assert not _is_policy_decision(spliced)
+
+
+def test_pwb4_transport_matcher_rechecks_permit_expiry_at_use_time() -> None:
+    verified = _verified()
+    context = _call_context(verified)
+    permit = _issue_model_permit(
+        _permit_view(verified),
+        verified,
+        issued_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    expires_at = permit.view.expires_at
+
+    assert _permit_matches_call_context(
+        permit,
+        verified,
+        context,
+        _checked_at=expires_at - timedelta(microseconds=1),
+    )
+    assert not _permit_matches_call_context(
+        permit,
+        verified,
+        context,
+        _checked_at=expires_at,
+    )
+    assert not _permit_matches_call_context(
+        permit,
+        verified,
+        context,
+        _checked_at=expires_at + timedelta(microseconds=1),
+    )
+
+    old_verified = _issue_verified_admission(
+        _strict_request(),
+        _binding().model_copy(
+            update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)}
+        ),
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2020, 7, 22, tzinfo=UTC),
+    )
+    old_permit = _issue_model_permit(
+        _permit_view(old_verified),
+        old_verified,
+        issued_at=datetime(2020, 7, 22, tzinfo=UTC),
+    )
+    assert not _permit_matches_call_context(
+        old_permit,
+        old_verified,
+        _call_context(old_verified),
+    )
+
+
+def test_pwb4_public_composition_signatures_have_no_clock_rollback() -> None:
+    assert "clock" not in signature(ProductionModelComposition.verify).parameters
+    assert "checked_at" not in signature(ProductionModelComposition.verify).parameters
+    assert "clock" not in signature(
+        ProductionModelComposition._evaluate_for_guard
+    ).parameters
+    assert "checked_at" not in signature(
+        ProductionModelComposition._evaluate_for_guard
+    ).parameters
 
 
 def test_pwb4_receipt_sink_protocol_records_receipt_only() -> None:
