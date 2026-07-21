@@ -5,17 +5,19 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Lock, local
 from typing import Any
 
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, func, select, text
-from sqlalchemy.engine import make_url
+from sqlalchemy import create_engine, event, func, select, text
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
 from insurance_harness.knowledge.pages import render_snapshot_pages
@@ -505,6 +507,50 @@ def test_ra2_approval_unique_race_is_domain_safe_and_preserves_outer_transaction
     assert prior.risk_level == "high"
 
 
+@contextmanager
+def _block_after_two_approval_prechecks(
+    engine: Engine,
+) -> Iterator[tuple[Callable[[], None], list[int]]]:
+    """Hold each worker after PG determines its first approval precheck result."""
+
+    barrier = Barrier(2)
+    state = local()
+    hit_lock = Lock()
+    connection_hits: list[int] = []
+
+    def arm_current_worker() -> None:
+        state.armed = True
+        state.blocked = False
+
+    def after_cursor_execute(
+        connection: Any,
+        _cursor: Any,
+        statement: str,
+        _parameters: Any,
+        _context: Any,
+        _executemany: bool,
+    ) -> None:
+        normalized = " ".join(statement.lower().split())
+        if (
+            not getattr(state, "armed", False)
+            or getattr(state, "blocked", False)
+            or " from release_approvals " not in f" {normalized} "
+            or "release_approvals.space_id" not in normalized
+            or "release_approvals.manifest_hash" not in normalized
+        ):
+            return
+        state.blocked = True
+        with hit_lock:
+            connection_hits.append(id(connection))
+        barrier.wait(timeout=15)
+
+    event.listen(engine, "after_cursor_execute", after_cursor_execute)
+    try:
+        yield arm_current_worker, connection_hits
+    finally:
+        event.remove(engine, "after_cursor_execute", after_cursor_execute)
+
+
 @pytest.mark.integration_postgres
 def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -> None:
     raw_url = os.getenv("HARNESS_TEST_POSTGRES_URL")
@@ -571,24 +617,42 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
             manifest_ids = list(executor.map(lambda _index: persist_worker(), range(2)))
         assert len(set(manifest_ids)) == 1
 
-        approval_barrier = Barrier(2)
-
-        def approve_worker() -> str:
+        def approve_worker(index: int, arm_precheck: Callable[[], None]) -> tuple[str, int]:
             with factory() as worker:
-                approval_barrier.wait(timeout=15)
+                prior = _prior_caller_work(worker, scope, f"pg-same-{index}")
+                backend_pid = worker.scalar(text("SELECT pg_backend_pid()"))
+                assert isinstance(backend_pid, int)
+                arm_precheck()
                 approval = _approve(worker, scope, manifest)
+                assert worker.get(ReviewItem, prior.id) is prior
+                prior.risk_level = "high"
+                worker.flush()
                 worker.commit()
-                return approval.id
+                return approval.id, backend_pid
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            approval_ids = list(executor.map(lambda _index: approve_worker(), range(2)))
+        with _block_after_two_approval_prechecks(engine) as (arm_precheck, same_hits):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                same_results = list(
+                    executor.map(
+                        lambda index: approve_worker(index, arm_precheck), range(2)
+                    )
+                )
+        approval_ids = [approval_id for approval_id, _pid in same_results]
         assert len(set(approval_ids)) == 1
+        assert len(same_hits) == 2
+        assert len({pid for _approval_id, pid in same_results}) == 2
 
-        competing_barrier = Barrier(2)
-
-        def competing_approval_worker(index: int) -> tuple[str, bool]:
+        def competing_approval_worker(
+            index: int,
+            arm_precheck: Callable[[], None],
+        ) -> tuple[str, int, bool]:
             with factory() as worker:
-                competing_barrier.wait(timeout=15)
+                prior = _prior_caller_work(
+                    worker, competing_scope, f"pg-competing-{index}"
+                )
+                backend_pid = worker.scalar(text("SELECT pg_backend_pid()"))
+                assert isinstance(backend_pid, int)
+                arm_precheck()
                 try:
                     _approve(
                         worker,
@@ -596,25 +660,44 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
                         competing_manifest,
                         reason=f"competing exact attestation {index}",
                     )
+                    assert worker.get(ReviewItem, prior.id) is prior
+                    prior.risk_level = "high"
+                    worker.flush()
                     worker.commit()
-                    return "winner", worker.is_active
+                    return "winner", backend_pid, worker.is_active
                 except ReleaseApprovalError as exc:
                     assert "already approved" in str(exc)
+                    assert worker.get(ReviewItem, prior.id) is prior
+                    prior.risk_level = "high"
+                    worker.flush()
                     usable = worker.is_active and (
                         worker.scalar(
                             select(func.count()).select_from(ReleaseManifestRecord)
                         )
                         == 2
                     )
-                    return "typed_error", usable
+                    return "typed_error", backend_pid, usable
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            competing_results = list(executor.map(competing_approval_worker, range(2)))
-        assert sorted(status for status, _usable in competing_results) == [
+        with _block_after_two_approval_prechecks(engine) as (
+            arm_competing_precheck,
+            competing_hits,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                competing_results = list(
+                    executor.map(
+                        lambda index: competing_approval_worker(
+                            index, arm_competing_precheck
+                        ),
+                        range(2),
+                    )
+                )
+        assert sorted(status for status, _pid, _usable in competing_results) == [
             "typed_error",
             "winner",
         ]
-        assert all(usable for _status, usable in competing_results)
+        assert len(competing_hits) == 2
+        assert len({pid for _status, pid, _usable in competing_results}) == 2
+        assert all(usable for _status, _pid, usable in competing_results)
         with factory() as verifier:
             assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 2
             assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 2

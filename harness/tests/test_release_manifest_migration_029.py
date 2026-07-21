@@ -484,6 +484,22 @@ def _postgresql_029_triggers(engine: Engine) -> tuple[str, ...]:
         )
 
 
+def _assert_postgresql_error(
+    error: pytest.ExceptionInfo[DBAPIError],
+    *,
+    sqlstate: str,
+    constraint: str | None = None,
+    message: str | None = None,
+) -> None:
+    original = error.value.orig
+    assert getattr(original, "sqlstate", None) == sqlstate
+    if constraint is not None:
+        diagnostic = getattr(original, "diag", None)
+        assert getattr(diagnostic, "constraint_name", None) == constraint
+    if message is not None:
+        assert message in str(original)
+
+
 @pytest.mark.integration_postgres
 def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
     postgres_029_schema: Postgres029Schema,
@@ -531,18 +547,29 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
     assert TABLES <= set(inspect(engine).get_table_names())
     assert GUARDS <= set(_postgresql_029_triggers(engine))
 
-    statements = (
-        "UPDATE release_manifests SET manifest_hash='" + "c" * 64 + "'",
-        "DELETE FROM release_manifests",
-        "UPDATE release_approvals SET reason='tampered'",
-        "DELETE FROM release_approvals",
+    mutations = (
+        (
+            "UPDATE release_manifests SET manifest_hash='" + "c" * 64 + "'",
+            "release manifests are immutable",
+        ),
+        ("DELETE FROM release_manifests", "release manifests are immutable"),
+        (
+            "UPDATE release_approvals SET reason='tampered'",
+            "release approvals are append-only",
+        ),
+        ("DELETE FROM release_approvals", "release approvals are append-only"),
     )
     with engine.connect() as connection:
         outer = connection.begin()
-        for statement in statements:
-            with pytest.raises(DBAPIError):
+        for statement, expected_message in mutations:
+            with pytest.raises(DBAPIError) as error:
                 with connection.begin_nested():
                     connection.execute(text(statement))
+            _assert_postgresql_error(
+                error,
+                sqlstate="23514",
+                message=expected_message,
+            )
             assert connection.scalar(text("SELECT 1")) == 1
             assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
             assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
@@ -555,6 +582,8 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
                         'alice@example.com', 'human', 'viewer', 'receipt-role',
                         'wrong role', :now, :now)""",
                 {"space": space_id, "role_hash": "c" * 64, "now": now},
+                "23514",
+                "ck_release_approvals_role",
             ),
             (
                 """INSERT INTO release_approvals
@@ -569,6 +598,8 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
                     "wrong_hash": "d" * 64,
                     "now": now,
                 },
+                "23503",
+                "fk_release_approvals_exact_manifest",
             ),
             (
                 """INSERT INTO release_approvals
@@ -578,12 +609,19 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
                         'alice@example.com', 'human', 'release_approver', 'receipt-space',
                         'cross space', :now, :now)""",
                 {"snapshot": snapshot_id, "hash": manifest_hash, "now": now},
+                "23503",
+                "fk_release_approvals_exact_manifest",
             ),
         )
-        for statement, parameters in invalid_approvals:
-            with pytest.raises(DBAPIError):
+        for statement, parameters, expected_state, expected_constraint in invalid_approvals:
+            with pytest.raises(DBAPIError) as error:
                 with connection.begin_nested():
                     connection.execute(text(statement), parameters)
+            _assert_postgresql_error(
+                error,
+                sqlstate=expected_state,
+                constraint=expected_constraint,
+            )
             assert connection.scalar(text("SELECT 1")) == 1
             assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
             assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
