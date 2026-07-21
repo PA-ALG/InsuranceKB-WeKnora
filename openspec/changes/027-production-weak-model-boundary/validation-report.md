@@ -94,10 +94,10 @@ parameters to zero-model product/knowledge functions.
 - Task 2 frozen contracts: complete for strict request/rich binding,
   `AdmissionVerifier`, opaque `VerifiedAdmission`, verification receipt, opaque
   `IssuedModelPermit` and receipt-only `ModelPermitView`.
-- Task 3 policy/permit/decision evaluator and production composition authority are complete.
-  Task 4 remains pending for canonical verifier-registry integration,
-  `GuardedModelClient`, transport enforcement, trusted call-scope recomputation and
-  production entrypoint closure.
+- Task 3 policy/permit/decision evaluator and the composition-domain seal/evaluator hook
+  are complete. Task 4 remains pending for the canonical verifier registry, the actual
+  production composition root, `GuardedModelClient`, transport enforcement, trusted
+  call-scope recomputation and production entrypoint wiring/closure.
 - Provider contract or quality claim: none.
 - Product CLI and knowledge importer/merge/review/source-lifecycle/publisher exports:
   recorded as zero-model boundaries that keep their own governance/approval/snapshot

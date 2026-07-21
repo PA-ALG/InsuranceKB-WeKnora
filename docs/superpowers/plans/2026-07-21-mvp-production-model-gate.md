@@ -43,7 +43,7 @@
 
 ### Task 1: Freeze the entrypoint inventory and baseline
 
-- [ ] **Step 1: Read the contract and enumerate current entrypoints**
+- [x] **Step 1: Read the contract and enumerate current entrypoints**
 
 Run:
 
@@ -53,11 +53,11 @@ rg -n "OpenAICompatClient\(|LiteLLMClient\(|JudgeDispatcher\(|def main|publish_p
 
 Expected: every transport construction and public command is visible; no files are changed.
 
-- [ ] **Step 2: Write `entrypoint-inventory.md`**
+- [x] **Step 2: Write `entrypoint-inventory.md`**
 
 For each CLI/API/export record: path, callable, production/offline/read-only classification, model role, current model source, required guard, and owner. Explicitly classify merge/release as zero-model; do not add a permit parameter merely to zero-model code.
 
-- [ ] **Step 3: Run the focused pre-change baseline**
+- [x] **Step 3: Run the focused pre-change baseline**
 
 Run:
 
@@ -68,13 +68,13 @@ uv run pytest -q tests/test_config.py tests/test_compiler_llm.py tests/test_sour
 
 Expected: PASS. Record count/time in the validation report draft; do not run the full suite.
 
-- [ ] **Step 4: Human commit boundary**
+- [x] **Step 4: Human commit boundary**
 
 Report inventory and baseline only. Do not commit/push.
 
 ### Task 2: Immutable identity and policy decision
 
-- [ ] **Step 1: Write the PWB1 RED tests**
+- [x] **Step 1: Write the PWB1 RED tests**
 
 Add tests equivalent to:
 
@@ -90,7 +90,7 @@ def test_identity_binds_provider_deployment_role_and_policy() -> None:
     )
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -101,7 +101,7 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "identity or rol
 
 Expected: FAIL with `ModuleNotFoundError: insurance_harness.model_policy` or missing symbols.
 
-- [ ] **Step 3: Implement minimal frozen models**
+- [x] **Step 3: Implement minimal frozen models**
 
 The public shape must remain equivalent to:
 
@@ -134,17 +134,17 @@ class ModelPermitView(BaseModel):
 
 Likewise `ModelPermitView` is only serializable receipt data. The canonical policy uses a non-public issuer to create opaque `IssuedModelPermit` with a process seal; Pydantic construction/model-copy/deserialization cannot create authority. Prefer `GuardedModelClient.call(verified_admission, model_call_context)` so the client internally evaluates/issues/compares before transport, rather than accepting a caller-provided permit. It compares purpose/schema/Space/full-binding/call-scope on every call. Reject blank expected identity, expected/actual mismatch, hand-crafted READY/permit, custom policy/guard injection, cross-Space/binding replay, rolling aliases, non-approved families, role/template mismatch, and expired capabilities.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same test command. Expected: PASS in ≤90 seconds.
 
 ### Task 3: Admission/run binding and audit receipts
 
-- [ ] **Step 1: Write PWB4 RED tests**
+- [x] **Step 1: Write PWB4 RED tests**
 
 Cover: missing independent expected purpose/schema/run identity/revision; unknown/wrong profile pair; wrong run revision; borrowed 020 canonical approval for 030; deriving expected from actual; hand-constructed READY binding; caller-injected verifier; wrong Space/manifest/eligibility/Golden/routing/schema/template/structured-dispatch/model-plan/caps/rights/provenance/integration hash; exact template not in lock; hand-crafted/copied/deserialized permit view; custom policy/guard injection; cross-Space/different-binding permit replay; expired permit; receipt contains no API key or raw prompt and does contain Space/full-binding/call-scope digests.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -153,11 +153,11 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "admission or bo
 
 Expected: at least one assertion FAIL because run binding/receipts are not implemented.
 
-- [ ] **Step 3: Implement evaluator and receipt sink**
+- [x] **Step 3: Implement evaluator and receipt sink**
 
 Freeze the 027-owned Protocol and both controlled capability issuers. Production composition selects the verifier by independent expected purpose/schema and the canonical model policy by code/config identity; it accepts no CLI/config verifier/policy/issuer override. Applicable 020/030 adapters implement the Protocol and do their own signature/full-request checks; 027 does not mutate their records or duplicate evaluation. The common model policy accepts only `VerifiedAdmission`, compares purpose/schema/run/Space plus call role/model plan/exact template membership, and issues an opaque permit bound to the full binding and call scope. Every allow/deny returns a structured `PolicyReceipt` containing decision, reason code, identity key, run/template/model-plan hashes, Space, verified-binding/call-scope digests, timestamp, and request hash only.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same command. Expected: PASS; secret sentinel absent from serialized receipts.
 
