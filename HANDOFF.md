@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-21（业务方已批准 Integration-first MVP：23 份来源、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice。）
+> 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份来源、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审，Wave 1 开始分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice。）
 
 > [!IMPORTANT]
 > **项目核心方向与 MVP 已于 2026-07-21 批准：Enterprise LLM Wiki 是产品本体，WeKnora 是企业底座，Harness 是弱模型知识编译与治理运行时。** 业务方已声明 LLM-wiki-black 为项目方完整著作权资产，可把其 TS 能力选择性迁移/重构到统一 Python 3.12 Harness；原 TS 不作为第二套生产 runtime，第三方许可证单独管理。当前 CLI/config 尚未硬禁强模型路径，MVP admission 也未 READY，因此不得真实生产运行。P-1 release namespace/原子 active alias 是直接 WeKnora 生产 Wiki UI 的前置，但不是 MVP 前置；MVP 使用 ACL 隔离 staging + Harness Reader/MCP 同快照。任何会话认领任务前先读[北极星设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)和[MVP 控制基准](docs/insurance-kb/23-mvp-control-board.md)。
@@ -10,11 +10,11 @@
 
 | 字段 | 当前值 |
 |---|---|
-| 状态 / 截止 | `PLANNING READY`；目标 7–10 个工作日，起点以首个 OpenSpec 执行窗口认领日计 |
+| 状态 / 截止 | `WAVE 1 STARTING`；目标 7–10 个工作日，执行起点 2026-07-22 |
 | 冻结范围 | 23 来源、5 产品、医疗/终身寿险/年金；含混合产品、后续修订/冲突、FAQ JSON |
 | 当前 Gate | `NS-RIGHTS=recorded`；`NS-0=pending`；`MVP admission=pending`；P-1/13 产品 baseline 非 MVP 阻断 |
-| 当前 Wave | G：占号/任务卡；随后 S(027→028)、K(029+010 thin)、M(013+032)、I(030) |
-| 最多 3 个 blocker | 027 未完成；MVP source manifest/hash 未冻结；执行 OpenSpec 尚未通过独立计划复核 |
+| 当前 Wave | S0=027、K0=029、I0=030 manifest/fixtures 并发；既有 031 operational admission 单独收口，之后 M=013+032 |
+| 最多 3 个 blocker | 027 未完成；029 approved serving authority 未完成；MVP source manifest/hash 未冻结 |
 | 完成定义 | 多文档归属、弱模型 Harness、Evidence、冲突、人审、hash 批准、Reader/MCP 同快照、结构化直入、更新/告警/回滚全部通过 |
 | 详细范围 | `docs/insurance-kb/23-mvp-control-board.md`；完整企业路线见 `16-roadmap.md` |
 

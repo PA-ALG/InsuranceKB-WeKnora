@@ -34,12 +34,12 @@
 | 024 | extraction-recall-uplift | ⚠️ 第一方软件范围已合入；真实收益未验证 | 028 可选择性复用；030 证明 MVP slice 效果，完整 020 验证留 M2 |
 | 025 | merge-weak-value-guard | ⏭ 后置 | 非 MVP 阻断；排在完整 010 与企业 merge hardening 后；迁移 0011 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
-| 027 | production-weak-model-boundary | 🧭 已占号，待执行 OpenSpec | MVP S0；所有生产入口硬禁强/未知/rolling model；零真实模型前置 |
-| 028 | template-compilation-runtime-mvp | 🧭 已占号，待执行 OpenSpec | MVP S1；TemplatePackage + CompilationJob/StageRun/Attempt/Receipt/Alert，复用现有主链 |
-| 029 | release-manifest-approval-mvp | 🧭 已占号，待执行 OpenSpec | MVP K0；完整 manifest hash 真人批准、CAS CurrentRelease、P-1 前 Harness serving |
-| 030 | enterprise-wiki-mvp-slice | 🧭 已占号，待执行 OpenSpec | 23 来源/5 产品 manifest、独立 admission、fixtures、真实 E2E 与验收报告 |
-| 032 | human-wiki-reader-mvp | 🧭 已占号，待执行 OpenSpec | MVP M1；独立只读产品 Wiki，消费 029 serving，与 013 同 snapshot/hash；不复用 008 写工作台；031 保留给既有 operational-run-admission |
-| 032+ | （空闲） | | 先占号再开目录 |
+| 027 | production-weak-model-boundary | 🟡 正式 OpenSpec，Wave 1 待实施 | MVP S0；所有生产入口硬禁强/未知/rolling model；零真实模型前置 |
+| 028 | template-compilation-runtime-mvp | 🟡 正式 OpenSpec，等待 027 | MVP S1；TemplatePackage + CompilationJob/StageRun/Attempt/Receipt/Alert，复用现有主链 |
+| 029 | release-manifest-approval-mvp | 🟡 正式 OpenSpec，Wave 1 待实施 | MVP K0；完整 manifest hash 真人批准、CAS CurrentRelease、P-1 前 Harness serving |
+| 030 | enterprise-wiki-mvp-slice | 🟡 正式 OpenSpec，I0 可实施 | 23 来源/5 产品 manifest、独立 admission、fixtures、真实 E2E 与验收报告 |
+| 032 | human-wiki-reader-mvp | 🟡 正式 OpenSpec，等待 029/013 | MVP M1；独立只读产品 Wiki，消费 029 serving，与 013 同 snapshot/hash；不复用 008 写工作台；031 保留给既有 operational-run-admission |
+| 033+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
