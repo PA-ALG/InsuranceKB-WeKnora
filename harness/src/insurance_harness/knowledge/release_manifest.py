@@ -538,7 +538,11 @@ def _derive_directory_and_relationships(
             if evidence.stale_at is not None:
                 raise ReleaseManifestBuildError("frozen evidence stale state is invalid")
             linked = evidence.lineage_status == "linked"
-            if linked != (evidence.chunk_id is not None and evidence.chunk_hash is not None):
+            if linked and (evidence.chunk_id is None or evidence.chunk_hash is None):
+                raise ReleaseManifestBuildError("frozen evidence lineage shape is invalid")
+            if not linked and (
+                evidence.chunk_id is not None or evidence.chunk_hash is not None
+            ):
                 raise ReleaseManifestBuildError("frozen evidence lineage shape is invalid")
         key = (fact.product_id, fact.product_version_id)
         identity: dict[str, object] = {

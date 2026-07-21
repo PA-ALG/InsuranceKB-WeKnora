@@ -853,6 +853,29 @@ def test_ra1_snapshot_builder_rejects_invalid_frozen_evidence_closure(
 
 
 @pytest.mark.parametrize(
+    ("lineage_status", "cleared_field"),
+    [("page_only", "chunk_hash"), ("ambiguous", "chunk_id")],
+)
+def test_ra1_nonlinked_evidence_rejects_any_single_chunk_identity_residue(
+    kb_session: Session,
+    lineage_status: str,
+    cleared_field: str,
+) -> None:
+    def leave_one_chunk_identity(facts: list[dict[str, Any]]) -> None:
+        evidence = facts[0]["evidence"][0]
+        evidence["lineage_status"] = lineage_status
+        evidence[cleared_field] = None
+
+    suffix = f"evidence-{lineage_status}-residue"
+    scope, _claim = _persist_projection_with_pages(
+        kb_session, suffix=suffix, fact_mutator=leave_one_chunk_identity
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match="evidence lineage"):
+        _build_from_snapshot(kb_session, scope, f"snapshot-{suffix}")
+
+
+@pytest.mark.parametrize(
     "mutator",
     [
         lambda pages: pages[0]["page_metadata"].__setitem__(
