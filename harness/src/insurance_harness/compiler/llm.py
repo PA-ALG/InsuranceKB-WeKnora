@@ -178,3 +178,7 @@ class LiteLLMClient:
             ],
         )
         return cast(str, resp.choices[0].message.content or "")
+
+
+class GapfillBudgetExhausted(RuntimeError):
+    """024 E3 R2：补漏预算耗尽——出站前拒绝，绝不发请求。"""

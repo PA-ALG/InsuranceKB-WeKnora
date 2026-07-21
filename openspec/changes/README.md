@@ -31,7 +31,7 @@
 | 022 | review-hardening | ✅ 已交付 | ⚠️ 编号冲突历史记录：与下行同号，两者均已合入，**目录不改名**，冲突就此冻结 |
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
-| 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
+| 024 | extraction-recall-uplift | ✅ 软件实现完成（PR #13） | 轨道 L5；durable attempt ledger + E1～E7 + A10 双侧护栏；真实召回/非退化证据仍由 020 D4/D4b 承接 |
 | 025 | merge-weak-value-guard | 📂 三版定稿（codex PR #17 两轮复审收口，可认领） | 合并前置弱值门槛：抑制=有资格前提的裁决（E1~E5：三态/高风险/权威/**全权威时间切片+effective_to 贯通**/基线复核）+ 可证明偏序 SpecificityRelation（score 仅 008 排序）+ **root+events 双表**可恢复生命周期（来源 revision 状态机，stale 不复活）+ 三类失败语义/锁/exact-once；G1~G9 strict 规格；迁移 0011（docs 03 §8 已先行登记，双方言触发器）；**实现候 021（规格已提出未实现）**，可与 024 同一执行者顺手接 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027+ | （空闲） | | 先占号再开目录 |

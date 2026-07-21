@@ -23,6 +23,7 @@ UnknownReason = Literal[
     "not_found",  # 所有候选章节均"未提及" E4.1
     "dead_letter",  # 传输级失败超重试上限 E1.2
     "missing_in_response",  # 模型未返回该字段
+    "incompatible_value",  # 字段-值语义不兼容（024 E6，Q012 护栏）
 ]
 
 CandidateOrigin = Literal["extract", "gapfill", "vote", "judge", "fastpath"]
@@ -148,6 +149,8 @@ class RunManifest(BaseModel):
     dead_letters: list[DeadLetter] = Field(default_factory=list)
     pending_judge_count: int = 0
     template_registry_version: str = ""  # 006 F3：空 = 未启用 fast path
+    # 024 E7：变体注册表+assignment policy 内容摘要（入 run/checkpoint 身份，resume 不一致即拒）
+    variant_digest: str = ""
     fastpath_fields: int = 0  # fast path 命中并通过校验链的字段总数
 
 
@@ -161,6 +164,43 @@ class DocPayload(BaseModel):
     family_id: str = ""
 
 
+class AuditAttempt(BaseModel):
+    """一次真实出站 LLM 调用（E7 attempt 链）：在调用点追加，随 pred 持久化。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    attempt_id: str
+    stage: str  # extract / extract_retry / vote / judge / gapfill
+    prompt_version: str
+    request_key: str
+    outcome: str  # parsed / parse_failed / no_value …
+
+
+class ExtractionAudit(BaseModel):
+    """024 E7：单条 pred 的抽取审计（随 pred.jsonl 持久化，020 D4 A/B 对账的唯一依据）。
+
+    - ``prompt_variant_used``：该值**实际经过**的模板标识（baseline@…/fastpath/
+      gapfill-default@v1/targeted@vN）——注册表 membership 不得冒充实际使用；
+    - ``variant_assignment``：实验分桶臂（control/treatment；实验关闭时 None）；
+    - ``winning_origin``：产生最终值的路径（extract/vote/judge/fastpath/gapfill）；
+    - ``compat_reject``：字段-值兼容性拒绝原因（E6.3，无则 None）；
+    - ``pointer_terms``：source_pointer 解析出的定向检索词（E6/补漏审计）。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    prompt_variant_used: str
+    variant_assignment: str | None = None
+    winning_origin: str = "extract"
+    # E7 R2：attempt 链——每次真实出站调用一条；winning_attempt_id 指向真正产生
+    # 最终值的 attempt（fastpath 等非 LLM 来源为 None）。prompt_variant_used 由
+    # winning attempt 派生（无 winner 时 fastpath/baseline 兜底），不再有继承歧义。
+    attempts: tuple[AuditAttempt, ...] = ()
+    winning_attempt_id: str | None = None
+    compat_reject: str | None = None
+    pointer_terms: tuple[str, ...] = ()
+
+
 class PredRecord(GoldenRecord):
     """pred JSONL 行格式：GoldenRecord 对齐 + confidence 扩展（E5.1，eval 忽略未知字段）。"""
 
@@ -171,3 +211,5 @@ class PredRecord(GoldenRecord):
     data_quality: DataQuality = "llm_extracted"
     # 022 RH3.1：新产物显式标记来源；缺字段的历史 JSONL 保持 legacy 兼容。
     source_mode: SourceMode = "legacy"
+    # 024 E7：类型化抽取审计（历史 JSONL 缺字段 → None，向后兼容；eval 忽略未知字段）
+    extraction_audit: ExtractionAudit | None = None

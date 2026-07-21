@@ -1,6 +1,6 @@
 # 024 · 抽取召回提升（extract_empty 主攻 + 值粒度对齐）
 
-> 状态：**提案（2026-07-16，已条款化，可认领）**。轨道 L5（见 docs/insurance-kb/22），零真实模型调用，即刻可从 main 开工。
+> 状态：**软件实现完成（2026-07-21，PR #13 为集成载体）**。轨道 L5（见 docs/insurance-kb/22）；本 change 的软件验证零真实模型调用，真实效果结论仍由 020 D4 承接。
 > 设计权威：005 validation-report（归因清单=本 change 的工单来源）、04（管道结构）、11（模板/表格）、21（复审前自测）。
 
 ## 为什么做
@@ -15,7 +15,7 @@
 2. **prompt 变体机制**：字段组级变体注册（配置化、确定性选择、**版本化标识**入 pred 元数据——020 A/B 以此对账）；
 3. **定向补漏增强**：触发条件 **schema 驱动**（必填/期望字段 + 空/unknown/source_pointer + 候选章节 + 预算），复用既有 gapfill 链与 evidence 回验（反幻觉门槛不降）；
 4. **值粒度对齐指引**：字段级抽取指引并入变体机制（不改 pred schema、不动尺子；效果由 020 D4 评分）；
-5. **后处理非退化合同**：在**未变更的既有录制集**上，清洗/兼容性/解析改动不使 3 基线产品回放评分下降（进 deterministic 门禁）；禁止用人工新 fixture 分数暗示提升；
+5. **后处理机制合同**：冻结 synthetic fixture 的清洗/兼容性/解析/编排行为并钉住 request key；它不构成真实非退化证据。真实同录制集 differential replay 明确留在未完成的 **020 D4b**；禁止用人工新 fixture 分数暗示提升；
 6. **抽取侧弱值/兼容性护栏**（LLM-wiki-black A10 承接，2026-07-16 代码级审计确认为唯一未迁移真空）：`WEAK_UNACTIONABLE`/`REFERENCE_ONLY` 两族清洗模式 + 字段-值语义兼容性校验（Q012/Q026 历史 bug 固化为回放用例）。
 
 ## 不做什么
@@ -27,4 +27,4 @@
 
 ## 影响
 
-文件域：仅 `harness/src/insurance_harness/compiler/`（extract/gapfill/prompts/pipeline 接线点；routing 关键词表允许按 005 先例补充）。无迁移。与轨道 L1–L4 文件域不相交。
+文件域：`harness/src/insurance_harness/compiler/`、`harness/src/insurance_harness/schemas/`、对应测试与本 change 文档。每个 run 新增本地 `llm-attempts.sqlite` 事实账本；无 Alembic/业务数据库迁移。与轨道 L1–L4 文件域不相交。
