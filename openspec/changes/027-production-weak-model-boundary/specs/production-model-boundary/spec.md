@@ -13,12 +13,12 @@
 
 ### Requirement: PWB2 所有生产入口共用单一策略
 
-extract、gap、judge/consensus、conflict suggestion、merge candidate promotion 与 release command SHALL 共用同一 policy decision，不得各自复制 allowlist。缺 policy/permit 的 production 调用 SHALL fail closed。
+所有会调用模型的 extract、gap、judge/consensus 与 conflict-suggestion entrypoint SHALL 通过 composition root 注入的 canonical `GuardedModelClient`，不得各自复制 allowlist，也不得接收 caller-supplied permit/policy/guard。merge candidate promotion 与 release command SHALL 明确证明为零模型路径；它们不得为了满足形状而接收伪 permit。缺 canonical guard 或 verified admission 的 production 模型调用 SHALL fail closed。
 
 #### Scenario: 旁路枚举测试
 
 - **WHEN** 测试枚举所有公开 CLI/API/package entrypoint
-- **THEN** 每个 production entrypoint 都要求同一 `ModelPermit` 或明确证明零模型
+- **THEN** 每个 production 模型 entrypoint 都调用同一 canonical `GuardedModelClient`，其余 entrypoint 有明确零模型证明；公开 permit view 从不作为调用参数
 
 ### Requirement: PWB3 禁止强模型 fallback
 
@@ -31,12 +31,40 @@ extract、gap、judge/consensus、conflict suggestion、merge candidate promotio
 
 ### Requirement: PWB4 Admission 与审计绑定
 
-production permit SHALL 绑定适用 run admission、template/model plan hash 和调用角色；permit 不匹配、过期或 run 非 READY 时零网络调用。每次允许/拒绝决定都产生不含 secret 的结构化 receipt。
+027 SHALL 冻结唯一跨包 admission 边界：`StrictAdmissionRequestBinding`、只读 rich `AdmissionBinding` view、opaque `VerifiedAdmission` capability，以及 `AdmissionVerifier.verify(StrictAdmissionRequestBinding) -> VerifiedAdmission` Protocol。030 只实现 verifier，028 只消费该 Protocol；两者不得复制 DTO/port。
+
+production request/config SHALL 显式携带独立、不可变且必填的 expected purpose、run schema version、run identity/revision；这些期望值不得从 admission artifact 的 actual 值反推、缺省或回填。production composition root SHALL 先用 expected purpose/schema 从代码 registry 选择唯一 verifier，再调用 verify；CLI/config/PolicyContext SHALL NOT 接受 caller-supplied `AdmissionBinding`、`state=READY` 或 verifier override。`VerifiedAdmission` SHALL 只能由 canonical verifier 的受控非公开 factory 签发，包含不可序列化的进程内 seal 与 verification receipt；公开构造 rich DTO 不得成为 policy capability，test fake 只能存在于显式 test-only helper 且不得作为 production export。
+
+capability 的 binding view 至少携带 actual purpose/schema、run identity/revision、state、artifact hash/expiry、Space、manifest/eligibility、Golden Slice、routing policy、schema/template lock、structured-dispatch lock、model plan、resource caps、rights/provenance、integration SHA 与批准 model roles 的 canonical hashes/identities，并产生覆盖全 binding + strict request 的 `verified_binding_digest`。027 不得重复实现 030 验签/evaluator；其单一 model policy 只消费 `VerifiedAdmission`，在任何网络调用前比较 expected/actual purpose/schema/run、Space、调用角色、model plan 与 exact template 对批准 template lock 的成员证明。
+
+production policy SHALL 通过非公开 issuer 签发 opaque `IssuedModelPermit` capability；公开/可序列化的 permit view 只用于 receipt，不构成调用权威。permit capability 至少绑定 purpose、run schema、Space、run identity/revision、admission artifact hash、`verified_binding_digest`、exact template hash、model plan hash、model identity/role、call-scope hash 与 expiry，并携带不可由 Pydantic 构造/copy/deserialize 伪造的进程 seal。
+
+`GuardedModelClient` SHALL 由 production composition root 注入 canonical policy/transport；CLI/config/caller 不得传入自定义 policy、permit issuer、permit capability 或 guard override。每次调用接收 `VerifiedAdmission + ModelCallContext`，由 client 内部调用 canonical policy evaluate/issue，再逐字段比较 issued permit scope；手工 DTO、复制 view 或 test fake 均不得进入 production transport。permit 不得仅凭相同 run/template/model 在另一 Space、manifest、template lock、integration SHA 或 call scope 重放。每次允许/拒绝 receipt SHALL 包含 permit identity、Space、verified-binding/call-scope digests 且不含 secret。任一身份缺失/不匹配、过期或 run 非 READY 时零网络调用。
 
 #### Scenario: 不能借用 020 canonical 状态
 
 - **WHEN** 030 MVP run 请求使用 020 canonical admission 的 approval/permit
 - **THEN** 因 run identity 不匹配被拒绝
+
+#### Scenario: 期望身份不得从 admission 自证
+
+- **WHEN** production request 未显式提供 expected purpose/schema/run identity/revision，或实现试图用 admission actual 值同时充当 expected 与 actual
+- **THEN** 在 provider client 构造前 fail closed，模型调用数为 0
+
+#### Scenario: 手工 READY DTO 不构成 verified capability
+
+- **WHEN** production caller 手工构造 `AdmissionBinding(state=READY)`、传入自定义 verifier，或绕过 canonical registry 直接调用 model policy
+- **THEN** production composition/PolicyContext 在 client 构造前拒绝；只有 canonical verifier 返回的 opaque capability 可继续，模型调用数为 0
+
+#### Scenario: permit 不得跨 verified scope 重放
+
+- **WHEN** 已签发 permit 被用于另一 Space，或使用相同 run/model/template 但不同 manifest、template lock、integration SHA、job/stage call scope 的 context
+- **THEN** GuardedModelClient 在 transport 前拒绝，provider 调用数为 0，receipt 记录 scope/digest mismatch
+
+#### Scenario: 手工 permit 或自定义 guard 不构成调用权威
+
+- **WHEN** caller 构造/复制/反序列化 permit view，替换 identity/role/expiry，或向 production entrypoint 注入自定义 policy/guard
+- **THEN** canonical GuardedModelClient 不接受该输入，transport 调用数为 0；只有内部 policy issuer 产生的 opaque permit 可调用 transport
 
 ### Requirement: PWB5 零模型验证
 

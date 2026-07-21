@@ -16,8 +16,8 @@
 - Dependencies: 029 exact `ApprovedSnapshotReader.read_current` and exported canonical DTOs, plus 013 `access/tokens.py`; service work can start with an exact fake, final integration waits for both.
 - Risk: **A** for Space/auth, **C** for read-only UI.
 - Use @superpowers:test-driven-development and @superpowers:verification-before-completion.
-- Allowed: new `human_reader/`, its templates/tests/report. Forbidden: `workbench/`, `knowledge/`, `mcp/`, publisher, WeKnora write adapter, schema editor.
-- AI session does not commit/push.
+- Allowed: new `human_reader/`, its templates/tests/report, plus read-only imports from M0-owned `access/`. Forbidden: modifying `access/`, `workbench/`, `knowledge/`, `mcp/`, publisher, WeKnora write adapter, schema editor.
+- This campaign has explicit business-owner authorization to commit, push, and open a ready PR after verification; the execution session SHALL NOT self-merge.
 
 ## File map
 
@@ -183,4 +183,4 @@ Reviewer checks HR1–HR6 and rejects workbench/publisher scope creep. Run full 
 
 - [ ] **Step 5: Human commit boundary**
 
-Report exact diff/tests/NOT RUN and stop. Do not commit/push.
+Report exact diff/tests/NOT RUN and stop feature work. Under this campaign's explicit authorization, commit/push and open a ready PR after review; do not self-merge.

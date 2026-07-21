@@ -4,9 +4,9 @@
 
 **Goal:** Implement OpenSpec 027 so every production model call is bound to an immutable approved weak-model identity and the matching run admission, with strong/unknown/rolling fallbacks rejected before network I/O.
 
-**Architecture:** Add one `model_policy` package that owns identity, permit, decision, receipt, and guarded-client behavior. Existing compiler clients remain transport primitives; production entrypoints must obtain a `ModelPermit` from the shared evaluator, while replay/offline-golden paths stay explicit and cannot be selected as production fallbacks.
+**Architecture:** Add one `model_policy` package that owns the cross-package strict admission request/rich binding/opaque verified capability/verifier Protocol plus model identity, internally issued scoped capability, decision, receipt, and guarded-client behavior. A production composition root selects the canonical verifier from independent expected purpose/schema and accepts no caller-supplied READY/binding/verifier. Existing compiler clients remain transport primitives; every model-capable production entrypoint invokes the canonical `GuardedModelClient` with `VerifiedAdmission + ModelCallContext`, while only its non-public policy issuer may mint an opaque `IssuedModelPermit`. Replay/offline-golden paths stay explicit and cannot be selected as production fallbacks.
 
-**Tech Stack:** Python 3.12, Pydantic v2, existing run-admission models, httpx fakes/respx, pytest, Ruff, mypy.
+**Tech Stack:** Python 3.12, Pydantic v2, Protocol/opaque capability boundary, existing 020 adapter plus future 030 verifier implementation, httpx fakes/respx, pytest, Ruff, mypy.
 
 ---
 
@@ -18,14 +18,15 @@
 - Allowed domain: `model_policy/`, `config.py`, minimal `compiler/cli.py`, `compiler/judge.py`, `compiler/llm.py` wiring, 027 tests/artifacts.
 - S0/027 is the sole owner of global `harness/src/insurance_harness/config.py` in Wave 1 and merges before 028/013 integration. 028 and 013 use package-local immutable settings and must not edit this file; any later shared alias is a separate serialized integration patch.
 - Forbidden: new extraction logic, templates, knowledge tables, releases, real provider calls, 020 canonical artifact mutation.
-- This execution session does **not** commit or push. At each “human commit boundary,” stop, report the exact diff/tests, and let the human owner commit.
+- This campaign has explicit business-owner authorization to commit, push, and open a ready PR after verification; the execution session SHALL NOT self-merge and still stops for G review.
 
 ## File map
 
 **Create**
 
 - `harness/src/insurance_harness/model_policy/__init__.py` — stable public exports only.
-- `harness/src/insurance_harness/model_policy/models.py` — immutable model identity, role, run binding, permit, decision, receipt.
+- `harness/src/insurance_harness/model_policy/admission.py` — `StrictAdmissionRequestBinding`, rich binding view, opaque `VerifiedAdmission`, controlled issuer, and `AdmissionVerifier` Protocol; no profile evaluator.
+- `harness/src/insurance_harness/model_policy/models.py` — immutable model identity, role, full-scope permit, decision, receipt.
 - `harness/src/insurance_harness/model_policy/policy.py` — one fail-closed evaluator and approved-family/rolling-alias rules.
 - `harness/src/insurance_harness/model_policy/gateway.py` — `GuardedModelClient` wrapper and receipt sink protocol.
 - `harness/tests/test_production_model_boundary_027.py` — PWB1/PWB3/PWB4 behavioral tests.
@@ -37,7 +38,7 @@
 
 - `harness/src/insurance_harness/config.py` — explicit production profile, immutable identity fields, policy version; deprecate old judge fallback in production.
 - `harness/src/insurance_harness/compiler/llm.py` — expose transport behind the guarded wrapper; do not embed a second allowlist.
-- `harness/src/insurance_harness/compiler/cli.py` — production `extract` obtains/validates permit before constructing a network client.
+- `harness/src/insurance_harness/compiler/cli.py` — production `extract` builds the strict request, obtains `VerifiedAdmission` through canonical composition, and invokes the guarded client; it never accepts or constructs a permit.
 - `harness/src/insurance_harness/compiler/judge.py` — gateway judge accepts only guarded weak-model client in production; `claude-session` stays offline/manual only.
 
 ### Task 1: Freeze the entrypoint inventory and baseline
@@ -113,18 +114,25 @@ class ModelIdentity(BaseModel):
     role: Literal["classify", "extract", "gap", "verify", "consensus"]
     policy_version: str
 
-class ModelPermit(BaseModel):
+class ModelPermitView(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     identity: ModelIdentity
+    purpose: str
+    run_schema_version: str
+    space_id: str
     run_id: str
     run_revision: str
     admission_hash: str
+    verified_binding_digest: str
     template_hash: str
     model_plan_hash: str
+    call_scope_hash: str
     expires_at: AwareDatetime
 ```
 
-Reject blank values, rolling aliases (`latest`, unversioned deployment names), non-approved families, role mismatch, and expired permits in one evaluator.
+`StrictAdmissionRequestBinding` carries independent expected purpose/schema/run identity and every request hash: admission artifact, Space, manifest/eligibility, Golden Slice, routing policy, schema/template lock, structured-dispatch lock, model plan/deployment roles, resource caps, rights/provenance, and integration SHA. `AdmissionBinding` preserves the actual values plus a canonical full-binding digest, but raw DTO construction is not authority. `VerifiedAdmission` has a non-public controlled issuer/seal and verification receipt; only a canonical `AdmissionVerifier` selected by production composition may issue it. `PolicyContext` accepts this opaque capability, never caller-supplied binding/READY/verifier.
+
+Likewise `ModelPermitView` is only serializable receipt data. The canonical policy uses a non-public issuer to create opaque `IssuedModelPermit` with a process seal; Pydantic construction/model-copy/deserialization cannot create authority. Prefer `GuardedModelClient.call(verified_admission, model_call_context)` so the client internally evaluates/issues/compares before transport, rather than accepting a caller-provided permit. It compares purpose/schema/Space/full-binding/call-scope on every call. Reject blank expected identity, expected/actual mismatch, hand-crafted READY/permit, custom policy/guard injection, cross-Space/binding replay, rolling aliases, non-approved families, role/template mismatch, and expired capabilities.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -134,7 +142,7 @@ Run the same test command. Expected: PASS in ≤90 seconds.
 
 - [ ] **Step 1: Write PWB4 RED tests**
 
-Cover: wrong run revision; borrowed 020 canonical approval for 030; wrong template/model-plan hash; expired permit; READY false; receipt contains no API key or raw prompt.
+Cover: missing independent expected purpose/schema/run identity/revision; unknown/wrong profile pair; wrong run revision; borrowed 020 canonical approval for 030; deriving expected from actual; hand-constructed READY binding; caller-injected verifier; wrong Space/manifest/eligibility/Golden/routing/schema/template/structured-dispatch/model-plan/caps/rights/provenance/integration hash; exact template not in lock; hand-crafted/copied/deserialized permit view; custom policy/guard injection; cross-Space/different-binding permit replay; expired permit; receipt contains no API key or raw prompt and does contain Space/full-binding/call-scope digests.
 
 - [ ] **Step 2: Run RED**
 
@@ -147,7 +155,7 @@ Expected: at least one assertion FAIL because run binding/receipts are not imple
 
 - [ ] **Step 3: Implement evaluator and receipt sink**
 
-Use a narrow adapter over existing admission artifacts; do not mutate 020 records. Every allow/deny returns a structured `PolicyReceipt` containing decision, reason code, identity key, run/template/model-plan hashes, timestamp, and request hash only.
+Freeze the 027-owned Protocol and both controlled capability issuers. Production composition selects the verifier by independent expected purpose/schema and the canonical model policy by code/config identity; it accepts no CLI/config verifier/policy/issuer override. Applicable 020/030 adapters implement the Protocol and do their own signature/full-request checks; 027 does not mutate their records or duplicate evaluation. The common model policy accepts only `VerifiedAdmission`, compares purpose/schema/run/Space plus call role/model plan/exact template membership, and issues an opaque permit bound to the full binding and call scope. Every allow/deny returns a structured `PolicyReceipt` containing decision, reason code, identity key, run/template/model-plan hashes, Space, verified-binding/call-scope digests, timestamp, and request hash only.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -170,7 +178,7 @@ Expected: FAIL before wrapper implementation.
 
 - [ ] **Step 3: Implement `GuardedModelClient`**
 
-It must call the evaluator before delegating, persist a decision receipt for both allow/deny, and never choose another model. Retry selection belongs to 028 and may only reuse an approved permit/plan.
+It accepts `VerifiedAdmission + ModelCallContext`, calls the canonical policy internally, receives an opaque issued permit through the non-public issuer, compares all scopes, persists a decision receipt for both allow/deny, and only then delegates. It never accepts a caller-supplied permit/policy/guard and never chooses another model. Retry selection belongs to 028 and must re-enter this method with the approved plan/context.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -193,11 +201,11 @@ Expected: FAIL for current unguarded `compiler/cli.py`/gateway judge constructio
 
 - [ ] **Step 3: Add production settings without retaining an implicit fallback**
 
-Add only global production-model-policy settings: profile, provider, immutable deployment ID, policy version, admission artifact, and model plan hash. Do not add runtime worker/attempt/time/token or MCP token/host/port/disclaimer keys; those belong to package-local 028/013 settings. In `production`, old `judge_mode=gateway`, `llm_model_judge_fallback`, `claude-session`, unknown IDs, and missing admission all fail before client construction. Replay/goldenset requires an explicit non-production profile.
+Add only global production-model-policy settings: production profile, provider, immutable deployment ID, policy version, admission artifact reference, independently required expected purpose/schema/run identity/revision, and model plan hash. Expected values are frozen request/config data, not late CLI overrides and never default from the artifact. No setting accepts READY/binding/verifier/policy/permit issuer. Do not add runtime worker/attempt/time/token or MCP token/host/port/disclaimer keys; those belong to package-local 028/013 settings. In `production`, old `judge_mode=gateway`, `llm_model_judge_fallback`, `claude-session`, unknown IDs, missing expected identity, and missing admission all fail before client construction. Replay/goldenset requires an explicit non-production profile.
 
 - [ ] **Step 4: Wire CLI and judge to the common evaluator**
 
-Do not spread allowlist checks into CLI branches. Production `extract` builds one `PolicyContext`, receives one permit, then builds guarded clients for the approved roles.
+Do not spread allowlist checks into CLI branches. Production composition builds the strict request, selects the canonical verifier from expected purpose/schema, obtains `VerifiedAdmission`, and constructs guarded clients with the canonical policy/transport. `extract` passes only the capability and `ModelCallContext`; it cannot inject or deserialize permit/policy/guard objects.
 
 - [ ] **Step 5: Run GREEN and regression slice**
 
@@ -234,4 +242,4 @@ Run one complete deterministic suite only after review findings are closed, then
 
 - [ ] **Step 5: Human commit boundary**
 
-Report diff, focused/full/static evidence, NOT RUN, and seven-stage time. Do not commit or push.
+Report diff, focused/full/static evidence, NOT RUN, and seven-stage time. Under this campaign's explicit authorization, commit/push and open a ready PR after both reviews close; do not self-merge.

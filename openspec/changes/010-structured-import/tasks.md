@@ -58,6 +58,7 @@ codex 关闭首轮 8/9 项并接受"源码指纹属 I4 纪律模型之外"的反
 - [ ] T9 批次报告/错误隔离 + dry-run 默认与 apply 一致性（I5）
 - [ ] T10 产品对齐一对多 + FAQ → qa_staging（I7）
 - [ ] T11 端到端：bootstrap + 双 revision 冲突 + 碰撞/重算 + 发布链回溯（冻结 provenance 全套、零回查、零伪引用）（I8）
+- [ ] T11a 028 exact-entry adapter：`register_product_paths` + `bootstrap_manifest_entries` 精确 path/hash、no-root-scan、全量 preflight；`import_known_schema_manifest_entries` 精确 registered source/schema/profile/mapping binding；两者 canonical receipt/count/hash、零 CompilationJob/模型，extra/skipped/hash drift 零写
 - [ ] T12 收尾：validation-report（含下方七组验收矩阵逐项证据 + Q020 合规 + Owner-A 复审记录）→ HANDOFF 更新
 
 ## 验收矩阵（七组，逐项可运行；validation-report 按此对账）

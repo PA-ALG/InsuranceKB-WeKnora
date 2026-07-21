@@ -6,7 +6,7 @@
 ## 1. 当前事实
 
 - 现有底座：001～008、015～019、021、023、024 有软件落点；010 只有 T1～T4；013 MCP 只有占位；020 只有 admission 软件且 13 产品 canonical run 仍 BLOCKED。
-- 业务方已批准 Integration-first MVP：23 来源、5 产品、7–10 工作日。
+- 业务方已批准 Integration-first MVP：23-entry 受控输入、5 产品、7–10 工作日。
 - LLM-wiki-black 第一方权利已记录，可选择性迁移；第三方许可证继续单独管理。
 - 当前真实运行前置：027 NS-0 verified + 030 MVP admission READY。P-1 与完整 020 不阻塞 MVP。
 - 迁移号与共享 DB 域只能串行；其余按文件域并行。
@@ -17,12 +17,13 @@
 |---|---|---|---|---|
 | **G · 总体规划/验收** | 范围、编号、依赖、任务卡、状态、PR/报告检查、最终放行 | 23 控制基准 + 本轮 plans | `docs/insurance-kb/{06,13,16,17,18,21,22,23}`、`HANDOFF.md`、注册表 | 所有功能代码；不跑重测试 |
 | **S0 · Model Gate** | 生产弱模型硬门禁 | 027 | `config.py`、模型/CLI/judge/fallback 入口及 027 tests | `knowledge/`、`structured_import/`、`mcp/`、`workbench/` |
-| **S1 · Template/Runtime** | TemplatePackage、可恢复 CompilationJob/StageRun/Attempt/Receipt/Alert | 028 | 新 `template_packages/`、新 `runtime/`；compiler 仅最小 adapter | `knowledge/`、`mcp/`、`workbench/` |
+| **S1 · Template/Runtime** | TemplatePackage、父 intake → 产品子 compilation job、可恢复 StageRun/Attempt/Receipt/Alert | 028 | 新 `template_packages/`、新 `runtime/`；compiler 仅最小 adapter | `knowledge/`、`mcp/`、`workbench/` |
 | **K0 · Release Authority** | ReleaseManifest、完整 hash 真人批准、CAS CurrentRelease、逻辑回滚 | 029 | `knowledge/`、029 migration/tests | compiler/runtime/MCP/workbench |
-| **K1 · Structured Thin** | 已知 schema product_meta/FAQ 直入完整治理链 | 010 MVP 子集 | `structured_import/`；经批准的 knowledge 接线；010 migration/tests | runtime/MCP/workbench |
-| **M0 · Agent Reader** | MCP core 只读工具与 snapshot/hash envelope | 013 core | `mcp/`、MCP tests | `knowledge/`、compiler/runtime |
+| **K1 · Structured Thin** | `product_meta` 只注册且零 Claim/Evidence；已登记 FAQ fact_assertions 进入完整治理链 | 010 MVP 子集 | `structured_import/`；经批准的 knowledge 接线；additive `product/register.py::register_product_paths` + 003 regression；010 migration/tests | runtime/MCP/workbench |
+| **M0 · Agent Reader** | MCP core 只读工具、共享消费授权与 snapshot/hash envelope | 013 core | `access/`、`mcp/`、对应 tests；`access/` 是 032 只读消费的共享契约 | `knowledge/`、compiler/runtime |
 | **M1 · Human Reader** | 独立只读产品 Wiki，与 MCP 共用批准快照 | 032 | 新 `human_reader/`、032 tests | `knowledge/`、`mcp/`、`workbench/` |
-| **I0 · Slice/Data** | 23-source manifest、fixtures、MVP admission | 030 T1–T3 | 新 `dataset/mvp-*`、030 artifacts/tests | 所有生产模块 |
+| **I0a · Slice/Data** | 23-entry manifest、fixtures、Golden Slice | 030 T1–T2/T4 | 新 `dataset/mvp-*`、030 data artifacts/tests | 所有生产模块 |
+| **I0b · MVP Admission** | 最小 parameterized admission core + 代码固定 030 profile，实现 027 `AdmissionVerifier` 并签发 opaque `VerifiedAdmission` | 030 T3 | 新 `run_admission/{models,evaluator,trust_policy,cli}.py` + `profiles/mvp.py`、030 admission tests、未签名模板与脱敏索引 | 020 evaluator/artifacts、任意 profile DSL、其他生产模块；签名 envelope/request 不入 Git |
 | **I1 · Integration QA** | 真实主链、更新/冲突/告警/同快照/回滚验收 | 030 T4+ | 新 E2E tests/runbook/validation report | 发现功能问题只退回原 Owner，不直接修 |
 
 ### 总体规划会话保留的统一权
@@ -39,8 +40,9 @@
 ```text
 NS-RIGHTS recorded ✅
         │
-        ├─► 027 Model Gate ─► 028 Template/Runtime ─┐
-        │                                           │
+        ├─► 027 Model Gate ─┬─► 028 Template/Runtime ─┐
+        │                   └─► 030 MVP Admission ────┤
+        │                                             │
         ├─► 029 Release Authority ─► 010 thin ──────┼─► 030 Integration/E2E
         │                                           │
         └─► 013 MCP core ─► 032 Human Reader ──────┘
@@ -48,9 +50,9 @@ NS-RIGHTS recorded ✅
 030 source manifest/fixtures 可从 Day 1 开始；真实模型 run 等 027 + MVP admission READY。
 ```
 
-### Wave 0 · 规划与占号（G，当前）
+### Wave 0 · 规划与占号（G，已完成）
 
-- 登记 027～030 与 032；031 保留给既有 operational admission；
+- 登记 027～032；031 为既有 operational admission 收口，032 为 Human Reader；
 - 产出七份可独立认领的实施计划；030 计划内含跨包验收矩阵；
 - 独立 reviewer 复核计划；
 - 不写功能代码。
@@ -59,14 +61,15 @@ NS-RIGHTS recorded ✅
 
 - S0：027，先封模型入口；
 - K0：029 的模型/服务合同与 migration RED；
-- M0：013 core 基于 SnapshotReader protocol/fake 开发；
-- I0：固定 23-source manifest/hash、混合文档/更新/FAQ fixture。
+- M0：013 core 基于 029 `ApprovedSnapshotReader` protocol/fake 开发；
+- I0a：固定 23-entry manifest/hash、混合文档/更新/FAQ fixture；不等待 admission adapter。
 
 027 与其他包文件域不相交，可并行；K0 是唯一迁移 Owner。
 
 ### Wave 2 · 主能力实现（Day 3–5）
 
 - S1：027 合入后实现 028；
+- I0b：027 合入后实现独立 030 MVP admission profile；020 canonical evaluator/artifact 保持不变；
 - K0 → K1 串行：029 后实现 010 thin；
 - M0 与 M1 共享 029 serving contract：013 core 与 032 可并行，最后做同快照 contract integration；
 - I0 只跑零模型 admission/fixture contract。
@@ -77,7 +80,7 @@ NS-RIGHTS recorded ✅
 - 只由 I1 写跨包 E2E 和报告；
 - 功能失败分别退回 S/K/M Owner；
 - 027 + MVP admission READY 后才调用真实弱模型；
-- 验收 23 来源、更新、冲突、Alert、hash 人审、同快照和回滚。
+- 验收 23-entry 受控输入、更新、冲突、Alert、hash 人审、同快照和回滚。
 
 ### Wave 4 · 独立验收（Day 9–10）
 
@@ -89,18 +92,19 @@ NS-RIGHTS recorded ✅
 
 ## 4. PR 列车与合入顺序
 
-推荐 8–10 个小 PR，而不是 3 个大 PR：
+推荐 9–11 个小 PR，而不是 3 个大 PR：
 
 1. 027 模型硬门禁；
 2. 029 ReleaseManifest/Approval 合同与迁移；
 3. 013 MCP core；
-4. 030 source manifest/fixtures/admission；
-5. 028a TemplatePackage；
-6. 028b Compilation runtime/orchestrator；
-7. 010 thin structured path；
-8. 032 Human Reader；
-9. 030 E2E contracts；
-10. 必要时单独 integration wiring/closeout。
+4. 030a source manifest/fixtures；
+5. 030b MVP admission profile（027 后）；
+6. 028a TemplatePackage；
+7. 028b Compilation runtime/orchestrator；
+8. 010 thin structured path；
+9. 032 Human Reader；
+10. 030 E2E contracts；
+11. 必要时单独 integration wiring/closeout。
 
 约束：
 
@@ -137,11 +141,11 @@ NS-RIGHTS recorded ✅
 
 ## 7. 会话与 worktree 纪律
 
-- 一个 change/PR 一个独立 worktree，从当时最新 `main` 建 `feat/NNN-*`；
+- 一个 change/PR 一个独立 worktree，从当时最新 `main` 建 `codex/NNN-*`；
 - `.venv`、临时 SQLite、run artifacts 不跨 worktree 共享；
 - `.env` 只手工复制到 gitignored 位置，不进入输出和提交；
 - 普通命令 60 秒无输出即轮询，10 分钟硬中止；子任务 2 分钟无有效结果转主线程；
-- AI 会话不 commit/push，由人验收后操作；
+- 本轮业务方已显式授权执行会话在验证后 commit、push 并创建 ready PR；执行会话不得自合入，仍由 G 独立 review 后决定 merge；
 - 规划会话只读代码和验证报告，不运行完整测试；
 - I1 集成会话不“顺手修”功能，避免失去文件域 Owner 和根因上下文。
 

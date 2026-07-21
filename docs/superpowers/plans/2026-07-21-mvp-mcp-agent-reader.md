@@ -18,7 +18,7 @@
 - Risk: **A** for token/Space isolation, **C** for transport adapter.
 - Use @superpowers:test-driven-development and @superpowers:verification-before-completion.
 - Full compare/history/SSE/production SSO and actual WeKnora Agent mounting are deferred unless 030 captures live evidence.
-- AI session does not commit/push.
+- This campaign has explicit business-owner authorization to commit, push, and open a ready PR after verification; the execution session SHALL NOT self-merge.
 
 ## File map
 
@@ -220,4 +220,4 @@ Review M1–M5 only against the MVP profile, run full deterministic once after f
 
 - [ ] **Step 4: Human commit boundary**
 
-Stop with exact diff/test evidence. Do not commit/push.
+Stop feature work with exact diff/test evidence. Under this campaign's explicit authorization, commit/push and open a ready PR after review; do not self-merge.

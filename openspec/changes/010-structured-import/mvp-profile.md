@@ -1,6 +1,6 @@
 # 010 MVP Thin Profile（不代表完整 010 完成）
 
-> 适用范围：2026-07-21 批准的 23-source MVP。完整 I1～I9 与 T5～T12 继续保留在企业 M2；本页只冻结本轮可独立验收的子集。
+> 适用范围：2026-07-21 批准的 23-entry 受控输入 MVP。完整 I1～I9 与 T5～T12 继续保留在企业 M2；本页只冻结本轮可独立验收的子集。
 
 ## Schema profile 与 behavior profile
 
@@ -15,6 +15,7 @@
 5. 记录级幂等键与内容 hash collision fail closed；同一 SourceRevision 重放零知识/业务 mutation（若复用 append-only lifecycle audit，可追加明确 idempotent decision，不得产生新 record/Evidence/ChangeSet/Claim）；
 6. 发布快照冻结 structured provenance，Reader 发布后零回查源记录；
 7. 原始 FAQ `question/answer` 只进入 staging/留存，不参与 current facts；只有输入中显式存在且通过批准 mapping 的 `fact_assertions[]` 才能形成 Claim 候选。最终 snapshot 对这些 fact assertions 可追溯到 FAQ structured record；这不等于 012 QA 已交付。
+8. 为 028 单一 manifest dispatcher 提供 additive exact-entry API：产品注册只接收明确 `product_meta` path+sha256，完整 preflight 后精确注册且不扫描 root/sibling/PDF；registered structured import 只接收明确 record ref+sha256、source authority/schema/profile 与 mapping manifest/effective version，完整 preflight 后调用本页同一治理服务。两条通道都返回 canonical receipt/count/hash，零 `CompilationJob`/模型调用；任何 extra/skipped/hash drift 在首写前 fail closed。
 
 ## 本轮明确后置
 

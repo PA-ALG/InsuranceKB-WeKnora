@@ -1,6 +1,6 @@
 # 027 · Production Weak-Model Boundary
 
-> 状态：MVP S0，规格待独立复核。北极星 C1/C3；是所有真实 MVP 模型运行的硬前置。
+> 状态：MVP S0，规格与实施计划已独立复核。北极星 C1/C3；是所有真实 MVP 模型运行的硬前置。
 
 ## 为什么做
 
@@ -12,8 +12,9 @@
 - 建立单一 `ProductionModelPolicy`，只接受批准、不可变身份的 MiniMax/Qwen/Qwen-VL 能力档；
 - 在任何网络调用、候选推进、ChangeSet 或 CurrentRelease 变更前 fail closed；
 - 旧强 judge/fallback 只能显式 offline-eval，不能被 production profile 引用；
+- strict request 显式给出独立 expected purpose/schema/Space/run identity/revision 与全部 content-addressed binding hashes；`AdmissionBinding` 只读归一化 actual admission，opaque `VerifiedAdmission` 才是 authority，二者在调用前全量匹配；
 - 把 policy decision、model identity、admission/run identity 写入 receipt；
-- 为 028 提供稳定的 `ModelPermit`/`ModelGateway` 边界。
+- 为 028 提供稳定的 `AdmissionVerifier`、opaque `VerifiedAdmission` 与 canonical `GuardedModelClient` 边界；公开 `ModelPermitView` 只作审计回执，不构成调用权威。
 
 ## 不做
 

@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份来源、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审，Wave 1 开始分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice。）
+> 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份受控输入、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审并按 cross-reference findings 修订，Wave 1 已分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice；030 使用自己的 admission profile，不借用 020 evaluator/artifact。）
 
 > [!IMPORTANT]
 > **项目核心方向与 MVP 已于 2026-07-21 批准：Enterprise LLM Wiki 是产品本体，WeKnora 是企业底座，Harness 是弱模型知识编译与治理运行时。** 业务方已声明 LLM-wiki-black 为项目方完整著作权资产，可把其 TS 能力选择性迁移/重构到统一 Python 3.12 Harness；原 TS 不作为第二套生产 runtime，第三方许可证单独管理。当前 CLI/config 尚未硬禁强模型路径，MVP admission 也未 READY，因此不得真实生产运行。P-1 release namespace/原子 active alias 是直接 WeKnora 生产 Wiki UI 的前置，但不是 MVP 前置；MVP 使用 ACL 隔离 staging + Harness Reader/MCP 同快照。任何会话认领任务前先读[北极星设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)和[MVP 控制基准](docs/insurance-kb/23-mvp-control-board.md)。
@@ -10,11 +10,11 @@
 
 | 字段 | 当前值 |
 |---|---|
-| 状态 / 截止 | `WAVE 1 STARTING`；目标 7–10 个工作日，执行起点 2026-07-22 |
-| 冻结范围 | 23 来源、5 产品、医疗/终身寿险/年金；含混合产品、后续修订/冲突、FAQ JSON |
+| 状态 / 截止 | `WAVE 1 ACTIVE`；目标 7–10 个工作日，执行起点 2026-07-22 |
+| 冻结范围 | 23 份受控输入、5 产品、医疗/终身寿险/年金；15 PDF + 5 registration-only product_meta + 混合产品、后续修订/冲突、FAQ JSON |
 | 当前 Gate | `NS-RIGHTS=recorded`；`NS-0=pending`；`MVP admission=pending`；P-1/13 产品 baseline 非 MVP 阻断 |
-| 当前 Wave | S0=027、K0=029、I0=030 manifest/fixtures 并发；既有 031 operational admission 单独收口，之后 M=013+032 |
-| 最多 3 个 blocker | 027 未完成；029 approved serving authority 未完成；MVP source manifest/hash 未冻结 |
+| 当前 Wave | S0=027、K0=029 并发；既有 031 operational admission 单独收口；I0a=030 manifest/fixtures 等 031 窗口释放后接手，I0b admission profile 等 027 |
+| 最多 3 个 blocker | 027 未完成；029 approved serving authority 未完成；030 23-entry manifest/hash 与独立 admission profile 未冻结 |
 | 完成定义 | 多文档归属、弱模型 Harness、Evidence、冲突、人审、hash 批准、Reader/MCP 同快照、结构化直入、更新/告警/回滚全部通过 |
 | 详细范围 | `docs/insurance-kb/23-mvp-control-board.md`；完整企业路线见 `16-roadmap.md` |
 
@@ -34,7 +34,7 @@
 
 0e. **OpenSpec `022-review-hardening` 已随 [PR #5](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/5) 合入 `main`**：六项 Claude 复审意见已客观裁决并按 SDD/TDD 实现；RH1～RH6 task-level 双审均 Approved，整包 spec review `Approved`，整包 quality 的唯一 Important（持久化 `proposed=[]` 泄漏 `AttributeError`）已补 RED、在 RH2 边界统一为无泄漏 `ScopeViolation` 后复审 `Approved`，无剩余 Critical/Important/Minor。最终 fresh 本地证据：OpenSpec strict exit 0、Ruff exit 0、mypy 151 files exit 0、deterministic **961 passed / 5 deselected**；focused 为 RH1 `43 passed / 1 skipped`、RH2 `62 passed`、RH3 `136 passed`、RH4 `110 passed`、RH5/RH6 `15 passed`，bridge collection 仍为 contract 12 / live 1。PR 最终 head `7a924254` 的 [deterministic](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741905) 与 [PostgreSQL 16 integration](https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/29326433014/job/87063741858) 均通过，merge commit 为 `2615b260`。WeKnora 继续 **`NOT RUN`**；PostgreSQL CI 不得替代真实 live。RH1 只保证函数内 savepoint，outer transaction/进程终止/多页补偿仍归 018；RH2 不含 ordering/`processed_at`/SourceHead/CAS，仍归 021；Directory replay 保持 eval-only；live 是 existing-knowledge 而非 upload。
 
-0f. **排期与依赖裁决（2026-07-21 更新）**：历史 13 产品 canonical run 仍按 018 → 021、019/021 → 020；MVP 不修改该 run，建立独立 23-source admission。第一方权利已记录，当前硬前置只有 NS-0 运行时模型门禁与适用 admission READY。各 change 继续遵守 SDD、风险分级 TDD、独立复核与 CLAUDE 门禁。
+0f. **排期与依赖裁决（2026-07-21 更新）**：历史 13 产品 canonical run 仍按 018 → 021、019/021 → 020；MVP 不修改该 run，为独立 23-entry 受控输入建立 admission。第一方权利已记录，当前硬前置只有 NS-0 运行时模型门禁与适用 admission READY。各 change 继续遵守 SDD、风险分级 TDD、独立复核与 CLAUDE 门禁。
 
 0g. **OpenSpec 023 本机 WeKnora live 环境（2026-07-17 当前状态）**：PR #10、#16、#19、#20 均已合入 `main`。受信 main workflow 已从锁定的 Tencent upstream `5eefa70e...` 构建 `linux/arm64` app，OCI/GitHub attestation、SLSA provenance 与 SPDX SBOM 均已核验；`deploy/local-live/images.lock` 和 Compose 固定 subject digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`。本机六服务 healthy，宿主只监听 `127.0.0.1:8080/8081/5442`；百炼五角色 direct probe、幂等 provision、普通 PDF 与 clean-SHA VLM smoke 均通过，VLM 结果为 `status=completed / image_ocr_chunks=1 / image_caption_chunks=1 / dirty=false / evidence=exact`。PR #20 另以真实 API TDD 修复重复注册、Wiki indexing strategy、pages envelope 与服务端扩展 VLM overrides 四项合同差异；最终 live 又发现 Wiki 空关系返回 `null`，PR #9 以 `test_s2_4_*` RED→GREEN 仅规范化为 `[]`。018 的本机 5-node 已 `5 passed / skipped=0`；正式 GitHub exact-SHA gate 作为收尾 PR 的合并前门禁执行。
 
@@ -123,7 +123,7 @@
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；`0005`、统一读模型、可恢复 publish/rollback 与 5-node live 已验收，021 已解锁 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 🚧 canonical admission 仍 BLOCKED；T2～T7/D4b 未运行。保留为企业生产化，不阻塞 030 的独立 23-source MVP slice | 高 token 数据任务，NEXT |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | 🚧 canonical admission 仍 BLOCKED；T2～T7/D4b 未运行。保留为企业生产化，不阻塞 030 的独立 23-entry 受控输入 MVP slice | 高 token 数据任务，NEXT |
 | B23 | 021 Source lifecycle ordering | ✅ 已随 PR #23 合入；SourceHead/Event/BackfillIssue、per-source lock/CAS 与迁移 0006 已落地 | 开发型，中大 |
 | B24 | 024 抽取召回提升 | ⚠️ 旧软件范围已随 PR #13 合入；第一方权利已记录，但真实召回与非退化仍未验证。028 可选择性复用，效果由 030 MVP slice 证明 | 开发型任务，中 |
 | B25 | 025 合并前置弱值门槛 | ⛔ 规格已合入但不是 MVP 主链阻断；排在 010 full 与企业 merge hardening 后 | 开发型，小，NEXT |
@@ -152,7 +152,7 @@
 ## 三、已拍板决策（2026-07-11 业务方确认）与剩余卡点
 
 已拍板：
-1. **完整企业范围 = 全险种覆盖；MVP 允许跨险种薄切，不是单险种 demo。** 已批准 MVP 使用 5 产品、23 来源、医疗/终身寿险/年金；完整 13 产品和后续险种仍按波次进入企业验收。
+1. **完整企业范围 = 全险种覆盖；MVP 允许跨险种薄切，不是单险种 demo。** 已批准 MVP 使用 5 产品、23-entry 受控输入、医疗/终身寿险/年金；完整 13 产品和后续险种仍按波次进入企业验收。
 2. **18 条扩展字段提案全部接受**，已并入 schema v1.1（`docs/insurance-kb/schema-baseline/extensions-v1.1.yaml`）。
 3. **金标是独立离线评测资产**：2026-07-11 首选 Claude（Fable/Opus 级）构建候选；2026-07-21 北极星进一步明确可插拔最强可用模型/多模型/人工，且绝不能成为生产依赖或直接发布来源。
 
@@ -161,10 +161,10 @@
 
 ## 四、下一步计划（按序）
 
-1. **总体规划窗口**：登记 027～030 与 032（保留既有 031 operational admission），完成七个可独立认领的实施计划与独立计划复核；只改规划/规格，不写功能代码。
-2. **窗口 S**：先完成 027 NS-0，再完成 028 TemplatePackage/Compilation runtime MVP。
-3. **窗口 K/M/I 并行**：029 + 010 thin；013 + 032；030 source manifest/fixtures/E2E。008 审核工作台不承担人类消费页。
-4. **Day 5 起合流**：用独立 MVP admission 运行 23 来源，完成更新、冲突、Alert、人/MCP 同快照与回滚；完整 020 留到企业阶段。
+1. **总体规划窗口（已完成基线，持续总控）**：027～032 已登记（031 为既有 operational admission），七个实施计划和独立复核已完成；继续只做范围、合同、PR review/merge 与 Roadmap，不写功能代码。
+2. **当前并行窗口**：S0 实施 027 NS-0；K0 实施 029；既有 031 按独立红队 finding 收口。三者均须原窗口修复、创建/更新 PR，再由总体规划窗口 review。
+3. **下一波**：027 合入后启动 028 与 030b；029 合入后启动 010 thin；013 + 032 按 serving contract 合流。030a manifest/fixtures 可独立推进；008 审核工作台不承担人类消费页。
+4. **Day 5 起合流**：用 030 自有 admission profile 运行 23-entry slice，完成更新、冲突、Alert、人/MCP 同快照与回滚；不得借用 020 evaluator/artifact，完整 020 留到企业阶段。
 
 样本语料：业务方 2026-07-11 提供 `shouxian_product`（13 产品，39 PDF + 12 meta json）并确认拷入仓库 → `dataset/shouxian_product/`，作为测试验证集原料。仓库外 `../samples/` 的早期解压副本作废，以 dataset 内为准。
 

@@ -1,6 +1,6 @@
 # 029 · ReleaseManifest + Human Approval MVP
 
-> 状态：MVP K0，规格待独立复核。北极星 C3/C5；复用 018，不实现 P-1。
+> 状态：MVP K0，规格与实施计划已独立复核。北极星 C3/C5；复用 018，不实现 P-1。
 
 ## 为什么做
 

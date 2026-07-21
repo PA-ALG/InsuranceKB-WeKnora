@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the `010 known-schema thin` profile so an approved structured product-fact/FAQ JSON source bypasses PDF parsing but still becomes immutable structured Evidence, governed Claims/ChangeSets/Review, and a frozen readable snapshot without fake page/chunk lineage.
 
-**Architecture:** Extend the existing 010 registry/mapping foundation with one strict known-schema adapter and the complete forward-compatible `0007` schema fixed by I4/I7/I9. The behavior remains thin, but each record is first bound to a reconstructable common `SourceRevision`, then a discriminated structured Evidence branch flows through model→merge→snapshot v2→reader. Raw FAQ question/answer stays in `qa_staging`; only explicit mapped `fact_assertions` may enter the Claim governance path.
+**Architecture:** Extend the existing 010 registry/mapping foundation with one strict known-schema adapter and the complete forward-compatible `0007` schema fixed by I4/I7/I9. The behavior remains thin, but each record is first bound to a reconstructable common `SourceRevision`, then a discriminated structured Evidence branch flows through merge→snapshot v2→reader with zero model call. Raw FAQ question/answer stays in `qa_staging`; only explicit mapped `fact_assertions` may enter the Claim governance path. Add exact-entry public adapters for 028: metadata registration receives only approved path+hash entries and never scans a root, while registered structured records receive exact content/source/mapping bindings and never create a document job.
 
 **Tech Stack:** Python 3.12, Pydantic v2, SQLAlchemy/Alembic, existing 007/018/021/029 knowledge services, pytest, PostgreSQL migration lane.
 
@@ -18,7 +18,7 @@
 - Risk: **A** for schema/migration/frozen provenance; **B** for mapping/merge behavior.
 - Use @superpowers:test-driven-development and @superpowers:verification-before-completion.
 - Do not implement unknown mapping, CSV/API, generalized mapping-change/M:N reprocessing services, FAQ search/pages, QA objects, or modify 013/032. The M:N table, I9 constraints, and qa_staging schema still ship now because an applied `0007` may not be rewritten later.
-- AI session does not commit/push.
+- This campaign has explicit business-owner authorization to commit, push, and open a ready PR after verification; the execution session SHALL NOT self-merge.
 
 ## PR and file split
 
@@ -56,9 +56,15 @@
 
 **Modify**
 
+- `harness/src/insurance_harness/product/register.py` — additive `register_product_paths(...)` exact-entry API; preflight explicit meta path+hash inputs, never glob sibling products/documents.
 - `harness/src/insurance_harness/structured_import/service.py` — replace the hard stop only for explicit known-schema API.
 - `harness/src/insurance_harness/structured_import/__init__.py` — export the named thin API.
 - `harness/tests/test_structured_import_010.py` — retain unknown/unregistered fail-closed regression.
+- `harness/tests/test_product_registration_003.py` — exact-entry registration/no-root-scan regression.
+
+**Create for the 028 dispatcher contract**
+
+- `harness/tests/test_manifest_entry_adapters_010_mvp.py` — exact five-meta and one registered-FAQ path/hash contract, all-or-nothing preflight, canonical receipts, and zero model/job/Claim boundary.
 
 ### Task 1: Freeze the known-schema and FAQ assertion boundary
 
@@ -222,7 +228,7 @@ Expected: PASS.
 
 - [ ] **Step 6: Independent review and human commit boundary for 010-thin-a**
 
-Reviewer focuses on migration, provenance, strict union, cross-Space, and old v1 behavior. Stop; do not commit/push.
+Reviewer focuses on migration, provenance, strict union, cross-Space, and old v1 behavior. Under this campaign's explicit authorization, commit/push only after checks pass and open a ready PR; do not self-merge.
 
 ### Task 6: Known-schema write service through governance
 
@@ -239,7 +245,7 @@ uv run pytest -q tests/test_known_schema_import_010_mvp.py
 
 - [ ] **Step 3: Implement one explicit API**
 
-Add `import_known_schema_records(session, scope, *, source_entry, mapping, records, apply=False)`. Flow: attest scope → resolve registered source/mapping → construct/validate common SourceRevision for every record → preflight the whole batch and collisions → materialize/reuse revision records → open/reuse the I9-fingerprinted ChangeSet and append batch links → map assertions with that revision binding to `ProposedClaim` → call existing `MergeEngine`/Review. Lifecycle decisions, revision rows, ChangeSet, links and Evidence use one caller-owned transaction/nested savepoint; the service never commits/rolls back the caller Session. The generic `import_records()` remains fail-closed for unknown/unprofiled input.
+Add `import_known_schema_records(session, scope, *, source_entry, mapping, records, apply=False)`. Flow: attest scope → resolve registered source/mapping → construct/validate common SourceRevision for every record → preflight the whole batch and collisions → materialize/reuse revision records → open/reuse the I9-fingerprinted ChangeSet and append batch links → map assertions with that revision binding to `ProposedClaim` → call existing `MergeEngine`/Review. Lifecycle decisions, revision rows, ChangeSet, links and Evidence use one caller-owned transaction/nested savepoint; the service never commits/rolls back the caller Session. The generic `import_records()` remains fail-closed for unknown/unprofiled input. Also expose `import_known_schema_manifest_entries(...)`, which accepts exact external entry refs+sha256 plus the registered source identity/authority/record-schema ref, adapter/canonicalizer/source-profile versions, mapping manifest and effective mapping version; it preflights the complete list before delegating to this service and returns canonical per-entry/batch receipts for 028 `StructuredFactImportPort.apply_registered_records`.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -271,7 +277,28 @@ uv run pytest -q tests/test_structured_import_010.py tests/test_known_schema_imp
 
 Expected: PASS.
 
-### Task 8: Validate and hand off 010 known-schema thin
+### Task 8: Expose exact-entry adapters for the single 028 manifest dispatcher
+
+- [ ] **Step 1: Write exact-entry RED tests**
+
+Use a fixture root containing the approved five metadata files plus unrelated sibling product directories and extra files. Assert `bootstrap_from_dir` remains available for its existing operator workflow, but the 028-facing path accepts only explicit entries, verifies every path+sha256 before the first write, registers exactly the five approved products, performs no root scan/glob/skip, and produces zero Claim/Evidence/model call. For the FAQ branch, assert an exact registered record ref+hash is staged/imported through the known-schema service, an unregistered source/hash/mapping-version mutation is zero-write, and no `CompilationJob` or document parser is invoked. Canonical receipts must expose the exact input counts/hashes plus structured source-profile/mapping identities used by `structured_dispatch_lock`.
+
+- [ ] **Step 2: Implement additive public APIs and thin 028 adapters**
+
+Add `register_product_paths(session, *, scope, entries, commit=False)` in `product/register.py`. Each immutable entry carries an exact `product_meta.json` path and sha256; the function canonicalizes/deduplicates and preflights all entries before calling the existing per-product registration primitive. It does not iterate the dataset root or glob PDFs/siblings; optional document registration, if ever needed, must receive its own exact path+hash entries. Add `bootstrap_manifest_entries(session, *, space_id, entries, apply=False)` in `structured_import/service.py` as the public 010 adapter. Export both exact-entry services without changing existing `bootstrap_from_dir` callers.
+
+Expose `import_known_schema_manifest_entries(...)` from `structured_import` for exact registered structured records. The 028 `ProductRegistrationPort.apply_exact_entries` and `StructuredFactImportPort.apply_registered_records` implementations are thin adapters over these public APIs; neither reimplements 003/010 parsing, registration, mapping, lifecycle, merge or transaction logic. Both return deterministic receipt/count/hash DTOs and make zero model call.
+
+- [ ] **Step 3: Run focused GREEN**
+
+```bash
+cd harness
+uv run pytest -q tests/test_manifest_entry_adapters_010_mvp.py tests/test_product_registration_003.py tests/test_known_schema_import_010_mvp.py tests/test_known_faq_import_010_mvp.py
+```
+
+Expected: exact five-meta + one FAQ dispatch PASS; an extra sibling/root file is untouched; every preflight mismatch leaves all business tables unchanged.
+
+### Task 9: Validate and hand off 010 known-schema thin
 
 - [ ] **Step 1: Touched-code static checks**
 
@@ -291,4 +318,4 @@ Owner-A reviews every `knowledge/` and migration change; structured-import owner
 
 - [ ] **Step 4: One PR-ready full deterministic run and human commit boundary**
 
-Run full deterministic once after both reviews close, report seven-stage time and exact evidence, then stop. Do not commit/push.
+Run full deterministic once after both reviews close and report seven-stage time and exact evidence. Under this campaign's explicit authorization, commit/push and open a ready PR; do not self-merge.

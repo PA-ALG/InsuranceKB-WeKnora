@@ -350,7 +350,7 @@ calls ≈ Σ_组( 命中section数 × ceil(组字段数/8) )        # Step 2，�
 
 ## 9. MVP 与企业扩展切片
 
-1. **MVP-0（当前 7～10 工作日）**：按 030 固定 23 来源/5 产品；027 封死强/未知/rolling model；028 用批准 TemplatePackage 与持久 job/stage/attempt/receipt/alert 连接分类、事实级路由、短任务多弱模型、Evidence 回验和现有合并主链；029/032/013 完成人审 hash、Human/Agent 同快照和回滚。MVP 只用单进程 2～4 worker，不把生产 WeKnora Wiki UI 作为完成条件。
+1. **MVP-0（当前 7～10 工作日）**：按 030 固定 23-entry 受控输入/5 产品；027 封死强/未知/rolling model；028 用批准 TemplatePackage 与持久 job/stage/attempt/receipt/alert 连接分类、事实级路由、短任务多弱模型、Evidence 回验和现有合并主链；029/032/013 完成人审 hash、Human/Agent 同快照和回滚。MVP 只用单进程 2～4 worker，不把生产 WeKnora Wiki UI 作为完成条件。
 2. **企业 M2**：扩为完整四级 Template registry、13 产品 canonical baseline、完整预算账本、PostgreSQL lease/fencing、多 worker 恢复和 P-1 原子发布。
 3. **规模 M3**：千份文档分片、公平调度、五级限流、批次控制台和 Alert SLA。
 

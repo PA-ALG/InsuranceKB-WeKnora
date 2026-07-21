@@ -18,7 +18,7 @@
 - Use @superpowers:test-driven-development for each invariant and @superpowers:verification-before-completion before handoff.
 - This session is the K0 owner of `knowledge/` and migration `0013`; no other migration may be authored concurrently.
 - Do not implement P-1 namespaces/aliases/GC, UI, MCP handlers, structured-evidence persistence, or a second SnapshotFact table. The public serving DTO must nevertheless reserve the strict structured Evidence branch consumed after 010.
-- AI session does not commit/push. Stop at human commit boundaries.
+- This campaign has explicit business-owner authorization to commit, push, and open a ready PR after verification; the execution session SHALL NOT self-merge and still stops for G review.
 
 ## File map
 
@@ -298,4 +298,4 @@ Reviewer checks RA1–RA7, tenant isolation, mutable-read absence, append-only a
 
 - [ ] **Step 4: One PR-ready full deterministic run and human commit boundary**
 
-Run full deterministic only after findings close, record seven-stage time, report exact diff/evidence, and stop. Do not commit/push.
+Run full deterministic only after findings close, record seven-stage time, and report exact diff/evidence. Under this campaign's explicit authorization, commit/push and open a ready PR; do not self-merge.

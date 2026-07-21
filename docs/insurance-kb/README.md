@@ -29,7 +29,7 @@
 | [20-enterprise-runtime-foundation.md](20-enterprise-runtime-foundation.md) | 企业运行基础：KnowledgeSpace、Source Bridge、SnapshotFact 与 Golden 闸门 | 🚧 历史软件地基已合入；027/适用 admission 未齐，真实 baseline 未运行 |
 | [21-selftest-before-submit.md](21-selftest-before-submit.md) | 复审前自测方法论：提交前 gauntlet、反复返工问题清单（身份绑可变标签/判定两处推导/构造期校验器可绕过/对称路径/冗余安全层…）、并行红队配方；源自 019 七轮返工教训固化 | ✅ |
 | [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md) | G/S/K/M/I 会话拓扑、依赖、文件域、PR 列车与风险分级 TDD | ✅ 2026-07-21 |
-| [23-mvp-control-board.md](23-mvp-control-board.md) | 已批准 MVP 的冻结范围、23 来源样本、任务包、7–10 日节奏、验收与提效规则 | ✅ 当前 MVP 基准 |
+| [23-mvp-control-board.md](23-mvp-control-board.md) | 已批准 MVP 的冻结范围、23-entry 受控输入、任务包、7–10 日节奏、验收与提效规则 | ✅ 当前 MVP 基准 |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 权威分工：[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)（产品/架构）· [16-roadmap](16-roadmap.md)（完整阶段）· [23-mvp-control-board](23-mvp-control-board.md)（冻结 MVP）· [HANDOFF](../../HANDOFF.md)（唯一实时状态）· [master plan](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（完整 backlog）。

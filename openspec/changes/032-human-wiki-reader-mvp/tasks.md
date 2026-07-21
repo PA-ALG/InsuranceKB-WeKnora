@@ -1,4 +1,4 @@
-# 032 任务（风险 C；独立只读消费面）
+# 032 任务（Space/auth 风险 A；只读 service/UI 风险 C）
 
 - [ ] T1 冻结目录/产品页 DTO 与 `ApprovedSnapshotReader` port，写 HR1/HR2 RED
 - [ ] T2 实现 `human_reader` service：产品解析、事实分组、Evidence/typed gap 映射；零 mutable Claim 查询
