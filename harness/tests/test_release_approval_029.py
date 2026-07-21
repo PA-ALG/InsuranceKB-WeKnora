@@ -508,10 +508,13 @@ def test_ra2_approval_unique_race_is_domain_safe_and_preserves_outer_transaction
 
 
 @contextmanager
-def _block_after_two_approval_prechecks(
+def _block_after_two_release_prechecks(
     engine: Engine,
+    *,
+    table_name: str,
+    identity_columns: tuple[str, ...],
 ) -> Iterator[tuple[Callable[[], None], list[int]]]:
-    """Hold each worker after PG determines its first approval precheck result."""
+    """Hold each worker after PG determines its first exact precheck result."""
 
     barrier = Barrier(2)
     state = local()
@@ -534,9 +537,11 @@ def _block_after_two_approval_prechecks(
         if (
             not getattr(state, "armed", False)
             or getattr(state, "blocked", False)
-            or " from release_approvals " not in f" {normalized} "
-            or "release_approvals.space_id" not in normalized
-            or "release_approvals.manifest_hash" not in normalized
+            or f" from {table_name} " not in f" {normalized} "
+            or any(
+                f"{table_name}.{column}" not in normalized
+                for column in identity_columns
+            )
         ):
             return
         state.blocked = True
@@ -604,18 +609,39 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
             persist_release_manifest(setup, competing_scope, competing_manifest)
             setup.commit()
 
-        manifest_barrier = Barrier(2)
-
-        def persist_worker() -> str:
+        def persist_worker(
+            index: int,
+            arm_precheck: Callable[[], None],
+        ) -> tuple[str, int, bool]:
             with factory() as worker:
-                manifest_barrier.wait(timeout=15)
+                prior = _prior_caller_work(worker, scope, f"pg-manifest-{index}")
+                backend_pid = worker.scalar(text("SELECT pg_backend_pid()"))
+                assert isinstance(backend_pid, int)
+                arm_precheck()
                 record = persist_release_manifest(worker, scope, manifest)
+                assert worker.get(ReviewItem, prior.id) is prior
+                prior.risk_level = "high"
+                worker.flush()
                 worker.commit()
-                return record.id
+                return record.id, backend_pid, worker.is_active
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            manifest_ids = list(executor.map(lambda _index: persist_worker(), range(2)))
+        with _block_after_two_release_prechecks(
+            engine,
+            table_name="release_manifests",
+            identity_columns=("space_id", "snapshot_id"),
+        ) as (arm_manifest_precheck, manifest_hits):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                manifest_results = list(
+                    executor.map(
+                        lambda index: persist_worker(index, arm_manifest_precheck),
+                        range(2),
+                    )
+                )
+        manifest_ids = [record_id for record_id, _pid, _usable in manifest_results]
         assert len(set(manifest_ids)) == 1
+        assert len(manifest_hits) == 2
+        assert len({pid for _record_id, pid, _usable in manifest_results}) == 2
+        assert all(usable for _record_id, _pid, usable in manifest_results)
 
         def approve_worker(index: int, arm_precheck: Callable[[], None]) -> tuple[str, int]:
             with factory() as worker:
@@ -630,7 +656,11 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
                 worker.commit()
                 return approval.id, backend_pid
 
-        with _block_after_two_approval_prechecks(engine) as (arm_precheck, same_hits):
+        with _block_after_two_release_prechecks(
+            engine,
+            table_name="release_approvals",
+            identity_columns=("space_id", "manifest_hash"),
+        ) as (arm_precheck, same_hits):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 same_results = list(
                     executor.map(
@@ -678,7 +708,11 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
                     )
                     return "typed_error", backend_pid, usable
 
-        with _block_after_two_approval_prechecks(engine) as (
+        with _block_after_two_release_prechecks(
+            engine,
+            table_name="release_approvals",
+            identity_columns=("space_id", "manifest_hash"),
+        ) as (
             arm_competing_precheck,
             competing_hits,
         ):
