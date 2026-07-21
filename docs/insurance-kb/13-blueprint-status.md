@@ -28,21 +28,21 @@
 | 005 评测尺子v2+召回归因 | 值粒度 54 为最大失分项 | ✅ 已验收 |
 | 006 模板 fastpath+可喂性评分 | 费率表列直取留出验证 1.00；族指纹修复 | ✅ 已验收 |
 | 007 Claim/合并/审核/发布主链 | 端到端故事通过 | ✅ 已验收 |
-| 008 审核工作台 | W1–W7 条款 + T1–T8 任务（2026-07-16 基础对齐修订） | 📋 **已条款化可认领**（轨道 L2，B8；仅 W4 回滚等 018） |
-| 009~012 | 概念层/结构化直入/健康度/QA对象 | 📋 B11~B14：**010 T1~T4 已合入 main（PR #14，2026-07-18，三轮复审收口）**，T5+ 域段候 021；009/011/012 已条款化（正式 delta 过 strict，迁移 0008/0009/0010 已占号），**规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领** |
+| 008 审核工作台 | W1–W7 条款 + T1–T8 任务（2026-07-16 基础对齐修订） | ✅ 核心 T1～T5/T7 已随 PR #15 合入；T6/W4 作为独立 follow-up |
+| 009~012 | 概念层/结构化直入/健康度/QA对象 | 🚧 **010 T1～T4 已合入（PR #14），021 已合入（PR #23），010 T5～T12 现可认领**；011 主规格+PR #22 fast-follow 收口后可独立认领；009/012 分别等待 010 域段/qa_staging，不作整波无条件放行 |
 | 013~014 | insurance MCP server / 批量并发调度（P0.5） | 📋 B15~B16；**013 规格就绪且已由 PR #9 解锁**（M1–M4，轨道 L3）——**至此 master plan S0~S5 + 插件架构全组件均有设计或实现覆盖** |
-| 015 | 数据飞轮 | 📋 提案（B17） |
+| 015 | 数据飞轮 | ✅ durable foundation 已随 PR #18 合入；Langfuse 直连与 ReviewItem 动作投影仍 gated |
 | 016 | KnowledgeSpace/强制作用域 | ✅ T1～T8 完成（244 focused / 495 non-live），规格/质量双审与主代理验收通过（B18） |
 | 017 | WeKnora SourceDocument Bridge/Evidence lineage | ⚠️ T1–T8 软件完成并通过双审/全量复验；真实 WeKnora/PostgreSQL live 为 NOT RUN（B19） |
 | 018 | SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；T1～T7、两轮复审、PostgreSQL 与 5-node live 已完成（B20） |
 | 019 | Golden 工具/QualityProfile/在线 Gate | ✅ **已完成并合入 main**（PR #8，merge `4d9c84e`，非-live 1142 passed）（B21） |
-| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | ✅ 运行规格通过；019 已就绪，待 021 + 020 T1 run-admission（B22） |
-| 021 | Source lifecycle ordering | 📋 规格已提出，待实现 durable SourceHead、generation/processed_at 与 per-source lock/CAS（B23；迁移预分配 0006） |
+| 020 | gs-v0.1 与 13 产品 baseline 真实运行 | 🚧 019/021 前置已完成；T1 零模型 run-admission 在 PR #24，D2～D4 真实运行尚未开始 |
+| 021 | Source lifecycle ordering | ✅ 已随 PR #23 合入；durable SourceHead/Event、generation/processed_at 与 per-source lock/CAS 已落地 |
 | 022×2 | 测试组合再平衡 / 复审收口 | ✅ 均已随 PR #5 合入（编号冲突已在 `openspec/changes/README.md` 注册表记案冻结） |
 | 023 | 本机 WeKnora live 环境+受信门禁 | ✅ PR #10/#16/#19/#20 已合入 main；受信 app digest、provenance/SBOM、真实 provision/PDF、clean-SHA VLM 与 018 五节点均已验证 |
-| 024 | 抽取召回提升（extract_empty+值粒度） | 📋 **新开可认领**（轨道 L5，E1–E5，零真实模型调用，B24） |
+| 024 | 抽取召回提升（extract_empty+值粒度） | ✅ 软件已随 PR #13 合入；真实召回与非退化证据归 020 D4/D4b |
 
-执行类遗留：HANDOFF ⓪-B。016/017/018 已完成；021 ordering 尚未实现，在其合入前不同 source revision 仍只能串行处理，007 不得被描述为完整并发生产闭环。
+执行类遗留：HANDOFF ⓪-B。021 ordering 已完成；当前关键路径是 020 T1（PR #24）→ READY 后的 D2～D4 真实运行。软件/CI 通过不得表述为真实 baseline 或召回提升完成。
 
 ## 2. LLM Wiki 27 项功能引入状态复盘（对照 09 文档）
 
@@ -67,12 +67,12 @@
 
 | Change | 一句话范围 | 依赖 | 实现归属 |
 |---|---|---|---|
-| **009 概念层编译** | 概念抽取（从 Claim 值与术语表）→ 概念主页（聚合+跨产品差异表）→ 义项索引 → 产品页⇄概念页 wikilink；purpose 配置注入编译/抽取 prompt | 007 | 其他模型（B11） |
-| **010 结构化直入** | JSON/JSONL/CSV/FAQ → 映射器 → Claim/QA 批次（幂等键 external_record_id+source_revision）→ 走 007 合并审核；未知 JSON 生成候选映射待确认；dry-run 预检 | 007 | 其他模型（B12） |
+| **009 概念层编译** | 概念抽取（从 Claim 值与术语表）→ 概念主页（聚合+跨产品差异表）→ 义项索引 → 产品页⇄概念页 wikilink；purpose 配置注入编译/抽取 prompt | 007/016/018 + 010 T5～T12 | 其他模型（B11） |
+| **010 结构化直入** | JSON/JSONL/CSV/FAQ → 映射器 → Claim/QA 批次（幂等键 external_record_id+source_revision）→ 走 007 合并审核；未知 JSON 生成候选映射待确认；dry-run 预检 | 007/018/021（均已满足） | 其他模型（B12） |
 | **011 知识健康度巡检** | 定时任务：过期扫描（生效/失效日期）、长期 pending 冲突、完整度退化、发布页与 Claim 漂移检测；产出健康度报告+整改工单（进 ReviewItem） | 007 | 其他模型（B13） |
 | **012 QA 一等对象** | qa_items 表 + FAQ 抽取对齐（答案绑定 Claim id）+ 派生 QA 编译器（事实变更自动重编）+ 产品页聚合展示 | 007/010 | 其他模型（B14） |
 
-优先级建议：**010 > 009 > 012 > 011**（010 解锁业务方现成的结构化知识库快速见效；009 补齐 wiki 形态完整性；012 依赖 010 的 FAQ 通道；011 在知识量上来后价值显现）。
+L4 顺序：**010 T5～T12 → 009 / 012**；011 的主体可并行认领，009 未落地时孤立扫描必须报告 not-applicable。全项目关键路径仍优先 020，不因 L4 开工而插队。
 
 ## 4. 能力审计与决策记录（2026-07-12 与业务方对齐）
 
