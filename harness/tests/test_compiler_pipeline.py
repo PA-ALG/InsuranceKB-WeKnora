@@ -38,6 +38,7 @@ from insurance_harness.sources import (
     DirectoryDocumentSource,
     DirectorySourceRequest,
     MaterializedBatch,
+    ProcessedAtOrdering,
     SourceDocument,
     SourceRevision,
     SourceScope,
@@ -178,7 +179,7 @@ class _ScopedFixtureSource:
         digest = hashlib.sha256(b"").hexdigest()
         revision = SourceRevision(
             file_hash=digest,
-            processed_at=DIRECTORY_REPLAY_PROCESSED_AT,
+            ordering=ProcessedAtOrdering(value=DIRECTORY_REPLAY_PROCESSED_AT),
             parser_fingerprint="fixture-parser-v1",
         )
         path = request.product_dir / "保险条款.pdf"
@@ -253,7 +254,7 @@ def _source_manifest_entry() -> DocManifestEntry:
     digest = hashlib.sha256(b"").hexdigest()
     revision = SourceRevision(
         file_hash=digest,
-        processed_at=DIRECTORY_REPLAY_PROCESSED_AT,
+        ordering=ProcessedAtOrdering(value=DIRECTORY_REPLAY_PROCESSED_AT),
         parser_fingerprint="fixture-parser-v1",
     )
     return DocManifestEntry(
@@ -261,6 +262,7 @@ def _source_manifest_entry() -> DocManifestEntry:
         source_id="compiler-pipeline-test/保险条款.pdf",
         knowledge_id="fixture-knowledge-1",
         source_revision=revision.value,
+        ordering=revision.ordering,
         file_hash=digest,
         original_digest=digest,
         parser_fingerprint=revision.parser_fingerprint,

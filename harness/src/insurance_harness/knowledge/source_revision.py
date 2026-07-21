@@ -1,11 +1,10 @@
 """Source revision notifications and source-scoped lifecycle operations (017 T7)."""
 
-import hashlib
 from datetime import UTC, datetime
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -17,12 +16,24 @@ from insurance_harness.db.scope import (
     require_current_scope,
 )
 from insurance_harness.knowledge.models import SourceImportIdentity
-from insurance_harness.knowledge.tables import ChangeItem, ChangeSet, Claim, ClaimEvidence
-
-_APPLIED_SOURCE_ITEM_ACTIONS = frozenset(
-    {"add", "enrich", "supersede", "conflict", "retract"}
+from insurance_harness.knowledge.source_aggregates import (
+    validate_applied_source_change_set as validate_applied_source_change_set,
 )
-_APPLIED_SOURCE_ITEM_DECISIONS = frozenset({"auto_applied", "approved"})
+from insurance_harness.knowledge.source_aggregates import (
+    validate_retract_tombstone as validate_retract_tombstone,
+)
+from insurance_harness.knowledge.source_aggregates import (
+    validate_source_change_set_aggregate as validate_source_change_set_aggregate,
+)
+from insurance_harness.knowledge.source_keys import (
+    derive_retract_event_key as derive_retract_event_key,
+)
+from insurance_harness.knowledge.source_lifecycle import (
+    LifecycleBusinessOutcome,
+    LifecycleDecisionResult,
+    coordinate_source_lifecycle,
+)
+from insurance_harness.knowledge.tables import ChangeSet, Claim, ClaimEvidence
 
 
 class SourceRevisionReport(BaseModel):
@@ -35,93 +46,6 @@ class SourceRevisionReport(BaseModel):
     reused: bool
     stale_count: int = Field(ge=0)
     change_set_id: str | None
-
-
-def derive_retract_event_key(knowledge_id: str, event_revision: str) -> str:
-    """Return the reserved 64-character revision for one deletion event."""
-    digest = hashlib.sha256(
-        f"{knowledge_id}\0{event_revision}".encode()
-    ).hexdigest()
-    return f"retract:{digest[:56]}"
-
-
-def validate_retract_tombstone(
-    session: Session,
-    scope: KnowledgeScope,
-    change_set: ChangeSet,
-    *,
-    knowledge_id: str,
-) -> int:
-    """Validate a scoped applied retract aggregate and return its item count."""
-    if (
-        change_set.space_id != scope.space_id
-        or change_set.source_kind != "document"
-        or change_set.status != "applied"
-        or change_set.knowledge_ids != [knowledge_id]
-    ):
-        raise ScopeViolation("source tombstone is invalid")
-    items = list(
-        session.scalars(
-            select(ChangeItem).where(ChangeItem.change_set_id == change_set.id)
-        )
-    )
-    scoped_items = list(
-        session.scalars(
-            select(ChangeItem)
-            .join(Claim, Claim.id == ChangeItem.claim_id)
-            .where(
-                ChangeItem.change_set_id == change_set.id,
-                Claim.space_id == scope.space_id,
-            )
-        )
-    )
-    if len(scoped_items) != len(items):
-        raise ScopeViolation("source tombstone is invalid")
-    seen_claim_ids: set[str] = set()
-    for item in scoped_items:
-        proposed = item.proposed
-        removed_evidence = (
-            proposed.get("removed_evidence")
-            if isinstance(proposed, dict)
-            else None
-        )
-        if (
-            item.claim_id is None
-            or item.claim_id in seen_claim_ids
-            or item.action != "retract"
-            or item.decision != "auto_applied"
-            or not isinstance(proposed, dict)
-            or proposed.get("knowledge_id") != knowledge_id
-            or type(removed_evidence) is not int
-            or removed_evidence <= 0
-        ):
-            raise ScopeViolation("source tombstone is invalid")
-        seen_claim_ids.add(item.claim_id)
-    return len(items)
-
-
-def validate_source_change_set_aggregate(
-    session: Session,
-    scope: KnowledgeScope,
-    identity: SourceImportIdentity,
-    change_set: ChangeSet,
-    *,
-    allowed_source_kinds: tuple[str, ...],
-) -> int:
-    """Validate immutable source identity fields and return the child item count."""
-    if (
-        change_set.space_id != scope.space_id
-        or change_set.source_kind not in allowed_source_kinds
-        or change_set.external_record_id != identity.knowledge_id
-        or change_set.source_revision != identity.source_revision
-        or change_set.knowledge_ids != [identity.knowledge_id]
-    ):
-        raise ScopeViolation("source change set aggregate mismatch")
-    return session.scalar(
-        select(func.count())
-        .select_from(ChangeItem)
-        .where(ChangeItem.change_set_id == change_set.id)
-    ) or 0
 
 
 def _validated_identity(
@@ -197,27 +121,14 @@ def _existing_zero_evidence_source_change_set(
     if len(rows) != 1:
         raise ScopeViolation("source change set is ambiguous")
     change_set = rows[0]
-    item_count = validate_source_change_set_aggregate(
-        session,
-        scope,
-        identity,
-        change_set,
-        allowed_source_kinds=("document", "recompile"),
-    )
     if change_set.status == "applied":
-        items = tuple(
-            session.scalars(
-                select(ChangeItem).where(
-                    ChangeItem.change_set_id == change_set.id
-                )
-            )
+        validate_applied_source_change_set(
+            session,
+            scope,
+            identity,
+            change_set,
+            allowed_source_kinds=("document", "recompile"),
         )
-        if any(
-            item.action not in _APPLIED_SOURCE_ITEM_ACTIONS
-            or item.decision not in _APPLIED_SOURCE_ITEM_DECISIONS
-            for item in items
-        ):
-            raise ScopeViolation("source change set cannot be replayed")
         # Local import avoids the merge -> source_revision module cycle.
         from insurance_harness.knowledge.merge import (
             validate_scoped_change_set_items,
@@ -232,6 +143,13 @@ def _existing_zero_evidence_source_change_set(
                 "source change set cannot be replayed"
             ) from exc
         return change_set, True
+    item_count = validate_source_change_set_aggregate(
+        session,
+        scope,
+        identity,
+        change_set,
+        allowed_source_kinds=("document", "recompile"),
+    )
     if (
         change_set.source_kind == "recompile"
         and change_set.status == "pending"
@@ -278,6 +196,164 @@ def _insert_recompile_or_reread(
     return candidate, True
 
 
+def _active_source_revisions(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+) -> set[str]:
+    return set(
+        session.scalars(
+            select(ClaimEvidence.source_revision)
+            .join(Claim, Claim.id == ClaimEvidence.claim_id)
+            .where(
+                Claim.space_id == scope.space_id,
+                ClaimEvidence.knowledge_id == identity.knowledge_id,
+                ClaimEvidence.raw_kb_id == scope.raw_kb_id,
+                ClaimEvidence.lineage_status.is_not(None),
+                ClaimEvidence.source_revision.is_not(None),
+                ClaimEvidence.stale_at.is_(None),
+            )
+        )
+    )
+
+
+def _source_revision_business_outcome(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+    stale_timestamp: datetime,
+    created_by: str,
+    decision: LifecycleDecisionResult,
+) -> LifecycleBusinessOutcome:
+    """Apply notify business state after the lifecycle decision is durable."""
+
+    active_revisions = _active_source_revisions(session, scope, identity)
+    if decision.decision == "idempotent":
+        if active_revisions and active_revisions != {identity.source_revision}:
+            raise ScopeViolation("source revision state is ambiguous")
+        change_set, applied_same_revision = (
+            _existing_zero_evidence_source_change_set(
+                session,
+                scope,
+                identity,
+            )
+        )
+        active_same_revision = active_revisions == {identity.source_revision}
+        reused_pending = (
+            change_set is not None
+            and not applied_same_revision
+            and not active_same_revision
+        )
+        linked_change_set_id = (
+            change_set.id if change_set is not None else None
+        )
+        return LifecycleBusinessOutcome(
+            payload=SourceRevisionReport(
+                same_revision=not reused_pending,
+                created=False,
+                reused=reused_pending,
+                stale_count=0,
+                change_set_id=(linked_change_set_id if reused_pending else None),
+            ),
+            aggregate_kind=(
+                "source_revision" if linked_change_set_id is not None else None
+            ),
+            change_set_id=linked_change_set_id,
+        )
+    if active_revisions == {identity.source_revision}:
+        change_set, _applied = _existing_zero_evidence_source_change_set(
+            session,
+            scope,
+            identity,
+        )
+        return LifecycleBusinessOutcome(
+            payload=SourceRevisionReport(
+                same_revision=True,
+                created=False,
+                reused=False,
+                stale_count=0,
+                change_set_id=None,
+            ),
+            aggregate_kind=(
+                "source_revision" if change_set is not None else None
+            ),
+            change_set_id=(change_set.id if change_set is not None else None),
+        )
+    if identity.source_revision in active_revisions:
+        raise ScopeViolation("source revision state is ambiguous")
+
+    if active_revisions:
+        change_set = _existing_recompile(session, scope, identity)
+        applied_same_revision = False
+    else:
+        change_set, applied_same_revision = (
+            _existing_zero_evidence_source_change_set(
+                session,
+                scope,
+                identity,
+            )
+        )
+    if applied_same_revision:
+        assert change_set is not None
+        return LifecycleBusinessOutcome(
+            payload=SourceRevisionReport(
+                same_revision=True,
+                created=False,
+                reused=False,
+                stale_count=0,
+                change_set_id=None,
+            ),
+            aggregate_kind="source_revision",
+            change_set_id=change_set.id,
+        )
+    if change_set is None:
+        change_set, created = _insert_recompile_or_reread(
+            session,
+            scope,
+            identity,
+            created_by=created_by,
+        )
+    else:
+        created = False
+    target_ids = (
+        select(ClaimEvidence.id)
+        .join(Claim, Claim.id == ClaimEvidence.claim_id)
+        .where(
+            Claim.space_id == scope.space_id,
+            ClaimEvidence.knowledge_id == identity.knowledge_id,
+            ClaimEvidence.raw_kb_id == scope.raw_kb_id,
+            ClaimEvidence.lineage_status.is_not(None),
+            ClaimEvidence.source_revision.is_not(None),
+            ClaimEvidence.source_revision != identity.source_revision,
+            ClaimEvidence.stale_at.is_(None),
+        )
+    )
+    stale_result = cast(
+        CursorResult[Any],
+        session.execute(
+            update(ClaimEvidence)
+            .where(
+                ClaimEvidence.id.in_(target_ids),
+                ClaimEvidence.stale_at.is_(None),
+            )
+            .values(stale_at=stale_timestamp)
+            .execution_options(synchronize_session="fetch")
+        ),
+    )
+    stale_count = stale_result.rowcount or 0
+    return LifecycleBusinessOutcome(
+        payload=SourceRevisionReport(
+            same_revision=False,
+            created=created,
+            reused=not created,
+            stale_count=stale_count,
+            change_set_id=change_set.id,
+        ),
+        aggregate_kind="source_revision",
+        change_set_id=change_set.id,
+    )
+
+
 def notify_source_revision(
     session: Session,
     scope: KnowledgeScope,
@@ -290,91 +366,29 @@ def notify_source_revision(
     identity = _validated_identity(identity, scope)
     require_current_scope(session, scope)
     stale_timestamp = _validated_observed_at(observed_at)
-
-    with session.begin_nested():
-        active_revisions = set(
-            session.scalars(
-                select(ClaimEvidence.source_revision)
-                .join(Claim, Claim.id == ClaimEvidence.claim_id)
-                .where(
-                    Claim.space_id == scope.space_id,
-                    ClaimEvidence.knowledge_id == identity.knowledge_id,
-                    ClaimEvidence.raw_kb_id == scope.raw_kb_id,
-                    ClaimEvidence.lineage_status.is_not(None),
-                    ClaimEvidence.source_revision.is_not(None),
-                    ClaimEvidence.stale_at.is_(None),
-                )
-            )
-        )
-        if active_revisions == {identity.source_revision}:
-            return SourceRevisionReport(
-                same_revision=True,
-                created=False,
-                reused=False,
-                stale_count=0,
-                change_set_id=None,
-            )
-        if identity.source_revision in active_revisions:
-            raise ScopeViolation("source revision state is ambiguous")
-
-        if active_revisions:
-            change_set = _existing_recompile(session, scope, identity)
-        else:
-            change_set, applied_same_revision = (
-                _existing_zero_evidence_source_change_set(
-                    session,
-                    scope,
-                    identity,
-                )
-            )
-            if applied_same_revision:
-                return SourceRevisionReport(
-                    same_revision=True,
-                    created=False,
-                    reused=False,
-                    stale_count=0,
-                    change_set_id=None,
-                )
-        if change_set is None:
-            change_set, created = _insert_recompile_or_reread(
-                session,
+    lifecycle = coordinate_source_lifecycle(
+        session,
+        scope,
+        identity,
+        "active",
+        actor=created_by,
+        apply_business=lambda callback_session, decision: (
+            _source_revision_business_outcome(
+                callback_session,
                 scope,
                 identity,
-                created_by=created_by,
+                stale_timestamp,
+                created_by,
+                decision,
             )
-        else:
-            created = False
-        target_ids = (
-            select(ClaimEvidence.id)
-            .join(Claim, Claim.id == ClaimEvidence.claim_id)
-            .where(
-                Claim.space_id == scope.space_id,
-                ClaimEvidence.knowledge_id == identity.knowledge_id,
-                ClaimEvidence.raw_kb_id == scope.raw_kb_id,
-                ClaimEvidence.lineage_status.is_not(None),
-                ClaimEvidence.source_revision.is_not(None),
-                ClaimEvidence.source_revision != identity.source_revision,
-                ClaimEvidence.stale_at.is_(None),
-            )
-        )
-        stale_result = cast(
-            CursorResult[Any],
-            session.execute(
-                update(ClaimEvidence)
-                .where(
-                    ClaimEvidence.id.in_(target_ids),
-                    ClaimEvidence.stale_at.is_(None),
-                )
-                .values(stale_at=stale_timestamp)
-                .execution_options(synchronize_session="fetch")
-            )
-        )
-        stale_count = stale_result.rowcount or 0
-        session.flush()
+        ),
+    )
+    if lifecycle.business_payload is None:
         return SourceRevisionReport(
-            same_revision=False,
-            created=created,
-            reused=not created,
-            stale_count=stale_count,
-            change_set_id=change_set.id,
+            same_revision=lifecycle.decision == "blocked_deleted",
+            created=False,
+            reused=False,
+            stale_count=0,
+            change_set_id=None,
         )
+    return SourceRevisionReport.model_validate(lifecycle.business_payload)

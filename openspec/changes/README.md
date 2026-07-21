@@ -21,18 +21,18 @@
 | 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审完成（PR #12 已合入，2026-07-18），按 L4 依赖顺序可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
-| 015 | feedback-flywheel | 📋 提案 | M2，依赖 009 |
+| 015 | feedback-flywheel | ✅ 已合入 main（PR #18） | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
 | 017 | weknora-source-bridge | ✅ 软件交付；live NOT RUN | |
-| 018 | release-snapshot-read-model | ⏳ PR #9（live 收口中） | 独占迁移 0005 |
+| 018 | release-snapshot-read-model | ✅ 已合入 main（PR #9，2026-07-17） | 独占迁移 0005 |
 | 019 | golden-quality-gate | ✅ 已合入 main（PR #8） | |
 | 020 | golden-v01-baseline-run | 📋 等 019✅+021 | 高 token 数据任务 |
-| 021 | source-lifecycle-ordering | 📋 等 018 | 迁移预分配 0006 |
+| 021 | source-lifecycle-ordering | ✅ 软件/双审/本机门禁完成，待人工 commit/push/PR | 迁移 0006，实际链 `0012 → 0006`；deterministic 1901，PG 25/skipped=0 |
 | 022 | review-hardening | ✅ 已交付 | ⚠️ 编号冲突历史记录：与下行同号，两者均已合入，**目录不改名**，冲突就此冻结 |
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
-| 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
-| 025 | merge-weak-value-guard | 🔒 已占号（目录未开） | 合并前置弱值门槛：更粗略新值不开冲突（Q026 防审核队列垃圾）；小型，PR #9 合入后提案；可与 024 同一执行者顺手接 |
+| 024 | extraction-recall-uplift | ✅ 软件实现完成（PR #13） | 轨道 L5；durable attempt ledger + E1～E7 + A10 双侧护栏；真实召回/非退化证据仍由 020 D4/D4b 承接 |
+| 025 | merge-weak-value-guard | 📂 三版定稿（codex PR #17 两轮复审收口，可认领） | 合并前置弱值门槛：抑制=有资格前提的裁决（E1~E5：三态/高风险/权威/**全权威时间切片+effective_to 贯通**/基线复核）+ 可证明偏序 SpecificityRelation（score 仅 008 排序）+ **root+events 双表**可恢复生命周期（来源 revision 状态机，stale 不复活）+ 三类失败语义/锁/exact-once；G1~G9 strict 规格；迁移 0011（docs 03 §8 已先行登记，双方言触发器）；**实现候 021（规格已提出未实现）**，可与 024 同一执行者顺手接 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027+ | （空闲） | | 先占号再开目录 |
 
@@ -44,13 +44,15 @@
 | 0002 | 007 knowledge_domain | ✅ |
 | 0003 | 016 enterprise_knowledge_scope | ✅ |
 | 0004 | 017 source_evidence_lineage | ✅ |
-| 0005 | 018 release_snapshot_read_model | ⏳ PR #9 |
-| 0006 | 021 source-lifecycle-ordering | 预分配 |
+| 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
+| 0006 | 021 source-lifecycle-ordering | 🟡 已实施，待合入；实际 down_revision=0012 |
 | 0007 | 010 structured-import（qa_staging 等） | 预分配 |
 | 0008 | 009 concept-layer | 预分配 |
 | 0009 | 012 qa-objects | 预分配 |
 | 0010 | 011 knowledge-health（completeness_snapshots + health_runs/health_findings） | 预分配 |
-| 0011+ | （空闲；014/015 如需建表先来占号） | |
+| 0011 | 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表，append-only+触发器） | 预分配 |
+| 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
+| 0013+ | （空闲；014 如需建表先来占号） | |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 

@@ -12,9 +12,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .attempts import AttemptLedger, InMemoryAttemptLedger
+from .extract import call_and_parse
 from .llm import ModelClient
 from .models import FieldCandidate, Judgement, JudgeRequest
-from .parsing import extract_json_array
+from .prompts import PROMPT_VERSION
 
 JUDGE_SYSTEM = """你是寿险条款抽取结果的裁决者。你收到一个字段的多个候选值（含证据），\
 从中选出最可信的一个，或判定全部不可信。只输出 JSON 数组（恰好一个元素）：
@@ -37,10 +39,21 @@ class JudgeDispatcher:
 
     async def dispatch(self, request: JudgeRequest) -> Judgement | None:
         """返回 Judgement（gateway 即时裁决）或 None（claude-session 入队待批处理）。"""
+        judgement, _ = await self.dispatch_audited(request)
+        return judgement
+
+    async def dispatch_audited(
+        self,
+        request: JudgeRequest,
+        *,
+        ledger: AttemptLedger | None = None,
+    ) -> tuple[Judgement | None, str | None]:
+        """Dispatch and return the producer explicitly (safe under concurrency)."""
         if self.mode == "claude-session":
             self.queue.append(request)
-            return None
+            return None, None
         assert self._client is not None
+        ledger = ledger if ledger is not None else InMemoryAttemptLedger()
         user = (
             f"产品：{request.product_name}\n文档：{request.doc}\n"
             f"字段：{request.field_name}（field_id={request.field_id}）\n"
@@ -48,24 +61,35 @@ class JudgeDispatcher:
             f"## 候选值\n{json.dumps(request.candidates, ensure_ascii=False, indent=1)}\n\n"
             f"## 上下文节选\n{request.context_excerpt}"
         )
-        raw = await self._client.complete(JUDGE_SYSTEM, user)
-        parsed = extract_json_array(raw)
+        call = await call_and_parse(
+            self._client,
+            JUDGE_SYSTEM,
+            user,
+            ledger=ledger,
+            field_ids=(request.field_id,),
+            stage="judge",
+            prompt_version=f"judge@{PROMPT_VERSION}",
+        )
+        parsed = call.items
         if not parsed:
-            return None
+            return None, None
         item: dict[str, Any] = parsed[0]
         tri = str(item.get("tri_state", "unknown"))
-        return Judgement(
-            product_id=request.product_id,
-            field_id=request.field_id,
-            value=None if item.get("value") is None else str(item.get("value")),
-            tri_state="present" if tri == "present" else "unknown",
-            evidence=[
-                {"page": int(e.get("page", 0)), "quote": str(e.get("quote", ""))}  # type: ignore[misc]
-                for e in item.get("evidence") or []
-                if isinstance(e, dict)
-            ],
-            confidence="medium",
-            reasoning=str(item.get("reasoning", "")) or None,
+        return (
+            Judgement(
+                product_id=request.product_id,
+                field_id=request.field_id,
+                value=None if item.get("value") is None else str(item.get("value")),
+                tri_state="present" if tri == "present" else "unknown",
+                evidence=[
+                    {"page": int(e.get("page", 0)), "quote": str(e.get("quote", ""))}  # type: ignore[misc]
+                    for e in item.get("evidence") or []
+                    if isinstance(e, dict)
+                ],
+                confidence="medium",
+                reasoning=str(item.get("reasoning", "")) or None,
+            ),
+            call.producing_attempt_id,
         )
 
 

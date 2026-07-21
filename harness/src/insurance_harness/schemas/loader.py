@@ -16,6 +16,7 @@ from .models import (
     FieldSpec,
     GlossaryTerm,
     ProductLineSchema,
+    Requiredness,
     RiskLevel,
     SchemaRegistry,
     ValueType,
@@ -78,6 +79,35 @@ def _parse_sources(raw: str) -> tuple[str, ...]:
     return tuple(p for p in re.split(r"[/、，,]", raw) if p)
 
 
+def _parse_requiredness(row: dict[str, Any], *, file: str, name: str) -> "Requiredness":
+    """『必填』/requiredness 列（可选）：必填/required/是→required；可选/optional/否
+    →optional；expected/期望→expected。**键缺失/显式空白才默认 expected**；键存在
+    但值不在枚举 → 带定位抛 SchemaLoadError（fail-fast，codex R2 P2：拼写错误不得
+    静默放大补漏人群与成本）。"""
+    def parse(raw: str) -> Requiredness | None:
+        if not raw:
+            return None
+        if raw in ("required", "必填", "是"):
+            return "required"
+        if raw in ("optional", "可选", "否"):
+            return "optional"
+        if raw in ("expected", "期望"):
+            return "expected"
+        raise SchemaLoadError(
+            f"{file}: 字段 {name!r} 的 requiredness/必填 值不合法：{raw!r}"
+            "（合法：required/必填/是、expected/期望、optional/可选/否）"
+        )
+
+    canonical = parse(_as_str(row.get("requiredness")))
+    chinese = parse(_as_str(row.get("必填")))
+    if canonical is not None and chinese is not None and canonical != chinese:
+        raise SchemaLoadError(
+            f"{file}: 字段 {name!r} 的 requiredness 与 必填 配置冲突："
+            f"{canonical!r} != {chinese!r}"
+        )
+    return canonical or chinese or "expected"
+
+
 def _field_from_baseline(row: dict[str, Any], sheet: str, file: str) -> FieldSpec:
     name = _as_str(row.get("字段名"))
     if not name:
@@ -89,6 +119,7 @@ def _field_from_baseline(row: dict[str, Any], sheet: str, file: str) -> FieldSpe
         field_id=stable_field_id(name, _as_str(row.get("英文名"))),
         extractable=extractable,
         allowed_sources=_parse_sources(sources_raw),
+        requiredness=_parse_requiredness(row, file=file, name=name),
         description=_as_str(row.get("说明")) or _as_str(row.get("取值")),
         source_sheet=sheet,
     )
@@ -118,6 +149,7 @@ def _field_from_extension(row: dict[str, Any], file: str) -> FieldSpec:
         allowed_sources=_parse_sources(sources_raw),
         risk_level=risk,
         evidence_required=risk == "high",
+        requiredness=_parse_requiredness(row, file=file, name=name),
         description=_as_str(row.get("说明")),
         source_sheet="extensions-v1.1",
     )

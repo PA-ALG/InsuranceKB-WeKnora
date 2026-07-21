@@ -45,6 +45,7 @@ from ..sources import (
     WeKnoraDocumentSource,
     WeKnoraSourceRequest,
 )
+from .experiment import AssignmentPolicy
 from .feedability import render_feedability, score_feedability, write_quarantine
 from .judge import JudgeDispatcher, read_judgements
 from .llm import ModelClient, OpenAICompatClient, ReplayClient
@@ -79,6 +80,60 @@ def _positive_int(raw: str) -> int:
     if value <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return value
+
+
+def _nonnegative_int(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError:
+        raise argparse.ArgumentTypeError("must be a non-negative integer") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+    return value
+
+
+def _pipeline_config_from_args(
+    args: argparse.Namespace, *, judge_mode: str
+) -> PipelineConfig:
+    experiment_id = getattr(args, "experiment_id", None)
+    experiment_seed = getattr(args, "experiment_seed", 0)
+    gapfill_max_calls = getattr(args, "gapfill_max_calls", None)
+    if experiment_id is not None and not experiment_id.strip():
+        raise SystemExit("--experiment-id must not be blank")
+    if experiment_id is None and experiment_seed != 0:
+        raise SystemExit("--experiment-seed requires --experiment-id")
+    assignment = AssignmentPolicy(
+        enabled=experiment_id is not None,
+        experiment_id=experiment_id or "",
+        seed=experiment_seed,
+    )
+    return PipelineConfig(
+        judge_mode=judge_mode,
+        concurrency=args.concurrency,
+        gapfill_max_calls=gapfill_max_calls,
+        assignment=assignment,
+    )
+
+
+def _add_recall_config_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--concurrency", type=_positive_int, default=6)
+    parser.add_argument(
+        "--gapfill-max-calls",
+        type=_nonnegative_int,
+        default=None,
+        help="run 级补漏真实出站调用硬上限（0=禁止，缺省=不限）",
+    )
+    parser.add_argument(
+        "--experiment-id",
+        default=None,
+        help="启用 020 D4 A/B 分桶并指定稳定实验身份",
+    )
+    parser.add_argument(
+        "--experiment-seed",
+        type=_nonnegative_int,
+        default=0,
+        help="实验确定性分桶 seed（非零时必须同时给 --experiment-id）",
+    )
 
 
 def load_settings(*, require_weknora: bool = False) -> HarnessSettings:
@@ -161,7 +216,7 @@ async def _cmd_extract(args: argparse.Namespace) -> int:
             registry=registry,
             model_id=model_id,
             source=source,
-            config=PipelineConfig(judge_mode=judge.mode, concurrency=args.concurrency),
+            config=_pipeline_config_from_args(args, judge_mode=judge.mode),
             judge=judge,
             template_registry=template_registry if template_registry.templates else None,
             table_provider=select_table_provider(settings.table_provider),
@@ -221,7 +276,7 @@ async def _cmd_extract_replay(args: argparse.Namespace) -> int:
             registry=registry,
             model_id=model_id,
             source=source,
-            config=PipelineConfig(judge_mode=judge.mode, concurrency=args.concurrency),
+            config=_pipeline_config_from_args(args, judge_mode=judge.mode),
             judge=judge,
             template_registry=template_registry if template_registry.templates else None,
             table_provider=select_table_provider(settings.table_provider),
@@ -365,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
     p_ext.add_argument("--schema-dir", type=Path, default=_DEFAULT_SCHEMA_DIR)
     p_ext.add_argument("--replay-dir", type=Path, default=None, help="录制回放夹具目录")
     p_ext.add_argument("--model", default=None, help="覆盖 HARNESS_LLM_MODEL_WEAK")
-    p_ext.add_argument("--concurrency", type=_positive_int, default=6)
+    _add_recall_config_arguments(p_ext)
     p_ext.add_argument("--resume", action="store_true", help="从 checkpoint 续跑")
     p_ext.add_argument(
         "--templates-dir", type=Path, default=None,
@@ -381,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     p_replay.add_argument("--schema-dir", type=Path, default=_DEFAULT_SCHEMA_DIR)
     p_replay.add_argument("--replay-dir", type=Path, default=None, help="录制回放夹具目录")
     p_replay.add_argument("--model", default=None, help="覆盖 HARNESS_LLM_MODEL_WEAK")
-    p_replay.add_argument("--concurrency", type=_positive_int, default=6)
+    _add_recall_config_arguments(p_replay)
     p_replay.add_argument("--resume", action="store_true", help="从 checkpoint 续跑")
     p_replay.add_argument(
         "--templates-dir", type=Path, default=None,

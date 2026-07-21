@@ -8,6 +8,7 @@ from sqlalchemy import event, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from insurance_harness.db.models import InsuranceProduct, ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.knowledge import MergePolicy, import_pred_records
 from insurance_harness.knowledge import source_revision as revision_service
@@ -18,10 +19,13 @@ from insurance_harness.knowledge.tables import (
     ChangeSet,
     Claim,
     ClaimEvidence,
+    ClaimRevision,
     CurrentRelease,
     ReleaseSnapshot,
     SnapshotClaim,
+    SnapshotFact,
 )
+from insurance_harness.sources import ProcessedAtOrdering
 from tests.kbhelpers import pred, seed_product
 from tests.support.source_revision import (
     EARLIER,
@@ -31,6 +35,18 @@ from tests.support.source_revision import (
     count_rows,
     source_identity,
 )
+
+
+def test_l1_source_identity_fixture_keeps_default_a_before_b(
+    kb_session: Session,
+) -> None:
+    scope = bound_scope(kb_session, "fixture-ordering")
+    revision_a = source_identity(scope, revision_char="a")
+    revision_b = source_identity(scope, revision_char="b")
+
+    assert isinstance(revision_a.ordering, ProcessedAtOrdering)
+    assert isinstance(revision_b.ordering, ProcessedAtOrdering)
+    assert revision_a.ordering.value < revision_b.ordering.value
 
 
 def test_t7_source_revision_report_is_frozen_and_strict() -> None:
@@ -212,7 +228,7 @@ def test_rh2_2_zero_evidence_new_revision_creates_then_reuses_one_recompile(
     assert applied_a.source_revision == revision_a.source_revision
     assert count_rows(kb_session, ClaimEvidence) == 0
 
-    revision_b = source_identity(scope, revision_char="b")
+    revision_b = source_identity(scope, revision_char="b", ordering_offset=1)
     first = revision_service.notify_source_revision(
         kb_session,
         scope,
@@ -304,7 +320,7 @@ def test_rh2_2_zero_evidence_malformed_or_conflicting_aggregate_fails_closed_wit
         ),
         policy=MergePolicy(auto_apply_add=True),
     )
-    revision_b = source_identity(scope, revision_char="b")
+    revision_b = source_identity(scope, revision_char="b", ordering_offset=1)
 
     def blocked_change_set(
         source_kind: str,
@@ -470,7 +486,7 @@ def test_t7_new_revision_marks_only_scoped_matching_source_aware_evidence_stale(
         predicate="waiting_period-b",
         identities=[old_b],
     )
-    new_a = source_identity(scope_a, revision_char="b")
+    new_a = source_identity(scope_a, revision_char="b", ordering_offset=1)
 
     report = revision_service.notify_source_revision(
         kb_session,
@@ -495,7 +511,13 @@ def test_t7_new_revision_marks_only_scoped_matching_source_aware_evidence_stale(
         change_set.external_record_id,
         change_set.source_revision,
         change_set.status,
-    ) == (scope_a.space_id, "recompile", "knowledge-1", "b" * 64, "pending")
+    ) == (
+        scope_a.space_id,
+        "recompile",
+        "knowledge-1",
+        new_a.source_revision,
+        "pending",
+    )
 
 
 def test_t7_repeated_new_revision_notification_reuses_one_pending_recompile(
@@ -509,7 +531,7 @@ def test_t7_repeated_new_revision_notification_reuses_one_pending_recompile(
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
 
     first = revision_service.notify_source_revision(
         kb_session, scope, new, observed_at=NOW
@@ -577,7 +599,7 @@ def test_t7_notification_rejects_nonempty_or_nonpending_recompile_without_stale_
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     blocked = ChangeSet(
         space_id=scope.space_id,
         source_kind="recompile",
@@ -624,7 +646,7 @@ def test_t7_notification_rejects_document_recompile_ambiguity(kb_session: Sessio
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     kb_session.add_all(
         [
             ChangeSet(
@@ -671,7 +693,7 @@ def test_t7_notification_rejects_malformed_recompile_knowledge_ids_without_stale
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     blocked = ChangeSet(
         space_id=scope.space_id,
         source_kind="recompile",
@@ -711,7 +733,7 @@ def test_t7_notification_flush_failure_rolls_back_stale_and_changeset(
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     evidence_id = evidence[0].id
 
     def fail_recompile_flush(session: Session, _context: object, _instances: object) -> None:
@@ -750,7 +772,7 @@ def test_t7_duplicate_key_race_rereads_exact_pending_winner(
         predicate="waiting_period",
         identities=[old],
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
 
     def race_factory(
         session: Session,
@@ -817,7 +839,7 @@ def test_t7_duplicate_key_race_rejects_invalid_winner_and_rolls_back_stale(
         identities=[old],
     )
     evidence_id = evidence[0].id
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
 
     def invalid_race_factory(
         session: Session,
@@ -890,7 +912,7 @@ def test_t7_unrelated_integrity_error_is_not_misclassified_as_recompile_race(
         identities=[old],
     )
     evidence_id = evidence[0].id
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     collision = ChangeSet(
         id="collision-id",
         space_id=scope.space_id,
@@ -971,7 +993,7 @@ def test_t7_notification_ignores_legacy_and_other_source_rows_on_mixed_claim(
     report = revision_service.notify_source_revision(
         kb_session,
         scope,
-        source_identity(scope, revision_char="b"),
+        source_identity(scope, revision_char="b", ordering_offset=1),
         observed_at=NOW,
     )
 
@@ -992,19 +1014,52 @@ def test_t7_notification_does_not_mutate_release_pointer_or_snapshot(
         predicate="waiting_period",
         identities=[old],
     )
+    assert claim.product_version_id is not None
+    version = kb_session.get(ProductVersion, claim.product_version_id)
+    assert version is not None
+    product = kb_session.get(InsuranceProduct, version.product_id)
+    assert product is not None
+    kb_session.add(
+        ClaimRevision(
+            claim_id=claim.id,
+            revision_no=claim.current_revision,
+            before=None,
+            after={"value": claim.value},
+            actor="test",
+        )
+    )
     rendered_pages = [{"slug": "product", "content": "published"}]
     snapshot = ReleaseSnapshot(
         space_id=scope.space_id,
         label="release-1",
         rendered_pages=rendered_pages,
-        status="published",
+        status="building",
         read_model_version=1,
-        projection_frozen_at=NOW,
-        published_at=NOW,
+        projection_frozen_at=None,
+        published_at=None,
         published_by="publisher",
     )
     kb_session.add(snapshot)
     kb_session.flush()
+    fact = SnapshotFact(
+        space_id=scope.space_id,
+        snapshot_id=snapshot.id,
+        claim_id=claim.id,
+        revision_no=claim.current_revision,
+        product_id=product.id,
+        product_version_id=version.id,
+        product_code=product.product_code,
+        product_name=product.canonical_name,
+        version_label=version.version_label,
+        predicate=claim.predicate,
+        field_name=claim.predicate,
+        field_group="terms",
+        value_state="present",
+        value=dict(claim.value or {}),
+        confidence=claim.confidence,
+        schema_version=claim.schema_version,
+        evidence=[{"knowledge_id": old.knowledge_id}],
+    )
     membership = SnapshotClaim(
         space_id=scope.space_id,
         snapshot_id=snapshot.id,
@@ -1016,24 +1071,63 @@ def test_t7_notification_does_not_mutate_release_pointer_or_snapshot(
         id="current",
         snapshot_id=snapshot.id,
     )
-    kb_session.add_all([membership, pointer])
+    kb_session.add_all([fact, membership])
     kb_session.flush()
+    snapshot.status = "published"
+    snapshot.projection_frozen_at = NOW
+    snapshot.published_at = NOW
+    kb_session.flush()
+    kb_session.add(pointer)
+    kb_session.flush()
+
+    before_fingerprint = (
+        snapshot.id,
+        snapshot.status,
+        tuple((page["slug"], page["content"]) for page in rendered_pages),
+        fact.id,
+        fact.claim_id,
+        fact.revision_no,
+        fact.value,
+        tuple(item["knowledge_id"] for item in fact.evidence),
+        membership.claim_id,
+        membership.revision_no,
+        pointer.snapshot_id,
+    )
 
     revision_service.notify_source_revision(
         kb_session,
         scope,
-        source_identity(scope, revision_char="b"),
+        source_identity(scope, revision_char="b", ordering_offset=1),
         observed_at=NOW,
     )
 
     kb_session.refresh(snapshot)
     kb_session.refresh(pointer)
     kb_session.refresh(membership)
+    kb_session.refresh(fact)
+    after_fingerprint = (
+        snapshot.id,
+        snapshot.status,
+        tuple(
+            (page["slug"], page["content"])
+            for page in (snapshot.rendered_pages or [])
+        ),
+        fact.id,
+        fact.claim_id,
+        fact.revision_no,
+        fact.value,
+        tuple(item["knowledge_id"] for item in fact.evidence),
+        membership.claim_id,
+        membership.revision_no,
+        pointer.snapshot_id,
+    )
+    assert after_fingerprint == before_fingerprint
     assert snapshot.rendered_pages == rendered_pages
     assert pointer.snapshot_id == snapshot.id
     assert membership.claim_id == claim.id
     assert count_rows(kb_session, ReleaseSnapshot) == 1
     assert count_rows(kb_session, SnapshotClaim) == 1
+    assert count_rows(kb_session, SnapshotFact) == 1
     assert count_rows(kb_session, CurrentRelease) == 1
 
 
@@ -1067,7 +1161,7 @@ def test_t7_stale_write_is_a_scoped_conditional_null_to_timestamp_update(
         report = revision_service.notify_source_revision(
             kb_session,
             scope,
-            source_identity(scope, revision_char="b"),
+            source_identity(scope, revision_char="b", ordering_offset=1),
             observed_at=NOW,
         )
     finally:
@@ -1084,8 +1178,13 @@ def test_t7_notification_never_overwrites_an_existing_stale_timestamp(
     kb_session: Session,
 ) -> None:
     scope = bound_scope(kb_session)
-    active = source_identity(scope, revision_char="a")
-    prior = source_identity(scope, revision_char="c")
+    active = source_identity(scope, revision_char="a", ordering_offset=1)
+    prior = source_identity(scope, revision_char="c", ordering_offset=0)
+    incoming = source_identity(scope, revision_char="b", ordering_offset=2)
+    assert isinstance(active.ordering, ProcessedAtOrdering)
+    assert isinstance(prior.ordering, ProcessedAtOrdering)
+    assert isinstance(incoming.ordering, ProcessedAtOrdering)
+    assert prior.ordering.value < active.ordering.value < incoming.ordering.value
     _, rows = claim_with_evidence(
         kb_session,
         scope,
@@ -1098,7 +1197,7 @@ def test_t7_notification_never_overwrites_an_existing_stale_timestamp(
     report = revision_service.notify_source_revision(
         kb_session,
         scope,
-        source_identity(scope, revision_char="b"),
+        incoming,
         observed_at=NOW,
     )
 
