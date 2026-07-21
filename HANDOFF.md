@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-20（020 T1 run-admission 软件闭环已完成并生成零模型 `BLOCKED` 工件；T2～T7 未运行。当前仍须先完成 021，并补齐输入/执行面 identity、历史 provenance、签名审批、三模型不可变身份/probe 与预算账户后，才允许真实模型调用；见 0j/B22。）
+> 最后更新：2026-07-21（OpenSpec 021 已随 PR #23、merge `cfefcc9b` 合入 main，六项 GitHub CI 全绿；020 T1 run-admission 软件闭环正在更新到该新基线。T2～T7 仍未运行，只有刷新 canonical admission 为 READY 后才允许真实模型调用；见 0j/0k/B22/B23。）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -43,10 +43,12 @@
    - [x] T1～T6 严格 TDD 完成，codex 七轮 APPROVED，随 PR #8 合入（merge commit `4d9c84e`，2026-07-15）；证据见 B21 与 `openspec/changes/019-golden-quality-gate/validation-report.md`。
    - `run-admission` 属于 020 T1，只能在 019、021 均完成后由 020 自己执行（边界不变）。
 
-   **收敛轨 — 021 Source lifecycle ordering（0/10，硬依赖 018）**
-   - [ ] 先完成 source ordering/delete/reactivation 状态机规格审查，再按 `openspec/changes/021-source-lifecycle-ordering/` T1～T10 TDD 实施。
-   - [ ] 迁移编号排在 018 的 `0005` 之后；交付 SourceHead/SourceEvent、`processed_at/generation`、per-source lock/CAS、delete/import/notify 竞争处理与 PostgreSQL 双会话证据。
-   - [ ] 在真实 PostgreSQL 逆序/并发/删除竞争用例通过前，不得宣称 ordering 安全。
+   **收敛轨 — 021 Source lifecycle ordering（T1～T10 全部完成；硬依赖 018✅）**
+   - [x] source ordering/delete/reactivation 状态机按 SDD/TDD 实施；`notify/import/delete/reactivate` 共用 per-source lock/CAS 与 append-only event。
+   - [x] 迁移 `0006` 实际接 main head `0012`；交付 SourceHead/SourceEvent/BackfillIssue resolver、`processed_at/generation` 与 caller-owned nested transaction。
+   - [x] 本机 PostgreSQL 16 逆序/并发/删除竞争与真实 Alembic lane：021 核心 21 passed，全部 PG 25 passed，JUnit skipped=0。
+   - [x] 最终 spec PASS、quality APPROVED；OpenSpec strict、Ruff、mypy 248 files、deterministic 1901 与 diff check 全绿。
+   - [ ] 人工 owner 复核后 commit/push/PR（AI 不越过 Git 边界）。
 
    **价值出口 — 020 真实金标/baseline 运行（硬依赖 019+021）**：019 提供 artifact 工具/合同，021 关闭 source ordering 风险；两者完成后，020 才从 T1 `run-admission` 开始，未准入前零模型调用。B10 WeKnora 测试实例/真实 live 环境可由独立负责人并行准备，但不得与代码轨共享分支，也不得用 PostgreSQL integration 冒充 WeKnora live。
 
@@ -56,7 +58,9 @@
 
 0i. **PR #18 / OpenSpec 015 codex 接管（2026-07-18，当前）**：Claude 旧版以 cursor/gap/observation 文件充当 `--apply` 状态；该方案不能在三份文件间原子提交，也不携 Space 身份，无法满足企业多实例 exactly-once。codex 按 SDD/TDD 新增迁移 `0012` 的 `flywheel_checkpoints`、`flywheel_observations`、`knowledge_gaps`，以 KnowledgeSpace 行锁串行同 Space 的跨 source gap 聚合，在 caller-owned transaction 内写 processed ledger/gap 并最后推进 checkpoint；故障注入全回滚、健康重试恰一次、同 source 跨 Space 隔离。CLI 现必填 `--source-id`，dry-run 零写，`--apply` 落 DB；真实 Space-scoped published Claim 查询已接空知识信号。全仓首轮 deterministic 抓到新增 head 破坏 `head→0002` 的首 DDL 前预检，已在 0012 镜像 0003/0005 下游兼容性检查并新增非空飞轮表 downgrade 拒绝测试；Alembic env 已注册新 ORM。提交前自检另以 `model_construct` 复现 PII validator 绕过，已在 pull 消费点幂等再脱敏，确保 evaluation/queue/gap payload 不落原文。当前本机 PostgreSQL 16 lane **4 passed / JUnit tests=4 skipped=0**，Ruff PASS、mypy 238 files PASS，deterministic **1681 passed / 9 deselected**。实现 commit `f5f7f3de` 已 push PR #18，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，PR 已达可合并状态。F1.1b Langfuse 直连与 F2.4 ReviewItem 动作投影继续 gated，禁止因本轮 durable foundation 完成而虚报。
 
-0j. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-20）**：已按 SDD/TDD 实现类型化 admission/evaluator/CLI、签名 canonical identity、完整输入与 execution-surface 指纹、安全 provider probe、durable budget reservation/request-attempt ledger、每产品 runtime 重验、annotation/baseline 可恢复执行入口、提交前 exact-bytes/语义回验及 validation→settlement 同锁。两轮独立最终复核均无 P0/P1/P2。当前权威 `run-admission.json` 为 **`BLOCKED`**，runtime capability=`budget-ledger-v3-canary-v1`，provider probe 全为 `not_attempted`，模型调用/token/费用均为 0；阻塞包括 021 依赖不匹配、输入/执行面 identity 漂移或缺失、历史 provenance 缺失、provenance/budget 签名审批缺失、预算未准入及三模型不可变身份未冻结。**这只表示 T1 软件闭环完成，不表示 020 数据运行完成**：T2～T7 尚未运行，D5/T8 最终对账也未完成；解除阻塞后必须刷新准入工件并得到 READY，方可按 T2→T7 执行。
+0j. **OpenSpec 021 主流程已合入（2026-07-21）**：确定性链路已贯通 `SourceRevision → per-source advisory lock → SourceHead/append-only SourceEvent → notify/import/delete → stale-or-blocked audit no-op → strictly-newer reactivate`；历史 ordering 不可证明时只建唯一 open BackfillIssue，显式 resolver 与正常 lifecycle 共锁且 exact retry 返回原 resolution event。Task8 覆盖 13 个真实业务并发节点与 8 个真实 Alembic 节点；合并前 fresh 本地 deterministic **1901 passed/30 deselected**、PostgreSQL **25 passed/skipped=0**、OpenSpec/Ruff/mypy 全绿，PR #23 的两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，merge=`cfefcc9b`。021 已解除 020 的 source-ordering 依赖，但不会自动放行模型调用。
+
+0k. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-21，更新基线中）**：已按 SDD/TDD 实现类型化 admission/evaluator/CLI、签名 canonical identity、完整输入与 execution-surface 指纹、安全 provider probe、durable budget reservation/request-attempt ledger、每产品 runtime 重验、annotation/baseline 可恢复执行入口、提交前 exact-bytes/语义回验及 validation→settlement 同锁。两轮独立最终复核均无 P0/P1/P2。021 合入前权威工件为零模型 **`BLOCKED`**，runtime capability=`budget-ledger-v3-canary-v1`，provider probe 全为 `not_attempted`，模型调用/token/费用均为 0；当前须在 merge `cfefcc9b` 基线上重新生成 canonical admission。**这只表示 T1 软件闭环完成，不表示 020 数据运行完成**：T2～T7 尚未运行，D5/T8 最终对账也未完成；其余输入/执行面 identity、历史 provenance、签名审批、预算与三模型身份/probe 解除并得到 READY 后，方可按 T2→T7 执行。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -122,8 +126,8 @@
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；`0005`、统一读模型、可恢复 publish/rollback 与 5-node live 已验收，021 已解锁 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **T1 软件闭环已完成，当前零模型 `BLOCKED`；T2～T7 未运行**。硬依赖 019+021；还须补齐输入/执行面 identity、历史 provenance、签名审批、三模型 identity/probe 与预算准入，刷新为 READY 后才允许模型调用 | 高 token 数据任务 |
-| B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后（注册表预分配 0006），完成后与 019 共同解锁 020 | 开发型，中大 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **T1 软件闭环已完成，正在更新到已含 021 的 main；T2～T7 未运行**。仍须补齐输入/执行面 identity、历史 provenance、签名审批、三模型 identity/probe 与预算准入，刷新为 READY 后才允许模型调用 | 高 token 数据任务 |
+| B23 | 021 Source lifecycle ordering | ✅ **T1～T10 已随 PR #23 合入 main（merge `cfefcc9b`）**：durable SourceHead/Event/BackfillIssue resolver、processed_at/generation、per-source lock/CAS、delete/import/notify/reactivate；迁移 0006 接 0012；六项 GitHub CI 全绿 | 开发型，中大 |
 | B24 | 024 抽取召回提升（extract_empty 主攻 + 值粒度指引 + A10 弱值/兼容性护栏） | **可认领（轨道 L5，2026-07-16 新开）**：`openspec/changes/024-extraction-recall-uplift/`（E1–E6 条款 + T1–T7 任务）；005 归因工单→回放 RED 用例，零真实模型调用；E6 承接 LLM-wiki-black A10 唯一未迁移真空（Q012/Q026 历史 bug 固化）；真实回归归 020 D4 | 开发型，中小 |
 | B25 | 025 合并前置弱值门槛（已占号未开目录） | 更粗略新值不开冲突（Q026）+ informationScore 仅作 008 排序信号不作替换判据；PR #9 已合入，现可提案，可与 B24 同一执行者推进 | 开发型，小 |
 | B26 | 026 data_quality 端到端持久化（已占号未开目录） | 12 号 #2 采纳项对账发现只落了 pred 侧：需 Claim/Revision/Snapshot/MCP 全链字段+迁移+回填设计；业务确需时立项，落地前 010/013 等不得预支该字段承诺 | 开发型，中小 |

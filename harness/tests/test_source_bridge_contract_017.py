@@ -124,6 +124,7 @@ def test_manifest_to_import_context_preserves_bridge_identity_contract(
         source_id=document.source_id,
         knowledge_id=document.knowledge_id,
         source_revision=document.source_revision.value,
+        ordering=document.source_revision.ordering,
         file_hash=document.source_revision.file_hash,
         original_digest=document.original_digest,
         parser_fingerprint=document.source_revision.parser_fingerprint,
@@ -146,6 +147,7 @@ def test_manifest_to_import_context_preserves_bridge_identity_contract(
         "knowledge_id": document.knowledge_id,
         "raw_kb_id": scope.raw_kb_id,
         "source_revision": document.source_revision.value,
+        "ordering": document.source_revision.ordering.model_dump(mode="python"),
         "file_hash": document.source_revision.file_hash,
         "original_digest": document.original_digest,
         "parser_version": document.source_revision.parser_fingerprint,
@@ -170,6 +172,7 @@ def test_manifest_context_rejects_duplicate_and_non_bijective_docs_contract(
         source_id=document.source_id,
         knowledge_id=document.knowledge_id,
         source_revision=document.source_revision.value,
+        ordering=document.source_revision.ordering,
         file_hash=document.source_revision.file_hash,
         original_digest=document.original_digest,
         parser_fingerprint=document.source_revision.parser_fingerprint,
@@ -201,14 +204,20 @@ def test_manifest_context_rejects_self_consistent_forged_identity_contract(
         wiki_kb_id="wiki-manifest-forged",
     )
     document = _source_document(scope)
+    forged_revision = type(document.source_revision)(
+        file_hash="d" * 32,
+        ordering=document.source_revision.ordering,
+        parser_fingerprint="forged-parser@1",
+    )
     forged_entry = DocManifestEntry(
         doc=document.file_name,
         source_id="forged-source",
         knowledge_id="forged-knowledge",
-        source_revision="c" * 64,
-        file_hash="d" * 32,
+        source_revision=forged_revision.value,
+        ordering=forged_revision.ordering,
+        file_hash=forged_revision.file_hash,
         original_digest="e" * 64,
-        parser_fingerprint="forged-parser@1",
+        parser_fingerprint=forged_revision.parser_fingerprint,
     )
     manifest = RunManifest(
         run_id="live-contract-forged",

@@ -17,7 +17,11 @@ from insurance_harness.compiler.models import RunManifest
 from insurance_harness.compiler.pipeline import ExtractionPipeline
 from insurance_harness.db.scope import ScopeViolation
 from insurance_harness.schemas import ProductLineSchema, SchemaRegistry
-from insurance_harness.sources import DirectorySourceRequest, SourceRevision
+from insurance_harness.sources import (
+    DirectorySourceRequest,
+    ProcessedAtOrdering,
+    SourceRevision,
+)
 from tests.support.source_pipeline import (
     MODEL_REGISTRY,
     REGISTRY,
@@ -66,7 +70,9 @@ async def test_resume_rejects_source_identity_drift_before_model_calls(
             update={
                 "source_revision": SourceRevision(
                     file_hash="c" * 64,
-                    processed_at=datetime(1970, 1, 1, tzinfo=UTC),
+                    ordering=ProcessedAtOrdering(
+                        value=datetime(1970, 1, 1, tzinfo=UTC)
+                    ),
                     parser_fingerprint="fixture-parser-v1",
                 )
             }

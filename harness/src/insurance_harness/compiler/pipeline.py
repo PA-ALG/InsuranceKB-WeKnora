@@ -35,7 +35,9 @@ from ..sources import (
     DocumentSource,
     MaterializedBatch,
     SourceDocument,
+    SourceRevision,
     match_quote_to_chunks,
+    source_ordering_identity_token,
 )
 from .extract import (
     Sleeper,
@@ -284,13 +286,14 @@ class ExtractionPipeline:
         documents: tuple[SourceDocument, ...],
     ) -> RunManifest:
         manifest = self._require_manifest_scope(raw_manifest)
-        expected = [_source_document_identity(document)[:7] for document in documents]
+        expected = [_source_document_identity(document)[:8] for document in documents]
         actual = [
             (
                 entry.doc,
                 entry.source_id,
                 entry.knowledge_id,
                 entry.source_revision,
+                source_ordering_identity_token(entry.ordering),
                 entry.file_hash,
                 entry.original_digest,
                 entry.parser_fingerprint,
@@ -491,6 +494,7 @@ class ExtractionPipeline:
                     source_id=document.source_id,
                     knowledge_id=document.knowledge_id,
                     source_revision=document.source_revision.value,
+                    ordering=document.source_revision.ordering,
                     file_hash=document.source_revision.file_hash,
                     original_digest=document.original_digest,
                     parser_fingerprint=document.source_revision.parser_fingerprint,
@@ -1257,6 +1261,7 @@ def _source_document_identity(document: SourceDocument) -> tuple[object, ...]:
         document.source_id,
         document.knowledge_id,
         document.source_revision.value,
+        source_ordering_identity_token(document.source_revision.ordering),
         document.source_revision.file_hash,
         document.original_digest,
         document.source_revision.parser_fingerprint,
@@ -1277,6 +1282,7 @@ def _checkpoint_source_identities(raw_documents: object) -> list[tuple[object, .
             revision = raw["source_revision"]
             if not isinstance(revision, dict):
                 raise TypeError
+            validated_revision = SourceRevision.model_validate(revision)
             raw_scope = raw["scope"]
             if raw_scope is None:
                 scope: tuple[object, ...] | None = None
@@ -1294,14 +1300,15 @@ def _checkpoint_source_identities(raw_documents: object) -> list[tuple[object, .
                     raw["file_name"],
                     raw["source_id"],
                     raw["knowledge_id"],
-                    revision["value"],
-                    revision["file_hash"],
+                    validated_revision.value,
+                    source_ordering_identity_token(validated_revision.ordering),
+                    validated_revision.file_hash,
                     raw["original_digest"],
-                    revision["parser_fingerprint"],
+                    validated_revision.parser_fingerprint,
                     scope,
                 )
             )
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, ValidationError):
         raise ScopeViolation("source identity mismatch") from None
     return identities
 

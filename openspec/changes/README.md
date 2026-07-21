@@ -21,13 +21,13 @@
 | 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
 | 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
-| 015 | feedback-flywheel | ✅ PR #18 CI 全绿，待合并 | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
+| 015 | feedback-flywheel | ✅ 已合入 main（PR #18） | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
 | 017 | weknora-source-bridge | ✅ 软件交付；live NOT RUN | |
 | 018 | release-snapshot-read-model | ✅ 已合入 main（PR #9，2026-07-17） | 独占迁移 0005 |
 | 019 | golden-quality-gate | ✅ 已合入 main（PR #8） | |
 | 020 | golden-v01-baseline-run | 📋 等 019✅+021 | 高 token 数据任务 |
-| 021 | source-lifecycle-ordering | 📋 018 已合入（PR #9），可开工 | 迁移预分配 0006 |
+| 021 | source-lifecycle-ordering | ✅ 软件/双审/本机门禁完成，待人工 commit/push/PR | 迁移 0006，实际链 `0012 → 0006`；deterministic 1901，PG 25/skipped=0 |
 | 022 | review-hardening | ✅ 已交付 | ⚠️ 编号冲突历史记录：与下行同号，两者均已合入，**目录不改名**，冲突就此冻结 |
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
@@ -45,13 +45,13 @@
 | 0003 | 016 enterprise_knowledge_scope | ✅ |
 | 0004 | 017 source_evidence_lineage | ✅ |
 | 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
-| 0006 | 021 source-lifecycle-ordering | 预分配 |
+| 0006 | 021 source-lifecycle-ordering | 🟡 已实施，待合入；实际 down_revision=0012 |
 | 0007 | 010 structured-import（qa_staging 等） | 预分配 |
 | 0008 | 009 concept-layer | 预分配 |
 | 0009 | 012 qa-objects | 预分配 |
 | 0010 | 011 knowledge-health（completeness_snapshots + health_runs/health_findings） | 预分配 |
 | 0011 | 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表，append-only+触发器） | 预分配 |
-| 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | PR #18 实施中；down_revision 指当前 main 实际 head 0005 |
+| 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
 | 0013+ | （空闲；014 如需建表先来占号） | |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。

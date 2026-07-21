@@ -21,6 +21,7 @@ from insurance_harness.compiler.models import (
 )
 from insurance_harness.compiler.pipeline import RunResult
 from insurance_harness.goldenset.admission_runtime import AdmissionPausedError
+from insurance_harness.sources.models import GenerationOrdering, SourceRevision
 from tests.run_admission_execution_contract_020 import (
     ExecutionArtifacts020,
     execution_artifacts_or_skip,
@@ -129,6 +130,11 @@ def _baseline_result(tmp_path: Path) -> tuple[RunResult, Path]:
     dead_letters_path.write_text(
         dead_letter.model_dump_json() + "\n", encoding="utf-8"
     )
+    source_revision = SourceRevision(
+        file_hash="b" * 64,
+        ordering=GenerationOrdering(value=1),
+        parser_fingerprint="parser-v1",
+    )
     manifest = RunManifest(
         run_id="020-baseline-product",
         product_dir=str(product_dir),
@@ -144,10 +150,11 @@ def _baseline_result(tmp_path: Path) -> tuple[RunResult, Path]:
             DocManifestEntry(
                 doc=record.doc,
                 source_id="source-1",
-                source_revision="a" * 64,
-                file_hash="b" * 64,
+                source_revision=source_revision.value,
+                ordering=source_revision.ordering,
+                file_hash=source_revision.file_hash,
                 original_digest="c" * 64,
-                parser_fingerprint="parser-v1",
+                parser_fingerprint=source_revision.parser_fingerprint,
             )
         ],
         dead_letters=[dead_letter],

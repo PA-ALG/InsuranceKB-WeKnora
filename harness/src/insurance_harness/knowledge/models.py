@@ -18,10 +18,23 @@ from pydantic import (
 )
 
 from insurance_harness.adapters.weknora.models import normalize_safe_knowledge_id
+from insurance_harness.sources.models import (
+    SourceOrdering,
+    SourceRevision,
+    source_ordering_identity_token,
+)
 
 ValueState = Literal["present", "absent_explicitly", "unknown"]
 ReviewAction = Literal["approve", "reject", "defer"]
 LineageStatus = Literal["linked", "page_only", "ambiguous"]
+ImportLifecycleDecision = Literal[
+    "accepted_create",
+    "accepted_advance",
+    "accepted_reactivate",
+    "idempotent",
+    "stale",
+    "blocked_deleted",
+]
 
 #: 受限动作集（K4.2）：ReviewItem 只允许这三个动作，动作集外拒绝执行。
 ALLOWED_REVIEW_ACTIONS: tuple[str, ...] = ("approve", "reject", "defer")
@@ -39,11 +52,16 @@ def _non_empty(value: str) -> str:
 class SourceImportIdentity(BaseModel):
     """Trusted source identity for one compiler document at import time."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        revalidate_instances="always",
+    )
 
     knowledge_id: str
     raw_kb_id: str
     source_revision: str
+    ordering: SourceOrdering
     file_hash: str
     original_digest: str
     parser_version: str
@@ -74,11 +92,25 @@ class SourceImportIdentity(BaseModel):
             raise ValueError("file hash must be MD5 or SHA-256")
         return normalized
 
+    @model_validator(mode="after")
+    def _validate_revision_identity(self) -> "SourceImportIdentity":
+        SourceRevision(
+            file_hash=self.file_hash,
+            ordering=self.ordering,
+            parser_fingerprint=self.parser_version,
+            value=self.source_revision,
+        )
+        return self
+
 
 class SourceImportContext(BaseModel):
     """Scope-attested document-to-source mapping; filenames are lookup keys only."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        revalidate_instances="always",
+    )
 
     space_id: str
     tenant_id: str
@@ -97,10 +129,34 @@ class SourceImportContext(BaseModel):
         if not value:
             raise ValueError("source context requires at least one document")
         normalized: dict[str, SourceImportIdentity] = {}
+        sources: dict[str, SourceImportIdentity] = {}
         for doc, identity in value.items():
             key = doc.strip()
             if not key or key in normalized:
                 raise ValueError("source document names must be unique and non-empty")
+            previous = sources.get(identity.knowledge_id)
+            if previous is not None:
+                if previous.ordering.kind != identity.ordering.kind:
+                    raise ValueError("source ordering kind cannot change")
+                if (
+                    source_ordering_identity_token(previous.ordering)
+                    == source_ordering_identity_token(identity.ordering)
+                    and previous.source_revision != identity.source_revision
+                ):
+                    raise ValueError(
+                        "source ordering collision maps to different revisions"
+                    )
+                if (
+                    previous.source_revision == identity.source_revision
+                    and previous.ordering != identity.ordering
+                ):
+                    raise ValueError(
+                        "source revision cannot map to different ordering values"
+                    )
+                raise ValueError(
+                    "source knowledge identities must map to exactly one document"
+                )
+            sources[identity.knowledge_id] = identity
             normalized[key] = identity
         return MappingProxyType(normalized)
 
@@ -176,14 +232,16 @@ class ProposedEvidence(BaseModel):
         assert self.file_hash is not None
         assert self.original_digest is not None
         assert self.parser_version is not None
-        SourceImportIdentity(
-            knowledge_id=self.knowledge_id,
-            raw_kb_id=self.raw_kb_id,
-            source_revision=self.source_revision,
-            file_hash=self.file_hash,
-            original_digest=self.original_digest,
-            parser_version=self.parser_version,
-        )
+        if normalize_safe_knowledge_id(self.knowledge_id) is None:
+            raise ValueError("knowledge ID violates the WeKnora source identity contract")
+        if not self.raw_kb_id.strip() or not self.parser_version.strip():
+            raise ValueError("source-aware evidence audit must be complete")
+        if (
+            _SHA256_HEX.fullmatch(self.source_revision.lower()) is None
+            or _MD5_OR_SHA256_HEX.fullmatch(self.file_hash.lower()) is None
+            or _SHA256_HEX.fullmatch(self.original_digest.lower()) is None
+        ):
+            raise ValueError("source-aware evidence audit digest is invalid")
         if self.lineage_status == "linked":
             if (
                 self.chunk_id is None
@@ -288,8 +346,9 @@ class ImportPartitionReport(BaseModel):
 
     knowledge_id: str
     source_revision: str
-    source_kind: str
-    change_set_id: str
+    lifecycle_decision: ImportLifecycleDecision
+    source_kind: str | None
+    change_set_id: str | None
     duplicate_batch: bool = False
     total_records: int = 0
     imported: int = 0
@@ -298,3 +357,15 @@ class ImportPartitionReport(BaseModel):
     unknown_placeholders: int = 0
     merge: MergeReport = Field(default_factory=MergeReport)
     judge_queue: list[ConflictJudgeRequest] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_lifecycle_aggregate_shape(self) -> "ImportPartitionReport":
+        audit_only = self.lifecycle_decision in ("stale", "blocked_deleted")
+        has_aggregate = (
+            self.source_kind is not None and self.change_set_id is not None
+        )
+        if (self.source_kind is None) != (self.change_set_id is None):
+            raise ValueError("import lifecycle aggregate shape is invalid")
+        if audit_only == has_aggregate:
+            raise ValueError("import lifecycle aggregate shape is invalid")
+        return self

@@ -1,6 +1,6 @@
 """Shared builders for source-revision and source-import tests."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.goldenset.records import Evidence
 from insurance_harness.knowledge.models import SourceImportIdentity
 from insurance_harness.knowledge.tables import Claim, ClaimEvidence
+from insurance_harness.sources import ProcessedAtOrdering, SourceRevision
 from tests.kbhelpers import pred, seed_bound_scope, seed_product
 
 NOW = datetime(2026, 7, 14, 8, 0, tzinfo=UTC)
@@ -34,14 +35,24 @@ def source_identity(
     *,
     knowledge_id: str = "knowledge-1",
     revision_char: str = "a",
+    ordering_offset: int | None = None,
 ) -> SourceImportIdentity:
+    if ordering_offset is None:
+        ordering_offset = ord(revision_char) - ord("a")
+    processed_at = NOW + timedelta(seconds=ordering_offset)
+    revision = SourceRevision(
+        file_hash=revision_char * 32,
+        ordering=ProcessedAtOrdering(value=processed_at),
+        parser_fingerprint="pdfplumber@0.11:text-v1",
+    )
     return SourceImportIdentity(
         knowledge_id=knowledge_id,
         raw_kb_id=scope.raw_kb_id,
-        source_revision=revision_char * 64,
-        file_hash=revision_char * 32,
+        source_revision=revision.value,
+        ordering=revision.ordering,
+        file_hash=revision.file_hash,
         original_digest=revision_char * 64,
-        parser_version="pdfplumber@0.11:text-v1",
+        parser_version=revision.parser_fingerprint,
     )
 
 

@@ -16,6 +16,7 @@ from insurance_harness.knowledge.tables import (
     Claim,
     ClaimEvidence,
     Conflict,
+    SourceEvent,
 )
 from tests.kbhelpers import allow_all_gate, seed_product
 from tests.support.source_revision import (
@@ -47,7 +48,7 @@ def test_t7_t6_importer_populates_pending_recompile_without_document_changeset(
         code="IMPORT-T7",
         name="Import T7",
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     notification = revision_service.notify_source_revision(
         kb_session,
         scope,
@@ -94,7 +95,7 @@ def test_t7_importer_rejects_malformed_source_changeset_knowledge_ids_before_wri
         code=f"IMPORT-T7-MALFORMED-{status}-{len(knowledge_ids or [])}",
         name="Import T7 malformed source ChangeSet",
     )
-    identity = source_identity(scope, revision_char="b")
+    identity = source_identity(scope, revision_char="b", ordering_offset=1)
     blocked = ChangeSet(
         space_id=scope.space_id,
         source_kind="recompile" if status == "pending" else "document",
@@ -150,7 +151,7 @@ def test_t7_importer_rejects_applied_duplicate_with_cross_scope_item_claim(
         predicate="cross_scope_duplicate_item",
         identities=[source_identity(scope_b, revision_char="c")],
     )
-    identity = source_identity(scope_a, revision_char="b")
+    identity = source_identity(scope_a, revision_char="b", ordering_offset=1)
     applied = ChangeSet(
         space_id=scope_a.space_id,
         source_kind="document",
@@ -230,7 +231,7 @@ def test_t7_importer_rejects_applied_duplicate_with_cross_scope_conflict_refs(
         schema_version="v1",
         evidence=[],
     ).model_dump(mode="json")
-    identity = source_identity(scope_a, revision_char="b")
+    identity = source_identity(scope_a, revision_char="b", ordering_offset=1)
     applied = ChangeSet(
         space_id=scope_a.space_id,
         source_kind="document",
@@ -328,7 +329,7 @@ def test_t7_importer_accepts_applied_duplicate_with_scoped_winner_existing_confl
         schema_version="v1",
         evidence=[],
     ).model_dump(mode="json")
-    identity = source_identity(scope, revision_char="b")
+    identity = source_identity(scope, revision_char="b", ordering_offset=1)
     applied = ChangeSet(
         space_id=scope.space_id,
         source_kind="document",
@@ -405,7 +406,7 @@ def test_t7_notification_and_import_failure_roll_back_as_one_caller_transaction(
         code="IMPORT-T7-ROLLBACK",
         name="Import T7 rollback",
     )
-    new = source_identity(scope, revision_char="b")
+    new = source_identity(scope, revision_char="b", ordering_offset=1)
     evidence_id = evidence[0].id
 
     with pytest.raises(ScopeViolation, match="mismatch"):
@@ -440,7 +441,7 @@ def test_t7_notification_and_import_failure_roll_back_as_one_caller_transaction(
     assert count_rows(kb_session, ChangeItem) == 0
 
 
-def test_t7_empty_tombstone_rejects_late_import_of_the_same_source_revision(
+def test_t7_empty_tombstone_blocks_late_import_of_the_same_source_revision(
     kb_session: Session,
 ) -> None:
     scope = bound_scope(kb_session)
@@ -453,25 +454,28 @@ def test_t7_empty_tombstone_rejects_late_import_of_the_same_source_revision(
     identity = source_identity(scope, revision_char="a")
     tombstone = retract_source(kb_session, scope, identity)
 
-    with pytest.raises(ScopeViolation, match="tombstone"):
-        import_pred_records(
-            kb_session,
-            [source_record(identity)],
-            scope=scope,
-            product_id=product.product_code,
-            product_version_id=version.id,
-            source_context={
-                "space_id": scope.space_id,
-                "tenant_id": scope.tenant_id,
-                "raw_kb_id": scope.raw_kb_id,
-                "documents": {
-                    "new.pdf": identity.model_dump(mode="python")
-                },
+    blocked = import_pred_records(
+        kb_session,
+        [source_record(identity)],
+        scope=scope,
+        product_id=product.product_code,
+        product_version_id=version.id,
+        source_context={
+            "space_id": scope.space_id,
+            "tenant_id": scope.tenant_id,
+            "raw_kb_id": scope.raw_kb_id,
+            "documents": {
+                "new.pdf": identity.model_dump(mode="python")
             },
-            policy=MergePolicy(auto_apply_add=True),
-        )
+        },
+        policy=MergePolicy(auto_apply_add=True),
+    )
 
     kb_session.commit()
+    part = blocked.partitions[0]
+    assert part.lifecycle_decision == "blocked_deleted"
+    assert part.source_kind is None and part.change_set_id is None
+    assert blocked.change_set_ids == []
     assert count_rows(kb_session, ChangeSet) == 1
     assert kb_session.get(ChangeSet, tombstone.change_set_id) is not None
     assert count_rows(kb_session, ChangeItem) == 0
@@ -668,25 +672,43 @@ def test_t7_late_import_fails_closed_on_malformed_source_tombstone(
     with pytest.raises(ScopeViolation, match="source tombstone is invalid"):
         retract_source(kb_session, scope, identity)
 
-    with pytest.raises(ScopeViolation, match="source tombstone is invalid"):
-        import_pred_records(
-            kb_session,
-            [source_record(identity)],
-            scope=scope,
-            product_id=product.product_code,
-            product_version_id=version.id,
-            source_context={
-                "space_id": scope.space_id,
-                "tenant_id": scope.tenant_id,
-                "raw_kb_id": scope.raw_kb_id,
-                "documents": {
-                    "new.pdf": identity.model_dump(mode="python")
-                },
+    # 021 makes equal active input against a durable deleted head an audit-only
+    # blocked_deleted decision.  It does not consume or revalidate the tombstone;
+    # delete replay above remains the aggregate-integrity guard.  A malformed
+    # tombstone without a head still reaches the import callback and fails closed.
+    blocked = import_pred_records(
+        kb_session,
+        [source_record(identity)],
+        scope=scope,
+        product_id=product.product_code,
+        product_version_id=version.id,
+        source_context={
+            "space_id": scope.space_id,
+            "tenant_id": scope.tenant_id,
+            "raw_kb_id": scope.raw_kb_id,
+            "documents": {
+                "new.pdf": identity.model_dump(mode="python")
             },
-            policy=MergePolicy(auto_apply_add=True),
-        )
+        },
+        policy=MergePolicy(auto_apply_add=True),
+    )
 
     kb_session.commit()
+    part = blocked.partitions[0]
+    assert part.lifecycle_decision == "blocked_deleted"
+    assert part.source_kind is None and part.change_set_id is None
+    blocked_event = kb_session.scalar(
+        select(SourceEvent)
+        .where(
+            SourceEvent.space_id == scope.space_id,
+            SourceEvent.knowledge_id == identity.knowledge_id,
+            SourceEvent.decision == "blocked_deleted",
+        )
+        .order_by(SourceEvent.created_at.desc(), SourceEvent.id.desc())
+    )
+    assert blocked_event is not None
+    assert blocked_event.change_set_id is None
+    assert blocked_event.tombstone_change_item_id is None
     assert {
         table: count_rows(kb_session, table) for table in baseline
     } == baseline

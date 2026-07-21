@@ -6,7 +6,16 @@ from .directory import (
     DirectorySourceRequest,
 )
 from .lineage import LineageResult, LineageStatus, match_quote_to_chunks
-from .models import SourceChunk, SourceDocument, SourceRevision, SourceScope
+from .models import (
+    GenerationOrdering,
+    ProcessedAtOrdering,
+    SourceChunk,
+    SourceDocument,
+    SourceOrdering,
+    SourceRevision,
+    SourceScope,
+    source_ordering_identity_token,
+)
 from .protocol import (
     DocumentSource,
     MaterializationStage,
@@ -24,12 +33,16 @@ __all__ = [
     "LineageStatus",
     "MaterializedBatch",
     "MaterializationStage",
+    "GenerationOrdering",
+    "ProcessedAtOrdering",
     "SourceChunk",
     "SourceDocument",
     "SourceMaterializationError",
+    "SourceOrdering",
     "SourceRevision",
     "SourceScope",
     "WeKnoraDocumentSource",
     "WeKnoraSourceRequest",
     "match_quote_to_chunks",
+    "source_ordering_identity_token",
 ]
