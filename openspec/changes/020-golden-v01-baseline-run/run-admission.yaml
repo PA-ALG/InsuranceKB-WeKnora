@@ -33,7 +33,7 @@ plan:
         base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
         provider_policy: bailian-deployment-detail-v1
         credential_env_name: HARNESS_DASHSCOPE_API_KEY
-    identity_contract_hash: c2b66cae5a93ca1cd91ead7702a4fff5c869381dc2b0289dcde40b9fcebc4a4a
+    identity_contract_hash: efa732938f32ce50e5f1f036afcd67605fec1a6f26bd49ae1c180aa20fa7af11
     budget_contract_hash: null
   approval_envelopes: []
   observations: []
@@ -41,6 +41,7 @@ plan:
 identity_request:
   required_dependency_revisions:
     019: 6e3e5f9abc994fca7c8e62f786410b9b7c77307d
+    "021": f557fc94ea244ac3ae77266cf7efccddcbcc78e7
   source_products_root: dataset/shouxian_product
   golden_products_root: dataset/goldenset/wip-gs-v0.1
   products:
@@ -231,9 +232,9 @@ identity_request:
     harness/src/insurance_harness/compiler/gapfill.py: 5be30f6d872ac973929e266a6638dd53d3e3198f1f5ce687f45618f2bbb9826c
     harness/src/insurance_harness/compiler/judge.py: 512d6d05db601622e03c197ef0873c8f5d0f15880556fb2adc5bf199000a1149
     harness/src/insurance_harness/compiler/llm.py: 23ecbf7e9ed10d5d0c7af1ce6d71623a9bbce34ea6f737654df8e8ed26bda328
-    harness/src/insurance_harness/compiler/models.py: ad1814a618c6730f7889e022eb6b9bb87f75b2de1833162eb76c1307de4d0a6b
+    harness/src/insurance_harness/compiler/models.py: 7842f2f83f602c4609ca24ee61422d17225eabda1b879ad9703c95102b399345
     harness/src/insurance_harness/compiler/parsing.py: 4566f62310fde7a8e0a13c2cc8d2f3f303edb955d85a7b83ac81b2c5d4f3c61a
-    harness/src/insurance_harness/compiler/pipeline.py: f1e15e2a9ab64eb37d87d09e9c798d774337dab4df49b8967513e5c9f8c2ae3c
+    harness/src/insurance_harness/compiler/pipeline.py: 1aed6f15ba90cb22341fe5a71b580e69ef48aff5aaa03f02bc526f0acf417cae
     harness/src/insurance_harness/compiler/prompts/__init__.py: 0cbb0d44d94c0b04e1f3d71467343eb2982590a28077fb2188d91fd53c085284
     harness/src/insurance_harness/compiler/recall_attribution.py: f801485cb83a6c2e6e194fedfb8b38f8e96dedc44a3415d2cf7d74c2e08245df
     harness/src/insurance_harness/compiler/routing_data.py: c805410bade91f2fe8c9eb167e92161348891764956220b1f38bb9b2add7e0bb
@@ -252,7 +253,7 @@ identity_request:
     harness/src/insurance_harness/db/README.md: c2965e787b2d8761cf7103728dfa2e98cdb81d5617be9dbad52878650608619a
     harness/src/insurance_harness/db/__init__.py: 9b006fd448d6ae3524160dd273906f04c2ccd6982da088760777730be5b91a8f
     harness/src/insurance_harness/db/base.py: d4f9c2184b4383b0527eac4fc571b7d7495e7dee2eb223b4a47776632098dbaf
-    harness/src/insurance_harness/db/models.py: c6c5a435b4c622bd0ab959ba83a3e314a6421d6bc48e0daf2740cef42c11f6b6
+    harness/src/insurance_harness/db/models.py: 15c1e758db458bfdfe7e986eb20bcfd4058157ff0ca70544e70dca1030bebe5e
     harness/src/insurance_harness/db/scope.py: b6fcf9996005ca3f7744124e532cb1485ea879db93c47a2e2badbbf59d4ddb0c
     harness/src/insurance_harness/db/scope_cli.py: 5be28e0ca2e77f5c211348a841316ee4f2fe7974ccf98f0be93b857272aad473
     harness/src/insurance_harness/flywheel/__init__.py: f48dd4ce6e8b5de6676e700a2f88d29531246c2f75cc735151bb4d64f61af80b
@@ -269,33 +270,36 @@ identity_request:
     harness/src/insurance_harness/flywheel/tables.py: 1fe6e920ce245ca1f05105db6dd6b9a2681ebc94cfde5be3f5ef9d4e19da32cf
     harness/src/insurance_harness/goldenset/README.md: 9180e038e72ba4d40cdd58fe1875be80f242de9e9cde274efab14c16f1fc5692
     harness/src/insurance_harness/goldenset/__init__.py: 208dc50795e397bd015ea43eb4fe41fcd3281a3067eeca42d194bc55a0bdda02
-    harness/src/insurance_harness/goldenset/admission.py: 29bc4351bf2279d87c026f744b96ac10ad3646a1e8d3021b1af2f54742da2f74
-    harness/src/insurance_harness/goldenset/admission_budget.py: 3a56dbf339e14bb4bc10063471fe144ab177c90070d8724924de8043a2988ccd
-    harness/src/insurance_harness/goldenset/admission_cli.py: 0246004c0cd518c836a980cc09d2401b98e35f91a689d38bb8ba1eee54976024
-    harness/src/insurance_harness/goldenset/admission_identity.py: 7e982ac29e51f6dde386aeffee6baacc6540a4941fc2397f62396da213d8268b
-    harness/src/insurance_harness/goldenset/admission_models.py: 2a0b07b245dc3168a1965f54ab93b0a33949f092c23383fec9978e3fdaa8fd9d
+    harness/src/insurance_harness/goldenset/admission.py: ddfb0f27638f1071760eee7c84e9b22924331b2f93ee529477be19662fac2317
+    harness/src/insurance_harness/goldenset/admission_artifacts.py: cb0ef11048dc2aa250c69defb0a7180fb3fdee7970954017eb0d04e96388833d
+    harness/src/insurance_harness/goldenset/admission_budget.py: 464605c1934ff5c9a8a43c5edfb2e9cba42b6c03b0786af3d04b491a4b67863c
+    harness/src/insurance_harness/goldenset/admission_cli.py: abdedd2e5d15d3b50a7d0379a82a3e4b41a53639eee42275d8a37a4def8a336d
+    harness/src/insurance_harness/goldenset/admission_identity.py: bcaa4884b7f51ebf37f5fafc7081d346dc95cce9add55ec2d6b665b075772576
+    harness/src/insurance_harness/goldenset/admission_models.py: 17941c368fc266f3d8b00b444a3f1d8f0b8c6e0303a86ef1f3bb1ba65a483442
     harness/src/insurance_harness/goldenset/admission_probe.py: 349e7dabcd698e21c504704bbcb3eb725b5180f29a836b9d04553a6318d44e8a
-    harness/src/insurance_harness/goldenset/admission_runtime.py: a2001bb1681e99cbcf3eb331db6d5ed52f7ecb9b1aaf3123f0fc2ecdadb796b9
+    harness/src/insurance_harness/goldenset/admission_runtime.py: d84b23a00434e087ad0de9fb04b2a231a7aa7a529234254dc019ee8421387f15
     harness/src/insurance_harness/goldenset/annotator.py: 5d32fb00e36d15798483cea0007e78d713df326575fa3646aeed6c215dfe43c8
     harness/src/insurance_harness/goldenset/assemble.py: 0361a8a14107a44eddf9b42eefd1ccd25dc38dea629132a04b8f1fb5212f67f6
     harness/src/insurance_harness/goldenset/baseline.py: 884cfffb9954b09ab844cafb8ffec0678f53ad01ace6ae75ed2e42e228c80624
     harness/src/insurance_harness/goldenset/eval.py: bf8e5dc34f499167a79587eb9212401e201ec27d45ce2f4a18a085dc434cf20b
+    harness/src/insurance_harness/goldenset/execution_artifacts_020.py: 3abc177fe1deb068475d20fb0470a8b0753a89042f5fbdb9e9ce1d5513793100
     harness/src/insurance_harness/goldenset/keypoints.py: 1ec9c287408e65b80cf87bc95b7eb3cdc4e66eb8119b259fa475b3685bec3e0a
     harness/src/insurance_harness/goldenset/normalize.py: e19e4d9c5e47e47cc04edf480356ceb1783f5768035683030f8c08a6f894a591
-    harness/src/insurance_harness/goldenset/pdf.py: bc695364e1994ce277d9c60f319c052d8cf9de841ef353b97f32beaa7b701d69
+    harness/src/insurance_harness/goldenset/pdf.py: a564c4e7d0ade06ebe7e535c332ce11e69c58af32ed8e28efd766760aa057341
     harness/src/insurance_harness/goldenset/profile.py: 4e5302f0ab660449a907186472271e36e9f52b491efba1493e7a5f66cd016a4b
     harness/src/insurance_harness/goldenset/records.py: ff84a91fc0bfcb57fd6c6f9e819ce2fcbfda42d2928144b3553b11acbb07258c
     harness/src/insurance_harness/goldenset/release.py: f5d31986afde13b93649ff03dc5bfc37757d1bc0a4f20feead0f5e6006b11329
-    harness/src/insurance_harness/goldenset/runner.py: 32e588166cca5974a92b7e1a02c8d44c0cbd75f8b956016faee6bde932026c65
+    harness/src/insurance_harness/goldenset/run_020.py: c76f2026bcf012f62c7465d355cfd8db2d117498f3d38416e13c63dfac3ef878
+    harness/src/insurance_harness/goldenset/runner.py: 6b273de9cad09381db88df07d7c30734b6d56201f01ae85ecf11670cf2245749
     harness/src/insurance_harness/goldenset/validate.py: 3c8a35f89fabd2ec5dd5e7641f485c349594817fa5bd12e09f6d7e0057a7eb58
     harness/src/insurance_harness/goldenset/verify.py: ddeeaaa3ef480f47c571ca3cb290f420c157eff50f17eace96f2961b363aedac
     harness/src/insurance_harness/knowledge/README.md: e04f42fb70e8712afb5be3955f26fd7ae7929ebe88bc3e85977a3cfc7be6f384
-    harness/src/insurance_harness/knowledge/__init__.py: f1748bcd7574989550ef4d65d58ac8c34065870f831ad59d08f16b464adcd523
+    harness/src/insurance_harness/knowledge/__init__.py: 68f105def6d6d423774254d8bde2709d711d6be38646e5773b2c7de04eda6c70
     harness/src/insurance_harness/knowledge/authority.py: 1ff7a1a7e20b797ecf0d4dc2c41a661dbacf6be6311ed04d2a60db966eca08c9
     harness/src/insurance_harness/knowledge/fallback.py: c7bb0b2c4e0be3bd4a477f5b05b3ecda52be242fed1def3fec8f7a6825276f35
-    harness/src/insurance_harness/knowledge/importer.py: a007ca0a0d5b036f449f7795fca4ace72c961eddc8437942d1d84ed23a6f5632
-    harness/src/insurance_harness/knowledge/merge.py: fd37970a2168bcfbcca4c87bbf80e02a345c99ff70b0f49756d735ac541c24e3
-    harness/src/insurance_harness/knowledge/models.py: c0f5f94c8cf805830738109c765969487152d7f7fe718e1df73f8bf04d35276f
+    harness/src/insurance_harness/knowledge/importer.py: d59c713e88069758e7677aaa33376e65951894869a09e0b4c2041cea49b01b37
+    harness/src/insurance_harness/knowledge/merge.py: daf12de6c13aa8f393f88793516e74970c729419b3b701fe07a08f368dd3e616
+    harness/src/insurance_harness/knowledge/models.py: 61caea15829d5cf4473b7f2d71a30d40770c144a2413ed870251bdd483a2fd76
     harness/src/insurance_harness/knowledge/pages.py: 2bc80b38dd6160196e7663bbbd0b47134fb3c0b3e17502a19e581d5bccf1adaf
     harness/src/insurance_harness/knowledge/projection.py: 80cb509ec008c31542b1b68f796b7f078337d7daf460ddd7e2dd8d9face3ff06
     harness/src/insurance_harness/knowledge/publisher.py: 8d91eb111844beac6d4ff568caf916aa212a057edd848c23140542b899f96161
@@ -306,8 +310,11 @@ identity_request:
     harness/src/insurance_harness/knowledge/release_plan.py: 64c096d744c93d372fc5b5a85c069a8d79c5bae5a664a831a4695a29359f835d
     harness/src/insurance_harness/knowledge/review.py: 6af4662450c6702ec4d8b2ce7f5f8f1098b86e54c786d13cbbb80d43c13000e2
     harness/src/insurance_harness/knowledge/snapshots.py: b90a61d33dfe775fdde3665849a7f8e8f8f9abe680d4b3838db62f69e7ecbde5
-    harness/src/insurance_harness/knowledge/source_revision.py: 7b8e0f3ef17b3765e8853d696140f689c88baecf4947bc66ffa6b857d5f7d825
-    harness/src/insurance_harness/knowledge/tables.py: 12fb657dd11a8389a456e59190d4c14b73e68f6b32716162a8f5ce5546b18be7
+    harness/src/insurance_harness/knowledge/source_aggregates.py: 42910f590475dcce795959123ca202f0e86736c328e394cda6c0ab1cd75124ce
+    harness/src/insurance_harness/knowledge/source_keys.py: 7cd0cc4b452659319a68ad26bdfb03f9564277ed5d5a2bfa402b96a58a6fb7b5
+    harness/src/insurance_harness/knowledge/source_lifecycle.py: b155bf05e4487e362c9b535dc20a72f163681d3c5470f8e88b529c46cf9ee487
+    harness/src/insurance_harness/knowledge/source_revision.py: 44a6f52fd966c7eae5f1e02a4b085122bc7d8944bfabf00551c2243c92000376
+    harness/src/insurance_harness/knowledge/tables.py: 592ff83146be7ca9d0ab5db0f4de66647231e75b0bfccb5d0a1f478827caff04
     harness/src/insurance_harness/live_env/__init__.py: 994d20bc7f1a7dbf90dd70a7273641a0a23cda1285aa102fbc8feae45dd914a3
     harness/src/insurance_harness/live_env/compose.py: fc712f94399e5835277f605a64cb6a5b487ae5dacec94defa90697a267d26630
     harness/src/insurance_harness/live_env/config.py: 78cd3c6d2be27f087116c9e1effcac02a1bfdfb3fa34302084a5b112d30f0266
@@ -334,12 +341,12 @@ identity_request:
     harness/src/insurance_harness/schemas/__init__.py: 82114c232a0d17fc1c109a98a0005b0fa26e7c1646fb91c194578c98ce8a0aab
     harness/src/insurance_harness/schemas/loader.py: 8a4e4b916cfc187fe1db9aae223ee3590a8bd32436ad006f664fb3d748891f14
     harness/src/insurance_harness/schemas/models.py: 868a9d2fd825830d3626525611671a8cc084943ddc3065ad41aade8ae1fc6951
-    harness/src/insurance_harness/sources/__init__.py: 2edd03057a20bff2ff9bc83f2a467d6b2e1c45661c9acfe3f38addf8e24d185d
-    harness/src/insurance_harness/sources/directory.py: eca63b2c2f5b4564beba02b52415914409bd895af4417a89295383bb72e36072
+    harness/src/insurance_harness/sources/__init__.py: fda6ad663dd767347d4c58e8b798fc920a6d17df7e7add06c535a0f96bb6d3aa
+    harness/src/insurance_harness/sources/directory.py: 62778f65c88583c816c970fc8c6660194ac1f0a3b72b612700ac12b58fec54b7
     harness/src/insurance_harness/sources/lineage.py: e87a69cd39dda59c674dc944710a6c014e987d89a510d833060e4c3a67cb4ef7
-    harness/src/insurance_harness/sources/models.py: 06ba6e3ac92e9c67817ca2311853561f7e8b802e73e0f96693e71e943f418a1d
+    harness/src/insurance_harness/sources/models.py: db370971e8cebd90667e42f05cacf8e273203f49df8a4c9267b8efccf074b326
     harness/src/insurance_harness/sources/protocol.py: 971e950706f8af745a71304919f24c24ee5d02fccee0d3d45788f2d4f229697c
-    harness/src/insurance_harness/sources/weknora.py: 3c25b8259bf9d9623b058320a7112b35fbcd34a620738fe833e127b5f5f2f114
+    harness/src/insurance_harness/sources/weknora.py: 2b3f95114635e9ec4fc3da1e567c6cad141c2344bc5c5e08219b616db9ebba56
     harness/src/insurance_harness/structured_import/__init__.py: 35faa75b64287a436533697f8b7be3afc1073379f3b7af3da340a8286bbb837b
     harness/src/insurance_harness/structured_import/cli.py: cf1a628f189f3b58cdb0354677594b56d35ab5db09acae9ef434a7ec6e033208
     harness/src/insurance_harness/structured_import/errors.py: e0ab2e5cf11fb306ac9ddf0367bfa8566e906bcbd2e6072d1fb5edfae4c6c8a7

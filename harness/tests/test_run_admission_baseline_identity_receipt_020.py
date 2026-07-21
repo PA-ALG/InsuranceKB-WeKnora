@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from insurance_harness.compiler.models import BaselineAdmissionIdentity
 from insurance_harness.compiler.pipeline import RunArtifactCommitCandidate, RunResult
 from insurance_harness.goldenset.admission_runtime import AdmissionPausedError
+from insurance_harness.sources.models import SourceRevision
 from tests.test_run_admission_baseline_artifacts_020 import (
     _FIRST,
     _JUDGE_MODE,
@@ -51,11 +52,19 @@ def _result_with_identity(
     result, run_root = _baseline_result(tmp_path)
     checkpoint = Path(result.manifest.checkpoint_path)
     checkpoint.unlink()
+    baseline_document = result.manifest.docs[0]
+    source_revision = SourceRevision(
+        file_hash=identity.pdf_digests["保险条款.pdf"],
+        ordering=baseline_document.ordering,
+        parser_fingerprint=identity.parser_fingerprint,
+    )
     document = result.manifest.docs[0].model_copy(
         update={
-            "file_hash": identity.pdf_digests["保险条款.pdf"],
+            "source_revision": source_revision.value,
+            "ordering": source_revision.ordering,
+            "file_hash": source_revision.file_hash,
             "original_digest": identity.pdf_digests["保险条款.pdf"],
-            "parser_fingerprint": identity.parser_fingerprint,
+            "parser_fingerprint": source_revision.parser_fingerprint,
         }
     )
     manifest = result.manifest.model_copy(
