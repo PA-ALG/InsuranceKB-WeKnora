@@ -19,6 +19,10 @@ Sha256Hex = Annotated[
     StrictStr,
     StringConstraints(pattern=r"^[0-9a-f]{64}$"),
 ]
+CleanIntegrationSha = Annotated[
+    StrictStr,
+    StringConstraints(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$"),
+]
 
 
 class _ImmutableModel(BaseModel):
@@ -65,13 +69,18 @@ class ModelIdentity(_ImmutableModel):
         return (self.provider, self.deployment_id, self.role, self.policy_version)
 
 
-class ModelPermit(_ImmutableModel):
-    """Frozen permit shape; admission evaluation is implemented by 027 Task 3."""
+class ModelPermitView(_ImmutableModel):
+    """Serializable permit receipt; possession never grants model-call authority."""
 
     identity: ModelIdentity
+    purpose: NonBlankStr
+    run_schema_version: NonBlankStr
+    space_id: NonBlankStr
     run_id: NonBlankStr
     run_revision: NonBlankStr
     admission_hash: Sha256Hex
+    verified_binding_digest: Sha256Hex
     template_hash: Sha256Hex
     model_plan_hash: Sha256Hex
+    call_scope_hash: Sha256Hex
     expires_at: AwareDatetime
