@@ -95,6 +95,12 @@ from insurance_harness.knowledge.release_approval import (
     ReleaseManifestPersistenceError,
     persist_release_manifest,
 )
+from insurance_harness.knowledge.release_authority import (
+    ReleaseActivationFailure,
+    ReleaseActivationResult,
+    ReleaseActivationSuccess,
+    ReleaseAuthorityService,
+)
 from insurance_harness.knowledge.release_plan import (
     ActionExecution,
     LegacyPageOwnership,
@@ -193,6 +199,10 @@ __all__ = [
     "ReleasePlanExecutor",
     "ReleaseApprovalError",
     "ReleaseApprovalService",
+    "ReleaseActivationFailure",
+    "ReleaseActivationResult",
+    "ReleaseActivationSuccess",
+    "ReleaseAuthorityService",
     "ReleaseAuthorizationError",
     "ReleaseAuthorizer",
     "ReleaseManifestPersistenceError",

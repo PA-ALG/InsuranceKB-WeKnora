@@ -21,12 +21,21 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 HARNESS_ROOT = Path(__file__).resolve().parents[1]
-TABLES = {"release_manifests", "release_approvals"}
+TABLES = {
+    "release_manifests",
+    "release_approvals",
+    "release_activation_audits",
+    "release_alerts",
+}
 GUARDS = {
     "trg_release_manifests_update_guard_029",
     "trg_release_manifests_delete_guard_029",
     "trg_release_approvals_update_guard_029",
     "trg_release_approvals_delete_guard_029",
+    "trg_release_activation_audits_update_guard_029",
+    "trg_release_activation_audits_delete_guard_029",
+    "trg_release_alerts_update_guard_029",
+    "trg_release_alerts_delete_guard_029",
 }
 
 
@@ -156,6 +165,30 @@ def test_ra2_0013_is_single_head_and_creates_exact_schema(tmp_path: Path) -> Non
     assert {"ck_release_approvals_actor_type", "ck_release_approvals_role"} <= {
         item["name"] for item in inspector.get_check_constraints("release_approvals")
     }
+    assert {
+        "id",
+        "space_id",
+        "kind",
+        "from_snapshot_id",
+        "target_snapshot_id",
+        "manifest_hash",
+        "approval_id",
+        "actor",
+        "reason",
+        "activated_at",
+        "created_at",
+    } == {item["name"] for item in inspector.get_columns("release_activation_audits")}
+    assert {
+        "id",
+        "space_id",
+        "snapshot_id",
+        "manifest_hash",
+        "code",
+        "severity",
+        "safe_details",
+        "detected_at",
+        "created_at",
+    } == {item["name"] for item in inspector.get_columns("release_alerts")}
 
 
 def test_ra2_0013_guards_manifest_immutable_and_approval_append_only(
@@ -179,7 +212,32 @@ def test_ra2_0013_guards_manifest_immutable_and_approval_append_only(
             ),
             {"space": space_id, "snapshot": snapshot_id, "hash": "a" * 64, "now": now},
         )
-
+        connection.execute(
+            text(
+                """INSERT INTO release_activation_audits
+                (id, space_id, kind, from_snapshot_id, target_snapshot_id, manifest_hash,
+                 approval_id, actor, reason, activated_at, created_at)
+                VALUES ('audit-1', :space, 'promote', NULL, :snapshot, :hash,
+                        'approval-1', 'alice', 'activate', :now, :now)"""
+            ),
+            {"space": space_id, "snapshot": snapshot_id, "hash": "a" * 64, "now": now},
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_alerts
+                (id, space_id, snapshot_id, manifest_hash, code, severity,
+                 safe_details, detected_at, created_at)
+                VALUES ('alert-1', :space, :snapshot, :hash, 'manifest_tamper',
+                        'critical', :details, :now, :now)"""
+            ),
+            {
+                "space": space_id,
+                "snapshot": snapshot_id,
+                "hash": "a" * 64,
+                "details": json.dumps({"stage": "test"}),
+                "now": now,
+            },
+        )
     with engine.connect() as connection:
         assert GUARDS <= set(
             connection.scalars(
@@ -191,6 +249,10 @@ def test_ra2_0013_guards_manifest_immutable_and_approval_append_only(
             "DELETE FROM release_manifests",
             "UPDATE release_approvals SET reason='changed'",
             "DELETE FROM release_approvals",
+            "UPDATE release_activation_audits SET reason='changed'",
+            "DELETE FROM release_activation_audits",
+            "UPDATE release_alerts SET severity='low'",
+            "DELETE FROM release_alerts",
         ):
             with pytest.raises(IntegrityError):
                 connection.execute(text(statement))
@@ -469,6 +531,38 @@ def _seed_postgresql_release_authority(engine: Engine) -> tuple[str, str, str]:
                 "now": now,
             },
         )
+        connection.execute(
+            text(
+                """INSERT INTO release_activation_audits
+                (id, space_id, kind, from_snapshot_id, target_snapshot_id, manifest_hash,
+                 approval_id, actor, reason, activated_at, created_at)
+                VALUES ('audit-pg-029', :space, 'promote', NULL, :snapshot, :hash,
+                        'approval-pg-029', 'alice@example.com', 'activate exact manifest',
+                        :now, :now)"""
+            ),
+            {
+                "space": manifest.space_id,
+                "snapshot": manifest.snapshot_id,
+                "hash": manifest.manifest_sha256,
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                """INSERT INTO release_alerts
+                (id, space_id, snapshot_id, manifest_hash, code, severity,
+                 safe_details, detected_at, created_at)
+                VALUES ('alert-pg-029', :space, :snapshot, :hash, 'manifest_tamper',
+                        'critical', CAST(:details AS JSON), :now, :now)"""
+            ),
+            {
+                "space": manifest.space_id,
+                "snapshot": manifest.snapshot_id,
+                "hash": manifest.manifest_sha256,
+                "details": json.dumps({"stage": "migration-test"}),
+                "now": now,
+            },
+        )
     return manifest.space_id, manifest.snapshot_id, manifest.manifest_sha256
 
 
@@ -558,6 +652,19 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
             "release approvals are append-only",
         ),
         ("DELETE FROM release_approvals", "release approvals are append-only"),
+        (
+            "UPDATE release_activation_audits SET reason='tampered'",
+            "release activation audits are append-only",
+        ),
+        (
+            "DELETE FROM release_activation_audits",
+            "release activation audits are append-only",
+        ),
+        (
+            "UPDATE release_alerts SET severity='low'",
+            "release alerts are append-only",
+        ),
+        ("DELETE FROM release_alerts", "release alerts are append-only"),
     )
     with engine.connect() as connection:
         outer = connection.begin()
@@ -573,6 +680,13 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
             assert connection.scalar(text("SELECT 1")) == 1
             assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
             assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM release_activation_audits")
+                )
+                == 1
+            )
+            assert connection.scalar(text("SELECT count(*) FROM release_alerts")) == 1
         invalid_approvals = (
             (
                 """INSERT INTO release_approvals
@@ -625,6 +739,13 @@ def test_ra2_0013_real_postgresql_guards_reject_mutation_and_recover_savepoint(
             assert connection.scalar(text("SELECT 1")) == 1
             assert connection.scalar(text("SELECT count(*) FROM release_manifests")) == 2
             assert connection.scalar(text("SELECT count(*) FROM release_approvals")) == 1
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM release_activation_audits")
+                )
+                == 1
+            )
+            assert connection.scalar(text("SELECT count(*) FROM release_alerts")) == 1
         outer.rollback()
 
 
@@ -651,6 +772,24 @@ def test_ra2_0013_real_postgresql_nonempty_downgrade_fails_before_any_ddl(
                         "SELECT id, space_id, snapshot_id, manifest_hash, actor, actor_type, "
                         "role, authorization_receipt, reason, approved_at, created_at "
                         "FROM release_approvals ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, kind, from_snapshot_id, target_snapshot_id, "
+                        "manifest_hash, approval_id, actor, reason, activated_at, created_at "
+                        "FROM release_activation_audits ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, code, severity, "
+                        "safe_details::text, detected_at, created_at "
+                        "FROM release_alerts ORDER BY id"
                     )
                 )
             ),
@@ -682,6 +821,24 @@ def test_ra2_0013_real_postgresql_nonempty_downgrade_fails_before_any_ddl(
                         "SELECT id, space_id, snapshot_id, manifest_hash, actor, actor_type, "
                         "role, authorization_receipt, reason, approved_at, created_at "
                         "FROM release_approvals ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, kind, from_snapshot_id, target_snapshot_id, "
+                        "manifest_hash, approval_id, actor, reason, activated_at, created_at "
+                        "FROM release_activation_audits ORDER BY id"
+                    )
+                )
+            ),
+            tuple(
+                connection.execute(
+                    text(
+                        "SELECT id, space_id, snapshot_id, manifest_hash, code, severity, "
+                        "safe_details::text, detected_at, created_at "
+                        "FROM release_alerts ORDER BY id"
                     )
                 )
             ),

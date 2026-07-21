@@ -324,6 +324,7 @@ class ReleaseApproval(Base):
         UniqueConstraint(
             "space_id", "manifest_hash", name="uq_release_approvals_space_manifest"
         ),
+        UniqueConstraint("space_id", "id", name="uq_release_approvals_space_id"),
         ForeignKeyConstraint(
             ["space_id", "snapshot_id", "manifest_hash"],
             [
@@ -360,6 +361,93 @@ class ReleaseApproval(Base):
     authorization_receipt: Mapped[str] = mapped_column(String(512))
     reason: Mapped[str] = mapped_column(Text)
     approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReleaseActivationAudit(Base):
+    """Append-only audit of one explicit approved pointer transition."""
+
+    __tablename__ = "release_activation_audits"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "from_snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_release_activation_audits_from_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "target_snapshot_id", "manifest_hash"],
+            [
+                "release_manifests.space_id",
+                "release_manifests.snapshot_id",
+                "release_manifests.manifest_hash",
+            ],
+            name="fk_release_activation_audits_exact_manifest",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "approval_id"],
+            ["release_approvals.space_id", "release_approvals.id"],
+            name="fk_release_activation_audits_space_approval",
+        ),
+        CheckConstraint(
+            "kind IN ('promote', 'rollback')",
+            name="ck_release_activation_audits_kind",
+        ),
+        CheckConstraint(
+            "length(trim(actor)) > 0 AND length(trim(reason)) > 0",
+            name="ck_release_activation_audits_attestation",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("knowledge_spaces.id", name="fk_release_activation_audits_space"),
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    from_snapshot_id: Mapped[str | None] = mapped_column(String(36))
+    target_snapshot_id: Mapped[str] = mapped_column(String(36))
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    approval_id: Mapped[str] = mapped_column(String(36))
+    actor: Mapped[str] = mapped_column(String(128))
+    reason: Mapped[str] = mapped_column(Text)
+    activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReleaseAlert(Base):
+    """Append-only safe operational alert for release-integrity failures."""
+
+    __tablename__ = "release_alerts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["space_id", "snapshot_id", "manifest_hash"],
+            [
+                "release_manifests.space_id",
+                "release_manifests.snapshot_id",
+                "release_manifests.manifest_hash",
+            ],
+            name="fk_release_alerts_exact_manifest",
+        ),
+        CheckConstraint(
+            "code = 'manifest_tamper'",
+            name="ck_release_alerts_code",
+        ),
+        CheckConstraint(
+            "severity = 'critical'",
+            name="ck_release_alerts_severity",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_release_alerts_space")
+    )
+    snapshot_id: Mapped[str] = mapped_column(String(36))
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    code: Mapped[str] = mapped_column(String(32), default="manifest_tamper")
+    severity: Mapped[str] = mapped_column(String(16), default="critical")
+    safe_details: Mapped[dict[str, Any]] = mapped_column(JSON)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -851,6 +939,22 @@ def _register_release_authority_guards() -> None:
             BEFORE DELETE ON release_approvals FOR EACH ROW
             BEGIN SELECT RAISE(ABORT, 'release approvals are append-only'); END""",
         ),
+        ReleaseActivationAudit.__table__: (
+            """CREATE TRIGGER trg_release_activation_audits_update_guard_029
+            BEFORE UPDATE ON release_activation_audits FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release activation audits are append-only'); END""",
+            """CREATE TRIGGER trg_release_activation_audits_delete_guard_029
+            BEFORE DELETE ON release_activation_audits FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release activation audits are append-only'); END""",
+        ),
+        ReleaseAlert.__table__: (
+            """CREATE TRIGGER trg_release_alerts_update_guard_029
+            BEFORE UPDATE ON release_alerts FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release alerts are append-only'); END""",
+            """CREATE TRIGGER trg_release_alerts_delete_guard_029
+            BEFORE DELETE ON release_alerts FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release alerts are append-only'); END""",
+        ),
     }
     for table, statements in sqlite_guards.items():
         for statement in statements:
@@ -884,6 +988,30 @@ def _register_release_authority_guards() -> None:
             """CREATE TRIGGER trg_release_approvals_delete_guard_029
             BEFORE DELETE ON release_approvals FOR EACH ROW
             EXECUTE FUNCTION guard_release_approvals_append_only_029()""",
+        ),
+        ReleaseActivationAudit.__table__: (
+            """CREATE FUNCTION guard_release_activation_audits_append_only_029()
+            RETURNS trigger LANGUAGE plpgsql AS $guard$ BEGIN
+            RAISE EXCEPTION 'release activation audits are append-only'
+            USING ERRCODE = '23514'; END; $guard$""",
+            """CREATE TRIGGER trg_release_activation_audits_update_guard_029
+            BEFORE UPDATE ON release_activation_audits FOR EACH ROW
+            EXECUTE FUNCTION guard_release_activation_audits_append_only_029()""",
+            """CREATE TRIGGER trg_release_activation_audits_delete_guard_029
+            BEFORE DELETE ON release_activation_audits FOR EACH ROW
+            EXECUTE FUNCTION guard_release_activation_audits_append_only_029()""",
+        ),
+        ReleaseAlert.__table__: (
+            """CREATE FUNCTION guard_release_alerts_append_only_029()
+            RETURNS trigger LANGUAGE plpgsql AS $guard$ BEGIN
+            RAISE EXCEPTION 'release alerts are append-only'
+            USING ERRCODE = '23514'; END; $guard$""",
+            """CREATE TRIGGER trg_release_alerts_update_guard_029
+            BEFORE UPDATE ON release_alerts FOR EACH ROW
+            EXECUTE FUNCTION guard_release_alerts_append_only_029()""",
+            """CREATE TRIGGER trg_release_alerts_delete_guard_029
+            BEFORE DELETE ON release_alerts FOR EACH ROW
+            EXECUTE FUNCTION guard_release_alerts_append_only_029()""",
         ),
     }
     for table, statements in postgres_guards.items():

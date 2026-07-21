@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.pages import render_snapshot_pages
 from insurance_harness.knowledge.release_approval import (
     AuthorizationDecision,
@@ -29,6 +30,11 @@ from insurance_harness.knowledge.release_approval import (
     ReleaseManifestPersistenceError,
     persist_release_manifest,
 )
+from insurance_harness.knowledge.release_authority import (
+    ReleaseActivationFailure,
+    ReleaseActivationSuccess,
+    ReleaseAuthorityService,
+)
 from insurance_harness.knowledge.release_manifest import (
     ReleaseManifest,
     build_release_manifest_from_snapshot,
@@ -36,6 +42,8 @@ from insurance_harness.knowledge.release_manifest import (
 from insurance_harness.knowledge.snapshots import build_snapshot_facts
 from insurance_harness.knowledge.tables import (
     CurrentRelease,
+    ReleaseActivationAudit,
+    ReleaseAlert,
     ReleaseApproval,
     ReleaseManifestRecord,
     ReleaseSnapshot,
@@ -381,6 +389,9 @@ def test_ra2_public_knowledge_contract_exports_authority_types() -> None:
 
     assert knowledge.AuthorizationDecision is AuthorizationDecision
     assert knowledge.ReleaseApprovalService is ReleaseApprovalService
+    assert knowledge.ReleaseActivationFailure is ReleaseActivationFailure
+    assert knowledge.ReleaseActivationSuccess is ReleaseActivationSuccess
+    assert knowledge.ReleaseAuthorityService is ReleaseAuthorityService
     assert knowledge.persist_release_manifest is persist_release_manifest
 
 
@@ -507,6 +518,335 @@ def test_ra2_approval_unique_race_is_domain_safe_and_preserves_outer_transaction
     assert prior.risk_level == "high"
 
 
+def _approve_persisted_manifest(
+    session: Session,
+    scope: Any,
+    manifest: ReleaseManifest,
+) -> None:
+    persist_release_manifest(session, scope, manifest)
+    session.commit()
+    _approve(session, scope, manifest)
+    session.commit()
+
+
+def _additional_frozen_manifest(
+    session: Session,
+    scope: Any,
+    suffix: str,
+) -> ReleaseManifest:
+    _product, version = release_product(session, scope, code=f"P-{suffix}")
+    release_claim(
+        session,
+        scope,
+        version,
+        claim_id=f"claim-{suffix}",
+        predicate="coverage_amount",
+    )
+    snapshot_id = f"snapshot-{suffix}"
+    facts = build_snapshot_facts(session, scope, snapshot_id=snapshot_id)
+    pages = [
+        page.model_dump(mode="json")
+        for page in render_snapshot_pages(
+            facts,
+            space_id=scope.space_id,
+            snapshot_id=snapshot_id,
+            compiled_at=NOW,
+        )
+    ]
+    snapshot = ReleaseSnapshot(
+        id=snapshot_id,
+        space_id=scope.space_id,
+        label=snapshot_id,
+        rendered_pages=pages,
+        status="building",
+        read_model_version=1,
+        published_by="test",
+    )
+    session.add(snapshot)
+    session.flush()
+    for index, fact in enumerate(facts):
+        evidence = [item.model_dump(mode="json") for item in fact.evidence]
+        for item in evidence:
+            for field in ("extracted_at", "created_at", "updated_at"):
+                item[field] = NOW.isoformat()
+        session.add(
+            SnapshotFact(
+                id=f"fact-{suffix}-{index}",
+                space_id=fact.space_id,
+                snapshot_id=snapshot_id,
+                claim_id=fact.claim_id,
+                revision_no=fact.revision_no,
+                product_id=fact.product_id,
+                product_version_id=fact.product_version_id,
+                product_code=fact.product_code,
+                product_name=fact.product_name,
+                version_label=fact.version_label,
+                predicate=fact.predicate,
+                field_name=fact.field_name,
+                field_group=fact.field_group,
+                value_state=fact.value_state,
+                value=fact.value,
+                effective_from=fact.effective_from,
+                effective_to=fact.effective_to,
+                confidence=fact.confidence,
+                schema_version=fact.schema_version,
+                evidence=evidence,
+            )
+        )
+    session.flush()
+    snapshot.projection_frozen_at = NOW
+    snapshot.status = "published"
+    snapshot.published_at = NOW
+    session.commit()
+    return build_release_manifest_from_snapshot(
+        session,
+        scope,
+        snapshot_id=snapshot_id,
+        schema_version="v1.1+release",
+        template_hashes=(_A, _B),
+        model_plan_hash=_C,
+    )
+
+
+def test_ra3_explicit_none_promotes_first_approved_manifest_and_appends_audit(
+    session: Session,
+) -> None:
+    scope, manifest = _frozen_manifest(session, "ra3-first")
+    _approve_persisted_manifest(session, scope, manifest)
+
+    result = ReleaseAuthorityService(session).promote(
+        scope,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="first approved activation",
+    )
+
+    assert isinstance(result, ReleaseActivationSuccess)
+    assert result.action == "promote"
+    assert result.previous_snapshot_id is None
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == manifest.snapshot_id
+    audit = session.get(ReleaseActivationAudit, result.audit_id)
+    assert audit is not None
+    assert audit.approval_id is not None
+    assert audit.manifest_hash == manifest.manifest_sha256
+    assert session.in_transaction()
+    session.rollback()
+    assert session.get(CurrentRelease, (scope.space_id, "current")) is None
+    assert session.get(ReleaseActivationAudit, result.audit_id) is None
+
+
+def test_ra3_unattested_scope_returns_typed_failure_without_pointer_change(
+    session: Session,
+) -> None:
+    scope, manifest = _frozen_manifest(session, "ra3-scope")
+    _approve_persisted_manifest(session, scope, manifest)
+    forged = KnowledgeScope(
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        wiki_kb_id=scope.wiki_kb_id,
+    )
+
+    result = ReleaseAuthorityService(session).promote(
+        forged,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="forged scope",
+    )
+
+    assert isinstance(result, ReleaseActivationFailure)
+    assert result.code == "scope_mismatch"
+    assert session.get(CurrentRelease, (scope.space_id, "current")) is None
+
+
+def test_ra3_existing_pointer_cas_and_stale_failure_are_explicit(session: Session) -> None:
+    scope, first = _frozen_manifest(session, "ra3-cas-a")
+    _approve_persisted_manifest(session, scope, first)
+    second = _additional_frozen_manifest(session, scope, "ra3-cas-b")
+    _approve_persisted_manifest(session, scope, second)
+    session.add(
+        CurrentRelease(space_id=scope.space_id, id="current", snapshot_id=first.snapshot_id)
+    )
+    session.commit()
+    service = ReleaseAuthorityService(session)
+
+    stale = service.promote(
+        scope,
+        snapshot_id=second.snapshot_id,
+        manifest_hash=second.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="stale expectation",
+    )
+    assert isinstance(stale, ReleaseActivationFailure)
+    assert stale.code == "stale_current_release"
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == first.snapshot_id
+
+    promoted = service.promote(
+        scope,
+        snapshot_id=second.snapshot_id,
+        manifest_hash=second.manifest_sha256,
+        expected_current_snapshot_id=first.snapshot_id,
+        reason="replace exact pointer",
+    )
+    assert isinstance(promoted, ReleaseActivationSuccess)
+    assert promoted.previous_snapshot_id == first.snapshot_id
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == second.snapshot_id
+
+
+def test_ra3_unapproved_manifest_never_moves_pointer_or_audits(session: Session) -> None:
+    scope, manifest = _frozen_manifest(session, "ra3-unapproved")
+    persist_release_manifest(session, scope, manifest)
+    session.commit()
+
+    result = ReleaseAuthorityService(session).promote(
+        scope,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="must be rejected",
+    )
+
+    assert isinstance(result, ReleaseActivationFailure)
+    assert result.code == "approval_missing"
+    assert session.get(CurrentRelease, (scope.space_id, "current")) is None
+    assert session.scalar(select(func.count()).select_from(ReleaseActivationAudit)) == 0
+
+
+def test_ra3_artifact_drift_keeps_pointer_and_returns_committable_safe_alert(
+    session: Session,
+) -> None:
+    scope, manifest = _frozen_manifest(session, "ra3-tamper")
+    _approve_persisted_manifest(session, scope, manifest)
+    session.execute(text("DROP TRIGGER trg_snapshot_facts_update_guard_018"))
+    session.execute(
+        text("UPDATE snapshot_facts SET value=:value WHERE snapshot_id=:snapshot_id"),
+        {"value": '{"text":"tampered"}', "snapshot_id": manifest.snapshot_id},
+    )
+    session.commit()
+
+    result = ReleaseAuthorityService(session).promote(
+        scope,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="detect drift",
+    )
+
+    assert isinstance(result, ReleaseActivationFailure)
+    assert result.code == "manifest_tamper"
+    assert result.alert_id is not None
+    assert session.get(CurrentRelease, (scope.space_id, "current")) is None
+    alert = session.get(ReleaseAlert, result.alert_id)
+    assert alert is not None
+    assert alert.space_id == scope.space_id
+    assert set(alert.safe_details) == {"action", "stage"}
+    assert "receipt" not in json.dumps(alert.safe_details).lower()
+    session.commit()
+    assert session.get(ReleaseAlert, result.alert_id) is not None
+
+
+def test_ra5_rollback_reuses_cas_and_only_targets_an_exact_approved_manifest(
+    session: Session,
+) -> None:
+    scope, first = _frozen_manifest(session, "ra5-a")
+    _approve_persisted_manifest(session, scope, first)
+    second = _additional_frozen_manifest(session, scope, "ra5-b")
+    _approve_persisted_manifest(session, scope, second)
+    service = ReleaseAuthorityService(session)
+    promoted = service.promote(
+        scope,
+        snapshot_id=second.snapshot_id,
+        manifest_hash=second.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="activate B",
+    )
+    assert isinstance(promoted, ReleaseActivationSuccess)
+    session.commit()
+
+    rolled_back = service.rollback(
+        scope,
+        snapshot_id=first.snapshot_id,
+        manifest_hash=first.manifest_sha256,
+        expected_current_snapshot_id=second.snapshot_id,
+        reason="return to approved A",
+    )
+
+    assert isinstance(rolled_back, ReleaseActivationSuccess)
+    assert rolled_back.action == "rollback"
+    assert rolled_back.previous_snapshot_id == second.snapshot_id
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == first.snapshot_id
+    kinds = list(
+        session.scalars(
+            select(ReleaseActivationAudit.kind).order_by(ReleaseActivationAudit.created_at)
+        )
+    )
+    assert kinds == ["promote", "rollback"]
+
+
+def test_ra5_unapproved_rollback_and_hash_substitution_fail_closed(session: Session) -> None:
+    scope, current = _frozen_manifest(session, "ra5-current")
+    _approve_persisted_manifest(session, scope, current)
+    target = _additional_frozen_manifest(session, scope, "ra5-unapproved")
+    persist_release_manifest(session, scope, target)
+    session.add(
+        CurrentRelease(space_id=scope.space_id, id="current", snapshot_id=current.snapshot_id)
+    )
+    session.commit()
+    service = ReleaseAuthorityService(session)
+
+    unapproved = service.rollback(
+        scope,
+        snapshot_id=target.snapshot_id,
+        manifest_hash=target.manifest_sha256,
+        expected_current_snapshot_id=current.snapshot_id,
+        reason="unapproved target",
+    )
+    substituted = service.rollback(
+        scope,
+        snapshot_id=current.snapshot_id,
+        manifest_hash="0" * 64,
+        expected_current_snapshot_id=current.snapshot_id,
+        reason="hash substitution",
+    )
+
+    assert isinstance(unapproved, ReleaseActivationFailure)
+    assert unapproved.code == "approval_missing"
+    assert isinstance(substituted, ReleaseActivationFailure)
+    assert substituted.code == "manifest_mismatch"
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == current.snapshot_id
+
+
+def test_ra5_release_authority_has_zero_provider_or_model_surface(session: Session) -> None:
+    class ProviderFake:
+        calls = 0
+
+    scope, manifest = _frozen_manifest(session, "ra5-zero-provider")
+    _approve_persisted_manifest(session, scope, manifest)
+
+    result = ReleaseAuthorityService(session).rollback(
+        scope,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="logical rollback only",
+    )
+
+    assert isinstance(result, ReleaseActivationSuccess)
+    assert ProviderFake.calls == 0
+
+
 @contextmanager
 def _block_after_two_release_prechecks(
     engine: Engine,
@@ -608,6 +948,14 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
             )
             persist_release_manifest(setup, competing_scope, competing_manifest)
             setup.commit()
+            authority_scope, authority_manifest = _frozen_manifest(
+                setup, "postgres-authority-race"
+            )
+            _approve_persisted_manifest(
+                setup,
+                authority_scope,
+                authority_manifest,
+            )
 
         def persist_worker(
             index: int,
@@ -732,9 +1080,73 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
         assert len(competing_hits) == 2
         assert len({pid for _status, pid, _usable in competing_results}) == 2
         assert all(usable for _status, _pid, usable in competing_results)
+
+        def promote_worker(
+            index: int,
+            arm_precheck: Callable[[], None],
+        ) -> tuple[str, int, bool]:
+            with factory() as worker:
+                prior = _prior_caller_work(
+                    worker,
+                    authority_scope,
+                    f"pg-authority-{index}",
+                )
+                backend_pid = worker.scalar(text("SELECT pg_backend_pid()"))
+                assert isinstance(backend_pid, int)
+                arm_precheck()
+                result = ReleaseAuthorityService(worker).promote(
+                    authority_scope,
+                    snapshot_id=authority_manifest.snapshot_id,
+                    manifest_hash=authority_manifest.manifest_sha256,
+                    expected_current_snapshot_id=None,
+                    reason=f"concurrent explicit CAS {index}",
+                )
+                assert worker.get(ReviewItem, prior.id) is prior
+                prior.risk_level = "high"
+                worker.flush()
+                if isinstance(result, ReleaseActivationSuccess):
+                    status = "winner"
+                else:
+                    assert result.code == "stale_current_release"
+                    assert result.current_snapshot_id == authority_manifest.snapshot_id
+                    status = "typed_stale"
+                worker.commit()
+                return status, backend_pid, worker.is_active
+
+        with _block_after_two_release_prechecks(
+            engine,
+            table_name="current_release",
+            identity_columns=("space_id",),
+        ) as (arm_authority_precheck, authority_hits):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                authority_results = list(
+                    executor.map(
+                        lambda index: promote_worker(index, arm_authority_precheck),
+                        range(2),
+                    )
+                )
+        assert sorted(status for status, _pid, _usable in authority_results) == [
+            "typed_stale",
+            "winner",
+        ]
+        assert len(authority_hits) == 2
+        assert len({pid for _status, pid, _usable in authority_results}) == 2
+        assert all(usable for _status, _pid, usable in authority_results)
         with factory() as verifier:
-            assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 2
-            assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 2
+            assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 3
+            assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 3
+            pointer = verifier.get(
+                CurrentRelease,
+                (authority_scope.space_id, "current"),
+            )
+            assert pointer is not None
+            assert pointer.snapshot_id == authority_manifest.snapshot_id
+            assert (
+                verifier.scalar(
+                    select(func.count()).select_from(ReleaseActivationAudit)
+                )
+                == 1
+            )
     finally:
         if engine is not None:
             engine.dispose()
