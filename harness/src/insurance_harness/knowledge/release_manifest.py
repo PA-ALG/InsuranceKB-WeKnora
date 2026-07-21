@@ -7,7 +7,7 @@ import json
 import math
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
@@ -169,6 +169,17 @@ class CanonicalEvidence(_StrictFrozenModel):
         "original_digest",
         "parser_version",
     )(_canonical_text)
+
+    @field_validator(
+        "extracted_at", "created_at", "updated_at", "stale_at", mode="after"
+    )
+    @classmethod
+    def _normalize_datetime(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("evidence datetime must be timezone-aware")
+        return value.astimezone(UTC)
 
 
 class CanonicalSnapshotFact(_StrictFrozenModel):
@@ -561,8 +572,12 @@ def _derive_directory_and_relationships(
     page_slugs: dict[tuple[str, str], list[str]] = {key: [] for key in product_rows}
     covered_claims: dict[tuple[str, str], set[str]] = {key: set() for key in product_rows}
     relationships: list[dict[str, object]] = []
+    seen_page_slugs: set[str] = set()
     for page in pages:
         metadata = page.page_metadata
+        if page.slug in seen_page_slugs:
+            raise ReleaseManifestBuildError("duplicate page slug in frozen projection")
+        seen_page_slugs.add(page.slug)
         if metadata.space_id != scope.space_id or metadata.snapshot_id != snapshot_id:
             raise ReleaseManifestBuildError("frozen page identity is invalid")
         if (

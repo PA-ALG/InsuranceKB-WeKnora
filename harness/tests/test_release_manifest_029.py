@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -225,6 +226,41 @@ def test_ra1_input_and_mapping_key_order_do_not_change_canonical_hash() -> None:
     assert first == second
     assert first.manifest_sha256 == second.manifest_sha256
     assert first.template_hashes == tuple(sorted((_A, _B)))
+
+
+@pytest.mark.parametrize(
+    "datetime_field", ["extracted_at", "created_at", "updated_at", "stale_at"]
+)
+def test_ra1_evidence_datetimes_normalize_same_instant_to_utc(
+    datetime_field: str,
+) -> None:
+    utc_items = _items()
+    offset_items = deepcopy(utc_items)
+    utc_instant = NOW
+    offset_instant = NOW.astimezone(timezone(timedelta(hours=8)))
+    utc_items["facts"][0]["evidence"][0][datetime_field] = utc_instant
+    offset_items["facts"][0]["evidence"][0][datetime_field] = offset_instant
+
+    utc_manifest = _manifest(**utc_items)
+    offset_manifest = _manifest(**offset_items)
+
+    assert utc_manifest.manifest_sha256 == offset_manifest.manifest_sha256
+    changed_fact = next(
+        fact for fact in offset_manifest.facts if fact.claim_id == "claim-2"
+    )
+    normalized = getattr(changed_fact.evidence[0], datetime_field)
+    assert normalized is not None and normalized.utcoffset() == timedelta(0)
+
+
+@pytest.mark.parametrize(
+    "datetime_field", ["extracted_at", "created_at", "updated_at", "stale_at"]
+)
+def test_ra1_evidence_datetimes_reject_naive_values(datetime_field: str) -> None:
+    items = _items()
+    items["facts"][0]["evidence"][0][datetime_field] = datetime(2026, 7, 15, 8)
+
+    with pytest.raises(ValidationError):
+        _manifest(**items)
 
 
 @pytest.mark.parametrize(
@@ -557,6 +593,12 @@ def _persist_projection_with_pages(
         }
         for index, fact in enumerate(facts)
     ]
+    # SQLite drops timezone information from ORM DateTime values; this helper
+    # represents a valid production PostgreSQL frozen projection explicitly.
+    for row in fact_rows:
+        for evidence in row["evidence"]:
+            for field in ("extracted_at", "created_at", "updated_at"):
+                evidence[field] = NOW.isoformat()
     if fact_mutator is not None:
         fact_mutator(fact_rows)
     snapshot = ReleaseSnapshot(
@@ -803,6 +845,23 @@ def test_ra1_snapshot_builder_rejects_cross_product_claim_on_page(
 
     with pytest.raises(ReleaseManifestBuildError, match="claim closure"):
         _build_from_snapshot(kb_session, scope, "snapshot-page-cross-product")
+
+
+def test_ra1_snapshot_builder_rejects_duplicate_page_slug_across_products(
+    kb_session: Session,
+) -> None:
+    def duplicate_slug(pages: list[dict[str, Any]]) -> None:
+        pages[1]["slug"] = pages[0]["slug"]
+
+    scope, _claim = _persist_projection_with_pages(
+        kb_session,
+        suffix="duplicate-page-slug",
+        page_mutator=duplicate_slug,
+        two_products=True,
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match="duplicate page slug"):
+        _build_from_snapshot(kb_session, scope, "snapshot-duplicate-page-slug")
 
 
 @pytest.mark.parametrize(
