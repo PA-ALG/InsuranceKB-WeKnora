@@ -57,6 +57,12 @@ class KnowledgeSpace(TimestampMixin, Base):
         UniqueConstraint(
             "tenant_id", "wiki_kb_id", name="uq_knowledge_spaces_tenant_wiki_kb"
         ),
+        UniqueConstraint(
+            "id",
+            "tenant_id",
+            "raw_kb_id",
+            name="uq_knowledge_spaces_scope_raw",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)

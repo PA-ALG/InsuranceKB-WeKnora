@@ -175,6 +175,7 @@ class ChangeSet(TimestampMixin, Base):
             "source_revision",
             name="uq_changeset_source",
         ),
+        UniqueConstraint("space_id", "id", name="uq_change_sets_space_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -194,7 +195,12 @@ class ChangeSet(TimestampMixin, Base):
 
 class ChangeItem(TimestampMixin, Base):
     __tablename__ = "change_items"
-    __table_args__ = (Index("ix_items_changeset", "change_set_id"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "change_set_id", "id", name="uq_change_items_change_set_id"
+        ),
+        Index("ix_items_changeset", "change_set_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     change_set_id: Mapped[str] = mapped_column(String(36), ForeignKey("change_sets.id"))
@@ -540,6 +546,205 @@ class ReconciliationJob(TimestampMixin, Base):
     reconcile_operation_id: Mapped[str | None] = mapped_column(String(36))
     status: Mapped[str] = mapped_column(String(16), default="pending")
     last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class SourceHead(TimestampMixin, Base):
+    """Durable current lifecycle position for one Space-scoped source (021 L2)."""
+
+    __tablename__ = "source_heads"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id", "knowledge_id", name="uq_source_heads_space_knowledge"
+        ),
+        UniqueConstraint(
+            "space_id",
+            "tenant_id",
+            "raw_kb_id",
+            "knowledge_id",
+            name="uq_source_heads_scoped_source",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "tenant_id", "raw_kb_id"],
+            ["knowledge_spaces.id", "knowledge_spaces.tenant_id", "knowledge_spaces.raw_kb_id"],
+            name="fk_source_heads_scope_raw",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "knowledge_id", "last_event_id"],
+            ["source_events.space_id", "source_events.knowledge_id", "source_events.id"],
+            name="fk_source_heads_last_event",
+            use_alter=True,
+        ),
+        CheckConstraint(
+            "(ordering_kind = 'processed_at' "
+            "AND ordering_processed_at IS NOT NULL AND ordering_generation IS NULL) "
+            "OR (ordering_kind = 'generation' "
+            "AND ordering_processed_at IS NULL AND ordering_generation >= 0)",
+            name="ck_source_heads_ordering_shape",
+        ),
+        CheckConstraint(
+            "state IN ('active', 'deleted')", name="ck_source_heads_state"
+        ),
+        CheckConstraint("version >= 1", name="ck_source_heads_version"),
+        Index("ix_source_heads_scope_state", "space_id", "state"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(String(36))
+    tenant_id: Mapped[str] = mapped_column(String(255))
+    raw_kb_id: Mapped[str] = mapped_column(String(255))
+    knowledge_id: Mapped[str] = mapped_column(String(255))
+    head_revision: Mapped[str] = mapped_column(String(64))
+    ordering_kind: Mapped[str] = mapped_column(String(16))
+    ordering_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ordering_generation: Mapped[int | None] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(16))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    last_event_id: Mapped[str | None] = mapped_column(String(36))
+    actor: Mapped[str] = mapped_column(String(128))
+    head_updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SourceEvent(Base):
+    """Append-only input and decision ledger for one SourceHead (021 L2)."""
+
+    __tablename__ = "source_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id", "knowledge_id", "id", name="uq_source_events_source_id"
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "tenant_id", "raw_kb_id"],
+            ["knowledge_spaces.id", "knowledge_spaces.tenant_id", "knowledge_spaces.raw_kb_id"],
+            name="fk_source_events_scope_raw",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "tenant_id", "raw_kb_id", "knowledge_id"],
+            [
+                "source_heads.space_id",
+                "source_heads.tenant_id",
+                "source_heads.raw_kb_id",
+                "source_heads.knowledge_id",
+            ],
+            name="fk_source_events_scoped_head",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "change_set_id"],
+            ["change_sets.space_id", "change_sets.id"],
+            name="fk_source_events_space_change_set",
+        ),
+        ForeignKeyConstraint(
+            ["change_set_id", "tombstone_change_item_id"],
+            ["change_items.change_set_id", "change_items.id"],
+            name="fk_source_events_tombstone_item",
+        ),
+        CheckConstraint(
+            "(ordering_kind = 'processed_at' "
+            "AND ordering_processed_at IS NOT NULL AND ordering_generation IS NULL) "
+            "OR (ordering_kind = 'generation' "
+            "AND ordering_processed_at IS NULL AND ordering_generation >= 0)",
+            name="ck_source_events_ordering_shape",
+        ),
+        CheckConstraint(
+            "desired_state IN ('active', 'deleted')",
+            name="ck_source_events_desired_state",
+        ),
+        CheckConstraint(
+            "decision IN ('accepted_create', 'accepted_advance', "
+            "'accepted_delete', 'accepted_reactivate', 'idempotent', "
+            "'stale', 'blocked_deleted')",
+            name="ck_source_events_decision",
+        ),
+        CheckConstraint(
+            "tombstone_change_item_id IS NULL OR change_set_id IS NOT NULL",
+            name="ck_source_events_tombstone_link",
+        ),
+        Index(
+            "ix_source_events_source_time",
+            "space_id",
+            "knowledge_id",
+            "decided_at",
+        ),
+        Index(
+            "ix_source_events_scope_decision", "space_id", "decision", "decided_at"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(String(36))
+    tenant_id: Mapped[str] = mapped_column(String(255))
+    raw_kb_id: Mapped[str] = mapped_column(String(255))
+    knowledge_id: Mapped[str] = mapped_column(String(255))
+    input_revision: Mapped[str] = mapped_column(String(64))
+    ordering_kind: Mapped[str] = mapped_column(String(16))
+    ordering_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ordering_generation: Mapped[int | None] = mapped_column(Integer)
+    desired_state: Mapped[str] = mapped_column(String(16))
+    decision: Mapped[str] = mapped_column(String(32))
+    before_head: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_head: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    causation_id: Mapped[str | None] = mapped_column(String(255))
+    actor: Mapped[str] = mapped_column(String(128))
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    change_set_id: Mapped[str | None] = mapped_column(String(36))
+    tombstone_change_item_id: Mapped[str | None] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SourceLifecycleBackfillIssue(TimestampMixin, Base):
+    """Durable unresolved ordering ambiguity; migration must never guess a head."""
+
+    __tablename__ = "source_lifecycle_backfill_issues"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id",
+            "knowledge_id",
+            name="uq_source_lifecycle_issues_space_knowledge",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "tenant_id", "raw_kb_id"],
+            ["knowledge_spaces.id", "knowledge_spaces.tenant_id", "knowledge_spaces.raw_kb_id"],
+            name="fk_source_lifecycle_issues_scope_raw",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'resolved')",
+            name="ck_source_lifecycle_issues_status",
+        ),
+        CheckConstraint(
+            "(status = 'open' "
+            "AND resolved_revision IS NULL AND resolved_ordering_kind IS NULL "
+            "AND resolved_processed_at IS NULL AND resolved_generation IS NULL "
+            "AND expected_state IS NULL AND resolved_by IS NULL "
+            "AND resolution_reason IS NULL AND resolved_at IS NULL) "
+            "OR (status = 'resolved' AND resolved_revision IS NOT NULL "
+            "AND expected_state IN ('active', 'deleted') AND resolved_by IS NOT NULL "
+            "AND resolution_reason IS NOT NULL AND resolved_at IS NOT NULL "
+            "AND ((resolved_ordering_kind = 'processed_at' "
+            "AND resolved_processed_at IS NOT NULL AND resolved_generation IS NULL) "
+            "OR (resolved_ordering_kind = 'generation' "
+            "AND resolved_processed_at IS NULL AND resolved_generation >= 0)))",
+            name="ck_source_lifecycle_issues_resolution_shape",
+        ),
+        Index(
+            "ix_source_lifecycle_issues_scope_status", "space_id", "status"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(String(36))
+    tenant_id: Mapped[str] = mapped_column(String(255))
+    raw_kb_id: Mapped[str] = mapped_column(String(255))
+    knowledge_id: Mapped[str] = mapped_column(String(255))
+    observed_revisions: Mapped[list[str]] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    resolved_revision: Mapped[str | None] = mapped_column(String(64))
+    resolved_ordering_kind: Mapped[str | None] = mapped_column(String(16))
+    resolved_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_generation: Mapped[int | None] = mapped_column(Integer)
+    expected_state: Mapped[str | None] = mapped_column(String(16))
+    resolved_by: Mapped[str | None] = mapped_column(String(128))
+    resolution_reason: Mapped[str | None] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 register_metadata_guards(Base.metadata)

@@ -4,7 +4,7 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
 import pytest
@@ -22,6 +22,7 @@ from insurance_harness.knowledge.source_revision import (
     notify_source_revision,
 )
 from insurance_harness.knowledge.tables import ChangeSet, Claim, ClaimEvidence
+from insurance_harness.sources import ProcessedAtOrdering, SourceRevision
 from tests.kbhelpers import seed_bound_scope, seed_product
 
 NOW = datetime(2026, 7, 14, 10, 0, tzinfo=UTC)
@@ -39,14 +40,28 @@ def _live_connect_args(schema: str | None = None) -> dict[str, object]:
     }
 
 
-def _identity(scope: KnowledgeScope, revision_char: str) -> SourceImportIdentity:
+def _identity(
+    scope: KnowledgeScope,
+    revision_char: str,
+    *,
+    ordering_offset: int | None = None,
+) -> SourceImportIdentity:
+    if ordering_offset is None:
+        ordering_offset = ord(revision_char) - ord("a")
+    processed_at = NOW + timedelta(seconds=ordering_offset)
+    revision = SourceRevision(
+        file_hash=revision_char * 32,
+        ordering=ProcessedAtOrdering(value=processed_at),
+        parser_fingerprint="pdfplumber@0.11:text-v1",
+    )
     return SourceImportIdentity(
         knowledge_id="knowledge-concurrent",
         raw_kb_id=scope.raw_kb_id,
-        source_revision=revision_char * 64,
-        file_hash=revision_char * 32,
+        source_revision=revision.value,
+        ordering=revision.ordering,
+        file_hash=revision.file_hash,
         original_digest=revision_char * 64,
-        parser_version="pdfplumber@0.11:text-v1",
+        parser_version=revision.parser_fingerprint,
     )
 
 
@@ -175,7 +190,7 @@ def test_t7_live_postgresql_concurrent_notifications_create_one_recompile() -> N
                 report = notify_source_revision(
                     worker_session,
                     worker_scope,
-                    _identity(worker_scope, "b"),
+                    _identity(worker_scope, "b", ordering_offset=1),
                     observed_at=NOW,
                 )
                 worker_session.commit()

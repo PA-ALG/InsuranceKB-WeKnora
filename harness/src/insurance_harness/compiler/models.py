@@ -3,10 +3,11 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, GoldenRecord, TriState
+from ..sources.models import SourceOrdering, SourceRevision
 from .llm import CallStats
 from .sections import DocSection
 
@@ -91,10 +92,13 @@ class Judgement(BaseModel):
 
 
 class DocManifestEntry(BaseModel):
+    model_config = ConfigDict(revalidate_instances="always")
+
     doc: str
     source_id: str
     knowledge_id: str | None = None
     source_revision: str
+    ordering: SourceOrdering
     file_hash: str
     original_digest: str
     parser_fingerprint: str
@@ -108,6 +112,16 @@ class DocManifestEntry(BaseModel):
     feedability_score: float = 1.0
     feedability_ok: bool = True
     fastpath_fields: int = 0  # 006 F3：该文档 fast path 命中并通过校验链的字段数
+
+    @model_validator(mode="after")
+    def _validate_source_revision_identity(self) -> "DocManifestEntry":
+        SourceRevision(
+            file_hash=self.file_hash,
+            ordering=self.ordering,
+            parser_fingerprint=self.parser_fingerprint,
+            value=self.source_revision,
+        )
+        return self
 
 
 class RunManifest(BaseModel):

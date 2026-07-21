@@ -14,7 +14,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from ..goldenset.pdf import PageText, extract_pages
-from .models import SourceDocument, SourceRevision
+from .models import ProcessedAtOrdering, SourceDocument, SourceRevision
 from .protocol import MaterializationStage, MaterializedBatch, SourceMaterializationError
 
 # Directory replay has no upstream processing clock. A fixed Unix epoch UTC sentinel makes
@@ -144,7 +144,7 @@ class DirectoryDocumentSource:
                 ) from exc
             revision = SourceRevision(
                 file_hash=digest,
-                processed_at=DIRECTORY_REPLAY_PROCESSED_AT,
+                ordering=ProcessedAtOrdering(value=DIRECTORY_REPLAY_PROCESSED_AT),
                 parser_fingerprint=self._parser_fingerprint,
             )
             try:
