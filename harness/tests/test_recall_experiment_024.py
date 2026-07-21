@@ -276,67 +276,68 @@ def test_e3_budget_caps_outbound_calls_across_topn_sections() -> None:
     """max_calls=1 + top_n=3（前段全 unknown）→ 出站 complete 恰 1 次。"""
     import pytest as _pytest
 
-    from insurance_harness.compiler.llm import (
-        BudgetedClient,
-        GapfillBudgetExhausted,
-        GapfillCallBudget,
-    )
+    from insurance_harness.compiler.attempts import InMemoryAttemptLedger
+    from insurance_harness.compiler.llm import GapfillBudgetExhausted
 
     field = FieldSpec(name="等待期", field_id="zh_wp")
     spy = _SpyClient(
         '[{"field_id":"zh_wp","value":null,"tri_state":"unknown","evidence":[]}]'
     )
-    budget = GapfillCallBudget(1)
-    client = BudgetedClient(spy, budget)
+    ledger = InMemoryAttemptLedger("budget-topn")
     pages = {_DOC: [s.fragments[0] for _, s in _sections3()]}
     with _pytest.raises(GapfillBudgetExhausted):
         asyncio.run(
-            gapfill_field(client, "产品", field, _sections3(), pages, top_n=3)
+            gapfill_field(
+                spy, "产品", field, _sections3(), pages, top_n=3,
+                ledger=ledger, budget_limit=1,
+            )
         )
     assert spy.calls == 1, f"预算=1 时出站只能 1 次，实得 {spy.calls}"
-    assert budget.used == 1
+    assert ledger.used("gapfill") == 1
 
 
 def test_e3_budget_caps_parse_retry_outbound() -> None:
     """解析重试也是出站调用：预算=1 时重试不得越过上界。"""
     import pytest as _pytest
 
-    from insurance_harness.compiler.llm import (
-        BudgetedClient,
-        GapfillBudgetExhausted,
-        GapfillCallBudget,
-    )
+    from insurance_harness.compiler.attempts import InMemoryAttemptLedger
+    from insurance_harness.compiler.llm import GapfillBudgetExhausted
 
     field = FieldSpec(name="等待期", field_id="zh_wp")
     spy = _SpyClient("这不是 JSON")  # 触发 parse retry
-    client = BudgetedClient(spy, GapfillCallBudget(1))
+    ledger = InMemoryAttemptLedger("budget-parse")
     sections = _sections3()[:1]
     pages = {_DOC: [sections[0][1].fragments[0]]}
     with _pytest.raises(GapfillBudgetExhausted):
-        asyncio.run(gapfill_field(client, "产品", field, sections, pages))
+        asyncio.run(
+            gapfill_field(
+                spy, "产品", field, sections, pages,
+                ledger=ledger, budget_limit=1,
+            )
+        )
     assert spy.calls == 1, "parse retry 的第二次出站必须被预算拒绝"
 
 
 def test_e3_budget_shared_across_concurrent_fields() -> None:
     """两字段并发共享 max_calls=1 → 总出站恰 1（permit 在调用边界原子获取）。"""
-    from insurance_harness.compiler.llm import (
-        BudgetedClient,
-        GapfillBudgetExhausted,
-        GapfillCallBudget,
-    )
+    from insurance_harness.compiler.attempts import InMemoryAttemptLedger
+    from insurance_harness.compiler.llm import GapfillBudgetExhausted
 
     f1 = FieldSpec(name="等待期", field_id="zh_wp")
     f2 = FieldSpec(name="等待期", field_id="zh_wp2", aliases=("等待期",))
     spy = _SpyClient(
         '[{"field_id":"zh_x","value":null,"tri_state":"unknown","evidence":[]}]'
     )
-    client = BudgetedClient(spy, GapfillCallBudget(1))
+    ledger = InMemoryAttemptLedger("budget-concurrent")
     sections = _sections3()[:1]
     pages = {_DOC: [sections[0][1].fragments[0]]}
 
     async def _one(field: FieldSpec) -> str:
         try:
-            await gapfill_field(client, "产品", field, sections, pages, top_n=1)
+            await gapfill_field(
+                spy, "产品", field, sections, pages, top_n=1,
+                ledger=ledger, budget_limit=1,
+            )
             return "ok"
         except GapfillBudgetExhausted:
             return "exhausted"
@@ -350,42 +351,52 @@ def test_e3_budget_shared_across_concurrent_fields() -> None:
 
 
 def test_e3_no_candidate_sections_consumes_zero_budget() -> None:
-    from insurance_harness.compiler.llm import BudgetedClient, GapfillCallBudget
+    from insurance_harness.compiler.attempts import InMemoryAttemptLedger
 
     field = FieldSpec(name="等待期", field_id="zh_wp")
     spy = _SpyClient("[]")
-    budget = GapfillCallBudget(3)
+    ledger = InMemoryAttemptLedger("budget-no-candidate")
     page = PageText(page_no=1, text="与该字段完全无关。")
     sec = DocSection(section_id="s1", title="无关", headings=(), fragments=(page,))
     asyncio.run(
-        gapfill_field(BudgetedClient(spy, budget), "产品", field,
-                      [(_DOC, sec)], {_DOC: [page]})
+        gapfill_field(
+            spy, "产品", field, [(_DOC, sec)], {_DOC: [page]},
+            ledger=ledger, budget_limit=3,
+        )
     )
-    assert spy.calls == 0 and budget.used == 0, "无候选：零调用且零额度消耗"
+    assert spy.calls == 0 and ledger.used("gapfill") == 0, "无候选：零调用且零额度消耗"
 
 
 def test_e3_zero_budget_is_legal_and_strictly_zero_calls() -> None:
     """max_calls=0 合法（ge=0）且严格零出站；已用额度跨批次/resume 不复活。"""
     import pytest as _pytest
 
-    from insurance_harness.compiler.llm import (
-        GapfillBudgetExhausted,
-        GapfillCallBudget,
-    )
+    from insurance_harness.compiler.attempts import InMemoryAttemptLedger
+    from insurance_harness.compiler.llm import GapfillBudgetExhausted
     from insurance_harness.compiler.pipeline import PipelineConfig
 
     assert PipelineConfig(gapfill_max_calls=0).gapfill_max_calls == 0
-    zero = GapfillCallBudget(0)
+    zero = InMemoryAttemptLedger("budget-zero")
     with _pytest.raises(GapfillBudgetExhausted):
-        zero.acquire()
-    # 跨批次/resume：used 从 checkpoint state 传入，不得重置
-    carried = GapfillCallBudget(1, used=1)
-    assert carried.remaining == 0
+        zero.reserve(
+            stage="gapfill", prompt_version="v1", request_key="k",
+            field_ids=("f",), budget_scope="gapfill", budget_limit=0,
+        )
+    # resume 使用同一 durable ledger 的既有 reservation，而非 checkpoint counter。
+    carried = InMemoryAttemptLedger("budget-carried")
+    carried.reserve(
+        stage="gapfill", prompt_version="v1", request_key="k",
+        field_ids=("f",), budget_scope="gapfill", budget_limit=1,
+    )
+    assert carried.used("gapfill") == 1
     with _pytest.raises(GapfillBudgetExhausted):
-        carried.acquire()
+        carried.reserve(
+            stage="gapfill", prompt_version="v1", request_key="k2",
+            field_ids=("f",), budget_scope="gapfill", budget_limit=1,
+        )
     assert not gapfill_eligibility(
         FieldSpec(name="等待期", field_id="zh_wp", requiredness="required"),
-        None, budget_remaining=carried.remaining,
+        None, budget_remaining=0,
     ).eligible, "已耗尽额度经 state 续传后不得再触发补漏"
 
 

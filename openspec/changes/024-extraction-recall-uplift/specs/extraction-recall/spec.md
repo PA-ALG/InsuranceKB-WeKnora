@@ -35,7 +35,7 @@
 
 ### Requirement: E3 定向补漏的触发必须 schema 驱动且不降低反幻觉门槛
 
-第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望（`FieldSpec.requiredness ∈ {required, expected}`——基线 Excel 无显式必填列时默认 expected，YAML 提供『必填』/requiredness 列时按列解析），首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节（检索无候选=零 LLM 调用），且预算允许（运行级补漏预算，单位=**真实出站 `ModelClient.complete` 请求**——解析重试与传输重试的每次出站均计费；permit 在调用边界原子获取，余额为 0 不得出站；`gapfill_max_calls` 允许 0=合法零预算；已用量随 checkpoint state 跨批次/resume 累计，不得重置）。首轮 `source_pointer` 的解析词条 SHALL 参与补漏检索（被指向正文不含字段名也能命中）并入审计。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
+第二轮定向提问的触发条件 SHALL 完全由运行时可得信息构成：字段属当前产品适用 schema 且标记为必填/期望（`FieldSpec.requiredness ∈ {required, expected}`——基线 Excel 无显式必填列时默认 expected，YAML 提供『必填』/requiredness 列时按列解析；两种别名同时出现但语义冲突时 fail-closed），首轮结果为空、`unknown` 或 `source_pointer`，存在候选章节（检索无候选=零 LLM 调用），且预算允许。运行级补漏预算单位是**真实出站 `ModelClient.complete` 请求**：解析重试与传输重试的每次出站均计费；每次调用 SHALL 在出站前以独立于 LangGraph node checkpoint 的 durable run ledger 原子预留并提交，余额为 0 不得出站；`gapfill_max_calls` 允许 0=合法零预算；进程在出站后、node checkpoint 前崩溃时，该未知结果的预留仍 SHALL 占用预算，resume 不得复活额度。`PipelineState.gapfill_calls_used` 仅可作投影，不得作为预算权威。首轮 `source_pointer` 的解析词条 SHALL 参与补漏检索（被指向正文不含字段名也能命中）并入审计。金标 SHALL NOT 参与触发判定（仅测试评分用）。补漏走既有 gapfill 链路与预算控制；结果仍过 evidence 回验（引文对不上原文即打回），置信分级沿既有语义，反幻觉门槛不得降低。
 
 #### Scenario: schema 驱动触发（无金标参与）
 
@@ -47,6 +47,13 @@
 
 - **WHEN** 补漏返回的引文与原文对不上
 - **THEN** 该值被打回不入 pred（004 反幻觉回归用例保持全绿）
+
+#### Scenario: 崩溃后预算不复活
+
+- **GIVEN** gapfill 调用已在 run ledger 预留并越过出站边界，但进程在 node checkpoint 前终止
+- **WHEN** 同一 run resume
+- **THEN** 该预留仍可审计且计入硬上限；达到上限时后续请求在出站前被拒绝
+- **AND** resume 若改变该 run 的 gapfill 上限（含有限与无限互换）则 fail-closed
 
 ### Requirement: E4 值粒度对齐指引只经变体机制注入且不改数据契约
 
@@ -100,7 +107,7 @@ cleaning SHALL 增补 `WEAK_UNACTIONABLE`（"以合同为准/按合同约定/需
 
 ### Requirement: E7 实验归属、实际使用与审计必须进入最终 pred 产物（codex PR#13 裁决）
 
-三个概念 SHALL 分离且全部持久化：**variant_assignment**（运行前基于 experiment_id+seed+product+field 对同一 eligible population 确定性分桶 control/treatment；实验关闭为空；control 臂强制默认补漏模板）、**prompt_variant_used**（每条 pred 实际经过的模板标识——baseline/fastpath/default@v1/targeted@vN；注册表 membership SHALL NOT 冒充实际使用）、**winning_origin**（产生最终值的路径）。pred SHALL 携带类型化 `extraction_audit`：**attempt 链**（每次真实出站调用一条：attempt_id/stage/prompt_version/request_key/outcome）+ `winning_attempt_id`（指向真正产生最终值的 attempt；fastpath 等非 LLM 来源为 null；vote/judge 改写最终值时指向其自身 attempt，仅确证时保留原产生者）+ 上述三项 + 兼容性拒绝原因 + 指针词条；`prompt_variant_used` SHALL 由 winning attempt 派生（stage 消歧，无继承歧义）且经 pred.jsonl 序列化/反序列化不丢失（pred 值契约不变、eval 忽略未知字段、历史 JSONL 向后兼容）。变体注册表与 assignment policy SHALL 由管道配置注入（节点不得各取全局默认），其内容摘要 SHALL 进入 RunManifest 与 checkpoint 身份，resume 时不一致 SHALL fail-closed。
+三个概念 SHALL 分离且全部持久化：**variant_assignment**（在 eligible field 调用前，基于 experiment_id+seed+product+field 确定性分桶 control/treatment；即使调用失败或无候选值也不得丢失；实验关闭为空；control 臂强制默认补漏模板）、**prompt_variant_used**（每条 pred 最终值实际经过的模板标识——baseline/fastpath/default@v1/targeted@vN；注册表 membership SHALL NOT 冒充实际使用）、**winning_origin**（真正产生最终值的路径）。pred SHALL 携带类型化 `extraction_audit`：**attempt 链**（每次真实出站调用一条：attempt_id/stage/prompt_version/request_key/outcome；预留发生在出站前，传输失败、解析失败、重试、批内落选与后续落选路径均不得丢失；同一 request 的多次调用 attempt_id 仍唯一）+ `winning_attempt_id`（指向真正产生最终值的 attempt；fastpath 等非 LLM 来源为 null；批内未重试字段保留首轮 producer；vote/judge 改写最终值时指向其自身 producer，仅确证时保留原 producer）+ 上述三项 + 兼容性拒绝原因 + 指针词条。finalize SHALL 以 durable field ledger 重建完整 attempt 链，候选 metadata 不是事实权威；`prompt_variant_used` 与 `winning_origin` SHALL 由 winning attempt 派生（stage 消歧，无继承歧义）且经 pred.jsonl 序列化/反序列化不丢失（pred 值契约不变、eval 忽略未知字段、历史 JSONL 向后兼容）。变体注册表与 assignment policy SHALL 由管道配置注入（节点不得各取全局默认），其内容摘要 SHALL 进入 RunManifest 与 checkpoint 身份，resume 时不一致 SHALL fail-closed。`PipelineConfig`、assignment policy 与变体模型 SHALL 拒绝未知键；实验 ID SHALL 规范化且启用时非空；CLI SHALL 可配置 gapfill 硬上限与 experiment ID/seed。
 
 #### Scenario: 审计穿过交付边界
 

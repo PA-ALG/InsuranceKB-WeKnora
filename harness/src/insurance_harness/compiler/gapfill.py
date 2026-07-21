@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..goldenset.pdf import PageText
 from ..schemas import FieldSpec
+from .attempts import AttemptLedger, InMemoryAttemptLedger
 from .cleaning import clean_value
 from .compat import check_field_value
 from .experiment import Arm
@@ -160,12 +161,15 @@ async def gapfill_field(
     registry: VariantRegistry | None = None,
     arm: "Arm | None" = None,
     source_pointer: str | None = None,
+    ledger: AttemptLedger | None = None,
+    budget_limit: int | None = None,
 ) -> FieldCandidate:
     """对单个 unknown 字段执行补漏：三态输出，present/absent 必须过 quote 回验。
 
     注册表/臂由管道注入（E7）；``source_pointer`` 解析词条参与检索（E6）。
     无候选章节 → 零 LLM 调用返回 unknown（E3 触发合同）。"""
     registry = registry if registry is not None else VariantRegistry.default()
+    ledger = ledger if ledger is not None else InMemoryAttemptLedger()
     variant = _variant_for(field, registry, arm)
     pointer_terms = parse_pointer_terms(source_pointer)
     candidates = rank_sections(field, sections, top_n, extra_terms=pointer_terms)
@@ -177,7 +181,6 @@ async def gapfill_field(
 
     keywords = gapfill_keywords(field)
     compat_reject_reason: str | None = None  # E6.3：补漏路径的兼容性拒绝原因（可审计）
-    attempt_log: list[dict[str, object]] = []
     for doc, sec in candidates:
         if variant.targeted_template == TARGETED_SHORT_ANSWER:
             user = build_targeted_gapfill_user(
@@ -186,12 +189,13 @@ async def gapfill_field(
             )
         else:  # 未注册字段：既有组装零漂移（E2.3）
             user = build_gapfill_user(product_name, doc, field, sec.fragments, keywords)
-        before = len(attempt_log)
-        parsed = await call_and_parse(
+        call = await call_and_parse(
             client, GAPFILL_SYSTEM, user,
-            attempt_log=attempt_log,
+            ledger=ledger, field_ids=(field.field_id,),
             stage="gapfill", prompt_version=_used_version(variant),
+            budget_scope="gapfill", budget_limit=budget_limit,
         )
+        parsed = call.items
         if not parsed:
             continue  # 解析失败视作该段无线索，换下一个候选段落
         item = next(
@@ -212,8 +216,10 @@ async def gapfill_field(
         if not all_quotes_verified(cand.evidence, pages_by_doc.get(doc, ())):
             continue  # 未验证引文不得出场（E3.2），当作无线索处理
         out = cand.model_copy(update={"origin": "gapfill", "confidence": "medium"})
-        out.metadata["attempts"] = list(attempt_log)
-        out.metadata["winning_attempt_id"] = attempt_log[before]["attempt_id"]
+        out.metadata["attempts"] = [
+            a.model_dump() for a in ledger.attempts_for_field(field.field_id)
+        ]
+        out.metadata["winning_attempt_id"] = call.producing_attempt_id
         return _stamp_variant(out, variant, arm, pointer_terms)
 
     if compat_reject_reason is not None:
@@ -221,8 +227,12 @@ async def gapfill_field(
         # 不得笼统记 not_found（gauntlet F6：补漏路径拒绝原因此前丢失）。
         rejected = _unknown(field, doc="", reason="incompatible_value")
         rejected.metadata["compat_reject"] = compat_reject_reason
-        rejected.metadata["attempts"] = list(attempt_log)
+        rejected.metadata["attempts"] = [
+            a.model_dump() for a in ledger.attempts_for_field(field.field_id)
+        ]
         return _stamp_variant(rejected, variant, arm, pointer_terms)
     missed = _unknown(field, doc="", reason="not_found")
-    missed.metadata["attempts"] = list(attempt_log)
+    missed.metadata["attempts"] = [
+        a.model_dump() for a in ledger.attempts_for_field(field.field_id)
+    ]
     return _stamp_variant(missed, variant, arm, pointer_terms)

@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .variants import VariantRegistry
 
@@ -32,11 +32,16 @@ class AssignmentPolicy(BaseModel):
     注册字段使用注册表变体（现状语义，实际使用会如实记录）。
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    enabled: bool = False
-    experiment_id: str = ""
-    seed: int = Field(default=0, ge=0)
+    enabled: bool = Field(default=False, strict=True)
+    experiment_id: str = Field(default="", strict=True)
+    seed: int = Field(default=0, strict=True, ge=0)
+
+    @field_validator("experiment_id", mode="before")
+    @classmethod
+    def _canonical_experiment_id(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def _require_named_experiment(self) -> AssignmentPolicy:

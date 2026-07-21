@@ -16,6 +16,7 @@ from ..goldenset.normalize import _parse_date, _parse_number
 from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, TriState
 from ..schemas import FieldSpec
+from .attempts import AttemptLedger, InMemoryAttemptLedger
 from .cleaning import clean_value
 from .compat import check_field_value
 from .llm import ModelClient, TruncatedOutputError, request_key
@@ -57,41 +58,73 @@ async def with_transport_retry[T](
     raise TransportRetryError(f"重试 {attempts} 次后仍失败：{last!r}") from last
 
 
+class CallParseResult(BaseModel):
+    """Parsed response plus the exact outbound attempt that produced it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    items: list[dict[str, Any]] | None
+    producing_attempt_id: str | None
+    attempt_ids: tuple[str, ...]
+
+
 async def call_and_parse(
     client: ModelClient,
     system: str,
     user: str,
     *,
-    attempt_log: list[dict[str, Any]] | None = None,
+    ledger: AttemptLedger | None = None,
+    field_ids: Sequence[str] = (),
     stage: str = "",
     prompt_version: str = "",
-) -> list[dict[str, Any]] | None:
+    budget_scope: str | None = None,
+    budget_limit: int | None = None,
+) -> CallParseResult:
     """一次调用 + 对抗性解析；解析失败带反馈重试 1 次（E3.1）。
 
-    E7 R2：``attempt_log`` 非空时，每次真实出站 complete() 追加一条 attempt
-    （含 parse retry——它也是一次出站调用、也计预算）。"""
-    key = request_key(system, user)
-    raw = await client.complete(system, user)
-    parsed = extract_json_array(raw)
-    if attempt_log is not None:
-        attempt_log.append({
-            "attempt_id": f"{stage}:{key[:12]}",
-            "stage": stage, "prompt_version": prompt_version,
-            "request_key": key,
-            "outcome": "parsed" if parsed is not None else "parse_failed",
-        })
-    if parsed is None:
-        key2 = request_key(system, user + PARSE_RETRY_SUFFIX)
-        raw = await client.complete(system, user + PARSE_RETRY_SUFFIX)
+    Every real outbound call is reserved before ``complete``. Parse retry is a
+    separate reservation and becomes the producer when it succeeds."""
+    ledger = ledger if ledger is not None else InMemoryAttemptLedger()
+    attempt_ids: list[str] = []
+
+    async def one(call_stage: str, call_user: str) -> tuple[list[dict[str, Any]] | None, str]:
+        key = request_key(system, call_user)
+        attempt = ledger.reserve(
+            stage=call_stage,
+            prompt_version=prompt_version,
+            request_key=key,
+            field_ids=field_ids,
+            budget_scope=budget_scope,
+            budget_limit=budget_limit,
+        )
+        attempt_ids.append(attempt.attempt_id)
+        try:
+            raw = await client.complete(system, call_user)
+        except asyncio.CancelledError:
+            ledger.finish(attempt.attempt_id, "cancelled")
+            raise
+        except BaseException:
+            ledger.finish(attempt.attempt_id, "transport_failed")
+            raise
         parsed = extract_json_array(raw)
-        if attempt_log is not None:
-            attempt_log.append({
-                "attempt_id": f"{stage}_retry:{key2[:12]}",
-                "stage": f"{stage}_retry", "prompt_version": prompt_version,
-                "request_key": key2,
-                "outcome": "parsed" if parsed is not None else "parse_failed",
-            })
-    return parsed
+        ledger.finish(
+            attempt.attempt_id, "parsed" if parsed is not None else "parse_failed"
+        )
+        return parsed, attempt.attempt_id
+
+    parsed, producer = await one(stage, user)
+    if parsed is not None:
+        return CallParseResult(
+            items=parsed,
+            producing_attempt_id=producer,
+            attempt_ids=tuple(attempt_ids),
+        )
+    parsed, retry_producer = await one(f"{stage}_retry", user + PARSE_RETRY_SUFFIX)
+    return CallParseResult(
+        items=parsed,
+        producing_attempt_id=retry_producer if parsed is not None else None,
+        attempt_ids=tuple(attempt_ids),
+    )
 
 
 def validate_typed_value(field: FieldSpec, value: str) -> str | None:
@@ -226,12 +259,14 @@ class WindowExtractor:
         doc: str,
         pages: Sequence[PageText],
         max_fields_per_call: int = MAX_FIELDS_PER_CALL,
+        ledger: AttemptLedger | None = None,
     ) -> None:
         self._client = client
         self._product = product_name
         self._doc = doc
         self._pages = pages
         self._batch_size = min(max_fields_per_call, MAX_FIELDS_PER_CALL)
+        self._ledger = ledger if ledger is not None else InMemoryAttemptLedger()
 
     async def extract(
         self, window: Window, fields: Sequence[FieldSpec]
@@ -245,16 +280,19 @@ class WindowExtractor:
         self, window: Window, batch: Sequence[FieldSpec]
     ) -> list[FieldCandidate]:
         user = build_extraction_user(self._product, self._doc, batch, window.fragments)
-        attempt_log: list[dict[str, Any]] = []
-        parsed = await call_and_parse(
+        call = await call_and_parse(
             self._client, EXTRACTION_SYSTEM, user,
-            attempt_log=attempt_log, stage="extract",
+            ledger=self._ledger, field_ids=tuple(f.field_id for f in batch),
+            stage="extract",
             prompt_version=f"baseline@{PROMPT_VERSION}",
         )
+        parsed = call.items
         if parsed is None:  # 解析重试仍失败：该批全部 unknown+原因（E3.1）
             failed_batch = [_unknown(f, self._doc, "parse_failed") for f in batch]
             for fb in failed_batch:
-                fb.metadata["attempts"] = list(attempt_log)
+                fb.metadata["attempts"] = [
+                    a.model_dump() for a in self._ledger.attempts_for_field(fb.field_id)
+                ]
             return failed_batch
 
         by_id = {str(item.get("field_id")): item for item in parsed}
@@ -270,6 +308,8 @@ class WindowExtractor:
             )
             if err is None:
                 results[f.field_id] = cand
+                if cand.tri_state != "unknown" and call.producing_attempt_id is not None:
+                    cand.metadata["winning_attempt_id"] = call.producing_attempt_id
             else:
                 rejects.append((f, err))
                 results[f.field_id] = cand  # 占位，打回成功后覆盖
@@ -280,11 +320,14 @@ class WindowExtractor:
             user2 = build_extraction_user(
                 self._product, self._doc, retry_fields, window.fragments, feedback=feedback
             )
-            parsed2 = await call_and_parse(
+            retry_call = await call_and_parse(
                 self._client, EXTRACTION_SYSTEM, user2,
-                attempt_log=attempt_log, stage="extract",
+                ledger=self._ledger,
+                field_ids=tuple(f.field_id for f in retry_fields),
+                stage="extract_validation_retry",
                 prompt_version=f"baseline@{PROMPT_VERSION}",
             )
+            parsed2 = retry_call.items
             by_id2 = {str(i.get("field_id")): i for i in parsed2 or []}
             for f, first_err in rejects:
                 reason: UnknownReason = (
@@ -299,6 +342,13 @@ class WindowExtractor:
                 )
                 if err2 is None:
                     results[f.field_id] = cand2
+                    if (
+                        cand2.tri_state != "unknown"
+                        and retry_call.producing_attempt_id is not None
+                    ):
+                        cand2.metadata["winning_attempt_id"] = (
+                            retry_call.producing_attempt_id
+                        )
                 else:  # 不得带着未验证引文出场：值/证据一律清空
                     failed = _unknown(f, self._doc, reason)
                     failed.metadata["rejected_value"] = cand2.value
@@ -306,13 +356,11 @@ class WindowExtractor:
                         e.model_dump() for e in cand2.evidence
                     ]
                     results[f.field_id] = failed
-        # E7 R2：批内每个候选挂本批 attempt 链；产出值的候选 winning 指向
-        # 产生它的最后一次 extract attempt（打回重抽成功=第二条）。
+        # Standalone callers receive the same field-scoped projection that finalize
+        # later reconstructs from the durable run ledger.
         for f in batch:
             out_cand = results[f.field_id]
-            out_cand.metadata["attempts"] = list(attempt_log)
-            if attempt_log and out_cand.tri_state != "unknown":
-                out_cand.metadata.setdefault(
-                    "winning_attempt_id", attempt_log[-1]["attempt_id"]
-                )
+            out_cand.metadata["attempts"] = [
+                a.model_dump() for a in self._ledger.attempts_for_field(f.field_id)
+            ]
         return [results[f.field_id] for f in batch]

@@ -84,19 +84,28 @@ def _parse_requiredness(row: dict[str, Any], *, file: str, name: str) -> "Requir
     →optional；expected/期望→expected。**键缺失/显式空白才默认 expected**；键存在
     但值不在枚举 → 带定位抛 SchemaLoadError（fail-fast，codex R2 P2：拼写错误不得
     静默放大补漏人群与成本）。"""
-    raw = _as_str(row.get("requiredness")) or _as_str(row.get("必填"))
-    if not raw:
-        return "expected"
-    if raw in ("required", "必填", "是"):
-        return "required"
-    if raw in ("optional", "可选", "否"):
-        return "optional"
-    if raw in ("expected", "期望"):
-        return "expected"
-    raise SchemaLoadError(
-        f"{file}: 字段 {name!r} 的 requiredness/必填 值不合法：{raw!r}"
-        "（合法：required/必填/是、expected/期望、optional/可选/否）"
-    )
+    def parse(raw: str) -> Requiredness | None:
+        if not raw:
+            return None
+        if raw in ("required", "必填", "是"):
+            return "required"
+        if raw in ("optional", "可选", "否"):
+            return "optional"
+        if raw in ("expected", "期望"):
+            return "expected"
+        raise SchemaLoadError(
+            f"{file}: 字段 {name!r} 的 requiredness/必填 值不合法：{raw!r}"
+            "（合法：required/必填/是、expected/期望、optional/可选/否）"
+        )
+
+    canonical = parse(_as_str(row.get("requiredness")))
+    chinese = parse(_as_str(row.get("必填")))
+    if canonical is not None and chinese is not None and canonical != chinese:
+        raise SchemaLoadError(
+            f"{file}: 字段 {name!r} 的 requiredness 与 必填 配置冲突："
+            f"{canonical!r} != {chinese!r}"
+        )
+    return canonical or chinese or "expected"
 
 
 def _field_from_baseline(row: dict[str, Any], sheet: str, file: str) -> FieldSpec:

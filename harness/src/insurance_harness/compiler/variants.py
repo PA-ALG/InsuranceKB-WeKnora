@@ -30,7 +30,7 @@ class PromptVariant(BaseModel):
     T3/T4 填充；默认变体两者皆空——组装函数据此保持既有输出逐字不变。
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     variant_id: str
     version: str
@@ -53,7 +53,7 @@ class VariantRegistry(BaseModel):
     查询顺序：精确 → 组级 → 默认。注册数据见 ``DEFAULT_REGISTRY``。
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     entries: tuple[tuple[str, str, PromptVariant], ...] = ()
 
