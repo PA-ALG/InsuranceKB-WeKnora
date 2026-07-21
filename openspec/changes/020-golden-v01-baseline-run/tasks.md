@@ -31,4 +31,4 @@
 - 同 run budget revision 只允许提高 account ceiling；product、exact request、request pool 及其 limits/rates 的增删改均属于新合同，必须拒绝，防止用“扩容”绕过原始签名范围。
 - production Bailian 只接受与真实 POST `model` 完全相同的 provider-guaranteed immutable deployment ID；revision-only/可变 alias 只能作为审计观察，不能授权推理。
 - 019/021 依赖身份固定为实际 main merge `4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f` / `cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35`，feature head、cherry-equivalent 或“仅为祖先”均不能替代 designated revision。
-- canonical 工件采用两阶段提交：先提交代码/source plan，再从 clean code SHA 运行 CLI 生成 JSON/Markdown。当前 evaluated revision=`2169c5821021dfc9513d3cc760dea4fc4e519112`，结果仍为零模型 `BLOCKED`，且已消除 dirty/dependency/identity drift 阻塞。
+- canonical 工件采用两阶段提交：先提交代码/source plan，再从 clean code SHA 运行 CLI 生成 JSON/Markdown。合入最新 main 并指纹化 024 新增/修改执行面后，当前 evaluated revision=`59695273ebc66d3f2613b81d07d1eb7a693dc20b`，结果仍为零模型 `BLOCKED`，且已消除 dirty/dependency/identity drift 阻塞。

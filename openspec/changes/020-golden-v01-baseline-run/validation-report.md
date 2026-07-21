@@ -6,14 +6,14 @@
 
 - 权威工件：`run-admission.json`；人读镜像：`run-admission.md`。
 - 状态：`BLOCKED`。
-- evaluated revision：`2169c5821021dfc9513d3cc760dea4fc4e519112`。
-- source plan 当前固定 designated merge：019=`4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f`、021=`cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35`；identity contract=`45dd7c9d5d784435969a744ef72e76b4bd9ab9d0d4bac6e59ea2899c241fe69`。
+- evaluated revision：`59695273ebc66d3f2613b81d07d1eb7a693dc20b`。
+- source plan 当前固定 designated merge：019=`4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f`、021=`cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35`；identity contract=`3570e7563e9dce74a889af39e67ca1c0df9a6e97e39a3ba6ec129886970dbef6`。
 - checker：`020.1`；runtime capability：`budget-ledger-v3-canary-v1`。
 - provider probe：annotator、weak_extractor、judge 均为 `not_attempted`。
 - 模型调用：0；token：0；费用：0。
 - 模型指纹：未冻结，作为 `model_identity_pending` 阻塞；production Bailian 只接受 provider 保证可调用且不可变、并与实际 POST `model_id` 相同的 `immutable_deployment_id`，revision-only 与 `gmt_modified` observation 不得授权可变 alias。
 
-本次 PR #24 hardening 按两阶段提交生成证据：先将代码与 source plan 提交为 `2169c582`，再由 repository CLI 在该 clean code SHA 上重新生成 JSON/Markdown；CLI 按预期 exit 2（typed `BLOCKED`）。canonical 工件已不含 `dirty_consumed_file`、`dependency_revision_mismatch`、`dependency_not_ancestor`、`identity_contract_mismatch` 或 `execution_surface_unpinned`。
+本次 PR #24 hardening 按两阶段提交生成证据：初始安全修复为 `2169c582`；合入最新 main 后，checker 如期发现 024 带来的 4 个 unpinned 与 12 个 digest drift execution files。全部 16 个文件重新纳入 source plan，并提交为 clean SHA `59695273`，随后由 repository CLI 重新生成 JSON/Markdown；CLI 按预期 exit 2（typed `BLOCKED`）。最终 canonical 工件已不含 `dirty_consumed_file`、`dependency_revision_mismatch`、`dependency_not_ancestor`、`identity_contract_mismatch`、`execution_surface_unpinned` 或 `digest_mismatch`。
 
 当前阻塞类别如下；完整逐产品/逐输入证据以 canonical JSON 为准：
 
@@ -31,9 +31,9 @@
 | 门禁 | 结果 |
 |---|---|
 | 020 focused suite | `700 passed` |
-| 全量 non-live / non-PostgreSQL | `2607 passed, 30 deselected`，221.91 秒 |
+| 全量 non-live / non-PostgreSQL | `2706 passed, 30 deselected`，308.01 秒 |
 | Ruff | PASS，`All checks passed!` |
-| mypy strict | PASS，285 source files |
+| mypy strict | PASS，297 source files |
 | OpenSpec strict | PASS |
 | `git diff --check` | PASS |
 | 复核 | 独立高风险/预算复核 + 主线程完整 identity/mutation-boundary 复核；无遗留 P0/P1/P2 |
