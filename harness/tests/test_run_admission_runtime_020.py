@@ -13,6 +13,7 @@ from typing import Final, Literal
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+import insurance_harness.goldenset.admission_runtime as admission_runtime
 from insurance_harness.goldenset.admission import (
     ProductionAdmissionEvaluator,
     RunAdmissionDocument,
@@ -234,7 +235,7 @@ def _roles() -> dict[str, ModelRolePlan]:
         role: ModelRolePlan(
             provider="bailian",
             model_id=f"{role}-deployment",
-            expected_model_revision="2026-07-20T08:00:00Z",
+            immutable_deployment_id=f"{role}-deployment",
             protocol="https",
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             provider_policy="bailian-deployment-detail-v1",
@@ -512,6 +513,84 @@ async def test_d1_5_blocked_drift_calls_inner_model_zero_times(
 
     assert inspector.calls == 1
     assert invoker.calls == 0
+
+
+@pytest.mark.parametrize(
+    "role_plan",
+    (
+        _roles()[_ROLE].model_copy(
+            update={
+                "expected_model_revision": "2026-07-20T08:00:00Z",
+                "immutable_deployment_id": None,
+            }
+        ),
+        _roles()[_ROLE].model_copy(
+            update={
+                "expected_model_revision": None,
+                "immutable_deployment_id": "different-deployment",
+            }
+        ),
+        ModelRolePlan.model_construct(
+            **{
+                **_roles()[_ROLE].model_dump(),
+                "expected_model_revision": None,
+                "immutable_deployment_id": "different-deployment",
+            }
+        ),
+    ),
+    ids=("revision-only", "mismatched-immutable-id", "model-construct-bypass"),
+)
+async def test_d1_5_production_bailian_rejects_non_invocable_identity_before_inference(
+    monkeypatch: pytest.MonkeyPatch,
+    role_plan: ModelRolePlan,
+) -> None:
+    inference_calls = 0
+
+    async def counted_inference(**_kwargs: object) -> ApprovedModelResponse:
+        nonlocal inference_calls
+        inference_calls += 1
+        return ApprovedModelResponse(
+            content="must not be returned",
+            input_tokens=1,
+            output_tokens=1,
+            usage_verified=True,
+        )
+
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", "runtime-identity-test-key")
+    monkeypatch.setattr(admission_runtime, "_invoke_bailian", counted_inference)
+    invoker = admission_runtime._BailianApprovedModelInvoker()
+
+    with pytest.raises(
+        AdmissionPausedError, match="approved_model_identity_not_invocable"
+    ):
+        await invoker.complete(
+            role_plan=role_plan,
+            maximum=_REQUEST_MAXIMUM,
+            system=_SYSTEM,
+            user=_USER,
+        )
+
+    assert inference_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("provider", "other-provider"),
+        ("protocol", "http"),
+        ("base_url", "https://example.invalid/v1"),
+        ("provider_policy", "other-policy"),
+        ("credential_env_name", "OTHER_API_KEY"),
+    ),
+)
+def test_d1_5_bailian_http_mutation_boundary_rejects_foreign_policy(
+    field_name: str,
+    value: str,
+) -> None:
+    role_plan = _roles()[_ROLE].model_copy(update={field_name: value})
+
+    with pytest.raises(AdmissionPausedError, match="approved_model_policy_unsupported"):
+        admission_runtime._validated_bailian_role_plan(role_plan)
 
 
 async def test_d1_3b_two_workers_make_exactly_one_inner_model_call(

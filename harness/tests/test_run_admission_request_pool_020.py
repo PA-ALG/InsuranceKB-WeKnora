@@ -796,7 +796,7 @@ def test_d1_3b_d1_3c_pool_revision_cannot_rebind_model_or_rate(
             "SELECT * FROM budget_approvals"
         ).fetchall()
 
-    with pytest.raises(BudgetLedgerError, match="role rate"):
+    with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
         ledger.open_or_expand_account(
             plan=expanded_plan,
             contract=expanded_contract,
@@ -821,6 +821,91 @@ def test_d1_3b_d1_3c_pool_revision_cannot_rebind_model_or_rate(
         assert connection.execute("SELECT * FROM budget_approvals").fetchall() == (
             approvals_before
         )
+
+
+@pytest.mark.parametrize("mutation", ("add_pool", "remove_pool", "change_pool"))
+def test_d1_3c_revision_rejects_any_request_pool_difference_before_mutation(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    initial_pools = (
+        _pool(),
+        _pool(role="judge", max_attempts=1, maximum=_amounts(100, 50, 10)),
+    )
+    initial_contract = _contract(
+        request_pools=(initial_pools if mutation == "remove_pool" else initial_pools[:1])
+    )
+    initial_plan = _plan(initial_contract)
+    ledger = BudgetLedger(db_path)
+    initial = ledger.open_or_expand_account(
+        plan=initial_plan,
+        contract=initial_contract,
+        envelope=_envelope(private_key, initial_contract, initial_plan),
+        trusted_public_keys={"finance-key": private_key.public_key()},
+        expected_scope=_SCOPE,
+        authorized_roles=frozenset({"budget_approver"}),
+        now=_NOW,
+    )
+    product = initial_contract.product_reserves[0]
+    changed_pools: tuple[RequestPoolReserve, ...]
+    if mutation == "add_pool":
+        changed_pools = initial_pools
+    elif mutation == "remove_pool":
+        changed_pools = initial_pools[:1]
+    else:
+        changed_pools = (_pool(max_attempts=2),)
+    changed_product = product.model_copy(update={"request_pools": changed_pools})
+    changed_contract = initial_contract.model_copy(
+        update={
+            "ceiling": _amounts(30_000, 15_000, 3_000),
+            "product_reserves": (changed_product,),
+        }
+    )
+    changed_plan = _plan(changed_contract)
+    changed_envelope = _envelope(
+        private_key,
+        changed_contract,
+        changed_plan,
+        revision=2,
+        previous_digest=initial.approval_digest,
+    )
+    with sqlite3.connect(db_path) as connection:
+        before = tuple(
+            connection.execute(f"SELECT * FROM {table}").fetchall()
+            for table in (
+                "budget_accounts",
+                "budget_approvals",
+                "product_limits",
+                "request_limits",
+                "request_pool_limits",
+            )
+        )
+
+    with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
+        ledger.open_or_expand_account(
+            plan=changed_plan,
+            contract=changed_contract,
+            envelope=changed_envelope,
+            trusted_public_keys={"finance-key": private_key.public_key()},
+            expected_scope=_SCOPE,
+            authorized_roles=frozenset({"budget_approver"}),
+            now=_NOW,
+        )
+
+    with sqlite3.connect(db_path) as connection:
+        after = tuple(
+            connection.execute(f"SELECT * FROM {table}").fetchall()
+            for table in (
+                "budget_accounts",
+                "budget_approvals",
+                "product_limits",
+                "request_limits",
+                "request_pool_limits",
+            )
+        )
+    assert after == before
 
 
 @pytest.mark.parametrize("mutation", ("model_identity", "role_rate"))
@@ -894,7 +979,7 @@ def test_d1_3a_d1_3c_account_role_rates_lock_before_new_pool_revision(
             "SELECT * FROM request_pool_limits"
         ).fetchall()
 
-    with pytest.raises(BudgetLedgerError, match="role rate"):
+    with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
         ledger.open_or_expand_account(
             plan=expanded_plan,
             contract=expanded_contract,
@@ -1014,21 +1099,13 @@ def test_d1_3c_pre_pool_schema_migration_failure_preserves_old_table(
     assert "limit_kind" not in columns
 
 
-def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_introduction_revision(
+def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_identity(
     tmp_path: Path,
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
     ledger = BudgetLedger(db_path)
-    exact = RequestReserve(
-        request_unit=_unit("initial exact request"),
-        role="judge",
-        maximum=_amounts(100, 50, 10),
-    )
-    initial_contract = _contract(
-        request_reserves=(exact,),
-        request_pools=(),
-    )
+    initial_contract = _contract()
     initial_plan = _plan(initial_contract)
     initial = ledger.open_or_expand_account(
         plan=initial_plan,
@@ -1039,15 +1116,8 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_introduction_revision(
         authorized_roles=frozenset({"budget_approver"}),
         now=_NOW,
     )
-    initial_product = initial_contract.product_reserves[0]
-    expanded_product = initial_product.model_copy(
-        update={"request_pools": (_pool(),)}
-    )
     expanded_contract = initial_contract.model_copy(
-        update={
-            "ceiling": _amounts(30_000, 15_000, 3_000),
-            "product_reserves": (expanded_product,),
-        }
+        update={"ceiling": _amounts(30_000, 15_000, 3_000)}
     )
     expanded_plan = _plan(expanded_contract)
     ledger.open_or_expand_account(

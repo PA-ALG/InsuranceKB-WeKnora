@@ -55,6 +55,11 @@ def _commit_all(repo: Path, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
+def _commit_empty(repo: Path, message: str) -> str:
+    _git(repo, "commit", "--allow-empty", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
 def _make_repo(tmp_path: Path) -> tuple[Path, str]:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -168,6 +173,7 @@ def _inspect(repo: Path, request: IdentityInspectionRequest) -> IdentityInspecti
 
 
 def _inspector(repo: Path) -> DeterministicIdentityInspector:
+    revision = _git(repo, "rev-parse", "HEAD")
     return DeterministicIdentityInspector._for_testing(
         repo_root=repo,
         expected_product_lines={product_id: "life" for product_id in _PRODUCT_IDS},
@@ -176,6 +182,23 @@ def _inspector(repo: Path) -> DeterministicIdentityInspector:
         golden_products_root="inputs/golden",
         execution_roots=("harness/src", "harness/config"),
         shared_roots=("shared",),
+        required_dependency_revisions={"019": revision, "021": revision},
+    )
+
+
+def _inspector_with_dependency_policy(
+    repo: Path,
+    required_dependency_revisions: Mapping[str, str],
+) -> DeterministicIdentityInspector:
+    return DeterministicIdentityInspector._for_testing(
+        repo_root=repo,
+        expected_product_lines={product_id: "life" for product_id in _PRODUCT_IDS},
+        historical_product_ids=frozenset(_HISTORICAL_PRODUCT_IDS),
+        source_products_root="inputs/source",
+        golden_products_root="inputs/golden",
+        execution_roots=("harness/src", "harness/config"),
+        shared_roots=("shared",),
+        required_dependency_revisions=required_dependency_revisions,
     )
 
 
@@ -326,8 +349,10 @@ def test_d1_1b_dependency_revision_must_be_ancestor(tmp_path: Path) -> None:
     _write(repo, "evaluated.txt", "evaluated revision\n")
     _commit_all(repo, "evaluated revision")
 
-    valid = _inspect(
-        repo,
+    valid_inspector = _inspector_with_dependency_policy(
+        repo, {"019": revision_019, "021": revision_021}
+    )
+    valid = valid_inspector.inspect(
         _request(
             repo,
             required_dependency_revisions={"019": revision_019, "021": revision_021},
@@ -339,8 +364,10 @@ def test_d1_1b_dependency_revision_must_be_ancestor(tmp_path: Path) -> None:
     _write(repo, "unmerged.txt", "not in evaluated history\n")
     unmerged_021 = _commit_all(repo, "unmerged dependency candidate")
     _git(repo, "switch", current_branch)
-    blocked = _inspect(
-        repo,
+    blocked_inspector = _inspector_with_dependency_policy(
+        repo, {"019": revision_019, "021": unmerged_021}
+    )
+    blocked = blocked_inspector.inspect(
         _request(
             repo,
             required_dependency_revisions={"019": revision_019, "021": unmerged_021},
@@ -351,6 +378,73 @@ def test_d1_1b_dependency_revision_must_be_ancestor(tmp_path: Path) -> None:
         blocker.code == "dependency_not_ancestor" and blocker.subject == "021"
         for blocker in blocked.blockers
     )
+
+
+def test_d1_1b_dependency_pins_must_equal_designated_merge_revisions(
+    tmp_path: Path,
+) -> None:
+    repo, feature_019 = _make_repo(tmp_path)
+    merge_019 = _commit_empty(repo, "designated merge 019")
+    _write(repo, "dependency-021.txt", "feature 021\n")
+    feature_021 = _commit_all(repo, "feature head 021")
+    merge_021 = _commit_empty(repo, "designated merge 021")
+    cherry_picked_equivalent = _commit_empty(repo, "cherry-picked equivalent")
+    _commit_empty(repo, "evaluated revision")
+    designated = {"019": merge_019, "021": merge_021}
+    inspector = _inspector_with_dependency_policy(repo, designated)
+
+    exact = inspector.inspect(
+        _request(repo, required_dependency_revisions=designated)
+    )
+
+    assert not _blockers(exact, "dependency_revision_mismatch")
+    assert not _blockers(exact, "dependency_not_ancestor")
+
+    for pins, subjects in (
+        ({"019": feature_019, "021": feature_021}, {"019", "021"}),
+        ({"019": merge_019, "021": cherry_picked_equivalent}, {"021"}),
+    ):
+        blocked = inspector.inspect(
+            _request(repo, required_dependency_revisions=pins)
+        )
+
+        assert {
+            blocker.subject
+            for blocker in _blockers(blocked, "dependency_revision_mismatch")
+        } == subjects
+        assert not _blockers(blocked, "dependency_not_ancestor")
+
+
+def test_d1_1b_model_construct_dependency_pin_bypass_fails_closed(
+    tmp_path: Path,
+) -> None:
+    repo, feature_019 = _make_repo(tmp_path)
+    merge_019 = _commit_empty(repo, "designated merge 019")
+    merge_021 = _commit_empty(repo, "designated merge 021")
+    _commit_empty(repo, "evaluated revision")
+    designated = {"019": merge_019, "021": merge_021}
+    inspector = _inspector_with_dependency_policy(repo, designated)
+    valid = _request(repo, required_dependency_revisions=designated)
+    bypassed = IdentityInspectionRequest.model_construct(
+        **{
+            **{
+                field_name: getattr(valid, field_name)
+                for field_name in IdentityInspectionRequest.model_fields
+            },
+            "required_dependency_revisions": {
+                "019": feature_019,
+                "021": merge_021,
+            },
+        }
+    )
+
+    result = inspector.inspect(bypassed)
+
+    assert {
+        blocker.subject
+        for blocker in _blockers(result, "dependency_revision_mismatch")
+    } == {"019"}
+    assert not _blockers(result, "dependency_not_ancestor")
 
 
 def test_d1_1b_execution_surface_digest_changes_for_any_consumed_code(

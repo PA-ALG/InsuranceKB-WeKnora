@@ -35,8 +35,8 @@ def _role(
     base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",
     protocol: str = "https",
     policy: str = _POLICY_ID,
-    revision: str | None = "2026-07-19T07:59:00Z",
-    deployment: str | None = None,
+    revision: str | None = None,
+    deployment: str | None = _DEPLOYED_MODEL,
     credential_env_name: str = "HARNESS_DASHSCOPE_API_KEY",
 ) -> ModelRolePlan:
     return ModelRolePlan(
@@ -130,6 +130,40 @@ def test_d1_2a_static_mode_performs_zero_network_and_cannot_ready() -> None:
     assert result.observed_at is None
 
 
+def test_d1_2b_probe_request_model_construct_invalid_mode_calls_client_zero_times(
+) -> None:
+    client_calls = 0
+
+    def forbidden_factory(**_kwargs: Any) -> httpx.Client:
+        nonlocal client_calls
+        client_calls += 1
+        raise AssertionError("invalid request must fail before creating a client")
+
+    prober = SafeProviderProbe._for_testing(
+        policy_registry=ProviderProbePolicyRegistry.code_owned(),
+        client_factory=forbidden_factory,
+        clock=lambda: _NOW,
+        monotonic=lambda: 10.0,
+        env_reader=lambda _name: _FAKE_KEY,
+    )
+    valid = _request(_role())
+    bypassed = ProbeRequest.model_construct(
+        **{
+            **{
+                field_name: getattr(valid, field_name)
+                for field_name in ProbeRequest.model_fields
+            },
+            "mode": "forged-remote",
+        }
+    )
+
+    result = prober.run(bypassed)
+
+    assert result.verified is False
+    assert "unsafe_probe_configuration" in _codes(result)
+    assert client_calls == 0
+
+
 def test_d1_2a_remote_probe_forces_https_tls_trust_env_false_no_redirect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -209,6 +243,8 @@ def test_d1_2a_remote_probe_forces_https_tls_trust_env_false_no_redirect(
                 base_url="http://127.0.0.1:9876",
                 protocol="http",
                 policy="test-loopback-deployment-detail-v1",
+                revision="2026-07-19T07:59:00Z",
+                deployment=None,
                 credential_env_name="TEST_NO_CREDENTIAL",
             )
         )
@@ -315,7 +351,7 @@ def test_d1_2a_does_not_follow_3xx_or_cross_origin(
     assert "policy_mismatch" in _codes(cross_origin_result)
 
 
-def test_d1_2b_compares_signed_expected_revision_or_deployment(
+def test_d1_2b_production_bailian_requires_invocable_immutable_deployment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", _FAKE_KEY)
@@ -323,50 +359,107 @@ def test_d1_2b_compares_signed_expected_revision_or_deployment(
     def run_with_metadata(
         role_plan: ModelRolePlan,
         metadata: dict[str, str],
-    ) -> ProbeResult:
+    ) -> tuple[ProbeResult, int]:
+        requests = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal requests
+            requests += 1
+            return httpx.Response(
+                200,
+                json={
+                    "output": {
+                        "deployed_model": role_plan.model_id,
+                        "base_model": "deepseek-v4-flash",
+                        "gmt_modified": "2026-07-19T07:59:00Z",
+                        "status": "RUNNING",
+                        **metadata,
+                    }
+                },
+            )
+
         prober, _ = _probe(
-            httpx.MockTransport(
-                lambda _request: httpx.Response(
-                    200,
-                    json={
-                        "output": {
-                            "deployed_model": role_plan.model_id,
-                            "base_model": "deepseek-v4-flash",
-                            "gmt_modified": "2026-07-19T07:59:00Z",
-                            "status": "RUNNING",
-                            **metadata,
-                        }
-                    },
-                )
+            httpx.MockTransport(handler)
+        )
+        result = prober.run(
+            ProbeRequest.model_construct(
+                **{
+                    **_request().model_dump(mode="python"),
+                    "role_plan": role_plan,
+                }
             )
         )
-        result = prober.run(_request(role_plan))
         assert isinstance(result, ProbeResult)
         assert all(isinstance(blocker, ProbeBlocker) for blocker in result.blockers)
-        return result
+        return result, requests
 
-    matching_revision = run_with_metadata(_role(), {})
-    suffix_revision = run_with_metadata(
-        _role(), {"gmt_modified": "2026-07-19T07:58:00Z"}
+    revision_only = _role(
+        revision="2026-07-19T07:59:00Z", deployment=None
     )
-    matching_deployment = run_with_metadata(
+    matching_revision, matching_revision_requests = run_with_metadata(revision_only, {})
+    drifted_revision, drifted_revision_requests = run_with_metadata(
+        revision_only, {"gmt_modified": "2026-07-19T07:58:00Z"}
+    )
+    matching_deployment, matching_deployment_requests = run_with_metadata(
         _role(revision=None, deployment=_DEPLOYED_MODEL),
         {},
     )
-    wrong_deployment = run_with_metadata(
+    wrong_deployment, wrong_deployment_requests = run_with_metadata(
         _role(revision=None, deployment="another-deployment"),
         {},
     )
-    stopped_deployment = run_with_metadata(_role(), {"status": "STOPPED"})
+    bypassed = ModelRolePlan.model_construct(
+        **{
+            **_role(revision=None, deployment=_DEPLOYED_MODEL).model_dump(),
+            "immutable_deployment_id": "another-deployment",
+        }
+    )
+    bypassed_deployment, bypassed_requests = run_with_metadata(bypassed, {})
+    dual_identity = ModelRolePlan.model_construct(
+        **{
+            **_role().model_dump(),
+            "expected_model_revision": "2026-07-19T07:59:00Z",
+        }
+    )
+    dual_identity_result, dual_identity_requests = run_with_metadata(
+        dual_identity, {}
+    )
+    invalid_schema = ModelRolePlan.model_construct(
+        **{
+            **_role().model_dump(),
+            "model_id": 7,
+            "immutable_deployment_id": 7,
+        }
+    )
+    invalid_schema_result, invalid_schema_requests = run_with_metadata(
+        invalid_schema, {}
+    )
+    stopped_deployment, stopped_deployment_requests = run_with_metadata(
+        _role(), {"status": "STOPPED"}
+    )
 
-    assert matching_revision.verified is True
-    assert matching_revision.observed_revision == "2026-07-19T07:59:00Z"
+    assert matching_revision.verified is False
+    assert drifted_revision.verified is False
+    assert matching_revision_requests == 0
+    assert drifted_revision_requests == 0
+    assert "model_identity_mismatch" in _codes(matching_revision)
+    assert "model_identity_mismatch" in _codes(drifted_revision)
     assert matching_deployment.verified is True
+    assert matching_deployment_requests == 1
     assert matching_deployment.observed_deployment_id == _DEPLOYED_MODEL
-    assert suffix_revision.verified is False
     assert wrong_deployment.verified is False
-    assert "model_identity_mismatch" in _codes(suffix_revision)
+    assert wrong_deployment_requests == 0
     assert "model_identity_mismatch" in _codes(wrong_deployment)
+    assert bypassed_deployment.verified is False
+    assert bypassed_requests == 0
+    assert "model_identity_mismatch" in _codes(bypassed_deployment)
+    assert dual_identity_result.verified is False
+    assert dual_identity_requests == 0
+    assert "unsafe_probe_configuration" in _codes(dual_identity_result)
+    assert invalid_schema_result.verified is False
+    assert invalid_schema_requests == 0
+    assert "unsafe_probe_configuration" in _codes(invalid_schema_result)
+    assert stopped_deployment_requests == 1
     assert "deployment_not_running" in _codes(stopped_deployment)
 
 
@@ -675,7 +768,7 @@ def test_d1_2b_deeply_nested_metadata_is_typed_invalid(
         {
             "deployed_model": _DEPLOYED_MODEL,
             "gmt_modified": "2026-07-19T07:58:00Z",
-            "status": "RUNNING",
+            "status": "STOPPED",
         },
     ),
 )
@@ -772,8 +865,15 @@ def test_d1_2b_public_alias_without_deployment_detail_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", _FAKE_KEY)
+    requests = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(404, json={"code": "NotFound"})
+
     prober, _ = _probe(
-        httpx.MockTransport(lambda _request: httpx.Response(404, json={"code": "NotFound"}))
+        httpx.MockTransport(handler)
     )
 
     result = prober.run(
@@ -781,13 +881,15 @@ def test_d1_2b_public_alias_without_deployment_detail_is_blocked(
             _role(
                 model_id="deepseek-v4-flash",
                 revision="2026-07-19T07:59:00Z",
+                deployment=None,
                 credential_env_name="HARNESS_DASHSCOPE_API_KEY",
             )
         )
     )
 
     assert result.verified is False
-    assert "model_not_found" in _codes(result)
+    assert "model_identity_mismatch" in _codes(result)
+    assert requests == 0
     assert result.observed_revision is None
     assert result.observed_deployment_id is None
 

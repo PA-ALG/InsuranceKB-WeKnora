@@ -230,7 +230,8 @@ async def test_d1_5_verified_usage_over_bound_marks_overage_without_replay(
     client = runtime_cases._client(guard)
 
     assert await client.complete(runtime_cases._SYSTEM, runtime_cases._USER) == "provider answer"
-    assert await client.complete(runtime_cases._SYSTEM, runtime_cases._USER) == "provider answer"
+    with pytest.raises(AdmissionPausedError, match="request_budget_claim_failed"):
+        await client.complete(runtime_cases._SYSTEM, runtime_cases._USER)
 
     snapshot = ledger.attempt_snapshot(_attempt_key(document))
     assert snapshot.state == "terminal"
@@ -274,7 +275,8 @@ async def test_d1_5_unrepresentable_provider_usage_is_terminal_overage_without_r
     client = runtime_cases._client(guard)
 
     assert await client.complete(runtime_cases._SYSTEM, runtime_cases._USER) == "provider answer"
-    assert await client.complete(runtime_cases._SYSTEM, runtime_cases._USER) == "provider answer"
+    with pytest.raises(AdmissionPausedError, match="request_budget_claim_failed"):
+        await client.complete(runtime_cases._SYSTEM, runtime_cases._USER)
 
     snapshot = ledger.attempt_snapshot(_attempt_key(document))
     assert snapshot.state == "terminal"

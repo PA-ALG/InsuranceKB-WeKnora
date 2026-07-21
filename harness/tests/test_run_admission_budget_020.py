@@ -19,10 +19,11 @@ from insurance_harness.goldenset.admission_budget import (
     BudgetLedger,
     BudgetLedgerError,
     ProductReserve,
-    ProviderNoUsageProof,
     ProviderSpendCapAttestation,
+    RequestPoolReserve,
     RequestReserve,
     RoleRate,
+    SendPermit,
     budget_account_identity,
     budget_contract_hash,
     model_role_budget_identity_hash,
@@ -194,6 +195,31 @@ def _admit(
         authorized_roles=frozenset({"budget_approver"}),
         now=_NOW,
     )
+
+
+def _tamper_attempt_to_legacy_no_usage(db_path: Path, permit: SendPermit) -> None:
+    key = permit.key
+    with sqlite3.connect(db_path) as connection:
+        changed = connection.execute(
+            """UPDATE request_attempts SET state='no_usage',
+               charged_input=0,charged_output=0,charged_cost=0,
+               provider_proof_digest=?,provider_request_id=?,
+               provider_verifier_policy=?,provider_proof_observed_at=?
+               WHERE account_id=? AND stage=? AND product_id=? AND request_unit=?
+               AND attempt_no=?""",
+            (
+                "f" * 64,
+                "legacy-untrusted-request",
+                "legacy-untrusted-policy",
+                _NOW.isoformat(),
+                key.account_id,
+                key.stage,
+                key.product_id,
+                key.request_unit,
+                key.attempt_no,
+            ),
+        ).rowcount
+    assert changed == 1
 
 
 def test_d1_3a_invalid_caps_rates_attestation_or_approval_block(
@@ -443,7 +469,11 @@ def test_d1_3b_crash_boundaries_become_uncertain_full_charge_and_never_replay(
     ) is False
 
 
-def test_d1_3b_terminal_or_provider_no_usage_proof_controls_resume(
+def test_d1_3b_budget_ledger_exposes_no_caller_debit_erasing_transition() -> None:
+    assert not hasattr(BudgetLedger, "record_provider_no_usage")
+
+
+def test_d1_3b_legacy_no_usage_attempt_cannot_release_reservation(
     tmp_path: Path,
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
@@ -451,42 +481,214 @@ def test_d1_3b_terminal_or_provider_no_usage_proof_controls_resume(
     ledger = BudgetLedger(db_path)
     account = _admit(ledger, _contract(), private_key)
     ledger.reserve_product(account.account_id, "extraction", "product-01", _amounts())
-    terminal = ledger.claim_attempt(
-        account.account_id, "extraction", "product-01", "page-001", 1,
-        "owner-a", _amounts(700, 300, 80),
+    permit = ledger.claim_attempt(
+        account.account_id,
+        "extraction",
+        "product-01",
+        "page-001",
+        1,
+        "legacy-owner",
+        _amounts(700, 300, 80),
     )
-    assert terminal is not None
-    ledger.record_terminal(
-        terminal,
-        actual=_amounts(600, 250, 70),
-        response_digest="a" * 64,
-        usage_verified=False,
-    )
-    assert ledger.recover_incomplete(account.account_id) == 0
-    ledger.settle_product(account.account_id, "extraction", "product-01")
+    assert permit is not None
+    _tamper_attempt_to_legacy_no_usage(db_path, permit)
 
-    ledger.reserve_product(account.account_id, "extraction", "product-02", _amounts())
-    unused = ledger.claim_attempt(
-        account.account_id, "extraction", "product-02", "page-001", 1,
-        "owner-b", _amounts(700, 300, 80),
-    )
-    assert unused is not None
     assert ledger.release_product(
-        account.account_id, "extraction", "product-02"
+        account.account_id, "extraction", "product-01"
     ) is False
-    ledger.record_provider_no_usage(
-        unused,
-        proof=ProviderNoUsageProof(
-            provider="bailian",
-            provider_request_id="request-001",
-            evidence_digest="b" * 64,
-            observed_at=_NOW,
-            verifier_policy="bailian-usage-reconciliation-v1",
+    assert ledger.attempt_snapshot(permit.key).state == "no_usage"
+    assert ledger.account_snapshot(account.account_id).reserved == _amounts()
+
+
+def test_d1_3b_legacy_no_usage_attempt_must_recover_to_uncertain_full_charge(
+    tmp_path: Path,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    ledger = BudgetLedger(db_path)
+    account = _admit(ledger, _contract(), private_key)
+    ledger.reserve_product(account.account_id, "extraction", "product-01", _amounts())
+    permit = ledger.claim_attempt(
+        account.account_id,
+        "extraction",
+        "product-01",
+        "page-001",
+        1,
+        "legacy-owner",
+        _amounts(700, 300, 80),
+    )
+    assert permit is not None
+    _tamper_attempt_to_legacy_no_usage(db_path, permit)
+
+    assert ledger.recover_incomplete(account.account_id) == 1
+    recovered = ledger.attempt_snapshot(permit.key)
+    assert recovered.state == "uncertain"
+    assert recovered.charged == permit.maximum
+    with sqlite3.connect(db_path) as connection:
+        proof_fields = connection.execute(
+            """SELECT provider_proof_digest,provider_request_id,
+                      provider_verifier_policy,provider_proof_observed_at
+               FROM request_attempts WHERE account_id=? AND stage=? AND product_id=?
+               AND request_unit=? AND attempt_no=?""",
+            (
+                permit.key.account_id,
+                permit.key.stage,
+                permit.key.product_id,
+                permit.key.request_unit,
+                permit.key.attempt_no,
+            ),
+        ).fetchone()
+    assert proof_fields == (None, None, None, None)
+    assert ledger.release_product(
+        account.account_id, "extraction", "product-01"
+    ) is False
+
+
+def test_d1_3b_recovery_repairs_settled_zero_reservation_from_legacy_no_usage(
+    tmp_path: Path,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    ledger = BudgetLedger(db_path)
+    maximum = _amounts()
+    contract = _contract(
+        products=("product-01", "product-02"),
+        requests=(
+            RequestReserve(
+                request_unit="page-001",
+                role="weak_extractor",
+                maximum=maximum,
+            ),
         ),
     )
-    assert ledger.release_product(
-        account.account_id, "extraction", "product-02"
-    ) is True
+    account = _admit(ledger, contract, private_key)
+    ledger.reserve_product(account.account_id, "extraction", "product-01", maximum)
+    permit = ledger.claim_attempt(
+        account.account_id,
+        "extraction",
+        "product-01",
+        "page-001",
+        1,
+        "legacy-owner",
+        maximum,
+    )
+    assert permit is not None
+    _tamper_attempt_to_legacy_no_usage(db_path, permit)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """UPDATE product_reservations SET state='settled',
+               actual_input=0,actual_output=0,actual_cost=0
+               WHERE account_id=? AND stage=? AND product_id=?""",
+            (account.account_id, "extraction", "product-01"),
+        )
+
+    assert ledger.recover_incomplete(account.account_id) == 1
+    settlement = ledger.product_settlement_snapshot(
+        account.account_id, "extraction", "product-01"
+    )
+    assert settlement.reservation_state == "settled"
+    assert settlement.reservation_actual == maximum
+    assert ledger.account_snapshot(account.account_id).settled == maximum
+
+
+def test_d1_3b_recovery_latches_overage_for_released_legacy_no_usage(
+    tmp_path: Path,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    ledger = BudgetLedger(db_path)
+    account = _admit(ledger, _contract(), private_key)
+    ledger.reserve_product(account.account_id, "extraction", "product-01", _amounts())
+    ledger.reserve_product(account.account_id, "extraction", "product-02", _amounts())
+    permit = ledger.claim_attempt(
+        account.account_id,
+        "extraction",
+        "product-01",
+        "page-001",
+        1,
+        "legacy-owner",
+        _amounts(700, 300, 80),
+    )
+    assert permit is not None
+    _tamper_attempt_to_legacy_no_usage(db_path, permit)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """UPDATE product_reservations SET state='released',
+               actual_input=0,actual_output=0,actual_cost=0
+               WHERE account_id=? AND stage=? AND product_id=?""",
+            (account.account_id, "extraction", "product-01"),
+        )
+
+    assert ledger.recover_incomplete(account.account_id) == 1
+    assert (
+        ledger.product_settlement_snapshot(
+            account.account_id, "extraction", "product-01"
+        ).reservation_state
+        == "released"
+    )
+    assert ledger.account_snapshot(account.account_id).overage is True
+    with pytest.raises(BudgetLedgerError, match="overage"):
+        ledger.claim_attempt(
+            account.account_id,
+            "extraction",
+            "product-02",
+            "page-001",
+            1,
+            "new-owner",
+            _amounts(700, 300, 80),
+        )
+    with pytest.raises(BudgetLedgerError, match="overage"):
+        ledger.reserve_product(
+            account.account_id, "extraction", "product-03", _amounts()
+        )
+
+
+def test_d1_3b_legacy_no_usage_pool_attempt_cannot_settle_at_zero(
+    tmp_path: Path,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    base_contract = _contract(products=("product-01",))
+    pool_contract = base_contract.model_copy(
+        update={
+            "product_reserves": (
+                ProductReserve(
+                    stage="extraction",
+                    product_id="product-01",
+                    maximum=_amounts(),
+                    request_reserves=(),
+                    request_pools=(
+                        RequestPoolReserve(
+                            role="weak_extractor",
+                            max_attempts=1,
+                            per_attempt_maximum=_amounts(700, 300, 80),
+                        ),
+                    ),
+                ),
+            )
+        }
+    )
+    ledger = BudgetLedger(db_path)
+    account = _admit(ledger, pool_contract, private_key)
+    ledger.reserve_product(account.account_id, "extraction", "product-01", _amounts())
+    permit = ledger.claim_pool_attempt(
+        account_id=account.account_id,
+        stage="extraction",
+        product_id="product-01",
+        request_unit="d" * 64,
+        attempt_no=1,
+        owner_token="legacy-owner",
+        role="weak_extractor",
+        maximum=_amounts(700, 300, 80),
+    )
+    assert permit is not None
+    _tamper_attempt_to_legacy_no_usage(db_path, permit)
+
+    with pytest.raises(BudgetLedgerError, match="unresolved|unsupported"):
+        ledger.settle_product(account.account_id, "extraction", "product-01")
+
+    assert ledger.attempt_snapshot(permit.key).state == "no_usage"
+    assert ledger.account_snapshot(account.account_id).reserved == _amounts()
 
 
 def test_d1_3b_owner_can_mark_only_its_attempt_uncertain_and_full_charge(
@@ -603,7 +805,7 @@ def test_d1_3b_settle_requires_every_signed_request_unit(tmp_path: Path) -> None
     ledger.settle_product(account.account_id, "extraction", "product-01")
 
 
-def test_d1_3a_d1_3b_request_bound_is_signed_and_retry_is_sequential(
+def test_d1_3a_d1_3b_request_bound_is_signed_and_created_attempt_cannot_be_erased(
     tmp_path: Path,
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
@@ -631,35 +833,17 @@ def test_d1_3a_d1_3b_request_bound_is_signed_and_retry_is_sequential(
         _amounts(700, 300, 80),
     )
     assert first is not None
-    ledger.record_provider_no_usage(
-        first,
-        proof=ProviderNoUsageProof(
-            provider="bailian",
-            provider_request_id="request-002",
-            evidence_digest="c" * 64,
-            observed_at=_NOW,
-            verifier_policy="bailian-usage-reconciliation-v1",
-        ),
-    )
-    with pytest.raises(BudgetLedgerError, match="attempt number"):
+    ledger.mark_uncertain(first)
+    with pytest.raises(BudgetLedgerError, match="product reservation"):
         ledger.claim_attempt(
             account.account_id,
             "extraction",
             "product-03",
             "page-001",
-            3,
-            "owner-c",
+            2,
+            "owner-b",
             _amounts(700, 300, 80),
         )
-    assert ledger.claim_attempt(
-        account.account_id,
-        "extraction",
-        "product-03",
-        "page-001",
-        2,
-        "owner-b",
-        _amounts(700, 300, 80),
-    ) is not None
 
 
 def test_d1_3c_cross_run_replay_cannot_open_or_debit_account(tmp_path: Path) -> None:
@@ -699,7 +883,7 @@ def test_d1_3c_cap_revision_preserves_debits_and_cannot_reduce_ceiling(
     assert permit is not None
     ledger.recover_incomplete(first.account_id)
 
-    expanded_contract = _contract(ceiling=_amounts(20_000, 10_000, 2_000), provider_cap=1_800)
+    expanded_contract = _contract(ceiling=_amounts(20_000, 10_000, 2_000))
     expanded_plan = _plan(expanded_contract)
     expanded_envelope = _envelope(
         private_key,
@@ -737,3 +921,136 @@ def test_d1_3c_cap_revision_preserves_debits_and_cannot_reduce_ceiling(
             envelope=lower_envelope,
             plan=lower_plan,
         )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "add_product",
+        "remove_product",
+        "add_request",
+        "remove_request",
+        "change_product",
+        "change_request",
+        "change_attestation",
+    ),
+)
+def test_d1_3c_revision_rejects_any_product_or_exact_request_difference_before_mutation(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    db_path = tmp_path / "budget.sqlite3"
+    base_requests = (
+        RequestReserve(
+            request_unit="page-001",
+            role="weak_extractor",
+            maximum=_amounts(700, 300, 80),
+        ),
+        RequestReserve(
+            request_unit="page-002",
+            role="weak_extractor",
+            maximum=_amounts(100, 50, 10),
+        ),
+    )
+    initial_contract = _contract(requests=base_requests)
+    ledger = BudgetLedger(db_path)
+    first = _admit(ledger, initial_contract, private_key)
+
+    if mutation == "add_product":
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            products=("product-01", "product-02", "product-03", "product-04"),
+            requests=base_requests,
+        )
+    elif mutation == "remove_product":
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            products=("product-01", "product-02"),
+            requests=base_requests,
+        )
+    elif mutation == "add_request":
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            requests=base_requests
+            + (
+                RequestReserve(
+                    request_unit="page-003",
+                    role="judge",
+                    maximum=_amounts(50, 25, 5),
+                ),
+            ),
+        )
+    elif mutation == "remove_request":
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            requests=base_requests[:1],
+        )
+    elif mutation == "change_product":
+        changed_product = initial_contract.product_reserves[0].model_copy(
+            update={"maximum": _amounts(1_001, 500, 100)}
+        )
+        changed_contract = initial_contract.model_copy(
+            update={
+                "ceiling": _amounts(20_000, 10_000, 2_000),
+                "product_reserves": (
+                    changed_product,
+                    *initial_contract.product_reserves[1:],
+                ),
+            }
+        )
+    elif mutation == "change_request":
+        changed_request = base_requests[0].model_copy(
+            update={"maximum": _amounts(701, 300, 80)}
+        )
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            requests=(changed_request, base_requests[1]),
+        )
+    else:
+        changed_contract = _contract(
+            ceiling=_amounts(20_000, 10_000, 2_000),
+            provider_cap=899,
+            requests=base_requests,
+        )
+    changed_plan = _plan(changed_contract)
+    changed_envelope = _envelope(
+        private_key,
+        changed_contract,
+        plan=changed_plan,
+        revision=2,
+        previous_digest=first.approval_digest,
+    )
+    with sqlite3.connect(db_path) as connection:
+        before = tuple(
+            connection.execute(f"SELECT * FROM {table}").fetchall()
+            for table in (
+                "budget_accounts",
+                "budget_approvals",
+                "product_limits",
+                "request_limits",
+                "request_pool_limits",
+            )
+        )
+
+    with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
+        _admit(
+            ledger,
+            changed_contract,
+            private_key,
+            envelope=changed_envelope,
+            plan=changed_plan,
+        )
+
+    with sqlite3.connect(db_path) as connection:
+        after = tuple(
+            connection.execute(f"SELECT * FROM {table}").fetchall()
+            for table in (
+                "budget_accounts",
+                "budget_approvals",
+                "product_limits",
+                "request_limits",
+                "request_pool_limits",
+            )
+        )
+    assert after == before

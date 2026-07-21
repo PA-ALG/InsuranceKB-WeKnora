@@ -35,6 +35,7 @@ type NonBlankStr = Annotated[
 type BlockerCode = Literal[
     "absolute_path",
     "dependency_not_ancestor",
+    "dependency_revision_mismatch",
     "dependency_set_mismatch",
     "digest_mismatch",
     "dirty_consumed_file",
@@ -77,7 +78,12 @@ _PRODUCTION_PRODUCT_LINES = MappingProxyType(
 _NEW_PRODUCT_IDS = frozenset(
     {"平安爱满分（2026）两全保险", "平安附加（2026）意外伤害保险"}
 )
-_REQUIRED_DEPENDENCIES = frozenset({"019", "021"})
+_PRODUCTION_DEPENDENCY_REVISIONS = MappingProxyType(
+    {
+        "019": "4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f",
+        "021": "cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35",
+    }
+)
 _CACHE_COMPONENTS = frozenset(
     {"__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
 )
@@ -189,7 +195,7 @@ class _IdentityPolicy:
     required_shared_paths: tuple[str, ...]
     source_root_files: frozenset[str]
     golden_root_files: frozenset[str]
-    required_dependencies: frozenset[str] = _REQUIRED_DEPENDENCIES
+    required_dependency_revisions: Mapping[str, str]
 
 
 def _production_policy() -> _IdentityPolicy:
@@ -216,6 +222,7 @@ def _production_policy() -> _IdentityPolicy:
         golden_root_files=frozenset(
             {"manifest.json", "build_golden.py", "assemble_release.py"}
         ),
+        required_dependency_revisions=_PRODUCTION_DEPENDENCY_REVISIONS,
     )
 
 
@@ -236,6 +243,7 @@ class DeterministicIdentityInspector:
         golden_products_root: str,
         execution_roots: tuple[str, ...],
         shared_roots: tuple[str, ...],
+        required_dependency_revisions: Mapping[str, str],
         required_shared_paths: tuple[str, ...] = (),
         source_root_files: frozenset[str] = frozenset(),
         golden_root_files: frozenset[str] = frozenset(),
@@ -255,6 +263,9 @@ class DeterministicIdentityInspector:
                 required_shared_paths=required_shared_paths,
                 source_root_files=source_root_files,
                 golden_root_files=golden_root_files,
+                required_dependency_revisions=MappingProxyType(
+                    dict(required_dependency_revisions)
+                ),
             ),
         )
         return instance
@@ -407,8 +418,10 @@ class DeterministicIdentityInspector:
         evaluated_revision: str,
         blockers: list[IdentityInspectionBlocker],
     ) -> None:
+        expected_revisions = self._policy.required_dependency_revisions
         actual_keys = set(request.required_dependency_revisions)
-        for subject in sorted(self._policy.required_dependencies - actual_keys):
+        expected_keys = set(expected_revisions)
+        for subject in sorted(expected_keys - actual_keys):
             blockers.append(
                 IdentityInspectionBlocker(
                     code="dependency_set_mismatch",
@@ -416,7 +429,7 @@ class DeterministicIdentityInspector:
                     message=f"required dependency pin is missing: {subject}",
                 )
             )
-        for subject in sorted(actual_keys - self._policy.required_dependencies):
+        for subject in sorted(actual_keys - expected_keys):
             blockers.append(
                 IdentityInspectionBlocker(
                     code="dependency_set_mismatch",
@@ -426,8 +439,20 @@ class DeterministicIdentityInspector:
             )
         if evaluated_revision.startswith("<"):
             return
-        for subject in sorted(actual_keys & self._policy.required_dependencies):
+        for subject in sorted(actual_keys & expected_keys):
             revision = request.required_dependency_revisions[subject]
+            if revision != expected_revisions[subject]:
+                blockers.append(
+                    IdentityInspectionBlocker(
+                        code="dependency_revision_mismatch",
+                        subject=subject,
+                        message=(
+                            f"dependency {subject} does not pin the code-designated "
+                            "merge revision"
+                        ),
+                    )
+                )
+                continue
             completed = self._git(
                 "merge-base", "--is-ancestor", revision, evaluated_revision
             )

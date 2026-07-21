@@ -33,15 +33,15 @@ plan:
         base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
         provider_policy: bailian-deployment-detail-v1
         credential_env_name: HARNESS_DASHSCOPE_API_KEY
-    identity_contract_hash: efa732938f32ce50e5f1f036afcd67605fec1a6f26bd49ae1c180aa20fa7af11
+    identity_contract_hash: 45dd7c9d5d784435969a744ef72e76b4bd9ab9d0d4bac6e59ea2899c241fe69b
     budget_contract_hash: null
   approval_envelopes: []
   observations: []
   derived_state: null
 identity_request:
   required_dependency_revisions:
-    019: 6e3e5f9abc994fca7c8e62f786410b9b7c77307d
-    "021": f557fc94ea244ac3ae77266cf7efccddcbcc78e7
+    019: 4d9c84e25bd53f3564631b8f8dc0b1f85e21e55f
+    "021": cfefcc9b3a7d6af0503f3b76cf8ac5a1b6d44b35
   source_products_root: dataset/shouxian_product
   golden_products_root: dataset/goldenset/wip-gs-v0.1
   products:
@@ -272,12 +272,12 @@ identity_request:
     harness/src/insurance_harness/goldenset/__init__.py: 208dc50795e397bd015ea43eb4fe41fcd3281a3067eeca42d194bc55a0bdda02
     harness/src/insurance_harness/goldenset/admission.py: ddfb0f27638f1071760eee7c84e9b22924331b2f93ee529477be19662fac2317
     harness/src/insurance_harness/goldenset/admission_artifacts.py: cb0ef11048dc2aa250c69defb0a7180fb3fdee7970954017eb0d04e96388833d
-    harness/src/insurance_harness/goldenset/admission_budget.py: 464605c1934ff5c9a8a43c5edfb2e9cba42b6c03b0786af3d04b491a4b67863c
+    harness/src/insurance_harness/goldenset/admission_budget.py: 33b9e741b9a9181417bf4bab56160542e2da13c5c00e9b6928a28696b2fa0e75
     harness/src/insurance_harness/goldenset/admission_cli.py: abdedd2e5d15d3b50a7d0379a82a3e4b41a53639eee42275d8a37a4def8a336d
-    harness/src/insurance_harness/goldenset/admission_identity.py: bcaa4884b7f51ebf37f5fafc7081d346dc95cce9add55ec2d6b665b075772576
+    harness/src/insurance_harness/goldenset/admission_identity.py: adc708a948a74bd2e7554771ef2377cc864c443be639fba1794701e52e2351fc
     harness/src/insurance_harness/goldenset/admission_models.py: 17941c368fc266f3d8b00b444a3f1d8f0b8c6e0303a86ef1f3bb1ba65a483442
-    harness/src/insurance_harness/goldenset/admission_probe.py: 349e7dabcd698e21c504704bbcb3eb725b5180f29a836b9d04553a6318d44e8a
-    harness/src/insurance_harness/goldenset/admission_runtime.py: d84b23a00434e087ad0de9fb04b2a231a7aa7a529234254dc019ee8421387f15
+    harness/src/insurance_harness/goldenset/admission_probe.py: 522b0609714e8ee3883ad5b326cdc38d965345af9c35a9faea9ecfb6fd619999
+    harness/src/insurance_harness/goldenset/admission_runtime.py: 4cd3b2e3039b1448377634d0e459a449627adf232c9710380d57ba28b8a65e1c
     harness/src/insurance_harness/goldenset/annotator.py: 5d32fb00e36d15798483cea0007e78d713df326575fa3646aeed6c215dfe43c8
     harness/src/insurance_harness/goldenset/assemble.py: 0361a8a14107a44eddf9b42eefd1ccd25dc38dea629132a04b8f1fb5212f67f6
     harness/src/insurance_harness/goldenset/baseline.py: 884cfffb9954b09ab844cafb8ffec0678f53ad01ace6ae75ed2e42e228c80624

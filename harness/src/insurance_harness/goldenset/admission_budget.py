@@ -263,20 +263,6 @@ class ProductReserve(_FrozenModel):
         return self
 
 
-class ProviderNoUsageProof(_FrozenModel):
-    provider: NonBlankStr
-    provider_request_id: NonBlankStr
-    evidence_digest: Sha256Digest
-    observed_at: datetime
-    verifier_policy: Literal["bailian-usage-reconciliation-v1"]
-
-    @model_validator(mode="after")
-    def require_trusted_time(self) -> ProviderNoUsageProof:
-        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
-            raise ValueError("provider proof observation must include timezone")
-        return self
-
-
 class BudgetContract(_FrozenModel):
     currency: Annotated[StrictStr, StringConstraints(pattern=r"^[A-Z]{3}$")]
     price_snapshot_id: NonBlankStr
@@ -1074,23 +1060,37 @@ class BudgetLedger:
     @staticmethod
     def _reconcile_legacy_settled_reservations(
         connection: sqlite3.Connection,
+        account_id: str | None = None,
     ) -> None:
-        """Conservatively materialize usage-unverified terminal debits on v4 upgrade."""
+        """Conservatively materialize settled debits during migration or recovery."""
 
-        settled = connection.execute(
-            """SELECT * FROM product_reservations
-               WHERE state='settled'
-               ORDER BY account_id,stage,product_id"""
-        ).fetchall()
+        if account_id is None:
+            settled = connection.execute(
+                """SELECT * FROM product_reservations
+                   WHERE state='settled'
+                   ORDER BY account_id,stage,product_id"""
+            ).fetchall()
+        else:
+            settled = connection.execute(
+                """SELECT * FROM product_reservations
+                   WHERE account_id=? AND state='settled'
+                   ORDER BY stage,product_id""",
+                (account_id,),
+            ).fetchall()
         overage_accounts: set[str] = set()
         for reservation in settled:
-            account_id = str(reservation["account_id"])
+            reservation_account_id = str(reservation["account_id"])
             stage = str(reservation["stage"])
             product_id = str(reservation["product_id"])
-            actual = BudgetLedger._attempt_charges(connection, account_id, stage, product_id)
+            actual = BudgetLedger._attempt_charges(
+                connection,
+                reservation_account_id,
+                stage,
+                product_id,
+            )
             maximum = _amounts_from_row(reservation, "max_input", "max_output", "max_cost")
             if not _fits(actual, maximum):
-                overage_accounts.add(account_id)
+                overage_accounts.add(reservation_account_id)
             connection.execute(
                 """UPDATE product_reservations
                    SET actual_input=?,actual_output=?,actual_cost=?
@@ -1099,23 +1099,26 @@ class BudgetLedger:
                     actual.input_tokens,
                     actual.output_tokens,
                     actual.cost_minor_units,
-                    account_id,
+                    reservation_account_id,
                     stage,
                     product_id,
                 ),
             )
-        accounts = connection.execute(
-            "SELECT * FROM budget_accounts ORDER BY account_id"
-        ).fetchall()
+        if account_id is None:
+            accounts = connection.execute(
+                "SELECT * FROM budget_accounts ORDER BY account_id"
+            ).fetchall()
+        else:
+            accounts = [BudgetLedger._require_account(connection, account_id)]
         for account in accounts:
-            account_id = str(account["account_id"])
+            current_account_id = str(account["account_id"])
             ceiling = _amounts_from_row(account, "ceiling_input", "ceiling_output", "ceiling_cost")
-            if not _fits(BudgetLedger._occupied(connection, account_id), ceiling):
-                overage_accounts.add(account_id)
-        for account_id in overage_accounts:
+            if not _fits(BudgetLedger._occupied(connection, current_account_id), ceiling):
+                overage_accounts.add(current_account_id)
+        for overage_account_id in overage_accounts:
             connection.execute(
                 "UPDATE budget_accounts SET overage=1 WHERE account_id=?",
-                (account_id,),
+                (overage_account_id,),
             )
 
     @contextmanager
@@ -1252,12 +1255,19 @@ class BudgetLedger:
                 bytes(original_approval["contract_json"])
             )
         except (TypeError, ValueError) as exc:
-            raise BudgetLedgerError("budget account original role rates are invalid") from exc
-        if dict(original_contract.role_rates) != dict(contract.role_rates):
-            raise BudgetLedgerError("budget account role rates cannot change")
+            raise BudgetLedgerError("budget account original contract is invalid") from exc
+        original_without_ceiling = original_contract.model_dump(mode="python")
+        proposed_without_ceiling = contract.model_dump(mode="python")
+        original_without_ceiling.pop("ceiling")
+        proposed_without_ceiling.pop("ceiling")
+        if canonical_json_bytes(original_without_ceiling) != canonical_json_bytes(
+            proposed_without_ceiling
+        ):
+            raise BudgetLedgerError(
+                "budget revision may change only the account ceiling"
+            )
         if not _fits(current_ceiling, ceiling) or ceiling == current_ceiling:
             raise BudgetLedgerError("new ceiling must monotonically increase")
-        self._merge_product_limits(connection, str(row["account_id"]), contract)
         self._insert_approval(
             connection,
             str(row["account_id"]),
@@ -1790,6 +1800,9 @@ class BudgetLedger:
         if not owner_token.strip() or _is_zero(maximum):
             raise BudgetLedgerError("attempt owner and maximum bound are required")
         with self._mutation() as connection:
+            account = self._require_account(connection, account_id)
+            if bool(account["overage"]):
+                raise BudgetLedgerError("account has an unresolved actual-usage overage")
             reservation = connection.execute(
                 """SELECT * FROM product_reservations
                    WHERE account_id=? AND stage=? AND product_id=?""",
@@ -1878,6 +1891,9 @@ class BudgetLedger:
         if not owner_token.strip() or _is_zero(maximum):
             raise BudgetLedgerError("attempt owner and maximum bound are required")
         with self._mutation() as connection:
+            account = self._require_account(connection, account_id)
+            if bool(account["overage"]):
+                raise BudgetLedgerError("account has an unresolved actual-usage overage")
             reservation = connection.execute(
                 """SELECT * FROM product_reservations
                    WHERE account_id=? AND stage=? AND product_id=?""",
@@ -2056,46 +2072,38 @@ class BudgetLedger:
                     (permit.key.account_id,),
                 )
 
-    def record_provider_no_usage(self, permit: SendPermit, *, proof: ProviderNoUsageProof) -> None:
-        with self._mutation() as connection:
-            approval = connection.execute(
-                """SELECT contract_json FROM budget_approvals WHERE account_id=?
-                   ORDER BY revision DESC LIMIT 1""",
-                (permit.key.account_id,),
-            ).fetchone()
-            if approval is None:
-                raise BudgetLedgerError("budget approval not found")
-            contract = BudgetContract.model_validate_json(bytes(approval[0]))
-            if proof.provider != contract.provider_attestation.provider:
-                raise BudgetLedgerError("provider proof does not match budget contract")
-            changed = connection.execute(
-                """UPDATE request_attempts SET state='no_usage',
-                   charged_input=0,charged_output=0,charged_cost=0,
-                   provider_proof_digest=?,provider_request_id=?,
-                   provider_verifier_policy=?,provider_proof_observed_at=?
-                   WHERE account_id=? AND stage=? AND product_id=? AND request_unit=?
-                   AND attempt_no=? AND owner_token_digest=?
-                   AND state IN ('prepared','sent','uncertain')""",
-                (
-                    proof.evidence_digest,
-                    proof.provider_request_id,
-                    proof.verifier_policy,
-                    proof.observed_at.isoformat(),
-                    *self._permit_params(permit),
-                ),
-            ).rowcount
-            if changed != 1:
-                raise BudgetLedgerError("provider no-usage proof cannot resolve attempt")
-
     def recover_incomplete(self, account_id: str) -> int:
         with self._mutation() as connection:
             self._require_account(connection, account_id)
+            affected_reservations = connection.execute(
+                """SELECT DISTINCT reservations.state
+                   FROM request_attempts AS attempts
+                   JOIN product_reservations AS reservations
+                     ON reservations.account_id=attempts.account_id
+                    AND reservations.stage=attempts.stage
+                    AND reservations.product_id=attempts.product_id
+                   WHERE attempts.account_id=? AND attempts.state='no_usage'""",
+                (account_id,),
+            ).fetchall()
             changed = connection.execute(
                 """UPDATE request_attempts SET state='uncertain',
-                   charged_input=max_input,charged_output=max_output,charged_cost=max_cost
-                   WHERE account_id=? AND state IN ('prepared','sent')""",
+                   charged_input=max_input,charged_output=max_output,charged_cost=max_cost,
+                   provider_proof_digest=NULL,provider_request_id=NULL,
+                   provider_verifier_policy=NULL,provider_proof_observed_at=NULL
+                   WHERE account_id=? AND state IN ('prepared','sent','no_usage')""",
                 (account_id,),
             ).rowcount
+            affected_states = {str(row["state"]) for row in affected_reservations}
+            if "settled" in affected_states:
+                self._reconcile_legacy_settled_reservations(
+                    connection,
+                    account_id=account_id,
+                )
+            if "released" in affected_states:
+                connection.execute(
+                    "UPDATE budget_accounts SET overage=1 WHERE account_id=?",
+                    (account_id,),
+                )
         return int(changed)
 
     def release_product(self, account_id: str, stage: str, product_id: str) -> bool:
@@ -2109,7 +2117,7 @@ class BudgetLedger:
                 return False
             unresolved = connection.execute(
                 """SELECT COUNT(*) FROM request_attempts WHERE account_id=? AND stage=?
-                   AND product_id=? AND state != 'no_usage'""",
+                   AND product_id=?""",
                 (account_id, stage, product_id),
             ).fetchone()
             assert unresolved is not None
@@ -2133,7 +2141,7 @@ class BudgetLedger:
                 raise BudgetLedgerError("product is not reserved")
             unresolved = connection.execute(
                 """SELECT COUNT(*) FROM request_attempts WHERE account_id=? AND stage=?
-                   AND product_id=? AND state IN ('prepared','sent')""",
+                   AND product_id=? AND state NOT IN ('terminal','uncertain')""",
                 (account_id, stage, product_id),
             ).fetchone()
             assert unresolved is not None
@@ -2432,9 +2440,7 @@ class BudgetLedger:
         values: list[BudgetAmounts] = []
         for row in rows:
             state = str(row["state"])
-            if state == "no_usage":
-                continue
-            if state in {"prepared", "sent"} or (
+            if state in {"prepared", "sent", "no_usage"} or (
                 state == "terminal" and not bool(row["usage_verified"])
             ):
                 values.append(_amounts_from_row(row, "max_input", "max_output", "max_cost"))
@@ -2517,7 +2523,6 @@ __all__ = [
     "ProductReserve",
     "ProductSettlementAttempt",
     "ProductSettlementSnapshot",
-    "ProviderNoUsageProof",
     "ProviderSpendCapAttestation",
     "RequestPoolReserve",
     "RequestReserve",

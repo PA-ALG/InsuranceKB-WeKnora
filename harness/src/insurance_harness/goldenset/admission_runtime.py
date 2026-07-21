@@ -144,6 +144,7 @@ class _BailianApprovedModelInvoker:
         system: str,
         user: str,
     ) -> ApprovedModelResponse:
+        role_plan = _validated_bailian_role_plan(role_plan)
         if (
             role_plan.provider != "bailian"
             or role_plan.protocol != "https"
@@ -180,6 +181,7 @@ async def _invoke_bailian(
     user: str,
     api_key: str,
 ) -> ApprovedModelResponse:
+    role_plan = _validated_bailian_role_plan(role_plan)
     async with httpx.AsyncClient(
         base_url=_BAILIAN_BASE_URL,
         headers={"Authorization": f"Bearer {api_key}"},
@@ -245,6 +247,34 @@ async def _invoke_bailian(
         usage_verified=usage_verified,
         usage_unrepresentable=usage_unrepresentable,
     )
+
+
+def _validated_bailian_role_plan(role_plan: ModelRolePlan) -> ModelRolePlan:
+    """Revalidate the invocable identity at each production mutation boundary."""
+
+    try:
+        validated = ModelRolePlan.model_validate(
+            {
+                field_name: getattr(role_plan, field_name)
+                for field_name in ModelRolePlan.model_fields
+            }
+        )
+    except (AttributeError, TypeError, ValueError):
+        raise AdmissionPausedError("approved_model_identity_not_invocable") from None
+    if (
+        validated.immutable_deployment_id is None
+        or validated.immutable_deployment_id != validated.model_id
+    ):
+        raise AdmissionPausedError("approved_model_identity_not_invocable")
+    if (
+        validated.provider != "bailian"
+        or validated.protocol != "https"
+        or validated.base_url != _BAILIAN_BASE_URL
+        or validated.provider_policy != _BAILIAN_POLICY
+        or validated.credential_env_name != _BAILIAN_CREDENTIAL_ENV
+    ):
+        raise AdmissionPausedError("approved_model_policy_unsupported")
+    return validated
 
 
 def _strict_provider_usage(

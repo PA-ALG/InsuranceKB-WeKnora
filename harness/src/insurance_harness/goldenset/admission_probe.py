@@ -317,6 +317,24 @@ class SafeProviderProbe:
         self._allow_test_policy = allow_test_policy
 
     def run(self, request: ProbeRequest) -> ProbeResult:
+        role_plan = self._validated_role_plan(request.role_plan)
+        if role_plan is None:
+            return self._blocked(request, "unsafe_probe_configuration")
+        try:
+            request = ProbeRequest.model_validate(
+                {
+                    "role": request.role,
+                    "role_plan": {
+                        field_name: getattr(role_plan, field_name)
+                        for field_name in ModelRolePlan.model_fields
+                    },
+                    "mode": request.mode,
+                    "probe_observed_at": request.probe_observed_at,
+                    "price_observed_at": request.price_observed_at,
+                }
+            )
+        except (AttributeError, TypeError, ValueError):
+            return self._blocked(request, "unsafe_probe_configuration")
         safe_provider = self._safe_identifier(request.role_plan.provider)
         safe_model_id = self._safe_model_id(request.role_plan.model_id)
         if request.mode == "static":
@@ -337,6 +355,16 @@ class SafeProviderProbe:
             return self._blocked(
                 request,
                 "test_policy_not_allowed",
+                endpoint_origin=policy.metadata_origin,
+            )
+        if not policy.test_only and not self._has_invocable_immutable_identity(
+            request.role_plan
+        ):
+            return self._blocked(
+                request,
+                "model_identity_mismatch",
+                provider=safe_provider,
+                model_id=safe_model_id,
                 endpoint_origin=policy.metadata_origin,
             )
 
@@ -486,10 +514,14 @@ class SafeProviderProbe:
                 started,
             )
         expected_revision = request.role_plan.expected_model_revision
-        if expected_revision is not None:
+        if policy.test_only and expected_revision is not None:
             verified = revision == expected_revision
         else:
-            verified = deployed_model == request.role_plan.immutable_deployment_id
+            verified = (
+                deployed_model
+                == request.role_plan.immutable_deployment_id
+                == request.role_plan.model_id
+            )
         if deployed_model != request.role_plan.model_id or not base_model or not verified:
             return self._network_blocked(
                 request,
@@ -558,6 +590,23 @@ class SafeProviderProbe:
             return False
         normalized_origin = f"{parsed.scheme}://{parsed.netloc}"
         return normalized_origin == policy.inference_origin
+
+    @staticmethod
+    def _has_invocable_immutable_identity(role_plan: ModelRolePlan) -> bool:
+        deployment_id = role_plan.immutable_deployment_id
+        return bool(deployment_id is not None and deployment_id == role_plan.model_id)
+
+    @staticmethod
+    def _validated_role_plan(role_plan: ModelRolePlan) -> ModelRolePlan | None:
+        try:
+            return ModelRolePlan.model_validate(
+                {
+                    field_name: getattr(role_plan, field_name)
+                    for field_name in ModelRolePlan.model_fields
+                }
+            )
+        except (AttributeError, TypeError, ValueError):
+            return None
 
     @staticmethod
     def _configuration_blocker_code(
