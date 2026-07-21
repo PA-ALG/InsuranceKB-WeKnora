@@ -14,25 +14,25 @@
 | 005 | eval-refinement-recall | ✅ 已交付 | 归因清单由 024 承接 |
 | 006 | template-fastpath | ✅ 已交付 | PP-StructureV3 遗留 B9 |
 | 007 | claims-changeset-publish | ✅ 已交付 | |
-| 008 | review-workbench | 📋 已条款化（正式 delta），可认领 | 轨道 L2；**W4 整页等 018**；Owner 复审=A |
-| 009 | concept-layer | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 轨道 L4 第二件（010 域段后）；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
-| 010 | structured-import | 📋 已条款化（正式 delta），可认领 | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据全消费链：**快照 v2 判别联合、batch_fingerprint 批次身份、mapping_manifest 四元组、双轴幂等**（tables/models/merge/pages/snapshots/reader 同 PR 闭合）；迁移预分配 0007；knowledge 域 Owner-A 复审；T1~T4 即刻、**knowledge 域段排在 021 之后**（关键路径不变） |
-| 011 | knowledge-health | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | H1.3a 三方对账（冻结/远端实读/重编）；H1.8 typed provider（缺数据 degraded 不虚报健康）；**迁移占号 0010（completeness_snapshots + health_runs/health_findings）**；typed subject 接线 Owner-A |
-| 012 | qa-objects | 📋 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 依赖 010 域段 qa_staging；qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
-| 013 | insurance-mcp | 📋 规格就绪（正式 delta） | 轨道 L3；HTTP Streamable 主传输；实现等 PR #9 合并 |
+| 008 | review-workbench | ✅ T1～T5/T7 已合入（PR #15）；W4/T6 follow-up 可认领 | 轨道 L2；018✅ 已解除整页/回滚前置；Owner 复审=A |
+| 009 | concept-layer | 📋 规格已收口，**待 010 T5～T12 合入后认领** | 轨道 L4 第二件；021✅仅解除 010 ordering 前置；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
+| 010 | structured-import | 🚧 T1～T4 已合入（PR #14）；**T5～T12 已由 021✅解除前置，可从最新 main 认领** | 轨道 L4 首件；双通道（Q020 合规）+ structured 证据全消费链：快照 v2 判别联合、batch_fingerprint、mapping_manifest 四元组、双轴幂等；迁移预分配 0007；knowledge 域 Owner-A 复审 |
+| 011 | knowledge-health | 📋 PR #12 主规格 + PR #22 fast-follow 已收口，**011 本体可认领** | H1.3a 远端/输入/工具链独立证据轴、多信号并报、不可归因 degraded；H1.8 通过 020 registry 消费 024 attempt ledger，缺数据 degraded；迁移 0010；typed subject 接线 Owner-A |
+| 012 | qa-objects | 📋 规格已收口，**待 010 T5～T12 的 qa_staging/冻结合同合入后认领** | qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
+| 013 | insurance-mcp | 📋 规格就绪，可认领 | 轨道 L3；HTTP Streamable 主传输；018/PR #9 前置已满足 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
 | 015 | feedback-flywheel | ✅ 已合入 main（PR #18） | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
 | 016 | enterprise-knowledge-scope | ✅ 已交付 | |
 | 017 | weknora-source-bridge | ✅ 软件交付；live NOT RUN | |
 | 018 | release-snapshot-read-model | ✅ 已合入 main（PR #9，2026-07-17） | 独占迁移 0005 |
 | 019 | golden-quality-gate | ✅ 已合入 main（PR #8） | |
-| 020 | golden-v01-baseline-run | 📋 等 019✅+021 | 高 token 数据任务 |
-| 021 | source-lifecycle-ordering | ✅ 软件/双审/本机门禁完成，待人工 commit/push/PR | 迁移 0006，实际链 `0012 → 0006`；deterministic 1901，PG 25/skipped=0 |
+| 020 | golden-v01-baseline-run | 🚧 T1 零模型 run-admission 在 PR #24；真实 D2～D4 未运行 | 019✅+021✅；未 READY 前禁止真实模型调用 |
+| 021 | source-lifecycle-ordering | ✅ 已合入 main（PR #23） | 迁移 0006，实际链 `0012 → 0006`；deterministic 1901，PG 25/skipped=0 |
 | 022 | review-hardening | ✅ 已交付 | ⚠️ 编号冲突历史记录：与下行同号，两者均已合入，**目录不改名**，冲突就此冻结 |
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
-| 024 | extraction-recall-uplift | 📋 本次新开，可认领 | 轨道 L5；零真实模型调用；含 A10 抽取侧弱值/兼容性护栏（E6） |
-| 025 | merge-weak-value-guard | 📂 三版定稿（codex PR #17 两轮复审收口，可认领） | 合并前置弱值门槛：抑制=有资格前提的裁决（E1~E5：三态/高风险/权威/**全权威时间切片+effective_to 贯通**/基线复核）+ 可证明偏序 SpecificityRelation（score 仅 008 排序）+ **root+events 双表**可恢复生命周期（来源 revision 状态机，stale 不复活）+ 三类失败语义/锁/exact-once；G1~G9 strict 规格；迁移 0011（docs 03 §8 已先行登记，双方言触发器）；**实现候 021（规格已提出未实现）**，可与 024 同一执行者顺手接 |
+| 024 | extraction-recall-uplift | ✅ 已合入 main（PR #13） | 轨道 L5；durable attempt ledger + E1～E7 + A10 双侧护栏；真实召回/非退化证据仍由 020 D4/D4b 承接 |
+| 025 | merge-weak-value-guard | 📋 规格已合入（PR #17），021✅ 后实现前置已满足，可认领 | 合并前置弱值门槛：抑制=有资格前提的裁决 + SpecificityRelation + root/events 可恢复生命周期；G1～G9 strict；迁移 0011 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027+ | （空闲） | | 先占号再开目录 |
 
@@ -45,7 +45,7 @@
 | 0003 | 016 enterprise_knowledge_scope | ✅ |
 | 0004 | 017 source_evidence_lineage | ✅ |
 | 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
-| 0006 | 021 source-lifecycle-ordering | 🟡 已实施，待合入；实际 down_revision=0012 |
+| 0006 | 021 source-lifecycle-ordering | ✅ 已随 PR #23 合入；实际 down_revision=0012 |
 | 0007 | 010 structured-import（qa_staging 等） | 预分配 |
 | 0008 | 009 concept-layer | 预分配 |
 | 0009 | 012 qa-objects | 预分配 |

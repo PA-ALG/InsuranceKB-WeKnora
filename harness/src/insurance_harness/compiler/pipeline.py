@@ -39,6 +39,8 @@ from ..sources import (
     match_quote_to_chunks,
     source_ordering_identity_token,
 )
+from .attempts import SqliteAttemptLedger
+from .experiment import AssignmentPolicy, assign_arm, experiment_digest
 from .extract import (
     Sleeper,
     TransportRetryError,
@@ -48,15 +50,22 @@ from .extract import (
     with_transport_retry,
 )
 from .feedability import score_feedability
-from .gapfill import gapfill_field
+from .gapfill import gapfill_eligibility, gapfill_field
 from .judge import JudgeDispatcher, make_judge_request, write_judge_queue
-from .llm import CallStats, MeteredClient, ModelClient
+from .llm import (
+    CallStats,
+    GapfillBudgetExhausted,
+    MeteredClient,
+    ModelClient,
+)
 from .models import (
+    AuditAttempt,
     BaselineAdmissionIdentity,
     DataQuality,
     DeadLetter,
     DocManifestEntry,
     DocPayload,
+    ExtractionAudit,
     FieldCandidate,
     JudgeRequest,
     PredRecord,
@@ -67,12 +76,13 @@ from .routing_data import GROUP_ORDER, group_of_field
 from .sections import family_fingerprint, route_groups, split_sections
 from .templates import TemplateRegistry, run_fastpath
 from .templates.tables import TableStructureProvider
+from .variants import VariantRegistry
 from .verification import quote_verified
 from .voting import vote_field
 
 
 class PipelineConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     max_fields_per_call: int = Field(default=10, strict=True, gt=0)  # E3.1
     window_chars: int = Field(default=4_000, strict=True, gt=0)
@@ -82,6 +92,12 @@ class PipelineConfig(BaseModel):
         default=1.0, strict=True, ge=0, allow_inf_nan=False
     )
     gapfill_top_n: int = Field(default=3, strict=True, gt=0)
+    # 024 E3：补漏 LLM 调用总预算（None=不限）；并发下原子扣减（单事件循环内
+    # 预约后再 await，不存在两任务同看余额的窗口）
+    gapfill_max_calls: int | None = Field(default=None, strict=True, ge=0)
+    # 024 E7：变体注册表与实验分桶策略由此注入（节点不得各自取全局默认）
+    variant_registry: VariantRegistry = Field(default_factory=VariantRegistry.default)
+    assignment: AssignmentPolicy = Field(default_factory=AssignmentPolicy)
     concurrency: int = Field(default=6, strict=True, gt=0)
     judge_mode: str = "claude-session"
 
@@ -97,6 +113,8 @@ class PipelineState(TypedDict, total=False):
     model_id: str
     schema_version: str
     prompt_version: str
+    variant_digest: str
+    gapfill_calls_used: int
     judge_mode: str
     fail_nodes: list[str]  # 测试用注入失败节点（E1.1 用例）
     source_documents: list[dict[str, Any]]
@@ -139,6 +157,7 @@ class _RunIdentity(BaseModel):
     schema_version: str
     prompt_version: str
     judge_mode: str
+    variant_digest: str = ""
 
 
 _DOC_PRIORITY = ("保险条款", "条款", "产品说明书", "说明书")  # 合并时的来源优先级
@@ -184,6 +203,9 @@ def merge_candidates(cands: list[FieldCandidate]) -> dict[str, FieldCandidate]:
         cur = best.get(c.field_id)
         if cur is None or rank(c) < rank(cur):
             best[c.field_id] = c
+    # E7（codex PR#13 阻断2）：merge 不再按注册表 membership 补盖变体标签——
+    # prompt_variant_used 只在真实使用处记录（gapfill/fastpath），其余路径在
+    # _to_pred 按 origin 如实落 baseline（首轮/vote/judge 都经 baseline prompt）。
     return best
 
 
@@ -232,6 +254,12 @@ class ExtractionPipeline:
 
     def _line(self, state: PipelineState) -> ProductLineSchema:
         return self._registry.line(state["line_key"])
+
+    def _attempt_ledger(self, state: PipelineState) -> SqliteAttemptLedger:
+        return SqliteAttemptLedger(
+            Path(state["run_dir"]) / "llm-attempts.sqlite",
+            run_id=state["run_id"],
+        )
 
     def _require_manifest_scope(self, raw_manifest: object) -> RunManifest:
         manifest = _parse_run_manifest(raw_manifest)
@@ -429,6 +457,9 @@ class ExtractionPipeline:
             schema_version=self._registry.version,
             prompt_version=PROMPT_VERSION,
             judge_mode=self._judge.mode,
+            variant_digest=experiment_digest(
+                self._cfg.variant_registry, self._cfg.assignment
+            ),
         )
 
     async def _node_load(self, state: PipelineState) -> dict[str, Any]:
@@ -487,6 +518,10 @@ class ExtractionPipeline:
             model_id=state.get("model_id", self._model_id),
             judge_mode=state.get("judge_mode", self._judge.mode),
             prompt_version=state.get("prompt_version", PROMPT_VERSION),
+            variant_digest=state.get(
+                "variant_digest",
+                experiment_digest(self._cfg.variant_registry, self._cfg.assignment),
+            ),
             started_at=datetime.now(UTC),
             docs=[
                 DocManifestEntry(
@@ -554,6 +589,7 @@ class ExtractionPipeline:
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
+        ledger = self._attempt_ledger(state)
         sem = asyncio.Semaphore(self._cfg.concurrency)
         candidates: list[FieldCandidate] = []
         dead: list[DeadLetter] = [
@@ -631,6 +667,7 @@ class ExtractionPipeline:
             extractor = WindowExtractor(
                 metered, state["product_name"], payload.doc, payload.pages,
                 max_fields_per_call=self._cfg.max_fields_per_call,
+                ledger=ledger,
             )
             for group in GROUP_ORDER:
                 fields = [
@@ -667,6 +704,7 @@ class ExtractionPipeline:
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
+        ledger = self._attempt_ledger(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
         merged = merge_candidates(candidates)
         payloads = [DocPayload.model_validate(raw) for raw in state["docs"]]
@@ -674,27 +712,59 @@ class ExtractionPipeline:
         pages_by_doc: dict[str, list[PageText]] = {p.doc: p.pages for p in payloads}
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
+        # 024 E3：SQLite reservation commits before every outbound call. The ledger,
+        # not checkpoint state, is the budget authority and survives a hard crash.
+        ledger.ensure_budget("gapfill", self._cfg.gapfill_max_calls)
+        used = ledger.used("gapfill")
+        checkpoint_used = int(state.get("gapfill_calls_used") or 0)
+        if checkpoint_used > used:
+            # A pre-ledger or corrupted checkpoint cannot safely restore an
+            # already-spent external-call budget. Refuse instead of resetting it.
+            raise ScopeViolation("attempt ledger mismatch")
+        remaining = (
+            None
+            if self._cfg.gapfill_max_calls is None
+            else max(0, self._cfg.gapfill_max_calls - used)
+        )
+
         async def do_field(field: FieldSpec) -> FieldCandidate | None:
             async with sem:
+                prior = merged.get(field.field_id)
+                arm = assign_arm(
+                    self._cfg.assignment, state["product_id"], field.field_id
+                )
+                ledger.record_assignment(field.field_id, arm)
                 try:
                     cand = await with_transport_retry(
                         lambda: gapfill_field(
                             metered, state["product_name"], field, section_pool,
                             pages_by_doc, top_n=self._cfg.gapfill_top_n,
+                            registry=self._cfg.variant_registry, arm=arm,
+                            ledger=ledger,
+                            budget_limit=self._cfg.gapfill_max_calls,
+                            source_pointer=(
+                                prior.source_pointer if prior is not None else None
+                            ),
                         ),
                         attempts=self._cfg.transport_attempts,
                         base_delay_s=self._cfg.backoff_base_s,
                         sleep=self._sleep,
                     )
+                except GapfillBudgetExhausted:
+                    return None  # 预算耗尽：后续字段不再出站（E3）
                 except TransportRetryError:
                     return None
                 return cand
 
-        # 补漏只针对 extractable 且当前 unknown 的字段（E4.1）
+        # E3 触发合同：字段属适用 schema（line 过滤）+ requiredness∈{required,
+        # expected} + 首轮空/unknown/source_pointer + 预算允许（纯函数判定，金标零参与）；
+        # 候选章节存在性由 gapfill_field 检索层裁定（无候选=零 LLM 调用零额度）。
         targets = [
             f
             for f in line.extractable_fields
-            if (merged.get(f.field_id) is None or merged[f.field_id].tri_state == "unknown")
+            if gapfill_eligibility(
+                f, merged.get(f.field_id), budget_remaining=remaining
+            ).eligible
         ]
         results = await asyncio.gather(*(do_field(f) for f in targets))
         for cand in results:
@@ -702,6 +772,7 @@ class ExtractionPipeline:
                 candidates.append(cand)
         manifest.stats = _merge_stats(manifest.stats, stats)
         return {
+            "gapfill_calls_used": ledger.used("gapfill"),
             "candidates": [c.model_dump(mode="json") for c in candidates],
             "manifest": manifest.model_dump(mode="json"),
         }
@@ -712,6 +783,7 @@ class ExtractionPipeline:
         line = self._line(state)
         stats = CallStats()
         metered = MeteredClient(self._client, stats)
+        ledger = self._attempt_ledger(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
         merged = merge_candidates(candidates)
         payloads = {p.doc: p for p in (DocPayload.model_validate(r) for r in state["docs"])}
@@ -724,7 +796,8 @@ class ExtractionPipeline:
                 try:
                     return await with_transport_retry(
                         lambda: vote_field(
-                            metered, state["product_name"], field, cand, pages
+                            metered, state["product_name"], field, cand, pages,
+                            ledger=ledger,
                         ),
                         attempts=self._cfg.transport_attempts,
                         base_delay_s=self._cfg.backoff_base_s,
@@ -751,11 +824,16 @@ class ExtractionPipeline:
                     state["product_id"], state["product_name"], cand,
                     "vote_disagreement", context,
                 )
-                judgement = await self._judge.dispatch(req)
+                judgement, judge_attempt_id = await self._judge.dispatch_audited(
+                    req, ledger=ledger
+                )
                 if judgement is None:
                     cand = cand.model_copy(update={"pending_judge": True})
                     judge_queue.append(req.model_dump(mode="json"))
                 else:
+                    meta = dict(cand.metadata)
+                    if judge_attempt_id is not None:
+                        meta["winning_attempt_id"] = judge_attempt_id
                     cand = cand.model_copy(
                         update={
                             "value": judgement.value,
@@ -763,6 +841,7 @@ class ExtractionPipeline:
                             "evidence": judgement.evidence,
                             "confidence": judgement.confidence,
                             "origin": "judge",
+                            "metadata": meta,
                         }
                     )
             candidates.append(cand)
@@ -781,10 +860,28 @@ class ExtractionPipeline:
                     state["product_id"], state["product_name"], cand2,
                     "quote_mismatch_high_risk", "",
                 )
-                judgement = await self._judge.dispatch(req)
+                judgement, judge_attempt_id = await self._judge.dispatch_audited(
+                    req, ledger=ledger
+                )
                 if judgement is None:
                     candidates.append(cand2.model_copy(update={"pending_judge": True}))
                     judge_queue.append(req.model_dump(mode="json"))
+                else:
+                    meta = dict(cand2.metadata)
+                    if judge_attempt_id is not None:
+                        meta["winning_attempt_id"] = judge_attempt_id
+                    candidates.append(
+                        cand2.model_copy(
+                            update={
+                                "value": judgement.value,
+                                "tri_state": judgement.tri_state,
+                                "evidence": judgement.evidence,
+                                "confidence": judgement.confidence,
+                                "origin": "judge",
+                                "metadata": meta,
+                            }
+                        )
+                    )
 
         manifest.stats = _merge_stats(manifest.stats, stats)
         return {
@@ -806,6 +903,7 @@ class ExtractionPipeline:
                 document.file_name: document for document in runtime_documents
             }
         line = self._line(state)
+        ledger = self._attempt_ledger(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
         merged = merge_candidates(candidates)
         created = datetime.now(UTC)
@@ -817,10 +915,22 @@ class ExtractionPipeline:
                     field_id=f.field_id, field_name=f.name,
                     group=group_of_field(f.name), doc="", tri_state="unknown",
                 )
+            audit_metadata = dict(cand.metadata)
+            durable_attempts = ledger.attempts_for_field(f.field_id)
+            legacy_attempts = audit_metadata.get("attempts")
+            if isinstance(legacy_attempts, list) and legacy_attempts and not durable_attempts:
+                raise ScopeViolation("attempt ledger mismatch")
+            audit_metadata["attempts"] = [
+                attempt.model_dump() for attempt in durable_attempts
+            ]
+            assignment = ledger.assignment_for_field(f.field_id)
+            if assignment is not None:
+                audit_metadata["variant_assignment"] = assignment
             document = documents_by_name.get(cand.doc)
             cand = cand.model_copy(
                 update={
                     "evidence": _source_aware_evidence(cand, document),
+                    "metadata": audit_metadata,
                 }
             )
             records.append(_to_pred(cand, state, self._model_id, manifest, created))
@@ -1251,6 +1361,7 @@ def _manifest_run_identity(manifest: RunManifest) -> _RunIdentity:
         schema_version=manifest.schema_version,
         prompt_version=manifest.prompt_version,
         judge_mode=manifest.judge_mode,
+        variant_digest=manifest.variant_digest,
     )
 
 
@@ -1338,7 +1449,51 @@ def _to_pred(
         if dq_raw in ("structured_direct", "table_parsed", "llm_extracted", "llm_inferred")
         else "llm_extracted"
     )
+    # E7：prompt_variant_used 在真实使用处记录（gapfill stamp）；未 stamp 的
+    # 候选按 origin 如实归因——fastpath=确定性直取（无 prompt）、其余（extract/
+    # vote/judge/dead_letter）均经 baseline 抽取 prompt。注册表 membership 不参与。
+    raw_attempts = cand.metadata.get("attempts")
+    attempts = tuple(
+        AuditAttempt.model_validate(a)
+        for a in (raw_attempts if isinstance(raw_attempts, list) else [])
+        if isinstance(a, dict)
+    )
+    raw_winner = cand.metadata.get("winning_attempt_id")
+    winning_attempt_id = raw_winner if isinstance(raw_winner, str) else None
+    winner = next(
+        (a for a in attempts if a.attempt_id == winning_attempt_id), None
+    )
+    if winning_attempt_id is not None and winner is None and cand.origin != "fastpath":
+        raise ScopeViolation("attempt ledger mismatch")
+    # E7 R2：prompt_variant_used 由 winning attempt 派生（stage 消歧）；无 winner
+    # 时按来源如实兜底——fastpath=非 LLM 直取、其余 unknown/未出值仍归 baseline。
+    if winner is not None:
+        used = winner.prompt_version
+        winning_origin = _attempt_origin(winner.stage)
+    elif cand.origin == "fastpath":
+        used = "fastpath"
+        winning_origin = "fastpath"
+    else:
+        used = f"baseline@{manifest.prompt_version or PROMPT_VERSION}"
+        winning_origin = cand.origin
+    raw_arm = cand.metadata.get("variant_assignment")
+    raw_compat = cand.metadata.get("compat_reject")
+    raw_terms = cand.metadata.get("pointer_terms")
+    audit = ExtractionAudit(
+        prompt_variant_used=used,
+        variant_assignment=raw_arm if isinstance(raw_arm, str) else None,
+        attempts=attempts,
+        winning_attempt_id=(
+            winning_attempt_id if cand.origin != "fastpath" else None
+        ),
+        winning_origin=winning_origin,
+        compat_reject=raw_compat if isinstance(raw_compat, str) else None,
+        pointer_terms=(
+            tuple(str(t) for t in raw_terms) if isinstance(raw_terms, list) else ()
+        ),
+    )
     return PredRecord(
+        extraction_audit=audit,
         data_quality=data_quality,
         source_mode="weknora" if manifest.space_id else "directory_replay",
         product_id=state["product_id"],
@@ -1356,6 +1511,14 @@ def _to_pred(
         pending_judge=cand.pending_judge,
         unknown_reason=cand.unknown_reason,
     )
+
+
+def _attempt_origin(stage: str) -> str:
+    """Map retry/detail stages back to the value-producing pipeline origin."""
+    for origin in ("extract", "gapfill", "vote", "judge"):
+        if stage == origin or stage.startswith(f"{origin}_"):
+            return origin
+    return stage
 
 
 def _source_aware_evidence(

@@ -101,6 +101,37 @@ def build_gapfill_user(
     )
 
 
+def build_targeted_gapfill_user(
+    product_name: str,
+    doc_name: str,
+    field: FieldSpec,
+    fragments: Sequence[PageText],
+    keywords: Sequence[str],
+    guidance: str | None = None,
+) -> str:
+    """extract_empty 字段的定向二轮提问（024 E3.1，判断题/短答形态）。
+
+    与 ``build_gapfill_user`` 同构（同一 GAPFILL_SYSTEM、同一回验契约，E3.2
+    反幻觉门槛不降），追加定向指令块：短答优先、别名提示、可选值粒度指引
+    （E4.1 经变体注入）。触发与组装均不接受任何金标输入（E3.1）。
+    """
+    lines = [
+        "定向核对指令：",
+        "- 优先给出短语级取值（日期/期限/金额/枚举原文短语），不要整段复述；",
+        f"- 该字段亦可能以这些说法出现：{'、'.join(keywords)}；",
+        '- 若段落仅给出指向他处的线索（如"详见附表"），输出 unknown。',
+    ]
+    if guidance:
+        lines.append(f"- {guidance}")
+    targeted_block = "\n".join(lines)
+    return (
+        f"产品：{product_name}\n文档：{doc_name}\n\n"
+        f"## 待核对字段（定向补漏）\n{_field_line(field)}\n\n"
+        f"{targeted_block}\n\n"
+        f"## 候选原文（分页标注）\n{render_pages(fragments)}"
+    )
+
+
 def build_vote_user(
     product_name: str,
     doc_name: str,

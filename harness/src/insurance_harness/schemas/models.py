@@ -6,6 +6,9 @@ from pydantic import BaseModel, ConfigDict
 
 ValueType = Literal["short", "long", "enum", "number", "date", "table"]
 RiskLevel = Literal["low", "medium", "high"]
+# 024 E3：补漏触发的要求程度。基线 Excel 无显式必填列时默认 expected（可抽取字段
+# 都是期望收录——与既有触发人群一致）；YAML 提供『必填』/requiredness 列时按列解析。
+Requiredness = Literal["required", "expected", "optional"]
 
 
 class FieldSpec(BaseModel):
@@ -19,6 +22,7 @@ class FieldSpec(BaseModel):
     risk_level: RiskLevel = "low"
     aliases: tuple[str, ...] = ()
     evidence_required: bool = False
+    requiredness: Requiredness = "expected"
     description: str = ""
     source_sheet: str = ""
 

@@ -1,6 +1,6 @@
 # 011 知识健康度巡检验收规格
 
-> 三版（2026-07-18）：codex PR #12 复审收口——H1.3 改 A/B/C 三方对账（原两方比较无法观察人工绕改、原因分类不成立）；新增 H1.8 typed provider 合同（缺数据不得误报健康）；H2 补 health run 持久基准；字段/状态名对齐实际模型（`claims.effective_to`、`ReviewItem.status=open`）。二版（2026-07-16）Wave 2 条款化。原 H1~H3 条款 ID 沿用。定位：**运维离线扫描**——可读主链表（不受在线读模型限制），但涉及"已发布内容"的比较一律以 018 冻结快照为基准。
+> 四版（2026-07-21，PR #22 fast-follow）：H1.3a 将远端、输入和工具链改为独立证据轴；多轴同时变化必须全部报告，证据不足时不得伪造唯一因果。H1.8 对齐 024 durable attempt ledger 与 020 run registry 的当前边界。三版（2026-07-18）：codex PR #12 复审收口——H1.3 改 A/B/C 三方对账（原两方比较无法观察人工绕改、原因分类不成立）；新增 H1.8 typed provider 合同（缺数据不得误报健康）；H2 补 health run 持久基准；字段/状态名对齐实际模型（`claims.effective_to`、`ReviewItem.status=open`）。二版（2026-07-16）Wave 2 条款化。原 H1~H3 条款 ID 沿用。定位：**运维离线扫描**——可读主链表（不受在线读模型限制），但涉及"已发布内容"的比较一律以 018 冻结快照为基准。
 
 ## ADDED Requirements
 
@@ -26,20 +26,47 @@
 - **WHEN** 009 概念表尚未落地时运行扫描
 - **THEN** H1.5 报 not-applicable（报告显式呈现），零误报孤立、零误报 clean
 
-### Requirement: H1.3a 漂移三方对账（A/B/C，原因互斥）
+### Requirement: H1.3a 漂移三方对账（A/B/C，独立维度可并存）
 
 漂移检测 SHALL 为三方对账，SHALL NOT 只做两方比较：
 
 - **A** = current snapshot 的冻结 rendered page（018）——"应在线"内容；
 - **B** = 经现有 WeKnora adapter 只读回读的**实际远端页面**——A≠B ⇒ `remote_drift`（人工绕改/远端异常），这是唯一能观察到人工绕改的比较；
-- **C** = 按当前 mutable Claims + 显式 compiler/schema/purpose 版本重编译结果——A≠C ⇒ `pending_content_change`（待发布事实变化）或 `compiler_version_change`（以 run manifest 的版本 digest 区分，SHALL NOT 以"compiler version 相同 ⇒ 绕改"推断）。
+- **C** = 按当前 mutable Claims + 显式 compiler/schema/purpose 版本重编译结果。每次比较 SHALL 同时形成两组可重放身份：`input_identity`（规范化、排序后的实际编译输入，包括 SnapshotFact/current Claim 的稳定字段与 Evidence 引用）和 `toolchain_identity`（compiler/schema/purpose 版本 digest）；任一身份缺失或不可验证时，该轴 SHALL 报 `unknown/unavailable`，不得猜测原因。
 
-三类原因 SHALL 互斥归因；比较 hash SHALL 基于规范化 content/source_refs/chunk_refs/稳定 metadata（排除时间戳等易变字段）；**远端不可用/超时 SHALL 报 `unknown/unavailable`，SHALL NOT 计为 healthy**。
+A/B 页面关系、冻结/当前 `input_identity` 和冻结/当前 `toolchain_identity` 是**三个独立证据轴，SHALL 分别评估、保留并允许任意组合**：A≠B SHALL 报 `remote_drift`；input identity 不同 SHALL 报 `pending_content_change`；toolchain identity 不同 SHALL 报 `compiler_version_change`。后两项不以 A≠C 为前提——即使输入与工具链变化碰巧得到相同页面，也不得丢失身份变化信号；发现项 SHALL 携带 `local_render_changed = (A≠C)`，不得把身份变化宣称为页面差异的唯一原因。
 
-#### Scenario: 三类原因互斥命中
+若 A≠C，SHALL 另报 `local_render_drift` 并保留所有已知身份信号。任一身份缺失或不可验证时，该轴 SHALL 报 `unknown/unavailable`、报告整体 degraded，同时仍保留 `local_render_drift` 和其他可证明的身份变化；不得用剩余已知轴替代缺失轴作唯一归因。若 A≠C 且两组身份均可验证并相同，SHALL 再报 `unclassified_local_drift`（表示非确定性或 manifest/规范化漏项），不得归入上述任一已知原因。页面比较 hash SHALL 基于规范化 content/source_refs/chunk_refs/稳定 metadata（排除时间戳等易变字段）；**远端不可用/超时 SHALL 报 `unknown/unavailable`，SHALL NOT 计为 healthy**。
 
-- **WHEN** 分别构造：仅改远端 B、仅改 mutable Claim、仅 bump compiler digest 三个夹具
-- **THEN** 依次仅命中 remote_drift / pending_content_change / compiler_version_change，互不串扰
+#### Scenario: 单变量夹具无串扰命中
+
+- **WHEN** 分别构造：仅改远端 B；仅改 mutable Claim 且令 A≠C；仅 bump compiler digest 且令 A≠C 三个夹具
+- **THEN** 依次命中 remote_drift；pending_content_change + local_render_drift；compiler_version_change + local_render_drift，且不出现其他身份轴信号
+
+#### Scenario: B 与 C 同时变化两维并报
+
+- **WHEN** 同一页面既被远端人工改写（B 变）又有 Claim 变更未发布（C 变）
+- **THEN** remote_drift 与 pending_content_change **同时报告**（两维各自成立，零漏报）
+
+#### Scenario: 本地输入与工具链同时变化不丢信号
+
+- **WHEN** 当前 Claim 输入身份与冻结输入不同，且 compiler/schema/purpose 工具链身份也与冻结 manifest 不同，重编页面 C 与 A 不同
+- **THEN** pending_content_change 与 compiler_version_change 同时报告；若 B 也与 A 不同，remote_drift 亦同时报告
+
+#### Scenario: 身份变化但渲染结果相同仍保留证据
+
+- **WHEN** input_identity 与 toolchain_identity 均变化，但规范化页面 A=C
+- **THEN** pending_content_change 与 compiler_version_change 同时报告，且两项均记录 local_render_changed=false
+
+#### Scenario: 身份缺失时保留页面差异与已知轴
+
+- **WHEN** A≠C、input_identity 不可验证，但 toolchain_identity 可验证且已变化
+- **THEN** 同时报告 local_render_drift、input identity unknown/unavailable 与 compiler_version_change，报告整体 degraded；不得宣称工具链是唯一原因
+
+#### Scenario: 身份相同但重编结果漂移时拒绝伪归因
+
+- **WHEN** A≠C，但冻结/当前 input_identity 与 toolchain_identity 均相同
+- **THEN** 报 unclassified_local_drift 且报告整体 degraded，不得误报 pending_content_change 或 compiler_version_change
 
 #### Scenario: 远端不可用不出干净报告
 
@@ -48,7 +75,21 @@
 
 ### Requirement: H1.8 数据源 typed provider（缺数据不得误报健康）
 
-四类可靠性信号源 SHALL 经 typed provider 合同消费：每个 provider 返回 `ok | unavailable | stale` + source namespace + watermark + observed_at；**任一必需 provider unavailable/stale 时报告 SHALL 标记 degraded**，SHALL NOT 以"零发现=健康"呈现。数据源发现方式 SHALL 明确：compiler 死信/judge-queue 以 020 approved run artifact 目录（run registry）为准；018 reconciliation 读其数据库表；**017 桥接失败当前无 durable failure ledger——该 provider SHALL 显式报 unavailable（合同：ledger 由后续 change 提供后接入），SHALL NOT 假装可读**。
+四类可靠性信号源 SHALL 经 typed provider 合同消费：每个 provider 返回 `ok | unavailable | stale` + source namespace + watermark + observed_at；**任一必需 provider unavailable/stale 时报告 SHALL 标记 degraded**，SHALL NOT 以"零发现=健康"呈现。
+
+Compiler provider SHALL 只消费一个不可变、内容寻址的 020 run-registry snapshot。snapshot SHALL 为每个 Space 提供唯一递增 `registry_revision`、`generated_at`、`complete_through_sequence` 和按 `(sequence, run_id)` 唯一的 run entries；每个 entry SHALL 绑定 admission status、run manifest、024 per-run `llm-attempts.sqlite` 终态副本以及 dead-letter/judge-queue 最终产物的 digest。扫描 SHALL 选择目标 Space 中所有 `admitted|approved` 且 `sequence <= complete_through_sequence` 的 entries，按 `(sequence, run_id)` 稳定排序并全量重算当前 backlog，不得任意挑“最新 run”或扫描未准入目录。provider watermark SHALL 持久化 `(source_namespace, registry_revision, complete_through_sequence, snapshot_sha256)`；revision/sequence 相对上次成功 health run 倒退、重复 identity/digest 不自洽 SHALL 报 unavailable，`scan_started_at - generated_at` 超过本次 health config 冻结的 `max_registry_age` SHALL 报 stale。首轮以 snapshot 声明的 registry 起点扫描全量；后续仍扫描该 snapshot 的完整已准入集合，watermark 仅用于完整性、回退与趋势对账，不得因增量游标漏掉尚未解决的旧失败。020 registry 尚未提供、snapshot 非终态或任一已选 run 工件缺失/哈希不符时，compiler provider SHALL 整体 unavailable，不得用部分结果生成 clean 结论。
+
+018 reconciliation provider 读取其数据库表；**021 SourceEvent 不是桥接解析失败账本，017 当前仍无 durable failure ledger——该 provider SHALL 显式报 unavailable（合同：ledger 由后续 change 提供后接入），SHALL NOT 假装可读**。
+
+#### Scenario: 多 run registry 选择与 watermark 确定
+
+- **WHEN** 同一 Space 的 snapshot 含乱序列出的三个已准入 run 与一个 blocked run，并以固定 complete_through_sequence 扫描
+- **THEN** provider 仅按 `(sequence, run_id)` 顺序消费三个已准入 run 的内容寻址工件，全量重算旧未解决失败，产出唯一 watermark；输入排列变化不得改变结果
+
+#### Scenario: registry 过期、回退或工件不完整时拒绝部分健康
+
+- **WHEN** snapshot 超过 max_registry_age、revision/sequence 相对上次成功 watermark 回退，或任一已选 run 的 ledger/最终产物缺失或 digest 不符
+- **THEN** compiler provider 整体报 stale 或 unavailable，报告 degraded，SHALL NOT 用其余 run 的部分结果给出 healthy
 
 #### Scenario: provider 缺失报告 degraded
 

@@ -13,6 +13,7 @@
 - [ ] T6 完成长字段 keypoints 与 before/after 回归（D4.1/D4.2）
 - [ ] T7 生成 approved baseline/QualityProfile（D4.3）
 - [ ] T8 validation-report、HANDOFF/002/05/13/16/20 对账（D5）
+- [ ] D4b（024 R2 让渡承接）differential replay：以同一批不可变 raw responses 对 base SHA 与 candidate SHA 重放评分，建立“后处理改动非退化”真实证据（024 E5 的非退化半条在此完成；synthetic 机制探针不作数）
 
 状态：T1 软件准入闭环已在 021 合入后的基线上复验；当前权威工件为零模型 `BLOCKED`。021 revision/输入执行面指纹已通过；T2～T7 未运行，T8 最终收尾未完成。在剩余历史 provenance/缺失输入、签名审批、模型身份/probe 与预算账户全部通过前不得触发真实模型调用。
 

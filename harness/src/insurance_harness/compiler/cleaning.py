@@ -60,12 +60,43 @@ SOURCE_ONLY_PATTERNS: Final[tuple[str, ...]] = (
     "请参见来源文件",
 )
 
+# --- 024 E6（LLM-wiki-black A10 承接）：两族新模式，既有模式与语义零漂移 ---
+
+#: 弱值/不可执行文案（旧项目 WEAK_UNACTIONABLE）：看似有值实则空转 → unknown。
+WEAK_UNACTIONABLE_PATTERNS: Final[tuple[str, ...]] = (
+    "以合同为准",
+    "按合同约定",
+    "以保险合同为准",
+    "以本合同为准",
+    r"以(?:保险)?条款(?:原文)?为准",
+    "需核对条款",
+    "请核对条款",
+    "具体以合同",
+)
+
+#: 引用型文案（旧项目 REFERENCE_ONLY）：整值即"指向他处"→ source_pointer 供补漏。
+REFERENCE_ONLY_PATTERNS: Final[tuple[str, ...]] = (
+    r"(?:详见|参见|见)(?:本合同)?第[^，。；\s]{1,10}条",
+    r"详见本合同[^，。；]{0,12}",
+    r"详见附[表录件][一二三四五六七八九十\d]{0,3}",
+)
+
 _PLACEHOLDER_RE: Final[re.Pattern[str]] = re.compile(
     "^(" + "|".join(p.replace("/", "\\/") for p in PLACEHOLDER_PATTERNS) + ")"
 )
 _SOURCE_ONLY_RE: Final[re.Pattern[str]] = re.compile(
     "^(?:" + "|".join(SOURCE_ONLY_PATTERNS) + ")(?:[:：\\s]|$)",
     re.IGNORECASE,
+)
+#: 弱值文案要求"整值即弱表述"（允许 ≤6 字尾注），与 _REFERENCE_ONLY_RE 同一
+#: 整值锚定纪律：避免吞掉"弱前缀 + 实值"的长句（如"按合同约定的年利率3.5%复利
+#: 递增"）——原先裸前缀 .match 会把含数字实值的模型输出清成 placeholder（gauntlet F4）。
+_WEAK_UNACTIONABLE_RE: Final[re.Pattern[str]] = re.compile(
+    "^(?:" + "|".join(WEAK_UNACTIONABLE_PATTERNS) + ")[^，。；]{0,6}[。；]?$"
+)
+#: 引用型要求"整值即指针"（允许 ≤6 字尾注），避免吞掉含实值的长句。
+_REFERENCE_ONLY_RE: Final[re.Pattern[str]] = re.compile(
+    "^(?:" + "|".join(REFERENCE_ONLY_PATTERNS) + ")[^，。；]{0,6}[。；]?$"
 )
 
 
@@ -86,6 +117,10 @@ def clean_value(raw: str | None) -> CleanResult:
         return CleanResult(value=None, is_placeholder=True)
     if _SOURCE_ONLY_RE.match(text):
         return CleanResult(value=None, is_placeholder=True, source_pointer=text)
+    if _REFERENCE_ONLY_RE.match(text):  # 024 E6：整值即引用 → 指针供补漏定向追抽
+        return CleanResult(value=None, is_placeholder=True, source_pointer=text)
+    if _WEAK_UNACTIONABLE_RE.match(text):  # 024 E6：弱值文案不冒充事实
+        return CleanResult(value=None, is_placeholder=True)
     if _PLACEHOLDER_RE.match(text):
         return CleanResult(value=None, is_placeholder=True)
     return CleanResult(value=text)
