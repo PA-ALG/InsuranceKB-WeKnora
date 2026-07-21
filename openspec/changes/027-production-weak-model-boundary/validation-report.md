@@ -1,7 +1,8 @@
 # 027 Validation Report
 
-> Status: draft for T1 inventory freeze. No production implementation or real-provider
-> validation is claimed here.
+> Status: T1 inventory refreshed after rebase onto `fde06802`; Task 2 frozen authority
+> contracts are implemented. Canonical verification/policy/gateway wiring and real-provider
+> validation are not claimed here.
 
 ## Focused deterministic baseline
 
@@ -9,70 +10,77 @@ Command:
 
 ```bash
 PYTHONPATH=src /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.venv/bin/python \
-  -m pytest -q tests/test_config.py tests/test_compiler_llm.py \
-  tests/test_source_pipeline_cli_017.py \
-  -m 'not live and not integration_postgres'
+  -m pytest -q tests/test_production_model_boundary_027.py
 ```
 
-Recorded baseline result: **34 passed in 9.11s**.
+Recorded focused result: **28 passed in 0.56s**. Focused Ruff and mypy checks were also
+clean. A fresh docs-correction rerun remained **28 passed in 0.29s**. These are focused
+Task 2 results, not a full deterministic-suite claim.
 
 Real provider: **NOT RUN**. The focused baseline is deterministic and does not prove
-provider availability, production admission readiness, or completion of PWB1-PWB5.
-
-The `uv` launcher is not used as negative product evidence in this environment: while
-initializing its cache/system configuration under the sandbox it panicked. That is a
-toolchain/environment difference, not a pytest failure; the repository Harness virtual
-environment command above is the focused test result of record.
+provider availability, canonical gateway readiness, or completion of PWB1-PWB5.
 
 ## Admission binding decision
 
-When implemented, production authorization SHALL require two independently mandatory,
-caller-declared expected values:
+Task 2 freezes `StrictAdmissionRequestBinding` as the caller-declared expected scope.
+Every field is independently mandatory:
 
-- `expected_run_id`
-- `expected_run_revision`
+- purpose, run schema version, run id/revision and Space;
+- admission artifact ref and digest;
+- manifest, eligibility, Golden slice and routing-policy hashes;
+- schema, template-lock and structured-dispatch hashes;
+- model-plan, deployment-roles and resource-caps hashes;
+- rights and provenance hashes;
+- clean integration SHA.
 
-Neither value SHALL be inferred, copied, defaulted or reconstructed from admission
-**actual** observations. In particular, a successful probe, a matching artifact found on
-disk, or a 020 canonical admission response SHALL NOT supply the expected identity of a
-030 MVP run.
+None of these expected values may be inferred, copied, defaulted or reconstructed from
+admission **actual** observations. In particular, a probe, matching artifact or 020
+canonical response cannot supply the expected scope for a 030 MVP run.
 
-The future 027 adapter over prior admission output SHALL be read-only. When implemented,
-`AdmissionBinding` SHALL normalize only these actual facts:
+Task 2 also freezes rich, serializable `AdmissionBinding` actual data. It mirrors the full
+expected scope as actual purpose/schema/run/Space/artifact and all hashes, and additionally
+records READY/BLOCKED state, aware expiry, the exact approved `ModelIdentity` set and exact
+approved template hashes. Raw READY data remains evidence, not process authority.
 
-- actual run identity;
-- actual run revision;
-- actual admission state;
-- actual admitted artifact hash;
-- expiry;
-- approved capability roles.
+`AdmissionVerifier` is the sole frozen verification Protocol:
+`verify(request: StrictAdmissionRequestBinding, /) -> VerifiedAdmission`. The returned
+`VerifiedAdmission` is immutable, process-local, non-serializable and caller-unconstructable;
+its serializable `AdmissionVerificationReceipt` records verifier id/version, verification
+time, request digest, binding digest and verified-binding digest without granting authority.
+The future canonical verifier registry must be selected from code by independent expected
+purpose/run-schema values and must not accept caller binding, READY state or verifier
+override.
 
-The adapter SHALL NOT settle admission, rewrite prior artifacts, infer expected values,
-or broaden roles. When implemented, `ProductionModelPolicy` SHALL sign a `ModelPermit`
-only when the independently supplied expected run identity/revision, actual
-identity/revision, READY state, artifact hash, unexpired binding, requested role,
-template/model-plan hash, immutable model identity and policy version all match exactly.
-Missing, unknown, expired or mismatched data SHALL fail closed before network access.
-Where candidate promotion is orchestrated, that future upstream orchestration boundary
-SHALL validate the receipt before invoking the zero-model knowledge workflow; it SHALL
-NOT push permit/admission parameters down into knowledge functions.
+Canonical production composition SHALL obtain `VerifiedAdmission` and inject one
+`GuardedModelClient`. Every model call SHALL provide only
+`VerifiedAdmission + ModelCallContext`. Inside that client, canonical policy SHALL evaluate
+the exact approved identity and call scope, issue opaque process-local
+`IssuedModelPermit`, and emit receipt-only `ModelPermitView`; the view is never call
+authority. Caller-supplied permit, policy, issuer or guard is forbidden. Missing,
+mismatched, expired, non-READY or cross-scope data SHALL fail closed before transport.
 
-This required design is intentionally stricter than treating admission as a boolean.
-Once enforced, it SHALL prevent borrowing 020 canonical status for 030 even when both
-runs use the same provider/model; this is required intent, not a current implementation
-claim.
+Once the Task 3/4 verifier registry, internal policy/decision receipt and gateway are
+enforced, this design SHALL prevent borrowing 020 state for 030 even when model or template
+values overlap. Candidate-promotion orchestration SHALL validate receipts upstream; it
+SHALL NOT add `IssuedModelPermit`, `ModelPolicy`, `AdmissionBinding` or receipt parameters
+to zero-model product/knowledge functions.
 
 ## Scope and evidence status
 
 - Entrypoint/package/command inventory: documented in
   `artifacts/entrypoint-inventory.md`.
 - Real provider: **NOT RUN**.
-- Production model policy/permit implementation: pending later 027 tasks.
+- Task 2 frozen contracts: complete for strict request/rich binding,
+  `AdmissionVerifier`, opaque `VerifiedAdmission`, verification receipt, opaque
+  `IssuedModelPermit` and receipt-only `ModelPermitView`.
+- Task 3/4 remain pending for the canonical verifier registry, internal policy decision
+  receipt, `ModelCallContext`, `GuardedModelClient`, production composition and entrypoint
+  closure.
 - Provider contract or quality claim: none.
 - Product CLI and knowledge importer/merge/review/source-lifecycle/publisher exports:
   recorded as zero-model boundaries that keep their own governance/approval/snapshot
-  contracts. They receive no new `ModelPermit`, model policy, admission or receipt
-  parameters; no product/knowledge code or state was changed.
+  contracts. They receive no new `IssuedModelPermit`, `ModelPolicy`, `AdmissionBinding`
+  or receipt parameters; no product/knowledge code or state was changed.
 - The gap described above is approved to be closed inside 027's own compiler/model-policy
   domain; no 020, 030, 031, knowledge, MCP, runtime, dataset or structured-import scope is
   borrowed.
