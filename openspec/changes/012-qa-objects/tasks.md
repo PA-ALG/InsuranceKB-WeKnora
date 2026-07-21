@@ -12,4 +12,4 @@
 - [ ] T8 收尾：validation-report → HANDOFF 更新
 
 约束：零模型调用；不改 compiler/goldenset/adapters；迁移仅 0009（链序按注册表规则）；read_model_version 升级按注册表合入序取号（010 v2 之后）。
-状态：**已条款化，规格复审收口中（PR #12）——收口前不可认领**。依赖：007/016/018 已合入 + 010 域段（qa_staging，候 021）。
+状态：**已条款化，PR #12 规格复审已完成；当前等待 010 knowledge 域段交付 qa_staging 与冻结合同后认领**。依赖：007/016/018/021 已合入；021 只解除 010 的 ordering 前置，不能替代 010 域段本身。
