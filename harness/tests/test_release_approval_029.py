@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from pathlib import Path
+from threading import Barrier
 from typing import Any
 
 import pytest
-from sqlalchemy import func, select, text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, func, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from insurance_harness.knowledge.pages import render_snapshot_pages
@@ -29,6 +37,7 @@ from insurance_harness.knowledge.tables import (
     ReleaseApproval,
     ReleaseManifestRecord,
     ReleaseSnapshot,
+    ReviewItem,
     SnapshotFact,
 )
 from tests.support.release_018 import (
@@ -369,3 +378,218 @@ def test_ra2_public_knowledge_contract_exports_authority_types() -> None:
     assert knowledge.AuthorizationDecision is AuthorizationDecision
     assert knowledge.ReleaseApprovalService is ReleaseApprovalService
     assert knowledge.persist_release_manifest is persist_release_manifest
+
+
+def _hide_first_scalar_for_entity(
+    monkeypatch: pytest.MonkeyPatch,
+    session: Session,
+    entity: type[object],
+) -> None:
+    """Model a stale pre-insert read while keeping the DB uniqueness conflict real."""
+
+    original_scalar = session.scalar
+    hidden = False
+
+    def stale_scalar(statement: Any, *args: Any, **kwargs: Any) -> Any:
+        nonlocal hidden
+        descriptions = getattr(statement, "column_descriptions", ())
+        selected_entity = descriptions[0].get("entity") if descriptions else None
+        if selected_entity is entity and not hidden:
+            hidden = True
+            return None
+        return original_scalar(statement, *args, **kwargs)
+
+    monkeypatch.setattr(session, "scalar", stale_scalar)
+
+
+def _prior_caller_work(session: Session, scope: Any, suffix: str) -> ReviewItem:
+    prior = ReviewItem(
+        space_id=scope.space_id,
+        review_key=f"review-{suffix}",
+        type="release",
+        subject={"source": "caller"},
+        allowed_actions=["approve"],
+        status="open",
+        risk_level="low",
+    )
+    session.add(prior)
+    session.flush()
+    return prior
+
+
+@pytest.mark.parametrize("same_manifest", [True, False])
+def test_ra2_manifest_unique_race_is_domain_safe_and_preserves_outer_transaction(
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    same_manifest: bool,
+) -> None:
+    scope, requested = _frozen_manifest(session, f"manifest-race-{same_manifest}")
+    competing = requested
+    if not same_manifest:
+        competing = build_release_manifest_from_snapshot(
+            session,
+            scope,
+            snapshot_id=requested.snapshot_id,
+            schema_version=requested.schema_version,
+            template_hashes=(_A,),
+            model_plan_hash=_C,
+        )
+    row = ReleaseManifestRecord(
+        space_id=scope.space_id,
+        snapshot_id=competing.snapshot_id,
+        manifest_hash=competing.manifest_sha256,
+        payload=competing.model_dump(mode="json"),
+    )
+    session.add(row)
+    prior = _prior_caller_work(session, scope, f"manifest-{same_manifest}")
+    outer = session.get_transaction()
+    _hide_first_scalar_for_entity(monkeypatch, session, ReleaseManifestRecord)
+
+    if same_manifest:
+        result = persist_release_manifest(session, scope, requested)
+        assert result.id == row.id
+    else:
+        with pytest.raises(ReleaseManifestPersistenceError, match="already bound"):
+            persist_release_manifest(session, scope, requested)
+
+    assert session.is_active
+    assert session.get_transaction() is outer
+    assert session.get(ReviewItem, prior.id) is prior
+    prior.risk_level = "high"
+    session.flush()
+    assert prior.risk_level == "high"
+
+
+@pytest.mark.parametrize("same_attestation", [True, False])
+def test_ra2_approval_unique_race_is_domain_safe_and_preserves_outer_transaction(
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    same_attestation: bool,
+) -> None:
+    scope, manifest = _frozen_manifest(session, f"approval-race-{same_attestation}")
+    persist_release_manifest(session, scope, manifest)
+    session.commit()
+    row = ReleaseApproval(
+        space_id=scope.space_id,
+        snapshot_id=manifest.snapshot_id,
+        manifest_hash=manifest.manifest_sha256,
+        actor="alice@example.com",
+        actor_type="human",
+        role="release_approver",
+        authorization_receipt="iam:release-approver:alice:42",
+        reason=(
+            "reviewed exact release artifacts"
+            if same_attestation
+            else "a different prior attestation"
+        ),
+    )
+    session.add(row)
+    prior = _prior_caller_work(session, scope, f"approval-{same_attestation}")
+    outer = session.get_transaction()
+    _hide_first_scalar_for_entity(monkeypatch, session, ReleaseApproval)
+
+    if same_attestation:
+        result = _approve(session, scope, manifest)
+        assert result.id == row.id
+    else:
+        with pytest.raises(ReleaseApprovalError, match="already approved"):
+            _approve(session, scope, manifest)
+
+    assert session.is_active
+    assert session.get_transaction() is outer
+    assert session.get(ReviewItem, prior.id) is prior
+    prior.risk_level = "high"
+    session.flush()
+    assert prior.risk_level == "high"
+
+
+@pytest.mark.integration_postgres
+def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -> None:
+    raw_url = os.getenv("HARNESS_TEST_POSTGRES_URL")
+    if not raw_url:
+        pytest.skip("HARNESS_TEST_POSTGRES_URL is required for real PostgreSQL RA2")
+    admin_url = make_url(raw_url).set(drivername="postgresql+psycopg")
+    if admin_url.get_backend_name() != "postgresql":
+        pytest.fail("HARNESS_TEST_POSTGRES_URL must use PostgreSQL")
+    database_name = f"ikb_029_race_{uuid.uuid4().hex}"
+    connect_args = {
+        "connect_timeout": 10,
+        "options": "-cstatement_timeout=30000 -clock_timeout=15000",
+    }
+    admin = create_engine(
+        admin_url,
+        isolation_level="AUTOCOMMIT",
+        connect_args=connect_args,
+    )
+    engine = None
+    database_created = False
+    try:
+        with admin.connect() as connection:
+            connection.exec_driver_sql(f'CREATE DATABASE "{database_name}"')
+        database_created = True
+        test_url = admin_url.set(database=database_name).update_query_dict(
+            {
+                "application_name": "insurancekb_029_race_test",
+                "connect_timeout": "10",
+                "options": "-cstatement_timeout=30000 -clock_timeout=15000",
+            }
+        )
+        engine = create_engine(test_url, connect_args=connect_args, pool_pre_ping=True)
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option(
+            "script_location",
+            str(Path(__file__).resolve().parents[1] / "migrations"),
+        )
+        config.set_main_option(
+            "sqlalchemy.url",
+            test_url.render_as_string(hide_password=False).replace("%", "%%"),
+        )
+        command.upgrade(config, "head")
+        from insurance_harness.db.base import make_session_factory
+
+        factory = make_session_factory(engine)
+        with factory() as setup:
+            scope, manifest = _frozen_manifest(setup, "postgres-race")
+
+        manifest_barrier = Barrier(2)
+
+        def persist_worker() -> str:
+            with factory() as worker:
+                manifest_barrier.wait(timeout=15)
+                record = persist_release_manifest(worker, scope, manifest)
+                worker.commit()
+                return record.id
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            manifest_ids = list(executor.map(lambda _index: persist_worker(), range(2)))
+        assert len(set(manifest_ids)) == 1
+
+        approval_barrier = Barrier(2)
+
+        def approve_worker() -> str:
+            with factory() as worker:
+                approval_barrier.wait(timeout=15)
+                approval = _approve(worker, scope, manifest)
+                worker.commit()
+                return approval.id
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            approval_ids = list(executor.map(lambda _index: approve_worker(), range(2)))
+        assert len(set(approval_ids)) == 1
+        with factory() as verifier:
+            assert verifier.scalar(select(func.count()).select_from(ReleaseManifestRecord)) == 1
+            assert verifier.scalar(select(func.count()).select_from(ReleaseApproval)) == 1
+    finally:
+        if engine is not None:
+            engine.dispose()
+        if database_created:
+            with admin.connect() as connection:
+                connection.execute(
+                    text(
+                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                        "WHERE datname=:name AND pid<>pg_backend_pid()"
+                    ),
+                    {"name": database_name},
+                )
+                connection.exec_driver_sql(f'DROP DATABASE IF EXISTS "{database_name}"')
+        admin.dispose()

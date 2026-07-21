@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from insurance_harness.db.base import utcnow
 from insurance_harness.db.scope import KnowledgeScope, require_current_scope
 from insurance_harness.knowledge.release_manifest import (
     ReleaseManifest,
@@ -61,6 +65,35 @@ class ReleaseAuthorizer(Protocol):
         manifest_hash: str,
         authorization_receipt: str,
     ) -> AuthorizationDecision: ...
+
+
+def _insert_if_absent(
+    session: Session,
+    table: Any,
+    values: dict[str, object],
+    *,
+    conflict_columns: tuple[str, ...],
+) -> bool:
+    """Issue one atomic, transaction-owned insert for supported production dialects."""
+
+    dialect = session.get_bind().dialect.name
+    if dialect == "sqlite":
+        inserted_id = session.scalar(
+            sqlite_insert(table)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=conflict_columns)
+            .returning(table.c.id)
+        )
+    elif dialect == "postgresql":
+        inserted_id = session.scalar(
+            postgresql_insert(table)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=conflict_columns)
+            .returning(table.c.id)
+        )
+    else:
+        raise RuntimeError(f"unsupported release authority dialect: {dialect}")
+    return inserted_id is not None
 
 
 def _canonical_payload(manifest: ReleaseManifest) -> dict[str, object]:
@@ -131,15 +164,36 @@ def persist_release_manifest(
             )
         return existing
 
-    record = ReleaseManifestRecord(
-        space_id=scope.space_id,
-        snapshot_id=manifest.snapshot_id,
-        manifest_hash=manifest.manifest_sha256,
-        payload=payload,
+    now = utcnow()
+    _insert_if_absent(
+        session,
+        ReleaseManifestRecord.__table__,
+        {
+            "id": str(uuid.uuid4()),
+            "space_id": scope.space_id,
+            "snapshot_id": manifest.snapshot_id,
+            "manifest_hash": manifest.manifest_sha256,
+            "payload": payload,
+            "created_at": now,
+            "updated_at": now,
+        },
+        conflict_columns=("space_id", "snapshot_id"),
     )
-    session.add(record)
-    session.flush()
-    return record
+    winner = session.scalar(
+        select(ReleaseManifestRecord).where(
+            ReleaseManifestRecord.space_id == scope.space_id,
+            ReleaseManifestRecord.snapshot_id == manifest.snapshot_id,
+        )
+    )
+    if (
+        winner is not None
+        and winner.manifest_hash == manifest.manifest_sha256
+        and winner.payload == payload
+    ):
+        return winner
+    raise ReleaseManifestPersistenceError(
+        "snapshot is already bound to a different manifest"
+    )
 
 
 def _load_exact_manifest(
@@ -262,19 +316,43 @@ class ReleaseApprovalService:
                 return existing
             raise ReleaseApprovalError("manifest is already approved by another attestation")
 
-        approval = ReleaseApproval(
-            space_id=scope.space_id,
-            snapshot_id=snapshot_id,
-            manifest_hash=manifest_hash,
-            actor=actor,
-            actor_type=actor_type,
-            role="release_approver",
-            authorization_receipt=authorization_receipt,
-            reason=reason,
+        now = utcnow()
+        _insert_if_absent(
+            self._session,
+            ReleaseApproval.__table__,
+            {
+                "id": str(uuid.uuid4()),
+                "space_id": scope.space_id,
+                "snapshot_id": snapshot_id,
+                "manifest_hash": manifest_hash,
+                "actor": actor,
+                "actor_type": actor_type,
+                "role": "release_approver",
+                "authorization_receipt": authorization_receipt,
+                "reason": reason,
+                "approved_at": now,
+                "created_at": now,
+            },
+            conflict_columns=("space_id", "manifest_hash"),
         )
-        self._session.add(approval)
-        self._session.flush()
-        return approval
+        winner = self._session.scalar(
+            select(ReleaseApproval).where(
+                ReleaseApproval.space_id == scope.space_id,
+                ReleaseApproval.manifest_hash == manifest_hash,
+            )
+        )
+        if winner is not None and (
+            winner.snapshot_id == snapshot_id
+            and winner.actor == actor
+            and winner.actor_type == actor_type
+            and winner.role == "release_approver"
+            and winner.authorization_receipt == authorization_receipt
+            and winner.reason == reason
+        ):
+            return winner
+        raise ReleaseApprovalError(
+            "manifest is already approved by another attestation"
+        )
 
 
 __all__ = [
