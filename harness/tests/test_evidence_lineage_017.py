@@ -25,6 +25,7 @@ from insurance_harness.goldenset.records import Evidence
 from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegistry
 from insurance_harness.sources.lineage import LineageResult, match_quote_to_chunks
 from insurance_harness.sources.models import (
+    ProcessedAtOrdering,
     SourceChunk,
     SourceDocument,
     SourceRevision,
@@ -425,7 +426,7 @@ def test_legacy_evidence_retains_historical_page_and_extra_tolerance() -> None:
 def _revision(file_hash: str) -> SourceRevision:
     return SourceRevision(
         file_hash=file_hash,
-        processed_at=datetime(2026, 7, 14, tzinfo=UTC),
+        ordering=ProcessedAtOrdering(value=datetime(2026, 7, 14, tzinfo=UTC)),
         parser_fingerprint="pdfplumber@0.11:text-v1",
     )
 
@@ -436,6 +437,7 @@ def _manifest_entry(document: SourceDocument) -> DocManifestEntry:
         source_id=document.source_id,
         knowledge_id=document.knowledge_id,
         source_revision=document.source_revision.value,
+        ordering=document.source_revision.ordering,
         file_hash=document.source_revision.file_hash,
         original_digest=document.original_digest,
         parser_fingerprint=document.source_revision.parser_fingerprint,

@@ -28,7 +28,7 @@ from insurance_harness.sources import (
     WeKnoraDocumentSource,
     WeKnoraSourceRequest,
 )
-from insurance_harness.sources.models import SourceRevision
+from insurance_harness.sources.models import ProcessedAtOrdering, SourceRevision
 
 BODY_A = b"source document a"
 BODY_B = b"source document b"
@@ -467,7 +467,7 @@ async def test_materialize_success_preserves_dtos_sequence_revision_and_path_lif
         first = batch.documents[0]
         expected_revision = SourceRevision(
             file_hash=hashlib.md5(BODY_A, usedforsecurity=False).hexdigest(),
-            processed_at=PROCESSED_AT,
+            ordering=ProcessedAtOrdering(value=PROCESSED_AT),
             parser_fingerprint="pdfplumber@0.11:text-v1",
         )
         assert first.scope is not None

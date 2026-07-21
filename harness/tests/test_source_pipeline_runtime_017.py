@@ -115,6 +115,7 @@ async def test_node_load_consumes_source_documents_without_glob(
     assert entry["source_id"] == document.source_id
     assert entry["knowledge_id"] is None
     assert entry["source_revision"] == document.source_revision.value
+    assert entry["ordering"] == document.source_revision.ordering.model_dump(mode="json")
     assert entry["file_hash"] == document.source_revision.file_hash
     assert entry["original_digest"] == document.original_digest
     assert entry["parser_fingerprint"] == document.source_revision.parser_fingerprint

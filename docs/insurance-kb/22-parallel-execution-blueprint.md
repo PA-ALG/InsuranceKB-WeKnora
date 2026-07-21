@@ -3,10 +3,10 @@
 > 与 16（roadmap，讲**顺序**与里程碑）配套：本文讲**并行结构**——哪些 change 可以同时推进、按什么优先级、由谁执行、靠什么护栏不互相踩。实时进度以 `HANDOFF.md` ⓪ 为准（本文不放 checkbox，避免双份清单漂移）。编号占用以 `openspec/changes/README.md` 注册表为准。
 > 制定：2026-07-16（总设计师裁定 + 业务方当日拍板：模型凭据已补齐交 codex 处理、013 MCP 提前、规格工作不等 PR #9）。
 
-## 1. 现状快照（2026-07-16）
+## 1. 现状快照（2026-07-19）
 
-- **已合入 main**：001–007（编译主链）、016/017（Space 隔离+来源桥接）、019（质量闸门）、022×2（测试再平衡+复审收口）、023（本机 live 环境+受信 workflow，PR #10）。
-- **在审**：018（PR #9，仅剩真实 WeKnora live 证据；凭据已补，codex 处理中）。
+- **已合入 main**：001–007、015/016/017/018/019、022×2、023；ReleaseSnapshot、durable feedback foundation 与本机 WeKnora live 地基均已落地。
+- **关键路径当前点**：021 软件、独立双审与本机门禁已完成（deterministic 1901；PG 25/skipped=0），待人工 commit/push/PR；其后只先启动 020 T1 零模型 run-admission，不直接跑 13 产品。
 - **架构体检结论**：插件式边界零违规（WeKnora API 全封装在 adapters、无直连库/队列、Go/Vue 零污染）；企业地基超额交付；**价值面（工作台/MCP/概念层/QA）零代码**——`workbench/` 与 `mcp/` 均为空壳占位。
 - **诊断**：方向未偏，瓶颈是并行度≈1。依赖图允许 5–6 条轨同时推进。
 
@@ -14,8 +14,8 @@
 
 | 轨 | 内容（change） | 执行者（会话） | **Owner 复审**（17 §1 合并权） | 前置 | 开工条件 | 独占文件域 |
 |---|---|---|---|---|---|---|
-| **L0 解阻塞** | 018 live 收口 → PR #9 合并 | codex | A | 凭据 ✅ | **进行中** | 018 分支 |
-| **L1 关键路径** | 021 ordering → 020 真实基线（run-admission → D2/D3/D4） | codex | 021=A（knowledge/迁移）；020=B（goldenset/数据） | 018 合并；020 另需 019✅ | PR #9 合并后 | `sources/`+`knowledge/` ordering、迁移 0006；020 = `dataset/` |
+| **L0 解阻塞** | 018 live 收口 → PR #9 合并 | codex | A | 凭据 ✅ | **已完成** | 018 已合入 main |
+| **L1 关键路径** | 021 ordering → 020 真实基线（run-admission → D2/D3/D4） | codex | 021=A（knowledge/迁移）；020=B（goldenset/数据） | 018/019 ✅ | **021 待人工 Git；下一步 020 T1** | `sources/`+`knowledge/` ordering、迁移 0006；020 = `dataset/` |
 | **L2 审核面** | 008 审核工作台 | C1 | **A**（workbench/ 属 A 域） | 007/016/019 ✅；**W4 整页等 018** | **即刻**（W4 除外） | `workbench/`（新） |
 | **L3 Agent 出口** | 013 insurance MCP | C2 | C（MCP 新包） | 003/007 ✅ + 018 读模型 | 规格已就绪；**实现等 PR #9** | `mcp/`（新） |
 | **L4 知识形态** | 010 直入 → 009 概念层 → 012 QA →（011 健康度） | C3 | C（新包）；**010 的 knowledge 域改动（tables/models/merge/pages/snapshots/reader+迁移 0007）加 A** | 007 ✅；**010 的 knowledge 域段前置 018+021**；012 依赖 010 | 010 **通道一/登记映射（T1~T4）即刻**；knowledge 域段（T5 起）**基于 021 合入后的 main**（不插入关键路径，三轮复审裁决 2026-07-16）；009/011/012 已条款化（三版 2026-07-18），**规格复审收口中（PR #12）——收口前不可认领** | 导入新包、`concepts/`（新）、QA 模块（新）；迁移 0007/0008/0009；**010 例外：触及 knowledge 域含冻结合同（见其 proposal 影响节）** |

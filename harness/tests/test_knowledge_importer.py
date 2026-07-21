@@ -1,6 +1,8 @@
 """K2：pred JSONL → Claim 导入器（specs/mainchain.md）。"""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import event, func, select
@@ -14,7 +16,10 @@ from insurance_harness.knowledge import (
     import_pred_jsonl,
     import_pred_records,
 )
-from insurance_harness.knowledge.importer import to_proposed_claim
+from insurance_harness.knowledge.importer import (
+    _validated_source_context,
+    to_proposed_claim,
+)
 from insurance_harness.knowledge.models import (
     ProposedEvidence,
     SourceImportContext,
@@ -26,6 +31,11 @@ from insurance_harness.knowledge.tables import (
     Claim,
     ClaimEvidence,
     ReviewItem,
+)
+from insurance_harness.sources import (
+    GenerationOrdering,
+    ProcessedAtOrdering,
+    SourceRevision,
 )
 from tests.kbhelpers import (
     BROCHURE,
@@ -57,20 +67,29 @@ def _source_identity(
     knowledge_id: str,
     raw_kb_id: str = "raw-importer",
     revision_char: str = "a",
-) -> dict[str, str]:
+) -> dict[str, Any]:
+    processed_at = datetime(2026, 7, 14, tzinfo=UTC) + timedelta(
+        seconds=ord(revision_char) - ord("a")
+    )
+    revision = SourceRevision(
+        file_hash=revision_char * 32,
+        ordering=ProcessedAtOrdering(value=processed_at),
+        parser_fingerprint="pdfplumber@0.11:text-v1",
+    )
     return {
         "knowledge_id": knowledge_id,
         "raw_kb_id": raw_kb_id,
-        "source_revision": revision_char * 64,
-        "file_hash": revision_char * 32,
+        "source_revision": revision.value,
+        "ordering": revision.ordering.model_dump(mode="python"),
+        "file_hash": revision.file_hash,
         "original_digest": revision_char * 64,
-        "parser_version": "pdfplumber@0.11:text-v1",
+        "parser_version": revision.parser_fingerprint,
     }
 
 
 def _source_context(
     scope: KnowledgeScope,
-    documents: dict[str, dict[str, str]],
+    documents: dict[str, dict[str, Any]],
 ) -> dict[str, object]:
     return {
         "space_id": scope.space_id,
@@ -84,7 +103,7 @@ def _source_pred(
     field_id: str,
     *,
     doc: str,
-    identity: dict[str, str],
+    identity: dict[str, Any],
     value: str | None = "90天",
     tri_state: str = "present",
 ) -> PredRecord:
@@ -474,18 +493,18 @@ def test_t6_source_aware_import_partitions_multiple_documents_losslessly(
         (part.knowledge_id, part.source_revision, part.source_kind)
         for part in report.partitions
     } == {
-        ("knowledge-a", "a" * 64, "document"),
-        ("knowledge-b", "b" * 64, "document"),
+        ("knowledge-a", a["source_revision"], "document"),
+        ("knowledge-b", b["source_revision"], "document"),
     }
     change_sets = kb_session.execute(select(ChangeSet)).scalars().all()
     assert {(row.external_record_id, row.source_revision) for row in change_sets} == {
-        ("knowledge-a", "a" * 64),
-        ("knowledge-b", "b" * 64),
+        ("knowledge-a", a["source_revision"]),
+        ("knowledge-b", b["source_revision"]),
     }
     evidence = kb_session.execute(select(ClaimEvidence)).scalars().all()
     assert {(row.knowledge_id, row.source_revision, row.chunk_hash) for row in evidence} == {
-        ("knowledge-a", "a" * 64, "d" * 64),
-        ("knowledge-b", "b" * 64, "d" * 64),
+        ("knowledge-a", a["source_revision"], "d" * 64),
+        ("knowledge-b", b["source_revision"], "d" * 64),
     }
     assert all(row.stale_at is None for row in evidence)
 
@@ -502,7 +521,7 @@ def test_t6_multi_partition_failure_rolls_back_every_import_side_effect(
         source_kind="recompile",
         knowledge_ids=["knowledge-z"],
         external_record_id="knowledge-z",
-        source_revision="b" * 64,
+        source_revision=blocked["source_revision"],
         status="pending",
         created_by="test",
     )
@@ -564,7 +583,7 @@ def test_t6_source_aware_unknown_uses_trusted_doc_context(kb_session: Session) -
     assert report.unknown_placeholders == 1
     assert len(report.partitions) == 1
     assert report.partitions[0].knowledge_id == "knowledge-unknown"
-    assert report.partitions[0].source_revision == "a" * 64
+    assert report.partitions[0].source_revision == identity["source_revision"]
 
 
 @pytest.mark.parametrize(
@@ -678,7 +697,7 @@ def test_t6_source_aware_import_resumes_empty_pending_changeset(
         source_kind=source_kind,
         knowledge_ids=["knowledge-a"],
         external_record_id="knowledge-a",
-        source_revision="a" * 64,
+        source_revision=identity["source_revision"],
         status="pending",
         created_by="source-change" if source_kind == "recompile" else "interrupted-import",
     )
@@ -712,7 +731,7 @@ def test_t6_source_aware_import_rejects_ambiguous_or_partially_used_changeset(
             source_kind=kind,
             knowledge_ids=["knowledge-a"],
             external_record_id="knowledge-a",
-            source_revision="a" * 64,
+            source_revision=identity["source_revision"],
             status="pending",
             created_by="test",
         )
@@ -743,7 +762,7 @@ def test_t6_source_aware_import_rejects_pending_changeset_with_items(
         source_kind="recompile",
         knowledge_ids=["knowledge-a"],
         external_record_id="knowledge-a",
-        source_revision="a" * 64,
+        source_revision=identity["source_revision"],
         status="pending",
         created_by="test",
     )
@@ -781,7 +800,7 @@ def test_t6_applied_identical_revision_is_duplicate_with_zero_items(
         source_kind="document",
         knowledge_ids=["knowledge-a"],
         external_record_id="knowledge-a",
-        source_revision="a" * 64,
+        source_revision=identity["source_revision"],
         status="applied",
         created_by="previous-import",
     )
@@ -873,7 +892,10 @@ def test_t6_enrich_dedupe_keeps_same_quote_from_new_source_revision(
         )
 
     rows = kb_session.execute(select(ClaimEvidence)).scalars().all()
-    assert {row.source_revision for row in rows} == {"a" * 64, "b" * 64}
+    assert {row.source_revision for row in rows} == {
+        first_identity["source_revision"],
+        second_identity["source_revision"],
+    }
     assert len(rows) == 2
 
 
@@ -1014,3 +1036,28 @@ def test_t6_source_context_revalidates_nested_constructed_identity_in_raw_dict(
             product_version_id=version.id,
             source_context=raw_context,
         )
+
+
+def test_l1_importer_context_revalidates_constructed_ordering_instance(
+    kb_session: Session,
+) -> None:
+    scope = _scope(kb_session)
+    raw_identity = _source_identity(knowledge_id="knowledge-constructed-ordering")
+    identity = SourceImportIdentity.model_construct(
+        knowledge_id=raw_identity["knowledge_id"],
+        raw_kb_id=raw_identity["raw_kb_id"],
+        source_revision=raw_identity["source_revision"],
+        ordering=GenerationOrdering.model_construct(value=True),
+        file_hash=raw_identity["file_hash"],
+        original_digest=raw_identity["original_digest"],
+        parser_version=raw_identity["parser_version"],
+    )
+    context = SourceImportContext.model_construct(
+        space_id=scope.space_id,
+        tenant_id=scope.tenant_id,
+        raw_kb_id=scope.raw_kb_id,
+        documents={"policy.pdf": identity},
+    )
+
+    with pytest.raises(ScopeViolation, match="source context mismatch"):
+        _validated_source_context(context, scope)

@@ -48,9 +48,14 @@ from insurance_harness.knowledge.review import (
     derive_review_key,
     ensure_review_item,
 )
-from insurance_harness.knowledge.source_revision import (
-    derive_retract_event_key,
+from insurance_harness.knowledge.source_aggregates import (
     validate_retract_tombstone,
+)
+from insurance_harness.knowledge.source_keys import derive_retract_event_key
+from insurance_harness.knowledge.source_lifecycle import (
+    LifecycleBusinessOutcome,
+    LifecycleDecisionResult,
+    coordinate_source_lifecycle,
 )
 from insurance_harness.knowledge.tables import (
     ChangeItem,
@@ -60,6 +65,9 @@ from insurance_harness.knowledge.tables import (
     ClaimRevision,
     Conflict,
     ReviewItem,
+    SourceEvent,
+    SourceHead,
+    SourceLifecycleBackfillIssue,
 )
 
 RiskResolver = Callable[[str], str]
@@ -1891,6 +1899,32 @@ def _legacy_retract_has_source_aware_state(
     *,
     knowledge_id: str,
 ) -> bool:
+    lifecycle_root = session.scalar(
+        select(SourceHead.id).where(
+            SourceHead.space_id == scope.space_id,
+            SourceHead.knowledge_id == knowledge_id,
+        )
+    )
+    if lifecycle_root is not None:
+        return True
+    lifecycle_event = session.scalar(
+        select(SourceEvent.id)
+        .where(
+            SourceEvent.space_id == scope.space_id,
+            SourceEvent.knowledge_id == knowledge_id,
+        )
+        .limit(1)
+    )
+    if lifecycle_event is not None:
+        return True
+    lifecycle_issue = session.scalar(
+        select(SourceLifecycleBackfillIssue.id).where(
+            SourceLifecycleBackfillIssue.space_id == scope.space_id,
+            SourceLifecycleBackfillIssue.knowledge_id == knowledge_id,
+        )
+    )
+    if lifecycle_issue is not None:
+        return True
     evidence_id = session.scalar(
         select(ClaimEvidence.id)
         .join(Claim, Claim.id == ClaimEvidence.claim_id)
@@ -1913,6 +1947,7 @@ def _legacy_retract_has_source_aware_state(
     )
     return any(
         _SOURCE_REVISION_HEX.fullmatch(revision or "") is not None
+        or (revision or "").startswith("retract:")
         for revision in source_revisions
     )
 
@@ -1953,6 +1988,17 @@ def _existing_retract_change_set(
     )
 
 
+def _is_exact_retract_unique_conflict(error: IntegrityError) -> bool:
+    diagnostic = getattr(error.orig, "diag", None)
+    if getattr(diagnostic, "constraint_name", None) == "uq_changeset_source":
+        return True
+    return (
+        "unique constraint failed: change_sets.space_id, "
+        "change_sets.source_kind, change_sets.external_record_id, "
+        "change_sets.source_revision"
+    ) in str(error.orig).lower()
+
+
 def _insert_retract_change_set(
     session: Session,
     scope: KnowledgeScope,
@@ -1975,7 +2021,9 @@ def _insert_retract_change_set(
         with session.begin_nested():
             session.add(candidate)
             session.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
+        if not _is_exact_retract_unique_conflict(exc):
+            raise
         winner = _existing_retract_change_set(
             session,
             scope,
@@ -1988,24 +2036,230 @@ def _insert_retract_change_set(
     return candidate, True
 
 
-def retract_source(
+def _apply_retract_evidence(
     session: Session,
     scope: KnowledgeScope,
-    source: SourceImportIdentity | str,
     *,
-    legacy_replay: bool = False,
-    created_by: str = "retractor",
+    knowledge_id: str,
+    change_set: ChangeSet,
+    evidence: list[ClaimEvidence],
+    created_by: str,
 ) -> MergeReport:
-    """Delete one scoped source with an exact-event idempotency record."""
-    (
-        knowledge_id,
-        external_record_id,
-        source_revision,
-        source_aware,
-    ) = _prepare_retract_source(source, scope, legacy_replay=legacy_replay)
-    require_current_scope(session, scope)
+    report = MergeReport(change_set_id=change_set.id)
+    by_claim: dict[str, list[ClaimEvidence]] = {}
+    for row in evidence:
+        by_claim.setdefault(row.claim_id, []).append(row)
+    for claim_id, rows in by_claim.items():
+        claim = _require_scoped_claim(session, scope, claim_id)
+        removed_ids = {row.id for row in rows}
+        remaining_active = [
+            row
+            for row in _evidence_for_claim(session, claim)
+            if row.id not in removed_ids and row.stale_at is None
+        ]
+        for row in rows:
+            session.delete(row)
+        item = ChangeItem(
+            change_set_id=change_set.id,
+            action="retract",
+            claim_id=claim_id,
+            proposed={
+                "knowledge_id": knowledge_id,
+                "removed_evidence": len(rows),
+            },
+            decision="auto_applied",
+            decision_basis={
+                "note": f"来源删除；剩余 active 证据 {len(remaining_active)} 条"
+                + (
+                    "→ Claim retracted"
+                    if not remaining_active
+                    else "，Claim 保留"
+                )
+            },
+        )
+        session.add(item)
+        session.flush()
+        if not remaining_active and claim.status in (
+            "published",
+            "candidate",
+            "draft",
+        ):
+            _retract_claim(
+                session,
+                claim,
+                change_item_id=item.id,
+                actor=created_by,
+                reason=f"来源 {knowledge_id} 删除后 active 证据清零",
+            )
+        report.bump("retract")
+    session.flush()
+    return report
+
+
+def _tombstone_business_outcome(
+    session: Session,
+    scope: KnowledgeScope,
+    change_set: ChangeSet,
+    *,
+    knowledge_id: str,
+) -> LifecycleBusinessOutcome:
+    report = _retract_replay_report(
+        session,
+        scope,
+        change_set,
+        knowledge_id=knowledge_id,
+    )
+    item_id: str | None = None
+    if report.actions.get("retract") == 1:
+        item_id = session.scalar(
+            select(ChangeItem.id).where(ChangeItem.change_set_id == change_set.id)
+        )
+    return LifecycleBusinessOutcome(
+        payload=report,
+        aggregate_kind="tombstone",
+        change_set_id=change_set.id,
+        tombstone_change_item_id=item_id,
+    )
+
+
+def _source_aware_retract_evidence(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    knowledge_id: str,
+) -> list[ClaimEvidence]:
+    return list(
+        session.scalars(
+            select(ClaimEvidence)
+            .join(Claim, Claim.id == ClaimEvidence.claim_id)
+            .where(
+                Claim.space_id == scope.space_id,
+                ClaimEvidence.knowledge_id == knowledge_id,
+                ClaimEvidence.raw_kb_id == scope.raw_kb_id,
+                ClaimEvidence.lineage_status.is_not(None),
+            )
+        )
+    )
+
+
+def _reuse_source_aware_tombstone(
+    session: Session,
+    scope: KnowledgeScope,
+    change_set: ChangeSet,
+    *,
+    knowledge_id: str,
+) -> LifecycleBusinessOutcome:
+    outcome = _tombstone_business_outcome(
+        session,
+        scope,
+        change_set,
+        knowledge_id=knowledge_id,
+    )
+    if _source_aware_retract_evidence(
+        session,
+        scope,
+        knowledge_id=knowledge_id,
+    ):
+        raise ScopeViolation("source tombstone conflicts with live evidence")
+    return outcome
+
+
+def _apply_source_aware_retract(
+    session: Session,
+    decision: LifecycleDecisionResult,
+    *,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+    tombstone_revision: str,
+    created_by: str,
+) -> LifecycleBusinessOutcome:
+    existing = _existing_retract_change_set(
+        session,
+        scope,
+        external_record_id=identity.knowledge_id,
+        source_revision=tombstone_revision,
+    )
+    if existing is not None:
+        return _reuse_source_aware_tombstone(
+            session,
+            scope,
+            existing,
+            knowledge_id=identity.knowledge_id,
+        )
+    if decision.decision == "idempotent":
+        raise ScopeViolation("source delete requires an exact tombstone")
+    if decision.decision != "accepted_delete":
+        raise ScopeViolation("source delete lifecycle decision is invalid")
+
+    evidence = _source_aware_retract_evidence(
+        session,
+        scope,
+        knowledge_id=identity.knowledge_id,
+    )
+    change_set, created = _insert_retract_change_set(
+        session,
+        scope,
+        knowledge_id=identity.knowledge_id,
+        external_record_id=identity.knowledge_id,
+        source_revision=tombstone_revision,
+        created_by=created_by,
+    )
+    if not created:
+        return _reuse_source_aware_tombstone(
+            session,
+            scope,
+            change_set,
+            knowledge_id=identity.knowledge_id,
+        )
+    _apply_retract_evidence(
+        session,
+        scope,
+        knowledge_id=identity.knowledge_id,
+        change_set=change_set,
+        evidence=evidence,
+        created_by=created_by,
+    )
+    return _tombstone_business_outcome(
+        session,
+        scope,
+        change_set,
+        knowledge_id=identity.knowledge_id,
+    )
+
+
+def apply_source_aware_retract(
+    session: Session,
+    scope: KnowledgeScope,
+    identity: SourceImportIdentity,
+    decision: LifecycleDecisionResult,
+    *,
+    created_by: str,
+) -> LifecycleBusinessOutcome:
+    """Apply one already-coordinated source-aware delete business outcome."""
+    return _apply_source_aware_retract(
+        session,
+        decision,
+        scope=scope,
+        identity=identity,
+        tombstone_revision=derive_retract_event_key(
+            identity.knowledge_id,
+            identity.source_revision,
+        ),
+        created_by=created_by,
+    )
+
+
+def _retract_legacy_source(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    knowledge_id: str,
+    external_record_id: str,
+    source_revision: str,
+    created_by: str,
+) -> MergeReport:
     with session.begin_nested():
-        if not source_aware and _legacy_retract_has_source_aware_state(
+        if _legacy_retract_has_source_aware_state(
             session,
             scope,
             knowledge_id=knowledge_id,
@@ -2031,11 +2285,7 @@ def retract_source(
                 .where(
                     ClaimEvidence.knowledge_id == knowledge_id,
                     Claim.space_id == scope.space_id,
-                    *(
-                        ()
-                        if source_aware
-                        else (ClaimEvidence.lineage_status.is_(None),)
-                    ),
+                    ClaimEvidence.lineage_status.is_(None),
                 )
             )
         )
@@ -2054,54 +2304,58 @@ def retract_source(
                 change_set,
                 knowledge_id=knowledge_id,
             )
-        report = MergeReport(change_set_id=change_set.id)
-        if not evidence:
-            return report
-        by_claim: dict[str, list[ClaimEvidence]] = {}
-        for row in evidence:
-            by_claim.setdefault(row.claim_id, []).append(row)
-        for claim_id, rows in by_claim.items():
-            claim = _require_scoped_claim(session, scope, claim_id)
-            removed_ids = {row.id for row in rows}
-            remaining_active = [
-                row
-                for row in _evidence_for_claim(session, claim)
-                if row.id not in removed_ids and row.stale_at is None
-            ]
-            for row in rows:
-                session.delete(row)
-            item = ChangeItem(
-                change_set_id=change_set.id,
-                action="retract",
-                claim_id=claim_id,
-                proposed={
-                    "knowledge_id": knowledge_id,
-                    "removed_evidence": len(rows),
-                },
-                decision="auto_applied",
-                decision_basis={
-                    "note": f"来源删除；剩余 active 证据 {len(remaining_active)} 条"
-                    + (
-                        "→ Claim retracted"
-                        if not remaining_active
-                        else "，Claim 保留"
-                    )
-                },
+        return _apply_retract_evidence(
+            session,
+            scope,
+            knowledge_id=knowledge_id,
+            change_set=change_set,
+            evidence=evidence,
+            created_by=created_by,
+        )
+
+
+def retract_source(
+    session: Session,
+    scope: KnowledgeScope,
+    source: SourceImportIdentity | str,
+    *,
+    legacy_replay: bool = False,
+    created_by: str = "retractor",
+) -> MergeReport:
+    """Delete one scoped source with an exact-event idempotency record."""
+    (
+        knowledge_id,
+        external_record_id,
+        source_revision,
+        source_aware,
+    ) = _prepare_retract_source(source, scope, legacy_replay=legacy_replay)
+    require_current_scope(session, scope)
+    if not source_aware:
+        return _retract_legacy_source(
+            session,
+            scope,
+            knowledge_id=knowledge_id,
+            external_record_id=external_record_id,
+            source_revision=source_revision,
+            created_by=created_by,
+        )
+    assert isinstance(source, SourceImportIdentity)
+    lifecycle = coordinate_source_lifecycle(
+        session,
+        scope,
+        source,
+        "deleted",
+        actor=created_by,
+        apply_business=lambda callback_session, decision: (
+            apply_source_aware_retract(
+                callback_session,
+                scope,
+                source,
+                decision,
+                created_by=created_by,
             )
-            session.add(item)
-            session.flush()
-            if not remaining_active and claim.status in (
-                "published",
-                "candidate",
-                "draft",
-            ):
-                _retract_claim(
-                    session,
-                    claim,
-                    change_item_id=item.id,
-                    actor=created_by,
-                    reason=f"来源 {knowledge_id} 删除后 active 证据清零",
-                )
-            report.bump("retract")
-        session.flush()
-        return report
+        ),
+    )
+    if lifecycle.business_payload is None:
+        return MergeReport()
+    return MergeReport.model_validate(lifecycle.business_payload)

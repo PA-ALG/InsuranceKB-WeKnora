@@ -21,10 +21,12 @@ from insurance_harness.knowledge.models import SourceImportContext, SourceImport
 from insurance_harness.schemas.models import FieldSpec, ProductLineSchema, SchemaRegistry
 from insurance_harness.sources import WeKnoraDocumentSource
 from insurance_harness.sources.models import (
+    ProcessedAtOrdering,
     SourceChunk,
     SourceDocument,
     SourceRevision,
     SourceScope,
+    source_ordering_identity_token,
 )
 
 _REQUIRED_LIVE_VARIABLES = (
@@ -172,6 +174,7 @@ def _source_context_from_manifest(
             document.source_id,
             document.knowledge_id,
             document.source_revision.value,
+            source_ordering_identity_token(document.source_revision.ordering),
             document.source_revision.file_hash,
             document.original_digest,
             document.source_revision.parser_fingerprint,
@@ -180,6 +183,7 @@ def _source_context_from_manifest(
             entry.source_id,
             entry.knowledge_id,
             entry.source_revision,
+            source_ordering_identity_token(entry.ordering),
             entry.file_hash,
             entry.original_digest,
             entry.parser_fingerprint,
@@ -194,6 +198,7 @@ def _source_context_from_manifest(
             knowledge_id=document.knowledge_id,
             raw_kb_id=scope.raw_kb_id,
             source_revision=document.source_revision.value,
+            ordering=document.source_revision.ordering,
             file_hash=document.source_revision.file_hash,
             original_digest=document.original_digest,
             parser_version=document.source_revision.parser_fingerprint,
@@ -317,7 +322,9 @@ def _source_document(scope: KnowledgeScope) -> SourceDocument:
         file_type="application/pdf",
         source_revision=SourceRevision(
             file_hash="a" * 32,
-            processed_at=datetime(2026, 7, 14, tzinfo=UTC),
+            ordering=ProcessedAtOrdering(
+                value=datetime(2026, 7, 14, tzinfo=UTC)
+            ),
             parser_fingerprint="pdfplumber@0.11:text-v1",
         ),
         original_digest="b" * 64,

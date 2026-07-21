@@ -21,6 +21,37 @@ POSTGRES_NODE = (
     "tests/test_source_revision_postgres_017.py::"
     "test_t7_live_postgresql_concurrent_notifications_create_one_recompile"
 )
+SOURCE_LIFECYCLE_POSTGRES_NODES = {
+    f"tests/test_source_lifecycle_postgres_021.py::{node}"
+    for node in (
+        "test_l6_postgresql_same_first_identity_creates_one_business_aggregate",
+        "test_l6_postgresql_b_c_lock_orders_redecide_to_c[b]",
+        "test_l6_postgresql_b_c_lock_orders_redecide_to_c[c]",
+        "test_l6_postgresql_resolver_and_normal_event_share_one_source_lock",
+        "test_l6_postgresql_first_event_delete_creates_durable_empty_tombstone",
+        "test_l6_postgresql_newer_delete_advances_active_or_deleted_head[active]",
+        "test_l6_postgresql_newer_delete_advances_active_or_deleted_head[deleted]",
+        "test_l6_postgresql_same_revision_delete_beats_concurrent_notify",
+        "test_l6_postgresql_same_revision_delete_beats_concurrent_import",
+        "test_l6_postgresql_strictly_newer_notify_reactivates_deleted_head",
+        "test_l6_postgresql_c_then_late_b_stays_on_c_without_business_write",
+        "test_l6_postgresql_controlled_cas_loser_rereads_before_business",
+        "test_l6_postgresql_event_failure_rolls_back_unit_and_keeps_caller_session",
+    )
+}
+SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES = {
+    f"tests/test_source_lifecycle_migration_postgres_021.py::{node}"
+    for node in (
+        "test_l5_0012_to_0006_installs_postgresql_schema_constraints_and_append_only_guards",
+        "test_l5_historical_0012_rows_create_zero_heads_and_one_open_issue_per_source",
+        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_head]",
+        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[source_event]",
+        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[backfill_issue]",
+        "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[historical_provenance]",
+        "test_l5_empty_0006_to_0012_to_0006_round_trip_restores_postgresql_schema",
+        "test_l5_alembic_check_passes_and_revision_topology_has_single_0006_head",
+    )
+}
 POSTGRES_NODES = {
     POSTGRES_NODE,
     (
@@ -35,7 +66,7 @@ POSTGRES_NODES = {
         "tests/test_workbench_concurrency_008.py::"
         "test_w1_4_live_postgresql_two_sessions_single_apply"
     ),
-}
+} | SOURCE_LIFECYCLE_POSTGRES_NODES | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
 WEKNORA_NODES = {
     "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
     "tests/test_live.py::test_live_knowledge_endpoint_shape",
