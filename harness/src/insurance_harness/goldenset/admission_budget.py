@@ -6,12 +6,12 @@ import hashlib
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Any, Literal, Self, cast
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -24,11 +24,37 @@ from pydantic import (
     model_validator,
 )
 
+from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
+    PROVISIONING_AUTHORIZATION_DOMAIN,
+    AuthorizationDomain,
+    AuthorizationVerificationError,
+    DeploymentReceipt,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
+    InfrastructureAuthorization,
+    PricingEvidenceApproval,
+    ProviderCapApproval,
+    ProvisioningAuthorization,
+    ProvisioningAuthorizationPayload,
+    VerifiedPricingCapability,
+    VerifiedProviderCapCapability,
+    VerifiedReconciledDeploymentReceipt,
+    infrastructure_authorization_digest,
+    require_verified_pricing_capability,
+    require_verified_provider_capability,
+    require_verified_reconciled_receipt,
+    verify_adoption_authorization,
+    verify_pricing_evidence,
+    verify_provider_cap_evidence,
+    verify_provisioning_authorization,
+)
 from insurance_harness.goldenset.admission_models import (
     ApprovalVerificationError,
     BudgetApprovalEnvelope,
     ModelRolePlan,
     RunAdmissionPlanPayload,
+    TrustedAuthority,
     canonical_json_bytes,
     plan_payload_hash,
     verify_approval_envelope,
@@ -52,7 +78,9 @@ _MODEL_ROLE_DOMAIN = b"insurancekb.run-admission.budget-model-role.v1\0"
 _ROLE_RATE_DOMAIN = b"insurancekb.run-admission.budget-role-rate.v1\0"
 _SETTLEMENT_SNAPSHOT_DOMAIN = b"insurancekb.run-admission.product-settlement-snapshot.v1\0"
 _BUSY_TIMEOUT_MS = 30_000
-_SCHEMA_VERSION = 4
+_TESTING_MODE_SENTINEL = object()
+_SCHEMA_VERSION = 5
+_PRE_INFRASTRUCTURE_SCHEMA_VERSION = 4
 _PRE_CANARY_SCHEMA_VERSION = 3
 _PRE_USAGE_SCHEMA_VERSION = 2
 _PRE_POOL_SCHEMA_VERSION = 1
@@ -60,6 +88,23 @@ _PRE_POOL_SCHEMA_VERSION = 1
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _ceil_timedelta_seconds(value: Any) -> int:
+    """Return positive whole seconds without floating-point conversion."""
+
+    if not hasattr(value, "days") or not hasattr(value, "seconds") or not hasattr(
+        value, "microseconds"
+    ):
+        raise BudgetLedgerError("pricing duration is invalid")
+    total_microseconds = (
+        int(value.days) * 86_400_000_000
+        + int(value.seconds) * 1_000_000
+        + int(value.microseconds)
+    )
+    if total_microseconds <= 0:
+        raise BudgetLedgerError("pricing duration must be positive")
+    return (total_microseconds + 999_999) // 1_000_000
 
 _PRE_POOL_ATTEMPT_COLUMNS = frozenset(
     {
@@ -140,6 +185,130 @@ _CANARY_CLAIM_TABLE_SQL = """CREATE TABLE canary_capability_claims (
         REFERENCES product_limits(account_id, stage, product_id),
     FOREIGN KEY (account_id, target_stage, target_product_id)
         REFERENCES product_limits(account_id, stage, product_id)
+)"""
+_INFRASTRUCTURE_AUTHORIZATION_COLUMNS = frozenset(
+    {
+        "authorization_digest",
+        "domain",
+        "envelope_json",
+        "run_identity",
+        "purpose",
+        "operation_id",
+        "reserve_id",
+        "recorded_at",
+    }
+)
+_INFRASTRUCTURE_RESERVE_COLUMNS = frozenset(
+    {
+        "reserve_id",
+        "account_id",
+        "run_identity",
+        "purpose",
+        "operation_id",
+        "authorization_digest",
+        "pricing_evidence_digest",
+        "pricing_approval_digest",
+        "provider_cap_evidence_digest",
+        "provider_cap_approval_digest",
+        "provider_cap_max_cost",
+        "provider_cap_expires_at",
+        "provider",
+        "currency",
+        "workspace_ref",
+        "project_ref",
+        "credential_ref",
+        "region",
+        "base_model",
+        "request_plan",
+        "receipt_plan",
+        "input_tpm_quota",
+        "output_tpm_quota",
+        "covers_fixed_infrastructure",
+        "covers_inference",
+        "cleanup_deadline",
+        "max_cost",
+        "state",
+        "deployed_model",
+        "receipt_digest",
+        "remote_manifest_digest",
+        "receipt_json",
+        "final_approval_digest",
+        "created_at",
+        "bound_at",
+    }
+)
+_DEPLOYMENT_ROLE_BINDING_COLUMNS = frozenset(
+    {
+        "account_id",
+        "role",
+        "reserve_id",
+    }
+)
+_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL = """CREATE TABLE infrastructure_authorizations (
+    authorization_digest TEXT PRIMARY KEY,
+    domain TEXT NOT NULL CHECK (domain IN (
+        'insurancekb.run-admission.provisioning.v1',
+        'insurancekb.run-admission.deployment-adoption.v1'
+    )),
+    envelope_json BLOB NOT NULL UNIQUE,
+    run_identity TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    reserve_id TEXT NOT NULL UNIQUE,
+    recorded_at TEXT NOT NULL,
+    UNIQUE (run_identity, purpose, operation_id)
+)"""
+_INFRASTRUCTURE_RESERVE_TABLE_SQL = """CREATE TABLE infrastructure_reserves (
+    reserve_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    run_identity TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    authorization_digest TEXT NOT NULL UNIQUE
+        REFERENCES infrastructure_authorizations(authorization_digest),
+    pricing_evidence_digest TEXT NOT NULL,
+    pricing_approval_digest TEXT NOT NULL,
+    provider_cap_evidence_digest TEXT NOT NULL,
+    provider_cap_approval_digest TEXT NOT NULL,
+    provider_cap_max_cost INTEGER NOT NULL CHECK (provider_cap_max_cost > 0),
+    provider_cap_expires_at TEXT NOT NULL,
+    provider TEXT NOT NULL CHECK (provider='bailian'),
+    currency TEXT NOT NULL CHECK (currency='CNY'),
+    workspace_ref TEXT NOT NULL,
+    project_ref TEXT NOT NULL,
+    credential_ref TEXT NOT NULL,
+    region TEXT NOT NULL,
+    base_model TEXT NOT NULL,
+    request_plan TEXT NOT NULL CHECK (request_plan='ptu_v2'),
+    receipt_plan TEXT NOT NULL CHECK (receipt_plan='ptu'),
+    input_tpm_quota INTEGER NOT NULL CHECK (input_tpm_quota=10000),
+    output_tpm_quota INTEGER NOT NULL CHECK (output_tpm_quota=1000),
+    covers_fixed_infrastructure INTEGER NOT NULL CHECK (covers_fixed_infrastructure=1),
+    covers_inference INTEGER NOT NULL CHECK (covers_inference=1),
+    cleanup_deadline TEXT NOT NULL,
+    max_cost INTEGER NOT NULL CHECK (max_cost > 0),
+    state TEXT NOT NULL CHECK (state IN ('reserved','bound')),
+    deployed_model TEXT UNIQUE,
+    receipt_digest TEXT UNIQUE,
+    remote_manifest_digest TEXT UNIQUE,
+    receipt_json BLOB,
+    final_approval_digest TEXT,
+    created_at TEXT NOT NULL,
+    bound_at TEXT,
+    UNIQUE (account_id, operation_id),
+    CHECK ((state='reserved' AND deployed_model IS NULL AND receipt_digest IS NULL
+            AND remote_manifest_digest IS NULL
+            AND receipt_json IS NULL AND final_approval_digest IS NULL AND bound_at IS NULL)
+        OR (state='bound' AND deployed_model IS NOT NULL AND receipt_digest IS NOT NULL
+            AND remote_manifest_digest IS NOT NULL
+            AND receipt_json IS NOT NULL AND final_approval_digest IS NOT NULL
+            AND bound_at IS NOT NULL))
+)"""
+_DEPLOYMENT_ROLE_BINDING_TABLE_SQL = """CREATE TABLE deployment_role_bindings (
+    account_id TEXT NOT NULL REFERENCES budget_accounts(account_id),
+    role TEXT NOT NULL CHECK (role IN ('annotator','weak_extractor','judge')),
+    reserve_id TEXT NOT NULL REFERENCES infrastructure_reserves(reserve_id),
+    PRIMARY KEY (account_id, role)
 )"""
 
 
@@ -401,6 +570,105 @@ class BudgetAdmissionProof(_FrozenModel):
     provider_attestation_expires_at: datetime
 
 
+class InfrastructureReserveSnapshot(_FrozenModel):
+    """Redacted durable state for one fixed-cost deployment reserve."""
+
+    reserve_id: NonBlankStr
+    account_id: Sha256Digest
+    run_identity: NonBlankStr
+    purpose: NonBlankStr
+    operation_id: NonBlankStr
+    authorization_domain: AuthorizationDomain
+    authorization_digest: Sha256Digest
+    maximum: BudgetAmounts
+    state: Literal["reserved", "bound"]
+    deployed_model: NonBlankStr | None = None
+    receipt_digest: Sha256Digest | None = None
+    final_approval_digest: Sha256Digest | None = None
+    roles: tuple[BudgetRole, ...] = ()
+
+
+class InfrastructureCleanupBinding(_FrozenModel):
+    """Exact durable facts a cleanup signature must bind; no mutable labels."""
+
+    reserve_id: NonBlankStr
+    run_identity: NonBlankStr
+    purpose: NonBlankStr
+    scope: NonBlankStr
+    operation_id: NonBlankStr
+    workspace_ref: NonBlankStr
+    project_ref: DigestRef
+    credential_ref: DigestRef
+    receipt_digest: Sha256Digest
+    deployed_model: NonBlankStr
+    remote_manifest_digest: Sha256Digest
+    cleanup_deadline: datetime
+
+    @model_validator(mode="after")
+    def require_aware_cleanup_deadline(self) -> InfrastructureCleanupBinding:
+        if (
+            self.cleanup_deadline.tzinfo is None
+            or self.cleanup_deadline.utcoffset() is None
+        ):
+            raise ValueError("cleanup deadline must include a timezone")
+        return self
+
+
+class InfrastructureCreatePermit(_FrozenModel):
+    """Proof that a create transition already owns its durable fixed-cost reserve."""
+
+    operation_id: NonBlankStr
+    reserve: InfrastructureReserveSnapshot
+    authorization_expires_at: datetime
+    provider_cap_expires_at: datetime
+    cleanup_deadline: datetime
+
+    @model_validator(mode="after")
+    def require_pre_post_reserve(self) -> InfrastructureCreatePermit:
+        if self.operation_id != self.reserve.operation_id:
+            raise ValueError("infrastructure create permit operation mismatch")
+        if self.reserve.authorization_domain != PROVISIONING_AUTHORIZATION_DOMAIN:
+            raise ValueError("only provisioning can yield a create permit")
+        if self.reserve.state != "reserved" or self.reserve.deployed_model is not None:
+            raise ValueError("create permit requires an unbound durable reserve")
+        for field_name, timestamp in (
+            ("authorization_expires_at", self.authorization_expires_at),
+            ("provider_cap_expires_at", self.provider_cap_expires_at),
+            ("cleanup_deadline", self.cleanup_deadline),
+        ):
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError(f"{field_name} must include a timezone")
+        return self
+
+    def require_fresh(self, now: datetime) -> None:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise BudgetLedgerError("permit freshness time must include a timezone")
+        if now >= self.authorization_expires_at:
+            raise BudgetLedgerError("create permit authorization has expired")
+        if now >= self.provider_cap_expires_at:
+            raise BudgetLedgerError("create permit provider cap has expired")
+        if now >= self.cleanup_deadline:
+            raise BudgetLedgerError("create permit cleanup deadline has elapsed")
+
+
+@dataclass(frozen=True, slots=True)
+class FinalInfrastructureBindingRequest:
+    """All public evidence required to bind one deployment in the final topology."""
+
+    reserve_id: str
+    authorization: InfrastructureAuthorization
+    expected_authorization: (
+        ProvisioningAuthorizationPayload
+        | ExistingDeploymentAdoptionAuthorizationPayload
+    )
+    receipt_capability: VerifiedReconciledDeploymentReceipt
+    roles: tuple[BudgetRole, ...]
+    pricing_evidence_bytes: bytes
+    pricing_approval: PricingEvidenceApproval
+    provider_cap_evidence_bytes: bytes
+    provider_cap_approval: ProviderCapApproval
+
+
 def _is_zero(value: BudgetAmounts) -> bool:
     return value.input_tokens == 0 and value.output_tokens == 0 and value.cost_minor_units == 0
 
@@ -452,6 +720,38 @@ def model_role_budget_identity_hash(role_plan: ModelRolePlan) -> str:
     return hashlib.sha256(_MODEL_ROLE_DOMAIN + canonical_json_bytes(role_plan)).hexdigest()
 
 
+def derive_role_rate_from_pricing(
+    pricing_capability: VerifiedPricingCapability,
+    *,
+    role_plan: ModelRolePlan,
+    expected_provider: str,
+    expected_currency: str,
+    candidate: RoleRate | None = None,
+) -> RoleRate:
+    """Derive or revalidate the sole RoleRate allowed by sealed signed pricing."""
+
+    try:
+        pricing = require_verified_pricing_capability(pricing_capability)
+    except AuthorizationVerificationError as exc:
+        raise BudgetLedgerError("verified pricing is required for role rate") from exc
+    if (
+        role_plan.provider != pricing.provider
+        or expected_provider != pricing.provider
+        or expected_currency != pricing.currency
+    ):
+        raise BudgetLedgerError("role rate resource does not match signed pricing")
+    expected = RoleRate(
+        model_role_identity_hash=model_role_budget_identity_hash(role_plan),
+        input_cost_per_million_minor_units=pricing.input_cost_per_million_minor_units,
+        output_cost_per_million_minor_units=pricing.output_cost_per_million_minor_units,
+    )
+    if candidate is not None and canonical_json_bytes(candidate) != canonical_json_bytes(
+        expected
+    ):
+        raise BudgetLedgerError("role rate differs from signed pricing or model identity")
+    return expected
+
+
 def role_rate_digest(rate: RoleRate) -> str:
     return hashlib.sha256(_ROLE_RATE_DOMAIN + canonical_json_bytes(rate)).hexdigest()
 
@@ -482,7 +782,7 @@ def verify_budget_admission_contract(
     plan: RunAdmissionPlanPayload,
     contract: BudgetContract,
     envelope: BudgetApprovalEnvelope,
-    trusted_public_keys: Mapping[str, Ed25519PublicKey],
+    trusted_public_keys: Mapping[str, TrustedAuthority],
     expected_scope: str,
     authorized_roles: frozenset[str],
     now: datetime,
@@ -557,7 +857,7 @@ class BudgetLedger:
     """SQLite budget state machine; every mutation holds a BEGIN IMMEDIATE lock."""
 
     def __init__(self, db_path: Path) -> None:
-        self._initialize(db_path, clock=_utc_now)
+        self._initialize(db_path, clock=_utc_now, testing_sentinel=None)
 
     @classmethod
     def _for_testing(
@@ -567,7 +867,11 @@ class BudgetLedger:
         clock: Callable[[], datetime],
     ) -> Self:
         instance = cls.__new__(cls)
-        instance._initialize(db_path, clock=clock)
+        instance._initialize(
+            db_path,
+            clock=clock,
+            testing_sentinel=_TESTING_MODE_SENTINEL,
+        )
         return instance
 
     def _initialize(
@@ -575,9 +879,11 @@ class BudgetLedger:
         db_path: Path,
         *,
         clock: Callable[[], datetime],
+        testing_sentinel: object | None,
     ) -> None:
         self._db_path = Path(db_path)
         self._clock = clock
+        self._testing_sentinel = testing_sentinel
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize_schema()
 
@@ -606,6 +912,7 @@ class BudgetLedger:
                 _PRE_POOL_SCHEMA_VERSION,
                 _PRE_USAGE_SCHEMA_VERSION,
                 _PRE_CANARY_SCHEMA_VERSION,
+                _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
                 _SCHEMA_VERSION,
             }:
                 raise BudgetLedgerError("budget schema migration version is unsupported")
@@ -613,6 +920,7 @@ class BudgetLedger:
             self._migrate_attempt_schema(connection, version)
             self._migrate_pool_schema(connection, version)
             self._migrate_canary_claim_schema(connection, version)
+            self._migrate_infrastructure_schema(connection, version)
             if version != _SCHEMA_VERSION:
                 self._reconcile_legacy_settled_reservations(connection)
             connection.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
@@ -783,6 +1091,9 @@ class BudgetLedger:
     def _table_columns(connection: sqlite3.Connection, table_name: str) -> frozenset[str]:
         if table_name not in {
             "canary_capability_claims",
+            "deployment_role_bindings",
+            "infrastructure_authorizations",
+            "infrastructure_reserves",
             "request_attempts",
             "request_attempts_v3",
             "request_pool_limits",
@@ -808,7 +1119,12 @@ class BudgetLedger:
         if columns not in {_PRE_POOL_ATTEMPT_COLUMNS, _PRE_USAGE_ATTEMPT_COLUMNS}:
             raise BudgetLedgerError("budget schema migration found unknown attempt columns")
         if (
-            version in {_PRE_CANARY_SCHEMA_VERSION, _SCHEMA_VERSION}
+            version
+            in {
+                _PRE_CANARY_SCHEMA_VERSION,
+                _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
+                _SCHEMA_VERSION,
+            }
             or (version == _PRE_USAGE_SCHEMA_VERSION and columns != _PRE_USAGE_ATTEMPT_COLUMNS)
             or (version == _PRE_POOL_SCHEMA_VERSION and columns != _PRE_POOL_ATTEMPT_COLUMNS)
         ):
@@ -901,6 +1217,7 @@ class BudgetLedger:
         if columns != _PRE_BINDING_POOL_COLUMNS or version in {
             _PRE_USAGE_SCHEMA_VERSION,
             _PRE_CANARY_SCHEMA_VERSION,
+            _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
             _SCHEMA_VERSION,
         }:
             raise BudgetLedgerError("budget schema migration found unknown pool columns")
@@ -990,12 +1307,64 @@ class BudgetLedger:
     def _migrate_canary_claim_schema(self, connection: sqlite3.Connection, version: int) -> None:
         columns = self._table_columns(connection, "canary_capability_claims")
         if not columns:
-            if version == _SCHEMA_VERSION:
+            if version in {_PRE_INFRASTRUCTURE_SCHEMA_VERSION, _SCHEMA_VERSION}:
                 raise BudgetLedgerError("budget canary claim table is missing")
             self._create_canary_claim_table(connection)
             return
         if columns != _CANARY_CLAIM_COLUMNS or not self._canary_claim_schema_is_current(connection):
             raise BudgetLedgerError("budget canary claim schema is invalid")
+
+    @staticmethod
+    def _create_infrastructure_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL)
+        connection.execute(_INFRASTRUCTURE_RESERVE_TABLE_SQL)
+        connection.execute(_DEPLOYMENT_ROLE_BINDING_TABLE_SQL)
+
+    def _migrate_infrastructure_schema(
+        self,
+        connection: sqlite3.Connection,
+        version: int,
+    ) -> None:
+        actual = {
+            "infrastructure_authorizations": self._table_columns(
+                connection, "infrastructure_authorizations"
+            ),
+            "infrastructure_reserves": self._table_columns(
+                connection, "infrastructure_reserves"
+            ),
+            "deployment_role_bindings": self._table_columns(
+                connection, "deployment_role_bindings"
+            ),
+        }
+        present = {name for name, columns in actual.items() if columns}
+        if not present:
+            if version == _SCHEMA_VERSION:
+                raise BudgetLedgerError("budget infrastructure schema is missing")
+            self._create_infrastructure_schema(connection)
+            return
+        if present != frozenset(actual):
+            raise BudgetLedgerError("budget infrastructure schema is incomplete")
+        expected_columns = {
+            "infrastructure_authorizations": _INFRASTRUCTURE_AUTHORIZATION_COLUMNS,
+            "infrastructure_reserves": _INFRASTRUCTURE_RESERVE_COLUMNS,
+            "deployment_role_bindings": _DEPLOYMENT_ROLE_BINDING_COLUMNS,
+        }
+        if actual != expected_columns:
+            raise BudgetLedgerError("budget infrastructure schema has drifted columns")
+        expected_sql = {
+            "infrastructure_authorizations": _INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL,
+            "infrastructure_reserves": _INFRASTRUCTURE_RESERVE_TABLE_SQL,
+            "deployment_role_bindings": _DEPLOYMENT_ROLE_BINDING_TABLE_SQL,
+        }
+        for table_name, sql in expected_sql.items():
+            stored = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            ).fetchone()
+            if stored is None or str(stored["sql"]) != sql:
+                raise BudgetLedgerError("budget infrastructure schema definition has drifted")
+        if version != _SCHEMA_VERSION:
+            raise BudgetLedgerError("budget infrastructure schema version does not match tables")
 
     @staticmethod
     def _canary_claim_schema_is_current(connection: sqlite3.Connection) -> bool:
@@ -1134,13 +1503,1516 @@ class BudgetLedger:
         finally:
             connection.close()
 
+    def _require_testing_mode(self) -> None:
+        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
+            raise BudgetLedgerError("private infrastructure helper requires testing mode")
+
+    def _validate_infrastructure_capabilities(
+        self,
+        payload: ProvisioningAuthorizationPayload
+        | ExistingDeploymentAdoptionAuthorizationPayload,
+        *,
+        pricing_capability: VerifiedPricingCapability,
+        provider_capability: VerifiedProviderCapCapability,
+        now: datetime,
+    ) -> tuple[VerifiedPricingCapability, VerifiedProviderCapCapability]:
+        try:
+            pricing = require_verified_pricing_capability(pricing_capability)
+            provider_cap = require_verified_provider_capability(provider_capability)
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("verified infrastructure capabilities are required") from exc
+        pricing_expected = (
+            payload.provider,
+            payload.currency,
+            payload.workspace_ref,
+            payload.project_ref,
+            payload.credential_ref,
+            payload.region,
+            payload.base_model,
+            payload.request_plan,
+            payload.receipt_plan,
+            payload.input_tpm_quota,
+            payload.output_tpm_quota,
+        )
+        pricing_resource = (
+            pricing.provider,
+            pricing.currency,
+            pricing.workspace_ref,
+            pricing.project_ref,
+            pricing.credential_ref,
+            pricing.region,
+            pricing.base_model,
+            pricing.request_plan,
+            pricing.receipt_plan,
+            pricing.input_tpm_quota,
+            pricing.output_tpm_quota,
+        )
+        cap_expected = (
+            payload.provider,
+            payload.currency,
+            payload.workspace_ref,
+            payload.project_ref,
+            payload.credential_ref,
+        )
+        cap_resource = (
+            provider_cap.provider,
+            provider_cap.currency,
+            provider_cap.workspace_ref,
+            provider_cap.project_ref,
+            provider_cap.credential_ref,
+        )
+        if pricing_resource != pricing_expected or cap_resource != cap_expected:
+            raise BudgetLedgerError("infrastructure capability resource mismatch")
+        if (
+            pricing.evidence_digest != payload.pricing_evidence_digest
+            or pricing.approval_digest != payload.pricing_approval_digest
+            or pricing.fixed_cost_minor_units != payload.maximum_cost_minor_units
+            or provider_cap.evidence_digest != payload.provider_cap_evidence_digest
+            or provider_cap.approval_digest != payload.provider_cap_approval_digest
+            or provider_cap.max_cost_minor_units
+            != payload.provider_cap_max_cost_minor_units
+            or provider_cap.expires_at != payload.provider_cap_expires_at
+            or provider_cap.coverage
+            != frozenset(payload.provider_cap_coverage)
+        ):
+            raise BudgetLedgerError("infrastructure price or cap capability mismatch")
+        if now >= provider_cap.expires_at:
+            raise BudgetLedgerError("verified provider cap capability is expired")
+        if payload.maximum_cost_minor_units > provider_cap.max_cost_minor_units:
+            raise BudgetLedgerError("infrastructure reserve exceeds provider cap")
+        return pricing, provider_cap
+
+    def reserve_provisioning_before_post(
+        self,
+        *,
+        authorization: ProvisioningAuthorization,
+        expected: ProvisioningAuthorizationPayload,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        pricing_evidence_bytes: bytes | None = None,
+        pricing_approval: PricingEvidenceApproval | None = None,
+        provider_cap_evidence_bytes: bytes | None = None,
+        provider_cap_approval: ProviderCapApproval | None = None,
+        now: datetime,
+        **unsupported: object,
+    ) -> InfrastructureCreatePermit:
+        """Reverify signed price/cap evidence and occupy cost before provider POST."""
+
+        if (
+            unsupported
+            or not isinstance(pricing_evidence_bytes, bytes)
+            or not isinstance(pricing_approval, PricingEvidenceApproval)
+            or not isinstance(provider_cap_evidence_bytes, bytes)
+            or not isinstance(provider_cap_approval, ProviderCapApproval)
+        ):
+            raise BudgetLedgerError(
+                "production provisioning requires signed pricing and provider-cap evidence"
+            )
+        try:
+            pricing = verify_pricing_evidence(
+                pricing_evidence_bytes,
+                envelope=pricing_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected.scope,
+                now=now,
+                fixed_duration_seconds=_ceil_timedelta_seconds(
+                    expected.cleanup_deadline - expected.issued_at
+                ),
+                cost_window_start=expected.issued_at,
+            )
+            provider_cap = verify_provider_cap_evidence(
+                provider_cap_evidence_bytes,
+                envelope=provider_cap_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected.scope,
+                now=now,
+            )
+            authorization_digest = verify_provisioning_authorization(
+                authorization,
+                expected=expected,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(
+                f"signed provisioning price/cap evidence rejected: {exc}"
+            ) from exc
+        if pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
+            raise BudgetLedgerError(
+                "caller cost differs from mechanically derived pricing evidence"
+            )
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            now=now,
+        )
+        snapshot = self._reserve_infrastructure(
+            authorization=authorization,
+            authorization_digest=authorization_digest,
+            payload=expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            recorded_at=now,
+        )
+        permit = InfrastructureCreatePermit(
+            operation_id=expected.operation_id,
+            reserve=snapshot,
+            authorization_expires_at=expected.expires_at,
+            provider_cap_expires_at=provider_cap.expires_at,
+            cleanup_deadline=expected.cleanup_deadline,
+        )
+        permit.require_fresh(now)
+        return permit
+
+    def _reserve_provisioning_before_post_for_testing(
+        self,
+        *,
+        authorization: ProvisioningAuthorization,
+        expected: ProvisioningAuthorizationPayload,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        pricing_capability: VerifiedPricingCapability,
+        provider_capability: VerifiedProviderCapCapability,
+        now: datetime,
+    ) -> InfrastructureCreatePermit:
+        """Verify and occupy fixed cost before any future provider POST."""
+
+        self._require_testing_mode()
+
+        try:
+            authorization_digest = verify_provisioning_authorization(
+                authorization,
+                expected=expected,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(f"provisioning authorization rejected: {exc}") from exc
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing_capability,
+            provider_capability=provider_capability,
+            now=now,
+        )
+        snapshot = self._reserve_infrastructure(
+            authorization=authorization,
+            authorization_digest=authorization_digest,
+            payload=expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            recorded_at=now,
+        )
+        permit = InfrastructureCreatePermit(
+            operation_id=expected.operation_id,
+            reserve=snapshot,
+            authorization_expires_at=expected.expires_at,
+            provider_cap_expires_at=provider_cap.expires_at,
+            cleanup_deadline=expected.cleanup_deadline,
+        )
+        permit.require_fresh(now)
+        return permit
+
+    def reserve_existing_adoption(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        expected: ExistingDeploymentAdoptionAuthorizationPayload,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        pricing_evidence_bytes: bytes | None = None,
+        pricing_approval: PricingEvidenceApproval | None = None,
+        provider_cap_evidence_bytes: bytes | None = None,
+        provider_cap_approval: ProviderCapApproval | None = None,
+        now: datetime,
+        **unsupported: object,
+    ) -> InfrastructureReserveSnapshot:
+        """Verify historical receipt plus signed cost evidence before adoption reserve."""
+
+        if (
+            unsupported
+            or not isinstance(pricing_evidence_bytes, bytes)
+            or not isinstance(pricing_approval, PricingEvidenceApproval)
+            or not isinstance(provider_cap_evidence_bytes, bytes)
+            or not isinstance(provider_cap_approval, ProviderCapApproval)
+        ):
+            raise BudgetLedgerError(
+                "production adoption requires signed pricing and provider-cap evidence"
+            )
+        incurred_seconds = _ceil_timedelta_seconds(
+            expected.issued_at - expected.gmt_create
+        )
+        future_seconds = _ceil_timedelta_seconds(
+            expected.cleanup_deadline - expected.issued_at
+        )
+        try:
+            receipt = require_verified_reconciled_receipt(receipt_capability).receipt
+            pricing = verify_pricing_evidence(
+                pricing_evidence_bytes,
+                envelope=pricing_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected.scope,
+                now=now,
+                fixed_duration_seconds=incurred_seconds + future_seconds,
+                cost_window_start=expected.gmt_create,
+                fixed_duration_segments_seconds=(incurred_seconds, future_seconds),
+            )
+            provider_cap = verify_provider_cap_evidence(
+                provider_cap_evidence_bytes,
+                envelope=provider_cap_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected.scope,
+                now=now,
+            )
+            authorization_digest = verify_adoption_authorization(
+                authorization,
+                expected=expected,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(
+                f"signed adoption price/cap/receipt evidence rejected: {exc}"
+            ) from exc
+        if pricing.fixed_segment_costs_minor_units != (
+            expected.incurred_cost_minor_units,
+            expected.future_max_cost_minor_units,
+        ) or pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
+            raise BudgetLedgerError(
+                "adoption costs differ from mechanically derived pricing evidence"
+            )
+        self._require_receipt_matches_authorization(receipt, expected)
+        if (
+            receipt.content_digest != expected.receipt_digest
+            or receipt.content.deployed_model != expected.deployed_model
+            or receipt.content.gmt_create != expected.gmt_create
+        ):
+            raise BudgetLedgerError("deployment adoption receipt mismatch")
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            now=now,
+        )
+        return self._reserve_infrastructure(
+            authorization=authorization,
+            authorization_digest=authorization_digest,
+            payload=expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            recorded_at=now,
+        )
+
+    def _reserve_existing_adoption_for_testing(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        expected: ExistingDeploymentAdoptionAuthorizationPayload,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        pricing_capability: VerifiedPricingCapability,
+        provider_capability: VerifiedProviderCapCapability,
+        now: datetime,
+    ) -> InfrastructureReserveSnapshot:
+        """Occupy historical plus future cost for an already-existing deployment."""
+
+        self._require_testing_mode()
+
+        try:
+            authorization_digest = verify_adoption_authorization(
+                authorization,
+                expected=expected,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+            verified_receipt = require_verified_reconciled_receipt(receipt_capability).receipt
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(
+                f"deployment adoption authorization rejected: {exc}"
+            ) from exc
+        self._require_receipt_matches_authorization(verified_receipt, expected)
+        if (
+            verified_receipt.content_digest != expected.receipt_digest
+            or verified_receipt.content.deployed_model != expected.deployed_model
+            or verified_receipt.content.gmt_create != expected.gmt_create
+        ):
+            raise BudgetLedgerError("deployment adoption receipt mismatch")
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing_capability,
+            provider_capability=provider_capability,
+            now=now,
+        )
+        return self._reserve_infrastructure(
+            authorization=authorization,
+            authorization_digest=authorization_digest,
+            payload=expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            recorded_at=now,
+        )
+
+    def _reserve_infrastructure(
+        self,
+        *,
+        authorization: InfrastructureAuthorization,
+        authorization_digest: str,
+        payload: ProvisioningAuthorizationPayload
+        | ExistingDeploymentAdoptionAuthorizationPayload,
+        pricing_capability: VerifiedPricingCapability,
+        provider_capability: VerifiedProviderCapCapability,
+        recorded_at: datetime,
+    ) -> InfrastructureReserveSnapshot:
+        account_id = budget_account_identity(payload.run_identity, payload.purpose)
+        envelope_json = canonical_json_bytes(authorization)
+        with self._mutation() as connection:
+            existing = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                (payload.infrastructure_reserve_id,),
+            ).fetchone()
+            if existing is not None:
+                stored_authorization = connection.execute(
+                    """SELECT * FROM infrastructure_authorizations
+                       WHERE authorization_digest=?""",
+                    (str(existing["authorization_digest"]),),
+                ).fetchone()
+                if (
+                    str(existing["authorization_digest"]) != authorization_digest
+                    or str(existing["account_id"]) != account_id
+                    or str(existing["operation_id"]) != payload.operation_id
+                    or int(existing["max_cost"]) != payload.maximum_cost_minor_units
+                    or stored_authorization is None
+                    or bytes(stored_authorization["envelope_json"]) != envelope_json
+                    or not self._stored_capabilities_match(
+                        existing, pricing_capability, provider_capability
+                    )
+                ):
+                    raise BudgetLedgerError("infrastructure reserve conflict")
+                total = self._infrastructure_reserved_cost(connection, account_id)
+                if total > provider_capability.max_cost_minor_units:
+                    raise BudgetLedgerError("infrastructure reserves exceed provider cap")
+                return self._infrastructure_snapshot(connection, existing)
+
+            total = self._infrastructure_reserved_cost(connection, account_id)
+            if (
+                total + payload.maximum_cost_minor_units
+                > provider_capability.max_cost_minor_units
+            ):
+                raise BudgetLedgerError("infrastructure reserves exceed provider cap")
+            try:
+                connection.execute(
+                    """INSERT INTO infrastructure_authorizations VALUES (
+                           ?, ?, ?, ?, ?, ?, ?, ?
+                       )""",
+                    (
+                        authorization_digest,
+                        authorization.domain,
+                        envelope_json,
+                        payload.run_identity,
+                        payload.purpose,
+                        payload.operation_id,
+                        payload.infrastructure_reserve_id,
+                        recorded_at.isoformat(),
+                    ),
+                )
+                connection.execute(
+                    """INSERT INTO infrastructure_reserves (
+                           reserve_id,account_id,run_identity,purpose,operation_id,
+                           authorization_digest,pricing_evidence_digest,
+                           pricing_approval_digest,provider_cap_evidence_digest,
+                           provider_cap_approval_digest,provider_cap_max_cost,
+                           provider_cap_expires_at,provider,currency,workspace_ref,project_ref,
+                           credential_ref,region,base_model,request_plan,receipt_plan,
+                           input_tpm_quota,output_tpm_quota,covers_fixed_infrastructure,
+                           covers_inference,cleanup_deadline,max_cost,state,created_at
+                       ) VALUES (
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                           ?, ?, ?, ?, ?, ?, ?, 'reserved', ?
+                       )""",
+                    (
+                        payload.infrastructure_reserve_id,
+                        account_id,
+                        payload.run_identity,
+                        payload.purpose,
+                        payload.operation_id,
+                        authorization_digest,
+                        pricing_capability.evidence_digest,
+                        pricing_capability.approval_digest,
+                        provider_capability.evidence_digest,
+                        provider_capability.approval_digest,
+                        provider_capability.max_cost_minor_units,
+                        provider_capability.expires_at.isoformat(),
+                        provider_capability.provider,
+                        provider_capability.currency,
+                        provider_capability.workspace_ref,
+                        provider_capability.project_ref,
+                        provider_capability.credential_ref,
+                        pricing_capability.region,
+                        pricing_capability.base_model,
+                        pricing_capability.request_plan,
+                        pricing_capability.receipt_plan,
+                        pricing_capability.input_tpm_quota,
+                        pricing_capability.output_tpm_quota,
+                        1,
+                        1,
+                        payload.cleanup_deadline.isoformat(),
+                        payload.maximum_cost_minor_units,
+                        recorded_at.isoformat(),
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise BudgetLedgerError("infrastructure authorization conflict") from exc
+            inserted = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                (payload.infrastructure_reserve_id,),
+            ).fetchone()
+            assert inserted is not None
+            return self._infrastructure_snapshot(connection, inserted)
+
+    def bind_final_infrastructure_contract(
+        self,
+        *,
+        reserve_id: str,
+        authorization: InfrastructureAuthorization,
+        expected_authorization: ProvisioningAuthorizationPayload
+        | ExistingDeploymentAdoptionAuthorizationPayload,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+        pricing_evidence_bytes: bytes | None = None,
+        pricing_approval: PricingEvidenceApproval | None = None,
+        provider_cap_evidence_bytes: bytes | None = None,
+        provider_cap_approval: ProviderCapApproval | None = None,
+    ) -> InfrastructureReserveSnapshot:
+        """Reverify all signed external evidence before binding a final contract."""
+
+        if (
+            not isinstance(pricing_evidence_bytes, bytes)
+            or not isinstance(pricing_approval, PricingEvidenceApproval)
+            or not isinstance(provider_cap_evidence_bytes, bytes)
+            or not isinstance(provider_cap_approval, ProviderCapApproval)
+        ):
+            raise BudgetLedgerError(
+                "production final bind requires signed pricing and provider-cap evidence"
+            )
+        try:
+            if isinstance(expected_authorization, ProvisioningAuthorizationPayload):
+                if not isinstance(authorization, ProvisioningAuthorization):
+                    raise AuthorizationVerificationError(
+                        "provisioning authorization type mismatch"
+                    )
+                duration = _ceil_timedelta_seconds(
+                    expected_authorization.cleanup_deadline
+                    - expected_authorization.issued_at
+                )
+                segments: tuple[int, ...] | None = None
+                cost_window_start = expected_authorization.issued_at
+                authorization_digest = verify_provisioning_authorization(
+                    authorization,
+                    expected=expected_authorization,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+            else:
+                if not isinstance(
+                    authorization, ExistingDeploymentAdoptionAuthorization
+                ):
+                    raise AuthorizationVerificationError(
+                        "adoption authorization type mismatch"
+                    )
+                incurred = _ceil_timedelta_seconds(
+                    expected_authorization.issued_at
+                    - expected_authorization.gmt_create
+                )
+                future = _ceil_timedelta_seconds(
+                    expected_authorization.cleanup_deadline
+                    - expected_authorization.issued_at
+                )
+                duration = incurred + future
+                segments = (incurred, future)
+                cost_window_start = expected_authorization.gmt_create
+                authorization_digest = verify_adoption_authorization(
+                    authorization,
+                    expected=expected_authorization,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+            pricing = verify_pricing_evidence(
+                pricing_evidence_bytes,
+                envelope=pricing_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+                fixed_duration_seconds=duration,
+                cost_window_start=cost_window_start,
+                fixed_duration_segments_seconds=segments,
+            )
+            provider_cap = verify_provider_cap_evidence(
+                provider_cap_evidence_bytes,
+                envelope=provider_cap_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+            )
+            receipt = require_verified_reconciled_receipt(receipt_capability).receipt
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(
+                "final infrastructure signed evidence rejected"
+            ) from exc
+        if pricing.fixed_cost_minor_units != expected_authorization.maximum_cost_minor_units:
+            raise BudgetLedgerError(
+                "final infrastructure cost differs from signed pricing"
+            )
+        if isinstance(expected_authorization, ExistingDeploymentAdoptionAuthorizationPayload):
+            if pricing.fixed_segment_costs_minor_units != (
+                expected_authorization.incurred_cost_minor_units,
+                expected_authorization.future_max_cost_minor_units,
+            ):
+                raise BudgetLedgerError(
+                    "final adoption segments differ from signed pricing"
+                )
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected_authorization,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            now=now,
+        )
+        self._require_receipt_matches_authorization(
+            receipt, expected_authorization
+        )
+        for role in roles:
+            role_plan = plan.model_roles.get(role)
+            if not isinstance(role_plan, ModelRolePlan):
+                raise BudgetLedgerError("deployment role topology is invalid")
+            derive_role_rate_from_pricing(
+                pricing,
+                role_plan=role_plan,
+                expected_provider=expected_authorization.provider,
+                expected_currency=expected_authorization.currency,
+                candidate=contract.role_rates.get(role),
+            )
+        return self._bind_final_infrastructure_contract_transaction(
+            reserve_id=reserve_id,
+            receipt_capability=receipt_capability,
+            roles=roles,
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_authorities,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+            expected_authorization_digest=authorization_digest,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+        )
+
+    def _bind_final_infrastructure_contract_for_testing(
+        self,
+        *,
+        reserve_id: str,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+    ) -> InfrastructureReserveSnapshot:
+        """Atomically bind final approval, receipt, deployment, and role references."""
+
+        self._require_testing_mode()
+
+        return self._bind_final_infrastructure_contract_transaction(
+            reserve_id=reserve_id,
+            receipt_capability=receipt_capability,
+            roles=roles,
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+
+    def bind_final_infrastructure_topology(
+        self,
+        *,
+        strong: FinalInfrastructureBindingRequest,
+        weak: FinalInfrastructureBindingRequest,
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+    ) -> tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot]:
+        """Reverify both deployments, then bind their exact topology atomically."""
+
+        strong_verified = self._verify_final_binding_request(
+            strong,
+            plan=plan,
+            contract=contract,
+            trusted_authorities=trusted_authorities,
+            expected_scope=expected_scope,
+            now=now,
+        )
+        weak_verified = self._verify_final_binding_request(
+            weak,
+            plan=plan,
+            contract=contract,
+            trusted_authorities=trusted_authorities,
+            expected_scope=expected_scope,
+            now=now,
+        )
+        if (
+            strong_verified[2].evidence_digest
+            != weak_verified[2].evidence_digest
+            or strong_verified[2].approval_digest
+            != weak_verified[2].approval_digest
+        ):
+            raise BudgetLedgerError(
+                "strong and weak deployments require the same signed provider cap"
+            )
+        verified_by_reserve = {
+            strong.reserve_id: strong_verified,
+            weak.reserve_id: weak_verified,
+        }
+        if len(verified_by_reserve) != 2:
+            raise BudgetLedgerError("final infrastructure topology is invalid")
+        return self._bind_final_infrastructure_topology_transaction(
+            bindings=(
+                (strong.reserve_id, strong.receipt_capability, strong.roles),
+                (weak.reserve_id, weak.receipt_capability, weak.roles),
+            ),
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_authorities,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+            verified_by_reserve=verified_by_reserve,
+        )
+
+    def _verify_final_binding_request(
+        self,
+        request: FinalInfrastructureBindingRequest,
+        *,
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        now: datetime,
+    ) -> tuple[str, VerifiedPricingCapability, VerifiedProviderCapCapability]:
+        expected = request.expected_authorization
+        try:
+            if isinstance(expected, ProvisioningAuthorizationPayload):
+                if not isinstance(request.authorization, ProvisioningAuthorization):
+                    raise AuthorizationVerificationError(
+                        "provisioning authorization type mismatch"
+                    )
+                duration = _ceil_timedelta_seconds(
+                    expected.cleanup_deadline - expected.issued_at
+                )
+                segments: tuple[int, ...] | None = None
+                cost_window_start = expected.issued_at
+                authorization_digest = verify_provisioning_authorization(
+                    request.authorization,
+                    expected=expected,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+            else:
+                if not isinstance(
+                    request.authorization, ExistingDeploymentAdoptionAuthorization
+                ):
+                    raise AuthorizationVerificationError(
+                        "adoption authorization type mismatch"
+                    )
+                incurred = _ceil_timedelta_seconds(
+                    expected.issued_at - expected.gmt_create
+                )
+                future = _ceil_timedelta_seconds(
+                    expected.cleanup_deadline - expected.issued_at
+                )
+                duration = incurred + future
+                segments = (incurred, future)
+                cost_window_start = expected.gmt_create
+                authorization_digest = verify_adoption_authorization(
+                    request.authorization,
+                    expected=expected,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+            pricing = verify_pricing_evidence(
+                request.pricing_evidence_bytes,
+                envelope=request.pricing_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+                fixed_duration_seconds=duration,
+                cost_window_start=cost_window_start,
+                fixed_duration_segments_seconds=segments,
+            )
+            provider_cap = verify_provider_cap_evidence(
+                request.provider_cap_evidence_bytes,
+                envelope=request.provider_cap_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+            )
+            receipt = require_verified_reconciled_receipt(
+                request.receipt_capability
+            ).receipt
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError(
+                "final infrastructure signed evidence rejected"
+            ) from exc
+        if pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
+            raise BudgetLedgerError(
+                "final infrastructure cost differs from signed pricing"
+            )
+        if isinstance(expected, ExistingDeploymentAdoptionAuthorizationPayload) and (
+            pricing.fixed_segment_costs_minor_units
+            != (expected.incurred_cost_minor_units, expected.future_max_cost_minor_units)
+        ):
+            raise BudgetLedgerError(
+                "final adoption segments differ from signed pricing"
+            )
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            now=now,
+        )
+        self._require_receipt_matches_authorization(receipt, expected)
+        for role in request.roles:
+            role_plan = plan.model_roles.get(role)
+            if not isinstance(role_plan, ModelRolePlan):
+                raise BudgetLedgerError("deployment role topology is invalid")
+            derive_role_rate_from_pricing(
+                pricing,
+                role_plan=role_plan,
+                expected_provider=expected.provider,
+                expected_currency=expected.currency,
+                candidate=contract.role_rates.get(role),
+            )
+        return authorization_digest, pricing, provider_cap
+
+    def _bind_final_infrastructure_contract_transaction(
+        self,
+        *,
+        reserve_id: str,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+        expected_authorization_digest: str | None = None,
+        pricing_capability: VerifiedPricingCapability | None = None,
+        provider_capability: VerifiedProviderCapCapability | None = None,
+    ) -> InfrastructureReserveSnapshot:
+        """Shared transaction; production must supply freshly verified capabilities."""
+
+        try:
+            receipt = require_verified_reconciled_receipt(receipt_capability).receipt
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("verified reconciled receipt is required") from exc
+        proof = verify_budget_admission_contract(
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+        role_set = frozenset(roles)
+        if role_set not in {
+            frozenset({"annotator", "judge"}),
+            frozenset({"weak_extractor"}),
+        } or len(roles) != len(role_set):
+            raise BudgetLedgerError("deployment role topology is invalid")
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        receipt_json = canonical_json_bytes(receipt)
+        with self._mutation() as connection:
+            reserve = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                (reserve_id,),
+            ).fetchone()
+            if reserve is None:
+                raise BudgetLedgerError("infrastructure reserve not found")
+            if (
+                str(reserve["account_id"]) != account_id
+                or str(reserve["run_identity"]) != plan.run_identity
+                or str(reserve["purpose"]) != plan.purpose
+            ):
+                raise BudgetLedgerError("infrastructure reserve run identity conflict")
+            authorization = self._stored_infrastructure_authorization(connection, reserve)
+            payload = authorization.payload
+            if expected_authorization_digest is not None and (
+                str(reserve["authorization_digest"])
+                != expected_authorization_digest
+                or infrastructure_authorization_digest(authorization)
+                != expected_authorization_digest
+                or pricing_capability is None
+                or provider_capability is None
+                or not self._stored_capabilities_match(
+                    reserve, pricing_capability, provider_capability
+                )
+            ):
+                raise BudgetLedgerError(
+                    "final signed infrastructure evidence conflicts with reserve"
+                )
+            if now >= payload.cleanup_deadline:
+                raise BudgetLedgerError("infrastructure cleanup deadline has elapsed")
+            if now >= payload.provider_cap_expires_at:
+                raise BudgetLedgerError("infrastructure provider cap has expired")
+            attestation = contract.provider_attestation
+            if (
+                attestation.provider != str(reserve["provider"])
+                or attestation.evidence_digest
+                != str(reserve["provider_cap_evidence_digest"])
+                or attestation.project_ref != str(reserve["project_ref"])
+                or attestation.credential_ref != str(reserve["credential_ref"])
+                or attestation.max_cost_minor_units
+                != int(reserve["provider_cap_max_cost"])
+                or attestation.expires_at.isoformat()
+                != str(reserve["provider_cap_expires_at"])
+                or contract.currency != str(reserve["currency"])
+                or not bool(reserve["covers_fixed_infrastructure"])
+                or not bool(reserve["covers_inference"])
+                or str(reserve["workspace_ref"]) != payload.workspace_ref
+                or str(reserve["pricing_evidence_digest"])
+                != payload.pricing_evidence_digest
+                or str(reserve["pricing_approval_digest"])
+                != payload.pricing_approval_digest
+                or str(reserve["provider_cap_evidence_digest"])
+                != payload.provider_cap_evidence_digest
+                or str(reserve["provider_cap_approval_digest"])
+                != payload.provider_cap_approval_digest
+                or int(reserve["provider_cap_max_cost"])
+                != payload.provider_cap_max_cost_minor_units
+                or str(reserve["currency"]) != payload.currency
+                or str(reserve["provider"]) != payload.provider
+                or str(reserve["project_ref"]) != payload.project_ref
+                or str(reserve["credential_ref"]) != payload.credential_ref
+            ):
+                raise BudgetLedgerError("final provider attestation resource mismatch")
+            self._require_receipt_matches_authorization(receipt, authorization.payload)
+            if isinstance(authorization, ExistingDeploymentAdoptionAuthorization) and (
+                receipt.content_digest != authorization.payload.receipt_digest
+                or receipt.content.deployed_model != authorization.payload.deployed_model
+                or receipt.content.gmt_create != authorization.payload.gmt_create
+            ):
+                raise BudgetLedgerError("deployment adoption receipt conflict")
+            for role in roles:
+                role_plan = plan.model_roles[role]
+                if (
+                    not isinstance(role_plan, ModelRolePlan)
+                    or role_plan.provider != payload.provider
+                    or role_plan.model_id != receipt.content.deployed_model
+                    or role_plan.immutable_deployment_id != receipt.content.deployed_model
+                ):
+                    raise BudgetLedgerError(
+                        "model_id, immutable_deployment_id and deployed_model must match"
+                    )
+            if str(reserve["state"]) == "bound":
+                stored_roles = tuple(
+                    str(row["role"])
+                    for row in connection.execute(
+                        """SELECT role FROM deployment_role_bindings
+                           WHERE reserve_id=? ORDER BY role""",
+                        (reserve_id,),
+                    ).fetchall()
+                )
+                if (
+                    str(reserve["deployed_model"]) != receipt.content.deployed_model
+                    or str(reserve["receipt_digest"]) != receipt.content_digest
+                    or str(reserve["remote_manifest_digest"])
+                    != receipt.content.remote_manifest_digest
+                    or bytes(reserve["receipt_json"]) != receipt_json
+                    or str(reserve["final_approval_digest"]) != proof.approval_digest
+                    or stored_roles != tuple(sorted(roles))
+                ):
+                    raise BudgetLedgerError("bound infrastructure replay conflict")
+                return self._infrastructure_snapshot(connection, reserve)
+
+            account = connection.execute(
+                "SELECT * FROM budget_accounts WHERE account_id=?", (account_id,)
+            ).fetchone()
+            if account is None:
+                self._insert_account(
+                    connection,
+                    account_id,
+                    plan.run_identity,
+                    plan.purpose,
+                    contract,
+                    envelope,
+                    proof.approval_digest,
+                    proof.contract_hash,
+                )
+            else:
+                self._expand_account(
+                    connection,
+                    account,
+                    contract,
+                    envelope,
+                    proof.approval_digest,
+                    proof.contract_hash,
+                )
+            current_account = self._require_account(connection, account_id)
+            product_max_row = connection.execute(
+                "SELECT COALESCE(SUM(max_cost), 0) FROM product_limits WHERE account_id=?",
+                (account_id,),
+            ).fetchone()
+            assert product_max_row is not None
+            all_fixed_and_product_maxima = self._infrastructure_reserved_cost(
+                connection, account_id
+            ) + int(product_max_row[0])
+            if (
+                all_fixed_and_product_maxima
+                > contract.provider_attestation.max_cost_minor_units
+            ):
+                raise BudgetLedgerError(
+                    "infrastructure plus product maxima exceed final provider cap"
+                )
+            ceiling = _amounts_from_row(
+                current_account, "ceiling_input", "ceiling_output", "ceiling_cost"
+            )
+            occupied = self._occupied(connection, account_id)
+            if not _fits(occupied, ceiling):
+                raise BudgetLedgerError("infrastructure reserve exceeds final budget ceiling")
+            if occupied.cost_minor_units > contract.provider_attestation.max_cost_minor_units:
+                raise BudgetLedgerError("infrastructure reserve exceeds final provider cap")
+            try:
+                connection.execute(
+                    """UPDATE infrastructure_reserves
+                       SET state='bound',deployed_model=?,receipt_digest=?,
+                           remote_manifest_digest=?,receipt_json=?,
+                           final_approval_digest=?,bound_at=?
+                       WHERE reserve_id=? AND state='reserved'""",
+                    (
+                        receipt.content.deployed_model,
+                        receipt.content_digest,
+                        receipt.content.remote_manifest_digest,
+                        receipt_json,
+                        proof.approval_digest,
+                        now.isoformat(),
+                        reserve_id,
+                    ),
+                )
+                for role in sorted(roles):
+                    connection.execute(
+                        "INSERT INTO deployment_role_bindings VALUES (?, ?, ?)",
+                        (
+                            account_id,
+                            role,
+                            reserve_id,
+                        ),
+                    )
+            except sqlite3.IntegrityError as exc:
+                raise BudgetLedgerError("deployment or role reserve conflict") from exc
+            bound = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?", (reserve_id,)
+            ).fetchone()
+            assert bound is not None
+            return self._infrastructure_snapshot(connection, bound)
+
+    def _bind_final_infrastructure_topology_for_testing(
+        self,
+        *,
+        bindings: tuple[
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+        ],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+    ) -> tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot]:
+        """Test seam for O8's all-or-nothing two-deployment final topology."""
+
+        self._require_testing_mode()
+        return self._bind_final_infrastructure_topology_transaction(
+            bindings=bindings,
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+
+    def _bind_final_infrastructure_topology_transaction(
+        self,
+        *,
+        bindings: tuple[
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+        ],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+        verified_by_reserve: Mapping[
+            str,
+            tuple[
+                str, VerifiedPricingCapability, VerifiedProviderCapCapability
+            ],
+        ]
+        | None = None,
+    ) -> tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot]:
+        """Bind strong+weak reserves under one SQLite transaction."""
+
+        normalized: list[
+            tuple[str, DeploymentReceipt, tuple[BudgetRole, ...]]
+        ] = []
+        try:
+            for reserve_id, capability, roles in bindings:
+                normalized.append(
+                    (
+                        reserve_id,
+                        require_verified_reconciled_receipt(capability).receipt,
+                        roles,
+                    )
+                )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("verified reconciled receipt is required") from exc
+        if (
+            frozenset(normalized[0][2]) != frozenset({"annotator", "judge"})
+            or len(normalized[0][2]) != 2
+            or normalized[1][2] != ("weak_extractor",)
+            or normalized[0][0] == normalized[1][0]
+            or normalized[0][1].content.deployed_model
+            == normalized[1][1].content.deployed_model
+        ):
+            raise BudgetLedgerError("final infrastructure topology is invalid")
+        proof = verify_budget_admission_contract(
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        try:
+            with self._mutation() as connection:
+                rows: list[sqlite3.Row] = []
+                for reserve_id, receipt, roles in normalized:
+                    reserve = connection.execute(
+                        "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                        (reserve_id,),
+                    ).fetchone()
+                    if reserve is None:
+                        raise BudgetLedgerError("infrastructure reserve not found")
+                    authorization = self._stored_infrastructure_authorization(
+                        connection, reserve
+                    )
+                    payload = authorization.payload
+                    verified = (
+                        None
+                        if verified_by_reserve is None
+                        else verified_by_reserve.get(reserve_id)
+                    )
+                    if verified_by_reserve is not None and (
+                        verified is None
+                        or str(reserve["authorization_digest"]) != verified[0]
+                        or infrastructure_authorization_digest(authorization)
+                        != verified[0]
+                        or not self._stored_capabilities_match(
+                            reserve, verified[1], verified[2]
+                        )
+                    ):
+                        raise BudgetLedgerError(
+                            "final signed infrastructure evidence conflicts with reserve"
+                        )
+                    if (
+                        str(reserve["account_id"]) != account_id
+                        or str(reserve["run_identity"]) != plan.run_identity
+                        or str(reserve["purpose"]) != plan.purpose
+                        or now >= payload.cleanup_deadline
+                        or now >= payload.provider_cap_expires_at
+                    ):
+                        raise BudgetLedgerError(
+                            "infrastructure reserve run or freshness conflict"
+                        )
+                    attestation = contract.provider_attestation
+                    if (
+                        attestation.provider != str(reserve["provider"])
+                        or attestation.evidence_digest
+                        != str(reserve["provider_cap_evidence_digest"])
+                        or attestation.project_ref != str(reserve["project_ref"])
+                        or attestation.credential_ref != str(reserve["credential_ref"])
+                        or attestation.max_cost_minor_units
+                        != int(reserve["provider_cap_max_cost"])
+                        or attestation.expires_at.isoformat()
+                        != str(reserve["provider_cap_expires_at"])
+                        or contract.currency != str(reserve["currency"])
+                        or not bool(reserve["covers_fixed_infrastructure"])
+                        or not bool(reserve["covers_inference"])
+                    ):
+                        raise BudgetLedgerError(
+                            "final provider attestation resource mismatch"
+                        )
+                    self._require_receipt_matches_authorization(receipt, payload)
+                    for role in roles:
+                        role_plan = plan.model_roles[role]
+                        if (
+                            not isinstance(role_plan, ModelRolePlan)
+                            or role_plan.provider != payload.provider
+                            or role_plan.model_id != receipt.content.deployed_model
+                            or role_plan.immutable_deployment_id
+                            != receipt.content.deployed_model
+                        ):
+                            raise BudgetLedgerError(
+                                "model_id, immutable_deployment_id and deployed_model must match"
+                            )
+                    rows.append(reserve)
+
+                account = connection.execute(
+                    "SELECT * FROM budget_accounts WHERE account_id=?", (account_id,)
+                ).fetchone()
+                if account is None:
+                    self._insert_account(
+                        connection,
+                        account_id,
+                        plan.run_identity,
+                        plan.purpose,
+                        contract,
+                        envelope,
+                        proof.approval_digest,
+                        proof.contract_hash,
+                    )
+                else:
+                    self._expand_account(
+                        connection,
+                        account,
+                        contract,
+                        envelope,
+                        proof.approval_digest,
+                        proof.contract_hash,
+                    )
+                occupied = self._occupied(connection, account_id)
+                current = self._require_account(connection, account_id)
+                ceiling = _amounts_from_row(
+                    current, "ceiling_input", "ceiling_output", "ceiling_cost"
+                )
+                if not _fits(occupied, ceiling):
+                    raise BudgetLedgerError(
+                        "infrastructure reserve exceeds final budget ceiling"
+                    )
+                if occupied.cost_minor_units > contract.provider_attestation.max_cost_minor_units:
+                    raise BudgetLedgerError(
+                        "infrastructure reserve exceeds final provider cap"
+                    )
+
+                results: list[InfrastructureReserveSnapshot] = []
+                for reserve, (_, receipt, roles) in zip(rows, normalized, strict=True):
+                    receipt_json = canonical_json_bytes(receipt)
+                    if str(reserve["state"]) == "bound":
+                        stored_roles = tuple(
+                            str(row["role"])
+                            for row in connection.execute(
+                                """SELECT role FROM deployment_role_bindings
+                                   WHERE reserve_id=? ORDER BY role""",
+                                (str(reserve["reserve_id"]),),
+                            ).fetchall()
+                        )
+                        if (
+                            str(reserve["deployed_model"])
+                            != receipt.content.deployed_model
+                            or str(reserve["receipt_digest"]) != receipt.content_digest
+                            or str(reserve["final_approval_digest"])
+                            != proof.approval_digest
+                            or stored_roles != tuple(sorted(roles))
+                        ):
+                            raise BudgetLedgerError(
+                                "bound infrastructure replay conflict"
+                            )
+                    else:
+                        connection.execute(
+                            """UPDATE infrastructure_reserves
+                               SET state='bound',deployed_model=?,receipt_digest=?,
+                                   remote_manifest_digest=?,receipt_json=?,
+                                   final_approval_digest=?,bound_at=?
+                               WHERE reserve_id=? AND state='reserved'""",
+                            (
+                                receipt.content.deployed_model,
+                                receipt.content_digest,
+                                receipt.content.remote_manifest_digest,
+                                receipt_json,
+                                proof.approval_digest,
+                                now.isoformat(),
+                                str(reserve["reserve_id"]),
+                            ),
+                        )
+                        for role in sorted(roles):
+                            connection.execute(
+                                "INSERT INTO deployment_role_bindings VALUES (?, ?, ?)",
+                                (account_id, role, str(reserve["reserve_id"])),
+                            )
+                    bound = connection.execute(
+                        "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                        (str(reserve["reserve_id"]),),
+                    ).fetchone()
+                    assert bound is not None
+                    results.append(self._infrastructure_snapshot(connection, bound))
+                return cast(
+                    tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot],
+                    tuple(results),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise BudgetLedgerError("final infrastructure topology bind failed") from exc
+
+    def infrastructure_reserve(self, reserve_id: str) -> InfrastructureReserveSnapshot:
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?", (reserve_id,)
+            ).fetchone()
+            if row is None:
+                raise BudgetLedgerError("infrastructure reserve not found")
+            snapshot = self._infrastructure_snapshot(connection, row)
+            connection.commit()
+            return snapshot
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def infrastructure_cleanup_binding(
+        self, reserve_id: str
+    ) -> InfrastructureCleanupBinding:
+        """Reconstruct cleanup authority facts from the bound durable reserve."""
+
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?", (reserve_id,)
+            ).fetchone()
+            if (
+                row is None
+                or str(row["state"]) != "bound"
+                or row["receipt_digest"] is None
+                or row["deployed_model"] is None
+            ):
+                raise BudgetLedgerError("bound infrastructure cleanup binding not found")
+            authorization = self._stored_infrastructure_authorization(connection, row)
+            payload = authorization.payload
+            binding = InfrastructureCleanupBinding(
+                reserve_id=str(row["reserve_id"]),
+                run_identity=str(row["run_identity"]),
+                purpose=str(row["purpose"]),
+                scope=payload.scope,
+                operation_id=str(row["operation_id"]),
+                workspace_ref=str(row["workspace_ref"]),
+                project_ref=str(row["project_ref"]),
+                credential_ref=str(row["credential_ref"]),
+                receipt_digest=str(row["receipt_digest"]),
+                deployed_model=str(row["deployed_model"]),
+                remote_manifest_digest=str(row["remote_manifest_digest"]),
+                cleanup_deadline=datetime.fromisoformat(str(row["cleanup_deadline"])),
+            )
+            connection.commit()
+            return binding
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _require_receipt_matches_authorization(
+        receipt: DeploymentReceipt,
+        payload: ProvisioningAuthorizationPayload
+        | ExistingDeploymentAdoptionAuthorizationPayload,
+    ) -> None:
+        content = receipt.content
+        if (
+            content.operation_id != payload.operation_id
+            or content.infrastructure_reserve_id != payload.infrastructure_reserve_id
+            or content.workspace_ref != payload.workspace_ref
+            or content.project_ref != payload.project_ref
+            or content.credential_ref != payload.credential_ref
+            or content.region != payload.region
+            or content.base_model != payload.base_model
+            or content.request_plan != payload.request_plan
+            or content.receipt_plan != payload.receipt_plan
+            or content.input_tpm != payload.input_tpm_quota
+            or content.output_tpm != payload.output_tpm_quota
+        ):
+            raise BudgetLedgerError("deployment receipt does not match authorization")
+
+    @staticmethod
+    def _infrastructure_reserved_cost(
+        connection: sqlite3.Connection,
+        account_id: str,
+    ) -> int:
+        row = connection.execute(
+            """SELECT COALESCE(SUM(max_cost), 0) FROM infrastructure_reserves
+               WHERE account_id=? AND state IN ('reserved','bound')""",
+            (account_id,),
+        ).fetchone()
+        assert row is not None
+        return int(row[0])
+
+    @staticmethod
+    def _stored_capabilities_match(
+        row: sqlite3.Row,
+        pricing: VerifiedPricingCapability,
+        provider_cap: VerifiedProviderCapCapability,
+    ) -> bool:
+        return (
+            str(row["pricing_evidence_digest"]) == pricing.evidence_digest
+            and str(row["pricing_approval_digest"]) == pricing.approval_digest
+            and str(row["provider_cap_evidence_digest"])
+            == provider_cap.evidence_digest
+            and str(row["provider_cap_approval_digest"])
+            == provider_cap.approval_digest
+            and int(row["provider_cap_max_cost"])
+            == provider_cap.max_cost_minor_units
+            and str(row["provider_cap_expires_at"])
+            == provider_cap.expires_at.isoformat()
+            and str(row["provider"])
+            == provider_cap.provider
+            == pricing.provider
+            and str(row["currency"]) == provider_cap.currency == pricing.currency
+            and str(row["workspace_ref"])
+            == provider_cap.workspace_ref
+            == pricing.workspace_ref
+            and str(row["project_ref"])
+            == provider_cap.project_ref
+            == pricing.project_ref
+            and str(row["credential_ref"])
+            == provider_cap.credential_ref
+            == pricing.credential_ref
+            and str(row["region"]) == pricing.region
+            and str(row["base_model"]) == pricing.base_model
+            and str(row["request_plan"]) == pricing.request_plan
+            and str(row["receipt_plan"]) == pricing.receipt_plan
+            and int(row["input_tpm_quota"]) == pricing.input_tpm_quota
+            and int(row["output_tpm_quota"]) == pricing.output_tpm_quota
+            and bool(row["covers_fixed_infrastructure"])
+            and bool(row["covers_inference"])
+        )
+
+    @staticmethod
+    def _stored_infrastructure_authorization(
+        connection: sqlite3.Connection,
+        reserve: sqlite3.Row,
+    ) -> InfrastructureAuthorization:
+        row = connection.execute(
+            """SELECT domain,envelope_json FROM infrastructure_authorizations
+               WHERE authorization_digest=?""",
+            (str(reserve["authorization_digest"]),),
+        ).fetchone()
+        if row is None:
+            raise BudgetLedgerError("infrastructure authorization is unavailable")
+        try:
+            if str(row["domain"]) == PROVISIONING_AUTHORIZATION_DOMAIN:
+                return ProvisioningAuthorization.model_validate_json(bytes(row["envelope_json"]))
+            if str(row["domain"]) == ADOPTION_AUTHORIZATION_DOMAIN:
+                return ExistingDeploymentAdoptionAuthorization.model_validate_json(
+                    bytes(row["envelope_json"])
+                )
+        except (TypeError, ValueError) as exc:
+            raise BudgetLedgerError("stored infrastructure authorization is invalid") from exc
+        raise BudgetLedgerError("stored infrastructure authorization domain is invalid")
+
+    @staticmethod
+    def _infrastructure_snapshot(
+        connection: sqlite3.Connection,
+        row: sqlite3.Row,
+    ) -> InfrastructureReserveSnapshot:
+        authorization = BudgetLedger._stored_infrastructure_authorization(connection, row)
+        roles = tuple(
+            cast(BudgetRole, str(binding["role"]))
+            for binding in connection.execute(
+                """SELECT role FROM deployment_role_bindings
+                   WHERE reserve_id=? ORDER BY role""",
+                (str(row["reserve_id"]),),
+            ).fetchall()
+        )
+        try:
+            return InfrastructureReserveSnapshot(
+                reserve_id=str(row["reserve_id"]),
+                account_id=str(row["account_id"]),
+                run_identity=str(row["run_identity"]),
+                purpose=str(row["purpose"]),
+                operation_id=str(row["operation_id"]),
+                authorization_domain=authorization.domain,
+                authorization_digest=str(row["authorization_digest"]),
+                maximum=BudgetAmounts(
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_minor_units=int(row["max_cost"]),
+                ),
+                state=cast(Literal["reserved", "bound"], str(row["state"])),
+                deployed_model=(
+                    None if row["deployed_model"] is None else str(row["deployed_model"])
+                ),
+                receipt_digest=(
+                    None if row["receipt_digest"] is None else str(row["receipt_digest"])
+                ),
+                final_approval_digest=(
+                    None
+                    if row["final_approval_digest"] is None
+                    else str(row["final_approval_digest"])
+                ),
+                roles=roles,
+            )
+        except ValueError as exc:
+            raise BudgetLedgerError("infrastructure reserve row is invalid") from exc
+
     def open_or_expand_account(
         self,
         *,
         plan: RunAdmissionPlanPayload,
         contract: BudgetContract,
         envelope: BudgetApprovalEnvelope,
-        trusted_public_keys: Mapping[str, Ed25519PublicKey],
+        trusted_public_keys: Mapping[str, TrustedAuthority],
         expected_scope: str,
         authorized_roles: frozenset[str],
         now: datetime,
@@ -1496,6 +3368,9 @@ class BudgetLedger:
             ceiling = _amounts_from_row(account, "ceiling_input", "ceiling_output", "ceiling_cost")
             if not _fits(_add(occupied, maximum), ceiling):
                 raise BudgetLedgerError("insufficient budget before product boundary")
+            self._require_provider_cap_allows(
+                connection, account_id, _add(occupied, maximum)
+            )
             connection.execute(
                 """INSERT INTO product_reservations
                    (account_id,stage,product_id,state,max_input,max_output,max_cost)
@@ -1570,6 +3445,9 @@ class BudgetLedger:
             )
             if not _fits(_add(occupied, maximum), ceiling):
                 raise BudgetLedgerError("insufficient budget before product boundary")
+            self._require_provider_cap_allows(
+                connection, account_id, _add(occupied, maximum)
+            )
             connection.execute(
                 """INSERT INTO product_reservations
                    (account_id,stage,product_id,state,max_input,max_output,max_cost)
@@ -1715,6 +3593,9 @@ class BudgetLedger:
             ceiling = _amounts_from_row(account, "ceiling_input", "ceiling_output", "ceiling_cost")
             if not _fits(_add(occupied, target_maximum), ceiling):
                 raise BudgetLedgerError("insufficient budget before capability target")
+            self._require_provider_cap_allows(
+                connection, account_id, _add(occupied, target_maximum)
+            )
             connection.execute(
                 """INSERT INTO canary_capability_claims VALUES (
                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -2359,6 +4240,7 @@ class BudgetLedger:
                 "SELECT * FROM request_attempts WHERE account_id=? AND state='uncertain'",
                 (account_id,),
             ).fetchall()
+            infrastructure_cost = self._infrastructure_reserved_cost(connection, account_id)
             connection.commit()
         except BaseException:
             connection.rollback()
@@ -2372,6 +4254,12 @@ class BudgetLedger:
                 if str(row["state"]) == "reserved"
             )
         )
+        infrastructure_reserved = BudgetAmounts(
+            input_tokens=0,
+            output_tokens=0,
+            cost_minor_units=infrastructure_cost,
+        )
+        reserved = _add(reserved, infrastructure_reserved)
         settled = _sum_amounts(
             tuple(
                 _amounts_from_row(row, "actual_input", "actual_output", "actual_cost")
@@ -2412,7 +4300,7 @@ class BudgetLedger:
         rows = connection.execute(
             "SELECT * FROM product_reservations WHERE account_id=?", (account_id,)
         ).fetchall()
-        return _sum_amounts(
+        product_occupied = _sum_amounts(
             tuple(
                 _amounts_from_row(
                     row,
@@ -2423,6 +4311,16 @@ class BudgetLedger:
                 for row in rows
                 if str(row["state"]) != "released"
             )
+        )
+        return _add(
+            product_occupied,
+            BudgetAmounts(
+                input_tokens=0,
+                output_tokens=0,
+                cost_minor_units=BudgetLedger._infrastructure_reserved_cost(
+                    connection, account_id
+                ),
+            ),
         )
 
     @staticmethod
@@ -2495,6 +4393,18 @@ class BudgetLedger:
             raise BudgetLedgerError(f"{label} digest is invalid")
 
     @staticmethod
+    def _require_provider_cap_allows(
+        connection: sqlite3.Connection,
+        account_id: str,
+        proposed_occupied: BudgetAmounts,
+    ) -> None:
+        provider_cap = BudgetLedger._current_contract(
+            connection, account_id
+        ).provider_attestation.max_cost_minor_units
+        if proposed_occupied.cost_minor_units > provider_cap:
+            raise BudgetLedgerError("durable provider cap exceeded before product reserve")
+
+    @staticmethod
     def _current_contract(connection: sqlite3.Connection, account_id: str) -> BudgetContract:
         approval = connection.execute(
             """SELECT a.contract_json FROM budget_approvals AS a
@@ -2520,6 +4430,9 @@ __all__ = [
     "BudgetContract",
     "BudgetLedger",
     "BudgetLedgerError",
+    "InfrastructureCreatePermit",
+    "InfrastructureCleanupBinding",
+    "InfrastructureReserveSnapshot",
     "ProductReserve",
     "ProductSettlementAttempt",
     "ProductSettlementSnapshot",
@@ -2532,6 +4445,7 @@ __all__ = [
     "SendPermit",
     "budget_account_identity",
     "budget_contract_hash",
+    "derive_role_rate_from_pricing",
     "model_role_budget_identity_hash",
     "role_rate_digest",
     "role_rate_cost",

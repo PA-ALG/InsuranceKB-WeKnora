@@ -13,6 +13,11 @@
 *.key
 *.crt
 
+# 031 离线审批：私钥/待签材料必须位于仓库外；这些模式仅作误操作兜底
+.run-admission-private/
+.run-admission-staging/
+*.run-admission.rendered.json
+
 # IDE和编辑器文件
 *.swp
 *.swo

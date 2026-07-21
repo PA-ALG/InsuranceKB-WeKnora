@@ -308,6 +308,9 @@ def _downgrade_to_v2(db_path: Path) -> list[tuple[object, ...]]:
         connection.executescript(
             """
             BEGIN IMMEDIATE;
+            DROP TABLE deployment_role_bindings;
+            DROP TABLE infrastructure_reserves;
+            DROP TABLE infrastructure_authorizations;
             CREATE TABLE request_attempts_v2 (
                 account_id TEXT NOT NULL,
                 stage TEXT NOT NULL,
@@ -398,6 +401,6 @@ async def test_d1_5_v2_schema_migration_preserves_rows_and_marks_usage_unverifie
                       provider_verifier_policy,provider_proof_observed_at
                FROM request_attempts ORDER BY attempt_no"""
         ).fetchall()
-    assert version == (4,)
+    assert version == (5,)
     assert [tuple(row) for row in new_rows] == old_rows
     assert migrated.attempt_snapshot(_attempt_key(document)).usage_verified is False

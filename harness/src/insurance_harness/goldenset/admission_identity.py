@@ -10,6 +10,7 @@ import subprocess
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Annotated, Literal, Self
@@ -24,8 +25,9 @@ from pydantic import (
 )
 
 from insurance_harness.goldenset.admission_models import (
-    HistoricalProvenance,
+    LegacyFrozenProvenance,
     ProductInputSelection,
+    ProvenanceApprovalSelection,
     canonical_json_bytes,
 )
 
@@ -44,7 +46,19 @@ type BlockerCode = Literal[
     "execution_surface_unpinned",
     "extra_historical_product",
     "extra_product",
+    "git_object_format_mismatch",
     "identity_configuration_error",
+    "legacy_evidence_blob_mismatch",
+    "legacy_evidence_digest_mismatch",
+    "legacy_evidence_missing",
+    "legacy_evidence_path_invalid",
+    "legacy_freeze_time_mismatch",
+    "legacy_frozen_commit_not_ancestor",
+    "legacy_limitation_mismatch",
+    "legacy_product_digest_mismatch",
+    "legacy_recorded_agent_mismatch",
+    "legacy_recorded_agent_unproven",
+    "legacy_wip_digest_mismatch",
     "line_key_mismatch",
     "missing_historical_provenance",
     "missing_historical_product",
@@ -88,6 +102,88 @@ _CACHE_COMPONENTS = frozenset(
     {"__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
 )
 _IDENTITY_CONTRACT_DOMAIN = b"insurancekb.run-admission.identity-contract.v1\0"
+_GIT_READ_TIMEOUT_SECONDS = 10.0
+_GIT_READ_FAILURE_RETURN_CODE = 128
+
+
+def _git_read_command(*args: str) -> tuple[str, ...]:
+    return (
+        "git",
+        "--no-optional-locks",
+        "-c",
+        "core.useReplaceRefs=false",
+        "-c",
+        "core.fsmonitor=false",
+        *args,
+    )
+
+
+def _sanitized_git_environment() -> dict[str, str]:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_OPTIONAL_LOCKS": "0",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+    )
+    return environment
+
+
+def _run_git_text(
+    repo_root: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
+    command = _git_read_command(*args)
+    try:
+        return subprocess.run(
+            command,
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_GIT_READ_TIMEOUT_SECONDS,
+            env=_sanitized_git_environment(),
+        )
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        return subprocess.CompletedProcess(
+            command,
+            _GIT_READ_FAILURE_RETURN_CODE,
+            "",
+            "git read failed safely",
+        )
+
+
+def _run_git_bytes(
+    repo_root: Path, *args: str
+) -> subprocess.CompletedProcess[bytes]:
+    command = _git_read_command(*args)
+    try:
+        return subprocess.run(
+            command,
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            timeout=_GIT_READ_TIMEOUT_SECONDS,
+            env=_sanitized_git_environment(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return subprocess.CompletedProcess(
+            command,
+            _GIT_READ_FAILURE_RETURN_CODE,
+            b"",
+            b"git read failed safely",
+        )
+
+
+@dataclass(frozen=True)
+class _TreeBlobResult:
+    status: Literal["found", "missing", "error"]
+    blob_id: str | None = None
+    content: bytes | None = None
 
 
 class _ImmutableModel(BaseModel):
@@ -132,7 +228,7 @@ class IdentityInspectionRequest(_ImmutableModel):
     shared_input_digests: Mapping[NonBlankStr, NonBlankStr]
     execution_surface_digests: Mapping[NonBlankStr, NonBlankStr]
     historical_product_ids: tuple[NonBlankStr, ...]
-    historical_provenance: tuple[HistoricalProvenance, ...]
+    historical_provenance: tuple[ProvenanceApprovalSelection, ...]
 
     @model_validator(mode="after")
     def freeze_mappings(self) -> IdentityInspectionRequest:
@@ -174,6 +270,419 @@ class IdentityInspectionResult(_ImmutableModel):
     @field_serializer("product_digests")
     def serialize_product_digests(self, value: Mapping[str, str]) -> dict[str, str]:
         return dict(value)
+
+
+class LegacyProvenanceEvidenceInspector:
+    """Validate legacy provenance exclusively from read-only Git evidence."""
+
+    def __init__(self, *, repo_root: Path) -> None:
+        self._initialize(
+            repo_root=repo_root,
+            historical_product_ids=_production_policy().historical_product_ids,
+            golden_products_root=_production_policy().golden_products_root,
+            # The repository identifies a model family/session-agents label but not
+            # one unique historical session agent. Keep production empty until an
+            # authoritative repository fact can be code-allowlisted.
+            agent_trailer_allowlist={},
+        )
+
+    @classmethod
+    def _for_testing(
+        cls,
+        *,
+        repo_root: Path,
+        historical_product_ids: frozenset[str],
+        golden_products_root: str,
+        agent_trailer_allowlist: Mapping[str, str],
+    ) -> LegacyProvenanceEvidenceInspector:
+        instance = cls.__new__(cls)
+        instance._initialize(
+            repo_root=repo_root,
+            historical_product_ids=historical_product_ids,
+            golden_products_root=golden_products_root,
+            agent_trailer_allowlist=agent_trailer_allowlist,
+        )
+        return instance
+
+    def _initialize(
+        self,
+        *,
+        repo_root: Path,
+        historical_product_ids: frozenset[str],
+        golden_products_root: str,
+        agent_trailer_allowlist: Mapping[str, str],
+    ) -> None:
+        self._repo_root = repo_root.resolve(strict=True)
+        self._historical_product_ids = historical_product_ids
+        self._golden_products_root = golden_products_root.rstrip("/")
+        self._agent_trailer_allowlist = MappingProxyType(
+            dict(agent_trailer_allowlist)
+        )
+
+    def inspect(
+        self,
+        entries: Sequence[ProvenanceApprovalSelection],
+        *,
+        evaluated_revision: str,
+        product_digests: Mapping[str, str],
+    ) -> tuple[IdentityInspectionBlocker, ...]:
+        blockers: list[IdentityInspectionBlocker] = []
+        counts = Counter(entry.product_id for entry in entries)
+        for product_id in sorted(self._historical_product_ids):
+            count = counts[product_id]
+            if count == 0:
+                blockers.append(
+                    self._blocker(
+                        "missing_historical_provenance",
+                        "historical product lacks provenance",
+                        product_id=product_id,
+                    )
+                )
+            elif count > 1:
+                blockers.append(
+                    self._blocker(
+                        "duplicate_historical_provenance",
+                        f"historical product has {count} provenance entries",
+                        product_id=product_id,
+                    )
+                )
+        for product_id in sorted(set(counts) - self._historical_product_ids):
+            blockers.append(
+                self._blocker(
+                    "unknown_historical_provenance",
+                    "provenance targets a non-historical product",
+                    product_id=product_id,
+                )
+            )
+
+        object_format = self._object_format(blockers)
+        if object_format is None:
+            return tuple(blockers)
+        oid_length = 40 if object_format == "sha1" else 64
+        if not self._oid_matches(evaluated_revision, oid_length):
+            blockers.append(
+                self._blocker(
+                    "git_object_format_mismatch",
+                    "evaluated revision does not match repository object format",
+                    subject="evaluated_revision",
+                )
+            )
+            return tuple(blockers)
+
+        for entry in entries:
+            if not isinstance(entry, LegacyFrozenProvenance):
+                continue
+            if counts[entry.product_id] != 1:
+                continue
+            self._inspect_legacy_entry(
+                entry,
+                evaluated_revision=evaluated_revision,
+                product_digests=product_digests,
+                oid_length=oid_length,
+                blockers=blockers,
+            )
+        return tuple(blockers)
+
+    def _inspect_legacy_entry(
+        self,
+        entry: LegacyFrozenProvenance,
+        *,
+        evaluated_revision: str,
+        product_digests: Mapping[str, str],
+        oid_length: int,
+        blockers: list[IdentityInspectionBlocker],
+    ) -> None:
+        if entry.limitation != "original_annotation_time_unavailable":
+            blockers.append(
+                self._blocker(
+                    "legacy_limitation_mismatch",
+                    "legacy provenance limitation is not code-owned",
+                    product_id=entry.product_id,
+                )
+            )
+        actual_product_digest = product_digests.get(entry.product_id)
+        if actual_product_digest != entry.product_digest:
+            blockers.append(
+                self._blocker(
+                    "legacy_product_digest_mismatch",
+                    "legacy product digest differs from inspected product identity",
+                    product_id=entry.product_id,
+                )
+            )
+
+        format_valid = True
+        for subject, oid in (
+            ("frozen_commit", entry.frozen_commit),
+            ("evidence_blob_id", entry.evidence_blob_id),
+        ):
+            if not self._oid_matches(oid, oid_length):
+                format_valid = False
+                blockers.append(
+                    self._blocker(
+                        "git_object_format_mismatch",
+                        f"{subject} does not match repository object format",
+                        product_id=entry.product_id,
+                        subject=subject,
+                    )
+                )
+        if not format_valid:
+            return
+
+        ancestry = self._git_text(
+            "merge-base", "--is-ancestor", entry.frozen_commit, evaluated_revision
+        )
+        if ancestry.returncode == 1:
+            blockers.append(
+                self._blocker(
+                    "legacy_frozen_commit_not_ancestor",
+                    "legacy frozen commit is not an ancestor of evaluated revision",
+                    product_id=entry.product_id,
+                )
+            )
+        elif ancestry.returncode != 0:
+            blockers.append(
+                self._blocker(
+                    "identity_configuration_error",
+                    "git could not validate legacy frozen commit ancestry",
+                    product_id=entry.product_id,
+                )
+            )
+
+        expected_path = (
+            f"{self._golden_products_root}/{entry.product_id}/golden.jsonl"
+        )
+        if entry.evidence_path != expected_path or not self._literal_path_is_safe(
+            entry.evidence_path
+        ):
+            blockers.append(
+                self._blocker(
+                    "legacy_evidence_path_invalid",
+                    "legacy evidence path is not the code-derived literal product path",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+            return
+
+        frozen_tree = self._tree_blob(entry.frozen_commit, entry.evidence_path)
+        if frozen_tree.status == "error":
+            blockers.append(
+                self._blocker(
+                    "identity_configuration_error",
+                    "git could not read legacy evidence tree/blob",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+            return
+        if frozen_tree.status == "missing":
+            blockers.append(
+                self._blocker(
+                    "legacy_evidence_missing",
+                    "legacy evidence blob is absent from frozen commit",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+            return
+        assert frozen_tree.blob_id is not None
+        assert frozen_tree.content is not None
+        actual_blob_id = frozen_tree.blob_id
+        evidence_bytes = frozen_tree.content
+        if actual_blob_id != entry.evidence_blob_id:
+            blockers.append(
+                self._blocker(
+                    "legacy_evidence_blob_mismatch",
+                    "legacy evidence blob ID differs from frozen tree",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+        if hashlib.sha256(evidence_bytes).hexdigest() != entry.evidence_digest:
+            blockers.append(
+                self._blocker(
+                    "legacy_evidence_digest_mismatch",
+                    "legacy evidence digest differs from frozen blob bytes",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+
+        current_tree = self._tree_blob(evaluated_revision, entry.evidence_path)
+        if current_tree.status == "error":
+            blockers.append(
+                self._blocker(
+                    "identity_configuration_error",
+                    "git could not read evaluated WIP evidence tree/blob",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+        elif current_tree.status == "missing":
+            blockers.append(
+                self._blocker(
+                    "legacy_evidence_missing",
+                    "legacy WIP evidence is absent from evaluated revision",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+        else:
+            assert current_tree.content is not None
+        if (
+            current_tree.status == "found"
+            and current_tree.content is not None
+            and hashlib.sha256(current_tree.content).hexdigest() != entry.wip_digest
+        ):
+            blockers.append(
+                self._blocker(
+                    "legacy_wip_digest_mismatch",
+                    "legacy WIP digest differs from evaluated revision bytes",
+                    product_id=entry.product_id,
+                    path=entry.evidence_path,
+                )
+            )
+
+        commit_time = self._commit_time(entry.frozen_commit)
+        if commit_time is None:
+            blockers.append(
+                self._blocker(
+                    "identity_configuration_error",
+                    "git could not read frozen commit time",
+                    product_id=entry.product_id,
+                )
+            )
+        elif entry.evidence_frozen_at != commit_time:
+            blockers.append(
+                self._blocker(
+                    "legacy_freeze_time_mismatch",
+                    "evidence freeze time differs from frozen commit time",
+                    product_id=entry.product_id,
+                )
+            )
+
+        derived_agent_id = self._derived_agent_id(entry.frozen_commit)
+        if derived_agent_id is None:
+            blockers.append(
+                self._blocker(
+                    "legacy_recorded_agent_unproven",
+                    "repository evidence does not prove one allowlisted agent ID",
+                    product_id=entry.product_id,
+                )
+            )
+        elif entry.recorded_agent_id != derived_agent_id:
+            blockers.append(
+                self._blocker(
+                    "legacy_recorded_agent_mismatch",
+                    "recorded agent ID differs from allowlisted repository evidence",
+                    product_id=entry.product_id,
+                )
+            )
+
+    def _object_format(
+        self, blockers: list[IdentityInspectionBlocker]
+    ) -> Literal["sha1", "sha256"] | None:
+        completed = self._git_text("rev-parse", "--show-object-format")
+        value = completed.stdout.strip()
+        if completed.returncode != 0 or value not in {"sha1", "sha256"}:
+            blockers.append(
+                self._blocker(
+                    "identity_configuration_error",
+                    "git object format could not be determined",
+                )
+            )
+            return None
+        if value == "sha1":
+            return "sha1"
+        return "sha256"
+
+    def _tree_blob(self, revision: str, path: str) -> _TreeBlobResult:
+        tree = self._git_bytes(
+            "ls-tree", "-z", "--full-tree", revision, "--", f":(literal){path}"
+        )
+        if tree.returncode != 0:
+            return _TreeBlobResult(status="error")
+        if not tree.stdout:
+            return _TreeBlobResult(status="missing")
+        records = tree.stdout.rstrip(b"\0").split(b"\0")
+        if len(records) != 1 or b"\t" not in records[0]:
+            return _TreeBlobResult(status="error")
+        header, returned_path = records[0].split(b"\t", 1)
+        fields = header.split()
+        if len(fields) != 3 or fields[1] != b"blob":
+            return _TreeBlobResult(status="error")
+        try:
+            decoded_path = returned_path.decode("utf-8", errors="strict")
+            blob_id = fields[2].decode("ascii", errors="strict")
+        except UnicodeError:
+            return _TreeBlobResult(status="error")
+        if decoded_path != path:
+            return _TreeBlobResult(status="error")
+        blob = self._git_bytes("cat-file", "blob", blob_id)
+        if blob.returncode != 0:
+            return _TreeBlobResult(status="error")
+        return _TreeBlobResult(status="found", blob_id=blob_id, content=blob.stdout)
+
+    def _commit_time(self, revision: str) -> datetime | None:
+        completed = self._git_text("show", "-s", "--format=%cI", revision)
+        if completed.returncode != 0:
+            return None
+        try:
+            value = datetime.fromisoformat(completed.stdout.strip())
+        except ValueError:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            return None
+        return value
+
+    def _derived_agent_id(self, revision: str) -> str | None:
+        completed = self._git_text("show", "-s", "--format=%B", revision)
+        if completed.returncode != 0:
+            return None
+        prefix = "Co-Authored-By: "
+        derived = {
+            self._agent_trailer_allowlist[line[len(prefix) :]]
+            for line in completed.stdout.splitlines()
+            if line.startswith(prefix)
+            and line[len(prefix) :] in self._agent_trailer_allowlist
+        }
+        if len(derived) != 1:
+            return None
+        return next(iter(derived))
+
+    def _git_text(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return _run_git_text(self._repo_root, *args)
+
+    def _git_bytes(self, *args: str) -> subprocess.CompletedProcess[bytes]:
+        return _run_git_bytes(self._repo_root, *args)
+
+    @staticmethod
+    def _oid_matches(oid: str, expected_length: int) -> bool:
+        return len(oid) == expected_length and all(
+            character in "0123456789abcdef" for character in oid
+        )
+
+    @staticmethod
+    def _literal_path_is_safe(path: str) -> bool:
+        pure = PurePosixPath(path)
+        return bool(pure.parts) and not pure.is_absolute() and ".." not in pure.parts
+
+    @staticmethod
+    def _blocker(
+        code: BlockerCode,
+        message: str,
+        *,
+        path: str | None = None,
+        subject: str | None = None,
+        product_id: str | None = None,
+    ) -> IdentityInspectionBlocker:
+        return IdentityInspectionBlocker(
+            code=code,
+            message=message,
+            path=path,
+            subject=subject,
+            product_id=product_id,
+        )
 
 
 def identity_contract_hash(request: IdentityInspectionRequest) -> str:
@@ -273,6 +782,14 @@ class DeterministicIdentityInspector:
     def _initialize(self, repo_root: Path, policy: _IdentityPolicy) -> None:
         self._repo_root = repo_root.resolve(strict=True)
         self._policy = policy
+        self._legacy_provenance_inspector = (
+            LegacyProvenanceEvidenceInspector._for_testing(
+                repo_root=self._repo_root,
+                historical_product_ids=policy.historical_product_ids,
+                golden_products_root=policy.golden_products_root,
+                agent_trailer_allowlist={},
+            )
+        )
 
     def inspect(self, request: IdentityInspectionRequest) -> IdentityInspectionResult:
         blockers: list[IdentityInspectionBlocker] = []
@@ -313,7 +830,14 @@ class DeterministicIdentityInspector:
             policy_source_root, policy_golden_root
         )
         self._inspect_git_pollution(consumed_roots, blockers)
-        self._inspect_historical_provenance(request, blockers)
+        self._inspect_historical_product_manifest(request, blockers)
+        blockers.extend(
+            self._legacy_provenance_inspector.inspect(
+                request.historical_provenance,
+                evaluated_revision=evaluated_revision,
+                product_digests=product_digests,
+            )
+        )
         return IdentityInspectionResult(
             evaluated_revision=evaluated_revision,
             product_digests=product_digests,
@@ -323,13 +847,7 @@ class DeterministicIdentityInspector:
         )
 
     def _git(self, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ("git", *args),
-            cwd=self._repo_root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        return _run_git_text(self._repo_root, *args)
 
     def _configuration_error(
         self, message: str, blockers: list[IdentityInspectionBlocker]
@@ -1039,7 +1557,7 @@ class DeterministicIdentityInspector:
         parts = PurePosixPath(relative).parts
         return bool(set(parts) & _CACHE_COMPONENTS) or relative.endswith(".pyc")
 
-    def _inspect_historical_provenance(
+    def _inspect_historical_product_manifest(
         self,
         request: IdentityInspectionRequest,
         blockers: list[IdentityInspectionBlocker],
@@ -1072,35 +1590,6 @@ class DeterministicIdentityInspector:
                     )
                 )
 
-        provenance_counts = Counter(
-            item.product_id for item in request.historical_provenance
-        )
-        for product_id in request.historical_product_ids:
-            count = provenance_counts[product_id]
-            if count == 0:
-                blockers.append(
-                    IdentityInspectionBlocker(
-                        code="missing_historical_provenance",
-                        product_id=product_id,
-                        message=f"historical product lacks provenance: {product_id}",
-                    )
-                )
-            elif count > 1:
-                blockers.append(
-                    IdentityInspectionBlocker(
-                        code="duplicate_historical_provenance",
-                        product_id=product_id,
-                        message=f"historical product has duplicate provenance: {product_id}",
-                    )
-                )
-        for product_id in sorted(set(provenance_counts) - expected):
-            blockers.append(
-                IdentityInspectionBlocker(
-                    code="unknown_historical_provenance",
-                    product_id=product_id,
-                    message=f"provenance targets a non-historical product: {product_id}",
-                )
-            )
 
 
 __all__ = [
@@ -1108,5 +1597,6 @@ __all__ = [
     "IdentityInspectionBlocker",
     "IdentityInspectionRequest",
     "IdentityInspectionResult",
+    "LegacyProvenanceEvidenceInspector",
     "identity_contract_hash",
 ]

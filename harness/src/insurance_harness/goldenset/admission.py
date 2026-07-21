@@ -15,7 +15,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Any, Literal, Protocol, Self
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -53,6 +52,7 @@ from insurance_harness.goldenset.admission_models import (
     ModelRolePlan,
     ProvenanceApprovalEnvelope,
     RunAdmissionPlan,
+    TrustedAuthority,
     canonical_json_bytes,
     plan_payload_hash,
     verify_approval_envelope,
@@ -537,7 +537,7 @@ class ProductionAdmissionEvaluator:
         self,
         *,
         repo_root: Path,
-        trusted_public_keys: Mapping[str, Ed25519PublicKey] | None = None,
+        trusted_public_keys: Mapping[str, TrustedAuthority] | None = None,
         allowed_budget_roles: frozenset[str] = frozenset(),
         allowed_provenance_roles: frozenset[str] = frozenset(),
         probe: bool = False,
@@ -561,7 +561,7 @@ class ProductionAdmissionEvaluator:
         cls,
         *,
         repo_root: Path,
-        trusted_public_keys: Mapping[str, Ed25519PublicKey],
+        trusted_public_keys: Mapping[str, TrustedAuthority],
         allowed_budget_roles: frozenset[str],
         allowed_provenance_roles: frozenset[str],
         allowed_canary_review_roles: frozenset[str],
@@ -593,7 +593,7 @@ class ProductionAdmissionEvaluator:
         *,
         identity_inspector: IdentityInspector,
         provider_probe: ProviderProbe,
-        trusted_public_keys: Mapping[str, Ed25519PublicKey],
+        trusted_public_keys: Mapping[str, TrustedAuthority],
         probe: bool,
         clock: Callable[[], datetime],
         runtime_capability_ready: bool,
@@ -626,7 +626,7 @@ class ProductionAdmissionEvaluator:
         *,
         identity_inspector: IdentityInspector,
         provider_probe: ProviderProbe,
-        trusted_public_keys: Mapping[str, Ed25519PublicKey],
+        trusted_public_keys: Mapping[str, TrustedAuthority],
         allowed_budget_roles: frozenset[str],
         allowed_provenance_roles: frozenset[str],
         allowed_canary_review_roles: frozenset[str],

@@ -305,6 +305,9 @@ def _replace_attempts_with_pre_pool_schema(db_path: Path) -> list[tuple[object, 
         connection.executescript(
             """
             BEGIN IMMEDIATE;
+            DROP TABLE deployment_role_bindings;
+            DROP TABLE infrastructure_reserves;
+            DROP TABLE infrastructure_authorizations;
             CREATE TABLE request_attempts_pre_pool (
                 account_id TEXT NOT NULL,
                 stage TEXT NOT NULL,
@@ -434,6 +437,9 @@ def _replace_pool_with_pre_binding_schema(db_path: Path) -> None:
         connection.executescript(
             """
             BEGIN IMMEDIATE;
+            DROP TABLE deployment_role_bindings;
+            DROP TABLE infrastructure_reserves;
+            DROP TABLE infrastructure_authorizations;
             CREATE TABLE request_pool_limits_pre_binding (
                 account_id TEXT NOT NULL,
                 stage TEXT NOT NULL,
@@ -1033,7 +1039,7 @@ def test_d1_3b_d1_3c_pre_pool_schema_migrates_rows_and_remains_operable(
             "SELECT role,limit_kind FROM request_attempts ORDER BY attempt_no"
         ).fetchall()
         foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
-    assert version == (4,)
+    assert version == (5,)
     assert {"role", "limit_kind"}.issubset(columns)
     assert [tuple(row) for row in preserved_rows] == old_rows
     assert [tuple(row) for row in migrated_bindings] == [
@@ -1149,7 +1155,7 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_iden
     assert binding is not None
     assert binding[0] == expected_rate.model_role_identity_hash
     assert isinstance(binding[1], str) and len(binding[1]) == 64
-    assert version == (4,)
+    assert version == (5,)
 
 
 def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_rebind(

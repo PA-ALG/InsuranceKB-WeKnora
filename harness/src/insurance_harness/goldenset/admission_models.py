@@ -12,6 +12,7 @@ import binascii
 import hashlib
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
@@ -66,6 +67,9 @@ type NonBlankStr = Annotated[
 type NonNegativeStrictInt = Annotated[StrictInt, Field(ge=0)]
 type PositiveStrictInt = Annotated[StrictInt, Field(ge=1)]
 type Sha256Digest = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+type GitObjectId = Annotated[
+    StrictStr, StringConstraints(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+]
 type RunIdentityStr = Annotated[
     StrictStr,
     StringConstraints(
@@ -82,6 +86,35 @@ type PurposeStr = Annotated[
 
 class ApprovalVerificationError(ValueError):
     """Raised when a detached run-admission approval is not trustworthy."""
+
+
+@dataclass(frozen=True, slots=True)
+class TrustedKeyPolicy:
+    """One trust-root key bound to its exact human and approval capabilities."""
+
+    key_id: str
+    approver_identity: str
+    domains: frozenset[str]
+    scopes: frozenset[str]
+    roles: frozenset[str]
+    public_key: Ed25519PublicKey
+
+    def __post_init__(self) -> None:
+        if not self.key_id.strip() or not self.approver_identity.strip():
+            raise ValueError("trusted key identity fields must be non-blank")
+        if not self.domains or not self.scopes or not self.roles:
+            raise ValueError("trusted key policy capabilities must be non-empty")
+        if any(
+            not value.strip()
+            for values in (self.domains, self.scopes, self.roles)
+            for value in values
+        ):
+            raise ValueError("trusted key policy values must be non-blank")
+        if not isinstance(self.public_key, Ed25519PublicKey):
+            raise TypeError("trusted key policy requires an Ed25519 public key")
+
+
+type TrustedAuthority = Ed25519PublicKey | TrustedKeyPolicy
 
 
 class _ImmutableModel(BaseModel):
@@ -217,6 +250,43 @@ class ProvenanceApprovalEntry(_ImmutableModel):
         return self
 
 
+class ObservedAnnotationProvenance(ProvenanceApprovalEntry):
+    """Annotation provenance backed by an observed provider/model time window."""
+
+    provenance_kind: Literal["observed_annotation"]
+
+
+class LegacyFrozenProvenance(_ImmutableModel):
+    """Repository-frozen legacy evidence without a synthetic annotation window."""
+
+    provenance_kind: Literal["legacy_frozen"]
+    product_id: NonBlankStr
+    product_digest: Sha256Digest
+    wip_digest: Sha256Digest
+    frozen_commit: GitObjectId
+    evidence_path: NonBlankStr
+    evidence_blob_id: GitObjectId
+    evidence_digest: Sha256Digest
+    recorded_agent_id: NonBlankStr
+    evidence_frozen_at: datetime
+    limitation: Literal["original_annotation_time_unavailable"]
+
+    @model_validator(mode="after")
+    def require_aware_freeze_time(self) -> LegacyFrozenProvenance:
+        if (
+            self.evidence_frozen_at.tzinfo is None
+            or self.evidence_frozen_at.utcoffset() is None
+        ):
+            raise ValueError("evidence_frozen_at must include a timezone")
+        return self
+
+
+type ProvenanceApprovalSelection = Annotated[
+    ObservedAnnotationProvenance | LegacyFrozenProvenance,
+    Field(discriminator="provenance_kind"),
+]
+
+
 class ProductInputPlan(_ImmutableModel):
     """Immutable identity of all source inputs consumed for one product."""
 
@@ -313,10 +383,6 @@ class PendingProductInputPlan(_ImmutableModel):
 type ProductInputSelection = ProductInputPlan | PendingProductInputPlan
 
 
-class HistoricalProvenance(ProvenanceApprovalEntry):
-    """Per-product evidence for the historical Golden annotation identity."""
-
-
 class BudgetPlan(BudgetApprovalEntry):
     """Immutable top-level input/output token and cost ceiling."""
 
@@ -347,7 +413,7 @@ class BudgetApprovalPayload(_ApprovalPayload):
 
 
 class ProvenanceApprovalPayload(_ApprovalPayload):
-    product_entries: tuple[ProvenanceApprovalEntry, ...]
+    product_entries: tuple[ProvenanceApprovalSelection, ...]
 
 
 class BudgetApprovalEnvelope(_ImmutableModel):
@@ -542,7 +608,7 @@ def verify_approval_envelope(
     expected_run_identity: str,
     expected_purpose: str,
     expected_scope: str,
-    trusted_public_keys: Mapping[str, object],
+    trusted_public_keys: Mapping[str, TrustedAuthority],
     allowed_roles: frozenset[str],
     now: datetime,
 ) -> None:
@@ -573,9 +639,22 @@ def verify_approval_envelope(
     if now >= payload.expires_at:
         raise ApprovalVerificationError("approval is expired")
 
-    public_key = trusted_public_keys.get(envelope.key_id)
-    if public_key is None:
+    trusted_authority = trusted_public_keys.get(envelope.key_id)
+    if trusted_authority is None:
         raise ApprovalVerificationError("unknown key id")
+    public_key = trusted_authority
+    if isinstance(trusted_authority, TrustedKeyPolicy):
+        if trusted_authority.key_id != envelope.key_id:
+            raise ApprovalVerificationError("trusted key policy key id mismatch")
+        if payload.approver_identity != trusted_authority.approver_identity:
+            raise ApprovalVerificationError("approval identity violates trusted key policy")
+        if envelope.domain not in trusted_authority.domains:
+            raise ApprovalVerificationError("approval domain violates trusted key policy")
+        if payload.scope not in trusted_authority.scopes:
+            raise ApprovalVerificationError("approval scope violates trusted key policy")
+        if payload.approver_role not in trusted_authority.roles:
+            raise ApprovalVerificationError("approval role violates trusted key policy")
+        public_key = trusted_authority.public_key
     if not isinstance(public_key, Ed25519PublicKey):
         raise ApprovalVerificationError("trusted key is not an Ed25519 public key")
 
@@ -604,18 +683,23 @@ __all__ = [
     "CanaryReviewArtifactEvidence",
     "CanaryReviewTarget",
     "CanaryReviewUsageEvidence",
-    "HistoricalProvenance",
+    "GitObjectId",
+    "LegacyFrozenProvenance",
     "ModelRolePlan",
     "ModelRoleSelection",
     "PendingModelRolePlan",
     "PendingProductInputPlan",
     "ProductInputSelection",
     "ProductInputPlan",
+    "ObservedAnnotationProvenance",
     "ProvenanceApprovalEntry",
     "ProvenanceApprovalEnvelope",
     "ProvenanceApprovalPayload",
+    "ProvenanceApprovalSelection",
     "RunAdmissionPlan",
     "RunAdmissionPlanPayload",
+    "TrustedAuthority",
+    "TrustedKeyPolicy",
     "approval_signed_bytes",
     "canonical_json_bytes",
     "plan_payload_hash",

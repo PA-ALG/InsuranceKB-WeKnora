@@ -34,7 +34,8 @@
 | 024 | extraction-recall-uplift | ✅ 已合入 main（PR #13） | 轨道 L5；durable attempt ledger + E1～E7 + A10 双侧护栏；真实召回/非退化证据仍由 020 D4/D4b 承接 |
 | 025 | merge-weak-value-guard | 📋 规格已合入（PR #17），021✅ 后实现前置已满足，可认领 | 合并前置弱值门槛：抑制=有资格前提的裁决 + SpecificityRelation + root/events 可恢复生命周期；G1～G9 strict；迁移 0011 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
-| 027+ | （空闲） | | 先占号再开目录 |
+| 031 | operational-run-admission | 🚧 设计复核修订中 | 解除 020 真实准入阻塞；两套最小 PTU 已由 operator 创建并验证身份，仍须预算/审批治理后才可 READY |
+| 027-030、032+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
