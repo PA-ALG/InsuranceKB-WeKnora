@@ -412,7 +412,6 @@ async def test_artifact_commit_failure_leaves_no_partial_outputs_or_staging(
             )
 
         monkeypatch.setattr(Path, "write_text", fail_staged_queue_write)
-        expected = "injected stage write failure"
     else:
         replace_calls = 0
         original_replace = os.replace
@@ -428,9 +427,8 @@ async def test_artifact_commit_failure_leaves_no_partial_outputs_or_staging(
             original_replace(source_path, destination_path)
 
         monkeypatch.setattr(os, "replace", fail_second_replace)
-        expected = "injected replace failure"
 
-    with pytest.raises(OSError, match=expected):
+    with pytest.raises(RuntimeError, match="^run artifact commit failed") as caught:
         await pipeline.run(
             product_dir=product_dir,
             run_dir=run_dir,
@@ -438,6 +436,10 @@ async def test_artifact_commit_failure_leaves_no_partial_outputs_or_staging(
             source_request=DirectorySourceRequest(product_dir=product_dir),
         )
 
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert "injected" not in str(caught.value)
+    assert str(tmp_path) not in str(caught.value)
     assert_no_committed_artifacts(run_dir)
     assert not list(run_dir.glob(".artifacts-*.staging"))
 

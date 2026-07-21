@@ -4,6 +4,7 @@
 本批样本均为文本型 PDF；疑似扫描件直接报错（后续批次接 OCR 时再扩展）。
 """
 
+from io import BytesIO
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -29,17 +30,29 @@ def detect_scanned(pages: list[PageText]) -> bool:
     return avg < _SCANNED_AVG_CHARS_THRESHOLD
 
 
-def extract_pages(pdf_path: Path) -> list[PageText]:
+def _extract_pages(pdf_source: Path | BytesIO, *, source_name: str) -> list[PageText]:
     import pdfplumber
 
     pages: list[PageText] = []
-    with pdfplumber.open(pdf_path) as pdf:
+    with pdfplumber.open(pdf_source) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             text = page.extract_text() or ""
             pages.append(PageText(page_no=i, text=text))
     if detect_scanned(pages):
         raise ScannedPdfError(
-            f"{pdf_path.name}: 平均每页可提取文本 < {_SCANNED_AVG_CHARS_THRESHOLD} 字，"
+            f"{source_name}: 平均每页可提取文本 < {_SCANNED_AVG_CHARS_THRESHOLD} 字，"
             f"疑似扫描件——本批次不支持，请登记为待 OCR 样本"
         )
     return pages
+
+
+def extract_pages(pdf_path: Path) -> list[PageText]:
+    """从路径解析 PDF，保持原有公开接口。"""
+
+    return _extract_pages(pdf_path, source_name=pdf_path.name)
+
+
+def extract_pages_bytes(pdf_bytes: bytes, *, source_name: str) -> list[PageText]:
+    """从调用方已验证的精确字节解析 PDF，避免再次按路径打开。"""
+
+    return _extract_pages(BytesIO(pdf_bytes), source_name=source_name)

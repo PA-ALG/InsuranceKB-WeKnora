@@ -1,9 +1,19 @@
 """抽取管道数据模型（004；口径见 docs/insurance-kb/03/04）。"""
 
+from collections.abc import Mapping
 from datetime import datetime
+from pathlib import PurePosixPath
+from types import MappingProxyType
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_serializer,
+    field_validator,
+)
 
 from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, GoldenRecord, TriState
@@ -31,6 +41,86 @@ CandidateOrigin = Literal["extract", "gapfill", "vote", "judge", "fastpath"]
 # llm_extracted=通用管道模型抽取（既有默认）；llm_inferred=模型推断（无直接证据，预留）
 DataQuality = Literal["structured_direct", "table_parsed", "llm_extracted", "llm_inferred"]
 SourceMode = Literal["legacy", "weknora", "directory_replay"]
+
+
+class BaselineAdmissionIdentity(BaseModel):
+    """Versioned signed-input identity durably attached to an admitted baseline."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    format: Literal["insurancekb.baseline-admission-identity.v1"]
+    execution_plan_hash: str
+    parser_fingerprint: str
+    pdf_digests: Mapping[str, str]
+    product_meta_digest: str
+    fields_digest: str
+    consumed_input_digests: Mapping[str, str]
+    shared_input_digests: Mapping[str, str]
+    extractor_model_id: str
+    judge_model_id: str
+    schema_version: str
+    template_registry_version: str
+
+    @field_validator(
+        "execution_plan_hash",
+        "parser_fingerprint",
+        "product_meta_digest",
+        "fields_digest",
+    )
+    @classmethod
+    def _lower_sha256(cls, value: str) -> str:
+        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+            raise ValueError("must be a lowercase sha256 digest")
+        return value
+
+    @field_validator("pdf_digests", "consumed_input_digests", "shared_input_digests")
+    @classmethod
+    def _digest_mapping(
+        cls,
+        value: Mapping[str, str],
+        info: ValidationInfo,
+    ) -> Mapping[str, str]:
+        if not value or any(
+            not key
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            for key, digest in value.items()
+        ):
+            raise ValueError("must contain lowercase sha256 digests")
+        for key in value:
+            path = PurePosixPath(key)
+            if (
+                path.is_absolute()
+                or not path.parts
+                or any(part in {"", ".", ".."} for part in path.parts)
+                or path.as_posix() != key
+                or (
+                    info.field_name in {"pdf_digests", "consumed_input_digests"}
+                    and len(path.parts) != 1
+                )
+                or (
+                    info.field_name == "pdf_digests"
+                    and not key.casefold().endswith(".pdf")
+                )
+            ):
+                raise ValueError("digest paths must be canonical repo-relative paths")
+        return MappingProxyType(dict(sorted(value.items())))
+
+    @field_serializer("pdf_digests", "consumed_input_digests", "shared_input_digests")
+    def _serialize_digest_mapping(self, value: Mapping[str, str]) -> dict[str, str]:
+        return dict(value)
+
+    @field_validator(
+        "extractor_model_id",
+        "judge_model_id",
+        "schema_version",
+        "template_registry_version",
+    )
+    @classmethod
+    def _nonblank_identity(cls, value: str) -> str:
+        if not value.strip() or value != value.strip():
+            raise ValueError("must be nonblank and trimmed")
+        return value
 
 
 class FieldCandidate(BaseModel):
@@ -135,6 +225,7 @@ class RunManifest(BaseModel):
     pending_judge_count: int = 0
     template_registry_version: str = ""  # 006 F3：空 = 未启用 fast path
     fastpath_fields: int = 0  # fast path 命中并通过校验链的字段总数
+    baseline_admission: BaselineAdmissionIdentity | None = None
 
 
 class DocPayload(BaseModel):

@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
-> 最后更新：2026-07-18（PR #18 由 codex 接管：文件态已替换为 migration 0012 的 Space-scoped durable unit-of-work；本机 PostgreSQL 16 四节点 `tests=4 skipped=0`、Ruff/mypy 全绿、deterministic `1681 passed / 9 deselected`；实现 commit `f5f7f3de` 已 push，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，见 0i/B17。018 已随 PR #9 合入 `main`；008 工作台 PR #15 仍待终审，见 B8。）
+> 最后更新：2026-07-20（020 T1 run-admission 软件闭环已完成并生成零模型 `BLOCKED` 工件；T2～T7 未运行。当前仍须先完成 021，并补齐输入/执行面 identity、历史 provenance、签名审批、三模型不可变身份/probe 与预算账户后，才允许真实模型调用；见 0j/B22。）
 
 ## ⓪ 当前最优先事项（接手先看这里）
 
@@ -55,6 +55,8 @@
 0h. **并行执行蓝图（总设计师制定，业务方 2026-07-16 拍板）**：全轨道结构（L0 解阻塞 / L1 关键路径 021→020 / L2 工作台 008 / L3 MCP 013 / L4 知识形态 010→009→012 / L5 抽取提准 024 / L6 治理）、优先级与护栏见 `docs/insurance-kb/22-parallel-execution-blueprint.md`；**change 号与 Alembic 迁移号一律先在 `openspec/changes/README.md` 注册表占号**（022 撞号教训；0006=021、0007=010、0008=009、0009=012 已预分配）。018/019/023 已完成，当前关键路径为 021→020；013 与 008 W4 已随 PR #9 解锁。010 的 knowledge 域段（T5 起）仍排在 021 之后。**Wave 2（009/011/012）已条款化（正式 delta 过 strict；迁移 0008/0009/0010 已占号），规格复审收口中（codex P0/P1：冻结投影边界/QA 断言级绑定/三方对账等，见 PR #12）——收口前不可认领**。
 
 0i. **PR #18 / OpenSpec 015 codex 接管（2026-07-18，当前）**：Claude 旧版以 cursor/gap/observation 文件充当 `--apply` 状态；该方案不能在三份文件间原子提交，也不携 Space 身份，无法满足企业多实例 exactly-once。codex 按 SDD/TDD 新增迁移 `0012` 的 `flywheel_checkpoints`、`flywheel_observations`、`knowledge_gaps`，以 KnowledgeSpace 行锁串行同 Space 的跨 source gap 聚合，在 caller-owned transaction 内写 processed ledger/gap 并最后推进 checkpoint；故障注入全回滚、健康重试恰一次、同 source 跨 Space 隔离。CLI 现必填 `--source-id`，dry-run 零写，`--apply` 落 DB；真实 Space-scoped published Claim 查询已接空知识信号。全仓首轮 deterministic 抓到新增 head 破坏 `head→0002` 的首 DDL 前预检，已在 0012 镜像 0003/0005 下游兼容性检查并新增非空飞轮表 downgrade 拒绝测试；Alembic env 已注册新 ORM。提交前自检另以 `model_construct` 复现 PII validator 绕过，已在 pull 消费点幂等再脱敏，确保 evaluation/queue/gap payload 不落原文。当前本机 PostgreSQL 16 lane **4 passed / JUnit tests=4 skipped=0**，Ruff PASS、mypy 238 files PASS，deterministic **1681 passed / 9 deselected**。实现 commit `f5f7f3de` 已 push PR #18，GitHub 两组 deterministic/integration-postgres/wheel-smoke 共六项全绿，PR 已达可合并状态。F1.1b Langfuse 直连与 F2.4 ReviewItem 动作投影继续 gated，禁止因本轮 durable foundation 完成而虚报。
+
+0j. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-20）**：已按 SDD/TDD 实现类型化 admission/evaluator/CLI、签名 canonical identity、完整输入与 execution-surface 指纹、安全 provider probe、durable budget reservation/request-attempt ledger、每产品 runtime 重验、annotation/baseline 可恢复执行入口、提交前 exact-bytes/语义回验及 validation→settlement 同锁。两轮独立最终复核均无 P0/P1/P2。当前权威 `run-admission.json` 为 **`BLOCKED`**，runtime capability=`budget-ledger-v3-canary-v1`，provider probe 全为 `not_attempted`，模型调用/token/费用均为 0；阻塞包括 021 依赖不匹配、输入/执行面 identity 漂移或缺失、历史 provenance 缺失、provenance/budget 签名审批缺失、预算未准入及三模型不可变身份未冻结。**这只表示 T1 软件闭环完成，不表示 020 数据运行完成**：T2～T7 尚未运行，D5/T8 最终对账也未完成；解除阻塞后必须刷新准入工件并得到 READY，方可按 T2→T7 执行。
 
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与在线 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、judge/dead-letter/keypoints。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
@@ -120,7 +122,7 @@
 | B19 | **017 WeKnora SourceDocument Bridge + Evidence lineage** | ✅ T1～T8 软件完成并通过双审/全量门禁；真实 live gate 已纳入冻结七变量的受控手工 workflow，但无运行证据仍为 `NOT RUN`；不同 revision 乱序由 021 承接 | 开发型，中大 + live |
 | B20 | 018 SnapshotFact/统一读取/可恢复发布 | ✅ PR #9 已合入（merge `b093a447`）；`0005`、统一读模型、可恢复 publish/rollback 与 5-node live 已验收，021 已解锁 | 开发型，中大 + live |
 | B21 | 019 Golden 工具/QualityProfile/在线 Gate | ✅ **软件实施完成 + codex 六轮返工→七轮 APPROVED(可合并) + 提交前独立红队自测(R6/R7) + 七轮非阻断清理(红队归档 27→5、注释去返工叙事、canonicalize≠provenance 措辞，`6e3e5f9`)**（feat/019-golden-quality-gate，T1～T6 严格 TDD，全库 non-live 1142 passed / ruff / mypy 161 files 全绿）：portable assembler+validator（强制证据回验、disputed≤5%）、**内容寻址** BaselineArtifact（六类产物各带 sha256+计数自洽）/不可变 approval（**提交 artifact + 画像内容哈希** `artifact_sha256`/`profile_content_sha256` + 强制回归 + prior 不可伪造 + 换 id 不能跳回归；`allow_lineage_reset` 须 prior 非空 + baseline_id 不在 prior + **golden 集(评测基准)真变更** + 非空 reason 方逃生；**非 reset 回归对称要求候选与基线同 golden 集**，明确为结构约束+审计信号、非授权本身）、QualityProfile+六维 staleness（`content_hash` 排除 approval 回指、全链绑定、零观测不给满分）、`build_profile` **复用 `eval.evaluate`**（pred-only 多余字段计 FP、每字段聚合并入 pred-only 幻觉、**disputed 键预测经 `excluded_disputed_keys` 单一权威排除、不计幻觉**、口径一致）、`compare_baselines` 全局 micro/macro F1+幻觉+证据+unresolved+字段阈值结构化、统一 QualityGate **fail-closed**（校 profile↔approval↔artifact 内容哈希+指纹 + **profile 版本** + **pending_judge**；merge `_gate_ok` 保留独立 pending 短路做纵深防御、gate 异常 fail-closed 不崩批**且 logging 记可审计原因**；无 gate/不匹配一律进 ReviewItem）。**领域类型** `Rate[0,1]`/`NonNegativeInt`/`Identifier`(禁空白 id)/`Sha256Hex`(golden hash 64hex+规范小写，`_canon_hash` 比较点再规范化防 model_copy 绕过) 令越界比率/负计数/NaN/空白标识/大小写变体身份构造期即不可入。真实 baseline/画像由 020 用同一 API 产出（020 从磁盘加载须 `model_validate` 使领域约束 load-bearing）。详见 `openspec/changes/019-golden-quality-gate/validation-report.md` | 开发型，中 |
-| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **硬依赖 019+021**；统一承接 B1/B2/B3/B4/B6/B7，先完成 020 T1 run-admission，再允许模型调用 | 高 token 数据任务 |
+| B22 | 020 gs-v0.1 + 13 产品 baseline 真实运行 | **T1 软件闭环已完成，当前零模型 `BLOCKED`；T2～T7 未运行**。硬依赖 019+021；还须补齐输入/执行面 identity、历史 provenance、签名审批、三模型 identity/probe 与预算准入，刷新为 READY 后才允许模型调用 | 高 token 数据任务 |
 | B23 | 021 Source lifecycle ordering | **硬依赖 018**；durable SourceHead、processed_at/generation、per-source lock/CAS；迁移在 018 `0005` 之后（注册表预分配 0006），完成后与 019 共同解锁 020 | 开发型，中大 |
 | B24 | 024 抽取召回提升（extract_empty 主攻 + 值粒度指引 + A10 弱值/兼容性护栏） | **可认领（轨道 L5，2026-07-16 新开）**：`openspec/changes/024-extraction-recall-uplift/`（E1–E6 条款 + T1–T7 任务）；005 归因工单→回放 RED 用例，零真实模型调用；E6 承接 LLM-wiki-black A10 唯一未迁移真空（Q012/Q026 历史 bug 固化）；真实回归归 020 D4 | 开发型，中小 |
 | B25 | 025 合并前置弱值门槛（已占号未开目录） | 更粗略新值不开冲突（Q026）+ informationScore 仅作 008 排序信号不作替换判据；PR #9 已合入，现可提案，可与 B24 同一执行者推进 | 开发型，小 |
@@ -159,9 +161,9 @@
 ## 四、下一步计划（按序）
 
 1. **合并后收尾**：完成 ⓪-0f 的文档口径、旧 ledger、OpenSpec archive 与 strict/link/status 对账；只做收尾，不夹带 018 功能。
-2. **018 与 019 已完成；下一关键路径为 021 → 020**：021 交付 SourceHead、generation/processed_at 与 per-source lock/CAS；其后 020 才执行 run-admission 和真实 baseline。013 与 008 W4 可并行开工。
+2. **018 与 019 已完成；下一关键路径仍为 021 → 020 数据运行**：020 T1 准入软件已先行完成并正确输出 BLOCKED；021 交付 SourceHead、generation/processed_at 与 per-source lock/CAS，且其余 identity/provenance/model/budget 阻塞解除后，才可刷新 READY 并进入 T2～T7。013 与 008 W4 可并行开工。
 3. **018 完成后推进 021**：完成 source lifecycle ordering、并发/乱序/删除竞争及 PostgreSQL 双会话验证。
-4. **019 与 021 均完成后启动 020**：先完成 020 T1 run-admission，再完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，执行前登记模型、预算与断点。B10 WeKnora 环境准备可全程由独立负责人并行。
+4. **021 完成并解除其余准入阻塞后继续 020**：重新生成 READY admission，再完成剩余 2 产品、13 产品 baseline、judge/dead-letter/keypoints；该项高 token，执行前登记模型、预算与断点。B10 WeKnora 环境准备可全程由独立负责人并行。
 
 样本语料：业务方 2026-07-11 提供 `shouxian_product`（13 产品，39 PDF + 12 meta json）并确认拷入仓库 → `dataset/shouxian_product/`，作为测试验证集原料。仓库外 `../samples/` 的早期解压副本作废，以 dataset 内为准。
 
@@ -178,6 +180,7 @@
 9a. **"本地绿 ≠ CI 绿"三连坑（2026-07-13 付费确认）**：① ruff 的 first-party 自动探测本地/CI 漂移→已显式 known-first-party；② mypy/ruff 本地缓存可产生假绿→验收复跑加 --no-cache / 删缓存；③ **上游 .gitignore 的 `WeKnora`（二进制名）曾吞掉 adapters/weknora/ 整个目录**，5 个核心文件从未进 git、CI 因此一直红而本地全绿→已加例外；**新增目录后必须查 `git status --ignored`，验收标准含"CI 绿"而不只是本地门禁**。
 9. **本机 shell 有 SOCKS 代理环境变量（ALL_PROXY 等），曾导致 httpx 全部请求挂掉**——适配层已用 `trust_env=False` 修复；新写任何 HTTP 客户端都要注意这一点。**git push 大提交会在 sideband 中途断连**——解法（已配置进本仓库）：`git config http.postBuffer 524288000` + `http.version HTTP/1.1`，并用 `env -u ALL_PROXY -u HTTPS_PROXY …` 绕开代理变量执行 push。
 10. **“基础设施测试被收集 ≠ 真的执行”**：过去 PR 只跑 `-m "not live"`，PostgreSQL/WeKnora 可全部 skip 仍绿色。现在显式三 lane、preflight、JUnit `tests > 0 && skipped = 0`；以后新增基础设施用例必须同步维护 lane collection 契约，不能只看 pytest exit code。
+10a. **020 T1 的 exact-bytes/长门禁教训（2026-07-20）**：安全工件不能在校验后重新按路径读取；PDF、schema、annotation bundle 与 SQLite checkpoint 必须绑定同一快照/exact bytes，SQLite context manager 不负责关闭连接，须显式 `closing`。validate→settle 必须持同一 run lock，候选授权必须在 settle/resume 后 fresh 重算。全库长测不可因暂时无输出判断卡死，须每 60 秒轮询并报告进度；遇到 flake 先定位根因（本轮为测试替身未接收 `dir_fd` 与进程启动窗口），不得单纯扩大超时掩盖产品 bug。
 11. **长时间无反馈是执行故障，不是“任务复杂”**：023 期间先后出现 reviewer spawn 约 30/67 分钟，以及 2026-07-16 一次并行子任务调度调用异常挂起约两小时。硬规则升级：任何 agent/tool **60 秒无新输出即轮询**；普通测试/网络命令 **10 分钟硬中止**；spawn/follow-up 调度 **2 分钟无返回即中断并转主线程**。主路径已有可测试产物后，不得让可选 reviewer/spawn 阻塞收口；每 60 秒给业务方可验证进度。子代理方案必须由主线程安全复核，mutable tag、dirty build 或放宽 digest 合同不得因局部测试全绿直接进入 PR。
 12. **子代理 GREEN 只是局部证据**：023 CLI 子线曾把 runtime env 错写成七个 `HARNESS_LIVE_*`，单模块 22 passed 仍无法真实运行；主线程组合复核后才改为复用四角色 `load_local_live_config`、八项 `ensure_runtime_environment` 与默认 `probe_all_models`。并行开发必须文件独占，但合并前主线程必须检查真实数据流并跑跨模块 focused + 全量 deterministic，不能把各轨测试数相加当集成完成。
 13. **真实 adapter 要尽早做最小闭环**：023 在实机才发现 worktree 派生 Compose project 会撞固定 container name，以及 PostgreSQL `CREATE ROLE ... PASSWORD %s` 不支持该位置的 bind 参数。以后 concrete adapter 完成第一版即跑最小、可逆、无敏感输出的 create→verify→cleanup；不要等大量 mock 测试结束才碰真实 handler/DDL。Compose project、REST 响应字段、DDL 语法和清理后不存在都必须单独验明。

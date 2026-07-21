@@ -1,12 +1,18 @@
 """spec G2.4/G2.5：产品级编排——险种推断、断点续跑、meta 比对接线。"""
 
 import json
+import stat
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from insurance_harness.goldenset import GoldenAnnotator, PageText, annotate_product
+from insurance_harness.goldenset import (
+    GoldenAnnotator,
+    PageText,
+    annotate_product,
+    runner,
+)
 from insurance_harness.goldenset.runner import UnknownProductLineError, infer_line_key
 from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegistry
 
@@ -82,6 +88,58 @@ async def test_g2_5_cache_skips_second_run(
     second = await annotate_product(product_dir, REGISTRY, annotator, cache_dir)
     assert client.calls == 1  # G2.5：缓存命中，零模型调用
     assert [r.field_id for r in second] == [r.field_id for r in first]
+
+    cache_product_dir = cache_dir / product_dir.name
+    cache_file = cache_product_dir / "保险条款.pdf.cachetest00.jsonl"
+    assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(cache_product_dir.stat().st_mode) == 0o700
+    assert stat.S_IMODE(cache_file.stat().st_mode) == 0o600
+    assert sorted(path.name for path in cache_product_dir.iterdir()) == [cache_file.name]
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ("public-root", "public-product", "public-file", "symlink-file", "mismatch"),
+)
+async def test_g2_5_cache_hit_rejects_unsafe_or_identity_mismatched_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tamper: str,
+) -> None:
+    monkeypatch.setattr("insurance_harness.goldenset.runner.extract_pages", _fake_pages)
+    product_dir = tmp_path / "平安测试医疗保险"
+    product_dir.mkdir()
+    (product_dir / "保险条款.pdf").write_bytes(b"%PDF-fake")
+    (product_dir / "product_meta.json").write_text(
+        json.dumps({"planCode": "1847H"}), encoding="utf-8"
+    )
+    cache_dir = tmp_path / ".cache"
+    client = CountingClient()
+    annotator = GoldenAnnotator(client, REGISTRY, annotator_model="claude-test")
+    records = await annotate_product(product_dir, REGISTRY, annotator, cache_dir)
+    cache_product_dir = cache_dir / product_dir.name
+    cache_file = cache_product_dir / "保险条款.pdf.cachetest00.jsonl"
+
+    if tamper == "public-root":
+        cache_dir.chmod(0o755)
+    elif tamper == "public-product":
+        cache_product_dir.chmod(0o755)
+    elif tamper == "public-file":
+        cache_file.chmod(0o644)
+    elif tamper == "symlink-file":
+        outside = tmp_path / "outside-cache.jsonl"
+        outside.write_bytes(cache_file.read_bytes())
+        outside.chmod(0o600)
+        cache_file.unlink()
+        cache_file.symlink_to(outside)
+    else:
+        forged = records[0].model_copy(update={"product_id": "forged"})
+        cache_file.write_text(forged.model_dump_json() + "\n", encoding="utf-8")
+
+    with pytest.raises(runner.CacheSecurityError):
+        await annotate_product(product_dir, REGISTRY, annotator, cache_dir)
+
+    assert client.calls == 1
 
 
 async def test_meta_mismatch_wired_into_pipeline(

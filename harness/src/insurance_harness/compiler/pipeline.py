@@ -11,10 +11,12 @@ import asyncio
 import fcntl
 import os
 import shutil
+import stat
 import tempfile
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -48,6 +50,7 @@ from .gapfill import gapfill_field
 from .judge import JudgeDispatcher, make_judge_request, write_judge_queue
 from .llm import CallStats, MeteredClient, ModelClient
 from .models import (
+    BaselineAdmissionIdentity,
     DataQuality,
     DeadLetter,
     DocManifestEntry,
@@ -108,6 +111,16 @@ class RunResult(BaseModel):
     pred_path: Path
     manifest_path: Path
     judge_queue_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class RunArtifactCommitCandidate:
+    """Exact staged bytes presented to an optional precommit admission gate."""
+
+    pred: bytes
+    manifest: bytes
+    judge_queue: bytes
+    dead_letters: bytes
 
 
 class _RunIdentity(BaseModel):
@@ -190,6 +203,8 @@ class ExtractionPipeline:
         template_registry: TemplateRegistry | None = None,
         table_provider: TableStructureProvider | None = None,
         scope: KnowledgeScope | None = None,
+        baseline_admission_identity: BaselineAdmissionIdentity | None = None,
+        precommit_validator: Callable[[RunArtifactCommitCandidate], None] | None = None,
     ) -> None:
         self._client = client
         self._registry = registry
@@ -202,6 +217,12 @@ class ExtractionPipeline:
         self._templates = template_registry
         self._table_provider = table_provider
         self._scope = scope
+        if baseline_admission_identity is not None and precommit_validator is None:
+            raise ValueError(
+                "baseline admission identity requires a precommit validator"
+            )
+        self._baseline_admission_identity = baseline_admission_identity
+        self._precommit_validator = precommit_validator
         if scope is not None:
             scope_log_context(scope)
 
@@ -477,6 +498,7 @@ class ExtractionPipeline:
                 )
                 for document in source_documents
             ],
+            baseline_admission=self._baseline_admission_identity,
         )
         return {
             "product_id": product_id,
@@ -822,6 +844,7 @@ class ExtractionPipeline:
             dead_letter_text="".join(
                 dead.model_dump_json() + "\n" for dead in manifest.dead_letters
             ),
+            precommit_validator=self._precommit_validator,
         )
         return {"manifest": manifest.model_dump(mode="json")}
 
@@ -959,11 +982,45 @@ class ExtractionPipeline:
 
 @asynccontextmanager
 async def _exclusive_run_directory(run_dir: Path) -> AsyncIterator[None]:
-    lock_path = run_dir / ".run.lock"
-    file_descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    run_descriptor: int | None = None
+    file_descriptor: int | None = None
     acquired = False
     try:
-        os.fchmod(file_descriptor, 0o600)
+        validation_failed = False
+        try:
+            run_descriptor = os.open(
+                run_dir,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            )
+            run_metadata = os.fstat(run_descriptor)
+            if (
+                not stat.S_ISDIR(run_metadata.st_mode)
+                or run_metadata.st_uid != os.geteuid()
+                or run_metadata.st_mode & 0o022
+            ):
+                validation_failed = True
+            if not validation_failed:
+                file_descriptor = os.open(
+                    ".run.lock",
+                    os.O_CREAT
+                    | os.O_RDWR
+                    | os.O_NOFOLLOW
+                    | os.O_CLOEXEC,
+                    0o600,
+                    dir_fd=run_descriptor,
+                )
+                lock_metadata = os.fstat(file_descriptor)
+                if (
+                    not stat.S_ISREG(lock_metadata.st_mode)
+                    or lock_metadata.st_uid != os.geteuid()
+                    or stat.S_IMODE(lock_metadata.st_mode) != 0o600
+                    or lock_metadata.st_nlink != 1
+                ):
+                    validation_failed = True
+        except OSError:
+            validation_failed = True
+        if validation_failed or file_descriptor is None:
+            raise RuntimeError("run directory lock is unsafe") from None
         while not acquired:
             try:
                 fcntl.flock(
@@ -975,9 +1032,20 @@ async def _exclusive_run_directory(run_dir: Path) -> AsyncIterator[None]:
                 await asyncio.sleep(0.01)
         yield
     finally:
-        if acquired:
+        if acquired and file_descriptor is not None:
             fcntl.flock(file_descriptor, fcntl.LOCK_UN)
-        os.close(file_descriptor)
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if run_descriptor is not None:
+            os.close(run_descriptor)
+
+
+@asynccontextmanager
+async def run_settlement_guard(run_dir: Path) -> AsyncIterator[None]:
+    """Hold the run's validated ``.run.lock`` across final validation and settle."""
+
+    async with _exclusive_run_directory(run_dir):
+        yield
 
 
 def _commit_run_artifacts(
@@ -987,6 +1055,7 @@ def _commit_run_artifacts(
     manifest_text: str,
     judge_requests: list[JudgeRequest],
     dead_letter_text: str,
+    precommit_validator: Callable[[RunArtifactCommitCandidate], None] | None = None,
 ) -> None:
     staging_dir = Path(
         tempfile.mkdtemp(prefix=".artifacts-", suffix=".staging", dir=run_dir)
@@ -997,26 +1066,152 @@ def _commit_run_artifacts(
         "dead-letters.jsonl",
         "manifest.json",
     )
-    try:
-        (staging_dir / "pred.jsonl").write_text(pred_text, encoding="utf-8")
-        write_judge_queue(staging_dir / "judge-queue.jsonl", judge_requests)
-        (staging_dir / "dead-letters.jsonl").write_text(
-            dead_letter_text, encoding="utf-8"
-        )
-        (staging_dir / "manifest.json").write_text(manifest_text, encoding="utf-8")
+    data_artifact_names = artifact_names[:-1]
+    manifest_name = artifact_names[-1]
+    failed = False
+    readback_failed = False
+    staging_cleanup_failed = False
+    control_flow_error: BaseException | None = None
+    commit_started = False
 
-        commit_marker = run_dir / "manifest.json"
-        commit_marker.unlink(missing_ok=True)
+    def fsync_file(path: Path) -> None:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
         try:
-            for name in artifact_names[:-1]:
-                os.replace(staging_dir / name, run_dir / name)
-            os.replace(staging_dir / artifact_names[-1], commit_marker)
-        except BaseException:
-            for name in artifact_names:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def fsync_run_directory() -> None:
+        descriptor = os.open(
+            run_dir,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+        )
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def remove_committed_targets(*, best_effort: bool) -> None:
+        manifest_retired = True
+        try:
+            (run_dir / manifest_name).unlink(missing_ok=True)
+        except OSError:
+            manifest_retired = False
+            if not best_effort:
+                raise
+        try:
+            fsync_run_directory()
+        except OSError:
+            manifest_retired = False
+            if not best_effort:
+                raise
+
+        # Never remove data while an old commit marker may still be durable. A
+        # later retry can clear it safely; deleting data first would let that
+        # marker claim an incomplete run after a crash.
+        if not manifest_retired:
+            return
+
+        for name in data_artifact_names:
+            try:
                 (run_dir / name).unlink(missing_ok=True)
-            raise
+            except OSError:
+                if not best_effort:
+                    raise
+        try:
+            fsync_run_directory()
+        except OSError:
+            if not best_effort:
+                raise
+
+    try:
+        try:
+            (staging_dir / "pred.jsonl").write_text(pred_text, encoding="utf-8")
+            write_judge_queue(staging_dir / "judge-queue.jsonl", judge_requests)
+            (staging_dir / "dead-letters.jsonl").write_text(
+                dead_letter_text, encoding="utf-8"
+            )
+            (staging_dir / "manifest.json").write_text(
+                manifest_text, encoding="utf-8"
+            )
+
+            for name in artifact_names:
+                fsync_file(staging_dir / name)
+
+            if precommit_validator is not None:
+                try:
+                    precommit_validator(
+                        RunArtifactCommitCandidate(
+                            pred=(staging_dir / "pred.jsonl").read_bytes(),
+                            manifest=(staging_dir / "manifest.json").read_bytes(),
+                            judge_queue=(staging_dir / "judge-queue.jsonl").read_bytes(),
+                            dead_letters=(staging_dir / "dead-letters.jsonl").read_bytes(),
+                        )
+                    )
+                except BaseException as error:
+                    control_flow_error = error
+
+            if control_flow_error is None:
+                # Retire any previous commit marker durably before removing or replacing
+                # the data that it names.
+                commit_started = True
+                remove_committed_targets(best_effort=False)
+                for name in data_artifact_names:
+                    os.replace(staging_dir / name, run_dir / name)
+                commit_marker = run_dir / manifest_name
+                os.replace(staging_dir / manifest_name, commit_marker)
+                fsync_run_directory()
+
+                readback_failed = True
+                if commit_marker.read_bytes() == manifest_text.encode():
+                    readback_failed = False
+        except BaseException as error:
+            if isinstance(error, Exception):
+                failed = True
+            else:
+                control_flow_error = error
+        if commit_started and (failed or readback_failed or control_flow_error is not None):
+            try:
+                remove_committed_targets(best_effort=True)
+            except BaseException as cleanup_error:
+                if not isinstance(cleanup_error, Exception):
+                    if control_flow_error is None:
+                        control_flow_error = cleanup_error
+                else:
+                    failed = True
     finally:
-        shutil.rmtree(staging_dir, ignore_errors=True)
+        try:
+            shutil.rmtree(staging_dir)
+        except FileNotFoundError:
+            pass
+        except BaseException as cleanup_error:
+            if isinstance(cleanup_error, Exception):
+                staging_cleanup_failed = True
+            elif control_flow_error is None:
+                control_flow_error = cleanup_error
+        if os.path.lexists(staging_dir):
+            staging_cleanup_failed = True
+        try:
+            fsync_run_directory()
+        except BaseException as cleanup_error:
+            if isinstance(cleanup_error, Exception):
+                staging_cleanup_failed = True
+            elif control_flow_error is None:
+                control_flow_error = cleanup_error
+    if control_flow_error is not None:
+        raise control_flow_error
+    if staging_cleanup_failed:
+        raise RuntimeError("run artifact staging cleanup failed") from None
+    if failed or readback_failed:
+        message = (
+            "run artifact manifest read-back failed"
+            if readback_failed
+            else "run artifact commit failed"
+        )
+        raise RuntimeError(message) from None
 
 
 def _merge_stats(a: CallStats, b: CallStats) -> CallStats:
