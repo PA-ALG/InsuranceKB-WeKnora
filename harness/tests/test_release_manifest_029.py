@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from insurance_harness.knowledge.pages import render_snapshot_pages
 from insurance_harness.knowledge.release_manifest import (
+    CanonicalDirectoryEntry,
+    CanonicalPage,
+    CanonicalRelationship,
+    CanonicalSnapshotFact,
     ReleaseManifest,
     ReleaseManifestBuildError,
     ReleaseManifestIntegrityError,
@@ -18,8 +26,9 @@ from insurance_harness.knowledge.release_manifest import (
     verify_release_manifest,
 )
 from insurance_harness.knowledge.snapshots import build_snapshot_facts
-from insurance_harness.knowledge.tables import ReleaseSnapshot
+from insurance_harness.knowledge.tables import ReleaseSnapshot, SnapshotFact
 from tests.support.release_018 import (
+    NOW,
     persist_release_snapshot,
     release_claim,
     release_product,
@@ -32,22 +41,117 @@ _C = "c" * 64
 
 
 def _items() -> dict[str, list[dict[str, Any]]]:
+    def evidence(claim_id: str) -> dict[str, Any]:
+        return {
+            "id": f"evidence-{claim_id}",
+            "claim_id": claim_id,
+            "knowledge_id": f"knowledge-{claim_id}",
+            "doc_title": f"document-{claim_id}",
+            "chunk_id": f"chunk-{claim_id}",
+            "quote": "frozen quote",
+            "page": 1,
+            "section": "coverage",
+            "table_ref": None,
+            "timestamp_ms": None,
+            "authority_level": 1,
+            "doc_role": "terms",
+            "extraction_method": "llm",
+            "extracted_at": NOW,
+            "raw_kb_id": "raw-1",
+            "source_revision": _A,
+            "file_hash": _B,
+            "original_digest": _C,
+            "parser_version": "parser/1",
+            "chunk_hash": _A,
+            "lineage_status": "linked",
+            "stale_at": None,
+            "created_at": NOW,
+            "updated_at": NOW,
+        }
+
+    def fact(index: int) -> dict[str, Any]:
+        claim_id = f"claim-{index}"
+        return {
+            "space_id": "space-1",
+            "snapshot_id": "snapshot-1",
+            "claim_id": claim_id,
+            "revision_no": index,
+            "product_id": f"product-{index}",
+            "product_version_id": f"version-{index}",
+            "product_code": f"P{index}",
+            "product_name": f"Product {index}",
+            "version_label": "V1",
+            "predicate": "waiting_period",
+            "field_name": "Waiting period",
+            "field_group": "coverage",
+            "value_state": "present",
+            "value": {"currency": "CNY", "amount": index * 10},
+            "effective_from": None,
+            "effective_to": None,
+            "confidence": 0.9,
+            "schema_version": "insurance-knowledge-v1",
+            "evidence": (evidence(claim_id),),
+        }
+
+    def page(index: int) -> dict[str, Any]:
+        return {
+            "slug": f"product/P{index}/V1/overview",
+            "title": f"Product {index}",
+            "content": f"page-{index}",
+            "source_refs": (),
+            "chunk_refs": (),
+            "page_metadata": {
+                "entity_ids": {
+                    "product_id": f"product-{index}",
+                    "product_version_id": f"version-{index}",
+                },
+                "snapshot_id": "snapshot-1",
+                "claim_ids": (f"claim-{index}",),
+                "compiled_at": NOW.isoformat(),
+                "harness_version": "insurance-harness/0.1.0",
+                "schema_version": "insurance-knowledge-v1",
+                "managed_by": "insurance-harness",
+                "space_id": "space-1",
+                "schema_versions": ("insurance-knowledge-v1",),
+            },
+        }
+
     return {
-        "facts": [
-            {"claim_id": "claim-2", "value": {"currency": "CNY", "amount": 20}},
-            {"claim_id": "claim-1", "value": {"amount": 10, "currency": "CNY"}},
-        ],
-        "rendered_pages": [
-            {"page_id": "page-2", "body": "B"},
-            {"body": "A", "page_id": "page-1"},
-        ],
+        "facts": [fact(2), fact(1)],
+        "rendered_pages": [page(2), page(1)],
         "directory_entries": [
-            {"product_id": "product-2", "page_id": "page-2"},
-            {"page_id": "page-1", "product_id": "product-1"},
+            {
+                "product_id": "product-2",
+                "product_version_id": "version-2",
+                "product_code": "P2",
+                "product_name": "Product 2",
+                "version_label": "V1",
+                "page_slugs": ("product/P2/V1/overview",),
+            },
+            {
+                "product_id": "product-1",
+                "product_version_id": "version-1",
+                "product_code": "P1",
+                "product_name": "Product 1",
+                "version_label": "V1",
+                "page_slugs": ("product/P1/V1/overview",),
+            },
         ],
         "relationships": [
-            {"from": "page-2", "kind": "related", "to": "page-1"},
-            {"kind": "product", "to": "product-1", "from": "page-1"},
+            {
+                "from_type": "product_version",
+                "from_id": "version-2",
+                "relationship": "renders",
+                "to_type": "page",
+                "to_id": "product/P2/V1/overview",
+            },
+            {
+                "from_type": "page",
+                "from_id": "product/P1/V1/overview",
+                "relationship": "contains_claim",
+                "to_type": "claim",
+                "to_id": "claim-1",
+            },
         ],
     }
 
@@ -69,9 +173,12 @@ def _manifest(**overrides: Any) -> ReleaseManifest:
 def test_ra1_manifest_binds_all_four_artifact_groups_with_count_and_digest() -> None:
     manifest = _manifest()
 
-    assert {item["claim_id"] for item in manifest.facts} == {"claim-1", "claim-2"}
-    assert {item["page_id"] for item in manifest.rendered_pages} == {"page-1", "page-2"}
-    assert {item["product_id"] for item in manifest.directory_entries} == {
+    assert {item.claim_id for item in manifest.facts} == {"claim-1", "claim-2"}
+    assert {item.slug for item in manifest.rendered_pages} == {
+        "product/P1/V1/overview",
+        "product/P2/V1/overview",
+    }
+    assert {item.product_id for item in manifest.directory_entries} == {
         "product-1",
         "product-2",
     }
@@ -121,18 +228,22 @@ def test_ra1_input_and_mapping_key_order_do_not_change_canonical_hash() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field", "replacement"),
+    ("field", "changed_field", "changed_value"),
     [
-        ("facts", ({"claim_id": "tampered"},)),
-        ("rendered_pages", ({"page_id": "tampered"},)),
-        ("directory_entries", ({"product_id": "tampered"},)),
-        ("relationships", ({"from": "tampered", "to": "page-1"},)),
+        ("facts", "product_name", "tampered"),
+        ("rendered_pages", "content", "tampered"),
+        ("directory_entries", "product_name", "tampered"),
+        ("relationships", "to_id", "tampered"),
     ],
 )
 def test_ra1_any_artifact_content_tamper_fails_closed(
-    field: str, replacement: tuple[dict[str, str], ...]
+    field: str, changed_field: str, changed_value: str
 ) -> None:
-    manifest = _manifest().model_copy(update={field: replacement})
+    original = _manifest()
+    item = getattr(original, field)[0]
+    manifest = original.model_copy(
+        update={field: (item.model_copy(update={changed_field: changed_value}),)}
+    )
 
     with pytest.raises(ReleaseManifestIntegrityError, match=field):
         verify_release_manifest(manifest)
@@ -172,6 +283,47 @@ def test_ra1_outer_manifest_hash_tamper_fails_closed() -> None:
 
 
 @pytest.mark.parametrize(
+    ("group", "digest_field", "operation"),
+    [
+        (group, digest, operation)
+        for group, digest in (
+            ("facts", "facts_digest"),
+            ("rendered_pages", "rendered_pages_digest"),
+            ("directory_entries", "directory_digest"),
+            ("relationships", "relationships_digest"),
+        )
+        for operation in ("insert", "delete", "mutate")
+    ],
+)
+def test_ra1_insert_delete_or_content_mutation_changes_group_and_outer_hash(
+    group: str, digest_field: str, operation: str
+) -> None:
+    original = _manifest()
+    values = _items()
+    artifacts = values[group]
+    if operation == "insert":
+        artifacts.append(deepcopy(artifacts[0]))
+    elif operation == "delete":
+        artifacts.pop()
+    elif group == "facts":
+        artifacts[0]["evidence"][0]["quote"] = "evidence-only mutation"
+    elif group == "rendered_pages":
+        artifacts[0]["content"] = "page mutation"
+    elif group == "directory_entries":
+        artifacts[0]["product_name"] = "directory mutation"
+    else:
+        artifacts[0]["to_id"] = "relationship-mutation"
+
+    rebuilt = _manifest(**{group: artifacts})
+
+    assert getattr(rebuilt, digest_field) != getattr(original, digest_field)
+    assert rebuilt.manifest_sha256 != original.manifest_sha256
+    tampered = original.model_copy(update={group: getattr(rebuilt, group)})
+    with pytest.raises(ReleaseManifestIntegrityError, match=group):
+        verify_release_manifest(tampered)
+
+
+@pytest.mark.parametrize(
     ("identity", "changed"),
     [
         ("schema_version", "insurance-knowledge-v2"),
@@ -196,16 +348,18 @@ def test_ra1_manifest_schema_rejects_a_missing_artifact_group(missing: str) -> N
     data = _manifest().model_dump(mode="json")
     del data[missing]
 
-    with pytest.raises(ValidationError):
-        ReleaseManifest.model_validate(data)
+    with pytest.raises(ValidationError) as exc_info:
+        ReleaseManifest.model_validate_json(json.dumps(data))
+    assert any(error["loc"] == (missing,) for error in exc_info.value.errors())
 
 
 def test_ra1_manifest_schema_forbids_extra_fields() -> None:
     data = _manifest().model_dump(mode="json")
     data["unbound_artifacts"] = [{"id": "outside-manifest"}]
 
-    with pytest.raises(ValidationError):
-        ReleaseManifest.model_validate(data)
+    with pytest.raises(ValidationError) as exc_info:
+        ReleaseManifest.model_validate_json(json.dumps(data))
+    assert any(error["loc"] == ("unbound_artifacts",) for error in exc_info.value.errors())
 
 
 @pytest.mark.parametrize(
@@ -231,8 +385,8 @@ def test_ra1_caller_mutation_cannot_drift_built_manifest() -> None:
     manifest = _manifest(**items)
 
     items["facts"][0]["value"]["amount"] = 999
-    items["rendered_pages"].append({"page_id": "page-3", "body": "C"})
-    items["directory_entries"][0]["page_id"] = "page-x"
+    items["rendered_pages"][0]["content"] = "changed"
+    items["directory_entries"][0]["product_name"] = "changed"
     items["relationships"].clear()
 
     assert manifest == _manifest(**original)
@@ -242,6 +396,10 @@ def test_ra1_caller_mutation_cannot_drift_built_manifest() -> None:
 def test_ra1_manifest_models_are_frozen_and_revalidate_nested_models() -> None:
     manifest = _manifest()
 
+    assert isinstance(manifest.facts[0], CanonicalSnapshotFact)
+    assert isinstance(manifest.rendered_pages[0], CanonicalPage)
+    assert isinstance(manifest.directory_entries[0], CanonicalDirectoryEntry)
+    assert isinstance(manifest.relationships[0], CanonicalRelationship)
     with pytest.raises(ValidationError):
         manifest.space_id = "space-2"  # type: ignore[misc]
     with pytest.raises(ValidationError):
@@ -249,6 +407,56 @@ def test_ra1_manifest_models_are_frozen_and_revalidate_nested_models() -> None:
             manifest.model_dump(mode="json")
             | {"facts_digest": {"count": -1, "sha256": _A}}
         )
+
+
+def test_ra1_manifest_preserves_canonical_external_json_shape() -> None:
+    manifest = _manifest()
+    dumped = manifest.model_dump(mode="json")
+
+    assert isinstance(dumped["facts"][0], dict)
+    assert isinstance(dumped["facts"][0]["value"], dict)
+    assert isinstance(dumped["facts"][0]["evidence"], list)
+    assert isinstance(dumped["rendered_pages"][0]["page_metadata"], dict)
+    restored = ReleaseManifest.model_validate_json(
+        json.dumps(dumped, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+    assert restored == manifest
+    verify_release_manifest(restored)
+
+
+def test_ra1_strict_models_reject_python_type_coercion() -> None:
+    with pytest.raises(ValidationError):
+        _manifest(read_model_version="1")
+    bad = _items()
+    bad["facts"][0]["revision_no"] = "1"
+    with pytest.raises(ValidationError):
+        _manifest(**bad)
+
+
+def test_ra1_deep_json_values_cannot_be_mutated_in_place() -> None:
+    manifest = _manifest()
+
+    with pytest.raises(TypeError):
+        manifest.facts[0].value["currency"] = "USD"
+    with pytest.raises(ValidationError):
+        manifest.facts[0].evidence[0].quote = "changed"  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        manifest.rendered_pages[0].page_metadata.space_id = "changed"  # type: ignore[misc]
+
+
+def test_ra1_generic_builder_rejects_incomplete_untyped_fact() -> None:
+    with pytest.raises(ValidationError):
+        _manifest(facts=({"claim_id": "missing-complete-frozen-fields"},))
+
+    missing_evidence = _items()
+    del missing_evidence["facts"][0]["evidence"]
+    with pytest.raises(ValidationError):
+        _manifest(**missing_evidence)
+
+
+def test_ra1_template_hashes_must_be_nonempty() -> None:
+    with pytest.raises(ValidationError):
+        _manifest(template_hashes=())
 
 
 def _persist_frozen_snapshot(session: Session, *, suffix: str = "manifest") -> tuple[Any, Any]:
@@ -283,6 +491,92 @@ def _build_from_snapshot(session: Session, scope: Any, snapshot_id: str) -> Rele
     )
 
 
+def _persist_projection_with_pages(
+    session: Session,
+    *,
+    suffix: str,
+    page_mutator: Callable[[list[dict[str, Any]]], None] | None = None,
+    two_products: bool = False,
+) -> tuple[Any, Any]:
+    scope = release_scope(session, suffix)
+    _product, version = release_product(session, scope, code=f"P-{suffix}-A")
+    claim, _evidence = release_claim(
+        session,
+        scope,
+        version,
+        claim_id=f"claim-{suffix}-a",
+        predicate="waiting_period",
+    )
+    if two_products:
+        _other_product, other_version = release_product(
+            session, scope, code=f"P-{suffix}-B"
+        )
+        release_claim(
+            session,
+            scope,
+            other_version,
+            claim_id=f"claim-{suffix}-b",
+            predicate="coverage_amount",
+        )
+    snapshot_id = f"snapshot-{suffix}"
+    facts = build_snapshot_facts(session, scope, snapshot_id=snapshot_id)
+    pages = [
+        page.model_dump(mode="json")
+        for page in render_snapshot_pages(
+            facts,
+            space_id=scope.space_id,
+            snapshot_id=snapshot_id,
+            compiled_at=NOW,
+        )
+    ]
+    if page_mutator is not None:
+        page_mutator(pages)
+    snapshot = ReleaseSnapshot(
+        id=snapshot_id,
+        space_id=scope.space_id,
+        label=snapshot_id,
+        rendered_pages=pages,
+        status="building",
+        read_model_version=1,
+        projection_frozen_at=None,
+        published_at=None,
+        published_by="test",
+    )
+    session.add(snapshot)
+    session.flush()
+    for index, fact in enumerate(facts):
+        session.add(
+            SnapshotFact(
+                id=f"fact-{suffix}-{index}",
+                space_id=fact.space_id,
+                snapshot_id=snapshot_id,
+                claim_id=fact.claim_id,
+                revision_no=fact.revision_no,
+                product_id=fact.product_id,
+                product_version_id=fact.product_version_id,
+                product_code=fact.product_code,
+                product_name=fact.product_name,
+                version_label=fact.version_label,
+                predicate=fact.predicate,
+                field_name=fact.field_name,
+                field_group=fact.field_group,
+                value_state=fact.value_state,
+                value=fact.value,
+                effective_from=fact.effective_from,
+                effective_to=fact.effective_to,
+                confidence=fact.confidence,
+                schema_version=fact.schema_version,
+                evidence=[item.model_dump(mode="json") for item in fact.evidence],
+            )
+        )
+    session.flush()
+    snapshot.projection_frozen_at = NOW
+    snapshot.status = "published"
+    snapshot.published_at = NOW
+    session.commit()
+    return scope, claim
+
+
 def test_ra1_snapshot_builder_reads_only_frozen_projection_not_mutable_claim(
     kb_session: Session,
 ) -> None:
@@ -296,7 +590,7 @@ def test_ra1_snapshot_builder_reads_only_frozen_projection_not_mutable_claim(
 
     assert claim in kb_session.dirty  # read-only builder must not autoflush mutable state
     assert second == first
-    assert second.facts[0]["value"] == {"text": "90天"}
+    assert second.facts[0].value == {"text": "90天"}
 
 
 def test_ra1_snapshot_builder_derives_directory_from_frozen_facts(
@@ -306,16 +600,13 @@ def test_ra1_snapshot_builder_derives_directory_from_frozen_facts(
 
     manifest = _build_from_snapshot(kb_session, scope, "snapshot-directory")
 
-    assert manifest.directory_entries == (
-        {
-            "page_slugs": [],
-            "product_code": "P-directory",
-            "product_id": manifest.facts[0]["product_id"],
-            "product_name": "产品P-directory",
-            "product_version_id": manifest.facts[0]["product_version_id"],
-            "version_label": "V1",
-        },
-    )
+    entry = manifest.directory_entries[0]
+    assert entry.page_slugs == ()
+    assert entry.product_code == "P-directory"
+    assert entry.product_id == manifest.facts[0].product_id
+    assert entry.product_name == "产品P-directory"
+    assert entry.product_version_id == manifest.facts[0].product_version_id
+    assert entry.version_label == "V1"
     assert manifest.relationships == ()
     verify_release_manifest(manifest)
 
@@ -351,3 +642,127 @@ def test_ra1_snapshot_builder_rejects_unfrozen_snapshot(kb_session: Session) -> 
 
     with pytest.raises(ReleaseManifestBuildError, match="projection is not frozen"):
         _build_from_snapshot(kb_session, scope, "snapshot-unfrozen")
+
+
+def test_ra1_snapshot_builder_accepts_projection_frozen_building_candidate(
+    kb_session: Session,
+) -> None:
+    scope = release_scope(kb_session, "frozen-building")
+    kb_session.add(
+        ReleaseSnapshot(
+            id="snapshot-frozen-building",
+            space_id=scope.space_id,
+            label="snapshot-frozen-building",
+            rendered_pages=[],
+            status="building",
+            read_model_version=1,
+            projection_frozen_at=NOW,
+            published_at=None,
+            published_by="test",
+        )
+    )
+    kb_session.commit()
+
+    manifest = _build_from_snapshot(kb_session, scope, "snapshot-frozen-building")
+
+    assert manifest.snapshot_id == "snapshot-frozen-building"
+    verify_release_manifest(manifest)
+
+
+def test_ra1_snapshot_builder_rejects_dirty_frozen_rows(kb_session: Session) -> None:
+    scope, _claim = _persist_frozen_snapshot(kb_session, suffix="dirty-frozen")
+    snapshot = kb_session.get(ReleaseSnapshot, "snapshot-dirty-frozen")
+    fact = kb_session.scalar(
+        select(SnapshotFact).where(SnapshotFact.snapshot_id == "snapshot-dirty-frozen")
+    )
+    assert snapshot is not None and fact is not None
+
+    fact.product_name = "dirty fact"
+    with pytest.raises(ReleaseManifestBuildError, match="dirty frozen projection"):
+        _build_from_snapshot(kb_session, scope, snapshot.id)
+    kb_session.rollback()
+
+    snapshot = kb_session.get(ReleaseSnapshot, "snapshot-dirty-frozen")
+    assert snapshot is not None
+    snapshot.notes = "dirty snapshot"
+    with pytest.raises(ReleaseManifestBuildError, match="dirty frozen projection"):
+        _build_from_snapshot(kb_session, scope, snapshot.id)
+
+
+def test_ra1_snapshot_builder_rejects_deleted_frozen_row(kb_session: Session) -> None:
+    scope, _claim = _persist_frozen_snapshot(kb_session, suffix="deleted-frozen")
+    fact = kb_session.scalar(
+        select(SnapshotFact).where(SnapshotFact.snapshot_id == "snapshot-deleted-frozen")
+    )
+    assert fact is not None
+    kb_session.delete(fact)
+
+    with pytest.raises(ReleaseManifestBuildError, match="dirty frozen projection"):
+        _build_from_snapshot(kb_session, scope, "snapshot-deleted-frozen")
+
+
+@pytest.mark.parametrize(
+    ("suffix", "mutator", "error"),
+    [
+        (
+            "page-cross-space",
+            lambda pages: pages[0]["page_metadata"].__setitem__("space_id", "other"),
+            "page identity",
+        ),
+        (
+            "page-ghost-claim",
+            lambda pages: pages[0]["page_metadata"]["claim_ids"].append("ghost"),
+            "claim closure",
+        ),
+        (
+            "page-duplicate-claim",
+            lambda pages: pages[0]["page_metadata"]["claim_ids"].append(
+                pages[0]["page_metadata"]["claim_ids"][0]
+            ),
+            "claims are invalid",
+        ),
+        (
+            "page-missing-claim",
+            lambda pages: pages[0]["page_metadata"].__setitem__("claim_ids", []),
+            "claims are invalid",
+        ),
+        (
+            "page-wrong-product",
+            lambda pages: pages[0]["page_metadata"]["entity_ids"].__setitem__(
+                "product_id", "other-product"
+            ),
+            "matching fact identity",
+        ),
+    ],
+)
+def test_ra1_snapshot_builder_rejects_invalid_page_fact_closure(
+    kb_session: Session,
+    suffix: str,
+    mutator: Callable[[list[dict[str, Any]]], None],
+    error: str,
+) -> None:
+    scope, _claim = _persist_projection_with_pages(
+        kb_session, suffix=suffix, page_mutator=mutator
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match=error):
+        _build_from_snapshot(kb_session, scope, f"snapshot-{suffix}")
+
+
+def test_ra1_snapshot_builder_rejects_cross_product_claim_on_page(
+    kb_session: Session,
+) -> None:
+    def cross_product(pages: list[dict[str, Any]]) -> None:
+        pages.sort(key=lambda page: page["slug"])
+        foreign_claim = pages[1]["page_metadata"]["claim_ids"][0]
+        pages[0]["page_metadata"]["claim_ids"].append(foreign_claim)
+
+    scope, _claim = _persist_projection_with_pages(
+        kb_session,
+        suffix="page-cross-product",
+        page_mutator=cross_product,
+        two_products=True,
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match="claim closure"):
+        _build_from_snapshot(kb_session, scope, "snapshot-page-cross-product")
