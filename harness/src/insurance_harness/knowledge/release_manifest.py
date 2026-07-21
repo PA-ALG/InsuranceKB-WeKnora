@@ -21,6 +21,7 @@ from pydantic import (
     field_validator,
 )
 from sqlalchemy import select
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope, require_current_scope
@@ -462,32 +463,32 @@ def verify_release_manifest(manifest: ReleaseManifest) -> None:
         raise ReleaseManifestIntegrityError("manifest_sha256 mismatch")
 
 
-def _snapshot_fact_item(fact: SnapshotFact) -> dict[str, object]:
+def _snapshot_fact_item(fact: RowMapping) -> dict[str, object]:
     evidence = tuple(
         CanonicalEvidence.model_validate_json(
             json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         )
-        for item in fact.evidence
+        for item in fact["evidence"]
     )
     return {
-        "space_id": fact.space_id,
-        "snapshot_id": fact.snapshot_id,
-        "claim_id": fact.claim_id,
-        "revision_no": fact.revision_no,
-        "product_id": fact.product_id,
-        "product_version_id": fact.product_version_id,
-        "product_code": fact.product_code,
-        "product_name": fact.product_name,
-        "version_label": fact.version_label,
-        "predicate": fact.predicate,
-        "field_name": fact.field_name,
-        "field_group": fact.field_group,
-        "value_state": fact.value_state,
-        "value": fact.value,
-        "effective_from": fact.effective_from,
-        "effective_to": fact.effective_to,
-        "confidence": fact.confidence,
-        "schema_version": fact.schema_version,
+        "space_id": fact["space_id"],
+        "snapshot_id": fact["snapshot_id"],
+        "claim_id": fact["claim_id"],
+        "revision_no": fact["revision_no"],
+        "product_id": fact["product_id"],
+        "product_version_id": fact["product_version_id"],
+        "product_code": fact["product_code"],
+        "product_name": fact["product_name"],
+        "version_label": fact["version_label"],
+        "predicate": fact["predicate"],
+        "field_name": fact["field_name"],
+        "field_group": fact["field_group"],
+        "value_state": fact["value_state"],
+        "value": fact["value"],
+        "effective_from": fact["effective_from"],
+        "effective_to": fact["effective_to"],
+        "confidence": fact["confidence"],
+        "schema_version": fact["schema_version"],
         "evidence": evidence,
     }
 
@@ -522,12 +523,23 @@ def _derive_directory_and_relationships(
     *,
     scope: KnowledgeScope,
     snapshot_id: str,
+    schema_version: str,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     product_rows: dict[tuple[str, str], dict[str, object]] = {}
     product_claims: dict[tuple[str, str], set[str]] = {}
     for fact in facts:
         if fact.space_id != scope.space_id or fact.snapshot_id != snapshot_id:
             raise ReleaseManifestBuildError("frozen fact identity is invalid")
+        for evidence in fact.evidence:
+            if evidence.claim_id != fact.claim_id:
+                raise ReleaseManifestBuildError("frozen evidence claim mismatch")
+            if evidence.raw_kb_id != scope.raw_kb_id:
+                raise ReleaseManifestBuildError("frozen evidence scope mismatch")
+            if evidence.stale_at is not None:
+                raise ReleaseManifestBuildError("frozen evidence stale state is invalid")
+            linked = evidence.lineage_status == "linked"
+            if linked != (evidence.chunk_id is not None and evidence.chunk_hash is not None):
+                raise ReleaseManifestBuildError("frozen evidence lineage shape is invalid")
         key = (fact.product_id, fact.product_version_id)
         identity: dict[str, object] = {
             "product_id": fact.product_id,
@@ -549,6 +561,11 @@ def _derive_directory_and_relationships(
         metadata = page.page_metadata
         if metadata.space_id != scope.space_id or metadata.snapshot_id != snapshot_id:
             raise ReleaseManifestBuildError("frozen page identity is invalid")
+        if (
+            metadata.schema_version != schema_version
+            or metadata.schema_versions != (schema_version,)
+        ):
+            raise ReleaseManifestBuildError("frozen page schema identity is invalid")
         key = (metadata.entity_ids.product_id, metadata.entity_ids.product_version_id)
         if key not in product_rows:
             raise ReleaseManifestBuildError("frozen page has no matching fact identity")
@@ -615,39 +632,41 @@ def build_release_manifest_from_snapshot(
     require_current_scope(session, scope)
     if _has_dirty_frozen_projection(session):
         raise ReleaseManifestBuildError("dirty frozen projection cannot be signed")
+    snapshot_table = ReleaseSnapshot.__table__
+    fact_table = SnapshotFact.__table__
     with session.no_autoflush:
-        snapshot = session.scalar(
-            select(ReleaseSnapshot).where(
-                ReleaseSnapshot.id == snapshot_id,
-                ReleaseSnapshot.space_id == scope.space_id,
+        snapshot = session.execute(
+            select(snapshot_table).where(
+                snapshot_table.c.id == snapshot_id,
+                snapshot_table.c.space_id == scope.space_id,
             )
-        )
+        ).mappings().one_or_none()
     if snapshot is None:
         raise ReleaseManifestBuildError("snapshot unavailable")
-    if snapshot.status not in {"building", "published"}:
+    if snapshot["status"] not in {"building", "published"}:
         raise ReleaseManifestBuildError("snapshot projection is not signable")
-    if snapshot.projection_frozen_at is None:
+    if snapshot["projection_frozen_at"] is None:
         raise ReleaseManifestBuildError("snapshot projection is not frozen")
-    if snapshot.rendered_pages is None:
+    if snapshot["rendered_pages"] is None:
         raise ReleaseManifestBuildError("snapshot rendered pages are unavailable")
 
     with session.no_autoflush:
         rows = list(
-            session.scalars(
-                select(SnapshotFact).where(
-                    SnapshotFact.space_id == scope.space_id,
-                    SnapshotFact.snapshot_id == snapshot.id,
+            session.execute(
+                select(fact_table).where(
+                    fact_table.c.space_id == scope.space_id,
+                    fact_table.c.snapshot_id == snapshot["id"],
                 )
-            )
+            ).mappings()
         )
-    if any(row.schema_version != schema_version for row in rows):
+    if any(row["schema_version"] != schema_version for row in rows):
         raise ReleaseManifestBuildError("snapshot schema identity mismatch")
     try:
         facts = _canonical_models(
             (_snapshot_fact_item(row) for row in rows), CanonicalSnapshotFact
         )
         pages = _canonical_models(
-            (_page_item(page) for page in snapshot.rendered_pages), CanonicalPage
+            (_page_item(page) for page in snapshot["rendered_pages"]), CanonicalPage
         )
     except ValidationError as exc:
         raise ReleaseManifestBuildError("frozen snapshot artifact is invalid") from exc
@@ -655,13 +674,14 @@ def build_release_manifest_from_snapshot(
         facts,
         pages,
         scope=scope,
-        snapshot_id=snapshot.id,
+        snapshot_id=snapshot["id"],
+        schema_version=schema_version,
     )
     return build_release_manifest(
         schema_version=schema_version,
         space_id=scope.space_id,
-        snapshot_id=snapshot.id,
-        read_model_version=snapshot.read_model_version,
+        snapshot_id=snapshot["id"],
+        read_model_version=snapshot["read_model_version"],
         template_hashes=template_hashes,
         model_plan_hash=model_plan_hash,
         facts=facts,

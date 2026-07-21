@@ -496,6 +496,7 @@ def _persist_projection_with_pages(
     *,
     suffix: str,
     page_mutator: Callable[[list[dict[str, Any]]], None] | None = None,
+    fact_mutator: Callable[[list[dict[str, Any]]], None] | None = None,
     two_products: bool = False,
 ) -> tuple[Any, Any]:
     scope = release_scope(session, suffix)
@@ -531,6 +532,33 @@ def _persist_projection_with_pages(
     ]
     if page_mutator is not None:
         page_mutator(pages)
+    fact_rows = [
+        {
+            "id": f"fact-{suffix}-{index}",
+            "space_id": fact.space_id,
+            "snapshot_id": snapshot_id,
+            "claim_id": fact.claim_id,
+            "revision_no": fact.revision_no,
+            "product_id": fact.product_id,
+            "product_version_id": fact.product_version_id,
+            "product_code": fact.product_code,
+            "product_name": fact.product_name,
+            "version_label": fact.version_label,
+            "predicate": fact.predicate,
+            "field_name": fact.field_name,
+            "field_group": fact.field_group,
+            "value_state": fact.value_state,
+            "value": fact.value,
+            "effective_from": fact.effective_from,
+            "effective_to": fact.effective_to,
+            "confidence": fact.confidence,
+            "schema_version": fact.schema_version,
+            "evidence": [item.model_dump(mode="json") for item in fact.evidence],
+        }
+        for index, fact in enumerate(facts)
+    ]
+    if fact_mutator is not None:
+        fact_mutator(fact_rows)
     snapshot = ReleaseSnapshot(
         id=snapshot_id,
         space_id=scope.space_id,
@@ -544,31 +572,8 @@ def _persist_projection_with_pages(
     )
     session.add(snapshot)
     session.flush()
-    for index, fact in enumerate(facts):
-        session.add(
-            SnapshotFact(
-                id=f"fact-{suffix}-{index}",
-                space_id=fact.space_id,
-                snapshot_id=snapshot_id,
-                claim_id=fact.claim_id,
-                revision_no=fact.revision_no,
-                product_id=fact.product_id,
-                product_version_id=fact.product_version_id,
-                product_code=fact.product_code,
-                product_name=fact.product_name,
-                version_label=fact.version_label,
-                predicate=fact.predicate,
-                field_name=fact.field_name,
-                field_group=fact.field_group,
-                value_state=fact.value_state,
-                value=fact.value,
-                effective_from=fact.effective_from,
-                effective_to=fact.effective_to,
-                confidence=fact.confidence,
-                schema_version=fact.schema_version,
-                evidence=[item.model_dump(mode="json") for item in fact.evidence],
-            )
-        )
+    for row in fact_rows:
+        session.add(SnapshotFact(**row))
     session.flush()
     snapshot.projection_frozen_at = NOW
     snapshot.status = "published"
@@ -701,6 +706,38 @@ def test_ra1_snapshot_builder_rejects_deleted_frozen_row(kb_session: Session) ->
         _build_from_snapshot(kb_session, scope, "snapshot-deleted-frozen")
 
 
+def test_ra1_snapshot_builder_ignores_untracked_in_place_json_mutation(
+    kb_session: Session,
+) -> None:
+    scope, _claim = _persist_projection_with_pages(
+        kb_session, suffix="identity-map-json"
+    )
+    snapshot = kb_session.get(ReleaseSnapshot, "snapshot-identity-map-json")
+    fact = kb_session.scalar(
+        select(SnapshotFact).where(
+            SnapshotFact.snapshot_id == "snapshot-identity-map-json"
+        )
+    )
+    assert snapshot is not None and snapshot.rendered_pages
+    assert fact is not None and fact.value and fact.evidence
+
+    fact.value["text"] = "untracked-memory-value"
+    fact.evidence[0]["quote"] = "untracked-memory-evidence"
+    snapshot.rendered_pages[0]["content"] = "untracked-memory-page"
+    assert snapshot not in kb_session.dirty
+    assert fact not in kb_session.dirty
+
+    manifest = _build_from_snapshot(
+        kb_session, scope, "snapshot-identity-map-json"
+    )
+
+    assert manifest.facts[0].value == {"text": "90天"}
+    assert manifest.facts[0].evidence[0].quote != "untracked-memory-evidence"
+    assert manifest.rendered_pages[0].content != "untracked-memory-page"
+    assert fact.value["text"] == "untracked-memory-value"
+    assert snapshot.rendered_pages[0]["content"] == "untracked-memory-page"
+
+
 @pytest.mark.parametrize(
     ("suffix", "mutator", "error"),
     [
@@ -766,3 +803,73 @@ def test_ra1_snapshot_builder_rejects_cross_product_claim_on_page(
 
     with pytest.raises(ReleaseManifestBuildError, match="claim closure"):
         _build_from_snapshot(kb_session, scope, "snapshot-page-cross-product")
+
+
+@pytest.mark.parametrize(
+    ("suffix", "mutator", "error"),
+    [
+        (
+            "evidence-cross-claim",
+            lambda facts: facts[0]["evidence"][0].__setitem__(
+                "claim_id", "other-claim"
+            ),
+            "evidence claim",
+        ),
+        (
+            "evidence-cross-raw",
+            lambda facts: facts[0]["evidence"][0].__setitem__(
+                "raw_kb_id", "other-raw-kb"
+            ),
+            "evidence scope",
+        ),
+        (
+            "evidence-stale",
+            lambda facts: facts[0]["evidence"][0].__setitem__(
+                "stale_at", NOW.isoformat()
+            ),
+            "evidence stale",
+        ),
+        (
+            "evidence-bad-lineage",
+            lambda facts: facts[0]["evidence"][0].__setitem__(
+                "lineage_status", "page_only"
+            ),
+            "evidence lineage",
+        ),
+    ],
+)
+def test_ra1_snapshot_builder_rejects_invalid_frozen_evidence_closure(
+    kb_session: Session,
+    suffix: str,
+    mutator: Callable[[list[dict[str, Any]]], None],
+    error: str,
+) -> None:
+    scope, _claim = _persist_projection_with_pages(
+        kb_session, suffix=suffix, fact_mutator=mutator
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match=error):
+        _build_from_snapshot(kb_session, scope, f"snapshot-{suffix}")
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda pages: pages[0]["page_metadata"].__setitem__(
+            "schema_version", "other-schema"
+        ),
+        lambda pages: pages[0]["page_metadata"].__setitem__(
+            "schema_versions", ["other-schema"]
+        ),
+    ],
+)
+def test_ra1_snapshot_builder_rejects_page_schema_identity_mismatch(
+    kb_session: Session,
+    mutator: Callable[[list[dict[str, Any]]], None],
+) -> None:
+    scope, _claim = _persist_projection_with_pages(
+        kb_session, suffix="page-schema", page_mutator=mutator
+    )
+
+    with pytest.raises(ReleaseManifestBuildError, match="page schema"):
+        _build_from_snapshot(kb_session, scope, "snapshot-page-schema")
