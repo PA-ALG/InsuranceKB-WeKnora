@@ -1,5 +1,7 @@
 # 保险知识编译能力迭代方案
 
+> **历史输入，已被合并**：当前唯一主 backlog 是 [2026-07-insurance-knowledge-compiler-master-plan.md](2026-07-insurance-knowledge-compiler-master-plan.md)，最高产品/架构口径是 [Enterprise LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。本文件只保留需求来源与演进记录，不再单独决定落点、模型策略或发布权限。
+
 ## 背景与目标
 
 本迭代旨在把 LLM Wiki 的知识编译理念融入 WeKnora，并使其可用于保险公司的产品、条款、核保、理赔、监管和培训知识管理。

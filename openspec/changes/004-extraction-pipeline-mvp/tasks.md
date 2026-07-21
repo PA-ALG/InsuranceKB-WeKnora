@@ -1,5 +1,8 @@
 # 004 任务
 
+> [!CAUTION]
+> **以下 checkbox 仅是历史记录，不是当前可执行任务。** 第一方产物可按 provenance 迁移，但全部保持 production-disabled；只有 027/028 新 OpenSpec 与适用 admission/030 验收通过后，才能在新运行时使用。
+
 - [x] T1 公共模块重构：002 的对抗性 JSON 解析器与 quote 回验抽到 `compiler/` 可复用位置（002 测试不破坏）（E3.1/E3.2）→ `compiler/parsing.py`、`compiler/verification.py`、`compiler/llm.py`（ModelClient/ReplayClient/request_key 提升为公共，goldenset.annotator 保留再导出）
 - [x] T2 06 资产代码化：GROUP_KEYWORDS/7 组/字段桥接 → routing_data.py；占位值正则 → cleaning.py（E2.3/E3.3）；字段桥接覆盖 schema v1.1 全部 extractable 字段（单测强制）
 - [x] T3 章节切分（页码映射）+ 组路由（E2）→ `compiler/sections.py`；含文档族结构指纹（11 §1.1）

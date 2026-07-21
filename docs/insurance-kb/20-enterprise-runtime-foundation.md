@@ -1,6 +1,6 @@
 # 20 · 企业运行基础：作用域、来源桥接、发布快照与质量闸门
 
-> 状态：设计已形成，按 OpenSpec 016～021 分段实施。016/017/018/019 已完成；018 已取得 PostgreSQL 与真实 WeKnora 5-node 零 skip证据。021 ordering 与 020 真实 baseline 尚未完成。本文是方案 A 的总设计；各 change 的 `specs/` 是验收权威。
+> 状态（2026-07-21）：016/017/018/019/021 软件均已合入；018 已取得 PostgreSQL 与真实 WeKnora 5-node 零 skip 证据，但只是 SnapshotFact/历史逐页发布地基，不含 NS-C/P-1 全制品 seal/原子 serving alias。`NS-RIGHTS=recorded` 已确认 LLM-wiki-black 第一方权利；020 canonical admission 仍 `BLOCKED`，027 生产模型入口尚未硬封，030 MVP admission 也未 READY。027 与适用 admission 缺一时，真实编译/merge/release 均禁止。
 
 ## 1. 目标与结论
 
@@ -11,8 +11,8 @@
 1. 每次读写都属于显式 `KnowledgeSpace`，不得依赖进程级默认租户或默认 KB；
 2. 生产编译输入来自 WeKnora `knowledge`，本地目录只保留为开发、回放与金标评测入口；
 3. Evidence 同时记录原文页锚点、WeKnora chunk 锚点和来源修订；
-4. Wiki、MCP 与 Agent 只消费当前 `ReleaseSnapshot` 的不可变事实投影；
-5. Golden Set 不只是离线报告，而是抽取策略和自动发布策略的质量闸门。
+4. Wiki、MCP 与 Agent 只消费 WeKnora active alias 指向、且与已批准 `ReleaseSnapshot` 及本地 CurrentRelease activation-receipt 镜像核对一致的不可变投影；P-1 前仅 Harness reader 可服务批准快照；
+5. Golden Set 不只是离线报告，而是抽取与低风险候选自动化策略的质量闸门；不能替代 release 级真人最终批准。
 
 ## 2. 模块分工
 
@@ -39,17 +39,19 @@ KnowledgeSpace
   binding_status: bound | unbound
 ```
 
-同一 tenant 可以有多个 KnowledgeSpace；一个 Space 固定映射一个 KB-RAW 和一个 KB-WIKI。Harness 内部使用 `space_id`，避免把“哪个 kb_id”混成一个不明确字段。
+同一 tenant 可以有多个 KnowledgeSpace；一个 Space 固定映射一个 KB-RAW 和一个**独占的目标** KB-WIKI。数据库对 bound Space 强制 `UQ(tenant_id, wiki_kb_id)`，禁止两个 Space 共享同一 target Wiki KB；P-1 active alias 的地址就是 `(tenant_id, target_wiki_kb_id)`。Harness 内部使用 `space_id`，避免把“哪个 kb_id”混成一个不明确字段。
+
+P-1 前的隔离 staging 不是 Space 的消费目标，不复用 `wiki_kb_id`。NS-C 新增可撤销、可审计的 `WikiPublicationCapability`：`{space_id, tenant_id, target_wiki_kb_id, staging_wiki_kb_id, mode, acl_probe_hash, retrieval_probe_hash, issued_by, expires_at}`。`staging_wiki_kb_id` 必须与 target 不同，并对有效 capability 强制 `UQ(tenant_id, staging_wiki_kb_id)`，两类 KB 均不可跨 Space 复用；`mode=isolated_staging` 时 publisher 只能写 staging，普通用户/Agent/RAG 探针必须证明不可达。P-1 后 capability 切为 `mode=release_namespace`，target 通过 active alias 激活；签发及每次写/seal/activate/query 前都复验 tenant/Space/KB 一一绑定，任何缺失、过期或 ID/ACL 漂移均 fail closed。
 
 以下聚合根必须直接带 `space_id`：Product、ProductDocument、UnassignedItem、Claim、ChangeSet、ReviewItem、ReleaseSnapshot、CurrentRelease。子表通过父表外键继承作用域，但任何服务入口仍必须接收 `KnowledgeScope` 并在查询中校验。
 
 所有原全局唯一约束改为空间内唯一，包括：
 
 - `(space_id, product_code)`；
-- `(space_id, source_kind, external_record_id, source_revision)`；
+- ChangeSet `(space_id, source_kind, idempotency_key)`，其中 key 对所有来源类型非空；structured SourceRevision 另以 branch CHECK 保证 external record/revision 非空后建立作用域唯一键；
 - `(space_id, review_key)`；
 - `(space_id, release_label)`；
-- `CurrentRelease(space_id)` 每空间一行。
+- `CurrentRelease(space_id)` 每空间一行，且 bound Space 的 `(tenant_id, wiki_kb_id)` 唯一。
 
 迁移采用兼容的两阶段策略：历史数据先进入 `legacy-default` 且状态为 `unbound`，三个外部绑定字段均为 NULL；只有 bound Space 能构造 `KnowledgeScope`。测试和离线迁移工具可以按 `space_id` 检查 unbound 数据，但生产桥接、发布和在线读取必须拒绝。管理员在单事务内校验并写入 tenant/raw/wiki 三项后切换为 bound。
 
@@ -79,7 +81,7 @@ WeKnora adapter 通过受 ACL 保护的接口读取 knowledge 元数据、下载
 Compiler 改为依赖 `DocumentSource` 协议：
 
 - `DirectoryDocumentSource`：本地回放、Golden Set、单元测试；
-- `WeKnoraDocumentSource`：生产模式，唯一允许进入在线编译的实现。
+- `WeKnoraDocumentSource`：目标态在线来源 adapter；它只解决来源真实性，不解除 027/适用 admission，也不使当前 004 编译器获得生产资格。
 
 PDF 页码来自下载的原文件；chunk 引用通过 evidence quote 与 chunk 内容归一化匹配得到。唯一命中写 `chunk_id`；零命中或多命中保留页锚点，并记录 `lineage_status=page_only|ambiguous`，不得伪造 chunk 关联。
 
@@ -98,16 +100,16 @@ Evidence 额外冻结 `source_revision`、`file_hash`、`parser_version` 与可�
 
 Wiki 渲染器和未来 MCP 查询都只读取 `SnapshotFact`。不得绕过当前快照直接查询 `claims.status='published'` 作为在线答案。
 
-发布采用可恢复状态机：
+发布采用可恢复状态机投影（事件 append-only，snapshot 本体不原地改 status）：
 
 ```text
 building → publishing → published
                     ↘ failed
 ```
 
-先在数据库内构建 SnapshotFact、页面物化结果和完整 PublishPlan（upsert/delete 写集及补偿动作），再向 WeKnora 幂等执行；全部成功后才移动该 Space 的 CurrentRelease。外部写入部分失败时指针不动，记录 PublishAttempt。failed snapshot 可用同一冻结 plan 显式重试；放弃时 reconciliation 按 current snapshot 精确 upsert 旧页面，并删除失败 plan 触及但 current 不拥有的全部 Harness managed slug，消除半发布状态。若目标 slug 是非 Harness 管理页面，发布前直接拒绝覆盖。
+先在数据库内构建 SnapshotFact、页面物化结果和完整 PublishPlan，再向 WeKnora P-1 的不可见 `release_id` namespace 幂等 staging 并回读验证；之后调用 `seal-release(expected_write_etag, manifest_hash)`，由平台原子重算物理 namespace/index hash 并冻结 PUT/DELETE。随后必须由该 Space 授权人对完整 snapshot content hash 最终批准。只有 seal receipt、仍有效的 approval、target KB 归属和 hash 全匹配时，才调用 `activate-release(expected_alias, release_id, manifest_hash)`；activate 再验 seal/物理 hash 后以 active alias CAS 作为 serving commit。本地 `current_release` 只镜像 verified activation receipt/ETag，不能独立上线。alias/镜像/批准失配时 MCP fail closed + Alert。P-1 前只能写 ACL 隔离、禁生产检索的 staging KB，由 Harness reader 预览，禁止写生产 Wiki。failed snapshot 可用同一冻结 plan 显式重试；任何制品变化都生成新 snapshot并重新批准。
 
-回滚同样先重放旧快照页面，再移动该 Space 指针。MCP 和 Wiki 页面因此引用同一个 snapshot_id。
+批准撤销/到期、release pin 与 GC 都用 append-only event/receipt 表达。当前 release 和仍具有效 rollback approval/保留资格的 sealed namespace、index generation、内容制品必须 pin，禁止 GC；仅失败未激活 staging，或明确失去回滚资格且过审计保留期的 release，可经授权后 GC 并记录逐项 hash/receipt。回滚先对有效批准、seal、页面/关系/目录/MCP manifest、内容制品和 index generation 做物理 hash preflight，缺一项即阻断；全绿后才执行 active alias CAS，不逐页重放、不重新调用模型。MCP 每次读取并核对同一 alias，所以与 Wiki 页面引用同一个 snapshot_id。
 
 ## 6. Curated-first 查询策略
 
@@ -127,11 +129,11 @@ Golden 工作拆成四层：
 1. **数据集发布**：13/13、schema 固定、每产品 disputed rate ≤5%、自评满分；
 2. **全量基线**：13 产品全部跑抽取，完成 judge queue、dead letter 与 long-field keypoints；
 3. **回归闸门**：候选版本相对批准基线不得出现指标退化；
-4. **自动化资格**：只有低风险字段且质量画像满足最小样本数、值准确率、幻觉率和证据准确率阈值，才可能自动 add/enrich/supersede。
+4. **低风险候选自动化资格**：只有低风险字段且质量画像满足最小样本数、值准确率、幻觉率和证据准确率阈值，才可能自动形成/推进 add/enrich/supersede 候选；不能直接发布。
 
-默认安全策略：`auto_apply_supersede_low_risk=false`。即使配置开启，也必须同时存在匹配 schema/model/prompt/source-profile 的已批准 `QualityProfile`。高风险字段始终人工审核。
+默认安全策略：`auto_apply_supersede_low_risk=false`。即使配置开启，也只允许生成 candidate revision，且必须同时存在匹配 schema/model/prompt/source-profile 的已批准 `QualityProfile`。高风险字段始终人工审核；每个生产 snapshot 无论风险都须真人最终批准。
 
-首版保守资格阈值可配置，默认：样本支持数 ≥10、值准确率 ≥0.98、幻觉率 ≤0.01、证据准确率 =1.0。阈值不足只意味着“禁止自动发布”，不阻止候选事实进入审核队列。
+首版保守资格阈值可配置，默认：样本支持数 ≥10、值准确率 ≥0.98、幻觉率 ≤0.01、证据准确率 =1.0。阈值不足意味着禁止低风险候选自动推进，只能进入审核队列；阈值达标也不产生无人批准发布。
 
 ## 8. 失败处理与可观测性
 
@@ -142,9 +144,10 @@ Golden 工作拆成四层：
 | 原件下载或页解析失败 | dead letter；不使用 chunks 猜页码 |
 | quote 无 chunk 唯一匹配 | 保留 page evidence，标 lineage 状态 |
 | source revision 变化 | Evidence stale + recompile ChangeSet |
-| 质量画像缺失或过期 | 自动发布关闭，进入审核 |
-| Wiki 部分发布失败 | CurrentRelease 不移动；记录 attempt 并 reconciliation |
-| 回滚失败 | 指针不移动，当前在线快照保持 |
+| 质量画像缺失或过期 | 低风险候选自动推进关闭，进入审核 |
+| Wiki staging/回读失败 | active alias 不移动；记录 attempt/Alert，staging 对普通 UI/RAG 不可见 |
+| active alias CAS/ack 失配 | CAS 失败保持旧 alias；若 alias 已变但本地 ack 丢失，MCP fail closed，凭 provider receipt reconciliation，不猜状态 |
+| 回滚失败 | active alias 不移动，当前在线快照保持 |
 
 所有 run manifest 记录 `space_id/tenant_id/raw_kb_id/knowledge_id/source_revision/schema/model/prompt`，使一次错误可以重放并定位到来源版本。
 
@@ -153,13 +156,13 @@ Golden 工作拆成四层：
 | Change | 内容 | 依赖 |
 |---|---|---|
 | 016 | KnowledgeSpace、作用域强制、两阶段迁移 | 007 |
-| 017 | WeKnora SourceDocument Bridge、Evidence lineage | 016、004 |
+| 017 | WeKnora SourceDocument Bridge、Evidence lineage | 历史 change 依赖 016、004；其 live 证据只证明 bridge，不解除 004 的 027/028/030 生产质量门禁 |
 | 018 | SnapshotFact、统一读取、发布/回滚一致性 | 007、016、017（硬依赖） |
-| 019 | Golden 工具、QualityProfile 与发布闸门（确定性软件） | 002、004、005、007；merge 接入在 016 后；无 018 前置 |
-| 020 | gs-v0.1 收尾、13 产品 baseline、judge/dead-letter/keypoints（真实数据运行） | 002、019、021；先完成 020 T1 run-admission |
+| 019 | Golden 工具、QualityProfile 与发布闸门（确定性软件） | 历史 change 依赖 002、004、005、007；确定性工具可保留，任何加载 004/merge 的生产用途仍受 027/适用 admission |
+| 020 | gs-v0.1 收尾、13 产品 baseline、judge/dead-letter/keypoints（真实数据运行） | 002、019、021 + NS-RIGHTS recorded + NS-0 verified + 020 admission READY |
 | 021 | SourceHead、不同 revision ordering 与统一 per-source lock/CAS | 017、018；迁移在 018 `0005` 之后 |
 
-016/017/018/019 现已完成；018 已实现 migration `0005`、统一读模型和可恢复 saga，并由 PostgreSQL service-owned Session 与真实 WeKnora V1→V2→rollback 五节点零 skip验收。021 现可在 `0005` 后实施；020 仍必须等待 021 并先完成自身 T1 run-admission。B10 的本机 live 环境与受信门禁已完成，但不等于未来 WeKnora 升级可跳过重新验收。
+016/017/018/019/021 已合入；018 实现 migration `0005`、统一读模型和旧范围可恢复 saga，021 已在其后补齐 SourceHead/order/lock/CAS。020 T1 run-admission 软件也已合入，但权威工件仍为零模型 `BLOCKED`。当前 MVP 动作是 027→028，并行 029/010 thin、013/032 和独立 030 admission；只有 `NS-RIGHTS=recorded ∧ NS-0=verified ∧ applicable admission=READY` 才执行对应真实 slice。B10 本机 live 环境与受信门禁不替代这些条件；NS-C/P-1 及未来 WeKnora 升级仍须另做同快照 live 验收。
 
 ## 10. 非目标
 

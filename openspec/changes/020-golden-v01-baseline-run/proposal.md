@@ -1,5 +1,8 @@
 # 020 · gs-v0.1 与 13 产品基线真实运行
 
+> [!CAUTION]
+> **当前仍不可执行。** `NS-RIGHTS=recorded` 已满足，T1 admission 软件已合入，但 canonical 工件仍 BLOCKED；真实 D2～D4 还必须满足 `NS-0=verified`，并使用经 027/028/provenance 批准的 execution surface。北极星与注册表 supersede 本文件任何“READY 即运行”或旧强 judge 表述；030 MVP 不借用本 admission。
+
 ## Why
 
 002 T8 尚有 2 产品，HANDOFF B2/B3/B6/B7 尚未完成。它们是高 token、依赖真实模型和凭据的数据运行，不应与 019 的确定性软件验收混在一起，但必须以 SDD 方式保留准入、断点、产物和验收合同。

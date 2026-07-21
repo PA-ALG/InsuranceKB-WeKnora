@@ -1,5 +1,8 @@
 # 006 · 模板抽取 Fast Path 与表格结构识别
 
+> [!CAUTION]
+> **历史、不可执行、production-disabled。** 本 change 依赖的模板/路由是可迁移第一方资产，但还保留强模型润色入口；旧范围通过不等于 028 `TemplateVersion/Approval/provenance receipt` 或生产准入。027/028 与适用 admission 未通过前不得加载这些模板生成真实候选。
+
 > 设计权威：docs/insurance-kb/11 §1（三层模板设计）、§2（解析升级链）。本提案是其 change 化，细化范围与验收。
 
 ## 为什么做

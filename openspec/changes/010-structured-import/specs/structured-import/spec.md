@@ -47,12 +47,25 @@
 **正交来源轴**：证据 SHALL 新增 `source_kind ∈ {legacy, weknora, structured}`，与表示链接质量的 `lineage_status` 正交——`lineage_status` 值域**不变**（linked/page_only/ambiguous），且仅对 source_kind=weknora 有意义；SHALL NOT 把来源种类塞进 lineage_status。
 
 迁移 0007 SHALL 按以下 schema 固定（不留实现者二选一）：
-- `structured_source_records`：`id`（36-char PK）+ space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、imported_at；UNIQUE(space_id, source_system, external_record_id, source_revision)；**insert-only**——服务层无 UPDATE/DELETE 路径，SQLite/PostgreSQL 均以 DB trigger 拒绝 UPDATE **与 DELETE**（合规删除须另立显式 purge change，本 change 不暗开口子）；**本表只保存不可变的 raw source identity/content，不含任何批次外键**——一条不可变记录必须能参加多个 mapping batch（单值 batch_id 与重算语义矛盾，五轮复审定案）；
+- `structured_source_records`：`id`（36-char PK）+ space_id、source_system、external_record_id、source_revision、record_locator、record_hash、raw_payload、authority_level、source_profile_fingerprint、ordering_kind、ordering_processed_at、ordering_generation、imported_at；ordering 两分支必须恰有一个成立；UNIQUE(space_id, source_system, external_record_id, source_revision)；**insert-only**——服务层无 UPDATE/DELETE 路径，SQLite/PostgreSQL 均以 DB trigger 拒绝 UPDATE **与 DELETE**（合规删除须另立显式 purge change，本 change 不暗开口子）；**本表只保存不可变的 raw source identity/content 与可重构 SourceRevision 的冻结绑定，不含任何批次外键**——一条不可变记录必须能参加多个 mapping batch（单值 batch_id 与重算语义矛盾，五轮复审定案）；
 - `structured_import_batch_records`（**append-only 关联表**，记录↔批次 M:N）：`change_set_id`（FK→`change_sets.id`）+ `structured_record_id`（FK→`structured_source_records.id`），PK/UNIQUE(change_set_id, structured_record_id)；服务层无 UPDATE/DELETE，SQLite/PostgreSQL 双方言 trigger 拒绝 UPDATE 与 DELETE；
 - `claim_evidence`：新增**非空** `source_kind ∈ {legacy, weknora, structured}`、可空 `structured_record_id`（FK）、可空 `mapping_version`；迁移顺序 SHALL 为"先加 nullable/临时 default → 按'lineage 审计组完整→weknora，否则→legacy'回填 → 再收紧 NOT NULL/CHECK"；CHECK 按 kind 分支——weknora ⇒ 017 审计组齐全（既有语义不变）；structured ⇒ structured_record_id 与 mapping_version 非空 ∧ 禁止伪 page/chunk/raw_kb lineage；legacy ⇒ 全空、**仅存量兼容且不得冻结发布**；
 - **downgrade 有条件**：仅当库中无 structured 行、无 structured Evidence、无 v2 快照时允许降级；发现任一项即 fail-closed——SHALL NOT 以"可逆"为名销毁 provenance。
 
-**record_hash 语义（比较对象定死，防恒真）**：record_hash = canonical raw record（键排序、UTF-8、minified JSON 序列化）的 SHA-256；任何"一致性"校验 SHALL 以 raw_payload **重算** canonical hash 与落库值比对（探测绕库改写），SHALL NOT 把表中 record_hash 与其自身比较。
+**record_hash 与公共 SourceRevision 语义（比较对象定死，防恒真）**：输入 SHALL 严格区分 provenance envelope 与 raw business `payload`；record_hash = canonical(payload)（键排序、UTF-8、minified JSON）的 SHA-256，envelope 不进入 hash，避免循环身份。任何"一致性"校验 SHALL 以 raw_payload 中的 business payload **重算** canonical hash 与落库值比对（探测绕库改写），SHALL NOT 把表中 record_hash 与其自身比较。
+
+每条结构化记录 SHALL 携带显式 `SourceOrdering`；`source_profile_fingerprint` SHALL 由已登记 `record_schema_ref + known_schema_adapter_version + canonicalizer_version` 的 canonical 内容计算并冻结，`imported_at` 不得充当 ordering。adapter SHALL 使用现有公共模型构造并验证：
+
+```python
+SourceRevision(
+    file_hash=record_hash,
+    ordering=ordering,
+    parser_fingerprint=source_profile_fingerprint,
+    value=source_revision,
+)
+```
+
+输入 `source_revision` 必须等于推导值；`effective_mapping_version` 不得进入 SourceRevision，保持 raw-source identity 与转换行为两条独立轴。生命周期分区 identity 固定为 `(space_id, source_system, external_record_id)`，不得用展示字段 `knowledge_id=source_system` 作为 head identity，否则同一系统的不同记录会错误合并。structured Evidence 的 `structured_record_id` 是其公共 SourceRevision 持久绑定；禁止伪造 document `raw_kb_id/knowledge_id` 来复用 021。
 
 **mapping_version 语义（覆盖全部会改变输出的行为，防"YAML 未变代码变"错误 no-op）**：`mapping_manifest = {parsed_mapping, transformer_registry_version, normalizer_version, target_schema_version}`——YAML 先 parse 为 JSON 兼容树再 canonicalize（sorted-key、minified、UTF-8；注释/缩进/键序不影响结果）；`effective_mapping_version = SHA-256(canonical(mapping_manifest))`；ChangeSet SHALL 持久化 canonical manifest，Evidence 与快照冻结副本携带 digest；transformer/normalizer 行为变更 SHALL bump 对应版本，SHALL NOT 只改代码不改 manifest 版本。来源内容版本（record_hash）与转换版本（effective_mapping_version）是两条独立轴。
 
@@ -69,6 +82,12 @@
 - **WHEN** 以 structured kind 构造携带已登记记录身份+映射版本的 ProposedEvidence，并以既有 weknora/legacy 夹具重放全部既有校验用例
 - **THEN** structured 构造成功且 WeKnora 审计组必须全空（混填被拒）
 - **AND** weknora/legacy 既有用例的接受/拒绝结果与理由逐条一致（校验/裁决行为不变）
+
+#### Scenario: 结构化记录可重构公共 SourceRevision
+
+- **WHEN** 从已落库 structured_source_record 的 raw payload、record_hash、ordering 与 source_profile_fingerprint 重构 SourceRevision
+- **THEN** 得到的 value 与落库 source_revision 完全一致，mapping_version 变化不改变该 revision
+- **AND** 任一 raw payload/hash/ordering/profile/revision 被篡改时验证 fail closed，不产生 Evidence/ChangeSet
 
 #### Scenario: 发布时验证不产伪引用、篡改即拒发
 

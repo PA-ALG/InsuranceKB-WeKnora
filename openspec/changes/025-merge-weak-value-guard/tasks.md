@@ -1,5 +1,8 @@
 # 025 合并前置弱值门槛 · 任务
 
+> [!CAUTION]
+> **以下任务冻结，当前不可认领。** 只有 MVP 后重新排入完整 010/merge hardening、027 已完成且新的 delta 获批后才可重排；旧依赖段和示例不构成开工授权。
+
 > 三版（2026-07-18，codex PR #17 两轮复审收口）。依赖：007 主链 + 018（PR #9 已合入）；**实现排在 021 之后（021 规格已提出、尚未实现——G7 重评复核/G8 锁序依赖其 SourceHead/per-source lock 语义）**。文件域：`knowledge/merge.py` + `knowledge/models.py`（ProposedClaim.effective_to）+ `knowledge/importer.py` + `knowledge/tables.py`（双表）+ 触发器 DDL + 只读查询 API + 迁移 0011（含迁移测试）+ docs 03 §8（已先行修订）。测试名引用条款号（G1~G9）。零真实模型调用。
 
 ## 任务（红绿；每条护栏必配 accept 侧/负测——024 gauntlet 教训：只测拒绝侧=半个护栏）

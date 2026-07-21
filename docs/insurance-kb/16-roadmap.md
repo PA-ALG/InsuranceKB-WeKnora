@@ -1,70 +1,132 @@
-# 16 · Roadmap（里程碑与关键路径）
+# 16 · Enterprise LLM Wiki Roadmap
 
-> 与 13（蓝图现状）配套：13 讲"建到哪了"，本文讲"接下来按什么顺序建、每一站的完成定义"。排期按里程碑不按日历（团队自行映射到周）。**并行轨道结构与分工见 22（并行执行蓝图）**。
+> 本文定义稳定的阶段、顺序和完成定义；实时状态只在 `HANDOFF.md` 的 MVP-0 控制板维护，冻结 MVP 范围和任务拓扑见 [23-mvp-control-board.md](23-mvp-control-board.md)，并行文件域见 [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md)。
+> 产品北极星：**Enterprise LLM Wiki 是产品本体；WeKnora 是企业底座；Python Harness 是弱模型知识编译与治理运行时。**
 
-## M0 · 企业运行基础（当前里程碑）
+## 0. 现有基础与路线修正
 
-**目标**：先消除“本地验证链 ≠ 企业生产链”，让租户隔离、WeKnora 来源、Evidence 血缘、发布快照与 Golden Gate 成为不可绕过的基础。
+现有 001～024 已形成可复用底座：KnowledgeSpace、WeKnora Source Bridge、产品注册/分类/路由、Claim/Evidence/ChangeSet/Review、ReleaseSnapshot/SnapshotReader、Source lifecycle、审核工作台核心、Golden Gate、run-admission 软件和本机 WeKnora 环境。
 
-| 事项 | Change | 完成定义 |
+过去 Roadmap 把首次 MVP 与完整企业生产验收混在同一个 M1，导致 P-1、13 产品 baseline、完整结构化平台、分布式调度、预算结算和 GC 都被放在首个产品闭环之前。2026-07-21 业务方批准以下修正：
+
+- 先交付真实多文档 MVP，而不是继续建设孤立组件；
+- MVP 固定长期对象和接口，后续扩实现而不换主链；
+- P-1、完整预算/调度和 13 产品全 baseline 后置，但企业路线不删除；
+- LLM-wiki-black 是项目方第一方资产，可选择性迁移为 Python Harness 组件；第三方许可证单独管理。
+
+## M1 · 真实多文档 MVP（当前，7–10 个工作日）
+
+**目标**：用现有底座走通“资料进 → 知识编译 → 人审 → 人/Agent 同快照 → 更新/回滚”的真实闭环。
+
+### 固定范围
+
+- 23 份受控输入：15 份真实 PDF、5 份只进入产品注册且零 Claim/Evidence 的 `product_meta.json`，以及混合产品文档、后续修订/冲突来源、FAQ JSON；
+- 5 个产品，覆盖医疗、终身寿险、年金；
+- WeKnora 文档来源与已知 schema 结构化来源；
+- 固定批准模板、弱模型多次短任务、Evidence 回验、ChangeSet/Conflict、人工审核；
+- ReleaseManifest/完整 hash 批准、Harness Reader 与 MCP 同 SnapshotReader；
+- 一次来源更新、一次失败告警、一次回滚。
+
+### 工作包
+
+| 包 | OpenSpec | 交付 |
 |---|---|---|
-| KnowledgeSpace 与 tenant/双 KB 强制作用域 | 016 | 双租户同业务键互不影响；legacy bind；跨空间 fail closed |
-| WeKnora SourceDocument Bridge | 017 | upload→parse→download/chunks→compiler；Evidence 带 source revision/page/chunk |
-| SnapshotFact 与统一在线读取 | 018 | Wiki/MCP 同快照；失败不移动指针；补偿精确恢复 |
-| Golden 工具与自动发布质量闸门 | 019 | portable validator/profile；默认不自动 supersede；回归失败不能批准 |
-| gs-v0.1 与 13 产品真实基线 | 020 | run-admission 后 13/13、裁决/死信/keypoints/approved profile 齐 |
-| Source lifecycle ordering | 021 | durable current head；不同 revision 乱序/并发和 import/delete 竞争由统一 lock/CAS 裁决 |
+| Model Gate | 027 | 所有生产入口只允许批准、身份冻结的 MiniMax/Qwen/Qwen-VL 级弱模型；旧强 judge/fallback fail closed |
+| Template + Runtime | 028 | 最小 TemplatePackage、父 intake → 按产品/模板确定性子 compilation job、StageRun/Attempt/AgentReceipt/Alert、可恢复编排与现有主链接线 |
+| Release Authority | 029 | ReleaseManifest、授权人批准完整 hash、CAS CurrentRelease、逻辑回滚；P-1 前不写生产 Wiki UI |
+| Structured Thin Slice | 010 的 MVP 子集 | `product_meta.json` 只进产品注册且零 Claim/Evidence；已登记 FAQ `fact_assertions` → SourceRevision/结构化 Evidence → Claim 候选 → ChangeSet/Review，raw FAQ 只暂存 |
+| Human/Agent Read | 013 core + 032 | 独立只读 Human Wiki Reader 与 MCP 消费同一 ApprovedSnapshotReader，返回相同 snapshot/hash；008 继续只做运营审核 |
+| Real Slice/E2E | 030 | 23-entry manifest/fixtures、最小 parameterized admission core + 固定 MVP profile（实现 027 `AdmissionVerifier`、签发 opaque `VerifiedAdmission`，不复用 020 evaluator）、真实运行、更新/冲突/告警/回滚验收报告 |
 
-**当前排期与硬依赖（业务方 2026-07-14 裁决）**：合并后收尾优先；随后 018 与 019 无相互前置，可独立或并行推进，019 是解锁真实基线的工具轨，价值优先级不低于 018。硬依赖为 018 → 021、019 → 020、021 → 020；020 在 019、021 均完成后先执行自身 T1 run-admission。021 不阻塞 T8 live 验收，但阻塞不同 revision 并发开放。
+### 完成定义
 
-进度（2026-07-17）：016/017/018 软件已完成；018 已交付不可变 SnapshotFact、pointer-only Reader、frozen renderer、可恢复 publish/rollback/reconciliation 与 curated-first RAW policy，并取得 PostgreSQL 零 skip和真实 WeKnora 5-node 证据。021 仍 proposed/pending，尚未实现不同 revision ordering；在 021 完成前仍只允许同一 Space/source 串行 lifecycle。最新精确证据见 018 validation report、HANDOFF 与收尾 PR check/comment。
+1. 23 份受控输入可校验且幂等，5 份 `product_meta` 不冒充 Claim 来源；
+2. 5 个产品形成有 Evidence 的可读知识页；
+3. 混合文档由父 intake job 按明确产品/模板扇出子 compilation job，不产生跨产品污染，歧义进入人工队列；
+4. `product_meta` 只注册产品；已登记 FAQ fact assertions 可跳过 PDF 解析但不跳过来源、冲突、审核与版本；
+5. 新 SourceRevision 形成 add/enrich/supersede/conflict，不静默覆盖；
+6. 模板失配、无共识、证据断链或尝试耗尽产生持久 Alert 并停止推进；
+7. 授权人批准完整 manifest hash 后才移动 CurrentRelease；
+8. 人与 MCP 返回相同 snapshot/hash；
+9. 回滚不重新调用模型；
+10. 独立验收报告诚实区分 deterministic、PostgreSQL、WeKnora live 与真实 provider 证据。
 
-更新（2026-07-17）：**019 已随 PR #8 合入 main**；**023 已由 PR #10/#16/#19/#20 完成**；**018 已随 PR #9 合入**（merge `b093a447`），021/013/008 W4 已解锁。多轨并行拆分见 22 号蓝图与 HANDOFF ⓪-0h。
+MVP 不宣称 WeKnora 生产 Wiki UI 已完成；P-1 前只使用 ACL 隔离 staging + Harness Reader/MCP。
 
-## M1 · 可演示闭环
+## M2 · 企业生产核心（MVP 后重新基线，参考 3–5 周）
 
-**目标**：给管理层/业务方演示"文档进 → 知识出 → 人可审 → Agent 可用 → 可回滚"的完整故事。
+**目标**：把 MVP 的同一合同扩展为正式生产发布和完整业务覆盖。
 
-| 事项 | 入口 | 前置 |
+| 能力 | 主要范围 | 完成定义 |
 |---|---|---|
-| WeKnora 双库跑通 + live 契约 + L1~L5 演示脚本 | B10（14 号文档 Runbook） | 无 |
-| 结构化直入（存量 JSON/FAQ 变知识） | B12（010，specs 齐） | 007✅ |
-| 审核工作台四页 | B8（008，specs 齐） | 007✅ |
-| 金标收尾 gs-v0.1（13/13） | 020 D2（承接 B1） | 019 + 021 + 020 T1 run-admission |
-| 全量基线 + judge 批处理 + 死信复跑 | 020 D3/D4（承接 B2/B3/B4/B6/B7） | gs-v0.1 |
+| P-1 原子发布 | release namespace、seal、`active_release_id` CAS、MCP alias 核对、pin/GC、批准撤销/到期 | 人、MCP、页面、目录、关系和索引物理同快照；故障不移动 serving alias |
+| 完整 Template Registry | global→险种→文档类型→产品族 scope、版本/hash/approval/retire、Golden Slice 准入 | 模板可评测、可回滚、失配告警；草案不自动生产化 |
+| 完整 Runtime | durable job/checkpoint、worker lease/fencing、多模型计划、预算预留/结算 | 崩溃恢复、迟到 worker 拒绝、attempt/receipt 可审计 |
+| 完整结构化知识 | 010 全量：未知 schema 映射、CSV/API、QA staging、mapping 演进 | 文档与结构化输入同走治理主链 |
+| 完整 Human/Agent | 013 四工具、032 扩展、008 发布/回滚页、009 概念、012 QA | 产品页、概念、FAQ、比较和历史版本完整 |
+| 完整质量基线 | 13 产品和跨险种 Golden Slice、020 D2～D4/D4b | 召回/准确率/Evidence/污染/冲突指标有真实 provider 证据 |
 
-**完成定义**：L1~L6 演示一条命令跑通；13 产品金标+基线报告齐；工作台可完成一次真实审核与回滚。
-**关键路径**：B10 → L6（其余可并行）。
+M2 完成后，Enterprise LLM Wiki 才可宣称企业生产核心就绪。
 
-## M2 · 形态完整（wiki 化与运营）
+## M3 · 规模运营（M2 后滚动计划，参考 4–6 周）
 
-| 事项 | 入口 | 前置 |
-|---|---|---|
-| 概念层（概念主页/义项/互链/purpose） | B11（009） | 007✅，prompts 改造等 006✅ |
-| QA 一等对象 | B14（012） | 010 |
-| 知识健康度巡检（含同类对比缺口 H1.6） | B13（011） | 007✅ |
-| 数据飞轮（Langfuse 信号→缺口工单） | B17（015） | 007✅、009（概念对齐） |
-| insurance MCP server（版本敏感问答） | B15（013） | 007✅ + 018✅；规格就绪，已可开工 |
-| 上游 3 Issue/PR（乐观锁/webhook/ingest_mode） | B5 | 无 |
+**目标**：支持百千文档并发、知识运营和持续质量提升。
 
-**完成定义**：六能力审计（13 §4）全部转 ✅；"在线问诊"式概念页上线；Agent 能答历史版本问题。
+- 014/NS-F：按 Space/产品版本分片、限流、公平性、dead letter、批次控制台；
+- 011：知识完整度、证据健康、过期/漂移/孤立/任务可靠性；
+- NS-E：产品知识仪表盘、Schema/Template Workbench、缺口批量补全与审批；
+- 完整预算与成本运营：provider/model/tenant/product 维度，不进入 M1 主叙事；
+- 015 飞轮：查询缺口、审核反馈、错误样例 → 新任务/Golden Slice/模板版本；
+- 更多险种和文档类型按 slice 准入，不一次性大爆炸上线。
 
-## M3 · 规模化与提准
+完成定义：千份级批次可恢复运行；同一产品 finalize 串行且不丢更新；质量趋势和 Alert 有 Owner/SLA；模板/模型升级经过固定留出集非退化。
 
-| 事项 | 入口 | 前置 |
-|---|---|---|
-| 批量并发调度 + 批次控制台 | B16（014） | M1 |
-| 抽取提准迭代：漏抽 24 条归因修复 → 基线回归（目标由团队按 v2 分数定阶梯） | B7 + 005 归因工单 | B2 |
-| 模板铺开（按族分数立项）+ PP-StructureV3 接入 | B9 + 006 机制✅ | B2（按族数据） |
-| 金标要点清单精修 + 第二波险种样本（重疾/护理/补充养老） | B6 + 业务方补样本 | — |
+## M4 · 持续演进
 
-**完成定义**：千份级批次可跑（限流/死信/控制台）；基线分数达团队设定阶梯；第二波险种入库。
+- 基于业务背景生成 Schema/Template 草案，并经过留出集和人工批准；
+- 关系/概念网络、差异分析、决策表与 Agent 规划接口；
+- 扫描表格、图片、音视频等多模态扩展；
+- 受控 Deep Research 与知识发现，只产生候选，不绕过 Evidence/ChangeSet/Review；
+- 将高频问答、审核否决和冲突模式转为可版本化知识资产。
 
-## M4 · 智能演进（P2/P3，暂不细排）
+M4 是持续产品演进，不设置一次性“完成”日期。
 
-领域图谱与洞察、受控 Deep Research、规则可执行化（决策表）、PPTX/音视频/图片多模态——master plan P2/P3 原文有效，待 M2/M3 数据规模触发。
+## Architecture Runway：从 MVP 起冻结
 
-## 恒定原则
+M1～M4 共用以下对象和语义：
 
-- **主航道 = 15 号追踪矩阵的九问 + master plan**：任何新想法先对照"是否服务九问"，是→出 proposal，否→记 idea 不动工；
-- 每个里程碑收尾：更新 13（蓝图）与 15（追踪矩阵）状态、跑金标回归、HANDOFF 对账。
+`KnowledgeSpace / SourceRevision / Claim / Evidence / ChangeSet / ReviewItem / ReleaseSnapshot / TemplatePackage / CompilationJob / StageRun / Attempt / AgentReceipt / Alert`
+
+扩展规则：
+
+- 单进程 executor → 分布式 worker，只换 runtime adapter；
+- 固定模板实例 → 四级 registry，只扩 TemplatePackage repository/resolver；
+- Harness CurrentRelease → WeKnora active alias，只扩 release adapter/seal receipt；
+- 产品主数据注册 + 已登记 FAQ fact assertions → 通用结构化平台，只扩 mapping/source adapters，不改变双通道边界；
+- MCP core → 完整工具集，继续只读 SnapshotReader；
+- 5 产品 slice → 13 产品/全险种，继续使用相同 Golden/quality contracts。
+
+任何后续方案若要求放弃这些身份或绕过 Claim/Evidence/ChangeSet/ReleaseSnapshot，必须回到北极星重新审批，不能在执行 PR 中自行重构。
+
+## MVP 前明确不排
+
+- P-1 全故障矩阵、GC/retention 全组合；
+- 13 产品 canonical 020 完整运行；
+- 完整预算 UI、退款 reconciliation、成本分摊；
+- 千份并发、五级限流、公平性和批次控制台；
+- 未知 schema 通用映射、10 万条结构化压力测试；
+- PP-StructureV3、图谱洞察、Deep Research、多模态增强；
+- 与当前 Wiki 闭环无直接关系的 WeKnora 平台优化。
+
+“不排”只表示不进入 M1；上述能力均保留在 M2～M4，不得据此删除合同或扩展点。
+
+## Roadmap 运营规则
+
+- HANDOFF 只放实时状态、最多 3 个 blocker、下一动作和证据链接；
+- 23 号文档只放冻结 MVP 范围、任务拓扑和效率规则；
+- 本文只放稳定阶段与完成定义；
+- 13 号文档只记录已交付能力和差量；
+- OpenSpec 是单个功能包的条款级合同；
+- master plan 是完整 backlog，不再作为当前 MVP 控制板。
+
+每个里程碑收尾都更新 13/15/HANDOFF，并用实际 PR 七段时间重新估算下一阶段。

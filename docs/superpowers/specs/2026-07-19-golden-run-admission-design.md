@@ -2,6 +2,9 @@
 
 Date: 2026-07-19
 
+> [!CAUTION]
+> **历史设计，不能单独授权运行。** 本文保留 020 T1 admission 合同与历史上下文；当前权威门禁由 [Enterprise LLM Wiki 北极星设计](2026-07-21-enterprise-llm-wiki-north-star-design.md) 取代。`NS-RIGHTS=recorded` 已满足；020 真实 annotation/baseline/judge/merge/release 仍必须满足 `NS-0=verified ∧ canonical admission=READY`，且使用经新 OpenSpec/质量验收的 execution surface。030 MVP 使用独立 admission，不能借用本文工件。
+
 ## Context
 
 Change 020 is the first budgeted data run on the critical path. It completes the two
@@ -428,4 +431,4 @@ explicit external gate and never part of deterministic CI.
 4. Generate the honest pre-merge `BLOCKED` report with zero model calls.
 5. After a human commits/merges 021, rebase on the new `main`, pin the merge revision,
    obtain exact signed provenance/model/budget approval, and run non-inference probes.
-6. Only after freshly derived `READY`, start one missing-product canary under T2.
+6. Only after freshly deriving `NS-RIGHTS=recorded`, `NS-0=verified`, and canonical admission `READY`—and confirming the approved execution surface—start one missing-product canary under T2.
