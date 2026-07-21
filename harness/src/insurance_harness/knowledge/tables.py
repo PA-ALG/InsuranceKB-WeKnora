@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    DDL,
     JSON,
     Boolean,
     CheckConstraint,
@@ -22,6 +23,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -275,6 +277,85 @@ class ReleaseSnapshot(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_by: Mapped[str] = mapped_column(String(128))
     notes: Mapped[str | None] = mapped_column(Text)
+
+
+class ReleaseManifestRecord(TimestampMixin, Base):
+    """Immutable canonical artifact envelope bound to one frozen snapshot."""
+
+    __tablename__ = "release_manifests"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id", "snapshot_id", name="uq_release_manifests_space_snapshot"
+        ),
+        UniqueConstraint(
+            "space_id", "manifest_hash", name="uq_release_manifests_space_hash"
+        ),
+        UniqueConstraint(
+            "space_id",
+            "snapshot_id",
+            "manifest_hash",
+            name="uq_release_manifests_exact",
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "snapshot_id"],
+            ["release_snapshots.space_id", "release_snapshots.id"],
+            name="fk_release_manifests_space_snapshot",
+        ),
+        CheckConstraint(
+            "length(manifest_hash) = 64 AND manifest_hash = lower(manifest_hash)",
+            name="ck_release_manifests_hash",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_release_manifests_space")
+    )
+    snapshot_id: Mapped[str] = mapped_column(String(36))
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class ReleaseApproval(Base):
+    """Append-only named-human approval of one exact ReleaseManifest."""
+
+    __tablename__ = "release_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "space_id", "manifest_hash", name="uq_release_approvals_space_manifest"
+        ),
+        ForeignKeyConstraint(
+            ["space_id", "snapshot_id", "manifest_hash"],
+            [
+                "release_manifests.space_id",
+                "release_manifests.snapshot_id",
+                "release_manifests.manifest_hash",
+            ],
+            name="fk_release_approvals_exact_manifest",
+        ),
+        CheckConstraint(
+            "actor_type IN ('human', 'principal')",
+            name="ck_release_approvals_actor_type",
+        ),
+        CheckConstraint(
+            "length(trim(actor)) > 0 AND length(trim(authorization_receipt)) > 0 "
+            "AND length(trim(reason)) > 0",
+            name="ck_release_approvals_named_attestation",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    space_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_spaces.id", name="fk_release_approvals_space")
+    )
+    snapshot_id: Mapped[str] = mapped_column(String(36))
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    actor: Mapped[str] = mapped_column(String(128))
+    actor_type: Mapped[str] = mapped_column(String(16))
+    authorization_receipt: Mapped[str] = mapped_column(String(512))
+    reason: Mapped[str] = mapped_column(Text)
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class SnapshotFact(TimestampMixin, Base):
@@ -747,4 +828,69 @@ class SourceLifecycleBackfillIssue(TimestampMixin, Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+def _register_release_authority_guards() -> None:
+    sqlite_guards: dict[Any, tuple[str, ...]] = {
+        ReleaseManifestRecord.__table__: (
+            """CREATE TRIGGER trg_release_manifests_update_guard_029
+            BEFORE UPDATE ON release_manifests FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release manifests are immutable'); END""",
+            """CREATE TRIGGER trg_release_manifests_delete_guard_029
+            BEFORE DELETE ON release_manifests FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release manifests are immutable'); END""",
+        ),
+        ReleaseApproval.__table__: (
+            """CREATE TRIGGER trg_release_approvals_update_guard_029
+            BEFORE UPDATE ON release_approvals FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release approvals are append-only'); END""",
+            """CREATE TRIGGER trg_release_approvals_delete_guard_029
+            BEFORE DELETE ON release_approvals FOR EACH ROW
+            BEGIN SELECT RAISE(ABORT, 'release approvals are append-only'); END""",
+        ),
+    }
+    for table, statements in sqlite_guards.items():
+        for statement in statements:
+            event.listen(
+                table,
+                "after_create",
+                DDL(statement).execute_if(dialect="sqlite"),  # type: ignore[no-untyped-call]
+            )
+
+    postgres_guards: dict[Any, tuple[str, ...]] = {
+        ReleaseManifestRecord.__table__: (
+            """CREATE FUNCTION guard_release_manifests_immutable_029() RETURNS trigger
+            LANGUAGE plpgsql AS $guard$ BEGIN
+            RAISE EXCEPTION 'release manifests are immutable' USING ERRCODE = '23514';
+            END; $guard$""",
+            """CREATE TRIGGER trg_release_manifests_update_guard_029
+            BEFORE UPDATE ON release_manifests FOR EACH ROW
+            EXECUTE FUNCTION guard_release_manifests_immutable_029()""",
+            """CREATE TRIGGER trg_release_manifests_delete_guard_029
+            BEFORE DELETE ON release_manifests FOR EACH ROW
+            EXECUTE FUNCTION guard_release_manifests_immutable_029()""",
+        ),
+        ReleaseApproval.__table__: (
+            """CREATE FUNCTION guard_release_approvals_append_only_029() RETURNS trigger
+            LANGUAGE plpgsql AS $guard$ BEGIN
+            RAISE EXCEPTION 'release approvals are append-only' USING ERRCODE = '23514';
+            END; $guard$""",
+            """CREATE TRIGGER trg_release_approvals_update_guard_029
+            BEFORE UPDATE ON release_approvals FOR EACH ROW
+            EXECUTE FUNCTION guard_release_approvals_append_only_029()""",
+            """CREATE TRIGGER trg_release_approvals_delete_guard_029
+            BEFORE DELETE ON release_approvals FOR EACH ROW
+            EXECUTE FUNCTION guard_release_approvals_append_only_029()""",
+        ),
+    }
+    for table, statements in postgres_guards.items():
+        for statement in statements:
+            event.listen(
+                table,
+                "after_create",
+                DDL(statement).execute_if(  # type: ignore[no-untyped-call]
+                    dialect="postgresql"
+                ),
+            )
+
+
+_register_release_authority_guards()
 register_metadata_guards(Base.metadata)

@@ -85,6 +85,16 @@ from insurance_harness.knowledge.reader import (
     SnapshotReadError,
 )
 from insurance_harness.knowledge.reconcile import ReconcileResult
+from insurance_harness.knowledge.release_approval import (
+    AuthorizationDecision,
+    EffectiveReleaseActorType,
+    ReleaseApprovalError,
+    ReleaseApprovalService,
+    ReleaseAuthorizationError,
+    ReleaseAuthorizer,
+    ReleaseManifestPersistenceError,
+    persist_release_manifest,
+)
 from insurance_harness.knowledge.release_plan import (
     ActionExecution,
     LegacyPageOwnership,
@@ -134,6 +144,7 @@ __all__ = [
     "ActionExecution",
     "ALLOWED_REVIEW_ACTIONS",
     "AUTHORITY_BY_DOC_ROLE",
+    "AuthorizationDecision",
     "BackfillResolutionResult",
     "CONFIDENCE_TO_FLOAT",
     "ChangeItemProjection",
@@ -166,6 +177,7 @@ __all__ = [
     "LifecycleState",
     "EventAggregateKind",
     "EventLinks",
+    "EffectiveReleaseActorType",
     "PersistedLifecycleResult",
     "SourceLifecycleBlocked",
     "SourceLifecycleContention",
@@ -179,6 +191,11 @@ __all__ = [
     "RawFallbackProvider",
     "RawHit",
     "ReleasePlanExecutor",
+    "ReleaseApprovalError",
+    "ReleaseApprovalService",
+    "ReleaseAuthorizationError",
+    "ReleaseAuthorizer",
+    "ReleaseManifestPersistenceError",
     "ReleasePublisher",
     "ReconcileResult",
     "SnapshotBuildError",
@@ -212,6 +229,7 @@ __all__ = [
     "load_review_aggregates",
     "notify_source_revision",
     "policy_from_settings",
+    "persist_release_manifest",
     "product_page_slug",
     "project_change_item",
     "publish_claim",
