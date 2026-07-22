@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import ValidationError
+from pydantic import BaseModel
 
 from insurance_harness.template_packages.models import (
-    FieldGroup,
     ResolutionRequest,
     ResolvedTemplate,
     ResolvedTemplateSource,
@@ -16,7 +15,8 @@ from insurance_harness.template_packages.models import (
     TemplatePackageContent,
     TemplateScope,
     TemplateVersion,
-    ValidatorRef,
+    _merge_template_contents,
+    _TemplateContentMergeError,
     canonical_content_hash,
 )
 from insurance_harness.template_packages.ports import TemplateCatalog
@@ -25,13 +25,17 @@ ResolutionReason = Literal[
     "invalid_request",
     "invalid_catalog_entry",
     "content_hash_mismatch",
+    "catalog_scope_mutation",
     "scope_mismatch",
     "unapproved",
     "approval_hash_mismatch",
     "approval_binding_mismatch",
     "schema_version_mismatch",
+    "validator_conflict",
     "unresolved_scope",
 ]
+
+_ScopeIdentity = tuple[str, str, str | None, str | None, str | None]
 
 
 class TemplateResolutionError(ValueError):
@@ -42,15 +46,37 @@ class TemplateResolutionError(ValueError):
         super().__init__(reason_code)
 
 
+def _snapshot_exact_fields(
+    value: object,
+    model_type: type[BaseModel],
+) -> dict[str, object]:
+    """Copy one exact Pydantic DTO without invoking caller-shadowable methods."""
+
+    if type(value) is not model_type:
+        raise TypeError("DTO must use its exact domain type")
+    storage = object.__getattribute__(value, "__dict__")
+    if type(storage) is not dict:
+        raise TypeError("DTO storage must be an exact dictionary")
+    items = tuple(storage.items())
+    field_names = tuple(model_type.model_fields)
+    if len(items) != len(field_names):
+        raise ValueError("DTO field set is incomplete or extended")
+    for field_name, _ in items:
+        if type(field_name) is not str or field_name not in field_names:
+            raise ValueError("DTO field set is non-canonical")
+    snapshot = dict(items)
+    return {field_name: snapshot[field_name] for field_name in field_names}
+
+
 def _canonical_request(request: ResolutionRequest) -> ResolutionRequest:
     """Freeze one exact base DTO before invoking any external catalog code."""
 
-    if type(request) is not ResolutionRequest:
-        raise TemplateResolutionError("invalid_request")
     try:
-        payload = request.model_dump(mode="python", round_trip=True)
+        payload = _snapshot_exact_fields(request, ResolutionRequest)
+        if any(type(value) is not str for value in payload.values()):
+            raise TypeError("request identity must use exact string primitives")
         return ResolutionRequest.model_validate(payload)
-    except (AttributeError, TypeError, ValueError, ValidationError):
+    except Exception:
         raise TemplateResolutionError("invalid_request") from None
 
 
@@ -78,93 +104,94 @@ def _requested_scopes(request: ResolutionRequest) -> tuple[TemplateScope, ...]:
     )
 
 
+def _scope_identity(scope: TemplateScope) -> _ScopeIdentity:
+    return (
+        scope.space_id,
+        scope.level,
+        scope.product_line_id,
+        scope.document_type_id,
+        scope.product_family_id,
+    )
+
+
+def _scope_from_identity(identity: _ScopeIdentity) -> TemplateScope:
+    space_id, level, product_line_id, document_type_id, product_family_id = identity
+    return TemplateScope.model_validate(
+        {
+            "space_id": space_id,
+            "level": level,
+            "product_line_id": product_line_id,
+            "document_type_id": document_type_id,
+            "product_family_id": product_family_id,
+        }
+    )
+
+
 def _validated_entry(
     candidate: TemplateCatalogEntry,
-    requested_scope: TemplateScope,
+    expected_scope: _ScopeIdentity,
 ) -> TemplateCatalogEntry:
     """Revalidate an adapter result and bind approval to its exact full content."""
 
     try:
-        candidate_hash = canonical_content_hash(candidate.version.content)
-    except (AttributeError, TypeError, ValueError):
-        raise TemplateResolutionError("invalid_catalog_entry") from None
-    if candidate_hash != candidate.version.content_hash:
-        raise TemplateResolutionError("content_hash_mismatch")
-
-    try:
+        candidate_values = _snapshot_exact_fields(candidate, TemplateCatalogEntry)
+        candidate_version = candidate_values["version"]
+        candidate_approval = candidate_values["approval"]
+        version_values = _snapshot_exact_fields(candidate_version, TemplateVersion)
+        approval_values = _snapshot_exact_fields(candidate_approval, TemplateApproval)
+        candidate_content = version_values["content"]
+        content_values = _snapshot_exact_fields(
+            candidate_content,
+            TemplatePackageContent,
+        )
+        content = TemplatePackageContent.model_validate(content_values)
+        candidate_hash = canonical_content_hash(content)
+        stated_hash = version_values["content_hash"]
+        if (
+            type(stated_hash) is not str
+            or len(stated_hash) != 64
+            or any(character not in "0123456789abcdef" for character in stated_hash)
+        ):
+            raise ValueError("content_hash must be canonical SHA-256 hex")
         version = TemplateVersion.model_validate(
-            candidate.version.model_dump(mode="python", round_trip=True)
+            {
+                **version_values,
+                "content": content,
+                "content_hash": candidate_hash,
+            }
         )
-        approval = TemplateApproval.model_validate(
-            candidate.approval.model_dump(mode="python", round_trip=True)
+        approval = TemplateApproval.model_validate(approval_values)
+        snapshot = TemplateCatalogEntry(
+            version=version,
+            approval=approval,
         )
-    except (AttributeError, ValidationError):
+    except Exception:
         raise TemplateResolutionError("invalid_catalog_entry") from None
 
-    if version.scope != requested_scope:
+    if candidate_hash != stated_hash:
+        raise TemplateResolutionError("content_hash_mismatch")
+    if _scope_identity(snapshot.version.scope) != expected_scope:
         raise TemplateResolutionError("scope_mismatch")
-    if approval.state != "approved":
+    if snapshot.approval.state != "approved":
         raise TemplateResolutionError("unapproved")
-    if approval.content_hash != version.content_hash:
+    if snapshot.approval.content_hash != snapshot.version.content_hash:
         raise TemplateResolutionError("approval_hash_mismatch")
     if (
-        approval.package_id != version.package_id
-        or approval.version_id != version.version_id
-        or approval.scope != version.scope
+        snapshot.approval.package_id != snapshot.version.package_id
+        or snapshot.approval.version_id != snapshot.version.version_id
+        or snapshot.approval.scope != snapshot.version.scope
     ):
         raise TemplateResolutionError("approval_binding_mismatch")
-    return TemplateCatalogEntry(version=version, approval=approval)
-
-
-def _overlay_field_groups(
-    base: tuple[FieldGroup, ...], overlay: tuple[FieldGroup, ...]
-) -> tuple[FieldGroup, ...]:
-    result = list(base)
-    positions = {item.group_id: index for index, item in enumerate(result)}
-    for item in overlay:
-        position = positions.get(item.group_id)
-        if position is None:
-            positions[item.group_id] = len(result)
-            result.append(item)
-        else:
-            result[position] = item
-    return tuple(result)
-
-
-def _overlay_validators(
-    base: tuple[ValidatorRef, ...], overlay: tuple[ValidatorRef, ...]
-) -> tuple[ValidatorRef, ...]:
-    result = list(base)
-    positions = {item.validator_id: index for index, item in enumerate(result)}
-    for item in overlay:
-        position = positions.get(item.validator_id)
-        if position is None:
-            positions[item.validator_id] = len(result)
-            result.append(item)
-        else:
-            result[position] = item
-    return tuple(result)
+    return snapshot
 
 
 def _overlay_content(
     base: TemplatePackageContent, overlay: TemplatePackageContent
 ) -> TemplatePackageContent:
-    if overlay.schema_version != base.schema_version:
-        raise TemplateResolutionError("schema_version_mismatch")
-    role_prompts = dict(base.role_prompts)
-    role_prompts.update(overlay.role_prompts)
-    attempt_limits = dict(base.attempt_limits)
-    attempt_limits.update(overlay.attempt_limits)
-    return TemplatePackageContent(
-        schema_version=base.schema_version,
-        field_groups=_overlay_field_groups(base.field_groups, overlay.field_groups),
-        role_prompts=role_prompts,
-        validators=_overlay_validators(base.validators, overlay.validators),
-        evidence_policy=overlay.evidence_policy,
-        attempt_limits=attempt_limits,
-        golden_slice_ref=overlay.golden_slice_ref,
-        provenance=base.provenance + overlay.provenance,
-    )
+    try:
+        return _merge_template_contents(base, overlay)
+    except _TemplateContentMergeError as exc:
+        raise TemplateResolutionError(exc.reason_code) from None
 
 
 def resolve_template(
@@ -176,9 +203,23 @@ def resolve_template(
     canonical_request = _canonical_request(request)
     entries: list[TemplateCatalogEntry] = []
     for requested_scope in _requested_scopes(canonical_request):
-        candidate = catalog.get_approved(requested_scope)
+        expected_scope = _scope_identity(requested_scope)
+        query_scope = _scope_from_identity(expected_scope)
+        candidate = catalog.get_approved(query_scope)
+        try:
+            query_values = _snapshot_exact_fields(query_scope, TemplateScope)
+            if any(
+                value is not None and type(value) is not str
+                for value in query_values.values()
+            ):
+                raise TypeError("query scope must use exact primitive values")
+            query_snapshot = TemplateScope.model_validate(query_values)
+            if _scope_identity(query_snapshot) != expected_scope:
+                raise ValueError("query scope changed during catalog lookup")
+        except Exception:
+            raise TemplateResolutionError("catalog_scope_mutation") from None
         if candidate is not None:
-            entries.append(_validated_entry(candidate, requested_scope))
+            entries.append(_validated_entry(candidate, expected_scope))
     if not entries:
         raise TemplateResolutionError("unresolved_scope")
 
@@ -190,6 +231,7 @@ def resolve_template(
             scope=entry.version.scope,
             package_id=entry.version.package_id,
             version_id=entry.version.version_id,
+            content=entry.version.content,
             content_hash=entry.version.content_hash,
         )
         for entry in entries

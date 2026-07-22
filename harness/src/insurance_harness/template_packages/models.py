@@ -11,7 +11,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import (
     BaseModel,
     ConfigDict,
-    PositiveInt,
+    Field,
     StrictBool,
     StrictStr,
     StringConstraints,
@@ -35,6 +35,9 @@ SourceCommit = Annotated[
 ]
 ScopeLevel = Literal["global", "product-line", "document-type", "product-family"]
 ApprovalState = Literal["approved", "pending", "revoked"]
+StrictPositiveInt = Annotated[int, Field(strict=True, gt=0)]
+
+_CONTENT_HASH_DOMAIN = b"insurancekb.template-package.content.v1\0"
 
 
 class _ImmutableModel(BaseModel):
@@ -65,6 +68,21 @@ class _ImmutableModel(BaseModel):
             values.update(update)
         return type(self).model_validate(values)
 
+    def __copy__(self) -> Self:
+        """Return a freshly validated immutable value, never raw internal state."""
+
+        return type(self).model_validate(
+            self.model_dump(mode="python", round_trip=True)
+        )
+
+    def __deepcopy__(self, memo: dict[int, Any] | None = None) -> Self:
+        """Deep-copy through validation so immutable mapping views remain safe."""
+
+        del memo
+        return type(self).model_validate(
+            self.model_dump(mode="python", round_trip=True)
+        )
+
 
 class FieldGroup(_ImmutableModel):
     group_id: NonBlankStr
@@ -91,7 +109,7 @@ class ValidatorRef(_ImmutableModel):
 class EvidencePolicy(_ImmutableModel):
     require_quote: StrictBool
     require_locator: StrictBool
-    minimum_sources: PositiveInt
+    minimum_sources: StrictPositiveInt
 
 
 class ProvenanceReceipt(_ImmutableModel):
@@ -147,9 +165,34 @@ class TemplatePackageContent(_ImmutableModel):
     role_prompts: Mapping[NonBlankStr, StrictStr]
     validators: tuple[ValidatorRef, ...]
     evidence_policy: EvidencePolicy
-    attempt_limits: Mapping[NonBlankStr, PositiveInt]
+    attempt_limits: Mapping[NonBlankStr, StrictPositiveInt]
     golden_slice_ref: NonBlankStr
     provenance: tuple[ProvenanceReceipt, ...]
+
+    @field_validator("role_prompts", "attempt_limits", mode="before")
+    @classmethod
+    def require_unambiguous_mapping(cls, value: object) -> dict[str, object]:
+        """Reject coercive pair iterables and mappings that enumerate duplicate keys."""
+
+        if not isinstance(value, Mapping):
+            raise ValueError("mapping input must be an exact Mapping")
+        try:
+            items = tuple(value.items())
+        except (AttributeError, TypeError, ValueError):
+            raise ValueError("mapping input could not be enumerated") from None
+        result: dict[str, object] = {}
+        seen: set[str] = set()
+        for item in items:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError("mapping items must be exact key/value pairs")
+            key, item_value = item
+            if type(key) is not str:
+                raise ValueError("mapping keys must be exact strings")
+            if key in seen:
+                raise ValueError("mapping input contains duplicate keys")
+            seen.add(key)
+            result[key] = item_value
+        return result
 
     @field_validator("role_prompts", mode="after")
     @classmethod
@@ -189,20 +232,52 @@ class TemplatePackageContent(_ImmutableModel):
             raise ValueError("attempt_limits must not be empty")
         if not self.provenance:
             raise ValueError("provenance must not be empty")
+        _require_unicode_scalars(self)
         return self
 
 
 def canonical_content_hash(content: TemplatePackageContent) -> str:
-    """Return SHA-256 of the complete canonical JSON payload."""
+    """Return the versioned, domain-separated hash of validated canonical content."""
 
-    payload = json.dumps(
-        content.model_dump(mode="json", round_trip=True),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
+    if type(content) is not TemplatePackageContent:
+        raise ValueError("invalid_template_content")
+    try:
+        raw = {
+            field_name: getattr(content, field_name)
+            for field_name in TemplatePackageContent.model_fields
+        }
+        validated = TemplatePackageContent.model_validate(raw)
+        payload = json.dumps(
+            validated.model_dump(mode="json", round_trip=True),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (AttributeError, TypeError, UnicodeEncodeError, ValueError):
+        raise ValueError("invalid_template_content") from None
+    return hashlib.sha256(_CONTENT_HASH_DOMAIN + payload).hexdigest()
+
+
+def _require_unicode_scalars(value: object) -> None:
+    """Ensure every string is made only from Unicode scalar values."""
+
+    if isinstance(value, str):
+        if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+            raise ValueError("text must contain only Unicode scalar values")
+        return
+    if isinstance(value, BaseModel):
+        for field_name in type(value).model_fields:
+            _require_unicode_scalars(getattr(value, field_name))
+        return
+    if isinstance(value, Mapping):
+        for key, item_value in value.items():
+            _require_unicode_scalars(key)
+            _require_unicode_scalars(item_value)
+        return
+    if isinstance(value, tuple):
+        for item in value:
+            _require_unicode_scalars(item)
 
 
 class TemplateScope(_ImmutableModel):
@@ -286,11 +361,93 @@ class TemplateCatalogEntry(_ImmutableModel):
     approval: TemplateApproval
 
 
+class _TemplateContentMergeError(ValueError):
+    def __init__(self, reason_code: Literal["schema_version_mismatch", "validator_conflict"]):
+        self.reason_code = reason_code
+        super().__init__(reason_code)
+
+
+def _merge_field_groups(
+    base: tuple[FieldGroup, ...], overlay: tuple[FieldGroup, ...]
+) -> tuple[FieldGroup, ...]:
+    result = list(base)
+    positions = {item.group_id: index for index, item in enumerate(result)}
+    for item in overlay:
+        position = positions.get(item.group_id)
+        if position is None:
+            positions[item.group_id] = len(result)
+            result.append(item)
+        else:
+            result[position] = item
+    return tuple(result)
+
+
+def _merge_validators(
+    base: tuple[ValidatorRef, ...], overlay: tuple[ValidatorRef, ...]
+) -> tuple[ValidatorRef, ...]:
+    """Add validators monotonically; replacement has no provable safe semantics."""
+
+    result = list(base)
+    by_id = {item.validator_id: item for item in result}
+    for item in overlay:
+        existing = by_id.get(item.validator_id)
+        if existing is None:
+            by_id[item.validator_id] = item
+            result.append(item)
+        elif existing != item:
+            raise _TemplateContentMergeError("validator_conflict")
+    return tuple(result)
+
+
+def _merge_template_contents(
+    base: TemplatePackageContent,
+    overlay: TemplatePackageContent,
+) -> TemplatePackageContent:
+    """Apply one code-owned, deterministic and monotonic scope overlay."""
+
+    if overlay.schema_version != base.schema_version:
+        raise _TemplateContentMergeError("schema_version_mismatch")
+    role_prompts = dict(base.role_prompts)
+    role_prompts.update(overlay.role_prompts)
+    attempt_limits = dict(base.attempt_limits)
+    attempt_limits.update(overlay.attempt_limits)
+    return TemplatePackageContent(
+        schema_version=base.schema_version,
+        field_groups=_merge_field_groups(base.field_groups, overlay.field_groups),
+        role_prompts=role_prompts,
+        validators=_merge_validators(base.validators, overlay.validators),
+        evidence_policy=EvidencePolicy(
+            require_quote=(
+                base.evidence_policy.require_quote
+                or overlay.evidence_policy.require_quote
+            ),
+            require_locator=(
+                base.evidence_policy.require_locator
+                or overlay.evidence_policy.require_locator
+            ),
+            minimum_sources=max(
+                base.evidence_policy.minimum_sources,
+                overlay.evidence_policy.minimum_sources,
+            ),
+        ),
+        attempt_limits=attempt_limits,
+        golden_slice_ref=overlay.golden_slice_ref,
+        provenance=base.provenance + overlay.provenance,
+    )
+
+
 class ResolvedTemplateSource(_ImmutableModel):
     scope: TemplateScope
     package_id: NonBlankStr
     version_id: NonBlankStr
+    content: TemplatePackageContent
     content_hash: Sha256Hex
+
+    @model_validator(mode="after")
+    def require_source_content_hash(self) -> ResolvedTemplateSource:
+        if self.content_hash != canonical_content_hash(self.content):
+            raise ValueError("content_hash_mismatch")
+        return self
 
 
 class ResolvedTemplate(_ImmutableModel):
@@ -303,6 +460,51 @@ class ResolvedTemplate(_ImmutableModel):
     def require_resolved_hash_and_sources(self) -> ResolvedTemplate:
         if not self.source_chain:
             raise ValueError("source_chain must not be empty")
+        expected_scopes = {
+            "global": TemplateScope(space_id=self.request.space_id, level="global"),
+            "product-line": TemplateScope(
+                space_id=self.request.space_id,
+                level="product-line",
+                product_line_id=self.request.product_line_id,
+            ),
+            "document-type": TemplateScope(
+                space_id=self.request.space_id,
+                level="document-type",
+                product_line_id=self.request.product_line_id,
+                document_type_id=self.request.document_type_id,
+            ),
+            "product-family": TemplateScope(
+                space_id=self.request.space_id,
+                level="product-family",
+                product_line_id=self.request.product_line_id,
+                document_type_id=self.request.document_type_id,
+                product_family_id=self.request.product_family_id,
+            ),
+        }
+        level_order = {
+            "global": 0,
+            "product-line": 1,
+            "document-type": 2,
+            "product-family": 3,
+        }
+        previous_order = -1
+        for source in self.source_chain:
+            order = level_order[source.scope.level]
+            if order <= previous_order or source.scope != expected_scopes[source.scope.level]:
+                raise ValueError("source_chain is unordered, duplicated, or inapplicable")
+            previous_order = order
+
+        resolved_content = self.source_chain[0].content
+        try:
+            for source in self.source_chain[1:]:
+                resolved_content = _merge_template_contents(
+                    resolved_content,
+                    source.content,
+                )
+        except _TemplateContentMergeError as exc:
+            raise ValueError(f"source_chain {exc.reason_code}") from None
+        if resolved_content != self.content:
+            raise ValueError("resolved_content_mismatch")
         if self.content_hash != canonical_content_hash(self.content):
             raise ValueError("content_hash_mismatch")
         return self

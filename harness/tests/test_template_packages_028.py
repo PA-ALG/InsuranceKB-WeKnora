@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ast
+import copy
+import hashlib
 import inspect
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
@@ -16,6 +19,8 @@ from insurance_harness.template_packages import (
     FieldGroup,
     ProvenanceReceipt,
     ResolutionRequest,
+    ResolvedTemplate,
+    ResolvedTemplateSource,
     TemplateApproval,
     TemplateCatalog,
     TemplateCatalogEntry,
@@ -190,8 +195,52 @@ class _RequestMutatingCatalog:
         return None
 
 
+class _ScopeMutatingCatalog:
+    """Coordinate mutation of the exact query DTO with a foreign result."""
+
+    def __init__(self, foreign_entry: TemplateCatalogEntry) -> None:
+        self._foreign_entry = foreign_entry
+        self.requests: list[TemplateScope] = []
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        self.requests.append(scope)
+        object.__setattr__(scope, "space_id", self._foreign_entry.version.scope.space_id)
+        return self._foreign_entry
+
+
+class _HostileScopeValueCatalog:
+    """Replace a query primitive with an equality trap before returning."""
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        object.__setattr__(scope, "space_id", _ExplodingHash())
+        return None
+
+
+class _DuplicateItemsMapping(dict[str, object]):
+    def items(self) -> object:  # type: ignore[override]
+        return (("extract", self["first"]), ("extract", self["second"]))
+
+
 class _ResolutionRequestSubclass(ResolutionRequest):
     pass
+
+
+class _TemplateCatalogEntrySubclass(TemplateCatalogEntry):
+    pass
+
+
+class _TemplateVersionSubclass(TemplateVersion):
+    pass
+
+
+class _TemplateApprovalSubclass(TemplateApproval):
+    pass
+
+
+class _ExplodingHash:
+    def __eq__(self, other: object) -> bool:
+        del other
+        raise RuntimeError("hostile equality")
 
 
 def _request(*, space_id: str = "space-a", family_id: str = "family-ordinary") -> ResolutionRequest:
@@ -200,6 +249,34 @@ def _request(*, space_id: str = "space-a", family_id: str = "family-ordinary") -
         product_line_id="line-life",
         document_type_id="document-terms",
         product_family_id=family_id,
+    )
+
+
+def _stacked_resolved() -> ResolvedTemplate:
+    request = _request()
+    scopes = (
+        _scope("global"),
+        _scope("product-line", product_line_id=request.product_line_id),
+        _scope(
+            "document-type",
+            product_line_id=request.product_line_id,
+            document_type_id=request.document_type_id,
+        ),
+        _scope(
+            "product-family",
+            product_line_id=request.product_line_id,
+            document_type_id=request.document_type_id,
+            product_family_id=request.product_family_id,
+        ),
+    )
+    return resolve_template(
+        _MemoryCatalog(
+            tuple(
+                _entry(scope, _content(f"source-{index}"), version_id=f"v{index}")
+                for index, scope in enumerate(scopes)
+            )
+        ),
+        request,
     )
 
 
@@ -221,6 +298,51 @@ def test_tr1_canonical_hash_is_stable_and_covers_every_content_byte() -> None:
     assert canonical_content_hash(left) == canonical_content_hash(reordered)
     assert canonical_content_hash(left) != canonical_content_hash(one_byte_changed)
     assert len(canonical_content_hash(left)) == 64
+
+
+def test_tr1_hash_contract_has_stable_domain_and_version_prefix() -> None:
+    content = _content("domain")
+    canonical_json = json.dumps(
+        content.model_dump(mode="json", round_trip=True),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+
+    expected = hashlib.sha256(
+        b"insurancekb.template-package.content.v1\0" + canonical_json
+    ).hexdigest()
+    assert canonical_content_hash(content) == expected
+
+
+@pytest.mark.parametrize("surrogate", ["\ud800", "\udfff"])
+def test_tr1_content_rejects_non_unicode_scalar_text_before_hash(surrogate: str) -> None:
+    with pytest.raises(ValidationError, match="Unicode scalar"):
+        _content("surrogate", prompts={"extract": f"prompt-{surrogate}"})
+
+
+def test_tr1_public_hash_revalidates_construct_copy_and_serialized_content() -> None:
+    content = _content("hash-sink")
+    expected = canonical_content_hash(content)
+    serialized = TemplatePackageContent.model_validate_json(content.model_dump_json())
+    constructed = TemplatePackageContent.model_construct(
+        **content.model_dump(mode="python", round_trip=True)
+    )
+
+    assert canonical_content_hash(copy.copy(content)) == expected
+    assert canonical_content_hash(copy.deepcopy(content)) == expected
+    assert canonical_content_hash(serialized) == expected
+    assert canonical_content_hash(constructed) == expected
+
+    invalid_construct = TemplatePackageContent.model_construct(
+        **{
+            **content.model_dump(mode="python", round_trip=True),
+            "attempt_limits": {"extract": True},
+        }
+    )
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(invalid_construct)
 
 
 @pytest.mark.parametrize(
@@ -259,6 +381,46 @@ def test_tr1_mapping_keys_must_arrive_in_canonical_form(
 ) -> None:
     with pytest.raises(ValidationError):
         _content("canonical-keys").model_copy(update={field: value})
+
+
+@pytest.mark.parametrize("value", [True, "1", 1.0])
+def test_tr1_attempt_limits_require_strict_positive_integers(value: object) -> None:
+    with pytest.raises(ValidationError):
+        _content("strict-attempts").model_copy(
+            update={"attempt_limits": {"extract": value}}
+        )
+
+
+@pytest.mark.parametrize("value", [True, "1", 1.0])
+def test_tr1_evidence_minimum_sources_requires_strict_positive_integer(
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        EvidencePolicy(
+            require_quote=True,
+            require_locator=True,
+            minimum_sources=value,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (
+            "role_prompts",
+            _DuplicateItemsMapping(first="prompt-one", second="prompt-two"),
+        ),
+        ("attempt_limits", _DuplicateItemsMapping(first=1, second=2)),
+        ("role_prompts", [("extract", "prompt")]),
+        ("attempt_limits", [("extract", 1)]),
+    ],
+)
+def test_tr1_mapping_inputs_reject_duplicate_or_iterable_ambiguity(
+    field: str,
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError, match="mapping"):
+        _content("ambiguous-mapping").model_copy(update={field: value})
 
 
 def test_tr1_content_is_deeply_immutable() -> None:
@@ -372,6 +534,102 @@ def test_tr1_corrupt_persisted_full_hash_is_recomputed_at_resolver_boundary() ->
     assert exc_info.value.reason_code == "content_hash_mismatch"
 
 
+def test_tr1_partial_catalog_dtos_fail_with_typed_boundary_error() -> None:
+    global_scope = _scope("global")
+    valid = _entry(global_scope, _content("partial"), version_id="global-v1")
+    partial_version = TemplateVersion.model_construct(content=valid.version.content)
+    partial_approval = TemplateApproval.model_construct(state="approved")
+    hostile_hash_version = TemplateVersion.model_construct(
+        **{
+            **{
+                field_name: getattr(valid.version, field_name)
+                for field_name in TemplateVersion.model_fields
+            },
+            "content_hash": _ExplodingHash(),
+        }
+    )
+    subclassed_version = _TemplateVersionSubclass.model_validate(
+        valid.version.model_dump(mode="python", round_trip=True)
+    )
+    subclassed_approval = _TemplateApprovalSubclass.model_validate(
+        valid.approval.model_dump(mode="python", round_trip=True)
+    )
+    candidates = (
+        TemplateCatalogEntry.model_construct(
+            version=partial_version,
+            approval=valid.approval,
+        ),
+        TemplateCatalogEntry.model_construct(
+            version=valid.version,
+            approval=partial_approval,
+        ),
+        _TemplateCatalogEntrySubclass(
+            version=valid.version,
+            approval=valid.approval,
+        ),
+        TemplateCatalogEntry.model_construct(
+            version=hostile_hash_version,
+            approval=valid.approval,
+        ),
+        TemplateCatalogEntry.model_construct(
+            version=subclassed_version,
+            approval=valid.approval,
+        ),
+        TemplateCatalogEntry.model_construct(
+            version=valid.version,
+            approval=subclassed_approval,
+        ),
+    )
+
+    for candidate in candidates:
+        with pytest.raises(
+            TemplateResolutionError,
+            match="invalid_catalog_entry",
+        ) as exc_info:
+            resolve_template(_FixedCatalog(candidate), _request())
+        assert exc_info.value.reason_code == "invalid_catalog_entry"
+
+
+@pytest.mark.parametrize("invalid_part", ["package", "version", "scope", "approval"])
+def test_tr1_invalid_catalog_structure_precedes_wrong_but_well_formed_hash(
+    invalid_part: str,
+) -> None:
+    global_scope = _scope("global")
+    valid = _entry(global_scope, _content("invalid-structure"), version_id="global-v1")
+    version_values = {
+        field_name: getattr(valid.version, field_name)
+        for field_name in TemplateVersion.model_fields
+    }
+    approval_values = {
+        field_name: getattr(valid.approval, field_name)
+        for field_name in TemplateApproval.model_fields
+    }
+    version_values["content_hash"] = "0" * 64
+    if invalid_part == "package":
+        version_values["package_id"] = ""
+    elif invalid_part == "version":
+        version_values["version_id"] = ""
+    elif invalid_part == "scope":
+        version_values["scope"] = TemplateScope.model_construct(
+            space_id="space-a",
+            level="global",
+            product_line_id="unexpected",
+        )
+    else:
+        approval_values["approval_id"] = ""
+    candidate = TemplateCatalogEntry.model_construct(
+        version=TemplateVersion.model_construct(**version_values),
+        approval=TemplateApproval.model_construct(**approval_values),
+    )
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="invalid_catalog_entry",
+    ) as exc_info:
+        resolve_template(_FixedCatalog(candidate), _request())
+    assert exc_info.value.reason_code == "invalid_catalog_entry"
+
+
 def test_tr1_cross_space_catalog_result_fails_closed() -> None:
     foreign_scope = _scope("global", space_id="space-b")
     foreign = _entry(foreign_scope, _content("foreign"), version_id="global-b-v1")
@@ -380,6 +638,114 @@ def test_tr1_cross_space_catalog_result_fails_closed() -> None:
         resolve_template(_FixedCatalog(foreign), _request(space_id="space-a"))
 
     assert exc_info.value.reason_code == "scope_mismatch"
+
+
+def test_tr1_catalog_cannot_mutate_query_scope_into_foreign_authority() -> None:
+    foreign_scope = _scope("global", space_id="space-b")
+    foreign = _entry(foreign_scope, _content("foreign"), version_id="global-b-v1")
+    catalog = _ScopeMutatingCatalog(foreign)
+
+    with pytest.raises(TemplateResolutionError, match="catalog_scope_mutation") as exc_info:
+        resolve_template(catalog, _request(space_id="space-a"))
+
+    assert exc_info.value.reason_code == "catalog_scope_mutation"
+
+
+def test_tr1_catalog_query_equality_trap_is_typed_scope_mutation() -> None:
+    with pytest.raises(
+        TemplateResolutionError,
+        match="catalog_scope_mutation",
+    ) as exc_info:
+        resolve_template(_HostileScopeValueCatalog(), _request())
+
+    assert exc_info.value.reason_code == "catalog_scope_mutation"
+
+
+def test_tr1_evidence_policy_can_only_tighten_across_scope_overlay() -> None:
+    global_scope = _scope("global")
+    family_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-ordinary",
+    )
+    strict_global = EvidencePolicy(
+        require_quote=True,
+        require_locator=True,
+        minimum_sources=3,
+    )
+    weak_family = EvidencePolicy(
+        require_quote=False,
+        require_locator=False,
+        minimum_sources=1,
+    )
+    catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("strict-global", evidence_policy=strict_global),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("weak-family", evidence_policy=weak_family),
+                version_id="family-v1",
+            ),
+        )
+    )
+
+    resolved = resolve_template(catalog, _request())
+
+    assert resolved.content.evidence_policy == strict_global
+
+
+def test_tr1_duplicate_validator_must_be_identical_or_fail_closed() -> None:
+    global_scope = _scope("global")
+    family_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-ordinary",
+    )
+    validator = ValidatorRef(
+        validator_id="evidence-validator",
+        validator_version="v1",
+        config_hash="1" * 64,
+    )
+    identical_catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("validator-global", validators=(validator,)),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("validator-family", validators=(validator,)),
+                version_id="family-v1",
+            ),
+        )
+    )
+    assert resolve_template(identical_catalog, _request()).content.validators == (validator,)
+
+    conflicting = validator.model_copy(update={"config_hash": "2" * 64})
+    conflicting_catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("validator-global", validators=(validator,)),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("validator-family", validators=(conflicting,)),
+                version_id="family-v2",
+            ),
+        )
+    )
+    with pytest.raises(TemplateResolutionError, match="validator_conflict") as exc_info:
+        resolve_template(conflicting_catalog, _request())
+    assert exc_info.value.reason_code == "validator_conflict"
 
 
 def test_tr2_unresolved_applicability_fails_closed() -> None:
@@ -413,6 +779,23 @@ def test_tr2_invalid_or_subclassed_request_is_typed_and_has_zero_catalog_calls(
     assert catalog.requests == []
 
 
+def test_tr2_shadowed_request_method_is_typed_and_has_zero_catalog_calls() -> None:
+    request = _request()
+    catalog = _MemoryCatalog(())
+
+    def exploding_dump(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise RuntimeError("hostile request dump")
+
+    object.__setattr__(request, "model_dump", exploding_dump)
+
+    with pytest.raises(TemplateResolutionError, match="invalid_request") as exc_info:
+        resolve_template(catalog, request)
+
+    assert exc_info.value.reason_code == "invalid_request"
+    assert catalog.requests == []
+
+
 def test_tr2_resolver_uses_one_canonical_request_snapshot() -> None:
     request = _request(space_id="space-a")
     global_scope = _scope("global", space_id="space-a")
@@ -425,6 +808,78 @@ def test_tr2_resolver_uses_one_canonical_request_snapshot() -> None:
     assert resolved.request.space_id == "space-a"
     assert {scope.space_id for scope in catalog.requests} == {"space-a"}
     assert {source.scope.space_id for source in resolved.source_chain} == {"space-a"}
+
+
+def test_tr2_resolved_source_chain_carries_hashable_content_facts() -> None:
+    resolved = _stacked_resolved()
+
+    assert "content" in ResolvedTemplateSource.model_fields
+    assert all(
+        source.content_hash == canonical_content_hash(source.content)
+        for source in resolved.source_chain
+    )
+
+
+def test_tr2_ordinary_constructor_rejects_cross_space_duplicate_or_unordered_lineage() -> None:
+    resolved = _stacked_resolved()
+    sources = resolved.source_chain
+    foreign_global = sources[0].model_copy(
+        update={"scope": _scope("global", space_id="space-b")}
+    )
+    unrelated_line = sources[1].model_copy(
+        update={"scope": _scope("product-line", product_line_id="line-other")}
+    )
+    bad_chains = (
+        (sources[0], sources[0]),
+        tuple(reversed(sources)),
+        (foreign_global,) + sources[1:],
+        (sources[0], unrelated_line) + sources[2:],
+    )
+
+    for source_chain in bad_chains:
+        with pytest.raises(ValidationError, match="source_chain"):
+            ResolvedTemplate(
+                request=resolved.request,
+                content=resolved.content,
+                content_hash=resolved.content_hash,
+                source_chain=source_chain,
+            )
+
+
+def test_tr2_ordinary_constructor_rejects_source_or_final_content_mismatch() -> None:
+    resolved = _stacked_resolved()
+    first = resolved.source_chain[0]
+    corrupt_source = ResolvedTemplateSource.model_construct(
+        scope=first.scope,
+        package_id=first.package_id,
+        version_id=first.version_id,
+        content=first.content,
+        content_hash="0" * 64,
+    )
+    with pytest.raises(ValidationError, match="content_hash_mismatch"):
+        ResolvedTemplate(
+            request=resolved.request,
+            content=resolved.content,
+            content_hash=resolved.content_hash,
+            source_chain=(corrupt_source,) + resolved.source_chain[1:],
+        )
+
+    unrelated_content = _content("unrelated-final")
+    with pytest.raises(ValidationError, match="resolved_content_mismatch"):
+        ResolvedTemplate(
+            request=resolved.request,
+            content=unrelated_content,
+            content_hash=canonical_content_hash(unrelated_content),
+            source_chain=resolved.source_chain,
+        )
+
+
+def test_tr2_valid_resolved_template_survives_serialization_round_trip() -> None:
+    resolved = _stacked_resolved()
+
+    restored = ResolvedTemplate.model_validate_json(resolved.model_dump_json())
+
+    assert restored == resolved
 
 
 def test_tr2_resolver_applies_stable_order_and_returns_full_source_chain() -> None:
