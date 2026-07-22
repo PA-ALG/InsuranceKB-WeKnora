@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.compiler.pipeline import PipelineConfig
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.schemas import FieldSpec, ProductLineSchema, SchemaRegistry
 from insurance_harness.sources import (
@@ -41,6 +42,12 @@ MODEL_REGISTRY = SchemaRegistry(
     },
     glossary=(),
 )
+
+
+def offline_pipeline_config() -> PipelineConfig:
+    """Return the explicit non-production profile used by compiler test doubles."""
+
+    return PipelineConfig(model_profile="offline-eval")
 
 
 class NoModelCalls:

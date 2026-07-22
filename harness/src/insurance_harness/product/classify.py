@@ -34,6 +34,14 @@ class Classification(BaseModel):
     used_llm: bool = False
 
 
+class ClassificationModelBoundaryError(PermissionError):
+    """Typed refusal for a raw classifier client outside an explicit offline lane."""
+
+    def __init__(self, reason_code: str = "offline_profile_required") -> None:
+        self.reason_code = reason_code
+        super().__init__("raw classification model clients require an offline profile")
+
+
 _FILENAME_RULES: tuple[tuple[str, DocumentType], ...] = (
     ("条款", DocumentType.TERMS),
     ("说明书", DocumentType.BROCHURE),
@@ -111,7 +119,11 @@ async def classify_document(
     pages: list[PageText],
     *,
     model_client: ModelClient | None = None,
+    model_profile: str | None = None,
 ) -> Classification:
+    if model_client is not None and model_profile not in {"offline-eval", "replay"}:
+        raise ClassificationModelBoundaryError()
+
     head_text = "\n".join(p.text for p in pages[:2])
     line = detect_product_line(file_name + "\n" + head_text)
 

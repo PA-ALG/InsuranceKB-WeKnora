@@ -43,7 +43,7 @@
 
 ### Task 1: Freeze the entrypoint inventory and baseline
 
-- [ ] **Step 1: Read the contract and enumerate current entrypoints**
+- [x] **Step 1: Read the contract and enumerate current entrypoints**
 
 Run:
 
@@ -53,11 +53,11 @@ rg -n "OpenAICompatClient\(|LiteLLMClient\(|JudgeDispatcher\(|def main|publish_p
 
 Expected: every transport construction and public command is visible; no files are changed.
 
-- [ ] **Step 2: Write `entrypoint-inventory.md`**
+- [x] **Step 2: Write `entrypoint-inventory.md`**
 
 For each CLI/API/export record: path, callable, production/offline/read-only classification, model role, current model source, required guard, and owner. Explicitly classify merge/release as zero-model; do not add a permit parameter merely to zero-model code.
 
-- [ ] **Step 3: Run the focused pre-change baseline**
+- [x] **Step 3: Run the focused pre-change baseline**
 
 Run:
 
@@ -68,13 +68,13 @@ uv run pytest -q tests/test_config.py tests/test_compiler_llm.py tests/test_sour
 
 Expected: PASS. Record count/time in the validation report draft; do not run the full suite.
 
-- [ ] **Step 4: Human commit boundary**
+- [x] **Step 4: Human commit boundary**
 
 Report inventory and baseline only. Do not commit/push.
 
 ### Task 2: Immutable identity and policy decision
 
-- [ ] **Step 1: Write the PWB1 RED tests**
+- [x] **Step 1: Write the PWB1 RED tests**
 
 Add tests equivalent to:
 
@@ -84,13 +84,13 @@ def test_production_identity_rejects_unknown_strong_or_rolling(model_id: str) ->
     with pytest.raises(ModelPolicyDenied):
         evaluator.evaluate(context(identity=model_identity(model_id)))
 
-def test_identity_binds_provider_deployment_role_and_policy() -> None:
+def test_identity_binds_provider_deployment_family_role_and_policy() -> None:
     assert approved.identity_key == (
-        "dashscope", "qwen3.6-prod-20260715", "extract", "pwb-v1"
+        "bailian", "qwen3.6-prod-20260715", "qwen", "extract", "pwb-v1"
     )
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -101,7 +101,7 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "identity or rol
 
 Expected: FAIL with `ModuleNotFoundError: insurance_harness.model_policy` or missing symbols.
 
-- [ ] **Step 3: Implement minimal frozen models**
+- [x] **Step 3: Implement minimal frozen models**
 
 The public shape must remain equivalent to:
 
@@ -134,17 +134,17 @@ class ModelPermitView(BaseModel):
 
 Likewise `ModelPermitView` is only serializable receipt data. The canonical policy uses a non-public issuer to create opaque `IssuedModelPermit` with a process seal; Pydantic construction/model-copy/deserialization cannot create authority. Prefer `GuardedModelClient.call(verified_admission, model_call_context)` so the client internally evaluates/issues/compares before transport, rather than accepting a caller-provided permit. It compares purpose/schema/Space/full-binding/call-scope on every call. Reject blank expected identity, expected/actual mismatch, hand-crafted READY/permit, custom policy/guard injection, cross-Space/binding replay, rolling aliases, non-approved families, role/template mismatch, and expired capabilities.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same test command. Expected: PASS in ≤90 seconds.
 
 ### Task 3: Admission/run binding and audit receipts
 
-- [ ] **Step 1: Write PWB4 RED tests**
+- [x] **Step 1: Write PWB4 RED tests**
 
 Cover: missing independent expected purpose/schema/run identity/revision; unknown/wrong profile pair; wrong run revision; borrowed 020 canonical approval for 030; deriving expected from actual; hand-constructed READY binding; caller-injected verifier; wrong Space/manifest/eligibility/Golden/routing/schema/template/structured-dispatch/model-plan/caps/rights/provenance/integration hash; exact template not in lock; hand-crafted/copied/deserialized permit view; custom policy/guard injection; cross-Space/different-binding permit replay; expired permit; receipt contains no API key or raw prompt and does contain Space/full-binding/call-scope digests.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -153,21 +153,21 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "admission or bo
 
 Expected: at least one assertion FAIL because run binding/receipts are not implemented.
 
-- [ ] **Step 3: Implement evaluator and receipt sink**
+- [x] **Step 3: Implement evaluator and receipt sink**
 
 Freeze the 027-owned Protocol and both controlled capability issuers. Production composition selects the verifier by independent expected purpose/schema and the canonical model policy by code/config identity; it accepts no CLI/config verifier/policy/issuer override. Applicable 020/030 adapters implement the Protocol and do their own signature/full-request checks; 027 does not mutate their records or duplicate evaluation. The common model policy accepts only `VerifiedAdmission`, compares purpose/schema/run/Space plus call role/model plan/exact template membership, and issues an opaque permit bound to the full binding and call scope. Every allow/deny returns a structured `PolicyReceipt` containing decision, reason code, identity key, run/template/model-plan hashes, Space, verified-binding/call-scope digests, timestamp, and request hash only.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the same command. Expected: PASS; secret sentinel absent from serialized receipts.
 
 ### Task 4: Guard network calls and prohibit fallback escalation
 
-- [ ] **Step 1: Write PWB3 zero-network RED tests**
+- [x] **Step 1: Write PWB3 zero-network RED tests**
 
 Use a counting fake transport. Assert unknown identity, exhausted weak attempts, truncation, and no-consensus produce zero strong-model calls and no candidate-promotion callback.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -176,21 +176,21 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "network or fall
 
 Expected: FAIL before wrapper implementation.
 
-- [ ] **Step 3: Implement `GuardedModelClient`**
+- [x] **Step 3: Implement `GuardedModelClient`**
 
 It accepts `VerifiedAdmission + ModelCallContext`, calls the canonical policy internally, receives an opaque issued permit through the non-public issuer, compares all scopes, persists a decision receipt for both allow/deny, and only then delegates. It never accepts a caller-supplied permit/policy/guard and never chooses another model. Retry selection belongs to 028 and must re-enter this method with the approved plan/context.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Expected: PASS; fake transport counts exactly one call for allowed identity and zero for every denied case.
 
 ### Task 5: Wire every production entrypoint
 
-- [ ] **Step 1: Write PWB2 inventory RED**
+- [x] **Step 1: Write PWB2 inventory RED**
 
 `test_production_entrypoints_027.py` must parse the checked-in inventory and assert each listed production model entrypoint imports/calls the common guard; zero-model entries must have a proof test and classification.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -199,15 +199,17 @@ uv run pytest -q tests/test_production_entrypoints_027.py
 
 Expected: FAIL for current unguarded `compiler/cli.py`/gateway judge construction.
 
-- [ ] **Step 3: Add production settings without retaining an implicit fallback**
+- [x] **Step 3: Add production settings without retaining an implicit fallback**
 
 Add only global production-model-policy settings: production profile, provider, immutable deployment ID, policy version, admission artifact reference, independently required expected purpose/schema/run identity/revision, and model plan hash. Expected values are frozen request/config data, not late CLI overrides and never default from the artifact. No setting accepts READY/binding/verifier/policy/permit issuer. Do not add runtime worker/attempt/time/token or MCP token/host/port/disclaimer keys; those belong to package-local 028/013 settings. In `production`, old `judge_mode=gateway`, `llm_model_judge_fallback`, `claude-session`, unknown IDs, missing expected identity, and missing admission all fail before client construction. Replay/goldenset requires an explicit non-production profile.
 
-- [ ] **Step 4: Wire CLI and judge to the common evaluator**
+The config identity is a declaration, never its own approval source. Current-MVP code-owned validation accepts only original canonical ASCII lowercase `bailian` plus a mutually exclusive anchored qwen/qwen-vl/minimax deployment grammar with an explicit capability/size-token allowlist and strict date/vendor/sha256 immutable anchors. Unicode/case confusables, unknown alphabetic tokens, cross-family roots, arbitrary suffixes and short digests fail closed; strong-model markers are defense-in-depth, not the primary parser. The exact provider/deployment/family/role/policy allowlist must still be derived from canonical `VerifiedAdmission` and match the independently declared production profile and model-plan hash before provider construction. The guarded call path re-derives the complete identity set and model-plan from the current opaque admission snapshot so another admission cannot reuse the initial binding.
 
-Do not spread allowlist checks into CLI branches. Production composition builds the strict request, selects the canonical verifier from expected purpose/schema, obtains `VerifiedAdmission`, and constructs guarded clients with the canonical policy/transport. `extract` passes only the capability and `ModelCallContext`; it cannot inject or deserialize permit/policy/guard objects.
+- [x] **Step 4: Wire CLI and judge to the common evaluator**
 
-- [ ] **Step 5: Run GREEN and regression slice**
+Do not spread allowlist checks into CLI branches. Production composition builds the strict request and selects the canonical verifier from expected purpose/schema. On this 027 branch the 030 verifier module is absent; a deterministic verifier fake additionally proves that successful verification still fails as `canonical_adapter_unavailable` while the reviewed 028 provider adapter is absent. Thus Task 5 wires the boundary fail-closed but does not claim a usable production transport. No caller can inject or deserialize permit/policy/guard objects.
+
+- [x] **Step 5: Run GREEN and regression slice**
 
 ```bash
 cd harness
@@ -218,7 +220,7 @@ Expected: PASS; no live/integration marker selected.
 
 ### Task 6: Validate and hand off PR 027
 
-- [ ] **Step 1: Run static checks only on touched code**
+- [x] **Step 1: Run static checks only on touched code**
 
 ```bash
 cd harness
@@ -228,11 +230,11 @@ uv run mypy src/insurance_harness/model_policy src/insurance_harness/config.py s
 
 Expected: both exit 0.
 
-- [ ] **Step 2: Fill `validation-report.md`**
+- [x] **Step 2: Fill `validation-report.md`**
 
 Record exact commands/counts, entrypoint coverage, permit/receipt examples with secrets redacted, confirm global config contains no runtime/MCP keys, and `real provider = NOT RUN`. Do not claim extraction quality improvement.
 
-- [ ] **Step 3: Request independent spec/quality review**
+- [x] **Step 3: Request independent spec/quality review**
 
 Reviewer checks PWB1–PWB5 in one pass. Maximum two remediation rounds; third-round disagreement goes to the G planning window.
 

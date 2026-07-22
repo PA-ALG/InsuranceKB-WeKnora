@@ -475,9 +475,11 @@ def test_d1_5_production_baseline_executor_requires_admission_document() -> None
     )
 
 
-def test_d1_5_pipeline_rejects_admission_receipt_without_precommit_gate(
+def test_d1_5_precommit_contract_rejects_identity_without_validator(
     tmp_path: Path,
 ) -> None:
+    """Validate only the artifact precommit contract; 027 owns production model admission."""
+
     context = _context(tmp_path)
     product = context.document.identity_request.products[0]
     assert type(product) is ProductInputPlan
@@ -502,6 +504,7 @@ def test_d1_5_pipeline_rejects_admission_receipt_without_precommit_gate(
             registry=context.registry,
             model_id=_EXTRACTOR_MODEL,
             source=cast(Any, object()),
+            config=PipelineConfig(model_profile="offline-eval"),
             baseline_admission_identity=identity,
         )
 

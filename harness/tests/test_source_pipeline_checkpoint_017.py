@@ -29,6 +29,7 @@ from tests.support.source_pipeline import (
     NoModelCalls,
     TrackingSource,
     assert_no_committed_artifacts,
+    offline_pipeline_config,
     source_document,
 )
 
@@ -47,6 +48,7 @@ async def test_resume_rejects_source_identity_drift_before_model_calls(
     source = TrackingSource(source_document(), runtime_path)
     client = CountingModel()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="counting",
@@ -103,6 +105,7 @@ async def test_resume_rejects_patched_checkpoint_source_before_model_calls(
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     client = CountingModel()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="counting",
@@ -147,6 +150,7 @@ async def test_resume_rejects_non_allowlisted_patch_before_checkpoint_write(
     (product_dir / "product_meta.json").write_text("{}", encoding="utf-8")
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=CountingModel(),
         registry=MODEL_REGISTRY,
         model_id="counting",
@@ -190,6 +194,7 @@ async def test_resume_rejects_unknown_fail_node_before_checkpoint_write(
     (product_dir / "product_meta.json").write_text("{}", encoding="utf-8")
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=CountingModel(),
         registry=MODEL_REGISTRY,
         model_id="counting",
@@ -230,6 +235,7 @@ async def test_resume_rejects_checkpoint_from_a_different_run_directory_pre_mode
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     client = CountingModel()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="baseline-model",
@@ -292,6 +298,7 @@ async def test_resume_rejects_checkpoint_execution_identity_drift_pre_model(
     )
     baseline_registry = line_registry if changed_field == "line" else MODEL_REGISTRY
     baseline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=baseline_registry,
         model_id="baseline-model",
@@ -328,6 +335,7 @@ async def test_resume_rejects_checkpoint_execution_identity_drift_pre_model(
     if changed_field == "prompt":
         monkeypatch.setattr(pipeline_module, "PROMPT_VERSION", "changed-prompt-version")
     resumed = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=changed_registry,
         model_id=changed_model_id,
@@ -362,6 +370,7 @@ async def test_non_resume_rejects_reusing_existing_thread_state_pre_model(
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     client = CountingModel()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="baseline-model",
@@ -402,6 +411,7 @@ async def test_resume_without_checkpoint_state_fails_closed_pre_model(
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     client = CountingModel()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="baseline-model",
@@ -432,6 +442,7 @@ async def test_completed_run_rejects_alternate_fresh_checkpoint_pre_source(
     run_dir = tmp_path / "completed-run"
     first_source = TrackingSource(source_document(), tmp_path / "first-runtime.pdf")
     first = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -456,6 +467,7 @@ async def test_completed_run_rejects_alternate_fresh_checkpoint_pre_source(
         source_document(), tmp_path / "rejected-runtime.pdf"
     )
     rejected = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -491,6 +503,7 @@ async def test_resume_rejects_copied_checkpoint_at_a_different_path_pre_model(
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     client = CountingModel()
     first = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=client,
         registry=MODEL_REGISTRY,
         model_id="counting",
@@ -538,12 +551,14 @@ async def test_concurrent_fresh_writers_are_serialized_by_run_directory(
     first_source = TrackingSource(source_document(), tmp_path / "runtime-first.pdf")
     second_source = TrackingSource(source_document(), tmp_path / "runtime-second.pdf")
     first = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
         source=first_source,
     )
     second = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -606,6 +621,7 @@ async def test_concurrent_fresh_writers_are_serialized_by_run_directory(
         source_document(), tmp_path / "runtime-verification.pdf"
     )
     verified = await ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",

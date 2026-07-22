@@ -9,6 +9,8 @@
 
 import asyncio
 import fcntl
+import hashlib
+import json
 import os
 import shutil
 import stat
@@ -19,7 +21,9 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from threading import RLock
+from typing import Any, Literal, TypedDict, cast
+from weakref import WeakKeyDictionary
 
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -57,6 +61,8 @@ from .llm import (
     GapfillBudgetExhausted,
     MeteredClient,
     ModelClient,
+    ProductionEntrypointDenied,
+    _require_production_compiler_client,
 )
 from .models import (
     AuditAttempt,
@@ -67,6 +73,7 @@ from .models import (
     DocPayload,
     ExtractionAudit,
     FieldCandidate,
+    Judgement,
     JudgeRequest,
     PredRecord,
     RunManifest,
@@ -100,6 +107,51 @@ class PipelineConfig(BaseModel):
     assignment: AssignmentPolicy = Field(default_factory=AssignmentPolicy)
     concurrency: int = Field(default=6, strict=True, gt=0)
     judge_mode: str = "claude-session"
+    model_profile: Literal["disabled", "production", "offline-eval", "replay"] = (
+        "disabled"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _ProductionPipelineState:
+    """Code-owned runtime snapshot; caller-visible attributes are non-authoritative."""
+
+    client: ModelClient
+    registry: SchemaRegistry
+    model_id: str
+    config: PipelineConfig
+    scope: KnowledgeScope
+
+
+_PRODUCTION_PIPELINE_STATES: WeakKeyDictionary[object, _ProductionPipelineState] = (
+    WeakKeyDictionary()
+)
+_PRODUCTION_PIPELINE_LOCK = RLock()
+
+
+def _production_pipeline_state(value: object) -> _ProductionPipelineState | None:
+    with _PRODUCTION_PIPELINE_LOCK:
+        return _PRODUCTION_PIPELINE_STATES.get(value)
+
+
+def _register_production_pipeline(
+    value: object,
+    *,
+    client: ModelClient,
+    registry: SchemaRegistry,
+    model_id: str,
+    config: PipelineConfig,
+    scope: KnowledgeScope,
+) -> None:
+    state = _ProductionPipelineState(
+        client=client,
+        registry=registry.model_copy(deep=True),
+        model_id=model_id,
+        config=config.model_copy(deep=True),
+        scope=scope.model_copy(deep=True),
+    )
+    with _PRODUCTION_PIPELINE_LOCK:
+        _PRODUCTION_PIPELINE_STATES[value] = state
 
 
 class PipelineState(TypedDict, total=False):
@@ -171,6 +223,20 @@ _GRAPH_NODE_NAMES = frozenset(
     {"load", "split_route", "extract", "gapfill", "vote", "finalize"}
 )
 _STATE_PATCH_KEYS = frozenset({"fail_nodes"})
+_SCHEMA_FACT_DOMAIN = b"insurancekb.compiler.schema-registry.v1\0"
+
+
+def _compiler_schema_hash(registry: SchemaRegistry) -> str:
+    """Content address the exact code-owned schema bytes used by this pipeline."""
+
+    payload = json.dumps(
+        registry.model_dump(mode="json", round_trip=True),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(_SCHEMA_FACT_DOMAIN + payload).hexdigest()
 
 
 def _doc_rank(doc: str) -> int:
@@ -215,6 +281,23 @@ def _maybe_fail(node: str, state: PipelineState) -> None:
 
 
 class ExtractionPipeline:
+    def __getattribute__(self, name: str) -> Any:
+        if name in {"_client", "_registry", "_model_id", "_cfg", "_scope", "_judge"}:
+            state = _production_pipeline_state(self)
+            if state is not None:
+                if name == "_client":
+                    return state.client
+                if name == "_registry":
+                    return state.registry.model_copy(deep=True)
+                if name == "_model_id":
+                    return state.model_id
+                if name == "_cfg":
+                    return state.config.model_copy(deep=True)
+                if name == "_scope":
+                    return state.scope.model_copy(deep=True)
+                return JudgeDispatcher(mode="guarded", client=state.client)
+        return object.__getattribute__(self, name)
+
     def __init__(
         self,
         client: ModelClient,
@@ -233,8 +316,25 @@ class ExtractionPipeline:
         self._client = client
         self._registry = registry
         self._model_id = model_id
-        self._cfg = config or PipelineConfig()
-        self._judge = judge or JudgeDispatcher(mode=self._cfg.judge_mode)
+        resolved_config = config or PipelineConfig()
+        self._cfg = resolved_config
+        if resolved_config.model_profile == "production":
+            if resolved_config.judge_mode != "guarded":
+                raise ProductionEntrypointDenied("invalid_production_judge")
+            scope_fields = scope_log_context(scope) if scope is not None else {}
+            _require_production_compiler_client(
+                client,
+                schema_hash=_compiler_schema_hash(registry),
+                model_id=model_id,
+                space_id=scope_fields.get("space_id"),
+            )
+            if judge is not None:
+                raise ValueError("production judge is built only by composition root")
+            self._judge = JudgeDispatcher(mode="guarded", client=client)
+        elif resolved_config.model_profile == "disabled":
+            raise ProductionEntrypointDenied("invalid_production_client")
+        else:
+            self._judge = judge or JudgeDispatcher(mode=resolved_config.judge_mode)
         self._sleep: Sleeper = sleep if sleep is not None else asyncio.sleep
         self._source = source
         # 006 F3：模板注册表未提供/为空 → fast path 整体旁路（004 行为不变）
@@ -249,6 +349,17 @@ class ExtractionPipeline:
         self._precommit_validator = precommit_validator
         if scope is not None:
             scope_log_context(scope)
+        if resolved_config.model_profile == "production":
+            if scope is None:
+                raise ProductionEntrypointDenied("invalid_production_client")
+            _register_production_pipeline(
+                self,
+                client=client,
+                registry=registry,
+                model_id=model_id,
+                config=resolved_config,
+                scope=scope,
+            )
 
     # --- 节点 ---
 
@@ -785,26 +896,84 @@ class ExtractionPipeline:
         metered = MeteredClient(self._client, stats)
         ledger = self._attempt_ledger(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
+        dead = [DeadLetter.model_validate(d) for d in state.get("dead_letters") or []]
         merged = merge_candidates(candidates)
         payloads = {p.doc: p for p in (DocPayload.model_validate(r) for r in state["docs"])}
         judge_queue = list(state.get("judge_queue") or [])
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
-        async def do_vote(field: FieldSpec, cand: FieldCandidate) -> FieldCandidate:
+        async def do_vote(
+            field: FieldSpec,
+            cand: FieldCandidate,
+        ) -> tuple[FieldCandidate, TransportRetryError | None]:
             async with sem:
                 pages = payloads[cand.doc].pages if cand.doc in payloads else []
                 try:
-                    return await with_transport_retry(
-                        lambda: vote_field(
-                            metered, state["product_name"], field, cand, pages,
-                            ledger=ledger,
+                    return (
+                        await with_transport_retry(
+                            lambda: vote_field(
+                                metered, state["product_name"], field, cand, pages,
+                                ledger=ledger,
+                            ),
+                            attempts=self._cfg.transport_attempts,
+                            base_delay_s=self._cfg.backoff_base_s,
+                            sleep=self._sleep,
                         ),
-                        attempts=self._cfg.transport_attempts,
-                        base_delay_s=self._cfg.backoff_base_s,
-                        sleep=self._sleep,
+                        None,
                     )
-                except TransportRetryError:
-                    return cand.model_copy(update={"confidence": "low"})
+                except TransportRetryError as exc:
+                    return cand, exc
+
+        async def dispatch_judge(
+            request: JudgeRequest,
+        ) -> tuple[Judgement | None, str | None, TransportRetryError | None]:
+            try:
+                judgement, attempt_id = await with_transport_retry(
+                    lambda: self._judge.dispatch_audited(request, ledger=ledger),
+                    attempts=self._cfg.transport_attempts,
+                    base_delay_s=self._cfg.backoff_base_s,
+                    sleep=self._sleep,
+                )
+            except TransportRetryError as exc:
+                return None, None, exc
+            return judgement, attempt_id, None
+
+        def block_field(
+            cand: FieldCandidate,
+            *,
+            stage: str,
+            error: TransportRetryError,
+        ) -> None:
+            """Supersede every candidate for a failed verification field."""
+
+            candidates[:] = [
+                existing
+                for existing in candidates
+                if existing.field_id != cand.field_id
+            ]
+            candidates.append(
+                cand.model_copy(
+                    update={
+                        "value": None,
+                        "tri_state": "unknown",
+                        "evidence": [],
+                        "confidence": "low",
+                        "unknown_reason": "dead_letter",
+                        "pending_judge": False,
+                    }
+                )
+            )
+            dead.append(
+                DeadLetter(
+                    product=state["product_name"],
+                    doc=cand.doc,
+                    group=cand.group,
+                    window_ref=f"{stage}:{cand.field_id}",
+                    field_ids=[cand.field_id],
+                    error=str(error),
+                    attempts=self._cfg.transport_attempts,
+                )
+            )
 
         # 投票只对 risk_level=high 且已有 present 候选的字段发生（E4.2/E4.3）；
         # fastpath 确定性直取字段退出投票（006 F3.4，12 #1：数字类字段退出投票）
@@ -817,16 +986,20 @@ class ExtractionPipeline:
             and merged[f.field_id].origin != "fastpath"
         ]
         voted = await asyncio.gather(*(do_vote(f, c) for f, c in vote_targets))
-        for (_field, _), cand in zip(vote_targets, voted, strict=True):
+        for (_field, _), (cand, vote_error) in zip(vote_targets, voted, strict=True):
+            if vote_error is not None:
+                block_field(cand, stage="vote", error=vote_error)
+                continue
             if cand.vote_agreement == 1:  # 三票三样 → 裁决（E4.2）
                 context = "\n".join(e.quote for e in cand.evidence)
                 req = make_judge_request(
                     state["product_id"], state["product_name"], cand,
                     "vote_disagreement", context,
                 )
-                judgement, judge_attempt_id = await self._judge.dispatch_audited(
-                    req, ledger=ledger
-                )
+                judgement, judge_attempt_id, judge_error = await dispatch_judge(req)
+                if judge_error is not None:
+                    block_field(cand, stage="judge", error=judge_error)
+                    continue
                 if judgement is None:
                     cand = cand.model_copy(update={"pending_judge": True})
                     judge_queue.append(req.model_dump(mode="json"))
@@ -860,9 +1033,10 @@ class ExtractionPipeline:
                     state["product_id"], state["product_name"], cand2,
                     "quote_mismatch_high_risk", "",
                 )
-                judgement, judge_attempt_id = await self._judge.dispatch_audited(
-                    req, ledger=ledger
-                )
+                judgement, judge_attempt_id, judge_error = await dispatch_judge(req)
+                if judge_error is not None:
+                    block_field(cand2, stage="judge", error=judge_error)
+                    continue
                 if judgement is None:
                     candidates.append(cand2.model_copy(update={"pending_judge": True}))
                     judge_queue.append(req.model_dump(mode="json"))
@@ -886,6 +1060,7 @@ class ExtractionPipeline:
         manifest.stats = _merge_stats(manifest.stats, stats)
         return {
             "candidates": [c.model_dump(mode="json") for c in candidates],
+            "dead_letters": [d.model_dump(mode="json") for d in dead],
             "judge_queue": judge_queue,
             "manifest": manifest.model_dump(mode="json"),
         }

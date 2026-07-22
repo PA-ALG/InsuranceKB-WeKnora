@@ -18,7 +18,7 @@ from insurance_harness.compiler.models import (
     PredRecord,
     RunManifest,
 )
-from insurance_harness.compiler.pipeline import ExtractionPipeline
+from insurance_harness.compiler.pipeline import ExtractionPipeline, PipelineConfig
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.goldenset.records import Evidence
@@ -477,6 +477,7 @@ async def _finalize_one_candidate(
         registry=_REGISTRY,
         model_id="no-model",
         source=cast(Any, object()),
+        config=PipelineConfig(model_profile="offline-eval"),
         scope=scope,
     )
     manifest = RunManifest(
@@ -901,6 +902,7 @@ async def test_public_run_materializes_scoped_source_and_writes_linked_pred_audi
         registry=_REGISTRY,
         model_id="scripted-public-run",
         source=source,
+        config=PipelineConfig(model_profile="offline-eval"),
         scope=scope,
     )
 
