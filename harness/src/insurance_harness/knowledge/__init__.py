@@ -116,6 +116,14 @@ from insurance_harness.knowledge.review import (
     ensure_review_item,
     get_review_item,
 )
+from insurance_harness.knowledge.serving import (
+    ApprovedSnapshotReader,
+    ApprovedSnapshotResult,
+    CanonicalServingFact,
+    ServingDocumentEvidence,
+    ServingFailure,
+    ServingStructuredEvidence,
+)
 from insurance_harness.knowledge.snapshots import (
     FrozenEvidence,
     SnapshotBuildError,
@@ -151,9 +159,12 @@ __all__ = [
     "ALLOWED_REVIEW_ACTIONS",
     "AUTHORITY_BY_DOC_ROLE",
     "AuthorizationDecision",
+    "ApprovedSnapshotReader",
+    "ApprovedSnapshotResult",
     "BackfillResolutionResult",
     "CONFIDENCE_TO_FLOAT",
     "ChangeItemProjection",
+    "CanonicalServingFact",
     "ConflictJudgeRequest",
     "ConflictJudgement",
     "CoverageGap",
@@ -213,6 +224,9 @@ __all__ = [
     "SnapshotFactsResult",
     "SnapshotReadError",
     "SnapshotReader",
+    "ServingDocumentEvidence",
+    "ServingFailure",
+    "ServingStructuredEvidence",
     "WikiPageClient",
     "WikiWriteVerificationError",
     "RenderedPage",
