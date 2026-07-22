@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from importlib import import_module
 from threading import RLock
-from typing import cast
+from typing import Literal, cast
 from weakref import WeakKeyDictionary
 
 from .admission import (
@@ -17,9 +17,14 @@ from .admission import (
     StrictAdmissionRequestBinding,
     VerifiedAdmission,
     _is_verified_admission,
+    _verified_authority_snapshot,
 )
-from .models import IdentityKey, ModelCallContext, _normalize_identity_keys
-from .policy import ProductionModelPolicy, _PolicyDecision
+from .models import IdentityKey, ModelCallContext, ModelIdentity, _normalize_identity_keys
+from .policy import (
+    ProductionModelPolicy,
+    _PolicyDecision,
+    _validate_production_identity_declaration,
+)
 
 _COMPOSITION_SEAL = object()
 _CANONICAL_ADMISSION_MODULE = "insurance_harness.run_admission.evaluator"
@@ -31,6 +36,8 @@ _AUTHORITY_NONCE = secrets.token_bytes(32)
 @dataclass(frozen=True, slots=True)
 class _CompositionState:
     approved_identity_keys: frozenset[IdentityKey]
+    model_plan_hash: str | None
+    profile: Literal["production"] | None
     pid: int
     process_nonce: bytes
 
@@ -99,30 +106,94 @@ class ProductionModelComposition:
         """Package-local hook for the future canonical guarded client only."""
 
         state = _get_composition_state(self)
-        if state is None:
+        if state is None or state.profile != "production" or state.model_plan_hash is None:
             raise AdmissionPolicyDenied("invalid_production_composition")
+        verified_snapshot = _verified_authority_snapshot(verified_admission)
+        if verified_snapshot is None:
+            raise AdmissionPolicyDenied("invalid_verified_admission")
+        _request, binding, _receipt = verified_snapshot
+        if binding.actual_model_plan_hash != state.model_plan_hash:
+            raise AdmissionPolicyDenied("model_plan_hash_mismatch")
+        try:
+            current_keys = _normalize_identity_keys(
+                _validate_production_identity_declaration(identity).identity_key
+                for identity in binding.approved_identities
+            )
+        except (AttributeError, TypeError, ValueError):
+            raise AdmissionPolicyDenied("production_identity_mismatch") from None
+        if current_keys != state.approved_identity_keys:
+            raise AdmissionPolicyDenied("production_identity_mismatch")
         policy = ProductionModelPolicy(state.approved_identity_keys)
         return policy._evaluate_call(verified_admission, context)
 
 
-def _build_production_model_composition(
-    *,
-    approved_identity_keys: Iterable[IdentityKey],
-) -> ProductionModelComposition:
-    """Assemble policy only; verifier selection always follows the fixed bridge."""
-
+def _new_composition(state: _CompositionState) -> ProductionModelComposition:
     composition = ProductionModelComposition.__new__(
         ProductionModelComposition,
         _seal=_COMPOSITION_SEAL,
     )
-    state = _CompositionState(
-        approved_identity_keys=_normalize_identity_keys(approved_identity_keys),
-        pid=_AUTHORITY_PID,
-        process_nonce=_AUTHORITY_NONCE,
-    )
     with _COMPOSITION_LOCK:
         _COMPOSITION_STATES[composition] = state
     return composition
+
+
+def _build_production_model_composition() -> ProductionModelComposition:
+    """Build a verifier-only composition with no model-call authority."""
+
+    return _new_composition(
+        _CompositionState(
+            approved_identity_keys=frozenset(),
+            model_plan_hash=None,
+            profile=None,
+            pid=_AUTHORITY_PID,
+            process_nonce=_AUTHORITY_NONCE,
+        )
+    )
+
+
+def _bind_verified_production_model_composition(
+    verified_admission: VerifiedAdmission,
+    *,
+    expected_identities: Iterable[ModelIdentity],
+    expected_model_plan_hash: str,
+) -> ProductionModelComposition:
+    """Bind model-call authority only to canonical admission-approved identities."""
+
+    verified_snapshot = _verified_authority_snapshot(verified_admission)
+    if verified_snapshot is None:
+        raise AdmissionPolicyDenied("invalid_verified_admission")
+    request, binding, _receipt = verified_snapshot
+    try:
+        expected_keys = _normalize_identity_keys(
+            _validate_production_identity_declaration(
+                ModelIdentity.model_validate(
+                    identity.model_dump(mode="python", round_trip=True, warnings=False)
+                )
+            ).identity_key
+            for identity in expected_identities
+        )
+        actual_keys = _normalize_identity_keys(
+            _validate_production_identity_declaration(identity).identity_key
+            for identity in binding.approved_identities
+        )
+    except (AttributeError, TypeError, ValueError):
+        raise AdmissionPolicyDenied("production_identity_mismatch") from None
+    if expected_keys != actual_keys:
+        raise AdmissionPolicyDenied("production_identity_mismatch")
+    if (
+        expected_model_plan_hash != request.expected_model_plan_hash
+        or expected_model_plan_hash != binding.actual_model_plan_hash
+    ):
+        raise AdmissionPolicyDenied("model_plan_hash_mismatch")
+    return _new_composition(
+        _CompositionState(
+            approved_identity_keys=actual_keys,
+            model_plan_hash=binding.actual_model_plan_hash,
+            profile="production",
+            pid=_AUTHORITY_PID,
+            process_nonce=_AUTHORITY_NONCE,
+        )
+    )
 
 
 def _get_composition_state(value: object) -> _CompositionState | None:

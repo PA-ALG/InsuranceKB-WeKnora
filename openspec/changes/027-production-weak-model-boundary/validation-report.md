@@ -158,6 +158,56 @@ cleanup retained only under explicit `offline-eval`.
 
 Real provider: **NOT RUN**.
 
+## PWB1 corrective: config declaration is not approval
+
+The post-PR security review reproduced a real Important finding on head `8b681969`:
+`openai/gpt4o-20260722 family=qwen`, `openai/o3-20260722 family=qwen`, and
+`evil-provider/custom-model-20260722 family=qwen` all constructed production settings. The
+root cause was not merely an incomplete strong-model substring list: config created a policy
+allowlist from the same caller-supplied identity, while the four-field `IdentityKey` omitted
+`family`.
+
+The corrective RED contained seven failures: one family-key collision, three untrusted
+provider declarations, and three config-vs-canonical-admission deployment/family/policy
+mismatches. GREEN changes the authority flow as follows:
+
+- `IdentityKey` is now provider/deployment/family/role/policy, and the policy snapshot digest
+  domain is versioned accordingly;
+- config performs only code-owned provider/family capability-domain and weak/rolling shape
+  validation; it never constructs an allowlist from its own declaration;
+- a verifier-only composition has no model-call authority; after canonical verification, a
+  second sealed composition derives its exact full identity set only from the opaque
+  `VerifiedAdmission` snapshot and requires equality with all independently configured
+  compiler roles plus the model-plan hash;
+- provider/deployment/family/role/policy drift is typed fail-closed before provider adapter
+  construction. The reviewed 028 adapter remains absent.
+
+The first independent corrective reviews then found two additional Important cases. A bound
+composition accepted another opaque admission with the same model-plan but an extra or missing
+role because use-time validation compared only the plan hash. Separately, deployment labels such
+as `gpt_4o`, `gpt.4o`, `gpt/4o`, `gpt 4o`, `deep_seek` and `o_3` bypassed contiguous substring or
+token checks. Twenty new RED cases reproduced those paths, including a guarded fake that wrote an
+ALLOW receipt and executed once before the fix.
+
+GREEN adds a code-owned, family-specific normalized deployment namespace plus immutable version
+shape as a deny-only catalog check, and checks normalized alphanumeric strong-model markers;
+exact deployment approval still comes only from canonical admission. Every guarded call now
+recomputes the complete approved identity set from the current opaque authority snapshot and
+requires equality with the sealed composition state in addition to the model-plan hash. The new
+extra-role and missing-role tests prove typed rejection with zero receipt and zero executor
+observation. Follow-up review found the `qwen` prefix overlapped `qwen-vl`; the resolver now uses
+longest namespace first and requires the uniquely resolved family to equal the declared family,
+with both mismatch directions covered before transport. A final quality question also prevented
+the deny-only immutable-shape check from being coupled to one YYYYMMDD convention: the catalog
+now recognizes explicit YYYYMMDD, ISO-date, fixed YYMM vendor-version and sha256-attestation
+shapes, while exact deployment approval still requires admission equality.
+
+Final local corrective evidence: the two 027 suites are `276 passed`; the config/compiler/source
+compatibility slice plus 027 is `310 passed`; all-repo Ruff passes; strict mypy passes across
+`305 source files`; OpenSpec strict and `git diff --check` pass. Independent specification and
+quality re-reviews are both **Approved** with zero Critical/Important/Minor findings. New-SHA CI
+and total-control re-review remain pending. Real provider remains **NOT RUN**.
+
 ## Task 6 PR-ready evidence
 
 The single local complete deterministic pytest run was executed after the first independent
@@ -330,12 +380,14 @@ authenticated authority digest. The bound-transport registry is independently
 closure-private and weak-keyed. Every pre-sink and post-sink snapshot must reproduce the
 same authority digest; swapping a target, executor, binding or coordinated public view cannot
 redirect the call. PID/process-generation checks, HMAC-key rotation and child-fork registry
-reset revoke copied, collected, restarted or inherited authority. Because
-canonical `IdentityKey` does not contain family, no deployment-name heuristic is used: the
-full bound identity, including family, is compared exactly against call facts,
-admission-approved identity and permit before transport. Wrong provider/deployment/role/
-policy, strong and rolling identities are rejected at binding; a family mismatch is rejected
-at call time with zero receipt and zero transport. The gateway has no payload attributes,
+reset revoke copied, collected, restarted or inherited authority. Canonical `IdentityKey`
+now contains family, so transport binding and policy snapshots compare the full
+provider/deployment/family/role/policy identity. Code-owned provider/family namespace,
+immutable-version and strong/rolling shape checks remain deny-only and never grant approval;
+exact approval comes from canonical admission. The complete admission identity set and model-plan
+are revalidated from opaque authority on every call.
+Wrong provider/deployment/family/role/policy, strong and rolling identities are rejected at
+composition or transport binding with zero receipt and zero transport. The gateway has no payload attributes,
 and the gateway, adapter, executor and transport binding are
 non-copyable/non-serializable/fork-transferable.
 

@@ -52,6 +52,7 @@ from insurance_harness.model_policy.admission import (
     _issue_verified_admission,
 )
 from insurance_harness.model_policy.composition import (
+    _bind_verified_production_model_composition,
     _build_production_model_composition,
 )
 from insurance_harness.model_policy.policy import (
@@ -93,7 +94,7 @@ class _MutableIdentityPart(str):
 
 
 class _ExplodingIdentityKeys:
-    def __iter__(self) -> Iterator[tuple[str, str, str, str]]:
+    def __iter__(self) -> Iterator[tuple[str, str, str, str, str]]:
         raise RuntimeError("caller iterator failure")
 
 
@@ -103,17 +104,18 @@ class _ExplodingIdentityKeys:
         {_MutableIdentityKey(_identity().identity_key)},
         {
             (
-                _MutableIdentityPart("bailian"),
-                "qwen3.6-prod-20260715",
-                "extract",
-                "pwb-v1",
+                    _MutableIdentityPart("bailian"),
+                    "qwen3.6-prod-20260715",
+                    "qwen",
+                    "extract",
+                    "pwb-v1",
             )
         },
         (_identity().identity_key, _identity().identity_key),
-        (("bailian", "qwen3.6-prod-20260715", "extract"),),
-        (("", "qwen3.6-prod-20260715", "extract", "pwb-v1"),),
-        ((" bailian", "qwen3.6-prod-20260715", "extract", "pwb-v1"),),
-        (("bailian", "qwen3.6-prod-20260715", "admin", "pwb-v1"),),
+        (("bailian", "qwen3.6-prod-20260715", "qwen", "extract"),),
+        (("", "qwen3.6-prod-20260715", "qwen", "extract", "pwb-v1"),),
+        ((" bailian", "qwen3.6-prod-20260715", "qwen", "extract", "pwb-v1"),),
+        (("bailian", "qwen3.6-prod-20260715", "qwen", "admin", "pwb-v1"),),
         _ExplodingIdentityKeys(),
     ],
 )
@@ -122,22 +124,24 @@ def test_pwb1_policy_and_composition_reject_noncanonical_allowlist_keys(
 ) -> None:
     with pytest.raises(ValueError, match="invalid approved identity keys"):
         ProductionModelPolicy(keys)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="invalid approved identity keys"):
-        _build_production_model_composition(
-            approved_identity_keys=keys,  # type: ignore[arg-type]
-        )
+    with pytest.raises(TypeError):
+        cast(Any, _build_production_model_composition)(approved_identity_keys=keys)
 
 
 def test_pwb1_allowlist_snapshot_does_not_retain_caller_container() -> None:
     identity = _identity()
-    keys = [identity.identity_key]
-    policy = ProductionModelPolicy(keys)
-    composition = _build_production_model_composition(approved_identity_keys=keys)
-    digest = policy.policy_snapshot_digest
+    identities = [identity]
+    policy = ProductionModelPolicy([identity.identity_key])
     verified = _verified()
+    composition = _bind_verified_production_model_composition(
+        verified,
+        expected_identities=identities,
+        expected_model_plan_hash=verified.request.expected_model_plan_hash,
+    )
+    digest = policy.policy_snapshot_digest
     context = _call_context(verified)
 
-    keys.clear()
+    identities.clear()
 
     assert policy.policy_snapshot_digest == digest
     assert policy.evaluate(identity) == identity
@@ -164,7 +168,35 @@ def test_pwb1_rolling_identity_is_denied_even_when_exact_key_is_allowlisted(
     assert denied.value.reason_code == "rolling_identity"
 
 
-@pytest.mark.parametrize("deployment_id", ["claude-opus", "deepseek-v4"])
+@pytest.mark.parametrize(
+    "deployment_id",
+    [
+        "qwen3-prod-2026-07-15",
+        "qwen3-235b-a22b-instruct-2507",
+        "qwen3-prod-sha256-a1b2c3d4",
+    ],
+)
+def test_pwb1_code_owned_catalog_accepts_supported_immutable_id_shapes(
+    deployment_id: str,
+) -> None:
+    identity = _identity(deployment_id)
+
+    assert _policy_for(identity).evaluate(identity) == identity
+
+
+@pytest.mark.parametrize(
+    "deployment_id",
+    [
+        "claude-opus",
+        "deepseek-v4",
+        "gpt_4o-20260722",
+        "gpt.4o-20260722",
+        "gpt/4o-20260722",
+        "gpt 4o-20260722",
+        "deep_seek-v4-20260722",
+        "o_3-20260722",
+    ],
+)
 def test_pwb1_strong_identity_is_denied_even_when_exact_key_is_allowlisted(
     deployment_id: str,
 ) -> None:
@@ -192,6 +224,7 @@ def test_pwb1_identity_key_is_exact_and_family_is_constrained() -> None:
     assert identity.identity_key == (
         "bailian",
         "qwen3.6-prod-20260715",
+        "qwen",
         "extract",
         "pwb-v1",
     )
@@ -206,6 +239,56 @@ def test_pwb1_identity_key_is_exact_and_family_is_constrained() -> None:
     with pytest.raises(ModelPolicyDenied) as denied:
         _policy_for(identity).evaluate(forged_family)
     assert denied.value.reason_code == "invalid_identity"
+
+
+def test_pwb1_identity_key_binds_approved_family_without_label_collision() -> None:
+    approved = _identity(family="qwen")
+    disguised = approved.model_copy(update={"family": "qwen-vl"})
+
+    assert disguised.identity_key != approved.identity_key
+    with pytest.raises(ModelPolicyDenied) as denied:
+        _policy_for(approved).evaluate(disguised)
+
+    assert denied.value.reason_code == "invalid_identity"
+
+
+@pytest.mark.parametrize(
+    ("deployment_id", "family"),
+    [
+        ("qwen3.6-prod-20260715", "qwen-vl"),
+        ("qwen-vl3-prod-20260715", "qwen"),
+    ],
+)
+def test_pwb1_deployment_namespace_and_family_are_mutually_consistent(
+    deployment_id: str,
+    family: str,
+) -> None:
+    disguised = _identity(deployment_id, family=family)
+    verified = _issue_verified_admission(
+        _strict_request(),
+        _binding().model_copy(update={"approved_identities": (disguised,)}),
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    sink = _CountingReceiptSink()
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        composition = _bind_verified_production_model_composition(
+            verified,
+            expected_identities=(disguised,),
+            expected_model_plan_hash=verified.request.expected_model_plan_hash,
+        )
+        client = _build_test_gateway(
+            composition=composition,
+            transport_identity=disguised,
+            receipt_sink=sink,
+        )
+        request = _gateway_request()
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
+
+    assert denied.value.reason_code == "production_identity_mismatch"
+    assert sink.receipts == []
 
 
 def test_pwb1_identity_model_is_frozen_extra_forbid_and_copy_revalidates() -> None:
@@ -759,9 +842,12 @@ class _CanonicalTestVerifier:
 
 
 def _composition() -> ProductionModelComposition:
+    verified = _verified()
     identity = _identity()
-    return _build_production_model_composition(
-        approved_identity_keys=frozenset({identity.identity_key}),
+    return _bind_verified_production_model_composition(
+        verified,
+        expected_identities=(identity,),
+        expected_model_plan_hash=verified.request.expected_model_plan_hash,
     )
 
 
@@ -787,15 +873,12 @@ def _install_test_canonical_bridge(
 
 
 def test_pwb4_production_builder_cannot_register_mirror_or_custom_verifier() -> None:
-    assert tuple(signature(_build_production_model_composition).parameters) == (
-        "approved_identity_keys",
-    )
+    assert tuple(signature(_build_production_model_composition).parameters) == ()
     with pytest.raises(TypeError):
         _build_production_model_composition(  # type: ignore[call-arg]
             canonical_verifiers={
                 ("attacker-purpose", "attacker-schema"): _CanonicalTestVerifier()
             },
-            approved_identity_keys=frozenset({_identity().identity_key}),
         )
     assert "_build_production_model_composition" not in model_policy_package.__all__
     assert not hasattr(ProductionModelComposition, "register_verifier")
@@ -978,14 +1061,133 @@ def test_pwb4_issued_permit_cannot_replay_across_full_binding(
 def test_pwb4_policy_denies_identity_or_role_outside_admission() -> None:
     verified = _verified()
     gap_identity = _identity(role="gap")
-    context = _call_context(verified).model_copy(update={"identity": gap_identity})
 
-    decision = _build_production_model_composition(
-        approved_identity_keys=frozenset({gap_identity.identity_key})
-    )._evaluate_for_guard(verified, context)
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        _bind_verified_production_model_composition(
+            verified,
+            expected_identities=(gap_identity,),
+            expected_model_plan_hash=verified.request.expected_model_plan_hash,
+        )
 
-    assert not _decision_authorizes_call(decision, verified, context)
-    assert decision.receipt.reason_code == "identity_not_admission_approved"
+    assert denied.value.reason_code == "production_identity_mismatch"
+
+
+def test_pwb1_verified_composition_binds_every_role_and_model_plan() -> None:
+    verified = _verified()
+    extract_identity = _identity()
+
+    with pytest.raises(AdmissionPolicyDenied) as role_denied:
+        _bind_verified_production_model_composition(
+            verified,
+            expected_identities=(extract_identity, _identity(role="gap")),
+            expected_model_plan_hash=verified.request.expected_model_plan_hash,
+        )
+    assert role_denied.value.reason_code == "production_identity_mismatch"
+
+    with pytest.raises(AdmissionPolicyDenied) as plan_denied:
+        _bind_verified_production_model_composition(
+            verified,
+            expected_identities=(extract_identity,),
+            expected_model_plan_hash="0" * 64,
+        )
+    assert plan_denied.value.reason_code == "model_plan_hash_mismatch"
+
+
+@pytest.mark.parametrize("replacement", ["extra-role", "missing-role"])
+def test_pwb1_bound_composition_rechecks_complete_admission_identity_set_per_call(
+    replacement: str,
+) -> None:
+    extract_identity = _identity()
+    gap_identity = _identity(role="gap")
+    one_role_verified = _verified()
+    two_role_verified = _issue_verified_admission(
+        _strict_request(),
+        _binding().model_copy(
+            update={"approved_identities": (extract_identity, gap_identity)}
+        ),
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    if replacement == "extra-role":
+        bound_verified = one_role_verified
+        current_verified = two_role_verified
+        expected_identities: tuple[ModelIdentity, ...] = (extract_identity,)
+    else:
+        bound_verified = two_role_verified
+        current_verified = one_role_verified
+        expected_identities = (extract_identity, gap_identity)
+    composition = _bind_verified_production_model_composition(
+        bound_verified,
+        expected_identities=expected_identities,
+        expected_model_plan_hash=bound_verified.request.expected_model_plan_hash,
+    )
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=composition,
+        transport_identity=extract_identity,
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        _run_gateway_call(
+            client,
+            current_verified,
+            _gateway_facts(current_verified, request),
+            request,
+        )
+
+    assert denied.value.reason_code == "production_identity_mismatch"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+@pytest.mark.parametrize(
+    "deployment_id",
+    [
+        "gpt_4o-20260722",
+        "gpt.4o-20260722",
+        "gpt/4o-20260722",
+        "gpt 4o-20260722",
+        "deep_seek-v4-20260722",
+        "o_3-20260722",
+    ],
+)
+def test_pwb1_disguised_strong_identity_cannot_build_guarded_transport(
+    deployment_id: str,
+) -> None:
+    disguised = _identity(deployment_id)
+    verified = _issue_verified_admission(
+        _strict_request(),
+        _binding().model_copy(update={"approved_identities": (disguised,)}),
+        verifier_id="canonical-admission",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    sink = _CountingReceiptSink()
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        composition = _bind_verified_production_model_composition(
+            verified,
+            expected_identities=(disguised,),
+            expected_model_plan_hash=verified.request.expected_model_plan_hash,
+        )
+        client = _build_test_gateway(
+            composition=composition,
+            transport_identity=disguised,
+            receipt_sink=sink,
+        )
+        request = _gateway_request()
+        _run_gateway_call(
+            client,
+            verified,
+            _gateway_facts(verified, request),
+            request,
+        )
+
+    assert denied.value.reason_code == "production_identity_mismatch"
+    assert sink.receipts == []
 
 
 def test_pwb4_policy_denies_expired_verified_scope_without_issuing_permit() -> None:
@@ -1220,17 +1422,19 @@ def test_pwb4_coordinated_decision_receipt_permit_context_rebind_is_denied() -> 
 def test_pwb4_composition_and_policy_allowlist_cannot_be_swapped_after_issue() -> None:
     verified = _verified()
     context = _call_context(verified)
-    composition = _build_production_model_composition(approved_identity_keys=frozenset())
-    assert composition._evaluate_for_guard(verified, context).receipt.decision == "DENY"
+    composition = _build_production_model_composition()
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        composition._evaluate_for_guard(verified, context)
+    assert denied.value.reason_code == "invalid_production_composition"
 
     replacement = _policy_for(context.identity)
     try:
         object.__setattr__(composition, "_policy", replacement)
     except AttributeError:
         pass
-    decision = composition._evaluate_for_guard(verified, context)
-    provider_calls = int(_decision_authorizes_call(decision, verified, context))
-    assert provider_calls == 0
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        composition._evaluate_for_guard(verified, context)
+    assert denied.value.reason_code == "invalid_production_composition"
 
     mutable = ProductionModelPolicy(approved_identity_keys=frozenset())
     with pytest.raises(ModelPolicyDenied):
@@ -2225,23 +2429,17 @@ def test_pwb4_gateway_factory_rejects_wrong_bound_transport_identity(
 
 
 def test_pwb4_gateway_wrong_bound_transport_family_is_zero_call() -> None:
-    verified = _verified()
-    request = _gateway_request()
     sink = _CountingReceiptSink()
     wrong_family = _identity().model_copy(update={"family": "qwen-vl"})
-    client = _build_test_gateway(
-        composition=_composition(),
-        transport_identity=wrong_family,
-        receipt_sink=sink,
-    )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
+        _build_test_gateway(
+            composition=_composition(),
+            transport_identity=wrong_family,
+            receipt_sink=sink,
         )
 
     assert denied.value.reason_code == "invalid_transport_identity"
-    assert _gateway_executor_terminal_observations(client) == []
     assert sink.receipts == []
 
 

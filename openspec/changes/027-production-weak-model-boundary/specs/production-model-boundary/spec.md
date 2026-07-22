@@ -4,12 +4,22 @@
 
 ### Requirement: PWB1 不可变弱模型身份
 
-生产模型身份 SHALL 由 `provider + deployment/model immutable id + capability role + policy version` 构成；只允许批准列表中的 MiniMax/Qwen/Qwen-VL 能力档。空白、未知、`latest`/rolling alias、Claude/DeepSeek 或批准记录不匹配 SHALL 在任何网络调用前拒绝。
+生产模型身份 SHALL 由 `provider + deployment/model immutable id + family + capability role + policy version` 构成；只允许批准列表中的 MiniMax/Qwen/Qwen-VL 能力档。`family` SHALL 是完整 identity key 的一部分，不得作为可替换标签。production config 只声明独立期望身份，不得用该声明构造批准列表或自批准；具体 deployment 的批准权 SHALL 来自 canonical `VerifiedAdmission` 中的 exact full identities，且与 code-owned production profile、完整角色集合和 model-plan hash 精确一致。每次受保护调用 SHALL 从当前 opaque admission authority 重新核对完整 identity 集合和 model-plan，不得复用另一份 admission 的初次绑定结果。空白、未知、不受控 provider、不符合 code-owned provider/family deployment namespace 或不可变版本形状、`latest`/rolling alias、Claude/DeepSeek/OpenAI 强模型、family/provider/deployment 伪装或批准记录不匹配 SHALL 在任何 provider/transport 构造前拒绝；分隔符变化不得绕过强模型识别。
 
 #### Scenario: 未批准模型零网络调用
 
 - **WHEN** production profile 请求未知、强模型或 rolling identity
 - **THEN** 返回类型化拒绝，provider fake 记录零调用
+
+#### Scenario: 配置不得自批准模型身份
+
+- **WHEN** caller 在 production config 中把 GPT/O-series/custom deployment 标注为 Qwen，或让 provider/deployment/family/role/policy 任一字段与 canonical admission 的批准身份不一致
+- **THEN** code-owned provider catalog 或 exact `VerifiedAdmission` 比较在 provider 构造前类型化拒绝，模型调用数为 0；config 声明本身不产生 allowlist
+
+#### Scenario: 调用时完整身份集合不可替换
+
+- **WHEN** composition 绑定后收到同 model-plan 但增加或缺少角色身份的另一份 `VerifiedAdmission`
+- **THEN** 调用时从 opaque authority snapshot 重算的完整集合不相等，类型化拒绝且 receipt/transport 均为 0
 
 ### Requirement: PWB2 所有生产入口共用单一策略
 

@@ -10,3 +10,8 @@
 - [ ] T8 独立规格/质量复核；更新 HANDOFF MVP-0 一行与七段时间
 
 完成前不得启动 028 的真实 provider wiring 或 030 live run。
+
+## 裁决记录
+
+- PWB1 corrective：`family` 纳入 `IdentityKey`；production config 仅作独立期望声明与 code-owned provider 能力域预检，不得再以自身 identity 构造 allowlist。具体 deployment/role/policy 批准只取 canonical `VerifiedAdmission` 的完整 identity 集合，并与 production profile、独立 model-plan hash 精确绑定。依据：PR #27 安全复核可稳定复现 family 标签伪装与 config 自批准。
+- PWB1 final corrective：code-owned provider/family catalog 以规范化 namespace 与不可变版本形状作 deny-only 预检，分隔符伪装的 GPT/DeepSeek/O-series 同样拒绝；每次 guarded call 从当前 opaque admission snapshot 重算完整角色 identity set，extra/missing role 不得复用先前 composition authority。

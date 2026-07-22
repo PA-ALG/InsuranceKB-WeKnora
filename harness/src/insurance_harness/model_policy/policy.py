@@ -38,14 +38,45 @@ from .models import (
 )
 
 _APPROVED_FAMILIES = frozenset({"minimax", "qwen", "qwen-vl"})
+_TRUSTED_PROVIDER_FAMILY_KEYS = frozenset(
+    ("bailian", family) for family in _APPROVED_FAMILIES
+)
+_TRUSTED_DEPLOYMENT_NAMESPACES = (
+    ("bailian", "qwenvl", "qwen-vl"),
+    ("bailian", "minimax", "minimax"),
+    ("bailian", "qwen", "qwen"),
+)
 _STRONG_MODEL_MARKERS = frozenset(
-    {"claude", "deepseek", "gemini", "gpt-4", "gpt-5", "opus", "sonnet"}
+    {
+        "claude",
+        "deepseek",
+        "gemini",
+        "gpt4",
+        "gpt-4",
+        "gpt5",
+        "gpt-5",
+        "opus",
+        "sonnet",
+    }
+)
+_STRONG_MODEL_TOKENS = frozenset({"o1", "o3", "o4"})
+_NORMALIZED_STRONG_MODEL_MARKERS = frozenset(
+    {"claude", "deepseek", "gemini", "gpt4", "gpt5", "o1", "o3", "o4"}
 )
 _ROLLING_MARKERS = frozenset(
     {"latest", "rolling", "current", "default", "auto", "stable", "blue", "green", "canary"}
 )
 _UNVERSIONED_ALIASES = frozenset({"minimax", "qwen", "qwen3", "qwen-vl"})
-_POLICY_DIGEST_DOMAIN = b"insurancekb.model-policy.approved-identities.v1\0"
+_IMMUTABLE_VERSION_MARKERS = (
+    re.compile(r"(?:^|[._-])20[0-9]{6}(?:$|[._-])"),
+    re.compile(
+        r"(?:^|[._-])20[0-9]{2}[._-](?:0[1-9]|1[0-2])"
+        r"[._-](?:0[1-9]|[12][0-9]|3[01])(?:$|[._-])"
+    ),
+    re.compile(r"(?:^|[._-])2[0-9](?:0[1-9]|1[0-2])(?:$|[._-])"),
+    re.compile(r"(?:^|[._-])sha256[._-][0-9a-f]{8,64}(?:$|[._-])"),
+)
+_POLICY_DIGEST_DOMAIN = b"insurancekb.model-policy.approved-identities.v2\0"
 _CONTEXT_DIGEST_DOMAIN = b"insurancekb.model-policy.call-context.v1\0"
 _DENY_SCOPE_DIGEST_DOMAIN = b"insurancekb.model-policy.deny-receipt-scope.v1\0"
 _DECISION_CONSTRUCTION_SEAL = object()
@@ -100,6 +131,7 @@ class ModelPolicyDenied(PermissionError):
 
     _MESSAGES = {
         "strong_model": "production model identity is outside the weak-model boundary",
+        "provider_not_approved": "production model provider is not code-owned",
         "family_not_approved": "production model family is not approved",
         "invalid_identity": "production model identity is invalid",
         "invalid_call_context": "production model call context is invalid",
@@ -214,22 +246,54 @@ def _evaluate_identity(
     identity: ModelIdentity,
     approved_identity_keys: frozenset[IdentityKey],
 ) -> ModelIdentity:
+    validated = _validate_production_identity_declaration(identity)
+    if validated.identity_key not in approved_identity_keys:
+        raise ModelPolicyDenied("identity_not_approved")
+    return validated
+
+
+def _validate_production_identity_declaration(
+    identity: ModelIdentity,
+) -> ModelIdentity:
+    """Validate weak-model shape without granting deployment approval."""
+
     try:
         validated = ModelIdentity.model_validate(
             identity.model_dump(mode="python", round_trip=True, warnings=False)
         )
     except (AttributeError, TypeError, ValueError):
         raise ModelPolicyDenied("invalid_identity") from None
-    deployment = validated.deployment_id.casefold()
-    if validated.family not in _APPROVED_FAMILIES:
+    if not any(
+        provider == validated.provider
+        for provider, _family in _TRUSTED_PROVIDER_FAMILY_KEYS
+    ):
+        raise ModelPolicyDenied("provider_not_approved")
+    if (validated.provider, validated.family) not in _TRUSTED_PROVIDER_FAMILY_KEYS:
         raise ModelPolicyDenied("family_not_approved")
-    if any(marker in deployment for marker in _STRONG_MODEL_MARKERS):
+    deployment = validated.deployment_id.casefold()
+    normalized_deployment = re.sub(r"[^a-z0-9]+", "", deployment)
+    if any(marker in deployment for marker in _STRONG_MODEL_MARKERS) or any(
+        marker in normalized_deployment for marker in _NORMALIZED_STRONG_MODEL_MARKERS
+    ):
         raise ModelPolicyDenied("strong_model")
     tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
+    if tokens.intersection(_STRONG_MODEL_TOKENS):
+        raise ModelPolicyDenied("strong_model")
     if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
         raise ModelPolicyDenied("rolling_identity")
-    if validated.identity_key not in approved_identity_keys:
-        raise ModelPolicyDenied("identity_not_approved")
+    resolved_family = next(
+        (
+            family
+            for provider, prefix, family in _TRUSTED_DEPLOYMENT_NAMESPACES
+            if provider == validated.provider
+            and normalized_deployment.startswith(prefix)
+        ),
+        None,
+    )
+    if resolved_family != validated.family:
+        raise ModelPolicyDenied("invalid_identity")
+    if not any(pattern.search(deployment) for pattern in _IMMUTABLE_VERSION_MARKERS):
+        raise ModelPolicyDenied("rolling_identity")
     return validated
 
 

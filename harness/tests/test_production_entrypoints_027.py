@@ -51,7 +51,9 @@ from insurance_harness.model_policy import (
 from insurance_harness.model_policy import composition as composition_module
 from insurance_harness.model_policy import gateway as gateway_module
 from insurance_harness.model_policy.admission import _issue_verified_admission
-from insurance_harness.model_policy.composition import _build_production_model_composition
+from insurance_harness.model_policy.composition import (
+    _bind_verified_production_model_composition,
+)
 from insurance_harness.schemas import (
     FieldSpec,
     ProductLineSchema,
@@ -179,6 +181,10 @@ def test_pwb2_inventory_drives_real_compiler_entrypoint_closure() -> None:
             if "_build_production_model_composition" not in factory_calls:
                 failures.append(
                     f"{path}: production factory skips canonical composition"
+                )
+            if "_bind_verified_production_model_composition" not in factory_calls:
+                failures.append(
+                    f"{path}: production factory skips admission-owned identity binding"
                 )
             factory_leaks = forbidden_raw_constructors.intersection(factory_calls)
             if factory_leaks:
@@ -373,6 +379,37 @@ def test_pwb1_production_profile_rejects_legacy_or_unfrozen_model_routes(
         HarnessSettings(**_production_settings(**updates))  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    ("provider", "deployment_id"),
+    [
+        ("openai", "gpt4o-20260722"),
+        ("openai", "o3-20260722"),
+        ("evil-provider", "custom-model-20260722"),
+        ("bailian", "gpt4o-20260722"),
+        ("bailian", "o3-20260722"),
+        ("bailian", "gpt_4o-20260722"),
+        ("bailian", "gpt.4o-20260722"),
+        ("bailian", "gpt/4o-20260722"),
+        ("bailian", "gpt 4o-20260722"),
+        ("bailian", "deep_seek-v4-20260722"),
+        ("bailian", "o_3-20260722"),
+        ("bailian", "qwen-vl3-prod-20260722"),
+    ],
+)
+def test_pwb1_production_profile_rejects_caller_declared_provider_catalog_spoof(
+    provider: str,
+    deployment_id: str,
+) -> None:
+    with pytest.raises(ValidationError):
+        HarnessSettings.model_validate(
+            _production_settings(
+                production_model_provider=provider,
+                production_model_deployment_id=deployment_id,
+                production_model_family="qwen",
+            )
+        )
+
+
 def test_pwb4_global_config_has_no_caller_authority_or_runtime_override_fields() -> None:
     forbidden = {
         "admission_binding",
@@ -468,8 +505,10 @@ def _guarded_test_client(
         template_hash=template_hash,
         schema_hash=schema_hash,
     )
-    composition = _build_production_model_composition(
-        approved_identity_keys={identity.identity_key}
+    composition = _bind_verified_production_model_composition(
+        verified,
+        expected_identities=(identity,),
+        expected_model_plan_hash=request.expected_model_plan_hash,
     )
     if transport_mode is None:
         target = gateway_module._build_stateful_model_client_target_for_test(
@@ -560,8 +599,10 @@ def _guarded_role_test_client(
         verifier_version="v1",
         verified_at=datetime(2026, 7, 22, tzinfo=UTC),
     )
-    composition = _build_production_model_composition(
-        approved_identity_keys={extract_identity.identity_key, role_identity.identity_key}
+    composition = _bind_verified_production_model_composition(
+        verified,
+        expected_identities=(extract_identity, role_identity),
+        expected_model_plan_hash=request.expected_model_plan_hash,
     )
     extract_executor = gateway_module._issue_test_model_executor_for_test(
         composition=composition,
@@ -1249,6 +1290,17 @@ def test_pwb2_cli_production_builder_fails_closed_without_028_adapter_after_veri
         template_hash="a" * 64,
         schema_hash=settings.production_expected_schema_hash,
     )
+    approved_identities = tuple(
+        _identity.model_copy(update={"role": role})
+        for role in ("extract", "gap", "verify", "consensus")
+    )
+    verified = _issue_verified_admission(
+        request,
+        verified.binding.model_copy(update={"approved_identities": approved_identities}),
+        verifier_id="027-entrypoint-all-roles",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
     verifier_calls: list[StrictAdmissionRequestBinding] = []
     transport_builds: list[object] = []
 
@@ -1293,6 +1345,94 @@ def test_pwb2_cli_production_builder_fails_closed_without_028_adapter_after_veri
 
     assert denied.value.reason_code == "canonical_adapter_unavailable"
     assert verifier_calls == [request]
+    assert transport_builds == []
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"production_model_deployment_id": "qwen3-attacker-prod-20260722"},
+        {
+            "production_model_deployment_id": "qwen-vl3-prod-20260722",
+            "production_model_family": "qwen-vl",
+        },
+        {"production_model_policy_version": "caller-policy"},
+    ],
+)
+def test_pwb1_production_builder_rejects_config_identity_not_exactly_admission_approved(
+    updates: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = HarnessSettings.model_validate(_production_settings(**updates))
+    request = compiler_cli._strict_production_request(settings)
+    approved_extract = ModelIdentity(
+        provider="bailian",
+        deployment_id="qwen3-prod-20260722-sha256-a1",
+        family="qwen",
+        role="extract",
+        policy_version="pwb-v1",
+    )
+    approved_identities = tuple(
+        approved_extract.model_copy(update={"role": role})
+        for role in ("extract", "gap", "verify", "consensus")
+    )
+    binding = AdmissionBinding.model_validate(
+        {
+            **{
+                f"actual_{name.removeprefix('expected_')}": value
+                for name, value in request.model_dump().items()
+            },
+            "actual_state": "READY",
+            "actual_expires_at": datetime(2099, 8, 1, tzinfo=UTC),
+            "approved_identities": approved_identities,
+            "approved_template_hashes": ("a" * 64,),
+        }
+    )
+    verified = _issue_verified_admission(
+        request,
+        binding,
+        verifier_id="027-config-spoof-regression",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    transport_builds: list[object] = []
+
+    class _CanonicalVerifier:
+        def verify(
+            self,
+            current: StrictAdmissionRequestBinding,
+            /,
+        ) -> VerifiedAdmission:
+            assert current == request
+            return verified
+
+    class _CanonicalModule:
+        @staticmethod
+        def select_canonical_admission_verifier(
+            purpose: str,
+            run_schema_version: str,
+        ) -> _CanonicalVerifier:
+            assert (purpose, run_schema_version) == (
+                request.expected_purpose,
+                request.expected_run_schema_version,
+            )
+            return _CanonicalVerifier()
+
+    monkeypatch.setattr(composition_module, "import_module", lambda name: _CanonicalModule)
+    monkeypatch.setattr(
+        compiler_cli,
+        "OpenAICompatClient",
+        lambda **kwargs: transport_builds.append(kwargs),
+    )
+
+    with pytest.raises(AdmissionPolicyDenied) as denied:
+        compiler_cli._build_production_compiler_client(
+            settings,
+            schema_hash=settings.production_expected_schema_hash,
+            space_id=settings.production_expected_space_id,
+        )
+
+    assert denied.value.reason_code == "production_identity_mismatch"
     assert transport_builds == []
 
 

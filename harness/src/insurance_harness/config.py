@@ -12,7 +12,8 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .model_policy import ModelIdentity, ModelPolicyDenied, ProductionModelPolicy
+from .model_policy import ModelIdentity, ModelPolicyDenied
+from .model_policy.policy import _validate_production_identity_declaration
 
 
 class HarnessSettings(BaseSettings):
@@ -209,7 +210,7 @@ class HarnessSettings(BaseSettings):
             policy_version=self.production_model_policy_version,
         )
         try:
-            ProductionModelPolicy({identity.identity_key}).evaluate(identity)
+            _validate_production_identity_declaration(identity)
         except ModelPolicyDenied:
             raise ValueError("production model identity is not approved") from None
         return self

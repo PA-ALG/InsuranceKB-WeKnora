@@ -22,7 +22,8 @@ from pydantic import (
 
 ModelFamily = Literal["minimax", "qwen", "qwen-vl"]
 ModelRole = Literal["classify", "extract", "gap", "verify", "consensus"]
-IdentityKey = tuple[str, str, ModelRole, str]
+IdentityKey = tuple[str, str, ModelFamily, ModelRole, str]
+_MODEL_FAMILIES = frozenset({"minimax", "qwen", "qwen-vl"})
 _MODEL_ROLES = frozenset({"classify", "extract", "gap", "verify", "consensus"})
 PolicyReasonCode = Literal[
     "policy_allowed",
@@ -37,6 +38,7 @@ PolicyReasonCode = Literal[
     "admission_expired",
     "template_not_approved",
     "strong_model",
+    "provider_not_approved",
     "family_not_approved",
     "invalid_identity",
     "rolling_identity",
@@ -68,22 +70,23 @@ def _normalize_identity_keys(keys: Iterable[IdentityKey]) -> frozenset[IdentityK
 
     normalized: set[IdentityKey] = set()
     for key in candidates:
-        if type(key) is not tuple or len(key) != 4:
+        if type(key) is not tuple or len(key) != 5:
             raise ValueError("invalid approved identity keys")
         if any(type(part) is not str for part in key):
             raise ValueError("invalid approved identity keys")
-        provider, deployment_id, role, policy_version = key
+        provider, deployment_id, family, role, policy_version = key
         stable_parts = (provider, deployment_id, policy_version)
         if any(
             not value or value != value.strip() or len(value) > 256
             for value in stable_parts
         ):
             raise ValueError("invalid approved identity keys")
-        if role not in _MODEL_ROLES:
+        if family not in _MODEL_FAMILIES or role not in _MODEL_ROLES:
             raise ValueError("invalid approved identity keys")
         canonical: IdentityKey = (
             provider,
             deployment_id,
+            family,
             role,
             policy_version,
         )
@@ -133,7 +136,13 @@ class ModelIdentity(_ImmutableModel):
     def identity_key(self) -> IdentityKey:
         """Return the exact, stable identity used by the injected approval set."""
 
-        return (self.provider, self.deployment_id, self.role, self.policy_version)
+        return (
+            self.provider,
+            self.deployment_id,
+            self.family,
+            self.role,
+            self.policy_version,
+        )
 
 
 class ModelPermitView(_ImmutableModel):

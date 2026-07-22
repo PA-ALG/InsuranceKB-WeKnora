@@ -287,6 +287,8 @@ class AdmissionPolicyDenied(ValueError):
         "invalid_admission_request": "strict admission request is invalid",
         "invalid_admission_binding": "admission binding is invalid",
         "invalid_production_composition": "production model composition is unavailable",
+        "production_identity_mismatch": "configured model identity is not admission-approved",
+        "model_plan_hash_mismatch": "production model plan does not match admission",
         "invalid_verified_admission": "verified admission capability is invalid",
         "unknown_admission_profile": "admission purpose/schema profile is not registered",
     }

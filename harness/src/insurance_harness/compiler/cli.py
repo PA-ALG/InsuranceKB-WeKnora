@@ -40,7 +40,10 @@ from ..db import make_engine
 from ..db.scope import load_scope
 from ..goldenset.pdf import extract_pages
 from ..model_policy import ModelIdentity, StrictAdmissionRequestBinding
-from ..model_policy.composition import _build_production_model_composition
+from ..model_policy.composition import (
+    _bind_verified_production_model_composition,
+    _build_production_model_composition,
+)
 from ..schemas import load_schema_registry
 from ..sources import (
     DirectoryDocumentSource,
@@ -238,10 +241,13 @@ def _build_production_compiler_client(
         _production_identity(settings, role=role)
         for role in ("extract", "gap", "verify", "consensus")
     )
-    composition = _build_production_model_composition(
-        approved_identity_keys={identity.identity_key for identity in identities}
+    verification_composition = _build_production_model_composition()
+    verified = verification_composition.verify(request)
+    _bind_verified_production_model_composition(
+        verified,
+        expected_identities=identities,
+        expected_model_plan_hash=request.expected_model_plan_hash,
     )
-    composition.verify(request)
     raise ProductionEntrypointDenied("canonical_adapter_unavailable")
 
 
