@@ -2687,9 +2687,11 @@ def test_ra7_seal_detects_file_mutation_immediately_before_final_create(
     run_dir = compilation.parent.parent
     original_write = release_cli._write_json_exclusive_at
 
-    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+    def race_write(
+        root_descriptor: int, relative: str, value: object
+    ) -> tuple[int, int]:
         (run_dir / "metrics.json").write_text('{"passed":false}', encoding="utf-8")
-        original_write(root_descriptor, relative, value)
+        return original_write(root_descriptor, relative, value)
 
     monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
@@ -2720,12 +2722,14 @@ def test_ra7_seal_rejects_whole_run_directory_swap_before_final_create(
     original_write = release_cli._write_json_exclusive_at
     swapped = False
 
-    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+    def race_write(
+        root_descriptor: int, relative: str, value: object
+    ) -> tuple[int, int]:
         nonlocal swapped
         run_dir.rename(verified_run)
         replacement_run.rename(run_dir)
         swapped = True
-        original_write(root_descriptor, relative, value)
+        return original_write(root_descriptor, relative, value)
 
     monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     try:
@@ -2764,12 +2768,14 @@ def test_ra7_seal_cleanup_never_unlinks_replacement_directory_file(
     original_write = release_cli._write_json_exclusive_at
     swapped = False
 
-    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+    def race_write(
+        root_descriptor: int, relative: str, value: object
+    ) -> tuple[int, int]:
         nonlocal swapped
         run_dir.rename(verified_run)
         replacement_run.rename(run_dir)
         swapped = True
-        original_write(root_descriptor, relative, value)
+        return original_write(root_descriptor, relative, value)
 
     monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     try:
@@ -2833,9 +2839,11 @@ def test_ra7_seal_detects_late_extra_file_and_leaves_no_final(
     run_dir = compilation.parent.parent
     original_write = release_cli._write_json_exclusive_at
 
-    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+    def race_write(
+        root_descriptor: int, relative: str, value: object
+    ) -> tuple[int, int]:
         (run_dir / "late-extra.json").write_text('{"late":true}', encoding="utf-8")
-        original_write(root_descriptor, relative, value)
+        return original_write(root_descriptor, relative, value)
 
     monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
@@ -2879,3 +2887,122 @@ def test_ra7_seal_cleans_partial_final_when_exclusive_write_fails(
 
     assert caught.value.code == "output_unavailable"
     assert not (run_dir / "artifact-manifest.json").exists()
+
+
+def test_ra7_seal_partial_write_cleanup_preserves_same_directory_replacement(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    output = run_dir / "artifact-manifest.json"
+    displaced = run_dir / "displaced-partial-artifact-manifest.json"
+    sentinel = b'{"unrelated":true}\n'
+
+    def replace_then_fail(_descriptor: int, _raw: bytes) -> int:
+        output.rename(displaced)
+        output.write_bytes(sentinel)
+        raise OSError("injected partial-write replacement")
+
+    monkeypatch.setattr(os, "write", replace_then_fail)
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.seal_run_artifacts(
+            context,
+            directory=run_dir,
+            compilation_manifest_path=compilation,
+            release_proof_path=release_proof,
+            serving_proof_path=serving_proof,
+        )
+
+    assert caught.value.code == "output_unavailable"
+    assert output.read_bytes() == sentinel
+    assert displaced.exists()
+
+
+def test_ra7_seal_post_create_cleanup_preserves_same_directory_replacement(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    output = run_dir / "artifact-manifest.json"
+    displaced = run_dir / "displaced-complete-artifact-manifest.json"
+    sentinel = b'{"unrelated":true}\n'
+    original_read = release_cli._stable_read_at
+
+    def replace_before_read(root_descriptor: int, relative: str) -> bytes:
+        if relative == "artifact-manifest.json":
+            output.rename(displaced)
+            output.write_bytes(sentinel)
+            raise release_cli.ReleaseCLIError(
+                "artifact_changed_during_seal", "injected final replacement"
+            )
+        return original_read(root_descriptor, relative)
+
+    monkeypatch.setattr(release_cli, "_stable_read_at", replace_before_read)
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.seal_run_artifacts(
+            context,
+            directory=run_dir,
+            compilation_manifest_path=compilation,
+            release_proof_path=release_proof,
+            serving_proof_path=serving_proof,
+        )
+
+    assert caught.value.code == "artifact_changed_during_seal"
+    assert output.read_bytes() == sentinel
+    assert displaced.exists()
+
+
+def test_ra7_seal_translates_child_removal_after_recursive_scan(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    child = next(path for path in sorted(run_dir.iterdir()) if path.is_dir())
+    displaced = run_dir / f"displaced-{child.name}"
+    original_stat = os.stat
+    target_stats = 0
+    moved = False
+
+    def remove_before_post_stat(
+        path: Any,
+        *,
+        dir_fd: int | None = None,
+        follow_symlinks: bool = True,
+    ) -> os.stat_result:
+        nonlocal target_stats, moved
+        if path == child.name and dir_fd is not None:
+            target_stats += 1
+            if target_stats == 2:
+                child.rename(displaced)
+                moved = True
+        return original_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(release_cli, "_require_seal_fd_support", lambda: None)
+    monkeypatch.setattr(os, "stat", remove_before_post_stat)
+    try:
+        with pytest.raises(release_cli.ReleaseCLIError) as caught:
+            release_cli.seal_run_artifacts(
+                context,
+                directory=run_dir,
+                compilation_manifest_path=compilation,
+                release_proof_path=release_proof,
+                serving_proof_path=serving_proof,
+            )
+    finally:
+        if moved:
+            displaced.rename(child)
+
+    assert target_stats == 2
+    assert caught.value.code == "artifact_changed_during_seal"

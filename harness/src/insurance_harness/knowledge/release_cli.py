@@ -2030,7 +2030,12 @@ def _verify_seal_root(root: Path, root_descriptor: int) -> None:
             "artifact_changed_during_seal", "run directory identity changed"
         ) from exc
     try:
-        anchored = os.fstat(root_descriptor)
+        try:
+            anchored = os.fstat(root_descriptor)
+        except OSError as exc:
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "run directory identity changed"
+            ) from exc
         if _path_identity(observed) != _path_identity(anchored):
             raise ReleaseCLIError(
                 "artifact_changed_during_seal", "run directory identity changed"
@@ -2051,10 +2056,12 @@ def _open_regular_at(
             "artifact_changed_during_seal", "artifact could not be read stably"
         )
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptors = [os.dup(root_descriptor)]
-    identities = [_path_identity(os.fstat(descriptors[0]))]
-    current = descriptors[0]
+    descriptors: list[int] = []
+    identities: list[tuple[int, int]] = []
     try:
+        current = os.dup(root_descriptor)
+        descriptors.append(current)
+        identities.append(_path_identity(os.fstat(current)))
         for part in pure.parts[:-1]:
             current = os.open(part, flags, dir_fd=current)
             descriptors.append(current)
@@ -2080,12 +2087,17 @@ def _stable_read_at(root_descriptor: int, relative: str) -> bytes:
     file_descriptor = descriptors[-1]
     try:
         chunks: list[bytes] = []
-        while True:
-            chunk = os.read(file_descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            chunks.append(chunk)
-        after = os.fstat(file_descriptor)
+        try:
+            while True:
+                chunk = os.read(file_descriptor, 1024 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            after = os.fstat(file_descriptor)
+        except OSError as exc:
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "artifact changed while being read"
+            ) from exc
         raw = b"".join(chunks)
         if _file_state(before) != _file_state(after) or len(raw) != after.st_size:
             raise ReleaseCLIError(
@@ -2119,7 +2131,12 @@ def _walk_regular_files_at(
 ) -> tuple[str, ...]:
     prefix = PurePosixPath() if prefix is None else prefix
     current = root_descriptor if directory_descriptor is None else directory_descriptor
-    before = os.fstat(current)
+    try:
+        before = os.fstat(current)
+    except OSError as exc:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "run directory changed during scan"
+        ) from exc
     try:
         with os.scandir(current) as iterator:
             names = sorted(entry.name for entry in iterator)
@@ -2147,7 +2164,14 @@ def _walk_regular_files_at(
                     "artifact_changed_during_seal", "run directory changed during scan"
                 ) from exc
             try:
-                if _path_identity(os.fstat(child)) != _path_identity(entry_state):
+                try:
+                    child_state = os.fstat(child)
+                except OSError as exc:
+                    raise ReleaseCLIError(
+                        "artifact_changed_during_seal",
+                        "run directory changed during scan",
+                    ) from exc
+                if _path_identity(child_state) != _path_identity(entry_state):
                     raise ReleaseCLIError(
                         "artifact_changed_during_seal",
                         "run directory changed during scan",
@@ -2159,7 +2183,15 @@ def _walk_regular_files_at(
                         prefix=relative,
                     )
                 )
-                current_state = os.stat(name, dir_fd=current, follow_symlinks=False)
+                try:
+                    current_state = os.stat(
+                        name, dir_fd=current, follow_symlinks=False
+                    )
+                except OSError as exc:
+                    raise ReleaseCLIError(
+                        "artifact_changed_during_seal",
+                        "run directory changed during scan",
+                    ) from exc
                 if _path_identity(current_state) != _path_identity(entry_state):
                     raise ReleaseCLIError(
                         "artifact_changed_during_seal",
@@ -2173,7 +2205,12 @@ def _walk_regular_files_at(
             raise ReleaseCLIError(
                 "unsafe_artifact_path", "run contains a non-regular artifact"
             )
-    after = os.fstat(current)
+    try:
+        after = os.fstat(current)
+    except OSError as exc:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "run directory changed during scan"
+        ) from exc
     if _file_state(before) != _file_state(after):
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "run directory changed during scan"
@@ -2233,19 +2270,35 @@ def _supplied_relative(root: Path, supplied: str | Path) -> str:
     return relative
 
 
+def _unlink_created_if_unchanged(
+    root_descriptor: int,
+    relative: str,
+    created_identity: tuple[int, int] | None,
+) -> None:
+    if created_identity is None:
+        return
+    try:
+        observed = os.stat(relative, dir_fd=root_descriptor, follow_symlinks=False)
+        if _path_identity(observed) != created_identity:
+            return
+        os.unlink(relative, dir_fd=root_descriptor)
+    except OSError:
+        return
+
+
 def _write_json_exclusive_at(
     root_descriptor: int, relative: str, value: object
-) -> None:
+) -> tuple[int, int]:
     pure = PurePosixPath(relative)
     if pure.is_absolute() or len(pure.parts) != 1 or pure.parts[0] in {"", ".", ".."}:
         raise ReleaseCLIError("output_unavailable", "output path is unavailable")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
     descriptor: int | None = None
-    created = False
+    created_identity: tuple[int, int] | None = None
     try:
         descriptor = os.open(pure.parts[0], flags, 0o600, dir_fd=root_descriptor)
-        created = True
         state = os.fstat(descriptor)
+        created_identity = _path_identity(state)
         if not stat.S_ISREG(state.st_mode):
             raise OSError("output is not a regular file")
         raw = _canonical_bytes(value) + b"\n"
@@ -2256,14 +2309,13 @@ def _write_json_exclusive_at(
                 raise OSError("output write made no progress")
             offset += written
         os.fsync(descriptor)
+        return created_identity
     except FileExistsError as exc:
         raise ReleaseCLIError("output_exists", "output path already exists") from exc
     except OSError as exc:
-        if created:
-            try:
-                os.unlink(pure.parts[0], dir_fd=root_descriptor)
-            except FileNotFoundError:
-                pass
+        _unlink_created_if_unchanged(
+            root_descriptor, pure.parts[0], created_identity
+        )
         raise ReleaseCLIError("output_unavailable", "output could not be created") from exc
     finally:
         if descriptor is not None:
@@ -2378,15 +2430,14 @@ def _seal_run_artifacts_locked(
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "artifact changed before final create"
         )
-    output_created = False
+    output_identity: tuple[int, int] | None = None
     try:
         _verify_seal_root(root, root_descriptor)
-        _write_json_exclusive_at(
+        output_identity = _write_json_exclusive_at(
             root_descriptor,
             "artifact-manifest.json",
             artifact_manifest.model_dump(mode="json"),
         )
-        output_created = True
         expected_output = _canonical_bytes(artifact_manifest.model_dump(mode="json")) + b"\n"
         if _stable_read_at(root_descriptor, "artifact-manifest.json") != expected_output:
             raise ReleaseCLIError(
@@ -2401,11 +2452,9 @@ def _seal_run_artifacts_locked(
                 "artifact_changed_during_seal", "artifact changed during final create"
             )
     except Exception:
-        if output_created:
-            try:
-                os.unlink("artifact-manifest.json", dir_fd=root_descriptor)
-            except FileNotFoundError:
-                pass
+        _unlink_created_if_unchanged(
+            root_descriptor, "artifact-manifest.json", output_identity
+        )
         raise
     _verify_seal_root(root, root_descriptor)
     return artifact_manifest
