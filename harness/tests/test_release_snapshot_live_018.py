@@ -14,13 +14,13 @@ from insurance_harness.config import HarnessSettings
 from insurance_harness.db import models as _db_models  # noqa: F401
 from insurance_harness.db.base import Base
 from insurance_harness.db.scope import KnowledgeScope
-from insurance_harness.knowledge.publisher import ReleasePublisher
 from insurance_harness.knowledge.reader import SnapshotFactsResult, SnapshotReader
-from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import Claim, ClaimRevision
 from tests.kbhelpers import seed_bound_scope, seed_product
 from tests.support.live import AsyncCleanup, run_cleanups_preserving_failure
 from tests.support.release_018 import NOW, release_claim
+from tests.support.release_plan_018 import _issue_test_staging_capability
+from tests.support.release_publisher_018 import ReleasePublisher
 
 _REQUIRED = (
     "HARNESS_LIVE_BASE_URL",

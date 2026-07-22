@@ -16,13 +16,11 @@ from insurance_harness.db.base import make_session_factory
 from insurance_harness.db.models import ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.knowledge.pages import RenderedPage
-from insurance_harness.knowledge.publisher import ReleasePublisher
 from insurance_harness.knowledge.reader import SnapshotFactsResult, SnapshotReader
 from insurance_harness.knowledge.release_guard_ddl_018 import (
     SQLITE_CREATE_GUARDS,
     SQLITE_DROP_GUARDS,
 )
-from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import (
     ChangeSet,
     Claim,
@@ -39,6 +37,8 @@ from tests.support.release_018 import (
     release_product,
     release_scope,
 )
+from tests.support.release_plan_018 import _issue_test_staging_capability
+from tests.support.release_publisher_018 import ReleasePublisher
 
 
 class _RollbackWiki:

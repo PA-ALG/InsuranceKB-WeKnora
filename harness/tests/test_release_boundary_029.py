@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ast
+import importlib
+import importlib.util
 import inspect
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -12,11 +15,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope
-from insurance_harness.knowledge.pages import render_snapshot_pages
-from insurance_harness.knowledge.publisher import (
-    LegacyStagingReleasePublisher,
-    ReleasePublisher,
-)
+from insurance_harness.knowledge.pages import RenderedPage, render_snapshot_pages
 from insurance_harness.knowledge.release_boundary import (
     P1CapabilityMissing,
     ProductionWikiPublishRequest,
@@ -24,12 +23,6 @@ from insurance_harness.knowledge.release_boundary import (
     request_production_wiki_publish,
 )
 from insurance_harness.knowledge.release_manifest import ReleaseManifest
-from insurance_harness.knowledge.release_plan import (
-    PublishPlan,
-    ReleasePlanExecutor,
-    StagingCapabilityRequired,
-    _issue_test_staging_capability,
-)
 from insurance_harness.knowledge.serving import ServingFailure
 from insurance_harness.knowledge.snapshots import build_snapshot_facts
 from insurance_harness.knowledge.tables import (
@@ -43,6 +36,17 @@ from tests.support.release_018 import (
     release_claim,
     release_product,
     release_scope,
+)
+from tests.support.release_plan_018 import (
+    PublishAction,
+    PublishPlan,
+    ReleasePlanExecutor,
+    StagingCapabilityRequired,
+    _issue_test_staging_capability,
+)
+from tests.support.release_publisher_018 import (
+    LegacyStagingReleasePublisher,
+    ReleasePublisher,
 )
 from tests.test_serving_reader_029 import _approved_release, _reader
 
@@ -247,6 +251,16 @@ def test_ra6_package_exports_production_boundary_not_legacy_publisher() -> None:
         assert legacy not in knowledge.__all__
 
 
+def test_ra6_production_package_has_no_legacy_wiki_execution_modules() -> None:
+    for module_name in (
+        "insurance_harness.knowledge.publisher",
+        "insurance_harness.knowledge.release_plan",
+    ):
+        assert importlib.util.find_spec(module_name) is None
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(module_name)
+
+
 def test_ra6_legacy_publisher_remains_direct_module_characterization_only() -> None:
     assert LegacyStagingReleasePublisher is ReleasePublisher
     assert "staging/test-only" in (ReleasePublisher.__doc__ or "")
@@ -318,6 +332,30 @@ async def test_ra6_capability_is_exact_for_every_executor_entrypoint(
         await executor.execute(scope_b, plan)
     with pytest.raises(StagingCapabilityRequired):
         await executor._execute_locked(scope_b, plan)
+    action = PublishAction(kind="delete", slug="never-touch")
+    with pytest.raises(StagingCapabilityRequired):
+        await executor._execute_action(scope_b, action, None)
+    page = RenderedPage(
+        slug="never-touch",
+        title="Never touch",
+        content="# Never touch",
+        page_metadata={
+            "managed_by": "insurance-harness",
+            "space_id": scope_b.space_id,
+            "snapshot_id": "target",
+        },
+    )
+    with pytest.raises(StagingCapabilityRequired):
+        await executor._verify_upsert(
+            scope_b,
+            page,
+            created_new=False,
+            legacy_ownership=None,
+        )
+
+    object.__setattr__(executor, "_staging_capability", object())
+    with pytest.raises(StagingCapabilityRequired):
+        await executor._execute_action(scope_a, action, None)
     assert wiki.calls == 0
 
 
@@ -368,6 +406,58 @@ async def test_ra6_publisher_wrong_scope_capability_blocks_before_db_mutation_or
     assert wiki.calls == 0
 
 
+@pytest.mark.asyncio
+async def test_ra6_publisher_private_io_entrypoints_recheck_capability_first(
+    session: Session,
+) -> None:
+    scope_a = release_scope(session, "publisher-private-a")
+    scope_b = release_scope(session, "publisher-private-b")
+    _product, version_b = release_product(session, scope_b, code="PRIVATE-B")
+    session.commit()
+    bind = session.get_bind()
+    assert isinstance(bind, Engine)
+    factory_calls = 0
+
+    def counted_factory() -> Session:
+        nonlocal factory_calls
+        factory_calls += 1
+        return Session(bind)
+
+    publisher = ReleasePublisher(
+        counted_factory,
+        object(),
+        staging_capability=_issue_test_staging_capability(scope_a),
+    )
+    factory_calls = 0
+
+    with pytest.raises(StagingCapabilityRequired):
+        await publisher._publish_product_version_locked(
+            scope_b,
+            product_version_id=version_b.id,
+            label="private-boundary",
+            published_by="reviewer",
+            registry=None,
+            field_names=None,
+            doc_titles=None,
+            notes=None,
+        )
+    assert factory_calls == 0
+
+    object.__setattr__(publisher, "_staging_capability", object())
+    with pytest.raises(StagingCapabilityRequired):
+        await publisher._publish_product_version_locked(
+            scope_a,
+            product_version_id=version_b.id,
+            label="forged-boundary",
+            published_by="reviewer",
+            registry=None,
+            field_names=None,
+            doc_titles=None,
+            notes=None,
+        )
+    assert factory_calls == 0
+
+
 def test_ra6_production_blocked_signature_and_ast_have_no_client_surface() -> None:
     parameters = inspect.signature(request_production_wiki_publish).parameters
     assert tuple(parameters) == ("request",)
@@ -377,6 +467,56 @@ def test_ra6_production_blocked_signature_and_ast_have_no_client_surface() -> No
         "executor",
         "release_publisher",
     } & set(parameters)
+
+
+def test_ra6_test_only_private_io_entrypoints_recheck_capability_first() -> None:
+    required = {
+        ReleasePlanExecutor: {
+            "_execute_action",
+            "_execute_locked",
+            "_verify_upsert",
+        },
+        ReleasePublisher: {
+            "_activate",
+            "_attempt_finished",
+            "_attempt_started",
+            "_build_operation",
+            "_build_rollback_operation",
+            "_current_id",
+            "_execute_active",
+            "_fail_reconcile",
+            "_finalize",
+            "_finalize_reconcile",
+            "_legacy_ownership",
+            "_load_operation",
+            "_mark_failed",
+            "_operation_may_have_mutated",
+            "_prepare_reconcile",
+            "_publish_product_version_locked",
+            "_reconcile_operation_locked",
+            "_recover_expired_locked",
+            "_retry_operation_locked",
+            "_rollback_to_snapshot_locked",
+        },
+    }
+    for owner, method_names in required.items():
+        for method_name in method_names:
+            tree = ast.parse(textwrap.dedent(inspect.getsource(getattr(owner, method_name))))
+            method = tree.body[0]
+            assert isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
+            first = method.body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                first = method.body[1]
+            assert isinstance(first, ast.Expr), f"{owner.__name__}.{method_name}"
+            assert isinstance(first.value, ast.Call), f"{owner.__name__}.{method_name}"
+            assert (
+                isinstance(first.value.func, ast.Name)
+                and first.value.func.id == "_require_staging_capability"
+            ), f"{owner.__name__}.{method_name}"
 
 
 def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:

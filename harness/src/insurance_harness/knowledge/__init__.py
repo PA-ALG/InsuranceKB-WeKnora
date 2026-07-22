@@ -69,11 +69,6 @@ from insurance_harness.knowledge.projection import (
     load_review_aggregates,
     project_change_item,
 )
-from insurance_harness.knowledge.publisher import (
-    current_snapshot_id,
-    default_snapshot_label,
-    snapshot_claim_set,
-)
 from insurance_harness.knowledge.reader import (
     CoverageGap,
     CoverageGapCode,
@@ -116,6 +111,11 @@ from insurance_harness.knowledge.serving import (
     ServingDocumentEvidence,
     ServingFailure,
     ServingStructuredEvidence,
+)
+from insurance_harness.knowledge.snapshot_queries import (
+    current_snapshot_id,
+    default_snapshot_label,
+    snapshot_claim_set,
 )
 from insurance_harness.knowledge.snapshots import (
     FrozenEvidence,

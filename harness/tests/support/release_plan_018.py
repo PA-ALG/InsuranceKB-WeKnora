@@ -1,4 +1,4 @@
-"""Frozen release plans and ownership-safe Wiki execution (OpenSpec 018)."""
+"""Test-only frozen release plans and ownership-safe Wiki execution (018)."""
 
 import asyncio
 import hashlib
@@ -328,6 +328,7 @@ class ReleasePlanExecutor:
         action: PublishAction,
         legacy_ownership: LegacyPageOwnership | None,
     ) -> bool | None:
+        _require_staging_capability(self._staging_capability, scope)
         try:
             remote = await self._client.get_wiki_page(
                 scope.wiki_kb_id, action.slug
@@ -374,6 +375,7 @@ class ReleasePlanExecutor:
         created_new: bool,
         legacy_ownership: LegacyPageOwnership | None,
     ) -> None:
+        _require_staging_capability(self._staging_capability, scope)
         try:
             remote = await self._client.get_wiki_page(
                 scope.wiki_kb_id, page.slug

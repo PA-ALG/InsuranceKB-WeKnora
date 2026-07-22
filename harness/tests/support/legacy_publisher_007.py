@@ -16,17 +16,6 @@ from insurance_harness.knowledge.pages import (
     product_page_slug,
     render_product_page,
 )
-from insurance_harness.knowledge.publisher import (
-    PublishResult,
-    RollbackResult,
-    _require_label_available,
-    _require_scoped_product_version,
-    _require_scoped_snapshot,
-    _upsert_page,
-    _validate_publish_metadata,
-    _validate_rollback_metadata,
-    _validate_scope,
-)
 from insurance_harness.knowledge.tables import (
     ChangeSet,
     Claim,
@@ -37,6 +26,17 @@ from insurance_harness.knowledge.tables import (
     SnapshotClaim,
 )
 from insurance_harness.schemas import SchemaRegistry
+from tests.support.release_publisher_018 import (
+    PublishResult,
+    RollbackResult,
+    _require_label_available,
+    _require_scoped_product_version,
+    _require_scoped_snapshot,
+    _upsert_page,
+    _validate_publish_metadata,
+    _validate_rollback_metadata,
+    _validate_scope,
+)
 
 
 def _snapshot_claims_for_publish(

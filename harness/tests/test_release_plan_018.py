@@ -12,7 +12,8 @@ from insurance_harness.adapters.weknora import (
 )
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge import RenderedPage
-from insurance_harness.knowledge.release_plan import (
+from tests.support.release_018 import release_scope
+from tests.support.release_plan_018 import (
     LegacyPageOwnership,
     PageOwnershipCollision,
     PublishAction,
@@ -20,7 +21,6 @@ from insurance_harness.knowledge.release_plan import (
     ReleasePlanExecutor,
     _issue_test_staging_capability,
 )
-from tests.support.release_018 import release_scope
 
 
 class _MemoryWiki:

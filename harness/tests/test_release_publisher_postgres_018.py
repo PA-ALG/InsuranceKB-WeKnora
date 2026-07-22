@@ -16,8 +16,6 @@ from insurance_harness.adapters.weknora import (
 from insurance_harness.db import models as _db_models  # noqa: F401
 from insurance_harness.db.base import Base
 from insurance_harness.db.models import InsuranceProduct
-from insurance_harness.knowledge.publisher import ReleasePublisher
-from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import (
     CurrentRelease,
     ReleaseOperation,
@@ -30,6 +28,8 @@ from tests.support.release_018 import (
     release_product,
     release_scope,
 )
+from tests.support.release_plan_018 import _issue_test_staging_capability
+from tests.support.release_publisher_018 import ReleasePublisher
 
 TEST_POSTGRES_URL = os.getenv("HARNESS_TEST_POSTGRES_URL")
 

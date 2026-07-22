@@ -10,7 +10,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 import insurance_harness.knowledge as knowledge_api
-import insurance_harness.knowledge.publisher as publisher_module
+import tests.support.release_publisher_018 as publisher_module
 from insurance_harness.adapters.weknora import (
     WeKnoraClientError,
     WeKnoraTransientError,
@@ -19,11 +19,6 @@ from insurance_harness.adapters.weknora import (
 from insurance_harness.db.base import make_session_factory
 from insurance_harness.db.models import ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
-from insurance_harness.knowledge.publisher import PublishResult, ReleasePublisher
-from insurance_harness.knowledge.release_plan import (
-    PageOwnershipCollision,
-    _issue_test_staging_capability,
-)
 from insurance_harness.knowledge.tables import (
     Claim,
     CurrentRelease,
@@ -39,6 +34,11 @@ from tests.support.release_018 import (
     release_product,
     release_scope,
 )
+from tests.support.release_plan_018 import (
+    PageOwnershipCollision,
+    _issue_test_staging_capability,
+)
+from tests.support.release_publisher_018 import PublishResult, ReleasePublisher
 
 
 def test_r3_6_package_publish_api_requires_service_owned_session() -> None:

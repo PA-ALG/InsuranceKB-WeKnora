@@ -1,4 +1,4 @@
-"""Legacy staging/test-only WeKnora publisher (changes 007/016/018).
+"""Test-only legacy WeKnora publisher (changes 007/016/018).
 
 This module preserves the 018 recovery state machine for characterization, staging,
 and tests. It is not a production release authority and must not be package-exported.
@@ -29,15 +29,6 @@ from insurance_harness.knowledge.pages import (
     render_snapshot_pages,
 )
 from insurance_harness.knowledge.reconcile import ReconcileResult
-from insurance_harness.knowledge.release_plan import (
-    LegacyPageOwnership,
-    PageOwnershipCollision,
-    PublishAction,
-    PublishPlan,
-    ReleasePlanExecutor,
-    WikiPageClient,
-    _require_staging_capability,
-)
 from insurance_harness.knowledge.snapshots import (
     SnapshotFactView,
     build_snapshot_facts,
@@ -55,6 +46,15 @@ from insurance_harness.knowledge.tables import (
     SnapshotFact,
 )
 from insurance_harness.schemas import SchemaRegistry
+from tests.support.release_plan_018 import (
+    LegacyPageOwnership,
+    PageOwnershipCollision,
+    PublishAction,
+    PublishPlan,
+    ReleasePlanExecutor,
+    WikiPageClient,
+    _require_staging_capability,
+)
 
 
 class PublishResult(BaseModel):
@@ -282,11 +282,11 @@ class ReleasePublisher:
         self._lease_duration = lease_duration
         self._now = now
 
-    @staticmethod
-    def _current_id(session: Session, space_id: str) -> str | None:
+    def _current_id(self, session: Session, scope: KnowledgeScope) -> str | None:
+        _require_staging_capability(self._staging_capability, scope)
         return session.scalar(
             select(CurrentRelease.snapshot_id).where(
-                CurrentRelease.space_id == space_id
+                CurrentRelease.space_id == scope.space_id
             )
         )
 
@@ -370,6 +370,7 @@ class ReleasePublisher:
         field_names: Mapping[str, str] | None,
         doc_titles: Mapping[str, str] | None,
     ) -> str:
+        _require_staging_capability(self._staging_capability, scope)
         _validate_publish_metadata(label, published_by)
         now = self._now()
         with self._session_factory() as session:
@@ -391,7 +392,7 @@ class ReleasePublisher:
                 snapshot_id=snapshot_id,
                 compiled_at=now,
             )
-            base_snapshot_id = self._current_id(session, scope.space_id)
+            base_snapshot_id = self._current_id(session, scope)
             base_snapshot = (
                 session.scalar(
                     select(ReleaseSnapshot).where(
@@ -454,6 +455,7 @@ class ReleasePublisher:
     def _load_operation(
         self, session: Session, scope: KnowledgeScope, operation_id: str
     ) -> tuple[ReleaseOperation, ReleaseSnapshot, PublishPlan]:
+        _require_staging_capability(self._staging_capability, scope)
         require_current_scope(session, scope)
         operation = session.scalar(
             select(ReleaseOperation).where(
@@ -480,6 +482,7 @@ class ReleasePublisher:
         return operation, snapshot, plan
 
     def _activate(self, scope: KnowledgeScope, operation_id: str) -> PublishPlan:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, snapshot, plan = self._load_operation(
@@ -493,7 +496,7 @@ class ReleasePublisher:
             )
             if operation.status != "building" or not snapshot_ready:
                 raise ScopeViolation("release operation unavailable")
-            if self._current_id(session, scope.space_id) != operation.base_snapshot_id:
+            if self._current_id(session, scope) != operation.base_snapshot_id:
                 operation.status = "failed"
                 if operation.kind == "publish":
                     snapshot.status = "failed"
@@ -510,6 +513,7 @@ class ReleasePublisher:
     def _legacy_ownership(
         self, scope: KnowledgeScope, base_snapshot_id: str | None
     ) -> LegacyPageOwnership | None:
+        _require_staging_capability(self._staging_capability, scope)
         if base_snapshot_id is None:
             return None
         with self._session_factory() as session:
@@ -535,6 +539,7 @@ class ReleasePublisher:
         action_no: int,
         action: PublishAction,
     ) -> None:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, _snapshot, _plan = self._load_operation(
@@ -570,6 +575,7 @@ class ReleasePublisher:
         created_new: bool | None,
         error: str | None,
     ) -> None:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, _snapshot, _plan = self._load_operation(
@@ -606,6 +612,7 @@ class ReleasePublisher:
         *,
         reconciliation_required: bool,
     ) -> None:
+        _require_staging_capability(self._staging_capability, scope)
         with self._session_factory() as session:
             operation, snapshot, _plan = self._load_operation(
                 session, scope, operation_id
@@ -651,6 +658,7 @@ class ReleasePublisher:
         scope: KnowledgeScope,
         operation_id: str,
     ) -> bool:
+        _require_staging_capability(self._staging_capability, scope)
         with self._session_factory() as session:
             require_current_scope(session, scope)
             attempts = session.scalars(
@@ -664,6 +672,7 @@ class ReleasePublisher:
     def _finalize(
         self, scope: KnowledgeScope, operation_id: str
     ) -> PublishResult:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, snapshot, _plan = self._load_operation(
@@ -677,7 +686,7 @@ class ReleasePublisher:
             )
             if operation.status != "running" or not snapshot_ready:
                 raise ScopeViolation("release operation unavailable")
-            if self._current_id(session, scope.space_id) != operation.base_snapshot_id:
+            if self._current_id(session, scope) != operation.base_snapshot_id:
                 raise ScopeViolation("release base changed")
             if operation.kind == "publish":
                 snapshot.status = "published"
@@ -732,6 +741,7 @@ class ReleasePublisher:
         plan: PublishPlan,
         retry_no: int,
     ) -> PublishResult:
+        _require_staging_capability(self._staging_capability, scope)
         await self._executor._execute_locked(
             scope,
             plan,
@@ -790,6 +800,7 @@ class ReleasePublisher:
         doc_titles: Mapping[str, str] | None,
         notes: str | None,
     ) -> PublishResult:
+        _require_staging_capability(self._staging_capability, scope)
         operation_id = self._build_operation(
             scope,
             product_version_id=product_version_id,
@@ -827,6 +838,7 @@ class ReleasePublisher:
     async def _retry_operation_locked(
         self, scope: KnowledgeScope, *, operation_id: str
     ) -> PublishResult:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, snapshot, plan = self._load_operation(
@@ -842,7 +854,7 @@ class ReleasePublisher:
                 operation.kind not in ("publish", "rollback")
                 or operation.status != "failed"
                 or not snapshot_retryable
-                or self._current_id(session, scope.space_id)
+                or self._current_id(session, scope)
                 != operation.base_snapshot_id
             ):
                 raise ScopeViolation("release operation unavailable")
@@ -878,11 +890,12 @@ class ReleasePublisher:
         actor: str,
         reason: str,
     ) -> str:
+        _require_staging_capability(self._staging_capability, scope)
         _validate_rollback_metadata(actor, reason)
         now = self._now()
         with self._session_factory() as session:
             require_current_scope(session, scope)
-            base_snapshot_id = self._current_id(session, scope.space_id)
+            base_snapshot_id = self._current_id(session, scope)
             if base_snapshot_id is None:
                 raise ScopeViolation("release target unavailable")
             target = session.scalar(
@@ -964,6 +977,7 @@ class ReleasePublisher:
         actor: str,
         reason: str,
     ) -> RollbackResult:
+        _require_staging_capability(self._staging_capability, scope)
         operation_id = self._build_rollback_operation(
             scope,
             snapshot_id=snapshot_id,
@@ -1008,6 +1022,7 @@ class ReleasePublisher:
         scope: KnowledgeScope,
         source_operation_id: str,
     ) -> tuple[str, PublishPlan, int, tuple[RenderedPage, ...], bool]:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             require_current_scope(session, scope)
@@ -1040,7 +1055,7 @@ class ReleasePublisher:
                 source_plan = PublishPlan.model_validate(source.publish_plan)
             except ValidationError as exc:
                 raise ScopeViolation("reconciliation unavailable") from exc
-            current_id = self._current_id(session, scope.space_id)
+            current_id = self._current_id(session, scope)
             current = (
                 session.scalar(
                     select(ReleaseSnapshot).where(
@@ -1156,6 +1171,7 @@ class ReleasePublisher:
         operation_id: str,
         error: BaseException,
     ) -> None:
+        _require_staging_capability(self._staging_capability, scope)
         with self._session_factory() as session:
             operation, _snapshot, _plan = self._load_operation(
                 session, scope, operation_id
@@ -1181,6 +1197,7 @@ class ReleasePublisher:
         scope: KnowledgeScope,
         operation_id: str,
     ) -> ReconcileResult:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         with self._session_factory() as session:
             operation, _snapshot, _plan = self._load_operation(
@@ -1190,7 +1207,7 @@ class ReleasePublisher:
                 operation.kind != "reconcile"
                 or operation.status != "running"
                 or operation.parent_operation_id is None
-                or self._current_id(session, scope.space_id)
+                or self._current_id(session, scope)
                 != operation.base_snapshot_id
             ):
                 raise ScopeViolation("reconciliation unavailable")
@@ -1245,6 +1262,7 @@ class ReleasePublisher:
         *,
         source_operation_id: str,
     ) -> ReconcileResult:
+        _require_staging_capability(self._staging_capability, scope)
         operation_id, plan, retry_no, current_pages, succeeded = (
             self._prepare_reconcile(scope, source_operation_id)
         )
@@ -1288,6 +1306,7 @@ class ReleasePublisher:
     def _recover_expired_locked(
         self, scope: KnowledgeScope
     ) -> tuple[str, ...]:
+        _require_staging_capability(self._staging_capability, scope)
         now = self._now()
         recovered: list[str] = []
         with self._session_factory() as session:
