@@ -86,7 +86,7 @@ def test_production_identity_rejects_unknown_strong_or_rolling(model_id: str) ->
 
 def test_identity_binds_provider_deployment_family_role_and_policy() -> None:
     assert approved.identity_key == (
-        "dashscope", "qwen3.6-prod-20260715", "qwen", "extract", "pwb-v1"
+        "bailian", "qwen3.6-prod-20260715", "qwen", "extract", "pwb-v1"
     )
 ```
 
@@ -203,7 +203,7 @@ Expected: FAIL for current unguarded `compiler/cli.py`/gateway judge constructio
 
 Add only global production-model-policy settings: production profile, provider, immutable deployment ID, policy version, admission artifact reference, independently required expected purpose/schema/run identity/revision, and model plan hash. Expected values are frozen request/config data, not late CLI overrides and never default from the artifact. No setting accepts READY/binding/verifier/policy/permit issuer. Do not add runtime worker/attempt/time/token or MCP token/host/port/disclaimer keys; those belong to package-local 028/013 settings. In `production`, old `judge_mode=gateway`, `llm_model_judge_fallback`, `claude-session`, unknown IDs, missing expected identity, and missing admission all fail before client construction. Replay/goldenset requires an explicit non-production profile.
 
-The config identity is a declaration, never its own approval source. Code-owned validation may reject an unsupported provider/family deployment namespace, non-immutable version shape or normalized strong/rolling identity, but the exact provider/deployment/family/role/policy allowlist must be derived from canonical `VerifiedAdmission` and match the independently declared production profile and model-plan hash before provider construction. The guarded call path re-derives the complete identity set and model-plan from the current opaque admission snapshot so another admission cannot reuse the initial binding.
+The config identity is a declaration, never its own approval source. Current-MVP code-owned validation accepts only original canonical ASCII lowercase `bailian` plus a mutually exclusive anchored qwen/qwen-vl/minimax deployment grammar with an explicit capability/size-token allowlist and strict date/vendor/sha256 immutable anchors. Unicode/case confusables, unknown alphabetic tokens, cross-family roots, arbitrary suffixes and short digests fail closed; strong-model markers are defense-in-depth, not the primary parser. The exact provider/deployment/family/role/policy allowlist must still be derived from canonical `VerifiedAdmission` and match the independently declared production profile and model-plan hash before provider construction. The guarded call path re-derives the complete identity set and model-plan from the current opaque admission snapshot so another admission cannot reuse the initial binding.
 
 - [x] **Step 4: Wire CLI and judge to the common evaluator**
 

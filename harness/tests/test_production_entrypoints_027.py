@@ -306,7 +306,7 @@ def _production_settings(**updates: object) -> dict[str, object]:
         "weknora_api_key": "weknora-secret",
         "model_profile": "production",
         "production_model_provider": "bailian",
-        "production_model_deployment_id": "qwen3-prod-20260722-sha256-a1",
+        "production_model_deployment_id": "qwen3-prod-20260722-sha256-a1b2c3d4",
         "production_model_family": "qwen",
         "production_model_policy_version": "pwb-v1",
         "judge_mode": "guarded",
@@ -394,6 +394,22 @@ def test_pwb1_production_profile_rejects_legacy_or_unfrozen_model_routes(
         ("bailian", "deep_seek-v4-20260722"),
         ("bailian", "o_3-20260722"),
         ("bailian", "qwen-vl3-prod-20260722"),
+        ("bailian", "qwen-gpt-04-prod-20260722"),
+        ("bailian", "qwen-g-p-t-04-prod-20260722"),
+        ("bailian", "qwen-g.p.t.0.4-prod-20260722"),
+        ("bailian", "qwen-o-03-prod-20260722"),
+        ("bailian", "qwen-minimax-m2-5-prod-20260722"),
+        ("bailian", "qwen3-minimax-m2.5-prod-20260722"),
+        ("bailian", "qwen3-attacker-prod-20260722"),
+        ("bailian", "qwen3-prod-20260722-sha256-a1"),
+        ("bailian", "QWEN3-PROD-20260722"),
+        ("bailian", "ｑｗｅｎ３-prod-20260722"),
+        ("bailian", "q\u0332wen3-prod-20260722"),
+        ("Bailian", "qwen3-prod-20260722"),
+        (" bailian", "qwen3-prod-20260722"),
+        ("ｂａｉｌｉａｎ", "qwen3-prod-20260722"),
+        ("b\u0332ailian", "qwen3-prod-20260722"),
+        ("bailian", "qwen3-prod-20260722 "),
     ],
 )
 def test_pwb1_production_profile_rejects_caller_declared_provider_catalog_spoof(
@@ -443,7 +459,7 @@ def _reserved_call_authority(
 ) -> tuple[VerifiedAdmission, ModelIdentity, StrictAdmissionRequestBinding]:
     identity = ModelIdentity(
         provider="bailian",
-        deployment_id="qwen3-prod-20260722-sha256-a1",
+        deployment_id="qwen3-prod-20260722-sha256-a1b2c3d4",
         family="qwen",
         role="extract",
         policy_version="pwb-v1",
@@ -556,7 +572,7 @@ def _guarded_role_test_client(
 
     extract_identity = ModelIdentity(
         provider="bailian",
-        deployment_id="qwen3-prod-20260722-sha256-a1",
+        deployment_id="qwen3-prod-20260722-sha256-a1b2c3d4",
         family="qwen",
         role="extract",
         policy_version="pwb-v1",
@@ -1351,7 +1367,7 @@ def test_pwb2_cli_production_builder_fails_closed_without_028_adapter_after_veri
 @pytest.mark.parametrize(
     "updates",
     [
-        {"production_model_deployment_id": "qwen3-attacker-prod-20260722"},
+        {"production_model_deployment_id": "qwen3-coder-prod-20260722"},
         {
             "production_model_deployment_id": "qwen-vl3-prod-20260722",
             "production_model_family": "qwen-vl",
@@ -1367,7 +1383,7 @@ def test_pwb1_production_builder_rejects_config_identity_not_exactly_admission_a
     request = compiler_cli._strict_production_request(settings)
     approved_extract = ModelIdentity(
         provider="bailian",
-        deployment_id="qwen3-prod-20260722-sha256-a1",
+        deployment_id="qwen3-prod-20260722-sha256-a1b2c3d4",
         family="qwen",
         role="extract",
         policy_version="pwb-v1",

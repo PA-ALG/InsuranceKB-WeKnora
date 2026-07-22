@@ -4,7 +4,9 @@
 
 ### Requirement: PWB1 不可变弱模型身份
 
-生产模型身份 SHALL 由 `provider + deployment/model immutable id + family + capability role + policy version` 构成；只允许批准列表中的 MiniMax/Qwen/Qwen-VL 能力档。`family` SHALL 是完整 identity key 的一部分，不得作为可替换标签。production config 只声明独立期望身份，不得用该声明构造批准列表或自批准；具体 deployment 的批准权 SHALL 来自 canonical `VerifiedAdmission` 中的 exact full identities，且与 code-owned production profile、完整角色集合和 model-plan hash 精确一致。每次受保护调用 SHALL 从当前 opaque admission authority 重新核对完整 identity 集合和 model-plan，不得复用另一份 admission 的初次绑定结果。空白、未知、不受控 provider、不符合 code-owned provider/family deployment namespace 或不可变版本形状、`latest`/rolling alias、Claude/DeepSeek/OpenAI 强模型、family/provider/deployment 伪装或批准记录不匹配 SHALL 在任何 provider/transport 构造前拒绝；分隔符变化不得绕过强模型识别。
+生产模型身份 SHALL 由 `provider + deployment/model immutable id + family + capability role + policy version` 构成；只允许批准列表中的 MiniMax/Qwen/Qwen-VL 能力档。`family` SHALL 是完整 identity key 的一部分，不得作为可替换标签。production config 只声明独立期望身份，不得用该声明构造批准列表或自批准；具体 deployment 的批准权 SHALL 来自 canonical `VerifiedAdmission` 中的 exact full identities，且与 code-owned production profile、完整角色集合和 model-plan hash 精确一致。每次受保护调用 SHALL 从当前 opaque admission authority 重新核对完整 identity 集合和 model-plan，不得复用另一份 admission 的初次绑定结果。
+
+当前 MVP deny-only 预检 SHALL 只接受原文即 canonical ASCII lowercase 的 `bailian` provider 和 deployment：原文必须为 ASCII、NFKC 后不变且 casefold 后仍与原文相同，Unicode confusable、combining mark 或大小写混写不得经归一化后放行。deployment SHALL 由互斥锚定根 `qwen<major>[.<minor>]`、`qwen-vl<major>[.<minor>]` 或 `minimax-m<major>[.<minor>]` 开始；根后只允许 code-owned capability token `{prod,instruct,thinking,coder,chat,plus,max,turbo,long,preview}`、size/arch token `\d+([.]\d+)?b`/`a\d+b`，并以 YYYYMMDD、严格 ISO `YYYY-MM-DD`、YYMM 或 `sha256-<8..64 lowercase hex>` 锚定，日期后可再带合法 sha256。未知字母 token、跨 family 根、任意尾串、短 digest、`latest`/rolling alias、Claude/DeepSeek/OpenAI/GPT/O-series 强模型、family/provider/deployment 伪装或批准记录不匹配 SHALL 在任何 provider/transport 构造前拒绝；强模型 marker 仅作纵深防御，不得代替 grammar。
 
 #### Scenario: 未批准模型零网络调用
 
@@ -15,6 +17,11 @@
 
 - **WHEN** caller 在 production config 中把 GPT/O-series/custom deployment 标注为 Qwen，或让 provider/deployment/family/role/policy 任一字段与 canonical admission 的批准身份不一致
 - **THEN** code-owned provider catalog 或 exact `VerifiedAdmission` 比较在 provider 构造前类型化拒绝，模型调用数为 0；config 声明本身不产生 allowlist
+
+#### Scenario: 受控 deployment grammar 不接受标签伪装
+
+- **WHEN** caller 使用 `qwen-gpt-04-*`、分隔符变体、`qwen-minimax-*`、跨 family 根、大小写/Unicode confusable、未知 token 或不足 8 位的 sha256 anchor
+- **THEN** deny-only grammar 在 config/bind/use-time client 构造或 transport 之前返回类型化拒绝，provider、ALLOW receipt 与 transport 均为 0；只有 grammar 合法且与 opaque `VerifiedAdmission` exact identity 相等的 deployment 才可继续
 
 #### Scenario: 调用时完整身份集合不可替换
 

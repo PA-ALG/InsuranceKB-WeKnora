@@ -14,4 +14,4 @@
 ## 裁决记录
 
 - PWB1 corrective：`family` 纳入 `IdentityKey`；production config 仅作独立期望声明与 code-owned provider 能力域预检，不得再以自身 identity 构造 allowlist。具体 deployment/role/policy 批准只取 canonical `VerifiedAdmission` 的完整 identity 集合，并与 production profile、独立 model-plan hash 精确绑定。依据：PR #27 安全复核可稳定复现 family 标签伪装与 config 自批准。
-- PWB1 final corrective：code-owned provider/family catalog 以规范化 namespace 与不可变版本形状作 deny-only 预检，分隔符伪装的 GPT/DeepSeek/O-series 同样拒绝；每次 guarded call 从当前 opaque admission snapshot 重算完整角色 identity set，extra/missing role 不得复用先前 composition authority。
+- PWB1 final corrective：code-owned deny-only catalog 不再通过 prefix/marker 推断 family；当前 MVP 只接受原文 canonical ASCII lowercase `bailian`，并以互斥锚定根、受控 capability/size token 与严格 immutable anchor 解析 deployment。`qwen-gpt-04`/分隔变体/`qwen-minimax`/跨 family 根/Unicode 或大小写变体/短 digest 一律拒绝；强模型 marker 仅作纵深防御。exact deployment 批准仍只来自 opaque `VerifiedAdmission`，每次 guarded call 从当前 authority snapshot 重算完整角色 identity set。

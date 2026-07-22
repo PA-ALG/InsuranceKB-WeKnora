@@ -50,6 +50,10 @@ NonBlankStr = Annotated[
     StrictStr,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=256),
 ]
+IdentitySourceStr = Annotated[
+    StrictStr,
+    StringConstraints(min_length=1, max_length=256, pattern=r".*\S.*"),
+]
 Sha256Hex = Annotated[
     StrictStr,
     StringConstraints(pattern=r"^[0-9a-f]{64}$"),
@@ -126,8 +130,10 @@ class _ImmutableModel(BaseModel):
 
 
 class ModelIdentity(_ImmutableModel):
-    provider: NonBlankStr
-    deployment_id: NonBlankStr
+    # Preserve source text so the policy can reject, rather than silently normalize,
+    # non-canonical provider/deployment declarations.
+    provider: IdentitySourceStr
+    deployment_id: IdentitySourceStr
     family: ModelFamily
     role: ModelRole
     policy_version: NonBlankStr

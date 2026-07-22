@@ -169,19 +169,74 @@ def test_pwb1_rolling_identity_is_denied_even_when_exact_key_is_allowlisted(
 
 
 @pytest.mark.parametrize(
-    "deployment_id",
+    ("deployment_id", "family"),
     [
-        "qwen3-prod-2026-07-15",
-        "qwen3-235b-a22b-instruct-2507",
-        "qwen3-prod-sha256-a1b2c3d4",
+        ("qwen3.6-prod-20260715", "qwen"),
+        ("qwen3-prod-2026-07-15", "qwen"),
+        ("qwen3-235b-a22b-instruct-2507", "qwen"),
+        ("qwen3-prod-sha256-a1b2c3d4", "qwen"),
+        ("qwen-vl3-prod-20260715", "qwen-vl"),
+        ("minimax-m2.5-prod-20260715", "minimax"),
     ],
 )
 def test_pwb1_code_owned_catalog_accepts_supported_immutable_id_shapes(
     deployment_id: str,
+    family: str,
+) -> None:
+    identity = _identity(deployment_id, family=family)
+
+    assert _policy_for(identity).evaluate(identity) == identity
+
+
+@pytest.mark.parametrize(
+    ("provider", "deployment_id"),
+    [
+        ("Bailian", "qwen3-prod-20260722"),
+        (" bailian", "qwen3-prod-20260722"),
+        ("ｂａｉｌｉａｎ", "qwen3-prod-20260722"),
+        ("b\u0332ailian", "qwen3-prod-20260722"),
+        ("bailian", "QWEN3-PROD-20260722"),
+        ("bailian", "qwen3-prod-20260722 "),
+        ("bailian", "ｑｗｅｎ３-prod-20260722"),
+        ("bailian", "q\u0332wen3-prod-20260722"),
+        ("bailian", "qwen3_prod_20260722"),
+    ],
+)
+def test_pwb1_provider_and_deployment_must_be_original_canonical_ascii_lowercase(
+    provider: str,
+    deployment_id: str,
+) -> None:
+    identity = _identity(deployment_id).model_copy(update={"provider": provider})
+    policy = _policy_for(_identity())
+
+    with pytest.raises(ModelPolicyDenied) as denied:
+        policy.evaluate(identity)
+
+    assert denied.value.reason_code == "invalid_identity"
+
+
+@pytest.mark.parametrize(
+    "deployment_id",
+    [
+        "qwen-gpt-04-prod-20260722",
+        "qwen-g-p-t-04-prod-20260722",
+        "qwen-g.p.t.0.4-prod-20260722",
+        "qwen-o-03-prod-20260722",
+        "qwen-minimax-m2-5-prod-20260722",
+        "qwen3-minimax-m2.5-prod-20260722",
+        "qwen3-attacker-prod-20260722",
+        "qwen3-prod-20260722-sha256-a1",
+    ],
+)
+def test_pwb1_anchored_catalog_rejects_unknown_or_cross_family_grammar(
+    deployment_id: str,
 ) -> None:
     identity = _identity(deployment_id)
 
-    assert _policy_for(identity).evaluate(identity) == identity
+    with pytest.raises(ModelPolicyDenied) as denied:
+        _policy_for(identity).evaluate(identity)
+
+    assert denied.value.reason_code in {"invalid_identity", "strong_model"}
 
 
 @pytest.mark.parametrize(
@@ -195,6 +250,10 @@ def test_pwb1_code_owned_catalog_accepts_supported_immutable_id_shapes(
         "gpt 4o-20260722",
         "deep_seek-v4-20260722",
         "o_3-20260722",
+        "qwen-gpt-04-prod-20260722",
+        "qwen-g-p-t-04-prod-20260722",
+        "qwen-g.p.t.0.4-prod-20260722",
+        "qwen-o-03-prod-20260722",
     ],
 )
 def test_pwb1_strong_identity_is_denied_even_when_exact_key_is_allowlisted(
@@ -257,6 +316,8 @@ def test_pwb1_identity_key_binds_approved_family_without_label_collision() -> No
     [
         ("qwen3.6-prod-20260715", "qwen-vl"),
         ("qwen-vl3-prod-20260715", "qwen"),
+        ("minimax-m2.5-prod-20260715", "qwen"),
+        ("qwen3-minimax-m2.5-prod-20260715", "qwen"),
     ],
 )
 def test_pwb1_deployment_namespace_and_family_are_mutually_consistent(
@@ -1152,6 +1213,14 @@ def test_pwb1_bound_composition_rechecks_complete_admission_identity_set_per_cal
         "gpt 4o-20260722",
         "deep_seek-v4-20260722",
         "o_3-20260722",
+        "qwen-gpt-04-prod-20260722",
+        "qwen-g-p-t-04-prod-20260722",
+        "qwen-g.p.t.0.4-prod-20260722",
+        "qwen-o-03-prod-20260722",
+        "qwen-minimax-m2-5-prod-20260722",
+        "QWEN3-PROD-20260722",
+        "ｑｗｅｎ３-prod-20260722",
+        "q\u0332wen3-prod-20260722",
     ],
 )
 def test_pwb1_disguised_strong_identity_cannot_build_guarded_transport(
@@ -1872,6 +1941,12 @@ def test_pwb4_gateway_scope_mismatch_persists_one_deny_and_zero_transport(
         _identity("qwen3.6-unlisted-20260715"),
         _identity("qwen-latest"),
         _identity("claude-opus"),
+        _identity("qwen-gpt-04-prod-20260722"),
+        _identity("qwen-g-p-t-04-prod-20260722"),
+        _identity("qwen-minimax-m2-5-prod-20260722"),
+        _identity("QWEN3-PROD-20260722"),
+        _identity("ｑｗｅｎ３-prod-20260722"),
+        _identity("q\u0332wen3-prod-20260722"),
     ],
 )
 def test_pwb4_gateway_invalid_identity_never_calls_or_falls_back(

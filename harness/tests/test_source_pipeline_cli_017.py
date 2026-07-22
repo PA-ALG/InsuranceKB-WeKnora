@@ -28,7 +28,7 @@ def _production_settings(**updates: object) -> HarnessSettings:
         "weknora_api_key": "secret",
         "model_profile": "production",
         "production_model_provider": "bailian",
-        "production_model_deployment_id": "qwen3-prod-20260722-sha256-a1",
+        "production_model_deployment_id": "qwen3-prod-20260722-sha256-a1b2c3d4",
         "production_model_family": "qwen",
         "production_model_policy_version": "pwb-v1",
         "judge_mode": "guarded",

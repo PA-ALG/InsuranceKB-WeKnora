@@ -7,9 +7,10 @@ import json
 import os
 import re
 import secrets
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from threading import RLock
 from typing import SupportsIndex, cast
 from weakref import WeakKeyDictionary
@@ -37,44 +38,44 @@ from .models import (
     _normalize_identity_keys,
 )
 
-_APPROVED_FAMILIES = frozenset({"minimax", "qwen", "qwen-vl"})
 _TRUSTED_PROVIDER_FAMILY_KEYS = frozenset(
-    ("bailian", family) for family in _APPROVED_FAMILIES
-)
-_TRUSTED_DEPLOYMENT_NAMESPACES = (
-    ("bailian", "qwenvl", "qwen-vl"),
-    ("bailian", "minimax", "minimax"),
-    ("bailian", "qwen", "qwen"),
-)
-_STRONG_MODEL_MARKERS = frozenset(
     {
-        "claude",
-        "deepseek",
-        "gemini",
-        "gpt4",
-        "gpt-4",
-        "gpt5",
-        "gpt-5",
-        "opus",
-        "sonnet",
+        ("bailian", "minimax"),
+        ("bailian", "qwen"),
+        ("bailian", "qwen-vl"),
     }
 )
-_STRONG_MODEL_TOKENS = frozenset({"o1", "o3", "o4"})
-_NORMALIZED_STRONG_MODEL_MARKERS = frozenset(
-    {"claude", "deepseek", "gemini", "gpt4", "gpt5", "o1", "o3", "o4"}
+_DEPLOYMENT_ROOT_GRAMMARS = (
+    ("bailian", "qwen-vl", re.compile(r"^qwen-vl[0-9]+(?:\.[0-9]+)?-(.+)$")),
+    ("bailian", "minimax", re.compile(r"^minimax-m[0-9]+(?:\.[0-9]+)?-(.+)$")),
+    ("bailian", "qwen", re.compile(r"^qwen[0-9]+(?:\.[0-9]+)?-(.+)$")),
+)
+_DEPLOYMENT_CAPABILITY_TOKENS = frozenset(
+    {
+        "chat",
+        "coder",
+        "instruct",
+        "long",
+        "max",
+        "plus",
+        "preview",
+        "prod",
+        "thinking",
+        "turbo",
+    }
 )
 _ROLLING_MARKERS = frozenset(
     {"latest", "rolling", "current", "default", "auto", "stable", "blue", "green", "canary"}
 )
 _UNVERSIONED_ALIASES = frozenset({"minimax", "qwen", "qwen3", "qwen-vl"})
-_IMMUTABLE_VERSION_MARKERS = (
-    re.compile(r"(?:^|[._-])20[0-9]{6}(?:$|[._-])"),
-    re.compile(
-        r"(?:^|[._-])20[0-9]{2}[._-](?:0[1-9]|1[0-2])"
-        r"[._-](?:0[1-9]|[12][0-9]|3[01])(?:$|[._-])"
-    ),
-    re.compile(r"(?:^|[._-])2[0-9](?:0[1-9]|1[0-2])(?:$|[._-])"),
-    re.compile(r"(?:^|[._-])sha256[._-][0-9a-f]{8,64}(?:$|[._-])"),
+_CANONICAL_DEPLOYMENT_ID = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
+_MODEL_SIZE_TOKEN = re.compile(r"^(?:[0-9]+(?:\.[0-9]+)?b|a[0-9]+b)$")
+_SHA256_SUFFIX = re.compile(r"^(?:(.*)-)?sha256-([0-9a-f]{8,64})$")
+_COMPACT_DATE_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{8})$")
+_ISO_DATE_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{4}-[0-9]{2}-[0-9]{2})$")
+_VENDOR_VERSION_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{2}(?:0[1-9]|1[0-2]))$")
+_STRONG_MODEL_WORDS = frozenset(
+    {"claude", "deepseek", "gemini", "opus", "sonnet"}
 )
 _POLICY_DIGEST_DOMAIN = b"insurancekb.model-policy.approved-identities.v2\0"
 _CONTEXT_DIGEST_DOMAIN = b"insurancekb.model-policy.call-context.v1\0"
@@ -263,38 +264,111 @@ def _validate_production_identity_declaration(
         )
     except (AttributeError, TypeError, ValueError):
         raise ModelPolicyDenied("invalid_identity") from None
-    if not any(
-        provider == validated.provider
-        for provider, _family in _TRUSTED_PROVIDER_FAMILY_KEYS
-    ):
+    provider = validated.provider
+    deployment = validated.deployment_id
+    if not _is_original_canonical_ascii_lowercase(
+        provider
+    ) or not _is_original_canonical_ascii_lowercase(deployment):
+        raise ModelPolicyDenied("invalid_identity")
+    if _CANONICAL_DEPLOYMENT_ID.fullmatch(deployment) is None:
+        if _contains_strong_model_signature(deployment):
+            raise ModelPolicyDenied("strong_model")
+        raise ModelPolicyDenied("invalid_identity")
+    if provider != "bailian":
         raise ModelPolicyDenied("provider_not_approved")
-    if (validated.provider, validated.family) not in _TRUSTED_PROVIDER_FAMILY_KEYS:
+    if (provider, validated.family) not in _TRUSTED_PROVIDER_FAMILY_KEYS:
         raise ModelPolicyDenied("family_not_approved")
-    deployment = validated.deployment_id.casefold()
-    normalized_deployment = re.sub(r"[^a-z0-9]+", "", deployment)
-    if any(marker in deployment for marker in _STRONG_MODEL_MARKERS) or any(
-        marker in normalized_deployment for marker in _NORMALIZED_STRONG_MODEL_MARKERS
-    ):
-        raise ModelPolicyDenied("strong_model")
     tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
-    if tokens.intersection(_STRONG_MODEL_TOKENS):
-        raise ModelPolicyDenied("strong_model")
     if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
         raise ModelPolicyDenied("rolling_identity")
-    resolved_family = next(
+    if not _matches_code_owned_deployment_grammar(
+        provider,
+        validated.family,
+        deployment,
+    ):
+        if _contains_strong_model_signature(deployment):
+            raise ModelPolicyDenied("strong_model")
+        raise ModelPolicyDenied("invalid_identity")
+    return validated
+
+
+def _is_original_canonical_ascii_lowercase(value: str) -> bool:
+    return (
+        value.isascii()
+        and value == value.strip()
+        and unicodedata.normalize("NFKC", value) == value
+        and value.casefold() == value
+    )
+
+
+def _matches_code_owned_deployment_grammar(
+    provider: str,
+    family: str,
+    deployment: str,
+) -> bool:
+    root_match = next(
         (
-            family
-            for provider, prefix, family in _TRUSTED_DEPLOYMENT_NAMESPACES
-            if provider == validated.provider
-            and normalized_deployment.startswith(prefix)
+            pattern.fullmatch(deployment)
+            for candidate_provider, candidate_family, pattern in _DEPLOYMENT_ROOT_GRAMMARS
+            if (candidate_provider, candidate_family) == (provider, family)
         ),
         None,
     )
-    if resolved_family != validated.family:
-        raise ModelPolicyDenied("invalid_identity")
-    if not any(pattern.search(deployment) for pattern in _IMMUTABLE_VERSION_MARKERS):
-        raise ModelPolicyDenied("rolling_identity")
-    return validated
+    if root_match is None:
+        return False
+    tail = root_match.group(1)
+    descriptors = _strip_immutable_deployment_anchor(tail)
+    if descriptors is None:
+        return False
+    if not descriptors:
+        return True
+    descriptor_tokens = descriptors.split("-")
+    return len(descriptor_tokens) == len(set(descriptor_tokens)) and all(
+        token in _DEPLOYMENT_CAPABILITY_TOKENS
+        or _MODEL_SIZE_TOKEN.fullmatch(token) is not None
+        for token in descriptor_tokens
+    )
+
+
+def _strip_immutable_deployment_anchor(tail: str) -> str | None:
+    sha_match = _SHA256_SUFFIX.fullmatch(tail)
+    if sha_match is not None:
+        prefix = sha_match.group(1) or ""
+        dated_prefix = _strip_date_or_vendor_anchor(prefix)
+        return prefix if dated_prefix is None else dated_prefix
+    return _strip_date_or_vendor_anchor(tail)
+
+
+def _strip_date_or_vendor_anchor(value: str) -> str | None:
+    compact_match = _COMPACT_DATE_SUFFIX.fullmatch(value)
+    if compact_match is not None and _is_valid_iso_date(
+        f"{compact_match.group(2)[:4]}-"
+        f"{compact_match.group(2)[4:6]}-"
+        f"{compact_match.group(2)[6:]}"
+    ):
+        return compact_match.group(1) or ""
+    iso_match = _ISO_DATE_SUFFIX.fullmatch(value)
+    if iso_match is not None and _is_valid_iso_date(iso_match.group(2)):
+        return iso_match.group(1) or ""
+    vendor_match = _VENDOR_VERSION_SUFFIX.fullmatch(value)
+    if vendor_match is not None:
+        return vendor_match.group(1) or ""
+    return None
+
+
+def _is_valid_iso_date(value: str) -> bool:
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _contains_strong_model_signature(deployment: str) -> bool:
+    compact = re.sub(r"[^a-z0-9]+", "", deployment)
+    return any(word in compact for word in _STRONG_MODEL_WORDS) or bool(
+        re.search(r"(?:gpt|o)0*[1-9][0-9]*", compact)
+    )
 
 
 def _evaluate_call_with_snapshot(

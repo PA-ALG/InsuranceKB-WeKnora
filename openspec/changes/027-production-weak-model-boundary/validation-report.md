@@ -202,11 +202,36 @@ the deny-only immutable-shape check from being coupled to one YYYYMMDD conventio
 now recognizes explicit YYYYMMDD, ISO-date, fixed YYMM vendor-version and sha256-attestation
 shapes, while exact deployment approval still requires admission equality.
 
-Final local corrective evidence: the two 027 suites are `276 passed`; the config/compiler/source
-compatibility slice plus 027 is `310 passed`; all-repo Ruff passes; strict mypy passes across
-`305 source files`; OpenSpec strict and `git diff --check` pass. Independent specification and
-quality re-reviews are both **Approved** with zero Critical/Important/Minor findings. New-SHA CI
-and total-control re-review remain pending. Real provider remains **NOT RUN**.
+That prefix-oriented corrective was still insufficient. Final security review on `3824cfd9`
+reproduced ALLOW for `qwen-gpt-04-prod-20260722`, `qwen-g-p-t-04-prod-20260722` and
+`qwen-minimax-m2-5-prod-20260722`: a caller could place an untrusted alphabetic token after the
+accepted family prefix, while the finite strong-marker check did not recognize every separator
+form. Unicode/case variants were also normalization hazards. The corrective RED was therefore
+not a marker-list extension: 36 focused failures froze config, policy bind/use-time and guarded
+zero-transport behavior, together with the valid qwen/qwen-vl/minimax forms. Four subsequent RED
+cases proved that the shared identity string constraint had silently trimmed leading/trailing
+whitespace before policy evaluation.
+
+GREEN replaces prefix inference with a deny-only parser. Provider and deployment source text is
+now preserved rather than stripped and must already be canonical ASCII lowercase; current MVP
+provider is exactly `bailian`. Mutually exclusive anchored roots identify qwen, qwen-vl and
+minimax. Only the frozen capability-token
+allowlist, numeric size/architecture tokens and strict immutable date/vendor/sha256 anchors are
+accepted after the root; sha256 digests require 8--64 lowercase hex characters. Unknown tokens,
+cross-family roots, arbitrary suffixes and Unicode/case confusables are invalid. Strong markers
+remain defense-in-depth. This parser grants no identity: exact provider/deployment/family/role/
+policy approval still comes only from the opaque admission snapshot and is rechecked at bind and
+use time.
+
+Fresh local evidence before final independent review: both 027 suites are `332 passed`; the
+config/compiler/source compatibility slice plus 027 is `366 passed`; all-repo Ruff passes and
+strict mypy passes across `305 source files`; OpenSpec strict, `git diff --check` and the secret
+scan pass. Independent specification and quality/security re-reviews are both **Approved** with
+zero Critical, Important or Minor findings. The total-control scope/compatibility review also
+approved with zero Critical/Important and one documentation Minor: the implementation-plan
+example still named a legacy provider alias; it now uses the sole trusted MVP provider
+`bailian`, and the 027 plan/spec/test scope contains no remaining legacy alias. New-SHA CI and
+total-control exact-SHA security review remain pending. Real provider remains **NOT RUN**.
 
 ## Task 6 PR-ready evidence
 
