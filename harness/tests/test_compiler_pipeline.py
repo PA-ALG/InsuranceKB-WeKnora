@@ -223,7 +223,12 @@ def _pipeline(
         registry=REGISTRY,
         model_id="scripted-test",
         source=source,
-        config=PipelineConfig(concurrency=2, transport_attempts=2, backoff_base_s=0.0),
+        config=PipelineConfig(
+            concurrency=2,
+            transport_attempts=2,
+            backoff_base_s=0.0,
+            model_profile="offline-eval",
+        ),
         sleep=_fast_sleep,
         scope=scope,
     )
@@ -803,7 +808,10 @@ async def test_e1_2_transport_failure_becomes_dead_letter_not_abort(tmp_path: Pa
 # --- 裁决回写 CLI ---
 
 
-async def test_apply_judgements_cli_updates_pred(tmp_path: Path) -> None:
+async def test_apply_judgements_cli_updates_pred(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     result = await _run_ok(tmp_path, ScriptedClient())
     run_dir = result.pred_path.parent
     judgements = tmp_path / "judgements.jsonl"
@@ -820,6 +828,7 @@ async def test_apply_judgements_cli_updates_pred(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+    monkeypatch.setenv("HARNESS_MODEL_PROFILE", "manual")
     rc = compiler_cli.main(["apply-judgements", str(run_dir), str(judgements)])
     assert rc == 0
     updated = {r.field_id: r for r in read_jsonl(result.pred_path)}

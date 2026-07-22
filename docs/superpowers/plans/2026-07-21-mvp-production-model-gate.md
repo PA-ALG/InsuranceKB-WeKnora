@@ -186,11 +186,11 @@ Expected: PASS; fake transport counts exactly one call for allowed identity and 
 
 ### Task 5: Wire every production entrypoint
 
-- [ ] **Step 1: Write PWB2 inventory RED**
+- [x] **Step 1: Write PWB2 inventory RED**
 
 `test_production_entrypoints_027.py` must parse the checked-in inventory and assert each listed production model entrypoint imports/calls the common guard; zero-model entries must have a proof test and classification.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -199,15 +199,15 @@ uv run pytest -q tests/test_production_entrypoints_027.py
 
 Expected: FAIL for current unguarded `compiler/cli.py`/gateway judge construction.
 
-- [ ] **Step 3: Add production settings without retaining an implicit fallback**
+- [x] **Step 3: Add production settings without retaining an implicit fallback**
 
 Add only global production-model-policy settings: production profile, provider, immutable deployment ID, policy version, admission artifact reference, independently required expected purpose/schema/run identity/revision, and model plan hash. Expected values are frozen request/config data, not late CLI overrides and never default from the artifact. No setting accepts READY/binding/verifier/policy/permit issuer. Do not add runtime worker/attempt/time/token or MCP token/host/port/disclaimer keys; those belong to package-local 028/013 settings. In `production`, old `judge_mode=gateway`, `llm_model_judge_fallback`, `claude-session`, unknown IDs, missing expected identity, and missing admission all fail before client construction. Replay/goldenset requires an explicit non-production profile.
 
-- [ ] **Step 4: Wire CLI and judge to the common evaluator**
+- [x] **Step 4: Wire CLI and judge to the common evaluator**
 
-Do not spread allowlist checks into CLI branches. Production composition builds the strict request, selects the canonical verifier from expected purpose/schema, obtains `VerifiedAdmission`, and constructs guarded clients with the canonical policy/transport. `extract` passes only the capability and `ModelCallContext`; it cannot inject or deserialize permit/policy/guard objects.
+Do not spread allowlist checks into CLI branches. Production composition builds the strict request and selects the canonical verifier from expected purpose/schema. On this 027 branch the 030 verifier module is absent; a deterministic verifier fake additionally proves that successful verification still fails as `canonical_adapter_unavailable` while the reviewed 028 provider adapter is absent. Thus Task 5 wires the boundary fail-closed but does not claim a usable production transport. No caller can inject or deserialize permit/policy/guard objects.
 
-- [ ] **Step 5: Run GREEN and regression slice**
+- [x] **Step 5: Run GREEN and regression slice**
 
 ```bash
 cd harness
@@ -218,7 +218,7 @@ Expected: PASS; no live/integration marker selected.
 
 ### Task 6: Validate and hand off PR 027
 
-- [ ] **Step 1: Run static checks only on touched code**
+- [x] **Step 1: Run static checks only on touched code**
 
 ```bash
 cd harness
@@ -228,7 +228,7 @@ uv run mypy src/insurance_harness/model_policy src/insurance_harness/config.py s
 
 Expected: both exit 0.
 
-- [ ] **Step 2: Fill `validation-report.md`**
+- [x] **Step 2: Fill `validation-report.md`**
 
 Record exact commands/counts, entrypoint coverage, permit/receipt examples with secrets redacted, confirm global config contains no runtime/MCP keys, and `real provider = NOT RUN`. Do not claim extraction quality improvement.
 

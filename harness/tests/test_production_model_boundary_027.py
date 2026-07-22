@@ -9,7 +9,7 @@ import json
 import pickle
 import threading
 import weakref
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
 from inspect import iscoroutinefunction, signature
@@ -3422,6 +3422,39 @@ def test_pwb4_gateway_sync_sink_returning_awaitable_is_receipt_failure() -> None
     assert denied.value.reason_code == "receipt_sink_failure"
     assert _gateway_executor_terminal_observations(client) == []
     assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_sync_sink_returning_generator_closes_frame() -> None:
+    class _GeneratorSink:
+        def __init__(self) -> None:
+            self.results: list[Generator[None, None, None]] = []
+
+        def record(self, receipt: PolicyReceipt, /) -> object:
+            del receipt
+
+            def deferred() -> Generator[None, None, None]:
+                yield
+
+            result = deferred()
+            self.results.append(result)
+            return result
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _GeneratorSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
+
+    assert denied.value.reason_code == "receipt_sink_failure"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.results) == 1
+    assert sink.results[0].gi_frame is None
 
 
 def test_pwb4_gateway_propagates_transport_cancellation_without_retry() -> None:

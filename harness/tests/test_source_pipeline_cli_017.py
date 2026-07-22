@@ -22,6 +22,32 @@ from tests.support.source_pipeline import (
 )
 
 
+def _production_settings(**updates: object) -> HarnessSettings:
+    values: dict[str, object] = {
+        "weknora_base_url": "https://weknora.invalid",
+        "weknora_api_key": "secret",
+        "model_profile": "production",
+        "production_model_provider": "bailian",
+        "production_model_deployment_id": "qwen3-prod-20260722-sha256-a1",
+        "production_model_family": "qwen",
+        "production_model_policy_version": "pwb-v1",
+        "judge_mode": "guarded",
+        "llm_base_url": "https://provider.invalid/compatible-mode/v1",
+        "llm_api_key": "provider-secret",
+    }
+    for name in HarnessSettings.model_fields:
+        if not name.startswith("production_expected_"):
+            continue
+        if name.endswith(("_hash", "_digest")):
+            values[name] = "a" * 64
+        elif name == "production_expected_clean_integration_sha":
+            values[name] = "b" * 40
+        else:
+            values[name] = f"test-{name.removeprefix('production_expected_')}"
+    values.update(updates)
+    return HarnessSettings(**values)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("command", ["extract", "extract-replay"])
 def test_cli_rejects_zero_concurrency_before_dispatch(
     tmp_path: Path,
@@ -182,9 +208,15 @@ def test_extract_replay_constructs_only_directory_source(
         compiler_cli, "DirectoryDocumentSource", FakeDirectorySource, raising=False
     )
     monkeypatch.setattr(compiler_cli, "ExtractionPipeline", FakePipeline)
-    monkeypatch.setattr(compiler_cli, "load_settings", lambda: SimpleNamespace(
-        judge_mode="claude-session", table_provider="pdfplumber"
-    ))
+    monkeypatch.setattr(
+        compiler_cli,
+        "load_settings",
+        lambda: SimpleNamespace(
+            model_profile="offline-eval",
+            judge_mode="claude-session",
+            table_provider="pdfplumber",
+        ),
+    )
     monkeypatch.setattr(compiler_cli, "build_client", lambda *args: (NoModelCalls(), "replay"))
     monkeypatch.setattr(compiler_cli, "load_schema_registry", lambda _: REGISTRY)
     monkeypatch.setattr(
@@ -244,10 +276,9 @@ def test_production_extract_loads_bound_scope_and_passes_all_source_limits(
         )
         session.commit()
     seed_engine.dispose()
-    settings = HarnessSettings(
-        weknora_base_url="https://weknora.invalid",
-        weknora_api_key="secret",
+    settings = _production_settings(
         db_url=db_url,
+        production_expected_space_id="space-1",
         source_max_documents_per_batch=3,
         source_max_batch_bytes=4_000,
         source_max_batch_pages=50,
@@ -306,7 +337,11 @@ def test_production_extract_loads_bound_scope_and_passes_all_source_limits(
             )
 
     monkeypatch.setattr(compiler_cli, "load_settings", lambda **_: settings)
-    monkeypatch.setattr(compiler_cli, "build_client", lambda *args: (NoModelCalls(), "replay"))
+    monkeypatch.setattr(
+        compiler_cli,
+        "_build_production_compiler_client",
+        lambda *args, **kwargs: NoModelCalls(),
+    )
     monkeypatch.setattr(compiler_cli, "load_schema_registry", lambda _: REGISTRY)
     monkeypatch.setattr(
         compiler_cli,
@@ -373,7 +408,7 @@ def test_production_extract_loads_bound_scope_and_passes_all_source_limits(
     "failure_stage",
     [
         "schema",
-        "judge_constructor",
+        "canonical_builder",
         "engine_constructor",
         "weknora_constructor",
         "scope",
@@ -381,7 +416,7 @@ def test_production_extract_loads_bound_scope_and_passes_all_source_limits(
         "pipeline_constructor",
         "run",
         "source_aclose",
-        "judge_aclose",
+        "model_aclose",
     ],
 )
 async def test_production_extract_attempts_all_registered_resource_cleanup(
@@ -443,27 +478,21 @@ async def test_production_extract_attempts_all_registered_resource_cleanup(
                 pred_path=run_dir / "pred.jsonl",
             )
 
-    settings = HarnessSettings(
-        weknora_base_url="https://weknora.invalid",
-        weknora_api_key="secret",
+    settings = _production_settings(
         db_url="sqlite:///unused.db",
-        llm_base_url="https://llm.invalid",
-        llm_api_key="secret",
-        llm_model_judge_fallback="judge-model",
-        judge_mode="gateway",
+        production_expected_space_id="space-1",
     )
-    model_client = ClosableModel("model")
 
     def load_registry(_: object) -> SchemaRegistry:
         if failure_stage == "schema":
             raise RuntimeError(f"boom:{failure_stage}")
         return REGISTRY
 
-    def make_judge_client(**kwargs: object) -> ClosableModel:
-        del kwargs
-        if failure_stage == "judge_constructor":
+    def make_production_client(*args: object, **kwargs: object) -> ClosableModel:
+        del args, kwargs
+        if failure_stage == "canonical_builder":
             raise RuntimeError(f"boom:{failure_stage}")
-        return ClosableModel("judge")
+        return ClosableModel("model")
 
     def make_fake_engine(_: str) -> FakeEngine:
         if failure_stage == "engine_constructor":
@@ -489,10 +518,11 @@ async def test_production_extract_attempts_all_registered_resource_cleanup(
 
     monkeypatch.setattr(compiler_cli, "load_settings", lambda **_: settings)
     monkeypatch.setattr(
-        compiler_cli, "build_client", lambda *args: (model_client, "model")
+        compiler_cli,
+        "_build_production_compiler_client",
+        make_production_client,
     )
     monkeypatch.setattr(compiler_cli, "load_schema_registry", load_registry)
-    monkeypatch.setattr(compiler_cli, "OpenAICompatClient", make_judge_client)
     monkeypatch.setattr(
         compiler_cli,
         "load_template_registry",
@@ -590,6 +620,7 @@ async def test_replay_extract_attempts_all_registered_resource_cleanup(
     settings = HarnessSettings(
         weknora_base_url="https://unused.invalid",
         weknora_api_key="unused",
+        model_profile="offline-eval",
         llm_base_url="https://llm.invalid",
         llm_api_key="secret",
         llm_model_judge_fallback="judge-model",

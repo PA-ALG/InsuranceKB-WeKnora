@@ -1,9 +1,9 @@
 # 027 Validation Report
 
-> Status: T1 inventory, Task 2 frozen authority contracts, Task 3 policy authority and
-> Task 4's canonical atomic gateway are implemented and independently approved.
-> Task 5 production entrypoint wiring is intentionally still pending.
-> Real-provider validation is not claimed here.
+> Status: Tasks 1–4 and Task 5's compiler-entrypoint boundary are implemented. Production
+> command routing is guarded and fail-closed, but production model execution is deliberately
+> unavailable until the separately owned 030 verifier and reviewed 028 provider adapter
+> exist. Real-provider validation is not claimed here.
 
 ## Focused deterministic baseline
 
@@ -34,13 +34,99 @@ issues. `git diff --check` also passed. These are focused Task 2/3/4 results, no
 deterministic-suite claim.
 
 Final independent Task 4 review: **Spec Approved** and **Quality Approved**, with zero
-Critical or Important findings. One non-blocking lifecycle cleanup remains explicitly owned
-by Task 5: if a misbehaving synchronous receipt sink returns a synchronous generator, the
-call already fails closed with zero transport, but Task 5's durable sink adapter should also
-best-effort close that generator and retain a regression test for the frame lifecycle.
+Critical or Important findings. The Task 5 lifecycle regression now proves that a
+misbehaving synchronous sink's returned generator is closed with zero transport. No durable
+production sink is claimed because the reviewed 028 adapter that must own production
+transport/sink lifetime is absent.
 
 Real provider: **NOT RUN**. The focused baseline is deterministic and does not prove
-provider availability, production entrypoint closure or completion of PWB1-PWB5.
+provider availability or a usable production transport.
+
+## Task 5 compiler-entrypoint evidence
+
+The production compiler command now requires `model_profile=production` and complete,
+independent frozen policy settings. It has no CLI model or replay override. Before DB/source
+or provider construction it compares the CLI Space, loads the code-owned schema bytes,
+derives the canonical schema hash, builds `StrictAdmissionRequestBinding`, fixes weak-model
+identities for the compiler roles, and invokes the single composition verifier selector.
+Missing 030 fails as `canonical_verifier_unavailable`. A deterministic selector fake proves
+that even successful verification ends as `canonical_adapter_unavailable` with zero raw
+transport construction while the reviewed 028 adapter is absent. Therefore this report does
+not claim that production model calls are available.
+
+`ExtractionPipeline` defaults to `model_profile=disabled`. Production construction requires
+the sealed compiler client, exact extract deployment, canonical schema hash, DB-attested
+Space and guarded judge. A code-owned weak-key snapshot freezes independent copies of the
+client, registry, model id, config and scope; the production judge is rebuilt from the sealed
+client. Behavioral TOCTOU tests coordinate post-construction replacement of client, judge,
+registry, model, profile and Space and observe zero raw-client calls while canonical run
+identity and guarded dispatch remain in use. Offline/replay pipelines have no such snapshot
+and retain their explicitly selected test behavior.
+
+After durable attempt reservation, compiler calls derive separate, domain-separated input,
+content and rendered-prompt digests from trusted reservation/run/field facts and code-owned
+prompt/schema facts. The compiler template hash names the exact code-owned prompt template;
+it is not a 028 `TemplatePackage` hash. Exact template membership, stage role and reservation
+identity are evaluated by `GuardedModelClient`. Template mismatch records DENY and performs
+zero transport calls. Unknown/rolling/strong identity, raw client, legacy gateway/Claude
+judge and missing/default profile tests use explicit client/schema/transport counters and
+all observe zero calls before typed refusal.
+
+Approved weak-transport failure is classified as retryable without changing identity. A
+production pipeline regression drives the canonical failing executor to the exact configured
+attempt limit, observes two weak-transport terminal attempts, zero strong/offline fallback
+calls, and returns only one `unknown/dead_letter` candidate plus its dead letter. The compiler
+result contains no ChangeSet or promotion output. Template/policy DENY remains non-retryable.
+
+Replay and offline execution require explicit `replay` or `offline-eval`; replay additionally
+requires a fixture directory. `apply-judgements` requires explicit `manual` or
+`offline-eval`. The production compiler never selects these paths as fallback. This is a
+command/model-authority boundary only: no general downstream artifact-provenance or
+candidate-promotion gate was added, so later import/use of offline artifacts remains a
+separate owner/adapter governance contract.
+
+Final deterministic Task 5 evidence:
+
+```bash
+cd harness
+PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
+  tests/test_production_entrypoints_027.py \
+  tests/test_production_model_boundary_027.py tests/test_config.py \
+  tests/test_compiler_llm.py tests/test_source_pipeline_cli_017.py
+# 270 passed in 8.19s
+
+PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
+  tests/test_compiler_pipeline.py tests/test_source_pipeline_checkpoint_017.py \
+  tests/test_source_pipeline_runtime_017.py tests/test_source_pipeline_cli_017.py \
+  tests/test_recall_config_024.py
+# 128 passed in 25.68s
+
+.venv/bin/ruff check src/insurance_harness/model_policy \
+  src/insurance_harness/config.py src/insurance_harness/compiler/cli.py \
+  src/insurance_harness/compiler/extract.py src/insurance_harness/compiler/judge.py \
+  src/insurance_harness/compiler/llm.py src/insurance_harness/compiler/pipeline.py \
+  tests/test_production_entrypoints_027.py \
+  tests/test_production_model_boundary_027.py tests/test_source_pipeline_cli_017.py \
+  tests/test_compiler_pipeline.py tests/test_source_pipeline_checkpoint_017.py \
+  tests/test_source_pipeline_runtime_017.py tests/support/source_pipeline.py
+# All checks passed!
+
+.venv/bin/mypy src/insurance_harness/model_policy \
+  src/insurance_harness/config.py src/insurance_harness/compiler/cli.py \
+  src/insurance_harness/compiler/extract.py src/insurance_harness/compiler/judge.py \
+  src/insurance_harness/compiler/llm.py src/insurance_harness/compiler/pipeline.py
+# Success: no issues found in 12 source files
+```
+
+The first inventory RED was one missing compiler CLI guard edge. The coordinated pipeline
+TOCTOU RED was three failures: one raw extraction call, one raw judge route and one attacker
+registry identity read. The PWB3 transport RED showed `ModelTransportError` escaping before
+the configured attempt limit; it is now classified as retryable while policy DENY remains
+non-retryable. All are now GREEN. The exact old source-CLI compatibility slice is also GREEN
+at **18 passed**, with production tests moved to the canonical builder and legacy gateway
+cleanup retained only under explicit `offline-eval`.
+
+Real provider: **NOT RUN**.
 
 ## Admission binding decision
 
@@ -206,12 +292,11 @@ terminal observations and are not claimed as provider/network evidence; the stat
 post-authority observation is the deterministic I/O boundary used by Task 4 tests. Task 4
 deliberately does not add orchestration outcome, retry, fallback or promotion ports.
 
-The current executor modes and stateful target are test-only. Task 5 must add a reviewed
-production dispatcher and immutable configuration snapshot that bind provider, endpoint,
-credential and client lifetime to the exact `ModelIdentity`, while strongly retaining the
-production client and sink. Task 5 must reuse this guard/binder instead of recreating model
-policy or transport authorization outside it, and durable sink selection remains a Task 5
-gate. Task 5 still owns canonical production composition and entrypoint wiring.
+The current executor modes and stateful target are test-only. Task 5 wires the compiler to
+the fixed verifier selector and then deliberately returns `canonical_adapter_unavailable`.
+The separately owned 028 implementation must add a reviewed production adapter and durable
+sink that bind provider, endpoint, credential and client lifetime to the exact
+`ModelIdentity`, reusing this guard/binder rather than recreating policy authorization.
 
 ## Scope and evidence status
 
@@ -225,13 +310,13 @@ gate. Task 5 still owns canonical production composition and entrypoint wiring.
   are complete. Task 4's canonical `GuardedModelClient`, transport enforcement and trusted
   call-scope recomputation are complete and independently approved with zero Critical or
   Important findings.
-  The 030 production verifier bridge remains absent and therefore fail-closed; Task 5 owns
-  production composition/entrypoint wiring.
-- Provider contract or quality claim: none.
+  Task 5's compiler composition/entrypoint wiring is complete and fail-closed. The selected
+  030 verifier module and reviewed 028 provider adapter remain absent, so production model
+  execution is unavailable.
+- Provider contract or quality claim: none; real provider is **NOT RUN**.
 - Product CLI and knowledge importer/merge/review/source-lifecycle/publisher exports:
   recorded as zero-model boundaries that keep their own governance/approval/snapshot
   contracts. They receive no new `IssuedModelPermit`, `ModelPolicy`, `AdmissionBinding`
   or receipt parameters; no product/knowledge code or state was changed.
-- The gap described above is approved to be closed inside 027's own compiler/model-policy
-  domain; no 020, 030, 031, knowledge, MCP, runtime, dataset or structured-import scope is
-  borrowed.
+- No 020, 030, 031, knowledge, MCP, runtime, dataset or structured-import implementation
+  scope is borrowed. This report does not claim a cross-domain artifact-promotion gate.

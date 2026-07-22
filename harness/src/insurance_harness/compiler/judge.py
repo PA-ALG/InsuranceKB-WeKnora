@@ -14,7 +14,7 @@ from typing import Any
 
 from .attempts import AttemptLedger, InMemoryAttemptLedger
 from .extract import call_and_parse
-from .llm import ModelClient
+from .llm import ModelClient, _is_production_compiler_client
 from .models import FieldCandidate, Judgement, JudgeRequest
 from .prompts import PROMPT_VERSION
 
@@ -29,10 +29,12 @@ class JudgeDispatcher:
     """裁决分发：claude-session 入队；gateway 直接调裁决模型。"""
 
     def __init__(self, mode: str = "claude-session", client: ModelClient | None = None) -> None:
-        if mode not in ("claude-session", "gateway"):
+        if mode not in ("claude-session", "gateway", "guarded"):
             raise ValueError(f"未知 judge_mode：{mode!r}")
-        if mode == "gateway" and client is None:
-            raise ValueError("gateway 裁决模式必须提供裁决模型 client")
+        if mode in ("gateway", "guarded") and client is None:
+            raise ValueError(f"{mode} 裁决模式必须提供裁决模型 client")
+        if mode == "guarded" and not _is_production_compiler_client(client):
+            raise ValueError("guarded 裁决模式只接受 canonical production client")
         self.mode = mode
         self._client = client
         self.queue: list[JudgeRequest] = []

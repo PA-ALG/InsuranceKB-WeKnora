@@ -30,6 +30,7 @@ from tests.support.source_pipeline import (
     NoModelCalls,
     TrackingSource,
     assert_no_committed_artifacts,
+    offline_pipeline_config,
     source_document,
 )
 
@@ -92,6 +93,7 @@ async def test_node_load_consumes_source_documents_without_glob(
     monkeypatch.setattr(Path, "glob", reject_glob)
     document = source_document()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -133,6 +135,7 @@ async def test_run_rematerializes_and_holds_runtime_paths_for_the_whole_graph(
     runtime_path = tmp_path / "must-never-be-serialized.pdf"
     source = TrackingSource(source_document(), runtime_path)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -202,6 +205,7 @@ async def test_scoped_source_document_stays_runtime_attested_through_load(
     product_dir.mkdir()
     (product_dir / "product_meta.json").write_text("{}", encoding="utf-8")
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -233,6 +237,7 @@ async def test_scoped_pipeline_rejects_unscoped_document_before_graph_and_cleans
     runtime_path = tmp_path / "unscoped-runtime.pdf"
     source = TrackingSource(source_document(), runtime_path)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -281,6 +286,7 @@ async def test_unscoped_pipeline_rejects_scoped_document_before_graph_and_cleans
     runtime_path = tmp_path / "scoped-runtime.pdf"
     source = TrackingSource(document, runtime_path)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -314,6 +320,7 @@ async def test_graph_failure_cleans_materialized_batch(tmp_path: Path) -> None:
     runtime_path = tmp_path / "failure-runtime.pdf"
     source = TrackingSource(source_document(), runtime_path)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -341,6 +348,7 @@ async def test_graph_cancellation_cleans_materialized_batch(tmp_path: Path) -> N
     source = TrackingSource(source_document(), runtime_path)
     started = asyncio.Event()
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -387,6 +395,7 @@ async def test_artifact_commit_failure_leaves_no_partial_outputs_or_staging(
     run_dir = tmp_path / f"run-atomic-{failure_kind}"
     source = TrackingSource(source_document(), tmp_path / "runtime.pdf")
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -463,6 +472,7 @@ async def test_run_requires_manifest_commit_marker_before_reading_artifacts(
     (product_dir / "product_meta.json").write_text("{}", encoding="utf-8")
     run_dir = tmp_path / "run-missing-commit-marker"
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -525,6 +535,7 @@ async def test_fastpath_uses_the_run_owned_source_id_path(
 
     monkeypatch.setattr(pipeline_module, "run_fastpath", capture_fastpath)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -587,6 +598,7 @@ async def test_concurrent_runs_on_one_pipeline_keep_runtime_paths_isolated(
 
     monkeypatch.setattr(pipeline_module, "run_fastpath", capture_fastpath)
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",
@@ -637,6 +649,7 @@ async def test_duplicate_file_names_fail_closed_before_graph(tmp_path: Path) -> 
     product_dir.mkdir()
     (product_dir / "product_meta.json").write_text("{}", encoding="utf-8")
     pipeline = ExtractionPipeline(
+        config=offline_pipeline_config(),
         client=NoModelCalls(),
         registry=REGISTRY,
         model_id="no-model",

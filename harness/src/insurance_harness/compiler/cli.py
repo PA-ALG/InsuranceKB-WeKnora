@@ -29,6 +29,7 @@ import argparse
 import asyncio
 from contextlib import AsyncExitStack
 from pathlib import Path
+from typing import Literal
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -38,6 +39,8 @@ from ..config import HarnessSettings
 from ..db import make_engine
 from ..db.scope import load_scope
 from ..goldenset.pdf import extract_pages
+from ..model_policy import ModelIdentity, StrictAdmissionRequestBinding
+from ..model_policy.composition import _build_production_model_composition
 from ..schemas import load_schema_registry
 from ..sources import (
     DirectoryDocumentSource,
@@ -48,9 +51,14 @@ from ..sources import (
 from .experiment import AssignmentPolicy
 from .feedability import render_feedability, score_feedability, write_quarantine
 from .judge import JudgeDispatcher, read_judgements
-from .llm import ModelClient, OpenAICompatClient, ReplayClient
+from .llm import (
+    ModelClient,
+    OpenAICompatClient,
+    ProductionEntrypointDenied,
+    ReplayClient,
+)
 from .models import PredRecord
-from .pipeline import ExtractionPipeline, PipelineConfig
+from .pipeline import ExtractionPipeline, PipelineConfig, _compiler_schema_hash
 from .sections import family_fingerprint, split_sections
 from .templates import (
     ProductDocInput,
@@ -93,7 +101,12 @@ def _nonnegative_int(raw: str) -> int:
 
 
 def _pipeline_config_from_args(
-    args: argparse.Namespace, *, judge_mode: str
+    args: argparse.Namespace,
+    *,
+    judge_mode: str,
+    model_profile: Literal["disabled", "production", "offline-eval", "replay"] = (
+        "disabled"
+    ),
 ) -> PipelineConfig:
     experiment_id = getattr(args, "experiment_id", None)
     experiment_seed = getattr(args, "experiment_seed", 0)
@@ -112,6 +125,7 @@ def _pipeline_config_from_args(
         concurrency=args.concurrency,
         gapfill_max_calls=gapfill_max_calls,
         assignment=assignment,
+        model_profile=model_profile,
     )
 
 
@@ -167,30 +181,87 @@ def build_client(
     return client, model
 
 
+def _strict_production_request(
+    settings: HarnessSettings,
+) -> StrictAdmissionRequestBinding:
+    """Build the independent expected request; never copy verifier-returned actuals."""
+
+    payload = {
+        field: getattr(settings, f"production_{field}")
+        for field in StrictAdmissionRequestBinding.model_fields
+    }
+    return StrictAdmissionRequestBinding.model_validate(payload)
+
+
+def _production_identity(
+    settings: HarnessSettings,
+    *,
+    role: Literal["extract", "gap", "verify", "consensus"],
+) -> ModelIdentity:
+    """Bind every compiler role to the single frozen weak deployment."""
+
+    return ModelIdentity.model_validate(
+        {
+            "provider": settings.production_model_provider,
+            "deployment_id": settings.production_model_deployment_id,
+            "family": settings.production_model_family,
+            "role": role,
+            "policy_version": settings.production_model_policy_version,
+        }
+    )
+
+
+def _build_production_compiler_client(
+    settings: HarnessSettings,
+    *,
+    schema_hash: str | None,
+    space_id: str | None,
+) -> ModelClient:
+    """Verify canonical admission before any provider adapter can be constructed.
+
+    OpenSpec 028 owns the reviewed provider adapter. Until that adapter is present,
+    a successfully verified admission still fails closed instead of using the raw
+    OpenAI-compatible transport primitive.
+    """
+
+    if settings.model_profile != "production":
+        raise ProductionEntrypointDenied("invalid_model_profile")
+    request = _strict_production_request(settings)
+    if (
+        schema_hash is None
+        or schema_hash != request.expected_schema_hash
+        or space_id is None
+        or space_id != request.expected_space_id
+    ):
+        raise ProductionEntrypointDenied("invalid_production_client")
+    identities = tuple(
+        _production_identity(settings, role=role)
+        for role in ("extract", "gap", "verify", "consensus")
+    )
+    composition = _build_production_model_composition(
+        approved_identity_keys={identity.identity_key for identity in identities}
+    )
+    composition.verify(request)
+    raise ProductionEntrypointDenied("canonical_adapter_unavailable")
+
+
 async def _cmd_extract(args: argparse.Namespace) -> int:
     async with AsyncExitStack() as resources:
         settings = load_settings(require_weknora=True)
-        client, model_id = build_client(settings, args.replay_dir, args.model)
-        resources.push_async_callback(_aclose_if_supported, client)
+        if settings.model_profile != "production":
+            raise ProductionEntrypointDenied("invalid_model_profile")
+        if args.space_id != settings.production_expected_space_id:
+            raise ProductionEntrypointDenied("invalid_production_client")
         registry = load_schema_registry(args.schema_dir)
-        judge: JudgeDispatcher
-        if settings.judge_mode == "gateway":
-            fallback = settings.llm_model_judge_fallback
-            if not (settings.llm_base_url and settings.llm_api_key and fallback):
-                raise SystemExit(
-                    "judge_mode=gateway 需要 HARNESS_LLM_MODEL_JUDGE_FALLBACK 配置"
-                )
-            judge_client = OpenAICompatClient(
-                base_url=settings.llm_base_url,
-                api_key=settings.llm_api_key,
-                model=fallback,
-                max_tokens=settings.llm_max_tokens,
-                timeout_s=settings.llm_timeout_s,
-            )
-            resources.push_async_callback(_aclose_if_supported, judge_client)
-            judge = JudgeDispatcher(mode="gateway", client=judge_client)
-        else:
-            judge = JudgeDispatcher(mode="claude-session")
+        client = _build_production_compiler_client(
+            settings,
+            schema_hash=_compiler_schema_hash(registry),
+            space_id=args.space_id,
+        )
+        resources.push_async_callback(_aclose_if_supported, client)
+        model_id = settings.production_model_deployment_id
+        if model_id is None:
+            raise ProductionEntrypointDenied("invalid_production_client")
         # 006 F3：--templates-dir 提供且非空时启用 fast path；否则 004 行为不变
         template_registry = load_template_registry(args.templates_dir)
         db_url = args.db_url or settings.db_url
@@ -216,8 +287,11 @@ async def _cmd_extract(args: argparse.Namespace) -> int:
             registry=registry,
             model_id=model_id,
             source=source,
-            config=_pipeline_config_from_args(args, judge_mode=judge.mode),
-            judge=judge,
+            config=_pipeline_config_from_args(
+                args,
+                judge_mode="guarded",
+                model_profile="production",
+            ),
             template_registry=template_registry if template_registry.templates else None,
             table_provider=select_table_provider(settings.table_provider),
             scope=scope,
@@ -232,6 +306,7 @@ async def _cmd_extract(args: argparse.Namespace) -> int:
             ),
             line_key=args.line_key,
             resume=args.resume,
+            thread_id=settings.production_expected_run_id,
         )
     m = result.manifest
     print(
@@ -246,10 +321,17 @@ async def _cmd_extract(args: argparse.Namespace) -> int:
 async def _cmd_extract_replay(args: argparse.Namespace) -> int:
     async with AsyncExitStack() as resources:
         settings = load_settings()
+        profile = settings.model_profile
+        if profile not in {"offline-eval", "replay"}:
+            raise ProductionEntrypointDenied("invalid_model_profile")
+        if profile == "replay" and args.replay_dir is None:
+            raise ProductionEntrypointDenied("replay_fixture_required")
+        if profile == "offline-eval" and args.replay_dir is not None:
+            raise ProductionEntrypointDenied("invalid_model_profile")
         client, model_id = build_client(settings, args.replay_dir, args.model)
         resources.push_async_callback(_aclose_if_supported, client)
         registry = load_schema_registry(args.schema_dir)
-        if settings.judge_mode == "gateway":
+        if profile == "offline-eval" and settings.judge_mode == "gateway":
             fallback = settings.llm_model_judge_fallback
             if not (settings.llm_base_url and settings.llm_api_key and fallback):
                 raise SystemExit(
@@ -276,7 +358,11 @@ async def _cmd_extract_replay(args: argparse.Namespace) -> int:
             registry=registry,
             model_id=model_id,
             source=source,
-            config=_pipeline_config_from_args(args, judge_mode=judge.mode),
+            config=_pipeline_config_from_args(
+                args,
+                judge_mode=judge.mode,
+                model_profile=profile,
+            ),
             judge=judge,
             template_registry=template_registry if template_registry.templates else None,
             table_provider=select_table_provider(settings.table_provider),
@@ -299,6 +385,9 @@ async def _cmd_extract_replay(args: argparse.Namespace) -> int:
 
 
 def _cmd_apply_judgements(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    if settings.model_profile not in {"manual", "offline-eval"}:
+        raise ProductionEntrypointDenied("invalid_model_profile")
     pred_path = args.run_dir / "pred.jsonl"
     records = [
         PredRecord.model_validate_json(line)
@@ -418,8 +507,6 @@ def main(argv: list[str] | None = None) -> int:
     p_ext.add_argument("--run-dir", type=Path, required=True)
     p_ext.add_argument("--line-key", default=None)
     p_ext.add_argument("--schema-dir", type=Path, default=_DEFAULT_SCHEMA_DIR)
-    p_ext.add_argument("--replay-dir", type=Path, default=None, help="录制回放夹具目录")
-    p_ext.add_argument("--model", default=None, help="覆盖 HARNESS_LLM_MODEL_WEAK")
     _add_recall_config_arguments(p_ext)
     p_ext.add_argument("--resume", action="store_true", help="从 checkpoint 续跑")
     p_ext.add_argument(

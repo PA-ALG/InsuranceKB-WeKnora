@@ -4,10 +4,15 @@
 而不是等到运行时才失败（spec S2.1）。
 """
 
-from pathlib import Path
+from __future__ import annotations
 
-from pydantic import Field
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .model_policy import ModelIdentity, ModelPolicyDenied, ProductionModelPolicy
 
 
 class HarnessSettings(BaseSettings):
@@ -67,6 +72,66 @@ class HarnessSettings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_timeout_s: float = 180.0
 
+    # --- 生产弱模型边界（change 027） ---
+    # disabled 是安全默认；历史 replay/goldenset/manual 路径必须显式选择非生产 profile。
+    model_profile: Literal[
+        "disabled", "production", "offline-eval", "replay", "goldenset", "manual"
+    ] = "disabled"
+    production_model_provider: str | None = None
+    production_model_deployment_id: str | None = None
+    production_model_family: Literal["minimax", "qwen", "qwen-vl"] | None = None
+    production_model_policy_version: str | None = None
+
+    # 独立 expected request；不得从 verifier 返回的 actual admission 回填。
+    production_expected_purpose: str | None = None
+    production_expected_run_schema_version: str | None = None
+    production_expected_run_id: str | None = None
+    production_expected_run_revision: str | None = None
+    production_expected_space_id: str | None = None
+    production_expected_admission_artifact_ref: str | None = None
+    production_expected_admission_artifact_digest: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_manifest_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_eligibility_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_golden_slice_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_routing_policy_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_schema_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_template_lock_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_structured_dispatch_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_model_plan_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_deployment_roles_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_resource_caps_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_rights_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_provenance_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    production_expected_clean_integration_sha: str | None = Field(
+        default=None, pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
+    )
+
     # --- 审核工作台鉴权（change 008，spec W6：token→principal+Space 集合绑定） ---
     # JSON：{"<token>": {"principal": "审核人标识", "space_ids": ["<space-id>", ...]}}
     # 未配置 = 拒绝一切请求（fail-closed 默认）；operator 一律取 token 绑定 principal
@@ -88,3 +153,67 @@ class HarnessSettings(BaseSettings):
     # 默认关闭自动通过=全部走审核（保守）；开启后仅 risk=low 且 confidence≥阈值 的 enrich 自动应用
     merge_auto_apply_enrich: bool = False
     merge_enrich_auto_min_confidence: float = 0.8
+
+    @model_validator(mode="after")
+    def require_frozen_production_model_policy(self) -> HarnessSettings:
+        if self.model_profile != "production":
+            return self
+        required = (
+            "production_model_provider",
+            "production_model_deployment_id",
+            "production_model_family",
+            "production_model_policy_version",
+            "production_expected_purpose",
+            "production_expected_run_schema_version",
+            "production_expected_run_id",
+            "production_expected_run_revision",
+            "production_expected_space_id",
+            "production_expected_admission_artifact_ref",
+            "production_expected_admission_artifact_digest",
+            "production_expected_manifest_hash",
+            "production_expected_eligibility_hash",
+            "production_expected_golden_slice_hash",
+            "production_expected_routing_policy_hash",
+            "production_expected_schema_hash",
+            "production_expected_template_lock_hash",
+            "production_expected_structured_dispatch_hash",
+            "production_expected_model_plan_hash",
+            "production_expected_deployment_roles_hash",
+            "production_expected_resource_caps_hash",
+            "production_expected_rights_hash",
+            "production_expected_provenance_hash",
+            "production_expected_clean_integration_sha",
+            "llm_base_url",
+            "llm_api_key",
+        )
+        missing = [name for name in required if not _nonblank(getattr(self, name))]
+        if missing:
+            raise ValueError("production model policy configuration is incomplete")
+        if self.judge_mode != "guarded" or self.llm_model_judge_fallback is not None:
+            raise ValueError("legacy model judge routes are forbidden in production")
+
+        assert self.production_model_provider is not None
+        assert self.production_model_deployment_id is not None
+        assert self.production_model_family is not None
+        assert self.production_model_policy_version is not None
+        if (
+            self.production_model_provider.casefold() == "unknown"
+            or self.production_model_deployment_id.casefold() == "unknown"
+        ):
+            raise ValueError("production model identity must be immutable and known")
+        identity = ModelIdentity(
+            provider=self.production_model_provider,
+            deployment_id=self.production_model_deployment_id,
+            family=self.production_model_family,
+            role="extract",
+            policy_version=self.production_model_policy_version,
+        )
+        try:
+            ProductionModelPolicy({identity.identity_key}).evaluate(identity)
+        except ModelPolicyDenied:
+            raise ValueError("production model identity is not approved") from None
+        return self
+
+
+def _nonblank(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())

@@ -472,12 +472,11 @@ def _persist_receipt(
     except Exception:
         raise ModelGatewayDenied("receipt_sink_failure") from None
     if result is not None:
-        if isawaitable(result):
-            _close_or_cancel_awaitable(result)
+        _close_or_cancel_deferred(result)
         raise ModelGatewayDenied("receipt_sink_failure")
 
 
-def _close_or_cancel_awaitable(value: object) -> None:
+def _close_or_cancel_deferred(value: object) -> None:
     """Dispose of a rejected deferred result without leaking provider details."""
 
     for method_name in ("cancel", "close"):

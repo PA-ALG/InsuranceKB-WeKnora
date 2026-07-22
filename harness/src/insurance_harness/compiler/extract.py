@@ -15,11 +15,17 @@ from pydantic import BaseModel, ConfigDict
 from ..goldenset.normalize import _parse_date, _parse_number
 from ..goldenset.pdf import PageText
 from ..goldenset.records import Evidence, TriState
+from ..model_policy import ModelTransportError
 from ..schemas import FieldSpec
 from .attempts import AttemptLedger, InMemoryAttemptLedger
 from .cleaning import clean_value
 from .compat import check_field_value
-from .llm import ModelClient, TruncatedOutputError, request_key
+from .llm import (
+    ModelClient,
+    TruncatedOutputError,
+    _complete_reserved_model_call,
+    request_key,
+)
 from .models import FieldCandidate, UnknownReason
 from .parsing import extract_json_array
 from .prompts import (
@@ -51,7 +57,13 @@ async def with_transport_retry[T](
     for i in range(attempts):
         try:
             return await fn()
-        except (TruncatedOutputError, httpx.HTTPError, OSError, ValueError) as exc:
+        except (
+            TruncatedOutputError,
+            ModelTransportError,
+            httpx.HTTPError,
+            OSError,
+            ValueError,
+        ) as exc:
             last = exc
             if i + 1 < attempts:
                 await sleep(base_delay_s * (4**i))
@@ -99,7 +111,17 @@ async def call_and_parse(
         )
         attempt_ids.append(attempt.attempt_id)
         try:
-            raw = await client.complete(system, call_user)
+            raw = await _complete_reserved_model_call(
+                client,
+                system,
+                call_user,
+                run_id=ledger.run_id,
+                call_stage=call_stage,
+                prompt_version=prompt_version,
+                attempt_id=attempt.attempt_id,
+                reserved_request_key=attempt.request_key,
+                field_ids=tuple(field_ids),
+            )
         except asyncio.CancelledError:
             ledger.finish(attempt.attempt_id, "cancelled")
             raise

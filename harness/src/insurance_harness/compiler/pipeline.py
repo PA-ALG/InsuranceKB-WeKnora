@@ -9,6 +9,8 @@
 
 import asyncio
 import fcntl
+import hashlib
+import json
 import os
 import shutil
 import stat
@@ -19,7 +21,9 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from threading import RLock
+from typing import Any, Literal, TypedDict, cast
+from weakref import WeakKeyDictionary
 
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -57,6 +61,8 @@ from .llm import (
     GapfillBudgetExhausted,
     MeteredClient,
     ModelClient,
+    ProductionEntrypointDenied,
+    _require_production_compiler_client,
 )
 from .models import (
     AuditAttempt,
@@ -100,6 +106,51 @@ class PipelineConfig(BaseModel):
     assignment: AssignmentPolicy = Field(default_factory=AssignmentPolicy)
     concurrency: int = Field(default=6, strict=True, gt=0)
     judge_mode: str = "claude-session"
+    model_profile: Literal["disabled", "production", "offline-eval", "replay"] = (
+        "disabled"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _ProductionPipelineState:
+    """Code-owned runtime snapshot; caller-visible attributes are non-authoritative."""
+
+    client: ModelClient
+    registry: SchemaRegistry
+    model_id: str
+    config: PipelineConfig
+    scope: KnowledgeScope
+
+
+_PRODUCTION_PIPELINE_STATES: WeakKeyDictionary[object, _ProductionPipelineState] = (
+    WeakKeyDictionary()
+)
+_PRODUCTION_PIPELINE_LOCK = RLock()
+
+
+def _production_pipeline_state(value: object) -> _ProductionPipelineState | None:
+    with _PRODUCTION_PIPELINE_LOCK:
+        return _PRODUCTION_PIPELINE_STATES.get(value)
+
+
+def _register_production_pipeline(
+    value: object,
+    *,
+    client: ModelClient,
+    registry: SchemaRegistry,
+    model_id: str,
+    config: PipelineConfig,
+    scope: KnowledgeScope,
+) -> None:
+    state = _ProductionPipelineState(
+        client=client,
+        registry=registry.model_copy(deep=True),
+        model_id=model_id,
+        config=config.model_copy(deep=True),
+        scope=scope.model_copy(deep=True),
+    )
+    with _PRODUCTION_PIPELINE_LOCK:
+        _PRODUCTION_PIPELINE_STATES[value] = state
 
 
 class PipelineState(TypedDict, total=False):
@@ -171,6 +222,20 @@ _GRAPH_NODE_NAMES = frozenset(
     {"load", "split_route", "extract", "gapfill", "vote", "finalize"}
 )
 _STATE_PATCH_KEYS = frozenset({"fail_nodes"})
+_SCHEMA_FACT_DOMAIN = b"insurancekb.compiler.schema-registry.v1\0"
+
+
+def _compiler_schema_hash(registry: SchemaRegistry) -> str:
+    """Content address the exact code-owned schema bytes used by this pipeline."""
+
+    payload = json.dumps(
+        registry.model_dump(mode="json", round_trip=True),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(_SCHEMA_FACT_DOMAIN + payload).hexdigest()
 
 
 def _doc_rank(doc: str) -> int:
@@ -215,6 +280,23 @@ def _maybe_fail(node: str, state: PipelineState) -> None:
 
 
 class ExtractionPipeline:
+    def __getattribute__(self, name: str) -> Any:
+        if name in {"_client", "_registry", "_model_id", "_cfg", "_scope", "_judge"}:
+            state = _production_pipeline_state(self)
+            if state is not None:
+                if name == "_client":
+                    return state.client
+                if name == "_registry":
+                    return state.registry.model_copy(deep=True)
+                if name == "_model_id":
+                    return state.model_id
+                if name == "_cfg":
+                    return state.config.model_copy(deep=True)
+                if name == "_scope":
+                    return state.scope.model_copy(deep=True)
+                return JudgeDispatcher(mode="guarded", client=state.client)
+        return object.__getattribute__(self, name)
+
     def __init__(
         self,
         client: ModelClient,
@@ -233,8 +315,25 @@ class ExtractionPipeline:
         self._client = client
         self._registry = registry
         self._model_id = model_id
-        self._cfg = config or PipelineConfig()
-        self._judge = judge or JudgeDispatcher(mode=self._cfg.judge_mode)
+        resolved_config = config or PipelineConfig()
+        self._cfg = resolved_config
+        if resolved_config.model_profile == "production":
+            if resolved_config.judge_mode != "guarded":
+                raise ProductionEntrypointDenied("invalid_production_judge")
+            scope_fields = scope_log_context(scope) if scope is not None else {}
+            _require_production_compiler_client(
+                client,
+                schema_hash=_compiler_schema_hash(registry),
+                model_id=model_id,
+                space_id=scope_fields.get("space_id"),
+            )
+            if judge is not None:
+                raise ValueError("production judge is built only by composition root")
+            self._judge = JudgeDispatcher(mode="guarded", client=client)
+        elif resolved_config.model_profile == "disabled":
+            raise ProductionEntrypointDenied("invalid_production_client")
+        else:
+            self._judge = judge or JudgeDispatcher(mode=resolved_config.judge_mode)
         self._sleep: Sleeper = sleep if sleep is not None else asyncio.sleep
         self._source = source
         # 006 F3：模板注册表未提供/为空 → fast path 整体旁路（004 行为不变）
@@ -249,6 +348,17 @@ class ExtractionPipeline:
         self._precommit_validator = precommit_validator
         if scope is not None:
             scope_log_context(scope)
+        if resolved_config.model_profile == "production":
+            if scope is None:
+                raise ProductionEntrypointDenied("invalid_production_client")
+            _register_production_pipeline(
+                self,
+                client=client,
+                registry=registry,
+                model_id=model_id,
+                config=resolved_config,
+                scope=scope,
+            )
 
     # --- 节点 ---
 
