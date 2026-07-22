@@ -10,12 +10,12 @@
 |---|---|---|
 | RA1～RA6 本域实现 | PASS | 各阶段 Spec/Quality 双审均已 `Approved` |
 | RA7 本域实现 | LOCAL PASS | focused `88/88`；Quality `PASS`；Spec `LOCAL PASS` |
-| 029 fresh focused | PASS WITH SKIP | 执行 Owner 在 Task 8 前复验：`262 passed, 1 skipped`；唯一 skip 为未提供 PostgreSQL URL，不能替代 PG 验收 |
+| 029 fresh focused | PASS WITH EXPECTED PG SKIP | 执行 Owner 在 Task 8 前复验非 PG 选择：`262 passed, 1 skipped`；该次 URL 缺失 skip 不作为 PG 证据，独立真实 PG lane 见下行 |
 | Ruff / mypy / diff | PASS | Task 8 前 fresh 结果均 clean；文档提交后的 OpenSpec/diff 结果见 §10 |
-| 真实 PostgreSQL | PENDING | 必须实际运行指定 migration/approval/CAS 并发矩阵且 `skipped=0` |
+| 真实 PostgreSQL 16 | PASS | isolated container：`3 passed, 37 deselected in 54.55s`；JUnit guard `tests=3 skipped=0` |
 | RA7 跨域集成 | BLOCKED EXTERNALLY | 028 producer/public contract、ClaimEvidence lineage 与 production trusted composition 尚未提供；029 缺合同路径 fail closed |
 | 整包独立 Spec/Quality review | PENDING | 不以分阶段 review 代替最终 whole-change review |
-| final full deterministic / PR | PENDING | final rebase 后只运行一次；PG 或外部合同未关闭时最多 Draft |
+| final full deterministic / PR | PENDING | final rebase 后只运行一次；外部合同未关闭时最多 Draft |
 | 生产 WeKnora UI | NOT RUN / BLOCKED | P-1 capability 不存在，返回 typed `P1CapabilityMissing` |
 | 真实 model/provider/Node/TS | 0 calls | 029 治理路径不导入、不调用这些执行面 |
 
@@ -104,21 +104,35 @@ Rollback 路径的静态边界禁止 `runtime/model/provider/publisher`，测试
 
 ### 3.3 PostgreSQL 硬门禁
 
-Migration graph 的 fresh 只读检查为 `uv run alembic heads` → `0013 (head)`；真实 PostgreSQL 状态仍为 `PENDING`。必须在 PostgreSQL 16 上执行且 JUnit/pytest 显示 `skipped=0` 后，T6 和 PR-ready 才可关闭。
+Migration graph 的 fresh 只读检查为 `uv run alembic heads` → `0013 (head)`。随后在 isolated PostgreSQL 16 container 上执行真实 lane：
 
-| PostgreSQL 行为 | 最终要求 | 当前 |
+```text
+HARNESS_TEST_POSTGRES_URL=<sanitized-isolated-postgresql-16-url> \
+uv run pytest -q -m integration_postgres \
+  tests/test_release_manifest_migration_029.py \
+  tests/test_release_approval_029.py \
+  --junitxml=reports/postgres-029.xml
+
+3 passed, 37 deselected in 54.55s
+
+uv run python scripts/check_junit.py reports/postgres-029.xml
+tests=3 skipped=0
+```
+
+| PostgreSQL 行为 | 实测结果 | 当前 |
 |---|---|---|
-| manifest UPDATE / DELETE | DB trigger 实际拒绝，savepoint 后 Session 可用 | PENDING |
-| approval UPDATE / DELETE | DB trigger 实际拒绝，savepoint 后 Session 可用 | PENDING |
-| activation audit / release alert UPDATE / DELETE | DB trigger 实际拒绝 | PENDING |
-| exact composite FK / cross-Space splice | DB constraint 实际拒绝 | PENDING |
-| `actor_type` 与 `role=release_approver` CHECK | DB constraint 实际拒绝非法值 | PENDING |
-| non-empty downgrade preflight | 首个 DDL 前 fail closed，schema/data 均不变 | PENDING |
-| exact manifest + same approval attestation race | 两 Session 收敛同一行，caller Session 可用 | PENDING |
-| different approval attestation race | 一 winner、一 typed error，loser Session 可用 | PENDING |
-| concurrent CurrentRelease CAS | 一 winner、一 typed stale-CAS | PENDING |
+| manifest UPDATE / DELETE | DB trigger 以 SQLSTATE `23514` 实际拒绝；nested savepoint 后 Session 可用 | PASS |
+| approval UPDATE / DELETE | DB trigger 以 SQLSTATE `23514` 实际拒绝；nested savepoint 后 Session 可用 | PASS |
+| activation audit / release alert UPDATE / DELETE | DB trigger 实际拒绝；row counts 保持不变 | PASS |
+| exact composite FK / cross-Space splice | `fk_release_approvals_exact_manifest` 以 SQLSTATE `23503` 实际拒绝 | PASS |
+| `role=release_approver` CHECK | `ck_release_approvals_role` 以 SQLSTATE `23514` 实际拒绝非法 role | PASS |
+| non-empty downgrade preflight | 在首个 DDL 前 fail closed；version、tables、triggers、rows 均不变 | PASS |
+| exact manifest race | 两个真实 backend 在 precheck 后竞争并收敛同一 manifest，caller Session 均可用 | PASS |
+| same approval attestation race | 两个真实 backend 收敛同一 approval | PASS |
+| different approval attestation race | 一 winner、一 typed `ReleaseApprovalError`；loser Session 可继续 scoped query/flush | PASS |
+| concurrent CurrentRelease CAS | 一 winner、一 typed `stale_current_release`；两个 Session 均可用 | PASS |
 
-预期 lane 使用 `HARNESS_TEST_POSTGRES_URL`；缺 URL 时的 skip 明确记作 `NOT RUN`，SQLite 结果不能替代 PostgreSQL trigger、`RETURNING`、lock 或并发语义。
+该 lane 首次运行暴露两个 029 test-only 问题：并发 helper 派生的 child ID 超过数据库 `VARCHAR(36)`，以及 loser Session 可用性断言误用了全局 manifest count、没有按竞争 Space 精确计数。执行 Owner 只修正测试身份长度与 scope-exact assertion 后重跑得到上述 final 结果；它们不是放宽生产约束。此证据来自真实 PostgreSQL trigger、constraint、`RETURNING`、savepoint 与并发 backend，SQLite 没有替代任何 PG 语义。
 
 ## 4. RA4 唯一 ApprovedSnapshotReader 合同
 
@@ -267,6 +281,7 @@ reason: inspected complete release manifest
 |---|---|
 | RA7 focused | `88 passed` |
 | 029/root focused | `262 passed, 1 skipped`；PG URL 缺失产生 skip，不计作 PG PASS |
+| PostgreSQL 16 integration | `3 passed, 37 deselected in 54.55s`；`reports/postgres-029.xml` 经 guard 验证 `tests=3 skipped=0` |
 | Alembic graph | `0013 (head)`，单 head |
 | Ruff | PASS |
 | mypy | PASS |
@@ -275,10 +290,9 @@ reason: inspected complete release manifest
 
 ### 10.2 尚未完成
 
-- `HARNESS_TEST_POSTGRES_URL` 真实 PostgreSQL lane：PENDING，必须 `skipped=0`。
 - whole-change independent Spec/Quality review：PENDING。
-- fetch/rebase 最新 `main` 后必要 focused/static/PG 重跑：PENDING。
-- PR-ready full deterministic：PENDING；只在上述 finding/PG 关闭后运行一次。
+- fetch/rebase 最新 `main` 后必要 focused/static 门禁：PENDING；若相关 DB diff 变化，须重新运行 PG lane。
+- PR-ready full deterministic：PENDING；只在剩余 review finding 与 external integration blocker 关闭后运行一次。
 - 七段时间、最终 head/diff、secret audit、push/PR URL：PENDING，由执行 Owner 在最终 handoff/PR body 填写。
 
-退出规则：若 PG 与 external integration 均关闭、整包双审无 finding、最终 rebase/full/static/OpenSpec/diff/secret 全绿，才可创建 Ready PR；否则最多创建 Draft，并把上述 blocker 保持为未完成，不得自行 merge。
+退出规则：真实 PG 硬门禁现已关闭；若 external integration 也关闭、整包双审无 finding、最终 rebase/full/static/OpenSpec/diff/secret 全绿，才可创建 Ready PR；否则最多创建 Draft，并把上述 blocker 保持为未完成，不得自行 merge。
