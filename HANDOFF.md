@@ -79,6 +79,23 @@
 
 0k. **OpenSpec 020 T1 run-admission 软件闭环（2026-07-21，已随 PR #24 合入）**：已交付类型化 admission/evaluator/CLI、不可变 identity、输入与 execution-surface 指纹、provider probe、budget/request-attempt ledger、运行时重验和可恢复入口；focused 700、deterministic 2706、Ruff/mypy 与适用 OpenSpec strict 曾通过。权威 canonical 工件仍为零模型 **`BLOCKED`**，T2～T7/D4b 未运行。它是 13 产品企业 baseline 的历史资产，不是 MVP 运行前置；MVP 建立独立 admission，但同样必须等 NS-0 verified 才能调用真实模型。
 
+0l. **OpenSpec 031 分层复审收口中（2026-07-23）**：A authority/cap、B receipt/transport、
+C adoption/cleanup/CLI 已形成独立本地审查层；C commit=`040f3d4a`、tree=`42f2be04`，跨窗口
+Spec 与 Quality/Security 均 C0/I0/M0。D finalizer/wiring 当前仍是未提交候选：生产入口在同一
+session lock 内于 submit、resume、begin-product、post-settlement/candidate 四个边界 fresh 读取
+durable topology/cap；normal/resume 的 candidate evaluator 返回后还会再次独立读取 durable
+topology/cap，漂移、cap 轮换/过期或 loader 失败时 candidate write 为 0。旧 020 preflight
+evaluator 已移除，`run_020` 保留 C 的
+`TrustedKeyPolicy → public_key` 边界。D allowlist 经总控机械修正为 26 路径，唯一删除项是 A-C
+临时 blocker 测试；其安全覆盖由四边界 typed-blocker/zero-effect 测试替代。当前 fresh 证据为
+020/031 affected **1274 passed**、Ruff PASS、strict mypy 3 source files PASS、OpenSpec 020/031
+strict PASS；冻结 main 与当前 031 聚合树的 027/030 compatibility focused **375 passed**，其中
+`canonical_verifier_unavailable` 与 `unknown_admission_profile` 精确断言 **2 passed**。D 最终
+Spec 与 Quality/Security 独立复审均 C0/I0/M0；唯一一次 full deterministic 为
+**3280 passed / 30 deselected / 495 warnings（509.75s）**。PR #26 仍保持 Draft，待本地
+stacked commit/push 与远端 CI；provider/live、
+T2.3 provenance、真实外部签名、root-owned trust/provider 条件均继续 **NOT RUN/BLOCKED**。
+
 1. **T8 金标标注仍剩 2 个产品，但执行入口已统一**：现有 11 份保持不重做；019 先交付可移植 assembler/validator、QualityProfile 与 Gate，020 再按 run-admission 固定精确模型/预算/断点后完成 2 产品、13 产品 baseline、离线分歧处理/dead-letter/冻结 keypoints。强模型只能可选离线提出候选，不能成为 CI/生产前置。原 T8 现场仍见 `openspec/changes/002-goldenset-s0/T8-HANDOVER.md`，新的统一运行合同见 `openspec/changes/020-golden-v01-baseline-run/`。
 2. ✅ **change 003 已完成并验收**（2026-07-12）：产品主数据/别名/版本/文档登记（幂等）+ 文档分类器 + 章节级产品路由 + unassigned 池 + CLI。验收：39 PDF 分类 100%、exact 路由 100%、零 LLM 调用（validation-report.md）；门禁 89 passed 全绿。别名剥后缀的歧义教训见 003/tasks.md 裁决记录。
 3. ⚠️ **change 004 只完成旧规格/测试范围，不是当前生产证明**（2026-07-12）：routing/cleaning 属已确认权利的第一方迁移资产，可由 028 选择性重构；但强模型 judge/fallback、治理旁路和历史分数不满足当前北极星，NS-0/030 验收前不得作为当前 baseline。

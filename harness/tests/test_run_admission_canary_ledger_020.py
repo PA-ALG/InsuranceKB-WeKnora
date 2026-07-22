@@ -90,6 +90,7 @@ def _contract() -> BudgetContract:
         role_rates=role_rates,
         provider_attestation=ProviderSpendCapAttestation(
             provider="bailian",
+            workspace_ref="goldenset-production",
             project_ref="sha256:" + "4" * 64,
             credential_ref="sha256:" + "5" * 64,
             max_cost_minor_units=100,
@@ -179,6 +180,12 @@ def _seed_settled_canary(
 
 def _downgrade_legacy_usage_schema(db_path: Path, *, version: int, reservation_state: str) -> None:
     with sqlite3.connect(db_path) as connection:
+        connection.execute("DROP TABLE infrastructure_provider_cap_evidence")
+        connection.execute("DROP TABLE final_topology_receipt_annexes")
+        connection.execute("DROP TABLE final_infrastructure_topologies")
+        connection.execute("DROP TABLE deployment_role_bindings")
+        connection.execute("DROP TABLE infrastructure_reserves")
+        connection.execute("DROP TABLE infrastructure_authorizations")
         connection.execute("DROP TABLE canary_capability_claims")
         connection.execute(
             """UPDATE request_attempts
@@ -734,7 +741,7 @@ def test_d1_3b_d1_5_legacy_unverified_terminal_debits_full_bound_after_v4_migrat
     assert first.charged == _amounts(10, 5, 2)
     assert first.usage_verified is False
     with sqlite3.connect(db_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
         assert connection.execute("SELECT COUNT(*) FROM canary_capability_claims").fetchone() == (
             0,
         )
@@ -755,7 +762,7 @@ def test_d1_3b_v4_missing_capability_table_fails_closed_without_repair(
         BudgetLedger(db_path)
 
     with sqlite3.connect(db_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
         assert (
             connection.execute(
                 "SELECT name FROM sqlite_master WHERE name='canary_capability_claims'"
@@ -896,7 +903,7 @@ def test_d1_3b_v4_claim_schema_wrong_pk_or_fk_fails_closed_without_repair(
             """SELECT sql FROM sqlite_master
                WHERE type='table' AND name='canary_capability_claims'"""
         ).fetchone()
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
     assert schema_after is not None
     assert str(schema_after[0]) == schema_before
 
@@ -1025,6 +1032,6 @@ def test_d1_3b_v4_claim_schema_exact_shape_drift_fails_closed_without_repair(
             """SELECT sql FROM sqlite_master
                WHERE type='table' AND name='canary_capability_claims'"""
         ).fetchone()
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
     assert schema_after is not None
     assert str(schema_after[0]) == schema_before

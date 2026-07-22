@@ -63,6 +63,9 @@ from insurance_harness.goldenset.admission_cli import (
     _load_deployment_canary_review_approval,
     _safe_load_unique,
 )
+from insurance_harness.goldenset.admission_coordinator import (
+    OperationalAdmissionFinalizer,
+)
 from insurance_harness.goldenset.admission_models import (
     ModelRolePlan,
     ProductInputPlan,
@@ -164,6 +167,16 @@ class _GuardFactory(Protocol):
     ) -> AdmissionRuntimeGuard: ...
 
 
+class _OperationalFinalizer(Protocol):
+    def __call__(
+        self,
+        *,
+        document: RunAdmissionDocument,
+        evaluator: ProductionAdmissionEvaluator,
+        ledger: BudgetLedger,
+    ) -> None: ...
+
+
 class _AnnotationExecutor(Protocol):
     def __call__(
         self,
@@ -219,6 +232,16 @@ class _CandidatePersister(Protocol):
     ) -> None: ...
 
 
+class _CandidateAdmissionBoundary(Protocol):
+    def __call__(
+        self,
+        *,
+        document: RunAdmissionDocument,
+        evaluator: ProductionAdmissionEvaluator,
+        ledger: BudgetLedger,
+    ) -> RuntimeAdmissionDecision: ...
+
+
 class _CandidateResumer(Protocol):
     def __call__(
         self,
@@ -228,6 +251,7 @@ class _CandidateResumer(Protocol):
         evaluator: ProductionAdmissionEvaluator,
         ledger: BudgetLedger,
         configuration: _ReadyConfiguration,
+        candidate_admission_boundary: _CandidateAdmissionBoundary,
     ) -> bool: ...
 
 
@@ -241,10 +265,18 @@ def _candidate_resume_disabled(
     evaluator: ProductionAdmissionEvaluator,
     ledger: BudgetLedger,
     configuration: _ReadyConfiguration,
+    candidate_admission_boundary: _CandidateAdmissionBoundary,
 ) -> bool:
     """Compatibility default for injected test dependencies without resume state."""
 
-    del product_id, document, evaluator, ledger, configuration
+    del (
+        product_id,
+        document,
+        evaluator,
+        ledger,
+        configuration,
+        candidate_admission_boundary,
+    )
     return False
 
 
@@ -261,6 +293,8 @@ class _ReadyCommandDependencies:
 
     session_lock_factory: _SessionLockFactory
     ledger_factory: _LedgerFactory
+    operational_finalizer: _OperationalFinalizer
+    candidate_admission_boundary: _CandidateAdmissionBoundary
     guard_factory: _GuardFactory
     annotation_executor: _AnnotationExecutor
     baseline_executor: _BaselineExecutor
@@ -2022,6 +2056,7 @@ def _resume_annotation_candidate_fail_closed(
     evaluator: ProductionAdmissionEvaluator,
     ledger: BudgetLedger,
     configuration: _ReadyConfiguration,
+    candidate_admission_boundary: _CandidateAdmissionBoundary,
 ) -> bool:
     if product_id != _FIRST_CANARY_PRODUCT_ID:
         raise AdmissionPausedError("candidate_resume_state_unsafe")
@@ -2055,20 +2090,14 @@ def _resume_annotation_candidate_fail_closed(
     if settlement is None or artifacts is None or settlement.reservation_state != "settled":
         raise AdmissionPausedError("candidate_resume_state_unsafe")
 
-    decision = _fresh_initial_candidate_decision(
+    _build_and_persist_annotation_candidate_after_postcheck(
         document=document,
         evaluator=evaluator,
         ledger=ledger,
-    )
-    candidate = _build_annotation_candidate(
-        document=document,
-        ledger=ledger,
-        execution_decision=decision,
         configuration=configuration,
-    )
-    _persist_annotation_candidate(
-        candidate=candidate,
-        configuration=configuration,
+        candidate_admission_boundary=candidate_admission_boundary,
+        candidate_builder=_build_annotation_candidate,
+        candidate_persister=_persist_annotation_candidate,
     )
     return True
 
@@ -2103,14 +2132,80 @@ def _fresh_initial_candidate_decision(
     return decision
 
 
+def _evaluate_candidate_with_operational_postcheck(
+    *,
+    document: RunAdmissionDocument,
+    evaluator: ProductionAdmissionEvaluator,
+    ledger: BudgetLedger,
+) -> RuntimeAdmissionDecision:
+    finalizer = OperationalAdmissionFinalizer(ledger=ledger, evaluator=evaluator)
+    try:
+        return finalizer.evaluate_with_fresh_topology_postcheck(
+            document,
+            expected_scope="goldenset-production",
+            evaluation=lambda: _fresh_initial_candidate_decision(
+                document=document,
+                evaluator=evaluator,
+                ledger=ledger,
+            ),
+        )
+    except BudgetLedgerError:
+        raise AdmissionPausedError("operational_finalization_blocked") from None
+
+
+def _build_and_persist_annotation_candidate_after_postcheck(
+    *,
+    document: RunAdmissionDocument,
+    evaluator: ProductionAdmissionEvaluator,
+    ledger: BudgetLedger,
+    configuration: _ReadyConfiguration,
+    candidate_admission_boundary: _CandidateAdmissionBoundary,
+    candidate_builder: _CandidateBuilder,
+    candidate_persister: _CandidatePersister,
+) -> None:
+    decision = candidate_admission_boundary(
+        document=document,
+        evaluator=evaluator,
+        ledger=ledger,
+    )
+    candidate = candidate_builder(
+        document=document,
+        ledger=ledger,
+        execution_decision=decision,
+        configuration=configuration,
+    )
+    candidate_persister(candidate=candidate, configuration=configuration)
+
+
 def _build_session_lock(account_id: str) -> RunSessionLock:
     return RunSessionLock(account_id=account_id)
+
+
+def _finalize_operational_admission(
+    *,
+    document: RunAdmissionDocument,
+    evaluator: ProductionAdmissionEvaluator,
+    ledger: BudgetLedger,
+) -> None:
+    """Require a fresh durable 031 topology; a report is never a capability."""
+
+    result = OperationalAdmissionFinalizer(
+        ledger=ledger,
+        evaluator=evaluator,
+    ).finalize_durable(
+        document,
+        expected_scope="goldenset-production",
+    )
+    if result.state != "READY":
+        raise AdmissionPausedError("operational_finalization_blocked")
 
 
 def _production_ready_dependencies() -> _ReadyCommandDependencies:
     return _ReadyCommandDependencies(
         session_lock_factory=_build_session_lock,
         ledger_factory=_open_budget_ledger,
+        operational_finalizer=_finalize_operational_admission,
+        candidate_admission_boundary=_evaluate_candidate_with_operational_postcheck,
         guard_factory=_build_runtime_guard,
         annotation_executor=_execute_annotation,
         baseline_executor=_execute_baseline,
@@ -2145,6 +2240,11 @@ async def _run_ready_command_for_testing(
     response_root = configuration.run_root / account_id / "responses"
     with dependencies.session_lock_factory(account_id):
         ledger = dependencies.ledger_factory(configuration.ledger_path)
+        dependencies.operational_finalizer(
+            document=document,
+            evaluator=evaluator,
+            ledger=ledger,
+        )
         guard = dependencies.guard_factory(
             document=document,
             evaluator=evaluator,
@@ -2154,18 +2254,26 @@ async def _run_ready_command_for_testing(
         active_error: BaseException | None = None
         try:
             guard.recover_incomplete_at_startup()
-            if (
-                command == "annotate-canary"
-                and product_id == _FIRST_CANARY_PRODUCT_ID
-                and dependencies.candidate_resumer(
+            if command == "annotate-canary" and product_id == _FIRST_CANARY_PRODUCT_ID:
+                dependencies.operational_finalizer(
+                    document=document,
+                    evaluator=evaluator,
+                    ledger=ledger,
+                )
+                if dependencies.candidate_resumer(
                     product_id=product_id,
                     document=document,
                     evaluator=evaluator,
                     ledger=ledger,
                     configuration=configuration,
-                )
-            ):
-                return
+                    candidate_admission_boundary=dependencies.candidate_admission_boundary,
+                ):
+                    return
+            dependencies.operational_finalizer(
+                document=document,
+                evaluator=evaluator,
+                ledger=ledger,
+            )
             product = guard.begin_product(stage=stage, product_id=product_id)
             if command == "annotate-canary":
                 annotation_result = await dependencies.annotation_executor(
@@ -2214,20 +2322,21 @@ async def _run_ready_command_for_testing(
                 )
                 product.settle()
             if command == "annotate-canary" and product_id == _FIRST_CANARY_PRODUCT_ID:
-                fresh_decision = _fresh_initial_candidate_decision(
+                dependencies.operational_finalizer(
                     document=document,
                     evaluator=evaluator,
                     ledger=ledger,
                 )
-                candidate = dependencies.candidate_builder(
+                _build_and_persist_annotation_candidate_after_postcheck(
                     document=document,
+                    evaluator=evaluator,
                     ledger=ledger,
-                    execution_decision=fresh_decision,
                     configuration=configuration,
-                )
-                dependencies.candidate_persister(
-                    candidate=candidate,
-                    configuration=configuration,
+                    candidate_admission_boundary=(
+                        dependencies.candidate_admission_boundary
+                    ),
+                    candidate_builder=dependencies.candidate_builder,
+                    candidate_persister=dependencies.candidate_persister,
                 )
         except BaseException as error:
             active_error = error
@@ -2258,33 +2367,16 @@ async def _run_ready_command(
     )
 
 
-class OperationalAdmissionStackIncompleteError(RuntimeError):
-    """The review stack cannot execute until canonical 031 finalization is present."""
-
-
-def _require_complete_operational_admission_stack() -> Never:
-    """Fail closed while only the independently reviewable A-C layers are installed."""
-
-    raise OperationalAdmissionStackIncompleteError("031 operational admission stack is incomplete")
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     """Preflight fixed inputs, then dispatch a freshly guarded READY product."""
 
     try:
         arguments = _build_parser().parse_args(argv)
-        try:
-            _require_complete_operational_admission_stack()
-        except OperationalAdmissionStackIncompleteError:
-            return 2
         configuration = _production_configuration()
         document = _load_production_document(configuration)
         if not _contains_exact_product(document, str(arguments.product)):
             return 2
         evaluator = _build_production_evaluator(configuration)
-        result = evaluator(document)
-        if result.state == "BLOCKED":
-            return 2
         try:
             asyncio.run(
                 _run_ready_command(
@@ -2297,6 +2389,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         except AdmissionBlockedError:
             return 2
+        except AdmissionPausedError as error:
+            if error.code == "operational_finalization_blocked":
+                return 2
+            raise
         return 0
     except Exception:
         return 1

@@ -166,7 +166,7 @@ def _roles() -> dict[str, ModelRolePlan]:
 
 
 def _identity_request(*, include_first: bool = True) -> IdentityInspectionRequest:
-    product_ids = ((_FIRST, _SECOND) if include_first else (_SECOND,))
+    product_ids = (_FIRST, _SECOND) if include_first else (_SECOND,)
     products = tuple(
         ProductInputPlan(
             product_id=product_id,
@@ -211,6 +211,7 @@ def _contract(roles: dict[str, ModelRolePlan]) -> BudgetContract:
         },
         provider_attestation=ProviderSpendCapAttestation(
             provider="bailian",
+            workspace_ref="goldenset-production",
             project_ref="sha256:" + "8" * 64,
             credential_ref="sha256:" + "9" * 64,
             max_cost_minor_units=200,
@@ -411,9 +412,7 @@ def _review_payload(
         "issued_at": _NOW - timedelta(minutes=1),
         "expires_at": _NOW + timedelta(minutes=30),
         "review_decision": "approved",
-        "granted_targets": (
-            {"stage": "annotation", "product_id": _SECOND},
-        ),
+        "granted_targets": ({"stage": "annotation", "product_id": _SECOND},),
         "execution_plan_hash": execution_plan_hash(document),
         "evaluated_revision": initial.result.evaluated_revision,
         "runtime_capability_version": initial.result.runtime_capability_version,
@@ -421,18 +420,14 @@ def _review_payload(
         "budget_account_identity": account_id,
         "budget_revision": account.revision,
         "budget_approval_digest": account.approval_digest,
-        "settlement_snapshot_digest": ledger.product_settlement_snapshot_digest(
-            settlement
-        ),
+        "settlement_snapshot_digest": ledger.product_settlement_snapshot_digest(settlement),
         "artifacts": _artifacts(),
         "provider_usage": {
             "role": "annotator",
             "input_tokens": usage.input_tokens,
             "output_tokens": usage.output_tokens,
             "cost_minor_units": usage.cost_minor_units,
-            "role_rate_digest": role_rate_digest(
-                document.budget_contract.role_rates["annotator"]
-            ),
+            "role_rate_digest": role_rate_digest(document.budget_contract.role_rates["annotator"]),
         },
     }
     values.update(overrides)
@@ -453,7 +448,9 @@ def _signed_review(
     )
 
 
-def _setup(tmp_path: Path) -> tuple[
+def _setup(
+    tmp_path: Path,
+) -> tuple[
     RunAdmissionDocument,
     BudgetLedger,
     ProductionAdmissionEvaluator,
@@ -466,9 +463,7 @@ def _setup(tmp_path: Path) -> tuple[
     review_key = Ed25519PrivateKey.generate()
     source = _ReviewSource()
     artifacts = _ArtifactInspector(_artifacts())
-    evaluator = _evaluator(
-        provenance_key, budget_key, review_key, source, artifacts
-    )
+    evaluator = _evaluator(provenance_key, budget_key, review_key, source, artifacts)
     document = _document(provenance_key, budget_key)
     ledger = BudgetLedger._for_testing(
         tmp_path / "budget.sqlite3",
@@ -487,12 +482,10 @@ def test_d1_5_execution_authorization_is_process_only_and_not_in_result(
     source = _ReviewSource()
     inspector = _ArtifactInspector(_artifacts())
     document = _document(provenance_key, budget_key)
-    evaluator = _evaluator(
-        provenance_key, budget_key, review_key, source, inspector
-    )
+    evaluator = _evaluator(provenance_key, budget_key, review_key, source, inspector)
 
     decision = evaluator.evaluate_execution(
-        document, BudgetLedger(tmp_path / "budget.sqlite3")
+        document, BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     )
 
     assert isinstance(decision, RuntimeAdmissionDecision)
@@ -539,7 +532,7 @@ def test_d1_5_initial_authorization_must_match_runtime_account_snapshot(
     )
     decision = evaluator.evaluate_execution(
         document,
-        BudgetLedger(tmp_path / "budget.sqlite3"),
+        BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW),
     )
     assert isinstance(decision.authorization, InitialExecutionAuthorization)
     assert decision.account is not None
@@ -607,20 +600,17 @@ def test_d1_5_initial_canary_requires_typed_identity_product(tmp_path: Path) -> 
     source = _ReviewSource()
     inspector = _ArtifactInspector(_artifacts())
     document = _document(provenance_key, budget_key, include_first=False)
-    evaluator = _evaluator(
-        provenance_key, budget_key, review_key, source, inspector
-    )
+    evaluator = _evaluator(provenance_key, budget_key, review_key, source, inspector)
 
     decision = evaluator.evaluate_execution(
-        document, BudgetLedger(tmp_path / "budget.sqlite3")
+        document, BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     )
 
     assert decision.result.state == "BLOCKED"
     assert decision.authorization is None
     assert decision.account is not None
     assert any(
-        blocker.code == "initial_canary_identity_missing"
-        for blocker in decision.result.blockers
+        blocker.code == "initial_canary_identity_missing" for blocker in decision.result.blockers
     )
 
 
@@ -643,15 +633,14 @@ def test_d1_5_initial_authorization_rechecks_base_expiry_at_final_clock(
 
     decision = evaluator.evaluate_execution(
         _document(provenance_key, budget_key),
-        BudgetLedger(tmp_path / "budget.sqlite3"),
+        BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW),
     )
 
     assert decision.result.state == "BLOCKED"
     assert decision.authorization is None
     assert decision.account is not None
     assert any(
-        blocker.code == "execution_authorization_expired"
-        for blocker in decision.result.blockers
+        blocker.code == "execution_authorization_expired" for blocker in decision.result.blockers
     )
 
 
@@ -673,7 +662,7 @@ def test_d1_5_revalidate_initial_authorization_rechecks_time_and_plan(
     )
     decision = evaluator.evaluate_execution(
         document,
-        BudgetLedger(tmp_path / "budget.sqlite3"),
+        BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW),
     )
     assert isinstance(decision.authorization, InitialExecutionAuthorization)
     authorization = decision.authorization
@@ -739,9 +728,7 @@ def test_d1_5_valid_review_grants_only_second_annotation(tmp_path: Path) -> None
             id="threshold-version",
         ),
         pytest.param(
-            _artifacts().model_copy(
-                update={"disputed_count": 1, "record_count": 19}
-            ),
+            _artifacts().model_copy(update={"disputed_count": 1, "record_count": 19}),
             id="one-of-nineteen",
         ),
     ),
@@ -767,8 +754,7 @@ def test_d1_5_matching_signed_and_observed_quality_ineligible_review_blocks(
     assert decision.result.state == "BLOCKED"
     assert decision.authorization is None
     assert any(
-        blocker.code == "canary_review_quality_ineligible"
-        for blocker in decision.result.blockers
+        blocker.code == "canary_review_quality_ineligible" for blocker in decision.result.blockers
     )
 
 
@@ -777,9 +763,7 @@ def test_d1_5_matching_quality_at_exact_five_percent_can_continue(
 ) -> None:
     document, ledger, evaluator, source, artifacts, review_key = _setup(tmp_path)
     initial = evaluator.evaluate_execution(document, ledger)
-    boundary = _artifacts().model_copy(
-        update={"disputed_count": 1, "record_count": 20}
-    )
+    boundary = _artifacts().model_copy(update={"disputed_count": 1, "record_count": 20})
     artifacts.evidence = boundary
     payload = _review_payload(document, ledger, initial, artifacts=boundary)
     source.envelope = _signed_review(review_key, payload)
@@ -794,9 +778,7 @@ def test_d1_5_matching_quality_at_exact_five_percent_can_continue(
 def test_d1_5_review_authorization_keeps_signed_digest_across_later_drift(
     tmp_path: Path,
 ) -> None:
-    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(
-        tmp_path
-    )
+    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(tmp_path)
     initial = evaluator.evaluate_execution(document, ledger)
     payload = _review_payload(document, ledger, initial)
     source.envelope = _signed_review(review_key, payload)
@@ -859,9 +841,7 @@ def test_d1_5_semantic_invalid_review_blocks_globally_without_fallback(
     overrides: dict[str, object],
     blocker: str,
 ) -> None:
-    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(
-        tmp_path
-    )
+    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(tmp_path)
     initial = evaluator.evaluate_execution(document, ledger)
     source.envelope = _signed_review(
         review_key,
@@ -887,14 +867,11 @@ def test_d1_5_invalid_signature_artifact_or_usage_drift_blocks(
     assert evaluator.evaluate_execution(document, ledger).authorization is None
 
     source.envelope = signed
-    artifacts.evidence = artifacts.evidence.model_copy(
-        update={"golden_digest": "7" * 64}
-    )
+    artifacts.evidence = artifacts.evidence.model_copy(update={"golden_digest": "7" * 64})
     artifact_drift = evaluator.evaluate_execution(document, ledger)
     assert artifact_drift.authorization is None
     assert any(
-        item.code == "canary_review_artifact_mismatch"
-        for item in artifact_drift.result.blockers
+        item.code == "canary_review_artifact_mismatch" for item in artifact_drift.result.blockers
     )
 
     artifacts.evidence = _artifacts()
@@ -910,16 +887,11 @@ def test_d1_5_invalid_signature_artifact_or_usage_drift_blocks(
     source.envelope = _signed_review(review_key, usage_payload)
     usage_drift = evaluator.evaluate_execution(document, ledger)
     assert usage_drift.authorization is None
-    assert any(
-        item.code == "canary_review_usage_mismatch"
-        for item in usage_drift.result.blockers
-    )
+    assert any(item.code == "canary_review_usage_mismatch" for item in usage_drift.result.blockers)
 
 
 def test_d1_5_role_rate_and_ledger_drift_block_review(tmp_path: Path) -> None:
-    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(
-        tmp_path
-    )
+    document, ledger, evaluator, source, _artifacts_inspector, review_key = _setup(tmp_path)
     initial = evaluator.evaluate_execution(document, ledger)
     payload = _review_payload(document, ledger, initial)
     bad_rate = payload.model_copy(
@@ -944,10 +916,7 @@ def test_d1_5_role_rate_and_ledger_drift_block_review(tmp_path: Path) -> None:
         )
     drift = evaluator.evaluate_execution(document, ledger)
     assert drift.authorization is None
-    assert any(
-        item.code == "canary_review_settlement_ineligible"
-        for item in drift.result.blockers
-    )
+    assert any(item.code == "canary_review_settlement_ineligible" for item in drift.result.blockers)
 
 
 def test_d1_5_execution_plan_hash_excludes_approvals_and_derived_state() -> None:
@@ -981,23 +950,22 @@ def test_d1_5_review_source_input_error_is_not_downgraded_to_initial_canary(
     )
 
     with pytest.raises(PermissionError, match="unsafe deployment inbox"):
-        evaluator.evaluate_execution(document, BudgetLedger(tmp_path / "budget.sqlite3"))
+        evaluator.evaluate_execution(
+            document, BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
+        )
 
 
 def test_d1_5_artifact_inspection_failure_is_semantic_block(tmp_path: Path) -> None:
     document, ledger, evaluator, source, artifacts, review_key = _setup(tmp_path)
     initial = evaluator.evaluate_execution(document, ledger)
-    source.envelope = _signed_review(
-        review_key, _review_payload(document, ledger, initial)
-    )
+    source.envelope = _signed_review(review_key, _review_payload(document, ledger, initial))
     artifacts.error = ArtifactEvidenceInspectionError("missing content address")
 
     decision = evaluator.evaluate_execution(document, ledger)
 
     assert decision.authorization is None
     assert any(
-        item.code == "canary_review_artifact_unavailable"
-        for item in decision.result.blockers
+        item.code == "canary_review_artifact_unavailable" for item in decision.result.blockers
     )
 
 
@@ -1017,7 +985,7 @@ def test_d1_5_final_clock_rechecks_review_and_base_expiry(tmp_path: Path) -> Non
         clock=clock,
     )
     document = _document(provenance_key, budget_key)
-    ledger = BudgetLedger(tmp_path / "budget.sqlite3")
+    ledger = BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     _settle_canary(evaluator, document, ledger)
     initial = evaluator.evaluate_execution(document, ledger)
     payload = _review_payload(
@@ -1027,19 +995,14 @@ def test_d1_5_final_clock_rechecks_review_and_base_expiry(tmp_path: Path) -> Non
         expires_at=_NOW + timedelta(minutes=1),
     )
     source.envelope = _signed_review(review_key, payload)
-    artifacts.on_inspect = lambda: setattr(
-        clock, "current", _NOW + timedelta(minutes=2)
-    )
+    artifacts.on_inspect = lambda: setattr(clock, "current", _NOW + timedelta(minutes=2))
 
     decision = evaluator.evaluate_execution(document, ledger)
 
     assert decision.result.state == "BLOCKED"
     assert decision.authorization is None
     assert decision.account is not None
-    assert any(
-        blocker.code == "canary_review_invalid"
-        for blocker in decision.result.blockers
-    )
+    assert any(blocker.code == "canary_review_invalid" for blocker in decision.result.blockers)
 
 
 def test_d1_5_revalidate_review_authorization_rechecks_time_plan_and_artifacts(
@@ -1060,12 +1023,10 @@ def test_d1_5_revalidate_review_authorization_rechecks_time_plan_and_artifacts(
         clock=clock,
     )
     document = _document(provenance_key, budget_key)
-    ledger = BudgetLedger(tmp_path / "budget.sqlite3")
+    ledger = BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     _settle_canary(evaluator, document, ledger)
     initial = evaluator.evaluate_execution(document, ledger)
-    source.envelope = _signed_review(
-        review_key, _review_payload(document, ledger, initial)
-    )
+    source.envelope = _signed_review(review_key, _review_payload(document, ledger, initial))
     decision = evaluator.evaluate_execution(document, ledger)
     assert isinstance(decision.authorization, ReviewedExecutionAuthorization)
     authorization = decision.authorization
@@ -1081,15 +1042,12 @@ def test_d1_5_revalidate_review_authorization_rechecks_time_plan_and_artifacts(
             authorization,
         )
 
-    artifacts.evidence = artifacts.evidence.model_copy(
-        update={"manifest_digest": "8" * 64}
-    )
+    artifacts.evidence = artifacts.evidence.model_copy(update={"manifest_digest": "8" * 64})
     with pytest.raises(
         ExecutionAuthorizationValidationError,
         match="^reviewed execution authorization artifact drifted$",
     ):
         evaluator.revalidate_review_authorization(document, authorization)
-
     artifacts.evidence = authorization.artifact_evidence
     clock.current = authorization.evaluated_at - timedelta(microseconds=1)
     with pytest.raises(ExecutionAuthorizationValidationError, match="backwards"):

@@ -106,7 +106,6 @@ class _MutableIdentityInspector:
             blockers=blockers,
         )
 
-
 class _PassingProbe:
     def run(self, request: ProbeRequest) -> ProbeResult:
         return ProbeResult(
@@ -291,6 +290,7 @@ def _budget_contract(
         },
         provider_attestation=ProviderSpendCapAttestation(
             provider="bailian",
+            workspace_ref="goldenset-production",
             project_ref="sha256:" + "c" * 64,
             credential_ref="sha256:" + "d" * 64,
             max_cost_minor_units=900,
@@ -458,12 +458,15 @@ def _runtime(
     response_root = tmp_path / "checkpoint" / "responses"
     ledger: BudgetLedger
     if ordering_ledger:
-        ledger = _OrderingLedger(
+        ordering = _OrderingLedger._for_testing(
             tmp_path / "budget.sqlite3",
-            response_root=response_root,
+            clock=lambda: _NOW,
         )
+        ordering.response_root = response_root
+        ordering.terminal_observed_after_durable_response = False
+        ledger = ordering
     else:
-        ledger = BudgetLedger(tmp_path / "budget.sqlite3")
+        ledger = BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     guard = AdmissionRuntimeGuard._for_testing(
         document=document,
         evaluator=evaluator,
@@ -560,9 +563,7 @@ async def test_d1_5_production_bailian_rejects_non_invocable_identity_before_inf
     monkeypatch.setattr(admission_runtime, "_invoke_bailian", counted_inference)
     invoker = admission_runtime._BailianApprovedModelInvoker()
 
-    with pytest.raises(
-        AdmissionPausedError, match="approved_model_identity_not_invocable"
-    ):
+    with pytest.raises(AdmissionPausedError, match="approved_model_identity_not_invocable"):
         await invoker.complete(
             role_plan=role_plan,
             maximum=_REQUEST_MAXIMUM,

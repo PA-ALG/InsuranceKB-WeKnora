@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Protocol, cast
+from typing import NoReturn, Protocol, cast
 
 import pytest
 
@@ -91,6 +92,7 @@ class _ProductionCandidateResumer(Protocol):
         evaluator: ProductionAdmissionEvaluator,
         ledger: BudgetLedger,
         configuration: object,
+        candidate_admission_boundary: object,
     ) -> bool: ...
 
 
@@ -228,10 +230,93 @@ def _candidate_resumer() -> _ProductionCandidateResumer:
     )
 
 
+def _candidate_boundary(**kwargs: object) -> RuntimeAdmissionDecision:
+    return run_020._fresh_initial_candidate_decision(
+        document=cast(RunAdmissionDocument, kwargs["document"]),
+        evaluator=cast(ProductionAdmissionEvaluator, kwargs["evaluator"]),
+        ledger=cast(BudgetLedger, kwargs["ledger"]),
+    )
+
+
 def test_d1_5_production_dependencies_hold_pipeline_lock_through_settlement() -> None:
     dependencies = run_020._production_ready_dependencies()
 
     assert dependencies.baseline_settlement_guard is run_settlement_guard
+    assert dependencies.operational_finalizer is run_020._finalize_operational_admission
+    assert (
+        dependencies.candidate_admission_boundary
+        is run_020._evaluate_candidate_with_operational_postcheck
+    )
+
+
+def test_o8_t9_18_production_candidate_boundary_blocks_before_build_and_persist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    document = _resume_document()
+    ledger = cast(BudgetLedger, object())
+    decision = _fresh_decision()
+    evaluator_impl = _ResumeEvaluator(decision)
+    evaluator = cast(ProductionAdmissionEvaluator, evaluator_impl)
+    events: list[str] = []
+
+    class _PostcheckFailureFinalizer:
+        def __init__(
+            self,
+            *,
+            ledger: BudgetLedger,
+            evaluator: ProductionAdmissionEvaluator,
+        ) -> None:
+            assert ledger is globals_ledger
+            assert evaluator is globals_evaluator
+            events.append("finalizer_constructed")
+
+        def evaluate_with_fresh_topology_postcheck(
+            self,
+            _document: RunAdmissionDocument,
+            *,
+            expected_scope: str,
+            evaluation: Callable[[], RuntimeAdmissionDecision],
+        ) -> RuntimeAdmissionDecision:
+            assert expected_scope == "goldenset-production"
+            events.append("fresh_postcheck")
+            evaluation()
+            raise BudgetLedgerError("post-evaluator durable reload failed")
+
+    globals_ledger = ledger
+    globals_evaluator = evaluator
+    monkeypatch.setattr(
+        run_020,
+        "OperationalAdmissionFinalizer",
+        _PostcheckFailureFinalizer,
+    )
+    dependencies = run_020._production_ready_dependencies()
+
+    def forbidden_builder(**_kwargs: object) -> CanaryReviewCandidate:
+        events.append("candidate_write")
+        raise AssertionError("candidate build ran after topology reload failure")
+
+    def forbidden_persister(**_kwargs: object) -> None:
+        events.append("candidate_write")
+        raise AssertionError("candidate persist ran after topology reload failure")
+
+    with pytest.raises(
+        AdmissionPausedError, match="^operational_finalization_blocked$"
+    ):
+        run_020._build_and_persist_annotation_candidate_after_postcheck(
+            document=document,
+            evaluator=evaluator,
+            ledger=ledger,
+            configuration=_configuration(tmp_path),
+            candidate_admission_boundary=(
+                dependencies.candidate_admission_boundary
+            ),
+            candidate_builder=forbidden_builder,
+            candidate_persister=forbidden_persister,
+        )
+
+    assert evaluator_impl.calls == [(document, ledger)]
+    assert events == ["finalizer_constructed", "fresh_postcheck"]
 
 
 def _fresh_decision() -> RuntimeAdmissionDecision:
@@ -873,6 +958,7 @@ def test_d1_5_candidate_resumer_returns_false_only_when_state_is_fully_absent(
         evaluator=evaluator,
         ledger=ledger,
         configuration=configuration,
+        candidate_admission_boundary=_candidate_boundary,
     )
 
     assert resumed is False
@@ -926,6 +1012,7 @@ def test_d1_5_candidate_resumer_revalidates_then_builds_and_persists(
         evaluator=evaluator,
         ledger=ledger,
         configuration=configuration,
+        candidate_admission_boundary=_candidate_boundary,
     )
 
     assert resumed is True
@@ -941,6 +1028,61 @@ def test_d1_5_candidate_resumer_revalidates_then_builds_and_persists(
     assert persister_calls == [
         {"candidate": candidate, "configuration": configuration}
     ]
+    assert ledger_impl.settle_calls == 0
+
+
+def test_o8_t9_18_resume_candidate_evaluator_drift_blocks_before_write(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    document = _resume_document()
+    configuration = _configuration(tmp_path)
+    ledger_impl = _ResumeLedger("settled")
+    ledger = cast(BudgetLedger, ledger_impl)
+    store = _ResumeArtifactStore("exact")
+    evaluator_impl = _ResumeEvaluator(_fresh_decision())
+    evaluator = cast(ProductionAdmissionEvaluator, evaluator_impl)
+    post_resume_calls: list[dict[str, object]] = []
+
+    def candidate_admission_boundary(**kwargs: object) -> NoReturn:
+        cast(ProductionAdmissionEvaluator, kwargs["evaluator"]).evaluate_execution(
+            cast(RunAdmissionDocument, kwargs["document"]),
+            cast(BudgetLedger, kwargs["ledger"]),
+        )
+        raise AdmissionPausedError("operational_finalization_blocked")
+
+    monkeypatch.setattr(run_020, "execution_plan_hash", lambda _value: _PLAN_HASH)
+    monkeypatch.setattr(
+        run_020,
+        "budget_account_identity",
+        lambda _run, _purpose: "c" * 64,
+    )
+    monkeypatch.setattr(run_020, "CanaryArtifactStore", lambda: store)
+    monkeypatch.setattr(
+        run_020,
+        "_build_annotation_candidate",
+        lambda **kwargs: post_resume_calls.append(kwargs),
+    )
+    monkeypatch.setattr(
+        run_020,
+        "_persist_annotation_candidate",
+        lambda **kwargs: post_resume_calls.append(kwargs),
+    )
+
+    with pytest.raises(
+        AdmissionPausedError, match="operational_finalization_blocked"
+    ):
+        _candidate_resumer()(
+            product_id=_FIRST_CANARY,
+            document=document,
+            evaluator=evaluator,
+            ledger=ledger,
+            configuration=configuration,
+            candidate_admission_boundary=candidate_admission_boundary,
+        )
+
+    assert evaluator_impl.calls == [(document, ledger)]
+    assert post_resume_calls == []
     assert ledger_impl.settle_calls == 0
 
 
@@ -1002,6 +1144,7 @@ def test_d1_5_candidate_resumer_rejects_ambiguous_or_unauthorized_state(
             evaluator=evaluator,
             ledger=ledger,
             configuration=configuration,
+            candidate_admission_boundary=_candidate_boundary,
         )
 
     if non_initial:

@@ -833,15 +833,23 @@ class ProductionAdmissionEvaluator:
         )
         if len(envelopes) != 1:  # Defensive: READY construction already requires this.
             raise BudgetLedgerError("READY admission requires one budget approval")
-        account = ledger.open_or_expand_account(
-            plan=document.plan.payload,
-            contract=contract,
-            envelope=envelopes[0],
-            trusted_public_keys=self._trusted_public_keys,
-            expected_scope=_BUDGET_SCOPE,
-            authorized_roles=self._allowed_budget_roles,
-            now=result.evaluated_at,
-        )
+        if ledger._is_testing_mode():
+            account = ledger._open_or_expand_account_for_testing(
+                plan=document.plan.payload,
+                contract=contract,
+                envelope=envelopes[0],
+                trusted_public_keys=self._trusted_public_keys,
+                expected_scope=_BUDGET_SCOPE,
+                authorized_roles=self._allowed_budget_roles,
+                now=result.evaluated_at,
+            )
+        else:
+            account = ledger.open_or_expand_account(
+                plan=document.plan.payload,
+                contract=contract,
+                envelope=envelopes[0],
+                expected_scope=_BUDGET_SCOPE,
+            )
         return result, account
 
     def evaluate_execution(

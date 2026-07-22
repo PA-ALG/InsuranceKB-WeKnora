@@ -192,7 +192,7 @@ def _expand_budget_account(
             budget_key.sign(approval_signed_bytes("budget", payload))
         ).decode("ascii"),
     )
-    ledger.open_or_expand_account(
+    ledger._open_or_expand_account_for_testing(
         plan=expanded_plan,
         contract=expanded_contract,
         envelope=envelope,
@@ -208,8 +208,8 @@ def test_d1_5_evaluation_exception_chain_is_sanitized_before_authorization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
 
@@ -240,8 +240,8 @@ def test_d1_5_initial_revalidation_exception_chain_is_sanitized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
 
@@ -275,8 +275,8 @@ def test_d1_5_initial_atomic_reserve_exception_chain_is_sanitized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
 
@@ -478,8 +478,8 @@ def test_d1_5_product_admission_exposes_same_read_only_execution_decision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     observed: list[RuntimeAdmissionDecision] = []
     original_evaluate = evaluator.evaluate_execution
@@ -544,8 +544,8 @@ def test_d1_5_initial_authorization_expiry_between_revalidation_and_reserve_fail
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
     original_revalidate = getattr(evaluator, "revalidate_initial_authorization", None)
@@ -588,8 +588,8 @@ def test_d1_5_initial_authorization_real_budget_revision_drift_reserves_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
     original_revalidate = getattr(evaluator, "revalidate_initial_authorization", None)
@@ -661,8 +661,8 @@ def test_d1_5_reviewed_authorization_expiry_after_revalidation_claims_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, source, _budget_key, review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, source, _budget_key, review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     auth_cases._settle_canary(evaluator, document, ledger)
     initial = evaluator.evaluate_execution(document, ledger)
@@ -706,8 +706,8 @@ def test_d1_5_authorization_clock_rollback_before_evaluation_reserves_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _MutableClock()
-    document, ledger, evaluator, _source, _budget_key, _review_key = (
-        _initial_runtime_context(tmp_path, clock)
+    document, ledger, evaluator, _source, _budget_key, _review_key = _initial_runtime_context(
+        tmp_path, clock
     )
     model_calls = _install_zero_model_counter(monkeypatch)
     original_revalidate = getattr(evaluator, "revalidate_initial_authorization", None)

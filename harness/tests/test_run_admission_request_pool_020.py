@@ -124,6 +124,7 @@ def _contract(
         role_rates=_rates(roles, weak_input_rate=weak_input_rate),
         provider_attestation=ProviderSpendCapAttestation(
             provider="bailian",
+            workspace_ref="goldenset-production",
             project_ref="sha256:" + "a" * 64,
             credential_ref="sha256:" + "b" * 64,
             max_cost_minor_units=2_000,
@@ -198,7 +199,7 @@ def _admit(
     private_key: Ed25519PrivateKey,
 ) -> AccountSnapshot:
     plan = _plan(contract)
-    return ledger.open_or_expand_account(
+    return ledger._open_or_expand_account_for_testing(
         plan=plan,
         contract=contract,
         envelope=_envelope(private_key, contract, plan),
@@ -213,7 +214,7 @@ def _reserve(
     tmp_path: Path,
     contract: BudgetContract,
 ) -> tuple[BudgetLedger, AccountSnapshot]:
-    ledger = BudgetLedger(tmp_path / "budget.sqlite3")
+    ledger = BudgetLedger._for_testing(tmp_path / "budget.sqlite3", clock=lambda: _NOW)
     account = _admit(ledger, contract, Ed25519PrivateKey.generate())
     product = contract.product_reserves[0]
     ledger.reserve_product(
@@ -305,6 +306,12 @@ def _replace_attempts_with_pre_pool_schema(db_path: Path) -> list[tuple[object, 
         connection.executescript(
             """
             BEGIN IMMEDIATE;
+            DROP TABLE infrastructure_provider_cap_evidence;
+            DROP TABLE final_topology_receipt_annexes;
+            DROP TABLE final_infrastructure_topologies;
+            DROP TABLE deployment_role_bindings;
+            DROP TABLE infrastructure_reserves;
+            DROP TABLE infrastructure_authorizations;
             CREATE TABLE request_attempts_pre_pool (
                 account_id TEXT NOT NULL,
                 stage TEXT NOT NULL,
@@ -358,9 +365,7 @@ def _replace_attempts_with_pre_pool_schema(db_path: Path) -> list[tuple[object, 
             COMMIT;
             """
         )
-        rows = connection.execute(
-            "SELECT * FROM request_attempts ORDER BY attempt_no"
-        ).fetchall()
+        rows = connection.execute("SELECT * FROM request_attempts ORDER BY attempt_no").fetchall()
     return [tuple(row) for row in rows]
 
 
@@ -434,6 +439,12 @@ def _replace_pool_with_pre_binding_schema(db_path: Path) -> None:
         connection.executescript(
             """
             BEGIN IMMEDIATE;
+            DROP TABLE infrastructure_provider_cap_evidence;
+            DROP TABLE final_topology_receipt_annexes;
+            DROP TABLE final_infrastructure_topologies;
+            DROP TABLE deployment_role_bindings;
+            DROP TABLE infrastructure_reserves;
+            DROP TABLE infrastructure_authorizations;
             CREATE TABLE request_pool_limits_pre_binding (
                 account_id TEXT NOT NULL,
                 stage TEXT NOT NULL,
@@ -589,7 +600,7 @@ def test_d1_3b_concurrent_same_dynamic_unit_has_exactly_one_permit(
 
     def worker(owner: str) -> None:
         try:
-            contender = BudgetLedger(db_path)
+            contender = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
             barrier.wait()
             permit = _claim_pool(
                 contender,
@@ -611,7 +622,12 @@ def test_d1_3b_concurrent_same_dynamic_unit_has_exactly_one_permit(
 
     assert errors == []
     assert len(permits) == 1
-    assert BudgetLedger(db_path).account_snapshot(account.account_id).attempt_count == 1
+    assert (
+        BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
+        .account_snapshot(account.account_id)
+        .attempt_count
+        == 1
+    )
 
 
 def test_d1_3b_unvisited_pool_branches_do_not_block_product_settlement(
@@ -674,7 +690,7 @@ def test_d1_3b_recovery_marks_incomplete_pool_attempt_uncertain_full_charge(
     if mark_sent:
         ledger.mark_sent(permit)
 
-    recovered = BudgetLedger(db_path)
+    recovered = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     assert recovered.recover_incomplete(account.account_id) == 1
     attempt = recovered.attempt_snapshot(permit.key)
     assert attempt.state == "uncertain"
@@ -728,10 +744,10 @@ def test_d1_3b_d1_3c_pool_revision_cannot_rebind_model_or_rate(
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
-    ledger = BudgetLedger(db_path)
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     initial_contract = _contract()
     initial_plan = _plan(initial_contract)
-    initial = ledger.open_or_expand_account(
+    initial = ledger._open_or_expand_account_for_testing(
         plan=initial_plan,
         contract=initial_contract,
         envelope=_envelope(private_key, initial_contract, initial_plan),
@@ -786,18 +802,12 @@ def test_d1_3b_d1_3c_pool_revision_cannot_rebind_model_or_rate(
         previous_digest=initial.approval_digest,
     )
     with sqlite3.connect(db_path) as connection:
-        pool_before = connection.execute(
-            "SELECT * FROM request_pool_limits"
-        ).fetchall()
-        attempts_before = connection.execute(
-            "SELECT * FROM request_attempts"
-        ).fetchall()
-        approvals_before = connection.execute(
-            "SELECT * FROM budget_approvals"
-        ).fetchall()
+        pool_before = connection.execute("SELECT * FROM request_pool_limits").fetchall()
+        attempts_before = connection.execute("SELECT * FROM request_attempts").fetchall()
+        approvals_before = connection.execute("SELECT * FROM budget_approvals").fetchall()
 
     with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
-        ledger.open_or_expand_account(
+        ledger._open_or_expand_account_for_testing(
             plan=expanded_plan,
             contract=expanded_contract,
             envelope=expanded_envelope,
@@ -812,15 +822,9 @@ def test_d1_3b_d1_3c_pool_revision_cannot_rebind_model_or_rate(
     assert after.approval_digest == initial.approval_digest
     assert after.attempt_count == 1
     with sqlite3.connect(db_path) as connection:
-        assert connection.execute("SELECT * FROM request_pool_limits").fetchall() == (
-            pool_before
-        )
-        assert connection.execute("SELECT * FROM request_attempts").fetchall() == (
-            attempts_before
-        )
-        assert connection.execute("SELECT * FROM budget_approvals").fetchall() == (
-            approvals_before
-        )
+        assert connection.execute("SELECT * FROM request_pool_limits").fetchall() == (pool_before)
+        assert connection.execute("SELECT * FROM request_attempts").fetchall() == (attempts_before)
+        assert connection.execute("SELECT * FROM budget_approvals").fetchall() == (approvals_before)
 
 
 @pytest.mark.parametrize("mutation", ("add_pool", "remove_pool", "change_pool"))
@@ -838,8 +842,8 @@ def test_d1_3c_revision_rejects_any_request_pool_difference_before_mutation(
         request_pools=(initial_pools if mutation == "remove_pool" else initial_pools[:1])
     )
     initial_plan = _plan(initial_contract)
-    ledger = BudgetLedger(db_path)
-    initial = ledger.open_or_expand_account(
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
+    initial = ledger._open_or_expand_account_for_testing(
         plan=initial_plan,
         contract=initial_contract,
         envelope=_envelope(private_key, initial_contract, initial_plan),
@@ -884,7 +888,7 @@ def test_d1_3c_revision_rejects_any_request_pool_difference_before_mutation(
         )
 
     with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
-        ledger.open_or_expand_account(
+        ledger._open_or_expand_account_for_testing(
             plan=changed_plan,
             contract=changed_contract,
             envelope=changed_envelope,
@@ -915,7 +919,7 @@ def test_d1_3a_d1_3c_account_role_rates_lock_before_new_pool_revision(
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
-    ledger = BudgetLedger(db_path)
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     exact = RequestReserve(
         request_unit=_unit("initial judge request"),
         role="judge",
@@ -923,7 +927,7 @@ def test_d1_3a_d1_3c_account_role_rates_lock_before_new_pool_revision(
     )
     initial_contract = _contract(request_reserves=(exact,), request_pools=())
     initial_plan = _plan(initial_contract)
-    initial = ledger.open_or_expand_account(
+    initial = ledger._open_or_expand_account_for_testing(
         plan=initial_plan,
         contract=initial_contract,
         envelope=_envelope(private_key, initial_contract, initial_plan),
@@ -968,19 +972,13 @@ def test_d1_3a_d1_3c_account_role_rates_lock_before_new_pool_revision(
         previous_digest=initial.approval_digest,
     )
     with sqlite3.connect(db_path) as connection:
-        account_before = connection.execute(
-            "SELECT * FROM budget_accounts"
-        ).fetchall()
-        approvals_before = connection.execute(
-            "SELECT * FROM budget_approvals"
-        ).fetchall()
+        account_before = connection.execute("SELECT * FROM budget_accounts").fetchall()
+        approvals_before = connection.execute("SELECT * FROM budget_approvals").fetchall()
         limits_before = connection.execute("SELECT * FROM product_limits").fetchall()
-        pools_before = connection.execute(
-            "SELECT * FROM request_pool_limits"
-        ).fetchall()
+        pools_before = connection.execute("SELECT * FROM request_pool_limits").fetchall()
 
     with pytest.raises(BudgetLedgerError, match="only the account ceiling"):
-        ledger.open_or_expand_account(
+        ledger._open_or_expand_account_for_testing(
             plan=expanded_plan,
             contract=expanded_contract,
             envelope=expanded_envelope,
@@ -991,18 +989,10 @@ def test_d1_3a_d1_3c_account_role_rates_lock_before_new_pool_revision(
         )
 
     with sqlite3.connect(db_path) as connection:
-        assert connection.execute("SELECT * FROM budget_accounts").fetchall() == (
-            account_before
-        )
-        assert connection.execute("SELECT * FROM budget_approvals").fetchall() == (
-            approvals_before
-        )
-        assert connection.execute("SELECT * FROM product_limits").fetchall() == (
-            limits_before
-        )
-        assert connection.execute("SELECT * FROM request_pool_limits").fetchall() == (
-            pools_before
-        )
+        assert connection.execute("SELECT * FROM budget_accounts").fetchall() == (account_before)
+        assert connection.execute("SELECT * FROM budget_approvals").fetchall() == (approvals_before)
+        assert connection.execute("SELECT * FROM product_limits").fetchall() == (limits_before)
+        assert connection.execute("SELECT * FROM request_pool_limits").fetchall() == (pools_before)
 
 
 def test_d1_3b_d1_3c_pre_pool_schema_migrates_rows_and_remains_operable(
@@ -1012,13 +1002,11 @@ def test_d1_3b_d1_3c_pre_pool_schema_migrates_rows_and_remains_operable(
     old_rows = _replace_attempts_with_pre_pool_schema(db_path)
     assert [row[6] for row in old_rows] == ["terminal", "uncertain", "prepared"]
 
-    migrated = BudgetLedger(db_path)
+    migrated = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
 
     with sqlite3.connect(db_path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
-        columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(request_attempts)")
-        }
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(request_attempts)")}
         preserved_rows = connection.execute(
             """SELECT
                    account_id,stage,product_id,request_unit,attempt_no,
@@ -1033,7 +1021,7 @@ def test_d1_3b_d1_3c_pre_pool_schema_migrates_rows_and_remains_operable(
             "SELECT role,limit_kind FROM request_attempts ORDER BY attempt_no"
         ).fetchall()
         foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
-    assert version == (4,)
+    assert version == (8,)
     assert {"role", "limit_kind"}.issubset(columns)
     assert [tuple(row) for row in preserved_rows] == old_rows
     assert [tuple(row) for row in migrated_bindings] == [
@@ -1079,7 +1067,7 @@ def test_d1_3c_pre_pool_schema_migration_failure_preserves_old_table(
     assert schema_before is not None
 
     with pytest.raises(BudgetLedgerError, match="migration"):
-        BudgetLedger(db_path)
+        BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
 
     with sqlite3.connect(db_path) as connection:
         rows_after = connection.execute(
@@ -1089,9 +1077,7 @@ def test_d1_3c_pre_pool_schema_migration_failure_preserves_old_table(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='request_attempts'"
         ).fetchone()
         version = connection.execute("PRAGMA user_version").fetchone()
-        columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(request_attempts)")
-        }
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(request_attempts)")}
     assert rows_after == rows_before
     assert schema_after == schema_before
     assert version == (1,)
@@ -1104,10 +1090,10 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_iden
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
-    ledger = BudgetLedger(db_path)
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     initial_contract = _contract()
     initial_plan = _plan(initial_contract)
-    initial = ledger.open_or_expand_account(
+    initial = ledger._open_or_expand_account_for_testing(
         plan=initial_plan,
         contract=initial_contract,
         envelope=_envelope(private_key, initial_contract, initial_plan),
@@ -1120,7 +1106,7 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_iden
         update={"ceiling": _amounts(30_000, 15_000, 3_000)}
     )
     expanded_plan = _plan(expanded_contract)
-    ledger.open_or_expand_account(
+    ledger._open_or_expand_account_for_testing(
         plan=expanded_plan,
         contract=expanded_contract,
         envelope=_envelope(
@@ -1137,7 +1123,7 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_iden
     )
     _replace_pool_with_pre_binding_schema(db_path)
 
-    BudgetLedger(db_path)
+    BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
 
     expected_rate = expanded_contract.role_rates["weak_extractor"]
     with sqlite3.connect(db_path) as connection:
@@ -1149,7 +1135,7 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_uses_immutable_revision_one_iden
     assert binding is not None
     assert binding[0] == expected_rate.model_role_identity_hash
     assert isinstance(binding[1], str) and len(binding[1]) == 64
-    assert version == (4,)
+    assert version == (8,)
 
 
 def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_rebind(
@@ -1157,7 +1143,7 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_rebind(
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
-    ledger = BudgetLedger(db_path)
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     initial_contract = _contract()
     initial = _admit(ledger, initial_contract, private_key)
     rebound_contract = initial_contract.model_copy(
@@ -1189,12 +1175,11 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_rebind(
     _replace_pool_with_pre_binding_schema(db_path)
 
     with pytest.raises(BudgetLedgerError, match="binding changed"):
-        BudgetLedger(db_path)
+        BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
 
     with sqlite3.connect(db_path) as connection:
         columns = {
-            str(row[1])
-            for row in connection.execute("PRAGMA table_info(request_pool_limits)")
+            str(row[1]) for row in connection.execute("PRAGMA table_info(request_pool_limits)")
         }
         version = connection.execute("PRAGMA user_version").fetchone()
     assert columns == set(_PRE_BINDING_POOL_COLUMNS)
@@ -1206,15 +1191,13 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_bound_change(
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
     db_path = tmp_path / "budget.sqlite3"
-    ledger = BudgetLedger(db_path)
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
     initial_contract = _contract()
     initial = _admit(ledger, initial_contract, private_key)
     changed_product = initial_contract.product_reserves[0].model_copy(
         update={"request_pools": (_pool(max_attempts=4),)}
     )
-    changed_contract = initial_contract.model_copy(
-        update={"product_reserves": (changed_product,)}
-    )
+    changed_contract = initial_contract.model_copy(update={"product_reserves": (changed_product,)})
     changed_digest = "5" * 64
     with sqlite3.connect(db_path) as connection:
         connection.execute(
@@ -1238,25 +1221,18 @@ def test_d1_3b_d1_3c_pre_binding_pool_migration_rejects_historical_bound_change(
                SET current_revision=2,approval_digest=? WHERE account_id=?""",
             (changed_digest, initial.account_id),
         )
-        connection.execute(
-            "UPDATE request_pool_limits SET max_attempts=4"
-        )
+        connection.execute("UPDATE request_pool_limits SET max_attempts=4")
     _replace_pool_with_pre_binding_schema(db_path)
     with sqlite3.connect(db_path) as connection:
-        rows_before = connection.execute(
-            "SELECT * FROM request_pool_limits"
-        ).fetchall()
+        rows_before = connection.execute("SELECT * FROM request_pool_limits").fetchall()
 
     with pytest.raises(BudgetLedgerError, match="history changed"):
-        BudgetLedger(db_path)
+        BudgetLedger._for_testing(db_path, clock=lambda: _NOW)
 
     with sqlite3.connect(db_path) as connection:
-        rows_after = connection.execute(
-            "SELECT * FROM request_pool_limits"
-        ).fetchall()
+        rows_after = connection.execute("SELECT * FROM request_pool_limits").fetchall()
         columns = {
-            str(row[1])
-            for row in connection.execute("PRAGMA table_info(request_pool_limits)")
+            str(row[1]) for row in connection.execute("PRAGMA table_info(request_pool_limits)")
         }
         version = connection.execute("PRAGMA user_version").fetchone()
     assert rows_after == rows_before

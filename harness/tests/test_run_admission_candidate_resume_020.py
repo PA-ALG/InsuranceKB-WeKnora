@@ -198,6 +198,13 @@ async def _no_op_settlement_guard(_run_dir: Path) -> AsyncIterator[None]:
 
 def _dependencies(**values: object) -> SimpleNamespace:
     values.setdefault("baseline_settlement_guard", _no_op_settlement_guard)
+    values.setdefault("operational_finalizer", lambda **_kwargs: None)
+    values.setdefault(
+        "candidate_admission_boundary",
+        lambda **kwargs: cast(
+            _FreshEvaluator, kwargs["evaluator"]
+        ).evaluate_execution(kwargs["document"], kwargs["ledger"]),
+    )
     return SimpleNamespace(**values)
 
 

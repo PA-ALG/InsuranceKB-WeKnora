@@ -28,11 +28,12 @@ from insurance_harness.goldenset.admission_models import (
     BudgetApprovalEntry,
     BudgetApprovalEnvelope,
     BudgetApprovalPayload,
-    HistoricalProvenance,
     ModelRolePlan,
+    ObservedAnnotationProvenance,
     PendingModelRolePlan,
     ProvenanceApprovalEnvelope,
     ProvenanceApprovalPayload,
+    ProvenanceApprovalSelection,
     RunAdmissionPlan,
     RunAdmissionPlanPayload,
     approval_signed_bytes,
@@ -77,7 +78,7 @@ class _PassingProbe:
 
 
 def _identity_request(
-    provenance: tuple[HistoricalProvenance, ...] = (),
+    provenance: tuple[ProvenanceApprovalSelection, ...] = (),
 ) -> IdentityInspectionRequest:
     return IdentityInspectionRequest(
         required_dependency_revisions={},
@@ -176,6 +177,7 @@ def _contract(roles: dict[str, ModelRolePlan]) -> BudgetContract:
         },
         provider_attestation=ProviderSpendCapAttestation(
             provider="bailian",
+            workspace_ref="goldenset-production",
             project_ref="sha256:" + "c" * 64,
             credential_ref="sha256:" + "d" * 64,
             max_cost_minor_units=900,
@@ -195,7 +197,8 @@ def _signed_document(
 ) -> RunAdmissionDocument:
     roles = _roles()
     contract = _contract(roles)
-    provenance = HistoricalProvenance(
+    provenance = ObservedAnnotationProvenance(
+        provenance_kind="observed_annotation",
         product_id="product-01",
         annotator_provider="bailian",
         annotator_model_id="historical-annotator",

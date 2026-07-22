@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import NoReturn, cast
+from typing import Any, NoReturn, cast
 
 import pytest
 
@@ -73,7 +73,6 @@ def test_d1_5_production_entrypoint_source_exists() -> None:
         "D1.5 requires insurance_harness.goldenset.run_020 before guarded commands "
         "can be implemented"
     )
-
 
 @pytest.mark.parametrize("command", _COMMANDS)
 def test_d1_5_entrypoint_accepts_exactly_one_product(
@@ -164,15 +163,6 @@ def test_d1_5_production_bootstrap_forces_remote_probe_and_fixed_paths(
     } == expected
 
 
-class _BlockedEvaluator:
-    def __init__(self, events: list[str]) -> None:
-        self._events = events
-
-    def __call__(self, _document: object) -> SimpleNamespace:
-        self._events.append("evaluate")
-        return SimpleNamespace(state="BLOCKED")
-
-
 class _ReadyEvaluator:
     def __init__(self, events: list[str]) -> None:
         self._events = events
@@ -214,7 +204,7 @@ def _install_construction_bombs(
 
 
 @pytest.mark.parametrize("command", _COMMANDS)
-def test_d1_5_blocked_entrypoint_constructs_no_ledger_client_or_pipeline(
+def test_o8_missing_topology_entrypoint_runs_no_preflight_probe_or_pipeline(
     entrypoint_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     command: str,
@@ -230,9 +220,13 @@ def test_d1_5_blocked_entrypoint_constructs_no_ledger_client_or_pipeline(
         events.append("load_document")
         return document
 
-    def build_evaluator(_configuration: object) -> _BlockedEvaluator:
+    def build_evaluator(_configuration: object) -> _ReadyEvaluator:
         events.append("build_evaluator")
-        return _BlockedEvaluator(events)
+        return _ReadyEvaluator(events)
+
+    async def run_ready_command(**_kwargs: object) -> None:
+        events.append("031_finalizer")
+        raise AdmissionPausedError("operational_finalization_blocked")
 
     monkeypatch.setattr(
         entrypoint_module,
@@ -244,14 +238,12 @@ def test_d1_5_blocked_entrypoint_constructs_no_ledger_client_or_pipeline(
         "_build_production_evaluator",
         build_evaluator,
     )
+    monkeypatch.setattr(entrypoint_module, "_run_ready_command", run_ready_command)
     _install_construction_bombs(entrypoint_module, monkeypatch, events)
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main([command, "--product", _FIRST_CANARY]) == 2
-    # 031 A-C deliberately fail closed before the legacy 020 evaluator or any
-    # runtime dependency is constructed. D owns the canonical finalizer wiring
-    # that restores the downstream execution assertions.
-    assert events == []
+    assert events == ["load_document", "build_evaluator", "031_finalizer"]
 
 
 @pytest.mark.parametrize("command", _COMMANDS)
@@ -298,7 +290,10 @@ def test_d1_5_product_must_exactly_match_typed_identity_before_ledger_or_client(
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main([command, "--product", requested_product]) == 2
-    assert events == []
+    assert events in (
+        ["load_document"],
+        ["load_document", "build_evaluator", "evaluate"],
+    )
 
 
 def _qualified_name(node: ast.expr) -> str:
@@ -430,6 +425,11 @@ class _FakeRuntimeGuard:
 
 
 def _ready_dependencies(module: ModuleType, **values: object) -> object:
+    values.setdefault("operational_finalizer", lambda **_kwargs: None)
+    values.setdefault(
+        "candidate_admission_boundary",
+        lambda **kwargs: module._fresh_initial_candidate_decision(**kwargs),
+    )
     factory = cast(
         Callable[..., object],
         module._ReadyCommandDependencies,
@@ -510,7 +510,7 @@ def _baseline_execution_result(tmp_path: Path) -> RunResult:
     )
 
 
-def test_d1_5_main_ready_is_typed_blocked_until_031_finalizer_is_wired(
+def test_d1_5_main_ready_dispatches_production_command_and_returns_zero(
     entrypoint_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -556,8 +556,284 @@ def test_d1_5_main_ready_is_typed_blocked_until_031_finalizer_is_wired(
     )
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
-    assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 2
-    assert events == []
+    assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 0
+    assert events == [
+        "load_document",
+        "build_evaluator",
+        "production_dispatch",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_o8_production_execution_requires_031_finalizer_before_executor_io(
+    entrypoint_module: ModuleType,
+) -> None:
+    events: list[str] = []
+    ledger = object()
+    guard = _FakeRuntimeGuard(events)
+
+    def finalize_operational_admission(**_kwargs: object) -> NoReturn:
+        events.append("031_finalizer")
+        raise AdmissionPausedError("operational_finalization_blocked")
+
+    async def forbidden_executor(**_kwargs: object) -> CanaryArtifactBundle:
+        events.append("executor_io")
+        return _annotation_execution_result()
+
+    dependencies = SimpleNamespace(
+        session_lock_factory=lambda _account_id: _FakeSessionLock(events),
+        ledger_factory=lambda _path: ledger,
+        operational_finalizer=finalize_operational_admission,
+        candidate_admission_boundary=lambda **kwargs: (
+            entrypoint_module._fresh_initial_candidate_decision(**kwargs)
+        ),
+        guard_factory=lambda **_kwargs: guard,
+        annotation_executor=forbidden_executor,
+        baseline_executor=forbidden_executor,
+        artifact_committer=lambda **_kwargs: events.append("artifact_write"),
+        candidate_builder=lambda **_kwargs: object(),
+        candidate_persister=lambda **_kwargs: events.append("candidate_write"),
+        baseline_settlement_guard=entrypoint_module._baseline_settlement_guard_disabled,
+        candidate_resumer=lambda **_kwargs: False,
+    )
+
+    with pytest.raises(
+        AdmissionPausedError, match="operational_finalization_blocked"
+    ):
+        await _ready_runner(entrypoint_module)(
+            command="annotate-canary",
+            product_id=_SECOND_CANARY,
+            document=_ready_document(),
+            evaluator=cast(Any, object()),
+            configuration=_ready_configuration(),
+            dependencies=cast(Any, dependencies),
+        )
+
+    assert events == ["lock_enter", "031_finalizer", "lock_exit"]
+
+
+@pytest.mark.asyncio
+async def test_o8_candidate_resume_requires_fresh_031_finalizer_before_reads_or_writes(
+    entrypoint_module: ModuleType,
+) -> None:
+    events: list[str] = []
+
+    def finalize_operational_admission(**_kwargs: object) -> NoReturn:
+        events.append("031_finalizer")
+        raise AdmissionPausedError("operational_finalization_blocked")
+
+    def forbidden_candidate_resume(**_kwargs: object) -> bool:
+        events.append("candidate_resume")
+        return True
+
+    dependencies = SimpleNamespace(
+        session_lock_factory=lambda _account_id: _FakeSessionLock(events),
+        ledger_factory=lambda _path: object(),
+        operational_finalizer=finalize_operational_admission,
+        candidate_admission_boundary=lambda **kwargs: (
+            entrypoint_module._fresh_initial_candidate_decision(**kwargs)
+        ),
+        guard_factory=lambda **_kwargs: _FakeRuntimeGuard(events),
+        annotation_executor=lambda **_kwargs: events.append("executor_io"),
+        baseline_executor=lambda **_kwargs: events.append("executor_io"),
+        artifact_committer=lambda **_kwargs: events.append("artifact_write"),
+        candidate_builder=lambda **_kwargs: object(),
+        candidate_persister=lambda **_kwargs: events.append("candidate_write"),
+        baseline_settlement_guard=entrypoint_module._baseline_settlement_guard_disabled,
+        candidate_resumer=forbidden_candidate_resume,
+    )
+
+    with pytest.raises(
+        AdmissionPausedError, match="operational_finalization_blocked"
+    ):
+        await _ready_runner(entrypoint_module)(
+            command="annotate-canary",
+            product_id=_FIRST_CANARY,
+            document=_ready_document(),
+            evaluator=cast(Any, object()),
+            configuration=_ready_configuration(),
+            dependencies=cast(Any, dependencies),
+        )
+
+    assert events == ["lock_enter", "031_finalizer", "lock_exit"]
+
+
+@pytest.mark.asyncio
+async def test_o8_submit_resume_and_begin_each_require_fresh_031_finalization(
+    entrypoint_module: ModuleType,
+) -> None:
+    events: list[str] = []
+    ledger = object()
+    decision = _fresh_initial_decision()
+    evaluator = _FreshCandidateEvaluator(decision)
+    guard = _FakeRuntimeGuard(events, execution_decision=decision)
+
+    def finalize_operational_admission(**_kwargs: object) -> None:
+        events.append("031_fresh_boundary")
+
+    async def execute_annotation(**_kwargs: object) -> CanaryArtifactBundle:
+        events.append("executor_io")
+        return _annotation_execution_result()
+
+    def resume_candidate(**_kwargs: object) -> bool:
+        events.append("candidate_resume")
+        return False
+
+    dependencies = SimpleNamespace(
+        session_lock_factory=lambda _account_id: _FakeSessionLock(events),
+        ledger_factory=lambda _path: ledger,
+        operational_finalizer=finalize_operational_admission,
+        candidate_admission_boundary=lambda **kwargs: (
+            entrypoint_module._fresh_initial_candidate_decision(**kwargs)
+        ),
+        guard_factory=lambda **_kwargs: guard,
+        annotation_executor=execute_annotation,
+        baseline_executor=execute_annotation,
+        artifact_committer=lambda **_kwargs: events.append("artifact_write"),
+        candidate_builder=lambda **_kwargs: object(),
+        candidate_persister=lambda **_kwargs: events.append("candidate_write"),
+        baseline_settlement_guard=entrypoint_module._baseline_settlement_guard_disabled,
+        candidate_resumer=resume_candidate,
+    )
+
+    await _ready_runner(entrypoint_module)(
+        command="annotate-canary",
+        product_id=_FIRST_CANARY,
+        document=_ready_document(),
+        evaluator=cast(Any, evaluator),
+        configuration=_ready_configuration(),
+        dependencies=cast(Any, dependencies),
+    )
+
+    assert events.count("031_fresh_boundary") == 4
+    assert events.index("031_fresh_boundary") < events.index("recover")
+    resume_index = events.index("candidate_resume")
+    assert events[resume_index - 1] == "031_fresh_boundary"
+    begin_index = next(
+        index for index, event in enumerate(events) if event.startswith("begin:")
+    )
+    assert events[begin_index - 1] == "031_fresh_boundary"
+    assert events.index("executor_io") > begin_index
+
+
+@pytest.mark.asyncio
+async def test_o8_post_settlement_candidate_transition_requires_fresh_031_finalizer(
+    entrypoint_module: ModuleType,
+) -> None:
+    events: list[str] = []
+    finalizer_calls = 0
+    decision = _fresh_initial_decision()
+    evaluator = _FreshCandidateEvaluator(decision)
+    guard = _FakeRuntimeGuard(events, execution_decision=decision)
+
+    def finalize_operational_admission(**_kwargs: object) -> None:
+        nonlocal finalizer_calls
+        finalizer_calls += 1
+        events.append("031_fresh_boundary")
+        if finalizer_calls == 4:
+            raise AdmissionPausedError("operational_finalization_blocked")
+
+    async def execute_annotation(**_kwargs: object) -> CanaryArtifactBundle:
+        events.append("executor_io")
+        return _annotation_execution_result()
+
+    def forbidden_candidate(**_kwargs: object) -> object:
+        events.append("candidate_write")
+        raise AssertionError("candidate transition ran after 031 authority expired")
+
+    dependencies = SimpleNamespace(
+        session_lock_factory=lambda _account_id: _FakeSessionLock(events),
+        ledger_factory=lambda _path: object(),
+        operational_finalizer=finalize_operational_admission,
+        candidate_admission_boundary=lambda **kwargs: (
+            entrypoint_module._fresh_initial_candidate_decision(**kwargs)
+        ),
+        guard_factory=lambda **_kwargs: guard,
+        annotation_executor=execute_annotation,
+        baseline_executor=execute_annotation,
+        artifact_committer=lambda **_kwargs: events.append("artifact_write"),
+        candidate_builder=forbidden_candidate,
+        candidate_persister=forbidden_candidate,
+        baseline_settlement_guard=entrypoint_module._baseline_settlement_guard_disabled,
+        candidate_resumer=lambda **_kwargs: False,
+    )
+
+    with pytest.raises(
+        AdmissionPausedError, match="operational_finalization_blocked"
+    ):
+        await _ready_runner(entrypoint_module)(
+            command="annotate-canary",
+            product_id=_FIRST_CANARY,
+            document=_ready_document(),
+            evaluator=cast(Any, evaluator),
+            configuration=_ready_configuration(),
+            dependencies=cast(Any, dependencies),
+        )
+
+    assert finalizer_calls == 4
+    assert evaluator.calls == []
+    assert "candidate_write" not in events
+
+
+@pytest.mark.asyncio
+async def test_o8_t9_18_normal_candidate_evaluator_drift_blocks_before_write(
+    entrypoint_module: ModuleType,
+) -> None:
+    events: list[str] = []
+    ledger = object()
+    decision = _fresh_initial_decision()
+    evaluator = _FreshCandidateEvaluator(decision)
+    guard = _FakeRuntimeGuard(events, execution_decision=decision)
+
+    def candidate_admission_boundary(**kwargs: object) -> NoReturn:
+        events.append("candidate_boundary_precheck")
+        entrypoint_module._fresh_initial_candidate_decision(
+            document=kwargs["document"],
+            evaluator=kwargs["evaluator"],
+            ledger=kwargs["ledger"],
+        )
+        events.append("topology_drift_during_candidate_evaluator")
+        raise AdmissionPausedError("operational_finalization_blocked")
+
+    async def execute_annotation(**_kwargs: object) -> CanaryArtifactBundle:
+        events.append("executor_io")
+        return _annotation_execution_result()
+
+    def forbidden_candidate(**_kwargs: object) -> object:
+        events.append("candidate_write")
+        raise AssertionError("candidate write ran after post-evaluator topology drift")
+
+    dependencies = SimpleNamespace(
+        session_lock_factory=lambda _account_id: _FakeSessionLock(events),
+        ledger_factory=lambda _path: ledger,
+        operational_finalizer=lambda **_kwargs: events.append("031_fresh_boundary"),
+        candidate_admission_boundary=candidate_admission_boundary,
+        guard_factory=lambda **_kwargs: guard,
+        annotation_executor=execute_annotation,
+        baseline_executor=execute_annotation,
+        artifact_committer=lambda **_kwargs: events.append("artifact_write"),
+        candidate_builder=forbidden_candidate,
+        candidate_persister=forbidden_candidate,
+        baseline_settlement_guard=entrypoint_module._baseline_settlement_guard_disabled,
+        candidate_resumer=lambda **_kwargs: False,
+    )
+
+    with pytest.raises(
+        AdmissionPausedError, match="operational_finalization_blocked"
+    ):
+        await _ready_runner(entrypoint_module)(
+            command="annotate-canary",
+            product_id=_FIRST_CANARY,
+            document=_ready_document(),
+            evaluator=cast(Any, evaluator),
+            configuration=_ready_configuration(),
+            dependencies=cast(Any, dependencies),
+        )
+
+    assert evaluator.calls == [(_ready_document(), ledger)]
+    assert events.count("031_fresh_boundary") == 4
+    assert "topology_drift_during_candidate_evaluator" in events
+    assert "candidate_write" not in events
 
 
 def test_d1_5_main_returns_two_when_fresh_product_boundary_is_blocked(
@@ -599,7 +875,11 @@ def test_d1_5_main_returns_two_when_fresh_product_boundary_is_blocked(
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 2
-    assert events == []
+    assert events == [
+        "load_document",
+        "build_evaluator",
+        "fresh_boundary",
+    ]
 
 
 @pytest.mark.asyncio
