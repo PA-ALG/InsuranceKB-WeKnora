@@ -142,7 +142,9 @@ def _hold_lock_worker(root: str, account_id: str, connection: Connection) -> Non
     try:
         with _worker_lock(root, account_id):
             connection.send("acquired")
-            if not connection.poll(5):
+            # This timeout covers parent/child scheduling and macOS ``spawn``
+            # imports, not the lock acquisition contract itself.
+            if not connection.poll(60):
                 raise TimeoutError("parent did not release test holder")
             connection.recv()
     except Exception as exc:
@@ -170,7 +172,9 @@ def _probe_lock_once(root: Path, account_id: str) -> str:
     process.start()
     child.close()
     try:
-        if not parent.poll(10):
+        # The child performs a nonblocking flock once it starts.  Allow slow
+        # spawned-interpreter imports without conflating them with lock wait.
+        if not parent.poll(30):
             pytest.fail("D1.5 session-lock attempt blocked instead of failing fast")
         return cast(str, parent.recv())
     finally:
@@ -187,7 +191,7 @@ def _start_holder(root: Path, account_id: str) -> tuple[BaseProcess, Connection]
     )
     process.start()
     child.close()
-    if not parent.poll(3):
+    if not parent.poll(30):
         _join_or_terminate(process)
         pytest.fail("D1.5 session-lock holder did not acquire promptly")
     assert parent.recv() == "acquired"

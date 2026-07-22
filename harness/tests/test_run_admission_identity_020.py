@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -18,9 +19,11 @@ from insurance_harness.goldenset.admission_identity import (
     IdentityInspectionResult,
 )
 from insurance_harness.goldenset.admission_models import (
-    HistoricalProvenance,
+    LegacyFrozenProvenance,
+    ObservedAnnotationProvenance,
     ProductInputPlan,
     ProductInputSelection,
+    ProvenanceApprovalSelection,
 )
 
 _PRODUCT_IDS = tuple(f"product-{number:02d}" for number in range(1, 14))
@@ -108,8 +111,9 @@ def _product_plan(repo: Path, product_id: str) -> ProductInputPlan:
     )
 
 
-def _provenance(product_id: str) -> HistoricalProvenance:
-    return HistoricalProvenance(
+def _provenance(product_id: str) -> ObservedAnnotationProvenance:
+    return ObservedAnnotationProvenance(
+        provenance_kind="observed_annotation",
         product_id=product_id,
         annotator_provider="provider-a",
         annotator_model_id="annotator-model-1",
@@ -127,7 +131,7 @@ def _request(
     golden_products_root: str = "inputs/golden",
     required_dependency_revisions: Mapping[str, str] | None = None,
     historical_product_ids: tuple[str, ...] | None = None,
-    historical_provenance: tuple[HistoricalProvenance, ...] | None = None,
+    historical_provenance: tuple[ProvenanceApprovalSelection, ...] | None = None,
 ) -> IdentityInspectionRequest:
     revision = _git(repo, "rev-parse", "HEAD")
     return IdentityInspectionRequest(
@@ -738,6 +742,60 @@ def test_d1_1c_duplicate_and_unknown_provenance_block_per_product(
     assert _blockers(result, "unknown_historical_provenance")
 
 
+def _legacy_provenance(product_id: str, revision: str) -> LegacyFrozenProvenance:
+    return LegacyFrozenProvenance(
+        provenance_kind="legacy_frozen",
+        product_id=product_id,
+        product_digest="1" * 64,
+        wip_digest="2" * 64,
+        frozen_commit=revision,
+        evidence_path=f"inputs/golden/{product_id}/golden.jsonl",
+        evidence_blob_id="3" * 40,
+        evidence_digest="4" * 64,
+        recorded_agent_id="repository-agent",
+        evidence_frozen_at=_ANNOTATED_AT,
+        limitation="original_annotation_time_unavailable",
+    )
+
+
+def test_o2_integrated_legacy_cardinality_diagnostics_are_emitted_once(
+    tmp_path: Path,
+) -> None:
+    repo, revision = _make_repo(tmp_path)
+    entries = tuple(
+        _legacy_provenance(product_id, revision)
+        for product_id in _HISTORICAL_PRODUCT_IDS[:-1]
+    )
+    duplicate_product = _HISTORICAL_PRODUCT_IDS[0]
+    missing_product = _HISTORICAL_PRODUCT_IDS[-1]
+    unknown_product = _PRODUCT_IDS[-1]
+
+    result = _inspect(
+        repo,
+        _request(
+            repo,
+            historical_provenance=(
+                *entries,
+                _legacy_provenance(duplicate_product, revision),
+                _legacy_provenance(unknown_product, revision),
+            ),
+        ),
+    )
+
+    assert [
+        blocker.product_id
+        for blocker in _blockers(result, "missing_historical_provenance")
+    ] == [missing_product]
+    assert [
+        blocker.product_id
+        for blocker in _blockers(result, "duplicate_historical_provenance")
+    ] == [duplicate_product]
+    assert [
+        blocker.product_id
+        for blocker in _blockers(result, "unknown_historical_provenance")
+    ] == [unknown_product]
+
+
 def test_d1_1b_git_rev_parse_and_status_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -761,6 +819,160 @@ def test_d1_1b_git_rev_parse_and_status_fail_closed(
 
     monkeypatch.setattr(inspector, "_git", fail_status)
     assert _blockers(inspector.inspect(request), "identity_configuration_error")
+
+
+def test_o2_git_status_disables_hostile_repository_fsmonitor(tmp_path: Path) -> None:
+    repo, _ = _make_repo(tmp_path)
+    marker = repo / ".git" / "fsmonitor-executed"
+    hook = repo / ".git" / "hostile-fsmonitor"
+    hook.write_text(
+        f"#!/bin/sh\nprintf executed > {marker!s}\nexit 0\n",
+        encoding="utf-8",
+    )
+    os.chmod(hook, 0o755)
+    _git(repo, "config", "core.fsmonitor", str(hook))
+
+    result = _inspect(repo, _request(repo))
+
+    assert not marker.exists()
+    assert not _blockers(result, "identity_configuration_error")
+
+
+def test_o2_shared_git_runner_bounds_timeout_and_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _ = _make_repo(tmp_path)
+    request = _request(repo)
+    inspector = _inspector(repo)
+    observed_timeouts: list[float] = []
+
+    def time_out(
+        command: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        timeout = kwargs.get("timeout")
+        assert isinstance(timeout, float)
+        observed_timeouts.append(timeout)
+        raise subprocess.TimeoutExpired(command, timeout)
+
+    monkeypatch.setattr(subprocess, "run", time_out)
+
+    result = inspector.inspect(request)
+
+    assert observed_timeouts
+    assert all(value == 10.0 for value in observed_timeouts)
+    assert _blockers(result, "identity_configuration_error")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    (
+        FileNotFoundError("git executable missing"),
+        OSError("git executable broken"),
+        UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte"),
+    ),
+)
+def test_o2_shared_git_runner_normalizes_process_and_decode_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
+    repo, _ = _make_repo(tmp_path)
+    request = _request(repo)
+    inspector = _inspector(repo)
+
+    def fail(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", fail)
+
+    result = inspector.inspect(request)
+
+    assert _blockers(result, "identity_configuration_error")
+
+
+@pytest.mark.parametrize(
+    "hostile_variable",
+    (
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    ),
+)
+def test_o2_integrated_identity_ignores_ambient_git_redirection_and_sees_pollution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hostile_variable: str,
+) -> None:
+    trusted_parent = tmp_path / "trusted"
+    hostile_parent = tmp_path / "hostile"
+    trusted_parent.mkdir()
+    hostile_parent.mkdir()
+    repo, _ = _make_repo(trusted_parent)
+    trusted_head = _commit_empty(repo, "trusted unique head")
+    request = _request(repo)
+    inspector = _inspector(repo)
+    hostile_repo, _ = _make_repo(hostile_parent)
+    _commit_empty(hostile_repo, "hostile unique head")
+    hostile_values = {
+        "GIT_DIR": str(hostile_repo / ".git"),
+        "GIT_WORK_TREE": str(hostile_repo),
+        "GIT_OBJECT_DIRECTORY": str(hostile_repo / ".git" / "objects"),
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(
+            hostile_repo / ".git" / "objects"
+        ),
+    }
+    pollution_path = "inputs/source/product-01/ambient-untracked.txt"
+    _write(repo, pollution_path, "must remain visible\n")
+    monkeypatch.setenv(hostile_variable, hostile_values[hostile_variable])
+
+    result = inspector.inspect(request)
+
+    assert result.evaluated_revision == trusted_head
+    assert not _blockers(result, "dependency_not_ancestor")
+    assert not _blockers(result, "identity_configuration_error")
+    assert any(
+        blocker.code == "untracked_consumed_file"
+        and blocker.path == pollution_path
+        for blocker in result.blockers
+    )
+
+
+def test_o2_integrated_identity_ignores_replace_for_head_dependency_and_status(
+    tmp_path: Path,
+) -> None:
+    repo, dependency = _make_repo(tmp_path)
+    head = _commit_empty(repo, "evaluated descendant")
+    required_dependencies = {"019": dependency, "021": dependency}
+    request = _request(
+        repo, required_dependency_revisions=required_dependencies
+    )
+    inspector = _inspector_with_dependency_policy(repo, required_dependencies)
+    pollution_path = "inputs/source/product-01/replace-hidden.txt"
+    _write(repo, pollution_path, "must remain visible\n")
+    _git(repo, "add", "-A")
+    replacement_tree = _git(repo, "write-tree")
+    _git(repo, "reset", head)
+    replacement_commit = subprocess.run(
+        ("git", "commit-tree", replacement_tree),
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        input="replacement root\n",
+    ).stdout.strip()
+    _git(repo, "replace", head, replacement_commit)
+
+    result = inspector.inspect(request)
+
+    assert result.evaluated_revision == head
+    assert not _blockers(result, "dependency_not_ancestor")
+    assert not _blockers(result, "identity_configuration_error")
+    assert any(
+        blocker.code == "untracked_consumed_file"
+        and blocker.path == pollution_path
+        for blocker in result.blockers
+    )
 
 
 def test_d1_1b_execution_directory_symlink_is_not_skipped(tmp_path: Path) -> None:

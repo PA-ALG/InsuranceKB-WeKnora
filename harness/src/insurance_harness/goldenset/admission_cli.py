@@ -6,13 +6,15 @@ import argparse
 import base64
 import binascii
 import hashlib
+import json
 import os
 import secrets
 import stat
 from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path, PurePath
 from types import MappingProxyType
-from typing import Annotated, Any, Never, Self
+from typing import Annotated, Any, Never, Self, cast
 
 import yaml
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -33,23 +35,35 @@ from insurance_harness.goldenset.admission import (
     ProductionAdmissionEvaluator,
     RunAdmissionDocument,
 )
+from insurance_harness.goldenset.admission_authority import (
+    OfflineApprovalDomain,
+    generate_offline_key,
+    read_bounded_public_file,
+    remove_generated_private_key,
+    render_unsigned_approval,
+    sign_rendered_approval,
+    verify_offline_envelope,
+    write_public_key_descriptor,
+)
 from insurance_harness.goldenset.admission_models import (
+    BudgetApprovalPayload,
     CanaryReviewApprovalEnvelope,
+    CanaryReviewApprovalPayload,
+    ProvenanceApprovalPayload,
     RunAdmissionPlan,
+    TrustedAuthority,
+    TrustedKeyPolicy,
     canonical_json_bytes,
 )
 
 type AdmissionEvaluator = Callable[[RunAdmissionPlan], AdmissionResult]
 type AdmissionDocumentEvaluator = Callable[[RunAdmissionDocument], AdmissionResult]
-type NonBlankStr = Annotated[
-    StrictStr, StringConstraints(strip_whitespace=True, min_length=1)
-]
+type NonBlankStr = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
 _DEPLOYMENT_TRUST_PATH = Path("/etc/insurancekb/run-admission-trust.yaml")
-_CANARY_REVIEW_APPROVAL_INBOX = Path(
-    "/var/lib/insurancekb/run-admission/canary-review-inbox"
-)
+_CANARY_REVIEW_APPROVAL_INBOX = Path("/var/lib/insurancekb/run-admission/canary-review-inbox")
 _MAX_TRUST_CONFIGURATION_BYTES = 1024 * 1024
 _MAX_CANARY_REVIEW_BYTES = 256 * 1024
+_MAX_OFFLINE_PAYLOAD_BYTES = 1024 * 1024
 
 
 class CanaryReviewApprovalInputError(ValueError):
@@ -60,10 +74,21 @@ class CanaryReviewInboxError(PermissionError):
     """The deployment-owned review inbox is ambiguous or not protected."""
 
 
+class _TrustedKeyPolicyConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    approver_identity: NonBlankStr
+    domains: tuple[NonBlankStr, ...]
+    scopes: tuple[NonBlankStr, ...]
+    roles: tuple[NonBlankStr, ...]
+    public_key: NonBlankStr
+
+
 class _TrustedApprovalConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    public_keys: Mapping[NonBlankStr, NonBlankStr]
+    public_keys: Mapping[NonBlankStr, NonBlankStr] = {}
+    key_policies: Mapping[NonBlankStr, _TrustedKeyPolicyConfiguration] = {}
     budget_roles: tuple[NonBlankStr, ...]
     provenance_roles: tuple[NonBlankStr, ...]
     canary_review_roles: tuple[NonBlankStr, ...] = ()
@@ -74,9 +99,14 @@ class _TrustedApprovalConfiguration(BaseModel):
             "public_keys",
             MappingProxyType(dict(self.public_keys)),
         )
+        object.__setattr__(
+            self,
+            "key_policies",
+            MappingProxyType(dict(self.key_policies)),
+        )
 
-    @field_serializer("public_keys")
-    def serialize_public_keys(self, value: Mapping[str, str]) -> dict[str, str]:
+    @field_serializer("public_keys", "key_policies")
+    def serialize_mappings(self, value: Mapping[str, object]) -> dict[str, object]:
         return dict(value)
 
     def copy(
@@ -144,9 +174,7 @@ def _require_protected_inode(
         or metadata.st_uid != required_uid
         or metadata.st_mode & 0o022
     ):
-        raise CanaryReviewInboxError(
-            f"canary review {inode_kind} is not deployment-protected"
-        )
+        raise CanaryReviewInboxError(f"canary review {inode_kind} is not deployment-protected")
 
 
 def _read_bounded_descriptor(descriptor: int, *, maximum: int) -> bytes:
@@ -175,9 +203,7 @@ def _load_canary_review_approval_from_inbox(
     """
 
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-        raise CanaryReviewInboxError(
-            "platform cannot safely traverse the canary review inbox"
-        )
+        raise CanaryReviewInboxError("platform cannot safely traverse the canary review inbox")
     if not inbox.is_absolute() or not anchor.is_absolute():
         raise CanaryReviewInboxError("canary review inbox and anchor must be absolute")
     try:
@@ -215,9 +241,7 @@ def _load_canary_review_approval_from_inbox(
 
         entries = os.listdir(current_fd)
         if len(entries) != 1:
-            raise CanaryReviewInboxError(
-                "canary review inbox must contain exactly one envelope"
-            )
+            raise CanaryReviewInboxError("canary review inbox must contain exactly one envelope")
         filename = entries[0]
         if (
             filename in {".", ".."}
@@ -239,9 +263,7 @@ def _load_canary_review_approval_from_inbox(
                     "canary review approval has invalid syntax or schema"
                 )
             if metadata.st_size > _MAX_CANARY_REVIEW_BYTES:
-                raise CanaryReviewInboxError(
-                    "canary review approval exceeds the size limit"
-                )
+                raise CanaryReviewInboxError("canary review approval exceeds the size limit")
             payload = _read_bounded_descriptor(
                 file_fd,
                 maximum=_MAX_CANARY_REVIEW_BYTES,
@@ -265,9 +287,7 @@ def _load_canary_review_approval_from_inbox(
         ) from exc
 
 
-def _load_deployment_canary_review_approval() -> (
-    CanaryReviewApprovalEnvelope | None
-):
+def _load_deployment_canary_review_approval() -> CanaryReviewApprovalEnvelope | None:
     """Load the optional review only from the code-fixed, root-owned inbox."""
 
     try:
@@ -484,21 +504,41 @@ def run_document_check(
 
 def _parse_trusted_approval_configuration(
     payload: str,
+    *,
+    require_key_policies: bool = False,
 ) -> tuple[
-    Mapping[str, Ed25519PublicKey],
+    Mapping[str, TrustedAuthority],
     frozenset[str],
     frozenset[str],
     frozenset[str],
 ]:
     raw = _safe_load_unique(payload)
     configuration = _TrustedApprovalConfiguration.model_validate(raw)
-    public_keys: dict[str, Ed25519PublicKey] = {}
+    if set(configuration.public_keys) & set(configuration.key_policies):
+        raise ValueError("trusted key id cannot use both legacy and policy forms")
+    if require_key_policies and (configuration.public_keys or not configuration.key_policies):
+        raise ValueError("production trust requires a policy for every key")
+    public_keys: dict[str, TrustedAuthority] = {}
     for key_id, encoded in configuration.public_keys.items():
         try:
             key_bytes = base64.b64decode(encoded, validate=True)
             public_keys[key_id] = Ed25519PublicKey.from_public_bytes(key_bytes)
         except (binascii.Error, ValueError) as exc:
             raise ValueError("trusted approval public key is invalid") from exc
+    for key_id, policy in configuration.key_policies.items():
+        try:
+            key_bytes = base64.b64decode(policy.public_key, validate=True)
+            public_key = Ed25519PublicKey.from_public_bytes(key_bytes)
+            public_keys[key_id] = TrustedKeyPolicy(
+                key_id=key_id,
+                approver_identity=policy.approver_identity,
+                domains=frozenset(policy.domains),
+                scopes=frozenset(policy.scopes),
+                roles=frozenset(policy.roles),
+                public_key=public_key,
+            )
+        except (binascii.Error, TypeError, ValueError) as exc:
+            raise ValueError("trusted approval key policy is invalid") from exc
     return (
         MappingProxyType(public_keys),
         frozenset(configuration.budget_roles),
@@ -508,7 +548,7 @@ def _parse_trusted_approval_configuration(
 
 
 def _load_deployment_approval_configuration() -> tuple[
-    Mapping[str, Ed25519PublicKey],
+    Mapping[str, TrustedAuthority],
     frozenset[str],
     frozenset[str],
     frozenset[str],
@@ -536,7 +576,10 @@ def _load_deployment_approval_configuration() -> tuple[
             raise PermissionError("deployment trust configuration is not protected")
         with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
             descriptor = -1
-            return _parse_trusted_approval_configuration(stream.read())
+            return _parse_trusted_approval_configuration(
+                stream.read(),
+                require_key_policies=True,
+            )
     finally:
         if descriptor >= 0:
             os.close(descriptor)
@@ -556,6 +599,24 @@ def _build_parser() -> argparse.ArgumentParser:
     check.add_argument("--result-json", required=True)
     check.add_argument("--report-md", required=True)
     check.add_argument("--probe", action="store_true")
+    keygen = subparsers.add_parser("keygen")
+    keygen.add_argument("--repo-root", required=True)
+    keygen.add_argument("--private-key", required=True)
+    keygen.add_argument("--public-metadata", required=True)
+    render = subparsers.add_parser("render")
+    render.add_argument("--repo-root", required=True)
+    render.add_argument("--domain", required=True)
+    render.add_argument("--key-id", required=True)
+    render.add_argument("--payload", required=True)
+    render.add_argument("--output", required=True)
+    sign = subparsers.add_parser("sign")
+    sign.add_argument("--repo-root", required=True)
+    sign.add_argument("--rendered", required=True)
+    sign.add_argument("--private-key", required=True)
+    sign.add_argument("--output", required=True)
+    verify = subparsers.add_parser("verify")
+    verify.add_argument("--envelope", required=True)
+    verify.add_argument("--trust-store", required=True)
     return parser
 
 
@@ -574,6 +635,89 @@ def main(argv: Sequence[str] | None = None) -> int:
     report_md: Path | None = None
     try:
         arguments = _build_parser().parse_args(argv)
+        if arguments.command == "keygen":
+            repo_root = Path(arguments.repo_root).resolve(strict=True)
+            private_path = Path(arguments.private_key)
+            public_metadata = Path(arguments.public_metadata)
+            try:
+                os.lstat(public_metadata)
+            except FileNotFoundError:
+                pass
+            else:
+                raise FileExistsError(public_metadata)
+            descriptor = generate_offline_key(
+                private_path=private_path,
+                repo_root=repo_root,
+            )
+            try:
+                write_public_key_descriptor(
+                    descriptor=descriptor,
+                    output_path=public_metadata,
+                )
+            except Exception:
+                remove_generated_private_key(
+                    private_path=private_path,
+                    descriptor=descriptor,
+                )
+                raise
+            return 0
+        if arguments.command == "render":
+            repo_root = Path(arguments.repo_root).resolve(strict=True)
+            domain = cast(OfflineApprovalDomain, str(arguments.domain))
+            raw_payload = json.loads(
+                read_bounded_public_file(
+                    Path(arguments.payload),
+                    maximum=_MAX_OFFLINE_PAYLOAD_BYTES,
+                )
+            )
+            payload: BudgetApprovalPayload | ProvenanceApprovalPayload | CanaryReviewApprovalPayload
+            if domain == "budget":
+                payload = BudgetApprovalPayload.model_validate(raw_payload)
+            elif domain == "provenance":
+                payload = ProvenanceApprovalPayload.model_validate(raw_payload)
+            elif domain == "canary-review":
+                payload = CanaryReviewApprovalPayload.model_validate(raw_payload)
+            else:
+                raise ValueError("approval domain is unsupported")
+            render_unsigned_approval(
+                domain=domain,
+                key_id=str(arguments.key_id),
+                payload=payload,
+                output_path=Path(arguments.output),
+                repo_root=repo_root,
+            )
+            return 0
+        if arguments.command == "sign":
+            repo_root = Path(arguments.repo_root).resolve(strict=True)
+            sign_rendered_approval(
+                rendered_path=Path(arguments.rendered),
+                private_key_path=Path(arguments.private_key),
+                output_path=Path(arguments.output),
+                repo_root=repo_root,
+            )
+            return 0
+        if arguments.command == "verify":
+            trust_path = Path(arguments.trust_store)
+            keys, budget_roles, provenance_roles, canary_roles = (
+                _parse_trusted_approval_configuration(
+                    read_bounded_public_file(
+                        trust_path,
+                        maximum=_MAX_TRUST_CONFIGURATION_BYTES,
+                    ).decode("utf-8"),
+                    require_key_policies=True,
+                )
+            )
+            verify_offline_envelope(
+                envelope_path=Path(arguments.envelope),
+                trusted_public_keys=keys,
+                allowed_roles_by_domain={
+                    "budget": budget_roles,
+                    "provenance": provenance_roles,
+                    "canary-review": canary_roles,
+                },
+                now=datetime.now(UTC),
+            )
+            return 0
         result_json = Path(arguments.result_json)
         report_md = Path(arguments.report_md)
         repo_root = Path(arguments.repo_root).resolve(strict=True)
@@ -583,7 +727,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         evaluator = ProductionAdmissionEvaluator(
             repo_root=repo_root,
-            trusted_public_keys=public_keys,
+            trusted_public_keys={
+                key_id: (value.public_key if isinstance(value, TrustedKeyPolicy) else value)
+                for key_id, value in public_keys.items()
+            },
             allowed_budget_roles=budget_roles,
             allowed_provenance_roles=provenance_roles,
             probe=bool(arguments.probe),

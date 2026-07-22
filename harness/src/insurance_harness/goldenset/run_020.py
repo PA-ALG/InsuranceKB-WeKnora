@@ -66,6 +66,7 @@ from insurance_harness.goldenset.admission_cli import (
 from insurance_harness.goldenset.admission_models import (
     ModelRolePlan,
     ProductInputPlan,
+    TrustedKeyPolicy,
 )
 from insurance_harness.goldenset.admission_runtime import (
     AdmissionBlockedError,
@@ -230,9 +231,7 @@ class _CandidateResumer(Protocol):
     ) -> bool: ...
 
 
-type _BaselineSettlementGuardFactory = Callable[
-    [Path], AbstractAsyncContextManager[None]
-]
+type _BaselineSettlementGuardFactory = Callable[[Path], AbstractAsyncContextManager[None]]
 
 
 def _candidate_resume_disabled(
@@ -268,9 +267,7 @@ class _ReadyCommandDependencies:
     artifact_committer: _ArtifactCommitter
     candidate_builder: _CandidateBuilder
     candidate_persister: _CandidatePersister
-    baseline_settlement_guard: _BaselineSettlementGuardFactory = (
-        _baseline_settlement_guard_disabled
-    )
+    baseline_settlement_guard: _BaselineSettlementGuardFactory = _baseline_settlement_guard_disabled
     candidate_resumer: _CandidateResumer = _candidate_resume_disabled
 
 
@@ -338,7 +335,10 @@ def _build_production_evaluator(
     )
     return ProductionAdmissionEvaluator._for_production_canary(
         repo_root=configuration.repo_root,
-        trusted_public_keys=public_keys,
+        trusted_public_keys={
+            key_id: (policy.public_key if isinstance(policy, TrustedKeyPolicy) else policy)
+            for key_id, policy in public_keys.items()
+        },
         allowed_budget_roles=budget_roles,
         allowed_provenance_roles=provenance_roles,
         allowed_canary_review_roles=review_roles,
@@ -900,12 +900,7 @@ def _private_annotation_snapshot(
             ):
                 if descriptor is not None:
                     os.close(descriptor)
-        root = (
-            run_root
-            / _ANNOTATION_SNAPSHOT_ROOT
-            / plan_hash
-            / snapshot_digest
-        )
+        root = run_root / _ANNOTATION_SNAPSHOT_ROOT / plan_hash / snapshot_digest
         return _AnnotationSnapshot(
             root=root,
             product_dir=root / "product" / product_id,
@@ -978,9 +973,7 @@ def _private_baseline_snapshot(
             product_fd = _materialize_snapshot_directory(
                 content_fd, "product", inputs.product_files
             )
-            schema_fd = _materialize_snapshot_directory(
-                content_fd, "schema", inputs.schema_files
-            )
+            schema_fd = _materialize_snapshot_directory(content_fd, "schema", inputs.schema_files)
             template_fd = _materialize_snapshot_directory(
                 content_fd, "templates", inputs.template_files
             )
@@ -999,12 +992,7 @@ def _private_baseline_snapshot(
             ):
                 if descriptor is not None:
                     os.close(descriptor)
-        root = (
-            configuration.run_root
-            / _BASELINE_SNAPSHOT_ROOT
-            / plan_hash
-            / snapshot_digest
-        )
+        root = configuration.run_root / _BASELINE_SNAPSHOT_ROOT / plan_hash / snapshot_digest
         return _BaselineSnapshot(
             root=root,
             product_dir=root / "product",
@@ -1489,11 +1477,10 @@ def _private_baseline_checkpoint_status(
                 dir_fd=run_fd,
                 follow_symlinks=False,
             )
-            if (
-                not stat.S_ISREG(path_metadata.st_mode)
-                or (path_metadata.st_dev, path_metadata.st_ino)
-                != (metadata.st_dev, metadata.st_ino)
-            ):
+            if not stat.S_ISREG(path_metadata.st_mode) or (
+                path_metadata.st_dev,
+                path_metadata.st_ino,
+            ) != (metadata.st_dev, metadata.st_ino):
                 raise _BaselineResumeFault
             chunks: list[bytes] = []
             total = 0
@@ -1529,9 +1516,11 @@ def _private_baseline_checkpoint_status(
                     "ORDER BY checkpoint_id DESC LIMIT 1",
                     (identity.run_id,),
                 ).fetchone()
-                if row is None and connection.execute(
-                    "SELECT 1 FROM checkpoints LIMIT 1"
-                ).fetchone() is not None:
+                if (
+                    row is None
+                    and connection.execute("SELECT 1 FROM checkpoints LIMIT 1").fetchone()
+                    is not None
+                ):
                     raise _BaselineResumeFault
                 if row is not None:
                     try:
@@ -1575,11 +1564,10 @@ def _private_baseline_checkpoint_status(
                 dir_fd=run_fd,
                 follow_symlinks=False,
             )
-            if (
-                not stat.S_ISREG(final_metadata.st_mode)
-                or (final_metadata.st_dev, final_metadata.st_ino)
-                != (metadata.st_dev, metadata.st_ino)
-            ):
+            if not stat.S_ISREG(final_metadata.st_mode) or (
+                final_metadata.st_dev,
+                final_metadata.st_ino,
+            ) != (metadata.st_dev, metadata.st_ino):
                 raise _BaselineResumeFault
             return True, row is not None
         except Exception as error:
@@ -1658,12 +1646,10 @@ def _baseline_resume_state(
         if not names <= _BASELINE_RUN_NAMES:
             raise _BaselineResumeFault
         _require_private_baseline_run_lock(run_fd)
-        checkpoint_exists, checkpoint_initialized = (
-            _private_baseline_checkpoint_status(
-                run_fd,
-                identity=identity,
-                schema_version=schema_version or "",
-            )
+        checkpoint_exists, checkpoint_initialized = _private_baseline_checkpoint_status(
+            run_fd,
+            identity=identity,
+            schema_version=schema_version or "",
         )
         manifest = _read_baseline_manifest(run_fd)
         if manifest is not None:
@@ -1872,9 +1858,8 @@ def _commit_execution_artifact(
     if command not in {"annotate-canary", "baseline-product"}:
         raise AdmissionPausedError("canary_artifact_commit_invalid")
     if command == "annotate-canary":
-        if (
-            product_id not in _ANNOTATION_BUSINESS_PRODUCT_IDS
-            or not isinstance(execution_result, CanaryArtifactBundle)
+        if product_id not in _ANNOTATION_BUSINESS_PRODUCT_IDS or not isinstance(
+            execution_result, CanaryArtifactBundle
         ):
             raise AdmissionPausedError("canary_artifact_commit_invalid")
         try:
@@ -1940,9 +1925,7 @@ def _commit_execution_artifact(
     product_dir = Path(manifest.product_dir)
     try:
         products = tuple(
-            item
-            for item in document.identity_request.products
-            if item.product_id == product_id
+            item for item in document.identity_request.products if item.product_id == product_id
         )
         if len(products) != 1 or not isinstance(admission_identity, BaselineAdmissionIdentity):
             raise _BaselineInputFault
@@ -1953,9 +1936,7 @@ def _commit_execution_artifact(
         plan_hash = execution_plan_hash(document)
         target_digest = _baseline_target_digest(product_id)
         expected_run_dir = configuration.run_root / plan_hash / target_digest
-        snapshot_parent = (
-            configuration.run_root / _BASELINE_SNAPSHOT_ROOT / plan_hash
-        )
+        snapshot_parent = configuration.run_root / _BASELINE_SNAPSHOT_ROOT / plan_hash
         snapshot_parts = product_dir.relative_to(snapshot_parent).parts
         if (
             plan_hash != admission_identity.execution_plan_hash
@@ -1978,8 +1959,7 @@ def _commit_execution_artifact(
             or manifest.product_id != expected_plan_code
             or manifest.product_name != product_id
             or manifest.schema_version != admission_identity.schema_version
-            or manifest.template_registry_version
-            != admission_identity.template_registry_version
+            or manifest.template_registry_version != admission_identity.template_registry_version
         ):
             raise _BaselineInputFault
     except (AttributeError, KeyError, TypeError, ValueError, _BaselineInputFault):
@@ -2072,11 +2052,7 @@ def _resume_annotation_candidate_fail_closed(
 
     if settlement is None and artifacts is None:
         return False
-    if (
-        settlement is None
-        or artifacts is None
-        or settlement.reservation_state != "settled"
-    ):
+    if settlement is None or artifacts is None or settlement.reservation_state != "settled":
         raise AdmissionPausedError("candidate_resume_state_unsafe")
 
     decision = _fresh_initial_candidate_decision(
@@ -2282,11 +2258,25 @@ async def _run_ready_command(
     )
 
 
+class OperationalAdmissionStackIncompleteError(RuntimeError):
+    """The review stack cannot execute until canonical 031 finalization is present."""
+
+
+def _require_complete_operational_admission_stack() -> Never:
+    """Fail closed while only the independently reviewable A-C layers are installed."""
+
+    raise OperationalAdmissionStackIncompleteError("031 operational admission stack is incomplete")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Preflight fixed inputs, then dispatch a freshly guarded READY product."""
 
     try:
         arguments = _build_parser().parse_args(argv)
+        try:
+            _require_complete_operational_admission_stack()
+        except OperationalAdmissionStackIncompleteError:
+            return 2
         configuration = _production_configuration()
         document = _load_production_document(configuration)
         if not _contains_exact_product(document, str(arguments.product)):

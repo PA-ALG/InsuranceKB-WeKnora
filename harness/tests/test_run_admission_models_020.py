@@ -19,12 +19,11 @@ from insurance_harness.goldenset.admission_models import (
     BudgetApprovalEnvelope,
     BudgetApprovalPayload,
     BudgetPlan,
-    HistoricalProvenance,
     ModelRolePlan,
+    ObservedAnnotationProvenance,
     PendingModelRolePlan,
     PendingProductInputPlan,
     ProductInputPlan,
-    ProvenanceApprovalEntry,
     ProvenanceApprovalEnvelope,
     ProvenanceApprovalPayload,
     RunAdmissionPlan,
@@ -102,7 +101,8 @@ def _provenance_payload(**overrides: object) -> ProvenanceApprovalPayload:
         "issued_at": _NOW - timedelta(minutes=5),
         "expires_at": _NOW + timedelta(minutes=5),
         "product_entries": (
-            ProvenanceApprovalEntry(
+            ObservedAnnotationProvenance(
+                provenance_kind="observed_annotation",
                 product_id="product-01",
                 annotator_provider="provider-a",
                 annotator_model_id="model-1",
@@ -505,7 +505,8 @@ def test_d1_1b_d1_1c_d1_3a_foundation_contracts_are_frozen_and_forbid_extra() ->
         fields_digest="c" * 64,
         consumed_input_digests={"prompts/extract.md": "d" * 64},
     )
-    provenance = HistoricalProvenance(
+    provenance = ObservedAnnotationProvenance(
+        provenance_kind="observed_annotation",
         product_id="product-01",
         annotator_provider="provider-a",
         annotator_model_id="model-1",
@@ -562,7 +563,9 @@ def test_d1_1c_provenance_rejects_blank_or_invalid_time_window(
     }
     values.update(updates)
     with pytest.raises(ValidationError):
-        HistoricalProvenance.model_validate(values)
+        ObservedAnnotationProvenance.model_validate(
+            {"provenance_kind": "observed_annotation", **values}
+        )
 
 
 def test_d1_3a_d1_3c_budget_approval_binds_contract_and_explicit_chain() -> None:
