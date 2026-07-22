@@ -343,6 +343,106 @@ def test_ra2_0013_rejects_cross_space_manifest_and_nonhuman_approval(
             )
 
 
+def test_ra3_0013_activation_audit_cannot_splice_target_a_to_approval_b(
+    tmp_path: Path,
+) -> None:
+    url, engine = _db(tmp_path, "audit-exact-approval")
+    command.upgrade(_cfg(url), "head")
+    now = datetime.now(UTC)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        space_id, snapshot_a = _seed_scope_snapshot(connection, "audit-exact")
+        snapshot_b = "snapshot-audit-exact-b"
+        connection.execute(
+            text(
+                """INSERT INTO release_snapshots
+                (id, space_id, label, rendered_pages, status, read_model_version,
+                 projection_frozen_at, published_at, published_by, notes,
+                 created_at, updated_at)
+                VALUES (:snapshot, :space, :snapshot, :pages, 'published', 1,
+                        :now, :now, 'test', NULL, :now, :now)"""
+            ),
+            {
+                "snapshot": snapshot_b,
+                "space": space_id,
+                "pages": json.dumps([]),
+                "now": now,
+            },
+        )
+        _insert_manifest(
+            connection,
+            space_id=space_id,
+            snapshot_id=snapshot_a,
+            manifest_hash="a" * 64,
+        )
+        _insert_manifest(
+            connection,
+            space_id=space_id,
+            snapshot_id=snapshot_b,
+            manifest_hash="b" * 64,
+        )
+        for approval_id, snapshot_id, manifest_hash in (
+            ("approval-a", snapshot_a, "a" * 64),
+            ("approval-b", snapshot_b, "b" * 64),
+        ):
+            connection.execute(
+                text(
+                    """INSERT INTO release_approvals
+                    (id, space_id, snapshot_id, manifest_hash, actor, actor_type, role,
+                     authorization_receipt, reason, approved_at, created_at)
+                    VALUES (:id, :space, :snapshot, :hash, 'approver@example.com',
+                            'human', 'release_approver', :receipt, 'reviewed', :now, :now)"""
+                ),
+                {
+                    "id": approval_id,
+                    "space": space_id,
+                    "snapshot": snapshot_id,
+                    "hash": manifest_hash,
+                    "receipt": f"receipt-{approval_id}",
+                    "now": now,
+                },
+            )
+
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                text(
+                    """INSERT INTO release_activation_audits
+                    (id, space_id, kind, from_snapshot_id, target_snapshot_id,
+                     manifest_hash, approval_id, actor, reason, activated_at, created_at)
+                    VALUES ('spliced-audit', :space, 'rollback', :from_snapshot,
+                            :target_snapshot, :hash, 'approval-b',
+                            'activation-operator@example.com', 'operator rollback',
+                            :now, :now)"""
+                ),
+                {
+                    "space": space_id,
+                    "from_snapshot": snapshot_b,
+                    "target_snapshot": snapshot_a,
+                    "hash": "a" * 64,
+                    "now": now,
+                },
+            )
+
+        connection.execute(
+            text(
+                """INSERT INTO release_activation_audits
+                (id, space_id, kind, from_snapshot_id, target_snapshot_id,
+                 manifest_hash, approval_id, actor, reason, activated_at, created_at)
+                VALUES ('exact-audit', :space, 'rollback', :from_snapshot,
+                        :target_snapshot, :hash, 'approval-a',
+                        'activation-operator@example.com', 'operator rollback',
+                        :now, :now)"""
+            ),
+            {
+                "space": space_id,
+                "from_snapshot": snapshot_b,
+                "target_snapshot": snapshot_a,
+                "hash": "a" * 64,
+                "now": now,
+            },
+        )
+
+
 def test_ra2_0013_nonempty_downgrade_refuses_before_any_ddl(tmp_path: Path) -> None:
     url, engine = _db(tmp_path, "unsafe-downgrade")
     command.upgrade(_cfg(url), "head")

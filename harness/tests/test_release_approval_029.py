@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import uuid
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session
 
+import insurance_harness.knowledge.release_authority as release_authority_module
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.pages import render_snapshot_pages
 from insurance_harness.knowledge.release_approval import (
@@ -761,11 +763,20 @@ def test_ra5_rollback_reuses_cas_and_only_targets_an_exact_approved_manifest(
     second = _additional_frozen_manifest(session, scope, "ra5-b")
     _approve_persisted_manifest(session, scope, second)
     service = ReleaseAuthorityService(session)
+    activated_a = service.promote(
+        scope,
+        snapshot_id=first.snapshot_id,
+        manifest_hash=first.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="activate A",
+    )
+    assert isinstance(activated_a, ReleaseActivationSuccess)
+    session.commit()
     promoted = service.promote(
         scope,
         snapshot_id=second.snapshot_id,
         manifest_hash=second.manifest_sha256,
-        expected_current_snapshot_id=None,
+        expected_current_snapshot_id=first.snapshot_id,
         reason="activate B",
     )
     assert isinstance(promoted, ReleaseActivationSuccess)
@@ -790,7 +801,41 @@ def test_ra5_rollback_reuses_cas_and_only_targets_an_exact_approved_manifest(
             select(ReleaseActivationAudit.kind).order_by(ReleaseActivationAudit.created_at)
         )
     )
-    assert kinds == ["promote", "rollback"]
+    assert kinds == ["promote", "promote", "rollback"]
+
+
+def test_ra5_rollback_rejects_approved_candidate_that_was_never_activated(
+    session: Session,
+) -> None:
+    scope, never_activated = _frozen_manifest(session, "ra5-never-activated")
+    _approve_persisted_manifest(session, scope, never_activated)
+    current = _additional_frozen_manifest(session, scope, "ra5-active")
+    _approve_persisted_manifest(session, scope, current)
+    service = ReleaseAuthorityService(session)
+    activated = service.promote(
+        scope,
+        snapshot_id=current.snapshot_id,
+        manifest_hash=current.manifest_sha256,
+        expected_current_snapshot_id=None,
+        reason="activate current candidate",
+    )
+    assert isinstance(activated, ReleaseActivationSuccess)
+    session.commit()
+
+    result = service.rollback(
+        scope,
+        snapshot_id=never_activated.snapshot_id,
+        manifest_hash=never_activated.manifest_sha256,
+        expected_current_snapshot_id=current.snapshot_id,
+        reason="must not activate a never-active candidate",
+    )
+
+    assert isinstance(result, ReleaseActivationFailure)
+    assert result.code == "rollback_target_not_activated"
+    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
+    assert pointer is not None
+    assert pointer.snapshot_id == current.snapshot_id
+    assert session.scalar(select(func.count()).select_from(ReleaseActivationAudit)) == 1
 
 
 def test_ra5_unapproved_rollback_and_hash_substitution_fail_closed(session: Session) -> None:
@@ -828,23 +873,38 @@ def test_ra5_unapproved_rollback_and_hash_substitution_fail_closed(session: Sess
     assert pointer.snapshot_id == current.snapshot_id
 
 
-def test_ra5_release_authority_has_zero_provider_or_model_surface(session: Session) -> None:
-    class ProviderFake:
-        calls = 0
+def test_ra5_release_authority_has_static_zero_external_execution_surface() -> None:
+    source_path = Path(release_authority_module.__file__)
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    imported_modules = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    } | {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+    }
+    forbidden = {"runtime", "model", "provider", "publisher"}
+    assert not any(forbidden & set(module.split(".")) for module in imported_modules)
 
-    scope, manifest = _frozen_manifest(session, "ra5-zero-provider")
-    _approve_persisted_manifest(session, scope, manifest)
-
-    result = ReleaseAuthorityService(session).rollback(
-        scope,
-        snapshot_id=manifest.snapshot_id,
-        manifest_hash=manifest.manifest_sha256,
-        expected_current_snapshot_id=None,
-        reason="logical rollback only",
+    service = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ReleaseAuthorityService"
     )
-
-    assert isinstance(result, ReleaseActivationSuccess)
-    assert ProviderFake.calls == 0
+    rollback = next(
+        node
+        for node in service.body
+        if isinstance(node, ast.FunctionDef) and node.name == "rollback"
+    )
+    called_attributes = [
+        node.func.attr
+        for node in ast.walk(rollback)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    ]
+    assert called_attributes == ["_activate"]
 
 
 @contextmanager

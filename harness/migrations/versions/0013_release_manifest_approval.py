@@ -191,6 +191,13 @@ def upgrade() -> None:
             "space_id", "manifest_hash", name="uq_release_approvals_space_manifest"
         ),
         sa.UniqueConstraint("space_id", "id", name="uq_release_approvals_space_id"),
+        sa.UniqueConstraint(
+            "space_id",
+            "snapshot_id",
+            "manifest_hash",
+            "id",
+            name="uq_release_approvals_exact_id",
+        ),
         sa.ForeignKeyConstraint(
             ["space_id", "snapshot_id", "manifest_hash"],
             [
@@ -249,9 +256,14 @@ def upgrade() -> None:
             name="fk_release_activation_audits_exact_manifest",
         ),
         sa.ForeignKeyConstraint(
-            ["space_id", "approval_id"],
-            ["release_approvals.space_id", "release_approvals.id"],
-            name="fk_release_activation_audits_space_approval",
+            ["space_id", "target_snapshot_id", "manifest_hash", "approval_id"],
+            [
+                "release_approvals.space_id",
+                "release_approvals.snapshot_id",
+                "release_approvals.manifest_hash",
+                "release_approvals.id",
+            ],
+            name="fk_release_activation_audits_exact_approval",
         ),
         sa.CheckConstraint(
             "kind IN ('promote', 'rollback')",

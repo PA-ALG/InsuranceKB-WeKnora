@@ -38,6 +38,7 @@ type ReleaseAuthorityFailureCode = Literal[
     "manifest_mismatch",
     "manifest_tamper",
     "approval_missing",
+    "rollback_target_not_activated",
 ]
 
 
@@ -275,6 +276,21 @@ class ReleaseAuthorityService:
         ):
             return ReleaseActivationFailure(
                 code="approval_missing",
+                current_snapshot_id=current_snapshot_id,
+            )
+
+        if action == "rollback" and self._session.scalar(
+            select(ReleaseActivationAudit.id)
+            .where(
+                ReleaseActivationAudit.space_id == scope.space_id,
+                ReleaseActivationAudit.target_snapshot_id == snapshot_id,
+                ReleaseActivationAudit.manifest_hash == manifest_hash,
+                ReleaseActivationAudit.kind.in_(("promote", "rollback")),
+            )
+            .limit(1)
+        ) is None:
+            return ReleaseActivationFailure(
+                code="rollback_target_not_activated",
                 current_snapshot_id=current_snapshot_id,
             )
 
