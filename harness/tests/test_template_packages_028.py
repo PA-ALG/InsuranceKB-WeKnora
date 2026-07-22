@@ -1,0 +1,673 @@
+"""OpenSpec 028a pure-domain contracts for approved template packages."""
+
+from __future__ import annotations
+
+import ast
+import inspect
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Literal
+
+import pytest
+from pydantic import ValidationError
+
+from insurance_harness.template_packages import (
+    EvidencePolicy,
+    FieldGroup,
+    ProvenanceReceipt,
+    ResolutionRequest,
+    TemplateApproval,
+    TemplateCatalog,
+    TemplateCatalogEntry,
+    TemplatePackageContent,
+    TemplateResolutionError,
+    TemplateScope,
+    TemplateVersion,
+    ValidatorRef,
+    canonical_content_hash,
+    resolve_template,
+)
+
+_SOURCE_REPOSITORY = "silvielala412-lab/LLM-wiki-black"
+_SOURCE_BRANCH = "feature/product-catalog-domain"
+_SOURCE_COMMIT = "6a8a1d98de405b6a2837090ee2d43769b4c89be7"
+_HASH_A = "a" * 64
+_ScopeLevel = Literal["global", "product-line", "document-type", "product-family"]
+_ApprovalState = Literal["approved", "pending", "revoked"]
+_REPOSITORY_ROOT = Path(__file__).parents[2]
+_PACKAGE_ROOT = (
+    Path(__file__).parents[1] / "src" / "insurance_harness" / "template_packages"
+)
+_PYTHON_DOMAIN_ROOT = _PACKAGE_ROOT.parent
+
+
+def _receipt(
+    behavior: str,
+    *,
+    source_path: str = "frontend/src/lib/product-catalog-modules.ts",
+    python_target: str = "harness/src/insurance_harness/template_packages/models.py",
+) -> ProvenanceReceipt:
+    return ProvenanceReceipt(
+        migration_id=f"MIG-028A-{behavior}",
+        source_repository=_SOURCE_REPOSITORY,
+        source_branch=_SOURCE_BRANCH,
+        source_commit=_SOURCE_COMMIT,
+        source_path=source_path,
+        source_language="typescript",
+        rights_status="project-owned",
+        accepted_behavior=f"{behavior}: explicit field groups and document routing facts",
+        rejected_behavior=f"{behavior}: frontend runtime, fuzzy product-name dispatch, and state",
+        python_target=python_target,
+        translation_method="behavior_port_with_characterization_tests",
+        characterization_tests=(
+            "harness/tests/test_template_packages_028.py",
+            "harness/tests/test_product_routing.py",
+        ),
+    )
+
+
+def _content(
+    marker: str,
+    *,
+    groups: tuple[FieldGroup, ...] | None = None,
+    prompts: Mapping[str, str] | None = None,
+    validators: tuple[ValidatorRef, ...] | None = None,
+    limits: Mapping[str, int] | None = None,
+    evidence_policy: EvidencePolicy | None = None,
+    golden_slice_ref: str | None = None,
+    provenance: tuple[ProvenanceReceipt, ...] | None = None,
+) -> TemplatePackageContent:
+    return TemplatePackageContent(
+        schema_version="insurance-template.v1",
+        field_groups=groups
+        or (
+            FieldGroup(
+                group_id=f"group-{marker}",
+                field_ids=(f"field-{marker}",),
+                evidence_roles=("terms",),
+            ),
+        ),
+        role_prompts=prompts or {"extract": f"extract-{marker}"},
+        validators=validators
+        or (
+            ValidatorRef(
+                validator_id=f"validator-{marker}",
+                validator_version="v1",
+                config_hash=_HASH_A,
+            ),
+        ),
+        evidence_policy=evidence_policy
+        or EvidencePolicy(
+            require_quote=True,
+            require_locator=True,
+            minimum_sources=1,
+        ),
+        attempt_limits=limits or {"extract": 1},
+        golden_slice_ref=golden_slice_ref or f"golden-{marker}",
+        provenance=provenance or (_receipt(marker),),
+    )
+
+
+def _scope(
+    level: _ScopeLevel,
+    *,
+    space_id: str = "space-a",
+    product_line_id: str | None = None,
+    document_type_id: str | None = None,
+    product_family_id: str | None = None,
+) -> TemplateScope:
+    return TemplateScope(
+        space_id=space_id,
+        level=level,
+        product_line_id=product_line_id,
+        document_type_id=document_type_id,
+        product_family_id=product_family_id,
+    )
+
+
+def _entry(
+    scope: TemplateScope,
+    content: TemplatePackageContent,
+    *,
+    version_id: str,
+    approval_state: _ApprovalState = "approved",
+    approved_hash: str | None = None,
+) -> TemplateCatalogEntry:
+    version = TemplateVersion.from_content(
+        package_id="life-template-package",
+        version_id=version_id,
+        scope=scope,
+        content=content,
+    )
+    approval = TemplateApproval(
+        approval_id=f"approval-{version_id}",
+        package_id=version.package_id,
+        version_id=version.version_id,
+        scope=scope,
+        content_hash=approved_hash or version.content_hash,
+        state=approval_state,
+    )
+    return TemplateCatalogEntry(version=version, approval=approval)
+
+
+class _MemoryCatalog:
+    def __init__(self, entries: tuple[TemplateCatalogEntry, ...]) -> None:
+        self._entries = {entry.version.scope: entry for entry in entries}
+        self.requests: list[TemplateScope] = []
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        self.requests.append(scope)
+        return self._entries.get(scope)
+
+
+class _FixedCatalog:
+    """Hostile adapter used to prove the resolver distrusts returned scope."""
+
+    def __init__(self, entry: TemplateCatalogEntry) -> None:
+        self._entry = entry
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        return self._entry
+
+
+class _RequestMutatingCatalog:
+    """Mutate the caller DTO after the first lookup to exercise snapshot isolation."""
+
+    def __init__(
+        self,
+        request: ResolutionRequest,
+        global_entry: TemplateCatalogEntry,
+    ) -> None:
+        self._request = request
+        self._global_entry = global_entry
+        self.requests: list[TemplateScope] = []
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        self.requests.append(scope)
+        if len(self.requests) == 1:
+            object.__setattr__(self._request, "space_id", "space-b")
+            return self._global_entry
+        return None
+
+
+class _ResolutionRequestSubclass(ResolutionRequest):
+    pass
+
+
+def _request(*, space_id: str = "space-a", family_id: str = "family-ordinary") -> ResolutionRequest:
+    return ResolutionRequest(
+        space_id=space_id,
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id=family_id,
+    )
+
+
+def test_tr1_canonical_hash_is_stable_and_covers_every_content_byte() -> None:
+    left = _content(
+        "stable",
+        prompts={"verify": "verify-stable", "extract": "extract-stable"},
+        limits={"verify": 2, "extract": 1},
+    )
+    reordered = _content(
+        "stable",
+        prompts={"extract": "extract-stable", "verify": "verify-stable"},
+        limits={"extract": 1, "verify": 2},
+    )
+    one_byte_changed = reordered.model_copy(
+        update={"role_prompts": {"extract": "extract-stablE", "verify": "verify-stable"}}
+    )
+
+    assert canonical_content_hash(left) == canonical_content_hash(reordered)
+    assert canonical_content_hash(left) != canonical_content_hash(one_byte_changed)
+    assert len(canonical_content_hash(left)) == 64
+
+
+@pytest.mark.parametrize(
+    "changed_prompt",
+    ["extract-stable ", " extract-stable", "extract-stable\n"],
+)
+def test_tr1_prompt_whitespace_bytes_are_preserved_in_full_hash(
+    changed_prompt: str,
+) -> None:
+    original = _content("stable", prompts={"extract": "extract-stable"})
+    changed = original.model_copy(update={"role_prompts": {"extract": changed_prompt}})
+
+    assert changed.role_prompts["extract"] == changed_prompt
+    assert canonical_content_hash(original) != canonical_content_hash(changed)
+
+
+def test_tr1_full_hash_accepts_representative_multisection_prompt() -> None:
+    prompt = "system\n" + ("evidence-first extraction instructions\n" * 40)
+    content = _content("long-prompt", prompts={"extract": prompt})
+
+    assert len(prompt) > 512
+    assert content.role_prompts["extract"] == prompt
+    assert len(canonical_content_hash(content)) == 64
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("role_prompts", {" extract": "prompt", "extract": "other"}),
+        ("attempt_limits", {" extract": 1, "extract": 2}),
+    ],
+)
+def test_tr1_mapping_keys_must_arrive_in_canonical_form(
+    field: str,
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        _content("canonical-keys").model_copy(update={field: value})
+
+
+def test_tr1_content_is_deeply_immutable() -> None:
+    content = _content("immutable")
+
+    with pytest.raises(ValidationError):
+        content.schema_version = "tampered"
+    with pytest.raises(TypeError):
+        content.role_prompts["extract"] = "tampered"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        content.attempt_limits["extract"] = 99  # type: ignore[index]
+
+
+@pytest.mark.parametrize("approval_state", ["pending", "revoked"])
+def test_tr1_unapproved_template_fails_closed(approval_state: _ApprovalState) -> None:
+    global_scope = _scope("global")
+    catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("unapproved"),
+                version_id="global-v1",
+                approval_state=approval_state,
+            ),
+        )
+    )
+
+    with pytest.raises(TemplateResolutionError, match="unapproved") as exc_info:
+        resolve_template(catalog, _request())
+
+    assert exc_info.value.reason_code == "unapproved"
+
+
+def test_tr1_old_approval_does_not_authorize_changed_full_content() -> None:
+    global_scope = _scope("global")
+    original = _entry(global_scope, _content("before"), version_id="global-v1")
+    changed = _entry(
+        global_scope,
+        _content("after"),
+        version_id="global-v2",
+        approved_hash=original.version.content_hash,
+    )
+
+    with pytest.raises(TemplateResolutionError, match="approval_hash_mismatch") as exc_info:
+        resolve_template(_MemoryCatalog((changed,)), _request())
+
+    assert exc_info.value.reason_code == "approval_hash_mismatch"
+
+
+def test_tr1_old_approval_does_not_authorize_prompt_whitespace_change() -> None:
+    global_scope = _scope("global")
+    original = _entry(
+        global_scope,
+        _content("before", prompts={"extract": "exact prompt"}),
+        version_id="global-v1",
+    )
+    changed = _entry(
+        global_scope,
+        _content("after", prompts={"extract": "exact prompt\n"}),
+        version_id="global-v2",
+        approved_hash=original.version.content_hash,
+    )
+
+    with pytest.raises(TemplateResolutionError, match="approval_hash_mismatch"):
+        resolve_template(_MemoryCatalog((changed,)), _request())
+
+
+@pytest.mark.parametrize(
+    ("approval_field", "wrong_value"),
+    [
+        ("package_id", "other-package"),
+        ("version_id", "other-version"),
+        ("scope", _scope("global", space_id="space-b")),
+    ],
+)
+def test_tr1_approval_must_bind_exact_package_version_and_scope(
+    approval_field: str,
+    wrong_value: object,
+) -> None:
+    global_scope = _scope("global")
+    valid = _entry(global_scope, _content("binding"), version_id="global-v1")
+    mismatched = TemplateCatalogEntry(
+        version=valid.version,
+        approval=valid.approval.model_copy(update={approval_field: wrong_value}),
+    )
+
+    with pytest.raises(TemplateResolutionError, match="approval_binding_mismatch") as exc_info:
+        resolve_template(_MemoryCatalog((mismatched,)), _request())
+
+    assert exc_info.value.reason_code == "approval_binding_mismatch"
+
+
+def test_tr1_corrupt_persisted_full_hash_is_recomputed_at_resolver_boundary() -> None:
+    global_scope = _scope("global")
+    valid = _entry(global_scope, _content("valid"), version_id="global-v1")
+    corrupt_version = TemplateVersion.model_construct(
+        package_id=valid.version.package_id,
+        version_id=valid.version.version_id,
+        scope=valid.version.scope,
+        content=valid.version.content,
+        content_hash="0" * 64,
+    )
+    corrupt = TemplateCatalogEntry.model_construct(
+        version=corrupt_version,
+        approval=valid.approval,
+    )
+
+    with pytest.raises(TemplateResolutionError, match="content_hash_mismatch") as exc_info:
+        resolve_template(_MemoryCatalog((corrupt,)), _request())
+
+    assert exc_info.value.reason_code == "content_hash_mismatch"
+
+
+def test_tr1_cross_space_catalog_result_fails_closed() -> None:
+    foreign_scope = _scope("global", space_id="space-b")
+    foreign = _entry(foreign_scope, _content("foreign"), version_id="global-b-v1")
+
+    with pytest.raises(TemplateResolutionError, match="scope_mismatch") as exc_info:
+        resolve_template(_FixedCatalog(foreign), _request(space_id="space-a"))
+
+    assert exc_info.value.reason_code == "scope_mismatch"
+
+
+def test_tr2_unresolved_applicability_fails_closed() -> None:
+    with pytest.raises(TemplateResolutionError, match="unresolved_scope") as exc_info:
+        resolve_template(_MemoryCatalog(()), _request())
+
+    assert exc_info.value.reason_code == "unresolved_scope"
+
+
+@pytest.mark.parametrize(
+    "invalid_request",
+    [
+        ResolutionRequest.model_construct(space_id="space-a"),
+        _ResolutionRequestSubclass(
+            space_id="space-a",
+            product_line_id="line-life",
+            document_type_id="document-terms",
+            product_family_id="family-ordinary",
+        ),
+    ],
+)
+def test_tr2_invalid_or_subclassed_request_is_typed_and_has_zero_catalog_calls(
+    invalid_request: ResolutionRequest,
+) -> None:
+    catalog = _MemoryCatalog(())
+
+    with pytest.raises(TemplateResolutionError, match="invalid_request") as exc_info:
+        resolve_template(catalog, invalid_request)
+
+    assert exc_info.value.reason_code == "invalid_request"
+    assert catalog.requests == []
+
+
+def test_tr2_resolver_uses_one_canonical_request_snapshot() -> None:
+    request = _request(space_id="space-a")
+    global_scope = _scope("global", space_id="space-a")
+    entry = _entry(global_scope, _content("snapshot"), version_id="global-v1")
+    catalog = _RequestMutatingCatalog(request, entry)
+
+    resolved = resolve_template(catalog, request)
+
+    assert request.space_id == "space-b"
+    assert resolved.request.space_id == "space-a"
+    assert {scope.space_id for scope in catalog.requests} == {"space-a"}
+    assert {source.scope.space_id for source in resolved.source_chain} == {"space-a"}
+
+
+def test_tr2_resolver_applies_stable_order_and_returns_full_source_chain() -> None:
+    request = _request()
+    scopes = (
+        _scope("global"),
+        _scope("product-line", product_line_id=request.product_line_id),
+        _scope(
+            "document-type",
+            product_line_id=request.product_line_id,
+            document_type_id=request.document_type_id,
+        ),
+        _scope(
+            "product-family",
+            product_line_id=request.product_line_id,
+            document_type_id=request.document_type_id,
+            product_family_id=request.product_family_id,
+        ),
+    )
+    shared = FieldGroup(
+        group_id="shared",
+        field_ids=("global-field",),
+        evidence_roles=("terms",),
+    )
+    entries = (
+        _entry(
+            scopes[0],
+            _content(
+                "global",
+                groups=(shared,),
+                prompts={"extract": "global-extract", "verify": "global-verify"},
+                limits={"extract": 1},
+            ),
+            version_id="global-v1",
+        ),
+        _entry(
+            scopes[1],
+            _content(
+                "line",
+                groups=(
+                    FieldGroup(
+                        group_id="shared",
+                        field_ids=("line-field",),
+                        evidence_roles=("terms",),
+                    ),
+                    FieldGroup(
+                        group_id="line-only",
+                        field_ids=("line-only-field",),
+                        evidence_roles=("brochure",),
+                    ),
+                ),
+                prompts={"extract": "line-extract"},
+                limits={"verify": 2},
+            ),
+            version_id="line-v1",
+        ),
+        _entry(
+            scopes[2],
+            _content(
+                "document",
+                prompts={"verify": "document-verify"},
+                limits={"gap": 1},
+            ),
+            version_id="document-v1",
+        ),
+        _entry(
+            scopes[3],
+            _content(
+                "family",
+                prompts={"extract": "family-extract"},
+                limits={"extract": 2},
+                golden_slice_ref="golden-family-final",
+            ),
+            version_id="family-v1",
+        ),
+    )
+    catalog = _MemoryCatalog(entries)
+
+    resolved = resolve_template(catalog, request)
+
+    assert catalog.requests == list(scopes)
+    assert [source.scope.level for source in resolved.source_chain] == [
+        "global",
+        "product-line",
+        "document-type",
+        "product-family",
+    ]
+    assert [source.version_id for source in resolved.source_chain] == [
+        "global-v1",
+        "line-v1",
+        "document-v1",
+        "family-v1",
+    ]
+    assert [group.group_id for group in resolved.content.field_groups] == [
+        "shared",
+        "line-only",
+        "group-document",
+        "group-family",
+    ]
+    assert resolved.content.field_groups[0].field_ids == ("line-field",)
+    assert dict(resolved.content.role_prompts) == {
+        "extract": "family-extract",
+        "verify": "document-verify",
+    }
+    assert dict(resolved.content.attempt_limits) == {
+        "extract": 2,
+        "verify": 2,
+        "gap": 1,
+    }
+    assert resolved.content.golden_slice_ref == "golden-family-final"
+    assert resolved.content_hash == canonical_content_hash(resolved.content)
+
+
+def test_tr2_similar_ordinary_and_participating_families_never_share_overlay() -> None:
+    global_scope = _scope("global")
+    ordinary_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-ordinary",
+    )
+    participating_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-participating",
+    )
+    catalog = _MemoryCatalog(
+        (
+            _entry(global_scope, _content("global"), version_id="global-v1"),
+            _entry(
+                ordinary_scope,
+                _content("ordinary", prompts={"extract": "ordinary-only"}),
+                version_id="ordinary-v1",
+            ),
+            _entry(
+                participating_scope,
+                _content("participating", prompts={"extract": "participating-only"}),
+                version_id="participating-v1",
+            ),
+        )
+    )
+
+    ordinary = resolve_template(catalog, _request(family_id="family-ordinary"))
+    participating = resolve_template(catalog, _request(family_id="family-participating"))
+
+    assert ordinary.content.role_prompts["extract"] == "ordinary-only"
+    assert participating.content.role_prompts["extract"] == "participating-only"
+    assert ordinary.content_hash != participating.content_hash
+    assert "product_name" not in ResolutionRequest.model_fields
+    assert "product_name" not in inspect.getsource(resolve_template)
+
+
+def test_tr0_provenance_is_exact_metadata_not_a_typescript_runtime_bridge() -> None:
+    receipt = _receipt(
+        "document-routing",
+        source_path="frontend/src/lib/__tests__/product-catalog-document-routing.test.ts",
+        python_target="harness/src/insurance_harness/template_packages/resolver.py",
+    )
+
+    assert receipt.source_repository == _SOURCE_REPOSITORY
+    assert receipt.source_branch == _SOURCE_BRANCH
+    assert receipt.source_commit == _SOURCE_COMMIT
+    assert receipt.source_path.endswith(".ts")
+    assert receipt.python_target.endswith(".py")
+    assert receipt.source_language == "typescript"
+    assert (_REPOSITORY_ROOT / receipt.python_target).is_file()
+    with pytest.raises(ValidationError):
+        receipt.model_copy(update={"python_target": "runtime/template-resolver.ts"})
+
+
+@pytest.mark.parametrize(
+    ("field", "noncanonical_path"),
+    [
+        ("source_path", r"C:\repo\source.ts"),
+        ("source_path", "C:/repo/source.ts"),
+        ("source_path", "frontend/src/../source.ts"),
+        ("source_path", "frontend//source.ts"),
+        ("source_path", "frontend/source\x00.ts"),
+        ("python_target", r"harness\src\target.py"),
+        ("python_target", "/harness/src/target.py"),
+        ("characterization_tests", ("harness/tests/../test_escape.py",)),
+        ("characterization_tests", ("harness//tests/test_duplicate.py",)),
+    ],
+)
+def test_tr0_provenance_paths_require_canonical_repository_relative_posix_form(
+    field: str,
+    noncanonical_path: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        _receipt("canonical-path").model_copy(update={field: noncanonical_path})
+
+
+def test_tr0_package_has_one_read_only_port_and_no_orm_or_node_runtime_surface() -> None:
+    expected_files = {"__init__.py", "models.py", "ports.py", "resolver.py"}
+    assert {path.name for path in _PACKAGE_ROOT.iterdir() if path.is_file()} == expected_files
+    assert not tuple(_PYTHON_DOMAIN_ROOT.rglob("*.ts"))
+    assert not tuple(_PYTHON_DOMAIN_ROOT.rglob("*.tsx"))
+    assert not tuple(_PYTHON_DOMAIN_ROOT.rglob("package.json"))
+
+    public_protocol_methods = {
+        name
+        for name, value in vars(TemplateCatalog).items()
+        if not name.startswith("_") and callable(value)
+    }
+    assert public_protocol_methods == {"get_approved"}
+
+    banned_import_roots = {"sqlalchemy", "subprocess", "node", "nodejs", "typescript"}
+    for path in sorted(_PACKAGE_ROOT.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imported_roots = {
+            alias.name.split(".", 1)[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        imported_roots.update(
+            node.module.split(".", 1)[0]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+        )
+        assert imported_roots.isdisjoint(banned_import_roots), path
+
+    node_executables = {"node", "nodejs", "npm", "npx", "ts-node", "deno", "bun"}
+    for path in sorted(_PYTHON_DOMAIN_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if not (
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subprocess"
+                and node.func.attr in {"run", "Popen", "call", "check_call", "check_output"}
+            ):
+                continue
+            command_literals = {
+                child.value.strip().rsplit("/", 1)[-1]
+                for child in ast.walk(node)
+                if isinstance(child, ast.Constant) and isinstance(child.value, str)
+            }
+            assert command_literals.isdisjoint(node_executables), path
+
+    resolver_source = (_PACKAGE_ROOT / "resolver.py").read_text(encoding="utf-8")
+    assert "普通终身寿险" not in resolver_source
+    assert "分红型" not in resolver_source
+    assert ".ts" not in resolver_source
