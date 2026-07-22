@@ -1581,29 +1581,6 @@ def _load_serving_proof(path: Path) -> ServingProof:
     return value
 
 
-def _contained_artifact(root: Path, path: str | Path) -> Path:
-    candidate = Path(path)
-    try:
-        relative = candidate.resolve(strict=True).relative_to(root.resolve(strict=True))
-    except (OSError, ValueError) as exc:
-        raise ReleaseCLIError(
-            "unsafe_artifact_path", "artifact must be a regular file inside the run"
-        ) from exc
-    if candidate.is_symlink() or not candidate.is_file():
-        raise ReleaseCLIError("unsafe_artifact_path", "artifact is not a regular file")
-    SealedArtifact._safe_path(relative.as_posix())
-    return candidate
-
-
-def _unique_run_artifact(root: Path, basename: str) -> Path:
-    matches = [path for path in root.rglob(basename) if path.is_file()]
-    if len(matches) != 1:
-        raise ReleaseCLIError(
-            "artifact_chain_incomplete", f"expected exactly one {basename}"
-        )
-    return _contained_artifact(root, matches[0])
-
-
 def _artifact_item_count(path: Path, raw: bytes) -> int:
     if path.suffix == ".jsonl":
         return sum(1 for line in raw.splitlines() if line.strip())
@@ -1616,23 +1593,32 @@ def _artifact_item_count(path: Path, raw: bytes) -> int:
     return 1
 
 
-def _seal_chain_paths(root: Path) -> dict[str, Path]:
-    return {
-        name: _unique_run_artifact(root, name)
-        for name in (
-            "compilation-manifest.json",
-            "review-decisions.yaml",
-            "review-receipt.json",
-            "run-request.yaml",
-            "candidate-snapshot.json",
-            "release-manifest.json",
-            "release-approval-request.yaml",
-            "approval-receipt.json",
-            "release-proof.json",
-            "metrics.json",
-            "serving-proof.json",
-        )
-    }
+def _seal_chain_paths(root: Path, relative_paths: Sequence[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for name in (
+        "compilation-manifest.json",
+        "review-decisions.yaml",
+        "review-receipt.json",
+        "run-request.yaml",
+        "candidate-snapshot.json",
+        "release-manifest.json",
+        "release-approval-request.yaml",
+        "approval-receipt.json",
+        "release-proof.json",
+        "metrics.json",
+        "serving-proof.json",
+    ):
+        matches = [
+            relative
+            for relative in relative_paths
+            if PurePosixPath(relative).name == name
+        ]
+        if len(matches) != 1:
+            raise ReleaseCLIError(
+                "artifact_chain_incomplete", f"expected exactly one {name}"
+            )
+        result[name] = root.joinpath(*PurePosixPath(matches[0]).parts)
+    return result
 
 
 def _expected_serving_facts(
@@ -1984,7 +1970,79 @@ def _exclusive_seal_lock(root: Path) -> Iterator[None]:
             os.close(descriptor)
 
 
-def _stable_read_at(root: Path, relative: str) -> bytes:
+def _require_seal_fd_support() -> None:
+    if (
+        not hasattr(os, "O_NOFOLLOW")
+        or not hasattr(os, "O_DIRECTORY")
+        or os.open not in os.supports_dir_fd
+        or os.stat not in os.supports_dir_fd
+        or os.unlink not in os.supports_dir_fd
+        or os.scandir not in os.supports_fd
+    ):
+        raise ReleaseCLIError(
+            "unsafe_artifact_path", "descriptor-anchored sealing is unavailable"
+        )
+
+
+def _open_directory_path_no_follow(path: Path) -> tuple[list[int], os.stat_result]:
+    _require_seal_fd_support()
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parts = absolute.parts
+    if not absolute.is_absolute() or len(parts) < 2:
+        raise ReleaseCLIError("unsafe_artifact_path", "run directory is unavailable")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptors: list[int] = []
+    try:
+        current = os.open(parts[0], flags)
+        descriptors.append(current)
+        for part in parts[1:]:
+            current = os.open(part, flags, dir_fd=current)
+            descriptors.append(current)
+        state = os.fstat(current)
+        if not stat.S_ISDIR(state.st_mode):
+            raise OSError("run path is not a directory")
+        return descriptors, state
+    except OSError as exc:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise ReleaseCLIError(
+            "unsafe_artifact_path", "run directory is unavailable"
+        ) from exc
+
+
+@contextmanager
+def _anchored_seal_root(root: Path) -> Iterator[int]:
+    descriptors, _ = _open_directory_path_no_follow(root)
+    root_descriptor = descriptors[-1]
+    for descriptor in descriptors[:-1]:
+        os.close(descriptor)
+    try:
+        yield root_descriptor
+    finally:
+        os.close(root_descriptor)
+
+
+def _verify_seal_root(root: Path, root_descriptor: int) -> None:
+    try:
+        descriptors, observed = _open_directory_path_no_follow(root)
+    except ReleaseCLIError as exc:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "run directory identity changed"
+        ) from exc
+    try:
+        anchored = os.fstat(root_descriptor)
+        if _path_identity(observed) != _path_identity(anchored):
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "run directory identity changed"
+            )
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _open_regular_at(
+    root_descriptor: int, relative: str
+) -> tuple[list[int], tuple[tuple[int, int], ...], os.stat_result]:
     pure = PurePosixPath(relative)
     if pure.is_absolute() or not pure.parts or any(
         part in {"", ".", ".."} for part in pure.parts
@@ -1992,13 +2050,135 @@ def _stable_read_at(root: Path, relative: str) -> bytes:
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "artifact could not be read stably"
         )
-    return _stable_read_path(
-        root.joinpath(*pure.parts),
-        path_error_code="artifact_changed_during_seal",
-        path_error_message="artifact could not be read stably",
-        changed_code="artifact_changed_during_seal",
-        changed_message="artifact changed while being read",
-    )
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptors = [os.dup(root_descriptor)]
+    identities = [_path_identity(os.fstat(descriptors[0]))]
+    current = descriptors[0]
+    try:
+        for part in pure.parts[:-1]:
+            current = os.open(part, flags, dir_fd=current)
+            descriptors.append(current)
+            identities.append(_path_identity(os.fstat(current)))
+        file_descriptor = os.open(
+            pure.parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=current
+        )
+        descriptors.append(file_descriptor)
+        state = os.fstat(file_descriptor)
+        if not stat.S_ISREG(state.st_mode):
+            raise OSError("artifact is not a regular file")
+        return descriptors, tuple(identities), state
+    except OSError as exc:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "artifact could not be read stably"
+        ) from exc
+
+
+def _stable_read_at(root_descriptor: int, relative: str) -> bytes:
+    descriptors, lineage_before, before = _open_regular_at(root_descriptor, relative)
+    file_descriptor = descriptors[-1]
+    try:
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(file_descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(file_descriptor)
+        raw = b"".join(chunks)
+        if _file_state(before) != _file_state(after) or len(raw) != after.st_size:
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "artifact changed while being read"
+            )
+        verification, lineage_after, path_after = _open_regular_at(
+            root_descriptor, relative
+        )
+        try:
+            if (
+                lineage_before != lineage_after
+                or _file_state(path_after) != _file_state(after)
+            ):
+                raise ReleaseCLIError(
+                    "artifact_changed_during_seal", "artifact changed while being read"
+                )
+        finally:
+            for descriptor in reversed(verification):
+                os.close(descriptor)
+        return raw
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _walk_regular_files_at(
+    root_descriptor: int,
+    *,
+    directory_descriptor: int | None = None,
+    prefix: PurePosixPath | None = None,
+) -> tuple[str, ...]:
+    prefix = PurePosixPath() if prefix is None else prefix
+    current = root_descriptor if directory_descriptor is None else directory_descriptor
+    before = os.fstat(current)
+    try:
+        with os.scandir(current) as iterator:
+            names = sorted(entry.name for entry in iterator)
+    except OSError as exc:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "run directory could not be scanned"
+        ) from exc
+    observed: list[str] = []
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    for name in names:
+        try:
+            entry_state = os.stat(name, dir_fd=current, follow_symlinks=False)
+        except OSError as exc:
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "run directory changed during scan"
+            ) from exc
+        relative = prefix / name
+        if stat.S_ISLNK(entry_state.st_mode):
+            raise ReleaseCLIError("unsafe_artifact_path", "run contains a symlink")
+        if stat.S_ISDIR(entry_state.st_mode):
+            try:
+                child = os.open(name, directory_flags, dir_fd=current)
+            except OSError as exc:
+                raise ReleaseCLIError(
+                    "artifact_changed_during_seal", "run directory changed during scan"
+                ) from exc
+            try:
+                if _path_identity(os.fstat(child)) != _path_identity(entry_state):
+                    raise ReleaseCLIError(
+                        "artifact_changed_during_seal",
+                        "run directory changed during scan",
+                    )
+                observed.extend(
+                    _walk_regular_files_at(
+                        root_descriptor,
+                        directory_descriptor=child,
+                        prefix=relative,
+                    )
+                )
+                current_state = os.stat(name, dir_fd=current, follow_symlinks=False)
+                if _path_identity(current_state) != _path_identity(entry_state):
+                    raise ReleaseCLIError(
+                        "artifact_changed_during_seal",
+                        "run directory changed during scan",
+                    )
+            finally:
+                os.close(child)
+        elif stat.S_ISREG(entry_state.st_mode):
+            observed.append(relative.as_posix())
+        else:
+            raise ReleaseCLIError(
+                "unsafe_artifact_path", "run contains a non-regular artifact"
+            )
+    after = os.fstat(current)
+    if _file_state(before) != _file_state(after):
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "run directory changed during scan"
+        )
+    return tuple(observed)
 
 
 def _scan_sealed_files(
@@ -2006,15 +2186,14 @@ def _scan_sealed_files(
     allowed_paths: set[str],
     *,
     output: Path,
+    root_descriptor: int,
 ) -> tuple[tuple[SealedArtifact, ...], dict[str, bytes]]:
     observed: list[SealedArtifact] = []
     raw_files: dict[str, bytes] = {}
-    for path in sorted(root.rglob("*")):
-        if path.is_symlink():
-            raise ReleaseCLIError("unsafe_artifact_path", "run contains a symlink")
-        if not path.is_file() or path == output:
+    output_relative = output.relative_to(root).as_posix()
+    for relative in _walk_regular_files_at(root_descriptor):
+        if relative == output_relative:
             continue
-        relative = path.relative_to(root).as_posix()
         try:
             SealedArtifact._safe_path(relative)
         except ValueError as exc:
@@ -2025,7 +2204,8 @@ def _scan_sealed_files(
             raise ReleaseCLIError(
                 "unexpected_artifact", f"run contains an unbound artifact: {relative}"
             )
-        raw = _stable_read_at(root, relative)
+        raw = _stable_read_at(root_descriptor, relative)
+        path = root.joinpath(*PurePosixPath(relative).parts)
         raw_files[path.as_posix()] = raw
         observed.append(
             SealedArtifact(
@@ -2040,6 +2220,56 @@ def _scan_sealed_files(
     return tuple(observed), raw_files
 
 
+def _supplied_relative(root: Path, supplied: str | Path) -> str:
+    absolute_root = Path(os.path.abspath(os.fspath(root)))
+    absolute_supplied = Path(os.path.abspath(os.fspath(supplied)))
+    try:
+        relative = absolute_supplied.relative_to(absolute_root).as_posix()
+        SealedArtifact._safe_path(relative)
+    except (ValueError, RuntimeError) as exc:
+        raise ReleaseCLIError(
+            "unsafe_artifact_path", "artifact must be inside the anchored run"
+        ) from exc
+    return relative
+
+
+def _write_json_exclusive_at(
+    root_descriptor: int, relative: str, value: object
+) -> None:
+    pure = PurePosixPath(relative)
+    if pure.is_absolute() or len(pure.parts) != 1 or pure.parts[0] in {"", ".", ".."}:
+        raise ReleaseCLIError("output_unavailable", "output path is unavailable")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    descriptor: int | None = None
+    created = False
+    try:
+        descriptor = os.open(pure.parts[0], flags, 0o600, dir_fd=root_descriptor)
+        created = True
+        state = os.fstat(descriptor)
+        if not stat.S_ISREG(state.st_mode):
+            raise OSError("output is not a regular file")
+        raw = _canonical_bytes(value) + b"\n"
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise OSError("output write made no progress")
+            offset += written
+        os.fsync(descriptor)
+    except FileExistsError as exc:
+        raise ReleaseCLIError("output_exists", "output path already exists") from exc
+    except OSError as exc:
+        if created:
+            try:
+                os.unlink(pure.parts[0], dir_fd=root_descriptor)
+            except FileNotFoundError:
+                pass
+        raise ReleaseCLIError("output_unavailable", "output could not be created") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
 def _seal_run_artifacts_locked(
     context: GovernanceContext,
     *,
@@ -2047,31 +2277,32 @@ def _seal_run_artifacts_locked(
     compilation_manifest_path: str | Path,
     release_proof_path: str | Path,
     serving_proof_path: str | Path,
+    root_descriptor: int,
 ) -> ArtifactManifest:
     """Revalidate the complete release chain and create its final file exactly once."""
 
     require_current_scope(context.session, context.scope)
     root = Path(directory)
-    if root.is_symlink() or not root.is_dir():
-        raise ReleaseCLIError("unsafe_artifact_path", "run directory is unavailable")
+    _verify_seal_root(root, root_descriptor)
     output = root / "artifact-manifest.json"
-    if output.exists() or output.is_symlink():
+    relative_files = _walk_regular_files_at(root_descriptor)
+    if "artifact-manifest.json" in relative_files:
         raise ReleaseCLIError("artifact_manifest_exists", "artifact manifest already exists")
-    supplied_compilation = _contained_artifact(root, compilation_manifest_path)
-    supplied_release = _contained_artifact(root, release_proof_path)
-    supplied_serving = _contained_artifact(root, serving_proof_path)
-    paths = _seal_chain_paths(root)
+    paths = _seal_chain_paths(root, relative_files)
     if (
-        supplied_compilation.resolve() != paths["compilation-manifest.json"].resolve()
-        or supplied_release.resolve() != paths["release-proof.json"].resolve()
-        or supplied_serving.resolve() != paths["serving-proof.json"].resolve()
+        _supplied_relative(root, compilation_manifest_path)
+        != paths["compilation-manifest.json"].relative_to(root).as_posix()
+        or _supplied_relative(root, release_proof_path)
+        != paths["release-proof.json"].relative_to(root).as_posix()
+        or _supplied_relative(root, serving_proof_path)
+        != paths["serving-proof.json"].relative_to(root).as_posix()
     ):
         raise ReleaseCLIError("artifact_chain_mismatch", "supplied chain path mismatch")
     compilation_path = paths["compilation-manifest.json"]
     release_path = paths["release-proof.json"]
     serving_path = paths["serving-proof.json"]
     compilation_relative = compilation_path.relative_to(root).as_posix()
-    bootstrap_compilation_raw = _stable_read_at(root, compilation_relative)
+    bootstrap_compilation_raw = _stable_read_at(root_descriptor, compilation_relative)
     compilation = _parse_compilation_manifest(bootstrap_compilation_raw)
     allowed_paths = {
         path.relative_to(root).as_posix() for path in paths.values()
@@ -2080,7 +2311,10 @@ def _seal_run_artifacts_locked(
     allowed_paths.update(
         (compilation_parent / item.path).as_posix() for item in compilation.files
     )
-    files, raw_files = _scan_sealed_files(root, allowed_paths, output=output)
+    files, raw_files = _scan_sealed_files(
+        root, allowed_paths, output=output, root_descriptor=root_descriptor
+    )
+    _verify_seal_root(root, root_descriptor)
     if not files:
         raise ReleaseCLIError("artifact_chain_incomplete", "run has no artifacts")
     if raw_files[compilation_path.as_posix()] != bootstrap_compilation_raw:
@@ -2136,22 +2370,44 @@ def _seal_run_artifacts_locked(
     artifact_manifest = ArtifactManifest.model_validate(
         {**payload, "manifest_hash": canonical_sha256(payload)}
     )
-    if _scan_sealed_files(root, allowed_paths, output=output) != (files, raw_files):
+    before_create = _scan_sealed_files(
+        root, allowed_paths, output=output, root_descriptor=root_descriptor
+    )
+    _verify_seal_root(root, root_descriptor)
+    if before_create != (files, raw_files):
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "artifact changed before final create"
         )
+    output_created = False
     try:
-        _write_json_exclusive(output, artifact_manifest.model_dump(mode="json"))
-        if _scan_sealed_files(root, allowed_paths, output=output) != (files, raw_files):
+        _verify_seal_root(root, root_descriptor)
+        _write_json_exclusive_at(
+            root_descriptor,
+            "artifact-manifest.json",
+            artifact_manifest.model_dump(mode="json"),
+        )
+        output_created = True
+        expected_output = _canonical_bytes(artifact_manifest.model_dump(mode="json")) + b"\n"
+        if _stable_read_at(root_descriptor, "artifact-manifest.json") != expected_output:
+            raise ReleaseCLIError(
+                "artifact_changed_during_seal", "final artifact manifest drifted"
+            )
+        after_create = _scan_sealed_files(
+            root, allowed_paths, output=output, root_descriptor=root_descriptor
+        )
+        _verify_seal_root(root, root_descriptor)
+        if after_create != (files, raw_files):
             raise ReleaseCLIError(
                 "artifact_changed_during_seal", "artifact changed during final create"
             )
     except Exception:
-        try:
-            output.unlink()
-        except FileNotFoundError:
-            pass
+        if output_created:
+            try:
+                os.unlink("artifact-manifest.json", dir_fd=root_descriptor)
+            except FileNotFoundError:
+                pass
         raise
+    _verify_seal_root(root, root_descriptor)
     return artifact_manifest
 
 
@@ -2164,16 +2420,16 @@ def seal_run_artifacts(
     serving_proof_path: str | Path,
 ) -> ArtifactManifest:
     root = Path(directory)
-    if root.is_symlink() or not root.is_dir():
-        raise ReleaseCLIError("unsafe_artifact_path", "run directory is unavailable")
     with _exclusive_seal_lock(root):
-        return _seal_run_artifacts_locked(
-            context,
-            directory=root,
-            compilation_manifest_path=compilation_manifest_path,
-            release_proof_path=release_proof_path,
-            serving_proof_path=serving_proof_path,
-        )
+        with _anchored_seal_root(root) as root_descriptor:
+            return _seal_run_artifacts_locked(
+                context,
+                directory=root,
+                compilation_manifest_path=compilation_manifest_path,
+                release_proof_path=release_proof_path,
+                serving_proof_path=serving_proof_path,
+                root_descriptor=root_descriptor,
+            )
 
 
 def _required_path(parser: argparse.ArgumentParser, flag: str) -> None:

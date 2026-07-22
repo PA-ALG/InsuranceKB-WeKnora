@@ -7,6 +7,7 @@ import importlib.util
 import inspect
 import json
 import os
+import shutil
 from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Any, cast
@@ -2684,13 +2685,13 @@ def test_ra7_seal_detects_file_mutation_immediately_before_final_create(
         session, tmp_path
     )
     run_dir = compilation.parent.parent
-    original_write = release_cli._write_json_exclusive
+    original_write = release_cli._write_json_exclusive_at
 
-    def race_write(path: Path, value: object) -> None:
+    def race_write(root_descriptor: int, relative: str, value: object) -> None:
         (run_dir / "metrics.json").write_text('{"passed":false}', encoding="utf-8")
-        original_write(path, value)
+        original_write(root_descriptor, relative, value)
 
-    monkeypatch.setattr(release_cli, "_write_json_exclusive", race_write)
+    monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.seal_run_artifacts(
             context,
@@ -2700,6 +2701,92 @@ def test_ra7_seal_detects_file_mutation_immediately_before_final_create(
             serving_proof_path=serving_proof,
         )
 
+    assert caught.value.code == "artifact_changed_during_seal"
+    assert not (run_dir / "artifact-manifest.json").exists()
+
+
+def test_ra7_seal_rejects_whole_run_directory_swap_before_final_create(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    verified_run = tmp_path / "verified-run"
+    replacement_run = tmp_path / "replacement-run"
+    shutil.copytree(run_dir, replacement_run)
+    original_write = release_cli._write_json_exclusive_at
+    swapped = False
+
+    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+        nonlocal swapped
+        run_dir.rename(verified_run)
+        replacement_run.rename(run_dir)
+        swapped = True
+        original_write(root_descriptor, relative, value)
+
+    monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
+    try:
+        with pytest.raises(release_cli.ReleaseCLIError) as caught:
+            release_cli.seal_run_artifacts(
+                context,
+                directory=run_dir,
+                compilation_manifest_path=compilation,
+                release_proof_path=release_proof,
+                serving_proof_path=serving_proof,
+            )
+    finally:
+        if swapped:
+            run_dir.rename(replacement_run)
+            verified_run.rename(run_dir)
+
+    assert caught.value.code == "artifact_changed_during_seal"
+    assert not (run_dir / "artifact-manifest.json").exists()
+    assert not (replacement_run / "artifact-manifest.json").exists()
+
+
+def test_ra7_seal_cleanup_never_unlinks_replacement_directory_file(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    verified_run = tmp_path / "verified-run-cleanup"
+    replacement_run = tmp_path / "replacement-run-cleanup"
+    shutil.copytree(run_dir, replacement_run)
+    sentinel = b'{"unrelated":true}\n'
+    (replacement_run / "artifact-manifest.json").write_bytes(sentinel)
+    original_write = release_cli._write_json_exclusive_at
+    swapped = False
+
+    def race_write(root_descriptor: int, relative: str, value: object) -> None:
+        nonlocal swapped
+        run_dir.rename(verified_run)
+        replacement_run.rename(run_dir)
+        swapped = True
+        original_write(root_descriptor, relative, value)
+
+    monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
+    try:
+        with pytest.raises(release_cli.ReleaseCLIError) as caught:
+            release_cli.seal_run_artifacts(
+                context,
+                directory=run_dir,
+                compilation_manifest_path=compilation,
+                release_proof_path=release_proof,
+                serving_proof_path=serving_proof,
+            )
+    finally:
+        if swapped:
+            run_dir.rename(replacement_run)
+            verified_run.rename(run_dir)
+
+    assert (replacement_run / "artifact-manifest.json").read_bytes() == sentinel
     assert caught.value.code == "artifact_changed_during_seal"
     assert not (run_dir / "artifact-manifest.json").exists()
 
@@ -2744,13 +2831,13 @@ def test_ra7_seal_detects_late_extra_file_and_leaves_no_final(
         session, tmp_path
     )
     run_dir = compilation.parent.parent
-    original_write = release_cli._write_json_exclusive
+    original_write = release_cli._write_json_exclusive_at
 
-    def race_write(path: Path, value: object) -> None:
+    def race_write(root_descriptor: int, relative: str, value: object) -> None:
         (run_dir / "late-extra.json").write_text('{"late":true}', encoding="utf-8")
-        original_write(path, value)
+        original_write(root_descriptor, relative, value)
 
-    monkeypatch.setattr(release_cli, "_write_json_exclusive", race_write)
+    monkeypatch.setattr(release_cli, "_write_json_exclusive_at", race_write)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.seal_run_artifacts(
             context,
@@ -2774,11 +2861,13 @@ def test_ra7_seal_cleans_partial_final_when_exclusive_write_fails(
     )
     run_dir = compilation.parent.parent
 
-    def partial_write(path: Path, _value: object) -> None:
-        path.write_text("{", encoding="utf-8")
-        raise release_cli.ReleaseCLIError("output_unavailable", "injected")
+    original_write = os.write
 
-    monkeypatch.setattr(release_cli, "_write_json_exclusive", partial_write)
+    def partial_write(descriptor: int, _raw: bytes) -> int:
+        original_write(descriptor, b"{")
+        raise OSError("injected partial write")
+
+    monkeypatch.setattr(os, "write", partial_write)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.seal_run_artifacts(
             context,
