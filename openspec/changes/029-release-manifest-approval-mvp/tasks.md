@@ -8,4 +8,4 @@
 - [x] T6 迁移 0013；SQLite focused 与真实 PostgreSQL 16 guard/downgrade/concurrency 矩阵均已通过，PG JUnit `tests=4 skipped=0`，migration 为单 head `0013`
 - [x] T7 暴露 ApprovedSnapshotReader 的 snapshot/manifest hash 公开合同，供 013/032 使用；未修改其文件域
 - [ ] T8 RA7 本域 RED/实现、stable-root-FD/atomic-final remediation 与独立 Spec/Quality review 均已完成并 `APPROVED FOR DRAFT`；028 sealed producer 合同与 production composition root 尚未集成，缺合同路径保持 fail closed
-- [ ] T9 validation report 已创建，rebase 后最新代码 HEAD 真实 PostgreSQL `tests=4 skipped=0`；full deterministic 按 Draft 规则未运行，push/Draft PR 待完成；本会话按总控要求不修改 HANDOFF
+- [ ] T9 validation report 已创建，rebase 后最新代码 HEAD 真实 PostgreSQL `tests=4 skipped=0`，Draft PR #28 已创建；七个跨域 blocker 未关闭，full deterministic 按 Draft 规则未运行；本会话按总控要求不修改 HANDOFF

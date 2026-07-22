@@ -1,6 +1,6 @@
 # 029 · ReleaseManifest + Human Approval MVP
 
-> 状态：MVP K0，029 本域实现与真实 PostgreSQL 门禁已进入 Task 8 收尾；RA7 跨域集成、整包复审与 full deterministic 尚未关闭。北极星 C3/C5；复用 018，不实现 P-1。
+> 状态：MVP K0，029 本域实现、真实 PostgreSQL 门禁与整包 Draft 复审已关闭；RA7 跨域集成与 PR-ready full deterministic 尚未关闭。北极星 C3/C5；复用 018，不实现 P-1。
 
 ## 为什么做
 

@@ -293,6 +293,6 @@ reason: inspected complete release manifest
 - independent Spec/Quality review：`APPROVED FOR DRAFT`；所有已报告 Critical/Important 均已 RED→GREEN 并由原 reviewer 复核关闭。
 - 已 fetch/rebase `origin/main=5fe3c396`；focused/static 与最新代码 HEAD 的真实 PG lane 均已重跑，PG JUnit `skipped=0`。
 - PR-ready full deterministic：NOT RUN BY DESIGN；七个 external integration blocker 尚未关闭，且当前只允许 Draft。
-- diff/cross-domain/secret audit：PASS；唯一数据库 URL pattern 命中为 migration 测试固定 fixture `user:password@localhost`，不是凭据。最终代码 head 为 `c8c2f58b`；push/Draft PR URL 待创建后回填。
+- diff/cross-domain/secret audit：PASS；唯一数据库 URL pattern 命中为 migration 测试固定 fixture `user:password@localhost`，不是凭据。最终代码 head 为 `c8c2f58b`；Draft PR：[PA-ALG/InsuranceKB-WeKnora#28](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/28)。
 
 退出规则：真实 PG、增量独立双审、rebase 后 focused/static 均已关闭；七个 external integration blocker 仍使本分支最多创建 Draft。不得自行 merge。
