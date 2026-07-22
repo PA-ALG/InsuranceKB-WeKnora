@@ -216,9 +216,23 @@ class _HostileScopeValueCatalog:
         return None
 
 
+class _LookupFailingCatalog:
+    def __init__(self) -> None:
+        self.requests: list[TemplateScope] = []
+
+    def get_approved(self, scope: TemplateScope) -> TemplateCatalogEntry | None:
+        self.requests.append(scope)
+        raise RuntimeError("catalog unavailable")
+
+
 class _DuplicateItemsMapping(dict[str, object]):
     def items(self) -> object:  # type: ignore[override]
         return (("extract", self["first"]), ("extract", self["second"]))
+
+
+class _RaisingItemsMapping(dict[str, object]):
+    def items(self) -> object:  # type: ignore[override]
+        raise RuntimeError("hostile mapping items")
 
 
 class _ResolutionRequestSubclass(ResolutionRequest):
@@ -343,6 +357,82 @@ def test_tr1_public_hash_revalidates_construct_copy_and_serialized_content() -> 
     )
     with pytest.raises(ValueError, match="invalid_template_content"):
         canonical_content_hash(invalid_construct)
+
+
+def test_tr1_public_hash_rejects_extra_top_level_or_nested_storage() -> None:
+    plain_mapping = _content("plain-mapping").model_dump(
+        mode="python",
+        round_trip=True,
+    )
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(plain_mapping)  # type: ignore[arg-type]
+
+    top_level = _content("top-storage")
+    object.__getattribute__(top_level, "__dict__")["unvalidated_extra"] = "ignored"
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(top_level)
+
+    nested = _content("nested-storage")
+    object.__getattribute__(nested.field_groups[0], "__dict__")[
+        "unvalidated_extra"
+    ] = "ignored"
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(nested)
+
+
+def test_tr1_public_hash_normalizes_hostile_mapping_exception() -> None:
+    content = _content("raising-mapping")
+    poisoned = TemplatePackageContent.model_construct(
+        **{
+            **{
+                field_name: getattr(content, field_name)
+                for field_name in TemplatePackageContent.model_fields
+            },
+            "role_prompts": _RaisingItemsMapping(extract="prompt"),
+        }
+    )
+
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(poisoned)
+
+
+@pytest.mark.parametrize(
+    "storage_name",
+    ["__pydantic_extra__", "__pydantic_private__", "__pydantic_fields_set__"],
+)
+def test_tr1_public_hash_rejects_hidden_pydantic_storage(
+    storage_name: str,
+) -> None:
+    top_content = _content(f"hidden-top-{storage_name}")
+    nested_content = _content(f"hidden-nested-{storage_name}")
+    for content, target in (
+        (top_content, top_content),
+        (nested_content, nested_content.field_groups[0]),
+    ):
+        if storage_name == "__pydantic_fields_set__":
+            fields_set = set(object.__getattribute__(target, storage_name))
+            fields_set.add("unhashed")
+            object.__setattr__(target, storage_name, fields_set)
+        else:
+            object.__setattr__(target, storage_name, {"unhashed": "authority"})
+        with pytest.raises(ValueError, match="invalid_template_content"):
+            canonical_content_hash(content)
+
+
+def test_tr1_public_hash_rejects_empty_fields_set_top_level_or_nested() -> None:
+    top_content = _content("empty-fields-top")
+    object.__setattr__(top_content, "__pydantic_fields_set__", set())
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(top_content)
+
+    nested_content = _content("empty-fields-nested")
+    object.__setattr__(
+        nested_content.field_groups[0],
+        "__pydantic_fields_set__",
+        set(),
+    )
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(nested_content)
 
 
 @pytest.mark.parametrize(
@@ -661,6 +751,139 @@ def test_tr1_catalog_query_equality_trap_is_typed_scope_mutation() -> None:
     assert exc_info.value.reason_code == "catalog_scope_mutation"
 
 
+def test_tr1_catalog_lookup_failure_is_typed_and_stops_later_scopes() -> None:
+    catalog = _LookupFailingCatalog()
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="catalog_lookup_failed",
+    ) as exc_info:
+        resolve_template(catalog, _request())
+
+    assert exc_info.value.reason_code == "catalog_lookup_failed"
+    assert [scope.level for scope in catalog.requests] == ["global"]
+
+
+def test_tr1_duplicate_field_group_must_be_identical_or_fail_closed() -> None:
+    global_scope = _scope("global")
+    family_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-ordinary",
+    )
+    global_group = FieldGroup(
+        group_id="benefits",
+        field_ids=("benefit-a", "benefit-b"),
+        evidence_roles=("terms", "regulator"),
+    )
+    identical_catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("group-global", groups=(global_group,)),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("group-family", groups=(global_group,)),
+                version_id="family-v1",
+            ),
+        )
+    )
+    assert resolve_template(identical_catalog, _request()).content.field_groups == (
+        global_group,
+    )
+
+    weakened_group = FieldGroup(
+        group_id="benefits",
+        field_ids=("benefit-a",),
+        evidence_roles=("marketing",),
+    )
+    conflicting_catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("group-global", groups=(global_group,)),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("group-family", groups=(weakened_group,)),
+                version_id="family-v2",
+            ),
+        )
+    )
+    with pytest.raises(TemplateResolutionError, match="field_group_conflict") as exc_info:
+        resolve_template(conflicting_catalog, _request())
+    assert exc_info.value.reason_code == "field_group_conflict"
+
+
+def test_tr1_field_ids_must_be_unique_across_groups_in_one_content() -> None:
+    with pytest.raises(ValidationError, match="field_ids.*across field_groups"):
+        _content(
+            "duplicate-field-owner",
+            groups=(
+                FieldGroup(
+                    group_id="benefits",
+                    field_ids=("benefit-a",),
+                    evidence_roles=("terms", "regulator"),
+                ),
+                FieldGroup(
+                    group_id="benefits-shadow",
+                    field_ids=("benefit-a",),
+                    evidence_roles=("marketing",),
+                ),
+            ),
+        )
+
+
+@pytest.mark.parametrize("strict_group_is_global", [True, False])
+def test_tr1_overlay_cannot_reuse_field_id_under_a_new_group(
+    strict_group_is_global: bool,
+) -> None:
+    global_scope = _scope("global")
+    family_scope = _scope(
+        "product-family",
+        product_line_id="line-life",
+        document_type_id="document-terms",
+        product_family_id="family-ordinary",
+    )
+    strict_group = FieldGroup(
+        group_id="benefits",
+        field_ids=("benefit-a",),
+        evidence_roles=("terms", "regulator"),
+    )
+    shadow_group = FieldGroup(
+        group_id="benefits-shadow",
+        field_ids=("benefit-a",),
+        evidence_roles=("marketing",),
+    )
+    first, second = (
+        (strict_group, shadow_group)
+        if strict_group_is_global
+        else (shadow_group, strict_group)
+    )
+    catalog = _MemoryCatalog(
+        (
+            _entry(
+                global_scope,
+                _content("field-owner-global", groups=(first,)),
+                version_id="global-v1",
+            ),
+            _entry(
+                family_scope,
+                _content("field-owner-family", groups=(second,)),
+                version_id="family-v1",
+            ),
+        )
+    )
+
+    with pytest.raises(TemplateResolutionError, match="field_group_conflict") as exc_info:
+        resolve_template(catalog, _request())
+    assert exc_info.value.reason_code == "field_group_conflict"
+
+
 def test_tr1_evidence_policy_can_only_tighten_across_scope_overlay() -> None:
     global_scope = _scope("global")
     family_scope = _scope(
@@ -796,6 +1019,140 @@ def test_tr2_shadowed_request_method_is_typed_and_has_zero_catalog_calls() -> No
     assert catalog.requests == []
 
 
+def test_tr2_request_hidden_extra_storage_is_typed_and_has_zero_catalog_calls() -> None:
+    request = _request()
+    object.__setattr__(request, "__pydantic_extra__", {"unhashed": "authority"})
+    catalog = _MemoryCatalog(())
+
+    with pytest.raises(TemplateResolutionError, match="invalid_request") as exc_info:
+        resolve_template(catalog, request)
+
+    assert exc_info.value.reason_code == "invalid_request"
+    assert catalog.requests == []
+
+
+def test_tr2_request_empty_fields_set_is_typed_and_has_zero_catalog_calls() -> None:
+    request = _request()
+    object.__setattr__(request, "__pydantic_fields_set__", set())
+    catalog = _MemoryCatalog(())
+
+    with pytest.raises(TemplateResolutionError, match="invalid_request") as exc_info:
+        resolve_template(catalog, request)
+
+    assert exc_info.value.reason_code == "invalid_request"
+    assert catalog.requests == []
+
+
+def test_tr2_catalog_hidden_extra_storage_is_typed_invalid_entry() -> None:
+    entry = _entry(_scope("global"), _content("hidden-entry"), version_id="v1")
+    object.__setattr__(entry.version, "__pydantic_extra__", {"unhashed": "authority"})
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="invalid_catalog_entry",
+    ) as exc_info:
+        resolve_template(_FixedCatalog(entry), _request())
+
+    assert exc_info.value.reason_code == "invalid_catalog_entry"
+
+
+@pytest.mark.parametrize(
+    "hidden_target",
+    ["content-field-group", "version-scope", "approval-scope"],
+)
+def test_tr2_catalog_nested_hidden_storage_is_typed_invalid_entry(
+    hidden_target: str,
+) -> None:
+    entry = _entry(
+        _scope("global"),
+        _content(f"hidden-{hidden_target}"),
+        version_id="v1",
+    )
+    if hidden_target == "content-field-group":
+        object.__setattr__(
+            entry.version.content.field_groups[0],
+            "__pydantic_private__",
+            {"unhashed": "authority"},
+        )
+    else:
+        scope = entry.version.scope if hidden_target == "version-scope" else entry.approval.scope
+        object.__setattr__(scope, "__pydantic_fields_set__", set())
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="invalid_catalog_entry",
+    ) as exc_info:
+        resolve_template(_FixedCatalog(entry), _request())
+
+    assert exc_info.value.reason_code == "invalid_catalog_entry"
+
+
+def test_tr2_catalog_accepts_natural_scope_fields_set_at_all_levels() -> None:
+    scopes = (
+        TemplateScope(space_id="space-a", level="global"),
+        TemplateScope(
+            space_id="space-a",
+            level="product-line",
+            product_line_id="line-life",
+        ),
+        TemplateScope(
+            space_id="space-a",
+            level="document-type",
+            product_line_id="line-life",
+            document_type_id="document-terms",
+        ),
+        TemplateScope(
+            space_id="space-a",
+            level="product-family",
+            product_line_id="line-life",
+            document_type_id="document-terms",
+            product_family_id="family-ordinary",
+        ),
+    )
+    catalog = _MemoryCatalog(
+        tuple(
+            _entry(
+                scope,
+                _content(f"natural-scope-{index}"),
+                version_id=f"v{index}",
+            )
+            for index, scope in enumerate(scopes)
+        )
+    )
+
+    resolved = resolve_template(catalog, _request())
+
+    assert [source.scope.level for source in resolved.source_chain] == [
+        "global",
+        "product-line",
+        "document-type",
+        "product-family",
+    ]
+
+
+def test_tr2_catalog_scope_fields_set_cannot_omit_non_none_identity() -> None:
+    scope = TemplateScope(
+        space_id="space-a",
+        level="product-line",
+        product_line_id="line-life",
+    )
+    entry = _entry(scope, _content("scope-fields-omitted"), version_id="v1")
+    for bound_scope in (entry.version.scope, entry.approval.scope):
+        object.__setattr__(
+            bound_scope,
+            "__pydantic_fields_set__",
+            {"space_id", "level"},
+        )
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="invalid_catalog_entry",
+    ) as exc_info:
+        resolve_template(_FixedCatalog(entry), _request())
+
+    assert exc_info.value.reason_code == "invalid_catalog_entry"
+
+
 def test_tr2_resolver_uses_one_canonical_request_snapshot() -> None:
     request = _request(space_id="space-a")
     global_scope = _scope("global", space_id="space-a")
@@ -920,11 +1277,7 @@ def test_tr2_resolver_applies_stable_order_and_returns_full_source_chain() -> No
             _content(
                 "line",
                 groups=(
-                    FieldGroup(
-                        group_id="shared",
-                        field_ids=("line-field",),
-                        evidence_roles=("terms",),
-                    ),
+                    shared,
                     FieldGroup(
                         group_id="line-only",
                         field_ids=("line-only-field",),
@@ -979,7 +1332,7 @@ def test_tr2_resolver_applies_stable_order_and_returns_full_source_chain() -> No
         "group-document",
         "group-family",
     ]
-    assert resolved.content.field_groups[0].field_ids == ("line-field",)
+    assert resolved.content.field_groups[0].field_ids == ("global-field",)
     assert dict(resolved.content.role_prompts) == {
         "extract": "family-extract",
         "verify": "document-verify",

@@ -16,6 +16,7 @@ from insurance_harness.template_packages.models import (
     TemplateScope,
     TemplateVersion,
     _merge_template_contents,
+    _snapshot_content_value,
     _TemplateContentMergeError,
     canonical_content_hash,
 )
@@ -24,6 +25,7 @@ from insurance_harness.template_packages.ports import TemplateCatalog
 ResolutionReason = Literal[
     "invalid_request",
     "invalid_catalog_entry",
+    "catalog_lookup_failed",
     "content_hash_mismatch",
     "catalog_scope_mutation",
     "scope_mismatch",
@@ -31,6 +33,7 @@ ResolutionReason = Literal[
     "approval_hash_mismatch",
     "approval_binding_mismatch",
     "schema_version_mismatch",
+    "field_group_conflict",
     "validator_conflict",
     "unresolved_scope",
 ]
@@ -57,14 +60,39 @@ def _snapshot_exact_fields(
     storage = object.__getattribute__(value, "__dict__")
     if type(storage) is not dict:
         raise TypeError("DTO storage must be an exact dictionary")
-    items = tuple(storage.items())
     field_names = tuple(model_type.model_fields)
+    extra = object.__getattribute__(value, "__pydantic_extra__")
+    private = object.__getattribute__(value, "__pydantic_private__")
+    fields_set = object.__getattribute__(value, "__pydantic_fields_set__")
+    if extra is not None or private is not None:
+        raise ValueError("DTO has hidden extra or private storage")
+    if type(fields_set) is not set or any(
+        type(field_name) is not str or field_name not in field_names
+        for field_name in fields_set
+    ):
+        raise ValueError("DTO fields_set is non-canonical")
+    items = tuple(storage.items())
     if len(items) != len(field_names):
         raise ValueError("DTO field set is incomplete or extended")
     for field_name, _ in items:
         if type(field_name) is not str or field_name not in field_names:
             raise ValueError("DTO field set is non-canonical")
     snapshot = dict(items)
+    if model_type is TemplateScope:
+        required_scope_fields = {"space_id", "level"}
+        required_scope_fields.update(
+            field_name
+            for field_name in (
+                "product_line_id",
+                "document_type_id",
+                "product_family_id",
+            )
+            if snapshot[field_name] is not None
+        )
+        if not required_scope_fields.issubset(fields_set):
+            raise ValueError("TemplateScope fields_set omits identity fields")
+    elif len(fields_set) != len(field_names):
+        raise ValueError("DTO fields_set is incomplete")
     return {field_name: snapshot[field_name] for field_name in field_names}
 
 
@@ -140,11 +168,18 @@ def _validated_entry(
         version_values = _snapshot_exact_fields(candidate_version, TemplateVersion)
         approval_values = _snapshot_exact_fields(candidate_approval, TemplateApproval)
         candidate_content = version_values["content"]
-        content_values = _snapshot_exact_fields(
-            candidate_content,
-            TemplatePackageContent,
+        content_values = _snapshot_content_value(candidate_content)
+        version_scope_values = _snapshot_exact_fields(
+            version_values["scope"],
+            TemplateScope,
+        )
+        approval_scope_values = _snapshot_exact_fields(
+            approval_values["scope"],
+            TemplateScope,
         )
         content = TemplatePackageContent.model_validate(content_values)
+        version_scope = TemplateScope.model_validate(version_scope_values)
+        approval_scope = TemplateScope.model_validate(approval_scope_values)
         candidate_hash = canonical_content_hash(content)
         stated_hash = version_values["content_hash"]
         if (
@@ -158,9 +193,12 @@ def _validated_entry(
                 **version_values,
                 "content": content,
                 "content_hash": candidate_hash,
+                "scope": version_scope,
             }
         )
-        approval = TemplateApproval.model_validate(approval_values)
+        approval = TemplateApproval.model_validate(
+            {**approval_values, "scope": approval_scope}
+        )
         snapshot = TemplateCatalogEntry(
             version=version,
             approval=approval,
@@ -205,7 +243,10 @@ def resolve_template(
     for requested_scope in _requested_scopes(canonical_request):
         expected_scope = _scope_identity(requested_scope)
         query_scope = _scope_from_identity(expected_scope)
-        candidate = catalog.get_approved(query_scope)
+        try:
+            candidate = catalog.get_approved(query_scope)
+        except Exception:
+            raise TemplateResolutionError("catalog_lookup_failed") from None
         try:
             query_values = _snapshot_exact_fields(query_scope, TemplateScope)
             if any(

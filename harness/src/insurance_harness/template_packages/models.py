@@ -221,9 +221,16 @@ class TemplatePackageContent(_ImmutableModel):
     @model_validator(mode="after")
     def require_complete_unique_content(self) -> TemplatePackageContent:
         group_ids = tuple(group.group_id for group in self.field_groups)
+        field_ids = tuple(
+            field_id
+            for group in self.field_groups
+            for field_id in group.field_ids
+        )
         validator_ids = tuple(validator.validator_id for validator in self.validators)
         if not group_ids or len(set(group_ids)) != len(group_ids):
             raise ValueError("field_groups must be non-empty with unique group_id values")
+        if len(set(field_ids)) != len(field_ids):
+            raise ValueError("field_ids must be unique across field_groups")
         if not validator_ids or len(set(validator_ids)) != len(validator_ids):
             raise ValueError("validators must be non-empty with unique validator_id values")
         if not self.role_prompts:
@@ -239,13 +246,10 @@ class TemplatePackageContent(_ImmutableModel):
 def canonical_content_hash(content: TemplatePackageContent) -> str:
     """Return the versioned, domain-separated hash of validated canonical content."""
 
-    if type(content) is not TemplatePackageContent:
-        raise ValueError("invalid_template_content")
     try:
-        raw = {
-            field_name: getattr(content, field_name)
-            for field_name in TemplatePackageContent.model_fields
-        }
+        if type(content) is not TemplatePackageContent:
+            raise TypeError("content must use the exact TemplatePackageContent type")
+        raw = _snapshot_content_value(content)
         validated = TemplatePackageContent.model_validate(raw)
         payload = json.dumps(
             validated.model_dump(mode="json", round_trip=True),
@@ -254,9 +258,63 @@ def canonical_content_hash(content: TemplatePackageContent) -> str:
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-    except (AttributeError, TypeError, UnicodeEncodeError, ValueError):
+    except Exception:
         raise ValueError("invalid_template_content") from None
     return hashlib.sha256(_CONTENT_HASH_DOMAIN + payload).hexdigest()
+
+
+def _snapshot_content_value(value: object) -> object:
+    """Recursively copy exact DTO storage before public hash revalidation."""
+
+    if isinstance(value, BaseModel):
+        allowed_types = (
+            TemplatePackageContent,
+            FieldGroup,
+            ValidatorRef,
+            EvidencePolicy,
+            ProvenanceReceipt,
+        )
+        if type(value) not in allowed_types:
+            raise TypeError("content contains a non-canonical DTO type")
+        storage = object.__getattribute__(value, "__dict__")
+        if type(storage) is not dict:
+            raise TypeError("content DTO storage must be an exact dictionary")
+        field_names = tuple(type(value).model_fields)
+        extra = object.__getattribute__(value, "__pydantic_extra__")
+        private = object.__getattribute__(value, "__pydantic_private__")
+        fields_set = object.__getattribute__(value, "__pydantic_fields_set__")
+        if extra is not None or private is not None:
+            raise ValueError("content DTO has hidden extra or private storage")
+        if type(fields_set) is not set or len(fields_set) != len(field_names) or any(
+            type(field_name) is not str or field_name not in field_names
+            for field_name in fields_set
+        ):
+            raise ValueError("content DTO fields_set is non-canonical")
+        items = tuple(storage.items())
+        if len(items) != len(field_names):
+            raise ValueError("content DTO field set is incomplete or extended")
+        for field_name, _ in items:
+            if type(field_name) is not str or field_name not in field_names:
+                raise ValueError("content DTO field set is non-canonical")
+        snapshot = dict(items)
+        return {
+            field_name: _snapshot_content_value(snapshot[field_name])
+            for field_name in field_names
+        }
+    if isinstance(value, Mapping):
+        items = tuple(value.items())
+        result: dict[str, object] = {}
+        for item in items:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError("content mapping items must be exact pairs")
+            key, item_value = item
+            if type(key) is not str or key in result:
+                raise ValueError("content mapping keys must be unique exact strings")
+            result[key] = _snapshot_content_value(item_value)
+        return result
+    if isinstance(value, (tuple, list)):
+        return tuple(_snapshot_content_value(item) for item in value)
+    return value
 
 
 def _require_unicode_scalars(value: object) -> None:
@@ -362,7 +420,14 @@ class TemplateCatalogEntry(_ImmutableModel):
 
 
 class _TemplateContentMergeError(ValueError):
-    def __init__(self, reason_code: Literal["schema_version_mismatch", "validator_conflict"]):
+    def __init__(
+        self,
+        reason_code: Literal[
+            "schema_version_mismatch",
+            "field_group_conflict",
+            "validator_conflict",
+        ],
+    ):
         self.reason_code = reason_code
         super().__init__(reason_code)
 
@@ -371,14 +436,24 @@ def _merge_field_groups(
     base: tuple[FieldGroup, ...], overlay: tuple[FieldGroup, ...]
 ) -> tuple[FieldGroup, ...]:
     result = list(base)
-    positions = {item.group_id: index for index, item in enumerate(result)}
+    by_id = {item.group_id: item for item in result}
+    field_owners = {
+        field_id: item.group_id
+        for item in result
+        for field_id in item.field_ids
+    }
     for item in overlay:
-        position = positions.get(item.group_id)
-        if position is None:
-            positions[item.group_id] = len(result)
+        existing = by_id.get(item.group_id)
+        if existing is None:
+            if any(field_id in field_owners for field_id in item.field_ids):
+                raise _TemplateContentMergeError("field_group_conflict")
+            by_id[item.group_id] = item
             result.append(item)
-        else:
-            result[position] = item
+            field_owners.update(
+                {field_id: item.group_id for field_id in item.field_ids}
+            )
+        elif existing != item:
+            raise _TemplateContentMergeError("field_group_conflict")
     return tuple(result)
 
 
