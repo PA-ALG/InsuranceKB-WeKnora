@@ -9,11 +9,16 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
+import os
+import secrets
+import threading
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self, cast
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -33,6 +38,66 @@ from insurance_harness.goldenset.admission_models import (
     canonical_json_bytes,
 )
 
+
+class _IssuerSnapshotRegistry:
+    """Process-local identity registry; it is not a Python sandbox boundary."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._pid = os.getpid()
+        self._process_nonce = secrets.token_bytes(32)
+        self._entries: dict[int, tuple[weakref.ReferenceType[object], bytes]] = {}
+
+    def _reset_after_fork(self) -> None:
+        pid = os.getpid()
+        if pid != self._pid:
+            self._entries.clear()
+            self._pid = pid
+            self._process_nonce = secrets.token_bytes(32)
+
+    def register(self, capability: object, *, domain: bytes, snapshot: bytes) -> None:
+        with self._lock:
+            self._reset_after_fork()
+            key = id(capability)
+
+            def discard(reference: weakref.ReferenceType[object]) -> None:
+                with self._lock:
+                    current = self._entries.get(key)
+                    if current is not None and current[0] is reference:
+                        self._entries.pop(key, None)
+
+            reference = weakref.ref(capability, discard)
+            digest = hmac.new(
+                self._process_nonce,
+                domain + snapshot,
+                hashlib.sha256,
+            ).digest()
+            self._entries[key] = (reference, digest)
+
+    def require(self, capability: object, *, domain: bytes, snapshot: bytes) -> None:
+        with self._lock:
+            self._reset_after_fork()
+            current = self._entries.get(id(capability))
+            expected = hmac.new(
+                self._process_nonce,
+                domain + snapshot,
+                hashlib.sha256,
+            ).digest()
+            if (
+                current is None
+                or current[0]() is not capability
+                or not hmac.compare_digest(current[1], expected)
+            ):
+                raise AuthorizationVerificationError(
+                    "issuer-private capability snapshot is unavailable or drifted"
+                )
+
+
+_PRODUCTION_SNAPSHOT_REGISTRY = _IssuerSnapshotRegistry()
+_TEST_SNAPSHOT_REGISTRY = _IssuerSnapshotRegistry()
+_TRANSPORT_SNAPSHOT_DOMAIN = b"insurancekb.transport-capability-snapshot.v1\0"
+_RECEIPT_SNAPSHOT_DOMAIN = b"insurancekb.receipt-capability-snapshot.v1\0"
+
 PROVISIONING_AUTHORIZATION_DOMAIN: Literal["insurancekb.run-admission.provisioning.v1"] = (
     "insurancekb.run-admission.provisioning.v1"
 )
@@ -47,10 +112,15 @@ _PROVISIONING_SIGNING_PREFIX = b"insurancekb.run-admission.provisioning.v1\0"
 _PRICING_SIGNING_PREFIX = b"insurancekb.run-admission.pricing.v1\0"
 _PROVIDER_CAP_SIGNING_PREFIX = b"insurancekb.run-admission.provider-cap.v1\0"
 _AUTHORIZATION_DIGEST_DOMAIN = b"insurancekb.run-admission.infrastructure-authorization.v1\0"
+_RECEIPT_DIGEST_DOMAIN = b"insurancekb.run-admission.deployment-receipt.v1\0"
 _PRICING_EVIDENCE_DIGEST_DOMAIN = b"insurancekb.run-admission.pricing-evidence.v1\0"
 _PRICING_APPROVAL_DIGEST_DOMAIN = b"insurancekb.run-admission.pricing-approval.v1\0"
 _CAP_EVIDENCE_DIGEST_DOMAIN = b"insurancekb.run-admission.provider-cap-evidence.v1\0"
 _CAP_APPROVAL_DIGEST_DOMAIN = b"insurancekb.run-admission.provider-cap-approval.v1\0"
+_TRANSPORT_CREDENTIAL_REF_DOMAIN = b"insurancekb.run-admission.transport-credential-ref.v1\0"
+_TRANSPORT_IDENTITY_DIGEST_DOMAIN = b"insurancekb.run-admission.transport-identity.v1\0"
+_RECONCILIATION_DIGEST_DOMAIN = b"insurancekb.run-admission.receipt-reconciliation.v2\0"
+_BAILIAN_DEPLOYMENT_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/deployments"
 _MAX_AUTHORITY_EVIDENCE_BYTES = 64 * 1024
 
 type AuthorizationDomain = Literal["insurancekb.run-admission.provisioning.v1"]
@@ -272,6 +342,55 @@ type InfrastructureAuthorization = ProvisioningAuthorization
 type InfrastructureAuthorizationPayload = ProvisioningAuthorizationPayload
 
 
+class DeploymentReceiptContent(_ImmutableModel):
+    """Allowlisted provider receipt content; raw provider responses never enter it."""
+
+    operation_id: NonBlankStr
+    infrastructure_reserve_id: NonBlankStr
+    workspace_ref: NonBlankStr
+    project_ref: DigestRef
+    credential_ref: DigestRef
+    workspace_evidence_digest: Sha256Digest
+    region: NonBlankStr
+    base_model: NonBlankStr
+    deployed_model: NonBlankStr
+    request_plan: Literal["ptu_v2"]
+    receipt_plan: Literal["ptu"]
+    input_tpm: Literal[10_000]
+    output_tpm: Literal[1_000]
+    gmt_create: datetime
+    gmt_modified: datetime
+    cleanup_state: Literal["required"]
+    operation_marker: Annotated[StrictStr, StringConstraints(pattern=r"^ikb031-[0-9a-f]{24}$")]
+    deployment_suffix: Annotated[StrictStr, StringConstraints(pattern=r"^031-[0-9a-f]{16}$")]
+    remote_manifest_digest: Sha256Digest
+
+    @model_validator(mode="after")
+    def require_gmt_times(self) -> Self:
+        for field_name, timestamp in (
+            ("gmt_create", self.gmt_create),
+            ("gmt_modified", self.gmt_modified),
+        ):
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+                raise ValueError(f"{field_name} must include a timezone")
+            if timestamp.utcoffset() != timedelta(0):
+                raise ValueError(f"{field_name} must be normalized to GMT")
+        if self.gmt_modified < self.gmt_create:
+            raise ValueError("gmt_modified must not precede gmt_create")
+        return self
+
+
+class DeploymentReceipt(_ImmutableModel):
+    content: DeploymentReceiptContent
+    content_digest: Sha256Digest
+
+    @model_validator(mode="after")
+    def require_matching_content_digest(self) -> Self:
+        if self.content_digest != deployment_receipt_content_digest(self.content):
+            raise ValueError("deployment receipt content digest mismatch")
+        return self
+
+
 type ProviderCapCoverage = Literal["fixed_infrastructure", "inference"]
 
 _PRODUCTION_CAPABILITY_SEAL = object()
@@ -323,6 +442,92 @@ class VerifiedProviderCapCapability:
     max_cost_minor_units: int
     expires_at: datetime
     _seal: object
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class VerifiedDeploymentTransportIdentity:
+    """Opaque non-secret identity for the exact credential used by transport."""
+
+    provider: str
+    endpoint: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    currency: str
+    provider_cap_evidence_digest: str
+    provider_cap_approval_digest: str
+    coverage: frozenset[ProviderCapCoverage]
+    credential_fingerprint: str
+    identity_digest: str
+    expires_at: datetime
+    _seal: object
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class VerifiedReconciledDeploymentReceipt:
+    """Opaque receipt issued from fresh provider reconciliation evidence."""
+
+    receipt: DeploymentReceipt
+    reconciliation_digest: str
+    issuer: str
+    transport_identity_digest: str
+    run_identity: str
+    purpose: str
+    scope: str
+    operation_id: str
+    reserve_id: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    provider_cap_evidence_digest: str
+    provider_cap_approval_digest: str
+    remote_manifest_digest: str
+    observed_at: datetime
+    expires_at: datetime
+    _seal: object
+
+
+def _transport_capability_snapshot(capability: VerifiedDeploymentTransportIdentity) -> bytes:
+    return canonical_json_bytes(
+        {
+            "coverage": tuple(sorted(capability.coverage)),
+            "credential_fingerprint": capability.credential_fingerprint,
+            "credential_ref": capability.credential_ref,
+            "currency": capability.currency,
+            "endpoint": capability.endpoint,
+            "expires_at": capability.expires_at,
+            "identity_digest": capability.identity_digest,
+            "project_ref": capability.project_ref,
+            "provider": capability.provider,
+            "provider_cap_approval_digest": capability.provider_cap_approval_digest,
+            "provider_cap_evidence_digest": capability.provider_cap_evidence_digest,
+            "workspace_ref": capability.workspace_ref,
+        }
+    )
+
+
+def _receipt_capability_snapshot(capability: VerifiedReconciledDeploymentReceipt) -> bytes:
+    return canonical_json_bytes(
+        {
+            "credential_ref": capability.credential_ref,
+            "expires_at": capability.expires_at,
+            "issuer": capability.issuer,
+            "observed_at": capability.observed_at,
+            "operation_id": capability.operation_id,
+            "project_ref": capability.project_ref,
+            "provider_cap_approval_digest": capability.provider_cap_approval_digest,
+            "provider_cap_evidence_digest": capability.provider_cap_evidence_digest,
+            "purpose": capability.purpose,
+            "receipt": capability.receipt,
+            "reconciliation_digest": capability.reconciliation_digest,
+            "remote_manifest_digest": capability.remote_manifest_digest,
+            "reserve_id": capability.reserve_id,
+            "run_identity": capability.run_identity,
+            "scope": capability.scope,
+            "transport_identity_digest": capability.transport_identity_digest,
+            "workspace_ref": capability.workspace_ref,
+        }
+    )
 
 
 class _PricingCapabilityFacts(_ImmutableModel):
@@ -440,6 +645,380 @@ def _require_verified_provider_capability_for_testing(
     return capability
 
 
+def credential_ref_for_api_key(api_key: str) -> str:
+    """Derive a stable, domain-separated reference without persisting the key."""
+
+    if not isinstance(api_key, str) or not api_key or len(api_key) > 16 * 1024:
+        raise AuthorizationVerificationError("deployment credential is missing or oversized")
+    digest = hashlib.sha256(_TRANSPORT_CREDENTIAL_REF_DOMAIN + api_key.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def _transport_identity_digest(values: Mapping[str, object]) -> str:
+    return hashlib.sha256(
+        _TRANSPORT_IDENTITY_DIGEST_DOMAIN + canonical_json_bytes(dict(values))
+    ).hexdigest()
+
+
+def issue_verified_deployment_transport_identity(
+    *,
+    api_key: str,
+    provider_capability: object,
+) -> VerifiedDeploymentTransportIdentity:
+    """Bind a credential only to a cap freshly admitted by the durable ledger."""
+
+    from insurance_harness.goldenset.admission_budget import (
+        require_verified_infrastructure_provider_capability,
+    )
+
+    cap = require_verified_infrastructure_provider_capability(provider_capability)
+    return _issue_verified_deployment_transport_identity_from_cap(api_key=api_key, cap=cap)
+
+
+def issue_verified_topology_deployment_transport_identity(
+    *,
+    api_key: str,
+    provider_capability: object,
+) -> VerifiedDeploymentTransportIdentity:
+    """Bind transport only to a cap reloaded from a durable final topology."""
+
+    from insurance_harness.goldenset.admission_budget import (
+        require_verified_topology_provider_capability,
+    )
+
+    cap = require_verified_topology_provider_capability(provider_capability)
+    return _issue_verified_deployment_transport_identity_from_cap(api_key=api_key, cap=cap)
+
+
+def _issue_verified_deployment_transport_identity_from_cap(
+    *,
+    api_key: str,
+    cap: Any,
+) -> VerifiedDeploymentTransportIdentity:
+    credential_ref = credential_ref_for_api_key(api_key)
+    if credential_ref != cap.credential_ref:
+        raise AuthorizationVerificationError(
+            "deployment credential does not match signed credential_ref"
+        )
+    values: dict[str, object] = {
+        "provider": cap.provider,
+        "endpoint": _BAILIAN_DEPLOYMENT_ENDPOINT,
+        "workspace_ref": cap.workspace_ref,
+        "project_ref": cap.project_ref,
+        "credential_ref": cap.credential_ref,
+        "currency": cap.currency,
+        "provider_cap_evidence_digest": cap.evidence_digest,
+        "provider_cap_approval_digest": cap.approval_digest,
+        "coverage": tuple(sorted(cap.coverage)),
+        "credential_fingerprint": credential_ref.removeprefix("sha256:"),
+        "expires_at": cap.expires_at,
+    }
+    identity = object.__new__(VerifiedDeploymentTransportIdentity)
+    for name, value in values.items():
+        object.__setattr__(
+            identity,
+            name,
+            frozenset(cast(tuple[ProviderCapCoverage, ...], value))
+            if name == "coverage"
+            else value,
+        )
+    object.__setattr__(identity, "identity_digest", _transport_identity_digest(values))
+    object.__setattr__(identity, "_seal", _PRODUCTION_CAPABILITY_SEAL)
+    _PRODUCTION_SNAPSHOT_REGISTRY.register(
+        identity,
+        domain=_TRANSPORT_SNAPSHOT_DOMAIN,
+        snapshot=_transport_capability_snapshot(identity),
+    )
+    return identity
+
+
+def _issue_verified_deployment_transport_identity_for_testing(
+    *,
+    provider: str = "bailian",
+    endpoint: str = _BAILIAN_DEPLOYMENT_ENDPOINT,
+    workspace_ref: str,
+    project_ref: str,
+    credential_ref: str,
+    currency: str = "CNY",
+    provider_cap_evidence_digest: str,
+    provider_cap_approval_digest: str = "f" * 64,
+    coverage: frozenset[ProviderCapCoverage] = frozenset({"fixed_infrastructure", "inference"}),
+    expires_at: datetime,
+) -> VerifiedDeploymentTransportIdentity:
+    values: dict[str, object] = {
+        "provider": provider,
+        "endpoint": endpoint,
+        "workspace_ref": workspace_ref,
+        "project_ref": project_ref,
+        "credential_ref": credential_ref,
+        "currency": currency,
+        "provider_cap_evidence_digest": provider_cap_evidence_digest,
+        "provider_cap_approval_digest": provider_cap_approval_digest,
+        "coverage": tuple(sorted(coverage)),
+        "credential_fingerprint": credential_ref.removeprefix("sha256:"),
+        "expires_at": expires_at,
+    }
+    identity = object.__new__(VerifiedDeploymentTransportIdentity)
+    for name, value in values.items():
+        object.__setattr__(
+            identity,
+            name,
+            frozenset(cast(tuple[ProviderCapCoverage, ...], value))
+            if name == "coverage"
+            else value,
+        )
+    object.__setattr__(identity, "identity_digest", _transport_identity_digest(values))
+    object.__setattr__(identity, "_seal", _TEST_CAPABILITY_SEAL)
+    _TEST_SNAPSHOT_REGISTRY.register(
+        identity,
+        domain=_TRANSPORT_SNAPSHOT_DOMAIN,
+        snapshot=_transport_capability_snapshot(identity),
+    )
+    return identity
+
+
+def require_verified_deployment_transport_identity(
+    capability: object,
+    *,
+    now: datetime | None = None,
+) -> VerifiedDeploymentTransportIdentity:
+    if (
+        not isinstance(capability, VerifiedDeploymentTransportIdentity)
+        or capability._seal is not _PRODUCTION_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError(
+            "production verified deployment transport identity is required"
+        )
+    _PRODUCTION_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_TRANSPORT_SNAPSHOT_DOMAIN,
+        snapshot=_transport_capability_snapshot(capability),
+    )
+    if now is not None:
+        if now.tzinfo is None or now.utcoffset() is None or now >= capability.expires_at:
+            raise AuthorizationVerificationError("deployment transport identity is expired")
+    return capability
+
+
+def _require_verified_deployment_transport_identity_for_testing(
+    capability: object,
+    *,
+    now: datetime | None = None,
+) -> VerifiedDeploymentTransportIdentity:
+    if (
+        not isinstance(capability, VerifiedDeploymentTransportIdentity)
+        or capability._seal is not _TEST_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError(
+            "test verified deployment transport identity is required"
+        )
+    _TEST_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_TRANSPORT_SNAPSHOT_DOMAIN,
+        snapshot=_transport_capability_snapshot(capability),
+    )
+    if now is not None:
+        if now.tzinfo is None or now.utcoffset() is None or now >= capability.expires_at:
+            raise AuthorizationVerificationError("deployment transport identity is expired")
+    return capability
+
+
+def require_verified_reconciled_receipt(
+    capability: object,
+    *,
+    now: datetime | None = None,
+) -> VerifiedReconciledDeploymentReceipt:
+    if (
+        not isinstance(capability, VerifiedReconciledDeploymentReceipt)
+        or capability._seal is not _PRODUCTION_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError("production verified reconciled receipt is required")
+    _PRODUCTION_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_RECEIPT_SNAPSHOT_DOMAIN,
+        snapshot=_receipt_capability_snapshot(capability),
+    )
+    if now is not None:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise AuthorizationVerificationError("receipt verification time is invalid")
+        if now < capability.observed_at or now >= capability.expires_at:
+            raise AuthorizationVerificationError("verified reconciled receipt is stale")
+    return capability
+
+
+def _require_verified_reconciled_receipt_for_testing(
+    capability: object,
+    *,
+    now: datetime | None = None,
+) -> VerifiedReconciledDeploymentReceipt:
+    if (
+        not isinstance(capability, VerifiedReconciledDeploymentReceipt)
+        or capability._seal is not _TEST_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError("test verified reconciled receipt is required")
+    _TEST_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_RECEIPT_SNAPSHOT_DOMAIN,
+        snapshot=_receipt_capability_snapshot(capability),
+    )
+    if now is not None:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise AuthorizationVerificationError("receipt verification time is invalid")
+        if now < capability.observed_at or now >= capability.expires_at:
+            raise AuthorizationVerificationError("verified reconciled receipt is stale")
+    return capability
+
+
+def _register_verified_reconciled_receipt_capability(
+    capability: VerifiedReconciledDeploymentReceipt,
+    *,
+    testing: bool,
+) -> None:
+    registry = _TEST_SNAPSHOT_REGISTRY if testing else _PRODUCTION_SNAPSHOT_REGISTRY
+    registry.register(
+        capability,
+        domain=_RECEIPT_SNAPSHOT_DOMAIN,
+        snapshot=_receipt_capability_snapshot(capability),
+    )
+
+
+def verify_reconciled_deployment_receipt(
+    receipt: DeploymentReceipt,
+    *,
+    remote_expected: DeploymentReceipt,
+) -> VerifiedReconciledDeploymentReceipt:
+    """Reject the legacy caller-mint path; provider reconciliation owns issuance."""
+
+    del receipt, remote_expected
+    raise AuthorizationVerificationError("trusted provider reconciliation issuer is required")
+
+
+def deployment_reconciliation_digest(
+    *,
+    issuer: str,
+    transport_identity_digest: str,
+    run_identity: str,
+    purpose: str,
+    scope: str,
+    receipt_digest: str,
+    operation_id: str,
+    reserve_id: str,
+    workspace_ref: str,
+    project_ref: str,
+    credential_ref: str,
+    provider_cap_evidence_digest: str,
+    provider_cap_approval_digest: str,
+    remote_manifest_digest: str,
+    observed_at: datetime,
+    expires_at: datetime,
+) -> str:
+    """Hash the complete immutable provider reconciliation evidence boundary."""
+
+    facts = {
+        "issuer": issuer,
+        "transport_identity_digest": transport_identity_digest,
+        "run_identity": run_identity,
+        "purpose": purpose,
+        "scope": scope,
+        "receipt_digest": receipt_digest,
+        "operation_id": operation_id,
+        "reserve_id": reserve_id,
+        "workspace_ref": workspace_ref,
+        "project_ref": project_ref,
+        "credential_ref": credential_ref,
+        "provider_cap_evidence_digest": provider_cap_evidence_digest,
+        "provider_cap_approval_digest": provider_cap_approval_digest,
+        "remote_manifest_digest": remote_manifest_digest,
+        "observed_at": observed_at,
+        "expires_at": expires_at,
+    }
+    return hashlib.sha256(_RECONCILIATION_DIGEST_DOMAIN + canonical_json_bytes(facts)).hexdigest()
+
+
+def _issue_verified_reconciled_receipt_for_testing(
+    *,
+    receipt: DeploymentReceipt,
+    transport_identity: VerifiedDeploymentTransportIdentity,
+    run_identity: str,
+    purpose: str,
+    scope: str,
+    remote_manifest_digest: str,
+    observed_at: datetime,
+    expires_at: datetime,
+) -> VerifiedReconciledDeploymentReceipt:
+    identity = _require_verified_deployment_transport_identity_for_testing(
+        transport_identity, now=observed_at
+    )
+    try:
+        validated = DeploymentReceipt.model_validate(
+            receipt.model_dump(mode="python", round_trip=True)
+        )
+    except (TypeError, ValueError) as exc:
+        raise AuthorizationVerificationError("deployment receipt is invalid") from exc
+    if validated.content_digest != deployment_receipt_content_digest(validated.content):
+        raise AuthorizationVerificationError("deployment receipt content digest is invalid")
+    if (
+        validated.content.workspace_ref != identity.workspace_ref
+        or validated.content.project_ref != identity.project_ref
+        or validated.content.credential_ref != identity.credential_ref
+        or validated.content.remote_manifest_digest != remote_manifest_digest
+    ):
+        raise AuthorizationVerificationError(
+            "deployment receipt does not match verified transport observation"
+        )
+    _require_aware_active_window(observed_at, expires_at, "receipt reconciliation")
+    if expires_at > identity.expires_at:
+        raise AuthorizationVerificationError("receipt reconciliation outlives transport identity")
+    facts = {
+        "issuer": "bailian-deployment-controller-v1",
+        "transport_identity_digest": identity.identity_digest,
+        "run_identity": run_identity,
+        "purpose": purpose,
+        "scope": scope,
+        "receipt_digest": validated.content_digest,
+        "operation_id": validated.content.operation_id,
+        "reserve_id": validated.content.infrastructure_reserve_id,
+        "workspace_ref": identity.workspace_ref,
+        "project_ref": identity.project_ref,
+        "credential_ref": identity.credential_ref,
+        "provider_cap_evidence_digest": identity.provider_cap_evidence_digest,
+        "provider_cap_approval_digest": identity.provider_cap_approval_digest,
+        "remote_manifest_digest": remote_manifest_digest,
+        "observed_at": observed_at,
+        "expires_at": expires_at,
+    }
+    capability = object.__new__(VerifiedReconciledDeploymentReceipt)
+    object.__setattr__(capability, "receipt", validated)
+    object.__setattr__(
+        capability,
+        "reconciliation_digest",
+        deployment_reconciliation_digest(
+            issuer="bailian-deployment-controller-v1",
+            transport_identity_digest=identity.identity_digest,
+            run_identity=run_identity,
+            purpose=purpose,
+            scope=scope,
+            receipt_digest=validated.content_digest,
+            operation_id=validated.content.operation_id,
+            reserve_id=validated.content.infrastructure_reserve_id,
+            workspace_ref=identity.workspace_ref,
+            project_ref=identity.project_ref,
+            credential_ref=identity.credential_ref,
+            provider_cap_evidence_digest=identity.provider_cap_evidence_digest,
+            provider_cap_approval_digest=identity.provider_cap_approval_digest,
+            remote_manifest_digest=remote_manifest_digest,
+            observed_at=observed_at,
+            expires_at=expires_at,
+        ),
+    )
+    for name, value in facts.items():
+        if name != "receipt_digest":
+            object.__setattr__(capability, name, value)
+    object.__setattr__(capability, "_seal", _TEST_CAPABILITY_SEAL)
+    _register_verified_reconciled_receipt_capability(capability, testing=True)
+    return capability
+
+
 def authorization_signed_bytes(
     domain: AuthorizationDomain,
     payload: InfrastructureAuthorizationPayload,
@@ -457,6 +1036,10 @@ def infrastructure_authorization_digest(
     envelope: InfrastructureAuthorization,
 ) -> str:
     return hashlib.sha256(_AUTHORIZATION_DIGEST_DOMAIN + canonical_json_bytes(envelope)).hexdigest()
+
+
+def deployment_receipt_content_digest(content: DeploymentReceiptContent) -> str:
+    return hashlib.sha256(_RECEIPT_DIGEST_DOMAIN + canonical_json_bytes(content)).hexdigest()
 
 
 def _verify_authorization(
@@ -544,6 +1127,33 @@ def verify_provisioning_authorization(
         trusted_authorities=trusted_authorities,
         now=now,
     )
+
+
+def verify_deployment_receipt(
+    receipt: DeploymentReceipt,
+    *,
+    expected: DeploymentReceipt,
+) -> str:
+    """Revalidate construction and compare every normalized receipt byte exactly."""
+
+    try:
+        validated = DeploymentReceipt.model_validate(
+            receipt.model_dump(mode="python", round_trip=True)
+        )
+        validated_expected = DeploymentReceipt.model_validate(
+            expected.model_dump(mode="python", round_trip=True)
+        )
+    except (TypeError, ValueError) as exc:
+        raise AuthorizationVerificationError(
+            "deployment receipt content digest is invalid"
+        ) from exc
+    if validated.content_digest != deployment_receipt_content_digest(validated.content):
+        raise AuthorizationVerificationError("deployment receipt content digest is invalid")
+    if canonical_json_bytes(validated) != canonical_json_bytes(validated_expected):
+        raise AuthorizationVerificationError(
+            "deployment receipt does not match exact expected values"
+        )
+    return validated.content_digest
 
 
 def pricing_evidence_digest(evidence_bytes: bytes) -> str:
@@ -841,3 +1451,51 @@ def verify_provider_cap_evidence(
         object.__setattr__(capability, name, value)
     object.__setattr__(capability, "_seal", _PRODUCTION_CAPABILITY_SEAL)
     return capability
+
+
+__all__ = [
+    "PROVISIONING_AUTHORIZATION_DOMAIN",
+    "PRICING_EVIDENCE_DOMAIN",
+    "PROVIDER_CAP_DOMAIN",
+    "AuthorizationDomain",
+    "AuthorizationVerificationError",
+    "DeploymentReceipt",
+    "DeploymentReceiptContent",
+    "InfrastructureAuthorization",
+    "InfrastructureAuthorizationPayload",
+    "ProvisioningAuthorization",
+    "ProvisioningAuthorizationPayload",
+    "PricingEvidenceApproval",
+    "PricingEvidenceApprovalPayload",
+    "PricingEvidenceContent",
+    "ProviderCapApproval",
+    "ProviderCapApprovalPayload",
+    "ProviderCapEvidenceContent",
+    "ProviderCapCoverage",
+    "VerifiedPricingCapability",
+    "VerifiedProviderCapCapability",
+    "VerifiedDeploymentTransportIdentity",
+    "VerifiedReconciledDeploymentReceipt",
+    "authorization_signed_bytes",
+    "deployment_reconciliation_digest",
+    "deployment_receipt_content_digest",
+    "infrastructure_authorization_digest",
+    "pricing_approval_digest",
+    "pricing_evidence_digest",
+    "pricing_evidence_signed_bytes",
+    "provider_cap_approval_digest",
+    "provider_cap_evidence_digest",
+    "provider_cap_signed_bytes",
+    "credential_ref_for_api_key",
+    "issue_verified_deployment_transport_identity",
+    "issue_verified_topology_deployment_transport_identity",
+    "require_verified_deployment_transport_identity",
+    "require_verified_pricing_capability",
+    "require_verified_provider_capability",
+    "require_verified_reconciled_receipt",
+    "verify_deployment_receipt",
+    "verify_provisioning_authorization",
+    "verify_pricing_evidence",
+    "verify_provider_cap_evidence",
+    "verify_reconciled_deployment_receipt",
+]

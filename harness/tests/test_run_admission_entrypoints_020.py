@@ -248,7 +248,10 @@ def test_d1_5_blocked_entrypoint_constructs_no_ledger_client_or_pipeline(
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main([command, "--product", _FIRST_CANARY]) == 2
-    assert events == ["load_document", "build_evaluator", "evaluate"]
+    # 031 A-C deliberately fail closed before the legacy 020 evaluator or any
+    # runtime dependency is constructed. D owns the canonical finalizer wiring
+    # that restores the downstream execution assertions.
+    assert events == []
 
 
 @pytest.mark.parametrize("command", _COMMANDS)
@@ -295,10 +298,7 @@ def test_d1_5_product_must_exactly_match_typed_identity_before_ledger_or_client(
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main([command, "--product", requested_product]) == 2
-    assert events in (
-        ["load_document"],
-        ["load_document", "build_evaluator", "evaluate"],
-    )
+    assert events == []
 
 
 def _qualified_name(node: ast.expr) -> str:
@@ -510,7 +510,7 @@ def _baseline_execution_result(tmp_path: Path) -> RunResult:
     )
 
 
-def test_d1_5_main_ready_dispatches_production_command_and_returns_zero(
+def test_d1_5_main_ready_is_typed_blocked_until_031_finalizer_is_wired(
     entrypoint_module: ModuleType,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -556,13 +556,8 @@ def test_d1_5_main_ready_dispatches_production_command_and_returns_zero(
     )
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
-    assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 0
-    assert events == [
-        "load_document",
-        "build_evaluator",
-        "evaluate",
-        "production_dispatch",
-    ]
+    assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 2
+    assert events == []
 
 
 def test_d1_5_main_returns_two_when_fresh_product_boundary_is_blocked(
@@ -604,12 +599,7 @@ def test_d1_5_main_returns_two_when_fresh_product_boundary_is_blocked(
 
     main = cast(Callable[[list[str]], int], entrypoint_module.main)
     assert main(["annotate-canary", "--product", _FIRST_CANARY]) == 2
-    assert events == [
-        "load_document",
-        "build_evaluator",
-        "evaluate",
-        "fresh_boundary",
-    ]
+    assert events == []
 
 
 @pytest.mark.asyncio

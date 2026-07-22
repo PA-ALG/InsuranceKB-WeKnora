@@ -6,6 +6,7 @@ import hashlib
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
@@ -27,6 +28,7 @@ from insurance_harness.goldenset.admission_infrastructure import (
     PROVISIONING_AUTHORIZATION_DOMAIN,
     AuthorizationDomain,
     AuthorizationVerificationError,
+    DeploymentReceipt,
     InfrastructureAuthorization,
     PricingEvidenceApproval,
     ProviderCapApproval,
@@ -34,10 +36,15 @@ from insurance_harness.goldenset.admission_infrastructure import (
     ProvisioningAuthorizationPayload,
     VerifiedPricingCapability,
     VerifiedProviderCapCapability,
+    VerifiedReconciledDeploymentReceipt,
+    _IssuerSnapshotRegistry,
     _require_verified_pricing_capability_for_testing,
     _require_verified_provider_capability_for_testing,
+    _require_verified_reconciled_receipt_for_testing,
+    infrastructure_authorization_digest,
     require_verified_pricing_capability,
     require_verified_provider_capability,
+    require_verified_reconciled_receipt,
     verify_pricing_evidence,
     verify_provider_cap_evidence,
     verify_provisioning_authorization,
@@ -70,9 +77,26 @@ _OWNER_TOKEN_DOMAIN = b"insurancekb.run-admission.attempt-owner.v1\0"
 _MODEL_ROLE_DOMAIN = b"insurancekb.run-admission.budget-model-role.v1\0"
 _ROLE_RATE_DOMAIN = b"insurancekb.run-admission.budget-role-rate.v1\0"
 _SETTLEMENT_SNAPSHOT_DOMAIN = b"insurancekb.run-admission.product-settlement-snapshot.v1\0"
+_FINAL_TOPOLOGY_DOMAIN = b"insurancekb.run-admission.final-topology.v1\0"
+_RECEIPT_JSON_DOMAIN = b"insurancekb.run-admission.receipt-json.v1\0"
+_RECEIPT_ANNEX_DOMAIN = b"insurancekb.run-admission.receipt-annex.v1\0"
+_TRANSPORT_IDENTITY_DIGEST_DOMAIN = b"insurancekb.run-admission.transport-identity.v1\0"
+_BAILIAN_DEPLOYMENT_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/deployments"
+_TRUSTED_RECONCILIATION_ISSUER = "bailian-deployment-controller-v1"
+_FINAL_TOPOLOGY_SEAL = object()
+_INFRASTRUCTURE_PROVIDER_CAPABILITY_SEAL = object()
+_TOPOLOGY_PROVIDER_CAPABILITY_SEAL = object()
+_LEDGER_CAPABILITY_SNAPSHOT_REGISTRY = _IssuerSnapshotRegistry()
+_INFRASTRUCTURE_CAP_SNAPSHOT_DOMAIN = b"insurancekb.infrastructure-capability-snapshot.v1\0"
+_TOPOLOGY_CAP_SNAPSHOT_DOMAIN = b"insurancekb.topology-capability-snapshot.v1\0"
+_FINAL_TOPOLOGY_SNAPSHOT_DOMAIN = b"insurancekb.final-topology-snapshot.v1\0"
+_PRODUCTION_DEPLOYMENT_OPERATION_ROOT = Path("/var/lib/insurancekb/run-admission/deployments")
 _BUSY_TIMEOUT_MS = 30_000
 _TESTING_MODE_SENTINEL = object()
-_SCHEMA_VERSION = 5
+_SCHEMA_VERSION = 8
+_PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION = 7
+_PRE_RECEIPT_ANNEX_SCHEMA_VERSION = 6
+_PRE_FINAL_TOPOLOGY_SCHEMA_VERSION = 5
 _PRE_INFRASTRUCTURE_SCHEMA_VERSION = 4
 _PRE_CANARY_SCHEMA_VERSION = 3
 _PRE_USAGE_SCHEMA_VERSION = 2
@@ -98,6 +122,29 @@ def _ceil_timedelta_seconds(value: Any) -> int:
     if total_microseconds <= 0:
         raise BudgetLedgerError("pricing duration must be positive")
     return (total_microseconds + 999_999) // 1_000_000
+
+
+def _transport_identity_digest_for_provider_cap(
+    capability: VerifiedProviderCapCapability,
+) -> str:
+    """Mechanically bind transport identity to signed cap resource facts."""
+
+    values: dict[str, object] = {
+        "provider": capability.provider,
+        "endpoint": _BAILIAN_DEPLOYMENT_ENDPOINT,
+        "workspace_ref": capability.workspace_ref,
+        "project_ref": capability.project_ref,
+        "credential_ref": capability.credential_ref,
+        "currency": capability.currency,
+        "provider_cap_evidence_digest": capability.evidence_digest,
+        "provider_cap_approval_digest": capability.approval_digest,
+        "coverage": tuple(sorted(capability.coverage)),
+        "credential_fingerprint": capability.credential_ref.removeprefix("sha256:"),
+        "expires_at": capability.expires_at,
+    }
+    return hashlib.sha256(
+        _TRANSPORT_IDENTITY_DIGEST_DOMAIN + canonical_json_bytes(values)
+    ).hexdigest()
 
 
 _PRE_POOL_ATTEMPT_COLUMNS = frozenset(
@@ -222,12 +269,79 @@ _INFRASTRUCTURE_RESERVE_COLUMNS = frozenset(
         "cleanup_deadline",
         "max_cost",
         "state",
+        "deployed_model",
+        "receipt_digest",
+        "remote_manifest_digest",
+        "receipt_json",
+        "final_approval_digest",
         "created_at",
+        "bound_at",
     }
 )
-_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL = """CREATE TABLE infrastructure_authorizations (
+_DEPLOYMENT_ROLE_BINDING_COLUMNS = frozenset(
+    {
+        "account_id",
+        "role",
+        "reserve_id",
+    }
+)
+_A_V5_INFRASTRUCTURE_RESERVE_COLUMNS = _INFRASTRUCTURE_RESERVE_COLUMNS - {
+    "deployed_model",
+    "receipt_digest",
+    "remote_manifest_digest",
+    "receipt_json",
+    "final_approval_digest",
+    "bound_at",
+}
+_A_V5_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL = """CREATE TABLE infrastructure_authorizations (
     authorization_digest TEXT PRIMARY KEY,
     domain TEXT NOT NULL CHECK (domain='insurancekb.run-admission.provisioning.v1'),
+    envelope_json BLOB NOT NULL UNIQUE,
+    run_identity TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    reserve_id TEXT NOT NULL UNIQUE,
+    recorded_at TEXT NOT NULL,
+    UNIQUE (run_identity, purpose, operation_id)
+)"""
+_A_V5_INFRASTRUCTURE_RESERVE_TABLE_SQL = """CREATE TABLE infrastructure_reserves (
+    reserve_id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    run_identity TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    authorization_digest TEXT NOT NULL UNIQUE
+        REFERENCES infrastructure_authorizations(authorization_digest),
+    pricing_evidence_digest TEXT NOT NULL,
+    pricing_approval_digest TEXT NOT NULL,
+    provider_cap_evidence_digest TEXT NOT NULL,
+    provider_cap_approval_digest TEXT NOT NULL,
+    provider_cap_max_cost INTEGER NOT NULL CHECK (provider_cap_max_cost > 0),
+    provider_cap_expires_at TEXT NOT NULL,
+    provider TEXT NOT NULL CHECK (provider='bailian'),
+    currency TEXT NOT NULL CHECK (currency='CNY'),
+    workspace_ref TEXT NOT NULL,
+    project_ref TEXT NOT NULL,
+    credential_ref TEXT NOT NULL,
+    region TEXT NOT NULL,
+    base_model TEXT NOT NULL,
+    request_plan TEXT NOT NULL CHECK (request_plan='ptu_v2'),
+    receipt_plan TEXT NOT NULL CHECK (receipt_plan='ptu'),
+    input_tpm_quota INTEGER NOT NULL CHECK (input_tpm_quota=10000),
+    output_tpm_quota INTEGER NOT NULL CHECK (output_tpm_quota=1000),
+    covers_fixed_infrastructure INTEGER NOT NULL CHECK (covers_fixed_infrastructure=1),
+    covers_inference INTEGER NOT NULL CHECK (covers_inference=1),
+    cleanup_deadline TEXT NOT NULL,
+    max_cost INTEGER NOT NULL CHECK (max_cost > 0),
+    state TEXT NOT NULL CHECK (state='reserved'),
+    created_at TEXT NOT NULL,
+    UNIQUE (account_id, operation_id)
+)"""
+_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL = """CREATE TABLE infrastructure_authorizations (
+    authorization_digest TEXT PRIMARY KEY,
+    domain TEXT NOT NULL CHECK (domain =
+        'insurancekb.run-admission.provisioning.v1'
+    ),
     envelope_json BLOB NOT NULL UNIQUE,
     run_identity TEXT NOT NULL,
     purpose TEXT NOT NULL,
@@ -265,10 +379,84 @@ _INFRASTRUCTURE_RESERVE_TABLE_SQL = """CREATE TABLE infrastructure_reserves (
     covers_inference INTEGER NOT NULL CHECK (covers_inference=1),
     cleanup_deadline TEXT NOT NULL,
     max_cost INTEGER NOT NULL CHECK (max_cost > 0),
-    state TEXT NOT NULL CHECK (state='reserved'),
+    state TEXT NOT NULL CHECK (state IN ('reserved','bound')),
+    deployed_model TEXT UNIQUE,
+    receipt_digest TEXT UNIQUE,
+    remote_manifest_digest TEXT UNIQUE,
+    receipt_json BLOB,
+    final_approval_digest TEXT,
     created_at TEXT NOT NULL,
-    UNIQUE (account_id, operation_id)
+    bound_at TEXT,
+    UNIQUE (account_id, operation_id),
+    CHECK ((state='reserved' AND deployed_model IS NULL AND receipt_digest IS NULL
+            AND remote_manifest_digest IS NULL
+            AND receipt_json IS NULL AND final_approval_digest IS NULL AND bound_at IS NULL)
+        OR (state='bound' AND deployed_model IS NOT NULL AND receipt_digest IS NOT NULL
+            AND remote_manifest_digest IS NOT NULL
+            AND receipt_json IS NOT NULL AND final_approval_digest IS NOT NULL
+            AND bound_at IS NOT NULL))
 )"""
+_DEPLOYMENT_ROLE_BINDING_TABLE_SQL = """CREATE TABLE deployment_role_bindings (
+    account_id TEXT NOT NULL REFERENCES budget_accounts(account_id),
+    role TEXT NOT NULL CHECK (role IN ('annotator','weak_extractor','judge')),
+    reserve_id TEXT NOT NULL REFERENCES infrastructure_reserves(reserve_id),
+    PRIMARY KEY (account_id, role)
+)"""
+_FINAL_TOPOLOGY_COLUMNS = frozenset(
+    {
+        "account_id",
+        "strong_reserve_id",
+        "weak_reserve_id",
+        "topology_json",
+        "topology_digest",
+        "recorded_at",
+    }
+)
+_FINAL_TOPOLOGY_TABLE_SQL = """CREATE TABLE final_infrastructure_topologies (
+    account_id TEXT PRIMARY KEY REFERENCES budget_accounts(account_id),
+    strong_reserve_id TEXT NOT NULL UNIQUE REFERENCES infrastructure_reserves(reserve_id),
+    weak_reserve_id TEXT NOT NULL UNIQUE REFERENCES infrastructure_reserves(reserve_id),
+    topology_json BLOB NOT NULL UNIQUE,
+    topology_digest TEXT NOT NULL UNIQUE,
+    recorded_at TEXT NOT NULL,
+    CHECK (strong_reserve_id != weak_reserve_id)
+)"""
+_RECEIPT_ANNEX_COLUMNS = frozenset(
+    {
+        "annex_digest",
+        "reserve_id",
+        "receipt_digest",
+        "artifact_json",
+        "recorded_at",
+    }
+)
+_RECEIPT_ANNEX_TABLE_SQL = """CREATE TABLE final_topology_receipt_annexes (
+    annex_digest TEXT PRIMARY KEY,
+    reserve_id TEXT NOT NULL UNIQUE REFERENCES infrastructure_reserves(reserve_id),
+    receipt_digest TEXT NOT NULL UNIQUE,
+    artifact_json BLOB NOT NULL UNIQUE,
+    recorded_at TEXT NOT NULL
+)"""
+_INFRASTRUCTURE_PROVIDER_CAP_EVIDENCE_COLUMNS = frozenset(
+    {
+        "reserve_id",
+        "evidence_bytes",
+        "approval_envelope_bytes",
+        "evidence_digest",
+        "approval_digest",
+        "recorded_at",
+    }
+)
+_INFRASTRUCTURE_PROVIDER_CAP_EVIDENCE_TABLE_SQL = (
+    """CREATE TABLE infrastructure_provider_cap_evidence (
+    reserve_id TEXT PRIMARY KEY REFERENCES infrastructure_reserves(reserve_id),
+    evidence_bytes BLOB NOT NULL,
+    approval_envelope_bytes BLOB NOT NULL,
+    evidence_digest TEXT NOT NULL,
+    approval_digest TEXT NOT NULL,
+    recorded_at TEXT NOT NULL
+)"""
+)
 type _ProviderCapKey = tuple[
     str,
     str,
@@ -549,7 +737,11 @@ class InfrastructureReserveSnapshot(_FrozenModel):
     authorization_domain: AuthorizationDomain
     authorization_digest: Sha256Digest
     maximum: BudgetAmounts
-    state: Literal["reserved"]
+    state: Literal["reserved", "bound"]
+    deployed_model: NonBlankStr | None = None
+    receipt_digest: Sha256Digest | None = None
+    final_approval_digest: Sha256Digest | None = None
+    roles: tuple[BudgetRole, ...] = ()
 
 
 class InfrastructureCreatePermit(_FrozenModel):
@@ -567,7 +759,7 @@ class InfrastructureCreatePermit(_FrozenModel):
             raise ValueError("infrastructure create permit operation mismatch")
         if self.reserve.authorization_domain != PROVISIONING_AUTHORIZATION_DOMAIN:
             raise ValueError("only provisioning can yield a create permit")
-        if self.reserve.state != "reserved":
+        if self.reserve.state != "reserved" or self.reserve.deployed_model is not None:
             raise ValueError("create permit requires an unbound durable reserve")
         for field_name, timestamp in (
             ("authorization_expires_at", self.authorization_expires_at),
@@ -587,6 +779,278 @@ class InfrastructureCreatePermit(_FrozenModel):
             raise BudgetLedgerError("create permit provider cap has expired")
         if now >= self.cleanup_deadline:
             raise BudgetLedgerError("create permit cleanup deadline has elapsed")
+
+
+class FinalTopologyDeployment(_FrozenModel):
+    """Exact durable deployment facts carried by the sealed final topology."""
+
+    reserve_id: NonBlankStr
+    operation_id: NonBlankStr
+    authorization_digest: Sha256Digest
+    pricing_evidence_digest: Sha256Digest
+    pricing_approval_digest: Sha256Digest
+    maximum_cost_minor_units: NonNegativeInt
+    deployed_model: NonBlankStr
+    receipt_json_digest: Sha256Digest
+    receipt_digest: Sha256Digest
+    remote_manifest_digest: Sha256Digest
+    receipt: DeploymentReceipt
+    roles: tuple[BudgetRole, ...]
+    cleanup_deadline: datetime
+    reconciliation_digest: Sha256Digest
+    transport_identity_digest: Sha256Digest
+
+
+class _DurableFinalDeploymentEvidence(_FrozenModel):
+    reserve_id: NonBlankStr
+    roles: tuple[BudgetRole, ...]
+    pricing_evidence_json: NonBlankStr
+    pricing_approval: PricingEvidenceApproval
+    receipt_annex_digest: Sha256Digest
+    reconciliation_digest: Sha256Digest
+
+
+class _DurableFinalTopologyRecord(_FrozenModel):
+    version: Literal["insurancekb.run-admission.final-topology.v1"]
+    plan: RunAdmissionPlanPayload
+    contract: BudgetContract
+    budget_envelope: BudgetApprovalEnvelope
+    expected_scope: NonBlankStr
+    provider_cap_evidence_json: NonBlankStr
+    provider_cap_approval: ProviderCapApproval
+    strong: _DurableFinalDeploymentEvidence
+    weak: _DurableFinalDeploymentEvidence
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class VerifiedInfrastructureProviderCapCapability:
+    """Opaque provider cap issued only from a fresh production ledger transaction."""
+
+    run_identity: str
+    purpose: str
+    scope: str
+    operation_id: str
+    reserve_id: str
+    evidence_digest: str
+    approval_digest: str
+    provider: str
+    currency: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    coverage: frozenset[str]
+    max_cost_minor_units: int
+    expires_at: datetime
+    _seal: object
+
+
+def _infrastructure_capability_snapshot(
+    capability: VerifiedInfrastructureProviderCapCapability,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            name: (
+                tuple(sorted(value)) if isinstance(value, frozenset) else value
+            )
+            for name, value in (
+                ("approval_digest", capability.approval_digest),
+                ("coverage", capability.coverage),
+                ("credential_ref", capability.credential_ref),
+                ("currency", capability.currency),
+                ("evidence_digest", capability.evidence_digest),
+                ("expires_at", capability.expires_at),
+                ("max_cost_minor_units", capability.max_cost_minor_units),
+                ("operation_id", capability.operation_id),
+                ("project_ref", capability.project_ref),
+                ("provider", capability.provider),
+                ("purpose", capability.purpose),
+                ("reserve_id", capability.reserve_id),
+                ("run_identity", capability.run_identity),
+                ("scope", capability.scope),
+                ("workspace_ref", capability.workspace_ref),
+            )
+        }
+    )
+
+
+def require_verified_infrastructure_provider_capability(
+    capability: object,
+) -> VerifiedInfrastructureProviderCapCapability:
+    if (
+        not isinstance(capability, VerifiedInfrastructureProviderCapCapability)
+        or capability._seal is not _INFRASTRUCTURE_PROVIDER_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError(
+            "ledger-admitted infrastructure provider cap capability is required"
+        )
+    _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_INFRASTRUCTURE_CAP_SNAPSHOT_DOMAIN,
+        snapshot=_infrastructure_capability_snapshot(capability),
+    )
+    return capability
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class VerifiedTopologyProviderCapCapability:
+    """Provider cap issued only after a fresh bound final-topology reload."""
+
+    topology_digest: str
+    run_identity: str
+    purpose: str
+    scope: str
+    operation_id: str
+    reserve_id: str
+    evidence_digest: str
+    approval_digest: str
+    provider: str
+    currency: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    coverage: frozenset[str]
+    max_cost_minor_units: int
+    expires_at: datetime
+    _seal: object
+
+
+def _topology_capability_snapshot(
+    capability: VerifiedTopologyProviderCapCapability,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            "approval_digest": capability.approval_digest,
+            "coverage": tuple(sorted(capability.coverage)),
+            "credential_ref": capability.credential_ref,
+            "currency": capability.currency,
+            "evidence_digest": capability.evidence_digest,
+            "expires_at": capability.expires_at,
+            "max_cost_minor_units": capability.max_cost_minor_units,
+            "operation_id": capability.operation_id,
+            "project_ref": capability.project_ref,
+            "provider": capability.provider,
+            "purpose": capability.purpose,
+            "reserve_id": capability.reserve_id,
+            "run_identity": capability.run_identity,
+            "scope": capability.scope,
+            "topology_digest": capability.topology_digest,
+            "workspace_ref": capability.workspace_ref,
+        }
+    )
+
+
+def require_verified_topology_provider_capability(
+    capability: object,
+) -> VerifiedTopologyProviderCapCapability:
+    if (
+        not isinstance(capability, VerifiedTopologyProviderCapCapability)
+        or capability._seal is not _TOPOLOGY_PROVIDER_CAPABILITY_SEAL
+    ):
+        raise AuthorizationVerificationError(
+            "ledger-admitted topology-bound provider cap capability is required"
+        )
+    _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.require(
+        capability,
+        domain=_TOPOLOGY_CAP_SNAPSHOT_DOMAIN,
+        snapshot=_topology_capability_snapshot(capability),
+    )
+    return capability
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class VerifiedFinalTopology:
+    """Opaque capability issued only from production durable ledger state."""
+
+    topology_digest: str
+    account_id: str
+    run_identity: str
+    purpose: str
+    scope: str
+    plan_payload_hash: str
+    budget_contract_hash: str
+    budget_approval_digest: str
+    budget_revision: int
+    budget_approval_expires_at: datetime
+    strong: FinalTopologyDeployment
+    weak: FinalTopologyDeployment
+    provider: str
+    currency: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    provider_cap_evidence_digest: str
+    provider_cap_approval_digest: str
+    provider_cap_coverage: frozenset[str]
+    provider_cap_max_cost_minor_units: int
+    provider_cap_expires_at: datetime
+    provider_cap_approval_expires_at: datetime
+    issued_at: datetime
+    valid_until: datetime
+    _seal: object
+
+
+def _final_topology_capability_snapshot(capability: VerifiedFinalTopology) -> bytes:
+    return canonical_json_bytes(
+        {
+            name: (tuple(sorted(value)) if isinstance(value, frozenset) else value)
+            for name in type(capability).__slots__
+            if name not in {"__weakref__", "_seal"}
+            for value in (getattr(capability, name),)
+        }
+    )
+
+
+def require_verified_final_topology(
+    capability: object,
+    *,
+    now: datetime,
+    expected_plan_payload_hash: str,
+    expected_scope: str,
+) -> VerifiedFinalTopology:
+    """Reject caller-created, testing-ledger, or stale topology DTOs."""
+
+    if (
+        not isinstance(capability, VerifiedFinalTopology)
+        or capability._seal is not _FINAL_TOPOLOGY_SEAL
+    ):
+        raise BudgetLedgerError("verified production final topology is required")
+    try:
+        _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.require(
+            capability,
+            domain=_FINAL_TOPOLOGY_SNAPSHOT_DOMAIN,
+            snapshot=_final_topology_capability_snapshot(capability),
+        )
+    except AuthorizationVerificationError as exc:
+        raise BudgetLedgerError("verified final topology issuer snapshot is unavailable") from exc
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise BudgetLedgerError("final topology freshness time must include a timezone")
+    if now >= capability.valid_until:
+        raise BudgetLedgerError("verified production final topology is stale")
+    if capability.plan_payload_hash != expected_plan_payload_hash:
+        raise BudgetLedgerError("verified production final topology plan has drifted")
+    if capability.scope != expected_scope:
+        raise BudgetLedgerError("verified production final topology scope has drifted")
+    return capability
+
+
+@dataclass(frozen=True, slots=True)
+class FinalInfrastructureBindingRequest:
+    """All public evidence required to bind one deployment in the final topology."""
+
+    reserve_id: str
+    authorization: InfrastructureAuthorization
+    expected_authorization: ProvisioningAuthorizationPayload
+    receipt_capability: VerifiedReconciledDeploymentReceipt
+    roles: tuple[BudgetRole, ...]
+    pricing_evidence_bytes: bytes
+    pricing_approval: PricingEvidenceApproval
+    provider_cap_evidence_bytes: bytes
+    provider_cap_approval: ProviderCapApproval
+
+
+@dataclass(frozen=True, slots=True)
+class _FinalTopologyBindResult:
+    snapshots: tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot]
 
 
 def _is_zero(value: BudgetAmounts) -> bool:
@@ -859,6 +1323,9 @@ class BudgetLedger:
                 _PRE_USAGE_SCHEMA_VERSION,
                 _PRE_CANARY_SCHEMA_VERSION,
                 _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
+                _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+                _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+                _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
                 _SCHEMA_VERSION,
             }:
                 raise BudgetLedgerError("budget schema migration version is unsupported")
@@ -867,6 +1334,9 @@ class BudgetLedger:
             self._migrate_pool_schema(connection, version)
             self._migrate_canary_claim_schema(connection, version)
             self._migrate_infrastructure_schema(connection, version)
+            self._migrate_infrastructure_provider_cap_evidence_schema(connection, version)
+            self._migrate_final_topology_schema(connection, version)
+            self._migrate_receipt_annex_schema(connection, version)
             if version != _SCHEMA_VERSION:
                 self._reconcile_legacy_settled_reservations(connection)
             connection.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
@@ -1037,6 +1507,10 @@ class BudgetLedger:
     def _table_columns(connection: sqlite3.Connection, table_name: str) -> frozenset[str]:
         if table_name not in {
             "canary_capability_claims",
+            "deployment_role_bindings",
+            "final_infrastructure_topologies",
+            "final_topology_receipt_annexes",
+            "infrastructure_provider_cap_evidence",
             "infrastructure_authorizations",
             "infrastructure_reserves",
             "request_attempts",
@@ -1068,6 +1542,9 @@ class BudgetLedger:
             in {
                 _PRE_CANARY_SCHEMA_VERSION,
                 _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
+                _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+                _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+                _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
                 _SCHEMA_VERSION,
             }
             or (version == _PRE_USAGE_SCHEMA_VERSION and columns != _PRE_USAGE_ATTEMPT_COLUMNS)
@@ -1163,6 +1640,9 @@ class BudgetLedger:
             _PRE_USAGE_SCHEMA_VERSION,
             _PRE_CANARY_SCHEMA_VERSION,
             _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
+            _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+            _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+            _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
             _SCHEMA_VERSION,
         }:
             raise BudgetLedgerError("budget schema migration found unknown pool columns")
@@ -1254,6 +1734,9 @@ class BudgetLedger:
         if not columns:
             if version in {
                 _PRE_INFRASTRUCTURE_SCHEMA_VERSION,
+                _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+                _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+                _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
                 _SCHEMA_VERSION,
             }:
                 raise BudgetLedgerError("budget canary claim table is missing")
@@ -1266,6 +1749,7 @@ class BudgetLedger:
     def _create_infrastructure_schema(connection: sqlite3.Connection) -> None:
         connection.execute(_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL)
         connection.execute(_INFRASTRUCTURE_RESERVE_TABLE_SQL)
+        connection.execute(_DEPLOYMENT_ROLE_BINDING_TABLE_SQL)
 
     def _migrate_infrastructure_schema(
         self,
@@ -1277,10 +1761,20 @@ class BudgetLedger:
                 connection, "infrastructure_authorizations"
             ),
             "infrastructure_reserves": self._table_columns(connection, "infrastructure_reserves"),
+            "deployment_role_bindings": self._table_columns(connection, "deployment_role_bindings"),
         }
         present = {name for name, columns in actual.items() if columns}
+        if version == _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION and present == {
+            "infrastructure_authorizations",
+            "infrastructure_reserves",
+        }:
+            self._migrate_a_v5_infrastructure_schema(connection, actual)
+            return
         if not present:
             if version in {
+                _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+                _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+                _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
                 _SCHEMA_VERSION,
             }:
                 raise BudgetLedgerError("budget infrastructure schema is missing")
@@ -1291,12 +1785,14 @@ class BudgetLedger:
         expected_columns = {
             "infrastructure_authorizations": _INFRASTRUCTURE_AUTHORIZATION_COLUMNS,
             "infrastructure_reserves": _INFRASTRUCTURE_RESERVE_COLUMNS,
+            "deployment_role_bindings": _DEPLOYMENT_ROLE_BINDING_COLUMNS,
         }
         if actual != expected_columns:
             raise BudgetLedgerError("budget infrastructure schema has drifted columns")
         expected_sql = {
             "infrastructure_authorizations": _INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL,
             "infrastructure_reserves": _INFRASTRUCTURE_RESERVE_TABLE_SQL,
+            "deployment_role_bindings": _DEPLOYMENT_ROLE_BINDING_TABLE_SQL,
         }
         for table_name, sql in expected_sql.items():
             stored = connection.execute(
@@ -1306,9 +1802,155 @@ class BudgetLedger:
             if stored is None or str(stored["sql"]) != sql:
                 raise BudgetLedgerError("budget infrastructure schema definition has drifted")
         if version not in {
+            _PRE_FINAL_TOPOLOGY_SCHEMA_VERSION,
+            _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+            _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
             _SCHEMA_VERSION,
         }:
             raise BudgetLedgerError("budget infrastructure schema version does not match tables")
+
+    @staticmethod
+    def _migrate_a_v5_infrastructure_schema(
+        connection: sqlite3.Connection,
+        actual: Mapping[str, frozenset[str]],
+    ) -> None:
+        expected_columns = {
+            "infrastructure_authorizations": _INFRASTRUCTURE_AUTHORIZATION_COLUMNS,
+            "infrastructure_reserves": _A_V5_INFRASTRUCTURE_RESERVE_COLUMNS,
+            "deployment_role_bindings": frozenset(),
+        }
+        if actual != expected_columns:
+            raise BudgetLedgerError("budget infrastructure schema has drifted columns")
+        for table_name, expected_sql in (
+            (
+                "infrastructure_authorizations",
+                _A_V5_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL,
+            ),
+            ("infrastructure_reserves", _A_V5_INFRASTRUCTURE_RESERVE_TABLE_SQL),
+        ):
+            stored = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            ).fetchone()
+            if stored is None or str(stored["sql"]) != expected_sql:
+                raise BudgetLedgerError("budget infrastructure schema definition has drifted")
+
+        connection.execute(
+            "ALTER TABLE infrastructure_authorizations RENAME TO infrastructure_authorizations_v5"
+        )
+        connection.execute(
+            "ALTER TABLE infrastructure_reserves RENAME TO infrastructure_reserves_v5"
+        )
+        connection.execute(_INFRASTRUCTURE_AUTHORIZATION_TABLE_SQL)
+        connection.execute(_INFRASTRUCTURE_RESERVE_TABLE_SQL)
+        connection.execute(
+            """INSERT INTO infrastructure_authorizations
+               SELECT * FROM infrastructure_authorizations_v5"""
+        )
+        connection.execute(
+            """INSERT INTO infrastructure_reserves (
+                   reserve_id,account_id,run_identity,purpose,operation_id,
+                   authorization_digest,pricing_evidence_digest,pricing_approval_digest,
+                   provider_cap_evidence_digest,provider_cap_approval_digest,
+                   provider_cap_max_cost,provider_cap_expires_at,provider,currency,
+                   workspace_ref,project_ref,credential_ref,region,base_model,
+                   request_plan,receipt_plan,input_tpm_quota,output_tpm_quota,
+                   covers_fixed_infrastructure,covers_inference,cleanup_deadline,
+                   max_cost,state,created_at
+               )
+               SELECT reserve_id,account_id,run_identity,purpose,operation_id,
+                      authorization_digest,pricing_evidence_digest,pricing_approval_digest,
+                      provider_cap_evidence_digest,provider_cap_approval_digest,
+                      provider_cap_max_cost,provider_cap_expires_at,provider,currency,
+                      workspace_ref,project_ref,credential_ref,region,base_model,
+                      request_plan,receipt_plan,input_tpm_quota,output_tpm_quota,
+                      covers_fixed_infrastructure,covers_inference,cleanup_deadline,
+                      max_cost,state,created_at
+               FROM infrastructure_reserves_v5"""
+        )
+        connection.execute(_DEPLOYMENT_ROLE_BINDING_TABLE_SQL)
+        connection.execute("DROP TABLE infrastructure_reserves_v5")
+        connection.execute("DROP TABLE infrastructure_authorizations_v5")
+
+    def _migrate_infrastructure_provider_cap_evidence_schema(
+        self,
+        connection: sqlite3.Connection,
+        version: int,
+    ) -> None:
+        columns = self._table_columns(connection, "infrastructure_provider_cap_evidence")
+        if not columns:
+            if version == _SCHEMA_VERSION:
+                raise BudgetLedgerError("budget infrastructure provider-cap sidecar is missing")
+            connection.execute(_INFRASTRUCTURE_PROVIDER_CAP_EVIDENCE_TABLE_SQL)
+            return
+        if columns != _INFRASTRUCTURE_PROVIDER_CAP_EVIDENCE_COLUMNS:
+            raise BudgetLedgerError(
+                "budget infrastructure provider-cap sidecar has drifted columns"
+            )
+        stored = connection.execute(
+            """SELECT sql FROM sqlite_master
+               WHERE type='table' AND name='infrastructure_provider_cap_evidence'"""
+        ).fetchone()
+        if stored is None or str(stored["sql"]) != _INFRASTRUCTURE_PROVIDER_CAP_EVIDENCE_TABLE_SQL:
+            raise BudgetLedgerError("budget infrastructure provider-cap sidecar definition drifted")
+        if version != _SCHEMA_VERSION:
+            raise BudgetLedgerError("budget infrastructure provider-cap sidecar version mismatch")
+
+    @staticmethod
+    def _create_final_topology_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(_FINAL_TOPOLOGY_TABLE_SQL)
+
+    def _migrate_final_topology_schema(
+        self,
+        connection: sqlite3.Connection,
+        version: int,
+    ) -> None:
+        columns = self._table_columns(connection, "final_infrastructure_topologies")
+        if not columns:
+            if version in {_PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION, _SCHEMA_VERSION}:
+                raise BudgetLedgerError("budget final topology schema is missing")
+            self._create_final_topology_schema(connection)
+            return
+        if columns != _FINAL_TOPOLOGY_COLUMNS:
+            raise BudgetLedgerError("budget final topology schema has drifted columns")
+        stored = connection.execute(
+            """SELECT sql FROM sqlite_master
+               WHERE type='table' AND name='final_infrastructure_topologies'"""
+        ).fetchone()
+        if stored is None or str(stored["sql"]) != _FINAL_TOPOLOGY_TABLE_SQL:
+            raise BudgetLedgerError("budget final topology schema definition has drifted")
+        if version not in {
+            _PRE_RECEIPT_ANNEX_SCHEMA_VERSION,
+            _PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION,
+            _SCHEMA_VERSION,
+        }:
+            raise BudgetLedgerError("budget final topology schema version does not match tables")
+
+    @staticmethod
+    def _create_receipt_annex_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(_RECEIPT_ANNEX_TABLE_SQL)
+
+    def _migrate_receipt_annex_schema(
+        self,
+        connection: sqlite3.Connection,
+        version: int,
+    ) -> None:
+        columns = self._table_columns(connection, "final_topology_receipt_annexes")
+        if not columns:
+            if version in {_PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION, _SCHEMA_VERSION}:
+                raise BudgetLedgerError("budget receipt annex schema is missing")
+            self._create_receipt_annex_schema(connection)
+            return
+        if columns != _RECEIPT_ANNEX_COLUMNS:
+            raise BudgetLedgerError("budget receipt annex schema has drifted columns")
+        stored = connection.execute(
+            """SELECT sql FROM sqlite_master
+               WHERE type='table' AND name='final_topology_receipt_annexes'"""
+        ).fetchone()
+        if stored is None or str(stored["sql"]) != _RECEIPT_ANNEX_TABLE_SQL:
+            raise BudgetLedgerError("budget receipt annex schema definition has drifted")
+        if version not in {_PRE_PROVIDER_CAP_SIDECAR_SCHEMA_VERSION, _SCHEMA_VERSION}:
+            raise BudgetLedgerError("budget receipt annex schema version does not match tables")
 
     @staticmethod
     def _canary_claim_schema_is_current(connection: sqlite3.Connection) -> bool:
@@ -1558,9 +2200,6 @@ class BudgetLedger:
     ) -> InfrastructureCreatePermit:
         """Reverify signed price/cap evidence and occupy cost before provider POST."""
 
-        trusted_authorities = self._production_operational_authorities()
-        now = self._production_now()
-
         if (
             unsupported
             or not isinstance(pricing_evidence_bytes, bytes)
@@ -1571,52 +2210,67 @@ class BudgetLedger:
             raise BudgetLedgerError(
                 "production provisioning requires signed pricing and provider-cap evidence"
             )
-        try:
-            pricing = verify_pricing_evidence(
-                pricing_evidence_bytes,
-                envelope=pricing_approval,
-                trusted_authorities=trusted_authorities,
-                expected_scope=expected.scope,
+
+        def verify_fresh_boundary() -> tuple[
+            str,
+            VerifiedPricingCapability,
+            VerifiedProviderCapCapability,
+            datetime,
+        ]:
+            trusted_authorities = self._production_operational_authorities()
+            now = self._production_now()
+            try:
+                pricing = verify_pricing_evidence(
+                    pricing_evidence_bytes,
+                    envelope=pricing_approval,
+                    trusted_authorities=trusted_authorities,
+                    expected_scope=expected.scope,
+                    now=now,
+                    fixed_duration_seconds=_ceil_timedelta_seconds(
+                        expected.cleanup_deadline - expected.issued_at
+                    ),
+                    cost_window_start=expected.issued_at,
+                )
+                provider_cap = verify_provider_cap_evidence(
+                    provider_cap_evidence_bytes,
+                    envelope=provider_cap_approval,
+                    trusted_authorities=trusted_authorities,
+                    expected_scope=expected.scope,
+                    now=now,
+                )
+                authorization_digest = verify_provisioning_authorization(
+                    authorization,
+                    expected=expected,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError(
+                    f"signed provisioning price/cap evidence rejected: {exc}"
+                ) from exc
+            if pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
+                raise BudgetLedgerError(
+                    "caller cost differs from mechanically derived pricing evidence"
+                )
+            pricing, provider_cap = self._validate_infrastructure_capabilities(
+                expected,
+                pricing_capability=pricing,
+                provider_capability=provider_cap,
                 now=now,
-                fixed_duration_seconds=_ceil_timedelta_seconds(
-                    expected.cleanup_deadline - expected.issued_at
-                ),
-                cost_window_start=expected.issued_at,
             )
-            provider_cap = verify_provider_cap_evidence(
-                provider_cap_evidence_bytes,
-                envelope=provider_cap_approval,
-                trusted_authorities=trusted_authorities,
-                expected_scope=expected.scope,
-                now=now,
-            )
-            authorization_digest = verify_provisioning_authorization(
-                authorization,
-                expected=expected,
-                trusted_authorities=trusted_authorities,
-                now=now,
-            )
-        except AuthorizationVerificationError as exc:
-            raise BudgetLedgerError(
-                f"signed provisioning price/cap evidence rejected: {exc}"
-            ) from exc
-        if pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
-            raise BudgetLedgerError(
-                "caller cost differs from mechanically derived pricing evidence"
-            )
-        pricing, provider_cap = self._validate_infrastructure_capabilities(
-            expected,
-            pricing_capability=pricing,
-            provider_capability=provider_cap,
-            now=now,
-        )
-        snapshot = self._reserve_infrastructure(
+            return authorization_digest, pricing, provider_cap, now
+
+        authorization_digest, pricing, provider_cap, now = verify_fresh_boundary()
+        snapshot, now, provider_cap = self._reserve_infrastructure(
             authorization=authorization,
             authorization_digest=authorization_digest,
             payload=expected,
             pricing_capability=pricing,
             provider_capability=provider_cap,
             recorded_at=now,
+            provider_cap_evidence_bytes=provider_cap_evidence_bytes,
+            provider_cap_approval_bytes=canonical_json_bytes(provider_cap_approval),
+            freshness_revalidator=verify_fresh_boundary,
         )
         permit = InfrastructureCreatePermit(
             operation_id=expected.operation_id,
@@ -1657,7 +2311,7 @@ class BudgetLedger:
             provider_capability=provider_capability,
             now=now,
         )
-        snapshot = self._reserve_infrastructure(
+        snapshot, now, provider_cap = self._reserve_infrastructure(
             authorization=authorization,
             authorization_digest=authorization_digest,
             payload=expected,
@@ -1684,11 +2338,38 @@ class BudgetLedger:
         pricing_capability: VerifiedPricingCapability,
         provider_capability: VerifiedProviderCapCapability,
         recorded_at: datetime,
-    ) -> InfrastructureReserveSnapshot:
-        account_id = budget_account_identity(payload.run_identity, payload.purpose)
-        envelope_json = canonical_json_bytes(authorization)
-        provider_cap_key = self._provider_cap_key(provider_capability)
+        provider_cap_evidence_bytes: bytes | None = None,
+        provider_cap_approval_bytes: bytes | None = None,
+        freshness_revalidator: (
+            Callable[
+                [],
+                tuple[
+                    str,
+                    VerifiedPricingCapability,
+                    VerifiedProviderCapCapability,
+                    datetime,
+                ],
+            ]
+            | None
+        ) = None,
+    ) -> tuple[
+        InfrastructureReserveSnapshot,
+        datetime,
+        VerifiedProviderCapCapability,
+    ]:
+        if (provider_cap_evidence_bytes is None) != (provider_cap_approval_bytes is None):
+            raise BudgetLedgerError("infrastructure provider-cap sidecar is incomplete")
         with self._mutation() as connection:
+            if freshness_revalidator is not None:
+                (
+                    authorization_digest,
+                    pricing_capability,
+                    provider_capability,
+                    recorded_at,
+                ) = freshness_revalidator()
+            account_id = budget_account_identity(payload.run_identity, payload.purpose)
+            envelope_json = canonical_json_bytes(authorization)
+            provider_cap_key = self._provider_cap_key(provider_capability)
             existing = connection.execute(
                 "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
                 (payload.infrastructure_reserve_id,),
@@ -1711,6 +2392,21 @@ class BudgetLedger:
                     )
                 ):
                     raise BudgetLedgerError("infrastructure reserve conflict")
+                if provider_cap_evidence_bytes is not None:
+                    sidecar = connection.execute(
+                        """SELECT * FROM infrastructure_provider_cap_evidence
+                           WHERE reserve_id=?""",
+                        (payload.infrastructure_reserve_id,),
+                    ).fetchone()
+                    if (
+                        sidecar is None
+                        or bytes(sidecar["evidence_bytes"]) != provider_cap_evidence_bytes
+                        or bytes(sidecar["approval_envelope_bytes"])
+                        != provider_cap_approval_bytes
+                        or str(sidecar["evidence_digest"]) != provider_capability.evidence_digest
+                        or str(sidecar["approval_digest"]) != provider_capability.approval_digest
+                    ):
+                        raise BudgetLedgerError("infrastructure provider-cap sidecar conflict")
                 total = self._shared_provider_cap_occupied_cost(
                     connection,
                     provider_cap_key,
@@ -1719,7 +2415,11 @@ class BudgetLedger:
                 )
                 if total > provider_capability.max_cost_minor_units:
                     raise BudgetLedgerError("infrastructure reserves exceed provider cap")
-                return self._infrastructure_snapshot(connection, existing)
+                return (
+                    self._infrastructure_snapshot(connection, existing),
+                    recorded_at,
+                    provider_capability,
+                )
 
             total = self._shared_provider_cap_occupied_cost(
                 connection,
@@ -1790,6 +2490,20 @@ class BudgetLedger:
                         recorded_at.isoformat(),
                     ),
                 )
+                if provider_cap_evidence_bytes is not None:
+                    connection.execute(
+                        """INSERT INTO infrastructure_provider_cap_evidence VALUES (
+                               ?, ?, ?, ?, ?, ?
+                           )""",
+                        (
+                            payload.infrastructure_reserve_id,
+                            provider_cap_evidence_bytes,
+                            provider_cap_approval_bytes,
+                            provider_capability.evidence_digest,
+                            provider_capability.approval_digest,
+                            recorded_at.isoformat(),
+                        ),
+                    )
             except sqlite3.IntegrityError as exc:
                 raise BudgetLedgerError("infrastructure authorization conflict") from exc
             inserted = connection.execute(
@@ -1797,7 +2511,1897 @@ class BudgetLedger:
                 (payload.infrastructure_reserve_id,),
             ).fetchone()
             assert inserted is not None
-            return self._infrastructure_snapshot(connection, inserted)
+            return (
+                self._infrastructure_snapshot(connection, inserted),
+                recorded_at,
+                provider_capability,
+            )
+
+    def bind_final_infrastructure_contract(
+        self,
+        *,
+        reserve_id: str,
+        authorization: InfrastructureAuthorization,
+        expected_authorization: ProvisioningAuthorizationPayload,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        expected_scope: str,
+        pricing_evidence_bytes: bytes | None = None,
+        pricing_approval: PricingEvidenceApproval | None = None,
+        provider_cap_evidence_bytes: bytes | None = None,
+        provider_cap_approval: ProviderCapApproval | None = None,
+        **unsupported: object,
+    ) -> InfrastructureReserveSnapshot:
+        """Reject the non-atomic production single-reserve finalization path."""
+
+        raise BudgetLedgerError("atomic production topology binding is required")
+
+    def _bind_final_infrastructure_contract_for_testing(
+        self,
+        *,
+        reserve_id: str,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+    ) -> InfrastructureReserveSnapshot:
+        """Atomically bind final approval, receipt, deployment, and role references."""
+
+        self._require_testing_mode()
+
+        return self._bind_final_infrastructure_contract_transaction(
+            reserve_id=reserve_id,
+            receipt_capability=receipt_capability,
+            roles=roles,
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+
+    def bind_final_infrastructure_topology(
+        self,
+        *,
+        strong: FinalInfrastructureBindingRequest,
+        weak: FinalInfrastructureBindingRequest,
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        expected_scope: str,
+        **unsupported: object,
+    ) -> VerifiedFinalTopology:
+        """Reverify both deployments, then bind their exact topology atomically."""
+
+        if unsupported:
+            raise BudgetLedgerError(
+                "production final topology does not accept caller policy or time"
+            )
+        self._bind_final_infrastructure_topology_transaction(
+            bindings=(
+                (strong.reserve_id, strong.receipt_capability, strong.roles),
+                (weak.reserve_id, weak.receipt_capability, weak.roles),
+            ),
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            expected_scope=expected_scope,
+            production_requests=(strong, weak),
+        )
+        return self.require_fresh_final_topology(
+            plan=plan,
+            expected_scope=expected_scope,
+        )
+
+    @staticmethod
+    def _production_receipt_annex(
+        receipt: DeploymentReceipt,
+        *,
+        reconciliation_digest: str,
+    ) -> tuple[str, bytes, Any]:
+        """Read immutable ownership and reconciliation artifacts from the fixed store."""
+
+        from insurance_harness.goldenset.admission_deployment import (
+            DeploymentControlBlocked,
+            DeploymentReceiptArtifact,
+            DeploymentReconciliationEvidenceV1,
+            _OperationStore,
+        )
+
+        store: _OperationStore | None = None
+        try:
+            store = _OperationStore(_PRODUCTION_DEPLOYMENT_OPERATION_ROOT)
+            receipt_artifact_bytes = store.read(f"{receipt.content_digest}.receipt.json")
+            reconciliation_artifact_bytes = store.read(
+                f"{reconciliation_digest}.receipt-reconciliation.json"
+            )
+        except DeploymentControlBlocked as exc:
+            raise BudgetLedgerError("production receipt artifact is unavailable") from exc
+        finally:
+            if store is not None:
+                store.close()
+        if receipt_artifact_bytes is None or reconciliation_artifact_bytes is None:
+            raise BudgetLedgerError("production receipt reconciliation artifact is unavailable")
+        try:
+            receipt_artifact = DeploymentReceiptArtifact.model_validate_json(receipt_artifact_bytes)
+            reconciliation_artifact = DeploymentReconciliationEvidenceV1.model_validate_json(
+                reconciliation_artifact_bytes
+            )
+        except ValueError as exc:
+            raise BudgetLedgerError(
+                "production receipt reconciliation artifact is invalid"
+            ) from exc
+        if (
+            canonical_json_bytes(receipt_artifact) != receipt_artifact_bytes
+            or canonical_json_bytes(reconciliation_artifact) != reconciliation_artifact_bytes
+            or receipt_artifact.receipt != receipt
+            or receipt_artifact.receipt.content_digest != receipt.content_digest
+            or receipt_artifact.remote_manifest_digest != receipt.content.remote_manifest_digest
+            or reconciliation_artifact.receipt != receipt
+            or reconciliation_artifact.remote_manifest != receipt_artifact.remote_manifest
+            or reconciliation_artifact.reconciliation_digest != reconciliation_digest
+        ):
+            raise BudgetLedgerError("production receipt reconciliation artifact has drifted")
+        annex_bytes = canonical_json_bytes(
+            {
+                "version": "insurancekb.run-admission.receipt-annex.v1",
+                "receipt_artifact": receipt_artifact.model_dump(mode="json"),
+                "reconciliation_artifact": reconciliation_artifact.model_dump(mode="json"),
+            }
+        )
+        return (
+            hashlib.sha256(_RECEIPT_ANNEX_DOMAIN + annex_bytes).hexdigest(),
+            annex_bytes,
+            reconciliation_artifact,
+        )
+
+    @staticmethod
+    def _durable_final_deployment_evidence(
+        request: FinalInfrastructureBindingRequest,
+        *,
+        receipt_annex_digest: str,
+    ) -> _DurableFinalDeploymentEvidence:
+        receipt = require_verified_reconciled_receipt(request.receipt_capability)
+        return _DurableFinalDeploymentEvidence(
+            reserve_id=request.reserve_id,
+            roles=request.roles,
+            pricing_evidence_json=request.pricing_evidence_bytes.decode("utf-8"),
+            pricing_approval=request.pricing_approval,
+            receipt_annex_digest=receipt_annex_digest,
+            reconciliation_digest=receipt.reconciliation_digest,
+        )
+
+    @staticmethod
+    def _final_topology_capability_values(
+        *,
+        requests: tuple[
+            FinalInfrastructureBindingRequest,
+            FinalInfrastructureBindingRequest,
+        ],
+        verified: tuple[
+            tuple[str, VerifiedPricingCapability, VerifiedProviderCapCapability],
+            tuple[str, VerifiedPricingCapability, VerifiedProviderCapCapability],
+        ],
+        proof: BudgetAdmissionProof,
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        expected_scope: str,
+        now: datetime,
+    ) -> Mapping[str, object]:
+        deployments: list[FinalTopologyDeployment] = []
+        expiries = [
+            contract.price_expires_at,
+            envelope.payload.expires_at,
+            requests[0].provider_cap_approval.payload.expires_at,
+            verified[0][2].expires_at,
+        ]
+        for request, (authorization_digest, pricing, _cap) in zip(requests, verified, strict=True):
+            receipt_capability = require_verified_reconciled_receipt(
+                request.receipt_capability, now=now
+            )
+            receipt = receipt_capability.receipt
+            receipt_json = canonical_json_bytes(receipt)
+            expiries.extend(
+                (
+                    request.expected_authorization.cleanup_deadline,
+                    pricing.effective_until,
+                    request.pricing_approval.payload.expires_at,
+                    receipt_capability.expires_at,
+                )
+            )
+            deployments.append(
+                FinalTopologyDeployment(
+                    reserve_id=request.reserve_id,
+                    operation_id=request.expected_authorization.operation_id,
+                    authorization_digest=authorization_digest,
+                    pricing_evidence_digest=pricing.evidence_digest,
+                    pricing_approval_digest=pricing.approval_digest,
+                    maximum_cost_minor_units=(
+                        request.expected_authorization.maximum_cost_minor_units
+                    ),
+                    deployed_model=receipt.content.deployed_model,
+                    receipt_json_digest=hashlib.sha256(
+                        _RECEIPT_JSON_DOMAIN + receipt_json
+                    ).hexdigest(),
+                    receipt_digest=receipt.content_digest,
+                    remote_manifest_digest=receipt.content.remote_manifest_digest,
+                    receipt=receipt,
+                    roles=request.roles,
+                    cleanup_deadline=(request.expected_authorization.cleanup_deadline),
+                    reconciliation_digest=(receipt_capability.reconciliation_digest),
+                    transport_identity_digest=(receipt_capability.transport_identity_digest),
+                )
+            )
+        valid_until = min(expiries)
+        if now >= valid_until:
+            raise BudgetLedgerError("final topology durable evidence is stale")
+        provider_cap = verified[0][2]
+        strong, weak = deployments
+        digest_values: dict[str, object] = {
+            "account_id": budget_account_identity(plan.run_identity, plan.purpose),
+            "run_identity": plan.run_identity,
+            "purpose": plan.purpose,
+            "scope": expected_scope,
+            "plan_payload_hash": plan_payload_hash(plan),
+            "budget_contract_hash": proof.contract_hash,
+            "budget_approval_digest": proof.approval_digest,
+            "budget_revision": proof.revision,
+            "budget_approval_expires_at": envelope.payload.expires_at.isoformat(),
+            "strong": strong.model_dump(mode="json"),
+            "weak": weak.model_dump(mode="json"),
+            "provider": provider_cap.provider,
+            "currency": provider_cap.currency,
+            "workspace_ref": provider_cap.workspace_ref,
+            "project_ref": provider_cap.project_ref,
+            "credential_ref": provider_cap.credential_ref,
+            "provider_cap_evidence_digest": provider_cap.evidence_digest,
+            "provider_cap_approval_digest": provider_cap.approval_digest,
+            "provider_cap_coverage": sorted(provider_cap.coverage),
+            "provider_cap_max_cost_minor_units": provider_cap.max_cost_minor_units,
+            "provider_cap_expires_at": provider_cap.expires_at.isoformat(),
+            "provider_cap_approval_expires_at": (
+                requests[0].provider_cap_approval.payload.expires_at.isoformat()
+            ),
+            "valid_until": valid_until.isoformat(),
+        }
+        return MappingProxyType(
+            {
+                **digest_values,
+                "topology_digest": hashlib.sha256(
+                    _FINAL_TOPOLOGY_DOMAIN + canonical_json_bytes(digest_values)
+                ).hexdigest(),
+                "strong": strong,
+                "weak": weak,
+                "provider_cap_coverage": provider_cap.coverage,
+                "provider_cap_expires_at": provider_cap.expires_at,
+                "provider_cap_approval_expires_at": (
+                    requests[0].provider_cap_approval.payload.expires_at
+                ),
+                "budget_approval_expires_at": envelope.payload.expires_at,
+                "issued_at": now,
+                "valid_until": valid_until,
+            }
+        )
+
+    @staticmethod
+    def _seal_final_topology(values: Mapping[str, object]) -> VerifiedFinalTopology:
+        del values
+        raise BudgetLedgerError(
+            "in-memory final topology sealing is disabled; fresh durable reload is required"
+        )
+
+    def _verify_final_binding_request(
+        self,
+        request: FinalInfrastructureBindingRequest,
+        *,
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        now: datetime,
+    ) -> tuple[str, VerifiedPricingCapability, VerifiedProviderCapCapability]:
+        expected = request.expected_authorization
+        try:
+            if not isinstance(request.authorization, ProvisioningAuthorization):
+                raise AuthorizationVerificationError("provisioning authorization type mismatch")
+            duration = _ceil_timedelta_seconds(expected.cleanup_deadline - expected.issued_at)
+            segments: tuple[int, ...] | None = None
+            cost_window_start = expected.issued_at
+            authorization_digest = verify_provisioning_authorization(
+                request.authorization,
+                expected=expected,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+            pricing = verify_pricing_evidence(
+                request.pricing_evidence_bytes,
+                envelope=request.pricing_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+                fixed_duration_seconds=duration,
+                cost_window_start=cost_window_start,
+                fixed_duration_segments_seconds=segments,
+            )
+            provider_cap = verify_provider_cap_evidence(
+                request.provider_cap_evidence_bytes,
+                envelope=request.provider_cap_approval,
+                trusted_authorities=trusted_authorities,
+                expected_scope=expected_scope,
+                now=now,
+            )
+            receipt = self._require_verified_receipt_for_authorization(
+                request.receipt_capability, expected, now=now
+            )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("final infrastructure signed evidence rejected") from exc
+        if pricing.fixed_cost_minor_units != expected.maximum_cost_minor_units:
+            raise BudgetLedgerError("final infrastructure cost differs from signed pricing")
+        pricing, provider_cap = self._validate_infrastructure_capabilities(
+            expected,
+            pricing_capability=pricing,
+            provider_capability=provider_cap,
+            now=now,
+        )
+        self._require_receipt_matches_authorization(receipt, expected)
+        for role in request.roles:
+            role_plan = plan.model_roles.get(role)
+            if not isinstance(role_plan, ModelRolePlan):
+                raise BudgetLedgerError("deployment role topology is invalid")
+            derive_role_rate_from_pricing(
+                pricing,
+                role_plan=role_plan,
+                expected_provider=expected.provider,
+                expected_currency=expected.currency,
+                candidate=contract.role_rates.get(role),
+            )
+        return authorization_digest, pricing, provider_cap
+
+    def _bind_final_infrastructure_contract_transaction(
+        self,
+        *,
+        reserve_id: str,
+        receipt_capability: VerifiedReconciledDeploymentReceipt,
+        roles: tuple[BudgetRole, ...],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+        expected_authorization_digest: str | None = None,
+        pricing_capability: VerifiedPricingCapability | None = None,
+        provider_capability: VerifiedProviderCapCapability | None = None,
+        provider_cap_observed_at: datetime | None = None,
+    ) -> InfrastructureReserveSnapshot:
+        """Shared transaction; production must supply freshly verified capabilities."""
+
+        if self._is_testing_mode():
+            if any(
+                value is not None
+                for value in (
+                    expected_authorization_digest,
+                    pricing_capability,
+                    provider_capability,
+                    provider_cap_observed_at,
+                )
+            ):
+                raise BudgetLedgerError("testing final bind cannot consume production evidence")
+        else:
+            if (
+                not isinstance(expected_authorization_digest, str)
+                or not expected_authorization_digest
+                or pricing_capability is None
+                or provider_capability is None
+                or provider_cap_observed_at is None
+            ):
+                raise BudgetLedgerError(
+                    "production final bind requires complete root-verified evidence"
+                )
+            (
+                trusted_public_keys,
+                authorized_roles,
+                _provenance_roles,
+                _canary_roles,
+            ) = self._production_operational_configuration()
+            now = self._production_now()
+
+        try:
+            receipt = (
+                _require_verified_reconciled_receipt_for_testing(receipt_capability, now=now)
+                if self._is_testing_mode()
+                else require_verified_reconciled_receipt(receipt_capability, now=now)
+            ).receipt
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("verified reconciled receipt is required") from exc
+        proof = verify_budget_admission_contract(
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        )
+        role_set = frozenset(roles)
+        if role_set not in {
+            frozenset({"annotator", "judge"}),
+            frozenset({"weak_extractor"}),
+        } or len(roles) != len(role_set):
+            raise BudgetLedgerError("deployment role topology is invalid")
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        receipt_json = canonical_json_bytes(receipt)
+        with self._mutation() as connection:
+            reserve = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                (reserve_id,),
+            ).fetchone()
+            if reserve is None:
+                raise BudgetLedgerError("infrastructure reserve not found")
+            if (
+                str(reserve["account_id"]) != account_id
+                or str(reserve["run_identity"]) != plan.run_identity
+                or str(reserve["purpose"]) != plan.purpose
+            ):
+                raise BudgetLedgerError("infrastructure reserve run identity conflict")
+            authorization = self._stored_infrastructure_authorization(connection, reserve)
+            payload = authorization.payload
+            receipt = self._require_verified_receipt_for_authorization(
+                receipt_capability,
+                payload,
+                now=now,
+                testing=self._is_testing_mode(),
+            )
+            if expected_authorization_digest is not None and (
+                str(reserve["authorization_digest"]) != expected_authorization_digest
+                or infrastructure_authorization_digest(authorization)
+                != expected_authorization_digest
+                or pricing_capability is None
+                or provider_capability is None
+                or provider_cap_observed_at is None
+                or not self._stored_capabilities_match(
+                    reserve, pricing_capability, provider_capability
+                )
+            ):
+                raise BudgetLedgerError(
+                    "final signed infrastructure evidence conflicts with reserve"
+                )
+            if now >= payload.cleanup_deadline:
+                raise BudgetLedgerError("infrastructure cleanup deadline has elapsed")
+            if now >= payload.provider_cap_expires_at:
+                raise BudgetLedgerError("infrastructure provider cap has expired")
+            self._require_contract_matches_reserved_provider_cap(
+                contract,
+                reserve,
+                observed_at=provider_cap_observed_at,
+            )
+            if (
+                str(reserve["workspace_ref"]) != payload.workspace_ref
+                or str(reserve["pricing_evidence_digest"]) != payload.pricing_evidence_digest
+                or str(reserve["pricing_approval_digest"]) != payload.pricing_approval_digest
+                or str(reserve["provider_cap_evidence_digest"])
+                != payload.provider_cap_evidence_digest
+                or str(reserve["provider_cap_approval_digest"])
+                != payload.provider_cap_approval_digest
+                or int(reserve["provider_cap_max_cost"])
+                != payload.provider_cap_max_cost_minor_units
+                or str(reserve["currency"]) != payload.currency
+                or str(reserve["provider"]) != payload.provider
+                or str(reserve["project_ref"]) != payload.project_ref
+                or str(reserve["credential_ref"]) != payload.credential_ref
+            ):
+                raise BudgetLedgerError("final provider attestation resource mismatch")
+            self._require_receipt_matches_authorization(receipt, authorization.payload)
+            for role in roles:
+                role_plan = plan.model_roles[role]
+                if (
+                    not isinstance(role_plan, ModelRolePlan)
+                    or role_plan.provider != payload.provider
+                    or role_plan.model_id != receipt.content.deployed_model
+                    or role_plan.immutable_deployment_id != receipt.content.deployed_model
+                ):
+                    raise BudgetLedgerError(
+                        "model_id, immutable_deployment_id and deployed_model must match"
+                    )
+            if str(reserve["state"]) == "bound":
+                stored_roles = tuple(
+                    str(row["role"])
+                    for row in connection.execute(
+                        """SELECT role FROM deployment_role_bindings
+                           WHERE reserve_id=? ORDER BY role""",
+                        (reserve_id,),
+                    ).fetchall()
+                )
+                if (
+                    str(reserve["deployed_model"]) != receipt.content.deployed_model
+                    or str(reserve["receipt_digest"]) != receipt.content_digest
+                    or str(reserve["remote_manifest_digest"])
+                    != receipt.content.remote_manifest_digest
+                    or bytes(reserve["receipt_json"]) != receipt_json
+                    or str(reserve["final_approval_digest"]) != proof.approval_digest
+                    or stored_roles != tuple(sorted(roles))
+                ):
+                    raise BudgetLedgerError("bound infrastructure replay conflict")
+                return self._infrastructure_snapshot(connection, reserve)
+
+            account = connection.execute(
+                "SELECT * FROM budget_accounts WHERE account_id=?", (account_id,)
+            ).fetchone()
+            if account is None:
+                self._insert_account(
+                    connection,
+                    account_id,
+                    plan.run_identity,
+                    plan.purpose,
+                    contract,
+                    envelope,
+                    proof.approval_digest,
+                    proof.contract_hash,
+                )
+            else:
+                self._expand_account(
+                    connection,
+                    account,
+                    contract,
+                    envelope,
+                    proof.approval_digest,
+                    proof.contract_hash,
+                )
+            current_account = self._require_account(connection, account_id)
+            product_max_row = connection.execute(
+                "SELECT COALESCE(SUM(max_cost), 0) FROM product_limits WHERE account_id=?",
+                (account_id,),
+            ).fetchone()
+            assert product_max_row is not None
+            provider_cap_key = self._provider_cap_key_from_row(reserve)
+            shared_occupied = self._shared_provider_cap_occupied_cost(
+                connection,
+                provider_cap_key,
+                expected_max_cost=contract.provider_attestation.max_cost_minor_units,
+                candidate_account_id=account_id,
+            )
+            current_product_occupied = self._product_occupied_cost(
+                connection, frozenset({account_id})
+            )
+            all_fixed_and_product_maxima = (
+                shared_occupied - current_product_occupied + int(product_max_row[0])
+            )
+            if all_fixed_and_product_maxima > contract.provider_attestation.max_cost_minor_units:
+                raise BudgetLedgerError(
+                    "infrastructure plus product maxima exceed final provider cap"
+                )
+            ceiling = _amounts_from_row(
+                current_account, "ceiling_input", "ceiling_output", "ceiling_cost"
+            )
+            occupied = self._occupied(connection, account_id)
+            if not _fits(occupied, ceiling):
+                raise BudgetLedgerError("infrastructure reserve exceeds final budget ceiling")
+            if occupied.cost_minor_units > contract.provider_attestation.max_cost_minor_units:
+                raise BudgetLedgerError("infrastructure reserve exceeds final provider cap")
+            try:
+                connection.execute(
+                    """UPDATE infrastructure_reserves
+                       SET state='bound',deployed_model=?,receipt_digest=?,
+                           remote_manifest_digest=?,receipt_json=?,
+                           final_approval_digest=?,bound_at=?
+                       WHERE reserve_id=? AND state='reserved'""",
+                    (
+                        receipt.content.deployed_model,
+                        receipt.content_digest,
+                        receipt.content.remote_manifest_digest,
+                        receipt_json,
+                        proof.approval_digest,
+                        now.isoformat(),
+                        reserve_id,
+                    ),
+                )
+                for role in sorted(roles):
+                    connection.execute(
+                        "INSERT INTO deployment_role_bindings VALUES (?, ?, ?)",
+                        (
+                            account_id,
+                            role,
+                            reserve_id,
+                        ),
+                    )
+            except sqlite3.IntegrityError as exc:
+                raise BudgetLedgerError("deployment or role reserve conflict") from exc
+            bound = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?", (reserve_id,)
+            ).fetchone()
+            assert bound is not None
+            return self._infrastructure_snapshot(connection, bound)
+
+    def _bind_final_infrastructure_topology_for_testing(
+        self,
+        *,
+        bindings: tuple[
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+        ],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        trusted_public_keys: Mapping[str, TrustedAuthority],
+        expected_scope: str,
+        authorized_roles: frozenset[str],
+        now: datetime,
+    ) -> tuple[InfrastructureReserveSnapshot, InfrastructureReserveSnapshot]:
+        """Test seam for O8's all-or-nothing two-deployment final topology."""
+
+        self._require_testing_mode()
+        return self._bind_final_infrastructure_topology_transaction(
+            bindings=bindings,
+            plan=plan,
+            contract=contract,
+            envelope=envelope,
+            trusted_public_keys=trusted_public_keys,
+            expected_scope=expected_scope,
+            authorized_roles=authorized_roles,
+            now=now,
+        ).snapshots
+
+    def _bind_final_infrastructure_topology_transaction(
+        self,
+        *,
+        bindings: tuple[
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+            tuple[
+                str,
+                VerifiedReconciledDeploymentReceipt,
+                tuple[BudgetRole, ...],
+            ],
+        ],
+        plan: RunAdmissionPlanPayload,
+        contract: BudgetContract,
+        envelope: BudgetApprovalEnvelope,
+        expected_scope: str,
+        trusted_public_keys: Mapping[str, TrustedAuthority] | None = None,
+        authorized_roles: frozenset[str] | None = None,
+        now: datetime | None = None,
+        verified_by_reserve: Mapping[
+            str,
+            tuple[str, VerifiedPricingCapability, VerifiedProviderCapCapability],
+        ]
+        | None = None,
+        durable_record: _DurableFinalTopologyRecord | None = None,
+        production_requests: tuple[
+            FinalInfrastructureBindingRequest,
+            FinalInfrastructureBindingRequest,
+        ]
+        | None = None,
+    ) -> _FinalTopologyBindResult:
+        """Bind strong+weak reserves under one SQLite transaction."""
+
+        if self._is_testing_mode():
+            if (
+                production_requests is not None
+                or verified_by_reserve is not None
+                or durable_record is not None
+            ):
+                raise BudgetLedgerError("testing final topology cannot consume production evidence")
+        else:
+            if production_requests is None:
+                raise BudgetLedgerError(
+                    "production final topology requires signed binding requests"
+                )
+            if (
+                trusted_public_keys is not None
+                or authorized_roles is not None
+                or now is not None
+                or verified_by_reserve is not None
+                or durable_record is not None
+            ):
+                raise BudgetLedgerError(
+                    "production final topology rejects caller policy, time, or evidence"
+                )
+            strong_request, weak_request = production_requests
+            bindings = (
+                (
+                    strong_request.reserve_id,
+                    strong_request.receipt_capability,
+                    strong_request.roles,
+                ),
+                (
+                    weak_request.reserve_id,
+                    weak_request.receipt_capability,
+                    weak_request.roles,
+                ),
+            )
+
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        production_receipt_annexes: dict[str, tuple[str, str, bytes]] | None = None
+        try:
+            with self._mutation() as connection:
+                if production_requests is not None:
+                    self._require_production_mode()
+                    (
+                        trusted_public_keys,
+                        authorized_roles,
+                        _provenance_roles,
+                        _canary_roles,
+                    ) = self._production_operational_configuration()
+                    now = self._production_now()
+                    production_verified = tuple(
+                        self._verify_final_binding_request(
+                            request,
+                            plan=plan,
+                            contract=contract,
+                            trusted_authorities=trusted_public_keys,
+                            expected_scope=expected_scope,
+                            now=now,
+                        )
+                        for request in production_requests
+                    )
+                    if (
+                        production_verified[0][2].evidence_digest
+                        != production_verified[1][2].evidence_digest
+                        or production_verified[0][2].approval_digest
+                        != production_verified[1][2].approval_digest
+                    ):
+                        raise BudgetLedgerError(
+                            "strong and weak deployments require the same signed provider cap"
+                        )
+                    verified_by_reserve = {
+                        request.reserve_id: request_verified
+                        for request, request_verified in zip(
+                            production_requests, production_verified, strict=True
+                        )
+                    }
+                    if len(verified_by_reserve) != 2:
+                        raise BudgetLedgerError("final infrastructure topology is invalid")
+                    production_receipt_annexes = {}
+                    for request in production_requests:
+                        try:
+                            verified_receipt = require_verified_reconciled_receipt(
+                                request.receipt_capability,
+                                now=now,
+                            )
+                        except AuthorizationVerificationError as exc:
+                            raise BudgetLedgerError(
+                                "verified reconciled receipt is required"
+                            ) from exc
+                        annex_digest, artifact_bytes, reconciliation_artifact = (
+                            self._production_receipt_annex(
+                                verified_receipt.receipt,
+                                reconciliation_digest=(verified_receipt.reconciliation_digest),
+                            )
+                        )
+                        if (
+                            reconciliation_artifact.issuer != verified_receipt.issuer
+                            or reconciliation_artifact.transport_identity_digest
+                            != verified_receipt.transport_identity_digest
+                            or reconciliation_artifact.run_identity != verified_receipt.run_identity
+                            or reconciliation_artifact.purpose != verified_receipt.purpose
+                            or reconciliation_artifact.scope != verified_receipt.scope
+                            or reconciliation_artifact.observed_at != verified_receipt.observed_at
+                            or reconciliation_artifact.expires_at != verified_receipt.expires_at
+                            or reconciliation_artifact.provider_cap_evidence_digest
+                            != verified_receipt.provider_cap_evidence_digest
+                            or reconciliation_artifact.provider_cap_approval_digest
+                            != verified_receipt.provider_cap_approval_digest
+                        ):
+                            raise BudgetLedgerError(
+                                "production receipt reconciliation artifact has drifted"
+                            )
+                        production_receipt_annexes[request.reserve_id] = (
+                            annex_digest,
+                            verified_receipt.receipt.content_digest,
+                            artifact_bytes,
+                        )
+                    try:
+                        durable_record = _DurableFinalTopologyRecord(
+                            version="insurancekb.run-admission.final-topology.v1",
+                            plan=plan,
+                            contract=contract,
+                            budget_envelope=envelope,
+                            expected_scope=expected_scope,
+                            provider_cap_evidence_json=production_requests[
+                                0
+                            ].provider_cap_evidence_bytes.decode("utf-8"),
+                            provider_cap_approval=production_requests[0].provider_cap_approval,
+                            strong=self._durable_final_deployment_evidence(
+                                production_requests[0],
+                                receipt_annex_digest=production_receipt_annexes[
+                                    production_requests[0].reserve_id
+                                ][0],
+                            ),
+                            weak=self._durable_final_deployment_evidence(
+                                production_requests[1],
+                                receipt_annex_digest=production_receipt_annexes[
+                                    production_requests[1].reserve_id
+                                ][0],
+                            ),
+                        )
+                    except (
+                        AuthorizationVerificationError,
+                        UnicodeDecodeError,
+                        ValueError,
+                    ) as exc:
+                        raise BudgetLedgerError(
+                            "final infrastructure topology evidence is not canonical"
+                        ) from exc
+                if trusted_public_keys is None or authorized_roles is None or now is None:
+                    raise BudgetLedgerError("final topology verification policy is unavailable")
+                normalized: list[tuple[str, DeploymentReceipt, tuple[BudgetRole, ...]]] = []
+                capability_by_reserve = {
+                    reserve_id: capability for reserve_id, capability, _roles in bindings
+                }
+                try:
+                    for reserve_id, capability, roles in bindings:
+                        verified_receipt = (
+                            require_verified_reconciled_receipt(capability, now=now)
+                            if production_requests is not None
+                            else _require_verified_reconciled_receipt_for_testing(
+                                capability, now=now
+                            )
+                        )
+                        normalized.append(
+                            (
+                                reserve_id,
+                                verified_receipt.receipt,
+                                roles,
+                            )
+                        )
+                except AuthorizationVerificationError as exc:
+                    raise BudgetLedgerError("verified reconciled receipt is required") from exc
+                if (
+                    frozenset(normalized[0][2]) != frozenset({"annotator", "judge"})
+                    or len(normalized[0][2]) != 2
+                    or normalized[1][2] != ("weak_extractor",)
+                    or normalized[0][0] == normalized[1][0]
+                    or normalized[0][1].content.deployed_model
+                    == normalized[1][1].content.deployed_model
+                ):
+                    raise BudgetLedgerError("final infrastructure topology is invalid")
+                proof = verify_budget_admission_contract(
+                    plan=plan,
+                    contract=contract,
+                    envelope=envelope,
+                    trusted_public_keys=trusted_public_keys,
+                    expected_scope=expected_scope,
+                    authorized_roles=authorized_roles,
+                    now=now,
+                )
+                rows: list[sqlite3.Row] = []
+                for reserve_id, receipt, roles in normalized:
+                    reserve = connection.execute(
+                        "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                        (reserve_id,),
+                    ).fetchone()
+                    if reserve is None:
+                        raise BudgetLedgerError("infrastructure reserve not found")
+                    authorization = self._stored_infrastructure_authorization(connection, reserve)
+                    payload = authorization.payload
+                    receipt = self._require_verified_receipt_for_authorization(
+                        capability_by_reserve[reserve_id],
+                        payload,
+                        now=now,
+                        testing=production_requests is None,
+                    )
+                    normalized[len(rows)] = (reserve_id, receipt, roles)
+                    verified = (
+                        None if verified_by_reserve is None else verified_by_reserve.get(reserve_id)
+                    )
+                    if verified_by_reserve is not None and (
+                        verified is None
+                        or str(reserve["authorization_digest"]) != verified[0]
+                        or infrastructure_authorization_digest(authorization) != verified[0]
+                        or not self._stored_capabilities_match(reserve, verified[1], verified[2])
+                    ):
+                        raise BudgetLedgerError(
+                            "final signed infrastructure evidence conflicts with reserve"
+                        )
+                    if (
+                        str(reserve["account_id"]) != account_id
+                        or str(reserve["run_identity"]) != plan.run_identity
+                        or str(reserve["purpose"]) != plan.purpose
+                        or now >= payload.cleanup_deadline
+                        or now >= payload.provider_cap_expires_at
+                    ):
+                        raise BudgetLedgerError("infrastructure reserve run or freshness conflict")
+                    self._require_contract_matches_reserved_provider_cap(
+                        contract,
+                        reserve,
+                        observed_at=(
+                            None
+                            if durable_record is None
+                            else durable_record.provider_cap_approval.payload.evidence.observed_at
+                        ),
+                    )
+                    self._require_receipt_matches_authorization(receipt, payload)
+                    for role in roles:
+                        role_plan = plan.model_roles[role]
+                        if (
+                            not isinstance(role_plan, ModelRolePlan)
+                            or role_plan.provider != payload.provider
+                            or role_plan.model_id != receipt.content.deployed_model
+                            or role_plan.immutable_deployment_id != receipt.content.deployed_model
+                        ):
+                            raise BudgetLedgerError(
+                                "model_id, immutable_deployment_id and deployed_model must match"
+                            )
+                    rows.append(reserve)
+
+                account = connection.execute(
+                    "SELECT * FROM budget_accounts WHERE account_id=?", (account_id,)
+                ).fetchone()
+                if account is None:
+                    self._insert_account(
+                        connection,
+                        account_id,
+                        plan.run_identity,
+                        plan.purpose,
+                        contract,
+                        envelope,
+                        proof.approval_digest,
+                        proof.contract_hash,
+                    )
+                else:
+                    self._expand_account(
+                        connection,
+                        account,
+                        contract,
+                        envelope,
+                        proof.approval_digest,
+                        proof.contract_hash,
+                    )
+                occupied = self._occupied(connection, account_id)
+                current = self._require_account(connection, account_id)
+                ceiling = _amounts_from_row(
+                    current, "ceiling_input", "ceiling_output", "ceiling_cost"
+                )
+                if not _fits(occupied, ceiling):
+                    raise BudgetLedgerError("infrastructure reserve exceeds final budget ceiling")
+                if occupied.cost_minor_units > contract.provider_attestation.max_cost_minor_units:
+                    raise BudgetLedgerError("infrastructure reserve exceeds final provider cap")
+                provider_cap_keys = {self._provider_cap_key_from_row(row) for row in rows}
+                if len(provider_cap_keys) != 1:
+                    raise BudgetLedgerError("final infrastructure provider cap scope is ambiguous")
+                provider_cap_key = next(iter(provider_cap_keys))
+                shared_occupied = self._shared_provider_cap_occupied_cost(
+                    connection,
+                    provider_cap_key,
+                    expected_max_cost=contract.provider_attestation.max_cost_minor_units,
+                    candidate_account_id=account_id,
+                )
+                product_max_row = connection.execute(
+                    "SELECT COALESCE(SUM(max_cost), 0) FROM product_limits WHERE account_id=?",
+                    (account_id,),
+                ).fetchone()
+                assert product_max_row is not None
+                current_product_occupied = self._product_occupied_cost(
+                    connection, frozenset({account_id})
+                )
+                if (
+                    shared_occupied - current_product_occupied + int(product_max_row[0])
+                    > contract.provider_attestation.max_cost_minor_units
+                ):
+                    raise BudgetLedgerError(
+                        "infrastructure plus product maxima exceed final provider cap"
+                    )
+
+                results: list[InfrastructureReserveSnapshot] = []
+                for reserve, (_, receipt, roles) in zip(rows, normalized, strict=True):
+                    receipt_json = canonical_json_bytes(receipt)
+                    if str(reserve["state"]) == "bound":
+                        stored_roles = tuple(
+                            str(row["role"])
+                            for row in connection.execute(
+                                """SELECT role FROM deployment_role_bindings
+                                   WHERE reserve_id=? ORDER BY role""",
+                                (str(reserve["reserve_id"]),),
+                            ).fetchall()
+                        )
+                        if (
+                            str(reserve["deployed_model"]) != receipt.content.deployed_model
+                            or str(reserve["receipt_digest"]) != receipt.content_digest
+                            or str(reserve["remote_manifest_digest"])
+                            != receipt.content.remote_manifest_digest
+                            or bytes(reserve["receipt_json"]) != receipt_json
+                            or str(reserve["final_approval_digest"]) != proof.approval_digest
+                            or stored_roles != tuple(sorted(roles))
+                        ):
+                            raise BudgetLedgerError("bound infrastructure replay conflict")
+                    else:
+                        connection.execute(
+                            """UPDATE infrastructure_reserves
+                               SET state='bound',deployed_model=?,receipt_digest=?,
+                                   remote_manifest_digest=?,receipt_json=?,
+                                   final_approval_digest=?,bound_at=?
+                               WHERE reserve_id=? AND state='reserved'""",
+                            (
+                                receipt.content.deployed_model,
+                                receipt.content_digest,
+                                receipt.content.remote_manifest_digest,
+                                receipt_json,
+                                proof.approval_digest,
+                                now.isoformat(),
+                                str(reserve["reserve_id"]),
+                            ),
+                        )
+                        for role in sorted(roles):
+                            connection.execute(
+                                "INSERT INTO deployment_role_bindings VALUES (?, ?, ?)",
+                                (account_id, role, str(reserve["reserve_id"])),
+                            )
+                    bound = connection.execute(
+                        "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                        (str(reserve["reserve_id"]),),
+                    ).fetchone()
+                    assert bound is not None
+                    results.append(self._infrastructure_snapshot(connection, bound))
+                if durable_record is not None:
+                    if production_receipt_annexes is None:
+                        raise BudgetLedgerError("production receipt annexes are unavailable")
+                    for reserve_id, _receipt, _roles in normalized:
+                        annex_digest, receipt_digest, artifact_bytes = production_receipt_annexes[
+                            reserve_id
+                        ]
+                        existing_annex = connection.execute(
+                            """SELECT * FROM final_topology_receipt_annexes
+                               WHERE reserve_id=?""",
+                            (reserve_id,),
+                        ).fetchone()
+                        annex_values = (
+                            annex_digest,
+                            reserve_id,
+                            receipt_digest,
+                            artifact_bytes,
+                        )
+                        if existing_annex is None:
+                            connection.execute(
+                                """INSERT INTO final_topology_receipt_annexes
+                                   VALUES (?, ?, ?, ?, ?)""",
+                                (*annex_values, now.isoformat()),
+                            )
+                        elif (
+                            str(existing_annex["annex_digest"]),
+                            str(existing_annex["reserve_id"]),
+                            str(existing_annex["receipt_digest"]),
+                            bytes(existing_annex["artifact_json"]),
+                        ) != annex_values:
+                            raise BudgetLedgerError("durable receipt annex replay conflict")
+                    topology_json = canonical_json_bytes(durable_record)
+                    topology_digest = hashlib.sha256(
+                        _FINAL_TOPOLOGY_DOMAIN + topology_json
+                    ).hexdigest()
+                    existing_topology = connection.execute(
+                        """SELECT * FROM final_infrastructure_topologies
+                           WHERE account_id=?""",
+                        (account_id,),
+                    ).fetchone()
+                    topology_values = (
+                        normalized[0][0],
+                        normalized[1][0],
+                        topology_json,
+                        topology_digest,
+                    )
+                    if existing_topology is None:
+                        connection.execute(
+                            """INSERT INTO final_infrastructure_topologies
+                               VALUES (?, ?, ?, ?, ?, ?)""",
+                            (
+                                account_id,
+                                *topology_values,
+                                now.isoformat(),
+                            ),
+                        )
+                    elif (
+                        str(existing_topology["strong_reserve_id"]),
+                        str(existing_topology["weak_reserve_id"]),
+                        bytes(existing_topology["topology_json"]),
+                        str(existing_topology["topology_digest"]),
+                    ) != topology_values:
+                        raise BudgetLedgerError(
+                            "durable final infrastructure topology replay conflict"
+                        )
+                return _FinalTopologyBindResult(
+                    snapshots=cast(
+                        tuple[
+                            InfrastructureReserveSnapshot,
+                            InfrastructureReserveSnapshot,
+                        ],
+                        tuple(results),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise BudgetLedgerError("final infrastructure topology bind failed") from exc
+
+    def require_fresh_final_topology(
+        self,
+        *,
+        plan: RunAdmissionPlanPayload,
+        expected_scope: str,
+    ) -> VerifiedFinalTopology:
+        """Rebuild a sealed capability from exact production ledger state."""
+
+        now = self._production_now()
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        expected_plan_digest = plan_payload_hash(plan)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN")
+            account = connection.execute(
+                "SELECT * FROM budget_accounts WHERE account_id=?",
+                (account_id,),
+            ).fetchone()
+            if (
+                account is None
+                or str(account["run_identity"]) != plan.run_identity
+                or str(account["purpose"]) != plan.purpose
+                or bool(account["overage"])
+            ):
+                raise BudgetLedgerError("final topology budget account is unavailable")
+            approval = connection.execute(
+                """SELECT plan_payload_hash,contract_hash,contract_json,approval_digest
+                   FROM budget_approvals WHERE account_id=? AND revision=?""",
+                (account_id, int(account["current_revision"])),
+            ).fetchone()
+            if (
+                approval is None
+                or str(approval["approval_digest"]) != str(account["approval_digest"])
+                or str(approval["plan_payload_hash"]) != expected_plan_digest
+                or str(approval["contract_hash"]) != plan.budget_contract_hash
+            ):
+                raise BudgetLedgerError("final topology budget approval has drifted")
+            try:
+                contract = BudgetContract.model_validate_json(bytes(approval["contract_json"]))
+            except (TypeError, ValueError) as exc:
+                raise BudgetLedgerError("final topology budget contract is invalid") from exc
+            if budget_contract_hash(contract) != str(approval["contract_hash"]):
+                raise BudgetLedgerError("final topology budget contract has drifted")
+
+            topology_row = connection.execute(
+                """SELECT * FROM final_infrastructure_topologies
+                   WHERE account_id=?""",
+                (account_id,),
+            ).fetchone()
+            if topology_row is None:
+                raise BudgetLedgerError("signed durable final topology evidence is unavailable")
+            topology_json = bytes(topology_row["topology_json"])
+            topology_digest = hashlib.sha256(_FINAL_TOPOLOGY_DOMAIN + topology_json).hexdigest()
+            if topology_digest != str(topology_row["topology_digest"]):
+                raise BudgetLedgerError("durable final topology digest has drifted")
+            try:
+                durable_record = _DurableFinalTopologyRecord.model_validate_json(topology_json)
+            except (TypeError, ValueError) as exc:
+                raise BudgetLedgerError("durable final topology record is invalid") from exc
+            if (
+                canonical_json_bytes(durable_record) != topology_json
+                or durable_record.plan != plan
+                or durable_record.contract != contract
+                or durable_record.expected_scope != expected_scope
+                or durable_record.strong.reserve_id != str(topology_row["strong_reserve_id"])
+                or durable_record.weak.reserve_id != str(topology_row["weak_reserve_id"])
+            ):
+                raise BudgetLedgerError("durable final topology record has drifted")
+            (
+                trusted_authorities,
+                budget_roles,
+                _provenance_roles,
+                _canary_roles,
+            ) = self._production_operational_configuration()
+            try:
+                fresh_budget_proof = verify_budget_admission_contract(
+                    plan=plan,
+                    contract=contract,
+                    envelope=durable_record.budget_envelope,
+                    trusted_public_keys=trusted_authorities,
+                    expected_scope=expected_scope,
+                    authorized_roles=budget_roles,
+                    now=now,
+                )
+                fresh_provider_cap = verify_provider_cap_evidence(
+                    durable_record.provider_cap_evidence_json.encode("utf-8"),
+                    envelope=durable_record.provider_cap_approval,
+                    trusted_authorities=trusted_authorities,
+                    expected_scope=expected_scope,
+                    now=now,
+                )
+            except (ApprovalVerificationError, AuthorizationVerificationError) as exc:
+                raise BudgetLedgerError(
+                    "signed durable final topology evidence is stale or invalid"
+                ) from exc
+            if fresh_budget_proof.approval_digest != str(
+                account["approval_digest"]
+            ) or fresh_budget_proof.contract_hash != str(approval["contract_hash"]):
+                raise BudgetLedgerError("durable final budget proof has drifted")
+            expected_transport_identity_digest = _transport_identity_digest_for_provider_cap(
+                fresh_provider_cap
+            )
+
+            role_rows = connection.execute(
+                """SELECT role,reserve_id FROM deployment_role_bindings
+                   WHERE account_id=? ORDER BY role""",
+                (account_id,),
+            ).fetchall()
+            role_map = {str(row["role"]): str(row["reserve_id"]) for row in role_rows}
+            if (
+                set(role_map) != _REQUIRED_ROLES
+                or len(role_rows) != 3
+                or role_map["annotator"] != role_map["judge"]
+                or role_map["annotator"] == role_map["weak_extractor"]
+            ):
+                raise BudgetLedgerError("final topology role binding is invalid")
+            reserve_roles: tuple[tuple[str, tuple[BudgetRole, ...]], ...] = (
+                (role_map["annotator"], ("annotator", "judge")),
+                (role_map["weak_extractor"], ("weak_extractor",)),
+            )
+            deployments: list[FinalTopologyDeployment] = []
+            reserve_rows: list[sqlite3.Row] = []
+            cleanup_deadlines: list[datetime] = []
+            pricing_expiries: list[datetime] = []
+            durable_deployments = (
+                durable_record.strong,
+                durable_record.weak,
+            )
+            for (reserve_id, roles), durable_deployment in zip(
+                reserve_roles,
+                durable_deployments,
+                strict=True,
+            ):
+                reserve = connection.execute(
+                    "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                    (reserve_id,),
+                ).fetchone()
+                if (
+                    reserve is None
+                    or str(reserve["state"]) != "bound"
+                    or str(reserve["account_id"]) != account_id
+                    or str(reserve["run_identity"]) != plan.run_identity
+                    or str(reserve["purpose"]) != plan.purpose
+                    or str(reserve["final_approval_digest"]) != str(account["approval_digest"])
+                ):
+                    raise BudgetLedgerError("final topology reserve is not durably bound")
+                authorization = self._stored_infrastructure_authorization(connection, reserve)
+                payload = authorization.payload
+                if not isinstance(payload, ProvisioningAuthorizationPayload):
+                    raise BudgetLedgerError("stored infrastructure authorization domain is invalid")
+                pricing_duration = _ceil_timedelta_seconds(
+                    payload.cleanup_deadline - payload.issued_at
+                )
+                pricing_segments: tuple[int, ...] | None = None
+                pricing_start = payload.issued_at
+                try:
+                    fresh_pricing = verify_pricing_evidence(
+                        durable_deployment.pricing_evidence_json.encode("utf-8"),
+                        envelope=durable_deployment.pricing_approval,
+                        trusted_authorities=trusted_authorities,
+                        expected_scope=expected_scope,
+                        now=now,
+                        fixed_duration_seconds=pricing_duration,
+                        cost_window_start=pricing_start,
+                        fixed_duration_segments_seconds=pricing_segments,
+                    )
+                except AuthorizationVerificationError as exc:
+                    raise BudgetLedgerError(
+                        "signed durable deployment pricing is stale or invalid"
+                    ) from exc
+                if (
+                    infrastructure_authorization_digest(authorization)
+                    != str(reserve["authorization_digest"])
+                    or payload.run_identity != plan.run_identity
+                    or payload.purpose != plan.purpose
+                    or payload.scope != expected_scope
+                    or payload.operation_id != str(reserve["operation_id"])
+                    or payload.infrastructure_reserve_id != reserve_id
+                    or payload.workspace_ref != str(reserve["workspace_ref"])
+                    or payload.project_ref != str(reserve["project_ref"])
+                    or payload.credential_ref != str(reserve["credential_ref"])
+                    or durable_deployment.reserve_id != reserve_id
+                    or durable_deployment.roles != roles
+                    or fresh_pricing.evidence_digest != str(reserve["pricing_evidence_digest"])
+                    or fresh_pricing.approval_digest != str(reserve["pricing_approval_digest"])
+                ):
+                    raise BudgetLedgerError("final topology authorization has drifted")
+                try:
+                    receipt_json = bytes(reserve["receipt_json"])
+                    receipt = DeploymentReceipt.model_validate_json(receipt_json)
+                except (TypeError, ValueError) as exc:
+                    raise BudgetLedgerError("final topology receipt is invalid") from exc
+                annex = connection.execute(
+                    """SELECT * FROM final_topology_receipt_annexes
+                       WHERE annex_digest=?""",
+                    (durable_deployment.receipt_annex_digest,),
+                ).fetchone()
+                if annex is None:
+                    raise BudgetLedgerError("final topology receipt annex is unavailable")
+                annex_bytes = bytes(annex["artifact_json"])
+                (
+                    artifact_digest,
+                    production_artifact_bytes,
+                    reconciliation_artifact,
+                ) = self._production_receipt_annex(
+                    receipt,
+                    reconciliation_digest=durable_deployment.reconciliation_digest,
+                )
+                if (
+                    str(annex["reserve_id"]) != reserve_id
+                    or str(annex["receipt_digest"]) != receipt.content_digest
+                    or str(annex["annex_digest"]) != durable_deployment.receipt_annex_digest
+                    or hashlib.sha256(_RECEIPT_ANNEX_DOMAIN + annex_bytes).hexdigest()
+                    != durable_deployment.receipt_annex_digest
+                    or artifact_digest != durable_deployment.receipt_annex_digest
+                    or production_artifact_bytes != annex_bytes
+                ):
+                    raise BudgetLedgerError("final topology receipt annex has drifted")
+                if (
+                    reconciliation_artifact.issuer != _TRUSTED_RECONCILIATION_ISSUER
+                    or reconciliation_artifact.transport_identity_digest
+                    != expected_transport_identity_digest
+                    or reconciliation_artifact.reconciliation_digest
+                    != durable_deployment.reconciliation_digest
+                    or reconciliation_artifact.run_identity != plan.run_identity
+                    or reconciliation_artifact.purpose != plan.purpose
+                    or reconciliation_artifact.scope != expected_scope
+                    or reconciliation_artifact.receipt != receipt
+                    or reconciliation_artifact.receipt_digest != receipt.content_digest
+                    or reconciliation_artifact.operation_id != receipt.content.operation_id
+                    or reconciliation_artifact.reserve_id != reserve_id
+                    or reconciliation_artifact.workspace_ref != receipt.content.workspace_ref
+                    or reconciliation_artifact.project_ref != receipt.content.project_ref
+                    or reconciliation_artifact.credential_ref != receipt.content.credential_ref
+                    or reconciliation_artifact.provider_cap_evidence_digest
+                    != fresh_provider_cap.evidence_digest
+                    or reconciliation_artifact.provider_cap_approval_digest
+                    != fresh_provider_cap.approval_digest
+                    or reconciliation_artifact.remote_manifest_digest
+                    != receipt.content.remote_manifest_digest
+                    or reconciliation_artifact.observed_at.tzinfo is None
+                    or reconciliation_artifact.observed_at.utcoffset() is None
+                    or reconciliation_artifact.expires_at.tzinfo is None
+                    or reconciliation_artifact.expires_at.utcoffset() is None
+                    or reconciliation_artifact.observed_at >= reconciliation_artifact.expires_at
+                    or now < reconciliation_artifact.observed_at
+                    or reconciliation_artifact.expires_at > fresh_provider_cap.expires_at
+                ):
+                    raise BudgetLedgerError("final topology reconciliation provenance is invalid")
+                if (
+                    canonical_json_bytes(receipt) != receipt_json
+                    or receipt.content_digest != str(reserve["receipt_digest"])
+                    or receipt.content.deployed_model != str(reserve["deployed_model"])
+                    or receipt.content.remote_manifest_digest
+                    != str(reserve["remote_manifest_digest"])
+                ):
+                    raise BudgetLedgerError("final topology receipt has drifted")
+                self._require_receipt_matches_authorization(receipt, payload)
+                stored_roles = tuple(
+                    cast(BudgetRole, str(row["role"]))
+                    for row in connection.execute(
+                        """SELECT role FROM deployment_role_bindings
+                           WHERE account_id=? AND reserve_id=? ORDER BY role""",
+                        (account_id, reserve_id),
+                    ).fetchall()
+                )
+                if stored_roles != roles:
+                    raise BudgetLedgerError("final topology reserve roles have drifted")
+                for role in roles:
+                    role_plan = plan.model_roles[role]
+                    if (
+                        role_plan.provider != str(reserve["provider"])
+                        or role_plan.model_id != receipt.content.deployed_model
+                        or role_plan.immutable_deployment_id != receipt.content.deployed_model
+                    ):
+                        raise BudgetLedgerError("final topology deployment role has drifted")
+                cleanup_deadline = datetime.fromisoformat(str(reserve["cleanup_deadline"]))
+                cleanup_deadlines.append(cleanup_deadline)
+                pricing_expiries.extend(
+                    (
+                        fresh_pricing.effective_until,
+                        durable_deployment.pricing_approval.payload.expires_at,
+                    )
+                )
+                reserve_rows.append(reserve)
+                receipt_json_digest = hashlib.sha256(
+                    _RECEIPT_JSON_DOMAIN + receipt_json
+                ).hexdigest()
+                deployments.append(
+                    FinalTopologyDeployment(
+                        reserve_id=reserve_id,
+                        operation_id=str(reserve["operation_id"]),
+                        authorization_digest=str(reserve["authorization_digest"]),
+                        pricing_evidence_digest=fresh_pricing.evidence_digest,
+                        pricing_approval_digest=fresh_pricing.approval_digest,
+                        maximum_cost_minor_units=int(reserve["max_cost"]),
+                        deployed_model=receipt.content.deployed_model,
+                        receipt_json_digest=receipt_json_digest,
+                        receipt_digest=receipt.content_digest,
+                        remote_manifest_digest=receipt.content.remote_manifest_digest,
+                        receipt=receipt,
+                        roles=roles,
+                        cleanup_deadline=cleanup_deadline,
+                        reconciliation_digest=(reconciliation_artifact.reconciliation_digest),
+                        transport_identity_digest=(
+                            reconciliation_artifact.transport_identity_digest
+                        ),
+                    )
+                )
+
+            cap_keys = {self._provider_cap_key_from_row(reserve) for reserve in reserve_rows}
+            cap_evidence = {
+                str(reserve["provider_cap_evidence_digest"]) for reserve in reserve_rows
+            }
+            cap_approvals = {
+                str(reserve["provider_cap_approval_digest"]) for reserve in reserve_rows
+            }
+            cap_maxima = {int(reserve["provider_cap_max_cost"]) for reserve in reserve_rows}
+            cap_expiries = {
+                datetime.fromisoformat(str(reserve["provider_cap_expires_at"]))
+                for reserve in reserve_rows
+            }
+            if not (
+                len(cap_keys)
+                == len(cap_evidence)
+                == len(cap_approvals)
+                == len(cap_maxima)
+                == len(cap_expiries)
+                == 1
+            ):
+                raise BudgetLedgerError("final topology provider cap has drifted")
+            cap_key = next(iter(cap_keys))
+            provider, currency, workspace, project, credential, coverage_tuple = cap_key
+            coverage = frozenset(coverage_tuple)
+            cap_digest = next(iter(cap_evidence))
+            cap_approval_digest = next(iter(cap_approvals))
+            cap_maximum = next(iter(cap_maxima))
+            cap_expiry = next(iter(cap_expiries))
+            for reserve in reserve_rows:
+                self._require_contract_matches_reserved_provider_cap(
+                    contract,
+                    reserve,
+                    observed_at=(durable_record.provider_cap_approval.payload.evidence.observed_at),
+                )
+            if (
+                coverage != frozenset({"fixed_infrastructure", "inference"})
+                or fresh_provider_cap.provider != provider
+                or fresh_provider_cap.currency != currency
+                or fresh_provider_cap.workspace_ref != workspace
+                or fresh_provider_cap.project_ref != project
+                or fresh_provider_cap.credential_ref != credential
+                or fresh_provider_cap.coverage != coverage
+                or fresh_provider_cap.evidence_digest != cap_digest
+                or fresh_provider_cap.approval_digest != cap_approval_digest
+                or fresh_provider_cap.max_cost_minor_units != cap_maximum
+                or fresh_provider_cap.expires_at != cap_expiry
+            ):
+                raise BudgetLedgerError("final topology provider cap resource has drifted")
+            shared_occupied = self._shared_provider_cap_occupied_cost(
+                connection,
+                cap_key,
+                expected_max_cost=cap_maximum,
+                candidate_account_id=account_id,
+            )
+            if shared_occupied > cap_maximum:
+                raise BudgetLedgerError("final topology provider cap is exceeded")
+            valid_until = min(
+                cap_expiry,
+                durable_record.provider_cap_approval.payload.expires_at,
+                durable_record.budget_envelope.payload.expires_at,
+                contract.price_expires_at,
+                *cleanup_deadlines,
+                *pricing_expiries,
+            )
+            if now >= valid_until:
+                raise BudgetLedgerError("final topology durable evidence is stale")
+
+            strong, weak = deployments
+            digest_values: dict[str, object] = {
+                "account_id": account_id,
+                "run_identity": plan.run_identity,
+                "purpose": plan.purpose,
+                "scope": expected_scope,
+                "plan_payload_hash": expected_plan_digest,
+                "budget_contract_hash": str(approval["contract_hash"]),
+                "budget_approval_digest": str(account["approval_digest"]),
+                "budget_revision": int(account["current_revision"]),
+                "budget_approval_expires_at": (
+                    durable_record.budget_envelope.payload.expires_at.isoformat()
+                ),
+                "strong": strong.model_dump(mode="json"),
+                "weak": weak.model_dump(mode="json"),
+                "provider": provider,
+                "currency": currency,
+                "workspace_ref": workspace,
+                "project_ref": project,
+                "credential_ref": credential,
+                "provider_cap_evidence_digest": cap_digest,
+                "provider_cap_approval_digest": cap_approval_digest,
+                "provider_cap_coverage": sorted(coverage),
+                "provider_cap_max_cost_minor_units": cap_maximum,
+                "provider_cap_expires_at": cap_expiry.isoformat(),
+                "provider_cap_approval_expires_at": (
+                    durable_record.provider_cap_approval.payload.expires_at.isoformat()
+                ),
+                "valid_until": valid_until.isoformat(),
+            }
+            capability = object.__new__(VerifiedFinalTopology)
+            values: dict[str, object] = {
+                **digest_values,
+                "topology_digest": hashlib.sha256(
+                    _FINAL_TOPOLOGY_DOMAIN + canonical_json_bytes(digest_values)
+                ).hexdigest(),
+                "strong": strong,
+                "weak": weak,
+                "provider_cap_coverage": coverage,
+                "provider_cap_expires_at": cap_expiry,
+                "provider_cap_approval_expires_at": (
+                    durable_record.provider_cap_approval.payload.expires_at
+                ),
+                "budget_approval_expires_at": durable_record.budget_envelope.payload.expires_at,
+                "issued_at": now,
+                "valid_until": valid_until,
+            }
+            for name, value in values.items():
+                object.__setattr__(capability, name, value)
+            object.__setattr__(capability, "_seal", _FINAL_TOPOLOGY_SEAL)
+            connection.commit()
+            _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.register(
+                capability,
+                domain=_FINAL_TOPOLOGY_SNAPSHOT_DOMAIN,
+                snapshot=_final_topology_capability_snapshot(capability),
+            )
+            return require_verified_final_topology(
+                capability,
+                now=now,
+                expected_plan_payload_hash=expected_plan_digest,
+                expected_scope=expected_scope,
+            )
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def require_fresh_infrastructure_provider_capability(
+        self,
+        *,
+        plan: RunAdmissionPlanPayload,
+        expected_scope: str,
+        reserve_id: str,
+        **unsupported: object,
+    ) -> VerifiedInfrastructureProviderCapCapability:
+        """Freshly admit one reserved production cap without requiring final topology."""
+
+        if unsupported:
+            raise BudgetLedgerError(
+                "fresh infrastructure provider cap rejects caller-controlled inputs"
+            )
+        now = self._production_now()
+        trusted_authorities = self._production_operational_authorities()
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN")
+            reserve = connection.execute(
+                "SELECT * FROM infrastructure_reserves WHERE reserve_id=?",
+                (reserve_id,),
+            ).fetchone()
+            authorization_row = connection.execute(
+                """SELECT a.* FROM infrastructure_authorizations AS a
+                   JOIN infrastructure_reserves AS r
+                     ON r.authorization_digest=a.authorization_digest
+                   WHERE r.reserve_id=?""",
+                (reserve_id,),
+            ).fetchone()
+            sidecar = connection.execute(
+                """SELECT * FROM infrastructure_provider_cap_evidence
+                   WHERE reserve_id=?""",
+                (reserve_id,),
+            ).fetchone()
+            if reserve is None or authorization_row is None or sidecar is None:
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is unavailable"
+                )
+            authorization_bytes = bytes(authorization_row["envelope_json"])
+            approval_bytes = bytes(sidecar["approval_envelope_bytes"])
+            evidence_bytes = bytes(sidecar["evidence_bytes"])
+            try:
+                authorization = ProvisioningAuthorization.model_validate_json(authorization_bytes)
+                approval = ProviderCapApproval.model_validate_json(approval_bytes)
+            except (TypeError, ValueError) as exc:
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is invalid"
+                ) from exc
+            if (
+                canonical_json_bytes(authorization) != authorization_bytes
+                or canonical_json_bytes(approval) != approval_bytes
+            ):
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap bytes are non-canonical"
+                )
+            payload = authorization.payload
+            try:
+                authorization_digest = verify_provisioning_authorization(
+                    authorization,
+                    expected=payload,
+                    trusted_authorities=trusted_authorities,
+                    now=now,
+                )
+                provider_cap = verify_provider_cap_evidence(
+                    evidence_bytes,
+                    envelope=approval,
+                    trusted_authorities=trusted_authorities,
+                    expected_scope=expected_scope,
+                    now=now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is stale or invalid"
+                ) from exc
+            expected_coverage = frozenset(payload.provider_cap_coverage)
+            expected_account_id = budget_account_identity(plan.run_identity, plan.purpose)
+            recorded_at = str(reserve["created_at"])
+            if (
+                str(reserve["state"]) != "reserved"
+                or reserve["deployed_model"] is not None
+                or reserve["receipt_digest"] is not None
+                or reserve["remote_manifest_digest"] is not None
+                or reserve["receipt_json"] is not None
+                or reserve["final_approval_digest"] is not None
+                or reserve["bound_at"] is not None
+                or str(authorization_row["recorded_at"]) != recorded_at
+                or str(sidecar["recorded_at"]) != recorded_at
+                or plan.run_identity != payload.run_identity
+                or payload.run_identity != str(reserve["run_identity"])
+                or plan.purpose != payload.purpose
+                or payload.purpose != str(reserve["purpose"])
+                or str(authorization_row["domain"]) != authorization.domain
+                or str(authorization_row["run_identity"]) != payload.run_identity
+                or str(authorization_row["purpose"]) != payload.purpose
+                or str(authorization_row["operation_id"]) != payload.operation_id
+                or payload.scope != expected_scope
+                or payload.operation_id != str(reserve["operation_id"])
+                or payload.infrastructure_reserve_id != reserve_id
+                or str(authorization_row["reserve_id"]) != reserve_id
+                or str(authorization_row["authorization_digest"]) != authorization_digest
+                or str(reserve["authorization_digest"]) != authorization_digest
+                or str(reserve["account_id"]) != expected_account_id
+                or str(reserve["pricing_evidence_digest"])
+                != payload.pricing_evidence_digest
+                or str(reserve["pricing_approval_digest"])
+                != payload.pricing_approval_digest
+                or str(reserve["region"]) != payload.region
+                or str(reserve["base_model"]) != payload.base_model
+                or str(reserve["request_plan"]) != payload.request_plan
+                or str(reserve["receipt_plan"]) != payload.receipt_plan
+                or int(reserve["input_tpm_quota"]) != payload.input_tpm_quota
+                or int(reserve["output_tpm_quota"]) != payload.output_tpm_quota
+                or str(reserve["cleanup_deadline"]) != payload.cleanup_deadline.isoformat()
+                or int(reserve["max_cost"]) != payload.maximum_cost_minor_units
+                or provider_cap.provider != str(reserve["provider"])
+                or provider_cap.provider != payload.provider
+                or provider_cap.currency != str(reserve["currency"])
+                or provider_cap.currency != payload.currency
+                or provider_cap.workspace_ref != str(reserve["workspace_ref"])
+                or provider_cap.workspace_ref != payload.workspace_ref
+                or provider_cap.project_ref != str(reserve["project_ref"])
+                or provider_cap.project_ref != payload.project_ref
+                or provider_cap.credential_ref != str(reserve["credential_ref"])
+                or provider_cap.credential_ref != payload.credential_ref
+                or provider_cap.evidence_digest != str(reserve["provider_cap_evidence_digest"])
+                or provider_cap.approval_digest != str(reserve["provider_cap_approval_digest"])
+                or provider_cap.evidence_digest != str(sidecar["evidence_digest"])
+                or provider_cap.approval_digest != str(sidecar["approval_digest"])
+                or provider_cap.evidence_digest != payload.provider_cap_evidence_digest
+                or provider_cap.approval_digest != payload.provider_cap_approval_digest
+                or provider_cap.coverage != expected_coverage
+                or provider_cap.max_cost_minor_units != int(reserve["provider_cap_max_cost"])
+                or provider_cap.max_cost_minor_units
+                != payload.provider_cap_max_cost_minor_units
+                or provider_cap.expires_at.isoformat()
+                != str(reserve["provider_cap_expires_at"])
+                or provider_cap.expires_at != payload.provider_cap_expires_at
+                or int(reserve["covers_fixed_infrastructure"]) != 1
+                or int(reserve["covers_inference"]) != 1
+            ):
+                raise BudgetLedgerError("durable infrastructure provider-cap join has drifted")
+            capability = object.__new__(VerifiedInfrastructureProviderCapCapability)
+            values: dict[str, object] = {
+                "run_identity": payload.run_identity,
+                "purpose": payload.purpose,
+                "scope": payload.scope,
+                "operation_id": payload.operation_id,
+                "reserve_id": reserve_id,
+                "evidence_digest": provider_cap.evidence_digest,
+                "approval_digest": provider_cap.approval_digest,
+                "provider": provider_cap.provider,
+                "currency": provider_cap.currency,
+                "workspace_ref": provider_cap.workspace_ref,
+                "project_ref": provider_cap.project_ref,
+                "credential_ref": provider_cap.credential_ref,
+                "coverage": provider_cap.coverage,
+                "max_cost_minor_units": provider_cap.max_cost_minor_units,
+                "expires_at": provider_cap.expires_at,
+            }
+            for name, value in values.items():
+                object.__setattr__(capability, name, value)
+            object.__setattr__(
+                capability,
+                "_seal",
+                _INFRASTRUCTURE_PROVIDER_CAPABILITY_SEAL,
+            )
+            connection.commit()
+            _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.register(
+                capability,
+                domain=_INFRASTRUCTURE_CAP_SNAPSHOT_DOMAIN,
+                snapshot=_infrastructure_capability_snapshot(capability),
+            )
+            return require_verified_infrastructure_provider_capability(capability)
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def require_fresh_topology_provider_capability(
+        self,
+        *,
+        plan: RunAdmissionPlanPayload,
+        expected_scope: str,
+        reserve_id: str,
+        **unsupported: object,
+    ) -> VerifiedTopologyProviderCapCapability:
+        """Issue a cap only from one exact deployment in a fresh final topology."""
+
+        if unsupported:
+            raise BudgetLedgerError(
+                "fresh topology provider cap rejects caller-controlled inputs"
+            )
+        topology = self.require_fresh_final_topology(
+            plan=plan,
+            expected_scope=expected_scope,
+        )
+        deployments = tuple(
+            deployment
+            for deployment in (topology.strong, topology.weak)
+            if deployment.reserve_id == reserve_id
+        )
+        if len(deployments) != 1:
+            raise BudgetLedgerError("reserve is not uniquely bound by the fresh final topology")
+        deployment = deployments[0]
+        capability = object.__new__(VerifiedTopologyProviderCapCapability)
+        values: dict[str, object] = {
+            "topology_digest": topology.topology_digest,
+            "run_identity": topology.run_identity,
+            "purpose": topology.purpose,
+            "scope": topology.scope,
+            "operation_id": deployment.operation_id,
+            "reserve_id": deployment.reserve_id,
+            "evidence_digest": topology.provider_cap_evidence_digest,
+            "approval_digest": topology.provider_cap_approval_digest,
+            "provider": topology.provider,
+            "currency": topology.currency,
+            "workspace_ref": topology.workspace_ref,
+            "project_ref": topology.project_ref,
+            "credential_ref": topology.credential_ref,
+            "coverage": topology.provider_cap_coverage,
+            "max_cost_minor_units": topology.provider_cap_max_cost_minor_units,
+            "expires_at": topology.provider_cap_expires_at,
+        }
+        for name, value in values.items():
+            object.__setattr__(capability, name, value)
+        object.__setattr__(capability, "_seal", _TOPOLOGY_PROVIDER_CAPABILITY_SEAL)
+        _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.register(
+            capability,
+            domain=_TOPOLOGY_CAP_SNAPSHOT_DOMAIN,
+            snapshot=_topology_capability_snapshot(capability),
+        )
+        return require_verified_topology_provider_capability(capability)
+
+    def require_fresh_provider_capability(
+        self,
+        *,
+        plan: RunAdmissionPlanPayload,
+        expected_scope: str,
+        **unsupported: object,
+    ) -> VerifiedProviderCapCapability:
+        """Reissue the exact signed provider cap bound to a fresh topology.
+
+        The public boundary deliberately accepts neither caller-owned trust nor
+        caller-owned time.  A production topology is revalidated first; then the
+        durable signed cap sidecar is loaded again under the fixed root trust
+        configuration and compared byte-for-fact with that topology.
+        """
+
+        if unsupported:
+            raise BudgetLedgerError(
+                "fresh provider cap rejects caller-controlled verification inputs"
+            )
+        topology = self.require_fresh_final_topology(
+            plan=plan,
+            expected_scope=expected_scope,
+        )
+        now = self._production_now()
+        require_verified_final_topology(
+            topology,
+            now=now,
+            expected_plan_payload_hash=plan_payload_hash(plan),
+            expected_scope=expected_scope,
+        )
+        account_id = budget_account_identity(plan.run_identity, plan.purpose)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN")
+            topology_row = connection.execute(
+                """SELECT topology_json,topology_digest
+                   FROM final_infrastructure_topologies WHERE account_id=?""",
+                (account_id,),
+            ).fetchone()
+            if topology_row is None:
+                raise BudgetLedgerError("signed durable final topology evidence is unavailable")
+            topology_json = bytes(topology_row["topology_json"])
+            if hashlib.sha256(_FINAL_TOPOLOGY_DOMAIN + topology_json).hexdigest() != str(
+                topology_row["topology_digest"]
+            ):
+                raise BudgetLedgerError("durable final topology digest has drifted")
+            try:
+                durable_record = _DurableFinalTopologyRecord.model_validate_json(topology_json)
+            except (TypeError, ValueError) as exc:
+                raise BudgetLedgerError("durable final topology record is invalid") from exc
+            if (
+                canonical_json_bytes(durable_record) != topology_json
+                or durable_record.plan != plan
+                or durable_record.expected_scope != expected_scope
+            ):
+                raise BudgetLedgerError("durable final topology record has drifted")
+
+            trusted_authorities = self._production_operational_authorities()
+            try:
+                provider_cap = verify_provider_cap_evidence(
+                    durable_record.provider_cap_evidence_json.encode("utf-8"),
+                    envelope=durable_record.provider_cap_approval,
+                    trusted_authorities=trusted_authorities,
+                    expected_scope=expected_scope,
+                    now=now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError("signed durable provider cap is stale or invalid") from exc
+            if (
+                provider_cap.provider != topology.provider
+                or provider_cap.currency != topology.currency
+                or provider_cap.workspace_ref != topology.workspace_ref
+                or provider_cap.project_ref != topology.project_ref
+                or provider_cap.credential_ref != topology.credential_ref
+                or provider_cap.evidence_digest != topology.provider_cap_evidence_digest
+                or provider_cap.approval_digest != topology.provider_cap_approval_digest
+                or provider_cap.coverage != topology.provider_cap_coverage
+                or provider_cap.max_cost_minor_units != topology.provider_cap_max_cost_minor_units
+                or provider_cap.expires_at != topology.provider_cap_expires_at
+                or durable_record.provider_cap_approval.payload.expires_at
+                != topology.provider_cap_approval_expires_at
+            ):
+                raise BudgetLedgerError("durable provider cap has drifted from final topology")
+            connection.commit()
+            return require_verified_provider_capability(provider_cap)
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def infrastructure_reserve(self, reserve_id: str) -> InfrastructureReserveSnapshot:
         connection = self._connect()
@@ -1818,13 +4422,69 @@ class BudgetLedger:
             connection.close()
 
     @staticmethod
+    def _require_receipt_matches_authorization(
+        receipt: DeploymentReceipt,
+        payload: ProvisioningAuthorizationPayload,
+    ) -> None:
+        content = receipt.content
+        if (
+            content.operation_id != payload.operation_id
+            or content.infrastructure_reserve_id != payload.infrastructure_reserve_id
+            or content.workspace_ref != payload.workspace_ref
+            or content.project_ref != payload.project_ref
+            or content.credential_ref != payload.credential_ref
+            or content.region != payload.region
+            or content.base_model != payload.base_model
+            or content.request_plan != payload.request_plan
+            or content.receipt_plan != payload.receipt_plan
+            or content.input_tpm != payload.input_tpm_quota
+            or content.output_tpm != payload.output_tpm_quota
+        ):
+            raise BudgetLedgerError("deployment receipt does not match authorization")
+
+    @staticmethod
+    def _require_verified_receipt_for_authorization(
+        capability: VerifiedReconciledDeploymentReceipt,
+        payload: ProvisioningAuthorizationPayload,
+        *,
+        now: datetime,
+        testing: bool = False,
+    ) -> DeploymentReceipt:
+        try:
+            verified = (
+                _require_verified_reconciled_receipt_for_testing(capability, now=now)
+                if testing
+                else require_verified_reconciled_receipt(capability, now=now)
+            )
+        except AuthorizationVerificationError as exc:
+            raise BudgetLedgerError("verified reconciled receipt is stale or invalid") from exc
+        if (
+            verified.run_identity != payload.run_identity
+            or verified.purpose != payload.purpose
+            or verified.scope != payload.scope
+            or verified.operation_id != payload.operation_id
+            or verified.reserve_id != payload.infrastructure_reserve_id
+            or verified.workspace_ref != payload.workspace_ref
+            or verified.project_ref != payload.project_ref
+            or verified.credential_ref != payload.credential_ref
+            or verified.provider_cap_evidence_digest != payload.provider_cap_evidence_digest
+            or verified.provider_cap_approval_digest != payload.provider_cap_approval_digest
+            or verified.remote_manifest_digest != verified.receipt.content.remote_manifest_digest
+        ):
+            raise BudgetLedgerError(
+                "verified receipt reconciliation does not match authorization or cap"
+            )
+        BudgetLedger._require_receipt_matches_authorization(verified.receipt, payload)
+        return verified.receipt
+
+    @staticmethod
     def _infrastructure_reserved_cost(
         connection: sqlite3.Connection,
         account_id: str,
     ) -> int:
         row = connection.execute(
             """SELECT COALESCE(SUM(max_cost), 0) FROM infrastructure_reserves
-               WHERE account_id=? AND state='reserved'""",
+               WHERE account_id=? AND state IN ('reserved','bound')""",
             (account_id,),
         ).fetchone()
         assert row is not None
@@ -1964,7 +4624,7 @@ class BudgetLedger:
         matching = [
             row
             for row in connection.execute(
-                "SELECT * FROM infrastructure_reserves WHERE state='reserved'"
+                "SELECT * FROM infrastructure_reserves WHERE state IN ('reserved','bound')"
             ).fetchall()
             if BudgetLedger._provider_cap_key_from_row(row) == key
         ]
@@ -2032,11 +4692,11 @@ class BudgetLedger:
         if row is None:
             raise BudgetLedgerError("infrastructure authorization is unavailable")
         try:
-            if str(row["domain"]) != PROVISIONING_AUTHORIZATION_DOMAIN:
-                raise BudgetLedgerError("stored infrastructure authorization domain is invalid")
-            return ProvisioningAuthorization.model_validate_json(bytes(row["envelope_json"]))
+            if str(row["domain"]) == PROVISIONING_AUTHORIZATION_DOMAIN:
+                return ProvisioningAuthorization.model_validate_json(bytes(row["envelope_json"]))
         except (TypeError, ValueError) as exc:
             raise BudgetLedgerError("stored infrastructure authorization is invalid") from exc
+        raise BudgetLedgerError("stored infrastructure authorization domain is invalid")
 
     @staticmethod
     def _infrastructure_snapshot(
@@ -2044,6 +4704,14 @@ class BudgetLedger:
         row: sqlite3.Row,
     ) -> InfrastructureReserveSnapshot:
         authorization = BudgetLedger._stored_infrastructure_authorization(connection, row)
+        roles = tuple(
+            cast(BudgetRole, str(binding["role"]))
+            for binding in connection.execute(
+                """SELECT role FROM deployment_role_bindings
+                   WHERE reserve_id=? ORDER BY role""",
+                (str(row["reserve_id"]),),
+            ).fetchall()
+        )
         try:
             return InfrastructureReserveSnapshot(
                 reserve_id=str(row["reserve_id"]),
@@ -2058,7 +4726,19 @@ class BudgetLedger:
                     output_tokens=0,
                     cost_minor_units=int(row["max_cost"]),
                 ),
-                state=cast(Literal["reserved"], str(row["state"])),
+                state=cast(Literal["reserved", "bound"], str(row["state"])),
+                deployed_model=(
+                    None if row["deployed_model"] is None else str(row["deployed_model"])
+                ),
+                receipt_digest=(
+                    None if row["receipt_digest"] is None else str(row["receipt_digest"])
+                ),
+                final_approval_digest=(
+                    None
+                    if row["final_approval_digest"] is None
+                    else str(row["final_approval_digest"])
+                ),
+                roles=roles,
             )
         except ValueError as exc:
             raise BudgetLedgerError("infrastructure reserve row is invalid") from exc
@@ -3514,19 +6194,19 @@ class BudgetLedger:
         if now >= contract.price_expires_at or now >= contract.provider_attestation.expires_at:
             raise BudgetLedgerError("pricing or provider cap expired before cost mutation")
 
+    @staticmethod
     def _require_provider_cap_allows(
-        self,
         connection: sqlite3.Connection,
         account_id: str,
         proposed_occupied: BudgetAmounts,
     ) -> None:
-        contract = self._current_contract(connection, account_id)
+        contract = BudgetLedger._current_contract(connection, account_id)
         provider_cap = contract.provider_attestation.max_cost_minor_units
         matching_scope_rows = [
             row
             for row in connection.execute(
                 """SELECT * FROM infrastructure_reserves
-                   WHERE state='reserved'"""
+                   WHERE state IN ('reserved','bound')"""
             ).fetchall()
             if BudgetLedger._contract_matches_provider_cap_key(
                 contract, BudgetLedger._provider_cap_key_from_row(row)
@@ -3578,3 +6258,38 @@ class BudgetLedger:
             return BudgetContract.model_validate_json(bytes(approval["contract_json"]))
         except (TypeError, ValueError) as exc:
             raise BudgetLedgerError("current budget approval is invalid") from exc
+
+
+__all__ = [
+    "AccountSnapshot",
+    "AttemptKey",
+    "AttemptSnapshot",
+    "BudgetAdmissionProof",
+    "BudgetAmounts",
+    "BudgetContract",
+    "BudgetLedger",
+    "BudgetLedgerError",
+    "InfrastructureCreatePermit",
+    "InfrastructureReserveSnapshot",
+    "ProductReserve",
+    "ProductSettlementAttempt",
+    "ProductSettlementSnapshot",
+    "ProviderSpendCapAttestation",
+    "RequestPoolReserve",
+    "RequestReserve",
+    "RoleRate",
+    "SQLITE_SAFE_INTEGER_MAX",
+    "SettlementNoUsageProof",
+    "SendPermit",
+    "VerifiedInfrastructureProviderCapCapability",
+    "VerifiedTopologyProviderCapCapability",
+    "budget_account_identity",
+    "budget_contract_hash",
+    "derive_role_rate_from_pricing",
+    "model_role_budget_identity_hash",
+    "role_rate_digest",
+    "role_rate_cost",
+    "require_verified_infrastructure_provider_capability",
+    "require_verified_topology_provider_capability",
+    "verify_budget_admission_contract",
+]
