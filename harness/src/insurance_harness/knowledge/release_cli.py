@@ -2462,16 +2462,12 @@ def _seal_run_artifacts_locked(
             "artifact_changed_during_seal", "artifact changed before final create"
         )
     _verify_seal_root(root, root_descriptor)
-    _write_json_exclusive_at(
+    output_identity = _write_json_exclusive_at(
         root_descriptor,
         "artifact-manifest.json",
         artifact_manifest.model_dump(mode="json"),
     )
     expected_output = _canonical_bytes(artifact_manifest.model_dump(mode="json")) + b"\n"
-    if _stable_read_at(root_descriptor, "artifact-manifest.json") != expected_output:
-        raise ReleaseCLIError(
-            "artifact_changed_during_seal", "final artifact manifest drifted"
-        )
     after_create = _scan_sealed_files(
         root, allowed_paths, output=output, root_descriptor=root_descriptor
     )
@@ -2481,6 +2477,24 @@ def _seal_run_artifacts_locked(
             "artifact_changed_during_seal", "artifact changed during final create"
         )
     _verify_seal_root(root, root_descriptor)
+    try:
+        final_state = os.stat(
+            "artifact-manifest.json",
+            dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "final artifact manifest drifted"
+        ) from exc
+    if (
+        _path_identity(final_state) != output_identity
+        or _stable_read_at(root_descriptor, "artifact-manifest.json")
+        != expected_output
+    ):
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "final artifact manifest drifted"
+        )
     return artifact_manifest
 
 

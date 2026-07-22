@@ -3025,6 +3025,43 @@ def test_ra7_seal_post_create_cleanup_preserves_same_directory_replacement(
     assert displaced.exists()
 
 
+def test_ra7_seal_rechecks_final_after_post_create_scan(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    output = run_dir / "artifact-manifest.json"
+    displaced = tmp_path / "displaced-before-post-scan.json"
+    original_scan = release_cli._scan_sealed_files
+    scans = 0
+
+    def replace_before_post_scan(*args: object, **kwargs: object) -> object:
+        nonlocal scans
+        scans += 1
+        if scans == 3:
+            output.rename(displaced)
+            output.write_bytes(b'{"tampered":true}\n')
+        return original_scan(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(release_cli, "_scan_sealed_files", replace_before_post_scan)
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.seal_run_artifacts(
+            context,
+            directory=run_dir,
+            compilation_manifest_path=compilation,
+            release_proof_path=release_proof,
+            serving_proof_path=serving_proof,
+        )
+
+    assert caught.value.code == "artifact_changed_during_seal"
+    assert output.read_bytes() == b'{"tampered":true}\n'
+    assert displaced.exists()
+
+
 def test_ra7_seal_translates_child_removal_after_recursive_scan(
     session: Session,
     tmp_path: Path,
