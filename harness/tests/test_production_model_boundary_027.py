@@ -3454,7 +3454,7 @@ def test_pwb4_gateway_sync_sink_returning_generator_closes_frame() -> None:
     assert denied.value.reason_code == "receipt_sink_failure"
     assert _gateway_executor_terminal_observations(client) == []
     assert len(sink.results) == 1
-    assert sink.results[0].gi_frame is None
+    assert cast(Any, sink.results[0]).gi_frame is None
 
 
 def test_pwb4_gateway_propagates_transport_cancellation_without_retry() -> None:

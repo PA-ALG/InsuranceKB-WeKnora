@@ -35,6 +35,7 @@ from insurance_harness.db import Base, make_engine
 from insurance_harness.db.models import KnowledgeSpace
 from insurance_harness.db.scope import KnowledgeScope, load_scope
 from insurance_harness.goldenset.pdf import PageText
+from insurance_harness.goldenset.records import Evidence
 from insurance_harness.model_policy import (
     AdmissionBinding,
     AdmissionPolicyDenied,
@@ -45,6 +46,7 @@ from insurance_harness.model_policy import (
     ModelRole,
     PolicyReceipt,
     StrictAdmissionRequestBinding,
+    VerifiedAdmission,
 )
 from insurance_harness.model_policy import composition as composition_module
 from insurance_harness.model_policy import gateway as gateway_module
@@ -401,7 +403,7 @@ class _ReceiptCollector:
 
 def _reserved_call_authority(
     *, template_hash: str, schema_hash: str | None = None
-) -> tuple[object, ModelIdentity, StrictAdmissionRequestBinding]:
+) -> tuple[VerifiedAdmission, ModelIdentity, StrictAdmissionRequestBinding]:
     identity = ModelIdentity(
         provider="bailian",
         deployment_id="qwen3-prod-20260722-sha256-a1",
@@ -454,7 +456,14 @@ def _guarded_test_client(
     template_hash: str,
     schema_hash: str,
     transport_mode: str | None = None,
-) -> tuple[object, object, _ReceiptCollector, object, ModelIdentity, StrictAdmissionRequestBinding]:
+) -> tuple[
+    object,
+    object,
+    _ReceiptCollector,
+    VerifiedAdmission,
+    ModelIdentity,
+    StrictAdmissionRequestBinding,
+]:
     verified, identity, request = _reserved_call_authority(
         template_hash=template_hash,
         schema_hash=schema_hash,
@@ -487,7 +496,7 @@ def _guarded_test_client(
         executor=executor,
         receipt_sink=sink,
     )
-    client = llm_module._build_production_compiler_client_for_test(  # type: ignore[attr-defined]
+    client = llm_module._build_production_compiler_client_for_test(
         guarded_clients={"extract": guard},
         verified_admission=verified,
         retained_resources=(target, sink),
@@ -522,12 +531,12 @@ def _guarded_role_test_client(
             if name.startswith("production_expected_")
         }
     )
-    extract_template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+    extract_template_hash = llm_module._compiler_template_hash(
         stage="extract",
         prompt_version=f"baseline@{PROMPT_VERSION}",
         system=EXTRACTION_SYSTEM,
     )
-    role_template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+    role_template_hash = llm_module._compiler_template_hash(
         stage=stage,
         prompt_version=prompt_version,
         system=system,
@@ -574,7 +583,7 @@ def _guarded_role_test_client(
         executor=role_executor,
         receipt_sink=sink,
     )
-    client = llm_module._build_production_compiler_client_for_test(  # type: ignore[attr-defined]
+    client = llm_module._build_production_compiler_client_for_test(
         guarded_clients={"extract": extract_guard, role: role_guard},
         verified_admission=verified,
         retained_resources=(extract_executor, role_executor, sink),
@@ -612,7 +621,7 @@ def _production_role_pipeline_fixture(
         },
         glossary=(),
     )
-    schema_hash = pipeline_module._compiler_schema_hash(registry)  # type: ignore[attr-defined]
+    schema_hash = pipeline_module._compiler_schema_hash(registry)
     client, role_executor, request, identity = _guarded_role_test_client(
         schema_hash=schema_hash,
         role=role,
@@ -697,8 +706,8 @@ def _production_pipeline_fixture(
         lines={"t": line},
         glossary=(),
     )
-    schema_hash = pipeline_module._compiler_schema_hash(registry)  # type: ignore[attr-defined]
-    template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+    schema_hash = pipeline_module._compiler_schema_hash(registry)
+    template_hash = llm_module._compiler_template_hash(
         stage="extract",
         prompt_version=f"baseline@{PROMPT_VERSION}",
         system=EXTRACTION_SYSTEM,
@@ -779,9 +788,9 @@ def test_pwb2_reserved_attempt_builds_canonical_guarded_call_facts(
         version="not-the-run-schema-version", lines={}, glossary=()
     )
     assert hasattr(pipeline_module, "_compiler_schema_hash")
-    schema_hash = pipeline_module._compiler_schema_hash(schema_registry)  # type: ignore[attr-defined]
+    schema_hash = pipeline_module._compiler_schema_hash(schema_registry)
     assert hasattr(llm_module, "_compiler_template_hash")
-    template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+    template_hash = llm_module._compiler_template_hash(
         stage=stage,
         prompt_version=prompt_version,
         system=system,
@@ -834,7 +843,7 @@ def test_pwb2_reserved_attempt_builds_canonical_guarded_call_facts(
         content=user.encode("utf-8"),
         rendered_prompt=system.encode("utf-8"),
     )
-    input_digest = llm_module._compiler_input_digest(  # type: ignore[attr-defined]
+    input_digest = llm_module._compiler_input_digest(
         run_id=request.expected_run_id,
         call_stage=stage,
         attempt_id=parsed.producing_attempt_id,
@@ -899,8 +908,8 @@ def test_pwb2_production_pipeline_rejects_raw_model_client_before_default_judge(
 @pytest.mark.parametrize("judge_mode", ["gateway", "claude-session"])
 def test_pwb3_production_pipeline_rejects_legacy_judge_mode(judge_mode: str) -> None:
     registry = SchemaRegistry(version="not-run-schema", lines={}, glossary=())
-    schema_hash = pipeline_module._compiler_schema_hash(registry)  # type: ignore[attr-defined]
-    template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+    schema_hash = pipeline_module._compiler_schema_hash(registry)
+    template_hash = llm_module._compiler_template_hash(
         stage="extract",
         prompt_version="baseline@ep-v1.0",
         system="approved extraction system",
@@ -1167,7 +1176,7 @@ def test_pwb3_guarded_vote_exhaustion_cannot_leave_old_high_candidate_promotable
             doc="policy.pdf",
             value="90天",
             tri_state="present",
-            evidence=[{"page": 1, "quote": "本合同等待期为90天。"}],
+            evidence=[Evidence(page=1, quote="本合同等待期为90天。")],
             confidence="high",
         ).model_dump(mode="json")
     ]
@@ -1222,7 +1231,7 @@ def test_pwb2_cli_production_builder_uses_canonical_verifier_before_transport(
     monkeypatch.setattr(compiler_cli, "OpenAICompatClient", reject_transport)
 
     with pytest.raises(AdmissionPolicyDenied) as denied:
-        compiler_cli._build_production_compiler_client(  # type: ignore[attr-defined]
+        compiler_cli._build_production_compiler_client(
             settings,
             schema_hash=settings.production_expected_schema_hash,
             space_id=settings.production_expected_space_id,
@@ -1276,7 +1285,7 @@ def test_pwb2_cli_production_builder_fails_closed_without_028_adapter_after_veri
     )
 
     with pytest.raises(llm_module.ProductionEntrypointDenied) as denied:
-        compiler_cli._build_production_compiler_client(  # type: ignore[attr-defined]
+        compiler_cli._build_production_compiler_client(
             settings,
             schema_hash=settings.production_expected_schema_hash,
             space_id=settings.production_expected_space_id,
@@ -1397,9 +1406,7 @@ def test_pwb3_legacy_or_strong_production_config_denies_before_all_io(
 
     def load_invalid_settings(**kwargs: object) -> HarnessSettings:
         del kwargs
-        return HarnessSettings(  # type: ignore[arg-type]
-            **_production_settings(**updates)
-        )
+        return HarnessSettings.model_validate(_production_settings(**updates))
 
     monkeypatch.setattr(compiler_cli, "load_settings", load_invalid_settings)
     monkeypatch.setattr(
@@ -1456,13 +1463,17 @@ def test_pwb2_replay_entrypoint_requires_explicit_nonproduction_profile(
         model_profile=model_profile,  # type: ignore[arg-type]
     )
     builds: list[tuple[object, object, object]] = []
+
+    def record_build(
+        current: object,
+        fixture: object,
+        model: object,
+    ) -> tuple[object, str]:
+        builds.append((current, fixture, model))
+        return object(), "fixture-model"
+
     monkeypatch.setattr(compiler_cli, "load_settings", lambda: settings)
-    monkeypatch.setattr(
-        compiler_cli,
-        "build_client",
-        lambda current, fixture, model: builds.append((current, fixture, model))
-        or (object(), "fixture-model"),
-    )
+    monkeypatch.setattr(compiler_cli, "build_client", record_build)
     monkeypatch.setattr(
         compiler_cli,
         "load_schema_registry",

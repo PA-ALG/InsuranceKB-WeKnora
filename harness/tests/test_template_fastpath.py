@@ -221,7 +221,12 @@ def _pipeline(
             parser_fingerprint="fixture-parser-v1",
             page_loader=lambda _: list(RATE_PAGES),
         ),
-        config=PipelineConfig(concurrency=2, transport_attempts=2, backoff_base_s=0.0),
+        config=PipelineConfig(
+            concurrency=2,
+            transport_attempts=2,
+            backoff_base_s=0.0,
+            model_profile="offline-eval",
+        ),
         sleep=_fast_sleep,
         template_registry=registry_templates,
         table_provider=FakeProvider([GRID]),

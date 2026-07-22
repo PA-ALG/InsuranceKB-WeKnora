@@ -158,6 +158,73 @@ cleanup retained only under explicit `offline-eval`.
 
 Real provider: **NOT RUN**.
 
+## Task 6 PR-ready evidence
+
+The single local complete deterministic pytest run was executed after the first independent
+spec and quality approvals. It is recorded as a failure, not a pass:
+
+```bash
+cd harness
+PYTHONPATH=src .venv/bin/pytest -m "not live and not integration_postgres" -q
+# 2940 passed, 30 deselected, 12 failed in 653.61s (real 660.52s)
+```
+
+Eleven failures stopped at `PipelineConfig.model_profile=disabled` before their original
+business assertions because four `ExtractionPipeline` construction sites across three older
+test areas had not made their offline lane explicit. The approved mechanical migration added
+`model_profile="offline-eval"` only to the existing evidence-lineage, template-fastpath and
+precommit-contract fixtures. The 020 test was renamed and documents that it proves only the
+artifact precommit invariant; it does not claim production model admission. The 020 executor
+itself still defaults fail-closed before the reviewed 028 wiring exists; separate 027 tests
+cover the default-disabled/raw-client rejection and sealed-client production boundary. The
+twelfth failure was a three-second spawned session-lock holder timeout under full-suite load;
+unchanged focused rerun passed:
+
+```bash
+PYTHONPATH=src .venv/bin/pytest -q \
+  tests/test_run_admission_session_lock_020.py::test_d1_5_competitor_fails_before_recovery_or_ledger_mutation
+# 1 passed in 4.08s
+
+PYTHONPATH=src .venv/bin/pytest -q \
+  tests/test_evidence_lineage_017.py tests/test_template_fastpath.py \
+  tests/test_run_admission_baseline_production_020.py
+# 102 passed in 4.21s
+
+.venv/bin/ruff check .
+# All checks passed! (real 0.10s)
+
+.venv/bin/mypy src tests
+# Success: no issues found in 305 source files (real 2.38s)
+
+DO_NOT_TRACK=1 openspec validate 027-production-weak-model-boundary --strict
+# Change '027-production-weak-model-boundary' is valid
+
+git diff --check
+# PASS
+
+cli/scripts/check-secret-tokens.sh
+# no committed credentials found in docs
+```
+
+Independent final Task 6 review approved the mechanical patch with zero Critical and zero
+Important findings. The spec/scope reviewer also reported zero Minor findings after fresh
+`102 passed` compatibility and `240 passed` 027-focused runs. The quality reviewer reported
+one documentation-only Minor—the four-construction-site wording and explicit 020 fail-closed
+state above—and otherwise approved after a fresh combined `342 passed` run plus the unchanged
+session-lock focused test.
+
+Per the control decision, the failed local full run is not relabelled as PASS and is not
+repeated merely to erase its evidence. The final pushed SHA must first open as a Draft PR and
+receive the equivalent GitHub deterministic CI. Only an all-green equivalent CI may convert
+the PR to Ready; if no equivalent workflow exists, a second local complete deterministic run
+is required before Ready.
+
+Seven-stage record (honest availability): design/coding/review-wait/rework active durations
+were not instrumented and are **NOT RECORDED** rather than inferred from commit timestamps;
+focused command times are 4.32s, 15.56s, 4.08s and 4.21s as listed above; local full pytest
+was 653.61s (real 660.52s) and failed 12; final full CI is **PENDING**; live/provider is
+**NOT RUN**. PostgreSQL `integration_postgres` is **NOT RUN** in the local deterministic lane.
+
 ## Admission binding decision
 
 Task 2 freezes `StrictAdmissionRequestBinding` as the caller-declared expected scope.

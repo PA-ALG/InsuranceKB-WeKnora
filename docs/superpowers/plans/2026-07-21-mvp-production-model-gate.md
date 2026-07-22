@@ -232,7 +232,7 @@ Expected: both exit 0.
 
 Record exact commands/counts, entrypoint coverage, permit/receipt examples with secrets redacted, confirm global config contains no runtime/MCP keys, and `real provider = NOT RUN`. Do not claim extraction quality improvement.
 
-- [ ] **Step 3: Request independent spec/quality review**
+- [x] **Step 3: Request independent spec/quality review**
 
 Reviewer checks PWB1–PWB5 in one pass. Maximum two remediation rounds; third-round disagreement goes to the G planning window.
 
