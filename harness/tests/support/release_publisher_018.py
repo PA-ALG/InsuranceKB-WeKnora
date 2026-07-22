@@ -35,14 +35,11 @@ from insurance_harness.knowledge.snapshots import (
 )
 from insurance_harness.knowledge.tables import (
     ChangeSet,
-    Claim,
-    ClaimRevision,
     CurrentRelease,
     PublishAttempt,
     ReconciliationJob,
     ReleaseOperation,
     ReleaseSnapshot,
-    SnapshotClaim,
     SnapshotFact,
 )
 from insurance_harness.schemas import SchemaRegistry
@@ -85,8 +82,11 @@ async def _upsert_page(
     client: WeKnoraClient,
     scope: KnowledgeScope,
     page: RenderedPage,
+    *,
+    staging_capability: object | None = None,
 ) -> None:
     """已存在 → update，404 → create（上游 last-write-wins，客户端 slug 串行化兜底）。"""
+    _require_staging_capability(staging_capability, scope)
     wiki_page = _page_to_wiki(page)
     try:
         await client.get_wiki_page(scope.wiki_kb_id, page.slug)
@@ -98,7 +98,13 @@ async def _upsert_page(
     await client.update_wiki_page(scope.wiki_kb_id, wiki_page)
 
 
-def _validate_scope(session: Session, scope: KnowledgeScope) -> None:
+def _validate_scope(
+    session: Session,
+    scope: KnowledgeScope,
+    *,
+    staging_capability: object | None = None,
+) -> None:
+    _require_staging_capability(staging_capability, scope)
     require_current_scope(session, scope)
 
 
@@ -106,7 +112,10 @@ def _require_scoped_product_version(
     session: Session,
     scope: KnowledgeScope,
     product_version_id: str,
+    *,
+    staging_capability: object | None = None,
 ) -> tuple[ProductVersion, InsuranceProduct]:
+    _require_staging_capability(staging_capability, scope)
     row = session.execute(
         select(ProductVersion, InsuranceProduct)
         .join(
@@ -129,7 +138,10 @@ def _require_scoped_snapshot(
     session: Session,
     scope: KnowledgeScope,
     snapshot_id: str,
+    *,
+    staging_capability: object | None = None,
 ) -> ReleaseSnapshot:
+    _require_staging_capability(staging_capability, scope)
     snapshot = session.execute(
         select(ReleaseSnapshot).where(
             ReleaseSnapshot.id == snapshot_id,
@@ -145,7 +157,10 @@ def _require_label_available(
     session: Session,
     scope: KnowledgeScope,
     label: str,
+    *,
+    staging_capability: object | None = None,
 ) -> None:
+    _require_staging_capability(staging_capability, scope)
     existing = session.execute(
         select(ReleaseSnapshot.id).where(
             ReleaseSnapshot.space_id == scope.space_id,
@@ -173,89 +188,6 @@ def _validate_publish_metadata(label: str, published_by: str) -> None:
 def _validate_rollback_metadata(actor: str, reason: str) -> None:
     _validate_text(actor, max_length=128, error="rollback metadata is unavailable")
     _validate_text(reason, max_length=64, error="rollback metadata is unavailable")
-
-
-def current_snapshot_id(session: Session, scope: KnowledgeScope) -> str | None:
-    _validate_scope(session, scope)
-    pointer = session.get(CurrentRelease, (scope.space_id, "current"))
-    if pointer is None:
-        return None
-    snapshot_id = session.execute(
-        select(ReleaseSnapshot.id).where(
-            ReleaseSnapshot.space_id == scope.space_id,
-            ReleaseSnapshot.id == pointer.snapshot_id,
-        )
-    ).scalar_one_or_none()
-    if snapshot_id is None:
-        raise ScopeViolation("scope mismatch")
-    return snapshot_id
-
-
-def snapshot_claim_set(
-    session: Session,
-    scope: KnowledgeScope,
-    snapshot_id: str,
-) -> list[tuple[str, int]]:
-    _validate_scope(session, scope)
-    _require_scoped_snapshot(session, scope, snapshot_id)
-    rows = list(
-        session.execute(
-            select(SnapshotClaim).where(
-                SnapshotClaim.space_id == scope.space_id,
-                SnapshotClaim.snapshot_id == snapshot_id,
-            )
-        ).scalars()
-    )
-    claim_ids = {row.claim_id for row in rows}
-    scoped_claim_ids = (
-        set(
-            session.execute(
-                select(Claim.id).where(
-                    Claim.space_id == scope.space_id,
-                    Claim.id.in_(claim_ids),
-                )
-            ).scalars()
-        )
-        if claim_ids
-        else set()
-    )
-    revision_pairs = (
-        set(
-            session.execute(
-                select(ClaimRevision.claim_id, ClaimRevision.revision_no)
-                .join(Claim, Claim.id == ClaimRevision.claim_id)
-                .where(
-                    Claim.space_id == scope.space_id,
-                    ClaimRevision.claim_id.in_(claim_ids),
-                )
-            ).all()
-        )
-        if claim_ids
-        else set()
-    )
-    if scoped_claim_ids != claim_ids or any(
-        (row.claim_id, row.revision_no) not in revision_pairs for row in rows
-    ):
-        raise ScopeViolation("scope mismatch")
-    return [(r.claim_id, r.revision_no) for r in rows]
-
-
-def default_snapshot_label(session: Session, scope: KnowledgeScope) -> str:
-    """如 2026-07-15-r1（03 §5.2 示例）；同日多次发布递增 rN。"""
-    _validate_scope(session, scope)
-    today = utcnow().date().isoformat()
-    existing = session.execute(
-        select(ReleaseSnapshot.label).where(
-            ReleaseSnapshot.space_id == scope.space_id,
-            ReleaseSnapshot.label.like(f"{today}-r%"),
-        )
-    ).scalars().all()
-    revisions = [
-        int(label.removeprefix(f"{today}-r"))
-        for label in existing
-        if label.removeprefix(f"{today}-r").isdigit()
-    ]
-    return f"{today}-r{max(revisions, default=0) + 1}"
 
 
 class ReleasePublisher:
@@ -375,8 +307,18 @@ class ReleasePublisher:
         now = self._now()
         with self._session_factory() as session:
             require_current_scope(session, scope)
-            _require_scoped_product_version(session, scope, product_version_id)
-            _require_label_available(session, scope, label)
+            _require_scoped_product_version(
+                session,
+                scope,
+                product_version_id,
+                staging_capability=self._staging_capability,
+            )
+            _require_label_available(
+                session,
+                scope,
+                label,
+                staging_capability=self._staging_capability,
+            )
             snapshot_id = str(uuid.uuid4())
             facts = build_snapshot_facts(
                 session,

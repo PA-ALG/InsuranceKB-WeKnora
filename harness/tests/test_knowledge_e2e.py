@@ -6,6 +6,7 @@
 """
 
 import json
+from typing import Any
 
 import httpx
 import respx
@@ -37,16 +38,47 @@ from tests.kbhelpers import (
     seed_product,
 )
 from tests.support.legacy_publisher_007 import (
-    legacy_publish_product_version as publish_product_version,
+    legacy_publish_product_version as _legacy_publish_product_version,
 )
 from tests.support.legacy_publisher_007 import (
-    legacy_rollback_to_snapshot as rollback_to_snapshot,
+    legacy_rollback_to_snapshot as _legacy_rollback_to_snapshot,
 )
+from tests.support.release_plan_018 import _issue_test_staging_capability
 
 _GATE, _FP = allow_all_gate()  # fail-closed 后低风险 supersede 自动裁决须过 gate
 
 KB = "kb-wiki"
 WIKI = f"{BASE_URL}/api/v1/knowledgebase/{KB}/wiki"
+
+
+async def publish_product_version(
+    session: Session,
+    client: WeKnoraClient,
+    scope: KnowledgeScope,
+    **kwargs: Any,
+) -> Any:
+    return await _legacy_publish_product_version(
+        session,
+        client,
+        scope,
+        staging_capability=_issue_test_staging_capability(scope),
+        **kwargs,
+    )
+
+
+async def rollback_to_snapshot(
+    session: Session,
+    client: WeKnoraClient,
+    scope: KnowledgeScope,
+    **kwargs: Any,
+) -> Any:
+    return await _legacy_rollback_to_snapshot(
+        session,
+        client,
+        scope,
+        staging_capability=_issue_test_staging_capability(scope),
+        **kwargs,
+    )
 
 RISK = {"exclusion_clause": "high"}  # 免责条款为高风险字段（03 §6.2）
 FIELD_NAMES = {

@@ -26,6 +26,7 @@ from insurance_harness.knowledge.tables import (
     SnapshotClaim,
 )
 from insurance_harness.schemas import SchemaRegistry
+from tests.support.release_plan_018 import _require_staging_capability
 from tests.support.release_publisher_018 import (
     PublishResult,
     RollbackResult,
@@ -44,7 +45,10 @@ def _snapshot_claims_for_publish(
     scope: KnowledgeScope,
     product_version_id: str,
     views: list[PageClaimView],
+    *,
+    staging_capability: object | None = None,
 ) -> list[Claim]:
+    _require_staging_capability(staging_capability, scope)
     claim_ids = {view.claim_id for view in views}
     if not claim_ids:
         return []
@@ -85,7 +89,10 @@ def _validate_rollback_pages(
     scope: KnowledgeScope,
     snapshot: ReleaseSnapshot,
     pages: list[RenderedPage],
+    *,
+    staging_capability: object | None = None,
 ) -> None:
+    _require_staging_capability(staging_capability, scope)
     frozen_rows = list(
         session.execute(
             select(SnapshotClaim).where(
@@ -130,7 +137,12 @@ def _validate_rollback_pages(
         product_id = entity_ids.get("product_id")
         if not isinstance(version_id, str) or not isinstance(product_id, str):
             raise ScopeViolation("scope mismatch")
-        version, product = _require_scoped_product_version(session, scope, version_id)
+        version, product = _require_scoped_product_version(
+            session,
+            scope,
+            version_id,
+            staging_capability=staging_capability,
+        )
         if product.id != product_id:
             raise ScopeViolation("scope mismatch")
         if page.slug != product_page_slug(product.product_code, version.version_label):
@@ -200,7 +212,10 @@ def _move_pointer(
     session: Session,
     scope: KnowledgeScope,
     snapshot_id: str,
+    *,
+    staging_capability: object | None = None,
 ) -> None:
+    _require_staging_capability(staging_capability, scope)
     pointer = session.get(CurrentRelease, (scope.space_id, "current"))
     if pointer is None:
         session.add(
@@ -219,6 +234,7 @@ async def legacy_publish_product_version(
     client: WeKnoraClient,
     scope: KnowledgeScope,
     *,
+    staging_capability: object | None = None,
     product_version_id: str,
     label: str,
     published_by: str = "publisher",
@@ -229,14 +245,21 @@ async def legacy_publish_product_version(
     notes: str | None = None,
 ) -> PublishResult:
     """Run the retired behavior only for pre-018 regression characterization."""
-    _validate_scope(session, scope)
+    _require_staging_capability(staging_capability, scope)
+    _validate_scope(session, scope, staging_capability=staging_capability)
     _validate_publish_metadata(label, published_by)
     version, product = _require_scoped_product_version(
         session,
         scope,
         product_version_id,
+        staging_capability=staging_capability,
     )
-    _require_label_available(session, scope, label)
+    _require_label_available(
+        session,
+        scope,
+        label,
+        staging_capability=staging_capability,
+    )
     snapshot_id = str(uuid.uuid4())
 
     views = build_page_claims(
@@ -262,11 +285,17 @@ async def legacy_publish_product_version(
         scope,
         product_version_id,
         views,
+        staging_capability=staging_capability,
     )
     if not claims:
         raise ScopeViolation("scope mismatch")
 
-    await _upsert_page(client, scope, page)
+    await _upsert_page(
+        client,
+        scope,
+        page,
+        staging_capability=staging_capability,
+    )
     now = utcnow()
     snapshot = ReleaseSnapshot(
         id=snapshot_id,
@@ -290,7 +319,12 @@ async def legacy_publish_product_version(
                 revision_no=claim.current_revision,
             )
         )
-    _move_pointer(session, scope, snapshot.id)
+    _move_pointer(
+        session,
+        scope,
+        snapshot.id,
+        staging_capability=staging_capability,
+    )
     session.flush()
 
     return PublishResult(
@@ -305,14 +339,21 @@ async def legacy_rollback_to_snapshot(
     client: WeKnoraClient,
     scope: KnowledgeScope,
     *,
+    staging_capability: object | None = None,
     snapshot_id: str,
     actor: str = "publisher",
     reason: str = "rollback",
 ) -> RollbackResult:
     """Run the retired rollback only for pre-018 regression characterization."""
-    _validate_scope(session, scope)
+    _require_staging_capability(staging_capability, scope)
+    _validate_scope(session, scope, staging_capability=staging_capability)
     _validate_rollback_metadata(actor, reason)
-    snapshot = _require_scoped_snapshot(session, scope, snapshot_id)
+    snapshot = _require_scoped_snapshot(
+        session,
+        scope,
+        snapshot_id,
+        staging_capability=staging_capability,
+    )
     try:
         pages = [
             RenderedPage.model_validate(raw)
@@ -320,7 +361,13 @@ async def legacy_rollback_to_snapshot(
         ]
     except (TypeError, ValidationError) as exc:
         raise ScopeViolation("scope mismatch") from exc
-    _validate_rollback_pages(session, scope, snapshot, pages)
+    _validate_rollback_pages(
+        session,
+        scope,
+        snapshot,
+        pages,
+        staging_capability=staging_capability,
+    )
 
     with session.begin_nested():
         change_set = ChangeSet(
@@ -333,11 +380,21 @@ async def legacy_rollback_to_snapshot(
             created_by=actor,
         )
         session.add(change_set)
-        _move_pointer(session, scope, snapshot.id)
+        _move_pointer(
+            session,
+            scope,
+            snapshot.id,
+            staging_capability=staging_capability,
+        )
         session.flush()
 
         for page in pages:
-            await _upsert_page(client, scope, page)
+            await _upsert_page(
+                client,
+                scope,
+                page,
+                staging_capability=staging_capability,
+            )
 
     return RollbackResult(
         snapshot_id=snapshot.id,

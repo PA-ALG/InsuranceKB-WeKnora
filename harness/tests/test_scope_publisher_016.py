@@ -42,11 +42,42 @@ from insurance_harness.knowledge.tables import (
 from tests.conftest import BASE_URL
 from tests.kbhelpers import green_gate, seed_bound_scope, seed_product
 from tests.support.legacy_publisher_007 import (
-    legacy_publish_product_version as publish_product_version,
+    legacy_publish_product_version as _legacy_publish_product_version,
 )
 from tests.support.legacy_publisher_007 import (
-    legacy_rollback_to_snapshot as rollback_to_snapshot,
+    legacy_rollback_to_snapshot as _legacy_rollback_to_snapshot,
 )
+from tests.support.release_plan_018 import _issue_test_staging_capability
+
+
+async def publish_product_version(
+    session: Session,
+    client: WeKnoraClient,
+    scope: KnowledgeScope,
+    **kwargs: Any,
+) -> Any:
+    return await _legacy_publish_product_version(
+        session,
+        client,
+        scope,
+        staging_capability=_issue_test_staging_capability(scope),
+        **kwargs,
+    )
+
+
+async def rollback_to_snapshot(
+    session: Session,
+    client: WeKnoraClient,
+    scope: KnowledgeScope,
+    **kwargs: Any,
+) -> Any:
+    return await _legacy_rollback_to_snapshot(
+        session,
+        client,
+        scope,
+        staging_capability=_issue_test_staging_capability(scope),
+        **kwargs,
+    )
 
 
 def _scopes(session: Session) -> tuple[KnowledgeScope, KnowledgeScope]:

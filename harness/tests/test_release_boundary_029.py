@@ -14,6 +14,8 @@ from pydantic import ValidationError
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
+import tests.support.legacy_publisher_007 as legacy_publisher_module
+import tests.support.release_publisher_018 as release_publisher_module
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.pages import RenderedPage, render_snapshot_pages
 from insurance_harness.knowledge.release_boundary import (
@@ -517,6 +519,174 @@ def test_ra6_test_only_private_io_entrypoints_recheck_capability_first() -> None
                 isinstance(first.value.func, ast.Name)
                 and first.value.func.id == "_require_staging_capability"
             ), f"{owner.__name__}.{method_name}"
+
+
+def test_ra6_test_only_module_io_entrypoints_require_capability_first() -> None:
+    io_methods = {
+        "add",
+        "begin_nested",
+        "commit",
+        "create_wiki_page",
+        "execute",
+        "flush",
+        "get",
+        "get_wiki_page",
+        "scalar",
+        "scalars",
+        "update_wiki_page",
+    }
+    discovered: set[str] = set()
+    for module in (release_publisher_module, legacy_publisher_module):
+        tree = ast.parse(inspect.getsource(module))
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            touches_io = any(
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and isinstance(child.func.value, ast.Name)
+                and child.func.value.id in {"client", "session"}
+                and child.func.attr in io_methods
+                for child in ast.walk(node)
+            )
+            if not touches_io:
+                continue
+            qualified_name = f"{module.__name__}.{node.name}"
+            discovered.add(qualified_name)
+            parameter_names = {
+                argument.arg
+                for argument in (*node.args.args, *node.args.kwonlyargs)
+            }
+            assert "staging_capability" in parameter_names, qualified_name
+            first = node.body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                first = node.body[1]
+            assert isinstance(first, ast.Expr), qualified_name
+            assert isinstance(first.value, ast.Call), qualified_name
+            assert (
+                isinstance(first.value.func, ast.Name)
+                and first.value.func.id == "_require_staging_capability"
+            ), qualified_name
+    assert {
+        "tests.support.legacy_publisher_007.legacy_publish_product_version",
+        "tests.support.legacy_publisher_007.legacy_rollback_to_snapshot",
+        "tests.support.release_publisher_018._upsert_page",
+    } <= discovered
+
+
+@pytest.mark.asyncio
+async def test_ra6_test_only_module_io_rejects_no_forged_and_wrong_capability(
+    session: Session,
+) -> None:
+    scope_a = release_scope(session, "module-cap-a")
+    scope_b = release_scope(session, "module-cap-b")
+    session.commit()
+    valid_for_a = _issue_test_staging_capability(scope_a)
+
+    class ExplodingIO:
+        calls = 0
+
+        def __getattribute__(self, name: str) -> object:
+            if name != "calls":
+                object.__setattr__(self, "calls", self.calls + 1)
+                raise AssertionError("module entrypoint reached DB/Wiki I/O")
+            return object.__getattribute__(self, name)
+
+    exploding_session = ExplodingIO()
+    exploding_client = ExplodingIO()
+    page = RenderedPage(
+        slug="never-touch",
+        title="Never touch",
+        content="# Never touch",
+        page_metadata={
+            "managed_by": "insurance-harness",
+            "space_id": scope_b.space_id,
+            "snapshot_id": "target",
+        },
+    )
+
+    for invalid_capability in (None, object(), valid_for_a):
+        with pytest.raises(StagingCapabilityRequired):
+            release_publisher_module._validate_scope(
+                exploding_session,
+                scope_b,
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            release_publisher_module._require_scoped_product_version(
+                exploding_session,
+                scope_b,
+                "never-touch",
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            release_publisher_module._require_scoped_snapshot(
+                exploding_session,
+                scope_b,
+                "never-touch",
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            release_publisher_module._require_label_available(
+                exploding_session,
+                scope_b,
+                "never-touch",
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            await release_publisher_module._upsert_page(
+                exploding_client,
+                scope_b,
+                page,
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            legacy_publisher_module._snapshot_claims_for_publish(
+                exploding_session,
+                scope_b,
+                "never-touch",
+                [],
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            legacy_publisher_module._validate_rollback_pages(
+                exploding_session,
+                scope_b,
+                object(),
+                [],
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            legacy_publisher_module._move_pointer(
+                exploding_session,
+                scope_b,
+                "never-touch",
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            await legacy_publisher_module.legacy_publish_product_version(
+                exploding_session,
+                exploding_client,
+                scope_b,
+                product_version_id="never-touch",
+                label="never-touch",
+                staging_capability=invalid_capability,
+            )
+        with pytest.raises(StagingCapabilityRequired):
+            await legacy_publisher_module.legacy_rollback_to_snapshot(
+                exploding_session,
+                exploding_client,
+                scope_b,
+                snapshot_id="never-touch",
+                staging_capability=invalid_capability,
+            )
+
+    assert exploding_session.calls == 0
+    assert exploding_client.calls == 0
 
 
 def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:
