@@ -1281,10 +1281,19 @@ def test_pwb2_cli_production_builder_uses_canonical_verifier_before_transport(
     settings = HarnessSettings(**_production_settings())  # type: ignore[arg-type]
     transports: list[object] = []
 
+    def missing_canonical_module(name: str) -> object:
+        assert name == "insurance_harness.run_admission.evaluator"
+        raise ModuleNotFoundError(name)
+
     def reject_transport(**kwargs: object) -> object:
         transports.append(kwargs)
         pytest.fail("provider transport must not be constructed before canonical admission")
 
+    monkeypatch.setattr(
+        composition_module,
+        "import_module",
+        missing_canonical_module,
+    )
     monkeypatch.setattr(compiler_cli, "OpenAICompatClient", reject_transport)
 
     with pytest.raises(AdmissionPolicyDenied) as denied:

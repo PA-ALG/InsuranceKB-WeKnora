@@ -1,0 +1,21 @@
+# Unsigned strict-request shape only. The final request remains outside Git.
+expected_purpose: enterprise-wiki-mvp
+expected_run_schema_version: enterprise-wiki-mvp.v1
+expected_run_id: <external-run-id>
+expected_run_revision: <external-run-revision>
+expected_space_id: <bound-space-id>
+expected_admission_artifact_ref: <external-content-addressed-envelope-path>
+expected_admission_artifact_digest: <sha256>
+expected_manifest_hash: <sha256>
+expected_eligibility_hash: <sha256>
+expected_golden_slice_hash: <sha256>
+expected_routing_policy_hash: <sha256>
+expected_schema_hash: <sha256>
+expected_template_lock_hash: <sha256>
+expected_structured_dispatch_hash: <sha256>
+expected_model_plan_hash: <sha256>
+expected_deployment_roles_hash: <sha256>
+expected_resource_caps_hash: <sha256>
+expected_rights_hash: <sha256>
+expected_provenance_hash: <sha256>
+expected_clean_integration_sha: <clean-integration-sha>
