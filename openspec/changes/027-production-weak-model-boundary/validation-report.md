@@ -72,11 +72,14 @@ zero transport calls. Unknown/rolling/strong identity, raw client, legacy gatewa
 judge and missing/default profile tests use explicit client/schema/transport counters and
 all observe zero calls before typed refusal.
 
-Approved weak-transport failure is classified as retryable without changing identity. A
-production pipeline regression drives the canonical failing executor to the exact configured
-attempt limit, observes two weak-transport terminal attempts, zero strong/offline fallback
-calls, and returns only one `unknown/dead_letter` candidate plus its dead letter. The compiler
-result contains no ChangeSet or promotion output. Template/policy DENY remains non-retryable.
+Approved weak-transport failure is classified as retryable without changing identity. Guarded
+extract, verify/vote and consensus/judge regressions each drive the canonical failing executor
+to the exact configured attempt limit and observe zero strong/offline fallback calls. Extract
+already returned an `unknown/dead_letter`; Task 5 review found that vote retained its original
+present/high candidate and judge escaped on its first failure. The corrective implementation
+now supersedes every candidate for the failed field with one `unknown/dead_letter`, records a
+compiler dead letter and leaves no judge queue or ChangeSet/promotion output. Template/policy
+DENY remains non-retryable.
 
 Replay and offline execution require explicit `replay` or `offline-eval`; replay additionally
 requires a fixture directory. `apply-judgements` requires explicit `manual` or
@@ -93,13 +96,13 @@ PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
   tests/test_production_entrypoints_027.py \
   tests/test_production_model_boundary_027.py tests/test_config.py \
   tests/test_compiler_llm.py tests/test_source_pipeline_cli_017.py
-# 270 passed in 8.19s
+# 272 passed in 8.84s
 
 PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
   tests/test_compiler_pipeline.py tests/test_source_pipeline_checkpoint_017.py \
   tests/test_source_pipeline_runtime_017.py tests/test_source_pipeline_cli_017.py \
   tests/test_recall_config_024.py
-# 128 passed in 25.68s
+# 128 passed in 27.94s
 
 .venv/bin/ruff check src/insurance_harness/model_policy \
   src/insurance_harness/config.py src/insurance_harness/compiler/cli.py \
@@ -120,9 +123,12 @@ PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
 
 The first inventory RED was one missing compiler CLI guard edge. The coordinated pipeline
 TOCTOU RED was three failures: one raw extraction call, one raw judge route and one attacker
-registry identity read. The PWB3 transport RED showed `ModelTransportError` escaping before
-the configured attempt limit; it is now classified as retryable while policy DENY remains
-non-retryable. All are now GREEN. The exact old source-CLI compatibility slice is also GREEN
+registry identity read. The initial PWB3 transport RED showed extraction
+`ModelTransportError` escaping before the configured attempt limit. Independent review then
+added two corrective REDs: judge made one attempt and escaped, while exhausted vote preserved
+the pre-verification present/high candidate. All three guarded stages now use the configured
+weak-model limit and fail as `unknown/dead_letter`; policy DENY remains non-retryable. The
+exact old source-CLI compatibility slice is also GREEN
 at **18 passed**, with production tests moved to the canonical builder and legacy gateway
 cleanup retained only under explicit `offline-eval`.
 

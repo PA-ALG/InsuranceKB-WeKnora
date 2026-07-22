@@ -18,7 +18,7 @@ from insurance_harness.compiler import llm as llm_module
 from insurance_harness.compiler import pipeline as pipeline_module
 from insurance_harness.compiler.attempts import SqliteAttemptLedger
 from insurance_harness.compiler.extract import call_and_parse
-from insurance_harness.compiler.judge import JudgeDispatcher
+from insurance_harness.compiler.judge import JUDGE_SYSTEM, JudgeDispatcher
 from insurance_harness.compiler.models import (
     DeadLetter,
     DocPayload,
@@ -42,6 +42,7 @@ from insurance_harness.model_policy import (
     ModelCallRequest,
     ModelIdentity,
     ModelPolicyDenied,
+    ModelRole,
     PolicyReceipt,
     StrictAdmissionRequestBinding,
 )
@@ -399,6 +400,188 @@ def _guarded_test_client(
         retained_resources=(target, sink),
     )
     return client, target, sink, verified, identity, request
+
+
+def _guarded_role_test_client(
+    *,
+    schema_hash: str,
+    role: ModelRole,
+    stage: str,
+    prompt_version: str,
+    system: str,
+    transport_mode: str,
+) -> tuple[object, object, StrictAdmissionRequestBinding, ModelIdentity]:
+    """Build an explicit test-only production client with extract + one model role."""
+
+    extract_identity = ModelIdentity(
+        provider="bailian",
+        deployment_id="qwen3-prod-20260722-sha256-a1",
+        family="qwen",
+        role="extract",
+        policy_version="pwb-v1",
+    )
+    role_identity = extract_identity.model_copy(update={"role": role})
+    setting_values = _production_settings(production_expected_schema_hash=schema_hash)
+    request = StrictAdmissionRequestBinding.model_validate(
+        {
+            name.removeprefix("production_"): value
+            for name, value in setting_values.items()
+            if name.startswith("production_expected_")
+        }
+    )
+    extract_template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+        stage="extract",
+        prompt_version=f"baseline@{PROMPT_VERSION}",
+        system=EXTRACTION_SYSTEM,
+    )
+    role_template_hash = llm_module._compiler_template_hash(  # type: ignore[attr-defined]
+        stage=stage,
+        prompt_version=prompt_version,
+        system=system,
+    )
+    binding = AdmissionBinding.model_validate(
+        {
+            **{
+                f"actual_{name.removeprefix('expected_')}": value
+                for name, value in request.model_dump().items()
+            },
+            "actual_state": "READY",
+            "actual_expires_at": datetime(2099, 8, 1, tzinfo=UTC),
+            "approved_identities": (extract_identity, role_identity),
+            "approved_template_hashes": (extract_template_hash, role_template_hash),
+        }
+    )
+    verified = _issue_verified_admission(
+        request,
+        binding,
+        verifier_id="027-entrypoint-role-test",
+        verifier_version="v1",
+        verified_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
+    composition = _build_production_model_composition(
+        approved_identity_keys={extract_identity.identity_key, role_identity.identity_key}
+    )
+    extract_executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=extract_identity,
+    )
+    role_executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=role_identity,
+        mode=transport_mode,
+    )
+    sink = _ReceiptCollector()
+    extract_guard = gateway_module._build_guarded_model_client_for_test(
+        composition=composition,
+        executor=extract_executor,
+        receipt_sink=sink,
+    )
+    role_guard = gateway_module._build_guarded_model_client_for_test(
+        composition=composition,
+        executor=role_executor,
+        receipt_sink=sink,
+    )
+    client = llm_module._build_production_compiler_client_for_test(  # type: ignore[attr-defined]
+        guarded_clients={"extract": extract_guard, role: role_guard},
+        verified_admission=verified,
+        retained_resources=(extract_executor, role_executor, sink),
+    )
+    return client, role_executor, request, extract_identity
+
+
+def _production_role_pipeline_fixture(
+    tmp_path: Path,
+    *,
+    role: ModelRole,
+    stage: str,
+    prompt_version: str,
+    system: str,
+) -> tuple[
+    ExtractionPipeline,
+    dict[str, object],
+    object,
+    StrictAdmissionRequestBinding,
+]:
+    field = FieldSpec(
+        name="等待期",
+        field_id="x",
+        source_sheet="test",
+        risk_level="high",
+    )
+    registry = SchemaRegistry(
+        version="canonical-registry",
+        lines={
+            "t": ProductLineSchema(
+                line_key="t",
+                sheet_name="test",
+                fields=(field,),
+            )
+        },
+        glossary=(),
+    )
+    schema_hash = pipeline_module._compiler_schema_hash(registry)  # type: ignore[attr-defined]
+    client, role_executor, request, identity = _guarded_role_test_client(
+        schema_hash=schema_hash,
+        role=role,
+        stage=stage,
+        prompt_version=prompt_version,
+        system=system,
+        transport_mode="failure",
+    )
+    engine = make_engine(f"sqlite:///{tmp_path}/scope.db")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        session.add(
+            KnowledgeSpace(
+                id=request.expected_space_id,
+                name="Canonical",
+                tenant_id="tenant-canonical",
+                raw_kb_id="raw-canonical",
+                wiki_kb_id="wiki-canonical",
+                binding_status="bound",
+            )
+        )
+        session.commit()
+        scope = load_scope(session, request.expected_space_id)
+    pipeline = ExtractionPipeline(
+        client=client,  # type: ignore[arg-type]
+        registry=registry,
+        model_id=identity.deployment_id,
+        source=object(),  # type: ignore[arg-type]
+        config=PipelineConfig(
+            model_profile="production",
+            judge_mode="guarded",
+            transport_attempts=2,
+            backoff_base_s=0.0,
+        ),
+        scope=scope,
+    )
+    pipeline._test_scope_engine = engine  # type: ignore[attr-defined]  # noqa: SLF001
+    page = PageText(page_no=1, text="本合同等待期为90天。")
+    payload = DocPayload(
+        doc="policy.pdf",
+        pages=[page],
+        sections=[],
+        by_group={},
+    )
+    state: dict[str, object] = {
+        "run_id": request.expected_run_id,
+        "run_dir": str(tmp_path),
+        "line_key": "t",
+        "product_id": "product-1",
+        "product_name": "Canonical product",
+        "docs": [payload.model_dump(mode="json")],
+        "dead_letters": [],
+        "judge_queue": [],
+        "manifest": RunManifest(
+            run_id=request.expected_run_id,
+            product_dir="",
+            space_id=scope.space_id,
+            tenant_id=scope.tenant_id,
+            raw_kb_id=scope.raw_kb_id,
+        ).model_dump(mode="json"),
+    }
+    return pipeline, state, role_executor, request
 
 
 def _production_pipeline_fixture(
@@ -808,6 +991,109 @@ def test_pwb3_weak_transport_exhaustion_stays_blocked_without_fallback_or_promot
     assert len(dead_letters) == 1
     assert dead_letters[0].attempts == 2
     assert set(result) == {"candidates", "dead_letters", "manifest"}
+
+
+def test_pwb3_guarded_judge_exhaustion_retries_then_blocks_field(
+    tmp_path: Path,
+) -> None:
+    pipeline, state, executor, _request = _production_role_pipeline_fixture(
+        tmp_path,
+        role="consensus",
+        stage="judge",
+        prompt_version=f"judge@{PROMPT_VERSION}",
+        system=JUDGE_SYSTEM,
+    )
+    fallback_calls: list[tuple[str, str]] = []
+
+    class _ForbiddenFallback:
+        async def complete(self, system: str, user: str) -> str:
+            fallback_calls.append((system, user))
+            return "[]"
+
+    pipeline._judge = JudgeDispatcher(  # noqa: SLF001 - fallback observation probe
+        mode="gateway",
+        client=_ForbiddenFallback(),
+    )
+    state["candidates"] = [
+        FieldCandidate(
+            field_id="x",
+            field_name="等待期",
+            group=group_of_field("等待期"),
+            doc="policy.pdf",
+            tri_state="unknown",
+            unknown_reason="quote_mismatch",
+            metadata={
+                "rejected_value": "90天",
+                "rejected_evidence": [{"page": 1, "quote": "等待期为90天"}],
+            },
+        ).model_dump(mode="json")
+    ]
+
+    result = asyncio.run(pipeline._node_vote(state))  # type: ignore[arg-type]  # noqa: SLF001
+    candidates = [FieldCandidate.model_validate(raw) for raw in result["candidates"]]
+    dead_letters = [DeadLetter.model_validate(raw) for raw in result["dead_letters"]]
+
+    assert len(gateway_module._test_executor_terminal_observations(executor)) == 2
+    assert len(candidates) == 1
+    assert candidates[0].tri_state == "unknown"
+    assert candidates[0].unknown_reason == "dead_letter"
+    assert candidates[0].pending_judge is False
+    assert len(dead_letters) == 1
+    assert dead_letters[0].attempts == 2
+    assert result["judge_queue"] == []
+    assert fallback_calls == []
+    assert "changeset" not in result
+
+
+def test_pwb3_guarded_vote_exhaustion_cannot_leave_old_high_candidate_promotable(
+    tmp_path: Path,
+) -> None:
+    pipeline, state, executor, _request = _production_role_pipeline_fixture(
+        tmp_path,
+        role="verify",
+        stage="vote",
+        prompt_version=f"vote@{PROMPT_VERSION}",
+        system=EXTRACTION_SYSTEM,
+    )
+    fallback_calls: list[tuple[str, str]] = []
+
+    class _ForbiddenFallback:
+        async def complete(self, system: str, user: str) -> str:
+            fallback_calls.append((system, user))
+            return "[]"
+
+    pipeline._judge = JudgeDispatcher(  # noqa: SLF001 - fallback observation probe
+        mode="gateway",
+        client=_ForbiddenFallback(),
+    )
+    state["candidates"] = [
+        FieldCandidate(
+            field_id="x",
+            field_name="等待期",
+            group=group_of_field("等待期"),
+            doc="policy.pdf",
+            value="90天",
+            tri_state="present",
+            evidence=[{"page": 1, "quote": "本合同等待期为90天。"}],
+            confidence="high",
+        ).model_dump(mode="json")
+    ]
+
+    result = asyncio.run(pipeline._node_vote(state))  # type: ignore[arg-type]  # noqa: SLF001
+    candidates = [FieldCandidate.model_validate(raw) for raw in result["candidates"]]
+    dead_letters = [DeadLetter.model_validate(raw) for raw in result["dead_letters"]]
+
+    assert len(gateway_module._test_executor_terminal_observations(executor)) == 2
+    assert len(candidates) == 1
+    assert candidates[0].tri_state == "unknown"
+    assert candidates[0].unknown_reason == "dead_letter"
+    assert candidates[0].confidence == "low"
+    assert candidates[0].pending_judge is False
+    assert len(dead_letters) == 1
+    assert dead_letters[0].attempts == 2
+    assert result["judge_queue"] == []
+    assert fallback_calls == []
+    assert "changeset" not in result
 
 
 @pytest.mark.parametrize("model_profile", ["offline-eval", "replay"])

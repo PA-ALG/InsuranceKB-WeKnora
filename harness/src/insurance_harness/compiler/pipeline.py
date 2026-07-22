@@ -73,6 +73,7 @@ from .models import (
     DocPayload,
     ExtractionAudit,
     FieldCandidate,
+    Judgement,
     JudgeRequest,
     PredRecord,
     RunManifest,
@@ -895,26 +896,84 @@ class ExtractionPipeline:
         metered = MeteredClient(self._client, stats)
         ledger = self._attempt_ledger(state)
         candidates = [FieldCandidate.model_validate(c) for c in state.get("candidates") or []]
+        dead = [DeadLetter.model_validate(d) for d in state.get("dead_letters") or []]
         merged = merge_candidates(candidates)
         payloads = {p.doc: p for p in (DocPayload.model_validate(r) for r in state["docs"])}
         judge_queue = list(state.get("judge_queue") or [])
         sem = asyncio.Semaphore(self._cfg.concurrency)
 
-        async def do_vote(field: FieldSpec, cand: FieldCandidate) -> FieldCandidate:
+        async def do_vote(
+            field: FieldSpec,
+            cand: FieldCandidate,
+        ) -> tuple[FieldCandidate, TransportRetryError | None]:
             async with sem:
                 pages = payloads[cand.doc].pages if cand.doc in payloads else []
                 try:
-                    return await with_transport_retry(
-                        lambda: vote_field(
-                            metered, state["product_name"], field, cand, pages,
-                            ledger=ledger,
+                    return (
+                        await with_transport_retry(
+                            lambda: vote_field(
+                                metered, state["product_name"], field, cand, pages,
+                                ledger=ledger,
+                            ),
+                            attempts=self._cfg.transport_attempts,
+                            base_delay_s=self._cfg.backoff_base_s,
+                            sleep=self._sleep,
                         ),
-                        attempts=self._cfg.transport_attempts,
-                        base_delay_s=self._cfg.backoff_base_s,
-                        sleep=self._sleep,
+                        None,
                     )
-                except TransportRetryError:
-                    return cand.model_copy(update={"confidence": "low"})
+                except TransportRetryError as exc:
+                    return cand, exc
+
+        async def dispatch_judge(
+            request: JudgeRequest,
+        ) -> tuple[Judgement | None, str | None, TransportRetryError | None]:
+            try:
+                judgement, attempt_id = await with_transport_retry(
+                    lambda: self._judge.dispatch_audited(request, ledger=ledger),
+                    attempts=self._cfg.transport_attempts,
+                    base_delay_s=self._cfg.backoff_base_s,
+                    sleep=self._sleep,
+                )
+            except TransportRetryError as exc:
+                return None, None, exc
+            return judgement, attempt_id, None
+
+        def block_field(
+            cand: FieldCandidate,
+            *,
+            stage: str,
+            error: TransportRetryError,
+        ) -> None:
+            """Supersede every candidate for a failed verification field."""
+
+            candidates[:] = [
+                existing
+                for existing in candidates
+                if existing.field_id != cand.field_id
+            ]
+            candidates.append(
+                cand.model_copy(
+                    update={
+                        "value": None,
+                        "tri_state": "unknown",
+                        "evidence": [],
+                        "confidence": "low",
+                        "unknown_reason": "dead_letter",
+                        "pending_judge": False,
+                    }
+                )
+            )
+            dead.append(
+                DeadLetter(
+                    product=state["product_name"],
+                    doc=cand.doc,
+                    group=cand.group,
+                    window_ref=f"{stage}:{cand.field_id}",
+                    field_ids=[cand.field_id],
+                    error=str(error),
+                    attempts=self._cfg.transport_attempts,
+                )
+            )
 
         # 投票只对 risk_level=high 且已有 present 候选的字段发生（E4.2/E4.3）；
         # fastpath 确定性直取字段退出投票（006 F3.4，12 #1：数字类字段退出投票）
@@ -927,16 +986,20 @@ class ExtractionPipeline:
             and merged[f.field_id].origin != "fastpath"
         ]
         voted = await asyncio.gather(*(do_vote(f, c) for f, c in vote_targets))
-        for (_field, _), cand in zip(vote_targets, voted, strict=True):
+        for (_field, _), (cand, vote_error) in zip(vote_targets, voted, strict=True):
+            if vote_error is not None:
+                block_field(cand, stage="vote", error=vote_error)
+                continue
             if cand.vote_agreement == 1:  # 三票三样 → 裁决（E4.2）
                 context = "\n".join(e.quote for e in cand.evidence)
                 req = make_judge_request(
                     state["product_id"], state["product_name"], cand,
                     "vote_disagreement", context,
                 )
-                judgement, judge_attempt_id = await self._judge.dispatch_audited(
-                    req, ledger=ledger
-                )
+                judgement, judge_attempt_id, judge_error = await dispatch_judge(req)
+                if judge_error is not None:
+                    block_field(cand, stage="judge", error=judge_error)
+                    continue
                 if judgement is None:
                     cand = cand.model_copy(update={"pending_judge": True})
                     judge_queue.append(req.model_dump(mode="json"))
@@ -970,9 +1033,10 @@ class ExtractionPipeline:
                     state["product_id"], state["product_name"], cand2,
                     "quote_mismatch_high_risk", "",
                 )
-                judgement, judge_attempt_id = await self._judge.dispatch_audited(
-                    req, ledger=ledger
-                )
+                judgement, judge_attempt_id, judge_error = await dispatch_judge(req)
+                if judge_error is not None:
+                    block_field(cand2, stage="judge", error=judge_error)
+                    continue
                 if judgement is None:
                     candidates.append(cand2.model_copy(update={"pending_judge": True}))
                     judge_queue.append(req.model_dump(mode="json"))
@@ -996,6 +1060,7 @@ class ExtractionPipeline:
         manifest.stats = _merge_stats(manifest.stats, stats)
         return {
             "candidates": [c.model_dump(mode="json") for c in candidates],
+            "dead_letters": [d.model_dump(mode="json") for d in dead],
             "judge_queue": judge_queue,
             "manifest": manifest.model_dump(mode="json"),
         }
