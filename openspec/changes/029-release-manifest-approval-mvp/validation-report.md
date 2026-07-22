@@ -9,13 +9,13 @@
 | 范围 | 当前状态 | 证据边界 |
 |---|---|---|
 | RA1～RA6 本域实现 | PASS | 各阶段 Spec/Quality 双审均已 `Approved` |
-| RA7 本域实现 | LOCAL PASS | focused `88/88`；Quality `PASS`；Spec `LOCAL PASS` |
-| 029 fresh focused | PASS WITH EXPECTED PG SKIP | 执行 Owner 在 Task 8 前复验非 PG 选择：`262 passed, 1 skipped`；该次 URL 缺失 skip 不作为 PG 证据，独立真实 PG lane 见下行 |
-| Ruff / mypy / diff | PASS | Task 8 前 fresh 结果均 clean；文档提交后的 OpenSpec/diff 结果见 §10 |
-| 真实 PostgreSQL 16 | PASS | isolated container：`3 passed, 37 deselected in 54.55s`；JUnit guard `tests=3 skipped=0` |
+| RA7 本域实现 | LOCAL PASS | stable-root-FD、atomic final install 与最后 inode/byte closure 已独立 Spec/Quality `APPROVED FOR DRAFT`；post-rebase focused 含全部 `103` 条 CLI tests |
+| 029 fresh focused | PASS WITH EXPECTED PG SKIP | rebase 后最新 HEAD：`233 passed, 1 skipped in 26.76s`；该 skip 是未注入 URL 的 integration marker，不作为 PG 证据 |
+| Ruff / mypy / diff | PASS | Ruff clean；mypy `318` source files clean；文档提交后的 OpenSpec/diff 结果见 §10 |
+| 真实 PostgreSQL 16 | PASS | rebase 后最新代码 HEAD isolated container：`4 passed, 40 deselected in 3.03s`；JUnit guard `tests=4 skipped=0` |
 | RA7 跨域集成 | BLOCKED EXTERNALLY | 028 producer/public contract、ClaimEvidence lineage 与 production trusted composition 尚未提供；029 缺合同路径 fail closed |
-| 整包独立 Spec/Quality review | PENDING | 不以分阶段 review 代替最终 whole-change review |
-| final full deterministic / PR | PENDING | final rebase 后只运行一次；外部合同未关闭时最多 Draft |
+| 整包独立 Spec/Quality review | APPROVED FOR DRAFT | Quality findings 经逐轮 RED→GREEN remediation；最终增量 Spec/Quality 均无 Critical/Important |
+| final full deterministic / PR | DRAFT ONLY | 已 rebase 到 `origin/main=5fe3c396`；七个 external contract blocker 未关闭，full deterministic 按计划未运行 |
 | 生产 WeKnora UI | NOT RUN / BLOCKED | P-1 capability 不存在，返回 typed `P1CapabilityMissing` |
 | 真实 model/provider/Node/TS | 0 calls | 029 治理路径不导入、不调用这些执行面 |
 
@@ -113,10 +113,10 @@ uv run pytest -q -m integration_postgres \
   tests/test_release_approval_029.py \
   --junitxml=reports/postgres-029.xml
 
-3 passed, 37 deselected in 54.55s
+4 passed, 40 deselected in 3.03s
 
 uv run python scripts/check_junit.py reports/postgres-029.xml
-tests=3 skipped=0
+tests=4 skipped=0
 ```
 
 | PostgreSQL 行为 | 实测结果 | 当前 |
@@ -132,7 +132,7 @@ tests=3 skipped=0
 | different approval attestation race | 一 winner、一 typed `ReleaseApprovalError`；loser Session 可继续 scoped query/flush | PASS |
 | concurrent CurrentRelease CAS | 一 winner、一 typed `stale_current_release`；两个 Session 均可用 | PASS |
 
-该 lane 首次运行暴露两个 029 test-only 问题：并发 helper 派生的 child ID 超过数据库 `VARCHAR(36)`，以及 loser Session 可用性断言误用了全局 manifest count、没有按竞争 Space 精确计数。执行 Owner 只修正测试身份长度与 scope-exact assertion 后重跑得到上述 final 结果；它们不是放宽生产约束。此证据来自真实 PostgreSQL trigger、constraint、`RETURNING`、savepoint 与并发 backend，SQLite 没有替代任何 PG 语义。
+该 lane 早期暴露两个 029 test-only 问题：并发 helper 派生的 child ID 超过数据库 `VARCHAR(36)`，以及 loser Session 可用性断言误用了全局 manifest count、没有按竞争 Space 精确计数。rebase 后最终门禁又暴露 production `_insert_if_absent` 只指定一个 conflict arbiter，无法稳定吸收同一 row 同时命中 snapshot/hash 两个唯一约束；真实 RED 为 raw `UniqueViolation`。实现改为 targetless `ON CONFLICT DO NOTHING`，再由 scoped exact winner read 区分幂等或 typed conflict；原失败与整条 PG lane 重跑通过。此证据来自真实 PostgreSQL trigger、constraint、`RETURNING`、savepoint 与并发 backend，SQLite 没有替代任何 PG 语义。
 
 ## 4. RA4 唯一 ApprovedSnapshotReader 合同
 
@@ -241,9 +241,9 @@ reason: inspected complete release manifest
 2. `build-candidate` 重验每个 compiler file 的 safe relative path、hash、size、item count，重验 review receipt/DB event/ChangeItem exact inventory，并核对 base snapshot/hash、target revisions/facts hash 与 accepted ChangeItem lineage；candidate 是 fresh DB-only projection，`CurrentRelease` 不变。
 3. `approve-manifest` 重验完整 ReleaseManifest 与 explicit expected current，只 append exact approval/receipt，不 promote。
 4. `promote-approved` 重放相同 human request、manifest、approval receipt 与 DB exact row，只调用一次 RA3 CAS；成功后写 exact release proof。
-5. `seal-run-artifacts` 重验完整 human/review/candidate/approval/release/serving chain、DB current/audit/approval，以及两次实际 `ApprovedSnapshotReader` 返回的 Human/MCP exact DTO。它在 directory lock 下稳定读取全部允许 artifact，拒绝 symlink、sensitive/unbound/late-added/changed files；`artifact-manifest.json` 以 exclusive create 最后写，失败清除 partial final。
+5. `seal-run-artifacts` 重验完整 human/review/candidate/approval/release/serving chain、DB current/audit/approval，以及两次实际 `ApprovedSnapshotReader` 返回的 Human/MCP exact DTO。它在 directory lock 下以 no-follow 方式打开并持有单一 run-root FD；递归扫描与 stable read 全部相对该 FD。最终 JSON 先写入不可预测 private temp inode 并 `fsync`，再以 descriptor-relative hard-link exclusive install 到 `artifact-manifest.json`，因此 partial bytes 永不可见；final 安装后不做存在 TOCTOU 的按名删除。post-scan/root verify 之后最后重验安装 inode 与 exact bytes，路径/内容漂移 typed fail closed。
 
-本域 tests 已覆盖 compiler artifact drift、request/receipt semantic substitution、stale/concurrent DB state、self-declared serving proof、reader ordering/evidence/principal/time/version drift、seal 前后文件 TOCTOU、late extra file 与 partial write cleanup。
+本域 tests 已覆盖 compiler artifact drift、request/receipt semantic substitution、stale/concurrent DB state、self-declared serving proof、reader ordering/evidence/principal/time/version drift、seal 前后文件 TOCTOU、whole-directory rename、same-directory replacement sentinel、private partial write、late extra file、post-child typed error 与 post-scan final replacement。
 
 跨域真实 compilation-to-final-seal run 仍为 `BLOCKED EXTERNALLY`，不能把 029 synthetic/fake producer fixture 表述为 028 integration PASS。
 
@@ -268,10 +268,10 @@ reason: inspected complete release manifest
 | RA3 promote / RA5 rollback | Approved | Approved | 本域关闭；PG CAS 最终环境门禁另列 |
 | RA4 serving reader | Approved | Approved | 本域关闭 |
 | RA6 staging/P-1 boundary | Approved | Approved | 本域关闭 |
-| RA7 governance CLI | LOCAL PASS | PASS | 允许进入 Task 8；跨域合同不得冒充完成 |
-| Whole change RA1～RA7 | PENDING | PENDING | final one-pass review 尚未执行 |
+| RA7 governance CLI | APPROVED FOR DRAFT | APPROVED FOR DRAFT | stable-root-FD、inode-safe failure handling、atomic complete-final install 与 last exact closure 已逐轮复审关闭 |
+| Whole change RA1～RA7 | APPROVED FOR DRAFT | APPROVED FOR DRAFT | 最终无 Critical/Important；七个跨域 blocker 不因本域通过而关闭 |
 
-最终 reviewer 仍须逐项检查 tenant isolation、mutable-read absence、append-only approval、无自动真人 decision、governance-only imports、final-seal ordering、migration/down-grade guards 与真实并发结果。
+最终 reviewer 已逐项检查 tenant isolation、mutable-read absence、append-only approval、无自动真人 decision、governance-only imports、final-seal ordering、migration/down-grade guards 与真实并发结果。
 
 ## 10. 验证账本与退出条件
 
@@ -279,20 +279,20 @@ reason: inspected complete release manifest
 
 | 门禁 | 结果 |
 |---|---|
-| RA7 focused | `88 passed` |
-| 029/root focused | `262 passed, 1 skipped`；PG URL 缺失产生 skip，不计作 PG PASS |
-| PostgreSQL 16 integration | `3 passed, 37 deselected in 54.55s`；`reports/postgres-029.xml` 经 guard 验证 `tests=3 skipped=0` |
+| RA7 CLI focused | standalone remediation run `103 passed in 15.48s`；随后全部纳入 post-rebase focused |
+| 029/root focused | post-rebase `233 passed, 1 skipped in 26.76s`；PG URL 缺失产生 integration skip，不计作 PG PASS |
+| PostgreSQL 16 integration | post-rebase 最新代码 HEAD：`4 passed, 40 deselected in 3.03s`；JUnit guard `tests=4 skipped=0` |
 | Alembic graph | `0013 (head)`，单 head |
 | Ruff | PASS |
-| mypy | PASS |
+| mypy | `Success: no issues found in 318 source files` |
 | `git diff --check` | PASS |
 | OpenSpec strict（Task 8 文档后） | `Change '029-release-manifest-approval-mvp' is valid`，exit 0 |
 
 ### 10.2 尚未完成
 
-- whole-change independent Spec/Quality review：PENDING。
-- fetch/rebase 最新 `main` 后必要 focused/static 门禁：PENDING；若相关 DB diff 变化，须重新运行 PG lane。
-- PR-ready full deterministic：PENDING；只在剩余 review finding 与 external integration blocker 关闭后运行一次。
-- 七段时间、最终 head/diff、secret audit、push/PR URL：PENDING，由执行 Owner 在最终 handoff/PR body 填写。
+- independent Spec/Quality review：`APPROVED FOR DRAFT`；所有已报告 Critical/Important 均已 RED→GREEN 并由原 reviewer 复核关闭。
+- 已 fetch/rebase `origin/main=5fe3c396`；focused/static 与最新代码 HEAD 的真实 PG lane 均已重跑，PG JUnit `skipped=0`。
+- PR-ready full deterministic：NOT RUN BY DESIGN；七个 external integration blocker 尚未关闭，且当前只允许 Draft。
+- diff/cross-domain/secret audit：PASS；唯一数据库 URL pattern 命中为 migration 测试固定 fixture `user:password@localhost`，不是凭据。最终代码 head 为 `c8c2f58b`；push/Draft PR URL 待创建后回填。
 
-退出规则：真实 PG 硬门禁现已关闭；若 external integration 也关闭、整包双审无 finding、最终 rebase/full/static/OpenSpec/diff/secret 全绿，才可创建 Ready PR；否则最多创建 Draft，并把上述 blocker 保持为未完成，不得自行 merge。
+退出规则：真实 PG、增量独立双审、rebase 后 focused/static 均已关闭；七个 external integration blocker 仍使本分支最多创建 Draft。不得自行 merge。
