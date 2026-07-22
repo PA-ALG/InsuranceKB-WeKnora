@@ -7,6 +7,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import yaml
@@ -20,6 +21,32 @@ from insurance_harness.goldenset.admission_authority import (
     render_unsigned_approval,
     sign_rendered_approval,
 )
+from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
+    CLEANUP_AUTHORIZATION_DOMAIN,
+    PRICING_EVIDENCE_DOMAIN,
+    PROVIDER_CAP_DOMAIN,
+    PROVISIONING_AUTHORIZATION_DOMAIN,
+    AuthorizationDomain,
+    AuthorizationVerificationError,
+    DeploymentCleanupAuthorization,
+    DeploymentCleanupAuthorizationPayload,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
+    PricingEvidenceApprovalPayload,
+    PricingEvidenceContent,
+    ProviderCapApprovalPayload,
+    ProviderCapEvidenceContent,
+    ProvisioningAuthorization,
+    ProvisioningAuthorizationPayload,
+    authorization_signed_bytes,
+    cleanup_authorization_signed_bytes,
+    pricing_evidence_digest,
+    provider_cap_evidence_digest,
+    verify_adoption_authorization,
+    verify_cleanup_authorization,
+    verify_provisioning_authorization,
+)
 from insurance_harness.goldenset.admission_models import (
     ApprovalVerificationError,
     BudgetApprovalEntry,
@@ -27,6 +54,7 @@ from insurance_harness.goldenset.admission_models import (
     BudgetApprovalPayload,
     TrustedKeyPolicy,
     approval_signed_bytes,
+    canonical_json_bytes,
     verify_approval_envelope,
 )
 
@@ -715,3 +743,732 @@ def test_o3_keygen_render_sign_verify_cli_round_trip_is_offline_and_separate(
         == 0
     )
     assert capsys.readouterr().out == ""
+
+
+def test_o3_independent_operational_domains_cli_render_sign_verify_round_trip(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    external = tmp_path / "operator"
+    external.mkdir(mode=0o700)
+    key = external / "authority.key"
+    metadata = repo / "authority-public.json"
+    assert admission_cli.main(
+        [
+            "keygen",
+            "--repo-root",
+            str(repo),
+            "--private-key",
+            str(key),
+            "--public-metadata",
+            str(metadata),
+        ]
+    ) == 0
+    public = json.loads(metadata.read_text(encoding="utf-8"))
+    now = datetime.now(UTC)
+    pricing_evidence = PricingEvidenceContent(
+        version="insurancekb.run-admission.pricing-evidence.v1",
+        issuer="bailian-price-catalog",
+        provider="bailian",
+        workspace_ref="workspace-cn-beijing-031",
+        project_ref="sha256:" + "a" * 64,
+        credential_ref="sha256:" + "b" * 64,
+        region="cn-beijing",
+        base_model="qwen3.7-plus-2026-05-26",
+        request_plan="ptu_v2",
+        receipt_plan="ptu",
+        input_tpm_quota=10_000,
+        output_tpm_quota=1_000,
+        currency="CNY",
+        effective_from=now - timedelta(days=1),
+        effective_until=now + timedelta(days=1),
+        billing_quantum_seconds=3600,
+        round_up_rule="ceiling",
+        fixed_cost_per_quantum_minor_units=672,
+        input_cost_per_million_minor_units=240,
+        output_cost_per_million_minor_units=960,
+        tiers_policy="worst_case_included",
+        thinking_policy="worst_case_included",
+        cache_policy="worst_case_included",
+        overflow_policy="block",
+    )
+    cap_evidence = ProviderCapEvidenceContent(
+        version="insurancekb.run-admission.provider-cap-evidence.v1",
+        issuer="bailian-control-plane",
+        provider="bailian",
+        workspace_ref=pricing_evidence.workspace_ref,
+        project_ref=pricing_evidence.project_ref,
+        credential_ref=pricing_evidence.credential_ref,
+        currency="CNY",
+        max_cost_minor_units=20_000,
+        coverage=("fixed_infrastructure", "inference"),
+        observed_at=now - timedelta(minutes=1),
+        expires_at=now + timedelta(hours=1),
+    )
+    pricing_digest = pricing_evidence_digest(canonical_json_bytes(pricing_evidence))
+    cap_digest = provider_cap_evidence_digest(canonical_json_bytes(cap_evidence))
+    common: dict[str, object] = {
+        "provider": "bailian",
+        "run_identity": "run-031",
+        "purpose": "baseline",
+        "scope": "goldenset-production",
+        "operation_id": "op-strong-031",
+        "infrastructure_reserve_id": "infra-strong-031",
+        "workspace_ref": pricing_evidence.workspace_ref,
+        "project_ref": pricing_evidence.project_ref,
+        "credential_ref": pricing_evidence.credential_ref,
+        "region": "cn-beijing",
+        "base_model": pricing_evidence.base_model,
+        "request_plan": "ptu_v2",
+        "receipt_plan": "ptu",
+        "input_tpm_quota": 10_000,
+        "output_tpm_quota": 1_000,
+        "pricing_evidence_digest": pricing_digest,
+        "provider_cap_evidence_digest": cap_digest,
+        "pricing_approval_digest": "e" * 64,
+        "provider_cap_approval_digest": "f" * 64,
+        "currency": "CNY",
+        "provider_cap_max_cost_minor_units": 20_000,
+        "provider_cap_coverage": ("fixed_infrastructure", "inference"),
+        "provider_cap_expires_at": cap_evidence.expires_at,
+        "cleanup_deadline": now + timedelta(hours=8),
+        "approver_identity": "operator@example.test",
+        "issued_at": now - timedelta(minutes=1),
+        "expires_at": now + timedelta(minutes=30),
+    }
+    provisioning = ProvisioningAuthorizationPayload.model_validate(
+        {
+            **common,
+            "transition": "create",
+            "maximum_cost_minor_units": 5_376,
+            "approver_role": "deployment-provisioner",
+        }
+    )
+    adoption = ExistingDeploymentAdoptionAuthorizationPayload.model_validate(
+        {
+            **common,
+            "transition": "adopt_existing",
+            "maximum_cost_minor_units": 6_048,
+            "approver_role": "budget-approver",
+            "deployed_model": "qwen3.7-plus-2026-05-26-031strng",
+            "receipt_digest": "1" * 64,
+            "gmt_create": now - timedelta(hours=1),
+            "preexisting": True,
+            "limitation": "not_preauthorized_by_031",
+            "incurred_cost_minor_units": 672,
+            "future_max_cost_minor_units": 5_376,
+        }
+    )
+    payloads = {
+        PROVISIONING_AUTHORIZATION_DOMAIN: provisioning,
+        ADOPTION_AUTHORIZATION_DOMAIN: adoption,
+        PRICING_EVIDENCE_DOMAIN: PricingEvidenceApprovalPayload(
+            evidence_digest=pricing_digest,
+            evidence=pricing_evidence,
+            scope="goldenset-production",
+            approver_identity="operator@example.test",
+            approver_role="pricing-evidence-approver",
+            issued_at=now - timedelta(minutes=1),
+            expires_at=now + timedelta(minutes=30),
+        ),
+        PROVIDER_CAP_DOMAIN: ProviderCapApprovalPayload(
+            evidence_digest=cap_digest,
+            evidence=cap_evidence,
+            scope="goldenset-production",
+            approver_identity="operator@example.test",
+            approver_role="provider-cap-attestor",
+            issued_at=now - timedelta(minutes=1),
+            expires_at=now + timedelta(minutes=30),
+        ),
+        CLEANUP_AUTHORIZATION_DOMAIN: DeploymentCleanupAuthorizationPayload(
+            run_identity="run-031",
+            purpose="baseline",
+            scope="goldenset-production",
+            operation_id="op-strong-031",
+            reserve_id="infra-strong-031",
+            receipt_digest="1" * 64,
+            deployed_model="qwen3.7-plus-2026-05-26-031strng",
+            workspace_ref=pricing_evidence.workspace_ref,
+            project_ref=pricing_evidence.project_ref,
+            credential_ref=pricing_evidence.credential_ref,
+            expected_remote_manifest_digest="2" * 64,
+            cleanup_reason="approved test cleanup",
+            cleanup_deadline=now + timedelta(hours=8),
+            approver_identity="operator@example.test",
+            approver_role="deployment-cleanup-operator",
+            issued_at=now - timedelta(minutes=1),
+            expires_at=now + timedelta(minutes=30),
+        ),
+    }
+    trust = external / "trust.yaml"
+    policy: dict[str, object] = {
+        "approver_identity": "operator@example.test",
+        "domains": list(payloads),
+        "scopes": ["goldenset-production"],
+        "roles": [
+            "deployment-provisioner",
+            "budget-approver",
+            "pricing-evidence-approver",
+            "provider-cap-attestor",
+            "deployment-cleanup-operator",
+        ],
+        "public_key": public["public_key"],
+    }
+    trust_configuration: dict[str, object] = {
+        "key_policies": {public["key_id"]: policy},
+        "budget_roles": [],
+        "provenance_roles": [],
+    }
+    trust.write_text(yaml.safe_dump(trust_configuration), encoding="utf-8")
+    trust.chmod(0o600)
+
+    for index, (domain, payload) in enumerate(payloads.items()):
+        payload_path = repo / f"payload-{index}.json"
+        payload_path.write_text(
+            json.dumps(payload.model_dump(mode="json"), sort_keys=True),
+            encoding="utf-8",
+        )
+        rendered = external / f"approval-{index}.rendered.json"
+        envelope = repo / f"approval-{index}.json"
+        assert admission_cli.main(
+            [
+                "render",
+                "--repo-root",
+                str(repo),
+                "--domain",
+                domain,
+                "--key-id",
+                public["key_id"],
+                "--payload",
+                str(payload_path),
+                "--output",
+                str(rendered),
+            ]
+        ) == 0
+        assert admission_cli.main(
+            [
+                "sign",
+                "--repo-root",
+                str(repo),
+                "--rendered",
+                str(rendered),
+                "--private-key",
+                str(key),
+                "--output",
+                str(envelope),
+            ]
+        ) == 0
+        assert admission_cli.main(
+            [
+                "verify",
+                "--envelope",
+                str(envelope),
+                "--trust-store",
+                str(trust),
+            ]
+        ) == 0
+
+    provisioning_envelope = json.loads(
+        (repo / "approval-0.json").read_text(encoding="utf-8")
+    )
+    adoption_envelope = json.loads(
+        (repo / "approval-1.json").read_text(encoding="utf-8")
+    )
+    provisioning_envelope["signature"] = adoption_envelope["signature"]
+    cross_domain_replay = repo / "approval-cross-domain-replay.json"
+    cross_domain_replay.write_text(
+        json.dumps(provisioning_envelope, sort_keys=True), encoding="utf-8"
+    )
+    assert admission_cli.main(
+        [
+            "verify",
+            "--envelope",
+            str(cross_domain_replay),
+            "--trust-store",
+            str(trust),
+        ]
+    ) == 1
+
+    for field, invalid_value in (
+        ("approver_identity", "another-operator@example.test"),
+        ("domains", [ADOPTION_AUTHORIZATION_DOMAIN]),
+        ("scopes", ["another-scope"]),
+        ("roles", ["budget-approver"]),
+    ):
+        original_value = policy[field]
+        policy[field] = invalid_value
+        trust.write_text(yaml.safe_dump(trust_configuration), encoding="utf-8")
+        assert admission_cli.main(
+            [
+                "verify",
+                "--envelope",
+                str(repo / "approval-0.json"),
+                "--trust-store",
+                str(trust),
+            ]
+        ) == 1
+        policy[field] = original_value
+
+
+def test_o3_cleanup_verifier_rejects_subclass_before_caller_method_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    payload = DeploymentCleanupAuthorizationPayload(
+        run_identity="run-031",
+        purpose="baseline",
+        scope="goldenset-production",
+        operation_id="op-strong-031",
+        reserve_id="infra-strong-031",
+        receipt_digest="1" * 64,
+        deployed_model="qwen3.7-plus-2026-05-26-031strng",
+        workspace_ref="workspace-cn-beijing-031",
+        project_ref="sha256:" + "a" * 64,
+        credential_ref="sha256:" + "b" * 64,
+        expected_remote_manifest_digest="2" * 64,
+        cleanup_reason="approved test cleanup",
+        cleanup_deadline=_NOW + timedelta(hours=1),
+        approver_identity="operator@example.test",
+        approver_role="deployment-cleanup-operator",
+        issued_at=_NOW - timedelta(minutes=1),
+        expires_at=_NOW + timedelta(minutes=30),
+    )
+    signature = base64.b64encode(
+        private_key.sign(cleanup_authorization_signed_bytes(payload))
+    ).decode("ascii")
+    safe = DeploymentCleanupAuthorization(
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        key_id="cleanup-key",
+        payload=payload,
+        signature=signature,
+    )
+    malicious_payload = payload.model_copy(update={"scope": "attacker-scope"})
+
+    class MaliciousCleanupAuthorization(DeploymentCleanupAuthorization):
+        pass
+
+    malicious = MaliciousCleanupAuthorization.model_construct(
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        key_id=safe.key_id,
+        payload=malicious_payload,
+        signature=safe.signature,
+    )
+    model_dump_called = False
+
+    def return_signed_safe_snapshot(*_args: object, **_kwargs: object) -> dict[str, object]:
+        nonlocal model_dump_called
+        model_dump_called = True
+        return safe.model_dump(mode="python", round_trip=True)
+
+    monkeypatch.setattr(
+        MaliciousCleanupAuthorization,
+        "model_dump",
+        return_signed_safe_snapshot,
+    )
+    policy = TrustedKeyPolicy(
+        key_id="cleanup-key",
+        public_key=private_key.public_key(),
+        approver_identity="operator@example.test",
+        domains=frozenset({CLEANUP_AUTHORIZATION_DOMAIN}),
+        scopes=frozenset({"goldenset-production"}),
+        roles=frozenset({"deployment-cleanup-operator"}),
+    )
+
+    with pytest.raises(AuthorizationVerificationError, match="type"):
+        verify_cleanup_authorization(
+            malicious,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+    assert model_dump_called is False
+
+
+def test_o3_offline_cleanup_verify_rejects_exact_cleanup_deadline(
+    tmp_path: Path,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    payload = DeploymentCleanupAuthorizationPayload(
+        run_identity="run-031",
+        purpose="baseline",
+        scope="goldenset-production",
+        operation_id="op-strong-031",
+        reserve_id="infra-strong-031",
+        receipt_digest="1" * 64,
+        deployed_model="qwen3.7-plus-2026-05-26-031strng",
+        workspace_ref="workspace-cn-beijing-031",
+        project_ref="sha256:" + "a" * 64,
+        credential_ref="sha256:" + "b" * 64,
+        expected_remote_manifest_digest="2" * 64,
+        cleanup_reason="approved test cleanup",
+        cleanup_deadline=_NOW,
+        approver_identity="operator@example.test",
+        approver_role="deployment-cleanup-operator",
+        issued_at=_NOW - timedelta(hours=1),
+        expires_at=_NOW + timedelta(hours=1),
+    )
+    envelope = DeploymentCleanupAuthorization(
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        key_id="cleanup-key",
+        payload=payload,
+        signature=base64.b64encode(
+            private_key.sign(cleanup_authorization_signed_bytes(payload))
+        ).decode("ascii"),
+    )
+    envelope_path = tmp_path / "cleanup.json"
+    envelope_path.write_bytes(canonical_json_bytes(envelope))
+    policy = TrustedKeyPolicy(
+        key_id="cleanup-key",
+        public_key=private_key.public_key(),
+        approver_identity="operator@example.test",
+        domains=frozenset({CLEANUP_AUTHORIZATION_DOMAIN}),
+        scopes=frozenset({"goldenset-production"}),
+        roles=frozenset({"deployment-cleanup-operator"}),
+    )
+
+    with pytest.raises(ApprovalVerificationError, match="cleanup deadline"):
+        authority.verify_offline_envelope(
+            envelope_path=envelope_path,
+            trusted_public_keys={policy.key_id: policy},
+            allowed_roles_by_domain={
+                CLEANUP_AUTHORIZATION_DOMAIN: frozenset(
+                    {"deployment-cleanup-operator"}
+                )
+            },
+            now=_NOW,
+        )
+
+
+@pytest.mark.parametrize(
+    ("domain", "boundary"),
+    (
+        (PROVISIONING_AUTHORIZATION_DOMAIN, "cleanup"),
+        (PROVISIONING_AUTHORIZATION_DOMAIN, "provider_cap"),
+        (ADOPTION_AUTHORIZATION_DOMAIN, "cleanup"),
+        (ADOPTION_AUTHORIZATION_DOMAIN, "provider_cap"),
+    ),
+)
+def test_o3_offline_infrastructure_verify_rejects_exact_operational_deadlines(
+    tmp_path: Path,
+    domain: AuthorizationDomain,
+    boundary: Literal["cleanup", "provider_cap"],
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    common: dict[str, object] = {
+        "provider": "bailian",
+        "run_identity": "run-031",
+        "purpose": "baseline",
+        "scope": "goldenset-production",
+        "operation_id": "op-strong-031",
+        "infrastructure_reserve_id": "infra-strong-031",
+        "workspace_ref": "workspace-cn-beijing-031",
+        "project_ref": "sha256:" + "a" * 64,
+        "credential_ref": "sha256:" + "b" * 64,
+        "region": "cn-beijing",
+        "base_model": "qwen3.7-plus-2026-05-26",
+        "request_plan": "ptu_v2",
+        "receipt_plan": "ptu",
+        "input_tpm_quota": 10_000,
+        "output_tpm_quota": 1_000,
+        "pricing_evidence_digest": "c" * 64,
+        "provider_cap_evidence_digest": "d" * 64,
+        "pricing_approval_digest": "e" * 64,
+        "provider_cap_approval_digest": "f" * 64,
+        "currency": "CNY",
+        "provider_cap_max_cost_minor_units": 20_000,
+        "provider_cap_coverage": ("fixed_infrastructure", "inference"),
+        "provider_cap_expires_at": (
+            _NOW if boundary == "provider_cap" else _NOW + timedelta(hours=2)
+        ),
+        "maximum_cost_minor_units": 5_376,
+        "cleanup_deadline": (
+            _NOW if boundary == "cleanup" else _NOW + timedelta(hours=2)
+        ),
+        "approver_identity": "operator@example.test",
+        "issued_at": _NOW - timedelta(hours=1),
+        "expires_at": _NOW + timedelta(hours=1),
+    }
+    envelope: ProvisioningAuthorization | ExistingDeploymentAdoptionAuthorization
+    if domain == PROVISIONING_AUTHORIZATION_DOMAIN:
+        payload = ProvisioningAuthorizationPayload.model_validate(
+            {
+                **common,
+                "transition": "create",
+                "approver_role": "deployment-provisioner",
+            }
+        )
+        envelope = ProvisioningAuthorization(
+            domain=domain,
+            key_id="infrastructure-key",
+            payload=payload,
+            signature=base64.b64encode(
+                private_key.sign(authorization_signed_bytes(domain, payload))
+            ).decode("ascii"),
+        )
+        role = "deployment-provisioner"
+    else:
+        adoption_payload = ExistingDeploymentAdoptionAuthorizationPayload.model_validate(
+            {
+                **common,
+                "transition": "adopt_existing",
+                "maximum_cost_minor_units": 6_048,
+                "approver_role": "budget-approver",
+                "deployed_model": "qwen3.7-plus-2026-05-26-031strng",
+                "receipt_digest": "1" * 64,
+                "gmt_create": _NOW - timedelta(hours=2),
+                "preexisting": True,
+                "limitation": "not_preauthorized_by_031",
+                "incurred_cost_minor_units": 672,
+                "future_max_cost_minor_units": 5_376,
+            }
+        )
+        envelope = ExistingDeploymentAdoptionAuthorization(
+            domain=domain,
+            key_id="infrastructure-key",
+            payload=adoption_payload,
+            signature=base64.b64encode(
+                private_key.sign(authorization_signed_bytes(domain, adoption_payload))
+            ).decode("ascii"),
+        )
+        role = "budget-approver"
+    envelope_path = tmp_path / f"{domain}-{boundary}.json"
+    envelope_path.write_bytes(canonical_json_bytes(envelope))
+    policy = TrustedKeyPolicy(
+        key_id="infrastructure-key",
+        public_key=private_key.public_key(),
+        approver_identity="operator@example.test",
+        domains=frozenset({domain}),
+        scopes=frozenset({"goldenset-production"}),
+        roles=frozenset({role}),
+    )
+    expected_message = (
+        "cleanup deadline" if boundary == "cleanup" else "provider cap"
+    )
+
+    with pytest.raises(ApprovalVerificationError, match=expected_message):
+        authority.verify_offline_envelope(
+            envelope_path=envelope_path,
+            trusted_public_keys={policy.key_id: policy},
+            allowed_roles_by_domain={domain: frozenset({role})},
+            now=_NOW,
+        )
+
+
+def test_o3_infrastructure_verifiers_reject_subclasses_and_hidden_constructed_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_key = Ed25519PrivateKey.generate()
+    common: dict[str, object] = {
+        "provider": "bailian",
+        "run_identity": "run-031",
+        "purpose": "baseline",
+        "scope": "goldenset-production",
+        "operation_id": "op-strong-031",
+        "infrastructure_reserve_id": "infra-strong-031",
+        "workspace_ref": "workspace-cn-beijing-031",
+        "project_ref": "sha256:" + "a" * 64,
+        "credential_ref": "sha256:" + "b" * 64,
+        "region": "cn-beijing",
+        "base_model": "qwen3.7-plus-2026-05-26",
+        "request_plan": "ptu_v2",
+        "receipt_plan": "ptu",
+        "input_tpm_quota": 10_000,
+        "output_tpm_quota": 1_000,
+        "pricing_evidence_digest": "c" * 64,
+        "provider_cap_evidence_digest": "d" * 64,
+        "pricing_approval_digest": "e" * 64,
+        "provider_cap_approval_digest": "f" * 64,
+        "currency": "CNY",
+        "provider_cap_max_cost_minor_units": 20_000,
+        "provider_cap_coverage": ("fixed_infrastructure", "inference"),
+        "provider_cap_expires_at": _NOW + timedelta(hours=1),
+        "cleanup_deadline": _NOW + timedelta(hours=8),
+        "approver_identity": "operator@example.test",
+        "issued_at": _NOW - timedelta(minutes=1),
+        "expires_at": _NOW + timedelta(minutes=30),
+    }
+    provisioning_payload = ProvisioningAuthorizationPayload.model_validate(
+        {
+            **common,
+            "transition": "create",
+            "maximum_cost_minor_units": 5_376,
+            "approver_role": "deployment-provisioner",
+        }
+    )
+    adoption_payload = ExistingDeploymentAdoptionAuthorizationPayload.model_validate(
+        {
+            **common,
+            "transition": "adopt_existing",
+            "maximum_cost_minor_units": 6_048,
+            "approver_role": "budget-approver",
+            "deployed_model": "qwen3.7-plus-2026-05-26-031strng",
+            "receipt_digest": "1" * 64,
+            "gmt_create": _NOW - timedelta(hours=1),
+            "preexisting": True,
+            "limitation": "not_preauthorized_by_031",
+            "incurred_cost_minor_units": 672,
+            "future_max_cost_minor_units": 5_376,
+        }
+    )
+    provisioning = ProvisioningAuthorization(
+        domain=PROVISIONING_AUTHORIZATION_DOMAIN,
+        key_id="infrastructure-key",
+        payload=provisioning_payload,
+        signature=base64.b64encode(
+            private_key.sign(
+                authorization_signed_bytes(
+                    PROVISIONING_AUTHORIZATION_DOMAIN,
+                    provisioning_payload,
+                )
+            )
+        ).decode("ascii"),
+    )
+    adoption = ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="infrastructure-key",
+        payload=adoption_payload,
+        signature=base64.b64encode(
+            private_key.sign(
+                authorization_signed_bytes(
+                    ADOPTION_AUTHORIZATION_DOMAIN,
+                    adoption_payload,
+                )
+            )
+        ).decode("ascii"),
+    )
+    policy = TrustedKeyPolicy(
+        key_id="infrastructure-key",
+        public_key=private_key.public_key(),
+        approver_identity="operator@example.test",
+        domains=frozenset(
+            {PROVISIONING_AUTHORIZATION_DOMAIN, ADOPTION_AUTHORIZATION_DOMAIN}
+        ),
+        scopes=frozenset({"goldenset-production"}),
+        roles=frozenset({"deployment-provisioner", "budget-approver"}),
+    )
+
+    class MaliciousProvisioningAuthorization(ProvisioningAuthorization):
+        pass
+
+    class MaliciousAdoptionAuthorization(ExistingDeploymentAdoptionAuthorization):
+        pass
+
+    malicious_provisioning = MaliciousProvisioningAuthorization.model_construct(
+        **provisioning.__dict__
+    )
+    malicious_adoption = MaliciousAdoptionAuthorization.model_construct(
+        **adoption.__dict__
+    )
+
+    def caller_method_must_not_run(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("caller model_dump ran before exact-type rejection")
+
+    monkeypatch.setattr(
+        MaliciousProvisioningAuthorization,
+        "model_dump",
+        caller_method_must_not_run,
+    )
+    monkeypatch.setattr(
+        MaliciousAdoptionAuthorization,
+        "model_dump",
+        caller_method_must_not_run,
+    )
+    with pytest.raises(AuthorizationVerificationError, match="type"):
+        verify_provisioning_authorization(
+            malicious_provisioning,
+            expected=provisioning_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+    with pytest.raises(AuthorizationVerificationError, match="type"):
+        verify_adoption_authorization(
+            malicious_adoption,
+            expected=adoption_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+
+    class MaliciousProvisioningPayload(ProvisioningAuthorizationPayload):
+        pass
+
+    class MaliciousAdoptionPayload(ExistingDeploymentAdoptionAuthorizationPayload):
+        pass
+
+    provisioning_with_subclass_payload = ProvisioningAuthorization.model_construct(
+        domain=provisioning.domain,
+        key_id=provisioning.key_id,
+        payload=MaliciousProvisioningPayload.model_construct(
+            **provisioning_payload.__dict__
+        ),
+        signature=provisioning.signature,
+    )
+    adoption_with_subclass_payload = ExistingDeploymentAdoptionAuthorization.model_construct(
+        domain=adoption.domain,
+        key_id=adoption.key_id,
+        payload=MaliciousAdoptionPayload.model_construct(**adoption_payload.__dict__),
+        signature=adoption.signature,
+    )
+    with pytest.raises(AuthorizationVerificationError, match="type"):
+        verify_provisioning_authorization(
+            provisioning_with_subclass_payload,
+            expected=provisioning_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+    with pytest.raises(AuthorizationVerificationError, match="type"):
+        verify_adoption_authorization(
+            adoption_with_subclass_payload,
+            expected=adoption_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+
+    verify_provisioning_authorization(
+        provisioning.model_copy(),
+        expected=provisioning_payload.model_copy(),
+        trusted_authorities={policy.key_id: policy},
+        now=_NOW,
+    )
+    verify_adoption_authorization(
+        adoption.model_copy(),
+        expected=adoption_payload.model_copy(),
+        trusted_authorities={policy.key_id: policy},
+        now=_NOW,
+    )
+
+    constructed_with_extra = ProvisioningAuthorization.model_construct(
+        **provisioning.__dict__
+    )
+    object.__setattr__(constructed_with_extra, "unexpected", "smuggled state")
+    with pytest.raises(AuthorizationVerificationError, match="snapshot"):
+        verify_provisioning_authorization(
+            constructed_with_extra,
+            expected=provisioning_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+
+    payload_with_extra = ProvisioningAuthorizationPayload.model_construct(
+        **provisioning_payload.__dict__
+    )
+    object.__setattr__(payload_with_extra, "unexpected", "smuggled state")
+    envelope_with_payload_extra = ProvisioningAuthorization.model_construct(
+        domain=provisioning.domain,
+        key_id=provisioning.key_id,
+        payload=payload_with_extra,
+        signature=provisioning.signature,
+    )
+    with pytest.raises(AuthorizationVerificationError, match="snapshot"):
+        verify_provisioning_authorization(
+            envelope_with_payload_extra,
+            expected=provisioning_payload,
+            trusted_authorities={policy.key_id: policy},
+            now=_NOW,
+        )
+
+    with pytest.raises(ValueError, match="extra"):
+        ProvisioningAuthorization.model_validate(
+            {**provisioning.model_dump(mode="python"), "unexpected": "rejected"}
+        )
+    with pytest.raises(ValueError, match="extra"):
+        provisioning.model_copy(update={"unexpected": "rejected"})

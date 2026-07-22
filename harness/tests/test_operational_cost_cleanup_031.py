@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import base64
 import copy
+import fcntl
 import hashlib
+import inspect
 import json
+import os
+import pickle
 import secrets
 import sqlite3
+import threading
+import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -22,6 +29,9 @@ from insurance_harness.goldenset.admission_budget import (
     BudgetLedger,
     BudgetLedgerError,
     FinalInfrastructureBindingRequest,
+    InfrastructureCleanupBinding,
+    InfrastructureCreatePermit,
+    InfrastructureReserveSnapshot,
     ProviderSpendCapAttestation,
     RoleRate,
     _approval_digest,
@@ -32,8 +42,18 @@ from insurance_harness.goldenset.admission_budget import (
     require_verified_topology_provider_capability,
 )
 from insurance_harness.goldenset.admission_deployment import (
+    BAILIAN_DEPLOYMENT_ENDPOINT,
     BailianDeploymentHTTPTransport,
+    CleanupDeleteIntent,
+    CleanupDeleteIntentSlot,
+    CleanupReceipt,
+    CleanupTerminalJournal,
+    DeploymentControlBlocked,
     DeploymentController,
+    DeploymentNotFound,
+    DeploymentReceiptArtifact,
+    DeploymentReconciliationEvidenceV1,
+    DurableDeleteAttemptEvidence,
     ProviderDeploymentManifest,
     deterministic_deployment_suffix,
     deterministic_operation_marker,
@@ -41,12 +61,18 @@ from insurance_harness.goldenset.admission_deployment import (
     transport_workspace_evidence_digest,
 )
 from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
+    CLEANUP_AUTHORIZATION_DOMAIN,
     PRICING_EVIDENCE_DOMAIN,
     PROVIDER_CAP_DOMAIN,
     PROVISIONING_AUTHORIZATION_DOMAIN,
     AuthorizationVerificationError,
+    DeploymentCleanupAuthorization,
+    DeploymentCleanupAuthorizationPayload,
     DeploymentReceipt,
     DeploymentReceiptContent,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
     PricingEvidenceApproval,
     PricingEvidenceApprovalPayload,
     PricingEvidenceContent,
@@ -61,8 +87,11 @@ from insurance_harness.goldenset.admission_infrastructure import (
     _require_verified_pricing_capability_for_testing,
     _require_verified_provider_capability_for_testing,
     authorization_signed_bytes,
+    cleanup_authorization_digest,
+    cleanup_authorization_signed_bytes,
     credential_ref_for_api_key,
     deployment_receipt_content_digest,
+    infrastructure_authorization_digest,
     pricing_approval_digest,
     pricing_evidence_digest,
     pricing_evidence_signed_bytes,
@@ -84,6 +113,7 @@ from insurance_harness.goldenset.admission_models import (
     canonical_json_bytes,
     plan_payload_hash,
 )
+from tests.test_operational_deployment_031 import _production_adoption_case
 
 NOW = datetime(2026, 7, 21, 8, 0, tzinfo=UTC)
 SHA_A = "a" * 64
@@ -285,6 +315,67 @@ def _provisioning_authorization(
     return payload, envelope
 
 
+def _adoption_authorization(
+    key: Ed25519PrivateKey,
+    pricing: PricingEvidenceApproval,
+    cap: ProviderCapApproval,
+    receipt: DeploymentReceipt,
+    *,
+    incurred_cost_minor_units: int = 672,
+    future_max_cost_minor_units: int = 5_376,
+) -> tuple[
+    ExistingDeploymentAdoptionAuthorizationPayload,
+    ExistingDeploymentAdoptionAuthorization,
+]:
+    payload = ExistingDeploymentAdoptionAuthorizationPayload(
+        transition="adopt_existing",
+        provider="bailian",
+        run_identity="golden-v01-run-031",
+        purpose="golden-v0.1 production run",
+        scope="goldenset-production",
+        operation_id=receipt.content.operation_id,
+        infrastructure_reserve_id=receipt.content.infrastructure_reserve_id,
+        workspace_ref=receipt.content.workspace_ref,
+        project_ref=receipt.content.project_ref,
+        credential_ref=receipt.content.credential_ref,
+        region=receipt.content.region,
+        base_model=receipt.content.base_model,
+        request_plan=receipt.content.request_plan,
+        receipt_plan=receipt.content.receipt_plan,
+        input_tpm_quota=receipt.content.input_tpm,
+        output_tpm_quota=receipt.content.output_tpm,
+        pricing_evidence_digest=pricing.payload.evidence_digest,
+        provider_cap_evidence_digest=cap.payload.evidence_digest,
+        pricing_approval_digest=pricing_approval_digest(pricing),
+        provider_cap_approval_digest=provider_cap_approval_digest(cap),
+        currency="CNY",
+        provider_cap_max_cost_minor_units=cap.payload.evidence.max_cost_minor_units,
+        provider_cap_coverage=cap.payload.evidence.coverage,
+        provider_cap_expires_at=cap.payload.evidence.expires_at,
+        maximum_cost_minor_units=(incurred_cost_minor_units + future_max_cost_minor_units),
+        cleanup_deadline=NOW + timedelta(hours=8),
+        approver_identity="budget-owner@example.test",
+        approver_role="budget-approver",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(minutes=30),
+        deployed_model=receipt.content.deployed_model,
+        receipt_digest=receipt.content_digest,
+        gmt_create=receipt.content.gmt_create,
+        preexisting=True,
+        limitation="not_preauthorized_by_031",
+        incurred_cost_minor_units=incurred_cost_minor_units,
+        future_max_cost_minor_units=future_max_cost_minor_units,
+    )
+    return payload, ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="adoption-key",
+        payload=payload,
+        signature=base64.b64encode(
+            key.sign(authorization_signed_bytes(ADOPTION_AUTHORIZATION_DOMAIN, payload))
+        ).decode("ascii"),
+    )
+
+
 def _manifest(**updates: Any) -> ProviderDeploymentManifest:
     values: dict[str, object] = {
         "deployed_model": "qwen3.7-plus-2026-05-26-031strng",
@@ -430,6 +521,2196 @@ def _controller_issued_production_receipt(
         raising=False,
     )
     return result.receipt, result.receipt_capability
+
+
+def test_o7_t9_19_c4_production_cleanup_exposes_canonical_factory_and_api() -> None:
+    factory = getattr(DeploymentController, "for_production_cleanup", None)
+    cleanup = getattr(DeploymentController, "cleanup", None)
+
+    assert callable(factory)
+    assert callable(cleanup)
+
+
+def test_o7_t9_19_c4_production_cleanup_factory_owns_ledger_transport_and_clock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    receipt = _receipt()
+    binding = InfrastructureCleanupBinding(
+        reserve_id=receipt.content.infrastructure_reserve_id,
+        run_identity="golden-v01-run-031",
+        purpose="golden-v0.1 production run",
+        scope="goldenset-production",
+        operation_id=receipt.content.operation_id,
+        workspace_ref=receipt.content.workspace_ref,
+        project_ref=receipt.content.project_ref,
+        credential_ref=receipt.content.credential_ref,
+        receipt_digest=receipt.content_digest,
+        deployed_model=receipt.content.deployed_model,
+        remote_manifest_digest=receipt.content.remote_manifest_digest,
+        reconciliation_digest="1" * 64,
+        transport_identity_digest="2" * 64,
+        cleanup_deadline=NOW + timedelta(hours=8),
+    )
+    root = tmp_path / "deployment-control"
+    root.mkdir(mode=0o700)
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", TEST_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", root)
+    monkeypatch.setattr(
+        admission_deployment,
+        "_PRODUCTION_BUDGET_LEDGER_PATH",
+        tmp_path / "budget.sqlite3",
+    )
+    monkeypatch.setattr(
+        BudgetLedger,
+        "infrastructure_cleanup_binding",
+        lambda _ledger, reserve_id: binding
+        if reserve_id == binding.reserve_id
+        else (_ for _ in ()).throw(BudgetLedgerError("not found")),
+    )
+
+    controller = DeploymentController.for_production_cleanup(
+        reserve_id=binding.reserve_id
+    )
+    try:
+        assert controller._cleanup_reserve_reader.infrastructure_cleanup_binding(
+            binding.reserve_id
+        ) == binding
+        assert controller._transport.endpoint == admission_deployment.BAILIAN_DEPLOYMENT_ENDPOINT
+        assert set(inspect.signature(controller.cleanup).parameters) == {
+            "authorization",
+            "receipt_digest",
+        }
+    finally:
+        controller.close()
+
+
+def _c4_cleanup_binding(
+    receipt: DeploymentReceipt,
+    capability: VerifiedReconciledDeploymentReceipt,
+) -> InfrastructureCleanupBinding:
+    return InfrastructureCleanupBinding(
+        reserve_id=receipt.content.infrastructure_reserve_id,
+        run_identity=capability.run_identity,
+        purpose=capability.purpose,
+        scope=capability.scope,
+        operation_id=receipt.content.operation_id,
+        workspace_ref=receipt.content.workspace_ref,
+        project_ref=receipt.content.project_ref,
+        credential_ref=receipt.content.credential_ref,
+        receipt_digest=receipt.content_digest,
+        deployed_model=receipt.content.deployed_model,
+        remote_manifest_digest=receipt.content.remote_manifest_digest,
+        reconciliation_digest=capability.reconciliation_digest,
+        transport_identity_digest=capability.transport_identity_digest,
+        cleanup_deadline=NOW + timedelta(hours=8),
+    )
+
+
+def _c4_cleanup_authorization(
+    key: Ed25519PrivateKey,
+    binding: InfrastructureCleanupBinding,
+    **updates: object,
+) -> DeploymentCleanupAuthorization:
+    values: dict[str, object] = {
+        "run_identity": binding.run_identity,
+        "purpose": binding.purpose,
+        "scope": binding.scope,
+        "operation_id": binding.operation_id,
+        "reserve_id": binding.reserve_id,
+        "receipt_digest": binding.receipt_digest,
+        "deployed_model": binding.deployed_model,
+        "workspace_ref": binding.workspace_ref,
+        "project_ref": binding.project_ref,
+        "credential_ref": binding.credential_ref,
+        "expected_remote_manifest_digest": binding.remote_manifest_digest,
+        "cleanup_reason": "T9.19 controlled cleanup",
+        "cleanup_deadline": binding.cleanup_deadline,
+        "approver_identity": "cleanup-operator@example.test",
+        "approver_role": "deployment-cleanup-operator",
+        "issued_at": NOW - timedelta(minutes=1),
+        "expires_at": NOW + timedelta(minutes=30),
+    }
+    values.update(updates)
+    payload = DeploymentCleanupAuthorizationPayload.model_validate(values)
+    return DeploymentCleanupAuthorization(
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        key_id="cleanup-key",
+        payload=payload,
+        signature=base64.b64encode(
+            key.sign(cleanup_authorization_signed_bytes(payload))
+        ).decode("ascii"),
+    )
+
+
+def _c4_cleanup_resource_prefix(binding: InfrastructureCleanupBinding) -> str:
+    return hashlib.sha256(
+        b"insurancekb.run-admission.cleanup-resource.v1\0"
+        + canonical_json_bytes(binding)
+    ).hexdigest()
+
+
+class _C4CleanupReader:
+    def __init__(self, binding: InfrastructureCleanupBinding) -> None:
+        self.binding = binding
+
+    def infrastructure_cleanup_binding(
+        self,
+        reserve_id: str,
+    ) -> InfrastructureCleanupBinding:
+        if reserve_id != self.binding.reserve_id:
+            raise BudgetLedgerError("cleanup binding not found")
+        return self.binding
+
+    def infrastructure_reserve(self, reserve_id: str) -> InfrastructureReserveSnapshot:
+        raise AssertionError("cleanup must not read mutable reserve state")
+
+
+class _C4CleanupTransport:
+    endpoint = BAILIAN_DEPLOYMENT_ENDPOINT
+
+    def __init__(self, manifest: ProviderDeploymentManifest) -> None:
+        self.manifest: ProviderDeploymentManifest | None = manifest
+        self.identity = _issue_verified_deployment_transport_identity_for_testing(
+            workspace_ref=manifest.workspace_ref,
+            project_ref="sha256:" + SHA_A,
+            credential_ref="sha256:" + SHA_B,
+            provider_cap_evidence_digest="d" * 64,
+            provider_cap_approval_digest="f" * 64,
+            expires_at=NOW + timedelta(hours=24),
+        )
+        self.detail_calls = 0
+        self.delete_calls = 0
+        self.mode = "ok"
+
+    def deployment_detail(self, *, deployed_model: str) -> bytes:
+        self.detail_calls += 1
+        if self.manifest is None:
+            raise DeploymentNotFound("absent")
+        return canonical_json_bytes(self.manifest)
+
+    def delete_deployment(self, *, deployed_model: str) -> bytes:
+        self.delete_calls += 1
+        if self.mode == "timeout_without_accept":
+            raise TimeoutError("ambiguous")
+        self.manifest = None
+        if self.mode == "timeout_after_accept":
+            raise TimeoutError("response lost")
+        return b"{}"
+
+    def list_deployments(self, *, marker: str, suffix: str) -> bytes:
+        raise AssertionError("cleanup must not list")
+
+    def create_deployment(self, *, request_body: bytes, idempotency_key: str) -> bytes:
+        raise AssertionError("cleanup must not create")
+
+
+def _c4_cleanup_controller(
+    tmp_path: Path,
+    receipt: DeploymentReceipt,
+    manifest: ProviderDeploymentManifest,
+    transport: _C4CleanupTransport,
+    *,
+    clock: Any = None,
+) -> tuple[DeploymentController, InfrastructureCleanupBinding]:
+    root = tmp_path / "deployment-control"
+    root.mkdir(mode=0o700)
+    capability = _testing_receipt_capability(receipt)
+    binding = _c4_cleanup_binding(receipt, capability)
+    receipt_artifact = DeploymentReceiptArtifact(
+        receipt=receipt,
+        remote_manifest=manifest,
+        remote_manifest_digest=provider_manifest_digest(manifest),
+    )
+    reconciliation = DeploymentReconciliationEvidenceV1(
+        version="insurancekb.run-admission.deployment-reconciliation-evidence.v1",
+        issuer="bailian-deployment-controller-v1",
+        transport_identity_digest=capability.transport_identity_digest,
+        run_identity=capability.run_identity,
+        purpose=capability.purpose,
+        scope=capability.scope,
+        receipt=receipt,
+        remote_manifest=manifest,
+        receipt_digest=receipt.content_digest,
+        operation_id=receipt.content.operation_id,
+        reserve_id=receipt.content.infrastructure_reserve_id,
+        workspace_ref=receipt.content.workspace_ref,
+        project_ref=receipt.content.project_ref,
+        credential_ref=receipt.content.credential_ref,
+        provider_cap_evidence_digest=capability.provider_cap_evidence_digest,
+        provider_cap_approval_digest=capability.provider_cap_approval_digest,
+        remote_manifest_digest=receipt.content.remote_manifest_digest,
+        observed_at=capability.observed_at,
+        expires_at=capability.expires_at,
+        reconciliation_digest=capability.reconciliation_digest,
+    )
+    receipt_path = root / f"{receipt.content_digest}.receipt.json"
+    receipt_path.write_bytes(canonical_json_bytes(receipt_artifact))
+    receipt_path.chmod(0o600)
+    reconciliation_path = root / (
+        f"{capability.reconciliation_digest}.receipt-reconciliation.json"
+    )
+    reconciliation_path.write_bytes(canonical_json_bytes(reconciliation))
+    reconciliation_path.chmod(0o600)
+    controller = DeploymentController._for_testing(
+        run_root=root,
+        reserve_reader=_C4CleanupReader(binding),
+        transport=transport,
+        clock=(lambda: NOW) if clock is None else clock,
+    )
+    return controller, binding
+
+
+def test_o7_t9_19_c4_verified_running_ptu_uses_direct_delete_and_terminal_404(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+
+    try:
+        result = controller._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=_policy(
+                key,
+                key_id="cleanup-key",
+                identity="cleanup-operator@example.test",
+                domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                role="deployment-cleanup-operator",
+            ),
+            receipt_digest=receipt.content_digest,
+        )
+    finally:
+        controller.close()
+
+    assert result.receipt.billing_stop_verified is True
+    assert result.receipt.terminal_state == "absent_404"
+    assert result.receipt.causal_delete_attempt_digest is not None
+    assert (transport.detail_calls, transport.delete_calls) == (2, 1)
+
+
+@pytest.mark.parametrize("attempt_drift", ["missing", "replaced", "symlink"])
+def test_o7_t9_19_c4_second_get_reloads_paired_attempt_before_causal_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    attempt_drift: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    original_detail = transport.deployment_detail
+
+    def drift_attempt_before_second_404(*, deployed_model: str) -> bytes:
+        if transport.detail_calls == 1 and transport.manifest is None:
+            attempt = next(
+                controller._store.root.glob("*.cleanup-delete-attempt.slot")
+            )
+            attempt.unlink()
+            if attempt_drift == "replaced":
+                attempt.write_bytes(b"{}")
+                attempt.chmod(0o600)
+            elif attempt_drift == "symlink":
+                attempt.symlink_to(
+                    controller._store.root
+                    / f"{binding.receipt_digest}.receipt.json"
+                )
+        return original_detail(deployed_model=deployed_model)
+
+    monkeypatch.setattr(
+        transport,
+        "deployment_detail",
+        drift_attempt_before_second_404,
+    )
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=_c4_cleanup_authorization(key, binding),
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code in {
+        "cleanup_attempt_invalid",
+        "operation_artifact_unsafe",
+    }
+    assert transport.delete_calls == 1
+    root = tmp_path / "deployment-control"
+    assert not tuple(root.glob("*.cleanup-terminal-journal.json"))
+    assert not tuple(root.glob("*.cleanup-receipt.json"))
+
+
+def test_o7_t9_19_c4_terminal_journal_succeeds_as_durable_attempt_successor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    original_publish = controller._publish_cleanup_terminal
+
+    def remove_slots_after_fresh_reload(**kwargs: Any) -> Any:
+        assert kwargs["verified_attempt"] is not None
+        for pattern in (
+            "*.cleanup-delete-intent.slot",
+            "*.cleanup-delete-attempt.slot",
+        ):
+            for path in controller._store.root.glob(pattern):
+                path.unlink()
+        return original_publish(**kwargs)
+
+    monkeypatch.setattr(
+        controller,
+        "_publish_cleanup_terminal",
+        remove_slots_after_fresh_reload,
+    )
+    first = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=binding.receipt_digest,
+    )
+    root = controller._store.root
+    controller.close()
+
+    assert first.receipt.terminal_state == "absent_404"
+    assert first.receipt.causal_delete_attempt_digest is not None
+    assert not tuple(root.glob("*.cleanup-delete-intent.slot"))
+    assert not tuple(root.glob("*.cleanup-delete-attempt.slot"))
+    assert first.journal_path is not None
+    journal = CleanupTerminalJournal.model_validate_json(
+        first.journal_path.read_bytes()
+    )
+    assert journal.causal_intent_snapshot is not None
+    assert journal.causal_attempt_snapshot is not None
+
+    replay_transport = _C4CleanupTransport(manifest)
+    replay_transport.manifest = None
+    restarted = DeploymentController._for_testing(
+        run_root=root,
+        reserve_reader=_C4CleanupReader(binding),
+        transport=replay_transport,
+        clock=lambda: NOW,
+    )
+    try:
+        replay = restarted._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        restarted.close()
+
+    assert replay == first
+    assert (replay_transport.detail_calls, replay_transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "forgery",
+    ["intent_copy", "attempt_copy", "construct", "raw_tamper"],
+)
+def test_o7_t9_19_c4_embedded_terminal_successor_forgery_fails_closed(
+    tmp_path: Path,
+    forgery: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    first = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=binding.receipt_digest,
+    )
+    assert first.journal_path is not None
+    journal = CleanupTerminalJournal.model_validate_json(
+        first.journal_path.read_bytes()
+    )
+    assert journal.causal_intent_snapshot is not None
+    assert journal.causal_attempt_snapshot is not None
+    if forgery == "intent_copy":
+        forged_intent = journal.causal_intent_snapshot.model_copy(deep=True)
+        object.__setattr__(forged_intent, "intent_digest", "0" * 64)
+        forged = journal.model_copy(deep=True)
+        object.__setattr__(forged, "causal_intent_snapshot", forged_intent)
+        forged_bytes = canonical_json_bytes(forged)
+    elif forgery == "attempt_copy":
+        forged_attempt = journal.causal_attempt_snapshot.model_copy(deep=True)
+        object.__setattr__(forged_attempt, "attempt_proof", "0" * 64)
+        forged = journal.model_copy(deep=True)
+        object.__setattr__(forged, "causal_attempt_snapshot", forged_attempt)
+        forged_bytes = canonical_json_bytes(forged)
+    elif forgery == "construct":
+        forged = CleanupTerminalJournal.model_construct(
+            version=journal.version,
+            binding=journal.binding,
+            receipt=journal.receipt,
+            receipt_digest=journal.receipt_digest,
+            causal_intent_snapshot=None,
+            causal_attempt_snapshot=None,
+        )
+        forged_bytes = canonical_json_bytes(forged)
+    else:
+        raw_values = json.loads(first.journal_path.read_bytes())
+        raw_values["causal_attempt_snapshot"]["attempted_at"] = (
+            NOW + timedelta(seconds=1)
+        ).isoformat()
+        forged_bytes = json.dumps(
+            raw_values,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    first.journal_path.write_bytes(forged_bytes)
+    for pattern in (
+        "*.cleanup-delete-intent.slot",
+        "*.cleanup-delete-attempt.slot",
+    ):
+        for path in controller._store.root.glob(pattern):
+            path.unlink()
+    root = controller._store.root
+    controller.close()
+
+    replay_transport = _C4CleanupTransport(manifest)
+    replay_transport.manifest = None
+    restarted = DeploymentController._for_testing(
+        run_root=root,
+        reserve_reader=_C4CleanupReader(binding),
+        transport=replay_transport,
+        clock=lambda: NOW,
+    )
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            restarted._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=authorities,
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        restarted.close()
+
+    assert blocked.value.code == "cleanup_receipt_invalid"
+    assert (replay_transport.detail_calls, replay_transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("run_identity", "foreign-run"),
+        ("purpose", "foreign-purpose"),
+        ("scope", "foreign-scope"),
+        ("operation_id", "foreign-operation"),
+        ("reserve_id", "foreign-reserve"),
+        ("receipt_digest", "1" * 64),
+        ("deployed_model", "foreign-deployment"),
+        ("credential_ref", "sha256:" + "2" * 64),
+        ("expected_remote_manifest_digest", "3" * 64),
+    ],
+)
+def test_o7_t9_19_c4_cross_resource_cleanup_replay_has_zero_provider_io(
+    tmp_path: Path,
+    field: str,
+    replacement: object,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorization = _c4_cleanup_authorization(
+        key,
+        binding,
+        **{field: replacement},
+    )
+
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=receipt.content_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code == "cleanup_authorization_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+def test_o7_t9_19_c4_actual_os_lock_queue_expiry_has_zero_provider_io(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    expired = threading.Event()
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: NOW + timedelta(minutes=2) if expired.is_set() else NOW,
+    )
+    authorization = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    lock_path = controller._store.path(
+        controller._store.lock_name(binding.run_identity)
+    )
+    descriptor = os.open(
+        lock_path,
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+        0o600,
+    )
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    failures: list[BaseException] = []
+
+    def cleanup() -> None:
+        try:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=receipt.content_digest,
+            )
+        except BaseException as exc:
+            failures.append(exc)
+
+    thread = threading.Thread(target=cleanup)
+    thread.start()
+    time.sleep(0.1)
+    assert thread.is_alive()
+    expired.set()
+    fcntl.flock(descriptor, fcntl.LOCK_UN)
+    os.close(descriptor)
+    thread.join(timeout=5)
+    controller.close()
+
+    assert len(failures) == 1
+    assert isinstance(failures[0], DeploymentControlBlocked)
+    assert failures[0].code == "cleanup_authorization_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+def test_o7_t9_19_c4_missing_reconciliation_artifact_blocks_before_provider_io(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    reconciliation_path = controller._store.path(
+        f"{binding.reconciliation_digest}.receipt-reconciliation.json"
+    )
+    reconciliation_path.unlink()
+    authorization = _c4_cleanup_authorization(key, binding)
+
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=receipt.content_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code == "cleanup_authorization_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize("same_resource", [False, True])
+def test_o7_t9_19_c4_intent_limit_is_scoped_to_exact_cleanup_resource(
+    tmp_path: Path,
+    same_resource: bool,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    counted_binding = (
+        binding
+        if same_resource
+        else binding.model_copy(update={"reserve_id": "foreign-reserve"})
+    )
+    if same_resource:
+        occupied_authorization = _c4_cleanup_authorization(
+            key,
+            binding,
+            issued_at=NOW - timedelta(minutes=2),
+            expires_at=NOW + timedelta(minutes=20),
+        )
+        occupied_intent = CleanupDeleteIntent(
+            binding=binding,
+            authorization=occupied_authorization,
+            authorization_digest=cleanup_authorization_digest(
+                occupied_authorization
+            ),
+            authorization_issued_at=occupied_authorization.payload.issued_at,
+        )
+        occupied_digest = hashlib.sha256(
+            b"insurancekb.run-admission.cleanup-delete-intent.v1\0"
+            + canonical_json_bytes(occupied_intent)
+        ).hexdigest()
+        occupied_bytes = canonical_json_bytes(
+            CleanupDeleteIntentSlot(
+                intent=occupied_intent,
+                intent_digest=occupied_digest,
+            )
+        )
+    else:
+        occupied_bytes = b"{}"
+    prefix = _c4_cleanup_resource_prefix(counted_binding)
+    for ordinal in range(64):
+        path = controller._store.path(
+            f"{prefix}.{ordinal:02d}.cleanup-delete-intent.slot"
+        )
+        path.write_bytes(occupied_bytes)
+        path.chmod(0o600)
+    authorization = _c4_cleanup_authorization(key, binding)
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    try:
+        if same_resource:
+            with pytest.raises(DeploymentControlBlocked) as blocked:
+                controller._cleanup_for_testing(
+                    authorization=authorization,
+                    trusted_authorities=authorities,
+                    receipt_digest=binding.receipt_digest,
+                )
+            assert blocked.value.code == "cleanup_journal_limit_exceeded"
+            assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+        else:
+            result = controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=authorities,
+                receipt_digest=binding.receipt_digest,
+            )
+            assert result.receipt.billing_stop_verified is True
+            assert (transport.detail_calls, transport.delete_calls) == (2, 1)
+    finally:
+        controller.close()
+
+
+def test_o7_t9_19_c4_cleanup_reads_only_fixed_resource_slots_with_many_foreign_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    root = controller._store.root
+    for ordinal in range(1_000):
+        foreign = root / f"foreign-{ordinal:04d}.artifact"
+        foreign.write_bytes(b"foreign")
+        foreign.chmod(0o600)
+    slot_reads = 0
+    original_read = controller._store.read
+
+    def count_slot_reads(name: str) -> bytes | None:
+        nonlocal slot_reads
+        if name.endswith(".cleanup-delete-intent.slot"):
+            slot_reads += 1
+        return original_read(name)
+
+    def forbid_directory_scan(*args: Any, **kwargs: Any) -> tuple[str, ...]:
+        raise AssertionError("cleanup must not enumerate the operation-store directory")
+
+    reads_before_first_get: list[int] = []
+    original_detail = transport.deployment_detail
+
+    def detail(*, deployed_model: str) -> bytes:
+        reads_before_first_get.append(slot_reads)
+        return original_detail(deployed_model=deployed_model)
+
+    monkeypatch.setattr(controller._store, "read", count_slot_reads)
+    monkeypatch.setattr(controller._store, "names_with_suffix", forbid_directory_scan)
+    monkeypatch.setattr(
+        controller._store,
+        "names_with_prefix_and_suffix",
+        forbid_directory_scan,
+    )
+    monkeypatch.setattr(transport, "deployment_detail", detail)
+    try:
+        result = controller._cleanup_for_testing(
+            authorization=_c4_cleanup_authorization(key, binding),
+            trusted_authorities=_policy(
+                key,
+                key_id="cleanup-key",
+                identity="cleanup-operator@example.test",
+                domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                role="deployment-cleanup-operator",
+            ),
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        controller.close()
+
+    assert result.receipt.billing_stop_verified is True
+    assert reads_before_first_get[0] == 64
+    assert (transport.detail_calls, transport.delete_calls) == (2, 1)
+
+
+@pytest.mark.parametrize(
+    "timeout_mode",
+    ["timeout_without_accept", "timeout_after_accept"],
+)
+def test_o7_t9_19_c4_delete_timeout_remains_noncausal_after_external_absence(
+    tmp_path: Path,
+    timeout_mode: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    now = {"value": NOW}
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: now["value"],
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    first = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    transport.mode = timeout_mode
+
+    first_result: Any = None
+    try:
+        first_result = controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    except DeploymentControlBlocked as ambiguous:
+        assert timeout_mode == "timeout_without_accept"
+        assert ambiguous.code == "billing_stop_unverified"
+    assert transport.delete_calls == 1
+    if timeout_mode == "timeout_after_accept":
+        controller.close()
+        assert first_result.receipt.terminal_state == "already_absent_404"
+        assert first_result.receipt.causal_delete_attempt_digest is None
+        return
+
+    now["value"] = NOW + timedelta(minutes=2)
+    transport.manifest = None
+    transport.mode = "ok"
+    replacement = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=now["value"] - timedelta(seconds=1),
+        expires_at=now["value"] + timedelta(minutes=30),
+    )
+    try:
+        result = controller._cleanup_for_testing(
+            authorization=replacement,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    finally:
+        controller.close()
+
+    assert result.receipt.terminal_state == "already_absent_404"
+    assert result.receipt.causal_delete_attempt_digest is None
+    assert transport.delete_calls == 1
+
+
+def test_o7_t9_19_c4_pre_send_intent_never_proves_causal_delete_after_crash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    first = _c4_cleanup_authorization(key, binding)
+    original_gate = controller._verify_cleanup_gate
+    gate_calls = 0
+
+    def crash_after_intent_before_delete(**kwargs: Any) -> Any:
+        nonlocal gate_calls
+        gate_calls += 1
+        if gate_calls == 5:
+            raise SystemExit("simulated crash after intent before DELETE invocation")
+        return original_gate(**kwargs)
+
+    monkeypatch.setattr(
+        controller,
+        "_verify_cleanup_gate",
+        crash_after_intent_before_delete,
+    )
+    with pytest.raises(SystemExit):
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    root = controller._store.root
+    controller.close()
+    assert transport.delete_calls == 0
+    assert len(tuple(root.glob("*.cleanup-delete-intent.slot"))) == 1
+
+    transport.manifest = None
+    restarted = DeploymentController._for_testing(
+        run_root=root,
+        reserve_reader=_C4CleanupReader(binding),
+        transport=transport,
+        clock=lambda: NOW + timedelta(minutes=2),
+    )
+    replacement = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW + timedelta(minutes=2) - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=32),
+    )
+    try:
+        recovered = restarted._cleanup_for_testing(
+            authorization=replacement,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        restarted.close()
+
+    assert recovered.receipt.terminal_state == "already_absent_404"
+    assert recovered.receipt.causal_delete_attempt_digest is None
+    assert transport.delete_calls == 0
+
+
+def test_o7_t9_19_c4_first_observation_404_is_noncausal_and_never_deletes(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    transport.manifest = None
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    try:
+        result = controller._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=_policy(
+                key,
+                key_id="cleanup-key",
+                identity="cleanup-operator@example.test",
+                domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                role="deployment-cleanup-operator",
+            ),
+            receipt_digest=receipt.content_digest,
+        )
+    finally:
+        controller.close()
+
+    assert result.receipt.terminal_state == "already_absent_404"
+    assert result.receipt.causal_delete_attempt_digest is None
+    assert (transport.detail_calls, transport.delete_calls) == (1, 0)
+
+
+def test_o7_t9_19_c4_same_ambiguous_authority_never_retries_but_new_authority_can_delete(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    now = {"value": NOW}
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: now["value"],
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    first = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    transport.mode = "timeout_without_accept"
+    with pytest.raises(DeploymentControlBlocked):
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    with pytest.raises(DeploymentControlBlocked):
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    assert transport.delete_calls == 1
+
+    now["value"] = NOW + timedelta(minutes=2)
+    transport.mode = "ok"
+    replacement = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=now["value"] - timedelta(seconds=1),
+        expires_at=now["value"] + timedelta(minutes=30),
+    )
+    try:
+        result = controller._cleanup_for_testing(
+            authorization=replacement,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    finally:
+        controller.close()
+    assert result.receipt.terminal_state == "absent_404"
+    assert result.receipt.causal_delete_attempt_digest is not None
+    assert transport.delete_calls == 2
+
+
+def test_o7_t9_19_c4_exact_replay_is_zero_io_and_foreign_terminal_receipt_fails_closed(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    first = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=receipt.content_digest,
+    )
+    calls = (transport.detail_calls, transport.delete_calls)
+    replay = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=receipt.content_digest,
+    )
+    assert replay == first
+    assert (transport.detail_calls, transport.delete_calls) == calls
+
+    assert first.journal_path is not None
+    original_journal = first.journal_path.read_bytes()
+    copied_receipt = first.receipt.model_copy(
+        update={"observed_at": first.receipt.observed_at + timedelta(seconds=1)}
+    )
+    copied_receipt_bytes = canonical_json_bytes(copied_receipt)
+    forged_journal = CleanupTerminalJournal.model_construct(
+        binding=binding,
+        receipt=copied_receipt,
+        receipt_digest=hashlib.sha256(
+            b"insurancekb.run-admission.cleanup-receipt.v1\0"
+            + copied_receipt_bytes
+        ).hexdigest(),
+    )
+    first.journal_path.write_bytes(canonical_json_bytes(forged_journal))
+    with pytest.raises(DeploymentControlBlocked) as copied:
+        controller._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    assert copied.value.code == "cleanup_receipt_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == calls
+    first.journal_path.write_bytes(original_journal)
+
+    first.receipt_path.write_bytes(b"{}\n")
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        controller._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    controller.close()
+    assert blocked.value.code == "cleanup_receipt_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == calls
+
+
+def test_o7_t9_19_c4_forged_terminal_journal_cannot_assert_billing_stop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    seed_transport = _C4CleanupTransport(manifest)
+    seed_controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        seed_transport,
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    forged_receipt_values: dict[str, object] = {
+        "binding": binding,
+        "cleanup_authorization_digest": cleanup_authorization_digest(authorization),
+        "causal_delete_attempt_digest": None,
+        "terminal_state": "already_absent_404",
+        "observed_at": NOW,
+    }
+    if "observation_proof" in CleanupReceipt.model_fields:
+        forged_receipt_values["cleanup_transport_identity_digest"] = "0" * 64
+        forged_receipt_values["observation_proof"] = "0" * 64
+    forged_receipt = CleanupReceipt.model_validate(forged_receipt_values)
+    forged_receipt_bytes = canonical_json_bytes(forged_receipt)
+    forged_digest = hashlib.sha256(
+        b"insurancekb.run-admission.cleanup-receipt.v1\0" + forged_receipt_bytes
+    ).hexdigest()
+    forged_journal = CleanupTerminalJournal(
+        binding=binding,
+        receipt=forged_receipt,
+        receipt_digest=forged_digest,
+    )
+    journal_path = seed_controller._store.path(
+        seed_controller._store.cleanup_terminal_journal_name(binding)
+    )
+    journal_path.write_bytes(canonical_json_bytes(forged_journal))
+    journal_path.chmod(0o600)
+    seed_controller.close()
+
+    database_path = tmp_path / "budget.sqlite3"
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", TEST_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", journal_path.parent)
+    monkeypatch.setattr(
+        admission_deployment,
+        "_PRODUCTION_BUDGET_LEDGER_PATH",
+        database_path,
+    )
+    monkeypatch.setattr(
+        BudgetLedger,
+        "infrastructure_cleanup_binding",
+        lambda _ledger, reserve_id: binding
+        if reserve_id == binding.reserve_id
+        else (_ for _ in ()).throw(BudgetLedgerError("not found")),
+    )
+    _install_production_authorities(
+        monkeypatch,
+        _policy(
+            key,
+            key_id="cleanup-key",
+            identity="cleanup-operator@example.test",
+            domain=CLEANUP_AUTHORIZATION_DOMAIN,
+            role="deployment-cleanup-operator",
+        ),
+    )
+    controller = DeploymentController.for_production_cleanup(
+        reserve_id=binding.reserve_id
+    )
+    controller._clock = lambda: NOW
+    provider_calls: list[str] = []
+
+    def detail(*, deployed_model: str) -> bytes:
+        provider_calls.append("GET")
+        return canonical_json_bytes(manifest)
+
+    def delete(*, deployed_model: str) -> bytes:
+        provider_calls.append("DELETE")
+        return b"{}"
+
+    monkeypatch.setattr(controller._transport, "deployment_detail", detail)
+    monkeypatch.setattr(controller._transport, "delete_deployment", delete)
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller.cleanup(
+                authorization=authorization,
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code == "cleanup_receipt_invalid"
+    assert provider_calls == []
+
+
+def test_o7_t9_19_c4_terminal_proof_survives_same_key_restart_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    seed_controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        _C4CleanupTransport(manifest),
+    )
+    root = seed_controller._store.root
+    seed_controller.close()
+    authorization = _c4_cleanup_authorization(key, binding)
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", TEST_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", root)
+    monkeypatch.setattr(
+        admission_deployment,
+        "_PRODUCTION_BUDGET_LEDGER_PATH",
+        tmp_path / "budget.sqlite3",
+    )
+    monkeypatch.setattr(
+        BudgetLedger,
+        "infrastructure_cleanup_binding",
+        lambda _ledger, reserve_id: binding
+        if reserve_id == binding.reserve_id
+        else (_ for _ in ()).throw(BudgetLedgerError("not found")),
+    )
+    _install_production_authorities(monkeypatch, authorities)
+    remote: dict[str, ProviderDeploymentManifest | None] = {"manifest": manifest}
+    provider_calls: list[str] = []
+
+    def detail(*, deployed_model: str) -> bytes:
+        provider_calls.append("GET")
+        current = remote["manifest"]
+        if current is None:
+            raise DeploymentNotFound("absent")
+        return canonical_json_bytes(current)
+
+    def delete(*, deployed_model: str) -> bytes:
+        provider_calls.append("DELETE")
+        remote["manifest"] = None
+        return b"{}"
+
+    first_controller = DeploymentController.for_production_cleanup(
+        reserve_id=binding.reserve_id
+    )
+    first_controller._clock = lambda: NOW
+    monkeypatch.setattr(first_controller._transport, "deployment_detail", detail)
+    monkeypatch.setattr(first_controller._transport, "delete_deployment", delete)
+    try:
+        first = first_controller.cleanup(
+            authorization=authorization,
+            receipt_digest=binding.receipt_digest,
+        )
+        authenticator_repr = repr(first_controller._cleanup_observation_authenticator)
+    finally:
+        first_controller.close()
+    assert provider_calls == ["GET", "DELETE", "GET"]
+
+    restart = DeploymentController.for_production_cleanup(reserve_id=binding.reserve_id)
+    restart._clock = lambda: NOW
+    monkeypatch.setattr(restart._transport, "deployment_detail", detail)
+    monkeypatch.setattr(restart._transport, "delete_deployment", delete)
+    try:
+        replay = restart.cleanup(
+            authorization=authorization,
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        restart.close()
+    assert replay == first
+    assert provider_calls == ["GET", "DELETE", "GET"]
+    assert TEST_API_KEY not in authenticator_repr
+    assert TEST_API_KEY.encode() not in first.receipt_path.read_bytes()
+    assert first.journal_path is not None
+    assert TEST_API_KEY.encode() not in first.journal_path.read_bytes()
+
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", "wrong-cleanup-key")
+    with pytest.raises(DeploymentControlBlocked) as wrong_key:
+        DeploymentController.for_production_cleanup(reserve_id=binding.reserve_id)
+    assert wrong_key.value.code == "production_cleanup_controller_unavailable"
+    assert provider_calls == ["GET", "DELETE", "GET"]
+
+
+@pytest.mark.parametrize("attack", ["copy", "deepcopy", "pickle", "construct"])
+def test_o7_t9_19_c4_cleanup_authenticator_cannot_be_copied_or_serialized(
+    attack: str,
+) -> None:
+    authenticator = admission_deployment._CleanupObservationAuthenticator.for_production(
+        TEST_API_KEY
+    )
+    if attack == "construct":
+        forged = object.__new__(type(authenticator))
+        with pytest.raises(DeploymentControlBlocked):
+            forged.proof(b"observation")
+    else:
+        operation: Callable[[], object] = {
+            "copy": lambda: copy.copy(authenticator),
+            "deepcopy": lambda: copy.deepcopy(authenticator),
+            "pickle": lambda: pickle.dumps(authenticator),
+        }[attack]
+        with pytest.raises(TypeError):
+            operation()
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires POSIX fork")
+def test_o7_t9_19_c4_cleanup_authenticator_is_invalid_after_fork() -> None:
+    authenticator = admission_deployment._CleanupObservationAuthenticator.for_production(
+        TEST_API_KEY
+    )
+    observation = b"fork-bound-cleanup-observation"
+    authenticator.proof(observation)
+    read_descriptor, write_descriptor = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(read_descriptor)
+        try:
+            authenticator.proof(observation)
+        except BaseException:
+            outcome = b"blocked"
+        else:
+            outcome = b"vulnerable"
+        os.write(write_descriptor, outcome)
+        os.close(write_descriptor)
+        os._exit(0)
+    os.close(write_descriptor)
+    try:
+        outcome = os.read(read_descriptor, 32)
+    finally:
+        os.close(read_descriptor)
+        os.waitpid(pid, 0)
+    assert outcome == b"blocked"
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_o7_t9_19_c4_unsigned_legacy_journal_cannot_be_promoted_to_causal_cleanup(
+    tmp_path: Path,
+    version: int,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    legacy_path = controller._store.path(
+        controller._store.cleanup_legacy_journal_name(binding, version)
+    )
+    legacy_path.write_bytes(
+        canonical_json_bytes(
+            {
+                "version": version,
+                "run_identity": binding.run_identity,
+                "operation_id": binding.operation_id,
+                "reserve_id": binding.reserve_id,
+                "receipt_digest": binding.receipt_digest,
+                "delete_started": True,
+                "cleanup_authorization_digest": "4" * 64,
+            }
+        )
+    )
+    legacy_path.chmod(0o600)
+    authorization = _c4_cleanup_authorization(key, binding)
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=receipt.content_digest,
+            )
+    finally:
+        controller.close()
+    assert blocked.value.code == "cleanup_journal_legacy_untrusted"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "failure_point",
+    ["intent", "terminal_journal", "terminal_receipt"],
+)
+def test_o7_t9_19_c4_atomic_publication_failure_is_recoverable_without_blind_delete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    original = controller._store.atomic_write_absent_on_failure
+    failed = False
+
+    def fail_once(name: str, content: bytes) -> tuple[int, int] | None:
+        nonlocal failed
+        target = (
+            (failure_point == "intent" and name.endswith(".cleanup-delete-intent.slot"))
+            or (
+                failure_point == "terminal_journal"
+                and name.endswith(".cleanup-terminal-journal.json")
+            )
+            or (
+                failure_point == "terminal_receipt"
+                and name.endswith(".cleanup-receipt.json")
+            )
+        )
+        if target and not failed:
+            failed = True
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "simulated no-replace publication failure",
+            )
+        return original(name, content)
+
+    monkeypatch.setattr(controller._store, "atomic_write_absent_on_failure", fail_once)
+    with pytest.raises(DeploymentControlBlocked):
+        controller._cleanup_for_testing(
+            authorization=authorization,
+            trusted_authorities=authorities,
+            receipt_digest=receipt.content_digest,
+        )
+    calls_after_failure = transport.delete_calls
+    monkeypatch.setattr(controller._store, "atomic_write_absent_on_failure", original)
+    recovered = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=receipt.content_digest,
+    )
+    replay = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=receipt.content_digest,
+    )
+    controller.close()
+
+    assert recovered == replay
+    assert recovered.receipt.billing_stop_verified is True
+    assert transport.delete_calls == (1 if failure_point == "intent" else calls_after_failure)
+    assert len(tuple((tmp_path / "deployment-control").glob("*.cleanup-receipt.json"))) == 1
+    assert len(
+        tuple((tmp_path / "deployment-control").glob("*.cleanup-terminal-journal.json"))
+    ) == 1
+
+
+@pytest.mark.parametrize(
+    "failure_phase",
+    ["create", "link", "file_fsync", "dir_fsync", "readback"],
+)
+def test_o7_t9_19_c4_completed_attempt_publication_failure_is_noncausal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_phase: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    now = {"value": NOW}
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: now["value"],
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    original_write = controller._store.atomic_write_absent_on_failure
+
+    def fail_attempt(name: str, content: bytes) -> tuple[int, int] | None:
+        if name.endswith(".cleanup-delete-attempt.slot"):
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                f"simulated attempt {failure_phase} failure",
+            )
+        return original_write(name, content)
+
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        fail_attempt,
+    )
+    first = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    with pytest.raises(DeploymentControlBlocked):
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    assert transport.delete_calls == 1
+    root = controller._store.root
+    assert not tuple(root.glob("*.cleanup-delete-attempt.slot"))
+    assert not tuple(root.glob("*.cleanup-receipt.json"))
+    assert not tuple(root.glob("*.cleanup-terminal-journal.json"))
+
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        original_write,
+    )
+    now["value"] = NOW + timedelta(minutes=2)
+    replacement = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=now["value"] - timedelta(seconds=1),
+        expires_at=now["value"] + timedelta(minutes=30),
+    )
+    try:
+        recovered = controller._cleanup_for_testing(
+            authorization=replacement,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        controller.close()
+    assert recovered.receipt.terminal_state == "already_absent_404"
+    assert recovered.receipt.causal_delete_attempt_digest is None
+    assert transport.delete_calls == 1
+
+
+def test_o7_t9_19_c4_forged_completed_attempt_blocks_before_provider_io(
+    tmp_path: Path,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    attempt = controller._store.path(
+        f"{_c4_cleanup_resource_prefix(binding)}.00.cleanup-delete-attempt.slot"
+    )
+    attempt.write_bytes(b"{}")
+    attempt.chmod(0o600)
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=_c4_cleanup_authorization(key, binding),
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+    assert blocked.value.code == "cleanup_attempt_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "forgery",
+    [
+        "run",
+        "resource",
+        "authorization",
+        "transport",
+        "receipt",
+        "model_copy",
+        "model_construct",
+        "pickle_copy",
+    ],
+)
+def test_o7_t9_19_c4_completed_attempt_identity_or_copy_forgery_fails_closed(
+    tmp_path: Path,
+    forgery: str,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    authorization = _c4_cleanup_authorization(key, binding)
+    result = controller._cleanup_for_testing(
+        authorization=authorization,
+        trusted_authorities=authorities,
+        receipt_digest=binding.receipt_digest,
+    )
+    attempt_path = next(controller._store.root.glob("*.cleanup-delete-attempt.slot"))
+    attempt = DurableDeleteAttemptEvidence.model_validate_json(
+        attempt_path.read_bytes()
+    )
+    assert result.journal_path is not None
+    result.journal_path.unlink()
+    result.receipt_path.unlink()
+    changed_binding = binding
+    if forgery == "run":
+        changed_binding = binding.model_copy(update={"run_identity": "foreign-run"})
+    elif forgery == "resource":
+        changed_binding = binding.model_copy(update={"reserve_id": "foreign-reserve"})
+    elif forgery == "receipt":
+        changed_binding = binding.model_copy(update={"receipt_digest": "0" * 64})
+    if forgery in {"run", "resource", "receipt"}:
+        forged = attempt.model_copy(update={"binding": changed_binding})
+    elif forgery == "authorization":
+        forged = attempt.model_copy(
+            update={"cleanup_authorization_digest": "0" * 64}
+        )
+    elif forgery == "transport":
+        forged = attempt.model_copy(
+            update={"cleanup_transport_identity_digest": "0" * 64}
+        )
+    elif forgery == "model_copy":
+        forged = attempt.model_copy(
+            update={"attempted_at": attempt.attempted_at + timedelta(seconds=1)}
+        )
+    elif forgery == "model_construct":
+        forged = DurableDeleteAttemptEvidence.model_construct(
+            version=attempt.version,
+            binding=attempt.binding,
+            intent_digest=attempt.intent_digest,
+            cleanup_authorization_digest=attempt.cleanup_authorization_digest,
+            cleanup_transport_identity_digest=(
+                attempt.cleanup_transport_identity_digest
+            ),
+            attempted_at=attempt.attempted_at + timedelta(seconds=1),
+            outcome_class=attempt.outcome_class,
+            attempt_proof=attempt.attempt_proof,
+        )
+    else:
+        forged = pickle.loads(pickle.dumps(attempt))
+        object.__setattr__(
+            forged,
+            "attempted_at",
+            attempt.attempted_at + timedelta(seconds=1),
+        )
+    attempt_path.write_bytes(canonical_json_bytes(forged))
+    transport.manifest = manifest
+    transport.detail_calls = 0
+    transport.delete_calls = 0
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=authorities,
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+    assert blocked.value.code == "cleanup_attempt_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+
+
+@pytest.mark.parametrize("failure", [KeyboardInterrupt, SystemExit])
+def test_o7_t9_19_c4_process_control_during_delete_never_creates_attempt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: type[BaseException],
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+    )
+
+    def interrupt(*, deployed_model: str) -> bytes:
+        transport.delete_calls += 1
+        raise failure("process control")
+
+    monkeypatch.setattr(transport, "delete_deployment", interrupt)
+    try:
+        with pytest.raises(failure):
+            controller._cleanup_for_testing(
+                authorization=_c4_cleanup_authorization(key, binding),
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+    root = tmp_path / "deployment-control"
+    assert not tuple(root.glob("*.cleanup-delete-attempt.slot"))
+    assert not tuple(root.glob("*.cleanup-receipt.json"))
+    assert not tuple(root.glob("*.cleanup-terminal-journal.json"))
+
+
+def test_o7_t9_19_c4_terminal_get_expiry_blocks_before_receipt_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    expired = threading.Event()
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: NOW + timedelta(minutes=2) if expired.is_set() else NOW,
+    )
+    authorization = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    original_detail = transport.deployment_detail
+
+    def expire_after_terminal_get(*, deployed_model: str) -> bytes:
+        try:
+            return original_detail(deployed_model=deployed_model)
+        finally:
+            if transport.detail_calls == 2:
+                expired.set()
+
+    monkeypatch.setattr(transport, "deployment_detail", expire_after_terminal_get)
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=receipt.content_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code == "cleanup_authorization_invalid"
+    assert transport.delete_calls == 1
+    root = tmp_path / "deployment-control"
+    assert tuple(root.glob("*.cleanup-terminal-journal.json")) == ()
+    assert tuple(root.glob("*.cleanup-receipt.json")) == ()
+
+
+def test_o7_t9_19_c4_first_get_rechecks_freshness_after_journal_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    expired = False
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: NOW + timedelta(minutes=2) if expired else NOW,
+    )
+    authorization = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    original_scan = controller._load_cleanup_delete_intents
+
+    def expire_after_scan(**kwargs: Any) -> Any:
+        nonlocal expired
+        result = original_scan(**kwargs)
+        expired = True
+        return result
+
+    monkeypatch.setattr(controller, "_load_cleanup_delete_intents", expire_after_scan)
+    root = controller._store.root
+    before = frozenset(root.iterdir())
+    try:
+        with pytest.raises(DeploymentControlBlocked) as blocked:
+            controller._cleanup_for_testing(
+                authorization=authorization,
+                trusted_authorities=_policy(
+                    key,
+                    key_id="cleanup-key",
+                    identity="cleanup-operator@example.test",
+                    domain=CLEANUP_AUTHORIZATION_DOMAIN,
+                    role="deployment-cleanup-operator",
+                ),
+                receipt_digest=binding.receipt_digest,
+            )
+    finally:
+        controller.close()
+
+    assert blocked.value.code == "cleanup_authorization_invalid"
+    assert (transport.detail_calls, transport.delete_calls) == (0, 0)
+    assert not tuple(root.glob("*.cleanup-delete-intent*"))
+    assert not tuple(root.glob("*.cleanup-terminal-journal.json"))
+    assert not tuple(root.glob("*.cleanup-receipt.json"))
+    assert before <= frozenset(root.iterdir())
+
+
+def test_o7_t9_19_c4_restore_rechecks_freshness_after_receipt_readback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = Ed25519PrivateKey.generate()
+    manifest = _manifest()
+    receipt = _receipt(manifest)
+    transport = _C4CleanupTransport(manifest)
+    now = {"value": NOW}
+    controller, binding = _c4_cleanup_controller(
+        tmp_path,
+        receipt,
+        manifest,
+        transport,
+        clock=lambda: now["value"],
+    )
+    authorities = _policy(
+        key,
+        key_id="cleanup-key",
+        identity="cleanup-operator@example.test",
+        domain=CLEANUP_AUTHORIZATION_DOMAIN,
+        role="deployment-cleanup-operator",
+    )
+    first = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=NOW - timedelta(seconds=1),
+        expires_at=NOW + timedelta(minutes=1),
+    )
+    original_write = controller._store.atomic_write_absent_on_failure
+    failed_terminal_receipt = False
+
+    def fail_first_terminal_receipt(
+        name: str,
+        content: bytes,
+    ) -> tuple[int, int] | None:
+        nonlocal failed_terminal_receipt
+        if name.endswith(".cleanup-receipt.json") and not failed_terminal_receipt:
+            failed_terminal_receipt = True
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "simulated terminal receipt interruption",
+            )
+        return original_write(name, content)
+
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        fail_first_terminal_receipt,
+    )
+    with pytest.raises(DeploymentControlBlocked):
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    assert transport.delete_calls == 1
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        original_write,
+    )
+    expired_after_receipt_readback = False
+
+    def expire_after_receipt_readback(
+        name: str,
+        content: bytes,
+    ) -> tuple[int, int] | None:
+        nonlocal expired_after_receipt_readback
+        outcome = original_write(name, content)
+        if name.endswith(".cleanup-receipt.json"):
+            expired_after_receipt_readback = True
+            now["value"] = NOW + timedelta(minutes=1)
+        return outcome
+
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        expire_after_receipt_readback,
+    )
+    with pytest.raises(DeploymentControlBlocked) as expired:
+        controller._cleanup_for_testing(
+            authorization=first,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    assert expired.value.code == "cleanup_authorization_invalid"
+    assert expired_after_receipt_readback is True
+    assert transport.delete_calls == 1
+
+    now["value"] = NOW + timedelta(minutes=2)
+    replacement = _c4_cleanup_authorization(
+        key,
+        binding,
+        issued_at=now["value"] - timedelta(seconds=1),
+        expires_at=now["value"] + timedelta(minutes=30),
+    )
+    monkeypatch.setattr(
+        controller._store,
+        "atomic_write_absent_on_failure",
+        original_write,
+    )
+    try:
+        recovered = controller._cleanup_for_testing(
+            authorization=replacement,
+            trusted_authorities=authorities,
+            receipt_digest=binding.receipt_digest,
+        )
+    finally:
+        controller.close()
+
+    assert recovered.receipt.billing_stop_verified is True
+    assert transport.delete_calls == 1
+
+
+def test_o7_production_adoption_uses_controller_receipt_and_reserves_segments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pricing_key = Ed25519PrivateKey.generate()
+    cap_key = Ed25519PrivateKey.generate()
+    provision_key = Ed25519PrivateKey.generate()
+    adoption_key = Ed25519PrivateKey.generate()
+    pricing_content = _pricing_content()
+    cap_content = _cap_content()
+    pricing = _pricing_approval(pricing_key, pricing_content)
+    cap = _cap_approval(cap_key, cap_content)
+    provisioning_payload, provisioning = _provisioning_authorization(
+        provision_key,
+        pricing,
+        cap,
+    )
+    authorities = {
+        **_policy(
+            pricing_key,
+            key_id="pricing-key",
+            identity="pricing-owner@example.test",
+            domain=PRICING_EVIDENCE_DOMAIN,
+            role="pricing-evidence-approver",
+        ),
+        **_policy(
+            cap_key,
+            key_id="cap-key",
+            identity="cap-attestor@example.test",
+            domain=PROVIDER_CAP_DOMAIN,
+            role="provider-cap-attestor",
+        ),
+        **_policy(
+            provision_key,
+            key_id="provisioning-key",
+            identity="deployment-operator@example.test",
+            domain=PROVISIONING_AUTHORIZATION_DOMAIN,
+            role="deployment-provisioner",
+        ),
+        **_policy(
+            adoption_key,
+            key_id="adoption-key",
+            identity="budget-owner@example.test",
+            domain=ADOPTION_AUTHORIZATION_DOMAIN,
+            role="budget-approver",
+        ),
+    }
+    _install_production_authorities(monkeypatch, authorities)
+    provisioning_path = tmp_path / "provisioning.sqlite3"
+    provisioning_ledger = BudgetLedger(provisioning_path)
+    permit = provisioning_ledger.reserve_provisioning_before_post(
+        authorization=provisioning,
+        expected=provisioning_payload,
+        pricing_evidence_bytes=canonical_json_bytes(pricing_content),
+        pricing_approval=pricing,
+        provider_cap_evidence_bytes=canonical_json_bytes(cap_content),
+        provider_cap_approval=cap,
+    )
+    assert type(permit) is InfrastructureCreatePermit
+    deployment_suffix = deterministic_deployment_suffix(
+        provisioning_payload.run_identity,
+        provisioning_payload.operation_id,
+        OWNERSHIP_NONCE,
+    )
+    manifest = _manifest(
+        deployed_model=f"{provisioning_payload.base_model}-{deployment_suffix}"
+    )
+    role_plan = ModelRolePlan(
+        provider="bailian",
+        model_id=manifest.deployed_model,
+        immutable_deployment_id=manifest.deployed_model,
+        protocol="https",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        provider_policy="bailian-deployment-detail-v1",
+        credential_env_name="HARNESS_DASHSCOPE_API_KEY",
+    )
+    plan = RunAdmissionPlanPayload(
+        run_identity=provisioning_payload.run_identity,
+        purpose=provisioning_payload.purpose,
+        model_roles={
+            "annotator": role_plan,
+            "judge": role_plan,
+            "weak_extractor": role_plan,
+        },
+        budget_contract_hash="9" * 64,
+    )
+    receipt, receipt_capability = _controller_issued_production_receipt(
+        monkeypatch,
+        ledger_path=provisioning_path,
+        operation_root=tmp_path / "controller-store",
+        plan=plan,
+        authorization=provisioning,
+        permit=permit,
+        manifest=manifest,
+    )
+    expected, adoption = _adoption_authorization(
+        adoption_key,
+        pricing,
+        cap,
+        receipt,
+    )
+    adoption_ledger = BudgetLedger(tmp_path / "adoption.sqlite3")
+
+    with pytest.raises(BudgetLedgerError, match="production|receipt|verified|signed"):
+        adoption_ledger.reserve_existing_adoption(
+            authorization=adoption,
+            expected=expected,
+            receipt_capability=copy.copy(receipt_capability),
+            pricing_evidence_bytes=canonical_json_bytes(pricing_content),
+            pricing_approval=pricing,
+            provider_cap_evidence_bytes=canonical_json_bytes(cap_content),
+            provider_cap_approval=cap,
+        )
+    with sqlite3.connect(tmp_path / "adoption.sqlite3") as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM infrastructure_reserves"
+        ).fetchone() == (0,)
+
+    snapshot = adoption_ledger.reserve_existing_adoption(
+        authorization=adoption,
+        expected=expected,
+        receipt_capability=receipt_capability,
+        pricing_evidence_bytes=canonical_json_bytes(pricing_content),
+        pricing_approval=pricing,
+        provider_cap_evidence_bytes=canonical_json_bytes(cap_content),
+        provider_cap_approval=cap,
+    )
+
+    assert type(snapshot) is InfrastructureReserveSnapshot
+    assert snapshot.authorization_domain == ADOPTION_AUTHORIZATION_DOMAIN
+    assert snapshot.maximum.cost_minor_units == 6_048
+    with sqlite3.connect(tmp_path / "adoption.sqlite3") as connection:
+        sidecar = connection.execute(
+            """SELECT evidence_bytes,approval_envelope_bytes
+               FROM infrastructure_provider_cap_evidence"""
+        ).fetchone()
+        assert sidecar == (
+            canonical_json_bytes(cap_content),
+            canonical_json_bytes(cap),
+        )
+
+    for label, incurred, future in (
+        ("incurred", 1, 5_376),
+        ("future", 672, 1),
+    ):
+        invalid_expected, invalid_adoption = _adoption_authorization(
+            adoption_key,
+            pricing,
+            cap,
+            receipt,
+            incurred_cost_minor_units=incurred,
+            future_max_cost_minor_units=future,
+        )
+        invalid_path = tmp_path / f"adoption-invalid-{label}.sqlite3"
+        invalid_ledger = BudgetLedger(invalid_path)
+        with pytest.raises(BudgetLedgerError, match="cost|pricing|mechanical"):
+            invalid_ledger.reserve_existing_adoption(
+                authorization=invalid_adoption,
+                expected=invalid_expected,
+                receipt_capability=receipt_capability,
+                pricing_evidence_bytes=canonical_json_bytes(pricing_content),
+                pricing_approval=pricing,
+                provider_cap_evidence_bytes=canonical_json_bytes(cap_content),
+                provider_cap_approval=cap,
+            )
+        with sqlite3.connect(invalid_path) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM infrastructure_reserves"
+            ).fetchone() == (0,)
 
 
 def test_o7_signed_pricing_mechanically_rounds_fixed_and_inference_rates() -> None:
@@ -878,6 +3159,7 @@ def test_o3_o7_production_ledger_rejects_caller_self_enrolled_authorities_before
         "invalid_window",
         "future_window",
         "self_consistent_window",
+        "cleanup_binding_topology",
     ],
 )
 def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery(
@@ -890,6 +3172,7 @@ def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery
     cap_key = Ed25519PrivateKey.generate()
     provision_key = Ed25519PrivateKey.generate()
     finance_key = Ed25519PrivateKey.generate()
+    cleanup_key = Ed25519PrivateKey.generate()
     pricing_content = _pricing_content()
     cap_content = _cap_content(expires_at=NOW + timedelta(minutes=20))
     pricing = _pricing_approval(pricing_key, pricing_content)
@@ -937,6 +3220,13 @@ def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery
             identity="finance-owner@example.test",
             domain="budget",
             role="budget_approver",
+        ),
+        **_policy(
+            cleanup_key,
+            key_id="cleanup-key",
+            identity="cleanup-operator@example.test",
+            domain=CLEANUP_AUTHORIZATION_DOMAIN,
+            role="deployment-cleanup-operator",
         ),
     }
     _install_production_authorities(monkeypatch, authorities)
@@ -1425,6 +3715,295 @@ def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery
         envelope=budget_envelope,
         expected_scope="goldenset-production",
     )
+    cleanup_binding = ledger.infrastructure_cleanup_binding("infra-strong-031")
+    assert type(cleanup_binding) is InfrastructureCleanupBinding
+    assert cleanup_binding.receipt_digest == receipt.content_digest
+    assert cleanup_binding.remote_manifest_digest == provider_manifest_digest(strong_manifest)
+    assert cleanup_binding.reconciliation_digest == receipt_capability.reconciliation_digest
+    assert (
+        cleanup_binding.transport_identity_digest
+        == receipt_capability.transport_identity_digest
+    )
+    assert cleanup_binding.scope == expected.scope
+
+    if forgery == "issuer":
+        selected_receipt = receipt if deployment_key == "strong" else weak_receipt
+        selected_manifest = (
+            strong_manifest if deployment_key == "strong" else weak_manifest
+        )
+        selected_binding = ledger.infrastructure_cleanup_binding(
+            selected_receipt.content.infrastructure_reserve_id
+        )
+        remote: dict[str, ProviderDeploymentManifest | None] = {
+            "manifest": selected_manifest
+        }
+        provider_methods: list[str] = []
+
+        def cleanup_detail(
+            _transport: BailianDeploymentHTTPTransport,
+            *,
+            deployed_model: str,
+        ) -> bytes:
+            provider_methods.append("GET")
+            assert deployed_model == selected_binding.deployed_model
+            current = remote["manifest"]
+            if current is None:
+                raise DeploymentNotFound("absent")
+            return canonical_json_bytes(current)
+
+        def cleanup_delete(
+            _transport: BailianDeploymentHTTPTransport,
+            *,
+            deployed_model: str,
+        ) -> bytes:
+            provider_methods.append("DELETE")
+            assert deployed_model == selected_binding.deployed_model
+            remote["manifest"] = None
+            return b"{}"
+
+        monkeypatch.setattr(
+            BailianDeploymentHTTPTransport,
+            "deployment_detail",
+            cleanup_detail,
+        )
+        monkeypatch.setattr(
+            BailianDeploymentHTTPTransport,
+            "delete_deployment",
+            cleanup_delete,
+        )
+        database_before_cleanup = (tmp_path / "budget.sqlite3").read_bytes()
+        cleanup_controller = DeploymentController.for_production_cleanup(
+            reserve_id=selected_binding.reserve_id
+        )
+        cleanup_controller._clock = lambda: NOW
+        try:
+            cleanup_result = cleanup_controller.cleanup(
+                authorization=_c4_cleanup_authorization(
+                    cleanup_key,
+                    selected_binding,
+                ),
+                receipt_digest=selected_binding.receipt_digest,
+            )
+        finally:
+            cleanup_controller.close()
+        assert cleanup_result.receipt.terminal_state == "absent_404"
+        assert provider_methods == ["GET", "DELETE", "GET"]
+        assert (tmp_path / "budget.sqlite3").read_bytes() == database_before_cleanup
+
+    if forgery == "cleanup_binding_topology":
+        topology_tables = (
+            "infrastructure_reserves",
+            "infrastructure_authorizations",
+            "deployment_role_bindings",
+            "final_topology_receipt_annexes",
+            "final_infrastructure_topologies",
+        )
+
+        def topology_state() -> dict[str, list[tuple[Any, ...]]]:
+            with sqlite3.connect(tmp_path / "budget.sqlite3") as state_connection:
+                return {
+                    table: state_connection.execute(
+                        f"SELECT * FROM {table} ORDER BY rowid"
+                    ).fetchall()
+                    for table in topology_tables
+                }
+
+        with sqlite3.connect(tmp_path / "budget.sqlite3") as connection:
+            original_row = connection.execute(
+                """SELECT account_id,strong_reserve_id,weak_reserve_id,
+                          topology_json,topology_digest
+                   FROM final_infrastructure_topologies"""
+            ).fetchone()
+        assert original_row is not None
+        account_id, strong_reserve_id, weak_reserve_id, topology_json, topology_digest = (
+            original_row
+        )
+        original_payload = json.loads(bytes(topology_json))
+        with sqlite3.connect(tmp_path / "budget.sqlite3") as connection:
+            authorization_digest, authorization_envelope = connection.execute(
+                """SELECT a.authorization_digest,a.envelope_json
+                   FROM infrastructure_authorizations AS a
+                   JOIN infrastructure_reserves AS r
+                     ON r.authorization_digest=a.authorization_digest
+                   WHERE r.reserve_id='infra-strong-031'"""
+            ).fetchone()
+
+        for mutation in (
+            "authorization_envelope_noncanonical",
+            "authorization_digest",
+            "authorization_payload",
+            "topology_digest",
+            "row_reserve_ids",
+            "noncanonical_topology_json",
+            "plan_run_identity",
+            "plan_purpose",
+            "expected_scope",
+            "pricing_evidence_digest",
+            "pricing_approval_digest",
+            "provider_cap_evidence_digest",
+            "provider_cap_approval_digest",
+            "roles",
+            "receipt_annex_digest",
+            "reconciliation_digest",
+        ):
+            with sqlite3.connect(tmp_path / "budget.sqlite3") as connection:
+                connection.execute(
+                    """UPDATE final_infrastructure_topologies
+                       SET strong_reserve_id=?,weak_reserve_id=?,topology_json=?,topology_digest=?
+                       WHERE account_id=?""",
+                    (
+                        strong_reserve_id,
+                        weak_reserve_id,
+                        topology_json,
+                        topology_digest,
+                        account_id,
+                    ),
+                )
+                connection.execute(
+                    """UPDATE infrastructure_authorizations
+                       SET authorization_digest=?,envelope_json=?
+                       WHERE reserve_id='infra-strong-031'""",
+                    (authorization_digest, authorization_envelope),
+                )
+                connection.execute(
+                    """UPDATE infrastructure_reserves SET authorization_digest=?
+                       WHERE reserve_id='infra-strong-031'""",
+                    (authorization_digest,),
+                )
+                if mutation == "authorization_envelope_noncanonical":
+                    connection.execute(
+                        """UPDATE infrastructure_authorizations SET envelope_json=?
+                           WHERE authorization_digest=?""",
+                        (
+                            json.dumps(
+                                json.loads(bytes(authorization_envelope)),
+                                indent=2,
+                                sort_keys=True,
+                            ).encode("utf-8"),
+                            authorization_digest,
+                        ),
+                    )
+                elif mutation == "authorization_digest":
+                    mutated_authorization = json.loads(bytes(authorization_envelope))
+                    mutated_authorization["signature"] += "A"
+                    connection.execute(
+                        """UPDATE infrastructure_authorizations SET envelope_json=?
+                           WHERE authorization_digest=?""",
+                        (canonical_json_bytes(mutated_authorization), authorization_digest),
+                    )
+                elif mutation == "authorization_payload":
+                    mutated_authorization = json.loads(bytes(authorization_envelope))
+                    mutated_authorization["payload"]["cleanup_deadline"] = (
+                        NOW + timedelta(hours=7)
+                    ).isoformat()
+                    mutated_payload = ProvisioningAuthorizationPayload.model_validate(
+                        mutated_authorization["payload"]
+                    )
+                    changed_authorization = ProvisioningAuthorization(
+                        domain=PROVISIONING_AUTHORIZATION_DOMAIN,
+                        key_id=str(mutated_authorization["key_id"]),
+                        payload=mutated_payload,
+                        signature=base64.b64encode(
+                            provision_key.sign(
+                                authorization_signed_bytes(
+                                    PROVISIONING_AUTHORIZATION_DOMAIN,
+                                    mutated_payload,
+                                )
+                            )
+                        ).decode("ascii"),
+                    )
+                    changed_digest = infrastructure_authorization_digest(
+                        changed_authorization
+                    )
+                    connection.execute(
+                        """UPDATE infrastructure_authorizations
+                           SET authorization_digest=?,envelope_json=?
+                           WHERE reserve_id='infra-strong-031'""",
+                        (
+                            changed_digest,
+                            canonical_json_bytes(changed_authorization),
+                        ),
+                    )
+                    connection.execute(
+                        """UPDATE infrastructure_reserves SET authorization_digest=?
+                           WHERE reserve_id='infra-strong-031'""",
+                        (changed_digest,),
+                    )
+                elif mutation == "topology_digest":
+                    connection.execute(
+                        "UPDATE final_infrastructure_topologies SET topology_digest=?",
+                        ("0" * 64,),
+                    )
+                elif mutation == "row_reserve_ids":
+                    connection.execute(
+                        """UPDATE final_infrastructure_topologies
+                           SET strong_reserve_id=?,weak_reserve_id=?""",
+                        (weak_reserve_id, strong_reserve_id),
+                    )
+                else:
+                    mutated_payload = copy.deepcopy(original_payload)
+                    if mutation == "noncanonical_topology_json":
+                        mutated_json = json.dumps(
+                            mutated_payload,
+                            indent=2,
+                            sort_keys=True,
+                        ).encode("utf-8")
+                    else:
+                        if mutation == "plan_run_identity":
+                            mutated_payload["plan"]["run_identity"] = "other-run-031"
+                        elif mutation == "plan_purpose":
+                            mutated_payload["plan"]["purpose"] = "other purpose"
+                        elif mutation == "expected_scope":
+                            mutated_payload["expected_scope"] = "other-scope"
+                        elif mutation == "pricing_evidence_digest":
+                            mutated_payload["strong"]["pricing_evidence_json"] = (
+                                mutated_payload["weak"]["pricing_evidence_json"]
+                            )
+                        elif mutation == "pricing_approval_digest":
+                            mutated_payload["strong"]["pricing_approval"]["signature"] += "A"
+                        elif mutation == "provider_cap_evidence_digest":
+                            mutated_payload["provider_cap_evidence_json"] = json.dumps(
+                                json.loads(mutated_payload["provider_cap_evidence_json"]),
+                                indent=2,
+                                sort_keys=True,
+                            )
+                        elif mutation == "provider_cap_approval_digest":
+                            mutated_payload["provider_cap_approval"]["signature"] += "A"
+                        elif mutation == "roles":
+                            mutated_payload["strong"]["roles"] = ["annotator"]
+                        elif mutation == "receipt_annex_digest":
+                            mutated_payload["strong"]["receipt_annex_digest"] = "0" * 64
+                        else:
+                            mutated_payload["strong"]["reconciliation_digest"] = "0" * 64
+                        mutated_json = canonical_json_bytes(mutated_payload)
+                    mutated_digest = hashlib.sha256(
+                        b"insurancekb.run-admission.final-topology.v1\0" + mutated_json
+                    ).hexdigest()
+                    connection.execute(
+                        """UPDATE final_infrastructure_topologies
+                           SET topology_json=?,topology_digest=?""",
+                        (mutated_json, mutated_digest),
+                    )
+            before_rejected_binding = topology_state()
+            with pytest.raises(BudgetLedgerError, match="topology|cleanup|drift|bound"):
+                ledger.infrastructure_cleanup_binding("infra-strong-031")
+            assert topology_state() == before_rejected_binding
+
+        with sqlite3.connect(tmp_path / "budget.sqlite3") as connection:
+            connection.execute(
+                """UPDATE final_infrastructure_topologies
+                   SET strong_reserve_id=?,weak_reserve_id=?,topology_json=?,topology_digest=?
+                   WHERE account_id=?""",
+                (
+                    strong_reserve_id,
+                    weak_reserve_id,
+                    topology_json,
+                    topology_digest,
+                    account_id,
+                ),
+            )
+        assert ledger.infrastructure_cleanup_binding("infra-strong-031") == cleanup_binding
+        return
 
     assert type(bound).__name__ == "VerifiedFinalTopology"
     assert fresh_reload_observations == [(2, 1)]
@@ -2129,5 +4708,321 @@ def test_o7_production_budget_receipt_gate_rejects_private_test_issuer(
             expected,
             now=NOW,
         )
-
     assert (tmp_path / "budget.sqlite3").read_bytes() == before
+
+
+def test_o7_t9_19_c4_real_c3_adoption_dual_bind_to_production_cleanup_e2e(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def ledger_rows(db_path: Path) -> tuple[tuple[str, tuple[tuple[object, ...], ...]], ...]:
+        with sqlite3.connect(db_path) as connection:
+            tables = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    """SELECT name FROM sqlite_master
+                       WHERE type='table' AND name NOT LIKE 'sqlite_%'
+                       ORDER BY name"""
+                ).fetchall()
+            )
+            return tuple(
+                (
+                    table,
+                    tuple(
+                        tuple(row)
+                        for row in connection.execute(
+                            f'SELECT * FROM "{table}" ORDER BY rowid'
+                        ).fetchall()
+                    ),
+                )
+                for table in tables
+            )
+
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    strong_manifest = case.manifest
+    strong_receipt = case.receipt
+    weak_operation = "op-adopt-weak-031"
+    weak_reserve = "infra-adopt-weak-031"
+    weak_nonce = "6" * 32
+    weak_suffix = deterministic_deployment_suffix(
+        case.payload.run_identity,
+        weak_operation,
+        weak_nonce,
+    )
+    weak_manifest = strong_manifest.model_copy(
+        update={
+            "deployed_model": f"{strong_manifest.base_model}-{weak_suffix}",
+            "ownership_nonce": weak_nonce,
+            "operation_marker": deterministic_operation_marker(
+                case.payload.run_identity,
+                weak_operation,
+                weak_nonce,
+            ),
+            "deployment_suffix": weak_suffix,
+        }
+    )
+    weak_content = strong_receipt.content.model_copy(
+        update={
+            "operation_id": weak_operation,
+            "infrastructure_reserve_id": weak_reserve,
+            "deployed_model": weak_manifest.deployed_model,
+            "operation_marker": weak_manifest.operation_marker,
+            "deployment_suffix": weak_manifest.deployment_suffix,
+            "remote_manifest_digest": provider_manifest_digest(weak_manifest),
+        }
+    )
+    weak_receipt = DeploymentReceipt(
+        content=weak_content,
+        content_digest=deployment_receipt_content_digest(weak_content),
+    )
+    weak_payload = case.payload.model_copy(
+        update={
+            "operation_id": weak_operation,
+            "infrastructure_reserve_id": weak_reserve,
+            "deployed_model": weak_receipt.content.deployed_model,
+            "receipt_digest": weak_receipt.content_digest,
+            "gmt_create": weak_receipt.content.gmt_create,
+        }
+    )
+    weak_authorization = ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="adoption-key",
+        payload=weak_payload,
+        signature=base64.b64encode(
+            case.adoption_key.sign(
+                authorization_signed_bytes(ADOPTION_AUTHORIZATION_DOMAIN, weak_payload)
+            )
+        ).decode("ascii"),
+    )
+    remotes: dict[str, ProviderDeploymentManifest | None] = {
+        strong_manifest.deployed_model: strong_manifest,
+        weak_manifest.deployed_model: weak_manifest,
+    }
+    provider_methods: list[tuple[str, str]] = []
+
+    def detail(
+        _transport: BailianDeploymentHTTPTransport,
+        *,
+        deployed_model: str,
+    ) -> bytes:
+        provider_methods.append(("GET", deployed_model))
+        manifest = remotes[deployed_model]
+        if manifest is None:
+            raise DeploymentNotFound("absent")
+        return canonical_json_bytes(manifest)
+
+    def delete(
+        _transport: BailianDeploymentHTTPTransport,
+        *,
+        deployed_model: str,
+    ) -> bytes:
+        provider_methods.append(("DELETE", deployed_model))
+        remotes[deployed_model] = None
+        return b"{}"
+
+    monkeypatch.setattr(BailianDeploymentHTTPTransport, "deployment_detail", detail)
+    monkeypatch.setattr(BailianDeploymentHTTPTransport, "delete_deployment", delete)
+    strong_adopted = case.controller.reconcile_existing_adoption(
+        authorization=case.authorization
+    )
+    weak_adopted = case.controller.reconcile_existing_adoption(
+        authorization=weak_authorization
+    )
+    assert strong_adopted.receipt == strong_receipt
+    assert weak_adopted.receipt == weak_receipt
+    ledger = case.fixture.ledger
+    strong_reserved = ledger.reserve_existing_adoption(
+        authorization=case.authorization,
+        expected=case.payload,
+        receipt_capability=strong_adopted.receipt_capability,
+        pricing_evidence_bytes=case.fixture.pricing_bytes,
+        pricing_approval=case.fixture.pricing_approval,
+        provider_cap_evidence_bytes=case.fixture.cap_bytes,
+        provider_cap_approval=case.fixture.cap_approval,
+    )
+    weak_reserved = ledger.reserve_existing_adoption(
+        authorization=weak_authorization,
+        expected=weak_payload,
+        receipt_capability=weak_adopted.receipt_capability,
+        pricing_evidence_bytes=case.fixture.pricing_bytes,
+        pricing_approval=case.fixture.pricing_approval,
+        provider_cap_evidence_bytes=case.fixture.cap_bytes,
+        provider_cap_approval=case.fixture.cap_approval,
+    )
+    strong_plan = ModelRolePlan(
+        provider="bailian",
+        model_id=strong_receipt.content.deployed_model,
+        immutable_deployment_id=strong_receipt.content.deployed_model,
+        protocol="https",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        provider_policy="bailian-deployment-detail-v1",
+        credential_env_name="HARNESS_DASHSCOPE_API_KEY",
+    )
+    weak_plan = strong_plan.model_copy(
+        update={
+            "model_id": weak_receipt.content.deployed_model,
+            "immutable_deployment_id": weak_receipt.content.deployed_model,
+        }
+    )
+    verified_pricing = verify_pricing_evidence(
+        case.fixture.pricing_bytes,
+        envelope=case.fixture.pricing_approval,
+        trusted_authorities=case.authorities,
+        expected_scope=case.payload.scope,
+        now=NOW,
+        fixed_duration_seconds=9 * 3600,
+        cost_window_start=strong_receipt.content.gmt_create,
+        fixed_duration_segments_seconds=(3600, 8 * 3600),
+    )
+    strong_rate = derive_role_rate_from_pricing(
+        verified_pricing,
+        role_plan=strong_plan,
+        expected_provider="bailian",
+        expected_currency="CNY",
+    )
+    weak_rate = derive_role_rate_from_pricing(
+        verified_pricing,
+        role_plan=weak_plan,
+        expected_provider="bailian",
+        expected_currency="CNY",
+    )
+    cap_evidence = case.fixture.cap_approval.payload.evidence
+    contract = BudgetContract(
+        currency="CNY",
+        price_snapshot_id=case.fixture.pricing_approval.payload.evidence_digest,
+        price_observed_at=NOW,
+        price_expires_at=case.fixture.pricing_approval.payload.evidence.effective_until,
+        ceiling=BudgetAmounts(input_tokens=0, output_tokens=0, cost_minor_units=20_000),
+        role_rates={
+            "annotator": strong_rate,
+            "judge": strong_rate,
+            "weak_extractor": weak_rate,
+        },
+        provider_attestation=ProviderSpendCapAttestation(
+            provider="bailian",
+            workspace_ref=cap_evidence.workspace_ref,
+            project_ref=cap_evidence.project_ref,
+            credential_ref=cap_evidence.credential_ref,
+            evidence_digest=case.fixture.cap_approval.payload.evidence_digest,
+            max_cost_minor_units=cap_evidence.max_cost_minor_units,
+            observed_at=cap_evidence.observed_at,
+            expires_at=cap_evidence.expires_at,
+        ),
+        product_reserves=(),
+    )
+    plan = RunAdmissionPlanPayload(
+        run_identity=case.payload.run_identity,
+        purpose=case.payload.purpose,
+        model_roles={
+            "annotator": strong_plan,
+            "judge": strong_plan,
+            "weak_extractor": weak_plan,
+        },
+        budget_contract_hash=budget_contract_hash(contract),
+    )
+    finance_key = Ed25519PrivateKey.generate()
+    cleanup_key = Ed25519PrivateKey.generate()
+    authorities = {
+        **case.authorities,
+        **_policy(
+            finance_key,
+            key_id="finance-key",
+            identity="finance-owner@example.test",
+            domain="budget",
+            role="budget_approver",
+        ),
+        **_policy(
+            cleanup_key,
+            key_id="cleanup-key",
+            identity="cleanup-operator@example.test",
+            domain=CLEANUP_AUTHORIZATION_DOMAIN,
+            role="deployment-cleanup-operator",
+        ),
+    }
+    _install_production_authorities(monkeypatch, authorities)
+    budget_payload = BudgetApprovalPayload(
+        plan_payload_hash=plan_payload_hash(plan),
+        run_identity=plan.run_identity,
+        purpose=plan.purpose,
+        scope=case.payload.scope,
+        approver_identity="finance-owner@example.test",
+        approver_role="budget_approver",
+        issued_at=NOW - timedelta(minutes=1),
+        expires_at=NOW + timedelta(minutes=30),
+        budget_entries=(
+            BudgetApprovalEntry(
+                currency="CNY",
+                max_input_tokens=0,
+                max_output_tokens=0,
+                max_cost_minor_units=20_000,
+                budget_contract_hash=budget_contract_hash(contract),
+            ),
+        ),
+    )
+    budget_approval = BudgetApprovalEnvelope(
+        domain="budget",
+        key_id="finance-key",
+        payload=budget_payload,
+        signature=base64.b64encode(
+            finance_key.sign(approval_signed_bytes("budget", budget_payload))
+        ).decode("ascii"),
+    )
+    monkeypatch.setattr(
+        "insurance_harness.goldenset.admission_budget._PRODUCTION_DEPLOYMENT_OPERATION_ROOT",
+        case.run_root,
+        raising=False,
+    )
+    ledger.bind_final_infrastructure_topology(
+        strong=FinalInfrastructureBindingRequest(
+            reserve_id=strong_reserved.reserve_id,
+            authorization=case.authorization,
+            expected_authorization=case.payload,
+            receipt_capability=strong_adopted.receipt_capability,
+            roles=("annotator", "judge"),
+            pricing_evidence_bytes=case.fixture.pricing_bytes,
+            pricing_approval=case.fixture.pricing_approval,
+            provider_cap_evidence_bytes=case.fixture.cap_bytes,
+            provider_cap_approval=case.fixture.cap_approval,
+        ),
+        weak=FinalInfrastructureBindingRequest(
+            reserve_id=weak_reserved.reserve_id,
+            authorization=weak_authorization,
+            expected_authorization=weak_payload,
+            receipt_capability=weak_adopted.receipt_capability,
+            roles=("weak_extractor",),
+            pricing_evidence_bytes=case.fixture.pricing_bytes,
+            pricing_approval=case.fixture.pricing_approval,
+            provider_cap_evidence_bytes=case.fixture.cap_bytes,
+            provider_cap_approval=case.fixture.cap_approval,
+        ),
+        plan=plan,
+        contract=contract,
+        envelope=budget_approval,
+        expected_scope=case.payload.scope,
+    )
+    case.controller.close()
+    ledger_rows_before_cleanup = ledger_rows(case.fixture.db_path)
+    methods_before_cleanup = len(provider_methods)
+    for reserve_id in (strong_reserved.reserve_id, weak_reserved.reserve_id):
+        cleanup_controller = DeploymentController.for_production_cleanup(
+            reserve_id=reserve_id
+        )
+        cleanup_controller._clock = lambda: NOW
+        binding = ledger.infrastructure_cleanup_binding(reserve_id)
+        try:
+            result = cleanup_controller.cleanup(
+                authorization=_c4_cleanup_authorization(cleanup_key, binding),
+                receipt_digest=binding.receipt_digest,
+            )
+        finally:
+            cleanup_controller.close()
+        assert result.receipt.terminal_state == "absent_404"
+    assert provider_methods[methods_before_cleanup:] == [
+        ("GET", strong_receipt.content.deployed_model),
+        ("DELETE", strong_receipt.content.deployed_model),
+        ("GET", strong_receipt.content.deployed_model),
+        ("GET", weak_receipt.content.deployed_model),
+        ("DELETE", weak_receipt.content.deployed_model),
+        ("GET", weak_receipt.content.deployed_model),
+    ]
+    assert ledger_rows(case.fixture.db_path) == ledger_rows_before_cleanup

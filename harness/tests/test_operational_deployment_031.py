@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import base64
 import copy
+import fcntl
 import inspect
 import json
 import os
 import pickle
 import secrets
+import stat
 import threading
 import time
 from collections.abc import Callable
@@ -36,6 +38,7 @@ from insurance_harness.goldenset.admission_budget import (
 from insurance_harness.goldenset.admission_deployment import (
     BAILIAN_DEPLOYMENT_ENDPOINT,
     BailianDeploymentHTTPTransport,
+    DeploymentAdoptionResult,
     DeploymentControlBlocked,
     DeploymentController,
     DeploymentControlResult,
@@ -52,11 +55,14 @@ from insurance_harness.goldenset.admission_deployment import (
     transport_workspace_evidence_digest,
 )
 from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
     PROVIDER_CAP_DOMAIN,
     PROVISIONING_AUTHORIZATION_DOMAIN,
     AuthorizationVerificationError,
     DeploymentReceipt,
     DeploymentReceiptContent,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
     ProviderCapApproval,
     ProviderCapApprovalPayload,
     ProviderCapEvidenceContent,
@@ -71,9 +77,12 @@ from insurance_harness.goldenset.admission_infrastructure import (
     credential_ref_for_api_key,
     deployment_receipt_content_digest,
     issue_verified_deployment_transport_identity,
+    pricing_approval_digest,
+    provider_cap_approval_digest,
     provider_cap_evidence_digest,
     provider_cap_signed_bytes,
     require_verified_deployment_transport_identity,
+    require_verified_reconciled_receipt,
     verify_deployment_receipt,
     verify_provider_cap_evidence,
 )
@@ -198,10 +207,552 @@ def test_o3_o4_o7_production_controller_api_exposes_no_trust_override() -> None:
         assert "trusted_authorities" not in inspect.signature(operation).parameters
 
 
+def test_o4_c3_production_adoption_api_uses_only_controller_owned_dependencies() -> None:
+    assert hasattr(DeploymentController, "reconcile_existing_adoption")
+    parameters = inspect.signature(
+        DeploymentController.reconcile_existing_adoption
+    ).parameters
+    assert tuple(parameters) == ("self", "authorization")
+
+
 def test_o5_c2_production_topology_refresh_exposes_no_caller_selected_evidence() -> None:
     assert tuple(
         inspect.signature(DeploymentController.refresh_topology_reconciliation_batch).parameters
     ) == ("self",)
+
+
+def _production_adoption_case(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> SimpleNamespace:
+    fixture = _production_reserve_with_sidecar(tmp_path, monkeypatch)
+    existing_authorities, budget_roles, provenance_roles, review_roles = (
+        admission_cli._load_deployment_approval_configuration()
+    )
+    adoption_key = Ed25519PrivateKey.generate()
+    authorities = {
+        **existing_authorities,
+        "adoption-key": TrustedKeyPolicy(
+            key_id="adoption-key",
+            approver_identity="budget-owner@example.test",
+            domains=frozenset({ADOPTION_AUTHORIZATION_DOMAIN}),
+            scopes=frozenset({fixture.payload.scope}),
+            roles=frozenset({"budget-approver"}),
+            public_key=adoption_key.public_key(),
+        ),
+    }
+    monkeypatch.setattr(
+        admission_cli,
+        "_load_deployment_approval_configuration",
+        lambda: (authorities, budget_roles, provenance_roles, review_roles),
+    )
+    run_root = tmp_path / "production-adoption"
+    run_root.mkdir(mode=0o700)
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", _PRODUCTION_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_BUDGET_LEDGER_PATH", fixture.db_path)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", run_root)
+
+    operation_id = "op-adopt-031"
+    reserve_id = "infra-adopt-031"
+    ownership_nonce = "7" * 32
+    manifest = ProviderDeploymentManifest.model_validate(
+        _manifest(
+            ownership_nonce=ownership_nonce,
+            operation_marker=deterministic_operation_marker(
+                fixture.payload.run_identity,
+                operation_id,
+                ownership_nonce,
+            ),
+            deployment_suffix=deterministic_deployment_suffix(
+                fixture.payload.run_identity,
+                operation_id,
+                ownership_nonce,
+            ),
+        )
+    )
+    receipt_content = DeploymentReceiptContent(
+        operation_id=operation_id,
+        infrastructure_reserve_id=reserve_id,
+        workspace_ref=fixture.payload.workspace_ref,
+        project_ref=fixture.payload.project_ref,
+        credential_ref=fixture.payload.credential_ref,
+        workspace_evidence_digest=transport_workspace_evidence_digest(
+            issue_verified_deployment_transport_identity(
+                api_key=_PRODUCTION_API_KEY,
+                provider_capability=fixture.ledger.require_fresh_infrastructure_provider_capability(
+                    plan=fixture.plan,
+                    expected_scope=fixture.payload.scope,
+                    reserve_id=fixture.permit.reserve.reserve_id,
+                ),
+            )
+        ),
+        region=fixture.payload.region,
+        base_model=manifest.base_model,
+        deployed_model=manifest.deployed_model,
+        request_plan=fixture.payload.request_plan,
+        receipt_plan=manifest.plan,
+        input_tpm=manifest.input_tpm,
+        output_tpm=manifest.output_tpm,
+        gmt_create=manifest.gmt_create,
+        gmt_modified=manifest.gmt_modified,
+        cleanup_state="required",
+        operation_marker=manifest.operation_marker,
+        deployment_suffix=manifest.deployment_suffix,
+        remote_manifest_digest=provider_manifest_digest(manifest),
+    )
+    receipt = DeploymentReceipt(
+        content=receipt_content,
+        content_digest=deployment_receipt_content_digest(receipt_content),
+    )
+    payload = ExistingDeploymentAdoptionAuthorizationPayload(
+        transition="adopt_existing",
+        provider="bailian",
+        run_identity=fixture.payload.run_identity,
+        purpose=fixture.payload.purpose,
+        scope=fixture.payload.scope,
+        operation_id=operation_id,
+        infrastructure_reserve_id=reserve_id,
+        workspace_ref=fixture.payload.workspace_ref,
+        project_ref=fixture.payload.project_ref,
+        credential_ref=fixture.payload.credential_ref,
+        region=fixture.payload.region,
+        base_model=manifest.base_model,
+        request_plan=fixture.payload.request_plan,
+        receipt_plan=manifest.plan,
+        input_tpm_quota=manifest.input_tpm,
+        output_tpm_quota=manifest.output_tpm,
+        pricing_evidence_digest=fixture.pricing_approval.payload.evidence_digest,
+        provider_cap_evidence_digest=fixture.cap_approval.payload.evidence_digest,
+        pricing_approval_digest=pricing_approval_digest(fixture.pricing_approval),
+        provider_cap_approval_digest=provider_cap_approval_digest(fixture.cap_approval),
+        currency="CNY",
+        provider_cap_max_cost_minor_units=20_000,
+        provider_cap_coverage=("fixed_infrastructure", "inference"),
+        provider_cap_expires_at=fixture.cap_approval.payload.evidence.expires_at,
+        maximum_cost_minor_units=6_048,
+        cleanup_deadline=NOW + timedelta(hours=8),
+        approver_identity="budget-owner@example.test",
+        approver_role="budget-approver",
+        issued_at=NOW,
+        expires_at=NOW + timedelta(minutes=30),
+        deployed_model=manifest.deployed_model,
+        receipt_digest=receipt.content_digest,
+        gmt_create=manifest.gmt_create,
+        preexisting=True,
+        limitation="not_preauthorized_by_031",
+        incurred_cost_minor_units=672,
+        future_max_cost_minor_units=5_376,
+    )
+    authorization = ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="adoption-key",
+        payload=payload,
+        signature=base64.b64encode(
+            adoption_key.sign(
+                authorization_signed_bytes(ADOPTION_AUTHORIZATION_DOMAIN, payload)
+            )
+        ).decode("ascii"),
+    )
+    provider_calls = {"get": 0, "post": 0}
+
+    def detail(
+        _transport: BailianDeploymentHTTPTransport,
+        *,
+        deployed_model: str,
+    ) -> bytes:
+        assert deployed_model == manifest.deployed_model
+        provider_calls["get"] += 1
+        return canonical_json_bytes(manifest)
+
+    def post(
+        _transport: BailianDeploymentHTTPTransport,
+        *,
+        request_body: bytes,
+        idempotency_key: str,
+    ) -> bytes:
+        del request_body, idempotency_key
+        provider_calls["post"] += 1
+        raise AssertionError("adoption must never POST")
+
+    monkeypatch.setattr(BailianDeploymentHTTPTransport, "deployment_detail", detail)
+    monkeypatch.setattr(BailianDeploymentHTTPTransport, "create_deployment", post)
+    controller = DeploymentController.for_production(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+        reserve_id=fixture.permit.reserve.reserve_id,
+    )
+    controller._clock = lambda: NOW
+
+    return SimpleNamespace(
+        adoption_key=adoption_key,
+        authorization=authorization,
+        authorities=authorities,
+        controller=controller,
+        fixture=fixture,
+        manifest=manifest,
+        payload=payload,
+        provider_calls=provider_calls,
+        receipt=receipt,
+        run_root=run_root,
+    )
+
+
+def test_o5_c3_production_adoption_reconciles_without_post_and_feeds_c2_reservation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+
+    result = case.controller.reconcile_existing_adoption(
+        authorization=case.authorization
+    )
+
+    assert type(result) is DeploymentAdoptionResult
+    assert (
+        require_verified_reconciled_receipt(result.receipt_capability, now=NOW)
+        is result.receipt_capability
+    )
+    assert case.provider_calls == {"get": 1, "post": 0}
+    assert len(list(case.run_root.glob("*.receipt.json"))) == 1
+    assert len(list(case.run_root.glob("*.receipt-reconciliation.json"))) == 1
+
+    adoption_ledger = BudgetLedger(tmp_path / "adoption.sqlite3")
+    reserved = adoption_ledger.reserve_existing_adoption(
+        authorization=case.authorization,
+        expected=case.payload,
+        receipt_capability=result.receipt_capability,
+        pricing_evidence_bytes=case.fixture.pricing_bytes,
+        pricing_approval=case.fixture.pricing_approval,
+        provider_cap_evidence_bytes=case.fixture.cap_bytes,
+        provider_cap_approval=case.fixture.cap_approval,
+    )
+    assert reserved.reserve_id == case.payload.infrastructure_reserve_id
+    assert reserved.authorization_domain == ADOPTION_AUTHORIZATION_DOMAIN
+
+
+def test_o4_c3_production_adoption_rejects_caller_self_enrolled_authority_before_get(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    root_authorities = {
+        key_id: authority
+        for key_id, authority in case.authorities.items()
+        if key_id != "adoption-key"
+    }
+    monkeypatch.setattr(
+        admission_cli,
+        "_load_deployment_approval_configuration",
+        lambda: (root_authorities, frozenset(), frozenset(), frozenset()),
+    )
+
+    with pytest.raises(TypeError, match="trusted_authorities"):
+        cast(Any, case.controller.reconcile_existing_adoption)(
+            authorization=case.authorization,
+            trusted_authorities=case.authorities,
+        )
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        case.controller.reconcile_existing_adoption(
+            authorization=case.authorization
+        )
+
+    assert blocked.value.code in {
+        "adoption_gate_rejected",
+        "production_provider_cap_invalid",
+        "trusted_authority_unavailable",
+    }
+    assert case.provider_calls == {"get": 0, "post": 0}
+    assert tuple(case.run_root.iterdir()) == ()
+
+
+def test_o4_c3_production_adoption_malicious_subclass_fails_closed_before_get(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+
+    class MaliciousAdoptionAuthorization(ExistingDeploymentAdoptionAuthorization):
+        def model_dump(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            raise AttributeError("attacker-controlled model_dump")
+
+    malicious = MaliciousAdoptionAuthorization.model_construct(
+        **case.authorization.__dict__
+    )
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        case.controller.reconcile_existing_adoption(authorization=malicious)
+
+    assert blocked.value.code == "adoption_gate_rejected"
+    assert case.provider_calls == {"get": 0, "post": 0}
+    assert tuple(case.run_root.iterdir()) == ()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("provider_cap_max_cost_minor_units", 99_999),
+        ("provider_cap_expires_at", NOW + timedelta(minutes=50)),
+    ],
+)
+def test_o4_c3_post_lock_root_cap_drift_blocks_before_get_or_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    replacement: object,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    payload = case.payload.model_copy(update={field: replacement})
+    authorization = ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="adoption-key",
+        payload=payload,
+        signature=base64.b64encode(
+            case.adoption_key.sign(
+                authorization_signed_bytes(ADOPTION_AUTHORIZATION_DOMAIN, payload)
+            )
+        ).decode("ascii"),
+    )
+    publications = 0
+
+    def forbidden_publication(_observation: object) -> None:
+        nonlocal publications
+        publications += 1
+        raise AssertionError("drifted root cap must not reach receipt publication")
+
+    monkeypatch.setattr(
+        case.controller,
+        "_publish_reconciled_receipt",
+        forbidden_publication,
+    )
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        case.controller.reconcile_existing_adoption(authorization=authorization)
+
+    assert blocked.value.code == "adoption_gate_rejected"
+    assert case.provider_calls == {"get": 0, "post": 0}
+    assert publications == 0
+    assert list(case.run_root.glob("*.receipt.json")) == []
+    assert list(case.run_root.glob("*.receipt-reconciliation.json")) == []
+
+
+def test_o5_c3_actual_run_lock_queue_expiry_blocks_before_provider_get(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    lock_path = case.controller._store.path(
+        case.controller._store.lock_name(case.payload.run_identity)
+    )
+    descriptor = os.open(
+        lock_path,
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+        0o600,
+    )
+    fcntl.flock(descriptor, fcntl.LOCK_EX)
+    expired = threading.Event()
+    case.controller._clock = lambda: (
+        NOW + timedelta(minutes=30) if expired.is_set() else NOW
+    )
+    failures: list[BaseException] = []
+
+    def adopt() -> None:
+        try:
+            case.controller.reconcile_existing_adoption(
+                authorization=case.authorization
+            )
+        except BaseException as exc:
+            failures.append(exc)
+
+    thread = threading.Thread(target=adopt)
+    thread.start()
+    time.sleep(0.1)
+    assert thread.is_alive()
+    expired.set()
+    fcntl.flock(descriptor, fcntl.LOCK_UN)
+    os.close(descriptor)
+    thread.join(timeout=5)
+
+    assert len(failures) == 1
+    assert isinstance(failures[0], DeploymentControlBlocked)
+    assert failures[0].code == "adoption_gate_rejected"
+    assert case.provider_calls == {"get": 0, "post": 0}
+    assert list(case.run_root.glob("*.receipt.json")) == []
+
+
+@pytest.mark.parametrize(
+    "failure_point",
+    ["link", "file_fsync", "directory_fsync", "readback", "reconciliation"],
+)
+def test_o7_c3_atomic_failure_leaves_no_adoption_artifact_and_exact_replay_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    original_link = os.link
+    original_fsync = os.fsync
+    original_read = cast(
+        Callable[[str], bytes | None],
+        case.controller._store.read,
+    )
+    original_publish = case.controller._publish_reconciled_receipt
+
+    def fail_link(*_args: object, **_kwargs: object) -> None:
+        raise OSError("simulated adoption publication link failure")
+
+    fsync_calls = 0
+
+    def fail_fsync(descriptor: int) -> None:
+        nonlocal fsync_calls
+        fsync_calls += 1
+        if failure_point == "file_fsync" and fsync_calls == 1:
+            raise OSError("simulated adoption file fsync failure")
+        if failure_point == "directory_fsync" and fsync_calls == 2:
+            raise OSError("simulated adoption directory fsync failure")
+        original_fsync(descriptor)
+
+    receipt_reads = 0
+
+    def fail_readback(name: str) -> bytes | None:
+        nonlocal receipt_reads
+        result = original_read(name)
+        if name.endswith(".receipt.json"):
+            receipt_reads += 1
+            if receipt_reads == 2:
+                return b"{}"
+        return result
+
+    def fail_reconciliation(
+        _observation: object,
+    ) -> VerifiedReconciledDeploymentReceipt:
+        raise DeploymentControlBlocked(
+            "simulated_reconciliation_failure",
+            "simulated reconciliation publication failure",
+        )
+
+    if failure_point == "link":
+        monkeypatch.setattr(os, "link", fail_link)
+    elif failure_point in {"file_fsync", "directory_fsync"}:
+        monkeypatch.setattr(os, "fsync", fail_fsync)
+    elif failure_point == "readback":
+        monkeypatch.setattr(case.controller._store, "read", fail_readback)
+    else:
+        monkeypatch.setattr(
+            case.controller,
+            "_publish_reconciled_receipt",
+            fail_reconciliation,
+        )
+
+    with pytest.raises(DeploymentControlBlocked):
+        case.controller.reconcile_existing_adoption(
+            authorization=case.authorization
+        )
+
+    assert list(case.run_root.glob("*.receipt.json")) == []
+    assert list(case.run_root.glob("*.receipt-reconciliation.json")) == []
+    assert [path for path in case.run_root.iterdir() if path.name.endswith(".tmp")] == []
+    assert case.provider_calls == {"get": 1, "post": 0}
+
+    monkeypatch.setattr(os, "link", original_link)
+    monkeypatch.setattr(os, "fsync", original_fsync)
+    monkeypatch.setattr(case.controller._store, "read", original_read)
+    monkeypatch.setattr(
+        case.controller,
+        "_publish_reconciled_receipt",
+        original_publish,
+    )
+    first = case.controller.reconcile_existing_adoption(
+        authorization=case.authorization
+    )
+    receipt_bytes = first.receipt_path.read_bytes()
+    reconciliation_paths = list(
+        case.run_root.glob("*.receipt-reconciliation.json")
+    )
+    assert len(reconciliation_paths) == 1
+    reconciliation_bytes = reconciliation_paths[0].read_bytes()
+
+    replay = case.controller.reconcile_existing_adoption(
+        authorization=case.authorization
+    )
+
+    assert replay.receipt == first.receipt
+    assert replay.receipt_path == first.receipt_path
+    assert replay.receipt_path.read_bytes() == receipt_bytes
+    assert reconciliation_paths[0].read_bytes() == reconciliation_bytes
+    assert case.provider_calls == {"get": 3, "post": 0}
+
+
+@pytest.mark.parametrize("race", ["different", "same", "symlink"])
+def test_o7_c3_atomic_publish_never_overwrites_racing_foreign_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    race: str,
+) -> None:
+    case = _production_adoption_case(tmp_path, monkeypatch)
+    receipt_name = f"{case.payload.receipt_digest}.receipt.json"
+    receipt_path = case.run_root / receipt_name
+    receipt_bytes = canonical_json_bytes(
+        DeploymentReceiptArtifact(
+            receipt=case.receipt,
+            remote_manifest=case.manifest,
+            remote_manifest_digest=provider_manifest_digest(case.manifest),
+        )
+    )
+    foreign_bytes = receipt_bytes if race == "same" else b'{"foreign":true}'
+    symlink_target = case.run_root / "foreign-target.json"
+    if race == "symlink":
+        symlink_target.write_bytes(foreign_bytes)
+    original_fsync = os.fsync
+    inserted_identity: tuple[int, int] | None = None
+    inserted = False
+
+    def racing_fsync(descriptor: int) -> None:
+        nonlocal inserted, inserted_identity
+        if not inserted and stat.S_ISREG(os.fstat(descriptor).st_mode):
+            inserted = True
+            if race == "symlink":
+                os.symlink(symlink_target.name, receipt_path)
+            else:
+                foreign_descriptor = os.open(
+                    receipt_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    0o600,
+                )
+                try:
+                    os.write(foreign_descriptor, foreign_bytes)
+                finally:
+                    os.close(foreign_descriptor)
+            metadata = os.lstat(receipt_path)
+            inserted_identity = (metadata.st_dev, metadata.st_ino)
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", racing_fsync)
+
+    if race == "same":
+        result = case.controller.reconcile_existing_adoption(
+            authorization=case.authorization
+        )
+        assert result.receipt == case.receipt
+    else:
+        with pytest.raises(DeploymentControlBlocked):
+            case.controller.reconcile_existing_adoption(
+                authorization=case.authorization
+            )
+
+    assert inserted_identity is not None
+    final_metadata = os.lstat(receipt_path)
+    assert (final_metadata.st_dev, final_metadata.st_ino) == inserted_identity
+    if race == "symlink":
+        assert receipt_path.is_symlink()
+        assert os.readlink(receipt_path) == symlink_target.name
+    else:
+        assert receipt_path.read_bytes() == foreign_bytes
+    if race != "same":
+        assert list(case.run_root.glob("*.receipt-reconciliation.json")) == []
+        with pytest.raises(BudgetLedgerError):
+            case.fixture.ledger.infrastructure_reserve(
+                case.payload.infrastructure_reserve_id
+            )
 
 
 def test_o5_o6_free_provider_observation_issuer_cannot_mint_production_receipt_capability() -> None:
@@ -2025,7 +2576,7 @@ def test_o6_topology_observation_rejects_cap_approval_drift_before_get_or_artifa
     assert list(root.glob("*.topology-observation-batch.json")) == []
 
 
-@pytest.mark.parametrize("failure_point", ["replace", "file_fsync", "directory_fsync"])
+@pytest.mark.parametrize("failure_point", ["link", "file_fsync", "directory_fsync"])
 def test_o6_topology_observation_batch_atomic_failure_leaves_no_batch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2038,7 +2589,7 @@ def test_o6_topology_observation_batch_atomic_failure_leaves_no_batch(
     original_fsync = os.fsync
     fsync_calls = 0
 
-    def fail_replace(*_args: object, **_kwargs: object) -> None:
+    def fail_link(*_args: object, **_kwargs: object) -> None:
         raise OSError("simulated batch publication failure")
 
     def fail_fsync(descriptor: int) -> None:
@@ -2050,8 +2601,8 @@ def test_o6_topology_observation_batch_atomic_failure_leaves_no_batch(
             raise OSError("simulated batch directory fsync failure")
         original_fsync(descriptor)
 
-    if failure_point == "replace":
-        monkeypatch.setattr(os, "replace", fail_replace)
+    if failure_point == "link":
+        monkeypatch.setattr(os, "link", fail_link)
     else:
         monkeypatch.setattr(os, "fsync", fail_fsync)
 
@@ -2293,7 +2844,7 @@ def test_o6_absent_on_failure_removes_named_artifact_when_directory_fsync_is_int
 
 
 @pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
-def test_o6_absent_on_failure_cleans_successful_rename_interrupted_before_return(
+def test_o6_absent_on_failure_cleans_successful_link_interrupted_before_return(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     interruption: type[BaseException],
@@ -2304,24 +2855,26 @@ def test_o6_absent_on_failure_cleans_successful_rename_interrupted_before_return
         _FakeTransport(),
         payload,
     )
-    original_replace = os.replace
+    original_link = os.link
 
-    def replace_then_interrupt(
+    def link_then_interrupt(
         source: Any,
         destination: Any,
         *,
         src_dir_fd: int | None = None,
         dst_dir_fd: int | None = None,
+        follow_symlinks: bool = True,
     ) -> None:
-        original_replace(
+        original_link(
             source,
             destination,
             src_dir_fd=src_dir_fd,
             dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
         )
-        raise interruption("rename completed before process-control interruption")
+        raise interruption("link completed before process-control interruption")
 
-    monkeypatch.setattr(os, "replace", replace_then_interrupt)
+    monkeypatch.setattr(os, "link", link_then_interrupt)
     name = f"{'6' * 64}.receipt-reconciliation.json"
 
     with pytest.raises(interruption):
@@ -2332,7 +2885,7 @@ def test_o6_absent_on_failure_cleans_successful_rename_interrupted_before_return
     controller.close()
 
 
-def test_o6_absent_on_failure_does_not_delete_foreign_inode_after_rename_interrupt(
+def test_o6_absent_on_failure_does_not_delete_foreign_inode_after_link_interrupt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2342,22 +2895,29 @@ def test_o6_absent_on_failure_does_not_delete_foreign_inode_after_rename_interru
         _FakeTransport(),
         payload,
     )
-    original_replace = os.replace
+    original_link = os.link
     foreign = b"foreign-owner"
+    injected = False
 
-    def replace_then_foreign_takeover(
+    def link_then_foreign_takeover(
         source: Any,
         destination: Any,
         *,
         src_dir_fd: int | None = None,
         dst_dir_fd: int | None = None,
+        follow_symlinks: bool = True,
     ) -> None:
-        original_replace(
+        nonlocal injected
+        original_link(
             source,
             destination,
             src_dir_fd=src_dir_fd,
             dst_dir_fd=dst_dir_fd,
+            follow_symlinks=follow_symlinks,
         )
+        if injected:
+            return
+        injected = True
         name = cast(str, destination)
         assert dst_dir_fd is not None
         root_fd = dst_dir_fd
@@ -2373,9 +2933,9 @@ def test_o6_absent_on_failure_does_not_delete_foreign_inode_after_rename_interru
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        raise KeyboardInterrupt("foreign inode replaced completed rename")
+        raise KeyboardInterrupt("foreign inode replaced completed link")
 
-    monkeypatch.setattr(os, "replace", replace_then_foreign_takeover)
+    monkeypatch.setattr(os, "link", link_then_foreign_takeover)
     name = f"{'5' * 64}.receipt-reconciliation.json"
 
     with pytest.raises(KeyboardInterrupt):

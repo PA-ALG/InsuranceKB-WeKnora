@@ -27,9 +27,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from pydantic import BaseModel, StrictStr, StringConstraints
 
 from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
+    CLEANUP_AUTHORIZATION_DOMAIN,
     PRICING_EVIDENCE_DOMAIN,
     PROVIDER_CAP_DOMAIN,
     PROVISIONING_AUTHORIZATION_DOMAIN,
+    DeploymentCleanupAuthorization,
+    DeploymentCleanupAuthorizationPayload,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
     PricingEvidenceApproval,
     PricingEvidenceApprovalPayload,
     ProviderCapApproval,
@@ -37,6 +43,7 @@ from insurance_harness.goldenset.admission_infrastructure import (
     ProvisioningAuthorization,
     ProvisioningAuthorizationPayload,
     authorization_signed_bytes,
+    cleanup_authorization_signed_bytes,
     pricing_evidence_signed_bytes,
     provider_cap_signed_bytes,
 )
@@ -60,12 +67,18 @@ from insurance_harness.goldenset.admission_models import (
 type NonBlankStr = Annotated[StrictStr, StringConstraints(strip_whitespace=True, min_length=1)]
 type OperationalApprovalDomain = Literal[
     "insurancekb.run-admission.provisioning.v1",
+    "insurancekb.run-admission.deployment-adoption.v1",
     "insurancekb.run-admission.pricing.v1",
     "insurancekb.run-admission.provider-cap.v1",
+    "insurancekb.run-admission.deployment-cleanup.v1",
 ]
 type OfflineApprovalDomain = ApprovalDomain | OperationalApprovalDomain
 type OperationalApprovalEnvelope = (
-    ProvisioningAuthorization | PricingEvidenceApproval | ProviderCapApproval
+    ProvisioningAuthorization
+    | ExistingDeploymentAdoptionAuthorization
+    | PricingEvidenceApproval
+    | ProviderCapApproval
+    | DeploymentCleanupAuthorization
 )
 type OfflineApprovalEnvelope = VerifiableApprovalEnvelope | OperationalApprovalEnvelope
 
@@ -472,10 +485,14 @@ def _validate_payload(
         return CanaryReviewApprovalPayload.model_validate(raw)
     if domain == PROVISIONING_AUTHORIZATION_DOMAIN:
         return ProvisioningAuthorizationPayload.model_validate(raw)
+    if domain == ADOPTION_AUTHORIZATION_DOMAIN:
+        return ExistingDeploymentAdoptionAuthorizationPayload.model_validate(raw)
     if domain == PRICING_EVIDENCE_DOMAIN:
         return PricingEvidenceApprovalPayload.model_validate(raw)
     if domain == PROVIDER_CAP_DOMAIN:
         return ProviderCapApprovalPayload.model_validate(raw)
+    if domain == CLEANUP_AUTHORIZATION_DOMAIN:
+        return DeploymentCleanupAuthorizationPayload.model_validate(raw)
     raise ValueError("approval domain is unsupported")
 
 
@@ -486,6 +503,10 @@ def _signed_bytes(domain: OfflineApprovalDomain, payload: BaseModel) -> bytes:
         if not isinstance(payload, ProvisioningAuthorizationPayload):
             raise TypeError("provisioning domain requires provisioning payload")
         return authorization_signed_bytes(domain, payload)
+    if domain == ADOPTION_AUTHORIZATION_DOMAIN:
+        if not isinstance(payload, ExistingDeploymentAdoptionAuthorizationPayload):
+            raise TypeError("adoption domain requires adoption payload")
+        return authorization_signed_bytes(domain, payload)
     if domain == PRICING_EVIDENCE_DOMAIN:
         if not isinstance(payload, PricingEvidenceApprovalPayload):
             raise TypeError("pricing domain requires pricing payload")
@@ -494,6 +515,10 @@ def _signed_bytes(domain: OfflineApprovalDomain, payload: BaseModel) -> bytes:
         if not isinstance(payload, ProviderCapApprovalPayload):
             raise TypeError("provider-cap domain requires provider-cap payload")
         return provider_cap_signed_bytes(payload)
+    if domain == CLEANUP_AUTHORIZATION_DOMAIN:
+        if not isinstance(payload, DeploymentCleanupAuthorizationPayload):
+            raise TypeError("cleanup domain requires cleanup payload")
+        return cleanup_authorization_signed_bytes(payload)
     raise ValueError("approval domain is unsupported")
 
 
@@ -516,10 +541,14 @@ def _build_envelope(
         return CanaryReviewApprovalEnvelope.model_validate(values)
     if rendered.domain == PROVISIONING_AUTHORIZATION_DOMAIN:
         return ProvisioningAuthorization.model_validate(values)
+    if rendered.domain == ADOPTION_AUTHORIZATION_DOMAIN:
+        return ExistingDeploymentAdoptionAuthorization.model_validate(values)
     if rendered.domain == PRICING_EVIDENCE_DOMAIN:
         return PricingEvidenceApproval.model_validate(values)
     if rendered.domain == PROVIDER_CAP_DOMAIN:
         return ProviderCapApproval.model_validate(values)
+    if rendered.domain == CLEANUP_AUTHORIZATION_DOMAIN:
+        return DeploymentCleanupAuthorization.model_validate(values)
     raise ValueError("approval domain is unsupported")
 
 
@@ -578,13 +607,40 @@ def load_public_envelope(path: Path) -> OfflineApprovalEnvelope:
             return CanaryReviewApprovalEnvelope.model_validate(raw)
         if domain == PROVISIONING_AUTHORIZATION_DOMAIN:
             return ProvisioningAuthorization.model_validate(raw)
+        if domain == ADOPTION_AUTHORIZATION_DOMAIN:
+            return ExistingDeploymentAdoptionAuthorization.model_validate(raw)
         if domain == PRICING_EVIDENCE_DOMAIN:
             return PricingEvidenceApproval.model_validate(raw)
         if domain == PROVIDER_CAP_DOMAIN:
             return ProviderCapApproval.model_validate(raw)
+        if domain == CLEANUP_AUTHORIZATION_DOMAIN:
+            return DeploymentCleanupAuthorization.model_validate(raw)
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise ValueError("public approval envelope is invalid") from exc
     raise ValueError("public approval envelope domain is unsupported")
+
+
+def _verify_operational_time_constraints(
+    envelope: OperationalApprovalEnvelope,
+    *,
+    now: datetime,
+) -> None:
+    payload = envelope.payload
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ApprovalVerificationError("verification time must include a timezone")
+    if now < payload.issued_at or now >= payload.expires_at:
+        raise ApprovalVerificationError("operational approval is outside its validity window")
+    if isinstance(
+        envelope,
+        (ProvisioningAuthorization, ExistingDeploymentAdoptionAuthorization),
+    ):
+        if now >= envelope.payload.cleanup_deadline:
+            raise ApprovalVerificationError("cleanup deadline has elapsed")
+        if now >= envelope.payload.provider_cap_expires_at:
+            raise ApprovalVerificationError("provider cap has expired")
+    elif isinstance(envelope, DeploymentCleanupAuthorization):
+        if now >= envelope.payload.cleanup_deadline:
+            raise ApprovalVerificationError("cleanup deadline has elapsed")
 
 
 def verify_offline_envelope(
@@ -625,10 +681,7 @@ def verify_offline_envelope(
         raise ApprovalVerificationError(
             "approver role is not authorized for this operational domain"
         )
-    if now.tzinfo is None or now.utcoffset() is None:
-        raise ApprovalVerificationError("verification time must include a timezone")
-    if now < operational_payload.issued_at or now >= operational_payload.expires_at:
-        raise ApprovalVerificationError("operational approval is outside its validity window")
+    _verify_operational_time_constraints(envelope, now=now)
     authority = trusted_public_keys.get(envelope.key_id)
     if not isinstance(authority, TrustedKeyPolicy):
         raise ApprovalVerificationError("operational approval requires an exact trusted key policy")

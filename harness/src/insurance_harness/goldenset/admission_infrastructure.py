@@ -101,29 +101,43 @@ _RECEIPT_SNAPSHOT_DOMAIN = b"insurancekb.receipt-capability-snapshot.v1\0"
 PROVISIONING_AUTHORIZATION_DOMAIN: Literal["insurancekb.run-admission.provisioning.v1"] = (
     "insurancekb.run-admission.provisioning.v1"
 )
+ADOPTION_AUTHORIZATION_DOMAIN: Literal[
+    "insurancekb.run-admission.deployment-adoption.v1"
+] = "insurancekb.run-admission.deployment-adoption.v1"
 PRICING_EVIDENCE_DOMAIN: Literal["insurancekb.run-admission.pricing.v1"] = (
     "insurancekb.run-admission.pricing.v1"
 )
 PROVIDER_CAP_DOMAIN: Literal["insurancekb.run-admission.provider-cap.v1"] = (
     "insurancekb.run-admission.provider-cap.v1"
 )
+CLEANUP_AUTHORIZATION_DOMAIN: Literal[
+    "insurancekb.run-admission.deployment-cleanup.v1"
+] = "insurancekb.run-admission.deployment-cleanup.v1"
 
 _PROVISIONING_SIGNING_PREFIX = b"insurancekb.run-admission.provisioning.v1\0"
+_ADOPTION_SIGNING_PREFIX = b"insurancekb.run-admission.deployment-adoption.v1\0"
 _PRICING_SIGNING_PREFIX = b"insurancekb.run-admission.pricing.v1\0"
 _PROVIDER_CAP_SIGNING_PREFIX = b"insurancekb.run-admission.provider-cap.v1\0"
+_CLEANUP_SIGNING_PREFIX = b"insurancekb.run-admission.deployment-cleanup.v1\0"
 _AUTHORIZATION_DIGEST_DOMAIN = b"insurancekb.run-admission.infrastructure-authorization.v1\0"
 _RECEIPT_DIGEST_DOMAIN = b"insurancekb.run-admission.deployment-receipt.v1\0"
 _PRICING_EVIDENCE_DIGEST_DOMAIN = b"insurancekb.run-admission.pricing-evidence.v1\0"
 _PRICING_APPROVAL_DIGEST_DOMAIN = b"insurancekb.run-admission.pricing-approval.v1\0"
 _CAP_EVIDENCE_DIGEST_DOMAIN = b"insurancekb.run-admission.provider-cap-evidence.v1\0"
 _CAP_APPROVAL_DIGEST_DOMAIN = b"insurancekb.run-admission.provider-cap-approval.v1\0"
+_CLEANUP_AUTHORIZATION_DIGEST_DOMAIN = (
+    b"insurancekb.run-admission.deployment-cleanup-authorization.v1\0"
+)
 _TRANSPORT_CREDENTIAL_REF_DOMAIN = b"insurancekb.run-admission.transport-credential-ref.v1\0"
 _TRANSPORT_IDENTITY_DIGEST_DOMAIN = b"insurancekb.run-admission.transport-identity.v1\0"
 _RECONCILIATION_DIGEST_DOMAIN = b"insurancekb.run-admission.receipt-reconciliation.v2\0"
 _BAILIAN_DEPLOYMENT_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/deployments"
 _MAX_AUTHORITY_EVIDENCE_BYTES = 64 * 1024
 
-type AuthorizationDomain = Literal["insurancekb.run-admission.provisioning.v1"]
+type AuthorizationDomain = Literal[
+    "insurancekb.run-admission.provisioning.v1",
+    "insurancekb.run-admission.deployment-adoption.v1",
+]
 type NonBlankStr = Annotated[
     StrictStr, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)
 ]
@@ -275,6 +289,44 @@ class ProviderCapApproval(_ImmutableModel):
     signature: NonBlankStr
 
 
+class DeploymentCleanupAuthorizationPayload(_ImmutableModel):
+    run_identity: NonBlankStr
+    purpose: NonBlankStr
+    scope: NonBlankStr
+    operation_id: NonBlankStr
+    reserve_id: NonBlankStr
+    receipt_digest: Sha256Digest
+    deployed_model: NonBlankStr
+    workspace_ref: NonBlankStr
+    project_ref: DigestRef
+    credential_ref: DigestRef
+    expected_remote_manifest_digest: Sha256Digest
+    cleanup_reason: NonBlankStr
+    cleanup_deadline: datetime
+    approver_identity: NonBlankStr
+    approver_role: Literal["deployment-cleanup-operator"]
+    issued_at: datetime
+    expires_at: datetime
+
+    @model_validator(mode="after")
+    def require_cleanup_window(self) -> Self:
+        _require_aware_active_window(self.issued_at, self.expires_at, "cleanup approval")
+        if (
+            self.cleanup_deadline.tzinfo is None
+            or self.cleanup_deadline.utcoffset() is None
+            or self.cleanup_deadline <= self.issued_at
+        ):
+            raise ValueError("cleanup deadline must follow issue time")
+        return self
+
+
+class DeploymentCleanupAuthorization(_ImmutableModel):
+    domain: Literal["insurancekb.run-admission.deployment-cleanup.v1"]
+    key_id: NonBlankStr
+    payload: DeploymentCleanupAuthorizationPayload
+    signature: NonBlankStr
+
+
 class _CommonInfrastructureAuthorizationPayload(_ImmutableModel):
     provider: Literal["bailian"]
     run_identity: NonBlankStr
@@ -331,6 +383,33 @@ class ProvisioningAuthorizationPayload(_CommonInfrastructureAuthorizationPayload
     approver_role: Literal["deployment-provisioner"]
 
 
+class ExistingDeploymentAdoptionAuthorizationPayload(
+    _CommonInfrastructureAuthorizationPayload
+):
+    transition: Literal["adopt_existing"]
+    approver_role: Literal["budget-approver"]
+    deployed_model: NonBlankStr
+    receipt_digest: Sha256Digest
+    gmt_create: datetime
+    preexisting: Literal[True]
+    limitation: Literal["not_preauthorized_by_031"]
+    incurred_cost_minor_units: NonNegativeCost
+    future_max_cost_minor_units: PositiveCost
+
+    @model_validator(mode="after")
+    def require_conservative_preexisting_cost(self) -> Self:
+        if self.gmt_create.tzinfo is None or self.gmt_create.utcoffset() is None:
+            raise ValueError("gmt_create must include a timezone")
+        if self.gmt_create >= self.issued_at:
+            raise ValueError("preexisting deployment must predate adoption authorization")
+        if (
+            self.incurred_cost_minor_units + self.future_max_cost_minor_units
+            != self.maximum_cost_minor_units
+        ):
+            raise ValueError("adoption maximum must equal incurred plus future maximum cost")
+        return self
+
+
 class ProvisioningAuthorization(_ImmutableModel):
     domain: Literal["insurancekb.run-admission.provisioning.v1"]
     key_id: NonBlankStr
@@ -338,8 +417,19 @@ class ProvisioningAuthorization(_ImmutableModel):
     signature: NonBlankStr
 
 
-type InfrastructureAuthorization = ProvisioningAuthorization
-type InfrastructureAuthorizationPayload = ProvisioningAuthorizationPayload
+class ExistingDeploymentAdoptionAuthorization(_ImmutableModel):
+    domain: Literal["insurancekb.run-admission.deployment-adoption.v1"]
+    key_id: NonBlankStr
+    payload: ExistingDeploymentAdoptionAuthorizationPayload
+    signature: NonBlankStr
+
+
+type InfrastructureAuthorization = (
+    ProvisioningAuthorization | ExistingDeploymentAdoptionAuthorization
+)
+type InfrastructureAuthorizationPayload = (
+    ProvisioningAuthorizationPayload | ExistingDeploymentAdoptionAuthorizationPayload
+)
 
 
 class DeploymentReceiptContent(_ImmutableModel):
@@ -1030,11 +1120,17 @@ def authorization_signed_bytes(
 ) -> bytes:
     """Return the canonical bytes for exactly one versioned authorization domain."""
 
-    if domain != PROVISIONING_AUTHORIZATION_DOMAIN:
+    if domain == PROVISIONING_AUTHORIZATION_DOMAIN:
+        if not isinstance(payload, ProvisioningAuthorizationPayload):
+            raise TypeError("provisioning domain requires a provisioning payload")
+        prefix = _PROVISIONING_SIGNING_PREFIX
+    elif domain == ADOPTION_AUTHORIZATION_DOMAIN:
+        if not isinstance(payload, ExistingDeploymentAdoptionAuthorizationPayload):
+            raise TypeError("adoption domain requires an adoption payload")
+        prefix = _ADOPTION_SIGNING_PREFIX
+    else:  # pragma: no cover - static typing plus runtime fail-closed guard
         raise ValueError("unknown infrastructure authorization domain")
-    if not isinstance(payload, ProvisioningAuthorizationPayload):
-        raise TypeError("provisioning domain requires a provisioning payload")
-    return _PROVISIONING_SIGNING_PREFIX + canonical_json_bytes(payload)
+    return prefix + canonical_json_bytes(payload)
 
 
 def infrastructure_authorization_digest(
@@ -1056,12 +1152,42 @@ def _verify_authorization(
     trusted_authorities: Mapping[str, TrustedAuthority],
     now: datetime,
 ) -> str:
-    try:
-        if not isinstance(envelope, ProvisioningAuthorization):
+    model_type: type[ProvisioningAuthorization] | type[
+        ExistingDeploymentAdoptionAuthorization
+    ]
+    if expected_domain == PROVISIONING_AUTHORIZATION_DOMAIN:
+        if (
+            type(envelope) is not ProvisioningAuthorization
+            or type(envelope.payload) is not ProvisioningAuthorizationPayload
+            or type(expected) is not ProvisioningAuthorizationPayload
+        ):
             raise AuthorizationVerificationError("authorization type is invalid")
-        validated: InfrastructureAuthorization = ProvisioningAuthorization.model_validate(
+        model_type = ProvisioningAuthorization
+    elif expected_domain == ADOPTION_AUTHORIZATION_DOMAIN:
+        if (
+            type(envelope) is not ExistingDeploymentAdoptionAuthorization
+            or type(envelope.payload)
+            is not ExistingDeploymentAdoptionAuthorizationPayload
+            or type(expected) is not ExistingDeploymentAdoptionAuthorizationPayload
+        ):
+            raise AuthorizationVerificationError("authorization type is invalid")
+        model_type = ExistingDeploymentAdoptionAuthorization
+    else:  # pragma: no cover - static typing plus runtime fail-closed guard
+        raise AuthorizationVerificationError("authorization domain is invalid")
+    if (
+        set(envelope.__dict__) != set(type(envelope).model_fields)
+        or set(envelope.payload.__dict__) != set(type(envelope.payload).model_fields)
+        or set(expected.__dict__) != set(type(expected).model_fields)
+    ):
+        raise AuthorizationVerificationError("authorization snapshot is invalid")
+    try:
+        validated: InfrastructureAuthorization = model_type.model_validate(
             envelope.model_dump(mode="python", round_trip=True)
         )
+        if canonical_json_bytes(validated) != canonical_json_bytes(envelope):
+            raise AuthorizationVerificationError("authorization snapshot is invalid")
+    except AuthorizationVerificationError:
+        raise
     except (TypeError, ValueError) as exc:
         raise AuthorizationVerificationError("authorization structure is invalid") from exc
 
@@ -1134,6 +1260,23 @@ def verify_provisioning_authorization(
     )
 
 
+def verify_adoption_authorization(
+    envelope: ExistingDeploymentAdoptionAuthorization,
+    *,
+    expected: ExistingDeploymentAdoptionAuthorizationPayload,
+    trusted_authorities: Mapping[str, TrustedAuthority],
+    now: datetime,
+) -> str:
+    return _verify_authorization(
+        envelope,
+        expected=expected,
+        expected_domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        expected_role="budget-approver",
+        trusted_authorities=trusted_authorities,
+        now=now,
+    )
+
+
 def verify_deployment_receipt(
     receipt: DeploymentReceipt,
     *,
@@ -1197,6 +1340,75 @@ def pricing_approval_digest(envelope: PricingEvidenceApproval) -> str:
 
 def provider_cap_approval_digest(envelope: ProviderCapApproval) -> str:
     return hashlib.sha256(_CAP_APPROVAL_DIGEST_DOMAIN + canonical_json_bytes(envelope)).hexdigest()
+
+
+def cleanup_authorization_signed_bytes(
+    payload: DeploymentCleanupAuthorizationPayload,
+) -> bytes:
+    return _CLEANUP_SIGNING_PREFIX + canonical_json_bytes(payload)
+
+
+def cleanup_authorization_digest(
+    envelope: DeploymentCleanupAuthorization,
+) -> str:
+    return hashlib.sha256(
+        _CLEANUP_AUTHORIZATION_DIGEST_DOMAIN + canonical_json_bytes(envelope)
+    ).hexdigest()
+
+
+def verify_cleanup_authorization(
+    envelope: DeploymentCleanupAuthorization,
+    *,
+    trusted_authorities: Mapping[str, TrustedAuthority],
+    now: datetime,
+) -> str:
+    """Verify the independent cleanup authority; resource binding is checked by controller."""
+
+    if (
+        type(envelope) is not DeploymentCleanupAuthorization
+        or type(envelope.payload) is not DeploymentCleanupAuthorizationPayload
+    ):
+        raise AuthorizationVerificationError("cleanup authorization type is invalid")
+    if (
+        set(envelope.__dict__) != set(type(envelope).model_fields)
+        or set(envelope.payload.__dict__) != set(type(envelope.payload).model_fields)
+    ):
+        raise AuthorizationVerificationError(
+            "cleanup authorization snapshot is invalid"
+        )
+    try:
+        validated = DeploymentCleanupAuthorization.model_validate(
+            envelope.model_dump(mode="python", round_trip=True)
+        )
+        if canonical_json_bytes(validated) != canonical_json_bytes(envelope):
+            raise AuthorizationVerificationError(
+                "cleanup authorization snapshot is invalid"
+            )
+    except AuthorizationVerificationError:
+        raise
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise AuthorizationVerificationError("cleanup authorization is invalid") from exc
+    if validated.domain != CLEANUP_AUTHORIZATION_DOMAIN:
+        raise AuthorizationVerificationError("cleanup authorization domain mismatch")
+    _require_now_in_window(
+        now=now,
+        issued_at=validated.payload.issued_at,
+        expires_at=validated.payload.expires_at,
+        label="cleanup authorization",
+    )
+    if now >= validated.payload.cleanup_deadline:
+        raise AuthorizationVerificationError("cleanup deadline has elapsed")
+    _verify_evidence_policy(
+        key_id=validated.key_id,
+        identity=validated.payload.approver_identity,
+        domain=validated.domain,
+        scope=validated.payload.scope,
+        role=validated.payload.approver_role,
+        signature=validated.signature,
+        signed_bytes=cleanup_authorization_signed_bytes(validated.payload),
+        trusted_authorities=trusted_authorities,
+    )
+    return cleanup_authorization_digest(validated)
 
 
 def _parse_canonical_evidence(
@@ -1459,13 +1671,19 @@ def verify_provider_cap_evidence(
 
 
 __all__ = [
+    "ADOPTION_AUTHORIZATION_DOMAIN",
     "PROVISIONING_AUTHORIZATION_DOMAIN",
     "PRICING_EVIDENCE_DOMAIN",
     "PROVIDER_CAP_DOMAIN",
+    "CLEANUP_AUTHORIZATION_DOMAIN",
     "AuthorizationDomain",
     "AuthorizationVerificationError",
     "DeploymentReceipt",
     "DeploymentReceiptContent",
+    "DeploymentCleanupAuthorization",
+    "DeploymentCleanupAuthorizationPayload",
+    "ExistingDeploymentAdoptionAuthorization",
+    "ExistingDeploymentAdoptionAuthorizationPayload",
     "InfrastructureAuthorization",
     "InfrastructureAuthorizationPayload",
     "ProvisioningAuthorization",
@@ -1482,6 +1700,8 @@ __all__ = [
     "VerifiedDeploymentTransportIdentity",
     "VerifiedReconciledDeploymentReceipt",
     "authorization_signed_bytes",
+    "cleanup_authorization_digest",
+    "cleanup_authorization_signed_bytes",
     "deployment_reconciliation_digest",
     "deployment_receipt_content_digest",
     "infrastructure_authorization_digest",
@@ -1498,9 +1718,11 @@ __all__ = [
     "require_verified_pricing_capability",
     "require_verified_provider_capability",
     "require_verified_reconciled_receipt",
+    "verify_adoption_authorization",
     "verify_deployment_receipt",
     "verify_provisioning_authorization",
     "verify_pricing_evidence",
     "verify_provider_cap_evidence",
     "verify_reconciled_deployment_receipt",
+    "verify_cleanup_authorization",
 ]

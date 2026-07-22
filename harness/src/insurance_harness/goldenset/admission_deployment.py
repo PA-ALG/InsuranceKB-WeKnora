@@ -9,16 +9,20 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import hmac
 import json
 import os
 import re
 import secrets
 import stat
+import threading
+import weakref
 from collections.abc import Callable, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol, Self, cast
+from typing import Annotated, Any, Literal, Never, Protocol, Self, SupportsIndex, cast
 from urllib.parse import quote
 
 import httpx
@@ -35,6 +39,7 @@ from pydantic import (
 from insurance_harness.goldenset.admission_budget import (
     BudgetLedger,
     BudgetLedgerError,
+    InfrastructureCleanupBinding,
     InfrastructureCreatePermit,
     InfrastructureReserveSnapshot,
     VerifiedFinalTopology,
@@ -44,8 +49,12 @@ from insurance_harness.goldenset.admission_budget import (
 from insurance_harness.goldenset.admission_infrastructure import (
     _PRODUCTION_CAPABILITY_SEAL,
     AuthorizationVerificationError,
+    DeploymentCleanupAuthorization,
+    DeploymentCleanupAuthorizationPayload,
     DeploymentReceipt,
     DeploymentReceiptContent,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
     ProvisioningAuthorization,
     ProvisioningAuthorizationPayload,
     VerifiedDeploymentTransportIdentity,
@@ -53,6 +62,7 @@ from insurance_harness.goldenset.admission_infrastructure import (
     _issue_verified_reconciled_receipt_for_testing,
     _register_verified_reconciled_receipt_capability,
     _require_verified_deployment_transport_identity_for_testing,
+    cleanup_authorization_digest,
     credential_ref_for_api_key,
     deployment_receipt_content_digest,
     deployment_reconciliation_digest,
@@ -60,6 +70,8 @@ from insurance_harness.goldenset.admission_infrastructure import (
     issue_verified_deployment_transport_identity,
     issue_verified_topology_deployment_transport_identity,
     require_verified_deployment_transport_identity,
+    verify_adoption_authorization,
+    verify_cleanup_authorization,
     verify_provisioning_authorization,
 )
 from insurance_harness.goldenset.admission_models import (
@@ -83,6 +95,7 @@ _REGION: Literal["cn-beijing"] = "cn-beijing"
 _PAYMENT_TYPE: Literal["postpaid"] = "postpaid"
 _MAX_CONTROL_RESPONSE_BYTES = 256 * 1024
 _MAX_ARTIFACT_BYTES = 256 * 1024
+_MAX_CLEANUP_JOURNAL_ARTIFACTS = 64
 _PRIVATE_DIRECTORY_MODE = 0o700
 _PRIVATE_FILE_MODE = 0o600
 _MARKER_DOMAIN = b"insurancekb.run-admission.deployment-marker.v1\0"
@@ -93,6 +106,27 @@ _IDEMPOTENCY_DOMAIN = b"insurancekb.run-admission.deployment-idempotency.v1\0"
 _TOPOLOGY_OBSERVATION_BATCH_DOMAIN = (
     b"insurancekb.run-admission.topology-reconciliation-observation-batch.v1\0"
 )
+_CLEANUP_TRANSPORT_IDENTITY_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-transport-identity.v1\0"
+)
+_CLEANUP_DELETE_INTENT_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-delete-intent.v1\0"
+)
+_CLEANUP_DELETE_ATTEMPT_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-delete-attempt.v1\0"
+)
+_CLEANUP_DELETE_ATTEMPT_PROOF_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-delete-attempt-proof.v1\0"
+)
+_CLEANUP_RECEIPT_DOMAIN = b"insurancekb.run-admission.cleanup-receipt.v1\0"
+_CLEANUP_RESOURCE_DOMAIN = b"insurancekb.run-admission.cleanup-resource.v1\0"
+_CLEANUP_OBSERVATION_KEY_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-observation-key.v1\0"
+)
+_CLEANUP_OBSERVATION_PROOF_DOMAIN = (
+    b"insurancekb.run-admission.cleanup-observation-proof.v1\0"
+)
+_TESTING_CLEANUP_OBSERVATION_KEY = b"test-only-cleanup-observation-key-v1"
 _RECONCILIATION_FRESHNESS = timedelta(minutes=5)
 _TESTING_MODE_SENTINEL = object()
 _SAFE_PROVIDER_ID = re.compile(r"^[A-Za-z0-9._:@+-]{1,512}$")
@@ -368,6 +402,480 @@ class DeploymentControlResult(_ImmutableModel):
     journal_path: Path
 
 
+class DeploymentAdoptionResult(_ImmutableModel):
+    receipt: DeploymentReceipt
+    receipt_capability: VerifiedReconciledDeploymentReceipt
+    remote_manifest_digest: Sha256Digest
+    receipt_path: Path
+
+
+class CleanupDeleteIntent(_ImmutableModel):
+    version: Literal[1] = 1
+    binding: InfrastructureCleanupBinding
+    authorization: DeploymentCleanupAuthorization
+    authorization_digest: Sha256Digest
+    authorization_issued_at: datetime
+
+    @field_validator("authorization_issued_at")
+    @classmethod
+    def require_aware_start(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("cleanup delete start must include a timezone")
+        return value
+
+
+class CleanupDeleteIntentSlot(_ImmutableModel):
+    version: Literal[1] = 1
+    intent: CleanupDeleteIntent
+    intent_digest: Sha256Digest
+
+    @model_validator(mode="after")
+    def require_matching_intent_digest(self) -> CleanupDeleteIntentSlot:
+        expected = hashlib.sha256(
+            _CLEANUP_DELETE_INTENT_DOMAIN + canonical_json_bytes(self.intent)
+        ).hexdigest()
+        if self.intent_digest != expected:
+            raise ValueError("cleanup delete intent slot digest mismatch")
+        return self
+
+
+class DurableDeleteAttemptEvidence(_ImmutableModel):
+    version: Literal[1] = 1
+    binding: InfrastructureCleanupBinding
+    intent_digest: Sha256Digest
+    cleanup_authorization_digest: Sha256Digest
+    cleanup_transport_identity_digest: Sha256Digest
+    attempted_at: datetime
+    outcome_class: Literal["accepted"] = "accepted"
+    attempt_proof: Sha256Digest
+
+    @field_validator("attempted_at")
+    @classmethod
+    def require_aware_attempt_time(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("cleanup delete attempt time must include a timezone")
+        return value
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class _VerifiedDeleteAttemptSnapshot:
+    """Controller-local capability for an exact paired intent/attempt snapshot."""
+
+    intent_slot: CleanupDeleteIntentSlot
+    attempt: DurableDeleteAttemptEvidence
+    attempt_digest: Sha256Digest
+    slot_index: int
+    _seal: object
+
+    def __copy__(self) -> Never:
+        raise TypeError("verified cleanup attempt snapshots cannot be copied")
+
+    def __deepcopy__(self, memo: object) -> Never:
+        raise TypeError("verified cleanup attempt snapshots cannot be copied")
+
+    def __reduce__(self) -> Never:
+        raise TypeError("verified cleanup attempt snapshots cannot be serialized")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> Never:
+        raise TypeError("verified cleanup attempt snapshots cannot be serialized")
+
+
+class CleanupReceipt(_ImmutableModel):
+    version: Literal[1] = 1
+    binding: InfrastructureCleanupBinding
+    cleanup_authorization_digest: Sha256Digest
+    causal_delete_attempt_digest: Sha256Digest | None
+    terminal_state: Literal["absent_404", "already_absent_404"]
+    observed_at: datetime
+    cleanup_transport_identity_digest: Sha256Digest
+    observation_proof: Sha256Digest
+    billing_stop_verified: Literal[True] = True
+
+    @field_validator("observed_at")
+    @classmethod
+    def require_aware_observation(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("cleanup observation must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def require_causal_delete_for_deleted_state(self) -> CleanupReceipt:
+        if (self.terminal_state == "absent_404") != (
+            self.causal_delete_attempt_digest is not None
+        ):
+            raise ValueError("cleanup terminal state has invalid delete causality")
+        return self
+
+
+class CleanupControlResult(_ImmutableModel):
+    receipt: CleanupReceipt
+    receipt_path: Path
+    journal_path: Path | None
+
+
+class CleanupTerminalJournal(_ImmutableModel):
+    version: Literal[1] = 1
+    binding: InfrastructureCleanupBinding
+    receipt: CleanupReceipt
+    receipt_digest: Sha256Digest
+    causal_intent_snapshot: CleanupDeleteIntentSlot | None = None
+    causal_attempt_snapshot: DurableDeleteAttemptEvidence | None = None
+
+    @model_validator(mode="after")
+    def require_matching_terminal_receipt(self) -> CleanupTerminalJournal:
+        expected = hashlib.sha256(
+            _CLEANUP_RECEIPT_DOMAIN + canonical_json_bytes(self.receipt)
+        ).hexdigest()
+        if self.receipt.binding != self.binding or self.receipt_digest != expected:
+            raise ValueError("cleanup terminal journal receipt mismatch")
+        snapshots_present = (
+            self.causal_intent_snapshot is not None
+            and self.causal_attempt_snapshot is not None
+        )
+        if snapshots_present != (
+            self.receipt.causal_delete_attempt_digest is not None
+        ) or (self.causal_intent_snapshot is None) != (
+            self.causal_attempt_snapshot is None
+        ):
+            raise ValueError("cleanup terminal journal causality snapshot mismatch")
+        if snapshots_present:
+            assert self.causal_intent_snapshot is not None
+            assert self.causal_attempt_snapshot is not None
+            attempt_bytes = canonical_json_bytes(self.causal_attempt_snapshot)
+            attempt_digest = hashlib.sha256(
+                _CLEANUP_DELETE_ATTEMPT_DOMAIN + attempt_bytes
+            ).hexdigest()
+            if (
+                self.causal_intent_snapshot.intent.binding != self.binding
+                or self.causal_attempt_snapshot.binding != self.binding
+                or self.causal_attempt_snapshot.intent_digest
+                != self.causal_intent_snapshot.intent_digest
+                or self.causal_attempt_snapshot.cleanup_authorization_digest
+                != self.causal_intent_snapshot.intent.authorization_digest
+                or attempt_digest != self.receipt.causal_delete_attempt_digest
+            ):
+                raise ValueError("cleanup terminal journal causal evidence mismatch")
+        return self
+
+
+def _cleanup_observation_bytes(
+    *,
+    binding: InfrastructureCleanupBinding,
+    cleanup_authorization_digest: str,
+    causal_delete_attempt_digest: str | None,
+    terminal_state: Literal["absent_404", "already_absent_404"],
+    observed_at: datetime,
+    cleanup_transport_identity_digest: str,
+    causal_intent_snapshot: CleanupDeleteIntentSlot | None,
+    causal_attempt_snapshot: DurableDeleteAttemptEvidence | None,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            "billing_stop_verified": True,
+            "binding": binding,
+            "causal_delete_attempt_digest": causal_delete_attempt_digest,
+            "causal_intent_snapshot": causal_intent_snapshot,
+            "causal_attempt_snapshot": causal_attempt_snapshot,
+            "cleanup_authorization_digest": cleanup_authorization_digest,
+            "cleanup_transport_identity_digest": cleanup_transport_identity_digest,
+            "observed_at": observed_at,
+            "terminal_state": terminal_state,
+            "version": 1,
+        }
+    )
+
+
+def _cleanup_resource_digest(binding: InfrastructureCleanupBinding) -> str:
+    return hashlib.sha256(
+        _CLEANUP_RESOURCE_DOMAIN + canonical_json_bytes(binding)
+    ).hexdigest()
+
+
+def _cleanup_delete_attempt_bytes(
+    *,
+    binding: InfrastructureCleanupBinding,
+    intent_digest: str,
+    cleanup_authorization_digest: str,
+    cleanup_transport_identity_digest: str,
+    attempted_at: datetime,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            "attempted_at": attempted_at,
+            "binding": binding,
+            "cleanup_authorization_digest": cleanup_authorization_digest,
+            "cleanup_transport_identity_digest": cleanup_transport_identity_digest,
+            "intent_digest": intent_digest,
+            "outcome_class": "accepted",
+            "version": 1,
+        }
+    )
+
+
+class _CleanupObservationAuthenticator:
+    """Machine-local proof issuer; raw key material is never serialized."""
+
+    __slots__ = ("__weakref__",)
+
+    def __init__(self) -> None:
+        raise TypeError("cleanup observation authenticators are issuer-created")
+
+    @classmethod
+    def for_production(cls, api_key: str) -> _CleanupObservationAuthenticator:
+        if not isinstance(api_key, str) or not api_key:
+            raise ValueError("cleanup observation key source is invalid")
+        instance = object.__new__(cls)
+        _CLEANUP_OBSERVATION_AUTHENTICATOR_REGISTRY.register(
+            instance,
+            hmac.new(
+                api_key.encode("utf-8"),
+                _CLEANUP_OBSERVATION_KEY_DOMAIN,
+                hashlib.sha256,
+            ).digest(),
+        )
+        return instance
+
+    @classmethod
+    def for_testing(cls) -> _CleanupObservationAuthenticator:
+        instance = object.__new__(cls)
+        _CLEANUP_OBSERVATION_AUTHENTICATOR_REGISTRY.register(
+            instance,
+            hmac.new(
+                _TESTING_CLEANUP_OBSERVATION_KEY,
+                _CLEANUP_OBSERVATION_KEY_DOMAIN,
+                hashlib.sha256,
+            ).digest(),
+        )
+        return instance
+
+    def proof(self, observation: bytes) -> str:
+        return hmac.new(
+            _CLEANUP_OBSERVATION_AUTHENTICATOR_REGISTRY.require(self),
+            _CLEANUP_OBSERVATION_PROOF_DOMAIN + observation,
+            hashlib.sha256,
+        ).hexdigest()
+
+    def require(self, observation: bytes, proof: str) -> None:
+        expected = self.proof(observation)
+        if not hmac.compare_digest(expected, proof):
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup observation proof is invalid",
+            )
+
+    def attempt_proof(self, attempt: bytes) -> str:
+        return hmac.new(
+            _CLEANUP_OBSERVATION_AUTHENTICATOR_REGISTRY.require(self),
+            _CLEANUP_DELETE_ATTEMPT_PROOF_DOMAIN + attempt,
+            hashlib.sha256,
+        ).hexdigest()
+
+    def require_attempt(self, attempt: bytes, proof: str) -> None:
+        expected = self.attempt_proof(attempt)
+        if not hmac.compare_digest(expected, proof):
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt proof is invalid",
+            )
+
+    def __copy__(self) -> None:
+        raise TypeError("cleanup observation authenticators cannot be copied")
+
+    def __deepcopy__(self, memo: object) -> None:
+        raise TypeError("cleanup observation authenticators cannot be copied")
+
+    def __reduce__(self) -> Never:
+        raise TypeError("cleanup observation authenticators cannot be serialized")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> Never:
+        raise TypeError("cleanup observation authenticators cannot be serialized")
+
+
+class _CleanupObservationAuthenticatorRegistry:
+    """PID-bound issuer registry with no reverse strong reference to capabilities."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._pid = os.getpid()
+        self._keys: weakref.WeakKeyDictionary[
+            _CleanupObservationAuthenticator,
+            bytes,
+        ] = weakref.WeakKeyDictionary()
+
+    def _reset_after_fork(self) -> None:
+        pid = os.getpid()
+        if pid != self._pid:
+            self._pid = pid
+            self._keys = weakref.WeakKeyDictionary()
+
+    def register(
+        self,
+        authenticator: _CleanupObservationAuthenticator,
+        key: bytes,
+    ) -> None:
+        with self._lock:
+            self._reset_after_fork()
+            self._keys[authenticator] = bytes(key)
+
+    def require(self, authenticator: object) -> bytes:
+        with self._lock:
+            self._reset_after_fork()
+            if type(authenticator) is not _CleanupObservationAuthenticator:
+                raise DeploymentControlBlocked(
+                    "cleanup_receipt_invalid",
+                    "terminal cleanup observation authenticator is invalid",
+                )
+            key = self._keys.get(authenticator)
+            if key is None:
+                raise DeploymentControlBlocked(
+                    "cleanup_receipt_invalid",
+                    "terminal cleanup observation authenticator is unregistered",
+                )
+            return key
+
+
+_CLEANUP_OBSERVATION_AUTHENTICATOR_REGISTRY = (
+    _CleanupObservationAuthenticatorRegistry()
+)
+
+
+@dataclass(frozen=True, slots=True, init=False, weakref_slot=True)
+class _CleanupTransportIdentity:
+    """Issuer-private non-secret credential identity for cost-reducing cleanup."""
+
+    provider: str
+    endpoint: str
+    workspace_ref: str
+    project_ref: str
+    credential_ref: str
+    credential_fingerprint: str
+    identity_digest: str
+    _seal: object
+
+
+class _CleanupTransportIdentityRegistry:
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._pid = os.getpid()
+        self._nonce = secrets.token_bytes(32)
+        self._entries: dict[
+            int,
+            tuple[weakref.ReferenceType[_CleanupTransportIdentity], bytes],
+        ] = {}
+
+    def _reset_after_fork(self) -> None:
+        if os.getpid() != self._pid:
+            self._entries.clear()
+            self._pid = os.getpid()
+            self._nonce = secrets.token_bytes(32)
+
+    def register(self, identity: _CleanupTransportIdentity, snapshot: bytes) -> None:
+        with self._lock:
+            self._reset_after_fork()
+            key = id(identity)
+
+            def discard(
+                reference: weakref.ReferenceType[_CleanupTransportIdentity],
+            ) -> None:
+                with self._lock:
+                    current = self._entries.get(key)
+                    if current is not None and current[0] is reference:
+                        self._entries.pop(key, None)
+
+            reference = weakref.ref(identity, discard)
+            digest = hmac.new(
+                self._nonce,
+                _CLEANUP_TRANSPORT_IDENTITY_DOMAIN + snapshot,
+                hashlib.sha256,
+            ).digest()
+            self._entries[key] = (reference, digest)
+
+    def require(self, identity: _CleanupTransportIdentity, snapshot: bytes) -> None:
+        with self._lock:
+            self._reset_after_fork()
+            current = self._entries.get(id(identity))
+            expected = hmac.new(
+                self._nonce,
+                _CLEANUP_TRANSPORT_IDENTITY_DOMAIN + snapshot,
+                hashlib.sha256,
+            ).digest()
+            if (
+                current is None
+                or current[0]() is not identity
+                or not hmac.compare_digest(current[1], expected)
+            ):
+                raise DeploymentControlBlocked(
+                    "cleanup_transport_identity_invalid",
+                    "issuer-private cleanup transport identity is unavailable or drifted",
+                )
+
+
+_CLEANUP_TRANSPORT_IDENTITY_REGISTRY = _CleanupTransportIdentityRegistry()
+_CLEANUP_TRANSPORT_IDENTITY_SEAL = object()
+
+
+def _cleanup_transport_identity_snapshot(identity: _CleanupTransportIdentity) -> bytes:
+    return canonical_json_bytes(
+        {
+            "credential_fingerprint": identity.credential_fingerprint,
+            "credential_ref": identity.credential_ref,
+            "endpoint": identity.endpoint,
+            "identity_digest": identity.identity_digest,
+            "project_ref": identity.project_ref,
+            "provider": identity.provider,
+            "workspace_ref": identity.workspace_ref,
+        }
+    )
+
+
+def _issue_cleanup_transport_identity(
+    *,
+    api_key: str,
+    binding: InfrastructureCleanupBinding,
+) -> _CleanupTransportIdentity:
+    credential_ref = credential_ref_for_api_key(api_key)
+    if credential_ref != binding.credential_ref:
+        raise ValueError("Bailian API key does not match durable cleanup ownership")
+    facts = {
+        "credential_fingerprint": credential_ref.removeprefix("sha256:"),
+        "credential_ref": binding.credential_ref,
+        "endpoint": BAILIAN_DEPLOYMENT_ENDPOINT,
+        "project_ref": binding.project_ref,
+        "provider": "bailian",
+        "workspace_ref": binding.workspace_ref,
+    }
+    digest = hashlib.sha256(
+        _CLEANUP_TRANSPORT_IDENTITY_DOMAIN + canonical_json_bytes(facts)
+    ).hexdigest()
+    identity = object.__new__(_CleanupTransportIdentity)
+    for name, value in {**facts, "identity_digest": digest}.items():
+        object.__setattr__(identity, name, value)
+    object.__setattr__(identity, "_seal", _CLEANUP_TRANSPORT_IDENTITY_SEAL)
+    _CLEANUP_TRANSPORT_IDENTITY_REGISTRY.register(
+        identity,
+        _cleanup_transport_identity_snapshot(identity),
+    )
+    return identity
+
+
+def _require_cleanup_transport_identity(
+    identity: object,
+) -> _CleanupTransportIdentity:
+    if (
+        type(identity) is not _CleanupTransportIdentity
+        or identity._seal is not _CLEANUP_TRANSPORT_IDENTITY_SEAL
+    ):
+        raise DeploymentControlBlocked(
+            "cleanup_transport_identity_invalid",
+            "issuer-private cleanup transport identity is required",
+        )
+    _CLEANUP_TRANSPORT_IDENTITY_REGISTRY.require(
+        identity,
+        _cleanup_transport_identity_snapshot(identity),
+    )
+    return identity
+
+
 class _ControllerRemoteReceiptObservation:
     """Fresh provider-detail observation produced only inside receipt finalization."""
 
@@ -380,8 +888,8 @@ class _ControllerRemoteReceiptObservation:
     remote_manifest_digest: str
     observed_at: datetime
     expires_at: datetime
-    authorization: ProvisioningAuthorization
-    permit: InfrastructureCreatePermit
+    authorization: ProvisioningAuthorization | ExistingDeploymentAdoptionAuthorization
+    permit: InfrastructureCreatePermit | None
     trusted_authorities: Mapping[str, TrustedAuthority]
     _seal: object
 
@@ -419,8 +927,8 @@ class _ControllerReceiptPublicationProof:
     scope: str
     observed_at: datetime
     expires_at: datetime
-    authorization: ProvisioningAuthorization
-    permit: InfrastructureCreatePermit
+    authorization: ProvisioningAuthorization | ExistingDeploymentAdoptionAuthorization
+    permit: InfrastructureCreatePermit | None
     trusted_authorities: Mapping[str, TrustedAuthority]
     _seal: object
 
@@ -513,6 +1021,13 @@ class InfrastructureReserveReader(Protocol):
     def infrastructure_reserve(self, reserve_id: str) -> InfrastructureReserveSnapshot: ...
 
 
+class InfrastructureCleanupBindingReader(Protocol):
+    def infrastructure_cleanup_binding(
+        self,
+        reserve_id: str,
+    ) -> InfrastructureCleanupBinding: ...
+
+
 class DeploymentControlTransport(Protocol):
     endpoint: str
     identity: VerifiedDeploymentTransportIdentity
@@ -522,6 +1037,15 @@ class DeploymentControlTransport(Protocol):
     def create_deployment(self, *, request_body: bytes, idempotency_key: str) -> bytes: ...
 
     def deployment_detail(self, *, deployed_model: str) -> bytes: ...
+
+
+class DeploymentCleanupTransport(Protocol):
+    endpoint: str
+    identity: VerifiedDeploymentTransportIdentity
+
+    def deployment_detail(self, *, deployed_model: str) -> bytes: ...
+
+    def delete_deployment(self, *, deployed_model: str) -> bytes: ...
 
 
 def _canonical_operation_bytes(
@@ -674,6 +1198,7 @@ class BailianDeploymentHTTPTransport:
 
     endpoint = BAILIAN_DEPLOYMENT_ENDPOINT
     identity: VerifiedDeploymentTransportIdentity
+    _cleanup_identity: _CleanupTransportIdentity | None = None
 
     def __init__(self) -> None:
         raise TypeError("production transport is owned by DeploymentController")
@@ -719,6 +1244,22 @@ class BailianDeploymentHTTPTransport:
         return instance
 
     @classmethod
+    def _for_production_cleanup(
+        cls,
+        *,
+        api_key: str,
+        binding: InfrastructureCleanupBinding,
+    ) -> BailianDeploymentHTTPTransport:
+        identity = _issue_cleanup_transport_identity(
+            api_key=api_key,
+            binding=binding,
+        )
+        instance = cls.__new__(cls)
+        instance._cleanup_identity = identity
+        instance._initialize_client(api_key=api_key, transport=None)
+        return instance
+
+    @classmethod
     def _for_testing(
         cls,
         *,
@@ -759,6 +1300,7 @@ class BailianDeploymentHTTPTransport:
         ):
             raise ValueError("Bailian API key does not match verified transport identity")
         self.identity = verified_identity
+        self._cleanup_identity = None
         self._initialize_client(api_key=api_key, transport=transport)
 
     def _initialize_client(
@@ -795,7 +1337,7 @@ class BailianDeploymentHTTPTransport:
 
     def _request_bounded(
         self,
-        method: Literal["GET", "POST"],
+        method: Literal["GET", "POST", "DELETE"],
         url: str,
         *,
         accepted_statuses: frozenset[int],
@@ -805,8 +1347,13 @@ class BailianDeploymentHTTPTransport:
         conflict_is_distinct: bool = False,
         not_found_is_distinct: bool = False,
     ) -> bytes:
-        if method not in {"GET", "POST"}:
+        if method not in {"GET", "POST", "DELETE"}:
             raise DeploymentTransportError("B-layer transport method is not permitted")
+        cleanup_identity = getattr(self, "_cleanup_identity", None)
+        if (method == "DELETE" and cleanup_identity is None) or (
+            method == "POST" and cleanup_identity is not None
+        ):
+            raise DeploymentTransportError("transport method is outside its bound mode")
         try:
             with self._client.stream(
                 method,
@@ -859,6 +1406,16 @@ class BailianDeploymentHTTPTransport:
             "GET",
             f"{BAILIAN_DEPLOYMENT_ENDPOINT}/{quote(deployed_model, safe='')}",
             accepted_statuses=frozenset({200}),
+            not_found_is_distinct=True,
+        )
+
+    def delete_deployment(self, *, deployed_model: str) -> bytes:
+        _require_safe_provider_id(deployed_model, "deployed_model")
+        _require_cleanup_transport_identity(self._cleanup_identity)
+        return self._request_bounded(
+            "DELETE",
+            f"{BAILIAN_DEPLOYMENT_ENDPOINT}/{quote(deployed_model, safe='')}",
+            accepted_statuses=frozenset({200, 202, 204}),
             not_found_is_distinct=True,
         )
 
@@ -917,6 +1474,61 @@ class _OperationStore:
             suffix=".run.lock",
         )
 
+    def cleanup_intent_name(
+        self,
+        binding: InfrastructureCleanupBinding,
+        slot: int,
+    ) -> str:
+        if type(slot) is not int or not 0 <= slot < _MAX_CLEANUP_JOURNAL_ARTIFACTS:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "cleanup intent slot is unsafe",
+            )
+        return (
+            f"{_cleanup_resource_digest(binding)}.{slot:02d}"
+            ".cleanup-delete-intent.slot"
+        )
+
+    def cleanup_attempt_name(
+        self,
+        binding: InfrastructureCleanupBinding,
+        slot: int,
+    ) -> str:
+        if type(slot) is not int or not 0 <= slot < _MAX_CLEANUP_JOURNAL_ARTIFACTS:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "cleanup attempt slot is unsafe",
+            )
+        return (
+            f"{_cleanup_resource_digest(binding)}.{slot:02d}"
+            ".cleanup-delete-attempt.slot"
+        )
+
+    def cleanup_legacy_journal_name(
+        self,
+        binding: InfrastructureCleanupBinding,
+        version: int,
+    ) -> str:
+        if type(version) is not int or version not in {1, 2}:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "legacy cleanup journal version is unsafe",
+            )
+        return f"{_cleanup_resource_digest(binding)}.v{version}.cleanup-journal.json"
+
+    def cleanup_terminal_journal_name(
+        self,
+        binding: InfrastructureCleanupBinding,
+    ) -> str:
+        return self._name(
+            b"insurancekb.run-admission.cleanup-terminal-journal-name.v1\0",
+            binding.run_identity,
+            binding.operation_id,
+            binding.reserve_id,
+            binding.receipt_digest,
+            suffix=".cleanup-terminal-journal.json",
+        )
+
     @contextmanager
     def run_lock(self, run_identity: str) -> Any:
         name = self.lock_name(run_identity)
@@ -952,6 +1564,46 @@ class _OperationStore:
 
     def path(self, name: str) -> Path:
         return self.root / name
+
+    def names_with_suffix(self, suffix: str) -> tuple[str, ...]:
+        if not suffix.startswith(".") or "/" in suffix:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "deployment artifact suffix is unsafe",
+            )
+        try:
+            names = os.listdir(self._root_fd)
+        except OSError as exc:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "deployment artifact directory cannot be listed",
+            ) from exc
+        return tuple(
+            sorted(
+                name
+                for name in names
+                if isinstance(name, str)
+                and name.endswith(suffix)
+                and "/" not in name
+                and "\x00" not in name
+            )
+        )
+
+    def names_with_prefix_and_suffix(
+        self,
+        prefix: str,
+        suffix: str,
+    ) -> tuple[str, ...]:
+        if re.fullmatch(r"[0-9a-f]{64}\.", prefix) is None:
+            raise DeploymentControlBlocked(
+                "operation_artifact_unsafe",
+                "deployment artifact prefix is unsafe",
+            )
+        return tuple(
+            name
+            for name in self.names_with_suffix(suffix)
+            if name.startswith(prefix)
+        )
 
     def read(self, name: str) -> bytes | None:
         try:
@@ -1074,7 +1726,7 @@ class _OperationStore:
         temporary = f".{name}.{secrets.token_hex(12)}.tmp"
         descriptor = -1
         staged = True
-        rename_attempted = False
+        publication_may_exist = False
         staging_identity: tuple[int, int] | None = None
         try:
             descriptor = os.open(
@@ -1102,17 +1754,53 @@ class _OperationStore:
             os.fsync(descriptor)
             os.close(descriptor)
             descriptor = -1
-            rename_attempted = True
-            os.replace(
-                temporary,
-                name,
-                src_dir_fd=self._root_fd,
-                dst_dir_fd=self._root_fd,
-            )
+            publication_may_exist = True
+            try:
+                os.link(
+                    temporary,
+                    name,
+                    src_dir_fd=self._root_fd,
+                    dst_dir_fd=self._root_fd,
+                    follow_symlinks=False,
+                )
+            except FileExistsError:
+                publication_may_exist = False
+                os.unlink(temporary, dir_fd=self._root_fd)
+                staged = False
+                os.fsync(self._root_fd)
+                raced = self.read(name)
+                if raced != content:
+                    raise DeploymentControlBlocked(
+                        "operation_artifact_unsafe",
+                        "content-addressed deployment artifact conflicts",
+                    ) from None
+                return None
+            os.unlink(temporary, dir_fd=self._root_fd)
             staged = False
             os.fsync(self._root_fd)
         except BaseException as exc:
-            if rename_attempted and staging_identity is not None:
+            if descriptor >= 0:
+                try:
+                    os.close(descriptor)
+                except BaseException as cleanup_exc:
+                    exc.add_note(
+                        "staging descriptor cleanup conflict: "
+                        f"{type(cleanup_exc).__name__}"
+                    )
+                descriptor = -1
+            if staged:
+                try:
+                    os.unlink(temporary, dir_fd=self._root_fd)
+                    staged = False
+                    os.fsync(self._root_fd)
+                except FileNotFoundError:
+                    staged = False
+                except BaseException as cleanup_exc:
+                    exc.add_note(
+                        "staging publication cleanup conflict: "
+                        f"{type(cleanup_exc).__name__}"
+                    )
+            if publication_may_exist and staging_identity is not None:
                 try:
                     self.remove_if_owned(name, staging_identity)
                 except BaseException as cleanup_exc:
@@ -1128,11 +1816,6 @@ class _OperationStore:
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
-            if staged:
-                try:
-                    os.unlink(temporary, dir_fd=self._root_fd)
-                except OSError:
-                    pass
         assert staging_identity is not None
         try:
             if self.read(name) != content:
@@ -1280,6 +1963,76 @@ class DeploymentController:
 
     def __init__(self) -> None:
         raise TypeError("use DeploymentController.for_production()")
+
+    @classmethod
+    def for_production_cleanup(
+        cls,
+        *,
+        reserve_id: str,
+    ) -> DeploymentController:
+        """Build the fixed DELETE-only boundary from durable cleanup ownership."""
+
+        api_key = os.environ.get(_PRODUCTION_API_KEY_ENV)
+        if not isinstance(api_key, str) or not api_key:
+            raise DeploymentControlBlocked(
+                "deployment_credential_unavailable",
+                "root-owned deployment credential is unavailable",
+            )
+        transport: BailianDeploymentHTTPTransport | None = None
+        instance: DeploymentController | None = None
+        try:
+            reserve_reader = BudgetLedger(_PRODUCTION_BUDGET_LEDGER_PATH)
+            binding = reserve_reader.infrastructure_cleanup_binding(reserve_id)
+            observation_authenticator = _CleanupObservationAuthenticator.for_production(
+                api_key
+            )
+            transport = BailianDeploymentHTTPTransport._for_production_cleanup(
+                api_key=api_key,
+                binding=binding,
+            )
+            instance = cls.__new__(cls)
+            instance._initialize(
+                run_root=_PRODUCTION_RUN_ROOT,
+                reserve_reader=reserve_reader,
+                transport=transport,
+                clock=lambda: datetime.now(UTC),
+                testing_sentinel=None,
+                cleanup_observation_authenticator=observation_authenticator,
+            )
+            instance._production_cleanup_dependencies = (
+                reserve_reader,
+                transport,
+                binding,
+                observation_authenticator,
+            )
+        except (BudgetLedgerError, OSError, TypeError, ValueError) as exc:
+            if instance is not None:
+                instance.close()
+            elif transport is not None:
+                transport.close()
+            raise DeploymentControlBlocked(
+                "production_cleanup_controller_unavailable",
+                "canonical production cleanup controller is unavailable",
+            ) from exc
+        except BaseException:
+            if instance is not None:
+                instance.close()
+            elif transport is not None:
+                transport.close()
+            raise
+        return instance
+
+    def cleanup(
+        self,
+        *,
+        authorization: DeploymentCleanupAuthorization,
+        receipt_digest: str,
+    ) -> CleanupControlResult:
+        return self._cleanup(
+            authorization=authorization,
+            trusted_authorities=self._production_operational_authorities(),
+            receipt_digest=receipt_digest,
+        )
 
     @classmethod
     def for_production(
@@ -1465,11 +2218,23 @@ class DeploymentController:
         transport: DeploymentControlTransport,
         clock: Callable[[], datetime],
         testing_sentinel: object | None,
+        cleanup_observation_authenticator: _CleanupObservationAuthenticator | None = None,
     ) -> None:
         self._reserve_reader = reserve_reader
         self._transport = transport
+        self._cleanup_reserve_reader = cast(
+            InfrastructureCleanupBindingReader,
+            reserve_reader,
+        )
+        self._cleanup_transport = cast(DeploymentCleanupTransport, transport)
         self._clock = clock
         self._testing_sentinel = testing_sentinel
+        self._cleanup_observation_authenticator = (
+            _CleanupObservationAuthenticator.for_testing()
+            if testing_sentinel is _TESTING_MODE_SENTINEL
+            else cleanup_observation_authenticator
+        )
+        self._cleanup_attempt_snapshot_seal = object()
         self._remote_observation_seal = object()
         self._receipt_publication_seal = object()
         self._closed = False
@@ -1481,6 +2246,15 @@ class DeploymentController:
                 RunAdmissionPlanPayload,
                 str,
                 str | None,
+            ]
+            | None
+        ) = None
+        self._production_cleanup_dependencies: (
+            tuple[
+                BudgetLedger,
+                BailianDeploymentHTTPTransport,
+                InfrastructureCleanupBinding,
+                _CleanupObservationAuthenticator,
             ]
             | None
         ) = None
@@ -1617,6 +2391,102 @@ class DeploymentController:
                 "production deployment controller mode does not permit this operation",
             )
 
+    def _require_production_cleanup_dependencies(
+        self,
+        *,
+        reserve_id: str,
+    ) -> InfrastructureCleanupBinding:
+        owned = self._production_cleanup_dependencies
+        if (
+            self._testing_sentinel is _TESTING_MODE_SENTINEL
+            or owned is None
+            or self._reserve_reader is not owned[0]
+            or self._transport is not owned[1]
+            or self._cleanup_observation_authenticator is not owned[3]
+            or type(self._reserve_reader) is not BudgetLedger
+            or type(self._transport) is not BailianDeploymentHTTPTransport
+            or type(self._cleanup_observation_authenticator)
+            is not _CleanupObservationAuthenticator
+            or self._reserve_reader._db_path != _PRODUCTION_BUDGET_LEDGER_PATH
+            or self._store.root != _PRODUCTION_RUN_ROOT
+        ):
+            raise DeploymentControlBlocked(
+                "production_cleanup_dependency_invalid",
+                "canonical production cleanup dependencies have drifted",
+            )
+        try:
+            fresh = owned[0].infrastructure_cleanup_binding(reserve_id)
+            identity = _require_cleanup_transport_identity(
+                getattr(owned[1], "_cleanup_identity", None)
+            )
+        except (BudgetLedgerError, TypeError, ValueError) as exc:
+            raise DeploymentControlBlocked(
+                "production_cleanup_ownership_invalid",
+                "durable cleanup ownership is unavailable",
+            ) from exc
+        if (
+            fresh != owned[2]
+            or identity.endpoint != BAILIAN_DEPLOYMENT_ENDPOINT
+            or identity.workspace_ref != fresh.workspace_ref
+            or identity.project_ref != fresh.project_ref
+            or identity.credential_ref != fresh.credential_ref
+        ):
+            raise DeploymentControlBlocked(
+                "production_cleanup_ownership_invalid",
+                "durable cleanup ownership has drifted",
+            )
+        return fresh
+
+    def _cleanup_transport_digest(self) -> str:
+        if self._testing_sentinel is _TESTING_MODE_SENTINEL:
+            identity = _require_verified_deployment_transport_identity_for_testing(
+                self._transport.identity
+            )
+            return identity.identity_digest
+        owned = self._production_cleanup_dependencies
+        if owned is None:
+            raise DeploymentControlBlocked(
+                "production_cleanup_dependency_invalid",
+                "canonical production cleanup dependencies are unavailable",
+            )
+        return _require_cleanup_transport_identity(
+            getattr(owned[1], "_cleanup_identity", None)
+        ).identity_digest
+
+    def _require_cleanup_observation_proof(
+        self,
+        receipt: CleanupReceipt,
+        *,
+        causal_intent_snapshot: CleanupDeleteIntentSlot | None,
+        causal_attempt_snapshot: DurableDeleteAttemptEvidence | None,
+    ) -> None:
+        authenticator = self._cleanup_observation_authenticator
+        if type(authenticator) is not _CleanupObservationAuthenticator:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup observation authenticator is unavailable",
+            )
+        if receipt.cleanup_transport_identity_digest != self._cleanup_transport_digest():
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup transport identity has drifted",
+            )
+        authenticator.require(
+            _cleanup_observation_bytes(
+                binding=receipt.binding,
+                cleanup_authorization_digest=receipt.cleanup_authorization_digest,
+                causal_delete_attempt_digest=receipt.causal_delete_attempt_digest,
+                terminal_state=receipt.terminal_state,
+                observed_at=receipt.observed_at,
+                cleanup_transport_identity_digest=(
+                    receipt.cleanup_transport_identity_digest
+                ),
+                causal_intent_snapshot=causal_intent_snapshot,
+                causal_attempt_snapshot=causal_attempt_snapshot,
+            ),
+            receipt.observation_proof,
+        )
+
     def provision(
         self,
         *,
@@ -1633,6 +2503,1281 @@ class DeploymentController:
             authorization=authorization,
             permit=permit,
             trusted_authorities=self._production_operational_authorities(),
+        )
+
+    def reconcile_existing_adoption(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+    ) -> DeploymentAdoptionResult:
+        self._require_production_dependencies()
+        self._require_production_mode("provisioning")
+        return self._reconcile_existing_adoption(
+            authorization=authorization,
+            trusted_authorities=self._production_operational_authorities(),
+        )
+
+    def _cleanup_for_testing(
+        self,
+        *,
+        authorization: DeploymentCleanupAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_digest: str,
+    ) -> CleanupControlResult:
+        self._require_testing_mode()
+        return self._cleanup(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+
+    def _cleanup(
+        self,
+        *,
+        authorization: DeploymentCleanupAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_digest: str,
+    ) -> CleanupControlResult:
+        authorization_digest, binding, artifact = self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        with self._store.run_lock(binding.run_identity):
+            authorization_digest, binding, artifact = self._verify_cleanup_gate(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            self._reject_untrusted_legacy_cleanup_journals(binding)
+            restored = self._restore_cleanup_terminal(
+                binding,
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            if restored is not None:
+                return restored
+            intent = CleanupDeleteIntent(
+                binding=binding,
+                authorization=authorization,
+                authorization_digest=authorization_digest,
+                authorization_issued_at=authorization.payload.issued_at,
+            )
+            intent_bytes = canonical_json_bytes(intent)
+            intent_digest = hashlib.sha256(
+                _CLEANUP_DELETE_INTENT_DOMAIN + intent_bytes
+            ).hexdigest()
+            intent_slot = CleanupDeleteIntentSlot(
+                intent=intent,
+                intent_digest=intent_digest,
+            )
+            intent_slot_bytes = canonical_json_bytes(intent_slot)
+            prior_intents, first_empty_slot = self._load_cleanup_delete_intents(
+                binding=binding,
+                trusted_authorities=trusted_authorities,
+            )
+            prior_attempts = self._load_cleanup_delete_attempts(
+                binding=binding,
+                intents=prior_intents,
+            )
+            existing_intent = next(
+                (
+                    existing.intent
+                    for digest, existing, _slot_index in prior_intents
+                    if digest == intent_digest
+                ),
+                None,
+            )
+            if existing_intent is None and first_empty_slot is None:
+                raise DeploymentControlBlocked(
+                    "cleanup_journal_limit_exceeded",
+                    "cleanup delete intent slots are full",
+                )
+            authorization_digest, binding, artifact = self._verify_cleanup_gate(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            try:
+                observed = _parse_manifest(
+                    self._transport.deployment_detail(
+                        deployed_model=binding.deployed_model
+                    )
+                )
+            except DeploymentNotFound:
+                authorization_digest, binding, _artifact = self._verify_cleanup_gate(
+                    authorization=authorization,
+                    trusted_authorities=trusted_authorities,
+                    receipt_digest=receipt_digest,
+                )
+                verified_attempt = (
+                    self._reload_cleanup_attempt_snapshot(
+                        prior_attempts[-1],
+                        binding=binding,
+                        trusted_authorities=trusted_authorities,
+                    )
+                    if prior_attempts
+                    else None
+                )
+                return self._publish_cleanup_terminal(
+                    binding=binding,
+                    authorization_digest=authorization_digest,
+                    verified_attempt=verified_attempt,
+                    terminal_state=(
+                        "absent_404"
+                        if prior_attempts
+                        else "already_absent_404"
+                    ),
+                    authorization=authorization,
+                    trusted_authorities=trusted_authorities,
+                    receipt_digest=receipt_digest,
+                )
+            except (DeploymentTransportError, TimeoutError) as exc:
+                raise DeploymentControlBlocked(
+                    "cleanup_remote_unverified",
+                    "cleanup detail could not prove the provider state",
+                ) from exc
+            self._require_cleanup_manifest(observed=observed, artifact=artifact)
+            if existing_intent is not None:
+                raise DeploymentControlBlocked(
+                    "billing_stop_unverified",
+                    "this cleanup authorization already has an uncertain delete attempt",
+                )
+            authorization_digest, binding, artifact = self._verify_cleanup_gate(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            self._require_cleanup_manifest(observed=observed, artifact=artifact)
+            assert first_empty_slot is not None
+            self._store.atomic_write_absent_on_failure(
+                self._store.cleanup_intent_name(binding, first_empty_slot),
+                intent_slot_bytes,
+            )
+            authorization_digest, binding, artifact = self._verify_cleanup_gate(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            self._require_cleanup_manifest(observed=observed, artifact=artifact)
+            completed_attempt: _VerifiedDeleteAttemptSnapshot | None = None
+            try:
+                self._cleanup_transport.delete_deployment(
+                    deployed_model=binding.deployed_model
+                )
+            except (DeploymentNotFound, DeploymentTransportError, TimeoutError):
+                pass
+            else:
+                attempted_at = self._clock()
+                authorization_digest, binding, _artifact = self._verify_cleanup_gate(
+                    authorization=authorization,
+                    trusted_authorities=trusted_authorities,
+                    receipt_digest=receipt_digest,
+                )
+                completed_attempt = self._publish_completed_delete_attempt(
+                    binding=binding,
+                    intent_slot=intent_slot,
+                    attempted_at=attempted_at,
+                    slot_index=first_empty_slot,
+                    trusted_authorities=trusted_authorities,
+                )
+            authorization_digest, binding, _artifact = self._verify_cleanup_gate(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+                receipt_digest=receipt_digest,
+            )
+            try:
+                terminal = _parse_manifest(
+                    self._transport.deployment_detail(
+                        deployed_model=binding.deployed_model
+                    )
+                )
+            except DeploymentNotFound:
+                authorization_digest, binding, _artifact = self._verify_cleanup_gate(
+                    authorization=authorization,
+                    trusted_authorities=trusted_authorities,
+                    receipt_digest=receipt_digest,
+                )
+                verified_attempt = (
+                    self._reload_cleanup_attempt_snapshot(
+                        completed_attempt,
+                        binding=binding,
+                        trusted_authorities=trusted_authorities,
+                    )
+                    if completed_attempt is not None
+                    else None
+                )
+                return self._publish_cleanup_terminal(
+                    binding=binding,
+                    authorization_digest=authorization_digest,
+                    verified_attempt=verified_attempt,
+                    terminal_state=(
+                        "absent_404"
+                        if completed_attempt is not None
+                        else "already_absent_404"
+                    ),
+                    authorization=authorization,
+                    trusted_authorities=trusted_authorities,
+                    receipt_digest=receipt_digest,
+                )
+            except (DeploymentTransportError, TimeoutError) as exc:
+                raise DeploymentControlBlocked(
+                    "billing_stop_unverified",
+                    "cleanup reconciliation is uncertain",
+                ) from exc
+            self._require_cleanup_manifest(observed=terminal, artifact=artifact)
+            raise DeploymentControlBlocked(
+                "billing_stop_unverified",
+                "cleanup did not reach terminal provider absence",
+            )
+
+    def _verify_cleanup_gate(
+        self,
+        *,
+        authorization: DeploymentCleanupAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_digest: str,
+    ) -> tuple[str, InfrastructureCleanupBinding, DeploymentReceiptArtifact]:
+        try:
+            if (
+                type(authorization) is not DeploymentCleanupAuthorization
+                or set(authorization.__dict__) != set(type(authorization).model_fields)
+                or type(authorization.payload)
+                is not DeploymentCleanupAuthorizationPayload
+            ):
+                raise TypeError("cleanup authorization type is not exact")
+            validated = DeploymentCleanupAuthorization.model_validate(
+                authorization.model_dump(mode="python", round_trip=True)
+            )
+            if canonical_json_bytes(validated) != canonical_json_bytes(authorization):
+                raise ValueError("cleanup authorization snapshot changed")
+            now = self._clock()
+            digest = verify_cleanup_authorization(
+                validated,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+            payload = validated.payload
+            binding = (
+                self._require_production_cleanup_dependencies(
+                    reserve_id=payload.reserve_id
+                )
+                if self._testing_sentinel is not _TESTING_MODE_SENTINEL
+                else self._cleanup_reserve_reader.infrastructure_cleanup_binding(
+                    payload.reserve_id
+                )
+            )
+            if (
+                receipt_digest != binding.receipt_digest
+                or (
+                    payload.run_identity,
+                    payload.purpose,
+                    payload.scope,
+                    payload.operation_id,
+                    payload.reserve_id,
+                    payload.receipt_digest,
+                    payload.deployed_model,
+                    payload.workspace_ref,
+                    payload.project_ref,
+                    payload.credential_ref,
+                    payload.expected_remote_manifest_digest,
+                    payload.cleanup_deadline,
+                )
+                != (
+                    binding.run_identity,
+                    binding.purpose,
+                    binding.scope,
+                    binding.operation_id,
+                    binding.reserve_id,
+                    binding.receipt_digest,
+                    binding.deployed_model,
+                    binding.workspace_ref,
+                    binding.project_ref,
+                    binding.credential_ref,
+                    binding.remote_manifest_digest,
+                    binding.cleanup_deadline,
+                )
+            ):
+                raise ValueError("cleanup authorization does not match durable ownership")
+            if self._transport.endpoint != BAILIAN_DEPLOYMENT_ENDPOINT:
+                raise ValueError("cleanup endpoint drifted")
+            if self._testing_sentinel is _TESTING_MODE_SENTINEL:
+                identity = _require_verified_deployment_transport_identity_for_testing(
+                    self._transport.identity
+                )
+                if (
+                    identity.workspace_ref,
+                    identity.project_ref,
+                    identity.credential_ref,
+                ) != (
+                    binding.workspace_ref,
+                    binding.project_ref,
+                    binding.credential_ref,
+                ):
+                    raise ValueError("cleanup transport identity drifted")
+            else:
+                _require_cleanup_transport_identity(
+                    getattr(self._transport, "_cleanup_identity", None)
+                )
+            artifact = self._load_cleanup_source_artifacts(binding)
+        except (
+            AttributeError,
+            AuthorizationVerificationError,
+            BudgetLedgerError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise DeploymentControlBlocked(
+                "cleanup_authorization_invalid",
+                "independent deployment cleanup authorization is invalid",
+            ) from exc
+        return digest, binding, artifact
+
+    def _load_cleanup_source_artifacts(
+        self,
+        binding: InfrastructureCleanupBinding,
+    ) -> DeploymentReceiptArtifact:
+        receipt_raw = self._store.read(f"{binding.receipt_digest}.receipt.json")
+        reconciliation_raw = self._store.read(
+            f"{binding.reconciliation_digest}.receipt-reconciliation.json"
+        )
+        if receipt_raw is None or reconciliation_raw is None:
+            raise ValueError("cleanup ownership artifacts are missing")
+        artifact = DeploymentReceiptArtifact.model_validate_json(receipt_raw)
+        reconciliation = DeploymentReconciliationEvidenceV1.model_validate_json(
+            reconciliation_raw
+        )
+        if (
+            canonical_json_bytes(artifact) != receipt_raw
+            or canonical_json_bytes(reconciliation) != reconciliation_raw
+            or artifact.receipt.content_digest != binding.receipt_digest
+            or artifact.remote_manifest_digest != binding.remote_manifest_digest
+            or reconciliation.reconciliation_digest != binding.reconciliation_digest
+            or reconciliation.transport_identity_digest
+            != binding.transport_identity_digest
+            or reconciliation.receipt != artifact.receipt
+            or reconciliation.remote_manifest != artifact.remote_manifest
+            or reconciliation.run_identity != binding.run_identity
+            or reconciliation.purpose != binding.purpose
+            or reconciliation.scope != binding.scope
+            or reconciliation.operation_id != binding.operation_id
+            or reconciliation.reserve_id != binding.reserve_id
+            or reconciliation.workspace_ref != binding.workspace_ref
+            or reconciliation.project_ref != binding.project_ref
+            or reconciliation.credential_ref != binding.credential_ref
+            or reconciliation.remote_manifest_digest
+            != binding.remote_manifest_digest
+        ):
+            raise ValueError("cleanup ownership artifacts have drifted")
+        return artifact
+
+    def _load_cleanup_delete_intents(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> tuple[tuple[tuple[str, CleanupDeleteIntentSlot, int], ...], int | None]:
+        found: list[tuple[str, CleanupDeleteIntentSlot, int]] = []
+        first_empty_slot: int | None = None
+        for slot_index in range(_MAX_CLEANUP_JOURNAL_ARTIFACTS):
+            name = self._store.cleanup_intent_name(binding, slot_index)
+            raw = self._store.read(name)
+            if raw is None:
+                if first_empty_slot is None:
+                    first_empty_slot = slot_index
+                continue
+            try:
+                slot = CleanupDeleteIntentSlot.model_validate_json(raw)
+                intent = slot.intent
+                digest = slot.intent_digest
+                if (
+                    canonical_json_bytes(slot) != raw
+                    or cleanup_authorization_digest(intent.authorization)
+                    != intent.authorization_digest
+                    or intent.authorization.payload.issued_at
+                    != intent.authorization_issued_at
+                ):
+                    raise ValueError("cleanup delete intent is noncanonical")
+                verify_cleanup_authorization(
+                    intent.authorization,
+                    trusted_authorities=trusted_authorities,
+                    now=intent.authorization.payload.issued_at,
+                )
+            except (AuthorizationVerificationError, TypeError, ValueError) as exc:
+                raise DeploymentControlBlocked(
+                    "cleanup_journal_invalid",
+                    "cleanup delete intent is invalid",
+                ) from exc
+            same_resource_key = (
+                intent.binding.run_identity,
+                intent.binding.operation_id,
+                intent.binding.reserve_id,
+                intent.binding.receipt_digest,
+            ) == (
+                binding.run_identity,
+                binding.operation_id,
+                binding.reserve_id,
+                binding.receipt_digest,
+            )
+            if same_resource_key and intent.binding != binding:
+                raise DeploymentControlBlocked(
+                    "cleanup_journal_conflict",
+                    "cleanup delete intent conflicts with durable ownership",
+                )
+            if intent.binding == binding:
+                found.append((digest, slot, slot_index))
+        found.sort(
+            key=lambda item: (
+                item[1].intent.authorization_issued_at,
+                item[0],
+            )
+        )
+        return tuple(found), first_empty_slot
+
+    def _load_cleanup_delete_attempts(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        intents: tuple[tuple[str, CleanupDeleteIntentSlot, int], ...],
+    ) -> tuple[_VerifiedDeleteAttemptSnapshot, ...]:
+        intents_by_slot = {
+            slot_index: (intent_digest, intent_slot)
+            for intent_digest, intent_slot, slot_index in intents
+        }
+        found: list[_VerifiedDeleteAttemptSnapshot] = []
+        authenticator = self._cleanup_observation_authenticator
+        if type(authenticator) is not _CleanupObservationAuthenticator:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt authenticator is unavailable",
+            )
+        transport_digest = self._cleanup_transport_digest()
+        for slot_index in range(_MAX_CLEANUP_JOURNAL_ARTIFACTS):
+            raw = self._store.read(
+                self._store.cleanup_attempt_name(binding, slot_index)
+            )
+            if raw is None:
+                continue
+            try:
+                attempt = DurableDeleteAttemptEvidence.model_validate_json(raw)
+                paired = intents_by_slot.get(slot_index)
+                attempt_bytes = _cleanup_delete_attempt_bytes(
+                    binding=attempt.binding,
+                    intent_digest=attempt.intent_digest,
+                    cleanup_authorization_digest=(
+                        attempt.cleanup_authorization_digest
+                    ),
+                    cleanup_transport_identity_digest=(
+                        attempt.cleanup_transport_identity_digest
+                    ),
+                    attempted_at=attempt.attempted_at,
+                )
+                if (
+                    canonical_json_bytes(attempt) != raw
+                    or paired is None
+                    or attempt.binding != binding
+                    or attempt.intent_digest != paired[0]
+                    or attempt.cleanup_authorization_digest
+                    != paired[1].intent.authorization_digest
+                    or attempt.cleanup_transport_identity_digest != transport_digest
+                    or attempt.attempted_at
+                    < paired[1].intent.authorization_issued_at
+                ):
+                    raise ValueError("completed cleanup attempt is not exact")
+                authenticator.require_attempt(attempt_bytes, attempt.attempt_proof)
+            except (TypeError, ValueError) as exc:
+                raise DeploymentControlBlocked(
+                    "cleanup_attempt_invalid",
+                    "completed cleanup attempt is invalid",
+                ) from exc
+            digest = hashlib.sha256(
+                _CLEANUP_DELETE_ATTEMPT_DOMAIN + raw
+            ).hexdigest()
+            snapshot = object.__new__(_VerifiedDeleteAttemptSnapshot)
+            object.__setattr__(snapshot, "intent_slot", paired[1])
+            object.__setattr__(snapshot, "attempt", attempt)
+            object.__setattr__(snapshot, "attempt_digest", digest)
+            object.__setattr__(snapshot, "slot_index", slot_index)
+            object.__setattr__(
+                snapshot,
+                "_seal",
+                self._cleanup_attempt_snapshot_seal,
+            )
+            found.append(snapshot)
+        found.sort(
+            key=lambda item: (item.attempt.attempted_at, item.attempt_digest)
+        )
+        return tuple(found)
+
+    def _verify_cleanup_attempt_evidence(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        intent_slot: CleanupDeleteIntentSlot,
+        attempt: DurableDeleteAttemptEvidence,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> str:
+        authenticator = self._cleanup_observation_authenticator
+        if type(authenticator) is not _CleanupObservationAuthenticator:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt authenticator is unavailable",
+            )
+        try:
+            validated_slot = CleanupDeleteIntentSlot.model_validate(
+                intent_slot.model_dump(mode="python", round_trip=True)
+            )
+            validated_attempt = DurableDeleteAttemptEvidence.model_validate(
+                attempt.model_dump(mode="python", round_trip=True)
+            )
+            intent = validated_slot.intent
+            attempt_bytes = _cleanup_delete_attempt_bytes(
+                binding=validated_attempt.binding,
+                intent_digest=validated_attempt.intent_digest,
+                cleanup_authorization_digest=(
+                    validated_attempt.cleanup_authorization_digest
+                ),
+                cleanup_transport_identity_digest=(
+                    validated_attempt.cleanup_transport_identity_digest
+                ),
+                attempted_at=validated_attempt.attempted_at,
+            )
+            if (
+                canonical_json_bytes(validated_slot)
+                != canonical_json_bytes(intent_slot)
+                or canonical_json_bytes(validated_attempt)
+                != canonical_json_bytes(attempt)
+                or cleanup_authorization_digest(intent.authorization)
+                != intent.authorization_digest
+                or intent.authorization.payload.issued_at
+                != intent.authorization_issued_at
+                or intent.binding != binding
+                or validated_attempt.binding != binding
+                or validated_attempt.intent_digest != validated_slot.intent_digest
+                or validated_attempt.cleanup_authorization_digest
+                != intent.authorization_digest
+                or validated_attempt.cleanup_transport_identity_digest
+                != self._cleanup_transport_digest()
+                or validated_attempt.attempted_at
+                < intent.authorization_issued_at
+            ):
+                raise ValueError("completed cleanup attempt is not exact")
+            verify_cleanup_authorization(
+                intent.authorization,
+                trusted_authorities=trusted_authorities,
+                now=intent.authorization_issued_at,
+            )
+            authenticator.require_attempt(
+                attempt_bytes,
+                validated_attempt.attempt_proof,
+            )
+        except (
+            AttributeError,
+            AuthorizationVerificationError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt is invalid",
+            ) from exc
+        return hashlib.sha256(
+            _CLEANUP_DELETE_ATTEMPT_DOMAIN
+            + canonical_json_bytes(validated_attempt)
+        ).hexdigest()
+
+    def _read_cleanup_attempt_snapshot(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        slot_index: int,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> _VerifiedDeleteAttemptSnapshot:
+        try:
+            intent_raw = self._store.read(
+                self._store.cleanup_intent_name(binding, slot_index)
+            )
+            attempt_raw = self._store.read(
+                self._store.cleanup_attempt_name(binding, slot_index)
+            )
+            if intent_raw is None or attempt_raw is None:
+                raise ValueError("paired cleanup attempt artifacts are missing")
+            intent_slot = CleanupDeleteIntentSlot.model_validate_json(intent_raw)
+            attempt = DurableDeleteAttemptEvidence.model_validate_json(attempt_raw)
+            if (
+                canonical_json_bytes(intent_slot) != intent_raw
+                or canonical_json_bytes(attempt) != attempt_raw
+            ):
+                raise ValueError("paired cleanup attempt artifacts are noncanonical")
+            digest = self._verify_cleanup_attempt_evidence(
+                binding=binding,
+                intent_slot=intent_slot,
+                attempt=attempt,
+                trusted_authorities=trusted_authorities,
+            )
+        except DeploymentControlBlocked:
+            raise
+        except (AttributeError, OSError, TypeError, ValueError) as exc:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "paired cleanup attempt artifacts are invalid",
+            ) from exc
+        snapshot = object.__new__(_VerifiedDeleteAttemptSnapshot)
+        object.__setattr__(snapshot, "intent_slot", intent_slot)
+        object.__setattr__(snapshot, "attempt", attempt)
+        object.__setattr__(snapshot, "attempt_digest", digest)
+        object.__setattr__(snapshot, "slot_index", slot_index)
+        object.__setattr__(
+            snapshot,
+            "_seal",
+            self._cleanup_attempt_snapshot_seal,
+        )
+        return snapshot
+
+    def _require_verified_cleanup_attempt_snapshot(
+        self,
+        snapshot: _VerifiedDeleteAttemptSnapshot,
+        *,
+        binding: InfrastructureCleanupBinding,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> None:
+        if (
+            type(snapshot) is not _VerifiedDeleteAttemptSnapshot
+            or snapshot._seal is not self._cleanup_attempt_snapshot_seal
+            or not 0 <= snapshot.slot_index < _MAX_CLEANUP_JOURNAL_ARTIFACTS
+        ):
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "verified cleanup attempt snapshot is invalid",
+            )
+        digest = self._verify_cleanup_attempt_evidence(
+            binding=binding,
+            intent_slot=snapshot.intent_slot,
+            attempt=snapshot.attempt,
+            trusted_authorities=trusted_authorities,
+        )
+        if digest != snapshot.attempt_digest:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "verified cleanup attempt snapshot has drifted",
+            )
+
+    def _reload_cleanup_attempt_snapshot(
+        self,
+        snapshot: _VerifiedDeleteAttemptSnapshot,
+        *,
+        binding: InfrastructureCleanupBinding,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> _VerifiedDeleteAttemptSnapshot:
+        self._require_verified_cleanup_attempt_snapshot(
+            snapshot,
+            binding=binding,
+            trusted_authorities=trusted_authorities,
+        )
+        fresh = self._read_cleanup_attempt_snapshot(
+            binding=binding,
+            slot_index=snapshot.slot_index,
+            trusted_authorities=trusted_authorities,
+        )
+        if (
+            fresh.intent_slot != snapshot.intent_slot
+            or fresh.attempt != snapshot.attempt
+            or fresh.attempt_digest != snapshot.attempt_digest
+        ):
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "paired cleanup attempt snapshot has drifted",
+            )
+        return fresh
+
+    def _reject_untrusted_legacy_cleanup_journals(
+        self,
+        binding: InfrastructureCleanupBinding,
+    ) -> None:
+        for version in (1, 2):
+            legacy = self._store.read(
+                self._store.cleanup_legacy_journal_name(binding, version)
+            )
+            if legacy is not None:
+                raise DeploymentControlBlocked(
+                    "cleanup_journal_legacy_untrusted",
+                    "legacy cleanup journal lacks trusted causal authorization evidence",
+                )
+
+    @staticmethod
+    def _require_cleanup_manifest(
+        *,
+        observed: ProviderDeploymentManifest,
+        artifact: DeploymentReceiptArtifact,
+    ) -> None:
+        if (
+            observed != artifact.remote_manifest
+            or observed.status != "RUNNING"
+            or _remote_manifest_digest(observed) != artifact.remote_manifest_digest
+        ):
+            raise DeploymentControlBlocked(
+                "cleanup_manifest_mismatch",
+                "remote manifest changed before cleanup",
+            )
+
+    def _publish_completed_delete_attempt(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        intent_slot: CleanupDeleteIntentSlot,
+        attempted_at: datetime,
+        slot_index: int,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> _VerifiedDeleteAttemptSnapshot:
+        authenticator = self._cleanup_observation_authenticator
+        if type(authenticator) is not _CleanupObservationAuthenticator:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt authenticator is unavailable",
+            )
+        transport_digest = self._cleanup_transport_digest()
+        attempt_facts = _cleanup_delete_attempt_bytes(
+            binding=binding,
+            intent_digest=intent_slot.intent_digest,
+            cleanup_authorization_digest=(
+                intent_slot.intent.authorization_digest
+            ),
+            cleanup_transport_identity_digest=transport_digest,
+            attempted_at=attempted_at,
+        )
+        attempt = DurableDeleteAttemptEvidence(
+            binding=binding,
+            intent_digest=intent_slot.intent_digest,
+            cleanup_authorization_digest=(
+                intent_slot.intent.authorization_digest
+            ),
+            cleanup_transport_identity_digest=transport_digest,
+            attempted_at=attempted_at,
+            attempt_proof=authenticator.attempt_proof(attempt_facts),
+        )
+        attempt_bytes = canonical_json_bytes(attempt)
+        name = self._store.cleanup_attempt_name(binding, slot_index)
+        self._store.atomic_write_absent_on_failure(name, attempt_bytes)
+        if self._store.read(name) != attempt_bytes:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt readback drifted",
+            )
+        authenticator.require_attempt(attempt_facts, attempt.attempt_proof)
+        snapshot = self._read_cleanup_attempt_snapshot(
+            binding=binding,
+            slot_index=slot_index,
+            trusted_authorities=trusted_authorities,
+        )
+        if snapshot.intent_slot != intent_slot or snapshot.attempt != attempt:
+            raise DeploymentControlBlocked(
+                "cleanup_attempt_invalid",
+                "completed cleanup attempt readback changed",
+            )
+        return snapshot
+
+    def _publish_cleanup_terminal(
+        self,
+        *,
+        binding: InfrastructureCleanupBinding,
+        authorization_digest: str,
+        verified_attempt: _VerifiedDeleteAttemptSnapshot | None,
+        terminal_state: Literal["absent_404", "already_absent_404"],
+        authorization: DeploymentCleanupAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_digest: str,
+    ) -> CleanupControlResult:
+        if verified_attempt is not None:
+            self._require_verified_cleanup_attempt_snapshot(
+                verified_attempt,
+                binding=binding,
+                trusted_authorities=trusted_authorities,
+            )
+        attempt_digest = (
+            verified_attempt.attempt_digest
+            if verified_attempt is not None
+            else None
+        )
+        causal_intent_snapshot = (
+            verified_attempt.intent_slot
+            if verified_attempt is not None
+            else None
+        )
+        causal_attempt_snapshot = (
+            verified_attempt.attempt
+            if verified_attempt is not None
+            else None
+        )
+        observed_at = self._clock()
+        cleanup_transport_identity_digest = self._cleanup_transport_digest()
+        authenticator = self._cleanup_observation_authenticator
+        if type(authenticator) is not _CleanupObservationAuthenticator:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup observation authenticator is unavailable",
+            )
+        observation = _cleanup_observation_bytes(
+            binding=binding,
+            cleanup_authorization_digest=authorization_digest,
+            causal_delete_attempt_digest=attempt_digest,
+            terminal_state=terminal_state,
+            observed_at=observed_at,
+            cleanup_transport_identity_digest=cleanup_transport_identity_digest,
+            causal_intent_snapshot=causal_intent_snapshot,
+            causal_attempt_snapshot=causal_attempt_snapshot,
+        )
+        receipt = CleanupReceipt(
+            binding=binding,
+            cleanup_authorization_digest=authorization_digest,
+            causal_delete_attempt_digest=attempt_digest,
+            terminal_state=terminal_state,
+            observed_at=observed_at,
+            cleanup_transport_identity_digest=cleanup_transport_identity_digest,
+            observation_proof=authenticator.proof(observation),
+        )
+        self._require_cleanup_observation_proof(
+            receipt,
+            causal_intent_snapshot=causal_intent_snapshot,
+            causal_attempt_snapshot=causal_attempt_snapshot,
+        )
+        receipt_bytes = canonical_json_bytes(receipt)
+        cleanup_receipt_digest = hashlib.sha256(
+            _CLEANUP_RECEIPT_DOMAIN + receipt_bytes
+        ).hexdigest()
+        terminal = CleanupTerminalJournal(
+            binding=binding,
+            receipt=receipt,
+            receipt_digest=cleanup_receipt_digest,
+            causal_intent_snapshot=causal_intent_snapshot,
+            causal_attempt_snapshot=causal_attempt_snapshot,
+        )
+        journal_name = self._store.cleanup_terminal_journal_name(binding)
+        journal_bytes = canonical_json_bytes(terminal)
+        self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        self._store.atomic_write_absent_on_failure(journal_name, journal_bytes)
+        receipt_name = f"{cleanup_receipt_digest}.cleanup-receipt.json"
+        self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        self._store.atomic_write_absent_on_failure(receipt_name, receipt_bytes)
+        self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        return CleanupControlResult(
+            receipt=receipt,
+            receipt_path=self._store.path(receipt_name),
+            journal_path=self._store.path(journal_name),
+        )
+
+    def _restore_cleanup_terminal(
+        self,
+        binding: InfrastructureCleanupBinding,
+        *,
+        authorization: DeploymentCleanupAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        receipt_digest: str,
+    ) -> CleanupControlResult | None:
+        journal_name = self._store.cleanup_terminal_journal_name(binding)
+        raw = self._store.read(journal_name)
+        if raw is None:
+            return None
+        try:
+            journal = CleanupTerminalJournal.model_validate_json(raw)
+        except ValueError as exc:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup journal is invalid",
+            ) from exc
+        if canonical_json_bytes(journal) != raw or journal.binding != binding:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup journal has drifted",
+            )
+        self._require_cleanup_observation_proof(
+            journal.receipt,
+            causal_intent_snapshot=journal.causal_intent_snapshot,
+            causal_attempt_snapshot=journal.causal_attempt_snapshot,
+        )
+        self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        if journal.causal_intent_snapshot is not None:
+            assert journal.causal_attempt_snapshot is not None
+            embedded_digest = self._verify_cleanup_attempt_evidence(
+                binding=binding,
+                intent_slot=journal.causal_intent_snapshot,
+                attempt=journal.causal_attempt_snapshot,
+                trusted_authorities=trusted_authorities,
+            )
+            if embedded_digest != journal.receipt.causal_delete_attempt_digest:
+                raise DeploymentControlBlocked(
+                    "cleanup_receipt_invalid",
+                    "terminal cleanup receipt causal evidence has drifted",
+                )
+        receipt_bytes = canonical_json_bytes(journal.receipt)
+        receipt_name = f"{journal.receipt_digest}.cleanup-receipt.json"
+        existing = self._store.read(receipt_name)
+        if existing is None:
+            self._store.atomic_write_absent_on_failure(receipt_name, receipt_bytes)
+        elif existing != receipt_bytes:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup receipt conflicts",
+            )
+        if self._store.read(receipt_name) != receipt_bytes:
+            raise DeploymentControlBlocked(
+                "cleanup_receipt_invalid",
+                "terminal cleanup receipt readback drifted",
+            )
+        self._verify_cleanup_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            receipt_digest=receipt_digest,
+        )
+        self._require_cleanup_observation_proof(
+            journal.receipt,
+            causal_intent_snapshot=journal.causal_intent_snapshot,
+            causal_attempt_snapshot=journal.causal_attempt_snapshot,
+        )
+        return CleanupControlResult(
+            receipt=journal.receipt,
+            receipt_path=self._store.path(receipt_name),
+            journal_path=self._store.path(journal_name),
+        )
+
+    def _reconcile_existing_adoption_for_testing(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> DeploymentAdoptionResult:
+        self._require_testing_mode()
+        return self._reconcile_existing_adoption(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+        )
+
+    def _reconcile_existing_adoption(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> DeploymentAdoptionResult:
+        payload, _identity = self._verify_adoption_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            now=self._clock(),
+        )
+        with self._store.run_lock(payload.run_identity):
+            if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
+                self._require_production_dependencies()
+            return self._reconcile_existing_adoption_locked(
+                authorization=authorization,
+                trusted_authorities=trusted_authorities,
+            )
+
+    def _verify_adoption_gate(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+        now: datetime,
+    ) -> tuple[
+        ExistingDeploymentAdoptionAuthorizationPayload,
+        VerifiedDeploymentTransportIdentity,
+    ]:
+        try:
+            if type(authorization) is not ExistingDeploymentAdoptionAuthorization:
+                raise TypeError("adoption authorization type is not exact")
+            candidate_payload = authorization.payload
+            if type(candidate_payload) is not ExistingDeploymentAdoptionAuthorizationPayload:
+                raise TypeError("adoption authorization payload type is not exact")
+            payload_snapshot = {
+                name: getattr(candidate_payload, name)
+                for name in ExistingDeploymentAdoptionAuthorizationPayload.model_fields
+            }
+            validated = ExistingDeploymentAdoptionAuthorization.model_validate(
+                {
+                    "domain": authorization.domain,
+                    "key_id": authorization.key_id,
+                    "payload": payload_snapshot,
+                    "signature": authorization.signature,
+                }
+            )
+            payload = validated.payload
+            if payload.base_model not in _ALLOWED_BASES:
+                raise ValueError("base model is outside fixed policy")
+            if (
+                payload.provider != "bailian"
+                or payload.region != _REGION
+                or payload.request_plan != _REQUEST_PLAN
+                or payload.receipt_plan != _RECEIPT_PLAN
+                or payload.input_tpm_quota != _INPUT_TPM
+                or payload.output_tpm_quota != _OUTPUT_TPM
+            ):
+                raise ValueError("deployment adoption policy drift")
+            verify_adoption_authorization(
+                validated,
+                expected=payload,
+                trusted_authorities=trusted_authorities,
+                now=now,
+            )
+            identity = self._verified_transport_identity(payload=payload, now=now)
+        except (
+            AttributeError,
+            AuthorizationVerificationError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise DeploymentControlBlocked(
+                "adoption_gate_rejected",
+                "deployment adoption authorization is invalid",
+            ) from exc
+        return payload, identity
+
+    def _require_fresh_adoption_boundary(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> tuple[
+        ExistingDeploymentAdoptionAuthorizationPayload,
+        VerifiedDeploymentTransportIdentity,
+        Mapping[str, TrustedAuthority],
+    ]:
+        fresh_cap: VerifiedInfrastructureProviderCapCapability | None = None
+        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
+            self._require_production_dependencies()
+            trusted_authorities = self._production_operational_authorities()
+            owned = self._production_dependencies
+            if owned is None or owned[2] != "provisioning" or owned[5] is None:
+                raise DeploymentControlBlocked(
+                    "production_reserve_binding_mismatch",
+                    "production adoption requires the fixed reserve cap boundary",
+                )
+            try:
+                fresh_cap = owned[0].require_fresh_infrastructure_provider_capability(
+                    plan=owned[3],
+                    expected_scope=owned[4],
+                    reserve_id=owned[5],
+                )
+            except (
+                AuthorizationVerificationError,
+                BudgetLedgerError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                raise DeploymentControlBlocked(
+                    "adoption_gate_rejected",
+                    "root-owned adoption provider cap is stale or invalid",
+                ) from exc
+        payload, identity = self._verify_adoption_gate(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+            now=self._clock(),
+        )
+        owned = self._production_dependencies
+        if self._testing_sentinel is not _TESTING_MODE_SENTINEL and (
+            owned is None
+            or owned[2] != "provisioning"
+            or payload.run_identity != owned[3].run_identity
+            or payload.purpose != owned[3].purpose
+            or payload.scope != owned[4]
+        ):
+            raise DeploymentControlBlocked(
+                "production_reserve_binding_mismatch",
+                "production adoption does not match the factory run binding",
+            )
+        if fresh_cap is not None and (
+            (
+                payload.provider,
+                payload.currency,
+                payload.workspace_ref,
+                payload.project_ref,
+                payload.credential_ref,
+                payload.provider_cap_evidence_digest,
+                payload.provider_cap_approval_digest,
+                frozenset(payload.provider_cap_coverage),
+                payload.provider_cap_max_cost_minor_units,
+                payload.provider_cap_expires_at,
+            )
+            != (
+                fresh_cap.provider,
+                fresh_cap.currency,
+                fresh_cap.workspace_ref,
+                fresh_cap.project_ref,
+                fresh_cap.credential_ref,
+                fresh_cap.evidence_digest,
+                fresh_cap.approval_digest,
+                fresh_cap.coverage,
+                fresh_cap.max_cost_minor_units,
+                fresh_cap.expires_at,
+            )
+            or payload.maximum_cost_minor_units > fresh_cap.max_cost_minor_units
+        ):
+            raise DeploymentControlBlocked(
+                "adoption_gate_rejected",
+                "signed adoption provider cap does not match root-owned evidence",
+            )
+        return payload, identity, trusted_authorities
+
+    @staticmethod
+    def _require_exact_adoption_manifest(
+        manifest: ProviderDeploymentManifest,
+        payload: ExistingDeploymentAdoptionAuthorizationPayload,
+    ) -> None:
+        if (
+            manifest.deployed_model != payload.deployed_model
+            or manifest.deployed_model
+            != f"{payload.base_model}-{manifest.deployment_suffix}"
+            or manifest.base_model != payload.base_model
+            or manifest.plan != payload.receipt_plan
+            or manifest.input_tpm != payload.input_tpm_quota
+            or manifest.output_tpm != payload.output_tpm_quota
+            or manifest.status != "RUNNING"
+            or manifest.workspace_ref != payload.workspace_ref
+            or manifest.operation_marker
+            != deterministic_operation_marker(
+                payload.run_identity,
+                payload.operation_id,
+                manifest.ownership_nonce,
+            )
+            or manifest.deployment_suffix
+            != deterministic_deployment_suffix(
+                payload.run_identity,
+                payload.operation_id,
+                manifest.ownership_nonce,
+            )
+        ):
+            raise DeploymentControlBlocked(
+                "adoption_remote_mismatch",
+                "adopted deployment does not match the signed provider identity",
+            )
+
+    def _reconcile_existing_adoption_locked(
+        self,
+        *,
+        authorization: ExistingDeploymentAdoptionAuthorization,
+        trusted_authorities: Mapping[str, TrustedAuthority],
+    ) -> DeploymentAdoptionResult:
+        payload, identity, trusted_authorities = self._require_fresh_adoption_boundary(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+        )
+        try:
+            detail = _parse_manifest(
+                self._transport.deployment_detail(deployed_model=payload.deployed_model)
+            )
+        except (DeploymentTransportError, DeploymentNotFound, TimeoutError) as exc:
+            raise DeploymentControlBlocked(
+                "adoption_remote_unverified",
+                "adopted deployment cannot be freshly reconciled",
+            ) from exc
+        self._require_exact_adoption_manifest(detail, payload)
+        observed_at = self._clock()
+        payload, identity, trusted_authorities = self._require_fresh_adoption_boundary(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+        )
+        manifest_digest = _remote_manifest_digest(detail)
+        content = DeploymentReceiptContent(
+            operation_id=payload.operation_id,
+            infrastructure_reserve_id=payload.infrastructure_reserve_id,
+            workspace_ref=identity.workspace_ref,
+            project_ref=identity.project_ref,
+            credential_ref=identity.credential_ref,
+            workspace_evidence_digest=transport_workspace_evidence_digest(identity),
+            region=payload.region,
+            base_model=detail.base_model,
+            deployed_model=detail.deployed_model,
+            request_plan=payload.request_plan,
+            receipt_plan=detail.plan,
+            input_tpm=detail.input_tpm,
+            output_tpm=detail.output_tpm,
+            gmt_create=detail.gmt_create,
+            gmt_modified=detail.gmt_modified,
+            cleanup_state="required",
+            operation_marker=detail.operation_marker,
+            deployment_suffix=detail.deployment_suffix,
+            remote_manifest_digest=manifest_digest,
+        )
+        receipt = DeploymentReceipt(
+            content=content,
+            content_digest=deployment_receipt_content_digest(content),
+        )
+        if (
+            receipt.content_digest != payload.receipt_digest
+            or receipt.content.deployed_model != payload.deployed_model
+            or receipt.content.gmt_create != payload.gmt_create
+        ):
+            raise DeploymentControlBlocked(
+                "adoption_receipt_mismatch",
+                "fresh provider receipt does not match signed adoption",
+            )
+        artifact = DeploymentReceiptArtifact(
+            receipt=receipt,
+            remote_manifest=detail,
+            remote_manifest_digest=manifest_digest,
+        )
+        receipt_name = f"{receipt.content_digest}.receipt.json"
+        artifact_bytes = canonical_json_bytes(artifact)
+        payload, identity, trusted_authorities = self._require_fresh_adoption_boundary(
+            authorization=authorization,
+            trusted_authorities=trusted_authorities,
+        )
+        publication_identity = self._store.atomic_write_absent_on_failure(
+            receipt_name,
+            artifact_bytes,
+        )
+        observation = object.__new__(_ControllerRemoteReceiptObservation)
+        observation_values: dict[str, object] = {
+            "receipt": receipt,
+            "remote_manifest": detail,
+            "transport_identity": identity,
+            "run_identity": payload.run_identity,
+            "purpose": payload.purpose,
+            "scope": payload.scope,
+            "remote_manifest_digest": manifest_digest,
+            "observed_at": observed_at,
+            "expires_at": min(
+                observed_at + _RECONCILIATION_FRESHNESS,
+                identity.expires_at,
+                payload.expires_at,
+            ),
+            "authorization": authorization,
+            "permit": None,
+            "trusted_authorities": dict(trusted_authorities),
+            "_seal": self._remote_observation_seal,
+        }
+        for name, value in observation_values.items():
+            object.__setattr__(observation, name, value)
+        try:
+            capability = self._publish_reconciled_receipt(observation)
+        except BaseException as exc:
+            try:
+                self._store.remove_if_owned(receipt_name, publication_identity)
+            except BaseException as cleanup_exc:
+                exc.add_note(
+                    "adoption receipt cleanup conflict: "
+                    f"{type(cleanup_exc).__name__}"
+                )
+            raise
+        return DeploymentAdoptionResult(
+            receipt=receipt,
+            receipt_capability=capability,
+            remote_manifest_digest=manifest_digest,
+            receipt_path=self._store.path(receipt_name),
         )
 
     def _require_production_provisioning_binding(
@@ -2408,7 +4553,10 @@ class DeploymentController:
     def _verified_transport_identity(
         self,
         *,
-        payload: ProvisioningAuthorizationPayload,
+        payload: (
+            ProvisioningAuthorizationPayload
+            | ExistingDeploymentAdoptionAuthorizationPayload
+        ),
         now: datetime,
     ) -> VerifiedDeploymentTransportIdentity:
         try:
@@ -2727,10 +4875,28 @@ class DeploymentController:
         self,
         authority: _ControllerRemoteReceiptObservation | _ControllerReceiptPublicationProof,
     ) -> None:
-        self._require_fresh_provisioning_boundary(
-            authorization=authority.authorization,
-            permit=authority.permit,
-            trusted_authorities=authority.trusted_authorities,
+        if (
+            type(authority.authorization) is ProvisioningAuthorization
+            and type(authority.permit) is InfrastructureCreatePermit
+        ):
+            self._require_fresh_provisioning_boundary(
+                authorization=authority.authorization,
+                permit=authority.permit,
+                trusted_authorities=authority.trusted_authorities,
+            )
+            return
+        if (
+            type(authority.authorization) is ExistingDeploymentAdoptionAuthorization
+            and authority.permit is None
+        ):
+            self._require_fresh_adoption_boundary(
+                authorization=authority.authorization,
+                trusted_authorities=authority.trusted_authorities,
+            )
+            return
+        raise DeploymentControlBlocked(
+            "receipt_authority_invalid",
+            "receipt publication authority does not match its operation",
         )
 
     def _require_current_reserve(self, permit: InfrastructureCreatePermit) -> None:

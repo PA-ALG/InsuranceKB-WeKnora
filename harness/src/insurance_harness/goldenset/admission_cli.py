@@ -45,6 +45,18 @@ from insurance_harness.goldenset.admission_authority import (
     verify_offline_envelope,
     write_public_key_descriptor,
 )
+from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
+    CLEANUP_AUTHORIZATION_DOMAIN,
+    PRICING_EVIDENCE_DOMAIN,
+    PROVIDER_CAP_DOMAIN,
+    PROVISIONING_AUTHORIZATION_DOMAIN,
+    DeploymentCleanupAuthorizationPayload,
+    ExistingDeploymentAdoptionAuthorizationPayload,
+    PricingEvidenceApprovalPayload,
+    ProviderCapApprovalPayload,
+    ProvisioningAuthorizationPayload,
+)
 from insurance_harness.goldenset.admission_models import (
     BudgetApprovalPayload,
     CanaryReviewApprovalEnvelope,
@@ -64,6 +76,19 @@ _CANARY_REVIEW_APPROVAL_INBOX = Path("/var/lib/insurancekb/run-admission/canary-
 _MAX_TRUST_CONFIGURATION_BYTES = 1024 * 1024
 _MAX_CANARY_REVIEW_BYTES = 256 * 1024
 _MAX_OFFLINE_PAYLOAD_BYTES = 1024 * 1024
+_OPERATIONAL_ROLES_BY_DOMAIN: Mapping[OfflineApprovalDomain, frozenset[str]] = (
+    MappingProxyType(
+        {
+            PROVISIONING_AUTHORIZATION_DOMAIN: frozenset({"deployment-provisioner"}),
+            ADOPTION_AUTHORIZATION_DOMAIN: frozenset({"budget-approver"}),
+            PRICING_EVIDENCE_DOMAIN: frozenset({"pricing-evidence-approver"}),
+            PROVIDER_CAP_DOMAIN: frozenset({"provider-cap-attestor"}),
+            CLEANUP_AUTHORIZATION_DOMAIN: frozenset(
+                {"deployment-cleanup-operator"}
+            ),
+        }
+    )
+)
 
 
 class CanaryReviewApprovalInputError(ValueError):
@@ -670,13 +695,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                     maximum=_MAX_OFFLINE_PAYLOAD_BYTES,
                 )
             )
-            payload: BudgetApprovalPayload | ProvenanceApprovalPayload | CanaryReviewApprovalPayload
+            payload: (
+                BudgetApprovalPayload
+                | ProvenanceApprovalPayload
+                | CanaryReviewApprovalPayload
+                | ProvisioningAuthorizationPayload
+                | ExistingDeploymentAdoptionAuthorizationPayload
+                | PricingEvidenceApprovalPayload
+                | ProviderCapApprovalPayload
+                | DeploymentCleanupAuthorizationPayload
+            )
             if domain == "budget":
                 payload = BudgetApprovalPayload.model_validate(raw_payload)
             elif domain == "provenance":
                 payload = ProvenanceApprovalPayload.model_validate(raw_payload)
             elif domain == "canary-review":
                 payload = CanaryReviewApprovalPayload.model_validate(raw_payload)
+            elif domain == PROVISIONING_AUTHORIZATION_DOMAIN:
+                payload = ProvisioningAuthorizationPayload.model_validate(raw_payload)
+            elif domain == ADOPTION_AUTHORIZATION_DOMAIN:
+                payload = ExistingDeploymentAdoptionAuthorizationPayload.model_validate(
+                    raw_payload
+                )
+            elif domain == PRICING_EVIDENCE_DOMAIN:
+                payload = PricingEvidenceApprovalPayload.model_validate(raw_payload)
+            elif domain == PROVIDER_CAP_DOMAIN:
+                payload = ProviderCapApprovalPayload.model_validate(raw_payload)
+            elif domain == CLEANUP_AUTHORIZATION_DOMAIN:
+                payload = DeploymentCleanupAuthorizationPayload.model_validate(raw_payload)
             else:
                 raise ValueError("approval domain is unsupported")
             render_unsigned_approval(
@@ -714,6 +760,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "budget": budget_roles,
                     "provenance": provenance_roles,
                     "canary-review": canary_roles,
+                    **_OPERATIONAL_ROLES_BY_DOMAIN,
                 },
                 now=datetime.now(UTC),
             )

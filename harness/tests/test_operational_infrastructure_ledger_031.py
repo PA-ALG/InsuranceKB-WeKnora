@@ -36,12 +36,15 @@ from insurance_harness.goldenset.admission_budget import (
     require_verified_infrastructure_provider_capability,
 )
 from insurance_harness.goldenset.admission_infrastructure import (
+    ADOPTION_AUTHORIZATION_DOMAIN,
     PRICING_EVIDENCE_DOMAIN,
     PROVIDER_CAP_DOMAIN,
     PROVISIONING_AUTHORIZATION_DOMAIN,
     AuthorizationVerificationError,
     DeploymentReceipt,
     DeploymentReceiptContent,
+    ExistingDeploymentAdoptionAuthorization,
+    ExistingDeploymentAdoptionAuthorizationPayload,
     PricingEvidenceApproval,
     PricingEvidenceApprovalPayload,
     PricingEvidenceContent,
@@ -355,6 +358,55 @@ def _sign_authorization(
             private_key.sign(authorization_signed_bytes(PROVISIONING_AUTHORIZATION_DOMAIN, payload))
         ).decode("ascii"),
     )
+
+
+def _adoption_authorization(
+    private_key: Ed25519PrivateKey,
+    receipt: DeploymentReceipt,
+) -> tuple[
+    ExistingDeploymentAdoptionAuthorizationPayload,
+    ExistingDeploymentAdoptionAuthorization,
+]:
+    payload = ExistingDeploymentAdoptionAuthorizationPayload.model_validate(
+        {
+            **_authorization_payload().model_dump(mode="python"),
+            "transition": "adopt_existing",
+            "deployed_model": receipt.content.deployed_model,
+            "receipt_digest": receipt.content_digest,
+            "gmt_create": receipt.content.gmt_create,
+            "preexisting": True,
+            "limitation": "not_preauthorized_by_031",
+            "incurred_cost_minor_units": 3_360,
+            "future_max_cost_minor_units": 3_360,
+            "approver_identity": "budget-owner@example.test",
+            "approver_role": "budget-approver",
+        }
+    )
+    return payload, ExistingDeploymentAdoptionAuthorization(
+        domain=ADOPTION_AUTHORIZATION_DOMAIN,
+        key_id="adoption-key",
+        payload=payload,
+        signature=base64.b64encode(
+            private_key.sign(
+                authorization_signed_bytes(ADOPTION_AUTHORIZATION_DOMAIN, payload)
+            )
+        ).decode("ascii"),
+    )
+
+
+def _adoption_policy(
+    private_key: Ed25519PrivateKey,
+) -> dict[str, TrustedKeyPolicy]:
+    return {
+        "adoption-key": TrustedKeyPolicy(
+            key_id="adoption-key",
+            approver_identity="budget-owner@example.test",
+            domains=frozenset({ADOPTION_AUTHORIZATION_DOMAIN}),
+            scopes=frozenset({SCOPE}),
+            roles=frozenset({"budget-approver"}),
+            public_key=private_key.public_key(),
+        )
+    }
 
 
 def _infra_policy(
@@ -774,7 +826,7 @@ def _verified_receipt(
 
 
 def _pricing_capability(
-    payload: ProvisioningAuthorizationPayload,
+    payload: ProvisioningAuthorizationPayload | ExistingDeploymentAdoptionAuthorizationPayload,
 ) -> VerifiedPricingCapability:
     return _issue_verified_pricing_capability_for_testing(
         evidence_digest=payload.pricing_evidence_digest,
@@ -795,7 +847,7 @@ def _pricing_capability(
 
 
 def _cap_capability(
-    payload: ProvisioningAuthorizationPayload,
+    payload: ProvisioningAuthorizationPayload | ExistingDeploymentAdoptionAuthorizationPayload,
     *,
     maximum: int | None = None,
 ) -> VerifiedProviderCapCapability:
@@ -1342,6 +1394,70 @@ def test_o4_adoption_requires_receipt_verified_against_independent_remote_expect
 
     with pytest.raises(AuthorizationVerificationError, match="trusted provider"):
         verify_reconciled_deployment_receipt(local, remote_expected=remote)
+
+
+def test_o4_existing_adoption_reserves_cost_without_create_authority(tmp_path: Path) -> None:
+    ledger = BudgetLedger._for_testing(tmp_path / "adoption.sqlite3", clock=lambda: NOW)
+    key = Ed25519PrivateKey.generate()
+    receipt_capability = _verified_receipt()
+    payload, authorization = _adoption_authorization(key, receipt_capability.receipt)
+
+    snapshot = ledger._reserve_existing_adoption_for_testing(
+        authorization=authorization,
+        expected=payload,
+        trusted_authorities=_adoption_policy(key),
+        receipt_capability=receipt_capability,
+        pricing_capability=_pricing_capability(payload),
+        provider_capability=_cap_capability(payload),
+        now=NOW,
+    )
+
+    assert type(snapshot) is InfrastructureReserveSnapshot
+    assert not isinstance(snapshot, InfrastructureCreatePermit)
+    assert snapshot.authorization_domain == ADOPTION_AUTHORIZATION_DOMAIN
+    assert snapshot.maximum.cost_minor_units == payload.maximum_cost_minor_units
+
+
+@pytest.mark.parametrize(
+    "replay",
+    ("stale", "cross-cap", "cross-run"),
+)
+def test_o4_existing_adoption_rejects_receipt_replay_before_write(
+    tmp_path: Path,
+    replay: str,
+) -> None:
+    db_path = tmp_path / f"adoption-{replay}.sqlite3"
+    ledger = BudgetLedger._for_testing(db_path, clock=lambda: NOW)
+    key = Ed25519PrivateKey.generate()
+    receipt_capability = (
+        _verified_receipt(
+            observed_at=NOW - timedelta(minutes=10),
+            expires_at=NOW - timedelta(minutes=1),
+        )
+        if replay == "stale"
+        else _verified_receipt(
+            cap_digest=SHA_C if replay == "cross-cap" else SHA_D,
+            run_identity="other-run-031" if replay == "cross-run" else RUN,
+        )
+    )
+    receipt = _receipt()
+    payload, authorization = _adoption_authorization(key, receipt)
+
+    with pytest.raises(BudgetLedgerError, match="receipt|reconciliation|cap|authorization"):
+        ledger._reserve_existing_adoption_for_testing(
+            authorization=authorization,
+            expected=payload,
+            trusted_authorities=_adoption_policy(key),
+            receipt_capability=receipt_capability,
+            pricing_capability=_pricing_capability(payload),
+            provider_capability=_cap_capability(payload),
+            now=NOW,
+        )
+
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM infrastructure_reserves"
+        ).fetchone() == (0,)
 
 
 def test_o4_cloned_receipts_cannot_self_mint_verified_reconciliation() -> None:
@@ -1906,6 +2022,7 @@ def test_o3_production_account_open_uses_internal_clock_for_expired_budget(
     (
         "open_or_expand_account",
         "reserve_provisioning_before_post",
+        "reserve_existing_adoption",
         "bind_final_infrastructure_contract",
         "bind_final_infrastructure_topology",
         "require_fresh_final_topology",
