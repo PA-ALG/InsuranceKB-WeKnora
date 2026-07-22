@@ -1,8 +1,9 @@
-"""WeKnora 发布器（changes 007/016；specs K5.2~K5.4、S1/S2/S4）。
+"""Legacy staging/test-only WeKnora publisher (changes 007/016/018).
 
-published Claims → 产品限定页 → adapters/weknora 写 wiki 页（slug 串行化由客户端保证）。
-每次发布记录 ReleaseSnapshot（冻结 (claim_id, revision_no) + 物化渲染产物）并移动
-current_release 指针；回滚 = 按快照重发布 + 指针回切 + rollback ChangeSet 留痕（03 §5.2）。
+This module preserves the 018 recovery state machine for characterization, staging,
+and tests. It is not a production release authority and must not be package-exported.
+Production release requires OpenSpec 029 approval/CAS serving contracts and the P-1
+capability boundary.
 """
 
 import uuid
@@ -257,7 +258,7 @@ def default_snapshot_label(session: Session, scope: KnowledgeScope) -> str:
 
 
 class ReleasePublisher:
-    """018 service-owned, pointer-last release saga."""
+    """Legacy staging/test-only 018 service-owned, pointer-last release saga."""
 
     def __init__(
         self,
@@ -1370,3 +1371,7 @@ class ReleasePublisher:
                 recovered.append(operation.id)
             session.commit()
         return tuple(recovered)
+
+
+# Explicit compatibility name for direct-module 018 characterization only.
+LegacyStagingReleasePublisher = ReleasePublisher

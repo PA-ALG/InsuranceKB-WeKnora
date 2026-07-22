@@ -39,7 +39,10 @@ from tests.support.release_018 import (
 
 
 def test_r3_6_package_publish_api_requires_service_owned_session() -> None:
-    assert knowledge_api.ReleasePublisher is ReleasePublisher
+    assert not hasattr(knowledge_api, "ReleasePublisher")
+    assert "ReleasePublisher" not in knowledge_api.__all__
+    assert not hasattr(knowledge_api, "PublishResult")
+    assert "PublishResult" not in knowledge_api.__all__
     assert not hasattr(knowledge_api, "publish_product_version")
     assert "publish_product_version" not in knowledge_api.__all__
     assert set(knowledge_api.__all__) <= vars(knowledge_api).keys()
@@ -53,7 +56,9 @@ def test_r3_7_retired_007_helpers_are_not_exported_by_production_publisher() -> 
 
 
 def test_r4_1_package_rollback_api_requires_release_publisher() -> None:
-    assert knowledge_api.ReleasePublisher is ReleasePublisher
+    assert not hasattr(knowledge_api, "ReleasePublisher")
+    assert not hasattr(knowledge_api, "RollbackResult")
+    assert "RollbackResult" not in knowledge_api.__all__
     assert not hasattr(knowledge_api, "rollback_to_snapshot")
     assert "rollback_to_snapshot" not in knowledge_api.__all__
     assert not hasattr(publisher_module, "_legacy_rollback_to_snapshot")
