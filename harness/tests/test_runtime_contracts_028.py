@@ -91,6 +91,22 @@ def _parent() -> ParentIntakeIdentity:
     return ParentIntakeIdentity(**_parent_values())
 
 
+class _MutableStr(str):
+    def __new__(cls, value: str) -> _MutableStr:
+        instance = super().__new__(cls, value)
+        instance.current = value
+        return instance
+
+    def mutate(self, value: str) -> None:
+        self.current = value
+
+    def __hash__(self) -> int:
+        return hash(self.current)
+
+    def __eq__(self, other: object) -> bool:
+        return self.current == other
+
+
 def _unsafe_parent(*, verified_binding_digest: str) -> ParentIntakeIdentity:
     values = _parent_values()
     return cast(
@@ -503,6 +519,178 @@ def test_tr3_job_and_stage_statuses_follow_recoverable_fail_closed_transitions()
         stage.transition("succeeded")
 
 
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("job_status", "queued"),
+        ("stage_name", "materialize"),
+        ("stage_status", "pending"),
+    ],
+)
+def test_tr3_state_contracts_reject_mutable_str_subclasses_at_construction(
+    field_name: str,
+    value: str,
+) -> None:
+    injected = _MutableStr(value)
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        if field_name == "job_status":
+            JobState(identity=_parent(), status=cast(Any, injected))
+        elif field_name == "stage_name":
+            StageState(
+                identity=_parent(),
+                stage_name=cast(Any, injected),
+                status="pending",
+            )
+        else:
+            StageState(
+                identity=_parent(),
+                stage_name="materialize",
+                status=cast(Any, injected),
+            )
+
+
+def test_tr3_mutable_status_subclass_cannot_relabel_a_stored_state() -> None:
+    status = _MutableStr("queued")
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        state = JobState(identity=_parent(), status=cast(Any, status))
+        status.mutate("running")
+        state.transition("succeeded")
+
+
+@pytest.mark.parametrize("state_kind", ["job", "stage"])
+def test_tr3_state_transition_targets_must_be_exact_builtin_strings(
+    state_kind: str,
+) -> None:
+    target = _MutableStr("running")
+    state: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        state.transition(cast(Any, target))
+
+
+@pytest.mark.parametrize("state_kind", ["job", "stage"])
+def test_tr3_state_raw_nested_mutation_closes_all_ordinary_public_paths(
+    state_kind: str,
+) -> None:
+    valid: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+    invalid: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+    stored_identity = (
+        tuple.__getitem__(invalid, 0)
+        if isinstance(invalid, tuple)
+        else object.__getattribute__(invalid, "identity")
+    )
+    object.__getattribute__(stored_identity, "__dict__")["space_id"] = "space-b"
+
+    for sequence_read in (
+        lambda: invalid[0],
+        lambda: tuple(invalid),
+        lambda: list(invalid),
+    ):
+        with pytest.raises((RuntimeContractError, TypeError)):
+            sequence_read()
+
+    for public_read in (
+        lambda: invalid.identity,
+        lambda: invalid.status,
+        lambda: invalid.job_id,
+        lambda: invalid == valid,
+        lambda: valid == invalid,
+        lambda: hash(invalid),
+        lambda: invalid in {valid},
+        lambda: invalid in {valid: "value"},
+        lambda: repr(invalid),
+        lambda: str(invalid),
+        lambda: pickle.dumps(invalid),
+    ):
+        with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+            public_read()
+
+
+@pytest.mark.parametrize("state_kind", ["job", "stage"])
+def test_tr3_pickle_restored_state_cannot_regain_public_contract_semantics(
+    state_kind: str,
+) -> None:
+    state: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+    restored = pickle.loads(pickle.dumps(state))
+
+    for public_read in (
+        lambda: restored.identity,
+        lambda: restored.status,
+        lambda: restored.job_id,
+        lambda: restored == state,
+        lambda: state == restored,
+        lambda: hash(restored),
+        lambda: tuple(restored),
+        lambda: repr(restored),
+        lambda: str(restored),
+    ):
+        with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+            public_read()
+
+
+@pytest.mark.parametrize("state_kind", ["job", "stage"])
+def test_tr3_valid_state_equality_hash_and_repr_are_canonical(state_kind: str) -> None:
+    left: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+    right: Any = (
+        JobState(identity=_parent(), status="queued")
+        if state_kind == "job"
+        else StageState(
+            identity=_parent(),
+            stage_name="materialize",
+            status="pending",
+        )
+    )
+
+    assert left == right and right == left
+    assert hash(left) == hash(right)
+    assert right in {left}
+    assert {left: "canonical"}[right] == "canonical"
+    assert repr(left) == repr(right)
+    assert str(left) == str(right)
+
+
 def test_tr3_state_identity_derives_job_id_and_kind_without_caller_self_report() -> None:
     parent = _parent()
     route = ResolvedRouteBinding.model_validate(_route_values())
@@ -519,7 +707,7 @@ def test_tr3_state_identity_derives_job_id_and_kind_without_caller_self_report()
     assert parent_state.job_kind == "intake"
     assert child_state.job_id == child.job_id
     assert child_state.job_kind == "product_compilation"
-    with pytest.raises(TypeError):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         JobState(  # type: ignore[call-arg]
             identity=parent,
             job_id=child.job_id,
@@ -537,10 +725,10 @@ def test_tr3_succeeded_state_storage_and_identity_cannot_be_overwritten() -> Non
         status="succeeded",
     )
 
-    with pytest.raises((AttributeError, TypeError)):
-        object.__setattr__(succeeded_job, "status", "running")
-    with pytest.raises((AttributeError, TypeError)):
-        object.__setattr__(succeeded_stage, "status", "running")
+    with pytest.raises(ValidationError, match="Instance is frozen"):
+        succeeded_job.status = "running"
+    with pytest.raises(ValidationError, match="Instance is frozen"):
+        succeeded_stage.status = "running"
 
     visible_job_identity = succeeded_job.identity
     visible_stage_identity = succeeded_stage.identity
@@ -549,8 +737,8 @@ def test_tr3_succeeded_state_storage_and_identity_cannot_be_overwritten() -> Non
     assert succeeded_job.status == "succeeded"
     assert succeeded_stage.status == "succeeded"
 
-    stored_job_identity = tuple.__getitem__(succeeded_job, 0)
-    stored_stage_identity = tuple.__getitem__(succeeded_stage, 0)
+    stored_job_identity = object.__getattribute__(succeeded_job, "identity")
+    stored_stage_identity = object.__getattribute__(succeeded_stage, "identity")
     object.__setattr__(stored_job_identity, "space_id", "space-b")
     object.__setattr__(stored_stage_identity, "space_id", "space-b")
     for read in (
@@ -572,29 +760,21 @@ def test_tr3_state_types_cannot_be_subclassed_to_override_terminal_status() -> N
     with pytest.raises(TypeError, match="final contract type"):
 
         class ForgedJobState(JobState):
-            @property
-            def status(self) -> Any:
-                return "running"
+            pass
 
     with pytest.raises(TypeError, match="final contract type"):
 
         class ForgedStageState(StageState):
-            @property
-            def status(self) -> Any:
-                return "running"
+            pass
 
 
-def test_tr3_forged_tuple_state_rejects_every_public_read() -> None:
-    forged = tuple.__new__(JobState, (_parent(), _digest("wrong"), "succeeded"))
-
-    for read in (
-        lambda: forged.identity,
-        lambda: forged.status,
-        lambda: forged.job_kind,
-        lambda: forged.job_id,
-    ):
-        with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
-            read()
+def test_tr3_forged_state_construct_is_rejected_before_public_read() -> None:
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        cast(Any, BaseModel.model_construct).__func__(
+            JobState,
+            identity=_parent(),
+            status="succeeded",
+        )
 
 def test_tr3_stage_state_rejects_stage_from_the_other_job_kind() -> None:
     with pytest.raises(RuntimeContractError, match="invalid_stage_name"):
@@ -1254,6 +1434,73 @@ def test_tr3_contract_registry_is_weak_and_concurrent_reads_are_identity_bound()
 
     replacements = tuple(_parent() for _index in range(128))
     assert all(replacement.job_id == expected_job_id for replacement in replacements)
+
+
+def test_tr3_valid_contract_equality_hash_and_repr_are_canonical() -> None:
+    left = ChildCompilationIdentity(
+        parent=_parent(),
+        route=ResolvedRouteBinding.model_validate(_route_values()),
+    )
+    right = ChildCompilationIdentity(
+        parent=_parent(),
+        route=ResolvedRouteBinding.model_validate(_route_values()),
+    )
+
+    assert left == right
+    assert right == left
+    assert hash(left) == hash(right)
+    assert right in {left}
+    assert {left: "canonical"}[right] == "canonical"
+    assert repr(left) == repr(right)
+    assert str(left) == str(right)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["raw", "private", "fields_set", "nested", "pickle"],
+)
+def test_tr3_invalid_contract_equality_hash_membership_and_repr_fail_closed(
+    tamper: str,
+) -> None:
+    valid: Any
+    invalid: Any
+    if tamper == "nested":
+        valid = ChildCompilationIdentity(
+            parent=_parent(),
+            route=ResolvedRouteBinding.model_validate(_route_values()),
+        )
+        invalid = ChildCompilationIdentity(
+            parent=_parent(),
+            route=ResolvedRouteBinding.model_validate(_route_values()),
+        )
+        stored_parent = object.__getattribute__(invalid, "parent")
+        object.__getattribute__(stored_parent, "__dict__")["space_id"] = "space-b"
+    else:
+        valid = _parent()
+        invalid = (
+            pickle.loads(pickle.dumps(valid)) if tamper == "pickle" else _parent()
+        )
+        if tamper == "raw":
+            object.__getattribute__(invalid, "__dict__")["space_id"] = "space-b"
+        elif tamper == "private":
+            object.__setattr__(invalid, "__pydantic_private__", {"hidden": True})
+        elif tamper == "fields_set":
+            object.__getattribute__(invalid, "__pydantic_fields_set__").remove(
+                "space_id"
+            )
+
+    operations = (
+        lambda: invalid == valid,
+        lambda: valid == invalid,
+        lambda: hash(invalid),
+        lambda: invalid in {valid},
+        lambda: invalid in {valid: "value"},
+        lambda: repr(invalid),
+        lambda: str(invalid),
+    )
+    for operation in operations:
+        with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+            operation()
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="requires POSIX fork semantics")

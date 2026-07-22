@@ -42,6 +42,7 @@ _CHILD_IDENTITY_DOMAIN = b"insurancekb.runtime.child-compilation-identity.v2\0"
 _SECTION_SET_DOMAIN = b"insurancekb.runtime.routed-section-set.v1\0"
 _SECTION_UNIVERSE_DOMAIN = b"insurancekb.runtime.materialized-section-universe.v1\0"
 _TEMPLATE_BINDING_DOMAIN = b"insurancekb.runtime.template-binding.v1\0"
+_CONTRACT_VALUE_HASH_DOMAIN = b"insurancekb.runtime.contract-value-hash.v1\0"
 _VALIDATION_DEPTH: ContextVar[int] = ContextVar("runtime_contract_validation_depth", default=0)
 _UNRESOLVED_IDENTITIES = frozenset(
     {"unknown", "unassigned", "unresolved", "pending", "none", "null", "*"}
@@ -443,6 +444,67 @@ def _snapshot_exact_model(model_type: type[BaseModel], value: object) -> dict[st
         raise RuntimeContractError("invalid_contract_dto") from None
 
 
+def _contract_value_semantics(snapshot: object) -> object:
+    """Remove instance seals while preserving canonical contract value semantics."""
+
+    if type(snapshot) is not tuple or not snapshot:
+        raise TypeError("canonical snapshot is malformed")
+    tag = snapshot[0]
+    if tag == "none" and len(snapshot) == 1:
+        return ("none",)
+    if tag in {"str", "bool", "int"} and len(snapshot) == 2:
+        return snapshot
+    if tag in {"tuple", "list"} and len(snapshot) == 2:
+        items = snapshot[1]
+        if type(items) is not tuple:
+            raise TypeError("canonical sequence snapshot is malformed")
+        return (tag, tuple(_contract_value_semantics(item) for item in items))
+    if tag in {"dict", "frozen-mapping"}:
+        items_index = 1 if tag == "dict" else 2
+        expected_length = 2 if tag == "dict" else 3
+        if len(snapshot) != expected_length or type(snapshot[items_index]) is not tuple:
+            raise TypeError("canonical mapping snapshot is malformed")
+        return (
+            tag,
+            tuple(
+                (key, _contract_value_semantics(item))
+                for key, item in snapshot[items_index]
+            ),
+        )
+    if tag == "runtime-model" and len(snapshot) == 4:
+        return _contract_value_semantics(snapshot[3])
+    if tag == "model" and len(snapshot) == 4:
+        model_type = snapshot[1]
+        fields = snapshot[3]
+        if (
+            not isinstance(model_type, type)
+            or not issubclass(model_type, BaseModel)
+            or type(fields) is not tuple
+        ):
+            raise TypeError("canonical model snapshot is malformed")
+        return (
+            "model",
+            f"{model_type.__module__}.{model_type.__qualname__}",
+            tuple(
+                (field_name, _contract_value_semantics(field_snapshot))
+                for field_name, field_snapshot in fields
+            ),
+        )
+    raise TypeError("canonical snapshot tag is invalid")
+
+
+def _canonical_contract_value(value: object) -> object:
+    try:
+        if not isinstance(value, _ImmutableModel):
+            raise TypeError("value is not a runtime contract")
+        entry = _read_contract_snapshot(value)
+        return _contract_value_semantics(entry.snapshot)
+    except RuntimeContractError:
+        raise
+    except Exception:
+        raise RuntimeContractError("invalid_contract_dto") from None
+
+
 def _snapshot_runtime_input(value: object) -> object:
     """Reject stale sealed runtime instances before Pydantic can launder them."""
 
@@ -527,6 +589,38 @@ class _ImmutableModel(BaseModel):
     def __iter__(self) -> Generator[tuple[str, Any], None, None]:
         validated = _revalidate_exact(type(self), self)
         yield from BaseModel.__iter__(validated)
+
+    def __eq__(self, other: object) -> bool:
+        left = _canonical_contract_value(self)
+        if not isinstance(other, _ImmutableModel):
+            return NotImplemented
+        right = _canonical_contract_value(other)
+        return type(self) is type(other) and left == right
+
+    def __hash__(self) -> int:
+        digest = _canonical_digest(
+            _CONTRACT_VALUE_HASH_DOMAIN,
+            _canonical_contract_value(self),
+        )
+        return int(digest[:15], 16)
+
+    def __repr_args__(self) -> Generator[tuple[str | None, Any], None, None]:
+        values = _snapshot_exact_model(type(self), self)
+        for field_name in type(self).model_fields:
+            yield field_name, values[field_name]
+
+    def __repr__(self) -> str:
+        arguments = ", ".join(
+            f"{field_name}={value!r}"
+            for field_name, value in self.__repr_args__()
+        )
+        return f"{type(self).__name__}({arguments})"
+
+    def __str__(self) -> str:
+        return " ".join(
+            f"{field_name}={value!r}"
+            for field_name, value in self.__repr_args__()
+        )
 
     def __getstate__(self) -> dict[str, Any]:
         validated = _revalidate_exact(type(self), self)
@@ -813,149 +907,83 @@ def _validated_identity(value: object) -> Identity:
     raise RuntimeContractError("invalid_contract_dto")
 
 
-class JobState(tuple[object, ...]):
+class JobState(_ImmutableModel):
     """Immutable state snapshot whose job id and kind are derived from identity."""
 
-    __slots__ = ()
+    identity: Identity
+    status: JobStatus
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        del cls, kwargs
-        raise TypeError("JobState is a final contract type")
-
-    def __new__(cls, *, identity: Identity, status: JobStatus) -> JobState:
-        if status not in _JOB_TRANSITIONS:
+    @field_validator("status", mode="before")
+    @classmethod
+    def require_exact_status_string(cls, value: object) -> object:
+        if type(value) is not str:
             raise RuntimeContractError("invalid_contract_dto")
-        validated = _validated_identity(identity)
-        return tuple.__new__(cls, (validated, validated.job_id, status))
-
-    @property
-    def identity(self) -> Identity:
-        identity, _status = _validated_job_state(self)
-        return identity
-
-    @property
-    def status(self) -> JobStatus:
-        _identity, status = _validated_job_state(self)
-        return status
+        return value
 
     @property
     def job_id(self) -> str:
-        identity, _status = _validated_job_state(self)
-        return identity.job_id
+        return _revalidate_exact(JobState, self).identity.job_id
 
     @property
     def job_kind(self) -> JobKind:
-        identity, _status = _validated_job_state(self)
+        identity = _revalidate_exact(JobState, self).identity
         return "intake" if type(identity) is ParentIntakeIdentity else "product_compilation"
 
     def transition(self, target: JobStatus) -> JobState:
-        identity, status = _validated_job_state(self)
+        if type(target) is not str:
+            raise RuntimeContractError("invalid_contract_dto")
+        validated = _revalidate_exact(JobState, self)
+        identity = validated.identity
+        status = validated.status
         if target not in _JOB_TRANSITIONS[status]:
             raise RuntimeContractError("invalid_job_transition")
         return JobState(identity=identity, status=target)
 
 
-class StageState(tuple[object, ...]):
+class StageState(_ImmutableModel):
     """Immutable separately checkpointed stage state bound to one identity."""
 
-    __slots__ = ()
+    identity: Identity
+    stage_name: StageName
+    status: StageStatus
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        del cls, kwargs
-        raise TypeError("StageState is a final contract type")
+    @field_validator("stage_name", "status", mode="before")
+    @classmethod
+    def require_exact_state_string(cls, value: object) -> object:
+        if type(value) is not str:
+            raise RuntimeContractError("invalid_contract_dto")
+        return value
 
-    def __new__(
-        cls,
-        *,
-        identity: Identity,
-        stage_name: StageName,
-        status: StageStatus,
-    ) -> StageState:
-        validated = _validated_identity(identity)
+    @model_validator(mode="after")
+    def require_stage_for_job_kind(self) -> StageState:
+        validated = _validated_identity(self.identity)
         job_kind: JobKind = (
             "intake" if type(validated) is ParentIntakeIdentity else "product_compilation"
         )
         expected = PARENT_STAGE_SEQUENCE if job_kind == "intake" else CHILD_STAGE_SEQUENCE
-        if stage_name not in expected:
+        if self.stage_name not in expected:
             raise RuntimeContractError("invalid_stage_name")
-        if status not in _STAGE_TRANSITIONS:
-            raise RuntimeContractError("invalid_contract_dto")
-        return tuple.__new__(cls, (validated, validated.job_id, stage_name, status))
-
-    @property
-    def identity(self) -> Identity:
-        identity, _stage_name, _status = _validated_stage_state(self)
-        return identity
-
-    @property
-    def stage_name(self) -> StageName:
-        _identity, stage_name, _status = _validated_stage_state(self)
-        return stage_name
-
-    @property
-    def status(self) -> StageStatus:
-        _identity, _stage_name, status = _validated_stage_state(self)
-        return status
+        return self
 
     @property
     def job_id(self) -> str:
-        identity, _stage_name, _status = _validated_stage_state(self)
-        return identity.job_id
+        return _revalidate_exact(StageState, self).identity.job_id
 
     @property
     def job_kind(self) -> JobKind:
-        identity, _stage_name, _status = _validated_stage_state(self)
+        identity = _revalidate_exact(StageState, self).identity
         return "intake" if type(identity) is ParentIntakeIdentity else "product_compilation"
 
     def transition(self, target: StageStatus) -> StageState:
-        identity, stage_name, status = _validated_stage_state(self)
+        if type(target) is not str:
+            raise RuntimeContractError("invalid_contract_dto")
+        validated = _revalidate_exact(StageState, self)
+        identity = validated.identity
+        stage_name = validated.stage_name
+        status = validated.status
         if target not in _STAGE_TRANSITIONS[status]:
             raise RuntimeContractError("invalid_stage_transition")
         return StageState(identity=identity, stage_name=stage_name, status=target)
-
-
-def _validated_job_state(value: object) -> tuple[Identity, JobStatus]:
-    try:
-        if type(value) is not JobState or tuple.__len__(value) != 3:
-            raise TypeError
-        identity = _validated_identity(tuple.__getitem__(value, 0))
-        frozen_job_id = tuple.__getitem__(value, 1)
-        status = tuple.__getitem__(value, 2)
-        if (
-            type(frozen_job_id) is not str
-            or identity.job_id != frozen_job_id
-            or status not in _JOB_TRANSITIONS
-        ):
-            raise TypeError
-        return identity, status
-    except Exception:
-        raise RuntimeContractError("invalid_contract_dto") from None
-
-
-def _validated_stage_state(
-    value: object,
-) -> tuple[Identity, StageName, StageStatus]:
-    try:
-        if type(value) is not StageState or tuple.__len__(value) != 4:
-            raise TypeError
-        identity = _validated_identity(tuple.__getitem__(value, 0))
-        frozen_job_id = tuple.__getitem__(value, 1)
-        stage_name = tuple.__getitem__(value, 2)
-        status = tuple.__getitem__(value, 3)
-        job_kind: JobKind = (
-            "intake" if type(identity) is ParentIntakeIdentity else "product_compilation"
-        )
-        expected = PARENT_STAGE_SEQUENCE if job_kind == "intake" else CHILD_STAGE_SEQUENCE
-        if (
-            type(frozen_job_id) is not str
-            or identity.job_id != frozen_job_id
-            or stage_name not in expected
-            or status not in _STAGE_TRANSITIONS
-        ):
-            raise TypeError
-        return identity, stage_name, status
-    except Exception:
-        raise RuntimeContractError("invalid_contract_dto") from None
 
 
 class StageBinding(_ImmutableModel):
