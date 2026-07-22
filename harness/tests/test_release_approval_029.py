@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import os
 import uuid
@@ -67,11 +68,14 @@ _C = "c" * 64
 def _frozen_manifest(session: Session, suffix: str = "approval") -> tuple[Any, ReleaseManifest]:
     scope = release_scope(session, suffix)
     _product, version = release_product(session, scope, code=f"P-{suffix}")
+    claim_id = f"claim-{suffix}"
+    if len(claim_id) > 27:
+        claim_id = f"claim-{hashlib.sha256(suffix.encode('utf-8')).hexdigest()[:21]}"
     release_claim(
         session,
         scope,
         version,
-        claim_id=f"claim-{suffix}",
+        claim_id=claim_id,
         predicate="waiting_period",
     )
     snapshot_id = f"snapshot-{suffix}"
@@ -1110,9 +1114,14 @@ def test_ra2_postgresql_two_sessions_converge_on_exact_manifest_and_approval() -
                     worker.flush()
                     usable = worker.is_active and (
                         worker.scalar(
-                            select(func.count()).select_from(ReleaseManifestRecord)
+                            select(func.count())
+                            .select_from(ReleaseManifestRecord)
+                            .where(
+                                ReleaseManifestRecord.space_id
+                                == competing_scope.space_id
+                            )
                         )
-                        == 2
+                        == 1
                     )
                     return "typed_error", backend_pid, usable
 
