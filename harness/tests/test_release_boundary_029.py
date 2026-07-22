@@ -8,6 +8,7 @@ import importlib.util
 import inspect
 import textwrap
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 import tests.support.legacy_publisher_007 as legacy_publisher_module
 import tests.support.release_publisher_018 as release_publisher_module
+from insurance_harness.adapters.weknora import WeKnoraClient
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.pages import RenderedPage, render_snapshot_pages
 from insurance_harness.knowledge.release_boundary import (
@@ -44,6 +46,7 @@ from tests.support.release_plan_018 import (
     PublishPlan,
     ReleasePlanExecutor,
     StagingCapabilityRequired,
+    WikiPageClient,
     _issue_test_staging_capability,
 )
 from tests.support.release_publisher_018 import (
@@ -278,7 +281,8 @@ def test_ra6_executor_and_publisher_require_opaque_capability_before_side_effect
                 raise AssertionError("Wiki client surface must not be inspected")
             return object.__getattribute__(self, name)
 
-    wiki = ExplodingWiki()
+    exploding_wiki = ExplodingWiki()
+    wiki = cast(WikiPageClient, exploding_wiki)
     with pytest.raises(StagingCapabilityRequired):
         ReleasePlanExecutor(wiki)
     with pytest.raises(StagingCapabilityRequired):
@@ -300,7 +304,7 @@ def test_ra6_executor_and_publisher_require_opaque_capability_before_side_effect
             staging_capability=object(),
         )
     assert factory_calls == 0
-    assert wiki.calls == 0
+    assert exploding_wiki.calls == 0
 
 
 @pytest.mark.asyncio
@@ -319,7 +323,8 @@ async def test_ra6_capability_is_exact_for_every_executor_entrypoint(
             self.calls += 1
             raise AssertionError("wrong-scope execution reached Wiki")
 
-    wiki = ExplodingWiki()
+    exploding_wiki = ExplodingWiki()
+    wiki = cast(WikiPageClient, exploding_wiki)
     executor = ReleasePlanExecutor(wiki, staging_capability=capability)
     plan = PublishPlan(
         base_snapshot_id=None,
@@ -358,7 +363,7 @@ async def test_ra6_capability_is_exact_for_every_executor_entrypoint(
     object.__setattr__(executor, "_staging_capability", object())
     with pytest.raises(StagingCapabilityRequired):
         await executor._execute_action(scope_a, action, None)
-    assert wiki.calls == 0
+    assert exploding_wiki.calls == 0
 
 
 @pytest.mark.asyncio
@@ -382,7 +387,8 @@ async def test_ra6_publisher_wrong_scope_capability_blocks_before_db_mutation_or
                 raise AssertionError("wrong-scope publisher reached Wiki")
             return object.__getattribute__(self, name)
 
-    wiki = ExplodingWiki()
+    exploding_wiki = ExplodingWiki()
+    wiki = cast(WikiPageClient, exploding_wiki)
     publisher = ReleasePublisher(
         session_factory=lambda: Session(bind),
         wiki_client=wiki,
@@ -405,7 +411,7 @@ async def test_ra6_publisher_wrong_scope_capability_blocks_before_db_mutation_or
         table: session.scalar(select(func.count()).select_from(table))
         for table in (ReleaseSnapshot, CurrentRelease)
     } == before
-    assert wiki.calls == 0
+    assert exploding_wiki.calls == 0
 
 
 @pytest.mark.asyncio
@@ -427,7 +433,7 @@ async def test_ra6_publisher_private_io_entrypoints_recheck_capability_first(
 
     publisher = ReleasePublisher(
         counted_factory,
-        object(),
+        cast(WikiPageClient, object()),
         staging_capability=_issue_test_staging_capability(scope_a),
     )
     factory_calls = 0
@@ -617,8 +623,10 @@ async def test_ra6_test_only_module_io_rejects_no_forged_and_wrong_capability(
                 raise AssertionError("module entrypoint reached DB/Wiki I/O")
             return object.__getattribute__(self, name)
 
-    exploding_session = ExplodingIO()
-    exploding_client = ExplodingIO()
+    raw_session = ExplodingIO()
+    raw_client = ExplodingIO()
+    exploding_session = cast(Session, raw_session)
+    exploding_client = cast(WeKnoraClient, raw_client)
     page = RenderedPage(
         slug="never-touch",
         title="Never touch",
@@ -677,7 +685,7 @@ async def test_ra6_test_only_module_io_rejects_no_forged_and_wrong_capability(
             legacy_publisher_module._validate_rollback_pages(
                 exploding_session,
                 scope_b,
-                object(),
+                cast(ReleaseSnapshot, object()),
                 [],
                 staging_capability=invalid_capability,
             )
@@ -706,8 +714,8 @@ async def test_ra6_test_only_module_io_rejects_no_forged_and_wrong_capability(
                 staging_capability=invalid_capability,
             )
 
-    assert exploding_session.calls == 0
-    assert exploding_client.calls == 0
+    assert raw_session.calls == 0
+    assert raw_client.calls == 0
 
 
 def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:

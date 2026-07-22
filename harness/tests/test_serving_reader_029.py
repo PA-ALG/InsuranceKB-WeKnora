@@ -124,7 +124,12 @@ def _persist_manifest(
     return manifest
 
 
-def _approved_release(session: Session, suffix: str = "serving") -> _ApprovedFixture:
+def _approved_release(
+    session: Session,
+    suffix: str = "serving",
+    *,
+    unknown_waiting_fact: bool = False,
+) -> _ApprovedFixture:
     scope = release_scope(session, suffix)
     product_a, version_a = release_product(session, scope, code=f"A-{suffix}")
     product_b, version_b = release_product(session, scope, code=f"B-{suffix}")
@@ -199,6 +204,13 @@ def _approved_release(session: Session, suffix: str = "serving") -> _ApprovedFix
         )
         for fact in build_snapshot_facts(session, scope, snapshot_id=snapshot_id)
     ]
+    if unknown_waiting_fact:
+        facts = [
+            fact.model_copy(update={"value_state": "unknown", "value": None})
+            if fact.claim_id == waiting_claim.id
+            else fact
+            for fact in facts
+        ]
     persist_release_snapshot(
         session,
         scope,
@@ -273,6 +285,28 @@ def test_ra4_approved_current_returns_strict_hash_bound_canonical_facts(
     assert evidence_keys == sorted(evidence_keys)
     with pytest.raises(Exception, match="frozen"):
         result.snapshot_id = "changed"
+
+
+def test_ra4_unknown_in_approved_snapshot_is_a_successful_fact(
+    session: Session,
+) -> None:
+    approved = _approved_release(
+        session,
+        "unknown",
+        unknown_waiting_fact=True,
+    )
+
+    result = _reader(session).read_current(
+        approved.scope,
+        claim_id=approved.waiting_claim_id,
+    )
+
+    assert isinstance(result, ApprovedSnapshotResult)
+    assert result.snapshot_id == approved.manifest.snapshot_id
+    assert result.manifest_hash == approved.manifest.manifest_sha256
+    assert len(result.facts) == 1
+    assert result.facts[0].value_state == "unknown"
+    assert result.facts[0].value is None
 
 
 def test_ra4_filters_are_exact_composable_and_have_fixed_gap_precedence(

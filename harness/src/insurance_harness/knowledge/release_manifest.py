@@ -197,7 +197,7 @@ class CanonicalSnapshotFact(_StrictFrozenModel):
     predicate: str
     field_name: str
     field_group: str
-    value_state: Literal["present", "absent_explicitly"]
+    value_state: Literal["present", "absent_explicitly", "unknown"]
     value: ImmutableJson
     effective_from: date | None
     effective_to: date | None
@@ -219,6 +219,29 @@ class CanonicalSnapshotFact(_StrictFrozenModel):
         "field_group",
         "schema_version",
     )(_canonical_text)
+
+    @field_validator("evidence", mode="after")
+    @classmethod
+    def _canonical_evidence_order(
+        cls,
+        value: tuple[CanonicalEvidence, ...],
+    ) -> tuple[CanonicalEvidence, ...]:
+        identities = tuple(item.id for item in value)
+        if len(set(identities)) != len(identities):
+            raise ValueError("evidence identities must be unique")
+        return tuple(
+            sorted(
+                value,
+                key=lambda item: (
+                    item.raw_kb_id,
+                    item.knowledge_id,
+                    item.source_revision,
+                    item.file_hash,
+                    item.chunk_id or "",
+                    item.id,
+                ),
+            )
+        )
 
 
 class CanonicalPageEntityIds(_StrictFrozenModel):

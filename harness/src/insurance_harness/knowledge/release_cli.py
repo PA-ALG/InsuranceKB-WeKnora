@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
@@ -207,6 +208,7 @@ class ReviewAuthorizationDecision(_StrictFrozenModel):
     principal: str
     actor_type: str
     compilation_manifest_hash: str
+    decision_hash: str
     authorization_receipt: str
 
     _text = field_validator(
@@ -216,7 +218,9 @@ class ReviewAuthorizationDecision(_StrictFrozenModel):
         "actor_type",
         "authorization_receipt",
     )(_canonical_text)
-    _hash = field_validator("compilation_manifest_hash")(_literal_sha256)
+    _hash = field_validator("compilation_manifest_hash", "decision_hash")(
+        _literal_sha256
+    )
 
 
 class ReviewAuthorizer(Protocol):
@@ -228,6 +232,7 @@ class ReviewAuthorizer(Protocol):
         principal: str,
         actor_type: str,
         compilation_manifest_hash: str,
+        decision_hash: str,
         authorization_receipt: str,
     ) -> ReviewAuthorizationDecision: ...
 
@@ -574,13 +579,114 @@ def _decode_json(raw: bytes) -> object:
         raise ReleaseCLIError("invalid_artifact", "artifact is not canonical JSON") from exc
 
 
-def _read_json(path: Path) -> object:
-    if path.is_symlink() or not path.is_file():
-        raise ReleaseCLIError("unsafe_artifact_path", "artifact must be a regular file")
+def _path_identity(value: os.stat_result) -> tuple[int, int]:
+    return value.st_dev, value.st_ino
+
+
+def _file_state(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def _open_regular_no_follow(
+    path: Path,
+    *,
+    error_code: str,
+    error_message: str,
+) -> tuple[list[int], tuple[tuple[int, int], ...], os.stat_result]:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parts = absolute.parts
+    if not absolute.is_absolute() or len(parts) < 2 or not hasattr(os, "O_NOFOLLOW"):
+        raise ReleaseCLIError(error_code, error_message)
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+    descriptors: list[int] = []
+    identities: list[tuple[int, int]] = []
     try:
-        return _decode_json(path.read_bytes())
+        current = os.open(parts[0], directory_flags)
+        descriptors.append(current)
+        root_state = os.fstat(current)
+        if not stat.S_ISDIR(root_state.st_mode):
+            raise OSError("path anchor is not a directory")
+        identities.append(_path_identity(root_state))
+        for part in parts[1:-1]:
+            current = os.open(part, directory_flags, dir_fd=current)
+            descriptors.append(current)
+            directory_state = os.fstat(current)
+            if not stat.S_ISDIR(directory_state.st_mode):
+                raise OSError("path component is not a directory")
+            identities.append(_path_identity(directory_state))
+        file_descriptor = os.open(
+            parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=current
+        )
+        descriptors.append(file_descriptor)
+        file_state = os.fstat(file_descriptor)
+        if not stat.S_ISREG(file_state.st_mode):
+            raise OSError("artifact is not a regular file")
+        return descriptors, tuple(identities), file_state
     except OSError as exc:
-        raise ReleaseCLIError("invalid_artifact", "artifact is not canonical JSON") from exc
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise ReleaseCLIError(error_code, error_message) from exc
+
+
+def _stable_read_path(
+    path: Path,
+    *,
+    path_error_code: str = "unsafe_artifact_path",
+    path_error_message: str = "artifact path is unavailable or unsafe",
+    changed_code: str = "artifact_changed_during_read",
+    changed_message: str = "artifact changed while being read",
+) -> bytes:
+    descriptors, lineage_before, before = _open_regular_no_follow(
+        path,
+        error_code=path_error_code,
+        error_message=path_error_message,
+    )
+    file_descriptor = descriptors[-1]
+    try:
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(file_descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        after = os.fstat(file_descriptor)
+        raw = b"".join(chunks)
+        if _file_state(before) != _file_state(after) or len(raw) != after.st_size:
+            raise ReleaseCLIError(changed_code, changed_message)
+        verification_descriptors, lineage_after, path_after = _open_regular_no_follow(
+            path,
+            error_code=changed_code,
+            error_message=changed_message,
+        )
+        try:
+            if (
+                lineage_before != lineage_after
+                or _path_identity(path_after) != _path_identity(after)
+                or _file_state(path_after) != _file_state(after)
+            ):
+                raise ReleaseCLIError(changed_code, changed_message)
+        finally:
+            for descriptor in reversed(verification_descriptors):
+                os.close(descriptor)
+        return raw
+    except ReleaseCLIError:
+        raise
+    except OSError as exc:
+        raise ReleaseCLIError(changed_code, changed_message) from exc
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _read_json(path: Path) -> object:
+    return _decode_json(_stable_read_path(path))
 
 
 def _safe_bundle_file(root: Path, relative: str) -> Path:
@@ -635,7 +741,7 @@ def load_compilation_manifest(path: str | Path) -> CompilationManifest:
     root = manifest_path.parent
     for entry in manifest.files:
         artifact_path = _safe_bundle_file(root, entry.path)
-        raw = artifact_path.read_bytes()
+        raw = _stable_read_path(artifact_path)
         if (
             hashlib.sha256(raw).hexdigest() != entry.sha256
             or len(raw) != entry.size_bytes
@@ -741,12 +847,12 @@ def _decode_yaml(raw: bytes) -> object:
 
 
 def _read_yaml(path: Path) -> object:
-    if path.is_symlink() or not path.is_file():
-        raise ReleaseCLIError("unsafe_artifact_path", "request must be a regular file")
-    try:
-        return _decode_yaml(path.read_bytes())
-    except OSError as exc:
-        raise ReleaseCLIError("invalid_request", "request YAML is invalid") from exc
+    return _decode_yaml(
+        _stable_read_path(
+            path,
+            path_error_message="request path is unavailable or unsafe",
+        )
+    )
 
 
 def dump_yaml(value: Mapping[str, object]) -> str:
@@ -794,6 +900,14 @@ def _exact_review_authorization(
     scope: KnowledgeScope,
     compilation_manifest_hash: str,
 ) -> None:
+    decision_hash = canonical_sha256(
+        {
+            "schema_version": "review-authorization-v1",
+            "space_id": scope.space_id,
+            "compilation_manifest_hash": compilation_manifest_hash,
+            **decision.model_dump(mode="json"),
+        }
+    )
     try:
         authorized = authorizer.authorize_review(
             space_id=scope.space_id,
@@ -801,6 +915,7 @@ def _exact_review_authorization(
             principal=decision.principal,
             actor_type=decision.actor_type,
             compilation_manifest_hash=compilation_manifest_hash,
+            decision_hash=decision_hash,
             authorization_receipt=decision.authorization_receipt,
         )
     except Exception as exc:
@@ -812,6 +927,7 @@ def _exact_review_authorization(
         decision.principal,
         decision.actor_type,
         compilation_manifest_hash,
+        decision_hash,
         decision.authorization_receipt,
     )
     observed = (
@@ -821,6 +937,7 @@ def _exact_review_authorization(
         authorized.principal,
         authorized.actor_type,
         authorized.compilation_manifest_hash,
+        authorized.decision_hash,
         authorized.authorization_receipt,
     )
     if observed != expected:
@@ -1399,6 +1516,7 @@ def promote_approved(
         raise ReleaseCLIError(
             "promotion_binding_mismatch", "approval receipt is not persisted and exact"
         )
+    proof: ReleaseProof | None = None
     with context.session.begin_nested():
         result = ReleaseAuthorityService(context.session).promote(
             context.scope,
@@ -1407,31 +1525,35 @@ def promote_approved(
             expected_current_snapshot_id=request.expected_current_snapshot_id,
             reason=request.reason,
         )
-        if isinstance(result, ReleaseActivationFailure):
-            raise ReleaseCLIError(result.code, "release CAS failed")
-        audit = context.session.get(ReleaseActivationAudit, result.audit_id)
-        if audit is None:
-            raise ReleaseCLIError("promotion_binding_mismatch", "release audit is missing")
-        payload = {
-            "schema_version": "release-proof-v1",
-            "action": "promote",
-            "space_id": context.scope.space_id,
-            "snapshot_id": result.snapshot_id,
-            "manifest_hash": result.manifest_hash,
-            "request_hash": request_hash,
-            "approval_receipt_hash": approval.receipt_hash,
-            "previous_snapshot_id": result.previous_snapshot_id,
-            "audit_id": result.audit_id,
-            "approval_id": approval.approval_id,
-            "principal": request.principal,
-            "reason": request.reason,
-            "activated_at": _utc_iso(audit.activated_at),
-            "audit_created_at": _utc_iso(audit.created_at),
-        }
-        proof = ReleaseProof.model_validate(
-            {**payload, "proof_hash": canonical_sha256(payload)}
-        )
-        _write_json_exclusive(output, proof.model_dump(mode="json"))
+        if not isinstance(result, ReleaseActivationFailure):
+            audit = context.session.get(ReleaseActivationAudit, result.audit_id)
+            if audit is None:
+                raise ReleaseCLIError(
+                    "promotion_binding_mismatch", "release audit is missing"
+                )
+            payload = {
+                "schema_version": "release-proof-v1",
+                "action": "promote",
+                "space_id": context.scope.space_id,
+                "snapshot_id": result.snapshot_id,
+                "manifest_hash": result.manifest_hash,
+                "request_hash": request_hash,
+                "approval_receipt_hash": approval.receipt_hash,
+                "previous_snapshot_id": result.previous_snapshot_id,
+                "audit_id": result.audit_id,
+                "approval_id": approval.approval_id,
+                "principal": request.principal,
+                "reason": request.reason,
+                "activated_at": _utc_iso(audit.activated_at),
+                "audit_created_at": _utc_iso(audit.created_at),
+            }
+            proof = ReleaseProof.model_validate(
+                {**payload, "proof_hash": canonical_sha256(payload)}
+            )
+            _write_json_exclusive(output, proof.model_dump(mode="json"))
+    if isinstance(result, ReleaseActivationFailure):
+        raise ReleaseCLIError(result.code, "release CAS failed")
+    assert proof is not None
     return proof
 
 
@@ -1863,55 +1985,20 @@ def _exclusive_seal_lock(root: Path) -> Iterator[None]:
 
 
 def _stable_read_at(root: Path, relative: str) -> bytes:
-    parts = PurePosixPath(relative).parts
-    root_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-    no_follow = getattr(os, "O_NOFOLLOW", 0)
-    descriptors: list[int] = []
-    try:
-        current = os.open(root, root_flags | no_follow)
-        descriptors.append(current)
-        for part in parts[:-1]:
-            current = os.open(part, root_flags | no_follow, dir_fd=current)
-            descriptors.append(current)
-        file_descriptor = os.open(parts[-1], os.O_RDONLY | no_follow, dir_fd=current)
-        descriptors.append(file_descriptor)
-        before = os.fstat(file_descriptor)
-        chunks: list[bytes] = []
-        while True:
-            chunk = os.read(file_descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            chunks.append(chunk)
-        after = os.fstat(file_descriptor)
-        if (
-            before.st_dev,
-            before.st_ino,
-            before.st_size,
-            before.st_mtime_ns,
-        ) != (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-        ):
-            raise ReleaseCLIError(
-                "artifact_changed_during_seal", "artifact changed while being read"
-            )
-        raw = b"".join(chunks)
-        if len(raw) != after.st_size:
-            raise ReleaseCLIError(
-                "artifact_changed_during_seal", "artifact read was incomplete"
-            )
-        return raw
-    except ReleaseCLIError:
-        raise
-    except OSError as exc:
+    pure = PurePosixPath(relative)
+    if pure.is_absolute() or not pure.parts or any(
+        part in {"", ".", ".."} for part in pure.parts
+    ):
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "artifact could not be read stably"
-        ) from exc
-    finally:
-        for descriptor in reversed(descriptors):
-            os.close(descriptor)
+        )
+    return _stable_read_path(
+        root.joinpath(*pure.parts),
+        path_error_code="artifact_changed_during_seal",
+        path_error_message="artifact could not be read stably",
+        changed_code="artifact_changed_during_seal",
+        changed_message="artifact changed while being read",
+    )
 
 
 def _scan_sealed_files(

@@ -501,7 +501,7 @@ class SnapshotFact(TimestampMixin, Base):
             name="fk_snapshot_facts_space_product_version",
         ),
         CheckConstraint(
-            "value_state IN ('present', 'absent_explicitly')",
+            "value_state IN ('present', 'absent_explicitly', 'unknown')",
             name="ck_snapshot_facts_value_state",
         ),
         Index(

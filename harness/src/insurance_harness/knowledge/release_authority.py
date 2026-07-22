@@ -111,14 +111,14 @@ def _cas_current_release(
             inserted = session.scalar(
                 sqlite_insert(CurrentRelease)
                 .values(**values)
-                .on_conflict_do_nothing(index_elements=("space_id",))
+                .on_conflict_do_nothing()
                 .returning(CurrentRelease.space_id)
             )
         elif dialect == "postgresql":
             inserted = session.scalar(
                 postgresql_insert(CurrentRelease)
                 .values(**values)
-                .on_conflict_do_nothing(index_elements=("space_id",))
+                .on_conflict_do_nothing()
                 .returning(CurrentRelease.space_id)
             )
         else:

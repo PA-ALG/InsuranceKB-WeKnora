@@ -228,6 +228,50 @@ def test_ra1_input_and_mapping_key_order_do_not_change_canonical_hash() -> None:
     assert first.template_hashes == tuple(sorted((_A, _B)))
 
 
+def test_ra1_nested_evidence_order_does_not_change_canonical_hash() -> None:
+    items = _items()
+    target_claim_id = items["facts"][0]["claim_id"]
+    first_evidence = items["facts"][0]["evidence"][0]
+    second_evidence = dict(first_evidence)
+    second_evidence["id"] = "evidence-second"
+    second_evidence["knowledge_id"] = "knowledge-second"
+    second_evidence["chunk_id"] = "chunk-second"
+    items["facts"][0]["evidence"] = (first_evidence, second_evidence)
+
+    reordered = deepcopy(items)
+    reordered["facts"][0]["evidence"] = tuple(
+        reversed(reordered["facts"][0]["evidence"])
+    )
+
+    first = _manifest(**items)
+    second = _manifest(**reordered)
+
+    assert first == second
+    assert first.manifest_sha256 == second.manifest_sha256
+    canonical_fact = next(
+        fact for fact in first.facts if fact.claim_id == target_claim_id
+    )
+    assert tuple(item.id for item in canonical_fact.evidence) == (
+        f"evidence-{target_claim_id}",
+        "evidence-second",
+    )
+
+
+@pytest.mark.parametrize("conflicting_duplicate", [False, True])
+def test_ra1_duplicate_evidence_identity_is_rejected(
+    conflicting_duplicate: bool,
+) -> None:
+    items = _items()
+    original = items["facts"][0]["evidence"][0]
+    duplicate = dict(original)
+    if conflicting_duplicate:
+        duplicate["quote"] = "conflicting duplicate"
+    items["facts"][0]["evidence"] = (original, duplicate)
+
+    with pytest.raises(ValidationError, match="evidence identities must be unique"):
+        _manifest(**items)
+
+
 @pytest.mark.parametrize(
     "datetime_field", ["extracted_at", "created_at", "updated_at", "stale_at"]
 )
@@ -437,7 +481,7 @@ def test_ra1_manifest_models_are_frozen_and_revalidate_nested_models() -> None:
     assert isinstance(manifest.directory_entries[0], CanonicalDirectoryEntry)
     assert isinstance(manifest.relationships[0], CanonicalRelationship)
     with pytest.raises(ValidationError):
-        manifest.space_id = "space-2"  # type: ignore[misc]
+        manifest.space_id = "space-2"
     with pytest.raises(ValidationError):
         ReleaseManifest.model_validate(
             manifest.model_dump(mode="json")
@@ -475,9 +519,9 @@ def test_ra1_deep_json_values_cannot_be_mutated_in_place() -> None:
     with pytest.raises(TypeError):
         manifest.facts[0].value["currency"] = "USD"
     with pytest.raises(ValidationError):
-        manifest.facts[0].evidence[0].quote = "changed"  # type: ignore[misc]
+        manifest.facts[0].evidence[0].quote = "changed"
     with pytest.raises(ValidationError):
-        manifest.rendered_pages[0].page_metadata.space_id = "changed"  # type: ignore[misc]
+        manifest.rendered_pages[0].page_metadata.space_id = "changed"
 
 
 def test_ra1_generic_builder_rejects_incomplete_untyped_fact() -> None:
@@ -568,7 +612,7 @@ def _persist_projection_with_pages(
     ]
     if page_mutator is not None:
         page_mutator(pages)
-    fact_rows = [
+    fact_rows: list[dict[str, Any]] = [
         {
             "id": f"fact-{suffix}-{index}",
             "space_id": fact.space_id,

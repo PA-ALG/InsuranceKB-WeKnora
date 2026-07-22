@@ -12,10 +12,27 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from insurance_harness.knowledge.release_guard_ddl_018 import (
+    METADATA_CREATE_GUARDS as RELEASE_018_CREATE_GUARDS,
+)
+from insurance_harness.knowledge.release_guard_ddl_018 import (
+    METADATA_DROP_GUARDS as RELEASE_018_DROP_GUARDS,
+)
+
 revision = "0013"
 down_revision = "0006"
 branch_labels = None
 depends_on = None
+
+SNAPSHOT_FACT_VALUE_STATES_029 = "'present', 'absent_explicitly', 'unknown'"
+SNAPSHOT_FACT_VALUE_STATES_018 = "'present', 'absent_explicitly'"
+SNAPSHOT_FACT_VALUE_STATE_CHECK = "ck_snapshot_facts_value_state"
+SNAPSHOT_FACT_VALUE_STATE_EXPANDED_CHECK = (
+    "ck_snapshot_facts_value_state_029_expanded"
+)
+SNAPSHOT_FACT_VALUE_STATE_RESTRICTED_CHECK = (
+    "ck_snapshot_facts_value_state_029_restricted"
+)
 
 SQLITE_CREATE_GUARDS = (
     """CREATE TRIGGER trg_release_manifests_update_guard_029
@@ -132,7 +149,71 @@ def _drop_guards() -> None:
         op.execute(sa.text(statement))
 
 
+def _replace_sqlite_snapshot_fact_value_state_check(*, states: str) -> None:
+    for statement in RELEASE_018_DROP_GUARDS["sqlite"]["snapshot_facts"]:
+        op.execute(sa.text(statement))
+    with op.batch_alter_table("snapshot_facts") as batch:
+        batch.drop_constraint(SNAPSHOT_FACT_VALUE_STATE_CHECK, type_="check")
+        batch.create_check_constraint(
+            SNAPSHOT_FACT_VALUE_STATE_CHECK,
+            f"value_state IN ({states})",
+        )
+    for statement in RELEASE_018_CREATE_GUARDS["sqlite"]["snapshot_facts"]:
+        op.execute(sa.text(statement))
+
+
+def _replace_postgresql_snapshot_fact_value_state_check(
+    *,
+    states: str,
+    temporary_name: str,
+) -> None:
+    op.execute(
+        sa.text(
+            f"ALTER TABLE snapshot_facts ADD CONSTRAINT {temporary_name} "
+            f"CHECK (value_state IN ({states})) NOT VALID"
+        )
+    )
+    op.execute(
+        sa.text(f"ALTER TABLE snapshot_facts VALIDATE CONSTRAINT {temporary_name}")
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE snapshot_facts "
+            f"DROP CONSTRAINT {SNAPSHOT_FACT_VALUE_STATE_CHECK}"
+        )
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE snapshot_facts "
+            f"RENAME CONSTRAINT {temporary_name} "
+            f"TO {SNAPSHOT_FACT_VALUE_STATE_CHECK}"
+        )
+    )
+
+
+def _replace_snapshot_fact_value_state_check(
+    *,
+    states: str,
+    postgresql_temporary_name: str,
+) -> None:
+    dialect = op.get_bind().dialect.name
+    if dialect == "sqlite":
+        _replace_sqlite_snapshot_fact_value_state_check(states=states)
+        return
+    if dialect == "postgresql":
+        _replace_postgresql_snapshot_fact_value_state_check(
+            states=states,
+            temporary_name=postgresql_temporary_name,
+        )
+        return
+    raise RuntimeError(f"unsupported snapshot fact migration dialect: {dialect}")
+
+
 def upgrade() -> None:
+    _replace_snapshot_fact_value_state_check(
+        states=SNAPSHOT_FACT_VALUE_STATES_029,
+        postgresql_temporary_name=SNAPSHOT_FACT_VALUE_STATE_EXPANDED_CHECK,
+    )
     op.create_table(
         "release_manifests",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -323,15 +404,31 @@ def _validate_empty_before_downgrade() -> None:
         )
     }
     durable = {table: count for table, count in counts.items() if count}
-    if durable:
+    unknown_snapshot_facts = int(
+        connection.scalar(
+            sa.text("SELECT count(*) FROM snapshot_facts WHERE value_state = 'unknown'")
+        )
+        or 0
+    )
+    if durable or unknown_snapshot_facts:
+        conflicts = []
+        if durable:
+            conflicts.append(f"durable release authority data exists {durable}")
+        if unknown_snapshot_facts:
+            conflicts.append(
+                f"unknown snapshot facts exist {{'snapshot_facts': {unknown_snapshot_facts}}}"
+            )
         raise RuntimeError(
-            "0013 downgrade refused before DDL: durable release authority data exists "
-            f"{durable}"
+            "0013 downgrade refused before DDL: " + "; ".join(conflicts)
         )
 
 
 def downgrade() -> None:
     _validate_empty_before_downgrade()
+    _replace_snapshot_fact_value_state_check(
+        states=SNAPSHOT_FACT_VALUE_STATES_018,
+        postgresql_temporary_name=SNAPSHOT_FACT_VALUE_STATE_RESTRICTED_CHECK,
+    )
     _drop_guards()
     op.drop_table("release_alerts")
     op.drop_table("release_activation_audits")

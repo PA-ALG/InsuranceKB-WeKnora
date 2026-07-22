@@ -19,6 +19,10 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.orm import Session
+
+from insurance_harness.knowledge.tables import ReleaseSnapshot, SnapshotFact
+from tests.support.release_018 import release_claim, release_product, release_scope
 
 HARNESS_ROOT = Path(__file__).resolve().parents[1]
 TABLES = {
@@ -119,6 +123,221 @@ def _insert_manifest(
             "now": now,
         },
     )
+
+
+def _insert_snapshot_fact(
+    connection: Any,
+    *,
+    value_state: str,
+    suffix: str,
+) -> None:
+    now = datetime.now(UTC)
+    space_id = f"fact-space-{suffix}"
+    snapshot_id = f"fact-snapshot-{suffix}"
+    connection.execute(
+        text(
+            """INSERT INTO knowledge_spaces
+            (id, tenant_id, raw_kb_id, wiki_kb_id, name, binding_status,
+             created_at, updated_at)
+            VALUES (:space, :tenant, :raw, :wiki, :name, 'bound', :now, :now)"""
+        ),
+        {
+            "space": space_id,
+            "tenant": f"fact-tenant-{suffix}",
+            "raw": f"fact-raw-{suffix}",
+            "wiki": f"fact-wiki-{suffix}",
+            "name": f"Fact {suffix}",
+            "now": now,
+        },
+    )
+    connection.execute(
+        text(
+            """INSERT INTO release_snapshots
+            (id, space_id, label, rendered_pages, status, read_model_version,
+             projection_frozen_at, published_at, published_by, notes,
+             created_at, updated_at)
+            VALUES (:snapshot, :space, :snapshot, :pages, 'building', 1,
+                    NULL, NULL, 'migration-test', NULL, :now, :now)"""
+        ),
+        {
+            "snapshot": snapshot_id,
+            "space": space_id,
+            "pages": json.dumps([]),
+            "now": now,
+        },
+    )
+    connection.execute(
+        text(
+            """INSERT INTO snapshot_facts
+            (id, space_id, snapshot_id, claim_id, revision_no, product_id,
+             product_version_id, product_code, product_name, version_label,
+             predicate, field_name, field_group, value_state, value,
+             effective_from, effective_to, confidence, schema_version, evidence,
+             created_at, updated_at)
+            VALUES (:id, :space, :snapshot, :claim, 1, :product, :version,
+                    :product_code, :product_name, 'V1', 'waiting_period',
+                    'Waiting period', 'coverage', :value_state, :value,
+                    NULL, NULL, 0.9, 'v1', :evidence, :now, :now)"""
+        ),
+        {
+            "id": f"fact-{suffix}",
+            "space": space_id,
+            "snapshot": snapshot_id,
+            "claim": f"fact-claim-{suffix}",
+            "product": f"fact-product-{suffix}",
+            "version": f"fact-version-{suffix}",
+            "product_code": f"P-{suffix}",
+            "product_name": f"Product {suffix}",
+            "value_state": value_state,
+            "value": json.dumps(None if value_state != "present" else {"days": 90}),
+            "evidence": json.dumps([]),
+            "now": now,
+        },
+    )
+
+
+def _sqlite_snapshot_fact_contract(engine: Engine) -> dict[str, Any]:
+    inspector = inspect(engine)
+    foreign_keys = tuple(
+        sorted(
+            (
+                item["name"],
+                tuple(item["constrained_columns"]),
+                item["referred_table"],
+                tuple(item["referred_columns"]),
+            )
+            for item in inspector.get_foreign_keys("snapshot_facts")
+        )
+    )
+    indexes = tuple(
+        sorted(
+            (
+                item["name"],
+                tuple(item["column_names"]),
+                bool(item["unique"]),
+            )
+            for item in inspector.get_indexes("snapshot_facts")
+        )
+    )
+    with engine.connect() as connection:
+        triggers = tuple(
+            connection.execute(
+                text(
+                    "SELECT name, sql FROM sqlite_master "
+                    "WHERE type='trigger' AND tbl_name='snapshot_facts' "
+                    "AND name LIKE '%_018' ORDER BY name"
+                )
+            )
+        )
+    return {
+        "foreign_keys": foreign_keys,
+        "indexes": indexes,
+        "triggers": triggers,
+    }
+
+
+def _snapshot_fact_value_state_check(engine: Engine) -> str:
+    checks = {
+        item["name"]: str(item["sqltext"]).lower()
+        for item in inspect(engine).get_check_constraints("snapshot_facts")
+    }
+    return checks["ck_snapshot_facts_value_state"]
+
+
+def _snapshot_fact_rows(engine: Engine) -> tuple[tuple[Any, ...], ...]:
+    with engine.connect() as connection:
+        return tuple(
+            tuple(row)
+            for row in connection.execute(
+                text(
+                    "SELECT id, space_id, snapshot_id, claim_id, revision_no, "
+                    "product_id, product_version_id, product_code, product_name, "
+                    "version_label, predicate, field_name, field_group, value_state, "
+                    "value, effective_from, effective_to, confidence, schema_version, "
+                    "evidence, created_at, updated_at FROM snapshot_facts ORDER BY id"
+                )
+            )
+        )
+
+
+def test_ra4_0013_sqlite_expands_snapshot_fact_state_without_contract_loss(
+    tmp_path: Path,
+) -> None:
+    url, engine = _db(tmp_path, "snapshot-fact-upgrade")
+    command.upgrade(_cfg(url), "0006")
+    with engine.begin() as connection:
+        _insert_snapshot_fact(connection, value_state="present", suffix="existing")
+    before_contract = _sqlite_snapshot_fact_contract(engine)
+    before_rows = _snapshot_fact_rows(engine)
+    assert "unknown" not in _snapshot_fact_value_state_check(engine)
+
+    command.upgrade(_cfg(url), "0013")
+
+    assert _sqlite_snapshot_fact_contract(engine) == before_contract
+    assert _snapshot_fact_rows(engine) == before_rows
+    assert "unknown" in _snapshot_fact_value_state_check(engine)
+    with engine.begin() as connection:
+        _insert_snapshot_fact(connection, value_state="unknown", suffix="unknown")
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        _insert_snapshot_fact(connection, value_state="unavailable", suffix="invalid")
+
+
+def test_ra4_0013_sqlite_unknown_downgrade_fails_before_any_ddl(
+    tmp_path: Path,
+) -> None:
+    url, engine = _db(tmp_path, "snapshot-fact-unsafe-downgrade")
+    command.upgrade(_cfg(url), "0013")
+    with engine.begin() as connection:
+        _insert_snapshot_fact(connection, value_state="unknown", suffix="durable")
+    before_tables = tuple(sorted(inspect(engine).get_table_names()))
+    before_contract = _sqlite_snapshot_fact_contract(engine)
+    before_rows = _snapshot_fact_rows(engine)
+    before_check = _snapshot_fact_value_state_check(engine)
+
+    with pytest.raises(RuntimeError, match="unknown snapshot facts exist"):
+        command.downgrade(_cfg(url), "0006")
+
+    assert tuple(sorted(inspect(engine).get_table_names())) == before_tables
+    assert _sqlite_snapshot_fact_contract(engine) == before_contract
+    assert _snapshot_fact_rows(engine) == before_rows
+    assert _snapshot_fact_value_state_check(engine) == before_check
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
+        assert all(
+            connection.scalar(text(f"SELECT count(*) FROM {table}")) == 0
+            for table in TABLES
+        )
+
+
+def test_ra4_0013_sqlite_safe_downgrade_restores_two_states_and_rolls_forward(
+    tmp_path: Path,
+) -> None:
+    url, engine = _db(tmp_path, "snapshot-fact-safe-downgrade")
+    command.upgrade(_cfg(url), "0013")
+    with engine.begin() as connection:
+        _insert_snapshot_fact(connection, value_state="present", suffix="present")
+        _insert_snapshot_fact(
+            connection,
+            value_state="absent_explicitly",
+            suffix="absent",
+        )
+    before_contract = _sqlite_snapshot_fact_contract(engine)
+    before_rows = _snapshot_fact_rows(engine)
+
+    command.downgrade(_cfg(url), "0006")
+
+    assert TABLES.isdisjoint(inspect(engine).get_table_names())
+    assert _sqlite_snapshot_fact_contract(engine) == before_contract
+    assert _snapshot_fact_rows(engine) == before_rows
+    assert "unknown" not in _snapshot_fact_value_state_check(engine)
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        _insert_snapshot_fact(connection, value_state="unknown", suffix="downgraded")
+
+    command.upgrade(_cfg(url), "0013")
+
+    assert "unknown" in _snapshot_fact_value_state_check(engine)
+    with engine.begin() as connection:
+        _insert_snapshot_fact(connection, value_state="unknown", suffix="rollforward")
 
 
 def test_ra2_0013_is_single_head_and_creates_exact_schema(tmp_path: Path) -> None:
@@ -498,6 +717,19 @@ def test_ra2_0013_postgresql_offline_ddl_contains_guards_and_exact_fk() -> None:
     assert "fk_release_approvals_exact_manifest" in ddl
     assert "guard_release_manifests_immutable_029" in ddl
     assert "guard_release_approvals_append_only_029" in ddl
+    add_position = ddl.index(
+        "add constraint ck_snapshot_facts_value_state_029_expanded"
+    )
+    validate_position = ddl.index(
+        "validate constraint ck_snapshot_facts_value_state_029_expanded"
+    )
+    drop_position = ddl.index("drop constraint ck_snapshot_facts_value_state")
+    rename_position = ddl.index(
+        "rename constraint ck_snapshot_facts_value_state_029_expanded "
+        "to ck_snapshot_facts_value_state"
+    )
+    assert "not valid" in ddl[add_position:validate_position]
+    assert add_position < validate_position < drop_position < rename_position
 
 
 @pytest.fixture
@@ -664,6 +896,100 @@ def _seed_postgresql_release_authority(engine: Engine) -> tuple[str, str, str]:
             },
         )
     return manifest.space_id, manifest.snapshot_id, manifest.manifest_sha256
+
+
+@pytest.mark.integration_postgres
+def test_ra4_0013_real_postgresql_accepts_unknown_and_preflights_downgrade(
+    postgres_029_schema: Postgres029Schema,
+) -> None:
+    engine = postgres_029_schema.engine
+    with Session(engine) as session:
+        scope = release_scope(session, "pg-unknown")
+        product, version = release_product(session, scope, code="PG-UNKNOWN")
+        claim, _ = release_claim(
+            session,
+            scope,
+            version,
+            claim_id="claim-pg-unknown",
+            predicate="waiting_period",
+            value_state="unknown",
+        )
+        snapshot = ReleaseSnapshot(
+            id="snapshot-pg-unknown",
+            space_id=scope.space_id,
+            label="snapshot-pg-unknown",
+            rendered_pages=[],
+            status="building",
+            read_model_version=1,
+            published_by="migration-test",
+        )
+        session.add(snapshot)
+        session.flush()
+        session.add(
+            SnapshotFact(
+                id="fact-pg-unknown",
+                space_id=scope.space_id,
+                snapshot_id=snapshot.id,
+                claim_id=claim.id,
+                revision_no=1,
+                product_id=product.id,
+                product_version_id=version.id,
+                product_code=product.product_code,
+                product_name=product.canonical_name,
+                version_label=version.version_label,
+                predicate=claim.predicate,
+                field_name="Waiting period",
+                field_group="coverage",
+                value_state="unknown",
+                value=None,
+                effective_from=None,
+                effective_to=None,
+                confidence=claim.confidence,
+                schema_version=claim.schema_version,
+                evidence=[],
+            )
+        )
+        session.commit()
+
+    with engine.connect() as connection:
+        before_version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+        before_definition = connection.scalar(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'ck_snapshot_facts_value_state'"
+            )
+        )
+        before_rows = tuple(
+            connection.execute(
+                text(
+                    "SELECT id, space_id, snapshot_id, claim_id, revision_no, value_state "
+                    "FROM snapshot_facts ORDER BY id"
+                )
+            )
+        )
+    assert before_version == "0013"
+    assert before_definition is not None and "unknown" in before_definition.lower()
+    assert before_rows and before_rows[0].value_state == "unknown"
+
+    with pytest.raises(RuntimeError, match="unknown snapshot facts exist"):
+        command.downgrade(_cfg(postgres_029_schema.url), "0006")
+
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0013"
+        assert connection.scalar(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'ck_snapshot_facts_value_state'"
+            )
+        ) == before_definition
+        assert tuple(
+            connection.execute(
+                text(
+                    "SELECT id, space_id, snapshot_id, claim_id, revision_no, value_state "
+                    "FROM snapshot_facts ORDER BY id"
+                )
+            )
+        ) == before_rows
 
 
 def _postgresql_029_triggers(engine: Engine) -> tuple[str, ...]:

@@ -6,24 +6,32 @@ import hashlib
 import importlib.util
 import inspect
 import json
+import os
+from collections.abc import Callable, Collection
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import yaml
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 
 import insurance_harness.knowledge.release_cli as release_cli
+from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.release_approval import AuthorizationDecision
+from insurance_harness.knowledge.release_authority import ReleaseAuthorityService
 from insurance_harness.knowledge.release_boundary import (
     build_fresh_staging_candidate_manifest,
     canonical_target_facts_hash,
 )
 from insurance_harness.knowledge.release_manifest import ReleaseManifestBuildError
-from insurance_harness.knowledge.serving import ApprovedSnapshotResult, ServingFailure
+from insurance_harness.knowledge.serving import (
+    ApprovedSnapshotReader,
+    ApprovedSnapshotResult,
+    ServingFailure,
+)
 from insurance_harness.knowledge.snapshots import build_snapshot_facts
 from insurance_harness.knowledge.tables import (
     ChangeItem,
@@ -32,6 +40,8 @@ from insurance_harness.knowledge.tables import (
     ClaimEvidence,
     ClaimRevision,
     CurrentRelease,
+    ReleaseAlert,
+    ReleaseApproval,
     ReleaseManifestRecord,
     ReleaseSnapshot,
     ReviewItem,
@@ -103,6 +113,42 @@ def _write_compilation_bundle(
     return path, manifest
 
 
+def _change_path_during_fd_read(
+    monkeypatch: pytest.MonkeyPatch,
+    target: Path,
+    *,
+    mode: str,
+) -> Callable[[], bool]:
+    original_read = os.read
+    original_raw = target.read_bytes()
+    original_stat = target.stat()
+    changed = False
+
+    def racing_read(file_descriptor: int, size: int) -> bytes:
+        nonlocal changed
+        chunk = original_read(file_descriptor, size)
+        observed = os.fstat(file_descriptor)
+        if (
+            not changed
+            and observed.st_dev == original_stat.st_dev
+            and observed.st_ino == original_stat.st_ino
+        ):
+            if mode == "replace":
+                replacement = target.with_name(f".{target.name}.raced")
+                replacement.write_bytes(original_raw)
+                replacement.replace(target)
+            elif mode == "mutate":
+                with target.open("ab") as artifact:
+                    artifact.write(b"\n")
+            else:  # pragma: no cover - test helper contract
+                raise AssertionError(f"unsupported race mode: {mode}")
+            changed = True
+        return chunk
+
+    monkeypatch.setattr(os, "read", racing_read)
+    return lambda: changed
+
+
 def test_ra7_release_governance_cli_module_exists() -> None:
     assert importlib.util.find_spec("insurance_harness.knowledge.release_cli") is not None
 
@@ -161,7 +207,7 @@ def test_ra7_parser_exposes_exact_governance_commands_and_arguments() -> None:
     subparsers = next(
         action for action in parser._actions if hasattr(action, "choices") and action.choices
     )
-    assert set(subparsers.choices) == set(cases)
+    assert set(cast(Collection[str], subparsers.choices)) == set(cases)
 
 
 def test_ra7_cli_architecture_has_no_compiler_runtime_model_or_process_path() -> None:
@@ -207,7 +253,7 @@ def test_ra7_cli_architecture_has_no_compiler_runtime_model_or_process_path() ->
 
 
 def test_ra7_human_requests_are_strict_explicit_and_never_self_authorizing() -> None:
-    review = {
+    review: dict[str, Any] = {
         "input_origin": "human-authored",
         "space_id": "space-a",
         "compilation_manifest_hash": "a" * 64,
@@ -307,7 +353,8 @@ def test_ra7_compilation_manifest_revalidates_path_hash_size_and_count(
     artifact.write_text(original, encoding="utf-8")
 
     escaped = dict(manifest)
-    escaped["files"] = [{**manifest["files"][0], "path": "../escape.json"}]
+    files = cast(list[dict[str, object]], manifest["files"])
+    escaped["files"] = [{**files[0], "path": "../escape.json"}]
     escaped_payload = {key: value for key, value in escaped.items() if key != "manifest_hash"}
     escaped["manifest_hash"] = _canonical_hash(escaped_payload)
     manifest_path.write_text(json.dumps(escaped), encoding="utf-8")
@@ -321,7 +368,8 @@ def test_ra7_compilation_manifest_rejects_duplicates_symlinks_and_sensitive_file
 ) -> None:
     manifest_path, manifest = _write_compilation_bundle(tmp_path / "bundle")
     duplicate = dict(manifest)
-    duplicate["files"] = [manifest["files"][0], manifest["files"][0]]
+    files = cast(list[dict[str, object]], manifest["files"])
+    duplicate["files"] = [files[0], files[0]]
     duplicate_payload = {key: value for key, value in duplicate.items() if key != "manifest_hash"}
     duplicate["manifest_hash"] = _canonical_hash(duplicate_payload)
     manifest_path.write_text(json.dumps(duplicate), encoding="utf-8")
@@ -351,6 +399,27 @@ def test_ra7_compilation_manifest_rejects_duplicates_symlinks_and_sensitive_file
     assert caught.value.code == "unsafe_artifact_path"
 
 
+@pytest.mark.parametrize("symlink_kind", ["leaf", "parent"])
+def test_ra7_compilation_manifest_rejects_symlinked_input_path_components(
+    tmp_path: Path,
+    symlink_kind: str,
+) -> None:
+    real = tmp_path / "real-bundle"
+    manifest_path, _ = _write_compilation_bundle(real)
+    if symlink_kind == "leaf":
+        supplied = tmp_path / "linked-manifest.json"
+        supplied.symlink_to(manifest_path)
+    else:
+        linked_parent = tmp_path / "linked-bundle"
+        linked_parent.symlink_to(real, target_is_directory=True)
+        supplied = linked_parent / manifest_path.name
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.load_compilation_manifest(supplied)
+
+    assert caught.value.code == "unsafe_artifact_path"
+
+
 class _ReviewAuthorizer:
     def authorize_review(self, **kwargs: Any) -> release_cli.ReviewAuthorizationDecision:
         return release_cli.ReviewAuthorizationDecision(
@@ -360,6 +429,7 @@ class _ReviewAuthorizer:
             principal=kwargs["principal"],
             actor_type=kwargs["actor_type"],
             compilation_manifest_hash=kwargs["compilation_manifest_hash"],
+            decision_hash=kwargs["decision_hash"],
             authorization_receipt=kwargs["authorization_receipt"],
         )
 
@@ -377,7 +447,9 @@ class _ReleaseAuthorizer:
         )
 
 
-def _seed_blocking_review(session: Session) -> tuple[object, ChangeSet, ReviewItem]:
+def _seed_blocking_review(
+    session: Session,
+) -> tuple[KnowledgeScope, ChangeSet, ReviewItem]:
     scope = release_scope(session, "release-cli-review")
     change_set = ChangeSet(
         space_id=scope.space_id,
@@ -468,8 +540,117 @@ def test_ra7_apply_review_decisions_uses_exact_human_request_and_existing_servic
     assert output.exists()
     session.refresh(review)
     assert review.status == "resolved"
-    assert review.resolution["actor"] == "alice"
+    assert cast(dict[str, object], review.resolution)["actor"] == "alice"
     assert session.scalar(select(func.count()).select_from(CurrentRelease)) == before_current
+
+
+def test_ra7_review_authorization_for_reject_cannot_be_replayed_for_approve(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    scope, change_set, review = _seed_blocking_review(session)
+    _compilation_path, compilation = _write_compilation_bundle(
+        tmp_path / "bundle",
+        space_id=scope.space_id,
+        change_set_ids=[change_set.id],
+        blocking_review_ids=[review.id],
+    )
+    decision = {
+        "review_id": review.id,
+        "expected_version": review.updated_at.isoformat(),
+        "action": "approve",
+        "principal": "alice",
+        "actor_type": "human",
+        "authorization_receipt": "review-auth-bound-to-reject",
+        "reason": "inspected exact evidence",
+        "request_id": "review-request-action-bound",
+    }
+    reject_subject = {
+        "schema_version": "review-authorization-v1",
+        "space_id": scope.space_id,
+        "compilation_manifest_hash": compilation["manifest_hash"],
+        **decision,
+        "action": "reject",
+    }
+    reject_decision_hash = _canonical_hash(reject_subject)
+
+    class RejectOnlyAuthorizer:
+        def authorize_review(
+            self, **kwargs: Any
+        ) -> release_cli.ReviewAuthorizationDecision:
+            payload = {
+                "outcome": "authorized",
+                "space_id": kwargs["space_id"],
+                "review_id": kwargs["review_id"],
+                "principal": kwargs["principal"],
+                "actor_type": kwargs["actor_type"],
+                "compilation_manifest_hash": kwargs["compilation_manifest_hash"],
+                "authorization_receipt": kwargs["authorization_receipt"],
+            }
+            if "decision_hash" in kwargs:
+                payload["decision_hash"] = reject_decision_hash
+            return release_cli.ReviewAuthorizationDecision.model_validate(payload)
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli._exact_review_authorization(
+            RejectOnlyAuthorizer(),
+            release_cli.ReviewDecision.model_validate(decision),
+            scope=scope,
+            compilation_manifest_hash=str(compilation["manifest_hash"]),
+        )
+
+    assert caught.value.code == "review_authorization_failed"
+    session.refresh(review)
+    assert review.status == "open"
+
+
+def test_ra7_apply_review_rejects_request_changed_during_read_before_resolution(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope, change_set, review = _seed_blocking_review(session)
+    compilation_path, compilation = _write_compilation_bundle(
+        tmp_path / "bundle",
+        space_id=scope.space_id,
+        change_set_ids=[change_set.id],
+        blocking_review_ids=[review.id],
+    )
+    request = {
+        "input_origin": "human-authored",
+        "space_id": scope.space_id,
+        "compilation_manifest_hash": compilation["manifest_hash"],
+        "decisions": [
+            {
+                "review_id": review.id,
+                "expected_version": review.updated_at.isoformat(),
+                "action": "reject",
+                "principal": "alice",
+                "actor_type": "human",
+                "authorization_receipt": "review-auth-stable-read",
+                "reason": "inspected exact evidence",
+                "request_id": "review-request-stable-read",
+            }
+        ],
+    }
+    request_path = tmp_path / "review-decisions-race.yaml"
+    request_path.write_text(release_cli.dump_yaml(request), encoding="utf-8")
+    changed = _change_path_during_fd_read(
+        monkeypatch, request_path, mode="mutate"
+    )
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.apply_review_decisions(
+            release_cli.GovernanceContext(session, scope, _ReviewAuthorizer(), None),
+            request_path=request_path,
+            compilation_manifest_path=compilation_path,
+            output_path=tmp_path / "review-receipt-race.json",
+        )
+
+    assert changed()
+    assert caught.value.code == "artifact_changed_during_read"
+    session.refresh(review)
+    assert review.status == "open"
 
 
 def test_ra7_apply_review_decisions_fails_before_write_on_hash_or_version_mismatch(
@@ -483,7 +664,7 @@ def test_ra7_apply_review_decisions_fails_before_write_on_hash_or_version_mismat
         change_set_ids=[change_set.id],
         blocking_review_ids=[review.id],
     )
-    base = {
+    base: dict[str, object] = {
         "input_origin": "human-authored",
         "space_id": scope.space_id,
         "compilation_manifest_hash": "f" * 64,
@@ -517,7 +698,8 @@ def test_ra7_apply_review_decisions_fails_before_write_on_hash_or_version_mismat
     assert review.status == "open"
 
     base["compilation_manifest_hash"] = compilation["manifest_hash"]
-    base["decisions"][0]["expected_version"] = "stale-version"
+    decisions = cast(list[dict[str, object]], base["decisions"])
+    decisions[0]["expected_version"] = "stale-version"
     request_path.write_text(release_cli.dump_yaml(base), encoding="utf-8")
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.apply_review_decisions(
@@ -613,7 +795,7 @@ def test_ra7_apply_review_negative_matrix_is_zero_write(
 def _write_resolved_review_bundle(
     session: Session,
     tmp_path: Path,
-) -> tuple[object, str, Path, Path]:
+) -> tuple[KnowledgeScope, str, Path, Path]:
     approved = _approved_release(session, "release-cli-candidate")
     scope = approved.scope
     snapshot_id = "snapshot-release-cli-candidate-new"
@@ -806,7 +988,10 @@ def test_ra7_candidate_approval_and_promote_are_separate_exact_steps(
     )
     assert proof.snapshot_id == snapshot_id
     assert proof.audit_created_at
-    assert session.get(CurrentRelease, (scope.space_id, "current")).snapshot_id == snapshot_id
+    assert (
+        cast(CurrentRelease, session.get(CurrentRelease, (scope.space_id, "current"))).snapshot_id
+        == snapshot_id
+    )
 
 
 def test_ra7_build_candidate_rejects_mutated_compiler_artifact_without_output(
@@ -846,6 +1031,49 @@ def test_ra7_build_candidate_rejects_mutated_compiler_artifact_without_output(
     assert not output.exists()
 
 
+def test_ra7_build_candidate_rejects_compiler_replacement_before_snapshot_write(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope, snapshot_id, compilation_path, review_receipt_path = (
+        _write_resolved_review_bundle(session, tmp_path)
+    )
+    compilation = release_cli.load_compilation_manifest(compilation_path)
+    receipt = release_cli.load_review_receipt(review_receipt_path)
+    request = {
+        "schema_version": "candidate-run-request-v1",
+        "space_id": scope.space_id,
+        "compilation_manifest_path": "bundle/compilation-manifest.json",
+        "compilation_manifest_hash": compilation.manifest_hash,
+        "review_receipt_hash": receipt.receipt_hash,
+        "snapshot_id": snapshot_id,
+        "knowledge_schema_version": "v1.1+release",
+        "template_hashes": ["d" * 64],
+        "model_plan_hash": "e" * 64,
+    }
+    request_path = tmp_path / "candidate-race.yaml"
+    request_path.write_text(release_cli.dump_yaml(request), encoding="utf-8")
+    compiler_artifact = compilation_path.parent / "compiler-facts.json"
+    changed = _change_path_during_fd_read(
+        monkeypatch, compiler_artifact, mode="replace"
+    )
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.build_candidate(
+            release_cli.GovernanceContext(
+                session, scope, _ReviewAuthorizer(), _ReleaseAuthorizer()
+            ),
+            run_request_path=request_path,
+            review_receipt_path=review_receipt_path,
+            output_dir=tmp_path / "candidate-race-output",
+        )
+
+    assert changed()
+    assert caught.value.code == "artifact_changed_during_read"
+    assert session.get(ReleaseSnapshot, snapshot_id) is None
+
+
 @pytest.mark.parametrize(
     ("mutation", "expected_code"),
     [
@@ -879,7 +1107,10 @@ def test_ra7_candidate_negative_matrix_is_zero_write(
         item.decision = "needs_review"
         session.flush()
     elif mutation == "deferred":
-        review.resolution = {**review.resolution, "action": "defer"}
+        review.resolution = {
+            **cast(dict[str, Any], review.resolution),
+            "action": "defer",
+        }
         session.flush()
     elif mutation == "incomplete-changeset":
         session.add(
@@ -1043,7 +1274,7 @@ def _write_promoted_run(
     manifest = release_cli._load_release_manifest(manifest_path)
     assert context.approved_snapshot_reader is not None
     actual = context.approved_snapshot_reader.read_current(context.scope)
-    assert isinstance(actual, release_cli.ApprovedSnapshotResult)
+    assert isinstance(actual, ApprovedSnapshotResult)
     facts_hash, evidence_hash, ordering_hash = release_cli._actual_serving_hashes(
         actual
     )
@@ -1098,8 +1329,9 @@ def test_ra7_approve_negative_matrix_does_not_move_current(
     context, _, request_path, manifest_path, _ = _write_approved_run(
         session, tmp_path
     )
-    current_before = session.get(
-        CurrentRelease, (context.scope.space_id, "current")
+    current_before = cast(
+        CurrentRelease,
+        session.get(CurrentRelease, (context.scope.space_id, "current")),
     ).snapshot_id
     request = yaml.safe_load(request_path.read_text(encoding="utf-8"))
     if mutation == "missing-hash":
@@ -1132,7 +1364,10 @@ def test_ra7_approve_negative_matrix_does_not_move_current(
     assert caught.value.code == expected_code
     assert not output.exists()
     assert (
-        session.get(CurrentRelease, (context.scope.space_id, "current")).snapshot_id
+        cast(
+            CurrentRelease,
+            session.get(CurrentRelease, (context.scope.space_id, "current")),
+        ).snapshot_id
         == current_before
     )
 
@@ -1189,15 +1424,30 @@ def test_ra7_promote_negative_matrix_has_no_retry(
         payload = {key: value for key, value in approval.items() if key != "receipt_hash"}
         approval["receipt_hash"] = _canonical_hash(payload)
         approval_path.write_text(json.dumps(approval), encoding="utf-8")
-    original = release_cli.ReleaseAuthorityService.promote
+    original = ReleaseAuthorityService.promote
     calls = 0
 
-    def counted_promote(service: object, *args: object, **kwargs: object) -> object:
+    def counted_promote(
+        service: ReleaseAuthorityService,
+        scope: KnowledgeScope,
+        *,
+        snapshot_id: str,
+        manifest_hash: str,
+        expected_current_snapshot_id: str | None,
+        reason: str,
+    ) -> object:
         nonlocal calls
         calls += 1
-        return original(service, *args, **kwargs)
+        return original(
+            service,
+            scope,
+            snapshot_id=snapshot_id,
+            manifest_hash=manifest_hash,
+            expected_current_snapshot_id=expected_current_snapshot_id,
+            reason=reason,
+        )
 
-    monkeypatch.setattr(release_cli.ReleaseAuthorityService, "promote", counted_promote)
+    monkeypatch.setattr(ReleaseAuthorityService, "promote", counted_promote)
     output = tmp_path / "second-release-proof.json"
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.promote_approved(
@@ -1463,7 +1713,7 @@ def test_ra7_build_candidate_rejects_preexisting_same_space_snapshot(
         )
 
     assert caught.value.code == "candidate_snapshot_exists"
-    assert session.get(ReleaseSnapshot, snapshot_id).status == "building"
+    assert cast(ReleaseSnapshot, session.get(ReleaseSnapshot, snapshot_id)).status == "building"
 
 
 class _DenyReviewAuthorizer:
@@ -1475,6 +1725,7 @@ class _DenyReviewAuthorizer:
             principal=kwargs["principal"],
             actor_type=kwargs["actor_type"],
             compilation_manifest_hash=kwargs["compilation_manifest_hash"],
+            decision_hash=kwargs["decision_hash"],
             authorization_receipt=kwargs["authorization_receipt"],
         )
 
@@ -1808,7 +2059,7 @@ def test_ra7_build_candidate_artifact_failure_rolls_back_fresh_snapshot(
         def fail_rename(_source: Path, _destination: Path) -> None:
             raise OSError("injected rename failure")
 
-        monkeypatch.setattr(release_cli.os, "rename", fail_rename)
+        monkeypatch.setattr(os, "rename", fail_rename)
 
     with pytest.raises(release_cli.ReleaseCLIError):
         release_cli.build_candidate(
@@ -1833,8 +2084,9 @@ def test_ra7_promote_write_failure_rolls_back_cas_and_keeps_session_usable(
     context, _, request_path, manifest_path, approval_path = _write_approved_run(
         session, tmp_path
     )
-    current_before = session.get(
-        CurrentRelease, (context.scope.space_id, "current")
+    current_before = cast(
+        CurrentRelease,
+        session.get(CurrentRelease, (context.scope.space_id, "current")),
     ).snapshot_id
 
     def fail_write(_path: Path, _value: object) -> None:
@@ -1852,10 +2104,135 @@ def test_ra7_promote_write_failure_rolls_back_cas_and_keeps_session_usable(
 
     assert caught.value.code == "output_unavailable"
     assert (
-        session.get(CurrentRelease, (context.scope.space_id, "current")).snapshot_id
+        cast(
+            CurrentRelease,
+            session.get(CurrentRelease, (context.scope.space_id, "current")),
+        ).snapshot_id
         == current_before
     )
     session.scalar(select(func.count()).select_from(ChangeSet))
+
+
+def test_ra7_approve_rejects_request_replacement_before_approval_write(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _, request_path, manifest_path, _ = _write_approved_run(
+        session, tmp_path
+    )
+    approvals_before = session.scalar(
+        select(func.count()).select_from(ReleaseApproval)
+    )
+    changed = _change_path_during_fd_read(
+        monkeypatch, request_path, mode="replace"
+    )
+    output = tmp_path / "second-approval-race.json"
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.approve_manifest(
+            context,
+            request_path=request_path,
+            manifest_path=manifest_path,
+            output_path=output,
+        )
+
+    assert changed()
+    assert caught.value.code == "artifact_changed_during_read"
+    assert (
+        session.scalar(select(func.count()).select_from(ReleaseApproval))
+        == approvals_before
+    )
+    assert not output.exists()
+
+
+def test_ra7_promote_rejects_manifest_replacement_before_cas(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, _, request_path, manifest_path, approval_path = _write_approved_run(
+        session, tmp_path
+    )
+    current_before = cast(
+        CurrentRelease,
+        session.get(CurrentRelease, (context.scope.space_id, "current")),
+    ).snapshot_id
+    changed = _change_path_during_fd_read(
+        monkeypatch, manifest_path, mode="replace"
+    )
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.promote_approved(
+            context,
+            request_path=request_path,
+            manifest_path=manifest_path,
+            approval_receipt_path=approval_path,
+            output_path=tmp_path / "release-proof-race.json",
+        )
+
+    assert changed()
+    assert caught.value.code == "artifact_changed_during_read"
+    assert (
+        cast(
+            CurrentRelease,
+            session.get(CurrentRelease, (context.scope.space_id, "current")),
+        ).snapshot_id
+        == current_before
+    )
+
+
+def test_ra7_promote_manifest_tamper_keeps_alert_for_caller_commit(
+    session: Session,
+    tmp_path: Path,
+) -> None:
+    context, _, request_path, manifest_path, approval_path = _write_approved_run(
+        session, tmp_path
+    )
+    current_before = cast(
+        CurrentRelease,
+        session.get(CurrentRelease, (context.scope.space_id, "current")),
+    ).snapshot_id
+    manifest = release_cli._load_release_manifest(manifest_path)
+    session.execute(text("DROP TRIGGER trg_snapshot_facts_update_guard_018"))
+    session.execute(
+        text("UPDATE snapshot_facts SET value=:value WHERE snapshot_id=:snapshot_id"),
+        {"value": '{"text":"tampered"}', "snapshot_id": manifest.snapshot_id},
+    )
+    session.commit()
+    alerts_before = session.scalar(select(func.count()).select_from(ReleaseAlert))
+
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.promote_approved(
+            context,
+            request_path=request_path,
+            manifest_path=manifest_path,
+            approval_receipt_path=approval_path,
+            output_path=tmp_path / "tamper-release-proof.json",
+        )
+
+    assert caught.value.code == "manifest_tamper"
+    assert (
+        cast(
+            CurrentRelease,
+            session.get(CurrentRelease, (context.scope.space_id, "current")),
+        ).snapshot_id
+        == current_before
+    )
+    assert session.scalar(select(func.count()).select_from(ReleaseAlert)) == cast(
+        int, alerts_before
+    ) + 1
+    alert = session.scalar(
+        select(ReleaseAlert).where(
+            ReleaseAlert.space_id == context.scope.space_id,
+            ReleaseAlert.code == "manifest_tamper",
+        )
+    )
+    assert alert is not None
+    alert_id = alert.id
+    session.commit()
+    session.expire_all()
+    assert session.get(ReleaseAlert, alert_id) is not None
 
 
 def test_ra7_seal_requires_injected_actual_approved_snapshot_reader(
@@ -2100,12 +2477,14 @@ def test_ra7_seal_rejects_self_declared_proof_when_actual_reader_fails(
 
 
 class _TamperedApprovedReader:
-    def __init__(self, actual: object, mutation: str) -> None:
+    def __init__(self, actual: ApprovedSnapshotReader, mutation: str) -> None:
         self._actual = actual
         self._mutation = mutation
 
-    def read_current(self, scope: object) -> ApprovedSnapshotResult | ServingFailure:
-        result = self._actual.read_current(scope)  # type: ignore[attr-defined]
+    def read_current(
+        self, scope: KnowledgeScope
+    ) -> ApprovedSnapshotResult | ServingFailure:
+        result = self._actual.read_current(scope)
         if not isinstance(result, ApprovedSnapshotResult):
             return result
         if self._mutation == "reverse":
