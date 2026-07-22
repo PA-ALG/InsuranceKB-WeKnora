@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
-from types import MappingProxyType
-from typing import Annotated, Any, Literal, Self
+from collections.abc import Iterator, Mapping
+from typing import Annotated, Any, Literal, Self, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -38,6 +37,42 @@ ApprovalState = Literal["approved", "pending", "revoked"]
 StrictPositiveInt = Annotated[int, Field(strict=True, gt=0)]
 
 _CONTENT_HASH_DOMAIN = b"insurancekb.template-package.content.v1\0"
+
+_ValueT = TypeVar("_ValueT")
+
+
+class _FrozenMapping(
+    tuple[tuple[str, _ValueT], ...],
+    Mapping[str, _ValueT],
+):
+    """Immutable mapping whose complete authority state is inspectable."""
+
+    __slots__ = ()
+
+    def __new__(
+        cls,
+        items: tuple[tuple[str, _ValueT], ...],
+    ) -> Self:
+        if type(items) is not tuple:
+            raise TypeError("frozen mapping items must use an exact tuple")
+        seen: set[str] = set()
+        for item in items:
+            if type(item) is not tuple or len(item) != 2:
+                raise TypeError("frozen mapping entries must use exact pairs")
+            key, _value = item
+            if type(key) is not str or key in seen:
+                raise ValueError("frozen mapping keys must be unique exact strings")
+            seen.add(key)
+        return tuple.__new__(cls, items)
+
+    def __getitem__(self, key: str) -> _ValueT:  # type: ignore[override]
+        for item_key, value in tuple.__iter__(self):
+            if item_key == key:
+                return value
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:  # type: ignore[override]
+        return (key for key, _value in tuple.__iter__(self))
 
 
 class _ImmutableModel(BaseModel):
@@ -201,14 +236,14 @@ class TemplatePackageContent(_ImmutableModel):
     ) -> Mapping[str, str]:
         if any(not prompt.strip() for prompt in value.values()):
             raise ValueError("role prompt bodies must contain non-whitespace text")
-        return MappingProxyType(dict(value))
+        return _FrozenMapping(tuple(value.items()))
 
     @field_validator("attempt_limits", mode="after")
     @classmethod
     def freeze_attempt_limits(
         cls, value: Mapping[str, int]
     ) -> Mapping[str, int]:
-        return MappingProxyType(dict(value))
+        return _FrozenMapping(tuple(value.items()))
 
     @field_serializer("role_prompts")
     def serialize_role_prompts(self, value: Mapping[str, str]) -> dict[str, str]:
@@ -301,20 +336,30 @@ def _snapshot_content_value(value: object) -> object:
             field_name: _snapshot_content_value(snapshot[field_name])
             for field_name in field_names
         }
-    if isinstance(value, Mapping):
-        items = tuple(value.items())
+    mapping_items: tuple[tuple[object, object], ...] | None
+    if type(value) is dict:
+        mapping_items = tuple(value.items())
+    elif type(value) is _FrozenMapping:
+        mapping_items = tuple(tuple.__iter__(value))
+    else:
+        mapping_items = None
+    if mapping_items is not None:
         result: dict[str, object] = {}
-        for item in items:
-            if not isinstance(item, tuple) or len(item) != 2:
+        for item in mapping_items:
+            if type(item) is not tuple or len(item) != 2:
                 raise ValueError("content mapping items must be exact pairs")
             key, item_value = item
             if type(key) is not str or key in result:
                 raise ValueError("content mapping keys must be unique exact strings")
             result[key] = _snapshot_content_value(item_value)
         return result
-    if isinstance(value, (tuple, list)):
+    if type(value) is tuple:
         return tuple(_snapshot_content_value(item) for item in value)
-    return value
+    if type(value) is list:
+        return [_snapshot_content_value(item) for item in value]
+    if value is None or type(value) in {str, int, bool}:
+        return value
+    raise TypeError("content contains a non-canonical value type")
 
 
 def _require_unicode_scalars(value: object) -> None:

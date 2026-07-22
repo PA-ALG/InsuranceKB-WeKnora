@@ -7,9 +7,10 @@ import copy
 import hashlib
 import inspect
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Literal
+from types import MappingProxyType
+from typing import Literal, overload
 
 import pytest
 from pydantic import ValidationError
@@ -235,6 +236,55 @@ class _RaisingItemsMapping(dict[str, object]):
         raise RuntimeError("hostile mapping items")
 
 
+class _HiddenList(list[object]):
+    authority: str
+
+
+class _HiddenTuple(tuple[object, ...]):
+    authority: str
+
+
+class _HiddenDict(dict[str, object]):
+    authority: str
+
+
+class _CustomSequence(Sequence[object]):
+    authority: str
+
+    def __init__(self, values: Sequence[object]) -> None:
+        self._values = tuple(values)
+        self.authority = "unhashed"
+
+    @overload
+    def __getitem__(self, index: int) -> object: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[object]: ...
+
+    def __getitem__(self, index: int | slice) -> object | Sequence[object]:
+        return self._values[index]
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
+class _CustomMapping(Mapping[str, object]):
+    authority: str
+
+    def __init__(self, values: Mapping[str, object]) -> None:
+        self._values = dict(values)
+        self.authority = "unhashed"
+
+    def __getitem__(self, key: str) -> object:
+        return self._values[key]
+
+    def __iter__(self) -> object:  # type: ignore[override]
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
 class _ResolutionRequestSubclass(ResolutionRequest):
     pass
 
@@ -264,6 +314,65 @@ def _request(*, space_id: str = "space-a", family_id: str = "family-ordinary") -
         document_type_id="document-terms",
         product_family_id=family_id,
     )
+
+
+def _poisoned_content_container(
+    kind: str,
+    *,
+    marker: str,
+) -> tuple[TemplatePackageContent, TemplatePackageContent]:
+    canonical = _content(marker)
+    values = {
+        field_name: getattr(canonical, field_name)
+        for field_name in TemplatePackageContent.model_fields
+    }
+    if kind == "list-subclass-top":
+        hidden_list = _HiddenList(canonical.field_groups)
+        hidden_list.authority = "unhashed"
+        values["field_groups"] = hidden_list
+    elif kind == "tuple-subclass-nested":
+        group = canonical.field_groups[0]
+        hidden_tuple = _HiddenTuple(group.field_ids)
+        hidden_tuple.authority = "unhashed"
+        poisoned_group = FieldGroup.model_construct(
+            group_id=group.group_id,
+            field_ids=hidden_tuple,
+            evidence_roles=group.evidence_roles,
+        )
+        values["field_groups"] = (poisoned_group,)
+    elif kind == "dict-subclass-top":
+        hidden_dict = _HiddenDict(canonical.role_prompts)
+        hidden_dict.authority = "unhashed"
+        values["role_prompts"] = hidden_dict
+    elif kind == "list-subclass-nested":
+        receipt = canonical.provenance[0]
+        hidden_list = _HiddenList(receipt.characterization_tests)
+        hidden_list.authority = "unhashed"
+        poisoned_receipt = ProvenanceReceipt.model_construct(
+            **{
+                **{
+                    field_name: getattr(receipt, field_name)
+                    for field_name in ProvenanceReceipt.model_fields
+                },
+                "characterization_tests": hidden_list,
+            }
+        )
+        values["provenance"] = (poisoned_receipt,)
+    elif kind == "custom-sequence-top":
+        values["field_groups"] = _CustomSequence(canonical.field_groups)
+    elif kind == "custom-mapping-top":
+        values["role_prompts"] = _CustomMapping(canonical.role_prompts)
+    elif kind == "mappingproxy-hidden-dict-top":
+        hidden_dict = _HiddenDict(canonical.role_prompts)
+        hidden_dict.authority = "unhashed"
+        values["role_prompts"] = MappingProxyType(hidden_dict)
+    elif kind == "mappingproxy-custom-mapping-top":
+        values["role_prompts"] = MappingProxyType(
+            _CustomMapping(canonical.role_prompts)
+        )
+    else:  # pragma: no cover - test matrix is closed above
+        raise AssertionError(f"unknown poison kind: {kind}")
+    return canonical, TemplatePackageContent.model_construct(**values)
 
 
 def _stacked_resolved() -> ResolvedTemplate:
@@ -397,6 +506,55 @@ def test_tr1_public_hash_normalizes_hostile_mapping_exception() -> None:
 
 
 @pytest.mark.parametrize(
+    "kind",
+    [
+        "list-subclass-top",
+        "tuple-subclass-nested",
+        "dict-subclass-top",
+        "list-subclass-nested",
+        "custom-sequence-top",
+        "custom-mapping-top",
+        "mappingproxy-hidden-dict-top",
+        "mappingproxy-custom-mapping-top",
+    ],
+)
+def test_tr1_public_hash_rejects_non_exact_or_hidden_content_containers(
+    kind: str,
+) -> None:
+    canonical, poisoned = _poisoned_content_container(
+        kind,
+        marker=f"hash-{kind}",
+    )
+
+    assert canonical_content_hash(canonical)
+    with pytest.raises(ValueError, match="invalid_template_content"):
+        canonical_content_hash(poisoned)
+
+
+def test_tr1_public_hash_accepts_exact_builtin_container_normalization() -> None:
+    canonical = _content("exact-containers")
+    group = canonical.field_groups[0]
+    exact_list_group = FieldGroup.model_construct(
+        group_id=group.group_id,
+        field_ids=list(group.field_ids),
+        evidence_roles=tuple(group.evidence_roles),
+    )
+    constructed = TemplatePackageContent.model_construct(
+        **{
+            **{
+                field_name: getattr(canonical, field_name)
+                for field_name in TemplatePackageContent.model_fields
+            },
+            "field_groups": [exact_list_group],
+            "role_prompts": dict(canonical.role_prompts),
+            "attempt_limits": dict(canonical.attempt_limits),
+        }
+    )
+
+    assert canonical_content_hash(constructed) == canonical_content_hash(canonical)
+
+
+@pytest.mark.parametrize(
     "storage_name",
     ["__pydantic_extra__", "__pydantic_private__", "__pydantic_fields_set__"],
 )
@@ -524,6 +682,32 @@ def test_tr1_content_is_deeply_immutable() -> None:
         content.attempt_limits["extract"] = 99  # type: ignore[index]
 
 
+@pytest.mark.parametrize("setter_name", ["setattr", "object-setattr"])
+def test_tr1_code_owned_mapping_authority_storage_cannot_be_rebound(
+    setter_name: str,
+) -> None:
+    content = _content("mapping-storage")
+    resolved = _stacked_resolved()
+    targets = (
+        (content.role_prompts, (("extract", "tampered"),)),
+        (content.attempt_limits, (("extract", 99),)),
+        (resolved.content.role_prompts, (("extract", "tampered"),)),
+        (
+            resolved.source_chain[0].content.attempt_limits,
+            (("extract", 99),),
+        ),
+    )
+
+    for mapping, replacement in targets:
+        before = dict(mapping)
+        with pytest.raises((AttributeError, TypeError)):
+            if setter_name == "setattr":
+                mapping._items = replacement  # type: ignore[union-attr]
+            else:
+                object.__setattr__(mapping, "_items", replacement)
+        assert dict(mapping) == before
+
+
 @pytest.mark.parametrize("approval_state", ["pending", "revoked"])
 def test_tr1_unapproved_template_fails_closed(approval_state: _ApprovalState) -> None:
     global_scope = _scope("global")
@@ -622,6 +806,51 @@ def test_tr1_corrupt_persisted_full_hash_is_recomputed_at_resolver_boundary() ->
         resolve_template(_MemoryCatalog((corrupt,)), _request())
 
     assert exc_info.value.reason_code == "content_hash_mismatch"
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "list-subclass-top",
+        "tuple-subclass-nested",
+        "dict-subclass-top",
+        "list-subclass-nested",
+        "custom-sequence-top",
+        "custom-mapping-top",
+        "mappingproxy-hidden-dict-top",
+        "mappingproxy-custom-mapping-top",
+    ],
+)
+def test_tr1_resolver_rejects_approved_content_with_hidden_container_state(
+    kind: str,
+) -> None:
+    scope = _scope("global")
+    canonical, poisoned = _poisoned_content_container(
+        kind,
+        marker=f"resolver-{kind}",
+    )
+    approved = _entry(scope, canonical, version_id=f"v-{kind}")
+    version = TemplateVersion.model_construct(
+        **{
+            **{
+                field_name: getattr(approved.version, field_name)
+                for field_name in TemplateVersion.model_fields
+            },
+            "content": poisoned,
+        }
+    )
+    candidate = TemplateCatalogEntry.model_construct(
+        version=version,
+        approval=approved.approval,
+    )
+
+    with pytest.raises(
+        TemplateResolutionError,
+        match="invalid_catalog_entry",
+    ) as exc_info:
+        resolve_template(_MemoryCatalog((candidate,)), _request())
+
+    assert exc_info.value.reason_code == "invalid_catalog_entry"
 
 
 def test_tr1_partial_catalog_dtos_fail_with_typed_boundary_error() -> None:
