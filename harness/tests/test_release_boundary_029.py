@@ -535,6 +535,7 @@ def test_ra6_test_only_module_io_entrypoints_require_capability_first() -> None:
         "scalars",
         "update_wiki_page",
     }
+    indirect_io_helpers = {"require_current_scope"}
     discovered: set[str] = set()
     for module in (release_publisher_module, legacy_publisher_module):
         tree = ast.parse(inspect.getsource(module))
@@ -543,10 +544,23 @@ def test_ra6_test_only_module_io_entrypoints_require_capability_first() -> None:
                 continue
             touches_io = any(
                 isinstance(child, ast.Call)
-                and isinstance(child.func, ast.Attribute)
-                and isinstance(child.func.value, ast.Name)
-                and child.func.value.id in {"client", "session"}
-                and child.func.attr in io_methods
+                and (
+                    (
+                        isinstance(child.func, ast.Attribute)
+                        and isinstance(child.func.value, ast.Name)
+                        and child.func.value.id in {"client", "session"}
+                        and child.func.attr in io_methods
+                    )
+                    or (
+                        isinstance(child.func, ast.Name)
+                        and child.func.id in indirect_io_helpers
+                        and len(child.args) >= 2
+                        and isinstance(child.args[0], ast.Name)
+                        and child.args[0].id == "session"
+                        and isinstance(child.args[1], ast.Name)
+                        and child.args[1].id == "scope"
+                    )
+                )
                 for child in ast.walk(node)
             )
             if not touches_io:
@@ -571,11 +585,18 @@ def test_ra6_test_only_module_io_entrypoints_require_capability_first() -> None:
                 isinstance(first.value.func, ast.Name)
                 and first.value.func.id == "_require_staging_capability"
             ), qualified_name
-    assert {
+    assert discovered == {
+        "tests.support.legacy_publisher_007._move_pointer",
+        "tests.support.legacy_publisher_007._snapshot_claims_for_publish",
+        "tests.support.legacy_publisher_007._validate_rollback_pages",
         "tests.support.legacy_publisher_007.legacy_publish_product_version",
         "tests.support.legacy_publisher_007.legacy_rollback_to_snapshot",
+        "tests.support.release_publisher_018._require_label_available",
+        "tests.support.release_publisher_018._require_scoped_product_version",
+        "tests.support.release_publisher_018._require_scoped_snapshot",
         "tests.support.release_publisher_018._upsert_page",
-    } <= discovered
+        "tests.support.release_publisher_018._validate_scope",
+    }
 
 
 @pytest.mark.asyncio
