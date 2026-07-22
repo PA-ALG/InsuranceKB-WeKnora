@@ -380,6 +380,9 @@ class _ControllerRemoteReceiptObservation:
     remote_manifest_digest: str
     observed_at: datetime
     expires_at: datetime
+    authorization: ProvisioningAuthorization
+    permit: InfrastructureCreatePermit
+    trusted_authorities: Mapping[str, TrustedAuthority]
     _seal: object
 
     __slots__ = (
@@ -392,6 +395,9 @@ class _ControllerRemoteReceiptObservation:
         "remote_manifest_digest",
         "observed_at",
         "expires_at",
+        "authorization",
+        "permit",
+        "trusted_authorities",
         "_seal",
     )
 
@@ -413,6 +419,9 @@ class _ControllerReceiptPublicationProof:
     scope: str
     observed_at: datetime
     expires_at: datetime
+    authorization: ProvisioningAuthorization
+    permit: InfrastructureCreatePermit
+    trusted_authorities: Mapping[str, TrustedAuthority]
     _seal: object
 
     __slots__ = (
@@ -427,6 +436,9 @@ class _ControllerReceiptPublicationProof:
         "scope",
         "observed_at",
         "expires_at",
+        "authorization",
+        "permit",
+        "trusted_authorities",
         "_seal",
     )
 
@@ -1040,7 +1052,11 @@ class _OperationStore:
                 "operation_artifact_unsafe", "deployment artifact readback mismatch"
             )
 
-    def atomic_write_absent_on_failure(self, name: str, content: bytes) -> None:
+    def atomic_write_absent_on_failure(
+        self,
+        name: str,
+        content: bytes,
+    ) -> tuple[int, int] | None:
         """Publish a new content-addressed artifact or leave no named artifact."""
 
         existing = self.read(name)
@@ -1050,7 +1066,7 @@ class _OperationStore:
                     "operation_artifact_unsafe",
                     "content-addressed deployment artifact conflicts",
                 )
-            return
+            return None
         if not content or len(content) > _MAX_ARTIFACT_BYTES:
             raise DeploymentControlBlocked(
                 "operation_artifact_unsafe", "deployment artifact size is invalid"
@@ -1058,7 +1074,8 @@ class _OperationStore:
         temporary = f".{name}.{secrets.token_hex(12)}.tmp"
         descriptor = -1
         staged = True
-        published = False
+        rename_attempted = False
+        staging_identity: tuple[int, int] | None = None
         try:
             descriptor = os.open(
                 temporary,
@@ -1067,6 +1084,7 @@ class _OperationStore:
                 dir_fd=self._root_fd,
             )
             metadata = os.fstat(descriptor)
+            staging_identity = (metadata.st_dev, metadata.st_ino)
             if (
                 not stat.S_ISREG(metadata.st_mode)
                 or metadata.st_uid != os.geteuid()
@@ -1084,6 +1102,7 @@ class _OperationStore:
             os.fsync(descriptor)
             os.close(descriptor)
             descriptor = -1
+            rename_attempted = True
             os.replace(
                 temporary,
                 name,
@@ -1091,18 +1110,21 @@ class _OperationStore:
                 dst_dir_fd=self._root_fd,
             )
             staged = False
-            published = True
             os.fsync(self._root_fd)
-        except OSError as exc:
-            if published:
+        except BaseException as exc:
+            if rename_attempted and staging_identity is not None:
                 try:
-                    os.unlink(name, dir_fd=self._root_fd)
-                    os.fsync(self._root_fd)
-                except OSError:
-                    pass
-            raise DeploymentControlBlocked(
-                "operation_artifact_unsafe", "deployment artifact write failed"
-            ) from exc
+                    self.remove_if_owned(name, staging_identity)
+                except BaseException as cleanup_exc:
+                    exc.add_note(
+                        "publication cleanup conflict: "
+                        f"{type(cleanup_exc).__name__}"
+                    )
+            if isinstance(exc, OSError):
+                raise DeploymentControlBlocked(
+                    "operation_artifact_unsafe", "deployment artifact write failed"
+                ) from exc
+            raise
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
@@ -1111,15 +1133,146 @@ class _OperationStore:
                     os.unlink(temporary, dir_fd=self._root_fd)
                 except OSError:
                     pass
-        if self.read(name) != content:
+        assert staging_identity is not None
+        try:
+            if self.read(name) != content:
+                raise DeploymentControlBlocked(
+                    "operation_artifact_unsafe", "deployment artifact readback mismatch"
+                )
+        except BaseException as exc:
             try:
-                os.unlink(name, dir_fd=self._root_fd)
-                os.fsync(self._root_fd)
-            except OSError:
-                pass
-            raise DeploymentControlBlocked(
-                "operation_artifact_unsafe", "deployment artifact readback mismatch"
+                self.remove_if_owned(name, staging_identity)
+            except BaseException as cleanup_exc:
+                exc.add_note(
+                    "publication cleanup conflict: "
+                    f"{type(cleanup_exc).__name__}"
+                )
+            raise
+        return staging_identity
+
+    def remove_if_owned(self, name: str, publication_identity: tuple[int, int] | None) -> bool:
+        """Durably remove only the inode published by this invocation."""
+
+        if publication_identity is None:
+            return False
+        quarantine = f".cleanup-{secrets.token_hex(16)}.tmp"
+        try:
+            # Move the current directory entry first.  The subsequent decision
+            # applies to the inode that was atomically moved, never to a path
+            # that can be replaced between a stat and an unlink.
+            os.rename(
+                name,
+                quarantine,
+                src_dir_fd=self._root_fd,
+                dst_dir_fd=self._root_fd,
             )
+        except BaseException as exc:
+            try:
+                os.stat(
+                    quarantine,
+                    dir_fd=self._root_fd,
+                    follow_symlinks=False,
+                )
+            except OSError:
+                if isinstance(exc, OSError):
+                    return False
+                raise
+            try:
+                self._resolve_quarantined_entry(
+                    name,
+                    quarantine,
+                    publication_identity,
+                )
+            except BaseException as cleanup_exc:
+                exc.add_note(
+                    "quarantine cleanup conflict: "
+                    f"{type(cleanup_exc).__name__}"
+                )
+            raise
+        return self._resolve_quarantined_entry(name, quarantine, publication_identity)
+
+    def _resolve_quarantined_entry(
+        self,
+        name: str,
+        quarantine: str,
+        publication_identity: tuple[int, int],
+    ) -> bool:
+        """Resolve a successfully quarantined entry without path-based deletion."""
+
+        try:
+            path_metadata = os.stat(
+                quarantine,
+                dir_fd=self._root_fd,
+                follow_symlinks=False,
+            )
+        except OSError:
+            self._restore_or_preserve_quarantined_entry(name, quarantine)
+            return False
+        if not stat.S_ISREG(path_metadata.st_mode):
+            self._restore_or_preserve_quarantined_entry(name, quarantine)
+            return False
+
+        descriptor = -1
+        try:
+            try:
+                descriptor = os.open(
+                    quarantine,
+                    os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=self._root_fd,
+                )
+            except OSError:
+                self._restore_or_preserve_quarantined_entry(name, quarantine)
+                return False
+            metadata = os.fstat(descriptor)
+            owned = (
+                stat.S_ISREG(metadata.st_mode)
+                and metadata.st_uid == os.geteuid()
+                and stat.S_IMODE(metadata.st_mode) == _PRIVATE_FILE_MODE
+                and metadata.st_nlink == 1
+                and (metadata.st_dev, metadata.st_ino) == publication_identity
+            )
+            if not owned:
+                self._restore_or_preserve_quarantined_entry(name, quarantine)
+                return False
+            os.unlink(quarantine, dir_fd=self._root_fd)
+            os.fsync(self._root_fd)
+            return True
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
+    def _restore_or_preserve_quarantined_entry(self, name: str, quarantine: str) -> None:
+        """Restore a foreign entry, or preserve it under an explicit conflict name."""
+
+        try:
+            os.link(
+                quarantine,
+                name,
+                src_dir_fd=self._root_fd,
+                dst_dir_fd=self._root_fd,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            preserved = f".foreign-preserved-{secrets.token_hex(16)}.artifact"
+            try:
+                os.rename(
+                    quarantine,
+                    preserved,
+                    src_dir_fd=self._root_fd,
+                    dst_dir_fd=self._root_fd,
+                )
+                os.fsync(self._root_fd)
+            except OSError as preserve_exc:
+                raise DeploymentControlBlocked(
+                    "operation_artifact_cleanup_conflict",
+                    "foreign cleanup conflict could not be preserved",
+                ) from preserve_exc
+            raise DeploymentControlBlocked(
+                "operation_artifact_cleanup_conflict",
+                f"foreign cleanup conflict preserved as {preserved}",
+            ) from exc
+        os.unlink(quarantine, dir_fd=self._root_fd)
+        os.fsync(self._root_fd)
 
 
 class DeploymentController:
@@ -1260,7 +1413,8 @@ class DeploymentController:
             (weak_cap, topology.weak),
         ):
             if (
-                capability.run_identity != topology.run_identity
+                capability.topology_digest != topology.topology_digest
+                or capability.run_identity != topology.run_identity
                 or capability.purpose != topology.purpose
                 or capability.scope != topology.scope
                 or capability.reserve_id != deployment.reserve_id
@@ -1589,7 +1743,15 @@ class DeploymentController:
             )
             journal = self._advance_to_prepared(journal_name, journal)
             if journal.state == "receipted":
-                return self._restore_receipt(journal_name, journal, payload, request)
+                return self._restore_receipt(
+                    journal_name,
+                    journal,
+                    payload,
+                    request,
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
+                )
 
             payload, trusted_authorities = self._require_fresh_provisioning_boundary(
                 authorization=authorization,
@@ -1608,7 +1770,16 @@ class DeploymentController:
                         "remote deployment predates this operation send intent",
                     )
                 journal = self._record_ownership(journal_name, journal, transition="reconciled")
-                return self._finish_receipt(journal_name, journal, payload, request, match)
+                return self._finish_receipt(
+                    journal_name,
+                    journal,
+                    payload,
+                    request,
+                    match,
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
+                )
 
             if journal.send_started:
                 raise DeploymentControlBlocked(
@@ -1644,10 +1815,18 @@ class DeploymentController:
                     )
                 )
                 self._require_exact_manifest(created, request)
-                if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
-                    self._require_production_dependencies()
+                payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
+                )
                 detail = _parse_manifest(
                     self._transport.deployment_detail(deployed_model=created.deployed_model)
+                )
+                payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
                 )
                 if canonical_json_bytes(detail) != canonical_json_bytes(created):
                     raise DeploymentControlBlocked(
@@ -1655,7 +1834,16 @@ class DeploymentController:
                         "provider detail does not match create manifest",
                     )
                 journal = self._record_ownership(journal_name, journal, transition="created")
-                return self._finish_receipt(journal_name, journal, payload, request, detail)
+                return self._finish_receipt(
+                    journal_name,
+                    journal,
+                    payload,
+                    request,
+                    detail,
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
+                )
             except (
                 DeploymentProviderConflict,
                 DeploymentTransportError,
@@ -1690,7 +1878,16 @@ class DeploymentController:
                         "provider mutation outcome requires manual reconciliation",
                     ) from None
                 journal = self._record_ownership(journal_name, journal, transition="reconciled")
-                return self._finish_receipt(journal_name, journal, payload, request, match)
+                return self._finish_receipt(
+                    journal_name,
+                    journal,
+                    payload,
+                    request,
+                    match,
+                    authorization=authorization,
+                    permit=permit,
+                    trusted_authorities=trusted_authorities,
+                )
 
     def _require_fresh_provisioning_boundary(
         self,
@@ -1854,7 +2051,7 @@ class DeploymentController:
         self,
         *,
         expected_fingerprint: str,
-    ) -> None:
+    ) -> VerifiedFinalTopology:
         self._require_production_dependencies()
         topology, strong, weak = self._production_topology_refresh_inputs()
         if self._topology_refresh_fingerprint(topology, strong, weak) != expected_fingerprint:
@@ -1862,6 +2059,7 @@ class DeploymentController:
                 "production_topology_drift",
                 "root-owned topology changed during provider observation",
             )
+        return topology
 
     def _refresh_topology_reconciliation_batch_for_testing(
         self,
@@ -1956,14 +2154,16 @@ class DeploymentController:
             started_at = self._clock()
             identity = self._topology_transport_identity(
                 now=started_at,
+                topology_digest=topology_digest,
                 provider_cap_evidence_digest=provider_cap_evidence_digest,
                 provider_cap_approval_digest=provider_cap_approval_digest,
             )
             self._require_target_transport(strong_target, identity)
             self._require_target_transport(weak_target, identity)
             try:
+                publication_topology: VerifiedFinalTopology | None = None
                 if production_fingerprint is not None:
-                    self._require_fresh_production_topology_refresh(
+                    publication_topology = self._require_fresh_production_topology_refresh(
                         expected_fingerprint=production_fingerprint
                     )
                 strong_manifest = _parse_manifest(
@@ -2007,8 +2207,18 @@ class DeploymentController:
                 ) from exc
 
             observed_at = self._clock()
+            if production_fingerprint is not None:
+                publication_topology = self._require_fresh_production_topology_refresh(
+                    expected_fingerprint=production_fingerprint
+                )
+                if observed_at >= publication_topology.valid_until:
+                    raise DeploymentControlBlocked(
+                        "production_topology_drift",
+                        "root-owned topology expired before observation publication",
+                    )
             identity = self._topology_transport_identity(
                 now=observed_at,
+                topology_digest=topology_digest,
                 provider_cap_evidence_digest=provider_cap_evidence_digest,
                 provider_cap_approval_digest=provider_cap_approval_digest,
             )
@@ -2017,6 +2227,11 @@ class DeploymentController:
             expires_at = min(
                 observed_at + _RECONCILIATION_FRESHNESS,
                 identity.expires_at,
+                *(
+                    (publication_topology.valid_until,)
+                    if publication_topology is not None
+                    else ()
+                ),
             )
             batch = TopologyReconciliationObservationBatchV1(
                 version=("insurancekb.run-admission.topology-reconciliation-observation-batch.v1"),
@@ -2039,22 +2254,43 @@ class DeploymentController:
                 _TOPOLOGY_OBSERVATION_BATCH_DOMAIN + batch_bytes
             ).hexdigest()
             artifact_name = f"{batch_digest}.topology-observation-batch.json"
-            self._store.atomic_write_absent_on_failure(artifact_name, batch_bytes)
-            raw = self._store.read(artifact_name)
+            if production_fingerprint is not None:
+                self._require_fresh_production_topology_refresh(
+                    expected_fingerprint=production_fingerprint
+                )
+            publication_identity = self._store.atomic_write_absent_on_failure(
+                artifact_name,
+                batch_bytes,
+            )
             try:
-                restored = TopologyReconciliationObservationBatchV1.model_validate(
-                    _parse_json_bytes(raw or b"", maximum=_MAX_ARTIFACT_BYTES)
-                )
-            except (DeploymentControlBlocked, TypeError, ValueError) as exc:
-                raise DeploymentControlBlocked(
-                    "topology_observation_artifact_invalid",
-                    "topology observation artifact readback is invalid",
-                ) from exc
-            if canonical_json_bytes(restored) != batch_bytes:
-                raise DeploymentControlBlocked(
-                    "topology_observation_artifact_invalid",
-                    "topology observation artifact readback drifted",
-                )
+                try:
+                    raw = self._store.read(artifact_name)
+                    restored = TopologyReconciliationObservationBatchV1.model_validate(
+                        _parse_json_bytes(raw or b"", maximum=_MAX_ARTIFACT_BYTES)
+                    )
+                except (DeploymentControlBlocked, TypeError, ValueError) as exc:
+                    raise DeploymentControlBlocked(
+                        "topology_observation_artifact_invalid",
+                        "topology observation artifact readback is invalid",
+                    ) from exc
+                if canonical_json_bytes(restored) != batch_bytes:
+                    raise DeploymentControlBlocked(
+                        "topology_observation_artifact_invalid",
+                        "topology observation artifact readback drifted",
+                    )
+                if production_fingerprint is not None:
+                    self._require_fresh_production_topology_refresh(
+                        expected_fingerprint=production_fingerprint
+                    )
+            except BaseException as exc:
+                try:
+                    self._store.remove_if_owned(artifact_name, publication_identity)
+                except BaseException as cleanup_exc:
+                    exc.add_note(
+                        "topology publication cleanup conflict: "
+                        f"{type(cleanup_exc).__name__}"
+                    )
+                raise
             return TopologyReconciliationObservationBatchArtifact(
                 batch=restored,
                 batch_digest=batch_digest,
@@ -2065,6 +2301,7 @@ class DeploymentController:
         self,
         *,
         now: datetime,
+        topology_digest: str,
         provider_cap_evidence_digest: str,
         provider_cap_approval_digest: str,
     ) -> VerifiedDeploymentTransportIdentity:
@@ -2088,6 +2325,7 @@ class DeploymentController:
         if (
             self._transport.endpoint != BAILIAN_DEPLOYMENT_ENDPOINT
             or identity.endpoint != BAILIAN_DEPLOYMENT_ENDPOINT
+            or identity.topology_digest != topology_digest
             or identity.provider_cap_evidence_digest != provider_cap_evidence_digest
             or identity.provider_cap_approval_digest != provider_cap_approval_digest
         ):
@@ -2245,6 +2483,7 @@ class DeploymentController:
                 "remote_receipt_observation_invalid",
                 "fresh controller-owned provider observation is required",
             )
+        self._require_receipt_authority_fresh(observation)
         receipt = observation.receipt
         remote_manifest = observation.remote_manifest
         transport_identity = observation.transport_identity
@@ -2277,6 +2516,7 @@ class DeploymentController:
                 "receipt_invalid",
                 "immutable receipt artifact does not match reconciliation",
             )
+        self._require_receipt_authority_fresh(observation)
         reconciliation_digest = deployment_reconciliation_digest(
             issuer="bailian-deployment-controller-v1",
             transport_identity_digest=transport_identity.identity_digest,
@@ -2319,53 +2559,68 @@ class DeploymentController:
         )
         evidence_name = f"{reconciliation_digest}.receipt-reconciliation.json"
         evidence_bytes = canonical_json_bytes(evidence)
-        self._store.atomic_write_absent_on_failure(
+        self._require_receipt_authority_fresh(observation)
+        publication_identity = self._store.atomic_write_absent_on_failure(
             evidence_name,
             evidence_bytes,
         )
-        reconciliation_readback = self._store.read(evidence_name)
-        if reconciliation_readback is None:
-            raise DeploymentControlBlocked(
-                "receipt_reconciliation_invalid",
-                "immutable reconciliation evidence is unavailable",
-            )
         try:
-            verified_evidence = DeploymentReconciliationEvidenceV1.model_validate_json(
-                reconciliation_readback
-            )
-        except (TypeError, ValueError) as exc:
-            raise DeploymentControlBlocked(
-                "receipt_reconciliation_invalid",
-                "immutable reconciliation evidence is invalid",
-            ) from exc
-        if (
-            reconciliation_readback != evidence_bytes
-            or canonical_json_bytes(verified_evidence) != reconciliation_readback
-            or verified_evidence != evidence
-        ):
-            raise DeploymentControlBlocked(
-                "receipt_reconciliation_invalid",
-                "immutable reconciliation evidence does not match publication",
-            )
+            reconciliation_readback = self._store.read(evidence_name)
+            if reconciliation_readback is None:
+                raise DeploymentControlBlocked(
+                    "receipt_reconciliation_invalid",
+                    "immutable reconciliation evidence is unavailable",
+                )
+            try:
+                verified_evidence = DeploymentReconciliationEvidenceV1.model_validate_json(
+                    reconciliation_readback
+                )
+            except (TypeError, ValueError) as exc:
+                raise DeploymentControlBlocked(
+                    "receipt_reconciliation_invalid",
+                    "immutable reconciliation evidence is invalid",
+                ) from exc
+            if (
+                reconciliation_readback != evidence_bytes
+                or canonical_json_bytes(verified_evidence) != reconciliation_readback
+                or verified_evidence != evidence
+            ):
+                raise DeploymentControlBlocked(
+                    "receipt_reconciliation_invalid",
+                    "immutable reconciliation evidence does not match publication",
+                )
+            self._require_receipt_authority_fresh(observation)
 
-        proof = object.__new__(_ControllerReceiptPublicationProof)
-        proof_values: dict[str, object] = {
-            "evidence": verified_evidence,
-            "receipt_artifact_bytes": receipt_artifact_bytes,
-            "reconciliation_evidence_bytes": reconciliation_readback,
-            "transport_identity": transport_identity,
-            "transport_identity_digest": transport_identity.identity_digest,
-            "remote_manifest_digest": remote_manifest_digest,
-            "run_identity": run_identity,
-            "purpose": purpose,
-            "scope": scope,
-            "observed_at": observed_at,
-            "expires_at": expires_at,
-            "_seal": self._receipt_publication_seal,
-        }
-        for name, value in proof_values.items():
-            object.__setattr__(proof, name, value)
-        return self._mint_reconciled_receipt_from_publication(proof)
+            proof = object.__new__(_ControllerReceiptPublicationProof)
+            proof_values: dict[str, object] = {
+                "evidence": verified_evidence,
+                "receipt_artifact_bytes": receipt_artifact_bytes,
+                "reconciliation_evidence_bytes": reconciliation_readback,
+                "transport_identity": transport_identity,
+                "transport_identity_digest": transport_identity.identity_digest,
+                "remote_manifest_digest": remote_manifest_digest,
+                "run_identity": run_identity,
+                "purpose": purpose,
+                "scope": scope,
+                "observed_at": observed_at,
+                "expires_at": expires_at,
+                "authorization": observation.authorization,
+                "permit": observation.permit,
+                "trusted_authorities": dict(observation.trusted_authorities),
+                "_seal": self._receipt_publication_seal,
+            }
+            for name, value in proof_values.items():
+                object.__setattr__(proof, name, value)
+            return self._mint_reconciled_receipt_from_publication(proof)
+        except BaseException as exc:
+            try:
+                self._store.remove_if_owned(evidence_name, publication_identity)
+            except BaseException as cleanup_exc:
+                exc.add_note(
+                    "receipt publication cleanup conflict: "
+                    f"{type(cleanup_exc).__name__}"
+                )
+            raise
 
     def _mint_reconciled_receipt_from_publication(
         self,
@@ -2379,6 +2634,7 @@ class DeploymentController:
                 "receipt_publication_proof_invalid",
                 "controller-owned receipt publication proof is required",
             )
+        self._require_receipt_authority_fresh(proof)
         evidence = proof.evidence
         receipt_artifact_bytes = self._store.read(
             f"{evidence.receipt_digest}.receipt.json"
@@ -2428,6 +2684,7 @@ class DeploymentController:
                 "receipt_publication_proof_invalid",
                 "controller receipt publication proof has drifted",
             )
+        self._require_receipt_authority_fresh(proof)
         if self._testing_sentinel is _TESTING_MODE_SENTINEL:
             return _issue_verified_reconciled_receipt_for_testing(
                 receipt=evidence.receipt,
@@ -2465,6 +2722,16 @@ class DeploymentController:
             object.__setattr__(capability, name, value)
         _register_verified_reconciled_receipt_capability(capability, testing=False)
         return capability
+
+    def _require_receipt_authority_fresh(
+        self,
+        authority: _ControllerRemoteReceiptObservation | _ControllerReceiptPublicationProof,
+    ) -> None:
+        self._require_fresh_provisioning_boundary(
+            authorization=authority.authorization,
+            permit=authority.permit,
+            trusted_authorities=authority.trusted_authorities,
+        )
 
     def _require_current_reserve(self, permit: InfrastructureCreatePermit) -> None:
         try:
@@ -2653,19 +2920,29 @@ class DeploymentController:
         payload: ProvisioningAuthorizationPayload,
         request: BailianDeploymentRequest,
         manifest: ProviderDeploymentManifest,
+        *,
+        authorization: ProvisioningAuthorization,
+        permit: InfrastructureCreatePermit,
+        trusted_authorities: Mapping[str, TrustedAuthority],
     ) -> DeploymentControlResult:
         self._require_exact_manifest(manifest, request)
-        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
-            self._require_production_dependencies()
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
         detail = _parse_manifest(
             self._transport.deployment_detail(deployed_model=manifest.deployed_model)
+        )
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
         )
         if canonical_json_bytes(detail) != canonical_json_bytes(manifest):
             raise DeploymentControlBlocked(
                 "remote_manifest_mismatch", "remote manifest changed before receipt"
             )
-        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
-            self._require_production_dependencies()
         observed_at = self._clock()
         identity = self._verified_transport_identity(payload=payload, now=observed_at)
         manifest_digest = _remote_manifest_digest(detail)
@@ -2707,7 +2984,17 @@ class DeploymentController:
                 "receipt_conflict", "content-addressed receipt conflicts"
             )
         if existing is None:
+            payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+                authorization=authorization,
+                permit=permit,
+                trusted_authorities=trusted_authorities,
+            )
             self._store.atomic_write(receipt_name, artifact_bytes)
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
         observation = object.__new__(_ControllerRemoteReceiptObservation)
         observation_values: dict[str, object] = {
             "receipt": receipt,
@@ -2722,11 +3009,13 @@ class DeploymentController:
                 observed_at + _RECONCILIATION_FRESHNESS,
                 identity.expires_at,
             ),
+            "authorization": authorization,
+            "permit": permit,
+            "trusted_authorities": dict(trusted_authorities),
             "_seal": self._remote_observation_seal,
         }
         for name, value in observation_values.items():
             object.__setattr__(observation, name, value)
-        capability = self._publish_reconciled_receipt(observation)
         terminal = journal.model_copy(
             update={
                 "state": "receipted",
@@ -2735,6 +3024,8 @@ class DeploymentController:
             }
         )
         self._write_journal(journal_name, terminal)
+        self._require_receipt_authority_fresh(observation)
+        capability = self._publish_reconciled_receipt(observation)
         return DeploymentControlResult(
             receipt=receipt,
             receipt_capability=capability,
@@ -2749,7 +3040,16 @@ class DeploymentController:
         journal: DeploymentOperationJournal,
         payload: ProvisioningAuthorizationPayload,
         request: BailianDeploymentRequest,
+        *,
+        authorization: ProvisioningAuthorization,
+        permit: InfrastructureCreatePermit,
+        trusted_authorities: Mapping[str, TrustedAuthority],
     ) -> DeploymentControlResult:
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
         assert journal.receipt_digest is not None
         receipt_name = f"{journal.receipt_digest}.receipt.json"
         raw = self._store.read(receipt_name)
@@ -2767,7 +3067,16 @@ class DeploymentController:
             raise DeploymentControlBlocked(
                 "receipt_invalid", "stored receipt does not match journal"
             )
-        return self._finish_receipt_from_existing(journal_name, journal, payload, request, artifact)
+        return self._finish_receipt_from_existing(
+            journal_name,
+            journal,
+            payload,
+            request,
+            artifact,
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
 
     def _finish_receipt_from_existing(
         self,
@@ -2776,21 +3085,31 @@ class DeploymentController:
         payload: ProvisioningAuthorizationPayload,
         request: BailianDeploymentRequest,
         artifact: DeploymentReceiptArtifact,
+        *,
+        authorization: ProvisioningAuthorization,
+        permit: InfrastructureCreatePermit,
+        trusted_authorities: Mapping[str, TrustedAuthority],
     ) -> DeploymentControlResult:
         self._require_exact_manifest(artifact.remote_manifest, request)
-        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
-            self._require_production_dependencies()
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
         detail = _parse_manifest(
             self._transport.deployment_detail(
                 deployed_model=artifact.remote_manifest.deployed_model
             )
         )
+        payload, trusted_authorities = self._require_fresh_provisioning_boundary(
+            authorization=authorization,
+            permit=permit,
+            trusted_authorities=trusted_authorities,
+        )
         if canonical_json_bytes(detail) != canonical_json_bytes(artifact.remote_manifest):
             raise DeploymentControlBlocked(
                 "remote_manifest_mismatch", "remote manifest changed after receipt"
             )
-        if self._testing_sentinel is not _TESTING_MODE_SENTINEL:
-            self._require_production_dependencies()
         observed_at = self._clock()
         identity = self._verified_transport_identity(payload=payload, now=observed_at)
         manifest_digest = _remote_manifest_digest(detail)
@@ -2834,6 +3153,9 @@ class DeploymentController:
                 observed_at + _RECONCILIATION_FRESHNESS,
                 identity.expires_at,
             ),
+            "authorization": authorization,
+            "permit": permit,
+            "trusted_authorities": dict(trusted_authorities),
             "_seal": self._remote_observation_seal,
         }
         for name, value in observation_values.items():

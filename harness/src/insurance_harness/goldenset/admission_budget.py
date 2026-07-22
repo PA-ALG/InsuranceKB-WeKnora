@@ -138,6 +138,7 @@ def _transport_identity_digest_for_provider_cap(
         "currency": capability.currency,
         "provider_cap_evidence_digest": capability.evidence_digest,
         "provider_cap_approval_digest": capability.approval_digest,
+        "topology_digest": None,
         "coverage": tuple(sorted(capability.coverage)),
         "credential_fingerprint": capability.credential_ref.removeprefix("sha256:"),
         "expires_at": capability.expires_at,
@@ -995,6 +996,19 @@ def _final_topology_capability_snapshot(capability: VerifiedFinalTopology) -> by
             name: (tuple(sorted(value)) if isinstance(value, frozenset) else value)
             for name in type(capability).__slots__
             if name not in {"__weakref__", "_seal"}
+            for value in (getattr(capability, name),)
+        }
+    )
+
+
+def _final_topology_durable_snapshot(capability: VerifiedFinalTopology) -> bytes:
+    """Canonical stable facts; excludes per-load issuance metadata."""
+
+    return canonical_json_bytes(
+        {
+            name: (tuple(sorted(value)) if isinstance(value, frozenset) else value)
+            for name in type(capability).__slots__
+            if name not in {"__weakref__", "_seal", "issued_at"}
             for value in (getattr(capability, name),)
         }
     )
@@ -3640,7 +3654,7 @@ class BudgetLedger:
     ) -> VerifiedFinalTopology:
         """Rebuild a sealed capability from exact production ledger state."""
 
-        now = self._production_now()
+        self._require_production_mode()
         account_id = budget_account_identity(plan.run_identity, plan.purpose)
         expected_plan_digest = plan_payload_hash(plan)
         connection = self._connect()
@@ -3700,6 +3714,7 @@ class BudgetLedger:
                 or durable_record.weak.reserve_id != str(topology_row["weak_reserve_id"])
             ):
                 raise BudgetLedgerError("durable final topology record has drifted")
+            now = self._production_now()
             (
                 trusted_authorities,
                 budget_roles,
@@ -3756,6 +3771,13 @@ class BudgetLedger:
             reserve_rows: list[sqlite3.Row] = []
             cleanup_deadlines: list[datetime] = []
             pricing_expiries: list[datetime] = []
+            authorization_expiries: list[datetime] = []
+            authorization_rechecks: list[
+                tuple[ProvisioningAuthorization, ProvisioningAuthorizationPayload, str]
+            ] = []
+            pricing_rechecks: list[
+                tuple[str, PricingEvidenceApproval, int, datetime, str, str]
+            ] = []
             durable_deployments = (
                 durable_record.strong,
                 durable_record.weak,
@@ -3819,6 +3841,24 @@ class BudgetLedger:
                     or fresh_pricing.approval_digest != str(reserve["pricing_approval_digest"])
                 ):
                     raise BudgetLedgerError("final topology authorization has drifted")
+                authorization_rechecks.append(
+                    (
+                        authorization,
+                        payload,
+                        str(reserve["authorization_digest"]),
+                    )
+                )
+                authorization_expiries.append(payload.expires_at)
+                pricing_rechecks.append(
+                    (
+                        durable_deployment.pricing_evidence_json,
+                        durable_deployment.pricing_approval,
+                        pricing_duration,
+                        pricing_start,
+                        fresh_pricing.evidence_digest,
+                        fresh_pricing.approval_digest,
+                    )
+                )
                 try:
                     receipt_json = bytes(reserve["receipt_json"])
                     receipt = DeploymentReceipt.model_validate_json(receipt_json)
@@ -4005,7 +4045,81 @@ class BudgetLedger:
                 contract.price_expires_at,
                 *cleanup_deadlines,
                 *pricing_expiries,
+                *authorization_expiries,
             )
+            (
+                final_authorities,
+                final_budget_roles,
+                _final_provenance_roles,
+                _final_canary_roles,
+            ) = self._production_operational_configuration()
+            final_now = self._production_now()
+            try:
+                final_budget_proof = verify_budget_admission_contract(
+                    plan=plan,
+                    contract=contract,
+                    envelope=durable_record.budget_envelope,
+                    trusted_public_keys=final_authorities,
+                    expected_scope=expected_scope,
+                    authorized_roles=final_budget_roles,
+                    now=final_now,
+                )
+                final_provider_cap = verify_provider_cap_evidence(
+                    durable_record.provider_cap_evidence_json.encode("utf-8"),
+                    envelope=durable_record.provider_cap_approval,
+                    trusted_authorities=final_authorities,
+                    expected_scope=expected_scope,
+                    now=final_now,
+                )
+                for authorization, payload, expected_digest in authorization_rechecks:
+                    if (
+                        verify_provisioning_authorization(
+                            authorization,
+                            expected=payload,
+                            trusted_authorities=final_authorities,
+                            now=final_now,
+                        )
+                        != expected_digest
+                    ):
+                        raise AuthorizationVerificationError(
+                            "durable infrastructure authorization digest drifted"
+                        )
+                for (
+                    evidence_json,
+                    pricing_approval,
+                    duration,
+                    pricing_start,
+                    expected_evidence_digest,
+                    expected_approval_digest,
+                ) in pricing_rechecks:
+                    pricing = verify_pricing_evidence(
+                        evidence_json.encode("utf-8"),
+                        envelope=pricing_approval,
+                        trusted_authorities=final_authorities,
+                        expected_scope=expected_scope,
+                        now=final_now,
+                        fixed_duration_seconds=duration,
+                        cost_window_start=pricing_start,
+                        fixed_duration_segments_seconds=None,
+                    )
+                    if (
+                        pricing.evidence_digest != expected_evidence_digest
+                        or pricing.approval_digest != expected_approval_digest
+                    ):
+                        raise AuthorizationVerificationError(
+                            "durable deployment pricing digest drifted"
+                        )
+            except (ApprovalVerificationError, AuthorizationVerificationError) as exc:
+                raise BudgetLedgerError(
+                    "signed durable final topology evidence is stale or invalid"
+                ) from exc
+            if (
+                final_budget_proof.approval_digest != fresh_budget_proof.approval_digest
+                or final_budget_proof.contract_hash != fresh_budget_proof.contract_hash
+                or final_provider_cap != fresh_provider_cap
+            ):
+                raise BudgetLedgerError("durable final topology authority has drifted")
+            now = final_now
             if now >= valid_until:
                 raise BudgetLedgerError("final topology durable evidence is stale")
 
@@ -4060,6 +4174,81 @@ class BudgetLedger:
                 object.__setattr__(capability, name, value)
             object.__setattr__(capability, "_seal", _FINAL_TOPOLOGY_SEAL)
             connection.commit()
+            (
+                post_commit_authorities,
+                post_commit_budget_roles,
+                _post_commit_provenance_roles,
+                _post_commit_canary_roles,
+            ) = self._production_operational_configuration()
+            return_now = self._production_now()
+            try:
+                post_commit_budget_proof = verify_budget_admission_contract(
+                    plan=plan,
+                    contract=contract,
+                    envelope=durable_record.budget_envelope,
+                    trusted_public_keys=post_commit_authorities,
+                    expected_scope=expected_scope,
+                    authorized_roles=post_commit_budget_roles,
+                    now=return_now,
+                )
+                post_commit_provider_cap = verify_provider_cap_evidence(
+                    durable_record.provider_cap_evidence_json.encode("utf-8"),
+                    envelope=durable_record.provider_cap_approval,
+                    trusted_authorities=post_commit_authorities,
+                    expected_scope=expected_scope,
+                    now=return_now,
+                )
+                for authorization, payload, expected_digest in authorization_rechecks:
+                    if (
+                        verify_provisioning_authorization(
+                            authorization,
+                            expected=payload,
+                            trusted_authorities=post_commit_authorities,
+                            now=return_now,
+                        )
+                        != expected_digest
+                    ):
+                        raise AuthorizationVerificationError(
+                            "durable infrastructure authorization digest drifted"
+                        )
+                for (
+                    evidence_json,
+                    pricing_approval,
+                    duration,
+                    pricing_start,
+                    expected_evidence_digest,
+                    expected_approval_digest,
+                ) in pricing_rechecks:
+                    pricing = verify_pricing_evidence(
+                        evidence_json.encode("utf-8"),
+                        envelope=pricing_approval,
+                        trusted_authorities=post_commit_authorities,
+                        expected_scope=expected_scope,
+                        now=return_now,
+                        fixed_duration_seconds=duration,
+                        cost_window_start=pricing_start,
+                        fixed_duration_segments_seconds=None,
+                    )
+                    if (
+                        pricing.evidence_digest != expected_evidence_digest
+                        or pricing.approval_digest != expected_approval_digest
+                    ):
+                        raise AuthorizationVerificationError(
+                            "durable deployment pricing digest drifted"
+                        )
+            except (ApprovalVerificationError, AuthorizationVerificationError) as exc:
+                raise BudgetLedgerError(
+                    "signed durable final topology evidence is stale or invalid"
+                ) from exc
+            if (
+                post_commit_budget_proof.approval_digest
+                != final_budget_proof.approval_digest
+                or post_commit_budget_proof.contract_hash != final_budget_proof.contract_hash
+                or post_commit_provider_cap != final_provider_cap
+            ):
+                raise BudgetLedgerError("durable final topology authority has drifted")
+            if return_now >= valid_until:
+                raise BudgetLedgerError("final topology durable evidence is stale")
             _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.register(
                 capability,
                 domain=_FINAL_TOPOLOGY_SNAPSHOT_DOMAIN,
@@ -4067,7 +4256,7 @@ class BudgetLedger:
             )
             return require_verified_final_topology(
                 capability,
-                now=now,
+                now=return_now,
                 expected_plan_payload_hash=expected_plan_digest,
                 expected_scope=expected_scope,
             )
@@ -4091,8 +4280,7 @@ class BudgetLedger:
             raise BudgetLedgerError(
                 "fresh infrastructure provider cap rejects caller-controlled inputs"
             )
-        now = self._production_now()
-        trusted_authorities = self._production_operational_authorities()
+        self._require_production_mode()
         connection = self._connect()
         try:
             connection.execute("BEGIN")
@@ -4134,6 +4322,8 @@ class BudgetLedger:
                     "durable infrastructure provider-cap bytes are non-canonical"
                 )
             payload = authorization.payload
+            trusted_authorities = self._production_operational_authorities()
+            now = self._production_now()
             try:
                 authorization_digest = verify_provisioning_authorization(
                     authorization,
@@ -4219,6 +4409,33 @@ class BudgetLedger:
                 or int(reserve["covers_inference"]) != 1
             ):
                 raise BudgetLedgerError("durable infrastructure provider-cap join has drifted")
+            final_authorities = self._production_operational_authorities()
+            final_now = self._production_now()
+            try:
+                final_authorization_digest = verify_provisioning_authorization(
+                    authorization,
+                    expected=payload,
+                    trusted_authorities=final_authorities,
+                    now=final_now,
+                )
+                final_provider_cap = verify_provider_cap_evidence(
+                    evidence_bytes,
+                    envelope=approval,
+                    trusted_authorities=final_authorities,
+                    expected_scope=expected_scope,
+                    now=final_now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is stale or invalid"
+                ) from exc
+            if (
+                final_authorization_digest != authorization_digest
+                or final_provider_cap != provider_cap
+            ):
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap authority has drifted"
+                )
             capability = object.__new__(VerifiedInfrastructureProviderCapCapability)
             values: dict[str, object] = {
                 "run_identity": payload.run_identity,
@@ -4245,6 +4462,37 @@ class BudgetLedger:
                 _INFRASTRUCTURE_PROVIDER_CAPABILITY_SEAL,
             )
             connection.commit()
+            post_commit_authorities = self._production_operational_authorities()
+            return_now = self._production_now()
+            try:
+                post_commit_authorization_digest = verify_provisioning_authorization(
+                    authorization,
+                    expected=payload,
+                    trusted_authorities=post_commit_authorities,
+                    now=return_now,
+                )
+                post_commit_provider_cap = verify_provider_cap_evidence(
+                    evidence_bytes,
+                    envelope=approval,
+                    trusted_authorities=post_commit_authorities,
+                    expected_scope=expected_scope,
+                    now=return_now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is stale or invalid"
+                ) from exc
+            if (
+                post_commit_authorization_digest != final_authorization_digest
+                or post_commit_provider_cap != final_provider_cap
+            ):
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap authority has drifted"
+                )
+            if return_now >= min(payload.expires_at, provider_cap.expires_at):
+                raise BudgetLedgerError(
+                    "durable infrastructure provider-cap evidence is stale or invalid"
+                )
             _LEDGER_CAPABILITY_SNAPSHOT_REGISTRY.register(
                 capability,
                 domain=_INFRASTRUCTURE_CAP_SNAPSHOT_DOMAIN,
@@ -4335,13 +4583,6 @@ class BudgetLedger:
             plan=plan,
             expected_scope=expected_scope,
         )
-        now = self._production_now()
-        require_verified_final_topology(
-            topology,
-            now=now,
-            expected_plan_payload_hash=plan_payload_hash(plan),
-            expected_scope=expected_scope,
-        )
         account_id = budget_account_identity(plan.run_identity, plan.purpose)
         connection = self._connect()
         try:
@@ -4370,6 +4611,13 @@ class BudgetLedger:
                 raise BudgetLedgerError("durable final topology record has drifted")
 
             trusted_authorities = self._production_operational_authorities()
+            now = self._production_now()
+            require_verified_final_topology(
+                topology,
+                now=now,
+                expected_plan_payload_hash=plan_payload_hash(plan),
+                expected_scope=expected_scope,
+            )
             try:
                 provider_cap = verify_provider_cap_evidence(
                     durable_record.provider_cap_evidence_json.encode("utf-8"),
@@ -4396,7 +4644,32 @@ class BudgetLedger:
             ):
                 raise BudgetLedgerError("durable provider cap has drifted from final topology")
             connection.commit()
-            return require_verified_provider_capability(provider_cap)
+
+            final_topology = self.require_fresh_final_topology(
+                plan=plan,
+                expected_scope=expected_scope,
+            )
+            if _final_topology_durable_snapshot(final_topology) != (
+                _final_topology_durable_snapshot(topology)
+            ):
+                raise BudgetLedgerError("durable final topology changed during provider-cap load")
+            final_authorities = self._production_operational_authorities()
+            final_now = self._production_now()
+            try:
+                final_provider_cap = verify_provider_cap_evidence(
+                    durable_record.provider_cap_evidence_json.encode("utf-8"),
+                    envelope=durable_record.provider_cap_approval,
+                    trusted_authorities=final_authorities,
+                    expected_scope=expected_scope,
+                    now=final_now,
+                )
+            except AuthorizationVerificationError as exc:
+                raise BudgetLedgerError(
+                    "signed durable provider cap is stale or invalid"
+                ) from exc
+            if final_provider_cap != provider_cap:
+                raise BudgetLedgerError("durable provider-cap authority changed during load")
+            return require_verified_provider_capability(final_provider_cap)
         except BaseException:
             connection.rollback()
             raise

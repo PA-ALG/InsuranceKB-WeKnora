@@ -224,7 +224,7 @@ def test_o5_o6_raw_controller_receipt_inputs_cannot_bypass_fresh_provider_detail
         admission_deployment._ControllerRemoteReceiptObservation()
 
 
-@pytest.mark.parametrize("attack", ["clone", "mutate"])
+@pytest.mark.parametrize("attack", ["clone", "mutate", "topology_digest"])
 def test_o5_i3_transport_capability_requires_issuer_private_canonical_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -251,6 +251,7 @@ def test_o5_i3_transport_capability_requires_issuer_private_canonical_snapshot(
             "currency",
             "provider_cap_evidence_digest",
             "provider_cap_approval_digest",
+            "topology_digest",
             "coverage",
             "credential_fingerprint",
             "expires_at",
@@ -258,9 +259,12 @@ def test_o5_i3_transport_capability_requires_issuer_private_canonical_snapshot(
             "_seal",
         ):
             object.__setattr__(candidate, name, getattr(identity, name))
-    else:
+    elif attack == "mutate":
         candidate = identity
         object.__setattr__(candidate, "workspace_ref", "attacker-workspace")
+    else:
+        candidate = identity
+        object.__setattr__(candidate, "topology_digest", "7" * 64)
 
     with pytest.raises(AuthorizationVerificationError, match="issuer|snapshot"):
         require_verified_deployment_transport_identity(candidate)
@@ -1029,6 +1033,84 @@ def test_o5_topology_factory_rejects_weak_sidecar_binding_drift_before_transport
     assert client_calls == 0
 
 
+def test_o5_i3_topology_factory_rejects_caps_from_different_topology_digests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _production_reserve_with_sidecar(tmp_path, monkeypatch)
+    strong_cap = fixture.ledger.require_fresh_infrastructure_provider_capability(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+        reserve_id=fixture.permit.reserve.reserve_id,
+    )
+    topology, _strong, _weak = _mock_final_topology_from_cap(strong_cap)
+    drifted_topology = SimpleNamespace(
+        **{
+            **vars(topology),
+            "topology_digest": "8" * 64,
+        }
+    )
+
+    monkeypatch.setattr(
+        BudgetLedger,
+        "require_fresh_final_topology",
+        lambda _ledger, **_kwargs: drifted_topology,
+    )
+    drifted_strong_cap = fixture.ledger.require_fresh_topology_provider_capability(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+        reserve_id=drifted_topology.strong.reserve_id,
+    )
+    drifted_weak_cap = fixture.ledger.require_fresh_topology_provider_capability(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+        reserve_id=drifted_topology.weak.reserve_id,
+    )
+    client_calls = 0
+
+    def load_expected_topology(_ledger: BudgetLedger, **_kwargs: object) -> Any:
+        return topology
+
+    def load_drifted_cap(_ledger: BudgetLedger, **kwargs: object) -> Any:
+        return (
+            drifted_strong_cap
+            if kwargs["reserve_id"] == topology.strong.reserve_id
+            else drifted_weak_cap
+        )
+
+    class _NoIOClient:
+        def __init__(self, **_kwargs: object) -> None:
+            nonlocal client_calls
+            client_calls += 1
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        BudgetLedger,
+        "require_fresh_final_topology",
+        load_expected_topology,
+    )
+    monkeypatch.setattr(
+        BudgetLedger,
+        "require_fresh_topology_provider_capability",
+        load_drifted_cap,
+    )
+    monkeypatch.setattr(httpx, "Client", _NoIOClient)
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", _PRODUCTION_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_BUDGET_LEDGER_PATH", fixture.db_path)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", tmp_path)
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        DeploymentController.for_production(
+            plan=fixture.plan,
+            expected_scope=fixture.payload.scope,
+        )
+
+    assert blocked.value.code == "production_controller_unavailable"
+    assert client_calls == 0
+
+
 def test_o5_i1_bound_topology_cap_uses_distinct_loader_from_reserved_provisioning_cap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1060,6 +1142,8 @@ def test_o5_topology_refresh_reloads_caps_between_strong_and_weak_get(
         reserve_id=fixture.permit.reserve.reserve_id,
     )
     topology, strong_cap, _weak_cap = _mock_final_topology_from_cap(strong_cap)
+    topology.topology_digest = "1" * 64
+    topology.plan_payload_hash = "2" * 64
     cap_expired = False
 
     def fixed_topology(_ledger: BudgetLedger, **_kwargs: object) -> Any:
@@ -1096,8 +1180,6 @@ def test_o5_topology_refresh_reloads_caps_between_strong_and_weak_get(
         base_model="deepseek-v4-flash",
         roles=("extractor",),
     )
-    topology.topology_digest = "1" * 64
-    topology.plan_payload_hash = "2" * 64
     topology.strong.receipt = strong_target.receipt
     topology.strong.roles = ("annotator", "judge")
     topology.strong.remote_manifest_digest = (
@@ -1140,6 +1222,152 @@ def test_o5_topology_refresh_reloads_caps_between_strong_and_weak_get(
 
     assert blocked.value.code == "production_provider_cap_invalid"
     assert detail_calls == 1
+    controller.close()
+
+
+@pytest.mark.parametrize(
+    "drift_stage",
+    ["before_publication", "after_readback", "after_readback_replay"],
+)
+def test_o5_topology_refresh_rechecks_topology_expiry_before_batch_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift_stage: str,
+) -> None:
+    fixture = _production_reserve_with_sidecar(tmp_path, monkeypatch)
+    strong_cap = fixture.ledger.require_fresh_infrastructure_provider_capability(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+        reserve_id=fixture.permit.reserve.reserve_id,
+    )
+    topology, _strong_cap, _weak_cap = _mock_final_topology_from_cap(strong_cap)
+    topology.topology_digest = "1" * 64
+    topology.plan_payload_hash = "2" * 64
+    topology.valid_until = NOW + timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        BudgetLedger,
+        "require_fresh_final_topology",
+        lambda _ledger, **_kwargs: topology,
+    )
+    run_root = tmp_path / "deployments"
+    run_root.mkdir(mode=0o700)
+    monkeypatch.setenv("HARNESS_DASHSCOPE_API_KEY", _PRODUCTION_API_KEY)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_BUDGET_LEDGER_PATH", fixture.db_path)
+    monkeypatch.setattr(admission_deployment, "_PRODUCTION_RUN_ROOT", run_root)
+    controller = DeploymentController.for_production(
+        plan=fixture.plan,
+        expected_scope=fixture.payload.scope,
+    )
+    if drift_stage == "before_publication":
+        observed = iter((NOW, topology.valid_until))
+        controller._clock = lambda: next(observed)
+    elif drift_stage == "after_readback":
+        controller._clock = lambda: NOW
+        original_freshness = controller._require_fresh_production_topology_refresh
+        freshness_calls = 0
+
+        def expire_after_readback(*, expected_fingerprint: str) -> Any:
+            nonlocal freshness_calls
+            freshness_calls += 1
+            if freshness_calls == 6:
+                raise DeploymentControlBlocked(
+                    "production_topology_drift",
+                    "topology expired after batch readback",
+                )
+            return original_freshness(expected_fingerprint=expected_fingerprint)
+
+        monkeypatch.setattr(
+            controller,
+            "_require_fresh_production_topology_refresh",
+            expire_after_readback,
+        )
+    else:
+        controller._clock = lambda: NOW
+    target_transport = _FakeTransport()
+    target_transport.identity = controller._transport.identity
+    strong_target = _topology_target(
+        target_transport,
+        boundary="strong",
+        operation_id="op-strong-topology-031",
+        reserve_id="infra-strong-topology-031",
+        base_model=STRONG_BASE,
+        roles=("annotator", "judge"),
+    )
+    weak_target = _topology_target(
+        target_transport,
+        boundary="weak",
+        operation_id="op-weak-topology-031",
+        reserve_id="infra-weak-topology-031",
+        base_model="deepseek-v4-flash",
+        roles=("extractor",),
+    )
+    topology.strong.receipt = strong_target.receipt
+    topology.strong.roles = ("annotator", "judge")
+    topology.strong.remote_manifest_digest = strong_target.receipt.content.remote_manifest_digest
+    topology.strong.reconciliation_digest = _write_bound_topology_artifacts(
+        controller,
+        strong_target,
+    )
+    topology.weak.receipt = weak_target.receipt
+    topology.weak.roles = ("weak_extractor",)
+    topology.weak.remote_manifest_digest = weak_target.receipt.content.remote_manifest_digest
+    topology.weak.reconciliation_digest = _write_bound_topology_artifacts(
+        controller,
+        weak_target,
+    )
+
+    def exact_detail(
+        _transport: BailianDeploymentHTTPTransport,
+        *,
+        deployed_model: str,
+    ) -> bytes:
+        target = (
+            strong_target
+            if deployed_model == strong_target.receipt.content.deployed_model
+            else weak_target
+        )
+        return canonical_json_bytes(target.expected_remote_manifest)
+
+    monkeypatch.setattr(BailianDeploymentHTTPTransport, "deployment_detail", exact_detail)
+
+    replay_path: Path | None = None
+    replay_bytes: bytes | None = None
+    if drift_stage == "after_readback_replay":
+        first = controller.refresh_topology_reconciliation_batch()
+        replay_path = first.artifact_path
+        replay_bytes = replay_path.read_bytes()
+        original_freshness = controller._require_fresh_production_topology_refresh
+        freshness_calls = 0
+
+        def expire_replay_after_readback(*, expected_fingerprint: str) -> Any:
+            nonlocal freshness_calls
+            freshness_calls += 1
+            if freshness_calls == 6:
+                raise DeploymentControlBlocked(
+                    "production_topology_drift",
+                    "topology expired after replay readback",
+                )
+            return original_freshness(expected_fingerprint=expected_fingerprint)
+
+        monkeypatch.setattr(
+            controller,
+            "_require_fresh_production_topology_refresh",
+            expire_replay_after_readback,
+        )
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        controller.refresh_topology_reconciliation_batch()
+
+    assert blocked.value.code in {
+        "production_provider_cap_invalid",
+        "production_topology_drift",
+    }
+    if replay_path is None:
+        assert list(run_root.glob("*.topology-observation-batch.json")) == []
+    else:
+        assert replay_path.read_bytes() == replay_bytes
+        assert list(run_root.glob("*.topology-observation-batch.json")) == [replay_path]
     controller.close()
 
 
@@ -1607,6 +1835,14 @@ def _topology_refresh_case(
     clock: Callable[[], datetime],
 ) -> tuple[DeploymentController, _FakeTransport, Any, Any, Path]:
     transport = _FakeTransport()
+    transport.identity = _issue_verified_deployment_transport_identity_for_testing(
+        workspace_ref=transport.workspace_ref,
+        project_ref=transport.project_ref,
+        credential_ref=transport.credential_ref,
+        provider_cap_evidence_digest=SHA_D,
+        topology_digest="1" * 64,
+        expires_at=NOW + timedelta(hours=1),
+    )
     strong = _topology_target(
         transport,
         boundary="strong",
@@ -2010,7 +2246,9 @@ def test_o6_reconciliation_artifact_failure_cannot_publish_receipt_capability(
     assert list(root.glob("*.receipt-reconciliation.json")) == []
     assert list(root.glob(".*.tmp")) == []
     journal_path = next(root.glob("*.journal.json"))
-    assert json.loads(journal_path.read_bytes())["state"] == "created"
+    # The terminal receipt pointer is durable before reconciliation capability
+    # mint, so restart can safely revalidate and resume without another POST.
+    assert json.loads(journal_path.read_bytes())["state"] == "receipted"
 
     monkeypatch.setattr(
         controller._store,
@@ -2021,6 +2259,489 @@ def test_o6_reconciliation_artifact_failure_cannot_publish_receipt_capability(
 
     assert recovered.receipt_path.exists()
     assert len(list(root.glob("*.receipt-reconciliation.json"))) == 1
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_o6_absent_on_failure_removes_named_artifact_when_directory_fsync_is_interrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: type[BaseException],
+) -> None:
+    payload = _authorization_payload()
+    transport = _FakeTransport()
+    controller, _authorization, _permit_value = _controller(tmp_path, transport, payload)
+    original_fsync = os.fsync
+    fsync_calls = 0
+
+    def interrupt_directory_fsync(descriptor: int) -> None:
+        nonlocal fsync_calls
+        fsync_calls += 1
+        if fsync_calls == 2:
+            raise interruption("simulated process-control interruption")
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(os, "fsync", interrupt_directory_fsync)
+    name = f"{'7' * 64}.receipt-reconciliation.json"
+
+    with pytest.raises(interruption):
+        controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    root = controller._store.root
+    assert not (root / name).exists()
+    assert list(root.glob(".*.tmp")) == []
+    controller.close()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_o6_absent_on_failure_cleans_successful_rename_interrupted_before_return(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: type[BaseException],
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    original_replace = os.replace
+
+    def replace_then_interrupt(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        original_replace(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+        raise interruption("rename completed before process-control interruption")
+
+    monkeypatch.setattr(os, "replace", replace_then_interrupt)
+    name = f"{'6' * 64}.receipt-reconciliation.json"
+
+    with pytest.raises(interruption):
+        controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    assert not (controller._store.root / name).exists()
+    assert list(controller._store.root.glob(".*.tmp")) == []
+    controller.close()
+
+
+def test_o6_absent_on_failure_does_not_delete_foreign_inode_after_rename_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    original_replace = os.replace
+    foreign = b"foreign-owner"
+
+    def replace_then_foreign_takeover(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        original_replace(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+        name = cast(str, destination)
+        assert dst_dir_fd is not None
+        root_fd = dst_dir_fd
+        os.unlink(name, dir_fd=root_fd)
+        descriptor = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+            0o600,
+            dir_fd=root_fd,
+        )
+        try:
+            os.write(descriptor, foreign)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        raise KeyboardInterrupt("foreign inode replaced completed rename")
+
+    monkeypatch.setattr(os, "replace", replace_then_foreign_takeover)
+    name = f"{'5' * 64}.receipt-reconciliation.json"
+
+    with pytest.raises(KeyboardInterrupt):
+        controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    assert (controller._store.root / name).read_bytes() == foreign
+    assert list(controller._store.root.glob(".*.tmp")) == []
+    controller.close()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_o6_atomic_publication_readback_interrupt_removes_only_own_inode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: type[BaseException],
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    original_read = controller._store.read
+    reads = 0
+
+    def interrupt_final_readback(name: str) -> bytes | None:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            raise interruption("publication readback interrupted")
+        return original_read(name)
+
+    monkeypatch.setattr(controller._store, "read", interrupt_final_readback)
+    name = f"{'4' * 64}.receipt-reconciliation.json"
+
+    with pytest.raises(interruption):
+        controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    assert not (controller._store.root / name).exists()
+    assert list(controller._store.root.glob(".*.tmp")) == []
+    controller.close()
+
+
+def test_o6_atomic_publication_readback_foreign_takeover_is_not_deleted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    original_read = controller._store.read
+    foreign = b"foreign-owner"
+    reads = 0
+    name = f"{'3' * 64}.receipt-reconciliation.json"
+
+    def replace_before_final_readback(candidate: str) -> bytes | None:
+        nonlocal reads
+        reads += 1
+        if reads == 2:
+            path = controller._store.root / candidate
+            path.unlink()
+            path.write_bytes(foreign)
+            path.chmod(0o600)
+        return original_read(candidate)
+
+    monkeypatch.setattr(controller._store, "read", replace_before_final_readback)
+
+    with pytest.raises(DeploymentControlBlocked, match="readback"):
+        controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    assert (controller._store.root / name).read_bytes() == foreign
+    assert list(controller._store.root.glob(".*.tmp")) == []
+    controller.close()
+
+
+def test_o6_atomic_publication_distinguishes_created_from_exact_replay(
+    tmp_path: Path,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'2' * 64}.receipt-reconciliation.json"
+
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    replay = controller._store.atomic_write_absent_on_failure(name, b"{}")
+
+    assert publication is not None
+    assert replay is None
+    assert (controller._store.root / name).read_bytes() == b"{}"
+    controller.close()
+
+
+def test_o6_owned_cleanup_quarantines_before_foreign_takeover(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'1' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_rename = os.rename
+    foreign = b"foreign-owner-after-cleanup-start"
+    takeover_calls = 0
+
+    def takeover_before_quarantine(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        nonlocal takeover_calls
+        if source == name:
+            takeover_calls += 1
+            path = controller._store.root / name
+            path.unlink()
+            path.write_bytes(foreign)
+            path.chmod(0o600)
+        original_rename(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+
+    monkeypatch.setattr(os, "rename", takeover_before_quarantine)
+
+    removed = controller._store.remove_if_owned(name, publication)
+
+    assert takeover_calls == 1
+    assert removed is False
+    assert (controller._store.root / name).read_bytes() == foreign
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
+
+
+def test_o6_owned_cleanup_restores_foreign_symlink_without_following(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'0' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_rename = os.rename
+    foreign_target = "foreign-owner-target"
+
+    def symlink_takeover_before_quarantine(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        if source == name:
+            path = controller._store.root / name
+            path.unlink()
+            path.symlink_to(foreign_target)
+        original_rename(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+
+    monkeypatch.setattr(os, "rename", symlink_takeover_before_quarantine)
+
+    removed = controller._store.remove_if_owned(name, publication)
+
+    path = controller._store.root / name
+    assert removed is False
+    assert path.is_symlink()
+    assert path.readlink() == Path(foreign_target)
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
+
+
+def test_o6_owned_cleanup_restores_original_name_when_quarantine_open_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'9' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_open = os.open
+
+    def fail_quarantine_open(path: Any, *args: Any, **kwargs: Any) -> int:
+        if isinstance(path, str) and path.startswith(".cleanup-"):
+            raise OSError(24, "simulated descriptor exhaustion")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", fail_quarantine_open)
+
+    removed = controller._store.remove_if_owned(name, publication)
+
+    assert removed is False
+    assert (controller._store.root / name).read_bytes() == b"{}"
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
+
+
+def test_o6_owned_cleanup_surfaces_and_preserves_double_takeover(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'f' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_rename = os.rename
+    foreign_a = b"foreign-owner-a"
+    foreign_b = b"foreign-owner-b"
+
+    def double_takeover_before_quarantine(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        if source == name:
+            path = controller._store.root / name
+            path.unlink()
+            path.write_bytes(foreign_a)
+            path.chmod(0o600)
+            original_rename(
+                source,
+                destination,
+                src_dir_fd=src_dir_fd,
+                dst_dir_fd=dst_dir_fd,
+            )
+            path.write_bytes(foreign_b)
+            path.chmod(0o600)
+            return
+        original_rename(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+
+    monkeypatch.setattr(os, "rename", double_takeover_before_quarantine)
+
+    with pytest.raises(DeploymentControlBlocked, match="cleanup conflict"):
+        controller._store.remove_if_owned(name, publication)
+
+    assert (controller._store.root / name).read_bytes() == foreign_b
+    preserved = list(controller._store.root.glob(".foreign-preserved-*.artifact"))
+    assert len(preserved) == 1
+    assert preserved[0].read_bytes() == foreign_a
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
+
+
+def test_o6_owned_cleanup_explicitly_preserves_non_linkable_foreign_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'e' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_rename = os.rename
+
+    def directory_takeover_before_quarantine(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        if source == name:
+            path = controller._store.root / name
+            path.unlink()
+            path.mkdir(mode=0o700)
+        original_rename(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+
+    monkeypatch.setattr(os, "rename", directory_takeover_before_quarantine)
+
+    with pytest.raises(DeploymentControlBlocked, match="cleanup conflict"):
+        controller._store.remove_if_owned(name, publication)
+
+    preserved = list(controller._store.root.glob(".foreign-preserved-*.artifact"))
+    assert len(preserved) == 1
+    assert preserved[0].is_dir()
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_o6_owned_cleanup_resolves_completed_quarantine_rename_before_rethrow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    interruption: type[BaseException],
+) -> None:
+    payload = _authorization_payload()
+    controller, _authorization, _permit_value = _controller(
+        tmp_path,
+        _FakeTransport(),
+        payload,
+    )
+    name = f"{'d' * 64}.receipt-reconciliation.json"
+    publication = controller._store.atomic_write_absent_on_failure(name, b"{}")
+    assert publication is not None
+    original_rename = os.rename
+
+    def rename_then_interrupt(
+        source: Any,
+        destination: Any,
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
+        original_rename(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
+        raise interruption("quarantine rename completed before interruption")
+
+    monkeypatch.setattr(os, "rename", rename_then_interrupt)
+
+    with pytest.raises(interruption):
+        controller._store.remove_if_owned(name, publication)
+
+    assert not (controller._store.root / name).exists()
+    assert list(controller._store.root.glob(".cleanup-*.tmp")) == []
+    controller.close()
 
 
 @pytest.mark.parametrize("readback", [None, b"{}\n"])
@@ -2412,7 +3133,7 @@ def test_o5_c1_foreign_actor_race_cannot_claim_ownership_without_exact_journal_n
     assert transport.post_calls == 1
     assert transport.detail_calls == 0
     assert not tuple(controller._store.root.glob("*.receipt.json"))
-    assert not tuple(controller._store.root.glob("*.reconciliation.json"))
+    assert not tuple(controller._store.root.glob("*.receipt-reconciliation.json"))
 
 
 def test_o5_two_operators_share_run_lock_and_create_at_most_once(tmp_path: Path) -> None:
@@ -2564,6 +3285,128 @@ def test_o5_i2_ambiguous_post_rechecks_expiry_before_reconciliation_list(
     assert transport.list_calls == 1
     assert transport.post_calls == 1
     assert transport.detail_calls == 0
+
+
+@pytest.mark.parametrize(
+    ("expiry_after", "expected_detail_calls", "expected_journal_state"),
+    [
+        ("post", 0, "prepared"),
+        ("first_detail", 1, "prepared"),
+        ("second_detail", 2, "created"),
+    ],
+)
+def test_o5_i1_provisioning_rechecks_full_freshness_after_every_provider_response(
+    tmp_path: Path,
+    expiry_after: str,
+    expected_detail_calls: int,
+    expected_journal_state: str,
+) -> None:
+    payload = _authorization_payload()
+    current = [NOW]
+
+    class _ExpiryAdvancingTransport(_FakeTransport):
+        def create_deployment(self, *, request_body: bytes, idempotency_key: str) -> bytes:
+            response = super().create_deployment(
+                request_body=request_body,
+                idempotency_key=idempotency_key,
+            )
+            if expiry_after == "post":
+                current[0] = payload.expires_at
+            return response
+
+        def deployment_detail(self, *, deployed_model: str) -> bytes:
+            response = super().deployment_detail(deployed_model=deployed_model)
+            if expiry_after == "first_detail" and self.detail_calls == 1:
+                current[0] = payload.expires_at
+            if expiry_after == "second_detail" and self.detail_calls == 2:
+                current[0] = payload.expires_at
+            return response
+
+    transport = _ExpiryAdvancingTransport()
+    controller, authorization, permit = _controller(
+        tmp_path,
+        transport,
+        payload,
+        clock=lambda: current[0],
+    )
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        _provision(controller, authorization, permit)
+
+    assert blocked.value.code == "provisioning_gate_rejected"
+    assert transport.list_calls == 1
+    assert transport.post_calls == 1
+    assert transport.detail_calls == expected_detail_calls
+    root = controller._store.root
+    assert list(root.glob("*.receipt.json")) == []
+    assert list(root.glob("*.receipt-reconciliation.json")) == []
+    journal = json.loads(next(root.glob("*.journal.json")).read_bytes())
+    assert journal["state"] == expected_journal_state
+    assert journal["send_started"] is True
+    controller.close()
+
+
+@pytest.mark.parametrize("terminal_drift", ["clock", "reserve"])
+def test_o5_i1_terminal_journal_drift_blocks_before_receipt_capability_mint_and_recovers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    terminal_drift: str,
+) -> None:
+    payload = _authorization_payload()
+    current = [NOW]
+    transport = _FakeTransport()
+    controller, authorization, permit = _controller(
+        tmp_path,
+        transport,
+        payload,
+        clock=lambda: current[0],
+    )
+    original_write = controller._write_journal
+    original_issuer = _testing_receipt_issuer()
+    mint_calls = 0
+    drift_once = True
+
+    def observe_mint(**values: object) -> Any:
+        nonlocal mint_calls
+        mint_calls += 1
+        return original_issuer(**values)
+
+    def drift_after_terminal_write(name: str, journal: Any) -> None:
+        nonlocal drift_once
+        original_write(name, journal)
+        if journal.state != "receipted" or not drift_once:
+            return
+        drift_once = False
+        if terminal_drift == "clock":
+            current[0] = payload.expires_at
+        else:
+            reader = cast(Any, controller._reserve_reader)
+            reader.reserve = permit.reserve.model_copy(update={"purpose": "drifted-purpose"})
+
+    monkeypatch.setattr(
+        admission_deployment,
+        "_issue_verified_reconciled_receipt_for_testing",
+        observe_mint,
+    )
+    monkeypatch.setattr(controller, "_write_journal", drift_after_terminal_write)
+
+    with pytest.raises(DeploymentControlBlocked) as blocked:
+        _provision(controller, authorization, permit)
+
+    assert blocked.value.code in {"provisioning_gate_rejected", "durable_reserve_mismatch"}
+    assert mint_calls == 0
+    journal = json.loads(next(controller._store.root.glob("*.journal.json")).read_bytes())
+    assert journal["state"] == "receipted"
+    assert transport.post_calls == 1
+
+    current[0] = NOW
+    cast(Any, controller._reserve_reader).reserve = permit.reserve
+    recovered = _provision(controller, authorization, permit)
+
+    assert recovered.receipt_capability.receipt == recovered.receipt
+    assert mint_calls == 1
+    assert transport.post_calls == 1
+    controller.close()
 
 
 def test_o5_tampered_created_journal_without_send_started_never_posts(

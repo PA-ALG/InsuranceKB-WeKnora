@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from insurance_harness.goldenset import admission_deployment
+from insurance_harness.goldenset import admission_cli, admission_deployment
 from insurance_harness.goldenset.admission_budget import (
     BudgetAmounts,
     BudgetContract,
@@ -1446,6 +1446,74 @@ def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery
     } == {str(row[0]) for row in annex_rows_before_replay}
     assert "receipt" not in durable_topology["strong"]
     assert "receipt" not in durable_topology["weak"]
+
+    if deployment_key == "strong" and forgery == "issuer":
+        original_connect = ledger._connect
+        current = [NOW]
+
+        class _CrossExpiryConnection:
+            def __init__(self, connection: sqlite3.Connection) -> None:
+                self._connection = connection
+                self._advanced = False
+
+            def execute(self, sql: str, parameters: Any = ()) -> Any:
+                if not self._advanced and sql.lstrip().upper().startswith("SELECT"):
+                    current[0] = bound.valid_until
+                    self._advanced = True
+                return self._connection.execute(sql, parameters)
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._connection, name)
+
+        with monkeypatch.context() as blocked_select:
+            blocked_select.setattr(ledger, "_clock", lambda: current[0])
+            blocked_select.setattr(
+                ledger,
+                "_connect",
+                lambda: _CrossExpiryConnection(original_connect()),
+            )
+            with pytest.raises(BudgetLedgerError, match="expired|stale|invalid"):
+                ledger.require_fresh_final_topology(
+                    plan=plan,
+                    expected_scope="goldenset-production",
+                )
+
+        trusted_configuration = admission_cli._load_deployment_approval_configuration()
+        root_available = [True]
+
+        class _RootRotatingConnection:
+            def __init__(self, connection: sqlite3.Connection) -> None:
+                self._connection = connection
+
+            def execute(self, sql: str, parameters: Any = ()) -> Any:
+                return self._connection.execute(sql, parameters)
+
+            def commit(self) -> None:
+                self._connection.commit()
+                root_available[0] = False
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._connection, name)
+
+        with monkeypatch.context() as rotated_root:
+            rotated_root.setattr(
+                admission_cli,
+                "_load_deployment_approval_configuration",
+                lambda: trusted_configuration
+                if root_available[0]
+                else ({}, frozenset(), frozenset(), frozenset()),
+            )
+            rotated_root.setattr(
+                ledger,
+                "_connect",
+                lambda: _RootRotatingConnection(original_connect()),
+            )
+            with pytest.raises(BudgetLedgerError, match="trust|authority|configuration|invalid"):
+                ledger.require_fresh_final_topology(
+                    plan=plan,
+                    expected_scope="goldenset-production",
+                )
+
     replayed_topology = ledger.require_fresh_final_topology(
         plan=plan,
         expected_scope="goldenset-production",
@@ -1508,6 +1576,147 @@ def test_o4_o8_public_topology_rejects_workspace_join_and_reconciliation_forgery
         verified_fresh_cap.max_cost_minor_units == static_topology.provider_cap_max_cost_minor_units
     )
     assert verified_fresh_cap.expires_at == static_topology.provider_cap_expires_at
+
+    provider_loader_failures: list[str] = []
+    original_connect = ledger._connect
+    with monkeypatch.context() as blocked_select:
+        current = [after_initial_reconciliation_ttl]
+
+        class _ProviderCapCrossExpiryConnection:
+            def __init__(self, connection: sqlite3.Connection) -> None:
+                self._connection = connection
+                self._advanced = False
+
+            def execute(self, sql: str, parameters: Any = ()) -> Any:
+                result = self._connection.execute(sql, parameters)
+                if (
+                    not self._advanced
+                    and "FROM final_infrastructure_topologies" in sql
+                ):
+                    current[0] = static_topology.provider_cap_expires_at
+                    self._advanced = True
+                return result
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._connection, name)
+
+        blocked_select.setattr(
+            ledger,
+            "require_fresh_final_topology",
+            lambda **_kwargs: static_topology,
+        )
+        blocked_select.setattr(ledger, "_clock", lambda: current[0])
+        blocked_select.setattr(
+            ledger,
+            "_connect",
+            lambda: _ProviderCapCrossExpiryConnection(original_connect()),
+        )
+        try:
+            ledger.require_fresh_provider_capability(
+                plan=plan,
+                expected_scope="goldenset-production",
+            )
+        except BudgetLedgerError:
+            pass
+        else:
+            provider_loader_failures.append("blocked_select_crossed_expiry")
+
+    trusted_configuration = admission_cli._load_deployment_approval_configuration()
+    with monkeypatch.context() as rotated_provider_root:
+        root_available = [True]
+
+        class _ProviderCapRootRotatingConnection:
+            def __init__(self, connection: sqlite3.Connection) -> None:
+                self._connection = connection
+
+            def commit(self) -> None:
+                self._connection.commit()
+                root_available[0] = False
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self._connection, name)
+
+        rotated_provider_root.setattr(
+            ledger,
+            "require_fresh_final_topology",
+            lambda **_kwargs: static_topology,
+        )
+        rotated_provider_root.setattr(ledger, "_clock", lambda: NOW)
+        rotated_provider_root.setattr(
+            admission_cli,
+            "_load_deployment_approval_configuration",
+            lambda: trusted_configuration
+            if root_available[0]
+            else ({}, frozenset(), frozenset(), frozenset()),
+        )
+        rotated_provider_root.setattr(
+            ledger,
+            "_connect",
+            lambda: _ProviderCapRootRotatingConnection(original_connect()),
+        )
+        try:
+            ledger.require_fresh_provider_capability(
+                plan=plan,
+                expected_scope="goldenset-production",
+            )
+        except BudgetLedgerError:
+            pass
+        else:
+            provider_loader_failures.append("commit_rotated_root")
+
+    with monkeypatch.context() as authority_load_expiry:
+        current = [
+            static_topology.provider_cap_expires_at - timedelta(microseconds=1)
+        ]
+        authority_loads = 0
+
+        def cross_expiry_during_final_authority_load() -> Any:
+            nonlocal authority_loads
+            authority_loads += 1
+            if authority_loads == 2:
+                current[0] = static_topology.provider_cap_expires_at
+            return trusted_configuration
+
+        authority_load_expiry.setattr(
+            ledger,
+            "require_fresh_final_topology",
+            lambda **_kwargs: static_topology,
+        )
+        authority_load_expiry.setattr(ledger, "_clock", lambda: current[0])
+        authority_load_expiry.setattr(
+            admission_cli,
+            "_load_deployment_approval_configuration",
+            cross_expiry_during_final_authority_load,
+        )
+        try:
+            ledger.require_fresh_provider_capability(
+                plan=plan,
+                expected_scope="goldenset-production",
+            )
+        except BudgetLedgerError:
+            pass
+        else:
+            provider_loader_failures.append("authority_load_crossed_expiry")
+
+    assert provider_loader_failures == []
+
+    with monkeypatch.context() as advancing_provider_clock:
+        current = [after_initial_reconciliation_ttl]
+
+        def advance_between_fresh_loads() -> datetime:
+            value = current[0]
+            current[0] = value + timedelta(microseconds=1)
+            return value
+
+        advancing_provider_clock.setattr(ledger, "_clock", advance_between_fresh_loads)
+        advancing_capability = ledger.require_fresh_provider_capability(
+            plan=plan,
+            expected_scope="goldenset-production",
+        )
+        assert (
+            require_verified_provider_capability(advancing_capability).evidence_digest
+            == static_topology.provider_cap_evidence_digest
+        )
 
     monkeypatch.setattr(ledger, "_clock", lambda: NOW + timedelta(minutes=20, seconds=1))
     with pytest.raises(BudgetLedgerError, match="stale|expired"):

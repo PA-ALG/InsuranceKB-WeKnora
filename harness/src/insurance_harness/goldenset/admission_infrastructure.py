@@ -456,6 +456,7 @@ class VerifiedDeploymentTransportIdentity:
     currency: str
     provider_cap_evidence_digest: str
     provider_cap_approval_digest: str
+    topology_digest: str | None
     coverage: frozenset[ProviderCapCoverage]
     credential_fingerprint: str
     identity_digest: str
@@ -501,6 +502,7 @@ def _transport_capability_snapshot(capability: VerifiedDeploymentTransportIdenti
             "provider": capability.provider,
             "provider_cap_approval_digest": capability.provider_cap_approval_digest,
             "provider_cap_evidence_digest": capability.provider_cap_evidence_digest,
+            "topology_digest": capability.topology_digest,
             "workspace_ref": capability.workspace_ref,
         }
     )
@@ -709,6 +711,7 @@ def _issue_verified_deployment_transport_identity_from_cap(
         "currency": cap.currency,
         "provider_cap_evidence_digest": cap.evidence_digest,
         "provider_cap_approval_digest": cap.approval_digest,
+        "topology_digest": getattr(cap, "topology_digest", None),
         "coverage": tuple(sorted(cap.coverage)),
         "credential_fingerprint": credential_ref.removeprefix("sha256:"),
         "expires_at": cap.expires_at,
@@ -742,6 +745,7 @@ def _issue_verified_deployment_transport_identity_for_testing(
     currency: str = "CNY",
     provider_cap_evidence_digest: str,
     provider_cap_approval_digest: str = "f" * 64,
+    topology_digest: str | None = None,
     coverage: frozenset[ProviderCapCoverage] = frozenset({"fixed_infrastructure", "inference"}),
     expires_at: datetime,
 ) -> VerifiedDeploymentTransportIdentity:
@@ -754,6 +758,7 @@ def _issue_verified_deployment_transport_identity_for_testing(
         "currency": currency,
         "provider_cap_evidence_digest": provider_cap_evidence_digest,
         "provider_cap_approval_digest": provider_cap_approval_digest,
+        "topology_digest": topology_digest,
         "coverage": tuple(sorted(coverage)),
         "credential_fingerprint": credential_ref.removeprefix("sha256:"),
         "expires_at": expires_at,

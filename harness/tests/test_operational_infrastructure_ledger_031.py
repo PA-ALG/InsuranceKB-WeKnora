@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from insurance_harness.goldenset import admission_infrastructure
+from insurance_harness.goldenset import admission_cli, admission_infrastructure
 from insurance_harness.goldenset.admission_budget import (
     BudgetAmounts,
     BudgetContract,
@@ -630,6 +630,86 @@ def test_o4_i2_provisioning_rechecks_expiry_after_begin_immediate_before_rows(
             "SELECT COUNT(*) FROM infrastructure_provider_cap_evidence"
         ).fetchone() == (0,)
 
+
+def test_o4_i2_reserved_cap_loader_samples_time_after_blocked_durable_select(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _production_reserve_with_sidecar(tmp_path, monkeypatch)
+    current = [NOW]
+    original_connect = fixture.ledger._connect
+
+    class _CrossExpiryConnection:
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self._connection = connection
+            self._advanced = False
+
+        def execute(self, sql: str, parameters: Any = ()) -> Any:
+            if not self._advanced and sql.lstrip().upper().startswith("SELECT"):
+                current[0] = fixture.payload.provider_cap_expires_at
+                self._advanced = True
+            return self._connection.execute(sql, parameters)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._connection, name)
+
+    monkeypatch.setattr(fixture.ledger, "_clock", lambda: current[0])
+    monkeypatch.setattr(
+        fixture.ledger,
+        "_connect",
+        lambda: _CrossExpiryConnection(original_connect()),
+    )
+
+    with pytest.raises(BudgetLedgerError, match="expired|stale|invalid"):
+        fixture.ledger.require_fresh_infrastructure_provider_capability(
+            plan=fixture.plan,
+            expected_scope=fixture.payload.scope,
+            reserve_id=fixture.permit.reserve.reserve_id,
+        )
+
+
+def test_o4_i2_reserved_cap_loader_rechecks_root_after_commit_before_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _production_reserve_with_sidecar(tmp_path, monkeypatch)
+    trusted_configuration = admission_cli._load_deployment_approval_configuration()
+    root_available = [True]
+    original_connect = fixture.ledger._connect
+
+    class _RootRotatingConnection:
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self._connection = connection
+
+        def execute(self, sql: str, parameters: Any = ()) -> Any:
+            return self._connection.execute(sql, parameters)
+
+        def commit(self) -> None:
+            self._connection.commit()
+            root_available[0] = False
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._connection, name)
+
+    monkeypatch.setattr(
+        admission_cli,
+        "_load_deployment_approval_configuration",
+        lambda: trusted_configuration
+        if root_available[0]
+        else ({}, frozenset(), frozenset(), frozenset()),
+    )
+    monkeypatch.setattr(
+        fixture.ledger,
+        "_connect",
+        lambda: _RootRotatingConnection(original_connect()),
+    )
+
+    with pytest.raises(BudgetLedgerError, match="trust|authority|configuration|invalid"):
+        fixture.ledger.require_fresh_infrastructure_provider_capability(
+            plan=fixture.plan,
+            expected_scope=fixture.payload.scope,
+            reserve_id=fixture.permit.reserve.reserve_id,
+        )
 
 def _receipt(**updates: Any) -> DeploymentReceipt:
     values: dict[str, object] = {
