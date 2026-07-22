@@ -88,6 +88,26 @@ command/model-authority boundary only: no general downstream artifact-provenance
 candidate-promotion gate was added, so later import/use of offline artifacts remains a
 separate owner/adapter governance contract.
 
+Independent quality review found that the inventoried product classifier still accepted a
+caller-provided raw model client without a profile. A deterministic RED observed one raw
+`complete` call. The approved minimal correction keeps the default and product CLI paths
+strictly deterministic, permits that historical fallback only with explicit `offline-eval`
+or `replay`, and raises typed `ClassificationModelBoundaryError` before `complete` for
+missing/default/disabled/production/unknown profiles. This does not add a production guarded
+classifier; future production classification must enter canonical composition and derive
+trusted call facts separately.
+
+The final quality review also exposed contradictory inventory wording around compiler
+helpers. `call_and_parse`, `gapfill_field`, `vote_field` and standalone `JudgeDispatcher`
+are library/transport primitives: raw-client use is offline/non-production and conveys no
+`VerifiedAdmission`, receipt authority or production-state progression. Production means
+the code-owned composition root, production CLI and sealed pipeline/factory/persistent entry
+path. Machine-enumerated source proofs require those roots to construct/validate the sealed
+client, forbid raw client constructors in their call sites, retain the guarded primitive
+chain and keep the callable primitives out of the compiler package export surface. Arbitrary
+same-process Python relabelling an offline return value is outside this capability boundary;
+future 028 production orchestration must pass `GuardedModelClient` into the primitives.
+
 Final deterministic Task 5 evidence:
 
 ```bash
@@ -95,21 +115,24 @@ cd harness
 PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
   tests/test_production_entrypoints_027.py \
   tests/test_production_model_boundary_027.py tests/test_config.py \
-  tests/test_compiler_llm.py tests/test_source_pipeline_cli_017.py
-# 272 passed in 8.84s
+  tests/test_compiler_llm.py tests/test_source_pipeline_cli_017.py \
+  tests/test_product_classify.py
+# 286 passed in 4.32s
 
 PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
   tests/test_compiler_pipeline.py tests/test_source_pipeline_checkpoint_017.py \
   tests/test_source_pipeline_runtime_017.py tests/test_source_pipeline_cli_017.py \
   tests/test_recall_config_024.py
-# 128 passed in 27.94s
+# 128 passed in 15.56s
 
 .venv/bin/ruff check src/insurance_harness/model_policy \
   src/insurance_harness/config.py src/insurance_harness/compiler/cli.py \
   src/insurance_harness/compiler/extract.py src/insurance_harness/compiler/judge.py \
   src/insurance_harness/compiler/llm.py src/insurance_harness/compiler/pipeline.py \
+  src/insurance_harness/product/classify.py \
   tests/test_production_entrypoints_027.py \
   tests/test_production_model_boundary_027.py tests/test_source_pipeline_cli_017.py \
+  tests/test_product_classify.py \
   tests/test_compiler_pipeline.py tests/test_source_pipeline_checkpoint_017.py \
   tests/test_source_pipeline_runtime_017.py tests/support/source_pipeline.py
 # All checks passed!
@@ -117,8 +140,9 @@ PYTHONPATH=src .venv/bin/python3.12 -m pytest -q \
 .venv/bin/mypy src/insurance_harness/model_policy \
   src/insurance_harness/config.py src/insurance_harness/compiler/cli.py \
   src/insurance_harness/compiler/extract.py src/insurance_harness/compiler/judge.py \
-  src/insurance_harness/compiler/llm.py src/insurance_harness/compiler/pipeline.py
-# Success: no issues found in 12 source files
+  src/insurance_harness/compiler/llm.py src/insurance_harness/compiler/pipeline.py \
+  src/insurance_harness/product/classify.py
+# Success: no issues found in 13 source files
 ```
 
 The first inventory RED was one missing compiler CLI guard edge. The coordinated pipeline

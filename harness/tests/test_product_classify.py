@@ -2,11 +2,14 @@
 
 from pathlib import Path
 
+import pytest
+
 from insurance_harness.goldenset.annotator import ReplayClient, request_key
 from insurance_harness.goldenset.pdf import PageText
 from insurance_harness.product.classify import (
     _LLM_SYSTEM,
     Classification,
+    ClassificationModelBoundaryError,
     DocumentType,
     classify_document,
     detect_product_line,
@@ -51,15 +54,48 @@ async def test_p3_3_unknown_without_client() -> None:
     assert not cls.used_llm
 
 
-async def test_p3_llm_fallback_with_replay(tmp_path: Path) -> None:
+@pytest.mark.parametrize("model_profile", ["offline-eval", "replay"])
+async def test_p3_llm_fallback_requires_explicit_nonproduction_profile(
+    tmp_path: Path,
+    model_profile: str,
+) -> None:
     user = PLAIN_PAGE.text[:3000]
     fixture = tmp_path / f"{request_key(_LLM_SYSTEM, user)}.txt"
     fixture.write_text('{"doc_type": "宣传材料", "reason": "营销口吻"}', encoding="utf-8")
     cls: Classification = await classify_document(
-        "某文件.pdf", [PLAIN_PAGE], model_client=ReplayClient(tmp_path)
+        "某文件.pdf",
+        [PLAIN_PAGE],
+        model_client=ReplayClient(tmp_path),
+        model_profile=model_profile,
     )
     assert cls.doc_type is DocumentType.MARKETING
     assert cls.used_llm and cls.confidence == "low"
+
+
+@pytest.mark.parametrize(
+    "model_profile",
+    [None, "disabled", "default", "production", "unknown-profile"],
+)
+async def test_pwb2_raw_classification_client_without_offline_profile_is_zero_call(
+    model_profile: str | None,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class _RawClient:
+        async def complete(self, system: str, user: str) -> str:
+            calls.append((system, user))
+            return '{"doc_type":"宣传材料","reason":"must not run"}'
+
+    with pytest.raises(ClassificationModelBoundaryError) as denied:
+        await classify_document(
+            "某文件.pdf",
+            [PLAIN_PAGE],
+            model_client=_RawClient(),
+            model_profile=model_profile,
+        )
+
+    assert denied.value.reason_code == "offline_profile_required"
+    assert calls == []
 
 
 def test_product_line_keyword_priority() -> None:

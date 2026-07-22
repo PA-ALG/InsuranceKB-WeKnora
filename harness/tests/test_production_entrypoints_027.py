@@ -125,54 +125,147 @@ def _called_names(node: ast.AST) -> frozenset[str]:
 
 
 def test_pwb2_inventory_drives_real_compiler_entrypoint_closure() -> None:
-    """Every inventoried compiler production call joins the reserved guarded path."""
+    """Every production root has code-owned sealed construction and no raw client."""
 
     entries = _inventory_entries()
     production = tuple(
         entry
         for entry in entries
-        if "production" in entry.classification.lower()
+        if entry.classification.lower().startswith("production")
         and "/compiler/" in entry.path
-        and any(
-            marker in entry.classification.lower()
-            for marker in ("entrypoint", "construction bypass", "model-call", "model judge")
-        )
     )
-    assert production, "inventory classifies no compiler production model entrypoints"
+    assert production, "inventory classifies no compiler production roots"
 
-    required_calls = {
-        "_cmd_extract": "_build_production_compiler_client",
-        "__init__": "_require_production_compiler_client",
-        "call_and_parse": "_complete_reserved_model_call",
-        "gapfill_field": "call_and_parse",
-        "vote_field": "call_and_parse",
-        "dispatch_audited": "call_and_parse",
+    proof_rules = {
+        "harness/src/insurance_harness/compiler/cli.py": (
+            "_cmd_extract",
+            "_build_production_compiler_client",
+        ),
+        "harness/src/insurance_harness/compiler/pipeline.py": (
+            "__init__",
+            "_require_production_compiler_client",
+        ),
     }
-    callable_names = {
-        "harness/src/insurance_harness/compiler/cli.py": "_cmd_extract",
-        "harness/src/insurance_harness/compiler/pipeline.py": "__init__",
-        "harness/src/insurance_harness/compiler/extract.py": "call_and_parse",
-        "harness/src/insurance_harness/compiler/gapfill.py": "gapfill_field",
-        "harness/src/insurance_harness/compiler/voting.py": "vote_field",
-        "harness/src/insurance_harness/compiler/judge.py": "dispatch_audited",
+    forbidden_raw_constructors = {
+        "LiteLLMClient",
+        "OpenAICompatClient",
+        "ReplayClient",
+        "build_client",
     }
     failures: list[str] = []
     covered: set[str] = set()
     for entry in production:
         path = str(_source_path(entry.path).relative_to(_REPOSITORY_ROOT))
-        callable_name = callable_names.get(path)
-        if callable_name is None:
-            failures.append(f"{path}: inventoried production entrypoint has no proof rule")
+        rule = proof_rules.get(path)
+        if rule is None:
+            failures.append(f"{path}: inventoried production root has no construction proof")
             continue
+        callable_name, required = rule
         tree = ast.parse(_source_path(entry.path).read_text(encoding="utf-8"))
         called = _called_names(_find_function(tree, callable_name))
-        required = required_calls[callable_name]
         if required not in called:
             failures.append(f"{path}:{callable_name} does not call {required}")
+        leaked = forbidden_raw_constructors.intersection(called)
+        if leaked:
+            failures.append(
+                f"{path}:{callable_name} constructs raw clients: {sorted(leaked)}"
+            )
+        if path.endswith("compiler/cli.py"):
+            factory_calls = _called_names(
+                _find_function(tree, "_build_production_compiler_client")
+            )
+            if "_build_production_model_composition" not in factory_calls:
+                failures.append(
+                    f"{path}: production factory skips canonical composition"
+                )
+            factory_leaks = forbidden_raw_constructors.intersection(factory_calls)
+            if factory_leaks:
+                failures.append(
+                    f"{path}: production factory constructs raw clients: "
+                    f"{sorted(factory_leaks)}"
+                )
         covered.add(path)
 
-    assert covered == set(callable_names), "inventory and production proof matrix diverged"
+    assert covered == set(proof_rules), "inventory and production-root proofs diverged"
     assert not failures, "\n".join(failures)
+
+
+def test_pwb2_inventory_keeps_library_model_primitives_outside_production_exports() -> None:
+    """Raw library calls stay non-production; sealed roots may use their guarded chain."""
+
+    entries = _inventory_entries()
+    primitive_rules = {
+        "harness/src/insurance_harness/compiler/extract.py": (
+            "call_and_parse",
+            "_complete_reserved_model_call",
+        ),
+        "harness/src/insurance_harness/compiler/gapfill.py": (
+            "gapfill_field",
+            "call_and_parse",
+        ),
+        "harness/src/insurance_harness/compiler/voting.py": (
+            "vote_field",
+            "call_and_parse",
+        ),
+        "harness/src/insurance_harness/compiler/judge.py": (
+            "dispatch_audited",
+            "call_and_parse",
+        ),
+    }
+    classified = {
+        str(_source_path(entry.path).relative_to(_REPOSITORY_ROOT)): entry
+        for entry in entries
+        if entry.classification.startswith("Library/transport primitive")
+        and "/compiler/" in entry.path
+    }
+
+    assert set(classified) == set(primitive_rules)
+    for path, (callable_name, required) in primitive_rules.items():
+        entry = classified[path]
+        assert "offline/non-production" in entry.classification
+        tree = ast.parse(_source_path(entry.path).read_text(encoding="utf-8"))
+        assert required in _called_names(_find_function(tree, callable_name))
+
+    package_tree = ast.parse(
+        (
+            _REPOSITORY_ROOT
+            / "harness/src/insurance_harness/compiler/__init__.py"
+        ).read_text(encoding="utf-8")
+    )
+    package_exports = next(
+        ast.literal_eval(node.value)
+        for node in package_tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "__all__"
+            for target in node.targets
+        )
+    )
+    assert {
+        "JudgeDispatcher",
+        "call_and_parse",
+        "gapfill_field",
+        "vote_field",
+    }.isdisjoint(package_exports)
+
+
+def test_pwb2_product_cli_classification_remains_deterministic_zero_model() -> None:
+    """The product CLI must not opt into the explicitly offline raw-client lane."""
+
+    source = _REPOSITORY_ROOT / "harness/src/insurance_harness/product/cli.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    command = _find_function(tree, "cmd_classify")
+    calls = [
+        node
+        for node in ast.walk(command)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "classify_document"
+    ]
+
+    assert len(calls) == 1
+    assert len(calls[0].args) == 2
+    assert calls[0].keywords == []
 
 
 _EXPECTED_POLICY_FIELDS = (
