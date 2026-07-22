@@ -17,6 +17,7 @@ from insurance_harness.db import models as _db_models  # noqa: F401
 from insurance_harness.db.base import Base
 from insurance_harness.db.models import InsuranceProduct
 from insurance_harness.knowledge.publisher import ReleasePublisher
+from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import (
     CurrentRelease,
     ReleaseOperation,
@@ -148,7 +149,10 @@ async def test_r3_6_postgresql_release_never_commits_caller_transaction() -> Non
             caller.flush()
 
             result = await ReleasePublisher(
-                factory, _PostgresWiki(), now=lambda: NOW
+                factory,
+                _PostgresWiki(),
+                staging_capability=_issue_test_staging_capability(scope),
+                now=lambda: NOW,
             ).publish_product_version(
                 scope,
                 product_version_id=version_id,

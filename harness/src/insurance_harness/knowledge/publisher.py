@@ -36,6 +36,7 @@ from insurance_harness.knowledge.release_plan import (
     PublishPlan,
     ReleasePlanExecutor,
     WikiPageClient,
+    _require_staging_capability,
 )
 from insurance_harness.knowledge.snapshots import (
     SnapshotFactView,
@@ -265,14 +266,18 @@ class ReleasePublisher:
         session_factory: Callable[[], Session],
         wiki_client: WikiPageClient,
         *,
+        staging_capability: object | None = None,
         lease_duration: timedelta = timedelta(minutes=5),
         now: Callable[[], datetime] = utcnow,
     ) -> None:
+        self._staging_capability = _require_staging_capability(staging_capability)
         self._session_factory = session_factory
         with session_factory() as session:
             lock_namespace = session.get_bind()
         self._executor = ReleasePlanExecutor(
-            wiki_client, lock_namespace=lock_namespace
+            wiki_client,
+            lock_namespace=lock_namespace,
+            staging_capability=self._staging_capability,
         )
         self._lease_duration = lease_duration
         self._now = now

@@ -16,6 +16,7 @@ from insurance_harness.db.base import Base
 from insurance_harness.db.scope import KnowledgeScope
 from insurance_harness.knowledge.publisher import ReleasePublisher
 from insurance_harness.knowledge.reader import SnapshotFactsResult, SnapshotReader
+from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import Claim, ClaimRevision
 from tests.kbhelpers import seed_bound_scope, seed_product
 from tests.support.live import AsyncCleanup, run_cleanups_preserving_failure
@@ -136,7 +137,11 @@ async def test_r6_4_live_release_v1_v2_rollback_roundtrip() -> None:
             claim_id = claim.id
             cleanup_slug = f"product/{product.product_code}/V1/overview"
 
-        publisher = ReleasePublisher(factory, client)
+        publisher = ReleasePublisher(
+            factory,
+            client,
+            staging_capability=_issue_test_staging_capability(scope),
+        )
         v1 = await publisher.publish_product_version(
             scope,
             product_version_id=version_id,

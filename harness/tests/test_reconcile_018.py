@@ -22,6 +22,7 @@ from insurance_harness.knowledge.release_guard_ddl_018 import (
     SQLITE_CREATE_GUARDS,
     SQLITE_DROP_GUARDS,
 )
+from insurance_harness.knowledge.release_plan import _issue_test_staging_capability
 from insurance_harness.knowledge.tables import (
     ChangeSet,
     Claim,
@@ -129,7 +130,12 @@ async def _published_v1_v2(
     scope, version_b = _seed(session)
     factory = _factory(session)
     wiki = _RollbackWiki()
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     v1 = await publisher.publish_product_version(
         scope,
         product_version_id=version_b.id,
@@ -286,7 +292,12 @@ async def test_r4_3_no_current_reconciliation_cleans_only_source_plan_slugs(
     scope, version_b = _seed(kb_session)
     wiki = _RollbackWiki()
     wiki.fail_slug = "product/B/V1/overview"
-    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     with pytest.raises(WeKnoraTransientError):
         await publisher.publish_product_version(
             scope,
@@ -398,7 +409,12 @@ async def test_r3_1_r3_3_expired_reconcile_child_requeues_original_job_only(
     scope, version_b = _seed(kb_session)
     wiki = _RollbackWiki()
     wiki.fail_slug = "product/B/V1/overview"
-    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     with pytest.raises(WeKnoraTransientError):
         await publisher.publish_product_version(
             scope,
@@ -485,7 +501,12 @@ async def test_r4_3_r4_4_first_018_failure_restores_exact_legacy_current(
         **legacy_page.model_dump(mode="python")
     )
     wiki.fail_slug = "product/B/V1/overview"
-    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     with pytest.raises(WeKnoraTransientError):
         await publisher.publish_product_version(
@@ -580,7 +601,12 @@ async def test_r4_3_failed_plan_removes_new_and_historical_noncurrent_slugs(
     kb_session.commit()
     factory = _factory(kb_session)
     wiki = _RollbackWiki()
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     v1 = await publisher.publish_product_version(
         scope,
         product_version_id=version_a.id,
@@ -667,7 +693,12 @@ async def test_r6_3_same_label_and_slug_are_isolated_across_spaces(
     kb_session.commit()
     factory = _factory(kb_session)
     wiki = _RollbackWiki()
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope_a, scope_b),
+        now=lambda: NOW,
+    )
     v1_a = await publisher.publish_product_version(
         scope_a, product_version_id=version_a.id, label="same-v1"
     )
@@ -728,7 +759,12 @@ async def test_r6_2_reconcile_then_same_plan_retry_publishes_original_target(
     scope, version_b = _seed(kb_session)
     factory = _factory(kb_session)
     wiki = _RollbackWiki()
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     v1 = await publisher.publish_product_version(
         scope, product_version_id=version_b.id, label="release-r6-v1"
     )

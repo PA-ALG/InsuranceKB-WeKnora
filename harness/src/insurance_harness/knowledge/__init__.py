@@ -104,16 +104,6 @@ from insurance_harness.knowledge.release_boundary import (
     build_staging_candidate_manifest,
     request_production_wiki_publish,
 )
-from insurance_harness.knowledge.release_plan import (
-    ActionExecution,
-    LegacyPageOwnership,
-    PageOwnershipCollision,
-    PublishAction,
-    PublishPlan,
-    ReleasePlanExecutor,
-    WikiPageClient,
-    WikiWriteVerificationError,
-)
 from insurance_harness.knowledge.review import (
     derive_review_key,
     ensure_review_item,
@@ -158,7 +148,6 @@ from insurance_harness.knowledge.source_revision import (
 )
 
 __all__ = [
-    "ActionExecution",
     "ALLOWED_REVIEW_ACTIONS",
     "AUTHORITY_BY_DOC_ROLE",
     "AuthorizationDecision",
@@ -175,12 +164,10 @@ __all__ = [
     "FallbackAnswer",
     "ImportReport",
     "ImportPartitionReport",
-    "LegacyPageOwnership",
     "MergeEngine",
     "MergeError",
     "MergePolicy",
     "MergeReport",
-    "PageOwnershipCollision",
     "P1CapabilityMissing",
     "ProposedClaim",
     "ProposedEvidence",
@@ -206,12 +193,9 @@ __all__ = [
     "SourceLifecycleError",
     "SourceRevisionReport",
     "FrozenEvidence",
-    "PublishAction",
-    "PublishPlan",
     "RawFallbackPolicy",
     "RawFallbackProvider",
     "RawHit",
-    "ReleasePlanExecutor",
     "ReleaseApprovalError",
     "ReleaseApprovalService",
     "ReleaseActivationFailure",
@@ -230,8 +214,6 @@ __all__ = [
     "ServingDocumentEvidence",
     "ServingFailure",
     "ServingStructuredEvidence",
-    "WikiPageClient",
-    "WikiWriteVerificationError",
     "RenderedPage",
     "apply_change_item",
     "apply_conflict_judgements",

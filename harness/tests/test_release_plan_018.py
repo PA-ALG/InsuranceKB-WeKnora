@@ -18,6 +18,7 @@ from insurance_harness.knowledge.release_plan import (
     PublishAction,
     PublishPlan,
     ReleasePlanExecutor,
+    _issue_test_staging_capability,
 )
 from tests.support.release_018 import release_scope
 
@@ -105,6 +106,16 @@ def _plan(*actions: PublishAction, target: str = "snapshot-1") -> PublishPlan:
     )
 
 
+def _executor(
+    wiki: _MemoryWiki,
+    *scopes: KnowledgeScope,
+) -> ReleasePlanExecutor:
+    return ReleasePlanExecutor(
+        wiki,
+        staging_capability=_issue_test_staging_capability(*scopes),
+    )
+
+
 def test_r3_3_publish_plan_digest_is_canonical_and_order_sensitive(
     kb_session: Any,
 ) -> None:
@@ -127,7 +138,7 @@ async def test_r3_4_executor_create_update_delete404_and_attempt_callbacks(
 ) -> None:
     scope = release_scope(kb_session)
     wiki = _MemoryWiki()
-    executor = ReleasePlanExecutor(wiki)
+    executor = _executor(wiki, scope)
     existing = _page(scope, slug="existing")
     wiki.pages[(scope.wiki_kb_id, "existing")] = WeKnoraWikiPage(
         **existing.model_dump(mode="python")
@@ -179,7 +190,7 @@ async def test_r4_4_executor_rejects_unowned_page_before_mutation(
     )
 
     with pytest.raises(PageOwnershipCollision, match="page ownership collision"):
-        await ReleasePlanExecutor(wiki).execute(
+        await _executor(wiki, scope).execute(
             scope,
             _plan(
                 PublishAction(
@@ -200,7 +211,7 @@ async def test_r3_5_upsert_readback_must_match_target_snapshot_metadata(
     finished: list[tuple[bool | None, str | None]] = []
 
     with pytest.raises(RuntimeError, match="wiki write verification failed"):
-        await ReleasePlanExecutor(wiki).execute(
+        await _executor(wiki, scope).execute(
             scope,
             _plan(
                 PublishAction(
@@ -230,7 +241,7 @@ async def test_r4_4_executor_adopts_only_exact_legacy_dual_match(
         snapshot_id="legacy-1", slugs=frozenset({"legacy"})
     )
 
-    await ReleasePlanExecutor(wiki).execute(
+    await _executor(wiki, scope).execute(
         scope,
         _plan(
             PublishAction(
@@ -246,7 +257,7 @@ async def test_r4_4_executor_adopts_only_exact_legacy_dual_match(
         slug="other", page_metadata={"snapshot_id": "legacy-1"}
     )
     with pytest.raises(PageOwnershipCollision):
-        await ReleasePlanExecutor(wiki).execute(
+        await _executor(wiki, scope).execute(
             scope,
             _plan(
                 PublishAction(
@@ -266,7 +277,7 @@ async def test_r3_4_response_loss_reports_unknown_creation_state(
     finished: list[tuple[bool | None, str | None]] = []
 
     with pytest.raises(WeKnoraTransientError, match="response lost"):
-        await ReleasePlanExecutor(wiki).execute(
+        await _executor(wiki, scope).execute(
             scope,
             _plan(
                 PublishAction(
@@ -289,7 +300,7 @@ async def test_r4_5_executor_serializes_same_space_but_not_different_spaces(
     scope_b = release_scope(kb_session, "b")
     wiki = _MemoryWiki()
     wiki.delay = True
-    executor = ReleasePlanExecutor(wiki)
+    executor = _executor(wiki, scope_a, scope_b)
 
     def plan_for(scope: KnowledgeScope, slug: str) -> PublishPlan:
         return _plan(

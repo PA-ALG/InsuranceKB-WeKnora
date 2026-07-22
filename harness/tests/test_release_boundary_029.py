@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import ast
+import inspect
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope
@@ -23,6 +24,12 @@ from insurance_harness.knowledge.release_boundary import (
     request_production_wiki_publish,
 )
 from insurance_harness.knowledge.release_manifest import ReleaseManifest
+from insurance_harness.knowledge.release_plan import (
+    PublishPlan,
+    ReleasePlanExecutor,
+    StagingCapabilityRequired,
+    _issue_test_staging_capability,
+)
 from insurance_harness.knowledge.serving import ServingFailure
 from insurance_harness.knowledge.snapshots import build_snapshot_facts
 from insurance_harness.knowledge.tables import (
@@ -133,9 +140,6 @@ def test_ra6_building_frozen_candidate_isolated_from_release_and_wiki(
 ) -> None:
     scope, snapshot_id = _building_frozen_candidate(session, "candidate")
 
-    class WikiFake:
-        calls = 0
-
     before_approvals = session.scalar(select(func.count()).select_from(ReleaseApproval))
     manifest = build_staging_candidate_manifest(
         session,
@@ -152,7 +156,6 @@ def test_ra6_building_frozen_candidate_isolated_from_release_and_wiki(
     assert session.scalar(select(func.count()).select_from(ReleaseApproval)) == (
         before_approvals
     )
-    assert WikiFake.calls == 0
     serving = _reader(session).read_current(scope)
     assert isinstance(serving, ServingFailure)
     assert serving.code == "no_release"
@@ -227,7 +230,19 @@ def test_ra6_package_exports_production_boundary_not_legacy_publisher() -> None:
     assert knowledge.P1CapabilityMissing is P1CapabilityMissing
     assert knowledge.build_staging_candidate_manifest is build_staging_candidate_manifest
     assert knowledge.request_production_wiki_publish is request_production_wiki_publish
-    for legacy in ("ReleasePublisher", "PublishResult", "RollbackResult"):
+    for legacy in (
+        "ReleasePublisher",
+        "PublishResult",
+        "RollbackResult",
+        "ReleasePlanExecutor",
+        "WikiPageClient",
+        "PublishPlan",
+        "PublishAction",
+        "ActionExecution",
+        "LegacyPageOwnership",
+        "PageOwnershipCollision",
+        "WikiWriteVerificationError",
+    ):
         assert not hasattr(knowledge, legacy)
         assert legacy not in knowledge.__all__
 
@@ -235,6 +250,133 @@ def test_ra6_package_exports_production_boundary_not_legacy_publisher() -> None:
 def test_ra6_legacy_publisher_remains_direct_module_characterization_only() -> None:
     assert LegacyStagingReleasePublisher is ReleasePublisher
     assert "staging/test-only" in (ReleasePublisher.__doc__ or "")
+
+
+def test_ra6_executor_and_publisher_require_opaque_capability_before_side_effects() -> None:
+    class ExplodingWiki:
+        calls = 0
+
+        def __getattribute__(self, name: str) -> object:
+            if name != "calls":
+                object.__setattr__(self, "calls", self.calls + 1)
+                raise AssertionError("Wiki client surface must not be inspected")
+            return object.__getattribute__(self, name)
+
+    wiki = ExplodingWiki()
+    with pytest.raises(StagingCapabilityRequired):
+        ReleasePlanExecutor(wiki)
+    with pytest.raises(StagingCapabilityRequired):
+        ReleasePlanExecutor(wiki, staging_capability=object())
+
+    factory_calls = 0
+
+    def exploding_factory() -> Session:
+        nonlocal factory_calls
+        factory_calls += 1
+        raise AssertionError("session factory must not be opened")
+
+    with pytest.raises(StagingCapabilityRequired):
+        ReleasePublisher(exploding_factory, wiki)
+    with pytest.raises(StagingCapabilityRequired):
+        ReleasePublisher(
+            exploding_factory,
+            wiki,
+            staging_capability=object(),
+        )
+    assert factory_calls == 0
+    assert wiki.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_ra6_capability_is_exact_for_every_executor_entrypoint(
+    session: Session,
+) -> None:
+    scope_a = release_scope(session, "capability-a")
+    scope_b = release_scope(session, "capability-b")
+    session.commit()
+    capability = _issue_test_staging_capability(scope_a)
+
+    class ExplodingWiki:
+        calls = 0
+
+        async def get_wiki_page(self, *_args: object) -> object:
+            self.calls += 1
+            raise AssertionError("wrong-scope execution reached Wiki")
+
+    wiki = ExplodingWiki()
+    executor = ReleasePlanExecutor(wiki, staging_capability=capability)
+    plan = PublishPlan(
+        base_snapshot_id=None,
+        target_snapshot_id="target",
+        actions=(),
+        compensation_actions=(),
+    )
+
+    with pytest.raises(StagingCapabilityRequired):
+        executor.space_lock(scope_b)
+    with pytest.raises(StagingCapabilityRequired):
+        await executor.execute(scope_b, plan)
+    with pytest.raises(StagingCapabilityRequired):
+        await executor._execute_locked(scope_b, plan)
+    assert wiki.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_ra6_publisher_wrong_scope_capability_blocks_before_db_mutation_or_client(
+    session: Session,
+) -> None:
+    scope_a = release_scope(session, "publisher-cap-a")
+    scope_b = release_scope(session, "publisher-cap-b")
+    _product, version_b = release_product(session, scope_b, code="CAP-B")
+    session.commit()
+    bind = session.get_bind()
+    assert isinstance(bind, Engine)
+    capability = _issue_test_staging_capability(scope_a)
+
+    class ExplodingWiki:
+        calls = 0
+
+        def __getattribute__(self, name: str) -> object:
+            if name != "calls":
+                object.__setattr__(self, "calls", self.calls + 1)
+                raise AssertionError("wrong-scope publisher reached Wiki")
+            return object.__getattribute__(self, name)
+
+    wiki = ExplodingWiki()
+    publisher = ReleasePublisher(
+        session_factory=lambda: Session(bind),
+        wiki_client=wiki,
+        staging_capability=capability,
+    )
+    before = {
+        table: session.scalar(select(func.count()).select_from(table))
+        for table in (ReleaseSnapshot, CurrentRelease)
+    }
+
+    with pytest.raises(StagingCapabilityRequired):
+        await publisher.publish_product_version(
+            scope_b,
+            product_version_id=version_b.id,
+            label="capability-boundary",
+        )
+
+    session.expire_all()
+    assert {
+        table: session.scalar(select(func.count()).select_from(table))
+        for table in (ReleaseSnapshot, CurrentRelease)
+    } == before
+    assert wiki.calls == 0
+
+
+def test_ra6_production_blocked_signature_and_ast_have_no_client_surface() -> None:
+    parameters = inspect.signature(request_production_wiki_publish).parameters
+    assert tuple(parameters) == ("request",)
+    assert not {
+        "client",
+        "wiki_client",
+        "executor",
+        "release_publisher",
+    } & set(parameters)
 
 
 def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:
@@ -247,7 +389,14 @@ def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:
         for node in ast.walk(boundary_tree)
         if isinstance(node, ast.ImportFrom)
     }
-    forbidden = {"publisher", "weknora", "runtime", "model", "provider"}
+    forbidden = {
+        "publisher",
+        "release_plan",
+        "weknora",
+        "runtime",
+        "model",
+        "provider",
+    }
     assert not any(forbidden & set(module.split(".")) for module in boundary_modules)
 
     src_root = boundary_path.parents[2]
@@ -277,3 +426,18 @@ def test_ra6_boundary_and_production_src_have_no_publish_bypass() -> None:
         if imports_publisher or imports_legacy_name:
             bypasses.append(str(path.relative_to(src_root)))
     assert bypasses == []
+
+    issuer_calls = []
+    for path in src_root.rglob("*.py"):
+        if path.name == "release_plan.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, (ast.Name, ast.Attribute))
+            and getattr(node.func, "id", getattr(node.func, "attr", None))
+            == "_issue_test_staging_capability"
+            for node in ast.walk(tree)
+        ):
+            issuer_calls.append(str(path.relative_to(src_root)))
+    assert issuer_calls == []

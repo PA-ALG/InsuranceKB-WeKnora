@@ -20,7 +20,10 @@ from insurance_harness.db.base import make_session_factory
 from insurance_harness.db.models import ProductVersion
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation
 from insurance_harness.knowledge.publisher import PublishResult, ReleasePublisher
-from insurance_harness.knowledge.release_plan import PageOwnershipCollision
+from insurance_harness.knowledge.release_plan import (
+    PageOwnershipCollision,
+    _issue_test_staging_capability,
+)
 from insurance_harness.knowledge.tables import (
     Claim,
     CurrentRelease,
@@ -43,6 +46,18 @@ def test_r3_6_package_publish_api_requires_service_owned_session() -> None:
     assert "ReleasePublisher" not in knowledge_api.__all__
     assert not hasattr(knowledge_api, "PublishResult")
     assert "PublishResult" not in knowledge_api.__all__
+    for writer_surface in (
+        "ReleasePlanExecutor",
+        "WikiPageClient",
+        "PublishPlan",
+        "PublishAction",
+        "ActionExecution",
+        "LegacyPageOwnership",
+        "PageOwnershipCollision",
+        "WikiWriteVerificationError",
+    ):
+        assert not hasattr(knowledge_api, writer_surface)
+        assert writer_surface not in knowledge_api.__all__
     assert not hasattr(knowledge_api, "publish_product_version")
     assert "publish_product_version" not in knowledge_api.__all__
     assert set(knowledge_api.__all__) <= vars(knowledge_api).keys()
@@ -232,7 +247,12 @@ async def test_r3_2_r3_3_success_freezes_full_space_and_moves_pointer_last(
             observed.append((pointer, status))
 
     wiki.on_mutation = observe
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     result = await publisher.publish_product_version(
         scope,
@@ -263,7 +283,12 @@ async def test_r3_4_failed_second_page_is_durable_and_same_plan_retry_succeeds(
     factory = _factory(kb_session)
     wiki = _SagaWiki()
     wiki.fail_slug = "product/B/V1/overview"
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     with pytest.raises(WeKnoraTransientError, match="planned write failure"):
         await publisher.publish_product_version(
@@ -314,7 +339,12 @@ async def test_r3_4_first_action_ownership_collision_skips_reconciliation(
         page_metadata={"managed_by": "third-party"},
     )
     wiki.pages[(scope.wiki_kb_id, slug)] = third_party
-    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     with pytest.raises(PageOwnershipCollision, match="page ownership collision"):
         await publisher.publish_product_version(
@@ -342,7 +372,12 @@ async def test_r3_4_retry_collision_uses_operation_wide_mutation_history(
     scope, _version_a, version_b = _seed_two_products(kb_session)
     wiki = _SagaWiki()
     wiki.fail_slug = "product/B/V1/overview"
-    publisher = ReleasePublisher(_factory(kb_session), wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     with pytest.raises(WeKnoraTransientError, match="planned write failure"):
         await publisher.publish_product_version(
@@ -404,7 +439,12 @@ async def test_r3_1_retry_rejects_failed_plan_after_current_changes_without_side
     wiki = _SagaWiki()
     wiki_mutations: list[str] = []
     wiki.on_mutation = wiki_mutations.append
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     release_x = await publisher.publish_product_version(
         scope,
@@ -496,7 +536,10 @@ async def test_r3_5_wrong_upsert_readback_fails_before_pointer_and_creates_job(
 ) -> None:
     scope, _version_a, version_b = _seed_two_products(kb_session)
     publisher = ReleasePublisher(
-        _factory(kb_session), _WrongReadbackWiki(), now=lambda: NOW
+        _factory(kb_session),
+        _WrongReadbackWiki(),
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
     )
 
     with pytest.raises(RuntimeError, match="wiki write verification failed"):
@@ -528,7 +571,12 @@ async def test_r3_4_final_pointer_commit_failure_is_durable_and_reconcilable(
         return _FinalCommitFailingSession(bind=bind, expire_on_commit=False)
 
     _FinalCommitFailingSession.fail_final_commit = True
-    publisher = ReleasePublisher(factory, _SagaWiki(), now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        _SagaWiki(),
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     with pytest.raises(RuntimeError, match="planned final commit failure"):
         await publisher.publish_product_version(
@@ -553,7 +601,12 @@ async def test_r3_2_zero_fact_release_deletes_old_pages_and_is_current(
     scope, _version_a, version_b = _seed_two_products(kb_session)
     factory = _factory(kb_session)
     wiki = _SagaWiki()
-    publisher = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
     first = await publisher.publish_product_version(
         scope,
         product_version_id=version_b.id,
@@ -627,7 +680,12 @@ async def test_r3_1_recovery_distinguishes_pre_io_building_from_running(
         kb_session.flush()
         kb_session.add(operation)
     kb_session.commit()
-    publisher = ReleasePublisher(factory, _SagaWiki(), now=lambda: NOW)
+    publisher = ReleasePublisher(
+        factory,
+        _SagaWiki(),
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: NOW,
+    )
 
     recovered = await publisher.recover_expired(scope)
 
@@ -651,8 +709,13 @@ async def test_r4_5_two_publishers_share_engine_space_wiki_lock(
     scope, _version_a, version_b = _seed_two_products(kb_session)
     factory = _factory(kb_session)
     wiki = _ConcurrentWiki()
-    first = ReleasePublisher(factory, wiki, now=lambda: NOW)
-    second = ReleasePublisher(factory, wiki, now=lambda: NOW)
+    capability = _issue_test_staging_capability(scope)
+    first = ReleasePublisher(
+        factory, wiki, staging_capability=capability, now=lambda: NOW
+    )
+    second = ReleasePublisher(
+        factory, wiki, staging_capability=capability, now=lambda: NOW
+    )
 
     results = await asyncio.gather(
         first.publish_product_version(
@@ -689,7 +752,10 @@ async def test_r3_1_recovery_waits_for_same_engine_space_plan_lock(
     clock = [NOW]
     wiki = _LeaseWiki()
     publisher = ReleasePublisher(
-        _factory(kb_session), wiki, now=lambda: clock[0]
+        _factory(kb_session),
+        wiki,
+        staging_capability=_issue_test_staging_capability(scope),
+        now=lambda: clock[0],
     )
     publishing = asyncio.create_task(
         publisher.publish_product_version(

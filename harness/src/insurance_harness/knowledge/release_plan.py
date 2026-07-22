@@ -29,6 +29,66 @@ class WikiWriteVerificationError(RuntimeError):
         self.created_new = created_new
 
 
+class StagingCapabilityRequired(PermissionError):
+    """A legacy Wiki executor lacks an exact opaque staging/test capability."""
+
+
+_STAGING_CAPABILITY_MARKER = object()
+
+
+class _StagingCapability:
+    __slots__ = ("_marker", "_scopes")
+
+    _marker: object
+    _scopes: frozenset[tuple[str, str]]
+
+    def __init__(
+        self,
+        marker: object,
+        scopes: frozenset[tuple[str, str]],
+    ) -> None:
+        if marker is not _STAGING_CAPABILITY_MARKER or not scopes:
+            raise StagingCapabilityRequired("staging capability is required")
+        object.__setattr__(self, "_marker", marker)
+        object.__setattr__(self, "_scopes", scopes)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise StagingCapabilityRequired("staging capability is immutable")
+
+
+def _issue_test_staging_capability(
+    *scopes: KnowledgeScope,
+) -> _StagingCapability:
+    """Issue an exact capability only for explicit 018 test/staging scopes."""
+
+    if not scopes:
+        raise StagingCapabilityRequired("staging capability is required")
+    identities: set[tuple[str, str]] = set()
+    for scope in scopes:
+        require_bound_scope(scope)
+        identities.add((scope.space_id, scope.wiki_kb_id))
+    return _StagingCapability(
+        _STAGING_CAPABILITY_MARKER,
+        frozenset(identities),
+    )
+
+
+def _require_staging_capability(
+    capability: object,
+    scope: KnowledgeScope | None = None,
+) -> _StagingCapability:
+    if (
+        not isinstance(capability, _StagingCapability)
+        or capability._marker is not _STAGING_CAPABILITY_MARKER
+    ):
+        raise StagingCapabilityRequired("staging capability is required")
+    if scope is not None:
+        require_bound_scope(scope)
+        if (scope.space_id, scope.wiki_kb_id) not in capability._scopes:
+            raise StagingCapabilityRequired("staging capability scope mismatch")
+    return capability
+
+
 class PublishAction(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -175,7 +235,9 @@ class ReleasePlanExecutor:
         client: WikiPageClient,
         *,
         lock_namespace: object | None = None,
+        staging_capability: object | None = None,
     ) -> None:
+        self._staging_capability = _require_staging_capability(staging_capability)
         self._client = client
         self._lock_namespace = lock_namespace or self
 
@@ -191,7 +253,7 @@ class ReleasePlanExecutor:
 
     def space_lock(self, scope: KnowledgeScope) -> asyncio.Lock:
         """Return the process-local lock shared by this Engine and Space."""
-        require_bound_scope(scope)
+        _require_staging_capability(self._staging_capability, scope)
         return self._space_lock(scope.space_id)
 
     async def execute(
@@ -203,6 +265,7 @@ class ReleasePlanExecutor:
         attempt_finished: AttemptFinished | None = None,
         legacy_ownership: LegacyPageOwnership | None = None,
     ) -> tuple[ActionExecution, ...]:
+        _require_staging_capability(self._staging_capability, scope)
         async with self.space_lock(scope):
             return await self._execute_locked(
                 scope,
@@ -222,6 +285,7 @@ class ReleasePlanExecutor:
         legacy_ownership: LegacyPageOwnership | None = None,
     ) -> tuple[ActionExecution, ...]:
         """Execute while the caller holds this executor's Space lock."""
+        _require_staging_capability(self._staging_capability, scope)
         results: list[ActionExecution] = []
         for action_no, action in enumerate(plan.actions):
             await _callback(attempt_started, action_no, action)
