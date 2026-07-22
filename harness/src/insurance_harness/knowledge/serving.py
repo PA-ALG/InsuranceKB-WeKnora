@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import math
+from collections.abc import Callable, Iterator, Mapping
 from datetime import UTC, date, datetime
-from typing import Annotated, Literal
+from types import MappingProxyType
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    ValidationError,
+    field_validator,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.scope import KnowledgeScope, ScopeViolation, require_current_scope
 from insurance_harness.knowledge.release_manifest import (
     CanonicalSnapshotFact,
-    ImmutableJson,
     ReleaseManifest,
     ReleaseManifestBuildError,
     ReleaseManifestIntegrityError,
@@ -39,6 +48,78 @@ type ServingFailureCode = Literal[
     "effective_date_miss",
     "claim_not_found",
     "scope_mismatch",
+]
+
+type _ServingJsonScalar = str | int | float | bool | None
+
+
+class _ServingFrozenJsonObject(Mapping[str, "_ServingJsonValue"]):
+    """Mapping whose recursively frozen storage cannot be rebound after construction."""
+
+    __slots__ = ("_items", "_values")
+    _items: tuple[str, ...]
+    _values: Mapping[str, _ServingJsonValue]
+
+    def __init__(self, values: Mapping[str, _ServingJsonValue]) -> None:
+        items = tuple(sorted(values))
+        object.__setattr__(self, "_items", items)
+        object.__setattr__(
+            self,
+            "_values",
+            MappingProxyType({key: values[key] for key in items}),
+        )
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise TypeError("serving JSON object is immutable")
+
+    def __getitem__(self, key: str) -> _ServingJsonValue:
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+type _ServingJsonValue = (
+    _ServingJsonScalar
+    | tuple["_ServingJsonValue", ...]
+    | _ServingFrozenJsonObject
+)
+
+
+def _freeze_serving_json(value: object) -> _ServingJsonValue:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("serving JSON numbers must be finite")
+        return value
+    if isinstance(value, Mapping):
+        frozen: dict[str, _ServingJsonValue] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("serving JSON object keys must be strings")
+            frozen[key] = _freeze_serving_json(item)
+        return _ServingFrozenJsonObject(frozen)
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_serving_json(item) for item in value)
+    raise ValueError("value must be canonical serving JSON")
+
+
+def _thaw_serving_json(value: _ServingJsonValue) -> Any:
+    if isinstance(value, _ServingFrozenJsonObject):
+        return {key: _thaw_serving_json(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_serving_json(item) for item in value]
+    return value
+
+
+_ServingImmutableJson = Annotated[
+    Any,
+    BeforeValidator(_freeze_serving_json),
+    PlainSerializer(_thaw_serving_json, return_type=Any, when_used="always"),
 ]
 
 
@@ -138,7 +219,7 @@ class CanonicalServingFact(_StrictFrozenModel):
     field_name: str
     field_group: str
     value_state: Literal["present", "absent_explicitly", "unknown"]
-    value: ImmutableJson
+    value: _ServingImmutableJson
     effective_from: date | None
     effective_to: date | None
     confidence: float

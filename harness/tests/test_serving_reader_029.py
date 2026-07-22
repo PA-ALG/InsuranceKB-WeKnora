@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -609,6 +610,70 @@ def test_ra4_document_and_structured_evidence_are_strict_discriminated_dtos() ->
     assert [item["kind"] for item in dumped["evidence"]] == ["document", "structured"]
     assert "page" not in dumped["evidence"][1]
     assert "chunk_id" not in dumped["evidence"][1]
+
+
+def test_ra4_serving_value_is_recursively_deep_immutable_and_serializes_stably() -> None:
+    evidence = ServingStructuredEvidence(
+        kind="structured",
+        id="structured-immutable",
+        claim_id="claim-immutable",
+        source_system="official-catalog",
+        source_record_id="record-immutable",
+        source_revision="revision-1",
+        source_locator="$.record",
+        source_hash="e" * 64,
+        mapping_version="mapping/v1",
+    )
+    fact = CanonicalServingFact(
+        claim_id="claim-immutable",
+        revision_no=1,
+        product_id="product-immutable",
+        product_version_id="version-immutable",
+        product_code="IMMUTABLE",
+        product_name="深冻结",
+        version_label="V1",
+        predicate="structured_value",
+        field_name="结构值",
+        field_group="测试",
+        value_state="present",
+        value={"nested": {"answer": 42}, "array": [{"item": "stable"}]},
+        effective_from=None,
+        effective_to=None,
+        confidence=1.0,
+        schema_version="v1.1+release",
+        evidence=(evidence,),
+    )
+    result = ApprovedSnapshotResult(
+        snapshot_id="snapshot-immutable",
+        manifest_hash="f" * 64,
+        approval_principal="release.owner@example.com",
+        approved_at=datetime(2026, 7, 22, tzinfo=UTC),
+        read_model_version=1,
+        facts=(fact,),
+    )
+    before = result.model_dump_json()
+    before_hash = hashlib.sha256(before.encode()).hexdigest()
+    root = fact.value
+    nested = root["nested"]
+    array = root["array"]
+
+    for target in (root, nested, array[0]):
+        for attribute, replacement in (
+            ("_values", {"tampered": True}),
+            ("_items", ("tampered",)),
+        ):
+            with pytest.raises((AttributeError, TypeError), match="immutable"):
+                setattr(target, attribute, replacement)
+    with pytest.raises(TypeError):
+        array[0] = {"item": "tampered"}
+
+    after = result.model_dump_json()
+    assert after == before
+    assert hashlib.sha256(after.encode()).hexdigest() == before_hash
+    assert result.model_dump(mode="json")["facts"][0]["value"] == {
+        "array": [{"item": "stable"}],
+        "nested": {"answer": 42},
+    }
 
 
 def test_ra4_human_and_agent_use_same_public_dto_method(session: Session) -> None:
