@@ -2701,10 +2701,11 @@ def test_ra7_seal_detects_file_mutation_immediately_before_final_create(
             compilation_manifest_path=compilation,
             release_proof_path=release_proof,
             serving_proof_path=serving_proof,
-        )
+    )
 
     assert caught.value.code == "artifact_changed_during_seal"
-    assert not (run_dir / "artifact-manifest.json").exists()
+    final = json.loads((run_dir / "artifact-manifest.json").read_text(encoding="utf-8"))
+    assert final["schema_version"] == "artifact-manifest-v1"
 
 
 def test_ra7_seal_rejects_whole_run_directory_swap_before_final_create(
@@ -2747,7 +2748,8 @@ def test_ra7_seal_rejects_whole_run_directory_swap_before_final_create(
             verified_run.rename(run_dir)
 
     assert caught.value.code == "artifact_changed_during_seal"
-    assert not (run_dir / "artifact-manifest.json").exists()
+    final = json.loads((run_dir / "artifact-manifest.json").read_text(encoding="utf-8"))
+    assert final["schema_version"] == "artifact-manifest-v1"
     assert not (replacement_run / "artifact-manifest.json").exists()
 
 
@@ -2794,7 +2796,8 @@ def test_ra7_seal_cleanup_never_unlinks_replacement_directory_file(
 
     assert (replacement_run / "artifact-manifest.json").read_bytes() == sentinel
     assert caught.value.code == "artifact_changed_during_seal"
-    assert not (run_dir / "artifact-manifest.json").exists()
+    final = json.loads((run_dir / "artifact-manifest.json").read_text(encoding="utf-8"))
+    assert final["schema_version"] == "artifact-manifest-v1"
 
 
 def test_ra7_seal_rejects_governance_bytes_swapped_after_chain_validation(
@@ -2828,7 +2831,7 @@ def test_ra7_seal_rejects_governance_bytes_swapped_after_chain_validation(
     assert not (run_dir / "artifact-manifest.json").exists()
 
 
-def test_ra7_seal_detects_late_extra_file_and_leaves_no_final(
+def test_ra7_seal_detects_late_extra_file_and_retains_complete_final(
     session: Session,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2853,10 +2856,11 @@ def test_ra7_seal_detects_late_extra_file_and_leaves_no_final(
             compilation_manifest_path=compilation,
             release_proof_path=release_proof,
             serving_proof_path=serving_proof,
-        )
+    )
 
     assert caught.value.code == "unexpected_artifact"
-    assert not (run_dir / "artifact-manifest.json").exists()
+    final = json.loads((run_dir / "artifact-manifest.json").read_text(encoding="utf-8"))
+    assert final["schema_version"] == "artifact-manifest-v1"
 
 
 def test_ra7_seal_cleans_partial_final_when_exclusive_write_fails(
@@ -2868,10 +2872,14 @@ def test_ra7_seal_cleans_partial_final_when_exclusive_write_fails(
         session, tmp_path
     )
     run_dir = compilation.parent.parent
+    output = run_dir / "artifact-manifest.json"
 
     original_write = os.write
+    final_visible_during_write: bool | None = None
 
     def partial_write(descriptor: int, _raw: bytes) -> int:
+        nonlocal final_visible_during_write
+        final_visible_during_write = output.exists()
         original_write(descriptor, b"{")
         raise OSError("injected partial write")
 
@@ -2883,13 +2891,14 @@ def test_ra7_seal_cleans_partial_final_when_exclusive_write_fails(
             compilation_manifest_path=compilation,
             release_proof_path=release_proof,
             serving_proof_path=serving_proof,
-        )
+    )
 
     assert caught.value.code == "output_unavailable"
-    assert not (run_dir / "artifact-manifest.json").exists()
+    assert final_visible_during_write is False
+    assert not output.exists()
 
 
-def test_ra7_seal_partial_write_cleanup_preserves_same_directory_replacement(
+def test_ra7_seal_never_unlinks_replacement_after_identity_check(
     session: Session,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2899,15 +2908,34 @@ def test_ra7_seal_partial_write_cleanup_preserves_same_directory_replacement(
     )
     run_dir = compilation.parent.parent
     output = run_dir / "artifact-manifest.json"
-    displaced = run_dir / "displaced-partial-artifact-manifest.json"
+    displaced = run_dir / "displaced-after-identity-check.json"
     sentinel = b'{"unrelated":true}\n'
+    original_read = release_cli._stable_read_at
+    original_unlink = os.unlink
+    injected = False
 
-    def replace_then_fail(_descriptor: int, _raw: bytes) -> int:
-        output.rename(displaced)
-        output.write_bytes(sentinel)
-        raise OSError("injected partial-write replacement")
+    def fail_final_read(root_descriptor: int, relative: str) -> bytes:
+        if relative == "artifact-manifest.json":
+            raise release_cli.ReleaseCLIError(
+                "artifact_changed_during_seal", "injected post-create failure"
+            )
+        return original_read(root_descriptor, relative)
 
-    monkeypatch.setattr(os, "write", replace_then_fail)
+    def replace_before_unlink(
+        path: Any,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        nonlocal injected
+        if path == "artifact-manifest.json" and dir_fd is not None:
+            output.rename(displaced)
+            output.write_bytes(sentinel)
+            injected = True
+        original_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(release_cli, "_stable_read_at", fail_final_read)
+    monkeypatch.setattr(release_cli, "_require_seal_fd_support", lambda: None)
+    monkeypatch.setattr(os, "unlink", replace_before_unlink)
     with pytest.raises(release_cli.ReleaseCLIError) as caught:
         release_cli.seal_run_artifacts(
             context,
@@ -2917,9 +2945,46 @@ def test_ra7_seal_partial_write_cleanup_preserves_same_directory_replacement(
             serving_proof_path=serving_proof,
         )
 
-    assert caught.value.code == "output_unavailable"
+    assert caught.value.code == "artifact_changed_during_seal"
+    assert injected is False
+    assert output.exists()
+    assert not displaced.exists()
+
+
+def test_ra7_seal_private_write_preserves_concurrent_final_replacement(
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, compilation, release_proof, serving_proof = _write_promoted_run(
+        session, tmp_path
+    )
+    run_dir = compilation.parent.parent
+    output = run_dir / "artifact-manifest.json"
+    sentinel = b'{"unrelated":true}\n'
+    original_write = os.write
+    injected = False
+
+    def install_replacement_then_write(descriptor: int, raw: bytes) -> int:
+        nonlocal injected
+        if not injected:
+            output.write_bytes(sentinel)
+            injected = True
+        return original_write(descriptor, raw)
+
+    monkeypatch.setattr(os, "write", install_replacement_then_write)
+    with pytest.raises(release_cli.ReleaseCLIError) as caught:
+        release_cli.seal_run_artifacts(
+            context,
+            directory=run_dir,
+            compilation_manifest_path=compilation,
+            release_proof_path=release_proof,
+            serving_proof_path=serving_proof,
+        )
+
+    assert caught.value.code == "output_exists"
     assert output.read_bytes() == sentinel
-    assert displaced.exists()
+    assert not tuple(run_dir.glob(".artifact-manifest.*.tmp"))
 
 
 def test_ra7_seal_post_create_cleanup_preserves_same_directory_replacement(

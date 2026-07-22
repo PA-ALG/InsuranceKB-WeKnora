@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import sys
@@ -1977,6 +1978,8 @@ def _require_seal_fd_support() -> None:
         or os.open not in os.supports_dir_fd
         or os.stat not in os.supports_dir_fd
         or os.unlink not in os.supports_dir_fd
+        or os.link not in os.supports_dir_fd
+        or os.link not in os.supports_follow_symlinks
         or os.scandir not in os.supports_fd
     ):
         raise ReleaseCLIError(
@@ -2270,7 +2273,7 @@ def _supplied_relative(root: Path, supplied: str | Path) -> str:
     return relative
 
 
-def _unlink_created_if_unchanged(
+def _unlink_private_temp_if_unchanged(
     root_descriptor: int,
     relative: str,
     created_identity: tuple[int, int] | None,
@@ -2286,17 +2289,32 @@ def _unlink_created_if_unchanged(
         return
 
 
+def _open_private_seal_temp(root_descriptor: int) -> tuple[int, str]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    for _ in range(128):
+        relative = f".artifact-manifest.{secrets.token_hex(16)}.tmp"
+        try:
+            return os.open(relative, flags, 0o600, dir_fd=root_descriptor), relative
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise ReleaseCLIError(
+                "output_unavailable", "private output could not be created"
+            ) from exc
+    raise ReleaseCLIError("output_unavailable", "private output name is unavailable")
+
+
 def _write_json_exclusive_at(
     root_descriptor: int, relative: str, value: object
 ) -> tuple[int, int]:
     pure = PurePosixPath(relative)
     if pure.is_absolute() or len(pure.parts) != 1 or pure.parts[0] in {"", ".", ".."}:
         raise ReleaseCLIError("output_unavailable", "output path is unavailable")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
     descriptor: int | None = None
+    temp_relative: str | None = None
     created_identity: tuple[int, int] | None = None
     try:
-        descriptor = os.open(pure.parts[0], flags, 0o600, dir_fd=root_descriptor)
+        descriptor, temp_relative = _open_private_seal_temp(root_descriptor)
         state = os.fstat(descriptor)
         created_identity = _path_identity(state)
         if not stat.S_ISREG(state.st_mode):
@@ -2309,17 +2327,30 @@ def _write_json_exclusive_at(
                 raise OSError("output write made no progress")
             offset += written
         os.fsync(descriptor)
+        os.link(
+            temp_relative,
+            pure.parts[0],
+            src_dir_fd=root_descriptor,
+            dst_dir_fd=root_descriptor,
+            follow_symlinks=False,
+        )
+        installed = os.stat(
+            pure.parts[0], dir_fd=root_descriptor, follow_symlinks=False
+        )
+        if _path_identity(installed) != created_identity:
+            raise OSError("installed output identity changed")
         return created_identity
     except FileExistsError as exc:
         raise ReleaseCLIError("output_exists", "output path already exists") from exc
     except OSError as exc:
-        _unlink_created_if_unchanged(
-            root_descriptor, pure.parts[0], created_identity
-        )
         raise ReleaseCLIError("output_unavailable", "output could not be created") from exc
     finally:
         if descriptor is not None:
             os.close(descriptor)
+        if temp_relative is not None:
+            _unlink_private_temp_if_unchanged(
+                root_descriptor, temp_relative, created_identity
+            )
 
 
 def _seal_run_artifacts_locked(
@@ -2430,32 +2461,25 @@ def _seal_run_artifacts_locked(
         raise ReleaseCLIError(
             "artifact_changed_during_seal", "artifact changed before final create"
         )
-    output_identity: tuple[int, int] | None = None
-    try:
-        _verify_seal_root(root, root_descriptor)
-        output_identity = _write_json_exclusive_at(
-            root_descriptor,
-            "artifact-manifest.json",
-            artifact_manifest.model_dump(mode="json"),
+    _verify_seal_root(root, root_descriptor)
+    _write_json_exclusive_at(
+        root_descriptor,
+        "artifact-manifest.json",
+        artifact_manifest.model_dump(mode="json"),
+    )
+    expected_output = _canonical_bytes(artifact_manifest.model_dump(mode="json")) + b"\n"
+    if _stable_read_at(root_descriptor, "artifact-manifest.json") != expected_output:
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "final artifact manifest drifted"
         )
-        expected_output = _canonical_bytes(artifact_manifest.model_dump(mode="json")) + b"\n"
-        if _stable_read_at(root_descriptor, "artifact-manifest.json") != expected_output:
-            raise ReleaseCLIError(
-                "artifact_changed_during_seal", "final artifact manifest drifted"
-            )
-        after_create = _scan_sealed_files(
-            root, allowed_paths, output=output, root_descriptor=root_descriptor
+    after_create = _scan_sealed_files(
+        root, allowed_paths, output=output, root_descriptor=root_descriptor
+    )
+    _verify_seal_root(root, root_descriptor)
+    if after_create != (files, raw_files):
+        raise ReleaseCLIError(
+            "artifact_changed_during_seal", "artifact changed during final create"
         )
-        _verify_seal_root(root, root_descriptor)
-        if after_create != (files, raw_files):
-            raise ReleaseCLIError(
-                "artifact_changed_during_seal", "artifact changed during final create"
-            )
-    except Exception:
-        _unlink_created_if_unchanged(
-            root_descriptor, "artifact-manifest.json", output_identity
-        )
-        raise
     _verify_seal_root(root, root_descriptor)
     return artifact_manifest
 
