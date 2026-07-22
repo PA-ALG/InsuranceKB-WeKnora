@@ -1,0 +1,54 @@
+# Unsigned, offline shape only. This file is never an approval or trust source.
+purpose: enterprise-wiki-mvp
+run_schema_version: enterprise-wiki-mvp.v1
+run_id: <external-run-id>
+run_revision: <external-run-revision>
+space_id: <bound-space-id>
+entry_count: 23
+manifest_hash: <sha256>
+eligibility_hash: <sha256>
+golden_slice_hash: <sha256>
+routing_policy_identity: <immutable-routing-policy-id>
+routing_policy_hash: <sha256>
+schema_lock:
+  artifacts:
+    - path: <repository-relative-schema-path>
+      sha256: <sha256>
+schema_hash: <sha256>
+template_lock:
+  artifacts:
+    - path: <repository-relative-template-path>
+      sha256: <sha256>
+template_lock_hash: <sha256>
+structured_dispatch:
+  registration_entries:
+    - path: <repository-relative-product-meta-path>
+      sha256: <sha256>
+  source_registry_identity: <immutable-source-registry-id>
+  source_authority_hash: <sha256>
+  record_schema_refs: [<immutable-record-schema-ref>]
+  adapter_version: <immutable-adapter-version>
+  canonicalizer_version: <immutable-canonicalizer-version>
+  source_profile_fingerprints: [<sha256>]
+  mapping_manifest_hashes: [<sha256>]
+  effective_mapping_versions: [<immutable-mapping-version>]
+structured_dispatch_hash: <sha256>
+model_plan_hash: <sha256>
+approved_identities:
+  - provider: <code-approved-provider>
+    deployment_id: <immutable-deployment-id>
+    family: <code-approved-family>
+    role: <one-of-five-code-owned-roles>
+    policy_version: <immutable-policy-version>
+deployment_roles_hash: <sha256>
+approved_template_hashes: [<sha256>]
+resource_caps:
+  worker_limit: <positive-integer>
+  attempt_limit: <positive-integer>
+  time_limit_seconds: <positive-integer>
+  token_limit: <positive-integer>
+resource_caps_hash: <sha256>
+rights_hash: <sha256>
+provenance_hash: <sha256>
+clean_integration_sha: <clean-integration-sha>
+expires_at: <rfc3339-aware-datetime>

@@ -1,0 +1,8 @@
+{
+  "schema_version": "insurancekb.mvp-sanitized-artifact-index-template.v1",
+  "run_identity_digest": "<sha256>",
+  "admission_envelope_digest": "<sha256>",
+  "strict_request_digest": "<sha256>",
+  "status": "<BLOCKED-or-VERIFIED>",
+  "note": "Sanitized digest/status index only; no human decision, authority, secret, or raw response."
+}
