@@ -131,6 +131,41 @@ Spec 与 Quality/Security C/I=0；D 最终候选也已取得两路独立 C/I=0 �
 aggregate 可进入提交与 stacked PR 复核，但尚未据此把 PR #26 转为 Ready。该边界同样不覆盖外部签名、
 root-owned trust/provider、人工 clean identity 或真实 provider/live 条件。
 
+### 3.3 唯一一次 full deterministic 的 tree custody
+
+full 开始前，D 候选通过 temp index
+`/private/tmp/031-d-corrective-v4-20260723.index` 冻结为 tree
+`dc5224fcda48777b1c72b160a8b68b7ffecf3bc0`；当时 working blobs 与该 tree 的 26-path
+候选逐项相等，real index 为空。随后仅运行一次：
+
+`uv run pytest -m "not live and not integration_postgres" -q`
+
+结果为 **3280 passed / 30 deselected / 495 warnings（509.75s）**。该 full-tested tree 的
+source/test blob manifest 如下；临时 blocker 测试在 tree 中不存在，属于既定 sole deletion：
+
+| path | mode | blob |
+|---|---:|---|
+| `harness/src/insurance_harness/goldenset/admission.py` | 100644 | `6a7253d02105eb073df9e4c7863f9d9cad8b5a35` |
+| `harness/src/insurance_harness/goldenset/admission_coordinator.py` | 100644 | `1ab07697f1a28829da7508c3e656bb81259b6556` |
+| `harness/src/insurance_harness/goldenset/run_020.py` | 100644 | `83b74aac8140bd02a993bf0d83d15460fc23eda2` |
+| `harness/tests/test_operational_coordinator_031.py` | 100644 | `3f96e6c058efac198b35b5ca89086cffea87e8be` |
+| `harness/tests/test_run_admission_canary_authorization_020.py` | 100644 | `9d5149abb3b119e5599046a27af28be4fa5dbe3c` |
+| `harness/tests/test_run_admission_canary_ledger_020.py` | 100644 | `7e588a2fed57bc4d02f53747f6fc3ba5719441de` |
+| `harness/tests/test_run_admission_canary_runtime_020.py` | 100644 | `c77757d16659e17e29c53a62b3db900aa7b9d171` |
+| `harness/tests/test_run_admission_candidate_resume_020.py` | 100644 | `146f56125afeb0099629e0e4672f0ebe4a622ab8` |
+| `harness/tests/test_run_admission_entrypoints_020.py` | 100644 | `1d408222b7c220bd62d67dd1e15973945d210a85` |
+| `harness/tests/test_run_admission_evaluator_020.py` | 100644 | `9a5465b56c93e2e071ebabdca6e68aa2d20cce68` |
+| `harness/tests/test_run_admission_production_wiring_020.py` | 100644 | `2f190387cee310bf80c9966d7bde6418f6611405` |
+| `harness/tests/test_run_admission_request_pool_020.py` | 100644 | `5c49729ab6d492c1375841cada4b9fe8bd7bdd3a` |
+| `harness/tests/test_run_admission_runtime_020.py` | 100644 | `9f664f5b3994d6720c8cbacbf180390c4eac5f6e` |
+| `harness/tests/test_run_admission_usage_020.py` | 100644 | `f596ca26afebd84f295f44cfcca28c9f24a38bf9` |
+
+full 完成后到 commit tree `93add501207472e28aef4453060e8204362469dd` 的差异严格只有
+`HANDOFF.md`、本 change 的 `tasks.md` 与本报告三份既有 D 文档，用于机械回填门禁状态和数字；
+`git diff --quiet dc5224fc 93add501 -- harness/src harness/tests` 为 PASS。此后不得修改任何
+source/test blob；本节自身的证据补录也仅允许形成 validation-report 文档差异。若最终冻结树的
+任一 source/test blob 与上表不一致，full 证据立即失效并必须标记 `Not Ready`，不得自行重跑。
+
 ## 4. 外部未满足条件
 
 1. **人工 clean commit 与 identity 重算**：当前 AI 工作树不能提供 production clean SHA。人工提交
