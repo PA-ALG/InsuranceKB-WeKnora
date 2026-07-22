@@ -239,6 +239,8 @@ def _make_contract_snapshot_lifecycle() -> tuple[Any, Any, Any, Any]:
             if type(obj) is cls:
                 try:
                     obj = _snapshot_runtime_input(obj)
+                except MemoryError:
+                    raise
                 except Exception:
                     raise RuntimeContractError("invalid_contract_dto") from None
             return cast(Any, BaseModel.model_validate).__func__(
@@ -260,6 +262,8 @@ def _make_contract_snapshot_lifecycle() -> tuple[Any, Any, Any, Any]:
             raise RuntimeContractError("invalid_contract_dto")
         try:
             issue(self)
+        except MemoryError:
+            raise
         except Exception:
             raise RuntimeContractError("invalid_contract_dto") from None
 
@@ -440,6 +444,8 @@ def _snapshot_exact_model(model_type: type[BaseModel], value: object) -> dict[st
         return _restore_model_fields(entry.snapshot)
     except RuntimeContractError:
         raise
+    except MemoryError:
+        raise
     except Exception:
         raise RuntimeContractError("invalid_contract_dto") from None
 
@@ -501,6 +507,8 @@ def _canonical_contract_value(value: object) -> object:
         return _contract_value_semantics(entry.snapshot)
     except RuntimeContractError:
         raise
+    except MemoryError:
+        raise
     except Exception:
         raise RuntimeContractError("invalid_contract_dto") from None
 
@@ -514,6 +522,8 @@ def _snapshot_runtime_input(value: object) -> object:
                 key: _snapshot_runtime_input(item)
                 for key, item in _snapshot_exact_model(type(value), value).items()
             }
+        except MemoryError:
+            raise
         except Exception:
             raise RuntimeContractError("invalid_contract_dto") from None
     if isinstance(value, Mapping):
@@ -678,6 +688,8 @@ def _revalidate_exact[ModelT: _ImmutableModel](
             ModelT,
             model_type.model_validate(_snapshot_exact_model(model_type, value)),
         )
+    except MemoryError:
+        raise
     except Exception:
         raise RuntimeContractError("invalid_contract_dto") from None
     finally:
