@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import builtins
 import copy
 import gc
+import hashlib
 import json
 import pickle
+import threading
 import weakref
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
-from inspect import signature
+from inspect import iscoroutinefunction, signature
+from typing import Any, cast
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -16,17 +21,23 @@ from pydantic import BaseModel, ValidationError
 import insurance_harness.model_policy as model_policy_package
 import insurance_harness.model_policy.admission as admission_module
 import insurance_harness.model_policy.composition as composition_module
+import insurance_harness.model_policy.gateway as gateway_module
 import insurance_harness.model_policy.policy as policy_module
 from insurance_harness.model_policy import (
     AdmissionBinding,
     AdmissionPolicyDenied,
     AdmissionVerificationReceipt,
     AdmissionVerifier,
+    GuardedModelClient,
     IssuedModelPermit,
     ModelCallContext,
+    ModelCallFacts,
+    ModelCallRequest,
+    ModelGatewayDenied,
     ModelIdentity,
     ModelPermitView,
     ModelPolicyDenied,
+    ModelTransportError,
     PolicyReceipt,
     ProductionModelComposition,
     ProductionModelPolicy,
@@ -1392,3 +1403,2431 @@ def test_pwb4_authority_registry_concurrent_reads_do_not_transfer_authority() ->
     assert not any(invalid)
     assert all(permits)
     assert not any(forged_permits)
+
+
+def test_pwb4_gateway_public_call_has_only_raw_facts_and_request() -> None:
+    gateway_type = getattr(model_policy_package, "GuardedModelClient", None)
+
+    assert gateway_type is not None
+    assert "GuardedModelClient" in model_policy_package.__all__
+    assert tuple(signature(gateway_type.call).parameters) == (
+        "self",
+        "verified_admission",
+        "facts",
+        "request",
+    )
+    assert iscoroutinefunction(gateway_type.call)
+    assert signature(gateway_type.call).return_annotation == "str"
+    assert {
+        "permit",
+        "decision",
+        "policy",
+        "guard",
+        "verifier",
+        "binding",
+        "clock",
+        "checked_at",
+        "call_scope_hash",
+    }.isdisjoint(signature(gateway_type.call).parameters)
+
+
+def test_pwb4_gateway_public_facts_and_request_are_frozen_without_scope_hash() -> None:
+    facts_type = getattr(model_policy_package, "ModelCallFacts", None)
+    request_type = getattr(model_policy_package, "ModelCallRequest", None)
+
+    assert facts_type is not None
+    assert request_type is not None
+    assert "call_scope_hash" not in facts_type.model_fields
+    assert "call_scope_hash" not in request_type.model_fields
+    facts = facts_type(
+        job_id="job-1",
+        stage="extract",
+        attempt=1,
+        input_digest="1" * 64,
+        content_digest="2" * 64,
+        rendered_prompt_digest="3" * 64,
+        purpose="production-compilation",
+        run_schema_version="run-schema-v1",
+        space_id="space-insurance",
+        run_id="run-030",
+        run_revision="revision-a",
+        admission_artifact_digest="1" * 64,
+        template_hash="f" * 64,
+        model_plan_hash="a" * 64,
+        identity=_identity(),
+        role="extract",
+    )
+    request = request_type(content=b"content", rendered_prompt=b"secret prompt")
+
+    with pytest.raises(ValidationError):
+        facts.stage = "gap"
+    with pytest.raises(ValidationError):
+        request.content = b"changed"
+
+
+_TEST_CLIENT_EXECUTORS: weakref.WeakKeyDictionary[object, object] = (
+    weakref.WeakKeyDictionary()
+)
+_raw_build_guarded_model_client_for_test = (
+    gateway_module._build_guarded_model_client_for_test
+)
+
+
+def _gateway_executor_terminal_observations(
+    client: GuardedModelClient,
+) -> list[tuple[ModelIdentity, ModelCallRequest]]:
+    executor = _TEST_CLIENT_EXECUTORS.get(client)
+    return (
+        []
+        if executor is None
+        else list(gateway_module._test_executor_terminal_observations(executor))
+    )
+
+
+def _gateway_executor_terminal_details(
+    client: GuardedModelClient,
+) -> tuple[tuple[ModelIdentity, ModelCallRequest, object, int], ...]:
+    executor = _TEST_CLIENT_EXECUTORS.get(client)
+    return () if executor is None else gateway_module._test_executor_terminal_details(executor)
+
+
+def _build_test_gateway(
+    *,
+    composition: ProductionModelComposition,
+    transport_identity: ModelIdentity,
+    receipt_sink: object,
+    mode: str = "success",
+) -> GuardedModelClient:
+    executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=transport_identity,
+        mode=mode,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=receipt_sink,
+    )
+    _TEST_CLIENT_EXECUTORS[client] = executor
+    return client
+
+
+def _build_raw_arbitrary_gateway(
+    *,
+    composition: ProductionModelComposition,
+    transport: object,
+    transport_identity: ModelIdentity,
+    receipt_sink: object,
+) -> GuardedModelClient:
+    del transport_identity
+    return _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=transport,  # type: ignore[arg-type]
+        receipt_sink=receipt_sink,
+    )
+
+
+class _CountingReceiptSink:
+    def __init__(self) -> None:
+        self.receipts: list[PolicyReceipt] = []
+
+    def record(self, receipt: PolicyReceipt, /) -> None:
+        self.receipts.append(receipt)
+
+
+def _gateway_request() -> ModelCallRequest:
+    return ModelCallRequest(
+        content=b"input-content-secret-sentinel",
+        rendered_prompt=b"raw-prompt-secret-sentinel",
+    )
+
+
+def _gateway_facts(
+    verified: VerifiedAdmission,
+    request: ModelCallRequest,
+    **updates: object,
+) -> ModelCallFacts:
+    binding = verified.binding
+    values: dict[str, object] = {
+        "job_id": "job-1",
+        "stage": "extract",
+        "attempt": 1,
+        "input_digest": "b" * 64,
+        "content_digest": hashlib.sha256(request.content).hexdigest(),
+        "rendered_prompt_digest": hashlib.sha256(
+            request.rendered_prompt
+        ).hexdigest(),
+        "purpose": binding.actual_purpose,
+        "run_schema_version": binding.actual_run_schema_version,
+        "space_id": binding.actual_space_id,
+        "run_id": binding.actual_run_id,
+        "run_revision": binding.actual_run_revision,
+        "admission_artifact_digest": binding.actual_admission_artifact_digest,
+        "template_hash": binding.approved_template_hashes[0],
+        "model_plan_hash": binding.actual_model_plan_hash,
+        "identity": binding.approved_identities[0],
+        "role": binding.approved_identities[0].role,
+    }
+    values.update(updates)
+    return ModelCallFacts.model_validate(values)
+
+
+def _run_gateway_call(
+    client: GuardedModelClient,
+    verified_admission: object,
+    facts: object,
+    request: object,
+    **kwargs: object,
+) -> object:
+    return asyncio.run(
+        client.call(
+            verified_admission,  # type: ignore[arg-type]
+            facts,  # type: ignore[arg-type]
+            request,  # type: ignore[arg-type]
+            **kwargs,
+        )
+    )
+
+
+def test_pwb4_gateway_allow_persists_once_then_calls_weak_transport_once() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    facts = _gateway_facts(verified, request)
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    result = _run_gateway_call(client, verified, facts, request)
+
+    assert result == "weak-result"
+    assert _gateway_executor_terminal_observations(client) == [(_identity(), request)]
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+    serialized = sink.receipts[0].model_dump_json()
+    assert "input-content-secret-sentinel" not in serialized
+    assert "raw-prompt-secret-sentinel" not in serialized
+    with pytest.raises(TypeError):
+        GuardedModelClient(
+            composition=_composition(),
+            receipt_sink=sink,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "reason_code"),
+    [
+        ("purpose", "wrong-purpose", "purpose_mismatch"),
+        ("run_schema_version", "wrong-schema", "run_schema_version_mismatch"),
+        ("space_id", "other-space", "space_id_mismatch"),
+        ("run_id", "other-run", "run_id_mismatch"),
+        ("run_revision", "other-revision", "run_revision_mismatch"),
+        (
+            "admission_artifact_digest",
+            "0" * 64,
+            "admission_artifact_digest_mismatch",
+        ),
+        ("template_hash", "0" * 64, "template_not_approved"),
+        ("model_plan_hash", "0" * 64, "model_plan_hash_mismatch"),
+    ],
+)
+def test_pwb4_gateway_scope_mismatch_persists_one_deny_and_zero_transport(
+    field: str,
+    replacement: str,
+    reason_code: str,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelPolicyDenied) as denied:
+        _run_gateway_call(
+            client,
+            verified,
+            _gateway_facts(verified, request, **{field: replacement}),
+            request,
+        )
+
+    assert denied.value.reason_code == reason_code
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "DENY"
+    assert sink.receipts[0].reason_code == reason_code
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        _identity("qwen3.6-unlisted-20260715"),
+        _identity("qwen-latest"),
+        _identity("claude-opus"),
+    ],
+)
+def test_pwb4_gateway_invalid_identity_never_calls_or_falls_back(
+    identity: ModelIdentity,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client,
+            verified,
+            _gateway_facts(
+                verified,
+                request,
+                identity=identity,
+                role=identity.role,
+            ),
+            request,
+        )
+
+    assert denied.value.reason_code == "invalid_transport_identity"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+    with pytest.raises(TypeError):
+        _build_test_gateway(
+            composition=_composition(),
+            transport_identity=_identity(),
+            receipt_sink=sink,
+            fallback_transport=object(),
+        )  # type: ignore[call-arg]
+
+
+def test_pwb4_gateway_invalid_capability_context_and_request_are_zero_sink() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    facts = _gateway_facts(verified, request)
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    forged = object.__new__(VerifiedAdmission)
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(client, forged, facts, request)
+    assert denied.value.reason_code == "invalid_verified_admission"
+
+    with pytest.raises(ModelGatewayDenied) as invalid_context:
+        _run_gateway_call(client, verified, _call_context(verified), request)
+    assert invalid_context.value.reason_code == "invalid_call_facts"
+
+    malformed = ModelCallRequest.model_construct(
+        content="raw-prompt-secret-sentinel", rendered_prompt=b"prompt"
+    )
+    with pytest.raises(ModelGatewayDenied) as invalid_request:
+        _run_gateway_call(client, verified, facts, malformed)
+    assert invalid_request.value.reason_code == "invalid_call_request"
+    assert "raw-prompt-secret-sentinel" not in str(invalid_request.value)
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "reason_code"),
+    [
+        ("role", "gap", "role_mismatch"),
+        ("content_digest", "0" * 64, "call_content_digest_mismatch"),
+        (
+            "rendered_prompt_digest",
+            "0" * 64,
+            "rendered_prompt_digest_mismatch",
+        ),
+    ],
+)
+def test_pwb4_gateway_tampered_raw_facts_fail_before_policy_receipt(
+    field: str,
+    replacement: str,
+    reason_code: str,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client,
+            verified,
+            _gateway_facts(verified, request, **{field: replacement}),
+            request,
+        )
+
+    assert denied.value.reason_code == reason_code
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_sink_failure_prevents_transport() -> None:
+    class _FailingSink:
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            del receipt
+            raise RuntimeError("api-key-secret-sentinel")
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _FailingSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "receipt_sink_failure"
+    assert "api-key-secret-sentinel" not in str(denied.value)
+    assert _gateway_executor_terminal_observations(client) == []
+
+
+def test_pwb4_gateway_transport_exception_has_no_retry_or_secret_echo() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode="failure",
+    )
+
+    with pytest.raises(ModelTransportError) as failed:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert "raw-prompt-secret-sentinel" not in str(failed.value)
+    assert len(_gateway_executor_terminal_observations(client)) == 1
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_rechecks_expiry_before_persisting_allow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    monkeypatch.setattr(
+        gateway_module,
+        "_utc_now",
+        lambda: verified.binding.actual_expires_at,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_is_opaque_nontransferable_and_reset_revokes() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(TypeError):
+        copy.copy(client)
+    with pytest.raises(TypeError):
+        copy.deepcopy(client)
+    with pytest.raises(TypeError):
+        pickle.dumps(client)
+    forged = object.__new__(GuardedModelClient)
+    with pytest.raises(ModelGatewayDenied) as forged_denied:
+        _run_gateway_call(
+            forged, verified, _gateway_facts(verified, request), request
+        )
+    assert forged_denied.value.reason_code == "invalid_gateway"
+
+    old_lock = gateway_module._GATEWAY_LOCK
+    old_states = gateway_module._GATEWAY_STATES
+    gateway_module._reset_gateway_authority_after_fork()
+
+    assert gateway_module._GATEWAY_LOCK is not old_lock
+    assert gateway_module._GATEWAY_STATES is not old_states
+    with pytest.raises(ModelGatewayDenied) as reset_denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+    assert reset_denied.value.reason_code == "invalid_gateway"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_registry_value_does_not_retain_weak_key() -> None:
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=_CountingReceiptSink(),
+    )
+    reference = weakref.ref(client)
+
+    del client
+    gc.collect()
+
+    assert reference() is None
+
+
+def test_pwb4_gateway_fork_reset_captures_private_authority_resets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    registered_reset = gateway_module._reset_gateway_authority_after_fork
+    monkeypatch.setattr(
+        gateway_module,
+        "_reset_bound_transport_authority_after_fork",
+        lambda: None,
+    )
+
+    registered_reset()
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_sink_backref_does_not_retain_weak_key() -> None:
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    sink.gateway = client  # type: ignore[attr-defined]
+    reference = weakref.ref(client)
+
+    del client, sink
+    gc.collect()
+
+    assert reference() is None
+
+
+def test_pwb4_gateway_sink_type_backref_does_not_retain_weak_key() -> None:
+    sink_type = type("EphemeralSink", (_CountingReceiptSink,), {})
+    sink = sink_type()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    sink_type.gateway = client  # type: ignore[attr-defined]
+    reference = weakref.ref(client)
+
+    del client, sink, sink_type
+    gc.collect()
+
+    assert reference() is None
+
+
+def test_pwb4_gateway_fails_closed_when_stateful_target_is_dropped() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+    )
+    sink = _CountingReceiptSink()
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+    target_ref = weakref.ref(target)
+
+    del target
+    gc.collect()
+
+    assert target_ref() is None
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+    )
+    assert denied.value.reason_code == "invalid_gateway"
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_captured_authority_cannot_be_swapped_by_sink() -> None:
+    class _SwappingSink(_CountingReceiptSink):
+        def __init__(self) -> None:
+            super().__init__()
+            self.client: GuardedModelClient | None = None
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            assert self.client is not None
+            for field, replacement in (
+                ("_composition", _composition()),
+                ("_transport", object()),
+                ("_receipt_sink", _CountingReceiptSink()),
+            ):
+                with pytest.raises((AttributeError, TypeError)):
+                    object.__setattr__(self.client, field, replacement)
+            _CountingReceiptSink.record(self, receipt)
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _SwappingSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    sink.client = client
+
+    result = _run_gateway_call(
+        client, verified, _gateway_facts(verified, request), request
+    )
+
+    assert result == "weak-result"
+    assert len(_gateway_executor_terminal_observations(client)) == 1
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_authority_mutation_before_receipt_is_zero_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    def revoke_gateway() -> datetime:
+        gateway_module._reset_gateway_authority_after_fork()
+        return datetime.now(UTC)
+
+    monkeypatch.setattr(gateway_module, "_utc_now", revoke_gateway)
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_builder_and_call_expose_no_override_or_fallback_ports() -> None:
+    assert "_build_guarded_model_client_for_test" not in model_policy_package.__all__
+    assert not hasattr(
+        model_policy_package, "_build_guarded_model_client_for_test"
+    )
+    assert tuple(
+        signature(gateway_module._build_guarded_model_client_for_test).parameters
+    ) == ("composition", "executor", "receipt_sink")
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    facts = _gateway_facts(verified, request)
+
+    for kwargs in (
+        {"permit": object()},
+        {"decision": object()},
+        {"policy": object()},
+        {"guard": object()},
+        {"verifier": object()},
+        {"binding": _binding()},
+        {"clock": lambda: datetime.now(UTC)},
+        {"checked_at": datetime.now(UTC)},
+        {"call_scope_hash": "0" * 64},
+        {"fallback": object()},
+        {"candidate_promoter": lambda: None},
+    ):
+        with pytest.raises(TypeError):
+            _run_gateway_call(client, verified, facts, request, **kwargs)
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+@pytest.mark.parametrize("outcome", ["truncated", "exhausted", "no_consensus"])
+def test_pwb4_gateway_does_not_accept_orchestrator_outcomes_or_promotion(
+    outcome: str,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    values = _gateway_facts(verified, request).model_dump()
+    values["outcome"] = outcome
+
+    with pytest.raises(ValidationError):
+        ModelCallFacts.model_validate(values)
+
+
+def test_pwb4_gateway_revalidates_model_constructed_malformed_facts() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    valid = _gateway_facts(verified, request)
+    malformed_values: dict[str, Any] = valid.model_dump()
+    malformed_values["job_id"] = None
+    malformed = ModelCallFacts.model_construct(**malformed_values)
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(client, verified, malformed, request)
+
+    assert denied.value.reason_code == "invalid_call_facts"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_privately_derives_distinct_full_call_scopes() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    base = _gateway_facts(verified, request)
+    variants = (
+        base,
+        base.model_copy(update={"job_id": "job-2"}),
+        base.model_copy(update={"stage": "gap"}),
+        base.model_copy(update={"attempt": 2}),
+        base.model_copy(update={"input_digest": "c" * 64}),
+    )
+    for facts in variants:
+        _run_gateway_call(client, verified, facts, request)
+    changed_prompt = ModelCallRequest(
+        content=request.content,
+        rendered_prompt=b"another raw prompt",
+    )
+    _run_gateway_call(
+        client,
+        verified,
+        _gateway_facts(verified, changed_prompt),
+        changed_prompt,
+    )
+
+    scope_hashes = {receipt.call_scope_hash for receipt in sink.receipts}
+    assert len(scope_hashes) == len(sink.receipts) == 6
+    for receipt in sink.receipts:
+        assert receipt.permit_view is not None
+        assert receipt.call_scope_hash == receipt.permit_view.call_scope_hash
+
+
+def test_pwb4_gateway_scope_includes_full_verified_binding() -> None:
+    original = _verified()
+    alternate = _alternate_verified(
+        manifest_hash="0" * 64,
+        template_lock_hash="1" * 64,
+        clean_integration_sha="0" * 40,
+    )
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    _run_gateway_call(client, original, _gateway_facts(original, request), request)
+    _run_gateway_call(client, alternate, _gateway_facts(alternate, request), request)
+
+    assert len(sink.receipts) == 2
+    assert sink.receipts[0].call_scope_hash != sink.receipts[1].call_scope_hash
+    assert (
+        sink.receipts[0].verified_binding_digest
+        != sink.receipts[1].verified_binding_digest
+    )
+
+
+@pytest.mark.parametrize(
+    "transport_identity",
+    [
+        _identity().model_copy(update={"provider": "other-provider"}),
+        _identity("qwen3.6-other-20260715"),
+        _identity(role="gap"),
+        _identity().model_copy(update={"policy_version": "other-policy"}),
+        _identity("claude-opus"),
+    ],
+)
+def test_pwb4_gateway_factory_rejects_wrong_bound_transport_identity(
+    transport_identity: ModelIdentity,
+) -> None:
+    sink = _CountingReceiptSink()
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _build_test_gateway(
+            composition=_composition(),
+            transport_identity=transport_identity,
+            receipt_sink=sink,
+        )
+
+    assert denied.value.reason_code == "invalid_transport_identity"
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_wrong_bound_transport_family_is_zero_call() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    wrong_family = _identity().model_copy(update={"family": "qwen-vl"})
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=wrong_family,
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "invalid_transport_identity"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_bound_transport_is_opaque_and_nontransferable() -> None:
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    state = gateway_module._get_gateway_state(client)
+
+    assert state is not None
+    binding = state.transport_binding
+    assert "_BoundModelTransport" not in model_policy_package.__all__
+    assert not hasattr(model_policy_package, "_BoundModelTransport")
+    with pytest.raises(TypeError):
+        copy.copy(binding)
+    with pytest.raises(TypeError):
+        copy.deepcopy(binding)
+    with pytest.raises(TypeError):
+        pickle.dumps(binding)
+    forged = object.__new__(gateway_module._BoundModelTransport)
+    assert gateway_module._bound_transport_snapshot(forged) is None
+
+
+def test_pwb4_gateway_executor_is_opaque_and_retained_only_by_live_gateway() -> None:
+    composition = _composition()
+    executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+    )
+    sink = _CountingReceiptSink()
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+    executor_ref = weakref.ref(executor)
+
+    with pytest.raises(TypeError):
+        copy.copy(executor)
+    with pytest.raises(TypeError):
+        copy.deepcopy(executor)
+    with pytest.raises(TypeError):
+        pickle.dumps(executor)
+    del executor
+    gc.collect()
+
+    assert executor_ref() is not None
+    verified = _verified()
+    request = _gateway_request()
+    assert (
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+        == "weak-result"
+    )
+
+    del client
+    gc.collect()
+    assert executor_ref() is None
+
+
+@pytest.mark.parametrize("invalid_dependency", ["sync_transport", "async_sink"])
+def test_pwb4_gateway_factory_rejects_wrong_dependency_execution_model(
+    invalid_dependency: str,
+) -> None:
+    class _SyncTransport:
+        __slots__ = ("__weakref__",)
+
+        def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            del identity, request
+            return "deferred"
+
+    class _AsyncSink:
+        records = 0
+
+        async def record(self, receipt: PolicyReceipt, /) -> None:
+            del receipt
+            type(self).records += 1
+
+    class _AsyncTransport:
+        __slots__ = ("__weakref__",)
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            del identity, request
+            return "unused"
+
+    transport: object = (
+        _SyncTransport()
+        if invalid_dependency == "sync_transport"
+        else _AsyncTransport()
+    )
+    sink: object = (
+        _AsyncSink()
+        if invalid_dependency == "async_sink"
+        else _CountingReceiptSink()
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _build_raw_arbitrary_gateway(
+            composition=_composition(),
+            transport=transport,
+            transport_identity=_identity(),
+            receipt_sink=sink,
+    )
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _AsyncSink.records == 0
+
+
+def test_pwb4_gateway_transport_code_mutation_before_use_is_zero_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def strong_call(
+        self: object,
+        identity: ModelIdentity,
+        request: ModelCallRequest,
+        /,
+    ) -> object:
+        del self, identity, request
+        return "strong"
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    adapter_type = gateway_module._CanonicalModelTransportAdapter
+    original_code = adapter_type.call.__code__
+
+    def mutate_code() -> datetime:
+        adapter_type.call.__code__ = strong_call.__code__
+        return datetime.now(UTC)
+
+    monkeypatch.setattr(gateway_module, "_utc_now", mutate_code)
+    try:
+        with pytest.raises(ModelGatewayDenied):
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        adapter_type.call.__code__ = original_code
+
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_sink_advancing_clock_to_expiry_prevents_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [datetime.now(UTC)]
+
+    class _AdvancingSink(_CountingReceiptSink):
+        def __init__(self, expires_at: datetime, clock: list[datetime]) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.expires_at = expires_at
+            self.clock = clock
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.clock[0] = self.expires_at
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _AdvancingSink(verified.binding.actual_expires_at, clock)
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    monkeypatch.setattr(gateway_module, "_utc_now", lambda: clock[0])
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_clock_crossing_expiry_during_authority_snapshot_is_zero_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [datetime.now(UTC)]
+    digest_calls = 0
+    original_digest = policy_module._approved_keys_digest
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    def advance_during_second_snapshot(keys: frozenset[object]) -> str:
+        nonlocal digest_calls
+        digest_calls += 1
+        if digest_calls == 2:
+            clock[0] = verified.binding.actual_expires_at
+        return original_digest(keys)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(gateway_module, "_utc_now", lambda: clock[0])
+    monkeypatch.setattr(
+        gateway_module,
+        "_approved_keys_digest",
+        advance_during_second_snapshot,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+@pytest.mark.parametrize("authority", ["gateway", "composition", "transport"])
+def test_pwb4_gateway_sink_revoking_authority_prevents_transport(
+    authority: str,
+) -> None:
+    class _RevokingSink(_CountingReceiptSink):
+        def __init__(self, authority: str) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.authority = authority
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            if self.authority == "gateway":
+                gateway_module._reset_gateway_authority_after_fork()
+            elif self.authority == "composition":
+                composition_module._reset_composition_authority_after_fork()
+            else:
+                gateway_module._reset_bound_transport_authority_after_fork()
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _RevokingSink(authority)
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_sink_mutating_transport_code_prevents_transport() -> None:
+    async def strong_call(
+        self: object,
+        identity: ModelIdentity,
+        request: ModelCallRequest,
+        /,
+    ) -> object:
+        del self, identity, request
+        return "strong"
+
+    class _MutatingSink(_CountingReceiptSink):
+        def __init__(self, transport_type: type[object], code: object) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.transport_type = transport_type
+            self.code = code
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.transport_type.call.__code__ = self.code  # type: ignore[attr-defined]
+
+    adapter_type = gateway_module._CanonicalModelTransportAdapter
+    original_code = adapter_type.call.__code__
+    verified = _verified()
+    request = _gateway_request()
+    sink = _MutatingSink(adapter_type, strong_call.__code__)
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    try:
+        with pytest.raises(ModelGatewayDenied):
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        adapter_type.call.__code__ = original_code
+
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_sink_rebinding_bound_snapshot_to_same_identity_executor_is_zero_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _SnapshotRebindingSink(_CountingReceiptSink):
+        def __init__(
+            self,
+            patcher: pytest.MonkeyPatch,
+            replacement: object,
+        ) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.patcher = patcher
+            self.replacement = replacement
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.patcher.setattr(
+                gateway_module,
+                "_bound_transport_snapshot",
+                self.replacement,
+            )
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    weak_executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+    )
+    replacement_executor = gateway_module._issue_test_model_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+    )
+
+    def replacement_snapshot(_binding: object) -> object:
+        return gateway_module._consume_executor(replacement_executor)
+
+    sink = _SnapshotRebindingSink(monkeypatch, replacement_snapshot)
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=weak_executor,
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert gateway_module._test_executor_terminal_observations(weak_executor) == ()
+    assert gateway_module._test_executor_terminal_observations(replacement_executor) == ()
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_sink_mutating_own_code_prevents_transport() -> None:
+    def replacement_record(self: object, _receipt: PolicyReceipt, /) -> None:
+        type(self).replacement_calls += 1  # type: ignore[attr-defined]
+
+    class _SelfMutatingSink(_CountingReceiptSink):
+        replacement_calls = 0
+
+        def __init__(self, replacement_code: object) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.replacement_code = replacement_code
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            type(self).record.__code__ = self.replacement_code  # type: ignore[assignment]
+
+    original_code = _SelfMutatingSink.record.__code__
+    verified = _verified()
+    request = _gateway_request()
+    sink = _SelfMutatingSink(replacement_record.__code__)
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    try:
+        with pytest.raises(ModelGatewayDenied):
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        _SelfMutatingSink.record.__code__ = original_code
+
+    assert _gateway_executor_terminal_observations(client) == []
+    assert _SelfMutatingSink.replacement_calls == 0
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_sink_code_mutated_before_call_is_zero_transport() -> None:
+    class _MutableSink(_CountingReceiptSink):
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+
+    def replacement_record(self: object, _receipt: PolicyReceipt, /) -> None:
+        type(self).replacement_calls += 1  # type: ignore[attr-defined]
+
+    _MutableSink.replacement_calls = 0  # type: ignore[attr-defined]
+    original_code = _MutableSink.record.__code__
+    verified = _verified()
+    request = _gateway_request()
+    sink = _MutableSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    _MutableSink.record.__code__ = replacement_record.__code__
+
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        _MutableSink.record.__code__ = original_code
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+    assert _MutableSink.replacement_calls == 0  # type: ignore[attr-defined]
+
+
+async def _deferred_transport_result() -> object:
+    return "deferred-result"
+
+
+def test_pwb4_gateway_canonical_async_executor_runs_once() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+    async def invoke() -> object:
+        expected_loop = asyncio.get_running_loop()
+        expected_thread = threading.get_ident()
+        result = await client.call(
+            verified,
+            _gateway_facts(verified, request),
+            request,
+        )
+        observations = _gateway_executor_terminal_details(client)
+        assert len(observations) == 1
+        assert observations[0][2] is expected_loop
+        assert observations[0][3] == expected_thread
+        return result
+
+    result = asyncio.run(invoke())
+
+    assert result == "weak-result"
+    assert _gateway_executor_terminal_observations(client) == [(_identity(), request)]
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_sealed_stateful_model_client_bridge_maps_utf8_on_same_loop() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="api-key-secret-sentinel",
+    )
+    sink = _CountingReceiptSink()
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+    async def invoke() -> object:
+        return await client.call(verified, _gateway_facts(verified, request), request)
+
+    result = asyncio.run(invoke())
+
+    assert result == "stateful-result"
+    assert gateway_module._test_stateful_target_calls(target) == (
+        (
+            request.rendered_prompt.decode("utf-8"),
+            request.content.decode("utf-8"),
+        ),
+    )
+    observations = gateway_module._test_stateful_target_observations(target)
+    assert len(observations) == 1
+    assert observations[0][2].is_closed()
+    assert observations[0][3] == threading.get_ident()
+    assert gateway_module._test_executor_terminal_observations(executor) == (
+        (_identity(), request),
+    )
+    assert len(sink.receipts) == 1
+    assert "api-key-secret-sentinel" not in sink.receipts[0].model_dump_json()
+
+
+def test_pwb4_gateway_sink_cannot_mutate_stateful_target_route() -> None:
+    class _RouteMutatingSink(_CountingReceiptSink):
+        def __init__(self, target: Any) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.target = target
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.target.endpoint = "https://strong.example.test"
+            self.target.model = "strong-model"
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+    )
+    sink = _RouteMutatingSink(target)
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client, verified, _gateway_facts(verified, request), request
+        )
+
+    assert denied.value.reason_code == "receipt_sink_failure"
+    assert gateway_module._test_stateful_target_calls(target) == ()
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_json_helper_rebind_cannot_redirect_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _RedirectingJson:
+        @staticmethod
+        def loads(_value: object) -> dict[str, str]:
+            return {"result": "strong-result"}
+
+    class _JsonHelperRebindingSink(_CountingReceiptSink):
+        def __init__(
+            self,
+            patcher: pytest.MonkeyPatch,
+            redirecting_json: type[object],
+        ) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.patcher = patcher
+            self.redirecting_json = redirecting_json
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.patcher.setattr(
+                gateway_module,
+                "json",
+                self.redirecting_json,
+            )
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+        result="weak-result",
+    )
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    sink = _JsonHelperRebindingSink(monkeypatch, _RedirectingJson)
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    result = _run_gateway_call(
+        client, verified, _gateway_facts(verified, request), request
+    )
+
+    assert result == "weak-result"
+    assert gateway_module._test_stateful_target_calls(target) == (
+        (
+            request.rendered_prompt.decode("utf-8"),
+            request.content.decode("utf-8"),
+        ),
+    )
+    assert len(sink.receipts) == 1
+
+
+@pytest.mark.parametrize("helper_name", ["target_snapshot", "target_invoke"])
+def test_pwb4_gateway_executor_closure_helper_rebind_is_zero_call(
+    helper_name: str,
+) -> None:
+    class _ClosureHelperRebindingSink(_CountingReceiptSink):
+        def __init__(
+            self,
+            owner: Any,
+            selected_helper: str,
+            replacement: Any,
+        ) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.owner = owner
+            self.selected_helper = selected_helper
+            self.replacement = replacement
+            self.mutated_cell: Any = None
+            self.original: Any = None
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            closure = self.owner.__closure__
+            if closure is None:
+                raise AssertionError("executor consumer must close over its helpers")
+            cells = dict(zip(self.owner.__code__.co_freevars, closure, strict=True))
+            self.mutated_cell = cells[self.selected_helper]
+            self.original = self.mutated_cell.cell_contents
+            self.mutated_cell.cell_contents = self.replacement
+
+        def restore(self) -> None:
+            if self.mutated_cell is not None:
+                self.mutated_cell.cell_contents = self.original
+
+    async def redirected_invoke(
+        _target: object,
+        _system: str,
+        _user: str,
+    ) -> str:
+        return "redirected-result"
+
+    original_snapshot = gateway_module._stateful_target_snapshot
+
+    def equivalent_snapshot(target: object) -> object:
+        return original_snapshot(target)
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+        result="weak-result",
+    )
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    replacement = (
+        equivalent_snapshot
+        if helper_name == "target_snapshot"
+        else redirected_invoke
+    )
+    consume = gateway_module._consume_executor
+    consume_closure = consume.__closure__
+    assert consume_closure is not None
+    consume_cells = dict(
+        zip(consume.__code__.co_freevars, consume_closure, strict=True)
+    )
+    mutation_owner = (
+        consume
+        if helper_name in consume_cells
+        else consume_cells["validate_locked"].cell_contents
+    )
+    sink = _ClosureHelperRebindingSink(
+        mutation_owner,
+        helper_name,
+        replacement,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        sink.restore()
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert gateway_module._test_executor_terminal_observations(executor) == ()
+    assert gateway_module._test_stateful_target_calls(target) == ()
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_executor_helper_dependency_rebind_is_zero_call() -> None:
+    class _HelperDependencyRebindingSink(_CountingReceiptSink):
+        def __init__(self, helper: Any, replacement: Any) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.helper = helper
+            self.replacement = replacement
+            self.mutated_cell: Any = None
+            self.original: Any = None
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            closure = self.helper.__closure__
+            if closure is None:
+                raise AssertionError("target helper must close over dependencies")
+            cells = dict(zip(self.helper.__code__.co_freevars, closure, strict=True))
+            self.mutated_cell = cells["json_loads"]
+            self.original = self.mutated_cell.cell_contents
+            self.mutated_cell.cell_contents = self.replacement
+
+        def restore(self) -> None:
+            if self.mutated_cell is not None:
+                self.mutated_cell.cell_contents = self.original
+
+    def redirected_loads(_value: object) -> dict[str, str]:
+        return {"result": "redirected-result"}
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+        result="weak-result",
+    )
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    sink = _HelperDependencyRebindingSink(
+        gateway_module._invoke_stateful_target,
+        redirected_loads,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        sink.restore()
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert gateway_module._test_executor_terminal_observations(executor) == ()
+    assert gateway_module._test_stateful_target_calls(target) == ()
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_second_thread_route_mutation_after_validation_is_ignored() -> None:
+    validated = threading.Event()
+    mutated = threading.Event()
+    mutation_blocked: list[bool] = []
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+        result="weak-result",
+    )
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    assert gateway_module._set_stateful_target_barrier_for_test(
+        target,
+        validated,
+        mutated,
+    )
+    sink = _CountingReceiptSink()
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    def mutate_route() -> None:
+        try:
+            assert validated.wait(timeout=5)
+            target.result = "strong-result"  # type: ignore[attr-defined]
+        except (AttributeError, TypeError):
+            mutation_blocked.append(True)
+        finally:
+            mutated.set()
+
+    mutator = threading.Thread(target=mutate_route)
+    mutator.start()
+    result = _run_gateway_call(
+        client, verified, _gateway_facts(verified, request), request
+    )
+    mutator.join(timeout=5)
+
+    assert not mutator.is_alive()
+    assert mutation_blocked == [True]
+    assert result == "weak-result"
+    assert gateway_module._test_stateful_target_calls(target) == (
+        (
+            request.rendered_prompt.decode("utf-8"),
+            request.content.decode("utf-8"),
+        ),
+    )
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_stateful_test_issuer_rejects_custom_target_shape() -> None:
+    class _CustomTarget:
+        async def complete(self, system: str, user: str) -> str:
+            return f"{system}:{user}"
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        gateway_module._issue_stateful_model_client_executor_for_test(
+            composition=_composition(),
+            transport_identity=_identity(),
+            target=_CustomTarget(),
+        )
+
+    assert denied.value.reason_code == "invalid_gateway"
+
+
+def test_pwb4_gateway_stateful_test_issuer_rejects_model_identity_mismatch() -> None:
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model="strong-or-other-model",
+        credential="weak-credential",
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        gateway_module._issue_stateful_model_client_executor_for_test(
+            composition=_composition(),
+            transport_identity=_identity(),
+            target=target,
+        )
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert gateway_module._test_stateful_target_calls(target) == ()
+
+
+def test_pwb4_gateway_stateful_target_exposes_no_mutable_route_fields() -> None:
+    identity = _identity()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=identity.deployment_id,
+        credential="weak-credential",
+    )
+
+    for field in ("endpoint", "model", "credential", "result"):
+        with pytest.raises((AttributeError, TypeError)):
+            setattr(target, field, "replacement")
+
+    assert gateway_module._test_stateful_target_calls(target) == ()
+
+
+def test_pwb4_gateway_sink_mutating_stateful_complete_code_is_zero_target_call() -> None:
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+    )
+    target_type = type(target)
+    original_code = target_type.complete.__code__  # type: ignore[attr-defined]
+
+    strong_result = "strong-result"
+
+    async def replacement_complete(self: object, system: str, user: str) -> str:
+        del self, system, user
+        return strong_result
+
+    class _TargetCodeMutatingSink(_CountingReceiptSink):
+        def __init__(self, target_type: type[object], code: object) -> None:
+            _CountingReceiptSink.__init__(self)
+            self.target_type = target_type
+            self.code = code
+
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            self.target_type.complete.__code__ = self.code  # type: ignore[attr-defined]
+
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    sink = _TargetCodeMutatingSink(target_type, replacement_complete.__code__)
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _run_gateway_call(
+                client, verified, _gateway_facts(verified, request), request
+            )
+    finally:
+        target_type.complete.__code__ = original_code  # type: ignore[attr-defined]
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert gateway_module._test_stateful_target_calls(target) == ()
+    assert len(sink.receipts) == 1
+
+
+@pytest.mark.parametrize("field", ["content", "rendered_prompt"])
+def test_pwb4_gateway_request_rejects_non_utf8_before_authority(
+    field: str,
+) -> None:
+    values = {
+        "content": b"valid-user",
+        "rendered_prompt": b"valid-system",
+    }
+    values[field] = b"\xff"
+
+    with pytest.raises(ValidationError):
+        ModelCallRequest.model_validate(values)
+
+    malformed = ModelCallRequest.model_construct(
+        content=values["content"],
+        rendered_prompt=values["rendered_prompt"],
+    )
+    verified = _verified()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _run_gateway_call(
+            client,
+            verified,
+            _gateway_facts(verified, malformed),
+            malformed,
+        )
+
+    assert denied.value.reason_code == "invalid_call_request"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_factory_rejects_regular_function_returning_coroutine() -> None:
+    class _DeferredTransport:
+        __slots__ = ("__weakref__",)
+
+        def call(
+            self,
+            _identity: ModelIdentity,
+            _request: ModelCallRequest,
+            /,
+        ) -> object:
+            return _deferred_transport_result()
+
+    sink = _CountingReceiptSink()
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _build_raw_arbitrary_gateway(
+            composition=_composition(),
+            transport=_DeferredTransport(),
+            transport_identity=_identity(),
+            receipt_sink=sink,
+        )
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_rejects_and_closes_nested_transport_awaitable() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode="nested",
+    )
+
+    with pytest.raises(ModelTransportError):
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+
+
+@pytest.mark.parametrize(
+    ("mode", "frame_attribute"),
+    [
+        ("generator", "gi_frame"),
+        ("async-generator", "ag_frame"),
+    ],
+)
+def test_pwb4_gateway_rejects_and_closes_deferred_generator_results(
+    mode: str,
+    frame_attribute: str,
+    recwarn: pytest.WarningsRecorder,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode=mode,
+    )
+
+    with pytest.raises(ModelTransportError):
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    executor = _TEST_CLIENT_EXECUTORS[client]
+    deferred = gateway_module._test_executor_deferred_results(executor)
+    assert len(deferred) == 1
+    assert getattr(deferred[0], frame_attribute) is None
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+    gc.collect()
+    assert list(recwarn) == []
+
+
+@pytest.mark.parametrize("mode", ["bytes", "object"])
+def test_pwb4_gateway_accepts_only_exact_str_terminal_values(mode: str) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode=mode,
+    )
+
+    with pytest.raises(ModelTransportError):
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_rejects_bare_awaitable_without_executing_it(
+    recwarn: pytest.WarningsRecorder,
+) -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode="bare-awaitable",
+    )
+
+    with pytest.raises(ModelTransportError):
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    executor = _TEST_CLIENT_EXECUTORS[client]
+    deferred = gateway_module._test_executor_deferred_results(executor)
+    assert len(deferred) == 1
+    assert cast(Any, deferred[0]).deferred_calls == 0
+    assert gateway_module._test_executor_terminal_observations(executor) == ()
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+    gc.collect()
+    assert list(recwarn) == []
+
+
+def test_pwb4_gateway_cleanup_cancellation_propagates_without_observation() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode="slow-aclose",
+    )
+    executor = _TEST_CLIENT_EXECUTORS[client]
+
+    async def cancel_during_cleanup() -> None:
+        call = asyncio.create_task(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+        deferred: tuple[object, ...] = ()
+        while not deferred:
+            await asyncio.sleep(0)
+            deferred = gateway_module._test_executor_deferred_results(executor)
+        cleanup_target = cast(Any, deferred[0])
+        await cleanup_target.cleanup_entered.wait()
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        assert call.cancelled()
+
+    asyncio.run(cancel_during_cleanup())
+
+    assert gateway_module._test_executor_terminal_observations(executor) == ()
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_sync_sink_returning_awaitable_is_receipt_failure() -> None:
+    class _DeferredSink:
+        def __init__(self) -> None:
+            self.receipts: list[PolicyReceipt] = []
+
+        def record(self, receipt: PolicyReceipt, /) -> object:
+            self.receipts.append(receipt)
+            return _deferred_transport_result()
+
+    verified = _verified()
+    request = _gateway_request()
+    sink = _DeferredSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+    )
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    assert denied.value.reason_code == "receipt_sink_failure"
+    assert _gateway_executor_terminal_observations(client) == []
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_propagates_transport_cancellation_without_retry() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    sink = _CountingReceiptSink()
+    client = _build_test_gateway(
+        composition=_composition(),
+        transport_identity=_identity(),
+        receipt_sink=sink,
+        mode="cancel",
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+
+    assert _gateway_executor_terminal_observations(client) == [(_identity(), request)]
+    assert len(sink.receipts) == 1
+
+
+def test_pwb4_gateway_final_target_revocation_is_typed_zero_observation() -> None:
+    verified = _verified()
+    request = _gateway_request()
+    composition = _composition()
+    target = gateway_module._build_stateful_model_client_target_for_test(
+        endpoint="https://weak.example.test",
+        model=_identity().deployment_id,
+        credential="weak-credential",
+    )
+    executor = gateway_module._issue_stateful_model_client_executor_for_test(
+        composition=composition,
+        transport_identity=_identity(),
+        target=target,
+    )
+    sink = _CountingReceiptSink()
+    client = _raw_build_guarded_model_client_for_test(
+        composition=composition,
+        executor=executor,
+        receipt_sink=sink,
+    )
+
+    async def invoke_after_revocation() -> None:
+        entered = asyncio.Event()
+        resume = asyncio.Event()
+        assert gateway_module._set_stateful_target_precheck_barrier_for_test(
+            target,
+            entered,
+            resume,
+        )
+        call = asyncio.create_task(
+            client.call(verified, _gateway_facts(verified, request), request)
+        )
+        await entered.wait()
+        gateway_module._reset_stateful_target_authority_after_fork()
+        resume.set()
+        await call
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        asyncio.run(invoke_after_revocation())
+
+    assert denied.value.reason_code == "authority_revalidation_failed"
+    assert gateway_module._test_executor_terminal_observations(executor) == ()
+    assert gateway_module._test_stateful_target_calls(target) == ()
+    assert len(sink.receipts) == 1
+    assert sink.receipts[0].decision == "ALLOW"
+
+
+def test_pwb4_gateway_factory_rejects_noncanonical_mutable_adapter_shape() -> None:
+    class _MutableRouteTransport:
+        __slots__ = ("route", "__weakref__")
+        calls = 0
+
+        def __init__(self) -> None:
+            self.route = "weak"
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            type(self).calls += 1
+            del identity, request
+            return self.route
+
+    transport = _MutableRouteTransport()
+    sink = _CountingReceiptSink()
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _build_raw_arbitrary_gateway(
+            composition=_composition(),
+            transport=transport,
+            transport_identity=_identity(),
+            receipt_sink=sink,
+        )
+
+    transport.route = "strong"
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _MutableRouteTransport.calls == 0
+    assert sink.receipts == []
+
+
+async def _weak_async_route(
+    _identity: ModelIdentity,
+    _request: ModelCallRequest,
+) -> object:
+    return "weak-route"
+
+
+async def _strong_async_route(
+    _identity: ModelIdentity,
+    _request: ModelCallRequest,
+) -> object:
+    return "strong-route"
+
+
+_ASYNC_ROUTE_DELEGATE = _weak_async_route
+
+
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_module_global_route() -> None:
+    class _GlobalRouteTransport:
+        __slots__ = ("__weakref__",)
+        calls = 0
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            type(self).calls += 1
+            return await _ASYNC_ROUTE_DELEGATE(identity, request)
+
+    class _RouteMutatingSink(_CountingReceiptSink):
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            global _ASYNC_ROUTE_DELEGATE
+            _CountingReceiptSink.record(self, receipt)
+            _ASYNC_ROUTE_DELEGATE = _strong_async_route
+
+    global _ASYNC_ROUTE_DELEGATE
+    _ASYNC_ROUTE_DELEGATE = _weak_async_route
+    transport = _GlobalRouteTransport()
+    sink = _RouteMutatingSink()
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _build_raw_arbitrary_gateway(
+                composition=_composition(),
+                transport=transport,
+                transport_identity=_identity(),
+                receipt_sink=sink,
+            )
+    finally:
+        _ASYNC_ROUTE_DELEGATE = _weak_async_route
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _GlobalRouteTransport.calls == 0
+    assert sink.receipts == []
+
+
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_builtin_route() -> None:
+    class _BuiltinRouteTransport:
+        __slots__ = ("__weakref__",)
+        calls = 0
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            type(self).calls += 1
+            return await _pwb4_builtin_route(  # type: ignore[name-defined]  # noqa: F821
+                identity, request
+            )
+
+    class _BuiltinMutatingSink(_CountingReceiptSink):
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            _CountingReceiptSink.record(self, receipt)
+            vars(builtins)["_pwb4_builtin_route"] = _strong_async_route
+
+    vars(builtins)["_pwb4_builtin_route"] = _weak_async_route
+    transport = _BuiltinRouteTransport()
+    sink = _BuiltinMutatingSink()
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _build_raw_arbitrary_gateway(
+                composition=_composition(),
+                transport=transport,
+                transport_identity=_identity(),
+                receipt_sink=sink,
+            )
+    finally:
+        vars(builtins).pop("_pwb4_builtin_route", None)
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _BuiltinRouteTransport.calls == 0
+    assert sink.receipts == []
+
+
+@pytest.mark.parametrize("defaults_kind", ["defaults", "kwdefaults"])
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_function_defaults(
+    defaults_kind: str,
+) -> None:
+    async def mutable_route_with_defaults(
+        _identity: ModelIdentity,
+        _request: ModelCallRequest,
+        route: str = "weak",
+    ) -> object:
+        return route
+
+    async def mutable_route_with_kwdefaults(
+        _identity: ModelIdentity,
+        _request: ModelCallRequest,
+        *,
+        route: str = "weak",
+    ) -> object:
+        return route
+
+    mutable_route = (
+        mutable_route_with_defaults
+        if defaults_kind == "defaults"
+        else mutable_route_with_kwdefaults
+    )
+
+    globals()["_PWB4_DEFAULTED_ROUTE"] = mutable_route
+
+    class _DefaultedRouteTransport:
+        __slots__ = ("__weakref__",)
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            return await _PWB4_DEFAULTED_ROUTE(  # type: ignore[name-defined]  # noqa: F821
+                identity, request
+            )
+
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _build_raw_arbitrary_gateway(
+                composition=_composition(),
+                transport=_DefaultedRouteTransport(),
+                transport_identity=_identity(),
+                receipt_sink=_CountingReceiptSink(),
+            )
+    finally:
+        globals().pop("_PWB4_DEFAULTED_ROUTE", None)
+
+    assert denied.value.reason_code == "invalid_gateway"
+
+
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_type_global_route() -> None:
+    class _MutableRouteType:
+        route = "weak"
+
+    globals()["_PWB4_ROUTE_TYPE"] = _MutableRouteType
+
+    class _TypeRouteTransport:
+        __slots__ = ("__weakref__",)
+        calls = 0
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            type(self).calls += 1
+            del identity, request
+            return _PWB4_ROUTE_TYPE.route  # type: ignore[name-defined]  # noqa: F821
+
+    transport = _TypeRouteTransport()
+    try:
+        with pytest.raises(ModelGatewayDenied) as denied:
+            _build_raw_arbitrary_gateway(
+                composition=_composition(),
+                transport=transport,
+                transport_identity=_identity(),
+                receipt_sink=_CountingReceiptSink(),
+            )
+    finally:
+        globals().pop("_PWB4_ROUTE_TYPE", None)
+
+    assert denied.value.reason_code == "invalid_gateway"
+    assert _TypeRouteTransport.calls == 0
+
+
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_local_import() -> None:
+    class _ImportingTransport:
+        __slots__ = ("__weakref__",)
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            del identity, request
+            import math
+
+            return math.pi
+
+    with pytest.raises(ModelGatewayDenied) as denied:
+        _build_raw_arbitrary_gateway(
+            composition=_composition(),
+            transport=_ImportingTransport(),
+            transport_identity=_identity(),
+            receipt_sink=_CountingReceiptSink(),
+        )
+
+    assert denied.value.reason_code == "invalid_gateway"
+
+
+_PWB4_INDIRECT_ROUTE = _weak_async_route
+_PWB4_HELPER_ROUTE_KIND = "indirect_global"
+
+
+async def _pwb4_indirect_route_helper(
+    identity: ModelIdentity,
+    request: ModelCallRequest,
+) -> object:
+    return await _PWB4_INDIRECT_ROUTE(identity, request)
+
+
+async def _pwb4_attribute_route_helper(
+    identity: ModelIdentity,
+    request: ModelCallRequest,
+) -> object:
+    route = _pwb4_attribute_route_helper.__dict__["route"]
+    return await route(identity, request)
+
+
+async def _pwb4_import_route_helper(
+    identity: ModelIdentity,
+    request: ModelCallRequest,
+) -> object:
+    import builtins as runtime_builtins
+
+    route = vars(runtime_builtins)["_pwb4_indirect_import_route"]
+    return await route(identity, request)
+
+
+@pytest.mark.parametrize(
+    "route_kind",
+    ["indirect_global", "helper_attribute", "helper_import"],
+)
+def test_pwb4_gateway_rejects_noncanonical_adapter_with_indirect_helper(
+    route_kind: str,
+) -> None:
+    class _IndirectTransport:
+        __slots__ = ("__weakref__",)
+        calls = 0
+
+        async def call(
+            self,
+            identity: ModelIdentity,
+            request: ModelCallRequest,
+            /,
+        ) -> object:
+            type(self).calls += 1
+            if _PWB4_HELPER_ROUTE_KIND == "indirect_global":
+                return await _pwb4_indirect_route_helper(identity, request)
+            if _PWB4_HELPER_ROUTE_KIND == "helper_attribute":
+                return await _pwb4_attribute_route_helper(identity, request)
+            return await _pwb4_import_route_helper(identity, request)
+
+    class _IndirectMutatingSink(_CountingReceiptSink):
+        def record(self, receipt: PolicyReceipt, /) -> None:
+            global _PWB4_INDIRECT_ROUTE
+            _CountingReceiptSink.record(self, receipt)
+            if _PWB4_HELPER_ROUTE_KIND == "indirect_global":
+                _PWB4_INDIRECT_ROUTE = _strong_async_route
+            elif _PWB4_HELPER_ROUTE_KIND == "helper_attribute":
+                _pwb4_attribute_route_helper.__dict__["route"] = _strong_async_route
+            else:
+                vars(builtins)["_pwb4_indirect_import_route"] = _strong_async_route
+
+    global _PWB4_HELPER_ROUTE_KIND, _PWB4_INDIRECT_ROUTE
+    _PWB4_HELPER_ROUTE_KIND = route_kind
+    _PWB4_INDIRECT_ROUTE = _weak_async_route
+    _pwb4_attribute_route_helper.__dict__["route"] = _weak_async_route
+    vars(builtins)["_pwb4_indirect_import_route"] = _weak_async_route
+    verified = _verified()
+    request = _gateway_request()
+    transport = _IndirectTransport()
+    sink = _IndirectMutatingSink()
+
+    try:
+        with pytest.raises(ModelGatewayDenied):
+            client = _build_raw_arbitrary_gateway(
+                composition=_composition(),
+                transport=transport,
+                transport_identity=_identity(),
+                receipt_sink=sink,
+            )
+            asyncio.run(
+                client.call(verified, _gateway_facts(verified, request), request)
+            )
+    finally:
+        _PWB4_INDIRECT_ROUTE = _weak_async_route
+        _pwb4_attribute_route_helper.__dict__["route"] = _weak_async_route
+        vars(builtins).pop("_pwb4_indirect_import_route", None)
+
+    assert _IndirectTransport.calls == 0
+    assert sink.receipts == []

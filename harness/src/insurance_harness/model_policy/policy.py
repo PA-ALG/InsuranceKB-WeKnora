@@ -681,12 +681,18 @@ def _decision_authorizes_call(
     context: ModelCallContext,
     *,
     _checked_at: datetime | None = None,
+    _expected_policy_snapshot_digest: str | None = None,
 ) -> bool:
     """Atomically consume canonical decision/permit snapshots for authorization."""
 
     with _DECISION_LOCK:
         state = _get_decision_state(decision)
         if state is None or state.verified_admission is not verified_admission:
+            return False
+        if (
+            _expected_policy_snapshot_digest is not None
+            and state.policy_snapshot_digest != _expected_policy_snapshot_digest
+        ):
             return False
         if not _decision_state_is_coherent(state):
             return False

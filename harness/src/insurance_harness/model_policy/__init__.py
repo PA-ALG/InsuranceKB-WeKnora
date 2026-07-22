@@ -10,9 +10,12 @@ from .admission import (
     VerifiedAdmission,
 )
 from .composition import ProductionModelComposition
+from .gateway import GuardedModelClient, ModelGatewayDenied, ModelTransportError
 from .models import (
     IdentityKey,
     ModelCallContext,
+    ModelCallFacts,
+    ModelCallRequest,
     ModelFamily,
     ModelIdentity,
     ModelPermitView,
@@ -28,13 +31,18 @@ __all__ = [
     "AdmissionVerificationReceipt",
     "AdmissionVerifier",
     "IdentityKey",
+    "GuardedModelClient",
     "IssuedModelPermit",
+    "ModelCallFacts",
+    "ModelCallRequest",
     "ModelCallContext",
     "ModelFamily",
     "ModelIdentity",
+    "ModelGatewayDenied",
     "ModelPermitView",
     "ModelPolicyDenied",
     "ModelRole",
+    "ModelTransportError",
     "PolicyReceipt",
     "ProductionModelComposition",
     "ProductionModelPolicy",

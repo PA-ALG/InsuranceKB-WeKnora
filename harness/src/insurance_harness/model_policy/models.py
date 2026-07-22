@@ -12,6 +12,8 @@ from pydantic import (
     AwareDatetime,
     BaseModel,
     ConfigDict,
+    PositiveInt,
+    StrictBytes,
     StrictStr,
     StringConstraints,
     field_validator,
@@ -185,6 +187,45 @@ class ModelCallContext(_ImmutableModel):
     template_hash: Sha256Hex
     model_plan_hash: Sha256Hex
     call_scope_hash: Sha256Hex
+
+
+class ModelCallFacts(_ImmutableModel):
+    """Caller facts for one call; all authority is recomputed by the gateway."""
+
+    job_id: NonBlankStr
+    stage: NonBlankStr
+    attempt: PositiveInt
+    input_digest: Sha256Hex
+    content_digest: Sha256Hex
+    rendered_prompt_digest: Sha256Hex
+    purpose: NonBlankStr
+    run_schema_version: NonBlankStr
+    space_id: NonBlankStr
+    run_id: NonBlankStr
+    run_revision: NonBlankStr
+    admission_artifact_digest: Sha256Hex
+    template_hash: Sha256Hex
+    model_plan_hash: Sha256Hex
+    identity: ModelIdentity
+    role: ModelRole
+
+
+class ModelCallRequest(_ImmutableModel):
+    """Frozen transport input; raw values are never copied into audit records."""
+
+    content: StrictBytes
+    rendered_prompt: StrictBytes
+
+    @model_validator(mode="after")
+    def require_nonempty_transport_input(self) -> ModelCallRequest:
+        if not self.content or not self.rendered_prompt:
+            raise ValueError("model call request values must not be empty")
+        try:
+            self.content.decode("utf-8", errors="strict")
+            self.rendered_prompt.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            raise ValueError("model call request values must be valid UTF-8") from None
+        return self
 
 
 class PolicyReceipt(_ImmutableModel):

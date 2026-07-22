@@ -163,11 +163,11 @@ Run the same command. Expected: PASS; secret sentinel absent from serialized rec
 
 ### Task 4: Guard network calls and prohibit fallback escalation
 
-- [ ] **Step 1: Write PWB3 zero-network RED tests**
+- [x] **Step 1: Write PWB3 zero-network RED tests**
 
 Use a counting fake transport. Assert unknown identity, exhausted weak attempts, truncation, and no-consensus produce zero strong-model calls and no candidate-promotion callback.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 cd harness
@@ -176,11 +176,11 @@ uv run pytest -q tests/test_production_model_boundary_027.py -k "network or fall
 
 Expected: FAIL before wrapper implementation.
 
-- [ ] **Step 3: Implement `GuardedModelClient`**
+- [x] **Step 3: Implement `GuardedModelClient`**
 
 It accepts `VerifiedAdmission + ModelCallContext`, calls the canonical policy internally, receives an opaque issued permit through the non-public issuer, compares all scopes, persists a decision receipt for both allow/deny, and only then delegates. It never accepts a caller-supplied permit/policy/guard and never chooses another model. Retry selection belongs to 028 and must re-enter this method with the approved plan/context.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Expected: PASS; fake transport counts exactly one call for allowed identity and zero for every denied case.
 
