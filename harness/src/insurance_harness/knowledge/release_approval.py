@@ -71,24 +71,22 @@ def _insert_if_absent(
     session: Session,
     table: Any,
     values: dict[str, object],
-    *,
-    conflict_columns: tuple[str, ...],
 ) -> bool:
-    """Issue one atomic, transaction-owned insert for supported production dialects."""
+    """Ignore any uniqueness winner, then let the scoped exact read classify it."""
 
     dialect = session.get_bind().dialect.name
     if dialect == "sqlite":
         inserted_id = session.scalar(
             sqlite_insert(table)
             .values(**values)
-            .on_conflict_do_nothing(index_elements=conflict_columns)
+            .on_conflict_do_nothing()
             .returning(table.c.id)
         )
     elif dialect == "postgresql":
         inserted_id = session.scalar(
             postgresql_insert(table)
             .values(**values)
-            .on_conflict_do_nothing(index_elements=conflict_columns)
+            .on_conflict_do_nothing()
             .returning(table.c.id)
         )
     else:
@@ -177,7 +175,6 @@ def persist_release_manifest(
             "created_at": now,
             "updated_at": now,
         },
-        conflict_columns=("space_id", "snapshot_id"),
     )
     winner = session.scalar(
         select(ReleaseManifestRecord).where(
@@ -333,7 +330,6 @@ class ReleaseApprovalService:
                 "approved_at": now,
                 "created_at": now,
             },
-            conflict_columns=("space_id", "manifest_hash"),
         )
         winner = self._session.scalar(
             select(ReleaseApproval).where(
