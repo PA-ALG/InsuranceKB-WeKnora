@@ -1647,7 +1647,7 @@ def test_o7_o8_production_controller_infrastructure_failure_is_typed_before_prov
     controller_calls: list[dict[str, object]] = []
 
     def fail_controller(
-        _cls: type[DeploymentController], **kwargs: object
+        _cls: type[DeploymentController], /, **kwargs: object
     ) -> DeploymentController:
         controller_calls.append(kwargs)
         raise failure_type("provider topology controller unavailable")
