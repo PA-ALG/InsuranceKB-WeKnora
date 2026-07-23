@@ -2,8 +2,10 @@
 
 > 当前状态（2026-07-23）：**PR #26 保持 Draft；A、B、C 已分别通过冻结树复审，D 已按
 > 26-path allowlist 完成 finalizer/wiring 的提交前门禁。D 的 Spec 与 Quality/Security 独立复审均为
-> C0/I0/M0；唯一一次 full deterministic 已通过。软件候选可进入提交/stacked PR 阶段，外部准入
-> 条件继续 `BLOCKED`。** 本报告不声称
+> C0/I0/M0。旧 D 冻结树的 full 不覆盖当前 latest-main replay；当前 replay exact tree
+> `5f6de94dce7869c50f9e3daa56a8cddc54ce9388` 已在独立 C/I=0 后按总控授权完成唯一一次 fresh
+> full：**4130 passed / 30 deselected / 495 warnings（485.04s）**。本次仅机械回填该证据，最终
+> report-only tree 仍需 full custody 复审；外部准入条件继续 `BLOCKED`。** 本报告不声称
 > canonical admission 或 020 `READY`，不声称已取得真实签名、provider hard cap、root-owned
 > runtime trust store 或远端最终状态，也不把旧测试计数冒充当前最终 diff 的证据。
 >
@@ -120,28 +122,33 @@ T9 中关闭；仍需最终只读复审确认没有遗漏，不能把软件门�
 | 冻结 main + 当前 031 聚合树的 027/030 compatibility focused | **375 passed**；`canonical_verifier_unavailable` / `unknown_admission_profile` 精确断言 **2 passed** |
 | Ruff（D changed Python paths） | **PASS** |
 | mypy strict（D 3 source files） | **PASS** |
-| deterministic `not live and not integration_postgres` | **PASS — 3280 passed / 30 deselected / 495 warnings，509.75s**；按冻结合同仅运行一次 |
+| deterministic `not live and not integration_postgres` | **PASS — 4130 passed / 30 deselected / 495 warnings，485.04s**；对象为已获独立 C/I=0 的 current replay exact tree `5f6de94dce7869c50f9e3daa56a8cddc54ce9388`，退出码 0，仅运行一次 |
 | OpenSpec strict | **PASS — 031 与依赖的 020 change 均 valid** |
 | `git diff --check` | **PASS** |
 | final 26-path scope / blob+mode / secret audit | **PASS**；26 paths、sole deletion、working/blob equality、C 9 protected blobs、real index staged=0、secret/private-path patterns 均通过；报告更新后在冻结 exact tree 上再次复核 |
+| 真实 PostgreSQL integration | **NOT RUN**；本轮 deterministic 明确排除 `integration_postgres` |
 | 真实 provider / WeKnora live | **NOT RUN**；本轮禁止外部 mutation/inference |
 
 A authority/cap、B receipt/transport 与 C adoption/cleanup/CLI 的冻结层均已取得跨窗口
-Spec 与 Quality/Security C/I=0；D 最终候选也已取得两路独立 C/I=0 并完成唯一一次 full，软件
-aggregate 可进入提交与 stacked PR 复核，但尚未据此把 PR #26 转为 Ready。该边界同样不覆盖外部签名、
-root-owned trust/provider、人工 clean identity 或真实 provider/live 条件。
+Spec 与 Quality/Security C/I=0；旧 D 冻结树也曾取得两路独立 C/I=0 和一次 full。当前
+latest-main replay 没有复用旧 full：exact tree `5f6de94dce7869c50f9e3daa56a8cddc54ce9388`
+先取得独立 C/I=0，再由总控授权运行本次 fresh full，结果为 4130 passed。当前只增加本报告的
+机械证据回填，source/tests 与 full-tested tree 精确相同；最终 report-only tree 仍需独立 custody
+复审，且该软件证据不覆盖外部签名、root-owned trust/provider、人工 clean identity 或真实
+provider/live 条件。
 
-### 3.3 唯一一次 full deterministic 的 tree custody
+### 3.3 旧 D tree 的 full deterministic 历史 custody（不覆盖当前 replay）
 
 full 开始前，D 候选通过 temp index
-`/private/tmp/031-d-corrective-v4-20260723.index` 冻结为 tree
+`031-d-corrective-v4-20260723.index` 冻结为 tree
 `dc5224fcda48777b1c72b160a8b68b7ffecf3bc0`；当时 working blobs 与该 tree 的 26-path
 候选逐项相等，real index 为空。随后仅运行一次：
 
 `uv run pytest -m "not live and not integration_postgres" -q`
 
-结果为 **3280 passed / 30 deselected / 495 warnings（509.75s）**。该 full-tested tree 的
-source/test blob manifest 如下；临时 blocker 测试在 tree 中不存在，属于既定 sole deletion：
+结果为 **3280 passed / 30 deselected / 495 warnings（509.75s）**。这是旧 D tree 的历史结果，
+不是当前 latest-main replay 的门禁。该历史 full-tested tree 的 source/test blob manifest 如下；
+临时 blocker 测试在 tree 中不存在，属于既定 sole deletion：
 
 | path | mode | blob |
 |---|---:|---|
@@ -160,11 +167,42 @@ source/test blob manifest 如下；临时 blocker 测试在 tree 中不存在，
 | `harness/tests/test_run_admission_runtime_020.py` | 100644 | `9f664f5b3994d6720c8cbacbf180390c4eac5f6e` |
 | `harness/tests/test_run_admission_usage_020.py` | 100644 | `f596ca26afebd84f295f44cfcca28c9f24a38bf9` |
 
-full 完成后到 commit tree `93add501207472e28aef4453060e8204362469dd` 的差异严格只有
+旧 full 完成后到旧 commit tree `93add501207472e28aef4453060e8204362469dd` 的差异严格只有
 `HANDOFF.md`、本 change 的 `tasks.md` 与本报告三份既有 D 文档，用于机械回填门禁状态和数字；
 `git diff --quiet dc5224fc 93add501 -- harness/src harness/tests` 为 PASS。此后不得修改任何
-source/test blob；本节自身的证据补录也仅允许形成 validation-report 文档差异。若最终冻结树的
-任一 source/test blob 与上表不一致，full 证据立即失效并必须标记 `Not Ready`，不得自行重跑。
+source/test blob；本节自身的证据补录也仅允许形成 validation-report 文档差异。当前 replay 基于
+`c3a833a482d0c1602f636b8e8df585fd64cb8765`，纠偏前 HEAD/tree 为
+`3793b8bc8f68c8bd1ba65195cf601e34d69ee797` / `a71bf83b9f29c3176aa4ff0e826e3b7b71541830`；
+其中 `harness/tests/test_operational_coordinator_031.py` 的 blob 为
+`77e49993171a46c5e874921981196e44d3a54bb3`，不同于上表旧 full 的
+`3f96e6c058efac198b35b5ca89086cffea87e8be`，并包含 latest-main/PR #32 的 strict4 基线。因此按
+本节规则，旧 full 对当前 replay 已失效，不得外推。当前 replay 已另行满足“exact tree 先通过
+跨窗口 C/I=0、再由总控明确授权 fresh full”的门禁；其独立证据见下一节，且不得自行重跑。
+
+### 3.4 当前 latest-main replay 的唯一 fresh full custody
+
+full 前再次复核：base 为 `c3a833a482d0c1602f636b8e8df585fd64cb8765`，HEAD 为
+`3793b8bc8f68c8bd1ba65195cf601e34d69ee797`，committed tree 为
+`a71bf83b9f29c3176aa4ff0e826e3b7b71541830`，temp index
+`031-main-replay-doc-corrective-20260723-02.index` 与 working tree 均精确冻结为
+`5f6de94dce7869c50f9e3daa56a8cddc54ce9388`；real index 为空，strict47 不变，source/tests
+无漂移。该 exact tree 已先取得独立 Spec 与 Quality/Security C0/I0/M0。
+
+唯一命令为：
+
+`uv run pytest -m "not live and not integration_postgres" -q`
+
+开始时间为 `2026-07-23T02:54:07Z`（`2026-07-23T10:54:07+0800`），结束时间为
+`2026-07-23T03:02:29Z`（`2026-07-23T11:02:29+0800`）；pytest 结果为
+**4130 passed / 30 deselected / 495 warnings（485.04s）**，退出码 0。测试对象包含当前
+`harness/tests/test_operational_coordinator_031.py` blob
+`77e49993171a46c5e874921981196e44d3a54bb3` 与 latest-main/PR #32 strict4 基线，不复用旧
+`3f96e6c0` 测试 blob 的结果。
+
+full 后仅允许本报告机械回填上述结果；source/tests、51 个 main-only 路径与 PR #32 strict4
+blob/mode 必须继续等于 full-tested tree。真实 PostgreSQL、provider、WeKnora live 均未运行；
+T2.3、外部签名、root-owned trust store 与 provider 条件继续 `BLOCKED`。最终 report-only tree
+须重新冻结并通过独立 full custody 复审后，才能进入后续 Git/PR 裁决。
 
 ## 4. 外部未满足条件
 
@@ -208,9 +246,10 @@ source/test blob；本节自身的证据补录也仅允许形成 validation-repo
 
 ## 6. 合并与后续顺序
 
-1. PR #26 保持 Draft；T9.12～T9.20 的分层 RED→GREEN、focused、Ruff、mypy strict、OpenSpec、
-   两路独立 C/I=0 与唯一一次 deterministic 均已完成；重新冻结报告回填后的 exact 26-path tree，
-   再按 A→B→C→D stacked 顺序提交/推送并更新 PR，转 Ready 前仍需最终远端 CI；
+1. PR #26 保持 Draft；T9.12～T9.20 的分层 RED→GREEN、focused、Ruff、mypy strict、OpenSpec 与
+   latest-main replay exact tree 的跨窗口 C/I=0 已完成；总控授权的唯一 fresh full 为
+   4130 passed。重新冻结本次 report-only 回填后的 strict47 exact tree并完成独立 full custody
+   复审后，才进入推送/新 Draft PR 的裁决；转 Ready 前仍需最终远端 CI；
 2. 使用 stacked review：`main ← A authority/cap ← B receipt/transport ←`
    `C adoption/cleanup/CLI ← D finalizer/wiring`。A 只承载固定 trust root 与 shared cap；durable
    topology 依赖 B 新增的 trusted receipt/transport facts，因此 sidecar/capability 在 B 闭合；
