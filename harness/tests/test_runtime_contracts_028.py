@@ -6,15 +6,17 @@ import ast
 import copy
 import gc
 import inspect
+import json
 import os
 import pickle
 import weakref
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, cast, get_type_hints
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from pydantic_core import PydanticSerializationError
 
 from insurance_harness import runtime
@@ -42,6 +44,10 @@ from insurance_harness.runtime.models import (
     StagePlan,
     StageState,
     VerifiedFactBatch,
+    _canonical_contract_value,
+    _revalidate_exact,
+    _snapshot_exact_model,
+    _snapshot_runtime_input,
 )
 from insurance_harness.runtime.ports import (
     ClassifyRouteStage,
@@ -72,6 +78,92 @@ def _digest(marker: str) -> str:
     return marker.encode("utf-8").hex().ljust(64, "0")[:64]
 
 
+@pytest.mark.parametrize("exception_type", (MemoryError, KeyboardInterrupt, SystemExit))
+def test_tr3_shared_revalidation_preserves_process_control_and_memory_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    exception_type: type[BaseException],
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+
+    def fail_validation(
+        cls: type[ParentIntakeIdentity],
+        obj: object,
+        /,
+        **kwargs: object,
+    ) -> ParentIntakeIdentity:
+        del cls, obj, kwargs
+        raise exception_type("sentinel")
+
+    monkeypatch.setattr(
+        ParentIntakeIdentity,
+        "model_validate",
+        classmethod(fail_validation),
+    )
+
+    with pytest.raises(exception_type, match="sentinel"):
+        _revalidate_exact(ParentIntakeIdentity, parent)
+
+
+def test_tr3_shared_revalidation_keeps_ordinary_failures_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+
+    def fail_validation(
+        cls: type[ParentIntakeIdentity],
+        obj: object,
+        /,
+        **kwargs: object,
+    ) -> ParentIntakeIdentity:
+        del cls, obj, kwargs
+        raise ValueError("ordinary-invalid")
+
+    monkeypatch.setattr(
+        ParentIntakeIdentity,
+        "model_validate",
+        classmethod(fail_validation),
+    )
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        _revalidate_exact(ParentIntakeIdentity, parent)
+
+
+@pytest.mark.parametrize("exception_type", (MemoryError, KeyboardInterrupt, SystemExit))
+def test_tr3_shared_snapshot_preserves_process_control_and_memory_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    exception_type: type[BaseException],
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+
+    def fail_snapshot(_value: object) -> object:
+        raise exception_type("sentinel")
+
+    monkeypatch.setattr(
+        "insurance_harness.runtime.models._read_contract_snapshot",
+        fail_snapshot,
+    )
+
+    with pytest.raises(exception_type, match="sentinel"):
+        _snapshot_exact_model(ParentIntakeIdentity, parent)
+
+
+def test_tr3_shared_snapshot_keeps_ordinary_failures_typed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+
+    def fail_snapshot(_value: object) -> object:
+        raise ValueError("ordinary-invalid")
+
+    monkeypatch.setattr(
+        "insurance_harness.runtime.models._read_contract_snapshot",
+        fail_snapshot,
+    )
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        _snapshot_exact_model(ParentIntakeIdentity, parent)
+
+
 def _parent_values() -> dict[str, str]:
     return {
         "space_id": "space-a",
@@ -85,6 +177,219 @@ def _parent_values() -> dict[str, str]:
         "structured_dispatch_lock_hash": _digest("dispatch"),
         "model_plan_hash": _digest("model-plan"),
     }
+
+
+def _configure_six_seam(
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+    parent: ParentIntakeIdentity,
+    fail: Callable[..., object],
+) -> Callable[[], object]:
+    if seam == "existing-validation":
+        monkeypatch.setattr(
+            "insurance_harness.runtime.models._snapshot_runtime_input",
+            fail,
+        )
+        return lambda: ParentIntakeIdentity.model_validate(parent)
+    if seam == "post-init-issue":
+        monkeypatch.setattr(
+            "insurance_harness.runtime.models._snapshot_model_storage",
+            fail,
+        )
+        return lambda: ParentIntakeIdentity.model_validate(_parent_values())
+    if seam == "snapshot-exact-model":
+        monkeypatch.setattr(
+            "insurance_harness.runtime.models._read_contract_snapshot",
+            fail,
+        )
+        return lambda: _snapshot_exact_model(ParentIntakeIdentity, parent)
+    if seam == "canonical-contract-value":
+        monkeypatch.setattr(
+            "insurance_harness.runtime.models._read_contract_snapshot",
+            fail,
+        )
+        return lambda: _canonical_contract_value(parent)
+    if seam == "snapshot-runtime-input":
+        monkeypatch.setattr(
+            "insurance_harness.runtime.models._snapshot_exact_model",
+            fail,
+        )
+        return lambda: _snapshot_runtime_input(parent)
+    monkeypatch.setattr(
+        "insurance_harness.runtime.models._snapshot_exact_model",
+        fail,
+    )
+    return lambda: _revalidate_exact(ParentIntakeIdentity, parent)
+
+
+@pytest.mark.parametrize(
+    "seam",
+    (
+        "existing-validation",
+        "post-init-issue",
+        "snapshot-exact-model",
+        "canonical-contract-value",
+        "snapshot-runtime-input",
+        "revalidate-exact",
+    ),
+)
+@pytest.mark.parametrize("exception_type", (MemoryError, KeyboardInterrupt, SystemExit))
+def test_tr3_six_shared_exception_seams_preserve_exact_failure_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+    exception_type: type[BaseException],
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+    sentinel = exception_type(f"sentinel-{seam}")
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise sentinel
+
+    operation = _configure_six_seam(monkeypatch, seam, parent, fail)
+
+    with pytest.raises(exception_type) as raised:
+        operation()
+
+    assert raised.value is sentinel
+
+
+@pytest.mark.parametrize(
+    "seam",
+    (
+        "existing-validation",
+        "post-init-issue",
+        "snapshot-exact-model",
+        "canonical-contract-value",
+        "snapshot-runtime-input",
+        "revalidate-exact",
+    ),
+)
+def test_tr3_six_shared_exception_seams_keep_ordinary_failures_typed(
+    monkeypatch: pytest.MonkeyPatch,
+    seam: str,
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise ValueError(f"ordinary-{seam}")
+
+    operation = _configure_six_seam(monkeypatch, seam, parent, fail)
+
+    with pytest.raises(RuntimeContractError, match="invalid_contract_dto"):
+        operation()
+
+
+@pytest.mark.parametrize(
+    "operation",
+    (
+        "constructor",
+        "raw-model-validate",
+        "existing-model-validate",
+        "type-adapter-raw",
+        "type-adapter-existing",
+        "model-validate-json",
+        "model-copy",
+        "model-dump",
+        "model-dump-json",
+        "field-read",
+        "left-equality",
+        "right-equality",
+        "hash",
+        "set-membership",
+        "dict-membership",
+        "repr",
+        "str",
+        "copy",
+        "deepcopy",
+        "pickle",
+    ),
+)
+def test_tr3_public_contract_surface_preserves_shared_memory_error_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    parent = ParentIntakeIdentity.model_validate(_parent_values())
+    equivalent = ParentIntakeIdentity.model_validate(_parent_values())
+    payload = json.dumps(_parent_values())
+    adapter = TypeAdapter(ParentIntakeIdentity)
+    sentinel = MemoryError(f"sentinel-{operation}")
+
+    def fail_storage(*_args: object, **_kwargs: object) -> object:
+        raise sentinel
+
+    monkeypatch.setattr(
+        "insurance_harness.runtime.models._snapshot_model_storage",
+        fail_storage,
+    )
+    operations: dict[str, Callable[[], object]] = {
+        "constructor": lambda: ParentIntakeIdentity(**_parent_values()),
+        "raw-model-validate": lambda: ParentIntakeIdentity.model_validate(
+            _parent_values()
+        ),
+        "existing-model-validate": lambda: ParentIntakeIdentity.model_validate(parent),
+        "type-adapter-raw": lambda: adapter.validate_python(_parent_values()),
+        "type-adapter-existing": lambda: adapter.validate_python(parent),
+        "model-validate-json": lambda: ParentIntakeIdentity.model_validate_json(payload),
+        "model-copy": lambda: parent.model_copy(),
+        "model-dump": lambda: parent.model_dump(),
+        "model-dump-json": lambda: parent.model_dump_json(),
+        "field-read": lambda: parent.space_id,
+        "left-equality": lambda: parent == equivalent,
+        "right-equality": lambda: equivalent == parent,
+        "hash": lambda: hash(parent),
+        "set-membership": lambda: parent in {equivalent},
+        "dict-membership": lambda: {equivalent: "value"}[parent],
+        "repr": lambda: repr(parent),
+        "str": lambda: str(parent),
+        "copy": lambda: copy.copy(parent),
+        "deepcopy": lambda: copy.deepcopy(parent),
+        "pickle": lambda: pickle.dumps(parent),
+    }
+
+    with pytest.raises(MemoryError) as raised:
+        operations[operation]()
+
+    assert raised.value is sentinel
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires POSIX fork semantics")
+def test_tr3_forked_constructor_preserves_shared_memory_error_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel = MemoryError("sentinel-fork")
+
+    def fail_storage(*_args: object, **_kwargs: object) -> object:
+        raise sentinel
+
+    monkeypatch.setattr(
+        "insurance_harness.runtime.models._snapshot_model_storage",
+        fail_storage,
+    )
+    read_fd, write_fd = os.pipe()
+    pid = os.fork()
+    if pid == 0:  # pragma: no cover - child reports identity through the pipe
+        os.close(read_fd)
+        try:
+            try:
+                ParentIntakeIdentity.model_validate(_parent_values())
+            except MemoryError as error:
+                result = "same" if error is sentinel else "different"
+            except BaseException:
+                result = "wrong-type"
+            else:
+                result = "accepted"
+            os.write(write_fd, result.encode("ascii"))
+        finally:
+            os.close(write_fd)
+            os._exit(0)
+
+    os.close(write_fd)
+    result = os.read(read_fd, 64).decode("ascii")
+    os.close(read_fd)
+    _, status = os.waitpid(pid, 0)
+
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert result == "same"
 
 
 def _parent() -> ParentIntakeIdentity:
@@ -1721,7 +2026,13 @@ def test_tr3_runtime_contract_kernel_has_exact_owned_files_and_no_deployable_imp
     )
     python_files = tuple(sorted(path.name for path in runtime_dir.glob("*.py")))
 
-    assert python_files == ("__init__.py", "models.py", "ports.py", "settings.py")
+    assert python_files == (
+        "__init__.py",
+        "compilation_manifest.py",
+        "models.py",
+        "ports.py",
+        "settings.py",
+    )
 
     forbidden_imports = {
         "alembic",
