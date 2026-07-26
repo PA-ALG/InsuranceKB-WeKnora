@@ -27,6 +27,7 @@
 > 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份受控输入、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审并按 cross-reference findings 修订，Wave 1 已分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice；030 使用自己的 admission profile，不借用 020 evaluator/artifact。）
 
 > [!IMPORTANT]
+> （历史快照：以下断言反映 2026-07-21 旧 MVP 口径，已被 033/23 号控制板取代，不构成当前授权。）
 > **项目核心方向与 MVP 已于 2026-07-21 批准：Enterprise LLM Wiki 是产品本体，WeKnora 是企业底座，Harness 是弱模型知识编译与治理运行时。** 业务方已声明 LLM-wiki-black 为项目方完整著作权资产，可把其 TS 能力选择性迁移/重构到统一 Python 3.12 Harness；原 TS 不作为第二套生产 runtime，第三方许可证单独管理。当前 CLI/config 尚未硬禁强模型路径，MVP admission 也未 READY，因此不得真实生产运行。P-1 release namespace/原子 active alias 是直接 WeKnora 生产 Wiki UI 的前置，但不是 MVP 前置；MVP 使用 ACL 隔离 staging + Harness Reader/MCP 同快照。任何会话认领任务前先读[北极星设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)和[MVP 控制基准](docs/insurance-kb/23-mvp-control-board.md)。
 
 ## MVP-0 历史控制板（2026-07-22 冻结，已被取代）
@@ -49,7 +50,7 @@
 
 （历史说明：本表当时与旧 23 号文档配套；该分工已随 033 重置终止。）
 
-## ⓪ 当前最优先事项（接手先看这里）
+## ⓪ 历史交接记录（2026-07-22 冻结，已被 033 路线取代；仅审计价值）
 
 0. **基础建设已合入 main（PR #1，2026-07-13）**：此后一律按 17 号规范从 main 切 `feat/NNN-*` 分支，PR 双查 + **CI 绿才算绿**（坑 9a）。上游 workflow "Build and Push Docker Image" 已在 GitHub 界面手动禁用（fork 无腾讯 registry 凭据必失败，属继承性噪音）；其余上游 workflow 有路径/标签过滤暂无干扰，误触发照此禁用，不影响版本列车跟版。
 

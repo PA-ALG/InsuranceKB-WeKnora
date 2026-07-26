@@ -47,10 +47,16 @@
 | `mcp` | 013 | 4 | P9b Thin MCP Adapter | **废弃** | 4 行占位空包，013 从未实现；无可移植物 |
 
 依赖方向备注（防止移植顺序踩空）：`knowledge → goldenset`（quality_gate 消费
-QualityProfile/ApprovalRecord）、`flywheel → knowledge`（只读 Claim）、
-`compiler → model_policy/sources/goldenset`、`run_admission → model_policy`。
+QualityProfile/ApprovalRecord）、`knowledge → compiler`（`snapshots.py`/`pages.py`
+引 `routing_data`，`importer.py` 引 `compiler.models`）、
+`knowledge → adapters/sources/schemas`、`flywheel → knowledge`（只读 Claim）、
+`flywheel → goldenset/product`、`compiler → model_policy/sources/goldenset`、
+`compiler → adapters/db`、`run_admission → model_policy`。
 冻结 `knowledge` 前，须先解除 `flywheel`/`workbench` 对它的读依赖或将二者一并
-冻结（当前即是：二者均冻结/保留，无新增消费）。
+冻结（当前即是：二者均冻结/保留，无新增消费）。冻结审计的 `knowledge` 自身
+依赖“拆分”处置的 `compiler`（含废弃件），因此 compiler 的移植/清理 PR 必须把
+`routing_data`/`models` 保留或先行移植为独立模块，不得在 knowledge 冻结解除前
+删除其被 knowledge 引用的部分。
 
 ## 3. 迁移与表权威切换
 
