@@ -18,14 +18,20 @@
 > CAP0 对 P2a/P2b 的门禁语义澄清与重置后基线排期（见 23 号 §8/§9；
 > 排期已于 2026-07-26 经业务方确认为基线）。
 > 2026-07-27（Wave 1）：**035 P1 Job Store + 事务性 Outbox 软件实施已按
-> tasks T1～T12 完成**（分支 `feat/035-p1-job-outbox-impl`，未合入）：
+> tasks T1～T12 完成**（分支 `feat/035-p1-job-outbox-impl`，PR #44）：
 > `insurance_harness.jobs` 包 + 唯一迁移 **0015**（down_revision=0006，
 > 实际链 `0012 → 0006 → 0015`；0007–0011/0013/0014 旧占号永不复用）。
-> 本机 PostgreSQL 16 lane 全量 `integration_postgres` **42 passed /
-> JUnit skipped=0**，focused deterministic 64 passed，Ruff/mypy/openspec
+> PR #44 双评审（规格 Approved-with-findings / 对抗 REJECTED，2C/10I/7M）
+> 已于同日 RED-first 全部闭环并重跑对抗 probe 验证：全局限额排除过期
+> lease、回收 generation +1、outbox append 状态门、clock_timestamp lease、
+> 有界维护批量、claim 排序索引、typed 输入验证、(space_id,event_id) 唯一、
+> DomainWriteHandle、降级活跃数据 preflight（含相对参数）、毒性事件
+> park、not_awaiting/per_space_concurrency_limit typed 语义等。本机
+> PostgreSQL 16 lane 全量 `integration_postgres` **47 passed / JUnit
+> skipped=0**，focused deterministic 78 passed，Ruff/mypy/openspec
 > --strict 全绿；完整 deterministic 与 CI PG job 记 NOT RUN（PR-ready 阶段
-> 运行）。生产代码量超 §16.2 ~900 行触发线（有效 1040 行），T13 独立
-> Spec/质量复审与重新切分评审待做；P3 及后续消费方仍不得提前接线。
+> 运行）。生产代码量超 §16.2 ~900 行触发线（有效 1300 行，双评审闭环为
+> 主要增量），重新切分评审待裁决；P3 及后续消费方仍不得提前接线。
 > 详见 `openspec/changes/035-p1-job-outbox/validation-report.md`。
 >
 > 执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再按批准设计进入

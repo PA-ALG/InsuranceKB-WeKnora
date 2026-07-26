@@ -52,6 +52,32 @@ class SpaceScopeError(JobStoreError):
         super().__init__(message)
 
 
+class InvalidJobInputError(JobStoreError, ValueError):
+    """输入合同违规（超长/NUL/不可序列化 payload 等）在存储层前置拒绝。
+
+    兼容旧 ValueError 合同；两种方言（PostgreSQL/SQLite）行为一致，不再
+    向调用方泄漏原始 DataError（review I6/M16）。
+    """
+
+    code = "invalid_input"
+
+
+class LeaseExpiredError(JobStoreError):
+    """P1.3：已过期 lease 不可经 heartbeat 复活，只能按第 10 条回收。"""
+
+    code = "lease_expired"
+
+    def __init__(self, *, job_id: str | None = None) -> None:
+        self.job_id = job_id
+        super().__init__("lease has expired; the job can only be reclaimed")
+
+
+class DuplicateEventError(JobStoreError):
+    """P1.6：同一 Space 内重复 event_id 的 outbox 追加 typed 拒绝。"""
+
+    code = "duplicate_event_id"
+
+
 class TypedJobError(Exception):
     """worker 执行失败的显式分类载体基类（P1.4）。"""
 

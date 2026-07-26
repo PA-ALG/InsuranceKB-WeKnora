@@ -11,18 +11,22 @@ P1.11：本迁移只创建 `wiki_jobs`/`wiki_outbox_events` 两表及其索引�
 两表不外键任何遗留域表；Space 绑定由 NOT NULL `space_id` 与存储层
 fail-closed scope 校验承担（P1.8）。
 
-downgrade 沿用仓库既有不变量「被拒绝的降级零 DDL」：当目的地越过 0006
-的破坏性 preflight 领地时，先复用 0006 模块的同一套只读检查（跳过其
-alembic_version 拓扑自检——此刻版本是 0015），任一拒绝发生在本迁移第一条
+downgrade 沿用仓库既有不变量「被拒绝的降级零 DDL」：先做本迁移自有数据
+preflight——存在**非终态任务行或未投递 outbox 行**即拒绝（review I9）；当
+目的地（含相对参数，review M13：先经 ScriptDirectory 解析再判定）越过
+0006 的破坏性 preflight 领地时，再复用 0006 模块的同一套只读检查（跳过其
+alembic_version 拓扑自检——此刻版本是 0015）。任一拒绝发生在本迁移第一条
 DDL 之前；历史迁移文件零修改。
 """
 
 import importlib.util
+import re
 from pathlib import Path
 from types import ModuleType
 
 import sqlalchemy as sa
 from alembic import context, op
+from alembic.script import ScriptDirectory
 
 revision = "0015"
 down_revision = "0006"
@@ -38,6 +42,8 @@ _JOB_STATES = (
     "'retry_wait', 'awaiting_human', 'blocked', 'dead_letter'"
 )
 _ERROR_CLASSES = "'retryable', 'non_retryable', 'capacity_blocked', 'human_required'"
+_LIVE_JOB_STATES = "'queued', 'leased', 'running', 'retry_wait', 'awaiting_human'"
+_RELATIVE_DESTINATION = re.compile(r"^-\d+$")
 
 
 def upgrade() -> None:
@@ -76,6 +82,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_wiki_jobs_claim", "wiki_jobs", ["space_id", "state", "available_at"])
+    op.create_index(
+        "ix_wiki_jobs_claim_order", "wiki_jobs", ["space_id", "state", "enqueued_at", "id"]
+    )
     op.create_index("ix_wiki_jobs_reclaim", "wiki_jobs", ["state", "lease_expires_at"])
 
     op.create_table(
@@ -92,7 +101,15 @@ def upgrade() -> None:
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("dispatched_at", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint("event_id", name="uq_wiki_outbox_events_event_id"),
+        sa.Column(
+            "dispatch_attempts", sa.Integer(), nullable=False, server_default=sa.text("0")
+        ),
+        sa.UniqueConstraint(
+            "space_id", "event_id", name="uq_wiki_outbox_events_space_event"
+        ),
+        sa.CheckConstraint(
+            "dispatch_attempts >= 0", name="ck_wiki_outbox_events_attempts"
+        ),
     )
     op.create_index(
         "ix_wiki_outbox_events_undispatched",
@@ -113,17 +130,76 @@ def _load_0006_module() -> ModuleType:
     return module
 
 
-def _destination_crosses_0006() -> bool:
+def _resolved_destinations() -> tuple[str, ...] | None:
+    """把降级目的地解析为具体 revision id；base/未知形式按「越过」处理。
+
+    相对形式（`-N`）沿 down_revision 链自 0015 逐步解析（review M13）；
+    解析失败时保守返回 None（视为 base，触发 preflight，宁拒绝不半降）。
+    """
     destination = context.get_revision_argument()
     if destination is None:
+        return None
+    raw_values = destination if isinstance(destination, tuple) else (destination,)
+    resolved: list[str] = []
+    for raw in raw_values:
+        value = str(raw)
+        if value in {"base", ""}:
+            return None
+        if _RELATIVE_DESTINATION.fullmatch(value):
+            steps = int(value[1:])
+            current: str | None = revision
+            script = ScriptDirectory.from_config(context.config)
+            for _ in range(steps):
+                if current is None:
+                    return None
+                node = script.get_revision(current)
+                down = node.down_revision
+                if isinstance(down, (tuple, list)):
+                    down = down[0] if down else None
+                current = down
+            if current is None:
+                return None
+            resolved.append(current)
+            continue
+        if not re.fullmatch(r"[0-9a-zA-Z_]+", value):
+            return None  # 未知寻址形式：保守按 base 处理
+        resolved.append(value)
+    return tuple(resolved)
+
+
+def _destination_crosses_0006() -> bool:
+    destinations = _resolved_destinations()
+    if destinations is None:
         return True
-    if isinstance(destination, tuple):
-        return any(revision_id in _DESTINATIONS_CROSSING_0006 for revision_id in destination)
-    return destination in _DESTINATIONS_CROSSING_0006
+    return any(revision_id in _DESTINATIONS_CROSSING_0006 for revision_id in destinations)
+
+
+def _validate_own_rows_before_ddl() -> None:
+    """本迁移自有数据 preflight：活跃任务/未投递事件存在即拒绝（I9）。"""
+    connection = op.get_bind()
+    live_jobs = int(
+        connection.scalar(
+            sa.text(f"SELECT count(*) FROM wiki_jobs WHERE state IN ({_LIVE_JOB_STATES})")
+        )
+        or 0
+    )
+    undispatched = int(
+        connection.scalar(
+            sa.text("SELECT count(*) FROM wiki_outbox_events WHERE dispatched_at IS NULL")
+        )
+        or 0
+    )
+    if live_jobs or undispatched:
+        raise RuntimeError(
+            "0015 downgrade refused before DDL: durable job runtime data exists "
+            f"{{'live_jobs': {live_jobs}, 'undispatched_outbox_events': {undispatched}}}; "
+            "drain or dead-letter jobs and dispatch outbox rows first"
+        )
 
 
 def _validate_downgrade_before_ddl() -> None:
     """在本迁移任何 DDL 之前重放 0006 聚合 preflight（除拓扑自检）。"""
+    _validate_own_rows_before_ddl()
     if not _destination_crosses_0006():
         return
     module = _load_0006_module()
@@ -168,5 +244,6 @@ def downgrade() -> None:
     op.drop_index("ix_wiki_outbox_events_undispatched", table_name="wiki_outbox_events")
     op.drop_table("wiki_outbox_events")
     op.drop_index("ix_wiki_jobs_reclaim", table_name="wiki_jobs")
+    op.drop_index("ix_wiki_jobs_claim_order", table_name="wiki_jobs")
     op.drop_index("ix_wiki_jobs_claim", table_name="wiki_jobs")
     op.drop_table("wiki_jobs")

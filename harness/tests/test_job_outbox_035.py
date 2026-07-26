@@ -11,12 +11,13 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import (
     ClaimedJob,
+    DuplicateEventError,
     JobRuntimeConfig,
     JobStore,
     OutboxDispatcher,
@@ -106,7 +107,8 @@ def test_p1_6_dispatch_marks_each_row_persistently(factory: SessionFactory) -> N
         space_id="space-a", deliver=lambda event: delivered.append(event.event_id)
     )
 
-    assert report.failed_event_id is None
+    assert report.failed_event_ids == ()
+    assert report.parked_event_ids == ()
     assert report.delivered_event_ids == tuple(delivered)
     assert len(delivered) == 2
     assert dispatcher.read_pending(space_id="space-a") == ()
@@ -136,15 +138,16 @@ def test_p1_6_delivered_but_unmarked_crash_converges_via_event_id_dedup(
 
     first_round = dispatcher.dispatch_pending(space_id="space-a", deliver=consumer)
     assert first_round.delivered_event_ids == ()
-    assert first_round.failed_event_id is not None
+    assert len(first_round.failed_event_ids) == 1
+    crashed_event_id = first_round.failed_event_ids[0]
     # 投递成功但未标记：行必须仍在未投递集合中等待重投。
     pending = dispatcher.read_pending(space_id="space-a")
-    assert [event.event_id for event in pending] == [first_round.failed_event_id]
+    assert [event.event_id for event in pending] == [crashed_event_id]
 
     second_round = dispatcher.dispatch_pending(space_id="space-a", deliver=consumer)
-    assert second_round.failed_event_id is None
-    assert second_round.delivered_event_ids == (first_round.failed_event_id,)
-    assert observed_effects == {first_round.failed_event_id: 1}
+    assert second_round.failed_event_ids == ()
+    assert second_round.delivered_event_ids == (crashed_event_id,)
+    assert observed_effects == {crashed_event_id: 1}
     assert dispatcher.read_pending(space_id="space-a") == ()
 
 
@@ -178,3 +181,79 @@ def test_p1_6_dispatch_scope_never_leaks_other_space_rows(factory: SessionFactor
     assert delivered == ["space-a"]
     remaining = dispatcher.read_pending(space_id="space-b")
     assert [event.space_id for event in remaining] == ["space-b"]
+
+
+# --- I10：毒性事件不阻塞后续事件，达配置上限后 park 出扫描窗口 ---
+
+
+def test_i10_poison_event_does_not_block_later_events_and_parks_at_bound(
+    factory: SessionFactory,
+) -> None:
+    store = _store(factory)
+    for index in range(4):
+        _complete_with_event(
+            store, "space-a", f"job-{index}", "job.succeeded", event_id=f"evt-{index}"
+        )
+    dispatcher = OutboxDispatcher(factory, max_dispatch_attempts=2)
+
+    def deliver(event: OutboxEventView) -> None:
+        if event.event_id == "evt-0":
+            raise RuntimeError("poison event")
+
+    first = dispatcher.dispatch_pending(space_id="space-a", deliver=deliver)
+    assert first.delivered_event_ids == ("evt-1", "evt-2", "evt-3")  # 不再队头阻塞
+    assert first.failed_event_ids == ("evt-0",)
+    assert first.parked_event_ids == ()
+
+    second = dispatcher.dispatch_pending(space_id="space-a", deliver=deliver)
+    assert second.delivered_event_ids == ()
+    assert second.parked_event_ids == ("evt-0",)  # 达上限：park 为毒性事件
+
+    third = dispatcher.dispatch_pending(space_id="space-a", deliver=deliver)
+    assert third.delivered_event_ids == ()
+    assert third.failed_event_ids == ()
+    assert third.parked_event_ids == ()
+    assert dispatcher.read_pending(space_id="space-a") == ()  # parked 移出扫描窗口
+
+    parked = dispatcher.read_parked(space_id="space-a")
+    assert [event.event_id for event in parked] == ["evt-0"]
+    assert parked[0].dispatch_attempts == 2
+    assert parked[0].dispatched_at is None  # park ≠ 假装投递成功
+
+
+def test_i7_event_id_is_unique_per_space_and_duplicate_is_typed(
+    factory: SessionFactory,
+) -> None:
+    store = _store(factory)
+    _complete_with_event(store, "space-a", "job-1", "job.succeeded", event_id="shared-id")
+    # 跨 Space 允许同一 event_id：事件流按 Space 隔离（P1.8）。
+    _complete_with_event(store, "space-b", "job-1", "job.succeeded", event_id="shared-id")
+
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-2")
+    outcome = store.claim(space_ids=("space-a",), worker_id="worker-1")
+    assert isinstance(outcome, ClaimedJob)
+    running = store.start(
+        space_id="space-a", job_id=outcome.job.id, generation=outcome.job.lease_generation
+    )
+
+    with pytest.raises(DuplicateEventError):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            events=(
+                OutboxEventDraft(
+                    event_type="job.succeeded", payload={}, event_id="shared-id"
+                ),
+            ),
+        )
+
+    # typed 拒绝且完成事务整体回滚：任务仍 running，零第二行。
+    assert store.get_job(space_id="space-a", job_id=running.id).state.value == "running"
+    with factory() as session:
+        count = session.scalar(
+            select(func.count())
+            .select_from(WikiOutboxEvent)
+            .where(WikiOutboxEvent.event_id == "shared-id")
+        )
+    assert count == 2

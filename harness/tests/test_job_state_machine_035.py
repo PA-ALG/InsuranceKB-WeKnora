@@ -185,6 +185,26 @@ def test_config_rejects_non_positive_or_empty_values() -> None:
         _config(global_concurrency_limit=0)
     with pytest.raises(ValidationError):
         _config(backoff_seconds=(1.0, -2.0))
+    with pytest.raises(ValidationError):
+        _config(maintenance_batch_size=0)
+    assert _config().maintenance_batch_size >= 1  # I4：回收/promote 批量有界
+
+
+def test_typed_error_taxonomy_for_input_lease_and_duplicate_event() -> None:
+    from insurance_harness.jobs import (
+        DuplicateEventError,
+        InvalidJobInputError,
+        JobStoreError,
+        LeaseExpiredError,
+    )
+
+    assert issubclass(InvalidJobInputError, JobStoreError)
+    assert issubclass(InvalidJobInputError, ValueError)
+    assert InvalidJobInputError("bad").code == "invalid_input"
+    assert issubclass(LeaseExpiredError, JobStoreError)
+    assert LeaseExpiredError(job_id="j").code == "lease_expired"
+    assert issubclass(DuplicateEventError, JobStoreError)
+    assert DuplicateEventError("dup").code == "duplicate_event_id"
 
 
 def test_config_is_frozen_and_policy_lookup_prefers_job_type_override() -> None:

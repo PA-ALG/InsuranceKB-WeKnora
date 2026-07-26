@@ -1,27 +1,36 @@
 """OpenSpec 035 P1 JobStore：任务状态与 lease 的唯一存储层写入口。
 
-事务边界（tasks Contract Card）：enqueue、claim、heartbeat、单次状态
-转换、「完成 + 领域写 + outbox 追加」各为一个 PostgreSQL 事务。过期判定
-只用数据库时钟（P1.3），写权威只看 lease generation；SQLite 仅
+事务边界（tasks Contract Card）：enqueue、claim（維护 + 领取两个事务）、
+heartbeat、单次状态转换、「完成 + 领域写 + outbox 追加」各为一个
+PostgreSQL 事务。过期判定只用数据库时钟（P1.3，PostgreSQL 取
+`clock_timestamp()` 语句时刻，锁等待不吞噬 lease 时长，review I3）；写
+权威只看 lease generation。并发限额由执行 claim 的实例按其配置执行：全部
+实例必须共享同一配置来源（review M18，见 `JobRuntimeConfig`）。SQLite 仅
 deterministic 测试用，真实并发证据只来自 PG lane（P1.12）。
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import json
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, text
+from sqlalchemy.engine import Result
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Executable
 
 from insurance_harness.jobs.errors import (
     IllegalTransitionError,
+    InvalidJobInputError,
+    LeaseExpiredError,
     SpaceScopeError,
     StaleGenerationError,
 )
 from insurance_harness.jobs.models import (
+    TERMINAL_STATES,
     ClaimedJob,
     ClaimOutcome,
     DecisionOutcome,
@@ -42,18 +51,30 @@ from insurance_harness.jobs.tables import WikiJob
 SessionFactory = Callable[[], Session]
 
 _SQLITE_NOW = text("SELECT strftime('%Y-%m-%d %H:%M:%f', 'now')")
+_POSTGRES_NOW = text("SELECT clock_timestamp()")
 _ACTIVE_STATES = (JobState.LEASED.value, JobState.RUNNING.value)
 # 稳定 64 位 claim 序列化锁键（pg_advisory_xact_lock；SQLite 单写者无需）。
 _CLAIM_LOCK_KEY = int.from_bytes(b"ikb035cl", "big", signed=True)
 
+# 输入合同上限与列宽一致；越界在存储层前置 typed 拒绝，不泄漏 DataError。
+MAX_SPACE_ID_LENGTH = 36
+MAX_JOB_ID_LENGTH = 36
+MAX_JOB_TYPE_LENGTH = 64
+MAX_IDEMPOTENCY_KEY_LENGTH = 255
+MAX_WORKER_ID_LENGTH = 128
+
 
 def database_now(session: Session) -> datetime:
-    """读数据库时钟（UTC）；过期与调度判定不得使用 worker 本地时钟。"""
+    """读数据库时钟（UTC）；过期与调度判定不得使用 worker 本地时钟。
+
+    PostgreSQL 用 `clock_timestamp()`（语句时刻）：在 advisory 锁等待之后
+    读取的时刻仍然新鲜，签发的 lease 不会「出生即过期」（review I3）。
+    """
     bind = session.get_bind()
     if bind.dialect.name == "sqlite":
         raw = session.execute(_SQLITE_NOW).scalar_one()
         return datetime.fromisoformat(str(raw)).replace(tzinfo=UTC)
-    value = session.execute(select(func.now())).scalar_one()
+    value = session.execute(_POSTGRES_NOW).scalar_one()
     assert isinstance(value, datetime)
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
@@ -89,14 +110,63 @@ def _snapshot(row: WikiJob) -> JobSnapshot:
     )
 
 
-def _require_text(value: str, name: str) -> str:
-    if not value:
-        raise ValueError(f"{name} must be a non-empty string")
+def _enqueue_result(row: WikiJob, *, deduplicated: bool) -> EnqueueResult:
+    snapshot = _snapshot(row)
+    return EnqueueResult(
+        job=snapshot,
+        deduplicated=deduplicated,
+        terminal=snapshot.state in TERMINAL_STATES,
+    )
+
+
+def validated_text(value: str, name: str, *, max_length: int) -> str:
+    """输入合同：非空、无 NUL、长度受限；违规 typed 拒绝（review I6/M16）。"""
+    if not isinstance(value, str) or not value:
+        raise InvalidJobInputError(f"{name} must be a non-empty string")
+    if "\x00" in value:
+        raise InvalidJobInputError(f"{name} must not contain NUL characters")
+    if len(value) > max_length:
+        raise InvalidJobInputError(f"{name} must be at most {max_length} characters")
     return value
 
 
+def validated_payload(payload: Mapping[str, Any] | None, name: str = "payload") -> dict[str, Any]:
+    """payload 必须是可 JSON 序列化的映射；违规 typed 拒绝（review I6）。"""
+    materialized = dict(payload or {})
+    try:
+        json.dumps(materialized)
+    except (TypeError, ValueError) as error:
+        raise InvalidJobInputError(f"{name} must be JSON-serializable: {error}") from error
+    return materialized
+
+
+class DomainWriteHandle:
+    """完成事务内的受限领域写句柄（review I8）。
+
+    只暴露 `execute`：调用方无法提交/回滚/关闭完成事务；领域写与任务
+    状态、outbox 行同生共死。合同：领域写只允许写调用方自己的领域表，
+    SHALL NOT 触碰 `wiki_` 前缀表（P1 表所有权）或其他 Space 的数据。
+    """
+
+    __slots__ = ("_session",)
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def execute(
+        self,
+        statement: Executable,
+        parameters: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None = None,
+    ) -> Result[Any]:
+        return self._session.execute(statement, parameters)
+
+
 class JobStore:
-    """P1 任务存储层单一入口；调用方不得绕过本类直接改行（P1.1）。"""
+    """P1 任务存储层单一入口；调用方不得绕过本类直接改行（P1.1）。
+
+    per-Space/全局限额由本实例的 `JobRuntimeConfig` 执行；多实例配置不
+    一致会弱化限额（review M18）——部署必须统一配置来源。
+    """
 
     def __init__(self, session_factory: SessionFactory, config: JobRuntimeConfig) -> None:
         self._session_factory = session_factory
@@ -116,10 +186,17 @@ class JobStore:
         idempotency_key: str,
         payload: dict[str, Any] | None = None,
     ) -> EnqueueResult:
-        """插入新任务或返回 typed dedup；键由消费方按批次/裁决铸造。"""
-        _require_text(space_id, "space_id")
-        _require_text(job_type, "job_type")
-        _require_text(idempotency_key, "idempotency_key")
+        """插入新任务或返回 typed dedup；键由消费方按批次/裁决铸造。
+
+        dedup 命中终态行时 `terminal=True`：新一次授权处理必须铸新键
+        （P1.5，review M17）。
+        """
+        validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+        validated_text(job_type, "job_type", max_length=MAX_JOB_TYPE_LENGTH)
+        validated_text(
+            idempotency_key, "idempotency_key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH
+        )
+        safe_payload = validated_payload(payload)
         with self._session_factory() as session:
             try:
                 with session.begin():
@@ -128,7 +205,7 @@ class JobStore:
                         space_id=space_id,
                         job_type=job_type,
                         idempotency_key=idempotency_key,
-                        payload=dict(payload or {}),
+                        payload=safe_payload,
                         state=JobState.QUEUED.value,
                         attempt=0,
                         lease_generation=0,
@@ -136,7 +213,7 @@ class JobStore:
                         enqueued_at=now,
                     )
                     session.add(row)
-                return EnqueueResult(job=_snapshot(row), deduplicated=False)
+                return _enqueue_result(row, deduplicated=False)
             except IntegrityError:
                 with session.begin():
                     existing = session.execute(
@@ -148,36 +225,53 @@ class JobStore:
                     ).scalar_one_or_none()
                     if existing is None:
                         raise
-                    return EnqueueResult(job=_snapshot(existing), deduplicated=True)
+                    return _enqueue_result(existing, deduplicated=True)
 
     # --- P1.2 claim（FOR UPDATE SKIP LOCKED） ---
 
     def claim(self, *, space_ids: Sequence[str], worker_id: str) -> ClaimOutcome:
-        """在声明 scope 内领取一个任务；无可领取返回 typed 空结果。"""
+        """在声明 scope 内领取一个任务；无可领取返回 typed 空结果。
+
+        事务 1（无串行化锁，review I4）：有界回收过期 lease + promote 到期
+        retry_wait；事务 2（advisory 串行化）：计数 → 领取。有效并发只统计
+        `lease_expires_at > now` 的 leased|running 行——已过期未回收的
+        lease 不占用限额（review C1）。
+        """
         if not space_ids:
-            raise ValueError("space_ids must not be empty")
-        _require_text(worker_id, "worker_id")
-        scope = tuple(dict.fromkeys(space_ids))
+            raise InvalidJobInputError("space_ids must not be empty")
+        scope = tuple(
+            dict.fromkeys(
+                validated_text(space, "space_ids entry", max_length=MAX_SPACE_ID_LENGTH)
+                for space in space_ids
+            )
+        )
+        validated_text(worker_id, "worker_id", max_length=MAX_WORKER_ID_LENGTH)
+        batch = self._config.maintenance_batch_size
         with self._session_factory() as session:
             with session.begin():
                 now = database_now(session)
+                # P1.2「或满足 P1.3 的过期回收条件」+ P1.1 第 5 条：回收与
+                # backoff requeue 都仅限存储层，在领取前的独立事务内执行。
+                self._reclaim_locked(session, scope, now, limit=batch)
+                self._promote_due_retries(session, scope, now, limit=batch)
+        with self._session_factory() as session:
+            with session.begin():
                 # 限额检查与领取必须原子；PostgreSQL 以事务级 advisory 锁
                 # 串行化「计数 → 领取」，行级仍用 SKIP LOCKED 不互相阻塞。
                 if session.get_bind().dialect.name == "postgresql":
                     session.execute(
                         text("SELECT pg_advisory_xact_lock(:key)"), {"key": _CLAIM_LOCK_KEY}
                     )
-                # P1.2「或满足 P1.3 的过期回收条件」：claim 先在同事务回收
-                # scope 内已过期 lease，被 requeue 的任务随即可领取。
-                self._reclaim_locked(session, scope, now)
-                # P1.1 第 5 条：backoff 到期的 retry_wait 由存储层按数据库
-                # 时钟 requeue（仅此入口，调用方无直接转换 API）。
-                self._promote_due_retries(session, scope, now)
+                # 锁后读钟：advisory 等待不吞噬 lease 时长（review I3）。
+                now = database_now(session)
                 global_active = int(
                     session.scalar(
                         select(func.count())
                         .select_from(WikiJob)
-                        .where(WikiJob.state.in_(_ACTIVE_STATES))
+                        .where(
+                            WikiJob.state.in_(_ACTIVE_STATES),
+                            WikiJob.lease_expires_at > now,
+                        )
                     )
                     or 0
                 )
@@ -190,6 +284,7 @@ class JobStore:
                         .where(
                             WikiJob.space_id.in_(scope),
                             WikiJob.state.in_(_ACTIVE_STATES),
+                            WikiJob.lease_expires_at > now,
                         )
                         .group_by(WikiJob.space_id)
                     ).tuples()
@@ -201,7 +296,8 @@ class JobStore:
                     < self._config.per_space_concurrency_limit
                 )
                 if not eligible:
-                    return NoClaimableJob(reason="empty")
+                    # scope 内全部 Space 饱和：不是空队列（review I12）。
+                    return NoClaimableJob(reason="per_space_concurrency_limit")
                 candidate = session.execute(
                     select(WikiJob)
                     .where(
@@ -228,7 +324,11 @@ class JobStore:
     # --- P1.3 lease、heartbeat 与 fencing ---
 
     def heartbeat(self, *, space_id: str, job_id: str, generation: int) -> JobSnapshot:
-        """延长 lease；仅当 generation 等于当前值且状态 leased|running。"""
+        """延长 lease；仅当 generation 等于当前值且状态 leased|running。
+
+        已按数据库时钟过期的 lease 不可复活（review M14）：typed
+        `lease_expired` 拒绝，任务只能按 P1.1 第 10 条回收。
+        """
         with self._session_factory() as session:
             with session.begin():
                 row = self._locked_job(session, space_id, job_id)
@@ -237,11 +337,18 @@ class JobStore:
                 if state not in (JobState.LEASED, JobState.RUNNING):
                     raise IllegalTransitionError(state, state, row.id)
                 now = database_now(session)
+                expires_at = _aware(row.lease_expires_at)
+                if expires_at is None or expires_at <= now:
+                    raise LeaseExpiredError(job_id=row.id)
                 row.lease_expires_at = now + timedelta(seconds=self._config.lease_seconds)
                 return _snapshot(row)
 
     def start(self, *, space_id: str, job_id: str, generation: int) -> JobSnapshot:
-        """`leased → running`：同 generation 的 worker 开始执行，attempt +1。"""
+        """`leased → running`：同 generation 的 worker 开始执行，attempt +1。
+
+        过期判定不在此处：claim/start 竞态由 generation fencing 保护，
+        过期执法只发生在回收与 heartbeat。
+        """
         with self._session_factory() as session:
             with session.begin():
                 row = self._locked_job(session, space_id, job_id)
@@ -262,12 +369,14 @@ class JobStore:
         job_id: str,
         generation: int,
         events: Sequence[OutboxEventDraft] = (),
-        domain_write: Callable[[Session], None] | None = None,
+        domain_write: Callable[[DomainWriteHandle], None] | None = None,
     ) -> JobSnapshot:
         """完成事务：领域写 + outbox 追加 + `running → succeeded` 同事务。
 
         本方法是任务领域结果的唯一写入口；fencing + 终态保证至多成功一
         次，重复完成 typed 拒绝且零领域写、零 outbox 追加（P1.5/P1.6）。
+        领域写经受限 `DomainWriteHandle` 在 SAVEPOINT 内执行（review I8），
+        不能提交/回滚完成事务；成功时清空历史错误残留（review M15）。
         """
         from insurance_harness.jobs.outbox import append_job_event
 
@@ -278,7 +387,8 @@ class JobStore:
                 ensure_transition(JobState(row.state), JobState.SUCCEEDED, row.id)
                 now = database_now(session)
                 if domain_write is not None:
-                    domain_write(session)
+                    with session.begin_nested():
+                        domain_write(DomainWriteHandle(session))
                 for draft in events:
                     append_job_event(
                         session,
@@ -292,6 +402,8 @@ class JobStore:
                 row.worker_id = None
                 row.lease_expires_at = None
                 row.finished_at = now
+                row.error_class = None
+                row.error_summary = None
                 return _snapshot(row)
 
     def report_failure(
@@ -324,13 +436,22 @@ class JobStore:
     # --- P1.7 人工 Decision 幂等唤醒 ---
 
     def resume_after_decision(self, *, space_id: str, job_id: str) -> DecisionOutcome:
-        """`awaiting_human → queued` 的唯一入口：当且仅当当前处于
-        awaiting_human 才 requeue；重复提交返回 typed duplicate、零行变更。"""
+        """`awaiting_human → queued` 的唯一入口。
+
+        当且仅当当前处于 awaiting_human 才 requeue；已被唤醒过的行返回
+        typed `duplicate`，从未 awaiting 的行返回 typed `not_awaiting`
+        （review I11）；二者零行变更。
+        """
         with self._session_factory() as session:
             with session.begin():
                 row = self._locked_job(session, space_id, job_id)
-                if JobState(row.state) is not JobState.AWAITING_HUMAN:
-                    return DecisionOutcome(job_id=row.id, status="duplicate")
+                state = JobState(row.state)
+                if state is not JobState.AWAITING_HUMAN:
+                    was_awaiting = row.error_class == ErrorClass.HUMAN_REQUIRED.value
+                    return DecisionOutcome(
+                        job_id=row.id,
+                        status="duplicate" if was_awaiting else "not_awaiting",
+                    )
                 ensure_transition(JobState.AWAITING_HUMAN, JobState.QUEUED, row.id)
                 row.state = JobState.QUEUED.value
                 row.available_at = database_now(session)
@@ -339,20 +460,33 @@ class JobStore:
     # --- P1.1 第 10 条 / P1.10：过期 lease 回收 ---
 
     def reclaim_expired_leases(self, *, space_ids: Sequence[str]) -> ReclaimReport:
-        """任何实例可执行的回收：只依赖 PostgreSQL 持久状态与数据库时钟。"""
+        """任何实例可执行的回收：只依赖 PostgreSQL 持久状态与数据库时钟。
+
+        单次调用最多处理 `maintenance_batch_size` 行（review I4）；剩余
+        过期 lease 由后续调用继续收敛。
+        """
         if not space_ids:
-            raise ValueError("space_ids must not be empty")
-        scope = tuple(dict.fromkeys(space_ids))
+            raise InvalidJobInputError("space_ids must not be empty")
+        scope = tuple(
+            dict.fromkeys(
+                validated_text(space, "space_ids entry", max_length=MAX_SPACE_ID_LENGTH)
+                for space in space_ids
+            )
+        )
         with self._session_factory() as session:
             with session.begin():
                 now = database_now(session)
-                return self._reclaim_locked(session, scope, now)
+                return self._reclaim_locked(
+                    session, scope, now, limit=self._config.maintenance_batch_size
+                )
 
     def _reclaim_locked(
-        self, session: Session, scope: tuple[str, ...], now: datetime
+        self, session: Session, scope: tuple[str, ...], now: datetime, *, limit: int
     ) -> ReclaimReport:
         """回收 scope 内已过期 lease：记 `lease_expired` retryable 并按
-        `max_attempts` 路由（P1.4）；行锁用 SKIP LOCKED 避免互相阻塞。"""
+        `max_attempts` 路由（P1.4）；每次回收使 generation 单调 +1，被逐出
+        worker 的写入立即 stale（review C2）。行锁 SKIP LOCKED，批量受
+        `limit` 约束（review I4）。"""
         expired_rows = (
             session.execute(
                 select(WikiJob)
@@ -362,6 +496,7 @@ class JobStore:
                     WikiJob.lease_expires_at <= now,
                 )
                 .order_by(WikiJob.id)
+                .limit(limit)
                 .with_for_update(skip_locked=True)
             )
             .scalars()
@@ -378,6 +513,7 @@ class JobStore:
             row.state = target.value
             row.worker_id = None
             row.lease_expires_at = None
+            row.lease_generation += 1
             row.error_class = ErrorClass.RETRYABLE.value
             row.error_summary = "lease_expired"
             if target is JobState.DEAD_LETTER:
@@ -391,7 +527,9 @@ class JobStore:
         )
 
     @staticmethod
-    def _promote_due_retries(session: Session, scope: tuple[str, ...], now: datetime) -> None:
+    def _promote_due_retries(
+        session: Session, scope: tuple[str, ...], now: datetime, *, limit: int
+    ) -> None:
         """`retry_wait → queued`：仅当配置化 backoff 按数据库时钟已到期。"""
         due_rows = (
             session.execute(
@@ -402,6 +540,7 @@ class JobStore:
                     WikiJob.available_at <= now,
                 )
                 .order_by(WikiJob.id)
+                .limit(limit)
                 .with_for_update(skip_locked=True)
             )
             .scalars()
@@ -415,10 +554,10 @@ class JobStore:
 
     def get_job(self, *, space_id: str, job_id: str) -> JobSnapshot:
         """按声明 Space 读取任务；不一致或不存在一律 fail closed。"""
-        _require_text(space_id, "space_id")
-        _require_text(job_id, "job_id")
         with self._session_factory() as session:
             with session.begin():
+                validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+                validated_text(job_id, "job_id", max_length=MAX_JOB_ID_LENGTH)
                 row = session.execute(
                     select(WikiJob).where(WikiJob.id == job_id, WikiJob.space_id == space_id)
                 ).scalar_one_or_none()
@@ -430,8 +569,8 @@ class JobStore:
 
     def _locked_job(self, session: Session, space_id: str, job_id: str) -> WikiJob:
         """FOR UPDATE 锁定并校验 scope；不一致/不存在 fail closed（P1.8）。"""
-        _require_text(space_id, "space_id")
-        _require_text(job_id, "job_id")
+        validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+        validated_text(job_id, "job_id", max_length=MAX_JOB_ID_LENGTH)
         row = session.execute(
             select(WikiJob)
             .where(WikiJob.id == job_id, WikiJob.space_id == space_id)

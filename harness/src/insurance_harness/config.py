@@ -62,6 +62,7 @@ class HarnessSettings(BaseSettings):
     job_type_policies: dict[str, JobTypePolicy] = Field(default_factory=dict)
     job_per_space_concurrency_limit: int = Field(default=2, ge=1)
     job_global_concurrency_limit: int = Field(default=8, ge=1)
+    job_maintenance_batch_size: int = Field(default=128, ge=1)
 
     def job_runtime_config(self) -> JobRuntimeConfig:
         """把 HARNESS_JOB_* 环境配置接线为 P1 JobStore 的运行时配置。"""
@@ -73,6 +74,7 @@ class HarnessSettings(BaseSettings):
             job_type_policies=self.job_type_policies,
             per_space_concurrency_limit=self.job_per_space_concurrency_limit,
             global_concurrency_limit=self.job_global_concurrency_limit,
+            maintenance_batch_size=self.job_maintenance_batch_size,
         )
 
     # --- 金标注（change 002；均可选，仅 LiteLLMClient 需要） ---

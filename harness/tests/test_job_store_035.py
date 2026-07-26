@@ -19,15 +19,18 @@ from sqlalchemy.orm import Session
 from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import (
     ClaimedJob,
+    DomainWriteHandle,
     EnqueueResult,
     ErrorClass,
     IllegalTransitionError,
+    InvalidJobInputError,
     JobFailure,
     JobRuntimeConfig,
     JobSnapshot,
     JobState,
     JobStore,
     JobTypePolicy,
+    LeaseExpiredError,
     NoClaimableJob,
     OutboxEventDraft,
     SpaceScopeError,
@@ -224,6 +227,10 @@ def test_p1_8_per_space_limit_values_two_and_four_take_effect(
     first_wave = _drain(limited_two, ("space-a",), "worker-1")
     assert len(first_wave) == 2
 
+    saturated = limited_two.claim(space_ids=("space-a",), worker_id="worker-extra")
+    assert isinstance(saturated, NoClaimableJob)
+    assert saturated.reason == "per_space_concurrency_limit"  # I12：饱和 ≠ 空队列
+
     limited_four = make_store(factory, per_space_concurrency_limit=4)
     second_wave = _drain(limited_four, ("space-a",), "worker-2")
     assert len(second_wave) == 2  # 已有 2 leased，共 4 = 新上限
@@ -380,9 +387,154 @@ def test_p1_1_reclaim_records_lease_expired_retryable_and_requeues_below_limit(
     assert job.error_summary == "lease_expired"
     assert job.worker_id is None
     assert job.lease_expires_at is None
+    # C2：回收本身使 generation 单调 +1，立即失效被逐出 worker 的 fencing。
+    assert job.lease_generation == claimed.lease_generation + 1
 
     retaken = _claimed(store, "space-a", worker_id="worker-2")
-    assert retaken.lease_generation == claimed.lease_generation + 1
+    assert retaken.lease_generation == claimed.lease_generation + 2
+
+
+def test_c2_reclaim_generation_bump_fences_evicted_worker_immediately(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory, lease_seconds=0.0)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
+    claimed = _claimed(store, "space-a")
+    running = store.start(
+        space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
+    )
+    store.reclaim_expired_leases(space_ids=("space-a",))
+
+    # 回收后（尚未有新 claim）：被逐出 worker 的一切写入即刻 stale。
+    with pytest.raises(StaleGenerationError):
+        store.heartbeat(
+            space_id="space-a", job_id=running.id, generation=running.lease_generation
+        )
+    with pytest.raises(StaleGenerationError):
+        store.report_success(
+            space_id="space-a", job_id=running.id, generation=running.lease_generation
+        )
+    with factory() as session:
+        with session.begin():
+            with pytest.raises(StaleGenerationError):
+                append_job_event(
+                    session,
+                    space_id="space-a",
+                    job_id=running.id,
+                    generation=running.lease_generation,
+                    draft=OutboxEventDraft(event_type="job.progress", payload={}),
+                )
+    with factory() as session:
+        outbox_rows = session.scalar(select(func.count()).select_from(WikiOutboxEvent))
+    assert outbox_rows == 0
+    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.QUEUED
+
+
+def test_c2_outbox_append_requires_running_state(factory: SessionFactory) -> None:
+    store = make_store(factory)
+    queued = store.enqueue(space_id="space-a", job_type="compile", idempotency_key="q").job
+    with factory() as session:
+        with session.begin():
+            with pytest.raises(IllegalTransitionError):
+                append_job_event(
+                    session,
+                    space_id="space-a",
+                    job_id=queued.id,
+                    generation=queued.lease_generation,
+                    draft=OutboxEventDraft(event_type="job.custom", payload={}),
+                )
+
+    leased = _claimed(store, "space-a")
+    with factory() as session:
+        with session.begin():
+            with pytest.raises(IllegalTransitionError):
+                append_job_event(
+                    session,
+                    space_id="space-a",
+                    job_id=leased.id,
+                    generation=leased.lease_generation,
+                    draft=OutboxEventDraft(event_type="job.custom", payload={}),
+                )
+
+    running = store.start(
+        space_id="space-a", job_id=leased.id, generation=leased.lease_generation
+    )
+    store.report_success(
+        space_id="space-a", job_id=running.id, generation=running.lease_generation
+    )
+    # 终态行携带仍然匹配的 generation：state guard 必须单独拒绝（B1 probe）。
+    with factory() as session:
+        with session.begin():
+            with pytest.raises(IllegalTransitionError):
+                append_job_event(
+                    session,
+                    space_id="space-a",
+                    job_id=running.id,
+                    generation=running.lease_generation,
+                    draft=OutboxEventDraft(event_type="job.succeeded.phantom", payload={}),
+                )
+    with factory() as session:
+        outbox_rows = session.scalar(select(func.count()).select_from(WikiOutboxEvent))
+    assert outbox_rows == 0
+
+
+def test_c1_expired_lease_outside_scope_does_not_hold_global_limit(
+    factory: SessionFactory,
+) -> None:
+    crasher = make_store(factory, lease_seconds=0.0, global_concurrency_limit=1)
+    crasher.enqueue(space_id="space-dead", job_type="compile", idempotency_key="k")
+    dead = _claimed(crasher, "space-dead", worker_id="worker-crash")
+
+    healthy = make_store(factory, lease_seconds=300.0, global_concurrency_limit=1)
+    healthy.enqueue(space_id="space-live", job_type="compile", idempotency_key="k")
+
+    outcome = healthy.claim(space_ids=("space-live",), worker_id="worker-live")
+
+    # 过期 lease 不再计入 leased|running 并发；scope 外的行零变更。
+    assert isinstance(outcome, ClaimedJob)
+    assert outcome.job.space_id == "space-live"
+    parked = healthy.get_job(space_id="space-dead", job_id=dead.id)
+    assert parked.state is JobState.LEASED
+    assert parked.lease_generation == dead.lease_generation
+
+
+def test_m14_heartbeat_cannot_revive_expired_lease(factory: SessionFactory) -> None:
+    store = make_store(factory, lease_seconds=0.0)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="k")
+    claimed = _claimed(store, "space-a")
+
+    reviver = make_store(factory, lease_seconds=600.0)
+    with pytest.raises(LeaseExpiredError):
+        reviver.heartbeat(
+            space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
+        )
+
+    unchanged = store.get_job(space_id="space-a", job_id=claimed.id)
+    assert unchanged.state is JobState.LEASED
+    assert unchanged.lease_expires_at == claimed.lease_expires_at
+
+
+def test_i4_claim_and_reclaim_maintenance_batches_are_bounded_by_config(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory, lease_seconds=300.0, maintenance_batch_size=2)
+    ids = []
+    for index in range(3):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=f"k{index}")
+        ids.append(_claimed(store, "space-a", worker_id=f"w{index}").id)
+    with factory() as session:  # 测试脚手架：把三个 lease 统一回拨为已过期
+        with session.begin():
+            session.execute(
+                text("UPDATE wiki_jobs SET lease_expires_at = '2000-01-01 00:00:00.000000+00:00'")
+            )
+
+    first = store.reclaim_expired_leases(space_ids=("space-a",))
+    assert len(first.requeued_job_ids) == 2  # 单次回收受 maintenance_batch_size 约束
+
+    second = store.reclaim_expired_leases(space_ids=("space-a",))
+    assert len(second.requeued_job_ids) == 1
+    states = [store.get_job(space_id="space-a", job_id=job_id).state for job_id in ids]
+    assert states == [JobState.QUEUED, JobState.QUEUED, JobState.QUEUED]
 
 
 def test_p1_10_reclaim_routes_to_dead_letter_at_max_attempts(
@@ -556,8 +708,8 @@ def test_p1_6_injected_interrupt_before_commit_leaves_no_half_writes(
     store = make_store(factory)
     running = _running_job(store)
 
-    def domain_write(session: Session) -> None:
-        session.execute(
+    def domain_write(handle: DomainWriteHandle) -> None:
+        handle.execute(
             text("INSERT INTO domain_results_035 (job_id) VALUES (:job_id)"),
             {"job_id": running.id},
         )
@@ -646,6 +798,152 @@ def test_p1_7_awaiting_human_releases_concurrency_slot_in_same_transaction(
     freed = store.claim(space_ids=("space-a",), worker_id="worker-2")
     assert isinstance(freed, ClaimedJob)
     assert freed.job.idempotency_key == "job-next"
+
+
+def test_m15_report_success_clears_error_residue_from_earlier_attempts(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory, backoff_seconds=(0.0,))
+    running = _running_job(store)
+    _fail_retryable(store, running, summary="transient blip")
+    retaken = store.claim(space_ids=("space-a",), worker_id="worker-2")
+    assert isinstance(retaken, ClaimedJob)
+    running_again = store.start(
+        space_id="space-a", job_id=retaken.job.id, generation=retaken.job.lease_generation
+    )
+
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running_again.id,
+        generation=running_again.lease_generation,
+    )
+
+    assert done.state is JobState.SUCCEEDED
+    assert done.error_class is None
+    assert done.error_summary is None
+
+
+def test_i8_domain_write_handle_cannot_commit_or_touch_session_lifecycle(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    with job_engine.begin() as connection:
+        connection.execute(text("CREATE TABLE domain_guard_035 (job_id TEXT PRIMARY KEY)"))
+    store = make_store(factory)
+    running = _running_job(store)
+    observed: dict[str, object] = {}
+
+    def domain_write(handle: DomainWriteHandle) -> None:
+        observed["has_commit"] = hasattr(handle, "commit")
+        observed["has_rollback"] = hasattr(handle, "rollback")
+        observed["has_close"] = hasattr(handle, "close")
+        handle.execute(
+            text("INSERT INTO domain_guard_035 (job_id) VALUES (:job_id)"),
+            {"job_id": running.id},
+        )
+        raise RuntimeError("crash after domain write")
+
+    with pytest.raises(RuntimeError, match="crash after domain write"):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+            domain_write=domain_write,
+        )
+
+    assert observed == {"has_commit": False, "has_rollback": False, "has_close": False}
+    with factory() as session:
+        assert session.scalar(text("SELECT count(*) FROM domain_guard_035")) == 0
+    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+
+
+def test_i6_input_validation_is_typed_and_dialect_independent(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(space_id="s" * 37, job_type="compile", idempotency_key="k")
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(space_id="space-a", job_type="t" * 65, idempotency_key="k")
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key="z" * 256)
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key="a\x00b")
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(
+            space_id="space-a",
+            job_type="compile",
+            idempotency_key="obj",
+            payload={"x": object()},
+        )
+    with pytest.raises(InvalidJobInputError):
+        store.claim(space_ids=("space-a",), worker_id="w" * 129)
+    assert isinstance(InvalidJobInputError("x"), ValueError)  # 兼容旧 ValueError 合同
+    assert InvalidJobInputError("x").code == "invalid_input"
+    assert job_count(factory) == 0
+
+
+def test_m16_claim_scope_members_and_worker_are_validated_typed(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="k")
+
+    with pytest.raises(InvalidJobInputError):
+        store.claim(space_ids=("space-a", ""), worker_id="worker-1")
+    with pytest.raises(InvalidJobInputError):
+        store.claim(space_ids=("space-a",), worker_id="")
+    with pytest.raises(InvalidJobInputError):
+        store.claim(space_ids=("space-a", "s\x00b"), worker_id="worker-1")
+    assert store.claim(space_ids=("space-a",), worker_id="worker-1") is not None
+
+
+def test_m17_dedup_result_exposes_terminal_flag(factory: SessionFactory) -> None:
+    store = make_store(factory, max_attempts=1, backoff_seconds=(0.0,))
+    fresh = store.enqueue(space_id="space-a", job_type="compile", idempotency_key="k")
+    assert fresh.terminal is False
+
+    claimed = _claimed(store, "space-a")
+    running = store.start(
+        space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
+    )
+    store.report_failure(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.NON_RETRYABLE, summary="fatal"),
+    )
+
+    again = store.enqueue(space_id="space-a", job_type="compile", idempotency_key="k")
+    assert again.deduplicated is True
+    assert again.terminal is True  # M17：消费方可据此铸新批次键，而非等待旧行
+    assert again.job.state is JobState.DEAD_LETTER
+
+
+def test_p1_9_backdated_row_yields_exact_oldest_schedulable_age(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    seeded = store.enqueue(space_id="space-a", job_type="compile", idempotency_key="old")
+    backdated = seeded.job.enqueued_at - timedelta(hours=1)
+    with factory() as session:  # 测试脚手架：回拨 enqueued_at 制造已知年龄
+        with session.begin():
+            session.execute(
+                text("UPDATE wiki_jobs SET enqueued_at = :backdated WHERE id = :id"),
+                {"backdated": backdated.isoformat(sep=" "), "id": seeded.job.id},
+            )
+
+    before = _db_now(factory)
+    with factory() as session:
+        metrics = space_job_metrics(session, space_id="space-a")
+    after = _db_now(factory)
+
+    assert metrics.oldest_schedulable_age_seconds is not None
+    lower = (before - backdated).total_seconds()
+    upper = (after - backdated).total_seconds()
+    assert lower <= metrics.oldest_schedulable_age_seconds <= upper
+    assert metrics.oldest_schedulable_age_seconds >= 3600.0
 
 
 def test_p1_4_report_failure_requires_running_and_matching_space(
@@ -944,7 +1242,7 @@ def test_p1_7_decision_resumes_awaiting_human_exactly_once(factory: SessionFacto
     assert store.get_job(space_id="space-a", job_id=waiting.id).state is JobState.QUEUED
 
 
-def test_p1_7_decision_on_non_awaiting_states_is_typed_duplicate_with_zero_changes(
+def test_p1_7_decision_on_never_awaiting_states_is_typed_not_awaiting(
     factory: SessionFactory,
 ) -> None:
     store = make_store(factory)
@@ -952,10 +1250,22 @@ def test_p1_7_decision_on_non_awaiting_states_is_typed_duplicate_with_zero_chang
 
     outcome = store.resume_after_decision(space_id="space-a", job_id=running.id)
 
-    assert outcome.status == "duplicate"
+    # I11：从未 awaiting 的行不是「重复 Decision」，报 typed not_awaiting。
+    assert outcome.status == "not_awaiting"
     unchanged = store.get_job(space_id="space-a", job_id=running.id)
     assert unchanged.state is JobState.RUNNING
     assert unchanged.lease_generation == running.lease_generation
+
+    dead = store.report_failure(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.NON_RETRYABLE, summary="fatal"),
+    )
+    assert dead.state is JobState.DEAD_LETTER
+    assert store.resume_after_decision(space_id="space-a", job_id=running.id).status == (
+        "not_awaiting"
+    )
 
     with pytest.raises(SpaceScopeError):
         store.resume_after_decision(space_id="space-b", job_id=running.id)

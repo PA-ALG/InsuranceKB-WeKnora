@@ -182,6 +182,12 @@ def test_p1_11_wiki_jobs_columns_not_null_space_and_idempotency_unique(
     }
     assert uniques["uq_wiki_jobs_idempotency"] == ("space_id", "job_type", "idempotency_key")
 
+    indexes = {
+        index["name"]: tuple(index["column_names"]) for index in inspector.get_indexes("wiki_jobs")
+    }
+    # I5：claim 的 ORDER BY (enqueued_at, id) 有匹配索引，避免外部排序。
+    assert indexes["ix_wiki_jobs_claim_order"] == ("space_id", "state", "enqueued_at", "id")
+
     with postgres_migration_db.engine.begin() as connection:
         connection.execute(
             text(
@@ -232,8 +238,16 @@ def test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space(
         "payload",
         "created_at",
         "dispatched_at",
+        "dispatch_attempts",
     }
-    for required in ("event_id", "space_id", "event_type", "payload", "created_at"):
+    for required in (
+        "event_id",
+        "space_id",
+        "event_type",
+        "payload",
+        "created_at",
+        "dispatch_attempts",
+    ):
         assert columns[required]["nullable"] is False, required
     assert columns["id"]["type"].__class__.__name__ == "BIGINT"
 
@@ -241,7 +255,8 @@ def test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space(
         constraint["name"]: tuple(constraint["column_names"])
         for constraint in inspector.get_unique_constraints("wiki_outbox_events")
     }
-    assert uniques["uq_wiki_outbox_events_event_id"] == ("event_id",)
+    # I7：event_id 幂等键按 Space 隔离，跨 Space 允许同名。
+    assert uniques["uq_wiki_outbox_events_space_event"] == ("space_id", "event_id")
 
     insert = text(
         "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload, created_at)"
@@ -255,6 +270,47 @@ def test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space(
     duplicate_event = str(uuid.uuid4())
     with postgres_migration_db.engine.begin() as connection:
         connection.execute(insert, {"event_id": duplicate_event})
-    with pytest.raises(IntegrityError, match="uq_wiki_outbox_events_event_id"):
+    with pytest.raises(IntegrityError, match="uq_wiki_outbox_events_space_event"):
         with postgres_migration_db.engine.begin() as connection:
             connection.execute(insert, {"event_id": duplicate_event})
+
+
+@pytest.mark.integration_postgres
+def test_i9_downgrade_with_live_rows_is_refused_before_any_ddl(
+    postgres_migration_db: PostgresMigrationDb,
+) -> None:
+    config = _cfg(postgres_migration_db.url)
+    command.upgrade(config, "head")
+    with postgres_migration_db.engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO wiki_jobs (id, space_id, job_type, idempotency_key, payload,"
+                " state, attempt, lease_generation, available_at, enqueued_at)"
+                " VALUES (:id, 'space-a', 'compile', 'live-1', '{}', 'queued', 0, 0,"
+                " now(), now())"
+            ),
+            {"id": str(uuid.uuid4())},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload,"
+                " created_at) VALUES (:event_id, 'space-a', 'job.succeeded', '{}', now())"
+            ),
+            {"event_id": str(uuid.uuid4())},
+        )
+
+    # 活跃任务 + 未投递事件：降级必须在任何 DDL 之前拒绝（含相对参数）。
+    for destination in ("0006", "-1"):
+        with pytest.raises(Exception, match="0015 downgrade refused"):
+            command.downgrade(config, destination)
+        tables = set(inspect(postgres_migration_db.engine).get_table_names())
+        assert P1_TABLES <= tables  # 零 DDL
+        assert _version_rows(postgres_migration_db.engine) == ("0015",)
+
+    # 任务收敛为终态且事件均已投递后，同一降级即可通过。
+    with postgres_migration_db.engine.begin() as connection:
+        connection.execute(text("UPDATE wiki_jobs SET state = 'succeeded', finished_at = now()"))
+        connection.execute(text("UPDATE wiki_outbox_events SET dispatched_at = now()"))
+    command.downgrade(config, "0006")
+    assert _version_rows(postgres_migration_db.engine) == ("0006",)
+    assert P1_TABLES.isdisjoint(inspect(postgres_migration_db.engine).get_table_names())

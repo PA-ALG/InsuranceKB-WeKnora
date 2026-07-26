@@ -69,6 +69,10 @@ JOB_STORE_POSTGRES_NODES = {
         "test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result",
         "test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts",
         "test_p1_9_metrics_match_seeded_distribution_on_postgres",
+        "test_c1_expired_foreign_lease_does_not_consume_global_limit",
+        "test_i3_lease_duration_survives_advisory_lock_wait",
+        "test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres",
+        "test_m19_concurrent_dispatchers_do_not_double_deliver",
     )
 }
 JOB_MIGRATION_POSTGRES_NODES = {
@@ -77,6 +81,7 @@ JOB_MIGRATION_POSTGRES_NODES = {
         "test_p1_11_single_new_migration_from_real_head_0006",
         "test_p1_11_wiki_jobs_columns_not_null_space_and_idempotency_unique",
         "test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space",
+        "test_i9_downgrade_with_live_rows_is_refused_before_any_ddl",
     )
 }
 POSTGRES_NODES = (

@@ -141,7 +141,13 @@ class JobTypePolicy(BaseModel):
 
 
 class JobRuntimeConfig(BaseModel):
-    """P1 运行时配置：lease/heartbeat/重试/并发上限全部来自这里。"""
+    """P1 运行时配置：lease/heartbeat/重试/并发上限全部来自这里。
+
+    限额由**执行 claim 的实例**按其配置执行：多实例配置不一致会弱化限额
+    （宽配置实例可超越紧配置实例的意图，review M18）。部署必须让全部
+    worker 实例共享同一配置来源；数据库支撑的集中限额策略是显式后续项，
+    不在 P1 交付。
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -152,6 +158,8 @@ class JobRuntimeConfig(BaseModel):
     job_type_policies: Mapping[str, JobTypePolicy] = Field(default_factory=dict)
     per_space_concurrency_limit: int = Field(ge=1)
     global_concurrency_limit: int = Field(ge=1)
+    #: 单次 claim/reclaim 附带维护（回收/promote）处理的最大行数（review I4）。
+    maintenance_batch_size: int = Field(default=128, ge=1)
 
     def model_post_init(self, _context: Any) -> None:
         if any(delay < 0 for delay in self.backoff_seconds):
@@ -189,10 +197,15 @@ class JobSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class EnqueueResult:
-    """enqueue 结果；重复幂等键返回既有任务并标记 dedup（P1.5）。"""
+    """enqueue 结果；重复幂等键返回既有任务并标记 dedup（P1.5）。
+
+    `terminal=True` 表示 dedup 命中的既有行已处于终态：同一逻辑工作的
+    新一次授权处理必须铸造**新**幂等键，而不是等待该行（review M17）。
+    """
 
     job: JobSnapshot
     deduplicated: bool
+    terminal: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,9 +217,9 @@ class ClaimedJob:
 
 @dataclass(frozen=True, slots=True)
 class NoClaimableJob:
-    """claim 的 typed 空结果：无可领取任务或全局限额已满（P1.2/P1.8）。"""
+    """claim 的 typed 空结果：空队列或限额饱和（P1.2/P1.8，review I12）。"""
 
-    reason: Literal["empty", "global_concurrency_limit"]
+    reason: Literal["empty", "global_concurrency_limit", "per_space_concurrency_limit"]
 
 
 ClaimOutcome = ClaimedJob | NoClaimableJob
@@ -214,10 +227,14 @@ ClaimOutcome = ClaimedJob | NoClaimableJob
 
 @dataclass(frozen=True, slots=True)
 class DecisionOutcome:
-    """人工 Decision 唤醒结果；重复提交返回 typed duplicate（P1.7）。"""
+    """人工 Decision 唤醒结果（P1.7）。
+
+    `duplicate` = 该任务已被 Decision 唤醒过（重复提交）；`not_awaiting` =
+    目标行从未处于 awaiting_human（review I11）。二者均零行变更。
+    """
 
     job_id: str
-    status: Literal["resumed", "duplicate"]
+    status: Literal["resumed", "duplicate", "not_awaiting"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,11 +265,17 @@ class OutboxEventView:
     payload: dict[str, Any]
     created_at: datetime
     dispatched_at: datetime | None
+    dispatch_attempts: int
 
 
 @dataclass(frozen=True, slots=True)
 class DispatchReport:
-    """一轮 dispatcher 扫描的 at-least-once 投递结果（P1.6）。"""
+    """一轮 dispatcher 扫描的 at-least-once 投递结果（P1.6）。
+
+    失败事件不再阻塞本轮后续事件；`parked_event_ids` 是本轮达到投递
+    尝试上限、被移出扫描窗口待人工处置的毒性事件（review I10）。
+    """
 
     delivered_event_ids: tuple[str, ...]
-    failed_event_id: str | None
+    failed_event_ids: tuple[str, ...]
+    parked_event_ids: tuple[str, ...]

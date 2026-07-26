@@ -6,9 +6,12 @@
 
 from insurance_harness.jobs.errors import (
     CapacityBlockedJobError,
+    DuplicateEventError,
     HumanRequiredJobError,
     IllegalTransitionError,
+    InvalidJobInputError,
     JobStoreError,
+    LeaseExpiredError,
     NonRetryableJobError,
     RetryableJobError,
     SpaceScopeError,
@@ -45,7 +48,7 @@ from insurance_harness.jobs.models import (
     route_failure,
 )
 from insurance_harness.jobs.outbox import OutboxDispatcher, append_job_event
-from insurance_harness.jobs.store import JobStore, database_now
+from insurance_harness.jobs.store import DomainWriteHandle, JobStore, database_now
 
 __all__ = [
     "LEGAL_TRANSITIONS",
@@ -56,11 +59,14 @@ __all__ = [
     "ClaimedJob",
     "DecisionOutcome",
     "DispatchReport",
+    "DomainWriteHandle",
+    "DuplicateEventError",
     "EnqueueResult",
     "ErrorClass",
     "GlobalJobMetrics",
     "HumanRequiredJobError",
     "IllegalTransitionError",
+    "InvalidJobInputError",
     "JobFailure",
     "JobRuntimeConfig",
     "JobSnapshot",
@@ -68,6 +74,7 @@ __all__ = [
     "JobStore",
     "JobStoreError",
     "JobTypePolicy",
+    "LeaseExpiredError",
     "NoClaimableJob",
     "NonRetryableJobError",
     "OutboxDispatcher",

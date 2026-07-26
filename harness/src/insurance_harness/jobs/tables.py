@@ -55,6 +55,7 @@ class WikiJob(Base):
             name="ck_wiki_jobs_lease_shape",
         ),
         Index("ix_wiki_jobs_claim", "space_id", "state", "available_at"),
+        Index("ix_wiki_jobs_claim_order", "space_id", "state", "enqueued_at", "id"),
         Index("ix_wiki_jobs_reclaim", "state", "lease_expires_at"),
     )
 
@@ -77,11 +78,17 @@ class WikiJob(Base):
 
 
 class WikiOutboxEvent(Base):
-    """事务性 outbox 行；id 只表示分配顺序，投递以持久 dispatched_at 为准。"""
+    """事务性 outbox 行；id 只表示分配顺序，投递以持久 dispatched_at 为准。
+
+    `event_id` 幂等键按 Space 唯一（跨 Space 允许同名，事件流按 Space
+    隔离）；`dispatch_attempts` 持久计数投递失败次数，达 dispatcher 配置
+    上限的毒性事件被移出扫描窗口（review I7/I10）。
+    """
 
     __tablename__ = "wiki_outbox_events"
     __table_args__ = (
-        UniqueConstraint("event_id", name="uq_wiki_outbox_events_event_id"),
+        UniqueConstraint("space_id", "event_id", name="uq_wiki_outbox_events_space_event"),
+        CheckConstraint("dispatch_attempts >= 0", name="ck_wiki_outbox_events_attempts"),
         Index(
             "ix_wiki_outbox_events_undispatched",
             "id",
@@ -100,3 +107,6 @@ class WikiOutboxEvent(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dispatch_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0")
+    )
