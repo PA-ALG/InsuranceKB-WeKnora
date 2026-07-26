@@ -98,6 +98,7 @@ class EvalResult:
     per_field: dict[str, FieldStats]
     micro: FieldStats
     confusion: dict[tuple[TriState, TriState], int]  # (golden, pred) -> count
+    # pred=present 且金标无值依据（D-2026-07-27-13：带值 absent 归三态混淆，不计幻觉）
     hallucination_rate: float
     evidence_accuracy: float | None  # None = 未启用（缺 --dataset-root 或 pred 无证据）
     errors: list[ErrorDetail] = field(default_factory=list)
@@ -128,6 +129,17 @@ def _classify_non_value(g_tri: TriState, p_tri: TriState) -> str:
     if g_tri == "present" and p_tri == "unknown":
         return CATEGORY_MISSED
     return CATEGORY_TRI_STATE
+
+
+def _golden_value_basis(g: GoldenRecord) -> bool:
+    """金标是否带值依据（D-2026-07-27-13 度量约定；G0-probe 2026-07-27 失败模式 #6）。
+
+    幻觉仅指「预测值完全没有金标值依据」：金标无值文本，或键在金标覆盖面之外。
+    带值的非 present 金标（如 是否可加保=absent_explicitly(不支持) vs 预测 present(不支持加保)）
+    说明模型找到了同一底层事实、只是三态标注不同 → pred=present 时归三态混淆
+    （absent→present 错位，仍计混淆矩阵与 FP），不计幻觉率分子。空白值不构成值依据。
+    """
+    return bool(g.value and g.value.strip())
 
 
 def _evidence_pages_adjacent(g: GoldenRecord, p: GoldenRecord) -> bool:
@@ -185,7 +197,8 @@ def evaluate(
 
         if p is not None and p.tri_state == "present":
             pred_present += 1
-            if g.tri_state != "present":
+            # 幻觉要求金标无值依据（D-2026-07-27-13）：带值 absent 归三态混淆（false_present 分支）
+            if g.tri_state != "present" and not _golden_value_basis(g):
                 hallucinated += 1
 
         stats = per_field[g.field_id]
@@ -238,7 +251,10 @@ def evaluate(
             errors.append(
                 ErrorDetail(
                     key[0], g.field_id, g.field_name, "false_present", g.value, p.value,
-                    category=CATEGORY_HALLUCINATION,
+                    # 带值 absent（如 absent(不支持) vs present(不支持加保)）是三态混淆而非幻觉。
+                    category=(
+                        CATEGORY_TRI_STATE if _golden_value_basis(g) else CATEGORY_HALLUCINATION
+                    ),
                 )
             )
         elif g.tri_state != p_tri:
@@ -390,7 +406,8 @@ def render_report(
         "",
         f"- micro Precision / Recall / F1：**{m.precision:.4f} / {m.recall:.4f} / {m.f1:.4f}**",
         f"- macro F1（按字段平均）：**{result.macro_f1:.4f}**",
-        f"- 幻觉率（pred=present 但金标非 present）：**{result.hallucination_rate:.4f}**",
+        f"- 幻觉率（pred=present 且金标无值依据；带值 absent 计三态混淆，D-2026-07-27-13）："
+        f"**{result.hallucination_rate:.4f}**",
         "- evidence 准确率："
         + (f"**{result.evidence_accuracy:.4f}**" if result.evidence_accuracy is not None
            else "未启用（缺 --dataset-root 或 pred 无证据）"),
