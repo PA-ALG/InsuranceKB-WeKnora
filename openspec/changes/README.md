@@ -41,10 +41,11 @@
 | 031 | operational-run-admission | ⛔ superseded / history-only | 旧 runtime/PR 路线冻结，不更新、不重放、不授予生产 authority |
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
-| 034 | canonical-envelope | 🗓️ planned / not implemented | C0；唯一跨语言 canonical envelope 合同，不是迁移号 |
-| 035 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号 |
+| 034 | c0-canonical-envelope | 🚧 实施中（Wave 1，总控窗口） | 033 §16 C0；纯 Python 包，无迁移 |
+| 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
 | 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
-| 037+ | （空闲） | | 先占号再开目录 |
+| 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
+| 038+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
