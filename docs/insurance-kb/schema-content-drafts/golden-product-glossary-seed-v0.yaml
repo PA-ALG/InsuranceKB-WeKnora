@@ -1,0 +1,414 @@
+# =====================================================================
+# Golden Product 概念词表种子 —— 内容草案（DRAFT，非权威）
+# =====================================================================
+status: DRAFT
+authority: none
+draft_id: golden-product-glossary-seed-v0
+draft_date: '2026-07-27'
+decision_anchor: 'D2=B + D11=A（2026-07-27 裁决）'
+scope: '平安e生保（尊享版）医疗保险（033 §14.1 Golden Product）相关概念：来自字段语义合同草案 + 医疗险通用概念'
+shape_note: '本文件替换 schema-baseline/glossary.yaml 的字段表形状（旧文件仅3行且沿用字段五列结构，本次不改动旧文件）；旧3条内容已吸收：就医绿通、费用垫付按原表内容改写，其他增值服务拆为 优惠体检/在线问诊/药品补贴 三个概念'
+definition_status: '全部 definition_draft 为通用保险领域知识起草，1-3句；未对特定产品作任何事实断言；每条均需保险专家确认后方可冻结'
+applicable_lines_vocab: '医疗 / 重疾 / 寿险 / 年金 / 意外 / all（all=全险种通用；年金=annuity）'
+risk_level_note: 'risk_level 表示该概念定义错误的业务后果等级（评审优先级），与字段 risk_level 同刻度'
+source_note_vocab: '条款定义节 / 监管定义 / 行业通识（可组合；表示定义冻结时应锚定的权威位置）'
+concepts:
+  - concept_id: waiting_period
+    canonical_name: 等待期
+    aliases: [观察期, 免责期]
+    definition_draft: '保险合同生效（或最后复效）后的一段约定期间，被保险人在此期间内因疾病发生保险事故的，保险人不承担或仅有限承担给付责任。医疗险等待期通常以天计，意外伤害导致的医疗费用一般不受等待期限制；连续续保通常不重新计算等待期。'
+    applicable_lines: [all]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: hesitation_period
+    canonical_name: 犹豫期
+    aliases: [冷静期, 犹豫期退保]
+    definition_draft: '投保人签收保险合同后的一段约定期间，在此期间内解除合同的，保险人通常退还已收全部保费（可扣除工本费），合同自始不生效。一年期医疗险是否设置犹豫期以条款为准。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节/监管定义
+  - concept_id: grace_period
+    canonical_name: 宽限期
+    aliases: [缴费宽限期]
+    definition_draft: '分期支付保险费的合同中，自约定缴费日起给予投保人补缴保费的宽限期间；宽限期内发生保险事故的，保险人仍承担保险责任，但可扣减欠交保费。趸交或一年期合同通常无宽限期语义。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: guaranteed_renewal
+    canonical_name: 保证续保
+    aliases: [保证续保条款]
+    definition_draft: '保险人在保证续保期间内不得因被保险人健康状况变化或理赔历史拒绝续保、也不得单独调整该被保险人费率的合同约定。监管对长期医疗险使用保证续保表述有明确规范；非保证续保产品续保需保险人同意。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 监管定义/条款定义节
+  - concept_id: guaranteed_renewal_period
+    canonical_name: 保证续保期
+    aliases: [保证续保期间]
+    definition_draft: '合同约定的保证续保适用期间（以年计）。期间内按条款约定续保；期满后的续保安排（重新核保、产品切换或停止承保）以条款为准。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: renewal
+    canonical_name: 续保
+    aliases: [连续投保]
+    definition_draft: '保险期间届满后继续投保同一产品的行为。续保与新投保在等待期、既往症认定和健康告知要求上通常不同；连续投保不中断是多数优待条件的前提。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: discontinuation_renewal_arrangement
+    canonical_name: 停售后续保安排
+    aliases: [停售转保, 停售衔接]
+    definition_draft: '产品停止销售后，保险人对存量客户提供的续保或转保衔接安排（如转投指定产品、保证续保期内继续承保）。属监管重点披露事项。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节/监管定义
+  - concept_id: deductible
+    canonical_name: 免赔额
+    aliases: [年免赔额, 共享免赔额, 起赔线]
+    definition_draft: '按合同约定应由被保险人自行承担、保险人不予赔付的医疗费用额度，超过部分才进入赔付计算。常见口径包括按年度计算、多责任共享或家庭共享；社保及其他途径已补偿部分是否可抵扣免赔额以条款为准。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: reimbursement_ratio
+    canonical_name: 报销比例
+    aliases: [给付比例, 赔付比例]
+    definition_draft: '保险人对扣除免赔额后的合理医疗费用按约定比例给付的百分比。常按是否具有社保身份、是否经社保结算、责任类型等分档，未经社保结算时比例通常降档。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: annual_benefit_limit
+    canonical_name: 给付限额
+    aliases: [年度给付限额, 保险金额上限, 保额]
+    definition_draft: '保险人对某项责任或全部责任累计给付保险金的最高限额，常按保险期间（年度）或保证续保期间设定。医疗险的给付限额与固定保额的给付型产品含义不同。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: indemnity_principle
+    canonical_name: 损失补偿原则
+    aliases: [补偿原则, 费用补偿型, 重复投保限制]
+    definition_draft: '费用补偿型医疗保险按被保险人实际发生且未获补偿的医疗费用赔付，从其他途径（社保、其他保单）已获得的补偿部分不重复赔付；定额给付型（如津贴）不受此限。决定同类保单能否重复理赔。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 监管定义/条款定义节
+  - concept_id: social_basic_medical_insurance
+    canonical_name: 社会基本医疗保险
+    aliases: [社保, 医保, 基本医保, 城镇职工医保, 城乡居民医保]
+    definition_draft: '国家举办的基本医疗保障制度，含职工基本医疗保险与城乡居民基本医疗保险等。商业医疗险常以是否具有该身份划分投保/费率/报销比例档位。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 监管定义
+  - concept_id: social_security_scope_expenses
+    canonical_name: 社保范围内费用
+    aliases: [医保目录内费用, 社保内费用]
+    definition_draft: '属于当地基本医疗保险药品、诊疗项目和服务设施目录范围内的医疗费用。部分产品仅报销社保范围内费用，或对范围外费用设不同比例。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节/监管定义
+  - concept_id: out_of_pocket_drugs
+    canonical_name: 自费药
+    aliases: [医保目录外药品, 社保外用药]
+    definition_draft: '不在基本医疗保险药品目录内、需完全自费的药品。是否报销自费药是医疗险报销范围的关键差异点。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 行业通识/条款定义节
+  - concept_id: pre_existing_condition
+    canonical_name: 既往症
+    aliases: [既往病史, 既往疾病]
+    definition_draft: '合同生效（或约定观察时点）前被保险人已患的、已确诊或应当知晓的疾病及其并发症。医疗险通常对既往症不承担责任或作除外/限制处理，其定义边界（已治愈、未就诊但有症状等）是理赔争议第一来源。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: exclusions
+    canonical_name: 责任免除
+    aliases: [除外责任, 免责条款, 免除责任]
+    definition_draft: '条款列明的保险人不承担保险责任的情形清单（如故意行为、违法犯罪、战争、特定治疗项目等）。免责清单为封闭列举，逐条具有法律效力，必须整节完整结构化而非摘取亮点。'
+    applicable_lines: [all]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: malignant_tumor
+    canonical_name: 恶性肿瘤
+    aliases: [癌症, 恶性肿瘤——重度]
+    definition_draft: '经病理学检查明确诊断、符合行业统一定义规范的恶性细胞不受控制地增长与扩散的疾病。行业2020版重大疾病定义规范将其区分为重度与轻度；医疗险条款通常在释义节采用或引用该规范。'
+    applicable_lines: [医疗, 重疾]
+    risk_level: high
+    source_note: 监管定义/条款定义节
+  - concept_id: carcinoma_in_situ
+    canonical_name: 原位癌
+    aliases: [原位病变]
+    definition_draft: '癌细胞局限于上皮层内、未突破基底膜浸润周围组织的早期病变。在重疾定义规范中不属于恶性肿瘤——重度；医疗险产品是否将其纳入癌症相关责任以条款释义为准。'
+    applicable_lines: [医疗, 重疾]
+    risk_level: high
+    source_note: 条款定义节/监管定义
+  - concept_id: proton_heavy_ion
+    canonical_name: 质子重离子治疗
+    aliases: [质子重离子医疗, 质子治疗]
+    definition_draft: '利用质子或重离子射线对肿瘤实施精准放射治疗的技术，费用高且多在特定医疗机构开展。部分医疗险将其列为专项责任并约定指定机构与给付比例。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节/行业通识
+  - concept_id: specified_diseases
+    canonical_name: 特定疾病
+    aliases: [特定重大疾病, 特疾]
+    definition_draft: '条款以清单方式列明、适用扩展责任或差异化给付的疾病集合。其清单构成与释义完全以合同为准，不同产品差异大。'
+    applicable_lines: [医疗, 重疾]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: general_medical_benefit
+    canonical_name: 一般医疗保险金
+    aliases: [一般医疗责任]
+    definition_draft: '医疗险的基础责任：对被保险人住院（及约定的门急诊）发生的合理且必要医疗费用，在免赔额与限额约束下按比例给付的保险金。与恶性肿瘤等专项医疗保险金相对。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: cancer_medical_benefit
+    canonical_name: 恶性肿瘤医疗保险金
+    aliases: [癌症医疗保险金, 恶性肿瘤或原位癌确诊费用保险金]
+    definition_draft: '针对恶性肿瘤（及条款约定的原位癌等）治疗费用的专项医疗责任，常有独立限额并可能免除免赔额。责任名称与覆盖病种范围以条款为准。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: hospitalization_allowance
+    canonical_name: 住院津贴
+    aliases: [住院日额津贴, 津贴给付]
+    definition_draft: '按实际住院天数以约定日额定额给付的保险金，通常设单次及累计给付天数上限，属定额给付型责任、不受损失补偿原则约束。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: special_outpatient
+    canonical_name: 特殊门诊
+    aliases: [门诊特殊疾病, 特殊门诊治疗]
+    definition_draft: '虽在门诊发生但按住院同等口径报销的特定治疗项目，常见清单包括门诊肾透析、恶性肿瘤门诊治疗（放化疗等）、器官移植后抗排异治疗等，具体以条款列举为准。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: outpatient_surgery
+    canonical_name: 门诊手术
+    aliases: []
+    definition_draft: '无需住院、在门诊完成的手术治疗。医疗险常将其纳入一般医疗责任的约定报销范围之一。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: pre_post_hospitalization_outpatient
+    canonical_name: 住院前后门急诊
+    aliases: [前后门急诊]
+    definition_draft: '与同一住院直接相关、在住院前后各若干天内（以条款约定天数为准）发生的门急诊费用，按约定并入住院责任报销。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: external_drug_purchase
+    canonical_name: 外购药
+    aliases: [院外购药, 外购药品责任]
+    definition_draft: '因院内无药，凭医院处方在院外药店购买药品的行为及对应费用责任。是否报销外购药、限定药品清单与购药渠道是近年医疗险竞争与理赔争议焦点。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: specialty_drugs
+    canonical_name: 特定药品
+    aliases: [特药, 抗癌特药, 特药责任]
+    definition_draft: '条款附列清单内的高值药品（多为抗肿瘤靶向药、免疫药物等），按清单版本、适应症和指定渠道约定给付。清单通常随年度更新，版本管理是语义关键。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: hospital_scope_public_grade2
+    canonical_name: 二级及以上公立医院
+    aliases: [二级以上公立医院, 指定医院范围]
+    definition_draft: '按医院分级管理标准评定为二级或三级的公立医院，是多数医疗险约定的基础就诊范围；条款释义通常还限定普通部并排除特定除外医院。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: general_ward
+    canonical_name: 普通部
+    aliases: [普通病房]
+    definition_draft: '公立医院中非特需、非国际、非VIP的普通医疗服务部分。医疗险基础责任常以普通部为限，特需/国际部需专项责任或高端产品覆盖。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: vip_ward
+    canonical_name: 特需医疗
+    aliases: [特需病房, 特需部]
+    definition_draft: '公立医院内提供更高服务标准、按市场价格收费的医疗服务部分。是否覆盖特需医疗是普通医疗险与中高端医疗险的重要分界。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节/行业通识
+  - concept_id: international_dept
+    canonical_name: 国际部
+    aliases: [国际医疗部]
+    definition_draft: '公立医院面向涉外/高端客户设立的医疗服务部门，收费高于普通部。通常仅中高端医疗产品覆盖。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节/行业通识
+  - concept_id: private_hospital
+    canonical_name: 私立医院
+    aliases: [民营医院, 私立医疗机构]
+    definition_draft: '非公立举办的医疗机构。基础医疗险通常不覆盖，覆盖时多以指定名单或资质条件约定。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 条款定义节/行业通识
+  - concept_id: green_channel
+    canonical_name: 就医绿通
+    aliases: [就医绿色通道, 绿通服务]
+    definition_draft: '保险人或合作机构为被保险人提供的就医协助服务，基线术语表列举：专家门诊预约、安排床位和专家手术、中医调理和营养方案制定。属增值服务而非保险责任，服务内容以服务手册为准。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: expense_advance
+    canonical_name: 费用垫付
+    aliases: [住院垫付, 垫付服务]
+    definition_draft: '被保险人在约定范围医院住院时，可申请由保险公司先行垫付住院医疗费用、事后办理结算的服务；须事前报案申请并经审核，垫付范围常限全国二级以上公立医院且额度视疾病与费用情况而定（基线术语表原释义要点）。属增值服务而非保险责任。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 行业通识
+  - concept_id: pre_claim_payment
+    canonical_name: 预赔
+    aliases: [预付赔款, 预先赔付]
+    definition_draft: '对符合条件的住院治疗，在治疗结束前按已发生费用先行给付部分保险金的理赔服务安排，缓解客户资金压力。适用条件以服务规则为准。'
+    applicable_lines: [医疗]
+    risk_level: medium
+    source_note: 行业通识
+  - concept_id: instant_claim
+    canonical_name: 闪赔
+    aliases: [快赔, 极速理赔]
+    definition_draft: '对小额、材料齐全的理赔申请提供的快速审核给付服务承诺（如按小时级到账）。属服务承诺而非合同责任。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: online_claim
+    canonical_name: 线上理赔
+    aliases: [在线理赔, APP理赔]
+    definition_draft: '通过线上渠道提交理赔申请与影像材料并完成审核给付的理赔方式。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: online_consultation
+    canonical_name: 在线问诊
+    aliases: [互联网问诊, 视频问诊]
+    definition_draft: '通过互联网平台向医生进行图文/视频咨询的健康服务，基线术语表将其列入其他增值服务。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: discounted_checkup
+    canonical_name: 优惠体检
+    aliases: [体检优惠]
+    definition_draft: '以优惠价格或权益形式提供的健康体检服务，基线术语表将其列入其他增值服务。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: drug_subsidy
+    canonical_name: 药品补贴
+    aliases: [购药补贴]
+    definition_draft: '对指定渠道购药提供的补贴或折扣权益，基线术语表将其列入其他增值服务。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: smart_underwriting
+    canonical_name: 智能核保
+    aliases: [自动核保, 在线核保]
+    definition_draft: '投保时通过线上问答规则引擎即时评估健康异常并给出承保结论（标准承保/除外/加费/拒保）的核保方式，无需人工介入。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 行业通识
+  - concept_id: manual_underwriting
+    canonical_name: 人工核保
+    aliases: [人核]
+    definition_draft: '由核保人员对健康告知异常、体检报告等材料进行个案评估并出具承保结论的核保方式。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 行业通识
+  - concept_id: health_disclosure
+    canonical_name: 健康告知
+    aliases: [健康告知书, 如实告知]
+    definition_draft: '投保时投保人/被保险人须如实回答的健康与既往病史询问事项。未如实告知且影响承保决定的，保险人可依法解除合同并拒赔；是医疗险理赔争议的高发环节。'
+    applicable_lines: [all]
+    risk_level: high
+    source_note: 条款定义节/监管定义
+  - concept_id: cash_value
+    canonical_name: 现金价值
+    aliases: [退保价值, 保单现金价值]
+    definition_draft: '长期保险合同解除时保险人按精算规则应退还的金额，通常随保单年度按现金价值表变化。一年期医疗险一般无或仅有极低现金价值。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: reinstatement
+    canonical_name: 复效
+    aliases: [效力恢复]
+    definition_draft: '合同因欠缴保费效力中止后，投保人在约定期限（常见两年）内申请恢复合同效力的机制，通常需补缴保费并可能重新计算等待期或重新核保。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: policy_lapse
+    canonical_name: 效力中止
+    aliases: [保单失效, 中止]
+    definition_draft: '宽限期届满仍未缴纳保费时合同效力暂时停止的状态；中止期间发生保险事故保险人不承担责任。与终止（合同彻底结束）不同。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: reduced_paid_up
+    canonical_name: 减额缴清
+    aliases: [减额交清]
+    definition_draft: '长期险保全选项：以当时现金价值一次缴清保费，将保额降低至相应水平，此后不再缴费、合同继续有效。一年期医疗险不适用。'
+    applicable_lines: [寿险, 年金, 重疾]
+    risk_level: medium
+    source_note: 条款定义节
+  - concept_id: claim_filing_period
+    canonical_name: 理赔申请时效
+    aliases: [索赔时效, 诉讼时效]
+    definition_draft: '被保险人或受益人请求给付保险金的权利期限（人身保险以外的险种与人身险时效不同，医疗费用类请求权通常适用较短时效），以及条款约定的及时报案义务。逾期影响举证与给付。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节/监管定义
+  - concept_id: reasonable_necessary_expenses
+    canonical_name: 合理且必要的医疗费用
+    aliases: [必需且合理费用, 合理医疗费用]
+    definition_draft: '与治疗目的直接相关、符合通常医疗实践与当地收费水平、非奢侈性或实验性的医疗费用。是费用类责任赔付审核的核心裁量概念，其判定标准以条款释义为准。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 条款定义节
+  - concept_id: accidental_injury
+    canonical_name: 意外伤害
+    aliases: [意外事故]
+    definition_draft: '外来的、突发的、非本意的、非疾病的使身体受到伤害的客观事件。医疗险中意外伤害医疗通常不受等待期限制，是三态与等待期 qualifier 的关键分支。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节/监管定义
+  - concept_id: million_medical
+    canonical_name: 百万医疗险
+    aliases: [百万医疗]
+    definition_draft: '行业对高保额（常以百万计）、高免赔额、低保费的费用补偿型医疗险的通称，属产品形态分类而非合同概念。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: small_amount_medical
+    canonical_name: 小额医疗险
+    aliases: [小额医疗]
+    definition_draft: '行业对低免赔（常为0免赔）、低限额、报销日常小额医疗费用的医疗险通称，属产品形态分类而非合同概念。'
+    applicable_lines: [医疗]
+    risk_level: low
+    source_note: 行业通识
+  - concept_id: rate_adjustable_longterm_medical
+    canonical_name: 费率可调
+    aliases: [费率调整, 长期医疗险费率可调]
+    definition_draft: '长期医疗险按监管规则保留的整体费率调整机制：满足触发条件时可对全体被保险人统一调整费率，须按规定披露调整依据与上限，不得针对个体调整。短期医疗险无此机制。'
+    applicable_lines: [医疗]
+    risk_level: high
+    source_note: 监管定义
+  - concept_id: rider
+    canonical_name: 附加险
+    aliases: [附加合同, 主险/附加险]
+    definition_draft: '不能独立投保、须依附于主险合同存在的保险合同；其效力通常随主险终止而终止。与之相对，主险可独立承保。'
+    applicable_lines: [all]
+    risk_level: low
+    source_note: 条款定义节/行业通识
+  - concept_id: occupation_class
+    canonical_name: 职业类别
+    aliases: [职业等级, 职业分类表]
+    definition_draft: '保险公司按职业风险程度对职业进行的分级（行业惯例常分1-6类，类别越高风险越大），决定可保性与费率；具体分类以各公司职业分类表为准。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 行业通识
+  - concept_id: surrender
+    canonical_name: 退保
+    aliases: [合同解除, 解约]
+    definition_draft: '投保人在保险期间内解除保险合同的行为。犹豫期内解除通常退还全部保费；犹豫期后解除按现金价值或未满期净保费退还，以条款为准。'
+    applicable_lines: [all]
+    risk_level: medium
+    source_note: 条款定义节
