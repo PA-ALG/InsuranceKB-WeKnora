@@ -43,10 +43,10 @@
 | 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | 🚧 实施中（Wave 1，总控窗口） | 033 §16 C0；纯 Python 包，无迁移 |
 | 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
-| 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
-| 037 | weknora-revision-contract-spike | ✅ 已合入 main（PR #40）；T6 裁决双合同 insufficient → 触发条件 W1（038） | W0；只读 spike，不是迁移号；证据与 w1-api-draft 见其 artifacts/；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
-| 038 | w1-weknora-revision-manifest | 📋 规格起草（W0 触发的条件 W1） | Go patch，预算内;W0 证据见 037 |
-| 039+ | （空闲） | | 先占号再开目录 |
+| 036 | capacity-contract | 🚧 实施中（PR #46） | CAP0；CapacityProfile 合同 + 八项问卷交付物（D-2026-07-26-1），不是迁移号，无迁移 |
+| 037 | weknora-revision-contract-spike | ✅ 已合入 main（PR #40）；T6 裁决双合同 insufficient → 触发条件 W1（038） | W0；只读 spike，不是迁移号；证据与 w1-api-draft 见其 artifacts/ |
+| 038 | w1-weknora-revision-manifest | ✅ 规格已合入（PR #41）；Go 实现窗口进行中 | W0 触发的条件 W1；Go patch 预算内 |
+| 039+ | （空闲，039/040 已由 p3/g0a 分支占用中） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
