@@ -57,6 +57,16 @@ Harness 是知识编译与治理运行时，PostgreSQL Active WikiRelease 是应
 PostgreSQL/WeKnora lane，并准确报告未运行项。完整 deterministic 只在 PR-ready
 或 CI 阶段运行，不在每个小步骤重复。文档 PR 只运行其明确列出的文档门禁。
 
+默认门禁是 deterministic lane：
+
+```bash
+uv run pytest -m "not live and not integration_postgres" -q
+```
+
+PostgreSQL `integration_postgres` lane 由 `.github/workflows/harness-ci.yml`
+的 PostgreSQL 16 job 验证；WeKnora `live` lane 只在受控
+`.github/workflows/harness-live.yml` 手工触发，未运行必须准确报告 `NOT RUN`。
+
 ## 高频不变量
 
 - `unknown` 不等于 `absent_explicitly`。
