@@ -12,15 +12,19 @@
 2. `leased → running`：同一 generation 的 worker 开始执行，attempt +1；
 3. `running → succeeded`：完成事务提交；
 4. `running → retry_wait`：typed `retryable` 错误且 attempt 未达配置上限；
-5. `retry_wait → queued`：配置化 backoff 到期（`available_at` 以数据库时钟判定）；
+5. `retry_wait → queued`：仅限存储层在以数据库时钟验证配置化 backoff 已
+   到期（`available_at <= 数据库当前时间`）后执行；
 6. `running → awaiting_human`：typed `human_required` 结果，同事务释放 lease；
 7. `awaiting_human → queued`：人工 Decision 幂等唤醒；
 8. `running → blocked`：typed `capacity_blocked` 阻断（含
    `candidate_capacity_exceeded` 一类合同性阻断原因）；
 9. `running → dead_letter`：typed `non_retryable` 错误，或 `retryable` 但
    attempt 已达配置上限；
-10. `leased → queued` 与 `running → queued`：仅限存储层在以数据库时钟验证
-    lease 已过期后执行的回收转换。
+10. `leased → queued | dead_letter` 与 `running → queued | dead_letter`：
+    仅限存储层在以数据库时钟验证 lease 已过期后执行的回收转换。回收 SHALL
+    把该次过期记录为 typed `retryable` 失败（错误摘要 `lease_expired`），并
+    按 P1.4 的 `max_attempts` 条件路由：attempt 已达上限转 `dead_letter`，
+    否则回 `queued`。
 
 系统 SHALL NOT 定义其他状态或其他转换；`succeeded`、`blocked`、
 `dead_letter` 在本状态机内 SHALL 是终态（无出边）。任何非法转换请求 SHALL
@@ -70,8 +74,9 @@ claim SHALL 返回 typed 空结果，SHALL NOT 抛出异常或在事务内等待
 数据库时钟）与每任务单调递增的 `lease_generation`（fencing token）。
 heartbeat SHALL 仅当携带的 generation 等于任务当前 generation 且状态为
 `leased | running` 时延长 `lease_expires_at`，否则 typed 拒绝、零行变更。
-lease 过期后任务 SHALL 可按 P1.1 第 10 条回收为 `queued`；下一次成功 claim
-SHALL 取得严格更大的 generation。携带小于当前 generation 的任何写入——
+lease 过期后任务 SHALL 只能按 P1.1 第 10 条回收（记 `lease_expired` 的
+typed `retryable` 失败并按 `max_attempts` 路由至 `queued` 或
+`dead_letter`）；回收后再次成功 claim SHALL 取得严格更大的 generation。携带小于当前 generation 的任何写入——
 heartbeat、状态转换、领域结果提交、outbox 追加——SHALL 在存储层被 typed
 `stale_generation` 拒绝且零行变更。lease 有效期与 heartbeat 间隔 SHALL
 来自配置，SHALL NOT 硬编码。过期判定与写入权威 SHALL NOT 参考 worker
@@ -106,8 +111,10 @@ human_required`，并分别确定性映射到 `retry_wait`、`dead_letter`、
 attempt 并保留原始错误摘要，SHALL NOT 被静默吞掉或伪装成功。`retryable`
 失败且 attempt 已达 `max_attempts` 时 SHALL 转入 `dead_letter`。
 `max_attempts` 与每次重试的 backoff 序列 SHALL 来自配置（可按 job_type
-覆盖），SHALL NOT 硬编码于转换代码。`dead_letter` 行 SHALL 保留
-space_id、幂等键、attempt、错误分类与最后错误摘要。
+覆盖），SHALL NOT 硬编码于转换代码。lease 过期回收（P1.1 第 10 条）SHALL
+复用同一分类与路由：记 typed `retryable` 失败（错误摘要
+`lease_expired`），attempt 已达上限即转 `dead_letter`。`dead_letter` 行
+SHALL 保留 space_id、幂等键、attempt、错误分类与最后错误摘要。
 
 #### Scenario: 达到重试上限进入 dead_letter
 
@@ -139,6 +146,12 @@ P1.1 状态机与 P1.3 fencing 共同保证）。在 at-least-once 重投/重放
 领域写、零 outbox 追加。系统 SHALL NOT 宣称 exactly-once execution；对外
 合同是 at-least-once 执行 + 幂等提交。
 
+幂等键 SHALL 由消费方按显式批次/重试裁决铸造，键 SHALL 编码该次批次/裁决
+身份：对同一逻辑工作的新一次授权处理 SHALL 使用新幂等键创建新任务行，
+而不是改写既有行。终态行（`succeeded | blocked | dead_letter`）与其唯一键
+SHALL 保持不变；P1 SHALL NOT 提供对终态行的 replay/重新处理入口——受治理
+的 replay 入口是显式后置非目标，SHALL NOT 被当作 P1 的隐含能力实现。
+
 #### Scenario: 重复 enqueue 幂等去重
 
 - **WHEN** 同一 `(space_id, job_type, idempotency_key)` 被并发或先后
@@ -158,7 +171,11 @@ P1.1 状态机与 P1.3 fencing 共同保证）。在 at-least-once 重投/重放
 `wiki_outbox_events` 行；事务中断或回滚时二者 SHALL 都不存在。存储层
 SHALL NOT 提供绕过该事务、在领域写路径上直接向外部系统发布的入口（无
 双写）。每条 outbox 行 SHALL 携带单调分配的有序 id、稳定 event_id（投递
-幂等键）、NOT NULL `space_id`、事件类型与负载。dispatcher SHALL 按有序 id
+幂等键）、NOT NULL `space_id`、事件类型与负载。有序 id SHALL 只表示分配
+顺序：较小 id 的行可能在较大 id 的行已投递之后才随其事务提交而可见，因此
+系统 SHALL NOT 提供跨事务的投递顺序保证；消费端 SHALL 只依赖 event_id
+幂等去重及其自身的 epoch/fencing 语义，SHALL NOT 把 id 顺序当作语义顺序。
+dispatcher SHALL 按有序 id
 升序扫描未标记投递的行、投递成功后持久标记 `dispatched_at`；投递语义
 SHALL 是 at-least-once：投递与标记之间崩溃时该行 SHALL 被重投，消费端
 SHALL 以 event_id 幂等去重。已提交的 outbox 行 SHALL NOT 因内存
@@ -237,17 +254,24 @@ SHALL NOT 被拒绝、丢弃或无限创建执行协程。
 
 存储层 SHALL 提供只读、确定性的指标查询接口，至少可返回：per-Space 与
 全局的各状态任务计数（含 queued 队列深度与 dead_letter 计数）、最老
-queued 任务的年龄（以数据库时钟计算）、attempt 累计与当前 `retry_wait`
-计数（失败率/重试率 SHALL 可由这些计数在采样间隔内推导）。指标查询 SHALL
+**可调度**任务年龄（覆盖 `state ∈ {queued, retry_wait}` 的行，以数据库
+时钟按 `enqueued_at` 计算——停留在 `retry_wait` 的任务 SHALL 同样可见，
+而不仅是最老 queued）、attempt 累计与当前 `retry_wait` 计数（失败率/
+重试率 SHALL 可由这些计数在采样间隔内推导）。`wiki_jobs` 每行 SHALL
+持久化 `enqueued_at`、最近一次 `started_at`（`leased → running`）与
+`finished_at`（进入终态）时间戳，供时长类指标推导；编译/审核/发布时长与
+投影延迟指标本身归消费方 PR（见 proposal 非目标）。指标查询 SHALL
 遵守 P1.8 的 Space scope 规则；全局聚合 SHALL 是显式命名的独立入口。P1
 SHALL NOT 建设独立 metrics 平台或引入第二存储。
 
 #### Scenario: 指标与已知数据分布一致
 
-- **WHEN** 测试预置已知分布（如 Space A：3 queued/1 running/2 dead_letter，
-  Space B：1 queued），随后执行指标查询
+- **WHEN** 测试预置已知分布（如 Space A：3 queued/1 running/1 retry_wait/
+  2 dead_letter，Space B：1 queued），且最老的可调度行处于 `retry_wait`，
+  随后执行指标查询
 - **THEN** per-Space 与全局的各状态计数、队列深度、dead_letter 计数与最老
-  queued 年龄与预置分布精确一致
+  可调度年龄与预置分布精确一致；最老可调度年龄由该 `retry_wait` 行决定，
+  每行的 `enqueued_at/started_at/finished_at` 已持久化可查
 
 ### Requirement: P1.10 崩溃恢复与接管
 
@@ -264,6 +288,14 @@ generation 重新领取执行。接管 SHALL NOT 依赖崩溃 worker 的任何�
   generation g+1 接管并完成任务，随后 A 恢复并尝试提交其结果
 - **THEN** 领域结果恰好是 B 提交的一份；A 的提交被 typed
   `stale_generation` 拒绝，outbox 中该任务的完成事件恰好一条
+
+#### Scenario: 重复崩溃循环有界
+
+- **WHEN** 配置 `max_attempts = 3`，同一（毒性）任务每次被领取进入
+  `running` 后都使 worker 崩溃，lease 反复过期并被回收
+- **THEN** 每次回收都记录 `lease_expired` 的 typed `retryable` 失败；
+  attempt 达到 3 后回收把任务路由进 `dead_letter`（保留 attempt、错误分类
+  与摘要），任务不会被无限次重新排队
 
 ### Requirement: P1.11 唯一迁移与表所有权
 

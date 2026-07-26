@@ -39,7 +39,8 @@ runtime 已 superseded / history-only，不得重放。没有 P1，后续每个�
 - `awaiting_human` 不持有 worker lease，人工 Decision 幂等唤醒原任务；
 - 所有行显式绑定 `space_id`，跨 Space fail closed；per-Space 与全局并发上限
   来自配置（数值不是产品上限）；
-- 队列深度、最老任务年龄、重试/失败与 dead-letter 计数可查询；
+- 队列深度、最老可调度任务年龄（覆盖 retry_wait）、重试/失败与 dead-letter
+  计数可查询，任务行持久化 enqueued/started/finished 时间戳；
 - 崩溃恢复：进程崩溃 → lease 过期 → 更高 generation 接管；
 - 恰好一个新 Alembic 迁移，只建 `wiki_jobs` 与 `wiki_outbox_events` 两表，
   `down_revision` 从执行时真实 head 续接（本规格起草时观测为 `0006`）；
@@ -60,6 +61,13 @@ runtime 已 superseded / history-only，不得重放。没有 P1，后续每个�
 - 每次编译创建/领养/删除模型部署；
 - 外部 provider 请求的 reconciliation 流程（归消费方 PR；P1 只提供 typed
   状态与幂等提交原语）；
+- 对终态任务（`succeeded | blocked | dead_letter`）的受治理 replay/重新
+  处理入口——显式后置非目标，不得作为隐含能力实现；重新处理只能由消费方
+  按显式批次/重试裁决铸造**新的**幂等键（键编码批次身份）创建新任务
+  （见 spec P1.5）；
+- token/成本/队列深度上限，以及编译/审核/发布时长与投影延迟指标——分别
+  归 CAP0/P4b 与消费方 PR；P1 只交付 per-Space/全局 worker 并发上限与
+  P1.9 所列存储层计数/年龄/时间戳指标；
 - API/Worker 进程壳与健康检查（P3）。
 
 ## 影响面
@@ -80,4 +88,7 @@ runtime 已 superseded / history-only，不得重放。没有 P1，后续每个�
 - 依赖：仅 D0（033 治理批准）。按 §16 DAG，P1 不依赖 C0/W0/CAP0 的产物。
 - 后续：P3 的 Worker 壳消费 JobStore；P4a/P4c/P5b1 以 P1 任务承载各自事务；
   P8 复用同一 Outbox 合同。per-Space/全局并发数值与 CapacityProfile 的正式
-  对接归 CAP0/P4b，P1 只保证上限来自配置且超限任务排队不丢失。
+  对接归 CAP0/P4b，P1 只保证上限来自配置且超限任务排队不丢失。token/成本/
+  队列深度上限归 CAP0/P4b；编译/审核/发布时长与投影延迟观测由消费方 PR
+  基于 P1.9 持久化时间戳实现；受治理的终态 replay 入口在明确业务需要时
+  另立 change，不在 P1 隐含交付。
