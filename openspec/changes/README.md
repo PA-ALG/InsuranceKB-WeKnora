@@ -34,13 +34,17 @@
 | 024 | extraction-recall-uplift | ⚠️ 第一方软件范围已合入；真实收益未验证 | 028 可选择性复用；030 证明 MVP slice 效果，完整 020 验证留 M2 |
 | 025 | merge-weak-value-guard | ⏭ 后置 | 非 MVP 阻断；排在完整 010 与企业 merge hardening 后；迁移 0011 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
-| 027 | production-weak-model-boundary | 🟡 正式 OpenSpec，Wave 1 待实施 | MVP S0；所有生产入口硬禁强/未知/rolling model；零真实模型前置 |
-| 028 | template-compilation-runtime-mvp | 🟡 正式 OpenSpec，等待 027 | MVP S1；TemplatePackage + 父 intake/产品子 CompilationJob + StageRun/Attempt/Receipt/Alert，复用现有主链 |
-| 029 | release-manifest-approval-mvp | 🟡 正式 OpenSpec，Wave 1 待实施 | MVP K0；完整 manifest hash 真人批准、CAS CurrentRelease、P-1 前 Harness serving |
-| 030 | enterprise-wiki-mvp-slice | 🟡 正式 OpenSpec，I0a 可实施 | 23-entry/5 产品 manifest/fixtures；027 后 I0b 实现独立 MVP `AdmissionVerifier`/opaque `VerifiedAdmission`；不复用 020 evaluator；随后真实 E2E 与验收报告 |
-| 031 | operational-run-admission | 🟠 既有实现分支收口中，待 PR | 编号在 032 建立前已被 operational admission 使用；当前只做验证/PR 收口，不扩 MVP 范围 |
-| 032 | human-wiki-reader-mvp | 🟡 正式 OpenSpec，等待 029/013 | MVP M1；独立只读产品 Wiki，消费 029 serving，与 013 同 snapshot/hash；不复用 008 写工作台 |
-| 033+ | （空闲） | | 先占号再开目录 |
+| 027 | production-weak-model-boundary | ✅ 已合入；能力保留 | 历史交付能力，不再作为旧 Wave 路线状态源；后续由 033 DAG 消费 |
+| 028 | template-compilation-runtime-mvp | ⛔ superseded / history-only | 旧 PR28/runtime 路线不得继续实现、重放或作为生产 authority |
+| 029 | release-manifest-approval-mvp | ⛔ superseded / history-only | 历史规格仅供审计；由 033 后续 Release/Review 小 PR 重新交付 |
+| 030 | enterprise-wiki-mvp-slice | ✅ 已合入；能力保留 | 历史交付能力，不再作为旧 Wave 路线状态源；后续由 033 DAG 消费 |
+| 031 | operational-run-admission | ⛔ superseded / history-only | 旧 runtime/PR 路线冻结，不更新、不重放、不授予生产 authority |
+| 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
+| 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
+| 034 | canonical-envelope | 🗓️ planned / not implemented | C0；唯一跨语言 canonical envelope 合同，不是迁移号 |
+| 035 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号 |
+| 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
+| 037+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
@@ -58,13 +62,28 @@
 | 0010 | 011 knowledge-health（completeness_snapshots + health_runs/health_findings） | 预分配 |
 | 0011 | 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表，append-only+触发器） | 预分配 |
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
-| 0013 | 029 release-manifest-approval-mvp | 预分配；合入时指向实际 head |
-| 0014 | 028 template-compilation-runtime-mvp | 预分配；若 MVP 采用独立 runtime tables，合入时指向实际 head |
+| 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
+| 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0015+ | （空闲；014 如需建表先来占号） | |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 并行开工基线（2026-07-21 MVP 批准后）
+## 当前可执行入口（2026-07-26）
+
+当前生产架构工作只以以下入口为准：
+
+- [OpenSpec 033](033-production-architecture-reset/)；
+- [已批准生产架构设计](../../docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)；
+- [当前 active execution plan](../../docs/insurance-kb/22-parallel-execution-blueprint.md)；
+- [实时状态与决策板](../../docs/insurance-kb/23-mvp-control-board.md)。
+
+执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再进入 Milestone A/B/C。
+
+## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）
+
+> [!WARNING]
+> 分类：`superseded / history-only`；**NOT EXECUTABLE**。以下 027/028/029/030/031/032、NS-0、030 admission 与 HANDOFF MVP-0 路线仅作历史审计，
+> 不授予当前实现、迁移、运行、提交或合入权限，不得据此开工或恢复旧分支。
 
 - 北极星与 Integration-first MVP 已批准；总体规划窗口先补齐 027～030、032 的正式 proposal/specs/tasks 和实现 plans，再交独立执行会话；
 - `NS-RIGHTS=recorded`：LLM-wiki-black 是项目方第一方资产，可按 provenance + OpenSpec 选择性迁移；第三方许可证另行清点；

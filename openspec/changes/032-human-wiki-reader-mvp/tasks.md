@@ -1,3 +1,6 @@
+> [!WARNING]
+> **SUPERSEDED / HISTORY-ONLY（D0，2026-07-26）**：本文件仅保留历史证据，不再是可执行路线，不得继续实现、重放或复用其中的运行时与迁移安排。当前权威设计见 `docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md`。
+
 # 032 任务（Space/auth 风险 A；只读 service/UI 风险 C）
 
 - [ ] T1 冻结目录/产品页 DTO 与 `ApprovedSnapshotReader` port，写 HR1/HR2 RED

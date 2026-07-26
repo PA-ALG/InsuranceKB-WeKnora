@@ -1,3 +1,6 @@
+> [!WARNING]
+> **SUPERSEDED / HISTORY-ONLY（D0，2026-07-26）**：本文件仅保留历史证据，不再是可执行路线，不得继续实现、重放或复用其中的运行时与迁移安排。当前权威设计见 `docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md`。
+
 # 029 Release Approval MVP 验收规格
 
 ## ADDED Requirements

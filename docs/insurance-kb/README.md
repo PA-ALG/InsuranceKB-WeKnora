@@ -1,6 +1,9 @@
 # 寿险知识平台文档集
 
-> **最高层设计基准**：[`Enterprise LLM Wiki 北极星设计`](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。它定义产品本体、三层职责、知识权威、生产弱模型边界、七类核心问题与开发门禁；本目录任何内容与其冲突时，先以北极星设计为准并修正文档。
+> **最高层设计基准**：[`近期生产架构重置设计`](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
+> [`Enterprise LLM Wiki 北极星设计`](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)
+> 继续定义产品价值、Evidence/Conflict/version/Release 与弱模型原则；近期生产
+> 权威、事务、WeKnora 集成和交付 DAG 以重置设计为准。
 
 初始版本产出于 2026-07-11 架构讨论定稿后。新人先读北极星设计，再从 00 开始按编号阅读。
 
@@ -20,16 +23,19 @@
 | [11-parsing-templates-multimodal.md](11-parsing-templates-multimodal.md) | 解析升级、四级模板专门化与多模态目标合同 | ⚠️ 004/006 资产 production-disabled |
 | [12-dayu-borrowings.md](12-dayu-borrowings.md) | dayu-agent（财报）弱模型准确性机制的借鉴决策：缩小模型战场、data_quality 来源分级、断链硬门禁、可喂性评分、dry-run 治理、保险算术校验器 | ✅ |
 | [13-blueprint-status.md](13-blueprint-status.md) | 整体蓝图现状：历史代码地基、NS-RIGHTS/NS-0～NS-F 差量、缺口与规划 | ✅ 2026-07-21 校正 |
-| [14-deployment-runbook.md](14-deployment-runbook.md) | 部署与联调 Runbook：RAW/STAGING/target 分阶段拓扑、pre/post-P1 路径、live 契约与 B10 边界 | ✅ 已校正 |
+| [14-deployment-runbook.md](14-deployment-runbook.md) | D0 后生产部署合同：API/Worker/PostgreSQL、Active Release、Outbox、WeKnora fenced projection 与上线证据 | 📋 D0 治理已冻结；实现未开始 |
 | [15-solutions-traceability.md](15-solutions-traceability.md) | 七类北极星核心问题的能力闭环与当前落点；保留 2026-07-12 历史九问追溯 | ✅ |
-| [16-roadmap.md](16-roadmap.md) | 完整 Roadmap：7–10 日真实 MVP → 企业生产核心 → 规模运营 → 持续演进 | ✅ 2026-07-21 批准 |
+| [16-roadmap.md](16-roadmap.md) | D0/C0/W0/CAP0 与 Milestone A/B/C 小 PR Roadmap | 📋 D0 实施；后续均 planned |
 | [17-team-collaboration.md](17-team-collaboration.md) | 三人协作规范：模块所有权分工、Git/PR 双查流程、HANDOFF 同步纪律、主航道守护清单、决策升级路径 | ✅ |
 | [18-ai-collaboration.md](18-ai-collaboration.md) | AI Coding 协作机制：会话生命周期、文件域声明制、门禁等化器、token 预算纪律、反模式清单（001~007 实战验证） | ✅ |
 | [19-weknora-utilization.md](19-weknora-utilization.md) | WeKnora 平台能力利用清单；领域编译器当前门禁另行标注 | ✅ 平台结论；编译生产未放行 |
 | [20-enterprise-runtime-foundation.md](20-enterprise-runtime-foundation.md) | 企业运行基础：KnowledgeSpace、Source Bridge、SnapshotFact 与 Golden 闸门 | 🚧 历史软件地基已合入；027/适用 admission 未齐，真实 baseline 未运行 |
 | [21-selftest-before-submit.md](21-selftest-before-submit.md) | 复审前自测方法论：提交前 gauntlet、反复返工问题清单（身份绑可变标签/判定两处推导/构造期校验器可绕过/对称路径/冗余安全层…）、并行红队配方；源自 019 七轮返工教训固化 | ✅ |
-| [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md) | G/S/K/M/I 会话拓扑、依赖、文件域、PR 列车与风险分级 TDD | ✅ 2026-07-21 |
-| [23-mvp-control-board.md](23-mvp-control-board.md) | 已批准 MVP 的冻结范围、23-entry 受控输入、任务包、7–10 日节奏、验收与提效规则 | ✅ 当前 MVP 基准 |
+| [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md) | 生产架构小 PR 并行 DAG、migration lane、Owner 与评审门 | 📋 D0 后执行 |
+| [23-mvp-control-board.md](23-mvp-control-board.md) | 当前唯一控制板：D0 状态、下一批 C0/W0/CAP0 与 Milestone 门禁 | 🚧 D0 实施 |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
-权威分工：[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)（产品/架构）· [16-roadmap](16-roadmap.md)（完整阶段）· [23-mvp-control-board](23-mvp-control-board.md)（冻结 MVP）· [HANDOFF](../../HANDOFF.md)（唯一实时状态）· [master plan](../project-iterations/2026-07-insurance-knowledge-compiler-master-plan.md)（完整 backlog）。
+权威分工：[生产架构重置设计](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)（近期生产架构）·
+[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)（核心产品定义）·
+[16-roadmap](16-roadmap.md)（完整阶段）· [23-mvp-control-board](23-mvp-control-board.md)（当前门禁）·
+[HANDOFF](../../HANDOFF.md)（实时状态）。
