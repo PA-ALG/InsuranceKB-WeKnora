@@ -16,16 +16,33 @@
 创建、reparse、manual 更新重建路径）SHALL 在写入 `parse_status=pending`
 的**同一数据库事务**内对该行执行原子自增分配新 attempt，并把该值传入
 解析任务 payload；分配 SHALL 由数据库行级序列化保证严格单调递增，
-SHALL NOT 复用、回退或跳号分配已用值。attempt 分配 SHALL 与 trace
-`OpenAttempt`（`/spans` 的 `current_attempt`）完全解耦：trace 记录失败
-SHALL NOT 影响 attempt 分配与解析，二者数值允许不相等，`/spans` 行为
-SHALL 保持不变。
+SHALL NOT 复用、回退或跳号分配已用值。worker 写入 chunk 行时 SHALL 逐行
+携带任务 payload 中的该 attempt 值：SHALL NOT 在写入时重读
+`current_parse_attempt`，SHALL NOT 采用 trace attempt 字段。attempt 分配
+SHALL 与 trace `OpenAttempt`（`/spans` 的 `current_attempt`）完全解耦：
+trace 记录失败 SHALL NOT 影响 attempt 分配与解析，二者数值允许不相等，
+`/spans` 行为 SHALL 保持不变。
 
-revision 提交（见 W1.5）SHALL 发生在把 `parse_status` 翻转为
-`completed` 的**同一数据库事务**内，且该事务 SHALL 在行锁下复核
-`current_parse_attempt` 仍等于本次提交的 attempt（提交 fencing）：不等
-时事务 SHALL 整体失败并返回 typed 错误，`parse_status` SHALL NOT 翻转为
-completed，SHALL NOT 写入 revision 行。
+**分配先于销毁（顺序约束）**：对已存在 chunk 集合的重建（reparse、
+manual 更新重建），分配事务（自增 + `parse_status=pending` 写）SHALL 在
+对上一 attempt 的 chunk/索引资源开始任何销毁**之前**提交；分配事务失败
+时 SHALL 中止本次重建，上一 attempt 保持完整可服务。由此 SHALL NOT 存在
+「上一 attempt 仍解析为当前可服务、其 chunk 却已被（部分）删除」的窗口
+——W0 T2 观察到的 cleanup-先于-状态写顺序在此被反转；分配提交之后清理
+即使中断，上一 attempt 也已不可服务（W1.2 409 / W1.3 410），fail closed
+而非静默缺页。本约束只重排既有 delete-and-rebuild 的推进顺序，
+SHALL NOT 引入历史 chunk 保留或第二存储。
+
+revision 提交（见 W1.5）SHALL 绑定**解析管线自身**把 `parse_status`
+翻转为 `completed` 的那次事务——包括直接翻转与 `finalizing →
+completed` 的 subtask 收敛提升路径
+（`knowledgeRepository.FinalizeSubtask`，由 `knowledge_post_process.go`
+驱动）——且该事务 SHALL 在行锁下复核 `current_parse_attempt` 仍等于
+本次提交的 attempt（提交 fencing）：不等时事务 SHALL 整体失败并返回
+typed 错误，`parse_status` SHALL NOT 翻转为 completed，SHALL NOT 写入
+revision 行。解析管线之外对 `parse_status=completed` 的既有写入（如
+clone/move 目标行与其他维护性更新）SHALL NOT 伪造或触发 revision 提交；
+此类「completed 但无 revision 行」在 W1.2 呈现 typed 409（子况 d）。
 
 `failed/cancelled` 的 attempt SHALL 不产生 revision 行；其分配记录
 SHALL 保留（`current_parse_attempt` 停在该失败值，`parse_status` 呈现
@@ -49,6 +66,16 @@ SHALL 保留（`current_parse_attempt` 停在该失败值，`parse_status` 呈�
 - **THEN** 两次分配获得两个不同的、严格递增的 attempt 值；
   `knowledge_revisions` 以 `(knowledge_id, parse_attempt)` 主键保证不
   产生同 attempt 的第二行
+
+#### Scenario: 分配提交前零销毁、分配后中断 fail closed
+
+- **WHEN** 对已提交 attempt N 的 knowledge 触发 reparse，分三轮观察：
+  (a) 正常执行并记录分配事务提交与首次 chunk 删除的先后；(b) 在分配
+  事务提交前注入失败；(c) 在分配事务提交后、清理完成前中断
+- **THEN** (a) attempt N 的任何 chunk 删除都发生在分配事务提交之后；
+  (b) 重建中止，attempt N 仍是当前可服务 attempt 且其绑定读取完整；
+  (c) attempt N 已不可服务（`/revision` 409、`/revisions/N/chunks`
+  410）——任何一轮都不存在「200 但 chunk 缺失」的读取
 
 #### Scenario: 迟到 worker 被提交 fencing 拒绝
 
@@ -82,8 +109,14 @@ SHALL 保留（`current_parse_attempt` 停在该失败值，`parse_status` 呈�
 2. **409** typed `revision_not_committed`（knowledge 存在但当前无可服务
    revision）：覆盖 (a) 从未成功 completed、(b) 当前 attempt 处于
    `pending/processing/finalizing`、(c) 最新 attempt 以
-   `failed/cancelled` 终止。body SHALL 附 `parse_status` 与当前
-   `parse_attempt`；存在历史已提交 revision 时 SHALL 附
+   `failed/cancelled` 终止、(d) `parse_status=completed` 但当前 attempt
+   无 revision 行（传承数据、clone/move 或其他非解析路径写入的
+   completed，见 W1.1）、(e) 无存量原文件字节的 knowledge（manual/FAQ
+   等 `file_path` 为空的来源；URL 入库若未持久化原文件字节亦同）——
+   W1 v1 revision 合同只覆盖 file-backed knowledge，此类行 SHALL 永久
+   豁免于 revision 提交并恒为本状态。body SHALL 附 `parse_status`、当前
+   `parse_attempt` 与机读 `reason`（可无歧义区分 a–e，file-less 为
+   `file_less_source`）；存在历史已提交 revision 时 SHALL 附
    `last_committed`（`parse_attempt`、`manifest_digest`、
    `completed_at`），供 lifecycle 消费方证明「completed 历史未被回退」。
 3. **410** typed `knowledge_deleted`（tombstone，见 W1.4）。
@@ -94,7 +127,12 @@ SHALL 保留（`current_parse_attempt` 停在该失败值，`parse_status` 呈�
 （app 源码 commit/版本）、docreader 版本标识、**已生效**的 chunker 配置
 （`chunk_size`、`chunk_overlap`、separators 的 digest）与
 `embedding_model_id`；SHALL 取自解析实际使用的有效配置，SHALL NOT 引用
-提交后可变的 KB 当前配置。
+提交后可变的 KB 当前配置。构建标识 SHALL 来自构建期注入的版本信息（与
+镜像 source lock 一致的 commit/版本值），SHALL NOT 在运行时从可变环境
+推断；某一分量在提交时确实不可得时 SHALL 记为显式 tagged 值
+`"unknown"`——SHALL NOT 省略键、SHALL NOT 写空串，也 SHALL NOT 因此使
+提交失败——使消费方可确定性检出降级身份；W1.6 的 compatibility matrix
+SHALL 记录生产镜像下各分量非 `"unknown"`。
 
 端点 SHALL 沿用既有读 ACL 链（KB 白名单 + retrieve capability +
 Viewer + KB 读权限校验）；无权限时 SHALL 维持既有 403/404 语义，
@@ -121,6 +159,15 @@ SHALL NOT 因 revision 端点泄漏无权限对象的存在性。
 - **WHEN** 分别对「从未存在的 id」「存在且已提交」「已删除且在保留窗口
   内」「存在但从未 completed」各调用一次
 - **THEN** 依次得到 404、200、410、409，错误码稳定且两两不同
+
+#### Scenario: 非解析 completed 与 file-less 来源呈现 typed 409
+
+- **WHEN** 分别对 (a) 一个经 clone/move 写入 `parse_status=completed`
+  且当前 attempt 无 revision 行的 knowledge、(b) 一个 manual/FAQ 等无
+  存量原文件字节的 knowledge 调用 `/revision`
+- **THEN** 二者均返回 409 `revision_not_committed`，`reason` 机读可
+  区分（分别为「非解析 completed 无 revision」与 `file_less_source`）；
+  SHALL NOT 为其伪造 revision 行或返回 200
 
 ### Requirement: W1.3 attempt 绑定的 chunk 读取
 
@@ -150,7 +197,11 @@ SHALL NOT 因 revision 端点泄漏无权限对象的存在性。
 `revision.parse_attempt` 与 `manifest_digest` 相同，且页并集大小等于
 `chunk_count`，则该并集即该 manifest 的完整快照；任何 410 表示必须重新
 走 W1.2 → W1.3。消费方 SHALL NOT 需要 `updated_at`、`seq_id` 或 id 集合
-启发式。
+启发式。完整性证明以「一个可服务 attempt 在走查期间持续存在」为活性
+前提（正常运行下重解析间隔 ≫ 单次走查时长）；在持续替换下走查可能反复
+410 而无法完成——这是正确性优先的预期行为：W1 只承诺绝不返回错误/混版
+数据，不承诺该对抗情形下的完成时限。消费方 SHOULD 在重新走查前经
+W1.2/W1.7 观察 `current_parse_attempt` 稳定并做退避。
 
 **superseded 语义裁决（与 037 草案一致）**：被替换 attempt 的 chunk 读
 SHALL 返回 410 `revision_superseded`，SHALL NOT 返回冻结的历史全集。
@@ -165,15 +216,18 @@ typed 失效，不承诺历史内容服务。
 无 typed 信号的情况下丢失该 attempt 的任何 chunk；替换/删除发生后的下
 一次页请求 SHALL 以 410 终止走查。该场景 SHALL 以 RED-style Go contract
 test 先行落地（先复现 W0 T4 的旧新混合 + 缺页作为 RED 基线，再由绑定
-端点转 GREEN），并 SHALL 重复至少 3 次无一混版。
+端点转 GREEN）。该 Go 测试 SHALL 采用**确定性交错**：在页读取之间直接
+调用分配/清理服务序列（或经注入点驱动替换），SHALL NOT 依赖挂钟竞速；
+fixture 的 chunk 数 SHALL 在所用 `page_size` 下覆盖至少 3 页。挂钟并发
+下重复 ≥3 次的复验归 live lane（tasks 验收 13）。
 
 #### Scenario: 走查中重解析被 410 终止而非静默混版（W0 T4 复刻）
 
-- **WHEN** 客户端以 `page_size=5` 走查 attempt N 的
-  `/revisions/N/chunks`，读完第 2 页后另一客户端触发 reparse
-  （attempt N+1 分配并清除旧集合），原客户端继续请求后续页，全流程重复
-  至少 3 次
-- **THEN** 每次重复中，替换点之后的首个页请求返回 410
+- **WHEN** 客户端走查 attempt N 的 `/revisions/N/chunks`（fixture 在
+  所用 `page_size` 下至少 3 页），读完第 2 页后测试以确定性交错触发
+  reparse（直接调用分配/清理序列，attempt N+1 分配并清除旧集合），原
+  客户端继续请求后续页；live lane 另以挂钟并发全流程重复至少 3 次
+- **THEN** 每次执行（含 live 重复）中，替换点之后的首个页请求返回 410
   `revision_superseded`（body 含 current_parse_attempt=N+1）；已返回的
   各页 `revision.parse_attempt` 均为 N；任何一次走查的并集要么被 410
   终止、要么大小恰为 chunk_count 且逐 chunk 属于 attempt N——0 次旧新
@@ -209,11 +263,12 @@ tombstone（`knowledge_id`、`deleted_at`）；对不存在的 id SHALL 返回
 404。tombstone 读取 SHALL 先解析软删行到其 KB 并执行与在世对象相同的
 ACL 校验，SHALL NOT 因 tombstone 泄漏无权限对象的存在性或删除时间。
 
-tombstone 可读性 SHALL 有显式保留窗口：窗口时长来自配置（部署默认值不
-是产品上限）。W1 SHALL NOT 引入新的硬删 GC；只要软删行存在，410 SHALL
-持续可读。若部署存在或未来引入对软删行的硬删清理，其 SHALL 遵守保留
-窗口——窗口内 SHALL NOT 硬删（410 保证可读），窗口外 410 退化为 404 是
-唯一允许的退化路径。删除 SHALL NOT 删除或改写 `knowledge_revisions`
+tombstone 可读性 SHALL 有显式保留窗口不变量，但 **W1 SHALL NOT 新增
+配置接线，也 SHALL NOT 引入硬删 GC**：只要软删行存在，410 SHALL 持续
+可读（W1 交付形态下窗口事实上无限）。保留窗口时长是部署策略量；任何
+未来引入软删行硬删清理的 change SHALL 拥有该窗口配置并遵守本不变量——
+窗口内 SHALL NOT 硬删（410 保证可读），窗口外 410 退化为 404 是唯一
+允许的退化路径。删除 SHALL NOT 删除或改写 `knowledge_revisions`
 历史行以外的 W1 状态语义；既有 DELETE 端点的请求/响应形状 SHALL 保持
 不变。
 
@@ -224,12 +279,14 @@ tombstone 可读性 SHALL 有显式保留窗口：窗口时长来自配置（部
 - **THEN** 前者返回 410 `knowledge_deleted` 且 tombstone 含
   `deleted_at`；后者返回 404；两者状态码与错误码均不同
 
-#### Scenario: 保留窗口内 GC 不得抹除 tombstone
+#### Scenario: 保留窗口内清理不得抹除 tombstone
 
-- **WHEN** 配置保留窗口为 T，软删发生后在 T 内执行任何清理任务，随后
-  请求 `/revision`
-- **THEN** 窗口内仍返回 410 tombstone；仅当窗口过后软删行被显式清理，
-  该 id 才允许退化为 404
+- **WHEN** 软删发生后，在保留窗口策略生效期内执行任何清理任务，随后
+  请求 `/revision`；另在测试内模拟窗口外清理（直接硬删该软删行）后再
+  请求一次
+- **THEN** 窗口内仍返回 410 tombstone（W1 自身不交付任何硬删清理，软
+  删行在即 410）；仅当窗口外软删行被显式清理，该 id 才允许退化为
+  404，且这是唯一退化路径
 
 #### Scenario: tombstone 不成为 ACL 旁路
 
@@ -244,12 +301,14 @@ tombstone 可读性 SHALL 有显式保留窗口：窗口时长来自配置（部
 到 `knowledges.file_sha256`；既有 MD5 `file_hash` 字段与语义 SHALL 保持
 不变。revision 行 SHALL NOT 以空 `file_sha256` 提交：迁移前上传的
 knowledge 在其下一次解析提交前 SHALL 由服务端从存量原文件字节计算并
-持久化 sha256。客户端提交的 `metadata.sha256` 维持现状（不校验、不
-采信），SHALL NOT 作为 `file_digest` 来源。
+持久化 sha256。无存量原文件字节的 knowledge 豁免于 revision 提交
+（W1.2 子况 e），因此 SHALL NOT 存在需要以空 digest 提交的路径。客户端
+提交的 `metadata.sha256` 维持现状（不校验、不采信），SHALL NOT 作为
+`file_digest` 来源。
 
 **manifest digest**：提交事务内 SHALL 按以下规范化字节序列计算（记法：
-`LF` = 0x0A，`decimal(x)` = 无前导零无符号十进制 ASCII，`hex(...)` =
-64 位小写十六进制）：
+`LF` = 0x0A；`decimal(x)` = 无符号十进制 ASCII、无前导零，且
+`decimal(0)` = `"0"`；`hex(...)` = 64 位小写十六进制）：
 
 ```text
 input = "weknora.chunk_manifest" LF        # domain separator
@@ -266,10 +325,15 @@ manifest_algorithm = "weknora.chunk_manifest.v1"
 
 其中 `content_bytes` SHALL 是 chunk content 的存储 UTF-8 字节逐字节
 原文——SHALL NOT 施加 Unicode 规范化、trim、换行转换或 JSON 转义；
-chunk 集合范围 SHALL 恰好等于 W1.3 端点服务的集合（同 knowledge、同
-attempt、同 document text chunk 过滤）；`chunk_index` 在同一 attempt 内
-SHALL 唯一，提交事务发现重复时 SHALL 整体失败（typed），SHALL NOT 提交
-歧义 manifest。revision 行 SHALL 持久化 `manifest_algorithm` 与
+`chunk_id` SHALL 是 API 返回的该 chunk UUID 字符串原文（与存储主键一致
+的 ASCII 形态）——主键形态若变化 SHALL 升 v2；chunk 集合范围 SHALL
+恰好等于 W1.3 端点服务的集合（同 knowledge、同 attempt、同 document
+text chunk 过滤）——image/OCR/多模态等非 text chunk 类型 SHALL 明确
+不在 v1 manifest 与绑定读取范围内（与既有默认列表语义一致），纳入它们
+SHALL 升 v2；`chunk_index` 在同一 attempt 内 SHALL 唯一，提交事务发现
+重复时 SHALL 整体失败（typed），SHALL NOT 提交歧义 manifest，并 SHALL
+以数据库唯一索引兜底（存活 document text chunk 行上的
+`(knowledge_id, parse_attempt, chunk_index)` 唯一；软删行不参与）。revision 行 SHALL 持久化 `manifest_algorithm` 与
 `manifest_digest`；提交后 SHALL NOT 重算或刷新该 digest——提交后经其他
 既有入口（如 chunk 编辑）发生的内容漂移 SHALL 通过「消费方按同算法重算
 ≠ 存储 digest」确定性可检出，服务端 SHALL NOT 掩盖该不一致。
@@ -297,7 +361,8 @@ vectors（固定输入 → 期望 digest），Harness 侧按 vectors 与 live �
 #### Scenario: 语言中立 vectors 固定算法
 
 - **WHEN** 用规格附带的固定 vectors（含空集、单 chunk、多字节 UTF-8
-  内容、非连续 chunk_index 等边界）分别在 Go 实现与独立参考实现上计算
+  内容、非连续 chunk_index、`decimal(0)`=`"0"` 编码等边界）分别在 Go
+  实现与独立参考实现上计算
 - **THEN** 双方对每条 vector 输出相同 digest；任何实现改动导致 vector
   不匹配即视为破坏合同，必须升 v2 而不是改 v1 语义
 
@@ -327,11 +392,16 @@ diff 完全一致的 exact 文件清单、`upstream_issue` 由
 patch surface 不一致 SHALL 视为验收失败。实现 SHALL NOT 改动允许面之外
 的文件；允许面限于：`migrations/versioned/` 恰好一对新 up/down、
 `internal/types/`（knowledge/chunk/revision 类型）、
-`internal/application/repository/`（knowledge/chunk/revision 存取）、
-`internal/application/service/`（knowledge_create/knowledge_process 的
-分配与提交接线）、`internal/handler/`（新只读 handler）、
-`internal/router/router.go`（路由 + API-key capability 声明）及其对应
-测试文件；SHALL NOT 修改任何历史迁移。
+`internal/application/repository/`（`knowledge.go` 的
+FinalizeSubtask 提交挂钩、`chunk.go` 的 attempt 过滤、revision 存取）、
+`internal/application/service/`（knowledge_create/knowledge_process/
+knowledge_post_process 的分配与提交接线）、`internal/handler/`（新只读
+handler）、`internal/router/router.go`（路由 + API-key capability
+声明）及其对应测试文件；SHALL NOT 修改任何历史迁移。迁移 SHALL 只落在
+`migrations/versioned/`（PostgreSQL/ParadeDB 生产链）；`mysql/`、
+`sqlite/`、`paradedb/` 目录 SHALL 零修改——sqlite 单测 lane 沿既有
+`AutoMigrate` 模式获得新列/新表，但 W1 的事务/并发合同只对 PostgreSQL
+承诺，sqlite 结果 SHALL NOT 冒充并发证据。
 
 按 033 §11.4，W1 SHALL 交付：(a) 上游 API contract tests（本规格各
 Requirement 的场景化测试）；(b) 普通知识/chunk REST 非回归测试（既有
@@ -365,21 +435,26 @@ shared database Redis or Asynq dependency）。设计 SHALL 可上游化：
 KB knowledge 列表项 SHALL 仅新增 `current_parse_attempt`（0 = 尚无
 分配）与 `file_sha256`（空 = 尚未计算）两个字段，且 SHALL 无条件序列化
 （不使用 omitempty 之类的零值省略），使字段**存在性**本身构成部署能力
-信号；其余字段与状态码 SHALL 逐一不变。`/chunks/:id`、`/spans`、
-DELETE、reparse 等既有端点 SHALL 零变更。新端点 SHALL 只注册为只读
-（retrieve capability + Viewer + KB 读 ACL），SHALL NOT 扩大任何既有
-API key 的写能力。
+信号。两个新字段加在 knowledge 序列化类型上：凡内嵌 knowledge 对象的
+既有响应（详情、列表、batch、search 等）SHALL 一并出现该增量字段（同一
+类型、同一只增语义）；chunk 对象同理仅新增 `parse_attempt` 字段。不
+内嵌 knowledge/chunk 对象的既有端点（`/spans`、DELETE、reparse、
+cancel-parse 等）SHALL 零变更；一切既有端点的请求参数、既有字段、状态
+码与错误码 SHALL 逐一不变。新端点 SHALL 只注册为只读（retrieve
+capability + Viewer + KB 读 ACL），SHALL NOT 扩大任何既有 API key 的写
+能力。
 
 新读取面 SHALL 可被消费方无歧义探测：`GET /knowledge/:id` 响应 JSON 中
 `current_parse_attempt` 键存在 ⇔ 部署含 W1。消费方（P4a/P4c Harness）
 SHALL 以该探测 fail closed：探测失败（键缺失或新端点路由缺失）时
 SHALL NOT 把旧部署上的 404 当作「从未存在」语义消费，SHALL NOT 回退到
-时间戳/启发式合同。W1 revision 端点的 4 个 typed 状态
-（`revision_not_committed`、`revision_superseded`、
-`revision_not_found`、`knowledge_deleted`、以及 404 not-found）SHALL
-使用稳定机读错误码，错误码与 HTTP 状态映射一经发布 SHALL NOT 变更；
-合同演进 SHALL 通过新增字段或升版本标识，SHALL NOT 复用既有码表达新
-语义。
+时间戳/启发式合同。W1 revision 端点 SHALL 使用**五个**稳定机读错误码：
+`revision_not_committed`（409）、`revision_superseded`（410）、
+`knowledge_deleted`（410）、`knowledge_not_found`（404，id 从未
+存在）、`revision_not_found`（404，该 attempt 无 revision 行）——两个
+404 与两个 410 分别以错误码无歧义区分；错误码与 HTTP 状态映射一经发布
+SHALL NOT 变更；合同演进 SHALL 通过新增字段或升版本标识，SHALL NOT
+复用既有码表达新语义。
 
 #### Scenario: 既有端点非回归
 
@@ -400,5 +475,5 @@ SHALL NOT 把旧部署上的 404 当作「从未存在」语义消费，SHALL NO
 #### Scenario: 错误码稳定可机读
 
 - **WHEN** 客户端仅依据 HTTP 状态 + 错误码分支处理 W1 全部响应
-- **THEN** 四种 typed 状态与 404 各有唯一稳定码，无需解析人类可读
-  message 即可无歧义路由所有分支
+- **THEN** 五个错误码各自唯一稳定（两个 404、两个 410 均可无歧义
+  区分），无需解析人类可读 message 即可路由所有分支

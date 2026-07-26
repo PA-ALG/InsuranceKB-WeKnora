@@ -58,10 +58,13 @@ clamp/越界语义（`internal/handler/chunk.go:127-128`、
   `knowledges.current_parse_attempt`/`knowledges.file_sha256` +
   `chunks.parse_attempt`（0 = 传承数据，不可绑定）；
 - **事务化 attempt 分配**：与写 `parse_status=pending` 同一 DB 事务，单调
-  +1，与 trace `OpenAttempt` 完全解耦（W1.1）；
-- **事务化 revision 提交**：与 `parse_status` 翻转 `completed` 同一 DB
-  事务内计算并固化 ordered chunk manifest digest、INSERT 不可变 revision
-  行，并以 `current_parse_attempt` 复核做提交 fencing（W1.1/W1.5）；
+  +1，与 trace `OpenAttempt` 完全解耦；重建路径上分配事务 SHALL 先于旧
+  attempt chunk 销毁提交（关闭 W0 T2 观察到的 cleanup-先行窗口）（W1.1）；
+- **事务化 revision 提交**：与解析管线把 `parse_status` 翻转 `completed`
+  的同一 DB 事务（含 finalizing→completed 的 FinalizeSubtask 提升路径）内
+  计算并固化 ordered chunk manifest digest、INSERT 不可变 revision 行，并
+  以 `current_parse_attempt` 复核做提交 fencing；clone/move 等非解析
+  completed 写入不产 revision，以 typed 409 呈现（W1.1/W1.2/W1.5）；
 - 2 个新只读端点：`GET /api/v1/knowledge/:id/revision`（typed
   200 completed / 409 in-progress / 410 tombstone / 404 never-existed，
   W1.2/W1.4）与
@@ -85,9 +88,12 @@ clamp/越界语义（`internal/handler/chunk.go:127-128`、
 - 不建立共享数据库读取、Redis/Asynq 耦合：attempt 簿记是 WeKnora 内部
   状态（其 Go 服务 + 其 DB），Harness 只经版本化 REST 消费，绝不共享；
 - 不引入第二套解析器；不改 docreader；不改上传/OCR/chunk 算法本身；
-- 不改既有 delete-and-rebuild 流程与
+- 不改 delete-and-rebuild 策略与
   `pending/processing/finalizing/completed/failed/deleting/cancelled`
-  状态机本身；
+  状态机本身（不保留历史 chunk、不加第二存储）；W1 对重建路径的唯一
+  改动是 spec W1.1 的顺序约束——分配事务先于旧 attempt 销毁提交；
+- 不给 manual/FAQ 等无存量原文件字节的来源定义 revision 合同（其
+  `/revision` 永久为 typed 409 子况，见 spec W1.2）；
 - 不把 LLM Wiki 领域逻辑搬进 Go：端点/表/算法命名全部通用
   （revision/manifest/attempt），设计保持可上游化；
 - 不追溯回填历史 attempt：`parse_attempt=0` 传承 chunk 不可绑定读取，
