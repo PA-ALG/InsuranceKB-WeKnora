@@ -15,6 +15,7 @@
 | W1 WeKnora Revision Manifest | 🚧 `TRIGGERED / SPEC DRAFTING`（Go patch，预算内 W1 项；~600 行估计） | OpenSpec 起草 → 双独立评审 → Go 实现 |
 | CAP0 Capacity Contract | 🚧 `IN PROGRESS`（OpenSpec 036；含 stock_backfill 档位与 declared/measured 语义） | TDD 实现中 |
 | G0-probe 弱模型探针 | 🚧 `IN PROGRESS`（校准专用，非验收证据） | 出数后校准 G0a 阈值 |
+| 038 G0a 金标资产化内核 | 🚧 规格 ✅ 冻结（PR #42 draft）；实现 `NOT STARTED` | RED → GREEN → 双独立评审 → PR |
 | Schema 切片 + 词表 seed 草稿 | 🚧 `IN PROGRESS`（Golden Product 医疗险；专家收口于 G0a） | 草稿 → 专家评审 |
 | Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
 | Milestone B | `PLANNED / NOT IMPLEMENTED` | 等 Semantic Core |
@@ -201,6 +202,28 @@ digest 仅 MD5；chunk 无 attempt 字段、无服务端 manifest digest、
 ① 关闭 superseded DRAFT PR #26/#28/#33（会话权限受限）；② 确认是否存在
 Golden Product 真实第二版本资料（决定 G0v 可行性）；③ CAP0 八项 launch
 容量问卷（036 交付后转发业务方填报）。
+
+### D-2026-07-27-13 · G0-probe 结果与阈值校准（校准专用，非验收证据）
+
+真实弱模型 dev 粗测（301 次调用）：micro F1 0.15–0.31（合计 0.231），与
+历史 0.216 同量级——**G0b 0.95/0.90 是结构性差距**。分解：引文回验
+1.000、present 检测精度 0.948（deepseek）、幻觉 0.052；塌方在值一致性
+0.273；qwen-flash 幻觉 0.22（4 倍差）→ 模型身份门有判别力；确定性
+fastpath 2/2 exact。G0a 冻结口径：可即冻 evidence ≥0.99 / 幻觉 ≤0.10
+（按模型身份）/ present-P ≥0.90；值精度与召回待 P5b0/P5b1+ 后分档
+（v2 P≥0.60 起步）；高风险 1.00 只经确定性路线 + 人审；每维最小支持
+≥30 键；**冻结前必须修"值承载 absent 计为幻觉"的度量约定 bug**。完整
+报告：`docs/insurance-kb/probes/2026-07-27-g0-probe-report.md`。
+
+### D-2026-07-27-14 · 真实版本资料已获取，G0v 走真资料
+
+平安官网信息披露渠道获取 14 份官方 PDF（备案号齐全，manifest 含
+sha256/来源 URL，见 `dataset/version-materials/`）。G0v 采用
+**e生保长期医疗（费率可调）1072-1（2020-168号）vs 1072-4（2021-155号
+重发）**真实版本对（033 §14.1 允许以具备真实版本资料的产品验收版本
+能力）；Golden 尊享版本体仅一个备案版本，保持单版本。**不构造合成
+版本**。同名不同产品"平安附加e生保（尊享版）长期医疗"一并收录，作
+P5a0 实体消歧测试数据。D8 关闭。
 
 ### D-2026-07-26-5 · 主线开发执行模式
 
