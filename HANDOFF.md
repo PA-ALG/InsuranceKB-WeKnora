@@ -1,6 +1,24 @@
 # HANDOFF — 交接文档
 
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
+>
+> [!IMPORTANT]
+> **当前状态（2026-07-26，D0 实施）**：用户已书面批准
+> [近期生产架构重置设计](docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
+> 当前执行以
+> [22 · active execution plan](docs/insurance-kb/22-parallel-execution-blueprint.md)
+> 与
+> [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
+> 为准。
+> 当前只完成治理合同改写；C0、W0、CAP0、Milestone A/B/C 及其全部功能、
+> migration、provider、live 和生产切换仍为 `planned / not implemented`。
+> 执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再按批准设计进入
+> Milestone A/B/C。PostgreSQL Active WikiRelease 是 serving authority；
+> WeKnora managed Wiki 是带 epoch fencing 的可重建投影；四种 ReviewPolicy
+> 均合法，原始资料只用于证据、审核和补编。Harness 与 WeKnora 只通过版本化
+> REST 与 Source lifecycle event 集成，MCP 仅是 Active Query 消费者薄适配器。
+> 本块以下内容保留为截至 2026-07-22 的历史交接记录，不得再作为当前路线、
+> migration 占号或实现授权；遇到冲突以新设计与 OpenSpec 033 为准。
 > 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份受控输入、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审并按 cross-reference findings 修订，Wave 1 已分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice；030 使用自己的 admission profile，不借用 020 evaluator/artifact。）
 
 > [!IMPORTANT]

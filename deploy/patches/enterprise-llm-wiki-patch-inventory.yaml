@@ -1,0 +1,99 @@
+schema_version: 1
+inventory_id: enterprise-llm-wiki-production-reset-v1
+authoritative_design_sha256: e1ef9f2276fbac714c3e5a7398aabab190b8e0dea9229ea35b897ff148c0ae9f
+upstream_baseline:
+  repository: Tencent/WeKnora
+  sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
+patches:
+  - patch_id: W1
+    upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
+    file_path:
+      - internal/types/knowledge.go
+      - internal/application/service/knowledge.go
+      - internal/handler/knowledge.go
+      - internal/router/router.go
+    owner: W1-weknora-revision-manifest
+    rationale: >-
+      Only if W0 proves the public API cannot bind lifecycle identity and ordered
+      content to one completed parse attempt, add the smallest versioned
+      lifecycle/manifest/snapshot REST contract.
+    compatibility_tests:
+      - exact completed-attempt manifest/content binding
+      - reparse-pagination-delete race rejects mixed revisions
+      - existing knowledge REST behavior remains compatible
+      - no shared database Redis or Asynq dependency
+    upstream_issue: pending-W0-verdict
+    remove_when: >-
+      Remove after an accepted upstream release exposes the W0-approved
+      SourceLifecycleContract and RevisionManifestContract and the Harness
+      compatibility matrix passes without this fork patch.
+    status: planned
+
+  - patch_id: P11
+    upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
+    file_path:
+      - internal/types/wiki_page.go
+      - internal/application/repository/wiki_page.go
+      - internal/application/service/wiki_page.go
+      - internal/handler/wiki_page.go
+      - internal/router/router.go
+    owner: P11-managed-page-fencing
+    rationale: >-
+      Add a dedicated managed-wiki endpoint, owner and activation-epoch
+      high-watermark so late projector writes and ordinary PUT/DELETE cannot
+      bypass PostgreSQL Release authority.
+    compatibility_tests:
+      - lower activation epoch is rejected
+      - same epoch requires the same page or tombstone digest
+      - ordinary Wiki PUT and DELETE reject managed pages
+      - managed reads enforce the current RAW KnowledgeBase ACL
+      - ordinary unmanaged Wiki behavior remains compatible
+    upstream_issue: pending-P11-contract-card
+    remove_when: >-
+      Remove after the same managed-page fencing and RAW ACL read guard ship in an
+      accepted upstream release and all compatibility vectors pass unchanged.
+    status: planned
+
+  - patch_id: P13
+    upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
+    file_path:
+      - frontend/src/api/wiki/index.ts
+      - frontend/src/views/knowledge/wiki/WikiBrowser.vue
+      - frontend/src/views/knowledge/wiki/CandidateReviewDrawer.vue
+    owner: P13-evidence-review-ux
+    rationale: >-
+      Expose Active Query content, Evidence drill-down, projection freshness and
+      exact CandidateRelease batch review without moving LLM Wiki domain rules
+      into Vue.
+    compatibility_tests:
+      - evidence locator and current RAW ACL failures are fail closed
+      - stale projection never renders as current knowledge
+      - one batch decision binds the exact CandidateRelease
+      - no page or item approval action exists
+    upstream_issue: pending-P13-contract-card
+    remove_when: >-
+      Remove after the equivalent generic managed Wiki evidence and batch-review
+      UX is accepted upstream and the LLM Wiki integration uses only upstream
+      public APIs.
+    status: planned
+
+  - patch_id: P14
+    upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
+    file_path:
+      - frontend/src/api/wiki/index.ts
+      - frontend/src/views/knowledge/wiki/WikiBrowser.vue
+      - frontend/src/views/knowledge/wiki/ManagedWikiProposalEditor.vue
+    owner: P14-proposal-edit-ux
+    rationale: >-
+      Route managed Wiki edits to the LLM Wiki ChangeProposal API with an exact
+      base release/page revision; never mutate a published managed page directly.
+    compatibility_tests:
+      - stale base release or page revision is rejected
+      - managed edit creates a Proposal and never calls ordinary page update
+      - proposal status and regenerated Candidate are visible
+      - unmanaged Wiki edit behavior remains compatible
+    upstream_issue: pending-P14-contract-card
+    remove_when: >-
+      Remove after the equivalent generic managed-page proposal integration is
+      accepted upstream and no fork-only Vue or API adapter remains.
+    status: planned

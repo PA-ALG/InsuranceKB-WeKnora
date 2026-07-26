@@ -1,10 +1,10 @@
 # 企业级 LLM Wiki 北极星设计
 
-> 状态：**产品、Integration-first MVP 与完整企业路线已由业务方批准（2026-07-21）；功能实施须按 OpenSpec 分包**
-> 地位：本项目的产品与架构最高层设计基准。所有 Roadmap、OpenSpec、实现、评测、前端和会话调度都必须与本文一致；如有冲突，以本文为准并先修订冲突文档。
+> 状态：**核心产品定义继续有效；近期生产架构已由 2026-07-24 重置设计取代并获用户书面批准（2026-07-26）**
+> 地位：本文保留产品北极星、Evidence/Conflict/version/Release 与弱模型原则；近期生产权威、事务、审核、WeKnora 集成和交付 DAG 以[生产架构重置设计](2026-07-24-enterprise-llm-wiki-production-architecture-design.md)为准。
 > 关联：[项目总览](../../insurance-kb/00-project-overview.md) · [架构基准](../../insurance-kb/02-architecture.md) · [知识模型](../../insurance-kb/03-knowledge-model.md) · [功能继承](../../insurance-kb/09-llm-wiki-feature-migration.md)
 
-> **当前运行阻断**：① 现有 production CLI/config 尚未硬禁用 Claude/DeepSeek/未知或滚动模型身份，NS-0 完成前禁止真实生产编译、judge、merge 与 release；② 独立 MVP slice admission 尚未 READY，READY 前零真实模型运行。业务方已声明 `LLM-wiki-black` 为项目方完整著作权资产，第一方迁移权利不再是阻断；第三方许可证仍逐项清点。本文批准不等于解除模型与运行准入门禁。
+> **当前阶段**：D0 只改治理合同。C0、W0、CAP0 和 Milestone A/B/C 均为 planned/not implemented；任何实现仍须独立 OpenSpec、TDD、准入和发布画像门禁。
 
 ## 1. 产品北极星
 
@@ -19,7 +19,7 @@
 - 冲突不会被静默覆盖，而是自动裁决或进入人工审核；
 - 人看到产品时，应在一个 Wiki 产品页获得当前完整知识、关联概念、FAQ、差异、来源与历史；
 - Agent 默认消费与人类页面相同 release snapshot 的结构化知识，而不是另起一套答案口径；
-- 文档与 raw chunk 保留为证据和长尾兜底，但不能覆盖已发布 Wiki 的权威结论。
+- 文档与原始 chunk 保留为证据、审核和补编输入；应用无已发布知识时返回不足或请求补充条件，不把原始检索包装成答案。
 
 一句话定义：
 
@@ -81,9 +81,9 @@ flowchart TB
 - Harness 是可恢复、可审计的编译运行时，不是遇错即断的一次性 pipeline。
 - Enterprise LLM Wiki 拥有知识语义、页面编译、关系、冲突、版本和发布生命周期。
 - WeKnora 的内置自动 Wiki 生成在保险知识库中必须关闭；只复用其页面载体和通用平台能力。
-- Harness 与 WeKnora 只通过公开 REST/MCP 交互，不直读数据库或队列。
-- 直接复用 WeKnora Wiki UI 的生产前置是通用 **release namespace + atomic active alias** 契约：staging 页面按 `release_id` 隔离，普通 list/get/search/index/graph/RAG/UI 只解析一个原子激活的 release。当前逐页 REST 写、`draft/published` 状态或单发布者纪律都不能证明同快照，不得作为替代。
-- 该通用补丁落地并通过 live 契约前，WeKnora 只能作为受限 staging/预览载体；普通用户的当前批准快照由 Harness 只读 reader 提供，Agent 走同快照 MCP。此状态不能宣称“生产 Wiki UI 已完成”。
+- Harness 与 WeKnora 只通过版本化 REST 和 Source lifecycle event 交互，不直读数据库、Redis/Asynq 或队列。
+- PostgreSQL `Space.active_release_id + activation_epoch` 是 serving authority；不可变 WikiRelease、active CAS 和 Outbox 在同一事务提交。
+- WeKnora managed Wiki 是带 server-side epoch fencing、可重建的投影。MCP 只可作为 Active Query 的消费者薄适配器，不承担 WeKnora 内部集成或发布控制。
 
 ### 3.2 生产模型边界
 
@@ -100,18 +100,17 @@ flowchart TB
 
 本系统存在两个不同层次的“真相源”，不可混为一谈：
 
-1. **内部语义与治理 SSOT**：`Claim + Evidence + ChangeSet + Revision + ReleaseSnapshot`。任何语义修改都必须在这里发生；Wiki 页面不能成为绕过治理的编辑入口。
-2. **默认消费权威**：WeKnora 原子 `active_release_id` 指向、approval 仍有效且 seal/manifest hash 核对一致的 `ReleaseSnapshot` Wiki，以及绑定同一 snapshot 的 MCP/Agent 接口。Harness `CurrentRelease` 只保存批准 snapshot/hash/ETag receipt 镜像；MCP 每次请求先读取 serving alias 并与批准 manifest 核对，任何失配都 fail closed。人和 Agent 必须看到同一版本、同一证据、同一冲突状态。
+1. **证据真相**：WeKnora Source、原文件、解析版本和 EvidenceFragment 说明知识
+   来自哪里，并始终执行当前 ACL。
+2. **语义与治理 SSOT**：ClaimRevision、RelationRevision、ProvenanceAnchor、
+   ConflictSet、CandidateRelease 与 ReviewDecision。Wiki 页面不能绕过这些对象
+   直接改写事实。
+3. **应用消费权威**：PostgreSQL Active WikiRelease。请求开始时固定
+   `release_id`，人、API、MCP 和问答读取同一页面、事实、证据和冲突状态。
 
-原始文档与 chunk 是不可变证据层和未覆盖知识的兜底检索层。消费顺序固定为：
-
-```text
-当前已发布 Wiki / 同快照 MCP
-        ↓ 缺失时产生 gap 与补编任务
-受权限约束的 RAW 证据检索（明确标注“未编译/低保证”）
-        ↓
-不得用 RAW 临时答案覆盖已发布 Wiki 结论
-```
+原始资料只进入 Evidence 核查、人工审核和补编，不进入应用答案旁路。Active
+WikiRelease 无答案时返回 `insufficient/needs_qualification`，并可创建 gap 或
+补编任务。
 
 ## 5. 持续知识编译闭环
 
@@ -123,8 +122,8 @@ flowchart LR
     D --> E["证据回验 / 三态 / 规则校验 / 缺口补抽"]
     E --> F["Claim 与 Evidence 候选"]
     F --> G["增量比较 / 冲突 / ChangeSet"]
-    G --> H["自动门禁 + 人工最终审核"]
-    H --> I["ReleaseSnapshot"]
+    G --> H["版本化 ReviewPolicy"]
+    H --> I["WikiRelease"]
     I --> J["Wiki 页面 / 关系 / FAQ / MCP"]
     J --> K["问答反馈 / 缺口 / 来源更新 / 质量漂移"]
     K --> B
@@ -156,7 +155,12 @@ flowchart LR
 - 低风险自动形成/推进 ChangeSet 候选的阈值、字段审核阈值、release 人工批准策略和告警阈值；
 - golden slice、留出集指标、适用范围和已知失败模式。
 
-模板内容、指标、golden slice 和 rights receipt 必须一起内容寻址并冻结为不可变 `TemplateVersion`；批准由真人 `TemplateApproval` 单独绑定完整 hash，撤销/retire 只追加 lifecycle event，当前版本只可用 expected ETag CAS。模板只有批准仍有效且通过版本化留出集与回归门禁后才能用于自动生成低风险 ChangeSet；未达到门槛只能生成待审核候选。任何 ChangeSet 无论如何产生，都必须经过授权人的 release 级最终审核，才能进入新的生产 ReleaseSnapshot。
+模板内容、指标、golden slice 和 rights receipt 一起内容寻址并冻结为不可变
+`TemplateVersion`。模板批准只授予模板使用资格，不等于 Release authority。
+Candidate 由 Space 的版本化 ReviewPolicy 选择
+`machine_auto | human_batch | hybrid | trusted_import`；自动资格必须精确绑定
+QualityProfileApproval、AutomationScope、run fingerprint、covered capabilities
+和 security profile，任一不匹配确定性回落 `human_batch`。
 
 ### 6.2 Agent 角色与写入纪律
 
@@ -182,7 +186,8 @@ Agent 只能产生带 receipt 的候选或建议；知识状态只能由治理�
 2. 针对缺失字段缩小上下文并定向补抽；
 3. 由多个弱模型 Agent 使用不同角色/prompt/采样独立尝试并做证据共识；
 4. 回退到通用 schema-driven agentic 路径，不使用不适配的专用模板；
-5. 达到尝试、预算或时间上限后停止自动形成/推进候选，生成 Alert + ReviewItem，由人接管；生产 release 本来就必须由授权人最终批准。
+5. 达到尝试、预算或时间上限后停止自动形成/推进候选，生成 Alert +
+   ReviewItem，并按 ReviewPolicy 确定性回落 `human_batch`。
 
 ## 7. 七类核心问题的系统解法
 
@@ -190,9 +195,9 @@ Agent 只能产生带 receipt 的候选或建议；知识状态只能由治理�
 |---|---|---|
 | 1. 弱模型准确率与覆盖率 | 模板层级、多角色短任务、独立多次尝试、定向补漏、持久 checkpoint、attempt ledger | 引文回验、高风险字段共识、字段级 golden 回归、失败不发布 |
 | 2. 结构化知识融合与冲突 | JSON/JSONL/CSV/FAQ/API 直入标准化器，直接生成 Product/Claim/QA 候选 | 跳过文档解析但不跳过产品对齐、Evidence/来源快照、ChangeSet、冲突与审核 |
-| 3. 自动校验 | schema/type/三态/引文/跨字段/时间/数值/同类产品异常等确定性与弱模型交叉校验 | 校验 receipt 可审计；高风险、低置信、无共识必须人工最终审核 |
+| 3. 自动校验 | schema/type/三态/引文/跨字段/时间/数值/同类产品异常等确定性与弱模型交叉校验 | 校验 receipt 可审计；高风险、低置信、无共识触发 blocker 并回落 `human_batch` |
 | 4. 智能分类与多产品文档 | 文档级分类 + 章节级模板选择 + 事实级产品/版本路由 | 模糊归属进入 unassigned；禁止跨产品污染 |
-| 5. 更新、删除与版本 | SourceRevision、ClaimRevision、不可变 ChangeSet、ReleaseSnapshot、change log、retract 与回滚 | 权威度/生效期优先；删除按剩余证据计数；回滚保持 Wiki/MCP/QA/索引一致 |
+| 5. 更新、删除与版本 | SourceRevision、ClaimRevision、不可变 ChangeSet、WikiRelease、change log、retract 与回滚 | 权威度/生效期优先；删除按剩余证据计数；回滚保持 Wiki/MCP/QA/索引一致 |
 | 6. 仪表盘与 Schema 工作台 | 产品知识全貌、完整度、Wiki 质量、缺口批量补全、schema/prompt/template 预览编辑与生成草案 | 草案需留出集评测和人工批准；schema 换版只生成重编计划 |
 | 7. 百千文档并发 | 三级任务、按产品版本分片、五级限流、幂等键、lock/CAS、失败隔离与 dead letter | 抽取可并行，同一产品版本 merge 串行；迟到结果必须重新比较 |
 
@@ -204,14 +209,15 @@ Agent 只能产生带 receipt 的候选或建议；知识状态只能由治理�
 |---|---|
 | `SourceRevision` | 冻结来源内容、解析结果、结构化原始记录与 ordering |
 | `SourceTrustPolicy/TrustedSourceRegistration` | 由连接器/签名/人工登记绑定来源身份、角色与 authority；分类模型和模板无权提权 |
-| `TemplatePackage/TemplateVersion/TemplateApproval` | 模板完整制品、适用范围、指标、rights receipt、不可变真人批准/撤销与 CAS 当前指针 |
+| `TemplatePackage/TemplateVersion/TemplateApproval` | 模板完整制品、适用范围、指标、rights receipt 与不可变 lifecycle；不授予 Release authority |
 | `CompilationJob/StageRun/WorkerLease/Attempt` | 持久任务、阶段 checkpoint、带 generation/fencing token 的租约、每次模型/工具尝试、预算与错误 |
 | `AgentReceipt` | 输入哈希、输出、证据、模型/prompt/template 身份和裁决理由 |
 | `Claim/Evidence` | 内部原子事实与证据 SSOT |
 | `ChangeSet/Conflict/ReviewItem` | 所有语义变更、冲突与人工门禁 |
-| `ReleaseSnapshot/WikiArtifact` | 人和 Agent 共同消费的冻结版本及确定性页面产物 |
-| `ReleaseApproval/ApprovalLifecycleEvent` | 绑定完整 snapshot hash 的真人最终批准，以及 append-only 撤销/到期审计 |
-| `ReleaseSealReceipt/ReleaseRetentionEvent/CurrentRelease` | namespace seal、物理制品 pin/GC 审计与每 Space 的 active-alias receipt 镜像 |
+| `CandidateRelease/ReviewDecision` | exact 待审闭包及四种 ReviewPolicy 产生的不可变决定 |
+| `WikiRelease` | 人和 Agent 共同消费的不可变版本；成员和 canonical digest 冻结 |
+| `Space.active_release_id + activation_epoch` | PostgreSQL serving authority；激活与回滚均以 expected-current CAS 切换 |
+| `OutboxEvent` | Active Release 提交后驱动可重放、可 reconciliation 的投影 |
 | `Alert` | 有类型约束和完整 job/source/product/field/template/model/attempt/evidence/budget 上下文、可路由认领关闭的异常，而非任意 JSON/日志文本 |
 | `KnowledgeHealthSnapshot` | 产品/版本/字段/页面质量及趋势 |
 
@@ -232,20 +238,25 @@ Agent 只能产生带 receipt 的候选或建议；知识状态只能由治理�
 
 ### 9.2 发布原子性
 
-- `published` 只表示 Claim/QA 具备被选入 snapshot 的资格；未被目标 snapshot manifest 收录的对象不得进入该版本消费口径；
-- 每个生产 ReleaseSnapshot 必须有授权人的最终批准；低风险自动化可以减少逐字段操作，但不能绕过 release 级人审；
-- Wiki 页面、关系、目录、Agent/MCP 读模型必须绑定同一个 snapshot；
-- active alias 的作用域固定为 `(tenant_id, target_wiki_kb_id)`；一个 bound Space 独占一个 target Wiki KB，target/staging KB 都不得被另一个 Space 复用。每次 staging、seal、activate、query 都重新核对 tenant/Space/KB 一一绑定，跨域 fail closed；
-- 发布先把完整制品写入不可被普通 UI/RAG 发现的 `release_id` namespace，逐项回读并校验 manifest hash；随后调用 `seal-release(expected_write_etag, manifest_hash)`。seal 必须在平台原子事务中重算页面、目录、关系与 index generation 的物理 hash，成功后 namespace/index 永久禁止普通 PUT/DELETE；任何变化只能创建新 `release_id`；
-- 仅在批准 hash 完全匹配、批准仍有效且 seal receipt 匹配时，调用 WeKnora 通用 `activate-release(expected_alias, release_id, manifest_hash)` 做一次 CAS；activate 再次验证 release 属于目标 tenant/Space/KB、sealed manifest 和物理 index hash，消除批准到激活之间的 TOCTOU；
-- WeKnora 的 active alias 是所有在线消费者的 serving identity。Harness 的 `CurrentRelease` 记录批准 snapshot 与 alias ETag/ack；MCP 必须在线核对 alias，双写/ack 失配时拒绝回答并告警，因此不会向人和 Agent 分别返回新旧知识；
-- staging、校验或 alias CAS 失败不得改变 serving alias；补偿和重试不能留下对普通用户可见的半套版本。仅逐页 `PUT` 成功不算发布成功；
-- 批准可由有权主体通过 append-only lifecycle event 撤销，或按不可变策略到期；在线读取与回滚每次都验证其仍有效，不能只看曾经存在过 approval；
-- 当前 release 及所有仍有有效回滚批准/保留资格的 sealed namespace、index generation 和内容寻址制品必须 pin，禁止覆盖和 GC。GC 只允许未激活失败 staging，或已明确失去回滚资格且超过审计保留期的 release；必须由授权人批准并追加不可变 GC event/删除 receipt；
-- 回滚前必须对旧 release 的 seal receipt、页面/关系/目录 manifest、内容制品和 index generation 逐项 hash preflight；缺一项即阻断并告警。通过后才把 active alias 原子切换到仍有有效批准的旧 namespace，使 Claim/QA、页面、关系、目录、MCP 与索引同时恢复；不得重新让模型生成旧答案；
-- 人工直接编辑 Wiki 页面只能形成 `manual_edit` ChangeSet，不能绕过 Claim 层。
-
-在 release namespace/active alias 通用补丁完成前，生产直接 WeKnora Wiki UI **fail closed**：页面只可写入 ACL 隔离且不参与检索的 staging KB，由 Harness reader 预览/服务当前批准 snapshot。MVP 验收证明 Harness reader 与 MCP 同 `ReleaseSnapshot`；staging 隔离、激活中途故障、alias CAS 竞争、MCP alias 失配、pin/GC 和物理同快照回滚属于企业生产验收。
+- `published` 只表示 Revision 具备被 Candidate 选择的资格；只有 Active
+  WikiRelease 的成员进入应用消费口径。
+- publication 在一个 PostgreSQL 事务内重验 Candidate base release/epoch、
+  ReviewPolicy id/epoch、binding/security、ReviewDecision 与自动审核资格，
+  创建不可变 WikiRelease 和成员，以 expected-current CAS 更新
+  `active_release_id + activation_epoch`，并写 Outbox。
+- 同一 Space 的 Candidate 创建、策略切换和 promotion 共用串行边界；不同
+  Space 可并行。CAS loser 的 publication 整体回滚，随后以 fresh 事务
+  stale/requeue，旧 Decision 不得复用。
+- Outbox Worker 和 WeKnora Projector 是 at-least-once；稳定幂等键、
+  activation-epoch fencing 和 reconciliation 使重复、迟到或部分失败收敛，
+  不宣称 exactly-once。
+- WeKnora managed 页面、搜索和链接是可重建投影，不是 Release commit。
+  P11 dedicated endpoint 拒绝较低 epoch、同 epoch 不同 digest，以及普通
+  PUT/DELETE 对 managed page 的绕过。
+- 回滚只把 active pointer CAS 到仍可服务的历史 WikiRelease 并递增新的
+  activation epoch，不重新调用模型或改写历史 Release。
+- 人工编辑 Published managed 页面只创建绑定 base release/page revision 的
+  ChangeProposal，再形成新的 Candidate/Decision/Release。
 
 ## 10. 告警与人工接管
 
@@ -299,21 +310,28 @@ Agent 通过只读 MCP/API 查询产品对齐、按日期取事实、证据链�
 
 ## 13. 分阶段建设顺序
 
-0. **先封运行阻断**：第一方权利决定已记录；NS-0 把强模型、未知/滚动 identity 和旧 judge/fallback 在所有生产入口硬封，并为 23 份来源建立独立 MVP admission；门禁前零真实模型运行；
-1. **治理地基**：来源、Claim/Evidence、ChangeSet、Snapshot、权限与审计；
-2. **可靠编译**：模板包、弱模型多 Agent、校验、attempt/checkpoint、告警；
-3. **企业 Wiki 形态**：产品页、概念页、关系、FAQ、同快照 MCP；
-4. **知识运营**：仪表盘、完整度、质量分、Schema/Template 工作台、批量补全；
-5. **规模化**：百千文档调度、分片一致性、限流、成本与运维；
-6. **持续演进**：反馈飞轮、模板扩展、更多险种与多模态。
+执行 DAG 以生产架构重置设计 §16 为准，入口顺序固定为：
 
-每一阶段都必须交付可演示的端到端 Wiki 价值，不允许只建设平台组件而长期没有人/Agent 可消费的知识成果。
+```text
+D0 → {C0, W0}
+C0 → CAP0
+then Milestone A → Milestone B → Milestone C
+```
 
-### 13.1 已批准的 MVP-0 Walking Skeleton
+- **D0** 只冻结治理合同和 planned patch inventory；
+- **C0** 冻结唯一跨语言 canonical envelope；
+- **W0** 只读证明 WeKnora revision/lifecycle 合同，证据不足才触发条件 W1；
+- **CAP0** 冻结真实 CapacityProfile，不用示例数字替代工作负载证据；
+- **Milestone A — Semantic Core**：完成来源、Evidence/Provenance、Schema、
+  identity/applicability/conflict 与 G0 semantic core；
+- **Milestone B — Governed Active Release**：完成 Candidate、四种
+  ReviewPolicy、PostgreSQL Release CAS/Outbox 与 Active Query；
+- **Milestone C — WeKnora Production Experience**：完成 fenced projection、
+  Evidence/Review/Proposal UX、恢复演练和生产切换。
 
-MVP-0 固定为 7–10 个工作日的 integration-first 交付：23 份来源、5 个产品、至少 3 类产品形态。它必须包含多文档产品归属、固定批准模板、弱模型多次短任务、Evidence 回验、ChangeSet/冲突、人审、ReleaseManifest/完整 hash 批准、Harness Reader 与 MCP 同快照、一次来源更新和一次回滚；并包含已知 schema 的 `product_meta.json`/FAQ 结构化直入。
-
-MVP-0 冻结最终对象和接口，但允许单进程持久 executor、2–4 worker、固定 attempt/time/token 上限、少量模板实例和 Harness Reader serving。P-1 原子 active alias、完整预算结算、分布式 lease/fairness、13 产品全 baseline、完整 Workbench/结构化平台和千份并发进入后续企业阶段，不得反向阻塞 MVP-0。
+上述项目当前均为 `planned / not implemented`。每个实现 PR 只交付一个领域
+不变量；文档数、worker 数、并发和 Candidate 大小均由 fixture 或版本化
+CapacityProfile 决定，不是产品硬上限。
 
 ## 14. 开发与评审硬门禁
 
@@ -322,11 +340,13 @@ MVP-0 冻结最终对象和接口，但允许单进程持久 executor、2–4 wo
 1. 它推进了哪一项 Enterprise LLM Wiki 核心能力；
 2. 读写哪一层权威数据，是否保持同 snapshot；
 3. 对弱模型、模板、证据、校验和失败告警有什么设计；
-4. 是否引入 WeKnora 上游污染或绕过 REST/MCP；
+4. 是否遵守版本化 REST + Source lifecycle event，且 WeKnora patch 是否只在
+   W1/P11/P13/P14 inventory budget 内；
 5. 是否有结构化直入、更新、冲突、删除、回滚和并发影响；
 6. 用哪些条款级测试与 golden 指标证明质量；
-7. 哪些情况必须停止自动形成/推进候选并交给人；release 级真人批准如何绑定 content hash。
-8. 若触及 Wiki 发布，是否证明 release namespace 隔离、active alias 原子切换、MCP alias 核对与 P-1 前 fail-closed 过渡。
+7. 哪些条件阻断自动资格并确定性回落 `human_batch`；
+8. 若触及发布，是否证明 PostgreSQL active CAS/epoch/Outbox、同 Space
+   串行、跨 Space 并行，以及 fenced projection 不具 serving authority。
 
 若一个任务不能说明其如何服务本北极星，应暂停排期；若只是通用平台优化，必须证明它是 Wiki 主线的明确前置，而不是另起产品主线。
 
@@ -342,13 +362,20 @@ MVP-0 冻结最终对象和接口，但允许单进程持久 executor、2–4 wo
 
 ## 16. 端到端验收故事
 
-MVP-0 先通过 1–6 的精简真实故事以及第 8 条中的完整 hash 人审、Harness Reader/MCP 同快照和逻辑回滚；首个**企业生产里程碑**再同时通过以下全部故事：
-
-1. 上传包含多个产品的文档，系统按事实路由到正确产品，歧义项进入人工队列；
-2. 直入一批 JSON/FAQ，不经解析仍生成有来源、可审核、可回滚的 ChangeSet；
-3. 上传同一产品新版本，自动补全或提出替换，冲突不静默覆盖；
-4. 人在产品 Wiki 页看到当前完整知识、关系、证据、缺口、历史与 change log；
-5. Agent 从 MCP 得到同 snapshot 的事实与证据，历史日期查询选择正确版本；
-6. 模板失效或弱模型多次无共识时，自动候选推进停止并产生完整告警；
-7. 在批量并发处理中，同一产品不丢更新，失败可隔离重放；
-8. 授权人批准完整 snapshot hash 后才能上线；release 先原子 seal、staging 对普通 UI/RAG 不可见，active alias 激活后人和 MCP 命中同一 release；并发写/删、批准撤销、跨 Space/KB、GC 与 CAS 故障都 fail closed。回滚只切向 hash preflight 全绿且仍有有效批准、物理制品已 pin 的旧版本，Claim、Wiki、QA、关系、目录、MCP 与索引一致恢复。
+1. 用户经 WeKnora 上传资料，Source lifecycle adapter 冻结 exact revision，
+   Compiler 生成可回验的 Claim/Relation/Evidence。
+2. 多来源更新形成显式 Conflict/Candidate；不静默覆盖，Schema gap 与 unresolved
+   内容进入 quarantine。
+3. `machine_auto` 只在 exact QualityProfileApproval/AutomationScope 和安全
+   闭包内发布；另一个 Space 可选择 `human_batch`，授权人批量决定完整
+   CandidateRelease。
+4. PostgreSQL promotion 事务创建不可变 WikiRelease、CAS active
+   pointer/epoch 并写 Outbox；并发 loser 整体回滚后 stale/requeue。
+5. 人、API、MCP 和问答在请求内固定同一个 Active WikiRelease；没有已发布
+   知识时不使用原始检索生成答案。
+6. WeKnora managed Wiki 接受当前 epoch 投影、拒绝迟到写和普通写入口绕过；
+   投影失败只影响 freshness，不改变 Active Release。
+7. 回滚只切换 active pointer 并增加 epoch，不重新调用模型；Evidence、历史
+   Release 和审计保持不可变。
+8. 多实例、跨 Space、ACL 变化、provider failure、重复 Outbox 和恢复演练均按
+   Contract Card fail closed 或幂等收敛。
