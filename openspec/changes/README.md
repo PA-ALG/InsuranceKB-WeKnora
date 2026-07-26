@@ -43,7 +43,7 @@
 | 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | 🚧 实施中（Wave 1，总控窗口） | 033 §16 C0；纯 Python 包，无迁移 |
 | 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
-| 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
+| 036 | capacity-contract | 🚧 实施中（Wave 1，总控窗口） | CAP0；生产 CapacityProfile 合同 + 八项问卷交付物（D-2026-07-26-1），不是迁移号，无迁移 |
 | 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
 | 038+ | （空闲） | | 先占号再开目录 |
 
