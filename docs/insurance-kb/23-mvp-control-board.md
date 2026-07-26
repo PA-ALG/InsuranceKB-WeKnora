@@ -7,12 +7,17 @@
 
 | 项目 | 状态 | 当前允许动作 |
 |---|---|---|
-| D0 Production Architecture Reset | `GOVERNANCE MERGED`（PR #34）；本 docs PR 为治理补丁收口 | 归档 033、维护决策记录 |
-| C0 Canonical Envelope | `IN PROGRESS`（Owner：总控窗口；worktree `ikb-c0`；OpenSpec 034） | 规格 → RED → GREEN → 双独立评审 → PR |
-| W0 Revision Contract Spike | `AUTHORIZED / NEXT`（本机 live 六服务 healthy 已核验 2026-07-26） | C0 提交后本窗口执行只读 spike |
-| CAP0 Capacity Contract | `PLANNED`（等 C0；launch 八项申报问卷待发业务方） | 等 C0 |
-| P1 Job Store + Outbox | `SPEC DRAFTING`（033 §16 DAG：仅依赖 D0，与 C0 并行） | 规格起草；实现待规格评审 |
-| Milestone A | `PLANNED / NOT IMPLEMENTED` | 等 foundation |
+| D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
+| 知识编译层修正案（Amendment 1） | 🚧 本 PR 落地（业务方 2026-07-27 批准） | 见修正案 §2–§7 |
+| C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 🚧 `IN PROGRESS`（worktree `ikb-p1-impl`，迁移占号 **0015**） | TDD 实现 → 双独立评审 → PR |
+| W0 Revision Contract Spike | ✅ `EXECUTED`（2026-07-27，OpenSpec 037）：**两份合同均 `insufficient` → 条件 W1 正式触发**；证据与 W1 API 草案在 spike PR | 评审合入证据 PR；P4a/P4c 保持 blocked 至 W1 |
+| W1 WeKnora Revision Manifest | 🚧 `TRIGGERED / SPEC DRAFTING`（Go patch，预算内 W1 项；~600 行估计） | OpenSpec 起草 → 双独立评审 → Go 实现 |
+| CAP0 Capacity Contract | 🚧 `IN PROGRESS`（OpenSpec 036；含 stock_backfill 档位与 declared/measured 语义） | TDD 实现中 |
+| G0-probe 弱模型探针 | 🚧 `IN PROGRESS`（校准专用，非验收证据） | 出数后校准 G0a 阈值 |
+| 038 G0a 金标资产化内核 | 🚧 规格 ✅ 冻结（PR #42 draft）；实现 `NOT STARTED` | RED → GREEN → 双独立评审 → PR |
+| Schema 切片 + 词表 seed 草稿 | 🚧 `IN PROGRESS`（Golden Product 医疗险；专家收口于 G0a） | 草稿 → 专家评审 |
+| Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
 | Milestone B | `PLANNED / NOT IMPLEMENTED` | 等 Semantic Core |
 | Milestone C | `PLANNED / NOT IMPLEMENTED` | 等 Governed Active Release |
 
@@ -142,6 +147,83 @@ PostgreSQL/live/load，也不宣称任何 Milestone 完成。
   仍按 033 等待 P4c/P5a2 合同；
 - W0 spike 的问题清单按"直接产出 W1 API 规格草案"的形状设计；W1 按大概率
   触发做预案，提前确认 Go 侧实现人力与窗口。
+
+### D-2026-07-27-6 · 外部诊断裁决与知识编译层修正案
+
+Opus 诊断（enterprise-llm-wiki-gap-analysis）经独立对抗性裁决后由业务方
+批准落地为
+[知识编译层修正案](../superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)。
+采纳：G0-probe、P5b0、P5a1+ 内容化（Golden Product 切片）、P5b1+ 抽取
+质量机制与反向补抽、P5b2+ SourcePrecedencePolicy（确定性①–④，弱模型
+共识建议后置）、P5a0+ 合同澄清、G0a+ 标注 Agent 子系统、CAP0+
+stock_backfill、human_batch-first 首发画像。拒绝（记录于修正案 §6）：
+recall 数学不可能论、无主动撤回入口论、machine_auto 吞吐死锁论、
+O(片段) 人工论。后续版本项见修正案 §5。
+
+### D-2026-07-27-7 · subject_ref = product_version
+
+Claim/Relation 的 `subject_ref` 绑定 `product_version`（修正案 §4.1）。
+P5a2 据此建模，不可逆；文档→ProductVersion 归属判定（P5a0/003）是版本
+编译的真实前置。
+
+### D-2026-07-27-8 · 首发画像 human_batch-first
+
+machine_auto 整链（P2c approval registry、P7 exact verifier、
+AutomationScope 重验、shadow/canary）移为 `P15[auto-profile]`，依赖 G0b。
+G0b 保持为知识质量门禁不变。P2c 拆分：ReviewPolicyVersion 存储/指针/
+epoch 留主线。
+
+### D-2026-07-27-9 · 金标标注模式（修订 033 §14.1 落地形态）
+
+模型标注 + 确定性验证 + ≥2 强模型交叉；人工只审分歧 + 全部高风险字段 +
+5% 抽样。高风险字段（precision=1.00 门槛）的裁判必须是人。holdout
+custody 等防刷红线不变。
+
+### D-2026-07-27-10 · 迁移台账清理
+
+0007–0011 预分配随 009/010/011/012/025 撤号作废，永不复用；0013/0014
+（superseded 028b 计划）同样作废。P1 实现使用 **0015**。台账修订随 P1
+实现 PR 提交（该 PR 是 0015 的占号 Owner）。
+
+### D-2026-07-27-11 · W0 裁决：两份合同 insufficient，W1 触发
+
+live 实测证据（OpenSpec 037 artifacts）：公开 API 无单调 parse
+generation；删除无 tombstone（404 与 never-existed 不可区分）；服务端
+digest 仅 MD5；chunk 无 attempt 字段、无服务端 manifest digest、
+`content_hash` 全空；metadata/chunk 替换非原子（3/3 观察到中间窗口）；
+分页期间重解析 3/3 出现新旧混排且静默丢块、全程 HTTP 200——"同 attempt
+完整快照"被证明不可获得。`SourceLifecycleContract` 与
+`RevisionManifestContract` 均 `insufficient`。**条件 W1 正式触发**（patch
+预算内），P4a/P4c 保持 blocked 至 W1 合入；W1 API 草案见 037
+`artifacts/w1-api-draft.md`。
+
+### D-2026-07-27-12 · 待业务方动作
+
+① 关闭 superseded DRAFT PR #26/#28/#33（会话权限受限）；② 确认是否存在
+Golden Product 真实第二版本资料（决定 G0v 可行性）；③ CAP0 八项 launch
+容量问卷（036 交付后转发业务方填报）。
+
+### D-2026-07-27-13 · G0-probe 结果与阈值校准（校准专用，非验收证据）
+
+真实弱模型 dev 粗测（301 次调用）：micro F1 0.15–0.31（合计 0.231），与
+历史 0.216 同量级——**G0b 0.95/0.90 是结构性差距**。分解：引文回验
+1.000、present 检测精度 0.948（deepseek）、幻觉 0.052；塌方在值一致性
+0.273；qwen-flash 幻觉 0.22（4 倍差）→ 模型身份门有判别力；确定性
+fastpath 2/2 exact。G0a 冻结口径：可即冻 evidence ≥0.99 / 幻觉 ≤0.10
+（按模型身份）/ present-P ≥0.90；值精度与召回待 P5b0/P5b1+ 后分档
+（v2 P≥0.60 起步）；高风险 1.00 只经确定性路线 + 人审；每维最小支持
+≥30 键；**冻结前必须修"值承载 absent 计为幻觉"的度量约定 bug**。完整
+报告：`docs/insurance-kb/probes/2026-07-27-g0-probe-report.md`。
+
+### D-2026-07-27-14 · 真实版本资料已获取，G0v 走真资料
+
+平安官网信息披露渠道获取 14 份官方 PDF（备案号齐全，manifest 含
+sha256/来源 URL，见 `dataset/version-materials/`）。G0v 采用
+**e生保长期医疗（费率可调）1072-1（2020-168号）vs 1072-4（2021-155号
+重发）**真实版本对（033 §14.1 允许以具备真实版本资料的产品验收版本
+能力）；Golden 尊享版本体仅一个备案版本，保持单版本。**不构造合成
+版本**。同名不同产品"平安附加e生保（尊享版）长期医疗"一并收录，作
+P5a0 实体消歧测试数据。D8 关闭。
 
 ### D-2026-07-26-5 · 主线开发执行模式
 

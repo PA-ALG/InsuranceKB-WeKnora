@@ -1,0 +1,345 @@
+[
+  {
+    "rep": 1,
+    "knowledge_id": "db15bea9-03a1-4e32-a9f8-27c7176e2933",
+    "delete_response": {
+      "status_code": 200,
+      "body": {
+        "data": {
+          "task_id": "bc5512f6-be71-40c4-bbc0-1075015dacca"
+        },
+        "message": "Delete task submitted",
+        "success": true
+      },
+      "t_ms": 335
+    },
+    "reads": [
+      {
+        "t_ms": 7,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 167,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 331,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 502,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 666,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 841,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1014,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1175,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1349,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1534,
+        "chunks_status": 200,
+        "chunks_total": 42,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1697,
+        "chunks_status": 404,
+        "chunks_total": null,
+        "chunks_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        },
+        "knowledge_status": 404,
+        "knowledge_parse_status": null,
+        "knowledge_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        }
+      }
+    ]
+  },
+  {
+    "rep": 2,
+    "knowledge_id": "57aba01b-9fac-48af-bfb8-03dbbc7d9e54",
+    "delete_response": {
+      "status_code": 200,
+      "body": {
+        "data": {
+          "task_id": "901637a0-e24a-4334-bd49-dd3db1c207a6"
+        },
+        "message": "Delete task submitted",
+        "success": true
+      },
+      "t_ms": 361
+    },
+    "reads": [
+      {
+        "t_ms": 13,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 185,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 357,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 525,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 700,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 874,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1055,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1236,
+        "chunks_status": 200,
+        "chunks_total": 22,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 1399,
+        "chunks_status": 404,
+        "chunks_total": null,
+        "chunks_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        },
+        "knowledge_status": 404,
+        "knowledge_parse_status": null,
+        "knowledge_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        }
+      }
+    ]
+  },
+  {
+    "rep": 3,
+    "knowledge_id": "7fea1717-e4ca-4d3b-bc89-ccc30d16550e",
+    "delete_response": {
+      "status_code": 200,
+      "body": {
+        "data": {
+          "task_id": "f9db2800-a9c0-49ef-91a5-250b62b10cfc"
+        },
+        "message": "Delete task submitted",
+        "success": true
+      },
+      "t_ms": 345
+    },
+    "reads": [
+      {
+        "t_ms": 17,
+        "chunks_status": 200,
+        "chunks_total": 23,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 181,
+        "chunks_status": 200,
+        "chunks_total": 23,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 341,
+        "chunks_status": 200,
+        "chunks_total": 23,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 506,
+        "chunks_status": 200,
+        "chunks_total": 23,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 670,
+        "chunks_status": 200,
+        "chunks_total": 23,
+        "chunks_error": null,
+        "knowledge_status": 200,
+        "knowledge_parse_status": "completed",
+        "knowledge_error": null
+      },
+      {
+        "t_ms": 832,
+        "chunks_status": 404,
+        "chunks_total": null,
+        "chunks_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        },
+        "knowledge_status": 404,
+        "knowledge_parse_status": null,
+        "knowledge_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        }
+      },
+      {
+        "t_ms": 998,
+        "chunks_status": 404,
+        "chunks_total": null,
+        "chunks_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        },
+        "knowledge_status": 404,
+        "knowledge_parse_status": null,
+        "knowledge_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        }
+      },
+      {
+        "t_ms": 1158,
+        "chunks_status": 404,
+        "chunks_total": null,
+        "chunks_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        },
+        "knowledge_status": 404,
+        "knowledge_parse_status": null,
+        "knowledge_error": {
+          "code": 1003,
+          "details": null,
+          "message": "Knowledge not found"
+        }
+      }
+    ]
+  }
+]

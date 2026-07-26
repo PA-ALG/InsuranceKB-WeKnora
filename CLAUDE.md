@@ -7,6 +7,8 @@ Harness 是知识编译与治理运行时，PostgreSQL Active WikiRelease 是应
 ## 开工前必读
 
 1. `docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md`
+   及其修正案 `docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md`
+   （知识编译层交付项、human_batch-first 首发画像、subject_ref=product_version）
 2. `docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md`
 3. `HANDOFF.md` 当前状态块
 4. 对应 `openspec/changes/<NNN>/`

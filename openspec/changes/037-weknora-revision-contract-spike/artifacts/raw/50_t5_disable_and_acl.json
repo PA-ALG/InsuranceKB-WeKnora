@@ -1,0 +1,127 @@
+{
+  "chunk_disable": {
+    "put_disable": {
+      "status_code": 200,
+      "body": {
+        "data": {
+          "id": "d5f9b7ac-5fe1-4c38-96b6-a088e4179240",
+          "seq_id": 100000360,
+          "tenant_id": 10002,
+          "knowledge_id": "db15bea9-03a1-4e32-a9f8-27c7176e2933",
+          "knowledge_base_id": "b05667d7-1cf6-4d4d-a997-31ff43298259",
+          "tag_id": "",
+          "content": "W0 spike scratch clause p01 l04: the insured event waiting period and benefit ratio sample sentence number 4 for revision contract probing.\nW0 spike scratch clause p01 l05: the insured event waiting period and benefit ratio sample sentence number 5 for revision contract probing.\nW0 spike scratch clause p01 l06: the insured event waiting period and benefit ratio sample sentence number 6 for revision contract probing.\n",
+          "chunk_index": 1,
+          "is_enabled": false,
+          "flags": 1,
+          "status": 0,
+          "start_at": 420,
+          "end_at": 840,
+          "pre_chunk_id": "b318dabe-9064-4eee-b239-d918a3c80f04",
+          "next_chunk_id": "5bd8f928-5bfb-46d8-9b49-39473543fccb",
+          "chunk_type": "text",
+          "parent_chunk_id": "",
+          "relation_chunks": null,
+          "indirect_relation_chunks": null,
+          "metadata": null,
+          "content_hash": "",
+          "image_info": "",
+          "created_at": "2026-07-27T01:20:45.811398+08:00",
+          "updated_at": "2026-07-26T17:22:17.760588494Z",
+          "deleted_at": null
+        },
+        "success": true
+      }
+    },
+    "chunk_after_disable_is_enabled": false,
+    "chunk_after_disable_updated_at": "2026-07-27T01:22:17.760588+08:00",
+    "put_reenable_status": 200
+  },
+  "knowledge_disable_attempt": {
+    "put_response": {
+      "status_code": 200,
+      "body": {
+        "message": "Knowledge chunk updated successfully",
+        "success": true
+      }
+    },
+    "enable_status_after": "enabled",
+    "finding": "PUT /knowledge/:id accepts the body but only title/description are updatable; enable_status silently unchanged"
+  },
+  "cancel_parse_on_completed": {
+    "status_code": 400,
+    "body": {
+      "error": {
+        "code": 1000,
+        "details": null,
+        "message": "解析已结束，无法取消"
+      },
+      "success": false
+    }
+  },
+  "acl": {
+    "ro_key_read_chunks": {
+      "status_code": 200,
+      "body": {
+        "total": 42
+      }
+    },
+    "ro_key_reparse": {
+      "status_code": 403,
+      "body": {
+        "error": "Forbidden: API key scope does not allow this operation"
+      }
+    },
+    "ro_key_delete_knowledge": {
+      "status_code": 403,
+      "body": {
+        "error": "Forbidden: API key scope does not allow this operation"
+      }
+    },
+    "scratch_rw_key_list_other_kb_readonly": {
+      "status_code": 403,
+      "body": {
+        "error": {
+          "code": 1002,
+          "details": null,
+          "message": "API key scope does not allow one or more knowledge bases"
+        },
+        "success": false
+      }
+    },
+    "scratch_rw_key_get_other_knowledge_readonly": {
+      "status_code": 403,
+      "body": {
+        "error": {
+          "code": 1002,
+          "details": null,
+          "message": "API key scope does not allow one or more knowledge bases"
+        },
+        "success": false
+      }
+    },
+    "main_key_list_scratch_kb_readonly": {
+      "status_code": 403,
+      "body": {
+        "error": {
+          "code": 1002,
+          "details": null,
+          "message": "API key scope does not allow one or more knowledge bases"
+        },
+        "success": false
+      }
+    },
+    "scratch_rw_key_clear_kb_contents_requires_full_access": {
+      "status_code": 403,
+      "body": {
+        "error": "Forbidden: API key scope does not allow this operation"
+      }
+    },
+    "scratch_rw_key_batch_delete_jwt_only": {
+      "status_code": 403,
+      "body": {
+        "error": "Forbidden: API key scope does not allow this operation"
+      }
+    }
+  }
+}

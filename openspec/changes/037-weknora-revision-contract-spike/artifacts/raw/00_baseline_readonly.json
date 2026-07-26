@@ -1,0 +1,31 @@
+{
+  "knowledge_bases": [
+    {
+      "id": "682fbb8f-cad8-4976-b5fa-bd7051800b9b",
+      "name": "KB-WIKI",
+      "updated_at": "2026-07-17T13:26:27.637641+08:00"
+    },
+    {
+      "id": "b850a2f8-2aa0-43cf-adf6-638c068af88f",
+      "name": "KB-RAW",
+      "updated_at": "2026-07-17T13:22:13.934532+08:00"
+    }
+  ],
+  "knowledge_by_kb": {
+    "682fbb8f-cad8-4976-b5fa-bd7051800b9b": [],
+    "b850a2f8-2aa0-43cf-adf6-638c068af88f": [
+      {
+        "id": "fbe2dd52-2a3f-416b-85c6-debccafc12a5",
+        "file_name": "vlm-canary.png",
+        "updated_at": "2026-07-17T13:31:24.901899+08:00",
+        "parse_status": "completed"
+      },
+      {
+        "id": "48b76866-0e12-491a-a25c-fece2c2f5fa0",
+        "file_name": "产品说明书.pdf",
+        "updated_at": "2026-07-17T13:30:00.43547+08:00",
+        "parse_status": "completed"
+      }
+    ]
+  }
+}

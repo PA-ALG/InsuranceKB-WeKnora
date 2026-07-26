@@ -1,0 +1,889 @@
+[
+  {
+    "rep": 1,
+    "pre_total": 42,
+    "reparse_fired_after_page": 2,
+    "reparse_time_ms": 474,
+    "pages": [
+      {
+        "t_ms": 9,
+        "page": 1,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000233,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:18:18.978709+08:00",
+          "processed_at": "2026-07-27T01:18:18.978709+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:18:18.978709+08:00",
+          "processed_at": "2026-07-27T01:18:18.978709+08:00"
+        }
+      },
+      {
+        "t_ms": 437,
+        "page": 2,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000238,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:18:18.978709+08:00",
+          "processed_at": "2026-07-27T01:18:18.978709+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:18:18.978709+08:00",
+          "processed_at": "2026-07-27T01:18:18.978709+08:00"
+        }
+      },
+      {
+        "t_ms": 894,
+        "page": 3,
+        "total": 0,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:33.495463+08:00",
+          "processed_at": null
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:33.495463+08:00",
+          "processed_at": null
+        }
+      },
+      {
+        "t_ms": 1321,
+        "page": 4,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          15,
+          16,
+          17,
+          18,
+          19
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000290,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        }
+      },
+      {
+        "t_ms": 1736,
+        "page": 5,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000295,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        }
+      },
+      {
+        "t_ms": 2166,
+        "page": 6,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          25,
+          26,
+          27,
+          28,
+          29
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000300,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:33.549261+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        }
+      },
+      {
+        "t_ms": 2594,
+        "page": 7,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          30,
+          31,
+          32,
+          33,
+          34
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000305,
+        "meta_before_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.007654+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.007654+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        }
+      },
+      {
+        "t_ms": 3019,
+        "page": 8,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          35,
+          36,
+          37,
+          38,
+          39
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000310,
+        "meta_before_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.007654+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.007654+08:00",
+          "processed_at": "2026-07-27T01:20:33.546004+08:00"
+        }
+      },
+      {
+        "t_ms": 3444,
+        "page": 9,
+        "total": 42,
+        "returned": 2,
+        "chunk_index": [
+          40,
+          41
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 2,
+        "min_seq_id": 100000315,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        }
+      },
+      {
+        "t_ms": 3862,
+        "page": 10,
+        "total": 42,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        }
+      }
+    ],
+    "detection": {
+      "mixed_old_and_new_ids_in_one_walk": true,
+      "old_ids_seen": 10,
+      "new_ids_seen": 27,
+      "distinct_totals_observed": [
+        0,
+        42
+      ],
+      "parse_status_sequence_observed": [
+        "completed",
+        "processing",
+        "finalizing",
+        "completed"
+      ],
+      "distinct_updated_at_observed": [
+        "2026-07-27T01:18:18.978709+08:00",
+        "2026-07-27T01:20:33.495463+08:00",
+        "2026-07-27T01:20:33.549261+08:00",
+        "2026-07-27T01:20:35.007654+08:00",
+        "2026-07-27T01:20:35.963944+08:00"
+      ],
+      "new_set_min_seq_gt_old_max": true,
+      "same_attempt_snapshot_provable_from_reads": false,
+      "why_not_provable": "no server field ties a page to a parse attempt; detection relies on comparing updated_at/processed_at/seq_id/id-set across reads, i.e. timestamp+heuristic comparison, and a page pair straddling the swap returns without any error or token change"
+    }
+  },
+  {
+    "rep": 2,
+    "pre_total": 42,
+    "reparse_fired_after_page": 2,
+    "reparse_time_ms": 472,
+    "pages": [
+      {
+        "t_ms": 13,
+        "page": 1,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000275,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        }
+      },
+      {
+        "t_ms": 441,
+        "page": 2,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000280,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:35.963944+08:00",
+          "processed_at": "2026-07-27T01:20:35.963944+08:00"
+        }
+      },
+      {
+        "t_ms": 899,
+        "page": 3,
+        "total": 0,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:39.395053+08:00",
+          "processed_at": null
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:39.395053+08:00",
+          "processed_at": null
+        }
+      },
+      {
+        "t_ms": 1321,
+        "page": 4,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          15,
+          16,
+          17,
+          18,
+          19
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000332,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:39.507861+08:00",
+          "processed_at": "2026-07-27T01:20:39.504878+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:39.507861+08:00",
+          "processed_at": "2026-07-27T01:20:39.504878+08:00"
+        }
+      },
+      {
+        "t_ms": 1743,
+        "page": 5,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000337,
+        "meta_before_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.059969+08:00",
+          "processed_at": "2026-07-27T01:20:39.504878+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.059969+08:00",
+          "processed_at": "2026-07-27T01:20:39.504878+08:00"
+        }
+      },
+      {
+        "t_ms": 2162,
+        "page": 6,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          25,
+          26,
+          27,
+          28,
+          29
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000342,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 2592,
+        "page": 7,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          30,
+          31,
+          32,
+          33,
+          34
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000347,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 3018,
+        "page": 8,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          35,
+          36,
+          37,
+          38,
+          39
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000352,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 3443,
+        "page": 9,
+        "total": 42,
+        "returned": 2,
+        "chunk_index": [
+          40,
+          41
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 2,
+        "min_seq_id": 100000357,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 3865,
+        "page": 10,
+        "total": 42,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      }
+    ],
+    "detection": {
+      "mixed_old_and_new_ids_in_one_walk": true,
+      "old_ids_seen": 10,
+      "new_ids_seen": 27,
+      "distinct_totals_observed": [
+        0,
+        42
+      ],
+      "parse_status_sequence_observed": [
+        "completed",
+        "processing",
+        "finalizing",
+        "completed"
+      ],
+      "distinct_updated_at_observed": [
+        "2026-07-27T01:20:35.963944+08:00",
+        "2026-07-27T01:20:39.395053+08:00",
+        "2026-07-27T01:20:39.507861+08:00",
+        "2026-07-27T01:20:40.059969+08:00",
+        "2026-07-27T01:20:40.631587+08:00"
+      ],
+      "new_set_min_seq_gt_old_max": true,
+      "same_attempt_snapshot_provable_from_reads": false,
+      "why_not_provable": "no server field ties a page to a parse attempt; detection relies on comparing updated_at/processed_at/seq_id/id-set across reads, i.e. timestamp+heuristic comparison, and a page pair straddling the swap returns without any error or token change"
+    }
+  },
+  {
+    "rep": 3,
+    "pre_total": 42,
+    "reparse_fired_after_page": 2,
+    "reparse_time_ms": 453,
+    "pages": [
+      {
+        "t_ms": 11,
+        "page": 1,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000317,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 434,
+        "page": 2,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "ids_from_old_set": 5,
+        "ids_from_new_set": 0,
+        "min_seq_id": 100000322,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:40.631587+08:00",
+          "processed_at": "2026-07-27T01:20:40.631587+08:00"
+        }
+      },
+      {
+        "t_ms": 875,
+        "page": 3,
+        "total": 0,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:44.870227+08:00",
+          "processed_at": null
+        },
+        "meta_after_page": {
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:44.870227+08:00",
+          "processed_at": null
+        }
+      },
+      {
+        "t_ms": 1309,
+        "page": 4,
+        "total": 0,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:44.870227+08:00",
+          "processed_at": null
+        },
+        "meta_after_page": {
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "updated_at": "2026-07-27T01:20:44.870227+08:00",
+          "processed_at": null
+        }
+      },
+      {
+        "t_ms": 1740,
+        "page": 5,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000379,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        }
+      },
+      {
+        "t_ms": 2156,
+        "page": 6,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          25,
+          26,
+          27,
+          28,
+          29
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000384,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        }
+      },
+      {
+        "t_ms": 2580,
+        "page": 7,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          30,
+          31,
+          32,
+          33,
+          34
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000389,
+        "meta_before_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "processing",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:45.824744+08:00",
+          "processed_at": "2026-07-27T01:20:45.822283+08:00"
+        }
+      },
+      {
+        "t_ms": 3018,
+        "page": 8,
+        "total": 42,
+        "returned": 5,
+        "chunk_index": [
+          35,
+          36,
+          37,
+          38,
+          39
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 5,
+        "min_seq_id": 100000394,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        }
+      },
+      {
+        "t_ms": 3434,
+        "page": 9,
+        "total": 42,
+        "returned": 2,
+        "chunk_index": [
+          40,
+          41
+        ],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 2,
+        "min_seq_id": 100000399,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        }
+      },
+      {
+        "t_ms": 3856,
+        "page": 10,
+        "total": 42,
+        "returned": 0,
+        "chunk_index": [],
+        "ids_from_old_set": 0,
+        "ids_from_new_set": 0,
+        "min_seq_id": null,
+        "meta_before_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        },
+        "meta_after_page": {
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "updated_at": "2026-07-27T01:20:47.244214+08:00",
+          "processed_at": "2026-07-27T01:20:47.244214+08:00"
+        }
+      }
+    ],
+    "detection": {
+      "mixed_old_and_new_ids_in_one_walk": true,
+      "old_ids_seen": 10,
+      "new_ids_seen": 22,
+      "distinct_totals_observed": [
+        0,
+        42
+      ],
+      "parse_status_sequence_observed": [
+        "completed",
+        "pending",
+        "processing",
+        "completed"
+      ],
+      "distinct_updated_at_observed": [
+        "2026-07-27T01:20:40.631587+08:00",
+        "2026-07-27T01:20:44.870227+08:00",
+        "2026-07-27T01:20:45.824744+08:00",
+        "2026-07-27T01:20:47.244214+08:00"
+      ],
+      "new_set_min_seq_gt_old_max": true,
+      "same_attempt_snapshot_provable_from_reads": false,
+      "why_not_provable": "no server field ties a page to a parse attempt; detection relies on comparing updated_at/processed_at/seq_id/id-set across reads, i.e. timestamp+heuristic comparison, and a page pair straddling the swap returns without any error or token change"
+    }
+  }
+]
