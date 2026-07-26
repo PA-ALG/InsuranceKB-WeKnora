@@ -12,6 +12,11 @@
 > 为准。
 > 当前只完成治理合同改写；C0、W0、CAP0、Milestone A/B/C 及其全部功能、
 > migration、provider、live 和生产切换仍为 `planned / not implemented`。
+> 2026-07-26 已按批准的架构评估落地三项治理产物：
+> [24 · 存量资产处置清单](docs/insurance-kb/24-legacy-asset-disposition.md)
+> （旧代码/迁移/OpenSpec 的唯一处置权威，Pn Contract Card 必须引用）、
+> CAP0 对 P2a/P2b 的门禁语义澄清与重置后基线排期（见 23 号 §8/§9；
+> 排期已于 2026-07-26 经业务方确认为基线）。
 > 执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再按批准设计进入
 > Milestone A/B/C。PostgreSQL Active WikiRelease 是 serving authority；
 > WeKnora managed Wiki 是带 epoch fencing 的可重建投影；四种 ReviewPolicy
@@ -22,9 +27,16 @@
 > 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份受控输入、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审并按 cross-reference findings 修订，Wave 1 已分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice；030 使用自己的 admission profile，不借用 020 evaluator/artifact。）
 
 > [!IMPORTANT]
+> （历史快照：以下断言反映 2026-07-21 旧 MVP 口径，已被 033/23 号控制板取代，不构成当前授权。）
 > **项目核心方向与 MVP 已于 2026-07-21 批准：Enterprise LLM Wiki 是产品本体，WeKnora 是企业底座，Harness 是弱模型知识编译与治理运行时。** 业务方已声明 LLM-wiki-black 为项目方完整著作权资产，可把其 TS 能力选择性迁移/重构到统一 Python 3.12 Harness；原 TS 不作为第二套生产 runtime，第三方许可证单独管理。当前 CLI/config 尚未硬禁强模型路径，MVP admission 也未 READY，因此不得真实生产运行。P-1 release namespace/原子 active alias 是直接 WeKnora 生产 Wiki UI 的前置，但不是 MVP 前置；MVP 使用 ACL 隔离 staging + Harness Reader/MCP 同快照。任何会话认领任务前先读[北极星设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)和[MVP 控制基准](docs/insurance-kb/23-mvp-control-board.md)。
 
-## MVP-0 实时控制板（唯一状态口径）
+## MVP-0 历史控制板（2026-07-22 冻结，已被取代）
+
+> [!WARNING]
+> 本表是旧 Integration-first MVP 的历史快照，2026-07-26 起不再是状态口径；
+> 唯一实时状态与裁决见
+> [23 · 生产架构控制板](docs/insurance-kb/23-mvp-control-board.md)。
+> 表内 Wave/Gate/截止时间均已随 033 重置作废，仅保留审计价值。
 
 | 字段 | 当前值 |
 |---|---|
@@ -36,9 +48,9 @@
 | 完成定义 | 多文档归属、弱模型 Harness、Evidence、冲突、人审、hash 批准、Reader/MCP 同快照、结构化直入、更新/告警/回滚全部通过 |
 | 详细范围 | `docs/insurance-kb/23-mvp-control-board.md`；完整企业路线见 `16-roadmap.md` |
 
-本表只维护实时状态、blocker 和证据链接；23 号文档维护冻结范围、边界和任务拓扑，二者不重复记 checkbox。
+（历史说明：本表当时与旧 23 号文档配套；该分工已随 033 重置终止。）
 
-## ⓪ 当前最优先事项（接手先看这里）
+## ⓪ 历史交接记录（2026-07-22 冻结，已被 033 路线取代；仅审计价值）
 
 0. **基础建设已合入 main（PR #1，2026-07-13）**：此后一律按 17 号规范从 main 切 `feat/NNN-*` 分支，PR 双查 + **CI 绿才算绿**（坑 9a）。上游 workflow "Build and Push Docker Image" 已在 GitHub 界面手动禁用（fork 无腾讯 registry 凭据必失败，属继承性噪音）；其余上游 workflow 有路径/标签过滤暂无干扰，误触发照此禁用，不影响版本列车跟版。
 
