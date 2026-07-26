@@ -1,0 +1,39 @@
+{
+  "status_code": 200,
+  "body": {
+    "data": {
+      "id": "db15bea9-03a1-4e32-a9f8-27c7176e2933",
+      "tenant_id": 10002,
+      "knowledge_base_id": "b05667d7-1cf6-4d4d-a997-31ff43298259",
+      "tags": null,
+      "type": "file",
+      "title": "w0-spike-doc-0727010627.pdf",
+      "description": "",
+      "source": "",
+      "channel": "web",
+      "parse_status": "pending",
+      "pending_subtasks_count": 0,
+      "summary_status": "none",
+      "enable_status": "disabled",
+      "embedding_model_id": "4d0a42b3-516e-437c-8afa-b3f5aabaf0f8",
+      "file_name": "w0-spike-doc-0727010627.pdf",
+      "file_type": "pdf",
+      "file_size": 20251,
+      "file_hash": "dccd482b0e50188efed3683f0c566f94",
+      "file_path": "local://10002/db15bea9-03a1-4e32-a9f8-27c7176e2933/1785085587488853666.pdf",
+      "storage_size": 0,
+      "metadata": {
+        "owner": "w0-spike-0727010627",
+        "sha256": "d70b91392fb0b302e7ad25be3f47894b8ec4b18d1a3ef353e102d12f094d60c7"
+      },
+      "last_faq_import_result": null,
+      "created_at": "2026-07-27T01:06:27.482278389+08:00",
+      "updated_at": "2026-07-27T01:06:27.482278472+08:00",
+      "processed_at": null,
+      "error_message": "",
+      "deleted_at": null,
+      "knowledge_base_name": ""
+    },
+    "success": true
+  }
+}

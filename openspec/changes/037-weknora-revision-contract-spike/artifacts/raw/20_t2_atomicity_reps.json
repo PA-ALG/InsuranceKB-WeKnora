@@ -1,0 +1,236 @@
+[
+  {
+    "rep": 1,
+    "pre_completed_total": 42,
+    "pre_first_chunk_id": "26f4e5c6-6a42-4506-9389-2a5f6e73e9b8",
+    "pre_updated_at": "2026-07-27T01:13:54.449839+08:00",
+    "analysis": {
+      "samples_taken": 504,
+      "status_transitions_seen": [
+        {
+          "t_ms": 36,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 350,
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 944,
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 1482,
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 1505,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        }
+      ],
+      "stale_completed_window_hits": [],
+      "stale_completed_hit_count": 0,
+      "chunks_visible_while_not_completed": [
+        {
+          "t_ms": 995,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000149
+        },
+        {
+          "t_ms": 1002,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000149
+        },
+        {
+          "t_ms": 1009,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000149
+        },
+        {
+          "t_ms": 1017,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000149
+        },
+        {
+          "t_ms": 1025,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000149
+        },
+        {
+          "note": "... 63 total"
+        }
+      ]
+    }
+  },
+  {
+    "rep": 2,
+    "pre_completed_total": 42,
+    "pre_first_chunk_id": "cbe78045-39b2-422e-b775-c011b401cd19",
+    "pre_updated_at": "2026-07-27T01:18:08.135217+08:00",
+    "analysis": {
+      "samples_taken": 585,
+      "status_transitions_seen": [
+        {
+          "t_ms": 9,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 187,
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 774,
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 2065,
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 2217,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        }
+      ],
+      "stale_completed_window_hits": [],
+      "stale_completed_hit_count": 0,
+      "chunks_visible_while_not_completed": [
+        {
+          "t_ms": 844,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000191
+        },
+        {
+          "t_ms": 852,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000191
+        },
+        {
+          "t_ms": 859,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000191
+        },
+        {
+          "t_ms": 874,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000191
+        },
+        {
+          "t_ms": 893,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000191
+        },
+        {
+          "note": "... 107 total"
+        }
+      ]
+    }
+  },
+  {
+    "rep": 3,
+    "pre_completed_total": 42,
+    "pre_first_chunk_id": "35be8f18-e22c-4f82-9f6f-6c0e23377848",
+    "pre_updated_at": "2026-07-27T01:18:13.207698+08:00",
+    "analysis": {
+      "samples_taken": 598,
+      "status_transitions_seen": [
+        {
+          "t_ms": 8,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 163,
+          "parse_status": "pending",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 557,
+          "parse_status": "processing",
+          "enable_status": "disabled",
+          "chunk_total": 0
+        },
+        {
+          "t_ms": 1377,
+          "parse_status": "finalizing",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        },
+        {
+          "t_ms": 2774,
+          "parse_status": "completed",
+          "enable_status": "enabled",
+          "chunk_total": 42
+        }
+      ],
+      "stale_completed_window_hits": [],
+      "stale_completed_hit_count": 0,
+      "chunks_visible_while_not_completed": [
+        {
+          "t_ms": 586,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000233
+        },
+        {
+          "t_ms": 595,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000233
+        },
+        {
+          "t_ms": 604,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000233
+        },
+        {
+          "t_ms": 612,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000233
+        },
+        {
+          "t_ms": 620,
+          "parse_status": "processing",
+          "chunk_total": 42,
+          "first_seq_id": 100000233
+        },
+        {
+          "note": "... 104 total"
+        }
+      ]
+    }
+  }
+]

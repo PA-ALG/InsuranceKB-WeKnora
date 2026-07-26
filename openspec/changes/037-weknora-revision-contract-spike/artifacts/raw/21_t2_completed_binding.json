@@ -1,0 +1,110 @@
+{
+  "knowledge_completed_read": {
+    "id": "db15bea9-03a1-4e32-a9f8-27c7176e2933",
+    "tenant_id": 10002,
+    "knowledge_base_id": "b05667d7-1cf6-4d4d-a997-31ff43298259",
+    "tags": null,
+    "type": "file",
+    "title": "w0-spike-doc-0727010627.pdf",
+    "description": "",
+    "source": "",
+    "channel": "web",
+    "parse_status": "completed",
+    "pending_subtasks_count": 0,
+    "summary_status": "pending",
+    "enable_status": "enabled",
+    "embedding_model_id": "4d0a42b3-516e-437c-8afa-b3f5aabaf0f8",
+    "file_name": "w0-spike-doc-0727010627.pdf",
+    "file_type": "pdf",
+    "file_size": 20251,
+    "file_hash": "dccd482b0e50188efed3683f0c566f94",
+    "file_path": "local://10002/db15bea9-03a1-4e32-a9f8-27c7176e2933/1785085587488853666.pdf",
+    "storage_size": 0,
+    "metadata": {
+      "owner": "w0-spike-0727010627",
+      "sha256": "d70b91392fb0b302e7ad25be3f47894b8ec4b18d1a3ef353e102d12f094d60c7"
+    },
+    "last_faq_import_result": null,
+    "created_at": "2026-07-27T01:06:27.482278+08:00",
+    "updated_at": "2026-07-27T01:18:18.978709+08:00",
+    "processed_at": "2026-07-27T01:18:18.978709+08:00",
+    "error_message": "",
+    "deleted_at": null,
+    "knowledge_base_name": ""
+  },
+  "kb_config_snapshot": {
+    "asr_config": {
+      "enabled": false,
+      "language": "",
+      "model_id": ""
+    },
+    "capabilities": {
+      "faq": false,
+      "graph": false,
+      "keyword": true,
+      "vector": true,
+      "wiki": false
+    },
+    "chunk_count": 0,
+    "chunking_config": {
+      "chunk_overlap": 0,
+      "chunk_size": 0,
+      "separators": null
+    },
+    "created_at": "2026-07-27T01:06:27.425301+08:00",
+    "creator_id": "983e7a15-dc4b-42be-8964-0ec99910d376",
+    "deleted_at": null,
+    "description": "w0-spike-0727010627 scratch KB (OpenSpec 037), safe to delete",
+    "embedding_model_id": "4d0a42b3-516e-437c-8afa-b3f5aabaf0f8",
+    "extract_config": null,
+    "faq_config": null,
+    "id": "b05667d7-1cf6-4d4d-a997-31ff43298259",
+    "image_processing_config": {
+      "model_id": ""
+    },
+    "indexing_strategy": {
+      "graph_enabled": false,
+      "keyword_enabled": true,
+      "vector_enabled": true,
+      "wiki_enabled": false
+    },
+    "is_pinned": false,
+    "is_processing": false,
+    "is_temporary": false,
+    "knowledge_count": 1,
+    "name": "w0-spike-kb-0727010627",
+    "pinned_at": null,
+    "processing_count": 0,
+    "question_generation_config": null,
+    "share_count": 0,
+    "storage_config": {
+      "app_id": "",
+      "bucket_name": "",
+      "path_prefix": "",
+      "provider": "",
+      "region": "",
+      "secret_id": "<REDACTED>",
+      "secret_key": "<REDACTED>"
+    },
+    "storage_provider_config": {
+      "provider": "local"
+    },
+    "summary_model_id": "",
+    "tenant_id": 10002,
+    "type": "document",
+    "updated_at": "2026-07-27T01:06:27.425301+08:00",
+    "vector_store_name": "System default",
+    "vector_store_source": "env",
+    "vector_store_status": "available",
+    "vlm_config": {
+      "api_key": "<REDACTED>",
+      "base_url": "",
+      "enabled": false,
+      "interface_type": "",
+      "model_id": "",
+      "model_name": ""
+    },
+    "wiki_config": null
+  },
+  "note": "parser/chunker identity fields available only as mutable KB-level config; knowledge carries embedding_model_id + file_hash(md5) + client metadata, no parser/chunker version, no attempt"
+}
