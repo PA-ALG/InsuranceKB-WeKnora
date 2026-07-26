@@ -1,0 +1,32 @@
+{
+  "run_id": "0727010627",
+  "residual_knowledge_before_kb_delete": [],
+  "residual_knowledge_deletes": [],
+  "kb_delete_response": {
+    "status_code": 200,
+    "body": {
+      "message": "Knowledge base deleted successfully",
+      "success": true
+    }
+  },
+  "rw_key_id_delete_status": 200,
+  "ro_key_id_delete_status": 200,
+  "kb_names_after": [
+    "KB-WIKI",
+    "KB-RAW"
+  ],
+  "w0_spike_kb_residue": [],
+  "api_key_names_after": "<REDACTED>",
+  "w0_spike_key_residue": [],
+  "w0_spike_knowledge_residue": [],
+  "preexisting_kb_no_touch_diff": {
+    "682fbb8f-cad8-4976-b5fa-bd7051800b9b": {
+      "name": "KB-WIKI",
+      "knowledge_identical_to_baseline": true
+    },
+    "b850a2f8-2aa0-43cf-adf6-638c068af88f": {
+      "name": "KB-RAW",
+      "knowledge_identical_to_baseline": true
+    }
+  }
+}
