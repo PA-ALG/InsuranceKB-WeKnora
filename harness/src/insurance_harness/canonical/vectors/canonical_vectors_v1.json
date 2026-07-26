@@ -1,0 +1,326 @@
+{
+ "vector_schema": "canonical-vectors-v1",
+ "domain_separator": "insurancekb.canonical-envelope",
+ "hash_schema_version": "1",
+ "valid": [
+  {
+   "name": "empty_map",
+   "object_type": "test.object",
+   "canonical_utf8": "{}",
+   "sha256": "8b39e1fd7077d5d3d8be03dc563f848cae7a496bbb6da4ee4c7b9c67e97737a5"
+  },
+  {
+   "name": "empty_list",
+   "object_type": "test.object",
+   "canonical_utf8": "[]",
+   "sha256": "2891fa4527924347b4807076dde365dc7c0c4b2bd548da8f228e24db4c060b03"
+  },
+  {
+   "name": "empty_string",
+   "object_type": "test.object",
+   "canonical_utf8": "\"\"",
+   "sha256": "4c7091779ff36a3c311dbd036fe4833469daef91d1bd3fa42814afa795f8067e"
+  },
+  {
+   "name": "bool_true",
+   "object_type": "test.object",
+   "canonical_utf8": "true",
+   "sha256": "a3b2119da5dfd773d39a260fec1366bec04c10ff844da5dad4896fb7b479fcb3"
+  },
+  {
+   "name": "bool_false",
+   "object_type": "test.object",
+   "canonical_utf8": "false",
+   "sha256": "ae139bca29c8486f04aedd3bbe2903504a9ab837dafb3f802b15ae0b8d99232e"
+  },
+  {
+   "name": "int_zero",
+   "object_type": "test.object",
+   "canonical_utf8": "0",
+   "sha256": "d985dfbd0dac38bfeb7730af66234ff1a91839b9f3a92499e197e0ea1d90937f"
+  },
+  {
+   "name": "int_negative",
+   "object_type": "test.object",
+   "canonical_utf8": "-42",
+   "sha256": "1d8ee958a6f5673f59d7b1de239ce0b3b68bb84ea9b6de39c948644cdb3db449"
+  },
+  {
+   "name": "int_max_safe",
+   "object_type": "test.object",
+   "canonical_utf8": "9007199254740991",
+   "sha256": "92f55ea659418ebf5029f2d51543e62e90af4a50a889ee2feceb16f53c76eaf9"
+  },
+  {
+   "name": "int_min_safe",
+   "object_type": "test.object",
+   "canonical_utf8": "-9007199254740991",
+   "sha256": "3a8d21cd25f895ffc9c4b8864a1adbb4b3388e9d55fe9d7d77e8b5bbc95bceb8"
+  },
+  {
+   "name": "string_ascii",
+   "object_type": "test.object",
+   "canonical_utf8": "\"hello\"",
+   "sha256": "c3fe888a72e01b25ba197a72ac5df28fcf3076282f87846b15a8f2f850888431"
+  },
+  {
+   "name": "string_unicode_nfc",
+   "object_type": "test.object",
+   "canonical_utf8": "\"保险产品é\"",
+   "sha256": "6cfbfd04c649d393d5cd1aef919295779904733f198b4b4b2649208442894dd0"
+  },
+  {
+   "name": "string_with_lf",
+   "object_type": "test.object",
+   "canonical_utf8": "\"line1\\nline2\"",
+   "sha256": "ab8ef3acb5ee29b2fba9827c661b3bcfe694f104d9d04e8ef2ee72618d831f57"
+  },
+  {
+   "name": "string_with_tab",
+   "object_type": "test.object",
+   "canonical_utf8": "\"a\\tb\"",
+   "sha256": "61c82bee5c4e02bacb3572b937e18d2412ebe1774655cfde64395e3af636ccfa"
+  },
+  {
+   "name": "string_emoji",
+   "object_type": "test.object",
+   "canonical_utf8": "\"😀\"",
+   "sha256": "f2fb2f27b97e7ad2c1b8e247ace0b59b1a47ab27cb57c6ee7ad5e57afb4d9cdf"
+  },
+  {
+   "name": "map_key_order_utf16",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"😀\":1,\"！\":2}",
+   "sha256": "73875f42c2856ffdb659f4975ffd82efb587ba2af3e2847403d4cf48f8a0de3b"
+  },
+  {
+   "name": "map_nested",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"a\":{\"x\":\"v\",\"y\":[1,2]},\"b\":1}",
+   "sha256": "dadceca58af269909f3709b9f5f403ca08f72202e5b2133e21415ab144d4b09b"
+  },
+  {
+   "name": "list_order_preserved",
+   "object_type": "test.object",
+   "canonical_utf8": "[2,1,3]",
+   "sha256": "cd0a6d157e4edb60e6234018a62caab9140fbf88f01f4973cc413bbf1087adfc"
+  },
+  {
+   "name": "set_sorted",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$set\":[1,2,3]}",
+   "sha256": "15926288ed6397717450d7f5dd06447ba8a0f6c3bd025c313db9d0c3a7f6814a"
+  },
+  {
+   "name": "set_dedupe",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$set\":[1,2]}",
+   "sha256": "1925ec35b24d3bbff3d49e9813135cc2e56bf058369c829056df673bd48e0287"
+  },
+  {
+   "name": "set_mixed",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$set\":[\"a\",2]}",
+   "sha256": "b931a6ced5d6d014cb4be523f9c76a9cdf85358e8b176fa15be565f3204ea7ed"
+  },
+  {
+   "name": "decimal_integer",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$decimal\":\"1\"}",
+   "sha256": "3ed856f6b6a53cd656e95eea47054f351f5ba56b6acb2b4c6e7bd71ae3a8f79b"
+  },
+  {
+   "name": "decimal_fraction",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$decimal\":\"0.5\"}",
+   "sha256": "de515ceefbac6f04a6afb23a741ca3a0d4588282072fa4b7ac938a1040654a11"
+  },
+  {
+   "name": "decimal_negzero",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$decimal\":\"0\"}",
+   "sha256": "54bd1c7a2efb0a782dcb5cd04cb90c884b0e7b1c925892dee95643e13f0d1cdc"
+  },
+  {
+   "name": "decimal_exponent_input",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$decimal\":\"100\"}",
+   "sha256": "4189519e86dafaf06b642439726e12339f449634b53930bb020f7cb430219413"
+  },
+  {
+   "name": "decimal_large",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$decimal\":\"12345678901234567890.1\"}",
+   "sha256": "41c38a60f82a8e5affc83592b14c18aed5ea5c4dfad455efa9a0e1bea73ff68a"
+  },
+  {
+   "name": "date_simple",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$date\":\"2026-07-26\"}",
+   "sha256": "b8278a47b1acbc29b59ceebf4476d9d351d191a7e7ee3b7984e040190d753063"
+  },
+  {
+   "name": "datetime_utc",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$datetime\":\"2026-07-26T08:00:00Z\"}",
+   "sha256": "656848a6ab984e112e797c1d2022420976f02d8e0a73c4d4405bcfb32e4d8f26"
+  },
+  {
+   "name": "datetime_tz_normalized",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$datetime\":\"2026-07-26T12:00:00Z\"}",
+   "sha256": "ee4a23df011d48510afd067235adf795b92679ec27dbc317e33ac76a1cfa8e78"
+  },
+  {
+   "name": "datetime_micro_trimmed",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$datetime\":\"2026-07-26T12:00:00.12Z\"}",
+   "sha256": "871f85942d8f0b86e51fdea9cc750776aef75c8d47cb5d891c7d7af5d74350d9"
+  },
+  {
+   "name": "sentinel_null",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"null\"}",
+   "sha256": "285cda0d0e0b8febcac065431763e6a47b141878bf39136c753059bb1944f124"
+  },
+  {
+   "name": "sentinel_unknown",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"unknown\"}",
+   "sha256": "34b64663edad475d7e2133f0675ab4f2ea47561d8d538898632134f0488c61c8"
+  },
+  {
+   "name": "sentinel_any",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"any\"}",
+   "sha256": "1cfaa60b7fbe97f47564ea09ce2baa474440e7d6a88360404d8e30567ac67de7"
+  },
+  {
+   "name": "sentinel_neg_inf",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"-inf\"}",
+   "sha256": "08904af234559fcfab27d96a23e849941ac4cea9a0c955057daa67ea0ecec205"
+  },
+  {
+   "name": "sentinel_pos_inf",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"+inf\"}",
+   "sha256": "940be93b0f299db7a7e9aeb5fb8e0e3bd0742aebe60fd54a346ae28a69ebb1c2"
+  },
+  {
+   "name": "none_is_null_sentinel",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"$s\":\"null\"}",
+   "sha256": "285cda0d0e0b8febcac065431763e6a47b141878bf39136c753059bb1944f124"
+  },
+  {
+   "name": "composite_claim",
+   "object_type": "claim-revision",
+   "canonical_utf8": "{\"applicability\":{\"audience_segment_ids\":{\"$s\":\"any\"},\"jurisdiction_ids\":{\"$set\":[\"CN-110000\",\"CN-310000\"]}},\"effective_from\":{\"$date\":\"2026-01-01\"},\"predicate_id\":\"waiting_period_days\",\"value\":90}",
+   "sha256": "a06e93fd70962fa975776e7b80f53475da8f1febd8f1bacc1548b348b8057083"
+  },
+  {
+   "name": "money_as_schema_map",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"amount\":{\"$decimal\":\"199.9\"},\"currency\":\"CNY\"}",
+   "sha256": "ae04c39cab0adff515e6ea43ce3539273cdb1fccc9e75985155cc6fe0b77d2e7"
+  },
+  {
+   "name": "depth_100",
+   "object_type": "test.object",
+   "canonical_utf8": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "sha256": "f029cc152e39dbf9eb5b042cffafa7a0b3625e18a1046d2cf3e0d4dd02c75378"
+  },
+  {
+   "name": "domain_sep_type_a",
+   "object_type": "test.type-a",
+   "canonical_utf8": "42",
+   "sha256": "15a99043d38c6a53ccd7addf40d87077bcb92aa5498f775cfcece49eb383fbeb"
+  },
+  {
+   "name": "domain_sep_type_b",
+   "object_type": "test.type-b",
+   "canonical_utf8": "42",
+   "sha256": "d24cf8587a455f71f7b5b19a0fa7a5204154da06d20cd4b061ddcc3f3687941a"
+  }
+ ],
+ "invalid": [
+  {
+   "name": "float_rejected",
+   "reason": "float_forbidden"
+  },
+  {
+   "name": "float_nan",
+   "reason": "float_forbidden"
+  },
+  {
+   "name": "bytes_rejected",
+   "reason": "unsupported_type"
+  },
+  {
+   "name": "non_nfc_text",
+   "reason": "non_nfc_text"
+  },
+  {
+   "name": "non_nfc_key",
+   "reason": "non_nfc_text"
+  },
+  {
+   "name": "carriage_return_text",
+   "reason": "carriage_return_forbidden"
+  },
+  {
+   "name": "control_char_text",
+   "reason": "control_char_forbidden"
+  },
+  {
+   "name": "surrogate_text",
+   "reason": "surrogate_forbidden"
+  },
+  {
+   "name": "int_too_large",
+   "reason": "int_out_of_range"
+  },
+  {
+   "name": "int_too_small",
+   "reason": "int_out_of_range"
+  },
+  {
+   "name": "decimal_nan",
+   "reason": "decimal_not_finite"
+  },
+  {
+   "name": "decimal_infinity",
+   "reason": "decimal_not_finite"
+  },
+  {
+   "name": "naive_datetime",
+   "reason": "naive_datetime"
+  },
+  {
+   "name": "non_string_key",
+   "reason": "non_string_key"
+  },
+  {
+   "name": "reserved_key",
+   "reason": "reserved_key"
+  },
+  {
+   "name": "deep_nesting",
+   "reason": "max_depth_exceeded"
+  },
+  {
+   "name": "datetime_out_of_range",
+   "reason": "datetime_out_of_range"
+  },
+  {
+   "name": "decimal_out_of_range",
+   "reason": "decimal_out_of_range"
+  },
+  {
+   "name": "invalid_object_type",
+   "reason": "invalid_object_type",
+   "level": "hash"
+  }
+ ]
+}
