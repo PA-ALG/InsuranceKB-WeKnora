@@ -225,7 +225,7 @@ def _terms_in_order(text: str, *terms: str) -> bool:
 
 
 def test_rh6_1_claude_default_gate_selects_only_deterministic_lane() -> None:
-    section = _level_two_section((REPO_ROOT / "CLAUDE.md").read_text(), "门禁（交付定义）")
+    section = _level_two_section((REPO_ROOT / "CLAUDE.md").read_text(), "默认验证")
 
     assert _pytest_commands(section) == [
         ["uv", "run", "pytest", "-m", "not live and not integration_postgres", "-q"]
