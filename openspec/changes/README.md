@@ -45,7 +45,8 @@
 | 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
 | 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
 | 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
-| 038+ | （空闲） | | 先占号再开目录 |
+| 038 | w1-weknora-revision-manifest | 📋 规格起草（W0 触发的条件 W1） | Go patch，预算内;W0 证据见 037 |
+| 039+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
