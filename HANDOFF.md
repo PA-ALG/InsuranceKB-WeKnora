@@ -10,13 +10,21 @@
 > 与
 > [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
 > 为准。
-> 当前只完成治理合同改写；C0、W0、CAP0、Milestone A/B/C 及其全部功能、
-> migration、provider、live 和生产切换仍为 `planned / not implemented`。
-> 2026-07-26 已按批准的架构评估落地三项治理产物：
-> [24 · 存量资产处置清单](docs/insurance-kb/24-legacy-asset-disposition.md)
-> （旧代码/迁移/OpenSpec 的唯一处置权威，Pn Contract Card 必须引用）、
-> CAP0 对 P2a/P2b 的门禁语义澄清与重置后基线排期（见 23 号 §8/§9；
-> 排期已于 2026-07-26 经业务方确认为基线）。
+> **2026-07-27 状态快照（Milestone A 施工中）**：
+> ① 已合入 main：PR #35 治理收口（24 号处置清单/决策记录/基线排期）、
+> PR #36 **C0 CanonicalEnvelopeV1**（双独立评审闭合，向量 40+19）、
+> PR #37 RH6.1 lane 契约修复、PR #38 **P1 Job Store + Outbox 规格**
+> （评审 5 项 findings 闭合）。
+> ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
+> 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
+> （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注
+> Agent 子系统（G0a+）、G0-probe 探针；首发画像改 **human_batch-first**，
+> machine_auto 移 `P15[auto-profile]`；subject_ref 绑 **product_version**。
+> ③ **W0 已执行（OpenSpec 037）：两份合同均 `insufficient`，条件 W1 正式
+> 触发**（证据+W1 API 草案见 037 artifacts）；P4a/P4c 保持 blocked 至 W1。
+> ④ 在飞行：P1 实现（迁移占号 0015；0007–0011/0013/0014 作废）、CAP0
+> （OpenSpec 036）、G0-probe、Schema 切片草稿、W1 规格。
+> ⑤ 实时状态与决策唯一口径 = 23 号控制板 §1/§8。
 > 执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再按批准设计进入
 > Milestone A/B/C。PostgreSQL Active WikiRelease 是 serving authority；
 > WeKnora managed Wiki 是带 epoch fencing 的可重建投影；四种 ReviewPolicy
