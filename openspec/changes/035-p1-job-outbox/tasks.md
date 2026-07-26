@@ -94,43 +94,43 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。
 严格 TDD：每个任务先落 RED 再实现 GREEN；按 HANDOFF 0g.1，开工后 15 分钟
 内必须落下 T1 的首个 RED，30 分钟内有可核验产物。
 
-- [ ] T1 RED（≤15 分钟）：纯单元测试冻结状态机——8 状态封闭枚举、合法转换
+- [x] T1 RED（≤15 分钟）：纯单元测试冻结状态机——8 状态封闭枚举、合法转换
   表穷举、非法转换 typed `illegal_transition`、错误分类 → 目标状态映射。
   GREEN：`job_runtime` 状态机纯函数核。
-- [ ] T2 RED：PG schema 合同测试（`integration_postgres`）——两表列/NOT
+- [x] T2 RED：PG schema 合同测试（`integration_postgres`）——两表列/NOT
   NULL space_id/幂等键唯一约束/outbox 有序 id 与 event_id。GREEN：先在
   README 迁移台账占号，再写唯一迁移（down_revision=当时真实 head，起草时
   观测 0006）与 ORM models。
-- [ ] T3 RED：重复 enqueue 幂等去重（含并发）+ claim 并发单领（≥8 连接、
+- [x] T3 RED：重复 enqueue 幂等去重（含并发）+ claim 并发单领（≥8 连接、
   SKIP LOCKED、空队列 typed 空结果）。GREEN：JobStore.enqueue/claim。
-- [ ] T4 RED：per-Space/全局限额（两组配置值断言不同行为）+ 超限排队不
+- [x] T4 RED：per-Space/全局限额（两组配置值断言不同行为）+ 超限排队不
   丢失 + 跨 Space claim/read/写 fail closed。GREEN：claim 限额与 Space
   scope 校验。
-- [ ] T5 RED：heartbeat 延长/拒绝、数据库时钟过期回收（回收记
+- [x] T5 RED：heartbeat 延长/拒绝、数据库时钟过期回收（回收记
   `lease_expired` retryable 失败并按 `max_attempts` 路由，未达上限回
   queued）、generation 严格递增、旧 generation 全写路径
   `stale_generation` 拒绝。GREEN：heartbeat/回收路由/fenced write guard。
-- [ ] T6 RED：完成事务原子性——领域写 + outbox 同事务、注入中断零半写、
+- [x] T6 RED：完成事务原子性——领域写 + outbox 同事务、注入中断零半写、
   重复完成 typed 拒绝零第二结果。GREEN：complete/fail 转换 API（
   retry_wait/blocked/dead_letter/awaiting_human 四个落点）。
-- [ ] T7 RED：backoff 序列与 max_attempts 只由配置决定、达上限进
+- [x] T7 RED：backoff 序列与 max_attempts 只由配置决定、达上限进
   dead_letter 并保留 attempt/分类/摘要、未分类异常按 retryable 计入不
   静默。GREEN：重试策略。
-- [ ] T8 RED：awaiting_human 同事务释放 lease、并发额度立即归还、人工
+- [x] T8 RED：awaiting_human 同事务释放 lease、并发额度立即归还、人工
   Decision 幂等 requeue（重复提交 typed duplicate）。GREEN：Decision
   唤醒入口。
-- [ ] T9 RED：outbox dispatcher at-least-once——投递成功未标记即崩溃 →
+- [x] T9 RED：outbox dispatcher at-least-once——投递成功未标记即崩溃 →
   重投 → 消费端 event_id 幂等收敛；扫描基于持久 `dispatched_at`，无已提交
   行被跳过。GREEN：dispatcher。
-- [ ] T10 RED：崩溃接管端到端——强制断开 A 连接 → lease 过期 → B 以 g+1
+- [x] T10 RED：崩溃接管端到端——强制断开 A 连接 → lease 过期 → B 以 g+1
   接管完成 → A 苏醒提交被拒 → 领域结果/完成事件各一份；重复崩溃循环
   有界——毒性任务反复崩溃时 attempt 达上限的回收路由进 dead_letter，不
   无限 requeue。GREEN：残余缺口修补，不引入新状态或新分支。
-- [ ] T11 RED：指标查询（per-Space + 全局各状态计数、队列深度、覆盖
+- [x] T11 RED：指标查询（per-Space + 全局各状态计数、队列深度、覆盖
   retry_wait 的最老可调度年龄、attempt/retry_wait/dead_letter 计数、
   enqueued/started/finished 时间戳持久化）与预置分布精确一致。
   GREEN：只读 metrics 查询。
-- [ ] T12 收尾：focused → Ruff/mypy → `openspec validate 035-p1-job-outbox
+- [x] T12 收尾：focused → Ruff/mypy → `openspec validate 035-p1-job-outbox
   --strict` → PostgreSQL 16 lane 全量 `integration_postgres`（JUnit
   `skipped=0`）；validation report 如实记录已运行项与 NOT RUN；更新 README
   迁移台账实际链序与 HANDOFF 当前状态块。

@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 from insurance_harness.db import models  # noqa: F401  # 注册全部 ORM 表
 from insurance_harness.db.base import Base
 from insurance_harness.flywheel import tables as flywheel_tables  # noqa: F401
+from insurance_harness.jobs import tables as jobs_tables  # noqa: F401  # P1 两表（change 035）
 from insurance_harness.knowledge import tables  # noqa: F401  # 注册知识域表（change 007）
 
 config = context.config

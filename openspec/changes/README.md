@@ -16,7 +16,7 @@
 | 007 | claims-changeset-publish | ✅ 旧范围已交付 | 不含 NS-C/P-1 seal/active alias；生产发布继续 fail closed |
 | 008 | review-workbench | ✅ T1～T5/T7 已合入（PR #15）；W4/T6 follow-up 可认领 | 轨道 L2；018✅ 已解除整页/回滚前置；Owner 复审=A |
 | 009 | concept-layer | 📋 规格已收口，**待 010 T5～T12 合入后认领** | 轨道 L4 第二件；021✅仅解除 010 ordering 前置；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
-| 010 | structured-import | 🚧 T1～T4 已合入；MVP 实施双通道薄切 | `product_meta` 只进产品注册且零 Claim/Evidence；已登记 FAQ fact_assertions 才走 SourceRevision/Evidence/ChangeSet/Review；完整 T5～T12 保留 M2；迁移预分配 0007 |
+| 010 | structured-import | 🚧 T1～T4 已合入；MVP 实施双通道薄切 | `product_meta` 只进产品注册且零 Claim/Evidence；已登记 FAQ fact_assertions 才走 SourceRevision/Evidence/ChangeSet/Review；完整 T5～T12 保留 M2；迁移预分配 0007 已作废（编号永不复用） |
 | 011 | knowledge-health | 📋 PR #12 主规格 + PR #22 fast-follow 已收口，**011 本体可认领** | H1.3a 远端/输入/工具链独立证据轴、多信号并报、不可归因 degraded；H1.8 通过 020 registry 消费 024 attempt ledger，缺数据 degraded；迁移 0010；typed subject 接线 Owner-A |
 | 012 | qa-objects | 📋 规格已收口，**待 010 T5～T12 的 qa_staging/冻结合同合入后认领** | qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
 | 013 | insurance-mcp | 📋 MVP core 可认领 | 先交付产品对齐/事实/证据与 snapshot/hash envelope；完整 compare/history 矩阵留 M2 |
@@ -42,7 +42,7 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | 🚧 实施中（Wave 1，总控窗口） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
+| 035 | p1-job-outbox | 🚧 实现中（Wave 1，总控窗口） | 033 §16 P1；迁移 0015 从真实 head 0006 续接（旧预留编号一律不复用，22号 §4/24号 §3）；一 PR 一迁移 |
 | 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
 | 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
 | 038+ | （空闲） | | 先占号再开目录 |
@@ -57,15 +57,16 @@
 | 0004 | 017 source_evidence_lineage | ✅ |
 | 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
 | 0006 | 021 source-lifecycle-ordering | ✅ 已随 PR #23 合入；实际 down_revision=0012 |
-| 0007 | 010 structured-import（qa_staging 等） | 预分配 |
-| 0008 | 009 concept-layer | 预分配 |
-| 0009 | 012 qa-objects | 预分配 |
-| 0010 | 011 knowledge-health（completeness_snapshots + health_runs/health_findings） | 预分配 |
-| 0011 | 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表，append-only+触发器） | 预分配 |
+| 0007 | 原 010 structured-import（qa_staging 等）预分配 | 已作废（对应 change 已撤号，编号永不复用） |
+| 0008 | 原 009 concept-layer 预分配 | 已作废（对应 change 已撤号，编号永不复用） |
+| 0009 | 原 012 qa-objects 预分配 | 已作废（对应 change 已撤号，编号永不复用） |
+| 0010 | 原 011 knowledge-health（completeness_snapshots + health_runs/health_findings）预分配 | 已作废（对应 change 已撤号，编号永不复用） |
+| 0011 | 原 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表）预分配 | 已作废（对应 change 已撤号，编号永不复用） |
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
-| 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0015+ | （空闲；014 如需建表先来占号） | |
+| 0013 | 旧 029 计划 | superseded / not reusable，继续作废（编号永不复用）；D0 不预占替代 migration |
+| 0014 | 旧 028 runtime 计划 | superseded / not reusable，继续作废（superseded 028b 计划，编号永不复用）；D0 不预占替代 migration |
+| 0015 | 035 p1-job-outbox（wiki_jobs + wiki_outbox_events） | 🚧 实施中；down_revision=0006（合入时真实 head），实际链 `0012 → 0006 → 0015` |
+| 0016+ | （空闲；014 如需建表先来占号） | |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
 
