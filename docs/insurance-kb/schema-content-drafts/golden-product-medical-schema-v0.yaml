@@ -1,0 +1,1202 @@
+# =====================================================================
+# Golden Product 医疗险字段语义合同 —— 内容草案（DRAFT，非权威）
+# 供保险领域专家评审；冻结后才进入 P5a1 SchemaVersion registry 内容（G0a）
+# =====================================================================
+status: DRAFT
+authority: none  # 未经专家评审冻结前不得作为 SchemaVersion 内容、抽取模板或发布依据
+draft_id: golden-product-medical-schema-v0
+draft_date: '2026-07-27'
+decision_anchor: 'D2=B + D11=A（2026-07-27 裁决）：仅做内容起草供专家评审；不写代码、不做迁移'
+golden_product:
+  name: 平安e生保（尊享版）医疗保险
+  reference: '033 §14.1 G0 Golden Product'
+  dataset_dir: dataset/shouxian_product/平安e生保（尊享版）医疗保险/
+  dataset_files: [保险条款.pdf, 产品说明书.pdf, 费率表.pdf, product_meta.json]
+  product_meta_snapshot:
+    planCode: '596'
+    versionNo: '596-1'
+    planPlanType: 普通型
+    planSalesStatus: 在售
+    planSalesChannel: '个人代理、电话销售'
+    startDate: '2025-09-08'
+    reportPreparedFileCode: '平保寿发〔2025〕404号'
+    sccode: '平安人寿〔2025〕医疗保险172号'
+baseline_inputs:
+  - docs/insurance-kb/schema-baseline/base.yaml            # 基础字段 35（全险种通用，医疗产品同样适用）
+  - docs/insurance-kb/schema-baseline/medical.yaml         # 医疗险 24
+  - docs/insurance-kb/schema-baseline/extensions-v1.1.yaml # 适用扩展 12 = 基础扩展 9 + 医疗险扩展 3
+conventions:
+  value_type_vocab: [bool, int, decimal, money, percentage, duration, date, enum, entity_ref, text_short, text_long]
+  unit_vocab: '天 / 年 / 元 / percent / 件'
+  comparator_rule: 'bool、单值enum、代码类text_short→exact_scalar；int/decimal/money/percentage/duration→numeric_tolerance_zero；date→date；区间值→interval；多值集合→enum_set；实体引用→entity_ref；text_long 及语义未闭合字段→text_keypoints_unknown（运行时 comparator 恒返回 unknown→进入人工复核；033 §8.2 comparator 三态 equal/different/unknown）'
+  three_state: '所有字段一律三态 present/absent_explicitly/unknown（03 §2.3.1）；unknown≠absent_explicitly；absent_explicitly 必须自带证据；免责/豁免类字段的 absent_explicitly 语义在 absent_explicitly_note 单独说明'
+  provenance_mapping: '取值来源列机械映射草案：产品条款/产品说明书/保险责任/免责条款→source_evidence；人工填充/人工填写→human_attestation；根据…计算/映射/推断/判断、LLM生成→derived；官网同步/口袋E/产品芯/核保系统/运营清单→external_sync；空白→undefined。该映射是机械草案，每个 undefined 行都需要业务答复'
+  mvp_publishable_rule: '仅 provenance_class=source_evidence 为 true。依据 033 §10.5（派生结论本轮不升级为可查询事实）与 §8.1（可发布事实只允许 source_evidence/human_attestation/external_attestation 三种封闭 kind——而基线的人工填充列尚不是带 receipt 的 HumanAttestation，系统同步列尚不是受控 connector 的 ExternalAttestation）'
+  risk_rule: '高风险族草案=豁免/等待期/除外(免责)/理赔限制(含免赔、社保限制、医院范围、补偿原则、续保保证、既往症)/给付比例(含给付限额、责任存在性)。族边界为起草判断，须专家逐字段确认；extensions-v1.1 已带明示 risk_level 的字段按原值保留'
+  required_qualifier_semantics: 'required=true 为草案标记；一旦冻结，required qualifier 缺失时该 assertion 记 applicability_unknown，阻断自动 merge 与 machine_auto（033 §8.2）。standard_dims 指 jurisdiction/audience/channel 三个标准维度；qualifier 值只允许 exact scalar、排序去重 enum/entity 集或闭合 numeric/date 区间'
+  enum_status_vocab: 'closed_draft_from_baseline=取值列给出的闭集草案；open_draft=取值列仅为示例或含推断补值(非闭集)；undefined=需受控目录，尚无草案值'
+fields:
+  # ================= 基础字段（base.yaml，35） =================
+  - field_id: product_code
+    display_name: 险种代码
+    baseline_file: base.yaml
+    baseline_value_source: 官网同步
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: external_sync
+    mvp_publishable: false
+    extraction_notes: '官网/销售系统产品编码，文档内不必然出现；数据集 product_meta.json(planCode=596) 可作对账参考'
+    expert_questions:
+      - 'external_sync 类字段（官网/口袋E/产品芯/核保系统）在 Golden 数据集中没有任何导出物：G0a 对这类字段是引入受控 connector+ExternalAttestation，还是显式标注不可评估？（本问题适用于全部 7 个 external_sync 字段）'
+      - '险种代码与产品主数据 product_code（ProductRegistry 铸造身份）重复：应作为主数据属性还是 Claim？'
+  - field_id: product_short_name
+    display_name: 险种简称
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '通常为运营命名口径；文档封面不必然含简称'
+    expert_questions:
+      - '取值来源空白：简称由运营系统给出还是可锚定官网/说明书？需业务答复'
+  - field_id: product_name
+    display_name: 险种名称
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '条款/说明书封面标题即全称，可回验'
+    expert_questions:
+      - '取值来源空白，但条款封面必有全称：确认改锚产品条款(source_evidence)并留痕'
+      - '与 ProductRegistry canonical_name 关系：产品身份由主数据铸造（033 §8.2），该字段值不得另立身份，只作展示/对账？'
+  - field_id: sales_start_date
+    display_name: 开始使用时间
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: date
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: date
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '销售口径日期，通常来自销售系统；注意与条款生效日期(clause_effective_date)不是一回事（v1.1 B-2 明示区分）'
+    expert_questions:
+      - '取值来源空白（推测口袋E/运营系统）：需业务答复'
+  - field_id: sales_end_date
+    display_name: 结束使用时间
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: date
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: date
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '销售口径日期，通常来自销售系统；在售产品预期 unknown 或开放'
+    expert_questions:
+      - '取值来源空白：需业务答复；在售产品该字段的三态口径（unknown vs 开放区间）需冻结'
+  - field_id: product_line
+    display_name: 产品类别
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [医疗险, 重疾险, 定期寿险, 终身寿险, 年金险, 两全保险, 意外险, 意外医疗险, 护理保险, 失能收入损失保险, 补充养老保险]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '草案枚举自基线 13 个险种 sheet 推断（非取值列）；条款名称与备案分类可回验'
+    expert_questions:
+      - '险种分类闭集与命名需确认（该枚举为起草推断，非基线取值列内容）；与 schema 险种路由的一致性'
+  - field_id: product_design_type
+    display_name: 产品类型
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [普通型, 分红型, 万能型, 投资连结型]
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '草案枚举为行业通识推断；product_meta.json 观察值为 普通型；分红型会联动 v1.1 分红扩展字段'
+    expert_questions:
+      - '取值来源空白；设计类型闭集需确认（万能/投连是否在本库范围内）'
+  - field_id: sales_channels
+    display_name: 销售渠道
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [个人代理, 电话销售, 银行保险, 互联网, 团险渠道]
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '草案枚举含 product_meta 观察值（个人代理、电话销售）+行业通识补值；通常为运营口径'
+    expert_questions:
+      - '销售渠道与 AssertionApplicabilityV1 的 channel_ids 标准维度以及 ProductVersion.channels 外层包络重叠：应作为产品版本包络属性而非独立 Claim？（033 §8.2）'
+  - field_id: published_external
+    display_name: 发布外网
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: bool
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '运营发布标记，文档内无'
+    expert_questions:
+      - '取值来源空白：需业务答复；是否属于产品知识库范畴（偏运营配置）'
+  - field_id: sales_status
+    display_name: 销售状态
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [在售, 停售]
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '草案枚举含 product_meta 观察值（在售）；停售会联动高风险字段 停售后续保安排'
+    expert_questions:
+      - '闭集确认（是否有 待售/暂停/归档 等状态）；与产品主数据 status 字段的权威关系'
+  - field_id: primary_or_rider
+    display_name: 主附加险
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [主险, 附加险]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '条款名称含"附加"可判断，但那是 derived 规则；取值来源列本身空白'
+    expert_questions:
+      - '锚定方式裁决：按条款名称判断（derived）还是按条款投保范围表述抽取（source_evidence）？'
+  - field_id: product_summary
+    display_name: 产品简介
+    baseline_file: base.yaml
+    baseline_value_source: Kimichat生成
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: derived
+    provenance_note: 'LLM 生成物：非文档证据、非人工背书、非外部系统记录，机械归入 derived'
+    mvp_publishable: false
+    extraction_notes: '生成式摘要；033 §10.5 规定自由摘要只能作为带引用的页面表现，不产生独立事实'
+    expert_questions:
+      - '确认降级：产品简介不作为 Claim，只作为页面渲染产物（带引用）；若保留为字段则需重新定义来源'
+  - field_id: product_highlights
+    display_name: 产品特色
+    baseline_file: base.yaml
+    baseline_value_source: 产品说明书
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '说明书亮点区；authority level 2（03 §6.1），亮点表述不得覆盖条款口径'
+    expert_questions:
+      - '亮点式表述与条款口径冲突时的裁决展示（正式口径与辅助解释分离）需要冻结规则'
+  - field_id: target_customer_group
+    display_name: 适用人群
+    baseline_file: base.yaml
+    baseline_value_source: 人工填写
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '人工归纳（基线说明：与客户收入相关）；无受控目录前无法机器比较'
+    expert_questions:
+      - '基线说明"和收入保留一个"：与 产品档次 二选一还是并存？需业务裁决'
+  - field_id: policyholder_rights
+    display_name: 保单权益
+    baseline_file: base.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款中合同解除/宽限/复效/转换等权益条目的汇编性字段'
+    expert_questions:
+      - '长文本汇编与结构化字段（犹豫期/宽限期/复效等）重叠：保留为页面知识还是拆解为结构化字段的聚合视图？'
+  - field_id: eligible_services
+    display_name: 可享服务
+    baseline_file: base.yaml
+    baseline_value_source: 三大服务对应的产品清单
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [臻享RUN健康管理服务, 居家养老, 高端康养]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: external_sync
+    provenance_note: '运营侧服务-产品对应清单，机械归入 external_sync'
+    mvp_publishable: false
+    extraction_notes: '按运营清单同步；说明书可能提及但清单是权威'
+    expert_questions:
+      - '清单来源系统与更新机制确认；与医疗险字段 增值服务(value_added_services) 的边界划分'
+  - field_id: premium_payment_term
+    display_name: 交费期限
+    baseline_file: base.yaml
+    baseline_value_source: 口袋E
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [10年交, 15年交, 20年交, 30年交]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: external_sync
+    mvp_publishable: false
+    extraction_notes: '示例值源自基线取值列（寿险导向）；医疗险典型口径（如1年交/趸交）不在示例中，闭集必须重定义；说明书/费率表含可回验信息'
+    expert_questions:
+      - '闭集重定义（医疗险口径）；可从说明书/费率表抽取时是否改锚 source_evidence？'
+  - field_id: premium_payment_mode
+    display_name: 交费方式
+    baseline_file: base.yaml
+    baseline_value_source: '口袋E，产品说明书包含部分内容'
+    value_type: enum
+    multi_valued: true
+    enum_status: closed_draft_from_baseline
+    enum_values: [趸交, 年交, 半年交, 季交, 月交]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: external_sync
+    provenance_note: '混合来源：主来源口袋E→external_sync；说明书部分可回验'
+    mvp_publishable: false
+    extraction_notes: '说明书投保须知/费率表表头常含交费方式'
+    expert_questions:
+      - '混合来源拆分：说明书可抽取子集是否改锚 source_evidence 使该字段部分可发布？'
+  - field_id: hesitation_period
+    display_name: 犹豫期
+    baseline_file: base.yaml
+    baseline_value_source: 产品条款
+    value_type: duration
+    unit: 天
+    three_state_policy: tri_state
+    absent_explicitly_note: '一年期医疗险条款可能不设犹豫期；absent_explicitly 须以条款明确不设或合同解除条无犹豫期约定的证据支持，不得由未抽到推定'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款犹豫期/合同解除条；与长文本字段 犹豫期及合同解除（退保） 重叠'
+    expert_questions:
+      - '犹豫期是否并入高风险族（消费者权益敏感、监管强关注）？当前草案为 medium'
+  - field_id: waiting_period
+    display_name: 等待期
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: duration
+    unit: 天
+    three_state_policy: tri_state
+    absent_explicitly_note: '等待期0天或续保无等待期是 present（值0/续保限定），不是 absent_explicitly；只有条款明确不设等待期才可标 absent_explicitly'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 等待期族
+    required_qualifiers:
+      - {qualifier: benefit_or_disease_type, kind: field_qualifier, required: true, note: '等待期常按责任/疾病类型不同（意外伤害医疗通常不受等待期限制）'}
+      - {qualifier: renewal_status, kind: field_qualifier, required: true, note: '首年投保 vs 连续续保的等待期口径不同'}
+    comparator_class: numeric_tolerance_zero
+    provenance_class: undefined
+    provenance_note: '基线取值来源列为空→机械映射 undefined；高风险核心字段因此暂不可发布'
+    mvp_publishable: false
+    extraction_notes: '条款等待期条，医疗险多位于保险责任的前置条件段'
+    expert_questions:
+      - '取值来源空白：确认改锚产品条款(source_evidence)并留痕——否则该高风险字段无法进入 MVP 发布与 G0a 全字段标注'
+  - field_id: grace_period
+    display_name: 宽限期
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: duration
+    unit: 天
+    three_state_policy: tri_state
+    absent_explicitly_note: '趸交/一年期形态下宽限期可能不适用；absent_explicitly 需条款证据'
+    risk_level: medium
+    required_qualifiers:
+      - {qualifier: payment_mode, kind: field_qualifier, required: false, note: '期交才有宽限期语义'}
+    comparator_class: numeric_tolerance_zero
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '条款保险费支付/宽限期条'
+    expert_questions:
+      - '三态无 N/A 表示：一年期医疗产品不适用的字段用 absent_explicitly 还是从该险种 schema slice 排除？需统一裁决（同题涉及 复效/减额缴清/费率可调）'
+      - '取值来源空白：确认改锚产品条款'
+  - field_id: covered_risks
+    display_name: 可覆盖风险
+    baseline_file: base.yaml
+    baseline_value_source: '保障内容来做映射？'
+    value_type: enum
+    multi_valued: true
+    enum_status: undefined
+    enum_values: []
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: derived
+    provenance_note: '基线取值来源自带问号（保障内容来做映射？）→按映射规则归 derived'
+    mvp_publishable: false
+    extraction_notes: '需先定义 保险金→风险 映射规则与风险目录（基线说明原文）'
+    expert_questions:
+      - '风险目录（受控枚举）由谁定义？映射规则确认前该字段无法进入任何评估'
+  - field_id: product_bundling_rules
+    display_name: 产品搭配规则
+    baseline_file: base.yaml
+    baseline_value_source: '来自口袋E？'
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: external_sync
+    provenance_note: '基线来源自带问号→暂归 external_sync，待业务确认'
+    mvp_publishable: false
+    extraction_notes: '基线说明：主要针对聚财宝或固定产品组合；医疗单品可能为空'
+    expert_questions:
+      - '来源确认（基线自带问号）；本产品适用性确认'
+  - field_id: coverage_period
+    display_name: 保障期间
+    baseline_file: base.yaml
+    baseline_value_source: 产品说明书
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '说明书/条款保险期间条；医疗险常为1年期表述'
+    expert_questions:
+      - 'canonical 表示需冻结：年数 / 至某年龄 / 终身 的 tagged 表示，否则 exact_scalar 比较不成立'
+      - '说明书与条款保险期间表述不一致时的权威序适用（条款 level1 > 说明书 level2）确认'
+  - field_id: coverage_period_class
+    display_name: 保障期间分类
+    baseline_file: base.yaml
+    baseline_value_source: 根据保障期间计算
+    value_type: enum
+    enum_status: closed_draft_from_baseline
+    enum_values: [短期, 长期, 终身]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: derived
+    mvp_publishable: false
+    extraction_notes: '由 保障期间 计算的派生分类'
+    expert_questions:
+      - '033 §10.5 派生边界：保留为检索/页面标签而非可查询事实？'
+  - field_id: entry_age_range
+    display_name: 投保年龄
+    baseline_file: base.yaml
+    baseline_value_source: 产品说明书
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers:
+      - {qualifier: channel, kind: standard_dim, required: false, note: '渠道可致可保年龄差异'}
+      - {qualifier: plan_tier, kind: field_qualifier, required: false, note: '计划/档次差异（如有）'}
+    comparator_class: interval
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '说明书投保须知/条款投保范围条；值为闭区间（如 出生满28天-70周岁）'
+    expert_questions:
+      - '年龄区间 canonical 表示需冻结：单位（天/周岁）混用、端点含义（满/不满）——interval comparator 依赖'
+  - field_id: fees
+    display_name: 费用
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: undefined
+    provenance_note: '基线说明本身在问"指的是什么费用"——语义未定'
+    mvp_publishable: false
+    extraction_notes: '语义未定；候选锚点是数据集中的费率表.pdf（按年龄/计划的保费），当前基线没有任何字段锚定费率表'
+    expert_questions:
+      - '字段语义裁决：是否重定义为费率表字段（如 标准保费(按年龄段/计划) qualifier 化），使费率表.pdf 有明确 schema 落点？'
+  - field_id: product_tier
+    display_name: 产品档次
+    baseline_file: base.yaml
+    baseline_value_source: 根据适用人群收入计算
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: derived
+    mvp_publishable: false
+    extraction_notes: '由适用人群收入计算的派生分档'
+    expert_questions:
+      - '基线说明"和收入保留一个"：与 适用人群 合并裁决'
+  - field_id: policy_count
+    display_name: 保单件数
+    baseline_file: base.yaml
+    baseline_value_source: 产品芯平台同步
+    value_type: int
+    unit: 件
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: external_sync
+    mvp_publishable: false
+    extraction_notes: '运营指标，产品芯平台同步'
+    expert_questions:
+      - '运营指标四件套（保单件数/退保率/理赔件数/理赔金额）是否属于产品知识库范畴，还是运营看板？需业务裁决（影响 4 个字段去留）'
+  - field_id: surrender_rate
+    display_name: 退保率
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: percentage
+    unit: percent
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '运营指标；来源空白'
+    expert_questions:
+      - '取值来源空白：需业务答复（参见 policy_count 的范畴问题）'
+  - field_id: claim_count
+    display_name: 理赔件数
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: int
+    unit: 件
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '运营指标；来源空白'
+    expert_questions:
+      - '取值来源空白：需业务答复（参见 policy_count 的范畴问题）'
+  - field_id: claim_paid_amount
+    display_name: 理赔金额
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: money
+    unit: 元
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '运营指标；来源空白'
+    expert_questions:
+      - '取值来源空白：需业务答复（参见 policy_count 的范畴问题）'
+  - field_id: insurance_period_and_renewal
+    display_name: 保险期间和续保
+    baseline_file: base.yaml
+    baseline_value_source: '产品说明书重要字段，文本较长'
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: '续保保证属理赔限制族（草案判断，待专家确认）'
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '说明书保险期间和续保节，长文本'
+    expert_questions:
+      - '与结构化字段 guaranteed_renewal / guaranteed_renewal_period / discontinuation_renewal 重叠：长文本保留为页面知识还是仅作三个结构化字段的证据来源？'
+  - field_id: hesitation_and_surrender_terms
+    display_name: 犹豫期及合同解除（退保）
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '条款犹豫期/合同解除条与说明书对应节；来源空白'
+    expert_questions:
+      - '取值来源空白（几乎必然是条款/说明书）：确认改锚 source_evidence；与 hesitation_period 数值字段的重叠处理'
+  - field_id: eligibility_scope
+    display_name: 投保范围
+    baseline_file: base.yaml
+    baseline_value_source: ''
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: undefined
+    mvp_publishable: false
+    extraction_notes: '条款投保范围/投保条件条几乎必有；来源空白'
+    expert_questions:
+      - '取值来源空白：确认改锚产品条款；与 投保年龄/投保职业/不限社保 等结构化字段的重叠处理'
+  # ================= 医疗险字段（medical.yaml，24） =================
+  - field_id: zero_deductible
+    display_name: 0免赔
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: bool
+    three_state_policy: tri_state
+    absent_explicitly_note: 'true=免赔额为0；该字段本质是 deductible==0 的派生标记，absent_explicitly 场景基本不存在'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 免赔/理赔限制族
+    required_qualifiers:
+      - {qualifier: benefit_type, kind: field_qualifier, required: false, note: '各责任免赔额可不同，单一bool难以表达'}
+    comparator_class: exact_scalar
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '人工判断；可由 免赔额 数值机械派生'
+    expert_questions:
+      - '与 deductible 冗余：改为 derived（由免赔额==0 计算）或删除？（v1.1 纪律：降级/移除需留痕）'
+  - field_id: cancer_medical_benefit
+    display_name: 癌症医疗
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款
+    value_type: text_short
+    three_state_policy: tri_state
+    absent_explicitly_note: '基线说明：如无则非癌症医疗——条款责任结构中无癌症相关保险金时标 absent_explicitly，须以责任清单证据支持'
+    risk_level: high
+    high_risk: true
+    risk_rationale: '责任存在性（草案并入给付族，待专家确认族边界）'
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款保险责任节中恶性肿瘤/原位癌相关保险金责任标题（基线示例：恶性肿瘤或原位癌确诊费用保险金）'
+    expert_questions:
+      - '值域裁决：自由责任名称(text_short) 还是 entity_ref 进受控责任目录（033 §8.2 封闭 catalog）？后者需先建目录'
+  - field_id: coverage_summary
+    display_name: 保什么
+    baseline_file: medical.yaml
+    baseline_value_source: 保险责任
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: '责任总览（草案并入给付族，待专家确认）'
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任整节的概览性字段'
+    expert_questions:
+      - '与各结构化责任字段重叠：作为页面聚合视图（不独立成 Claim）还是保留字段？'
+  - field_id: covered_age_groups
+    display_name: 保障人群
+    baseline_file: medical.yaml
+    baseline_value_source: 根据投保年龄映射
+    value_type: enum
+    multi_valued: true
+    enum_status: closed_draft_from_baseline
+    enum_values: ['儿童（0-17岁）', '成人（18-60岁）', '老人（60岁以上）']
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: derived
+    mvp_publishable: false
+    extraction_notes: '由 投保年龄 区间映射；基线说明给出三段划分'
+    expert_questions:
+      - '033 §10.5 派生边界：保留为检索标签（页面/过滤）而非可查询事实？边界年龄归属（60岁属成人还是老人）需澄清'
+  - field_id: guaranteed_renewal
+    display_name: 保证续保
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [保证续保, 非保证续保]
+    three_state_policy: tri_state
+    absent_explicitly_note: '注意语义陷阱：条款明确"不保证续保"是 present（值=非保证续保），不是 absent_explicitly；absent_explicitly 仅当条款完全无续保安排表述'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 续保保证/理赔限制族
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款续保条措辞；基线取值列只有"保证续保"，补值"非保证续保"为起草推断'
+    expert_questions:
+      - '三态与负值语义必须冻结：非保证续保=present负值 vs absent——否则三态混淆律(unknown≠absent)无法执行；枚举是否需要第三态（如停售仍可续保至某期限）'
+  - field_id: guaranteed_renewal_period
+    display_name: 保证续保期
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款
+    value_type: duration
+    unit: 年
+    three_state_policy: tri_state
+    absent_explicitly_note: '非保证续保产品该字段 absent_explicitly（需条款续保条证据），不得默认填0'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 续保保证/理赔限制族
+    required_qualifiers: []
+    comparator_class: numeric_tolerance_zero
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款续保条；长期医疗险产品名常含保证续保年限，需与条款一致性核对'
+    expert_questions:
+      - '产品名与条款口径不一致时的处理规则（条款权威）需冻结'
+  - field_id: social_security_unrestricted
+    display_name: 不限社保
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: bool
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 投保范围/理赔限制族（社保身份影响可保性与报销口径）
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '基线说明：部分医疗险保险对象中有关于社保的规定——条款投保范围/费率表常按社保身份分档'
+    expert_questions:
+      - '高风险字段卡在人工填充：条款投保范围与费率表社保分档可回验，确认改锚 source_evidence；字段语义澄清（不限社保指可保无社保人群，还是报销不区分社保身份）'
+  - field_id: high_risk_occupation_insurable
+    display_name: 高危职业
+    baseline_file: medical.yaml
+    baseline_value_source: 根据投保职业推断
+    value_type: bool
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: derived
+    mvp_publishable: false
+    extraction_notes: '由投保职业类别推断'
+    expert_questions:
+      - '字段语义确认：高危职业可保(true) 还是 拒保高危职业(true)？推断规则（几类以上算高危）需业务定义'
+  - field_id: insurable_occupation_classes
+    display_name: 投保职业
+    baseline_file: medical.yaml
+    baseline_value_source: 产品核保数据
+    value_type: enum
+    multi_valued: true
+    enum_status: undefined
+    enum_values: []
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: external_sync
+    provenance_note: '核保系统数据→机械归入 external_sync，待业务确认'
+    mvp_publishable: false
+    extraction_notes: '核保系统职业表；行业惯例按职业类别（如1-6类）划分，目录未定义'
+    expert_questions:
+      - '职业类别受控目录（1-6类口径）需定义；条款/投保须知含职业约定时是否改锚 source_evidence'
+  - field_id: coverage_scale_type
+    display_name: 额度类型
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: enum
+    enum_status: closed_draft_from_baseline
+    enum_values: [小额医疗, 百万医疗]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '人工分类标签；与给付限额量级相关'
+    expert_questions:
+      - '闭集是否需扩（中端/高端医疗等）；可否由 benefit_limit 阈值规则派生（则转 derived）？'
+  - field_id: deductible
+    display_name: 免赔额
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款
+    value_type: money
+    unit: 元
+    three_state_policy: tri_state
+    absent_explicitly_note: '免赔额为0是 present（值0），不是 absent_explicitly；absent_explicitly 仅当条款明确无免赔额机制（罕见）'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 免赔/理赔限制族
+    required_qualifiers:
+      - {qualifier: benefit_type, kind: field_qualifier, required: true, note: '按责任不同（一般医疗 vs 恶性肿瘤等）免赔额常不同'}
+      - {qualifier: deductible_basis, kind: field_qualifier, required: true, note: '年度免赔 vs 保证续保期内共享免赔的口径'}
+      - {qualifier: plan_tier, kind: field_qualifier, required: false, note: '计划/档次（如有）'}
+    comparator_class: numeric_tolerance_zero
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款保险责任/释义免赔额定义；说明书利益演示表'
+    expert_questions:
+      - 'deductible_basis qualifier 闭集需冻结（年度/保证续保期共享/家庭共享等行业形态）'
+  - field_id: outpatient_inpatient_scope
+    display_name: 报销门诊住院范围
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款
+    value_type: enum
+    enum_status: closed_draft_from_baseline
+    enum_values: [仅门诊, 仅住院, 门诊+住院]
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 责任范围/理赔限制族
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任节责任构成（住院/门诊责任划分）'
+    expert_questions:
+      - '三值闭集是否足够：住院型产品普遍含限定门诊责任（特殊门诊/门诊手术/住院前后门急诊）——归类规则需冻结，否则同一产品可两读'
+  - field_id: value_added_services
+    display_name: 增值服务
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [就医绿通, 费用垫付, 预赔, 闪赔, 线上理赔]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers:
+      - {qualifier: plan_tier, kind: field_qualifier, required: false, note: '服务可按计划/渠道差异提供'}
+    comparator_class: enum_set
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '说明书健康服务/增值服务节常可回验；基线术语目录另含 优惠体检/在线问诊/药品补贴'
+    expert_questions:
+      - '说明书可回验子集是否改锚 source_evidence；服务受控目录与 glossary 概念对齐（枚举开放）'
+  - field_id: underwriting_mode
+    display_name: 核保方式
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: enum
+    enum_status: closed_draft_from_baseline
+    enum_values: [智能核保, 人工核保, 智能+人工核保]
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '运营/人工口径，条款不含'
+    expert_questions: []
+  - field_id: allowance_benefits
+    display_name: 津贴
+    baseline_file: medical.yaml
+    baseline_value_source: 保险责任
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [住院津贴, 恶性肿瘤津贴]
+    three_state_policy: tri_state
+    absent_explicitly_note: '无津贴类责任→absent_explicitly，须以责任清单证据支持'
+    risk_level: high
+    high_risk: true
+    risk_rationale: '给付责任存在性（草案并入给付族，待专家确认）'
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任附加给付项；基线说明：大多在附录里——附表/附录定位'
+    expert_questions:
+      - '津贴目录开放（基线取值列以……结尾）：进受控责任目录？津贴日额/给付天数上限是否拆为 qualifier 化子字段？'
+  - field_id: benefit_limit
+    display_name: 给付限额
+    baseline_file: medical.yaml
+    baseline_value_source: '保险责任，一般在附表中'
+    value_type: money
+    unit: 元
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 保额给付比例族
+    required_qualifiers:
+      - {qualifier: benefit_type, kind: field_qualifier, required: true, note: '按责任（基线示例：一般医疗保险金200万、恶性肿瘤医疗保险金200万）'}
+      - {qualifier: limit_basis, kind: field_qualifier, required: true, note: '年度限额 vs 保证续保期内总限额'}
+      - {qualifier: plan_tier, kind: field_qualifier, required: false, note: '计划/档次'}
+      - {qualifier: age_band, kind: field_qualifier, required: false, note: '如责任表按年龄分档'}
+    comparator_class: numeric_tolerance_zero
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任附表（保险金额表）；金额常以万元书写'
+    extraction_unit_note: 'canonical 单位冻结为元；万元表述需规范化'
+    expert_questions:
+      - 'limit_basis qualifier 闭集冻结；万元→元规范化规则冻结（canonicalizer 依赖）'
+  - field_id: reimbursement_scope
+    display_name: 报销范围
+    baseline_file: medical.yaml
+    baseline_value_source: 保险责任
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 理赔限制族
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任节费用范围描述（社保内外、费用项目类别）'
+    expert_questions:
+      - '结构化拆解可行性：社保目录内/外、费用项目（床位/手术/药品/检查等）枚举化——与 reimbursement_ratio 的 qualifier 联动'
+  - field_id: reimbursement_ratio
+    display_name: 报销比例
+    baseline_file: medical.yaml
+    baseline_value_source: 保险责任
+    value_type: percentage
+    unit: percent
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 给付比例族
+    required_qualifiers:
+      - {qualifier: social_security_status, kind: field_qualifier, required: true, note: '有/无社会基本医疗保险身份投保'}
+      - {qualifier: social_security_settlement, kind: field_qualifier, required: true, note: '以社保身份投保但未经社保结算时比例通常降档——具体分档以条款为准'}
+      - {qualifier: benefit_type, kind: field_qualifier, required: true, note: '按责任类型'}
+      - {qualifier: hospital_or_visit_type, kind: field_qualifier, required: false, note: '医院部别/就诊类型（如适用）'}
+    comparator_class: numeric_tolerance_zero
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任给付比例段，常按社保身份/结算方式分档成表'
+    expert_questions:
+      - '本字段是 qualifier 最重字段：qualifier 闭集与 canonical 顺序必须冻结（applicability_hash 依赖）；分档表（qualifier组合→比例）的 assertion 拆分规则需冻结'
+  - field_id: hospital_scope
+    display_name: 医院范围
+    baseline_file: medical.yaml
+    baseline_value_source: 产品条款对医院的定义
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 理赔限制族（就诊医院决定是否可赔）
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款释义医院定义；部分产品含指定除外医院清单'
+    expert_questions:
+      - '结构化可行性：医院等级/性质/部别枚举（如二级及以上公立医院普通部）+除外医院清单(entity list)；与 high_end_medical_access 的关系'
+  - field_id: indemnity_principle
+    display_name: 补偿原则
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [损失补偿型, 定额给付型]
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 理赔限制族（基线说明：能否同类保单重复理赔）
+    required_qualifiers:
+      - {qualifier: benefit_type, kind: field_qualifier, required: false, note: '费用补偿责任与津贴类定额给付可并存于同一产品'}
+    comparator_class: exact_scalar
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '条款其他医疗保障/重复投保条款可回验；枚举命名为起草（监管用语：费用补偿型/定额给付型医疗保险）'
+    expert_questions:
+      - '高风险字段卡在人工填充：确认改锚条款相应条文(source_evidence)；枚举命名与监管口径对齐'
+  - field_id: special_exclusion_relaxations
+    display_name: 特殊免责
+    baseline_file: medical.yaml
+    baseline_value_source: 免责条款
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [自杀可赔, 猝死可赔]
+    three_state_policy: tri_state
+    absent_explicitly_note: '无免责放宽点→absent_explicitly；注意该字段语义是相对市场常规免责的放宽亮点'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 免责/除外族
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '免责条款节；判断放宽=对免责清单未列项的解读'
+    expert_questions:
+      - '证据语义裁决：自杀可赔/猝死可赔属于对免责清单未列项的负面推理——是否要求条款显式表述才可发布？若以 exclusions_official 结构化清单派生则应转 derived（不可发布）'
+  - field_id: high_end_medical_access
+    display_name: 高端医疗
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: enum
+    multi_valued: true
+    enum_status: open_draft
+    enum_values: [特需病房, 私立医院, 国际部]
+    three_state_policy: tri_state
+    absent_explicitly_note: '医院范围明确限定普通部时，特需/国际部为 absent_explicitly（以医院释义证据支持）'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '条款医院释义可回验（是否扩展至特需/私立/国际部）'
+    expert_questions:
+      - '与 hospital_scope 合并为其结构化维度（部别qualifier）还是独立字段？确认改锚条款医院释义'
+  - field_id: product_conversion
+    display_name: 险种转换
+    baseline_file: medical.yaml
+    baseline_value_source: 人工填充
+    value_type: text_long
+    three_state_policy: tri_state
+    absent_explicitly_note: '条款无转换条款→absent_explicitly 需以条款结构证据支持'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: human_attestation
+    mvp_publishable: false
+    extraction_notes: '基线说明仅举例 平安附加个人住院综合医疗保险（A）条款含该字段（A/B款互转）；本产品适用性未知'
+    expert_questions:
+      - '本产品是否存在转换条款需条款核实；条款含该条时改锚 source_evidence'
+  - field_id: rate_adjustable
+    display_name: 费率可调
+    baseline_file: medical.yaml
+    baseline_value_source: 根据产品名判断
+    value_type: bool
+    three_state_policy: tri_state
+    absent_explicitly_note: '短期医疗险无费率调整机制：absent_explicitly 的判据（条款无费率调整节是否足够）需专家裁决，不得由产品名推定'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: derived
+    provenance_note: '根据产品名判断→derived（基线注：在售的有两款费率可调）'
+    mvp_publishable: false
+    extraction_notes: '长期医疗险条款必含费率调整条款（监管要求），可直接回验；对照产品：同系列惠享版为费率可调长期医疗'
+    expert_questions:
+      - '改锚裁决：以条款费率调整节为证据（source_evidence）替代产品名推断；短期产品的 absent_explicitly 判据冻结'
+  # ============ 扩展字段（extensions-v1.1.yaml，适用 12） ============
+  # risk_level 沿用 v1.1 业务已确认值，不再作草案判断
+  - field_id: regulatory_filing_no
+    display_name: 条款备案/批复文号
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: low
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款首页必有（v1.1）；多产品文档路由的确定性锚点；product_meta 同时含 reportPreparedFileCode(平保寿发〔2025〕404号) 与 sccode(平安人寿〔2025〕医疗保险172号) 两类编号'
+    expert_questions:
+      - '两类编号裁决：报备文件编号 vs 产品注册号——本字段取哪个？是否拆为两个字段？（影响路由锚点唯一性）'
+  - field_id: clause_version
+    display_name: 条款版本标识
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_short
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 'v1.1 明示 high：与条款生效日期共同构成版本身份'
+    required_qualifiers: []
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款页眉/首页版本标识；区别于开始使用时间（销售口径）'
+    expert_questions:
+      - '版本标识的 canonical 形式（文号+年版？公司内版本号？）需冻结——ProductVersion 对齐依赖'
+  - field_id: clause_effective_date
+    display_name: 条款生效日期
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: date
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: v1.1 明示 high
+    required_qualifiers: []
+    comparator_class: date
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款首页/备案信息'
+    expert_questions: []
+  - field_id: exclusions_official
+    display_name: 责任免除
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 免责条款
+    value_type: text_long
+    three_state_policy: tri_state
+    absent_explicitly_note: '医疗险条款必有责任免除节；absent_explicitly 属异常，出现即转人工'
+    risk_level: high
+    high_risk: true
+    risk_rationale: 'v1.1 明示 high：完整结构化免责清单，非亮点式字段'
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '责任免除整节；逐条免责项'
+    expert_questions:
+      - '结构化设计：免责条目是否拆为 set_member 型逐条 assertion（每条免责一个成员）+受控免责目录？拆解粒度需冻结'
+  - field_id: waiting_period_claim_handling
+    display_name: 等待期内出险处理
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: enum
+    enum_status: open_draft
+    enum_values: [返还保费, 返还现金价值]
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 'v1.1 明示 high：理赔高频争议点'
+    required_qualifiers:
+      - {qualifier: benefit_or_disease_type, kind: field_qualifier, required: false, note: '处理方式可按责任/疾病类型不同'}
+    comparator_class: exact_scalar
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款等待期条内的处理约定'
+    expert_questions:
+      - '枚举闭集需按医疗险条款重定：v1.1 示例（返还保费 vs 现金价值）源自长期险口径，医疗险常为不承担给付责任/合同继续有效等表述'
+  - field_id: reinstatement
+    display_name: 复效条款
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    absent_explicitly_note: '一年期医疗险通常无效力中止/复效机制；absent_explicitly vs 险种不适用的表示需统一裁决（见 grace_period 同题）'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款效力中止及恢复条（如有）'
+    expert_questions: []
+  - field_id: claim_filing_requirements
+    display_name: 理赔申请时效与申请材料
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款保险金申请/诉讼时效条'
+    expert_questions: []
+  - field_id: sales_region_limit
+    display_name: 销售地区限制
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 人工填充/运营数据
+    value_type: enum
+    multi_valued: true
+    enum_status: undefined
+    enum_values: []
+    three_state_policy: tri_state
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: enum_set
+    provenance_class: human_attestation
+    provenance_note: 'v1.1 标注 extractable: false；机械映射按人工填充→human_attestation，运营数据部分待裁决'
+    mvp_publishable: false
+    extraction_notes: '常不在条款内（v1.1）；需运营数据'
+    expert_questions:
+      - '与 AssertionApplicabilityV1 jurisdiction_ids 标准维度及 ProductVersion.regions 外层包络的关系：是独立 Claim 还是版本包络属性？地区受控目录需定义'
+      - '运营数据部分是否走受控 connector（external_sync→ExternalAttestation）'
+  - field_id: reduced_paid_up
+    display_name: 减额缴清
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    absent_explicitly_note: '不适用产品形态下该字段处理见 applicability_note'
+    risk_level: medium
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    applicable_to_golden_product: false
+    applicability_note: 'v1.1 标注适用:长期险。本产品名称未含长期医疗（对照同系列惠享版为费率可调长期医疗），预计属短期医疗形态→预计不适用；由专家按条款确认后决定：从本产品 schema slice 移除（留痕）或保留为 absent_explicitly'
+    extraction_notes: '长期险条款保全选项（v1.1）'
+    expert_questions:
+      - '确认本产品不适用并留痕（v1.1 纪律：降级/移除需留痕）'
+  - field_id: pre_existing_conditions
+    display_name: 既往症定义与处理
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 'v1.1 明示 high：理赔争议第一来源（07 C-5）'
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款释义既往症定义+责任免除关联条目'
+    expert_questions:
+      - '拆分裁决：既往症定义（释义）与既往症处理（除外/拒赔/责任限制）是否拆为两个子字段？'
+  - field_id: external_drug_coverage
+    display_name: 外购药/特药责任
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 保险责任
+    value_type: text_long
+    three_state_policy: tri_state
+    absent_explicitly_note: '无外购药/特药责任→absent_explicitly，须以责任结构或免责证据支持'
+    risk_level: medium
+    required_qualifiers:
+      - {qualifier: drug_list_version, kind: field_qualifier, required: false, note: '特药目录版本（如有）'}
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '保险责任外购药/特药条或附加责任；说明书常作亮点强调（v1.1：近年产品竞争焦点）'
+    expert_questions:
+      - '特药目录 entity catalog 化与版本化（目录随年度调整）'
+  - field_id: discontinuation_renewal
+    display_name: 停售后续保安排
+    baseline_file: extensions-v1.1.yaml
+    baseline_value_source: 产品条款
+    value_type: text_long
+    three_state_policy: tri_state
+    risk_level: high
+    high_risk: true
+    risk_rationale: 'v1.1 明示 high：保证续保期的必要补充，监管重点（07 C-7）'
+    required_qualifiers: []
+    comparator_class: text_keypoints_unknown
+    provenance_class: source_evidence
+    mvp_publishable: true
+    extraction_notes: '条款续保条中停售安排表述'
+    expert_questions: []
