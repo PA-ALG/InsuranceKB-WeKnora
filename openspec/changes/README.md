@@ -45,7 +45,10 @@
 | 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
 | 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
 | 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
-| 038+ | （空闲） | | 先占号再开目录 |
+| 040 | g0a-annotation-subsystem | 🔒 已占号（PR #42 draft 规格起草中） | 修正案 G0a+ 金标标注 Agent 子系统；号随分支 `feat/038-g0a-annotation-subsystem` 使用中，按 035 先例本行代为登记避免注册表冲突，目录随其 PR 合入 |
+| 038 | w1-weknora-revision-manifest | 📋 规格评审闭合中（PR #41） | W0 触发的条件 W1；Go patch 预算内 |
+| 039 | p3-api-worker-shell | 📋 规格起草 | 033 §16 P3：同 wheel 两角色/健康检查/配置/优雅停止；principal 与 scoped service principals 归 P3（§16.2）；零迁移零表；实现待 P1 实现（0015）合入后开工 |
+| 041+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
