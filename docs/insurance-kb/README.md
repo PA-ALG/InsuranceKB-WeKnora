@@ -32,7 +32,8 @@
 | [20-enterprise-runtime-foundation.md](20-enterprise-runtime-foundation.md) | 企业运行基础：KnowledgeSpace、Source Bridge、SnapshotFact 与 Golden 闸门 | 🚧 历史软件地基已合入；027/适用 admission 未齐，真实 baseline 未运行 |
 | [21-selftest-before-submit.md](21-selftest-before-submit.md) | 复审前自测方法论：提交前 gauntlet、反复返工问题清单（身份绑可变标签/判定两处推导/构造期校验器可绕过/对称路径/冗余安全层…）、并行红队配方；源自 019 七轮返工教训固化 | ✅ |
 | [22-parallel-execution-blueprint.md](22-parallel-execution-blueprint.md) | 生产架构小 PR 并行 DAG、migration lane、Owner 与评审门 | 📋 D0 后执行 |
-| [23-mvp-control-board.md](23-mvp-control-board.md) | 当前唯一控制板：D0 状态、下一批 C0/W0/CAP0 与 Milestone 门禁 | 🚧 D0 实施 |
+| [23-mvp-control-board.md](23-mvp-control-board.md) | 当前唯一控制板：D0 状态、下一批 C0/W0/CAP0 与 Milestone 门禁、决策记录、重置后基线排期 | 🚧 D0 实施 |
+| [24-legacy-asset-disposition.md](24-legacy-asset-disposition.md) | 存量资产处置清单：17 包/7 迁移/全部旧 OpenSpec 的复用·移植·冻结·废弃唯一口径，Pn Contract Card 必须引用 | ✅ 2026-07-26 立项 |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
 权威分工：[生产架构重置设计](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)（近期生产架构）·
