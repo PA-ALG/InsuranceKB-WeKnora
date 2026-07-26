@@ -92,6 +92,11 @@ VALID_BUILDERS: dict[str, Callable[[], object]] = {
             "audience_segment_ids": CanonicalSentinel.ANY,
         },
     },
+    "money_as_schema_map": lambda: {
+        "currency": "CNY",
+        "amount": Decimal("199.90"),
+    },
+    "depth_100": lambda: _deep_list(100),
     "domain_sep_type_a": lambda: 42,
     "domain_sep_type_b": lambda: 42,
 }
@@ -113,6 +118,14 @@ INVALID_BUILDERS: dict[str, Callable[[], object]] = {
     "non_string_key": lambda: {1: "a"},
     "reserved_key": lambda: {"$x": 1},
     "deep_nesting": lambda: _deep_list(101),
+    "datetime_out_of_range": lambda: dt.datetime.min.replace(
+        tzinfo=dt.timezone(dt.timedelta(hours=5))
+    ),
+    "decimal_out_of_range": lambda: Decimal("1E+101"),
+}
+
+HASH_INVALID_BUILDERS: dict[str, Callable[[], tuple[str, object]]] = {
+    "invalid_object_type": lambda: ("bad\x00type", 1),
 }
 
 
@@ -126,7 +139,7 @@ def test_builders_cover_all_vectors_bidirectionally() -> None:
     valid_names = {case["name"] for case in _VECTORS["valid"]}
     invalid_names = {case["name"] for case in _VECTORS["invalid"]}
     assert valid_names == set(VALID_BUILDERS)
-    assert invalid_names == set(INVALID_BUILDERS)
+    assert invalid_names == set(INVALID_BUILDERS) | set(HASH_INVALID_BUILDERS)
 
 
 @pytest.mark.parametrize(
@@ -149,9 +162,12 @@ def test_valid_vector_bytes_and_hash(case: dict[str, str]) -> None:
 def test_invalid_vector_rejected_with_exact_reason(
     case: dict[str, str],
 ) -> None:
-    value = INVALID_BUILDERS[case["name"]]()
     with pytest.raises(CanonicalEncodingError) as excinfo:
-        canonical_bytes(value)
+        if case.get("level") == "hash":
+            object_type, value = HASH_INVALID_BUILDERS[case["name"]]()
+            canonical_hash(object_type, value)
+        else:
+            canonical_bytes(INVALID_BUILDERS[case["name"]]())
     assert excinfo.value.reason == case["reason"]
 
 

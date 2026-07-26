@@ -37,3 +37,4 @@
 - [x] T4：门禁：focused 两文件、`ruff check`、`mypy`（strict）、
   `openspec validate 034-c0-canonical-envelope --strict`；validation-report
   记录证据与 NOT RUN 项。
+- [x] T5（评审闭合）：双独立评审 4 项 Important + 5 项 Minor 全部 RED→GREEN 闭合；向量 40+19，focused 99 passed。

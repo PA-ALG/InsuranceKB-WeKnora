@@ -7,10 +7,14 @@
 系统 SHALL 提供 `canonical_bytes(value) -> bytes`，把受支持的值编码为
 RFC 8785（JCS）兼容的 UTF-8 JSON 字节；同一抽象值的编码 SHALL 与调用次数、
 进程、平台无关地逐字节相等。受支持的输入 SHALL 且仅为：`str`、`bool`、
-安全范围内的 `int`（|i| ≤ 2^53−1）、`decimal.Decimal`（有限值）、
+安全范围内的 `int`（|i| ≤ 2^53−1）、`decimal.Decimal`（有限且有界）、
 `datetime.date`、tz-aware `datetime.datetime`、五个显式 sentinel、
-`CanonicalSet`/`set`/`frozenset`、`list`/`tuple`、键为 `str` 的 `dict`，以及
-`None`（编码为 NULL sentinel）。其余类型 SHALL 以 typed error 拒绝。
+`CanonicalSet`、`list`/`tuple`、键为 `str` 的 `dict`，以及 `None`（编码为
+NULL sentinel）。类型判定 SHALL 使用 exact type：任何子类（含
+IntEnum/StrEnum）与其余类型一律以 typed error 拒绝，防止子类与裸原语
+获得相同 hash。裸 `set`/`frozenset` SHALL 拒绝——Python 相等性会在编码前
+折叠成员（如 `{1, 1.0}` 静默吞掉 float、`{True, 1}` 顺序相关），无序集合
+必须显式使用 `CanonicalSet`。
 
 #### Scenario: 确定性
 
@@ -48,7 +52,10 @@ SHALL NOT 静默归一化。字符串转义 SHALL 按 RFC 8785 §3.2.2.2 最小�
 `Decimal`。`Decimal` SHALL 编码为 tagged `{"$decimal":"<s>"}`，其中 `<s>`
 为无指数定点串：负号仅在非零负数出现、整数部无前导零、小数部无尾随零、
 `-0` 与 `0E-10` 规范化为 `"0"`；NaN/±Inf 的 Decimal SHALL 拒绝
-（`decimal_not_finite`）。
+（`decimal_not_finite`）。系数超过 100 位有效数字或数量级超过 10^±100
+SHALL 拒绝（`decimal_out_of_range`），与 int 上界对称，防止定点展开被用作
+无界内存放大。money/percentage 不新增 tag：SHALL 由 SchemaVersion 层以
+`$decimal` + 独立单位/币种字段的 map 表达（见向量 `money_as_schema_map`）。
 
 #### Scenario: decimal 规范化
 
@@ -66,7 +73,9 @@ SHALL NOT 静默归一化。字符串转义 SHALL 按 RFC 8785 §3.2.2.2 最小�
 `date` SHALL 编码为 `{"$date":"YYYY-MM-DD"}`。`datetime` SHALL 要求
 tz-aware（naive 拒绝，`naive_datetime`），规范化为 UTC 并编码为
 `{"$datetime":"YYYY-MM-DDTHH:MM:SS[.f{1,6}]Z"}`，微秒为零不输出小数部，
-非零时去除尾随零。
+非零时去除尾随零。UTC 规范化溢出可表示范围 SHALL 拒绝
+（`datetime_out_of_range`）；tzinfo 实现自身抛错 SHALL 转为 typed 拒绝，
+不泄漏未类型化异常。
 
 #### Scenario: 时区归一
 
@@ -92,8 +101,9 @@ SHALL NOT 出现在 canonical 字节中。
 
 ### Requirement: C0.6 set 排序去重，list 保序，map 键 UTF-16 码元排序
 
-`CanonicalSet`/`set`/`frozenset` SHALL 编码为 `{"$set":[...]}`，成员按各自
-canonical 字节升序排序并按字节相等去重。`list`/`tuple` SHALL 保持给定顺序。
+`CanonicalSet` SHALL 编码为 `{"$set":[...]}`，成员按各自
+canonical 字节升序排序并按字节相等去重（裸 `set`/`frozenset` 按 C0.1
+拒绝）。`list`/`tuple` SHALL 保持给定顺序。
 `dict` SHALL 仅接受 `str` 键（否则 `non_string_key`）；以 `$` 开头的键
 SHALL 拒绝（`reserved_key`，保留给 tag）；键序 SHALL 按 RFC 8785 的
 UTF-16 码元升序（等价于 UTF-16BE 字节序），SHALL NOT 使用码点序或插入序。
@@ -133,7 +143,9 @@ canonical 字节在不同 `object_type` 下 SHALL 得到不同 hash。更换算�
 ### Requirement: C0.8 语言中立向量冻结与双向完备
 
 变更 SHALL 交付 `canonical_vectors_v1.json`：每个合法用例含
-`name/object_type/canonical_utf8/sha256`，每个非法用例含 `name/reason`。
+`name/object_type/canonical_utf8/sha256`，每个非法用例含 `name/reason`
+（`level:"hash"` 表示在 `canonical_hash` 层以非法 `object_type` 拒绝，
+缺省为编码层）。
 向量的 `canonical_utf8` SHALL 由规范手工编写、`sha256` SHALL 由该冻结字符
 串按 C0.7 框架独立计算（不经由被测实现生成）。Python reference codec
 SHALL 对全部合法用例逐字节复现 `canonical_utf8` 与 `sha256`，对全部非法
@@ -154,7 +166,9 @@ SHALL 对全部合法用例逐字节复现 `canonical_utf8` 与 `sha256`，对�
 ### Requirement: C0.9 纯度与嵌套上限
 
 canonical 包 SHALL 零 `insurance_harness` 内部依赖、无 I/O、无全局可变
-状态。嵌套深度超过 100 SHALL 拒绝（`max_depth_exceeded`），不得栈溢出。
+状态。嵌套深度按容器层级计数（根容器为第 1 层，标量不计层），第 100 层
+SHALL 受理、第 101 层 SHALL 拒绝（`max_depth_exceeded`），不得栈溢出；
+受理边界由 valid 向量 `depth_100` 冻结。
 
 #### Scenario: 深度上限
 

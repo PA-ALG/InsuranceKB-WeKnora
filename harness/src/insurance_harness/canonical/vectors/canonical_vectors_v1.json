@@ -220,6 +220,18 @@
    "sha256": "a06e93fd70962fa975776e7b80f53475da8f1febd8f1bacc1548b348b8057083"
   },
   {
+   "name": "money_as_schema_map",
+   "object_type": "test.object",
+   "canonical_utf8": "{\"amount\":{\"$decimal\":\"199.9\"},\"currency\":\"CNY\"}",
+   "sha256": "ae04c39cab0adff515e6ea43ce3539273cdb1fccc9e75985155cc6fe0b77d2e7"
+  },
+  {
+   "name": "depth_100",
+   "object_type": "test.object",
+   "canonical_utf8": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "sha256": "f029cc152e39dbf9eb5b042cffafa7a0b3625e18a1046d2cf3e0d4dd02c75378"
+  },
+  {
    "name": "domain_sep_type_a",
    "object_type": "test.type-a",
    "canonical_utf8": "42",
@@ -296,6 +308,19 @@
   {
    "name": "deep_nesting",
    "reason": "max_depth_exceeded"
+  },
+  {
+   "name": "datetime_out_of_range",
+   "reason": "datetime_out_of_range"
+  },
+  {
+   "name": "decimal_out_of_range",
+   "reason": "decimal_out_of_range"
+  },
+  {
+   "name": "invalid_object_type",
+   "reason": "invalid_object_type",
+   "level": "hash"
   }
  ]
 }

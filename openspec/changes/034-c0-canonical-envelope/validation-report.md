@@ -51,3 +51,30 @@ PR，harness lane 因路径过滤未运行，破损未被暴露。与 canonical 
 - `template_packages` 自有 hash 与 C0 的对账归 P6a（24 号处置清单）；
 - `docs/insurance-kb/README.md` 索引行（25 号）待 PR #35 合入后由后续
   文档 PR 补录，避免与其 24 号行冲突。
+
+## R1 · 双独立评审闭合（2026-07-27）
+
+Spec review 与 adversarial Quality review 均 **Approved-with-findings**；
+全部 finding 按 RED→GREEN 闭合：
+
+- **F-set（Important，spec 评审）**：裸 `set`/`frozenset` 从受理域移除
+  （Python 相等性在编码前折叠成员：`{1, 1.0}` 吞 float、`{True, 1}` 顺序
+  相关）；仅受理显式 `CanonicalSet`。
+- **F-subclass（Important，红队）**：类型判定改 exact type；IntEnum/
+  StrEnum/任意子类拒绝，不再与裸原语同 hash。
+- **F-datetime（Important，红队）**：极端日期 `astimezone` 溢出与 tzinfo
+  实现抛错均转 typed 拒绝（新码 `datetime_out_of_range`）。
+- **F-decimal（Important，红队+spec）**：Decimal 加界（≤100 位有效数字、
+  数量级 ≤10^±100，新码 `decimal_out_of_range`），与 int 上界对称，封死
+  定点展开内存放大。
+- **Minor 闭合**：`invalid_object_type` 补 hash 层向量（`level:"hash"`）；
+  `\x00` object_type 入参数化用例；`depth_100` 合法向量冻结受理边界并在
+  文档定义深度计数；money/percentage 明确为 Schema 层 `$decimal` map
+  （新向量 `money_as_schema_map`）；int/decimal 数值身份钉死义务与转义
+  可达性注记写入 25 号文档。
+- 评审证明的正面结论一并记录：框架单射性（0x00 分隔 + object_type 字符
+  集）、UTF-16BE 排序 ≡ JCS §3.2.3、json.dumps 输出在受理域内与 JCS 无
+  偏差、循环引用被深度上限拦截、38/38 向量 hash 独立复算一致。
+
+闭合后证据：向量 40 valid + 19 invalid；focused **99 passed**；Ruff、
+mypy strict、OpenSpec strict 复跑全绿（见 PR 最新 commit）。

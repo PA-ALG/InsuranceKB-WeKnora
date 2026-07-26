@@ -8,7 +8,9 @@ REASON_CODES: Final[frozenset[str]] = frozenset(
     {
         "carriage_return_forbidden",
         "control_char_forbidden",
+        "datetime_out_of_range",
         "decimal_not_finite",
+        "decimal_out_of_range",
         "float_forbidden",
         "int_out_of_range",
         "invalid_object_type",

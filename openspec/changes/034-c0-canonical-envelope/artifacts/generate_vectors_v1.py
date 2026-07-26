@@ -77,6 +77,12 @@ VALID: list[tuple[str, str, str]] = [
         '"effective_from":{"$date":"2026-01-01"},'
         '"predicate_id":"waiting_period_days","value":90}',
     ),
+    (
+        "money_as_schema_map",
+        T,
+        '{"amount":{"$decimal":"199.9"},"currency":"CNY"}',
+    ),
+    ("depth_100", T, "[" * 100 + "]" * 100),
     ("domain_sep_type_a", "test.type-a", "42"),
     ("domain_sep_type_b", "test.type-b", "42"),
 ]
@@ -99,6 +105,13 @@ INVALID: list[tuple[str, str]] = [
     ("non_string_key", "non_string_key"),
     ("reserved_key", "reserved_key"),
     ("deep_nesting", "max_depth_exceeded"),
+    ("datetime_out_of_range", "datetime_out_of_range"),
+    ("decimal_out_of_range", "decimal_out_of_range"),
+]
+
+# hash 层非法用例：object_type 违法（level="hash"，构造器返回 (object_type, value)）
+INVALID_HASH: list[tuple[str, str]] = [
+    ("invalid_object_type", "invalid_object_type"),
 ]
 
 
@@ -118,6 +131,10 @@ def main() -> None:
         ],
         "invalid": [
             {"name": name, "reason": reason} for name, reason in INVALID
+        ]
+        + [
+            {"name": name, "reason": reason, "level": "hash"}
+            for name, reason in INVALID_HASH
         ],
     }
     with open(sys.argv[1], "w", encoding="utf-8") as fh:

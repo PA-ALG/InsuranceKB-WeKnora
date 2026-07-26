@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import enum
 from decimal import Decimal
 from pathlib import Path
 
@@ -38,11 +39,9 @@ class TestDeterminismAndTypes:
     def test_tuple_encodes_like_list(self) -> None:
         assert canonical_bytes((1, 2)) == canonical_bytes([1, 2])
 
-    def test_python_set_encodes_like_canonical_set(self) -> None:
-        assert canonical_bytes({3, 1, 2}) == canonical_bytes(
-            CanonicalSet([1, 2, 3])
-        )
-        assert canonical_bytes(frozenset({1})) == b'{"$set":[1]}'
+    def test_raw_python_set_rejected(self) -> None:
+        assert _reason({3, 1, 2}) == "unsupported_type"
+        assert _reason(frozenset({1})) == "unsupported_type"
 
     def test_unsupported_type_rejected(self) -> None:
         assert _reason(object()) == "unsupported_type"
@@ -145,7 +144,7 @@ class TestHashContract:
 
     @pytest.mark.parametrize(
         "object_type",
-        ["", "UPPER", "with space", "类型", "a" * 65, "1leading-digit"],
+        ["", "UPPER", "with space", "类型", "a" * 65, "1leading-digit", "a\x00b"],
     )
     def test_invalid_object_type_rejected(self, object_type: str) -> None:
         with pytest.raises(CanonicalEncodingError) as excinfo:
@@ -167,3 +166,53 @@ class TestPurity:
             assert "import insurance_harness" not in text.replace(
                 "import insurance_harness.canonical", ""
             ), source.name
+
+
+class TestReviewClosureR1:
+    """红队复审闭合（F1/F2/F3）：typed fail-closed 与 exact-type 语义。"""
+
+    def test_f1_datetime_extreme_is_typed_rejection(self) -> None:
+        value = dt.datetime.min.replace(
+            tzinfo=dt.timezone(dt.timedelta(hours=5))
+        )
+        assert _reason(value) == "datetime_out_of_range"
+
+    def test_f2_decimal_magnitude_bounded(self) -> None:
+        assert _reason(Decimal("1E+101")) == "decimal_out_of_range"
+        assert _reason(Decimal("-1E+101")) == "decimal_out_of_range"
+        assert _reason(Decimal("1." + "1" * 100)) == "decimal_out_of_range"
+
+    def test_f2_decimal_bounds_inclusive(self) -> None:
+        assert canonical_bytes(Decimal("1E+100"))
+        assert canonical_bytes(Decimal("1E-100"))
+        assert canonical_bytes(Decimal("1." + "1" * 99))
+
+    def test_f3_int_enum_subclass_rejected(self) -> None:
+        class Color(enum.IntEnum):
+            BLUE = 5
+
+        assert _reason(Color.BLUE) == "unsupported_type"
+
+    def test_f3_str_subclass_rejected(self) -> None:
+        class Status(enum.StrEnum):
+            OK = "hello"
+
+        class Text(str):
+            pass
+
+        assert _reason(Status.OK) == "unsupported_type"
+        assert _reason(Text("hello")) == "unsupported_type"
+
+    def test_f3_container_and_scalar_subclasses_rejected(self) -> None:
+        class MyDict(dict):  # type: ignore[type-arg]
+            pass
+
+        class MyDate(dt.date):
+            pass
+
+        class MyDecimal(Decimal):
+            pass
+
+        assert _reason(MyDict({"a": 1})) == "unsupported_type"
+        assert _reason(MyDate(2026, 1, 1)) == "unsupported_type"
+        assert _reason(MyDecimal("1")) == "unsupported_type"
