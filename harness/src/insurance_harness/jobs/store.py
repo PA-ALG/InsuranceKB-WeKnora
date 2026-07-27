@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import MetaData, Table, func, select, text
@@ -183,6 +184,46 @@ MAX_TABLE_NAME_LENGTH = 63  # PostgreSQL 标识符上限
 _BARE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
+#: 领域写列值只接受**纯标量**（P1.5「收数据不收代码」，D-2026-07-27-16
+#: 第三轮独立评审 A3 修订）。SQLAlchemy 表达式对象会被编译进 INSERT——实测
+#: `select(...).select_from(table("wiki_jobs")).scalar_subquery()` 能把 P1
+#: 自有表的行读出来写进领域表（跨已声明边界的信息泄漏），`func.current_database()`
+#: 与 `literal_column("current_user")` 能拿环境信息。写侧虽被方言挡住，但
+#: "收数据不收代码"这条冻结条款在 values 侧必须同样成立。
+_SCALAR_VALUE_TYPES: tuple[type, ...] = (str, bytes, bool, int, float, datetime, date, Decimal)
+
+
+def _validated_domain_value(key: str, value: Any) -> Any:
+    """校验单个列值是纯数据：拒绝任何可编译成 SQL 的对象（P1.5）。"""
+    if value is None or isinstance(value, _SCALAR_VALUE_TYPES):
+        return value
+    if isinstance(value, Mapping | list | tuple):
+        # JSON 容器：递归确认其中不夹带表达式对象。
+        items = value.values() if isinstance(value, Mapping) else value
+        for item in items:
+            _validated_domain_value(key, item)
+        return value
+    raise InvalidJobInputError(
+        f"domain write value for {key!r} must be plain data, got "
+        f"{type(value).__module__}.{type(value).__name__}; SQL expression objects are refused"
+    )
+
+
+def _validated_domain_values(values: Mapping[str, Any]) -> dict[str, Any]:
+    """校验列名是裸标识符、列值是纯标量（P1.5）。列名同样是安全比较点。"""
+    validated: dict[str, Any] = {}
+    for key, value in values.items():
+        if not isinstance(key, str):
+            raise InvalidJobInputError("domain write value keys must be strings")
+        column = key.strip().casefold()
+        if not _BARE_IDENTIFIER.fullmatch(column):
+            raise InvalidJobInputError(
+                f"domain write column must be a bare lowercase identifier (got {key!r})"
+            )
+        validated[column] = _validated_domain_value(key, value)
+    return validated
+
+
 def _canonical_table(raw: str) -> str:
     """把表标识规范化为安全比较用的 canonical 形式（P1.5）。
 
@@ -219,6 +260,7 @@ def _execute_domain_writes(
     if not specs:
         return
     canonical_tables: list[str] = []
+    canonical_values: list[dict[str, Any]] = []
     for spec in specs:
         table = _canonical_table(spec.table)
         if table in OWNED_TABLES:
@@ -228,15 +270,23 @@ def _execute_domain_writes(
         if not spec.values:
             raise InvalidJobInputError("domain write values must not be empty")
         canonical_tables.append(table)
+        canonical_values.append(_validated_domain_values(spec.values))
     metadata = MetaData()
     bind = session.get_bind()
-    for table, spec in zip(canonical_tables, specs, strict=True):
+    for table, values in zip(canonical_tables, canonical_values, strict=True):
         # 只用 canonical 名反射与执行：校验看到的名与实际打到的表必须是同一个。
         try:
             table_obj = Table(table, metadata, autoload_with=bind)
         except NoSuchTableError as error:
             raise InvalidJobInputError(f"domain write target table not found: {table!r}") from error
-        session.execute(sa_insert(table_obj).values(**dict(spec.values)))
+        # 列必须真实存在：未知列 typed 拒绝，而不是留给编译期抛
+        # `CompileError`（P1.5 读路径/输入合同一致性）。
+        unknown = sorted(set(values) - {column.name.casefold() for column in table_obj.columns})
+        if unknown:
+            raise InvalidJobInputError(
+                f"domain write references unknown columns on {table!r}: {unknown}"
+            )
+        session.execute(sa_insert(table_obj).values(**values))
 
 
 class JobStore:

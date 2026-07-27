@@ -300,6 +300,24 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节�
   PG `test_q30_owned_table_check_is_normalized_on_postgres`（同一护栏在两方言
   上给同族拒绝）。原自攻脚本复跑：13 个变体从 3 条 BLOCKER 转为全部 typed
   拒绝、零自有表触碰。
+- [x] **T31 RED：`values` 侧同样只收数据**（第三轮独立对抗评审的 A3 攻击面）。
+  T29/T30 只把"不收代码"落在参数**形态**上，`values` 仍接受任意 SQLAlchemy
+  表达式对象并编译进 INSERT：实测
+  `select(text("string_agg(id,',')")).select_from(table("wiki_jobs")).scalar_subquery()`
+  **成功把 P1 自有表的行 ID 读出来写进领域表**——跨已声明边界的信息泄漏；
+  `func.current_database()` / `literal_column("current_user")` 亦可取环境信息。
+  写侧被方言挡住（堆叠语句 `ResourceClosedError`、自有表零变更，已 live 复核），
+  读侧泄漏是真实的。GREEN：`_validated_domain_values` + `_validated_domain_value`
+  ——列值只接受纯标量（`None`/`str`/`bytes`/`bool`/`int`/`float`/`datetime`/
+  `date`/`Decimal` 与由其构成的 JSON 容器，容器递归校验），列名按裸标识符
+  校验，并在反射后确认列真实存在（未知列 typed 化，不留给编译期抛
+  `CompileError`）。节点：`test_q31_values_may_not_carry_sql_expressions`
+  （5 类表达式对象）、`test_q31_values_keys_must_be_plain_identifiers`（5 类
+  非法键）、`test_q31_plain_scalar_values_still_accepted`（接受侧含
+  `None`/`bool`/数值/`datetime`/含关键字字面量）、
+  PG `test_q31_values_may_not_smuggle_sql_on_postgres`（含泄漏计数为 0 与
+  接受侧）。评审 a3 脚本复跑：6 条从"泄漏成功/无异常"转为全部 typed 拒绝、
+  领域表零行、泄漏检查返回空。
 - [x] T20 RED：事件只能在完成事务内追加（清单第 22 项）。GREEN：
   `append_job_event` 从 `insurance_harness.jobs` 公共出口移除（降级为内部
   函数，测试直接引 `jobs.outbox` 验证内部合同）。节点：

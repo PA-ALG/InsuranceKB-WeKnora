@@ -1281,6 +1281,74 @@ def test_q30_owned_table_check_is_normalized_on_postgres(
 
 
 @pytest.mark.integration_postgres
+def test_q31_values_may_not_smuggle_sql_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.5「收数据不收代码」在 `values` 侧的 PG 证据（独立评审 A3）。
+
+    修复前 `scalar_subquery()` 能把 `wiki_jobs` 的行读出来写进领域表——跨已
+    声明边界的信息泄漏；`func.current_database()` 能拿环境信息。写侧虽被方言
+    挡住（堆叠语句抛错、自有表零变更），读侧泄漏是真实的。
+    """
+    import sqlalchemy as sa
+
+    space_id = _space("smuggle")
+    domain_table = f"domain_{uuid.uuid4().hex[:12]}"
+    with postgres_runtime.engine.begin() as connection:
+        connection.exec_driver_sql(f'CREATE TABLE "{domain_table}" (body TEXT)')
+    store = _store(postgres_runtime)
+    job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
+
+    hostile = (
+        sa.select(sa.text("string_agg(id, ',')"))
+        .select_from(sa.table("wiki_jobs"))
+        .scalar_subquery()
+    )
+    with pytest.raises(InvalidJobInputError):
+        store.report_success(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            domain_writes=(DomainWriteSpec(table=domain_table, values={"body": hostile}),),
+        )
+    with pytest.raises(InvalidJobInputError):
+        store.report_success(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            domain_writes=(
+                DomainWriteSpec(
+                    table=domain_table, values={"body": sa.func.current_database()}
+                ),
+            ),
+        )
+
+    with postgres_runtime.engine.begin() as connection:
+        leaked = connection.exec_driver_sql(
+            f'SELECT count(*) FROM "{domain_table}"'
+        ).scalar_one()
+    assert leaked == 0, "自有表内容被泄漏进领域表"
+    assert store.get_job(space_id=space_id, job_id=job_id).state is JobState.RUNNING
+
+    # 接受侧：纯标量（含含关键字的字面量）仍正常写入。
+    done = store.report_success(
+        space_id=space_id,
+        job_id=job_id,
+        generation=generation,
+        domain_writes=(
+            DomainWriteSpec(
+                table=domain_table, values={"body": "do not touch; call center; begin"}
+            ),
+        ),
+    )
+    assert done.state is JobState.SUCCEEDED
+    with postgres_runtime.engine.begin() as connection:
+        assert (
+            connection.exec_driver_sql(f'SELECT count(*) FROM "{domain_table}"').scalar_one() == 1
+        )
+
+
+@pytest.mark.integration_postgres
 def test_q25_delivered_but_unmarked_crash_converges_on_postgres(
     postgres_runtime: PostgresRuntime,
 ) -> None:

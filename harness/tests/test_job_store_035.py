@@ -1723,6 +1723,111 @@ def test_q30_owned_table_check_is_normalized_and_shape_restricted(
     assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
 
 
+def test_q31_values_may_not_carry_sql_expressions(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """P1.5「收数据不收代码」在 `values` 侧同样成立（独立评审 A3 发现）。
+
+    修复前 `values` 接受任意 SQLAlchemy 表达式对象并编译进 INSERT：
+    `sa.select(...).select_from(sa.table("wiki_jobs")).scalar_subquery()` 成功
+    把 P1 自有表的行 ID **读出来写进领域表**——跨已声明边界的信息泄漏；
+    `sa.func.current_database()` / `sa.literal_column("current_user")` 亦可
+    拿到环境信息。写侧虽被方言挡住（堆叠语句抛错、自有表零变更），但"收数据
+    不收代码"这条冻结条款在 values 侧被违反。
+    """
+    import sqlalchemy as sa
+
+    _domain_table(job_engine)
+    store = make_store(factory)
+    hostile_values: list[tuple[str, dict[str, object]]] = [
+        ("text", {"job_id": sa.text("'plain'")}),
+        ("func", {"job_id": sa.func.lower("X")}),
+        ("literal_column", {"job_id": sa.literal_column("'lc'")}),
+        (
+            "scalar_subquery",
+            {
+                "job_id": sa.select(sa.text("count(*)"))
+                .select_from(sa.table("wiki_jobs"))
+                .scalar_subquery()
+            },
+        ),
+        ("column", {"job_id": sa.column("job_id")}),
+    ]
+
+    for label, values in hostile_values:
+        running = _running_for_domain_write(store, key=f"expr-{label}")
+        with pytest.raises(InvalidJobInputError):
+            store.report_success(
+                space_id="space-a",
+                job_id=running.id,
+                generation=running.lease_generation,
+                domain_writes=(DomainWriteSpec(table="demo_domain", values=values),),
+            )
+        assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+
+    with factory() as session:
+        assert session.execute(text("SELECT count(*) FROM demo_domain")).scalar_one() == 0
+
+
+def test_q31_values_keys_must_be_plain_identifiers(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """列名同样是安全比较点：非裸标识符的键 typed 拒绝。"""
+    _domain_table(job_engine)
+    store = make_store(factory)
+
+    for bad_key in ("job_id; DROP TABLE x", "job id", '"job_id"', "__class__", ""):
+        running = _running_for_domain_write(store, key=f"key-{abs(hash(bad_key)) % 9973}")
+        with pytest.raises(InvalidJobInputError):
+            store.report_success(
+                space_id="space-a",
+                job_id=running.id,
+                generation=running.lease_generation,
+                domain_writes=(
+                    DomainWriteSpec(table="demo_domain", values={bad_key: "x"}),
+                ),
+            )
+
+
+def test_q31_plain_scalar_values_still_accepted(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """接受侧：纯标量（含 None、bool、数值、datetime、JSON 容器）不被误杀。"""
+    from datetime import UTC, datetime
+
+    with job_engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS scalar_domain "
+                "(txt TEXT, num INTEGER, flag BOOLEAN, ts TIMESTAMP, blob_col TEXT)"
+            )
+        )
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key="scalars")
+
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        domain_writes=(
+            DomainWriteSpec(
+                table="scalar_domain",
+                values={
+                    "txt": "do not touch; call center; begin",
+                    "num": 42,
+                    "flag": True,
+                    "ts": datetime(2026, 1, 1, tzinfo=UTC),
+                    "blob_col": None,
+                },
+            ),
+        ),
+    )
+
+    assert done.state is JobState.SUCCEEDED
+    with factory() as session:
+        assert session.execute(text("SELECT count(*) FROM scalar_domain")).scalar_one() == 1
+
+
 def test_q30_unknown_table_is_typed_not_raw_driver_error(
     factory: SessionFactory, job_engine: Engine
 ) -> None:
