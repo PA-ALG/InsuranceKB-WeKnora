@@ -1366,7 +1366,11 @@ def test_q25_delivered_but_unmarked_crash_converges_on_postgres(
         generation=generation,
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}, event_id="evt-1"),),
     )
-    dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
+    # 本节点隔离的是 at-least-once 重投语义，不是退避：显式零退避使重投立即
+    # 可见（模型默认已改为非零，见 D-2026-07-27-16 后的 B-finding-2 修复）。
+    dispatcher = OutboxDispatcher(
+        postgres_runtime.factory, _config(dispatch_backoff_seconds=(0.0,))
+    )
     seen: list[str] = []
 
     def deliver_then_crash(event: object) -> None:

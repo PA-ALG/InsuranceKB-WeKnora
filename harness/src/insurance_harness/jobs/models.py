@@ -24,7 +24,6 @@ from insurance_harness.jobs.errors import (
     RetryableJobError,
 )
 
-
 #: 退避档位上界（约 30 天）：超出即表达"实际别再重投"，那属消费方
 #: reconciliation（proposal 非目标），不是本层能履行的退避语义。
 MAX_DISPATCH_BACKOFF_SECONDS = 30 * 24 * 3600
