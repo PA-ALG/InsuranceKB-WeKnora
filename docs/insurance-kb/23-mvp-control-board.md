@@ -5,8 +5,8 @@
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> GitHub fresh 事实：共 53 个 PR，其中 48 个已合入；#26/#28/#33/#44
-> `CLOSED / NOT MERGED / HISTORY-ONLY`，#44 归档 tag 为
+> 本治理 PR 创建前的 GitHub fresh 事实：共 53 个 PR，其中 48 个已合入；
+> #26/#28/#33/#44 `CLOSED / NOT MERGED / HISTORY-ONLY`，#44 归档 tag 为
 > `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。当前唯一开放项是
 > PR #53（P1 re-land 候选，未合入）；本项目 open issue 为 0。PR 的存在
 > 不等于 Mission Card 批准，也不改变本表的验收口径。
