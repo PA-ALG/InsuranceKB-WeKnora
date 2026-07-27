@@ -15,10 +15,10 @@
 | 006 | template-fastpath | ⚠️ 第一方历史范围通过；不是 TemplatePackage | 可作为 028 能力输入；PP-StructureV3 后置 |
 | 007 | claims-changeset-publish | ✅ 旧范围已交付 | 不含 NS-C/P-1 seal/active alias；生产发布继续 fail closed |
 | 008 | review-workbench | ✅ T1～T5/T7 已合入（PR #15）；W4/T6 follow-up 可认领 | 轨道 L2；018✅ 已解除整页/回滚前置；Owner 复审=A |
-| 009 | concept-layer | 📋 规格已收口，**待 010 T5～T12 合入后认领** | 轨道 L4 第二件；021✅仅解除 010 ordering 前置；C3.4 混源防护；(space_id,canonical_key) 身份 + concept_revisions 定义版本化 + C6 冻结投影扩展合同；迁移 0008 |
-| 010 | structured-import | 🚧 T1～T4 已合入；MVP 实施双通道薄切 | `product_meta` 只进产品注册且零 Claim/Evidence；已登记 FAQ fact_assertions 才走 SourceRevision/Evidence/ChangeSet/Review；完整 T5～T12 保留 M2；迁移预分配 0007 |
-| 011 | knowledge-health | 📋 PR #12 主规格 + PR #22 fast-follow 已收口，**011 本体可认领** | H1.3a 远端/输入/工具链独立证据轴、多信号并报、不可归因 degraded；H1.8 通过 020 registry 消费 024 attempt ledger，缺数据 degraded；迁移 0010；typed subject 接线 Owner-A |
-| 012 | qa-objects | 📋 规格已收口，**待 010 T5～T12 的 qa_staging/冻结合同合入后认领** | qa_items/qa_revisions/qa_assertions/bindings 断言级绑定（复合 FK 闭 Space）+ 冻结事务内重验 + Q5 冻结投影扩展（SnapshotQA）；迁移 0009 |
+| 009 | concept-layer | 📋 历史规格已收口；当前不授权实施 | 旧迁移 0008 已撤号且不可复用；后续须按 033 Milestone 重新立项 |
+| 010 | structured-import | ⚠️ T1～T4 历史范围已合入；旧续作路线撤销 | 已有能力不是当前生产证明；旧迁移 0007 已撤号且不可复用 |
+| 011 | knowledge-health | 📋 历史规格已收口；当前不授权实施 | 旧迁移 0010 已撤号且不可复用；后续按修正案 Milestone C 重新立项 |
+| 012 | qa-objects | 📋 历史规格已收口；当前不授权实施 | 旧迁移 0009 已撤号且不可复用；后续须按 033 Milestone 重新立项 |
 | 013 | insurance-mcp | 📋 MVP core 可认领 | 先交付产品对齐/事实/证据与 snapshot/hash envelope；完整 compare/history 矩阵留 M2 |
 | 014 | batch-orchestration | 📋 提案 | M3，暂不排 |
 | 015 | feedback-flywheel | ✅ 已合入 main（PR #18） | 离线 trace→durable 飞轮；迁移 0012（三表单事务/Space 隔离）；Langfuse 直连与 ReviewItem 动作投影保持 gated |
@@ -32,7 +32,7 @@
 | 022 | test-portfolio-rebalance | ✅ 已交付 | 同上 |
 | 023 | local-weknora-live-environment | ✅ 已合入 main（PR #10） | 受信 live workflow |
 | 024 | extraction-recall-uplift | ⚠️ 第一方软件范围已合入；真实收益未验证 | 028 可选择性复用；030 证明 MVP slice 效果，完整 020 验证留 M2 |
-| 025 | merge-weak-value-guard | ⏭ 后置 | 非 MVP 阻断；排在完整 010 与企业 merge hardening 后；迁移 0011 |
+| 025 | merge-weak-value-guard | ⛔ 旧计划撤销 / history-only | 旧迁移 0011 已撤号且不可复用；后续须按 033 重新切片 |
 | 026 | claim-data-quality-persistence | 🔒 已占号（目录未开） | `data_quality` 的 Claim/Revision/Snapshot/MCP 端到端字段+迁移+回填（12 号文档 #2 采纳项至今只在 pred 侧，主链未落——PR #11 四轮对账发现）；业务确需时立项，010/013 不预支承诺 |
 | 027 | production-weak-model-boundary | ✅ 已合入；能力保留 | 历史交付能力，不再作为旧 Wave 路线状态源；后续由 033 DAG 消费 |
 | 028 | template-compilation-runtime-mvp | ⛔ superseded / history-only | 旧 PR28/runtime 路线不得继续实现、重放或作为生产 authority |
@@ -40,13 +40,15 @@
 | 030 | enterprise-wiki-mvp-slice | ✅ 已合入；能力保留 | 历史交付能力，不再作为旧 Wave 路线状态源；后续由 033 DAG 消费 |
 | 031 | operational-run-admission | ⛔ superseded / history-only | 旧 runtime/PR 路线冻结，不更新、不重放、不授予生产 authority |
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
-| 033 | production-architecture-reset | 🚧 D0 governance rewrite | 当前唯一生产架构治理状态源；不是迁移号 |
-| 034 | c0-canonical-envelope | 🚧 实施中（Wave 1，总控窗口） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 📋 规格起草（Wave 1，总控窗口） | 033 §16 P1；迁移从真实 head 0006 续接；一 PR 一迁移 |
-| 036 | capacity-contract | 🗓️ planned / not implemented | CAP0；生产 CapacityProfile 合同，不是迁移号 |
-| 037 | weknora-revision-contract-spike | 🗓️ planned / not implemented | W0；只读 revision/lifecycle contract spike，不是迁移号；原 035 因 Wave 1 总控窗口把 035 分配给 p1-job-outbox 而按「后者改号」规则改至本号 |
-| 038 | g0a-golden-asset-kernel | 🚧 实施中（总控窗口 Claude，worktree `ikb-g0a`） | Amendment §2 `G0a+` 前置：金标 provenance 分级 + 权威来源 lift + 确定性验证内核 + 内容寻址体检报告；**无迁移**（P1 独占当前 migration lane，用 0015）；文件域仅 `goldenset/` |
-| 039+ | （空闲） | | 先占号再开目录 |
+| 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
+| 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
+| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY`，未合入 | 必须重放最新 main 并重新 exact review；迁移 0015 Owner |
+| 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
+| 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
+| 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
+| 039 | p3-api-worker-shell | 规格 ✅ 已合入（PR #48）；实现 `NOT STARTED` | 033 §16 P3；零迁移零表；实现依赖 P1 |
+| 040 | g0a-annotation-subsystem | 🔒 唯一目标占号；PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED` | PR #42 仍用旧 `038-g0a-*` 路径并与 W1/038 冲突；rename/rebase 前不可合入、不可称 spec frozen |
+| 041+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
@@ -58,19 +60,24 @@
 | 0004 | 017 source_evidence_lineage | ✅ |
 | 0005 | 018 release_snapshot_read_model | ✅（PR #9 已合入） |
 | 0006 | 021 source-lifecycle-ordering | ✅ 已随 PR #23 合入；实际 down_revision=0012 |
-| 0007 | 010 structured-import（qa_staging 等） | 预分配 |
-| 0008 | 009 concept-layer | 预分配 |
-| 0009 | 012 qa-objects | 预分配 |
-| 0010 | 011 knowledge-health（completeness_snapshots + health_runs/health_findings） | 预分配 |
-| 0011 | 025 merge-weak-value-guard（suppressed_observations root + suppressed_observation_events 双表，append-only+触发器） | 预分配 |
+| 0007 | 旧 010 structured-import 计划 | superseded / not reusable（D-2026-07-27-10） |
+| 0008 | 旧 009 concept-layer 计划 | superseded / not reusable（D-2026-07-27-10） |
+| 0009 | 旧 012 qa-objects 计划 | superseded / not reusable（D-2026-07-27-10） |
+| 0010 | 旧 011 knowledge-health 计划 | superseded / not reusable（D-2026-07-27-10） |
+| 0011 | 旧 025 merge-weak-value-guard 计划 | superseded / not reusable（D-2026-07-27-10） |
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
 | 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0015+ | （空闲；014 如需建表先来占号） | |
+| 0015 | 035 p1-job-outbox 实现 | 已占号；PR #44 未合入，实际 down_revision 需在最新 main 重放后复核 |
+| 0016+ | （空闲） | 先占号再开 migration |
 
-> **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），**down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：每个实现 PR 合入时把自己的 down_revision 指向**当时 main 的实际 head**（先合的 0007 可以在 0006 之前入链）；不允许产生 multi-head；合入后在本表"备注"记录实际链序。数字顺序仅为可读性，不承载任何拓扑语义。
+> **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），
+> **down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：
+> 每个实现 PR 在最新 main 重放后，把自己的 down_revision 指向**当时 main 的
+> 实际 head**；不允许产生 multi-head；合入后在本表“备注”记录实际链序。
+> 数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 当前可执行入口（2026-07-26）
+## 当前可执行入口（2026-07-27）
 
 当前生产架构工作只以以下入口为准：
 
@@ -79,7 +86,17 @@
 - [当前 active execution plan](../../docs/insurance-kb/22-parallel-execution-blueprint.md)；
 - [实时状态与决策板](../../docs/insurance-kb/23-mvp-control-board.md)。
 
-执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再进入 Milestone A/B/C。
+`D0/C0/CAP0` 已合入，W0 已以双 `insufficient` 触发 W1。当前 Milestone A
+仍 `IN PROGRESS`，B/C `NOT IMPLEMENTED`；不得按 PR 数量推断 MVP 已上线。
+
+开放 PR custody：
+
+- PR #42 是 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`，仍使用旧
+  `038-g0a-*` 路径；注册表唯一目标是 040，rename/rebase 前不可合入、
+  不可称 spec frozen。
+- PR #44 是 P1 实现，当前 Ready 但 `DIRTY`；未合入，必须重放最新 main 并
+  接受新的 exact review。
+- 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）
 
