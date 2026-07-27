@@ -148,13 +148,15 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节�
   dispatcher、metrics 查询、配置接线），tests 约 5–6；
 - 生产代码目标 500–700 行；超过约 900 行触发重新切分评审（033 §16.2）；
   单文件 400/700（测试 500/800）行仅作警报线；
-- **实测（双评审闭环 + 边界修订后）**：raw 1781 / 有效 1300 行（迁移 200、
-  `__init__` 导出面 89、store 445、outbox 196、models 169、tables 86、
-  metrics 77、errors 38），超过 ~900 触发线。**已按
+- **实测（第二轮双评审闭环后）**：raw 2150 / 有效 1497 行（store 550、
+  outbox 210、迁移 214、models 187、metrics 111、tables 91、`__init__` 导出面
+  90、errors 44），超过 ~900 触发线。边界冻结的修复（两道防线、持久退避、
+  过期 lease 指标、两个新列）是本轮增量。**已按
   [D-2026-07-27-17](../../../docs/insurance-kb/23-mvp-control-board.md#d-2026-07-27-17--035-实现的-162-行数触发线豁免)
-  裁决不拆分**：拆分在算术上不能带来预算合规（可分离的 metrics + dispatcher
-  约 225 行，拆后仍约 1075 > 900），且会产生"outbox 无人 drain"的半成品。
-  豁免仅限本窗口，不构成后续 Pn 先例。本行不留 TBD。
+  裁决不拆分**：拆分在算术上仍不能带来预算合规——可分离的只有 metrics(111)
+  与 dispatcher 观测面(约 162)共约 273 行，拆后仍约 1224 > 900，且会产生
+  "outbox 无人 drain"的半成品。豁免仅限本窗口，不构成后续 Pn 先例。
+  本行不留 TBD。
 - 恰好 1 个新 Alembic 迁移，只建 `wiki_jobs`/`wiki_outbox_events`（含其列、
   索引与约束；边界修订新增的列属于这两张表，不产生第二个迁移）。
 

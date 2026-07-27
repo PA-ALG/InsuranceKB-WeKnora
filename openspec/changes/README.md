@@ -42,7 +42,7 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现由 **PR #53** 在最新 main 重落地 | 旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`，归档 tag `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；按 D-2026-07-27-15，#53 代码与该 tag 逐字节一致、仅重写治理文档（**取代 #52 的"实现回到 NOT STARTED、不得重放"条款**）；门禁在 #53 head 重跑，旧 head CI 不作证据；迁移 0015 Owner |
+| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）+ **边界修订随 #53**；实现在 **PR #53**（第二轮双评审中） | 旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`，归档 tag `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；按 D-2026-07-27-15 由 #53 重落地（**取代 #52 的"实现回到 NOT STARTED、不得重放"条款**）。#53 起初与归档 tag 逐字节一致，**其后按 D-2026-07-27-16 边界冻结做了实质修复，该"逐字节一致"表述自 `5d663004` 起不再成立**；门禁只以 #53 当前 head 为证据；迁移 0015 Owner |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
 | 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |

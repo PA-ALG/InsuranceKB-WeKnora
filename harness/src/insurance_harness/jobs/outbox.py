@@ -7,7 +7,9 @@ id 已投递后才提交可见，系统不提供跨事务投递顺序保证；�
 `dispatched_at` 标记，已提交行不会因内存水位丢失而永不投递；投递时对行
 持 `FOR UPDATE SKIP LOCKED`，并发 dispatcher 正常路径零双投递（review
 M19），崩溃在标记前仍会重投（at-least-once）。投递失败按持久
-`dispatch_attempts` 计数，达上限的毒性事件移出扫描窗口（review I10）。
+`dispatch_attempts` 计数并按配置化退避推迟 `next_dispatch_at`——**只让位，
+不出局**：已提交行永不因失败计数被移出扫描窗口（P1.6 投递可恢复性合同，
+D-2026-07-27-16 取代了 review I10 的硬上限 + park）。
 """
 
 from __future__ import annotations

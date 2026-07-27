@@ -327,9 +327,13 @@ class JobStore:
         """在声明 scope 内领取一个任务；无可领取返回 typed 空结果。
 
         事务 1（无串行化锁，review I4）：有界回收过期 lease + promote 到期
-        retry_wait；事务 2（advisory 串行化）：计数 → 领取。有效并发只统计
-        `lease_expires_at > now` 的 leased|running 行——已过期未回收的
-        lease 不占用限额（review C1）。
+        retry_wait；事务 2（advisory 串行化）：计数 → 领取。
+
+        并发计数包含**全部** `leased | running` 行，不按 lease 是否过期缩小
+        分母（P1.8 限额会计合同，D-2026-07-27-16）：未被回收的过期行其持有者
+        可能仍存活并消耗外部资源。为避免因此永久饥饿（review C1 的动机），
+        饱和且存在过期行时先做一次 `maintenance_batch_size` 有界、无 Space
+        过滤的回收再重算，仍饱和才返回 typed 拒绝。
         """
         if not space_ids:
             raise InvalidJobInputError("space_ids must not be empty")

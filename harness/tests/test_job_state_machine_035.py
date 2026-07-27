@@ -256,6 +256,7 @@ def test_settings_wire_job_runtime_config_from_environment(
 
     monkeypatch.setenv("HARNESS_JOB_MAX_ATTEMPTS", "5")
     monkeypatch.setenv("HARNESS_JOB_BACKOFF_SECONDS", "[2.0, 8.0]")
+    monkeypatch.setenv("HARNESS_JOB_DISPATCH_BACKOFF_SECONDS", "[3.0, 9.0]")
     settings = HarnessSettings(
         weknora_base_url="http://weknora.test",
         weknora_api_key="sk-test",
@@ -273,3 +274,21 @@ def test_settings_wire_job_runtime_config_from_environment(
     assert config.global_concurrency_limit >= 1
     assert config.heartbeat_interval_seconds > 0
     assert config.policy_for("anything").max_attempts == 5
+    # P1.6 退避必须来自配置（`HARNESS_JOB_*` 接线），默认不得为全 0——否则
+    # "让位"在真实部署里是空操作。
+    assert config.dispatch_backoff_seconds == (3.0, 9.0)
+    assert config.dispatch_backoff_delay(attempts=1) == 3.0
+    assert config.dispatch_backoff_delay(attempts=99) == 9.0
+
+
+def test_default_dispatch_backoff_is_not_all_zero() -> None:
+    """默认档位必须真的推迟，否则退避形同不存在。"""
+    from insurance_harness.config import HarnessSettings
+
+    settings = HarnessSettings(
+        weknora_base_url="http://weknora.test", weknora_api_key="sk-test"
+    )
+
+    config = settings.job_runtime_config()
+
+    assert any(delay > 0 for delay in config.dispatch_backoff_seconds)

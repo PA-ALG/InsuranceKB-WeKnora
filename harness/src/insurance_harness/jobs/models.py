@@ -306,8 +306,10 @@ class OutboxEventView:
 class DispatchReport:
     """一轮 dispatcher 扫描的 at-least-once 投递结果（P1.6）。
 
-    失败事件不再阻塞本轮后续事件；`parked_event_ids` 是本轮达到投递
-    尝试上限、被移出扫描窗口待人工处置的毒性事件（review I10）。
+    失败事件不阻塞本轮后续事件（review I10 的队头阻塞修复保留）；失败行按
+    持久退避推迟 `next_dispatch_at` 后**仍留在扫描集合内**，因此本 DTO 不再
+    有 `parked_event_ids`——"永不再投"的终态违反 P1.6（D-2026-07-27-16）。
+    运维视图见 `OutboxDispatcher.read_backed_off`。
     """
 
     delivered_event_ids: tuple[str, ...]

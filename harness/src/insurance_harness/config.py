@@ -66,6 +66,9 @@ class HarnessSettings(BaseSettings):
     job_per_space_concurrency_limit: int = Field(default=2, ge=1)
     job_global_concurrency_limit: int = Field(default=8, ge=1)
     job_maintenance_batch_size: int = Field(default=128, ge=1)
+    # outbox 投递失败的持久退避档位（P1.6，D-2026-07-27-16）。默认值只是环境
+    # 默认而非产品上限；不得默认为全 0，否则"让位"在真实部署里是空操作。
+    job_dispatch_backoff_seconds: tuple[float, ...] = (1.0, 5.0, 30.0, 120.0)
 
     def job_runtime_config(self) -> JobRuntimeConfig:
         """把 HARNESS_JOB_* 环境配置接线为 P1 JobStore 的运行时配置。"""
@@ -78,6 +81,7 @@ class HarnessSettings(BaseSettings):
             per_space_concurrency_limit=self.job_per_space_concurrency_limit,
             global_concurrency_limit=self.job_global_concurrency_limit,
             maintenance_batch_size=self.job_maintenance_batch_size,
+            dispatch_backoff_seconds=self.job_dispatch_backoff_seconds,
         )
 
     # --- 金标注（change 002；均可选，仅 LiteLLMClient 需要） ---

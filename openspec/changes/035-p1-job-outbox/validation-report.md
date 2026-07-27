@@ -7,13 +7,16 @@
 > 已关闭、**零代码合入**，归档于 tag
 > `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。本 PR（分支
 > `feat/035-p1-job-outbox-reland`）从最新 `main=70740334` 的干净 worktree
-> 重落地**同一份代码**：`git diff` 对归档 tag 在 `harness/` 与
-> `openspec/changes/035-p1-job-outbox/` 下为空（main 侧自 merge-base
-> `dedbbafb` 起从未触碰这些文件），仅按最新 main 重写 `HANDOFF.md` 与
-> `openspec/changes/README.md` 两个治理文档。**旧 #44 head 的 CI 与本机
-> 门禁结果一律不作本 PR 证据**；下文「已运行门禁」是在本 PR head 全新重跑
-> 的结果。迁移链前置已复核：最新 main 的真实 alembic head 仍为 `0006`，
-> `0015` 的 `down_revision="0006"` 无需改动，单 head。
+> 重落地**同一份代码**：首个重落地提交 `f8bb24c7` 时 `git diff` 对归档 tag
+> 在 P1 全部代码路径下为空（main 侧自 merge-base `dedbbafb` 起从未触碰这些
+> 文件），只按最新 main 重写了治理文档。
+>
+> **该「逐字节一致」表述自 `5d663004` 起不再成立**：其后按下文 D-2026-07-27-16
+> 边界冻结做了实质代码修复。**旧 #44 head、以及本 PR 早期 head 的门禁结果
+> 一律不作当前证据**；下文「已运行门禁」是在本 PR 当前 head 重跑的结果。
+> 迁移链前置已复核：最新 main（`caf05fac`，含 W1 #55——只动 WeKnora Go 侧，
+> 未引入新 Alembic revision）的真实 alembic head 仍为 `0006`，`0015` 的
+> `down_revision="0006"` 无需改动，单 head。
 >
 > **2026-07-27 双评审闭环（在归档代码内完成，随本 PR 一并交付）**：PR #44
 > 规格评审 Approved-with-findings（minor）、对抗评审 REJECTED（2 Critical /
