@@ -15,8 +15,9 @@ epoch fencing、可重建的投影。
 
 ## MVP 主航道协作
 
-任何新任务开工前，Owner 必须先向用户提交 **Mission Card** 并取得逐项批准。
-Mission Card 至少包含：
+任何会写入仓库、修改迁移/功能规格/行为，或改变 GitHub/外部状态的交付任务，
+开工前都必须由 Owner 向用户提交 **Mission Card** 并取得逐项批准。Mission
+Card 至少包含：
 
 - 业务目标与现在做的理由；
 - 唯一写 Owner、执行模型与 reasoning effort；
@@ -24,8 +25,10 @@ Mission Card 至少包含：
 - exact 验收条件、明确非目标；
 - 阻断问题定义。
 
-未获批准不得写实现、迁移或功能规格。GitHub 上已有分支、PR、旧测试或历史
-现场不构成开工授权；W1、P1、G0a 等后续功能仍须各自取得 Mission Card 批准。
+纯只读事实核验、审查、监控，以及已批准任务内的正常验证，无需另开 Mission
+Card；这些例外不得被扩大为写入或外部状态变更授权。未获批准不得写实现、迁移
+或功能规格。GitHub 上已有分支、PR、旧测试或历史现场不构成开工授权；W1、
+P1、G0a 等后续功能仍须各自取得 Mission Card 批准。
 
 当前排期不包含 Claude。三个 Codex lane 采用“两个独立开发 lane + 一个动态
 review/integration lane”，角色按任务轮换。review lane 空档只执行用户已批准
