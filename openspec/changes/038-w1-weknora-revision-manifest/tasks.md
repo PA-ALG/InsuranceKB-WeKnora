@@ -198,9 +198,11 @@ worktree 开始）。
   本 PR 不创建或处理 Tencent 通用上游事项。
 - [x] T12 收尾：focused Go tests → `go vet`/lint → `openspec validate
   038-w1-weknora-revision-manifest --strict` → migration 合同门禁 →
-  validation report。按本次 Mission Card，真实 PG/受控 live lane 如实
-  记为 NOT RUN；`openspec/changes/README.md`、控制板与 `HANDOFF.md`
-  属共享收尾文档，待本 PR 合并后另行更新，本 PR 禁止触碰。
+  validation report。后续合并门禁已在 PostgreSQL 16.14 隔离容器中
+  验证 migration up/down、并发 attempt 分配与两条 revision 原子完成
+  路径；受控 live lane 仍如实记为 NOT RUN。
+  `openspec/changes/README.md`、控制板与 `HANDOFF.md` 属共享收尾文档，
+  待本 PR 合并后另行更新，本 PR 禁止触碰。
 - [x] T13 独立 Spec/质量复审：按冻结合同查正确性与安全性；复审中出现
   新的同域基础不变量时，按 033 §18 停止补丁循环回到边界设计，不追加
   状态与异常分支。

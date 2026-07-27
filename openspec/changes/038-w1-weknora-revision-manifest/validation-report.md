@@ -5,8 +5,8 @@
 - Branch: `codex/038-w1-revision-manifest`
 - Base commit: `3f8aa56cf49cf390dd3e3bbc214cd3d6985331af`
 - Base tree: `8ce3a698f71351492dc139c9bbbc00b4e2acce5a`
-- Validation cutoff: `2026-07-27T10:47:12Z`
-- Delivery state: implementation complete locally; commit/push/Draft PR pending
+- Validation cutoff: `2026-07-27T11:12:21Z`
+- Delivery state: Draft PR #55; PostgreSQL merge gate complete
 
 This change owns one invariant only: a served document-text chunk page is bound
 to one database-authoritative completed parse attempt and immutable manifest,
@@ -107,6 +107,28 @@ of corrected tree `7040cab4cda4002343649013087bccfc39f9764b` returned Spec
 `C0/I0/M0 Approved YES` and Quality/Security `C0/I0/M0 Approved YES`; no
 earlier approval was reused.
 
+### PostgreSQL 16 merge gate
+
+A disposable local container ran PostgreSQL
+`16.14 (Debian 16.14-1.pgdg13+1)` on `aarch64`. A non-committed validation
+fixture exercised the exact committed migration and repository code; the
+fixture and container were removed after the run.
+
+```text
+TestW1Postgres16MigrationConcurrencyAndAtomicity
+single run: PASS
+repeat gate: PASS, count=3
+```
+
+The gate applied `000066` up and down against real PostgreSQL, verified the
+three new columns and `knowledge_revisions` table, observed concurrent
+allocations `4` and `5` from current attempt `3`, and completed both direct and
+`FinalizeSubtaskRevision` commit paths. A trigger-injected failure after
+revision insertion but before the completed update left zero revision rows and
+the knowledge status unchanged, confirming transaction rollback. The first
+sandboxed invocation was rejected before DB connection by loopback policy and
+is not used as evidence; the authorized identical invocation is the PASS above.
+
 An exploratory broader package run was not used as completion evidence:
 `internal/application/service` reached a sandbox-denied local listener test,
 and an unrelated tenant parser configuration handler test returned 400. Neither
@@ -116,13 +138,12 @@ requires the focused gate above, not a full repository run.
 ## NOT RUN / BLOCKED
 
 - Full repository test suite: **NOT RUN** (explicit Mission Card boundary).
-- Real PostgreSQL migration/integration: **NOT RUN**.
 - Provider/model/WeKnora live: **NOT RUN**.
 - W0 wall-clock live replay: **NOT RUN**; deterministic Go interleaving is
   GREEN, but live evidence must be collected only in the controlled lane.
 - Shared closeout documents (`HANDOFF.md`, control board, OpenSpec README):
   **BLOCKED from this PR by scope** and intentionally unchanged.
 
-No software BLOCKER remains for creating a Draft PR. Real PostgreSQL/live
-evidence and post-merge shared-document closeout remain explicit follow-ups;
-they do not authorize Ready or merge in this change.
+No software BLOCKER remains for Ready review. Provider/live evidence and
+post-merge shared-document closeout remain explicit follow-ups; W1 does not
+require provider/model I/O.
