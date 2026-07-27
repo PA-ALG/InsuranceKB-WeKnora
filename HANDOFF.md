@@ -10,12 +10,13 @@
 > 与
 > [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
 > 为准。
-> **当前事实截止点**：`main=99f42f33e17ad8054383c30b4cff563785e46548`。
-> PR #35–#50 中已合入 #35/#36/#37/#38/#39/#40/#41/#42/#43/#45/#46/#47/#48/#49/#50；
-> 当前 GitHub 唯一开放项为 #44（`OPEN / Ready / DIRTY / CONFLICTING`，未合入）。
+> **当前事实截止点**：`main=707403342712fafe94e7a02f0bb8fec35e3809ce`。
+> PR #35–#51 中除 #44 外均已合入；当前 GitHub 无开放 PR。PR #44 已
+> `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
+> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
 > ① **C0 与 CAP0 已实现并合入**（PR #36/#46）。P1 规格已合入（PR #38），
-> 实现 PR #44 必须重放到最新 main 并接受新 exact-head review，当前不得按
-> Ready 状态或旧 head CI 推断可合入；P3 规格已合入（PR #48），实现等待 P1。
+> 实现回到 `NOT STARTED`；后续只能从最新 main 以新的小 PR 提取仍需的能力，
+> 不得恢复或重放 #44。P3 规格已合入（PR #48），实现等待 P1。
 > ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
 > 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
 > （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注
@@ -33,14 +34,19 @@
 > 无人值守 `machine_auto` 仍属 `P15[auto-profile]`，依赖 G0b。superadmin
 > 不得绕过完整性、ACL、Provenance/security 或 PostgreSQL CAS。
 > ⑥ Milestone A 仍为 `IN PROGRESS`；Milestone B/C 均
-> `NOT IMPLEMENTED`，不得按 PR 数量宣称 MVP 已上线。旧 PR #26/#28/#33
-> 已关闭；CAP0 launch 问卷仍待业务确认。
+> `NOT IMPLEMENTED`，不得按 PR 数量宣称 MVP 已上线。旧 PR #26/#28/#33/#44
+> 均已关闭且未合入；CAP0 launch 问卷仍待业务确认。
 > ⑦ 实时状态与决策唯一口径 = 23 号控制板 §1/§8。
 > 前置顺序 `D0 → {C0, W0}`、`C0 → CAP0` 已完成；当前按批准设计推进
 > Milestone A。PostgreSQL Active WikiRelease 是 serving authority；
 > WeKnora managed Wiki 是带 epoch fencing 的可重建投影；四种 ReviewPolicy
 > 均合法，原始资料只用于证据、审核和补编。Harness 与 WeKnora 只通过版本化
 > REST 与 Source lifecycle event 集成，MCP 仅是 Active Query 消费者薄适配器。
+> ⑧ Repository operational cleanup A1/A2 已完成：worktree 登记
+> `66 → 23`，21 个 clean 历史 worktree 非 force 移除，22 个 prunable
+> 记录归零，13 个 dirty/frozen worktree 保留。仓外证据根为
+> `../.cleanup-evidence/2026-07-27`，A2 总校验 SHA-256 为
+> `7ffe022567b56a0a6020ae9b7f42476e26824ec8be25ae0c39d2bbe1b32ce14c`。
 > 本块以下内容保留为截至 2026-07-22 的历史交接记录，不得再作为当前路线、
 > migration 占号或实现授权；遇到冲突以新设计与 OpenSpec 033 为准。
 > 最后更新：2026-07-22（业务方已批准 Integration-first MVP：23 份受控输入、5 产品、7–10 个工作日。LLM-wiki-black 第一方权利决定已记录；027～030/032 OpenSpec 与实施计划已完成独立复审并按 cross-reference findings 修订，Wave 1 已分发。当前真实运行门禁是 `NS-0=verified ∧ applicable admission=READY`。020 的 13 产品 canonical run 仍 BLOCKED，但不再阻塞独立 MVP slice；030 使用自己的 admission profile，不借用 020 evaluator/artifact。）
