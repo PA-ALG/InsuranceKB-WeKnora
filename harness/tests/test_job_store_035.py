@@ -1565,6 +1565,11 @@ def test_q20_append_job_event_is_not_a_public_entry() -> None:
     assert not hasattr(jobs_package, "append_job_event")
 
 
+def _job_row_count(factory: SessionFactory) -> int:
+    with factory() as session:
+        return int(session.scalar(select(func.count()).select_from(WikiJob)) or 0)
+
+
 def _domain_table(job_engine: Engine) -> None:
     with job_engine.begin() as connection:
         connection.execute(text("CREATE TABLE IF NOT EXISTS demo_domain (job_id TEXT)"))
@@ -1672,6 +1677,91 @@ def test_q19c_other_domains_wiki_prefixed_tables_are_not_blocked(
         assert (
             session.execute(text("SELECT count(*) FROM wiki_page_revisions")).scalar_one() == 1
         )
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "WIKI_JOBS",
+        "Wiki_Jobs",
+        "wiki_JOBS",
+        "WIKI_OUTBOX_EVENTS",
+        "public.wiki_jobs",
+        '"wiki_jobs"',
+        " wiki_jobs",
+        "wiki_jobs ",
+        "\twiki_jobs",
+        "wiki_jobs--x",
+        "wiki_\uff4aobs",
+    ],
+)
+def test_q30_owned_table_check_is_normalized_and_shape_restricted(
+    factory: SessionFactory, job_engine: Engine, variant: str
+) -> None:
+    """P1.5：自有表校验必须**二次规范化**，且表标识必须是裸标识符。
+
+    第三轮自攻发现的 BLOCKER：原实现用**原样字符串**比对 `OWNED_TABLES`，
+    而 `autoload_with` 在 SQLite 上大小写不敏感地解析——`table="WIKI_JOBS"`
+    过了校验却真的写进 `wiki_jobs`（别的 Space、任意 state/lease_generation）。
+    在 PostgreSQL 上同一输入是 `NoSuchTableError`，即**护栏的正确性取决于
+    方言**，这不是护栏。安全比较点必须规范化（019 教训第 10 条），并把形状
+    收窄到裸标识符使变体无从构造。
+    """
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key=f"norm-{abs(hash(variant)) % 9973}")
+    before = _job_row_count(factory)
+
+    with pytest.raises((DomainWriteViolationError, InvalidJobInputError)):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            domain_writes=(DomainWriteSpec(table=variant, values={"space_id": "other"}),),
+        )
+
+    assert _job_row_count(factory) == before, f"{variant!r} 写进了 P1 自有表"
+    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+
+
+def test_q30_unknown_table_is_typed_not_raw_driver_error(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """目标表不存在时必须 typed 拒绝，不得泄漏原始反射异常。"""
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key="unknown-table")
+
+    with pytest.raises(InvalidJobInputError):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            domain_writes=(DomainWriteSpec(table="no_such_domain_table", values={"x": 1}),),
+        )
+
+
+def test_q30_legitimate_lowercase_domain_tables_still_work(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """接受侧：合法裸标识符（含同前缀的其他域表）不被形状收窄误杀。"""
+    with job_engine.begin() as connection:
+        connection.execute(
+            text("CREATE TABLE IF NOT EXISTS wiki_page_revisions (id TEXT, note TEXT)")
+        )
+    _domain_table(job_engine)
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key="accept-shape")
+
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        domain_writes=(
+            DomainWriteSpec(table="demo_domain", values={"job_id": running.id}),
+            DomainWriteSpec(table="wiki_page_revisions", values={"id": running.id, "note": "ok"}),
+        ),
+    )
+
+    assert done.state is JobState.SUCCEEDED
 
 
 def test_q19d_declared_domain_writes_commit_atomically(

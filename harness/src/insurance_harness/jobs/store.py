@@ -12,13 +12,14 @@ deterministic 测试用，真实并发证据只来自 PG lane（P1.12）。
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import MetaData, Table, func, select, text
 from sqlalchemy import insert as sa_insert
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoSuchTableError
 from sqlalchemy.orm import Session
 
 from insurance_harness.jobs.errors import (
@@ -176,6 +177,31 @@ OWNED_TABLES: frozenset[str] = frozenset({"wiki_jobs", "wiki_outbox_events"})
 
 MAX_TABLE_NAME_LENGTH = 63  # PostgreSQL 标识符上限
 
+#: 领域写目标表只接受**裸标识符**（P1.5，D-2026-07-27-16 第三轮自攻修订）。
+#: 形状收窄使"规范化后等于自有表"的各种变体无从构造：不允许点号（schema
+#: 限定）、引号、空白、注释标记、非 ASCII（Unicode 同形/大小写折叠）。
+_BARE_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def _canonical_table(raw: str) -> str:
+    """把表标识规范化为安全比较用的 canonical 形式（P1.5）。
+
+    第三轮自攻的 BLOCKER：原实现用**原样字符串**比对 `OWNED_TABLES`，而
+    `autoload_with` 在 SQLite 上大小写不敏感地解析——`table="WIKI_JOBS"` 过了
+    校验却真的写进 `wiki_jobs`（伪造别的 Space 的行、任意 state 与
+    `lease_generation`）。同一输入在 PostgreSQL 上是 `NoSuchTableError`，
+    即护栏的正确性取决于方言，这不是护栏。安全比较点必须自己规范化，不能
+    依赖底层解析恰好宽或恰好严（019 教训第 10 条）。
+    """
+    name = validated_text(raw, "domain write table", max_length=MAX_TABLE_NAME_LENGTH)
+    canonical = name.strip().casefold()
+    if not _BARE_IDENTIFIER.fullmatch(canonical):
+        raise InvalidJobInputError(
+            "domain write table must be a bare lowercase identifier "
+            f"(got {raw!r}); schema-qualified, quoted, padded or non-ASCII forms are refused"
+        )
+    return canonical
+
 
 def _execute_domain_writes(
     session: Session, specs: Sequence[DomainWriteSpec], *, job_id: str
@@ -192,18 +218,24 @@ def _execute_domain_writes(
     """
     if not specs:
         return
+    canonical_tables: list[str] = []
     for spec in specs:
-        table = validated_text(spec.table, "domain write table", max_length=MAX_TABLE_NAME_LENGTH)
+        table = _canonical_table(spec.table)
         if table in OWNED_TABLES:
             raise DomainWriteViolationError(
                 f"domain write may not target P1-owned table {table!r}", job_id=job_id
             )
         if not spec.values:
             raise InvalidJobInputError("domain write values must not be empty")
+        canonical_tables.append(table)
     metadata = MetaData()
     bind = session.get_bind()
-    for spec in specs:
-        table_obj = Table(spec.table, metadata, autoload_with=bind)
+    for table, spec in zip(canonical_tables, specs, strict=True):
+        # 只用 canonical 名反射与执行：校验看到的名与实际打到的表必须是同一个。
+        try:
+            table_obj = Table(table, metadata, autoload_with=bind)
+        except NoSuchTableError as error:
+            raise InvalidJobInputError(f"domain write target table not found: {table!r}") from error
         session.execute(sa_insert(table_obj).values(**dict(spec.values)))
 
 

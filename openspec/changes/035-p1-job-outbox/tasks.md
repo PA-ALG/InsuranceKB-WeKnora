@@ -283,6 +283,23 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节�
   迁移为 `test_i8_domain_write_cannot_leave_partial_rows_on_failure`，断言 I8
   真正要保住的"领域写失败不留半写"。
   **已声明的功能收窄**：声明式通道不支持完成事务内先读后写（规格已明文）。
+- [x] **T30 RED：自有表校验必须二次规范化 + 形状收窄**（总控窗口第三轮**自攻**
+  发现的 BLOCKER，非评审报告）。T29 的校验用**原样字符串**比对 `OWNED_TABLES`，
+  而 `autoload_with` 在 SQLite 上大小写不敏感地解析——`DomainWriteSpec(
+  table="WIKI_JOBS")` 过了校验却**真的写进 `wiki_jobs`**（实测 3/3 伪造成功：
+  别的 Space、任意 `state` 与 `lease_generation`）。同一输入在 PostgreSQL 上是
+  `NoSuchTableError`，即**护栏的正确性取决于运行方言**——这不是护栏。根因是
+  019 教训第 10 条的复现：安全比较点必须自己规范化，不能依赖底层解析恰好宽或
+  恰好严。GREEN：`_canonical_table()` 做 `strip().casefold()` 后比对，并以
+  `_BARE_IDENTIFIER` 把形状收窄为裸小写标识符（拒 schema 限定/引号/空白/注释
+  标记/非 ASCII）；反射只用 canonical 名，`NoSuchTableError` 转 typed
+  `InvalidJobInputError`。节点：
+  `test_q30_owned_table_check_is_normalized_and_shape_restricted`（11 参数化）、
+  `test_q30_unknown_table_is_typed_not_raw_driver_error`、
+  `test_q30_legitimate_lowercase_domain_tables_still_work`（接受侧）、
+  PG `test_q30_owned_table_check_is_normalized_on_postgres`（同一护栏在两方言
+  上给同族拒绝）。原自攻脚本复跑：13 个变体从 3 条 BLOCKER 转为全部 typed
+  拒绝、零自有表触碰。
 - [x] T20 RED：事件只能在完成事务内追加（清单第 22 项）。GREEN：
   `append_job_event` 从 `insurance_harness.jobs` 公共出口移除（降级为内部
   函数，测试直接引 `jobs.outbox` 验证内部合同）。节点：

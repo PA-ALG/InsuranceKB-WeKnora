@@ -33,6 +33,7 @@ from insurance_harness.jobs import (
     DomainWriteViolationError,
     ErrorClass,
     IllegalTransitionError,
+    InvalidJobInputError,
     JobFailure,
     JobRuntimeConfig,
     JobState,
@@ -1230,6 +1231,53 @@ def test_q19_declarative_domain_write_channel_on_postgres(
             == 1
         )
     assert _outbox_count(postgres_runtime, space_id) == 1
+
+
+@pytest.mark.integration_postgres
+def test_q30_owned_table_check_is_normalized_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.5：自有表校验的规范化在真实 PG 上同样成立（第三轮自攻 BLOCKER）。
+
+    SQLite 上 `table="WIKI_JOBS"` 曾过校验并真的写进 `wiki_jobs`；PG 上同一
+    输入是 `NoSuchTableError`。护栏的正确性**不得取决于方言**——两条 lane 都
+    必须给出同一族 typed 拒绝，且零自有表变更。
+    """
+    space_id = _space("norm")
+    store = _store(postgres_runtime)
+    job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
+    variants = (
+        "WIKI_JOBS",
+        "Wiki_Jobs",
+        "WIKI_OUTBOX_EVENTS",
+        "public.wiki_jobs",
+        '"wiki_jobs"',
+        " wiki_jobs",
+        "wiki_jobs--x",
+    )
+
+    with postgres_runtime.factory() as session:
+        before = int(
+            session.scalar(select(func.count()).select_from(WikiJob)) or 0
+        )
+
+    for variant in variants:
+        with pytest.raises((DomainWriteViolationError, InvalidJobInputError)):
+            store.report_success(
+                space_id=space_id,
+                job_id=job_id,
+                generation=generation,
+                domain_writes=(
+                    DomainWriteSpec(table=variant, values={"space_id": "other"}),
+                ),
+            )
+
+    with postgres_runtime.factory() as session:
+        after = int(session.scalar(select(func.count()).select_from(WikiJob)) or 0)
+    assert after == before, "规范化变体写进了 P1 自有表"
+    current = store.get_job(space_id=space_id, job_id=job_id)
+    assert current.state is JobState.RUNNING
+    assert current.lease_generation == generation
 
 
 @pytest.mark.integration_postgres
