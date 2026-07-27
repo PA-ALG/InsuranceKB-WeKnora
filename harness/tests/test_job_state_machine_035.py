@@ -101,8 +101,15 @@ def test_p1_1_storage_only_transitions_cover_backoff_and_lease_reclaim() -> None
 
 
 def test_p1_1_exhaustive_pairs_split_between_legal_and_typed_illegal() -> None:
+    """8×8 全组合三分：调用方可达的合法对、storage-only 对、非法对。
+
+    D-2026-07-27-16 起 storage-only 对（backoff 提升与回收）对调用方默认
+    拒绝——它们只能由存储层显式传 `storage_layer=True` 执行，这是 P1.1
+    "仅限存储层"从文档常量升级为可执行护栏的直接后果。
+    """
     for source, target in product(JobState, JobState):
-        if (source, target) in LEGAL_TRANSITIONS:
+        pair = (source, target)
+        if pair in LEGAL_TRANSITIONS and pair not in STORAGE_ONLY_TRANSITIONS:
             ensure_transition(source, target)
             continue
         with pytest.raises(IllegalTransitionError) as excinfo:
@@ -110,6 +117,9 @@ def test_p1_1_exhaustive_pairs_split_between_legal_and_typed_illegal() -> None:
         assert excinfo.value.code == "illegal_transition"
         assert excinfo.value.source is source
         assert excinfo.value.target is target
+        if pair in STORAGE_ONLY_TRANSITIONS:
+            # 存储层身份下同一对仍必须可执行，否则回收/提升会被自锁。
+            ensure_transition(source, target, storage_layer=True)
 
 
 def test_p1_1_terminal_states_have_no_outgoing_edges() -> None:

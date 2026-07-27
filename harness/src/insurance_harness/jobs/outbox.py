@@ -38,6 +38,7 @@ from insurance_harness.jobs.store import (
     SessionFactory,
     _aware,
     database_now,
+    require_active_lease,
     validated_payload,
     validated_text,
 )
@@ -94,6 +95,7 @@ def append_job_event(
     state = JobState(job.state)
     if state is not JobState.RUNNING:
         raise IllegalTransitionError(state, state, job.id)
+    require_active_lease(session, job)
     row = WikiOutboxEvent(
         space_id=space_id,
         event_type=draft.event_type,

@@ -18,7 +18,7 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现由 **PR #53** 在最新 main 同内容重落地，`OPEN / 待双独立评审` | 按 D-2026-07-27-15（取代 #52 的"实现回到 `NOT STARTED`、不得重放"条款）；#53 代码与归档 tag 逐字节一致，门禁在其 head 重跑；迁移 **0015** Owner，`down_revision="0006"` 已复核 |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）+ **边界修订随 #53**；实现在 **PR #53**，双独立评审 `not compliant / not approved` → **§18 停线成立**，边界已冻结、修复施工中 | 按 D-2026-07-27-15（重落地）与 **D-2026-07-27-16**（停线 + 边界冻结：写权威 = generation ∧ lease 未过期；限额计全部 `leased\|running`；回收补记 attempt + 跨 Space 入口；投递改持久退避；领域写句柄语句面约束）；行数豁免见 D-2026-07-27-17；迁移 **0015** Owner |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
 | W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
@@ -283,6 +283,85 @@ P5a0 实体消歧测试数据。D8 关闭。
   归档 tag 的内容可在最新 main 重落地；**关闭 PR ≠ 作废其已闭环的
   findings**。治理文档写"不得重放"需要业务方裁决，执行会话不得单方面
   把关闭动作升级为能力作废。
+
+### D-2026-07-27-16 · P1 §18 停线与 lease 写权威边界冻结
+
+PR #53 的双独立评审（Spec / Quality，互不知晓对方结论、各自独立 worktree +
+独立 PostgreSQL）双双给出 **not compliant / not approved**，并**独立复现了
+同一个破口**：过期未回收的 lease 既不计入并发限额、又保有完整写权威。
+
+**§18 停线判定成立。** 触发条件是"连续两轮独立评审仍出现同域新基础
+不变量"：#44 已过两轮（规格评审 minor + 对抗评审 REJECTED 19 条），本轮
+是同一份代码的第三、四轮，而两支新评审各自独立落在 **lease 过期语义 ×
+写权威 × 限额会计**这同一个域——C1 修了"过期行不占额度"、M14 修了"过期行
+不能被 heartbeat 续命"，两轮都没回答"过期行的持有者还有没有写权威"。
+按 §18"若根因是错误架构边界，替换边界而不是把补丁堆叠到旧实现"，本决策
+**先冻结边界规格再实现**，不接受继续在旧实现上追加条件分支。
+
+**三条 Critical**（均有 live 复现）：
+
+1. 过期未回收 lease 保有写权威 + per-Space/全局限额被无界超越（两侧共同；
+   Spec 侧"限额 1 实际 2 行"、Quality 侧"限额 2 实际 6 租约 + 6 份领域
+   结果"，且单 Space 即可触发）。计数侧被 C1 收窄为 `lease_expires_at >
+   now`，写权威侧只校验 generation ⇒ "被计数的集合" ≠ "能写的集合"，
+   全局上限恰在其设计要抵御的失效模式（worker stall）下静默 fail-open。
+2. `claim` 与 `start` 之间崩溃 ⇒ 毒任务无界重排队（Quality 独有；实测 25
+   次租约后 `attempt` 仍 0、永不 `dead_letter`）。DLQ 的界被押在"worker
+   有没有来得及自报 `start`"这一可缺失标签上，而数据库已知投递次数。
+3. 领域写句柄可结束完成事务 ⇒ 两份领域结果 + 跨 Space 伪造（Quality
+   独有）。此前 #44 与总控窗口均把它当作"已声明的可接受残余（SQL 沙箱
+   不属 P1）"，该定性被 live 证据推翻：一条 raw `COMMIT` 即可使领域行落库
+   而任务留在 `running`、outbox 为空，重放产生第二份领域结果；同一通道
+   还可复活其他 Space 的终态行、伪造 `lease_generation`、插入越域 outbox
+   行。I8 只收紧了属性面，未收紧语句面。
+
+**冻结的边界条款**（已随本 PR 写入 035 spec，属澄清不属扩域——不新增状态、
+不新增异常分支，四项修法均为收敛）：
+
+- P1.3 写权威 = 当前 generation ∧ lease 未过期；四条写路径对称执法；
+  `lease_seconds` 必须 `> heartbeat_interval_seconds` 且严格为正；
+- P1.8 限额计入全部 `leased | running` 行；饱和且存在过期行时先做一次受
+  `maintenance_batch_size` 约束、**无 Space 过滤**的回收再重算（消除 C1
+  的饥饿动机，同时不再过度准入）；
+- P1.1 第 10 条：回收 `leased` 行时先递增 `attempt` 再路由；
+  storage-only 转换必须有可执行的执法点，失败上报要求源状态 `running`；
+- P1.10 必须提供显式命名的跨 Space 回收入口（与 P1.9 全局聚合同形）；
+- P1.6 投递不得因失败计数永久移出扫描窗口，让位机制改**持久化退避**
+  （`next_dispatch_at` + 配置化退避序列）；事件只能在完成事务内追加；
+- P1.7 duplicate 判据改为不可被覆写的持久事实；
+- P1.5 领域写句柄受语句面约束（事务身份不变式 + 禁写 P1 自有表）；
+- P1.9 新增过期 lease 计数与最老过期 lease 年龄为必需指标。
+
+**评审方法论记录**：两支评审各自漏了对方抓到的东西——Spec 侧把
+`STORAGE_ONLY_TRANSITIONS` 判为满足（核了 backoff 提升无公共入口，但漏查
+失败上报缺源状态守卫）、把领域写句柄判为 Minor；Quality 侧不覆盖 Contract
+Card 义务与迁移台账合规。**有 live 复现的一侧优先。** 这印证 D-2026-07-26-2
+的双独立评审设置有效，且"红队也会错、双向都不轻信"。
+
+### D-2026-07-27-17 · 035 实现的 §16.2 行数触发线豁免
+
+035 实现的生产代码为 raw 1781 行 / 有效 1300 行（唯一迁移 200、`__init__`
+导出面 89、store 445、outbox 196、models 169、tables 86、metrics 77、
+errors 38），超过 033 §16.2 的 ~900 行重新切分警报线。该裁决自 #44 起
+一直悬置，本决策予以闭合：**不拆分**。
+
+依据（Spec 侧独立评审给出的算术论证，总控窗口采纳）：
+
+1. §16.2 自带反向约束"不能为了数字把一个原子不变量拆成跨 PR 半成品"。
+   P1.1–P1.8/P1.10 是一个不可分事务边界不变量（单领 → lease/fencing →
+   attempt/路由 → 完成事务 + outbox 同事务），该部分本身已约 750 有效行；
+2. **拆分在算术上不能带来预算合规**：唯一真正可分离的是 metrics（77）与
+   dispatcher（约 148），共约 225 行；拆掉后仍约 1075 > 900，只换来两个
+   PR 和一段"`wiki_outbox_events` 无人 drain"的空窗；
+3. §16.2 明确 900 是**评审触发线**而非正确性门禁，其正确出口是 reviewer
+   裁决而非强制拆分；
+4. 超出部分构成可审计且多不属 P1 领域逻辑：`__init__` 89 行纯 re-export、
+   迁移中约 76 行是为满足仓库既有"被拒绝的降级零 DDL"不变量而重放 0006
+   preflight 的机械代码、输入校验约 25 行。
+
+**豁免仅限本窗口，不构成后续 Pn 先例**；后续 Pn 的 Contract Card 仍按
+§16.2 的 300–700 目标与 ~900 触发线约束，超线仍须逐案裁决。tasks.md 的
+路径预算行同步改为实测值并引用本决策，不得留 TBD。
 
 ### D-2026-07-26-5 · 主线开发执行模式
 

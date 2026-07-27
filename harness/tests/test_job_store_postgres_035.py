@@ -152,6 +152,25 @@ def _store(runtime: PostgresRuntime, **overrides: object) -> JobStore:
     return JobStore(runtime.factory, _config(**overrides))
 
 
+def _force_expire(runtime: PostgresRuntime, *job_ids: str) -> None:
+    """把指定任务的 lease 回拨到过去，模拟 worker 停滞超过 lease 时长。
+
+    D-2026-07-27-16 起 `lease_seconds` 必须严格为正且大于 heartbeat 间隔
+    （`0` 会使每个 lease 出生即过期、静默作废并发限额），因此过期脚手架
+    统一走本函数：只回拨 lease，不改 state/attempt/generation。
+    """
+    with runtime.factory() as session:
+        with session.begin():
+            for job_id in job_ids:
+                session.execute(
+                    text(
+                        "UPDATE wiki_jobs SET lease_expires_at = "
+                        "timestamptz '2000-01-01 00:00:00+00' WHERE id = :job_id"
+                    ),
+                    {"job_id": job_id},
+                )
+
+
 def _space(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
@@ -322,7 +341,7 @@ def test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     space_id = _space("takeover")
-    expiring = _store(postgres_runtime, lease_seconds=0.0)
+    expiring = _store(postgres_runtime)
     healthy = _store(postgres_runtime, lease_seconds=300.0)
     expiring.enqueue(space_id=space_id, job_type="compile", idempotency_key="job-1")
 
@@ -331,6 +350,7 @@ def test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation(
     expiring.start(
         space_id=space_id, job_id=stale.job.id, generation=stale.job.lease_generation
     )
+    _force_expire(postgres_runtime, stale.job.id)
 
     takeover = healthy.claim(space_ids=(space_id,), worker_id="worker-b")
     assert isinstance(takeover, ClaimedJob)
@@ -450,9 +470,10 @@ def test_p1_3_late_worker_every_write_path_is_fenced_after_takeover(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     space_id = _space("fence")
-    expiring = _store(postgres_runtime, lease_seconds=0.0)
+    expiring = _store(postgres_runtime)
     healthy = _store(postgres_runtime, lease_seconds=300.0)
     job_id, old_generation = _start_running(expiring, space_id, "job-1", "worker-a")
+    _force_expire(postgres_runtime, job_id)
 
     takeover = healthy.claim(space_ids=(space_id,), worker_id="worker-b")
     assert isinstance(takeover, ClaimedJob)
@@ -673,8 +694,9 @@ def test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result(
         bind=crash_engine, expire_on_commit=False, future=True
     )
     try:
-        worker_a = JobStore(crash_factory, _config(lease_seconds=0.0))
+        worker_a = JobStore(crash_factory, _config())
         job_id, generation_a = _start_running(worker_a, space_id, "job-1", "worker-a")
+        _force_expire(postgres_runtime, job_id)
 
         # 强制终止 A 的全部后端连接：不执行任何清理（P1.10）。
         with postgres_runtime.factory() as session:
@@ -733,7 +755,7 @@ def test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts(
     postgres_runtime: PostgresRuntime,
 ) -> None:
     space_id = _space("poison")
-    store = _store(postgres_runtime, lease_seconds=0.0, max_attempts=3)
+    store = _store(postgres_runtime, max_attempts=3)
     store.enqueue(space_id=space_id, job_type="compile", idempotency_key="poison")
 
     generations: list[int] = []
@@ -747,7 +769,8 @@ def test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts(
             generation=outcome.job.lease_generation,
         )
         assert running.attempt == _round + 1
-        # worker 随即「崩溃」：不 heartbeat、不提交任何结果。
+        # worker 随即「崩溃」：不 heartbeat、不提交任何结果，lease 自然过期。
+        _force_expire(postgres_runtime, outcome.job.id)
 
     final = store.claim(space_ids=(space_id,), worker_id="worker-b")
     assert isinstance(final, NoClaimableJob)  # 回收路由进 dead_letter，不再 requeue
@@ -866,20 +889,32 @@ def test_c1_expired_foreign_lease_does_not_consume_global_limit(
     runtime = isolated_postgres_runtime
     space_dead = _space("dead")
     space_live = _space("live")
-    crasher = _store(runtime, lease_seconds=0.0, global_concurrency_limit=1)
+    crasher = _store(runtime, global_concurrency_limit=1)
     crasher.enqueue(space_id=space_dead, job_type="compile", idempotency_key="k")
     dead = crasher.claim(space_ids=(space_dead,), worker_id="worker-crash")
     assert isinstance(dead, ClaimedJob)
+    _force_expire(runtime, dead.job.id)
 
     healthy = _store(runtime, lease_seconds=300.0, global_concurrency_limit=1)
     healthy.enqueue(space_id=space_live, job_type="compile", idempotency_key="k")
 
     outcome = healthy.claim(space_ids=(space_live,), worker_id="worker-live")
 
+    # C1 的反饥饿意图保留；机制按 D-2026-07-27-16 改为「饱和时先做无 Space
+    # 过滤的有界回收再重算」——因此 scope 外过期行会被 fenced（generation +1），
+    # 不再断言"scope 外零变更"。保住的是：不永久饥饿 + 调用方拿不到跨 Space
+    # 任务内容 + 过期持有者即刻失去写权威。
     assert isinstance(outcome, ClaimedJob)  # 修复前：永远 global_concurrency_limit
     assert outcome.job.space_id == space_live
-    parked = healthy.get_job(space_id=space_dead, job_id=dead.job.id)
-    assert parked.state is JobState.LEASED  # scope 外零变更（P1.8）
+    reclaimed = healthy.get_job(space_id=space_dead, job_id=dead.job.id)
+    assert reclaimed.state is JobState.QUEUED
+    assert reclaimed.lease_generation == dead.job.lease_generation + 1
+    with pytest.raises(StaleGenerationError):
+        crasher.start(
+            space_id=space_dead,
+            job_id=dead.job.id,
+            generation=dead.job.lease_generation,
+        )
     # 有效（未过期）lease 已达全局限额：下一个 claim 被全局限额挡住。
     healthy.enqueue(space_id=space_live, job_type="compile", idempotency_key="k2")
     blocked = healthy.claim(space_ids=(space_live,), worker_id="worker-live")
@@ -897,7 +932,8 @@ def test_i3_lease_duration_survives_advisory_lock_wait(
     from insurance_harness.jobs.store import _CLAIM_LOCK_KEY
 
     space_id = _space("clockwait")
-    store = _store(postgres_runtime, lease_seconds=5.0)
+    # lease 必须大于 heartbeat 间隔（D-2026-07-27-16），短 lease 场景同步调小。
+    store = _store(postgres_runtime, lease_seconds=5.0, heartbeat_interval_seconds=1.0)
     store.enqueue(space_id=space_id, job_type="compile", idempotency_key="k")
     lock_held = threading.Event()
 
@@ -928,7 +964,7 @@ def test_i3_lease_duration_survives_advisory_lock_wait(
     # 修复前：lease 锚定事务开始时刻，等待 1.5s 后仅剩 ~3.5s 甚至立即过期。
     assert float(remaining) > 3.5
 
-    thief = _store(postgres_runtime, lease_seconds=5.0)
+    thief = _store(postgres_runtime, lease_seconds=5.0, heartbeat_interval_seconds=1.0)
     stolen = thief.claim(space_ids=(space_id,), worker_id="thief")
     assert isinstance(stolen, NoClaimableJob)  # 新 lease 未过期，不可被立即接管
     current = store.get_job(space_id=space_id, job_id=outcome.job.id)

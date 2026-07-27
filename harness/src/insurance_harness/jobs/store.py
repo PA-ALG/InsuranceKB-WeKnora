@@ -130,6 +130,20 @@ def validated_text(value: str, name: str, *, max_length: int) -> str:
     return value
 
 
+def require_active_lease(session: Session, row: WikiJob, *, now: datetime | None = None) -> None:
+    """写权威过期门（P1.3 写权威合同，D-2026-07-27-16）。
+
+    写权威 = 当前 generation ∧ lease 未过期。本函数是**唯一**执法点，
+    heartbeat/start/结果提交/失败上报/outbox 追加共用它——四条路径不得
+    各自实现或省略过期判定，否则"被计入并发上限的集合"与"仍能写的集合"
+    会不一致（C1 的窄计数 + 宽写权威即由此裂开）。判定只用数据库时钟。
+    """
+    current = database_now(session) if now is None else now
+    expires_at = _aware(row.lease_expires_at)
+    if expires_at is None or expires_at <= current:
+        raise LeaseExpiredError(job_id=row.id)
+
+
 def validated_payload(payload: Mapping[str, Any] | None, name: str = "payload") -> dict[str, Any]:
     """payload 必须是可 JSON 序列化的映射；违规 typed 拒绝（review I6）。"""
     materialized = dict(payload or {})
@@ -264,19 +278,16 @@ class JobStore:
                     )
                 # 锁后读钟：advisory 等待不吞噬 lease 时长（review I3）。
                 now = database_now(session)
-                global_active = int(
-                    session.scalar(
-                        select(func.count())
-                        .select_from(WikiJob)
-                        .where(
-                            WikiJob.state.in_(_ACTIVE_STATES),
-                            WikiJob.lease_expires_at > now,
-                        )
-                    )
-                    or 0
-                )
+                global_active = self._count_active(session, scope=None)
                 if global_active >= self._config.global_concurrency_limit:
-                    return NoClaimableJob(reason="global_concurrency_limit")
+                    # P1.8 限额会计合同（D-2026-07-27-16）：计数包含过期但未
+                    # 回收的行——它们的持有者可能仍存活并消耗外部资源。为避免
+                    # 因此永久饥饿（C1 的动机），饱和时先做一次无 Space 过滤
+                    # 的有界回收（使过期行被 fenced）再重算，仍饱和才拒绝。
+                    if self._reclaim_saturated(session, now):
+                        global_active = self._count_active(session, scope=None)
+                    if global_active >= self._config.global_concurrency_limit:
+                        return NoClaimableJob(reason="global_concurrency_limit")
                 active_by_space: dict[str, int] = {
                     row_space_id: int(row_count)
                     for row_space_id, row_count in session.execute(
@@ -284,7 +295,6 @@ class JobStore:
                         .where(
                             WikiJob.space_id.in_(scope),
                             WikiJob.state.in_(_ACTIVE_STATES),
-                            WikiJob.lease_expires_at > now,
                         )
                         .group_by(WikiJob.space_id)
                     ).tuples()
@@ -295,6 +305,26 @@ class JobStore:
                     if active_by_space.get(space_id, 0)
                     < self._config.per_space_concurrency_limit
                 )
+                if not eligible:
+                    # per-Space 饱和同样先尝试有界回收再重算（同上合同）。
+                    if self._reclaim_saturated(session, now):
+                        active_by_space = {
+                            row_space_id: int(row_count)
+                            for row_space_id, row_count in session.execute(
+                                select(WikiJob.space_id, func.count())
+                                .where(
+                                    WikiJob.space_id.in_(scope),
+                                    WikiJob.state.in_(_ACTIVE_STATES),
+                                )
+                                .group_by(WikiJob.space_id)
+                            ).tuples()
+                        }
+                        eligible = tuple(
+                            space_id
+                            for space_id in scope
+                            if active_by_space.get(space_id, 0)
+                            < self._config.per_space_concurrency_limit
+                        )
                 if not eligible:
                     # scope 内全部 Space 饱和：不是空队列（review I12）。
                     return NoClaimableJob(reason="per_space_concurrency_limit")
@@ -337,17 +367,16 @@ class JobStore:
                 if state not in (JobState.LEASED, JobState.RUNNING):
                     raise IllegalTransitionError(state, state, row.id)
                 now = database_now(session)
-                expires_at = _aware(row.lease_expires_at)
-                if expires_at is None or expires_at <= now:
-                    raise LeaseExpiredError(job_id=row.id)
+                require_active_lease(session, row, now=now)
                 row.lease_expires_at = now + timedelta(seconds=self._config.lease_seconds)
                 return _snapshot(row)
 
     def start(self, *, space_id: str, job_id: str, generation: int) -> JobSnapshot:
         """`leased → running`：同 generation 的 worker 开始执行，attempt +1。
 
-        过期判定不在此处：claim/start 竞态由 generation fencing 保护，
-        过期执法只发生在回收与 heartbeat。
+        写权威 = 当前 generation ∧ lease 未过期（P1.3，D-2026-07-27-16）：
+        lease 已过期的持有者即使 generation 未变也无权继续，typed
+        `lease_expired` 拒绝并零变更；该任务只能经回收后由新 generation 继续。
         """
         with self._session_factory() as session:
             with session.begin():
@@ -355,6 +384,7 @@ class JobStore:
                 self._check_generation(row, generation)
                 ensure_transition(JobState(row.state), JobState.RUNNING, row.id)
                 now = database_now(session)
+                require_active_lease(session, row, now=now)
                 row.state = JobState.RUNNING.value
                 row.attempt += 1
                 row.started_at = now
@@ -386,6 +416,7 @@ class JobStore:
                 self._check_generation(row, generation)
                 ensure_transition(JobState(row.state), JobState.SUCCEEDED, row.id)
                 now = database_now(session)
+                require_active_lease(session, row, now=now)
                 if domain_write is not None:
                     with session.begin_nested():
                         domain_write(DomainWriteHandle(session))
@@ -414,12 +445,21 @@ class JobStore:
             with session.begin():
                 row = self._locked_job(session, space_id, job_id)
                 self._check_generation(row, generation)
+                source = JobState(row.state)
+                if source is not JobState.RUNNING:
+                    # P1.1 storage-only 执法（D-2026-07-27-16）：持有有效 lease
+                    # 但尚未 start 的 leased 行不得经调用方之手直接进入终态或
+                    # 等待态——否则 `leased → dead_letter` 这对 storage-only
+                    # 转换有调用方直达旁路，且 max_attempts 预算被作废。
+                    # pre-start 失败一律由回收路径按 max_attempts 兜底。
+                    raise IllegalTransitionError(source, source, row.id)
+                now = database_now(session)
+                require_active_lease(session, row, now=now)
                 policy = self._config.policy_for(row.job_type)
                 target = route_failure(
                     failure.error_class, attempt=row.attempt, max_attempts=policy.max_attempts
                 )
-                ensure_transition(JobState(row.state), target, row.id)
-                now = database_now(session)
+                ensure_transition(source, target, row.id)
                 row.state = target.value
                 row.worker_id = None
                 row.lease_expires_at = None
@@ -480,21 +520,63 @@ class JobStore:
                     session, scope, now, limit=self._config.maintenance_batch_size
                 )
 
+    def reclaim_expired_leases_all_spaces(self) -> ReclaimReport:
+        """跨 Space 回收入口（P1.10 回收可达性合同，D-2026-07-27-16）。
+
+        显式命名的全局入口，与 `global_job_metrics` 同形：回收不得依赖任何
+        调用方对 Space 集合的枚举，否则最后一个 worker 崩溃的 Space 其过期
+        行永不收敛（既不 requeue 也不 dead_letter）。单次调用同样受
+        `maintenance_batch_size` 约束；剩余行由后续调用继续收敛。
+        """
+        with self._session_factory() as session:
+            with session.begin():
+                now = database_now(session)
+                return self._reclaim_locked(
+                    session, None, now, limit=self._config.maintenance_batch_size
+                )
+
+    @staticmethod
+    def _count_active(session: Session, *, scope: tuple[str, ...] | None) -> int:
+        """P1.8 限额分母：全部 `leased | running` 行，不按 lease 是否过期缩小。"""
+        conditions = [WikiJob.state.in_(_ACTIVE_STATES)]
+        if scope is not None:
+            conditions.insert(0, WikiJob.space_id.in_(scope))
+        return int(
+            session.scalar(select(func.count()).select_from(WikiJob).where(*conditions)) or 0
+        )
+
+    def _reclaim_saturated(self, session: Session, now: datetime) -> bool:
+        """限额饱和时的反饥饿动作：无 Space 过滤的一次有界回收。
+
+        返回是否确实回收了行（决定调用方是否值得重算计数）。批量受
+        `maintenance_batch_size` 约束，因此不会在串行段内产生无界工作。
+        """
+        report = self._reclaim_locked(
+            session, None, now, limit=self._config.maintenance_batch_size
+        )
+        return bool(report.requeued_job_ids or report.dead_lettered_job_ids)
+
     def _reclaim_locked(
-        self, session: Session, scope: tuple[str, ...], now: datetime, *, limit: int
+        self, session: Session, scope: tuple[str, ...] | None, now: datetime, *, limit: int
     ) -> ReclaimReport:
-        """回收 scope 内已过期 lease：记 `lease_expired` retryable 并按
-        `max_attempts` 路由（P1.4）；每次回收使 generation 单调 +1，被逐出
-        worker 的写入立即 stale（review C2）。行锁 SKIP LOCKED，批量受
-        `limit` 约束（review I4）。"""
+        """回收已过期 lease：记 `lease_expired` retryable 并按 `max_attempts`
+        路由（P1.4）；每次回收使 generation 单调 +1，被逐出 worker 的写入立即
+        stale（review C2）。行锁 SKIP LOCKED，批量受 `limit` 约束（review I4）。
+
+        `scope=None` 表示**不带 Space 过滤**（P1.10 回收可达性合同，
+        D-2026-07-27-16）：回收是存储层维护动作，不读写领域数据、不向调用方
+        返回任何跨 Space 内容，因此不构成 P1.8 跨 Space fail-closed 的例外。
+        """
+        conditions = [
+            WikiJob.state.in_(_ACTIVE_STATES),
+            WikiJob.lease_expires_at <= now,
+        ]
+        if scope is not None:
+            conditions.insert(0, WikiJob.space_id.in_(scope))
         expired_rows = (
             session.execute(
                 select(WikiJob)
-                .where(
-                    WikiJob.space_id.in_(scope),
-                    WikiJob.state.in_(_ACTIVE_STATES),
-                    WikiJob.lease_expires_at <= now,
-                )
+                .where(*conditions)
                 .order_by(WikiJob.id)
                 .limit(limit)
                 .with_for_update(skip_locked=True)
@@ -506,10 +588,16 @@ class JobStore:
         dead_lettered: list[str] = []
         for row in expired_rows:
             policy = self._config.policy_for(row.job_type)
+            if JobState(row.state) is JobState.LEASED:
+                # P1.1 第 10 条（D-2026-07-27-16）：本次投递从未进入 running，
+                # worker 未能自报 start，attempt 必须由回收记入——否则
+                # claim→start 之间崩溃的任务永不推进 attempt、无界重排队。
+                # running 行的 attempt 已由 start 计入，不重复计数。
+                row.attempt += 1
             target = (
                 JobState.DEAD_LETTER if row.attempt >= policy.max_attempts else JobState.QUEUED
             )
-            ensure_transition(JobState(row.state), target, row.id)
+            ensure_transition(JobState(row.state), target, row.id, storage_layer=True)
             row.state = target.value
             row.worker_id = None
             row.lease_expires_at = None
@@ -547,7 +635,7 @@ class JobStore:
             .all()
         )
         for row in due_rows:
-            ensure_transition(JobState(row.state), JobState.QUEUED, row.id)
+            ensure_transition(JobState(row.state), JobState.QUEUED, row.id, storage_layer=True)
             row.state = JobState.QUEUED.value
 
     # --- P1.8 scope 化读取 ---

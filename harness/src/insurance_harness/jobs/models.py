@@ -80,9 +80,23 @@ STORAGE_ONLY_TRANSITIONS: frozenset[tuple[JobState, JobState]] = frozenset(
 )
 
 
-def ensure_transition(source: JobState, target: JobState, job_id: str | None = None) -> None:
-    """转换合法性唯一入口：非法即抛 typed `illegal_transition`（P1.1）。"""
+def ensure_transition(
+    source: JobState,
+    target: JobState,
+    job_id: str | None = None,
+    *,
+    storage_layer: bool = False,
+) -> None:
+    """转换合法性唯一入口：非法即抛 typed `illegal_transition`（P1.1）。
+
+    `STORAGE_ONLY_TRANSITIONS` 是**可执行护栏**（P1.1 storage-only 执法合同，
+    D-2026-07-27-16）：默认 `storage_layer=False` 时命中 storage-only 对即
+    拒绝，只有回收与 backoff 提升路径显式传 `storage_layer=True`。仅把该
+    常量记录在文档或测试断言里不构成执法。
+    """
     if (source, target) not in LEGAL_TRANSITIONS:
+        raise IllegalTransitionError(source, target, job_id)
+    if not storage_layer and (source, target) in STORAGE_ONLY_TRANSITIONS:
         raise IllegalTransitionError(source, target, job_id)
 
 
@@ -151,7 +165,7 @@ class JobRuntimeConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    lease_seconds: float = Field(ge=0)
+    lease_seconds: float = Field(gt=0)
     heartbeat_interval_seconds: float = Field(gt=0)
     max_attempts: int = Field(ge=1)
     backoff_seconds: tuple[float, ...] = Field(min_length=1)
@@ -164,6 +178,10 @@ class JobRuntimeConfig(BaseModel):
     def model_post_init(self, _context: Any) -> None:
         if any(delay < 0 for delay in self.backoff_seconds):
             raise ValueError("backoff_seconds entries must be >= 0")
+        if self.lease_seconds <= self.heartbeat_interval_seconds:
+            # P1.3（D-2026-07-27-16）：lease 必须长于 heartbeat 间隔，否则
+            # 续租永远赶不上过期，所有 lease 实际上出生即死。
+            raise ValueError("lease_seconds must be greater than heartbeat_interval_seconds")
 
     def policy_for(self, job_type: str) -> JobTypePolicy:
         """job_type 覆盖优先，否则用全局默认（P1.4 可按 job_type 覆盖）。"""

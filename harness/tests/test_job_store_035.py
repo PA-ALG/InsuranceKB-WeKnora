@@ -81,6 +81,32 @@ def job_count(factory: SessionFactory) -> int:
         return int(session.scalar(select(func.count()).select_from(WikiJob)) or 0)
 
 
+def database_now_utc(store: JobStore) -> datetime:
+    """按数据库时钟读当前时间（过期断言必须与实现同一时钟）。"""
+    with store._session_factory() as session:  # noqa: SLF001 - 测试读同一时钟
+        return database_now(session)
+
+
+def force_expire(factory: SessionFactory, *job_ids: str) -> None:
+    """把指定任务的 lease 回拨到过去，模拟 worker 停滞超过 lease 时长。
+
+    D-2026-07-27-16 起 `lease_seconds` 必须严格为正且大于 heartbeat 间隔，
+    因此过期场景不再用 `lease_seconds=0`（那会使每个 lease 出生即过期，
+    静默作废并发限额）。所有过期脚手架统一走本函数：只回拨 lease，不改
+    state/attempt/generation，与真实停滞的可观测状态一致。
+    """
+    with factory() as session:
+        with session.begin():
+            for job_id in job_ids:
+                session.execute(
+                    text(
+                        "UPDATE wiki_jobs SET lease_expires_at = "
+                        "'2000-01-01 00:00:00.000000+00:00' WHERE id = :job_id"
+                    ),
+                    {"job_id": job_id},
+                )
+
+
 # --- T3：enqueue 幂等去重与 claim 基本合同 ---
 
 
@@ -373,9 +399,10 @@ def test_p1_1_start_moves_leased_to_running_and_counts_attempt(
 def test_p1_1_reclaim_records_lease_expired_retryable_and_requeues_below_limit(
     factory: SessionFactory,
 ) -> None:
-    store = make_store(factory, lease_seconds=0.0)
+    store = make_store(factory)
     store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
     claimed = _claimed(store, "space-a")
+    force_expire(factory, claimed.id)
 
     report = store.reclaim_expired_leases(space_ids=("space-a",))
 
@@ -397,12 +424,13 @@ def test_p1_1_reclaim_records_lease_expired_retryable_and_requeues_below_limit(
 def test_c2_reclaim_generation_bump_fences_evicted_worker_immediately(
     factory: SessionFactory,
 ) -> None:
-    store = make_store(factory, lease_seconds=0.0)
+    store = make_store(factory)
     store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
     claimed = _claimed(store, "space-a")
     running = store.start(
         space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
     )
+    force_expire(factory, running.id)
     store.reclaim_expired_leases(space_ids=("space-a",))
 
     # 回收后（尚未有新 claim）：被逐出 worker 的一切写入即刻 stale。
@@ -481,27 +509,40 @@ def test_c2_outbox_append_requires_running_state(factory: SessionFactory) -> Non
 def test_c1_expired_lease_outside_scope_does_not_hold_global_limit(
     factory: SessionFactory,
 ) -> None:
-    crasher = make_store(factory, lease_seconds=0.0, global_concurrency_limit=1)
+    """C1 的反饥饿意图保留，机制按 D-2026-07-27-16 改为「回收后放行」。
+
+    原实现让过期行退出限额分母以避免饥饿，但同时它们仍保有写权威（P1.3），
+    于是限额被停滞 worker 无界抬高。冻结后的合同改为：分母包含全部
+    `leased | running`，饱和时先做一次无 Space 过滤的有界回收再重算。因此
+    scope 外的过期行**会**被 fenced（generation +1）——这是刻意的契约收紧，
+    不再断言"scope 外零变更"；C1 真正要保住的是「不因外域过期行永久饥饿」
+    与「调用方拿不到跨 Space 任务内容」，两者在下方断言。
+    """
+    crasher = make_store(factory, global_concurrency_limit=1)
     crasher.enqueue(space_id="space-dead", job_type="compile", idempotency_key="k")
     dead = _claimed(crasher, "space-dead", worker_id="worker-crash")
+    force_expire(factory, dead.id)
 
     healthy = make_store(factory, lease_seconds=300.0, global_concurrency_limit=1)
     healthy.enqueue(space_id="space-live", job_type="compile", idempotency_key="k")
 
     outcome = healthy.claim(space_ids=("space-live",), worker_id="worker-live")
 
-    # 过期 lease 不再计入 leased|running 并发；scope 外的行零变更。
-    assert isinstance(outcome, ClaimedJob)
-    assert outcome.job.space_id == "space-live"
-    parked = healthy.get_job(space_id="space-dead", job_id=dead.id)
-    assert parked.state is JobState.LEASED
-    assert parked.lease_generation == dead.lease_generation
+    assert isinstance(outcome, ClaimedJob), "外域过期行不得造成永久饥饿"
+    assert outcome.job.space_id == "space-live", "调用方不得拿到跨 Space 任务"
+    reclaimed = healthy.get_job(space_id="space-dead", job_id=dead.id)
+    assert reclaimed.state is JobState.QUEUED
+    assert reclaimed.lease_generation == dead.lease_generation + 1
+    # 被逐出的 crasher 即刻失去写权威（generation 与 lease 双重失效）。
+    with pytest.raises(StaleGenerationError):
+        crasher.start(space_id="space-dead", job_id=dead.id, generation=dead.lease_generation)
 
 
 def test_m14_heartbeat_cannot_revive_expired_lease(factory: SessionFactory) -> None:
-    store = make_store(factory, lease_seconds=0.0)
+    store = make_store(factory)
     store.enqueue(space_id="space-a", job_type="compile", idempotency_key="k")
     claimed = _claimed(store, "space-a")
+    force_expire(factory, claimed.id)
 
     reviver = make_store(factory, lease_seconds=600.0)
     with pytest.raises(LeaseExpiredError):
@@ -511,7 +552,9 @@ def test_m14_heartbeat_cannot_revive_expired_lease(factory: SessionFactory) -> N
 
     unchanged = store.get_job(space_id="space-a", job_id=claimed.id)
     assert unchanged.state is JobState.LEASED
-    assert unchanged.lease_expires_at == claimed.lease_expires_at
+    # 断言 lease 未被续租：仍停在回拨后的过去时刻（不是 claim 时的原值）。
+    assert unchanged.lease_expires_at is not None
+    assert unchanged.lease_expires_at < database_now_utc(store)
 
 
 def test_i4_claim_and_reclaim_maintenance_batches_are_bounded_by_config(
@@ -540,10 +583,11 @@ def test_i4_claim_and_reclaim_maintenance_batches_are_bounded_by_config(
 def test_p1_10_reclaim_routes_to_dead_letter_at_max_attempts(
     factory: SessionFactory,
 ) -> None:
-    store = make_store(factory, lease_seconds=0.0, max_attempts=1)
+    store = make_store(factory, max_attempts=1)
     store.enqueue(space_id="space-a", job_type="compile", idempotency_key="poison")
     claimed = _claimed(store, "space-a")
     store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
+    force_expire(factory, claimed.id)
 
     report = store.reclaim_expired_leases(space_ids=("space-a",))
 
@@ -561,9 +605,10 @@ def test_p1_10_reclaim_routes_to_dead_letter_at_max_attempts(
 def test_p1_3_claim_reclaims_expired_lease_and_takes_strictly_newer_generation(
     factory: SessionFactory,
 ) -> None:
-    store = make_store(factory, lease_seconds=0.0)
+    store = make_store(factory)
     store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
     first = _claimed(store, "space-a", worker_id="worker-a")
+    force_expire(factory, first.id)
 
     second = _claimed(store, "space-a", worker_id="worker-b")
 
@@ -579,9 +624,10 @@ def test_p1_3_reclaim_leaves_active_leases_untouched_and_is_space_scoped(
     active_store.enqueue(space_id="space-a", job_type="compile", idempotency_key="alive")
     alive = _claimed(active_store, "space-a")
 
-    expired_store = make_store(factory, lease_seconds=0.0)
+    expired_store = make_store(factory)
     expired_store.enqueue(space_id="space-b", job_type="compile", idempotency_key="expired")
     expired = _claimed(expired_store, "space-b")
+    force_expire(factory, expired.id)
 
     report = active_store.reclaim_expired_leases(space_ids=("space-a",))
 
@@ -1293,3 +1339,372 @@ def test_p1_7_resumed_job_continues_same_state_machine(factory: SessionFactory) 
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
     )
     assert done.state is JobState.SUCCEEDED
+
+
+# --- T14/T15/T18：D-2026-07-27-16 边界冻结（写权威、回收 attempt、storage-only） ---
+
+
+def test_q14_reclaiming_a_leased_row_counts_one_attempt(factory: SessionFactory) -> None:
+    """P1.1 第 10 条：回收 `leased` 行（worker 未及 start）先 attempt +1。"""
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
+    claimed = _claimed(store, "space-a")
+    assert claimed.attempt == 0
+    force_expire(factory, claimed.id)
+
+    store.reclaim_expired_leases(space_ids=("space-a",))
+
+    job = store.get_job(space_id="space-a", job_id=claimed.id)
+    assert job.state is JobState.QUEUED
+    assert job.attempt == 1, "leased 行被回收必须记一次 attempt"
+
+
+def test_q14_crash_between_claim_and_start_is_bounded_by_max_attempts(
+    factory: SessionFactory,
+) -> None:
+    """P1.1 场景「未 start 即崩溃的重试次数有界」：不得无界重排队。"""
+    store = make_store(factory, max_attempts=3)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="poison")
+    leases = 0
+    for _ in range(12):
+        outcome = store.claim(space_ids=("space-a",), worker_id="worker-1")
+        if not isinstance(outcome, ClaimedJob):
+            break
+        leases += 1
+        force_expire(factory, outcome.job.id)  # worker 在 start 之前死亡
+        store.reclaim_expired_leases(space_ids=("space-a",))
+
+    with factory() as session:
+        row = session.execute(select(WikiJob)).scalar_one()
+        assert row.state == JobState.DEAD_LETTER.value, f"仍在 {row.state}，租约已发 {leases} 次"
+        assert row.attempt == 3
+    assert leases == 3
+
+
+def _active_rows(factory: SessionFactory) -> int:
+    with factory() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(WikiJob)
+                .where(WikiJob.state.in_((JobState.LEASED.value, JobState.RUNNING.value)))
+            )
+            or 0
+        )
+
+
+@pytest.mark.parametrize(
+    ("lease_seconds", "heartbeat"),
+    [(0.0, 30.0), (-1.0, 30.0), (30.0, 30.0), (10.0, 30.0)],
+)
+def test_q11_zero_or_sub_heartbeat_lease_is_rejected_by_config(
+    lease_seconds: float, heartbeat: float
+) -> None:
+    """P1.3：`lease_seconds` 必须严格为正且大于 heartbeat 间隔。
+
+    `lease_seconds = 0` 曾是合法配置，其后果是每个 lease 出生即过期——静默
+    作废并发限额与 heartbeat（运维若把 0 读作"不限期"会得到相反语义）。
+    """
+    with pytest.raises(ValueError):
+        JobRuntimeConfig.model_validate(
+            {
+                "lease_seconds": lease_seconds,
+                "heartbeat_interval_seconds": heartbeat,
+                "max_attempts": 3,
+                "backoff_seconds": (0.0,),
+                "per_space_concurrency_limit": 8,
+                "global_concurrency_limit": 32,
+            }
+        )
+
+
+def test_q11_positive_lease_above_heartbeat_is_still_accepted() -> None:
+    """接受侧：正常正值配置不被误拒。"""
+    config = make_config(lease_seconds=45.0, heartbeat_interval_seconds=15.0)
+    assert config.lease_seconds == 45.0
+
+
+def test_q17_unenumerated_space_converges_via_explicit_global_entry(
+    factory: SessionFactory,
+) -> None:
+    """P1.10 回收可达性：无人枚举的 Space 必须能经显式全局入口收敛。"""
+    store = make_store(factory, max_attempts=1)
+    store.enqueue(space_id="space-orphan", job_type="compile", idempotency_key="job")
+    orphan = _claimed(store, "space-orphan", worker_id="worker-gone")
+    force_expire(factory, orphan.id)
+
+    report = store.reclaim_expired_leases_all_spaces()
+
+    assert report.dead_lettered_job_ids == (orphan.id,)
+    job = store.get_job(space_id="space-orphan", job_id=orphan.id)
+    assert job.state is JobState.DEAD_LETTER
+    assert job.error_summary == "lease_expired"
+
+
+def test_q17_global_reclaim_leaves_unexpired_rows_untouched(factory: SessionFactory) -> None:
+    """接受侧：全局回收不得误杀未过期 lease。"""
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="live")
+    live = _claimed(store, "space-a")
+
+    report = store.reclaim_expired_leases_all_spaces()
+
+    assert report.requeued_job_ids == ()
+    assert report.dead_lettered_job_ids == ()
+    unchanged = store.get_job(space_id="space-a", job_id=live.id)
+    assert unchanged.state is JobState.LEASED
+    assert unchanged.lease_generation == live.lease_generation
+
+
+def test_q16_stalled_expired_leases_never_exceed_configured_limits(
+    factory: SessionFactory,
+) -> None:
+    """P1.8 限额会计：停滞的过期 lease 不得抬高 `leased | running` 行数上限。
+
+    每个 worker 只声明自己的 Space（P1.8 鼓励的分片部署），过期行属于别的
+    Space、无人回收——C1 的窄计数在此裂开：分母缩小而执行体一个没少。
+    """
+    store = make_store(factory, per_space_concurrency_limit=1, global_concurrency_limit=2)
+    for index in range(6):
+        store.enqueue(space_id=f"space-{index}", job_type="compile", idempotency_key="job")
+
+    for index in range(6):
+        outcome = store.claim(space_ids=(f"space-{index}",), worker_id=f"worker-{index}")
+        if isinstance(outcome, ClaimedJob):
+            force_expire(factory, outcome.job.id)  # worker 存活但停滞
+        assert _active_rows(factory) <= 2, f"第 {index + 1} 次 claim 后越限"
+
+
+def test_q16_single_space_saturation_is_not_bypassed_by_expired_rows(
+    factory: SessionFactory,
+) -> None:
+    """同一 Space、`maintenance_batch_size=1` 也不得越过 per-Space 上限。"""
+    store = make_store(
+        factory,
+        per_space_concurrency_limit=2,
+        global_concurrency_limit=2,
+        maintenance_batch_size=1,
+    )
+    for index in range(8):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=f"job-{index}")
+
+    for _ in range(6):
+        outcome = store.claim(space_ids=("space-a",), worker_id="worker-x")
+        if isinstance(outcome, ClaimedJob):
+            force_expire(factory, outcome.job.id)
+        assert _active_rows(factory) <= 2
+
+
+def test_q16_saturation_triggers_scope_free_bounded_reclaim(factory: SessionFactory) -> None:
+    """C1 反饥饿语义保留：饱和集合中属未声明 Space 的过期行被回收后放行，
+    且不向调用方返回跨 Space 任务内容。"""
+    store = make_store(factory, per_space_concurrency_limit=4, global_concurrency_limit=1)
+    store.enqueue(space_id="space-foreign", job_type="compile", idempotency_key="foreign")
+    store.enqueue(space_id="space-mine", job_type="compile", idempotency_key="mine")
+    foreign = store.claim(space_ids=("space-foreign",), worker_id="worker-foreign")
+    assert isinstance(foreign, ClaimedJob)
+    force_expire(factory, foreign.job.id)
+
+    outcome = store.claim(space_ids=("space-mine",), worker_id="worker-mine")
+
+    assert isinstance(outcome, ClaimedJob), "过期外域行必须被回收让路，不得永久饥饿"
+    assert outcome.job.space_id == "space-mine"
+    reclaimed = store.get_job(space_id="space-foreign", job_id=foreign.job.id)
+    assert reclaimed.state is JobState.QUEUED
+    assert reclaimed.lease_generation == foreign.job.lease_generation + 1
+    assert _active_rows(factory) == 1
+
+
+def test_q16_unexpired_leases_still_consume_the_limit(factory: SessionFactory) -> None:
+    """接受侧：未过期 lease 仍精确占额，达限返回 typed 拒绝而非放行。"""
+    store = make_store(factory, per_space_concurrency_limit=8, global_concurrency_limit=2)
+    for index in range(4):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=f"job-{index}")
+
+    granted = [store.claim(space_ids=("space-a",), worker_id=f"w-{i}") for i in range(4)]
+
+    assert sum(isinstance(item, ClaimedJob) for item in granted) == 2
+    refusals = [item for item in granted if isinstance(item, NoClaimableJob)]
+    assert [item.reason for item in refusals] == ["global_concurrency_limit"] * 2
+    assert _active_rows(factory) == 2
+
+
+def test_q18_storage_only_transitions_have_no_caller_entry(factory: SessionFactory) -> None:
+    """P1.1 storage-only 执法：持有有效 lease、attempt=0 的 leased 行不得经
+    任何调用方入口进入终态/等待态；四类错误分类逐一验证不对称已消除。"""
+    store = make_store(factory)
+    for error_class in ErrorClass:
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=error_class.value)
+
+    for error_class in ErrorClass:
+        leased = _claimed(store, "space-a", worker_id=f"w-{error_class.value}")
+        assert leased.attempt == 0
+        with pytest.raises(IllegalTransitionError):
+            store.report_failure(
+                space_id="space-a",
+                job_id=leased.id,
+                generation=leased.lease_generation,
+                failure=JobFailure(error_class=error_class, summary="pre-start fatal"),
+            )
+        frozen = store.get_job(space_id="space-a", job_id=leased.id)
+        assert (frozen.state, frozen.attempt, frozen.lease_generation) == (
+            JobState.LEASED,
+            0,
+            leased.lease_generation,
+        ), f"{error_class.value} 改变了 leased 行"
+        assert frozen.error_class is None and frozen.error_summary is None
+
+
+def test_q18_ensure_transition_refuses_storage_only_pairs_for_callers() -> None:
+    """storage-only 常量必须是可执行护栏，而非仅文档/测试断言。"""
+    from insurance_harness.jobs.models import STORAGE_ONLY_TRANSITIONS, ensure_transition
+
+    for source, target in sorted(STORAGE_ONLY_TRANSITIONS):
+        with pytest.raises(IllegalTransitionError):
+            ensure_transition(source, target, "job-x")
+        # 存储层自身仍可执行同一对转换。
+        ensure_transition(source, target, "job-x", storage_layer=True)
+
+
+def test_q18_running_to_dead_letter_still_works(factory: SessionFactory) -> None:
+    """接受侧：合法的 `running → dead_letter`（P1.1 #9）不被误杀。"""
+    store = make_store(factory, max_attempts=3)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
+    claimed = _claimed(store, "space-a")
+    running = store.start(
+        space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
+    )
+
+    dead = store.report_failure(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.NON_RETRYABLE, summary="fatal"),
+    )
+
+    assert dead.state is JobState.DEAD_LETTER
+    assert dead.attempt == 1
+    assert dead.error_class is ErrorClass.NON_RETRYABLE
+
+
+def test_q15_expired_lease_holder_has_no_write_authority_on_any_path(
+    factory: SessionFactory,
+) -> None:
+    """P1.3 写权威合同：过期未回收的持有者四条写路径全部 typed 拒绝、零变更。"""
+    store = make_store(factory)
+    for key in ("start", "success", "failure", "event"):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=key)
+
+    # 路径一：start
+    claimed = _claimed(store, "space-a")
+    force_expire(factory, claimed.id)
+    with pytest.raises(LeaseExpiredError):
+        store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
+    frozen = store.get_job(space_id="space-a", job_id=claimed.id)
+    assert (frozen.state, frozen.attempt, frozen.lease_generation) == (
+        JobState.LEASED,
+        0,
+        claimed.lease_generation,
+    )
+
+    # 路径二/三/四：running 行的结果提交、失败上报、outbox 追加
+    for path in ("success", "failure", "event"):
+        job = _claimed(store, "space-a", worker_id=f"worker-{path}")
+        running = store.start(
+            space_id="space-a", job_id=job.id, generation=job.lease_generation
+        )
+        force_expire(factory, running.id)
+        gen = running.lease_generation
+        if path == "success":
+            with pytest.raises(LeaseExpiredError):
+                store.report_success(
+                    space_id="space-a",
+                    job_id=running.id,
+                    generation=gen,
+                    events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+                )
+        elif path == "failure":
+            with pytest.raises(LeaseExpiredError):
+                store.report_failure(
+                    space_id="space-a",
+                    job_id=running.id,
+                    generation=gen,
+                    failure=JobFailure(error_class=ErrorClass.RETRYABLE, summary="boom"),
+                )
+        else:
+            with pytest.raises(LeaseExpiredError), factory() as session:
+                with session.begin():
+                    append_job_event(
+                        session,
+                        space_id="space-a",
+                        job_id=running.id,
+                        generation=gen,
+                        draft=OutboxEventDraft(event_type="job.progress", payload={}),
+                    )
+        after = store.get_job(space_id="space-a", job_id=running.id)
+        assert after.state is JobState.RUNNING, f"{path} 路径不应改变状态"
+        assert after.lease_generation == gen
+
+    with factory() as session:
+        assert int(session.scalar(select(func.count()).select_from(WikiOutboxEvent)) or 0) == 0
+
+
+def test_q15_unexpired_lease_still_writes_on_every_path(factory: SessionFactory) -> None:
+    """接受侧：未过期 lease 的四条写路径一条都不能被误杀。"""
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="ok-1")
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="ok-2")
+
+    first = _claimed(store, "space-a")
+    running = store.start(space_id="space-a", job_id=first.id, generation=first.lease_generation)
+    with factory() as session:
+        with session.begin():
+            append_job_event(
+                session,
+                space_id="space-a",
+                job_id=running.id,
+                generation=running.lease_generation,
+                draft=OutboxEventDraft(event_type="job.progress", payload={"n": 1}),
+            )
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+    )
+    assert done.state is JobState.SUCCEEDED
+
+    second = _claimed(store, "space-a", worker_id="worker-2")
+    running2 = store.start(
+        space_id="space-a", job_id=second.id, generation=second.lease_generation
+    )
+    failed = store.report_failure(
+        space_id="space-a",
+        job_id=running2.id,
+        generation=running2.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.RETRYABLE, summary="transient"),
+    )
+    assert failed.state is JobState.RETRY_WAIT
+
+
+def test_q14_crash_after_start_keeps_its_existing_bound(factory: SessionFactory) -> None:
+    """接受侧：start 之后崩溃的界与 attempt 计数不因 T14 改变。"""
+    store = make_store(factory, max_attempts=3)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="poison")
+    leases = 0
+    for _ in range(12):
+        outcome = store.claim(space_ids=("space-a",), worker_id="worker-1")
+        if not isinstance(outcome, ClaimedJob):
+            break
+        leases += 1
+        started = store.start(
+            space_id="space-a", job_id=outcome.job.id, generation=outcome.job.lease_generation
+        )
+        force_expire(factory, started.id)
+        store.reclaim_expired_leases(space_ids=("space-a",))
+
+    with factory() as session:
+        row = session.execute(select(WikiJob)).scalar_one()
+        assert row.state == JobState.DEAD_LETTER.value
+        assert row.attempt == 3
+    assert leases == 3

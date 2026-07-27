@@ -45,6 +45,14 @@ queued → leased → running → succeeded
 |---|---|
 | 并发 double-claim | 单事务 `FOR UPDATE SKIP LOCKED` 领取 + 每任务 generation 单调 +1，同 generation 至多一个成功 claim |
 | lease 过期后 stale writer | 全部写路径（heartbeat/转换/结果/outbox）校验 generation，旧 generation typed `stale_generation` 拒绝、零变更 |
+| **过期未回收的持有者仍在写**（D-16 边界冻结） | 写权威 = 当前 generation **∧** lease 未过期；四条写路径对称执法，过期一律 typed `lease_expired`、零变更 |
+| **停滞过期 lease 抬高并发上限**（D-16） | 限额计入全部 `leased \| running` 行（不按过期缩小分母）；饱和且存在过期行时先做一次 `maintenance_batch_size` 有界、无 Space 过滤的回收再重算 |
+| **未 start 即崩溃 ⇒ 无界重排队**（D-16） | 回收 `leased` 行时先 `attempt += 1` 再按 `max_attempts` 路由；界不依赖 worker 自报 `start` |
+| **无人枚举的 Space 永不收敛**（D-16） | 显式命名的跨 Space 回收入口（与 P1.9 全局聚合同形），不依赖调用方枚举 Space |
+| **调用方直达 storage-only 转换**（D-16） | storage-only 转换必须有可执行执法点；失败上报要求源状态 `running`，pre-start 失败一律走回收兜底 |
+| **领域写句柄越出通道**（D-16） | 语句面约束：回调前后校验完成事务/保存点身份不变，变更即 typed 拒绝并回滚；禁写 `wiki_` 自有表（含跨 Space 行与 `lease_generation`） |
+| **事件在调用方事务内追加 ⇒ 重复发布**（D-16） | 事件只能在完成事务内追加；不暴露调用方事务内的公共追加入口（重放会换新随机 event_id，消费端幂等无法折叠） |
+| **瞬时消费端不可用被当成毒性**（D-16） | 投递让位改持久化退避（`next_dispatch_at` + 配置化序列），不因失败计数永久移出扫描窗口；熔断/隔离属消费方 reconciliation |
 | 崩溃重放（同任务执行两次） | 完成事务受状态机终态 + fencing 保护至多成功一次；enqueue/outbox 幂等键去重；恰好一份领域结果 |
 | 跨 Space 泄漏 | 两表 NOT NULL `space_id`；所有入口校验 scope fail closed；无默认跨 Space 聚合，全局视图显式命名 |
 | outbox 双写不一致 | 领域写与 outbox 行同一事务；无绕过事务的直接外发入口；dispatcher 只读已提交行、按持久 `dispatched_at` 标记扫描 |
@@ -78,8 +86,61 @@ queued → leased → running → succeeded
 14. 迁移链：恰好一个新迁移、只建两表、down_revision=当时真实 head、无
     multi-head、upgrade 干净通过（PG）。
 
+**D-2026-07-27-16 边界冻结新增的强制验收项**（双独立评审 findings 的持久
+回归载体，后续重构不得删除）：
+
+15. 过期未回收的持有者在 `start`/结果提交/失败上报/outbox 追加四条路径全部
+    typed `lease_expired` 且零变更；接受侧：未过期 lease 的同四条路径正常
+    通过（unit + PG）；
+16. 停滞过期 lease 不抬高上限：任意时刻 `leased | running` 行数不超过配置
+    的 per-Space 与全局上限（跨 Space 与单 Space 两种拓扑）；接受侧：未过期
+    lease 仍精确占额、达限返回 typed 拒绝（PG）；
+17. 饱和触发无 Space 过滤的有界回收：饱和集合中属未声明 Space 的过期行被
+    回收后放行，且不向调用方返回跨 Space 任务内容（保留 C1 的反饥饿语义）（PG）；
+18. 未 start 即崩溃的循环有界：每次回收 `attempt += 1`，累计达 `max_attempts`
+    进 dead_letter；接受侧：crash-after-start 的界与 attempt 计数不变（unit + PG）；
+19. 无人枚举的 Space 经显式跨 Space 回收入口收敛为 queued/dead_letter（PG）；
+20. 四对 storage-only 转换经任何公共入口均 typed 拒绝且零字段变更（对持有
+    有效 lease、`attempt=0` 的 `leased` 行逐一尝试全部错误分类）；接受侧：
+    合法 `running → dead_letter` 仍成功且 attempt 正确（unit）；
+21. 领域写句柄：回调内结束/提交完成事务被 typed 拒绝并整体回滚（零领域行、
+    零 outbox、任务不 succeeded）；写 `wiki_` 自有表（含其他 Space 终态行与
+    `lease_generation`）被 typed 拒绝；接受侧：诚实领域写仍原子提交（PG）；
+22. 事件追加边界：调用方事务内的公共追加入口不存在；受支持路径下重放恰好
+    一份领域行 + 一条事件（unit + PG）；
+23. 瞬时消费端不可用后收敛：连续失败超过任何退避档位后恢复，健康事件仍被
+    投递并标记；接受侧：单条失败不阻塞同轮后续事件（unit + PG）；
+24. 指标暴露过期 lease 计数与最老过期 lease 年龄，使"全 Space 卡在过期
+    lease"与健康可区分；接受侧：健康分布读数仍精确（unit + PG）；
+25. Decision duplicate 判据经历回收/失败覆写后仍返回 duplicate；接受侧：真正
+    从未 awaiting 的行仍返回 not_awaiting（unit）；
+26. 只读入口（指标、outbox 读、投递、标记）输入合同与写路径一致：typed
+    输入错误、不泄漏驱动异常、`limit` 非正被拒（unit）；
+27. dispatcher at-least-once 的 PG 覆盖（补齐第 11 项标注的 (PG)）：投递成功
+    未标记即崩溃 → 重投 → event_id 幂等收敛（PG）；
+28. 迁移降级 crossing 分支覆盖：空库相对目的地 `-2`（跨 0006）成功；存在
+    存量 lifecycle 行时 `-2` 在零 DDL 前拒绝；`dead_letter` 取证行存在时
+    降级同样拒绝；offline `--sql` 模式显式 typed 拒绝（PG）。
+
 PG 项全部使用 `integration_postgres` marker，在 PostgreSQL 16 lane 执行且
-JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。
+JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节点必须
+注册进 `tests/test_ci_lanes_022.py` 的精确集合断言。
+
+### 存量资产处置引用（D-2026-07-26-3 义务）
+
+按 [24 · 存量资产处置清单](../../../docs/insurance-kb/24-legacy-asset-disposition.md)
+§2，本 PR 对应两行，声明如下：
+
+- **`runtime`（028b + S1）→ 冻结审计**：本 PR 取代其作为 033 §12 任务运行时
+  的地位。该包转为冻结审计资产、零生产消费者，本 PR 不读取、不导入、不复用
+  其任何表或模块。
+- **`compiler` → 废弃部分**：本 PR 取代其 LangGraph 管线编排与
+  `attempts.py` 的 SQLite attempt ledger（033 §12 固定 Job Store 取代）。
+- **表权威切换：无**。24 号 §3 的表权威切换表中不存在任何 job/outbox 表，
+  因此本 PR **零旧表停写、零读路径切换、零旧数据导入**；`wiki_jobs` 与
+  `wiki_outbox_events` 是新建表，不外键任何遗留域表。
+- **迁移台账**：0007–0011 旧预分配与 superseded 0013/0014 按 22 号 §4 /
+  24 号 §3 永不复用（D-2026-07-27-10）；本 PR 独占 0015。
 
 ### 路径预算
 
@@ -87,7 +148,15 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。
   dispatcher、metrics 查询、配置接线），tests 约 5–6；
 - 生产代码目标 500–700 行；超过约 900 行触发重新切分评审（033 §16.2）；
   单文件 400/700（测试 500/800）行仅作警报线；
-- 恰好 1 个新 Alembic 迁移，只建 `wiki_jobs`/`wiki_outbox_events`。
+- **实测（双评审闭环 + 边界修订后）**：raw 1781 / 有效 1300 行（迁移 200、
+  `__init__` 导出面 89、store 445、outbox 196、models 169、tables 86、
+  metrics 77、errors 38），超过 ~900 触发线。**已按
+  [D-2026-07-27-17](../../../docs/insurance-kb/23-mvp-control-board.md#d-2026-07-27-17--035-实现的-162-行数触发线豁免)
+  裁决不拆分**：拆分在算术上不能带来预算合规（可分离的 metrics + dispatcher
+  约 225 行，拆后仍约 1075 > 900），且会产生"outbox 无人 drain"的半成品。
+  豁免仅限本窗口，不构成后续 Pn 先例。本行不留 TBD。
+- 恰好 1 个新 Alembic 迁移，只建 `wiki_jobs`/`wiki_outbox_events`（含其列、
+  索引与约束；边界修订新增的列属于这两张表，不产生第二个迁移）。
 
 ## Tasks
 
@@ -134,7 +203,81 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。
   --strict` → PostgreSQL 16 lane 全量 `integration_postgres`（JUnit
   `skipped=0`）；validation report 如实记录已运行项与 NOT RUN；更新 README
   迁移台账实际链序与 HANDOFF 当前状态块。
-- [ ] T13 独立 Spec/质量复审。复审中若出现新的同域基础不变量，按 033 §18
-  停止补丁循环、回到边界设计，不追加状态和异常分支。
+- [x] T13 独立 Spec/质量复审。**已执行（2026-07-27，PR #53，两支互不知晓的
+  独立评审 + 各自独立 worktree/PostgreSQL）**：Spec `not compliant`（1C/6I/5m）、
+  Quality `not approved`（2C/6I/4m），**双方独立复现同一破口** ⇒ 按 033 §18
+  停止补丁循环、回到边界设计。裁决与冻结条款见
+  [D-2026-07-27-16](../../../docs/insurance-kb/23-mvp-control-board.md#d-2026-07-27-16--p1-18-停线与-lease-写权威边界冻结)；
+  行数豁免见 D-2026-07-27-17。
 
-完成 T12 前不得宣称 P1 验收达成；P3 及后续消费方 PR 不得提前开工接线。
+### 边界修订后的实现任务（D-16 后新增，严格 RED-first）
+
+- [x] T14 RED：回收 `leased` 行时 `attempt += 1` 再路由（清单第 18 项，含
+  crash-after-start 接受侧不回归）。GREEN：`_reclaim_locked`。
+  节点：`test_q14_reclaiming_a_leased_row_counts_one_attempt`、
+  `test_q14_crash_between_claim_and_start_is_bounded_by_max_attempts`、
+  `test_q14_crash_after_start_keeps_its_existing_bound`。
+- [x] T15 RED：写权威 = generation ∧ lease 未过期，四条写路径对称 typed
+  `lease_expired`（清单第 15 项，含未过期接受侧）。GREEN：四个入口共用
+  `require_active_lease` 单一原语，不各自 if。节点：
+  `test_q15_expired_lease_holder_has_no_write_authority_on_any_path`、
+  `test_q15_unexpired_lease_still_writes_on_every_path`。
+  次序裁决：先判转换合法性再判 lease 权威——对 queued/终态行
+  `illegal_transition` 比 `lease_expired` 更精确。
+- [x] T16 RED：限额计入全部 `leased | running`；饱和且存在过期行时先做一次
+  无 Space 过滤的有界回收再重算（清单第 16、17 项）。GREEN：`claim` 限额段
+  + `_count_active`/`_reclaim_saturated`。节点：
+  `test_q16_stalled_expired_leases_never_exceed_configured_limits`、
+  `test_q16_single_space_saturation_is_not_bypassed_by_expired_rows`、
+  `test_q16_saturation_triggers_scope_free_bounded_reclaim`、
+  `test_q16_unexpired_leases_still_consume_the_limit`。
+  **契约收紧**：C1 节点（det + PG）原断言"scope 外零变更"已按冻结边界迁移为
+  "回收后放行 + 调用方拿不到跨 Space 内容 + 过期持有者即刻失去写权威"。
+- [x] T17 RED：显式命名的跨 Space 回收入口（清单第 19 项）。GREEN：
+  `reclaim_expired_leases_all_spaces()`，与 `global_job_metrics` 同形；
+  `claim` 的 scope 语义未改。节点：
+  `test_q17_unenumerated_space_converges_via_explicit_global_entry`、
+  `test_q17_global_reclaim_leaves_unexpired_rows_untouched`。
+- [x] T18 RED：storage-only 转换无调用方入口 + 失败上报要求源状态 `running`
+  （清单第 20 项，含合法 `running → dead_letter` 接受侧）。GREEN：
+  `ensure_transition(..., storage_layer=False)` 使常量成为可执行护栏，只有
+  `_reclaim_locked`/`_promote_due_retries` 传 `True`。节点：
+  `test_q18_storage_only_transitions_have_no_caller_entry`、
+  `test_q18_ensure_transition_refuses_storage_only_pairs_for_callers`、
+  `test_q18_running_to_dead_letter_still_works`；穷举节点
+  `test_p1_1_exhaustive_pairs_split_between_legal_and_typed_illegal`
+  已迁移为三分（调用方可达/storage-only/非法）。
+- [x] T-cfg RED：`lease_seconds` 严格为正且大于 heartbeat 间隔（Quality F11）。
+  GREEN：`JobRuntimeConfig`（`gt=0` + `model_post_init` 一致性校验）与
+  `config.py` 的 `job_lease_seconds`。节点：
+  `test_q11_zero_or_sub_heartbeat_lease_is_rejected_by_config`（4 参数化）、
+  `test_q11_positive_lease_above_heartbeat_is_still_accepted`。
+  12 处 `lease_seconds=0.0` 过期脚手架全部迁移为 `force_expire`/`_force_expire`
+  （只回拨 lease，不改 state/attempt/generation）。
+- [ ] T19 RED：领域写句柄的事务身份不变式 + 禁写 `wiki_` 自有表（清单第 21
+  项，含诚实领域写接受侧）。GREEN：完成事务外层守卫 + 句柄语句面校验。
+- [ ] T20 RED：事件只能在完成事务内追加；重放恰好一份领域行 + 一条事件
+  （清单第 22 项）。GREEN：收回公共追加出口。
+- [ ] T21 RED：投递改持久化退避，瞬时不可用后收敛；单条失败不阻塞同轮
+  （清单第 23 项）。GREEN：0015 增列 `next_dispatch_at` + 配置化退避序列，
+  删除硬上限与永久 park。
+- [ ] T22 RED：过期 lease 指标（清单第 24 项，含健康分布接受侧）。GREEN：
+  `metrics.py` 增两项，同一事务同一数据库时钟。
+- [ ] T23 RED：Decision duplicate 判据经回收后仍正确（清单第 25 项，含真正
+  never-awaiting 接受侧）。GREEN：0015 增列不可覆写的持久事实位。
+- [ ] T24 RED：只读入口输入合同与写路径一致、`limit` 非正被拒（清单第 26
+  项）。GREEN：统一走既有 `validated_text` 原语。
+- [ ] T25 RED：dispatcher at-least-once 的 PG 节点（清单第 27 项，补齐第 11
+  项标注的 (PG)）。GREEN：无需生产改动，仅补覆盖。
+- [ ] T26 RED：迁移降级 crossing 分支 + `dead_letter` 取证保护 + offline
+  `--sql` 显式拒绝（清单第 28 项）。GREEN：0015 降级段。
+- [ ] T27 收尾复跑：focused → `uv run ruff check .` → `uv run mypy src tests`
+  → `openspec validate 035-p1-job-outbox --strict` → PostgreSQL 16 全量
+  `integration_postgres`（JUnit `skipped=0`）；新增 PG 节点全部注册进
+  `test_ci_lanes_022.py` 精确集；validation report 重写为本 head 证据 +
+  如实 NOT RUN。
+- [ ] T28 修复后重新提交双独立评审。若**再次**在 lease 过期/写权威/限额
+  会计域出现新的基础不变量，按 §18 不得继续补丁——回到 033 §12 的运行时
+  边界设计，由业务方裁决是否重划 P1 范围。
+
+完成 T27 前不得宣称 P1 验收达成；P3 及后续消费方 PR 不得提前开工接线。

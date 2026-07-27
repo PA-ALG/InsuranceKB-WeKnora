@@ -24,13 +24,26 @@
     仅限存储层在以数据库时钟验证 lease 已过期后执行的回收转换。回收 SHALL
     把该次过期记录为 typed `retryable` 失败（错误摘要 `lease_expired`），并
     按 P1.4 的 `max_attempts` 条件路由：attempt 已达上限转 `dead_letter`，
-    否则回 `queued`。
+    否则回 `queued`。**被回收行处于 `leased`（即本次投递从未进入
+    `running`，worker 未能自报 `start`）时，回收 SHALL 在路由前把
+    `attempt` 递增一次**——"该次过期记录为一次 typed `retryable` 失败"是
+    P1.4 意义上的一次 attempt，其计数 SHALL NOT 依赖 worker 是否来得及
+    自报开始。被回收行处于 `running` 时 attempt 已由 `start` 计入，SHALL
+    NOT 重复计数。
 
 系统 SHALL NOT 定义其他状态或其他转换；`succeeded`、`blocked`、
 `dead_letter` 在本状态机内 SHALL 是终态（无出边）。任何非法转换请求 SHALL
 在存储层被拒绝并返回 typed `illegal_transition` 错误，目标行零字段变更；
 转换合法性 SHALL 由存储层单一入口执行，SHALL NOT 依赖调用方自律或进程内
 检查。
+
+**storage-only 执法合同（边界冻结）**：第 5 条与第 10 条列出的转换是
+storage-only 转换。存储层 SHALL 拥有一个可执行的执法点，使这些转换**无法
+经任何公共调用入口到达**；把它们仅记录在文档、常量或测试断言里 SHALL NOT
+视为满足本条。具体地，失败上报入口 SHALL 要求源状态为 `running`——持有
+有效 lease、尚未 `start` 的 `leased` 行 SHALL NOT 经调用方之手直接进入
+`dead_letter`、`retry_wait`、`blocked` 或 `awaiting_human`；pre-start 失败
+一律由第 10 条的回收路径按 `max_attempts` 兜底。
 
 #### Scenario: 非法转换在存储层拒绝
 
@@ -44,6 +57,22 @@
 - **WHEN** 对处于 `succeeded`、`blocked` 或 `dead_letter` 的任务提交任何
   状态转换请求（包括重复完成）
 - **THEN** 请求被 typed 拒绝，不产生领域写、不追加 outbox 行
+
+#### Scenario: storage-only 转换没有调用方入口
+
+- **WHEN** 对一个持有有效 lease、`attempt = 0` 的 `leased` 行，逐一尝试经
+  公共入口到达第 5 条与第 10 条的四对 storage-only 转换（含以任意 typed
+  错误分类上报失败）
+- **THEN** 每一次尝试都返回 typed `illegal_transition`，该行
+  state/attempt/generation/lease 字段逐一保持不变；这些转换只能由存储层的
+  回收与 backoff 提升路径产生
+
+#### Scenario: 未 start 即崩溃的重试次数有界
+
+- **WHEN** 某任务被反复 claim，但每次都在 `start` 之前崩溃（反序列化失败、
+  OOM、进程被驱逐），lease 每次自然过期后被回收
+- **THEN** 每次回收使 `attempt` 递增一次，任务在累计达到配置 `max_attempts`
+  后 SHALL 进入 `dead_letter`，SHALL NOT 无限次重新排队
 
 ### Requirement: P1.2 PostgreSQL claim 单一领取
 
@@ -78,9 +107,19 @@ lease 过期后任务 SHALL 只能按 P1.1 第 10 条回收（记 `lease_expired
 typed `retryable` 失败并按 `max_attempts` 路由至 `queued` 或
 `dead_letter`）；回收后再次成功 claim SHALL 取得严格更大的 generation。携带小于当前 generation 的任何写入——
 heartbeat、状态转换、领域结果提交、outbox 追加——SHALL 在存储层被 typed
-`stale_generation` 拒绝且零行变更。lease 有效期与 heartbeat 间隔 SHALL
-来自配置，SHALL NOT 硬编码。过期判定与写入权威 SHALL NOT 参考 worker
-本地时钟。
+`stale_generation` 拒绝且零行变更。
+
+**写权威合同（边界冻结）**：一次写入被接受 SHALL 同时要求两个条件——
+携带的 generation 等于任务当前 generation，**且**该任务的 lease 按
+PostgreSQL 数据库时钟未过期。lease 过期后，除 P1.1 第 10 条的回收之外，
+heartbeat、状态转换、领域结果提交与 outbox 追加 SHALL 一律返回 typed
+`lease_expired` 并零行变更。写权威 SHALL NOT 在不同写路径之间不对称——
+不允许出现"heartbeat 执法过期而结果提交不执法"这类分歧。
+
+lease 有效期与 heartbeat 间隔 SHALL 来自配置，SHALL NOT 硬编码；
+`lease_seconds` SHALL 为严格正数且 SHALL 大于 `heartbeat_interval_seconds`
+（`lease_seconds = 0` 使每个 lease 出生即过期，SHALL 在配置层被拒绝）。
+过期判定与写入权威 SHALL NOT 参考 worker 本地时钟。
 
 #### Scenario: lease 过期接管
 
@@ -101,6 +140,21 @@ heartbeat、状态转换、领域结果提交、outbox 追加——SHALL 在存�
 - **WHEN** 某 worker 本地时钟快于或慢于数据库时钟任意幅度
 - **THEN** 过期判定仍只由数据库时钟决定，写入权威仍只由 generation 决定，
   任意时刻至多一个 generation 的写入会被接受
+
+#### Scenario: 过期未回收的持有者没有写权威
+
+- **WHEN** 某 worker 仍存活但执行缓慢，其 lease 已按数据库时钟过期而尚未被
+  任何实例回收（generation 未变），它依次尝试 `start`、领域结果提交、
+  失败上报与 outbox 追加
+- **THEN** 四类写入全部返回 typed `lease_expired`，零领域写、零 outbox
+  追加、零字段变更；该任务只能经 P1.1 第 10 条回收后由新 generation 继续
+
+#### Scenario: 配置层拒绝出生即过期的 lease
+
+- **WHEN** 部署把 `lease_seconds` 配为 `0`，或配为小于等于
+  `heartbeat_interval_seconds` 的值
+- **THEN** 运行时配置构造 SHALL typed 拒绝，SHALL NOT 接受该配置后在运行期
+  产生"全部 lease 立即过期、并发限额全开"的静默行为
 
 ### Requirement: P1.4 attempt、typed 错误分类与重试策略
 
@@ -146,6 +200,19 @@ P1.1 状态机与 P1.3 fencing 共同保证）。在 at-least-once 重投/重放
 领域写、零 outbox 追加。系统 SHALL NOT 宣称 exactly-once execution；对外
 合同是 at-least-once 执行 + 幂等提交。
 
+**领域写通道合同（边界冻结）**：完成事务向调用方暴露的领域写句柄 SHALL
+被**语句面**约束，不仅是属性面。具体地：句柄 SHALL NOT 能结束、提交或
+另起完成事务——存储层 SHALL 在回调返回后校验完成事务与其保存点仍是进入
+回调前的同一个，不成立即 typed 拒绝并回滚整个完成事务；句柄 SHALL NOT 能
+写入 P1 自有表（`wiki_jobs`、`wiki_outbox_events`），命中即 typed 拒绝。
+仅隐藏 `commit/rollback/close` 属性 SHALL NOT 视为满足本条：一条 raw
+`COMMIT`（或任何封装了提交语义的过程调用）即可使领域行落库而任务仍
+`running`、outbox 为空，其后的过期回收与重放将产生**第二份领域结果**；同
+一通道还可复活其他 Space 的终态行、伪造 `lease_generation` 并插入越域
+outbox 行，同时击穿 P1.1 终态无出边与 P1.8 跨 Space fail closed。按 P1.1
+"转换合法性 SHALL NOT 依赖调用方自律"，该约束 SHALL 由存储层执法，SHALL
+NOT 仅写在文档合同里。
+
 幂等键 SHALL 由消费方按显式批次/重试裁决铸造，键 SHALL 编码该次批次/裁决
 身份：对同一逻辑工作的新一次授权处理 SHALL 使用新幂等键创建新任务行，
 而不是改写既有行。终态行（`succeeded | blocked | dead_letter`）与其唯一键
@@ -158,6 +225,21 @@ SHALL 保持不变；P1 SHALL NOT 提供对终态行的 replay/重新处理入�
   enqueue 多次（如同一 SourceRevision 的重复事件）
 - **THEN** 表中恰好存在一行任务，后续 enqueue 均返回 typed dedup 结果并
   指向同一任务
+
+#### Scenario: 领域写句柄不能结束完成事务
+
+- **WHEN** 领域写回调内执行 raw `COMMIT`（或任何提交了外层事务的语句），
+  随后返回
+- **THEN** 存储层检测到完成事务身份已变并 typed 拒绝，领域行与 outbox 行
+  都不留下，任务不被标记 `succeeded`；SHALL NOT 出现"领域行已提交而任务
+  仍 `running`"从而在重放后产生第二份领域结果
+
+#### Scenario: 领域写句柄不能触碰 P1 自有表或其他 Space
+
+- **WHEN** 领域写回调尝试 `UPDATE wiki_jobs`（含其他 Space 的终态行或
+  `lease_generation`）或 `INSERT wiki_outbox_events`
+- **THEN** 该语句被 typed 拒绝、完成事务回滚；目标行零字段变更，不产生
+  越域 outbox 行
 
 #### Scenario: 重复执行不产生第二份领域结果
 
@@ -181,6 +263,24 @@ SHALL 是 at-least-once：投递与标记之间崩溃时该行 SHALL 被重投�
 SHALL 以 event_id 幂等去重。已提交的 outbox 行 SHALL NOT 因内存
 offset/水位丢失而永不投递；扫描 SHALL 基于持久化投递标记。
 
+**投递可恢复性合同（边界冻结）**：一条已提交、未投递的 outbox 行 SHALL
+NOT 因累计失败次数而被永久移出扫描窗口。单次投递失败 SHALL NOT 阻塞本轮
+后续事件（消除队头阻塞），但"失败 N 次"SHALL NOT 被当作"该事件不可投递"
+的判据——瞬时消费端不可用与永久毒性负载在该计数上不可区分。让位机制
+SHALL 是**持久化退避**：失败时递增持久失败计数并按配置化退避序列推迟
+`next_dispatch_at`，扫描条件为 `dispatched_at IS NULL AND next_dispatch_at
+<= 数据库当前时间`。退避参数 SHALL 来自运行时配置，SHALL NOT 硬编码于
+dispatcher 构造函数。毒性事件的熔断/隔离/人工处置属消费方 reconciliation
+（见 proposal 非目标），SHALL NOT 在 P1 内实现为"永不再投"的终态。
+
+**事件追加边界合同（边界冻结）**：outbox 事件 SHALL 只能在完成事务内追加。
+存储层 SHALL NOT 把"在调用方自有事务内追加任务事件"作为公共 API 暴露——
+该用法允许"领域写 + 事件行已提交但任务未完成"，其后的过期回收与重放会以
+**新铸的随机 event_id** 再发布同一逻辑工作，使消费端的 event_id 幂等去重
+在原理上无法折叠，并留下两份领域行。若后续确需执行期进度事件，其
+`event_id` SHALL 由任务身份与调用方铸造的确定性序号派生，使重放折叠为同
+一 id。
+
 #### Scenario: 领域写与 outbox 同事务原子
 
 - **WHEN** 完成事务在写入领域行与 outbox 行之后、提交之前被注入中断
@@ -198,13 +298,35 @@ offset/水位丢失而永不投递；扫描 SHALL 基于持久化投递标记。
 - **THEN** 领域事务照常提交，事件停留在 outbox 等待投递；不存在同步双写
   造成的半提交状态
 
+#### Scenario: 瞬时消费端不可用后仍然收敛
+
+- **WHEN** 消费端连续多轮扫描不可用（失败次数超过任何配置的退避档位），
+  随后恢复
+- **THEN** 这些健康事件 SHALL 在退避到期后被再次投递并最终成功标记；它们
+  SHALL NOT 因失败计数而永久消失于 pending 扫描集合
+
+#### Scenario: 单条失败不阻塞同轮后续事件
+
+- **WHEN** 同一轮扫描中较小 id 的事件投递失败，较大 id 的事件健康
+- **THEN** 失败事件让位并按退避推迟，健康事件在同一轮内被正常投递
+
 ### Requirement: P1.7 awaiting_human 不持有 lease
 
 `running → awaiting_human` SHALL 在同一存储事务中释放 worker lease：该
 任务 SHALL 立即不再计入其 Space 与全局的已领并发（P1.8），worker SHALL 可
 随即领取其他任务。人工 Decision SHALL 通过唯一存储层入口幂等唤醒原任务：
 当且仅当任务当前处于 `awaiting_human` 时执行 `awaiting_human → queued`；
-对同一任务的重复 Decision 提交 SHALL 返回 typed duplicate 且零行变更。
+对同一任务的重复 Decision 提交 SHALL 返回 typed duplicate 且零行变更；
+对从未进入 `awaiting_human` 的任务提交 Decision SHALL 返回与 duplicate
+可区分的 typed 结果，同样零行变更。
+
+**判据不可变合同（边界冻结）**：区分"重复提交"与"目标从未等待人工"
+SHALL 依据一个**不被后续失败/成功/回收路径覆写的持久事实**（如首次唤醒
+成功时写入且此后不再修改的时间戳）。SHALL NOT 以 `error_class` 这类可变
+列作为"是否曾经 awaiting_human"的代理——任何后续 `report_failure`、
+`report_success` 或回收都会覆写它，使 at-least-once 重投的 Decision 在
+任务经历一次租约过期后收到错误的"从未等待"语义。
+
 系统 SHALL NOT 为人工等待建立第二套工作流/任务系统；Decision 只作用于原
 任务行，唤醒后的执行仍走同一状态机。
 
@@ -219,6 +341,13 @@ offset/水位丢失而永不投递；扫描 SHALL 基于持久化投递标记。
 - **THEN** 任务恰好被 requeue 一次；第二次提交返回 typed duplicate，任务
   最终仍只产生一份领域结果
 
+#### Scenario: duplicate 判据经历回收后仍然正确
+
+- **WHEN** 任务被 Decision 唤醒并继续执行，随后又经历一次失败上报或一次
+  租约过期回收（两者都会覆写 `error_class`），此时同一 Decision 被重投
+- **THEN** 该次重投仍返回 typed duplicate，而不是"目标从未等待人工"；只有
+  真正从未进入过 `awaiting_human` 的任务才返回后者
+
 ### Requirement: P1.8 Space 绑定与配置化并发限额
 
 `wiki_jobs` 与 `wiki_outbox_events` 的每一行 SHALL 携带 NOT NULL
@@ -230,6 +359,18 @@ per-Space 与全局并发上限：某 Space 处于 `leased | running` 的任务�
 全局上限同理。两类上限 SHALL 来自配置；任何具体数值 SHALL 只是环境默认值
 而非产品上限，SHALL NOT 硬编码于领取逻辑。超限任务 SHALL 保持排队等待，
 SHALL NOT 被拒绝、丢弃或无限创建执行协程。
+
+**限额会计合同（边界冻结）**：计入上限的集合 SHALL 是**全部**处于
+`leased | running` 的行，SHALL NOT 按 lease 是否过期缩小该集合——因为按
+P1.3 的写权威合同，未被回收的过期行其持有者仍可能存活并正在消耗外部资源。
+"被计入上限的集合"与"可能仍在执行的集合" SHALL 一致。
+
+为使过期行不造成永久饥饿，claim 在检测到 per-Space 或全局上限已饱和、且
+饱和集合中存在 `lease_expires_at <= 数据库当前时间` 的行时，SHALL 先执行
+一次受 `maintenance_batch_size` 约束、**不带 Space 过滤**的回收（P1.1 第 10
+条语义）并重算计数，仍饱和才返回 typed 拒绝。该维护动作不读写任何领域
+数据、不返回任何跨 Space 内容，因此不构成 P1.8 跨 Space fail-closed 的
+例外——P1.8 约束的是任务/outbox 的读写与指标查询，不是存储层维护动作。
 
 #### Scenario: 跨 Space 操作 fail closed
 
@@ -244,6 +385,23 @@ SHALL NOT 被拒绝、丢弃或无限创建执行协程。
 - **THEN** claim 跳过 Space A 的任务并继续领取 Space B 的任务；Space A 的
   任务保持 queued，不丢失、不报错
 
+#### Scenario: 停滞的过期 lease 不能抬高并发上限
+
+- **WHEN** 若干 worker 仍存活但停滞，其 lease 已过期且无人回收；其他 worker
+  持续调用 claim（无论各自声明的 scope 是否覆盖那些停滞行）
+- **THEN** 同时处于 `leased | running` 的行数在任何时刻 SHALL NOT 超过配置
+  的 per-Space 与全局上限；停滞行要么已被 claim 触发的有界回收 fenced
+  （generation 递增，其持有者的后续写入按 P1.3 typed 拒绝），要么仍计入
+  上限使 claim 返回 typed 拒绝
+
+#### Scenario: 饱和触发无 Space 过滤的有界回收
+
+- **WHEN** 全局上限已饱和，且饱和集合中的过期行属于当前调用方未声明的
+  Space
+- **THEN** claim SHALL 先对这些过期行执行一次受 `maintenance_batch_size`
+  约束的回收并重算计数，从而既不永久饥饿也不越限；该回收 SHALL NOT 向
+  调用方返回任何跨 Space 任务内容
+
 #### Scenario: 限额只由配置决定
 
 - **WHEN** 同一数据分别以 per-Space 上限 2 与 4 两组配置运行
@@ -257,7 +415,12 @@ SHALL NOT 被拒绝、丢弃或无限创建执行协程。
 **可调度**任务年龄（覆盖 `state ∈ {queued, retry_wait}` 的行，以数据库
 时钟按 `enqueued_at` 计算——停留在 `retry_wait` 的任务 SHALL 同样可见，
 而不仅是最老 queued）、attempt 累计与当前 `retry_wait` 计数（失败率/
-重试率 SHALL 可由这些计数在采样间隔内推导）。`wiki_jobs` 每行 SHALL
+重试率 SHALL 可由这些计数在采样间隔内推导）、**过期 lease 计数与最老过期
+lease 年龄**（`state ∈ {leased, running} AND lease_expires_at <= 数据库当前
+时间`）。后者是必需项而非可选项：卡死形态恰好落在 `leased | running`，而
+可调度年龄的定义域是 `{queued, retry_wait}`，缺少该维度时"整个 Space 卡在
+过期 lease 上"与"系统健康"在指标上不可区分（队列深度为 0、最老可调度年龄
+为空）。`wiki_jobs` 每行 SHALL
 持久化 `enqueued_at`、最近一次 `started_at`（`leased → running`）与
 `finished_at`（进入终态）时间戳，供时长类指标推导；编译/审核/发布时长与
 投影延迟指标本身归消费方 PR（见 proposal 非目标）。指标查询 SHALL
@@ -273,6 +436,21 @@ SHALL NOT 建设独立 metrics 平台或引入第二存储。
   可调度年龄与预置分布精确一致；最老可调度年龄由该 `retry_wait` 行决定，
   每行的 `enqueued_at/started_at/finished_at` 已持久化可查
 
+#### Scenario: 卡在过期 lease 上的 Space 在指标上可见
+
+- **WHEN** 某 Space 的全部任务处于 `running` 且 lease 均已过期、无人回收
+  （队列深度为 0、无可调度行）
+- **THEN** 指标 SHALL 报告非零的过期 lease 计数与最老过期 lease 年龄，使该
+  卡死形态与"系统健康"可区分；SHALL NOT 仅以 `running` 计数呈现
+
+#### Scenario: 只读入口的输入合同与写路径一致
+
+- **WHEN** 以写路径会 typed 拒绝的 `space_id`（含空串、含 NUL 字符、超长）
+  或非正的分页/批量上限调用指标与 outbox 只读入口
+- **THEN** 这些入口 SHALL 返回同一族 typed 输入错误，SHALL NOT 泄漏原始
+  数据库驱动异常，也 SHALL NOT 对写路径拒绝的标识符静默返回"健康"读数；
+  `limit` 为 0 SHALL NOT 产生与"无事可做"不可区分的空结果
+
 ### Requirement: P1.10 崩溃恢复与接管
 
 worker 进程被强制终止（不执行任何清理）后，其持有的 lease SHALL 按数据库
@@ -281,6 +459,12 @@ generation 重新领取执行。接管 SHALL NOT 依赖崩溃 worker 的任何�
 内锁或单一 reaper 实例——回收逻辑 SHALL 只依赖 PostgreSQL 持久状态，任何
 实例都可执行。崩溃 worker 苏醒后的一切写入按 P1.3 被 fencing 拒绝；整个
 崩溃-接管-重放过程 SHALL 恰好产生一份领域结果。
+
+**回收可达性合同（边界冻结）**：存储层 SHALL 提供一个**显式命名的跨
+Space 回收入口**，使回收不依赖任何调用方对 Space 集合的枚举（与 P1.9
+"全局聚合 SHALL 是显式命名的独立入口"同形）。若回收只能对调用方声明的
+scope 执行，则最后一个 worker 崩溃的 Space 其过期行永不收敛——既不
+requeue 也不 dead_letter——该状态 SHALL NOT 存在。
 
 #### Scenario: 崩溃后接管且单一结果
 
@@ -296,6 +480,14 @@ generation 重新领取执行。接管 SHALL NOT 依赖崩溃 worker 的任何�
 - **THEN** 每次回收都记录 `lease_expired` 的 typed `retryable` 失败；
   attempt 达到 3 后回收把任务路由进 `dead_letter`（保留 attempt、错误分类
   与摘要），任务不会被无限次重新排队
+
+#### Scenario: 无人枚举的 Space 仍能收敛
+
+- **WHEN** 某 Space 的全部 worker 崩溃，此后没有任何调用方在其 claim 或
+  回收调用中声明该 Space
+- **THEN** 经显式命名的跨 Space 回收入口，该 Space 的过期行 SHALL 按
+  P1.1 第 10 条收敛为 `queued` 或 `dead_letter`，SHALL NOT 无限期停留在
+  `leased | running`
 
 ### Requirement: P1.11 唯一迁移与表所有权
 

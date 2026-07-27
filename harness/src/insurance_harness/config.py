@@ -55,7 +55,10 @@ class HarnessSettings(BaseSettings):
     db_url: str | None = None
 
     # --- P1 任务运行时（change 035）；数值只是环境默认值而非产品上限 ---
-    job_lease_seconds: float = Field(default=60.0, ge=0)
+    # P1.3（D-2026-07-27-16）：lease 必须严格为正；`0` 会使每个 lease 出生即
+    # 过期，静默作废并发限额与 heartbeat。与 heartbeat 的大小关系由
+    # `JobRuntimeConfig` 在装配时校验。
+    job_lease_seconds: float = Field(default=60.0, gt=0)
     job_heartbeat_interval_seconds: float = Field(default=20.0, gt=0)
     job_max_attempts: int = Field(default=3, ge=1)
     job_backoff_seconds: tuple[float, ...] = (5.0, 30.0, 120.0)
