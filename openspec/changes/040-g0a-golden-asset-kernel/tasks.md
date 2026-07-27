@@ -1,4 +1,4 @@
-# 038 · Tasks
+# 040 · Tasks
 
 ## Contract Card
 
@@ -45,7 +45,7 @@
    - `test_quote_verification_*`：`hit_on_page`/`hit_wrong_page`/`not_found`/
      `empty_quote`/`document_missing` 五态各一；规范化确定性。
    - `test_ambiguous_locator_*`：同页两处命中 → `ambiguous_locator`。
-   - **`test_accept_side_full_scan_038`**（阻断项）：全库扫描，722 条既有
+   - **`test_accept_side_full_scan_040`**（阻断项）：全库扫描，722 条既有
      `hit_on_page` 无未解释的净回归。
    - `test_structural_invariants_*`：present 无证据 / unknown 有值 / unknown
      有证据各产生 finding。
@@ -55,8 +55,8 @@
 
 6. **路径与规模预算**
    - 允许写入：`harness/src/insurance_harness/goldenset/`（新模块）、
-     `harness/tests/`、`openspec/changes/038-*/`、
-     `openspec/changes/README.md`（仅 038 占号一行）。
+     `harness/tests/`、`openspec/changes/040-*/`、
+     `openspec/changes/README.md`（仅 040 占号一行）。
    - **禁止写入**：`harness/src/insurance_harness/`（`goldenset/` 以外，
      特别是 P1 的 job/outbox 域）、任何 migration、`dataset/**`、
      `pyproject.toml`/lockfile。
@@ -64,13 +64,13 @@
 
 ## 执行清单
 
-- [ ] T1 占号 038 并推送分支（使编号在 origin 可见）
-- [ ] T2 RED：provenance 分级与验收入口拒绝（G038.1）
-- [ ] T3 RED：lift 装载器权威来源与禁伪造（G038.2）
-- [ ] T4 RED：引文回验五态 + 唯一性护栏（G038.3 / G038.4 拒绝侧）
-- [ ] T5 RED：接受侧全集扫描（G038.4 接受侧，阻断项）
-- [ ] T6 RED：结构不变量与字段闭合（G038.5）
-- [ ] T7 RED：源文档 digest 与报告 canonical digest（G038.6 / G038.7）
+- [ ] T1 占号 040 并推送分支（使编号在 origin 可见）
+- [ ] T2 RED：provenance 分级与验收入口拒绝（G040.1）
+- [ ] T3 RED：lift 装载器权威来源与禁伪造（G040.2）
+- [ ] T4 RED：引文回验五态 + 唯一性护栏（G040.3 / G040.4 拒绝侧）
+- [ ] T5 RED：接受侧全集扫描（G040.4 接受侧，阻断项）
+- [ ] T6 RED：结构不变量与字段闭合（G040.5）
+- [ ] T7 RED：源文档 digest 与报告 canonical digest（G040.6 / G040.7）
 - [ ] T8 GREEN：实现内核，全部 RED 转绿
 - [ ] T9 对 `wip-gs-v0.1` 全库生成体检报告 artifact 并记录结论
 - [ ] T10 门禁：focused、Ruff、mypy、`openspec validate --strict`、

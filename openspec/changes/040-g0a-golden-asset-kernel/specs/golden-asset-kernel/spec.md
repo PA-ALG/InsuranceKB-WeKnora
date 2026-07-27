@@ -1,8 +1,8 @@
-# 038 G0a 金标资产化内核 验收规格
+# 040 G0a 金标资产化内核 验收规格
 
 ## ADDED Requirements
 
-### Requirement: G038.1 Provenance 分级 fail-closed 且内容自算
+### Requirement: G040.1 Provenance 分级 fail-closed 且内容自算
 
 系统 SHALL 为每条金标记录派生一个 `GoldenProvenanceClass`，取值封闭为
 `attributed | legacy_unattributed`。分级 SHALL 由 receipt 字段的**内容**自算：
@@ -32,7 +32,7 @@ typed error 拒绝，SHALL NOT 降级、过滤后继续或只发警告。种子�
 - **WHEN** 以同一记录集调用种子用途入口
 - **THEN** 调用成功且返回值含 `attributed`/`legacy_unattributed` 各自计数
 
-### Requirement: G038.2 Lift 装载器只从权威来源补字段
+### Requirement: G040.2 Lift 装载器只从权威来源补字段
 
 系统 SHALL 提供把 `wip-gs-v0.1` 形态（七字段 JSONL）提升为 `GoldenRecord` 的
 装载器。缺失字段 SHALL 且仅 SHALL 从以下权威来源取值：`product_id` ←
@@ -64,7 +64,7 @@ manifest 未登记该产品）SHALL 以 typed error 拒绝该产品，SHALL NOT 
 - **THEN** 装载该产品以 typed error 拒绝，且错误标识该产品与缺失来源
 - **AND** 不以目录名或任何推断值代替
 
-### Requirement: G038.3 引文回验绑定页号且规范化确定
+### Requirement: G040.3 引文回验绑定页号且规范化确定
 
 引文回验 SHALL 判定：把 quote 与目标页文本施加同一规范化（Unicode NFKC、
 去除全部空白、统一全角标点到半角）后，quote 是否为该页文本的子串。判定结果
@@ -86,7 +86,7 @@ document_missing` 之一，SHALL NOT 以布尔或 None 表达。
 - **WHEN** quote 在文档任何页均不命中
 - **THEN** 结果为 `not_found`
 
-### Requirement: G038.4 短引文唯一性护栏与接受侧全集扫描
+### Requirement: G040.4 短引文唯一性护栏与接受侧全集扫描
 
 quote 在其声明页内 SHALL 唯一命中。同一页内出现 ≥2 次时判定为
 `ambiguous_locator` 并计入失败，因为页级 locator 无法唯一定位该证据。
@@ -108,7 +108,7 @@ SHALL 仍然全部判定为通过**（`ambiguous_locator` 除外，其被判失�
   `ambiguous_locator` 且报告逐条列出其页内命中次数
 - **AND** 不存在既未通过也未被逐条解释的 evidence
 
-### Requirement: G038.5 三态结构不变量与全字段闭合覆盖
+### Requirement: G040.5 三态结构不变量与全字段闭合覆盖
 
 系统 SHALL 校验三态结构不变量：`present` 记录必须有 ≥1 条 evidence；
 `absent_explicitly` 记录必须有 ≥1 条 evidence；`unknown` 记录必须无 value
@@ -129,7 +129,7 @@ SHALL 仍然全部判定为通过**（`ambiguous_locator` 除外，其被判失�
 - **THEN** 报告逐个列出缺失的 2 个 `field_id`，且该产品覆盖率按 58/60 呈现
 - **AND** 缺失字段不从分母消失
 
-### Requirement: G038.6 源文档 SHA-256 绑定
+### Requirement: G040.6 源文档 SHA-256 绑定
 
 验证内核 SHALL 在读取每个源文档时计算其字节 SHA-256，并把
 `(产品, 文档名, sha256, 页数)` 写入体检报告。报告 SHALL 以该 digest 而非文件
@@ -148,7 +148,7 @@ digest 变化，从而使任何基于旧报告的结论失效。
 - **WHEN** 源文档字节改变后重新运行
 - **THEN** 该文档的 sha256 与报告整体 digest 均改变
 
-### Requirement: G038.7 内容寻址体检报告且分母不丢失
+### Requirement: G040.7 内容寻址体检报告且分母不丢失
 
 体检报告 SHALL 以 C0 的 `canonical_hash` 计算内容寻址 digest，SHALL NOT 另立
 第三套哈希规则（`goldenset` 既有 019 哈希与 `template_packages` 自有 domain
