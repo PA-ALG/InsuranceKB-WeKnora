@@ -132,6 +132,10 @@ def _register_one(
             space_id=scope.space_id,
             product_id=product.id,
             version_label=meta.version_no,
+            # Existing schema slot for the exact version-level filing/registration
+            # anchor consumed by OpenSpec 041. Never rewrite an existing version:
+            # changed authority creates a new version instead.
+            terms_revision=meta.filing_no or meta.registration_no,
             effective_from=meta.start_date,
             channels=meta.channels or None,
             regions=[meta.region_code] if meta.region_code else None,
