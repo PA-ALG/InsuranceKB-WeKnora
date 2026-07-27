@@ -10,13 +10,45 @@
 > 与
 > [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
 > 为准。
-> **当前事实截止点**：`main=707403342712fafe94e7a02f0bb8fec35e3809ce`。
-> PR #35–#51 中除 #44 外均已合入；当前 GitHub 无开放 PR。PR #44 已
+> **当前事实截止点**：`main=0cb7beff`（PR #52 合入后）。
+> PR #35–#52 中除 #44 外均已合入。PR #44 已
 > `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
 > `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
 > ① **C0 与 CAP0 已实现并合入**（PR #36/#46）。P1 规格已合入（PR #38），
-> 实现回到 `NOT STARTED`；后续只能从最新 main 以新的小 PR 提取仍需的能力，
-> 不得恢复或重放 #44。P3 规格已合入（PR #48），实现等待 P1。
+> **实现由本 PR（#53）在最新 main 重落地**——业务方 2026-07-27 裁决
+> （D-2026-07-27-15），**取代 #52 写入的"实现回到 `NOT STARTED`、不得
+> 恢复或重放 #44"条款**：#44 的代码从未合入但已通过对抗评审 19 条 findings
+> 的 RED-first 闭环，从零重做会重新踩同一批陷阱。本 PR 代码与归档 tag
+> 逐字节一致（main 侧自 merge-base `dedbbafb` 起从未触碰这些文件），仅按
+> 最新 main 重写治理文档；门禁在本 PR head 全新重跑，旧 #44 head 的 CI
+> 不作证据。P3 规格已合入（PR #48），实现等待 P1 合入。
+> ①a **本 PR 交付的 P1 实现**：`harness/src/insurance_harness/jobs/` +
+> 唯一迁移 `0015`（`down_revision="0006"`，实际链 `0005 → 0012 → 0006 →
+> 0015`）。封闭 8 态状态机（12 对合法转换，其余 64 对组合 typed 拒绝；
+> backoff 到期与 lease 回收为 storage-only，调用方无入口）、`FOR UPDATE
+> SKIP LOCKED` 选行 + advisory lock 串行化配额判定、generation fencing
+> （迟到 worker 在 heartbeat/转换/结果提交/outbox 追加四路全拒且零行变更）、
+> 完成事务（领域写 + outbox append + succeeded 同一事务，崩溃注入证明零
+> 半写）、确定性失败路由（`retryable|non_retryable|capacity_blocked|
+> human_required` → `retry_wait|dead_letter|blocked|awaiting_human`）、
+> `awaiting_human` 幂等唤醒、at-least-once dispatcher（持久 `dispatched_at`
+> 标记，毒性事件按 `dispatch_attempts` 上限 park 出扫描窗口）。全部可调
+> 参数只来自 `JobRuntimeConfig`，转换代码零硬编码。
+> ①b **#44 的 19 条评审 findings 是本 PR 的强制验收清单**：规格评审
+> Approved-with-findings（minor），对抗评审 REJECTED（2 Critical / 10
+> Important / 7 Minor），全部已 RED-first 闭环并重跑 probe 验证。两个
+> Critical：C1 = scope 外的过期 lease 永久占死全局并发限额（有效并发改为
+> 只统计 `lease_expires_at > now`）；C2 = 回收不递增 generation 导致被逐出
+> worker 仍可写（每次回收 generation +1，且 outbox append 增加
+> `state == running` 门）。16 个以 finding 编号命名的测试节点
+> （`test_c1_*`/`test_c2_*`/`test_i3_*`…`test_m19_*`）随本 PR 交付，
+> 不得在后续重构中删除。
+> ①c **两项已知边界待 reviewer 裁决**：生产代码 1300 有效行 > §16.2 的
+> ~900 重新切分警报线（作者主张不拆——§16 交付表把 Job+Outbox 列为一个
+> 交付项、单一原子不变量；该裁决仍未做）；`DomainWriteHandle` 只封锁事务
+> 生命周期，句柄仍可执行任意 SQL（含越权触碰 `wiki_` 表），以文档合同
+> 约束，交 P3 接线时按权限模型收紧。SQLite lane 的 advisory 与
+> `SKIP LOCKED` 为 no-op，并发证据只以 PostgreSQL lane 为准。
 > ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
 > 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
 > （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注
@@ -35,7 +67,8 @@
 > 不得绕过完整性、ACL、Provenance/security 或 PostgreSQL CAS。
 > ⑥ Milestone A 仍为 `IN PROGRESS`；Milestone B/C 均
 > `NOT IMPLEMENTED`，不得按 PR 数量宣称 MVP 已上线。旧 PR #26/#28/#33/#44
-> 均已关闭且未合入；CAP0 launch 问卷仍待业务确认。
+> 均已关闭且未合入（#44 的实现内容由 #53 重落地）；CAP0 launch 问卷仍待
+> 业务确认。
 > ⑦ 实时状态与决策唯一口径 = 23 号控制板 §1/§8。
 > 前置顺序 `D0 → {C0, W0}`、`C0 → CAP0` 已完成；当前按批准设计推进
 > Milestone A。PostgreSQL Active WikiRelease 是 serving authority；

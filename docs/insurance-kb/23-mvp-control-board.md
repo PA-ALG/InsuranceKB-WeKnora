@@ -1,13 +1,15 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
 > 本次治理收口基线/事实截止点（截至 2026-07-27）：
-> `main=707403342712fafe94e7a02f0bb8fec35e3809ce`。
+> `main=0cb7beff`（PR #52 合入后）。
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#51 中除 #44 外均已合入；当前 GitHub 无开放 PR。PR #44 已
+> PR #35–#52 中除 #44 外均已合入。PR #44 已
 > `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
-> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
+> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；其实现内容按
+> D-2026-07-27-15 由 **PR #53（当前唯一开放 PR，待双独立评审）** 在最新
+> main 同内容重落地。
 
 ## 1. 当前状态
 
@@ -16,7 +18,7 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现 `NOT STARTED` | 从最新 main 以新小 PR 提取所需能力；当前迁移 head **0006**，**0015** 仅预留、未合入 |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现由 **PR #53** 在最新 main 同内容重落地，`OPEN / 待双独立评审` | 按 D-2026-07-27-15（取代 #52 的"实现回到 `NOT STARTED`、不得重放"条款）；#53 代码与归档 tag 逐字节一致，门禁在其 head 重跑；迁移 **0015** Owner，`down_revision="0006"` 已复核 |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
 | W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
@@ -246,6 +248,41 @@ sha256/来源 URL，见 `dataset/version-materials/`）。G0v 采用
 能力）；Golden 尊享版本体仅一个备案版本，保持单版本。**不构造合成
 版本**。同名不同产品"平安附加e生保（尊享版）长期医疗"一并收录，作
 P5a0 实体消歧测试数据。D8 关闭。
+
+### D-2026-07-27-15 · P1 旧 PR 关闭但实现同内容重落地（取代 #52 的"不得重放"条款）
+
+业务方 2026-07-27 裁决：**关闭 PR #44 成立，从零重做 P1 不成立。**
+
+- **背景**：#44（P1 实现）经规格评审 Approved-with-findings（minor）+
+  对抗评审 REJECTED（2 Critical / 10 Important / 7 Minor），19 条全部
+  RED-first 闭环后转为 `DIRTY / CONFLICTING`，2026-07-27 06:40 由 codex
+  关闭并归档为 tag `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
+  随后 PR #52 在 HANDOFF/注册表写入"P1 实现回到 `NOT STARTED`；后续只能
+  从最新 main 以新小 PR 提取仍需的能力，**不得恢复或重放 #44**"。
+- **裁决**：该条款由本决策**取代**。P1 实现由 **PR #53** 从最新 main 的
+  干净 worktree **同内容重落地**：代码对归档 tag 逐字节一致（`git diff`
+  在 P1 全部代码路径为空；main 侧自 merge-base `dedbbafb` 起从未触碰这些
+  文件），只按最新 main 重写 `HANDOFF.md`、`openspec/changes/README.md`
+  与 `validation-report.md`。#44 的 `CONFLICTING` 仅来自这两个治理文档，
+  代码零冲突。
+- **理由**：#44 的 19 条 findings 已沉淀为 16 个以 finding 编号命名的
+  测试节点（`test_c1_*`/`test_c2_*`/`test_i3..i10_*`/`test_m14..m19_*`）。
+  两个 Critical（C1 = scope 外过期 lease 永久占死全局限额；C2 = 回收不
+  递增 generation 致被逐出 worker 仍可写）是该领域固有陷阱,换分支从零
+  重做几乎必然重新踩一遍并再挨一轮对抗评审——循环变长而非变短。033 §18
+  的停线规则要求"外审发现真实缺陷时**保留测试场景**"，与本裁决一致；其
+  "连续两轮独立评审仍出现同域新基础不变量即停止补丁循环"的触发条件在
+  #44 不成立（规格评审只有 minor，实质 findings 只有对抗评审一轮）。
+- **约束**：这 16 个测试节点是 #53 验收清单的**强制项**，后续重构不得
+  删除。#53 不继承 #44 的任何门禁证据，全部在自己 head 重跑。两项已知
+  边界仍待 reviewer 裁决：生产代码 1300 有效行 > 033 §16.2 的 ~900
+  重新切分警报线（作者主张 P1 是单一原子不变量不拆，§16 交付表亦把
+  Job+Outbox 列为一个交付项）；`DomainWriteHandle` 可执行任意 SQL，以
+  文档合同约束、交 P3 接线时按权限模型收紧。
+- **一般规则**：未合入的 PR 被关闭时，若其代码已通过评审 findings 闭环，
+  归档 tag 的内容可在最新 main 重落地；**关闭 PR ≠ 作废其已闭环的
+  findings**。治理文档写"不得重放"需要业务方裁决，执行会话不得单方面
+  把关闭动作升级为能力作废。
 
 ### D-2026-07-26-5 · 主线开发执行模式
 

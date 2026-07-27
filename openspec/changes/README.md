@@ -42,7 +42,7 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现 `NOT STARTED` | 从最新 main 以新小 PR 提取所需能力；当前迁移 head 0006；0015 仅预留、未合入 |
+| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现由 **PR #53** 在最新 main 重落地 | 旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`，归档 tag `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；按 D-2026-07-27-15，#53 代码与该 tag 逐字节一致、仅重写治理文档（**取代 #52 的"实现回到 NOT STARTED、不得重放"条款**）；门禁在 #53 head 重跑，旧 head CI 不作证据；迁移 0015 Owner |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
 | 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
@@ -68,7 +68,7 @@
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
 | 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0015 | 035 p1-job-outbox 实现 | 预留、未合入；旧 PR #44 已关闭归档；当前 main 唯一 head=0006，未来新小 PR 须从当时最新 main 复核 down_revision |
+| 0015 | 035 p1-job-outbox 实现 | 由 PR #53 交付；`down_revision="0006"` 已按最新 main 的真实 alembic head 复核，实际链 `0005 → 0012 → 0006 → 0015`，单 head |
 | 0016+ | （空闲） | 先占号再开 migration |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），
@@ -91,11 +91,17 @@
 
 开放 PR custody：
 
-- 治理收口 PR #50 与 OpenSpec 040 编号收口 PR #42 均已合入；#42 仅交付
+- 治理收口 PR #50/#51 与 OpenSpec 040 编号收口 PR #42 均已合入；#42 仅交付
   G0a 规格，实施尚未开始。
-- 当前 GitHub 无开放 PR。旧 PR #44 已 `CLOSED / ARCHIVED / NOT MERGED`，
-  annotated tag 为 `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；P1 实现
-  回到 `NOT STARTED`，后续只从最新 main 以新小 PR 提取所需能力。
+- 旧 PR #44 已 `CLOSED / ARCHIVED / NOT MERGED`，annotated tag 为
+  `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`，**零代码合入**。按
+  D-2026-07-27-15（业务方裁决），其实现内容由 **PR #53** 在最新 main
+  同内容重落地——**该裁决取代 #52 写入的"实现回到 `NOT STARTED`、不得
+  恢复或重放 #44"条款**。理由：#44 的 19 条评审 findings（2 Critical /
+  10 Important / 7 Minor）已在归档代码内 RED-first 闭环并沉淀为 16 个以
+  finding 编号命名的测试节点；从零重做会重新踩同一批陷阱、延长而非缩短
+  循环。#53 是同内容重落地，不是重新实现，这 16 个节点是其验收清单的
+  强制项。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
 - A2 已把 worktree 登记从 66 收敛到 23：21 个 clean 历史 worktree 非 force
   移除、22 个 prunable 记录归零、13 个 dirty/frozen worktree 保留；仓外
