@@ -42,12 +42,12 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY`，未合入 | 必须重放最新 main 并重新 exact review；迁移 0015 Owner |
+| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY / CONFLICTING`，未合入 | 必须重放最新 main 并重新 exact review；旧 head CI 不是 latest-main 证据；迁移 0015 Owner |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
 | 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
 | 039 | p3-api-worker-shell | 规格 ✅ 已合入（PR #48）；实现 `NOT STARTED` | 033 §16 P3；零迁移零表；实现依赖 P1 |
-| 040 | g0a-golden-asset-kernel | 📋 编号收口候选；PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED` | 从旧 `038-g0a-*` 机械迁移到唯一目标 040；在非破坏更新与 fresh exact review 前不可合入、不可称 spec frozen |
+| 040 | g0a-golden-asset-kernel | 规格 ✅ 已合入（PR #42）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 编号冲突已关闭；后续实现须独立 TDD/复审，不得称 G0a 已验收或产品已完成 |
 | 041+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
@@ -91,11 +91,10 @@
 
 开放 PR custody：
 
-- PR #42 是 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`，仍使用旧
-  `038-g0a-*` 路径；注册表唯一目标是 040，rename/rebase 前不可合入、
-  不可称 spec frozen。
-- PR #44 是 P1 实现，当前 Ready 但 `DIRTY`；未合入，必须重放最新 main 并
-  接受新的 exact review。
+- 治理收口 PR #50 与 OpenSpec 040 编号收口 PR #42 均已合入；#42 仅交付
+  G0a 规格，实施尚未开始。
+- PR #44 是当前唯一开放 PR：`OPEN / Ready / DIRTY / CONFLICTING`；未合入，
+  必须重放最新 main 并接受新的 exact review，旧 head CI 不是 latest-main 证据。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）

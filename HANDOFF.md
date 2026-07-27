@@ -10,13 +10,12 @@
 > 与
 > [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
 > 为准。
-> **post-Fable 状态快照**：`main=b974bb90965eaaaf5404fdaf786778432e51cc77`。
-> PR #35–#49 中已合入 #35/#36/#37/#38/#39/#40/#41/#43/#45/#46/#47/#48/#49；
-> 该编号区间只开放 #42（`OPEN / Draft / DIRTY / CONFLICTING`）与
-> #44（Ready，但 `DIRTY`，未合入）。
+> **当前事实截止点**：`main=99f42f33e17ad8054383c30b4cff563785e46548`。
+> PR #35–#50 中已合入 #35/#36/#37/#38/#39/#40/#41/#42/#43/#45/#46/#47/#48/#49/#50；
+> 当前 GitHub 唯一开放项为 #44（`OPEN / Ready / DIRTY / CONFLICTING`，未合入）。
 > ① **C0 与 CAP0 已实现并合入**（PR #36/#46）。P1 规格已合入（PR #38），
 > 实现 PR #44 必须重放到最新 main 并接受新 exact-head review，当前不得按
-> Ready 状态推断可合入；P3 规格已合入（PR #48），实现等待 P1。
+> Ready 状态或旧 head CI 推断可合入；P3 规格已合入（PR #48），实现等待 P1。
 > ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
 > 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
 > （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注
@@ -26,10 +25,9 @@
 > 触发**（证据+W1 API 草案见 037 artifacts）；W1 规格已合入（PR #41），
 > Go 实现尚未开始，P4a/P4c 继续 blocked。
 > ④ G0-probe 已完成，但只用于阈值校准，不是验收证据。Schema/词表（PR #43）
-> 与金标标注（PR #49）均为 draft、非验收权威。PR #42
-> （`OPEN / Draft / DIRTY / CONFLICTING`）仍使用旧 `038-g0a-*` 路径，与
-> 已合入 W1/OpenSpec 038 冲突；注册表唯一目标为 040，在 rename/rebase 前
-> `BLOCKED`，不可合入、不可称 spec frozen；本状态收口不替它修改分支。
+> 与金标标注（PR #49）均为 draft、非验收权威。PR #42 已将
+> **OpenSpec 040 G0a 金标资产化内核规格合入**；其状态仅为
+> `SPEC-ONLY / IMPLEMENTATION NOT STARTED`，不表示 G0a 已验收或产品已完成。
 > ⑤ MVP 采用 **human_batch-first**：机器审核结果可作为批量决策输入，但生产
 > 发布动作只能由授权人对 exact CandidateRelease 一键批准/拒绝，不逐页；
 > 无人值守 `machine_auto` 仍属 `P15[auto-profile]`，依赖 G0b。superadmin
