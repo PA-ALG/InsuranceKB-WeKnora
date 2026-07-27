@@ -12,7 +12,9 @@ deterministic 测试用，真实并发证据只来自 PG lane（P1.12）。
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -21,8 +23,10 @@ from sqlalchemy.engine import Result
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import Executable
+from sqlalchemy.sql.elements import TextClause
 
 from insurance_harness.jobs.errors import (
+    DomainWriteViolationError,
     IllegalTransitionError,
     InvalidJobInputError,
     LeaseExpiredError,
@@ -130,6 +134,19 @@ def validated_text(value: str, name: str, *, max_length: int) -> str:
     return value
 
 
+def validated_limit(value: int, name: str) -> int:
+    """只读入口的分页/批量上限校验（P1.9 读路径输入合同，D-2026-07-27-16）。
+
+    `limit = 0` 会产生与"无事可做"完全不可区分的空结果，`limit < 0` 会泄漏
+    原始驱动异常；两者一律 typed `invalid_input`。
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise InvalidJobInputError(f"{name} must be an integer")
+    if value < 1:
+        raise InvalidJobInputError(f"{name} must be >= 1")
+    return value
+
+
 def require_active_lease(session: Session, row: WikiJob, *, now: datetime | None = None) -> None:
     """写权威过期门（P1.3 写权威合同，D-2026-07-27-16）。
 
@@ -154,24 +171,87 @@ def validated_payload(payload: Mapping[str, Any] | None, name: str = "payload") 
     return materialized
 
 
-class DomainWriteHandle:
-    """完成事务内的受限领域写句柄（review I8）。
+#: P1 自有表前缀：领域写句柄一律不得触碰（P1.5 领域写通道合同）。
+_OWNED_TABLE_PREFIX = "wiki_"
 
-    只暴露 `execute`：调用方无法提交/回滚/关闭完成事务；领域写与任务
-    状态、outbox 行同生共死。合同：领域写只允许写调用方自己的领域表，
-    SHALL NOT 触碰 `wiki_` 前缀表（P1 表所有权）或其他 Space 的数据。
+#: 保守标识符扫描：raw SQL 里出现的任何 `wiki_xxx` 标记都视为触碰自有表。
+_OWNED_TABLE_PATTERN = re.compile(rf"\b{_OWNED_TABLE_PREFIX}\w+", re.IGNORECASE)
+
+#: 结束/另起事务的语句：在完成事务内一律禁止（提交点校验的第一道）。
+_TRANSACTION_CONTROL_PATTERN = re.compile(
+    r"\b(commit|rollback|begin|start\s+transaction|savepoint|release\s+savepoint|"
+    r"prepare\s+transaction|call|do)\b",
+    re.IGNORECASE,
+)
+
+
+def _owned_tables_touched(statement: Executable) -> frozenset[str]:
+    """列出语句触碰到的 P1 自有表（P1.5，D-2026-07-27-16）。
+
+    Core 语句走元数据（精确）；`text()` 走保守标识符扫描（宁可误报也不漏
+    报）——句柄的安全比较点必须在语句面，属性面隐藏 `commit` 不构成执法。
+    """
+    if isinstance(statement, TextClause):
+        # raw SQL 无可靠元数据：保守标识符扫描，宁可误报不漏报。
+        return frozenset(
+            match.group(0).lower() for match in _OWNED_TABLE_PATTERN.finditer(str(statement))
+        )
+    found: set[str] = set()
+    # Core DML（Insert/Update/Delete）的目标表在 `.table`。
+    table = getattr(statement, "table", None)
+    name = str(getattr(table, "name", "")) if table is not None else ""
+    if name.startswith(_OWNED_TABLE_PREFIX):
+        found.add(name.lower())
+    # Core Select 的来源表；不同 SQLAlchemy 构造下该方法可能不可用。
+    get_final_froms = getattr(statement, "get_final_froms", None)
+    if callable(get_final_froms):
+        with suppress(Exception):
+            for source in get_final_froms():
+                source_name = str(getattr(source, "name", ""))
+                if source_name.startswith(_OWNED_TABLE_PREFIX):
+                    found.add(source_name.lower())
+    return frozenset(found)
+
+
+def _controls_transaction(statement: Executable) -> bool:
+    """raw 语句是否试图结束/另起事务或经过程隐式提交。"""
+    if not isinstance(statement, TextClause):
+        return False
+    return bool(_TRANSACTION_CONTROL_PATTERN.search(str(statement)))
+
+
+class DomainWriteHandle:
+    """完成事务内的受限领域写句柄（P1.5 领域写通道合同，D-2026-07-27-16）。
+
+    只暴露 `execute`，且 `execute` 在**语句面**执法两条不变量：
+    ① 不得结束/提交/另起完成事务（否则领域行落库而任务仍 `running`、
+    outbox 为空，重放产生第二份领域结果）；② 不得触碰 `wiki_` 前缀的 P1
+    自有表（否则可复活其他 Space 的终态行、伪造 `lease_generation`、插入
+    越域 outbox 行，同时击穿 P1.1 终态无出边与 P1.8 跨 Space fail closed）。
+    仅隐藏 `commit/rollback/close` 属性（review I8 的原修法）不构成执法。
     """
 
-    __slots__ = ("_session",)
+    __slots__ = ("_job_id", "_session")
 
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, job_id: str | None = None) -> None:
         self._session = session
+        self._job_id = job_id
 
     def execute(
         self,
         statement: Executable,
         parameters: Mapping[str, Any] | Sequence[Mapping[str, Any]] | None = None,
     ) -> Result[Any]:
+        if _controls_transaction(statement):
+            raise DomainWriteViolationError(
+                "domain write may not control the completion transaction", job_id=self._job_id
+            )
+        touched = _owned_tables_touched(statement)
+        if touched:
+            raise DomainWriteViolationError(
+                f"domain write may not touch P1-owned tables: {sorted(touched)}",
+                job_id=self._job_id,
+            )
         return self._session.execute(statement, parameters)
 
 
@@ -405,21 +485,33 @@ class JobStore:
 
         本方法是任务领域结果的唯一写入口；fencing + 终态保证至多成功一
         次，重复完成 typed 拒绝且零领域写、零 outbox 追加（P1.5/P1.6）。
-        领域写经受限 `DomainWriteHandle` 在 SAVEPOINT 内执行（review I8），
-        不能提交/回滚完成事务；成功时清空历史错误残留（review M15）。
+        领域写经受限 `DomainWriteHandle` 在 SAVEPOINT 内执行，其通道由
+        **两道独立防线**执法（P1.5 领域写通道合同，D-2026-07-27-16）：
+        句柄的语句面校验（拒绝事务控制语句与 `wiki_` 自有表），以及本方法
+        在回调返回后校验完成事务与 SAVEPOINT 身份未变。安全检查的冗余是
+        特性——不因"已有语句面校验"删掉提交点校验。
+        成功时清空历史错误残留（review M15）。
         """
         from insurance_harness.jobs.outbox import append_job_event
 
         with self._session_factory() as session:
-            with session.begin():
+            with session.begin() as outer:
                 row = self._locked_job(session, space_id, job_id)
                 self._check_generation(row, generation)
                 ensure_transition(JobState(row.state), JobState.SUCCEEDED, row.id)
                 now = database_now(session)
                 require_active_lease(session, row, now=now)
                 if domain_write is not None:
-                    with session.begin_nested():
-                        domain_write(DomainWriteHandle(session))
+                    with session.begin_nested() as nested:
+                        domain_write(DomainWriteHandle(session, job_id=job_id))
+                        if not nested.is_active:
+                            raise DomainWriteViolationError(
+                                "domain write ended its savepoint", job_id=job_id
+                            )
+                        if not outer.is_active:
+                            raise DomainWriteViolationError(
+                                "domain write ended the completion transaction", job_id=job_id
+                            )
                 for draft in events:
                     append_job_event(
                         session,
@@ -481,20 +573,30 @@ class JobStore:
         当且仅当当前处于 awaiting_human 才 requeue；已被唤醒过的行返回
         typed `duplicate`，从未 awaiting 的行返回 typed `not_awaiting`
         （review I11）；二者零行变更。
+
+        判据是**不可变的持久事实** `human_decision_resumed_at`（P1.7 判据
+        不可变合同，D-2026-07-27-16）：首次唤醒成功时写入、此后不再修改。
+        原实现用 `error_class == 'human_required'` 代理"是否曾经 awaiting"，
+        而回收无条件写 `retryable`、`report_failure`/`report_success` 也会
+        覆写它——于是重投的 Decision 在任务经历一次租约过期后收到错误的
+        "从未等待人工"语义。
         """
         with self._session_factory() as session:
             with session.begin():
                 row = self._locked_job(session, space_id, job_id)
                 state = JobState(row.state)
                 if state is not JobState.AWAITING_HUMAN:
-                    was_awaiting = row.error_class == ErrorClass.HUMAN_REQUIRED.value
+                    resumed_before = row.human_decision_resumed_at is not None
                     return DecisionOutcome(
                         job_id=row.id,
-                        status="duplicate" if was_awaiting else "not_awaiting",
+                        status="duplicate" if resumed_before else "not_awaiting",
                     )
                 ensure_transition(JobState.AWAITING_HUMAN, JobState.QUEUED, row.id)
+                now = database_now(session)
                 row.state = JobState.QUEUED.value
-                row.available_at = database_now(session)
+                row.available_at = now
+                if row.human_decision_resumed_at is None:
+                    row.human_decision_resumed_at = now
                 return DecisionOutcome(job_id=row.id, status="resumed")
 
     # --- P1.1 第 10 条 / P1.10：过期 lease 回收 ---

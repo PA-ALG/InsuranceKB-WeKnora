@@ -75,6 +75,11 @@ class WikiJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_class: Mapped[str | None] = mapped_column(String(32))
     error_summary: Mapped[str | None] = mapped_column(Text)
+    #: 首次人工 Decision 唤醒成功的时刻；写入后不再修改（P1.7 判据不可变，
+    #: D-2026-07-27-16）。`error_class` 会被回收与失败上报覆写，不能做代理。
+    human_decision_resumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
 
 class WikiOutboxEvent(Base):
@@ -91,6 +96,7 @@ class WikiOutboxEvent(Base):
         CheckConstraint("dispatch_attempts >= 0", name="ck_wiki_outbox_events_attempts"),
         Index(
             "ix_wiki_outbox_events_undispatched",
+            "next_dispatch_at",
             "id",
             sqlite_where=text("dispatched_at IS NULL"),
             postgresql_where=text("dispatched_at IS NULL"),
@@ -110,3 +116,8 @@ class WikiOutboxEvent(Base):
     dispatch_attempts: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0")
     )
+    #: 持久退避（P1.6 投递可恢复性合同，D-2026-07-27-16）：扫描条件是
+    #: `dispatched_at IS NULL AND next_dispatch_at <= 数据库当前时间`。
+    #: 取代原先"失败 N 次即永久移出扫描窗口"的硬上限——瞬时消费端不可用与
+    #: 永久毒性负载在失败计数上不可区分，硬上限会把前者误判为后者。
+    next_dispatch_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

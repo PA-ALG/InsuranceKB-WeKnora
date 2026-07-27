@@ -13,7 +13,7 @@ M19），崩溃在标记前仍会重投（at-least-once）。投递失败按持�
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,12 +22,12 @@ from sqlalchemy.orm import Session
 from insurance_harness.jobs.errors import (
     DuplicateEventError,
     IllegalTransitionError,
-    InvalidJobInputError,
     SpaceScopeError,
     StaleGenerationError,
 )
 from insurance_harness.jobs.models import (
     DispatchReport,
+    JobRuntimeConfig,
     JobState,
     OutboxEventDraft,
     OutboxEventView,
@@ -39,6 +39,7 @@ from insurance_harness.jobs.store import (
     _aware,
     database_now,
     require_active_lease,
+    validated_limit,
     validated_payload,
     validated_text,
 )
@@ -51,6 +52,8 @@ MAX_EVENT_ID_LENGTH = 36
 def _view(row: WikiOutboxEvent) -> OutboxEventView:
     created_at = _aware(row.created_at)
     assert created_at is not None
+    next_dispatch_at = _aware(row.next_dispatch_at)
+    assert next_dispatch_at is not None
     return OutboxEventView(
         id=row.id,
         event_id=row.event_id,
@@ -60,6 +63,7 @@ def _view(row: WikiOutboxEvent) -> OutboxEventView:
         created_at=created_at,
         dispatched_at=_aware(row.dispatched_at),
         dispatch_attempts=row.dispatch_attempts,
+        next_dispatch_at=next_dispatch_at,
     )
 
 
@@ -96,11 +100,14 @@ def append_job_event(
     if state is not JobState.RUNNING:
         raise IllegalTransitionError(state, state, job.id)
     require_active_lease(session, job)
+    created_at = now if now is not None else database_now(session)
     row = WikiOutboxEvent(
         space_id=space_id,
         event_type=draft.event_type,
         payload=payload,
-        created_at=now if now is not None else database_now(session),
+        created_at=created_at,
+        # 新事件立即可投（P1.6）：退避只在失败后推迟。
+        next_dispatch_at=created_at,
     )
     if draft.event_id is not None:
         row.event_id = draft.event_id
@@ -115,21 +122,24 @@ def append_job_event(
 
 
 class OutboxDispatcher:
-    """按有序 id 升序扫描未投递行并 at-least-once 投递（P1.6）。
+    """按有序 id 升序扫描到期未投递行并 at-least-once 投递（P1.6）。
 
-    `max_dispatch_attempts` 只是环境默认值，由部署配置注入：投递失败按行
-    持久累计，达上限即 park（不再进入扫描窗口，也不伪装已投递），由运维
-    经 `read_parked` 处置（review I10）。
+    投递让位机制是**持久退避**（P1.6 投递可恢复性合同，D-2026-07-27-16）：
+    失败时递增持久 `dispatch_attempts` 并按配置化 `dispatch_backoff_seconds`
+    推迟 `next_dispatch_at`；扫描条件为 `dispatched_at IS NULL AND
+    next_dispatch_at <= 数据库当前时间`。已提交行**永不**因失败计数被移出
+    扫描窗口——瞬时消费端不可用与永久毒性负载在该计数上不可区分，硬上限会
+    把前者误判为后者并静默丢弃健康事件。毒性事件的熔断/隔离/人工处置属消费方
+    reconciliation（proposal 非目标），不在 P1 内实现为"永不再投"的终态。
+    退避参数只来自 `JobRuntimeConfig`，不硬编码于本构造函数。
     """
 
-    def __init__(self, session_factory: SessionFactory, *, max_dispatch_attempts: int = 5) -> None:
-        if max_dispatch_attempts < 1:
-            raise InvalidJobInputError("max_dispatch_attempts must be >= 1")
+    def __init__(self, session_factory: SessionFactory, config: JobRuntimeConfig) -> None:
         self._session_factory = session_factory
-        self._max_dispatch_attempts = max_dispatch_attempts
+        self._config = config
 
     def read_pending(self, *, space_id: str, limit: int = 100) -> tuple[OutboxEventView, ...]:
-        """Space scope 内按 id 升序读取未标记投递、未 park 的已提交行。"""
+        """Space scope 内按 id 升序读取未投递且退避已到期的已提交行。"""
         validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
         return self._read(space_ids=(space_id,), limit=limit)
 
@@ -137,9 +147,17 @@ class OutboxDispatcher:
         """显式命名的全局扫描入口（P1.8：全局聚合不作为默认）。"""
         return self._read(space_ids=None, limit=limit)
 
-    def read_parked(self, *, space_id: str, limit: int = 100) -> tuple[OutboxEventView, ...]:
-        """达投递上限被 park 的毒性事件（未投递、待人工处置）。"""
+    def read_backed_off(
+        self, *, space_id: str, min_attempts: int = 1, limit: int = 100
+    ) -> tuple[OutboxEventView, ...]:
+        """运维视图：已失败 ≥ `min_attempts` 次、仍未投递的行。
+
+        它是**可观测面**而非坟墓：这些行仍在扫描集合内、退避到期后继续重投。
+        取代原 `read_parked`（后者语义是"永不再投"，违反 P1.6）。
+        """
         validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+        validated_limit(min_attempts, "min_attempts")
+        validated_limit(limit, "limit")
         with self._session_factory() as session:
             rows = (
                 session.execute(
@@ -147,7 +165,7 @@ class OutboxDispatcher:
                     .where(
                         WikiOutboxEvent.space_id == space_id,
                         WikiOutboxEvent.dispatched_at.is_(None),
-                        WikiOutboxEvent.dispatch_attempts >= self._max_dispatch_attempts,
+                        WikiOutboxEvent.dispatch_attempts >= min_attempts,
                     )
                     .order_by(WikiOutboxEvent.id)
                     .limit(limit)
@@ -160,18 +178,20 @@ class OutboxDispatcher:
     def _read(
         self, *, space_ids: tuple[str, ...] | None, limit: int
     ) -> tuple[OutboxEventView, ...]:
-        statement = (
-            select(WikiOutboxEvent)
-            .where(
-                WikiOutboxEvent.dispatched_at.is_(None),
-                WikiOutboxEvent.dispatch_attempts < self._max_dispatch_attempts,
-            )
-            .order_by(WikiOutboxEvent.id)
-            .limit(limit)
-        )
-        if space_ids is not None:
-            statement = statement.where(WikiOutboxEvent.space_id.in_(space_ids))
+        validated_limit(limit, "limit")
         with self._session_factory() as session:
+            now = database_now(session)
+            statement = (
+                select(WikiOutboxEvent)
+                .where(
+                    WikiOutboxEvent.dispatched_at.is_(None),
+                    WikiOutboxEvent.next_dispatch_at <= now,
+                )
+                .order_by(WikiOutboxEvent.id)
+                .limit(limit)
+            )
+            if space_ids is not None:
+                statement = statement.where(WikiOutboxEvent.space_id.in_(space_ids))
             rows = session.execute(statement).scalars().all()
             return tuple(_view(row) for row in rows)
 
@@ -206,24 +226,25 @@ class OutboxDispatcher:
 
         行锁（FOR UPDATE SKIP LOCKED）使并发 dispatcher 正常路径零双投递
         （review M19）；投递成功与标记之间崩溃 ⇒ 行未标记、下一轮重投，
-        消费端以 event_id 幂等去重。deliver 抛错不再阻塞本轮后续事件
-        （分配序本就不构成语义顺序）：失败按行持久累计
-        `dispatch_attempts`，达上限即 park（review I10）。
+        消费端以 event_id 幂等去重。deliver 抛错不阻塞本轮后续事件（分配序
+        本就不构成语义顺序）：失败递增持久 `dispatch_attempts` 并按配置化
+        退避推迟 `next_dispatch_at`——**只让位，不出局**（P1.6，D-16）。
         """
         validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+        validated_limit(limit, "limit")
         delivered: list[str] = []
         failed: list[str] = []
-        parked: list[str] = []
         cursor = 0
         for _ in range(limit):
             with self._session_factory() as session:
                 with session.begin():
+                    now = database_now(session)
                     row = session.execute(
                         select(WikiOutboxEvent)
                         .where(
                             WikiOutboxEvent.space_id == space_id,
                             WikiOutboxEvent.dispatched_at.is_(None),
-                            WikiOutboxEvent.dispatch_attempts < self._max_dispatch_attempts,
+                            WikiOutboxEvent.next_dispatch_at <= now,
                             WikiOutboxEvent.id > cursor,
                         )
                         .order_by(WikiOutboxEvent.id)
@@ -238,15 +259,16 @@ class OutboxDispatcher:
                         deliver(event)
                     except Exception:
                         row.dispatch_attempts += 1
-                        if row.dispatch_attempts >= self._max_dispatch_attempts:
-                            parked.append(event.event_id)
-                        else:
-                            failed.append(event.event_id)
+                        row.next_dispatch_at = now + timedelta(
+                            seconds=self._config.dispatch_backoff_delay(
+                                attempts=row.dispatch_attempts
+                            )
+                        )
+                        failed.append(event.event_id)
                         continue
-                    row.dispatched_at = database_now(session)
+                    row.dispatched_at = now
                     delivered.append(event.event_id)
         return DispatchReport(
             delivered_event_ids=tuple(delivered),
             failed_event_ids=tuple(failed),
-            parked_event_ids=tuple(parked),
         )

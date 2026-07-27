@@ -20,6 +20,16 @@
 > 10 Important / 7 Minor）；全部 finding 已按 RED-first 关闭并重跑评审
 > probe 验证，见下文「双评审 finding 闭环」节。这 19 条及其 16 个以 finding
 > 编号命名的测试节点是本 PR 验收清单的**强制项**，后续重构不得删除。
+>
+> **2026-07-27 §18 停线与边界冻结（第二轮双独立评审后）**：PR #53 提交
+> 双独立评审（Spec / Quality，互不知晓对方结论、各自独立 worktree +
+> 独立 PostgreSQL 实例），结果 `Spec compliant: no`（1C/6I/5m）与
+> `Quality approved: no`（2C/6I/4m），且**两侧独立复现了同一破口**——过期
+> 未回收的 lease 既不计入并发限额、又保有完整写权威。按 033 §18「根因是
+> 错误架构边界时替换边界而不是把补丁堆叠到旧实现」，先冻结规格再实现：
+> 035 spec 344 → 536 行（8 条边界合同，纯澄清、不新增状态/异常分支），
+> 裁决记入 23 号 §8 `D-2026-07-27-16`，行数触发线豁免记入 `D-2026-07-27-17`。
+> 修复见 tasks T14–T27，验收清单由 14 项扩为 **28 项**。
 
 ## 双评审 finding 闭环（2026-07-27）
 
@@ -121,30 +131,58 @@ enqueue（消费方铸造幂等键，DB 唯一去重）
   改名）、`test_source_lifecycle_migration_021.py` / `..._postgres_021.py`
   （单 head 断言随链前移至 0015，0012→0006 拓扑断言保留）。
 
-## 已运行门禁（2026-07-27，本 PR head 在 `main=70740334` 上全新重跑）
+## 边界冻结后的修复面（D-2026-07-27-16）
 
-> 以下全部是重落地后在本分支重跑的结果；旧 #44 head 的任何门禁结果均不
-> 作本 PR 证据。
+```text
+写权威    require_active_lease 单一过期门 → start / report_success /
+          report_failure / append_job_event 四路对称执法（+heartbeat）
+限额会计  _count_active 计全部 leased|running（不按过期缩小分母）
+          → 饱和且存在过期行时 _reclaim_saturated 做无 Space 过滤的有界回收
+回收的界  _reclaim_locked 对 leased 行先 attempt +1 再路由（修无界重排队）
+          + reclaim_expired_leases_all_spaces() 显式跨 Space 入口
+状态机    ensure_transition(storage_layer=False) 使 STORAGE_ONLY_TRANSITIONS
+          成为可执行护栏；report_failure 要求源状态 running
+领域写    DomainWriteHandle 语句面校验（事务控制语句 + wiki_ 自有表）
+          + 完成事务提交点校验 SAVEPOINT/外层事务身份（两道独立防线）
+事件边界  append_job_event 收回公共出口（只经 report_success 追加）
+投递      next_dispatch_at 持久退避 + 配置化 dispatch_backoff_seconds
+          取代 max_dispatch_attempts 硬上限与永久 park
+可观测    expired_lease_count / oldest_expired_lease_age_seconds
+判据      human_decision_resumed_at 不可变列取代可变 error_class 代理
+输入合同  validated_limit 原语 + 只读入口统一走 validated_text
+迁移      dead_letter 纳入降级拒绝；offline --sql 显式 typed 拒绝
+配置      lease_seconds 严格为正且 > heartbeat_interval_seconds
+```
+
+迁移 `0015` 新增两列（`wiki_outbox_events.next_dispatch_at`、
+`wiki_jobs.human_decision_resumed_at`）与索引调整
+（`ix_wiki_outbox_events_undispatched` → `(next_dispatch_at, id)`）。0015 未
+合入，属"合入前原位修订"，**不产生第二个 migration**（与 I5 索引同一处理）。
+
+## 已运行门禁（2026-07-27，本 PR head 在 `main=0cb7beff` 上全新重跑）
+
+> 以下全部是重落地 + 边界冻结修复后在本分支重跑的结果；旧 #44 head 与
+> 本 PR 早期 head 的门禁结果均不作当前证据。
 
 - focused deterministic（SQLite lane）：
   `tests/test_job_state_machine_035.py` + `tests/test_job_store_035.py` +
-  `tests/test_job_outbox_035.py` → **78 passed**。
+  `tests/test_job_outbox_035.py` + `tests/test_config.py` → **119 passed**
+  （边界冻结前 78）。
 - 存量迁移消费者回归（deterministic）：`test_scope_migration_016.py`、
   `test_source_lifecycle_migration_021.py`、
   `test_release_snapshot_migration_018.py`（含 SQLite `alembic check`）、
   `test_knowledge_db.py`、`test_flywheel_migration_015.py`、
   `test_product_db.py`、`test_config.py` → **80 passed**（0015 降级
   preflight 保持「被拒绝的降级零 DDL」全链不变量）。
-- CI lane 合同：`test_ci_lanes_022.py` 全文件 → **61 passed**，其中
-  `test_p0_4_three_collections_are_disjoint_exhaustive_and_precise`
-  单节点复跑 → **1 passed**（integration 集合与注册表精确一致）；22 个 PG
-  节点全部注册且 no-URL fail-fast。
+- CI lane 合同：`test_ci_lanes_022.py` 全文件 → **69 passed**（integration
+  集合与注册表精确一致）；PG 节点 22 → **30** 全部注册且 no-URL fail-fast
+  （store 18 → 23、migration 4 → 7）。
 - **PostgreSQL 16 lane（全量 `integration_postgres`）**：本机受控
-  `postgres:16` 全新容器（`127.0.0.1:5642`，全新 volume，零遗留状态；DSN
+  `postgres:16` 全新容器（`127.0.0.1:5942`，全新 volume，零遗留状态；DSN
   经 `HARNESS_TEST_POSTGRES_URL` 运行时注入，密码不入库不入日志）→
-  **47 passed / 3833 deselected**；JUnit（`harness/scripts/check_junit.py`）
-  `tests=47 skipped=0 failures=0 errors=0`。每组测试创建随机临时
-  database（migration 测试与独立全局限额测试）或经真实 Alembic
+  **55 passed / 3879 deselected**（边界冻结前 47）；JUnit
+  （`harness/scripts/check_junit.py`）`tests=55 skipped=0`。每组测试创建随机
+  临时 database（migration 测试与独立全局限额测试）或经真实 Alembic
   `upgrade head` 的模块级随机 database（store 测试），结束即 drop。
 - **CI 门禁原样命令**：`uv run ruff check .` → **All checks passed**；
   `uv run mypy src tests`（strict）→ **Success: no issues found in 350
@@ -183,10 +221,28 @@ enqueue（消费方铸造幂等键，DB 唯一去重）
 
 另有限额（两组配置值并发生效）、跨 Space fail closed（含 outbox 读）、
 Decision 并发幂等、retry/backoff 配置驱动、P1.9 指标分布（per-Space 精确
-+ 回拨 `enqueued_at` 的精确最老可调度年龄 + 全局按增量精确）、全局限额
-排除过期 lease、advisory 等待不吞噬 lease、并发 dispatcher 零双投递、
-活跃数据降级拒绝等 PG 节点，共 **22 个**，全部在 `test_ci_lanes_022.py`
-注册。
++ 回拨 `enqueued_at` 的精确最老可调度年龄 + 全局按增量精确）、advisory
+等待不吞噬 lease、并发 dispatcher 零双投递、活跃数据降级拒绝等 PG 节点。
+
+**D-2026-07-27-16 边界冻结新增的 8 个 PG 节点**（tasks 清单 15/16/19/21/
+27/28）：`test_q15_expired_lease_holder_has_no_write_authority_on_postgres`、
+`test_q16_stalled_expired_leases_never_exceed_limits_on_postgres`、
+`test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres`、
+`test_q19_domain_write_cannot_escape_its_channel_on_postgres`、
+`test_q25_delivered_but_unmarked_crash_converges_on_postgres`、
+`test_q26_downgrade_relative_destination_crossing_0006_is_resolved`、
+`test_q26_downgrade_refuses_while_dead_letter_forensics_exist`、
+`test_q26_offline_sql_downgrade_is_explicitly_refused`。
+
+PG 节点合计 **30 个**（22 → 30），全部在 `test_ci_lanes_022.py` 精确集注册。
+
+**契约收紧（刻意，两处）**：① C1 节点（det + PG）原断言"scope 外零变更"
+已迁移为"回收后放行 + 调用方拿不到跨 Space 内容 + 过期持有者即刻失去写
+权威"——冻结的边界选择了"限额分母含过期行 + 饱和时无 Space 过滤的有界
+回收"，与"claim 不触碰 scope 外行"不可兼得，取前者因其同时消灭过度准入与
+永久饥饿；② 转换穷举节点由二分改三分（调用方可达 / storage-only / 非法）。
+另有 12 处 `lease_seconds=0.0` 过期脚手架迁移为只回拨 lease 的
+`force_expire`/`_force_expire`（配置层已禁止 `lease_seconds = 0`）。
 
 ## NOT RUN（如实记录）
 
@@ -204,19 +260,38 @@ Decision 并发幂等、retry/backoff 配置驱动、P1.9 指标分布（per-Spa
 
 ## 已知边界与待复审项
 
-- 生产代码量：raw 1781 行 / 有效代码行（去空行/注释/docstring）1300 行
-  （其中唯一迁移 200、`__init__` 导出面 89、store 445、outbox 196），
-  超过 tasks Contract Card 的 ~900 触发线；双评审闭环（输入验证、
-  dispatcher 重构、降级 preflight）为主要增量。按 033 §16.2 需重新切分
-  评审裁决；P1 是单一原子不变量（单领/fencing/outbox 收敛），拆分候选
-  仅有 metrics/dispatcher 观测面，等复审裁决，不自行拆半成品。
-- `DomainWriteHandle` 只封锁事务生命周期（无 commit/rollback/close）；
-  句柄仍可执行任意 SQL（含越权触碰 `wiki_` 表，评审 H2 残余）。P1 以
-  文档合同约束（领域写只写调用方领域表）；SQL 级沙箱不在 P1 范围，
-  消费方 PR（P3 worker 壳）接线时按其权限模型收紧。
+- 生产代码量超过 tasks Contract Card 的 ~900 触发线（边界冻结前实测
+  raw 1781 / 有效 1300）。该裁决已由
+  [D-2026-07-27-17](../../../docs/insurance-kb/23-mvp-control-board.md)
+  **闭合为不拆分**：拆分在算术上不能带来预算合规（可分离的 metrics +
+  dispatcher 约 225 行，拆后仍约 1075 > 900），且会产生"outbox 无人 drain"
+  的半成品，正是 §16.2 禁止的为数字拆坏原子不变量。豁免仅限本窗口，不构成
+  后续 Pn 先例。边界冻结的修复使行数进一步增加（新增两道防线、退避、指标与
+  两个列），仍在同一豁免范围内。
+- `DomainWriteHandle` 的越权残余**已关闭**（原为"仅文档合同约束"）：现由
+  语句面校验 + 完成事务提交点身份校验两道防线执法（P1.5 领域写通道合同）。
+  残余边界改为：语句面对 raw SQL 采用**保守标识符扫描**，因此含字面串
+  `wiki_` 的合法领域语句会被误报为越界——这是刻意选择的方向（宁可误报不
+  漏报，命名冲突可由消费方改用 Core 语句或改名规避）。DB 权限级沙箱仍归
+  P3 principal 模型。
 - SQLite 仅 deterministic 测试用：`claim` 的 advisory 串行化与
   `FOR UPDATE SKIP LOCKED` 在 SQLite 为 no-op（单写者），并发证据只以
   PG lane 为准（P1.12 明文）。
 - T9 dispatcher 的 deterministic 测试先于 RED 实现（dispatcher 随
   outbox.py 在 T6 GREEN 一并落地），属 TDD 次序偏差，已在交付记录中
   如实说明；PG 侧 at-least-once/无跳过证据按 RED→GREEN 正常闭环。
+- **T22（过期 lease 指标）同样属 TDD 次序偏差**：其实现与 T24 的
+  `validated_text` 接线在同一处，先落 GREEN 后补验收节点；节点在本 head
+  全绿，如实记录不粉饰。
+- 并发限额仍由执行 claim 的实例按其自身配置执行（review M18 的既有边界
+  未变）：多实例配置漂移会弱化限额，部署必须共享单一配置来源；数据库
+  支撑的集中限额策略是显式后续项。
+- `claim` 在单一 advisory key 上全局串行化（`_CLAIM_LOCK_KEY`），且生产
+  engine 未设 `lock_timeout`：任一持锁事务卡住会阻塞全部 Space 的 claim。
+  I3 节点证明 lease 时长不被等待吞噬，但未证明等待有界。`lock_timeout`
+  接线归 P3 worker 壳（本 PR 不改 `make_engine`，避免夹带无关改动）。
+- `heartbeat_interval_seconds` 在 P1 内无消费者（heartbeat 调度归 P3
+  worker 壳）；本 PR 只用它校验 `lease_seconds` 的下界一致性。
+- `read_backed_off` 是运维**可观测面**，不是隔离终态：这些行仍在扫描集合
+  内、退避到期后继续重投。毒性事件的熔断/人工处置属消费方 reconciliation
+  （proposal 非目标）。

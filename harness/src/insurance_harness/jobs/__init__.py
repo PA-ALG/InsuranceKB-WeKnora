@@ -6,6 +6,7 @@
 
 from insurance_harness.jobs.errors import (
     CapacityBlockedJobError,
+    DomainWriteViolationError,
     DuplicateEventError,
     HumanRequiredJobError,
     IllegalTransitionError,
@@ -47,7 +48,12 @@ from insurance_harness.jobs.models import (
     ensure_transition,
     route_failure,
 )
-from insurance_harness.jobs.outbox import OutboxDispatcher, append_job_event
+
+# `append_job_event` 刻意不在公共出口（P1.6 事件追加边界合同，
+# D-2026-07-27-16）：事件只能在完成事务内追加，即只经 `report_success`。
+# 调用方自有事务内的追加会让"领域写 + 事件已提交而任务未完成"成为可能，
+# 重放时新铸随机 event_id，消费端幂等去重无法折叠。
+from insurance_harness.jobs.outbox import OutboxDispatcher
 from insurance_harness.jobs.store import DomainWriteHandle, JobStore, database_now
 
 __all__ = [
@@ -60,6 +66,7 @@ __all__ = [
     "DecisionOutcome",
     "DispatchReport",
     "DomainWriteHandle",
+    "DomainWriteViolationError",
     "DuplicateEventError",
     "EnqueueResult",
     "ErrorClass",
@@ -86,7 +93,6 @@ __all__ = [
     "SpaceScopeError",
     "StaleGenerationError",
     "TypedJobError",
-    "append_job_event",
     "classify_failure",
     "database_now",
     "ensure_transition",

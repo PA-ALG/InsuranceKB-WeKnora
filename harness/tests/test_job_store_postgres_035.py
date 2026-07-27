@@ -29,22 +29,27 @@ from sqlalchemy.orm import Session, sessionmaker
 from insurance_harness.jobs import (
     ClaimedJob,
     DomainWriteHandle,
+    DomainWriteViolationError,
     ErrorClass,
     IllegalTransitionError,
     JobFailure,
     JobRuntimeConfig,
     JobState,
     JobStore,
+    LeaseExpiredError,
     NoClaimableJob,
     OutboxDispatcher,
     OutboxEventDraft,
     SpaceScopeError,
     StaleGenerationError,
-    append_job_event,
     database_now,
     global_job_metrics,
     space_job_metrics,
 )
+
+# `append_job_event` 已不在公共出口（P1.6 事件追加边界，D-2026-07-27-16）：
+# 只能在完成事务内追加。测试直接引内部模块以验证该内部合同。
+from insurance_harness.jobs.outbox import append_job_event
 from insurance_harness.jobs.tables import WikiJob, WikiOutboxEvent
 
 HARNESS_ROOT = Path(__file__).resolve().parents[1]
@@ -620,7 +625,7 @@ def test_p1_6_late_committed_smaller_id_is_still_dispatched(
 ) -> None:
     space_id = _space("outbox")
     store = _store(postgres_runtime)
-    dispatcher = OutboxDispatcher(postgres_runtime.factory)
+    dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
     early_job, early_generation = _start_running(store, space_id, "job-early", "worker-a")
     late_job, late_generation = _start_running(store, space_id, "job-late", "worker-b")
 
@@ -1009,7 +1014,7 @@ def test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres(
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
     )
     assert done.state is JobState.SUCCEEDED
-    dispatcher = OutboxDispatcher(postgres_runtime.factory)
+    dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
     event_id = dispatcher.read_pending(space_id=space_a)[0].event_id
     assert dispatcher.read_pending(space_id=space_b) == ()  # 零行返回
     with pytest.raises(SpaceScopeError):
@@ -1041,7 +1046,7 @@ def test_m19_concurrent_dispatchers_do_not_double_deliver(
     barrier = threading.Barrier(2)
 
     def run_dispatcher() -> None:
-        dispatcher = OutboxDispatcher(postgres_runtime.factory)
+        dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
         barrier.wait(timeout=10)
 
         def deliver(event: object) -> None:
@@ -1059,5 +1064,215 @@ def test_m19_concurrent_dispatchers_do_not_double_deliver(
 
     assert len(seen) == 6
     assert len(set(seen)) == 6  # 行级 SKIP LOCKED：无双投递
-    dispatcher = OutboxDispatcher(postgres_runtime.factory)
+    dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
+    assert dispatcher.read_pending(space_id=space_id) == ()
+
+
+# --- D-2026-07-27-16 边界冻结：PostgreSQL 侧强制验收节点 ---
+
+
+@pytest.mark.integration_postgres
+def test_q15_expired_lease_holder_has_no_write_authority_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.3 写权威合同：过期未回收的持有者四条写路径全部 typed 拒绝、零变更。"""
+    space_id = _space("authority")
+    store = _store(postgres_runtime)
+    job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
+    _force_expire(postgres_runtime, job_id)
+
+    with pytest.raises(LeaseExpiredError):
+        store.report_success(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+        )
+    with pytest.raises(LeaseExpiredError):
+        store.report_failure(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            failure=JobFailure(error_class=ErrorClass.RETRYABLE, summary="late"),
+        )
+    with pytest.raises(LeaseExpiredError):
+        store.heartbeat(space_id=space_id, job_id=job_id, generation=generation)
+    with pytest.raises(LeaseExpiredError):
+        with postgres_runtime.factory() as session:
+            with session.begin():
+                append_job_event(
+                    session,
+                    space_id=space_id,
+                    job_id=job_id,
+                    generation=generation,
+                    draft=OutboxEventDraft(event_type="job.progress", payload={}),
+                )
+
+    current = store.get_job(space_id=space_id, job_id=job_id)
+    assert current.state is JobState.RUNNING
+    assert current.lease_generation == generation
+    assert _outbox_count(postgres_runtime, space_id) == 0
+
+
+@pytest.mark.integration_postgres
+def test_q16_stalled_expired_leases_never_exceed_limits_on_postgres(
+    isolated_postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.8 限额会计：停滞的过期 lease 不得抬高 leased|running 行数上限。"""
+    runtime = isolated_postgres_runtime
+    store = _store(runtime, per_space_concurrency_limit=1, global_concurrency_limit=2)
+    spaces = [_space(f"stall-{index}") for index in range(6)]
+    for space_id in spaces:
+        store.enqueue(space_id=space_id, job_type="compile", idempotency_key="job")
+
+    for space_id in spaces:
+        outcome = store.claim(space_ids=(space_id,), worker_id=f"worker-{space_id}")
+        if isinstance(outcome, ClaimedJob):
+            _force_expire(runtime, outcome.job.id)
+        with runtime.factory() as session:
+            active = int(
+                session.scalar(
+                    select(func.count())
+                    .select_from(WikiJob)
+                    .where(
+                        WikiJob.state.in_(
+                            (JobState.LEASED.value, JobState.RUNNING.value)
+                        )
+                    )
+                )
+                or 0
+            )
+        assert active <= 2, f"越限：{active} > 2"
+
+
+@pytest.mark.integration_postgres
+def test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.10 回收可达性：无人枚举的 Space 经显式全局入口收敛。"""
+    space_id = _space("orphan")
+    store = _store(postgres_runtime, max_attempts=1)
+    store.enqueue(space_id=space_id, job_type="compile", idempotency_key="job")
+    outcome = store.claim(space_ids=(space_id,), worker_id="worker-gone")
+    assert isinstance(outcome, ClaimedJob)
+    _force_expire(postgres_runtime, outcome.job.id)
+
+    report = store.reclaim_expired_leases_all_spaces()
+
+    assert outcome.job.id in report.dead_lettered_job_ids
+    dead = store.get_job(space_id=space_id, job_id=outcome.job.id)
+    assert dead.state is JobState.DEAD_LETTER
+    assert dead.error_summary == "lease_expired"
+
+
+@pytest.mark.integration_postgres
+def test_q19_domain_write_cannot_escape_its_channel_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.5 领域写通道：结束完成事务与触碰 P1 自有表都 typed 拒绝并整体回滚。"""
+    space_id = _space("channel")
+    domain_table = f"domain_{uuid.uuid4().hex[:12]}"
+    with postgres_runtime.engine.begin() as connection:
+        connection.exec_driver_sql(f'CREATE TABLE "{domain_table}" (job_id TEXT PRIMARY KEY)')
+    store = _store(postgres_runtime)
+    job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
+
+    def commit_escape(handle: DomainWriteHandle) -> None:
+        handle.execute(
+            text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'), {"job_id": job_id}
+        )
+        handle.execute(text("COMMIT"))
+
+    with pytest.raises(DomainWriteViolationError):
+        store.report_success(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            domain_write=commit_escape,
+        )
+
+    def owned_table_escape(handle: DomainWriteHandle) -> None:
+        handle.execute(text("UPDATE wiki_jobs SET lease_generation = lease_generation + 7"))
+
+    with pytest.raises(DomainWriteViolationError):
+        store.report_success(
+            space_id=space_id,
+            job_id=job_id,
+            generation=generation,
+            domain_write=owned_table_escape,
+        )
+
+    with postgres_runtime.engine.begin() as connection:
+        domain_rows = connection.exec_driver_sql(
+            f'SELECT count(*) FROM "{domain_table}"'
+        ).scalar_one()
+    assert domain_rows == 0
+    current = store.get_job(space_id=space_id, job_id=job_id)
+    assert current.state is JobState.RUNNING
+    assert current.lease_generation == generation
+    assert _outbox_count(postgres_runtime, space_id) == 0
+
+    # 接受侧：诚实领域写仍原子提交。
+    def honest(handle: DomainWriteHandle) -> None:
+        handle.execute(
+            text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'), {"job_id": job_id}
+        )
+
+    done = store.report_success(
+        space_id=space_id,
+        job_id=job_id,
+        generation=generation,
+        events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+        domain_write=honest,
+    )
+    assert done.state is JobState.SUCCEEDED
+    assert _outbox_count(postgres_runtime, space_id) == 1
+
+
+@pytest.mark.integration_postgres
+def test_q25_delivered_but_unmarked_crash_converges_on_postgres(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    """P1.6 at-least-once（Contract Card 清单第 11 项的 (PG) 覆盖）。
+
+    投递成功但标记前崩溃 ⇒ 该行下一轮被重投，消费端以 event_id 幂等去重
+    收敛为恰好一次可观测效果，且最终被持久标记。
+    """
+    space_id = _space("atleastonce")
+    store = _store(postgres_runtime)
+    job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
+    store.report_success(
+        space_id=space_id,
+        job_id=job_id,
+        generation=generation,
+        events=(OutboxEventDraft(event_type="job.succeeded", payload={}, event_id="evt-1"),),
+    )
+    dispatcher = OutboxDispatcher(postgres_runtime.factory, _config())
+    seen: list[str] = []
+
+    def deliver_then_crash(event: object) -> None:
+        seen.append(event.event_id)  # type: ignore[attr-defined]
+        raise RuntimeError("crash after delivery, before marking")
+
+    first = dispatcher.dispatch_pending(space_id=space_id, deliver=deliver_then_crash)
+    assert first.delivered_event_ids == ()
+    assert first.failed_event_ids == ("evt-1",)
+    with postgres_runtime.factory() as session:
+        undispatched = session.scalar(
+            select(func.count())
+            .select_from(WikiOutboxEvent)
+            .where(
+                WikiOutboxEvent.space_id == space_id,
+                WikiOutboxEvent.dispatched_at.is_(None),
+            )
+        )
+    assert undispatched == 1  # 未标记 ⇒ 仍待投递，不丢
+
+    def deliver(event: object) -> None:
+        seen.append(event.event_id)  # type: ignore[attr-defined]
+
+    second = dispatcher.dispatch_pending(space_id=space_id, deliver=deliver)
+    assert second.delivered_event_ids == ("evt-1",)
+    assert seen == ["evt-1", "evt-1"]  # at-least-once：两次投递
+    assert len(set(seen)) == 1  # 同一 event_id：消费端幂等可折叠
     assert dispatcher.read_pending(space_id=space_id) == ()

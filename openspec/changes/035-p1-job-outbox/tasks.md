@@ -254,28 +254,73 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节�
   `test_q11_positive_lease_above_heartbeat_is_still_accepted`。
   12 处 `lease_seconds=0.0` 过期脚手架全部迁移为 `force_expire`/`_force_expire`
   （只回拨 lease，不改 state/attempt/generation）。
-- [ ] T19 RED：领域写句柄的事务身份不变式 + 禁写 `wiki_` 自有表（清单第 21
-  项，含诚实领域写接受侧）。GREEN：完成事务外层守卫 + 句柄语句面校验。
-- [ ] T20 RED：事件只能在完成事务内追加；重放恰好一份领域行 + 一条事件
-  （清单第 22 项）。GREEN：收回公共追加出口。
-- [ ] T21 RED：投递改持久化退避，瞬时不可用后收敛；单条失败不阻塞同轮
-  （清单第 23 项）。GREEN：0015 增列 `next_dispatch_at` + 配置化退避序列，
-  删除硬上限与永久 park。
-- [ ] T22 RED：过期 lease 指标（清单第 24 项，含健康分布接受侧）。GREEN：
-  `metrics.py` 增两项，同一事务同一数据库时钟。
-- [ ] T23 RED：Decision duplicate 判据经回收后仍正确（清单第 25 项，含真正
-  never-awaiting 接受侧）。GREEN：0015 增列不可覆写的持久事实位。
-- [ ] T24 RED：只读入口输入合同与写路径一致、`limit` 非正被拒（清单第 26
-  项）。GREEN：统一走既有 `validated_text` 原语。
-- [ ] T25 RED：dispatcher at-least-once 的 PG 节点（清单第 27 项，补齐第 11
-  项标注的 (PG)）。GREEN：无需生产改动，仅补覆盖。
-- [ ] T26 RED：迁移降级 crossing 分支 + `dead_letter` 取证保护 + offline
-  `--sql` 显式拒绝（清单第 28 项）。GREEN：0015 降级段。
-- [ ] T27 收尾复跑：focused → `uv run ruff check .` → `uv run mypy src tests`
-  → `openspec validate 035-p1-job-outbox --strict` → PostgreSQL 16 全量
-  `integration_postgres`（JUnit `skipped=0`）；新增 PG 节点全部注册进
-  `test_ci_lanes_022.py` 精确集；validation report 重写为本 head 证据 +
-  如实 NOT RUN。
+- [x] T19 RED：领域写句柄的事务身份不变式 + 禁写 `wiki_` 自有表（清单第 21
+  项，含诚实领域写接受侧）。GREEN：**两道独立防线**——句柄 `execute` 的语句
+  面校验（拒绝事务控制语句与 `wiki_` 目标表；Core 语句走元数据、`text()` 走
+  保守标识符扫描）+ 完成事务在回调返回后校验 SAVEPOINT/外层事务仍 active。
+  安全冗余是特性，不因已有语句面校验而删掉提交点校验。新 typed
+  `DomainWriteViolationError`。节点：
+  `test_q19_domain_write_cannot_end_the_completion_transaction`、
+  `test_q19_domain_write_cannot_touch_p1_owned_tables`（4 参数化）、
+  `test_q19_honest_domain_write_still_commits_atomically`、
+  PG `test_q19_domain_write_cannot_escape_its_channel_on_postgres`。
+- [x] T20 RED：事件只能在完成事务内追加（清单第 22 项）。GREEN：
+  `append_job_event` 从 `insurance_harness.jobs` 公共出口移除（降级为内部
+  函数，测试直接引 `jobs.outbox` 验证内部合同）。节点：
+  `test_q20_append_job_event_is_not_a_public_entry`。
+- [x] T21 RED：投递改持久化退避，瞬时不可用后收敛；单条失败不阻塞同轮
+  （清单第 23 项）。GREEN：0015 增列 `next_dispatch_at`（NOT NULL，新事件
+  立即可投）+ 索引改 `(next_dispatch_at, id)` 部分索引 +
+  `JobRuntimeConfig.dispatch_backoff_seconds`；**删除** `max_dispatch_attempts`
+  硬上限、`parked_event_ids` 与 `read_parked`，新增运维视图
+  `read_backed_off`（仍在扫描集合内，不是坟墓）。`OutboxDispatcher` 构造签名
+  改为接收 `JobRuntimeConfig`（退避参数不得硬编码于构造函数）。节点：
+  `test_q21_transient_consumer_outage_recovers_at_least_once`、
+  `test_q21_dispatch_backoff_delay_comes_from_configuration`；
+  `test_i10_*` 已迁移为 `test_i10_poison_event_yields_via_backoff_without_blocking_later_events`
+  （断言"退避让位 + 不阻塞后续 + 行仍在库内待投"）。
+- [x] T22 RED：过期 lease 指标（清单第 24 项，含健康分布接受侧）。GREEN：
+  `SpaceJobMetrics`/`GlobalJobMetrics` 增 `expired_lease_count` 与
+  `oldest_expired_lease_age_seconds`，与既有字段同一事务、同一数据库时钟
+  （`_collect` 重构为 `_Collected` + `_age_seconds` 单一规范化原语）。节点：
+  `test_q22_metrics_expose_expired_lease_wedge`、
+  `test_q22_healthy_distribution_metrics_stay_exact`。
+  **TDD 次序偏差如实记录**：本项实现先于 RED 落地（metrics 改动与 T24 的
+  `validated_text` 接线同一处），验收节点随后补齐并全绿。
+- [x] T23 RED：Decision duplicate 判据经回收后仍正确（清单第 25 项，含真正
+  never-awaiting 接受侧）。GREEN：0015 增列 `human_decision_resumed_at`
+  （首次唤醒写入、此后不改），判据由可变 `error_class` 改读该列。节点：
+  `test_q23_decision_duplicate_label_survives_a_reclaim`（覆盖"唤醒→再失败"
+  与"唤醒→租约过期回收"两种覆写路径）、
+  `test_q23_never_awaiting_row_is_still_not_awaiting`。
+- [x] T24 RED：只读入口输入合同与写路径一致、`limit` 非正被拒（清单第 26
+  项）。GREEN：`space_job_metrics` 改走 `validated_text`；新增
+  `validated_limit` 原语，`read_pending`/`read_pending_all_spaces`/
+  `read_backed_off`/`dispatch_pending` 统一使用。节点：
+  `test_q24_read_path_input_contract_is_typed`（3 参数化）、
+  `test_q24_non_positive_limit_is_typed_on_read_entries`（2 参数化）、
+  `test_q24_default_limits_still_work`。
+- [x] T25 RED：dispatcher at-least-once 的 PG 节点（清单第 27 项，补齐第 11
+  项标注的 (PG)）。GREEN：无生产改动，仅补覆盖。节点：
+  PG `test_q25_delivered_but_unmarked_crash_converges_on_postgres`
+  （投递成功→标记前崩溃→重投→同一 event_id 两次投递、消费端可折叠→最终标记）。
+- [x] T26 RED：迁移降级 crossing 分支 + `dead_letter` 取证保护 + offline
+  `--sql` 显式拒绝（清单第 28 项）。GREEN：`_validate_own_rows_before_ddl`
+  纳入 `dead_letter`（P1.4 要求保留取证；`succeeded` 仍可丢弃）；
+  `_validate_downgrade_before_ddl` 首行判 `context.is_offline_mode()` 抛显式
+  `RuntimeError`（把偶然的 `AttributeError` fail-closed 变成声明的）。节点：
+  PG `test_q26_downgrade_relative_destination_crossing_0006_is_resolved`
+  （空库 `-2` 真实走到 M13 的解析分支——原 `test_i9_*` 因 live-row 预检先抛，
+  该分支从未被触达）、`test_q26_downgrade_refuses_while_dead_letter_forensics_exist`
+  （含只有 `succeeded` 时仍可降级的接受侧）、
+  `test_q26_offline_sql_downgrade_is_explicitly_refused`。
+- [x] T27 收尾复跑：035 deterministic **119 passed**（78 → 119）；存量迁移
+  消费者回归 **77 passed**；`test_ci_lanes_022.py` **69 passed**（精确集含新增
+  8 个 PG 节点）；PostgreSQL 16 全量 `integration_postgres` **55 passed /
+  3879 deselected**，JUnit `tests=55 skipped=0`；`uv run ruff check .` 全绿；
+  `uv run mypy src tests` strict **350 files** 全绿；
+  `openspec validate 035-p1-job-outbox --strict` valid。validation report 已
+  重写为本 head 证据 + 如实 NOT RUN。
 - [ ] T28 修复后重新提交双独立评审。若**再次**在 lease 过期/写权威/限额
   会计域出现新的基础不变量，按 §18 不得继续补丁——回到 033 §12 的运行时
   边界设计，由业务方裁决是否重划 P1 范围。

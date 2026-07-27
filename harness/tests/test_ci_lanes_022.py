@@ -73,6 +73,12 @@ JOB_STORE_POSTGRES_NODES = {
         "test_i3_lease_duration_survives_advisory_lock_wait",
         "test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres",
         "test_m19_concurrent_dispatchers_do_not_double_deliver",
+        # D-2026-07-27-16 边界冻结的强制验收节点（tasks 清单 15/16/19/21/27）。
+        "test_q15_expired_lease_holder_has_no_write_authority_on_postgres",
+        "test_q16_stalled_expired_leases_never_exceed_limits_on_postgres",
+        "test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres",
+        "test_q19_domain_write_cannot_escape_its_channel_on_postgres",
+        "test_q25_delivered_but_unmarked_crash_converges_on_postgres",
     )
 }
 JOB_MIGRATION_POSTGRES_NODES = {
@@ -82,6 +88,10 @@ JOB_MIGRATION_POSTGRES_NODES = {
         "test_p1_11_wiki_jobs_columns_not_null_space_and_idempotency_unique",
         "test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space",
         "test_i9_downgrade_with_live_rows_is_refused_before_any_ddl",
+        # D-2026-07-27-16：降级 crossing 分支、DLQ 取证保护、offline 显式拒绝。
+        "test_q26_downgrade_relative_destination_crossing_0006_is_resolved",
+        "test_q26_downgrade_refuses_while_dead_letter_forensics_exist",
+        "test_q26_offline_sql_downgrade_is_explicitly_refused",
     )
 }
 POSTGRES_NODES = (

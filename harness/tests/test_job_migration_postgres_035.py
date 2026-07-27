@@ -162,6 +162,8 @@ def test_p1_11_wiki_jobs_columns_not_null_space_and_idempotency_unique(
         "finished_at",
         "error_class",
         "error_summary",
+        # P1.7 判据不可变（D-2026-07-27-16）：首次 Decision 唤醒写入后不再修改。
+        "human_decision_resumed_at",
     }
     for required in (
         "space_id",
@@ -239,6 +241,8 @@ def test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space(
         "created_at",
         "dispatched_at",
         "dispatch_attempts",
+        # P1.6 持久退避（D-2026-07-27-16）：取代硬失败上限，失败只让位不出局。
+        "next_dispatch_at",
     }
     for required in (
         "event_id",
@@ -259,8 +263,9 @@ def test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space(
     assert uniques["uq_wiki_outbox_events_space_event"] == ("space_id", "event_id")
 
     insert = text(
-        "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload, created_at)"
-        " VALUES (:event_id, 'space-a', 'job.succeeded', '{}', now()) RETURNING id"
+        "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload, created_at,"
+        " next_dispatch_at) VALUES (:event_id, 'space-a', 'job.succeeded', '{}', now(),"
+        " now()) RETURNING id"
     )
     with postgres_migration_db.engine.begin() as connection:
         first = connection.execute(insert, {"event_id": str(uuid.uuid4())}).scalar_one()
@@ -294,7 +299,8 @@ def test_i9_downgrade_with_live_rows_is_refused_before_any_ddl(
         connection.execute(
             text(
                 "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload,"
-                " created_at) VALUES (:event_id, 'space-a', 'job.succeeded', '{}', now())"
+                " created_at, next_dispatch_at) VALUES (:event_id, 'space-a',"
+                " 'job.succeeded', '{}', now(), now())"
             ),
             {"event_id": str(uuid.uuid4())},
         )
@@ -314,3 +320,77 @@ def test_i9_downgrade_with_live_rows_is_refused_before_any_ddl(
     command.downgrade(config, "0006")
     assert _version_rows(postgres_migration_db.engine) == ("0006",)
     assert P1_TABLES.isdisjoint(inspect(postgres_migration_db.engine).get_table_names())
+
+
+# --- D-2026-07-27-16：降级 crossing 分支、DLQ 取证保护与 offline 显式拒绝 ---
+
+
+def _insert_job(engine: Engine, *, state: str, key: str) -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO wiki_jobs (id, space_id, job_type, idempotency_key, payload,"
+                " state, attempt, lease_generation, available_at, enqueued_at, finished_at)"
+                " VALUES (:id, 'space-a', 'compile', :key, '{}', :state, 1, 1, now(), now(),"
+                " now())"
+            ),
+            {"id": str(uuid.uuid4()), "key": key, "state": state},
+        )
+
+
+@pytest.mark.integration_postgres
+def test_q26_downgrade_relative_destination_crossing_0006_is_resolved(
+    postgres_migration_db: PostgresMigrationDb,
+) -> None:
+    """M13 的修复本体（相对目的地沿 down_revision 链解析）在空库上被覆盖。
+
+    原回归节点只传 `-1` 且因 live-row 预检先抛，解析分支从未被触达。
+    """
+    config = _cfg(postgres_migration_db.url)
+    command.upgrade(config, "head")
+    assert _version_rows(postgres_migration_db.engine) == ("0015",)
+
+    command.downgrade(config, "-2")  # 0015 → 0006 → 0012，跨 0006 领地
+
+    assert _version_rows(postgres_migration_db.engine) == ("0012",)
+    assert P1_TABLES.isdisjoint(inspect(postgres_migration_db.engine).get_table_names())
+
+
+@pytest.mark.integration_postgres
+def test_q26_downgrade_refuses_while_dead_letter_forensics_exist(
+    postgres_migration_db: PostgresMigrationDb,
+) -> None:
+    """P1.4 要求 dead_letter 保留取证字段；降级不得静默销毁 DLQ。"""
+    config = _cfg(postgres_migration_db.url)
+    command.upgrade(config, "head")
+    _insert_job(postgres_migration_db.engine, state="dead_letter", key="dlq-1")
+
+    with pytest.raises(Exception, match="0015 downgrade refused"):
+        command.downgrade(config, "0006")
+
+    tables = set(inspect(postgres_migration_db.engine).get_table_names())
+    assert P1_TABLES <= tables  # 零 DDL
+    assert _version_rows(postgres_migration_db.engine) == ("0015",)
+
+    # 接受侧：只有 succeeded（可丢弃）时同一降级仍必须通过。
+    with postgres_migration_db.engine.begin() as connection:
+        connection.execute(text("DELETE FROM wiki_jobs"))
+    _insert_job(postgres_migration_db.engine, state="succeeded", key="done-1")
+    command.downgrade(config, "0006")
+    assert _version_rows(postgres_migration_db.engine) == ("0006",)
+
+
+@pytest.mark.integration_postgres
+def test_q26_offline_sql_downgrade_is_explicitly_refused(
+    postgres_migration_db: PostgresMigrationDb,
+) -> None:
+    """offline `--sql` 降级必须是**声明的** fail-closed，而非偶然 AttributeError。"""
+    config = _cfg(postgres_migration_db.url)
+    command.upgrade(config, "head")
+
+    with pytest.raises(RuntimeError, match="offline `--sql` downgrade is not supported"):
+        command.downgrade(config, "0015:0006", sql=True)
+
+    tables = set(inspect(postgres_migration_db.engine).get_table_names())
+    assert P1_TABLES <= tables  # 零 DDL
+    assert _version_rows(postgres_migration_db.engine) == ("0015",)

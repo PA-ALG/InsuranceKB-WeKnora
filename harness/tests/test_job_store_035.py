@@ -20,6 +20,7 @@ from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import (
     ClaimedJob,
     DomainWriteHandle,
+    DomainWriteViolationError,
     EnqueueResult,
     ErrorClass,
     IllegalTransitionError,
@@ -32,15 +33,19 @@ from insurance_harness.jobs import (
     JobTypePolicy,
     LeaseExpiredError,
     NoClaimableJob,
+    OutboxDispatcher,
     OutboxEventDraft,
     SpaceScopeError,
     StaleGenerationError,
-    append_job_event,
     classify_failure,
     database_now,
     global_job_metrics,
     space_job_metrics,
 )
+
+# `append_job_event` 已不在公共出口（P1.6 事件追加边界，D-2026-07-27-16）：
+# 只能在完成事务内追加。测试直接引内部模块以验证该内部合同。
+from insurance_harness.jobs.outbox import append_job_event
 from insurance_harness.jobs.tables import WikiJob, WikiOutboxEvent
 
 SessionFactory = Callable[[], Session]
@@ -1391,6 +1396,284 @@ def _active_rows(factory: SessionFactory) -> int:
             )
             or 0
         )
+
+
+def test_q23_decision_duplicate_label_survives_a_reclaim(factory: SessionFactory) -> None:
+    """P1.7 判据不可变：duplicate 判定不得被回收/失败覆写 `error_class` 影响。
+
+    修复前判据是 `error_class == 'human_required'`，而回收无条件写
+    `retryable`、`report_failure`/`report_success` 也会覆写它——于是 Decision
+    的 at-least-once 重投在任务经历一次租约过期后收到"从未等待人工"。
+    """
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="job-1")
+    claimed = _claimed(store, "space-a")
+    running = store.start(
+        space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation
+    )
+    store.report_failure(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.HUMAN_REQUIRED, summary="needs human"),
+    )
+    assert store.resume_after_decision(space_id="space-a", job_id=running.id).status == "resumed"
+
+    # 路径一：唤醒后再失败（error_class 被覆写为 retryable）。
+    retaken = _claimed(store, "space-a", worker_id="worker-2")
+    again = store.start(
+        space_id="space-a", job_id=retaken.id, generation=retaken.lease_generation
+    )
+    store.report_failure(
+        space_id="space-a",
+        job_id=again.id,
+        generation=again.lease_generation,
+        failure=JobFailure(error_class=ErrorClass.RETRYABLE, summary="transient"),
+    )
+    assert (
+        store.resume_after_decision(space_id="space-a", job_id=again.id).status == "duplicate"
+    )
+
+    # 路径二：经历一次租约过期回收（回收无条件写 retryable）。
+    third = _claimed(store, "space-a", worker_id="worker-3")
+    force_expire(factory, third.id)
+    store.reclaim_expired_leases(space_ids=("space-a",))
+    assert (
+        store.resume_after_decision(space_id="space-a", job_id=third.id).status == "duplicate"
+    )
+
+
+def test_q23_never_awaiting_row_is_still_not_awaiting(factory: SessionFactory) -> None:
+    """接受侧：真正从未进入 awaiting_human 的行仍返回 not_awaiting。"""
+    store = make_store(factory)
+    queued = store.enqueue(
+        space_id="space-a", job_type="compile", idempotency_key="never"
+    ).job
+
+    outcome = store.resume_after_decision(space_id="space-a", job_id=queued.id)
+
+    assert outcome.status == "not_awaiting"
+    assert store.get_job(space_id="space-a", job_id=queued.id).state is JobState.QUEUED
+
+
+def test_q22_metrics_expose_expired_lease_wedge(factory: SessionFactory) -> None:
+    """P1.9：全 Space 卡在过期 lease 时必须与"健康"可区分。
+
+    修复前 queue_depth=0、oldest_schedulable_age=None，而 4 行持有已死租约，
+    指标上与空闲系统完全一样（零分母给满分）。
+    """
+    store = make_store(factory)
+    ids = []
+    for index in range(4):
+        store.enqueue(space_id="space-a", job_type="compile", idempotency_key=f"job-{index}")
+    for index in range(4):
+        claimed = _claimed(store, "space-a", worker_id=f"w-{index}")
+        store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
+        ids.append(claimed.id)
+    force_expire(factory, *ids)
+
+    with factory() as session:
+        metrics = space_job_metrics(session, space_id="space-a")
+        global_metrics = global_job_metrics(session)
+
+    assert metrics.queue_depth == 0
+    assert metrics.oldest_schedulable_age_seconds is None
+    assert metrics.expired_lease_count == 4, "卡死形态必须可见"
+    assert metrics.oldest_expired_lease_age_seconds is not None
+    assert metrics.oldest_expired_lease_age_seconds > 0
+    assert global_metrics.expired_lease_count == 4
+
+
+def test_q22_healthy_distribution_metrics_stay_exact(factory: SessionFactory) -> None:
+    """接受侧：健康分布的读数不因新增维度而漂移。"""
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="q1")
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="q2")
+    claimed = _claimed(store, "space-a")
+    store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
+
+    with factory() as session:
+        metrics = space_job_metrics(session, space_id="space-a")
+
+    assert metrics.queue_depth == 1
+    assert metrics.state_counts[JobState.RUNNING] == 1
+    assert metrics.oldest_schedulable_age_seconds is not None
+    assert metrics.expired_lease_count == 0
+    assert metrics.oldest_expired_lease_age_seconds is None
+
+
+@pytest.mark.parametrize("bad_space_id", ["", "a\x00b", "x" * 64])
+def test_q24_read_path_input_contract_is_typed(
+    factory: SessionFactory, bad_space_id: str
+) -> None:
+    """P1.9 读路径输入合同：写路径拒绝的标识符在读路径同样 typed 拒绝。
+
+    修复前：NUL 泄漏原始 `DataError`，超长 space_id 静默返回 queue_depth=0
+    （对写路径会拒绝的标识符给出"健康"读数）。
+    """
+    store = make_store(factory)
+    with pytest.raises(InvalidJobInputError):
+        store.enqueue(space_id=bad_space_id, job_type="compile", idempotency_key="k")
+    with factory() as session, pytest.raises(InvalidJobInputError):
+        space_job_metrics(session, space_id=bad_space_id)
+
+
+@pytest.mark.parametrize("bad_limit", [0, -1])
+def test_q24_non_positive_limit_is_typed_on_read_entries(
+    factory: SessionFactory, bad_limit: int
+) -> None:
+    """`limit = 0` 不得产生与"无事可做"不可区分的空结果。"""
+    dispatcher = OutboxDispatcher(factory, make_config())
+
+    with pytest.raises(InvalidJobInputError):
+        dispatcher.read_pending(space_id="space-a", limit=bad_limit)
+    with pytest.raises(InvalidJobInputError):
+        dispatcher.read_pending_all_spaces(limit=bad_limit)
+    with pytest.raises(InvalidJobInputError):
+        dispatcher.read_backed_off(space_id="space-a", limit=bad_limit)
+    with pytest.raises(InvalidJobInputError):
+        dispatcher.dispatch_pending(
+            space_id="space-a", deliver=lambda _event: None, limit=bad_limit
+        )
+
+
+def test_q24_default_limits_still_work(factory: SessionFactory) -> None:
+    """接受侧：默认与正常 limit 不被误拒。"""
+    dispatcher = OutboxDispatcher(factory, make_config())
+
+    assert dispatcher.read_pending(space_id="space-a") == ()
+    assert dispatcher.read_pending_all_spaces(limit=10) == ()
+    assert dispatcher.read_backed_off(space_id="space-a", limit=10) == ()
+    report = dispatcher.dispatch_pending(space_id="space-a", deliver=lambda _event: None)
+    assert report.delivered_event_ids == ()
+
+
+def test_q20_append_job_event_is_not_a_public_entry() -> None:
+    """P1.6 事件追加边界：调用方事务内的公共追加入口必须不存在。
+
+    该入口允许"领域写 + 事件行已提交但任务未完成"，其后的过期回收与重放会
+    以**新铸的随机 event_id** 再发布同一逻辑工作，消费端的 event_id 幂等
+    去重在原理上无法折叠，并留下两份领域行。
+    """
+    import insurance_harness.jobs as jobs_package
+
+    assert "append_job_event" not in jobs_package.__all__
+    assert not hasattr(jobs_package, "append_job_event")
+
+
+def _domain_table(job_engine: Engine) -> None:
+    with job_engine.begin() as connection:
+        connection.execute(text("CREATE TABLE IF NOT EXISTS demo_domain (job_id TEXT)"))
+
+
+def _running_for_domain_write(store: JobStore, key: str = "job-1") -> JobSnapshot:
+    """领域写通道用例的 running 任务（与存量 `_running_job` 签名区分）。"""
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key=key)
+    claimed = _claimed(store, "space-a", worker_id=f"w-{key}")
+    return store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
+
+
+def test_q19_domain_write_cannot_end_the_completion_transaction(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """P1.5 领域写通道：回调提交完成事务 ⇒ typed 拒绝 + 整体回滚。
+
+    修复前：一条 raw COMMIT 使领域行落库而任务仍 running、outbox 为空，
+    随后过期回收重放产生第二份领域结果。
+    """
+    _domain_table(job_engine)
+    store = make_store(factory)
+    running = _running_for_domain_write(store)
+
+    def escaping_write(handle: DomainWriteHandle) -> None:
+        handle.execute(
+            text("INSERT INTO demo_domain (job_id) VALUES (:job_id)"), {"job_id": running.id}
+        )
+        handle.execute(text("COMMIT"))
+
+    with pytest.raises(DomainWriteViolationError):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+            domain_write=escaping_write,
+        )
+
+    with factory() as session:
+        domain_rows = session.execute(text("SELECT count(*) FROM demo_domain")).scalar_one()
+        outbox_rows = session.scalar(select(func.count()).select_from(WikiOutboxEvent))
+    assert domain_rows == 0, "领域行不得在完成事务被拒后残留"
+    assert outbox_rows == 0
+    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE wiki_jobs SET lease_generation = lease_generation + 7",
+        "UPDATE wiki_jobs SET state = 'queued'",
+        "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload, created_at, "
+        "dispatch_attempts) VALUES ('forged', 'space-z', 'forged.event', '{}', "
+        "'2026-01-01 00:00:00+00:00', 0)",
+        "DELETE FROM wiki_jobs",
+    ],
+)
+def test_q19_domain_write_cannot_touch_p1_owned_tables(
+    factory: SessionFactory, job_engine: Engine, statement: str
+) -> None:
+    """P1 表所有权：句柄触碰 `wiki_` 自有表一律 typed 拒绝并整体回滚。"""
+    _domain_table(job_engine)
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key=f"job-{abs(hash(statement)) % 997}")
+    victim = store.enqueue(
+        space_id="space-z", job_type="compile", idempotency_key="victim"
+    ).job
+
+    def trespassing_write(handle: DomainWriteHandle) -> None:
+        handle.execute(text(statement))
+
+    with pytest.raises(DomainWriteViolationError):
+        store.report_success(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            domain_write=trespassing_write,
+        )
+
+    untouched = store.get_job(space_id="space-z", job_id=victim.id)
+    assert untouched.state is JobState.QUEUED
+    assert untouched.lease_generation == 0
+    with factory() as session:
+        assert int(session.scalar(select(func.count()).select_from(WikiOutboxEvent)) or 0) == 0
+    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+
+
+def test_q19_honest_domain_write_still_commits_atomically(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """接受侧：诚实领域写（只写自己的表）仍与状态、outbox 同事务原子提交。"""
+    _domain_table(job_engine)
+    store = make_store(factory)
+    running = _running_for_domain_write(store)
+
+    def honest_write(handle: DomainWriteHandle) -> None:
+        handle.execute(
+            text("INSERT INTO demo_domain (job_id) VALUES (:job_id)"), {"job_id": running.id}
+        )
+
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+        domain_write=honest_write,
+    )
+
+    assert done.state is JobState.SUCCEEDED
+    with factory() as session:
+        assert session.execute(text("SELECT count(*) FROM demo_domain")).scalar_one() == 1
+        assert int(session.scalar(select(func.count()).select_from(WikiOutboxEvent)) or 0) == 1
 
 
 @pytest.mark.parametrize(

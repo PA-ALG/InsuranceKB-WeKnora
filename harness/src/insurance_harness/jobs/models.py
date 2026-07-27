@@ -172,6 +172,11 @@ class JobRuntimeConfig(BaseModel):
     job_type_policies: Mapping[str, JobTypePolicy] = Field(default_factory=dict)
     per_space_concurrency_limit: int = Field(ge=1)
     global_concurrency_limit: int = Field(ge=1)
+    #: outbox 投递失败的持久退避序列（P1.6 投递可恢复性合同，
+    #: D-2026-07-27-16）。取代原先硬编码在 dispatcher 构造函数的
+    #: `max_dispatch_attempts` 硬上限——已提交行不得因失败计数被永久移出扫描
+    #: 窗口；失败只让位不出局，超出序列长度取最后一档持续重投。
+    dispatch_backoff_seconds: tuple[float, ...] = Field(default=(0.0,), min_length=1)
     #: 单次 claim/reclaim 附带维护（回收/promote）处理的最大行数（review I4）。
     maintenance_batch_size: int = Field(default=128, ge=1)
 
@@ -182,6 +187,15 @@ class JobRuntimeConfig(BaseModel):
             # P1.3（D-2026-07-27-16）：lease 必须长于 heartbeat 间隔，否则
             # 续租永远赶不上过期，所有 lease 实际上出生即死。
             raise ValueError("lease_seconds must be greater than heartbeat_interval_seconds")
+        if any(delay < 0 for delay in self.dispatch_backoff_seconds):
+            raise ValueError("dispatch_backoff_seconds entries must be >= 0")
+
+    def dispatch_backoff_delay(self, *, attempts: int) -> float:
+        """第 attempts 次投递失败后的退避秒数；超出序列取最后一档。"""
+        if attempts < 1:
+            raise ValueError("attempts must be >= 1")
+        index = min(attempts, len(self.dispatch_backoff_seconds)) - 1
+        return self.dispatch_backoff_seconds[index]
 
     def policy_for(self, job_type: str) -> JobTypePolicy:
         """job_type 覆盖优先，否则用全局默认（P1.4 可按 job_type 覆盖）。"""
@@ -284,6 +298,8 @@ class OutboxEventView:
     created_at: datetime
     dispatched_at: datetime | None
     dispatch_attempts: int
+    #: 下一次可投递时刻（持久退避，P1.6）；失败只推迟不出局。
+    next_dispatch_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,4 +312,3 @@ class DispatchReport:
 
     delivered_event_ids: tuple[str, ...]
     failed_event_ids: tuple[str, ...]
-    parked_event_ids: tuple[str, ...]

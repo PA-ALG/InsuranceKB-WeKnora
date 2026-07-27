@@ -65,6 +65,10 @@ def upgrade() -> None:
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_class", sa.String(32), nullable=True),
         sa.Column("error_summary", sa.Text(), nullable=True),
+        # P1.7 判据不可变（D-2026-07-27-16）：首次 Decision 唤醒成功时写入，
+        # 此后不再修改。duplicate/not_awaiting 的判定读它，而不是可被回收与
+        # 失败上报覆写的 `error_class`。
+        sa.Column("human_decision_resumed_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint(
             "space_id", "job_type", "idempotency_key", name="uq_wiki_jobs_idempotency"
         ),
@@ -104,6 +108,10 @@ def upgrade() -> None:
         sa.Column(
             "dispatch_attempts", sa.Integer(), nullable=False, server_default=sa.text("0")
         ),
+        # 持久退避（P1.6 投递可恢复性合同，D-2026-07-27-16）：扫描条件为
+        # `dispatched_at IS NULL AND next_dispatch_at <= now`。失败只推迟
+        # 不出局，取代原先"失败 N 次即永久移出扫描窗口"的硬上限。
+        sa.Column("next_dispatch_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint(
             "space_id", "event_id", name="uq_wiki_outbox_events_space_event"
         ),
@@ -114,7 +122,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_wiki_outbox_events_undispatched",
         "wiki_outbox_events",
-        ["id"],
+        ["next_dispatch_at", "id"],
         sqlite_where=sa.text("dispatched_at IS NULL"),
         postgresql_where=sa.text("dispatched_at IS NULL"),
     )
@@ -175,11 +183,23 @@ def _destination_crosses_0006() -> bool:
 
 
 def _validate_own_rows_before_ddl() -> None:
-    """本迁移自有数据 preflight：活跃任务/未投递事件存在即拒绝（I9）。"""
+    """本迁移自有数据 preflight：活跃任务、未投递事件或 DLQ 取证存在即拒绝。
+
+    `dead_letter` 行同样受保护（D-2026-07-27-16）：P1.4 明确要求 dead_letter
+    保留 space_id、幂等键、attempt、错误分类与最后错误摘要——DLQ 正是降级时
+    最不该无声消失的东西。`succeeded` 保持可丢弃，否则任何跑过任务的库都
+    无法降级。
+    """
     connection = op.get_bind()
     live_jobs = int(
         connection.scalar(
             sa.text(f"SELECT count(*) FROM wiki_jobs WHERE state IN ({_LIVE_JOB_STATES})")
+        )
+        or 0
+    )
+    dead_letter_jobs = int(
+        connection.scalar(
+            sa.text("SELECT count(*) FROM wiki_jobs WHERE state = 'dead_letter'")
         )
         or 0
     )
@@ -189,16 +209,25 @@ def _validate_own_rows_before_ddl() -> None:
         )
         or 0
     )
-    if live_jobs or undispatched:
+    if live_jobs or dead_letter_jobs or undispatched:
         raise RuntimeError(
             "0015 downgrade refused before DDL: durable job runtime data exists "
-            f"{{'live_jobs': {live_jobs}, 'undispatched_outbox_events': {undispatched}}}; "
-            "drain or dead-letter jobs and dispatch outbox rows first"
+            f"{{'live_jobs': {live_jobs}, 'dead_letter_jobs': {dead_letter_jobs}, "
+            f"'undispatched_outbox_events': {undispatched}}}; drain or archive jobs "
+            "and dispatch outbox rows first"
         )
 
 
 def _validate_downgrade_before_ddl() -> None:
     """在本迁移任何 DDL 之前重放 0006 聚合 preflight（除拓扑自检）。"""
+    if context.is_offline_mode():
+        # 本迁移的降级 preflight 需要真实连接读自有数据（I9/D-16）。offline
+        # `--sql` 模式无连接可用：把偶然的 fail-closed（原先抛 AttributeError）
+        # 变成**声明的** fail-closed，避免生成可执行的 DROP 脚本。
+        raise RuntimeError(
+            "0015 downgrade requires an online connection for its pre-DDL data "
+            "preflight; offline `--sql` downgrade is not supported"
+        )
     _validate_own_rows_before_ddl()
     if not _destination_crosses_0006():
         return

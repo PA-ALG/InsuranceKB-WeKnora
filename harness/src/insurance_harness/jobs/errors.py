@@ -78,6 +78,24 @@ class DuplicateEventError(JobStoreError):
     code = "duplicate_event_id"
 
 
+class DomainWriteViolationError(JobStoreError):
+    """P1.5 领域写通道合同（D-2026-07-27-16）：领域写越出其通道。
+
+    两类越界：① 回调结束/提交/另起了完成事务（事务或保存点身份已变）——
+    否则领域行落库而任务仍 `running`、outbox 为空，重放会产生第二份领域
+    结果；② 回调触碰 P1 自有表（`wiki_` 前缀），可复活其他 Space 的终态
+    行、伪造 `lease_generation` 或插入越域 outbox 行。仅隐藏
+    `commit/rollback/close` 属性不构成执法，必须在语句面与提交点校验。
+    """
+
+    code = "domain_write_violation"
+
+    def __init__(self, reason: str, *, job_id: str | None = None) -> None:
+        self.job_id = job_id
+        self.reason = reason
+        super().__init__(f"domain write violated its channel: {reason}")
+
+
 class TypedJobError(Exception):
     """worker 执行失败的显式分类载体基类（P1.4）。"""
 
