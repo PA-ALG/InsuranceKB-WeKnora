@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .jobs.models import JobRuntimeConfig, JobTypePolicy
 from .model_policy import ModelIdentity, ModelPolicyDenied
 from .model_policy.policy import _validate_production_identity_declaration
 
@@ -52,6 +53,36 @@ class HarnessSettings(BaseSettings):
 
     # --- Harness 自有数据库（change 003；生产 Postgres，SQLite 仅测试） ---
     db_url: str | None = None
+
+    # --- P1 任务运行时（change 035）；数值只是环境默认值而非产品上限 ---
+    # P1.3（D-2026-07-27-16）：lease 必须严格为正；`0` 会使每个 lease 出生即
+    # 过期，静默作废并发限额与 heartbeat。与 heartbeat 的大小关系由
+    # `JobRuntimeConfig` 在装配时校验。
+    job_lease_seconds: float = Field(default=60.0, gt=0)
+    job_heartbeat_interval_seconds: float = Field(default=20.0, gt=0)
+    job_max_attempts: int = Field(default=3, ge=1)
+    job_backoff_seconds: tuple[float, ...] = (5.0, 30.0, 120.0)
+    job_type_policies: dict[str, JobTypePolicy] = Field(default_factory=dict)
+    job_per_space_concurrency_limit: int = Field(default=2, ge=1)
+    job_global_concurrency_limit: int = Field(default=8, ge=1)
+    job_maintenance_batch_size: int = Field(default=128, ge=1)
+    # outbox 投递失败的持久退避档位（P1.6，D-2026-07-27-16）。默认值只是环境
+    # 默认而非产品上限；不得默认为全 0，否则"让位"在真实部署里是空操作。
+    job_dispatch_backoff_seconds: tuple[float, ...] = (1.0, 5.0, 30.0, 120.0)
+
+    def job_runtime_config(self) -> JobRuntimeConfig:
+        """把 HARNESS_JOB_* 环境配置接线为 P1 JobStore 的运行时配置。"""
+        return JobRuntimeConfig(
+            lease_seconds=self.job_lease_seconds,
+            heartbeat_interval_seconds=self.job_heartbeat_interval_seconds,
+            max_attempts=self.job_max_attempts,
+            backoff_seconds=self.job_backoff_seconds,
+            job_type_policies=self.job_type_policies,
+            per_space_concurrency_limit=self.job_per_space_concurrency_limit,
+            global_concurrency_limit=self.job_global_concurrency_limit,
+            maintenance_batch_size=self.job_maintenance_batch_size,
+            dispatch_backoff_seconds=self.job_dispatch_backoff_seconds,
+        )
 
     # --- 金标注（change 002；均可选，仅 LiteLLMClient 需要） ---
     goldenset_model: str | None = None

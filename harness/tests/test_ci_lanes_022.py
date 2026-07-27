@@ -49,24 +49,74 @@ SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES = {
         "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[backfill_issue]",
         "test_l5_nonempty_lifecycle_or_provenance_downgrade_fails_before_any_ddl[historical_provenance]",
         "test_l5_empty_0006_to_0012_to_0006_round_trip_restores_postgresql_schema",
-        "test_l5_alembic_check_passes_and_revision_topology_has_single_0006_head",
+        "test_l5_alembic_check_passes_and_revision_topology_keeps_single_head",
     )
 }
-POSTGRES_NODES = {
-    POSTGRES_NODE,
-    (
-        "tests/test_flywheel_postgres_015.py::"
-        "test_f3_3_live_postgresql_two_sessions_apply_same_trace_exactly_once"
-    ),
-    (
-        "tests/test_release_publisher_postgres_018.py::"
-        "test_r3_6_postgresql_release_never_commits_caller_transaction"
-    ),
-    (
-        "tests/test_workbench_concurrency_008.py::"
-        "test_w1_4_live_postgresql_two_sessions_single_apply"
-    ),
-} | SOURCE_LIFECYCLE_POSTGRES_NODES | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
+JOB_STORE_POSTGRES_NODES = {
+    f"tests/test_job_store_postgres_035.py::{node}"
+    for node in (
+        "test_p1_5_concurrent_duplicate_enqueue_creates_exactly_one_row",
+        "test_p1_2_eight_workers_claim_each_job_exactly_once_until_typed_empty",
+        "test_p1_2_claim_skips_externally_locked_row_without_blocking",
+        "test_p1_8_concurrent_claims_never_exceed_per_space_limit",
+        "test_p1_8_saturated_space_does_not_block_sibling_space",
+        "test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation",
+        "test_p1_6_completion_interrupt_before_commit_leaves_neither_row",
+        "test_p1_3_late_worker_every_write_path_is_fenced_after_takeover",
+        "test_p1_4_retry_loop_reaches_dead_letter_only_via_configured_policy",
+        "test_p1_7_concurrent_duplicate_decisions_requeue_exactly_once",
+        "test_p1_6_late_committed_smaller_id_is_still_dispatched",
+        "test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result",
+        "test_p1_10_poison_task_crash_loop_is_bounded_by_max_attempts",
+        "test_p1_9_metrics_match_seeded_distribution_on_postgres",
+        "test_c1_expired_foreign_lease_does_not_consume_global_limit",
+        "test_i3_lease_duration_survives_advisory_lock_wait",
+        "test_p1_8_cross_space_writes_and_outbox_reads_fail_closed_on_postgres",
+        "test_m19_concurrent_dispatchers_do_not_double_deliver",
+        # D-2026-07-27-16 边界冻结的强制验收节点（tasks 清单 15/16/19/21/27）。
+        "test_q15_expired_lease_holder_has_no_write_authority_on_postgres",
+        "test_q16_stalled_expired_leases_never_exceed_limits_on_postgres",
+        "test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres",
+        "test_q19_declarative_domain_write_channel_on_postgres",
+        "test_q30_owned_table_check_is_normalized_on_postgres",
+        "test_q31_values_may_not_smuggle_sql_on_postgres",
+        "test_q25_delivered_but_unmarked_crash_converges_on_postgres",
+    )
+}
+JOB_MIGRATION_POSTGRES_NODES = {
+    f"tests/test_job_migration_postgres_035.py::{node}"
+    for node in (
+        "test_p1_11_single_new_migration_from_real_head_0006",
+        "test_p1_11_wiki_jobs_columns_not_null_space_and_idempotency_unique",
+        "test_p1_11_outbox_ordered_id_event_id_unique_and_not_null_space",
+        "test_i9_downgrade_with_live_rows_is_refused_before_any_ddl",
+        # D-2026-07-27-16：降级 crossing 分支、DLQ 取证保护、offline 显式拒绝。
+        "test_q26_downgrade_relative_destination_crossing_0006_is_resolved",
+        "test_q26_downgrade_refuses_while_dead_letter_forensics_exist",
+        "test_q26_offline_sql_downgrade_is_explicitly_refused",
+    )
+}
+POSTGRES_NODES = (
+    {
+        POSTGRES_NODE,
+        (
+            "tests/test_flywheel_postgres_015.py::"
+            "test_f3_3_live_postgresql_two_sessions_apply_same_trace_exactly_once"
+        ),
+        (
+            "tests/test_release_publisher_postgres_018.py::"
+            "test_r3_6_postgresql_release_never_commits_caller_transaction"
+        ),
+        (
+            "tests/test_workbench_concurrency_008.py::"
+            "test_w1_4_live_postgresql_two_sessions_single_apply"
+        ),
+    }
+    | SOURCE_LIFECYCLE_POSTGRES_NODES
+    | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
+    | JOB_STORE_POSTGRES_NODES
+    | JOB_MIGRATION_POSTGRES_NODES
+)
 WEKNORA_NODES = {
     "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
     "tests/test_live.py::test_live_knowledge_endpoint_shape",

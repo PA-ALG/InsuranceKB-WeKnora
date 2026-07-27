@@ -915,14 +915,17 @@ def test_l5_empty_0006_to_0012_to_0006_round_trip_restores_postgresql_schema(
 
 
 @pytest.mark.integration_postgres
-def test_l5_alembic_check_passes_and_revision_topology_has_single_0006_head(
+def test_l5_alembic_check_passes_and_revision_topology_keeps_single_head(
     postgres_migration_db: PostgresMigrationDb,
 ) -> None:
     config = _cfg(postgres_migration_db.url)
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ["0006"]
+    # 0006 之后由 035 的 0015 续接（实际链 0012 → 0006 → 0015）；单 head 不变。
+    assert scripts.get_heads() == ["0015"]
 
     command.upgrade(config, "0012")
     command.upgrade(config, "0006")
     assert _version_rows(postgres_migration_db.engine) == ("0006",)
+    command.upgrade(config, "head")
+    assert _version_rows(postgres_migration_db.engine) == ("0015",)
     command.check(config)

@@ -1,0 +1,335 @@
+"""OpenSpec 035 T1：P1.1/P1.4 状态机纯函数核与 DTO/配置校验（deterministic）。"""
+
+from __future__ import annotations
+
+import dataclasses
+from itertools import product
+
+import pytest
+from pydantic import ValidationError
+
+from insurance_harness.jobs import (
+    LEGAL_TRANSITIONS,
+    STORAGE_ONLY_TRANSITIONS,
+    TERMINAL_STATES,
+    CapacityBlockedJobError,
+    ErrorClass,
+    HumanRequiredJobError,
+    IllegalTransitionError,
+    JobFailure,
+    JobRuntimeConfig,
+    JobState,
+    JobTypePolicy,
+    NonRetryableJobError,
+    RetryableJobError,
+    classify_failure,
+    ensure_transition,
+    route_failure,
+)
+
+S = JobState
+
+
+def _config(**overrides: object) -> JobRuntimeConfig:
+    values: dict[str, object] = {
+        "lease_seconds": 60.0,
+        "heartbeat_interval_seconds": 20.0,
+        "max_attempts": 3,
+        "backoff_seconds": (1.0, 5.0),
+        "per_space_concurrency_limit": 2,
+        "global_concurrency_limit": 8,
+    }
+    values.update(overrides)
+    return JobRuntimeConfig.model_validate(values)
+
+
+# --- P1.1 封闭枚举与合法转换表 ---
+
+
+def test_p1_1_job_state_is_a_closed_eight_state_enum() -> None:
+    assert {state.value for state in JobState} == {
+        "queued",
+        "leased",
+        "running",
+        "succeeded",
+        "retry_wait",
+        "awaiting_human",
+        "blocked",
+        "dead_letter",
+    }
+    assert TERMINAL_STATES == frozenset({S.SUCCEEDED, S.BLOCKED, S.DEAD_LETTER})
+
+
+def test_p1_4_error_class_is_a_closed_four_value_enum() -> None:
+    assert {klass.value for klass in ErrorClass} == {
+        "retryable",
+        "non_retryable",
+        "capacity_blocked",
+        "human_required",
+    }
+
+
+def test_p1_1_legal_transition_table_is_exactly_the_spec_list() -> None:
+    assert LEGAL_TRANSITIONS == frozenset(
+        {
+            (S.QUEUED, S.LEASED),
+            (S.LEASED, S.RUNNING),
+            (S.RUNNING, S.SUCCEEDED),
+            (S.RUNNING, S.RETRY_WAIT),
+            (S.RETRY_WAIT, S.QUEUED),
+            (S.RUNNING, S.AWAITING_HUMAN),
+            (S.AWAITING_HUMAN, S.QUEUED),
+            (S.RUNNING, S.BLOCKED),
+            (S.RUNNING, S.DEAD_LETTER),
+            (S.LEASED, S.QUEUED),
+            (S.LEASED, S.DEAD_LETTER),
+            (S.RUNNING, S.QUEUED),
+        }
+    )
+
+
+def test_p1_1_storage_only_transitions_cover_backoff_and_lease_reclaim() -> None:
+    assert STORAGE_ONLY_TRANSITIONS == frozenset(
+        {
+            (S.RETRY_WAIT, S.QUEUED),
+            (S.LEASED, S.QUEUED),
+            (S.LEASED, S.DEAD_LETTER),
+            (S.RUNNING, S.QUEUED),
+        }
+    )
+    assert STORAGE_ONLY_TRANSITIONS <= LEGAL_TRANSITIONS
+
+
+def test_p1_1_exhaustive_pairs_split_between_legal_and_typed_illegal() -> None:
+    """8×8 全组合三分：调用方可达的合法对、storage-only 对、非法对。
+
+    D-2026-07-27-16 起 storage-only 对（backoff 提升与回收）对调用方默认
+    拒绝——它们只能由存储层显式传 `storage_layer=True` 执行，这是 P1.1
+    "仅限存储层"从文档常量升级为可执行护栏的直接后果。
+    """
+    for source, target in product(JobState, JobState):
+        pair = (source, target)
+        if pair in LEGAL_TRANSITIONS and pair not in STORAGE_ONLY_TRANSITIONS:
+            ensure_transition(source, target)
+            continue
+        with pytest.raises(IllegalTransitionError) as excinfo:
+            ensure_transition(source, target)
+        assert excinfo.value.code == "illegal_transition"
+        assert excinfo.value.source is source
+        assert excinfo.value.target is target
+        if pair in STORAGE_ONLY_TRANSITIONS:
+            # 存储层身份下同一对仍必须可执行，否则回收/提升会被自锁。
+            ensure_transition(source, target, storage_layer=True)
+
+
+def test_p1_1_terminal_states_have_no_outgoing_edges() -> None:
+    for source, target in LEGAL_TRANSITIONS:
+        assert source not in TERMINAL_STATES
+        assert isinstance(target, JobState)
+
+
+# --- P1.4 错误分类 → 目标状态映射 ---
+
+
+@pytest.mark.parametrize(
+    ("error_class", "attempt", "expected"),
+    [
+        (ErrorClass.RETRYABLE, 1, S.RETRY_WAIT),
+        (ErrorClass.RETRYABLE, 2, S.RETRY_WAIT),
+        (ErrorClass.RETRYABLE, 3, S.DEAD_LETTER),
+        (ErrorClass.RETRYABLE, 4, S.DEAD_LETTER),
+        (ErrorClass.NON_RETRYABLE, 1, S.DEAD_LETTER),
+        (ErrorClass.CAPACITY_BLOCKED, 1, S.BLOCKED),
+        (ErrorClass.HUMAN_REQUIRED, 1, S.AWAITING_HUMAN),
+    ],
+)
+def test_p1_4_route_failure_is_deterministic(
+    error_class: ErrorClass, attempt: int, expected: JobState
+) -> None:
+    assert route_failure(error_class, attempt=attempt, max_attempts=3) is expected
+
+
+def test_p1_4_typed_job_errors_classify_to_their_declared_class() -> None:
+    cases: list[tuple[Exception, ErrorClass]] = [
+        (RetryableJobError("provider timeout"), ErrorClass.RETRYABLE),
+        (NonRetryableJobError("schema violation"), ErrorClass.NON_RETRYABLE),
+        (
+            CapacityBlockedJobError("candidate_capacity_exceeded"),
+            ErrorClass.CAPACITY_BLOCKED,
+        ),
+        (HumanRequiredJobError("needs review"), ErrorClass.HUMAN_REQUIRED),
+    ]
+    for error, expected in cases:
+        failure = classify_failure(error)
+        assert failure.error_class is expected
+        assert str(error) in failure.summary
+
+
+def test_p1_4_unclassified_exception_becomes_retryable_and_keeps_summary() -> None:
+    failure = classify_failure(ValueError("boom-035"))
+
+    assert failure.error_class is ErrorClass.RETRYABLE
+    assert "boom-035" in failure.summary
+    assert "ValueError" in failure.summary
+
+
+def test_job_failure_dto_is_frozen() -> None:
+    failure = JobFailure(error_class=ErrorClass.RETRYABLE, summary="x")
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        failure.summary = "y"  # type: ignore[misc]
+
+
+# --- 配置 DTO：全部值来自配置，非法值 fail closed ---
+
+
+def test_config_rejects_non_positive_or_empty_values() -> None:
+    with pytest.raises(ValidationError):
+        _config(max_attempts=0)
+    with pytest.raises(ValidationError):
+        _config(backoff_seconds=())
+    with pytest.raises(ValidationError):
+        _config(lease_seconds=-1.0)
+    with pytest.raises(ValidationError):
+        _config(per_space_concurrency_limit=0)
+    with pytest.raises(ValidationError):
+        _config(global_concurrency_limit=0)
+    with pytest.raises(ValidationError):
+        _config(backoff_seconds=(1.0, -2.0))
+    with pytest.raises(ValidationError):
+        _config(maintenance_batch_size=0)
+    assert _config().maintenance_batch_size >= 1  # I4：回收/promote 批量有界
+
+
+def test_typed_error_taxonomy_for_input_lease_and_duplicate_event() -> None:
+    from insurance_harness.jobs import (
+        DuplicateEventError,
+        InvalidJobInputError,
+        JobStoreError,
+        LeaseExpiredError,
+    )
+
+    assert issubclass(InvalidJobInputError, JobStoreError)
+    assert issubclass(InvalidJobInputError, ValueError)
+    assert InvalidJobInputError("bad").code == "invalid_input"
+    assert issubclass(LeaseExpiredError, JobStoreError)
+    assert LeaseExpiredError(job_id="j").code == "lease_expired"
+    assert issubclass(DuplicateEventError, JobStoreError)
+    assert DuplicateEventError("dup").code == "duplicate_event_id"
+
+
+def test_config_is_frozen_and_policy_lookup_prefers_job_type_override() -> None:
+    config = _config(
+        job_type_policies={
+            "compile": JobTypePolicy(max_attempts=5, backoff_seconds=(10.0, 60.0))
+        }
+    )
+
+    with pytest.raises(ValidationError):
+        config.max_attempts = 9  # pydantic frozen：运行时 ValidationError
+
+    default_policy = config.policy_for("extract")
+    assert default_policy.max_attempts == 3
+    assert default_policy.backoff_seconds == (1.0, 5.0)
+
+    override = config.policy_for("compile")
+    assert override.max_attempts == 5
+    assert override.backoff_seconds == (10.0, 60.0)
+
+
+def test_config_backoff_delay_clamps_to_last_configured_step() -> None:
+    policy = JobTypePolicy(max_attempts=9, backoff_seconds=(1.0, 5.0))
+
+    assert policy.backoff_delay(attempt=1) == 1.0
+    assert policy.backoff_delay(attempt=2) == 5.0
+    assert policy.backoff_delay(attempt=7) == 5.0
+    with pytest.raises(ValueError):
+        policy.backoff_delay(attempt=0)
+
+
+# --- 配置接线：HarnessSettings（HARNESS_ 环境前缀）→ JobRuntimeConfig ---
+
+
+def test_settings_wire_job_runtime_config_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from insurance_harness.config import HarnessSettings
+
+    monkeypatch.setenv("HARNESS_JOB_MAX_ATTEMPTS", "5")
+    monkeypatch.setenv("HARNESS_JOB_BACKOFF_SECONDS", "[2.0, 8.0]")
+    monkeypatch.setenv("HARNESS_JOB_DISPATCH_BACKOFF_SECONDS", "[3.0, 9.0]")
+    settings = HarnessSettings(
+        weknora_base_url="http://weknora.test",
+        weknora_api_key="sk-test",
+        job_lease_seconds=45.0,
+        job_per_space_concurrency_limit=3,
+    )
+
+    config = settings.job_runtime_config()
+
+    assert isinstance(config, JobRuntimeConfig)
+    assert config.lease_seconds == 45.0
+    assert config.max_attempts == 5
+    assert config.backoff_seconds == (2.0, 8.0)
+    assert config.per_space_concurrency_limit == 3
+    assert config.global_concurrency_limit >= 1
+    assert config.heartbeat_interval_seconds > 0
+    assert config.policy_for("anything").max_attempts == 5
+    # P1.6 退避必须来自配置（`HARNESS_JOB_*` 接线），默认不得为全 0——否则
+    # "让位"在真实部署里是空操作。
+    assert config.dispatch_backoff_seconds == (3.0, 9.0)
+    assert config.dispatch_backoff_delay(attempts=1) == 3.0
+    assert config.dispatch_backoff_delay(attempts=99) == 9.0
+
+
+@pytest.mark.parametrize("bad", [(float("inf"),), (float("nan"),), (1e12,), (0.0, float("inf"))])
+def test_q32_non_finite_or_absurd_dispatch_backoff_is_rejected(bad: tuple[float, ...]) -> None:
+    """P1.6：退避档位必须是实现**能够履行**的值（第四轮评审 B-finding-1）。
+
+    修复前只校验 `>= 0`，于是 `inf`/`nan`/`1e12` 通过配置门，但写入
+    `next_dispatch_at` 时抛裸 `OverflowError`/`ValueError`——异常在 cursor
+    推进前逃出 `dispatch_pending`，每轮重新撞上同一个队头事件 ⇒ 整个 Space 的
+    outbox 卡死（I10 队头阻塞回归），且 `dispatch_attempts += 1` 随回滚丢失
+    使单调性被绕过。护栏必须只接受自己能履行的值（与表标识同一族教训）。
+    """
+    with pytest.raises(ValueError):
+        JobRuntimeConfig(
+            lease_seconds=300.0,
+            heartbeat_interval_seconds=30.0,
+            max_attempts=3,
+            backoff_seconds=(0.0,),
+            per_space_concurrency_limit=8,
+            global_concurrency_limit=32,
+            dispatch_backoff_seconds=bad,
+        )
+
+
+def test_q32_model_default_dispatch_backoff_is_not_all_zero() -> None:
+    """B-finding-2：模型层默认不得全 0（`config.py` 已声明该不变量）。
+
+    修复前 `JobRuntimeConfig` 的默认是 `(0.0,)`，任何直接构造该模型的装配
+    （含全部单测）拿到零退避——实测连续失败重投 50 次仅 0.28s，约 180 次/秒
+    CPU 空转，与 `config.py` 自己写的"不得默认为全 0"矛盾。
+    """
+    config = JobRuntimeConfig(
+        lease_seconds=300.0,
+        heartbeat_interval_seconds=30.0,
+        max_attempts=3,
+        backoff_seconds=(0.0,),
+        per_space_concurrency_limit=8,
+        global_concurrency_limit=32,
+    )
+
+    assert any(delay > 0 for delay in config.dispatch_backoff_seconds)
+
+
+def test_default_dispatch_backoff_is_not_all_zero() -> None:
+    """默认档位必须真的推迟，否则退避形同不存在。"""
+    from insurance_harness.config import HarnessSettings
+
+    settings = HarnessSettings(
+        weknora_base_url="http://weknora.test", weknora_api_key="sk-test"
+    )
+
+    config = settings.job_runtime_config()
+
+    assert any(delay > 0 for delay in config.dispatch_backoff_seconds)
