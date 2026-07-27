@@ -50,7 +50,8 @@
 | 040 | g0a-golden-asset-kernel | 规格 ✅ 已合入（PR #42）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 编号冲突已关闭；后续实现须独立 TDD/复审，不得称 G0a 已验收或产品已完成 |
 | 041 | p5a0-product-version-resolver | ✅ 已合入 main（PR #56） | ⚠️ 该目录先于注册表行创建（占号规则被绕过），此行为事后补记；后续窗口一律先占号再开目录 |
 | 042 | p1-followup-backlog | 🔒 已占号（目录未开，比照 026 惯例） | 035 四轮评审的 5 条 BACKLOG，完整清单含 live 证据与建议修法见 [23 号 §8 D-2026-07-27-19](../../docs/insurance-kb/23-mvp-control-board.md)；预期零迁移；**开工前须取 Mission Card 批准并按正式 delta 格式建目录** |
-| 043+ | （空闲） | | 先占号再开目录 |
+| 043 | p2d-space-security-boundary | 🔒 已占号；SPEC-ONLY / IMPLEMENTATION BLOCKED ON P3 + P1 READ-ONLY FENCE | P2d Contract Card/OpenSpec 冻结窗口；零生产代码、零 migration；P3 实现/ACL-inspection authority 与 P1 read-only active-fence verifier 合入前不得开工实现 |
+| 044+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
@@ -71,7 +72,8 @@
 | 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0015 | 035 p1-job-outbox 实现 | 由 PR #53 交付；`down_revision="0006"` 已按最新 main 的真实 alembic head 复核，实际链 `0005 → 0012 → 0006 → 0015`，单 head |
-| 0016+ | （空闲） | 先占号再开 migration |
+| 0016 | 043 p2d-space-security-boundary | 🔒 已占号；SPEC-ONLY，migration 文件未创建；实现阻断于 P3 + P1 read-only fence，未来 down_revision 必须指向实现时 main 的真实 single head |
+| 0017+ | （空闲） | 先占号再开 migration |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），
 > **down_revision 链序由实际合入 main 的先后决定**，与数字大小无关。规则：
