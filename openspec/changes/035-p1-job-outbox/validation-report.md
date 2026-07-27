@@ -278,6 +278,25 @@ PG 节点合计 **32 个**（22 → 30 → 32），全部在 `test_ci_lanes_022.
   finding 编号测试节点（见「已运行门禁」末条），它们在本 PR head 全绿；
   probe 的历史结论保留在「双评审 finding 闭环」节，仅作旧 head 的审计记录。
 
+## 四轮评审收口与 BACKLOG 转出（D-2026-07-27-19）
+
+035 共经四轮独立评审（规格 1 + 对抗 3）+ 总控窗口 2 次自攻，最终**零 BLOCKER**。
+
+第四轮定向覆盖此前从未被独立验证的五个面：`attempt` 计数 **no finding**；
+`human_decision_resumed_at` **no finding（攻不动）**；`_reclaim_saturated` 的
+越限/饥饿/跨 Space 泄漏**全部攻不动**（15s 6 并发压测 2310 次采样零越限）；
+多 spec 领域写原子性**成立**；`next_dispatch_at` 3 条 BACKLOG **已在本 PR 修完**
+（非有限/荒谬退避档位通过配置门致 dispatcher 在失败处理内崩溃并卡死整个 Space
+的 outbox、模型默认 `(0.0,)` 热循环、退避基准在 deliver 之前读致超时失败无
+实际让位）。
+
+**5 条 BACKLOG 转 042**（号已占、目录未开，比照 026 惯例；完整清单含 live
+证据与建议修法见 23 号 §8 D-2026-07-27-19），不在本 change 内修：领域写失败驱动异常穿透 typed 面；反射占第二条连接（并发上限
+≥ 池容量时完成路径自我死锁）；反射无缓存；有界回收触发条件宽于 spec；
+`_execute_domain_writes` docstring 与实际次序不符（行为正确、声明不准）。
+五条均 live 证明不损坏数据、不越 Space、不产生第二份领域结果，符合
+`AGENTS.md` 的 BACKLOG 定义。
+
 ## 已知边界与待复审项
 
 - 生产代码量超过 tasks Contract Card 的 ~900 触发线（边界冻结前实测
