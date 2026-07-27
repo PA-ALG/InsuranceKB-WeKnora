@@ -1,14 +1,13 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
 > 本次治理收口基线/事实截止点（截至 2026-07-27）：
-> `main=b974bb90965eaaaf5404fdaf786778432e51cc77`；本候选合入后以实际合并提交
-> 作为新的 main，不预填未知 SHA。
+> `main=99f42f33e17ad8054383c30b4cff563785e46548`。
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#49 中已合入 #35/#36/#37/#38/#39/#40/#41/#43/#45/#46/#47/#48/#49。
-> 该编号区间的开放项只有 #42（`OPEN / Draft / DIRTY / CONFLICTING`）与
-> #44（Ready，但 `DIRTY`，未合入）。
+> PR #35–#50 中已合入 #35/#36/#37/#38/#39/#40/#41/#42/#43/#45/#46/#47/#48/#49/#50。
+> 当前 GitHub 唯一开放项为 #44（`OPEN / Ready / DIRTY / CONFLICTING`，未合入）；
+> 其旧 head CI 不构成 latest-main 证据。
 
 ## 1. 当前状态
 
@@ -17,7 +16,7 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY`，未合入 | 重放最新 main → 新 exact review；迁移占号 **0015** |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY / CONFLICTING`，未合入 | 重放最新 main → 新 exact review；旧 head CI 不是 latest-main 证据；迁移占号 **0015** |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
 | W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
@@ -25,7 +24,7 @@
 | G0-probe 弱模型探针 | ✅ `COMPLETED`（PR #45 证据；校准专用） | 只校准 G0a，不构成 G0a/G0b 验收证据 |
 | Schema 切片 + 词表 seed | ⚠️ `DRAFT / NON-AUTHORITY`（PR #43 已合入） | 等领域专家与后续 Contract Card 正式冻结 |
 | 金标标注 v0 | ⚠️ `DRAFT / NON-ACCEPTANCE-AUTHORITY`（PR #49 已合入） | 等 G0a 正式 custody、协议和验收冻结 |
-| G0a 金标资产化内核 | ⛔ PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`：仍使用旧 `038-g0a-*` 路径，与已合入 W1/038 冲突；注册表唯一目标为 040 | rename/rebase 后重新 exact review；不可合入、不可称 spec frozen |
+| G0a 金标资产化内核 | 规格 ✅ `MERGED`（PR #42，OpenSpec 040）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 后续实现须独立 TDD/复审；不得称 G0a 已验收或产品已完成 |
 | Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
 | Milestone B | `NOT IMPLEMENTED` | 等 Semantic Core |
 | Milestone C | `NOT IMPLEMENTED` | 等 Governed Active Release |
@@ -64,13 +63,14 @@ then Milestone A → Milestone B → Milestone C
 
 - OpenSpec 038 规格已由 PR #41 合入；Go 实现尚未开始。
 - P4a/P4c 在 W1 实现合入并通过合同门禁前保持 blocked。
-- PR #42（`OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`）的旧
-  `038-g0a-*` 路径不能复用或覆盖 W1/038，也不可称 spec frozen。
+- PR #42 已把 G0a 规格以 OpenSpec 040 合入；这只关闭编号冲突，不改变
+  W1/038，也不表示 G0a 实现或验收完成。
 
 ### P1 → P3
 
-- P1 规格已由 PR #38 合入；实现 PR #44 当前 `DIRTY`，必须在最新 main
-  重放并接受新的 exact-head 审查。
+- P1 规格已由 PR #38 合入；实现 PR #44 当前
+  `OPEN / Ready / DIRTY / CONFLICTING`，必须在最新 main 重放并接受新的
+  exact-head 审查；旧 head CI 不构成 latest-main 证据。
 - P3 规格已由 PR #48 合入；实现依赖 P1，不得提前复制 JobStore/Outbox。
 
 ### human_batch-first
