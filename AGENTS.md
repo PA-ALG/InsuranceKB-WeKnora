@@ -13,6 +13,45 @@ epoch fencing、可重建的投影。
 3. `HANDOFF.md` 的当前状态块
 4. 对应的 `openspec/changes/<NNN>/`
 
+## MVP 主航道协作
+
+任何会写入仓库、修改迁移/功能规格/行为，或改变 GitHub/外部状态的交付任务，
+开工前都必须由 Owner 向用户提交 **Mission Card** 并取得逐项批准。Mission
+Card 至少包含：
+
+- 业务目标与现在做的理由；
+- 唯一写 Owner、执行模型与 reasoning effort；
+- 依赖、预计 PR 数、预计周期；
+- exact 验收条件、明确非目标；
+- 阻断问题定义。
+
+纯只读事实核验、审查、监控，以及已批准任务内的正常验证，无需另开 Mission
+Card；这些例外不得被扩大为写入或外部状态变更授权。未获批准不得写实现、迁移
+或功能规格。GitHub 上已有分支、PR、旧测试或历史现场不构成开工授权；W1、
+P1、G0a 等后续功能仍须各自取得 Mission Card 批准。
+
+当前排期不包含 Claude。三个 Codex lane 采用“两个独立开发 lane + 一个动态
+review/integration lane”，角色按任务轮换。review lane 空档只执行用户已批准
+的任务或只读准备，不固定等待。跨 agent 必须有唯一写 Owner；每项工作从最新
+`origin/main` 的独立 clean worktree 开始，不得并发写同一文件域。
+
+默认执行模型为 `gpt-5.6-sol high`。只有数据丢失、安全、权限、迁移、真实并发、
+跨模块最终审查等高风险任务使用 `xhigh`。`max`/`ultra` 不得作为默认值，必须
+由用户单独批准，并提供代表性 eval 证明其收益。
+
+Reviewer finding 只能归为：
+
+- `BLOCKER`：可复现、在 Mission Card 范围内，并会造成明确验收失败、安全/
+  权限缺陷、数据损坏或真实并发错误；
+- `BACKLOG`：真实但不阻断当前用户价值，进入后续 Mission Card；
+- `REJECTED`：不可复现、低概率假设、范围外重构，或 Tencent/WeKnora 上游
+  通用问题。
+
+普通 PR 最多一轮修复复审，高风险 PR 最多两轮。两轮后仍出现同域新的基础问题，
+停止追加补丁，回到设计或拆分 PR。达到 Mission Card 验收且 CI 通过后及时合并，
+不追求理论完美。一个 PR 只交付一个用户价值，默认应在 1–2 个工作日完成且
+reviewer 可在 30 分钟内理解；超出时拆分，或重新取得用户批准。
+
 硬门禁：
 
 - 没有 OpenSpec 不写功能代码，先测试后实现；AI 会话不 commit/push。
