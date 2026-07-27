@@ -42,7 +42,7 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY / CONFLICTING`，未合入 | 必须重放最新 main 并重新 exact review；旧 head CI 不是 latest-main 证据；迁移 0015 Owner |
+| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现 `NOT STARTED` | 从最新 main 以新小 PR 提取所需能力；当前迁移 head 0006；0015 仅预留、未合入 |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
 | 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
@@ -68,7 +68,7 @@
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
 | 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0015 | 035 p1-job-outbox 实现 | 已占号；PR #44 未合入，实际 down_revision 需在最新 main 重放后复核 |
+| 0015 | 035 p1-job-outbox 实现 | 预留、未合入；旧 PR #44 已关闭归档；当前 main 唯一 head=0006，未来新小 PR 须从当时最新 main 复核 down_revision |
 | 0016+ | （空闲） | 先占号再开 migration |
 
 > **迁移号≠链拓扑**：上表编号只是占号防撞（文件名/revision id 用它），
@@ -93,9 +93,14 @@
 
 - 治理收口 PR #50 与 OpenSpec 040 编号收口 PR #42 均已合入；#42 仅交付
   G0a 规格，实施尚未开始。
-- PR #44 是当前唯一开放 PR：`OPEN / Ready / DIRTY / CONFLICTING`；未合入，
-  必须重放最新 main 并接受新的 exact review，旧 head CI 不是 latest-main 证据。
+- 当前 GitHub 无开放 PR。旧 PR #44 已 `CLOSED / ARCHIVED / NOT MERGED`，
+  annotated tag 为 `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；P1 实现
+  回到 `NOT STARTED`，后续只从最新 main 以新小 PR 提取所需能力。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
+- A2 已把 worktree 登记从 66 收敛到 23：21 个 clean 历史 worktree 非 force
+  移除、22 个 prunable 记录归零、13 个 dirty/frozen worktree 保留；仓外
+  证据根 `../.cleanup-evidence/2026-07-27` 的总校验 SHA-256 为
+  `7ffe022567b56a0a6020ae9b7f42476e26824ec8be25ae0c39d2bbe1b32ce14c`。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）
 

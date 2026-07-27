@@ -1,13 +1,13 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
 > 本次治理收口基线/事实截止点（截至 2026-07-27）：
-> `main=99f42f33e17ad8054383c30b4cff563785e46548`。
+> `main=707403342712fafe94e7a02f0bb8fec35e3809ce`。
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#50 中已合入 #35/#36/#37/#38/#39/#40/#41/#42/#43/#45/#46/#47/#48/#49/#50。
-> 当前 GitHub 唯一开放项为 #44（`OPEN / Ready / DIRTY / CONFLICTING`，未合入）；
-> 其旧 head CI 不构成 latest-main 证据。
+> PR #35–#51 中除 #44 外均已合入；当前 GitHub 无开放 PR。PR #44 已
+> `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
+> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
 
 ## 1. 当前状态
 
@@ -16,7 +16,7 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY / CONFLICTING`，未合入 | 重放最新 main → 新 exact review；旧 head CI 不是 latest-main 证据；迁移占号 **0015** |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`；实现 `NOT STARTED` | 从最新 main 以新小 PR 提取所需能力；当前迁移 head **0006**，**0015** 仅预留、未合入 |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
 | W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
@@ -25,6 +25,7 @@
 | Schema 切片 + 词表 seed | ⚠️ `DRAFT / NON-AUTHORITY`（PR #43 已合入） | 等领域专家与后续 Contract Card 正式冻结 |
 | 金标标注 v0 | ⚠️ `DRAFT / NON-ACCEPTANCE-AUTHORITY`（PR #49 已合入） | 等 G0a 正式 custody、协议和验收冻结 |
 | G0a 金标资产化内核 | 规格 ✅ `MERGED`（PR #42，OpenSpec 040）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 后续实现须独立 TDD/复审；不得称 G0a 已验收或产品已完成 |
+| Repository operational cleanup A1/A2 | ✅ PR #44 已关闭并以 annotated tag 归档；worktree `66 → 23` | 21 clean 非 force 移除、22 prunable 归零、13 dirty/frozen 保留；证据见仓外 `../.cleanup-evidence/2026-07-27` |
 | Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
 | Milestone B | `NOT IMPLEMENTED` | 等 Semantic Core |
 | Milestone C | `NOT IMPLEMENTED` | 等 Governed Active Release |
@@ -68,9 +69,9 @@ then Milestone A → Milestone B → Milestone C
 
 ### P1 → P3
 
-- P1 规格已由 PR #38 合入；实现 PR #44 当前
-  `OPEN / Ready / DIRTY / CONFLICTING`，必须在最新 main 重放并接受新的
-  exact-head 审查；旧 head CI 不构成 latest-main 证据。
+- P1 规格已由 PR #38 合入；旧实现 PR #44 已
+  `CLOSED / ARCHIVED / NOT MERGED`。P1 实现回到 `NOT STARTED`；后续只从
+  最新 main 以新的小 PR 提取所需能力，不恢复或重放旧分支。
 - P3 规格已由 PR #48 合入；实现依赖 P1，不得提前复制 JobStore/Outbox。
 
 ### human_batch-first
@@ -202,8 +203,9 @@ custody 等防刷红线不变。
 ### D-2026-07-27-10 · 迁移台账清理
 
 0007–0011 预分配随 009/010/011/012/025 撤号作废，永不复用；0013/0014
-（superseded 028b 计划）同样作废。P1 实现使用 **0015**。台账修订随 P1
-实现 PR 提交（该 PR 是 0015 的占号 Owner）。
+（superseded 028b 计划）同样作废。当前 main 唯一 Alembic head 是 **0006**；
+**0015** 仍为 P1 实现预留但未合入，未来新小 PR 必须从当时最新 main 重新
+确认 `down_revision`。
 
 ### D-2026-07-27-11 · W0 裁决：两份合同 insufficient，W1 触发
 
@@ -268,8 +270,9 @@ git commit/push"在本指示范围内由业务方授权覆盖；主线目标锁�
 - **喂入关键路径的并行道**（启动后前两周铺开）：C0✅ → CAP0✅ → P2a → P5a2
   → P2b/P2c（P2b/P2c 在 P2a 后、是 P6a/P6b/P7/P8 硬前置）；P4b（依赖
   CAP0+P4a，是 P5b1 硬前置——CAP0 输入回收风险因此直接压在关键路径上）；
-  P1 规格✅但实现 PR #44 待重放，P3 规格✅但实现等 P1；P2d、P5a0、P5a1
-  并行；G0a 标注草稿与 launch 容量输入回收同步推进。
+  P1 规格✅、实现 NOT STARTED（须从最新 main 以新小 PR 提取），P3
+  规格✅但实现等 P1；P2d、P5a0、P5a1 并行；G0a 标注草稿与 launch
+  容量输入回收同步推进。
 - **吞吐假设**：参照 021/023 历史，单个中大 PR（Contract Card + RED→GREEN
   + 双独立评审 + PG 并发测试）约 1–3 个窗口日。
 - **里程碑区间估计**（自 C0/W0 启动日起）：Milestone A（至 G0s）约 2–4
