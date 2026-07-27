@@ -27,8 +27,9 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from insurance_harness.jobs import (
+    OWNED_TABLES,
     ClaimedJob,
-    DomainWriteHandle,
+    DomainWriteSpec,
     DomainWriteViolationError,
     ErrorClass,
     IllegalTransitionError,
@@ -417,11 +418,8 @@ def test_p1_6_completion_interrupt_before_commit_leaves_neither_row(
     store = _store(postgres_runtime)
     job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
 
-    def domain_write(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'),
-            {"job_id": job_id},
-        )
+    # 声明式领域写（P1.5，D-2026-07-27-16）：存储层自己执行，调用方无句柄。
+    domain_writes = (DomainWriteSpec(table=domain_table, values={"job_id": job_id}),)
 
     def interrupt(_session: Session) -> None:
         raise RuntimeError("inject-commit-crash-035")
@@ -434,7 +432,7 @@ def test_p1_6_completion_interrupt_before_commit_leaves_neither_row(
                 job_id=job_id,
                 generation=generation,
                 events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-                domain_write=domain_write,
+                domain_writes=domain_writes,
             )
     finally:
         sqlalchemy_event.remove(postgres_runtime.factory, "before_commit", interrupt)
@@ -450,7 +448,7 @@ def test_p1_6_completion_interrupt_before_commit_leaves_neither_row(
         job_id=job_id,
         generation=generation,
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-        domain_write=domain_write,
+        domain_writes=domain_writes,
     )
     assert replay.state is JobState.SUCCEEDED
     with postgres_runtime.factory() as session:
@@ -463,7 +461,7 @@ def test_p1_6_completion_interrupt_before_commit_leaves_neither_row(
             job_id=job_id,
             generation=generation,
             events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-            domain_write=domain_write,
+            domain_writes=domain_writes,
         )
     with postgres_runtime.factory() as session:
         assert session.scalar(text(f'SELECT count(*) FROM "{domain_table}"')) == 1
@@ -722,18 +720,14 @@ def test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result(
         assert generation_b > generation_a
         worker_b.start(space_id=space_id, job_id=job_id, generation=generation_b)
 
-        def domain_write(handle: DomainWriteHandle) -> None:
-            handle.execute(
-                text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'),
-                {"job_id": job_id},
-            )
+        domain_writes = (DomainWriteSpec(table=domain_table, values={"job_id": job_id}),)
 
         done = worker_b.report_success(
             space_id=space_id,
             job_id=job_id,
             generation=generation_b,
             events=(OutboxEventDraft(event_type="job.succeeded", payload={"job": job_id}),),
-            domain_write=domain_write,
+            domain_writes=domain_writes,
         )
         assert done.state is JobState.SUCCEEDED
 
@@ -745,7 +739,7 @@ def test_p1_10_forced_kill_takeover_yields_exactly_one_domain_result(
                 job_id=job_id,
                 generation=generation_a,
                 events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-                domain_write=domain_write,
+                domain_writes=domain_writes,
             )
 
         with postgres_runtime.factory() as session:
@@ -1166,66 +1160,75 @@ def test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres(
 
 
 @pytest.mark.integration_postgres
-def test_q19_domain_write_cannot_escape_its_channel_on_postgres(
+def test_q19_declarative_domain_write_channel_on_postgres(
     postgres_runtime: PostgresRuntime,
 ) -> None:
-    """P1.5 领域写通道：结束完成事务与触碰 P1 自有表都 typed 拒绝并整体回滚。"""
+    """P1.5 领域写通道（D-2026-07-27-16 第二轮修订）在真实 PG 上的合同。
+
+    上一版把可执行回调放进完成事务再试图进程内沙箱它，被第二轮评审以公共
+    属性 `Result.connection` 一行击破（领域行落库 + 任务仍 running + outbox
+    空 ⇒ 重放产生第二份领域结果）。通道已改为声明式：调用方交表标识 + 列值，
+    存储层自己执行，没有任何句柄可泄漏。本节点断言三件事：① 自有表被拒；
+    ② 同前缀的其他域表不被误拦；③ 合法声明式写与状态、outbox 同事务原子。
+    """
     space_id = _space("channel")
     domain_table = f"domain_{uuid.uuid4().hex[:12]}"
+    foreign_wiki_table = f"wiki_page_revisions_{uuid.uuid4().hex[:8]}"
     with postgres_runtime.engine.begin() as connection:
         connection.exec_driver_sql(f'CREATE TABLE "{domain_table}" (job_id TEXT PRIMARY KEY)')
+        connection.exec_driver_sql(
+            f'CREATE TABLE "{foreign_wiki_table}" (id TEXT PRIMARY KEY, note TEXT)'
+        )
     store = _store(postgres_runtime)
     job_id, generation = _start_running(store, space_id, "job-1", "worker-a")
 
-    def commit_escape(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'), {"job_id": job_id}
-        )
-        handle.execute(text("COMMIT"))
-
-    with pytest.raises(DomainWriteViolationError):
-        store.report_success(
-            space_id=space_id,
-            job_id=job_id,
-            generation=generation,
-            domain_write=commit_escape,
-        )
-
-    def owned_table_escape(handle: DomainWriteHandle) -> None:
-        handle.execute(text("UPDATE wiki_jobs SET lease_generation = lease_generation + 7"))
-
-    with pytest.raises(DomainWriteViolationError):
-        store.report_success(
-            space_id=space_id,
-            job_id=job_id,
-            generation=generation,
-            domain_write=owned_table_escape,
-        )
-
+    # ① P1 自有表：在执行任何领域语句之前 typed 拒绝，整个完成事务回滚。
+    for owned in sorted(OWNED_TABLES):
+        with pytest.raises(DomainWriteViolationError):
+            store.report_success(
+                space_id=space_id,
+                job_id=job_id,
+                generation=generation,
+                domain_writes=(
+                    DomainWriteSpec(table=domain_table, values={"job_id": job_id}),
+                    DomainWriteSpec(table=owned, values={"space_id": space_id}),
+                ),
+            )
     with postgres_runtime.engine.begin() as connection:
-        domain_rows = connection.exec_driver_sql(
+        leaked = connection.exec_driver_sql(
             f'SELECT count(*) FROM "{domain_table}"'
         ).scalar_one()
-    assert domain_rows == 0
+    assert leaked == 0, "被拒绝的完成事务不得留下领域行"
     current = store.get_job(space_id=space_id, job_id=job_id)
     assert current.state is JobState.RUNNING
     assert current.lease_generation == generation
     assert _outbox_count(postgres_runtime, space_id) == 0
 
-    # 接受侧：诚实领域写仍原子提交。
-    def honest(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text(f'INSERT INTO "{domain_table}" (job_id) VALUES (:job_id)'), {"job_id": job_id}
-        )
-
+    # ②③ 同前缀的其他域表不被误拦；含事务控制关键字的字面量同样不被误拦。
     done = store.report_success(
         space_id=space_id,
         job_id=job_id,
         generation=generation,
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-        domain_write=honest,
+        domain_writes=(
+            DomainWriteSpec(table=domain_table, values={"job_id": job_id}),
+            DomainWriteSpec(
+                table=foreign_wiki_table,
+                values={"id": job_id, "note": "do not touch; call center; period begin"},
+            ),
+        ),
     )
     assert done.state is JobState.SUCCEEDED
+    with postgres_runtime.engine.begin() as connection:
+        assert (
+            connection.exec_driver_sql(f'SELECT count(*) FROM "{domain_table}"').scalar_one() == 1
+        )
+        assert (
+            connection.exec_driver_sql(
+                f'SELECT count(*) FROM "{foreign_wiki_table}"'
+            ).scalar_one()
+            == 1
+        )
     assert _outbox_count(postgres_runtime, space_id) == 1
 
 

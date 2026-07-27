@@ -256,16 +256,33 @@ JUnit `skipped=0`；默认 deterministic lane 如实记 NOT RUN。新增 PG 节�
   `test_q11_positive_lease_above_heartbeat_is_still_accepted`。
   12 处 `lease_seconds=0.0` 过期脚手架全部迁移为 `force_expire`/`_force_expire`
   （只回拨 lease，不改 state/attempt/generation）。
-- [x] T19 RED：领域写句柄的事务身份不变式 + 禁写 `wiki_` 自有表（清单第 21
-  项，含诚实领域写接受侧）。GREEN：**两道独立防线**——句柄 `execute` 的语句
-  面校验（拒绝事务控制语句与 `wiki_` 目标表；Core 语句走元数据、`text()` 走
-  保守标识符扫描）+ 完成事务在回调返回后校验 SAVEPOINT/外层事务仍 active。
-  安全冗余是特性，不因已有语句面校验而删掉提交点校验。新 typed
-  `DomainWriteViolationError`。节点：
-  `test_q19_domain_write_cannot_end_the_completion_transaction`、
-  `test_q19_domain_write_cannot_touch_p1_owned_tables`（4 参数化）、
-  `test_q19_honest_domain_write_still_commits_atomically`、
-  PG `test_q19_domain_write_cannot_escape_its_channel_on_postgres`。
+- [x] ~~T19 第一版：句柄语句面 + 提交点两道防线~~ —— **被第二轮评审否决，见
+  T29。** 保留记录以免后续实现重走此路：该版让可执行回调在完成事务内运行，
+  再试图在进程内沙箱它（拒绝事务控制语句 + 扫描 `wiki_` 目标表 + 校验
+  SAVEPOINT/外层事务仍 active）。评审以**公共属性一行**击破：
+  `handle.execute(...).connection.execute(text("COMMIT"))` ⇒ 领域行落库、
+  任务仍 `running`、outbox 空、抛裸 `OperationalError`。同时 SQL 文本扫描
+  **误杀合法负载**（P6a 的 `wiki_page_revisions`、P2b 的 `wiki_releases`、
+  含 `do`/`begin`/`call` 的字符串字面量）——既可绕过又会误杀，是"半个护栏
+  比没有更危险"。
+- [x] **T29 RED：完成事务收数据不收代码**（边界替换，业务方 2026-07-27 裁决
+  取方案 A）。GREEN：新增 frozen `DomainWriteSpec(table, values)`；
+  `report_success` 的 `domain_write: Callable[[DomainWriteHandle], None]` 改为
+  `domain_writes: Sequence[DomainWriteSpec]`，由 `_execute_domain_writes` 在
+  完成事务内执行；**删除 `DomainWriteHandle` 整个类、`_owned_tables_touched`、
+  `_controls_transaction` 与两个正则**。目标表校验改为在**数据**上比对
+  `OWNED_TABLES = {wiki_jobs, wiki_outbox_events}`（精确枚举，不按前缀封杀）。
+  调用方不再持有任何 Session/Connection/语句结果 ⇒ N1 攻击路径在类型层面
+  不可构造，N2/N3 误杀同时消失。节点：
+  `test_q19a_completion_entry_takes_data_not_code`（签名/类型/导出面断言）、
+  `test_q19b_domain_write_cannot_target_p1_owned_tables`（2 参数化）、
+  `test_q19c_other_domains_wiki_prefixed_tables_are_not_blocked`、
+  `test_q19d_declared_domain_writes_commit_atomically`、
+  PG `test_q19_declarative_domain_write_channel_on_postgres`。
+  **存量场景保留而非删除**：`test_i8_*` 的被测对象（句柄属性面）已不存在，
+  迁移为 `test_i8_domain_write_cannot_leave_partial_rows_on_failure`，断言 I8
+  真正要保住的"领域写失败不留半写"。
+  **已声明的功能收窄**：声明式通道不支持完成事务内先读后写（规格已明文）。
 - [x] T20 RED：事件只能在完成事务内追加（清单第 22 项）。GREEN：
   `append_job_event` 从 `insurance_harness.jobs` 公共出口移除（降级为内部
   函数，测试直接引 `jobs.outbox` 验证内部合同）。节点：

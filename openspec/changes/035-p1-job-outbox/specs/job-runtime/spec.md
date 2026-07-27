@@ -200,18 +200,32 @@ P1.1 状态机与 P1.3 fencing 共同保证）。在 at-least-once 重投/重放
 领域写、零 outbox 追加。系统 SHALL NOT 宣称 exactly-once execution；对外
 合同是 at-least-once 执行 + 幂等提交。
 
-**领域写通道合同（边界冻结）**：完成事务向调用方暴露的领域写句柄 SHALL
-被**语句面**约束，不仅是属性面。具体地：句柄 SHALL NOT 能结束、提交或
-另起完成事务——存储层 SHALL 在回调返回后校验完成事务与其保存点仍是进入
-回调前的同一个，不成立即 typed 拒绝并回滚整个完成事务；句柄 SHALL NOT 能
-写入 P1 自有表（`wiki_jobs`、`wiki_outbox_events`），命中即 typed 拒绝。
-仅隐藏 `commit/rollback/close` 属性 SHALL NOT 视为满足本条：一条 raw
-`COMMIT`（或任何封装了提交语义的过程调用）即可使领域行落库而任务仍
-`running`、outbox 为空，其后的过期回收与重放将产生**第二份领域结果**；同
-一通道还可复活其他 Space 的终态行、伪造 `lease_generation` 并插入越域
-outbox 行，同时击穿 P1.1 终态无出边与 P1.8 跨 Space fail closed。按 P1.1
-"转换合法性 SHALL NOT 依赖调用方自律"，该约束 SHALL 由存储层执法，SHALL
-NOT 仅写在文档合同里。
+**领域写通道合同（边界冻结，第二轮修订）**：完成事务 SHALL **收数据，不收
+代码**。存储层 SHALL NOT 在完成事务内执行调用方提供的可执行回调，也 SHALL
+NOT 向调用方交出任何数据库句柄（Session、Connection、Engine 或语句执行
+结果）。领域写 SHALL 以**声明式规格**提交——目标表标识 + 列值，或由存储层
+自行执行的已构造语句对象——并由存储层在完成事务内执行。
+
+理由（不得被后续实现重新裁决）：只要有第三方代码在完成事务内运行并持有任一
+数据库句柄，它就能提交外层事务，使领域行落库而任务仍 `running`、outbox 为
+空，其后的过期回收与重放将产生**第二份领域结果**；同一通道还可复活其他
+Space 的终态行、伪造 `lease_generation` 并插入越域 outbox 行，同时击穿 P1.1
+终态无出边与 P1.8 跨 Space fail closed。**进程内沙箱化一个可执行回调是不可
+完成的**：句柄一层层可达（Session → Connection → 语句结果 → …），隐藏属性
+或扫描 SQL 文本只能把泄漏点推深一层。按 P1.1"转换合法性 SHALL NOT 依赖
+调用方自律"，本约束 SHALL 由**接口形态**保证——非法状态在类型层面无法构造，
+而不是先构造再检测。
+
+目标表校验 SHALL 在**数据**上进行（比对表标识），SHALL NOT 靠扫描 SQL 文本
+推断：后者既可被绕过，又会误杀合法负载（含 `wiki_` 前缀的其他域自有表，以及
+恰好包含事务控制关键字的字符串字面量）。P1 自有表 SHALL 精确枚举为
+`wiki_jobs` 与 `wiki_outbox_events` 两张，命中即 typed 拒绝；其他 `wiki_`
+前缀表属别的交付项所有，SHALL NOT 被本校验拦下。
+
+已知功能边界（显式声明，非缺陷）：声明式通道不支持"完成事务内先读后写"
+（如先 SELECT 中间值再据以写入）。需要该形态的领域逻辑 SHALL 把读与计算移到
+完成事务之外，或由后续 PR 以显式合同新开入口，SHALL NOT 通过恢复可执行回调
+绕过本条。
 
 幂等键 SHALL 由消费方按显式批次/重试裁决铸造，键 SHALL 编码该次批次/裁决
 身份：对同一逻辑工作的新一次授权处理 SHALL 使用新幂等键创建新任务行，
@@ -226,20 +240,26 @@ SHALL 保持不变；P1 SHALL NOT 提供对终态行的 replay/重新处理入�
 - **THEN** 表中恰好存在一行任务，后续 enqueue 均返回 typed dedup 结果并
   指向同一任务
 
-#### Scenario: 领域写句柄不能结束完成事务
+#### Scenario: 完成事务不接受可执行回调，也不交出数据库句柄
 
-- **WHEN** 领域写回调内执行 raw `COMMIT`（或任何提交了外层事务的语句），
-  随后返回
-- **THEN** 存储层检测到完成事务身份已变并 typed 拒绝，领域行与 outbox 行
-  都不留下，任务不被标记 `succeeded`；SHALL NOT 出现"领域行已提交而任务
-  仍 `running`"从而在重放后产生第二份领域结果
+- **WHEN** 审阅完成事务入口的公共签名与其领域写参数类型
+- **THEN** 该参数 SHALL 是声明式规格的序列，SHALL NOT 是可调用对象；存储层
+  SHALL NOT 存在向调用方传递 Session/Connection/Engine 或语句执行结果的
+  公共路径。"回调内执行 raw `COMMIT` 使领域行落库而任务仍 `running`"这一
+  状态 SHALL 在接口层面无法构造，而不是先构造再由校验拦截
 
-#### Scenario: 领域写句柄不能触碰 P1 自有表或其他 Space
+#### Scenario: 领域写不能触碰 P1 自有表
 
-- **WHEN** 领域写回调尝试 `UPDATE wiki_jobs`（含其他 Space 的终态行或
-  `lease_generation`）或 `INSERT wiki_outbox_events`
-- **THEN** 该语句被 typed 拒绝、完成事务回滚；目标行零字段变更，不产生
-  越域 outbox 行
+- **WHEN** 领域写规格的目标表是 `wiki_jobs` 或 `wiki_outbox_events`
+- **THEN** 存储层在执行任何领域语句之前 typed 拒绝并回滚完成事务；任务行与
+  outbox 零变更，不产生越域行
+
+#### Scenario: 其他域的 wiki_ 前缀表不被误拦
+
+- **WHEN** 领域写规格的目标表带 `wiki_` 前缀但不属 P1（如其他交付项拥有的
+  页面/Release 表），或其列值中的字符串字面量恰好含事务控制关键字
+- **THEN** 该领域写 SHALL 正常执行——校验只比对表标识本身，SHALL NOT 因
+  前缀相同或文本相似而拒绝合法负载
 
 #### Scenario: 重复执行不产生第二份领域结果
 

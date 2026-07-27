@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from insurance_harness.db.base import Base, make_engine, make_session_factory
 from insurance_harness.jobs import (
     ClaimedJob,
-    DomainWriteHandle,
+    DomainWriteSpec,
     DomainWriteViolationError,
     EnqueueResult,
     ErrorClass,
@@ -759,11 +759,8 @@ def test_p1_6_injected_interrupt_before_commit_leaves_no_half_writes(
     store = make_store(factory)
     running = _running_job(store)
 
-    def domain_write(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text("INSERT INTO domain_results_035 (job_id) VALUES (:job_id)"),
-            {"job_id": running.id},
-        )
+    # 声明式领域写（P1.5，D-2026-07-27-16）：存储层自己执行，调用方无句柄。
+    domain_writes = (DomainWriteSpec(table="domain_results_035", values={"job_id": running.id}),)
 
     def interrupt(_session: Session) -> None:
         raise RuntimeError("inject-commit-crash-035")
@@ -776,7 +773,7 @@ def test_p1_6_injected_interrupt_before_commit_leaves_no_half_writes(
                 job_id=running.id,
                 generation=running.lease_generation,
                 events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-                domain_write=domain_write,
+                domain_writes=domain_writes,
             )
     finally:
         sqlalchemy_event.remove(factory, "before_commit", interrupt)
@@ -792,7 +789,7 @@ def test_p1_6_injected_interrupt_before_commit_leaves_no_half_writes(
         job_id=running.id,
         generation=running.lease_generation,
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-        domain_write=domain_write,
+        domain_writes=domain_writes,
     )
     assert replay.state is JobState.SUCCEEDED
     with factory() as session:
@@ -874,37 +871,44 @@ def test_m15_report_success_clears_error_residue_from_earlier_attempts(
     assert done.error_summary is None
 
 
-def test_i8_domain_write_handle_cannot_commit_or_touch_session_lifecycle(
+def test_i8_domain_write_cannot_leave_partial_rows_on_failure(
     factory: SessionFactory, job_engine: Engine
 ) -> None:
+    """I8 的场景保留，被测对象随边界替换而变（D-2026-07-27-16）。
+
+    原节点断言 `DomainWriteHandle` 不暴露 `commit/rollback/close`。该句柄已
+    删除——第二轮评审证明属性面封锁挡不住任何一层可达的 DB 句柄，通道改为
+    声明式（完成事务收数据不收代码，接口层面无句柄可泄漏；见
+    `test_q19a_completion_entry_takes_data_not_code`）。I8 真正要保住的性质
+    是"领域写失败时不留半写"，在此保留并断言：完成事务中途失败后，声明式
+    领域写落下的行必须随整个事务回滚，任务留在 `running` 可重放。
+    """
     with job_engine.begin() as connection:
         connection.execute(text("CREATE TABLE domain_guard_035 (job_id TEXT PRIMARY KEY)"))
     store = make_store(factory)
     running = _running_job(store)
-    observed: dict[str, object] = {}
 
-    def domain_write(handle: DomainWriteHandle) -> None:
-        observed["has_commit"] = hasattr(handle, "commit")
-        observed["has_rollback"] = hasattr(handle, "rollback")
-        observed["has_close"] = hasattr(handle, "close")
-        handle.execute(
-            text("INSERT INTO domain_guard_035 (job_id) VALUES (:job_id)"),
-            {"job_id": running.id},
-        )
+    def interrupt(_session: Session) -> None:
         raise RuntimeError("crash after domain write")
 
-    with pytest.raises(RuntimeError, match="crash after domain write"):
-        store.report_success(
-            space_id="space-a",
-            job_id=running.id,
-            generation=running.lease_generation,
-            events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-            domain_write=domain_write,
-        )
+    sqlalchemy_event.listen(factory, "before_commit", interrupt)
+    try:
+        with pytest.raises(RuntimeError, match="crash after domain write"):
+            store.report_success(
+                space_id="space-a",
+                job_id=running.id,
+                generation=running.lease_generation,
+                events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
+                domain_writes=(
+                    DomainWriteSpec(table="domain_guard_035", values={"job_id": running.id}),
+                ),
+            )
+    finally:
+        sqlalchemy_event.remove(factory, "before_commit", interrupt)
 
-    assert observed == {"has_commit": False, "has_rollback": False, "has_close": False}
     with factory() as session:
         assert session.scalar(text("SELECT count(*) FROM domain_guard_035")) == 0
+    assert _outbox_rows(factory) == []
     assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
 
 
@@ -1573,101 +1577,117 @@ def _running_for_domain_write(store: JobStore, key: str = "job-1") -> JobSnapsho
     return store.start(space_id="space-a", job_id=claimed.id, generation=claimed.lease_generation)
 
 
-def test_q19_domain_write_cannot_end_the_completion_transaction(
-    factory: SessionFactory, job_engine: Engine
-) -> None:
-    """P1.5 领域写通道：回调提交完成事务 ⇒ typed 拒绝 + 整体回滚。
+def test_q19a_completion_entry_takes_data_not_code(factory: SessionFactory) -> None:
+    """P1.5（第二轮修订）：完成事务不接受可执行回调,也不交出数据库句柄。
 
-    修复前：一条 raw COMMIT 使领域行落库而任务仍 running、outbox 为空，
-    随后过期回收重放产生第二份领域结果。
+    这是**接口层面**的断言,不是"先构造攻击再拦截":只要有第三方代码在完成
+    事务内运行并持有任一 DB 句柄,它就能提交外层事务(Session → Connection →
+    语句结果 → …逐层可达),隐藏属性或扫描 SQL 文本只能把泄漏点推深一层。
     """
-    _domain_table(job_engine)
-    store = make_store(factory)
-    running = _running_for_domain_write(store)
+    import inspect
 
-    def escaping_write(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text("INSERT INTO demo_domain (job_id) VALUES (:job_id)"), {"job_id": running.id}
-        )
-        handle.execute(text("COMMIT"))
+    import insurance_harness.jobs as jobs_package
 
-    with pytest.raises(DomainWriteViolationError):
-        store.report_success(
-            space_id="space-a",
-            job_id=running.id,
-            generation=running.lease_generation,
-            events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-            domain_write=escaping_write,
-        )
+    signature = inspect.signature(JobStore.report_success)
+    assert "domain_write" not in signature.parameters, "可执行回调入口必须不存在"
+    assert "domain_writes" in signature.parameters
+    annotation = str(signature.parameters["domain_writes"].annotation)
+    assert "Callable" not in annotation, f"领域写参数不得是可调用对象: {annotation}"
+    assert "DomainWriteSpec" in annotation
 
-    with factory() as session:
-        domain_rows = session.execute(text("SELECT count(*) FROM demo_domain")).scalar_one()
-        outbox_rows = session.scalar(select(func.count()).select_from(WikiOutboxEvent))
-    assert domain_rows == 0, "领域行不得在完成事务被拒后残留"
-    assert outbox_rows == 0
-    assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
+    # 交出句柄的旧类型必须从公共出口消失。
+    assert "DomainWriteHandle" not in jobs_package.__all__
+    assert not hasattr(jobs_package, "DomainWriteHandle")
+
+    # 声明式规格不得携带任何可执行/句柄字段。
+    spec = DomainWriteSpec(table="demo_domain", values={"job_id": "j1"})
+    for name in dir(spec):
+        if name.startswith("_"):
+            continue
+        assert not callable(getattr(spec, name)), f"DomainWriteSpec.{name} 不应可调用"
 
 
-@pytest.mark.parametrize(
-    "statement",
-    [
-        "UPDATE wiki_jobs SET lease_generation = lease_generation + 7",
-        "UPDATE wiki_jobs SET state = 'queued'",
-        "INSERT INTO wiki_outbox_events (event_id, space_id, event_type, payload, created_at, "
-        "dispatch_attempts) VALUES ('forged', 'space-z', 'forged.event', '{}', "
-        "'2026-01-01 00:00:00+00:00', 0)",
-        "DELETE FROM wiki_jobs",
-    ],
-)
-def test_q19_domain_write_cannot_touch_p1_owned_tables(
-    factory: SessionFactory, job_engine: Engine, statement: str
+@pytest.mark.parametrize("owned_table", ["wiki_jobs", "wiki_outbox_events"])
+def test_q19b_domain_write_cannot_target_p1_owned_tables(
+    factory: SessionFactory, job_engine: Engine, owned_table: str
 ) -> None:
-    """P1 表所有权：句柄触碰 `wiki_` 自有表一律 typed 拒绝并整体回滚。"""
+    """P1.5：目标表是 P1 自有表时,在执行任何领域语句之前 typed 拒绝。"""
     _domain_table(job_engine)
     store = make_store(factory)
-    running = _running_for_domain_write(store, key=f"job-{abs(hash(statement)) % 997}")
+    running = _running_for_domain_write(store, key=f"owned-{owned_table}")
     victim = store.enqueue(
         space_id="space-z", job_type="compile", idempotency_key="victim"
     ).job
 
-    def trespassing_write(handle: DomainWriteHandle) -> None:
-        handle.execute(text(statement))
-
     with pytest.raises(DomainWriteViolationError):
         store.report_success(
             space_id="space-a",
             job_id=running.id,
             generation=running.lease_generation,
-            domain_write=trespassing_write,
+            domain_writes=(
+                DomainWriteSpec(table="demo_domain", values={"job_id": running.id}),
+                DomainWriteSpec(table=owned_table, values={"space_id": "space-z"}),
+            ),
         )
 
     untouched = store.get_job(space_id="space-z", job_id=victim.id)
     assert untouched.state is JobState.QUEUED
     assert untouched.lease_generation == 0
     with factory() as session:
+        assert session.execute(text("SELECT count(*) FROM demo_domain")).scalar_one() == 0
         assert int(session.scalar(select(func.count()).select_from(WikiOutboxEvent)) or 0) == 0
     assert store.get_job(space_id="space-a", job_id=running.id).state is JobState.RUNNING
 
 
-def test_q19_honest_domain_write_still_commits_atomically(
+def test_q19c_other_domains_wiki_prefixed_tables_are_not_blocked(
     factory: SessionFactory, job_engine: Engine
 ) -> None:
-    """接受侧：诚实领域写（只写自己的表）仍与状态、outbox 同事务原子提交。"""
+    """P1.5：`wiki_` 前缀但非 P1 自有的表(别的交付项所有)不得被误拦。
+
+    旧的 SQL 文本扫描把整个 `wiki_` 前缀封死,连 P6a 的 `wiki_page_revisions`
+    与 P2b 的 `wiki_releases` 都写不了;校验改为比对表标识后该误杀消失。
+    """
+    with job_engine.begin() as connection:
+        connection.execute(
+            text("CREATE TABLE IF NOT EXISTS wiki_page_revisions (id TEXT, note TEXT)")
+        )
+    store = make_store(factory)
+    running = _running_for_domain_write(store, key="foreign-wiki")
+
+    done = store.report_success(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        domain_writes=(
+            # 列值里的字面量恰好含事务控制关键字,同样不得被误拦。
+            DomainWriteSpec(
+                table="wiki_page_revisions",
+                values={"id": running.id, "note": "do not touch; call center; period begin"},
+            ),
+        ),
+    )
+
+    assert done.state is JobState.SUCCEEDED
+    with factory() as session:
+        assert (
+            session.execute(text("SELECT count(*) FROM wiki_page_revisions")).scalar_one() == 1
+        )
+
+
+def test_q19d_declared_domain_writes_commit_atomically(
+    factory: SessionFactory, job_engine: Engine
+) -> None:
+    """接受侧：声明式领域写与状态、outbox 同事务原子提交。"""
     _domain_table(job_engine)
     store = make_store(factory)
     running = _running_for_domain_write(store)
-
-    def honest_write(handle: DomainWriteHandle) -> None:
-        handle.execute(
-            text("INSERT INTO demo_domain (job_id) VALUES (:job_id)"), {"job_id": running.id}
-        )
 
     done = store.report_success(
         space_id="space-a",
         job_id=running.id,
         generation=running.lease_generation,
         events=(OutboxEventDraft(event_type="job.succeeded", payload={}),),
-        domain_write=honest_write,
+        domain_writes=(DomainWriteSpec(table="demo_domain", values={"job_id": running.id}),),
     )
 
     assert done.state is JobState.SUCCEEDED

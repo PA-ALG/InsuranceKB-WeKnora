@@ -33,6 +33,17 @@
 > 035 spec 344 → 536 行（8 条边界合同，纯澄清、不新增状态/异常分支），
 > 裁决记入 23 号 §8 `D-2026-07-27-16`，行数触发线豁免记入 `D-2026-07-27-17`。
 > 修复见 tasks T14–T27，验收清单由 14 项扩为 **28 项**。
+>
+> **2026-07-27 第二轮双评审 → P1.5 边界替换**：修复后重新提交双独立评审。
+> lease 过期 / 写权威 / 限额会计域经 live 验证**真正闭合**（Spec 侧用探针反转
+> 了自己上轮 F1 的原始场景），13 条上轮 findings 中 12 条 CLOSED。但
+> **P1.5 领域写通道判定停线**：第一版修法（可执行回调 + 语句面校验 + 提交点
+> 校验）被公共属性一行击破——`handle.execute(...).connection.execute(COMMIT)`
+> ⇒ 领域行落库、任务仍 `running`、outbox 空，重放产生第二份领域结果；同时
+> SQL 文本扫描误杀 P6a/P2b 自己的 `wiki_` 表与含关键字的字符串字面量。
+> 既可绕过又会误杀 ⇒ 方法错误而非补得不够。业务方裁决取**方案 A：完成事务
+> 收数据不收代码**（见 tasks T29）。规格 P1.5 条款随之修订（536 → 556 行），
+> 四个 Scenario 重写为"接口层面不可构造 + 前缀不误拦"。
 
 ## 双评审 finding 闭环（2026-07-27）
 
@@ -145,8 +156,9 @@ enqueue（消费方铸造幂等键，DB 唯一去重）
           + reclaim_expired_leases_all_spaces() 显式跨 Space 入口
 状态机    ensure_transition(storage_layer=False) 使 STORAGE_ONLY_TRANSITIONS
           成为可执行护栏；report_failure 要求源状态 running
-领域写    DomainWriteHandle 语句面校验（事务控制语句 + wiki_ 自有表）
-          + 完成事务提交点校验 SAVEPOINT/外层事务身份（两道独立防线）
+领域写    完成事务收数据不收代码：DomainWriteSpec(table, values) 由存储层执行
+          目标表在数据上比对 OWNED_TABLES 精确两张（不按 wiki_ 前缀封杀）
+          调用方不持有任何 DB 句柄 ⇒ 提交外层事务在接口层面不可构造
 事件边界  append_job_event 收回公共出口（只经 report_success 追加）
 投递      next_dispatch_at 持久退避 + 配置化 dispatch_backoff_seconds
           取代 max_dispatch_attempts 硬上限与永久 park
@@ -271,12 +283,19 @@ PG 节点合计 **30 个**（22 → 30），全部在 `test_ci_lanes_022.py` 精
   的半成品，正是 §16.2 禁止的为数字拆坏原子不变量。豁免仅限本窗口，不构成
   后续 Pn 先例。边界冻结的修复使行数进一步增加（新增两道防线、退避、指标与
   两个列），仍在同一豁免范围内。
-- `DomainWriteHandle` 的越权残余**已关闭**（原为"仅文档合同约束"）：现由
-  语句面校验 + 完成事务提交点身份校验两道防线执法（P1.5 领域写通道合同）。
-  残余边界改为：语句面对 raw SQL 采用**保守标识符扫描**，因此含字面串
-  `wiki_` 的合法领域语句会被误报为越界——这是刻意选择的方向（宁可误报不
-  漏报，命名冲突可由消费方改用 Core 语句或改名规避）。DB 权限级沙箱仍归
-  P3 principal 模型。
+- 领域写通道的越权问题**由边界替换关闭，不是由检测关闭**（见 tasks T29）。
+  我在第一版曾把它报告为"已关闭（两道防线）"，**该结论被第二轮评审用 live
+  证据推翻**，此处如实更正：进程内沙箱化一个持有 DB 句柄的可执行回调是不可
+  完成的。现在调用方交 `DomainWriteSpec`、不持任何句柄，"提交外层事务"在
+  接口层面无从下手。DB 权限级隔离仍归 P3 principal 模型（属纵深防御的下一层，
+  不是本条的前提）。
+- **声明式通道的已声明功能收窄**：不支持完成事务内先读后写（先 SELECT 中间值
+  再据以写入）。当前全部用法是单条 INSERT，不受影响；需要该形态的领域逻辑
+  须把读与计算移到完成事务之外，或由后续 PR 以显式合同新开入口，**不得恢复
+  可执行回调**（规格已明文）。
+- `_execute_domain_writes` 每次调用按表名 `autoload_with` 反射表结构，未做
+  缓存：单次完成事务内的领域写数量很小（当前用法 1–2 条），但高频路径下值得
+  由消费方 PR 评估是否引入 `MetaData` 复用。列为 BACKLOG，不影响正确性。
 - SQLite 仅 deterministic 测试用：`claim` 的 advisory 串行化与
   `FOR UPDATE SKIP LOCKED` 在 SQLite 为 no-op（单写者），并发证据只以
   PG lane 为准（P1.12 明文）。

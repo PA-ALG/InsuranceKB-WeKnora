@@ -278,6 +278,24 @@ class ReclaimReport:
 
 
 @dataclass(frozen=True, slots=True)
+class DomainWriteSpec:
+    """完成事务内的**声明式**领域写（P1.5 领域写通道合同，D-2026-07-27-16）。
+
+    完成事务收数据、不收代码：调用方交目标表标识 + 列值，由存储层在完成事务
+    内执行。这样调用方从不持有 Session/Connection/语句结果，"回调提交外层
+    事务使领域行落库而任务仍 running"这一状态在**接口层面**无法构造——不是
+    先构造再检测。进程内沙箱化可执行回调是做不到的：句柄逐层可达，隐藏属性
+    或扫描 SQL 文本只会把泄漏点推深一层（第二轮评审 N1 的 live 证据）。
+
+    已知边界：不支持"完成事务内先读后写"。需要该形态的领域逻辑把读与计算移到
+    完成事务之外，或由后续 PR 以显式合同新开入口，不得恢复可执行回调。
+    """
+
+    table: str
+    values: Mapping[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class OutboxEventDraft:
     """完成事务内追加的事件草稿；event_id 缺省由存储层铸造（P1.6）。"""
 

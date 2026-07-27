@@ -77,7 +77,7 @@ JOB_STORE_POSTGRES_NODES = {
         "test_q15_expired_lease_holder_has_no_write_authority_on_postgres",
         "test_q16_stalled_expired_leases_never_exceed_limits_on_postgres",
         "test_q17_unenumerated_space_converges_via_global_reclaim_on_postgres",
-        "test_q19_domain_write_cannot_escape_its_channel_on_postgres",
+        "test_q19_declarative_domain_write_channel_on_postgres",
         "test_q25_delivered_but_unmarked_crash_converges_on_postgres",
     )
 }
