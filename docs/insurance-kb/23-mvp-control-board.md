@@ -1,25 +1,34 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
-> 当前唯一状态口径：D0 governance rewrite 正在实施。用户已于 2026-07-26
-> 书面批准生产架构设计；本控制板不把 planned 项写成已交付。
+> 本次治理收口基线/事实截止点（截至 2026-07-27）：
+> `main=b974bb90965eaaaf5404fdaf786778432e51cc77`；本候选合入后以实际合并提交
+> 作为新的 main，不预填未知 SHA。
+> 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
+> `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
+>
+> PR #35–#49 中已合入 #35/#36/#37/#38/#39/#40/#41/#43/#45/#46/#47/#48/#49。
+> 该编号区间的开放项只有 #42（`OPEN / Draft / DIRTY / CONFLICTING`）与
+> #44（Ready，但 `DIRTY`，未合入）。
 
 ## 1. 当前状态
 
 | 项目 | 状态 | 当前允许动作 |
 |---|---|---|
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
-| 知识编译层修正案（Amendment 1） | 🚧 本 PR 落地（业务方 2026-07-27 批准） | 见修正案 §2–§7 |
+| 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 🚧 `IN PROGRESS`（worktree `ikb-p1-impl`，迁移占号 **0015**） | TDD 实现 → 双独立评审 → PR |
-| W0 Revision Contract Spike | ✅ `EXECUTED`（2026-07-27，OpenSpec 037）：**两份合同均 `insufficient` → 条件 W1 正式触发**；证据与 W1 API 草案在 spike PR | 评审合入证据 PR；P4a/P4c 保持 blocked 至 W1 |
-| W1 WeKnora Revision Manifest | 🚧 `TRIGGERED / SPEC DRAFTING`（Go patch，预算内 W1 项；~600 行估计） | OpenSpec 起草 → 双独立评审 → Go 实现 |
-| CAP0 Capacity Contract | 🚧 `IN PROGRESS`（OpenSpec 036；含 stock_backfill 档位与 declared/measured 语义） | TDD 实现中 |
-| G0-probe 弱模型探针 | 🚧 `IN PROGRESS`（校准专用，非验收证据） | 出数后校准 G0a 阈值 |
-| 038 G0a 金标资产化内核 | 🚧 规格 ✅ 冻结（PR #42 draft）；实现 `NOT STARTED` | RED → GREEN → 双独立评审 → PR |
-| Schema 切片 + 词表 seed 草稿 | 🚧 `IN PROGRESS`（Golden Product 医疗险；专家收口于 G0a） | 草稿 → 专家评审 |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）；实现 PR #44 `OPEN / Ready / DIRTY`，未合入 | 重放最新 main → 新 exact review；迁移占号 **0015** |
+| W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
+| W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
+| CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
+| P3 API/Worker Shell | 规格 ✅ `MERGED`（PR #48，OpenSpec 039）；实现 `NOT STARTED` | 等 P1 实现合入 |
+| G0-probe 弱模型探针 | ✅ `COMPLETED`（PR #45 证据；校准专用） | 只校准 G0a，不构成 G0a/G0b 验收证据 |
+| Schema 切片 + 词表 seed | ⚠️ `DRAFT / NON-AUTHORITY`（PR #43 已合入） | 等领域专家与后续 Contract Card 正式冻结 |
+| 金标标注 v0 | ⚠️ `DRAFT / NON-ACCEPTANCE-AUTHORITY`（PR #49 已合入） | 等 G0a 正式 custody、协议和验收冻结 |
+| G0a 金标资产化内核 | ⛔ PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`：仍使用旧 `038-g0a-*` 路径，与已合入 W1/038 冲突；注册表唯一目标为 040 | rename/rebase 后重新 exact review；不可合入、不可称 spec frozen |
 | Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
-| Milestone B | `PLANNED / NOT IMPLEMENTED` | 等 Semantic Core |
-| Milestone C | `PLANNED / NOT IMPLEMENTED` | 等 Governed Active Release |
+| Milestone B | `NOT IMPLEMENTED` | 等 Semantic Core |
+| Milestone C | `NOT IMPLEMENTED` | 等 Governed Active Release |
 
 启动顺序：
 
@@ -42,25 +51,36 @@ then Milestone A → Milestone B → Milestone C
 - 旧路线只保留历史审计价值，不再提供实现授权；
 - 文档门禁、独立复审和 exact tree custody 完整。
 
-## 3. 下一批任务卡
+## 3. 当前推进卡
 
-### C0
+### 已完成地基
 
-- 单一职责：CanonicalEnvelopeV1、expected bytes/hash vectors、Python reference。
-- 不包含：领域表、Candidate/Release、Go patch。
-- 退出：跨语言规范、非法输入 fail closed、独立 Spec/Quality C/I=0。
+- C0：CanonicalEnvelopeV1 已由 PR #36 实现并合入。
+- CAP0：CapacityProfile 合同已由 PR #46 实现并合入；launch 问卷仍待业务确认。
+- W0：PR #40 已证明两份合同均 `insufficient`，其退出结果是触发 W1，不是
+  WeKnora revision 能力已满足。
 
-### W0
+### W1
 
-- 单一职责：只读证明 WeKnora Source lifecycle 与 revision manifest 合同。
-- 不包含：功能 patch、共享数据库、补偿平台。
-- 退出：现有 API 充分，或以可复现证据触发条件 W1。
+- OpenSpec 038 规格已由 PR #41 合入；Go 实现尚未开始。
+- P4a/P4c 在 W1 实现合入并通过合同门禁前保持 blocked。
+- PR #42（`OPEN / Draft / DIRTY / CONFLICTING / BLOCKED`）的旧
+  `038-g0a-*` 路径不能复用或覆盖 W1/038，也不可称 spec frozen。
 
-### CAP0
+### P1 → P3
 
-- 单一职责：CapacityProfile、launch/contracted_forecast/stress_breakpoint。
-- 前置：C0。
-- 不包含：压测平台、分片或第二数据库。
+- P1 规格已由 PR #38 合入；实现 PR #44 当前 `DIRTY`，必须在最新 main
+  重放并接受新的 exact-head 审查。
+- P3 规格已由 PR #48 合入；实现依赖 P1，不得提前复制 JobStore/Outbox。
+
+### human_batch-first
+
+- 机器审核结果可以成为批量决策输入；生产发布动作是授权人对 **exact
+  CandidateRelease** 的一次性批准或拒绝，不是逐页审批。
+- 完全无人值守 `machine_auto` 属 `P15[auto-profile]`，依赖 G0b，并要求
+  显式、版本化的 policy binding。
+- superadmin 不得绕过完整性、Space ACL、Provenance/security 或
+  PostgreSQL CAS/epoch。
 
 ## 4. Milestone Gate
 
@@ -197,11 +217,11 @@ digest 仅 MD5；chunk 无 attempt 字段、无服务端 manifest digest、
 预算内），P4a/P4c 保持 blocked 至 W1 合入；W1 API 草案见 037
 `artifacts/w1-api-draft.md`。
 
-### D-2026-07-27-12 · 待业务方动作
+### D-2026-07-27-12 · 业务方动作状态
 
-① 关闭 superseded DRAFT PR #26/#28/#33（会话权限受限）；② 确认是否存在
-Golden Product 真实第二版本资料（决定 G0v 可行性）；③ CAP0 八项 launch
-容量问卷（036 交付后转发业务方填报）。
+① superseded PR #26/#28/#33 已关闭，完成；② Golden Product 真实第二版本
+资料已取得，见 D-2026-07-27-14，完成；③ CAP0 八项 launch 容量问卷仍待
+业务确认，未完成。
 
 ### D-2026-07-27-13 · G0-probe 结果与阈值校准（校准专用，非验收证据）
 
@@ -241,19 +261,19 @@ git commit/push"在本指示范围内由业务方授权覆盖；主线目标锁�
 - **关键路径**（串行链，约 14 个 PR）：
 
   ```text
-  W0(→条件 W1) → P4a → P4c → G0a 冻结 → P5b1 → P5b2 → G0s
+  W1 → P4a → P4c → G0a 冻结 → P5b1 → P5b2 → G0s
     → P6a → P6b → P7 → P8 → P9a → G0b
   ```
 
-- **喂入关键路径的并行道**（启动后前两周铺开）：C0 → CAP0 → P2a → P5a2
+- **喂入关键路径的并行道**（启动后前两周铺开）：C0✅ → CAP0✅ → P2a → P5a2
   → P2b/P2c（P2b/P2c 在 P2a 后、是 P6a/P6b/P7/P8 硬前置）；P4b（依赖
   CAP0+P4a，是 P5b1 硬前置——CAP0 输入回收风险因此直接压在关键路径上）；
-  P1、P2d、P3、P5a0、P5a1 并行；G0a 标注草稿与 launch 容量输入回收同步
-  启动。
+  P1 规格✅但实现 PR #44 待重放，P3 规格✅但实现等 P1；P2d、P5a0、P5a1
+  并行；G0a 标注草稿与 launch 容量输入回收同步推进。
 - **吞吐假设**：参照 021/023 历史，单个中大 PR（Contract Card + RED→GREEN
   + 双独立评审 + PG 并发测试）约 1–3 个窗口日。
 - **里程碑区间估计**（自 C0/W0 启动日起）：Milestone A（至 G0s）约 2–4
-  周；Milestone B（至 G0b）约 4–8 周；Milestone C 依赖 W1/P11 Go 侧人力，
-  待 W0 裁决后另估。
-- 排期最大风险项：W1 是否触发及其 Go 侧人力、G0a 人工标注时长、launch
-  容量输入回收时长。三者都已有并行化预案（见 §8）。
+  周；Milestone B（至 G0b）约 4–8 周；Milestone C 依赖 W1/P11 Go 侧
+  实现人力与实际交付证据，待 W1 实现窗口确认后另估。
+- 排期最大风险项：W1 Go 实现人力与周期、G0a 人工标注时长、launch 容量
+  输入回收时长。三者都已有并行化预案（见 §8）。

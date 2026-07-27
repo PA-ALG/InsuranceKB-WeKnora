@@ -3,30 +3,43 @@
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
 >
 > [!IMPORTANT]
-> **当前状态（2026-07-26，D0 实施）**：用户已书面批准
+> **当前状态（2026-07-27，Milestone A 施工中）**：用户已书面批准
 > [近期生产架构重置设计](docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
 > 当前执行以
 > [22 · active execution plan](docs/insurance-kb/22-parallel-execution-blueprint.md)
 > 与
 > [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)
 > 为准。
-> **2026-07-27 状态快照（Milestone A 施工中）**：
-> ① 已合入 main：PR #35 治理收口（24 号处置清单/决策记录/基线排期）、
-> PR #36 **C0 CanonicalEnvelopeV1**（双独立评审闭合，向量 40+19）、
-> PR #37 RH6.1 lane 契约修复、PR #38 **P1 Job Store + Outbox 规格**
-> （评审 5 项 findings 闭合）。
+> **post-Fable 状态快照**：`main=b974bb90965eaaaf5404fdaf786778432e51cc77`。
+> PR #35–#49 中已合入 #35/#36/#37/#38/#39/#40/#41/#43/#45/#46/#47/#48/#49；
+> 该编号区间只开放 #42（`OPEN / Draft / DIRTY / CONFLICTING`）与
+> #44（Ready，但 `DIRTY`，未合入）。
+> ① **C0 与 CAP0 已实现并合入**（PR #36/#46）。P1 规格已合入（PR #38），
+> 实现 PR #44 必须重放到最新 main 并接受新 exact-head review，当前不得按
+> Ready 状态推断可合入；P3 规格已合入（PR #48），实现等待 P1。
 > ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
 > 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
 > （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注
 > Agent 子系统（G0a+）、G0-probe 探针；首发画像改 **human_batch-first**，
 > machine_auto 移 `P15[auto-profile]`；subject_ref 绑 **product_version**。
 > ③ **W0 已执行（OpenSpec 037）：两份合同均 `insufficient`，条件 W1 正式
-> 触发**（证据+W1 API 草案见 037 artifacts）；P4a/P4c 保持 blocked 至 W1。
-> ④ 在飞行：P1 实现（迁移占号 0015；0007–0011/0013/0014 作废）、CAP0
-> （OpenSpec 036）、G0-probe、Schema 切片草稿、W1 规格。
-> ⑤ 实时状态与决策唯一口径 = 23 号控制板 §1/§8。
-> 执行顺序固定为 `D0 → {C0, W0}`、`C0 → CAP0`，再按批准设计进入
-> Milestone A/B/C。PostgreSQL Active WikiRelease 是 serving authority；
+> 触发**（证据+W1 API 草案见 037 artifacts）；W1 规格已合入（PR #41），
+> Go 实现尚未开始，P4a/P4c 继续 blocked。
+> ④ G0-probe 已完成，但只用于阈值校准，不是验收证据。Schema/词表（PR #43）
+> 与金标标注（PR #49）均为 draft、非验收权威。PR #42
+> （`OPEN / Draft / DIRTY / CONFLICTING`）仍使用旧 `038-g0a-*` 路径，与
+> 已合入 W1/OpenSpec 038 冲突；注册表唯一目标为 040，在 rename/rebase 前
+> `BLOCKED`，不可合入、不可称 spec frozen；本状态收口不替它修改分支。
+> ⑤ MVP 采用 **human_batch-first**：机器审核结果可作为批量决策输入，但生产
+> 发布动作只能由授权人对 exact CandidateRelease 一键批准/拒绝，不逐页；
+> 无人值守 `machine_auto` 仍属 `P15[auto-profile]`，依赖 G0b。superadmin
+> 不得绕过完整性、ACL、Provenance/security 或 PostgreSQL CAS。
+> ⑥ Milestone A 仍为 `IN PROGRESS`；Milestone B/C 均
+> `NOT IMPLEMENTED`，不得按 PR 数量宣称 MVP 已上线。旧 PR #26/#28/#33
+> 已关闭；CAP0 launch 问卷仍待业务确认。
+> ⑦ 实时状态与决策唯一口径 = 23 号控制板 §1/§8。
+> 前置顺序 `D0 → {C0, W0}`、`C0 → CAP0` 已完成；当前按批准设计推进
+> Milestone A。PostgreSQL Active WikiRelease 是 serving authority；
 > WeKnora managed Wiki 是带 epoch fencing 的可重建投影；四种 ReviewPolicy
 > 均合法，原始资料只用于证据、审核和补编。Harness 与 WeKnora 只通过版本化
 > REST 与 Source lifecycle event 集成，MCP 仅是 Active Query 消费者薄适配器。
