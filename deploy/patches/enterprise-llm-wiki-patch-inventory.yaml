@@ -8,10 +8,36 @@ patches:
   - patch_id: W1
     upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
     file_path:
-      - internal/types/knowledge.go
+      - deploy/patches/enterprise-llm-wiki-patch-inventory.yaml
+      - internal/application/repository/knowledge.go
+      - internal/application/repository/knowledge_revision_test.go
+      - internal/application/service/extract.go
+      - internal/application/service/image_multimodal.go
       - internal/application/service/knowledge.go
+      - internal/application/service/knowledge_create.go
+      - internal/application/service/knowledge_create_test.go
+      - internal/application/service/knowledge_post_process.go
+      - internal/application/service/knowledge_process.go
+      - internal/application/service/knowledge_revision.go
+      - internal/application/service/knowledge_revision_test.go
+      - internal/application/service/knowledge_util.go
+      - internal/application/service/wiki_ingest.go
+      - internal/application/service/wiki_ingest_batch.go
       - internal/handler/knowledge.go
+      - internal/handler/knowledge_revision_test.go
       - internal/router/router.go
+      - internal/types/chunk.go
+      - internal/types/knowledge.go
+      - internal/types/knowledge_revision.go
+      - internal/types/knowledge_revision_test.go
+      - internal/types/task.go
+      - migrations/versioned/000066_knowledge_revision_manifest.down.sql
+      - migrations/versioned/000066_knowledge_revision_manifest.up.sql
+      - migrations/versioned/knowledge_revision_manifest_test.go
+      - openspec/changes/038-w1-weknora-revision-manifest/specs/weknora-revision-manifest/spec.md
+      - openspec/changes/038-w1-weknora-revision-manifest/tasks.md
+      - openspec/changes/038-w1-weknora-revision-manifest/validation-report.md
+      - scripts/get_version.sh
     owner: W1-weknora-revision-manifest
     rationale: >-
       Only if W0 proves the public API cannot bind lifecycle identity and ordered
@@ -22,12 +48,12 @@ patches:
       - reparse-pagination-delete race rejects mixed revisions
       - existing knowledge REST behavior remains compatible
       - no shared database Redis or Asynq dependency
-    upstream_issue: pending-W0-verdict
+    upstream_issue: not-filed-project-owned-thin-adapter
     remove_when: >-
       Remove after an accepted upstream release exposes the W0-approved
       SourceLifecycleContract and RevisionManifestContract and the Harness
       compatibility matrix passes without this fork patch.
-    status: planned
+    status: in-review
 
   - patch_id: P11
     upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c

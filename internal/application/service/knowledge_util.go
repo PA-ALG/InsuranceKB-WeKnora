@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -48,25 +49,36 @@ func isValidURL(url string) bool {
 	return false
 }
 
-// calculateFileHash calculates MD5 hash of a file
-func calculateFileHash(file *multipart.FileHeader) (string, error) {
+// calculateFileHashes computes the legacy MD5 deduplication key and the W1
+// SHA-256 revision identity in one streaming pass.
+func calculateFileHashes(file *multipart.FileHeader) (string, string, error) {
 	f, err := file.Open()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer f.Close()
 
-	h := md5.New()
-	if _, err := io.Copy(h, f); err != nil {
+	md5Hash := md5.New()
+	sha256Hash := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(md5Hash, sha256Hash), f); err != nil {
+		return "", "", err
+	}
+	return hex.EncodeToString(md5Hash.Sum(nil)), hex.EncodeToString(sha256Hash.Sum(nil)), nil
+}
+
+func calculateReaderSHA256(reader io.Reader) (string, error) {
+	hash := sha256.New()
+	if _, err := io.Copy(hash, reader); err != nil {
 		return "", err
 	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
 
-	// Reset file pointer for subsequent operations
-	if _, err := f.Seek(0, 0); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
+// calculateFileHash preserves the legacy helper for callers that only need
+// the MD5 deduplication identity.
+func calculateFileHash(file *multipart.FileHeader) (string, error) {
+	md5Digest, _, err := calculateFileHashes(file)
+	return md5Digest, err
 }
 
 func calculateStr(strList ...string) string {

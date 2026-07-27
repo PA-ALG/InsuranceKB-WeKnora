@@ -636,6 +636,215 @@ func (h *KnowledgeHandler) GetKnowledge(c *gin.Context) {
 	})
 }
 
+type knowledgeRevisionReader interface {
+	GetRevisionState(context.Context, string) (
+		*types.Knowledge, *types.KnowledgeRevision, *types.KnowledgeRevision, error,
+	)
+	GetRevision(context.Context, string, int64) (*types.KnowledgeRevision, error)
+	ListRevisionChunks(
+		context.Context, string, int64, *types.Pagination,
+	) ([]*types.Chunk, int64, error)
+}
+
+func (h *KnowledgeHandler) revisionReader() (knowledgeRevisionReader, error) {
+	reader, ok := h.kgService.GetRepository().(knowledgeRevisionReader)
+	if !ok {
+		return nil, fmt.Errorf("revision repository unavailable")
+	}
+	return reader, nil
+}
+
+func revisionError(c *gin.Context, status int, code string, details gin.H) {
+	payload := gin.H{"code": code}
+	for key, value := range details {
+		payload[key] = value
+	}
+	c.JSON(status, gin.H{"success": false, "error": payload})
+}
+
+func revisionDescriptor(revision *types.KnowledgeRevision) gin.H {
+	return gin.H{
+		"knowledge_id":    revision.KnowledgeID,
+		"parse_attempt":   revision.ParseAttempt,
+		"file_digest":     gin.H{"algorithm": "sha256", "value": revision.FileSHA256},
+		"parser_identity": revision.ParserIdentity,
+		"chunk_manifest": gin.H{
+			"algorithm":   revision.ManifestAlgorithm,
+			"digest":      revision.ManifestDigest,
+			"chunk_count": revision.ChunkCount,
+		},
+		"completed_at": revision.CompletedAt,
+	}
+}
+
+func revisionNotCommittedReason(knowledge *types.Knowledge) string {
+	switch {
+	case knowledge.FilePath == "":
+		return "file_less_source"
+	case knowledge.CurrentParseAttempt == 0:
+		return "never_completed"
+	case knowledge.ParseStatus == types.ParseStatusCompleted:
+		return "non_parse_completed"
+	case knowledge.ParseStatus == types.ParseStatusFailed ||
+		knowledge.ParseStatus == types.ParseStatusCancelled:
+		return "attempt_terminal"
+	default:
+		return "attempt_in_progress"
+	}
+}
+
+// GetKnowledgeRevision returns the immutable descriptor for the current
+// completed parse attempt.
+func (h *KnowledgeHandler) GetKnowledgeRevision(c *gin.Context) {
+	id := secutils.SanitizeForLog(c.Param("id"))
+	reader, err := h.revisionReader()
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	knowledge, current, last, err := reader.GetRevisionState(c.Request.Context(), id)
+	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
+		revisionError(c, http.StatusNotFound, "knowledge_not_found", nil)
+		return
+	}
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	if _, _, _, _, err = h.validateKnowledgeBaseAccessWithKBID(c, knowledge.KnowledgeBaseID); err != nil {
+		c.Error(err)
+		return
+	}
+	if knowledge.DeletedAt.Valid {
+		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
+			"tombstone": gin.H{"knowledge_id": id, "deleted_at": knowledge.DeletedAt.Time},
+		})
+		return
+	}
+	if current != nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": revisionDescriptor(current)})
+		return
+	}
+	details := gin.H{
+		"parse_status":  knowledge.ParseStatus,
+		"parse_attempt": knowledge.CurrentParseAttempt,
+		"reason":        revisionNotCommittedReason(knowledge),
+	}
+	if last != nil {
+		details["last_committed"] = gin.H{
+			"parse_attempt":   last.ParseAttempt,
+			"manifest_digest": last.ManifestDigest,
+			"completed_at":    last.CompletedAt,
+		}
+	}
+	revisionError(c, http.StatusConflict, "revision_not_committed", details)
+}
+
+// ListKnowledgeRevisionChunks returns one manifest-bound text-chunk page and
+// rejects any attempt change observed before or after the page query.
+func (h *KnowledgeHandler) ListKnowledgeRevisionChunks(c *gin.Context) {
+	id := secutils.SanitizeForLog(c.Param("id"))
+	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
+	if err != nil || attempt <= 0 {
+		revisionError(c, http.StatusBadRequest, "invalid_parse_attempt", nil)
+		return
+	}
+	var page types.Pagination
+	if err = c.ShouldBindQuery(&page); err != nil {
+		revisionError(c, http.StatusBadRequest, "invalid_pagination", nil)
+		return
+	}
+	if page.Page < 1 {
+		page.Page = 1
+	}
+	if page.PageSize < 1 {
+		page.PageSize = 10
+	}
+	if page.PageSize > 100 {
+		page.PageSize = 100
+	}
+
+	reader, err := h.revisionReader()
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	knowledge, current, _, err := reader.GetRevisionState(c.Request.Context(), id)
+	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
+		revisionError(c, http.StatusNotFound, "knowledge_not_found", nil)
+		return
+	}
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	if _, _, _, _, err = h.validateKnowledgeBaseAccessWithKBID(c, knowledge.KnowledgeBaseID); err != nil {
+		c.Error(err)
+		return
+	}
+	if knowledge.DeletedAt.Valid {
+		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
+			"tombstone": gin.H{"knowledge_id": id, "deleted_at": knowledge.DeletedAt.Time},
+		})
+		return
+	}
+	revision, err := reader.GetRevision(c.Request.Context(), id, attempt)
+	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
+		revisionError(c, http.StatusNotFound, "revision_not_found", gin.H{"parse_attempt": attempt})
+		return
+	}
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	if current == nil || current.ParseAttempt != attempt {
+		revisionError(c, http.StatusGone, "revision_superseded", gin.H{
+			"current_parse_attempt": knowledge.CurrentParseAttempt,
+			"parse_status":          knowledge.ParseStatus,
+		})
+		return
+	}
+	chunks, total, err := reader.ListRevisionChunks(c.Request.Context(), id, attempt, &page)
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	after, currentAfter, _, err := reader.GetRevisionState(c.Request.Context(), id)
+	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
+		revisionError(c, http.StatusGone, "revision_superseded", nil)
+		return
+	}
+	if err != nil {
+		c.Error(errors.NewInternalServerError(err.Error()))
+		return
+	}
+	if after.DeletedAt.Valid {
+		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
+			"tombstone": gin.H{"knowledge_id": id, "deleted_at": after.DeletedAt.Time},
+		})
+		return
+	}
+	if currentAfter == nil ||
+		currentAfter.ParseAttempt != attempt ||
+		currentAfter.ManifestDigest != revision.ManifestDigest {
+		revisionError(c, http.StatusGone, "revision_superseded",
+			gin.H{"current_parse_attempt": after.CurrentParseAttempt})
+		return
+	}
+	if total != int64(revision.ChunkCount) {
+		revisionError(c, http.StatusConflict, "revision_manifest_incomplete", nil)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true, "data": chunks, "total": total,
+		"page": page.Page, "page_size": page.PageSize,
+		"revision": gin.H{
+			"knowledge_id": id, "parse_attempt": attempt,
+			"manifest_digest": revision.ManifestDigest, "chunk_count": revision.ChunkCount,
+		},
+	})
+}
+
 // GetKnowledgeSpans godoc
 // @Summary      获取知识文档解析的 Span 树（含历史尝试）
 // @Description  返回该知识在解析流水线的 trace tree（root → stage → subspan）：每段状态、耗时、input/output、错误码、langfuse_trace_id。支持 ?attempt=N 查看历史尝试；不传则返回最新尝试。前端用于渲染时间线 + 多模态/embedding 子节点 + 一键跳转 Langfuse。

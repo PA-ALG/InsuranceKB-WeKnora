@@ -328,6 +328,10 @@ func RegisterKnowledgeRoutes(r *gin.RouterGroup, handler *handler.KnowledgeHandl
 		// routes; /move and /batch-delete stay JWT Contributor-gated and are
 		// not declared for API keys.
 		kRead.GET("/batch", g.Viewer(), handler.GetKnowledgeBatch)
+		// Revision reads resolve KB access inside the handler so soft-deleted
+		// knowledge can return an ACL-safe 410 tombstone instead of leaking 404.
+		kRead.GET("/:id/revision", g.Viewer(), handler.GetKnowledgeRevision)
+		kRead.GET("/:id/revisions/:attempt/chunks", g.Viewer(), handler.ListKnowledgeRevisionChunks)
 		kRead.GET("/:id", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledge)
 		kRead.GET("/:id/stages", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledgeSpans)
 		kRead.GET("/:id/spans", g.Viewer(), g.KBAccessReadFromKnowledgeIDParam("id"), handler.GetKnowledgeSpans)

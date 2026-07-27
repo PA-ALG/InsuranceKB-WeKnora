@@ -148,58 +148,60 @@ T1–T13 属于未来实现 PR 的执行顺序（T13 为合入前独立复审；
 HANDOFF/控制板取得实现窗口授权，并从当时最新 `origin/main` 干净
 worktree 开始）。
 
-- [ ] T1 RED：manifest 算法 vectors 单元测试（验收 1，含重复
+- [x] T1 RED：manifest 算法 vectors 单元测试（验收 1，含重复
   chunk_index typed 拒绝与多字节 UTF-8 内容逐字节语义）。GREEN：纯
   函数 digest 实现 + 固定 vectors 文件（供 Harness 复用）。
-- [ ] T2 RED：schema/migration 合同测试（验收 2）。GREEN：在
+- [x] T2 RED：schema/migration 合同测试（验收 2）。GREEN：在
   `migrations/versioned/` 占号写唯一 up/down 对 + types 加列/新类型
   （`parse_attempt` 默认 0、`file_sha256` 默认空、revision 表主键与
   NOT NULL 约束）。
-- [ ] T3 RED：attempt 分配事务/并发/trace 解耦 + **分配先于销毁** +
+- [x] T3 RED：attempt 分配事务/并发/trace 解耦 + **分配先于销毁** +
   payload 传递测试（验收 3）。GREEN：`knowledge_create.go`/
   `knowledge_process.go`（含 manual 重建路径）在 pending 写事务内原子
   自增并注入任务 payload；重排重建路径使分配事务先于
   `cleanupKnowledgeResources` 提交；chunk 写入逐行携带 payload 分配值
   （不重读、不用 trace 值）。
-- [ ] T4 RED：revision 提交原子性 + fencing + 失败零行 + 不可变测试
+- [x] T4 RED：revision 提交原子性 + fencing + 失败零行 + 不可变测试
   （验收 4、8，覆盖直接翻转与 FinalizeSubtask 提升两路径、clone/move
   非解析 completed 零 revision 行）。GREEN：解析管线完成翻转的提交
   事务（按 `chunk_index ASC` 读回本 attempt text chunk → 算 digest →
   INSERT revision → fencing 复核 → 翻 completed），接线于
   `knowledge_process.go` 与 `knowledge_post_process.go`/
   `repository/knowledge.go(FinalizeSubtask)`。
-- [ ] T5 RED：`/revision` 状态矩阵 + ACL 测试（验收 5，覆盖
+- [x] T5 RED：`/revision` 状态矩阵 + ACL 测试（验收 5，覆盖
   failed-after-committed 的 `last_committed` body、409 子况 (d) 非解析
   completed 与 (e) file-less 的机读 `reason`、`parser_identity`
   `"unknown"` 行为）。GREEN：revision handler +
   `RegisterKnowledgeRoutes` kRead 路由（retrieve capability）+
   tombstone Unscoped 读（先 KB ACL 后 410）。
-- [ ] T6 RED：绑定 chunk 读端点语义测试（验收 6）。GREEN：attempt 过滤
+- [x] T6 RED：绑定 chunk 读端点语义测试（验收 6）。GREEN：attempt 过滤
   repo 查询 + 分页 clamp 复用 + 每页 revision 绑定块 + 页后复核。
-- [ ] T7 RED：**W0 T4 竞态复刻合同测试（确定性交错）**——先在无绑定
+- [x] T7 RED：**W0 T4 竞态复刻合同测试（确定性交错）**——先在无绑定
   端点语义下复现旧新混合/缺页作为 RED 基线，再断言绑定端点 0 混版
   0 缺页、替换后 410；交错经页间直接调用分配/清理序列（或注入点）
   构造，fixture ≥3 页；加 DELETE 变体（验收 7；挂钟 ≥3 次重复归 T12
   live lane）。GREEN：双检窗口收口，不引入锁或快照存储。
-- [ ] T8 RED：tombstone 持续性与退化边界测试（验收 5/13 的窗口子
+- [x] T8 RED：tombstone 持续性与退化边界测试（验收 5/13 的窗口子
   项）：软删行存在期间 410 持续可读；测试内模拟窗口外清理（直接硬删
   软删行）后 404 且为唯一退化。GREEN：无新增配置/GC 生产代码（W1 不
   交付清理与窗口配置接线；若 T5 实现已满足则本任务只固化不变量测试）。
-- [ ] T9 RED：file sha256 流式计算 + legacy 补算 + 空值零提交测试
+- [x] T9 RED：file sha256 流式计算 + legacy 补算 + 空值零提交测试
   （验收 10）。GREEN：上传路径 sha256 + 提交前补算分支。
-- [ ] T10 RED：兼容/探测测试（验收 11）：既有端点非回归快照、新增字段
+- [x] T10 RED：兼容/探测测试（验收 11）：既有端点非回归快照、新增字段
   零值仍序列化、probe 二值判定、错误码稳定表。GREEN：响应字段接线
   （无 omitempty）+ 错误码常量表。
-- [ ] T11：patch inventory W1 行更新（exact `file_path`/`status`/
+- [x] T11：patch inventory W1 行更新（exact `file_path`/`status`/
   `upstream_issue`）+ patch surface 比对脚本或断言（验收 12）+
   upstream compatibility matrix 记录（基线 `5eefa70e`，四项
-  `compatibility_tests` 向量）+ 上游 issue 提交（generic 措辞，引用
-  `upstream-issues.md` 惯例）。
-- [ ] T12 收尾：focused Go tests → `go vet`/lint → `openspec validate
-  038-w1-weknora-revision-manifest --strict` → DB integration lane 全量
-  → 受控 live lane 重放（验收 13；未运行如实 NOT RUN）→ validation
-  report + README 台账状态 + HANDOFF 当前状态块更新。
-- [ ] T13 独立 Spec/质量复审：按冻结合同查正确性与安全性；复审中出现
+  `compatibility_tests` 向量）。按本次 Mission Card 的项目边界，
+  `upstream_issue` 明确记录为 `not-filed-project-owned-thin-adapter`；
+  本 PR 不创建或处理 Tencent 通用上游事项。
+- [x] T12 收尾：focused Go tests → `go vet`/lint → `openspec validate
+  038-w1-weknora-revision-manifest --strict` → migration 合同门禁 →
+  validation report。按本次 Mission Card，真实 PG/受控 live lane 如实
+  记为 NOT RUN；`openspec/changes/README.md`、控制板与 `HANDOFF.md`
+  属共享收尾文档，待本 PR 合并后另行更新，本 PR 禁止触碰。
+- [x] T13 独立 Spec/质量复审：按冻结合同查正确性与安全性；复审中出现
   新的同域基础不变量时，按 033 §18 停止补丁循环回到边界设计，不追加
   状态与异常分支。
 

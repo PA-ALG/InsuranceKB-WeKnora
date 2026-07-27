@@ -493,6 +493,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 			}
 
 			if result != nil {
+				result.Revision = op.Revision
 				mapMu.Lock()
 				ingestSucceeded++
 				docResults = append(docResults, result)
@@ -522,7 +523,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 				// "finalizing" until the housekeeping sweep marks it
 				// failed. The matching +1 was seeded by
 				// KnowledgePostProcess.SetFinalizing.
-				s.finalizeWikiSubtask(mapCtx, op.KnowledgeID)
+				s.finalizeWikiSubtask(mapCtx, op.KnowledgeID, op.Revision)
 			}
 			return nil
 		})
@@ -787,7 +788,7 @@ func (s *wikiIngestService) ProcessWikiIngest(ctx context.Context, t *asynq.Task
 		// held — the retry (or the dead-letter drain in requeueFailedOps)
 		// releases it once the op reaches a real terminal state.
 		if _, unapplied := unappliedSlugKIDs[r.KnowledgeID]; !unapplied {
-			s.finalizeWikiSubtask(ctx, r.KnowledgeID)
+			s.finalizeWikiSubtask(ctx, r.KnowledgeID, r.Revision)
 		}
 		if r.WikiSpan == nil {
 			continue

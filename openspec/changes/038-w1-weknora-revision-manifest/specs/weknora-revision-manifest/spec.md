@@ -448,13 +448,16 @@ capability + Viewer + KB 读 ACL），SHALL NOT 扩大任何既有 API key 的�
 `current_parse_attempt` 键存在 ⇔ 部署含 W1。消费方（P4a/P4c Harness）
 SHALL 以该探测 fail closed：探测失败（键缺失或新端点路由缺失）时
 SHALL NOT 把旧部署上的 404 当作「从未存在」语义消费，SHALL NOT 回退到
-时间戳/启发式合同。W1 revision 端点 SHALL 使用**五个**稳定机读错误码：
+时间戳/启发式合同。W1 revision 端点 SHALL 使用**六个**稳定机读错误码：
 `revision_not_committed`（409）、`revision_superseded`（410）、
 `knowledge_deleted`（410）、`knowledge_not_found`（404，id 从未
-存在）、`revision_not_found`（404，该 attempt 无 revision 行）——两个
-404 与两个 410 分别以错误码无歧义区分；错误码与 HTTP 状态映射一经发布
-SHALL NOT 变更；合同演进 SHALL 通过新增字段或升版本标识，SHALL NOT
-复用既有码表达新语义。
+存在）、`revision_not_found`（404，该 attempt 无 revision 行）和
+`revision_manifest_incomplete`（409，已提交 revision 的当前 active text
+chunk 数与不可变 `chunk_count` 漂移）——两个 404、两个 409 与两个 410
+分别以错误码无歧义区分；错误码与 HTTP 状态映射一经发布 SHALL NOT
+变更；合同演进 SHALL 通过新增字段或升版本标识，SHALL NOT 复用既有码
+表达新语义。`revision_manifest_incomplete` 是 fail-closed 完整性故障，
+消费方 SHALL NOT 接受部分页或回退到旧 chunks 端点。
 
 #### Scenario: 既有端点非回归
 
@@ -475,5 +478,5 @@ SHALL NOT 变更；合同演进 SHALL 通过新增字段或升版本标识，SHA
 #### Scenario: 错误码稳定可机读
 
 - **WHEN** 客户端仅依据 HTTP 状态 + 错误码分支处理 W1 全部响应
-- **THEN** 五个错误码各自唯一稳定（两个 404、两个 410 均可无歧义
+- **THEN** 六个错误码各自唯一稳定（两个 404、两个 409、两个 410 均可无歧义
   区分），无需解析人类可读 message 即可路由所有分支
