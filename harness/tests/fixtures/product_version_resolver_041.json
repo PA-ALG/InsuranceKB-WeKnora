@@ -1,0 +1,145 @@
+{
+  "schema_version": "041.fixture.v1",
+  "products": [
+    {
+      "id": "product-1072",
+      "product_code": "1072",
+      "canonical_name": "平安e生保长期医疗保险（费率可调）",
+      "category": "medical",
+      "filing_no": "平安人寿〔2021〕医疗保险155号",
+      "aliases": [
+        {
+          "alias": "e生保长期医疗",
+          "alias_type": "short",
+          "source": "auto"
+        },
+        {
+          "alias": "平安长期医疗1072",
+          "alias_type": "manual",
+          "source": "manual"
+        }
+      ],
+      "versions": [
+        {
+          "id": "version-1072-1",
+          "version_label": "1072-1",
+          "terms_revision": "平安人寿[2020]医疗保险168号",
+          "channels": ["个人代理"],
+          "regions": ["CN"],
+          "source_document": "dataset/version-materials/esb_changqi_1072-1_tiaokuan.pdf",
+          "source_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc"
+        },
+        {
+          "id": "version-1072-4",
+          "version_label": "1072-4",
+          "terms_revision": "平安人寿〔2021〕医疗保险155号",
+          "channels": ["个人代理", "互联网"],
+          "regions": ["CN"],
+          "source_document": "dataset/version-materials/esb_changqi_1072-4_tiaokuan.pdf",
+          "source_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079"
+        }
+      ]
+    },
+    {
+      "id": "product-596",
+      "product_code": "596",
+      "canonical_name": "平安e生保（尊享版）医疗保险",
+      "category": "medical",
+      "filing_no": "平安人寿〔2025〕医疗保险172号",
+      "aliases": [
+        {
+          "alias": "注册-596-1",
+          "alias_type": "registration_no",
+          "source": "auto"
+        },
+        {
+          "alias": "e生保尊享版",
+          "alias_type": "short",
+          "source": "auto"
+        },
+        {
+          "alias": "平安尊享医疗人工别名",
+          "alias_type": "manual",
+          "source": "manual"
+        }
+      ],
+      "versions": [
+        {
+          "id": "version-596-1",
+          "version_label": "596-1",
+          "terms_revision": "平安人寿〔2025〕医疗保险172号",
+          "channels": ["互联网"],
+          "regions": ["CN"],
+          "source_document": "dataset/version-materials/esb_zunxiang_596-1_tiaokuan.pdf",
+          "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+        }
+      ]
+    },
+    {
+      "id": "product-2609",
+      "product_code": "2609",
+      "canonical_name": "平安附加e生保（尊享版）长期医疗保险（费率可调）",
+      "category": "medical",
+      "filing_no": "平安人寿〔2021〕医疗保险129号",
+      "aliases": [
+        {
+          "alias": "平安同名人工别名",
+          "alias_type": "manual",
+          "source": "manual"
+        }
+      ],
+      "versions": [
+        {
+          "id": "version-2609-1",
+          "version_label": "2609-1",
+          "terms_revision": "平安人寿〔2021〕医疗保险129号",
+          "channels": ["个人代理"],
+          "regions": ["CN"],
+          "source_document": "dataset/version-materials/esb_fujia_zunxiang_2609-1_tiaokuan.pdf",
+          "source_sha256": "a6f214f96e73807a5c031932695ada7e1b28e19bc7c283c63255a253c02e1062"
+        }
+      ]
+    },
+    {
+      "id": "product-name-a",
+      "product_code": "NAME-A",
+      "canonical_name": "平安同名测试医疗保险",
+      "category": "medical",
+      "filing_no": "产品根备案-NAME-A",
+      "aliases": [
+        {
+          "alias": "平安同名人工别名",
+          "alias_type": "manual",
+          "source": "manual"
+        }
+      ],
+      "versions": [
+        {
+          "id": "version-name-a",
+          "version_label": "NAME-A-1",
+          "terms_revision": "注册-NAME-A-1",
+          "channels": null,
+          "regions": null
+        }
+      ]
+    },
+    {
+      "id": "product-name-b",
+      "product_code": "NAME-B",
+      "canonical_name": "平安同名测试医疗保险",
+      "category": "medical",
+      "filing_no": null,
+      "aliases": [],
+      "versions": []
+    },
+    {
+      "id": "product-no-version",
+      "product_code": "NO-VERSION",
+      "canonical_name": "平安无版本测试保险",
+      "category": "medical",
+      "filing_no": null,
+      "aliases": [],
+      "versions": []
+    }
+  ]
+}
