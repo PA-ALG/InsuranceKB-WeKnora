@@ -47,7 +47,7 @@
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
 | 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
 | 039 | p3-api-worker-shell | 规格 ✅ 已合入（PR #48）；实现 `NOT STARTED` | 033 §16 P3；零迁移零表；实现依赖 P1 |
-| 040 | g0a-annotation-subsystem | 🔒 唯一目标占号；PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED` | PR #42 仍用旧 `038-g0a-*` 路径并与 W1/038 冲突；rename/rebase 前不可合入、不可称 spec frozen |
+| 040 | g0a-golden-asset-kernel | 📋 编号收口候选；PR #42 `OPEN / Draft / DIRTY / CONFLICTING / BLOCKED` | 从旧 `038-g0a-*` 机械迁移到唯一目标 040；在非破坏更新与 fresh exact review 前不可合入、不可称 spec frozen |
 | 041+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
