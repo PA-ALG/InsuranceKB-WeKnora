@@ -68,7 +68,7 @@ EOF
         ;;
     "ldflags")
         # 输出Go ldflags格式
-        echo "-X 'github.com/Tencent/WeKnora/internal/handler.Version=$VERSION' -X 'github.com/Tencent/WeKnora/internal/handler.Edition=$EDITION' -X 'github.com/Tencent/WeKnora/internal/handler.CommitID=$COMMIT_ID' -X 'github.com/Tencent/WeKnora/internal/handler.BuildTime=$BUILD_TIME' -X 'github.com/Tencent/WeKnora/internal/handler.GoVersion=$GO_VERSION'"
+        echo "-X 'github.com/Tencent/WeKnora/internal/handler.Version=$VERSION' -X 'github.com/Tencent/WeKnora/internal/handler.Edition=$EDITION' -X 'github.com/Tencent/WeKnora/internal/handler.CommitID=$COMMIT_ID' -X 'github.com/Tencent/WeKnora/internal/handler.BuildTime=$BUILD_TIME' -X 'github.com/Tencent/WeKnora/internal/handler.GoVersion=$GO_VERSION' -X 'github.com/Tencent/WeKnora/internal/application/service.RevisionBuildVersion=$VERSION' -X 'github.com/Tencent/WeKnora/internal/application/service.RevisionBuildCommit=$COMMIT_ID'"
         ;;
     "info")
         # 输出信息格式

@@ -127,6 +127,9 @@ type Chunk struct {
 	Content string `json:"content"`
 	// Index position of the chunk in the original document
 	ChunkIndex int `json:"chunk_index"`
+	// ParseAttempt binds document text chunks to one database-authoritative
+	// parse generation. Zero identifies legacy or non-revision chunk rows.
+	ParseAttempt int64 `json:"parse_attempt" gorm:"type:bigint;not null;default:0"`
 	// Whether the chunk is enabled, can be used to temporarily disable certain chunks
 	IsEnabled bool `json:"is_enabled"               gorm:"default:true"`
 	// Flags 存储多个布尔状态的位标志（如推荐状态等）

@@ -95,6 +95,7 @@ func NewChunkExtractTask(
 	knowledgeID string,
 	attempt int,
 	chunkIndex int,
+	revision *types.RevisionCommitBinding,
 ) (bool, error) {
 	if strings.ToLower(os.Getenv("NEO4J_ENABLE")) != "true" {
 		logger.Warn(ctx, "NEO4J is not enabled, skip chunk extract task")
@@ -107,6 +108,7 @@ func NewChunkExtractTask(
 		KnowledgeID: knowledgeID,
 		Attempt:     attempt,
 		ChunkIndex:  chunkIndex,
+		Revision:    revision,
 	}
 	langfuse.InjectTracing(ctx, &taskPayload)
 	payload, err := json.Marshal(taskPayload)
@@ -244,7 +246,7 @@ func (s *ChunkExtractService) Handle(ctx context.Context, t *asynq.Task) error {
 		// payload field; legacy in-flight tasks without it are skipped.
 		finalizeSubtaskDetached(ctx, s.knowledgeRepo, p.KnowledgeID,
 			fmt.Sprintf("graph_chunk[%d]", p.ChunkIndex),
-			handleErr, false, isFinalAsynqAttempt(ctx))
+			handleErr, false, isFinalAsynqAttempt(ctx), p.Revision)
 		if gSpan == nil {
 			return
 		}
