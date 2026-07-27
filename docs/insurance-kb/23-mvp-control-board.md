@@ -1,13 +1,15 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
 > 本次治理收口基线/事实截止点（截至 2026-07-27）：
-> `main=707403342712fafe94e7a02f0bb8fec35e3809ce`。
+> `main=0cb7beffa474699600ac97af05494dc2627b6e4d`。
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#51 中除 #44 外均已合入；当前 GitHub 无开放 PR。PR #44 已
-> `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
-> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。
+> GitHub fresh 事实：共 53 个 PR，其中 48 个已合入；#26/#28/#33/#44
+> `CLOSED / NOT MERGED / HISTORY-ONLY`，#44 归档 tag 为
+> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`。当前唯一开放项是
+> PR #53（P1 re-land 候选，未合入）；本项目 open issue 为 0。PR 的存在
+> 不等于 Mission Card 批准，也不改变本表的验收口径。
 
 ## 1. 当前状态
 
@@ -246,6 +248,28 @@ sha256/来源 URL，见 `dataset/version-materials/`）。G0v 采用
 能力）；Golden 尊享版本体仅一个备案版本，保持单版本。**不构造合成
 版本**。同名不同产品"平安附加e生保（尊享版）长期医疗"一并收录，作
 P5a0 实体消歧测试数据。D8 关闭。
+
+### D-2026-07-27-15 · MVP 主航道协作与复审上限
+
+- 任一新任务开工前先提交 Mission Card 并获用户逐项批准：业务目标、当前
+  理由、唯一 Owner/模型 effort、依赖、预计 PR 数与周期、验收、非目标和
+  blocker 定义。既有分支/PR 不自动取得实现授权。
+- Claude 暂不进入当前排期。三个 Codex 采用两个独立开发 lane + 一个动态
+  review/integration lane，角色轮换；review 空档只做已批准任务或只读准备，
+  不固定等待。跨 agent 唯一写 Owner，从最新 main 建独立 clean worktree，
+  不并发写同一文件域。
+- 默认 `gpt-5.6-sol high`；数据丢失、安全、权限、迁移、真实并发和跨模块
+  最终审查使用 `xhigh`。`max`/`ultra` 需用户单独批准和代表性 eval 证据。
+- finding 只分 `BLOCKER / BACKLOG / REJECTED`。只有可复现、Mission Card
+  范围内且会造成验收失败、安全/权限、数据损坏或真实并发错误的问题可阻断；
+  低概率假设、范围外重构和 Tencent/WeKnora 上游通用问题不阻断当前 PR。
+- 普通 PR 最多一轮修复复审，高风险最多两轮；之后仍有同域新基础问题就回
+  设计或拆 PR。一个 PR 一个用户价值，默认 1–2 个工作日可完成、30 分钟内
+  可 review；超出则拆分或重新请用户批准。验收与 CI 通过后及时合入，不追求
+  理论完美。
+- 本裁决取代 D-2026-07-26-5 的 Claude/Wave 调度部分，但不改产品 DAG。
+  本治理决策不启动 W1、P1、G0a 或其他功能；每个后续功能仍需独立 Mission
+  Card 批准。
 
 ### D-2026-07-26-5 · 主线开发执行模式
 
