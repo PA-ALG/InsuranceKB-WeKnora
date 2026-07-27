@@ -261,14 +261,18 @@ class OutboxDispatcher:
                         deliver(event)
                     except Exception:
                         row.dispatch_attempts += 1
-                        row.next_dispatch_at = now + timedelta(
+                        # 退避基准必须是**失败发生时刻**，不能沿用 deliver 之前
+                        # 读的 `now`（第四轮评审 B-finding-3）：生产主要失败形态
+                        # 是超时，deliver 耗时超过档位时 `now + backoff` 已经过去，
+                        # 退避退化为空操作。此处按数据库时钟重读。
+                        row.next_dispatch_at = database_now(session) + timedelta(
                             seconds=self._config.dispatch_backoff_delay(
                                 attempts=row.dispatch_attempts
                             )
                         )
                         failed.append(event.event_id)
                         continue
-                    row.dispatched_at = now
+                    row.dispatched_at = database_now(session)
                     delivered.append(event.event_id)
         return DispatchReport(
             delivered_event_ids=tuple(delivered),

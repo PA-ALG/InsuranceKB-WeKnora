@@ -286,6 +286,33 @@ def test_q21_transient_consumer_outage_recovers_at_least_once(
     assert undispatched == 0
 
 
+def test_q33_slow_failure_still_gets_real_backoff(factory: SessionFactory) -> None:
+    """P1.6：退避基准必须在 deliver **之后**重读（第四轮评审 B-finding-3）。
+
+    修复前 `now` 在 `deliver()` 之前读取，失败分支写 `now + backoff`——deliver
+    耗时超过档位时写下的时刻已经过去，退避是空操作。生产主要失败形态正是
+    **超时**：出货默认 (1,5,30,120) 配 30s 消费端超时，则前三档全部退化。
+    """
+    import time
+
+    store = _store(factory)
+    _complete_with_event(store, "space-a", "job-1", "job.succeeded", event_id="slow")
+    dispatcher = _dispatcher(factory, dispatch_backoff_seconds=(1.0,))
+
+    def slow_failure(_event: OutboxEventView) -> None:
+        time.sleep(1.4)  # 超过 1.0s 档位
+        raise RuntimeError("consumer timeout")
+
+    report = dispatcher.dispatch_pending(space_id="space-a", deliver=slow_failure)
+    assert report.failed_event_ids == ("slow",)
+
+    # 退避必须相对**失败发生时刻**生效：此刻立即扫描不应看到它。
+    assert dispatcher.read_pending(space_id="space-a") == (), "慢失败没有真的让位"
+    backed_off = dispatcher.read_backed_off(space_id="space-a")
+    assert [event.event_id for event in backed_off] == ["slow"]
+    assert backed_off[0].dispatch_attempts == 1
+
+
 def test_q21_dispatch_backoff_delay_comes_from_configuration() -> None:
     """接受侧 + 配置驱动：退避档位只来自 `JobRuntimeConfig`。"""
     config = _runtime_config(dispatch_backoff_seconds=(1.0, 10.0, 60.0))

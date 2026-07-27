@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from math import isfinite
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +23,11 @@ from insurance_harness.jobs.errors import (
     NonRetryableJobError,
     RetryableJobError,
 )
+
+
+#: 退避档位上界（约 30 天）：超出即表达"实际别再重投"，那属消费方
+#: reconciliation（proposal 非目标），不是本层能履行的退避语义。
+MAX_DISPATCH_BACKOFF_SECONDS = 30 * 24 * 3600
 
 
 class JobState(StrEnum):
@@ -176,7 +182,10 @@ class JobRuntimeConfig(BaseModel):
     #: D-2026-07-27-16）。取代原先硬编码在 dispatcher 构造函数的
     #: `max_dispatch_attempts` 硬上限——已提交行不得因失败计数被永久移出扫描
     #: 窗口；失败只让位不出局，超出序列长度取最后一档持续重投。
-    dispatch_backoff_seconds: tuple[float, ...] = Field(default=(0.0,), min_length=1)
+    #: 默认必须真的推迟（第四轮评审 B-finding-2）：模型层默认曾是 `(0.0,)`，
+    #: 任何直接构造本模型的装配都拿到零退避（实测约 180 次/秒 CPU 空转），
+    #: 与 `config.py` 自己声明的"不得默认为全 0"矛盾。
+    dispatch_backoff_seconds: tuple[float, ...] = Field(default=(1.0,), min_length=1)
     #: 单次 claim/reclaim 附带维护（回收/promote）处理的最大行数（review I4）。
     maintenance_batch_size: int = Field(default=128, ge=1)
 
@@ -187,8 +196,21 @@ class JobRuntimeConfig(BaseModel):
             # P1.3（D-2026-07-27-16）：lease 必须长于 heartbeat 间隔，否则
             # 续租永远赶不上过期，所有 lease 实际上出生即死。
             raise ValueError("lease_seconds must be greater than heartbeat_interval_seconds")
-        if any(delay < 0 for delay in self.dispatch_backoff_seconds):
-            raise ValueError("dispatch_backoff_seconds entries must be >= 0")
+        # P1.6（第四轮评审 B-finding-1）：只接受实现**能够履行**的档位。
+        # 原先只校验 >= 0，于是 inf/nan/1e12 通过配置门，却在写入
+        # `next_dispatch_at` 时抛裸 OverflowError——异常在 cursor 推进前逃出
+        # dispatch_pending，每轮重撞同一队头事件使整个 Space 的 outbox 卡死，
+        # 且 `dispatch_attempts += 1` 随回滚丢失。护栏必须只接受自己能履行的值。
+        for delay in self.dispatch_backoff_seconds:
+            if not isfinite(delay):
+                raise ValueError("dispatch_backoff_seconds entries must be finite")
+            if delay < 0:
+                raise ValueError("dispatch_backoff_seconds entries must be >= 0")
+            if delay > MAX_DISPATCH_BACKOFF_SECONDS:
+                raise ValueError(
+                    "dispatch_backoff_seconds entries must be <= "
+                    f"{MAX_DISPATCH_BACKOFF_SECONDS} seconds"
+                )
 
     def dispatch_backoff_delay(self, *, attempts: int) -> float:
         """第 attempts 次投递失败后的退避秒数；超出序列取最后一档。"""

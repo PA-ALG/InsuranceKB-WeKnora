@@ -281,6 +281,47 @@ def test_settings_wire_job_runtime_config_from_environment(
     assert config.dispatch_backoff_delay(attempts=99) == 9.0
 
 
+@pytest.mark.parametrize("bad", [(float("inf"),), (float("nan"),), (1e12,), (0.0, float("inf"))])
+def test_q32_non_finite_or_absurd_dispatch_backoff_is_rejected(bad: tuple[float, ...]) -> None:
+    """P1.6：退避档位必须是实现**能够履行**的值（第四轮评审 B-finding-1）。
+
+    修复前只校验 `>= 0`，于是 `inf`/`nan`/`1e12` 通过配置门，但写入
+    `next_dispatch_at` 时抛裸 `OverflowError`/`ValueError`——异常在 cursor
+    推进前逃出 `dispatch_pending`，每轮重新撞上同一个队头事件 ⇒ 整个 Space 的
+    outbox 卡死（I10 队头阻塞回归），且 `dispatch_attempts += 1` 随回滚丢失
+    使单调性被绕过。护栏必须只接受自己能履行的值（与表标识同一族教训）。
+    """
+    with pytest.raises(ValueError):
+        JobRuntimeConfig(
+            lease_seconds=300.0,
+            heartbeat_interval_seconds=30.0,
+            max_attempts=3,
+            backoff_seconds=(0.0,),
+            per_space_concurrency_limit=8,
+            global_concurrency_limit=32,
+            dispatch_backoff_seconds=bad,
+        )
+
+
+def test_q32_model_default_dispatch_backoff_is_not_all_zero() -> None:
+    """B-finding-2：模型层默认不得全 0（`config.py` 已声明该不变量）。
+
+    修复前 `JobRuntimeConfig` 的默认是 `(0.0,)`，任何直接构造该模型的装配
+    （含全部单测）拿到零退避——实测连续失败重投 50 次仅 0.28s，约 180 次/秒
+    CPU 空转，与 `config.py` 自己写的"不得默认为全 0"矛盾。
+    """
+    config = JobRuntimeConfig(
+        lease_seconds=300.0,
+        heartbeat_interval_seconds=30.0,
+        max_attempts=3,
+        backoff_seconds=(0.0,),
+        per_space_concurrency_limit=8,
+        global_concurrency_limit=32,
+    )
+
+    assert any(delay > 0 for delay in config.dispatch_backoff_seconds)
+
+
 def test_default_dispatch_backoff_is_not_all_zero() -> None:
     """默认档位必须真的推迟，否则退避形同不存在。"""
     from insurance_harness.config import HarnessSettings
