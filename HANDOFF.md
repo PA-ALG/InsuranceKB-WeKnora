@@ -44,12 +44,33 @@
 > `state == running` 门）。16 个以 finding 编号命名的测试节点
 > （`test_c1_*`/`test_c2_*`/`test_i3_*`…`test_m19_*`）随本 PR 交付，
 > 不得在后续重构中删除。
-> ①c **两项已知边界待 reviewer 裁决**：生产代码 1300 有效行 > §16.2 的
-> ~900 重新切分警报线（作者主张不拆——§16 交付表把 Job+Outbox 列为一个
-> 交付项、单一原子不变量；该裁决仍未做）；`DomainWriteHandle` 只封锁事务
-> 生命周期，句柄仍可执行任意 SQL（含越权触碰 `wiki_` 表），以文档合同
-> 约束，交 P3 接线时按权限模型收紧。SQLite lane 的 advisory 与
-> `SKIP LOCKED` 为 no-op，并发证据只以 PostgreSQL lane 为准。
+> ①c **第二轮双独立评审 → §18 停线 → 边界冻结**（23 号 §8
+> **D-2026-07-27-16**）：两侧互不知晓却**独立复现同一破口**——过期未回收的
+> lease 既不计入并发限额、又保有完整写权威。规格补 8 条边界合同（344 → 556
+> 行，纯澄清不扩域），实现见 tasks T14–T27：回收 `leased` 行先 attempt +1
+> （修 claim→start 之间崩溃的**无界重排队**）、`require_active_lease` 四路
+> 对称过期门、限额计全部 `leased|running` + 饱和时无 Space 过滤的有界回收、
+> 显式跨 Space 回收入口、`ensure_transition(storage_layer=)` 使
+> storage-only 成为可执行护栏、投递改持久退避取代硬上限与 park、过期 lease
+> 指标、Decision 判据改不可变列、只读入口输入合同。行数触发线豁免见
+> **D-2026-07-27-17**（不拆分：拆分在算术上不能带来预算合规）。
+> ①d **P1.5 领域写通道经三轮才收敛**（教训必须保留）：① 第一版"可执行回调 +
+> 进程内沙箱"被评审以公共属性一行击破（`handle.execute(...).connection
+> .execute(COMMIT)` ⇒ 领域行落库、任务仍 running、outbox 空 ⇒ 重放产生第二份
+> 领域结果），且其 SQL 文本扫描**误杀** P6a/P2b 自己的 `wiki_` 表与含关键字
+> 的字面量；② 换边界为**完成事务收数据不收代码**（`DomainWriteSpec`，删
+> `DomainWriteHandle`）后，我自攻发现表名用**原样字符串**比对而
+> `autoload_with` 在 SQLite 上大小写不敏感 ⇒ `table="WIKI_JOBS"` 过校验却真的
+> 伪造写入 `wiki_jobs`；③ 独立评审再发现 `values` 仍收 SQL 表达式对象，
+> 子查询能把自有表行 ID **读出来写进领域表**（跨边界信息泄漏）。现三处
+> 比较点（表名 / 列名 / 列值）均已规范化 + 形状收窄 + 只收纯标量，并有两套
+> 独立攻击集（17 表名变体 + 6 类表达式对象）验证全部 typed 拒绝、零泄漏。
+> **同一条"安全比较点必须二次规范化"的教训在本 PR 内栽了两次**，后续任何
+> 涉身份/授权/表名比对的实现必须先规范化再比。
+> ①e 其余已知边界：SQLite lane 的 advisory 与 `SKIP LOCKED` 为 no-op，并发
+> 证据只以 PostgreSQL lane 为准；`claim` 在单一 advisory key 上全局串行化且
+> 生产 engine 未设 `lock_timeout`（归 P3）；多实例配置漂移会弱化限额（review
+> M18，部署须共享单一配置来源）。
 > ② [知识编译层修正案（Amendment 1）](docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md)
 > 已获业务方批准：补齐抽取工程（P5b0/P5b1+）、SourcePrecedence 冲突裁决
 > （P5b2+）、Schema/词表内容化（P5a1+，Golden Product 切片）、金标标注

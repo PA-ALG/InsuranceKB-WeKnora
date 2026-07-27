@@ -5,11 +5,11 @@
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#52 中除 #44 外均已合入。PR #44 已
+> PR #35–#56 中除 #44 外均已合入（#53 仍开放）。PR #44 已
 > `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
 > `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；其实现内容按
-> D-2026-07-27-15 由 **PR #53（当前唯一开放 PR，待双独立评审）** 在最新
-> main 同内容重落地。
+> D-2026-07-27-15 由 **PR #53** 在最新 main 重落地，并按 D-16/D-18 完成两次
+> 边界修订（"逐字节一致"自 `5d663004` 起不再成立）。
 
 ## 1. 当前状态
 
@@ -18,7 +18,7 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）+ **边界修订随 #53**；实现在 **PR #53**，双独立评审 `not compliant / not approved` → **§18 停线成立**，边界已冻结、修复施工中 | 按 D-2026-07-27-15（重落地）与 **D-2026-07-27-16**（停线 + 边界冻结：写权威 = generation ∧ lease 未过期；限额计全部 `leased\|running`；回收补记 attempt + 跨 Space 入口；投递改持久退避；领域写句柄语句面约束）；行数豁免见 D-2026-07-27-17；迁移 **0015** Owner |
+| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）+ **边界修订随 #53**；实现在 **PR #53**，第二轮双独立评审后边界已冻结并修复完毕，P1.5 通道经**三轮**收敛，等最后一轮定向对抗评审 | 按 D-2026-07-27-15（重落地）、**D-2026-07-27-16**（§18 停线 + 边界冻结）、**D-2026-07-27-17**（行数豁免不拆分）、**D-2026-07-27-18**（P1.5 换为声明式通道：完成事务收数据不收代码）；迁移 **0015** Owner |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
 | W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
@@ -337,6 +337,53 @@ PR #53 的双独立评审（Spec / Quality，互不知晓对方结论、各自�
 失败上报缺源状态守卫）、把领域写句柄判为 Minor；Quality 侧不覆盖 Contract
 Card 义务与迁移台账合规。**有 live 复现的一侧优先。** 这印证 D-2026-07-26-2
 的双独立评审设置有效，且"红队也会错、双向都不轻信"。
+
+### D-2026-07-27-18 · P1.5 领域写通道换为声明式（完成事务收数据不收代码）
+
+第二轮双独立评审在 lease 过期/写权威/限额会计域确认闭合（13 条上轮 findings
+12 条 CLOSED），但在 **P1.5 领域写通道**判定 §18 停线并给出两个边界裁决；
+业务方 2026-07-27 选 **方案 A**。
+
+**为什么换边界而不是再补一轮**：第一版修法是"可执行回调 + 进程内沙箱"
+（句柄语句面拒绝事务控制语句与 `wiki_` 目标表 + 完成事务提交点校验 SAVEPOINT/
+外层事务身份）。评审以**公共属性一行**击破：
+
+```text
+handle.execute(text("INSERT ...")).connection.execute(text("COMMIT"))
+→ 领域行落库、任务仍 running、outbox 空、抛裸 OperationalError
+⇒ 过期回收后重放产生第二份领域结果
+```
+
+同一套 SQL 文本扫描还**误杀合法负载**：P6a 的 `wiki_page_revisions`、P2b 的
+`wiki_releases`、含 `do`/`begin`/`call` 的字符串字面量全被拒。既可绕过又会
+误杀 ⇒ 方法错误而非补得不够（024 教训：半个护栏比没有更危险）。根因：**进程内
+沙箱化一个持有 DB 句柄的可执行回调不可完成**，句柄逐层可达（Session →
+Connection → 语句结果 → …），包一层只把泄漏点推深一层。
+
+**裁决内容**：完成事务 SHALL 收数据、不收代码。`report_success` 的
+`domain_write: Callable[[DomainWriteHandle], None]` 改为
+`domain_writes: Sequence[DomainWriteSpec]`（表标识 + 列值），由存储层自己执行；
+`DomainWriteHandle` 与全部 SQL 文本扫描删除。调用方不再持有任何 DB 句柄，
+"提交外层事务"在**接口层面无法构造**——非法状态不可构造，而非构造后检测。
+换边界的时点是唯一的：`domain_write` 当时**在生产代码里零消费者**（P3 未实现），
+再晚就要连带改 P3/P6a/P8。
+
+**已声明的功能收窄**：声明式通道不支持完成事务内先读后写。需要该形态的领域
+逻辑把读与计算移到事务外，或由后续 PR 以显式合同新开入口，**不得恢复可执行
+回调**。
+
+**三轮才收敛的账（教训保留，不得删除）**：① 第一版沙箱可绕过（独立评审发现）；
+② 换边界后表名用**原样字符串**比对，而 `autoload_with` 在 SQLite 上大小写不
+敏感 ⇒ `table="WIKI_JOBS"` 过校验却真的伪造写入 `wiki_jobs`（总控窗口**自攻**
+发现，3/3 成功；同一输入在 PostgreSQL 上是 `NoSuchTableError`，即护栏正确性
+取决于方言）；③ `values` 仍接受 SQL 表达式对象，`scalar_subquery` 能把自有表
+行 ID **读出来写进领域表**（独立评审发现，跨边界信息泄漏）。
+
+**固化规则**：涉身份/授权/表名/列名的**安全比较点必须先规范化再比**
+（`strip().casefold()`）并把形状收窄到裸标识符；"数据"必须真的是数据——列值
+只接受纯标量，任何可编译成 SQL 的对象一律拒绝。同一条教训在本 PR 内栽了两次，
+后续 Pn 实现窗口不得重犯。现三处比较点均有独立攻击集验证（17 个表名变体 +
+6 类表达式对象，全部 typed 拒绝、零泄漏、零自有表触碰）。
 
 ### D-2026-07-27-17 · 035 实现的 §16.2 行数触发线豁免
 

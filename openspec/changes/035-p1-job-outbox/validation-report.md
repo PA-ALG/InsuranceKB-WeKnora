@@ -181,22 +181,22 @@ enqueue（消费方铸造幂等键，DB 唯一去重）
 
 - focused deterministic（SQLite lane）：
   `tests/test_job_state_machine_035.py` + `tests/test_job_store_035.py` +
-  `tests/test_job_outbox_035.py` + `tests/test_config.py` → **119 passed**
-  （边界冻结前 78）。
+  `tests/test_job_outbox_035.py` + `tests/test_config.py` → **135 passed**
+  （重落地时 78 → 边界冻结后 119 → P1.5 边界替换与其两轮修复后 135）。
 - 存量迁移消费者回归（deterministic）：`test_scope_migration_016.py`、
   `test_source_lifecycle_migration_021.py`、
   `test_release_snapshot_migration_018.py`（含 SQLite `alembic check`）、
   `test_knowledge_db.py`、`test_flywheel_migration_015.py`、
   `test_product_db.py`、`test_config.py` → **80 passed**（0015 降级
   preflight 保持「被拒绝的降级零 DDL」全链不变量）。
-- CI lane 合同：`test_ci_lanes_022.py` 全文件 → **69 passed**（integration
-  集合与注册表精确一致）；PG 节点 22 → **30** 全部注册且 no-URL fail-fast
-  （store 18 → 23、migration 4 → 7）。
+- CI lane 合同：`test_ci_lanes_022.py` 全文件 → **71 passed**（integration
+  集合与注册表精确一致）；PG 节点 22 → **32** 全部注册且 no-URL fail-fast
+  （store 18 → 25、migration 4 → 7）。
 - **PostgreSQL 16 lane（全量 `integration_postgres`）**：本机受控
   `postgres:16` 全新容器（`127.0.0.1:5942`，全新 volume，零遗留状态；DSN
   经 `HARNESS_TEST_POSTGRES_URL` 运行时注入，密码不入库不入日志）→
-  **55 passed / 3879 deselected**（边界冻结前 47）；JUnit
-  （`harness/scripts/check_junit.py`）`tests=55 skipped=0`。每组测试创建随机
+  **57 passed / 3897 deselected**（重落地时 47 → 边界冻结后 55 → P1.5 替换后
+  57）；JUnit（`harness/scripts/check_junit.py`）`tests=57 skipped=0`。每组测试创建随机
   临时 database（migration 测试与独立全局限额测试）或经真实 Alembic
   `upgrade head` 的模块级随机 database（store 测试），结束即 drop。
 - **CI 门禁原样命令**：`uv run ruff check .` → **All checks passed**；
@@ -249,7 +249,12 @@ Decision 并发幂等、retry/backoff 配置驱动、P1.9 指标分布（per-Spa
 `test_q26_downgrade_refuses_while_dead_letter_forensics_exist`、
 `test_q26_offline_sql_downgrade_is_explicitly_refused`。
 
-PG 节点合计 **30 个**（22 → 30），全部在 `test_ci_lanes_022.py` 精确集注册。
+**P1.5 边界替换新增的 2 个 PG 节点**：
+`test_q30_owned_table_check_is_normalized_on_postgres`（表名规范化在两方言上
+给同族拒绝）、`test_q31_values_may_not_smuggle_sql_on_postgres`（列值不得夹带
+SQL，含泄漏计数为 0 与接受侧）。
+
+PG 节点合计 **32 个**（22 → 30 → 32），全部在 `test_ci_lanes_022.py` 精确集注册。
 
 **契约收紧（刻意，两处）**：① C1 节点（det + PG）原断言"scope 外零变更"
 已迁移为"回收后放行 + 调用方拿不到跨 Space 内容 + 过期持有者即刻失去写
