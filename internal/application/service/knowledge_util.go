@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -49,36 +48,25 @@ func isValidURL(url string) bool {
 	return false
 }
 
-// calculateFileHashes computes the legacy MD5 deduplication key and the W1
-// SHA-256 revision identity in one streaming pass.
-func calculateFileHashes(file *multipart.FileHeader) (string, string, error) {
+// calculateFileHash calculates MD5 hash of a file
+func calculateFileHash(file *multipart.FileHeader) (string, error) {
 	f, err := file.Open()
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer f.Close()
 
-	md5Hash := md5.New()
-	sha256Hash := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(md5Hash, sha256Hash), f); err != nil {
-		return "", "", err
-	}
-	return hex.EncodeToString(md5Hash.Sum(nil)), hex.EncodeToString(sha256Hash.Sum(nil)), nil
-}
-
-func calculateReaderSHA256(reader io.Reader) (string, error) {
-	hash := sha256.New()
-	if _, err := io.Copy(hash, reader); err != nil {
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
 
-// calculateFileHash preserves the legacy helper for callers that only need
-// the MD5 deduplication identity.
-func calculateFileHash(file *multipart.FileHeader) (string, error) {
-	md5Digest, _, err := calculateFileHashes(file)
-	return md5Digest, err
+	// Reset file pointer for subsequent operations
+	if _, err := f.Seek(0, 0); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func calculateStr(strList ...string) string {
@@ -127,6 +115,19 @@ func (s *knowledgeService) getVLMConfig(ctx context.Context, kb *types.Knowledge
 
 func (s *knowledgeService) buildStorageConfig(ctx context.Context, kb *types.KnowledgeBase) *types.DocParserStorageConfig {
 	provider := kb.GetStorageProvider()
+	tenant, _ := ctx.Value(types.TenantInfoContextKey).(*types.Tenant)
+	backendID := ""
+	if kb.StorageBackendID != nil {
+		backendID = *kb.StorageBackendID
+	}
+	if s.storageResolver != nil && tenant != nil {
+		if backend, err := s.storageResolver.ResolveBackend(ctx, tenant, backendID, provider); err == nil && backend != nil {
+			provider = backend.Provider
+			tenantCopy := *tenant
+			tenantCopy.StorageEngineConfig = backend.ToStorageEngineConfig()
+			tenant = &tenantCopy
+		}
+	}
 	if provider == "" {
 		provider = "local"
 	}
@@ -143,7 +144,7 @@ func (s *knowledgeService) buildStorageConfig(ctx context.Context, kb *types.Kno
 		hasKBFull = sc.SecretID != "" && sc.BucketName != ""
 	case "minio":
 		hasKBFull = sc.BucketName != ""
-	case "local", "tos", "s3", "oss", "ks3":
+	case "local", "tos", "s3", "oss", "ks3", "obs":
 		hasKBFull = false
 	}
 
@@ -165,7 +166,6 @@ func (s *knowledgeService) buildStorageConfig(ctx context.Context, kb *types.Kno
 	var out types.DocParserStorageConfig
 	out.Provider = strings.ToUpper(provider)
 
-	tenant, _ := ctx.Value(types.TenantInfoContextKey).(*types.Tenant)
 	if tenant != nil && tenant.StorageEngineConfig != nil {
 		sec := tenant.StorageEngineConfig
 		if sec.DefaultProvider != "" && provider == "" {
@@ -240,6 +240,15 @@ func (s *knowledgeService) buildStorageConfig(ctx context.Context, kb *types.Kno
 				out.BucketName = sec.KS3.BucketName
 				out.PathPrefix = sec.KS3.PathPrefix
 			}
+		case "obs":
+			if sec.OBS != nil {
+				out.Endpoint = sec.OBS.Endpoint
+				out.Region = sec.OBS.Region
+				out.AccessKeyID = sec.OBS.AccessKey
+				out.SecretAccessKey = sec.OBS.SecretKey
+				out.BucketName = sec.OBS.BucketName
+				out.PathPrefix = sec.OBS.PathPrefix
+			}
 		}
 	}
 
@@ -260,6 +269,21 @@ func (s *knowledgeService) resolveFileService(ctx context.Context, kb *types.Kno
 	provider := kb.GetStorageProvider()
 
 	tenant, _ := ctx.Value(types.TenantInfoContextKey).(*types.Tenant)
+	backendID := ""
+	if kb.StorageBackendID != nil {
+		backendID = strings.TrimSpace(*kb.StorageBackendID)
+	}
+	if s.storageResolver != nil && tenant != nil {
+		baseDir := strings.TrimSpace(os.Getenv("LOCAL_STORAGE_BASE_DIR"))
+		svc, resolvedProvider, err := s.storageResolver.ResolveFileService(ctx, tenant, backendID, provider, baseDir)
+		if err == nil && svc != nil {
+			logger.Infof(ctx, "[storage] resolveFileService selected instance: kb=%s backend=%s provider=%s", kb.ID, backendID, resolvedProvider)
+			return svc
+		}
+		if err != nil {
+			logger.Errorf(ctx, "Failed to resolve storage backend for kb=%s: %v", kb.ID, err)
+		}
+	}
 	if provider == "" && tenant != nil && tenant.StorageEngineConfig != nil {
 		provider = strings.ToLower(strings.TrimSpace(tenant.StorageEngineConfig.DefaultProvider))
 	}
@@ -286,6 +310,36 @@ func (s *knowledgeService) resolveFileService(ctx context.Context, kb *types.Kno
 // the provider inferred from the file path. This protects historical data when
 // tenant/KB config changes but files were stored under the old provider.
 func (s *knowledgeService) resolveFileServiceForPath(ctx context.Context, kb *types.KnowledgeBase, filePath string) interfaces.FileService {
+	// A resource:// reference belongs to the tenant that registered it. Shared
+	// KB requests use the viewer's effective tenant in ctx, which can otherwise
+	// select the wrong storage backend and pass the resource URL to local disk.
+	if _, ok := types.ParseResourcePath(filePath); ok && s.resourceCatalog != nil && s.storageResolver != nil && s.tenantRepo != nil {
+		resource, err := s.resourceCatalog.Resolve(ctx, filePath)
+		if err == nil && resource != nil {
+			ownerTenant, tenantErr := s.tenantRepo.GetTenantByID(ctx, resource.TenantID)
+			if tenantErr == nil && ownerTenant != nil {
+				baseDir := strings.TrimSpace(os.Getenv("LOCAL_STORAGE_BASE_DIR"))
+				if resolved, _, resolveErr := s.storageResolver.ResolveFileService(ctx, ownerTenant, resource.StorageBackendID, resource.Provider, baseDir); resolveErr == nil && resolved != nil {
+					return resolved
+				} else if resolveErr != nil {
+					logger.Warnf(ctx, "[storage] failed to resolve resource owner backend: resource=%s tenant=%d err=%v", resource.Handle, resource.TenantID, resolveErr)
+				}
+			}
+		}
+	}
+
+	if backendID, inner, ok := types.ParseStorageBackendPath(filePath); ok && s.storageResolver != nil {
+		tenant, _ := ctx.Value(types.TenantInfoContextKey).(*types.Tenant)
+		if tenant != nil {
+			provider := types.ParseProviderScheme(inner)
+			baseDir := strings.TrimSpace(os.Getenv("LOCAL_STORAGE_BASE_DIR"))
+			if resolved, _, err := s.storageResolver.ResolveFileService(ctx, tenant, backendID, provider, baseDir); err == nil {
+				return resolved
+			} else {
+				logger.Warnf(ctx, "[storage] failed to resolve backend from file path: backend=%s err=%v", backendID, err)
+			}
+		}
+	}
 	svc := s.resolveFileService(ctx, kb)
 	if filePath == "" {
 		return svc

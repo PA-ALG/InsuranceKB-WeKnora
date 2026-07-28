@@ -54,6 +54,25 @@ func (s *KnowledgePostProcessService) tracker() SpanTracker {
 	return s.spanTracker
 }
 
+// finishRunningMultimodalStage closes the multimodal stage only when image
+// work really ran and is still open. The canonical stage also exists when
+// multimodal processing is disabled, but that row is already "skipped" and
+// must not be rewritten to "done" with the postprocess queueing delay as its
+// duration.
+func (s *KnowledgePostProcessService) finishRunningMultimodalStage(
+	ctx context.Context,
+	knowledgeID string,
+	attempt int,
+) {
+	mm := s.tracker().LookupStage(ctx, knowledgeID, attempt, types.StageMultimodal)
+	if mm == nil ||
+		mm.Kind != types.SpanKindStage ||
+		mm.Status != types.SpanStatusRunning {
+		return
+	}
+	s.tracker().EndSpan(ctx, mm, nil)
+}
+
 // Handle implements asynq handler for TypeKnowledgePostProcess.
 func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Task) error {
 	var payload types.KnowledgePostProcessPayload
@@ -79,15 +98,12 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	// Close the multimodal stage span (parent enqueued it as "running"
 	// and we never see the per-image fan-in here other than by reaching
 	// post-process). If the parent skipped multimodal entirely, the
-	// stage row will already be in "skipped" state and EndSpan is a
-	// no-op for missing rows. Per-image success/failure counts are NOT
+	// stage row will already be in "skipped" state and must remain so.
+	// Per-image success/failure counts are NOT
 	// aggregated here — the frontend already walks the children when
 	// rendering the multimodal stage detail and counts them itself,
 	// avoiding an extra query path.
-	if mm := s.tracker().LookupStage(ctx, payload.KnowledgeID, attempt, types.StageMultimodal); mm != nil &&
-		mm.Kind == types.SpanKindStage {
-		s.tracker().EndSpan(ctx, mm, nil)
-	}
+	s.finishRunningMultimodalStage(ctx, payload.KnowledgeID, attempt)
 
 	postSpan := s.tracker().BeginStage(ctx, payload.KnowledgeID, attempt, types.StagePostProcess, nil)
 
@@ -234,19 +250,9 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 		if len(textChunks) > 0 {
 			updates["summary_status"] = types.SummaryStatusNone
 		}
-		var completionErr error
-		if payload.Revision != nil {
-			completionErr = commitDirectRevision(
-				ctx, s.knowledgeRepo, payload.KnowledgeID, payload.Revision,
-			)
-		} else {
-			completionErr = s.knowledgeRepo.UpdateKnowledgeColumns(
-				ctx, payload.KnowledgeID, updates,
-			)
-		}
-		if completionErr != nil {
+		if err := s.knowledgeRepo.UpdateKnowledgeColumns(ctx, payload.KnowledgeID, updates); err != nil {
 			logger.Warnf(ctx, "[KnowledgePostProcess] Failed to mark %s completed (no subtasks): %v",
-				payload.KnowledgeID, completionErr)
+				payload.KnowledgeID, err)
 		} else {
 			logger.Infof(ctx, "[KnowledgePostProcess] Knowledge %s marked completed (no enrichment subtasks).",
 				payload.KnowledgeID)
@@ -325,7 +331,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 		logger.Infof(ctx, "[KnowledgePostProcess] Spawning Graph RAG extract tasks for %d text-like chunks", len(textChunks))
 		for i, chunk := range textChunks {
 			ok, err := NewChunkExtractTask(ctx, s.taskEnqueuer, payload.TenantID, chunk.ID, kb.SummaryModelID,
-				payload.KnowledgeID, attempt, i, payload.Revision)
+				payload.KnowledgeID, attempt, i)
 			if err != nil {
 				logger.Errorf(ctx, "[KnowledgePostProcess] Failed to create chunk extract task for %s: %v", chunk.ID, err)
 			}
@@ -351,15 +357,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	//    and drain on its own".
 	enqueuedWiki := false
 	if willSpawnWiki {
-		EnqueueWikiIngest(
-			ctx,
-			s.taskEnqueuer,
-			s.pendingRepo,
-			payload.TenantID,
-			payload.KnowledgeBaseID,
-			payload.KnowledgeID,
-			payload.Revision,
-		)
+		EnqueueWikiIngest(ctx, s.taskEnqueuer, s.pendingRepo, payload.TenantID, payload.KnowledgeBaseID, payload.KnowledgeID)
 		logger.Infof(ctx, "[KnowledgePostProcess] Enqueued wiki ingest task for %s", payload.KnowledgeID)
 		enqueuedWiki = true
 	}
@@ -398,9 +396,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 			for i := 0; i < shortfall; i++ {
 				rctx, cancel := context.WithTimeout(
 					context.WithoutCancel(ctx), finalizeSubtaskDetachedTimeout)
-				_, _, err := finalizeRevisionSlot(
-					rctx, s.knowledgeRepo, payload.KnowledgeID, payload.Revision,
-				)
+				_, _, err := s.knowledgeRepo.FinalizeSubtask(rctx, payload.KnowledgeID)
 				cancel()
 				if err != nil {
 					logger.Warnf(ctx, "[KnowledgePostProcess] Failed to release subtask slot for %s: %v",
@@ -445,7 +441,6 @@ func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(ctx context.C
 		KnowledgeID:     payload.KnowledgeID,
 		Language:        payload.Language,
 		Attempt:         attempt,
-		Revision:        payload.Revision,
 	}
 	langfuse.InjectTracing(ctx, &taskPayload)
 	payloadBytes, err := json.Marshal(taskPayload)
@@ -454,7 +449,8 @@ func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(ctx context.C
 		return false
 	}
 
-	task := asynq.NewTask(types.TypeSummaryGeneration, payloadBytes, asynq.Queue("low"), asynq.MaxRetry(3))
+	task := asynq.NewTask(types.TypeSummaryGeneration, payloadBytes,
+		asynq.Queue(types.QueueSummary), asynq.MaxRetry(3), asynq.Timeout(30*time.Minute))
 	if _, err := s.taskEnqueuer.Enqueue(task); err != nil {
 		logger.Warnf(ctx, "[KnowledgePostProcess] Failed to enqueue summary generation for %s: %v", payload.KnowledgeID, err)
 		return false
@@ -531,7 +527,6 @@ func (s *KnowledgePostProcessService) enqueueQuestionGenerationTasks(
 			Language:        payload.Language,
 			Attempt:         attempt,
 			ChunkIDs:        chunkIDs,
-			Revision:        payload.Revision,
 			BatchIndex:      batchIndex,
 		}
 		// Boundary context: the text chunk just before / after this window.
@@ -550,7 +545,8 @@ func (s *KnowledgePostProcessService) enqueueQuestionGenerationTasks(
 			continue
 		}
 
-		task := asynq.NewTask(types.TypeQuestionGeneration, payloadBytes, asynq.Queue(types.QueueQuestion), asynq.MaxRetry(3))
+		task := asynq.NewTask(types.TypeQuestionGeneration, payloadBytes,
+			asynq.Queue(types.QueueQuestion), asynq.MaxRetry(3), asynq.Timeout(30*time.Minute))
 		if _, err := s.taskEnqueuer.Enqueue(task); err != nil {
 			logger.Warnf(ctx, "[KnowledgePostProcess] Failed to enqueue question generation batch %d for %s: %v", batchIndex-1, payload.KnowledgeID, err)
 			continue

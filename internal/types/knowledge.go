@@ -112,7 +112,7 @@ type KnowledgeListFilter struct {
 type Knowledge struct {
 	// Unique identifier of the knowledge
 	ID string `json:"id"                 gorm:"type:varchar(36);primaryKey"`
-	// Tenant ID
+	// Workspace ID
 	TenantID uint64 `json:"tenant_id"`
 	// ID of the knowledge base
 	KnowledgeBaseID string `json:"knowledge_base_id"`
@@ -134,9 +134,6 @@ type Knowledge struct {
 	// (summary + question + graph chunks). Only meaningful while
 	// ParseStatus == "finalizing"; defaults to 0 in any terminal state.
 	PendingSubtasksCount int `json:"pending_subtasks_count" gorm:"type:int;not null;default:0"`
-	// CurrentParseAttempt is the monotonic, database-authoritative parse
-	// generation. Zero identifies legacy rows that predate W1.
-	CurrentParseAttempt int64 `json:"current_parse_attempt" gorm:"type:bigint;not null;default:0"`
 	// Summary status for async summary generation
 	SummaryStatus string `json:"summary_status"     gorm:"type:varchar(32);default:none"`
 	// Enable status of the knowledge
@@ -151,9 +148,6 @@ type Knowledge struct {
 	FileSize int64 `json:"file_size"`
 	// File hash of the knowledge
 	FileHash string `json:"file_hash"`
-	// FileSHA256 binds file-backed revisions without changing FileHash's
-	// existing MD5 deduplication semantics.
-	FileSHA256 string `json:"file_sha256" gorm:"type:varchar(64);not null;default:''"`
 	// File path of the knowledge
 	FilePath string `json:"file_path"`
 	// Storage size of the knowledge

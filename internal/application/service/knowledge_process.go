@@ -162,8 +162,6 @@ type ProcessChunksOptions struct {
 	// child's ParentIndex references an entry in this slice.
 	ParentChunks []types.ParsedParentChunk
 	Metadata     map[string]string
-	Revision     *types.RevisionCommitBinding
-	ParseAttempt int64
 }
 
 // finalizeIndexedKnowledgeState makes a document retrievable as soon as chunks
@@ -228,7 +226,11 @@ func buildSplitterConfigFromChunking(cc types.ChunkingConfig) chunker.SplitterCo
 }
 
 // buildParentChildConfigs derives parent and child SplitterConfig from ChunkingConfig.
-// The base config (already validated with defaults) is used for separators.
+// The base config (already validated with defaults) is used for separators and
+// the splitting strategy. Strategy must be propagated: an empty Strategy resolves
+// to the legacy tier (see resolveChainWithProfile), which never runs the heading
+// splitter, so parent-child chunks would silently lose heading alignment and
+// ContextHeader breadcrumbs regardless of the configured strategy.
 func buildParentChildConfigs(cc types.ChunkingConfig, base chunker.SplitterConfig) (parent, child chunker.SplitterConfig) {
 	parentSize := cc.ParentChunkSize
 	if parentSize <= 0 {
@@ -242,11 +244,13 @@ func buildParentChildConfigs(cc types.ChunkingConfig, base chunker.SplitterConfi
 		ChunkSize:    parentSize,
 		ChunkOverlap: base.ChunkOverlap, // reuse configured overlap for parents
 		Separators:   base.Separators,
+		Strategy:     base.Strategy,
 	}
 	child = chunker.SplitterConfig{
 		ChunkSize:    childSize,
 		ChunkOverlap: childSize / 5, // ~20% overlap for child chunks
 		Separators:   base.Separators,
+		Strategy:     base.Strategy,
 	}
 	return
 }
@@ -447,10 +451,6 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 		chunks[idx].ChunkID = textChunk.ID
 		insertChunks = append(insertChunks, textChunk)
 	}
-	if options.Revision != nil {
-		options.ParseAttempt = options.Revision.ParseAttempt
-	}
-	stampParseAttempt(insertChunks, options.ParseAttempt)
 
 	// Sort chunks by index for proper ordering
 	sort.Slice(insertChunks, func(i, j int) bool {
@@ -653,25 +653,9 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 		pendingMultimodal || pendingPDFMultimodal,
 		now,
 	)
-	directRevisionCommit := options.Revision != nil &&
-		knowledge.ParseStatus == types.ParseStatusCompleted
-	if directRevisionCommit {
-		// Persist all non-terminal parse outputs first. The repository then
-		// exposes completed together with the immutable revision row.
-		knowledge.ParseStatus = types.ParseStatusProcessing
-	}
 
 	if err := s.repo.UpdateKnowledge(ctx, knowledge); err != nil {
 		logger.GetLogger(ctx).WithField("error", err).Errorf("processChunks update knowledge failed")
-		return
-	}
-	if directRevisionCommit {
-		if err := commitDirectRevision(ctx, s.repo, knowledge.ID, options.Revision); err != nil {
-			logger.GetLogger(ctx).WithField("error", err).
-				Errorf("processChunks direct revision commit failed")
-			return
-		}
-		knowledge.ParseStatus = types.ParseStatusCompleted
 	}
 
 	// Enqueue multimodal tasks for images (async, non-blocking)
@@ -681,15 +665,7 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 			"enable_ocr":     true,
 			"enable_caption": true,
 		})
-		s.enqueueImageMultimodalTasks(
-			ctx,
-			knowledge,
-			kb,
-			options.StoredImages,
-			chunks,
-			options.Metadata,
-			options.Revision,
-		)
+		s.enqueueImageMultimodalTasks(ctx, knowledge, kb, options.StoredImages, chunks, options.Metadata)
 	} else {
 		s.skipStage(ctx, knowledge.ID, types.StageMultimodal, "skipped")
 		// If there are no multimodal tasks, enqueue the post process task immediately
@@ -700,12 +676,12 @@ func (s *knowledgeService) processChunks(ctx context.Context,
 			KnowledgeBaseID: knowledge.KnowledgeBaseID,
 			Language:        lang,
 			Attempt:         attemptFromCtx(ctx),
-			Revision:        options.Revision,
 		}
 		langfuse.InjectTracing(ctx, &postProcessPayload)
 		payloadBytes, err := json.Marshal(postProcessPayload)
 		if err == nil {
-			task := asynq.NewTask(types.TypeKnowledgePostProcess, payloadBytes, asynq.Queue("default"), asynq.MaxRetry(3))
+			task := asynq.NewTask(types.TypeKnowledgePostProcess, payloadBytes,
+				knowledgePostProcessTaskOptions()...)
 			if _, err := s.task.Enqueue(task); err != nil {
 				logger.Errorf(ctx, "Failed to enqueue knowledge post process task: %v", err)
 			} else {
@@ -853,7 +829,8 @@ func (s *knowledgeService) getSummary(ctx context.Context,
 		"language": types.LanguageNameFromContext(ctx),
 	})
 	thinking := false
-	summary, err := summaryModel.Chat(ctx, []chat.Message{
+	modelCtx := types.WithLLMCallMetadata(ctx, "document_summary", "")
+	summary, err := summaryModel.Chat(modelCtx, []chat.Message{
 		{
 			Role:    "system",
 			Content: summaryPrompt,
@@ -927,7 +904,6 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		logger.Errorf(ctx, "Failed to unmarshal summary generation payload: %v", err)
 		return nil // Don't retry on unmarshal error
 	}
-
 	logger.Infof(ctx, "Processing summary generation for knowledge: %s", payload.KnowledgeID)
 
 	// Set tenant and language context
@@ -967,7 +943,7 @@ func (s *knowledgeService) ProcessSummaryGeneration(ctx context.Context, t *asyn
 		// "finalizing". When we DO return an error asynq will retry, so
 		// we only drain on the final attempt.
 		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID, "summary",
-			retErr, false, isFinalAsynqAttempt(ctx), payload.Revision)
+			retErr, false, isFinalAsynqAttempt(ctx))
 		if span == nil {
 			return
 		}
@@ -1284,7 +1260,7 @@ func (s *knowledgeService) processQuestionGenerationForKnowledge(ctx context.Con
 	// unwind LIFO, so this one declared first executes last.
 	defer func() {
 		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID, "question_legacy",
-			retErr, superseded, isFinalAsynqAttempt(ctx), payload.Revision)
+			retErr, superseded, isFinalAsynqAttempt(ctx))
 	}()
 	defer func() {
 		logger.Infof(
@@ -1487,6 +1463,10 @@ func (s *knowledgeService) processQuestionGenerationForKnowledge(ctx context.Con
 		questionCount = 10
 	}
 
+	processOverrides, _ := knowledge.ProcessOverrides()
+	questionGenCfg := ResolveProcessConfig(kb, processOverrides).QuestionGenerationConfig
+	customInstructions := questionGenCfg.CustomInstructions
+
 	// Collect image info for all text chunks so question generation can
 	// see caption / OCR text instead of bare image links.
 	textChunkIDs := make([]string, len(textChunks))
@@ -1520,7 +1500,8 @@ func (s *knowledgeService) processQuestionGenerationForKnowledge(ctx context.Con
 		}
 
 		llmCallAttempts++
-		questions, err := s.generateQuestionsWithContext(ctx, chatModel, enrichContent(chunk), prevContent, nextContent, knowledge.Title, questionCount)
+		questions, err := s.generateQuestionsWithContext(ctx, chatModel, enrichContent(chunk), prevContent, nextContent,
+			knowledge.Title, questionCount, customInstructions)
 		if err != nil {
 			llmCallFailed++
 			logger.Warnf(ctx, "Failed to generate questions for chunk %s: %v", chunk.ID, err)
@@ -1641,7 +1622,7 @@ func (s *knowledgeService) processQuestionGenerationForChunks(ctx context.Contex
 	defer func() {
 		finalizeSubtaskDetached(ctx, s.repo, payload.KnowledgeID,
 			fmt.Sprintf("question_batch[%d]", payload.BatchIndex),
-			retErr, superseded, isFinalAsynqAttempt(ctx), payload.Revision)
+			retErr, superseded, isFinalAsynqAttempt(ctx))
 	}()
 	defer func() {
 		logger.Infof(ctx,
@@ -1783,6 +1764,10 @@ func (s *knowledgeService) processQuestionGenerationForChunks(ctx context.Contex
 		questionCount = 10
 	}
 
+	processOverrides, _ := knowledge.ProcessOverrides()
+	questionGenCfg := ResolveProcessConfig(kb, processOverrides).QuestionGenerationConfig
+	customInstructions := questionGenCfg.CustomInstructions
+
 	// Fetch the batch chunks (in payload order) plus the two boundary
 	// neighbors so we can rebuild the same surrounding context the legacy
 	// loop used, all enriched with image OCR / caption info. A vanished
@@ -1846,7 +1831,8 @@ func (s *knowledgeService) processQuestionGenerationForChunks(ctx context.Contex
 		}
 
 		questions, gerr := s.generateQuestionsWithContext(
-			ctx, chatModel, enrich(chunk), prevContentAt(i), nextContentAt(i), knowledge.Title, questionCount)
+			ctx, chatModel, enrich(chunk), prevContentAt(i), nextContentAt(i), knowledge.Title, questionCount,
+			customInstructions)
 		if gerr != nil {
 			llmCallFailed++
 			logger.Warnf(ctx, "Failed to generate questions for chunk %s: %v", chunk.ID, gerr)
@@ -1908,6 +1894,7 @@ func (s *knowledgeService) processQuestionGenerationForChunks(ctx context.Contex
 // generateQuestionsWithContext generates questions for a chunk with surrounding context
 func (s *knowledgeService) generateQuestionsWithContext(ctx context.Context,
 	chatModel chat.Chat, content, prevContent, nextContent, docName string, questionCount int,
+	customInstructions string,
 ) ([]string, error) {
 	if content == "" || questionCount <= 0 {
 		return nil, nil
@@ -1939,9 +1926,11 @@ func (s *knowledgeService) generateQuestionsWithContext(ctx context.Context,
 		"doc_name":       docName,
 		"language":       langName,
 	})
+	prompt = types.AppendCustomPromptInstructions(prompt, customInstructions, "question_generation")
 
 	thinking := false
-	response, err := chatModel.Chat(ctx, []chat.Message{
+	modelCtx := types.WithLLMCallMetadata(ctx, "question_generation", "")
+	response, err := chatModel.Chat(modelCtx, []chat.Message{
 		{
 			Role:    "user",
 			Content: prompt,
@@ -2032,46 +2021,6 @@ func (s *knowledgeService) ReparseKnowledge(
 
 	processOverrides, _ = existing.ProcessOverrides()
 	reparseEff := ResolveProcessConfig(kb, processOverrides)
-	fileSHA256 := existing.FileSHA256
-	if existing.FilePath != "" && fileSHA256 == "" {
-		fileReader, readErr := s.resolveFileService(ctx, kb).GetFile(ctx, existing.FilePath)
-		if readErr != nil {
-			return nil, fmt.Errorf("open source file for sha256: %w", readErr)
-		}
-		fileSHA256, readErr = calculateReaderSHA256(fileReader)
-		closeErr := fileReader.Close()
-		if readErr != nil {
-			return nil, fmt.Errorf("calculate source file sha256: %w", readErr)
-		}
-		if closeErr != nil {
-			return nil, fmt.Errorf("close source file after sha256: %w", closeErr)
-		}
-	}
-
-	revisionRepo, err := requireRevisionRepository(s.repo)
-	if err != nil {
-		return nil, err
-	}
-	parseAttempt, err := revisionRepo.AllocateParseAttempt(
-		ctx,
-		existing.ID,
-		kb.EmbeddingModelID,
-		fileSHA256,
-	)
-	if err != nil {
-		return nil, err
-	}
-	existing.CurrentParseAttempt = parseAttempt
-	if fileSHA256 != "" {
-		existing.FileSHA256 = fileSHA256
-	}
-	revisionBinding := newRevisionBinding(
-		parseAttempt,
-		fileSHA256,
-		kb,
-		reparseEff,
-		existing.FileType,
-	)
 
 	// Keep wiki's pending queue consistent across both manual and non-manual
 	// paths. The destructive work (swapping old wiki contributions for new)
@@ -2081,6 +2030,11 @@ func (s *knowledgeService) ReparseKnowledge(
 	// pre-reparse chunk set.
 	if kb != nil && kb.IsWikiEnabled() {
 		s.prepareWikiForReparse(ctx, existing)
+	}
+	recordReparseStarted := func() {
+		recordKBActivity(ctx, s.audit, tenantID, existing.KnowledgeBaseID, types.AuditActionKnowledgeReparseStarted,
+			"knowledge", existing.ID, types.AuditOutcomeAccepted,
+			map[string]any{"title": existing.Title, "type": existing.Type, "attempt": reparseAttempt})
 	}
 
 	// For manual knowledge, use async manual processing (cleanup + re-indexing in worker)
@@ -2113,11 +2067,13 @@ func (s *knowledgeService) ReparseKnowledge(
 			return nil, err
 		}
 
-		if err := s.enqueueManualProcessing(ctx, existing, meta.Content, true); err != nil {
+		if _, err := s.enqueueManualProcessing(ctx, existing, meta.Content, true); err != nil {
 			logger.Errorf(ctx, "Failed to enqueue manual reparse task: %v", err)
 			existing.ParseStatus = "failed"
 			existing.ErrorMessage = "Failed to enqueue processing task"
 			s.repo.UpdateKnowledge(ctx, existing)
+		} else {
+			recordReparseStarted()
 		}
 		return existing, nil
 	}
@@ -2180,8 +2136,6 @@ func (s *knowledgeService) ReparseKnowledge(
 			QuestionCount:            questionCount,
 			Language:                 lang,
 			Attempt:                  reparseAttempt,
-			ParseAttempt:             parseAttempt,
-			Revision:                 revisionBinding,
 		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
@@ -2202,6 +2156,7 @@ func (s *knowledgeService) ReparseKnowledge(
 			return existing, nil
 		}
 		logger.Infof(ctx, "Enqueued reparse task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, existing.ID)
+		recordReparseStarted()
 
 		// For data tables (csv, xlsx, xls), also enqueue summary task
 		if slices.Contains([]string{"csv", "xlsx", "xls"}, getFileType(existing.FileName)) {
@@ -2235,8 +2190,6 @@ func (s *knowledgeService) ReparseKnowledge(
 			QuestionCount:            questionCount,
 			Language:                 lang,
 			Attempt:                  reparseAttempt,
-			ParseAttempt:             parseAttempt,
-			Revision:                 revisionBinding,
 		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
@@ -2257,6 +2210,7 @@ func (s *knowledgeService) ReparseKnowledge(
 			return existing, nil
 		}
 		logger.Infof(ctx, "Enqueued file URL reparse task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, existing.ID)
+		recordReparseStarted()
 
 		return existing, nil
 	}
@@ -2283,8 +2237,6 @@ func (s *knowledgeService) ReparseKnowledge(
 			QuestionCount:            questionCount,
 			Language:                 lang,
 			Attempt:                  reparseAttempt,
-			ParseAttempt:             parseAttempt,
-			Revision:                 revisionBinding,
 		}
 
 		langfuse.InjectTracing(ctx, &taskPayload)
@@ -2305,6 +2257,7 @@ func (s *knowledgeService) ReparseKnowledge(
 			return existing, nil
 		}
 		logger.Infof(ctx, "Enqueued URL reparse task: id=%s queue=%s knowledge_id=%s", info.ID, info.Queue, existing.ID)
+		recordReparseStarted()
 
 		return existing, nil
 	}
@@ -2323,7 +2276,7 @@ func (s *knowledgeService) ReparseKnowledge(
 //   - Any in-flight worker reads the new status at its next checkpoint and
 //     bails (see processChunks / ProcessDocument / downstream handlers).
 //   - The asynq inspector (if available) dequeues pending / scheduled / retry
-//     tasks for this knowledge_id across the default / critical / low queues
+//     tasks for this knowledge_id across all queues used by the pipeline
 //     and signals active workers to stop. Lite mode (no Redis) skips the
 //     dequeue step — the checkpoint-based abort is the only stop signal there.
 //   - Idempotent: re-calling on an already-cancelled row is a no-op.
@@ -2409,6 +2362,9 @@ func (s *knowledgeService) CancelKnowledgeParse(
 	// at isWikiKnowledgeAborted anyway, but scrubbing avoids waking the
 	// batch in the first place.
 	s.scrubWikiPendingIngest(ctx, existing.KnowledgeBaseID, knowledgeID, "cancel")
+	recordKBActivity(ctx, s.audit, tenantID, existing.KnowledgeBaseID, types.AuditActionKnowledgeParseCanceled,
+		"knowledge", existing.ID, types.AuditOutcomeCanceled,
+		map[string]any{"title": existing.Title, "type": existing.Type})
 	return existing, nil
 }
 
@@ -2667,11 +2623,6 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 		logger.Warnf(ctx, "ProcessManualUpdate: knowledge not found: %s", payload.KnowledgeID)
 		return nil
 	}
-	if payload.ParseAttempt > 0 && payload.ParseAttempt != knowledge.CurrentParseAttempt {
-		logger.Warnf(ctx, "ProcessManualUpdate: superseded parse attempt %d (current=%d): %s",
-			payload.ParseAttempt, knowledge.CurrentParseAttempt, payload.KnowledgeID)
-		return nil
-	}
 
 	// Skip if already completed or being deleted
 	if knowledge.ParseStatus == types.ParseStatusCompleted {
@@ -2738,7 +2689,7 @@ func (s *knowledgeService) ProcessManualUpdate(ctx context.Context, t *asynq.Tas
 	}
 
 	// Run manual processing (image resolution + chunking + embedding) synchronously within the worker
-	s.triggerManualProcessingAtAttempt(ctx, kb, knowledge, payload.Content, true, payload.ParseAttempt)
+	s.triggerManualProcessing(ctx, kb, knowledge, payload.Content, true)
 	return nil
 }
 
@@ -2780,15 +2731,6 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 	}
 
 	if knowledge == nil {
-		return nil
-	}
-	if !revisionPayloadMatchesKnowledge(knowledge, payload.Revision, payload.ParseAttempt) {
-		logger.Warnf(
-			ctx,
-			"Document revision binding is missing or superseded: knowledge=%s current_attempt=%d",
-			payload.KnowledgeID,
-			knowledge.CurrentParseAttempt,
-		)
 		return nil
 	}
 
@@ -2840,7 +2782,6 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 
 	processOverrides, _ := knowledge.ProcessOverrides()
 	eff := ResolveProcessConfig(kb, processOverrides)
-	payload.Revision = refreshRevisionBinding(payload.Revision, kb, eff, knowledge.FileType)
 
 	// Re-check abort status right before flipping to "processing" — closes
 	// the race where the user cancels between the entry guard above and
@@ -3118,7 +3059,6 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 		QuestionCount:            payload.QuestionCount,
 		EnableMultimodel:         payload.EnableMultimodel,
 		StoredImages:             storedImages,
-		Revision:                 payload.Revision,
 	}
 
 	if convertResult != nil {
@@ -3413,7 +3353,6 @@ func (s *knowledgeService) enqueueImageMultimodalTasks(
 	images []docparser.StoredImage,
 	chunks []types.ParsedChunk,
 	metadata map[string]string,
-	revision *types.RevisionCommitBinding,
 ) {
 	if s.task == nil || len(images) == 0 {
 		return
@@ -3454,7 +3393,6 @@ func (s *knowledgeService) enqueueImageMultimodalTasks(
 			ImageSourceType: metadata["image_source_type"],
 			Attempt:         attempt,
 			ImageIndex:      idx,
-			Revision:        revision,
 		}
 
 		langfuse.InjectTracing(ctx, &payload)
@@ -3464,7 +3402,8 @@ func (s *knowledgeService) enqueueImageMultimodalTasks(
 			continue
 		}
 
-		task := asynq.NewTask(types.TypeImageMultimodal, payloadBytes, asynq.Queue(types.QueueMultimodal))
+		task := asynq.NewTask(types.TypeImageMultimodal, payloadBytes,
+			asynq.Queue(types.QueueMultimodal), asynq.MaxRetry(3), asynq.Timeout(30*time.Minute))
 		if _, err := s.task.Enqueue(task); err != nil {
 			logger.Warnf(ctx, "Failed to enqueue image multimodal task for %s: %v", img.ServingURL, err)
 		} else {
@@ -3480,6 +3419,9 @@ func (s *knowledgeService) ProcessKnowledgeListReparse(ctx context.Context, t *a
 		logger.Errorf(ctx, "Failed to unmarshal knowledge list reparse payload: %v", err)
 		return err
 	}
+	ctx = payload.Initiator.Apply(ctx)
+	taskID, _ := asynq.GetTaskID(ctx)
+	ctx = withKBActivityTask(ctx, taskID, kbActivityTrigger(ctx))
 
 	logger.Infof(ctx, "Processing knowledge list reparse task for %d knowledge items", len(payload.KnowledgeIDs))
 

@@ -1,9 +1,6 @@
 package middleware
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestSanitizeBody(t *testing.T) {
 	cases := []struct {
@@ -42,6 +39,11 @@ func TestSanitizeBody(t *testing.T) {
 			want: `{"password":"***","token":"***"}`,
 		},
 		{
+			name: "snake_case new_password and old_password",
+			in:   `{"email":"alice@example.com","new_password":"FreshPass9","old_password":"OldPass9"}`,
+			want: `{"email":"alice@example.com","new_password":"***","old_password":"***"}`,
+		},
+		{
 			name: "extra whitespace around colon",
 			in:   `{"apiKey"  :   "leak"}`,
 			want: `{"apiKey":"***"}`,
@@ -50,6 +52,11 @@ func TestSanitizeBody(t *testing.T) {
 			name: "non sensitive fields untouched",
 			in:   `{"baseUrl":"https://example.com","modelName":"gpt"}`,
 			want: `{"baseUrl":"https://example.com","modelName":"gpt"}`,
+		},
+		{
+			name: "OAuth authorization response fields",
+			in:   `{"authorization_url":"https://idp.example/authorize?state=secret","authorization_attempt":"secret-state"}`,
+			want: `{"authorization_url":"***","authorization_attempt":"***"}`,
 		},
 	}
 
@@ -63,36 +70,10 @@ func TestSanitizeBody(t *testing.T) {
 	}
 }
 
-func TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog(t *testing.T) {
-	const body = `{"success":true,"data":{"ok":true,"elapsed_ms":12,"request":{"input":"private prompt"},"raw_response":{"content":"private model output","reasoning_content":"private reasoning"},"error":"private provider error"}}`
-
-	got := sanitizeResponseBodyForLog(
-		"/api/v1/models/model-1/debug?trace=1",
-		body,
-	)
-
-	if got != "[model debug response omitted]" {
-		t.Fatalf("unexpected model-debug log body: %q", got)
-	}
-	for _, secret := range []string{
-		"private prompt",
-		"private model output",
-		"private reasoning",
-		"private provider error",
-	} {
-		if strings.Contains(got, secret) {
-			t.Fatalf("model-debug access log leaked %q", secret)
-		}
-	}
-}
-
-func TestR3_3OrdinaryResponseKeepsExistingFieldSanitization(t *testing.T) {
-	const body = `{"api_key":"secret","content":"ordinary response"}`
-
-	got := sanitizeResponseBodyForLog("/api/v1/knowledge", body)
-
-	const want = `{"api_key":"***","content":"ordinary response"}`
+func TestSanitizeQuery(t *testing.T) {
+	got := sanitizeQuery("code=secret-code&state=secret-state&next=%2Fsettings&state=second")
+	want := "code=%2A%2A%2A&next=%2Fsettings&state=%2A%2A%2A"
 	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
+		t.Fatalf("sanitizeQuery() = %q, want %q", got, want)
 	}
 }

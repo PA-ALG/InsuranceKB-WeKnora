@@ -249,6 +249,7 @@ func (h *KnowledgeHandler) enqueueKnowledgeListDelete(
 	payload := types.KnowledgeListDeletePayload{
 		TenantID:     tenantID,
 		KnowledgeIDs: ids,
+		Initiator:    types.TaskInitiatorFromContext(ctx),
 	}
 	langfuse.InjectTracing(ctx, &payload)
 	payloadBytes, err := json.Marshal(payload)
@@ -256,7 +257,7 @@ func (h *KnowledgeHandler) enqueueKnowledgeListDelete(
 		return "", fmt.Errorf("marshal payload: %w", err)
 	}
 	task := asynq.NewTask(types.TypeKnowledgeListDelete, payloadBytes,
-		asynq.Queue("low"), asynq.MaxRetry(3))
+		asynq.Queue(types.QueueMaintenance), asynq.MaxRetry(3), asynq.Timeout(2*time.Hour))
 	info, err := h.asynqClient.Enqueue(task)
 	if err != nil {
 		return "", fmt.Errorf("enqueue task: %w", err)
@@ -273,6 +274,7 @@ func (h *KnowledgeHandler) enqueueKnowledgeListReparse(
 		TenantID:      tenantID,
 		KnowledgeIDs:  ids,
 		ProcessConfig: processConfig,
+		Initiator:     types.TaskInitiatorFromContext(ctx),
 	}
 	langfuse.InjectTracing(ctx, &payload)
 	payloadBytes, err := json.Marshal(payload)
@@ -280,7 +282,7 @@ func (h *KnowledgeHandler) enqueueKnowledgeListReparse(
 		return "", fmt.Errorf("marshal payload: %w", err)
 	}
 	task := asynq.NewTask(types.TypeKnowledgeListReparse, payloadBytes,
-		asynq.Queue("low"), asynq.MaxRetry(3))
+		asynq.Queue(types.QueueMaintenance), asynq.MaxRetry(3), asynq.Timeout(time.Hour))
 	info, err := h.asynqClient.Enqueue(task)
 	if err != nil {
 		return "", fmt.Errorf("enqueue task: %w", err)
@@ -636,215 +638,6 @@ func (h *KnowledgeHandler) GetKnowledge(c *gin.Context) {
 	})
 }
 
-type knowledgeRevisionReader interface {
-	GetRevisionState(context.Context, string) (
-		*types.Knowledge, *types.KnowledgeRevision, *types.KnowledgeRevision, error,
-	)
-	GetRevision(context.Context, string, int64) (*types.KnowledgeRevision, error)
-	ListRevisionChunks(
-		context.Context, string, int64, *types.Pagination,
-	) ([]*types.Chunk, int64, error)
-}
-
-func (h *KnowledgeHandler) revisionReader() (knowledgeRevisionReader, error) {
-	reader, ok := h.kgService.GetRepository().(knowledgeRevisionReader)
-	if !ok {
-		return nil, fmt.Errorf("revision repository unavailable")
-	}
-	return reader, nil
-}
-
-func revisionError(c *gin.Context, status int, code string, details gin.H) {
-	payload := gin.H{"code": code}
-	for key, value := range details {
-		payload[key] = value
-	}
-	c.JSON(status, gin.H{"success": false, "error": payload})
-}
-
-func revisionDescriptor(revision *types.KnowledgeRevision) gin.H {
-	return gin.H{
-		"knowledge_id":    revision.KnowledgeID,
-		"parse_attempt":   revision.ParseAttempt,
-		"file_digest":     gin.H{"algorithm": "sha256", "value": revision.FileSHA256},
-		"parser_identity": revision.ParserIdentity,
-		"chunk_manifest": gin.H{
-			"algorithm":   revision.ManifestAlgorithm,
-			"digest":      revision.ManifestDigest,
-			"chunk_count": revision.ChunkCount,
-		},
-		"completed_at": revision.CompletedAt,
-	}
-}
-
-func revisionNotCommittedReason(knowledge *types.Knowledge) string {
-	switch {
-	case knowledge.FilePath == "":
-		return "file_less_source"
-	case knowledge.CurrentParseAttempt == 0:
-		return "never_completed"
-	case knowledge.ParseStatus == types.ParseStatusCompleted:
-		return "non_parse_completed"
-	case knowledge.ParseStatus == types.ParseStatusFailed ||
-		knowledge.ParseStatus == types.ParseStatusCancelled:
-		return "attempt_terminal"
-	default:
-		return "attempt_in_progress"
-	}
-}
-
-// GetKnowledgeRevision returns the immutable descriptor for the current
-// completed parse attempt.
-func (h *KnowledgeHandler) GetKnowledgeRevision(c *gin.Context) {
-	id := secutils.SanitizeForLog(c.Param("id"))
-	reader, err := h.revisionReader()
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	knowledge, current, last, err := reader.GetRevisionState(c.Request.Context(), id)
-	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
-		revisionError(c, http.StatusNotFound, "knowledge_not_found", nil)
-		return
-	}
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	if _, _, _, _, err = h.validateKnowledgeBaseAccessWithKBID(c, knowledge.KnowledgeBaseID); err != nil {
-		c.Error(err)
-		return
-	}
-	if knowledge.DeletedAt.Valid {
-		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
-			"tombstone": gin.H{"knowledge_id": id, "deleted_at": knowledge.DeletedAt.Time},
-		})
-		return
-	}
-	if current != nil {
-		c.JSON(http.StatusOK, gin.H{"success": true, "data": revisionDescriptor(current)})
-		return
-	}
-	details := gin.H{
-		"parse_status":  knowledge.ParseStatus,
-		"parse_attempt": knowledge.CurrentParseAttempt,
-		"reason":        revisionNotCommittedReason(knowledge),
-	}
-	if last != nil {
-		details["last_committed"] = gin.H{
-			"parse_attempt":   last.ParseAttempt,
-			"manifest_digest": last.ManifestDigest,
-			"completed_at":    last.CompletedAt,
-		}
-	}
-	revisionError(c, http.StatusConflict, "revision_not_committed", details)
-}
-
-// ListKnowledgeRevisionChunks returns one manifest-bound text-chunk page and
-// rejects any attempt change observed before or after the page query.
-func (h *KnowledgeHandler) ListKnowledgeRevisionChunks(c *gin.Context) {
-	id := secutils.SanitizeForLog(c.Param("id"))
-	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
-	if err != nil || attempt <= 0 {
-		revisionError(c, http.StatusBadRequest, "invalid_parse_attempt", nil)
-		return
-	}
-	var page types.Pagination
-	if err = c.ShouldBindQuery(&page); err != nil {
-		revisionError(c, http.StatusBadRequest, "invalid_pagination", nil)
-		return
-	}
-	if page.Page < 1 {
-		page.Page = 1
-	}
-	if page.PageSize < 1 {
-		page.PageSize = 10
-	}
-	if page.PageSize > 100 {
-		page.PageSize = 100
-	}
-
-	reader, err := h.revisionReader()
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	knowledge, current, _, err := reader.GetRevisionState(c.Request.Context(), id)
-	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
-		revisionError(c, http.StatusNotFound, "knowledge_not_found", nil)
-		return
-	}
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	if _, _, _, _, err = h.validateKnowledgeBaseAccessWithKBID(c, knowledge.KnowledgeBaseID); err != nil {
-		c.Error(err)
-		return
-	}
-	if knowledge.DeletedAt.Valid {
-		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
-			"tombstone": gin.H{"knowledge_id": id, "deleted_at": knowledge.DeletedAt.Time},
-		})
-		return
-	}
-	revision, err := reader.GetRevision(c.Request.Context(), id, attempt)
-	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
-		revisionError(c, http.StatusNotFound, "revision_not_found", gin.H{"parse_attempt": attempt})
-		return
-	}
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	if current == nil || current.ParseAttempt != attempt {
-		revisionError(c, http.StatusGone, "revision_superseded", gin.H{
-			"current_parse_attempt": knowledge.CurrentParseAttempt,
-			"parse_status":          knowledge.ParseStatus,
-		})
-		return
-	}
-	chunks, total, err := reader.ListRevisionChunks(c.Request.Context(), id, attempt, &page)
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	after, currentAfter, _, err := reader.GetRevisionState(c.Request.Context(), id)
-	if goerrors.Is(err, repository.ErrKnowledgeNotFound) {
-		revisionError(c, http.StatusGone, "revision_superseded", nil)
-		return
-	}
-	if err != nil {
-		c.Error(errors.NewInternalServerError(err.Error()))
-		return
-	}
-	if after.DeletedAt.Valid {
-		revisionError(c, http.StatusGone, "knowledge_deleted", gin.H{
-			"tombstone": gin.H{"knowledge_id": id, "deleted_at": after.DeletedAt.Time},
-		})
-		return
-	}
-	if currentAfter == nil ||
-		currentAfter.ParseAttempt != attempt ||
-		currentAfter.ManifestDigest != revision.ManifestDigest {
-		revisionError(c, http.StatusGone, "revision_superseded",
-			gin.H{"current_parse_attempt": after.CurrentParseAttempt})
-		return
-	}
-	if total != int64(revision.ChunkCount) {
-		revisionError(c, http.StatusConflict, "revision_manifest_incomplete", nil)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true, "data": chunks, "total": total,
-		"page": page.Page, "page_size": page.PageSize,
-		"revision": gin.H{
-			"knowledge_id": id, "parse_attempt": attempt,
-			"manifest_digest": revision.ManifestDigest, "chunk_count": revision.ChunkCount,
-		},
-	})
-}
-
 // GetKnowledgeSpans godoc
 // @Summary      获取知识文档解析的 Span 树（含历史尝试）
 // @Description  返回该知识在解析流水线的 trace tree（root → stage → subspan）：每段状态、耗时、input/output、错误码、langfuse_trace_id。支持 ?attempt=N 查看历史尝试；不传则返回最新尝试。前端用于渲染时间线 + 多模态/embedding 子节点 + 一键跳转 Langfuse。
@@ -889,16 +682,18 @@ func (h *KnowledgeHandler) GetKnowledgeSpans(c *gin.Context) {
 
 	rows := []types.KnowledgeProcessingSpan{}
 	currentAttempt := 0
+	latestAttempt := 0
 	if h.spanRepo != nil {
-		if requestedAttempt == 0 {
-			latest, lerr := h.spanRepo.LatestAttempt(ctx, knowledge.ID)
-			if lerr != nil {
-				logger.Warnf(ctx, "spans LatestAttempt failed for %s: %v", knowledge.ID, lerr)
-			} else {
-				currentAttempt = latest
-			}
+		latest, lerr := h.spanRepo.LatestAttempt(ctx, knowledge.ID)
+		if lerr != nil {
+			logger.Warnf(ctx, "spans LatestAttempt failed for %s: %v", knowledge.ID, lerr)
 		} else {
+			latestAttempt = latest
+		}
+		if requestedAttempt > 0 {
 			currentAttempt = requestedAttempt
+		} else {
+			currentAttempt = latestAttempt
 		}
 		if currentAttempt > 0 {
 			rows, err = h.spanRepo.ListByAttempt(ctx, knowledge.ID, currentAttempt)
@@ -922,23 +717,66 @@ func (h *KnowledgeHandler) GetKnowledgeSpans(c *gin.Context) {
 
 	resp := gin.H{
 		"knowledge_id":    knowledge.ID,
+		"attempt":         currentAttempt,
+		"latest_attempt":  latestAttempt,
 		"parse_status":    knowledge.ParseStatus,
 		"current_attempt": currentAttempt,
 		"current_stage":   currentStageName,
 		"trace":           tree,
 	}
-	if lastErr != nil {
-		resp["last_error"] = gin.H{
-			"stage":       lastErr.Name,
-			"code":        lastErr.ErrorCode,
-			"message":     lastErr.ErrorMessage,
-			"finished_at": lastErr.FinishedAt,
-		}
+	if lastError := knowledgeSpansLastError(
+		currentAttempt,
+		latestAttempt,
+		knowledge.ParseStatus,
+		knowledge.ErrorMessage,
+		knowledge.UpdatedAt,
+		lastErr,
+	); lastError != nil {
+		resp["last_error"] = lastError
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    resp,
 	})
+}
+
+// knowledgeSpansLastError builds the last_error payload for GetKnowledgeSpans.
+// Span failures win when present; otherwise a failed knowledge row without a
+// matching span error (recovery / dead-letter paths) surfaces ErrorMessage.
+func knowledgeSpansLastError(
+	currentAttempt, latestAttempt int,
+	parseStatus, knowledgeErrorMessage string,
+	knowledgeUpdatedAt time.Time,
+	spanFailure *types.KnowledgeProcessingSpan,
+) gin.H {
+	if spanFailure != nil {
+		return gin.H{
+			"stage":         spanFailure.Name,
+			"code":          spanFailure.ErrorCode,
+			"message":       spanFailure.ErrorMessage,
+			"name":          spanFailure.Name,
+			"error_code":    spanFailure.ErrorCode,
+			"error_message": spanFailure.ErrorMessage,
+			"finished_at":   spanFailure.FinishedAt,
+		}
+	}
+	if currentAttempt != latestAttempt || parseStatus != types.ParseStatusFailed || knowledgeErrorMessage == "" {
+		return nil
+	}
+	errorCode := "UNKNOWN"
+	if strings.EqualFold(strings.TrimSpace(knowledgeErrorMessage),
+		"Task interrupted due to application restart") {
+		errorCode = "SERVER_RESTART"
+	}
+	return gin.H{
+		"stage":         "knowledge_processing",
+		"code":          errorCode,
+		"message":       knowledgeErrorMessage,
+		"name":          "knowledge_processing",
+		"error_code":    errorCode,
+		"error_message": knowledgeErrorMessage,
+		"finished_at":   knowledgeUpdatedAt,
+	}
 }
 
 // buildSpanTree assembles a flat list of span rows into a parent-child
@@ -1211,7 +1049,7 @@ func (h *KnowledgeHandler) DeleteKnowledge(c *gin.Context) {
 	effectiveTenantID, _ := effCtx.Value(types.TenantIDContextKey).(uint64)
 	if effectiveTenantID == 0 {
 		logger.Error(ctx, "Effective tenant ID missing after access validation")
-		c.Error(errors.NewInternalServerError("tenant context unavailable"))
+		c.Error(errors.NewInternalServerError("workspace context unavailable"))
 		return
 	}
 
@@ -1438,7 +1276,10 @@ func (h *KnowledgeHandler) DownloadKnowledgeFile(c *gin.Context) {
 		return
 	}
 
-	_, effCtx, err := h.resolveKnowledgeAndValidateKBAccess(c, id, types.OrgRoleViewer)
+	// Keep a handler-level Editor check in addition to the route guard. The
+	// original file is more sensitive than parsed-content reads and must not
+	// be downloadable through a read-only organization share.
+	_, effCtx, err := h.resolveKnowledgeAndValidateKBAccess(c, id, types.OrgRoleEditor)
 	if err != nil {
 		c.Error(err)
 		return
@@ -1550,13 +1391,13 @@ type GetKnowledgeBatchRequest struct {
 
 // GetKnowledgeBatch godoc
 // @Summary      批量获取知识
-// @Description  根据ID列表批量获取知识条目。可选 kb_id：指定时按该知识库校验权限并用于共享知识库的租户解析；可选 agent_id：使用共享智能体时传此参数，后端按智能体所属租户查询（用于刷新后恢复共享知识库下的文件）
+// @Description  根据ID列表批量获取知识条目。可选 kb_id：指定时按该知识库校验权限并用于共享知识库的空间解析；可选 agent_id：使用共享智能体时传此参数，后端按智能体所属空间查询（用于刷新后恢复共享知识库下的文件）
 // @Tags         知识管理
 // @Accept       json
 // @Produce      json
 // @Param        ids       query     []string  true   "知识ID列表"
 // @Param        kb_id     query     string   false  "可选，知识库ID（用于共享知识库时指定范围）"
-// @Param        agent_id  query     string   false  "可选，共享智能体ID（用于按智能体租户批量拉取文件详情）"
+// @Param        agent_id  query     string   false  "可选，共享智能体ID（用于按智能体空间批量拉取文件详情）"
 // @Success      200       {object}  map[string]interface{}  "知识列表"
 // @Failure      400       {object}  errors.AppError        "请求参数错误"
 // @Security     Bearer
@@ -1918,7 +1759,7 @@ type knowledgeTagBatchRequest struct {
 
 // UpdateKnowledgeTagBatch godoc
 // @Summary      批量更新知识标签
-// @Description  批量更新知识条目的标签。可选 kb_id：指定时按该知识库校验编辑权限并用于共享知识库的租户解析
+// @Description  批量更新知识条目的标签。可选 kb_id：指定时按该知识库校验编辑权限并用于共享知识库的空间解析
 // @Tags         知识管理
 // @Accept       json
 // @Produce      json
@@ -2107,7 +1948,7 @@ func (h *KnowledgeHandler) SearchKnowledge(c *gin.Context) {
 		_ = userIDVal
 		currentTenantID := c.GetUint64(types.TenantIDContextKey.String())
 		if currentTenantID == 0 {
-			c.Error(errors.NewUnauthorizedError("tenant ID not found"))
+			c.Error(errors.NewUnauthorizedError("workspace ID not found"))
 			return
 		}
 		callerTenantRole := types.TenantRoleFromContext(ctx)
@@ -2383,6 +2224,7 @@ func (h *KnowledgeHandler) MoveKnowledge(c *gin.Context) {
 		SourceKBID:   req.SourceKBID,
 		TargetKBID:   req.TargetKBID,
 		Mode:         req.Mode,
+		Initiator:    types.TaskInitiatorFromContext(ctx),
 	}
 	langfuse.InjectTracing(ctx, &payload)
 
@@ -2395,7 +2237,8 @@ func (h *KnowledgeHandler) MoveKnowledge(c *gin.Context) {
 
 	// Enqueue move task
 	task := asynq.NewTask(types.TypeKnowledgeMove, payloadBytes,
-		asynq.TaskID(taskID), asynq.Queue("default"), asynq.MaxRetry(3))
+		asynq.TaskID(taskID), asynq.Queue(types.QueueMaintenance),
+		asynq.MaxRetry(3), asynq.Timeout(2*time.Hour))
 	info, err := h.asynqClient.Enqueue(task)
 	if err != nil {
 		logger.Errorf(ctx, "MoveKnowledge: failed to enqueue task: %v", err)
