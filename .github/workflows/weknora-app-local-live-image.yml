@@ -1,4 +1,4 @@
-name: WeKnora app trusted local-live image
+name: WeKnora trusted local-live images
 
 on:
   workflow_dispatch:
@@ -13,14 +13,23 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  build:
+  validate:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 45
+    outputs:
+      build_repository: ${{ steps.source.outputs.build_repository }}
+      build_commit: ${{ steps.source.outputs.build_commit }}
+      build_tree: ${{ steps.source.outputs.build_tree }}
+      platform: ${{ steps.source.outputs.platform }}
+      lock_sha256: ${{ steps.source.outputs.lock_sha256 }}
+      image_tag: ${{ steps.source.outputs.image_tag }}
+      image_matrix: ${{ steps.source.outputs.image_matrix }}
     steps:
       - name: Checkout trusted workflow source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Read reviewed source lock
@@ -30,42 +39,112 @@ jobs:
             --lock deploy/local-live/weknora-app-source.lock.json \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Checkout exact Tencent upstream source
+      - name: Checkout exact merged project source
         env:
-          UPSTREAM_REPOSITORY: ${{ steps.source.outputs.repository }}
-          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
+          BUILD_REPOSITORY: ${{ steps.source.outputs.build_repository }}
+          BUILD_COMMIT: ${{ steps.source.outputs.build_commit }}
         run: |
           git clone --filter=blob:none --no-checkout \
-            "$UPSTREAM_REPOSITORY" "${{ runner.temp }}/weknora-source"
-          git -C "${{ runner.temp }}/weknora-source" \
-            checkout --detach "$UPSTREAM_COMMIT"
+            "$BUILD_REPOSITORY" "${{ runner.temp }}/locked-source"
+          git -C "${{ runner.temp }}/locked-source" checkout --detach "$BUILD_COMMIT"
 
-      - name: Verify source, Dockerfile, ancestors, and patch
-        env:
-          LOCKED_PATCH: ${{ steps.source.outputs.patch_path }}
+      - name: Verify merged source, adoption target, and Dockerfiles
         run: |
           python3 harness/scripts/verify_weknora_app_source.py verify \
             --lock deploy/local-live/weknora-app-source.lock.json \
-            --checkout "${{ runner.temp }}/weknora-source" \
-            --patch "$GITHUB_WORKSPACE/$LOCKED_PATCH"
+            --source-checkout "${{ runner.temp }}/locked-source" \
+            --workflow-checkout "$GITHUB_WORKSPACE"
 
-      - name: Apply reviewed security patch
+      - name: Checkout exact official adoption target
         env:
-          LOCKED_PATCH: ${{ steps.source.outputs.patch_path }}
-        working-directory: ${{ runner.temp }}/weknora-source
+          TARGET_REPOSITORY: ${{ steps.source.outputs.target_repository }}
+          TARGET_COMMIT: ${{ steps.source.outputs.target_commit }}
         run: |
-          git apply --check "$GITHUB_WORKSPACE/$LOCKED_PATCH"
-          git apply "$GITHUB_WORKSPACE/$LOCKED_PATCH"
+          git clone --filter=blob:none --no-checkout \
+            "$TARGET_REPOSITORY" "${{ runner.temp }}/official-target"
+          git -C "${{ runner.temp }}/official-target" checkout --detach "$TARGET_COMMIT"
 
-      - name: Set up Go
+      - name: Set up Python compatibility gate
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+          version: "0.9.26"
+
+      - name: Set up Go compatibility gate
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: ${{ runner.temp }}/weknora-source/go.mod
-          cache-dependency-path: ${{ runner.temp }}/weknora-source/go.sum
+          go-version-file: ${{ runner.temp }}/locked-source/go.mod
+          cache-dependency-path: ${{ runner.temp }}/locked-source/go.sum
 
-      - name: Verify model-debug access-log redaction
-        working-directory: ${{ runner.temp }}/weknora-source
-        run: go test ./internal/middleware -run R3_3 -count=1
+      - name: Install locked Harness dependencies
+        working-directory: ${{ runner.temp }}/locked-source/harness
+        run: uv sync --locked
+
+      - name: Reproduce reviewed thin adoption report
+        working-directory: ${{ runner.temp }}/locked-source
+        run: |
+          harness/.venv/bin/python harness/scripts/prepare_weknora_adoption.py check \
+            --target-manifest deploy/upstream/weknora-adoption-target.json \
+            --project-checkout . \
+            --target-checkout "${{ runner.temp }}/official-target" \
+            --runtime-source-lock \
+              "$GITHUB_WORKSPACE/deploy/local-live/weknora-app-source.lock.json" \
+            --inventory deploy/patches/enterprise-llm-wiki-patch-inventory.yaml \
+            --plugin-contract deploy/upstream/weknora-plugin-contract.yaml \
+            > "${{ runner.temp }}/thin-report.json"
+
+      - name: Verify thin report review binding
+        run: |
+          python3 harness/scripts/verify_weknora_app_source.py verify-report \
+            --lock deploy/local-live/weknora-app-source.lock.json \
+            --report "${{ runner.temp }}/thin-report.json"
+
+      - name: Run focused upgrade compatibility gates
+        working-directory: harness
+        run: |
+          "${{ runner.temp }}/locked-source/harness/.venv/bin/pytest" -q \
+            tests/test_prepare_weknora_adoption_045.py \
+            tests/test_local_live_cli_023.py::test_r3_3_retry_vlm_consumes_marker_after_identity_before_single_reparse \
+            tests/test_scope_016.py::test_s1_2_only_bound_space_builds_scope \
+            tests/test_service_shell_config_health_039.py::test_t3_readiness_starts_not_ready_then_checks_db_and_uses_fresh_cache \
+            tests/test_local_live_supply_chain_023.py
+
+      - name: Run focused migration and W1 contract gates
+        working-directory: ${{ runner.temp }}/locked-source
+        run: |
+          go test ./internal/database -count=1
+          go test ./internal/handler -run \
+            '^(TestGetKnowledgeRevision|TestRevisionPagination)' -count=1
+          go test ./internal/types -run \
+            '^TestKnowledgeRevisionManifestDigestVectors$' -count=1
+          go test ./migrations/versioned -run \
+            '^TestKnowledgeRevisionManifestMigrationContract$' -count=1
+
+  build:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate.outputs.image_matrix) }}
+    steps:
+      - name: Checkout exact merged project source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: PA-ALG/InsuranceKB-WeKnora
+          ref: ${{ matrix.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: locked-source
+
+      - name: Build verified frontend assets
+        if: matrix.id == 'frontend'
+        working-directory: locked-source/frontend
+        run: |
+          npm ci
+          npm test
+          npm run build-only
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -77,49 +156,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Build and push locked app image
+      - name: Build and push locked image
         id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
-          context: ${{ runner.temp }}/weknora-source
-          file: ${{ runner.temp }}/weknora-source/docker/Dockerfile.app
-          platforms: ${{ steps.source.outputs.platform }}
+          context: locked-source/${{ matrix.context }}
+          file: locked-source/${{ matrix.dockerfile }}
+          platforms: ${{ needs.validate.outputs.platform }}
           push: true
-          tags: ${{ steps.source.outputs.image_repository }}:${{ steps.source.outputs.image_tag }}
+          tags: ${{ matrix.repository }}:${{ needs.validate.outputs.image_tag }}
           labels: |
-            org.opencontainers.image.source=${{ steps.source.outputs.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.commit }}
-            io.insurancekb.source.tree=${{ steps.source.outputs.tree }}
-            io.insurancekb.patch.sha256=${{ steps.source.outputs.patch_sha256 }}
+            org.opencontainers.image.source=${{ needs.validate.outputs.build_repository }}
+            org.opencontainers.image.revision=${{ matrix.source_commit }}
+            io.insurancekb.source.tree=${{ matrix.source_tree }}
+            io.insurancekb.source.lock.sha256=${{ matrix.lock_sha256 }}
           build-args: |
-            VERSION_ARG=0.6.3-insurancekb-023
-            COMMIT_ID_ARG=${{ steps.source.outputs.commit }}
+            VERSION_ARG=source-${{ matrix.source_commit }}
+            COMMIT_ID_ARG=${{ matrix.source_commit }}
             BUILD_TIME_ARG=github-run-${{ github.run_id }}-${{ github.run_attempt }}
-          cache-from: type=gha,scope=weknora-app-arm64
-          cache-to: type=gha,scope=weknora-app-arm64,mode=max
+          cache-from: type=gha,scope=weknora-${{ matrix.id }}-arm64
+          cache-to: type=gha,scope=weknora-${{ matrix.id }}-arm64,mode=max
           provenance: mode=max
           sbom: true
 
       - name: Attest immutable GHCR subject
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
-          subject-name: ${{ steps.source.outputs.image_repository }}
+          subject-name: ${{ matrix.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
       - name: Record immutable artifact identity
         env:
-          IMAGE_REPOSITORY: ${{ steps.source.outputs.image_repository }}
+          IMAGE_ID: ${{ matrix.id }}
+          IMAGE_REPOSITORY: ${{ matrix.repository }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
-          SOURCE_TREE: ${{ steps.source.outputs.tree }}
-          PATCH_SHA256: ${{ steps.source.outputs.patch_sha256 }}
+          SOURCE_COMMIT: ${{ matrix.source_commit }}
+          SOURCE_TREE: ${{ matrix.source_tree }}
+          LOCK_SHA256: ${{ matrix.lock_sha256 }}
         run: |
           {
-            echo '### WeKnora app artifact'
+            echo "### WeKnora ${IMAGE_ID} artifact"
             echo
             echo "- image: ${IMAGE_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- source commit: ${SOURCE_COMMIT}"
             echo "- source tree: ${SOURCE_TREE}"
-            echo "- patch sha256: ${PATCH_SHA256}"
+            echo "- source lock sha256: ${LOCK_SHA256}"
           } >> "$GITHUB_STEP_SUMMARY"

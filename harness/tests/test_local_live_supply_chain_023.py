@@ -1,11 +1,10 @@
-"""OpenSpec 023 R2.1/R3.1/R3.3 trusted app supply-chain contracts."""
+"""OpenSpec 023/045 trusted multi-image supply-chain contracts."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
-import re
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -14,35 +13,20 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOCK_PATH = REPO_ROOT / "deploy/local-live/weknora-app-source.lock.json"
-PATCH_PATH = (
-    REPO_ROOT
-    / "deploy/local-live/patches/model-debug-access-log-redaction.patch"
-)
+MANIFEST_PATH = REPO_ROOT / "deploy/upstream/weknora-adoption-target.json"
 VERIFIER_PATH = REPO_ROOT / "harness/scripts/verify_weknora_app_source.py"
-WORKFLOW_PATH = (
-    REPO_ROOT / ".github/workflows/weknora-app-local-live-image.yml"
-)
-
+WORKFLOW_PATH = REPO_ROOT / ".github/workflows/weknora-app-local-live-image.yml"
+PROJECT_REPOSITORY = "https://github.com/PA-ALG/InsuranceKB-WeKnora.git"
 UPSTREAM_REPOSITORY = "https://github.com/Tencent/WeKnora.git"
-UPSTREAM_COMMIT = "5eefa70e6fc8f9ec27958779f91ece6cf685598c"
-UPSTREAM_TREE = "a44f7eaeb40cf156d2893398046ffcb3094e5940"
-DOCKERFILE_PATH = "docker/Dockerfile.app"
-DOCKERFILE_SHA256 = (
-    "be66005765bbc7db61851b07cd65529b0ee3c35d75f0eff84366d83a4cca3a32"
-)
-REQUIRED_ANCESTORS = (
-    "505bc7ddec0feaef337610ad2f26d34a9e41a012",
-    "3f516d7f317d2dbba6d1e8e5170db9ff1d052ca7",
-    "94d18ea15a663974f0dc4dc4d9a43f20dca14d39",
-    "abcecc870a7850d33b4a0d71d3845d0f3c4a1ae5",
-    "800cea0826574f351141b6b3b7d615f5e0d837d6",
-    "def92bb74fcde45dfc1be84cd6d63cf47113aa0b",
-)
-IMAGE_REPOSITORY = "ghcr.io/pa-alg/insurancekb-weknora-app"
+IMAGE_IDS = ("app", "frontend", "docreader")
+IMAGE_PATHS = {
+    "app": (".", "docker/Dockerfile.app"),
+    "frontend": ("frontend", "frontend/Dockerfile"),
+    "docreader": (".", "docker/Dockerfile.docreader"),
+}
 
 
 def _load_verifier() -> ModuleType:
-    assert VERIFIER_PATH.is_file(), "R2.1 source-lock verifier is missing"
     spec = importlib.util.spec_from_file_location(
         "verify_weknora_app_source_023", VERIFIER_PATH
     )
@@ -52,234 +36,330 @@ def _load_verifier() -> ModuleType:
     return module
 
 
-def _load_lock_json() -> dict[str, object]:
-    assert LOCK_PATH.is_file(), "R2.1 WeKnora app source lock is missing"
-    loaded = json.loads(LOCK_PATH.read_text())
+def _load_json(path: Path) -> dict[str, object]:
+    loaded = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(loaded, dict)
     return loaded
 
 
-def test_r2_1_source_lock_pins_real_app_dockerfile_and_security_ancestry() -> None:
-    lock = _load_lock_json()
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _git(path: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ("git", "-C", str(path), *arguments),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() -> None:
+    lock = _load_json(LOCK_PATH)
+    manifest = _load_json(MANIFEST_PATH)
 
     assert set(lock) == {
         "schema_version",
         "repository",
         "commit",
         "tree",
-        "dockerfile",
-        "required_ancestors",
-        "patch",
         "platform",
-        "image_repository",
+        "build_source",
+        "adoption_manifest",
+        "reviewed_thin_report_sha256",
+        "images",
     }
     assert lock["schema_version"] == 1
     assert lock["repository"] == UPSTREAM_REPOSITORY
-    assert lock["commit"] == UPSTREAM_COMMIT
-    assert lock["tree"] == UPSTREAM_TREE
-    assert lock["dockerfile"] == {
-        "path": DOCKERFILE_PATH,
-        "sha256": DOCKERFILE_SHA256,
-    }
-    assert lock["required_ancestors"] == list(REQUIRED_ANCESTORS)
     assert lock["platform"] == "linux/arm64"
-    assert lock["image_repository"] == IMAGE_REPOSITORY
 
-    patch = lock["patch"]
-    assert isinstance(patch, dict)
-    assert patch.get("path") == (
-        "deploy/local-live/patches/model-debug-access-log-redaction.patch"
+    build_source = lock["build_source"]
+    assert isinstance(build_source, dict)
+    assert set(build_source) == {"repository", "commit", "tree"}
+    assert build_source["repository"] == PROJECT_REPOSITORY
+    assert (
+        _git(
+            REPO_ROOT,
+            "merge-base",
+            "--is-ancestor",
+            str(build_source["commit"]),
+            "HEAD",
+        )
+        == ""
     )
-    assert re.fullmatch(r"[0-9a-f]{64}", str(patch.get("sha256", "")))
-    assert patch.get("sha256") == hashlib.sha256(PATCH_PATH.read_bytes()).hexdigest()
+    assert (
+        _git(REPO_ROOT, "rev-parse", f"{build_source['commit']}^{{tree}}")
+        == build_source["tree"]
+    )
+
+    adoption = lock["adoption_manifest"]
+    assert isinstance(adoption, dict)
+    assert set(adoption) == {"path", "sha256", "repository", "commit", "tree"}
+    assert adoption["path"] == "deploy/upstream/weknora-adoption-target.json"
+    assert adoption["sha256"] == _sha256(MANIFEST_PATH)
+    assert adoption["repository"] == manifest["repository"]
+    assert adoption["commit"] == manifest["commit"]
+    assert adoption["tree"] == manifest["tree"]
+
+    assert len(str(lock["reviewed_thin_report_sha256"])) == 64
+    images = lock["images"]
+    assert isinstance(images, dict)
+    assert tuple(images) == IMAGE_IDS
+    for image_id, (context, dockerfile_path) in IMAGE_PATHS.items():
+        image = images[image_id]
+        assert isinstance(image, dict)
+        assert set(image) == {"repository", "context", "dockerfile"}
+        assert image["repository"] == (
+            f"ghcr.io/pa-alg/insurancekb-weknora-{image_id}"
+        )
+        assert image["context"] == context
+        dockerfile = image["dockerfile"]
+        assert isinstance(dockerfile, dict)
+        assert dockerfile == {
+            "path": dockerfile_path,
+            "sha256": _sha256(REPO_ROOT / dockerfile_path),
+        }
 
 
-def test_r2_1_verifier_rejects_unknown_or_mutable_lock_fields(tmp_path: Path) -> None:
+def test_verifier_rejects_unknown_mutable_or_incomplete_lock(tmp_path: Path) -> None:
     module = _load_verifier()
-    lock = _load_lock_json()
+    lock = _load_json(LOCK_PATH)
 
+    mutations: list[tuple[str, dict[str, object], str]] = []
     unknown = dict(lock)
-    unknown["unreviewed_override"] = "allowed"
-    unknown_path = tmp_path / "unknown.json"
-    unknown_path.write_text(json.dumps(unknown))
-    with pytest.raises(module.SourceVerificationError, match="keys"):
-        module.load_source_lock(unknown_path)
+    unknown["override"] = True
+    mutations.append(("unknown", unknown, "keys"))
 
-    mutable = dict(lock)
-    mutable["image_repository"] = "docker.io/example/weknora-app:latest"
-    mutable_path = tmp_path / "mutable.json"
-    mutable_path.write_text(json.dumps(mutable))
-    with pytest.raises(module.SourceVerificationError, match="GHCR"):
-        module.load_source_lock(mutable_path)
+    mutable = json.loads(json.dumps(lock))
+    mutable["images"]["app"]["repository"] += ":latest"
+    mutations.append(("mutable", mutable, "tag-free"))
 
-    output_injection = dict(lock)
-    output_injection["patch"] = {
-        "path": "deploy/local-live/patches/reviewed.patch\nimage_repository=evil",
-        "sha256": "0" * 64,
-    }
-    injection_path = tmp_path / "output-injection.json"
-    injection_path.write_text(json.dumps(output_injection))
-    with pytest.raises(module.SourceVerificationError, match="single-line"):
-        module.load_source_lock(injection_path)
+    missing = json.loads(json.dumps(lock))
+    del missing["images"]["docreader"]
+    mutations.append(("missing", missing, "app, frontend, and docreader"))
+
+    for name, value, message in mutations:
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(value), encoding="utf-8")
+        with pytest.raises(module.SourceVerificationError, match=message):
+            module.load_source_lock(path)
 
 
-def test_r2_1_verifier_checks_hermetic_checkout_patch_and_dockerfile(
+def test_verifier_checks_exact_merged_source_manifest_and_dockerfiles(
     tmp_path: Path,
 ) -> None:
     module = _load_verifier()
-    checkout = tmp_path / "upstream"
-    checkout.mkdir()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init")
+    _git(repository, "config", "user.name", "OpenSpec 045 test")
+    _git(repository, "config", "user.email", "openspec-045@example.invalid")
+    _git(repository, "remote", "add", "origin", PROJECT_REPOSITORY)
 
-    def git(*arguments: str) -> str:
-        completed = subprocess.run(
-            ["git", "-C", str(checkout), *arguments],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return completed.stdout.strip()
+    for _, (_, dockerfile_path) in IMAGE_PATHS.items():
+        path = repository / dockerfile_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# {dockerfile_path}\nFROM scratch\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "synthetic upstream target")
+    target_commit = _git(repository, "rev-parse", "HEAD")
+    target_tree = _git(repository, "rev-parse", "HEAD^{tree}")
 
-    git("init")
-    git("config", "user.name", "OpenSpec 023 test")
-    git("config", "user.email", "openspec-023@example.invalid")
-    git("remote", "add", "origin", UPSTREAM_REPOSITORY)
+    manifest_path = repository / "deploy/upstream/weknora-adoption-target.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest = {
+        "schema_version": 1,
+        "repository": UPSTREAM_REPOSITORY,
+        "commit": target_commit,
+        "tree": target_tree,
+        "release_ancestor": {"tag": "v1.0.0", "commit": target_commit},
+        "required_capability_commits": [target_commit],
+        "official_migration_head": 1,
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "synthetic merged code")
+    source_commit = _git(repository, "rev-parse", "HEAD")
+    source_tree = _git(repository, "rev-parse", "HEAD^{tree}")
 
-    dockerfile = checkout / DOCKERFILE_PATH
-    dockerfile.parent.mkdir(parents=True)
-    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
-    git("add", DOCKERFILE_PATH)
-    git("commit", "-m", "synthetic security ancestor")
-    required_ancestor = git("rev-parse", "HEAD")
+    marker = repository / ".github/workflows/trusted.yml"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("name: trusted\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "synthetic workflow")
+    workflow_commit = _git(repository, "rev-parse", "HEAD")
 
-    dockerfile.write_text("FROM scratch\nRUN echo locked\n", encoding="utf-8")
-    git("add", DOCKERFILE_PATH)
-    git("commit", "-m", "synthetic locked source")
-    commit = git("rev-parse", "HEAD")
-    tree = git("rev-parse", "HEAD^{tree}")
+    source_checkout = tmp_path / "source"
+    workflow_checkout = tmp_path / "workflow"
+    _git(tmp_path, "clone", str(repository), str(source_checkout))
+    _git(tmp_path, "clone", str(repository), str(workflow_checkout))
+    _git(source_checkout, "checkout", "--detach", source_commit)
+    _git(workflow_checkout, "checkout", "--detach", workflow_commit)
+    _git(source_checkout, "remote", "set-url", "origin", PROJECT_REPOSITORY)
+    _git(workflow_checkout, "remote", "set-url", "origin", PROJECT_REPOSITORY)
 
-    patch_path = tmp_path / "synthetic.patch"
-    patch_path.write_text(
-        """diff --git a/docker/Dockerfile.app b/docker/Dockerfile.app
---- a/docker/Dockerfile.app
-+++ b/docker/Dockerfile.app
-@@ -1,2 +1,3 @@
- FROM scratch
- RUN echo locked
-+RUN echo patched
-""",
+    lock_value = {
+        "schema_version": 1,
+        "repository": UPSTREAM_REPOSITORY,
+        "commit": target_commit,
+        "tree": target_tree,
+        "platform": "linux/arm64",
+        "build_source": {
+            "repository": PROJECT_REPOSITORY,
+            "commit": source_commit,
+            "tree": source_tree,
+        },
+        "adoption_manifest": {
+            "path": "deploy/upstream/weknora-adoption-target.json",
+            "sha256": _sha256(source_checkout / MANIFEST_PATH.relative_to(REPO_ROOT)),
+            "repository": UPSTREAM_REPOSITORY,
+            "commit": target_commit,
+            "tree": target_tree,
+        },
+        "reviewed_thin_report_sha256": "0" * 64,
+        "images": {
+            image_id: {
+                "repository": f"ghcr.io/pa-alg/insurancekb-weknora-{image_id}",
+                "context": context,
+                "dockerfile": {
+                    "path": dockerfile_path,
+                    "sha256": _sha256(source_checkout / dockerfile_path),
+                },
+            }
+            for image_id, (context, dockerfile_path) in IMAGE_PATHS.items()
+        },
+    }
+    lock_path = tmp_path / "lock.json"
+    lock_path.write_text(json.dumps(lock_value), encoding="utf-8")
+    lock = module.load_source_lock(lock_path)
+
+    module.verify_source(lock, source_checkout, workflow_checkout)
+    (source_checkout / "docker/Dockerfile.app").write_text("FROM busybox\n")
+    with pytest.raises(module.SourceVerificationError, match="clean|Dockerfile"):
+        module.verify_source(lock, source_checkout, workflow_checkout)
+
+
+def test_manual_thin_report_requires_exact_reviewed_digest(tmp_path: Path) -> None:
+    module = _load_verifier()
+    lock = module.load_source_lock(LOCK_PATH)
+    report_value = {
+        "schema_version": 1,
+        "verdict": "manual_review_required",
+        "hard_checks": {"status": "pass", "code": "ok"},
+        "target": {
+            "repository": lock.adoption_manifest.repository,
+            "commit": lock.adoption_manifest.commit,
+            "tree": lock.adoption_manifest.tree,
+        },
+        "official_migrations": {"status": "merged"},
+        "plugin_contract": {"status": "valid"},
+    }
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps(report_value, sort_keys=True) + "\n", encoding="utf-8")
+    digest = _sha256(report)
+    reviewed = lock._replace(reviewed_thin_report_sha256=digest)
+
+    module.verify_thin_report(reviewed, report)
+    report.write_text(
+        json.dumps({**report_value, "overlaps": {"unexpected": ["path"]}}, sort_keys=True)
+        + "\n",
         encoding="utf-8",
     )
-    source_lock = module.SourceLock(
-        schema_version=1,
-        repository=UPSTREAM_REPOSITORY,
-        commit=commit,
-        tree=tree,
-        dockerfile=module.LockedFile(
-            path=DOCKERFILE_PATH,
-            sha256=hashlib.sha256(dockerfile.read_bytes()).hexdigest(),
-        ),
-        required_ancestors=(required_ancestor,),
-        patch=module.LockedFile(
-            path=patch_path.name,
-            sha256=hashlib.sha256(patch_path.read_bytes()).hexdigest(),
-        ),
-        platform="linux/arm64",
-        image_repository=IMAGE_REPOSITORY,
-    )
+    with pytest.raises(module.SourceVerificationError, match="reviewed digest"):
+        module.verify_thin_report(reviewed, report)
 
-    module.verify_checkout(source_lock, checkout, patch_path)
-    subprocess.run(
-        ["git", "-C", str(checkout), "apply", "--check", str(patch_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    dockerfile.write_text("FROM scratch\n", encoding="utf-8")
-    with pytest.raises(module.SourceVerificationError, match="Dockerfile"):
-        module.verify_checkout(source_lock, checkout, patch_path)
+    report_value["verdict"] = "block"
+    report.write_text(json.dumps(report_value) + "\n", encoding="utf-8")
+    with pytest.raises(module.SourceVerificationError, match="blocked"):
+        module.verify_thin_report(reviewed, report)
 
 
-def test_r2_1_locked_patch_pins_verified_uv_installer_and_security_changes() -> None:
-    patch = PATCH_PATH.read_text(encoding="utf-8")
+def test_emit_outputs_are_closed_and_share_one_source_and_lock(tmp_path: Path) -> None:
+    module = _load_verifier()
+    lock = module.load_source_lock(LOCK_PATH)
+    output = tmp_path / "github-output"
+    module.emit_github_outputs(lock, LOCK_PATH, output)
+    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
 
-    assert "[model debug response omitted]" in patch
-    assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in patch
-    assert "+.env.*" in patch
-    assert "golang-migrate/migrate/v4/cmd/migrate@v4.19.1" in patch
-    assert "@latest" in patch, "the patch must explicitly remove the mutable version"
-    assert "https://astral.sh/uv/0.9.26/install.sh" in patch
-    assert "09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18" in patch
-    assert "sha256sum -c" in patch
+    assert set(values) == {
+        "build_repository",
+        "build_commit",
+        "build_tree",
+        "target_repository",
+        "target_commit",
+        "platform",
+        "lock_sha256",
+        "image_tag",
+        "image_matrix",
+    }
+    matrix = json.loads(values["image_matrix"])
+    assert [item["id"] for item in matrix["include"]] == list(IMAGE_IDS)
+    assert all(item["source_commit"] == values["build_commit"] for item in matrix["include"])
+    assert all(item["source_tree"] == values["build_tree"] for item in matrix["include"])
+    assert all(item["lock_sha256"] == values["lock_sha256"] for item in matrix["include"])
 
 
-def test_r2_1_trusted_workflow_builds_only_locked_source_with_attestations() -> None:
-    assert WORKFLOW_PATH.is_file(), "R2.1 trusted GHCR workflow is missing"
-    workflow = WORKFLOW_PATH.read_text()
+def test_trusted_workflow_is_main_only_gated_and_builds_three_attested_images() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
+    dispatch = workflow.split("workflow_dispatch:", 1)[1].split("permissions:", 1)[0]
+    assert "inputs:" not in dispatch
     assert "pull_request:" not in workflow
     assert "\n  push:" not in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
-    assert "contents: read" in workflow
-    assert "packages: write" in workflow
-    assert "id-token: write" in workflow
-    assert "attestations: write" in workflow
-    assert "ubuntu-24.04-arm" in workflow
-
-    for action_pin in (
-        "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
-        "actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16",
-        "docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f",
-        "docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9",
-        "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8",
-        "actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be",
-    ):
-        assert action_pin in workflow
-
-    assert "verify_weknora_app_source.py emit" in workflow
     assert "verify_weknora_app_source.py verify" in workflow
-    assert "git apply --check" in workflow
-    assert "go test ./internal/middleware -run R3_3 -count=1" in workflow
-    assert "context: ${{ runner.temp }}/weknora-source" in workflow
-    assert "file: ${{ runner.temp }}/weknora-source/docker/Dockerfile.app" in workflow
-    assert "platforms: ${{ steps.source.outputs.platform }}" in workflow
-    assert (
-        "tags: ${{ steps.source.outputs.image_repository }}:"
-        "${{ steps.source.outputs.image_tag }}" in workflow
-    )
+    assert "prepare_weknora_adoption.py check" in workflow
+    assert "verify_weknora_app_source.py verify-report" in workflow
+    for required_gate in (
+        "test_r3_3_retry_vlm_consumes_marker_after_identity_before_single_reparse",
+        "test_s1_2_only_bound_space_builds_scope",
+        "test_t3_readiness_starts_not_ready_then_checks_db_and_uses_fresh_cache",
+        "go test ./internal/database",
+        "TestGetKnowledgeRevision",
+        "TestKnowledgeRevisionManifestDigestVectors",
+        "TestKnowledgeRevisionManifestMigrationContract",
+    ):
+        assert required_gate in workflow
+    assert "manual_review_required" not in workflow
+    assert "git apply" not in workflow
+    assert "patch_sha256" not in workflow
+    assert "80a5003" not in workflow
+    assert "0.7.1" not in workflow
+    assert "0.6.3" not in workflow
+
+    gate_position = workflow.index("verify-report")
+    login_position = workflow.index("Log in to GHCR")
+    push_position = workflow.index("push: true")
+    assert gate_position < login_position < push_position
+    assert "fromJSON(needs.validate.outputs.image_matrix)" in workflow
     assert "provenance: mode=max" in workflow
     assert "sbom: true" in workflow
     assert "push-to-registry: true" in workflow
+    assert "io.insurancekb.source.tree=" in workflow
+    assert "io.insurancekb.source.lock.sha256=" in workflow
     assert "secrets." not in workflow
+    assert "weknora-worker" not in workflow
 
 
-def test_r3_1_workflow_has_no_legacy_key_or_caller_controlled_source_fallback() -> None:
-    workflow = WORKFLOW_PATH.read_text()
+def test_model_debug_redaction_is_in_merged_source_not_a_workflow_patch() -> None:
+    source = (REPO_ROOT / "internal/middleware/logger.go").read_text(encoding="utf-8")
+    test_source = (REPO_ROOT / "internal/middleware/logger_test.go").read_text(
+        encoding="utf-8"
+    )
+    dockerfile = (REPO_ROOT / "docker/Dockerfile.app").read_text(encoding="utf-8")
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert "legacy" not in workflow.lower()
-    assert "repository:" not in workflow.split("workflow_dispatch:", 1)[1].split(
-        "permissions:", 1
-    )[0]
-    assert "commit:" not in workflow.split("workflow_dispatch:", 1)[1].split(
-        "permissions:", 1
-    )[0]
-    assert "platform:" not in workflow.split("workflow_dispatch:", 1)[1].split(
-        "permissions:", 1
-    )[0]
-
-
-def test_r3_3_patch_omits_complete_model_debug_response_envelope() -> None:
-    assert PATCH_PATH.is_file(), "R3.3 model-debug log redaction patch is missing"
-    patch = PATCH_PATH.read_text()
-
-    assert "sanitizeResponseBodyForLog" in patch
-    assert "[model debug response omitted]" in patch
-    assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in patch
-    for forbidden in (
-        "private prompt",
-        "private model output",
-        "private reasoning",
-        "private provider error",
-    ):
-        assert forbidden in patch, "the regression fixture must exercise every leak class"
+    assert "[model debug response omitted]" in source
+    assert "TestR3_3ModelDebugResponseIsNeverWrittenToAccessLog" in test_source
+    assert "migrate/v4/cmd/migrate@v4.19.1" in dockerfile
+    assert "migrate/v4/cmd/migrate@latest" not in dockerfile
+    assert "https://astral.sh/uv/0.9.26/install.sh" in dockerfile
+    assert (
+        "09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18"
+        in dockerfile
+    )
+    assert "sha256sum -c -" in dockerfile
+    assert "git apply" not in workflow
