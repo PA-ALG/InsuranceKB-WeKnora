@@ -22,7 +22,7 @@ RUN if [ -n "$APK_MIRROR_ARG" ]; then \
     apt-get install -y git build-essential libsqlite3-dev
 
 # Install migrate tool
-RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -76,7 +76,12 @@ RUN if [ -n "$APK_MIRROR_ARG" ]; then \
         ffmpeg && \
     python3 -m pip install --break-system-packages --upgrade pip setuptools wheel && \
     mkdir -p /home/appuser/.local/bin && \
-    curl -LsSf https://astral.sh/uv/install.sh | CARGO_HOME=/home/appuser/.cargo UV_INSTALL_DIR=/home/appuser/.local/bin sh && \
+    UV_INSTALLER_SHA256=09ace6a888bd5941b5d44f1177a9a8a6145552ec8aa81c51b1b57ff73e6b9e18 && \
+    curl -LsSf --proto '=https' --tlsv1.2 https://astral.sh/uv/0.9.26/install.sh -o /tmp/uv-install.sh && \
+    printf '%s  %s\n' "$UV_INSTALLER_SHA256" /tmp/uv-install.sh | sha256sum -c - && \
+    CARGO_HOME=/home/appuser/.cargo UV_INSTALL_DIR=/home/appuser/.local/bin \
+        sh /tmp/uv-install.sh && \
+    rm -f /tmp/uv-install.sh && \
     chown -R appuser:appuser /home/appuser && \
     ln -sf /home/appuser/.local/bin/uvx /usr/local/bin/uvx && \
     chmod +x /usr/local/bin/uvx && \
