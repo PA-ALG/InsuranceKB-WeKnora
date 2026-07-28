@@ -97,6 +97,13 @@ JOB_MIGRATION_POSTGRES_NODES = {
         "test_q26_offline_sql_downgrade_is_explicitly_refused",
     )
 }
+SERVICE_SHELL_POSTGRES_NODES = {
+    f"tests/test_service_shell_worker_039.py::{node}"
+    for node in (
+        "test_t5_postgres_two_workers_single_result_and_unknown_type_budget",
+        "test_t6_postgres_drain_reclaims_with_higher_generation_and_one_result",
+    )
+}
 POSTGRES_NODES = (
     {
         POSTGRES_NODE,
@@ -117,6 +124,7 @@ POSTGRES_NODES = (
     | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
     | JOB_STORE_POSTGRES_NODES
     | JOB_MIGRATION_POSTGRES_NODES
+    | SERVICE_SHELL_POSTGRES_NODES
 )
 WEKNORA_NODES = {
     "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
