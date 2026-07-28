@@ -131,13 +131,13 @@ T1–T4 可在 P1 合入前以纯 unit 先行，但不得提前接线 store）�
 - [x] T4 RED：两入口一 wheel——console scripts 存在、角色互斥（API 无
   claim 面、Worker 仅探针面）、app factory 可多实例构造。GREEN：cli 入口
   + `[project.scripts]` + API app factory（仅探针 + 观测路由骨架）。
-- [ ] T5 RED（integration_postgres；需 P1 实现已合入）：Worker 主循环——
+- [x] T5 RED（integration_postgres；需 P1 实现已合入）：Worker 主循环——
   注册测试 handler 后 ≥2 副本消费恰好单领取单结果；未注册 job_type 记
   typed `retryable`（`unknown_job_type`）按 `max_attempts` 路由不伪装
   成功；本地并发两组配置值生效；空队列退配置轮询间隔；瞬时 DB 错误有界
   退避不退出。GREEN：worker_loop（claim → dispatch → heartbeat → typed
   完成；空 registry + 显式注册扩展点）。
-- [ ] T6 RED（integration_postgres）：优雅停止——SIGTERM 后零新 claim、
+- [x] T6 RED（integration_postgres）：优雅停止——SIGTERM 后零新 claim、
   deadline 内完成正常提交、超时任务停 heartbeat 由第二实例以更高
   generation 接管收敛、readiness 即时 not ready、总退出有界、重复信号
   立即退出。GREEN：lifecycle/drain 模块（API 与 Worker 共用）。

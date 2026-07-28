@@ -2,7 +2,7 @@
 
 > Date: 2026-07-28  
 > Base: `40f3ae9e4b41fab51566c438da08c57d80e3089b`  
-> Status: **Draft candidate; PostgreSQL acceptance NOT RUN**
+> Status: **Draft candidate; PostgreSQL T5/T6 acceptance PASS**
 
 ## Delivered software scope
 
@@ -43,7 +43,7 @@ focused suite was retained and rerun after the corrective changes.
 | mypy strict changed scope | PASS (`11` files checked) |
 | OpenSpec 039 strict | PASS |
 | diff/scope/secret/private checks | PASS |
-| PostgreSQL 16 acceptance | **NOT RUN** by current mission boundary |
+| PostgreSQL 16 T5/T6 exact nodes | PASS: `2` tests, `0` skipped, `0` failures, `0` errors |
 | full deterministic | **NOT RUN** |
 | provider/model/WeKnora live | **NOT RUN** |
 
@@ -59,13 +59,27 @@ there is no second domain, migration, WeKnora adapter, or business handler to sp
 The excess is therefore disclosed for reviewer adjudication rather than hidden or
 split into non-runnable half-process PRs.
 
+## PostgreSQL 16 acceptance
+
+The exact `integration_postgres` nodes ran against the repository's controlled
+PostgreSQL 16 environment:
+
+- `test_t5_postgres_two_workers_single_result_and_unknown_type_budget`;
+- `test_t6_postgres_drain_reclaims_with_higher_generation_and_one_result`.
+
+They prove two real Worker loops converge through P1 to single terminal results,
+unknown job types consume their configured retry budget without stopping the loop,
+and a drained/abandoned generation is recovered by a second Worker with a strictly
+higher generation and one final result. The generated JUnit passed the repository
+gate with `tests=2`, `skipped=0`, `failures=0`, and `errors=0`.
+
 ## Remaining merge gates
 
-- T5/T6 real PostgreSQL multi-worker, lease takeover, and migration-readiness scenarios
-  remain unchecked and **NOT RUN**.
-- T8 remains incomplete until PostgreSQL evidence exists; its local
-  static/OpenSpec/scope subset is PASS.
-- T9 independent review has not yet approved the candidate.
+- T8 remains unchecked only for the explicitly deferred shared README/HANDOFF status
+  integration; its code, test, PostgreSQL, static, OpenSpec, scope, and zero-migration
+  gates are PASS.
+- T9 implementation review approved the original exact head. The test-only PostgreSQL
+  evidence delta remains gated on an exact-tree independent re-review before push.
 
 This report does not claim Ready, production readiness, provider validation, or live
 WeKnora validation.
