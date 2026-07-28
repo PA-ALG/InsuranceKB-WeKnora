@@ -328,6 +328,8 @@ def test_trusted_workflow_is_main_only_gated_and_builds_three_attested_images() 
     assert "provenance: mode=max" in workflow
     assert "sbom: true" in workflow
     assert "push-to-registry: true" in workflow
+    assert "npm test -- src/utils/wikiLineDiff.test.ts" in workflow
+    assert "\n          npm test\n" not in workflow
     assert "io.insurancekb.source.tree=" in workflow
     assert "io.insurancekb.source.lock.sha256=" in workflow
     assert "secrets." not in workflow
