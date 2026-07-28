@@ -55,19 +55,19 @@
 - [x] 验证 merge history 可证明 official ancestry，target files 与 Git tree
   一致。
 
-> Code replay 已完成；legacy W1 `000066`、独立 enterprise ledger 与 bridge
-> 仍严格属于 Task 3，不因源码重放而视为完成。
+> Code replay 完成后，legacy W1 `000066`、独立 enterprise ledger 与 bridge
+> 已由 Task 3 独立验证闭合，不把源码重放冒充迁移证据。
 
 ## Task 3 · Dual migration 与 legacy 000066 bridge
 
-- [ ] RED：official filenames/head/SHA256 与 target tree byte mismatch。
-- [ ] RED：legacy W1 66、pre-66、upstream-66-plus、fresh-target 与
+- [x] RED：official filenames/head/SHA256 与 target tree byte mismatch。
+- [x] RED：legacy W1 66、pre-66、upstream-66-plus、fresh-target 与
   unknown/dirty/partial origins。
-- [ ] 保留 legacy W1 `000066` byte/checksum fixture。
-- [ ] 建立 enterprise migration source 与 `enterprise_schema_migrations`。
-- [ ] 在 advisory lock/transaction 内重验并无损桥接 known legacy state。
-- [ ] 顺序执行 official→enterprise migration；unknown/dirty/partial 零写失败。
-- [ ] 在 disposable PostgreSQL 16/17 验证 crash/restart、data preservation 与
+- [x] 保留 legacy W1 `000066` byte/checksum fixture。
+- [x] 建立 enterprise migration source 与 `enterprise_schema_migrations`。
+- [x] 在 advisory lock/transaction 内重验并无损桥接 known legacy state。
+- [x] 顺序执行 official→enterprise migration；unknown/dirty/partial 零写失败。
+- [x] 在 disposable PostgreSQL 16/17 验证 crash/restart、data preservation 与
   双 ledger clean。
 
 ## Task 4 · Targeted compatibility
@@ -75,14 +75,15 @@
 - [x] 运行 W1 revision descriptor/chunk/manifest/race tests。
 - [x] 落地 planned in-progress-with-prior `last_committed` 真实测试并把对应 node
   从 planned 改为 existing；在此之前 Code final gate 不得通过。
-- [ ] 验证 public REST envelope、typed errors、ACL denied 与 zero-write。
+- [x] 验证 public REST envelope、typed errors、ACL denied 与 zero-write。
 - [x] 验证 Wiki 单页 history、line diff、manual edit optimistic locking、
   revert-new-revision 与未授权零写；这些证据不改变 Harness plugin authority。
-- [ ] 运行 focused frontend type/test、Go、Python、OpenSpec 与 diff/scope gates。
+- [x] 运行 focused frontend type/test、Go、Python、OpenSpec 与 diff/scope gates。
 
-> Code candidate 的 Wiki focused Go 与 line-diff tests 已通过；完整 frontend
-> type-check 在 exact upstream `80a5003` source 上仍有既存错误，因此综合门禁
-> 保持未勾，不在本 replay PR 扩修无关上游路径。
+> Code candidate 的 focused Go、134 个 Harness compatibility tests、Wiki
+> line-diff tests、OpenSpec 与有限升级检查均已通过。完整 frontend type-check
+> 如实报告 exact upstream `80a5003` source 的 10 个既存错误；candidate 的
+> `frontend/` 与该 target tree 零差异，因此不在本 replay PR 扩修无关上游路径。
 
 ## Task 5 · Trusted workflow 与 multi-image
 
