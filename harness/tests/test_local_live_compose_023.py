@@ -16,11 +16,23 @@ from insurance_harness.live_env.compose import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-T6D_2_APP_IMAGE = (
-    "ghcr.io/pa-alg/insurancekb-weknora-app:"
-    "src-5eefa70e6fc8-patch-6f6d8ad1e0e9@"
-    "sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5"
-)
+T6D_2_IMAGES = {
+    "app": (
+        "ghcr.io/pa-alg/insurancekb-weknora-app:"
+        "src-a8bf55ae1844-lock-55bb545f43a4@"
+        "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55"
+    ),
+    "frontend": (
+        "ghcr.io/pa-alg/insurancekb-weknora-frontend:"
+        "src-a8bf55ae1844-lock-55bb545f43a4@"
+        "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243"
+    ),
+    "docreader": (
+        "ghcr.io/pa-alg/insurancekb-weknora-docreader:"
+        "src-a8bf55ae1844-lock-55bb545f43a4@"
+        "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207"
+    ),
+}
 
 
 @pytest.fixture
@@ -715,7 +727,7 @@ def test_r2_1_six_image_lock_is_resolved_and_matches_overrides() -> None:
         "redis",
         "harness-postgres",
     }
-    assert lock["_status"] == "RESOLVED_2026-07-15"
+    assert lock["_status"] == "RESOLVED_2026-07-28"
     assert all(
         value.count("@sha256:") == 1 and "UNRESOLVED" not in value
         for key, value in lock.items()
@@ -732,11 +744,12 @@ def test_r2_1_six_image_lock_is_resolved_and_matches_overrides() -> None:
     )
 
 
-def test_t6d_2_r2_1_app_lock_and_compose_use_verified_manifest_digest() -> None:
+def test_t6d_2_r2_1_images_lock_and_compose_use_verified_manifest_digests() -> None:
     lock = json.loads((REPO_ROOT / "deploy/local-live/images.lock").read_text())
     override = (
         REPO_ROOT / "deploy/local-live/docker-compose.weknora.override.yml"
     ).read_text()
 
-    assert lock["app"] == T6D_2_APP_IMAGE
-    assert f"image: {T6D_2_APP_IMAGE}" in override
+    for image_id, expected in T6D_2_IMAGES.items():
+        assert lock[image_id] == expected
+        assert f"image: {expected}" in override
