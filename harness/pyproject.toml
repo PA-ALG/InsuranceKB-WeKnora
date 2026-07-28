@@ -25,6 +25,10 @@ dependencies = [
     "uvicorn>=0.30",
 ]
 
+[project.scripts]
+wiki-api = "insurance_harness.service_shell.cli:api_main"
+wiki-worker = "insurance_harness.service_shell.cli:worker_main"
+
 [project.optional-dependencies]
 # 金标注真实模型调用（spec G5：CI 不装此组，LiteLLMClient 延迟导入）
 llm = ["litellm>=1.40"]
@@ -46,6 +50,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/insurance_harness"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"alembic.ini" = "insurance_harness/_migration/alembic.ini"
+"migrations" = "insurance_harness/_migration/migrations"
 
 [tool.ruff]
 line-length = 100
