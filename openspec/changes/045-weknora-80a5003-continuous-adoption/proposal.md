@@ -2,7 +2,11 @@
 
 ## 状态
 
-`SPEC SLIMMED / TASK 1B SUBMITTED / ADOPTION NOT COMPLETE`
+`CODE CANDIDATE 404e7811 / MIGRATION, WORKFLOW AND ARTIFACT OPEN`
+
+候选分支已完成 exact source merge、W1 code replay 与 logger redaction replay。
+这不代表已合入 main，也不代表 legacy `000066` bridge、local-live runtime 或
+生产 Artifact 已完成。
 
 本 change 定义一条薄升级轨道：尽快把当前 manifest 指定的 Tencent WeKnora
 不可变 identity 合入项目，同时让下一次升级只需批准并替换 manifest，而不再

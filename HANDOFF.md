@@ -5,9 +5,11 @@
 > [!IMPORTANT]
 > **当前状态（2026-07-28，Milestone A 施工中）**
 >
-> **代码事实截止点**：`main=d1c1b3ac2d5aed0fa25134ca6551a137004dbfbc`。
-> 顶端合入链为 PR #59（P1 read-only active fence）→ PR #58（P3
-> API/Worker Shell）→ PR #57（P2d Space Security Boundary 规格）。
+> **代码事实截止点**：`origin/main=e40394572a37582ad6ebe33333ae0be61918b37e`；
+> 045 Code candidate=`404e78110722eefdd0f39205729e2c968d578512`。
+> 最近代码/规格基线由 PR #59（P1 read-only active fence）、PR #58（P3
+> API/Worker Shell）与 PR #57（P2d Space Security Boundary 规格）构成；
+> 其后的 PR #60/#61/#62 仅同步状态、Git 治理与 045 规格。
 > 此前 P1、W1、P5a0 已分别由 PR #53/#55/#56 合入。截止核验时 GitHub
 > open PR/issue 均为 `0`。
 >
@@ -22,17 +24,27 @@
 >
 > **CI 事实**：最后一个代码合入点 `3cfe1fd0` 的 main push run
 > `30323799320` 中 deterministic、integration-postgres、wheel-smoke
-> 全部成功；其后的 `d1c1b3ac` 只改 6 个文档/OpenSpec 路径，`harness`
-> 与 `.github` tree 均未变化，因此按 workflow path filter 不应产生
+> 全部成功；其后的 `d1c1b3ac` 与 PR #60/#61/#62 只改文档、治理与
+> OpenSpec 路径。fresh tree 对比确认 `d1c1b3ac..origin/main` 的 `harness`
+> 与 `.github` 均未变化，因此按 workflow path filter 不应产生
 > harness-ci，禁止为文档手工触发 full/provider/live/PG。
 >
-> **WeKnora 上游更新（已核验、尚未采用）**：Tencent 于 2026-07-24
+> **WeKnora 上游更新（source candidate 已采用，runtime 尚未采用）**：
+> Tencent 于 2026-07-24
 > 发布稳定版
 > [`v0.7.1`](https://github.com/Tencent/WeKnora/releases/tag/v0.7.1)，
 > exact tag commit 为 `c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb`。
-> 当前项目 `VERSION`、frontend/docreader、source lock 和 local-live app
-> 仍冻结在 `v0.6.3` / `5eefa70e6fc8f9ec27958779f91ece6cf685598c`
+> 045 candidate 已通过标准 merge 采用官方
+> `80a5003cc99a427098afe184eee6601916d3d156`，包含单页
+> history/diff/manual edit/revert，并已重放 W1 与 model-debug 日志脱敏。
+> candidate 的 `VERSION`/source tree 为 v0.7.1/`80a5003`；source lock 和
+> local-live app 仍冻结在 `v0.6.3` /
+> `5eefa70e6fc8f9ec27958779f91ece6cf685598c`
 > （app digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`）。
+> Candidate focused 验收中，Wiki history/manual edit/revert、乐观锁零残留、
+> 越权拒绝与 frontend line diff 均通过；完整 frontend type-check 在与
+> `80a5003` 字节一致的 `frontend/` 上仍有 10 个既存错误，因此综合 Task 4
+> 保持未完成，未在本 replay PR 扩修无关上游路径。
 > `5eefa70e → v0.7.1` 有 139 commits、733 个变更路径；新版本包含 scoped
 > tenant/platform API keys、KB activity audit、worker/task governance、
 > shared-space/organization 与 source-download 权限加固等项目相关能力。
@@ -40,11 +52,12 @@
 > **不能直接 bump**：上游已使用
 > `000066_expand_knowledge_span_name`，而已合入的 W1 用同号替换为
 > `000066_knowledge_revision_manifest`；上游随后还有 `000067–000074`。
-> W1 有 14 个生产路径同时被上游修改，且当前 trusted local-live 构建仍只
+> W1 的 14 个重叠生产路径已在 candidate 完成人工重放与 focused 验证，但
+> 当前 trusted local-live 构建仍只
 > checkout `5eefa70e` + model-debug redaction patch，所以现有运行制品并不
-> 包含 W1。采用 v0.7.1 前必须先交付迁移桥，为后续项目 migration 分配新的
-> 非冲突 identity，但不得静默重命名/删除 legacy W1 `000066`；随后重放 W1
-> 合同、重建 provenance/SBOM/attestation 并写回 exact image digest。上游新增 key/ACL
+> 包含 W1。runtime 采用前必须先交付迁移桥，为后续项目 migration 分配新的
+> 非冲突 identity，但不得静默重命名/删除 legacy W1 `000066`；随后验证
+> bridge + W1 合同、重建 provenance/SBOM/attestation 并写回 exact image digest。上游新增 key/ACL
 > 能力可能缩小 P3 ACL-inspection delta，但在验证 exact RAW/Wiki ACL
 > 等价读取前，不得把它写成已解除 043 blocker。v0.7.1 同时把原始 source
 > download 收紧为 Editor+，而 `/files` 的 KB-scoped retrieve 仍不足；
@@ -59,10 +72,11 @@
 > 并添加 upstream tag × project inventory 自动碰号检查；在该门禁落地前，
 > 不得继续追加新的 WeKnora project-owned migration。
 >
-> **下一轮主航道（均须各自取得 Mission Card，当前尚未授权功能写入）**：
+> **下一轮主航道**：
 >
-> 1. 开发 Lane A：先采用 WeKnora v0.7.1 并关闭 000066/W1/runtime 制品
->    缺口；随后基于新 API 重新裁剪最小 P3 ACL-inspection authority，
+> 1. 开发 Lane A：独立交付 Task 3 legacy `000066` bridge 与 enterprise
+>    migration ledger，再闭合剩余 compatibility、trusted images 和 Artifact；
+>    随后基于新 API 重新裁剪最小 P3 ACL-inspection authority，
 >    再串行接 OpenSpec 043 的 P2d 实现与预留迁移 0016；
 > 2. 开发 Lane B：P5a1 SchemaVersion + Golden Product slice；P2a 虽已满足
 >    C0/P3/CAP0 软件依赖，仍受 23 号 D-2026-07-26-1 的八项 launch
