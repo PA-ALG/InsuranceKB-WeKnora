@@ -1,0 +1,688 @@
+schema_version: 1
+contract_id: harness-weknora-w1-plugin
+contract_version: 1
+adoption_target_ref: deploy/upstream/weknora-adoption-target.json
+patch_inventory_ref: deploy/patches/enterprise-llm-wiki-patch-inventory.yaml
+transports:
+  allowed:
+    - versioned_rest
+    - lifecycle_poll
+  forbidden:
+    - shared_database
+    - redis
+    - asynq
+    - internal_queue
+    - mcp_control_plane
+states:
+  w1_runtime:
+    available: false
+    status: available_after_replay
+  consumer_adapted:
+    available: false
+    status: pre_w1
+  source_reader_authority:
+    available: false
+    status: blocked_on_p3_acl_inspection_authority
+  artifact_gate:
+    available: false
+    status: planned_nodes_pending_artifact_pr
+principals:
+  source_reader:
+    service: source_reader
+    authentication:
+      header: Authorization
+      scheme: Bearer
+      capabilities:
+        - retrieve
+    space_binding:
+      authority: harness_persisted_space_binding
+      identity_fields:
+        - tenant_id
+        - raw_knowledge_base_id
+      acl_basis:
+        - current_tenant_scope
+        - current_raw_knowledge_base_viewer_acl
+      exact_knowledge_base_scope: bound_raw_knowledge_base_only
+    allowed_operations:
+      - knowledge_list
+      - knowledge_get
+      - revision_get
+      - revision_chunks_get
+    denied_methods:
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+    zero_write: required
+    download_authority: blocked
+  test_writer:
+    service: w1_contract_test_writer
+    purpose: bounded_race_stimuli
+    allowed_operations:
+      - knowledge_reparse
+      - knowledge_delete
+    auto_retry: false
+    bounded_to_test_runs: true
+endpoints:
+  - endpoint_id: knowledge_list
+    method: GET
+    path: /api/v1/knowledge-bases/{raw_knowledge_base_id}/knowledge
+    principal: source_reader
+    authority: discovery_only
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: raw_knowledge_base_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters:
+        - name: page
+          value_type: positive_integer
+          required: false
+          minimum: 1
+          maximum: null
+        - name: page_size
+          value_type: positive_integer
+          required: false
+          minimum: 1
+          maximum: 100
+      body: none
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - data
+        - total
+        - page
+        - page_size
+      revision_required_fields: []
+    retry:
+      mode: bounded_get
+      identity_fields:
+        - space_binding
+        - raw_knowledge_base_id
+        - page
+        - page_size
+  - endpoint_id: knowledge_get
+    method: GET
+    path: /api/v1/knowledge/{knowledge_id}
+    principal: source_reader
+    authority: authorized_probe
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters: []
+      body: none
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - data
+      revision_required_fields:
+        - id
+        - knowledge_base_id
+        - parse_status
+        - current_parse_attempt
+        - file_sha256
+    retry:
+      mode: bounded_get
+      identity_fields:
+        - space_binding
+        - knowledge_id
+  - endpoint_id: revision_get
+    method: GET
+    path: /api/v1/knowledge/{knowledge_id}/revision
+    principal: source_reader
+    authority: current_committed_revision
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters: []
+      body: none
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - data
+      revision_required_fields:
+        - knowledge_id
+        - parse_attempt
+        - file_digest
+        - parser_identity
+        - chunk_manifest
+        - completed_at
+    retry:
+      mode: bounded_get
+      identity_fields:
+        - space_binding
+        - knowledge_id
+        - parse_attempt
+  - endpoint_id: revision_chunks_get
+    method: GET
+    path: /api/v1/knowledge/{knowledge_id}/revisions/{parse_attempt}/chunks
+    principal: source_reader
+    authority: attempt_bound_revision_chunks
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+        - name: parse_attempt
+          value_type: positive_integer
+          required: true
+          minimum: 1
+          maximum: null
+      query_parameters:
+        - name: page
+          value_type: positive_integer
+          required: false
+          minimum: 1
+          maximum: null
+        - name: page_size
+          value_type: positive_integer
+          required: false
+          minimum: 1
+          maximum: 100
+      body: none
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - data
+        - total
+        - page
+        - page_size
+        - revision
+      revision_required_fields:
+        - knowledge_id
+        - parse_attempt
+        - manifest_digest
+        - chunk_count
+    retry:
+      mode: bounded_get
+      identity_fields:
+        - space_binding
+        - knowledge_id
+        - parse_attempt
+        - page
+        - page_size
+        - manifest_digest
+  - endpoint_id: knowledge_download
+    method: GET
+    path: /api/v1/knowledge/{knowledge_id}/download
+    principal: source_reader
+    authority: blocked_pending_source_reader_acl_authority
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters: []
+      body: none
+    success:
+      available: false
+      root_success: null
+      statuses: []
+      envelope: blocked
+      required_fields: []
+      revision_required_fields: []
+    retry:
+      mode: never
+      identity_fields:
+        - space_binding
+        - knowledge_id
+  - endpoint_id: knowledge_reparse
+    method: POST
+    path: /api/v1/knowledge/{knowledge_id}/reparse
+    principal: test_writer
+    authority: stimulus_only
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters: []
+      body: bounded_process_config_fixture
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - message
+        - data
+      revision_required_fields: []
+    retry:
+      mode: never
+      identity_fields:
+        - test_run_id
+        - knowledge_id
+        - prior_parse_attempt
+  - endpoint_id: knowledge_delete
+    method: DELETE
+    path: /api/v1/knowledge/{knowledge_id}
+    principal: test_writer
+    authority: stimulus_only
+    timeout_policy_ref: w1_public_contract_timeout_v1
+    request:
+      path_parameters:
+        - name: knowledge_id
+          value_type: opaque_id
+          required: true
+          minimum: null
+          maximum: null
+      query_parameters: []
+      body: none
+    success:
+      available: true
+      root_success: true
+      statuses:
+        - 200
+      envelope: root
+      required_fields:
+        - success
+        - message
+        - data
+      revision_required_fields: []
+    retry:
+      mode: never
+      identity_fields:
+        - test_run_id
+        - knowledge_id
+typed_errors:
+  - code: revision_not_committed
+    reason: attempt_in_progress
+    status: 409
+    disposition: bounded_get_retry
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, reason, parse_status, parse_attempt]
+    last_committed: required_when_prior_committed
+    last_committed_required_fields:
+      - parse_attempt
+      - manifest_digest
+      - completed_at
+  - code: revision_not_committed
+    reason: attempt_terminal
+    status: 409
+    disposition: preserve_prior_source_head
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, reason, parse_status, parse_attempt]
+    last_committed: required_when_prior_committed
+    last_committed_required_fields:
+      - parse_attempt
+      - manifest_digest
+      - completed_at
+  - code: revision_not_committed
+    reason: never_completed
+    status: 409
+    disposition: block_until_committed
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, reason, parse_status, parse_attempt]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: revision_not_committed
+    reason: file_less_source
+    status: 409
+    disposition: exclude_from_w1_file_contract
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, reason, parse_status, parse_attempt]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: revision_not_committed
+    reason: non_parse_completed
+    status: 409
+    disposition: block_without_fallback
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, reason, parse_status, parse_attempt]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: revision_superseded
+    reason: any
+    status: 410
+    disposition: restart_revision_and_discard_pages
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, current_parse_attempt, parse_status]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: knowledge_deleted
+    reason: any
+    status: 410
+    disposition: record_tombstone
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, tombstone]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: revision_manifest_incomplete
+    reason: any
+    status: 409
+    disposition: block_without_fallback
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: revision_not_found
+    reason: any
+    status: 404
+    disposition: fail_without_fallback
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code, parse_attempt]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: knowledge_not_found
+    reason: authorized_probe_only
+    status: 404
+    disposition: accept_absence_after_authorized_probe
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: acl_denied
+    reason: "401"
+    status: 401
+    disposition: fail_closed_without_lifecycle_inference
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: acl_denied
+    reason: "403"
+    status: 403
+    disposition: fail_closed_without_lifecycle_inference
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code]
+    last_committed: forbidden
+    last_committed_required_fields: []
+  - code: acl_denied
+    reason: "404"
+    status: 404
+    disposition: fail_closed_without_lifecycle_inference
+    root_success: false
+    envelope: root
+    required_fields: [success, error]
+    error_required_fields: [code]
+    last_committed: forbidden
+    last_committed_required_fields: []
+lifecycle_dispositions:
+  failed: preserve_prior_source_head
+  cancelled: preserve_prior_source_head
+retry_policy:
+  allowed_methods:
+    - GET
+  bounded_attempts: 3
+  retryable_statuses:
+    - 408
+    - 429
+    - 502
+    - 503
+    - 504
+  mutation_auto_retry: false
+timeout_policy:
+  policy_id: w1_public_contract_timeout_v1
+  connect_seconds: 5
+  read_seconds: 15
+  overall_seconds: 60
+idempotency_identities:
+  knowledge_list:
+    - space_binding
+    - raw_knowledge_base_id
+    - page
+    - page_size
+  knowledge_get:
+    - space_binding
+    - knowledge_id
+  revision_get:
+    - space_binding
+    - knowledge_id
+    - parse_attempt
+  revision_chunks_get:
+    - space_binding
+    - knowledge_id
+    - parse_attempt
+    - page
+    - page_size
+    - manifest_digest
+  knowledge_reparse:
+    - test_run_id
+    - knowledge_id
+    - prior_parse_attempt
+  knowledge_delete:
+    - test_run_id
+    - knowledge_id
+readiness_signals:
+  - signal_id: weknora_runtime
+    status: available_after_w1_replay_and_schema_probe
+    requires:
+      - adopted_image_identity
+      - official_migrations_ready
+      - enterprise_w1_migration_ready
+      - w1_route_probe
+  - signal_id: harness_process
+    status: independent_existing_p3_process_readiness
+    requires:
+      - database_ready
+      - api_or_worker_role_ready
+  - signal_id: w1_consumer_capability
+    status: unavailable_pre_w1
+    requires:
+      - consumer_adapted
+      - source_reader_authority
+      - p4a_capability_registration
+      - p4c_capability_registration
+validation_lanes:
+  - lane_id: planner
+    nodes:
+      - node_id: planner.closed_schema_refs_public_grammar
+        test_ref: harness/tests/test_prepare_weknora_adoption_045.py::test_plugin_contract_freezes_approved_refs_transports_and_independent_states
+        status: existing
+        required_by: code_pr
+        proves:
+          - closed_schema
+          - inventory_refs
+          - public_method_path_query_grammar
+      - node_id: planner.forbidden_coupling_public_authority
+        test_ref: harness/tests/test_prepare_weknora_adoption_045.py::test_plugin_contract_rejects_security_coupling_private_wiki_and_lane_mutations
+        status: existing
+        required_by: code_pr
+        proves:
+          - forbidden_coupling_exact
+          - no_private_symbol_authority
+          - ordinary_wiki_excluded
+      - node_id: planner.declared_node_existence
+        test_ref: harness/tests/test_prepare_weknora_adoption_045.py::test_plugin_contract_separates_readiness_lanes_and_excludes_unowned_work
+        status: existing
+        required_by: code_pr
+        proves:
+          - validation_lanes_nonempty
+          - node_ids_unique
+          - exact_test_refs_declared
+  - lane_id: compatibility_ci
+    nodes:
+      - node_id: compatibility.w1_revision_descriptor
+        test_ref: internal/handler/knowledge_revision_test.go::TestGetKnowledgeRevisionReturnsCommittedDescriptor
+        status: existing
+        required_by: code_pr
+        proves:
+          - current_committed_revision_descriptor
+      - node_id: compatibility.w1_not_committed_error_matrix
+        test_ref: internal/handler/knowledge_revision_test.go::TestGetKnowledgeRevisionNotCommittedReasonMatrix
+        status: existing
+        required_by: code_pr
+        proves:
+          - revision_not_committed_reason_matrix
+          - terminal_last_committed_envelope
+      - node_id: compatibility.w1_in_progress_last_committed
+        test_ref: internal/handler/knowledge_revision_test.go::TestGetKnowledgeRevisionInProgressIncludesLastCommitted
+        status: planned
+        required_by: code_pr
+        proves:
+          - in_progress_with_prior_last_committed_envelope
+      - node_id: compatibility.w1_attempt_bound_chunks
+        test_ref: internal/handler/knowledge_revision_test.go::TestRevisionPaginationStopsOnDeterministicReparseWithoutMixedPage
+        status: existing
+        required_by: code_pr
+        proves:
+          - at_least_three_pages
+          - reparse_discards_superseded_pages
+          - zero_mixed_revision
+      - node_id: compatibility.w1_delete_race
+        test_ref: internal/handler/knowledge_revision_test.go::TestRevisionPaginationStopsOnDeterministicDelete
+        status: existing
+        required_by: code_pr
+        proves:
+          - delete_race_typed_termination
+          - zero_silent_partial_walk
+      - node_id: compatibility.w1_manifest_vectors
+        test_ref: internal/types/knowledge_revision_test.go::TestKnowledgeRevisionManifestDigestVectors
+        status: existing
+        required_by: code_pr
+        proves:
+          - manifest_digest
+          - file_digest_grammar
+      - node_id: compatibility.w1_migration_contract
+        test_ref: migrations/versioned/knowledge_revision_manifest_test.go::TestKnowledgeRevisionManifestMigrationContract
+        status: existing
+        required_by: code_pr
+        proves:
+          - w1_schema_objects
+          - primary_foreign_check_index_contract
+      - node_id: compatibility.harness_retry_scope
+        test_ref: harness/tests/test_local_live_cli_023.py::test_r3_3_retry_vlm_consumes_marker_after_identity_before_single_reparse
+        status: existing
+        required_by: code_pr
+        proves:
+          - one_bounded_explicit_mutation_stimulus
+          - no_mutation_retry_loop
+      - node_id: compatibility.harness_space_binding
+        test_ref: harness/tests/test_scope_016.py::test_s1_2_only_bound_space_builds_scope
+        status: existing
+        required_by: code_pr
+        proves:
+          - authoritative_space_binding
+          - exact_raw_knowledge_base_scope
+      - node_id: compatibility.harness_readiness
+        test_ref: harness/tests/test_service_shell_config_health_039.py::test_t3_readiness_starts_not_ready_then_checks_db_and_uses_fresh_cache
+        status: existing
+        required_by: code_pr
+        proves:
+          - harness_process_readiness_independent
+          - fail_closed_readiness
+  - lane_id: artifact_probe
+    nodes:
+      - node_id: artifact.w1_runtime_readiness
+        test_ref: .github/workflows/weknora-app-local-live-image.yml::w1_runtime_readiness
+        status: planned
+        required_by: artifact_pr
+        proves:
+          - final_image_identity
+          - w1_route_and_schema_probe
+          - independent_readiness_signals
+      - node_id: artifact.w1_scoped_read_zero_write
+        test_ref: .github/workflows/weknora-app-local-live-image.yml::w1_scoped_read_zero_write
+        status: planned
+        required_by: artifact_pr
+        proves:
+          - exact_bound_raw_kb_reads
+          - before_after_zero_write
+      - node_id: artifact.w1_denied_mutations_zero_write
+        test_ref: .github/workflows/weknora-app-local-live-image.yml::w1_denied_mutations_zero_write
+        status: planned
+        required_by: artifact_pr
+        proves:
+          - source_reader_post_put_patch_delete_denied
+          - before_after_zero_write
+          - download_authority_not_elevated
+      - node_id: artifact.w1_three_page_reparse_delete_race
+        test_ref: .github/workflows/weknora-app-local-live-image.yml::w1_three_page_reparse_delete_race
+        status: planned
+        required_by: artifact_pr
+        proves:
+          - separate_test_writer
+          - fixture_at_least_three_pages
+          - reparse_and_delete_stimuli
+          - mutation_stimuli_never_auto_retry
+      - node_id: artifact.w1_manifest_file_digest
+        test_ref: .github/workflows/weknora-app-local-live-image.yml::w1_manifest_file_digest
+        status: planned
+        required_by: artifact_pr
+        proves:
+          - full_page_envelope_preserved
+          - manifest_digest_recomputed
+          - file_digest_verified
+exclusions:
+  ordinary_wiki_operations:
+    - history
+    - diff
+    - edit
+    - revert
+  missions:
+    - P4a
+    - P4c
+    - P2d
+    - P11
+    - P13
+    - P14
+    - provider
+    - full

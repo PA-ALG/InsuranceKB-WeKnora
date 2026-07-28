@@ -1,0 +1,117 @@
+schema_version: 1
+inventory_id: enterprise-w1-revision-manifest-schema-v1
+owner: W1-weknora-revision-manifest
+authoritative_ref: openspec/changes/038-w1-weknora-revision-manifest/specs/weknora-revision-manifest/spec.md
+objects:
+  - semantic_id: knowledge.current_parse_attempt
+    object_type: column
+    table: knowledges
+    name: current_parse_attempt
+    data_type: BIGINT
+    nullable: false
+    default: "0"
+  - semantic_id: knowledge.file_sha256
+    object_type: column
+    table: knowledges
+    name: file_sha256
+    data_type: VARCHAR(64)
+    nullable: false
+    default: "''"
+  - semantic_id: chunk.parse_attempt
+    object_type: column
+    table: chunks
+    name: parse_attempt
+    data_type: BIGINT
+    nullable: false
+    default: "0"
+  - semantic_id: knowledge_revision.table
+    object_type: table
+    name: knowledge_revisions
+    columns:
+      - name: knowledge_id
+        data_type: VARCHAR(36)
+        nullable: false
+      - name: parse_attempt
+        data_type: BIGINT
+        nullable: false
+      - name: file_sha256
+        data_type: VARCHAR(64)
+        nullable: false
+      - name: parser_identity
+        data_type: JSONB
+        nullable: false
+      - name: manifest_algorithm
+        data_type: VARCHAR(64)
+        nullable: false
+      - name: manifest_digest
+        data_type: VARCHAR(64)
+        nullable: false
+      - name: chunk_count
+        data_type: INTEGER
+        nullable: false
+      - name: completed_at
+        data_type: TIMESTAMP
+        nullable: false
+    primary_key:
+      semantic_id: knowledge_revision.identity
+      columns:
+        - knowledge_id
+        - parse_attempt
+    foreign_keys:
+      - semantic_id: knowledge_revision.knowledge_owner
+        columns:
+          - knowledge_id
+        references_table: knowledges
+        references_columns:
+          - id
+        on_delete: CASCADE
+    checks:
+      - semantic_id: knowledge_revision.attempt_positive
+        column: parse_attempt
+        operator: gt
+        value: 0
+      - semantic_id: knowledge_revision.file_sha256_lowercase
+        column: file_sha256
+        operator: matches
+        value: "^[0-9a-f]{64}$"
+      - semantic_id: knowledge_revision.manifest_digest_lowercase
+        column: manifest_digest
+        operator: matches
+        value: "^[0-9a-f]{64}$"
+      - semantic_id: knowledge_revision.chunk_count_nonnegative
+        column: chunk_count
+        operator: gte
+        value: 0
+  - semantic_id: chunk.live_text_revision_ordinal
+    object_type: index
+    name: idx_chunks_live_text_revision_ordinal
+    table: chunks
+    unique: true
+    columns:
+      - name: knowledge_id
+        order: default
+      - name: parse_attempt
+        order: default
+      - name: chunk_index
+        order: default
+    predicate:
+      - column: deleted_at
+        operator: is_null
+        value: null
+      - column: chunk_type
+        operator: eq
+        value: text
+      - column: parse_attempt
+        operator: gt
+        value: 0
+  - semantic_id: knowledge_revision.completed_lookup
+    object_type: index
+    name: idx_knowledge_revisions_completed
+    table: knowledge_revisions
+    unique: false
+    columns:
+      - name: knowledge_id
+        order: default
+      - name: completed_at
+        order: desc
+    predicate: []
