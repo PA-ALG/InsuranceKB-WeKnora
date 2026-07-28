@@ -61,6 +61,7 @@ JOB_STORE_POSTGRES_NODES = {
         "test_p1_8_concurrent_claims_never_exceed_per_space_limit",
         "test_p1_8_saturated_space_does_not_block_sibling_space",
         "test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation",
+        "test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job",
         "test_p1_6_completion_interrupt_before_commit_leaves_neither_row",
         "test_p1_3_late_worker_every_write_path_is_fenced_after_takeover",
         "test_p1_4_retry_loop_reaches_dead_letter_only_via_configured_policy",
