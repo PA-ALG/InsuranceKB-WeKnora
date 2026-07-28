@@ -73,13 +73,28 @@ and a drained/abandoned generation is recovered by a second Worker with a strict
 higher generation and one final result. The generated JUnit passed the repository
 gate with `tests=2`, `skipped=0`, `failures=0`, and `errors=0`.
 
+## Exact-head CI corrective
+
+The first pushed PostgreSQL evidence commit added the two T5/T6 nodes but did not
+register them in the repository's exhaustive `POSTGRES_NODES` CI inventory. Both
+duplicate deterministic jobs therefore failed only
+`test_p0_4_three_collections_are_disjoint_exhaustive_and_precise`; the other
+`3,969` deterministic tests passed, and both integration-postgres and wheel-smoke
+jobs passed.
+
+The corrective is limited to registering those exact two nodes. The previously
+failing inventory test now passes, and the same PostgreSQL nodes were rerun with
+`tests=2`, `skipped=0`, `failures=0`, and `errors=0`. No production source,
+migration, handler, provider, or WeKnora behavior changed.
+
 ## Remaining merge gates
 
 - T8 remains unchecked only for the explicitly deferred shared README/HANDOFF status
   integration; its code, test, PostgreSQL, static, OpenSpec, scope, and zero-migration
   gates are PASS.
-- T9 implementation review approved the original exact head. The test-only PostgreSQL
-  evidence delta remains gated on an exact-tree independent re-review before push.
+- T9 implementation review approved the original exact head and the first test-only
+  PostgreSQL evidence tree. The CI-inventory corrective remains gated on a fresh
+  exact-tree independent re-review and new exact-head CI before merge.
 
 This report does not claim Ready, production readiness, provider validation, or live
 WeKnora validation.
