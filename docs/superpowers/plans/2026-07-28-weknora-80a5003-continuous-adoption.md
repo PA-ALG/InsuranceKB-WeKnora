@@ -140,8 +140,9 @@ duplicate-key/type mutation coverage.
 - [ ] **Step 6: Implement migration and plugin checks**
 
 Enumerate target official migration filenames/SHA256 up to manifest head and compare
-the merged project files byte-for-byte. Invoke the existing plugin parser/digest/node
-validation.
+the merged project files byte-for-byte only after target is an ancestor of project
+HEAD. Before merge, report `pre_merge` after validating the target chain. Invoke the
+existing plugin parser/digest/node validation.
 
 - [ ] **Step 7: Emit minimal deterministic JSON**
 

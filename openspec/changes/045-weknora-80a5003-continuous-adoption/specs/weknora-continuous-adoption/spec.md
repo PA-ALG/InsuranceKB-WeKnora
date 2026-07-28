@@ -132,8 +132,10 @@ credential。check SHALL NOT 创建 tracked
 
 official `migrations/versioned` SHALL 以 target Git tree 为 byte authority。
 check SHALL 验证规范 filename、唯一连续版本、manifest official head 与每个文件
-SHA256；合并后的 project official files SHALL 与 target byte-exact。项目
-SHALL NOT 修改 official SQL 或添加 project-owned official-chain migration。
+SHA256。target 尚不是 project HEAD ancestor 的合流前 check 只验证 target
+official chain，并明确报告 `pre_merge`；target 成为 project HEAD ancestor 后，
+check SHALL 要求 project official files 与 target byte-exact。项目 SHALL NOT
+修改 official SQL 或添加 project-owned official-chain migration。
 
 enterprise migrations SHALL 位于独立 source，并使用
 `enterprise_schema_migrations` ledger，在 official
