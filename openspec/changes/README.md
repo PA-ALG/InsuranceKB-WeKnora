@@ -52,7 +52,7 @@
 | 042 | p1-followup-backlog | 🔒 已占号（目录未开，比照 026 惯例） | 035 四轮评审的 5 条 BACKLOG，完整清单含 live 证据与建议修法见 [23 号 §8 D-2026-07-27-19](../../docs/insurance-kb/23-mvp-control-board.md)；预期零迁移；**开工前须取 Mission Card 批准并按正式 delta 格式建目录** |
 | 043 | p2d-space-security-boundary | 规格 ✅ 已合入（PR #57）；IMPLEMENTATION BLOCKED ON P3 ACL INSPECTION AUTHORITY | Space 边界基础合同：P3-derived scope、RAW/Wiki ACL 等价、current binding/epoch、跨 Space 拒绝与失败零写；实现预留迁移 0016 |
 | 044 | p1-read-only-active-fence-verifier | ✅ 已实现并合入（PR #59） | P1 零迁移 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
-| 045 | weknora-80a5003-continuous-adoption | 📋 规格起草；实现未开始 | 固定 post-v0.7.1 mainline `80a5003`（单页 history/diff/manual edit/revert）+ Harness 插件化 + enterprise migration 独立 ledger；闭合 `000066`、W1 replay 与 trusted artifact |
+| 045 | weknora-80a5003-continuous-adoption | 🚧 Task 1/2 Code candidate `404e7811` | exact `80a5003` source merge、W1/logger replay 已完成；Task 3 migration bridge、剩余 compatibility、workflow 与 Artifact 仍未完成 |
 | 046+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
@@ -102,9 +102,10 @@ WeKnora 官方稳定版为
 snapshot `80a5003cc99a427098afe184eee6601916d3d156`
 （tree `18fcf68e7a008ce69929e32233f0b6914040c223`，相对 v0.7.1 +17 commits /
 122 paths，含官方 `000075_wiki_page_revisions`）。045 固定该 exact identity，
-不得漂移到 mutable upstream main。项目 source lock/runtime 仍为
-v0.6.3/`5eefa70e`。采用前必须解决 upstream 与 W1 同占 `000066`、重放 W1
-重叠生产路径合同并重建受信制品；不得只改版本号或把上游
+不得漂移到 mutable upstream main。Code candidate 的 source tree/VERSION 已到
+`80a5003`/v0.7.1，local-live source lock/runtime 仍为
+v0.6.3/`5eefa70e`。runtime 采用前仍必须解决 upstream 与 W1 同占 `000066`
+并重建受信制品；不得只改版本号或把上游
 scoped/platform key 能力直接冒充 043 ACL blocker 已解除。
 在 migration-state/namespace 或兼容桥方案获批且 upstream-tag collision CI
 落地前，禁止新增 project-owned WeKnora migration，禁止静默重命名/删除
@@ -118,8 +119,9 @@ PR custody（2026-07-28 状态同步前 open PR/issue 均为 `0`）：
   `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`，**零代码合入**；批准的
   P1 内容由 PR #53 以独立 Git 身份重落地并已合入。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
-- 下一轮建议两开发 lane：Lane A 先做 `80a5003` adoption/迁移桥/W1 replay，
-  再裁剪 P3 ACL-inspection authority；Lane B 做 P5a1；第三 lane 只读
+- 下一轮建议两开发 lane：Lane A 从独立 Task 3 migration bridge 开始，再做
+  剩余 compatibility 与 trusted images/Artifact，之后裁剪 P3
+  ACL-inspection authority；Lane B 做 P5a1；第三 lane 只读
   review/integration。所有功能开工仍须单独 Mission Card。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）

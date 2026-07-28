@@ -154,6 +154,29 @@ func TestGetKnowledgeRevisionReturnsCommittedDescriptor(t *testing.T) {
 	require.Equal(t, revision.FileSHA256, data["file_digest"].(map[string]interface{})["value"])
 }
 
+func TestGetKnowledgeRevisionInProgressIncludesLastCommitted(t *testing.T) {
+	knowledge, last := revisionFixture(types.ParseStatusProcessing, 4)
+	last.ParseAttempt = 3
+	recorder := httptest.NewRecorder()
+	revisionRouter(t, &revisionReaderStub{
+		states: []revisionStubState{{knowledge: knowledge, last: last}},
+	}).ServeHTTP(recorder,
+		httptest.NewRequest(http.MethodGet, "/knowledge/knowledge-1/revision", nil))
+
+	require.Equal(t, http.StatusConflict, recorder.Code)
+	body := decodeRevisionResponse(t, recorder)
+	require.Equal(t, false, body["success"])
+	details := body["error"].(map[string]interface{})
+	require.Equal(t, "revision_not_committed", details["code"])
+	require.Equal(t, "attempt_in_progress", details["reason"])
+	require.Equal(t, types.ParseStatusProcessing, details["parse_status"])
+	require.Equal(t, float64(4), details["parse_attempt"])
+	committed := details["last_committed"].(map[string]interface{})
+	require.Equal(t, float64(3), committed["parse_attempt"])
+	require.Equal(t, last.ManifestDigest, committed["manifest_digest"])
+	require.Equal(t, last.CompletedAt.Format(time.RFC3339), committed["completed_at"])
+}
+
 func TestGetKnowledgeRevisionDistinguishesNotCommittedDeletedAndMissing(t *testing.T) {
 	knowledge, revision := revisionFixture(types.ParseStatusProcessing, 4)
 	recorder := httptest.NewRecorder()

@@ -143,9 +143,10 @@ func TestManualProcessPayloadCarriesDatabaseParseAttempt(t *testing.T) {
 	knowledge := &types.Knowledge{
 		ID: "manual-1", TenantID: 7, KnowledgeBaseID: "kb-1", CurrentParseAttempt: 9,
 	}
-	require.NoError(t, svc.enqueueManualProcessing(
+	_, err := svc.enqueueManualProcessing(
 		context.Background(), knowledge, "content", true,
-	))
+	)
+	require.NoError(t, err)
 	require.Equal(t, int64(9), task.manualPayload.ParseAttempt)
 }
 

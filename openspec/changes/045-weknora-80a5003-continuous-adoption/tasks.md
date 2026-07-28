@@ -1,106 +1,111 @@
-# 045 · Tasks（WeKnora `80a5003` Continuous Adoption）
+# 045 · Thin Adoption Tasks
 
-## Contract Card
+## 执行原则
 
-### 单一职责
+- 当前 target 全部从 manifest 读取；`80a5003...` 是数据，不是通用代码常量。
+- 使用 standard Git exact-SHA merge/replay，不生成 patch bundle 或 receipt。
+- thin check 只做 identity、两组 registered W1 overlap、official migration 与
+  plugin contract 验证；不做自动语义裁决。
+- official migration byte-exact；enterprise migration 使用独立 source/ledger。
+- `source_reader` authority 保持 blocked；P4a/P4c 不冒充 ready。
+- Code 与 Artifact 分离；Artifact 只能从已合入 main 的 source 构建。
 
-持续采用批准的官方不可变 identity，同时无损保留 W1：官方源码/migration
-原样跟随，
-Harness 插件化，enterprise migration 独立 ledger，legacy `000066` 经一次
-可证明兼容桥收敛。
+## Task 1A · Target manifest 与 immutable discover
 
-### 权威
+- [x] 记录当前 repository/commit/tree/release ancestor/required ancestors/
+  official migration head。
+- [x] `discover latest-stable|mainline-head` 只输出 immutable proposal。
+- [x] 拒绝 mutable ref 自动覆盖 manifest。
+- [x] 在 thin check 中验证 target checkout clean、origin、HEAD、tree 与
+  ancestors。
 
-- Tencent exact commit/tree/checksum（stable tag 或批准的 mainline snapshot）：
-  official source authority；
-- `schema_migrations`：official migration authority；
-- `enterprise_schema_migrations`：enterprise migration authority；
-- patch inventory：唯一允许的 WeKnora project delta；
-- trusted image digest/provenance：runtime identity authority；
-- Harness 仍拥有保险领域逻辑，WeKnora 不获得新领域 authority。
+## Task 1B · Slim plugin contract（已提交）
 
-### 失败边界
+- [x] 保留 machine-readable Harness plugin contract 与 semantic digest。
+- [x] 保留 public REST、principal、Space/ACL、zero-write、readiness 与
+  validation nodes。
+- [x] 删除 enterprise schema object inventory、generic DDL parser 及其测试。
+- [x] 删除 Python 中重复 canonical truth source，以 YAML+digest 为合同。
+- [x] Task 1B states 保持 false；Task 2 落地真实测试后，唯一 planned code
+  node 已转为 existing。
 
-identity 漂移、dirty/partial/unknown schema、checksum mismatch、未登记 patch、
-W1 contract regression、备份/恢复证据缺失均 fail closed；不得 force、
-drop/recreate、清空数据库或静默继续。
+## Task 1C · 实现有限 thin check
 
-### 范围警报
+- [x] RED：wrong origin/HEAD/tree/ancestor、dirty target 必须 `block`。
+- [x] RED：runtime lock 不得被用作 project↔target merge-base。
+- [x] RED：project merge-base→target 与 runtime→target 两组 registered W1
+  overlap 分别输出；任一 overlap 只产生 `manual_review_required`。
+- [x] RED：official migration filename/head/checksum 漂移必须 `block`。
+- [x] RED：plugin digest、existing/planned node 或 false states 漂移必须
+  `block`。
+- [x] GREEN：输出最小 deterministic JSON，verdict 仅
+  `pass|manual_review_required|block`。
+- [x] 证明 comment/format/mapping reorder 不改变结果，list/path semantic
+  mutation 改变 verdict。
+- [x] 保留既有 timeout/retry/node mutation tests，不引入通用 collision API。
 
-- `MAINLINE DRIFT`：升级被扩成 P2d/P3/P11/P13/P14 或产品新功能；
-- `DETAIL TRAP`：只修一个 SQL 文件/版本号，却没有持续升级、两 ledger、
-  四状态与 artifact 合同；
-- `UNREVIEWABLE DELTA`：把大规模 upstream vendor delta 与 project-authored
-  逻辑混为一体，无法分辨真实补丁。
+## Task 2 · Exact upstream merge 与受控 replay
 
-## Spec-only 清单
+- [x] 从 official remote fetch manifest exact SHA 并验证 tree/ancestors。
+- [x] 使用 Git 计算真实 project merge-base，创建标准 merge commit。
+- [x] 人工 review thin-check 列出的 registered W1 overlaps。
+- [x] 用普通 replay commits 恢复 W1 与既有 logger redaction。
+- [x] 每个 project-owned production path 都在 W1 inventory 登记。
+- [x] 不生成 `w1-*.patch`、bundle、verify-bundle、receipt 或 apply DSL。
+- [x] 验证 merge history 可证明 official ancestry，target files 与 Git tree
+  一致。
 
-- [x] S1 用户批准“官方持续跟随 + Harness 插件化 + 企业迁移独立记账”；
-- [x] S2 用户确认任何现有数据库不可清空/重建；
-- [x] S3 核验 v0.7.1 ancestor、目标
-  `80a5003cc99a427098afe184eee6601916d3d156`、tree、17-commit/122-path
-  增量、官方 `000075` 与双方 `000066` 的真实语义；
-- [x] S4 冻结四状态、unknown fail-closed、双 ledger 与 collision 合同；
-- [x] S5 冻结 Code/Artifact 两阶段交付及主航道非目标；
-- [x] S6 strict OpenSpec、diff/scope/UTF-8/private/secret 门禁；
-- [x] S7 对 exact `80a5003` 修订重新执行独立 Spec + Mainline/YAGNI review：
-  BLOCKER/BACKLOG=0，MAINLINE DRIFT/DETAIL TRAP=NO，
-  Spec/Mainline/YAGNI Approved=YES；
-- [x] S8 用户审阅书面规格后批准 implementation plan，并确认后续升级须可通过
-  同一入口发现最新 stable 或 mainline-head、解析为 exact commit/tree 后复用门禁。
+> Code replay 完成后，legacy W1 `000066`、独立 enterprise ledger 与 bridge
+> 已由 Task 3 独立验证闭合，不把源码重放冒充迁移证据。
 
-## Code PR（实现前必须由用户批准书面规格）
+## Task 3 · Dual migration 与 legacy 000066 bridge
 
-- [ ] C0 从实现时最新项目 `origin/main` 新建唯一 writer worktree；核验官方
-  target 仍精确为 `80a5003...`/tree `18fcf68e...` 且 ancestry 可证明；
-  不自动漂移到 upstream mutable main；
-- [ ] C1 RED：官方 tag/source/migration checksum 漂移门禁；
-- [ ] C2 RED：migration collision inventory 覆盖编号、schema object、patch
-  surface，分别证明真实 project merge-base delta 与 source-lock runtime
-  delta，先复现 legacy `000066` 冲突；
-- [ ] C3 RED：PostgreSQL 16 四状态 matrix；每态验证数据 count/digest、
-  official/enterprise ledger、span type 与 W1 schema；
-- [ ] C4 RED：dirty、partial、unknown、preflight race、双实例 race 全部零写；
-  bridge 后/official 后 crash checkpoints 均可幂等续跑；
-- [ ] C5 GREEN：同步官方 `80a5003` source/migrations（official head 75）；
-  保留 machine-readable upstream identity，不手工挑选 upstream commits；
-- [ ] C6 GREEN：将 W1 active migration 移入 enterprise source/ledger，保留
-  legacy SQL/checksum fixture；
-- [ ] C7 GREEN：实现只读 classifier、transactional compatibility bridge、
-  official→enterprise 顺序 migrator 和分离状态观测；
-- [ ] C8 GREEN：在 `80a5003` 重放 W1 + redaction patch，更新 inventory baseline、
-  exact paths、overlap verdict 和 compatibility tests；
-- [ ] C8a 将 source lock 升级为 exact identity + ordered patch + 三镜像定义，
-  并让 main-only trusted workflow 可从同一 verified tree 构建 app/frontend/
-  docreader；不写 runtime digest 或 adopted 结论；
-- [ ] C9 验证官方普通 knowledge/wiki/API 非回归、W1 exact revision/manifest、
-  reparse race、删除与 principal/ACL 既有边界；
-- [ ] C9a 验证普通 Wiki 单页 history、line diff、manual edit optimistic
-  locking、revert 生成新 revision 与 ACL 非回归；不接入 Harness
-  Release/P11/P14；
-- [ ] C10 focused Go、Ruff/mypy（Harness 受影响时）、OpenSpec、diff-check；
-  不运行 provider/live/full；
-- [ ] C11 独立 Spec 与 Quality/Security/Delivery review；BLOCKER 清零后才 Ready。
+- [x] RED：official filenames/head/SHA256 与 target tree byte mismatch。
+- [x] RED：legacy W1 66、pre-66、upstream-66-plus、fresh-target 与
+  unknown/dirty/partial origins。
+- [x] 保留 legacy W1 `000066` byte/checksum fixture。
+- [x] 建立 enterprise migration source 与 `enterprise_schema_migrations`。
+- [x] 在 advisory lock/transaction 内重验并无损桥接 known legacy state。
+- [x] 顺序执行 official→enterprise migration；unknown/dirty/partial 零写失败。
+- [x] 在 disposable PostgreSQL 16/17 验证 crash/restart、data preservation 与
+  双 ledger clean。
 
-## Artifact PR（Code 合入后）
+## Task 4 · Targeted compatibility
 
-- [ ] A1 从已合入 main 的 trusted workflow dispatch exact `80a5003...`
-  commit/tree，并重放 exact inventory；
-- [ ] A2 生成 final tree、image digest、provenance、SBOM、attestation 与
-  official/enterprise migration receipt；
-- [ ] A3 在四类可恢复备份 clone 上执行 PostgreSQL 16 upgrade + restore drill；
-- [ ] A4 W1 capability/live bounded probe，普通 source/wiki 非回归；
-- [ ] A5 exact candidate 全绿后更新 source lock、image lock、Compose 与
-  HANDOFF/control board；
-- [ ] A6 独立 supply-chain/data-safety review 后决定受控 local-live cutover；
-- [ ] A7 只有 runtime digest、数据库 evidence 与 Wiki revision bounded
-  feature probe 同时闭合，才声明 `80a5003 SNAPSHOT ADOPTED`。
+- [x] 运行 W1 revision descriptor/chunk/manifest/race tests。
+- [x] 落地 planned in-progress-with-prior `last_committed` 真实测试并把对应 node
+  从 planned 改为 existing；在此之前 Code final gate 不得通过。
+- [x] 验证 public REST envelope、typed errors、ACL denied 与 zero-write。
+- [x] 验证 Wiki 单页 history、line diff、manual edit optimistic locking、
+  revert-new-revision 与未授权零写；这些证据不改变 Harness plugin authority。
+- [x] 运行 focused frontend type/test、Go、Python、OpenSpec 与 diff/scope gates。
 
-## 明确不执行
+> Code candidate 的 focused Go、134 个 Harness compatibility tests、Wiki
+> line-diff tests、OpenSpec 与有限升级检查均已通过。完整 frontend type-check
+> 如实报告 exact upstream `80a5003` source 的 10 个既存错误；candidate 的
+> `frontend/` 与该 target tree 零差异，因此不在本 replay PR 扩修无关上游路径。
 
-- 不在 Spec PR 写生产代码、migration 或 workflow；
-- 不对现有 live/PG 数据库试跑；
-- 不运行 provider/full/load；
-- 不清理历史 worktree/branch/PR；
-- 不实现 P2d/P3 ACL、P11/P13/P14；
-- 不因官方新特性顺手扩大 Harness 产品面。
+## Task 5 · Trusted workflow 与 multi-image
+
+- [ ] workflow 仅从已合入 main 的 exact source/lock 构建。
+- [ ] server、worker、frontend 等 images 使用相同 commit/tree/lock。
+- [ ] 构建前运行 thin check、migration 与 targeted compatibility gates。
+- [ ] 发布 image digest、provenance 与 SBOM。
+- [ ] workflow 不下载或 apply project patch bundle。
+
+## Task 6 · Artifact
+
+- [ ] 从 trusted workflow 构建并固定 multi-image digests。
+- [ ] 在 backup clone/disposable PostgreSQL 验证 bridge 与 dual migration。
+- [ ] 验证 plugin/readiness/ACL/zero-write probes。
+- [ ] 验证产品 history/diff/edit/revert smoke。
+- [ ] 只有 image identity、migration、W1/plugin 与产品 probes 全通过才闭合
+  Artifact；consumer/source-reader/P4a/P4c 仍按各自真实状态报告。
+
+## 明确不创建
+
+- `deploy/upstream/weknora-enterprise-schema-objects.yaml`
+- `deploy/upstream/weknora-adoption-report.json`
+- generic DDL/schema-object/collision report engine
+- W1 patch/bundle/receipt、`bundle`、`verify-bundle` 或 patch DSL
+- 任意仓库/任意 patch engine

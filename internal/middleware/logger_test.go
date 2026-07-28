@@ -42,6 +42,11 @@ func TestSanitizeBody(t *testing.T) {
 			want: `{"password":"***","token":"***"}`,
 		},
 		{
+			name: "snake_case new_password and old_password",
+			in:   `{"email":"alice@example.com","new_password":"FreshPass9","old_password":"OldPass9"}`,
+			want: `{"email":"alice@example.com","new_password":"***","old_password":"***"}`,
+		},
+		{
 			name: "extra whitespace around colon",
 			in:   `{"apiKey"  :   "leak"}`,
 			want: `{"apiKey":"***"}`,
@@ -50,6 +55,11 @@ func TestSanitizeBody(t *testing.T) {
 			name: "non sensitive fields untouched",
 			in:   `{"baseUrl":"https://example.com","modelName":"gpt"}`,
 			want: `{"baseUrl":"https://example.com","modelName":"gpt"}`,
+		},
+		{
+			name: "OAuth authorization response fields",
+			in:   `{"authorization_url":"https://idp.example/authorize?state=secret","authorization_attempt":"secret-state"}`,
+			want: `{"authorization_url":"***","authorization_attempt":"***"}`,
 		},
 	}
 
@@ -60,6 +70,14 @@ func TestSanitizeBody(t *testing.T) {
 				t.Errorf("sanitizeBody(%q)\n got: %s\nwant: %s", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestSanitizeQuery(t *testing.T) {
+	got := sanitizeQuery("code=secret-code&state=secret-state&next=%2Fsettings&state=second")
+	want := "code=%2A%2A%2A&next=%2Fsettings&state=%2A%2A%2A"
+	if got != want {
+		t.Fatalf("sanitizeQuery() = %q, want %q", got, want)
 	}
 }
 
