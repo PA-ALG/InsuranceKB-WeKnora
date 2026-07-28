@@ -1,7 +1,7 @@
 # 039 P3 API/Worker Shell · implementation validation
 
-> Date: 2026-07-28  
-> Base: `40f3ae9e4b41fab51566c438da08c57d80e3089b`  
+> Date: 2026-07-28
+> Base: `40f3ae9e4b41fab51566c438da08c57d80e3089b`
 > Status: **Draft candidate; PostgreSQL T5/T6 acceptance PASS**
 
 ## Delivered software scope
