@@ -1,15 +1,13 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
-> 本次治理收口基线/事实截止点（截至 2026-07-27）：
-> `main=0cb7beff`（PR #52 合入后）。
+> 当前代码事实截止点（截至 2026-07-28）：
+> `main=d1c1b3ac2d5aed0fa25134ca6551a137004dbfbc`。
 > 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #35–#56 中除 #44 外均已合入（#53 仍开放）。PR #44 已
-> `CLOSED / ARCHIVED / NOT MERGED`，归档 tag 为
-> `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；其实现内容按
-> D-2026-07-27-15 由 **PR #53** 在最新 main 重落地，并按 D-16/D-18 完成两次
-> 边界修订（"逐字节一致"自 `5d663004` 起不再成立）。
+> PR #53/#55/#56/#57/#58/#59 均已合入；截止本次状态同步前 GitHub
+> open PR/issue 均为 `0`。PR #44 仍为 `CLOSED / ARCHIVED / NOT MERGED`，
+> 其经批准的 P1 实现由 PR #53 重落地后合入，不改变归档分支的历史身份。
 
 ## 1. 当前状态
 
@@ -18,16 +16,20 @@
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
-| P1 Job Store + Outbox | 规格 ✅ `MERGED`（PR #38）+ 边界修订随 #53；实现 **PR #53 四轮评审零 BLOCKER，满足合入条件** | 决策链：D-2026-07-27-15（重落地）→ **D-16**（§18 停线 + 8 条边界合同冻结）→ **D-17**（行数豁免不拆分）→ **D-18**（P1.5 换声明式通道）→ **D-19**（收口：B 面 3 条已修，5 条 BACKLOG 转 042）；迁移 **0015** Owner |
-| W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | P4a/P4c 保持 blocked 至 W1 实现合入 |
-| W1 WeKnora Revision Manifest | 规格 ✅ `MERGED`（PR #41，OpenSpec 038）；Go 实现 `NOT STARTED` | 按 W1 Contract Card 启动 Go 实现 |
+| P1 Job Store + Outbox | ✅ `IMPLEMENTED / MERGED`（规格 PR #38；实现 PR #53） | 迁移 **0015**；5 条非阻断 follow-up 归 042 |
+| W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | 触发结果已由 W1 PR #55 闭合 |
+| W1 WeKnora Revision Manifest | ✅ 源码 `IMPLEMENTED / MERGED`（规格 PR #41；实现 PR #55，OpenSpec 038） | local-live 仍锁 `5eefa70e` 且不含 W1；项目 W1 `000066` 与上游 `000066` 冲突，须由 v0.7.1 adoption Mission 闭合 |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
-| P3 API/Worker Shell | 规格 ✅ `MERGED`（PR #48，OpenSpec 039）；实现 `NOT STARTED` | 等 P1 实现合入 |
+| P3 API/Worker Shell | ✅ `IMPLEMENTED / MERGED`（规格 PR #48；实现 PR #58，OpenSpec 039） | 双角色、principal fail-closed、readiness truth、lease/drain 已交付 |
+| P1 Active Fence Verifier | ✅ `IMPLEMENTED / MERGED`（PR #59，OpenSpec 044） | 只读 DB-clock fence；零状态/Outbox 写 |
+| P5a0 ProductVersion Resolver | ✅ `IMPLEMENTED / MERGED`（PR #56，OpenSpec 041） | 后续 P5a2/G0a 消费 |
+| P2d Space Security Boundary | 规格 ✅ `MERGED`（PR #57，OpenSpec 043）；实现 blocked | 先交付最小 P3 ACL-inspection authority，再实施预留迁移 **0016** |
+| WeKnora upstream v0.7.1 | ✅ 官方稳定版可用（2026-07-24，`c64a4864`）；项目尚未采用 | 当前仍为 v0.6.3/`5eefa70e`；139 commits / 733 paths；先解决 000066、W1 14-path replay 与 KB-scoped source_reader 权限缺口；新 project-owned WeKnora migration 暂停占号 |
 | G0-probe 弱模型探针 | ✅ `COMPLETED`（PR #45 证据；校准专用） | 只校准 G0a，不构成 G0a/G0b 验收证据 |
 | Schema 切片 + 词表 seed | ⚠️ `DRAFT / NON-AUTHORITY`（PR #43 已合入） | 等领域专家与后续 Contract Card 正式冻结 |
 | 金标标注 v0 | ⚠️ `DRAFT / NON-ACCEPTANCE-AUTHORITY`（PR #49 已合入） | 等 G0a 正式 custody、协议和验收冻结 |
 | G0a 金标资产化内核 | 规格 ✅ `MERGED`（PR #42，OpenSpec 040）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 后续实现须独立 TDD/复审；不得称 G0a 已验收或产品已完成 |
-| Repository operational cleanup A1/A2 | ✅ PR #44 已关闭并以 annotated tag 归档；worktree `66 → 23` | 21 clean 非 force 移除、22 prunable 归零、13 dirty/frozen 保留；证据见仓外 `../.cleanup-evidence/2026-07-27` |
+| Repository operational cleanup A1/A2 | ✅ 历史收口已完成；同步 worktree 建立后为 32 records / 31 usable / 18 clean / 13 dirty / 1 prunable | 历史现场保留；未经新授权不清理、不 reset |
 | Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
 | Milestone B | `NOT IMPLEMENTED` | 等 Semantic Core |
 | Milestone C | `NOT IMPLEMENTED` | 等 Governed Active Release |
@@ -64,17 +66,33 @@ then Milestone A → Milestone B → Milestone C
 
 ### W1
 
-- OpenSpec 038 规格已由 PR #41 合入；Go 实现尚未开始。
-- P4a/P4c 在 W1 实现合入并通过合同门禁前保持 blocked。
+- OpenSpec 038 规格由 PR #41 合入，Go 源码实现由 PR #55 合入；W1 源码实现
+  已完成，runtime adoption 尚未完成。
+- 源码合同已完成，但 trusted local-live workflow 仍从 `5eefa70e` 构建且只
+  应用 model-debug redaction patch，当前运行制品不含 W1。采用 v0.7.1 时还
+  必须解决项目与上游同时占用 migration `000066` 的直接冲突。
+- P4a/P4c 的 W1 代码前置已经解除；生产运行采用仍受 v0.7.1 upgrade
+  Mission 阻断，它们还分别受 P2d、P2a/P4a 等 DAG 前置约束。
 - PR #42 已把 G0a 规格以 OpenSpec 040 合入；这只关闭编号冲突，不改变
-  W1/038，也不表示 G0a 实现或验收完成。
+  W1/038 的已完成事实，也不表示 G0a 实现或验收完成。
 
 ### P1 → P3
 
-- P1 规格已由 PR #38 合入；旧实现 PR #44 已
-  `CLOSED / ARCHIVED / NOT MERGED`。P1 实现回到 `NOT STARTED`；后续只从
-  最新 main 以新的小 PR 提取所需能力，不恢复或重放旧分支。
-- P3 规格已由 PR #48 合入；实现依赖 P1，不得提前复制 JobStore/Outbox。
+- P1 规格由 PR #38 合入，实现由 PR #53 合入；旧 PR #44 继续保持
+  `CLOSED / ARCHIVED / NOT MERGED`，不得混淆两个 Git 身份。
+- P3 规格由 PR #48 合入，实现由 PR #58 合入；PR #59 另交付只读 active
+  fence verifier。下一项 P3-owned 工作只有为 043 提供最小权限 ACL
+  inspection authority，不得扩成通用服务框架。
+
+### 下一轮两开发 + 一审查
+
+- Lane A：WeKnora v0.7.1 adoption + 000066 migration bridge + W1 replay；
+  再基于新 scoped/platform key API 裁剪 P3 ACL-inspection authority，
+  随后串行接 043 P2d。
+- Lane B：P5a1 SchemaVersion + Golden Product slice。P2a 等八项 launch
+  业务输入回收后再启动，不得以假设补齐 D-2026-07-26-1。
+- Lane C：动态只读 review/integration；所有修复退回唯一写 Owner。
+- P2c 技术依赖已满足但属于 Milestone B；G0a 仍受 P2d/P4c/P5a2 阻断。
 
 ### human_batch-first
 
@@ -129,6 +147,27 @@ PostgreSQL/live/load，也不宣称任何 Milestone 完成。
 
 > 本节按 22 号蓝图约定记录执行裁决。裁决只澄清执行口径，不修改已批准的
 > 033 设计正文；需要改正文时走下一次设计修订。
+
+### D-2026-07-28-20 · #53/#55–#59 集成完成与下一轮主航道
+
+1. `d1c1b3ac` 是本轮代码事实截止点；P1、W1、P5a0、P1 active fence、
+   P3 shell 已实现合入，P2d 规格已合入，禁止重复排期；W1 的 local-live
+   runtime adoption 尚未闭合。
+2. WeKnora 官方 `v0.7.1@c64a4864` 已发布，项目仍锁 v0.6.3/`5eefa70e`。
+   直接升级被上游/项目同号 migration `000066` 与 W1 14-path overlap 阻断。
+3. migration 修复不得静默改写历史，也不得把 legacy W1 `000066` 改名或
+   删档：必须覆盖现有 `5eefa` DB 尚未执行任一 000066、上游 000066 已执行、
+   项目 W1 000066 已执行、fresh v0.7.1 DB 四种状态，并保留两侧 schema；
+   采用独立 project migration state/namespace 或经审查兼容桥，并以
+   upstream-tag collision CI 阻断未来碰号。在此之前不新增 project-owned
+   WeKnora migration。
+4. 下一轮固定为两个开发 lane：Lane A 先做 v0.7.1 adoption/迁移桥/W1
+   replay，再裁剪 P3 ACL authority 并进入 P2d；Lane B 做 P5a1；第三 lane
+   动态审查/集成。
+5. P2a 的软件依赖已满足，但 D-2026-07-26-1 要求的八项 launch 业务输入
+   未回收前仍 blocked；P2c 不抢占当前 Milestone A lane。
+6. 状态文档同步不授权任何上述功能开工；每项仍须独立 Mission Card。
+7. 历史 worktree 不等于当前 main，dirty/prunable 现场未经授权不处理。
 
 ### D-2026-07-26-1 · CAP0 对 P2a/P2b 的门禁语义澄清
 

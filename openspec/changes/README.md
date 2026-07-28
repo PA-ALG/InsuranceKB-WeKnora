@@ -42,16 +42,16 @@
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
 | 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
-| 035 | p1-job-outbox | 规格 ✅ 已合入（PR #38）+ **边界修订随 #53**；实现在 **PR #53**（第二轮双评审中） | 旧实现 PR #44 `CLOSED / ARCHIVED / NOT MERGED`，归档 tag `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`；按 D-2026-07-27-15 由 #53 重落地（**取代 #52 的"实现回到 NOT STARTED、不得重放"条款**）。#53 起初与归档 tag 逐字节一致，**其后按 D-2026-07-27-16 边界冻结做了实质修复，该"逐字节一致"表述自 `5d663004` 起不再成立**；门禁只以 #53 当前 head 为证据；迁移 0015 Owner |
+| 035 | p1-job-outbox | ✅ 已实现并合入（规格 PR #38；实现 PR #53） | 旧 PR #44 保持 `CLOSED / ARCHIVED / NOT MERGED`；迁移 0015；5 条非阻断 follow-up 归 042 |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
 | 037 | weknora-revision-contract-spike | ✅ 已执行并合入（PR #40）；双合同 `insufficient` | W0；已触发 W1（038），只读 spike，不是迁移号 |
-| 038 | w1-weknora-revision-manifest | 规格 ✅ 已合入（PR #41）；Go 实现 `NOT STARTED` | W0 触发的 W1；Go patch 预算内 |
-| 039 | p3-api-worker-shell | 规格 ✅ 已合入（PR #48）；实现 `NOT STARTED` | 033 §16 P3；零迁移零表；实现依赖 P1 |
+| 038 | w1-weknora-revision-manifest | ✅ 源码已实现并合入（规格 PR #41；实现 PR #55） | local-live 仍锁 `5eefa70e` 且不含 W1；项目 `000066` 与 upstream v0.7.1 `000066` 冲突，runtime adoption 须独立 Mission 闭合 |
+| 039 | p3-api-worker-shell | ✅ 已实现并合入（规格 PR #48；实现 PR #58） | 033 §16 P3；零 Harness migration；下一项仅为 043 所需的最小 ACL-inspection authority |
 | 040 | g0a-golden-asset-kernel | 规格 ✅ 已合入（PR #42）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 编号冲突已关闭；后续实现须独立 TDD/复审，不得称 G0a 已验收或产品已完成 |
 | 041 | p5a0-product-version-resolver | ✅ 已合入 main（PR #56） | ⚠️ 该目录先于注册表行创建（占号规则被绕过），此行为事后补记；后续窗口一律先占号再开目录 |
 | 042 | p1-followup-backlog | 🔒 已占号（目录未开，比照 026 惯例） | 035 四轮评审的 5 条 BACKLOG，完整清单含 live 证据与建议修法见 [23 号 §8 D-2026-07-27-19](../../docs/insurance-kb/23-mvp-control-board.md)；预期零迁移；**开工前须取 Mission Card 批准并按正式 delta 格式建目录** |
-| 043 | p2d-space-security-boundary | 🔒 已占号；SPEC-ONLY / IMPLEMENTATION BLOCKED ON P3 ACL INSPECTION AUTHORITY | Space 边界基础合同：P3-derived scope、RAW/Wiki ACL 等价、current binding/epoch、跨 Space 拒绝与失败零写；零生产代码、零 migration；security profile/provider/P1 fence/Candidate 均移出本 change |
-| 044 | p1-read-only-active-fence-verifier | ✅ 候选已冻结；待交付 | P1 零迁移小 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
+| 043 | p2d-space-security-boundary | 规格 ✅ 已合入（PR #57）；IMPLEMENTATION BLOCKED ON P3 ACL INSPECTION AUTHORITY | Space 边界基础合同：P3-derived scope、RAW/Wiki ACL 等价、current binding/epoch、跨 Space 拒绝与失败零写；实现预留迁移 0016 |
+| 044 | p1-read-only-active-fence-verifier | ✅ 已实现并合入（PR #59） | P1 零迁移 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
 | 045+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
@@ -72,7 +72,7 @@
 | 0012 | 015 feedback-flywheel（flywheel_checkpoints + flywheel_observations + knowledge_gaps） | ✅ 已随 PR #18 合入；down_revision=0005 |
 | 0013 | 旧 029 计划 | superseded / not reusable；D0 不预占替代 migration |
 | 0014 | 旧 028 runtime 计划 | superseded / not reusable；D0 不预占替代 migration |
-| 0015 | 035 p1-job-outbox 实现 | 由 PR #53 交付；`down_revision="0006"` 已按最新 main 的真实 alembic head 复核，实际链 `0005 → 0012 → 0006 → 0015`，单 head |
+| 0015 | 035 p1-job-outbox 实现 | ✅ 已随 PR #53 合入；`down_revision="0006"`，实际链 `0005 → 0012 → 0006 → 0015`，单 head |
 | 0016 | 043 p2d-space-security-boundary | 🔒 已占号；SPEC-ONLY，migration 文件未创建；实现阻断于 P3 ACL inspection authority，未来 down_revision 必须指向实现时 main 的真实 single head |
 | 0017+ | （空闲） | 先占号再开 migration |
 
@@ -82,7 +82,7 @@
 > 实际 head**；不允许产生 multi-head；合入后在本表“备注”记录实际链序。
 > 数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 当前可执行入口（2026-07-27）
+## 当前可执行入口（2026-07-28）
 
 当前生产架构工作只以以下入口为准：
 
@@ -91,27 +91,30 @@
 - [当前 active execution plan](../../docs/insurance-kb/22-parallel-execution-blueprint.md)；
 - [实时状态与决策板](../../docs/insurance-kb/23-mvp-control-board.md)。
 
-`D0/C0/CAP0` 已合入，W0 已以双 `insufficient` 触发 W1。当前 Milestone A
-仍 `IN PROGRESS`，B/C `NOT IMPLEMENTED`；不得按 PR 数量推断 MVP 已上线。
+`D0/C0/CAP0/P1/W1/P3/P5a0` 与 P1 active fence 已实现合入；P2d 规格已
+合入但实现只等最小 P3 ACL-inspection authority。当前 Milestone A 仍
+`IN PROGRESS`，B/C `NOT IMPLEMENTED`；不得按 PR 数量推断 MVP 已上线。
 
-开放 PR custody：
+WeKnora 官方稳定版已到
+[`v0.7.1@c64a4864`](https://github.com/Tencent/WeKnora/releases/tag/v0.7.1)，
+项目 source lock/runtime 仍为 v0.6.3/`5eefa70e`。采用前必须解决 upstream
+与 W1 同占 `000066`、重放 14 个重叠生产路径合同并重建受信制品；不得只改
+版本号或把上游 scoped/platform key 能力直接冒充 043 ACL blocker 已解除。
+在 migration-state/namespace 或兼容桥方案获批且 upstream-tag collision CI
+落地前，禁止新增 project-owned WeKnora migration，禁止静默重命名/删除
+legacy W1 `000066`，也禁止覆盖 upstream `000066`。
 
-- 治理收口 PR #50/#51 与 OpenSpec 040 编号收口 PR #42 均已合入；#42 仅交付
-  G0a 规格，实施尚未开始。
+PR custody（2026-07-28 状态同步前 open PR/issue 均为 `0`）：
+
+- PR #53/#55/#56/#57/#58/#59 均已合入；其中 #57 只交付 043 规格，
+  #42 仍只交付 G0a 规格，均不得冒充对应实现已完成。
 - 旧 PR #44 已 `CLOSED / ARCHIVED / NOT MERGED`，annotated tag 为
-  `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`，**零代码合入**。按
-  D-2026-07-27-15（业务方裁决），其实现内容由 **PR #53** 在最新 main
-  同内容重落地——**该裁决取代 #52 写入的"实现回到 `NOT STARTED`、不得
-  恢复或重放 #44"条款**。理由：#44 的 19 条评审 findings（2 Critical /
-  10 Important / 7 Minor）已在归档代码内 RED-first 闭环并沉淀为 16 个以
-  finding 编号命名的测试节点；从零重做会重新踩同一批陷阱、延长而非缩短
-  循环。#53 是同内容重落地，不是重新实现，这 16 个节点是其验收清单的
-  强制项。
+  `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`，**零代码合入**；批准的
+  P1 内容由 PR #53 以独立 Git 身份重落地并已合入。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
-- A2 已把 worktree 登记从 66 收敛到 23：21 个 clean 历史 worktree 非 force
-  移除、22 个 prunable 记录归零、13 个 dirty/frozen worktree 保留；仓外
-  证据根 `../.cleanup-evidence/2026-07-27` 的总校验 SHA-256 为
-  `7ffe022567b56a0a6020ae9b7f42476e26824ec8be25ae0c39d2bbe1b32ce14c`。
+- 下一轮建议两开发 lane：Lane A 先做 v0.7.1 adoption/迁移桥/W1 replay，
+  再裁剪 P3 ACL-inspection authority；Lane B 做 P5a1；第三 lane 只读
+  review/integration。所有功能开工仍须单独 Mission Card。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）
 

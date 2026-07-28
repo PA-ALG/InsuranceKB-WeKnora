@@ -3,7 +3,91 @@
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
 >
 > [!IMPORTANT]
-> **当前状态（2026-07-27，Milestone A 施工中）**：用户已书面批准
+> **当前状态（2026-07-28，Milestone A 施工中）**
+>
+> **代码事实截止点**：`main=d1c1b3ac2d5aed0fa25134ca6551a137004dbfbc`。
+> 顶端合入链为 PR #59（P1 read-only active fence）→ PR #58（P3
+> API/Worker Shell）→ PR #57（P2d Space Security Boundary 规格）。
+> 此前 P1、W1、P5a0 已分别由 PR #53/#55/#56 合入。截止核验时 GitHub
+> open PR/issue 均为 `0`。
+>
+> **已交付且不得重复排期**：
+>
+> - P1 Job Store + Outbox（OpenSpec 035，迁移 0015）；
+> - W1 WeKnora Revision Manifest（OpenSpec 038，Go migration 000066）；
+> - P3 API/Worker 双角色 shell（OpenSpec 039）；
+> - P5a0 ProductVersion resolver（OpenSpec 041）；
+> - P1 read-only active fence verifier（OpenSpec 044）；
+> - P2d Space Security Boundary 的规格（OpenSpec 043，SPEC-ONLY）。
+>
+> **CI 事实**：最后一个代码合入点 `3cfe1fd0` 的 main push run
+> `30323799320` 中 deterministic、integration-postgres、wheel-smoke
+> 全部成功；其后的 `d1c1b3ac` 只改 6 个文档/OpenSpec 路径，`harness`
+> 与 `.github` tree 均未变化，因此按 workflow path filter 不应产生
+> harness-ci，禁止为文档手工触发 full/provider/live/PG。
+>
+> **WeKnora 上游更新（已核验、尚未采用）**：Tencent 于 2026-07-24
+> 发布稳定版
+> [`v0.7.1`](https://github.com/Tencent/WeKnora/releases/tag/v0.7.1)，
+> exact tag commit 为 `c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb`。
+> 当前项目 `VERSION`、frontend/docreader、source lock 和 local-live app
+> 仍冻结在 `v0.6.3` / `5eefa70e6fc8f9ec27958779f91ece6cf685598c`
+> （app digest `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`）。
+> `5eefa70e → v0.7.1` 有 139 commits、733 个变更路径；新版本包含 scoped
+> tenant/platform API keys、KB activity audit、worker/task governance、
+> shared-space/organization 与 source-download 权限加固等项目相关能力。
+>
+> **不能直接 bump**：上游已使用
+> `000066_expand_knowledge_span_name`，而已合入的 W1 用同号替换为
+> `000066_knowledge_revision_manifest`；上游随后还有 `000067–000074`。
+> W1 有 14 个生产路径同时被上游修改，且当前 trusted local-live 构建仍只
+> checkout `5eefa70e` + model-debug redaction patch，所以现有运行制品并不
+> 包含 W1。采用 v0.7.1 前必须先交付迁移桥，为后续项目 migration 分配新的
+> 非冲突 identity，但不得静默重命名/删除 legacy W1 `000066`；随后重放 W1
+> 合同、重建 provenance/SBOM/attestation 并写回 exact image digest。上游新增 key/ACL
+> 能力可能缩小 P3 ACL-inspection delta，但在验证 exact RAW/Wiki ACL
+> 等价读取前，不得把它写成已解除 043 blocker。v0.7.1 同时把原始 source
+> download 收紧为 Editor+，而 `/files` 的 KB-scoped retrieve 仍不足；
+> 禁止把规划中的只读 source_reader 提权绕过，须在升级 Mission 做独立 probe。
+>
+> **migration 防复发门禁**：不得删除、替换或复用上游 migration identity，
+> legacy W1 `000066` 也不得静默改名或删档。升级必须对“现有 `5eefa` DB
+> 尚未执行任何 000066 / 上游 000066 已执行 / 项目 W1 000066 已执行 /
+> fresh v0.7.1 DB”四种状态分别做 schema + migration-state 探测并证明
+> 双侧结构都存在。实现 Mission 必须
+> 在“项目扩展使用独立 migration state/namespace”或经审查的兼容桥中二选一，
+> 并添加 upstream tag × project inventory 自动碰号检查；在该门禁落地前，
+> 不得继续追加新的 WeKnora project-owned migration。
+>
+> **下一轮主航道（均须各自取得 Mission Card，当前尚未授权功能写入）**：
+>
+> 1. 开发 Lane A：先采用 WeKnora v0.7.1 并关闭 000066/W1/runtime 制品
+>    缺口；随后基于新 API 重新裁剪最小 P3 ACL-inspection authority，
+>    再串行接 OpenSpec 043 的 P2d 实现与预留迁移 0016；
+> 2. 开发 Lane B：P5a1 SchemaVersion + Golden Product slice；P2a 虽已满足
+>    C0/P3/CAP0 软件依赖，仍受 23 号 D-2026-07-26-1 的八项 launch
+>    业务输入阻断，不得用假设代填；
+> 3. Lane C：动态只读 review/integration，修复退回唯一写 Owner，不制造
+>    第三个生产写 lane。
+>
+> P4a 的代码 DAG 当前只等 P2d，但 W1 的生产运行采用须先由 v0.7.1 升级
+> Mission 闭合；P4c 继续等待 P2a + P4a；
+> P2c 技术依赖已满足但属于后续 Milestone B，不抢占上述两个 Milestone A
+> 开发 lane。G0a 040 仍只是规格，必须等 P2d + P4c + P5a0 + P5a2，
+> 不得因已有 draft 金标而提前宣布实现。
+>
+> **本地现场**：2026-07-28 同步 worktree 建立后为 32 条 worktree 记录、
+> 31 条可用、18 clean、13 dirty、1 prunable。历史 worktree/分支是审计
+> 现场，不代表当前 main；未经单独授权不得 reset、清理或强制“拉齐”。
+>
+> 当前执行权威仍是
+> [批准架构](docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)、
+> [22 · active execution plan](docs/insurance-kb/22-parallel-execution-blueprint.md)、
+> [23 · 实时状态/决策板](docs/insurance-kb/23-mvp-control-board.md)和
+> [OpenSpec 注册表](openspec/changes/README.md)。
+>
+> [!WARNING]
+> **历史快照（2026-07-27；不再是当前状态源）**：用户已书面批准
 > [近期生产架构重置设计](docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
 > 当前执行以
 > [22 · active execution plan](docs/insurance-kb/22-parallel-execution-blueprint.md)
