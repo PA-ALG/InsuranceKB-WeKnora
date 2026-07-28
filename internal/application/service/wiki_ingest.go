@@ -288,8 +288,9 @@ const (
 // unexported and excluded from JSON so the persisted payload does not
 // duplicate the column.
 type WikiPendingOp struct {
-	Op          string `json:"op"`
-	KnowledgeID string `json:"knowledge_id"`
+	Op          string                       `json:"op"`
+	KnowledgeID string                       `json:"knowledge_id"`
+	Revision    *types.RevisionCommitBinding `json:"revision,omitempty"`
 	// Ingest fields
 	Language string `json:"language,omitempty"`
 	// Retract fields
@@ -462,6 +463,28 @@ func EnqueueWikiIngest(
 	tenantID uint64,
 	kbID, knowledgeID string,
 ) {
+	enqueueWikiIngest(ctx, task, pendingRepo, tenantID, kbID, knowledgeID, nil)
+}
+
+func EnqueueWikiIngestWithRevision(
+	ctx context.Context,
+	task interfaces.TaskEnqueuer,
+	pendingRepo interfaces.TaskPendingOpsRepository,
+	tenantID uint64,
+	kbID, knowledgeID string,
+	revision *types.RevisionCommitBinding,
+) {
+	enqueueWikiIngest(ctx, task, pendingRepo, tenantID, kbID, knowledgeID, revision)
+}
+
+func enqueueWikiIngest(
+	ctx context.Context,
+	task interfaces.TaskEnqueuer,
+	pendingRepo interfaces.TaskPendingOpsRepository,
+	tenantID uint64,
+	kbID, knowledgeID string,
+	revision *types.RevisionCommitBinding,
+) {
 	lang, _ := types.LanguageFromContext(ctx)
 
 	// Persist the pending op. A re-ingest of the same knowledge id while
@@ -473,6 +496,7 @@ func EnqueueWikiIngest(
 		Op:          WikiOpIngest,
 		KnowledgeID: knowledgeID,
 		Language:    lang,
+		Revision:    revision,
 	}
 	payloadBytes, err := json.Marshal(op)
 	if err != nil {
@@ -1080,12 +1104,16 @@ func (s *wikiIngestService) trimPendingList(ctx context.Context, ids []int64) er
 // already zero: FinalizeSubtask guards both the decrement (count > 0) and
 // the promote (parse_status = finalizing AND count = 0), so an op enqueued
 // before this accounting shipped is a harmless no-op.
-func (s *wikiIngestService) finalizeWikiSubtask(ctx context.Context, knowledgeID string) {
+func (s *wikiIngestService) finalizeWikiSubtask(
+	ctx context.Context,
+	knowledgeID string,
+	revision *types.RevisionCommitBinding,
+) {
 	// Wiki is only finalized when its op reaches a terminal state, so this is
 	// always an intended drain (retErr=nil, final=true). Detached context: the
 	// wiki batch worker may be mid-shutdown or have a cancelled ctx when this
 	// runs; a swallowed failure would strand the parent in "finalizing".
-	finalizeSubtaskDetached(ctx, s.knowledgeRepo, knowledgeID, "wiki", nil, false, true)
+	finalizeSubtaskDetached(ctx, s.knowledgeRepo, knowledgeID, "wiki", nil, false, true, revision)
 }
 
 // requeueFailedOps records in-batch failures.
@@ -1142,7 +1170,7 @@ func (s *wikiIngestService) requeueFailedOps(ctx context.Context, payload WikiIn
 		// for deleted knowledge that has no counter to drain). The
 		// matching +1 was seeded by KnowledgePostProcess.SetFinalizing.
 		if op.Op == WikiOpIngest {
-			s.finalizeWikiSubtask(ctx, op.KnowledgeID)
+			s.finalizeWikiSubtask(ctx, op.KnowledgeID, op.Revision)
 		}
 		logger.Warnf(ctx, "wiki ingest: dropping op %s (%s) after %d failures (limit %d)", op.KnowledgeID, op.DocTitle, count, wikiMaxFailRetries)
 		if s.deadLetterRepo != nil {
@@ -1172,6 +1200,7 @@ func (s *wikiIngestService) requeueFailedOps(ctx context.Context, payload WikiIn
 // docIngestResult captures per-document info for batch post-processing.
 type docIngestResult struct {
 	KnowledgeID string
+	Revision    *types.RevisionCommitBinding
 	DocTitle    string
 	Summary     string // one-line summary of the document (from summary page)
 	// Pages records the wiki pages this document touched, carrying both

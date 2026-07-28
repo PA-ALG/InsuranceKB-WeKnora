@@ -3,15 +3,23 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var ErrKnowledgeNotFound = errors.New("knowledge not found")
+
+var (
+	ErrRevisionAlreadyCommitted = errors.New("revision already committed")
+	ErrRevisionSuperseded       = errors.New("revision superseded")
+	ErrRevisionCommitFailed     = errors.New("revision commit failed")
+)
 
 // escapeLikeKeyword escapes SQL LIKE wildcards (%, _) in a keyword
 // so they are treated as literal characters.
@@ -36,7 +44,12 @@ func escapeLikeKeyword(keyword string) string {
 // counter jump back up and never reach zero (the "stuck
 // pending_subtasks_count / never promoted to completed" bug). Omitting
 // the column here means Save can never touch it.
-var omitFieldsOnUpdate = []string{"DeletedAt", "PendingSubtasksCount"}
+var omitFieldsOnUpdate = []string{
+	"DeletedAt",
+	"PendingSubtasksCount",
+	"CurrentParseAttempt",
+	"FileSHA256",
+}
 
 // knowledgeRepository implements knowledge base and knowledge repository interface
 type knowledgeRepository struct {
@@ -52,6 +65,305 @@ func NewKnowledgeRepository(db *gorm.DB) interfaces.KnowledgeRepository {
 func (r *knowledgeRepository) CreateKnowledge(ctx context.Context, knowledge *types.Knowledge) error {
 	err := r.db.WithContext(ctx).Create(knowledge).Error
 	return err
+}
+
+// AllocateParseAttempt serializes on the knowledge row, advances the
+// database-authoritative parse generation and publishes the pending state in
+// the same transaction. It deliberately performs no resource cleanup.
+func (r *knowledgeRepository) AllocateParseAttempt(
+	ctx context.Context,
+	id string,
+	embeddingModelID string,
+	fileSHA256 string,
+) (int64, error) {
+	var allocated int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var knowledge types.Knowledge
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", id).
+			First(&knowledge).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrKnowledgeNotFound
+			}
+			return err
+		}
+
+		allocated = knowledge.CurrentParseAttempt + 1
+		now := time.Now()
+		updates := map[string]interface{}{
+			"current_parse_attempt":  allocated,
+			"parse_status":           types.ParseStatusPending,
+			"enable_status":          "disabled",
+			"description":            "",
+			"error_message":          "",
+			"processed_at":           nil,
+			"embedding_model_id":     embeddingModelID,
+			"pending_subtasks_count": 0,
+			"updated_at":             now,
+		}
+		if fileSHA256 != "" {
+			updates["file_sha256"] = fileSHA256
+		}
+		result := tx.Model(&types.Knowledge{}).
+			Where("id = ? AND current_parse_attempt = ?", id, knowledge.CurrentParseAttempt).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("%w: parse attempt allocation lost row fence", ErrRevisionCommitFailed)
+		}
+		return nil
+	})
+	return allocated, err
+}
+
+// CommitDirectRevision atomically inserts the immutable manifest row and
+// exposes parse_status=completed for a processing attempt with no enrichment
+// fan-out.
+func (r *knowledgeRepository) CommitDirectRevision(
+	ctx context.Context,
+	id string,
+	binding types.RevisionCommitBinding,
+) (*types.KnowledgeRevision, error) {
+	var revision *types.KnowledgeRevision
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		knowledge, err := lockRevisionKnowledge(tx, id, binding)
+		if err != nil {
+			return err
+		}
+		if knowledge.ParseStatus == types.ParseStatusCompleted {
+			return ErrRevisionAlreadyCommitted
+		}
+		if knowledge.ParseStatus != types.ParseStatusProcessing {
+			return fmt.Errorf("%w: direct completion requires processing status", ErrRevisionCommitFailed)
+		}
+
+		revision, err = insertRevisionLocked(tx, knowledge, binding)
+		if err != nil {
+			return err
+		}
+		now := revision.CompletedAt
+		result := tx.Model(&types.Knowledge{}).
+			Where("id = ? AND current_parse_attempt = ? AND parse_status = ?",
+				id, binding.ParseAttempt, types.ParseStatusProcessing).
+			Updates(map[string]interface{}{
+				"parse_status": types.ParseStatusCompleted,
+				"processed_at": now,
+				"updated_at":   now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrRevisionSuperseded
+		}
+		return nil
+	})
+	return revision, err
+}
+
+// FinalizeSubtaskRevision drains one enrichment slot under the same row lock
+// that fences the parse attempt. The final slot inserts the revision and flips
+// completed within this transaction.
+func (r *knowledgeRepository) FinalizeSubtaskRevision(
+	ctx context.Context,
+	id string,
+	binding types.RevisionCommitBinding,
+) (int, bool, error) {
+	var count int
+	var promoted bool
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		knowledge, err := lockRevisionKnowledge(tx, id, binding)
+		if err != nil {
+			return err
+		}
+		if knowledge.PendingSubtasksCount > 0 {
+			knowledge.PendingSubtasksCount--
+		}
+		count = knowledge.PendingSubtasksCount
+
+		updates := map[string]interface{}{
+			"pending_subtasks_count": count,
+			"updated_at":             time.Now(),
+		}
+		if knowledge.ParseStatus == types.ParseStatusFinalizing && count == 0 {
+			revision, err := insertRevisionLocked(tx, knowledge, binding)
+			if err != nil {
+				return err
+			}
+			updates["parse_status"] = types.ParseStatusCompleted
+			updates["processed_at"] = revision.CompletedAt
+			updates["updated_at"] = revision.CompletedAt
+			promoted = true
+		}
+
+		result := tx.Model(&types.Knowledge{}).
+			Where("id = ? AND current_parse_attempt = ?", id, binding.ParseAttempt).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrRevisionSuperseded
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, false, err
+	}
+	return count, promoted, nil
+}
+
+func lockRevisionKnowledge(
+	tx *gorm.DB,
+	id string,
+	binding types.RevisionCommitBinding,
+) (*types.Knowledge, error) {
+	if !binding.Valid() {
+		return nil, fmt.Errorf("%w: invalid revision binding", ErrRevisionCommitFailed)
+	}
+	var knowledge types.Knowledge
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ?", id).
+		First(&knowledge).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrKnowledgeNotFound
+		}
+		return nil, err
+	}
+	if knowledge.CurrentParseAttempt != binding.ParseAttempt {
+		return nil, ErrRevisionSuperseded
+	}
+	if knowledge.FilePath == "" || knowledge.FileSHA256 == "" ||
+		knowledge.FileSHA256 != binding.FileSHA256 {
+		return nil, fmt.Errorf("%w: file digest is absent or drifted", ErrRevisionCommitFailed)
+	}
+	return &knowledge, nil
+}
+
+func insertRevisionLocked(
+	tx *gorm.DB,
+	knowledge *types.Knowledge,
+	binding types.RevisionCommitBinding,
+) (*types.KnowledgeRevision, error) {
+	var existing types.KnowledgeRevision
+	err := tx.Where(
+		"knowledge_id = ? AND parse_attempt = ?",
+		knowledge.ID, binding.ParseAttempt,
+	).First(&existing).Error
+	switch {
+	case err == nil:
+		return nil, ErrRevisionAlreadyCommitted
+	case !errors.Is(err, gorm.ErrRecordNotFound):
+		return nil, err
+	}
+
+	var rows []types.Chunk
+	if err := tx.Where(
+		"knowledge_id = ? AND parse_attempt = ? AND chunk_type = ?",
+		knowledge.ID, binding.ParseAttempt, types.ChunkTypeText,
+	).Order("chunk_index ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	manifestRows := make([]types.RevisionManifestChunk, 0, len(rows))
+	for _, row := range rows {
+		manifestRows = append(manifestRows, types.RevisionManifestChunk{
+			ID:      row.ID,
+			Index:   row.ChunkIndex,
+			Content: row.Content,
+		})
+	}
+	digest, err := types.ComputeRevisionManifestDigest(
+		knowledge.ID, binding.ParseAttempt, manifestRows,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrRevisionCommitFailed, err)
+	}
+
+	revision := &types.KnowledgeRevision{
+		KnowledgeID:       knowledge.ID,
+		ParseAttempt:      binding.ParseAttempt,
+		FileSHA256:        binding.FileSHA256,
+		ParserIdentity:    binding.ParserIdentity.Normalized(),
+		ManifestAlgorithm: types.RevisionManifestAlgorithm,
+		ManifestDigest:    digest,
+		ChunkCount:        len(rows),
+		CompletedAt:       time.Now().UTC(),
+	}
+	if err := tx.Create(revision).Error; err != nil {
+		return nil, err
+	}
+	return revision, nil
+}
+
+func (r *knowledgeRepository) GetRevisionState(
+	ctx context.Context,
+	id string,
+) (*types.Knowledge, *types.KnowledgeRevision, *types.KnowledgeRevision, error) {
+	var knowledge types.Knowledge
+	var last types.KnowledgeRevision
+	hasLast := false
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Unscoped().Clauses(clause.Locking{Strength: "SHARE"}).
+			Where("id = ?", id).First(&knowledge).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrKnowledgeNotFound
+		}
+		if err != nil {
+			return err
+		}
+		err = tx.Where("knowledge_id = ?", id).
+			Order("parse_attempt DESC").First(&last).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		hasLast = err == nil
+		return err
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if !hasLast {
+		return &knowledge, nil, nil, nil
+	}
+	if !knowledge.DeletedAt.Valid &&
+		knowledge.ParseStatus == types.ParseStatusCompleted &&
+		knowledge.CurrentParseAttempt == last.ParseAttempt {
+		return &knowledge, &last, &last, nil
+	}
+	return &knowledge, nil, &last, nil
+}
+
+func (r *knowledgeRepository) GetRevision(
+	ctx context.Context, knowledgeID string, attempt int64,
+) (*types.KnowledgeRevision, error) {
+	var revision types.KnowledgeRevision
+	err := r.db.WithContext(ctx).Where(
+		"knowledge_id = ? AND parse_attempt = ?", knowledgeID, attempt,
+	).First(&revision).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrKnowledgeNotFound
+	}
+	return &revision, err
+}
+
+func (r *knowledgeRepository) ListRevisionChunks(
+	ctx context.Context,
+	knowledgeID string,
+	attempt int64,
+	page *types.Pagination,
+) ([]*types.Chunk, int64, error) {
+	query := r.db.WithContext(ctx).Model(&types.Chunk{}).
+		Where("knowledge_id = ? AND parse_attempt = ? AND chunk_type = ?",
+			knowledgeID, attempt, types.ChunkTypeText)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var chunks []*types.Chunk
+	err := query.Order("chunk_index ASC").Offset(page.Offset()).Limit(page.Limit()).Find(&chunks).Error
+	return chunks, total, err
 }
 
 // GetKnowledgeByID gets knowledge
@@ -511,6 +823,37 @@ func (r *knowledgeRepository) SetFinalizing(
 			"parse_status":           types.ParseStatusFinalizing,
 			"pending_subtasks_count": expectedSubtasks,
 			"updated_at":             now,
+		})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+func (r *knowledgeRepository) SetFinalizingRevision(
+	ctx context.Context,
+	id string,
+	expectedSubtasks int,
+	binding types.RevisionCommitBinding,
+) (bool, error) {
+	if !binding.Valid() {
+		return false, fmt.Errorf("%w: invalid revision binding", ErrRevisionCommitFailed)
+	}
+	if expectedSubtasks < 0 {
+		expectedSubtasks = 0
+	}
+	res := r.db.WithContext(ctx).Model(&types.Knowledge{}).
+		Where(
+			"id = ? AND parse_status = ? AND current_parse_attempt = ? AND file_sha256 = ?",
+			id,
+			types.ParseStatusProcessing,
+			binding.ParseAttempt,
+			binding.FileSHA256,
+		).
+		Updates(map[string]interface{}{
+			"parse_status":           types.ParseStatusFinalizing,
+			"pending_subtasks_count": expectedSubtasks,
+			"updated_at":             time.Now(),
 		})
 	if res.Error != nil {
 		return false, res.Error

@@ -23,6 +23,15 @@ type revisionRepository interface {
 	) (int, bool, error)
 }
 
+type finalizingRevisionRepository interface {
+	SetFinalizingRevision(
+		context.Context,
+		string,
+		int,
+		types.RevisionCommitBinding,
+	) (bool, error)
+}
+
 // RevisionBuildVersion and RevisionBuildCommit reuse the existing release
 // build inputs via -ldflags; debug.ReadBuildInfo remains the local fallback.
 var (
@@ -52,6 +61,34 @@ func finalizeRevisionSlot(
 		return 0, false, err
 	}
 	return revisionRepo.FinalizeSubtaskRevision(ctx, knowledgeID, *revision)
+}
+
+func setFinalizing(
+	ctx context.Context,
+	repo interfaces.KnowledgeRepository,
+	knowledgeID string,
+	expectedSubtasks int,
+	revision *types.RevisionCommitBinding,
+) (bool, error) {
+	if revision == nil {
+		return repo.SetFinalizing(ctx, knowledgeID, expectedSubtasks)
+	}
+	if !revision.Valid() {
+		return false, fmt.Errorf("%w: invalid revision binding", repository.ErrRevisionCommitFailed)
+	}
+	revisionRepo, ok := repo.(finalizingRevisionRepository)
+	if !ok {
+		return false, fmt.Errorf(
+			"%w: revision-aware finalizing unavailable",
+			repository.ErrRevisionCommitFailed,
+		)
+	}
+	return revisionRepo.SetFinalizingRevision(
+		ctx,
+		knowledgeID,
+		expectedSubtasks,
+		*revision,
+	)
 }
 
 func commitDirectRevision(

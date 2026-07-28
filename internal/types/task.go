@@ -263,7 +263,8 @@ type ExtractChunkPayload struct {
 	// ChunkIndex is the 0-based ordinal of this chunk inside the parent
 	// knowledge's text-chunk set, used as the subspan name suffix
 	// ("postprocess.graph.chunk[3]") so the timeline preserves order.
-	ChunkIndex int `json:"chunk_index,omitempty"`
+	ChunkIndex int                    `json:"chunk_index,omitempty"`
+	Revision   *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // DocumentProcessPayload represents the document process task payload
@@ -290,6 +291,13 @@ type DocumentProcessPayload struct {
 	// retried spans overwrite the previous attempt's row rather than
 	// fan out into a new attempt for every retry.
 	Attempt int `json:"attempt,omitempty"`
+	// ParseAttempt is the durable database fence for this task. It is
+	// separate from Attempt (tracing) and remains useful when a file-less
+	// source cannot carry a RevisionCommitBinding.
+	ParseAttempt int64 `json:"parse_attempt,omitempty"`
+	// Revision is the database parse-attempt binding. It is intentionally
+	// independent of Attempt, which remains tracing-only.
+	Revision *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // FAQImportPayload represents the FAQ import task payload (including dry run mode)
@@ -343,7 +351,8 @@ type QuestionGenerationPayload struct {
 	// BatchIndex is the 0-based ordinal of this batch inside the parent
 	// knowledge's text-chunk set, used as the subspan name suffix
 	// ("postprocess.question.batch[3]") so the timeline preserves order.
-	BatchIndex int `json:"batch_index,omitempty"`
+	BatchIndex int                    `json:"batch_index,omitempty"`
+	Revision   *RevisionCommitBinding `json:"revision,omitempty"`
 	// PrevChunkID / NextChunkID are the text chunks (by StartAt) just
 	// outside this batch window, computed at enqueue time so the worker can
 	// rebuild the same surrounding context the legacy whole-knowledge loop
@@ -363,7 +372,8 @@ type SummaryGenerationPayload struct {
 	// Attempt links this task to the parent parse attempt so the worker
 	// can record a postprocess.summary subspan under the right attempt's
 	// postprocess stage. See QuestionGenerationPayload.Attempt notes.
-	Attempt int `json:"attempt,omitempty"`
+	Attempt  int                    `json:"attempt,omitempty"`
+	Revision *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // KBClonePayload represents the knowledge base clone task payload
@@ -457,6 +467,7 @@ type ManualProcessPayload struct {
 	TenantID        uint64 `json:"tenant_id"`
 	KnowledgeID     string `json:"knowledge_id"`
 	KnowledgeBaseID string `json:"knowledge_base_id"`
+	ParseAttempt    int64  `json:"parse_attempt,omitempty"`
 	Content         string `json:"content"`      // cleaned markdown content
 	NeedCleanup     bool   `json:"need_cleanup"` // true for update, false for create
 }
@@ -481,17 +492,19 @@ type ImageMultimodalPayload struct {
 	// ImageIndex is the 0-based ordinal of this image inside the
 	// parent's image set. Used as the subspan name suffix
 	// ("multimodal.image[3]") so the timeline preserves order.
-	ImageIndex int `json:"image_index,omitempty"`
+	ImageIndex int                    `json:"image_index,omitempty"`
+	Revision   *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // KnowledgePostProcessPayload represents the knowledge post process task payload.
 type KnowledgePostProcessPayload struct {
 	TracingContext
-	TenantID        uint64 `json:"tenant_id"`
-	KnowledgeID     string `json:"knowledge_id"`
-	KnowledgeBaseID string `json:"knowledge_base_id"`
-	Language        string `json:"language,omitempty"` // Request locale for {{language}} in prompt templates
-	Attempt         int    `json:"attempt,omitempty"`
+	TenantID        uint64                 `json:"tenant_id"`
+	KnowledgeID     string                 `json:"knowledge_id"`
+	KnowledgeBaseID string                 `json:"knowledge_base_id"`
+	Language        string                 `json:"language,omitempty"` // Request locale for {{language}} in prompt templates
+	Attempt         int                    `json:"attempt,omitempty"`
+	Revision        *RevisionCommitBinding `json:"revision,omitempty"`
 }
 
 // KBCloneTaskStatus represents the status of a knowledge base clone task

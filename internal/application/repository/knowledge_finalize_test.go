@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -42,6 +43,8 @@ CREATE TABLE IF NOT EXISTS knowledges (
     summary_status VARCHAR(32) DEFAULT 'none',
     last_faq_import_result TEXT DEFAULT NULL,
     channel VARCHAR(50) NOT NULL DEFAULT 'web',
+    current_parse_attempt BIGINT NOT NULL DEFAULT 0,
+    file_sha256 VARCHAR(64) NOT NULL DEFAULT '',
     pending_subtasks_count INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +106,40 @@ func insertKnowledgeWithStatus(t *testing.T, db *gorm.DB, status string, deleted
 		VALUES (?, 1, ?, 'document', 'delete-test', 'manual', ?, ?)
 	`, id, uuid.New().String(), status, deletedAt).Error)
 	return id
+}
+
+func TestSetFinalizingRevisionRejectsLateAttempt(t *testing.T) {
+	db := setupKnowledgeTestDB(t)
+	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+	id := uuid.NewString()
+	digestA := strings.Repeat("a", 64)
+	digestB := strings.Repeat("b", 64)
+	require.NoError(t, db.Exec(`
+		INSERT INTO knowledges (
+			id, tenant_id, knowledge_base_id, type, title, source, parse_status,
+			current_parse_attempt, file_sha256, pending_subtasks_count
+		) VALUES (?, 1, ?, 'document', 'late-finalize', 'manual', 'processing', 2, ?, 0)
+	`, id, uuid.NewString(), digestB).Error)
+
+	transitioned, err := repo.SetFinalizingRevision(
+		context.Background(), id, 3,
+		types.RevisionCommitBinding{ParseAttempt: 1, FileSHA256: digestA},
+	)
+	require.NoError(t, err)
+	require.False(t, transitioned)
+	status, count := reloadKnowledgeRow(t, db, id)
+	require.Equal(t, types.ParseStatusProcessing, status)
+	require.Zero(t, count)
+
+	transitioned, err = repo.SetFinalizingRevision(
+		context.Background(), id, 3,
+		types.RevisionCommitBinding{ParseAttempt: 2, FileSHA256: digestB},
+	)
+	require.NoError(t, err)
+	require.True(t, transitioned)
+	status, count = reloadKnowledgeRow(t, db, id)
+	require.Equal(t, types.ParseStatusFinalizing, status)
+	require.Equal(t, 3, count)
 }
 
 // TestFinalizeSubtask_Concurrent_ExactlyOnePromote spawns N goroutines that

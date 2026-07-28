@@ -242,6 +242,14 @@ func NewRouter(params RouterParams) *gin.Engine {
 		)
 		RegisterKnowledgeTagRoutes(v1, params.TagHandler, rbacGuards)
 		RegisterKnowledgeRoutes(v1, params.KnowledgeHandler, rbacGuards)
+		// Revision reads resolve KB access inside the handler so soft-deleted
+		// knowledge can return an ACL-safe 410 tombstone instead of leaking 404.
+		knowledgeRead := rbacGuards.apiKeyGroup(
+			v1.Group("/knowledge"),
+			apiKeyIngest(apiKeyFullAccess()),
+		).With(apiKeyRetrieve(apiKeyFullAccess()))
+		knowledgeRead.GET("/:id/revision", rbacGuards.Viewer(), params.KnowledgeHandler.GetKnowledgeRevision)
+		knowledgeRead.GET("/:id/revisions/:attempt/chunks", rbacGuards.Viewer(), params.KnowledgeHandler.ListKnowledgeRevisionChunks)
 		RegisterFAQRoutes(v1, params.FAQHandler, rbacGuards)
 		RegisterChunkRoutes(v1, params.ChunkHandler, rbacGuards)
 		RegisterSessionRoutes(v1, params.SessionHandler, params.MessageSuggestionHandler, rbacGuards)

@@ -250,9 +250,19 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 		if len(textChunks) > 0 {
 			updates["summary_status"] = types.SummaryStatusNone
 		}
-		if err := s.knowledgeRepo.UpdateKnowledgeColumns(ctx, payload.KnowledgeID, updates); err != nil {
+		var completionErr error
+		if payload.Revision != nil {
+			completionErr = commitDirectRevision(
+				ctx, s.knowledgeRepo, payload.KnowledgeID, payload.Revision,
+			)
+		} else {
+			completionErr = s.knowledgeRepo.UpdateKnowledgeColumns(
+				ctx, payload.KnowledgeID, updates,
+			)
+		}
+		if completionErr != nil {
 			logger.Warnf(ctx, "[KnowledgePostProcess] Failed to mark %s completed (no subtasks): %v",
-				payload.KnowledgeID, err)
+				payload.KnowledgeID, completionErr)
 		} else {
 			logger.Infof(ctx, "[KnowledgePostProcess] Knowledge %s marked completed (no enrichment subtasks).",
 				payload.KnowledgeID)
@@ -260,7 +270,13 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	default:
 		// Flip processing → finalizing in one statement so a parallel
 		// cancel/delete cannot race us into completed.
-		promoted, err := s.knowledgeRepo.SetFinalizing(ctx, payload.KnowledgeID, expectedSubtasks)
+		promoted, err := setFinalizing(
+			ctx,
+			s.knowledgeRepo,
+			payload.KnowledgeID,
+			expectedSubtasks,
+			payload.Revision,
+		)
 		if err != nil {
 			logger.Warnf(ctx, "[KnowledgePostProcess] SetFinalizing failed for %s: %v",
 				payload.KnowledgeID, err)
@@ -331,7 +347,7 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 		logger.Infof(ctx, "[KnowledgePostProcess] Spawning Graph RAG extract tasks for %d text-like chunks", len(textChunks))
 		for i, chunk := range textChunks {
 			ok, err := NewChunkExtractTask(ctx, s.taskEnqueuer, payload.TenantID, chunk.ID, kb.SummaryModelID,
-				payload.KnowledgeID, attempt, i)
+				payload.KnowledgeID, attempt, i, payload.Revision)
 			if err != nil {
 				logger.Errorf(ctx, "[KnowledgePostProcess] Failed to create chunk extract task for %s: %v", chunk.ID, err)
 			}
@@ -357,7 +373,15 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 	//    and drain on its own".
 	enqueuedWiki := false
 	if willSpawnWiki {
-		EnqueueWikiIngest(ctx, s.taskEnqueuer, s.pendingRepo, payload.TenantID, payload.KnowledgeBaseID, payload.KnowledgeID)
+		EnqueueWikiIngestWithRevision(
+			ctx,
+			s.taskEnqueuer,
+			s.pendingRepo,
+			payload.TenantID,
+			payload.KnowledgeBaseID,
+			payload.KnowledgeID,
+			payload.Revision,
+		)
 		logger.Infof(ctx, "[KnowledgePostProcess] Enqueued wiki ingest task for %s", payload.KnowledgeID)
 		enqueuedWiki = true
 	}
@@ -396,7 +420,9 @@ func (s *KnowledgePostProcessService) Handle(ctx context.Context, task *asynq.Ta
 			for i := 0; i < shortfall; i++ {
 				rctx, cancel := context.WithTimeout(
 					context.WithoutCancel(ctx), finalizeSubtaskDetachedTimeout)
-				_, _, err := s.knowledgeRepo.FinalizeSubtask(rctx, payload.KnowledgeID)
+				_, _, err := finalizeRevisionSlot(
+					rctx, s.knowledgeRepo, payload.KnowledgeID, payload.Revision,
+				)
 				cancel()
 				if err != nil {
 					logger.Warnf(ctx, "[KnowledgePostProcess] Failed to release subtask slot for %s: %v",
@@ -441,6 +467,7 @@ func (s *KnowledgePostProcessService) enqueueSummaryGenerationTask(ctx context.C
 		KnowledgeID:     payload.KnowledgeID,
 		Language:        payload.Language,
 		Attempt:         attempt,
+		Revision:        payload.Revision,
 	}
 	langfuse.InjectTracing(ctx, &taskPayload)
 	payloadBytes, err := json.Marshal(taskPayload)
@@ -527,6 +554,7 @@ func (s *KnowledgePostProcessService) enqueueQuestionGenerationTasks(
 			Language:        payload.Language,
 			Attempt:         attempt,
 			ChunkIDs:        chunkIDs,
+			Revision:        payload.Revision,
 			BatchIndex:      batchIndex,
 		}
 		// Boundary context: the text chunk just before / after this window.

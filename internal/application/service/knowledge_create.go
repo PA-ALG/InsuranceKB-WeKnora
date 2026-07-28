@@ -70,7 +70,7 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 
 	// Calculate file hash for deduplication
 	logger.Info(ctx, "Calculating file hash")
-	hash, err := calculateFileHash(file)
+	hash, fileSHA256, err := calculateFileHashes(file)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to calculate file hash: %v", err)
 		return nil, err
@@ -188,22 +188,24 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 	// Prepare knowledge record
 	logger.Info(ctx, "Preparing knowledge record")
 	knowledge := &types.Knowledge{
-		ID:               uuid.New().String(),
-		TenantID:         tenantID,
-		KnowledgeBaseID:  kbID,
-		Type:             "file",
-		Channel:          defaultChannel(channel),
-		Title:            safeFilename,
-		FileName:         safeFilename,
-		FileType:         getFileType(safeFilename),
-		FileSize:         file.Size,
-		FileHash:         hash,
-		ParseStatus:      "pending",
-		EnableStatus:     "disabled",
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
-		EmbeddingModelID: kb.EmbeddingModelID,
-		Metadata:         metadataJSON,
+		ID:                  uuid.New().String(),
+		TenantID:            tenantID,
+		KnowledgeBaseID:     kbID,
+		Type:                "file",
+		Channel:             defaultChannel(channel),
+		Title:               safeFilename,
+		FileName:            safeFilename,
+		FileType:            getFileType(safeFilename),
+		FileSize:            file.Size,
+		FileHash:            hash,
+		FileSHA256:          fileSHA256,
+		CurrentParseAttempt: 1,
+		ParseStatus:         "pending",
+		EnableStatus:        "disabled",
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
+		EmbeddingModelID:    kb.EmbeddingModelID,
+		Metadata:            metadataJSON,
 	}
 
 	if processOverrides != nil {
@@ -260,6 +262,13 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 		EnableQuestionGeneration: enableQuestionGeneration,
 		QuestionCount:            questionCount,
 		Language:                 lang,
+		Revision: newRevisionBinding(
+			knowledge.CurrentParseAttempt,
+			knowledge.FileSHA256,
+			kb,
+			eff,
+			knowledge.FileType,
+		),
 	}
 
 	langfuse.InjectTracing(ctx, &taskPayload)
@@ -844,6 +853,7 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 
 	if status == types.ManualKnowledgeStatusPublish {
 		knowledge.ParseStatus = "pending"
+		knowledge.CurrentParseAttempt = 1
 	}
 
 	if status == types.ManualKnowledgeStatusPublish {
@@ -1124,6 +1134,16 @@ func (s *knowledgeService) UpdateManualKnowledge(ctx context.Context,
 	if _, err := ApplyKnowledgeProcessOverrides(ctx, kb, existing, payload.ProcessConfig, nil, nil); err != nil {
 		return nil, err
 	}
+	revisionRepo, err := requireRevisionRepository(s.repo)
+	if err != nil {
+		return nil, err
+	}
+	existing.CurrentParseAttempt, err = revisionRepo.AllocateParseAttempt(
+		ctx, existing.ID, kb.EmbeddingModelID, "",
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := s.repo.UpdateKnowledge(ctx, existing); err != nil {
 		logger.Errorf(ctx, "Failed to persist manual knowledge before indexing: %v", err)
@@ -1163,6 +1183,7 @@ func (s *knowledgeService) enqueueManualProcessing(ctx context.Context,
 		TenantID:        knowledge.TenantID,
 		KnowledgeID:     knowledge.ID,
 		KnowledgeBaseID: knowledge.KnowledgeBaseID,
+		ParseAttempt:    knowledge.CurrentParseAttempt,
 		Content:         content,
 		NeedCleanup:     needCleanup,
 	}
@@ -1227,6 +1248,12 @@ func sanitizeManualDownloadFilename(title string) string {
 func (s *knowledgeService) triggerManualProcessing(ctx context.Context,
 	kb *types.KnowledgeBase, knowledge *types.Knowledge, content string, doSync bool,
 ) {
+	s.triggerManualProcessingAtAttempt(ctx, kb, knowledge, content, doSync, 0)
+}
+
+func (s *knowledgeService) triggerManualProcessingAtAttempt(ctx context.Context,
+	kb *types.KnowledgeBase, knowledge *types.Knowledge, content string, doSync bool, parseAttempt int64,
+) {
 	clean := strings.TrimSpace(content)
 	if clean == "" {
 		return
@@ -1264,6 +1291,7 @@ func (s *knowledgeService) triggerManualProcessing(ctx context.Context,
 	opts := ProcessChunksOptions{
 		EnableMultimodel: eff.EnableMultimodel && len(resolvedImages) > 0,
 		StoredImages:     resolvedImages,
+		ParseAttempt:     parseAttempt,
 	}
 	if eff.QuestionGenerationConfig.Enabled {
 		opts.EnableQuestionGeneration = true

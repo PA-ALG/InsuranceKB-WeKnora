@@ -43,15 +43,7 @@ _SEMANTIC_ID_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+")
 _SQL_IDENTIFIER_RE = re.compile(r"[a-z][a-z0-9_]*")
 _REPOSITORY_REF_RE = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[a-zA-Z0-9_./-]+")
 PLUGIN_CONTRACT_SCHEMA_V1_SHA256 = (
-    "8ab57b2367dc475f84f5305c45e75f807234dfa217aa9fdc1261155b633f846a"
-)
-_PLANNED_CODE_PR_NODE = (
-    "compatibility_ci",
-    "compatibility.w1_in_progress_last_committed",
-    "internal/handler/knowledge_revision_test.go::"
-    "TestGetKnowledgeRevisionInProgressIncludesLastCommitted",
-    "code_pr",
-    ("in_progress_with_prior_last_committed_envelope",),
+    "548ef36ec27cd3175ff2c0d2de1654d3496a3233a3fa05514b51ef04e6d93d34"
 )
 
 
@@ -994,14 +986,7 @@ def _parse_validation_lanes(value: object, repository_root: Path) -> tuple[Valid
                 _resolve_existing_test_ref(repository_root, test_ref)
             elif status == "planned":
                 artifact_plan = lane_id == "artifact_probe" and required_by == "artifact_pr"
-                code_plan = (
-                    lane_id,
-                    node_id,
-                    test_ref,
-                    required_by,
-                    proves,
-                ) == _PLANNED_CODE_PR_NODE
-                if not artifact_plan and not code_plan:
+                if not artifact_plan:
                     _fail("planned validation node is outside the closed schema")
             else:
                 _fail("validation node.status must be existing or planned")
@@ -1041,8 +1026,8 @@ def _parse_validation_lanes(value: object, repository_root: Path) -> tuple[Valid
         for node in lane.nodes
         if node.status == "planned" and node.required_by == "code_pr"
     )
-    if planned_code_pr_nodes != (_PLANNED_CODE_PR_NODE,):
-        _fail("schema-version-1 requires the exact planned code_pr evidence node")
+    if planned_code_pr_nodes:
+        _fail("schema-version-1 forbids planned code_pr evidence nodes")
     return tuple(lanes)
 
 

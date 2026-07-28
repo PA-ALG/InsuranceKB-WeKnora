@@ -228,6 +228,7 @@ func finalizeSubtaskDetached(
 	knowledgeID, source string,
 	retErr error,
 	superseded, final bool,
+	revision *types.RevisionCommitBinding,
 ) {
 	willDrain := repo != nil && knowledgeID != "" && !superseded && (retErr == nil || final)
 	if !willDrain {
@@ -235,7 +236,8 @@ func finalizeSubtaskDetached(
 	}
 	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalizeSubtaskDetachedTimeout)
 	defer cancel()
-	if _, _, err := repo.FinalizeSubtask(dctx, knowledgeID); err != nil {
+	_, _, err := finalizeRevisionSlot(dctx, repo, knowledgeID, revision)
+	if err != nil {
 		logger.Warnf(ctx, "finalize subtask decrement failed source=%s knowledge=%s err=%v",
 			source, knowledgeID, err)
 	}

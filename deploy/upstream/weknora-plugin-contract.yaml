@@ -575,7 +575,7 @@ validation_lanes:
           - terminal_last_committed_envelope
       - node_id: compatibility.w1_in_progress_last_committed
         test_ref: internal/handler/knowledge_revision_test.go::TestGetKnowledgeRevisionInProgressIncludesLastCommitted
-        status: planned
+        status: existing
         required_by: code_pr
         proves:
           - in_progress_with_prior_last_committed_envelope

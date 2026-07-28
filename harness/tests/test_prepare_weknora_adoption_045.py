@@ -632,7 +632,7 @@ def test_plugin_contract_registers_existing_not_committed_reason_matrix_node() -
     )
 
 
-def test_plugin_contract_keeps_in_progress_prior_commit_evidence_planned() -> None:
+def test_plugin_contract_registers_in_progress_prior_commit_evidence() -> None:
     contract = adoption.load_plugin_contract(PLUGIN_CONTRACT)
     nodes = {node.node_id: node for lane in contract.validation_lanes for node in lane.nodes}
 
@@ -641,7 +641,7 @@ def test_plugin_contract_keeps_in_progress_prior_commit_evidence_planned() -> No
         "internal/handler/knowledge_revision_test.go::"
         "TestGetKnowledgeRevisionInProgressIncludesLastCommitted"
     )
-    assert node.status == "planned"
+    assert node.status == "existing"
     assert node.required_by == "code_pr"
     assert node.proves == ("in_progress_with_prior_last_committed_envelope",)
     assert contract.states.w1_runtime.available is False
@@ -679,10 +679,9 @@ def test_plugin_contract_separates_readiness_lanes_and_excludes_unowned_work() -
     assert all(node.required_by == "code_pr" for node in existing)
     assert planned
     planned_code_pr = tuple(node for node in planned if node.required_by == "code_pr")
-    assert tuple(node.node_id for node in planned_code_pr) == (
-        "compatibility.w1_in_progress_last_committed",
-    )
-    assert all(node.required_by == "artifact_pr" for node in planned if node not in planned_code_pr)
+    assert planned_code_pr == ()
+    assert len(planned) == 5
+    assert all(node.required_by == "artifact_pr" for node in planned)
     assert all(node.status != "existing" for node in planned)
     assert contract.states.artifact_gate.available is False
     assert contract.exclusions.ordinary_wiki_operations == (
@@ -809,7 +808,7 @@ def test_plugin_contract_rejects_consumer_adapted_without_required_w1_surface(
         lambda value: value["validation_lanes"][1]["nodes"][2].update(
             {"proves": ["in_progress_last_committed"]}
         ),
-        lambda value: value["validation_lanes"][1]["nodes"][2].update({"status": "existing"}),
+        lambda value: value["validation_lanes"][1]["nodes"][2].update({"status": "planned"}),
         lambda value: value["validation_lanes"][1]["nodes"][2].update(
             {"required_by": "artifact_pr"}
         ),
