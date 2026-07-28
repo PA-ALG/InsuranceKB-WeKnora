@@ -26,7 +26,7 @@ Read-only check on 2026-07-28:
 
 | Dependency | Exact evidence | Status for foundation implementation |
 |---|---|---|
-| P3 principal and Space scope | PR #58 head `48ebd042bdd6478d909250568c6eadadcb3d6ebc`; `HumanPrincipal`, `ServicePrincipal`, `StaticPrincipalProvider.authenticate`, `require_space_role` | available after PR #58 merges |
+| P3 principal and Space scope | final PR #58 head `9f5d9c7736fc95417a67f962e6205627c5c3b8d5`, merged in main `3cfe1fd0650059b4e6dd43e539af352616c4b712`; `HumanPrincipal`, `ServicePrincipal`, `StaticPrincipalProvider.authenticate`, `require_space_role` | available; interface facts unchanged |
 | P3 ACL inspection authority | PR #58 has only `read_raw_knowledge` and `project_managed_page`; no RAW+Wiki ACL inspection contract | **BLOCKER**; separate small P3 Mission required |
 | P1 read-only active fence | current P1 exports `JobStore`; `heartbeat` renews lease | backlog for provider authorization, not a 043 foundation dependency |
 

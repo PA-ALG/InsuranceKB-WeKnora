@@ -471,6 +471,44 @@ class JobStore:
 
     # --- P1.3 lease、heartbeat 与 fencing ---
 
+    def verify_active_fence(
+        self,
+        *,
+        space_id: str,
+        job_id: str,
+        generation: int,
+        attempt: int,
+    ) -> JobSnapshot:
+        """只读确认当前 worker 仍可开始一次有外部副作用的动作。
+
+        校验当前 Space/job、generation、`running`、attempt 与未过期 lease；
+        使用数据库时钟，且不续租、不推进状态、不写 outbox。PostgreSQL 的
+        共享行锁只覆盖本次短事务，返回前即释放，调用方不得跨 provider I/O
+        持有数据库事务。
+        """
+        validated_text(space_id, "space_id", max_length=MAX_SPACE_ID_LENGTH)
+        validated_text(job_id, "job_id", max_length=MAX_JOB_ID_LENGTH)
+        with self._session_factory() as session:
+            with session.begin():
+                row = session.execute(
+                    select(WikiJob)
+                    .where(WikiJob.id == job_id, WikiJob.space_id == space_id)
+                    .with_for_update(read=True)
+                ).scalar_one_or_none()
+                if row is None:
+                    raise SpaceScopeError()
+                self._check_generation(row, generation)
+                state = JobState(row.state)
+                if state is not JobState.RUNNING:
+                    raise IllegalTransitionError(state, state, row.id)
+                if attempt != row.attempt:
+                    raise InvalidJobInputError(
+                        f"attempt {attempt} does not match current attempt {row.attempt}"
+                    )
+                now = database_now(session)
+                require_active_lease(session, row, now=now)
+                return _snapshot(row)
+
     def heartbeat(self, *, space_id: str, job_id: str, generation: int) -> JobSnapshot:
         """延长 lease；仅当 generation 等于当前值且状态 leased|running。
 

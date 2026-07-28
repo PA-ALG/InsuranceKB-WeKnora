@@ -116,32 +116,32 @@ main 前 P3 实现不得开工接线（035 tasks 冻结口径）。
 首个 RED，30 分钟内有可核验产物。前置：P1 实现已合入 main（T5 起硬依赖；
 T1–T4 可在 P1 合入前以纯 unit 先行，但不得提前接线 store）。
 
-- [ ] T1 RED（≤15 分钟）：纯单元测试冻结 principal 模型——人类角色与
+- [x] T1 RED（≤15 分钟）：纯单元测试冻结 principal 模型——人类角色与
   服务 principal 封闭枚举、唯一铸造入口对缺失/未知/非法凭据与未知角色名
   fail closed、无匿名默认、caller 自报 space_id/user_id 零权限效果、
   服务 principal 不可持有人类角色/superadmin、能力集跨界拒绝。
   GREEN：`service_shell` principal 模块（配置/静态 provider 接口化）。
-- [ ] T2 RED：配置合同——`WIKI_` 前缀、缺必填非零码拒启动并列出缺失键、
+- [x] T2 RED：配置合同——`WIKI_` 前缀、缺必填非零码拒启动并列出缺失键、
   secret 脱敏于 repr/日志/错误、两组配置值行为差异、heartbeat ≥ lease
   交叉校验拒启动。GREEN：typed settings 模块。
-- [ ] T3 RED：探针语义——liveness 无外部依赖（DB 故障不影响）、readiness
+- [x] T3 RED：探针语义——liveness 无外部依赖（DB 故障不影响）、readiness
   的 DB 连通 + migration head 相等检查、mismatch/超时/首检未过/draining
   一律 not ready 且带 typed 原因、探针响应无 secret。GREEN：health 模块
   （head 期望值从 wheel 内 Alembic 配置读取）。
-- [ ] T4 RED：两入口一 wheel——console scripts 存在、角色互斥（API 无
+- [x] T4 RED：两入口一 wheel——console scripts 存在、角色互斥（API 无
   claim 面、Worker 仅探针面）、app factory 可多实例构造。GREEN：cli 入口
   + `[project.scripts]` + API app factory（仅探针 + 观测路由骨架）。
-- [ ] T5 RED（integration_postgres；需 P1 实现已合入）：Worker 主循环——
+- [x] T5 RED（integration_postgres；需 P1 实现已合入）：Worker 主循环——
   注册测试 handler 后 ≥2 副本消费恰好单领取单结果；未注册 job_type 记
   typed `retryable`（`unknown_job_type`）按 `max_attempts` 路由不伪装
   成功；本地并发两组配置值生效；空队列退配置轮询间隔；瞬时 DB 错误有界
   退避不退出。GREEN：worker_loop（claim → dispatch → heartbeat → typed
   完成；空 registry + 显式注册扩展点）。
-- [ ] T6 RED（integration_postgres）：优雅停止——SIGTERM 后零新 claim、
+- [x] T6 RED（integration_postgres）：优雅停止——SIGTERM 后零新 claim、
   deadline 内完成正常提交、超时任务停 heartbeat 由第二实例以更高
   generation 接管收敛、readiness 即时 not ready、总退出有界、重复信号
   立即退出。GREEN：lifecycle/drain 模块（API 与 Worker 共用）。
-- [ ] T7 RED：API 纯净性与观测端点——请求返回后无遗留领域后台任务；
+- [x] T7 RED：API 纯净性与观测端点——请求返回后无遗留领域后台任务；
   观测端点授权矩阵（space_admin 本 Space、super_admin 全局、其余含服务
   principal/跨 Space typed 拒绝零数据）；响应与 P1.9 预置分布精确一致且
   无负载无 secret。GREEN：观测端点 + 纯净性守卫。
@@ -149,10 +149,15 @@ T1–T4 可在 P1 合入前以纯 unit 先行，但不得提前接线 store）�
   039-p3-api-worker-shell --strict` → PostgreSQL 16 lane 全量
   `integration_postgres`（JUnit `skipped=0`）；零迁移守卫（diff 无迁移、
   `alembic heads` 前后不变）；validation report 如实记录已运行项与
-  NOT RUN；更新 README 注册表状态与 HANDOFF 当前状态块。
+  NOT RUN；更新 README 注册表状态与 HANDOFF 当前状态块。当前 corrective
+  working candidate 已完成 principal authority 深快照/深度不可变、
+  human/service unknown-Space fail-closed 与组合进程总退出时限的 focused
+  和静态门禁；本次未重跑 PostgreSQL，且共享 README/HANDOFF 仍按边界
+  延后，因此 T8 保持未勾选。
 - [ ] T9 单独立 Spec/质量复审（D-2026-07-26-2：P3 = 单独立评审 + 自动
   门禁）。复审中若出现新的同域基础不变量，按 033 §18 停止补丁循环、回到
-  边界设计，不追加状态和异常分支。
+  边界设计，不追加状态和异常分支。原 head 的复审证据不冒充本次 security
+  corrective exact head；push 后仍需 fresh exact-head 门禁/复核。
 
 完成 T8 前不得宣称 P3 验收达成；P2a/P2c/P2d/P5a0/P5a1 等消费方 PR 不得
 提前依赖未合入的壳接线。

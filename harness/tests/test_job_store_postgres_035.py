@@ -381,6 +381,71 @@ def test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation(
     assert current.worker_id == "worker-b"
 
 
+@pytest.mark.integration_postgres
+def test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job(
+    postgres_runtime: PostgresRuntime,
+) -> None:
+    space_id = _space("active-fence")
+    store = _store(postgres_runtime)
+    store.enqueue(space_id=space_id, job_type="compile", idempotency_key="job-1")
+    claimed = store.claim(space_ids=(space_id,), worker_id="worker-a")
+    assert isinstance(claimed, ClaimedJob)
+    running = store.start(
+        space_id=space_id,
+        job_id=claimed.job.id,
+        generation=claimed.job.lease_generation,
+    )
+    before = store.get_job(space_id=space_id, job_id=running.id)
+
+    verified = store.verify_active_fence(
+        space_id=space_id,
+        job_id=running.id,
+        generation=running.lease_generation,
+        attempt=running.attempt,
+    )
+
+    assert verified == before
+    assert store.get_job(space_id=space_id, job_id=running.id) == before
+    assert _outbox_count(postgres_runtime, space_id) == 0
+
+    _force_expire(postgres_runtime, running.id)
+    barrier = threading.Barrier(2)
+
+    def verify_expired_fence() -> type[BaseException] | None:
+        barrier.wait(timeout=10)
+        try:
+            store.verify_active_fence(
+                space_id=space_id,
+                job_id=running.id,
+                generation=running.lease_generation,
+                attempt=running.attempt,
+            )
+        except (LeaseExpiredError, StaleGenerationError) as error:
+            return type(error)
+        return None
+
+    def reclaim() -> None:
+        barrier.wait(timeout=10)
+        store.reclaim_expired_leases(space_ids=(space_id,))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        verify_future = executor.submit(verify_expired_fence)
+        reclaim_future = executor.submit(reclaim)
+        assert verify_future.result(timeout=FUTURE_TIMEOUT_S) in {
+            LeaseExpiredError,
+            StaleGenerationError,
+        }
+        reclaim_future.result(timeout=FUTURE_TIMEOUT_S)
+
+    # reclaim 使用 SKIP LOCKED；若 verifier 先持有共享锁，本轮回收允许跳过，
+    # 下一轮必须在锁释放后收敛。两种线性化顺序都不得让旧 fence 通过。
+    store.reclaim_expired_leases(space_ids=(space_id,))
+    reclaimed = store.get_job(space_id=space_id, job_id=running.id)
+    assert reclaimed.state is JobState.QUEUED
+    assert reclaimed.lease_generation == running.lease_generation + 1
+    assert _outbox_count(postgres_runtime, space_id) == 0
+
+
 # --- T6：完成事务 + outbox 原子性（含注入中断）与重复完成拒绝 ---
 
 

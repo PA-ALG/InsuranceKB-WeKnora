@@ -61,6 +61,7 @@ JOB_STORE_POSTGRES_NODES = {
         "test_p1_8_concurrent_claims_never_exceed_per_space_limit",
         "test_p1_8_saturated_space_does_not_block_sibling_space",
         "test_p1_3_expired_lease_is_reclaimed_and_retaken_with_greater_generation",
+        "test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job",
         "test_p1_6_completion_interrupt_before_commit_leaves_neither_row",
         "test_p1_3_late_worker_every_write_path_is_fenced_after_takeover",
         "test_p1_4_retry_loop_reaches_dead_letter_only_via_configured_policy",
@@ -96,6 +97,13 @@ JOB_MIGRATION_POSTGRES_NODES = {
         "test_q26_offline_sql_downgrade_is_explicitly_refused",
     )
 }
+SERVICE_SHELL_POSTGRES_NODES = {
+    f"tests/test_service_shell_worker_039.py::{node}"
+    for node in (
+        "test_t5_postgres_two_workers_single_result_and_unknown_type_budget",
+        "test_t6_postgres_drain_reclaims_with_higher_generation_and_one_result",
+    )
+}
 POSTGRES_NODES = (
     {
         POSTGRES_NODE,
@@ -116,6 +124,7 @@ POSTGRES_NODES = (
     | SOURCE_LIFECYCLE_MIGRATION_POSTGRES_NODES
     | JOB_STORE_POSTGRES_NODES
     | JOB_MIGRATION_POSTGRES_NODES
+    | SERVICE_SHELL_POSTGRES_NODES
 )
 WEKNORA_NODES = {
     "tests/test_knowledge_publisher.py::test_k5_5_live_publish_and_rollback_roundtrip",
