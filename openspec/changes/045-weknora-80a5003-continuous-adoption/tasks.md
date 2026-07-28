@@ -58,6 +58,11 @@ drop/recreate、清空数据库或静默继续。
 - [ ] C2 RED：migration collision inventory 覆盖编号、schema object、patch
   surface，分别证明真实 project merge-base delta 与 source-lock runtime
   delta，先复现 legacy `000066` 冲突；
+- [ ] C2a RED：machine-readable Harness plugin contract 覆盖 REST envelope、
+  typed error、principal/authoritative Space binding/current tenant+RAW-KB ACL、
+  allowed read/denied mutation/zero-write、retry/idempotency、forbidden coupling
+  与 exact validation nodes；W1 runtime、consumer adapted、source-reader
+  authority 三态不得互相冒充，私有 Go symbol 不得成为兼容权威；
 - [ ] C3 RED：PostgreSQL 16 四状态 matrix；每态验证数据 count/digest、
   official/enterprise ledger、span type 与 W1 schema；
 - [ ] C4 RED：dirty、partial、unknown、preflight race、双实例 race 全部零写；

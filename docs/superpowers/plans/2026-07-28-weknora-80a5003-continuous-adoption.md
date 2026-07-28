@@ -48,6 +48,12 @@
   and patch-overlap evidence.
 - Create `deploy/upstream/weknora-enterprise-schema-objects.yaml` — W1-owned columns,
   tables, constraints and indexes used by semantic collision checks.
+- Create `deploy/upstream/weknora-plugin-contract.yaml` — closed machine-readable
+  Harness↔WeKnora REST/lifecycle boundary, principal/Space/RAW-KB ACL, allowed
+  read/denied mutation/zero-write, envelope, typed errors, retry/idempotency and
+  exact three-lane validation nodes; it records W1 runtime, consumer adaptation and
+  source-reader authority as separate states and treats public semantics—not private
+  Go symbols—as compatibility authority.
 - Create `harness/scripts/prepare_weknora_adoption.py` — one guarded planning/bundle
   command for this and later upgrades.
 - Create `harness/tests/test_prepare_weknora_adoption_045.py` — unit/fixture tests for

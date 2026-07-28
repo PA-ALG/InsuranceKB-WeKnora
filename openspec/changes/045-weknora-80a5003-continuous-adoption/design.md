@@ -65,6 +65,16 @@ source-lock/target runtime delta。前者决定 merge conflicts，后者决定�
 归 Harness。集成优先使用 WeKnora public API、worker contract 或 sidecar；
 不得借升级把领域逻辑搬入 Go fork。
 
+持续升级的核心证据不是 vendor 文件能否合并，而是 machine-readable Harness
+plugin contract 在新 target 上仍成立。该 inventory SHALL 固定 versioned
+REST/lifecycle poll、完整 response envelope、typed error、principal、
+authoritative Space binding、current tenant/RAW-KB ACL、allowed read/denied
+mutation/zero-write、retry/idempotency/timeout、禁止共享内部基础设施及三阶段
+validation nodes。兼容权威是公共 method/path/grammar/semantics，不是私有 Go
+symbol。045 只建立 inventory 与 adoption compatibility gate；现有 Harness
+consumer 仍为 pre-W1，P4a/P4c 适配和 source-reader ACL authority 保持独立
+Mission/blocker，不在升级中顺手实现。
+
 WeKnora 内部 patch 仍只允许 patch inventory 已批准的 W1/P11/P13/P14。
 本 change 只重放已实现 W1 与现有 supply-chain redaction patch，不授权
 P11/P13/P14 或新 patch。

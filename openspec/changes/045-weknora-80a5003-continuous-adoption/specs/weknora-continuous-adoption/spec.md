@@ -50,6 +50,16 @@ readiness、migration observability 与 collision tooling SHALL 作为 W1
 adoption surface 在 inventory 中逐路径登记；它们改变 038 W1.6 的历史
 allowed surface，但不创建新的 patch identity 或保险领域能力。
 
+系统 SHALL 另以 machine-readable Harness plugin contract inventory 冻结
+WeKnora consumer 边界：versioned REST/lifecycle poll、principal、
+authoritative Space binding、current tenant/RAW-KB ACL、allowed reads/denied
+mutations 与失败零写、endpoint request/response envelope、typed error
+disposition、GET retry/W1 race-stimulus mutation no-retry、timeout/idempotency、禁止 shared
+DB/Redis/Asynq/internal queue，以及 validation nodes。inventory SHALL 分别
+表达 `W1 runtime available`、`Harness consumer adapted` 与
+`source_reader authority available`，不得因前一项通过就把后两项冒充为
+ready；P2d/P3 ACL-inspection authority 未交付时后者 SHALL 保持 false。
+
 #### Scenario: 上游新功能看似接近 W1
 
 - **WHEN** target snapshot 提供新的 API key、activity audit 或 source
@@ -61,6 +71,14 @@ allowed surface，但不创建新的 patch identity 或保险领域能力。
 
 - **WHEN** replay delta 含 inventory 外的生产路径或新 patch identity
 - **THEN** upgrade gate 失败并要求新 Mission，不顺手扩大 045
+
+#### Scenario: target 与 W1 已运行但 Harness 尚未适配
+
+- **WHEN** W1 routes/manifest tests 已通过，但 Harness 仍消费 mutable metadata
+  或 unbound chunk endpoint，或 source download authority 尚不可用
+- **THEN** runtime adoption 可按自身门禁继续，但 plugin contract 状态保持
+  `consumer_adapted=false` / `source_reader_authority=false`；不得声明
+  P4a/P4c 或 production revision capture ready
 
 ### Requirement: U1.3 官方与企业 migration 独立记账
 
@@ -200,6 +218,27 @@ commit/tree）与 enterprise inventory 比较：
 `5eefa70e6fc8f9ec27958779f91ece6cf685598c` 不是 project main 的 ancestor。
 collision report SHALL 同时记录两种 delta，且不得把 runtime baseline
 冒充 Git merge-base。
+
+collision gate SHALL 解析 machine-readable Harness plugin contract 的 closed
+schema，并验证 adoption target/inventory 引用、公共 method/path、request/
+query grammar、response envelope/fields、typed error、capability/ACL guard、
+forbidden coupling 与 validation node 存在性。私有 Go symbol/path 只可作为
+当前 target 的定位 evidence，不得成为 compatibility authority。普通 Wiki
+page history/diff/edit/revert 属于目标用户功能验收，不得被列为 Harness W1
+plugin contract。
+
+validation lanes SHALL 分工如下：
+
+1. planner：closed schema/ref、公共 REST grammar、forbidden coupling 与
+   declared node existence；
+2. compatibility CI：focused deterministic Go/Python contract nodes 与
+   cross-language manifest vectors；
+3. artifact probe：final-image W1/readiness、scoped reads/denied mutations、
+   before/after zero-write 与 bounded reparse/delete race。
+
+WeKnora runtime readiness、Harness API/worker process readiness 与 W1 consumer
+capability readiness SHALL 是三个独立信号；未注册 P4a/P4c capability 不得让
+当前 P3 process readiness 产生虚假失败。
 
 任何语义 overlap SHALL 产出 exact object/path/old-new identity，并要求显式
 compatibility verdict。collision gate SHALL 在新增任何 enterprise WeKnora
