@@ -20,8 +20,17 @@ DB_USER=${DB_USER:-postgres}
 DB_PASSWORD=${DB_PASSWORD:-postgres}
 DB_NAME=${DB_NAME:-WeKnora}
 
-# Use versioned migrations directory
-MIGRATIONS_DIR="${MIGRATIONS_DIR:-migrations/versioned}"
+# New migrations belong to the independent enterprise chain.
+MIGRATIONS_DIR="migrations/enterprise/versioned"
+
+case "$1" in
+    up|down|goto|force|version)
+        echo "Error: direct '$1' migration commands are disabled."
+        echo "Use the canonical guarded application migration path instead:"
+        echo "  Start WeKnora with AUTO_MIGRATE=true (the default)."
+        exit 2
+        ;;
+esac
 
 # Check if migrate tool is installed
 if ! command -v migrate &> /dev/null; then
@@ -61,21 +70,6 @@ fi
 
 # Execute migration based on command
 case "$1" in
-    up)
-        echo "Running migrations up..."
-        echo "DB_URL: ${DB_URL}"
-        echo "DB_USER: ${DB_USER}"
-        echo "DB_PASSWORD: ${DB_PASSWORD}"
-        echo "DB_HOST: ${DB_HOST}"
-        echo "DB_PORT: ${DB_PORT}"
-        echo "DB_NAME: ${DB_NAME}"
-        echo "MIGRATIONS_DIR: ${MIGRATIONS_DIR}"
-        migrate -path ${MIGRATIONS_DIR} -database ${DB_URL} up
-        ;;
-    down)
-        echo "Running migrations down..."
-        migrate -path ${MIGRATIONS_DIR} -database ${DB_URL} down
-        ;;
     create)
         if [ -z "$2" ]; then
             echo "Error: Migration name is required"
@@ -88,35 +82,11 @@ case "$1" in
         echo "  - ${MIGRATIONS_DIR}/$(ls -t ${MIGRATIONS_DIR} | head -1)"
         echo "  - ${MIGRATIONS_DIR}/$(ls -t ${MIGRATIONS_DIR} | head -2 | tail -1)"
         ;;
-    version)
-        echo "Checking current migration version..."
-        migrate -path ${MIGRATIONS_DIR} -database ${DB_URL} version
-        ;;
-    force)
-        if [ -z "$2" ]; then
-            echo "Error: Version number is required"
-            echo "Usage: $0 force <version>"
-            echo "Note: Use -1 to reset to no version (allows re-running all migrations)"
-            exit 1
-        fi
-        VERSION="$2"
-        echo "Forcing migration version to $VERSION..."
-        # Use env to pass the command, avoiding shell flag parsing issues with negative numbers
-        env migrate -path "${MIGRATIONS_DIR}" -database "${DB_URL}" force -- "$VERSION"
-        ;;
-    goto)
-        if [ -z "$2" ]; then
-            echo "Error: Version number is required"
-            echo "Usage: $0 goto <version>"
-            exit 1
-        fi
-        echo "Migrating to version $2..."
-        migrate -path ${MIGRATIONS_DIR} -database ${DB_URL} goto $2
-        ;;
     *)
-        echo "Usage: $0 {up|down|create <migration_name>|version|force <version>|goto <version>}"
+        echo "Usage: $0 create <migration_name>"
+        echo "Database migration execution is handled by the guarded application startup path."
         exit 1
         ;;
 esac
 
-echo "Migration command completed successfully" 
+echo "Migration command completed successfully"

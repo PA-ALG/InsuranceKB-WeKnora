@@ -103,6 +103,12 @@ func RunMigrationsWithOptions(dsn string, opts MigrationOptions) error {
 
 	logger.Infof(ctx, "Starting database migration...")
 
+	// PostgreSQL must pass the raw catalog origin preflight and acquire the
+	// fixed session advisory lock before either migrator is constructed.
+	if opts.SQLiteDBPath == "" && !strings.HasPrefix(dsn, "sqlite3://") {
+		return runPostgresMigrations(ctx, dsn, opts)
+	}
+
 	migrationsPath := "file://migrations/versioned"
 	if strings.HasPrefix(dsn, "sqlite3://") {
 		migrationsPath = "file://migrations/sqlite"
