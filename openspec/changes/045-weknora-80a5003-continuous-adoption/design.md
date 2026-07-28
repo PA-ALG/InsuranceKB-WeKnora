@@ -1,267 +1,260 @@
-# 045 · WeKnora `80a5003` Mainline Snapshot Continuous Adoption Design
+# 045 · WeKnora Immutable Upstream Thin Adoption Design
 
-> 状态：`SPEC-ONLY / IMPLEMENTATION NOT STARTED`
->
-> 目标不是制造一个长期私有 fork，而是建立「持续跟随批准的官方不可变
-> identity + Harness 插件化 + 企业迁移独立记账」的可重复升级路径。本设计
-> 首先采用 Tencent WeKnora mainline snapshot
-> `80a5003cc99a427098afe184eee6601916d3d156`；同一机制 SHALL 可用于后续
-> stable release 或经用户明确批准的 mainline snapshot。
+## 1. 目标
 
-## 1. 已冻结事实
-
-- 当前 deployed runtime source lock：
-  `v0.6.3@5eefa70e6fc8f9ec27958779f91ece6cf685598c`；
-- 当前 project main 与 target 的真实 Git merge-base 是
-  `b4b63a0c1f60718aa496df5ecf3a61a347da3d06`；runtime lock `5eefa70e...`
-  是 target ancestor，但不是 project main ancestor，因此 runtime upgrade
-  baseline 与 source merge baseline 必须分开建模；
-- release ancestor：
-  `v0.7.1@c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb`；
-- 目标官方 mainline snapshot：
-  commit `80a5003cc99a427098afe184eee6601916d3d156`，
-  tree `18fcf68e7a008ce69929e32233f0b6914040c223`；
-- 目标比 v0.7.1 前进 17 commits / 122 changed paths；提交
-  `80a5003` 新增 Wiki 单页 revision history、line diff、manual editing、
-  revert、optimistic locking 与官方 `000075_wiki_page_revisions`；
-- 当前 trusted local-live app digest：
-  `sha256:e2dd00b37dbcfebf87fab9d1e2338ad43e6ea9939a5ba9fcab9d412d866521f5`；
-- 目标 snapshot 继承的官方 chain 使用
-  `migrations/versioned/000066_expand_knowledge_span_name.{up,down}.sql`，
-  up 将 `knowledge_processing_spans.name` 扩展到 `VARCHAR(255)`；
-- 已合入 W1 使用
-  `migrations/versioned/000066_knowledge_revision_manifest.{up,down}.sql`，
-  创建 revision manifest 合同。两者编号相同、效果不同；
-- 当前 local-live workflow 从官方 `5eefa70e` checkout，只重放
-  model-debug access-log redaction patch；当前运行制品不含已合入仓库的 W1。
-
-用户已明确：任何现有数据库都必须保留数据；不得用清空、重建、force
-version 或伪造迁移历史绕过 `000066`。
-
-## 2. 核心决策
-
-### D1 · 官方源码持续跟随批准的不可变 identity
-
-每次升级 SHALL 锁定官方 commit、tree 与 source archive digest；stable
-release 还 SHALL 记录 tag，post-release mainline snapshot 还 SHALL 记录其
-release ancestor 与相对增量。本次只允许 exact `80a5003...`，不得跟随会继续
-移动的 `main`。官方源码与官方 migration 作为一组同步；不得只改
-`VERSION`、镜像 tag 或 source lock。
-
-官方大规模 vendor delta 不逐路径伪装成项目新功能。评审聚焦：
-
-1. 官方 target identity 与来源是否可证明；
-2. 企业 patch 的重放 delta；
-3. 官方变更与企业 owner 的碰撞；
-4. 数据迁移、API 合同和受信制品是否通过。
-
-adoption report SHALL 同时生成真实 project-head/target 三方合流清单与
-source-lock/target runtime delta。前者决定 merge conflicts，后者决定当前
-部署到候选制品的实际升级范围；任一方不得替代另一方。
-
-### D2 · Harness 继续是插件/外部服务
-
-保险领域 authority、Space、安全、编译、Release、Query 与 worker 编排继续
-归 Harness。集成优先使用 WeKnora public API、worker contract 或 sidecar；
-不得借升级把领域逻辑搬入 Go fork。
-
-持续升级的核心证据不是 vendor 文件能否合并，而是 machine-readable Harness
-plugin contract 在新 target 上仍成立。该 inventory SHALL 固定 versioned
-REST/lifecycle poll、完整 response envelope、typed error、principal、
-authoritative Space binding、current tenant/RAW-KB ACL、allowed read/denied
-mutation/zero-write、retry/idempotency/timeout、禁止共享内部基础设施及三阶段
-validation nodes。兼容权威是公共 method/path/grammar/semantics，不是私有 Go
-symbol。045 只建立 inventory 与 adoption compatibility gate；现有 Harness
-consumer 仍为 pre-W1，P4a/P4c 适配和 source-reader ACL authority 保持独立
-Mission/blocker，不在升级中顺手实现。
-
-WeKnora 内部 patch 仍只允许 patch inventory 已批准的 W1/P11/P13/P14。
-本 change 只重放已实现 W1 与现有 supply-chain redaction patch，不授权
-P11/P13/P14 或新 patch。
-
-045 显式修改 038 W1.6：W1 的 patch identity 与领域合同不扩大，但为解决
-官方/项目 `000066` 冲突，allowed surface 增加独立 migrator、legacy
-classifier/bridge、startup fail-closed readiness、双-ledger observability
-与 collision tooling。这些路径必须归入 W1 adoption inventory，不能伪装成
-上游文件，也不构成第五 patch。
-
-### D2a · 用户要求的 upstream Wiki revision 功能必须真实可用
-
-采用 `80a5003` 的直接用户价值不是 commit 数，而是普通 Wiki 单页的：
-
-- revision history；
-- 两版 line diff；
-- manual editing + optimistic locking；
-- revert 生成新 revision、保留旧历史；
-- edit source attribution（user/agent/pipeline/revert）。
-
-Code/Artifact gate SHALL 以 bounded upstream feature tests/probe 验证这些
-能力和既有 ACL。该验证不把普通 Wiki revision 解释成 W1 Source parse
-revision，也不接入 Harness managed-page fencing、ChangeProposal 或 Release
-rollback。
-
-### D3 · 迁移所有权永久独立记账
-
-「分轨」只指 migration source 与 state ledger，不指产品版本分叉：
-
-| owner | migration source | state ledger | 执行顺序 |
-|---|---|---|---|
-| Tencent upstream | `migrations/versioned` | `schema_migrations` | 先 |
-| Enterprise W1+ | `migrations/enterprise/versioned` | `enterprise_schema_migrations` | 后 |
-
-官方 migration 文件 SHALL 与目标 identity 一致。项目 migration SHALL NOT
-再使用官方数字序列；企业序列从 `000001` 独立开始。两条链可修改同一
-PostgreSQL database，但 enterprise migrator 使用独立 migration source、
-独立 state table 与独立 advisory-lock identity。
-
-### D4 · legacy W1 `000066` 只经一次兼容桥收敛
-
-兼容桥在任何普通 migration 前运行只读 preflight。它 SHALL 读取：
-
-- `schema_migrations` version/dirty；
-- 官方 span column 的精确 type；
-- W1 三列、revision table、约束和索引的结构指纹；
-- 任何 enterprise ledger/baseline；
-- 未知或部分应用形态。
-
-升级矩阵 SHALL 独立覆盖下列四个来源画像。运行时 classifier 依据 ledger 与
-schema 指纹选择安全动作；`fresh_target` 与既有 `upstream_66_plus` 即使最终
-schema 相同，也必须作为不同 fixture 验证，但不要求生产代码靠业务行数量
-猜测二者来源：
-
-| 状态 | 官方 000066 效果 | W1 效果 | 收敛动作 |
-|---|---|---|---|
-| `pre_66` | 无（official ledger <66） | 无 | 官方链 66→75；企业链应用 W1 |
-| `upstream_66_plus` | 有（existing DB） | 无 | 官方链续跑；企业链应用 W1 |
-| `legacy_w1_66` | 无 | 有 | 事务内补齐官方 66；官方链续跑；结构证明后登记企业 W1 baseline |
-| `fresh_target` | 有（fresh fixture at official head 75） | 无 | 企业链应用 W1 |
-
-`legacy_w1_66` bridge SHALL：
-
-1. 在 PostgreSQL advisory lock 和单事务内重新验证状态；
-2. 执行与官方 up migration 等价的 span type 扩展；
-3. 逐项证明 W1 schema 等于批准的 legacy 指纹；
-4. 保持 `schema_migrations=66` 的语义从「仅 W1」收敛为「官方 66 + W1」；
-5. 建立/登记 `enterprise_schema_migrations` 的 W1 baseline；
-6. 提交后再允许官方 67–75。
-
-它 SHALL NOT 删除或重建 W1 表、列、索引、revision rows、knowledge/chunk
-数据。legacy SQL 与 checksum SHALL 迁出 active official chain，作为
-只读 compatibility fixture 保留；不得静默删除或冒充官方文件。
-
-bridge 提交是一个明确的可恢复 checkpoint。classifier SHALL 识别
-`bridged_legacy_w1_66`（official 66 效果 + 完整 W1 指纹 + clean enterprise
-W1 baseline，official ledger 仍为 66）并直接从官方 67–75 继续；进程在 bridge
-提交后崩溃或第二实例稍后获得锁时，不得重复写 bridge，也不得把该状态误判为
-unknown。official 67–75 完成后但 application 尚未 ready 的
-`adopted_w1_pending_probe` 也 SHALL 可重入，只需重验 ledgers/schema/W1
-capability。
-
-### D5 · 未知状态 fail closed
-
-以下任一情况启动失败且零 schema/data 写：
-
-- 任一 ledger dirty；
-- version 与结构指纹不一致；
-- 同时只出现部分官方/W1 效果；
-- W1 对象存在但约束、索引或列类型不匹配；
-- 已有 enterprise ledger 与结构不匹配；
-- 目标 identity/官方 migration checksum 不符；
-- compatibility bridge 重验与 preflight 结果不同。
-
-已经精确匹配上述 bridge checkpoint 或 final adopted checkpoint 的状态不是
-unknown；它们必须幂等恢复。
-
-禁止自动 `force`、向前/向后猜 version、drop/recreate 或 best-effort
-继续启动。
-
-### D6 · 碰撞检查不仅比较编号
-
-CI SHALL 对每个目标官方 identity 生成：
-
-- official migration version/name/checksum inventory；
-- enterprise migration version/name/checksum inventory；
-- enterprise-touched schema object inventory；
-- official delta touched-object inventory；
-- registered patch replay path inventory。
-
-独立 namespace 使数字碰撞不再成立；但若官方新 migration 触碰
-enterprise-owned 表/列/索引，或官方源码改到 W1 patch surface，CI 仍 SHALL
-阻断并要求显式 compatibility/replay review。不得把「编号没撞」等同于
-「语义兼容」。
-
-### D7 · 启动顺序与 readiness 说真话
-
-PostgreSQL 生产 profile 的启动顺序固定：
+045 采用一条薄升级轨道：
 
 ```text
-identity/checksum preflight
-  → legacy compatibility bridge（仅命中时）
-  → official migrations
-  → enterprise migrations
-  → W1 capability/schema probe
-  → application ready
+approved manifest
+  → immutable discovery proposal
+  → finite check
+  → exact-SHA Git merge
+  → controlled W1/logger replay commits
+  → dual migration + targeted gates
+  → trusted multi-image Artifact
 ```
 
-任一步失败，application readiness SHALL 为 false，W1 route/worker SHALL
-不可服务。`migration version` 的观测 SHALL 分别显示 official 与 enterprise
-ledger，不得压成一个误导数字。
+当前 manifest 指向 commit
+`80a5003cc99a427098afe184eee6601916d3d156`、tree
+`18fcf68e7a008ce69929e32233f0b6914040c223`，release ancestor
+`v0.7.1@c64a48647cd6f7eb8b0fb020b2e8fec74ee375fb`。它们是当前数据，不是
+检查器常量。未来升级替换 manifest 后复用同一流程。
 
-本 Mission 只认证 PostgreSQL 生产 profile。官方 SQLite 行为须保持上游
-兼容，但 W1-on-SQLite 不在本 change 中补做或宣称已认证。
+设计优先级是：
 
-### D8 · 制品和部署必须来自同一身份
+1. 精确采用官方历史与 migration；
+2. 无损保留 W1 与已有数据库；
+3. 不扩大 Harness 权限；
+4. 保持工具有限、可审计、可删除；
+5. 用标准 Git 历史承载 merge/replay，不发明 patch 平台。
 
-trusted workflow SHALL 从固定官方 commit/tree 构建，按 machine-readable
-inventory 重放批准 patch，输出：
+## 2. 权威输入
 
-- final source tree / replay delta；
-- image subject digest；
-- provenance / SBOM / attestation；
-- official + enterprise migration inventory/checksum；
-- W1 capability probe；
-- 备份 clone 上四状态矩阵与 rollback/recovery evidence。
+### 2.1 Target manifest
 
-只有 exact candidate 通过后才能更新 source lock、image lock 和 local-live
-Compose。不得在目标数据库上边迁移边试错；首次真实升级只在可恢复备份 clone
-验证通过后进行。
+manifest 是唯一批准的 upstream identity 输入，至少记录 repository、commit、
+tree、release ancestor、required capability ancestors 与 official migration
+head。通用代码不得包含当前 commit/tree 的特判。
 
-## 3. 升级失败与恢复
+`discover latest-stable` 与 `discover mainline-head` 只查询并输出 immutable
+proposal。proposal 包含 resolved commit/tree/ancestor/head，不能直接覆盖
+tracked manifest、checkout、lock 或 workflow。
 
-- migration 前必须具备可验证备份与恢复点；
-- preflight/bridge/official/enterprise 每阶段产生不含 secret 的 receipt；
-- bridge 单事务失败自动回滚；
-- official 67–75 或 enterprise migration 失败按标准 dirty fail-closed，
-  不自动 force；
-- 切换失败优先恢复数据库快照和旧 digest，不执行 destructive down；
-- 官方 000066 down SQL 会截断 span name 到 64，生产回滚 SHALL NOT 默认调用
- 该 down migration。
+### 2.2 Harness plugin contract
 
-## 4. 交付切片
+machine-readable plugin contract 是 Harness↔WeKnora 边界的唯一可读合同：
 
-为避免大规模官方 vendor delta 与高风险 migration 混成不可审查大包，交付
-拆为：
+- versioned public REST 与 lifecycle polling；
+- `source_reader`、bounded test writer 等 principal；
+- authoritative Space binding 与 tenant/RAW-KB ACL；
+- allowed reads、denied mutations 与 failure zero-write；
+- request/response envelope、typed errors、timeout、retry、idempotency；
+- W1 runtime、consumer adaptation、source-reader authority、Artifact 状态；
+- existing 与 planned validation nodes。
 
-1. **045-Spec**：本设计、OpenSpec、状态机与测试矩阵；零生产代码；
-2. **045-Code**：官方 `80a5003` source sync、W1 replay、分轨 migrator、
-   compatibility bridge、collision CI、source-lock v2、main-only multi-image
-   trusted workflow 和 focused tests；workflow 定义先随 Code 合入，但此时
-   不产生 runtime digest 或 adopted 声明；
-3. **045-Artifact**：从已合入 main 的 trusted workflow 生成 image、
-   provenance/SBOM，执行四状态备份 clone 演练、image-lock/digest 更新和受控
-   local-live cutover。
+合同由 schema-v1 semantic digest 冻结。所有 Task 1B states 保持 false；
+`source_reader` authority 保持 blocked。planned code node 只有后续真实测试落地
+并改为 existing 后才能闭合，不能把 P4a/P4c 冒充 ready。
 
-Code 与 Artifact 可属于同一 OpenSpec，但必须独立 PR/独立 exact identity
-复审；未经 Code 合入不得提前制造 Artifact 通过结论。
+### 2.3 W1 planned path inventory
 
-## 5. 非目标
+W1 path inventory 只登记 project-owned replay 路径、owner、理由、测试与 remove
+condition。它不是 patch 文件、apply DSL 或 bundle manifest。路径 overlap 是
+人工 review 的输入，不能由 inventory 自动生成代码。
 
-- 不实现 P2d、P3 ACL-inspection、P11/P13/P14、P4a/P4c 或 provider；
-- 不把 target snapshot 的 scoped/platform API key 冒充 RAW/Wiki ACL 等价能力；
-- 不清理历史 worktree、旧 PR 或迁移历史；
-- 不升级到 mutable upstream main、pre-release 或未锁定镜像；
-- 不认证 SQLite W1、HA、全量性能/模型质量或生产正式切流；
-- 除用户明确要求的普通 Wiki 单页 history/diff/manual edit/revert 验收外，
-  不顺手吸收 target snapshot 的其他新功能到 Harness 产品面；
-- 不把 upstream page revert 冒充 Harness Release rollback、P11 fencing 或
-  P14 ChangeProposal。
+## 3. 有限 `check`
+
+`prepare_weknora_adoption.py check` 可以作为现有 prepare CLI 的子命令。它只
+处理当前项目与 manifest 指定的 Tencent WeKnora target，不演化成任意仓库或
+任意 patch engine。
+
+### 3.1 输入
+
+- tracked target manifest；
+- 一个独立 target checkout；
+- 当前 project checkout；
+- tracked runtime lock；
+- W1 path inventory；
+- Harness plugin contract；
+- target 与 project 中的 official migration files。
+
+target checkout 必须 clean。它的 `HEAD`、tree、origin 与 manifest 一致，并能
+证明 release ancestor 和 required capability commits 是 target ancestors。
+
+runtime lock 只表示已部署/已构建 baseline。它不得被用作 source merge-base。
+
+### 3.2 两组标准 Git delta
+
+`check` 使用 Git 原生命令，不实现 collision engine：
+
+1. 计算当前 project source 与 target 的真实 Git merge-base，再执行
+   `git diff --name-only <merge-base>..<target>`；
+2. 读取 runtime lock 后执行
+   `git diff --name-only <runtime>..<target>`。
+
+两组 path list 都与 registered W1 paths 求交集并排序输出。第一组回答“本次
+source merge 会触及哪些 W1-owned 路径”；第二组回答“当前 runtime 到 target
+的部署差距触及哪些 W1-owned 路径”。两组不能互相替代。
+
+任一 registered overlap 只产生 `manual_review_required`。工具不解析 Go/SQL
+业务语义，不判断自动保留哪一侧，也不生成 patch。
+
+### 3.3 Migration 检查
+
+official migration 以 target Git tree 为 byte authority。`check`：
+
+- 枚举规范化 filename；
+- 验证版本唯一、顺序连续到 manifest official head；
+- 计算每个文件 SHA256；
+- 在已合并 project tree 上验证 official files byte-exact；
+- 拒绝 filename/head/checksum 漂移、dirty ledger fixture 或额外 project-owned
+  official-chain migration。
+
+这不是 SQL DDL parser。工具不提取 table/column/index，不做 schema semantic
+collision。enterprise migration 由独立目录和 ledger 隔离，另由 PostgreSQL
+定向测试验证。
+
+### 3.4 Plugin contract 检查
+
+`check` 调用现有 closed parser，验证：
+
+- schema version 与 semantic digest；
+- public endpoint/principal/Space/ACL/zero-write 合同；
+- existing node 的真实 file/function；
+- 唯一 planned code node 与 Artifact planned nodes 的如实状态；
+- W1/consumer/source-reader/Artifact states 仍为 false。
+
+plugin contract 失败属于 `block`，不能降级为人工忽略。
+
+### 3.5 输出
+
+stdout 只输出一份简短 deterministic JSON；不创建 tracked adoption report 或
+receipt。固定字段为：
+
+```json
+{
+  "schema_version": 1,
+  "verdict": "pass",
+  "target": {"commit": "...", "tree": "..."},
+  "identity": {"clean": true, "origin": "official", "ancestors": "verified"},
+  "deltas": {
+    "project_merge_base_to_target": {"w1_overlaps": []},
+    "runtime_to_target": {"w1_overlaps": []}
+  },
+  "official_migrations": {"head": 75, "files": [{"name": "...", "sha256": "..."}]},
+  "plugin_contract": {"digest": "...", "existing_nodes": 0, "planned_nodes": 0}
+}
+```
+
+实际计数从输入计算，示例不是固定 target 数据。JSON 使用固定 key/list order、
+UTF-8 和无时间戳输出；不得包含绝对路径、环境变量、token、DSN 或文件内容。
+
+verdict 规则封闭：
+
+- `block`：identity、origin、ancestor、tree、migration、plugin digest/node 或
+  输入完整性失败；
+- `manual_review_required`：所有 hard checks 通过，但任一 delta 命中 registered
+  W1 path；
+- `pass`：hard checks 全通过且两组 registered overlap 为空。
+
+没有第四种 verdict，也没有自动 semantic verdict。
+
+## 4. 标准 Git merge 与受控 replay
+
+source adoption 使用 official remote 的 exact manifest SHA 创建标准 Git merge。
+merge-base 由 Git 根据 project history 与 target 计算。不得 squash 成无法证明
+official ancestry 的 vendor dump，也不得用 runtime lock 替代 merge-base。
+
+W1 与已有 logger redaction 只通过普通、可审查 replay commit 恢复。每个 replay
+路径必须在 W1 inventory 中，overlap 由人审查，结果由 focused tests 证明。
+045 不生成 `w1-*.patch`、bundle 或 receipt。Git commit/history 是唯一 patch
+carrier。
+
+普通 Wiki 单页 history、diff、manual edit、optimistic locking、revert 是
+upstream 产品验收。它们不加入 W1 plugin endpoints，也不授予 Harness
+`source_reader` 新权限。
+
+## 5. Migration 设计
+
+### 5.1 双 source、双 ledger
+
+PostgreSQL 按顺序运行：
+
+1. official `migrations/versioned` + `schema_migrations`；
+2. enterprise `migrations/enterprise/versioned` +
+   `enterprise_schema_migrations`。
+
+official files 与 target tree byte-exact。项目不得修改、覆盖或复用 official
+version。enterprise W1 migration 从独立 ledger 记账，后续 upstream head 增长
+不改变这一边界。
+
+### 5.2 Legacy W1 `000066` bridge
+
+历史项目曾把 W1 写进 official `000066`。bridge 在普通 migration 前通过 raw
+SQL 只读分类，并在 transaction/advisory lock 下重新确认：
+
+- official ledger version/dirty；
+- legacy W1 `000066` byte/checksum fixture；
+- W1 schema/data fingerprint；
+- official `000066` span expansion；
+- enterprise ledger state。
+
+已知 legacy 状态可幂等收敛到 official+enterprise 双 ledger；unknown、dirty、
+partial、checksum mismatch 或 lock 前后漂移必须零写 `block`。legacy fixture
+只服务兼容验证，不是 patch bundle 或通用 schema inventory。
+
+## 6. 定向验证
+
+### 6.1 Code gates
+
+- `check` unit/mutation tests；
+- exact official checksum/head tests；
+- W1/plugin compatibility tests；
+- disposable PostgreSQL origin/bridge/restart matrix；
+- Wiki history/diff/edit/revert 产品验收；
+- focused frontend type/test；
+- OpenSpec strict、lint、type、diff/scope checks。
+
+### 6.2 Workflow 与 images
+
+trusted workflow 只从已合入 main 的 exact source 构建。server、worker、frontend
+等多 image 必须共享同一 commit/tree/lock，并发布 digest、provenance 与 SBOM。
+workflow 不下载或应用 project patch bundle。
+
+### 6.3 Artifact
+
+Artifact 阶段在 Code 合入后执行：
+
+- exact image identity 与多 image 一致性；
+- disposable PostgreSQL/backup clone migration；
+- plugin/readiness/zero-write probes；
+- product history/diff/edit/revert smoke；
+- digest pin 与回滚证据。
+
+Code gate 通过不等于 Artifact ready；consumer/source-reader/P4a/P4c 状态仍按
+各自任务闭合。
+
+## 7. 明确删除
+
+045 不拥有以下文件或平台：
+
+- `deploy/upstream/weknora-enterprise-schema-objects.yaml`；
+- `deploy/upstream/weknora-adoption-report.json`；
+- W1 replay patch/bundle/receipt；
+- generic DDL parser、schema-object inventory 或 collision report；
+- `bundle`、`verify-bundle`、patch DSL 或 arbitrary repository engine。
+
+official checksum 与 W1 overlap evidence 由有限 `check` 的 stdout 和 CI log
+提供，不再复制成 tracked report。
+
+## 8. 决策结果
+
+这条轨道故意不解决所有未来冲突。它只可靠地回答：
+
+- 我们是否在采用 manifest 批准的 exact target？
+- source merge 与 runtime gap 各触及哪些 registered W1 paths？
+- official migrations 是否 byte-exact？
+- plugin contract 与 validation nodes 是否真实？
+- 是否可以继续、需要人工 review，或必须停止？
+
+语义合并仍由人和定向测试负责。这是边界，不是缺失功能。
