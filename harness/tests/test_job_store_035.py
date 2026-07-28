@@ -86,6 +86,11 @@ def job_count(factory: SessionFactory) -> int:
         return int(session.scalar(select(func.count()).select_from(WikiJob)) or 0)
 
 
+def outbox_count(factory: SessionFactory) -> int:
+    with factory() as session:
+        return int(session.scalar(select(func.count()).select_from(WikiOutboxEvent)) or 0)
+
+
 def database_now_utc(store: JobStore) -> datetime:
     """按数据库时钟读当前时间（过期断言必须与实现同一时钟）。"""
     with store._session_factory() as session:  # noqa: SLF001 - 测试读同一时钟
@@ -330,6 +335,109 @@ def _claimed(store: JobStore, space_id: str, worker_id: str = "worker-1") -> Job
     outcome = store.claim(space_ids=(space_id,), worker_id=worker_id)
     assert isinstance(outcome, ClaimedJob)
     return outcome.job
+
+
+def _running(store: JobStore, space_id: str = "space-a") -> JobSnapshot:
+    store.enqueue(space_id=space_id, job_type="compile", idempotency_key="active-fence")
+    claimed = _claimed(store, space_id)
+    return store.start(
+        space_id=space_id,
+        job_id=claimed.id,
+        generation=claimed.lease_generation,
+    )
+
+
+def test_p1_13_verify_active_fence_returns_current_snapshot_without_writes(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    running = _running(store)
+    before = store.get_job(space_id="space-a", job_id=running.id)
+    before_outbox = outbox_count(factory)
+
+    verified = store.verify_active_fence(
+        space_id="space-a",
+        job_id=running.id,
+        generation=running.lease_generation,
+        attempt=running.attempt,
+    )
+
+    assert verified == before
+    assert store.get_job(space_id="space-a", job_id=running.id) == before
+    assert outbox_count(factory) == before_outbox
+
+
+def test_p1_13_verify_active_fence_rejects_scope_and_non_running_without_writes(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    store.enqueue(space_id="space-a", job_type="compile", idempotency_key="active-fence")
+    leased = _claimed(store, "space-a")
+    before = store.get_job(space_id="space-a", job_id=leased.id)
+
+    with pytest.raises(SpaceScopeError):
+        store.verify_active_fence(
+            space_id="space-b",
+            job_id=leased.id,
+            generation=leased.lease_generation,
+            attempt=leased.attempt,
+        )
+    with pytest.raises(IllegalTransitionError):
+        store.verify_active_fence(
+            space_id="space-a",
+            job_id=leased.id,
+            generation=leased.lease_generation,
+            attempt=leased.attempt,
+        )
+
+    assert store.get_job(space_id="space-a", job_id=leased.id) == before
+    assert outbox_count(factory) == 0
+
+
+def test_p1_13_verify_active_fence_rejects_stale_or_wrong_attempt_without_writes(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    running = _running(store)
+    before = store.get_job(space_id="space-a", job_id=running.id)
+
+    with pytest.raises(StaleGenerationError):
+        store.verify_active_fence(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation - 1,
+            attempt=running.attempt,
+        )
+    with pytest.raises(InvalidJobInputError):
+        store.verify_active_fence(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            attempt=running.attempt + 1,
+        )
+
+    assert store.get_job(space_id="space-a", job_id=running.id) == before
+    assert outbox_count(factory) == 0
+
+
+def test_p1_13_verify_active_fence_rejects_expired_lease_without_writes(
+    factory: SessionFactory,
+) -> None:
+    store = make_store(factory)
+    running = _running(store)
+    force_expire(factory, running.id)
+    before = store.get_job(space_id="space-a", job_id=running.id)
+
+    with pytest.raises(LeaseExpiredError):
+        store.verify_active_fence(
+            space_id="space-a",
+            job_id=running.id,
+            generation=running.lease_generation,
+            attempt=running.attempt,
+        )
+
+    assert store.get_job(space_id="space-a", job_id=running.id) == before
+    assert outbox_count(factory) == 0
 
 
 def test_p1_3_heartbeat_extends_lease_only_by_configured_duration(

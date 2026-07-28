@@ -50,7 +50,8 @@
 | 040 | g0a-golden-asset-kernel | 规格 ✅ 已合入（PR #42）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 编号冲突已关闭；后续实现须独立 TDD/复审，不得称 G0a 已验收或产品已完成 |
 | 041 | p5a0-product-version-resolver | ✅ 已合入 main（PR #56） | ⚠️ 该目录先于注册表行创建（占号规则被绕过），此行为事后补记；后续窗口一律先占号再开目录 |
 | 042 | p1-followup-backlog | 🔒 已占号（目录未开，比照 026 惯例） | 035 四轮评审的 5 条 BACKLOG，完整清单含 live 证据与建议修法见 [23 号 §8 D-2026-07-27-19](../../docs/insurance-kb/23-mvp-control-board.md)；预期零迁移；**开工前须取 Mission Card 批准并按正式 delta 格式建目录** |
-| 043+ | （空闲） | | 先占号再开目录 |
+| 044 | p1-read-only-active-fence-verifier | ✅ 候选已冻结；待交付 | P1 零迁移小 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
+| 043, 045+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
