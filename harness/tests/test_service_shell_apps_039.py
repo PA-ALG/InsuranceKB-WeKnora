@@ -25,7 +25,10 @@ from insurance_harness.service_shell.apps import (
 )
 from insurance_harness.service_shell.config import ShellConfigError, ShellSettings
 from insurance_harness.service_shell.health import Lifecycle, ReadinessChecker
-from insurance_harness.service_shell.principal import StaticPrincipalProvider
+from insurance_harness.service_shell.principal import (
+    AuthenticationError,
+    StaticPrincipalProvider,
+)
 from insurance_harness.service_shell.worker import HandlerRegistry
 
 HARNESS_ROOT = Path(__file__).resolve().parents[1]
@@ -203,7 +206,8 @@ def _provider() -> StaticPrincipalProvider:
                 "space_ids": ["space-a"],
                 "capabilities": ["read_raw_knowledge"],
             },
-        }
+        },
+        known_space_ids=frozenset({"space-a", "space-b", "*"}),
     )
 
 
@@ -350,6 +354,7 @@ def _settings(**overrides: Any) -> ShellSettings:
             '{"admin":{"kind":"human","subject_id":"admin-user",'
             '"bindings":{"space-a":["space_admin"]}}}'
         ),
+        "principal_space_ids": ("space-a",),
         "worker_id": "worker-a",
         "worker_space_ids": ("space-a",),
     }
@@ -405,6 +410,40 @@ def test_t4_production_api_composition_wires_auth_and_p1_observations(
     )
     assert response.status_code == 200
     assert response.json()["queue_depth"] == 2
+
+
+@pytest.mark.parametrize(
+    ("credential", "principal_records_json"),
+    [
+        (
+            "admin",
+            '{"admin":{"kind":"human","subject_id":"admin-user",'
+            '"bindings":{"space-unknown":["space_admin"]}}}',
+        ),
+        (
+            "service",
+            '{"service":{"kind":"service","service":"source_reader",'
+            '"space_ids":["space-unknown"],'
+            '"capabilities":["read_raw_knowledge"]}}',
+        ),
+    ],
+)
+def test_t1_production_api_rejects_principal_bound_to_unknown_space(
+    credential: str,
+    principal_records_json: str,
+) -> None:
+    lifecycle, readiness = _health()
+    app = shell_cli.build_api_app(
+        settings=_settings(
+            principal_records_json=principal_records_json,
+        ),
+        lifecycle=lifecycle,
+        readiness=readiness,
+        session_factory=cast(Callable[[], Session], object()),
+    )
+
+    with pytest.raises(AuthenticationError, match="invalid_principal_binding"):
+        app.state.principal_provider.authenticate(credential)
 
 
 def test_t5_production_worker_composition_uses_p1_store_and_empty_registry(
@@ -507,3 +546,38 @@ async def test_t6_server_completion_does_not_double_count_the_first_signal(
     )
     assert lifecycle.drain_calls == 1
     assert lifecycle.immediate_termination_requested is False
+
+
+async def test_t6_worker_total_shutdown_timeout_caps_composed_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = Lifecycle()
+    _probe_lifecycle, readiness = _health()
+
+    class FakeWorker:
+        async def run(self) -> None:
+            await asyncio.Event().wait()
+
+    class FakeServer:
+        should_exit = False
+
+        async def serve(self) -> None:
+            lifecycle.begin_drain()
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(shell_cli, "build_worker_loop", lambda **_kwargs: FakeWorker())
+    monkeypatch.setattr(shell_cli, "_server", lambda *_args, **_kwargs: FakeServer())
+
+    await asyncio.wait_for(
+        shell_cli._serve_worker(
+            settings=_settings(
+                drain_deadline_seconds=0.01,
+                total_shutdown_timeout_seconds=0.02,
+            ),
+            lifecycle=lifecycle,
+            readiness=readiness,
+            session_factory=cast(Callable[[], Session], object()),
+        ),
+        timeout=0.08,
+    )
+    assert lifecycle.state.value == "terminated"

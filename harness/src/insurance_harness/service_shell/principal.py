@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -69,6 +71,11 @@ class HumanPrincipal(BaseModel):
                 raise ValueError("binding Space ids must be non-empty and contain no NUL")
             if not roles:
                 raise ValueError("each binding must contain at least one role")
+        object.__setattr__(
+            self,
+            "bindings",
+            MappingProxyType(dict(self.bindings)),
+        )
         return self
 
 
@@ -102,10 +109,12 @@ class StaticPrincipalProvider:
         self,
         records: Mapping[str, Mapping[str, Any]],
         *,
-        known_space_ids: frozenset[str] | None = None,
+        known_space_ids: frozenset[str],
     ) -> None:
-        self._records = {credential: dict(record) for credential, record in records.items()}
-        self._known_space_ids = known_space_ids
+        self._records = deepcopy(
+            {credential: dict(record) for credential, record in records.items()}
+        )
+        self._known_space_ids = frozenset(known_space_ids)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(credential_count={len(self._records)})"
@@ -134,7 +143,7 @@ class StaticPrincipalProvider:
                 spaces = service.space_ids
             else:
                 raise ValueError("unknown principal kind")
-            if self._known_space_ids is not None and not spaces <= self._known_space_ids:
+            if not spaces <= self._known_space_ids:
                 raise ValueError("unknown Space binding")
             return principal
         except (ValidationError, ValueError, TypeError) as error:

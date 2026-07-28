@@ -95,7 +95,10 @@ def build_api_app(
     return create_api_surface(
         lifecycle=lifecycle,
         readiness=readiness,
-        principal_provider=StaticPrincipalProvider(settings.principal_records()),
+        principal_provider=StaticPrincipalProvider(
+            settings.principal_records(),
+            known_space_ids=frozenset(settings.principal_space_ids),
+        ),
         observations=ObservationQueries(
             read_space=read_space,
             read_global=read_global,
@@ -194,18 +197,48 @@ async def _serve_worker(
         port=settings.worker_probe_port,
         shutdown_timeout=settings.total_shutdown_timeout_seconds,
     )
+    loop = asyncio.get_running_loop()
+    drain_started = asyncio.Event()
+
+    def wake_drain() -> None:
+        if not loop.is_closed():
+            loop.call_soon_threadsafe(drain_started.set)
+
+    unsubscribe = lifecycle.subscribe_drain(wake_drain)
     lifecycle.mark_serving()
     worker_task = asyncio.create_task(worker.run())
     server_task = asyncio.create_task(server.serve())
-    done, _pending = await asyncio.wait(
-        {worker_task, server_task},
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-    if server_task in done and lifecycle.state is ProcessState.SERVING:
-        lifecycle.begin_drain()
-    if worker_task in done:
-        server.should_exit = True
-    await asyncio.gather(worker_task, server_task)
+    drain_task = asyncio.create_task(drain_started.wait())
+    try:
+        done, _pending = await asyncio.wait(
+            {worker_task, server_task, drain_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if server_task in done and lifecycle.state is ProcessState.SERVING:
+            lifecycle.begin_drain()
+        if worker_task in done:
+            server.should_exit = True
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(worker_task, server_task),
+                timeout=settings.total_shutdown_timeout_seconds,
+            )
+        except TimeoutError:
+            worker_task.cancel()
+            server_task.cancel()
+            await asyncio.gather(worker_task, server_task, return_exceptions=True)
+    finally:
+        unsubscribe()
+        if not drain_task.done():
+            drain_task.cancel()
+        await asyncio.gather(drain_task, return_exceptions=True)
+        pending = [task for task in (worker_task, server_task) if not task.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        if lifecycle.state not in (ProcessState.TERMINATED, ProcessState.REFUSED):
+            lifecycle.mark_terminated()
 
 
 def worker_main() -> None:

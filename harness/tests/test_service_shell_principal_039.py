@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -40,7 +42,8 @@ def _provider() -> StaticPrincipalProvider:
                 "space_ids": ["space-b"],
                 "capabilities": ["project_managed_page"],
             },
-        }
+        },
+        known_space_ids=frozenset({"space-a", "space-b"}),
     )
 
 
@@ -75,7 +78,10 @@ def test_t1_missing_unknown_and_malformed_credentials_fail_closed(
 
 def test_t1_no_anonymous_default_and_unknown_role_fails_closed() -> None:
     with pytest.raises(AuthenticationError):
-        StaticPrincipalProvider({}).authenticate(None)
+        StaticPrincipalProvider(
+            {},
+            known_space_ids=frozenset(),
+        ).authenticate(None)
 
     provider = StaticPrincipalProvider(
         {
@@ -84,10 +90,60 @@ def test_t1_no_anonymous_default_and_unknown_role_fails_closed() -> None:
                 "subject_id": "user-1",
                 "bindings": {"space-a": ["owner"]},
             }
-        }
+        },
+        known_space_ids=frozenset({"space-a"}),
     )
     with pytest.raises(AuthenticationError, match="invalid_principal_binding"):
         provider.authenticate("credential")
+
+
+def test_t1_static_provider_requires_an_independent_known_space_authority() -> None:
+    with pytest.raises(TypeError):
+        cast(Any, StaticPrincipalProvider)({})
+
+
+def test_t1_static_provider_deep_snapshots_caller_owned_records() -> None:
+    caller_bindings = {"space-a": ["viewer"]}
+    records: dict[str, dict[str, Any]] = {
+        "credential": {
+            "kind": "human",
+            "subject_id": "user-1",
+            "bindings": caller_bindings,
+        }
+    }
+    provider = StaticPrincipalProvider(
+        records,
+        known_space_ids=frozenset({"space-a", "space-b"}),
+    )
+
+    caller_bindings["space-b"] = ["super_admin"]
+    principal = provider.authenticate("credential")
+
+    assert isinstance(principal, HumanPrincipal)
+    assert frozenset(principal.bindings) == frozenset({"space-a"})
+    with pytest.raises(AuthorizationError, match="space_scope_forbidden"):
+        require_space_role(
+            principal,
+            space_id="space-b",
+            allowed_roles=frozenset({HumanRole.SUPER_ADMIN}),
+        )
+
+
+def test_t1_minted_human_principal_bindings_are_deeply_immutable() -> None:
+    principal = _provider().authenticate("human-secret")
+    assert isinstance(principal, HumanPrincipal)
+
+    with pytest.raises(TypeError):
+        cast(dict[str, frozenset[HumanRole]], principal.bindings)["space-c"] = (
+            frozenset({HumanRole.SUPER_ADMIN})
+        )
+
+    with pytest.raises(AuthorizationError, match="space_scope_forbidden"):
+        require_space_role(
+            principal,
+            space_id="space-c",
+            allowed_roles=frozenset({HumanRole.SUPER_ADMIN}),
+        )
 
 
 def test_t1_scope_and_identity_come_only_from_authenticated_binding() -> None:

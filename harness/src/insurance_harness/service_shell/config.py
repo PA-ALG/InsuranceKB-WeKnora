@@ -34,6 +34,7 @@ class ShellSettings(BaseSettings):
 
     postgres_dsn: SecretStr
     principal_records_json: SecretStr = SecretStr("{}")
+    principal_space_ids: tuple[str, ...] = ()
     worker_id: str | None = None
     worker_space_ids: tuple[str, ...] = ()
     worker_local_concurrency: int = Field(default=1, ge=1)
@@ -88,6 +89,10 @@ class ShellSettings(BaseSettings):
             not self.worker_id or "\x00" in self.worker_id
         ):
             raise ValueError("worker_id must be non-empty and contain no NUL")
+        if any(not space_id or "\x00" in space_id for space_id in self.principal_space_ids):
+            raise ValueError(
+                "principal_space_ids entries must be non-empty and contain no NUL"
+            )
         if any(not space_id or "\x00" in space_id for space_id in self.worker_space_ids):
             raise ValueError("worker_space_ids entries must be non-empty and contain no NUL")
         return self

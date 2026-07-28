@@ -149,10 +149,15 @@ T1–T4 可在 P1 合入前以纯 unit 先行，但不得提前接线 store）�
   039-p3-api-worker-shell --strict` → PostgreSQL 16 lane 全量
   `integration_postgres`（JUnit `skipped=0`）；零迁移守卫（diff 无迁移、
   `alembic heads` 前后不变）；validation report 如实记录已运行项与
-  NOT RUN；更新 README 注册表状态与 HANDOFF 当前状态块。
+  NOT RUN；更新 README 注册表状态与 HANDOFF 当前状态块。当前 corrective
+  working candidate 已完成 principal authority 深快照/深度不可变、
+  human/service unknown-Space fail-closed 与组合进程总退出时限的 focused
+  和静态门禁；本次未重跑 PostgreSQL，且共享 README/HANDOFF 仍按边界
+  延后，因此 T8 保持未勾选。
 - [ ] T9 单独立 Spec/质量复审（D-2026-07-26-2：P3 = 单独立评审 + 自动
   门禁）。复审中若出现新的同域基础不变量，按 033 §18 停止补丁循环、回到
-  边界设计，不追加状态和异常分支。
+  边界设计，不追加状态和异常分支。原 head 的复审证据不冒充本次 security
+  corrective exact head；push 后仍需 fresh exact-head 门禁/复核。
 
 完成 T8 前不得宣称 P3 验收达成；P2a/P2c/P2d/P5a0/P5a1 等消费方 PR 不得
 提前依赖未合入的壳接线。

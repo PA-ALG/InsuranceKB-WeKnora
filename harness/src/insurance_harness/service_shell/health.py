@@ -33,6 +33,7 @@ class Lifecycle:
         self._state = ProcessState.STARTING
         self._lock = Lock()
         self._immediate_termination = Event()
+        self._drain_listeners: set[Callable[[], None]] = set()
         self._immediate_listeners: set[Callable[[], None]] = set()
 
     @property
@@ -52,20 +53,42 @@ class Lifecycle:
 
     def begin_drain(self) -> bool:
         """First signal starts drain; a repeated signal requests immediate termination."""
-        listeners: tuple[Callable[[], None], ...] = ()
+        drain_listeners: tuple[Callable[[], None], ...] = ()
+        immediate_listeners: tuple[Callable[[], None], ...] = ()
+        drain_started = False
         with self._lock:
             if self._state in (ProcessState.STARTING, ProcessState.SERVING):
                 self._state = ProcessState.DRAINING
-                return True
-            if (
+                drain_started = True
+                drain_listeners = tuple(self._drain_listeners)
+            elif (
                 self._state is ProcessState.DRAINING
                 and not self._immediate_termination.is_set()
             ):
                 self._immediate_termination.set()
-                listeners = tuple(self._immediate_listeners)
-        for listener in listeners:
+                immediate_listeners = tuple(self._immediate_listeners)
+        for listener in drain_listeners:
             listener()
-        return False
+        for listener in immediate_listeners:
+            listener()
+        return drain_started
+
+    def subscribe_drain(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Wake process composition as soon as the first drain signal is observed."""
+        notify_now = False
+        with self._lock:
+            if self._state is ProcessState.DRAINING:
+                notify_now = True
+            else:
+                self._drain_listeners.add(listener)
+        if notify_now:
+            listener()
+
+        def unsubscribe() -> None:
+            with self._lock:
+                self._drain_listeners.discard(listener)
+
+        return unsubscribe
 
     def subscribe_immediate_termination(
         self,

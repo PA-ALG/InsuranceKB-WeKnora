@@ -87,14 +87,50 @@ failing inventory test now passes, and the same PostgreSQL nodes were rerun with
 `tests=2`, `skipped=0`, `failures=0`, and `errors=0`. No production source,
 migration, handler, provider, or WeKnora behavior changed.
 
+## Principal authority and bounded-shutdown corrective
+
+The current working candidate closes two same-domain security blockers and the
+remaining P3.5 process-boundary gap:
+
+- production composition supplies an independent static known-Space authority;
+  human and service records referencing any other Space fail closed;
+- the static provider deep-snapshots caller-owned nested records, and minted human
+  bindings expose an immutable mapping, so post-construction mutation cannot expand
+  authority;
+- a first drain signal wakes the composed Worker role and the configured total
+  shutdown timeout bounds the Worker plus probe server together.
+
+Strict TDD reproduced the three authority defects before the production fix:
+the known-Space authority could be omitted, nested caller mutation added a new
+`super_admin` Space, and the public principal binding mapping accepted direct
+assignment. The three nodes failed for those exact reasons, then the corrective
+security matrix passed with `5 passed`.
+
+Fresh current-working-tree evidence:
+
+| Gate | Result |
+|---|---|
+| 039 non-PostgreSQL focused | `51 passed`, `2 deselected` |
+| Ruff changed scope | PASS |
+| strict mypy changed scope | PASS (`6` files checked) |
+| `git diff --check` | PASS |
+| PostgreSQL T5/T6 on this corrective tree | **NOT RUN** |
+| full/provider/model/WeKnora live | **NOT RUN** |
+
+An initial broad focused command collected the two `integration_postgres` nodes
+without a configured `HARNESS_TEST_POSTGRES_URL`; their fixtures stopped before
+product logic. The corrected command explicitly deselected them. This is recorded as
+environmental command selection, not as a PostgreSQL product failure or acceptance.
+
 ## Remaining merge gates
 
 - T8 remains unchecked only for the explicitly deferred shared README/HANDOFF status
-  integration; its code, test, PostgreSQL, static, OpenSpec, scope, and zero-migration
-  gates are PASS.
+  integration and fresh exact-head CI. Its earlier PostgreSQL evidence remains
+  historical; the current corrective tree did not rerun PostgreSQL.
 - T9 implementation review approved the original exact head and the first test-only
-  PostgreSQL evidence tree. The CI-inventory corrective remains gated on a fresh
-  exact-tree independent re-review and new exact-head CI before merge.
+  PostgreSQL evidence tree. That evidence does not approve the current security
+  corrective, which remains gated on a fresh exact-tree independent re-review and
+  new exact-head CI before merge.
 
 This report does not claim Ready, production readiness, provider validation, or live
 WeKnora validation.
