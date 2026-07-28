@@ -5,6 +5,7 @@ import json
 from dataclasses import FrozenInstanceError
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import yaml
@@ -728,8 +729,11 @@ def test_plugin_contract_rejects_duplicate_yaml_keys(tmp_path: Path) -> None:
         adoption.load_plugin_contract(path)
 
 
-def _contract_value() -> dict[str, object]:
-    return yaml.safe_load(PLUGIN_CONTRACT.read_text(encoding="utf-8"))
+def _contract_value() -> dict[str, Any]:
+    return cast(
+        dict[str, Any],
+        yaml.safe_load(PLUGIN_CONTRACT.read_text(encoding="utf-8")),
+    )
 
 
 @pytest.mark.parametrize(
