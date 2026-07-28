@@ -437,6 +437,9 @@ def test_p1_13_active_fence_uses_postgres_clock_and_never_mutates_job(
         }
         reclaim_future.result(timeout=FUTURE_TIMEOUT_S)
 
+    # reclaim 使用 SKIP LOCKED；若 verifier 先持有共享锁，本轮回收允许跳过，
+    # 下一轮必须在锁释放后收敛。两种线性化顺序都不得让旧 fence 通过。
+    store.reclaim_expired_leases(space_ids=(space_id,))
     reclaimed = store.get_job(space_id=space_id, job_id=running.id)
     assert reclaimed.state is JobState.QUEUED
     assert reclaimed.lease_generation == running.lease_generation + 1
