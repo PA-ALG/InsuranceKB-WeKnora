@@ -54,7 +54,7 @@ reviewer 可在 30 分钟内理解；超出时拆分，或重新取得用户批�
 
 硬门禁：
 
-- 没有 OpenSpec 不写功能代码，先测试后实现；AI 会话不 commit/push。
+- 没有 OpenSpec 不写功能代码，先测试后实现。AI 默认不 commit/push；用户对指定 Mission 明确授权后，只有总控 AI 可在 exact identity、独立复审和门禁通过后执行 commit/push/PR/merge，开发与评审 lane 不得自行执行。
 - 生产只允许经批准、身份冻结的 MiniMax/Qwen/Qwen-VL 能力档弱模型；强模型
   只能用于隔离的离线标注或评测，不能成为生产依赖。
 - ReviewPolicy 是按 Space 版本化配置，合法模式为
