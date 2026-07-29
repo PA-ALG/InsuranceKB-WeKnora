@@ -3,6 +3,7 @@
 > 候选身份：base `6605c703282e442a8636d7f323f17396e6f00d49`
 >
 > 状态：文档门禁 `PASS`；独立 Spec + Delivery 审查完成，`BLOCKER 0`。
+> 用户已于 2026-07-29 授权按 Mission Card 合入并启动 S0-R。
 > S0-R、PostgreSQL、provider、live、full 仍为
 > `NOT RUN / NOT IMPLEMENTED`。
 

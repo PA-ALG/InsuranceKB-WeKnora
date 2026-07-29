@@ -11,7 +11,7 @@
   fixture。
 - [x] C6 冻结暂定 PublishAuthorizationV0 canonical bytes、校验顺序与失败零写。
 - [x] C7 独立 Spec/Delivery review。
-- [ ] C8 用户逐项批准 Mission Card。
+- [x] C8 用户批准按 Mission Card 启动并执行 S0-R。
 
 ## 后续 S0-R（本 Change 不执行）
 
