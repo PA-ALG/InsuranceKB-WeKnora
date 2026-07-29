@@ -7,7 +7,7 @@
 - [x] T3 只增加 `internal/router/router.go`，冻结总路径上限十一。
 - [x] T4 明确现有 RBAC/API-key authority 内接线与第十二路径 fail closed。
 - [x] T5 OpenSpec 048 strict、diff/scope 与独立 Spec/Delivery review。
-- [ ] T6 用户复核书面 Amendment。
+- [x] T6 用户于 2026-07-30 确认书面 Amendment。
 
 ## 后续 S0-R（本 Change 不执行）
 
