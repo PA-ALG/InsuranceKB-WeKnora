@@ -39,6 +39,11 @@ Harness 不保存第二个 serving Active Head。跨系统发布、不可变物�
 reconciliation` 代码与迁移仍存在，但没有注册进 P3 Worker 的生产 Handler。
 它们只保留作审计和定向移植输入，不构成当前线上 serving authority。
 
+当前运行态命名为 `NO_PRODUCTION_ACTIVE_RELEASE`。旧 publisher 的公开导出和
+测试覆盖不改变该状态；在目标 Kernel 与正式 principal/ACL/Artifact 门禁闭合前，
+不得把其接入生产 Handler。S0-R 仅能在隔离测试 Space/凭据下产生
+`EXPERIMENTAL` 证据，不能直接升级为 `ACTIVE`。
+
 治理文档可以立即冻结目标方向，但不得把目标设计写成已实现能力。
 
 ## 3. 能力处置
@@ -71,10 +76,12 @@ OpenSpec 043 保留以下安全合同：
 SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R
 ```
 
-S0-R 编码前必须在其独立 OpenSpec 中冻结暂定最小发布 principal、MVP binding 和
-Release 协议。S0-R 通过后才把验证过的合同写入 043 Amendment；失败则废止该
-暂定合同。MVP 使用单 RAW KB + 单 release-managed Wiki KB，企业 cardinality
-保持可演进。
+S0-R 编码前必须在其独立 OpenSpec 中冻结暂定最小发布 principal、单值
+`raw_kb_id`/`release_managed_wiki_kb_id` binding、`PublishAuthorization`
+canonical bytes/nonce/校验顺序/失败零写及最小 read/ACL 协议。S0-R 通过后才把
+验证过的合同写入 043 Amendment；失败则废止该暂定合同。MVP 使用单 RAW KB +
+单 release-managed Wiki KB；未来多 RAW 必须另开 ADR/OpenSpec/migration，
+企业 cardinality 保持可演进。
 
 ## 5. 045 处置
 
@@ -117,6 +124,13 @@ MVP 纵向闭环
 
 不存在前置的全量 legacy 重接线 Mission。S0-R 是两工作日证伪窗口，不是生产
 Kernel 交付期限；S0-Q 是窄切片可行性，不是质量批准。
+
+S0-R Mission Card 必须在计时前冻结 exact fork 路径、表/索引、migration、
+read surface、升级责任和验证命令预算；超出任一预算即输出
+`RELEASE_PATH_NOT_FEASIBLE`。最小 fixture 必须用 R0(A/B/C) →
+R1(A 更新/B 删除/C 不变/D 新增)、同 base 双 Candidate 竞争、preparation/
+index/CAS/receipt 失败注入、并发 pinned/current read，以及两个 principal 下的
+ACL shrink 证明集合级原子性与权限收缩。单页成功 Demo 不得判定 feasible。
 
 ## 8. MVP 前十条合同的最小解释
 

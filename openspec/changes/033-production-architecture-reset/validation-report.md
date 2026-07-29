@@ -2,19 +2,28 @@
 
 ## 2026-07-29 Mission 0 · Authority Amendment 2
 
-> 状态：`LOCAL GOVERNANCE CANDIDATE GREEN / INDEPENDENT SPEC + QUALITY APPROVED`
+> 状态：`PR #67 CORRECTIVE CANDIDATE GREEN / INDEPENDENT SPEC + QUALITY APPROVED`
 >
 > 本节优先于下方历史 D0-S1 报告。下方旧 PostgreSQL serving authority、
 > Projector 与 P11/P12 结论只保留审计价值。
 
 ### Identity 与范围
 
-- base/HEAD：`529d72c994369750b26e352a70fd6284e8b0fd9d`
+- Mission base / PR base：
+  `529d72c994369750b26e352a70fd6284e8b0fd9d`
+- PR #67 predecessor head：
+  `d7d3c78363f7728abceda81e8f3a71bcc3cdf545`
+- predecessor tree：
+  `355af7375ac7fadacf8e3accc28f8c8429d029b8`
 - branch：`codex/v3-governance-mission0`
 - worktree：`.worktrees/v3-governance-mission0`
-- delta：29 个 Markdown/治理路径（24 modified + 5 added）
+- corrective delta：13 个 Markdown/治理路径；累计 PR delta：34 个
+  Markdown/治理路径
 - 功能源码、migration、workflow、deployment lock、principal：零修改
-- commit/push/PR：`NOT RUN`
+- fresh pre-corrective GitHub readback：PR #67 `OPEN / Draft / MERGEABLE / CLEAN`，
+  base/head 与上列一致；status checks 为 0
+- corrective commit/push：`NOT YET`；新 exact head/tree 只能在提交后由 GitHub
+  PR readback 记录，不能把提交 SHA 自引用进生成该提交的 tracked 文件
 
 ### 治理结论
 
@@ -29,6 +38,16 @@
    Full Artifact/W1 runtime probes open。
 5. S0-R 是输入就绪后的两工作日二元证伪窗口；S0-Q 只接受 WeKnora/W1 冻结
    解析制品；MVP 单 RAW/Wiki cardinality 不是永久企业不变量。
+6. 当前运行态是 `NO_PRODUCTION_ACTIVE_RELEASE`。目标 Release Kernel 未实现；
+   旧 publisher/reader 虽有公开导出与测试覆盖，但 P3 生产 Worker 未注册发布
+   Handler，不构成线上 authority。
+7. S0-R 最小 fixture 使用 R0(A/B/C) → R1(A 更新/B 删除/C 不变/D 新增)、同
+   base 双 Candidate、preparation/index/CAS/receipt 故障注入、并发
+   current/pinned read 与两 principal 的 ACL shrink。单页成功不再能产生
+   feasible 结论。
+8. S0-R 编码前须由独立 OpenSpec/Mission Card 冻结暂定
+   PublishAuthorization/read/ACL 合同与 exact patch/table/migration/upgrade
+   预算；Mission 0 未实现或批准生产协议。
 
 ### 门禁
 
@@ -36,12 +55,20 @@
 - `openspec validate 033-production-architecture-reset --strict`：PASS
 - `openspec validate 043-p2d-space-security-boundary --strict`：PASS
 - `openspec validate 045-weknora-80a5003-continuous-adoption --strict`：PASS
-- stale authority scan：当前入口无未限定的旧 serving/Projector 授权；历史正文
-  均有 prominent superseded/history-only notice
+- expanded authority scan：根 README、02/03/13、harness README 已加 prominent
+  当前规范层级；旧 serving/Projector/publisher 正文只保留 history-only 价值
+- cardinality/fixture scan：无未限定 `raw_kb_ids[]`、MVP 多 RAW 或单页
+  feasible fixture；唯一“一个页面”命中是拒绝该 false positive 的 Scenario
 - OpenSpec CLI PostHog telemetry：网络 flush 失败，不影响本地 validation PASS
-- baseline `openspec validate --all --strict`：31 PASS / 12 个既存历史 change
-  FAIL；Mission 0 不扩面修复
+- predecessor baseline `openspec validate --all --strict`：31 PASS / 12 个既存
+  历史 change FAIL；corrective 只重跑 033/043/045 strict，不扩面修复历史 change
 - full/provider/live/PostgreSQL/harness tests：`NOT RUN`（docs-only，按范围）
+- predecessor 与 corrective semantic candidate 均由两条本地独立 agent lane
+  完成 Spec/Quality review；corrective semantic diff SHA-256 为
+  `dc2bed9d726e241d13b60dfd12609da1b4b767d2563242d28af0613a7c171cac`，
+  两条 lane 均报告 BLOCKER 0、BACKLOG 0、MAINLINE DRIFT NO、DETAIL TRAP NO
+  与 Approved YES。该本地只读复审不等于 GitHub formal Review；PR 当前没有
+  GitHub formal review record。
 
 ---
 

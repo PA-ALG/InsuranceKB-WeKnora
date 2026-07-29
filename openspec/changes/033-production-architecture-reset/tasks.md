@@ -18,6 +18,23 @@
 - [x] M0.6 strict 验证 033/043/045、diff-check、stale authority scan 与零功能/
   migration/workflow/deployment-lock scope。
 
+## D0-M0R · PR #67 independent review corrective
+
+- [x] M0R.1 在根 README、02/03/13 与 harness README 建立统一规范层级；旧
+  P-1/Projector/publisher serving 描述只作历史，不再授权实现。
+- [x] M0R.2 将当前运行态命名为 `NO_PRODUCTION_ACTIVE_RELEASE`；明确旧
+  publisher 无 P3 生产 Handler，只保留审计/测试/定向移植价值。
+- [x] M0R.3 把 S0-R fixture 收紧为 R0(A/B/C)→R1(A 更新/B 删除/C 不变/D
+  新增)、同 base 双 Candidate、故障注入、并发 read 与 ACL shrink；拒绝单页
+  false positive。
+- [x] M0R.4 统一 MVP `1 RAW KB + 1 release-managed Wiki KB`；未来多 RAW
+  必须另开 ADR/OpenSpec/migration。
+- [x] M0R.5 要求 S0-R 编码前以独立 OpenSpec/Mission Card 冻结最小
+  PublishAuthorization/read/ACL 合同和可证伪 patch/table/migration/upgrade
+  预算；Mission 0 不实现这些合同。
+- [x] M0R.6 刷新 exact identity、范围、门禁与独立 delta review 证据；保持
+  Draft，不修改源码、migration、workflow、deployment lock 或 principal。
+
 ## D0-S0 · pre-implementation spec candidate
 
 - [x] T0 从执行时 exact `origin/main` 创建唯一隔离 worktree，验证 `.worktrees`

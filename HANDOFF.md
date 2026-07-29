@@ -9,6 +9,8 @@
 > - WeKnora 作为 authority carrier：`ACCEPTED_CONDITIONALLY`；
 > - Harness 保留语义编译、Candidate、审核与 PublishAuthorization 权威，但无
 >   第二个 serving Active Head；
+> - 当前运行过渡态：`NO_PRODUCTION_ACTIVE_RELEASE`；目标 Release Kernel
+>   尚未实现，P3 生产 Worker 未注册发布业务 Handler；
 > - upstream capability：
 >   `80a5003cc99a427098afe184eee6601916d3d156`；
 > - trusted image build source：
@@ -32,19 +34,21 @@
 >
 > 当前执行文档：
 > [Sole Serving Active Release Authority ADR](docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
-> [Authority Amendment 2](docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)、
-> [728 v3](jlx_enterprise_llm_wiki_complete_728_v3.md)。
+> [Authority Amendment 2](docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 与适用 OpenSpec；三者按此顺序构成规范授权。
+> [728 v3](jlx_enterprise_llm_wiki_complete_728_v3.md) 是 informative 设计输入与
+> 合订说明，不单独授予实现权。
 >
 > 下方 2026-07-28 及更早状态保留作历史证据；与本块冲突时不构成实现授权。
 >
 > [!IMPORTANT]
-> **2026-07-28 JLX 728 v3 架构复评入口（当前讨论权威）：**
+> **2026-07-28 JLX 728 v3 架构复评入口（历史讨论输入）：**
 > [728 v3 完整合订本](jlx_enterprise_llm_wiki_complete_728_v3.md) 已吸收
-> v2、Codex 第一性原理复评及 Web GPT 复评共识。它是当前方案评审和下一轮
-> OpenSpec/ADR 起草的首要输入；下方旧控制板与代码事实保留作历史证据，不能覆盖
-> v3 的架构裁决。
+> v2、Codex 第一性原理复评及 Web GPT 复评共识。它是当时方案评审和下一轮
+> OpenSpec/ADR 起草的首要输入；后续执行结论已由本页顶部 2026-07-29 规范层级
+> 收口。
 >
-> v3 当前状态：
+> 以下 v3 状态是 2026-07-28 历史快照；由本页顶部 2026-07-29 块覆盖：
 >
 > - 单一 Active Release 权威原则：`ACCEPTED`；
 > - WeKnora 作为权威载体：`ACCEPTED_CONDITIONALLY`；
@@ -53,8 +57,8 @@
 > - 知识编译可行性：等待 S0-Q；
 > - MVP-728 集成：只有 S0-R 与 S0-Q 都 PASS 后才可启动。
 >
-> ADR 应立即写为 `Accepted Conditionally`，不是等实验完成后再补。MVP 冻结
-> “一个 Space 只绑定一个 release-managed Wiki KB”；Raw KB 可多个。发布与
+> ADR 应立即写为 `Accepted Conditionally`，不是等实验完成后再补。MVP 现已
+> 收紧为“一个 Space 绑定一个 RAW KB 与一个 release-managed Wiki KB”。发布与
 > 质量两条验证线不得合并：S0-R 可使用 fixture Candidate，S0-Q 使用 2 份真实
 > 材料与 present/typed-present/absent_explicitly/unknown 四字段。MVP-728 前
 > 必须关闭 v3 定义的 10 条 P0 合同。

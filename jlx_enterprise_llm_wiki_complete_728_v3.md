@@ -16,8 +16,13 @@
 本文原始评审基线为 2026-07-28。Mission 0 已核对后续仓库事实，以下内容优先于
 正文中“尚未升级”“尚未选择 upstream”或“双基线选择矩阵”的历史表述：
 
+- 本文是 informative 设计输入与历史合订说明，不单独授予实现权；规范层级为
+  Sole Serving Active Release Authority ADR → Authority Amendment 2 → 适用
+  OpenSpec；
 - 单一 serving Active Release 原则保持 `ACCEPTED`；
 - WeKnora 作为该 authority 的载体保持 `ACCEPTED_CONDITIONALLY`；
+- 当前运行态是 `NO_PRODUCTION_ACTIVE_RELEASE`；目标 Release Kernel 未实现，
+  P3 生产 Worker 未注册发布业务 Handler；
 - upstream 选择已经完成：功能基线固定
   `80a5003cc99a427098afe184eee6601916d3d156`，不再重选 v0.7.1；
 - trusted image 构建源码是
@@ -529,21 +534,22 @@ MVP 与当前企业路线冻结以下产品约束：
 KnowledgeSpaceBinding
   tenant_id
   space_id
-  raw_kb_ids[]                    // 可为多个，提供 Source
+  raw_kb_id                       // MVP exactly one，提供 Source
   release_managed_wiki_kb_id     // exactly one，承载正式发布知识
 ```
 
 因此：
 
-- 多个 Raw KB 可以向同一 Space 提供 SourceRevision；
+- MVP 中一个 Raw KB 向该 Space 提供 SourceRevision；
 - 产品页、责任页、概念页和结构化 payload 全部进入同一个
   `release_managed_wiki_kb_id`；
 - `(tenant_id, space_id, wiki_kb_id)` Head 在该约束下等价于 Space 的正式知识
   原子边界；
 - Space 级发布和回滚不会跨多个 Head。
 
-企业后续若出现“一个 Space 必须拥有多个正式 Wiki KB”的真实需求，再引入
-`SpaceRelease` 聚合多个 `WikiKBRelease`；该能力不进入 MVP-728。
+企业后续若出现“一个 Space 必须拥有多个 RAW KB 或多个正式 Wiki KB”的真实
+需求，必须另开 ADR、OpenSpec 和 migration；多个正式 Wiki KB 还需引入
+`SpaceRelease` 聚合多个 `WikiKBRelease`。这些能力不进入 MVP-728。
 
 ---
 
@@ -1086,8 +1092,9 @@ MVP 查询：
 以下合同不要求全部由 S0-R/S0-Q 实现，但必须在 MVP-728 正式验收前全部关闭。
 
 1. **Release 原子范围唯一**：一个 Space 在 MVP 中只能绑定一个
-   `release_managed_wiki_kb_id`；Raw KB 可以多个。若未来允许多个正式 Wiki KB，
-   必须先引入真正的 `SpaceRelease`，不得用多个 Head 冒充 Space 级原子发布。
+   `raw_kb_id` 与一个 `release_managed_wiki_kb_id`。未来多 RAW 或多正式 Wiki
+   必须先经 ADR/OpenSpec/migration；多个正式 Wiki 还必须引入真正的
+   `SpaceRelease`，不得用多个 Head 冒充 Space 级原子发布。
 2. **Candidate 防 ABA**：`CandidateRelease` 同时冻结 `base_release_id` 与
    `base_activation_epoch`。
 3. **Claim 逻辑身份与比较合同**：必须冻结 logical family、comparison identity、
@@ -1139,22 +1146,27 @@ S0-Q（Quality Feasibility）┘
 范围：
 
 - 1 个 Space；
+- exactly 1 个 RAW KB；
 - exactly 1 个 release-managed Wiki KB；
-- 1 个 Candidate；
-- 1 个页面；
-- 1 组 canonical Claim/Evidence members；
+- R0 manifest 含 A/B/C 三个页面成员；
+- R1 同时更新 A、删除 B、保持 C、新增 D；
+- 从同一 R0 base 构造两个内容不同的 Candidate 并发竞争；
+- 每个页面引用冻结的 canonical Claim/Evidence members；
 - 人工直接批准；
-- WeKnora R1；
+- 两个当前 ACL principal，并在 pinned 内容上执行一次 ACL shrink；
 - pinned read。
 
 必须验证：
 
-- R1 经目标 Release 路径激活，不是旁路；
+- R1 经目标 preparation/index/CAS/receipt 路径激活，不是旁路；
 - manifest、canonical member 与页面 payload 同版；
 - 重复提交幂等；
-- expected head/epoch CAS；
-- 一次请求固定同一 release_id；
+- expected head/epoch CAS，同 base 双 Candidate 只有一个赢家；
+- 在 preparation、index、CAS、receipt 边界做有界失败注入；
+- 激活前后并发 current/pinned read，一次请求固定同一 release_id，任何读取只能
+  看到完整 R0 或完整 R1；
 - 检索或最小读取路径不召回其他 Release；
+- ACL shrink 后无权 principal 不能从 pinned 页面、payload 或最小检索旁路读取；
 - 普通 Wiki 写接口无法修改 release-managed 页面；
 - Harness 不保存第二 Active Head。
 
@@ -1162,9 +1174,15 @@ S0-Q（Quality Feasibility）┘
 
 ```text
 RELEASE_PATH_FEASIBLE
+or
+RELEASE_PATH_NOT_FEASIBLE
 ```
 
 S0-R 失败只证伪当前 WeKnora 载体或实现复杂度假设，不证明单一 Active 原则错误。
+开工前的独立 OpenSpec/Mission Card 必须冻结 exact fork 路径、表/索引、
+migration、read surface、升级责任和验证命令预算，并冻结暂定
+`PublishAuthorization` 字段、canonical bytes、nonce、校验顺序与失败零写。
+超预算或协议不成立时直接输出 `RELEASE_PATH_NOT_FEASIBLE`，不得延长窗口。
 
 #### S0-Q：Quality Feasibility
 
@@ -3288,23 +3306,28 @@ S0 不再用一条链同时证明发布架构和知识质量。两个最高风�
 
 | 维度 | S0-R 取值 |
 |---|---|
-| scope | 1 个 tenant / 1 个 Space / 1 个 release-managed Wiki KB |
+| scope | 1 个 tenant / 1 个 Space / 1 个 RAW KB / 1 个 release-managed Wiki KB |
 | Candidate | 允许 fixture Candidate，避免把抽取质量混入发布实验 |
-| 内容 | 1 个 manifest、1 个 canonical member、1 个页面 |
+| 内容 | R0=A/B/C；R1=A 更新/B 删除/C 不变/D 新增；同 base 两个不同 Candidate |
 | 审核 | 最小人工批准 + exact PublishAuthorization 绑定 |
 | 发布 | R1，preparation → ReadyReceipt → CAS activation |
-| 查询 | release-aware minimal read + pinned release_id |
+| 查询 | 激活前后并发 current/pinned/release-aware minimal read |
+| ACL | 两个当前 principal + pinned 内容上的一次 ACL shrink |
+| 故障 | preparation/index/CAS/receipt 边界的有界失败注入 |
 | 守卫 | 普通 PUT/DELETE 不能修改 managed 页面 |
 
 必须证明：重复提交幂等；并发激活只有一个赢家；expected head/epoch 漂移被拒；
-一次请求不混版；Harness 无第二 Active Head；同一 Space 不产生第二个
+任何读取只见完整 R0 或完整 R1；ACL shrink 后无权 principal 无旁路；Harness
+无第二 Active Head；同一 Space 不产生第二个
 release-managed Wiki KB；授权绑定 Candidate、manifest、receipt、审核和 scope；
 普通写入不能绕过 Kernel。
 
-通过状态只能是：
+两工作日窗口只能以以下二者之一结束：
 
 ```text
 RELEASE_PATH_FEASIBLE
+or
+RELEASE_PATH_NOT_FEASIBLE
 ```
 
 #### S0-Q：Quality Feasibility
@@ -4712,7 +4735,7 @@ MVP-728 需要 14 + N 个组件（技术方案 §11.5）、10–15 份材料、�
 
 | # | 合同 | 验证方式 |
 |---|---|---|
-| 1 | 一个 Space 只绑定一个 release-managed Wiki KB | 尝试创建或激活第二个 managed KB，证明被拒；Raw KB 不受此限制 |
+| 1 | MVP 一个 Space 只绑定一个 RAW KB 与一个 release-managed Wiki KB | 尝试绑定第二个 RAW/managed KB，证明被拒；未来扩展必须另开 ADR/OpenSpec/migration |
 | 2 | Candidate 冻结 base release_id **+ base activation_epoch** | 构造 R1→R2→R1 的 ABA 序列，证明旧 Candidate 被拒 |
 | 3 | Claim identity / comparison / comparator 固定 | 用同事实补证、适用范围变化、跨产品同名和改值向量验证六类变化动作 |
 | 4 | 删除、撤回、retention、legal hold、legal erasure 分义 | 对五类动作验证 serviceability、rollbackability、tombstone 与审计结果 |

@@ -1,6 +1,13 @@
 # 03 · 寿险知识模型设计
 
-> **本文地位**：本文定义 Enterprise LLM Wiki 的领域对象模型、页面模型、版本模型与冲突裁决规则，是 Python Harness 数据层的唯一设计依据；最高层产品与架构约束见[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。
+> [!WARNING]
+> **本文地位（2026-07-29）：** Claim、Evidence、ChangeSet、冲突与版本语义仍是
+> 可复用的领域设计输入；本文不再是 serving Release 数据层的唯一实现依据。
+> 下文 `ReleaseSnapshot`、`CurrentRelease`、P-1 active alias、Projector 和旧
+> publisher/reader 的 serving 语义均为历史设计。当前实现必须服从
+> [Sole Serving Active Release Authority ADR](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 与适用 OpenSpec。
 >
 > - 架构边界与插件划分见 [02-architecture.md](02-architecture.md)；本文定义的所有对象**持久化在 Harness 自有 PostgreSQL schema 中**，不建表进 WeKnora 的数据库。
 > - 抽取管道如何产出这些对象，见 [04-extraction-harness.md](04-extraction-harness.md)。

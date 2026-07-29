@@ -15,6 +15,9 @@
 当前仓库基线与原始 2026-07-28 文档状态已有变化。以下状态优先于本文后续历史
 段落：
 
+本文是 informative 交接与设计输入，不单独授予实现权。规范层级依次为 Sole
+Serving Active Release Authority ADR → Authority Amendment 2 → 适用 OpenSpec。
+
 ```text
 main:
 529d72c994369750b26e352a70fd6284e8b0fd9d
@@ -33,6 +36,9 @@ OPEN
 
 source_reader authority:
 BLOCKED
+
+runtime transition:
+NO_PRODUCTION_ACTIVE_RELEASE
 ```
 
 当前唯一执行顺序：
@@ -626,7 +632,8 @@ activated_at；MVP：current/as_of_date/release_id；known_at 后置。
 2. 单一 S0 拆为 S0-R（发布路径）与 S0-Q（知识编译质量），两者都 PASS 才进入
    MVP-728；
 3. MVP 冻结一个 Space 只绑定一个 release-managed Wiki KB，避免 Space 级
-   Release 与 KB 级 Head 粒度矛盾；
+   Release 与 KB 级 Head 粒度矛盾；Mission 0 修订后 MVP 同时固定一个 RAW KB，
+   未来多 RAW 需另开 ADR/OpenSpec/migration；
 4. S0-Q 使用四字段而非“三字段 + 一个模糊负例”；
 5. P0 合同由 7 条扩展并重排为 10 条，补齐 Release scope、Claim identity、
    完整 PublishAuthorization 与合法删除语义；
@@ -743,10 +750,20 @@ S0-Q（质量可行性）────┘
 
 #### S0-R
 
-使用 fixture Candidate，在一个 Space、一个 release-managed Wiki KB 中验证
-preparation、完整授权绑定、CAS activation、幂等、pinned/release-aware read、
-managed 写守卫以及 Harness 无第二 Active。状态只能是
-`RELEASE_PATH_FEASIBLE`。
+使用 fixture Candidate，在一个 Space、一个 RAW KB、一个 release-managed
+Wiki KB 中验证集合级原子性：
+
+- R0=A/B/C，R1=A 更新/B 删除/C 不变/D 新增；
+- 从同一 R0 base 构造两个不同 Candidate 并发竞争；
+- 在 preparation、index、CAS、receipt 边界做有界失败注入；
+- 激活前后并发 current/pinned read，任何读取只见完整 R0 或完整 R1；
+- 当前 ACL 使用两个 principal，并在 pinned 内容上验证一次 ACL shrink；
+- 普通写守卫有效，Harness 无第二 Active。
+
+开工前独立 OpenSpec/Mission Card 冻结 exact 路径、表/索引、migration、read
+surface、升级责任、验证命令预算，以及暂定 `PublishAuthorization` canonical
+bytes/nonce/校验顺序/失败零写。两工作日终态只能是
+`RELEASE_PATH_FEASIBLE` 或 `RELEASE_PATH_NOT_FEASIBLE`。
 
 #### S0-Q
 

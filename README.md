@@ -5,7 +5,15 @@
 > 本仓库同时是一个**企业级 Harness Agent 示范项目**：文档驱动（SDD）、测试驱动（TDD）、人机协作规范齐备，任何人/任何 AI 会话都能随时接手。
 
 > [!IMPORTANT]
-> **Enterprise LLM Wiki 是本项目的产品本体与最高优先级。** WeKnora 提供企业平台、权限、解析、检索和页面载体；Harness 负责用生产弱模型持续编译、校验、融合和版本化知识；P-1 active alias 指向且经最终批准的 Wiki 与同快照 MCP 是人和 Agent 的默认知识权威。每个生产 ReleaseSnapshot 都必须由 Space 授权人最终批准并绑定完整 content hash。直接复用 WeKnora Wiki UI 还必须先交付 P-1 release namespace/原子 active alias；此前只允许 ACL 隔离 staging + Harness reader，禁止逐页写生产 Wiki。所有开发必须遵守[北极星书面设计](docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)及其当前阻断。
+> **2026-07-29 当前执行权威。** Enterprise LLM Wiki 仍是产品本体；当前规范
+> 层级依次为 [Sole Serving Active Release Authority ADR](docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
+> → [Authority Amendment 2](docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> → 适用 OpenSpec。`jlx_enterprise_llm_wiki_complete_728_v3.md` 是设计输入与
+> 合订说明，不单独授予实现权。当前状态为
+> `NO_PRODUCTION_ACTIVE_RELEASE`：目标 Release Kernel 尚未实现，Harness P3
+> 生产 Worker 也未注册发布业务 Handler。下文 P-1、`ReleaseSnapshot`、
+> `CurrentRelease`、Projector 与旧 publisher 的 serving 描述只保留历史和定向
+> 移植价值；与上述权威冲突时不得据此开发或宣称线上已有 Active Release。
 
 ## 要解决的问题
 
@@ -41,7 +49,10 @@
         → P-1 原子激活 WeKnora release namespace + 同快照 MCP → 人 / Agent
 ```
 
-详见 [`docs/insurance-kb/02-architecture.md`](docs/insurance-kb/02-architecture.md)（含 ADR 与硬边界）与 [`13-blueprint-status.md`](docs/insurance-kb/13-blueprint-status.md)（建设现状）。
+插件边界与历史架构背景见
+[`docs/insurance-kb/02-architecture.md`](docs/insurance-kb/02-architecture.md)，
+当前执行裁决以本页顶部列出的 ADR、Amendment 2 与适用 OpenSpec 为准。
+[`13-blueprint-status.md`](docs/insurance-kb/13-blueprint-status.md) 只作历史建设账本。
 
 ## 快速开始
 

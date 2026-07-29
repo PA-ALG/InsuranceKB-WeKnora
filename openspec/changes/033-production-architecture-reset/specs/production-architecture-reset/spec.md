@@ -221,7 +221,21 @@ WeKnora 作为唯一 serving authority carrier SHALL 保持
 证明整版 manifest、原子激活、幂等、并发单赢家、pinned/release-aware read 和
 防旁路写可在有界 patch 内实现。S0-R SHALL 是输入就绪后的两工作日证伪窗口，
 终态只能为 `RELEASE_PATH_FEASIBLE` 或
-`RELEASE_PATH_NOT_FEASIBLE`；通过不等于生产 Kernel 或 MVP 完成。
+`RELEASE_PATH_NOT_FEASIBLE`；通过不等于生产 Kernel 或 MVP 完成。计时前的
+独立 S0-R OpenSpec/Mission Card SHALL 冻结 exact fork 路径、表/索引、
+migration、read surface、升级责任和验证命令预算；超出任一预算 SHALL 输出
+`RELEASE_PATH_NOT_FEASIBLE`，不得无界扩面。
+
+S0-R fixture SHALL 使用 R0(A/B/C) 与 R1(A 更新/B 删除/C 不变/D 新增)，从同一
+R0 base 构造两个不同 Candidate 并发竞争，在 preparation、index、CAS、receipt
+边界注入有界失败，并在激活前后并发执行 current/pinned read。任何读取 SHALL
+只见完整 R0 或完整 R1。当前 ACL SHALL 至少包含两个 principal，并对 pinned
+内容执行一次 ACL shrink。单页写通 SHALL NOT 作为 feasible 证据。
+
+S0-R 独立 OpenSpec SHALL 在编码前冻结暂定 `PublishAuthorization` 字段、
+canonical bytes、nonce、校验顺序、失败零写，以及最小 pinned/current/
+release-aware read 与 ACL 场景；这些暂定合同 SHALL NOT 被本 D0 视为生产协议
+批准。
 
 #### Scenario: S0-R 不得无限延期或旁路通过
 
@@ -230,12 +244,21 @@ WeKnora 作为唯一 serving authority carrier SHALL 保持
   以未完成继续延期，也不得用未经过目标 preparation/activation/read 路径的 Demo
   声明 feasible
 
+#### Scenario: 单页成功不能证明集合级原子性
+
+- **WHEN** S0-R 只证明一个页面可写入和读取，未覆盖集合变更、双 Candidate
+  竞争、故障注入、并发读取或 ACL shrink
+- **THEN** 不得输出 `RELEASE_PATH_FEASIBLE`
+
 ### Requirement: D0.14 MVP cardinality 与 S0-Q 输入保持真实
 
 MVP SHALL 使用 `1 Space = 1 RAW KB + 1 release-managed Wiki KB`，该限制
 SHALL 是 MVP profile 而非永久企业不变量。S0-Q 输入 SHALL 来自当前
 `80a5003` WeKnora/W1 冻结解析输出，或身份、digest、页码、表格结构和解析版本
 完全冻结的等价制品；SHALL NOT 用人工清洗 Markdown 替代真实解析难度。
+MVP binding SHALL 使用单值 `raw_kb_id` 与单值
+`release_managed_wiki_kb_id`；未来多 RAW SHALL 经新的 ADR、OpenSpec 和
+migration 扩展。
 
 #### Scenario: 清洗文本不能通过 S0-Q
 
@@ -243,6 +266,11 @@ SHALL 是 MVP profile 而非永久企业不变量。S0-Q 输入 SHALL 来自当�
   Markdown
 - **THEN** 该运行不得产生
   `KNOWLEDGE_COMPILATION_FEASIBLE_ON_NARROW_SLICE`
+
+#### Scenario: MVP 不接受隐式多 RAW
+
+- **WHEN** binding 输入包含第二个 RAW KB 或数组形式 RAW binding
+- **THEN** MVP 配置拒绝该输入；不得用未登记的多 KB ACL 聚合绕过
 
 ### Requirement: D0.15 legacy 改接与清理按纵切需要执行
 

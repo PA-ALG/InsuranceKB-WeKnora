@@ -2,7 +2,13 @@
 
 > 回答两个问题：**整个体系建到哪了**；**企业级 LLM Wiki 北极星还有哪些缺口**。滚动更新，每完成一个 change 修订一次。
 >
-> **治理声明**：本页是代码与 change 的状态账本，不是产品定义。最高产品与架构口径见 [企业级 LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)，执行顺序见 [16-roadmap.md](16-roadmap.md)。旧 change 的“完成/验收”只表示其当时规格范围通过，不能推导为企业级能力已经完成。
+> [!WARNING]
+> **历史状态账本，不是当前执行授权。** 本页保留既有 change 的交付证据；旧
+> change 的“完成/验收”只表示其当时规格范围通过，不能推导为企业级能力已经
+> 完成，也不能授权旧 P-1/Projector/publisher 路线。当前规范层级依次为
+> [Sole Serving Active Release Authority ADR](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 与适用 OpenSpec；实时交接见仓库根 `HANDOFF.md`。
 
 ## 0. 当前总判断
 

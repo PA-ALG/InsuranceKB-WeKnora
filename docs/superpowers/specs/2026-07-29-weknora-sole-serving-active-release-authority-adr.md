@@ -34,6 +34,23 @@ WeKnora 不得同时保存可独立决定线上版本的 Active Head。
 本决策不声称 Release Kernel 已实现。WeKnora 作为载体必须通过能力缺口核对和
 S0-R 证伪窗口。
 
+## 当前运行过渡态
+
+当前状态固定为：
+
+```text
+NO_PRODUCTION_ACTIVE_RELEASE
+```
+
+目标 Release Kernel 尚未实现。P3 生产 Worker 使用空业务 Handler registry；
+旧 `ReleasePublisher`、SnapshotReader 和 `current_release` 虽保留公开导出与
+测试覆盖，但没有生产运行时调用方，只作审计和定向移植输入。
+
+S0-R 只能使用隔离的测试 Space 与专用凭据，成功后最多把已验证路径标为
+`EXPERIMENTAL`。只有后续独立 OpenSpec 冻结正式协议、Space/principal/ACL
+合同、完整验收与 Artifact/runtime 门禁后，才允许声明
+`ACTIVE`；Mission 0 文档不得提前改变运行态。
+
 ## 条件与证伪
 
 以下任一条件成立，必须重新评估单一 authority 的承载位置：
@@ -48,8 +65,11 @@ S0-R 证伪窗口。
 ## S0-R 裁决窗口
 
 S0-R 是输入就绪后的两工作日证伪窗口，不是生产级 Release Kernel 的交付承诺。
-开工前必须冻结测试 Space、KB、fixture、环境、权限和暂定最小协议；计时开始后
-只允许两个终态：
+开工前必须以独立 OpenSpec/Mission Card 冻结测试 Space、KB、fixture、环境、
+权限、暂定最小协议及可核验预算。预算至少列出 exact fork 路径、表/索引、
+migration、read surface、升级责任和允许的验证命令；任一维度超出即终止并输出
+`RELEASE_PATH_NOT_FEASIBLE`，不得在计时中无界扩面。计时开始后只允许两个
+终态：
 
 - `RELEASE_PATH_FEASIBLE`：最小目标路径跑通，并列出正式实现剩余工作、patch
   面积、migration 面积和升级责任；
@@ -57,6 +77,21 @@ S0-R 是输入就绪后的两工作日证伪窗口，不是生产级 Release Ker
 
 不得以“尚未完成”为理由无限延期，也不得把旁路 Demo 当作可行性证据。S0-R
 通过只提升载体可行性状态，不等于生产 Kernel、MVP 或 Artifact 完成。
+
+最小有效 fixture 必须验证**集合级原子性**而非单页写通：
+
+- R0 包含 A/B/C；R1 同时更新 A、删除 B、保持 C、增加 D；
+- 从同一 base 构造两个不同 Candidate 并发竞争，只有一个可激活；
+- 在 preparation、index、CAS、receipt 边界注入有界失败，并在激活前后并发
+  pinned/current read；
+- 任何读取只能看到完整 R0 或完整 R1，不得看到成员混版；
+- 当前 ACL 至少含两个 principal，并对 pinned 内容验证一次 ACL shrink；
+- 普通 PUT/DELETE 不能修改 release-managed 内容，Harness 不能形成第二 Head。
+
+S0-R 编码前的独立 OpenSpec 还必须冻结暂定 `PublishAuthorization` 字段、
+canonical bytes、nonce、校验顺序、失败零写，以及最小 pinned/current/
+release-aware read 与 ACL 场景。它们是待证伪协议，不是本 ADR 已批准的生产
+实现。
 
 ## MVP cardinality
 
@@ -67,7 +102,9 @@ MVP profile 固定：
 ```
 
 这是 MVP cardinality，不是永久企业不变量。当前不建设 RAW KB 数组或多 KB ACL
-聚合。企业版出现真实多 RAW KB 需求后，必须通过显式规格和 migration 扩展。
+聚合。MVP 绑定模型必须使用单值 `raw_kb_id` 与单值
+`release_managed_wiki_kb_id`；企业版出现真实多 RAW KB 需求后，必须通过新的
+ADR、OpenSpec 与显式 migration 扩展。
 
 ## 正式页面编辑
 
