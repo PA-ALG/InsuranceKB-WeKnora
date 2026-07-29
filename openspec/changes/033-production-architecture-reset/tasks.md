@@ -1,5 +1,40 @@
 # 033 任务（D0，治理文档；无功能代码）
 
+> [!WARNING]
+> 2026-07-29 Amendment 2 已取代本 change 的 PostgreSQL Active +
+> WeKnora Projector 执行方向。既有 checkbox 是历史 D0 证据；不得据此实现
+> P11/P12 或旧 Projector。Mission 0 只更新治理权威，零功能代码、零 migration。
+>
+## D0-M0 · V3 authority Amendment 2
+
+- [x] M0.1 纳入 728 V3 与新会话 handoff，记录 2026-07-29 current identity。
+- [x] M0.2 创建 Sole Serving Active Release Authority ADR，状态
+  `ACCEPTED_CONDITIONALLY`。
+- [x] M0.3 创建 Amendment 2，取代 PostgreSQL Active + Projector 执行方向，
+  保留旧正文作 history-only。
+- [x] M0.4 更新 AGENTS/CLAUDE、北极星、生产设计、overview、roadmap、
+  execution blueprint、control board 与 legacy disposition 的优先级。
+- [x] M0.5 校正 043/045 与 OpenSpec 注册表状态。
+- [x] M0.6 strict 验证 033/043/045、diff-check、stale authority scan 与零功能/
+  migration/workflow/deployment-lock scope。
+
+## D0-M0R · PR #67 independent review corrective
+
+- [x] M0R.1 在根 README、02/03/13 与 harness README 建立统一规范层级；旧
+  P-1/Projector/publisher serving 描述只作历史，不再授权实现。
+- [x] M0R.2 将当前运行态命名为 `NO_PRODUCTION_ACTIVE_RELEASE`；明确旧
+  publisher 无 P3 生产 Handler，只保留审计/测试/定向移植价值。
+- [x] M0R.3 把 S0-R fixture 收紧为 R0(A/B/C)→R1(A 更新/B 删除/C 不变/D
+  新增)、同 base 双 Candidate、故障注入、并发 read 与 ACL shrink；拒绝单页
+  false positive。
+- [x] M0R.4 统一 MVP `1 RAW KB + 1 release-managed Wiki KB`；未来多 RAW
+  必须另开 ADR/OpenSpec/migration。
+- [x] M0R.5 要求 S0-R 编码前以独立 OpenSpec/Mission Card 冻结最小
+  PublishAuthorization/read/ACL 合同和可证伪 patch/table/migration/upgrade
+  预算；Mission 0 不实现这些合同。
+- [x] M0R.6 刷新 exact identity、范围、门禁与独立 delta review 证据；保持
+  Draft，不修改源码、migration、workflow、deployment lock 或 principal。
+
 ## D0-S0 · pre-implementation spec candidate
 
 - [x] T0 从执行时 exact `origin/main` 创建唯一隔离 worktree，验证 `.worktrees`

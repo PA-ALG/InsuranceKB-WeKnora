@@ -1,5 +1,12 @@
 # 24 · 存量资产处置清单
 
+> [!IMPORTANT]
+> **2026-07-29 Amendment 2 优先**：本文的逐包/逐迁移历史盘点继续有效，但
+> P2b/P8/P11/P12、PostgreSQL serving pointer 与 Projector 的目标归属已被
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 取代。旧 publisher、SnapshotReader、`current_release`、表和 migration
+> 继续冻结审计；只按首个纵切真实调用改接，物理清理不是 MVP 前置。
+>
 > 状态：D0 治理文档。业务方 2026-07-26 批准架构评估后立项
 > （裁决记录见 [23 · 控制板 §8 D-2026-07-26-3](23-mvp-control-board.md)）。
 >

@@ -1,6 +1,15 @@
 # insurance-harness
 
-寿险知识编译 Harness——WeKnora 的插件式扩展（架构见 [docs/insurance-kb/02-architecture.md](../docs/insurance-kb/02-architecture.md)，ADR-001）。
+> [!IMPORTANT]
+> 当前 serving Release 方向以
+> [Sole Serving Active Release Authority ADR](../docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
+> [Authority Amendment 2](../docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 和适用 OpenSpec 为准。现有 `ReleasePublisher`/reader 仅保留作测试、审计和
+> 定向移植输入；P3 生产 Worker 未注册发布业务 Handler，当前状态为
+> `NO_PRODUCTION_ACTIVE_RELEASE`。不得从公开导出或历史架构文档推导为生产
+> serving 已启用。
+
+寿险知识编译 Harness——WeKnora 的插件式扩展（插件边界与历史背景见 [docs/insurance-kb/02-architecture.md](../docs/insurance-kb/02-architecture.md)，ADR-001）。
 与 WeKnora **只通过 REST/MCP 交互**：零 import、零共库、不直连其数据库与队列（三条硬边界，02 §3）。
 
 ## 布局（src 布局；子包职责见各自 README）

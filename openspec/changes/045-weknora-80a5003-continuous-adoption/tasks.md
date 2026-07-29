@@ -87,20 +87,24 @@
 
 ## Task 5 · Trusted workflow 与 multi-image
 
-- [ ] workflow 仅从已合入 main 的 exact source/lock 构建。
-- [ ] server、worker、frontend 等 images 使用相同 commit/tree/lock。
-- [ ] 构建前运行 thin check、migration 与 targeted compatibility gates。
-- [ ] 发布 image digest、provenance 与 SBOM。
-- [ ] workflow 不下载或 apply project patch bundle。
+- [x] workflow 仅从已合入 main 的 exact source/lock 构建。
+- [x] server、worker、frontend 等 images 使用相同 commit/tree/lock。
+- [x] 构建前运行 thin check、migration 与 targeted compatibility gates。
+- [x] 发布 image digest、provenance 与 SBOM。
+- [x] workflow 不下载或 apply project patch bundle。
 
 ## Task 6 · Artifact
 
-- [ ] 从 trusted workflow 构建并固定 multi-image digests。
+- [x] 从 trusted workflow 构建并固定 multi-image digests。
 - [ ] 在 backup clone/disposable PostgreSQL 验证 bridge 与 dual migration。
 - [ ] 验证 plugin/readiness/ACL/zero-write probes。
 - [ ] 验证产品 history/diff/edit/revert smoke。
 - [ ] 只有 image identity、migration、W1/plugin 与产品 probes 全通过才闭合
   Artifact；consumer/source-reader/P4a/P4c 仍按各自真实状态报告。
+
+> 2026-07-29 identity：upstream capability=`80a5003...`；trusted image build
+> source=`a8bf55ae...`；current main=`529d72c...`。Task 5 与 Task 6 第一项的
+> 完成不能替代剩余 Full Artifact/W1 runtime probes。
 
 ## 明确不创建
 

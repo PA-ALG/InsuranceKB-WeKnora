@@ -2,11 +2,24 @@
 
 ## 状态
 
-`CODE CANDIDATE 404e7811 / MIGRATION, WORKFLOW AND ARTIFACT OPEN`
+`SOURCE + MIGRATION BRIDGE + TRUSTED IMAGES + DIGEST PIN COMPLETE /
+FULL ARTIFACT PROBES OPEN`
 
-候选分支已完成 exact source merge、W1 code replay 与 logger redaction replay。
-这不代表已合入 main，也不代表 legacy `000066` bridge、local-live runtime 或
-生产 Artifact 已完成。
+2026-07-29 exact 状态：
+
+- upstream capability：
+  `80a5003cc99a427098afe184eee6601916d3d156`；
+- trusted image build source：
+  `a8bf55ae18441abd380e594afba5000c51cc9633`；
+- current main：
+  `529d72c994369750b26e352a70fd6284e8b0fd9d`；
+- exact source merge、W1/logger replay、legacy `000066` bridge、trusted
+  app/frontend/docreader images 与 digest pin 已合入；
+- Full Artifact/W1 runtime probes 仍 open；
+- `source_reader` authority 仍 blocked。
+
+上述三个 Git identity 不能合并成“镜像由 current main 构建”。digest pin
+也不等于 Full Artifact closure。
 
 本 change 定义一条薄升级轨道：尽快把当前 manifest 指定的 Tencent WeKnora
 不可变 identity 合入项目，同时让下一次升级只需批准并替换 manifest，而不再
@@ -28,6 +41,8 @@
 
 当前 snapshot 的 Wiki 单页 history、diff、manual edit、optimistic locking 与
 revert 是产品验收项。它们不是 Harness W1 plugin contract 的 endpoint 或权限。
+它们也不等于 Enterprise LLM Wiki 的整版 Release 或 release-managed 正式页面
+编辑闭环。
 
 ## 保留的机制
 

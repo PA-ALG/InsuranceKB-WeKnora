@@ -2,10 +2,19 @@
 
 ## 状态
 
-`SPEC-ONLY / IMPLEMENTATION BLOCKED ON P3 ACL INSPECTION AUTHORITY`
+`SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`
 
 本 change 只冻结 Space 边界的最小实现合同，不表示 P2d 已实现，也不授权生产
 代码或 migration。实现须另获 Mission Card，并从当时最新 main 开始。
+
+2026-07-29 Authority Amendment 2 保留本 change 的 Space、principal
+fail-closed、binding epoch、ACL、跨 Space 拒绝、ABA/concurrency 与失败零写
+合同；当前 `wiki_projector`、单 RAW/Wiki projection binding 和旧发布语义不得
+原样进入实现。S0-R PASS 后必须用已验证的发布 principal、MVP binding 与
+Release 协议修订本 change，预留 migration 0016 在此之前不得创建。
+
+MVP 暂定 `1 Space = 1 RAW KB + 1 release-managed Wiki KB`。这是 MVP profile，
+不是永久企业 cardinality。
 
 ## 用户价值
 

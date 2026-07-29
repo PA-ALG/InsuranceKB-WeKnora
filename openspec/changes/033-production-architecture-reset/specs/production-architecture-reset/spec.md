@@ -1,5 +1,11 @@
 # 033 Production Architecture Reset 验收规格
 
+> [!WARNING]
+> 2026-07-29 Amendment 2 已取代 D0.3/D0.4/D0.5 中的 PostgreSQL serving
+> authority、Outbox Projector、P11 epoch-fenced projection 与封闭旧 patch
+> 编号语义。相关旧 Requirement/Scenario 仅作历史验收证据，不授权实现。当前
+> replacement contract 见本文件末尾 D0.12–D0.17。
+>
 ## ADDED Requirements
 
 ### Requirement: D0.1 可配置审核策略
@@ -194,3 +200,114 @@ migration；后续 owner 必须从执行时真实 `origin/main` Alembic head 重
 - **WHEN** S1 scope 检查发现任意 `openspec/changes/031-*` 文件变化
 - **THEN** D0 立即停止并返回 NEEDS_CONTEXT，不得以“统一 superseded notice”
   为理由扩大历史文件范围
+
+### Requirement: D0.12 单一 serving Active Release authority
+
+正式线上知识 SHALL 只有一个 serving Active Release authority。Harness 与
+WeKnora SHALL NOT 同时保存可独立决定线上版本的 Active Head。Harness MAY
+保存不可变 Candidate、ReviewDecision、PublishAuthorization、命令与回执，但
+本地 `current_release` 或 receipt 镜像 SHALL NOT 成为 serving pointer。
+
+#### Scenario: Harness receipt 不能形成第二个 Head
+
+- **WHEN** Harness 已记录发布命令或 activation receipt，但 WeKnora Active Head
+  未完成目标 CAS
+- **THEN** 正式读取不切换到该 Candidate，Harness 记录不具 serving authority
+
+### Requirement: D0.13 WeKnora 载体条件接受并可证伪
+
+WeKnora 作为唯一 serving authority carrier SHALL 保持
+`ACCEPTED_CONDITIONALLY`，直到 `80a5003` capability gap matrix 与 S0-R
+证明整版 manifest、原子激活、幂等、并发单赢家、pinned/release-aware read 和
+防旁路写可在有界 patch 内实现。S0-R SHALL 是输入就绪后的两工作日证伪窗口，
+终态只能为 `RELEASE_PATH_FEASIBLE` 或
+`RELEASE_PATH_NOT_FEASIBLE`；通过不等于生产 Kernel 或 MVP 完成。计时前的
+独立 S0-R OpenSpec/Mission Card SHALL 冻结 exact fork 路径、表/索引、
+migration、read surface、升级责任和验证命令预算；超出任一预算 SHALL 输出
+`RELEASE_PATH_NOT_FEASIBLE`，不得无界扩面。
+
+S0-R fixture SHALL 使用 R0(A/B/C) 与 R1(A 更新/B 删除/C 不变/D 新增)，从同一
+R0 base 构造两个不同 Candidate 并发竞争，在 preparation、index、CAS、receipt
+边界注入有界失败，并在激活前后并发执行 current/pinned read。任何读取 SHALL
+只见完整 R0 或完整 R1。当前 ACL SHALL 至少包含两个 principal，并对 pinned
+内容执行一次 ACL shrink。单页写通 SHALL NOT 作为 feasible 证据。
+
+S0-R 独立 OpenSpec SHALL 在编码前冻结暂定 `PublishAuthorization` 字段、
+canonical bytes、nonce、校验顺序、失败零写，以及最小 pinned/current/
+release-aware read 与 ACL 场景；这些暂定合同 SHALL NOT 被本 D0 视为生产协议
+批准。
+
+#### Scenario: S0-R 不得无限延期或旁路通过
+
+- **WHEN** 输入已冻结且两工作日窗口结束
+- **THEN** 输出一个终态及 exact patch/migration/upgrade responsibility；不得
+  以未完成继续延期，也不得用未经过目标 preparation/activation/read 路径的 Demo
+  声明 feasible
+
+#### Scenario: 单页成功不能证明集合级原子性
+
+- **WHEN** S0-R 只证明一个页面可写入和读取，未覆盖集合变更、双 Candidate
+  竞争、故障注入、并发读取或 ACL shrink
+- **THEN** 不得输出 `RELEASE_PATH_FEASIBLE`
+
+### Requirement: D0.14 MVP cardinality 与 S0-Q 输入保持真实
+
+MVP SHALL 使用 `1 Space = 1 RAW KB + 1 release-managed Wiki KB`，该限制
+SHALL 是 MVP profile 而非永久企业不变量。S0-Q 输入 SHALL 来自当前
+`80a5003` WeKnora/W1 冻结解析输出，或身份、digest、页码、表格结构和解析版本
+完全冻结的等价制品；SHALL NOT 用人工清洗 Markdown 替代真实解析难度。
+MVP binding SHALL 使用单值 `raw_kb_id` 与单值
+`release_managed_wiki_kb_id`；未来多 RAW SHALL 经新的 ADR、OpenSpec 和
+migration 扩展。
+
+#### Scenario: 清洗文本不能通过 S0-Q
+
+- **WHEN** 输入在 WeKnora/W1 冻结前被人工重排、去除表格结构或改写为干净
+  Markdown
+- **THEN** 该运行不得产生
+  `KNOWLEDGE_COMPILATION_FEASIBLE_ON_NARROW_SLICE`
+
+#### Scenario: MVP 不接受隐式多 RAW
+
+- **WHEN** binding 输入包含第二个 RAW KB 或数组形式 RAW binding
+- **THEN** MVP 配置拒绝该输入；不得用未登记的多 KB ACL 聚合绕过
+
+### Requirement: D0.15 legacy 改接与清理按纵切需要执行
+
+S0-R/S0-Q 通过后，首个 MVP PR SHALL 只改接其真实调用入口。旧 publisher、
+SnapshotReader、`current_release`、旧表和 migration MAY 冻结留存；SHALL NOT
+要求第一个纵切完成全量 legacy 删除。`wiki_projector` 只有在替代 principal
+合同冻结后才可移除或改名，物理清理 SHALL 是 MVP 后独立任务。
+
+#### Scenario: 冻结 legacy 不阻断首个纵切
+
+- **WHEN** 首个纵切不导入、不注册也不调用旧 publisher/reader
+- **THEN** 旧代码和 migration 的存在不阻断该纵切，且功能 PR 不夹带清理
+
+### Requirement: D0.16 OpenSpec 043 不得按旧投影语义实现
+
+OpenSpec 043 SHALL 保留 Space、principal fail-closed、binding epoch、ACL
+等价、跨 Space 拒绝、ABA/concurrency 与失败零写合同；状态 SHALL 为
+`SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`。当前 `wiki_projector` 和单
+RAW/Wiki projection binding SHALL NOT 直接授权实现。S0-R 独立 OpenSpec
+SHALL 先冻结暂定最小发布 principal、MVP binding 与 Release 协议，PASS 后才
+形成 043 Amendment。
+
+#### Scenario: 043 不能在 S0-R 前创建 migration
+
+- **WHEN** 043 尚未吸收 S0-R 已验证的 principal/binding/Release 合同
+- **THEN** P2d implementation 与预留 migration 0016 保持未开始
+
+### Requirement: D0.17 045 identity 与 Artifact 状态不得合并
+
+治理状态 SHALL 分开记录 upstream capability `80a5003...`、trusted image
+build source `a8bf55ae...` 和 current main `529d72c...`。source adoption、
+legacy `000066` bridge、trusted images 与 digest pin SHALL 记为 complete；
+Full Artifact/W1 runtime probes 与 `source_reader` authority SHALL 保持 open/
+blocked，直到各自节点提供真实证据。
+
+#### Scenario: digest pin 不等于 Artifact closure
+
+- **WHEN** app/frontend/docreader 已固定 digest，但 W1 runtime、ACL、zero-write、
+  race 或 manifest probe 仍为 planned
+- **THEN** 045 不得声明 Full Artifact complete 或 source-reader ready

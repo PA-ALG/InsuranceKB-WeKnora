@@ -1,11 +1,19 @@
 # 寿险知识平台文档集
 
-> **最高层设计基准**：[`近期生产架构重置设计`](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
+> [!IMPORTANT]
+> **当前最高层执行基准（2026-07-29）**：
+> [`Sole Serving Active Authority ADR`](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
+> + [`Authority Amendment 2`](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> + [`V3 设计`](../../jlx_enterprise_llm_wiki_complete_728_v3.md)。
+> 2026-07-24 重置设计的 PostgreSQL Active→Outbox→Projector 路线已
+> `SUPERSEDED / HISTORY-ONLY`；未被 Amendment 2 取代的产品、语义、Evidence、
+> Conflict、弱模型和质量合同继续有效。
+>
 > [`Enterprise LLM Wiki 北极星设计`](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)
-> 继续定义产品价值、Evidence/Conflict/version/Release 与弱模型原则；近期生产
-> 权威、事务、WeKnora 集成和交付 DAG 以重置设计为准。
+> 继续定义产品价值、Evidence/Conflict/version/Release 与弱模型原则。
 
-初始版本产出于 2026-07-11 架构讨论定稿后。新人先读北极星设计，再从 00 开始按编号阅读。
+初始版本产出于 2026-07-11 架构讨论定稿后。新人先读当前 Authority ADR 与
+Amendment 2，再从 00 开始按编号阅读；历史设计正文不能覆盖顶部修订。
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
@@ -23,7 +31,7 @@
 | [11-parsing-templates-multimodal.md](11-parsing-templates-multimodal.md) | 解析升级、四级模板专门化与多模态目标合同 | ⚠️ 004/006 资产 production-disabled |
 | [12-dayu-borrowings.md](12-dayu-borrowings.md) | dayu-agent（财报）弱模型准确性机制的借鉴决策：缩小模型战场、data_quality 来源分级、断链硬门禁、可喂性评分、dry-run 治理、保险算术校验器 | ✅ |
 | [13-blueprint-status.md](13-blueprint-status.md) | 整体蓝图现状：历史代码地基、NS-RIGHTS/NS-0～NS-F 差量、缺口与规划 | ✅ 2026-07-21 校正 |
-| [14-deployment-runbook.md](14-deployment-runbook.md) | D0 后生产部署合同：API/Worker/PostgreSQL、Active Release、Outbox、WeKnora fenced projection 与上线证据 | 📋 D0 治理已冻结；实现未开始 |
+| [14-deployment-runbook.md](14-deployment-runbook.md) | 旧 D0 部署合同与验收清单 | ⛔ Projector 拓扑已 superseded；正文 history-only |
 | [15-solutions-traceability.md](15-solutions-traceability.md) | 七类北极星核心问题的能力闭环与当前落点；保留 2026-07-12 历史九问追溯 | ✅ |
 | [16-roadmap.md](16-roadmap.md) | D0/C0/W0/CAP0 与 Milestone A/B/C 小 PR Roadmap | 📋 D0 实施；后续均 planned |
 | [17-team-collaboration.md](17-team-collaboration.md) | 三人协作规范：模块所有权分工、Git/PR 双查流程、HANDOFF 同步纪律、主航道守护清单、决策升级路径 | ✅ |
@@ -36,7 +44,7 @@
 | [24-legacy-asset-disposition.md](24-legacy-asset-disposition.md) | 存量资产处置清单：17 包/7 迁移/全部旧 OpenSpec 的复用·移植·冻结·废弃唯一口径，Pn Contract Card 必须引用 | ✅ 2026-07-26 立项 |
 | [schema-baseline/](schema-baseline/) | 机器可读字段基线（13 个 YAML + extensions-v1.1，转自业务方 2026-07-10 Excel） | ✅ |
 
-权威分工：[生产架构重置设计](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)（近期生产架构）·
-[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)（核心产品定义）·
+权威分工：[Authority ADR](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md) + [Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)（当前 serving 与执行方向）·
+[北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)（未被修订的核心产品定义）·
 [16-roadmap](16-roadmap.md)（完整阶段）· [23-mvp-control-board](23-mvp-control-board.md)（当前门禁）·
 [HANDOFF](../../HANDOFF.md)（实时状态）。

@@ -1,8 +1,18 @@
 # 02 · 技术架构设计
 
-> 本文是寿险知识平台的架构基准文档。所有开发（含 OpenSpec change）不得违背本文的边界约束；如需变更架构，先修订本文并记录新的 ADR。
+> [!WARNING]
+> **当前规范层级（2026-07-29）：** 本文保留插件边界、平台职责和既有工程背景，
+> 但不再是 serving Release 的最高实现授权。当前执行依次服从
+> [Sole Serving Active Release Authority ADR](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 与适用 OpenSpec。下文 P-1 active alias、PostgreSQL
+> `ReleaseSnapshot`/`CurrentRelease`、Projector、逐页 publisher 和双系统
+> serving 语义均为历史设计，不得覆盖新的 sole-serving-authority 裁决。
+
+> 本文是寿险知识平台的历史架构基准。未被当前 ADR/Amendment/OpenSpec 取代的
+> 插件边界仍有效；发生冲突时以上方当前规范层级为准。
 >
-> 最高层基准：[Enterprise LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。关联文档：[00-project-overview.md](00-project-overview.md)（项目入口）· [01-requirements-and-challenges.md](01-requirements-and-challenges.md)（需求与难点）· [03-knowledge-model.md](03-knowledge-model.md)（知识模型）· [04-extraction-harness.md](04-extraction-harness.md)（抽取管道）· [05-golden-set-eval.md](05-golden-set-eval.md)（金标与评估）
+> 历史基准：[Enterprise LLM Wiki 北极星设计](../superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md)。关联文档：[00-project-overview.md](00-project-overview.md)（项目入口）· [01-requirements-and-challenges.md](01-requirements-and-challenges.md)（需求与难点）· [03-knowledge-model.md](03-knowledge-model.md)（知识模型）· [04-extraction-harness.md](04-extraction-harness.md)（抽取管道）· [05-golden-set-eval.md](05-golden-set-eval.md)（金标与评估）
 
 ## ADR-002：Enterprise LLM Wiki 是产品本体（2026-07-21 拍板）
 

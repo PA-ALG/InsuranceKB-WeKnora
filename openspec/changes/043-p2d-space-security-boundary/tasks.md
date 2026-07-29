@@ -1,5 +1,10 @@
 # 043 · Tasks（P2d Space Boundary Foundation）
 
+> [!WARNING]
+> `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`。以下 Contract Card 保留通用
+> Space/ACL/epoch/跨 Space/零写边界，但不授权按旧 `wiki_projector` 或单
+> RAW/Wiki projection binding 实现。S0-R PASS 前不得创建 migration 0016。
+
 ## Contract Card
 
 ### 单一职责

@@ -40,7 +40,7 @@
 | 030 | enterprise-wiki-mvp-slice | ✅ 已合入；能力保留 | 历史交付能力，不再作为旧 Wave 路线状态源；后续由 033 DAG 消费 |
 | 031 | operational-run-admission | ⛔ superseded / history-only | 旧 runtime/PR 路线冻结，不更新、不重放、不授予生产 authority |
 | 032 | human-wiki-reader-mvp | ⛔ superseded / history-only | 历史规格仅供审计；后续消费面按 033 Milestone 重建 |
-| 033 | production-architecture-reset | ✅ D0 已合入（PR #34/#35）；治理状态源继续有效 | 当前唯一生产架构治理状态源；不是迁移号 |
+| 033 | production-architecture-reset | ✅ D0 已合入；Amendment 2 / Mission 0 治理修订进行中 | 当前治理入口；服务中的唯一 Active authority 改为 WeKnora，旧 Postgres Active→Outbox→Projector 发布链已被 Amendment 2 取代；不是迁移号 |
 | 034 | c0-canonical-envelope | ✅ 已实现并合入（PR #36） | 033 §16 C0；纯 Python 包，无迁移 |
 | 035 | p1-job-outbox | ✅ 已实现并合入（规格 PR #38；实现 PR #53） | 旧 PR #44 保持 `CLOSED / ARCHIVED / NOT MERGED`；迁移 0015；5 条非阻断 follow-up 归 042 |
 | 036 | capacity-contract | ✅ 已实现并合入（PR #46） | CAP0；CapacityProfile 合同已交付，八项 launch 问卷仍待业务确认；不是迁移号 |
@@ -50,9 +50,9 @@
 | 040 | g0a-golden-asset-kernel | 规格 ✅ 已合入（PR #42）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 编号冲突已关闭；后续实现须独立 TDD/复审，不得称 G0a 已验收或产品已完成 |
 | 041 | p5a0-product-version-resolver | ✅ 已合入 main（PR #56） | ⚠️ 该目录先于注册表行创建（占号规则被绕过），此行为事后补记；后续窗口一律先占号再开目录 |
 | 042 | p1-followup-backlog | 🔒 已占号（目录未开，比照 026 惯例） | 035 四轮评审的 5 条 BACKLOG，完整清单含 live 证据与建议修法见 [23 号 §8 D-2026-07-27-19](../../docs/insurance-kb/23-mvp-control-board.md)；预期零迁移；**开工前须取 Mission Card 批准并按正式 delta 格式建目录** |
-| 043 | p2d-space-security-boundary | 规格 ✅ 已合入（PR #57）；IMPLEMENTATION BLOCKED ON P3 ACL INSPECTION AUTHORITY | Space 边界基础合同：P3-derived scope、RAW/Wiki ACL 等价、current binding/epoch、跨 Space 拒绝与失败零写；实现预留迁移 0016 |
+| 043 | p2d-space-security-boundary | `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R` | 保留 Space/principal/epoch/ACL、跨 Space 拒绝与失败零写；`wiki_projector`、旧投影和新 Release principal/binding 协议不得原样复用；实现预留迁移 0016 |
 | 044 | p1-read-only-active-fence-verifier | ✅ 已实现并合入（PR #59） | P1 零迁移 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
-| 045 | weknora-80a5003-continuous-adoption | 🚧 Task 1/2 Code candidate `404e7811` | exact `80a5003` source merge、W1/logger replay 已完成；Task 3 migration bridge、剩余 compatibility、workflow 与 Artifact 仍未完成 |
+| 045 | weknora-80a5003-continuous-adoption | 🚧 Source + bridge + trusted images + digest pin complete；Full Artifact probes open | 上游能力基线 `80a5003`；镜像构建源码 `a8bf55ae...`；当前主线 `529d72c...`；固定 digest 已落地，但 Full Artifact/W1 runtime probes 尚未闭合 |
 | 046+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
@@ -83,33 +83,28 @@
 > 实际 head**；不允许产生 multi-head；合入后在本表“备注”记录实际链序。
 > 数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 当前可执行入口（2026-07-28）
+## 当前可执行入口（2026-07-29 · Mission 0）
 
 当前生产架构工作只以以下入口为准：
 
+- [WeKnora sole serving Active authority ADR](../../docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)；
+- [Enterprise LLM Wiki Authority Amendment 2](../../docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)；
+- [V3 完整设计](../../jlx_enterprise_llm_wiki_complete_728_v3.md)；
+- [V3 MVP handoff](../../mvp_handoff_jlx.md)；
 - [OpenSpec 033](033-production-architecture-reset/)；
-- [已批准生产架构设计](../../docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)；
-- [当前 active execution plan](../../docs/insurance-kb/22-parallel-execution-blueprint.md)；
 - [实时状态与决策板](../../docs/insurance-kb/23-mvp-control-board.md)。
 
-`D0/C0/CAP0/P1/W1/P3/P5a0` 与 P1 active fence 已实现合入；P2d 规格已
-合入但实现只等最小 P3 ACL-inspection authority。当前 Milestone A 仍
-`IN PROGRESS`，B/C `NOT IMPLEMENTED`；不得按 PR 数量推断 MVP 已上线。
+旧 2026-07-21/24 架构与 22 号并行蓝图只保留历史审计价值；凡与
+Amendment 2 冲突的 Postgres Active→Outbox→Projector serving authority
+均不再授权执行。当前唯一主航道为先完成 S0-R/S0-Q 证伪，再按需改接第一条
+真实纵切；不得按 PR 数量推断 MVP 已上线。
 
-WeKnora 官方稳定版为
-[`v0.7.1@c64a4864`](https://github.com/Tencent/WeKnora/releases/tag/v0.7.1)，
-但用户要求的单页 history/diff/manual edit/revert 位于其后官方 mainline
-snapshot `80a5003cc99a427098afe184eee6601916d3d156`
-（tree `18fcf68e7a008ce69929e32233f0b6914040c223`，相对 v0.7.1 +17 commits /
-122 paths，含官方 `000075_wiki_page_revisions`）。045 固定该 exact identity，
-不得漂移到 mutable upstream main。Code candidate 的 source tree/VERSION 已到
-`80a5003`/v0.7.1，local-live source lock/runtime 仍为
-v0.6.3/`5eefa70e`。runtime 采用前仍必须解决 upstream 与 W1 同占 `000066`
-并重建受信制品；不得只改版本号或把上游
-scoped/platform key 能力直接冒充 043 ACL blocker 已解除。
-在 migration-state/namespace 或兼容桥方案获批且 upstream-tag collision CI
-落地前，禁止新增 project-owned WeKnora migration，禁止静默重命名/删除
-legacy W1 `000066`，也禁止覆盖 upstream `000066`。
+045 的精确身份必须分层表达：上游功能基线为
+`80a5003cc99a427098afe184eee6601916d3d156`；可信镜像构建源码为
+`a8bf55ae18441abd380e594afba5000c51cc9633`（已包含 `80a5003`）；Mission 0
+启动时项目主线为 `529d72c994369750b26e352a70fd6284e8b0fd9d`，其中包含后续
+digest 固定与状态更新。当前运行身份以固定 digest 为准；Full Artifact/W1
+runtime probes 仍未闭合，不能写成完整 runtime adoption 已验收。
 
 PR custody（2026-07-28 状态同步前 open PR/issue 均为 `0`）：
 
@@ -119,10 +114,9 @@ PR custody（2026-07-28 状态同步前 open PR/issue 均为 `0`）：
   `archive/pr44-p1-job-outbox-20260727-a6cdc9ae`，**零代码合入**；批准的
   P1 内容由 PR #53 以独立 Git 身份重落地并已合入。
 - 旧 PR #26/#28/#33 已关闭，仅保留历史审计价值。
-- 下一轮建议两开发 lane：Lane A 从独立 Task 3 migration bridge 开始，再做
-  剩余 compatibility 与 trusted images/Artifact，之后裁剪 P3
-  ACL-inspection authority；Lane B 做 P5a1；第三 lane 只读
-  review/integration。所有功能开工仍须单独 Mission Card。
+- 下一步只允许 S0-R 与 S0-Q 两条证伪 lane；双 PASS 后也只改接第一条真实纵切
+  所调用的入口。P2d、P5a1、legacy 清理、通用 Release Kernel 与额外 migration
+  均不得从 Mission 0 自动获得开工授权。
 
 ## SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE · 旧并行开工基线（2026-07-21）
 
