@@ -53,7 +53,9 @@
 | 043 | p2d-space-security-boundary | `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R` | 保留 Space/principal/epoch/ACL、跨 Space 拒绝与失败零写；`wiki_projector`、旧投影和新 Release principal/binding 协议不得原样复用；实现预留迁移 0016 |
 | 044 | p1-read-only-active-fence-verifier | ✅ 已实现并合入（PR #59） | P1 零迁移 follow-up；只读 current row + DB clock 验证 Space/job/generation/running/attempt/unexpired lease；不续租、不推进状态、不写 Outbox |
 | 045 | weknora-80a5003-continuous-adoption | 🚧 Source + bridge + trusted images + digest pin complete；Full Artifact probes open | 上游能力基线 `80a5003`；镜像构建源码 `a8bf55ae...`；当前主线 `529d72c...`；固定 digest 已落地，但 Full Artifact/W1 runtime probes 尚未闭合 |
-| 046+ | （空闲） | | 先占号再开目录 |
+| 046 | weknora-release-capability-falsification | `SPEC + MISSION CARD / IMPLEMENTATION NOT STARTED` | 80a5003 capability gap + 两工作日 S0-R 二元证伪合同；不实现 Release Kernel |
+| 047 | s0q-quality-feasibility | `SPEC + MISSION CARD / BLOCKED_ON_INPUT` | 缺少真实冻结的 WeKnora/W1 parsed artifact 输入；不得用人工清洗 Markdown 代替 |
+| 048+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
