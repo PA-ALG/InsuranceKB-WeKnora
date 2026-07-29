@@ -1,12 +1,17 @@
 # 046 · Validation report
 
-> S0-R 执行身份：base/head/origin-main
-> `35c3391412054d5050d9c76ab5aa535165188202`，独立 worktree clean。
+> S0-R 第一轮身份：base/head/origin-main
+> `35c3391412054d5050d9c76ab5aa535165188202`。
 >
-> 二元终态：`RELEASE_PATH_NOT_FEASIBLE`。Owner 只读预算核验与独立接口审查
+> Amendment A 后第二轮身份：base/head/origin-main
+> `54923501fb75165b2272945ff1f7953150715820`，全新独立 worktree clean。
+>
+> 最终二元终态：`RELEASE_PATH_NOT_FEASIBLE`。第一轮只读预算核验与独立接口审查
 > 确认同一 `BLOCKER`：安全生产接线需要 Mission Card 外第 11 路径
-> `internal/router/router.go`。按 R0.2 在 RED 前停止，未实现 S0-R 或生产
-> Release Kernel。
+> `internal/router/router.go`；048 加入该路径后，第二轮可执行性审查又确认
+> enterprise `000002` 会先执行到 version `2`，再被现有 frozen-head 校验拒绝
+> 完成生产 migration phase，修复至少需要第 12 个生产路径。两轮均按 R0.2
+> 在 RED 前停止，未实现 S0-R 或生产 Release Kernel。
 
 ## S0-R 二元裁决证据
 
@@ -34,10 +39,35 @@
 - 脱离既有 RBAC/API-key gate 注册旁路 route：不能证明当前 principal、双 ACL
   shrink 或 managed write guard。
 
-enterprise `000002` 单一 migration 预算本身无需第二 migration，未构成本次
-阻断。阻断只来自安全生产接线必须增加第 11 实现路径。实际功能 patch、
-测试、migration 和 patch-inventory 变更均为零，也没有形成 Harness 第二
-serving Head 或任何实验 Head。
+第一轮关于 enterprise `000002` “未构成阻断”的结论只表示当时未进入 runner
+head 审查，已被下述第二轮 exact 证据取代。
+
+## Amendment A 后第二轮裁决证据
+
+- `internal/database/enterprise_migration.go:236-256` 的
+  `validatePostgresMigrationSetVersion` 对 enterprise source 把 expected head
+  固定为 `1`；`runPostgresMigrationSet` 会先执行 `migrator.Up()` 并读取最终
+  version，随后才调用该校验。新增 `000002` 后 schema/ledger 会先到 version
+  `2`，再返回 `MigrationSafetyError`；enterprise 分支不会自动 force 或回滚；
+- `internal/database/legacy_w1_bridge.go:975-978` 把存在且不为 `-1`/`1` 的
+  enterprise ledger 归为 unknown origin，`1015-1022` 也只承认 version `1`
+  为 bridged/current；
+- `internal/database/legacy_w1_bridge_test.go:1098-1120` 明确把 enterprise
+  version `2` 作为应失败 case，`1295-1304` 的真实 PostgreSQL matrix 又断言
+  current enterprise version 必须为 `1`；
+- 因此获批的 `000002` 无法成功完成当前生产迁移阶段，而且真实执行会形成
+  “schema/ledger 已到 2、startup 返回失败”的状态。最小修复已经需要 048
+  十一条之外的 `internal/database/enterprise_migration.go`，并继续要求修改
+  `internal/database/legacy_w1_bridge.go` 与
+  `internal/database/legacy_w1_bridge_test.go`；
+- 048 明确规定任何第 12 路径立即再次输出
+  `RELEASE_PATH_NOT_FEASIBLE`，且不得继续追加修订，因此未创建 migration、
+  RED、Release types/service/handler/router patch 或测试。
+
+两轮累计实际功能 patch、测试、migration 和 patch-inventory 变更均为零，
+没有形成 Harness 第二 serving Head 或任何实验 Head。签名算法、双 ACL
+black-box fixture 与 HTTP route test 结构均未进入实现，不能据此写 PASS 或
+进一步失败结论。
 
 ## 已复核静态事实
 
@@ -56,9 +86,12 @@ serving Head 或任何实验 Head。
 
 ## 文档门禁
 
-- pre-change baseline
+- 第一轮 pre-change baseline
   `go test ./internal/application/service ./internal/handler`：`PASS`，exit 0；
-- S0-R 新 focused tests：`NOT RUN`，在 RED 前触发预算停线；
+- 第二轮 implementation-plan 独立可执行性 review：`ISSUES FOUND`，上述
+  enterprise head 固定值为直接 `BLOCKER`；
+- 第二轮 Go baseline 与 S0-R 新 focused tests：`NOT RUN`，在 RED 前触发
+  第 12 路径停线；
 - PostgreSQL 16 targeted migration/fixture：`NOT RUN`；
 - touched-package `go vet`：`NOT RUN`；
 - 045 finite adoption check：`NOT RUN`；
