@@ -1,6 +1,6 @@
 # S0-R Release falsification Mission Card
 
-> 状态：`CANDIDATE FOR USER APPROVAL / IMPLEMENTATION NOT STARTED`
+> 状态：`FIRST RUN NOT_FEASIBLE / AMENDMENT A SPEC REVIEW PENDING`
 >
 > 时限：输入身份与专用环境就绪后，最多两个工作日。
 
@@ -20,7 +20,7 @@
 - 依赖：046 Spec Approved；不依赖 S0-Q 结果、P2d 实现、provider 或生产部署；
 - 预计：一个 Draft PR；两工作日内给出二元终态。
 
-## 冻结 patch budget
+## 第一轮冻结 patch budget（历史结果）
 
 实现只可触及以下 exact production/migration paths：
 
@@ -44,6 +44,33 @@
 任何第三个测试文件、额外生产路径、前端、Harness、official migration、
 workflow、principal 或通用索引框架需求都超预算，直接输出
 `RELEASE_PATH_NOT_FEASIBLE`，不在计时中扩面。
+
+第一轮在 RED 前确认：要把新 Release handler 安全接入现有 RBAC/API-key
+authority 与普通 Wiki PUT/DELETE guard，必须修改未列入上述预算的
+`internal/router/router.go`。该轮已按合同输出
+`RELEASE_PATH_NOT_FEASIBLE`，没有实现功能、测试或 migration。
+
+## Amendment A 候选预算
+
+OpenSpec 048 只提议在上述十个路径之外增加：
+
+11. `internal/router/router.go`
+
+该路径仅用于：
+
+- 向 `RouterParams` 显式注入 `WikiReleaseHandler`；
+- 在既有 `/api/v1` RBAC/API-key authority 下调用 release-aware Wiki 路由注册；
+- 保持既有 `RegisterWikiPageRoutes` 签名可用，在已授权的
+  `routes_knowledge.go` 内增加 production-only 严格 wrapper，避免修改现有
+  `router_wiki_test.go` 形成第 12 路径；
+- 不改变现有普通 Wiki route 的 principal 语义。
+
+其余 patch、表/索引、migration、read/write surface、fixture 与命令预算全部
+不变。任何第 12 个生产/测试路径、第二 migration、全局 service locator、
+隐藏 `init` 接线或权限旁路仍立即输出 `RELEASE_PATH_NOT_FEASIBLE`。
+
+只有 OpenSpec 048 合入且书面规格复核通过后，才可从当时最新 `origin/main`
+建立新 worktree 重新开始 RED；不得复用第一轮未产生的实现状态。
 
 ## 冻结物理预算
 
@@ -73,7 +100,9 @@ Active Head。表名是实验预算，不代表生产 schema 已获批准。
 - receipt 的 exact-idempotent retry read。
 
 不做 rollback API、Proposal UI、MCP、通用 query DSL、全量 Agent retrieval、
-Evidence UI 或生产 Handler 注册。
+Evidence UI、真实生产 Space 启用或部署。隔离 S0-R HTTP handler 仍必须接入
+现有 production router/RBAC chain；该接线只构成载体可行性证据，不得宣称
+生产 Release 能力已交付。
 
 ## 暂定 PublishAuthorizationV0
 
