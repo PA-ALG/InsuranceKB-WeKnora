@@ -1,5 +1,11 @@
 # 045 · WeKnora Immutable Upstream Thin Adoption Design
 
+> [!IMPORTANT]
+> 2026-07-29 状态：upstream `80a5003...`、image build source
+> `a8bf55ae...`、current main `529d72c...`；source adoption、migration bridge、
+> trusted images 与 digest pin 已完成。Full Artifact/W1 runtime probes 与
+> `source_reader` authority 仍未闭合。
+
 ## 1. 目标
 
 045 采用一条薄升级轨道：

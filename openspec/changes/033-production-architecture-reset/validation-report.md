@@ -1,5 +1,50 @@
 # 033 D0 Validation Report
 
+## 2026-07-29 Mission 0 · Authority Amendment 2
+
+> 状态：`LOCAL GOVERNANCE CANDIDATE GREEN / INDEPENDENT SPEC + QUALITY APPROVED`
+>
+> 本节优先于下方历史 D0-S1 报告。下方旧 PostgreSQL serving authority、
+> Projector 与 P11/P12 结论只保留审计价值。
+
+### Identity 与范围
+
+- base/HEAD：`529d72c994369750b26e352a70fd6284e8b0fd9d`
+- branch：`codex/v3-governance-mission0`
+- worktree：`.worktrees/v3-governance-mission0`
+- delta：29 个 Markdown/治理路径（24 modified + 5 added）
+- 功能源码、migration、workflow、deployment lock、principal：零修改
+- commit/push/PR：`NOT RUN`
+
+### 治理结论
+
+1. 正式线上知识只有一个 serving Active Release authority；WeKnora carrier
+   为 `ACCEPTED_CONDITIONALLY`，Harness 不保存第二个 serving Head。
+2. 旧 PostgreSQL Active→Outbox→Projector 路线保留 history-only，不授权实现，
+   legacy 按首个纵切真实调用改接，物理清理后置。
+3. 043 保留 Space/principal/epoch/ACL/跨 Space/失败零写安全合同，但为
+   `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`；migration 0016 不创建。
+4. 045 分离 upstream `80a5003...`、trusted build source `a8bf55ae...` 与
+   current main `529d72c...`；source/bridge/images/digest pin complete，
+   Full Artifact/W1 runtime probes open。
+5. S0-R 是输入就绪后的两工作日二元证伪窗口；S0-Q 只接受 WeKnora/W1 冻结
+   解析制品；MVP 单 RAW/Wiki cardinality 不是永久企业不变量。
+
+### 门禁
+
+- `git diff --check`：PASS
+- `openspec validate 033-production-architecture-reset --strict`：PASS
+- `openspec validate 043-p2d-space-security-boundary --strict`：PASS
+- `openspec validate 045-weknora-80a5003-continuous-adoption --strict`：PASS
+- stale authority scan：当前入口无未限定的旧 serving/Projector 授权；历史正文
+  均有 prominent superseded/history-only notice
+- OpenSpec CLI PostHog telemetry：网络 flush 失败，不影响本地 validation PASS
+- baseline `openspec validate --all --strict`：31 PASS / 12 个既存历史 change
+  FAIL；Mission 0 不扩面修复
+- full/provider/live/PostgreSQL/harness tests：`NOT RUN`（docs-only，按范围）
+
+---
+
 > 阶段：D0-S1 governance rewrite whole-candidate
 >
 > 状态：CORRECTIVE GREEN / PENDING FRESH WHOLE-CANDIDATE INDEPENDENT REVIEW。

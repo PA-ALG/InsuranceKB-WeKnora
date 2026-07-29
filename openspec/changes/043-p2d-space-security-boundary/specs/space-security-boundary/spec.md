@@ -2,6 +2,13 @@
 
 > 本 change 为 spec-only。它只冻结 Space、RAW/Wiki ACL 与 current binding 的
 > 基础边界，不表示实现依赖已满足。
+>
+> **2026-07-29 Amendment 2**：本规格状态为
+> `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`。Space/principal
+> fail-closed、binding epoch、ACL、跨 Space、ABA/concurrency 与失败零写合同
+> 继续有效；正文中的 `wiki_projector`、单 RAW/Wiki projection binding 与旧
+> 发布语义只作待修订输入，不授权实现或 migration。S0-R PASS 后必须以已验证
+> 合同形成 043 Amendment。
 
 ## ADDED Requirements
 

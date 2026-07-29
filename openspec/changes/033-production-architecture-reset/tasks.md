@@ -1,5 +1,23 @@
 # 033 任务（D0，治理文档；无功能代码）
 
+> [!WARNING]
+> 2026-07-29 Amendment 2 已取代本 change 的 PostgreSQL Active +
+> WeKnora Projector 执行方向。既有 checkbox 是历史 D0 证据；不得据此实现
+> P11/P12 或旧 Projector。Mission 0 只更新治理权威，零功能代码、零 migration。
+>
+## D0-M0 · V3 authority Amendment 2
+
+- [x] M0.1 纳入 728 V3 与新会话 handoff，记录 2026-07-29 current identity。
+- [x] M0.2 创建 Sole Serving Active Release Authority ADR，状态
+  `ACCEPTED_CONDITIONALLY`。
+- [x] M0.3 创建 Amendment 2，取代 PostgreSQL Active + Projector 执行方向，
+  保留旧正文作 history-only。
+- [x] M0.4 更新 AGENTS/CLAUDE、北极星、生产设计、overview、roadmap、
+  execution blueprint、control board 与 legacy disposition 的优先级。
+- [x] M0.5 校正 043/045 与 OpenSpec 注册表状态。
+- [x] M0.6 strict 验证 033/043/045、diff-check、stale authority scan 与零功能/
+  migration/workflow/deployment-lock scope。
+
 ## D0-S0 · pre-implementation spec candidate
 
 - [x] T0 从执行时 exact `origin/main` 创建唯一隔离 worktree，验证 `.worktrees`

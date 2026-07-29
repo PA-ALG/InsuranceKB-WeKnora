@@ -1,17 +1,42 @@
 # Enterprise LLM Wiki 项目指令
 
 本仓库的产品本体是 **Enterprise LLM Wiki**。WeKnora 提供企业平台、权限、
-上传、解析、检索和 Wiki 载体；Python Harness 负责编译、治理、Release 与
-Active Query。应用知识权威是 PostgreSQL 中不可变 WikiRelease 及
-`Space.active_release_id + activation_epoch`，WeKnora managed Wiki 是带
-epoch fencing、可重建的投影。
+上传、解析、检索和 Wiki 载体；Python Harness 负责寿险语义编译、治理、
+Candidate、审核与发布授权。正式线上知识只有一个 serving Active Release
+authority；当前条件接受 WeKnora 承载该 Active Head。Harness 不保存第二个
+serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只作
+冻结审计，不构成当前实现授权。
 
 任何任务开始前必须依次阅读：
 
-1. `docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md`
-2. `docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md`
-3. `HANDOFF.md` 的当前状态块
-4. 对应的 `openspec/changes/<NNN>/`
+1. `docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md`
+2. `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
+3. `jlx_enterprise_llm_wiki_complete_728_v3.md` 的 `§M0` 与当前任务相关章节；
+   只有总体架构评审才要求阅读全文
+4. `HANDOFF.md` 的最顶部当前状态块
+5. 对应的 `openspec/changes/<NNN>/`
+
+2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
+弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、
+P11/P12 Projector 与 fenced projection 执行方向已经 superseded。
+
+当前唯一开发顺序：
+
+```text
+Mission 0
+├── 80a5003 Release capability gap matrix → S0-R
+└── S0-Q 立即并行
+           ↓
+S0-R PASS AND S0-Q PASS
+           ↓
+MVP 纵向闭环；legacy 仅按需改接，物理清理后置
+```
+
+S0-R 是输入就绪后的两工作日证伪窗口，不是生产 Kernel 交付承诺；S0-Q 必须
+消费 WeKnora/W1 冻结解析制品，禁止人工清洗 Markdown。MVP profile 暂定
+`1 Space = 1 RAW KB + 1 release-managed Wiki KB`，不是永久企业不变量。
+OpenSpec 043 为 `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`，不得按旧
+`wiki_projector` 语义原样实现。
 
 ## MVP 主航道协作
 
@@ -72,10 +97,12 @@ reviewer 可在 30 分钟内理解；超出时拆分，或重新取得用户批�
   审核和补编；缺少已发布知识时返回不足或请求补充条件。
 - Harness 与 WeKnora 仅通过版本化 REST 和 Source lifecycle event 集成，不
   共享数据库、Redis/Asynq 或队列。MCP 仅是后续 Active Query 消费者适配器。
-- WeKnora 改动只允许 planned inventory 中的 W1/P11/P13/P14，在各自
-  Contract Card 和预算内实施；不得产生未登记补丁。
-- Wiki、Evidence、Conflict、版本、不可变 Release、回滚、当前 ACL 与
-  PostgreSQL CAS/Outbox 是生产闭环不可省略的合同。
+- WeKnora 新改动必须来自 S0-R capability gap、独立 OpenSpec/Mission Card
+  和有界 patch budget；旧 P11/P12 Projector 编号不再自动授权，W1 只保留
+  已交付合同。
+- Wiki、Evidence、Conflict、版本、不可变 Release、回滚、当前 ACL 与单一
+  serving Active Head 是生产闭环不可省略的合同。PostgreSQL Job Store/Outbox
+  继续服务任务可靠性，但不得形成第二个 Release serving pointer。
 - 第一方 `LLM-wiki-black` 资产只作为迁移来源；保险领域生产逻辑统一收敛到
   Python 3.12 Harness。第三方资产继续按各自许可证管理。
 

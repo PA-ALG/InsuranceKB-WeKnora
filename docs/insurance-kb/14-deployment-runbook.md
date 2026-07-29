@@ -1,10 +1,18 @@
 # 14 · 生产部署与联调 Runbook
 
-> 状态：D0 治理合同已冻结；本章描述目标生产合同，不表示 API、Worker、表、
-> migration、WeKnora patch 或上线环境已经实现。
+> [!WARNING]
+> **SUPERSEDED / HISTORY-ONLY — NOT EXECUTABLE（2026-07-29）**
 >
-> 权威设计：
-> [`2026-07-24 Enterprise LLM Wiki 近期生产架构重置`](../superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md)。
+> 本章的 PostgreSQL Active→Outbox→Projector 拓扑已被
+> [`Authority Amendment 2`](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 取代，不再授权实施。当前只允许 Mission 0 后的 S0-R/S0-Q 证伪；正式部署
+> Runbook 必须等载体、权限、激活与 Artifact 合同冻结后另行修订。以下正文保留
+> 作历史验收清单，不表示 API、Worker、表、migration、WeKnora patch 或上线
+> 环境已经实现。
+>
+> 当前权威：
+> [`Sole Serving Active Authority ADR`](../superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
+> 与 [`Authority Amendment 2`](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)。
 
 ## 1. 目标拓扑
 

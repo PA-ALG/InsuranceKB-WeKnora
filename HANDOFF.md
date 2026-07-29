@@ -3,6 +3,78 @@
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
 >
 > [!IMPORTANT]
+> **2026-07-29 Mission 0 · 当前唯一执行权威**
+>
+> - 单一 serving Active Release authority：`ACCEPTED`；
+> - WeKnora 作为 authority carrier：`ACCEPTED_CONDITIONALLY`；
+> - Harness 保留语义编译、Candidate、审核与 PublishAuthorization 权威，但无
+>   第二个 serving Active Head；
+> - upstream capability：
+>   `80a5003cc99a427098afe184eee6601916d3d156`；
+> - trusted image build source：
+>   `a8bf55ae18441abd380e594afba5000c51cc9633`；
+> - 当前 main：
+>   `529d72c994369750b26e352a70fd6284e8b0fd9d`；
+> - source adoption、legacy `000066` bridge、trusted images 与 digest pin：
+>   `COMPLETE`；
+> - Full Artifact/W1 runtime probes：`OPEN`；
+> - `source_reader` authority：`BLOCKED`。
+>
+> 唯一下一步是 Mission 0 治理纠偏，同时启动 S0-Q，并基于已采用的 `80a5003`
+> 填 Release capability gap matrix 后进入 S0-R。只有 S0-R 与 S0-Q 都 PASS
+> 才进入 MVP。不存在前置的全量 legacy 重接线或清理 Mission。
+>
+> OpenSpec 043 保留 Space/principal/epoch/ACL/跨 Space/失败零写合同，但状态为
+> `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`；不得按旧 `wiki_projector`
+> 语义原样实现。MVP cardinality 固定 `1 RAW KB + 1 release-managed Wiki KB`，
+> 但不是永久企业不变量。S0-R 两工作日只作证伪；S0-Q 禁止用人工清洗 Markdown
+> 绕过 WeKnora/W1 冻结解析输入。
+>
+> 当前执行文档：
+> [Sole Serving Active Release Authority ADR](docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)、
+> [Authority Amendment 2](docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)、
+> [728 v3](jlx_enterprise_llm_wiki_complete_728_v3.md)。
+>
+> 下方 2026-07-28 及更早状态保留作历史证据；与本块冲突时不构成实现授权。
+>
+> [!IMPORTANT]
+> **2026-07-28 JLX 728 v3 架构复评入口（当前讨论权威）：**
+> [728 v3 完整合订本](jlx_enterprise_llm_wiki_complete_728_v3.md) 已吸收
+> v2、Codex 第一性原理复评及 Web GPT 复评共识。它是当前方案评审和下一轮
+> OpenSpec/ADR 起草的首要输入；下方旧控制板与代码事实保留作历史证据，不能覆盖
+> v3 的架构裁决。
+>
+> v3 当前状态：
+>
+> - 单一 Active Release 权威原则：`ACCEPTED`；
+> - WeKnora 作为权威载体：`ACCEPTED_CONDITIONALLY`；
+> - Release Kernel 物理设计：等待 `v0.7.1/c64a486` 与 `80a5003` 双基线能力矩阵；
+> - 发布可行性：等待 S0-R；
+> - 知识编译可行性：等待 S0-Q；
+> - MVP-728 集成：只有 S0-R 与 S0-Q 都 PASS 后才可启动。
+>
+> ADR 应立即写为 `Accepted Conditionally`，不是等实验完成后再补。MVP 冻结
+> “一个 Space 只绑定一个 release-managed Wiki KB”；Raw KB 可多个。发布与
+> 质量两条验证线不得合并：S0-R 可使用 fixture Candidate，S0-Q 使用 2 份真实
+> 材料与 present/typed-present/absent_explicitly/unknown 四字段。MVP-728 前
+> 必须关闭 v3 定义的 10 条 P0 合同。
+>
+> 本轮只整理方案文档，没有执行升级、实现 Release Kernel、S0-R、S0-Q 或
+> MVP-728，也没有把文档结论冒充代码事实。
+>
+> [!NOTE]
+> **2026-07-28 JLX 总体架构/MVP 会话整理：**
+> 本轮按用户要求保留四份独立文档及一份完整合订本：
+> [总体需求与验收口径](jlx_enterprise_llm_wiki_requirements_728.md)、
+> [MVP + 企业级完整技术方案](jlx_enterprise_llm_wiki_technical_solution_728.md)、
+> [技术难点与核心问题](jlx_enterprise_llm_wiki_challenges_728.md)、
+> [项目交接文档](mvp_handoff_jlx.md)及
+> [完整合订本](jlx_enterprise_llm_wiki_complete_728.md)。
+> 本次交付只整理当前聊天窗口，不是代码 Review；实现事实由后续实施会话另行核验。
+> 外部评审完成并正式修订治理权威前，这五份文件是本轮方案评审入口，不代表
+> OpenSpec 033 已被自动取代。
+>
+> [!IMPORTANT]
 > **当前状态（2026-07-28，WeKnora Code gate 已闭合，Artifact 施工中）**
 >
 > **代码事实截止点**：`origin/main=e40394572a37582ad6ebe33333ae0be61918b37e`；

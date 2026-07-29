@@ -1,9 +1,16 @@
 # 22 · 生产架构小 PR 并行执行蓝图
 
+> [!WARNING]
+> **SUPERSEDED EXECUTION DAG（2026-07-29）**：本文原 D0→Milestone A/B/C、
+> P11/P12 Projector ownership 与 PostgreSQL Active 路线只作历史证据。当前
+> active execution plan 是 Mission 0 → `80a5003` capability gap/S0-Q →
+> S0-R → 双 PASS → MVP 纵切；legacy 只按真实调用改接，物理清理后置。详见
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)。
+>
 > 状态：D0 governance rewrite。后续窗口仅为 planned ownership，不代表已经
 > 实现或可运行。
 >
-> 本文件是当前 **active execution plan**；实时状态、阻塞与裁决只记录在
+> 本文件不再是当前 active execution plan；实时状态、阻塞与裁决只记录在
 > [23 · MVP 控制板](23-mvp-control-board.md)。任何实现窗口必须同时满足本计划
 > 的依赖/文件域和控制板的当前放行状态；每个小 PR 在 Ready/merge 前必须完成
 > 对应门禁及独立 Spec/Quality review，不能从旧分支或历史控制板反推授权。

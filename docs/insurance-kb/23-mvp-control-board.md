@@ -1,53 +1,68 @@
 # 23 · Enterprise LLM Wiki 生产架构控制板
 
-> 当前代码事实截止点（截至 2026-07-28）：
-> `main=d1c1b3ac2d5aed0fa25134ca6551a137004dbfbc`。
-> 用户已于 2026-07-26 书面批准生产架构设计；本控制板严格区分
+> 当前代码事实截止点（截至 2026-07-29）：
+> `main=529d72c994369750b26e352a70fd6284e8b0fd9d`。
+> 用户已批准 728 V3、Sole Serving Active Release Authority ADR 与 Amendment
+> 2；本控制板严格区分
 > `MERGED`、规格完成、draft、校准证据与生产上线，不把 planned 项写成已交付。
 >
-> PR #53/#55/#56/#57/#58/#59 均已合入；截止本次状态同步前 GitHub
-> open PR/issue 均为 `0`。PR #44 仍为 `CLOSED / ARCHIVED / NOT MERGED`，
+> PR #53/#55/#56/#57/#58/#59/#63/#64/#65/#66 均已合入；Mission 0 开工前
+> GitHub open PR 为 `0`。PR #44 仍为 `CLOSED / ARCHIVED / NOT MERGED`，
 > 其经批准的 P1 实现由 PR #53 重落地后合入，不改变归档分支的历史身份。
 
 ## 1. 当前状态
 
 | 项目 | 状态 | 当前允许动作 |
 |---|---|---|
+| V3 serving authority | ✅ 原则 `ACCEPTED`；WeKnora carrier `ACCEPTED_CONDITIONALLY` | Mission 0；不得恢复双 Active Projector |
+| Mission 0 | 🚧 docs-only 治理纠偏 | ADR/Amendment/状态同步；零功能代码、零 migration |
+| S0-Q | `APPROVED TO START AFTER OPENSPEC/MISSION CARD` | 使用 WeKnora/W1 冻结解析制品；禁止人工清洗文本 |
+| S0-R | `BLOCKED ON 80a5003 CAPABILITY GAP + OWN OPENSPEC` | 输入就绪后两工作日证伪；非生产 Kernel 交付 |
 | D0 + 治理补丁 | ✅ `MERGED`（PR #34/#35/#37） | 维护决策记录 |
 | 知识编译层修正案（Amendment 1） | ✅ `MERGED`（PR #39；业务方 2026-07-27 批准） | 见修正案 §2–§7 |
 | C0 Canonical Envelope | ✅ `MERGED`（PR #36，双独立评审 4 Important 闭合，向量 40+19） | 消费方引用 |
 | P1 Job Store + Outbox | ✅ `IMPLEMENTED / MERGED`（规格 PR #38；实现 PR #53） | 迁移 **0015**；5 条非阻断 follow-up 归 042 |
 | W0 Revision Contract Spike | ✅ `EXECUTED / MERGED`（PR #40，OpenSpec 037）：两份合同均 `insufficient`，W1 正式触发 | 触发结果已由 W1 PR #55 闭合 |
-| W1 WeKnora Revision Manifest | ✅ 源码 `IMPLEMENTED / MERGED`（规格 PR #41；实现 PR #55，OpenSpec 038） | local-live 仍锁 `5eefa70e` 且不含 W1；项目 W1 `000066` 与上游 `000066` 冲突，须由 v0.7.1 adoption Mission 闭合 |
+| W1 WeKnora Revision Manifest | ✅ 源码 `IMPLEMENTED / MERGED`（规格 PR #41；实现 PR #55，OpenSpec 038） | `80a5003` adoption 与 legacy `000066` bridge 已完成；Full Artifact/W1 runtime probes 仍 OPEN |
 | CAP0 Capacity Contract | ✅ `IMPLEMENTED / MERGED`（PR #46；含 stock_backfill 与 declared/measured） | 八项 launch 问卷仍待业务确认 |
 | P3 API/Worker Shell | ✅ `IMPLEMENTED / MERGED`（规格 PR #48；实现 PR #58，OpenSpec 039） | 双角色、principal fail-closed、readiness truth、lease/drain 已交付 |
 | P1 Active Fence Verifier | ✅ `IMPLEMENTED / MERGED`（PR #59，OpenSpec 044） | 只读 DB-clock fence；零状态/Outbox 写 |
 | P5a0 ProductVersion Resolver | ✅ `IMPLEMENTED / MERGED`（PR #56，OpenSpec 041） | 后续 P5a2/G0a 消费 |
-| P2d Space Security Boundary | 规格 ✅ `MERGED`（PR #57，OpenSpec 043）；实现 blocked | 先交付最小 P3 ACL-inspection authority，再实施预留迁移 **0016** |
-| WeKnora upstream v0.7.1 | ✅ 官方稳定版可用（2026-07-24，`c64a4864`）；项目尚未采用 | 当前仍为 v0.6.3/`5eefa70e`；139 commits / 733 paths；先解决 000066、W1 14-path replay 与 KB-scoped source_reader 权限缺口；新 project-owned WeKnora migration 暂停占号 |
+| P2d Space Security Boundary | 规格 ✅ `MERGED`（PR #57，OpenSpec 043）；`SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R` | 保留 Space/principal/epoch/ACL/跨 Space/零写；不得按旧 `wiki_projector` 语义实现或创建 0016 |
+| WeKnora `80a5003` adoption | ✅ source/bridge/images/digest pin complete | upstream=`80a5003`；build source=`a8bf55ae...`；Full Artifact probes OPEN，source_reader BLOCKED |
 | G0-probe 弱模型探针 | ✅ `COMPLETED`（PR #45 证据；校准专用） | 只校准 G0a，不构成 G0a/G0b 验收证据 |
 | Schema 切片 + 词表 seed | ⚠️ `DRAFT / NON-AUTHORITY`（PR #43 已合入） | 等领域专家与后续 Contract Card 正式冻结 |
 | 金标标注 v0 | ⚠️ `DRAFT / NON-ACCEPTANCE-AUTHORITY`（PR #49 已合入） | 等 G0a 正式 custody、协议和验收冻结 |
 | G0a 金标资产化内核 | 规格 ✅ `MERGED`（PR #42，OpenSpec 040）；`SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 后续实现须独立 TDD/复审；不得称 G0a 已验收或产品已完成 |
 | Repository operational cleanup A1/A2 | ✅ 历史收口已完成；同步 worktree 建立后为 32 records / 31 usable / 18 clean / 13 dirty / 1 prunable | 历史现场保留；未经新授权不清理、不 reset |
-| Milestone A | `IN PROGRESS`（首批地基推进中） | 按修正案 §7 DAG |
-| Milestone B | `NOT IMPLEMENTED` | 等 Semantic Core |
-| Milestone C | `NOT IMPLEMENTED` | 等 Governed Active Release |
+| 旧 Milestone A/B/C | `SUPERSEDED AS EXECUTION DAG / HISTORY-ONLY` | 只作能力盘点；当前按 S0 双门与 MVP 纵切推进 |
 
-启动顺序：
+当前唯一启动顺序：
 
 ```text
-D0 → {C0, W0}
-C0 → CAP0
-then Milestone A → Milestone B → Milestone C
+Mission 0
+├── 80a5003 capability gap matrix → S0-R
+└── S0-Q 立即并行
+           ↓
+S0-R PASS AND S0-Q PASS
+           ↓
+MVP 纵向闭环；legacy 按需改接、物理清理后置
 ```
 
-## 2. D0 完成定义
+## 2. 旧 D0/Milestone 账本（history-only）
+
+> [!WARNING]
+> 本节至第 7 节保留 2026-07-28 前的依赖、能力与验收盘点，不再构成开工顺序、
+> serving authority 或 patch 授权。凡与第 1 节和
+> `D-2026-07-29-1` 冲突，均以 Mission 0 / S0 双门路线为准。
+
+### 历史 D0 完成定义
 
 - 已批准生产设计完整进入仓库，除状态元数据外语义字节一致；
 - AGENTS、CLAUDE、北极星、Runbook、Roadmap 和控制板使用同一生产权威；
-- PostgreSQL Active WikiRelease 是 serving authority；
-- WeKnora managed Wiki 是 fenced、可重建投影；
+- 正式线上知识只有一个 serving Active Release authority；
+- WeKnora 作为 authority carrier 为 `ACCEPTED_CONDITIONALLY`；
+- Harness 不保存第二个 serving Head；
 - `machine_auto | human_batch | hybrid | trusted_import` 均为合法 ReviewPolicy；
 - 原始资料只用于证据、审核和补编；
 - Harness 与 WeKnora 只通过版本化 REST + Source lifecycle event；
@@ -147,6 +162,24 @@ PostgreSQL/live/load，也不宣称任何 Milestone 完成。
 
 > 本节按 22 号蓝图约定记录执行裁决。裁决只澄清执行口径，不修改已批准的
 > 033 设计正文；需要改正文时走下一次设计修订。
+
+### D-2026-07-29-1 · V3 sole serving authority 与 Mission 0
+
+1. 正式线上知识只有一个 serving Active Release authority；WeKnora 作为当前
+   carrier 为 `ACCEPTED_CONDITIONALLY`，Harness 无第二 serving Head。
+2. PostgreSQL Active → Outbox → WeKnora Projector 路线
+   `superseded / history-only`；旧 018 代码、表和 migration 冻结审计，不立即
+   删除。
+3. OpenSpec 043 保留通用安全合同，但必须在 S0-R 后 amendment；预留 migration
+   0016 不得提前创建。
+4. MVP profile 固定 `1 RAW KB + 1 release-managed Wiki KB`，不是永久企业
+   cardinality。
+5. S0-R 是输入就绪后的两工作日二元证伪窗口；S0-Q 必须使用 WeKnora/W1 冻结
+   解析制品。
+6. 045 exact identities 分离：upstream `80a5003...`、image build source
+   `a8bf55ae...`、current main `529d72c...`；digest pin 不等于 Full Artifact
+   closure。
+7. S0 双 PASS 后只按首个纵切真实调用改接，legacy 物理清理留到 MVP 后。
 
 ### D-2026-07-28-20 · #53/#55–#59 集成完成与下一轮主航道
 

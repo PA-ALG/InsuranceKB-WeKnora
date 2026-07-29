@@ -1,5 +1,13 @@
 # 033 · Production Architecture Reset
 
+> [!WARNING]
+> **AMENDMENT 2 ACTIVE（2026-07-29）**：本 change 中 PostgreSQL serving
+> authority、Outbox Projector、P11 epoch-fenced projection 与 P12 Projector
+> 路线已被
+> `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
+> 取代。旧正文保留作 D0 历史证据，不授权实现。当前唯一硬原则是单一 serving
+> Active Release；WeKnora 作为载体为 `ACCEPTED_CONDITIONALLY`。
+>
 > 状态：D0 实施，pre-implementation spec candidate；用户于 2026-07-26
 > 最终书面批准生产架构重置方向。本阶段只冻结 OpenSpec 与 planned patch
 > inventory，等待独立 Spec Approved 后才进入治理文档改写。

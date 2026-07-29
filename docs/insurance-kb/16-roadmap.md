@@ -1,5 +1,11 @@
 # 16 · Enterprise LLM Wiki 近期生产 Roadmap
 
+> [!WARNING]
+> **2026-07-29 路线修订**：以下旧 D0/Milestone DAG 保留作历史规划，不再授权
+> PostgreSQL Active + WeKnora Projector。当前唯一顺序为 Mission 0 →
+> `80a5003` capability gap/S0-Q → S0-R → 双 PASS → MVP 纵切。详见
+> [Authority Amendment 2](../superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)。
+>
 > 状态：用户于 2026-07-26 书面批准生产架构重置；D0 实施中。除 D0 文档外，
 > 本路线所有功能、migration、provider 运行和上线能力均为
 > `planned / not implemented`。
@@ -39,8 +45,9 @@ applicability、conflict 和 security boundary 的知识 IR。
 
 ## 3. Milestone B — Governed Active Release
 
-目标：证明合格知识可按 Space 策略审核、在 PostgreSQL 原子发布，并通过固定
-Release 查询和回滚。
+> **HISTORY-ONLY**：本节原目标中的 PostgreSQL 原子 Active 已被 Amendment 2
+> 取代。目标态改为 Harness 授权、WeKnora 原子激活唯一 serving Head，并通过
+> 固定 Release 查询和回滚。
 
 主要小 PR：
 

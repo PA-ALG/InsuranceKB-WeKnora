@@ -1,5 +1,16 @@
 # Enterprise LLM Wiki 近期生产架构重置设计
 
+> [!WARNING]
+> **SERVING AUTHORITY 部分已被 2026-07-29 Amendment 2 取代。**
+> 本文关于 PostgreSQL `Space.active_release_id + activation_epoch`、Outbox
+> Projector、managed-page fenced projection 及 P11/P12 的执行授权仅作历史证据。
+> 当前执行以
+> [Sole Serving Active Release Authority ADR](2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
+> 和
+> [Authority Amendment 2](2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 为准。本文的 Enterprise LLM Wiki 产品目标、Evidence/Conflict、弱模型、
+> Candidate 批审、不可变 Release 和过程护栏仍保留。
+>
 > 日期：2026-07-24
 >
 > 状态：用户最终书面批准 2026-07-26；当前阶段 D0 实施（批准前独立 Spec、Security、Delivery/YAGNI 复核均为 C0/I0/M0）

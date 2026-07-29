@@ -1,5 +1,11 @@
 # 043 Validation Report
 
+> [!IMPORTANT]
+> **2026-07-29 status override**：
+> `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`。本报告证明原 PR #57 的
+> Space/ACL/epoch/跨 Space/失败零写规格质量，不批准其旧
+> `wiki_projector`/projection binding 进入实现，也不批准 migration 0016。
+
 ## Candidate
 
 - base: `40f3ae9e4b41fab51566c438da08c57d80e3089b`

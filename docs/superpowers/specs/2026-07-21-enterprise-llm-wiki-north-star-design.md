@@ -1,5 +1,15 @@
 # 企业级 LLM Wiki 北极星设计
 
+> [!WARNING]
+> **SERVING AUTHORITY 与 Projector 路线已被 2026-07-29 Amendment 2 取代。**
+> 本文关于 PostgreSQL Active Head、WeKnora 可重建投影、epoch fencing 和
+> Projector reconciliation 的执行授权仅作历史证据。当前执行以
+> [Sole Serving Active Release Authority ADR](2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
+> 和
+> [Authority Amendment 2](2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
+> 为准。产品北极星、Claim/Evidence/Conflict、版本、弱模型和人/Agent 同版目标
+> 继续有效。
+>
 > 状态：**核心产品定义继续有效；近期生产架构已由 2026-07-24 重置设计取代并获用户书面批准（2026-07-26）**
 > 地位：本文保留产品北极星、Evidence/Conflict/version/Release 与弱模型原则；近期生产权威、事务、审核、WeKnora 集成和交付 DAG 以[生产架构重置设计](2026-07-24-enterprise-llm-wiki-production-architecture-design.md)为准。
 > 关联：[项目总览](../../insurance-kb/00-project-overview.md) · [架构基准](../../insurance-kb/02-architecture.md) · [知识模型](../../insurance-kb/03-knowledge-model.md) · [功能继承](../../insurance-kb/09-llm-wiki-feature-migration.md)

@@ -1,18 +1,20 @@
 # 项目约定（所有 AI 编码会话自动加载）
 
 本仓库交付 **Enterprise LLM Wiki**：WeKnora 是企业平台底座，Python 3.12
-Harness 是知识编译与治理运行时，PostgreSQL Active WikiRelease 是应用知识
-权威，WeKnora managed Wiki 是 fenced、可重建投影。
+Harness 是寿险知识编译、治理、Candidate、审核与发布授权运行时。正式线上知识
+只有一个 serving Active Release authority；当前条件接受 WeKnora 承载该
+Active Head，Harness 不保存第二个 serving Head。旧 PostgreSQL Active +
+Projector 路线已 superseded/history-only。
 
 ## 开工前必读
 
-1. `docs/superpowers/specs/2026-07-24-enterprise-llm-wiki-production-architecture-design.md`
-   及其修正案 `docs/superpowers/specs/2026-07-27-enterprise-llm-wiki-knowledge-compilation-amendment.md`
-   （知识编译层交付项、human_batch-first 首发画像、subject_ref=product_version）
-2. `docs/superpowers/specs/2026-07-21-enterprise-llm-wiki-north-star-design.md`
-3. `HANDOFF.md` 当前状态块
-4. 对应 `openspec/changes/<NNN>/`
-5. `docs/insurance-kb/00-project-overview.md`
+1. `docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md`
+2. `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
+3. `jlx_enterprise_llm_wiki_complete_728_v3.md` 的 `§M0` 与当前任务相关章节；
+   只有总体架构评审才要求阅读全文
+4. `HANDOFF.md` 最顶部当前状态块
+5. 对应 `openspec/changes/<NNN>/`
+6. `docs/insurance-kb/00-project-overview.md`
 
 ## 产品与权威边界
 
@@ -32,15 +34,20 @@ Harness 是知识编译与治理运行时，PostgreSQL Active WikiRelease 是应
 - superadmin 只可对 exact CandidateRelease 执行一次性 ReviewDecision 动作；
   不得直接改 active pointer，也不得绕过完整性、Space ACL、
   Provenance/Attestation 或恶意内容与其他安全检查。
-- 发布只由 PostgreSQL 事务完成：重验 Candidate/Decision/base/policy，
-  创建不可变 WikiRelease，CAS 更新 active pointer/epoch，并写 Outbox。
-  Worker/Projector 是 at-least-once，通过幂等、fencing 和 reconciliation
-  收敛。
+- Harness 冻结 Candidate、ReviewDecision 与 PublishAuthorization；目标发布
+  路径由 WeKnora preparation → authorization → atomic activation/CAS 完成。
+  Release Kernel 的物理设计尚未实现，必须先经过 `80a5003` capability gap
+  matrix 与 S0-R，不得恢复 PostgreSQL Active + WeKnora Active 双权威。
 - Harness 只通过版本化 WeKnora REST 与 Source lifecycle event 交互，不读取
   WeKnora DB、Redis/Asynq 或内部队列。MCP 仅映射 Active Query，不承担内部
   集成或发布控制。
-- WeKnora patch 仅允许 machine-readable inventory 中的 W1/P11/P13/P14；
-  新 patch 必须先修改 033 并独立批准。
+- OpenSpec 043 只保留 Space/principal/epoch/ACL/跨 Space/失败零写安全合同，
+  状态为 `SPEC-ONLY / REQUIRES AMENDMENT AFTER S0-R`；旧 `wiki_projector`
+  与单 RAW/Wiki projection binding 不授权直接实现。
+- MVP profile 是 `1 RAW KB + 1 release-managed Wiki KB`；未来多 RAW KB 通过
+  独立规格和 migration 扩展。
+- release-managed 页面拒绝普通 PUT/DELETE。上游单页 history/edit/revert
+  不等于整版 Release，也不授权正式知识绕过 Candidate/Review。
 
 ## 模型、资产与实现边界
 
