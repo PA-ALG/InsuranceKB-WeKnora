@@ -20,7 +20,7 @@ Serving Active Release Authority ADR → Authority Amendment 2 → 适用 OpenSp
 
 ```text
 main:
-b278b71502e7d5e65e63b248648be6685e596d03
+1650f3bb26fd92af554c22f45d7df0a45e29c160
 
 upstream capability:
 80a5003cc99a427098afe184eee6601916d3d156
@@ -48,7 +48,7 @@ c78053113e01355b1b03174d229633f27da2f478
 b278b71502e7d5e65e63b248648be6685e596d03
 
 S0-Q:
-INDEPENDENT GATE / FROZEN PARSED INPUT STILL REQUIRED
+BLOCKED_ON_INPUT / SCHEMA AUTHORITY ADMITTED / FULL GOLDEN NOT FROZEN
 ```
 
 S0-R 第三轮已在隔离 PostgreSQL 16.14 证明：legacy/fresh migration matrix、
@@ -57,6 +57,33 @@ enterprise `000002` up/down/restart、同 base 双 Candidate 单赢家、loser
 active-managed Wiki PUT/DELETE 拒绝。独立 Spec 与 Quality/Delivery review
 均通过，PR #73 已合入。该结果不是生产 Kernel、Artifact、部署或 MVP 完成；
 默认 production signer 仍为空 key map 并 fail closed。
+
+S0-Q 已于 2026-07-30 进入批准的两 PDF 窄切片运行。两份仓库 PDF 的 bytes 与
+SHA-256 均精确匹配，但固定 WeKnora 输入画像所需的百炼 embedding credential
+在创建任何 model/RAW KB/scratch KB/API key/knowledge 之前的一次维度探测返回
+HTTP 401。静态 exact source inspection 还确认 current W1 v1 manifest 只绑定
+text chunk id/index/content，不绑定 S0-Q 所需的 page/block/table-cell identity
+或表格结构 digest。按输入门禁，本轮交付 `BLOCKED_ON_INPUT`：W1 bundle、
+完整 Golden 的四条诊断投影、模型画像和 A–D 均未运行，Harness 弱/强模型
+调用均为零。临时
+fresh stack 与其容器、网络、卷、运行配置目录已精确删除，原有固定 WeKnora
+环境保持健康且未被重置。
+
+业务方原始
+`docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`
+已按 exact bytes 登记，SHA-256=
+`5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`。
+现有目标医疗产品 Golden WIP 覆盖当前 60/60 个可抽取字段（49 个工作簿权威
+字段 + 11 个后续 v1.1 扩展），但仍只是覆盖证据。禁止另建四字段 Golden；
+S0-Q 只从获批完整 Golden 投影四条诊断记录。R2 须等待独立 Golden Mission
+使用 `gpt-5.6-sol` 全字段统一候选生成或复核，完成 Evidence 回验、既定人工
+批准和不可变 artifact identity/digest。
+
+外部配置动作是刷新/替换已批准的百炼 embedding credential。开发侧下一条唯一
+主航道是另行批准一个最小 W1 page/block/table-cell identity +
+table-structure digest 绑定补丁；不建设表格平台。两项就绪后才在同固定镜像、
+同两份 PDF、同隔离 capture 流程重试一次。不要建立通用凭据治理、替代
+embedding、人工清洗文本，也不要提前实现 A–D、Release/Wiki 接线。
 
 当前唯一执行顺序：
 

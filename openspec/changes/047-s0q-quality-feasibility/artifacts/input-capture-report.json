@@ -1,0 +1,92 @@
+{
+  "a_d_matrix": "NOT_RUN",
+  "artifact_kind": "s0q_047_input_capture_report",
+  "artifacts": {
+    "brochure_w1": "NOT_CREATED",
+    "input_manifest": "NOT_CREATED",
+    "terms_w1": "NOT_CREATED"
+  },
+  "bucket": "input_integrity",
+  "capture_phase": "environment_preflight",
+  "identity": {
+    "authoritative_base": "1650f3bb26fd92af554c22f45d7df0a45e29c160",
+    "implementation_parent_head": "83498b7f82a645d54994f15aed7604d23a9a3a28",
+    "implementation_parent_tree": "c7ad4fdc5666d4683ed8b5046cdcd20def90996d"
+  },
+  "input_profile_admission": {
+    "embedding_dimension_probe": {
+      "calls": 1,
+      "result": "HTTP_401"
+    },
+    "model_record": "NOT_CREATED",
+    "raw_knowledge_base": "NOT_CREATED"
+  },
+  "manual_active_correction_seconds": 0,
+  "provider_usage": {
+    "harness_strong_diagnostic_calls": 0,
+    "harness_weak_model_calls": 0,
+    "weknora_embedding_infrastructure_calls": 1
+  },
+  "reason": "Pinned WeKnora input was not admitted: the configured Bailian embedding credential returned HTTP 401 before scratch knowledge-base creation, and the current W1 v1 exact-revision API binds text chunks but no page/block/table-cell identity or table-structure digest.",
+  "runner_started": false,
+  "runtime": {
+    "fresh_isolated_stack": {
+      "health_before_stop": "healthy",
+      "project": "insurancekb-s0q-047"
+    },
+    "images": {
+      "app": {
+        "digest": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+        "health": "healthy"
+      },
+      "docreader": {
+        "digest": "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+        "health": "healthy"
+      },
+      "frontend": {
+        "digest": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+        "health": "healthy"
+      }
+    },
+    "image_build_source": "a8bf55ae18441abd380e594afba5000c51cc9633",
+    "preexisting_stack": {
+      "admin_login": "HTTP_401",
+      "mutation_or_reset_attempted": false,
+      "observation": "Persisted admin identity and the available runtime credential no longer matched."
+    },
+    "upstream_capability": "80a5003cc99a427098afe184eee6601916d3d156"
+  },
+  "scratch": {
+    "api_key": "NOT_CREATED",
+    "knowledge_base_id": null,
+    "knowledge_ids": [],
+    "uploaded_documents": 0
+  },
+  "source_preflight": [
+    {
+      "bytes": 1047811,
+      "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/保险条款.pdf",
+      "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "status": "MATCH"
+    },
+    {
+      "bytes": 492101,
+      "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf",
+      "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "status": "MATCH"
+    }
+  ],
+  "status": "BLOCKED_ON_INPUT",
+  "temporary_environment_cleanup": {
+    "containers": "DELETED",
+    "directory": "DELETED",
+    "network": "DELETED",
+    "volumes": "DELETED"
+  },
+  "w1_contract_preflight": {
+    "current_manifest_binding": "text chunk id/index/content only",
+    "page_or_block_identity": "NOT_EXPOSED_BY_EXACT_REVISION_API",
+    "table_cell_relationships": "NOT_EXPOSED_BY_EXACT_REVISION_API",
+    "table_structure_digest": "NOT_BOUND_BY_W1_V1_MANIFEST"
+  }
+}

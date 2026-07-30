@@ -3,6 +3,30 @@
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
 >
 > [!IMPORTANT]
+> **2026-07-30 · S0-Q Schema authority 已登记，完整 Golden 仍待冻结**
+>
+> - 业务方批准公开入库的原始
+>   `docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`
+>   已保持 exact bytes，SHA-256=
+>   `5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`；
+> - 八张结构化字段表与对应既有 YAML 的字段顺序和规范化五列内容一致；原始
+>   空白/换行以 exact XLSX 为准；工作簿嵌入截图是字段定位、表格列、条件和
+>   计划层级的有权标注指导，不是具体产品答案；
+> - 现有目标医疗产品 Golden WIP 已覆盖当前 60/60 个可抽取字段，其中 49 个
+>   来自本工作簿、11 个来自后续 v1.1 扩展；这只证明覆盖，不构成冻结或批准；
+> - 不建立四字段 Golden。S0-Q 只从同一获批完整产品 Golden 投影
+>   `产品特色/免赔额/保证续保/宽限期` 四条诊断记录；
+> - R2 保持未完成。下一条独立 Golden Mission 应由 `gpt-5.6-sol` 对全部
+>   60 字段统一生成候选或复核，完成 Evidence 回验、既定人工批准和不可变
+>   artifact identity/digest；
+> - 本次仅登记 Schema 权威和复用合同，模型调用/A–D=`NOT RUN`。S0-Q 仍为
+>   `BLOCKED_ON_INPUT`，原 W1 page/block/table-cell/table-structure 与
+>   embedding credential 阻断均未被掩盖。
+>
+> 本块优先于下方旧“Seed Golden”表述；旧表述只代表四条诊断类别，不授权另建
+> 四字段金标。
+>
+> [!IMPORTANT]
 > **2026-07-30 · S0-R 第三轮已合入**
 >
 > - authoritative main：
