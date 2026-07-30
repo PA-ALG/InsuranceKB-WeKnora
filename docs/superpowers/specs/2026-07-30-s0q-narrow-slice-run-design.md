@@ -3,8 +3,8 @@
 ## Status and decision
 
 This design is the execution follow-up to OpenSpec 047. It keeps S0-Q narrow:
-two real source PDFs, one ProductVersion, four Seed Golden fields, and one
-binary feasibility verdict.
+two real source PDFs, one ProductVersion, four diagnostic records projected
+from the approved full product Golden, and one binary feasibility verdict.
 
 The approved processing order is:
 
@@ -40,6 +40,51 @@ The ProductVersion is `596-1`. The four fields are:
 preserves the table-structure difficulty required by OpenSpec 047.
 
 No other material, ProductVersion, or field may be added during the run.
+
+## Authoritative Schema and Golden truth
+
+The business-authoritative field source for this run is the owner-supplied
+workbook:
+
+- repository target:
+  `docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`;
+- source SHA-256:
+  `5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`.
+
+Its eight structured field sheets match the corresponding existing baseline
+YAML field rows. The embedded screenshots are also authoritative annotation
+guidance: they show which product-manual or contract regions, table columns,
+conditions, and plan distinctions the named fields are intended to capture.
+They are not per-product Golden answers and their example values must not be
+copied into the S0-Q expected output.
+
+The repository also contains later baseline files and v1.1 extensions that are
+not present in this workbook. They remain frozen in place for compatibility
+and may remain in historical Golden candidates, but they are not silently
+promoted to workbook-authoritative fields.
+
+S0-Q does not create a separate four-field Golden Set. The existing Golden
+annotation subsystem remains the single Golden path. For the medical Golden
+Product it already carries one record for every current extractable registry
+field; the S0-Q fields are only a four-field projection selected from that
+complete product annotation.
+
+Before R2 can complete, a separate Golden Mission must use `gpt-5.6-sol` to
+re-annotate or audit all 60 current extractable medical-registry fields against
+the exact product PDFs and this workbook, close deterministic Evidence checks
+and human approval, and publish an immutable artifact identity/digest.
+Selective four-field annotation is not sufficient for that Golden refresh.
+The 49 workbook-derived extractable fields and 11 later v1.1 extension fields
+remain distinguishable in the artifact; later extensions do not become
+workbook-authoritative merely because they are annotated.
+
+The current 60-record WIP proves coverage only. It is not the frozen Golden and
+cannot complete R2. Model output is a candidate, not self-authenticating truth.
+Deterministic quote/structure verification and the approved human review
+policy close the Golden identity. The full Golden remains isolated from the
+evaluated weak-model prompt; only the field contract may enter extraction. The
+four S0-Q expected records and oracle spans are read from the later frozen full
+Golden and may be used only in the already-defined diagnostic arms.
 
 ## Input capture
 
@@ -99,9 +144,9 @@ and active duration.
 ## Verdict and failure handling
 
 Emit `KNOWLEDGE_COMPILATION_FEASIBLE_ON_NARROW_SLICE` only when all four fields
-match the Seed Golden, all non-unknown Evidence semantically supports the
-typed claim, `unknown` abstains, budgets remain closed, and all four diagnostic
-arms complete.
+match their records in the frozen full Golden, all non-unknown Evidence
+semantically supports the typed claim, `unknown` abstains, budgets remain
+closed, and all four diagnostic arms complete.
 
 Otherwise, do not average the failure away. Retain the exact failed field and
 one of the frozen buckets:
@@ -120,7 +165,7 @@ The execution change may add only:
 
 - a bounded run authorization/manifest;
 - the two frozen input bundles;
-- the four-field Seed Golden;
+- a projection manifest that references four records in the frozen full Golden;
 - a thin one-shot runner or adapter only if existing commands cannot perform
   the exact W1 export and A-D run;
 - targeted tests and the final evidence report.

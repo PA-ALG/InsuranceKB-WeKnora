@@ -4,9 +4,18 @@
 
 - 单一职责：冻结真实 parsed artifact 输入与四字段窄切片验收。
 - 当前状态：`SPEC-ONLY / BLOCKED_ON_INPUT`。
-- 路径预算：本 Mission 恰好 5 个 Markdown 路径。
+- 原始 spec-only 交付路径预算：恰好 5 个 Markdown 路径（历史事实）。
 - 非目标：抽取实现、质量平台、模型调用、Release/S0-R/MVP、源码/migration/
-  workflow/principal/registry/README。
+  workflow/principal/运行时 registry。
+
+## 2026-07-30 Schema Authority Amendment
+
+- [x] 经业务方批准，将 exact 原始 XLSX 与嵌入截图公开入库并记录 SHA-256。
+- [x] 核对八张结构化字段表与现有 YAML 逐行映射，不修改运行时 YAML bytes。
+- [x] 冻结 Golden 合同：完整产品 Golden 是唯一金标来源，S0-Q 只投影四条
+  诊断记录，不新增四字段 Golden。
+- [x] 核对目标医疗产品历史 WIP 覆盖 60/60 个当前可抽取字段，其中 49 个来自
+  工作簿权威、11 个来自后续 v1.1 扩展；该事实不等于 Golden 获批。
 
 ## 本文档 Mission
 
@@ -33,7 +42,11 @@
     exact-revision API/manifest 只绑定 text chunk id/index/content，不绑定
     page/block/table-cell identity 或表格结构 digest。未生成 W1 bundle，R1
     保持未完成。证据见 `artifacts/input-capture-report.json`。
-- [ ] R2 提供预置 ProductVersion、四字段 Seed Golden 与 Evidence。
+- [ ] R2 提供预置 ProductVersion，以及从冻结完整产品 Golden 投影的四条
+  诊断记录与 Evidence。
+  - 当前历史 WIP 只证明 60/60 覆盖。须由独立 Golden Mission 使用
+    `gpt-5.6-sol` 全部字段统一候选生成或复核，完成 Evidence 回验、既定人工
+    批准和不可变 artifact identity/digest 后，R2 才可勾选。
 - [ ] R3 批准 exact 弱模型画像、调用/重试/timeout、人工修订时间上限，以及
   隔离强模型诊断臂的 exact identity/有限调用预算。
 - [x] R4 取得独立运行 Mission Card；模型/provider 仍须等待 R1–R3 admitted。

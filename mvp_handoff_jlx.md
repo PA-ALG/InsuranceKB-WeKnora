@@ -48,7 +48,7 @@ c78053113e01355b1b03174d229633f27da2f478
 b278b71502e7d5e65e63b248648be6685e596d03
 
 S0-Q:
-BLOCKED_ON_INPUT / W1 CAPTURE NOT STARTED
+BLOCKED_ON_INPUT / SCHEMA AUTHORITY ADMITTED / FULL GOLDEN NOT FROZEN
 ```
 
 S0-R 第三轮已在隔离 PostgreSQL 16.14 证明：legacy/fresh migration matrix、
@@ -64,9 +64,20 @@ SHA-256 均精确匹配，但固定 WeKnora 输入画像所需的百炼 embeddin
 HTTP 401。静态 exact source inspection 还确认 current W1 v1 manifest 只绑定
 text chunk id/index/content，不绑定 S0-Q 所需的 page/block/table-cell identity
 或表格结构 digest。按输入门禁，本轮交付 `BLOCKED_ON_INPUT`：W1 bundle、
-Seed Golden、模型画像和 A–D 均未运行，Harness 弱/强模型调用均为零。临时
+完整 Golden 的四条诊断投影、模型画像和 A–D 均未运行，Harness 弱/强模型
+调用均为零。临时
 fresh stack 与其容器、网络、卷、运行配置目录已精确删除，原有固定 WeKnora
 环境保持健康且未被重置。
+
+业务方原始
+`docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`
+已按 exact bytes 登记，SHA-256=
+`5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`。
+现有目标医疗产品 Golden WIP 覆盖当前 60/60 个可抽取字段（49 个工作簿权威
+字段 + 11 个后续 v1.1 扩展），但仍只是覆盖证据。禁止另建四字段 Golden；
+S0-Q 只从获批完整 Golden 投影四条诊断记录。R2 须等待独立 Golden Mission
+使用 `gpt-5.6-sol` 全字段统一候选生成或复核，完成 Evidence 回验、既定人工
+批准和不可变 artifact identity/digest。
 
 外部配置动作是刷新/替换已批准的百炼 embedding credential。开发侧下一条唯一
 主航道是另行批准一个最小 W1 page/block/table-cell identity +

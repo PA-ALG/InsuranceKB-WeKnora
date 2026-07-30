@@ -1,8 +1,15 @@
 # 07 · Schema 基线与扩展提案
 
-> 业务方于 2026-07-10 提供《产品知识库字段标签维度》Excel，作为产品知识 schema 的**基线**（baseline-2026-07-10）。本文记录基线接入、旧系统能力对照、字段元属性增强，以及 18 项扩展字段从提案到**已由业务方全部接受并并入 v1.1**的结果。
+> 原始业务权威是已入库的
+> [`产品知识库字段标签维度-20240205.xlsx`](schema-authority/产品知识库字段标签维度-20240205.xlsx)
+>（exact SHA-256 与逐表映射见
+> [`schema-authority/README.md`](schema-authority/README.md)）。其中八张结构化
+> 字段表与现有对应 YAML 的字段顺序及规范化五列内容逐行一致，嵌入截图同时
+> 给出字段定位和表格抽取语义；原始空白/换行以 exact XLSX 为准。
 >
-> 机器可读基线：[`schema-baseline/`](schema-baseline/)（13 个 YAML，由 Excel 逐字段转换，未做任何增删）。
+> [`schema-baseline/`](schema-baseline/) 是机器可读注册表。它除上述工作簿映射
+> 外，还包含 2026-07-10 后续登记的四个险种文件及已由业务方接受的 v1.1 扩展；
+> 因此不能再笼统描述为“13 个 YAML 全部由同一 Excel 原样转换”。
 
 ## 1. 基线构成
 
@@ -21,7 +28,11 @@
 | disability-income.yaml | 失能收入损失保险（新增） | 24 |
 | glossary.yaml | 专业术语目录（就医绿通/费用垫付等增值服务概念） | 3 |
 
-与旧能力盘点（06）的关系：业务方 Excel/YAML 是有权基线；LLM-wiki-black 为第一方资产，其字段元数据、分组和模板行为可按 source commit/path 迁移，但必须与业务基线对账，并经过新 OpenSpec、越域/污染测试、留出集和人工批准。只有业务基线 + 获批工程元数据才能构成生产 schema registry。
+与旧能力盘点（06）的关系：原始业务工作簿及其已核对 YAML 映射是有权基线；
+后续登记内容按各自 provenance 管理。LLM-wiki-black 为第一方资产，其字段
+元数据、分组和模板行为可按 source commit/path 迁移，但必须与业务基线对账，
+并经过新 OpenSpec、越域/污染测试、留出集和人工批准。只有业务基线 + 获批
+工程元数据才能构成生产 schema registry。
 
 注意两点差异（符合已定架构，无需修改基线）：
 - 基线基础字段**不含 QA 字段**——QA 已定为一等知识对象（03-knowledge-model.md §3），不进产品实体；旧字典里的 QA 字段不再迁移为字段。

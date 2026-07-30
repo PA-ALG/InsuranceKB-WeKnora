@@ -66,13 +66,33 @@ Revision Manifest 合同/实现存在；但仓库中未发现两份可直接用�
 - 复杂表格结构；
 - candidate-region anchor。
 
-现有 `dataset/goldenset/wip-gs-v0.1` 与 drafts 不自动满足上述等价条件。
-因此两份材料、一个 ProductVersion、四个实际字段和弱模型运行预算均不得用
+现有 `dataset/goldenset/wip-gs-v0.1` 不自动满足上述等价条件。因此两份材料、
+一个 ProductVersion、完整 Golden 的四条诊断投影和弱模型运行预算均不得用
 假值补齐，当前状态保持 `BLOCKED_ON_INPUT`。
+
+## 2026-07-30 Schema authority 与完整 Golden 核验
+
+- 业务方原始工作簿已按 exact bytes 入库：
+  `docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`；
+- source/repository SHA-256 均为
+  `5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`；
+- 八张结构化字段表与对应既有 YAML 的字段顺序及规范化五列内容逐一一致；
+  原始空白/换行以 exact XLSX 为准；嵌入截图作为字段定位、表格列、条件和
+  计划层级的标注指导，不作为具体产品答案；
+- 目标医疗产品历史 WIP 含 60 条记录、60 个唯一 field identity，覆盖当前
+  registry 的 60/60 个可抽取字段，无缺失、无重复；
+- 其中 49 个可抽取字段来自工作簿权威，11 个来自后续 v1.1 扩展，两类来源
+  保持可区分；
+- `产品特色`、`免赔额`、`保证续保`、`宽限期` 均已存在于这套完整 WIP 中，
+  不复制为第二份四字段 Golden；
+- 本轮没有运行模型，也没有把历史 WIP 写成冻结/批准 Golden。R2 仍须等待
+  独立 Golden Mission 使用 `gpt-5.6-sol` 对全部 60 字段统一生成候选或复核，
+  完成 Evidence 回验、既定人工批准和不可变 artifact identity/digest。
 
 ## 冻结的验收边界
 
-- 2 份真实冻结解析材料、1 个预置 ProductVersion、4 个 Seed Golden 字段；
+- 2 份真实冻结解析材料、1 个预置 ProductVersion、完整 Golden 投影的 4 条
+  诊断记录；
 - candidate region、复杂表格、typed value/归一、Evidence 语义支持；
 - `absent_explicitly` 正向否定 Evidence 与 `unknown` abstention；
 - typed fail-closed 与八个最小顶层 error buckets；
@@ -102,6 +122,8 @@ Revision Manifest 合同/实现存在；但仓库中未发现两份可直接用�
   `72 passed`
 - S0-Q runner/module/tests Ruff 与 mypy：`PASS`
 - `git diff --check`：`PASS`
+- Schema authority exact-bytes、工作簿映射与完整 Golden 60/60 覆盖审计：
+  `PASS`（不等于 Golden 批准）
 - full、PostgreSQL suite、无关 provider/live：`NOT RUN`
 - 已授权的本地 WeKnora 输入预检：`RUN / BLOCKED_ON_INPUT`；仅一次
   embedding 基础设施探测，未运行 Harness 模型链

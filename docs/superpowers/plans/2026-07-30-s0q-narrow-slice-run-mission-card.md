@@ -11,7 +11,8 @@ S0-R 已证明 WeKnora 可作为单一 Release authority 的实验载体；进�
 寿险知识编译。
 
 本 Mission 不追求质量平台或生产准入，只用两份真实 PDF、一个预置
-ProductVersion 与四个字段给出可复现的窄切片证伪结论。
+ProductVersion 与完整产品 Golden 中投影的四条诊断记录给出可复现的窄切片
+证伪结论。
 
 固定顺序：
 
@@ -46,6 +47,10 @@ ProductVersion 与四个字段给出可复现的窄切片证伪结论。
 | 保险条款 | `dataset/shouxian_product/平安e生保（尊享版）医疗保险/保险条款.pdf` | 1,047,811 | `88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc` |
 | 产品说明书 | `dataset/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf` | 492,101 | `5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279` |
 
+- Schema authority：
+  `docs/insurance-kb/schema-authority/产品知识库字段标签维度-20240205.xlsx`
+- Schema authority SHA-256：
+  `5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6`
 - ProductVersion：`596-1`
 - `present A`：`产品特色`
 - `typed-present B`：`免赔额`，计划一 CNY 10,000、计划二 CNY 0
@@ -53,7 +58,13 @@ ProductVersion 与四个字段给出可复现的窄切片证伪结论。
 - `unknown`：`宽限期`，必须 abstain
 - 复杂结构门：保险条款 PDF 第 31 页的合并表格
 
-不得增加第三份材料、第二个 ProductVersion 或第五个字段。
+这四条记录必须从同一冻结、获批的完整产品 Golden 中按 field identity 投影，
+并能解析到工作簿来源工作表和 registry field identity。不得增加第三份材料、
+第二个 ProductVersion 或第五个诊断字段，也不得创建独立四字段 Golden。
+
+当前历史 WIP 的 60/60 覆盖不构成批准。R2 必须等待独立 Golden Mission 使用
+`gpt-5.6-sol` 对全部 60 个当前可抽取医疗字段统一生成候选或复核，完成
+Evidence 回验、既定人工批准和不可变 artifact identity/digest。
 
 ## 依赖与阶段门
 
@@ -76,7 +87,7 @@ ProductVersion 与四个字段给出可复现的窄切片证伪结论。
 - 两份 source SHA/bytes 与 Mission Card 一致；
 - 两份 W1 bundle 的 exact attempt、page/chunk order、manifest digest 可重算；
 - 条款第 31 页复杂表格 anchor 可回验；
-- 预置 ProductVersion 和四字段 Seed Golden 完整；
+- 预置 ProductVersion 与冻结完整产品 Golden 的四条投影记录完整；
 - A–D 分别隔离 candidate region、extraction/model、normalizer/comparator、
   Evidence verifier；
 - 每字段保留 fixed-input digest、三态、Evidence、abstention、error bucket、
