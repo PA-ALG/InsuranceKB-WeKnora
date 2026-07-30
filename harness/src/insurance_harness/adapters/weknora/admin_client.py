@@ -103,6 +103,169 @@ class TypedChunkListing:
     page_size: int
 
 
+@dataclass(frozen=True)
+class W1FileDigest:
+    algorithm: str
+    value: str
+
+
+@dataclass(frozen=True)
+class W1ParserIdentity:
+    app_version: str
+    app_commit: str
+    docreader: str
+    parser_engine: str
+    chunk_size: int
+    chunk_overlap: int
+    separators_digest: str
+    chunker_config_digest: str
+    embedding_model_id: str
+
+
+@dataclass(frozen=True)
+class W1ChunkManifest:
+    algorithm: str
+    digest: str
+    chunk_count: int
+
+
+@dataclass(frozen=True)
+class W1RevisionDescriptor:
+    knowledge_id: str
+    parse_attempt: int
+    file_digest: W1FileDigest
+    parser_identity: W1ParserIdentity
+    chunk_manifest: W1ChunkManifest
+    completed_at: str
+
+
+@dataclass(frozen=True)
+class W1ChunkBinding:
+    knowledge_id: str
+    parse_attempt: int
+    manifest_digest: str
+    chunk_count: int
+
+
+@dataclass(frozen=True)
+class W1ChunkListing:
+    items: tuple[dict[str, Any], ...]
+    total: int
+    page_size: int
+    revision: W1ChunkBinding
+
+
+def _required_mapping(value: object) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise ValueError("invalid W1 revision descriptor")
+    return value
+
+
+def _required_text(document: Mapping[str, Any], key: str) -> str:
+    value = document.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("invalid W1 revision descriptor")
+    return value
+
+
+def _required_int(
+    document: Mapping[str, Any],
+    key: str,
+    *,
+    minimum: int,
+) -> int:
+    value = document.get(key)
+    if (
+        not isinstance(value, int)
+        or isinstance(value, bool)
+        or value < minimum
+    ):
+        raise ValueError("invalid W1 revision descriptor")
+    return value
+
+
+def _required_sha256(document: Mapping[str, Any], key: str) -> str:
+    value = _required_text(document, key)
+    if (
+        len(value) != 64
+        or value != value.lower()
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError("invalid W1 revision descriptor")
+    return value
+
+
+def _parse_w1_revision_descriptor(
+    value: object,
+    *,
+    expected_knowledge_id: str,
+) -> W1RevisionDescriptor:
+    document = _required_mapping(value)
+    knowledge_id = _required_text(document, "knowledge_id")
+    if knowledge_id != expected_knowledge_id:
+        raise ValueError("invalid W1 revision descriptor")
+    file_digest = _required_mapping(document.get("file_digest"))
+    if file_digest.get("algorithm") != "sha256":
+        raise ValueError("invalid W1 revision descriptor")
+    parser_identity = _required_mapping(document.get("parser_identity"))
+    chunk_manifest = _required_mapping(document.get("chunk_manifest"))
+    manifest_algorithm = _required_text(chunk_manifest, "algorithm")
+    if manifest_algorithm != "weknora.chunk_manifest.v1":
+        raise ValueError("invalid W1 revision descriptor")
+    return W1RevisionDescriptor(
+        knowledge_id=knowledge_id,
+        parse_attempt=_required_int(document, "parse_attempt", minimum=1),
+        file_digest=W1FileDigest(
+            algorithm="sha256",
+            value=_required_sha256(file_digest, "value"),
+        ),
+        parser_identity=W1ParserIdentity(
+            app_version=_required_text(parser_identity, "app_version"),
+            app_commit=_required_text(parser_identity, "app_commit"),
+            docreader=_required_text(parser_identity, "docreader"),
+            parser_engine=_required_text(parser_identity, "parser_engine"),
+            chunk_size=_required_int(parser_identity, "chunk_size", minimum=1),
+            chunk_overlap=_required_int(
+                parser_identity,
+                "chunk_overlap",
+                minimum=0,
+            ),
+            separators_digest=_required_sha256(
+                parser_identity,
+                "separators_digest",
+            ),
+            chunker_config_digest=_required_sha256(
+                parser_identity,
+                "chunker_config_digest",
+            ),
+            embedding_model_id=_required_text(
+                parser_identity,
+                "embedding_model_id",
+            ),
+        ),
+        chunk_manifest=W1ChunkManifest(
+            algorithm=manifest_algorithm,
+            digest=_required_sha256(chunk_manifest, "digest"),
+            chunk_count=_required_int(
+                chunk_manifest,
+                "chunk_count",
+                minimum=0,
+            ),
+        ),
+        completed_at=_required_text(document, "completed_at"),
+    )
+
+
+def _parse_w1_chunk_binding(value: object) -> W1ChunkBinding:
+    document = _required_mapping(value)
+    return W1ChunkBinding(
+        knowledge_id=_required_text(document, "knowledge_id"),
+        parse_attempt=_required_int(document, "parse_attempt", minimum=1),
+        manifest_digest=_required_sha256(document, "manifest_digest"),
+        chunk_count=_required_int(document, "chunk_count", minimum=0),
+    )
+
+
 def _finite_number(value: object) -> bool:
     return (
         isinstance(value, (int, float))
@@ -481,6 +644,23 @@ class WeKnoraAdminClient:
             raise ValueError("invalid knowledge-base response")
         return data
 
+    async def delete_knowledge_base(
+        self,
+        credential: SecretStr | AdminSession,
+        kb_id: str,
+    ) -> None:
+        if (
+            not isinstance(kb_id, str)
+            or not kb_id.strip()
+            or any(character in kb_id for character in "/?#")
+        ):
+            raise ValueError("invalid knowledge-base id")
+        await self._request(
+            "DELETE",
+            f"/knowledge-bases/{kb_id}",
+            headers=self._resource_auth(credential),
+        )
+
     async def list_knowledge(
         self,
         api_key: SecretStr,
@@ -686,6 +866,115 @@ class WeKnoraAdminClient:
         if not isinstance(data, dict):
             raise ValueError("invalid knowledge response")
         return data
+
+    async def get_knowledge_revision(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> W1RevisionDescriptor:
+        data = await self._request(
+            "GET",
+            f"/knowledge/{knowledge_id}/revision",
+            headers=self._api_key(api_key),
+        )
+        return _parse_w1_revision_descriptor(
+            data,
+            expected_knowledge_id=knowledge_id,
+        )
+
+    async def list_knowledge_revision_chunks(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+        *,
+        parse_attempt: int,
+        page_size: int = 100,
+    ) -> W1ChunkListing:
+        if (
+            not isinstance(parse_attempt, int)
+            or isinstance(parse_attempt, bool)
+            or parse_attempt < 1
+            or not isinstance(page_size, int)
+            or isinstance(page_size, bool)
+            or page_size < 1
+            or page_size > 100
+        ):
+            raise ValueError("invalid W1 revision chunk request")
+
+        items: list[dict[str, Any]] = []
+        binding: W1ChunkBinding | None = None
+        expected_total: int | None = None
+        seen_ids: set[str] = set()
+        previous_index = -1
+        page = 1
+        while True:
+            response = await self._client.get(
+                f"/knowledge/{knowledge_id}/revisions/{parse_attempt}/chunks",
+                headers=self._api_key(api_key),
+                params={"page": page, "page_size": page_size},
+            )
+            response.raise_for_status()
+            document: Any = response.json()
+            if not isinstance(document, Mapping) or document.get("success") is not True:
+                raise ValueError("invalid W1 revision chunk response")
+            data = document.get("data")
+            total = document.get("total")
+            observed_page = document.get("page")
+            observed_page_size = document.get("page_size")
+            try:
+                observed_binding = _parse_w1_chunk_binding(
+                    document.get("revision")
+                )
+            except ValueError:
+                raise ValueError("invalid W1 revision chunk response") from None
+            if (
+                not isinstance(data, list)
+                or not all(isinstance(item, Mapping) for item in data)
+                or not isinstance(total, int)
+                or isinstance(total, bool)
+                or total < 0
+                or observed_page != page
+                or observed_page_size != page_size
+                or observed_binding.knowledge_id != knowledge_id
+                or observed_binding.parse_attempt != parse_attempt
+                or observed_binding.chunk_count != total
+                or (binding is not None and observed_binding != binding)
+                or (expected_total is not None and total != expected_total)
+            ):
+                raise ValueError("invalid W1 revision chunk response")
+            binding = observed_binding
+            expected_total = total
+            for raw_item in data:
+                item = dict(raw_item)
+                chunk_id = item.get("id")
+                chunk_index = item.get("chunk_index")
+                if (
+                    not isinstance(chunk_id, str)
+                    or not chunk_id
+                    or chunk_id in seen_ids
+                    or item.get("knowledge_id") != knowledge_id
+                    or item.get("parse_attempt") != parse_attempt
+                    or not isinstance(chunk_index, int)
+                    or isinstance(chunk_index, bool)
+                    or chunk_index <= previous_index
+                    or not isinstance(item.get("content"), str)
+                ):
+                    raise ValueError("invalid W1 revision chunk response")
+                seen_ids.add(chunk_id)
+                previous_index = chunk_index
+                items.append(item)
+            if len(items) >= total:
+                if len(items) != total or binding is None:
+                    raise ValueError("invalid W1 revision chunk response")
+                return W1ChunkListing(
+                    items=tuple(items),
+                    total=total,
+                    page_size=page_size,
+                    revision=binding,
+                )
+            if not data:
+                raise ValueError("invalid W1 revision chunk response")
+            page += 1
 
     async def get_knowledge_parse_attempt(
         self,
