@@ -72,6 +72,24 @@ OpenSpec 048 只提议在上述十个路径之外增加：
 只有 OpenSpec 048 合入且书面规格复核通过后，才可从当时最新 `origin/main`
 建立新 worktree 重新开始 RED；不得复用第一轮未产生的实现状态。
 
+## 总控基础设施例外（2026-07-30）
+
+第二轮在 RED 前确认 enterprise migration head 被三处现有代码/测试固定为
+version `1`。这属于任何后续 enterprise migration 都必须维护的迁移基础设施，
+不是 Release 业务面扩张。用户明确要求以工程合理性优先，不得让人工路径上限
+阻塞正常必需修改，因此额外批准：
+
+12. `internal/database/enterprise_migration.go`
+13. `internal/database/legacy_w1_bridge.go`
+14. `internal/database/legacy_w1_bridge_test.go`
+
+三条路径只可用于让 packaged enterprise head、legacy origin classification 与
+真实 PostgreSQL matrix 一致支持 `000002`，不得承载 Release 表、API、ACL、
+principal 或通用 migration 平台。原十一条 Release 实现路径及表/索引、单
+migration、两测试文件和命令预算保持不变。后续若出现新的必要基础兼容路径，
+Owner 必须先证明其与业务范围无关并报告总控；不得以预算为由机械停工，也不得
+借“基础设施”名义扩展功能。
+
 ## 冻结物理预算
 
 enterprise migration 000002 最多创建五张实验表：

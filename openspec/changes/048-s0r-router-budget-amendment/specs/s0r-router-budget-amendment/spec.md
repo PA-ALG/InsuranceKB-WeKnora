@@ -25,6 +25,24 @@ read/write surface、fixture、测试文件与命令预算 SHALL 保持不变。
 - **WHEN** 实现需要任一未登记的生产或测试路径、第二 migration 或通用框架
 - **THEN** Owner 立即输出 `RELEASE_PATH_NOT_FEASIBLE`，不得继续扩面
 
+### Requirement: A2.1 必要基础设施不得与业务扩面混为一谈
+
+系统 SHALL 将已批准单一 enterprise migration 所必需的 migration-head 维护
+与 Release 业务扩面分开核算；若现有固定值导致 migration 无法运行，总控 MAY
+批准仅修复该基础设施的 exact paths。当前唯一批准的例外是：
+`internal/database/enterprise_migration.go`、
+`internal/database/legacy_w1_bridge.go` 与
+`internal/database/legacy_w1_bridge_test.go`。其修改 SHALL 只统一 packaged
+enterprise head、legacy origin classification 与 PostgreSQL matrix，不得增加
+Release schema/API 或通用 migration 框架。
+
+#### Scenario: version 2 被 version 1 固定值拒绝
+
+- **WHEN** `000002` 已属于批准预算，但 runner、bridge 或 matrix 仍只接受
+  enterprise version `1`
+- **THEN** Owner 修改上述三个 exact 基础路径使其一致接受 packaged head `2`，
+  然后恢复 S0-R；不得跳过安全校验或在失败后留下未解释的已迁移 schema
+
 ### Requirement: A3 新路径只能完成真实权限链内接线
 
 `internal/router/router.go` 的修改 SHALL 只用于向 `RouterParams` 显式注入
