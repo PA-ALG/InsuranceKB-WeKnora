@@ -27,6 +27,10 @@
 ## 后续运行（2026-07-30 已授权，仍须按门禁执行）
 
 - [ ] R1 提供两份真实材料的完整 frozen artifact manifest。
+  - 2026-07-30 首次有界输入预检结论：`BLOCKED_ON_INPUT`。两份 PDF 的
+    SHA/bytes 均匹配，但固定 WeKnora 输入画像所需的百炼 embedding 凭证在
+    创建 scratch KB 前的一次维度探测返回 HTTP 401；未生成 W1 bundle，R1
+    保持未完成。证据见 `artifacts/input-capture-report.json`。
 - [ ] R2 提供预置 ProductVersion、四字段 Seed Golden 与 Evidence。
 - [ ] R3 批准 exact 弱模型画像、调用/重试/timeout、人工修订时间上限，以及
   隔离强模型诊断臂的 exact identity/有限调用预算。
@@ -35,3 +39,6 @@
   abstention、Evidence 与人工修订时间。
 - [ ] R6 仅在所有验收通过时输出
   `KNOWLEDGE_COMPILATION_FEASIBLE_ON_NARROW_SLICE`。
+
+R1 未 admitted，因此 R2–R3 与 A–D/provider 按门禁均为 `NOT RUN`；这不是
+S0-Q PASS/FAIL，也不授权用人工清洗文本、替代 embedding 或扩大环境治理。

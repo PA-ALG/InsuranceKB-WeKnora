@@ -20,7 +20,7 @@ Serving Active Release Authority ADR → Authority Amendment 2 → 适用 OpenSp
 
 ```text
 main:
-b278b71502e7d5e65e63b248648be6685e596d03
+1650f3bb26fd92af554c22f45d7df0a45e29c160
 
 upstream capability:
 80a5003cc99a427098afe184eee6601916d3d156
@@ -48,7 +48,7 @@ c78053113e01355b1b03174d229633f27da2f478
 b278b71502e7d5e65e63b248648be6685e596d03
 
 S0-Q:
-INDEPENDENT GATE / FROZEN PARSED INPUT STILL REQUIRED
+BLOCKED_ON_INPUT / W1 CAPTURE NOT STARTED
 ```
 
 S0-R 第三轮已在隔离 PostgreSQL 16.14 证明：legacy/fresh migration matrix、
@@ -57,6 +57,19 @@ enterprise `000002` up/down/restart、同 base 双 Candidate 单赢家、loser
 active-managed Wiki PUT/DELETE 拒绝。独立 Spec 与 Quality/Delivery review
 均通过，PR #73 已合入。该结果不是生产 Kernel、Artifact、部署或 MVP 完成；
 默认 production signer 仍为空 key map 并 fail closed。
+
+S0-Q 已于 2026-07-30 进入批准的两 PDF 窄切片运行。两份仓库 PDF 的 bytes 与
+SHA-256 均精确匹配，但固定 WeKnora 输入画像所需的百炼 embedding credential
+在创建任何 model/RAW KB/scratch KB/API key/knowledge 之前的一次维度探测返回
+HTTP 401。按输入门禁，本轮交付 `BLOCKED_ON_INPUT`：W1 bundle、Seed Golden、
+模型画像和 A–D 均未运行，Harness 弱/强模型调用均为零。临时 fresh stack 与
+其容器、网络、卷、运行配置目录已精确删除，原有固定 WeKnora 环境保持健康且
+未被重置。
+
+当前唯一主航道动作是：刷新/替换已批准的百炼 embedding credential，然后在
+同固定镜像、同两份 PDF、同隔离 capture 流程只重试一次输入冻结。不要建立通用
+凭据治理、替代 embedding、人工清洗文本，也不要提前实现 A–D、Release/Wiki
+接线。
 
 当前唯一执行顺序：
 
