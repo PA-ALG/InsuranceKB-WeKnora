@@ -20,7 +20,7 @@ Serving Active Release Authority ADR → Authority Amendment 2 → 适用 OpenSp
 
 ```text
 main:
-37133d8feb421eaf78b01a6dbc800941ef4be2b7
+b278b71502e7d5e65e63b248648be6685e596d03
 
 upstream capability:
 80a5003cc99a427098afe184eee6601916d3d156
@@ -40,11 +40,12 @@ BLOCKED
 runtime transition:
 NO_PRODUCTION_ACTIVE_RELEASE
 
-S0-R third-run candidate:
-RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY
+S0-R third-run:
+RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY / MERGED
 
-S0-R branch:
-codex/046-s0r-release-falsification-impl-v3
+S0-R reviewed candidate / merge:
+c78053113e01355b1b03174d229633f27da2f478
+b278b71502e7d5e65e63b248648be6685e596d03
 
 S0-Q:
 INDEPENDENT GATE / FROZEN PARSED INPUT STILL REQUIRED
@@ -54,15 +55,14 @@ S0-R 第三轮已在隔离 PostgreSQL 16.14 证明：legacy/fresh migration matr
 enterprise `000002` up/down/restart、同 base 双 Candidate 单赢家、loser
 零残留、CAS 阻塞期完整 R0/R1 pinned read、双当前 ACL fail-closed 与
 active-managed Wiki PUT/DELETE 拒绝。独立 Spec 与 Quality/Delivery review
-均通过。该 candidate 尚待 Draft PR、exact-head CI 与合入，不是生产 Kernel、
-Artifact、部署或 MVP 完成；默认 production signer 仍为空 key map并
-fail closed。
+均通过，PR #73 已合入。该结果不是生产 Kernel、Artifact、部署或 MVP 完成；
+默认 production signer 仍为空 key map 并 fail closed。
 
 当前唯一执行顺序：
 
 ```text
 Mission 0
-├── S0-R candidate FEASIBLE → Draft PR / exact-head CI / merge
+├── S0-R merged FEASIBLE
 └── S0-Q 独立执行（必须使用冻结 parsed artifact）
            ↓
 S0-R merged PASS AND S0-Q PASS

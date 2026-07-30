@@ -3,14 +3,13 @@
 > 写给完全没有上下文的新会话/新成员。任何变更请持续更新本文。
 >
 > [!IMPORTANT]
-> **2026-07-30 · S0-R 第三轮 candidate**
+> **2026-07-30 · S0-R 第三轮已合入**
 >
-> - authoritative main/base：
->   `37133d8feb421eaf78b01a6dbc800941ef4be2b7`（PR #72 merge commit）；
-> - implementation branch：
->   `codex/046-s0r-release-falsification-impl-v3`；
-> - 当前结论：`RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY`，等待 Draft PR、
->   exact-head CI 与合入裁决；
+> - authoritative main：
+>   `b278b71502e7d5e65e63b248648be6685e596d03`（PR #73 merge commit）；
+> - reviewed candidate：
+>   `c78053113e01355b1b03174d229633f27da2f478`；
+> - 当前结论：`RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY / MERGED`；
 > - PostgreSQL 16.14：legacy/fresh migration matrix 七组 PASS；enterprise
 >   `000002` up/down/restart=`5|5 → 0|0 → 5|5`；同 base 双 Candidate 单赢家、
 >   loser 零残留与 CAS 阻塞期 R0/R1 pinned read 均 PASS，重复五次稳定；
@@ -20,9 +19,11 @@
 > - default production signer 仍为空 key map，activation fail closed；本轮无
 >   生产凭据、真实 Space、Artifact 或部署；
 > - 独立 Spec 与 Quality/Delivery review：`Approved: YES`；
-> - S0-Q 仍是独立 gate。S0-R candidate 通过不得启动 P2d/生产 Kernel，也不得
->   宣称 MVP 完成；只有 S0-R exact candidate 合入且 S0-Q PASS 后，才按需接
->   第一个 MVP 纵切。
+> - PR #73 无适用 GitHub PR workflow（现有 `pull_request` workflow 仅覆盖
+>   `harness/**`/`cli/**`）；本地 focused、PostgreSQL、vet 与 OpenSpec
+>   exact candidate evidence 均通过；
+> - S0-Q 仍是独立 gate。不得据此启动 P2d/生产 Kernel 或宣称 MVP 完成；只有
+>   S0-Q PASS 后，才按需接第一个 MVP 纵切。
 >
 > 本块优先于下方仍描述“S0-R 待启动”的 2026-07-29 快照。
 >
