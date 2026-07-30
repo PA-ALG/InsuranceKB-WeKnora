@@ -722,7 +722,7 @@ async def test_s0q_capture_rejects_unbound_table_then_cleans_scratch(
     tmp_path: Path,
 ) -> None:
     specs, _ = _capture_specs(tmp_path)
-    sources = {
+    sources: dict[str, tuple[str, tuple[dict[str, object], ...]]] = {
         "terms.pdf": (
             specs[0].source_sha256,
             (
@@ -779,7 +779,7 @@ async def test_s0q_capture_missing_table_structure_delivers_blocked_report(
     tmp_path: Path,
 ) -> None:
     specs, _ = _capture_specs(tmp_path)
-    sources = {
+    sources: dict[str, tuple[str, tuple[dict[str, object], ...]]] = {
         "terms.pdf": (
             specs[0].source_sha256,
             (
