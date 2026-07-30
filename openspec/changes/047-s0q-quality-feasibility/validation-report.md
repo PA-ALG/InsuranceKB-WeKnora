@@ -99,7 +99,7 @@ Revision Manifest 合同/实现存在；但仓库中未发现两份可直接用�
 
 - `openspec validate 047-s0q-quality-feasibility --strict`：`PASS`
 - `pytest tests/test_s0q_047.py tests/test_source_weknora_017.py`：
-  `71 passed`
+  `72 passed`
 - S0-Q runner/module/tests Ruff 与 mypy：`PASS`
 - `git diff --check`：`PASS`
 - full、PostgreSQL suite、无关 provider/live：`NOT RUN`

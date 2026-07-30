@@ -369,13 +369,21 @@ class FrozenW1DocumentSource:
         if (
             len(self._expected_sources) != 2
             or set(self._required_table_pages) != set(self._expected_sources)
+            or sum(
+                page is not None
+                for page in self._required_table_pages.values()
+            )
+            != 1
             or any(
                 not path
                 or _SHA256_RE.fullmatch(digest) is None
                 for path, digest in self._expected_sources.items()
             )
         ):
-            raise ValueError("invalid frozen W1 source admission profile")
+            raise ValueError(
+                "invalid frozen W1 source admission profile: exactly one "
+                "complex-table source is required"
+            )
 
     @asynccontextmanager
     async def materialize(

@@ -461,7 +461,7 @@ def test_s0q_rejects_flattened_text_with_only_a_table_label() -> None:
         )
 
 
-async def test_s0q_frozen_document_source_uses_only_bundle_content(
+async def test_s0q_frozen_document_source_rejects_unbound_table_content(
     tmp_path: Path,
 ) -> None:
     bundle_path = tmp_path / "terms-w1.json"
@@ -480,7 +480,7 @@ async def test_s0q_frozen_document_source_uses_only_bundle_content(
             "dataset/source/brochure.pdf": _DIGEST_B,
         },
         required_table_pages={
-            "dataset/source/terms.pdf": None,
+            "dataset/source/terms.pdf": 31,
             "dataset/source/brochure.pdf": None,
         },
     )
@@ -488,61 +488,45 @@ async def test_s0q_frozen_document_source_uses_only_bundle_content(
         bundle_paths=(bundle_path, brochure_path),
     )
 
-    async with source.materialize(request) as batch:
-        bundle_path.write_text("changed after materialization", encoding="utf-8")
-        document = batch.documents[0]
-        assert document.pages[29].page_no == 30
-        assert "不保证续保" in document.pages[29].text
-        assert document.pages[30].page_no == 31
-        assert "计划一免赔额10000元" in document.pages[30].text
-        assert document.chunks[1].metadata["structural_type"] == "table"
-        assert document.source_revision.ordering.value == 3
-        assert (
-            document.source_revision.parser_fingerprint
-            == s0q.canonical_sha256(_revision_data()["parser_identity"])
-        )
+    with pytest.raises(s0q.S0QBlockedOnInput, match="table structure digest"):
+        async with source.materialize(request):
+            pytest.fail("unbound table content must not materialize")
 
 
-async def test_s0q_frozen_document_source_identity_is_deterministic(
-    tmp_path: Path,
-) -> None:
-    bundle_path = tmp_path / "terms-w1.json"
-    brochure_path = tmp_path / "brochure-w1.json"
-    bundle_path.write_text(
-        json.dumps(_bundle_payload(), ensure_ascii=False),
-        encoding="utf-8",
+def test_s0q_frozen_document_identity_is_deterministic() -> None:
+    bundle = s0q.admit_frozen_w1_bundle(
+        _bundle_payload(),
+        expected_source_path="dataset/source/terms.pdf",
+        expected_source_sha256=_DIGEST_A,
+        required_table_page=None,
     )
-    brochure_path.write_text(
-        json.dumps(_brochure_bundle_payload(), ensure_ascii=False),
-        encoding="utf-8",
-    )
-    source = s0q.FrozenW1DocumentSource(
-        expected_sources={
-            "dataset/source/terms.pdf": _DIGEST_A,
-            "dataset/source/brochure.pdf": _DIGEST_B,
-        },
-        required_table_pages={
-            "dataset/source/terms.pdf": None,
-            "dataset/source/brochure.pdf": None,
-        },
-    )
-    request = s0q.FrozenW1SourceRequest(
-        bundle_paths=(bundle_path, brochure_path),
-    )
+    first = s0q._source_document(bundle)
+    second = s0q._source_document(bundle)
 
-    async with source.materialize(request) as first:
-        first_identity = first.documents[0].source_revision.value
-    async with source.materialize(request) as second:
-        second_identity = second.documents[0].source_revision.value
-
-    assert first_identity == second_identity
-    assert first.documents[0].source_id == second.documents[0].source_id
+    assert first.source_revision.value == second.source_revision.value
+    assert first.source_id == second.source_id
+    assert first.pages[30].page_no == 31
+    assert "计划一免赔额10000元" in first.pages[30].text
 
 
 def test_s0q_frozen_source_request_rejects_one_bundle() -> None:
     with pytest.raises(ValueError, match="at least 2"):
         s0q.FrozenW1SourceRequest(
             bundle_paths=(Path("terms-w1.json"),),
+        )
+
+
+def test_s0q_frozen_document_source_requires_one_complex_table_source() -> None:
+    with pytest.raises(ValueError, match="complex-table"):
+        s0q.FrozenW1DocumentSource(
+            expected_sources={
+                "dataset/source/terms.pdf": _DIGEST_A,
+                "dataset/source/brochure.pdf": _DIGEST_B,
+            },
+            required_table_pages={
+                "dataset/source/terms.pdf": None,
+                "dataset/source/brochure.pdf": None,
+            },
         )
 
 
