@@ -304,6 +304,51 @@ def _bundle_payload() -> dict[str, object]:
     }
 
 
+def _brochure_bundle_payload() -> dict[str, object]:
+    chunks: list[dict[str, object]] = [
+        {
+            "id": "chunk-brochure-1",
+            "knowledge_id": "knowledge-2",
+            "parse_attempt": 3,
+            "chunk_index": 0,
+            "content": "产品特色包括保证范围广。",
+            "start_at": 0,
+            "end_at": 12,
+            "page_number": 1,
+            "structural_type": "text",
+        },
+    ]
+    return {
+        "artifact_kind": "weknora_w1_exact_revision",
+        "capture_state": "completed",
+        "text_origin": "w1_exact_attempt_chunks",
+        "source_path": "dataset/source/brochure.pdf",
+        "source_bytes": 567,
+        "source_sha256": _DIGEST_B,
+        "knowledge_id": "knowledge-2",
+        "parse_attempt": 3,
+        "parser_identity": _revision_data()["parser_identity"],
+        "completed_at": "2026-07-30T10:00:00Z",
+        "manifest": {
+            "algorithm": "weknora.chunk_manifest.v1",
+            "digest": _reference_manifest_digest(
+                chunks,
+                knowledge_id="knowledge-2",
+            ),
+            "chunk_count": 1,
+        },
+        "chunks": chunks,
+        "anchors": [
+            {
+                "page_number": 1,
+                "chunk_id": "chunk-brochure-1",
+                "quote": "产品特色",
+                "structural_type": "text",
+            },
+        ],
+    }
+
+
 def test_s0q_canonical_json_is_mapping_order_independent() -> None:
     left = {"b": 2, "a": {"y": 2, "x": 1}}
     right = {"a": {"x": 1, "y": 2}, "b": 2}
@@ -317,7 +362,7 @@ def test_s0q_admits_complete_digest_bound_w1_bundle() -> None:
         _bundle_payload(),
         expected_source_path="dataset/source/terms.pdf",
         expected_source_sha256=_DIGEST_A,
-        required_table_page=31,
+        required_table_page=None,
     )
 
     assert bundle.parse_attempt == 3
@@ -406,19 +451,42 @@ def test_s0q_requires_table_anchor_on_the_frozen_page() -> None:
         )
 
 
+def test_s0q_rejects_flattened_text_with_only_a_table_label() -> None:
+    with pytest.raises(s0q.S0QBlockedOnInput, match="table structure digest"):
+        s0q.admit_frozen_w1_bundle(
+            _bundle_payload(),
+            expected_source_path="dataset/source/terms.pdf",
+            expected_source_sha256=_DIGEST_A,
+            required_table_page=31,
+        )
+
+
 async def test_s0q_frozen_document_source_uses_only_bundle_content(
     tmp_path: Path,
 ) -> None:
     bundle_path = tmp_path / "terms-w1.json"
+    brochure_path = tmp_path / "brochure-w1.json"
     bundle_path.write_text(
         json.dumps(_bundle_payload(), ensure_ascii=False),
         encoding="utf-8",
     )
-    source = s0q.FrozenW1DocumentSource(
-        expected_sources={"dataset/source/terms.pdf": _DIGEST_A},
-        required_table_pages={"dataset/source/terms.pdf": 31},
+    brochure_path.write_text(
+        json.dumps(_brochure_bundle_payload(), ensure_ascii=False),
+        encoding="utf-8",
     )
-    request = s0q.FrozenW1SourceRequest(bundle_paths=(bundle_path,))
+    source = s0q.FrozenW1DocumentSource(
+        expected_sources={
+            "dataset/source/terms.pdf": _DIGEST_A,
+            "dataset/source/brochure.pdf": _DIGEST_B,
+        },
+        required_table_pages={
+            "dataset/source/terms.pdf": None,
+            "dataset/source/brochure.pdf": None,
+        },
+    )
+    request = s0q.FrozenW1SourceRequest(
+        bundle_paths=(bundle_path, brochure_path),
+    )
 
     async with source.materialize(request) as batch:
         bundle_path.write_text("changed after materialization", encoding="utf-8")
@@ -439,15 +507,28 @@ async def test_s0q_frozen_document_source_identity_is_deterministic(
     tmp_path: Path,
 ) -> None:
     bundle_path = tmp_path / "terms-w1.json"
+    brochure_path = tmp_path / "brochure-w1.json"
     bundle_path.write_text(
         json.dumps(_bundle_payload(), ensure_ascii=False),
         encoding="utf-8",
     )
-    source = s0q.FrozenW1DocumentSource(
-        expected_sources={"dataset/source/terms.pdf": _DIGEST_A},
-        required_table_pages={"dataset/source/terms.pdf": 31},
+    brochure_path.write_text(
+        json.dumps(_brochure_bundle_payload(), ensure_ascii=False),
+        encoding="utf-8",
     )
-    request = s0q.FrozenW1SourceRequest(bundle_paths=(bundle_path,))
+    source = s0q.FrozenW1DocumentSource(
+        expected_sources={
+            "dataset/source/terms.pdf": _DIGEST_A,
+            "dataset/source/brochure.pdf": _DIGEST_B,
+        },
+        required_table_pages={
+            "dataset/source/terms.pdf": None,
+            "dataset/source/brochure.pdf": None,
+        },
+    )
+    request = s0q.FrozenW1SourceRequest(
+        bundle_paths=(bundle_path, brochure_path),
+    )
 
     async with source.materialize(request) as first:
         first_identity = first.documents[0].source_revision.value
@@ -456,6 +537,13 @@ async def test_s0q_frozen_document_source_identity_is_deterministic(
 
     assert first_identity == second_identity
     assert first.documents[0].source_id == second.documents[0].source_id
+
+
+def test_s0q_frozen_source_request_rejects_one_bundle() -> None:
+    with pytest.raises(ValueError, match="at least 2"):
+        s0q.FrozenW1SourceRequest(
+            bundle_paths=(Path("terms-w1.json"),),
+        )
 
 
 class _CaptureClient:
@@ -646,7 +734,7 @@ def _capture_specs(
     return specs, contents
 
 
-async def test_s0q_capture_writes_both_bundles_then_cleans_scratch(
+async def test_s0q_capture_rejects_unbound_table_then_cleans_scratch(
     tmp_path: Path,
 ) -> None:
     specs, _ = _capture_specs(tmp_path)
@@ -695,11 +783,11 @@ async def test_s0q_capture_writes_both_bundles_then_cleans_scratch(
         poll_interval_seconds=0,
     )
 
-    assert report["status"] == "ADMITTED"
-    assert (output / "terms-w1.json").is_file()
-    assert (output / "brochure-w1.json").is_file()
-    assert (output / "input-manifest.json").is_file()
-    assert (output / "input-capture-report.json").is_file()
+    assert report["status"] == "BLOCKED_ON_INPUT"
+    assert "table structure digest" in report["reason"]
+    assert sorted(path.name for path in output.iterdir()) == [
+        "input-capture-report.json"
+    ]
     assert client.events[-2:] == ["delete:key", "delete:kb"]
 
 
@@ -783,3 +871,37 @@ def test_s0q_capture_cli_exposes_only_the_bounded_capture_command() -> None:
     )
     assert capture_help.returncode == 0
     assert "--raw-kb-id" in capture_help.stdout
+
+
+def test_s0q_capture_cli_writes_blocked_report_on_environment_failure(
+    tmp_path: Path,
+) -> None:
+    script = Path(__file__).parents[1] / "scripts" / "run_s0q_047.py"
+    output = tmp_path / "artifacts"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "capture",
+            "--runtime-env",
+            str(tmp_path / "missing.runtime"),
+            "--output",
+            str(output),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    report = json.loads(
+        (output / "input-capture-report.json").read_text(encoding="utf-8")
+    )
+    assert report["status"] == "BLOCKED_ON_INPUT"
+    assert report["bucket"] == "input_integrity"
+    assert report["scratch"]["cleanup"] == {
+        "api_key": "not_created",
+        "knowledge_base": "not_created",
+    }
+    assert report["harness_model_provider_calls"] == 0

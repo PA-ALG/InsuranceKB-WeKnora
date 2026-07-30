@@ -20,6 +20,7 @@ from insurance_harness.live_env.compose import read_runtime_environment
 from insurance_harness.s0q_047 import (
     S0QCaptureSource,
     capture_s0q_w1_inputs,
+    write_s0q_capture_report,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -138,9 +139,10 @@ async def _scratch_payload(
 
 
 async def _capture(namespace: argparse.Namespace) -> int:
-    values = read_runtime_environment(namespace.runtime_env)
-    client = WeKnoraAdminClient(namespace.api_base_url)
+    client: WeKnoraAdminClient | None = None
     try:
+        values = read_runtime_environment(namespace.runtime_env)
+        client = WeKnoraAdminClient(namespace.api_base_url)
         session = await _session(client, values)
         payload = await _scratch_payload(
             client,
@@ -158,8 +160,30 @@ async def _capture(namespace: argparse.Namespace) -> int:
             poll_attempts=namespace.poll_attempts,
             poll_interval_seconds=namespace.poll_interval_seconds,
         )
+    except Exception as exc:
+        report = {
+            "artifact_kind": "s0q_047_input_capture_report",
+            "status": "BLOCKED_ON_INPUT",
+            "bucket": "input_integrity",
+            "reason": (
+                "environment preflight failed closed at "
+                f"{type(exc).__name__}"
+            ),
+            "scratch": {
+                "knowledge_base_id": None,
+                "knowledge_ids": [],
+                "cleanup": {
+                    "api_key": "not_created",
+                    "knowledge_base": "not_created",
+                },
+            },
+            "input_manifest_digest": None,
+            "harness_model_provider_calls": 0,
+        }
+        write_s0q_capture_report(namespace.output, report)
     finally:
-        await client.aclose()
+        if client is not None:
+            await client.aclose()
     print(
         json.dumps(
             {

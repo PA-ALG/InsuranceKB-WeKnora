@@ -61,15 +61,18 @@ active-managed Wiki PUT/DELETE 拒绝。独立 Spec 与 Quality/Delivery review
 S0-Q 已于 2026-07-30 进入批准的两 PDF 窄切片运行。两份仓库 PDF 的 bytes 与
 SHA-256 均精确匹配，但固定 WeKnora 输入画像所需的百炼 embedding credential
 在创建任何 model/RAW KB/scratch KB/API key/knowledge 之前的一次维度探测返回
-HTTP 401。按输入门禁，本轮交付 `BLOCKED_ON_INPUT`：W1 bundle、Seed Golden、
-模型画像和 A–D 均未运行，Harness 弱/强模型调用均为零。临时 fresh stack 与
-其容器、网络、卷、运行配置目录已精确删除，原有固定 WeKnora 环境保持健康且
-未被重置。
+HTTP 401。静态 exact source inspection 还确认 current W1 v1 manifest 只绑定
+text chunk id/index/content，不绑定 S0-Q 所需的 page/block/table-cell identity
+或表格结构 digest。按输入门禁，本轮交付 `BLOCKED_ON_INPUT`：W1 bundle、
+Seed Golden、模型画像和 A–D 均未运行，Harness 弱/强模型调用均为零。临时
+fresh stack 与其容器、网络、卷、运行配置目录已精确删除，原有固定 WeKnora
+环境保持健康且未被重置。
 
-当前唯一主航道动作是：刷新/替换已批准的百炼 embedding credential，然后在
-同固定镜像、同两份 PDF、同隔离 capture 流程只重试一次输入冻结。不要建立通用
-凭据治理、替代 embedding、人工清洗文本，也不要提前实现 A–D、Release/Wiki
-接线。
+外部配置动作是刷新/替换已批准的百炼 embedding credential。开发侧下一条唯一
+主航道是另行批准一个最小 W1 page/block/table-cell identity +
+table-structure digest 绑定补丁；不建设表格平台。两项就绪后才在同固定镜像、
+同两份 PDF、同隔离 capture 流程重试一次。不要建立通用凭据治理、替代
+embedding、人工清洗文本，也不要提前实现 A–D、Release/Wiki 接线。
 
 当前唯一执行顺序：
 

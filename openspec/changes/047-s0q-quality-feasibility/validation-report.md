@@ -36,6 +36,10 @@ head/tree=`0d80939ce0562b39b8eb5a54bcf043199c92f80e` /
   健康；
 - 创建任何 model/RAW KB/scratch KB/API key/knowledge/upload 之前，唯一一次
   WeKnora 输入基础设施 embedding dimension probe 返回 HTTP 401；
+- exact source inspection 同时确认 current W1 v1 manifest 只绑定 text chunk
+  id/index/content；revision chunks 未暴露或绑定 page/block/table-cell identity
+  与表格结构 digest。只有扁平文本和 `table` 标签时，新的 admission 测试会
+  typed fail closed，不允许 Harness 猜表头、合并单元格或行列关系；
 - 因输入画像未 admitted，W1 bundle/input manifest 未创建，Harness 弱模型
   调用=0、强模型诊断调用=0，A–D=`NOT RUN`；
 - 临时项目的 containers/network/volumes 与含临时配置的目录均已精确删除；
@@ -44,9 +48,11 @@ head/tree=`0d80939ce0562b39b8eb5a54bcf043199c92f80e` /
 非敏感机器证据：
 `artifacts/input-capture-report.json`。
 
-本次停止点严格位于 Q1 输入门。下一次唯一动作是由用户刷新/替换既有批准的百炼
-embedding credential 后，复用同一隔离 capture 流程重试一次；不得创建假
-embedding、人工整理 PDF 或提前进入模型/A–D。
+本次停止点严格位于 Q1 输入门。外部配置需由用户刷新/替换既有批准的百炼
+embedding credential；开发侧下一条唯一主航道是另行批准一个最小 W1
+page/block/table-cell identity + table-structure digest 绑定补丁。两项输入
+先决条件齐备后，才复用同一隔离 capture 流程重试一次；不得创建假 embedding、
+人工整理 PDF 或提前进入模型/A–D。
 
 ## 输入核验
 
@@ -93,7 +99,7 @@ Revision Manifest 合同/实现存在；但仓库中未发现两份可直接用�
 
 - `openspec validate 047-s0q-quality-feasibility --strict`：`PASS`
 - `pytest tests/test_s0q_047.py tests/test_source_weknora_017.py`：
-  `68 passed`
+  `71 passed`
 - S0-Q runner/module/tests Ruff 与 mypy：`PASS`
 - `git diff --check`：`PASS`
 - full、PostgreSQL suite、无关 provider/live：`NOT RUN`

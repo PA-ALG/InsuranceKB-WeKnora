@@ -27,7 +27,7 @@
     "harness_weak_model_calls": 0,
     "weknora_embedding_infrastructure_calls": 1
   },
-  "reason": "Pinned WeKnora input profile was not admitted: the configured Bailian embedding credential returned HTTP 401 during the sole dimension probe before scratch knowledge-base creation.",
+  "reason": "Pinned WeKnora input was not admitted: the configured Bailian embedding credential returned HTTP 401 before scratch knowledge-base creation, and the current W1 v1 exact-revision API binds text chunks but no page/block/table-cell identity or table-structure digest.",
   "runner_started": false,
   "runtime": {
     "fresh_isolated_stack": {
@@ -82,5 +82,11 @@
     "directory": "DELETED",
     "network": "DELETED",
     "volumes": "DELETED"
+  },
+  "w1_contract_preflight": {
+    "current_manifest_binding": "text chunk id/index/content only",
+    "page_or_block_identity": "NOT_EXPOSED_BY_EXACT_REVISION_API",
+    "table_cell_relationships": "NOT_EXPOSED_BY_EXACT_REVISION_API",
+    "table_structure_digest": "NOT_BOUND_BY_W1_V1_MANIFEST"
   }
 }

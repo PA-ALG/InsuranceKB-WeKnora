@@ -331,13 +331,18 @@ def admit_frozen_w1_bundle(
             f"required table anchor is missing for page {required_table_page}",
             bucket=S0QErrorBucket.INPUT_INTEGRITY,
         )
+    if required_table_page is not None:
+        raise S0QBlockedOnInput(
+            "W1 exact revision does not bind a table structure digest",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
     return bundle
 
 
 class FrozenW1SourceRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    bundle_paths: tuple[Path, ...] = Field(min_length=1, max_length=2)
+    bundle_paths: tuple[Path, ...] = Field(min_length=2, max_length=2)
 
     @field_validator("bundle_paths")
     @classmethod
@@ -362,7 +367,7 @@ class FrozenW1DocumentSource:
         self._expected_sources = dict(expected_sources)
         self._required_table_pages = dict(required_table_pages)
         if (
-            not self._expected_sources
+            len(self._expected_sources) != 2
             or set(self._required_table_pages) != set(self._expected_sources)
             or any(
                 not path
@@ -412,6 +417,11 @@ class FrozenW1DocumentSource:
             documents.append(document)
             local_paths[document.source_id] = bundle_path
             seen_sources.add(source_path)
+        if seen_sources != set(self._expected_sources):
+            raise S0QBlockedOnInput(
+                "frozen bundle set does not contain the exact two sources",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
         yield MaterializedBatch(
             documents=tuple(documents),
             local_paths=local_paths,
@@ -818,6 +828,13 @@ def _atomic_write_json(path: Path, value: Any) -> None:
             temporary_path.unlink(missing_ok=True)
 
 
+def write_s0q_capture_report(
+    output_dir: Path,
+    report: Mapping[str, Any],
+) -> None:
+    _atomic_write_json(output_dir / "input-capture-report.json", report)
+
+
 async def capture_s0q_w1_inputs(
     *,
     client: S0QCaptureClient,
@@ -987,7 +1004,7 @@ async def capture_s0q_w1_inputs(
         "input_manifest_digest": (
             manifest["manifest_digest"] if manifest is not None else None
         ),
-        "provider_calls": 0,
+        "harness_model_provider_calls": 0,
     }
-    _atomic_write_json(output_dir / "input-capture-report.json", report)
+    write_s0q_capture_report(output_dir, report)
     return report
