@@ -929,6 +929,9 @@ type legacyW1BridgeState struct {
 
 func classifyLegacyW1Origin(state legacyW1BridgeState) (legacyW1Origin, error) {
 	officialMigrationHead := upstream.OfficialMigrationHead()
+	enterpriseVersionKnown := state.enterpriseVersion == 1 ||
+		(state.enterpriseVersion == int64(packagedEnterpriseMigrationHead) &&
+			state.officialVersion == officialMigrationHead)
 	if !state.fixtureChecksumValid {
 		return "", fmt.Errorf("legacy W1 fixture checksum mismatch")
 	}
@@ -974,7 +977,7 @@ func classifyLegacyW1Origin(state legacyW1BridgeState) (legacyW1Origin, error) {
 	}
 	if state.enterpriseLedgerExists &&
 		state.enterpriseVersion != -1 &&
-		state.enterpriseVersion != 1 {
+		!enterpriseVersionKnown {
 		return "", unknownLegacyW1Origin(state)
 	}
 	if state.w1State == legacyW1Partial || state.spanState == spanNameUnknown {
@@ -1013,7 +1016,7 @@ func classifyLegacyW1Origin(state legacyW1BridgeState) (legacyW1Origin, error) {
 		return legacyW1OriginExactLegacy66, nil
 	}
 	if state.enterpriseLedgerExists &&
-		state.enterpriseVersion == 1 &&
+		enterpriseVersionKnown &&
 		state.w1State == legacyW1Exact &&
 		state.spanState == spanNameExpanded255 {
 		if state.officialVersion == 66 {

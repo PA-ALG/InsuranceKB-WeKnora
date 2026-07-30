@@ -16,6 +16,12 @@
 > 2026-07-30 总控后续裁决：上述三条 migration-head 路径属于正常基础设施
 > 维护，不是 Release 业务扩张；已 exact 批准修复并恢复第三轮。此前
 > `RELEASE_PATH_NOT_FEASIBLE` 仍是前两轮真实历史结果，但不再阻断新执行。
+>
+> 第三轮 candidate base：
+> `37133d8feb421eaf78b01a6dbc800941ef4be2b7`（PR #72 merge commit）；
+> branch：`codex/046-s0r-release-falsification-impl-v3`。第三轮二元结果为
+> `RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY`：有界载体路径已跑通，但这不是
+> 生产 Release Kernel、部署或 MVP 交付。
 
 ## S0-R 二元裁决证据
 
@@ -85,7 +91,7 @@ black-box fixture 与 HTTP route test 结构均未进入实现，不能据此写
 - Release 业务预算、单 `000002`、五表/五索引、两新增测试文件、无 Harness
   Active Head 与禁止 full/provider/live 的合同均不变。
 
-## 已复核静态事实
+## 第三轮开工前已复核静态事实
 
 - `80a5003cc99a427098afe184eee6601916d3d156` 是当前 HEAD ancestor；
 - `deploy/upstream/weknora-adoption-target.json` 冻结该 commit、tree
@@ -94,13 +100,30 @@ black-box fixture 与 HTTP route test 结构均未进入实现，不能据此写
 - `internal/application/repository/wiki_page.go` 的 CAS 是单页 `id + version`；
 - `internal/router/routes_knowledge.go` 提供单页 revision/revert，同时普通
   PUT/DELETE 仍对 KB owner/admin 开放；
-- 当前生产 Go/SQL 未找到整版 `active_release`、`activation_epoch`、
+- 当时生产 Go/SQL 未找到整版 `active_release`、`activation_epoch`、
   `release_managed`、`PublishAuthorization` 或 Ready/activation receipt；
 - W1 `manifest_digest` 属于 SourceRevision，不是 Release manifest；
 - 045 manifest/thin check/patch inventory 与 enterprise migration ledger
   可承担后续有界跟版。
 
-## 文档门禁
+## 第三轮实现与门禁
+
+- enterprise packaged head、legacy origin 与真实 matrix 已统一为 version `2`；
+  frozen-head 安全校验保留；
+- 单个 enterprise `000002` 创建五张实验表与五个非主键索引；down 反向删除，
+  未修改 official migration；
+- Release core 已证明 R0(A/B/C) → R1(A update/B delete/C unchanged/D new)、
+  immutable member、current/pinned page/payload/minimal search、四故障点零半写、
+  exact receipt retry 与 ACL shrink；
+- 生产 router 显式注入 `WikiReleaseHandler`，六条 release route 位于既有
+  `/api/v1` Auth/API-key/RBAC 链；Wiki 与 RAW ACL 均须产生 exact 成功证据，
+  RBAC rollout fail-open 不会产生 Release proof；
+- 一个 tenant+Space 只有一个 active Wiki Head；active-managed Wiki 的现有
+  PUT/DELETE 全部拒绝，unmanaged Wiki 保持原行为；
+- container 默认使用空 Ed25519 key map，误启用时 activation fail closed；
+  隔离测试显式注入测试 key。
+
+## 第三轮验证证据
 
 - 第一轮 pre-change baseline
   `go test ./internal/application/service ./internal/handler`：`PASS`，exit 0；
@@ -108,10 +131,23 @@ black-box fixture 与 HTTP route test 结构均未进入实现，不能据此写
   enterprise head 固定值为直接 `BLOCKER`；
 - 第二轮 Go baseline 与 S0-R 新 focused tests：`NOT RUN`，在 RED 前触发
   第 12 路径停线；
-- PostgreSQL 16 targeted migration/fixture：`NOT RUN`；
-- touched-package `go vet`：`NOT RUN`；
-- 045 finite adoption check：`NOT RUN`；
+- focused service/handler/router/database tests：`PASS`；
+- touched types/repository/container compile-only：`PASS`；
+- PostgreSQL 16.14 legacy/fresh migration matrix：七组 `PASS`，含 exact legacy
+  `000066` 数据保留、restart、dirty/partial fail closed；
+- `000002` SQL smoke：up=`5|5`、down=`0|0`、re-up=`5|5`、
+  restart=`5|5`；
+- PostgreSQL 同 base 双 Candidate 与 CAS-blocked pinned read：`PASS`，并
+  `count=5` 重复通过；`-race` 首次编译超过有界窗口后中止，不作为阻断；
+- touched-package `go vet`：`PASS`；
+- OpenSpec 046/048 strict：`PASS`；PostHog DNS flush warning 不影响 exit 0；
+- 045 finite adoption check：`manual_review_required`，仅来自既有 registered
+  W1 overlaps；official migration=`merged/head 75`、plugin contract=`valid`、
+  hard checks=`pass`；
+- `git diff --check`、`gofmt -d`：`PASS`；
+- independent Spec 与 Quality/Delivery review：`Approved: YES`；
 - provider、live、full：`NOT RUN`，且不在命令预算内。
 
-本报告只记录二元证伪，不得把 `RELEASE_PATH_NOT_FEASIBLE` 解释为 S0-R、
-生产 Release 能力或 MVP 已完成，也不得据此恢复双 serving Head。
+第三轮 `RELEASE_PATH_FEASIBLE` 只证明 WeKnora 可用有界 experimental patch
+承载唯一 serving Active Release 的最小路径。不得把它解释为生产 Kernel、
+S0-Q、MVP、Artifact 或部署完成，也不得据此恢复 Harness 第二 serving Head。

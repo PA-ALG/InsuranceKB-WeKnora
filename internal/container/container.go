@@ -171,6 +171,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewSyncLogRepository))
 	must(container.Provide(repository.NewWikiPageRepository))
 	must(container.Provide(repository.NewWikiLogEntryRepository))
+	must(container.Provide(repository.NewWikiReleaseRepository))
 	must(container.Provide(repository.NewTaskPendingOpsRepository))
 	must(container.Provide(repository.NewTaskDeadLetterRepository))
 
@@ -219,6 +220,14 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewWikiLogEntryService))
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
+	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
+	must(container.Provide(func() service.WikiReleaseAuthorizationVerifier {
+		return service.NewEd25519WikiReleaseAuthorizationVerifier(nil)
+	}))
+	must(container.Provide(func() service.WikiReleaseServiceOptions {
+		return service.WikiReleaseServiceOptions{}
+	}))
+	must(container.Provide(service.NewWikiReleaseService))
 	must(container.Provide(service.NewEmbedChannelService))
 
 	// Web search service (needed by AgentService)
@@ -375,6 +384,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewDataSourceHandler))
 	// Wiki page handler
 	must(container.Provide(handler.NewWikiPageHandler))
+	must(container.Provide(handler.NewWikiReleaseHandler))
 	// IM integration
 	logger.Debugf(ctx, "[Container] Registering IM integration...")
 	must(container.Provide(imPkg.NewService))

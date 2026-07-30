@@ -56,10 +56,19 @@ R4 的允许终态原定义为 `RELEASE_PATH_FEASIBLE` 或
   `internal/database/legacy_w1_bridge.go` 与
   `internal/database/legacy_w1_bridge_test.go` 三条 migration 基础路径；
   不扩大 Release 表/API/ACL/principal 或通用 migration 平台。
-- [ ] O3 从例外合入后的最新 main 建全新 clean worktree，先以现有 matrix RED
+- [x] O3 从例外合入后的最新 main 建全新 clean worktree，先以现有 matrix RED
   证明 version `2` 被固定值拒绝，再做最小 GREEN。
-- [ ] O4 migration 基础 GREEN 后，按原十一条业务路径恢复 S0-R，并继续执行
+- [x] O4 migration 基础 GREEN 后，按原十一条业务路径恢复 S0-R，并继续执行
   R0/R1、双 Candidate、四故障点、并发 read、双 ACL shrink 与 managed guard。
+- [x] O5 闭合 canonical authorization、frozen receipt identity、R0/R1、
+  四故障点、双 ACL shrink、生产路由与 active-managed PUT/DELETE focused
+  RED→GREEN。
+- [x] O6 在隔离 PostgreSQL 16 验证 legacy/fresh migration matrix、`000002`
+  up/down/restart、同 base 双 Candidate 单赢家与 CAS 阻塞期 pinned read。
+- [x] O7 登记 S0-R experimental patch，并运行 045 finite adoption check；
+  official migration 与 plugin contract 通过，既有 W1 overlap 保持人工复核。
+- [x] O8 独立 Spec 与 Quality/Delivery 复审均为 `Approved: YES`，第三轮输出
+  `RELEASE_PATH_FEASIBLE / EXPERIMENTAL ONLY`。
 
 ## 永久非目标
 

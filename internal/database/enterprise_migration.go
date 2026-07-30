@@ -16,6 +16,7 @@ const (
 	officialPostgresMigrationSource   = "file://migrations/versioned"
 	enterprisePostgresMigrationSource = "file://migrations/enterprise/versioned"
 	enterpriseMigrationLedgerTable    = "enterprise_schema_migrations"
+	packagedEnterpriseMigrationHead   = uint(2)
 )
 
 type postgresMigrationPhaseGuard interface {
@@ -238,7 +239,7 @@ func validatePostgresMigrationSetVersion(
 	cacheOfficial bool,
 	version uint,
 ) error {
-	var expected uint = 1
+	expected := packagedEnterpriseMigrationHead
 	if cacheOfficial {
 		expected = uint(upstream.OfficialMigrationHead())
 	}
