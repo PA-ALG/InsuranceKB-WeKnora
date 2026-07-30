@@ -24,13 +24,13 @@
 - [x] Q6 strict validate 047、diff-check 与 exact 五路径 scope。
 - [x] Q7 独立 Spec + Quality/Delivery review。
 
-## 后续运行（未授权，输入齐备前不得开始）
+## 后续运行（2026-07-30 已授权，仍须按门禁执行）
 
 - [ ] R1 提供两份真实材料的完整 frozen artifact manifest。
 - [ ] R2 提供预置 ProductVersion、四字段 Seed Golden 与 Evidence。
 - [ ] R3 批准 exact 弱模型画像、调用/重试/timeout、人工修订时间上限，以及
   隔离强模型诊断臂的 exact identity/有限调用预算。
-- [ ] R4 取得独立运行 Mission Card，再执行模型/provider。
+- [x] R4 取得独立运行 Mission Card；模型/provider 仍须等待 R1–R3 admitted。
 - [ ] R5 在同一 2 材料/4 字段完成 A–D 消融，输出逐字段结果、error buckets、
   abstention、Evidence 与人工修订时间。
 - [ ] R6 仅在所有验收通过时输出
