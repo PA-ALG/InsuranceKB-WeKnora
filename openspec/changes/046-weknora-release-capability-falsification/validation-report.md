@@ -12,6 +12,10 @@
 > enterprise `000002` 会先执行到 version `2`，再被现有 frozen-head 校验拒绝
 > 完成生产 migration phase，修复至少需要第 12 个生产路径。两轮均按 R0.2
 > 在 RED 前停止，未实现 S0-R 或生产 Release Kernel。
+>
+> 2026-07-30 总控后续裁决：上述三条 migration-head 路径属于正常基础设施
+> 维护，不是 Release 业务扩张；已 exact 批准修复并恢复第三轮。此前
+> `RELEASE_PATH_NOT_FEASIBLE` 仍是前两轮真实历史结果，但不再阻断新执行。
 
 ## S0-R 二元裁决证据
 
@@ -68,6 +72,18 @@ head 审查，已被下述第二轮 exact 证据取代。
 没有形成 Harness 第二 serving Head 或任何实验 Head。签名算法、双 ACL
 black-box fixture 与 HTTP route test 结构均未进入实现，不能据此写 PASS 或
 进一步失败结论。
+
+## 总控恢复裁决
+
+- 用户明确要求按工程合理性推进，允许必要基础兼容路径超出原人工计数；
+- 新授权只包含 `internal/database/enterprise_migration.go`、
+  `internal/database/legacy_w1_bridge.go` 与
+  `internal/database/legacy_w1_bridge_test.go`；
+- 必须保留 frozen-head 安全校验，不得简单删除 version check；
+- 第三轮先用现有 PostgreSQL matrix 形成 version `2` RED，再统一 runner、
+  bridge classification 与 matrix 期望；其后才恢复 Release RED→GREEN；
+- Release 业务预算、单 `000002`、五表/五索引、两新增测试文件、无 Harness
+  Active Head 与禁止 full/provider/live 的合同均不变。
 
 ## 已复核静态事实
 

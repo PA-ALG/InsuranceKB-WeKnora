@@ -46,8 +46,20 @@ R4 的允许终态原定义为 `RELEASE_PATH_FEASIBLE` 或
   未写 RED、功能、migration 或测试。
 - [x] A5 第二轮输出 `RELEASE_PATH_NOT_FEASIBLE`；actual 功能 patch、
   migration、测试与新增升级责任仍为零。
-- [x] A6 按 048 禁止继续追加预算修订；停止当前 S0-R carrier 路线，重新评估
-  单一 serving authority 的承载位置，且不得恢复双 Head。
+- [x] A6 按当时 048 规则停止第二轮并记录二元结果，且未恢复双 Head。
+
+## 总控基础设施例外与第三轮恢复
+
+- [x] O1 用户于 2026-07-30 明确裁决：工程合理性优先，不得让人工路径上限
+  阻塞正常必需修改。
+- [x] O2 仅批准 `internal/database/enterprise_migration.go`、
+  `internal/database/legacy_w1_bridge.go` 与
+  `internal/database/legacy_w1_bridge_test.go` 三条 migration 基础路径；
+  不扩大 Release 表/API/ACL/principal 或通用 migration 平台。
+- [ ] O3 从例外合入后的最新 main 建全新 clean worktree，先以现有 matrix RED
+  证明 version `2` 被固定值拒绝，再做最小 GREEN。
+- [ ] O4 migration 基础 GREEN 后，按原十一条业务路径恢复 S0-R，并继续执行
+  R0/R1、双 Candidate、四故障点、并发 read、双 ACL shrink 与 managed guard。
 
 ## 永久非目标
 
