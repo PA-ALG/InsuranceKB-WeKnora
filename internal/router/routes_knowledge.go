@@ -284,16 +284,56 @@ func RegisterKnowledgeTagRoutes(r *gin.RouterGroup, tagHandler *handler.TagHandl
 // :kb_id resolves directly to the owning KB so a Contributor who owns
 // the KB can manage its wiki, while a non-owner Contributor gets 403.
 func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHandler, g *rbacGuards) {
+	registerWikiPageRoutes(r, wikiHandler, nil, g)
+}
+
+// RegisterWikiPageRoutesWithRelease is the strict production wrapper. It
+// preserves the legacy wrapper while explicitly injecting release routes and
+// the active-managed ordinary mutation guard.
+func RegisterWikiPageRoutesWithRelease(
+	r *gin.RouterGroup,
+	wikiHandler *handler.WikiPageHandler,
+	releaseHandler *handler.WikiReleaseHandler,
+	g *rbacGuards,
+) {
+	registerWikiPageRoutes(r, wikiHandler, releaseHandler, g)
+}
+
+func registerWikiPageRoutes(
+	r *gin.RouterGroup,
+	wikiHandler *handler.WikiPageHandler,
+	releaseHandler *handler.WikiReleaseHandler,
+	g *rbacGuards,
+) {
 	wiki := g.apiKeyGroup(r.Group("/knowledgebase/:kb_id/wiki"), apiKeyIngest(apiKeyFullAccess()))
 	wikiRead := wiki.With(apiKeyRetrieve(apiKeyFullAccess()))
 	{
 		// Page CRUD
 		wikiRead.GET("/pages", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListPages)
 		wiki.POST("/pages", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreatePage)
-		wiki.PUT("/move-page", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.MovePage)
+		movePageHandlers := []gin.HandlerFunc{
+			g.OwnedWikiKBOrAdmin(),
+			g.KBAccessWrite("kb_id"),
+		}
+		if releaseHandler != nil {
+			movePageHandlers = append(movePageHandlers, releaseHandler.RejectManagedWikiWrite())
+		}
+		movePageHandlers = append(movePageHandlers, wikiHandler.MovePage)
+		wiki.PUT("/move-page", movePageHandlers...)
 		wikiRead.GET("/pages/*slug", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetPage)
-		wiki.PUT("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdatePage)
-		wiki.DELETE("/pages/*slug", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeletePage)
+		updatePageHandlers := []gin.HandlerFunc{
+			g.OwnedWikiKBOrAdmin(),
+			g.KBAccessWrite("kb_id"),
+		}
+		deletePageHandlers := append([]gin.HandlerFunc(nil), updatePageHandlers...)
+		if releaseHandler != nil {
+			updatePageHandlers = append(updatePageHandlers, releaseHandler.RejectManagedWikiWrite())
+			deletePageHandlers = append(deletePageHandlers, releaseHandler.RejectManagedWikiWrite())
+		}
+		updatePageHandlers = append(updatePageHandlers, wikiHandler.UpdatePage)
+		deletePageHandlers = append(deletePageHandlers, wikiHandler.DeletePage)
+		wiki.PUT("/pages/*slug", updatePageHandlers...)
+		wiki.DELETE("/pages/*slug", deletePageHandlers...)
 
 		// Revision history (slug is a catch-all like /pages; revert carries
 		// the slug in the body for the same reason move-page does)
@@ -303,8 +343,19 @@ func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHan
 		// Folder tree (directory nodes)
 		wikiRead.GET("/folders", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListFolders)
 		wiki.POST("/folders", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.CreateFolder)
-		wiki.PUT("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateFolder)
-		wiki.DELETE("/folders/:folder_id", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.DeleteFolder)
+		updateFolderHandlers := []gin.HandlerFunc{
+			g.OwnedWikiKBOrAdmin(),
+			g.KBAccessWrite("kb_id"),
+		}
+		deleteFolderHandlers := append([]gin.HandlerFunc(nil), updateFolderHandlers...)
+		if releaseHandler != nil {
+			updateFolderHandlers = append(updateFolderHandlers, releaseHandler.RejectManagedWikiWrite())
+			deleteFolderHandlers = append(deleteFolderHandlers, releaseHandler.RejectManagedWikiWrite())
+		}
+		updateFolderHandlers = append(updateFolderHandlers, wikiHandler.UpdateFolder)
+		deleteFolderHandlers = append(deleteFolderHandlers, wikiHandler.DeleteFolder)
+		wiki.PUT("/folders/:folder_id", updateFolderHandlers...)
+		wiki.DELETE("/folders/:folder_id", deleteFolderHandlers...)
 
 		// Special pages
 		wikiRead.GET("/index", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.GetIndex)
@@ -322,6 +373,63 @@ func RegisterWikiPageRoutes(r *gin.RouterGroup, wikiHandler *handler.WikiPageHan
 
 		// Issues
 		wikiRead.GET("/issues", g.Viewer(), g.KBAccessRead("kb_id"), wikiHandler.ListIssues)
-		wiki.PUT("/issues/:issue_id/status", g.OwnedWikiKBOrAdmin(), g.KBAccessWrite("kb_id"), wikiHandler.UpdateIssueStatus)
+		updateIssueHandlers := []gin.HandlerFunc{
+			g.OwnedWikiKBOrAdmin(),
+			g.KBAccessWrite("kb_id"),
+		}
+		if releaseHandler != nil {
+			updateIssueHandlers = append(updateIssueHandlers, releaseHandler.RejectManagedWikiWrite())
+		}
+		updateIssueHandlers = append(updateIssueHandlers, wikiHandler.UpdateIssueStatus)
+		wiki.PUT("/issues/:issue_id/status", updateIssueHandlers...)
 	}
+
+	if releaseHandler == nil {
+		return
+	}
+	release := g.apiKeyGroup(
+		r.Group("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id"),
+		apiKeyIngest(apiKeyFullAccess()),
+	)
+	releaseRead := release.With(apiKeyRetrieve(apiKeyFullAccess()))
+	releaseWriteGuards := []gin.HandlerFunc{
+		g.OwnedWikiKBOrAdmin(),
+		g.KBAccessWrite("kb_id"),
+		releaseHandler.RecordWikiAccessEvidence(),
+		g.KBAccessRead("raw_kb_id"),
+		releaseHandler.RecordRawAccessEvidence(),
+		releaseHandler.SealAccess(),
+	}
+	releaseReadGuards := []gin.HandlerFunc{
+		g.Viewer(),
+		g.KBAccessRead("kb_id"),
+		releaseHandler.RecordWikiAccessEvidence(),
+		g.KBAccessRead("raw_kb_id"),
+		releaseHandler.RecordRawAccessEvidence(),
+		releaseHandler.SealAccess(),
+	}
+	release.POST(
+		"/preparations",
+		append(append([]gin.HandlerFunc(nil), releaseWriteGuards...), releaseHandler.Prepare)...,
+	)
+	release.POST(
+		"/activations",
+		append(append([]gin.HandlerFunc(nil), releaseWriteGuards...), releaseHandler.Activate)...,
+	)
+	releaseRead.GET(
+		"/current",
+		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.Current)...,
+	)
+	releaseRead.GET(
+		"/releases/:release_id/pages/:logical_slug",
+		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.PinnedPage)...,
+	)
+	releaseRead.GET(
+		"/releases/:release_id/payloads/:logical_slug",
+		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.PinnedPayload)...,
+	)
+	releaseRead.GET(
+		"/releases/:release_id/search",
+		append(append([]gin.HandlerFunc(nil), releaseReadGuards...), releaseHandler.MinimalSearch)...,
+	)
 }

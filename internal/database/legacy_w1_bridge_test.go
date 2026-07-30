@@ -182,7 +182,20 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 			want: legacyW1OriginKnownBridged,
 		},
 		{
-			name: "full current",
+			name: "packaged enterprise head at official66 is unknown",
+			state: legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        66,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      2,
+			},
+			wantErr: "unknown legacy W1 migration origin",
+		},
+		{
+			name: "enterprise version1 remains a known upgradeable state",
 			state: legacyW1BridgeState{
 				fixtureChecksumValid:   true,
 				officialLedgerExists:   true,
@@ -191,6 +204,32 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 				spanState:              spanNameExpanded255,
 				enterpriseLedgerExists: true,
 				enterpriseVersion:      1,
+			},
+			want: legacyW1OriginFullCurrent,
+		},
+		{
+			name: "packaged enterprise head before official head is unknown",
+			state: legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        officialHead - 1,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      2,
+			},
+			wantErr: "unknown legacy W1 migration origin",
+		},
+		{
+			name: "full current at packaged enterprise head",
+			state: legacyW1BridgeState{
+				fixtureChecksumValid:   true,
+				officialLedgerExists:   true,
+				officialVersion:        officialHead,
+				w1State:                legacyW1Exact,
+				spanState:              spanNameExpanded255,
+				enterpriseLedgerExists: true,
+				enterpriseVersion:      2,
 			},
 			want: legacyW1OriginFullCurrent,
 		},
@@ -274,7 +313,7 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 			wantErr: "unknown legacy W1 migration origin",
 		},
 		{
-			name: "unexpected enterprise version",
+			name: "enterprise version above packaged head",
 			state: legacyW1BridgeState{
 				fixtureChecksumValid:   true,
 				officialLedgerExists:   true,
@@ -282,7 +321,7 @@ func TestClassifyLegacyW1Origin(t *testing.T) {
 				w1State:                legacyW1Exact,
 				spanState:              spanNameExpanded255,
 				enterpriseLedgerExists: true,
-				enterpriseVersion:      2,
+				enterpriseVersion:      3,
 			},
 			wantErr: "unknown legacy W1 migration origin",
 		},
@@ -1103,7 +1142,7 @@ func TestValidatePostgresMigrationSetVersionRequiresFrozenHeads(t *testing.T) {
 	require.NoError(t, validatePostgresMigrationSetVersion(
 		enterprisePostgresMigrationSource,
 		false,
-		1,
+		2,
 	))
 
 	for _, tt := range []struct {
@@ -1112,7 +1151,7 @@ func TestValidatePostgresMigrationSetVersionRequiresFrozenHeads(t *testing.T) {
 		version       uint
 	}{
 		{source: officialPostgresMigrationSource, cacheOfficial: true, version: officialHead - 1},
-		{source: enterprisePostgresMigrationSource, version: 2},
+		{source: enterprisePostgresMigrationSource, version: 1},
 	} {
 		err := validatePostgresMigrationSetVersion(tt.source, tt.cacheOfficial, tt.version)
 		var safetyErr *MigrationSafetyError
@@ -1300,7 +1339,7 @@ func (m *postgresMigrationMatrix) requireCurrent(t *testing.T) {
 	require.EqualValues(t, upstream.OfficialMigrationHead(), state.officialVersion)
 	require.False(t, state.officialDirty)
 	require.True(t, state.enterpriseLedgerExists)
-	require.EqualValues(t, 1, state.enterpriseVersion)
+	require.EqualValues(t, 2, state.enterpriseVersion)
 	require.False(t, state.enterpriseDirty)
 	require.Equal(t, dependencyAnchorsExact, state.dependencyState)
 	require.Equal(t, spanNameExpanded255, state.spanState)

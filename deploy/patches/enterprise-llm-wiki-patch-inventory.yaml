@@ -55,6 +55,42 @@ patches:
       compatibility matrix passes without this fork patch.
     status: in-review
 
+  - patch_id: S0R
+    upstream_sha: 80a5003cc99a427098afe184eee6601916d3d156
+    file_path:
+      - internal/types/wiki_release.go
+      - internal/application/repository/wiki_release.go
+      - internal/application/service/wiki_release.go
+      - internal/application/service/wiki_release_falsification_test.go
+      - internal/handler/wiki_release.go
+      - internal/handler/wiki_release_falsification_test.go
+      - internal/router/routes_knowledge.go
+      - internal/router/router.go
+      - internal/container/container.go
+      - internal/database/enterprise_migration.go
+      - internal/database/legacy_w1_bridge.go
+      - internal/database/legacy_w1_bridge_test.go
+      - migrations/enterprise/versioned/000002_release_falsification.up.sql
+      - migrations/enterprise/versioned/000002_release_falsification.down.sql
+    owner: S0R-weknora-release-falsification
+    rationale: >-
+      Falsify whether WeKnora can own the sole serving Active Release through
+      one bounded experimental Release path without creating a Harness Head or
+      a general publication framework.
+    compatibility_tests:
+      - closed canonical authorization and exact idempotent receipt retry
+      - PostgreSQL same-base activation has one winner and zero loser residue
+      - current and pinned reads never mix releases during activation
+      - current Wiki and RAW ACL shrink fails closed
+      - active-managed Wiki rejects ordinary PUT and DELETE
+      - unmanaged Wiki behavior remains compatible
+    upstream_issue: not-filed-experimental-carrier-falsification
+    remove_when: >-
+      Remove or replace after an accepted upstream release exposes equivalent
+      immutable Release activation, pinned reads, dual current ACL checks and
+      managed Wiki mutation fencing, and the same compatibility vectors pass.
+    status: experimental
+
   - patch_id: P11
     upstream_sha: 5eefa70e6fc8f9ec27958779f91ece6cf685598c
     file_path:
