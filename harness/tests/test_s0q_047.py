@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from collections.abc import Mapping
 from hashlib import sha256
 from pathlib import Path
@@ -13,6 +15,7 @@ import respx
 from pydantic import SecretStr
 
 import insurance_harness.s0q_047 as s0q
+from insurance_harness.adapters.weknora import admin_client as admin
 from insurance_harness.adapters.weknora.admin_client import WeKnoraAdminClient
 
 _DIGEST_A = "a" * 64
@@ -453,3 +456,330 @@ async def test_s0q_frozen_document_source_identity_is_deterministic(
 
     assert first_identity == second_identity
     assert first.documents[0].source_id == second.documents[0].source_id
+
+
+class _CaptureClient:
+    def __init__(
+        self,
+        *,
+        sources: dict[str, tuple[str, tuple[dict[str, object], ...]]],
+    ) -> None:
+        self.sources = sources
+        self.knowledge_to_source: dict[str, str] = {}
+        self.events: list[str] = []
+
+    async def create_knowledge_base(
+        self,
+        credential: object,
+        documented_payload: dict[str, object],
+    ) -> dict[str, object]:
+        self.events.append("create:kb")
+        return {"id": "scratch-kb", "name": documented_payload["name"]}
+
+    async def create_tenant_api_key(
+        self,
+        session: object,
+        *,
+        tenant_id: int,
+        name: str,
+        knowledge_base_ids: tuple[str, ...],
+    ) -> admin.TenantAPIKey:
+        self.events.append("create:key")
+        return admin.TenantAPIKey(
+            id=47,
+            tenant_id=tenant_id,
+            name=name,
+            role="contributor",
+            full_access=False,
+            knowledge_base_ids=knowledge_base_ids,
+            capabilities=("retrieve", "ingest"),
+            token=SecretStr("scratch-key"),
+        )
+
+    async def upload_file(
+        self,
+        api_key: SecretStr,
+        kb_id: str,
+        path: Path,
+        *,
+        metadata: dict[str, str],
+    ) -> dict[str, object]:
+        knowledge_id = f"knowledge-{len(self.knowledge_to_source) + 1}"
+        self.knowledge_to_source[knowledge_id] = path.name
+        self.events.append(f"upload:{path.name}")
+        return {"id": knowledge_id}
+
+    async def get_knowledge(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> dict[str, object]:
+        name = self.knowledge_to_source[knowledge_id]
+        digest, _ = self.sources[name]
+        return {
+            "id": knowledge_id,
+            "parse_status": "completed",
+            "file_sha256": digest,
+        }
+
+    async def get_knowledge_revision(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> admin.W1RevisionDescriptor:
+        name = self.knowledge_to_source[knowledge_id]
+        digest, chunks = self.sources[name]
+        manifest_digest = _reference_manifest_digest(
+            list(chunks),
+            knowledge_id=knowledge_id,
+        )
+        parser = _revision_data()["parser_identity"]
+        assert isinstance(parser, dict)
+        return admin.W1RevisionDescriptor(
+            knowledge_id=knowledge_id,
+            parse_attempt=3,
+            file_digest=admin.W1FileDigest(algorithm="sha256", value=digest),
+            parser_identity=admin.W1ParserIdentity(**parser),
+            chunk_manifest=admin.W1ChunkManifest(
+                algorithm="weknora.chunk_manifest.v1",
+                digest=manifest_digest,
+                chunk_count=len(chunks),
+            ),
+            completed_at="2026-07-30T10:00:00Z",
+        )
+
+    async def list_knowledge_revision_chunks(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+        *,
+        parse_attempt: int,
+        page_size: int,
+    ) -> admin.W1ChunkListing:
+        name = self.knowledge_to_source[knowledge_id]
+        _, chunks = self.sources[name]
+        exact_chunks = tuple(
+            {**chunk, "knowledge_id": knowledge_id}
+            for chunk in chunks
+        )
+        manifest_digest = _reference_manifest_digest(
+            list(exact_chunks),
+            knowledge_id=knowledge_id,
+        )
+        return admin.W1ChunkListing(
+            items=exact_chunks,
+            total=len(exact_chunks),
+            page_size=page_size,
+            revision=admin.W1ChunkBinding(
+                knowledge_id=knowledge_id,
+                parse_attempt=parse_attempt,
+                manifest_digest=manifest_digest,
+                chunk_count=len(exact_chunks),
+            ),
+        )
+
+    async def delete_tenant_api_key(
+        self,
+        session: object,
+        *,
+        tenant_id: int,
+        key_id: int,
+    ) -> None:
+        self.events.append("delete:key")
+
+    async def delete_knowledge_base(
+        self,
+        credential: object,
+        kb_id: str,
+    ) -> None:
+        self.events.append("delete:kb")
+
+
+def _capture_chunk(
+    *,
+    page_number: int,
+    structural_type: str,
+    content: str,
+) -> dict[str, object]:
+    return {
+        "id": "chunk-1",
+        "knowledge_id": "placeholder",
+        "parse_attempt": 3,
+        "chunk_index": 0,
+        "content": content,
+        "start_at": 0,
+        "end_at": len(content),
+        "page_number": page_number,
+        "structural_type": structural_type,
+    }
+
+
+def _capture_specs(
+    tmp_path: Path,
+) -> tuple[tuple[s0q.S0QCaptureSource, ...], dict[str, bytes]]:
+    contents = {
+        "terms.pdf": b"terms source",
+        "brochure.pdf": b"brochure source",
+    }
+    for name, value in contents.items():
+        (tmp_path / name).write_bytes(value)
+    specs = (
+        s0q.S0QCaptureSource(
+            source_path="terms.pdf",
+            source_bytes=len(contents["terms.pdf"]),
+            source_sha256=sha256(contents["terms.pdf"]).hexdigest(),
+            artifact_name="terms-w1.json",
+            required_anchor_page=31,
+            required_anchor_quote="免赔额",
+            required_anchor_structural_type="table",
+        ),
+        s0q.S0QCaptureSource(
+            source_path="brochure.pdf",
+            source_bytes=len(contents["brochure.pdf"]),
+            source_sha256=sha256(contents["brochure.pdf"]).hexdigest(),
+            artifact_name="brochure-w1.json",
+            required_anchor_page=1,
+            required_anchor_quote="产品特色",
+            required_anchor_structural_type="text",
+        ),
+    )
+    return specs, contents
+
+
+async def test_s0q_capture_writes_both_bundles_then_cleans_scratch(
+    tmp_path: Path,
+) -> None:
+    specs, _ = _capture_specs(tmp_path)
+    sources = {
+        "terms.pdf": (
+            specs[0].source_sha256,
+            (
+                _capture_chunk(
+                    page_number=31,
+                    structural_type="table",
+                    content="免赔额计划一10000元，计划二0元",
+                ),
+            ),
+        ),
+        "brochure.pdf": (
+            specs[1].source_sha256,
+            (
+                _capture_chunk(
+                    page_number=1,
+                    structural_type="text",
+                    content="产品特色包括保证范围广",
+                ),
+            ),
+        ),
+    }
+    client = _CaptureClient(sources=sources)
+    session = admin.AdminSession(
+        user_id="admin-1",
+        tenant_id=7,
+        token=SecretStr("admin-token"),
+        refresh_token=SecretStr("refresh-token"),
+    )
+    output = tmp_path / "artifacts"
+
+    report = await s0q.capture_s0q_w1_inputs(
+        client=client,
+        session=session,
+        source_root=tmp_path,
+        output_dir=output,
+        sources=specs,
+        scratch_kb_payload={
+            "name": "insurancekb-s0q-047-scratch-test",
+            "description": "owner=s0q-047",
+        },
+        poll_attempts=1,
+        poll_interval_seconds=0,
+    )
+
+    assert report["status"] == "ADMITTED"
+    assert (output / "terms-w1.json").is_file()
+    assert (output / "brochure-w1.json").is_file()
+    assert (output / "input-manifest.json").is_file()
+    assert (output / "input-capture-report.json").is_file()
+    assert client.events[-2:] == ["delete:key", "delete:kb"]
+
+
+async def test_s0q_capture_missing_table_structure_delivers_blocked_report(
+    tmp_path: Path,
+) -> None:
+    specs, _ = _capture_specs(tmp_path)
+    sources = {
+        "terms.pdf": (
+            specs[0].source_sha256,
+            (
+                _capture_chunk(
+                    page_number=31,
+                    structural_type="unknown",
+                    content="免赔额计划一10000元，计划二0元",
+                ),
+            ),
+        ),
+        "brochure.pdf": (
+            specs[1].source_sha256,
+            (
+                _capture_chunk(
+                    page_number=1,
+                    structural_type="text",
+                    content="产品特色包括保证范围广",
+                ),
+            ),
+        ),
+    }
+    client = _CaptureClient(sources=sources)
+    session = admin.AdminSession(
+        user_id="admin-1",
+        tenant_id=7,
+        token=SecretStr("admin-token"),
+        refresh_token=SecretStr("refresh-token"),
+    )
+    output = tmp_path / "artifacts"
+
+    report = await s0q.capture_s0q_w1_inputs(
+        client=client,
+        session=session,
+        source_root=tmp_path,
+        output_dir=output,
+        sources=specs,
+        scratch_kb_payload={
+            "name": "insurancekb-s0q-047-scratch-test",
+            "description": "owner=s0q-047",
+        },
+        poll_attempts=1,
+        poll_interval_seconds=0,
+    )
+
+    assert report["status"] == "BLOCKED_ON_INPUT"
+    assert report["bucket"] == "input_integrity"
+    assert "table structure" in report["reason"]
+    assert sorted(path.name for path in output.iterdir()) == [
+        "input-capture-report.json"
+    ]
+    assert client.events[-2:] == ["delete:key", "delete:kb"]
+
+
+def test_s0q_capture_cli_exposes_only_the_bounded_capture_command() -> None:
+    script = Path(__file__).parents[1] / "scripts" / "run_s0q_047.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "{capture}" in result.stdout
+    assert "diagnose" not in result.stdout
+
+    capture_help = subprocess.run(
+        [sys.executable, str(script), "capture", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert capture_help.returncode == 0
+    assert "--raw-kb-id" in capture_help.stdout
