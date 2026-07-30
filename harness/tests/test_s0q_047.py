@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from hashlib import sha256
+from pathlib import Path
 
 import httpx
 import pytest
@@ -399,3 +401,55 @@ def test_s0q_requires_table_anchor_on_the_frozen_page() -> None:
             expected_source_sha256=_DIGEST_A,
             required_table_page=31,
         )
+
+
+async def test_s0q_frozen_document_source_uses_only_bundle_content(
+    tmp_path: Path,
+) -> None:
+    bundle_path = tmp_path / "terms-w1.json"
+    bundle_path.write_text(
+        json.dumps(_bundle_payload(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    source = s0q.FrozenW1DocumentSource(
+        expected_sources={"dataset/source/terms.pdf": _DIGEST_A},
+        required_table_pages={"dataset/source/terms.pdf": 31},
+    )
+    request = s0q.FrozenW1SourceRequest(bundle_paths=(bundle_path,))
+
+    async with source.materialize(request) as batch:
+        bundle_path.write_text("changed after materialization", encoding="utf-8")
+        document = batch.documents[0]
+        assert document.pages[29].page_no == 30
+        assert "不保证续保" in document.pages[29].text
+        assert document.pages[30].page_no == 31
+        assert "计划一免赔额10000元" in document.pages[30].text
+        assert document.chunks[1].metadata["structural_type"] == "table"
+        assert document.source_revision.ordering.value == 3
+        assert (
+            document.source_revision.parser_fingerprint
+            == s0q.canonical_sha256(_revision_data()["parser_identity"])
+        )
+
+
+async def test_s0q_frozen_document_source_identity_is_deterministic(
+    tmp_path: Path,
+) -> None:
+    bundle_path = tmp_path / "terms-w1.json"
+    bundle_path.write_text(
+        json.dumps(_bundle_payload(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    source = s0q.FrozenW1DocumentSource(
+        expected_sources={"dataset/source/terms.pdf": _DIGEST_A},
+        required_table_pages={"dataset/source/terms.pdf": 31},
+    )
+    request = s0q.FrozenW1SourceRequest(bundle_paths=(bundle_path,))
+
+    async with source.materialize(request) as first:
+        first_identity = first.documents[0].source_revision.value
+    async with source.materialize(request) as second:
+        second_identity = second.documents[0].source_revision.value
+
+    assert first_identity == second_identity
+    assert first.documents[0].source_id == second.documents[0].source_id

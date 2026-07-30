@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import (
@@ -18,6 +21,15 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from insurance_harness.goldenset.pdf import PageText
+from insurance_harness.sources.models import (
+    GenerationOrdering,
+    SourceChunk,
+    SourceDocument,
+    SourceRevision,
+)
+from insurance_harness.sources.protocol import MaterializedBatch
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _UNKNOWN_IDENTITY = "unknown"
@@ -310,3 +322,141 @@ def admit_frozen_w1_bundle(
             bucket=S0QErrorBucket.INPUT_INTEGRITY,
         )
     return bundle
+
+
+class FrozenW1SourceRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    bundle_paths: tuple[Path, ...] = Field(min_length=1, max_length=2)
+
+    @field_validator("bundle_paths")
+    @classmethod
+    def _unique_json_paths(cls, value: tuple[Path, ...]) -> tuple[Path, ...]:
+        if (
+            len(value) != len(set(value))
+            or any(path.suffix.lower() != ".json" for path in value)
+        ):
+            raise ValueError("bundle_paths must be unique JSON files")
+        return value
+
+
+class FrozenW1DocumentSource:
+    """Offline source backed only by admitted W1 exact-attempt bundles."""
+
+    def __init__(
+        self,
+        *,
+        expected_sources: Mapping[str, str],
+        required_table_pages: Mapping[str, int | None],
+    ) -> None:
+        self._expected_sources = dict(expected_sources)
+        self._required_table_pages = dict(required_table_pages)
+        if (
+            not self._expected_sources
+            or set(self._required_table_pages) != set(self._expected_sources)
+            or any(
+                not path
+                or _SHA256_RE.fullmatch(digest) is None
+                for path, digest in self._expected_sources.items()
+            )
+        ):
+            raise ValueError("invalid frozen W1 source admission profile")
+
+    @asynccontextmanager
+    async def materialize(
+        self,
+        request: FrozenW1SourceRequest,
+    ) -> AsyncIterator[MaterializedBatch]:
+        documents: list[SourceDocument] = []
+        local_paths: dict[str, Path] = {}
+        seen_sources: set[str] = set()
+        for bundle_path in request.bundle_paths:
+            try:
+                payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                raise S0QBlockedOnInput(
+                    "frozen bundle file is unreadable",
+                    bucket=S0QErrorBucket.INPUT_INTEGRITY,
+                ) from None
+            source_path = (
+                payload.get("source_path")
+                if isinstance(payload, Mapping)
+                else None
+            )
+            if (
+                not isinstance(source_path, str)
+                or source_path in seen_sources
+                or source_path not in self._expected_sources
+            ):
+                raise S0QBlockedOnInput(
+                    "frozen bundle source is outside the admitted input set",
+                    bucket=S0QErrorBucket.INPUT_INTEGRITY,
+                )
+            bundle = admit_frozen_w1_bundle(
+                payload,
+                expected_source_path=source_path,
+                expected_source_sha256=self._expected_sources[source_path],
+                required_table_page=self._required_table_pages[source_path],
+            )
+            document = _source_document(bundle)
+            documents.append(document)
+            local_paths[document.source_id] = bundle_path
+            seen_sources.add(source_path)
+        yield MaterializedBatch(
+            documents=tuple(documents),
+            local_paths=local_paths,
+        )
+
+
+def _source_document(bundle: FrozenW1Bundle) -> SourceDocument:
+    page_content: dict[int, list[str]] = {}
+    chunks: list[SourceChunk] = []
+    for chunk in bundle.chunks:
+        page_content.setdefault(chunk.page_number, []).append(chunk.content)
+        chunks.append(
+            SourceChunk(
+                chunk_id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                start_at=chunk.start_at,
+                end_at=chunk.end_at,
+                content=chunk.content,
+                content_hash=hashlib.sha256(chunk.content.encode()).hexdigest(),
+                metadata={
+                    "w1_knowledge_id": bundle.knowledge_id,
+                    "parse_attempt": bundle.parse_attempt,
+                    "page_number": chunk.page_number,
+                    "structural_type": chunk.structural_type,
+                },
+            )
+        )
+    max_page = max(page_content)
+    pages = tuple(
+        PageText(
+            page_no=page_number,
+            text="\n".join(page_content.get(page_number, ())),
+        )
+        for page_number in range(1, max_page + 1)
+    )
+    parser_fingerprint = canonical_sha256(bundle.parser_identity)
+    source_revision = SourceRevision(
+        file_hash=bundle.source_sha256,
+        ordering=GenerationOrdering(value=bundle.parse_attempt),
+        parser_fingerprint=parser_fingerprint,
+    )
+    file_name = Path(bundle.source_path).name
+    return SourceDocument(
+        source_id=(
+            f"weknora-w1:{bundle.knowledge_id}:"
+            f"{bundle.parse_attempt}:{bundle.bundle_digest}"
+        ),
+        scope=None,
+        knowledge_id=None,
+        raw_kb_id=None,
+        title=Path(file_name).stem,
+        file_name=file_name,
+        file_type="pdf",
+        source_revision=source_revision,
+        original_digest=bundle.source_sha256,
+        pages=pages,
+        chunks=tuple(chunks),
+    )
