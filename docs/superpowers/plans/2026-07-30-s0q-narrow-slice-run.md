@@ -227,20 +227,31 @@ git add harness/scripts/run_s0q_047.py harness/src/insurance_harness/s0q_047.py 
 git commit -m "feat(047): capture real WeKnora quality inputs"
 ```
 
-## Task 6: Freeze Seed Golden and closed model budgets
+## Task 6: Bind the full-Golden projection and closed model budgets
 
 **Files:**
 
-- Create after input admission:
-  - `openspec/changes/047-s0q-quality-feasibility/artifacts/seed-golden.json`
+- Create only after input admission and full-Golden approval:
+  - `openspec/changes/047-s0q-quality-feasibility/artifacts/golden-projection.json`
   - `openspec/changes/047-s0q-quality-feasibility/artifacts/run-profile.json`
 - Modify: `harness/tests/test_s0q_047.py`
 
-- [ ] Freeze exactly four expected tri-state results and Evidence anchors:
-  - `产品特色`: `present A`;
-  - `免赔额`: typed plan 1 CNY 10,000 / plan 2 CNY 0;
-  - `保证续保`: `absent_explicitly`;
-  - `宽限期`: `unknown` and must abstain.
+- [ ] Bind one immutable, approved full product Golden artifact identity/digest.
+  Historical WIP coverage is insufficient. R2 remains incomplete until the
+  separate full-Golden Mission has covered all 60 current extractable medical
+  fields with `gpt-5.6-sol`, Evidence verification, human approval, and an
+  immutable artifact identity/digest.
+- [ ] Freeze a projection that references exactly these four records in that
+  full Golden by field/record identity:
+  - `产品特色` / `zh_6a3bd6cdbf`: `present A`;
+  - `免赔额` / `zh_0612362268`: `typed-present B`;
+  - `保证续保` / `zh_74aa1b9c93`: `absent_explicitly`;
+  - `宽限期` / `zh_d62301d84c`: `unknown` and must abstain.
+  The projection SHALL NOT duplicate expected values, Evidence, or oracle
+  spans into a second four-field Golden; it resolves them from the exact
+  approved full artifact.
+- [ ] Add tests rejecting an unapproved/WIP full Golden, a mismatched artifact
+  digest, a missing/duplicate record identity, or copied four-field values.
 - [ ] Freeze prompt/schema digests, temperature, seed if supported, timeouts, maximum calls, retry count, and manual active-time ceiling.
 - [ ] Resolve and record one immutable Bailian weak-model identity and one immutable strong diagnostic identity. A rolling alias without provider/deployment attestation is insufficient.
 - [ ] Add tests proving:
@@ -257,7 +268,7 @@ git commit -m "feat(047): capture real WeKnora quality inputs"
 git add openspec/changes/047-s0q-quality-feasibility/artifacts \
   openspec/changes/047-s0q-quality-feasibility/tasks.md \
   harness/tests/test_s0q_047.py
-git commit -m "docs(047): freeze quality seed and budgets"
+git commit -m "docs(047): freeze quality projection and budgets"
 ```
 
 ## Task 7: Run the bounded A–D falsification
