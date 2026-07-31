@@ -20,23 +20,33 @@
 5. 只在 2 材料/4 字段上运行 A–D 小样本诊断消融；
 6. 弱模型预算须预先冻结；强模型只可作预批准隔离诊断上限，不进入正式弱模型
    链或 feasible 分子；
-7. 当前输入不齐时唯一状态为 `BLOCKED_ON_INPUT`。
+7. 对已存在的两份 knowledge/revision 增加 task-local `capture-existing`
+   GET-only 证据入口，只冻结真实 parser/profile、current attempt、revision/text
+   manifest 和 API 暴露的 locator/metadata 字段形状；
+8. 当前输入不齐时唯一状态为 `BLOCKED_ON_INPUT`；只有 labels/metadata 而没有
+   cryptographic structure binding 时输出
+   `W1_STRUCTURE_EVIDENCE_INSUFFICIENT`；
+9. 两个 source 采用全局 PRE→BODY→POST fence；runtime 的 tenant/Space/RAW KB
+   必须在 client 创建前 exact match，source-reader secret 只从独立 process
+   environment 注入；未知远端 mapping key 不进入证据路径或 digest。
 
 ## 当前阻断
 
-仓库中没有可直接证明为 S0-Q 输入的两份 frozen parsed artifact bundle。
-既有 Golden WIP 已覆盖目标产品的完整可抽取字段集，但尚未形成当前
-`gpt-5.6-sol` 全字段复核、Evidence/人工批准和不可变 identity/digest；它也
-缺少所需的 WeKnora/W1 artifact identity、页码、表格结构和 parser version
-完整绑定，不能默认等价。本 change 不造 SHA、材料、ProductVersion 或字段
-样本，也不把规格写成 S0-Q PASS。
+OpenSpec 049 已冻结目标产品的 S0-Q full Golden，但 Golden 不替代 W1
+SourceRevision 输入。当前仍没有可直接证明为 S0-Q 输入的两份 frozen parsed
+artifact bundle；已有 W1 v1 revision manifest 只绑定 text chunk
+id/index/content，尚未证明 page/block/table-cell identity 或 table-structure
+digest。`capture-existing` 只读取已有 source 并诚实记录这一缺口，不造 SHA、
+不上传、不 reparse，也不把 metadata 标签升级为结构证明或把规格写成 S0-Q
+PASS。
 
 ## Impact
 
 - 原始 spec-only 交付为一个文档/规格 change 与一份 Mission Card；
 - 2026-07-30 经业务方另行批准的 authority amendment 增加 exact XLSX、
   authority README 和必要的 provenance/Golden 合同更新；
-- 零源码、migration、workflow、principal、运行时 registry 修改；
+- 047-R1E 仅修改现有 runner/module/focused test 与本 OpenSpec 四文件，最多七
+  路径；零 migration、workflow、principal、运行时 registry 或公共 API 修改；
 - 零模型/provider/live/PostgreSQL/full 运行；
 - 输入齐备后的实际 S0-Q 运行须另获授权，并按本规格产生真实报告。
 

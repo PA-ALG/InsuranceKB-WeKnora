@@ -57,3 +57,29 @@
 
 R1 未 admitted，因此 R2–R3 与 A–D/provider 按门禁均为 `NOT RUN`；这不是
 S0-Q PASS/FAIL，也不授权用人工清洗文本、替代 embedding 或扩大环境治理。
+
+## 047-R1E · Existing-source read-only evidence capture
+
+- [x] E1 从 exact
+  `origin/main=bb9b012ebbd97f92340fdab25557f7a24504b30f` 创建独立 clean
+  worktree；路径预算冻结为 runner/module/test + OpenSpec 四文件，最多七路径。
+- [x] E2 先写 focused RED，覆盖 GET-only allowlist、tenant/Space/KB、SHA/
+  attempt 漂移、跨 source 全局 fence、R1 descriptor、mixed-attempt chunks、
+  manifest 重算、独立 secret ingress、结构缺失与 mapping-key 输出脱敏。
+- [x] E3 实现 task-local `capture-existing`：只调用 `knowledge_get`、
+  `revision_get`、`revision_chunks_get`，不调用 upload/reparse/delete/list。
+- [x] E4 两 source 按固定顺序执行全局 PRE(K0/R0)→BODY(chunks/manifest)→
+  POST(R1/K1)；全部 fence exact 相等后才构造输出，失败零 admitted bundle、
+  零 revision/manifest 写。
+- [x] E5 证据只记录 parser/profile、字段名/type/shape 与非敏感 digest；正文、
+  credential、secret、绝对路径和未知 mapping key/digest 不进入报告；runtime
+  scope 在 client 前 exact match，credential 仅来自 process environment。
+- [x] E6 locator/metadata 只可分类为 `PRESENT_UNBOUND` 或
+  `ABSENT_INSUFFICIENT`；两者均保持
+  `W1_STRUCTURE_EVIDENCE_INSUFFICIENT`，不得猜测结构或授权 S0-Q。
+- [x] E7 focused、Ruff、strict mypy、OpenSpec 047 strict、diff/scope/private/
+  secret 最终门禁。
+- [ ] E8 exact frozen candidate 的独立 Spec 与 Quality/Delivery 双审。
+
+真实 credential/runtime/WeKnora capture、provider/model、PostgreSQL 和 full
+均不属于 R1E 实现阶段，保持 `NOT RUN`。

@@ -7,20 +7,29 @@ import argparse
 import asyncio
 import copy
 import json
+import os
 import secrets
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from pydantic import SecretStr
+
 from insurance_harness.adapters.weknora.admin_client import (
     AdminCredentials,
     AdminSession,
+    W1ChunkListing,
+    W1RevisionDescriptor,
     WeKnoraAdminClient,
 )
 from insurance_harness.live_env.compose import read_runtime_environment
 from insurance_harness.s0q_047 import (
     S0QCaptureSource,
+    S0QExistingScope,
+    S0QExistingSource,
+    capture_existing_w1_evidence,
     capture_s0q_w1_inputs,
     write_s0q_capture_report,
+    write_s0q_existing_evidence,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -72,6 +81,18 @@ def _parser() -> argparse.ArgumentParser:
     capture.add_argument("--raw-kb-id")
     capture.add_argument("--poll-attempts", type=int, default=180)
     capture.add_argument("--poll-interval-seconds", type=float, default=2.0)
+    existing = subcommands.add_parser(
+        "capture-existing",
+        help="Capture GET-only evidence for two existing W1 revisions.",
+    )
+    existing.add_argument("--runtime-env", type=Path, required=True)
+    existing.add_argument("--output", type=Path, required=True)
+    existing.add_argument("--api-base-url", default=API_BASE_URL)
+    existing.add_argument("--tenant-id", type=int, required=True)
+    existing.add_argument("--space-id", required=True)
+    existing.add_argument("--raw-kb-id", required=True)
+    existing.add_argument("--terms-knowledge-id", required=True)
+    existing.add_argument("--brochure-knowledge-id", required=True)
     return parser
 
 
@@ -200,10 +221,141 @@ async def _capture(namespace: argparse.Namespace) -> int:
     return 0 if report["status"] == "ADMITTED" else 2
 
 
+class _ExistingReadClient:
+    method_allowlist: tuple[str, ...] = (
+        "knowledge_get",
+        "revision_get",
+        "revision_chunks_get",
+    )
+
+    def __init__(
+        self,
+        client: WeKnoraAdminClient,
+        bound_scope: S0QExistingScope,
+    ) -> None:
+        self.__client = client
+        self.bound_scope = bound_scope
+
+    async def get_knowledge(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> dict[str, object]:
+        return await self.__client.get_knowledge(api_key, knowledge_id)
+
+    async def get_knowledge_revision(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> W1RevisionDescriptor:
+        return await self.__client.get_knowledge_revision(api_key, knowledge_id)
+
+    async def list_knowledge_revision_chunks(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+        *,
+        parse_attempt: int,
+        page_size: int,
+    ) -> W1ChunkListing:
+        return await self.__client.list_knowledge_revision_chunks(
+            api_key,
+            knowledge_id,
+            parse_attempt=parse_attempt,
+            page_size=page_size,
+        )
+
+
+async def _capture_existing(
+    namespace: argparse.Namespace,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    client: WeKnoraAdminClient | None = None
+    try:
+        values = read_runtime_environment(namespace.runtime_env)
+        recorded_tenant = values.get("LOCAL_LIVE_TENANT_ID")
+        expected_runtime_scope = {
+            "LOCAL_LIVE_TENANT_ID": str(namespace.tenant_id),
+            "LOCAL_LIVE_SPACE_ID": namespace.space_id,
+            "LOCAL_LIVE_RAW_KB_ID": namespace.raw_kb_id,
+        }
+        if any(
+            values.get(key) != expected
+            for key, expected in expected_runtime_scope.items()
+        ) or (
+            recorded_tenant is None
+            or not recorded_tenant.isdecimal()
+            or int(recorded_tenant) <= 0
+            or not namespace.space_id
+            or not namespace.raw_kb_id
+        ):
+            raise ValueError("runtime scope identity does not match request")
+        scope = S0QExistingScope(
+            tenant_id=namespace.tenant_id,
+            space_id=namespace.space_id,
+            raw_kb_id=namespace.raw_kb_id,
+        )
+        process_environment = os.environ if environ is None else environ
+        token = process_environment.get("WEKNORA_SOURCE_READER_API_KEY")
+        if not token:
+            raise ValueError("source-reader credential is unavailable")
+        client = WeKnoraAdminClient(namespace.api_base_url)
+        report = await capture_existing_w1_evidence(
+            client=_ExistingReadClient(client, scope),
+            api_key=SecretStr(token),
+            scope=scope,
+            sources=(
+                S0QExistingSource(
+                    source_path=SOURCES[0].source_path,
+                    source_bytes=SOURCES[0].source_bytes,
+                    source_sha256=SOURCES[0].source_sha256,
+                    knowledge_id=namespace.terms_knowledge_id,
+                ),
+                S0QExistingSource(
+                    source_path=SOURCES[1].source_path,
+                    source_bytes=SOURCES[1].source_bytes,
+                    source_sha256=SOURCES[1].source_sha256,
+                    knowledge_id=namespace.brochure_knowledge_id,
+                ),
+            ),
+        )
+    except Exception as exc:
+        report = {
+            "artifact_kind": "s0q_047_existing_source_evidence",
+            "status": "BLOCKED_ON_INPUT",
+            "reason": (
+                "existing-source capture failed closed at "
+                f"{type(exc).__name__}"
+            ),
+            "admitted_bundle": None,
+            "revision_or_manifest_writes": 0,
+            "harness_model_provider_calls": 0,
+        }
+    finally:
+        if client is not None:
+            await client.aclose()
+    write_s0q_existing_evidence(namespace.output, report)
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "report": "existing-source-evidence.json",
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    )
+    return 0 if report["status"] == "EXISTING_SOURCE_EVIDENCE_CAPTURED" else 2
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     namespace = _parser().parse_args(argv)
     if namespace.command == "capture":
         return asyncio.run(_capture(namespace))
+    if namespace.command == "capture-existing":
+        return asyncio.run(_capture_existing(namespace))
     raise AssertionError("unreachable")
 
 

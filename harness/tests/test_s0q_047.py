@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import runpy
 import subprocess
 import sys
 from collections.abc import Mapping
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -844,7 +847,7 @@ def test_s0q_capture_cli_exposes_only_the_bounded_capture_command() -> None:
     )
 
     assert result.returncode == 0
-    assert "{capture}" in result.stdout
+    assert "{capture,capture-existing}" in result.stdout
     assert "diagnose" not in result.stdout
 
     capture_help = subprocess.run(
@@ -889,3 +892,539 @@ def test_s0q_capture_cli_writes_blocked_report_on_environment_failure(
         "knowledge_base": "not_created",
     }
     assert report["harness_model_provider_calls"] == 0
+
+
+def _existing_source(
+    *,
+    knowledge_id: str,
+    source_path: str,
+    source_sha256: str,
+) -> s0q.S0QExistingSource:
+    return s0q.S0QExistingSource(
+        source_path=source_path,
+        source_bytes=123,
+        source_sha256=source_sha256,
+        knowledge_id=knowledge_id,
+    )
+
+
+class _ExistingReadClient:
+    method_allowlist: tuple[str, ...] = (
+        "knowledge_get",
+        "revision_get",
+        "revision_chunks_get",
+    )
+
+    def __init__(
+        self,
+        *,
+        bound_tenant_id: int = 7,
+        bound_space_id: str = "space-1",
+        bound_kb_id: str = "raw-kb-1",
+        second_attempt: int = 3,
+        second_kb_id: str = "raw-kb-1",
+        second_sha256: str | None = None,
+        listing_attempt: int = 3,
+        manifest_matches: bool = True,
+        expose_structure: bool = True,
+        drift_source_one_during_source_two_body: bool = False,
+        post_revision_completed_at: str | None = None,
+        missing_knowledge_field: str | None = None,
+        malicious_metadata: Mapping[str, object] | None = None,
+    ) -> None:
+        self.bound_scope = s0q.S0QExistingScope(
+            tenant_id=bound_tenant_id,
+            space_id=bound_space_id,
+            raw_kb_id=bound_kb_id,
+        )
+        self.second_attempt = second_attempt
+        self.second_kb_id = second_kb_id
+        self.second_sha256 = second_sha256
+        self.listing_attempt = listing_attempt
+        self.manifest_matches = manifest_matches
+        self.expose_structure = expose_structure
+        self.drift_source_one_during_source_two_body = (
+            drift_source_one_during_source_two_body
+        )
+        self.post_revision_completed_at = post_revision_completed_at
+        self.missing_knowledge_field = missing_knowledge_field
+        self.malicious_metadata = malicious_metadata
+        self.events: list[str] = []
+        self.knowledge_reads: dict[str, int] = {}
+        self.revision_reads: dict[str, int] = {}
+        self.source_one_drifted = False
+
+    def _source_digest(self, knowledge_id: str) -> str:
+        return _DIGEST_A if knowledge_id == "knowledge-1" else _DIGEST_B
+
+    def _chunks(self, knowledge_id: str) -> tuple[dict[str, object], ...]:
+        metadata: dict[str, object] = {
+            "private_note": "must-not-leak",
+            "source_path": "/private/runtime/source.pdf",
+        }
+        if self.expose_structure:
+            metadata.update(
+                {
+                    "page_number": 31,
+                    "table_cell": {"row": 2, "column": 3},
+                    "structural_type": "table",
+                }
+            )
+        if self.malicious_metadata is not None:
+            metadata.update(self.malicious_metadata)
+        return (
+            {
+                "id": f"{knowledge_id}-chunk-0",
+                "knowledge_id": knowledge_id,
+                "parse_attempt": self.listing_attempt,
+                "chunk_index": 0,
+                "content": "正文不得进入证据报告",
+                "metadata": metadata,
+            },
+        )
+
+    async def get_knowledge(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> dict[str, object]:
+        assert api_key.get_secret_value() == "reader-secret"
+        count = self.knowledge_reads.get(knowledge_id, 0) + 1
+        self.knowledge_reads[knowledge_id] = count
+        self.events.append(f"knowledge_get:{knowledge_id}:{count}")
+        document: dict[str, object] = {
+            "id": knowledge_id,
+            "tenant_id": 7,
+            "knowledge_base_id": (
+                self.second_kb_id if count == 2 else "raw-kb-1"
+            ),
+            "file_sha256": (
+                self.second_sha256
+                if count == 2 and self.second_sha256 is not None
+                else self._source_digest(knowledge_id)
+            ),
+            "parse_status": "completed",
+            "current_parse_attempt": (
+                4
+                if (
+                    knowledge_id == "knowledge-1"
+                    and count == 2
+                    and self.source_one_drifted
+                )
+                else self.second_attempt
+                if count == 2
+                else 3
+            ),
+            "metadata": {
+                "owner": "sensitive-owner-value",
+                "runtime_path": "/private/runtime/knowledge.json",
+            },
+        }
+        if self.missing_knowledge_field is not None:
+            document.pop(self.missing_knowledge_field)
+        return document
+
+    async def get_knowledge_revision(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+    ) -> admin.W1RevisionDescriptor:
+        count = self.revision_reads.get(knowledge_id, 0) + 1
+        self.revision_reads[knowledge_id] = count
+        self.events.append(f"revision_get:{knowledge_id}")
+        chunks = self._chunks(knowledge_id)
+        digest = _reference_manifest_digest(
+            list(chunks),
+            knowledge_id=knowledge_id,
+        )
+        parser = _revision_data()["parser_identity"]
+        assert isinstance(parser, dict)
+        return admin.W1RevisionDescriptor(
+            knowledge_id=knowledge_id,
+            parse_attempt=3,
+            file_digest=admin.W1FileDigest(
+                algorithm="sha256",
+                value=self._source_digest(knowledge_id),
+            ),
+            parser_identity=admin.W1ParserIdentity(**parser),
+            chunk_manifest=admin.W1ChunkManifest(
+                algorithm="weknora.chunk_manifest.v1",
+                digest=digest if self.manifest_matches else _DIGEST_C,
+                chunk_count=1,
+            ),
+            completed_at=(
+                self.post_revision_completed_at
+                if count == 2 and self.post_revision_completed_at is not None
+                else "2026-07-31T12:00:00Z"
+            ),
+        )
+
+    async def list_knowledge_revision_chunks(
+        self,
+        api_key: SecretStr,
+        knowledge_id: str,
+        *,
+        parse_attempt: int,
+        page_size: int,
+    ) -> admin.W1ChunkListing:
+        self.events.append(f"revision_chunks_get:{knowledge_id}")
+        if (
+            knowledge_id == "knowledge-2"
+            and self.drift_source_one_during_source_two_body
+        ):
+            self.source_one_drifted = True
+        chunks = self._chunks(knowledge_id)
+        digest = _reference_manifest_digest(
+            list(chunks),
+            knowledge_id=knowledge_id,
+        )
+        return admin.W1ChunkListing(
+            items=chunks,
+            total=1,
+            page_size=page_size,
+            revision=admin.W1ChunkBinding(
+                knowledge_id=knowledge_id,
+                parse_attempt=parse_attempt,
+                manifest_digest=digest,
+                chunk_count=1,
+            ),
+        )
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _existing_scope() -> s0q.S0QExistingScope:
+    return s0q.S0QExistingScope(
+        tenant_id=7,
+        space_id="space-1",
+        raw_kb_id="raw-kb-1",
+    )
+
+
+def _existing_sources() -> tuple[
+    s0q.S0QExistingSource,
+    s0q.S0QExistingSource,
+]:
+    return (
+        _existing_source(
+            knowledge_id="knowledge-1",
+            source_path="dataset/source/terms.pdf",
+            source_sha256=_DIGEST_A,
+        ),
+        _existing_source(
+            knowledge_id="knowledge-2",
+            source_path="dataset/source/brochure.pdf",
+            source_sha256=_DIGEST_B,
+        ),
+    )
+
+
+async def test_capture_existing_is_get_only_and_reports_unbound_shape() -> None:
+    client = _ExistingReadClient()
+
+    report = await s0q.capture_existing_w1_evidence(
+        client=client,
+        api_key=SecretStr("reader-secret"),
+        scope=_existing_scope(),
+        sources=_existing_sources(),
+    )
+
+    assert client.events == [
+        "knowledge_get:knowledge-1:1",
+        "revision_get:knowledge-1",
+        "knowledge_get:knowledge-2:1",
+        "revision_get:knowledge-2",
+        "revision_chunks_get:knowledge-1",
+        "revision_chunks_get:knowledge-2",
+        "revision_get:knowledge-1",
+        "knowledge_get:knowledge-1:2",
+        "revision_get:knowledge-2",
+        "knowledge_get:knowledge-2:2",
+    ]
+    assert report["status"] == "W1_STRUCTURE_EVIDENCE_INSUFFICIENT"
+    assert report["client_method_allowlist"] == list(client.method_allowlist)
+    assert report["admitted_bundle"] is None
+    assert {
+        source["structure_evidence"]["status"]
+        for source in report["sources"]
+    } == {"PRESENT_UNBOUND"}
+    assert all(
+        source["revision_manifest"]["digest"]
+        == source["text_manifest"]["digest"]
+        for source in report["sources"]
+    )
+
+
+async def test_capture_existing_rejects_mutating_client_capability() -> None:
+    class MutatingClient(_ExistingReadClient):
+        method_allowlist = (*_ExistingReadClient.method_allowlist, "knowledge_upload")
+
+    client = MutatingClient()
+
+    with pytest.raises(
+        s0q.S0QBlockedOnInput,
+        match="GET-only method allowlist",
+    ):
+        await s0q.capture_existing_w1_evidence(
+            client=client,
+            api_key=SecretStr("reader-secret"),
+            scope=_existing_scope(),
+            sources=_existing_sources(),
+        )
+
+    assert client.events == []
+
+
+@pytest.mark.parametrize(
+        ("client", "reason"),
+    [
+        (_ExistingReadClient(bound_tenant_id=8), "scope drift"),
+        (_ExistingReadClient(bound_space_id="foreign-space"), "scope drift"),
+        (_ExistingReadClient(bound_kb_id="foreign-kb"), "scope drift"),
+        (_ExistingReadClient(second_kb_id="foreign-kb"), "scope drift"),
+        (_ExistingReadClient(second_attempt=4), "attempt drift"),
+        (_ExistingReadClient(second_sha256=_DIGEST_C), "SHA drift"),
+        (_ExistingReadClient(listing_attempt=4), "mixed attempt"),
+        (_ExistingReadClient(manifest_matches=False), "manifest"),
+    ],
+)
+async def test_capture_existing_fails_closed_on_revision_drift(
+    client: _ExistingReadClient,
+    reason: str,
+) -> None:
+    with pytest.raises(s0q.S0QBlockedOnInput, match=reason):
+        await s0q.capture_existing_w1_evidence(
+            client=client,
+            api_key=SecretStr("reader-secret"),
+            scope=_existing_scope(),
+            sources=_existing_sources(),
+        )
+
+
+@pytest.mark.parametrize(
+    "client",
+    [
+        _ExistingReadClient(drift_source_one_during_source_two_body=True),
+        _ExistingReadClient(
+            post_revision_completed_at="2026-07-31T12:00:01Z"
+        ),
+    ],
+)
+async def test_capture_existing_uses_global_source_and_revision_fences(
+    client: _ExistingReadClient,
+) -> None:
+    with pytest.raises(s0q.S0QBlockedOnInput, match="drift"):
+        await s0q.capture_existing_w1_evidence(
+            client=client,
+            api_key=SecretStr("reader-secret"),
+            scope=_existing_scope(),
+            sources=_existing_sources(),
+        )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "id",
+        "tenant_id",
+        "knowledge_base_id",
+        "file_sha256",
+        "parse_status",
+        "current_parse_attempt",
+    ],
+)
+async def test_capture_existing_requires_complete_knowledge_identity(
+    field: str,
+) -> None:
+    client = _ExistingReadClient(missing_knowledge_field=field)
+
+    with pytest.raises(s0q.S0QBlockedOnInput, match="existing source"):
+        await s0q.capture_existing_w1_evidence(
+            client=client,
+            api_key=SecretStr("reader-secret"),
+            scope=_existing_scope(),
+            sources=_existing_sources(),
+        )
+
+
+async def test_capture_existing_missing_structure_is_typed_insufficient() -> None:
+    report = await s0q.capture_existing_w1_evidence(
+        client=_ExistingReadClient(expose_structure=False),
+        api_key=SecretStr("reader-secret"),
+        scope=_existing_scope(),
+        sources=_existing_sources(),
+    )
+
+    assert report["status"] == "W1_STRUCTURE_EVIDENCE_INSUFFICIENT"
+    assert {
+        source["structure_evidence"]["status"]
+        for source in report["sources"]
+    } == {"ABSENT_INSUFFICIENT"}
+    assert report["admitted_bundle"] is None
+
+
+async def test_capture_existing_report_contains_no_body_secret_or_path() -> None:
+    malicious_keys = (
+        "/Users/alice/private.pdf",
+        "Bearer sk-live-sensitive-key",
+        "postgresql://alice:secret@db.example/wiki",
+        "https://token.example.invalid/?api_key=secret",
+    )
+    report = await s0q.capture_existing_w1_evidence(
+        client=_ExistingReadClient(
+            malicious_metadata={
+                malicious_keys[0]: "path",
+                malicious_keys[1]: "token",
+                "table_cell": {
+                    "row": 2,
+                    malicious_keys[2]: "dsn",
+                    "header": {malicious_keys[3]: "nested"},
+                },
+            }
+        ),
+        api_key=SecretStr("reader-secret"),
+        scope=_existing_scope(),
+        sources=_existing_sources(),
+    )
+    serialized = json.dumps(report, ensure_ascii=False, sort_keys=True)
+
+    for forbidden in (
+        "正文不得进入证据报告",
+        "reader-secret",
+        "sensitive-owner-value",
+        "/private/runtime",
+        *malicious_keys,
+        *(sha256(key.encode()).hexdigest() for key in malicious_keys),
+    ):
+        assert forbidden not in serialized
+    assert "content" in serialized
+    assert "metadata" in serialized
+
+
+def _load_s0q_runner() -> dict[str, Any]:
+    script = Path(__file__).parents[1] / "scripts" / "run_s0q_047.py"
+    namespace = runpy.run_path(str(script), run_name="run_s0q_047_test")
+    capture_existing = namespace["_capture_existing"]
+    return cast(dict[str, Any], capture_existing.__globals__)
+
+
+def _existing_namespace(tmp_path: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        runtime_env=tmp_path / "runtime.env",
+        output=tmp_path / "output",
+        api_base_url="https://weknora.example/api/v1",
+        tenant_id=7,
+        space_id="space-1",
+        raw_kb_id="raw-kb-1",
+        terms_knowledge_id="knowledge-1",
+        brochure_knowledge_id="knowledge-2",
+    )
+
+
+async def test_capture_existing_uses_external_process_secret_ingress(
+    tmp_path: Path,
+) -> None:
+    runner = _load_s0q_runner()
+    client = _ExistingReadClient()
+    runner["read_runtime_environment"] = lambda _path: {
+        "LOCAL_LIVE_TENANT_ID": "7",
+        "LOCAL_LIVE_SPACE_ID": "space-1",
+        "LOCAL_LIVE_RAW_KB_ID": "raw-kb-1",
+    }
+    runner["WeKnoraAdminClient"] = lambda _url: client
+
+    result = await runner["_capture_existing"](
+        _existing_namespace(tmp_path),
+        environ={"WEKNORA_SOURCE_READER_API_KEY": "reader-secret"},
+    )
+
+    assert result == 2
+    assert client.events
+    report_bytes = (
+        tmp_path / "output" / "existing-source-evidence.json"
+    ).read_bytes()
+    assert b"reader-secret" not in report_bytes
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [
+        {
+            "LOCAL_LIVE_SPACE_ID": "space-1",
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb-1",
+        },
+        {
+            "LOCAL_LIVE_TENANT_ID": "8",
+            "LOCAL_LIVE_SPACE_ID": "space-1",
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb-1",
+        },
+        {
+            "LOCAL_LIVE_TENANT_ID": "7",
+            "LOCAL_LIVE_SPACE_ID": "foreign-space",
+            "LOCAL_LIVE_RAW_KB_ID": "raw-kb-1",
+        },
+        {
+            "LOCAL_LIVE_TENANT_ID": "7",
+            "LOCAL_LIVE_SPACE_ID": "space-1",
+            "LOCAL_LIVE_RAW_KB_ID": "foreign-kb",
+        },
+    ],
+)
+async def test_capture_existing_rejects_runtime_scope_before_client(
+    tmp_path: Path,
+    runtime: dict[str, str],
+) -> None:
+    runner = _load_s0q_runner()
+    client_creations: list[str] = []
+    runner["read_runtime_environment"] = lambda _path: runtime
+    runner["WeKnoraAdminClient"] = lambda url: client_creations.append(url)
+
+    result = await runner["_capture_existing"](
+        _existing_namespace(tmp_path),
+        environ={"WEKNORA_SOURCE_READER_API_KEY": "reader-secret"},
+    )
+
+    assert result == 2
+    assert client_creations == []
+
+
+async def test_capture_existing_rejects_missing_external_secret_before_client(
+    tmp_path: Path,
+) -> None:
+    runner = _load_s0q_runner()
+    client_creations: list[str] = []
+    runner["read_runtime_environment"] = lambda _path: {
+        "LOCAL_LIVE_TENANT_ID": "7",
+        "LOCAL_LIVE_SPACE_ID": "space-1",
+        "LOCAL_LIVE_RAW_KB_ID": "raw-kb-1",
+    }
+    runner["WeKnoraAdminClient"] = lambda url: client_creations.append(url)
+
+    result = await runner["_capture_existing"](
+        _existing_namespace(tmp_path),
+        environ={},
+    )
+
+    assert result == 2
+    assert client_creations == []
+
+
+def test_s0q_capture_cli_exposes_existing_get_only_command() -> None:
+    script = Path(__file__).parents[1] / "scripts" / "run_s0q_047.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "capture-existing", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "--tenant-id" in result.stdout
+    assert "--space-id" in result.stdout
+    assert "--raw-kb-id" in result.stdout
+    assert "--terms-knowledge-id" in result.stdout
+    assert "--brochure-knowledge-id" in result.stdout
+    assert "--output" in result.stdout
+    assert "upload" not in result.stdout.casefold()

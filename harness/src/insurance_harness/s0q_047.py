@@ -573,6 +573,541 @@ class S0QCaptureClient(Protocol):
     ) -> None: ...
 
 
+_EXISTING_GET_ALLOWLIST = (
+    "knowledge_get",
+    "revision_get",
+    "revision_chunks_get",
+)
+_LOCATOR_FIELD_NAMES = frozenset(
+    {
+        "bbox",
+        "block",
+        "block_id",
+        "block_index",
+        "cell",
+        "cell_id",
+        "chunk_type",
+        "column",
+        "element_type",
+        "locator",
+        "page",
+        "page_no",
+        "page_number",
+        "row",
+        "span",
+        "structural_type",
+        "table",
+        "table_cell",
+        "table_id",
+    }
+)
+_SAFE_SHAPE_KEYS = frozenset(
+    {
+        *_LOCATOR_FIELD_NAMES,
+        "cell",
+        "cells",
+        "chunk_index",
+        "content",
+        "cross-page",
+        "cross_page",
+        "file_sha256",
+        "header",
+        "headers",
+        "id",
+        "knowledge_base_id",
+        "knowledge_id",
+        "labels",
+        "metadata",
+        "parse_attempt",
+        "parse_status",
+        "rows",
+        "space_id",
+        "spans",
+        "tenant_id",
+        "current_parse_attempt",
+    }
+)
+
+
+class S0QExistingScope(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tenant_id: PositiveInt
+    space_id: str
+    raw_kb_id: str
+
+    _identity = field_validator("space_id", "raw_kb_id")(_nonempty)
+
+
+class S0QExistingSource(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source_path: str
+    source_bytes: PositiveInt
+    source_sha256: str
+    knowledge_id: str
+
+    _identity = field_validator("source_path", "knowledge_id")(_nonempty)
+    _digest = field_validator("source_sha256")(_sha256)
+
+    @model_validator(mode="after")
+    def _safe_relative_path(self) -> S0QExistingSource:
+        path = Path(self.source_path)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("existing source path must be repository-relative")
+        return self
+
+
+class S0QExistingReadClient(Protocol):
+    method_allowlist: tuple[str, ...]
+    bound_scope: S0QExistingScope
+
+    async def get_knowledge(
+        self,
+        api_key: Any,
+        knowledge_id: str,
+    ) -> dict[str, Any]: ...
+
+    async def get_knowledge_revision(
+        self,
+        api_key: Any,
+        knowledge_id: str,
+    ) -> W1RevisionDescriptor: ...
+
+    async def list_knowledge_revision_chunks(
+        self,
+        api_key: Any,
+        knowledge_id: str,
+        *,
+        parse_attempt: int,
+        page_size: int,
+    ) -> W1ChunkListing: ...
+
+
+def _shape_rows(value: Any) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    pending: list[tuple[str, Any]] = [("$", value)]
+    while pending:
+        path, current = pending.pop()
+        if len(rows) + len(pending) > 2048:
+            raise S0QBlockedOnInput(
+                "response shape exceeds the bounded evidence budget",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        if isinstance(current, Mapping):
+            if not all(isinstance(key, str) for key in current):
+                raise S0QBlockedOnInput(
+                    "response shape contains a non-string key",
+                    bucket=S0QErrorBucket.INPUT_INTEGRITY,
+                )
+            rows.append({"path": path, "type": "object"})
+            safe_keys = sorted(
+                (key for key in current if key in _SAFE_SHAPE_KEYS),
+                reverse=True,
+            )
+            unknown_values = [
+                item for key, item in current.items() if key not in _SAFE_SHAPE_KEYS
+            ]
+            if unknown_values:
+                unknown_types = sorted(
+                    {
+                        "object"
+                        if isinstance(item, Mapping)
+                        else "array"
+                        if isinstance(item, (list, tuple))
+                        else "null"
+                        if item is None
+                        else "bool"
+                        if type(item) is bool
+                        else "int"
+                        if type(item) is int
+                        else "float"
+                        if type(item) is float
+                        else "string"
+                        if type(item) is str
+                        else "unsupported"
+                        for item in unknown_values
+                    }
+                )
+                rows.append(
+                    {
+                        "path": f"{path}.<unknown>",
+                        "type": (
+                            f"members:{len(unknown_values)}:"
+                            f"{','.join(unknown_types)}"
+                        ),
+                    }
+                )
+            for key in safe_keys:
+                pending.append((f"{path}.{key}", current[key]))
+        elif isinstance(current, (list, tuple)):
+            rows.append({"path": path, "type": "array"})
+            for index, item in reversed(tuple(enumerate(current))):
+                pending.append((f"{path}[][{index}]", item))
+        else:
+            scalar_type = (
+                "null"
+                if current is None
+                else "bool"
+                if type(current) is bool
+                else "int"
+                if type(current) is int
+                else "float"
+                if type(current) is float
+                else "string"
+                if type(current) is str
+                else "unsupported"
+            )
+            if scalar_type == "unsupported":
+                raise S0QBlockedOnInput(
+                    "response shape contains a non-JSON scalar",
+                    bucket=S0QErrorBucket.INPUT_INTEGRITY,
+                )
+            rows.append({"path": path, "type": scalar_type})
+    return sorted(rows, key=lambda row: (row["path"], row["type"]))
+
+
+def _shape_evidence(
+    knowledge: Mapping[str, Any],
+    chunks: tuple[Mapping[str, Any], ...],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    knowledge_rows = _shape_rows(knowledge)
+    chunk_rows = _shape_rows(chunks)
+    all_rows = [*knowledge_rows, *chunk_rows]
+    locator_rows = [
+        row
+        for row in all_rows
+        if row["path"].rsplit(".", 1)[-1].split("[", 1)[0]
+        in _LOCATOR_FIELD_NAMES
+    ]
+    metadata_rows = [
+        row
+        for row in all_rows
+        if ".metadata" in row["path"] or ".labels" in row["path"]
+    ]
+    return (
+        {
+            "status": (
+                "PRESENT_UNBOUND" if locator_rows else "ABSENT_INSUFFICIENT"
+            ),
+            "field_shape": locator_rows,
+            "shape_digest": canonical_sha256(locator_rows),
+        },
+        {
+            "field_shape": metadata_rows,
+            "shape_digest": canonical_sha256(metadata_rows),
+        },
+    )
+
+
+def _existing_manifest_digest(
+    *,
+    knowledge_id: str,
+    parse_attempt: int,
+    chunks: tuple[Mapping[str, Any], ...],
+) -> str:
+    lines = [
+        "weknora.chunk_manifest",
+        "v1",
+        knowledge_id,
+        str(parse_attempt),
+        str(len(chunks)),
+    ]
+    previous_index = -1
+    seen_ids: set[str] = set()
+    for item in chunks:
+        chunk_id = item.get("id")
+        chunk_index = item.get("chunk_index")
+        content = item.get("content")
+        if (
+            not isinstance(chunk_id, str)
+            or not chunk_id
+            or chunk_id in seen_ids
+            or item.get("knowledge_id") != knowledge_id
+            or item.get("parse_attempt") != parse_attempt
+            or type(chunk_index) is not int
+            or chunk_index != previous_index + 1
+            or not isinstance(content, str)
+        ):
+            raise S0QBlockedOnInput(
+                "revision chunks contain mixed attempt or incomplete identity",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        seen_ids.add(chunk_id)
+        previous_index = chunk_index
+        lines.append(
+            f"{chunk_index}:{chunk_id}:"
+            f"{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
+        )
+    return hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest()
+
+
+def _validate_existing_knowledge(
+    knowledge: Mapping[str, Any],
+    *,
+    scope: S0QExistingScope,
+    source: S0QExistingSource,
+) -> int:
+    attempt = knowledge.get("current_parse_attempt")
+    if (
+        knowledge.get("id") != source.knowledge_id
+        or knowledge.get("tenant_id") != scope.tenant_id
+        or knowledge.get("knowledge_base_id") != scope.raw_kb_id
+        or knowledge.get("parse_status") != "completed"
+    ):
+        raise S0QBlockedOnInput(
+            "existing source scope drift",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+    if knowledge.get("file_sha256") != source.source_sha256:
+        raise S0QBlockedOnInput(
+            "existing source SHA drift",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+    if type(attempt) is not int or attempt < 1:
+        raise S0QBlockedOnInput(
+            "existing source current attempt is invalid",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+    return attempt
+
+
+def _knowledge_fence(
+    knowledge: Mapping[str, Any],
+) -> tuple[Any, ...]:
+    return tuple(
+        knowledge.get(key)
+        for key in (
+            "id",
+            "tenant_id",
+            "knowledge_base_id",
+            "parse_status",
+            "current_parse_attempt",
+            "file_sha256",
+        )
+    )
+
+
+def _validate_existing_revision(
+    descriptor: W1RevisionDescriptor,
+    *,
+    source: S0QExistingSource,
+    attempt: int,
+) -> None:
+    if (
+        descriptor.knowledge_id != source.knowledge_id
+        or descriptor.parse_attempt != attempt
+        or descriptor.file_digest.algorithm != "sha256"
+        or descriptor.file_digest.value != source.source_sha256
+        or descriptor.chunk_manifest.algorithm
+        != "weknora.chunk_manifest.v1"
+    ):
+        raise S0QBlockedOnInput(
+            "existing revision identity drift",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+
+
+async def capture_existing_w1_evidence(
+    *,
+    client: S0QExistingReadClient,
+    api_key: Any,
+    scope: S0QExistingScope,
+    sources: tuple[S0QExistingSource, ...],
+) -> dict[str, Any]:
+    if (
+        client.method_allowlist != _EXISTING_GET_ALLOWLIST
+        or client.bound_scope != scope
+    ):
+        raise S0QBlockedOnInput(
+            "capture-existing GET-only method allowlist or scope drift",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+    if (
+        len(sources) != 2
+        or len({source.knowledge_id for source in sources}) != 2
+        or len({source.source_path for source in sources}) != 2
+        or len({source.source_sha256 for source in sources}) != 2
+    ):
+        raise S0QBlockedOnInput(
+            "capture-existing requires exactly two distinct frozen sources",
+            bucket=S0QErrorBucket.INPUT_INTEGRITY,
+        )
+
+    preflight: list[
+        tuple[
+            S0QExistingSource,
+            Mapping[str, Any],
+            int,
+            W1RevisionDescriptor,
+        ]
+    ] = []
+    for source in sources:
+        before = await client.get_knowledge(api_key, source.knowledge_id)
+        attempt = _validate_existing_knowledge(
+            before,
+            scope=scope,
+            source=source,
+        )
+        descriptor = await client.get_knowledge_revision(
+            api_key,
+            source.knowledge_id,
+        )
+        _validate_existing_revision(
+            descriptor,
+            source=source,
+            attempt=attempt,
+        )
+        preflight.append((source, before, attempt, descriptor))
+
+    body_rows: list[
+        tuple[
+            S0QExistingSource,
+            Mapping[str, Any],
+            int,
+            W1RevisionDescriptor,
+            tuple[Mapping[str, Any], ...],
+            str,
+        ]
+    ] = []
+    for pre_source, pre_knowledge, pre_attempt, pre_descriptor in preflight:
+        listing = await client.list_knowledge_revision_chunks(
+            api_key,
+            pre_source.knowledge_id,
+            parse_attempt=pre_attempt,
+            page_size=100,
+        )
+        if (
+            listing.total != pre_descriptor.chunk_manifest.chunk_count
+            or listing.revision.knowledge_id != pre_source.knowledge_id
+            or listing.revision.parse_attempt != pre_attempt
+            or listing.revision.chunk_count != listing.total
+        ):
+            raise S0QBlockedOnInput(
+                "existing revision identity drift",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        chunks = tuple(listing.items)
+        text_manifest_digest = _existing_manifest_digest(
+            knowledge_id=pre_source.knowledge_id,
+            parse_attempt=pre_attempt,
+            chunks=chunks,
+        )
+        if (
+            pre_descriptor.chunk_manifest.digest != text_manifest_digest
+            or listing.revision.manifest_digest != text_manifest_digest
+        ):
+            raise S0QBlockedOnInput(
+                "existing revision manifest drift",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        body_rows.append(
+            (
+                pre_source,
+                pre_knowledge,
+                pre_attempt,
+                pre_descriptor,
+                chunks,
+                text_manifest_digest,
+            )
+        )
+
+    for (
+        post_source,
+        pre_knowledge,
+        pre_attempt,
+        pre_descriptor,
+        _,
+        _,
+    ) in body_rows:
+        post_descriptor = await client.get_knowledge_revision(
+            api_key,
+            post_source.knowledge_id,
+        )
+        after = await client.get_knowledge(api_key, post_source.knowledge_id)
+        after_attempt = _validate_existing_knowledge(
+            after,
+            scope=scope,
+            source=post_source,
+        )
+        if after_attempt != pre_attempt:
+            raise S0QBlockedOnInput(
+                "existing source attempt drift",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        if _knowledge_fence(after) != _knowledge_fence(pre_knowledge):
+            raise S0QBlockedOnInput(
+                "existing source identity drift",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        if post_descriptor != pre_descriptor:
+            raise S0QBlockedOnInput(
+                "existing revision descriptor drift",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+
+    evidence_sources: list[dict[str, Any]] = []
+    for (
+        evidence_source,
+        evidence_knowledge,
+        evidence_attempt,
+        evidence_descriptor,
+        evidence_chunks,
+        evidence_manifest_digest,
+    ) in body_rows:
+        structure, metadata = _shape_evidence(
+            evidence_knowledge,
+            evidence_chunks,
+        )
+        knowledge_shape = _shape_rows(evidence_knowledge)
+        chunk_shape = _shape_rows(evidence_chunks)
+        parser_identity = asdict(evidence_descriptor.parser_identity)
+        if any(
+            isinstance(value, str) and Path(value).is_absolute()
+            for value in parser_identity.values()
+        ):
+            raise S0QBlockedOnInput(
+                "parser identity exposes an absolute path",
+                bucket=S0QErrorBucket.INPUT_INTEGRITY,
+            )
+        evidence_sources.append(
+            {
+                "source_path": evidence_source.source_path,
+                "source_bytes": evidence_source.source_bytes,
+                "source_sha256": evidence_source.source_sha256,
+                "knowledge_id": evidence_source.knowledge_id,
+                "current_parse_attempt": evidence_attempt,
+                "parser_identity": parser_identity,
+                "revision_manifest": asdict(
+                    evidence_descriptor.chunk_manifest
+                ),
+                "text_manifest": {
+                    "algorithm": "weknora.chunk_manifest.v1",
+                    "digest": evidence_manifest_digest,
+                    "chunk_count": len(evidence_chunks),
+                },
+                "knowledge_shape": knowledge_shape,
+                "knowledge_shape_digest": canonical_sha256(knowledge_shape),
+                "chunk_shape": chunk_shape,
+                "chunk_shape_digest": canonical_sha256(chunk_shape),
+                "structure_evidence": structure,
+                "metadata_evidence": metadata,
+            }
+        )
+
+    body = {
+        "artifact_kind": "s0q_047_existing_source_evidence",
+        "status": "W1_STRUCTURE_EVIDENCE_INSUFFICIENT",
+        "scope": scope.model_dump(mode="json"),
+        "client_method_allowlist": list(_EXISTING_GET_ALLOWLIST),
+        "sources": evidence_sources,
+        "admitted_bundle": None,
+        "revision_or_manifest_writes": 0,
+        "harness_model_provider_calls": 0,
+    }
+    return {**body, "report_digest": canonical_sha256(body)}
+
+
 def _capture_preflight(
     *,
     source_root: Path,
@@ -841,6 +1376,13 @@ def write_s0q_capture_report(
     report: Mapping[str, Any],
 ) -> None:
     _atomic_write_json(output_dir / "input-capture-report.json", report)
+
+
+def write_s0q_existing_evidence(
+    output_dir: Path,
+    report: Mapping[str, Any],
+) -> None:
+    _atomic_write_json(output_dir / "existing-source-evidence.json", report)
 
 
 async def capture_s0q_w1_inputs(

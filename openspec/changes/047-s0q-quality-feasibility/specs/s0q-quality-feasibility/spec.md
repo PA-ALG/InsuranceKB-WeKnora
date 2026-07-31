@@ -22,6 +22,72 @@ SHALL NOT 进入运行。此时状态 SHALL 为 `BLOCKED_ON_INPUT`，且不得�
 - **WHEN** 输入将原 PDF/表格人工改写成干净 Markdown
 - **THEN** S0-Q 拒绝该输入，不运行 extractor，也不输出 feasible
 
+### Requirement: Q1a Existing-source capture 必须只读且不升级观察证据
+
+047-R1E SHALL 只对两个已存在、显式绑定的 knowledge/revision 执行
+`knowledge_get`、`revision_get` 与 `revision_chunks_get`。客户端 capability
+allowlist SHALL 恰为这三个 GET operation；出现 upload、reparse、delete 或任一
+其他 operation 时 SHALL 在首次 API I/O 前 fail closed。
+
+请求 SHALL 绑定 exact tenant、Space、RAW KB、knowledge id 与两份固定 PDF
+SHA-256。validated runtime 中既有 `LOCAL_LIVE_TENANT_ID`（positive decimal）、
+`LOCAL_LIVE_SPACE_ID` 与 `LOCAL_LIVE_RAW_KB_ID` SHALL 全部存在、非空并与请求
+exact match；否则 SHALL 在创建 client 或首次 GET 前 fail closed。source-reader
+credential SHALL 只从独立 process environment 注入，不得加入 runtime mapping、
+`.env`、CLI 参数或输出。
+
+两个 source SHALL 按固定顺序执行一个全局 fence：PRE 阶段读取两者
+knowledge K0 与 revision R0；BODY 阶段读取两者完整分页 chunks 并重算
+manifest；POST 阶段读取两者 revision R1 与 knowledge K1。只有全部 POST
+验证完成后才可构造输出。R1 SHALL 与 R0 的 knowledge/attempt/file SHA、
+parser identity、manifest algorithm/digest/count 与 completed 字段 exact
+相等；K1 SHALL 与 K0 的 id/tenant/RAW KB/status/current attempt/SHA exact
+相等。Space SHALL 由 client 创建前已验证的 runtime identity graph 绑定；
+authoritative Knowledge GET DTO 不暴露 `space_id`，因此 response fence 不得
+要求或推断该字段。descriptor、每页 binding、每个 chunk、总数、attempt 和
+text manifest SHALL 一致。capture SHALL 以既有
+`weknora.chunk_manifest.v1` 算法从 chunk id/index/content 重算 manifest。
+跨 tenant/Space/KB、SHA/attempt 漂移、分页混版或 manifest 不一致 SHALL typed
+fail closed，且不得形成 admitted bundle 或改变 revision/manifest。
+
+输出 SHALL 只包含 parser/profile、current attempt、revision/text manifest、
+字段名/type/shape与非敏感 digest；不得包含正文、secret、credential 或绝对
+路径。远端 mapping key 只有 task-local 固定 structural-key allowlist 中的
+page/block/table/cell/row/column/span/header/cross-page 与必要 identity/container
+键可进入 shape；未知 key 的原文或 digest 均不得输出，只可省略或聚合
+member count/type。API 暴露的 locator/labels/metadata SHALL 只分类为
+`PRESENT_UNBOUND` 或 `ABSENT_INSUFFICIENT`。它们不是 cryptographic structure
+binding；缺少 page/block/table-cell 与 table-structure digest 的可复算绑定时
+状态 SHALL 为 `W1_STRUCTURE_EVIDENCE_INSUFFICIENT`，不得猜测、上传、reparse
+或授权后续 S0-Q。
+
+#### Scenario: 已有 chunk 只有 table label
+
+- **WHEN** existing revision 的 metadata/labels 暴露 `table`、page 或 cell
+  字段，但 W1 manifest 没有绑定结构内容
+- **THEN** capture 记录 `PRESENT_UNBOUND` 并输出
+  `W1_STRUCTURE_EVIDENCE_INSUFFICIENT`，`admitted_bundle` 必须为空
+
+#### Scenario: 双读期间 current attempt 漂移
+
+- **WHEN** 任一 source 在另一 source 的 BODY 读取期间漂移，或 R1/K1 与对应
+  R0/K0 的冻结 identity 不同
+- **THEN** capture typed fail closed，不拼接两次 revision/chunks，也不写
+  revision、manifest 或 bundle
+
+#### Scenario: runtime scope 或 credential ingress 不完整
+
+- **WHEN** runtime tenant/Space/RAW KB 任一缺失或不匹配，或独立 process
+  environment 没有 source-reader credential
+- **THEN** capture 在创建 client 与任何 GET 前 typed fail closed，secret 不得
+  出现在报告或错误
+
+#### Scenario: 远端 mapping key 包含敏感值
+
+- **WHEN** response key 是 absolute path、URL、DSN、token 或未知嵌套 key
+- **THEN** key 原文及其 digest 均不得进入序列化报告，结构状态仍保持
+  `PRESENT_UNBOUND` 或 `ABSENT_INSUFFICIENT`
+
 ### Requirement: Q2 窄切片身份必须在运行前冻结
 
 运行清单 SHALL 在开始前冻结恰好一个 ProductVersion exact identity，以及从
