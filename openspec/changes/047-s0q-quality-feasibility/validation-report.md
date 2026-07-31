@@ -127,3 +127,66 @@ Revision Manifest 合同/实现存在；但仓库中未发现两份可直接用�
 - full、PostgreSQL suite、无关 provider/live：`NOT RUN`
 - 已授权的本地 WeKnora 输入预检：`RUN / BLOCKED_ON_INPUT`；仅一次
   embedding 基础设施探测，未运行 Harness 模型链
+
+## 2026-07-31 · 047-R1E offline implementation checkpoint
+
+- base：`bb9b012ebbd97f92340fdab25557f7a24504b30f`
+- scope：既有 runner/module/focused test + OpenSpec 047 四文件，最多七路径；
+- RED：原 23 tests 通过，新 9 tests 因缺少 `capture-existing` 合同失败；
+- GREEN：36 focused tests 通过；
+- read surface：每个 source 只执行 knowledge 双读、revision 单读、revision
+  chunks 单读；capability allowlist 恰为三个 GET；
+- output：parser/profile、attempt、revision/text manifest、字段 shape/digest；
+  正文、credential、secret、绝对路径为零；
+- structure verdict：metadata/labels 只产生 `PRESENT_UNBOUND` 或
+  `ABSENT_INSUFFICIENT`，顶层保持
+  `W1_STRUCTURE_EVIDENCE_INSUFFICIENT`，无 admitted bundle；
+- 真实 credential/runtime/WeKnora、provider/model、PostgreSQL、full：
+  `NOT RUN`。
+- Ruff：`PASS`；
+- strict mypy（runner/module/test）：`PASS`，0 issues；
+- OpenSpec 047 strict：`PASS`；
+- diff-check / exact seven-path scope / private / secret：`PASS`。
+
+本 checkpoint 不表示 R1 admitted、S0-Q feasible 或生产授权；独立 review
+将在 exact frozen candidate 上执行。
+
+## 2026-07-31 · 047-R1E one-shot review corrective
+
+- predecessor candidate：
+  `88b69d893056a8ee1329a46783f7bc18d853b008`，两路 review 均为
+  `NOT APPROVED`；
+- RED：existing-source subset 为 `14 failed, 14 passed`，分别复现跨 source
+  全局时间窗与缺失 R1、runtime secret ingress 不可达、缺失 tenant/Space
+  identity 被接受，以及恶意 mapping key/absolute path/token/URL/DSN 原文进入
+  shape；
+- GREEN：两 source 采用固定顺序的全局 PRE(K0/R0)→BODY(chunks/manifest)→
+  POST(R1/K1)，全部 fence exact 相等后才构造 evidence；
+- runtime gate：`LOCAL_LIVE_TENANT_ID`、`LOCAL_LIVE_SPACE_ID` 与
+  `LOCAL_LIVE_RAW_KB_ID` 在 client 创建/GET 前必须存在并 exact match；reader
+  secret 仅从独立 process environment 注入，不进入 runtime mapping、CLI、
+  报告或错误；
+- shape gate：仅固定 structural/identity/container key 可进入路径；未知 key
+  原文与 digest 均不输出，只聚合 member count/type；
+- fresh focused：`100 passed`（`test_s0q_047.py` +
+  `test_source_weknora_017.py`）；
+- Ruff：`PASS`；strict mypy（runner/module/test）：`PASS`，0 issues；
+- OpenSpec 047 strict：`PASS`（可选 telemetry 网络 flush 失败，不影响本地
+  validate exit 0）；`git diff --check`：`PASS`；
+- full、provider/model、live、PostgreSQL、真实 WeKnora/credential：
+  `NOT RUN`。
+
+corrective 保持原七路径、GET-only 三 operation、
+`W1_STRUCTURE_EVIDENCE_INSUFFICIENT`、`admitted_bundle=null` 与零
+revision/manifest/model/write；不表示 R1 admitted 或 S0-Q feasible。
+
+### Authoritative Knowledge DTO compatibility delta
+
+- main `internal/types/knowledge.go` 与 037 probe 均证明 Knowledge GET response
+  暴露 tenant/RAW KB，但不暴露 `space_id`；
+- RED：otherwise-valid exact-main response 因缺少 `space_id` 被旧候选误判
+  `existing source scope drift`；
+- GREEN：response K0/K1 fence 只比较 id/tenant/RAW KB/status/attempt/SHA；
+  runtime `LOCAL_LIVE_SPACE_ID` 的 present+exact-match client 前门禁保持不变；
+- focused fake 与 missing-field 矩阵已对齐 authoritative main DTO，runtime
+  Space mismatch 仍在 client/GET 前 fail closed。
