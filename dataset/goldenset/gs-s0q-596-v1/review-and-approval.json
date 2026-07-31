@@ -1,0 +1,2609 @@
+{
+  "review": {
+    "authority_counts": {
+      "v1_1_extensions": 11,
+      "workbook_authoritative": 49
+    },
+    "candidate_records": [
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "您、被保险人或受益人知道保险事故发生后应当在 10 日内通知我们。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "申请保险金时，由相应保险金受益人作为申请人填写保险金给付申请书，并提供下列证明和资料："
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 25,
+            "quote": "以上证明和资料不完整的，我们将及时一次性通知申请人补充提供。"
+          }
+        ],
+        "field_id": "claim_filing_requirements",
+        "field_name": "理赔申请时效与申请材料",
+        "reasoning": "5.2给出通知时限，5.3及其分项给出通用和专项申请材料。",
+        "tri_state": "present",
+        "value": "知道保险事故后10日内通知；申请人填写保险金给付申请书，并按责任提交保险合同、有效身份证件、诊断与病历检验资料、费用原始凭证及结算清单、处方或专项审核材料等；材料不完整时一次性通知补充"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "clause_effective_date",
+        "field_name": "条款生效日期",
+        "reasoning": "文件仅说明具体合同生效日在保险单载明，未给出本条款统一生效日期。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "clause_version",
+        "field_name": "条款版本标识",
+        "reasoning": "备案编号可确定备案身份，但文件未另行载明版本号或版次，不能将备案编号重复充作版本标识。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "若保险期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品的建议。"
+          }
+        ],
+        "field_id": "discontinuation_renewal",
+        "field_name": "停售后续保安排",
+        "reasoning": "保险期间与不保证续保条款直接规定停售后的安排。",
+        "tri_state": "present",
+        "value": "保险期间届满时若产品已停止销售，不再接受投保申请，但会提供投保其他保险产品的建议"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "被保险人所患既往症43及保险单中特别约定的除外疾病引起的相关费用；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 22,
+            "quote": "被保险人服用、吸食或注射毒品"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 22,
+            "quote": "核爆炸、核辐射或核污染、化学污染；恐怖袭击"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 23,
+            "quote": "因下列情形之一造成被保险人医疗费用支出的，我们不承担给付恶性肿瘤（重度）海外特定药品及医疗费用保险金的责任："
+          }
+        ],
+        "field_id": "exclusions_official",
+        "field_name": "责任免除",
+        "reasoning": "将条款2.1的28项主免责与海外特药医疗的6项附加免责归并为完整结构化清单。",
+        "tri_state": "present",
+        "value": "主责任免除包括：既往症及特别除外疾病；遗传性或先天性疾病；体检预防、牙科、整形美容、健美、妊娠生育及性功能治疗；多数人工器官、康复器械与耐用设备；HIV/AIDS相关疾病；非约定药房或无处方购药及滋补中草药；精神行为障碍与咨询；故意杀害或伤害、自伤、犯罪；毒品、高风险运动、职业病或医疗事故、酒驾、核污染或战争；不合理住院；未经批准治疗或药物；预防保健或医疗鉴定；违医嘱用药；康复、并发症或心理治疗；姑息、替代、基因、辅助疗法及未经证实治疗；已耐药。海外特药医疗另除外假体或器官、认知障碍或衰老护理、感染性疾病、无医嘱治疗、中国境外医学随访或无证据出国检查、非医疗必需费用。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "住院期间及住院前后院外购药费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 13,
+            "quote": "恶性肿瘤（重度）临床急需进口药品费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 14,
+            "quote": "恶性肿瘤（重度）海外特定药品及医疗费用保险金"
+          }
+        ],
+        "field_id": "external_drug_coverage",
+        "field_name": "外购药/特药责任",
+        "reasoning": "条款设置四类院外、进口或海外药品责任，并分别规定审核与购买条件。",
+        "tri_state": "present",
+        "value": "覆盖住院期间及住院前后院外购药；重度恶性肿瘤院外特定药；临床急需进口药；海外特定药。各责任须满足处方、目录、购买机构及预审核或合理性审核等条件"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "既往症指在本合同生效日之前被保险人已患且已知晓的疾病。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "被保险人所患既往症43及保险单中特别约定的除外疾病引起的相关费用；"
+          }
+        ],
+        "field_id": "pre_existing_conditions",
+        "field_name": "既往症定义与处理",
+        "reasoning": "同页脚注明确定义，责任免除正文明确处理结果。",
+        "tri_state": "present",
+        "value": "既往症指本合同生效日前被保险人已患且已知晓的疾病；既往症及保险单特别约定的除外疾病引起的相关费用不赔"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "reduced_paid_up",
+        "field_name": "减额缴清",
+        "reasoning": "三份文件未载明减额缴清权益或明确否定该权益。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安人寿〔2025〕医疗保险 172 号"
+          }
+        ],
+        "field_id": "regulatory_filing_no",
+        "field_name": "条款备案/批复文号",
+        "reasoning": "条款首页顶部直接载明备案编号。",
+        "tri_state": "present",
+        "value": "平安人寿〔2025〕医疗保险172号"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "reinstatement",
+        "field_name": "复效条款",
+        "reasoning": "本产品为一年期不保证续保合同，三份文件未出现效力中止后的复效安排。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "因治疗该疾病发生的费用，我们都不承担给付任何保险金的责任。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "我们不承担给付任何保险金的责任，向您返还所交保险费，本合同终止。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "以下三种情形，无等待期："
+          }
+        ],
+        "field_id": "waiting_period_claim_handling",
+        "field_name": "等待期内出险处理",
+        "reasoning": "等待期条款区分一般疾病、重度恶性肿瘤及无等待期例外。",
+        "tri_state": "present",
+        "value": "等待期内确诊一般疾病，相关治疗费用不承担；等待期内确诊恶性肿瘤（重度），不承担保险金、返还所交保险费并终止合同；约定三类情形无等待期"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "计划一为 1"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "计划二为 0"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "具体的年免赔额由您与我们在投保时约定，并在保险合同中载明。"
+          }
+        ],
+        "field_id": "zh_0612362268",
+        "field_name": "免赔额",
+        "reasoning": "保险计划表直接给出两计划免赔额，计算条款确认具体免赔额由投保时约定。",
+        "tri_state": "present",
+        "value": "计划一1万元；计划二0元，由投保时选择确定"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "一般医疗保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 7,
+            "quote": "术后康复住院医疗保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "住院期间及住院前后院外购药费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 9,
+            "quote": "质子重离子医疗保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 10,
+            "quote": "细胞免疫疗法医疗保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤特定用药基因检测费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 14,
+            "quote": "恶性肿瘤（重度）海外特定药品及医疗费用保险金"
+          }
+        ],
+        "field_id": "zh_09a5d9e54e",
+        "field_name": "保什么",
+        "reasoning": "归并条款1.5各分项保险责任，形成唯一保障清单。",
+        "tri_state": "present",
+        "value": "一般医疗、术后康复住院、住院期间及前后院外购药、质子重离子、细胞免疫疗法、恶性肿瘤特定用药基因检测、重度恶性肿瘤院外特药、临床急需进口药、特定医疗器械、海外特定药品及医疗费用"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 9,
+            "quote": "因本产品为费用补偿型医疗保险"
+          }
+        ],
+        "field_id": "zh_0b3894ed2a",
+        "field_name": "产品类型",
+        "reasoning": "条款直接声明产品属于费用补偿型医疗保险。",
+        "tri_state": "present",
+        "value": "费用补偿型医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "您可以同时为符合我们承保条件的家庭成员投保本产品"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "家庭成员仅指投保人本人、投保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保人的子女。"
+          }
+        ],
+        "field_id": "zh_0c5a8e59e2",
+        "field_name": "产品搭配规则",
+        "reasoning": "投保范围条款明确家庭成员组合投保规则。",
+        "tri_state": "present",
+        "value": "可同时为符合承保条件的家庭成员投保；家庭成员限本人、配偶、父母及子女"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "本合同的保险费需要您在投保时一次性交清。"
+          }
+        ],
+        "field_id": "zh_14b93ce275",
+        "field_name": "交费期限",
+        "reasoning": "一次性交清同时明确了本一年期合同的交费期限。",
+        "tri_state": "present",
+        "value": "投保时一次性交清"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "本合同的保险费需要您在投保时一次性交清。"
+          }
+        ],
+        "field_id": "zh_17a83223e4",
+        "field_name": "交费方式",
+        "reasoning": "条款直接规定交费方式。",
+        "tri_state": "present",
+        "value": "一次性交清"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_17e15e0c5a",
+        "field_name": "保单件数",
+        "reasoning": "三份产品文件没有实际保单件数统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险"
+          }
+        ],
+        "field_id": "zh_1a3227c6ce",
+        "field_name": "险种名称",
+        "reasoning": "条款首页标题直接给出完整险种名称。",
+        "tri_state": "present",
+        "value": "平安e生保（尊享版）医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_1a5675a37a",
+        "field_name": "保障期间分类",
+        "reasoning": "按 schema 的短期/长期/终身口径，一年期归为短期。",
+        "tri_state": "present",
+        "value": "短期（一年期）"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "自您签收本合同之日起，有 15 日的犹豫期。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "我们将退还您所支付的全部保险费。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "我们自收到解除合同通知书之日起30日内向您退还本合同的现金价值68。"
+          }
+        ],
+        "field_id": "zh_1ec5e3f2cc",
+        "field_name": "犹豫期及合同解除（退保）",
+        "reasoning": "犹豫期与解除合同条款分别明确退费后果。",
+        "tri_state": "present",
+        "value": "签收后15日为犹豫期，期内解除退还全部保险费；期后可解除，30日内退还现金价值，可能发生损失"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_23a2625781",
+        "field_name": "理赔金额",
+        "reasoning": "给付限额和投保示例不等于实际理赔金额统计，故无法抽取。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_2df7d6256c",
+        "field_name": "高危职业",
+        "reasoning": "费率表仅列医疗职业等级一级和二级的因子，未列明具体高危职业或高危职业承保规则。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "自您签收本合同之日起，有 15 日的犹豫期。"
+          }
+        ],
+        "field_id": "zh_313cabffd8",
+        "field_name": "犹豫期",
+        "reasoning": "犹豫期条款直接载明期限。",
+        "tri_state": "present",
+        "value": "15日"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_346f0dac8c",
+        "field_name": "发布外网",
+        "reasoning": "条款提及官网查询若干清单，但没有载明该产品的“发布外网”状态字段。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "一般医疗保险金给付限额 400 万元"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "术后康复住院医疗保险金给付限额 3 万元"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "住院期间及住院前后院外购药费用保险金给付限额 50 万元"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "恶性肿瘤特定用药基因检测费用保险金给付限额 3 万元"
+          }
+        ],
+        "field_id": "zh_3a3e6520a3",
+        "field_name": "给付限额",
+        "reasoning": "说明书利益演示表与条款计划表一致；采用说明书同页汇总的责任限额。",
+        "tri_state": "present",
+        "value": "保险期间总给付限额400万元；一般医疗400万元；术后康复住院3万元；住院期间及前后院外购药50万元；质子重离子400万元；细胞免疫疗法400万元；恶性肿瘤特定用药基因检测3万元；其余重度恶性肿瘤专项责任各400万元"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "一般医疗保险金、术后康复住院医疗保险金的给付比例为 100%；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "则上述保险金的给付比例为 60%；但因就诊的医疗机构原因无法进行基本医疗保险或公费医疗结算的，则上述保险金的给付比例仍为 100%。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "住院期间及住院前后院外购药费用保险金的给付比例为 100%；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 13,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金的给付比例为 100%"
+          }
+        ],
+        "field_id": "zh_3d8424595d",
+        "field_name": "报销比例",
+        "reasoning": "不同比例按责任及是否医保结算、是否预审核分别归并。",
+        "tri_state": "present",
+        "value": "一般医疗和术后康复住院通常100%；以有基本医保或公费医疗身份投保但理赔时未获该途径补偿的为60%，因医疗机构原因无法结算仍为100%；院外购药经预审核100%、未预审核但审核通过60%；重度恶性肿瘤院外特药通常100%，医保目录内特药未能医保结算时60%"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 19,
+            "quote": "被保险人每次就诊发生的合理且必要的属于保险责任范围内的医疗费用"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "我们在扣除被保险人已从其他途径获得的补偿后，对于剩余部分在该项保险金给付限额内按约定给付。"
+          }
+        ],
+        "field_id": "zh_4a789b1d6f",
+        "field_name": "报销范围",
+        "reasoning": "计算方法和补偿原则共同界定可报销费用口径。",
+        "tri_state": "present",
+        "value": "合同保险责任范围内合理且必要的医疗费用；从基本医疗保险、城乡居民大病保险或公费医疗取得的补偿先行扣除，其他途径已补偿部分亦不重复给付"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_5162df17d8",
+        "field_name": "销售状态",
+        "reasoning": "停售后处理是条件性条款，不能证明当前在售或停售状态。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_52548821b9",
+        "field_name": "费率可调",
+        "reasoning": "费率表给出当前费率计算和分组，但未明确保险公司有调整费率的权利或本产品支持费率调整。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 4,
+            "quote": "被保险人因疾病或意外伤害经二级及以上医保定点医院诊断"
+          }
+        ],
+        "field_id": "zh_540e1969e3",
+        "field_name": "可覆盖风险",
+        "reasoning": "一般医疗责任直接覆盖疾病和意外伤害所致医疗。",
+        "tri_state": "present",
+        "value": "疾病或意外伤害导致的合同约定医疗费用"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "若您在被保险人 71 周岁至 100 周岁期间投保本产品的，需要满足如下情形之一，并经我们审核同意"
+          }
+        ],
+        "field_id": "zh_58d313ee26",
+        "field_name": "保障人群",
+        "reasoning": "按 schema 的儿童、成人、老人年龄映射，文件覆盖三类人群。",
+        "tri_state": "present",
+        "value": "儿童、成人及老人；常规0周岁（出生满28日）至70周岁，符合条件并经审核同意可至100周岁"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_67ee7025ef",
+        "field_name": "主附加险",
+        "reasoning": "三份文件未用“主险”或“附加险”明确标注本产品。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "特需国际省心住，尊享品质医疗"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "药械疗法安心用，尊享前沿医疗"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障术后康复，尊享复健医疗"
+          }
+        ],
+        "field_id": "zh_6a3bd6cdbf",
+        "field_name": "产品特色",
+        "reasoning": "产品说明书“产品特色”逐项列出三项特色。",
+        "tri_state": "present",
+        "value": "特需国际省心住，尊享品质医疗；药械疗法安心用，尊享前沿医疗；保障术后康复，尊享复健医疗"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          }
+        ],
+        "field_id": "zh_74aa1b9c93",
+        "field_name": "保证续保",
+        "reasoning": "条款对保证续保作出明确否定。",
+        "tri_state": "absent_explicitly",
+        "value": "无保证续保（本合同为不保证续保合同）"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_74fd5a9469",
+        "field_name": "津贴",
+        "reasoning": "各项责任均为费用补偿或费用给付限额，未载明定额住院或恶性肿瘤津贴。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_7598a3116c",
+        "field_name": "保障期间",
+        "reasoning": "保险期间条款直接载明一年。",
+        "tri_state": "present",
+        "value": "一年"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_789479e2d4",
+        "field_name": "销售渠道",
+        "reasoning": "三份文件未明确列出可销售渠道。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "保险期间届满，您需要重新向我们申请投保本产品，并经我们审核同意，交纳保险费，获得新的保险合同。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "若保险期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品的建议。"
+          }
+        ],
+        "field_id": "zh_7bf05bc576",
+        "field_name": "保险期间和续保",
+        "reasoning": "条款完整规定期间、重新投保及停售后的处理。",
+        "tri_state": "present",
+        "value": "保险期间一年，不保证续保；届满须重新申请、经审核同意并交费取得新合同；停售后不再接受申请但建议其他产品"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "质子重离子医疗保险金给付限额"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "细胞免疫疗法医疗保险金给付限额"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金给付限额"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "恶性肿瘤（重度）海外特定药品及医疗费用保险金给付限额"
+          }
+        ],
+        "field_id": "zh_7d7fe38f09",
+        "field_name": "癌症医疗",
+        "reasoning": "说明书利益演示表汇总了多项癌症专项医疗责任。",
+        "tri_state": "present",
+        "value": "覆盖重度恶性肿瘤相关的质子重离子、细胞免疫疗法、特定用药基因检测、院外特定药、临床急需进口药、特定医疗器械及海外特定药品和医疗费用"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "保险费=单位费率×家庭费率因子"
+          },
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "非标准体单位费率=标准体单位费率+职业加费费率，职业加费费率=标准体单位费率*职业因子。"
+          }
+        ],
+        "field_id": "zh_7fe8603c08",
+        "field_name": "费用",
+        "reasoning": "独立费率表是费用字段的直接且最完整来源。",
+        "tri_state": "present",
+        "value": "保险费=单位费率×家庭费率因子；非标准体另加职业加费，具体单位费率按年龄、计划及基本医保/公费医疗状态区分"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险产品提供医疗费用保障"
+          }
+        ],
+        "field_id": "zh_89e518b987",
+        "field_name": "产品简介",
+        "reasoning": "阅读指引对产品功能作出直接概括。",
+        "tri_state": "present",
+        "value": "提供医疗费用保障"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_8bd90889d3",
+        "field_name": "开始使用时间",
+        "reasoning": "三份文件未载明产品开始使用或销售起始日期；文件元数据不作为合同字段证据。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_a17bd1c3f3",
+        "field_name": "退保率",
+        "reasoning": "三份产品文件没有退保率统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "犹豫期为15日，犹豫期内您可以要求全额退还保险费"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "被保险人可以享受本合同提供的健康管理服务"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "您有退保的权利"
+          }
+        ],
+        "field_id": "zh_a271d96039",
+        "field_name": "保单权益",
+        "reasoning": "条款阅读指引集中列明重要权益。",
+        "tri_state": "present",
+        "value": "15日犹豫期内全额退还保险费；享受合同保障及健康管理服务；可申请退保"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险"
+          }
+        ],
+        "field_id": "zh_ad4a95859a",
+        "field_name": "产品类别",
+        "reasoning": "正式产品名称明确标识类别为医疗保险。",
+        "tri_state": "present",
+        "value": "医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "您可以同时为符合我们承保条件的家庭成员投保本产品"
+          }
+        ],
+        "field_id": "zh_b4b770e114",
+        "field_name": "投保范围",
+        "reasoning": "投保范围同时包含年龄条件和家庭成员范围。",
+        "tri_state": "present",
+        "value": "常规投保年龄为0周岁（出生满28日）至70周岁；符合条件并经审核同意可覆盖71至100周岁；可为本人、配偶、父母及子女等家庭成员投保"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同的保险计划分为计划一、计划二"
+          }
+        ],
+        "field_id": "zh_b7ceabc3c0",
+        "field_name": "产品档次",
+        "reasoning": "保险计划条款明确两个产品档次。",
+        "tri_state": "present",
+        "value": "计划一、计划二"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "若您在被保险人 71 周岁至 100 周岁期间投保本产品的，需要满足如下情形之一，并经我们审核同意"
+          }
+        ],
+        "field_id": "zh_c4f4b0d48a",
+        "field_name": "投保年龄",
+        "reasoning": "投保范围条款分别规定常规与条件性高龄投保范围。",
+        "tri_state": "present",
+        "value": "0周岁（须出生满28日）至70周岁；符合重新投保或指定产品转投条件并经审核同意的，可在71至100周岁投保"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 2,
+            "quote": "一般医疗保险金包含住院医疗费用、指定门诊医疗费用和住院前后门诊急诊医疗费用三项。"
+          }
+        ],
+        "field_id": "zh_c5187f228e",
+        "field_name": "报销门诊住院范围",
+        "reasoning": "一般医疗同时覆盖住院、指定门诊和住院前后门急诊。",
+        "tri_state": "present",
+        "value": "门诊+住院"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "医疗职业等级 职业因子 一级 0 二级 20%"
+          }
+        ],
+        "field_id": "zh_c588207763",
+        "field_name": "投保职业",
+        "reasoning": "费率表明确仅展示两个医疗职业等级及对应职业因子。",
+        "tri_state": "present",
+        "value": "医疗职业等级一级、二级；二级职业因子20%，一级为0"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          }
+        ],
+        "field_id": "zh_ca6e0226c2",
+        "field_name": "保证续保期",
+        "reasoning": "明确不保证续保，因此不存在保证续保期间。",
+        "tri_state": "absent_explicitly",
+        "value": "无（不保证续保）"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_d62301d84c",
+        "field_name": "宽限期",
+        "reasoning": "文件载明保险届满后60日内重新投保和交费安排，但未将其定义为续期保费宽限期。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_dcae594f8b",
+        "field_name": "理赔件数",
+        "reasoning": "三份产品文件没有实际理赔件数统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "被保险人故意自伤、故意犯罪或抗拒依法采取的刑事强制措施；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 22,
+            "quote": "蹦极、驾驶滑翔机或滑翔伞"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 22,
+            "quote": "被保险人酒后驾驶55机动车56；"
+          }
+        ],
+        "field_id": "zh_e1bea0527a",
+        "field_name": "特殊免责",
+        "reasoning": "从正式责任免除中提取对产品有辨识度的特殊免责；文件没有“自杀可赔”或“猝死可赔”的正向约定。",
+        "tri_state": "present",
+        "value": "故意自伤、故意犯罪、毒品、高风险运动、职业病或医疗事故、酒驾、核污染、恐怖袭击、战争或暴乱等情形不赔"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_f1de0de938",
+        "field_name": "结束使用时间",
+        "reasoning": "三份文件未载明产品结束使用或销售终止日期。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障范围包含医院里的普通部、特需部及国际部"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "二级及以上医保定点医院指经中华人民共和国卫生部门评审确定的二级以上（含二级）的基本医疗保险定点的医院，不包括昂贵医院"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 9,
+            "quote": "我们指定质子重离子医疗机构"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "经我们安排的医疗机构"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "本合同约定的海外医院"
+          }
+        ],
+        "field_id": "zh_f32c510a5e",
+        "field_name": "医院范围",
+        "reasoning": "产品说明书与条款按责任共同界定普通部、特需部、国际部以及各专项指定机构。",
+        "tri_state": "present",
+        "value": "一般医疗为二级及以上医保定点医院普通部、特需部、国际部等（不含昂贵医院）；康复责任限约定康复科室；质子重离子、细胞免疫、临床急需进口药及海外医疗使用各自指定或安排的机构"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "上述30日的时间为等待期。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "以下三种情形，无等待期："
+          }
+        ],
+        "field_id": "zh_f558f0a88f",
+        "field_name": "等待期",
+        "reasoning": "条款明确等待期长度并列出三类无等待期情形。",
+        "tri_state": "present",
+        "value": "30日；意外伤害、符合条件的60日内重新投保或指定产品转投无等待期"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 23,
+            "quote": "我们在健康体检、健康咨询、就医服务及康复护理这 4 类健康管理服务类别范围内向被保险人提供健康管理服务"
+          }
+        ],
+        "field_id": "zh_f8cc996739",
+        "field_name": "可享服务",
+        "reasoning": "健康管理服务条款明确给出四类服务范围。",
+        "tri_state": "present",
+        "value": "健康体检、健康咨询、就医服务、康复护理"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "险种简称：e 生保尊享"
+          }
+        ],
+        "field_id": "zh_fd9a0b9fa3",
+        "field_name": "险种简称",
+        "reasoning": "条款首页直接载明险种简称。",
+        "tri_state": "present",
+        "value": "e生保尊享"
+      }
+    ],
+    "candidate_run": {
+      "batch_count": 6,
+      "input_refs": [
+        "schema:5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6",
+        "product:596",
+        "product-version:596-1",
+        "pdf:88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+        "pdf:5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+        "pdf:7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb"
+      ],
+      "input_sha256": "b845026d0813054b634936bf0ad7f145f09420af8ae75d854a16b868109ad6b4",
+      "model": "gpt-5.6-sol",
+      "output_sha256": "b778eaf2552f4ff385747f60857b51624e50232048fcf8c9405282590364a8df",
+      "parse_retries": 1,
+      "pass_id": "049-blind-candidate-a",
+      "prompt_sha256": "38e2aefcb7ca619920f89570330a566dbb8b0d75f54e84af03967e4598a88631"
+    },
+    "differences": [
+      "claim_filing_requirements",
+      "clause_effective_date",
+      "clause_version",
+      "discontinuation_renewal",
+      "exclusions_official",
+      "external_drug_coverage",
+      "pre_existing_conditions",
+      "reduced_paid_up",
+      "regulatory_filing_no",
+      "reinstatement",
+      "waiting_period_claim_handling",
+      "zh_0612362268",
+      "zh_09a5d9e54e",
+      "zh_0b3894ed2a",
+      "zh_0c5a8e59e2",
+      "zh_14b93ce275",
+      "zh_17a83223e4",
+      "zh_17e15e0c5a",
+      "zh_1a3227c6ce",
+      "zh_1a5675a37a",
+      "zh_1ec5e3f2cc",
+      "zh_23a2625781",
+      "zh_2df7d6256c",
+      "zh_313cabffd8",
+      "zh_346f0dac8c",
+      "zh_3a3e6520a3",
+      "zh_3d8424595d",
+      "zh_4a789b1d6f",
+      "zh_5162df17d8",
+      "zh_52548821b9",
+      "zh_540e1969e3",
+      "zh_58d313ee26",
+      "zh_67ee7025ef",
+      "zh_6a3bd6cdbf",
+      "zh_74aa1b9c93",
+      "zh_74fd5a9469",
+      "zh_789479e2d4",
+      "zh_7bf05bc576",
+      "zh_7d7fe38f09",
+      "zh_7fe8603c08",
+      "zh_89e518b987",
+      "zh_8bd90889d3",
+      "zh_a17bd1c3f3",
+      "zh_a271d96039",
+      "zh_ad4a95859a",
+      "zh_b4b770e114",
+      "zh_b7ceabc3c0",
+      "zh_c4f4b0d48a",
+      "zh_c5187f228e",
+      "zh_c588207763",
+      "zh_ca6e0226c2",
+      "zh_d62301d84c",
+      "zh_dcae594f8b",
+      "zh_e1bea0527a",
+      "zh_f1de0de938",
+      "zh_f32c510a5e",
+      "zh_f558f0a88f",
+      "zh_f8cc996739",
+      "zh_fd9a0b9fa3"
+    ],
+    "fixed_sample_fields": [
+      "discontinuation_renewal",
+      "zh_0612362268",
+      "zh_c4f4b0d48a"
+    ],
+    "mandatory_review_fields": [
+      "regulatory_filing_no",
+      "clause_version",
+      "clause_effective_date",
+      "exclusions_official",
+      "pre_existing_conditions",
+      "discontinuation_renewal"
+    ],
+    "product_version": "596-1",
+    "required_human_fields": [
+      "claim_filing_requirements",
+      "clause_effective_date",
+      "clause_version",
+      "discontinuation_renewal",
+      "exclusions_official",
+      "external_drug_coverage",
+      "pre_existing_conditions",
+      "reduced_paid_up",
+      "regulatory_filing_no",
+      "reinstatement",
+      "waiting_period_claim_handling",
+      "zh_0612362268",
+      "zh_09a5d9e54e",
+      "zh_0b3894ed2a",
+      "zh_0c5a8e59e2",
+      "zh_14b93ce275",
+      "zh_17a83223e4",
+      "zh_17e15e0c5a",
+      "zh_1a3227c6ce",
+      "zh_1a5675a37a",
+      "zh_1ec5e3f2cc",
+      "zh_23a2625781",
+      "zh_2df7d6256c",
+      "zh_313cabffd8",
+      "zh_346f0dac8c",
+      "zh_3a3e6520a3",
+      "zh_3d8424595d",
+      "zh_4a789b1d6f",
+      "zh_5162df17d8",
+      "zh_52548821b9",
+      "zh_540e1969e3",
+      "zh_58d313ee26",
+      "zh_67ee7025ef",
+      "zh_6a3bd6cdbf",
+      "zh_74aa1b9c93",
+      "zh_74fd5a9469",
+      "zh_789479e2d4",
+      "zh_7bf05bc576",
+      "zh_7d7fe38f09",
+      "zh_7fe8603c08",
+      "zh_89e518b987",
+      "zh_8bd90889d3",
+      "zh_a17bd1c3f3",
+      "zh_a271d96039",
+      "zh_ad4a95859a",
+      "zh_b4b770e114",
+      "zh_b7ceabc3c0",
+      "zh_c4f4b0d48a",
+      "zh_c5187f228e",
+      "zh_c588207763",
+      "zh_ca6e0226c2",
+      "zh_d62301d84c",
+      "zh_dcae594f8b",
+      "zh_e1bea0527a",
+      "zh_f1de0de938",
+      "zh_f32c510a5e",
+      "zh_f558f0a88f",
+      "zh_f8cc996739",
+      "zh_fd9a0b9fa3"
+    ],
+    "review_hash": "babd9a9453afa1f5942dda168705926b6fe2b0a6467a586b2d71ee335754a3e5",
+    "review_records": [
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "您、被保险人或受益人知道保险事故发生后应当在 10 日内通知我们。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "申请保险金时，由相应保险金受益人作为申请人填写保险金给付申请书，并提供下列证明和资料："
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "3. 二级及以上医保定点医院出具的附有病理显微镜检查、血液检验及其他科"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "4. 二级及以上医保定点医院出具的医疗诊断书、医疗病历或出院小结、检查"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "5. 二级及以上医保定点医院出具的医疗费用原始凭证和医疗费用结算清单"
+          }
+        ],
+        "field_id": "claim_filing_requirements",
+        "field_name": "理赔申请时效与申请材料",
+        "reasoning": "合并事故通知时限与5.3各保险金申请材料要求；专项责任按其专属流程办理。",
+        "tri_state": "present",
+        "value": "保险事故发生后应在10日内通知；申请人填写保险金给付申请书，通常提交保险合同、有效身份证件、诊断证明及病理/血液等检验报告、病历或出院小结、检查报告和处方、医疗费用原始凭证与结算清单（有医保等的含补偿证明）及其他确认事故材料；院外药、细胞免疫、特药/器械/海外责任另按相应流程补充材料。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "clause_effective_date",
+        "field_name": "条款生效日期",
+        "reasoning": "三份来源PDF未在正文解析页载明条款生效日期；不使用文件元数据推断。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "平安 e 生保（尊享版）医疗保险条款"
+          }
+        ],
+        "field_id": "clause_version",
+        "field_name": "条款版本标识",
+        "reasoning": "正式条款标题中的“尊享版”是可逐字提取的版本标识；未把备案年份当作生效日期。",
+        "tri_state": "present",
+        "value": "尊享版"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "若保险期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品的建议。"
+          }
+        ],
+        "field_id": "discontinuation_renewal",
+        "field_name": "停售后续保安排",
+        "reasoning": "条款明确规定停售后的投保/续保安排。",
+        "tri_state": "present",
+        "value": "保险期间届满时若产品已停止销售，不再接受该产品投保申请，但会提供投保其他保险产品的建议。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "3. 疗养、视力矫正手术、各种健康体检项目及预防性医疗项目、牙科保健、牙科费用、非意外伤害所致整容手术；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 22,
+            "quote": "22.不符合入院标准、挂床住院或住院病人应当出院而拒不出院（从医院确定出院之日起发生的一切医疗费用）；23.未被治疗所在地权威部门批准的治疗，未获得治疗所在地政府许可或批准的药品或药物；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 23,
+            "quote": "因下列情形之一造成被保险人医疗费用支出的，我们不承担给付恶性肿瘤（重度）海外特定药品及医疗费用保险金的责任：1. 假体、人造部件或器官（如人工关节）材料费以及相关安装和置换等费用；2. 因认知障碍、脑损伤或衰老而需要医学治疗或医学护理所产生的相关费用；3. 因治疗流行病、传染病，以及治疗因病毒感染、细菌感染导致的疾病所产生的费用；"
+          }
+        ],
+        "field_id": "exclusions_official",
+        "field_name": "责任免除",
+        "reasoning": "依条款2.1的28项一般免责及海外责任6项专项免责归并为完整结构化清单；其他免责条款仍以条款2.2指引为准。",
+        "tri_state": "present",
+        "value": "一般责任免除包括：既往症及特别约定除外疾病；遗传性疾病、先天畸形/变形/染色体异常及先天性恶性肿瘤；疗养、视力矫正、体检、预防医疗、牙科及非意外整容；列明美容皮肤项目；矫形及生理缺陷；健美；生育相关；包皮及性功能治疗；限定外人工器官、康复器械、假体义肢及非处方器械；耐用医疗与便利舒适设备及保健品；HIV/AIDS期间因疾病；不合规购药；滋补中草药；精神行为障碍、医疗咨询及健康预测；投保人故意杀害或伤害；被保险人故意自伤、犯罪或抗拒强制；毒品；高风险运动；职业病或医疗事故；酒驾；核/化学污染、恐袭、战争等；不符合入院标准、挂床或拒绝出院；未经批准治疗或药品；预防、休养、疗养、保健、医疗鉴定咨询预测；精神疾病或不遵医嘱用药；限定外康复、并发症、慢性症状和心理治疗；姑息、替代、基因、辅助、再造及未经证实诊疗；申领药品已耐药。海外特药及医疗责任另除外：假体/人造部件或器官；认知障碍、脑损伤或衰老护理；流行病、传染病及病毒/细菌感染；自行治疗或违医嘱用药；境外医学随访或无医学证据的出国就医检查；非医疗必需费用。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "住院期间及住院前后院外购药费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "由于本次住院治疗所必需的药品无法在医院内获得"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 8,
+            "quote": "需从医院外购买满足以下所有条件的药品的费用"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金"
+          }
+        ],
+        "field_id": "external_drug_coverage",
+        "field_name": "外购药/特药责任",
+        "reasoning": "合同分别设置一般院外购药与多类恶性肿瘤特药责任。",
+        "tri_state": "present",
+        "value": "覆盖符合条件的住院期间及住院前后院外购药，以及重度恶性肿瘤院外特定药、临床急需进口药和海外特定药；院外购药通常需处方、目录符合及预审核，未预审核后审通过时按60%给付。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "1. 被保险人所患既往症43及保险单中特别约定的除外疾病引起的相关费用；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "既往症指在本合同生效日之前被保险人已患且已知晓的疾病。"
+          }
+        ],
+        "field_id": "pre_existing_conditions",
+        "field_name": "既往症定义与处理",
+        "reasoning": "条款同时给出既往症定义和免责处理。",
+        "tri_state": "present",
+        "value": "既往症指合同生效日前被保险人已患且已知晓的疾病；既往症及保险单中特别约定除外疾病引起的相关费用不承担保险金。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "reduced_paid_up",
+        "field_name": "减额缴清",
+        "reasoning": "三份来源PDF未载明减额缴清权益或明确否定条款。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安人寿〔2025〕医疗保险 172 号"
+          }
+        ],
+        "field_id": "regulatory_filing_no",
+        "field_name": "条款备案/批复文号",
+        "reasoning": "条款首页明确列出备案文号。",
+        "tri_state": "present",
+        "value": "平安人寿〔2025〕医疗保险172号"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "reinstatement",
+        "field_name": "复效条款",
+        "reasoning": "三份来源PDF未载明合同效力中止后的复效条件；重新投保不等同于复效。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "因治疗该疾病发生的费用，我们都不承担给付任何保险金的责任。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "自本合同生效之日起（含生效当日）30日内，被保险人经二级及以上医保定点医院确诊本合同第1.5.14条所定义的“恶性肿瘤——重度”，我们不承担给付任何保险金的责任，向您返还所交保险费，本合同终止。"
+          }
+        ],
+        "field_id": "waiting_period_claim_handling",
+        "field_name": "等待期内出险处理",
+        "reasoning": "等待期条款对一般疾病与重度恶性肿瘤分别规定处理结果。",
+        "tri_state": "present",
+        "value": "生效起30日内确诊疾病，治疗该疾病的费用不承担任何保险金；30日内确诊恶性肿瘤——重度，不承担保险金、返还所交保险费并终止合同；三类约定情形无等待期。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "计划一为 1"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "计划二为 0"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "具体的年免赔额由您与我们在投保时约定，并在保险合同中载明。"
+          }
+        ],
+        "field_id": "zh_0612362268",
+        "field_name": "免赔额",
+        "reasoning": "保险计划表明确给出两计划免赔额，保险金计算条款说明由投保时约定并载明。",
+        "tri_state": "present",
+        "value": "计划一1万元；计划二0元；由投保时选择确定。其他专项责任表列免赔额为0元。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "在本合同保险期间内，我们承担以下保险责任："
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "一般医疗保险金给付限额                400 万元 术后康复住院医疗保险金给付限额              3 万元 住院期间及住院前后院外购药费用保险金给付限额             50 万元 质子重离子医疗保险金给付限额               400 万元 细胞免疫疗法医疗保险金给付限额              400 万元 恶性肿瘤特定用药基因检测费用保险金给付限额              3 万元"
+          }
+        ],
+        "field_id": "zh_09a5d9e54e",
+        "field_name": "保什么",
+        "reasoning": "以条款1.5责任结构和说明书利益表归并保险责任清单。",
+        "tri_state": "present",
+        "value": "等待期后按约定承担：一般医疗保险金（住院、指定门诊、住院前后门急诊）、术后康复住院医疗、住院期间及前后院外购药、质子重离子、细胞免疫疗法、恶性肿瘤特定用药基因检测、重度恶性肿瘤院外特药、临床急需进口药、特定医疗器械、海外特定药品及医疗费用。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "因本产品为费用补偿型医疗保险，对于符合一般医疗保险金给付条件的细胞免疫疗法医学治疗的评估费用和治疗费用，我们将按细胞免疫疗法医疗保险金给付，不会重复给付一般医疗保险金。"
+          }
+        ],
+        "field_id": "zh_0b3894ed2a",
+        "field_name": "产品类型",
+        "reasoning": "条款明确界定产品为费用补偿型医疗保险。",
+        "tri_state": "present",
+        "value": "费用补偿型医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "您已投保指定的产品，并在我们指定的期限内首次投保本产品且经我们审核同意的。"
+          }
+        ],
+        "field_id": "zh_0c5a8e59e2",
+        "field_name": "产品搭配规则",
+        "reasoning": "条款明确存在与“指定产品”搭配的投保规则，但未给出产品清单。",
+        "tri_state": "present",
+        "value": "已投保指定产品的，可在指定期限内首次投保本产品并经审核同意；来源未披露指定产品名称。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "本合同的保险费需要您在投保时一次性交清。"
+          }
+        ],
+        "field_id": "zh_14b93ce275",
+        "field_name": "交费期限",
+        "reasoning": "保险费支付条款明确为投保时一次性交清。",
+        "tri_state": "present",
+        "value": "投保时一次性交清"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 24,
+            "quote": "本合同的保险费需要您在投保时一次性交清。"
+          }
+        ],
+        "field_id": "zh_17a83223e4",
+        "field_name": "交费方式",
+        "reasoning": "以正式条款的一次性交清确定为趸交；说明书的概括性表述不改变条款结论。",
+        "tri_state": "present",
+        "value": "趸交（投保时一次性交清）"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_17e15e0c5a",
+        "field_name": "保单件数",
+        "reasoning": "三份来源PDF未载明保单件数统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险"
+          }
+        ],
+        "field_id": "zh_1a3227c6ce",
+        "field_name": "险种名称",
+        "reasoning": "条款封面标题给出完整险种名称。",
+        "tri_state": "present",
+        "value": "平安e生保（尊享版）医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_1a5675a37a",
+        "field_name": "保障期间分类",
+        "reasoning": "按Schema说明由一年保险期间映射为短期。",
+        "tri_state": "present",
+        "value": "短期（一年期）"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "自您签收本合同之日起，有 15 日的犹豫期。在此期间请您认真审视本合同，如果您认为本合同与您的需求不相符，您可以在此期间提出解除本合同，我们将退还您所支付的全部保险费。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "自我们收到解除合同通知书时起，本合同终止。您在犹豫期后解除本合同的，"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "我们自收到解除合同通知书之日起 30 日内向您退还本合同的现金价值"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "您在犹豫期后解除合同可能会遭受一定损失。"
+          }
+        ],
+        "field_id": "zh_1ec5e3f2cc",
+        "field_name": "犹豫期及合同解除（退保）",
+        "reasoning": "条款分别规定犹豫期解除与犹豫期后退保后果。",
+        "tri_state": "present",
+        "value": "签收合同起15日内解除可退还全部保险费；合同成立后可申请解除，犹豫期后30日内退还现金价值，可能有损失；收到解除通知书时合同终止。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_23a2625781",
+        "field_name": "理赔金额",
+        "reasoning": "三份来源PDF仅含责任限额和示例，不含实际理赔金额统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_2df7d6256c",
+        "field_name": "高危职业",
+        "reasoning": "费率表仅列医疗职业等级一级、二级及职业因子，未给出高危职业清单或承保结论。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 26,
+            "quote": "自您签收本合同之日起，有 15 日的犹豫期。"
+          }
+        ],
+        "field_id": "zh_313cabffd8",
+        "field_name": "犹豫期",
+        "reasoning": "条款直接给出犹豫期起算点和天数。",
+        "tri_state": "present",
+        "value": "自签收合同之日起15日"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_346f0dac8c",
+        "field_name": "发布外网",
+        "reasoning": "文中官方网站查询入口不等同于产品“发布外网”状态，来源未给出该字段。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 26,
+            "quote": "一般医疗保险金给付限额                400 万元 术后康复住院医疗保险金给付限额              3 万元 住院期间及住院前后院外购药费用保险金给付限额             50 万元 质子重离子医疗保险金给付限额               400 万元 细胞免疫疗法医疗保险金给付限额              400 万元 恶性肿瘤特定用药基因检测费用保险金给付限额              3 万元 恶性肿瘤（重度）院外特定药品费用保险金给付限额             400 万元 恶性肿瘤（重度）临床急需进口药品费用保险金给付限额            400 万元 恶性肿瘤（重度）特定医疗器械费用保险金给付限额             400 万元 恶性肿瘤（重度）海外特定药品及医疗费用保险金给付限额           400 万元"
+          }
+        ],
+        "field_id": "zh_3a3e6520a3",
+        "field_name": "给付限额",
+        "reasoning": "说明书利益演示表逐项列示给付限额，并与条款计划表一致。",
+        "tri_state": "present",
+        "value": "保险期间内总给付限额400万元；一般医疗400万元；术后康复住院3万元；住院期间及前后院外购药50万元；质子重离子400万元；细胞免疫疗法400万元；恶性肿瘤特定用药基因检测3万元；重度恶性肿瘤院外特药、临床急需进口药、特定医疗器械、海外特定药品及医疗费用各400万元。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "给付比例：一般医疗保险金、术后康复住院医疗保险金的给付比例为 100%；若您按被保险人拥有基本医疗保险或公费医疗的情况进行投保，但申请理赔时未从上述途径获得医疗费用补偿的，则上述保险金的给付比例为 60%；但因就诊的医疗机构原因无法进行基本医疗保险或公费医疗结算的，则上述保险金的给付比例仍为 100%。"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 6,
+            "quote": "您在院外购买药品前按合同约定提交院外购药预审核申请并经我们审核同意的，住院期间及住院前后院外购药费用保险金的给付比例为 100%；若您在院外购买药品前未提交院外购药预审核申请，购买药品后再向我们申请住院期间及住院前后院外购药费用保险金并经我们审核通过的，我们按 60%的给付比例给付住院期间及住院前后院外购药费用保险金"
+          }
+        ],
+        "field_id": "zh_3d8424595d",
+        "field_name": "报销比例",
+        "reasoning": "不同责任存在100%主比例和若干60%降比例条件，不能压缩为单一比例。",
+        "tri_state": "present",
+        "value": "一般医疗及术后康复住院通常100%；按有基本医保/公费医疗投保但理赔时未获其补偿时为60%，因医疗机构原因无法结算仍为100%。院外购药经预审核为100%、未预审核后审通过为60%；重度恶性肿瘤院外特药通常100%，医保目录内特药未能医保/公费结算时60%。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 4,
+            "quote": "本合同约定的“住院医疗费用”包含如下内容：（1）床位费"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 5,
+            "quote": "（8）药品费和医疗器械使用费"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 5,
+            "quote": "2. 指定门诊医疗费用"
+          }
+        ],
+        "field_id": "zh_4a789b1d6f",
+        "field_name": "报销范围",
+        "reasoning": "按一般医疗费用项目及各专项医疗责任归并报销范围。",
+        "tri_state": "present",
+        "value": "合理且必要的责任内医疗费用，包括住院床位、护理、膳食、检查检验、治疗、药品和医疗器械、医生及手术等；一般医疗还含指定门诊与住院前后门急诊，另按责任覆盖康复、院外药、质子重离子、细胞免疫及恶性肿瘤特药/器械/海外医疗。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_5162df17d8",
+        "field_name": "销售状态",
+        "reasoning": "停售条款仅描述未来情形，不能证明当前销售状态。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_52548821b9",
+        "field_name": "费率可调",
+        "reasoning": "费率表给出当前费率及影响因子，但三份来源PDF未声明保险公司可调整费率或调整机制。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "被保险人因疾病或意外伤害在二级及以上医保定点医院接受治疗的"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金"
+          }
+        ],
+        "field_id": "zh_540e1969e3",
+        "field_name": "可覆盖风险",
+        "reasoning": "由一般医疗责任与恶性肿瘤专项责任归纳可覆盖风险。",
+        "tri_state": "present",
+        "value": "疾病或意外伤害导致的合同约定医疗费用，以及符合条件的恶性肿瘤相关医疗、药品、器械和海外治疗费用。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁，且须\n符合投保当时我们的规定。\n若您在被保险人71周岁至100周岁期间投保本产品的，需要满足如下情形之\n一，并经我们审核同意：\n（1）非首次投保且在上一个保险期间届满后60日内提出重新投保申请；\n（2）您已投保指定的产品，并在我们指定的期限内首次投保本产品。"
+          }
+        ],
+        "field_id": "zh_58d313ee26",
+        "field_name": "保障人群",
+        "reasoning": "按Schema说明由投保年龄映射为儿童、成人和老年人群，并保留高龄限制。",
+        "tri_state": "present",
+        "value": "儿童、成人和老人：出生满28日至70周岁可按规定投保；71至100周岁仅在满足续投或指定产品条件并审核同意时可投保。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_67ee7025ef",
+        "field_name": "主附加险",
+        "reasoning": "三份来源PDF未以“主险”或“附加险”明确标注该产品属性。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障范围包含医院里的普通部、特需部及国际部"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障部分院外药械和处方、海外特药等"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障术后康复住院费用，强化治疗效果"
+          }
+        ],
+        "field_id": "zh_6a3bd6cdbf",
+        "field_name": "产品特色",
+        "reasoning": "产品说明书“产品特色”逐项列示三项亮点。",
+        "tri_state": "present",
+        "value": "特需部及国际部医疗；部分院外药械、处方和海外特药；术后康复住院医疗。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          }
+        ],
+        "field_id": "zh_74aa1b9c93",
+        "field_name": "保证续保",
+        "reasoning": "条款明确否定保证续保。",
+        "tri_state": "absent_explicitly",
+        "value": "不保证续保"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_74fd5a9469",
+        "field_name": "津贴",
+        "reasoning": "来源列示的保险金均为费用补偿型责任，未载明住院或恶性肿瘤定额津贴，也未明确否定津贴。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_7598a3116c",
+        "field_name": "保障期间",
+        "reasoning": "保险期间条款直接载明一年。",
+        "tri_state": "present",
+        "value": "一年"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_789479e2d4",
+        "field_name": "销售渠道",
+        "reasoning": "三份来源PDF未载明销售渠道。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。保险期间届满，您需要重新向我们申请投保本产品，并经我们审核同意，交纳保险费，获得新的保险合同。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "若保险期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您提供投保其他保险产品的建议。"
+          }
+        ],
+        "field_id": "zh_7bf05bc576",
+        "field_name": "保险期间和续保",
+        "reasoning": "保险期间与不保证续保条款完整覆盖该字段。",
+        "tri_state": "present",
+        "value": "保险期间一年，不保证续保；期满须重新申请、审核同意并交费后取得新合同；产品停售则不再接受投保申请，但提供其他保险产品建议。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤特定用药基因检测费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 12,
+            "quote": "恶性肿瘤（重度）院外特定药品费用保险金"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 14,
+            "quote": "恶性肿瘤（重度）海外特定药品及医疗费用保险金"
+          }
+        ],
+        "field_id": "zh_7d7fe38f09",
+        "field_name": "癌症医疗",
+        "reasoning": "条款设置多项明确的恶性肿瘤医疗及药械专项责任。",
+        "tri_state": "present",
+        "value": "覆盖恶性肿瘤特定用药基因检测、质子重离子、细胞免疫疗法、重度恶性肿瘤院外特药、临床急需进口药、特定医疗器械及海外特定药品和医疗费用。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "保险费=单位费率×家庭费率因子"
+          },
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "非标准体单位费率=标准体单位费率+职业加费费率，职业加费费率=标准体单位费率*职业因子。"
+          }
+        ],
+        "field_id": "zh_7fe8603c08",
+        "field_name": "费用",
+        "reasoning": "费率表给出保险费计算公式与职业加费结构；具体金额随参数变化。",
+        "tri_state": "present",
+        "value": "保险费=单位费率×家庭费率因子；单位费率按年龄、计划、基本医疗保险/公费医疗状态及投保情形区分，非标准体另按医疗职业等级加收职业费率。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险产品提供医疗费用保障"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_89e518b987",
+        "field_name": "产品简介",
+        "reasoning": "按条款的保障性质与保险期间作不扩张的综合简介。",
+        "tri_state": "present",
+        "value": "一年期费用补偿型医疗保险，提供疾病或意外伤害相关医疗费用保障，并涵盖一般医疗、术后康复、院外购药及多项恶性肿瘤医疗责任。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_8bd90889d3",
+        "field_name": "开始使用时间",
+        "reasoning": "三份来源PDF未载明产品开始使用日期；不以备案年份或PDF元数据推断。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_a17bd1c3f3",
+        "field_name": "退保率",
+        "reasoning": "三份来源PDF未载明退保率统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "犹豫期为15日，犹豫期内您可以要求全额退还保险费"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "被保险人可以享受本合同提供的保障"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "被保险人可以享受本合同提供的健康管理服务"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "您有退保的权利"
+          }
+        ],
+        "field_id": "zh_a271d96039",
+        "field_name": "保单权益",
+        "reasoning": "条款阅读指引的“您拥有的重要权益”直接列示。",
+        "tri_state": "present",
+        "value": "15日犹豫期内全额退还保险费；享受合同保障；享受健康管理服务；可申请退保。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "平安 e 生保（尊享版）医疗保险"
+          }
+        ],
+        "field_id": "zh_ad4a95859a",
+        "field_name": "产品类别",
+        "reasoning": "产品正式名称直接标明为医疗保险。",
+        "tri_state": "present",
+        "value": "医疗保险"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁，且须\n符合投保当时我们的规定。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "您可以同时为符合我们承保条件的家庭成员投保本产品，家庭成员仅指投保人本人、投保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保人的子女。"
+          }
+        ],
+        "field_id": "zh_b4b770e114",
+        "field_name": "投保范围",
+        "reasoning": "投保范围条款同时限定年龄和可投保家庭成员关系。",
+        "tri_state": "present",
+        "value": "常规投保年龄为出生满28日至70周岁；71至100周岁须满足续投或指定产品条件并经审核；可为本人、配偶、父母和子女等符合承保条件的家庭成员投保。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_b7ceabc3c0",
+        "field_name": "产品档次",
+        "reasoning": "计划一、计划二是保险计划，来源未提供Schema所指基于适用人群收入计算的产品档次。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 2,
+            "quote": "本合同接受的被保险人投保年龄为0周岁1(须出生满28日)至70周岁，且须\n符合投保当时我们的规定。\n若您在被保险人71周岁至100周岁期间投保本产品的，需要满足如下情形之\n一，并经我们审核同意：\n（1）非首次投保且在上一个保险期间届满后60日内提出重新投保申请；\n（2）您已投保指定的产品，并在我们指定的期限内首次投保本产品。"
+          }
+        ],
+        "field_id": "zh_c4f4b0d48a",
+        "field_name": "投保年龄",
+        "reasoning": "投保范围条款完整给出常规年龄与高龄条件。",
+        "tri_state": "present",
+        "value": "0周岁（须出生满28日）至70周岁；71至100周岁仅限符合上期届满后60日内重新投保，或已投保指定产品并在指定期限内首次投保之一，且须审核同意。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 4,
+            "quote": "一般医疗保险金包含住院医疗费用、指定门诊医疗费用和住院前后门诊急诊医疗费用三项。"
+          }
+        ],
+        "field_id": "zh_c5187f228e",
+        "field_name": "报销门诊住院范围",
+        "reasoning": "一般医疗责任同时包含住院和两类门诊费用。",
+        "tri_state": "present",
+        "value": "门诊+住院：一般医疗含住院医疗、指定门诊医疗及住院前后门诊急诊；另含符合条件的术后康复住院等责任。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "费率表.pdf",
+            "page": 1,
+            "quote": "医疗职业等级                     职业因子 一级                      0 二级                     20%"
+          },
+          {
+            "doc": "费率表.pdf",
+            "page": 2,
+            "quote": "职业因子在投保人申请投保时经核保评估依据被保险人的职业风险状况确定。"
+          }
+        ],
+        "field_id": "zh_c588207763",
+        "field_name": "投保职业",
+        "reasoning": "费率表仅能确定适用的一、二级医疗职业等级及核保确定机制，不扩张为具体职业清单。",
+        "tri_state": "present",
+        "value": "医疗职业等级一级、二级；职业因子分别为0、20%，具体在投保时经核保按职业风险确定。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本合同为不保证续保合同。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 20,
+            "quote": "本产品保险期间为一年，自本合同生效时起算。"
+          }
+        ],
+        "field_id": "zh_ca6e0226c2",
+        "field_name": "保证续保期",
+        "reasoning": "既然条款明确不保证续保，便不存在保证续保期；一年是单个保险期间而非保证续保期。",
+        "tri_state": "absent_explicitly",
+        "value": "无保证续保期；合同明确不保证续保，单个保险期间为一年。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_d62301d84c",
+        "field_name": "宽限期",
+        "reasoning": "条款中的60日是保险期满后的重新投保/交费窗口，不是当前合同续期保费的宽限期，故不映射。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_dcae594f8b",
+        "field_name": "理赔件数",
+        "reasoning": "三份来源PDF未载明理赔件数统计。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 21,
+            "quote": "16.被保险人故意自伤、故意犯罪或抗拒依法采取的刑事强制措施；"
+          },
+          {
+            "doc": "产品说明书.pdf",
+            "page": 21,
+            "quote": "（18）从事潜水、跳伞、攀岩、蹦极、驾驶滑翔机或滑翔伞、探险、武术比赛、摔跤比赛、特技表演、赛马、赛车等高风险运动导致的伤害引起的治疗；（19）由于职业病、医疗事故引起的医疗费用；（20）被保险人酒后驾驶机动车；"
+          }
+        ],
+        "field_id": "zh_e1bea0527a",
+        "field_name": "特殊免责",
+        "reasoning": "责任免除中明确列出人身行为与高风险活动等特殊免责。",
+        "tri_state": "present",
+        "value": "故意自伤、故意犯罪或抗拒刑事强制措施不赔；高风险运动、职业病、医疗事故、酒驾、核/化学污染、战争暴乱等导致的治疗亦不赔。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [],
+        "field_id": "zh_f1de0de938",
+        "field_name": "结束使用时间",
+        "reasoning": "三份来源PDF未载明产品结束使用日期。",
+        "tri_state": "unknown",
+        "value": null
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "产品说明书.pdf",
+            "page": 1,
+            "quote": "保障范围包含医院里的普通部、特需部及国际部"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "二级及以上医保定点医院指经中华人民共和国卫生部门评审确定的二级以上（含二级）的基本医疗保险定点的医院，不包括昂贵医院、康复医院、疗养院、护理院、戒酒或戒毒中心、精神心理治疗中心以及无相应医护人员或设备的二级或三级医院的联合医院或联合病房。"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 9,
+            "quote": "并在我们指定质子重离子医疗机构"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 31,
+            "quote": "本合同约定的海外医院"
+          }
+        ],
+        "field_id": "zh_f32c510a5e",
+        "field_name": "医院范围",
+        "reasoning": "条款及计划表按责任分别列出医疗机构范围，说明书确认普通部、特需部和国际部。",
+        "tri_state": "present",
+        "value": "一般医疗限二级及以上医保定点医院普通部、特需部、国际部等（不含昂贵医院）；术后康复限相应医院康复科室或公司定点医院中的二级及以上医保定点医院康复科室；质子重离子、细胞免疫、临床急需进口药及海外责任分别限指定或经安排机构。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "上述30日的时间为等待期。以下三种情形，无等待期："
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "1. 被保险人因意外伤害"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "2. 您在不迟于上一保险期间届满后60日重新投保本产品且经我们审核同意的；"
+          },
+          {
+            "doc": "保险条款.pdf",
+            "page": 3,
+            "quote": "3. 您已投保指定的产品，并在我们指定的期限内首次投保本产品且经我们审核同意的。"
+          }
+        ],
+        "field_id": "zh_f558f0a88f",
+        "field_name": "等待期",
+        "reasoning": "等待期条款同时载明期限和三类豁免。",
+        "tri_state": "present",
+        "value": "30日；意外伤害、上一保险期间届满后60日内经审核同意重新投保、已投保指定产品并在指定期限内首次投保且经审核同意三种情形无等待期。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 23,
+            "quote": "在符合约定条件的情况下，我们在健康体检、健康咨询、就医服务及康复护理这 4 类健康管理服务类别范围内向被保险人提供健康管理服务"
+          }
+        ],
+        "field_id": "zh_f8cc996739",
+        "field_name": "可享服务",
+        "reasoning": "条款明确列出四类健康管理服务并附条件。",
+        "tri_state": "present",
+        "value": "健康体检、健康咨询、就医服务、康复护理四类健康管理服务，具体以届时服务手册及约定条件为准。"
+      },
+      {
+        "annotator_model": "gpt-5.6-sol",
+        "evidence": [
+          {
+            "doc": "保险条款.pdf",
+            "page": 1,
+            "quote": "险种简称：e 生保尊享"
+          }
+        ],
+        "field_id": "zh_fd9a0b9fa3",
+        "field_name": "险种简称",
+        "reasoning": "条款阅读指引页直接列明险种简称。",
+        "tri_state": "present",
+        "value": "e生保尊享"
+      }
+    ],
+    "review_run": {
+      "batch_count": 6,
+      "input_refs": [
+        "schema:5cd0ed8af0bc10fec488d0d83e8e28c7c0d64408c4fc25cca92b2a365355fdb6",
+        "product:596",
+        "product-version:596-1",
+        "pdf:88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+        "pdf:5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+        "pdf:7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb"
+      ],
+      "input_sha256": "b845026d0813054b634936bf0ad7f145f09420af8ae75d854a16b868109ad6b4",
+      "model": "gpt-5.6-sol",
+      "output_sha256": "710b91cb5ae55970baa631eb7262091925c775a0308586beb5f470394f747e82",
+      "parse_retries": 1,
+      "pass_id": "049-blind-review-b",
+      "prompt_sha256": "b132233ec40a316e75438f8a868f79b2c6d4ed10db1a43e2fcbda5e4b66087d5"
+    },
+    "schema_version": "v1.1+b31a411c621c",
+    "source_documents": [
+      {
+        "name": "保险条款.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/保险条款.pdf",
+        "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+        "size": 1047811
+      },
+      {
+        "name": "产品说明书.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf",
+        "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+        "size": 492101
+      },
+      {
+        "name": "费率表.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/费率表.pdf",
+        "sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+        "size": 51961
+      }
+    ],
+    "status": "PENDING_HUMAN_REVIEW"
+  },
+  "adjudication": {
+    "decisions": [
+      {
+        "choice": "review",
+        "field_id": "claim_filing_requirements",
+        "reason": "review 对10日通知、通用申请材料及专项流程的表述更完整，并用同一条款文件中的更具体材料条目支撑。"
+      },
+      {
+        "choice": "review",
+        "field_id": "clause_effective_date",
+        "reason": "结果同义；review 更明确说明三份来源均未载明条款生效日期，并排除用PDF元数据推断。"
+      },
+      {
+        "choice": "review",
+        "field_id": "clause_version",
+        "reason": "正式条款标题逐字包含“尊享版”，可作为该产品条款的版本标识；review 的 present 结论有直接标题 Evidence。"
+      },
+      {
+        "choice": "review",
+        "field_id": "discontinuation_renewal",
+        "reason": "两侧事实一致；review 更直接对应停售后的重新投保安排，且保留不再接受本产品申请和建议其他产品两项结果。"
+      },
+      {
+        "choice": "review",
+        "field_id": "exclusions_official",
+        "reason": "review 对一般责任免除和海外专项责任免除的结构化归并更完整，并保留其他免责仍以条款2.2为准的边界。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "external_drug_coverage",
+        "reason": "candidate 用单一正式条款覆盖一般院外购药、院外特药、临床急需进口药和海外特药四类责任，并保留处方、目录、购买机构和审核条件，范围更完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "pre_existing_conditions",
+        "reason": "review 同时保留既往症定义及其免责处理，措辞更贴近条款原文且 Evidence 完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "reduced_paid_up",
+        "reason": "结果同义；review 更清楚地区分“未载明权益”和“未明确否定”，符合 unknown 三态。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "regulatory_filing_no",
+        "reason": "结果同义；candidate 明确指出备案编号位于条款首页顶部，来源定位更具体。"
+      },
+      {
+        "choice": "review",
+        "field_id": "reinstatement",
+        "reason": "结果同义；review 明确指出重新投保不等同于合同效力中止后的复效，避免语义混淆。"
+      },
+      {
+        "choice": "review",
+        "field_id": "waiting_period_claim_handling",
+        "reason": "review 明确带出30日窗口，并分别保留一般疾病、重度恶性肿瘤和三类无等待期情形的处理结果。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_0612362268",
+        "reason": "candidate 准确表达计划一1万元、计划二0元以及投保时选择；不额外把其他专项责任的0元免赔并入本字段主值。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_09a5d9e54e",
+        "reason": "candidate 使用单一《保险条款.pdf》逐项覆盖全部保险责任，避免 review 的跨文档 Evidence，同时保障清单完整。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_0b3894ed2a",
+        "reason": "两侧值一致；candidate 的短直接引文已经足以证明费用补偿型医疗保险，Evidence 更精简。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_0c5a8e59e2",
+        "reason": "Schema 将该字段用于固定产品组合；review 的“指定产品转投”比家庭成员共同投保更符合产品搭配语义，并如实保留指定产品名称未披露。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_14b93ce275",
+        "reason": "结果同义；review 直接以保险费支付条款说明投保时一次性交清，表述更清楚。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_17a83223e4",
+        "reason": "review 将条款中的“一次性交清”规范映射为“趸交”，同时保留原文解释，适合作为交费方式值。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_17e15e0c5a",
+        "reason": "结果同义；review 明确这是三份来源未提供保单件数统计，符合 unknown。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_1a3227c6ce",
+        "reason": "结果同义；review 指向条款封面完整标题，定位更明确。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_1a5675a37a",
+        "reason": "结果同义；review 明确这是依据 Schema 分类规则将一年期映射为短期，不把推导写成源文直接值。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_1ec5e3f2cc",
+        "reason": "review 完整保留犹豫期内全额退费、犹豫期后现金价值、30日处理期限、合同终止时点和潜在损失。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_23a2625781",
+        "reason": "结果同义；review 明确区分责任限额/示例与实际理赔金额统计，unknown 理由更严谨。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_2df7d6256c",
+        "reason": "结果同义；review 明确费率表仅能证明一、二级职业因子，不能推出高危职业清单或承保结论。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_313cabffd8",
+        "reason": "review 同时保留15日及“自签收合同之日起”的起算点，比仅记录天数更完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_346f0dac8c",
+        "reason": "结果同义；review 明确官网查询入口不等于产品发布外网状态，避免错误映射。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_3a3e6520a3",
+        "reason": "review 逐项列出总限额和全部专项责任限额，并由说明书同页完整利益表支撑，完整性最好。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_3d8424595d",
+        "reason": "candidate 使用单一《保险条款.pdf》覆盖一般医疗、康复、院外购药及院外特药的100%/60%条件，避免 review 的跨文档 Evidence，结论仍完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_4a789b1d6f",
+        "reason": "“报销范围”更应描述可报销的医疗费用项目与责任范围；review 比偏向补偿原则的 candidate 更符合字段 Schema。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_5162df17d8",
+        "reason": "结果同义；review 明确停售条款是未来条件，不能证明当前销售状态。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_52548821b9",
+        "reason": "结果同义；review 区分当前费率及影响因子与可调费率权利/机制，unknown 结论更严谨。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_540e1969e3",
+        "reason": "可覆盖风险需要完整保留疾病或意外导致的医疗费用，以及符合条件的恶性肿瘤药品、器械和海外医疗责任；review 的范围更完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_58d313ee26",
+        "reason": "review 既按 Schema 映射儿童、成人、老人，又完整保留71至100周岁的条件性投保限制。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_67ee7025ef",
+        "reason": "结果同义；review 明确三份来源未以主险或附加险标注产品属性，符合 unknown。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_6a3bd6cdbf",
+        "reason": "candidate 逐字保留产品说明书列出的三项官方“产品特色”文案，比 review 的功能性改写更忠实于该字段。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_74aa1b9c93",
+        "reason": "candidate 保留“本合同为不保证续保合同”的明确否定性质，absent_explicitly 语义更清楚。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_74fd5a9469",
+        "reason": "结果同义；review 明确来源只列费用补偿责任、未载明也未明确否定定额津贴，符合 unknown 而非 absent。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_789479e2d4",
+        "reason": "结果同义；review 简洁说明三份来源未载明销售渠道。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_7bf05bc576",
+        "reason": "review 的 Evidence 同时直接覆盖一年期、不保证续保、重新投保和停售处理，字段闭合最完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_7d7fe38f09",
+        "reason": "保险条款是该字段的权威来源；review 的清单完整保留基因检测、质子重离子、细胞免疫、院外特药、进口药、器械及海外医疗责任。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_7fe8603c08",
+        "reason": "review 在费率公式之外保留年龄、计划、医保状态、投保情形和职业等级等影响因素，费用口径更完整。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_89e518b987",
+        "reason": "review 在不超出条款的前提下补充一年期、费用补偿性质及主要责任类别，更适合作为产品简介。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_8bd90889d3",
+        "reason": "结果同义；review 明确不以备案年份或PDF元数据推断开始使用时间。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_a17bd1c3f3",
+        "reason": "结果同义；review 明确三份来源未载明退保率统计，符合 unknown。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_a271d96039",
+        "reason": "review Evidence 完整覆盖合同保障、健康管理服务、犹豫期退费和退保权四项权益。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_ad4a95859a",
+        "reason": "结果同义；review 直接从正式产品名称识别医疗保险类别，理由更简洁。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_b4b770e114",
+        "reason": "review 更完整地区分常规年龄、高龄条件和家庭成员范围，且不把高龄投保描述成无条件覆盖。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_b7ceabc3c0",
+        "reason": "来源中的计划一、计划二属于保险计划，不足以证明 Schema 所指的产品档次；review 的 unknown 避免语义误映射。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_c4f4b0d48a",
+        "reason": "review 明确列出71至100周岁的两种限定路径及审核条件，比 candidate 的概括更完整。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_c5187f228e",
+        "reason": "Schema 取值是“仅门诊、仅住院、门诊+住院”；candidate 精确给出规范枚举值，Evidence 已证明同时覆盖门诊和住院。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_c588207763",
+        "reason": "review 保留一、二级职业和0/20%因子，并补充职业因子由投保核保按职业风险确定，信息更完整且不虚构职业清单。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_ca6e0226c2",
+        "reason": "review 明确区分“不存在保证续保期”和“一年只是单个保险期间”，避免把一年误解为保证续保期。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_d62301d84c",
+        "reason": "结果同义；review 明确60日重新投保窗口不是续期保费宽限期，避免错误映射。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_dcae594f8b",
+        "reason": "结果同义；review 明确三份来源未载明理赔件数统计。"
+      },
+      {
+        "choice": "candidate",
+        "field_id": "zh_e1bea0527a",
+        "reason": "candidate 使用单一正式保险条款覆盖故意行为、高风险运动、职业/医疗事故、酒驾及灾害类免责，避免 review 的跨文档 Evidence。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_f1de0de938",
+        "reason": "结果同义；review 明确三份来源未载明结束使用日期。"
+      },
+      {
+        "choice": "custom",
+        "field_id": "zh_f32c510a5e",
+        "reason": "candidate 与 review 均为跨文档记录；条款附录2已在单页按责任完整汇总医院/机构范围，故用单一《保险条款.pdf》构造可冻结的完整 custom record。",
+        "record": {
+          "annotator_model": "gpt-5.6-sol",
+          "evidence": [
+            {
+              "doc": "保险条款.pdf",
+              "page": 3,
+              "quote": "二级及以上医保定点医院指经中华人民共和国卫生部门评审确定的二级以上（含二级）的基本医疗保险定点的医院，不包括昂贵医院"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 31,
+              "quote": "院普通部、特需部、国"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 31,
+              "quote": "际部等（不含昂贵医院）"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 7,
+              "quote": "在出院后30日内入住定点医院17中二级及以上医保定点医院的康复科室进行治疗的"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 9,
+              "quote": "在我们指定质子重离子医疗机构"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 10,
+              "quote": "在经我们安排的医疗机构接受满足以下约定的细胞免疫疗法医学治疗的"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 13,
+              "quote": "进口药品必须在该药品处方开具的临床急需进口药品医疗机构购买"
+            },
+            {
+              "doc": "保险条款.pdf",
+              "page": 14,
+              "quote": "在本合同约定的海外医院"
+            }
+          ],
+          "field_id": "zh_f32c510a5e",
+          "field_name": "医院范围",
+          "reasoning": "保险条款附录2的计划表在同一页按责任列明一般医疗、术后康复及各专项责任的医疗机构范围；使用单一正式条款来源，避免跨文档 GoldenRecord。",
+          "tri_state": "present",
+          "value": "一般医疗限二级及以上医保定点医院普通部、特需部、国际部等（不含昂贵医院）；术后康复限二级及以上医保定点医院康复科室或公司定点医院中的相应康复科室；质子重离子、细胞免疫、临床急需进口药及海外医疗分别限指定质子重离子医疗机构、经安排的医疗机构、临床急需进口药品医疗机构及合同约定的海外医院。"
+        }
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_f558f0a88f",
+        "reason": "review 完整列出30日等待期及意外伤害、60日内重新投保、指定产品转投三类无等待期条件。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_f8cc996739",
+        "reason": "review 保留健康体检、咨询、就医、康复护理四类服务，并增加以届时服务手册和约定条件为准的必要边界。"
+      },
+      {
+        "choice": "review",
+        "field_id": "zh_fd9a0b9fa3",
+        "reason": "结果同义；review 将险种简称定位到条款阅读指引页，来源更具体。"
+      }
+    ],
+    "review_hash": "babd9a9453afa1f5942dda168705926b6fe2b0a6467a586b2d71ee335754a3e5"
+  },
+  "approval_receipt": {
+    "subject_sha256": "6feb2acf4be1ab5ce075b662bc9c9a40024038ca2324b893d3f31b1384f7674b",
+    "approved_by": "workspace-owner-houjing",
+    "artifact_hash": "83032da028ef227071fddac0ed422cbb9d1c2cc31e195972f9878a67d95b44ca",
+    "conversation_id": "019fa5ea-2507-73a2-acb8-d49030bad2f0",
+    "issued_by": "total-control",
+    "release_hash": "fca06f988bf0310d12a0f6f8d0703a9476c54a5405676fb1a9b3476f91ec21d0",
+    "actor_type": "human",
+    "approved_at": "2026-07-30T23:48:18Z",
+    "source_thread_id": "019fa5ea-2507-73a2-acb8-d49030bad2f0",
+    "action": "approve",
+    "receipt_type": "total-control-human-approval.v1",
+    "user_approval_ref": "user-message:批准吧@2026-07-31",
+    "reason": "用户在总控线程明确批准 exact review hash 对应的59项推荐包并生成049正式 Golden 制品"
+  }
+}
