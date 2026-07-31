@@ -1,0 +1,70 @@
+{
+  "schema_versions": [
+    "v1.1+b31a411c621c"
+  ],
+  "annotator_models": [
+    "gpt-5.6-sol"
+  ],
+  "dataset_root": "dataset/shouxian_product",
+  "products": {
+    "596": {
+      "product_name": "平安e生保（尊享版）医疗保险",
+      "records": 60,
+      "disputed": 0,
+      "docs": [
+        "产品说明书.pdf",
+        "保险条款.pdf",
+        "费率表.pdf"
+      ],
+      "annotator_models": [
+        "gpt-5.6-sol"
+      ]
+    }
+  },
+  "totals": {
+    "records": 60,
+    "products": 1,
+    "tri_state": {
+      "present": 40,
+      "unknown": 18,
+      "absent_explicitly": 2
+    },
+    "disputed": 0,
+    "disputed_reasons": {}
+  },
+  "status": "S0_Q_FROZEN_FULL_GOLDEN_AVAILABLE",
+  "product_version": "596-1",
+  "release_hash": "fca06f988bf0310d12a0f6f8d0703a9476c54a5405676fb1a9b3476f91ec21d0",
+  "artifact_hash": "83032da028ef227071fddac0ed422cbb9d1c2cc31e195972f9878a67d95b44ca",
+  "approval_subject": "6feb2acf4be1ab5ce075b662bc9c9a40024038ca2324b893d3f31b1384f7674b",
+  "authority_counts": {
+    "workbook_authoritative": 49,
+    "v1_1_extensions": 11
+  },
+  "source_documents": [
+    {
+      "name": "保险条款.pdf",
+      "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/保险条款.pdf",
+      "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "size": 1047811
+    },
+    {
+      "name": "产品说明书.pdf",
+      "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf",
+      "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "size": 492101
+    },
+    {
+      "name": "费率表.pdf",
+      "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/费率表.pdf",
+      "sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+      "size": 51961
+    }
+  ],
+  "scope": "S0-Q only; not production or machine_auto",
+  "files": {
+    "596.jsonl": "562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb",
+    "disputed.jsonl": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "review-and-approval.json": "484fdb78bdc73109bccd4d771e41089574b26f28c1992b67b2114524a515c868"
+  }
+}

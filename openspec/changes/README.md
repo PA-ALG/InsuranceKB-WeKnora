@@ -56,7 +56,8 @@
 | 046 | weknora-release-capability-falsification | 第一轮 `RELEASE_PATH_NOT_FEASIBLE`（PR #70） | 冻结十路径预算缺少真实生产路由入口；零功能/测试/migration 实现，载体是否可行仍待 048 窄修订复验 |
 | 047 | s0q-quality-feasibility | `SPEC + MISSION CARD / BLOCKED_ON_INPUT` | 缺少真实冻结的 WeKnora/W1 parsed artifact 输入；不得用人工清洗 Markdown 代替 |
 | 048 | s0r-router-budget-amendment | `SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 只为 S0-R 增加 `internal/router/router.go`，总路径上限 11；其余预算不变 |
-| 049+ | （空闲） | | 先占号再开目录 |
+| 049 | s0q-full-golden-freeze | ✅ 具名人工已批准；S0-Q frozen full Golden 可用；Draft 交付待定 | 复用现有 Golden 系统；`gpt-5.6-sol` 对 596-1 全部 60 个当前可抽取字段完成双 blind pass、Evidence 回验和 exact-hash 批准；只供 S0-Q，不是生产或 machine_auto authority |
+| 050+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
