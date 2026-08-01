@@ -1,0 +1,26 @@
+{
+  "candidate_hash": "ab89066f6cc463c2ea827748617ac53607b11b91a10868361dc8247083440512",
+  "canonical_signed_sha256": "d65d88eb51476c389c20adf6899b3497fac9486284e2de6ab454c1c8b584594c",
+  "canonical_unsigned_sha256": "5b928d2aa2a881eebdd5a5a3a6079e9e725dc2a0318265a5bda7cc2191e95d84",
+  "human_batch_hash": "0c09955ac22e29e8067fd371426dd24dbc642da37b27579733b9c48018a802e1",
+  "public_key": "GX9rI-FshTLGq8g4-s1ep4m-DHaykgM0A5v6iz02jWE",
+  "receipt": {
+    "candidate_hash": "ab89066f6cc463c2ea827748617ac53607b11b91a10868361dc8247083440512",
+    "decision": "approve",
+    "expires_at": 2000,
+    "human_batch_hash": "0c09955ac22e29e8067fd371426dd24dbc642da37b27579733b9c48018a802e1",
+    "issued_at": 1000,
+    "nonce": "nonce-release-1",
+    "principal_id": "human-reviewer-1",
+    "raw_kb_id": "raw-1",
+    "review_policy_hash": "f63426984a8b52ff89c6545ff6196f41d953c9e004f9748b224779ff0f5615c1",
+    "signature": "5r2IfndscUnJ6yNDGDdaqquGRLlKCOPOGyQV_0AcV7BCAalfuBYDYAjpBGg9ZBEXDRPkenp52FrPj5J7Zqz9DQ",
+    "signer_key_id": "human-key-1",
+    "space_id": "space-059",
+    "tenant_id": 42,
+    "version": "1",
+    "wiki_kb_id": "wiki-1"
+  },
+  "review_policy_hash": "f63426984a8b52ff89c6545ff6196f41d953c9e004f9748b224779ff0f5615c1",
+  "source": "Python 3.12 PR1 candidate_batches canonical hashes"
+}

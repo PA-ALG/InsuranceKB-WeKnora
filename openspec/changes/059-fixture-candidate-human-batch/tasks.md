@@ -56,4 +56,41 @@
 - [x] 以隔离进程拦截 filesystem/environment/network/DB/WeKnora 操作，证明
   057 传递加载未造成构造期 I/O；不为模块加载扩 facade。
 - [x] 补 direct/model-copy RED：即使同步伪造 gap/review，也不能把 parent
-  PASS result 改成 FAIL；逐字段保持 EEV5，并精确重算最终 gap/review。
+      PASS result 改成 FAIL；逐字段保持 EEV5，并精确重算最终 gap/review。
+
+## Task 7 · PR2 identity and RED
+
+- [x] Bind PR2 to authoritative main `bfa6fe23...`, strict nine paths, existing
+      five Release tables, PR1 exact hashes and one immutable cross-language vector.
+- [x] RED named-human approve/reject, principal/current ACL, time/nonce/signature,
+      Candidate/batch/policy hash drift and failure-zero-write.
+
+## Task 8 · CAS activation and pinned reads
+
+- [x] RED exact retry/different-digest conflict, CAS loser zero orphan and
+      bounded transaction faults; implement only by extending the existing transaction.
+- [x] RED one Head pin per request, immutable release reads and independent dual
+      ACL verification for every page/payload/search operation.
+
+## Task 9 · Historical revert
+
+- [x] RED same-scope immutable historical target, epoch+1, zero new Release/member,
+      exact retry, foreign target rejection and activate/revert single winner.
+- [x] Implement the smallest repository/service CAS path; no migration/new API/platform.
+
+## Task 9A · Production-boundary security corrective
+
+- [x] RED legacy raw authorization, missing human receipt and self-reported
+      review digest through the existing activation handler; require reviewed
+      activation and zero Release/member/Head/receipt writes on rejection.
+- [x] RED historical URL release selection for page/payload/search; pin current
+      Head once per serving request and preserve fresh dual-ACL checks per read.
+- [x] Replace the sequential stale-contender check with a barrier/goroutine
+      activate-vs-revert race proving one expected-head winner.
+
+## Task 10 · Verification and freeze
+
+- [x] Run focused Go tests, bounded existing Release compatibility, `go vet`,
+      OpenSpec strict, diff/scope/private/secret and freeze an exact temp-index tree.
+- [x] Do not commit, push, create PR, run provider/live/PG/WeKnora, modify router,
+      or exceed the corrective eleven-path ceiling.

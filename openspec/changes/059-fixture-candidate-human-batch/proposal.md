@@ -2,9 +2,9 @@
 
 ## 状态
 
-`QUALITY CORRECTIVE COMPLETE / AWAITING DELTA REVIEW`
+`PR1 MERGED / PR2 RELEASE-CAS-PINNED-REVERT AWAITING EXTERNAL REVIEW`
 
-059 是 051 Child F 的第一个小 PR。它基于已合入 main 的 057 verified
+059 PR1 已合入。PR2 是同一 Mission 的第二个小 PR；它基于已合入 main 的 057 verified
 Evidence/repair receipts，并直接消费已合入 PR #86 的 058 immutable ChangeSet
 public contract。059 不复制 058 的 DTO、canonical hash 或 action logic。
 
@@ -50,7 +50,22 @@ objects 原样放入 Candidate；不得在本模块补造第二套 ChangeSet aut
 - 不读取 049 Golden，不调用模型，不修改 057/058 合同；
 - 不把 Candidate 或 human_batch 伪装成批准、发布或线上读取 authority。
 
+## PR2 bounded release boundary
+
+PR2 只把 PR1 exact Candidate/human-batch hash 接入现有五张 WeKnora Release
+表和既有事务边界：具名人工整批 decision receipt、单事务 Head CAS、请求起点
+一次 pin、每次读取双 ACL、以及指向同 scope 不可变历史 Release 的 CAS revert。
+WeKnora Head 仍是唯一 serving authority；Harness 不增加第二 Head。
+
+PR2 不增加 migration、router、新 API、队列、provider、live 或通用审核平台。
+既有 S0-R `PublishAuthorizationV0` 与五表只做窄幅复用，PR2 不改变表结构。
+安全纠偏仅收紧既有 release handler：激活入口必须同时消费具名人工 receipt
+与 publish authorization，serving 入口必须在请求起点 pin 当前 Head；URL 中的
+历史 `release_id` 不能铸造读取 authority。
+
 ## 路径预算
 
-严格七路径：OpenSpec registry；proposal/tasks/validation/spec 四件；一个
-task-local production module；一个 focused test。
+PR1 严格七路径。PR2 安全纠偏后相对已合入 PR1 最多十一条路径：本 OpenSpec
+四件、既有 `internal/types/wiki_release.go`、service、repository、两个既有域内
+handler/service focused test、既有 release handler 与一个 immutable
+cross-language fixture/vector；不修改 router 或 README。

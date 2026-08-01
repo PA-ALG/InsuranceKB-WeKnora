@@ -52,9 +52,17 @@ var publishAuthorizationV0Fields = map[string]struct{}{
 	"signature":                 {},
 }
 
+var humanBatchDecisionReceiptV1Fields = map[string]struct{}{
+	"version": {}, "decision": {}, "principal_id": {}, "tenant_id": {},
+	"space_id": {}, "raw_kb_id": {}, "wiki_kb_id": {},
+	"candidate_hash": {}, "human_batch_hash": {}, "review_policy_hash": {},
+	"issued_at": {}, "expires_at": {}, "nonce": {}, "signer_key_id": {},
+	"signature": {},
+}
+
 // ParsePublishAuthorizationV0 parses the experimental S0-R authorization.
 func ParsePublishAuthorizationV0(raw []byte) (*types.PublishAuthorizationV0, error) {
-	fields, err := parseClosedJSONObject(raw)
+	fields, err := parseClosedJSONObject(raw, publishAuthorizationV0Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +82,10 @@ func ParsePublishAuthorizationV0(raw []byte) (*types.PublishAuthorizationV0, err
 	return &authorization, nil
 }
 
-func parseClosedJSONObject(raw []byte) (map[string]json.RawMessage, error) {
+func parseClosedJSONObject(
+	raw []byte,
+	allowed map[string]struct{},
+) (map[string]json.RawMessage, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	token, err := decoder.Token()
@@ -85,7 +96,7 @@ func parseClosedJSONObject(raw []byte) (map[string]json.RawMessage, error) {
 		return nil, fmt.Errorf("%w: expected object", ErrWikiReleaseInvalidAuthorization)
 	}
 
-	fields := make(map[string]json.RawMessage, len(publishAuthorizationV0Fields))
+	fields := make(map[string]json.RawMessage, len(allowed))
 	for decoder.More() {
 		token, err = decoder.Token()
 		if err != nil {
@@ -95,7 +106,7 @@ func parseClosedJSONObject(raw []byte) (map[string]json.RawMessage, error) {
 		if !ok {
 			return nil, fmt.Errorf("%w: non-string field name", ErrWikiReleaseInvalidAuthorization)
 		}
-		if _, ok := publishAuthorizationV0Fields[name]; !ok {
+		if _, ok := allowed[name]; !ok {
 			return nil, fmt.Errorf("%w: unknown field %q", ErrWikiReleaseInvalidAuthorization, name)
 		}
 		if _, duplicate := fields[name]; duplicate {
@@ -117,6 +128,116 @@ func parseClosedJSONObject(raw []byte) (map[string]json.RawMessage, error) {
 		return nil, fmt.Errorf("%w: %v", ErrWikiReleaseInvalidAuthorization, err)
 	}
 	return fields, nil
+}
+
+// ParseHumanBatchDecisionReceiptV1 parses the closed named-human receipt.
+func ParseHumanBatchDecisionReceiptV1(raw []byte) (*types.HumanBatchDecisionReceiptV1, error) {
+	fields, err := parseClosedJSONObject(raw, humanBatchDecisionReceiptV1Fields)
+	if err != nil {
+		return nil, err
+	}
+	for name := range humanBatchDecisionReceiptV1Fields {
+		if _, ok := fields[name]; !ok {
+			return nil, fmt.Errorf("%w: missing field %q", ErrWikiReleaseInvalidAuthorization, name)
+		}
+	}
+	var receipt types.HumanBatchDecisionReceiptV1
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&receipt); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrWikiReleaseInvalidAuthorization, err)
+	}
+	normalizeHumanBatchDecisionReceiptV1(&receipt)
+	return &receipt, nil
+}
+
+// CanonicalHumanBatchDecisionReceiptV1 returns the exact signed JSON bytes.
+func CanonicalHumanBatchDecisionReceiptV1(
+	receipt *types.HumanBatchDecisionReceiptV1,
+	includeSignature bool,
+) ([]byte, error) {
+	if receipt == nil {
+		return nil, fmt.Errorf("%w: nil human decision", ErrWikiReleaseInvalidAuthorization)
+	}
+	canonical := *receipt
+	normalizeHumanBatchDecisionReceiptV1(&canonical)
+	fields := map[string]any{
+		"version": canonical.Version, "decision": canonical.Decision,
+		"principal_id": canonical.PrincipalID, "tenant_id": canonical.TenantID,
+		"space_id": canonical.SpaceID, "raw_kb_id": canonical.RawKBID,
+		"wiki_kb_id": canonical.WikiKBID, "candidate_hash": canonical.CandidateHash,
+		"human_batch_hash":   canonical.HumanBatchHash,
+		"review_policy_hash": canonical.ReviewPolicyHash,
+		"issued_at":          canonical.IssuedAt, "expires_at": canonical.ExpiresAt,
+		"nonce": canonical.Nonce, "signer_key_id": canonical.SignerKeyID,
+	}
+	if includeSignature {
+		fields["signature"] = canonical.Signature
+	}
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrWikiReleaseInvalidAuthorization, err)
+	}
+	return raw, nil
+}
+
+func normalizeHumanBatchDecisionReceiptV1(receipt *types.HumanBatchDecisionReceiptV1) {
+	receipt.Version = norm.NFC.String(receipt.Version)
+	receipt.Decision = norm.NFC.String(receipt.Decision)
+	receipt.PrincipalID = norm.NFC.String(receipt.PrincipalID)
+	receipt.SpaceID = norm.NFC.String(receipt.SpaceID)
+	receipt.RawKBID = norm.NFC.String(receipt.RawKBID)
+	receipt.WikiKBID = norm.NFC.String(receipt.WikiKBID)
+	receipt.CandidateHash = norm.NFC.String(receipt.CandidateHash)
+	receipt.HumanBatchHash = norm.NFC.String(receipt.HumanBatchHash)
+	receipt.ReviewPolicyHash = norm.NFC.String(receipt.ReviewPolicyHash)
+	receipt.Nonce = norm.NFC.String(receipt.Nonce)
+	receipt.SignerKeyID = norm.NFC.String(receipt.SignerKeyID)
+	receipt.Signature = norm.NFC.String(receipt.Signature)
+}
+
+// HumanBatchDecisionVerifier verifies the named-human signature boundary.
+type HumanBatchDecisionVerifier interface {
+	Verify(*types.HumanBatchDecisionReceiptV1) error
+}
+
+type ed25519HumanBatchDecisionVerifier struct {
+	keys map[string]ed25519.PublicKey
+}
+
+// NewEd25519HumanBatchDecisionVerifier freezes the authorized human key set.
+func NewEd25519HumanBatchDecisionVerifier(
+	keys map[string]ed25519.PublicKey,
+) HumanBatchDecisionVerifier {
+	frozen := make(map[string]ed25519.PublicKey, len(keys))
+	for keyID, publicKey := range keys {
+		frozen[keyID] = append(ed25519.PublicKey(nil), publicKey...)
+	}
+	return &ed25519HumanBatchDecisionVerifier{keys: frozen}
+}
+
+func (v *ed25519HumanBatchDecisionVerifier) Verify(
+	receipt *types.HumanBatchDecisionReceiptV1,
+) error {
+	if receipt == nil {
+		return fmt.Errorf("%w: nil human decision", ErrWikiReleaseInvalidAuthorization)
+	}
+	publicKey, ok := v.keys[receipt.SignerKeyID]
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return fmt.Errorf("%w: unknown human signer", ErrWikiReleaseInvalidAuthorization)
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(receipt.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return fmt.Errorf("%w: malformed human signature", ErrWikiReleaseInvalidAuthorization)
+	}
+	signingBytes, err := CanonicalHumanBatchDecisionReceiptV1(receipt, false)
+	if err != nil {
+		return err
+	}
+	if !ed25519.Verify(publicKey, signingBytes, signature) {
+		return fmt.Errorf("%w: human signature mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	return nil
 }
 
 // CanonicalPublishAuthorizationV0 returns the UTF-8 canonical JSON used by
@@ -328,9 +449,10 @@ type WikiReleaseFaults struct {
 // WikiReleaseServiceOptions keeps time, identities, and bounded faults
 // injectable without creating a general workflow platform.
 type WikiReleaseServiceOptions struct {
-	Now    func() time.Time
-	NewID  func(kind string) string
-	Faults WikiReleaseFaults
+	Now                   func() time.Time
+	NewID                 func(kind string) string
+	Faults                WikiReleaseFaults
+	HumanDecisionVerifier HumanBatchDecisionVerifier
 }
 
 // WikiReleaseConflictError is the typed expected-head/CAS loser result.
@@ -352,6 +474,7 @@ type WikiReleaseService struct {
 	repository            *wikirepository.WikiReleaseRepository
 	accessVerifier        WikiReleaseAccessVerifier
 	authorizationVerifier WikiReleaseAuthorizationVerifier
+	humanDecisionVerifier HumanBatchDecisionVerifier
 	now                   func() time.Time
 	newID                 func(kind string) string
 	faults                WikiReleaseFaults
@@ -370,6 +493,9 @@ func NewWikiReleaseService(
 	if authorizationVerifier == nil {
 		authorizationVerifier = NewEd25519WikiReleaseAuthorizationVerifier(nil)
 	}
+	if options.HumanDecisionVerifier == nil {
+		options.HumanDecisionVerifier = NewEd25519HumanBatchDecisionVerifier(nil)
+	}
 	if options.Now == nil {
 		options.Now = time.Now
 	}
@@ -382,10 +508,103 @@ func NewWikiReleaseService(
 		repository:            repository,
 		accessVerifier:        accessVerifier,
 		authorizationVerifier: authorizationVerifier,
+		humanDecisionVerifier: options.HumanDecisionVerifier,
 		now:                   options.Now,
 		newID:                 options.NewID,
 		faults:                options.Faults,
 	}
+}
+
+// ActivateReviewed requires a named-human whole-batch approval before the
+// existing atomic activation transaction can run.
+func (s *WikiReleaseService) ActivateReviewed(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	rawDecision []byte,
+	rawAuthorization []byte,
+) (*types.WikiReleaseReceipt, error) {
+	decision, err := ParseHumanBatchDecisionReceiptV1(rawDecision)
+	if err != nil {
+		return nil, err
+	}
+	decisionCanonical, err := CanonicalHumanBatchDecisionReceiptV1(decision, true)
+	if err != nil || !bytes.Equal(rawDecision, decisionCanonical) {
+		return nil, fmt.Errorf("%w: non-canonical human decision", ErrWikiReleaseInvalidAuthorization)
+	}
+	if s.humanDecisionVerifier == nil {
+		return nil, fmt.Errorf("%w: missing human verifier", ErrWikiReleaseInvalidAuthorization)
+	}
+	if err := s.humanDecisionVerifier.Verify(decision); err != nil {
+		return nil, err
+	}
+	authorization, err := ParsePublishAuthorizationV0(rawAuthorization)
+	if err != nil {
+		return nil, err
+	}
+	authorizationCanonical, err := CanonicalPublishAuthorizationV0(authorization, true)
+	if err != nil {
+		return nil, err
+	}
+	authorizationDigest := digestWikiReleaseBytes(authorizationCanonical)
+	scope := types.WikiReleaseScope{
+		TenantID: authorization.TenantID,
+		SpaceID:  authorization.SpaceID,
+		RawKBID:  authorization.RawKBID,
+		WikiKBID: authorization.WikiKBID,
+	}
+	exactRetry := false
+	if existing, receiptErr := s.repository.GetReceipt(ctx, scope, authorization.Nonce); receiptErr == nil {
+		if existing.AuthorizationDigest != authorizationDigest {
+			return nil, &WikiReleaseConflictError{Cause: errors.New("nonce digest mismatch")}
+		}
+		exactRetry = true
+	} else if !errors.Is(receiptErr, wikirepository.ErrWikiReleaseNotFound) {
+		return nil, receiptErr
+	}
+	if err := validateHumanBatchDecision059(decision, principal, scope, s.now().Unix(), exactRetry); err != nil {
+		return nil, err
+	}
+	if authorization.Action != "activate" || authorization.Nonce != decision.Nonce {
+		return nil, fmt.Errorf("%w: decision activation mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	preparation, err := s.repository.GetReadyPreparation(ctx, scope, authorization.PreparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	if preparation.CandidateDigest != decision.CandidateHash ||
+		preparation.ReadyReceiptDigest != decision.HumanBatchHash ||
+		preparation.ReviewPolicyID != decision.ReviewPolicyHash ||
+		preparation.ReviewDecisionDigest != digestWikiReleaseBytes(decisionCanonical) {
+		return nil, fmt.Errorf("%w: human decision preparation mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	return s.activate(ctx, principal, rawAuthorization)
+}
+
+func validateHumanBatchDecision059(
+	receipt *types.HumanBatchDecisionReceiptV1,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	now int64,
+	allowExpired bool,
+) error {
+	if receipt.Version != "1" || (receipt.Decision != "approve" && receipt.Decision != "reject") ||
+		receipt.Decision != "approve" || receipt.PrincipalID == "" || receipt.PrincipalID != principal.ID ||
+		receipt.WikiReleaseScope != scope || receipt.Nonce == "" ||
+		receipt.IssuedAt <= 0 || receipt.ExpiresAt <= receipt.IssuedAt || receipt.IssuedAt > now ||
+		(!allowExpired && receipt.ExpiresAt <= now) ||
+		!isLowerHexSHA256(receipt.CandidateHash) || !isLowerHexSHA256(receipt.HumanBatchHash) ||
+		!isLowerHexSHA256(receipt.ReviewPolicyHash) {
+		return fmt.Errorf("%w: invalid human decision", ErrWikiReleaseInvalidAuthorization)
+	}
+	return nil
+}
+
+func isLowerHexSHA256(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 }
 
 // Prepare validates and freezes the complete canonical manifest and members.
@@ -494,9 +713,9 @@ func digestWikiReleaseBytes(raw []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Activate validates exact authorization bindings then performs one atomic
-// release/member/CAS/receipt transaction.
-func (s *WikiReleaseService) Activate(
+// activate is the private atomic release/member/CAS/receipt implementation.
+// Production callers must enter through ActivateReviewed.
+func (s *WikiReleaseService) activate(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
 	rawAuthorization []byte,
@@ -593,13 +812,14 @@ func (s *WikiReleaseService) Activate(
 	if err == nil {
 		return receipt, nil
 	}
-	return s.resolveActivationError(
+	return s.resolveActivationErrorForOperation(
 		ctx,
 		principal,
 		scope,
 		authorization.Nonce,
 		authorizationDigest,
 		err,
+		"activate-retry",
 	)
 }
 
@@ -611,13 +831,27 @@ func (s *WikiReleaseService) resolveActivationError(
 	authorizationDigest string,
 	activationErr error,
 ) (*types.WikiReleaseReceipt, error) {
+	return s.resolveActivationErrorForOperation(
+		ctx, principal, scope, nonce, authorizationDigest, activationErr, "activate-retry",
+	)
+}
+
+func (s *WikiReleaseService) resolveActivationErrorForOperation(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	nonce string,
+	authorizationDigest string,
+	activationErr error,
+	retryOperation string,
+) (*types.WikiReleaseReceipt, error) {
 	existing, receiptErr := s.repository.GetReceipt(ctx, scope, nonce)
 	switch {
 	case receiptErr == nil:
 		if existing.AuthorizationDigest != authorizationDigest {
 			return nil, &WikiReleaseConflictError{Cause: errors.New("nonce digest mismatch")}
 		}
-		if err := s.verifyAccess(ctx, principal, scope, "activate-retry"); err != nil {
+		if err := s.verifyAccess(ctx, principal, scope, retryOperation); err != nil {
 			return nil, err
 		}
 		return existing, nil
@@ -628,6 +862,98 @@ func (s *WikiReleaseService) resolveActivationError(
 	default:
 		return nil, activationErr
 	}
+}
+
+// Revert atomically CASes Head to an immutable historical Release. It does
+// not create replacement releases or members.
+func (s *WikiReleaseService) Revert(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	rawAuthorization []byte,
+) (*types.WikiReleaseReceipt, error) {
+	authorization, err := ParsePublishAuthorizationV0(rawAuthorization)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := CanonicalPublishAuthorizationV0(authorization, true)
+	if err != nil {
+		return nil, err
+	}
+	authorizationDigest := digestWikiReleaseBytes(canonical)
+	scope := types.WikiReleaseScope{
+		TenantID: authorization.TenantID,
+		SpaceID:  authorization.SpaceID,
+		RawKBID:  authorization.RawKBID,
+		WikiKBID: authorization.WikiKBID,
+	}
+	existing, receiptErr := s.repository.GetReceipt(ctx, scope, authorization.Nonce)
+	switch {
+	case receiptErr == nil:
+		if existing.AuthorizationDigest != authorizationDigest {
+			return nil, &WikiReleaseConflictError{Cause: errors.New("nonce digest mismatch")}
+		}
+		if err := s.verifyAccess(ctx, principal, scope, "revert-retry"); err != nil {
+			return nil, err
+		}
+		return existing, nil
+	case !errors.Is(receiptErr, wikirepository.ErrWikiReleaseNotFound):
+		return nil, receiptErr
+	}
+	if err := s.authorizationVerifier.Verify(authorization); err != nil {
+		return nil, err
+	}
+	if authorization.Version != "0" || authorization.Action != "revert" ||
+		authorization.PreparationID == "" || authorization.CandidateDigest == "" ||
+		authorization.ManifestDigest == "" || authorization.ReadyReceiptDigest == "" ||
+		authorization.ReviewDecisionDigest == "" || authorization.ReviewPolicyID == "" ||
+		authorization.ExpectedReleaseID == "" || authorization.ExpectedActivationEpoch == 0 ||
+		authorization.Nonce == "" || authorization.ExpiresAt <= s.now().Unix() {
+		return nil, fmt.Errorf("%w: revert action, scope, or expiry", ErrWikiReleaseInvalidAuthorization)
+	}
+	preparation, err := s.repository.GetReadyPreparation(ctx, scope, authorization.PreparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	target, err := s.repository.GetReleaseByPreparation(ctx, scope, authorization.PreparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	if target.ID == authorization.ExpectedReleaseID ||
+		target.CandidateDigest != authorization.CandidateDigest ||
+		target.ManifestDigest != authorization.ManifestDigest ||
+		preparation.CandidateDigest != authorization.CandidateDigest ||
+		preparation.ManifestDigest != authorization.ManifestDigest ||
+		preparation.ReadyReceiptDigest != authorization.ReadyReceiptDigest ||
+		preparation.ReviewDecisionDigest != authorization.ReviewDecisionDigest ||
+		preparation.ReviewPolicyID != authorization.ReviewPolicyID {
+		return nil, fmt.Errorf("%w: historical release binding mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	if err := s.verifyAccess(ctx, principal, scope, "revert"); err != nil {
+		return nil, err
+	}
+	if err := s.verifyExpectedHead(ctx, scope, authorization); err != nil {
+		return nil, err
+	}
+	activatedAt := s.now().UTC()
+	receipt, err := s.repository.Revert(ctx, wikirepository.WikiReleaseRevertWrite{
+		Scope:                   scope,
+		TargetReleaseID:         target.ID,
+		ExpectedReleaseID:       authorization.ExpectedReleaseID,
+		ExpectedActivationEpoch: authorization.ExpectedActivationEpoch,
+		Nonce:                   authorization.Nonce,
+		AuthorizationDigest:     authorizationDigest,
+		ActivatedBy:             principal.ID,
+		ActivatedAt:             activatedAt,
+		ActivationReceiptID:     s.newID("receipt"),
+		CASFault:                s.faults.CAS,
+		ReceiptFault:            s.faults.Receipt,
+	})
+	if err == nil {
+		return receipt, nil
+	}
+	return s.resolveActivationErrorForOperation(
+		ctx, principal, scope, authorization.Nonce, authorizationDigest, err, "revert-retry",
+	)
 }
 
 func (s *WikiReleaseService) verifyExpectedHead(
@@ -693,8 +1019,79 @@ func (s *WikiReleaseService) Current(
 	}, nil
 }
 
+// WikiReleasePinnedRead is an opaque request-local Head observation. Its
+// fields are intentionally private so callers cannot mint historical pins.
+type WikiReleasePinnedRead struct {
+	scope           types.WikiReleaseScope
+	releaseID       string
+	activationEpoch uint64
+}
+
+// ReleaseID returns the immutable release identity for diagnostics only.
+func (pin WikiReleasePinnedRead) ReleaseID() string { return pin.releaseID }
+
+// ActivationEpoch returns the pinned epoch for diagnostics only.
+func (pin WikiReleasePinnedRead) ActivationEpoch() uint64 { return pin.activationEpoch }
+
+// BeginPinnedRead observes Head exactly once at request start.
+func (s *WikiReleaseService) BeginPinnedRead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+) (WikiReleasePinnedRead, error) {
+	current, err := s.Current(ctx, principal, scope)
+	if err != nil {
+		return WikiReleasePinnedRead{}, err
+	}
+	return WikiReleasePinnedRead{
+		scope:           scope,
+		releaseID:       current.ReleaseID,
+		activationEpoch: current.ActivationEpoch,
+	}, nil
+}
+
+// ReadPinnedPage reads from the immutable release captured at request start
+// and rechecks current dual ACL without consulting Head again.
+func (s *WikiReleaseService) ReadPinnedPage(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	pin WikiReleasePinnedRead,
+	logicalSlug string,
+) (*types.WikiReleaseMemberSnapshot, error) {
+	if pin.releaseID == "" || pin.activationEpoch == 0 {
+		return nil, ErrWikiReleaseNotFound
+	}
+	return s.pinnedPage(ctx, principal, pin.scope, pin.releaseID, logicalSlug)
+}
+
+// ReadPinnedPayload returns payload from the same request pin.
+func (s *WikiReleaseService) ReadPinnedPayload(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	pin WikiReleasePinnedRead,
+	logicalSlug string,
+) (json.RawMessage, error) {
+	if pin.releaseID == "" || pin.activationEpoch == 0 {
+		return nil, ErrWikiReleaseNotFound
+	}
+	return s.pinnedPayload(ctx, principal, pin.scope, pin.releaseID, logicalSlug)
+}
+
+// SearchPinned searches the same request pin and rechecks current dual ACL.
+func (s *WikiReleaseService) SearchPinned(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	pin WikiReleasePinnedRead,
+	query string,
+) ([]types.WikiReleaseMemberSnapshot, error) {
+	if pin.releaseID == "" || pin.activationEpoch == 0 {
+		return nil, ErrWikiReleaseNotFound
+	}
+	return s.minimalSearch(ctx, principal, pin.scope, pin.releaseID, query)
+}
+
 // PinnedPage reads one immutable member from an explicit release ID.
-func (s *WikiReleaseService) PinnedPage(
+func (s *WikiReleaseService) pinnedPage(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
 	scope types.WikiReleaseScope,
@@ -715,14 +1112,14 @@ func (s *WikiReleaseService) PinnedPage(
 }
 
 // PinnedPayload returns payload from the same explicit immutable release.
-func (s *WikiReleaseService) PinnedPayload(
+func (s *WikiReleaseService) pinnedPayload(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
 	scope types.WikiReleaseScope,
 	releaseID string,
 	logicalSlug string,
 ) (json.RawMessage, error) {
-	page, err := s.PinnedPage(ctx, principal, scope, releaseID, logicalSlug)
+	page, err := s.pinnedPage(ctx, principal, scope, releaseID, logicalSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +1127,7 @@ func (s *WikiReleaseService) PinnedPayload(
 }
 
 // MinimalSearch is release-aware and only scans immutable release members.
-func (s *WikiReleaseService) MinimalSearch(
+func (s *WikiReleaseService) minimalSearch(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
 	scope types.WikiReleaseScope,

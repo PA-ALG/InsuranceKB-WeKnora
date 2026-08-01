@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -33,11 +34,13 @@ func TestWikiReleaseFalsificationHandlerIsExplicitlyConstructed(t *testing.T) {
 }
 
 type wikiReleaseHandlerFixture struct {
-	handler    *handler.WikiReleaseHandler
-	repository *wikirepository.WikiReleaseRepository
-	scope      types.WikiReleaseScope
-	privateKey ed25519.PrivateKey
-	now        int64
+	handler         *handler.WikiReleaseHandler
+	service         *service.WikiReleaseService
+	repository      *wikirepository.WikiReleaseRepository
+	scope           types.WikiReleaseScope
+	privateKey      ed25519.PrivateKey
+	humanPrivateKey ed25519.PrivateKey
+	now             int64
 }
 
 func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
@@ -54,6 +57,7 @@ func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
 	))
 	repository := wikirepository.NewWikiReleaseRepository(db)
 	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x58}, ed25519.SeedSize))
+	humanPrivateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x59}, ed25519.SeedSize))
 	id := 0
 	now := int64(1_000)
 	releaseService := service.NewWikiReleaseService(
@@ -64,6 +68,11 @@ func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
 		}),
 		service.WikiReleaseServiceOptions{
 			Now: func() time.Time { return time.Unix(now, 0).UTC() },
+			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(
+				map[string]ed25519.PublicKey{
+					"handler-human": humanPrivateKey.Public().(ed25519.PublicKey),
+				},
+			),
 			NewID: func(kind string) string {
 				id++
 				return fmt.Sprintf("%s-%d", kind, id)
@@ -72,6 +81,7 @@ func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
 	)
 	return &wikiReleaseHandlerFixture{
 		handler:    handler.NewWikiReleaseHandler(releaseService),
+		service:    releaseService,
 		repository: repository,
 		scope: types.WikiReleaseScope{
 			TenantID: 42,
@@ -79,8 +89,9 @@ func newWikiReleaseHandlerFixture(t *testing.T) *wikiReleaseHandlerFixture {
 			RawKBID:  "raw-1",
 			WikiKBID: "wiki-1",
 		},
-		privateKey: privateKey,
-		now:        now,
+		privateKey:      privateKey,
+		humanPrivateKey: humanPrivateKey,
+		now:             now,
 	}
 }
 
@@ -180,16 +191,70 @@ func wikiReleasePreparationRequest() map[string]any {
 		"review_policy_id":          "policy-1",
 		"expected_release_id":       "",
 		"expected_activation_epoch": 0,
-		"members": []types.WikiReleaseMemberSnapshot{
-			{
-				LogicalSlug:  "a",
-				RevisionID:   "a0",
-				MemberDigest: "digest-a0",
-				Title:        "A",
-				Content:      "A0",
-				Payload:      json.RawMessage(`{"slug":"a","v":0}`),
-			},
-		},
+		"members":                   wikiReleaseHandlerMembers(0),
+	}
+}
+
+func wikiReleaseHandlerMembers(version int) []types.WikiReleaseMemberSnapshot {
+	return []types.WikiReleaseMemberSnapshot{{
+		LogicalSlug: "a", RevisionID: fmt.Sprintf("a%d", version),
+		MemberDigest: fmt.Sprintf("digest-a%d", version), Title: "A",
+		Content: fmt.Sprintf("A%d", version),
+		Payload: json.RawMessage(fmt.Sprintf(`{"slug":"a","v":%d}`, version)),
+	}}
+}
+
+func wikiReleaseHash(value string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(value)))
+}
+
+func wikiReleaseReviewedPreparationRequest(
+	t *testing.T,
+	fixture *wikiReleaseHandlerFixture,
+	preparationID string,
+	nonce string,
+	expectedReleaseID string,
+	expectedEpoch uint64,
+	members []types.WikiReleaseMemberSnapshot,
+) (map[string]any, []byte) {
+	t.Helper()
+	decision := &types.HumanBatchDecisionReceiptV1{
+		Version: "1", Decision: "approve",
+		PrincipalID: types.Principal{
+			Type: types.PrincipalAPITenant, ID: "handler-principal",
+		}.StorageID(),
+		WikiReleaseScope: fixture.scope,
+		CandidateHash:    wikiReleaseHash(preparationID + "-candidate"),
+		HumanBatchHash:   wikiReleaseHash(preparationID + "-batch"),
+		ReviewPolicyHash: wikiReleaseHash("handler-review-policy"),
+		IssuedAt:         fixture.now, ExpiresAt: fixture.now + 1_000,
+		Nonce: nonce, SignerKeyID: "handler-human",
+	}
+	unsigned, err := service.CanonicalHumanBatchDecisionReceiptV1(decision, false)
+	require.NoError(t, err)
+	decision.Signature = service.EncodeWikiReleaseSignature(
+		ed25519.Sign(fixture.humanPrivateKey, unsigned),
+	)
+	decisionRaw, err := service.CanonicalHumanBatchDecisionReceiptV1(decision, true)
+	require.NoError(t, err)
+	return map[string]any{
+		"preparation_id": preparationID, "candidate_digest": decision.CandidateHash,
+		"ready_receipt_digest":      decision.HumanBatchHash,
+		"review_decision_digest":    wikiReleaseHash(string(decisionRaw)),
+		"review_policy_id":          decision.ReviewPolicyHash,
+		"expected_release_id":       expectedReleaseID,
+		"expected_activation_epoch": expectedEpoch,
+		"members":                   members,
+	}, decisionRaw
+}
+
+func wikiReleaseReviewedActivationBody(
+	decisionRaw []byte,
+	authorizationRaw []byte,
+) map[string]json.RawMessage {
+	return map[string]json.RawMessage{
+		"human_decision":        decisionRaw,
+		"publish_authorization": authorizationRaw,
 	}
 }
 
@@ -197,8 +262,13 @@ func signWikiReleaseHandlerAuthorization(
 	t *testing.T,
 	privateKey ed25519.PrivateKey,
 	preparation types.WikiReleasePreparation,
+	nonceValues ...string,
 ) []byte {
 	t.Helper()
+	nonce := "nonce-r0"
+	if len(nonceValues) == 1 {
+		nonce = nonceValues[0]
+	}
 	authorization := &types.PublishAuthorizationV0{
 		Version:                 "0",
 		Action:                  "activate",
@@ -215,7 +285,7 @@ func signWikiReleaseHandlerAuthorization(
 		ExpectedReleaseID:       preparation.ExpectedReleaseID,
 		ExpectedActivationEpoch: preparation.ExpectedActivationEpoch,
 		ExpiresAt:               2_000,
-		Nonce:                   "nonce-r0",
+		Nonce:                   nonce,
 		SignerKeyID:             "handler-test",
 	}
 	signingBytes, err := service.CanonicalPublishAuthorizationV0(authorization, false)
@@ -234,16 +304,21 @@ func TestWikiReleaseFalsificationHandlerPrepareActivateAndPinnedReads(t *testing
 	registerWikiReleaseHandlerRoutes(engine, fixture.handler)
 
 	base := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1"
-	recorder := performJSON(t, engine, http.MethodPost, base+"/preparations", wikiReleasePreparationRequest())
+	preparationRequest, decisionRaw := wikiReleaseReviewedPreparationRequest(
+		t, fixture, "preparation-r0", "nonce-r0", "", 0, wikiReleaseHandlerMembers(0),
+	)
+	recorder := performJSON(t, engine, http.MethodPost, base+"/preparations", preparationRequest)
 	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
 	preparation := decodeWikiReleaseData[types.WikiReleasePreparation](t, recorder)
 	require.Equal(t, fixture.scope, preparation.WikiReleaseScope)
 
-	rawAuthorization := signWikiReleaseHandlerAuthorization(t, fixture.privateKey, preparation)
-	request := httptest.NewRequest(http.MethodPost, base+"/activations", bytes.NewReader(rawAuthorization))
-	request.Header.Set("Content-Type", "application/json")
-	recorder = httptest.NewRecorder()
-	engine.ServeHTTP(recorder, request)
+	rawAuthorization := signWikiReleaseHandlerAuthorization(
+		t, fixture.privateKey, preparation, "nonce-r0",
+	)
+	recorder = performJSON(
+		t, engine, http.MethodPost, base+"/activations",
+		wikiReleaseReviewedActivationBody(decisionRaw, rawAuthorization),
+	)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	receipt := decodeWikiReleaseData[types.WikiReleaseReceipt](t, recorder)
 
@@ -287,6 +362,106 @@ func TestWikiReleaseFalsificationHandlerPrepareActivateAndPinnedReads(t *testing
 	require.Equal(t, "a", search[0].LogicalSlug)
 }
 
+func TestWikiReleasePR2HandlerRejectsLegacyActivationWithoutHumanReceipt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fixture := newWikiReleaseHandlerFixture(t)
+	engine := gin.New()
+	engine.Use(wikiReleaseAuthContext(fixture.scope))
+	registerWikiReleaseHandlerRoutes(engine, fixture.handler)
+	base := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1"
+	preparationRequest, _ := wikiReleaseReviewedPreparationRequest(
+		t, fixture, "preparation-legacy", "nonce-legacy", "", 0, wikiReleaseHandlerMembers(0),
+	)
+	recorder := performJSON(t, engine, http.MethodPost, base+"/preparations", preparationRequest)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+	preparation := decodeWikiReleaseData[types.WikiReleasePreparation](t, recorder)
+	before, err := fixture.repository.CountState(context.Background())
+	require.NoError(t, err)
+
+	rawAuthorization := signWikiReleaseHandlerAuthorization(
+		t, fixture.privateKey, preparation, "nonce-legacy",
+	)
+	for _, testCase := range []struct {
+		name string
+		body []byte
+	}{
+		{name: "legacy raw authorization", body: rawAuthorization},
+		{name: "missing human receipt", body: mustMarshalWikiReleaseHandler(t, map[string]any{
+			"publish_authorization": json.RawMessage(rawAuthorization),
+		})},
+		{name: "self-reported review digest", body: mustMarshalWikiReleaseHandler(t, map[string]any{
+			"human_decision":        json.RawMessage(`{"review_decision_digest":"self-reported"}`),
+			"publish_authorization": json.RawMessage(rawAuthorization),
+		})},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodPost, base+"/activations", bytes.NewReader(testCase.body),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			recorder = httptest.NewRecorder()
+			engine.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+			after, err := fixture.repository.CountState(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, before, after)
+		})
+	}
+}
+
+func mustMarshalWikiReleaseHandler(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	require.NoError(t, err)
+	return raw
+}
+
+func TestWikiReleasePR2HandlerCannotSelectHistoricalRelease(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fixture := newWikiReleaseHandlerFixture(t)
+	engine := gin.New()
+	engine.Use(wikiReleaseAuthContext(fixture.scope))
+	registerWikiReleaseHandlerRoutes(engine, fixture.handler)
+	base := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1"
+
+	activate := func(
+		preparationID string,
+		nonce string,
+		expectedReleaseID string,
+		expectedEpoch uint64,
+		version int,
+	) *types.WikiReleaseReceipt {
+		t.Helper()
+		preparationRequest, decisionRaw := wikiReleaseReviewedPreparationRequest(
+			t, fixture, preparationID, nonce, expectedReleaseID, expectedEpoch,
+			wikiReleaseHandlerMembers(version),
+		)
+		recorder := performJSON(
+			t, engine, http.MethodPost, base+"/preparations", preparationRequest,
+		)
+		require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+		preparation := decodeWikiReleaseData[types.WikiReleasePreparation](t, recorder)
+		authorization := signWikiReleaseHandlerAuthorization(t, fixture.privateKey, preparation, nonce)
+		recorder = performJSON(
+			t, engine, http.MethodPost, base+"/activations",
+			wikiReleaseReviewedActivationBody(decisionRaw, authorization),
+		)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		receipt := decodeWikiReleaseData[types.WikiReleaseReceipt](t, recorder)
+		return &receipt
+	}
+	r0 := activate("preparation-r0", "nonce-r0", "", 0, 0)
+	_ = activate("preparation-r1", "nonce-r1", r0.ReleaseID, r0.ActivationEpoch, 1)
+
+	for _, suffix := range []string{"/pages/a", "/payloads/a", "/search?q=A0"} {
+		recorder := performJSON(
+			t, engine, http.MethodGet, base+"/releases/"+r0.ReleaseID+suffix, nil,
+		)
+		require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
+		require.NotContains(t, recorder.Body.String(), "A0")
+	}
+}
+
 func TestWikiReleaseFalsificationHandlerFailsClosedWithoutExactProof(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	fixture := newWikiReleaseHandlerFixture(t)
@@ -326,19 +501,22 @@ func TestWikiReleaseFalsificationManagedMutationGuard(t *testing.T) {
 	registerWikiReleaseHandlerRoutes(releaseEngine, fixture.handler)
 	base := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1"
 
+	preparationRequest, decisionRaw := wikiReleaseReviewedPreparationRequest(
+		t, fixture, "preparation-managed", "nonce-managed", "", 0,
+		wikiReleaseHandlerMembers(0),
+	)
 	recorder := performJSON(
-		t,
-		releaseEngine,
-		http.MethodPost,
-		base+"/preparations",
-		wikiReleasePreparationRequest(),
+		t, releaseEngine, http.MethodPost, base+"/preparations", preparationRequest,
 	)
 	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
 	preparation := decodeWikiReleaseData[types.WikiReleasePreparation](t, recorder)
-	rawAuthorization := signWikiReleaseHandlerAuthorization(t, fixture.privateKey, preparation)
-	request := httptest.NewRequest(http.MethodPost, base+"/activations", bytes.NewReader(rawAuthorization))
-	recorder = httptest.NewRecorder()
-	releaseEngine.ServeHTTP(recorder, request)
+	rawAuthorization := signWikiReleaseHandlerAuthorization(
+		t, fixture.privateKey, preparation, "nonce-managed",
+	)
+	recorder = performJSON(
+		t, releaseEngine, http.MethodPost, base+"/activations",
+		wikiReleaseReviewedActivationBody(decisionRaw, rawAuthorization),
+	)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	mutationEngine := gin.New()
@@ -591,19 +769,22 @@ func TestWikiReleaseFalsificationProductionManagedMutationCoverage(t *testing.T)
 	releaseEngine.Use(wikiReleaseAuthContext(fixture.scope))
 	registerWikiReleaseHandlerRoutes(releaseEngine, fixture.handler)
 	base := "/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1"
+	preparationRequest, decisionRaw := wikiReleaseReviewedPreparationRequest(
+		t, fixture, "preparation-production", "nonce-production", "", 0,
+		wikiReleaseHandlerMembers(0),
+	)
 	recorder := performJSON(
-		t,
-		releaseEngine,
-		http.MethodPost,
-		base+"/preparations",
-		wikiReleasePreparationRequest(),
+		t, releaseEngine, http.MethodPost, base+"/preparations", preparationRequest,
 	)
 	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
 	preparation := decodeWikiReleaseData[types.WikiReleasePreparation](t, recorder)
-	rawAuthorization := signWikiReleaseHandlerAuthorization(t, fixture.privateKey, preparation)
-	request := httptest.NewRequest(http.MethodPost, base+"/activations", bytes.NewReader(rawAuthorization))
-	recorder = httptest.NewRecorder()
-	releaseEngine.ServeHTTP(recorder, request)
+	rawAuthorization := signWikiReleaseHandlerAuthorization(
+		t, fixture.privateKey, preparation, "nonce-production",
+	)
+	recorder = performJSON(
+		t, releaseEngine, http.MethodPost, base+"/activations",
+		wikiReleaseReviewedActivationBody(decisionRaw, rawAuthorization),
+	)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	kbService := &wikiReleaseKBServiceStub{
