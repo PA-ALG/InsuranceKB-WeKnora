@@ -42,7 +42,8 @@ admits only explicit complete-scope/exclusive-support proofs. Existing C0
 - [x] Compile only candidate/retraction scopes; preserve all unaffected facts.
 - [x] Derive retract only when the baseline fact has exactly one supporting
       source revision and the explicit proof binds that source and exact scope.
-- [x] Export only the small pure public surface from `knowledge.__init__`.
+- [x] Expose the small pure surface only from explicit
+      `knowledge_compiler` submodules; do not alter or widen a package facade.
 
 ## T4 — Verification and freeze
 
@@ -61,8 +62,9 @@ admits only explicit complete-scope/exclusive-support proofs. Existing C0
       set and source-revision binding receipt; remove caller-owned FieldAuthority.
 - [x] Revalidate every fact/proof, fix mixed-baseline classification, and bind
       root Space/ProductVersion into the deterministic input hash.
-- [x] Replace eager knowledge package exports with compatible lazy exports and
-      prove isolated pure import does not load SQLAlchemy/models/publisher.
+- [x] Keep the legacy knowledge package API unchanged, place 058 under the pure
+      `knowledge_compiler` namespace, and prove isolated import does not load
+      SQLAlchemy/models/publisher.
 - [x] Run focused/C0/052/053 after the final main replay, Ruff, strict mypy
       including the focused test, OpenSpec/diff/exact10/private/secret; freeze a
       new temp-index tree.

@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 from insurance_harness.canonical import canonical_hash
-from insurance_harness.knowledge.source_authority import (
+from insurance_harness.knowledge_compiler.source_authority import (
     FactScopeV1,
     SourceAuthorityV1,
     _resolved_identity,

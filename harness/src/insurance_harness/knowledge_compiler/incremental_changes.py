@@ -18,12 +18,12 @@ from pydantic import (
 )
 
 from insurance_harness.canonical import canonical_hash
-from insurance_harness.knowledge.retractions import (
+from insurance_harness.knowledge_compiler.retractions import (
     RetractionContractError,
     RetractionProofV1,
     require_exclusive_retraction,
 )
-from insurance_harness.knowledge.source_authority import (
+from insurance_harness.knowledge_compiler.source_authority import (
     FactScopeV1,
     SourceAuthorityContractError,
     SourceAuthorityV1,

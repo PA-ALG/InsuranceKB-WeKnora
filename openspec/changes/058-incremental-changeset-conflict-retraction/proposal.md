@@ -28,8 +28,10 @@ surfacing unresolved conflicts, and proposing a narrowly proven retraction.
 - retraction only from explicit complete-scope and exclusive-support proof;
 - typed fail-closed behavior for cross-scope, malformed, missing, or ambiguous
   inputs.
-- strict revalidation at compilation entry and an import-light knowledge facade
-  so the pure compiler does not load ORM/publisher infrastructure.
+- strict revalidation at compilation entry and an isolated
+  `knowledge_compiler` namespace
+  so the pure compiler does not load ORM/publisher infrastructure or alter the
+  legacy knowledge package API.
 
 ## Exact path budget
 
@@ -40,10 +42,10 @@ Exactly ten paths:
 3. `tasks.md`
 4. `validation-report.md`
 5. `specs/incremental-changeset-conflict-retraction/spec.md`
-6. `harness/src/insurance_harness/knowledge/source_authority.py`
-7. `harness/src/insurance_harness/knowledge/incremental_changes.py`
-8. `harness/src/insurance_harness/knowledge/retractions.py`
-9. `harness/src/insurance_harness/knowledge/__init__.py`
+6. `harness/src/insurance_harness/knowledge_compiler/__init__.py`
+7. `harness/src/insurance_harness/knowledge_compiler/source_authority.py`
+8. `harness/src/insurance_harness/knowledge_compiler/incremental_changes.py`
+9. `harness/src/insurance_harness/knowledge_compiler/retractions.py`
 10. `harness/tests/test_incremental_changes_058.py`
 
 An eleventh path is a hard stop and requires Total Control to redraw the

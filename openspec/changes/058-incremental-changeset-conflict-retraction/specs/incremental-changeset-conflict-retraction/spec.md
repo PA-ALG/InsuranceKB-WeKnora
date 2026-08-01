@@ -112,9 +112,10 @@ worker, WeKnora, Candidate, ReviewDecision, PublishAuthorization, or Release.
 The ChangeSet is a draft fact only and grants no review, publish, or serving
 authority.
 
-Importing the 058 modules SHALL NOT eagerly import SQLAlchemy, legacy knowledge
-models, or publisher modules. Existing knowledge package exports SHALL remain
-available through lazy resolution rather than widening the 058 runtime boundary.
+The 058 modules SHALL live under the pure `knowledge_compiler` namespace and SHALL NOT
+eagerly import SQLAlchemy, legacy knowledge models, or publisher modules. The
+existing knowledge package exports and runtime initialization contract SHALL
+remain byte-for-byte unchanged.
 
 #### Scenario: caller asks draft to publish
 

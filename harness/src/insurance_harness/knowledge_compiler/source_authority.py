@@ -1,4 +1,4 @@
-"""Pure 052-binding receipts and source authority for OpenSpec 058."""
+"""Pure 052 binding receipts and source authority for OpenSpec 058."""
 
 from __future__ import annotations
 

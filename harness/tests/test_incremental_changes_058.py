@@ -18,14 +18,14 @@ from insurance_harness.compiler.material_profiles import (
     load_material_profile_catalog,
     resolve_material_profile,
 )
-from insurance_harness.knowledge.incremental_changes import (
+from insurance_harness.knowledge_compiler.incremental_changes import (
     ChangeSetDraftV1,
     IncrementalCompilationError,
     VerifiedFactV1,
     compile_incremental_changes,
 )
-from insurance_harness.knowledge.retractions import RetractionProofV1
-from insurance_harness.knowledge.source_authority import (
+from insurance_harness.knowledge_compiler.retractions import RetractionProofV1
+from insurance_harness.knowledge_compiler.source_authority import (
     FactScopeV1,
     MaterialBindingReceiptV1,
     SourceAuthorityV1,
@@ -740,7 +740,7 @@ def test_compile_revalidates_model_copy_bypasses() -> None:
 def test_isolated_incremental_import_does_not_load_platform_modules() -> None:
     script = """
 import sys
-import insurance_harness.knowledge.incremental_changes
+import insurance_harness.knowledge_compiler.incremental_changes
 for name in (
     'sqlalchemy',
     'insurance_harness.models',
