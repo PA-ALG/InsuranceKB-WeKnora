@@ -1,0 +1,18 @@
+[
+  {
+    "type": "text",
+    "text": "synthetic heading value",
+    "text_level": 1,
+    "bbox": [20, 30, 800, 110],
+    "page_idx": 0
+  },
+  {
+    "type": "table",
+    "table_body": "<table><tr><th rowspan=\"2\">synthetic header a</th><th colspan=\"2\">synthetic header b</th></tr><tr><td>synthetic value c</td><td>synthetic value d</td></tr></table>",
+    "table_caption": ["synthetic table"],
+    "table_footnote": [],
+    "img_path": "images/table-1.png",
+    "bbox": [30, 140, 900, 700],
+    "page_idx": 0
+  }
+]
