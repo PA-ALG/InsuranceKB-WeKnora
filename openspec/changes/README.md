@@ -60,7 +60,7 @@
 | 050 | postgres-embeddings-forward-repair | ✅ 已实现并合入 main（PR #78） | 修复 official ledger 已推进但 PostgreSQL retrieval 的 `embeddings` 表缺失；仅新增 enterprise forward migration，未重跑 PDF、模型或历史 migration |
 | 051 | enterprise-knowledge-compiler-architecture | ✅ 已合入 main（PR #79） | 父级知识编译合同；只冻结 A→C→B→{D,E}→F→G，不实现 parser/provider/runtime/migration |
 | 052 | material-profile-template-binding | ✅ 已合入 main（PR #80） | ProductVersion 596-1 三 PDF 的薄 MaterialProfile 绑定层；含 parser-neutral default + 至多一次 bounded upgrade policy，复用现有 TemplatePackage resolver，零 migration |
-| 053 | parsed-document-contract | 🧪 GREEN / FROZEN FOR DELIVERY | Parser-neutral ParsedDocument/ParseManifest 与质量门合同；零 parser/provider/DB/WeKnora 写 |
+| 053 | parsed-document-contract | ✅ 已合入 main（PR #82） | Parser-neutral ParsedDocument/ParseManifest 与质量门合同；零 parser/provider/DB/WeKnora 写 |
 | 054 | extraction-task-attempt-receipt | 🚧 开发中 | Durable ExtractionTask/Attempt/Receipt 与一次定点 repair 合同；零 provider/live |
 | 055 | weknora-sensitive-log-redaction | ✅ 已合入 main（PR #81） | GORM 慢 SQL 与失败 SQL 参数脱敏；零 migration/provider/live |
 | 056 | native-pdfplumber-parsed-document-adapter | 🚧 开发中 | native/pdfplumber 原生事实薄适配；缺失结构显式 unsupported，不做 OCR/VLM fallback |

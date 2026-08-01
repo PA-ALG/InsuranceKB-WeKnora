@@ -1,0 +1,27 @@
+{
+  "source_bytes": "synthetic-pdfplumber-fixture-v1",
+  "page": {
+    "page_number": 1,
+    "width": 612,
+    "height": 792,
+    "words": [
+      {"text": "保险责任", "x0": 40, "top": 60, "x1": 100, "bottom": 74},
+      {"text": "sensitive synthetic content", "x0": 110, "top": 60, "x1": 230, "bottom": 74, "unknown_vendor_key": "must-not-survive", "path": "/synthetic/absolute/path.pdf"}
+    ],
+    "tables": [
+      {
+        "bbox": [40, 100, 300, 180],
+        "rows": [
+          [[40, 100, 120, 120], [120, 100, 220, 120]],
+          [[40, 120, 120, 140], [120, 120, 220, 140]]
+        ],
+        "values": [["年龄", "保费"], ["0", "3943"]]
+      },
+      {
+        "bbox": [40, 200, 300, 240],
+        "rows": [[[40, 200, 120, 220], null]],
+        "values": [["合并标题", ""]]
+      }
+    ]
+  }
+}
