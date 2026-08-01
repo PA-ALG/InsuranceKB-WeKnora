@@ -930,8 +930,9 @@ type legacyW1BridgeState struct {
 func classifyLegacyW1Origin(state legacyW1BridgeState) (legacyW1Origin, error) {
 	officialMigrationHead := upstream.OfficialMigrationHead()
 	enterpriseVersionKnown := state.enterpriseVersion == 1 ||
-		(state.enterpriseVersion == int64(packagedEnterpriseMigrationHead) &&
-			state.officialVersion == officialMigrationHead)
+		(state.officialVersion == officialMigrationHead &&
+			state.enterpriseVersion > 1 &&
+			state.enterpriseVersion <= int64(packagedEnterpriseMigrationHead))
 	if !state.fixtureChecksumValid {
 		return "", fmt.Errorf("legacy W1 fixture checksum mismatch")
 	}
