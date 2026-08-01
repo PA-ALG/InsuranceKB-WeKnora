@@ -65,8 +65,9 @@
 | 055 | weknora-sensitive-log-redaction | ✅ 已合入 main（PR #81） | GORM 慢 SQL 与失败 SQL 参数脱敏；零 migration/provider/live |
 | 056 | native-pdfplumber-parsed-document-adapter | ✅ 已合入 main（PR #83） | native/pdfplumber 原生事实薄适配；缺失结构显式 unsupported，不做 OCR/VLM fallback |
 | 057 | extraction-evidence-verifier-targeted-repair | ✅ 已合入 main（PR #85） | 051 Child D2；确定性 Evidence/业务规则回验与最多一次失败字段 targeted repair；直接绑定 054 exact receipt DTO |
-| 058 | incremental-changeset-conflict-retraction | 🚧 开发中 | 051 Child E；纯确定性 affected-only ChangeSet draft、字段级来源权威、冲突与独占支持撤回；零 migration/DB/provider/Release |
-| 059+ | （空闲） | | 先占号再开目录 |
+| 058 | incremental-changeset-conflict-retraction | ✅ 已合入 main（PR #86） | 051 Child E；纯确定性 affected-only ChangeSet draft、字段级来源权威、冲突与独占支持撤回；零 migration/DB/provider/Release |
+| 059 | fixture-candidate-human-batch | 🚧 开发中 / 058 已合入 | 051 Child F 的 PR1；直接消费 058 public contract，仅 fixture Candidate + human_batch envelope，PR2 才拥有 CAS activate/pinned/revert |
+| 060+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
