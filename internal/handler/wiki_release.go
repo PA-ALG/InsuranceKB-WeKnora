@@ -201,7 +201,13 @@ func ensureWikiReleaseJSONEOF(decoder *json.Decoder) error {
 	return nil
 }
 
-// Activate validates and atomically activates one exact authorization.
+type wikiReleaseActivationRequest struct {
+	HumanDecision        json.RawMessage `json:"human_decision"`
+	PublishAuthorization json.RawMessage `json:"publish_authorization"`
+}
+
+// Activate validates a closed named-human decision and atomically activates
+// its separately signed exact authorization.
 func (h *WikiReleaseHandler) Activate(c *gin.Context) {
 	principal, _, err := h.requestIdentity(c)
 	if err != nil {
@@ -212,12 +218,20 @@ func (h *WikiReleaseHandler) Activate(c *gin.Context) {
 		writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
 		return
 	}
-	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, maxWikiReleaseAuthorizationBytes+1))
-	if err != nil || len(raw) == 0 || len(raw) > maxWikiReleaseAuthorizationBytes {
+	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 2*maxWikiReleaseAuthorizationBytes+1))
+	decoder.DisallowUnknownFields()
+	var request wikiReleaseActivationRequest
+	if err := decoder.Decode(&request); err != nil ||
+		len(request.HumanDecision) == 0 || len(request.PublishAuthorization) == 0 ||
+		len(request.HumanDecision) > maxWikiReleaseAuthorizationBytes ||
+		len(request.PublishAuthorization) > maxWikiReleaseAuthorizationBytes ||
+		ensureWikiReleaseJSONEOF(decoder) != nil {
 		writeWikiReleaseError(c, apperrors.NewBadRequestError("invalid release authorization"))
 		return
 	}
-	receipt, err := h.releaseService.Activate(c.Request.Context(), principal, raw)
+	receipt, err := h.releaseService.ActivateReviewed(
+		c.Request.Context(), principal, request.HumanDecision, request.PublishAuthorization,
+	)
 	if err != nil {
 		writeWikiReleaseError(c, err)
 		return
@@ -244,7 +258,7 @@ func (h *WikiReleaseHandler) Current(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": current})
 }
 
-// PinnedPage returns an immutable page member from the explicit release.
+// PinnedPage pins the current Head at request start, then serves that release.
 func (h *WikiReleaseHandler) PinnedPage(c *gin.Context) {
 	principal, scope, err := h.requestIdentity(c)
 	if err != nil {
@@ -255,13 +269,16 @@ func (h *WikiReleaseHandler) PinnedPage(c *gin.Context) {
 		writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
 		return
 	}
-	page, err := h.releaseService.PinnedPage(
-		c.Request.Context(),
-		principal,
-		scope,
-		strings.TrimSpace(c.Param("release_id")),
-		strings.TrimSpace(c.Param("logical_slug")),
-	)
+	pin, err := h.releaseService.BeginPinnedRead(c.Request.Context(), principal, scope)
+	if err == nil && strings.TrimSpace(c.Param("release_id")) != pin.ReleaseID() {
+		err = &service.WikiReleaseConflictError{Cause: stderrors.New("release is not current Head")}
+	}
+	var page *types.WikiReleaseMemberSnapshot
+	if err == nil {
+		page, err = h.releaseService.ReadPinnedPage(
+			c.Request.Context(), principal, pin, strings.TrimSpace(c.Param("logical_slug")),
+		)
+	}
 	if err != nil {
 		writeWikiReleaseError(c, err)
 		return
@@ -269,7 +286,7 @@ func (h *WikiReleaseHandler) PinnedPage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": page})
 }
 
-// PinnedPayload returns the payload from the same immutable member.
+// PinnedPayload pins the current Head at request start, then serves its payload.
 func (h *WikiReleaseHandler) PinnedPayload(c *gin.Context) {
 	principal, scope, err := h.requestIdentity(c)
 	if err != nil {
@@ -280,13 +297,16 @@ func (h *WikiReleaseHandler) PinnedPayload(c *gin.Context) {
 		writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
 		return
 	}
-	payload, err := h.releaseService.PinnedPayload(
-		c.Request.Context(),
-		principal,
-		scope,
-		strings.TrimSpace(c.Param("release_id")),
-		strings.TrimSpace(c.Param("logical_slug")),
-	)
+	pin, err := h.releaseService.BeginPinnedRead(c.Request.Context(), principal, scope)
+	if err == nil && strings.TrimSpace(c.Param("release_id")) != pin.ReleaseID() {
+		err = &service.WikiReleaseConflictError{Cause: stderrors.New("release is not current Head")}
+	}
+	var payload json.RawMessage
+	if err == nil {
+		payload, err = h.releaseService.ReadPinnedPayload(
+			c.Request.Context(), principal, pin, strings.TrimSpace(c.Param("logical_slug")),
+		)
+	}
 	if err != nil {
 		writeWikiReleaseError(c, err)
 		return
@@ -294,7 +314,7 @@ func (h *WikiReleaseHandler) PinnedPayload(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": payload})
 }
 
-// MinimalSearch searches only the explicit immutable release.
+// MinimalSearch pins the current Head at request start and searches only it.
 func (h *WikiReleaseHandler) MinimalSearch(c *gin.Context) {
 	principal, scope, err := h.requestIdentity(c)
 	if err != nil {
@@ -305,13 +325,14 @@ func (h *WikiReleaseHandler) MinimalSearch(c *gin.Context) {
 		writeWikiReleaseError(c, errorsUnavailableWikiReleaseService())
 		return
 	}
-	results, err := h.releaseService.MinimalSearch(
-		c.Request.Context(),
-		principal,
-		scope,
-		strings.TrimSpace(c.Param("release_id")),
-		c.Query("q"),
-	)
+	pin, err := h.releaseService.BeginPinnedRead(c.Request.Context(), principal, scope)
+	if err == nil && strings.TrimSpace(c.Param("release_id")) != pin.ReleaseID() {
+		err = &service.WikiReleaseConflictError{Cause: stderrors.New("release is not current Head")}
+	}
+	var results []types.WikiReleaseMemberSnapshot
+	if err == nil {
+		results, err = h.releaseService.SearchPinned(c.Request.Context(), principal, pin, c.Query("q"))
+	}
 	if err != nil {
 		writeWikiReleaseError(c, err)
 		return

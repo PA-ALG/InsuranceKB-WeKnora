@@ -113,3 +113,80 @@ PR2 after PR1 is merged.
 - **WHEN** construction would call a serving, review-decision, activation or
   revert boundary
 - **THEN** the PR1 contract rejects the operation; Active Head remains unchanged
+
+### Requirement: FCH7 named-human whole-batch decision receipt
+
+PR2 SHALL consume a closed, canonical, Ed25519-verifiable decision receipt that
+binds one named human principal, current tenant/Space/RAW-KB/Wiki-KB scope, exact
+PR1 Candidate hash, exact human-batch hash, exact review-policy hash, decision,
+issued/expiry times, nonce and signer key. Only `approve` MAY activate; `reject`,
+missing/unknown/duplicate fields, invalid signature, stale time, principal/ACL
+drift, or any Candidate/batch/policy mismatch SHALL fail before Release writes.
+The receipt SHALL bind the whole batch and SHALL NOT permit per-item partial
+approval. Exact signed fixture bytes SHALL be covered by one immutable
+Python-to-Go vector.
+The existing production activation handler SHALL accept only a closed request
+containing both that canonical human receipt and the separate publish
+authorization, and SHALL enter activation only through the reviewed boundary.
+The lower-level atomic transaction helper SHALL NOT remain an exported
+production activation path.
+
+#### Scenario: reject or partial receipt attempts activation
+
+- **WHEN** the receipt rejects the batch or any bound hash/principal byte drifts
+- **THEN** activation fails typed and Release/member/Head/receipt state is unchanged
+
+#### Scenario: legacy authorization bypasses the human receipt
+
+- **WHEN** a caller submits only legacy publish authorization, omits the human
+  receipt, or self-reports an opaque review digest
+- **THEN** the handler fails closed before any Release/member/Head/receipt write
+
+### Requirement: FCH8 atomic activation and idempotent receipt
+
+PR2 activation SHALL reuse the existing five-table transaction: insert one
+immutable Release and all members, CAS the sole WeKnora Head from the exact
+release/epoch to epoch+1, then persist one immutable receipt. CAS loss or any
+transaction fault SHALL roll back Release, members, Head and receipt together.
+An exact nonce plus exact authorization digest retry SHALL return the committed
+receipt; the same nonce with a different digest SHALL conflict.
+
+#### Scenario: two candidates race from one Head
+
+- **WHEN** two approved activations use the same expected release and epoch
+- **THEN** exactly one wins and the loser leaves no Release/member/receipt orphan
+
+### Requirement: FCH9 request-scoped pinned read with current ACL
+
+One request SHALL resolve the WeKnora Head exactly once into an immutable pinned
+release/epoch token. Page, payload and search reads under that token SHALL never
+re-read or advance the Head, but every read SHALL independently revalidate the
+current principal, binding and both KB ACLs. ACL shrink SHALL deny later reads
+even though the immutable pin remains unchanged.
+Every serving handler SHALL obtain that opaque pin once from current Head at
+request start. A caller-supplied historical `release_id` SHALL NOT select read
+authority and SHALL fail closed when it differs from the just-pinned Head.
+
+#### Scenario: Head advances after request pin
+
+- **WHEN** a request pins R0 and another activation advances the Head to R1
+- **THEN** all reads under the first token return only R0, subject to fresh ACL
+
+#### Scenario: URL asks for historical R0 while Head is R1
+
+- **WHEN** page, payload or search receives caller `release_id=R0` after Head is R1
+- **THEN** the request fails closed and returns no R0 content
+
+### Requirement: FCH10 immutable historical revert by CAS only
+
+Revert SHALL verify current access and a signed revert authorization, resolve an
+existing immutable Release in the exact same scope, and CAS the sole Head from
+the exact expected release/epoch to that historical Release at epoch+1. It SHALL
+NOT create or rewrite a Release or member. Revert receipt/idempotency and
+transaction rollback SHALL follow FCH8. Concurrent activate/revert from one Head
+SHALL have exactly one winner.
+
+#### Scenario: revert targets a foreign or mutable identity
+
+- **WHEN** the target is absent, current, cross-scope or its preparation/hash custody drifts
+- **THEN** revert fails closed and leaves all five tables unchanged

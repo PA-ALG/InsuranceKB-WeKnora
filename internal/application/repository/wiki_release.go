@@ -35,6 +35,22 @@ type WikiReleaseActivationWrite struct {
 	ReceiptFault              func() error
 }
 
+// WikiReleaseRevertWrite moves Head to an existing immutable release without
+// creating a replacement release or members.
+type WikiReleaseRevertWrite struct {
+	Scope                   types.WikiReleaseScope
+	TargetReleaseID         string
+	ExpectedReleaseID       string
+	ExpectedActivationEpoch uint64
+	Nonce                   string
+	AuthorizationDigest     string
+	ActivatedBy             string
+	ActivatedAt             time.Time
+	ActivationReceiptID     string
+	CASFault                func() error
+	ReceiptFault            func() error
+}
+
 // WikiReleaseRepository owns the five experimental release tables.
 type WikiReleaseRepository struct {
 	db *gorm.DB
@@ -161,6 +177,68 @@ func (r *WikiReleaseRepository) Activate(
 	return receipt, err
 }
 
+// Revert atomically CASes Head to one existing immutable historical Release
+// and records the same idempotency receipt shape used by activation.
+func (r *WikiReleaseRepository) Revert(
+	ctx context.Context,
+	write WikiReleaseRevertWrite,
+) (*types.WikiReleaseReceipt, error) {
+	if write.TargetReleaseID == "" || write.ExpectedReleaseID == "" ||
+		write.ExpectedActivationEpoch == 0 {
+		return nil, ErrWikiReleaseConflict
+	}
+	var receipt *types.WikiReleaseReceipt
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var target types.WikiRelease
+		if err := scopeQuery(tx, write.Scope).
+			Where("release_id = ?", write.TargetReleaseID).
+			Take(&target).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrWikiReleaseNotFound
+			}
+			return err
+		}
+		if write.CASFault != nil {
+			if err := write.CASFault(); err != nil {
+				return err
+			}
+		}
+		newEpoch := write.ExpectedActivationEpoch + 1
+		result := scopeQuery(tx.Model(&types.WikiReleaseHead{}), write.Scope).
+			Where("active_release_id = ? AND activation_epoch = ?",
+				write.ExpectedReleaseID, write.ExpectedActivationEpoch).
+			Updates(map[string]any{
+				"active_release_id": write.TargetReleaseID,
+				"activation_epoch":  newEpoch,
+				"updated_at":        write.ActivatedAt,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrWikiReleaseConflict
+		}
+		if write.ReceiptFault != nil {
+			if err := write.ReceiptFault(); err != nil {
+				return err
+			}
+		}
+		receipt = &types.WikiReleaseReceipt{
+			ID:                  write.ActivationReceiptID,
+			WikiReleaseScope:    write.Scope,
+			Nonce:               write.Nonce,
+			AuthorizationDigest: write.AuthorizationDigest,
+			PreviousReleaseID:   write.ExpectedReleaseID,
+			ReleaseID:           write.TargetReleaseID,
+			ActivationEpoch:     newEpoch,
+			ActivatedBy:         write.ActivatedBy,
+			CreatedAt:           write.ActivatedAt,
+		}
+		return tx.Create(receipt).Error
+	})
+	return receipt, err
+}
+
 func materializeMembers(
 	releaseID string,
 	snapshots []types.WikiReleaseMemberSnapshot,
@@ -215,6 +293,30 @@ func (r *WikiReleaseRepository) GetHead(
 	scope types.WikiReleaseScope,
 ) (*types.WikiReleaseHead, error) {
 	return getHead(r.db.WithContext(ctx), scope)
+}
+
+// GetReleaseByPreparation resolves one immutable historical target under the
+// exact four-part scope.
+func (r *WikiReleaseRepository) GetReleaseByPreparation(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	preparationID string,
+) (*types.WikiRelease, error) {
+	var releases []types.WikiRelease
+	err := scopeQuery(r.db.WithContext(ctx), scope).
+		Where("preparation_id = ?", preparationID).
+		Limit(2).
+		Find(&releases).Error
+	if err != nil {
+		return nil, err
+	}
+	if len(releases) == 0 {
+		return nil, ErrWikiReleaseNotFound
+	}
+	if len(releases) != 1 {
+		return nil, ErrWikiReleaseConflict
+	}
+	return &releases[0], nil
 }
 
 // GetHeadForSpace returns the single active head binding for one tenant and

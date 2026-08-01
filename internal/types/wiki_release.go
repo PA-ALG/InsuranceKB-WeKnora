@@ -28,6 +28,24 @@ type PublishAuthorizationV0 struct {
 	Signature               string `json:"signature"`
 }
 
+// HumanBatchDecisionReceiptV1 is the named-human whole-batch decision bound
+// to one exact Candidate and review policy. It is deliberately separate from
+// the release authorization so neither envelope can mint the other.
+type HumanBatchDecisionReceiptV1 struct {
+	Version     string `json:"version"`
+	Decision    string `json:"decision"`
+	PrincipalID string `json:"principal_id"`
+	WikiReleaseScope
+	CandidateHash    string `json:"candidate_hash"`
+	HumanBatchHash   string `json:"human_batch_hash"`
+	ReviewPolicyHash string `json:"review_policy_hash"`
+	IssuedAt         int64  `json:"issued_at"`
+	ExpiresAt        int64  `json:"expires_at"`
+	Nonce            string `json:"nonce"`
+	SignerKeyID      string `json:"signer_key_id"`
+	Signature        string `json:"signature"`
+}
+
 // WikiReleaseScope is the exact experimental release boundary.
 type WikiReleaseScope struct {
 	TenantID uint64 `json:"tenant_id" gorm:"column:tenant_id;not null"`
