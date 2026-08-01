@@ -100,7 +100,23 @@
         "cross_page_sections",
         "table_grid",
         "cell_locators"
-      ]
+      ],
+      "parse_policy": {
+        "policy_id": "596-1-terms-approved-parse-policy",
+        "policy_version": "v1",
+        "material_profile_id": "596-1-terms-v1",
+        "default_parser_profile_ref": "approved-parser-profile:parser-neutral-default.v1",
+        "bounded_upgrade_profile_ref": "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+        "upgrade_trigger_conditions": [
+          "required_capability_missing",
+          "manifest_digest_or_count_mismatch",
+          "locator_invalid_or_required_structure_missing",
+          "table_grid_or_span_incomplete"
+        ],
+        "max_parser_attempts": 2,
+        "privacy_policy_ref": "privacy-policy:source-revision-private-processing.v1",
+        "output_policy_ref": "output-policy:parsed-artifact-internal-only.v1"
+      }
     },
     {
       "profile_id": "596-1-brochure-v1",
@@ -117,7 +133,23 @@
         "block_locators",
         "table_grid",
         "cell_locators"
-      ]
+      ],
+      "parse_policy": {
+        "policy_id": "596-1-brochure-approved-parse-policy",
+        "policy_version": "v1",
+        "material_profile_id": "596-1-brochure-v1",
+        "default_parser_profile_ref": "approved-parser-profile:parser-neutral-default.v1",
+        "bounded_upgrade_profile_ref": "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+        "upgrade_trigger_conditions": [
+          "required_capability_missing",
+          "manifest_digest_or_count_mismatch",
+          "locator_invalid_or_required_structure_missing",
+          "table_grid_or_span_incomplete"
+        ],
+        "max_parser_attempts": 2,
+        "privacy_policy_ref": "privacy-policy:source-revision-private-processing.v1",
+        "output_policy_ref": "output-policy:parsed-artifact-internal-only.v1"
+      }
     },
     {
       "profile_id": "596-1-rate-table-v1",
@@ -137,7 +169,23 @@
         "cell_locators",
         "merged_cells",
         "cross_page_tables"
-      ]
+      ],
+      "parse_policy": {
+        "policy_id": "596-1-rate-table-approved-parse-policy",
+        "policy_version": "v1",
+        "material_profile_id": "596-1-rate-table-v1",
+        "default_parser_profile_ref": "approved-parser-profile:parser-neutral-default.v1",
+        "bounded_upgrade_profile_ref": "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+        "upgrade_trigger_conditions": [
+          "required_capability_missing",
+          "manifest_digest_or_count_mismatch",
+          "locator_invalid_or_required_structure_missing",
+          "table_grid_or_span_incomplete"
+        ],
+        "max_parser_attempts": 2,
+        "privacy_policy_ref": "privacy-policy:source-revision-private-processing.v1",
+        "output_policy_ref": "output-policy:parsed-artifact-internal-only.v1"
+      }
     }
   ],
   "field_authority_groups": [

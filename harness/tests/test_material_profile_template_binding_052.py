@@ -36,7 +36,7 @@ MODULE_PATH = (
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "material_profile_596_1_052.json"
 REPOSITORY_ROOT = Path(__file__).parents[2]
 SCHEMA_ROOT = REPOSITORY_ROOT / "docs" / "insurance-kb" / "schema-baseline"
-CATALOG_HASH = "fb7faa3f526a13fff5a75fae04ee973b0943075c48288d1fdd177d8c9a119a5e"
+CATALOG_HASH = "32651266dcef2c6597b35911906b3d64408bc9c0cabe2db52472f836d519d019"
 GOLDEN_IDENTITY = {
     "release_hash": "fca06f988bf0310d12a0f6f8d0703a9476c54a5405676fb1a9b3476f91ec21d0",
     "artifact_hash": "83032da028ef227071fddac0ed422cbb9d1c2cc31e195972f9878a67d95b44ca",
@@ -213,6 +213,199 @@ def _reason(
 
 def test_material_profile_binding_module_exists() -> None:
     assert MODULE_PATH.is_file(), "OpenSpec 052 MaterialProfile binding is missing"
+
+
+def test_missing_approved_parse_policy_is_rejected() -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    assert all("parse_policy" in profile for profile in raw["profiles"])
+    for profile in raw["profiles"]:
+        profile.pop("parse_policy")
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+def test_profiles_bind_one_parser_neutral_bounded_policy_and_receipt() -> None:
+    module = _module()
+    catalog = _catalog(module)
+    expected_triggers = (
+        "required_capability_missing",
+        "manifest_digest_or_count_mismatch",
+        "locator_invalid_or_required_structure_missing",
+        "table_grid_or_span_incomplete",
+    )
+
+    for profile in catalog.profiles:
+        policy = profile.parse_policy
+        assert policy.material_profile_id == profile.profile_id
+        assert policy.default_parser_profile_ref == (
+            "approved-parser-profile:parser-neutral-default.v1"
+        )
+        assert policy.bounded_upgrade_profile_ref == (
+            "approved-parser-profile:parser-neutral-bounded-upgrade.v1"
+        )
+        assert policy.upgrade_trigger_conditions == expected_triggers
+        assert policy.max_parser_attempts == 2
+        assert policy.privacy_policy_ref.startswith("privacy-policy:")
+        assert policy.output_policy_ref.startswith("output-policy:")
+
+        result = module.resolve_material_profile(
+            catalog,
+            _template_catalog(profile),
+            _request(module, catalog, profile.material_role),
+        )
+        receipt = result.parse_policy_receipt
+        assert receipt.material_profile_id == profile.profile_id
+        assert receipt.required_parse_capabilities == (
+            profile.required_parse_capabilities
+        )
+        assert receipt.policy_id == policy.policy_id
+        assert receipt.policy_version == policy.policy_version
+        assert receipt.default_parser_profile_ref == (
+            policy.default_parser_profile_ref
+        )
+        assert receipt.bounded_upgrade_profile_ref == (
+            policy.bounded_upgrade_profile_ref
+        )
+        assert receipt.upgrade_trigger_conditions == (
+            policy.upgrade_trigger_conditions
+        )
+        assert receipt.max_parser_attempts == policy.max_parser_attempts
+        assert receipt.privacy_policy_ref == policy.privacy_policy_ref
+        assert receipt.output_policy_ref == policy.output_policy_ref
+
+    fixture_text = FIXTURE_PATH.read_text(encoding="utf-8").casefold()
+    for candidate_name in ("pdfplumber", "mineru", "paddle", "ocr", "vlm"):
+        assert candidate_name not in fixture_text
+
+
+def test_parse_policy_rejects_a_third_parser_attempt() -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw["profiles"][0]["parse_policy"]["max_parser_attempts"] = 3
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+def test_parse_policy_rejects_upgrade_without_mechanical_trigger() -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw["profiles"][0]["parse_policy"]["upgrade_trigger_conditions"] = []
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+@pytest.mark.parametrize("missing_ref", ("privacy_policy_ref", "output_policy_ref"))
+def test_parse_policy_requires_profile_level_policy_refs(missing_ref: str) -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw["profiles"][0]["parse_policy"].pop(missing_ref)
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (
+            "default_parser_profile_ref",
+            [
+                "approved-parser-profile:parser-neutral-default.v1",
+                "approved-parser-profile:parser-neutral-other.v1",
+            ],
+        ),
+        (
+            "bounded_upgrade_profile_ref",
+            [
+                "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+                "approved-parser-profile:parser-neutral-third.v1",
+            ],
+        ),
+    ],
+)
+def test_parse_policy_rejects_multiple_or_chained_parser_profiles(
+    field: str,
+    value: list[str],
+) -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw["profiles"][0]["parse_policy"][field] = value
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+@pytest.mark.parametrize(
+    ("upgrade_ref", "triggers", "attempts"),
+    [
+        (None, [], 2),
+        (None, ["required_capability_missing"], 1),
+        (
+            "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+            ["required_capability_missing"],
+            1,
+        ),
+    ],
+)
+def test_parse_policy_attempt_limit_matches_optional_upgrade(
+    upgrade_ref: str | None,
+    triggers: list[str],
+    attempts: int,
+) -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    policy = raw["profiles"][0]["parse_policy"]
+    policy["bounded_upgrade_profile_ref"] = upgrade_ref
+    policy["upgrade_trigger_conditions"] = triggers
+    policy["max_parser_attempts"] = attempts
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
+
+
+def test_parse_policy_allows_explicit_no_upgrade_with_one_attempt() -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    policy = raw["profiles"][0]["parse_policy"]
+    policy["bounded_upgrade_profile_ref"] = None
+    policy["upgrade_trigger_conditions"] = []
+    policy["max_parser_attempts"] = 1
+
+    catalog = module.load_material_profile_catalog_data(raw)
+
+    parsed = catalog.profiles[0].parse_policy
+    assert parsed.bounded_upgrade_profile_ref is None
+    assert parsed.upgrade_trigger_conditions == ()
+    assert parsed.max_parser_attempts == 1
+
+
+def test_parse_policy_identity_must_match_owning_material_profile() -> None:
+    module = _module()
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    raw["profiles"][0]["parse_policy"]["material_profile_id"] = (
+        "596-1-brochure-v1"
+    )
+
+    with pytest.raises(module.MaterialProfileCatalogError) as caught:
+        module.load_material_profile_catalog_data(raw)
+
+    assert caught.value.reason_code == "invalid_parse_policy"
 
 
 def test_exact_catalog_matches_three_pdf_schema_and_golden_identity() -> None:
@@ -487,6 +680,48 @@ def test_catalog_c0_hash_is_stable_and_binding_hash_covers_template_chain() -> N
     )
     assert full.binding_hash != fallback.binding_hash
     assert full.binding_hash != full.resolved_template.content_hash
+
+
+def test_catalog_and_binding_c0_cover_capabilities_and_parse_policy_refs() -> None:
+    module = _module()
+    catalog = _catalog(module)
+    profile = next(item for item in catalog.profiles if item.material_role == "terms")
+    template_catalog = _template_catalog(profile)
+    request = _request(module, catalog, "terms")
+    original = module.resolve_material_profile(catalog, template_catalog, request)
+    raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    capabilities_raw = json.loads(json.dumps(raw))
+    capabilities_raw["profiles"][0]["required_parse_capabilities"].append(
+        "reading_order_edges"
+    )
+    capabilities_catalog = module.load_material_profile_catalog_data(capabilities_raw)
+    assert module.material_profile_catalog_hash(capabilities_catalog) != (
+        original.catalog_hash
+    )
+    capabilities_changed = module.resolve_material_profile(
+        capabilities_catalog,
+        _template_catalog(profile),
+        _request(module, capabilities_catalog, "terms"),
+    )
+    assert capabilities_changed.binding_hash != original.binding_hash
+    assert capabilities_changed.parse_policy_receipt.required_parse_capabilities[-1] == (
+        "reading_order_edges"
+    )
+
+    policy_raw = json.loads(json.dumps(raw))
+    policy_raw["profiles"][0]["parse_policy"]["privacy_policy_ref"] = (
+        "privacy-policy:source-revision-private-processing.v2"
+    )
+    policy_catalog = module.load_material_profile_catalog_data(policy_raw)
+    changed = module.resolve_material_profile(
+        policy_catalog,
+        _template_catalog(profile),
+        _request(module, policy_catalog, "terms"),
+    )
+    assert changed.catalog_hash != original.catalog_hash
+    assert changed.binding_hash != original.binding_hash
+    assert changed.parse_policy_receipt.privacy_policy_ref.endswith(".v2")
 
 
 @pytest.mark.parametrize("mutation", ("rate_primary", "field_missing"))

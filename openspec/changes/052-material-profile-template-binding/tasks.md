@@ -92,3 +92,23 @@ Claim/ChangeSet/Release。
   保持 real index 空，不 commit/push/PR。
 - [x] **Step 6:** 在 validation report 只记录 fresh 实际输出，并给出
   `BLOCKER / BACKLOG / MAINLINE DRIFT / DETAIL TRAP`。
+
+## Task 5: 051 KCA4 bounded parse-policy correction
+
+**Files:** 仍只允许上列 exact 8 paths；不得新增第九路径。
+
+- [x] **Step 1:** 对照 051 KCA4 验证反馈：原实现只有
+  `required_parse_capabilities`，确实缺 approved default、singular bounded
+  upgrade、机械 trigger、attempt limit、privacy/output refs 与对应 receipt。
+- [x] **Step 2:** 先新增“profile 缺 parse policy 必须拒绝”的 focused test；在
+  原实现上得到 `1 failed in 0.20s` / `DID NOT RAISE`，再只加入必填门得到
+  `1 passed in 0.11s`。
+- [x] **Step 3:** fixture 加入 parser-neutral policy 后，再先写第三次 attempt、
+  upgrade 无 trigger、缺 privacy/output、default/upgrade 多值链、limit 不一致、
+  owning identity 与 receipt/C0 覆盖测试；得到 `12 failed, 16 passed in 2.08s`。
+- [x] **Step 4:** 最小实现 frozen/extra-forbid `ApprovedParsePolicy` 与
+  `ParsePolicyReceipt`，只允许一个 default 和零/一个 upgrade，attempt 上限 1/2；
+  required capabilities 和所有 policy refs 进入 catalog/binding C0 与 receipt。
+- [x] **Step 5:** fresh 运行 focused + 原相关回归 + Ruff/strict mypy + OpenSpec
+  strict + diff/scope/private/secret/UTF-8-LF 门禁，并刷新 successor tree/blob handoff。
+- [x] **Step 6:** 保持 PR #80 Draft；本 correction 不 commit、不 push、不改 PR。

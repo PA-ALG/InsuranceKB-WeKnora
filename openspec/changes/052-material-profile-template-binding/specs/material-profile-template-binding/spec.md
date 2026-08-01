@@ -135,3 +135,43 @@ adapter/quality threshold 属于 B；Claim/ChangeSet/conflict merge 属于 D/E�
 - **WHEN** 实现需要导入 parser/provider/DB/WeKnora 或 Golden answer module
 - **THEN** scope gate 拒绝；本 Change 只允许领域 DTO、fixture loader、
   existing resolver seam 和 receipt
+
+### Requirement: MPTB9 parser-neutral approved parse policy
+
+每个 MaterialProfile SHALL 内嵌一个 parser-neutral approved parse policy，冻结
+`policy_id`、`policy_version`、owning `material_profile_id`、精确一个版本化
+`default_parser_profile_ref`、profile-level `privacy_policy_ref` 与
+`output_policy_ref`。这些 identity 只批准后续 B 可消费的 profile contract，
+不得被解释为 pdfplumber、MinerU、Paddle、OCR、VLM 或其他 candidate family
+已经成为 winner。
+
+policy MAY 以一个 singular `bounded_upgrade_profile_ref` 批准一次有界升级；不得是
+list/sequence，也不得嵌套第三个 profile。无 upgrade 时 SHALL 明确为 `null`、触发
+条件 SHALL 为空且 `max_parser_attempts` SHALL 为 `1`；有 upgrade 时 SHALL 至少
+冻结一个机械触发条件且 `max_parser_attempts` SHALL 为 `2`。允许的 trigger enum
+只包括：
+
+- `required_capability_missing`；
+- `manifest_digest_or_count_mismatch`；
+- `locator_invalid_or_required_structure_missing`；
+- `table_grid_or_span_incomplete`。
+
+MaterialProfile required capabilities 与上述完整 policy refs SHALL 同时进入 catalog
+C0、resolved binding C0 与显式 `ParsePolicyReceipt`。052 只冻结授权边界；不执行
+parser、不产生 attempt、不实现 053 的 `ADMIT | ESCALATE | BLOCK` 决策。
+
+#### Scenario: 默认解析不足且已批准一次 upgrade
+
+- **WHEN** 后续 B 对 default attempt 机械测得已冻结 trigger enum 之一
+- **THEN** receipt 只授权 exact singular upgrade 作为第二次 attempt；第二次仍不足
+  时 fail closed，不得执行第三次或临时拼接 parser chain
+
+#### Scenario: upgrade 没有触发条件
+
+- **WHEN** profile 指定 bounded upgrade 但 trigger set 为空，或 attempt limit 不是 2
+- **THEN** catalog 以 `invalid_parse_policy` fail closed
+
+#### Scenario: privacy/output policy 缺失
+
+- **WHEN** profile 缺少任一 versioned privacy/output policy ref
+- **THEN** catalog 以 `invalid_parse_policy` fail closed，不生成 binding receipt

@@ -39,9 +39,37 @@ NonBlankStr = Annotated[
 ]
 Sha256Hex = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 PositiveSize = Annotated[StrictInt, Field(gt=0)]
+ParserAttemptLimit = Annotated[StrictInt, Field(ge=1, le=2)]
+ParserProfileRef = Annotated[
+    StrictStr,
+    StringConstraints(
+        pattern=(
+            r"^approved-parser-profile:parser-neutral-"
+            r"[a-z0-9][a-z0-9.-]*\.v[1-9][0-9]*$"
+        )
+    ),
+]
+PrivacyPolicyRef = Annotated[
+    StrictStr,
+    StringConstraints(
+        pattern=r"^privacy-policy:[a-z0-9][a-z0-9.-]*\.v[1-9][0-9]*$"
+    ),
+]
+OutputPolicyRef = Annotated[
+    StrictStr,
+    StringConstraints(
+        pattern=r"^output-policy:[a-z0-9][a-z0-9.-]*\.v[1-9][0-9]*$"
+    ),
+]
 MaterialRole = Literal["terms", "brochure", "rate_table"]
 AuthorityClass = Literal["contract_fact", "brochure_fact", "rate_numeric"]
 ScopeLevel = Literal["global", "product-line", "document-type", "product-family"]
+UpgradeTriggerCondition = Literal[
+    "required_capability_missing",
+    "manifest_digest_or_count_mismatch",
+    "locator_invalid_or_required_structure_missing",
+    "table_grid_or_span_incomplete",
+]
 ResolutionReason = Literal[
     "product_identity_mismatch",
     "schema_identity_mismatch",
@@ -54,6 +82,7 @@ CatalogReason = Literal[
     "invalid_catalog",
     "invalid_field_authority",
     "invalid_field_bijection",
+    "invalid_parse_policy",
 ]
 
 MATERIAL_PROFILE_CATALOG_OBJECT_TYPE: Final[str] = "material-profile-catalog.v1"
@@ -149,16 +178,48 @@ class SourceDocumentIdentity(_FrozenModel):
         return value
 
 
+class ApprovedParsePolicy(_FrozenModel):
+    policy_id: NonBlankStr
+    policy_version: NonBlankStr
+    material_profile_id: NonBlankStr
+    default_parser_profile_ref: ParserProfileRef
+    bounded_upgrade_profile_ref: ParserProfileRef | None
+    upgrade_trigger_conditions: tuple[UpgradeTriggerCondition, ...]
+    max_parser_attempts: ParserAttemptLimit
+    privacy_policy_ref: PrivacyPolicyRef
+    output_policy_ref: OutputPolicyRef
+
+    @model_validator(mode="after")
+    def require_one_bounded_path(self) -> Self:
+        triggers = self.upgrade_trigger_conditions
+        if len(triggers) != len(set(triggers)):
+            raise ValueError("invalid_parse_policy")
+        upgrade = self.bounded_upgrade_profile_ref
+        if upgrade is None:
+            if triggers or self.max_parser_attempts != 1:
+                raise ValueError("invalid_parse_policy")
+        elif (
+            not triggers
+            or self.max_parser_attempts != 2
+            or upgrade == self.default_parser_profile_ref
+        ):
+            raise ValueError("invalid_parse_policy")
+        return self
+
+
 class MaterialProfile(_FrozenModel):
     profile_id: NonBlankStr
     material_role: MaterialRole
     source: SourceDocumentIdentity
     document_type_id: NonBlankStr
     required_parse_capabilities: tuple[NonBlankStr, ...]
+    parse_policy: ApprovedParsePolicy
 
     @model_validator(mode="after")
     def require_unique_capabilities(self) -> Self:
         capabilities = self.required_parse_capabilities
+        if self.parse_policy.material_profile_id != self.profile_id:
+            raise ValueError("invalid_parse_policy")
         if not capabilities or len(capabilities) != len(set(capabilities)):
             raise ValueError("required capabilities must be non-empty and unique")
         return self
@@ -224,6 +285,13 @@ class MaterialProfileCatalog(_FrozenModel):
             {profile.profile_id for profile in self.profiles}
         ) != 3:
             raise ValueError("invalid_catalog")
+        if len(
+            {
+                (profile.parse_policy.policy_id, profile.parse_policy.policy_version)
+                for profile in self.profiles
+            }
+        ) != 3:
+            raise ValueError("invalid_parse_policy")
         profiles_by_role = {profile.material_role: profile for profile in self.profiles}
         if set(profiles_by_role) != set(_EXPECTED_SOURCES):
             raise ValueError("invalid_catalog")
@@ -302,6 +370,17 @@ class TemplateFallbackReceipt(_FrozenModel):
         return self
 
 
+class ParsePolicyReceipt(ApprovedParsePolicy):
+    required_parse_capabilities: tuple[NonBlankStr, ...]
+
+    @model_validator(mode="after")
+    def require_unique_receipt_capabilities(self) -> Self:
+        capabilities = self.required_parse_capabilities
+        if not capabilities or len(capabilities) != len(set(capabilities)):
+            raise ValueError("invalid_parse_policy")
+        return self
+
+
 class MaterialProfileReviewItem(_FrozenModel):
     review_type: Literal["material_profile_binding"] = "material_profile_binding"
     reason_code: ResolutionReason
@@ -319,6 +398,7 @@ class MaterialProfileResolution(_FrozenModel):
     golden_identity: GoldenIdentity
     resolved_template: ResolvedTemplate
     template_receipt: TemplateFallbackReceipt
+    parse_policy_receipt: ParsePolicyReceipt
     review_items: tuple[MaterialProfileReviewItem, ...]
     binding_hash: Sha256Hex
 
@@ -331,8 +411,11 @@ class MaterialProfileResolution(_FrozenModel):
             product_family_id=self.product_family_id,
             golden_identity=self.golden_identity,
             template_receipt=self.template_receipt,
+            parse_policy_receipt=self.parse_policy_receipt,
         ):
             raise ValueError("binding_hash_mismatch")
+        if self.parse_policy_receipt != _parse_policy_receipt(self.profile):
+            raise ValueError("parse_policy_receipt_mismatch")
         if self.review_items:
             raise ValueError("successful resolution cannot contain ReviewItems")
         return self
@@ -353,6 +436,8 @@ class MaterialProfileResolutionError(ValueError):
 
 def _catalog_error_reason(exc: ValidationError) -> CatalogReason:
     text = str(exc)
+    if "parse_policy" in text:
+        return "invalid_parse_policy"
     if "invalid_field_authority" in text:
         return "invalid_field_authority"
     if "invalid_field_bijection" in text:
@@ -428,6 +513,15 @@ def _template_receipt(template: ResolvedTemplate) -> TemplateFallbackReceipt:
     )
 
 
+def _parse_policy_receipt(profile: MaterialProfile) -> ParsePolicyReceipt:
+    return ParsePolicyReceipt.model_validate(
+        {
+            **profile.parse_policy.model_dump(mode="python"),
+            "required_parse_capabilities": profile.required_parse_capabilities,
+        }
+    )
+
+
 def _binding_hash(
     *,
     catalog_hash: str,
@@ -436,6 +530,7 @@ def _binding_hash(
     product_family_id: str,
     golden_identity: GoldenIdentity,
     template_receipt: TemplateFallbackReceipt,
+    parse_policy_receipt: ParsePolicyReceipt,
 ) -> str:
     return canonical_hash(
         MATERIAL_PROFILE_BINDING_OBJECT_TYPE,
@@ -446,6 +541,7 @@ def _binding_hash(
             "product_family_id": product_family_id,
             "golden_identity": golden_identity.model_dump(mode="python"),
             "template_receipt": template_receipt.model_dump(mode="python"),
+            "parse_policy_receipt": parse_policy_receipt.model_dump(mode="python"),
         },
     )
 
@@ -539,6 +635,7 @@ def resolve_material_profile(
             observed=exc.reason_code,
         ) from None
     receipt = _template_receipt(resolved_template)
+    parse_policy_receipt = _parse_policy_receipt(profile)
     catalog_hash = material_profile_catalog_hash(catalog)
     binding_hash = _binding_hash(
         catalog_hash=catalog_hash,
@@ -547,6 +644,7 @@ def resolve_material_profile(
         product_family_id=mapping.product_family_id,
         golden_identity=catalog.golden_identity,
         template_receipt=receipt,
+        parse_policy_receipt=parse_policy_receipt,
     )
     return MaterialProfileResolution(
         catalog_hash=catalog_hash,
@@ -556,6 +654,7 @@ def resolve_material_profile(
         golden_identity=catalog.golden_identity,
         resolved_template=resolved_template,
         template_receipt=receipt,
+        parse_policy_receipt=parse_policy_receipt,
         review_items=(),
         binding_hash=binding_hash,
     )
@@ -564,6 +663,7 @@ def resolve_material_profile(
 __all__ = [
     "MATERIAL_PROFILE_BINDING_OBJECT_TYPE",
     "MATERIAL_PROFILE_CATALOG_OBJECT_TYPE",
+    "ApprovedParsePolicy",
     "FieldAuthority",
     "GoldenIdentity",
     "MaterialProfile",
@@ -573,6 +673,7 @@ __all__ = [
     "MaterialProfileResolutionError",
     "MaterialProfileResolutionRequest",
     "MaterialProfileReviewItem",
+    "ParsePolicyReceipt",
     "ProductBinding",
     "ProductFamilyMapping",
     "SchemaBinding",
