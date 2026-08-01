@@ -19,11 +19,24 @@ type ReadRequest struct {
 type ReadResult struct {
 	MarkdownContent string
 	ImageRefs       []ImageRef
+	NativeStructure *NativeStructureArtifact
 	ImageDirPath    string
 	Metadata        map[string]string
 	Error           string
 	IsAudio         bool   // true when the result contains raw audio data needing ASR transcription
 	AudioData       []byte // raw audio bytes for ASR processing
+}
+
+// NativeStructureArtifact is a content-addressed, privacy-safe parser sidecar.
+// SanitizedJSON contains no source body text, URL, secret, or absolute path.
+// It is deliberately narrow: consumers must still validate their own domain
+// contract before treating these facts as admitted structure.
+type NativeStructureArtifact struct {
+	SchemaVersion   string
+	SourceSHA256    string
+	RawSHA256       string
+	SanitizedSHA256 string
+	SanitizedJSON   []byte
 }
 
 // ImageRef represents an image reference extracted from the document.

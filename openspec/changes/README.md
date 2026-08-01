@@ -66,8 +66,9 @@
 | 056 | native-pdfplumber-parsed-document-adapter | ✅ 已合入 main（PR #83） | native/pdfplumber 原生事实薄适配；缺失结构显式 unsupported，不做 OCR/VLM fallback |
 | 057 | extraction-evidence-verifier-targeted-repair | ✅ 已合入 main（PR #85） | 051 Child D2；确定性 Evidence/业务规则回验与最多一次失败字段 targeted repair；直接绑定 054 exact receipt DTO |
 | 058 | incremental-changeset-conflict-retraction | ✅ 已合入 main（PR #86） | 051 Child E；纯确定性 affected-only ChangeSet draft、字段级来源权威、冲突与独占支持撤回；零 migration/DB/provider/Release |
-| 059 | fixture-candidate-human-batch | 🚧 开发中 / 058 已合入 | 051 Child F 的 PR1；直接消费 058 public contract，仅 fixture Candidate + human_batch envelope，PR2 才拥有 CAS activate/pinned/revert |
-| 060+ | （空闲） | | 先占号再开目录 |
+| 059 | fixture-candidate-human-batch | ✅ 已合入 main | 051 Child F 的 PR1；直接消费 058 public contract，仅 fixture Candidate + human_batch envelope，PR2 才拥有 CAS activate/pinned/revert |
+| 060 | mineru-cloud-native-parsed-document-adapter | `IMPLEMENTATION IN PROGRESS` | Stacked TDD：保留 MinerU pipeline `content_list.json` 原生结构，经过 Go ReadResult 脱敏 sidecar 桥接到 053；≤12 paths，provider/live=0 |
+| 061+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
