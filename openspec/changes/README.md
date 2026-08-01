@@ -58,8 +58,9 @@
 | 048 | s0r-router-budget-amendment | `SPEC-ONLY / IMPLEMENTATION NOT STARTED` | 只为 S0-R 增加 `internal/router/router.go`，总路径上限 11；其余预算不变 |
 | 049 | s0q-full-golden-freeze | ✅ 具名人工已批准；S0-Q frozen full Golden 可用；Draft 交付待定 | 复用现有 Golden 系统；`gpt-5.6-sol` 对 596-1 全部 60 个当前可抽取字段完成双 blind pass、Evidence 回验和 exact-hash 批准；只供 S0-Q，不是生产或 machine_auto authority |
 | 050 | postgres-embeddings-forward-repair | ✅ 已实现并合入 main（PR #78） | 修复 official ledger 已推进但 PostgreSQL retrieval 的 `embeddings` 表缺失；仅新增 enterprise forward migration，未重跑 PDF、模型或历史 migration |
-| 051 | enterprise-knowledge-compiler-architecture | 🚧 SPEC-ONLY / ARCHITECTURE FREEZE IN PROGRESS | 父级知识编译合同；只冻结 A→C→B→{D,E}→F→G，不实现 parser/provider/runtime/migration |
-| 052+ | （空闲） | | 先占号再开目录 |
+| 051 | enterprise-knowledge-compiler-architecture | ✅ 已合入 main（PR #79） | 父级知识编译合同；只冻结 A→C→B→{D,E}→F→G，不实现 parser/provider/runtime/migration |
+| 052 | material-profile-template-binding | 🚧 实现中 | ProductVersion 596-1 三 PDF 的薄 MaterialProfile 绑定层；复用现有 TemplatePackage resolver，零 migration |
+| 053+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

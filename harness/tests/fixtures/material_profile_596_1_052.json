@@ -1,0 +1,233 @@
+{
+  "contract": "material-profile-catalog.v1",
+  "catalog_version": "596-1.052.v1",
+  "product": {
+    "product_code": "596",
+    "product_version": "596-1"
+  },
+  "schema_binding": {
+    "line_key": "medical",
+    "schema_version": "v1.1+b31a411c621c",
+    "field_ids": [
+      "zh_fd9a0b9fa3",
+      "zh_1a3227c6ce",
+      "zh_8bd90889d3",
+      "zh_f1de0de938",
+      "zh_ad4a95859a",
+      "zh_0b3894ed2a",
+      "zh_789479e2d4",
+      "zh_346f0dac8c",
+      "zh_5162df17d8",
+      "zh_67ee7025ef",
+      "zh_89e518b987",
+      "zh_6a3bd6cdbf",
+      "zh_a271d96039",
+      "zh_f8cc996739",
+      "zh_14b93ce275",
+      "zh_17a83223e4",
+      "zh_313cabffd8",
+      "zh_f558f0a88f",
+      "zh_d62301d84c",
+      "zh_540e1969e3",
+      "zh_0c5a8e59e2",
+      "zh_7598a3116c",
+      "zh_1a5675a37a",
+      "zh_c4f4b0d48a",
+      "zh_7fe8603c08",
+      "zh_b7ceabc3c0",
+      "zh_17e15e0c5a",
+      "zh_a17bd1c3f3",
+      "zh_dcae594f8b",
+      "zh_23a2625781",
+      "zh_7bf05bc576",
+      "zh_1ec5e3f2cc",
+      "zh_b4b770e114",
+      "regulatory_filing_no",
+      "clause_version",
+      "clause_effective_date",
+      "exclusions_official",
+      "waiting_period_claim_handling",
+      "reinstatement",
+      "claim_filing_requirements",
+      "reduced_paid_up",
+      "zh_7d7fe38f09",
+      "zh_09a5d9e54e",
+      "zh_58d313ee26",
+      "zh_74aa1b9c93",
+      "zh_ca6e0226c2",
+      "zh_2df7d6256c",
+      "zh_c588207763",
+      "zh_0612362268",
+      "zh_c5187f228e",
+      "zh_74fd5a9469",
+      "zh_3a3e6520a3",
+      "zh_4a789b1d6f",
+      "zh_3d8424595d",
+      "zh_f32c510a5e",
+      "zh_e1bea0527a",
+      "zh_52548821b9",
+      "pre_existing_conditions",
+      "external_drug_coverage",
+      "discontinuation_renewal"
+    ]
+  },
+  "product_family_mapping": {
+    "mapping_source": "approved_product_version_mapping",
+    "product_code": "596",
+    "product_version": "596-1",
+    "product_family_id": "pingan-eshengbao-zunxiang-medical"
+  },
+  "golden_identity": {
+    "status": "S0_Q_FROZEN_FULL_GOLDEN_AVAILABLE",
+    "release_hash": "fca06f988bf0310d12a0f6f8d0703a9476c54a5405676fb1a9b3476f91ec21d0",
+    "artifact_hash": "83032da028ef227071fddac0ed422cbb9d1c2cc31e195972f9878a67d95b44ca",
+    "approval_subject": "6feb2acf4be1ab5ce075b662bc9c9a40024038ca2324b893d3f31b1384f7674b"
+  },
+  "profiles": [
+    {
+      "profile_id": "596-1-terms-v1",
+      "material_role": "terms",
+      "source": {
+        "name": "保险条款.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/保险条款.pdf",
+        "size": 1047811,
+        "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+      },
+      "document_type_id": "insurance-terms",
+      "required_parse_capabilities": [
+        "ordered_pages",
+        "block_locators",
+        "cross_page_sections",
+        "table_grid",
+        "cell_locators"
+      ]
+    },
+    {
+      "profile_id": "596-1-brochure-v1",
+      "material_role": "brochure",
+      "source": {
+        "name": "产品说明书.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf",
+        "size": 492101,
+        "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+      },
+      "document_type_id": "product-brochure",
+      "required_parse_capabilities": [
+        "ordered_pages",
+        "block_locators",
+        "table_grid",
+        "cell_locators"
+      ]
+    },
+    {
+      "profile_id": "596-1-rate-table-v1",
+      "material_role": "rate_table",
+      "source": {
+        "name": "费率表.pdf",
+        "path": "dataset/shouxian_product/平安e生保（尊享版）医疗保险/费率表.pdf",
+        "size": 51961,
+        "sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb"
+      },
+      "document_type_id": "rate-table",
+      "required_parse_capabilities": [
+        "ordered_pages",
+        "table_grid",
+        "header_hierarchy",
+        "row_column_indices",
+        "cell_locators",
+        "merged_cells",
+        "cross_page_tables"
+      ]
+    }
+  ],
+  "field_authority_groups": [
+    {
+      "authority_class": "brochure_fact",
+      "primary_role": "brochure",
+      "support_roles": [
+        "terms"
+      ],
+      "field_ids": [
+        "zh_fd9a0b9fa3",
+        "zh_1a3227c6ce",
+        "zh_8bd90889d3",
+        "zh_f1de0de938",
+        "zh_ad4a95859a",
+        "zh_0b3894ed2a",
+        "zh_789479e2d4",
+        "zh_346f0dac8c",
+        "zh_5162df17d8",
+        "zh_67ee7025ef",
+        "zh_89e518b987",
+        "zh_6a3bd6cdbf",
+        "zh_f8cc996739",
+        "zh_14b93ce275",
+        "zh_17a83223e4",
+        "zh_540e1969e3",
+        "zh_0c5a8e59e2",
+        "zh_7598a3116c",
+        "zh_1a5675a37a",
+        "zh_c4f4b0d48a",
+        "zh_b7ceabc3c0",
+        "zh_17e15e0c5a",
+        "zh_a17bd1c3f3",
+        "zh_dcae594f8b",
+        "zh_23a2625781",
+        "zh_7bf05bc576",
+        "zh_58d313ee26"
+      ]
+    },
+    {
+      "authority_class": "contract_fact",
+      "primary_role": "terms",
+      "support_roles": [
+        "brochure"
+      ],
+      "field_ids": [
+        "zh_a271d96039",
+        "zh_313cabffd8",
+        "zh_f558f0a88f",
+        "zh_d62301d84c",
+        "zh_1ec5e3f2cc",
+        "zh_b4b770e114",
+        "regulatory_filing_no",
+        "clause_version",
+        "clause_effective_date",
+        "exclusions_official",
+        "waiting_period_claim_handling",
+        "reinstatement",
+        "claim_filing_requirements",
+        "reduced_paid_up",
+        "zh_7d7fe38f09",
+        "zh_09a5d9e54e",
+        "zh_74aa1b9c93",
+        "zh_ca6e0226c2",
+        "zh_2df7d6256c",
+        "zh_0612362268",
+        "zh_c5187f228e",
+        "zh_74fd5a9469",
+        "zh_3a3e6520a3",
+        "zh_4a789b1d6f",
+        "zh_3d8424595d",
+        "zh_f32c510a5e",
+        "zh_e1bea0527a",
+        "zh_52548821b9",
+        "pre_existing_conditions",
+        "external_drug_coverage",
+        "discontinuation_renewal"
+      ]
+    },
+    {
+      "authority_class": "rate_numeric",
+      "primary_role": "rate_table",
+      "support_roles": [
+        "terms",
+        "brochure"
+      ],
+      "field_ids": [
+        "zh_7fe8603c08",
+        "zh_c588207763"
+      ]
+    }
+  ]
+}
