@@ -48,6 +48,7 @@ type MinerUCloudReader struct {
 	capturePolicy    bool
 	captureTimeout   time.Duration
 	calls            minerUCloudCallLedger
+	crossPageFacts   *minerUCrossPageProjection
 	fetchStatus      func(context.Context, string, map[string]string) ([]extractResultItem, error)
 	extractDone      func(context.Context, *extractResultItem, string, string) (string, []types.ImageRef, *types.NativeStructureArtifact, error)
 	newZIPHTTPClient func(int) *http.Client
@@ -109,6 +110,7 @@ func (c *MinerUCloudReader) validateZIPURL(rawURL string) error {
 
 func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*types.ReadResult, error) {
 	c.calls = minerUCloudCallLedger{}
+	c.crossPageFacts = nil
 	if c.apiKey == "" {
 		return &types.ReadResult{Error: "MinerU Cloud API key is not configured"}, nil
 	}
@@ -167,6 +169,10 @@ func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*
 }
 
 func (c *MinerUCloudReader) captureCallLedger() minerUCloudCallLedger { return c.calls }
+
+func (c *MinerUCloudReader) captureCrossPageProjection() *minerUCrossPageProjection {
+	return c.crossPageFacts
+}
 
 // --- batch upload API ---
 
@@ -406,8 +412,8 @@ func (c *MinerUCloudReader) extractDoneResult(ctx context.Context, item *extract
 	}
 
 	c.calls.ZIPGET++
-	md, imageRefs, nativeStructure, err := downloadAndExtractZip(
-		ctx, item.FullZipURL, sourceSHA256, effectiveModel, c.zipHTTPClient(), c.validateZIPURL,
+	md, imageRefs, nativeStructure, crossPageFacts, err := downloadAndExtractZip(
+		ctx, item.FullZipURL, sourceSHA256, effectiveModel, c.capturePolicy, c.zipHTTPClient(), c.validateZIPURL,
 	)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("extract zip: %w", err)
@@ -415,6 +421,7 @@ func (c *MinerUCloudReader) extractDoneResult(ctx context.Context, item *extract
 	if text != "" {
 		md = text
 	}
+	c.crossPageFacts = crossPageFacts
 
 	logger.Infof(context.Background(), "[MinerUCloud] parsed (zip), markdown=%d chars, images=%d, native_schema=%s", len(md), len(imageRefs), nativeStructure.SchemaVersion)
 	return md, imageRefs, nativeStructure, nil
@@ -435,42 +442,70 @@ var ErrMinerUNativeStructureUnavailable = errors.New("MinerU native structure un
 var ErrMinerUCloudPollBudgetExceeded = errors.New("MinerU Cloud poll budget exceeded")
 
 func downloadAndExtractZip(
-	ctx context.Context,
-	zipURL, sourceSHA256, effectiveModel string,
+	ctx context.Context, zipURL, sourceSHA256, effectiveModel string, captureProjection bool,
 	client *http.Client,
 	validateURL func(string) error,
-) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
+) (string, []types.ImageRef, *types.NativeStructureArtifact, *minerUCrossPageProjection, error) {
 	if err := validateURL(zipURL); err != nil {
-		return "", nil, nil, fmt.Errorf("zip URL blocked by SSRF check: %v", err)
+		return "", nil, nil, nil, fmt.Errorf("zip URL blocked by SSRF check: %v", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zipURL, nil)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("create zip request: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("create zip request: %w", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("download zip: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("download zip: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", nil, nil, fmt.Errorf("download zip status %d", resp.StatusCode)
+		return "", nil, nil, nil, fmt.Errorf("download zip status %d", resp.StatusCode)
 	}
 
-	zipData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("read zip body: %w", err)
+	var zipData []byte
+	if captureProjection {
+		zipData, err = readMinerUCaptureZIPBody(resp.Body, maxMinerUCrossPageZIPBytes)
+	} else {
+		zipData, err = io.ReadAll(resp.Body)
 	}
-	return extractMinerUZipBytes(zipData, sourceSHA256, effectiveModel)
+	if err != nil {
+		return "", nil, nil, nil, fmt.Errorf("read zip body: %w", err)
+	}
+	return extractMinerUZipBytesWithProjection(zipData, sourceSHA256, effectiveModel, captureProjection)
+}
+
+func readMinerUCaptureZIPBody(reader io.Reader, maxBytes int64) ([]byte, error) {
+	payload, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload)) > maxBytes {
+		return nil, fmt.Errorf("%w: compressed ZIP budget", ErrMinerUCrossPageProjectionInvalid)
+	}
+	return payload, nil
 }
 
 func extractMinerUZipBytes(zipData []byte, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
+	markdown, images, artifact, _, err := extractMinerUZipBytesWithProjection(zipData, sourceSHA256, effectiveModel, false)
+	return markdown, images, artifact, err
+}
+
+func extractMinerUZipBytesWithProjection(zipData []byte, sourceSHA256, effectiveModel string, captureProjection bool) (string, []types.ImageRef, *types.NativeStructureArtifact, *minerUCrossPageProjection, error) {
 	if effectiveModel != "pipeline" {
-		return "", nil, nil, fmt.Errorf("%w: effective model %q is not pipeline", ErrMinerUNativeStructureUnavailable, effectiveModel)
+		return "", nil, nil, nil, fmt.Errorf("%w: effective model %q is not pipeline", ErrMinerUNativeStructureUnavailable, effectiveModel)
+	}
+	var crossPageFacts *minerUCrossPageProjection
+	if _, targeted := minerUCrossPageRequiredCapability(sourceSHA256); captureProjection && targeted {
+		var err error
+		crossPageFacts, err = projectMinerUCrossPageZip(zipData, sourceSHA256)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
 	}
 
 	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("open zip: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("open zip: %w", err)
 	}
 
 	// Find .md files
@@ -487,10 +522,10 @@ func extractMinerUZipBytes(zipData []byte, sourceSHA256, effectiveModel string) 
 		}
 	}
 	if len(mdFiles) == 0 {
-		return "", nil, nil, fmt.Errorf("%w: no Markdown presentation", ErrMinerUNativeStructureUnavailable)
+		return "", nil, nil, nil, fmt.Errorf("%w: no Markdown presentation", ErrMinerUNativeStructureUnavailable)
 	}
 	if len(nativeFiles) != 1 {
-		return "", nil, nil, fmt.Errorf("%w: expected one pipeline content-list, got %d", ErrMinerUNativeStructureUnavailable, len(nativeFiles))
+		return "", nil, nil, nil, fmt.Errorf("%w: expected one pipeline content-list, got %d", ErrMinerUNativeStructureUnavailable, len(nativeFiles))
 	}
 	sort.Slice(mdFiles, func(i, j int) bool {
 		di, dj := strings.Count(mdFiles[i], "/"), strings.Count(mdFiles[j], "/")
@@ -502,15 +537,15 @@ func extractMinerUZipBytes(zipData []byte, sourceSHA256, effectiveModel string) 
 
 	mdText, err := readZipEntry(entries[mdFiles[0]])
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("read md file: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("read md file: %w", err)
 	}
 	rawNative, err := readZipEntryBytes(entries[nativeFiles[0]])
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("read native content-list: %w", err)
+		return "", nil, nil, nil, fmt.Errorf("read native content-list: %w", err)
 	}
 	nativeStructure, err := normalizeMinerUContentList(rawNative, sourceSHA256, effectiveModel)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("%w: %v", ErrMinerUNativeStructureUnavailable, err)
+		return "", nil, nil, nil, fmt.Errorf("%w: %v", ErrMinerUNativeStructureUnavailable, err)
 	}
 
 	mdDir := filepath.Dir(mdFiles[0])
@@ -557,7 +592,7 @@ func extractMinerUZipBytes(zipData []byte, sourceSHA256, effectiveModel string) 
 		})
 	}
 
-	return mdText, imageRefs, nativeStructure, nil
+	return mdText, imageRefs, nativeStructure, crossPageFacts, nil
 }
 
 const (

@@ -1,11 +1,15 @@
 package docparser
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,11 +20,358 @@ import (
 )
 
 type fakeMinerUCaptureReader struct {
-	result *types.ReadResult
-	err    error
-	calls  minerUCloudCallLedger
-	reads  int
+	result         *types.ReadResult
+	err            error
+	calls          minerUCloudCallLedger
+	crossPageFacts *minerUCrossPageProjection
+	reads          int
 }
+
+func TestProjectMinerUCrossPageFactsFromNativeMiddleOnly(t *testing.T) {
+	t.Parallel()
+	contentList := `[{"type":"table","page_idx":0,"bbox":[0,0,1,1],"table_body":"<table><tr><td>looks continued</td></tr></table>"}]`
+	presentMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[{"type":"text","index":4,"lines":[{"spans":[` +
+		`{"type":"text","content":"Bearer secret body","bbox":[1,2,3,4],"cross_page":true}]}]}]},` +
+		`{"page_idx":1,"para_blocks":[]}]}`
+	absentMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[{"type":"table","index":1,"blocks":[]}]},` +
+		`{"page_idx":1,"para_blocks":[]}]}`
+	ambiguousMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[]},{"page_idx":1,"para_blocks":[` +
+		`{"type":"table","index":2,"lines_deleted":true,"blocks":[]}]}]}`
+
+	tests := []struct {
+		name       string
+		middle     string
+		wantStatus string
+		wantCount  int
+	}{
+		{"cross-page-boolean-is-ambiguous", presentMiddle, minerUCrossPageAmbiguous, 0},
+		{"absent", absentMiddle, minerUCrossPageAbsent, 0},
+		{"ambiguous", ambiguousMiddle, minerUCrossPageAmbiguous, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			zipBytes := crossPageFixtureZip(t, []crossPageFixtureEntry{
+				{"nested/result.md", "private presentation"},
+				{"nested/result_content_list.json", contentList},
+				{"nested/result_middle.json", tc.middle},
+			})
+			got, err := projectMinerUCrossPageZip(zipBytes, minerUTermsSourceSHA256)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tc.wantStatus || got.RelationCount != tc.wantCount ||
+				got.SourceSHA256 != minerUTermsSourceSHA256 || got.MinerUVersion != "3.4.4" {
+				t.Fatalf("projection drifted: %#v", got)
+			}
+			encoded, err := json.Marshal(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range []string{"Bearer secret body", "private presentation", "bbox", "[1,2,3,4]", "nested/"} {
+				if bytes.Contains(encoded, []byte(forbidden)) {
+					t.Fatalf("projection leaked %q: %s", forbidden, encoded)
+				}
+			}
+		})
+	}
+
+	t.Run("content-list-is-not-cross-page-authority", func(t *testing.T) {
+		zipBytes := crossPageFixtureZip(t, []crossPageFixtureEntry{
+			{"result.md", "continued"}, {"result_content_list.json", contentList},
+		})
+		got, err := projectMinerUCrossPageZip(zipBytes, minerURatesSourceSHA256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != minerUCrossPageNotAvailable || got.RelationCount != 0 {
+			t.Fatalf("content-list minted native relation authority: %#v", got)
+		}
+	})
+
+	t.Run("adjacency-header-and-html-are-not-native-relations", func(t *testing.T) {
+		looksContinuous := `[{"type":"table","page_idx":0,"bbox":[0,0,1,1],` +
+			`"table_body":"<table><tr><th>same header</th></tr></table>"},` +
+			`{"type":"table","page_idx":1,"bbox":[0,0,1,1],` +
+			`"table_body":"<table><tr><th>same header</th></tr></table>"}]`
+		zipBytes := crossPageFixtureZip(t, []crossPageFixtureEntry{
+			{"result.md", "continued on adjacent page"},
+			{"result_content_list.json", looksContinuous},
+			{"result_middle.json", absentMiddle},
+		})
+		got, err := projectMinerUCrossPageZip(zipBytes, minerURatesSourceSHA256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != minerUCrossPageAbsent || got.RelationCount != 0 || len(got.Relations) != 0 {
+			t.Fatalf("presentation similarity minted a relation: %#v", got)
+		}
+	})
+
+	t.Run("rate-table-boolean-remains-ambiguous", func(t *testing.T) {
+		tableMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+			`{"page_idx":0,"para_blocks":[{"type":"table","index":0,"blocks":[` +
+			`{"type":"table_body","lines":[{"spans":[{"type":"table","cross_page":true}]}]}]}]},` +
+			`{"page_idx":1,"para_blocks":[]}]}`
+		got, err := projectMinerUCrossPageZip(
+			crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", tableMiddle}}),
+			minerURatesSourceSHA256,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != minerUCrossPageAmbiguous || got.RelationCount != 0 || len(got.Relations) != 0 {
+			t.Fatalf("boolean table marker was promoted to a relation: %#v", got)
+		}
+	})
+
+	t.Run("converter-enables-projection-only-for-capture-policy", func(t *testing.T) {
+		zipBytes := crossPageFixtureZip(t, []crossPageFixtureEntry{
+			{"result.md", "presentation"}, {"result_content_list.json", contentList},
+			{"result_middle.json", presentMiddle},
+		})
+		_, _, _, projected, err := extractMinerUZipBytesWithProjection(
+			zipBytes, minerUTermsSourceSHA256, "pipeline", true,
+		)
+		if err != nil || projected == nil || projected.Status != minerUCrossPageAmbiguous ||
+			projected.RelationCount != 0 {
+			t.Fatalf("capture-only projection seam failed: projection=%#v err=%v", projected, err)
+		}
+		_, _, _, ordinary, err := extractMinerUZipBytesWithProjection(
+			zipBytes, minerUTermsSourceSHA256, "pipeline", false,
+		)
+		if err != nil || ordinary != nil {
+			t.Fatalf("ordinary reader behavior was widened: projection=%#v err=%v", ordinary, err)
+		}
+	})
+
+	t.Run("member-order-and-path-do-not-change-semantic-projection", func(t *testing.T) {
+		first := crossPageFixtureZip(t, []crossPageFixtureEntry{
+			{"a/result_middle.json", presentMiddle}, {"a/result.md", "private presentation"},
+		})
+		second := crossPageFixtureZip(t, []crossPageFixtureEntry{
+			{"renamed/result.md", "private presentation"}, {"renamed/result_middle.json", presentMiddle},
+		})
+		one, err := projectMinerUCrossPageZip(first, minerUTermsSourceSHA256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		two, err := projectMinerUCrossPageZip(second, minerUTermsSourceSHA256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if one.ProjectionSHA256 != two.ProjectionSHA256 ||
+			one.MemberInventorySHA256 != two.MemberInventorySHA256 || one.RawZIPSHA256 == two.RawZIPSHA256 {
+			t.Fatalf("semantic/container custody was conflated: one=%#v two=%#v", one, two)
+		}
+		changed, err := projectMinerUCrossPageZip(
+			crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", absentMiddle}}),
+			minerUTermsSourceSHA256,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if changed.ProjectionSHA256 == one.ProjectionSHA256 {
+			t.Fatal("relation value change did not change projection hash")
+		}
+	})
+}
+
+func TestProjectMinerUCrossPageRejectsHostileZIP(t *testing.T) {
+	t.Parallel()
+	validMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[]}`
+	tests := map[string][]crossPageFixtureEntry{
+		"zip-slip":        {{"../result_middle.json", validMiddle}},
+		"duplicate":       {{"a//result_middle.json", validMiddle}, {"a/result_middle.json", validMiddle}},
+		"secret-name":     {{"Bearer-token_middle.json", validMiddle}},
+		"unsupported":     {{"result_middle.json", validMiddle}, {"payload.exe", "x"}},
+		"multiple-middle": {{"a_middle.json", validMiddle}, {"b_middle.json", validMiddle}},
+		"sensitive-key":   {{"result_middle.json", `{"_backend":"pipeline","_version_name":"3.4.4","api_key":"x","pdf_info":[]}`}},
+	}
+	t.Run("non-target-source", func(t *testing.T) {
+		if _, err := projectMinerUCrossPageZip(
+			crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", validMiddle}}),
+			strings.Repeat("f", 64),
+		); err == nil {
+			t.Fatal("non-target source entered 062 projection")
+		}
+	})
+	for name, entries := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := projectMinerUCrossPageZip(crossPageFixtureZip(t, entries), minerUTermsSourceSHA256); err == nil {
+				t.Fatal("hostile or ambiguous ZIP was accepted")
+			}
+		})
+	}
+	t.Run("member-count-budget", func(t *testing.T) {
+		entries := make([]crossPageFixtureEntry, 0, maxMinerUCrossPageMembers+1)
+		for index := 0; index <= maxMinerUCrossPageMembers; index++ {
+			entries = append(entries, crossPageFixtureEntry{fmt.Sprintf("%03d.md", index), "x"})
+		}
+		if _, err := projectMinerUCrossPageZip(crossPageFixtureZip(t, entries), minerUTermsSourceSHA256); err == nil {
+			t.Fatal("member count budget was not enforced")
+		}
+	})
+	t.Run("compression-bomb-budget", func(t *testing.T) {
+		entries := []crossPageFixtureEntry{{"result_middle.json", strings.Repeat("x", 2<<20)}}
+		if _, err := projectMinerUCrossPageZip(crossPageFixtureZip(t, entries), minerUTermsSourceSHA256); err == nil {
+			t.Fatal("compression ratio budget was not enforced")
+		}
+	})
+	for name, mode := range map[string]os.FileMode{
+		"symlink-middle": os.ModeSymlink | 0o777,
+		"special-middle": os.ModeNamedPipe | 0o600,
+	} {
+		t.Run(name, func(t *testing.T) {
+			middle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+				`{"page_idx":0,"para_blocks":[]}]}`
+			if _, err := projectMinerUCrossPageZip(
+				crossPageFixtureZipWithMode(t, "result_middle.json", middle, mode),
+				minerUTermsSourceSHA256,
+			); err == nil || !strings.Contains(err.Error(), "unsupported member class") {
+				t.Fatalf("non-regular ZIP member was not rejected by class: %v", err)
+			}
+		})
+	}
+}
+
+func TestMinerUCaptureZIPBodyReadIsBounded(t *testing.T) {
+	t.Parallel()
+	reader := &countingByteReader{}
+	if _, err := readMinerUCaptureZIPBody(reader, 32); err == nil ||
+		!errors.Is(err, ErrMinerUCrossPageProjectionInvalid) {
+		t.Fatalf("oversized capture ZIP body was not typed: %v", err)
+	}
+	if reader.readBytes != 33 {
+		t.Fatalf("capture ZIP reader consumed %d bytes, want limit+1", reader.readBytes)
+	}
+}
+
+func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.T) {
+	t.Parallel()
+	repositoryPDF := filepath.Join("..", "..", "..", "dataset", "shouxian_product",
+		"平安e生保（尊享版）医疗保险", "保险条款.pdf")
+	pdfBytes, err := os.ReadFile(repositoryPDF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdfHash := sha256.Sum256(pdfBytes)
+	if hex.EncodeToString(pdfHash[:]) != minerUTermsSourceSHA256 {
+		t.Fatal("frozen terms PDF identity drifted")
+	}
+	parent := t.TempDir()
+	sourcePath := filepath.Join(parent, "source.pdf")
+	if err := os.WriteFile(sourcePath, pdfBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	middle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[{"type":"text","lines":[{"spans":[` +
+		`{"type":"text","cross_page":true}]}]}]},{"page_idx":1,"para_blocks":[]}]}`
+	projection, err := projectMinerUCrossPageZip(
+		crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", middle}}),
+		minerUTermsSourceSHA256,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sanitized := []byte(`{"contract":"mineru-native-structure.v1","pages":[],"unsupported":[]}`)
+	sanitizedHash := sha256.Sum256(sanitized)
+	reader := &fakeMinerUCaptureReader{
+		result: &types.ReadResult{NativeStructure: &types.NativeStructureArtifact{
+			SchemaVersion: minerUStructureSchema, SourceSHA256: minerUTermsSourceSHA256,
+			RawSHA256: strings.Repeat("a", 64), SanitizedSHA256: hex.EncodeToString(sanitizedHash[:]),
+			SanitizedJSON: sanitized,
+		}},
+		calls:          minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		crossPageFacts: projection,
+	}
+	outputPath, err := captureMinerUNativeStructure(
+		context.Background(),
+		MinerUArtifactCaptureRequest{
+			SourcePath: sourcePath, SourceSHA256: minerUTermsSourceSHA256,
+			OutputDir:       filepath.Join(parent, "evidence"),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		},
+		func(string) (string, bool) { return "in-memory-secret", true },
+		func(map[string]string) minerUCaptureReader { return reader },
+		fixedCaptureClock(time.Time{}, time.Millisecond),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence minerUCaptureEvidence
+	if err := json.Unmarshal(payload, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.CrossPageFacts == nil || evidence.CrossPageFacts.Status != minerUCrossPageAmbiguous ||
+		evidence.CrossPageFacts.RelationCount != 0 || len(evidence.CrossPageFacts.Relations) != 0 ||
+		evidence.CrossPageFacts.SourceSHA256 != minerUTermsSourceSHA256 {
+		t.Fatalf("private capture evidence dropped projection custody: %#v", evidence.CrossPageFacts)
+	}
+	for _, forbidden := range []string{repositoryPDF, sourcePath, "in-memory-secret", "cross_page\":true"} {
+		if bytes.Contains(payload, []byte(forbidden)) {
+			t.Fatalf("capture evidence leaked %q", forbidden)
+		}
+	}
+}
+
+type crossPageFixtureEntry struct{ name, body string }
+
+func crossPageFixtureZip(t *testing.T, entries []crossPageFixtureEntry) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for _, entry := range entries {
+		file, err := writer.Create(entry.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.Write([]byte(entry.body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func crossPageFixtureZipWithMode(t *testing.T, name, body string, mode os.FileMode) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	header := &zip.FileHeader{Name: name, Method: zip.Store}
+	header.SetMode(mode)
+	file, err := writer.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+type countingByteReader struct{ readBytes int64 }
+
+func (r *countingByteReader) Read(payload []byte) (int, error) {
+	for index := range payload {
+		payload[index] = 'x'
+	}
+	r.readBytes += int64(len(payload))
+	return len(payload), nil
+}
+
+var _ io.Reader = (*countingByteReader)(nil)
 
 func (f *fakeMinerUCaptureReader) Read(_ context.Context, req *types.ReadRequest) (*types.ReadResult, error) {
 	f.reads++
@@ -31,6 +382,10 @@ func (f *fakeMinerUCaptureReader) Read(_ context.Context, req *types.ReadRequest
 }
 
 func (f *fakeMinerUCaptureReader) captureCallLedger() minerUCloudCallLedger { return f.calls }
+
+func (f *fakeMinerUCaptureReader) captureCrossPageProjection() *minerUCrossPageProjection {
+	return f.crossPageFacts
+}
 
 func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *testing.T) {
 	t.Parallel()

@@ -47,6 +47,7 @@ type minerUCloudCallLedger struct {
 type minerUCaptureReader interface {
 	Read(context.Context, *types.ReadRequest) (*types.ReadResult, error)
 	captureCallLedger() minerUCloudCallLedger
+	captureCrossPageProjection() *minerUCrossPageProjection
 }
 
 type minerUCaptureParserLedger struct {
@@ -62,15 +63,16 @@ type minerUCaptureParserLedger struct {
 }
 
 type minerUCaptureEvidence struct {
-	Contract            string                    `json:"contract"`
-	SourceSHA256        string                    `json:"source_sha256"`
-	RawSHA256           string                    `json:"raw_sha256"`
-	SanitizedSHA256     string                    `json:"sanitized_sha256"`
-	SanitizedArtifact   json.RawMessage           `json:"sanitized_artifact"`
-	Parser              minerUCaptureParserLedger `json:"parser"`
-	Calls               minerUCloudCallLedger     `json:"calls"`
-	LatencyMilliseconds int64                     `json:"latency_milliseconds"`
-	Status              string                    `json:"status"`
+	Contract            string                     `json:"contract"`
+	SourceSHA256        string                     `json:"source_sha256"`
+	RawSHA256           string                     `json:"raw_sha256"`
+	SanitizedSHA256     string                     `json:"sanitized_sha256"`
+	SanitizedArtifact   json.RawMessage            `json:"sanitized_artifact"`
+	Parser              minerUCaptureParserLedger  `json:"parser"`
+	Calls               minerUCloudCallLedger      `json:"calls"`
+	LatencyMilliseconds int64                      `json:"latency_milliseconds"`
+	Status              string                     `json:"status"`
+	CrossPageFacts      *minerUCrossPageProjection `json:"cross_page_facts,omitempty"`
 }
 
 type minerUCapturePublishHooks struct {
@@ -131,6 +133,10 @@ func captureMinerUNativeStructure(
 		calls.StatusGET > maxMinerUStatusPolls || calls.ZIPGET != 1 {
 		return "", fmt.Errorf("%w: provider call budget violated", ErrMinerUArtifactCaptureFailed)
 	}
+	crossPageFacts := reader.captureCrossPageProjection()
+	if err := validateMinerUCrossPageProjection(crossPageFacts, req.SourceSHA256); err != nil {
+		return "", fmt.Errorf("%w: cross-page projection custody", ErrMinerUArtifactCaptureFailed)
+	}
 	evidence := minerUCaptureEvidence{
 		Contract:            minerUCaptureContract,
 		SourceSHA256:        req.SourceSHA256,
@@ -141,6 +147,7 @@ func captureMinerUNativeStructure(
 		Calls:               calls,
 		LatencyMilliseconds: finished.Sub(started).Milliseconds(),
 		Status:              "completed",
+		CrossPageFacts:      crossPageFacts,
 	}
 	payload, err := json.Marshal(evidence)
 	if err != nil {
