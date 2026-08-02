@@ -73,6 +73,13 @@ func TestMinerUCloudPollingIsBoundedAndTransportFailFast(t *testing.T) {
 	if minerUCaptureTimeout >= 10*time.Minute {
 		t.Fatalf("capture deadline must stay below ten minutes: %s", minerUCaptureTimeout)
 	}
+	wantPolls := int(minerUCaptureTimeout / defaultPollInterval)
+	if wantPolls != 190 {
+		t.Fatalf("capture timeout/interval contract drifted: got=%d want=190", wantPolls)
+	}
+	if maxMinerUStatusPolls != wantPolls {
+		t.Fatalf("capture poll budget does not cover the deadline: got=%d want=%d", maxMinerUStatusPolls, wantPolls)
+	}
 }
 
 func TestMinerUCloudRedirectPolicyIsCaptureLocal(t *testing.T) {

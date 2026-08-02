@@ -32,7 +32,7 @@ const (
 	defaultCloudTimeout  = 600 * time.Second
 	minerUCaptureTimeout = 9*time.Minute + 30*time.Second
 	defaultBaseURL       = "https://mineru.net/api/v4"
-	maxMinerUStatusPolls = 20
+	maxMinerUStatusPolls = int(minerUCaptureTimeout / defaultPollInterval)
 )
 
 // MinerUCloudReader calls the MinerU Cloud API (mineru.net) to read/convert documents.
