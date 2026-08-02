@@ -75,7 +75,10 @@
 | 065 | release-proof-596-1 | 🚧 并行 Mission 进行中 | 由独立 Owner 交付，不与 067 共享写域 |
 | 066 | 596-1-weak-strong-ceiling | `RED / BLOCKED ON 067` | 同一 MinerU artifact 上 DeepSeek V4 Flash 与离线 GPT-5.6-sol ceiling |
 | 067 | 061-public-single-arm-golden-score | 🧊 STABLE CANDIDATE / REVIEW PENDING | 只公开已准入 MinerU 单臂对 exact 049 Golden 的确定性评分 seam |
-| 068+ | （空闲） | | 先占号再开目录 |
+| 068 | mineru-semantic-content-custody | ✅ 已随 PR #97 合入 | 060 native structure 的同次 semantic custody |
+| 069 | 596-1-semantic-input-binding | 🚧 独立开发中 | 与 070 零共享写域 |
+| 070 | golden18-human-gate | 🚧 实现中 | 596-1 Golden18 外部具名人工 decision/receipt 纯验证门 |
+| 071+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
