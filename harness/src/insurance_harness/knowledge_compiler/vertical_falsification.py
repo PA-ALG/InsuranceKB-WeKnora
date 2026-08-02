@@ -892,6 +892,35 @@ class ArmQualityMetricsV1:
 
 
 @dataclass(frozen=True, slots=True)
+class MetricFractionV1:
+    """One answer-free exact count with its explicit denominator."""
+
+    numerator: int
+    denominator: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.numerator) is not int
+            or type(self.denominator) is not int
+            or self.numerator < 0
+            or self.denominator < 0
+            or self.numerator > self.denominator
+        ):
+            raise ValueError("metric fraction is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class RawSingleArmMetricsV1:
+    """Answer-free single-arm facts; never a production admission authority."""
+
+    state_exact: MetricFractionV1
+    present_exact: MetricFractionV1
+    absent_exact: MetricFractionV1
+    known_evidence: MetricFractionV1
+    critical18_raw_exact: MetricFractionV1
+
+
+@dataclass(frozen=True, slots=True)
 class ArmFieldCorrectnessV1:
     """Answer-free per-field facts produced by the approved Golden comparator."""
 
@@ -927,6 +956,7 @@ class AdmittedFrozenArmScoreV1:
 
     status: Literal[
         "SCORED",
+        "UNADMITTED_RAW",
         "BLOCKED_ON_REQUIRED_CONTRACTS",
         "GOLDEN_INVALID",
     ]
@@ -937,6 +967,7 @@ class AdmittedFrozenArmScoreV1:
     arm_identity: ArmInputIdentityV1 | None
     admission_receipt_digest_sha256: str | None
     golden_content_digest_sha256: str | None
+    raw_metrics: RawSingleArmMetricsV1 | None = None
     golden_release_hash: str = APPROVED_GOLDEN_RELEASE_SHA256
     golden_artifact_hash: str = APPROVED_GOLDEN_ARTIFACT_SHA256
     golden_approval_subject_hash: str = APPROVED_GOLDEN_APPROVAL_SUBJECT_SHA256
@@ -949,6 +980,9 @@ class AdmittedFrozenArmScoreV1:
             "status": self.status,
             "reason_codes": self.reason_codes,
             "metrics": asdict(self.metrics),
+            "raw_metrics": (
+                None if self.raw_metrics is None else asdict(self.raw_metrics)
+            ),
             "field_correctness": tuple(
                 asdict(item) for item in self.field_correctness
             ),
@@ -1378,6 +1412,53 @@ def _quality_metrics(
         abstention_basis_points=_basis_points(abstentions, len(golden.fields)),
         known_evidence_basis_points=_basis_points(
             known_with_evidence, len(known)
+        ),
+    )
+
+
+def _raw_single_arm_metrics(
+    *,
+    evaluations: tuple[_FieldEvaluation, ...],
+    golden: GoldenSetV1,
+) -> RawSingleArmMetricsV1:
+    present = tuple(
+        item
+        for item, expected in zip(evaluations, golden.fields, strict=True)
+        if expected.expected_state == "present"
+    )
+    absent = tuple(
+        item
+        for item, expected in zip(evaluations, golden.fields, strict=True)
+        if expected.expected_state == "absent_explicitly"
+    )
+    known = tuple(
+        item
+        for item, expected in zip(evaluations, golden.fields, strict=True)
+        if expected.expected_state != "unknown"
+    )
+    critical = tuple(
+        item for item in evaluations if item.critical_priority is not None
+    )
+    return RawSingleArmMetricsV1(
+        state_exact=MetricFractionV1(
+            sum(item.tri_state_correct for item in evaluations),
+            len(evaluations),
+        ),
+        present_exact=MetricFractionV1(
+            sum(item.exact_field_correct for item in present),
+            len(present),
+        ),
+        absent_exact=MetricFractionV1(
+            sum(item.exact_field_correct for item in absent),
+            len(absent),
+        ),
+        known_evidence=MetricFractionV1(
+            sum(item.known_evidence_present for item in known),
+            len(known),
+        ),
+        critical18_raw_exact=MetricFractionV1(
+            sum(item.exact_field_correct for item in critical),
+            len(critical),
         ),
     )
 
@@ -1965,15 +2046,29 @@ def score_admitted_frozen_arm(
 
     evaluations = _field_evaluations(output=output, golden=golden)
     metrics = _quality_metrics(output=output, golden=golden)
+    raw_metrics = _raw_single_arm_metrics(evaluations=evaluations, golden=golden)
     gate_reasons = _absolute_gate_reasons(
         output=output,
         golden=golden,
         metrics=metrics,
     )
+    admission_reasons: list[str] = []
+    if (
+        output.identity.arm_profile_sha256 != APPROVED_ARM_PROFILE_SHA256
+        or output.identity.model_identity_sha256
+        != APPROVED_SEMANTIC_MODEL_IDENTITY_SHA256
+    ):
+        admission_reasons.append("ARM_PROFILE_MISMATCH")
+    if (
+        output.identity.semantic_model_id != APPROVED_SEMANTIC_MODEL_ID
+        or output.identity.semantic_api_base != APPROVED_SEMANTIC_API_BASE
+    ):
+        admission_reasons.append("ARM_AUTHORITY_MISMATCH")
     return AdmittedFrozenArmScoreV1(
-        status="SCORED",
-        reason_codes=tuple(gate_reasons),
+        status="UNADMITTED_RAW" if admission_reasons else "SCORED",
+        reason_codes=tuple(dict.fromkeys((*admission_reasons, *gate_reasons))),
         metrics=metrics,
+        raw_metrics=raw_metrics,
         field_correctness=tuple(
             ArmFieldCorrectnessV1(
                 field_id=item.field_id,
@@ -2254,6 +2349,8 @@ __all__ = [
     "CallBudgetLedgerV1",
     "EvidenceLocatorV1",
     "FrozenArmOutputV1",
+    "MetricFractionV1",
+    "RawSingleArmMetricsV1",
     "REQUIRED_PUBLIC_CONTRACTS",
     "RequiredPublicContract",
     "VerticalFalsificationAdmission",
