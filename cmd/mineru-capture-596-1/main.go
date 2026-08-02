@@ -21,10 +21,10 @@ const (
 )
 
 var (
-	ErrMinerUTwoSourcePreflight      = errors.New("MinerU two-source capture preflight failed")
-	ErrMinerUTwoSourceCaptureFailed  = errors.New("MinerU terms capture failed")
-	ErrMinerUTwoSourceCapturePartial = errors.New(
-		"MinerU rate capture failed after terms evidence was preserved",
+	ErrMinerUThreeSourcePreflight      = errors.New("MinerU three-source capture preflight failed")
+	ErrMinerUThreeSourceCaptureFailed  = errors.New("MinerU terms capture failed")
+	ErrMinerUThreeSourceCapturePartial = errors.New(
+		"MinerU capture failed after earlier evidence was preserved",
 	)
 )
 
@@ -40,6 +40,11 @@ var frozenCaptureSources = []captureSource{
 		role: "terms", maskedRole: "t***s",
 		relative: filepath.Join("dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "保险条款.pdf"),
 		sha256:   "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+	},
+	{
+		role: "brochure", maskedRole: "b******e",
+		relative: filepath.Join("dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "产品说明书.pdf"),
+		sha256:   "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
 	},
 	{
 		role: "rate", maskedRole: "r**e",
@@ -76,29 +81,33 @@ func runCLI(ctx context.Context, args []string, repositoryRoot string, deps runn
 	flags.SetOutput(io.Discard)
 	outputRoot := flags.String("output-root", "", "new direct child of /private/tmp")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *outputRoot == "" {
-		return ErrMinerUTwoSourcePreflight
+		return ErrMinerUThreeSourcePreflight
 	}
-	return runTwoSourceCapture(ctx, repositoryRoot, *outputRoot, deps)
+	return runThreeSourceCapture(ctx, repositoryRoot, *outputRoot, deps)
 }
 
-func runTwoSourceCapture(ctx context.Context, repositoryRoot, outputRoot string, deps runnerDependencies) error {
-	sources, err := preflightTwoSourceCapture(repositoryRoot, outputRoot, deps.lookupEnv)
+func runThreeSourceCapture(ctx context.Context, repositoryRoot, outputRoot string, deps runnerDependencies) error {
+	sources, err := preflightThreeSourceCapture(repositoryRoot, outputRoot, deps.lookupEnv)
 	if err != nil || deps.capture == nil {
-		return ErrMinerUTwoSourcePreflight
+		return ErrMinerUThreeSourcePreflight
 	}
 	if err := os.Mkdir(outputRoot, 0o700); err != nil {
-		return ErrMinerUTwoSourcePreflight
+		return ErrMinerUThreeSourcePreflight
 	}
 
 	stdout := deps.stdout
 	if stdout == nil {
 		stdout = io.Discard
 	}
+	generation := 0
 	for index, source := range sources {
 		artifact, captureErr := deps.capture(ctx, docparser.MinerUArtifactCaptureRequest{
-			SourcePath:   source.path,
-			SourceSHA256: source.sha256,
-			OutputDir:    filepath.Join(outputRoot, source.role),
+			SourcePath:    source.path,
+			SourceSHA256:  source.sha256,
+			AttemptNumber: 2,
+			AttemptRole:   "bounded_upgrade",
+			Generation:    &generation,
+			OutputDir:     filepath.Join(outputRoot, source.role),
 			ParserOverrides: map[string]string{
 				"mineru_cloud_model": "pipeline",
 			},
@@ -125,44 +134,44 @@ type admittedCaptureSource struct {
 	sha256     string
 }
 
-func preflightTwoSourceCapture(
+func preflightThreeSourceCapture(
 	repositoryRoot, outputRoot string,
 	lookupEnv func(string) (string, bool),
 ) ([]admittedCaptureSource, error) {
 	cleanOutput := filepath.Clean(outputRoot)
 	if !filepath.IsAbs(cleanOutput) || filepath.Dir(cleanOutput) != "/private/tmp" ||
 		filepath.Base(cleanOutput) == "." || cleanOutput != outputRoot {
-		return nil, ErrMinerUTwoSourcePreflight
+		return nil, ErrMinerUThreeSourcePreflight
 	}
 	if _, err := os.Lstat(cleanOutput); !errors.Is(err, os.ErrNotExist) {
-		return nil, ErrMinerUTwoSourcePreflight
+		return nil, ErrMinerUThreeSourcePreflight
 	}
 	if lookupEnv == nil {
-		return nil, ErrMinerUTwoSourcePreflight
+		return nil, ErrMinerUThreeSourcePreflight
 	}
 	credential, ok := lookupEnv(minerUCredentialEnvironment)
 	if !ok || strings.TrimSpace(credential) == "" {
-		return nil, ErrMinerUTwoSourcePreflight
+		return nil, ErrMinerUThreeSourcePreflight
 	}
 
 	root, err := filepath.Abs(repositoryRoot)
 	if err != nil {
-		return nil, ErrMinerUTwoSourcePreflight
+		return nil, ErrMinerUThreeSourcePreflight
 	}
 	sources := make([]admittedCaptureSource, 0, len(frozenCaptureSources))
 	for _, source := range frozenCaptureSources {
 		path := filepath.Join(root, source.relative)
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() {
-			return nil, ErrMinerUTwoSourcePreflight
+			return nil, ErrMinerUThreeSourcePreflight
 		}
 		payload, err := os.ReadFile(path)
 		if err != nil {
-			return nil, ErrMinerUTwoSourcePreflight
+			return nil, ErrMinerUThreeSourcePreflight
 		}
 		digest := sha256.Sum256(payload)
 		if hex.EncodeToString(digest[:]) != source.sha256 {
-			return nil, ErrMinerUTwoSourcePreflight
+			return nil, ErrMinerUThreeSourcePreflight
 		}
 		sources = append(sources, admittedCaptureSource{
 			role: source.role, maskedRole: source.maskedRole, path: path, sha256: source.sha256,
@@ -174,15 +183,15 @@ func preflightTwoSourceCapture(
 func validateCapturedEvidence(outputRoot, role, artifact string) (string, string, error) {
 	expected := filepath.Join(outputRoot, role, captureArtifactName)
 	if artifact != expected {
-		return "", "", ErrMinerUTwoSourceCaptureFailed
+		return "", "", ErrMinerUThreeSourceCaptureFailed
 	}
 	info, err := os.Lstat(expected)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-		return "", "", ErrMinerUTwoSourceCaptureFailed
+		return "", "", ErrMinerUThreeSourceCaptureFailed
 	}
 	payload, err := os.ReadFile(expected)
 	if err != nil {
-		return "", "", ErrMinerUTwoSourceCaptureFailed
+		return "", "", ErrMinerUThreeSourceCaptureFailed
 	}
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:]), filepath.ToSlash(filepath.Join(role, captureArtifactName)), nil
@@ -190,18 +199,18 @@ func validateCapturedEvidence(outputRoot, role, artifact string) (string, string
 
 func captureFailure(index int) error {
 	if index == 0 {
-		return ErrMinerUTwoSourceCaptureFailed
+		return ErrMinerUThreeSourceCaptureFailed
 	}
-	return ErrMinerUTwoSourceCapturePartial
+	return ErrMinerUThreeSourceCapturePartial
 }
 
 func stableRunnerError(err error) error {
 	switch {
-	case errors.Is(err, ErrMinerUTwoSourceCapturePartial):
-		return ErrMinerUTwoSourceCapturePartial
-	case errors.Is(err, ErrMinerUTwoSourceCaptureFailed):
-		return ErrMinerUTwoSourceCaptureFailed
+	case errors.Is(err, ErrMinerUThreeSourceCapturePartial):
+		return ErrMinerUThreeSourceCapturePartial
+	case errors.Is(err, ErrMinerUThreeSourceCaptureFailed):
+		return ErrMinerUThreeSourceCaptureFailed
 	default:
-		return ErrMinerUTwoSourcePreflight
+		return ErrMinerUThreeSourcePreflight
 	}
 }
