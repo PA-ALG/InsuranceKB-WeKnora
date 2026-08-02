@@ -68,9 +68,10 @@
 | 058 | incremental-changeset-conflict-retraction | ✅ 已合入 main（PR #86） | 051 Child E；纯确定性 affected-only ChangeSet draft、字段级来源权威、冲突与独占支持撤回；零 migration/DB/provider/Release |
 | 059 | fixture-candidate-human-batch | ✅ 已合入 main | 051 Child F 的 PR1；直接消费 058 public contract，仅 fixture Candidate + human_batch envelope，PR2 才拥有 CAS activate/pinned/revert |
 | 060 | mineru-cloud-native-parsed-document-adapter | ✅ 已合入 main（PR #88） | 保留 MinerU pipeline `content_list.json` 原生结构，经过 Go ReadResult 脱敏 sidecar 桥接到 053；provider/live=0 |
-| 061 | 596-1-vertical-falsification | `IMPLEMENTATION IN PROGRESS` | exact 三 PDF / Schema60 的解析准入、双臂冻结与 Golden-blind 质量证伪；capture 工具不单独占用 OpenSpec 编号 |
-| 062 | mineru-native-cross-page-falsification | `IMPLEMENTATION IN PROGRESS` | exact two-document native middle.json fact projection；provider/live=0 |
-| 063+ | （空闲） | | 先占号再开目录 |
+| 061 | 596-1-vertical-falsification | ✅ 已合入 main | exact 三 PDF / Schema60 的解析准入、双臂冻结与 Golden-blind 质量证伪；capture 工具不单独占用 OpenSpec 编号 |
+| 062 | mineru-native-cross-page-falsification | ✅ 已合入 main（PR #92） | exact two-document native middle.json fact projection；provider/live=0 |
+| 063 | mineru-two-source-capture-runner | `DELIVERY IN PROGRESS / PROVIDER NOT RUN` | task-local exact terms→rate runner；只组合061/062 capture API，零retry/fallback |
+| 064+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
