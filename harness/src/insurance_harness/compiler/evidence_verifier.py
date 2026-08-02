@@ -23,6 +23,7 @@ from pydantic import (
     StrictInt,
     StrictStr,
     StringConstraints,
+    ValidationError,
     computed_field,
     model_validator,
 )
@@ -68,6 +69,9 @@ RepairOutcome = Literal["COMPLETE", "REPAIR", "EXHAUSTED"]
 VERIFICATION_BATCH_OBJECT_TYPE: Final[str] = "evidence-verification-batch.v1"
 TARGETED_REPAIR_PLAN_OBJECT_TYPE: Final[str] = "targeted-repair-plan.v1"
 REPAIR_RESOLUTION_OBJECT_TYPE: Final[str] = "targeted-repair-resolution.v1"
+FREEFORM_EVIDENCE_BINDING_OBJECT_TYPE: Final[str] = (
+    "freeform-arm-evidence-binding-receipt.v1"
+)
 SIGNED_DECIMAL_PATTERN: Final[str] = r"[+-]?\d+(?:\.\d+)?"
 
 
@@ -200,6 +204,186 @@ class EvidenceSnapshotV1(_FrozenModel):
             raise ValueError("quote_snapshot_hash_mismatch")
         if self.value_snapshot_sha256 != _sha256_text(self.value_snapshot):
             raise ValueError("value_snapshot_hash_mismatch")
+        return self
+
+
+class FreeformEvidenceV1(_FrozenModel):
+    """Mechanical Evidence custody for a freeform field value.
+
+    The value itself is intentionally absent from this DTO: 057 proves that the
+    quote belongs to an exact parsed locator, while 061 owns semantic scoring.
+    """
+
+    field_id: NonBlankStr
+    source_sha256: Sha256Hex
+    source_revision_id: NonBlankStr
+    parse_attempt_id: NonBlankStr
+    parsed_document_hash: Sha256Hex
+    parse_manifest_hash: Sha256Hex
+    page_number: Annotated[StrictInt, Field(gt=0)]
+    block_id: NonBlankStr | None = None
+    table_id: NonBlankStr | None = None
+    cell_id: NonBlankStr | None = None
+    row_index: NonNegativeInt | None = None
+    column_index: NonNegativeInt | None = None
+    header_snapshot: NonBlankStr | None = None
+    row_span: Annotated[StrictInt, Field(gt=0)] | None = None
+    column_span: Annotated[StrictInt, Field(gt=0)] | None = None
+    locator: EvidenceLocatorSnapshotV1
+    quote_snapshot: NonBlankStr
+    quote_snapshot_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def require_quote_snapshot_hash(self) -> Self:
+        if self.quote_snapshot_sha256 != _sha256_text(self.quote_snapshot):
+            raise ValueError("quote_snapshot_hash_mismatch")
+        cell_shape = (
+            self.table_id,
+            self.row_index,
+            self.column_index,
+            self.row_span,
+            self.column_span,
+        )
+        if self.cell_id is not None and any(item is None for item in cell_shape):
+            raise ValueError("cell Evidence requires complete table coordinates")
+        if self.cell_id is None and any(item is not None for item in cell_shape[1:]):
+            raise ValueError("cell coordinates require a cell Evidence declaration")
+        if self.header_snapshot is not None and self.table_id is None:
+            raise ValueError("header snapshot requires a table Evidence declaration")
+        return self
+
+
+def _freeform_evidence_key(item: FreeformEvidenceV1) -> tuple[str, ...]:
+    def optional_int(value: int | None) -> str:
+        return "" if value is None else f"{value:020d}"
+
+    return (
+        item.source_revision_id,
+        item.parse_attempt_id,
+        item.parsed_document_hash,
+        item.parse_manifest_hash,
+        item.source_sha256,
+        f"{item.page_number:020d}",
+        item.block_id or "",
+        item.table_id or "",
+        item.cell_id or "",
+        optional_int(item.row_index),
+        optional_int(item.column_index),
+        item.header_snapshot or "",
+        optional_int(item.row_span),
+        optional_int(item.column_span),
+        item.locator.subject_type,
+        item.locator.subject_ref,
+        item.quote_snapshot_sha256,
+    )
+
+
+class FreeformFieldOutputV1(_FrozenModel):
+    product_version_id: NonBlankStr
+    field_id: NonBlankStr
+    state: TriState
+    value_snapshot: NonBlankStr | None
+    evidence: tuple[FreeformEvidenceV1, ...]
+
+    @model_validator(mode="after")
+    def require_exact_field_shape(self) -> Self:
+        if self.state == "unknown":
+            if self.value_snapshot is not None or self.evidence:
+                raise ValueError("unknown freeform field cannot carry value or Evidence")
+            return self
+        if self.value_snapshot is None or not self.evidence:
+            raise ValueError("known freeform field requires value and Evidence")
+        if any(item.field_id != self.field_id for item in self.evidence):
+            raise ValueError("freeform Evidence field mismatch")
+        keys = tuple(_freeform_evidence_key(item) for item in self.evidence)
+        if keys != tuple(sorted(keys)) or len(keys) != len(set(keys)):
+            raise ValueError("freeform Evidence must be canonical and unique")
+        return self
+
+
+class FreeformDocumentBindingV1(_FrozenModel):
+    source_id: NonBlankStr
+    source_revision_id: NonBlankStr
+    source_sha256: Sha256Hex
+    parse_attempt_id: NonBlankStr
+    parsed_document_hash: Sha256Hex
+    parse_manifest_hash: Sha256Hex
+
+
+def _freeform_document_key(item: FreeformDocumentBindingV1) -> tuple[str, ...]:
+    return (
+        item.source_revision_id,
+        item.parse_attempt_id,
+        item.parsed_document_hash,
+        item.parse_manifest_hash,
+    )
+
+
+def _freeform_receipt_payload(
+    *,
+    contract: str,
+    product_version_id: str,
+    field_id: str,
+    state: TriState,
+    value_snapshot: str | None,
+    documents: tuple[FreeformDocumentBindingV1, ...],
+    evidence: tuple[FreeformEvidenceV1, ...],
+) -> dict[str, object]:
+    return {
+        "contract": contract,
+        "product_version_id": product_version_id,
+        "field_id": field_id,
+        "state": state,
+        "value_snapshot": value_snapshot,
+        "documents": tuple(item.model_dump(mode="python") for item in documents),
+        "evidence": tuple(item.model_dump(mode="python") for item in evidence),
+    }
+
+
+class FreeformEvidenceBindingReceiptV1(_FrozenModel):
+    contract: Literal["freeform-arm-evidence-binding-receipt.v1"]
+    product_version_id: NonBlankStr
+    field_id: NonBlankStr
+    state: TriState
+    value_snapshot: NonBlankStr | None
+    documents: tuple[FreeformDocumentBindingV1, ...]
+    evidence: tuple[FreeformEvidenceV1, ...]
+    receipt_hash: Sha256Hex
+
+    @model_validator(mode="after")
+    def require_exact_receipt_hash(self) -> Self:
+        evidence_keys = tuple(_freeform_evidence_key(item) for item in self.evidence)
+        document_keys = tuple(_freeform_document_key(item) for item in self.documents)
+        evidence_members = {item[:4] for item in evidence_keys}
+        if self.state == "unknown":
+            if self.value_snapshot is not None or self.evidence or self.documents:
+                raise ValueError("unknown freeform receipt cannot carry custody")
+        elif (
+            self.value_snapshot is None
+            or not self.evidence
+            or not self.documents
+            or any(item.field_id != self.field_id for item in self.evidence)
+            or evidence_keys != tuple(sorted(evidence_keys))
+            or len(evidence_keys) != len(set(evidence_keys))
+            or document_keys != tuple(sorted(document_keys))
+            or len(document_keys) != len(set(document_keys))
+            or evidence_members != set(document_keys)
+        ):
+            raise ValueError("freeform receipt custody mismatch")
+        expected = canonical_hash(
+            FREEFORM_EVIDENCE_BINDING_OBJECT_TYPE,
+            _freeform_receipt_payload(
+                contract=self.contract,
+                product_version_id=self.product_version_id,
+                field_id=self.field_id,
+                state=self.state,
+                value_snapshot=self.value_snapshot,
+                documents=self.documents,
+                evidence=self.evidence,
+            ),
+        )
+        if self.receipt_hash != expected:
+            raise ValueError("freeform_receipt_hash_mismatch")
         return self
 
 
@@ -483,6 +667,263 @@ def _locator_fact(
                 cell.content_hash,
             )
     return None
+
+
+def _validate_freeform_field_output(value: FreeformFieldOutputV1) -> FreeformFieldOutputV1:
+    try:
+        return FreeformFieldOutputV1.model_validate(value.model_dump(mode="python"))
+    except (ValidationError, AttributeError, TypeError, ValueError):
+        raise VerifierContractError("freeform_field_output_invalid") from None
+
+
+def _validate_parsed_pair(
+    document: ParsedDocumentV1,
+    manifest: ParseManifestV1,
+) -> tuple[ParsedDocumentV1, ParseManifestV1]:
+    try:
+        exact_document = ParsedDocumentV1.model_validate(
+            document.model_dump(mode="python", exclude={"document_hash"})
+        )
+        exact_manifest = ParseManifestV1.model_validate(
+            manifest.model_dump(mode="python", exclude={"manifest_hash"})
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError):
+        raise VerifierContractError("freeform_parsed_pair_invalid") from None
+    if not _document_manifest_match(exact_document, exact_manifest):
+        raise VerifierContractError("freeform_document_manifest_mismatch")
+    return exact_document, exact_manifest
+
+
+def _freeform_binding_from_pair(
+    document: ParsedDocumentV1,
+    manifest: ParseManifestV1,
+) -> FreeformDocumentBindingV1:
+    return FreeformDocumentBindingV1(
+        source_id=document.subject.source_id,
+        source_revision_id=document.subject.source_revision_id,
+        source_sha256=document.subject.source_sha256,
+        parse_attempt_id=document.attempt.attempt_id,
+        parsed_document_hash=document.document_hash,
+        parse_manifest_hash=manifest.manifest_hash,
+    )
+
+
+def _verify_freeform_evidence(
+    *,
+    evidence: FreeformEvidenceV1,
+    document: ParsedDocumentV1,
+    manifest: ParseManifestV1,
+) -> None:
+    if (
+        evidence.source_sha256 != document.subject.source_sha256
+        or evidence.source_revision_id != document.subject.source_revision_id
+        or evidence.parse_attempt_id != document.attempt.attempt_id
+        or evidence.parsed_document_hash != document.document_hash
+        or evidence.parse_manifest_hash != manifest.manifest_hash
+    ):
+        raise VerifierContractError("freeform_evidence_identity_mismatch")
+    fact = _locator_fact(document, evidence.locator.subject_ref)
+    if fact is None:
+        raise VerifierContractError("freeform_locator_not_found")
+    kind, page_number, parent_refs, content_hash = fact
+    if evidence.locator.subject_type != kind:
+        raise VerifierContractError("freeform_locator_kind_mismatch")
+    if evidence.locator.page_number != page_number:
+        raise VerifierContractError("freeform_locator_page_mismatch")
+    if evidence.locator.parent_refs != parent_refs:
+        raise VerifierContractError("freeform_locator_parent_mismatch")
+    if evidence.locator.content_snapshot_sha256 != content_hash:
+        raise VerifierContractError("freeform_content_snapshot_mismatch")
+    if not _quote_occurs(evidence.quote_snapshot, evidence.locator.content_snapshot):
+        raise VerifierContractError("freeform_quote_not_found")
+    if evidence.page_number != page_number:
+        raise VerifierContractError("freeform_arm_locator_mismatch")
+
+    blocks = {item.block_id: item for item in document.blocks}
+    tables = {item.table_id: item for item in document.tables}
+    cells = {item.cell_id: item for item in document.cells}
+    if evidence.block_id is not None:
+        block = blocks.get(evidence.block_id)
+        if block is None or block.locator.page_number != evidence.page_number:
+            raise VerifierContractError("freeform_arm_locator_mismatch")
+    if evidence.cell_id is not None:
+        cell = cells.get(evidence.cell_id)
+        table = tables.get(evidence.table_id or "")
+        if (
+            cell is None
+            or table is None
+            or evidence.locator.subject_type != "cell"
+            or evidence.locator.subject_ref != cell.cell_id
+            or cell.table_id != table.table_id
+            or cell.locator.page_number != evidence.page_number
+            or table.locator.page_number != evidence.page_number
+            or cell.locator.row_index != evidence.row_index
+            or cell.locator.column_index != evidence.column_index
+            or cell.locator.row_span != evidence.row_span
+            or cell.locator.column_span != evidence.column_span
+        ):
+            raise VerifierContractError("freeform_arm_locator_mismatch")
+    elif evidence.table_id is not None:
+        table = tables.get(evidence.table_id)
+        if (
+            table is None
+            or table.locator.page_number != evidence.page_number
+            or evidence.locator.subject_type != "table"
+            or evidence.locator.subject_ref != table.table_id
+        ):
+            raise VerifierContractError("freeform_arm_locator_mismatch")
+    elif evidence.block_id is not None:
+        if (
+            evidence.locator.subject_type != "block"
+            or evidence.locator.subject_ref != evidence.block_id
+        ):
+            raise VerifierContractError("freeform_arm_locator_mismatch")
+    else:
+        page_ids = {
+            item.locator.page_number: item.page_id for item in document.pages
+        }
+        if (
+            evidence.locator.subject_type != "page"
+            or evidence.locator.subject_ref != page_ids.get(evidence.page_number)
+        ):
+            raise VerifierContractError("freeform_arm_locator_mismatch")
+
+    if evidence.header_snapshot is not None:
+        table = tables.get(evidence.table_id or "")
+        header_hash = _sha256_text(evidence.header_snapshot)
+        if table is None or not any(
+            cells[cell_id].content_hash == header_hash
+            for cell_id in table.header_cell_ids
+            if cell_id in cells
+        ):
+            raise VerifierContractError("freeform_header_snapshot_mismatch")
+
+
+def bind_freeform_arm_evidence(
+    *,
+    field_output: FreeformFieldOutputV1,
+    documents: tuple[ParsedDocumentV1, ...],
+    manifests: tuple[ParseManifestV1, ...],
+) -> FreeformEvidenceBindingReceiptV1:
+    """Bind exact parsed custody without judging freeform semantic entailment."""
+
+    output = _validate_freeform_field_output(field_output)
+    if output.state == "unknown":
+        if documents or manifests:
+            raise VerifierContractError("freeform_unknown_custody_forbidden")
+        bindings: tuple[FreeformDocumentBindingV1, ...] = ()
+    else:
+        if not documents or len(documents) != len(manifests):
+            raise VerifierContractError("freeform_document_membership_mismatch")
+        pairs = tuple(
+            _validate_parsed_pair(document, manifest)
+            for document, manifest in zip(documents, manifests, strict=True)
+        )
+        if any(
+            document.subject.product_version_id != output.product_version_id
+            for document, _ in pairs
+        ):
+            raise VerifierContractError("freeform_product_version_mismatch")
+        bindings = tuple(
+            _freeform_binding_from_pair(document, manifest)
+            for document, manifest in pairs
+        )
+        document_keys = tuple(_freeform_document_key(item) for item in bindings)
+        if (
+            document_keys != tuple(sorted(document_keys))
+            or len(document_keys) != len(set(document_keys))
+        ):
+            raise VerifierContractError("freeform_document_order_invalid")
+        pairs_by_key = dict(zip(document_keys, pairs, strict=True))
+        evidence_member_keys = {
+            (
+                item.source_revision_id,
+                item.parse_attempt_id,
+                item.parsed_document_hash,
+                item.parse_manifest_hash,
+            )
+            for item in output.evidence
+        }
+        if evidence_member_keys != set(document_keys):
+            raise VerifierContractError("freeform_document_membership_mismatch")
+        for item in output.evidence:
+            member_key = (
+                item.source_revision_id,
+                item.parse_attempt_id,
+                item.parsed_document_hash,
+                item.parse_manifest_hash,
+            )
+            document, manifest = pairs_by_key[member_key]
+            _verify_freeform_evidence(
+                evidence=item,
+                document=document,
+                manifest=manifest,
+            )
+
+    payload = _freeform_receipt_payload(
+        contract=FREEFORM_EVIDENCE_BINDING_OBJECT_TYPE,
+        product_version_id=output.product_version_id,
+        field_id=output.field_id,
+        state=output.state,
+        value_snapshot=output.value_snapshot,
+        documents=bindings,
+        evidence=output.evidence,
+    )
+    return FreeformEvidenceBindingReceiptV1(
+        contract="freeform-arm-evidence-binding-receipt.v1",
+        product_version_id=output.product_version_id,
+        field_id=output.field_id,
+        state=output.state,
+        value_snapshot=output.value_snapshot,
+        documents=bindings,
+        evidence=output.evidence,
+        receipt_hash=canonical_hash(FREEFORM_EVIDENCE_BINDING_OBJECT_TYPE, payload),
+    )
+
+
+def replay_freeform_arm_evidence_binding(
+    *,
+    receipt: FreeformEvidenceBindingReceiptV1,
+    documents: tuple[ParsedDocumentV1, ...],
+    manifests: tuple[ParseManifestV1, ...],
+) -> FreeformEvidenceBindingReceiptV1:
+    """Recompute one receipt from its exact field and parsed custody."""
+
+    try:
+        payload = _freeform_receipt_payload(
+            contract=receipt.contract,
+            product_version_id=receipt.product_version_id,
+            field_id=receipt.field_id,
+            state=receipt.state,
+            value_snapshot=receipt.value_snapshot,
+            documents=receipt.documents,
+            evidence=receipt.evidence,
+        )
+        expected_hash = canonical_hash(FREEFORM_EVIDENCE_BINDING_OBJECT_TYPE, payload)
+    except (AttributeError, TypeError, ValueError):
+        raise VerifierContractError("freeform_receipt_invalid") from None
+    if receipt.receipt_hash != expected_hash:
+        raise VerifierContractError("freeform_receipt_hash_mismatch")
+    try:
+        exact_receipt = FreeformEvidenceBindingReceiptV1.model_validate(
+            receipt.model_dump(mode="python")
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError):
+        raise VerifierContractError("freeform_receipt_invalid") from None
+    rebound = bind_freeform_arm_evidence(
+        field_output=FreeformFieldOutputV1(
+            product_version_id=exact_receipt.product_version_id,
+            field_id=exact_receipt.field_id,
+            state=exact_receipt.state,
+            value_snapshot=exact_receipt.value_snapshot,
+            evidence=exact_receipt.evidence,
+        ),
+        documents=documents,
+        manifests=manifests,
+    )
+    if rebound != exact_receipt:
+        raise VerifierContractError("freeform_receipt_binding_mismatch")
+    return exact_receipt
 
 
 def _verify_evidence(
@@ -856,6 +1297,10 @@ __all__ = [
     "EvidenceReviewItemV1",
     "EvidenceSnapshotV1",
     "EvidenceSupportScopeV1",
+    "FreeformDocumentBindingV1",
+    "FreeformEvidenceBindingReceiptV1",
+    "FreeformEvidenceV1",
+    "FreeformFieldOutputV1",
     "FieldCandidateV1",
     "FieldRuleV1",
     "GapV1",
@@ -867,7 +1312,9 @@ __all__ = [
     "VerifierContractError",
     "apply_targeted_repair",
     "bind_054_attempt_receipt",
+    "bind_freeform_arm_evidence",
     "plan_targeted_repair",
+    "replay_freeform_arm_evidence_binding",
     "value_snapshot",
     "verify_evidence_batch",
 ]

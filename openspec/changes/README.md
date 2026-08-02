@@ -71,7 +71,8 @@
 | 061 | 596-1-vertical-falsification | ✅ 已合入 main | exact 三 PDF / Schema60 的解析准入、双臂冻结与 Golden-blind 质量证伪；capture 工具不单独占用 OpenSpec 编号 |
 | 062 | mineru-native-cross-page-falsification | ✅ 已合入 main（PR #92） | exact two-document native middle.json fact projection；provider/live=0 |
 | 063 | mineru-two-source-capture-runner | `DELIVERY IN PROGRESS / PROVIDER NOT RUN` | task-local exact terms→rate runner；只组合061/062 capture API，零retry/fallback |
-| 064+ | （空闲） | | 先占号再开目录 |
+| 064 | freeform-arm-evidence-binding | `IMPLEMENTATION IN PROGRESS` | 扩展 057：自由文本 field output 与 exact ParsedDocument/ParseManifest locator+quote 的可重放 binding receipt；语义正确性仍归 061 Golden scorer |
+| 065+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
