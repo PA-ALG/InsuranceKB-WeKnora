@@ -116,3 +116,18 @@ Provider, model, live, database, PostgreSQL, WeKnora, full suite, commit, push, 
 Ready, merge. Focused deterministic tests did read exact approved `596.jsonl` bytes to
 verify file-hash/strict-parser custody; no Golden value entered a prompt, repair choice
 or provider execution.
+
+## 2026-08-02 post-merge capture-policy corrective
+
+- A bounded real capture on execution base `34f011d17bf575c2cfd089585e7c1f68efb19ac8`
+  used capture-library blobs identical to main `14ede0860785fbb5a0cd36c539fcc6335b04ca58`.
+  Credential admission succeeded without persistence or output. Terms reached one allocation,
+  one upload and twenty status polls, then stopped before ZIP download; brochure and rate made
+  zero calls. No evidence artifact was published and no automatic retry or fallback occurred.
+- Root cause: `minerUCaptureTimeout=9m30s` and `defaultPollInterval=3s` allowed 190 bounded polls,
+  while the independent fixed cap was 20 (about 57 seconds of waiting after the first poll).
+- Corrective RED failed with `got=20 want=190`. GREEN derives the fixed bounded poll cap from
+  `minerUCaptureTimeout/defaultPollInterval`; transport errors remain fail-fast, production sleep
+  remains three seconds, redirects remain zero, and retry/fallback behavior is unchanged.
+- Affected MinerU tests and `go vet ./internal/infrastructure/docparser`: `PASS`.
+- Corrected provider capture, commit, push, PR, Ready and merge: `NOT RUN`.
