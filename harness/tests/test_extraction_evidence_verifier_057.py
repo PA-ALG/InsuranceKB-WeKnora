@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from decimal import Decimal
+from typing import Literal
 
 import pytest
 
@@ -17,12 +18,17 @@ from insurance_harness.compiler.evidence_verifier import (
     EvidenceSupportScopeV1,
     FieldCandidateV1,
     FieldRuleV1,
+    FreeformEvidenceBindingReceiptV1,
+    FreeformEvidenceV1,
+    FreeformFieldOutputV1,
     RepairBudgetV1,
     TargetedRepairPlanV1,
     VerificationBatchV1,
     VerifierContractError,
     apply_targeted_repair,
+    bind_freeform_arm_evidence,
     plan_targeted_repair,
+    replay_freeform_arm_evidence_binding,
     value_snapshot,
     verify_evidence_batch,
 )
@@ -76,24 +82,38 @@ def _value(kind: str, **updates: object) -> CandidateValueV1:
     return CandidateValueV1.model_validate({"kind": kind, **updates})
 
 
-def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
+def _document(
+    *,
+    document_index: int = 1,
+    source_name: str = "terms",
+    source_revision_id: str = "revision-057",
+    source_sha256: str = "a" * 64,
+    material_role: Literal["terms", "brochure", "rate_table"] = "terms",
+    profile_id: str = "profile-terms-596-1",
+    header_text: str | None = None,
+    cell_text: str = (
+        "10000CNY 12.5 90day 90month 门诊+住院 2026-02-29 2024-02-290 "
+        "1..100 10..1 -10 -10CNY -1..10 10+20=30 10+20=31 不设年度免赔额"
+    ),
+) -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
+    page_id = f"page-{document_index}"
+    block_id = f"block-{document_index}"
+    table_id = f"table-{document_index}"
+    cell_id = f"cell-{document_index}"
+    header_cell_id = f"header-cell-{document_index}"
     page_text = "本产品596-1在标准条件下，住院医疗年度免赔额为10000元。"
     block_text = "标准条件适用于596-1。"
     table_text = "年度免赔额"
-    cell_text = (
-        "10000CNY 12.5 90day 90month 门诊+住院 2026-02-29 2024-02-290 "
-        "1..100 10..1 -10 -10CNY -1..10 10+20=30 10+20=31 不设年度免赔额"
-    )
     document = ParsedDocumentV1(
         contract="parsed-document.v1",
         subject=ParseSubjectV1(
             space_id="space-057",
-            source_id="source-terms",
-            source_revision_id="revision-057",
+            source_id=f"source-{source_name}",
+            source_revision_id=source_revision_id,
             product_version_id="596-1",
-            material_profile_id="profile-terms-596-1",
+            material_profile_id=profile_id,
             material_profile_binding_hash="b" * 64,
-            source_sha256="a" * 64,
+            source_sha256=source_sha256,
             raw_artifact_hash="c" * 64,
             canonical_envelope_hash="d" * 64,
         ),
@@ -125,7 +145,7 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
         ),
         pages=(
             ParsePageV1(
-                page_id="page-1",
+                page_id=page_id,
                 order_index=0,
                 locator=PageLocatorV1(page_number=1),
                 content_hash=_sha(page_text),
@@ -134,7 +154,7 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
         ),
         blocks=(
             ParseBlockV1(
-                block_id="block-1",
+                block_id=block_id,
                 order_index=0,
                 locator=BlockLocatorV1(
                     page_number=1,
@@ -147,7 +167,7 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
         ),
         tables=(
             ParseTableV1(
-                table_id="table-1",
+                table_id=table_id,
                 order_index=0,
                 locator=TableLocatorV1(
                     page_number=1,
@@ -156,21 +176,43 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
                 ),
                 content_hash=_sha(table_text),
                 structure_hash="3" * 64,
-                row_count=1,
+                row_count=2 if header_text is not None else 1,
                 column_count=1,
-                header_cell_ids=(),
+                header_cell_ids=(header_cell_id,) if header_text is not None else (),
                 continuation_table_ids=(),
             ),
         ),
         cells=(
+            *(
+                (
+                    ParseCellV1(
+                        cell_id=header_cell_id,
+                        order_index=0,
+                        table_id=table_id,
+                        locator=CellLocatorV1(
+                            page_number=1,
+                            table_id=table_id,
+                            row_index=0,
+                            column_index=0,
+                            row_span=1,
+                            column_span=1,
+                            bbox=(Decimal(0), Decimal(10), Decimal(10), Decimal(20)),
+                        ),
+                        content_hash=_sha(header_text),
+                        structure_hash="5" * 64,
+                    ),
+                )
+                if header_text is not None
+                else ()
+            ),
             ParseCellV1(
-                cell_id="cell-1",
-                order_index=0,
-                table_id="table-1",
+                cell_id=cell_id,
+                order_index=1 if header_text is not None else 0,
+                table_id=table_id,
                 locator=CellLocatorV1(
                     page_number=1,
-                    table_id="table-1",
-                    row_index=0,
+                    table_id=table_id,
+                    row_index=1 if header_text is not None else 0,
                     column_index=0,
                     row_span=1,
                     column_span=1,
@@ -185,20 +227,20 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
         unsupported=(),
     )
     profile = MaterialProfile(
-        profile_id="profile-terms-596-1",
-        material_role="terms",
+        profile_id=profile_id,
+        material_role=material_role,
         source=SourceDocumentIdentity(
-            name="terms.pdf",
-            path="dataset/terms.pdf",
+            name=f"{source_name}.pdf",
+            path=f"dataset/{source_name}.pdf",
             size=1,
-            sha256="a" * 64,
+            sha256=source_sha256,
         ),
         document_type_id="insurance-terms",
         required_parse_capabilities=("ordered_pages",),
         parse_policy=ApprovedParsePolicy(
             policy_id="policy-057",
             policy_version="v1",
-            material_profile_id="profile-terms-596-1",
+            material_profile_id=profile_id,
             default_parser_profile_ref="approved-parser-profile:parser-neutral-default.v1",
             bounded_upgrade_profile_ref=None,
             upgrade_trigger_conditions=(),
@@ -214,10 +256,11 @@ def _document() -> tuple[ParsedDocumentV1, ParseManifestV1, dict[str, str]]:
         document,
         manifest,
         {
-            "page-1": page_text,
-            "block-1": block_text,
-            "table-1": table_text,
-            "cell-1": cell_text,
+            page_id: page_text,
+            block_id: block_text,
+            table_id: table_text,
+            cell_id: cell_text,
+            **({header_cell_id: header_text} if header_text is not None else {}),
         },
     )
 
@@ -1056,3 +1099,453 @@ def test_value_snapshot_is_canonical_and_binary_float_is_rejected() -> None:
 
     with pytest.raises(ValueError, match="binary float"):
         CandidateValueV1.model_validate({"kind": "number", "number": 1.5})
+
+
+def _freeform_evidence(
+    *,
+    document: ParsedDocumentV1,
+    manifest: ParseManifestV1,
+    contents: dict[str, str],
+    field_id: str = "claim_filing_requirements",
+    ref: str | None = None,
+    quote: str | None = None,
+) -> FreeformEvidenceV1:
+    cell = document.cells[-1]
+    subject_ref = ref or cell.cell_id
+    content = contents[subject_ref]
+    exact_quote = quote or content.split(" ", maxsplit=1)[0]
+    return FreeformEvidenceV1(
+        field_id=field_id,
+        source_sha256=document.subject.source_sha256,
+        source_revision_id=document.subject.source_revision_id,
+        parse_attempt_id=document.attempt.attempt_id,
+        parsed_document_hash=document.document_hash,
+        parse_manifest_hash=manifest.manifest_hash,
+        page_number=cell.locator.page_number,
+        block_id=None,
+        table_id=cell.table_id,
+        cell_id=cell.cell_id,
+        row_index=cell.locator.row_index,
+        column_index=cell.locator.column_index,
+        header_snapshot=None,
+        row_span=cell.locator.row_span,
+        column_span=cell.locator.column_span,
+        locator=EvidenceLocatorSnapshotV1(
+            subject_type="cell",
+            subject_ref=subject_ref,
+            page_number=cell.locator.page_number,
+            parent_refs=(document.pages[0].page_id, cell.table_id),
+            content_snapshot=content,
+            content_snapshot_sha256=_sha(content),
+        ),
+        quote_snapshot=exact_quote,
+        quote_snapshot_sha256=_sha(exact_quote),
+    )
+
+
+def _freeform_fixture() -> tuple[
+    FreeformFieldOutputV1,
+    tuple[ParsedDocumentV1, ...],
+    tuple[ParseManifestV1, ...],
+]:
+    terms, terms_manifest, terms_contents = _document()
+    brochure, brochure_manifest, brochure_contents = _document(
+        document_index=2,
+        source_name="brochure",
+        source_revision_id="revision-064-brochure",
+        source_sha256="9" * 64,
+        material_role="brochure",
+        profile_id="profile-brochure-596-1",
+        cell_text="理赔时应提交完整申请材料，并可按要求补充证明。",
+    )
+    evidence = (
+        _freeform_evidence(
+            document=terms,
+            manifest=terms_manifest,
+            contents=terms_contents,
+        ),
+        _freeform_evidence(
+            document=brochure,
+            manifest=brochure_manifest,
+            contents=brochure_contents,
+        ),
+    )
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id="claim_filing_requirements",
+        state="present",
+        value_snapshot="申请人应提交理赔材料；具体清单由后续语义评分判断。",
+        evidence=evidence,
+    )
+    return output, (terms, brochure), (terms_manifest, brochure_manifest)
+
+
+def test_freeform_multi_source_receipt_is_replayable_without_semantic_judgment() -> None:
+    output, documents, manifests = _freeform_fixture()
+
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=documents,
+        manifests=manifests,
+    )
+
+    assert receipt.field_id == output.field_id
+    assert receipt.value_snapshot == output.value_snapshot
+    assert tuple(item.parsed_document_hash for item in receipt.documents) == tuple(
+        item.document_hash for item in documents
+    )
+    assert replay_freeform_arm_evidence_binding(
+        receipt=receipt,
+        documents=documents,
+        manifests=manifests,
+    ) == receipt
+    assert bind_freeform_arm_evidence(
+        field_output=output,
+        documents=documents,
+        manifests=manifests,
+    ).receipt_hash == receipt.receipt_hash
+
+
+@pytest.mark.parametrize(
+    ("ref", "kind", "parents"),
+    [
+        ("page-1", "page", ()),
+        ("block-1", "block", ("page-1",)),
+        ("table-1", "table", ("page-1",)),
+        ("cell-1", "cell", ("page-1", "table-1")),
+    ],
+)
+def test_freeform_page_block_table_and_cell_locators_bind(
+    ref: str,
+    kind: Literal["page", "block", "table", "cell"],
+    parents: tuple[str, ...],
+) -> None:
+    document, manifest, contents = _document()
+    content = contents[ref]
+    evidence = _freeform_evidence(
+        document=document,
+        manifest=manifest,
+        contents=contents,
+    ).model_copy(
+        update={
+            "block_id": ref if kind == "block" else None,
+            "table_id": (
+                parents[-1] if kind == "cell" else ref if kind == "table" else None
+            ),
+            "cell_id": ref if kind == "cell" else None,
+            "row_index": 0 if kind == "cell" else None,
+            "column_index": 0 if kind == "cell" else None,
+            "row_span": 1 if kind == "cell" else None,
+            "column_span": 1 if kind == "cell" else None,
+            "locator": EvidenceLocatorSnapshotV1(
+                subject_type=kind,
+                subject_ref=ref,
+                page_number=1,
+                parent_refs=parents,
+                content_snapshot=content,
+                content_snapshot_sha256=_sha(content),
+            ),
+            "quote_snapshot": content,
+            "quote_snapshot_sha256": _sha(content),
+        }
+    )
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id=evidence.field_id,
+        state="present",
+        value_snapshot="自由文本语义值不需要逐字出现在 quote 中。",
+        evidence=(evidence,),
+    )
+
+    assert bind_freeform_arm_evidence(
+        field_output=output,
+        documents=(document,),
+        manifests=(manifest,),
+    ).evidence == (evidence,)
+
+
+def test_freeform_rate_locator_replays_all_arm_structure_and_header() -> None:
+    document, manifest, contents = _document(
+        document_index=3,
+        source_name="rate",
+        source_revision_id="revision-064-rate",
+        source_sha256="8" * 64,
+        material_role="rate_table",
+        profile_id="profile-rate-596-1",
+        header_text="年龄",
+        cell_text="30岁对应费率为0.12。",
+    )
+    evidence = _freeform_evidence(
+        document=document,
+        manifest=manifest,
+        contents=contents,
+        field_id="zh_7fe8603c08",
+        quote="0.12",
+    ).model_copy(
+        update={
+            "block_id": document.blocks[0].block_id,
+            "header_snapshot": "年龄",
+        }
+    )
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id=evidence.field_id,
+        state="present",
+        value_snapshot="0.12",
+        evidence=(evidence,),
+    )
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=(document,),
+        manifests=(manifest,),
+    )
+
+    assert receipt.evidence == (evidence,)
+    assert replay_freeform_arm_evidence_binding(
+        receipt=receipt,
+        documents=(document,),
+        manifests=(manifest,),
+    ) == receipt
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"source_sha256": "0" * 64},
+        {"page_number": 2},
+        {"block_id": "block-x"},
+        {"table_id": "table-x"},
+        {"cell_id": "cell-x"},
+        {"row_index": 0},
+        {"column_index": 1},
+        {"header_snapshot": "保额"},
+        {"row_span": 2},
+        {"column_span": 2},
+    ],
+)
+def test_freeform_arm_locator_mutation_cannot_bind_or_replay(
+    update: dict[str, object],
+) -> None:
+    document, manifest, contents = _document(
+        document_index=3,
+        source_name="rate",
+        source_revision_id="revision-064-rate",
+        source_sha256="8" * 64,
+        material_role="rate_table",
+        profile_id="profile-rate-596-1",
+        header_text="年龄",
+        cell_text="30岁对应费率为0.12。",
+    )
+    evidence = _freeform_evidence(
+        document=document,
+        manifest=manifest,
+        contents=contents,
+        field_id="zh_7fe8603c08",
+        quote="0.12",
+    ).model_copy(
+        update={
+            "block_id": document.blocks[0].block_id,
+            "header_snapshot": "年龄",
+        }
+    )
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id=evidence.field_id,
+        state="present",
+        value_snapshot="0.12",
+        evidence=(evidence,),
+    )
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=(document,),
+        manifests=(manifest,),
+    )
+    mutated_evidence = evidence.model_copy(update=update)
+
+    with pytest.raises(VerifierContractError):
+        bind_freeform_arm_evidence(
+            field_output=output.model_copy(update={"evidence": (mutated_evidence,)}),
+            documents=(document,),
+            manifests=(manifest,),
+        )
+    with pytest.raises(VerifierContractError, match="freeform_receipt_hash_mismatch"):
+        replay_freeform_arm_evidence_binding(
+            receipt=receipt.model_copy(update={"evidence": (mutated_evidence,)}),
+            documents=(document,),
+            manifests=(manifest,),
+        )
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"source_revision_id": "foreign-revision"},
+        {"parse_attempt_id": "foreign-attempt"},
+        {"parsed_document_hash": "0" * 64},
+        {"parse_manifest_hash": "1" * 64},
+    ],
+)
+def test_freeform_identity_drift_fails_closed(update: dict[str, str]) -> None:
+    output, documents, manifests = _freeform_fixture()
+    drifted = output.model_copy(
+        update={"evidence": (output.evidence[0].model_copy(update=update), *output.evidence[1:])}
+    )
+
+    with pytest.raises(VerifierContractError, match="freeform_document_membership_mismatch"):
+        bind_freeform_arm_evidence(
+            field_output=drifted,
+            documents=documents,
+            manifests=manifests,
+        )
+
+
+@pytest.mark.parametrize(
+    ("locator_update", "evidence_update", "reason"),
+    [
+        ({"subject_ref": "missing-cell"}, {}, "freeform_locator_not_found"),
+        ({"subject_type": "page"}, {}, "freeform_locator_kind_mismatch"),
+        ({"page_number": 2}, {}, "freeform_locator_page_mismatch"),
+        ({"parent_refs": ("page-1", "table-x")}, {}, "freeform_locator_parent_mismatch"),
+        (
+            {
+                "content_snapshot": "different content",
+                "content_snapshot_sha256": _sha("different content"),
+            },
+            {},
+            "freeform_content_snapshot_mismatch",
+        ),
+        (
+            {},
+            {
+                "quote_snapshot": "not in content",
+                "quote_snapshot_sha256": _sha("not in content"),
+            },
+            "freeform_quote_not_found",
+        ),
+    ],
+)
+def test_freeform_locator_content_and_quote_fail_closed(
+    locator_update: dict[str, object],
+    evidence_update: dict[str, object],
+    reason: str,
+) -> None:
+    output, documents, manifests = _freeform_fixture()
+    evidence = output.evidence[0]
+    locator = evidence.locator.model_copy(update=locator_update)
+    drifted_evidence = evidence.model_copy(
+        update={"locator": locator, **evidence_update}
+    )
+    drifted = output.model_copy(
+        update={"evidence": (drifted_evidence, *output.evidence[1:])}
+    )
+
+    with pytest.raises(VerifierContractError, match=reason):
+        bind_freeform_arm_evidence(
+            field_output=drifted,
+            documents=documents,
+            manifests=manifests,
+        )
+
+
+def test_freeform_membership_shape_and_order_fail_closed() -> None:
+    output, documents, manifests = _freeform_fixture()
+    cases = (
+        output.model_copy(update={"evidence": ()}),
+        output.model_copy(update={"evidence": (output.evidence[0], output.evidence[0])}),
+        output.model_copy(update={"evidence": tuple(reversed(output.evidence))}),
+        output.model_copy(update={"evidence": (output.evidence[0],)}),
+        output.model_copy(update={"state": "unknown", "value_snapshot": None}),
+    )
+    for malformed in cases:
+        with pytest.raises(VerifierContractError):
+            bind_freeform_arm_evidence(
+                field_output=malformed,
+                documents=documents,
+                manifests=manifests,
+            )
+
+    with pytest.raises(VerifierContractError, match="freeform_document_order_invalid"):
+        bind_freeform_arm_evidence(
+            field_output=output,
+            documents=tuple(reversed(documents)),
+            manifests=tuple(reversed(manifests)),
+        )
+    with pytest.raises(VerifierContractError, match="freeform_document_manifest_mismatch"):
+        bind_freeform_arm_evidence(
+            field_output=output,
+            documents=documents,
+            manifests=tuple(reversed(manifests)),
+        )
+
+
+def test_freeform_unknown_has_no_evidence_or_document_custody() -> None:
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id="claim_filing_requirements",
+        state="unknown",
+        value_snapshot=None,
+        evidence=(),
+    )
+
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=(),
+        manifests=(),
+    )
+
+    assert receipt.evidence == ()
+    assert receipt.documents == ()
+    assert replay_freeform_arm_evidence_binding(
+        receipt=receipt,
+        documents=(),
+        manifests=(),
+    ) == receipt
+
+
+def test_freeform_receipt_hash_binds_value_evidence_and_document_closure() -> None:
+    output, documents, manifests = _freeform_fixture()
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=documents,
+        manifests=manifests,
+    )
+    changed_value = bind_freeform_arm_evidence(
+        field_output=output.model_copy(update={"value_snapshot": "不同的自由文本值"}),
+        documents=documents,
+        manifests=manifests,
+    )
+    assert changed_value.receipt_hash != receipt.receipt_hash
+
+    evidence = output.evidence[0]
+    changed_quote = "12.5"
+    changed_evidence = evidence.model_copy(
+        update={
+            "quote_snapshot": changed_quote,
+            "quote_snapshot_sha256": _sha(changed_quote),
+        }
+    )
+    changed_output = output.model_copy(
+        update={"evidence": (changed_evidence, *output.evidence[1:])}
+    )
+    changed_receipt = bind_freeform_arm_evidence(
+        field_output=changed_output,
+        documents=documents,
+        manifests=manifests,
+    )
+    assert changed_receipt.receipt_hash != receipt.receipt_hash
+
+    forged = receipt.model_copy(update={"value_snapshot": "mutated"})
+    assert isinstance(forged, FreeformEvidenceBindingReceiptV1)
+    with pytest.raises(VerifierContractError, match="freeform_receipt_hash_mismatch"):
+        replay_freeform_arm_evidence_binding(
+            receipt=forged,
+            documents=documents,
+            manifests=manifests,
+        )
+
+
+def test_freeform_extension_does_not_import_061_or_semantic_judge() -> None:
+    source = evidence_verifier.__loader__.get_source(evidence_verifier.__name__)  # type: ignore[union-attr]
+    assert source is not None
+    assert "vertical_falsification" not in source
+    assert "semantic_judge" not in source
