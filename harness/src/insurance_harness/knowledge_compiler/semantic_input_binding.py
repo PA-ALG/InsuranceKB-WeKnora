@@ -60,6 +60,7 @@ from insurance_harness.compiler.extraction_tasks import (
     build_extraction_task_profile,
 )
 from insurance_harness.compiler.material_profiles import (
+    FieldAuthority,
     MaterialProfileCatalog,
     MaterialProfileResolution,
     material_profile_catalog_hash,
@@ -104,6 +105,22 @@ SEMANTIC_COMPOSITION_OBJECT_TYPE: Final[str] = "semantic-input-composition-596-1
 SEMANTIC_REPAIR_BUNDLE_OBJECT_TYPE: Final[str] = "semantic-repair-bundle-596-1.v1"
 BOUND_SEMANTIC_ATTEMPT_OBJECT_TYPE: Final[str] = "bound-semantic-attempt-596-1.v1"
 SEMANTIC_ATTEMPT_SET_OBJECT_TYPE: Final[str] = "semantic-attempt-set-596-1.v1"
+SOURCE_AUTHORITY_REBOUND_FIELDS: Final[frozenset[str]] = frozenset(
+    {
+        "zh_0c5a8e59e2",
+        "zh_14b93ce275",
+        "zh_17a83223e4",
+        "zh_f8cc996739",
+        "zh_fd9a0b9fa3",
+    }
+)
+_SOURCE_AUTHORITY_REBOUND_TARGET: Final[dict[str, int]] = {
+    "zh_0c5a8e59e2": 0,
+    "zh_14b93ce275": 1,
+    "zh_17a83223e4": 1,
+    "zh_f8cc996739": 3,
+    "zh_fd9a0b9fa3": 0,
+}
 
 
 class SemanticBindingContractError(ValueError):
@@ -804,18 +821,80 @@ class SharedSemanticTaskPlanV1(_FrozenModel):
         return self
 
 
+def _effective_authorities(
+    catalog: MaterialProfileCatalog,
+) -> dict[MaterialRole, FieldAuthority]:
+    """Apply the exact 072 correction without changing the shared 052 catalog."""
+
+    original = {item.primary_role: item for item in catalog.field_authority_groups}
+    terms_fields = tuple(
+        sorted(set(original["terms"].field_ids) | SOURCE_AUTHORITY_REBOUND_FIELDS)
+    )
+    brochure_fields = tuple(
+        sorted(set(original["brochure"].field_ids) - SOURCE_AUTHORITY_REBOUND_FIELDS)
+    )
+    effective = {
+        **original,
+        "terms": original["terms"].model_copy(update={"field_ids": terms_fields}),
+        "brochure": original["brochure"].model_copy(
+            update={"field_ids": brochure_fields}
+        ),
+    }
+    try:
+        return {
+            role: FieldAuthority.model_validate(authority.model_dump(mode="python"))
+            for role, authority in effective.items()
+        }
+    except (ValidationError, ValueError):
+        raise SemanticBindingContractError("MATERIAL_AUTHORITY_MISMATCH") from None
+
+
 def _balanced_four(fields: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
     quotient, remainder = divmod(len(fields), 4)
     result: list[tuple[str, ...]] = []
     cursor = 0
     for index in range(4):
         width = quotient + (1 if index < remainder else 0)
-        partition = tuple(sorted(fields[cursor : cursor + width]))
-        result.append(partition)
+        result.append(tuple(sorted(fields[cursor : cursor + width])))
         cursor += width
     if cursor != len(fields) or any(not partition for partition in result):
         raise SemanticBindingContractError("SCHEMA60_TASK_PARTITION_INVALID")
     return tuple(result)
+
+
+def _semantic_partitions(
+    catalog: MaterialProfileCatalog,
+) -> dict[Literal["terms", "brochure"], tuple[tuple[str, ...], ...]]:
+    """Move only the five approved fields while retaining all prior task IDs."""
+
+    original = {item.primary_role: item for item in catalog.field_authority_groups}
+    partitions = {
+        role: [list(partition) for partition in _balanced_four(
+            tuple(
+                field_id
+                for field_id in APPROVED_SCHEMA60_FIELD_IDS
+                if field_id in original[role].field_ids
+            )
+        )]
+        for role in ("terms", "brochure")
+    }
+    for field_id, target in _SOURCE_AUTHORITY_REBOUND_TARGET.items():
+        source = next(
+            (partition for partition in partitions["brochure"] if field_id in partition),
+            None,
+        )
+        if source is None:
+            raise SemanticBindingContractError("SCHEMA60_TASK_PARTITION_INVALID")
+        source.remove(field_id)
+        partitions["terms"][target].append(field_id)
+    return {
+        "terms": tuple(
+            tuple(sorted(partition)) for partition in partitions["terms"]
+        ),
+        "brochure": tuple(
+            tuple(sorted(partition)) for partition in partitions["brochure"]
+        ),
+    }
 
 
 def _validated_authority(
@@ -936,7 +1015,7 @@ def build_596_1_shared_task_blueprint(
     except (ValidationError, AttributeError, TypeError, ValueError):
         raise SemanticBindingContractError("EXECUTION_IDENTITY_MISMATCH") from None
 
-    authorities = {item.primary_role: item for item in exact_catalog.field_authority_groups}
+    authorities = _effective_authorities(exact_catalog)
     if set(authorities) != set(EXPECTED_ROLES):
         raise SemanticBindingContractError("MATERIAL_AUTHORITY_MISMATCH")
     if set().union(*(set(item.field_ids) for item in authorities.values())) != set(
@@ -946,13 +1025,14 @@ def build_596_1_shared_task_blueprint(
 
     by_role = {item.profile.material_role: item for item in exact_resolutions}
     tasks: list[SharedSemanticTaskBlueprintV1] = []
+    semantic_partitions = _semantic_partitions(exact_catalog)
     for role in ("terms", "brochure"):
-        ordered = tuple(
-            field_id
-            for field_id in APPROVED_SCHEMA60_FIELD_IDS
-            if field_id in authorities[role].field_ids
-        )
-        for ordinal, partition in enumerate(_balanced_four(ordered), start=1):
+        partitions = semantic_partitions[role]
+        if set().union(*(set(partition) for partition in partitions)) != set(
+            authorities[role].field_ids
+        ):
+            raise SemanticBindingContractError("SCHEMA60_TASK_PARTITION_INVALID")
+        for ordinal, partition in enumerate(partitions, start=1):
             tasks.append(
                 _make_task(
                     resolution=by_role[role],
@@ -1254,7 +1334,7 @@ def compose_596_1_semantic_inputs(
 
     by_role = {item.profile.material_role: item for item in exact_resolutions}
     admitted_by_role = {item.admitted.role: item.admitted for item in sources}
-    authorities = {item.primary_role: item for item in exact_catalog.field_authority_groups}
+    authorities = _effective_authorities(exact_catalog)
     composed: list[ComposedSemanticTaskV1] = []
     for blueprint in first_plan.tasks:
         if blueprint.task_kind == "deterministic_rate":
@@ -1597,6 +1677,7 @@ __all__ = [
     "SemanticExecutionIdentityV1",
     "SharedSemanticTaskBlueprintV1",
     "SharedSemanticTaskPlanV1",
+    "SOURCE_AUTHORITY_REBOUND_FIELDS",
     "build_596_1_shared_task_blueprint",
     "compose_596_1_semantic_inputs",
     "bind_596_1_semantic_response",

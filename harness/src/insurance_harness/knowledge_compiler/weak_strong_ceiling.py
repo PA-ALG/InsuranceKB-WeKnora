@@ -18,7 +18,7 @@ STRONG_EXECUTION_RECEIPT_OBJECT_TYPE: Final[str] = (
     "strong-execution-receipt-596-1.v1"
 )
 APPROVED_SHARED_TASK_PLAN_SHA256: Final[str] = (
-    "198a24811fd0132eb6d59d013ca4ef20f59bb20e7644807c7177b875a8316439"
+    "08c7d9e4e6c11e68d8ad54f25a2bb3e92fb3040ce24f30dc69e579634bb994fc"
 )
 APPROVED_STRONG_MODEL_IDENTITY_SHA256: Final[str] = canonical_hash(
     "ceiling-596-1-strong-model-identity.v1",
@@ -39,12 +39,14 @@ _APPROVED_TASK_PARTITIONS: Final = (
         (
             "clause_version",
             "regulatory_filing_no",
+            "zh_0c5a8e59e2",
             "zh_1ec5e3f2cc",
             "zh_313cabffd8",
             "zh_a271d96039",
             "zh_b4b770e114",
             "zh_d62301d84c",
             "zh_f558f0a88f",
+            "zh_fd9a0b9fa3",
         ),
         vf.APPROVED_596_1_SOURCE_SHA256[0],
     ),
@@ -62,6 +64,8 @@ _APPROVED_TASK_PARTITIONS: Final = (
             "reinstatement",
             "waiting_period_claim_handling",
             "zh_09a5d9e54e",
+            "zh_14b93ce275",
+            "zh_17a83223e4",
             "zh_7d7fe38f09",
         ),
         vf.APPROVED_596_1_SOURCE_SHA256[0],
@@ -98,6 +102,7 @@ _APPROVED_TASK_PARTITIONS: Final = (
             "zh_52548821b9",
             "zh_e1bea0527a",
             "zh_f32c510a5e",
+            "zh_f8cc996739",
         ),
         vf.APPROVED_596_1_SOURCE_SHA256[0],
     ),
@@ -114,7 +119,6 @@ _APPROVED_TASK_PARTITIONS: Final = (
             "zh_8bd90889d3",
             "zh_ad4a95859a",
             "zh_f1de0de938",
-            "zh_fd9a0b9fa3",
         ),
         vf.APPROVED_596_1_SOURCE_SHA256[1],
     ),
@@ -125,13 +129,11 @@ _APPROVED_TASK_PARTITIONS: Final = (
         "596-1-brochure-semantic-02",
         "brochure-semantic-02",
         (
-            "zh_14b93ce275",
             "zh_346f0dac8c",
             "zh_5162df17d8",
             "zh_67ee7025ef",
             "zh_6a3bd6cdbf",
             "zh_89e518b987",
-            "zh_f8cc996739",
         ),
         vf.APPROVED_596_1_SOURCE_SHA256[1],
     ),
@@ -142,8 +144,6 @@ _APPROVED_TASK_PARTITIONS: Final = (
         "596-1-brochure-semantic-03",
         "brochure-semantic-03",
         (
-            "zh_0c5a8e59e2",
-            "zh_17a83223e4",
             "zh_1a5675a37a",
             "zh_540e1969e3",
             "zh_7598a3116c",
