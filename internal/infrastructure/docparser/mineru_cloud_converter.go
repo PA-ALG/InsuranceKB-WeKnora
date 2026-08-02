@@ -28,21 +28,31 @@ import (
 )
 
 const (
-	defaultPollInterval = 3 * time.Second
-	defaultCloudTimeout = 600 * time.Second
-	defaultBaseURL      = "https://mineru.net/api/v4"
+	defaultPollInterval  = 3 * time.Second
+	defaultCloudTimeout  = 600 * time.Second
+	minerUCaptureTimeout = 9*time.Minute + 30*time.Second
+	defaultBaseURL       = "https://mineru.net/api/v4"
+	maxMinerUStatusPolls = 20
 )
 
 // MinerUCloudReader calls the MinerU Cloud API (mineru.net) to read/convert documents.
 // Flow: POST /file-urls/batch → PUT file → poll GET /extract-results/batch/{batch_id}.
 type MinerUCloudReader struct {
-	apiKey        string
-	baseURL       string
-	model         string
-	formulaEnable bool
-	tableEnable   bool
-	ocrEnable     bool
-	language      string
+	apiKey           string
+	baseURL          string
+	model            string
+	formulaEnable    bool
+	tableEnable      bool
+	ocrEnable        bool
+	language         string
+	capturePolicy    bool
+	captureTimeout   time.Duration
+	calls            minerUCloudCallLedger
+	fetchStatus      func(context.Context, string, map[string]string) ([]extractResultItem, error)
+	extractDone      func(context.Context, *extractResultItem, string, string) (string, []types.ImageRef, *types.NativeStructureArtifact, error)
+	newZIPHTTPClient func(int) *http.Client
+	zipURLValidator  func(string) error
+	sleep            func(context.Context, time.Duration)
 }
 
 // NewMinerUCloudReader creates a reader from ParserEngineOverrides.
@@ -58,7 +68,47 @@ func NewMinerUCloudReader(overrides map[string]string) *MinerUCloudReader {
 	}
 }
 
+func (c *MinerUCloudReader) enableArtifactCapturePolicy() {
+	c.capturePolicy = true
+	c.captureTimeout = minerUCaptureTimeout
+}
+
+func (c *MinerUCloudReader) redirectLimit() int {
+	if c.capturePolicy {
+		return 0
+	}
+	return 5
+}
+
+func (c *MinerUCloudReader) operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if !c.capturePolicy {
+		return ctx, func() {}
+	}
+	timeout := c.captureTimeout
+	if timeout <= 0 {
+		timeout = minerUCaptureTimeout
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func (c *MinerUCloudReader) zipHTTPClient() *http.Client {
+	if c.newZIPHTTPClient != nil {
+		return c.newZIPHTTPClient(c.redirectLimit())
+	}
+	return utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{
+		Timeout: 120 * time.Second, MaxRedirects: c.redirectLimit(),
+	})
+}
+
+func (c *MinerUCloudReader) validateZIPURL(rawURL string) error {
+	if c.zipURLValidator != nil {
+		return c.zipURLValidator(rawURL)
+	}
+	return utils.ValidateURLForSSRF(rawURL)
+}
+
 func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*types.ReadResult, error) {
+	c.calls = minerUCloudCallLedger{}
 	if c.apiKey == "" {
 		return &types.ReadResult{Error: "MinerU Cloud API key is not configured"}, nil
 	}
@@ -68,7 +118,9 @@ func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*
 		return &types.ReadResult{Error: "no file content provided"}, nil
 	}
 
-	logger.Infof(context.Background(), "[MinerUCloud] Parsing file=%s size=%d via %s", req.FileName, len(content), c.baseURL)
+	logger.Infof(context.Background(), "[MinerUCloud] parsing source bytes=%d", len(content))
+	readCtx, cancel := c.operationContext(ctx)
+	defer cancel()
 
 	ext := filepath.Ext(req.FileName)
 	if ext == "" && req.FileType != "" {
@@ -90,17 +142,17 @@ func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*
 		return nil, fmt.Errorf("%w: effective model %q is not pipeline", ErrMinerUNativeStructureUnavailable, effectiveModel)
 	}
 
-	batchID, uploadURL, err := c.applyUploadURLs(ctx, fileName, effectiveModel)
+	batchID, uploadURL, err := c.applyUploadURLs(readCtx, fileName, effectiveModel)
 	if err != nil {
 		return nil, fmt.Errorf("MinerU Cloud apply upload URLs: %w", err)
 	}
 
-	if err := c.uploadFile(ctx, uploadURL, content); err != nil {
+	if err := c.uploadFile(readCtx, uploadURL, content); err != nil {
 		return nil, fmt.Errorf("MinerU Cloud file upload: %w", err)
 	}
 
 	sourceHash := sha256.Sum256(content)
-	mdContent, imageRefs, nativeStructure, err := c.pollBatchResult(ctx, batchID, fmt.Sprintf("%x", sourceHash), effectiveModel)
+	mdContent, imageRefs, nativeStructure, err := c.pollBatchResult(readCtx, batchID, fmt.Sprintf("%x", sourceHash), effectiveModel)
 	if err != nil {
 		return nil, fmt.Errorf("MinerU Cloud poll: %w", err)
 	}
@@ -113,6 +165,8 @@ func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*
 		NativeStructure: nativeStructure,
 	}, nil
 }
+
+func (c *MinerUCloudReader) captureCallLedger() minerUCloudCallLedger { return c.calls }
 
 // --- batch upload API ---
 
@@ -147,7 +201,8 @@ func (c *MinerUCloudReader) applyUploadURLs(ctx context.Context, fileName, model
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 30 * time.Second, MaxRedirects: 5})
+	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 30 * time.Second, MaxRedirects: c.redirectLimit()})
+	c.calls.AllocationPOST++
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return "", "", fmt.Errorf("HTTP request: %w", err)
@@ -170,7 +225,7 @@ func (c *MinerUCloudReader) applyUploadURLs(ctx context.Context, fileName, model
 		return "", "", fmt.Errorf("API returned no file_urls")
 	}
 
-	logger.Infof(context.Background(), "[MinerUCloud] batch apply ok: batch_id=%s, urls=%d", result.Data.BatchID, len(result.Data.FileURLs))
+	logger.Infof(context.Background(), "[MinerUCloud] allocation accepted")
 	return result.Data.BatchID, result.Data.FileURLs[0], nil
 }
 
@@ -180,7 +235,8 @@ func (c *MinerUCloudReader) uploadFile(ctx context.Context, uploadURL string, co
 		return fmt.Errorf("create PUT request: %w", err)
 	}
 
-	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 120 * time.Second, MaxRedirects: 5})
+	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 120 * time.Second, MaxRedirects: c.redirectLimit()})
+	c.calls.UploadPUT++
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("PUT upload: %w", err)
@@ -220,25 +276,41 @@ type extractResultItem struct {
 
 func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
 	deadline := time.Now().Add(defaultCloudTimeout)
-	pollCount := 0
 	headers := map[string]string{
 		"Authorization": "Bearer " + c.apiKey,
 	}
+	fetchStatus := c.fetchStatus
+	if fetchStatus == nil {
+		fetchStatus = c.fetchBatchStatus
+	}
+	extractDone := c.extractDone
+	if extractDone == nil {
+		extractDone = c.extractDoneResult
+	}
+	sleep := c.sleep
+	if sleep == nil {
+		sleep = sleepCtx
+	}
 
-	for time.Now().Before(deadline) {
-		// Bail out promptly on caller cancellation instead of spinning:
-		// fetchBatchStatus fails immediately and sleepCtx returns at once on a
-		// cancelled ctx, so without this guard the loop busy-hammers the cloud
-		// API and floods logs until the deadline.
+	for pollCount := 1; ; pollCount++ {
 		if err := ctx.Err(); err != nil {
 			return "", nil, nil, err
 		}
-		pollCount++
+		if c.capturePolicy && pollCount > maxMinerUStatusPolls {
+			return "", nil, nil, fmt.Errorf("%w: %d status polls", ErrMinerUCloudPollBudgetExceeded, maxMinerUStatusPolls)
+		}
+		if !c.capturePolicy && !time.Now().Before(deadline) {
+			return "", nil, nil, fmt.Errorf("MinerU Cloud task timed out after %d polls", pollCount-1)
+		}
 
-		items, err := c.fetchBatchStatus(ctx, batchID, headers)
+		c.calls.StatusGET++
+		items, err := fetchStatus(ctx, batchID, headers)
 		if err != nil {
-			logger.Errorf(context.Background(), "[MinerUCloud] poll #%d failed: %v", pollCount, err)
-			sleepCtx(ctx, defaultPollInterval)
+			if c.capturePolicy {
+				return "", nil, nil, fmt.Errorf("MinerU Cloud status transport failed: %w", err)
+			}
+			logger.Errorf(context.Background(), "[MinerUCloud] status poll failed; retrying")
+			sleep(ctx, defaultPollInterval)
 			continue
 		}
 
@@ -246,7 +318,9 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 			if pollCount <= 3 || pollCount%10 == 0 {
 				logger.Infof(context.Background(), "[MinerUCloud] poll #%d: extract_result empty, retrying", pollCount)
 			}
-			sleepCtx(ctx, defaultPollInterval)
+			if !c.capturePolicy || pollCount < maxMinerUStatusPolls {
+				sleep(ctx, defaultPollInterval)
+			}
 			continue
 		}
 
@@ -254,8 +328,8 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 		state := strings.ToLower(item.State)
 
 		if pollCount == 1 || pollCount%10 == 0 || state == "done" || state == "failed" {
-			logger.Infof(context.Background(), "[MinerUCloud] poll #%d: file=%s state=%s pages=%d/%d",
-				pollCount, item.FileName, state, item.Progress.ExtractedPages, item.Progress.TotalPages)
+			logger.Infof(context.Background(), "[MinerUCloud] poll #%d: state=%s pages=%d/%d",
+				pollCount, state, item.Progress.ExtractedPages, item.Progress.TotalPages)
 		}
 
 		if state == "failed" {
@@ -263,13 +337,13 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 		}
 
 		if state == "done" {
-			return c.extractDoneResult(ctx, &item, sourceSHA256, effectiveModel)
+			return extractDone(ctx, &item, sourceSHA256, effectiveModel)
 		}
 
-		sleepCtx(ctx, defaultPollInterval)
+		if !c.capturePolicy || pollCount < maxMinerUStatusPolls {
+			sleep(ctx, defaultPollInterval)
+		}
 	}
-
-	return "", nil, nil, fmt.Errorf("MinerU Cloud task timed out after %d polls", pollCount)
 }
 
 func (c *MinerUCloudReader) fetchBatchStatus(ctx context.Context, batchID string, headers map[string]string) ([]extractResultItem, error) {
@@ -282,7 +356,7 @@ func (c *MinerUCloudReader) fetchBatchStatus(ctx context.Context, batchID string
 		httpReq.Header.Set(k, v)
 	}
 
-	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 30 * time.Second, MaxRedirects: 5})
+	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 30 * time.Second, MaxRedirects: c.redirectLimit()})
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -306,20 +380,6 @@ func (c *MinerUCloudReader) fetchBatchStatus(ctx context.Context, batchID string
 		return nil, nil
 	}
 
-	// Dump the raw extract_result JSON for debugging
-	rawExtract := string(pollResp.Data.ExtractResult)
-	if len(rawExtract) > 4000 {
-		logger.Infof(context.Background(), "[MinerUCloud] Raw extract_result (truncated to 4000 chars): %s ...", rawExtract[:4000])
-	} else {
-		logger.Infof(context.Background(), "[MinerUCloud] Raw extract_result: %s", rawExtract)
-	}
-
-	// Pretty-print the structure to reveal all available fields
-	var rawObj interface{}
-	if err := json.Unmarshal(pollResp.Data.ExtractResult, &rawObj); err == nil {
-		logResponseStructure("MinerUCloud", rawObj, "extract_result")
-	}
-
 	// The extract_result can be either a single object or an array
 	var items []extractResultItem
 	if pollResp.Data.ExtractResult[0] == '[' {
@@ -339,13 +399,16 @@ func (c *MinerUCloudReader) fetchBatchStatus(ctx context.Context, batchID string
 
 // extractDoneResult extracts markdown and images from a completed batch item.
 // Prefers inline markdown/content fields; falls back to downloading full_zip_url.
-func (c *MinerUCloudReader) extractDoneResult(_ context.Context, item *extractResultItem, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
+func (c *MinerUCloudReader) extractDoneResult(ctx context.Context, item *extractResultItem, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
 	text := firstNonEmpty(item.Markdown, item.Content, item.Text)
 	if item.FullZipURL == "" {
 		return "", nil, nil, fmt.Errorf("MinerU Cloud state=done but no native ZIP artifact")
 	}
 
-	md, imageRefs, nativeStructure, err := downloadAndExtractZip(item.FullZipURL, sourceSHA256, effectiveModel)
+	c.calls.ZIPGET++
+	md, imageRefs, nativeStructure, err := downloadAndExtractZip(
+		ctx, item.FullZipURL, sourceSHA256, effectiveModel, c.zipHTTPClient(), c.validateZIPURL,
+	)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("extract zip: %w", err)
 	}
@@ -367,12 +430,24 @@ var minerUColspanPattern = regexp.MustCompile(`\bcolspan\s*=`)
 // that cannot produce the exact task-local MinerU structure contract.
 var ErrMinerUNativeStructureUnavailable = errors.New("MinerU native structure unavailable")
 
-func downloadAndExtractZip(zipURL, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
-	if err := utils.ValidateURLForSSRF(zipURL); err != nil {
+// ErrMinerUCloudPollBudgetExceeded marks a non-terminal cloud task that reached
+// the fixed capture budget. Callers must not start a second attempt implicitly.
+var ErrMinerUCloudPollBudgetExceeded = errors.New("MinerU Cloud poll budget exceeded")
+
+func downloadAndExtractZip(
+	ctx context.Context,
+	zipURL, sourceSHA256, effectiveModel string,
+	client *http.Client,
+	validateURL func(string) error,
+) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
+	if err := validateURL(zipURL); err != nil {
 		return "", nil, nil, fmt.Errorf("zip URL blocked by SSRF check: %v", err)
 	}
-	client := utils.NewSSRFSafeHTTPClient(utils.SSRFSafeHTTPClientConfig{Timeout: 120 * time.Second, MaxRedirects: 5})
-	resp, err := client.Get(zipURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zipURL, nil)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("create zip request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("download zip: %w", err)
 	}
@@ -455,13 +530,13 @@ func extractMinerUZipBytes(zipData []byte, sourceSHA256, effectiveModel string) 
 
 		resolved := resolveInZip(imgPath, mdDir, entries)
 		if resolved == nil {
-			logger.Errorf(context.Background(), "[MinerUCloud] image not found in zip: %s", imgPath)
+			logger.Errorf(context.Background(), "[MinerUCloud] referenced image missing from ZIP")
 			continue
 		}
 
 		imgData, err := readZipEntryBytes(resolved)
 		if err != nil {
-			logger.Errorf(context.Background(), "[MinerUCloud] failed to read zip image %s: %v", imgPath, err)
+			logger.Errorf(context.Background(), "[MinerUCloud] referenced image unreadable")
 			continue
 		}
 

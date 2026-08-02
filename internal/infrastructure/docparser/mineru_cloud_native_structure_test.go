@@ -8,12 +8,175 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
 )
+
+func TestMinerUCloudPollingIsBoundedAndTransportFailFast(t *testing.T) {
+	t.Parallel()
+	t.Run("transport-error-is-not-retried", func(t *testing.T) {
+		calls := 0
+		reader := &MinerUCloudReader{
+			apiKey: "synthetic", capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				calls++
+				return nil, errors.New("synthetic transport failure")
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		if err == nil || calls != 1 {
+			t.Fatalf("transport failure was retried: calls=%d err=%v", calls, err)
+		}
+	})
+
+	t.Run("nonterminal-status-stops-at-exact-cap", func(t *testing.T) {
+		calls := 0
+		reader := &MinerUCloudReader{
+			apiKey: "synthetic", capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				calls++
+				return []extractResultItem{{State: "running"}}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		if !errors.Is(err, ErrMinerUCloudPollBudgetExceeded) || calls != maxMinerUStatusPolls {
+			t.Fatalf("poll cap drifted: calls=%d err=%v", calls, err)
+		}
+	})
+
+	t.Run("done-downloads-one-zip", func(t *testing.T) {
+		zipCalls := 0
+		reader := &MinerUCloudReader{
+			apiKey: "synthetic", capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				return []extractResultItem{{State: "done", FullZipURL: "https://example.invalid/result.zip"}}, nil
+			},
+			extractDone: func(context.Context, *extractResultItem, string, string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
+				zipCalls++
+				return "", nil, &types.NativeStructureArtifact{}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		if err != nil || zipCalls != 1 {
+			t.Fatalf("ZIP budget drifted: calls=%d err=%v", zipCalls, err)
+		}
+	})
+
+	if minerUCaptureTimeout >= 10*time.Minute {
+		t.Fatalf("capture deadline must stay below ten minutes: %s", minerUCaptureTimeout)
+	}
+}
+
+func TestMinerUCloudRedirectPolicyIsCaptureLocal(t *testing.T) {
+	t.Parallel()
+	ordinary := NewMinerUCloudReader(map[string]string{"mineru_api_key": "synthetic"})
+	if ordinary.redirectLimit() != 5 {
+		t.Fatalf("ordinary redirect compatibility changed: %d", ordinary.redirectLimit())
+	}
+	capture, ok := newMinerUArtifactCaptureReader(map[string]string{"mineru_api_key": "synthetic"}).(*MinerUCloudReader)
+	if !ok {
+		t.Fatal("capture factory did not retain the concrete MinerU reader")
+	}
+	if capture.redirectLimit() != 0 {
+		t.Fatalf("capture redirects are not fail-closed: %d", capture.redirectLimit())
+	}
+}
+
+func TestMinerUArtifactCaptureDeadlineCancelsBlockedZIP(t *testing.T) {
+	t.Parallel()
+	reader, ok := newMinerUArtifactCaptureReader(map[string]string{"mineru_api_key": "synthetic"}).(*MinerUCloudReader)
+	if !ok {
+		t.Fatal("capture factory did not retain the concrete MinerU reader")
+	}
+	if reader.captureTimeout != 9*time.Minute+30*time.Second {
+		t.Fatalf("capture policy timeout drifted: %s", reader.captureTimeout)
+	}
+	reader.captureTimeout = 25 * time.Millisecond
+	reader.fetchStatus = func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+		return []extractResultItem{{State: "done", FullZipURL: "https://capture.invalid/blocked.zip"}}, nil
+	}
+	reader.zipURLValidator = func(rawURL string) error {
+		if rawURL != "https://capture.invalid/blocked.zip" {
+			t.Fatalf("unexpected ZIP URL: %s", rawURL)
+		}
+		return nil
+	}
+	zipRequests := 0
+	reader.newZIPHTTPClient = func(maxRedirects int) *http.Client {
+		if maxRedirects != 0 {
+			t.Fatalf("capture ZIP client accepted redirects: %d", maxRedirects)
+		}
+		return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			zipRequests++
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		})}
+	}
+	ctx, cancel := reader.operationContext(context.Background())
+	defer cancel()
+	started := time.Now()
+	_, _, _, err := reader.pollBatchResult(ctx, "batch", strings.Repeat("f", 64), "pipeline")
+	if !errors.Is(err, context.DeadlineExceeded) || zipRequests != 1 || time.Since(started) > time.Second {
+		t.Fatalf("real blocked ZIP request did not inherit capture deadline: requests=%d elapsed=%s err=%v", zipRequests, time.Since(started), err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestMinerUCloudOrdinaryReaderPreservesLegacyPolling(t *testing.T) {
+	t.Parallel()
+	if defaultCloudTimeout != 600*time.Second {
+		t.Fatalf("ordinary cloud timeout changed: %s", defaultCloudTimeout)
+	}
+
+	t.Run("transport-error-remains-retryable", func(t *testing.T) {
+		calls := 0
+		reader := &MinerUCloudReader{
+			apiKey: "synthetic",
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				calls++
+				if calls == 1 {
+					return nil, errors.New("transient transport failure")
+				}
+				return []extractResultItem{{State: "failed", ErrMsg: "terminal"}}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		if err == nil || calls != 2 || errors.Is(err, ErrMinerUCloudPollBudgetExceeded) {
+			t.Fatalf("ordinary transient poll behavior changed: calls=%d err=%v", calls, err)
+		}
+	})
+
+	t.Run("ordinary-reader-is-not-capped-at-twenty", func(t *testing.T) {
+		calls := 0
+		reader := &MinerUCloudReader{
+			apiKey: "synthetic",
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				calls++
+				if calls <= maxMinerUStatusPolls {
+					return []extractResultItem{{State: "running"}}, nil
+				}
+				return []extractResultItem{{State: "failed", ErrMsg: "terminal"}}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		if err == nil || calls != maxMinerUStatusPolls+1 || errors.Is(err, ErrMinerUCloudPollBudgetExceeded) {
+			t.Fatalf("ordinary polling inherited capture cap: calls=%d err=%v", calls, err)
+		}
+	})
+}
 
 type nativeStructureFixture struct {
 	Contract     string `json:"contract"`
