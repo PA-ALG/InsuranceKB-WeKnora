@@ -15,7 +15,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
 )
 
-func TestRunTwoSourceCaptureUsesFixedSequenceAndSanitizedOutput(t *testing.T) {
+func TestRunThreeSourceCaptureUsesFixedSequenceAndSanitizedOutput(t *testing.T) {
 	repositoryRoot := copyFrozenCaptureSources(t, false)
 	outputRoot := absentPrivateOutput(t)
 	secret := "must-never-appear"
@@ -43,22 +43,26 @@ func TestRunTwoSourceCaptureUsesFixedSequenceAndSanitizedOutput(t *testing.T) {
 		stdout: &stdout,
 	}
 
-	if err := runTwoSourceCapture(context.Background(), repositoryRoot, outputRoot, deps); err != nil {
+	if err := runThreeSourceCapture(context.Background(), repositoryRoot, outputRoot, deps); err != nil {
 		t.Fatal(err)
 	}
-	if len(requests) != 2 {
-		t.Fatalf("capture count=%d, want 2", len(requests))
+	if len(requests) != 3 {
+		t.Fatalf("capture count=%d, want 3", len(requests))
 	}
 	wantPaths := []string{
 		filepath.Join(repositoryRoot, "dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "保险条款.pdf"),
+		filepath.Join(repositoryRoot, "dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "产品说明书.pdf"),
 		filepath.Join(repositoryRoot, "dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "费率表.pdf"),
 	}
 	wantHashes := []string{
 		"88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+		"5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
 		"7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
 	}
 	for index, req := range requests {
 		if req.SourcePath != wantPaths[index] || req.SourceSHA256 != wantHashes[index] ||
+			req.AttemptNumber != 2 || req.AttemptRole != "bounded_upgrade" ||
+			req.Generation == nil || *req.Generation != 0 ||
 			req.ParserOverrides["mineru_cloud_model"] != "pipeline" {
 			t.Fatalf("request %d drifted: %#v", index, req)
 		}
@@ -68,13 +72,15 @@ func TestRunTwoSourceCaptureUsesFixedSequenceAndSanitizedOutput(t *testing.T) {
 		t.Fatalf("output root mode: info=%v err=%v", info, err)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "role=t***s") ||
+	if len(lines) != 3 || !strings.Contains(lines[0], "role=t***s") ||
 		!strings.Contains(lines[0], "artifact=terms/mineru-native-structure.json") ||
-		!strings.Contains(lines[1], "role=r**e") ||
-		!strings.Contains(lines[1], "artifact=rate/mineru-native-structure.json") {
+		!strings.Contains(lines[1], "role=b******e") ||
+		!strings.Contains(lines[1], "artifact=brochure/mineru-native-structure.json") ||
+		!strings.Contains(lines[2], "role=r**e") ||
+		!strings.Contains(lines[2], "artifact=rate/mineru-native-structure.json") {
 		t.Fatalf("stdout sequence drifted: %q", stdout.String())
 	}
-	for index, role := range []string{"terms", "rate"} {
+	for index, role := range []string{"terms", "brochure", "rate"} {
 		artifact := filepath.Join(outputRoot, role, "mineru-native-structure.json")
 		info, err := os.Stat(artifact)
 		if err != nil || info.Mode().Perm() != 0o600 {
@@ -91,11 +97,11 @@ func TestRunTwoSourceCaptureUsesFixedSequenceAndSanitizedOutput(t *testing.T) {
 	}
 }
 
-func TestRunTwoSourceCaptureRejectsNonPrivateArtifactMode(t *testing.T) {
+func TestRunThreeSourceCaptureRejectsNonPrivateArtifactMode(t *testing.T) {
 	repositoryRoot := copyFrozenCaptureSources(t, false)
 	outputRoot := absentPrivateOutput(t)
 	calls := 0
-	err := runTwoSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
+	err := runThreeSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
 		lookupEnv: func(string) (string, bool) { return "in-memory-secret", true },
 		capture: func(_ context.Context, req docparser.MinerUArtifactCaptureRequest) (string, error) {
 			calls++
@@ -103,29 +109,31 @@ func TestRunTwoSourceCaptureRejectsNonPrivateArtifactMode(t *testing.T) {
 		},
 		stdout: &bytes.Buffer{},
 	})
-	if !errors.Is(err, ErrMinerUTwoSourceCaptureFailed) || calls != 1 {
+	if !errors.Is(err, ErrMinerUThreeSourceCaptureFailed) || calls != 1 {
 		t.Fatalf("non-private artifact was not rejected: calls=%d err=%v", calls, err)
 	}
 }
 
-func TestRunTwoSourceCaptureFailsAllPreflightBeforeCapture(t *testing.T) {
+func TestRunThreeSourceCaptureFailsAllPreflightBeforeCapture(t *testing.T) {
 	tests := []struct {
-		name         string
-		mutateRepo   bool
-		rateMutation string
-		credential   bool
-		makeOutput   bool
+		name           string
+		mutateRepo     bool
+		sourceMutation string
+		credential     bool
+		makeOutput     bool
 	}{
 		{name: "source-sha-drift", mutateRepo: true, credential: true},
-		{name: "rate-source-missing", rateMutation: "missing", credential: true},
-		{name: "rate-source-sha-drift", rateMutation: "sha-drift", credential: true},
+		{name: "brochure-source-missing", sourceMutation: "brochure:missing", credential: true},
+		{name: "brochure-source-sha-drift", sourceMutation: "brochure:sha-drift", credential: true},
+		{name: "rate-source-missing", sourceMutation: "rate:missing", credential: true},
+		{name: "rate-source-sha-drift", sourceMutation: "rate:sha-drift", credential: true},
 		{name: "credential-missing"},
 		{name: "output-root-exists", credential: true, makeOutput: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			repositoryRoot := copyFrozenCaptureSources(t, tc.mutateRepo)
-			mutateFrozenRateSource(t, repositoryRoot, tc.rateMutation)
+			mutateFrozenSource(t, repositoryRoot, tc.sourceMutation)
 			outputRoot := absentPrivateOutput(t)
 			if tc.makeOutput {
 				if err := os.Mkdir(outputRoot, 0o700); err != nil {
@@ -133,7 +141,7 @@ func TestRunTwoSourceCaptureFailsAllPreflightBeforeCapture(t *testing.T) {
 				}
 			}
 			calls := 0
-			err := runTwoSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
+			err := runThreeSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
 				lookupEnv: func(string) (string, bool) { return "in-memory-secret", tc.credential },
 				capture: func(context.Context, docparser.MinerUArtifactCaptureRequest) (string, error) {
 					calls++
@@ -141,7 +149,7 @@ func TestRunTwoSourceCaptureFailsAllPreflightBeforeCapture(t *testing.T) {
 				},
 				stdout: &bytes.Buffer{},
 			})
-			if !errors.Is(err, ErrMinerUTwoSourcePreflight) || calls != 0 {
+			if !errors.Is(err, ErrMinerUThreeSourcePreflight) || calls != 0 {
 				t.Fatalf("preflight was not fail-before-capture: calls=%d err=%v", calls, err)
 			}
 			if !tc.makeOutput {
@@ -153,13 +161,13 @@ func TestRunTwoSourceCaptureFailsAllPreflightBeforeCapture(t *testing.T) {
 	}
 }
 
-func TestRunTwoSourceCaptureStopsOnFirstAndPreservesFirstOnSecondFailure(t *testing.T) {
-	for _, failAt := range []int{1, 2} {
+func TestRunThreeSourceCaptureStopsAndPreservesBoundedPartialCustody(t *testing.T) {
+	for _, failAt := range []int{1, 2, 3} {
 		t.Run(fmt.Sprintf("failure-%d", failAt), func(t *testing.T) {
 			repositoryRoot := copyFrozenCaptureSources(t, false)
 			outputRoot := absentPrivateOutput(t)
 			calls := 0
-			err := runTwoSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
+			err := runThreeSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
 				lookupEnv: func(string) (string, bool) { return "in-memory-secret", true },
 				capture: func(_ context.Context, req docparser.MinerUArtifactCaptureRequest) (string, error) {
 					calls++
@@ -174,9 +182,9 @@ func TestRunTwoSourceCaptureStopsOnFirstAndPreservesFirstOnSecondFailure(t *test
 				},
 				stdout: &bytes.Buffer{},
 			})
-			want := ErrMinerUTwoSourceCaptureFailed
-			if failAt == 2 {
-				want = ErrMinerUTwoSourceCapturePartial
+			want := ErrMinerUThreeSourceCaptureFailed
+			if failAt > 1 {
+				want = ErrMinerUThreeSourceCapturePartial
 			}
 			if !errors.Is(err, want) || calls != failAt || strings.Contains(err.Error(), "in-memory-secret") {
 				t.Fatalf("failure contract drifted: calls=%d err=%v", calls, err)
@@ -189,6 +197,11 @@ func TestRunTwoSourceCaptureStopsOnFirstAndPreservesFirstOnSecondFailure(t *test
 			if failAt == 2 && statErr != nil {
 				t.Fatalf("second failure lost first evidence: %v", statErr)
 			}
+			brochure := filepath.Join(outputRoot, "brochure", "mineru-native-structure.json")
+			_, brochureErr := os.Stat(brochure)
+			if failAt == 3 && brochureErr != nil {
+				t.Fatalf("third failure lost brochure evidence: %v", brochureErr)
+			}
 		})
 	}
 }
@@ -197,7 +210,7 @@ func TestRunCLIRejectsCredentialFlagsWithoutEchoingValue(t *testing.T) {
 	var stdout bytes.Buffer
 	secret := "must-never-echo"
 	err := runCLI(context.Background(), []string{"--api-key=" + secret}, ".", runnerDependencies{stdout: &stdout})
-	if !errors.Is(err, ErrMinerUTwoSourcePreflight) || strings.Contains(stdout.String(), secret) ||
+	if !errors.Is(err, ErrMinerUThreeSourcePreflight) || strings.Contains(stdout.String(), secret) ||
 		strings.Contains(err.Error(), secret) {
 		t.Fatalf("credential CLI boundary drifted: stdout=%q err=%v", stdout.String(), err)
 	}
@@ -210,7 +223,7 @@ func copyFrozenCaptureSources(t *testing.T, mutateTerms bool) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index, name := range []string{"保险条款.pdf", "费率表.pdf"} {
+	for index, name := range []string{"保险条款.pdf", "产品说明书.pdf", "费率表.pdf"} {
 		relative := filepath.Join("dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", name)
 		payload, err := os.ReadFile(filepath.Join(realRoot, relative))
 		if err != nil {
@@ -230,15 +243,20 @@ func copyFrozenCaptureSources(t *testing.T, mutateTerms bool) string {
 	return repositoryRoot
 }
 
-func mutateFrozenRateSource(t *testing.T, repositoryRoot, mutation string) {
+func mutateFrozenSource(t *testing.T, repositoryRoot, mutation string) {
 	t.Helper()
 	if mutation == "" {
 		return
 	}
+	parts := strings.Split(mutation, ":")
+	if len(parts) != 2 {
+		t.Fatalf("invalid source mutation: %s", mutation)
+	}
+	fileName := map[string]string{"brochure": "产品说明书.pdf", "rate": "费率表.pdf"}[parts[0]]
 	path := filepath.Join(
-		repositoryRoot, "dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", "费率表.pdf",
+		repositoryRoot, "dataset", "shouxian_product", "平安e生保（尊享版）医疗保险", fileName,
 	)
-	if mutation == "missing" {
+	if parts[1] == "missing" {
 		if err := os.Remove(path); err != nil {
 			t.Fatal(err)
 		}

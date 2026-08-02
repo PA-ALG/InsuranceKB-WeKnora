@@ -279,7 +279,7 @@ func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.
 	sanitized := []byte(`{"contract":"mineru-native-structure.v1","pages":[],"unsupported":[]}`)
 	sanitizedHash := sha256.Sum256(sanitized)
 	reader := &fakeMinerUCaptureReader{
-		result: &types.ReadResult{NativeStructure: &types.NativeStructureArtifact{
+		result: &types.ReadResult{MarkdownContent: "same-read terms text", NativeStructure: &types.NativeStructureArtifact{
 			SchemaVersion: minerUStructureSchema, SourceSHA256: minerUTermsSourceSHA256,
 			RawSHA256: strings.Repeat("a", 64), SanitizedSHA256: hex.EncodeToString(sanitizedHash[:]),
 			SanitizedJSON: sanitized,
@@ -291,6 +291,7 @@ func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.
 		context.Background(),
 		MinerUArtifactCaptureRequest{
 			SourcePath: sourcePath, SourceSHA256: minerUTermsSourceSHA256,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
 			OutputDir:       filepath.Join(parent, "evidence"),
 			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
 		},
@@ -387,7 +388,7 @@ func (f *fakeMinerUCaptureReader) captureCrossPageProjection() *minerUCrossPageP
 	return f.crossPageFacts
 }
 
-func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *testing.T) {
+func TestCaptureMinerUNativeStructureWritesSameReadSemanticCustody(t *testing.T) {
 	t.Parallel()
 	parent := t.TempDir()
 	sourcePaths := []string{
@@ -414,17 +415,22 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 		SanitizedSHA256: hex.EncodeToString(sanitizedHash[:]),
 		SanitizedJSON:   sanitized,
 	}
+	contentSnapshot := "same-read semantic body"
+	contentHash := sha256.Sum256([]byte(contentSnapshot))
+	var readers []*fakeMinerUCaptureReader
 	newReader := func(overrides map[string]string) minerUCaptureReader {
 		if overrides["mineru_api_key"] != "never-serialize-this-secret" || overrides["mineru_cloud_model"] != "pipeline" {
 			t.Fatalf("reader overrides drifted: %#v", overrides)
 		}
-		return &fakeMinerUCaptureReader{
+		reader := &fakeMinerUCaptureReader{
 			result: &types.ReadResult{
-				MarkdownContent: "private body must be discarded",
+				MarkdownContent: contentSnapshot,
 				NativeStructure: artifact,
 			},
 			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 3, ZIPGET: 1},
 		}
+		readers = append(readers, reader)
+		return reader
 	}
 	lookup := func(key string) (string, bool) {
 		if key != minerUAPIKeyEnvironmentVariable {
@@ -439,9 +445,12 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 		outputPath, err := captureMinerUNativeStructure(
 			context.Background(),
 			MinerUArtifactCaptureRequest{
-				SourcePath:   sourcePaths[index],
-				SourceSHA256: sourceSHA,
-				OutputDir:    outputDir,
+				SourcePath:    sourcePaths[index],
+				SourceSHA256:  sourceSHA,
+				AttemptNumber: 2,
+				AttemptRole:   "bounded_upgrade",
+				Generation:    intPointer(0),
+				OutputDir:     outputDir,
 				ParserOverrides: map[string]string{
 					"mineru_cloud_model":          "pipeline",
 					"mineru_cloud_enable_formula": "true",
@@ -474,7 +483,7 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 		}
 		outputs = append(outputs, payload)
 		for _, forbidden := range []string{
-			"never-serialize-this-secret", "private body must be discarded", sourcePaths[index],
+			"never-serialize-this-secret", sourcePaths[index],
 			"https://", "signed_url", "source.pdf",
 		} {
 			if strings.Contains(string(payload), forbidden) {
@@ -482,21 +491,34 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 			}
 		}
 		var decoded struct {
-			Contract            string          `json:"contract"`
-			SourceSHA256        string          `json:"source_sha256"`
-			RawSHA256           string          `json:"raw_sha256"`
-			SanitizedSHA256     string          `json:"sanitized_sha256"`
-			SanitizedArtifact   json.RawMessage `json:"sanitized_artifact"`
-			Parser              map[string]any  `json:"parser"`
-			Calls               map[string]int  `json:"calls"`
-			LatencyMilliseconds int64           `json:"latency_milliseconds"`
-			Status              string          `json:"status"`
+			Contract     string `json:"contract"`
+			SourceSHA256 string `json:"source_sha256"`
+			Attempt      struct {
+				AttemptNumber int    `json:"attempt_number"`
+				AttemptRole   string `json:"attempt_role"`
+				Generation    int    `json:"generation"`
+			} `json:"attempt"`
+			RawStructureSHA256       string          `json:"raw_structure_sha256"`
+			SanitizedStructureSHA256 string          `json:"sanitized_structure_sha256"`
+			SanitizedStructure       json.RawMessage `json:"sanitized_structure"`
+			ContentSnapshotSHA256    string          `json:"content_snapshot_sha256"`
+			ContentSnapshot          string          `json:"content_snapshot"`
+			CaptureIdentitySHA256    string          `json:"capture_identity_sha256"`
+			Parser                   map[string]any  `json:"parser"`
+			Calls                    map[string]int  `json:"calls"`
+			LatencyMilliseconds      int64           `json:"latency_milliseconds"`
+			Status                   string          `json:"status"`
 		}
 		if err := json.Unmarshal(payload, &decoded); err != nil {
 			t.Fatal(err)
 		}
 		if decoded.Contract != minerUCaptureContract || decoded.SourceSHA256 != sourceSHA ||
-			decoded.RawSHA256 != artifact.RawSHA256 || decoded.SanitizedSHA256 != artifact.SanitizedSHA256 ||
+			decoded.Attempt.AttemptNumber != 2 || decoded.Attempt.AttemptRole != "bounded_upgrade" ||
+			decoded.Attempt.Generation != 0 ||
+			decoded.RawStructureSHA256 != artifact.RawSHA256 ||
+			decoded.SanitizedStructureSHA256 != artifact.SanitizedSHA256 ||
+			decoded.ContentSnapshotSHA256 != hex.EncodeToString(contentHash[:]) ||
+			decoded.ContentSnapshot != contentSnapshot ||
 			decoded.Status != "completed" || decoded.LatencyMilliseconds != 125 {
 			t.Fatalf("capture ledger drifted: %#v", decoded)
 		}
@@ -508,6 +530,32 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 			decoded.Parser["native_structure_schema"] != minerUStructureSchema || decoded.Parser["config_sha256"] == "" {
 			t.Fatalf("parser identity is incomplete: %#v", decoded.Parser)
 		}
+		identityPreimage, err := json.Marshal(struct {
+			Contract     string `json:"contract"`
+			SourceSHA256 string `json:"source_sha256"`
+			Attempt      struct {
+				AttemptNumber int    `json:"attempt_number"`
+				AttemptRole   string `json:"attempt_role"`
+				Generation    int    `json:"generation"`
+			} `json:"attempt"`
+			ParserConfigSHA256       string `json:"parser_config_sha256"`
+			RawStructureSHA256       string `json:"raw_structure_sha256"`
+			SanitizedStructureSHA256 string `json:"sanitized_structure_sha256"`
+			ContentSnapshotSHA256    string `json:"content_snapshot_sha256"`
+		}{
+			Contract: minerUCaptureContract, SourceSHA256: sourceSHA, Attempt: decoded.Attempt,
+			ParserConfigSHA256:       decoded.Parser["config_sha256"].(string),
+			RawStructureSHA256:       artifact.RawSHA256,
+			SanitizedStructureSHA256: artifact.SanitizedSHA256,
+			ContentSnapshotSHA256:    hex.EncodeToString(contentHash[:]),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		identityHash := sha256.Sum256(identityPreimage)
+		if decoded.CaptureIdentitySHA256 != hex.EncodeToString(identityHash[:]) {
+			t.Fatalf("capture identity hash does not bind the attempt generation: %s", decoded.CaptureIdentitySHA256)
+		}
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(payload, &object); err != nil {
 			t.Fatal(err)
@@ -515,8 +563,11 @@ func TestCaptureMinerUNativeStructureWritesDeterministicSanitizedEvidence(t *tes
 		if _, exists := object["source_path_identity_sha256"]; exists {
 			t.Fatal("evidence retained a machine-local path-derived identity")
 		}
-		if string(decoded.SanitizedArtifact) != string(sanitized) {
-			t.Fatalf("sanitized artifact drifted: %s", decoded.SanitizedArtifact)
+		if string(decoded.SanitizedStructure) != string(sanitized) {
+			t.Fatalf("sanitized artifact drifted: %s", decoded.SanitizedStructure)
+		}
+		if readers[index].reads != 1 {
+			t.Fatalf("capture used %d reads, want exactly one", readers[index].reads)
 		}
 	}
 	if string(outputs[0]) != string(outputs[1]) {
@@ -586,6 +637,7 @@ func TestCaptureMinerUNativeStructureFailsBeforeProviderOrOutput(t *testing.T) {
 	validHash := sha256.Sum256([]byte("source"))
 	base := MinerUArtifactCaptureRequest{
 		SourcePath: sourcePath, SourceSHA256: hex.EncodeToString(validHash[:]),
+		AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
 		ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
 	}
 	tests := map[string]struct {
@@ -603,6 +655,22 @@ func TestCaptureMinerUNativeStructureFailsBeforeProviderOrOutput(t *testing.T) {
 		},
 		"unsupported-parser": {
 			mutate: func(req *MinerUArtifactCaptureRequest) { req.ParserOverrides["mineru_cloud_model"] = "vlm" },
+			lookup: func(string) (string, bool) { return "secret", true },
+		},
+		"attempt-number-drift": {
+			mutate: func(req *MinerUArtifactCaptureRequest) { req.AttemptNumber = 1 },
+			lookup: func(string) (string, bool) { return "secret", true },
+		},
+		"attempt-role-drift": {
+			mutate: func(req *MinerUArtifactCaptureRequest) { req.AttemptRole = "default" },
+			lookup: func(string) (string, bool) { return "secret", true },
+		},
+		"generation-drift": {
+			mutate: func(req *MinerUArtifactCaptureRequest) { req.Generation = intPointer(1) },
+			lookup: func(string) (string, bool) { return "secret", true },
+		},
+		"generation-missing": {
+			mutate: func(req *MinerUArtifactCaptureRequest) { req.Generation = nil },
 			lookup: func(string) (string, bool) { return "secret", true },
 		},
 	}
@@ -663,7 +731,7 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 			result: func() *types.ReadResult {
 				artifact := validArtifact()
 				artifact.SourceSHA256 = strings.Repeat("b", 64)
-				return &types.ReadResult{NativeStructure: artifact}
+				return &types.ReadResult{MarkdownContent: "body", NativeStructure: artifact}
 			}(),
 			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
 		},
@@ -673,12 +741,94 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 				artifact.SanitizedJSON = []byte(`{"body":"source.pdf"}`)
 				hash := sha256.Sum256(artifact.SanitizedJSON)
 				artifact.SanitizedSHA256 = hex.EncodeToString(hash[:])
-				return &types.ReadResult{NativeStructure: artifact}
+				return &types.ReadResult{MarkdownContent: "body", NativeStructure: artifact}
 			}(),
 			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
 		},
-		"call-budget-drift": {
+		"sanitized-cross-platform-path-leak": {
+			result: func() *types.ReadResult {
+				artifact := validArtifact()
+				artifact.SanitizedJSON = []byte(`{"path":"/home/alice/private.pdf"}`)
+				hash := sha256.Sum256(artifact.SanitizedJSON)
+				artifact.SanitizedSHA256 = hex.EncodeToString(hash[:])
+				return &types.ReadResult{MarkdownContent: "body", NativeStructure: artifact}
+			}(),
+			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"sanitized-unc-path-leak": {
+			result: func() *types.ReadResult {
+				artifact := validArtifact()
+				artifact.SanitizedJSON, _ = json.Marshal(map[string]string{
+					"path": `\\server\share\private.pdf`,
+				})
+				hash := sha256.Sum256(artifact.SanitizedJSON)
+				artifact.SanitizedSHA256 = hex.EncodeToString(hash[:])
+				return &types.ReadResult{MarkdownContent: "body", NativeStructure: artifact}
+			}(),
+			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"sanitized-hash-drift": {
+			result: func() *types.ReadResult {
+				artifact := validArtifact()
+				artifact.SanitizedSHA256 = strings.Repeat("b", 64)
+				return &types.ReadResult{MarkdownContent: "body", NativeStructure: artifact}
+			}(),
+			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"empty-content-snapshot": {
 			result: &types.ReadResult{NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-secret-leak": {
+			result: &types.ReadResult{
+				MarkdownContent: "body Bearer in-memory-secret", NativeStructure: validArtifact(),
+			},
+			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-source-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body " + sourcePath, NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-foreign-path-leak": {
+			result: &types.ReadResult{
+				MarkdownContent: "body /Users/alice/private.pdf", NativeStructure: validArtifact(),
+			},
+			calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-home-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body /home/alice/private.pdf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-var-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body /var/lib/private.pdf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-volumes-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body /Volumes/private/source.pdf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-windows-drive-path-leak": {
+			result: &types.ReadResult{MarkdownContent: `body C:\\Users\\alice\\private.pdf`, NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-windows-slash-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body D:/data/private.pdf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-unc-path-leak": {
+			result: &types.ReadResult{MarkdownContent: `body \\server\share\private.pdf`, NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-forward-unc-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body //server/share/private.pdf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"content-punctuated-posix-path-leak": {
+			result: &types.ReadResult{MarkdownContent: "body,path:/etc/private.conf", NativeStructure: validArtifact()},
+			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+		},
+		"call-budget-drift": {
+			result: &types.ReadResult{MarkdownContent: "body", NativeStructure: validArtifact()},
 			calls:  minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 2, StatusGET: 1, ZIPGET: 1},
 		},
 	}
@@ -690,6 +840,7 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 				context.Background(),
 				MinerUArtifactCaptureRequest{
 					SourcePath: sourcePath, SourceSHA256: sourceSHA, OutputDir: outputDir,
+					AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
 					ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
 				},
 				func(string) (string, bool) { return "in-memory-secret", true },
@@ -699,8 +850,10 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 			if !errors.Is(err, ErrMinerUArtifactCaptureFailed) || reader.reads != 1 {
 				t.Fatalf("failure was not typed or exactly-once: reads=%d err=%v", reader.reads, err)
 			}
-			if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "signed") {
-				t.Fatalf("provider detail escaped typed boundary: %v", err)
+			for _, forbidden := range []string{"secret", "signed", sourcePath, "/Users/alice", "Bearer"} {
+				if strings.Contains(err.Error(), forbidden) {
+					t.Fatalf("provider detail escaped typed boundary: %v", err)
+				}
 			}
 			if _, statErr := os.Stat(outputDir); !errors.Is(statErr, os.ErrNotExist) {
 				t.Fatalf("failed capture left output: %v", statErr)
@@ -708,6 +861,35 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 		})
 	}
 }
+
+func TestValidateMinerUCaptureContentAllowsNonPathSlashesAndURLs(t *testing.T) {
+	t.Parallel()
+	for _, content := range []string{
+		"benefit A / benefit B",
+		"ratio 1/2 and clause 3/4",
+		"reference https://example.com/public/spec",
+		"reference http://example.com/public/spec",
+	} {
+		if err := validateMinerUCaptureContent(content, "/private/source.pdf", "in-memory-secret"); err != nil {
+			t.Fatalf("non-path content %q was rejected: %v", content, err)
+		}
+	}
+	for _, value := range []string{
+		"benefit A / benefit B",
+		"https://example.com/public/spec",
+		"http://example.com/public/spec",
+	} {
+		payload, err := json.Marshal(map[string]any{"nested": []any{map[string]string{"value": value}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if containsAbsolutePathInSanitizedJSON(payload) {
+			t.Fatalf("sanitized JSON absolute-path detector misclassified %q", value)
+		}
+	}
+}
+
+func intPointer(value int) *int { return &value }
 
 func fixedCaptureClock(start time.Time, elapsed time.Duration) func() time.Time {
 	calls := 0

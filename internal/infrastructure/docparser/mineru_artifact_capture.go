@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	minerUCaptureContract             = "mineru-native-artifact-capture.v1"
+	minerUCaptureContract             = "mineru-semantic-content-custody.v2"
 	minerUCaptureFileName             = "mineru-native-structure.json"
 	minerUAPIKeyEnvironmentVariable   = "MINERU_API_KEY"
 	minerUCaptureParserImplementation = "NewMinerUCloudReader"
+	minerUCaptureAttemptNumber        = 2
+	minerUCaptureAttemptRole          = "bounded_upgrade"
+	minerUCaptureGeneration           = 0
 )
 
 var (
@@ -33,8 +36,17 @@ var (
 type MinerUArtifactCaptureRequest struct {
 	SourcePath      string
 	SourceSHA256    string
+	AttemptNumber   int
+	AttemptRole     string
+	Generation      *int
 	OutputDir       string
 	ParserOverrides map[string]string
+}
+
+type minerUCaptureAttemptIdentity struct {
+	AttemptNumber int    `json:"attempt_number"`
+	AttemptRole   string `json:"attempt_role"`
+	Generation    int    `json:"generation"`
 }
 
 type minerUCloudCallLedger struct {
@@ -63,16 +75,20 @@ type minerUCaptureParserLedger struct {
 }
 
 type minerUCaptureEvidence struct {
-	Contract            string                     `json:"contract"`
-	SourceSHA256        string                     `json:"source_sha256"`
-	RawSHA256           string                     `json:"raw_sha256"`
-	SanitizedSHA256     string                     `json:"sanitized_sha256"`
-	SanitizedArtifact   json.RawMessage            `json:"sanitized_artifact"`
-	Parser              minerUCaptureParserLedger  `json:"parser"`
-	Calls               minerUCloudCallLedger      `json:"calls"`
-	LatencyMilliseconds int64                      `json:"latency_milliseconds"`
-	Status              string                     `json:"status"`
-	CrossPageFacts      *minerUCrossPageProjection `json:"cross_page_facts,omitempty"`
+	Contract                 string                       `json:"contract"`
+	SourceSHA256             string                       `json:"source_sha256"`
+	Attempt                  minerUCaptureAttemptIdentity `json:"attempt"`
+	RawStructureSHA256       string                       `json:"raw_structure_sha256"`
+	SanitizedStructureSHA256 string                       `json:"sanitized_structure_sha256"`
+	SanitizedStructure       json.RawMessage              `json:"sanitized_structure"`
+	ContentSnapshotSHA256    string                       `json:"content_snapshot_sha256"`
+	ContentSnapshot          string                       `json:"content_snapshot"`
+	CaptureIdentitySHA256    string                       `json:"capture_identity_sha256"`
+	Parser                   minerUCaptureParserLedger    `json:"parser"`
+	Calls                    minerUCloudCallLedger        `json:"calls"`
+	LatencyMilliseconds      int64                        `json:"latency_milliseconds"`
+	Status                   string                       `json:"status"`
+	CrossPageFacts           *minerUCrossPageProjection   `json:"cross_page_facts,omitempty"`
 }
 
 type minerUCapturePublishHooks struct {
@@ -81,7 +97,7 @@ type minerUCapturePublishHooks struct {
 }
 
 // CaptureMinerUNativeStructure performs one bounded provider attempt and emits
-// one sanitized evidence file. It never reads credentials from arguments.
+// one private structure-and-content custody file. It never reads credentials from arguments.
 func CaptureMinerUNativeStructure(ctx context.Context, req MinerUArtifactCaptureRequest) (string, error) {
 	return captureMinerUNativeStructure(ctx, req, os.LookupEnv, newMinerUArtifactCaptureReader, time.Now)
 }
@@ -128,6 +144,12 @@ func captureMinerUNativeStructure(
 	if err := validateMinerUCaptureArtifact(artifact, req.SourceSHA256, req.SourcePath, apiKey); err != nil {
 		return "", err
 	}
+	contentSnapshot := result.MarkdownContent
+	if err := validateMinerUCaptureContent(contentSnapshot, req.SourcePath, apiKey); err != nil {
+		return "", err
+	}
+	contentHash := sha256.Sum256([]byte(contentSnapshot))
+	contentSHA256 := hex.EncodeToString(contentHash[:])
 	calls := reader.captureCallLedger()
 	if calls.AllocationPOST != 1 || calls.UploadPUT != 1 || calls.StatusGET < 1 ||
 		calls.StatusGET > maxMinerUStatusPolls || calls.ZIPGET != 1 {
@@ -137,12 +159,24 @@ func captureMinerUNativeStructure(
 	if err := validateMinerUCrossPageProjection(crossPageFacts, req.SourceSHA256); err != nil {
 		return "", fmt.Errorf("%w: cross-page projection custody", ErrMinerUArtifactCaptureFailed)
 	}
+	attempt := minerUCaptureAttemptIdentity{
+		AttemptNumber: req.AttemptNumber,
+		AttemptRole:   req.AttemptRole,
+		Generation:    *req.Generation,
+	}
 	evidence := minerUCaptureEvidence{
-		Contract:            minerUCaptureContract,
-		SourceSHA256:        req.SourceSHA256,
-		RawSHA256:           artifact.RawSHA256,
-		SanitizedSHA256:     artifact.SanitizedSHA256,
-		SanitizedArtifact:   json.RawMessage(append([]byte(nil), artifact.SanitizedJSON...)),
+		Contract:                 minerUCaptureContract,
+		SourceSHA256:             req.SourceSHA256,
+		Attempt:                  attempt,
+		RawStructureSHA256:       artifact.RawSHA256,
+		SanitizedStructureSHA256: artifact.SanitizedSHA256,
+		SanitizedStructure:       json.RawMessage(append([]byte(nil), artifact.SanitizedJSON...)),
+		ContentSnapshotSHA256:    contentSHA256,
+		ContentSnapshot:          contentSnapshot,
+		CaptureIdentitySHA256: captureMinerUIdentitySHA256(
+			req.SourceSHA256, attempt, parser.ConfigSHA256, artifact.RawSHA256,
+			artifact.SanitizedSHA256, contentSHA256,
+		),
 		Parser:              parser,
 		Calls:               calls,
 		LatencyMilliseconds: finished.Sub(started).Milliseconds(),
@@ -211,6 +245,8 @@ func publishMinerUCaptureEvidence(outputDir string, payload []byte, hooks minerU
 
 func validateMinerUCaptureInput(req MinerUArtifactCaptureRequest) ([]byte, minerUCaptureParserLedger, map[string]string, error) {
 	if req.SourcePath == "" || req.OutputDir == "" || !validLowerSHA256(req.SourceSHA256) ||
+		req.AttemptNumber != minerUCaptureAttemptNumber || req.AttemptRole != minerUCaptureAttemptRole ||
+		req.Generation == nil || *req.Generation != minerUCaptureGeneration ||
 		!strings.EqualFold(filepath.Ext(req.SourcePath), ".pdf") {
 		return nil, minerUCaptureParserLedger{}, nil, ErrMinerUArtifactCaptureInvalidInput
 	}
@@ -296,7 +332,124 @@ func validateMinerUCaptureArtifact(artifact *types.NativeStructureArtifact, sour
 			return fmt.Errorf("%w: sanitized artifact contains forbidden data", ErrMinerUArtifactCaptureFailed)
 		}
 	}
+	if containsAbsolutePathInSanitizedJSON(artifact.SanitizedJSON) {
+		return fmt.Errorf("%w: sanitized artifact contains forbidden data", ErrMinerUArtifactCaptureFailed)
+	}
 	return nil
+}
+
+func containsAbsolutePathInSanitizedJSON(payload []byte) bool {
+	var decoded any
+	if json.Unmarshal(payload, &decoded) != nil {
+		return true
+	}
+	return containsAbsolutePathInJSONValue(decoded)
+}
+
+func containsAbsolutePathInJSONValue(value any) bool {
+	switch typed := value.(type) {
+	case string:
+		return containsCrossPlatformAbsolutePath(typed)
+	case []any:
+		for _, item := range typed {
+			if containsAbsolutePathInJSONValue(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, item := range typed {
+			if containsAbsolutePathInJSONValue(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateMinerUCaptureContent(content, sourcePath, apiKey string) error {
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("%w: content snapshot is empty", ErrMinerUArtifactCaptureFailed)
+	}
+	for _, forbidden := range []string{sourcePath, apiKey, "file://", "/Users/", "/private/", "/tmp/"} {
+		if forbidden != "" && strings.Contains(content, forbidden) {
+			return fmt.Errorf("%w: content snapshot contains forbidden data", ErrMinerUArtifactCaptureFailed)
+		}
+	}
+	if containsCrossPlatformAbsolutePath(content) {
+		return fmt.Errorf("%w: content snapshot contains forbidden data", ErrMinerUArtifactCaptureFailed)
+	}
+	return nil
+}
+
+func containsCrossPlatformAbsolutePath(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if !capturePathBoundary(value, index) {
+			continue
+		}
+		rest := value[index:]
+		if rest[0] == '/' {
+			if len(rest) > 1 && rest[1] != '/' && !capturePathSeparator(rest[1]) {
+				return true
+			}
+			if strings.HasPrefix(rest, "//") && captureUNCPath(rest[2:], '/') {
+				return true
+			}
+		}
+		if strings.HasPrefix(rest, `\\`) && captureUNCPath(rest[2:], '\\') {
+			return true
+		}
+		if len(rest) > 2 && ((rest[0] >= 'A' && rest[0] <= 'Z') ||
+			(rest[0] >= 'a' && rest[0] <= 'z')) && rest[1] == ':' &&
+			(rest[2] == '/' || rest[2] == '\\') {
+			return true
+		}
+	}
+	return false
+}
+
+func capturePathBoundary(value string, index int) bool {
+	if index == 0 {
+		return true
+	}
+	previous := value[index-1]
+	if previous == ':' {
+		prefix := strings.ToLower(value[:index])
+		return !strings.HasSuffix(prefix, "http:") && !strings.HasSuffix(prefix, "https:")
+	}
+	return !((previous >= 'A' && previous <= 'Z') || (previous >= 'a' && previous <= 'z') ||
+		(previous >= '0' && previous <= '9') || strings.ContainsRune("_-.\\/", rune(previous)))
+}
+
+func capturePathSeparator(value byte) bool {
+	return value == ' ' || value == '\t' || value == '\r' || value == '\n'
+}
+
+func captureUNCPath(value string, separator byte) bool {
+	first := strings.IndexByte(value, separator)
+	return first > 0 && first+1 < len(value) && !capturePathSeparator(value[first+1])
+}
+
+func captureMinerUIdentitySHA256(
+	sourceSHA256 string,
+	attempt minerUCaptureAttemptIdentity,
+	parserConfigSHA256, rawStructureSHA256, sanitizedStructureSHA256, contentSnapshotSHA256 string,
+) string {
+	preimage, _ := json.Marshal(struct {
+		Contract                 string                       `json:"contract"`
+		SourceSHA256             string                       `json:"source_sha256"`
+		Attempt                  minerUCaptureAttemptIdentity `json:"attempt"`
+		ParserConfigSHA256       string                       `json:"parser_config_sha256"`
+		RawStructureSHA256       string                       `json:"raw_structure_sha256"`
+		SanitizedStructureSHA256 string                       `json:"sanitized_structure_sha256"`
+		ContentSnapshotSHA256    string                       `json:"content_snapshot_sha256"`
+	}{
+		Contract: minerUCaptureContract, SourceSHA256: sourceSHA256, Attempt: attempt,
+		ParserConfigSHA256: parserConfigSHA256, RawStructureSHA256: rawStructureSHA256,
+		SanitizedStructureSHA256: sanitizedStructureSHA256,
+		ContentSnapshotSHA256:    contentSnapshotSHA256,
+	})
+	digest := sha256.Sum256(preimage)
+	return hex.EncodeToString(digest[:])
 }
 
 func validLowerSHA256(value string) bool {
