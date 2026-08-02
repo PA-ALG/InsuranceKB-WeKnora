@@ -164,10 +164,13 @@ def _metrics(*, strong: bool) -> vf.ArmQualityMetricsV1:
 def _score(
     *,
     role: Literal["weak", "strong"],
-    status: Literal["SCORED", "GOLDEN_INVALID"] = "SCORED",
+    status: Literal["SCORED", "UNADMITTED_RAW", "GOLDEN_INVALID"] | None = None,
 ) -> vf.AdmittedFrozenArmScoreV1:
     output = _output(role)
     strong = role == "strong"
+    resolved_status: Literal["SCORED", "UNADMITTED_RAW", "GOLDEN_INVALID"] = (
+        ("UNADMITTED_RAW" if strong else "SCORED") if status is None else status
+    )
     correctness = tuple(
         vf.ArmFieldCorrectnessV1(
             field_id=field_id,
@@ -181,14 +184,26 @@ def _score(
         for index, field_id in enumerate(vf.APPROVED_SCHEMA60_FIELD_IDS)
     )
     return vf.AdmittedFrozenArmScoreV1(
-        status=status,
-        reason_codes=(() if status == "SCORED" else ("GOLDEN_596_BYTES_INVALID",)),
+        status=resolved_status,
+        reason_codes=(
+            ("ARM_PROFILE_MISMATCH", "ARM_AUTHORITY_MISMATCH")
+            if resolved_status == "UNADMITTED_RAW"
+            else (
+                ()
+                if resolved_status == "SCORED"
+                else ("GOLDEN_596_BYTES_INVALID",)
+            )
+        ),
         metrics=_metrics(strong=strong),
-        field_correctness=(correctness if status == "SCORED" else ()),
+        field_correctness=(
+            correctness if resolved_status != "GOLDEN_INVALID" else ()
+        ),
         output_hash=output.output_hash,
         arm_identity=output.identity,
         admission_receipt_digest_sha256=_ADMISSION_DIGEST,
-        golden_content_digest_sha256=("b" * 64 if status == "SCORED" else None),
+        golden_content_digest_sha256=(
+            "b" * 64 if resolved_status != "GOLDEN_INVALID" else None
+        ),
     )
 
 
@@ -208,7 +223,10 @@ def _install_scorer(
             if output.identity.semantic_model_id == vf.APPROVED_SEMANTIC_MODEL_ID
             else "strong"
         )
-        return _score(role=role, status=status)
+        return _score(
+            role=role,
+            status=(status if status == "GOLDEN_INVALID" else None),
+        )
 
     monkeypatch.setattr(vf, "score_admitted_frozen_arm", _fake)
     return calls
@@ -484,6 +502,35 @@ def test_scores_both_only_after_hash_freeze_and_emits_answer_safe_delta(
     ):
         assert forbidden not in serialized
     assert len(result.comparison_receipt_hash) == 64
+
+
+def test_blocks_when_strong_single_arm_score_pretends_to_be_scored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake(**kwargs: object) -> vf.AdmittedFrozenArmScoreV1:
+        output = kwargs["arm_output"]
+        assert isinstance(output, vf.FrozenArmOutputV1)
+        role: Literal["weak", "strong"] = (
+            "weak"
+            if output.identity.semantic_model_id == vf.APPROVED_SEMANTIC_MODEL_ID
+            else "strong"
+        )
+        return _score(role=role, status="SCORED")
+
+    monkeypatch.setattr(vf, "score_admitted_frozen_arm", _fake)
+    weak = _output("weak")
+    strong = _output("strong")
+
+    result = ceiling.compare_596_1_weak_strong_ceiling(
+        weak_output=weak,
+        strong_output=strong,
+        strong_execution_receipt=_strong_receipt(strong, weak_output=weak),
+        golden_596_jsonl_bytes=_GOLDEN_BYTES,
+        admitted_parse_artifacts=(),
+    )
+
+    assert result.status == "BLOCKED_ON_REQUIRED_CONTRACTS"
+    assert result.reason_codes == ("PUBLIC_SINGLE_ARM_SCORE_BLOCKED",)
 
 
 def test_golden_invalid_from_public_scorers_produces_no_delta(

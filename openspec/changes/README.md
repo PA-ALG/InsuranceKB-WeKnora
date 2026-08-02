@@ -78,7 +78,7 @@
 | 068 | mineru-semantic-content-custody | ✅ 已随 PR #97 合入 | 060 native structure 的同次 semantic custody |
 | 069 | 596-1-semantic-input-binding | 🚧 独立开发中 | 与 070 零共享写域 |
 | 070 | golden18-human-gate | 🚧 实现中 | 596-1 Golden18 外部具名人工 decision/receipt 纯验证门 |
-| 071 | offline-single-arm-raw-score | 🚧 独立开发中 | 与 072 零共享功能路径；不由本任务修改 |
+| 071 | offline-single-arm-raw-score | 🚧 implementation in progress | Strong-model single-arm results are descriptive `UNADMITTED_RAW`; no production or Release authority |
 | 072 | five-field-source-authority-rebind | 🚧 独立开发中 | 仅纠正 strong blind 裁决确认的五个 task input source/material binding；零 provider/Golden/scorer 改动 |
 | 073+ | （空闲） | | 先占号再开目录 |
 

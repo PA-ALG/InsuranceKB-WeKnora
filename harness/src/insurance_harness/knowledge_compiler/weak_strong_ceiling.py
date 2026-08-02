@@ -632,7 +632,7 @@ def _build_ceiling_comparison_from_scores(
             status="GOLDEN_INVALID",
             reason_codes=("GOLDEN_596_BYTES_INVALID",),
         )
-    if weak_score.status != "SCORED" or strong_score.status != "SCORED":
+    if weak_score.status != "SCORED" or strong_score.status != "UNADMITTED_RAW":
         return _blocked(
             status="BLOCKED_ON_REQUIRED_CONTRACTS",
             reason_codes=("PUBLIC_SINGLE_ARM_SCORE_BLOCKED",),

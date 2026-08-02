@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import Any, Literal, cast
 
 import pytest
@@ -18,9 +19,10 @@ def _model_sha(seed: str) -> str:
 
 def _identity(
     *,
-    model_id: str = "GPT-5.6-sol",
-    model_base: str = "https://api.openai.com/v1",
+    model_id: str = "gpt-5.6-sol",
+    model_base: str = "offline://codex-gpt-5.6-sol",
     model_sha: str = "b" * 64,
+    arm_profile_sha: str = "c" * 64,
 ) -> vf.ArmInputIdentityV1:
     return vf.ArmInputIdentityV1(
         product_version_id=vf.APPROVED_PRODUCT_VERSION_ID,
@@ -35,11 +37,20 @@ def _identity(
         budget_identity_sha256=vf.APPROVED_BUDGET_IDENTITY_SHA256,
         normalizer_identity_sha256=vf.APPROVED_NORMALIZER_IDENTITY_SHA256,
         comparator_identity_sha256=vf.APPROVED_COMPARATOR_IDENTITY_SHA256,
-        arm_profile_sha256="c" * 64,
+        arm_profile_sha256=arm_profile_sha,
         parse_artifact_receipt_digest_sha256=_ADMISSION_DIGEST,
         parser_id="mineru-cloud-pipeline",
         parser_mode="bounded_upgrade",
         parser_attempt=2,
+    )
+
+
+def _approved_identity() -> vf.ArmInputIdentityV1:
+    return _identity(
+        model_id=vf.APPROVED_SEMANTIC_MODEL_ID,
+        model_base=vf.APPROVED_SEMANTIC_API_BASE,
+        model_sha=vf.APPROVED_SEMANTIC_MODEL_IDENTITY_SHA256,
+        arm_profile_sha=vf.APPROVED_ARM_PROFILE_SHA256,
     )
 
 
@@ -146,7 +157,7 @@ def test_public_single_arm_score_api_exists() -> None:
     assert isinstance(score_type, type)
 
 
-def test_scores_exact_mineru_arm_without_authorizing_model(
+def test_scores_offline_strong_arm_only_as_unadmitted_raw(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     golden_reads = _install_ready_fakes(monkeypatch)
@@ -157,13 +168,122 @@ def test_scores_exact_mineru_arm_without_authorizing_model(
         admitted_parse_artifacts=(),
     )
 
-    assert score.status == "SCORED"
-    assert score.reason_codes == ()
+    assert score.status == "UNADMITTED_RAW"
+    assert "ARM_PROFILE_MISMATCH" in score.reason_codes
+    assert "ARM_AUTHORITY_MISMATCH" in score.reason_codes
     assert score.metrics.denominator == 60
     assert score.metrics.exact_field_correct == 60
+    assert score.raw_metrics == vf.RawSingleArmMetricsV1(
+        state_exact=vf.MetricFractionV1(60, 60),
+        present_exact=vf.MetricFractionV1(60, 60),
+        absent_exact=vf.MetricFractionV1(0, 0),
+        known_evidence=vf.MetricFractionV1(60, 60),
+        critical18_raw_exact=vf.MetricFractionV1(18, 18),
+    )
     assert len(score.field_correctness) == 60
     assert golden_reads == [_FAKE_GOLDEN_BYTES]
     assert len(score.score_receipt_hash) == 64
+
+
+def test_scores_only_exact_approved_deepseek_profile_as_scored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_ready_fakes(monkeypatch)
+
+    score = vf.score_admitted_frozen_arm(
+        arm_output=_output(identity=_approved_identity()),
+        golden_596_jsonl_bytes=_FAKE_GOLDEN_BYTES,
+        admitted_parse_artifacts=(),
+    )
+
+    assert score.status == "SCORED"
+    assert "ARM_PROFILE_MISMATCH" not in score.reason_codes
+    assert "ARM_AUTHORITY_MISMATCH" not in score.reason_codes
+
+
+def test_exact_049_parser_retains_absent_explicit_business_values() -> None:
+    golden_path = (
+        Path(__file__).parents[2]
+        / "dataset/goldenset/gs-s0q-596-v1/596.jsonl"
+    )
+
+    golden_bytes = golden_path.read_bytes()
+    golden = vf._parse_approved_golden_bytes(golden_bytes)
+    source_absent_values = {
+        str(record["field_id"]): record["value"]
+        for line in golden_bytes.decode("utf-8").splitlines()
+        if line.strip()
+        for record in (json.loads(line),)
+        if record["tri_state"] == "absent_explicitly"
+    }
+
+    assert golden is not None
+    absent = tuple(
+        field
+        for field in golden.fields
+        if field.expected_state == "absent_explicitly"
+    )
+    assert len(absent) == 2
+    assert {field.field_id: field.expected_value for field in absent} == (
+        source_absent_values
+    )
+    assert all(field.expected_value and field.expected_value.strip() for field in absent)
+
+
+def test_raw_metrics_separate_absent_value_from_state_correctness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_ready_fakes(monkeypatch)
+    golden = _golden()
+    critical_id = "zh_74aa1b9c93"
+    noncritical_id = "zh_ca6e0226c2"
+    golden_fields = tuple(
+        replace(
+            field,
+            expected_state="absent_explicitly",
+            expected_value=(
+                "exact-critical-absence"
+                if field.field_id == critical_id
+                else "exact-noncritical-absence"
+            ),
+        )
+        if field.field_id in {critical_id, noncritical_id}
+        else field
+        for field in golden.fields
+    )
+    monkeypatch.setattr(
+        vf,
+        "_parse_approved_golden_bytes",
+        lambda _value: replace(golden, fields=golden_fields),
+    )
+    fields = tuple(
+        replace(
+            field,
+            state="absent_explicitly",
+            value_snapshot=(
+                "wrong-critical-absence"
+                if field.field_id == critical_id
+                else "exact-noncritical-absence"
+            ),
+        )
+        if field.field_id in {critical_id, noncritical_id}
+        else field
+        for field in _fields()
+    )
+
+    score = vf.score_admitted_frozen_arm(
+        arm_output=_output(fields=fields),
+        golden_596_jsonl_bytes=_FAKE_GOLDEN_BYTES,
+        admitted_parse_artifacts=(),
+    )
+
+    assert score.raw_metrics == vf.RawSingleArmMetricsV1(
+        state_exact=vf.MetricFractionV1(60, 60),
+        present_exact=vf.MetricFractionV1(58, 58),
+        absent_exact=vf.MetricFractionV1(1, 2),
+        known_evidence=vf.MetricFractionV1(60, 60),
+        critical18_raw_exact=vf.MetricFractionV1(17, 18),
+    )
 
 
 @pytest.mark.parametrize(
@@ -264,7 +384,7 @@ def test_model_identity_changes_receipt_not_metrics(
         admitted_parse_artifacts=(),
     )
 
-    assert first.status == second.status == "SCORED"
+    assert first.status == second.status == "UNADMITTED_RAW"
     assert first.metrics == second.metrics
     assert first.field_correctness == second.field_correctness
     assert first.score_receipt_hash != second.score_receipt_hash
@@ -294,7 +414,7 @@ def test_reports_critical_value_and_rate_locator_failures(
     )
 
     score = vf.score_admitted_frozen_arm(
-        arm_output=_output(fields=tuple(fields)),
+        arm_output=_output(identity=_approved_identity(), fields=tuple(fields)),
         golden_596_jsonl_bytes=_FAKE_GOLDEN_BYTES,
         admitted_parse_artifacts=(),
     )
