@@ -72,7 +72,10 @@
 | 062 | mineru-native-cross-page-falsification | ✅ 已合入 main（PR #92） | exact two-document native middle.json fact projection；provider/live=0 |
 | 063 | mineru-two-source-capture-runner | `DELIVERY IN PROGRESS / PROVIDER NOT RUN` | task-local exact terms→rate runner；只组合061/062 capture API，零retry/fallback |
 | 064 | freeform-arm-evidence-binding | `IMPLEMENTATION IN PROGRESS` | 扩展 057：自由文本 field output 与 exact ParsedDocument/ParseManifest locator+quote 的可重放 binding receipt；语义正确性仍归 061 Golden scorer |
-| 065+ | （空闲） | | 先占号再开目录 |
+| 065 | release-proof-596-1 | 🚧 并行 Mission 进行中 | 由独立 Owner 交付，不与 067 共享写域 |
+| 066 | 596-1-weak-strong-ceiling | `RED / BLOCKED ON 067` | 同一 MinerU artifact 上 DeepSeek V4 Flash 与离线 GPT-5.6-sol ceiling |
+| 067 | 061-public-single-arm-golden-score | 🧊 STABLE CANDIDATE / REVIEW PENDING | 只公开已准入 MinerU 单臂对 exact 049 Golden 的确定性评分 seam |
+| 068+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

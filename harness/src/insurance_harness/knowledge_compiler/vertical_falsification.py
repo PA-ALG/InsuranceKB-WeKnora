@@ -892,6 +892,88 @@ class ArmQualityMetricsV1:
 
 
 @dataclass(frozen=True, slots=True)
+class ArmFieldCorrectnessV1:
+    """Answer-free per-field facts produced by the approved Golden comparator."""
+
+    field_id: str
+    critical_priority: Literal["P0", "P1"] | None
+    rate_field: bool
+    tri_state_correct: bool
+    exact_field_correct: bool
+    known_evidence_present: bool
+    rate_locator_complete: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class _FieldEvaluation:
+    field_id: str
+    critical_priority: Literal["P0", "P1"] | None
+    rate_field: bool
+    tri_state_correct: bool
+    normalized_value_evaluated: bool
+    normalized_value_correct: bool | None
+    exact_field_correct: bool
+    abstention: bool
+    miss: bool
+    hallucination: bool
+    wrong_value: bool
+    known_evidence_present: bool
+    rate_locator_complete: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedFrozenArmScoreV1:
+    """One admitted MinerU arm scored without disclosing Golden answers."""
+
+    status: Literal[
+        "SCORED",
+        "BLOCKED_ON_REQUIRED_CONTRACTS",
+        "GOLDEN_INVALID",
+    ]
+    reason_codes: tuple[str, ...]
+    metrics: ArmQualityMetricsV1
+    field_correctness: tuple[ArmFieldCorrectnessV1, ...]
+    output_hash: str | None
+    arm_identity: ArmInputIdentityV1 | None
+    admission_receipt_digest_sha256: str | None
+    golden_content_digest_sha256: str | None
+    golden_release_hash: str = APPROVED_GOLDEN_RELEASE_SHA256
+    golden_artifact_hash: str = APPROVED_GOLDEN_ARTIFACT_SHA256
+    golden_approval_subject_hash: str = APPROVED_GOLDEN_APPROVAL_SUBJECT_SHA256
+    golden_596_jsonl_sha256: str = APPROVED_GOLDEN_596_JSONL_SHA256
+    evaluator_identity_sha256: str = APPROVED_EVALUATOR_IDENTITY_SHA256
+    score_receipt_hash: str = field(init=False)
+
+    def __post_init__(self) -> None:
+        payload = {
+            "status": self.status,
+            "reason_codes": self.reason_codes,
+            "metrics": asdict(self.metrics),
+            "field_correctness": tuple(
+                asdict(item) for item in self.field_correctness
+            ),
+            "output_hash": self.output_hash,
+            "arm_identity": (
+                None if self.arm_identity is None else asdict(self.arm_identity)
+            ),
+            "admission_receipt_digest_sha256": (
+                self.admission_receipt_digest_sha256
+            ),
+            "golden_release_hash": self.golden_release_hash,
+            "golden_artifact_hash": self.golden_artifact_hash,
+            "golden_approval_subject_hash": self.golden_approval_subject_hash,
+            "golden_596_jsonl_sha256": self.golden_596_jsonl_sha256,
+            "golden_content_digest_sha256": self.golden_content_digest_sha256,
+            "evaluator_identity_sha256": self.evaluator_identity_sha256,
+        }
+        object.__setattr__(
+            self,
+            "score_receipt_hash",
+            canonical_hash("admitted-frozen-arm-score.v1", payload),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class VerticalFalsificationDecisionV1:
     terminal_outcome: Literal[
         "QUALITY_GATES_PASS_PENDING_HUMAN_RELEASE",
@@ -1150,21 +1232,32 @@ def _field_set_reasons(
     return []
 
 
-def _quality_metrics(
+def _field_evaluations(
     *,
     output: FrozenArmOutputV1 | None,
     golden: GoldenSetV1,
-) -> ArmQualityMetricsV1:
+) -> tuple[_FieldEvaluation, ...]:
     outputs = {} if output is None else _field_map(output.fields)
-    known = tuple(field for field in golden.fields if field.expected_state != "unknown")
-    critical_known = tuple(field for field in known if field.critical is not None)
-
-    def _basis_points(numerator: int, denominator: int) -> int:
-        return 0 if denominator == 0 else numerator * 10_000 // denominator
-
-    def _has_bound_evidence(field: GoldenFieldV1) -> bool:
-        actual = outputs.get(field.field_id)
-        return bool(
+    evaluations: list[_FieldEvaluation] = []
+    for expected in golden.fields:
+        actual = outputs.get(expected.field_id)
+        state_matches = actual is not None and actual.state == expected.expected_state
+        exact_matches = bool(
+            actual is not None
+            and state_matches
+            and actual.value_snapshot == expected.expected_value
+        )
+        value_evaluated = expected.expected_state == "present"
+        value_matches = (
+            bool(
+                actual is not None
+                and actual.state == "present"
+                and actual.value_snapshot == expected.expected_value
+            )
+            if value_evaluated
+            else None
+        )
+        has_bound_evidence = bool(
             actual
             and actual.state != "unknown"
             and actual.evidence
@@ -1174,58 +1267,86 @@ def _quality_metrics(
                 for evidence in actual.evidence
             )
         )
+        rate_locator_complete = (
+            bool(
+                actual
+                and actual.evidence
+                and all(_rate_locator_complete(item) for item in actual.evidence)
+            )
+            if expected.rate
+            else None
+        )
+        evaluations.append(
+            _FieldEvaluation(
+                field_id=expected.field_id,
+                critical_priority=expected.critical,
+                rate_field=expected.rate,
+                tri_state_correct=state_matches,
+                normalized_value_evaluated=value_evaluated,
+                normalized_value_correct=value_matches,
+                exact_field_correct=exact_matches,
+                abstention=actual is None or actual.state == "unknown",
+                miss=(
+                    expected.expected_state != "unknown"
+                    and (actual is None or actual.state == "unknown")
+                ),
+                hallucination=(
+                    expected.expected_state == "unknown"
+                    and actual is not None
+                    and actual.state != "unknown"
+                ),
+                wrong_value=bool(
+                    value_evaluated
+                    and actual is not None
+                    and actual.state == "present"
+                    and not value_matches
+                ),
+                known_evidence_present=has_bound_evidence,
+                rate_locator_complete=rate_locator_complete,
+            )
+        )
+    return tuple(evaluations)
 
-    tri_state_correct = 0
-    normalized_value_denominator = 0
-    normalized_value_correct = 0
-    abstentions = 0
-    misses = 0
-    hallucinations = 0
-    wrong_values = 0
-    exact_field_correct = 0
-    silent_errors = 0
-    critical_semantic_errors = 0
-    for expected in golden.fields:
-        actual = outputs.get(expected.field_id)
-        state_matches = actual is not None and actual.state == expected.expected_state
-        exact_matches = bool(
-            actual is not None
-            and state_matches
-            and actual.value_snapshot == expected.expected_value
-        )
-        tri_state_correct += state_matches
-        exact_field_correct += exact_matches
-        abstentions += actual is None or actual.state == "unknown"
-        misses += (
-            expected.expected_state != "unknown"
-            and (actual is None or actual.state == "unknown")
-        )
-        hallucinations += (
-            expected.expected_state == "unknown"
-            and actual is not None
-            and actual.state != "unknown"
-        )
-        if expected.expected_state == "present":
-            normalized_value_denominator += 1
-            if (
-                actual is not None
-                and actual.state == "present"
-                and actual.value_snapshot == expected.expected_value
-            ):
-                normalized_value_correct += 1
-            elif actual is not None and actual.state == "present":
-                wrong_values += 1
-        if expected.critical is not None and not exact_matches:
-            critical_semantic_errors += 1
-        if (
-            expected.critical is not None
-            and actual is not None
-            and actual.state != "unknown"
-            and not exact_matches
-        ):
-            silent_errors += 1
 
-    known_with_evidence = sum(_has_bound_evidence(field) for field in known)
+def _quality_metrics(
+    *,
+    output: FrozenArmOutputV1 | None,
+    golden: GoldenSetV1,
+) -> ArmQualityMetricsV1:
+    known = tuple(field for field in golden.fields if field.expected_state != "unknown")
+    critical_known = tuple(field for field in known if field.critical is not None)
+    evaluations = _field_evaluations(output=output, golden=golden)
+
+    def _basis_points(numerator: int, denominator: int) -> int:
+        return 0 if denominator == 0 else numerator * 10_000 // denominator
+
+    tri_state_correct = sum(item.tri_state_correct for item in evaluations)
+    normalized_value_denominator = sum(
+        item.normalized_value_evaluated for item in evaluations
+    )
+    normalized_value_correct = sum(
+        item.normalized_value_correct is True for item in evaluations
+    )
+    abstentions = sum(item.abstention for item in evaluations)
+    misses = sum(item.miss for item in evaluations)
+    hallucinations = sum(item.hallucination for item in evaluations)
+    wrong_values = sum(item.wrong_value for item in evaluations)
+    exact_field_correct = sum(item.exact_field_correct for item in evaluations)
+    silent_errors = sum(
+        item.critical_priority is not None
+        and not item.abstention
+        and not item.exact_field_correct
+        for item in evaluations
+    )
+    critical_semantic_errors = sum(
+        item.critical_priority is not None and not item.exact_field_correct
+        for item in evaluations
+    )
+    known_with_evidence = sum(
+        item.known_evidence_present
+        for item, expected in zip(evaluations, golden.fields, strict=True)
+        if expected.expected_state != "unknown"
+    )
 
     return ArmQualityMetricsV1(
         denominator=len(golden.fields),
@@ -1242,7 +1363,9 @@ def _quality_metrics(
         known_with_evidence=known_with_evidence,
         critical_known_denominator=len(critical_known),
         critical_known_with_evidence=sum(
-            _has_bound_evidence(field) for field in critical_known
+            item.known_evidence_present
+            for item, expected in zip(evaluations, golden.fields, strict=True)
+            if expected.expected_state != "unknown" and expected.critical is not None
         ),
         critical_silent_errors=silent_errors,
         critical_semantic_errors=critical_semantic_errors,
@@ -1274,6 +1397,181 @@ def _rate_locator_complete(evidence: EvidenceLocatorV1) -> bool:
         and evidence.column_span is not None
         and evidence.column_span >= 1
     )
+
+
+def _absolute_gate_reasons(
+    *,
+    output: FrozenArmOutputV1,
+    golden: GoldenSetV1,
+    metrics: ArmQualityMetricsV1,
+) -> list[str]:
+    reasons: list[str] = []
+    if metrics.critical_silent_errors:
+        reasons.append("CRITICAL_SILENT_ERROR")
+    if metrics.critical_semantic_errors:
+        reasons.append("CRITICAL_SEMANTIC_ERROR")
+    if metrics.hallucinations:
+        reasons.append("CANDIDATE_HALLUCINATION")
+    if metrics.tri_state_correct < 57:
+        reasons.append("TRI_STATE_CORRECTNESS_BELOW_57_OF_60")
+    if (
+        metrics.normalized_value_denominator == 0
+        or metrics.normalized_value_correct * 100
+        < metrics.normalized_value_denominator * 95
+    ):
+        reasons.append("NORMALIZED_VALUE_CORRECTNESS_BELOW_95")
+    if metrics.critical_known_with_evidence != metrics.critical_known_denominator:
+        reasons.append("CRITICAL_KNOWN_EVIDENCE_INCOMPLETE")
+    if (
+        metrics.known_denominator == 0
+        or metrics.known_with_evidence * 100 < metrics.known_denominator * 95
+    ):
+        reasons.append("OVERALL_KNOWN_EVIDENCE_BELOW_95")
+
+    output_fields = _field_map(output.fields)
+    for expected in golden.fields:
+        if expected.field_id not in APPROVED_RATE_FIELD_IDS:
+            continue
+        actual = output_fields.get(expected.field_id)
+        if actual is None or not actual.evidence or not all(
+            _rate_locator_complete(evidence) for evidence in actual.evidence
+        ):
+            reasons.append("RATE_EVIDENCE_LOCATOR_INCOMPLETE")
+            break
+    return reasons
+
+
+def _is_plain_nonblank(value: object) -> bool:
+    return type(value) is str and bool(value.strip())
+
+
+def _is_valid_arm_identity(identity: object) -> bool:
+    if type(identity) is not ArmInputIdentityV1:
+        return False
+    try:
+        sources = identity.source_sha256
+        if (
+            type(sources) is not tuple
+            or len(sources) != 3
+            or not all(type(value) is str and _is_sha256(value) for value in sources)
+            or len(set(sources)) != 3
+        ):
+            return False
+        hashes = (
+            identity.schema_sha256,
+            identity.parser_identity_sha256,
+            identity.model_identity_sha256,
+            identity.prompt_identity_sha256,
+            identity.budget_identity_sha256,
+            identity.normalizer_identity_sha256,
+            identity.comparator_identity_sha256,
+            identity.arm_profile_sha256,
+            identity.parse_artifact_receipt_digest_sha256,
+        )
+        return (
+            _is_plain_nonblank(identity.product_version_id)
+            and all(type(value) is str and _is_sha256(value) for value in hashes)
+            and _is_plain_nonblank(identity.schema_version)
+            and _is_plain_nonblank(identity.semantic_model_id)
+            and _is_plain_nonblank(identity.semantic_api_base)
+            and _is_plain_nonblank(identity.parser_id)
+            and _is_plain_nonblank(identity.parser_mode)
+            and type(identity.parser_attempt) is int
+            and identity.parser_attempt >= 1
+        )
+    except AttributeError:
+        return False
+
+
+def _is_optional_plain_string(value: object) -> bool:
+    return value is None or (type(value) is str and bool(value.strip()))
+
+
+def _is_optional_bounded_int(
+    value: object,
+    *,
+    minimum: int,
+) -> bool:
+    return value is None or (type(value) is int and value >= minimum)
+
+
+def _is_valid_evidence_locator(evidence: object) -> bool:
+    if type(evidence) is not EvidenceLocatorV1:
+        return False
+    try:
+        return (
+            type(evidence.source_sha256) is str
+            and _is_sha256(evidence.source_sha256)
+            and _is_plain_nonblank(evidence.quote_snapshot)
+            and _is_optional_bounded_int(evidence.page_number, minimum=1)
+            and all(
+                _is_optional_plain_string(value)
+                for value in (
+                    evidence.block_id,
+                    evidence.table_id,
+                    evidence.cell_id,
+                    evidence.header_snapshot,
+                )
+            )
+            and _is_optional_bounded_int(evidence.row_index, minimum=0)
+            and _is_optional_bounded_int(evidence.column_index, minimum=0)
+            and _is_optional_bounded_int(evidence.row_span, minimum=1)
+            and _is_optional_bounded_int(evidence.column_span, minimum=1)
+        )
+    except AttributeError:
+        return False
+
+
+def _is_valid_arm_field(field_output: object) -> bool:
+    if type(field_output) is not ArmFieldOutputV1:
+        return False
+    try:
+        if (
+            not _is_plain_nonblank(field_output.field_id)
+            or type(field_output.state) is not str
+            or field_output.state
+            not in ("present", "absent_explicitly", "unknown")
+            or type(field_output.evidence) is not tuple
+            or not all(
+                _is_valid_evidence_locator(evidence)
+                for evidence in field_output.evidence
+            )
+        ):
+            return False
+        if field_output.state == "unknown":
+            return field_output.value_snapshot is None
+        return _is_plain_nonblank(field_output.value_snapshot)
+    except AttributeError:
+        return False
+
+
+def _validated_frozen_arm_output(value: object) -> FrozenArmOutputV1 | None:
+    if type(value) is not FrozenArmOutputV1:
+        return None
+    try:
+        if (
+            type(value.arm) is not str
+            or value.arm not in ("baseline", "candidate")
+            or not _is_valid_arm_identity(value.identity)
+            or type(value.fields) is not tuple
+            or not all(_is_valid_arm_field(item) for item in value.fields)
+            or type(value.output_hash) is not str
+            or not _is_sha256(value.output_hash)
+        ):
+            return None
+    except AttributeError:
+        return None
+    return value
+
+
+def _safe_frozen_output_hash(value: object) -> str | None:
+    if type(value) is not FrozenArmOutputV1:
+        return None
+    try:
+        output_hash = value.output_hash
+    except AttributeError:
+        return None
+    return output_hash if type(output_hash) is str and _is_sha256(output_hash) else None
 
 
 def _score_admitted_frozen_outputs(
@@ -1433,43 +1731,13 @@ def _score_admitted_frozen_outputs(
 
     baseline_metrics = _quality_metrics(output=baseline, golden=golden)
     candidate_metrics = _quality_metrics(output=candidate, golden=golden)
-    if candidate_metrics.critical_silent_errors:
-        reasons.append("CRITICAL_SILENT_ERROR")
-    if candidate_metrics.critical_semantic_errors:
-        reasons.append("CRITICAL_SEMANTIC_ERROR")
-    if candidate_metrics.hallucinations:
-        reasons.append("CANDIDATE_HALLUCINATION")
-    if candidate_metrics.tri_state_correct < 57:
-        reasons.append("TRI_STATE_CORRECTNESS_BELOW_57_OF_60")
-    if (
-        candidate_metrics.normalized_value_denominator == 0
-        or candidate_metrics.normalized_value_correct * 100
-        < candidate_metrics.normalized_value_denominator * 95
-    ):
-        reasons.append("NORMALIZED_VALUE_CORRECTNESS_BELOW_95")
-    if (
-        candidate_metrics.critical_known_with_evidence
-        != candidate_metrics.critical_known_denominator
-    ):
-        reasons.append("CRITICAL_KNOWN_EVIDENCE_INCOMPLETE")
-    if (
-        candidate_metrics.known_denominator == 0
-        or candidate_metrics.known_with_evidence * 100
-        < candidate_metrics.known_denominator * 95
-    ):
-        reasons.append("OVERALL_KNOWN_EVIDENCE_BELOW_95")
-
-    if candidate is not None:
-        candidate_fields = _field_map(candidate.fields)
-        for expected in golden.fields:
-            if expected.field_id not in APPROVED_RATE_FIELD_IDS:
-                continue
-            actual = candidate_fields.get(expected.field_id)
-            if actual is None or not actual.evidence or not all(
-                _rate_locator_complete(evidence) for evidence in actual.evidence
-            ):
-                reasons.append("RATE_EVIDENCE_LOCATOR_INCOMPLETE")
-                break
+    reasons.extend(
+        _absolute_gate_reasons(
+            output=candidate,
+            golden=golden,
+            metrics=candidate_metrics,
+        )
+    )
 
     canonical_reasons = tuple(dict.fromkeys(reasons))
     return VerticalFalsificationDecisionV1(
@@ -1588,6 +1856,140 @@ def score_vertical_falsification(
         golden=golden,
         ledger=ledger,
         admission_receipt_digest_sha256=admission_digest,
+    )
+
+
+def score_admitted_frozen_arm(
+    *,
+    arm_output: object,
+    golden_596_jsonl_bytes: object,
+    admitted_parse_artifacts: tuple[AdmittedParseArtifactV1, ...],
+) -> AdmittedFrozenArmScoreV1:
+    """Score one MinerU arm through the exact admission and Golden custody gates."""
+
+    admission = admit_596_1_vertical_falsification(
+        admitted_parse_artifacts=admitted_parse_artifacts,
+    )
+    admission_digest = admission.receipt_digest_sha256
+    if (
+        admission.status != "READY_FOR_QUALITY_FALSIFICATION"
+        or not _is_sha256(admission_digest)
+    ):
+        return AdmittedFrozenArmScoreV1(
+            status="BLOCKED_ON_REQUIRED_CONTRACTS",
+            reason_codes=("PARSE_ARTIFACTS_NOT_ADMITTED",),
+            metrics=_empty_quality_metrics(),
+            field_correctness=(),
+            output_hash=None,
+            arm_identity=None,
+            admission_receipt_digest_sha256=(
+                admission_digest if _is_sha256(admission_digest) else None
+            ),
+            golden_content_digest_sha256=None,
+        )
+
+    output = _validated_frozen_arm_output(arm_output)
+    if output is None:
+        return AdmittedFrozenArmScoreV1(
+            status="BLOCKED_ON_REQUIRED_CONTRACTS",
+            reason_codes=("ARM_OUTPUT_MALFORMED",),
+            metrics=_empty_quality_metrics(),
+            field_correctness=(),
+            output_hash=_safe_frozen_output_hash(arm_output),
+            arm_identity=None,
+            admission_receipt_digest_sha256=admission_digest,
+            golden_content_digest_sha256=None,
+        )
+
+    reasons: list[str] = []
+    if not verify_arm_output_hash(output):
+        reasons.append("ARM_OUTPUT_HASH_MISMATCH")
+    else:
+        identity = output.identity
+        if output.arm != "candidate":
+            reasons.append("ARM_ROLE_MISMATCH")
+        if (
+            identity.product_version_id != APPROVED_PRODUCT_VERSION_ID
+            or identity.source_sha256 != APPROVED_596_1_SOURCE_SHA256
+            or identity.schema_version != APPROVED_SCHEMA_VERSION
+            or identity.schema_sha256 != APPROVED_SCHEMA_REGISTRY_SHA256
+        ):
+            reasons.append("ARM_AUTHORITY_MISMATCH")
+        if (
+            identity.parser_identity_sha256
+            != APPROVED_CANDIDATE_PARSER_IDENTITY_SHA256
+            or (identity.parser_id, identity.parser_mode, identity.parser_attempt)
+            != ("mineru-cloud-pipeline", "bounded_upgrade", 2)
+        ):
+            reasons.append("MINERU_PARSER_IDENTITY_MISMATCH")
+        if (
+            identity.prompt_identity_sha256 != APPROVED_PROMPT_IDENTITY_SHA256
+            or identity.budget_identity_sha256 != APPROVED_BUDGET_IDENTITY_SHA256
+            or identity.normalizer_identity_sha256
+            != APPROVED_NORMALIZER_IDENTITY_SHA256
+            or identity.comparator_identity_sha256
+            != APPROVED_COMPARATOR_IDENTITY_SHA256
+        ):
+            reasons.append("ARM_NON_MODEL_COMPONENT_MISMATCH")
+        if identity.parse_artifact_receipt_digest_sha256 != admission_digest:
+            reasons.append("PARSE_ARTIFACT_RECEIPT_BINDING_MISMATCH")
+        if tuple(field.field_id for field in output.fields) != (
+            APPROVED_SCHEMA60_FIELD_IDS
+        ):
+            reasons.append("SCHEMA60_FIELD_IDENTITY_MISMATCH")
+
+    if reasons:
+        return AdmittedFrozenArmScoreV1(
+            status="BLOCKED_ON_REQUIRED_CONTRACTS",
+            reason_codes=tuple(dict.fromkeys(reasons)),
+            metrics=_empty_quality_metrics(),
+            field_correctness=(),
+            output_hash=None if output is None else output.output_hash,
+            arm_identity=None if output is None else output.identity,
+            admission_receipt_digest_sha256=admission_digest,
+            golden_content_digest_sha256=None,
+        )
+
+    golden = _parse_approved_golden_bytes(golden_596_jsonl_bytes)
+    if golden is None:
+        return AdmittedFrozenArmScoreV1(
+            status="GOLDEN_INVALID",
+            reason_codes=("GOLDEN_596_BYTES_INVALID",),
+            metrics=_empty_quality_metrics(),
+            field_correctness=(),
+            output_hash=output.output_hash,
+            arm_identity=output.identity,
+            admission_receipt_digest_sha256=admission_digest,
+            golden_content_digest_sha256=None,
+        )
+
+    evaluations = _field_evaluations(output=output, golden=golden)
+    metrics = _quality_metrics(output=output, golden=golden)
+    gate_reasons = _absolute_gate_reasons(
+        output=output,
+        golden=golden,
+        metrics=metrics,
+    )
+    return AdmittedFrozenArmScoreV1(
+        status="SCORED",
+        reason_codes=tuple(gate_reasons),
+        metrics=metrics,
+        field_correctness=tuple(
+            ArmFieldCorrectnessV1(
+                field_id=item.field_id,
+                critical_priority=item.critical_priority,
+                rate_field=item.rate_field,
+                tri_state_correct=item.tri_state_correct,
+                exact_field_correct=item.exact_field_correct,
+                known_evidence_present=item.known_evidence_present,
+                rate_locator_complete=item.rate_locator_complete,
+            )
+            for item in evaluations
+        ),
+        output_hash=output.output_hash,
+        arm_identity=output.identity,
+        admission_receipt_digest_sha256=admission_digest,
+        golden_content_digest_sha256=golden.golden_content_digest_sha256,
     )
 
 
@@ -1839,11 +2241,13 @@ def admit_596_1_vertical_falsification(
 __all__ = [
     "ADMITTED_PARSE_ARTIFACTS_CONTRACT_ID",
     "AdmittedParseArtifactV1",
+    "AdmittedFrozenArmScoreV1",
     "APPROVED_ARM_PROFILE_SHA256",
     "APPROVED_CRITICAL18_FIELDS",
     "APPROVED_CRITICAL18_FIELD_IDS",
     "APPROVED_CRITICAL18_SHA256",
     "ArmFieldOutputV1",
+    "ArmFieldCorrectnessV1",
     "ArmInputIdentityV1",
     "ArmQualityMetricsV1",
     "BudgetDecisionV1",
@@ -1858,5 +2262,6 @@ __all__ = [
     "check_call_budget",
     "freeze_arm_output",
     "score_vertical_falsification",
+    "score_admitted_frozen_arm",
     "verify_arm_output_hash",
 ]
