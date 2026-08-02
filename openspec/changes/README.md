@@ -80,7 +80,8 @@
 | 070 | golden18-human-gate | 🚧 实现中 | 596-1 Golden18 外部具名人工 decision/receipt 纯验证门 |
 | 071 | offline-single-arm-raw-score | 🚧 implementation in progress | Strong-model single-arm results are descriptive `UNADMITTED_RAW`; no production or Release authority |
 | 072 | five-field-source-authority-rebind | 🚧 独立开发中 | 仅纠正 strong blind 裁决确认的五个 task input source/material binding；零 provider/Golden/scorer 改动 |
-| 073+ | （空闲） | | 先占号再开目录 |
+| 073 | 596-1-exact8-field-contracts | 🚧 implementation in progress | 四项任务本地合同+四项用户决策权威阻断门；零 provider |
+| 074+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
