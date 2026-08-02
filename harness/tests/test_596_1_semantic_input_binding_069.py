@@ -12,6 +12,7 @@ from typing import Literal
 import pytest
 
 import insurance_harness.knowledge_compiler.semantic_input_binding as semantic_module
+import insurance_harness.knowledge_compiler.weak_strong_ceiling as ceiling_module
 from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.evidence_verifier import (
     ApprovedLocatorSetV1,
@@ -62,6 +63,7 @@ from insurance_harness.knowledge_compiler.semantic_input_binding import (
     compose_596_1_semantic_inputs,
 )
 from insurance_harness.knowledge_compiler.vertical_falsification import (
+    APPROVED_RATE_FIELD_IDS,
     APPROVED_SCHEMA60_FIELD_IDS,
     AdmittedParseArtifactV1,
     VerticalFalsificationAdmission,
@@ -80,6 +82,18 @@ from insurance_harness.template_packages import (
 )
 
 CATALOG_PATH = Path(__file__).parent / "fixtures/material_profile_596_1_052.json"
+GOLDEN_PATH = (
+    Path(__file__).parents[2] / "dataset/goldenset/gs-s0q-596-v1/596.jsonl"
+)
+SOURCE_REBOUND_FIELDS = frozenset(
+    {
+        "zh_0c5a8e59e2",
+        "zh_14b93ce275",
+        "zh_17a83223e4",
+        "zh_f8cc996739",
+        "zh_fd9a0b9fa3",
+    }
+)
 _REAL_061_ADMISSION = admit_596_1_vertical_falsification
 
 
@@ -496,6 +510,85 @@ def test_shared_blueprint_is_exact_8_plus_2_schema60_bijection() -> None:
     )
 
 
+def test_exact_five_fields_follow_approved_golden_terms_evidence_only() -> None:
+    catalog, resolutions = _catalog_and_resolutions()
+    blueprint = build_596_1_shared_task_blueprint(
+        catalog=catalog,
+        resolutions=resolutions,
+        execution_identity=_execution_identity(),
+    )
+    task_by_field = {
+        field_id: task for task in blueprint.tasks for field_id in task.field_ids
+    }
+    golden_rows = {
+        row["field_id"]: row
+        for row in (
+            json.loads(line) for line in GOLDEN_PATH.read_text().splitlines()
+        )
+        if row["field_id"] in SOURCE_REBOUND_FIELDS
+    }
+
+    assert set(golden_rows) == SOURCE_REBOUND_FIELDS
+    assert {row["doc"] for row in golden_rows.values()} == {"保险条款.pdf"}
+    assert all(row["evidence"] for row in golden_rows.values())
+    assert {
+        field_id
+        for field_id, task in task_by_field.items()
+        if task.material_role != catalog.authority_for(field_id).primary_role
+    } == SOURCE_REBOUND_FIELDS
+    assert all(
+        task_by_field[field_id].material_role == "terms"
+        and task_by_field[field_id].source_sha256
+        == resolutions[0].profile.source.sha256
+        and task_by_field[field_id].material_profile_id
+        == resolutions[0].profile.profile_id
+        for field_id in SOURCE_REBOUND_FIELDS
+    )
+    assert all(
+        task_by_field[field_id].material_role
+        == catalog.authority_for(field_id).primary_role
+        for field_id in set(APPROVED_SCHEMA60_FIELD_IDS) - SOURCE_REBOUND_FIELDS
+    )
+    legacy_task_by_field: dict[str, str] = {}
+    for role in ("terms", "brochure"):
+        legacy_fields = tuple(
+            field_id
+            for field_id in APPROVED_SCHEMA60_FIELD_IDS
+            if catalog.authority_for(field_id).primary_role == role
+        )
+        quotient, remainder = divmod(len(legacy_fields), 4)
+        cursor = 0
+        for index in range(4):
+            width = quotient + (1 if index < remainder else 0)
+            legacy_task_by_field.update(
+                {
+                    field_id: f"069:596-1-{role}-semantic-{index + 1:02d}"
+                    for field_id in legacy_fields[cursor : cursor + width]
+                }
+            )
+            cursor += width
+    assert all(
+        task_by_field[field_id].task_id == legacy_task_by_field[field_id]
+        for field_id in set(APPROVED_SCHEMA60_FIELD_IDS)
+        - SOURCE_REBOUND_FIELDS
+        - set(APPROVED_RATE_FIELD_IDS)
+    )
+    mirrored = ceiling_module._approved_task_plan_payload()["tasks"]
+    assert isinstance(mirrored, tuple)
+    assert tuple(
+        (task.task_id, task.material_role, task.field_ids, task.source_sha256)
+        for task in blueprint.tasks
+    ) == tuple(
+        (
+            item["task_id"],
+            item["material_role"],
+            item["field_ids"],
+            item["source_sha256"],
+        )
+        for item in mirrored
+    )
+
+
 def test_model_identity_changes_blueprint_without_changing_task_partition() -> None:
     catalog, resolutions = _catalog_and_resolutions()
     first = build_596_1_shared_task_blueprint(
@@ -567,6 +660,24 @@ def test_composer_binds_same_read_custody_to_054_tasks_and_two_model_arms() -> N
     assert sum(item.initial_attempt is not None for item in composition.tasks) == 8
     assert tuple(item.field_ids for item in composition.arm_blueprints[0].tasks) == tuple(
         item.field_ids for item in composition.arm_blueprints[1].tasks
+    )
+    rebound_tasks = tuple(
+        task
+        for task in composition.tasks
+        if SOURCE_REBOUND_FIELDS.intersection(task.field_ids)
+    )
+    assert {
+        field_id for task in rebound_tasks for field_id in task.field_ids
+    }.issuperset(SOURCE_REBOUND_FIELDS)
+    assert all(
+        task.material_role == "terms"
+        and task.extraction_task is not None
+        and task.extraction_task.task_profile.material_profile.material_role == "terms"
+        and SOURCE_REBOUND_FIELDS.intersection(task.field_ids).issubset(
+            task.extraction_task.task_profile.field_authority.field_ids
+        )
+        and task.extraction_task.task_profile.field_authority.primary_role == "terms"
+        for task in rebound_tasks
     )
     assert all(
         item.attempt.attempt_number == 2
