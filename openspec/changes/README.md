@@ -82,7 +82,11 @@
 | 072 | five-field-source-authority-rebind | 🚧 独立开发中 | 仅纠正 strong blind 裁决确认的五个 task input source/material binding；零 provider/Golden/scorer 改动 |
 | 073 | 596-1-exact8-field-contracts | 🚧 implementation in progress | 四项任务本地合同+四项用户决策权威阻断门；零 provider |
 | 074 | fair-weak-strong-rerun-contract | 🚧 stacked implementation in progress | 依赖 PR #105/073；同一 3PDF/Schema60/task/prompt/budget/normalizer 的一次性双臂冻结门，零 provider |
-| 075+ | （空闲） | | 先占号再开目录 |
+| 075 | golden-v2-human-review-intake | 🧭 Mission 已批准 / 计划中 | 只消费原 P0-7 + P1-11 人工复核；决策齐全前不生成 v2，不运行模型 |
+| 076 | candidate-wiki-member-manifest-compiler | 🧭 Mission 已批准 / 计划中 | Candidate/HumanBatch → deterministic Wiki pages/member manifest；零 provider/DB/WeKnora |
+| 077 | release-human-review-dossier | 🧭 Mission 已批准 / 计划中 | Candidate/Evidence/ChangeSet → 只读 JSON+HTML 审核包；不得默认选择或自批 |
+| 078 | 596-1-incremental-update-vertical | 🧭 Mission 已批准 / 计划中 | 合成 fixture 验证 affected-only enrich/supersede/conflict/retract；零 Golden/provider/Release |
+| 079+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
