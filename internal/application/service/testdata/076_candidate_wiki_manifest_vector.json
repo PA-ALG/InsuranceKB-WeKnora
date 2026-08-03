@@ -1,0 +1,185 @@
+{
+  "contract": "candidate-wiki-manifest-vector.v1",
+  "members": [
+    {
+      "kind": "change_log",
+      "logical_slug": "change-log",
+      "revision_id": "2d232a7adc54dd9c98abfc67fbe18d0cda114255c9d931bb18b2c3f12f7b61ba",
+      "member_digest": "4fe3300947bef085b6863a48aadc92038e5a438bfcc04760360b5e561bd6666e",
+      "title": "Candidate change log",
+      "content": "# Candidate change log\n\n- enrich: 7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d",
+      "payload": {
+        "contract": "candidate-wiki-change-log.v1",
+        "candidate_hash": "91a4bf46106bd5dd963ce9c931e1d88c926bc89c4bc32a57ec77c81c79ae248c",
+        "human_batch_hash": "906b45e6af918664af2edbd1f8796e72203a63aaa2756512bb2ae1f347a878b6",
+        "review_policy_hash": "07daa4b6d576eeae608ebc896758406a41a1104cdbfbba36161610bfd3b39a2c",
+        "base_release_id": "release-vector-r0",
+        "base_activation_epoch": 1,
+        "base_manifest_digest": "ce4ecfd45dcc82140bdc905191cc9b0df2789be8af732777429bc4b15cc264e4",
+        "change_set_hash": "8e79314c1c18dd19cb0b47bab9107cf1b044760034e5abaee2fde0fb3e90d3cb",
+        "changes": [
+          {
+            "action": "enrich",
+            "scope_hash": "7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d",
+            "change_item_hash": "7f1a50042b5bff886895b24918cc3ea99dcbefd055a1396b61e521cd591e57a4",
+            "candidate_change_hash": "6cd072aabe6e2942b5c72c2f23fb89d4c373e369f857c4e2df027d8170e07fbc",
+            "before_member_digest": "1f464a33f9c9313090e33a5fc1fcebcd3e8afd620f7f92fd8913b0719f186d40",
+            "after_member_digest": "718e03b3192b8d78ebc42a968021251735502802a0997791e1ca092e6c65f299",
+            "retraction_proof_hash": null,
+            "fact_hashes": [
+              "8468b3053acbf2d21af931c115c05c9197dff92b5877e36dcac7bef923b51dd1",
+              "93ff9affe449bc2aa9d37702b868924db489fe91993813d98df4885bb279f94f"
+            ],
+            "evidence_hashes": [
+              "26ecc0ee9a13064dc1e351e60037d8193e1a58b1d296913225cf209a37765e4e",
+              "731cb890c09674ec65eace34a133294de5e01bfd7015c629ce10b05ce340b2e2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "page",
+      "logical_slug": "products/de9eeac82925eaa7a940c132/fields/7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d",
+      "revision_id": "0242c93059545bb1973f74dd8ebade98b92ba2622c3a268010446f8b1c7f8ecc",
+      "member_digest": "718e03b3192b8d78ebc42a968021251735502802a0997791e1ca092e6c65f299",
+      "title": "field_enrich",
+      "content": "# field_enrich\n\nStatus: resolved\n\n## Fact 1\n\nValue: {\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}\nEvidence p.1 block locator:b: 证据 b\n\n## Fact 2\n\nValue: {\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}\nEvidence p.1 block locator:c: 证据 c",
+      "payload": {
+        "contract": "candidate-wiki-field-page.v1",
+        "space_id": "space-059",
+        "product_version_id": "596-1",
+        "schema_contract": {
+          "object_type": "schema-contract.v1",
+          "artifact_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        },
+        "scope": {
+          "space_id": "space-059",
+          "product_version_id": "596-1",
+          "subject_id": "product:596-1",
+          "field_id": "field_enrich",
+          "valid_from": "2026-01-01T00:00:00.000000Z",
+          "valid_through": null,
+          "region": "CN",
+          "channel": "all-approved-channels",
+          "population": "eligible-insured",
+          "conditions": ["plan=standard"]
+        },
+        "scope_hash": "7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d",
+        "status": "resolved",
+        "action": "enrich",
+        "candidate_change_hash": "6cd072aabe6e2942b5c72c2f23fb89d4c373e369f857c4e2df027d8170e07fbc",
+        "facts": [
+          {
+            "fact_hash": "8468b3053acbf2d21af931c115c05c9197dff92b5877e36dcac7bef923b51dd1",
+            "candidate_snapshot_hash": "1901eb210f3aed89f19f7e57f6a34aabf9347816509e31ad0b46933ceb470694",
+            "state": "known",
+            "value_hash": "8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1",
+            "value_snapshot": "{\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}",
+            "authority": {
+              "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "source_revision_id": "r-enrich-old",
+              "material_role": "terms",
+              "binding": {
+                "catalog_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "space_id": "space-059",
+                "product_version_id": "596-1",
+                "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "source_revision_id": "r-enrich-old",
+                "material_role": "terms"
+              },
+              "reliable_at": "2026-01-02T00:00:00.000000Z"
+            },
+            "supporting_source_revision_ids": ["r-enrich-old"],
+            "evidence": [
+              {
+                "evidence_hash": "26ecc0ee9a13064dc1e351e60037d8193e1a58b1d296913225cf209a37765e4e",
+                "snapshot": {
+                  "field_id": "field_enrich",
+                  "product_version_id": "596-1",
+                  "source_revision_id": "r-enrich-old",
+                  "parse_attempt_id": "attempt:b",
+                  "parsed_document_hash": "fee9a1746fba580435abff9d38c41fd76cb250908d2d53c85e6c4f907913f822",
+                  "parse_manifest_hash": "dfb5fe4db1dff775da44a7de9ad989920f0aca74239f313771b97ca18344e5a2",
+                  "locator": {
+                    "subject_type": "block",
+                    "subject_ref": "locator:b",
+                    "page_number": 1,
+                    "parent_refs": ["page:b", "table:b"],
+                    "content_snapshot": "上下文 b",
+                    "content_snapshot_sha256": "b926c3f9aa8434e3f2cc4aac26e05e20a87fd01ffb6ae04d832cd4010ac3b31b"
+                  },
+                  "quote_snapshot": "证据 b",
+                  "quote_snapshot_sha256": "e00dd34f08e0c83bc6522f1665d4520ba5985dfa73b7db6ccb60174addcc1d03",
+                  "value_snapshot": "{\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}",
+                  "value_snapshot_sha256": "8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1",
+                  "support_scope": {
+                    "product_version_id": "596-1",
+                    "subject_id": "product:596-1",
+                    "condition_ids": ["plan=standard"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "fact_hash": "93ff9affe449bc2aa9d37702b868924db489fe91993813d98df4885bb279f94f",
+            "candidate_snapshot_hash": "01339f7bc2987393023b062ecb5892bfcf750de36ec68ffb5a21f840a4e21e36",
+            "state": "known",
+            "value_hash": "8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1",
+            "value_snapshot": "{\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}",
+            "authority": {
+              "source_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "source_revision_id": "r-enrich-new",
+              "material_role": "terms",
+              "binding": {
+                "catalog_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "binding_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "space_id": "space-059",
+                "product_version_id": "596-1",
+                "source_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "source_revision_id": "r-enrich-new",
+                "material_role": "terms"
+              },
+              "reliable_at": "2026-01-03T00:00:00.000000Z"
+            },
+            "supporting_source_revision_ids": ["r-enrich-new"],
+            "evidence": [
+              {
+                "evidence_hash": "731cb890c09674ec65eace34a133294de5e01bfd7015c629ce10b05ce340b2e2",
+                "snapshot": {
+                  "field_id": "field_enrich",
+                  "product_version_id": "596-1",
+                  "source_revision_id": "r-enrich-new",
+                  "parse_attempt_id": "attempt:c",
+                  "parsed_document_hash": "870da523c009ef1e30647257c4d2b32980d9193482888f45ca8f61d7f68f8e3a",
+                  "parse_manifest_hash": "768ae6a1f410ce387f2bb0515de5fe61864aac09bbe76e9a628b249fa6acf236",
+                  "locator": {
+                    "subject_type": "block",
+                    "subject_ref": "locator:c",
+                    "page_number": 1,
+                    "parent_refs": ["page:c", "table:c"],
+                    "content_snapshot": "上下文 c",
+                    "content_snapshot_sha256": "9d3296be0cbe467935be913c586115236c9fc0728ca127a284d3364540e94c0a"
+                  },
+                  "quote_snapshot": "证据 c",
+                  "quote_snapshot_sha256": "777be11433deaeb3edef911bed1c72b75f26a00fdca59f2a3dab2e90a2117619",
+                  "value_snapshot": "{\"enum_value\":\"相同\",\"kind\":\"enum\",\"operands\":[]}",
+                  "value_snapshot_sha256": "8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1",
+                  "support_scope": {
+                    "product_version_id": "596-1",
+                    "subject_id": "product:596-1",
+                    "condition_ids": ["plan=standard"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "expected_manifest_utf8": "{\"members\":[{\"kind\":\"change_log\",\"logical_slug\":\"change-log\",\"revision_id\":\"2d232a7adc54dd9c98abfc67fbe18d0cda114255c9d931bb18b2c3f12f7b61ba\",\"member_digest\":\"4fe3300947bef085b6863a48aadc92038e5a438bfcc04760360b5e561bd6666e\",\"title\":\"Candidate change log\",\"content\":\"# Candidate change log\\n\\n- enrich: 7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d\",\"payload\":{\"contract\":\"candidate-wiki-change-log.v1\",\"candidate_hash\":\"91a4bf46106bd5dd963ce9c931e1d88c926bc89c4bc32a57ec77c81c79ae248c\",\"human_batch_hash\":\"906b45e6af918664af2edbd1f8796e72203a63aaa2756512bb2ae1f347a878b6\",\"review_policy_hash\":\"07daa4b6d576eeae608ebc896758406a41a1104cdbfbba36161610bfd3b39a2c\",\"base_release_id\":\"release-vector-r0\",\"base_activation_epoch\":1,\"base_manifest_digest\":\"ce4ecfd45dcc82140bdc905191cc9b0df2789be8af732777429bc4b15cc264e4\",\"change_set_hash\":\"8e79314c1c18dd19cb0b47bab9107cf1b044760034e5abaee2fde0fb3e90d3cb\",\"changes\":[{\"action\":\"enrich\",\"scope_hash\":\"7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d\",\"change_item_hash\":\"7f1a50042b5bff886895b24918cc3ea99dcbefd055a1396b61e521cd591e57a4\",\"candidate_change_hash\":\"6cd072aabe6e2942b5c72c2f23fb89d4c373e369f857c4e2df027d8170e07fbc\",\"before_member_digest\":\"1f464a33f9c9313090e33a5fc1fcebcd3e8afd620f7f92fd8913b0719f186d40\",\"after_member_digest\":\"718e03b3192b8d78ebc42a968021251735502802a0997791e1ca092e6c65f299\",\"retraction_proof_hash\":null,\"fact_hashes\":[\"8468b3053acbf2d21af931c115c05c9197dff92b5877e36dcac7bef923b51dd1\",\"93ff9affe449bc2aa9d37702b868924db489fe91993813d98df4885bb279f94f\"],\"evidence_hashes\":[\"26ecc0ee9a13064dc1e351e60037d8193e1a58b1d296913225cf209a37765e4e\",\"731cb890c09674ec65eace34a133294de5e01bfd7015c629ce10b05ce340b2e2\"]}]}},{\"kind\":\"page\",\"logical_slug\":\"products/de9eeac82925eaa7a940c132/fields/7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d\",\"revision_id\":\"0242c93059545bb1973f74dd8ebade98b92ba2622c3a268010446f8b1c7f8ecc\",\"member_digest\":\"718e03b3192b8d78ebc42a968021251735502802a0997791e1ca092e6c65f299\",\"title\":\"field_enrich\",\"content\":\"# field_enrich\\n\\nStatus: resolved\\n\\n## Fact 1\\n\\nValue: {\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\\nEvidence p.1 block locator:b: 证据 b\\n\\n## Fact 2\\n\\nValue: {\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\\nEvidence p.1 block locator:c: 证据 c\",\"payload\":{\"contract\":\"candidate-wiki-field-page.v1\",\"space_id\":\"space-059\",\"product_version_id\":\"596-1\",\"schema_contract\":{\"object_type\":\"schema-contract.v1\",\"artifact_hash\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\"},\"scope\":{\"space_id\":\"space-059\",\"product_version_id\":\"596-1\",\"subject_id\":\"product:596-1\",\"field_id\":\"field_enrich\",\"valid_from\":\"2026-01-01T00:00:00.000000Z\",\"valid_through\":null,\"region\":\"CN\",\"channel\":\"all-approved-channels\",\"population\":\"eligible-insured\",\"conditions\":[\"plan=standard\"]},\"scope_hash\":\"7bbf86f727e81d6254bc5c97e650ef58d67e1e1ee68ba7a5674174cfbf14ea1d\",\"status\":\"resolved\",\"action\":\"enrich\",\"candidate_change_hash\":\"6cd072aabe6e2942b5c72c2f23fb89d4c373e369f857c4e2df027d8170e07fbc\",\"facts\":[{\"fact_hash\":\"8468b3053acbf2d21af931c115c05c9197dff92b5877e36dcac7bef923b51dd1\",\"candidate_snapshot_hash\":\"1901eb210f3aed89f19f7e57f6a34aabf9347816509e31ad0b46933ceb470694\",\"state\":\"known\",\"value_hash\":\"8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1\",\"value_snapshot\":\"{\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\",\"authority\":{\"source_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"source_revision_id\":\"r-enrich-old\",\"material_role\":\"terms\",\"binding\":{\"catalog_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"binding_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"space_id\":\"space-059\",\"product_version_id\":\"596-1\",\"source_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"source_revision_id\":\"r-enrich-old\",\"material_role\":\"terms\"},\"reliable_at\":\"2026-01-02T00:00:00.000000Z\"},\"supporting_source_revision_ids\":[\"r-enrich-old\"],\"evidence\":[{\"evidence_hash\":\"26ecc0ee9a13064dc1e351e60037d8193e1a58b1d296913225cf209a37765e4e\",\"snapshot\":{\"field_id\":\"field_enrich\",\"product_version_id\":\"596-1\",\"source_revision_id\":\"r-enrich-old\",\"parse_attempt_id\":\"attempt:b\",\"parsed_document_hash\":\"fee9a1746fba580435abff9d38c41fd76cb250908d2d53c85e6c4f907913f822\",\"parse_manifest_hash\":\"dfb5fe4db1dff775da44a7de9ad989920f0aca74239f313771b97ca18344e5a2\",\"locator\":{\"subject_type\":\"block\",\"subject_ref\":\"locator:b\",\"page_number\":1,\"parent_refs\":[\"page:b\",\"table:b\"],\"content_snapshot\":\"上下文 b\",\"content_snapshot_sha256\":\"b926c3f9aa8434e3f2cc4aac26e05e20a87fd01ffb6ae04d832cd4010ac3b31b\"},\"quote_snapshot\":\"证据 b\",\"quote_snapshot_sha256\":\"e00dd34f08e0c83bc6522f1665d4520ba5985dfa73b7db6ccb60174addcc1d03\",\"value_snapshot\":\"{\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\",\"value_snapshot_sha256\":\"8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1\",\"support_scope\":{\"product_version_id\":\"596-1\",\"subject_id\":\"product:596-1\",\"condition_ids\":[\"plan=standard\"]}}}]},{\"fact_hash\":\"93ff9affe449bc2aa9d37702b868924db489fe91993813d98df4885bb279f94f\",\"candidate_snapshot_hash\":\"01339f7bc2987393023b062ecb5892bfcf750de36ec68ffb5a21f840a4e21e36\",\"state\":\"known\",\"value_hash\":\"8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1\",\"value_snapshot\":\"{\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\",\"authority\":{\"source_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"source_revision_id\":\"r-enrich-new\",\"material_role\":\"terms\",\"binding\":{\"catalog_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"binding_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"space_id\":\"space-059\",\"product_version_id\":\"596-1\",\"source_id\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"source_revision_id\":\"r-enrich-new\",\"material_role\":\"terms\"},\"reliable_at\":\"2026-01-03T00:00:00.000000Z\"},\"supporting_source_revision_ids\":[\"r-enrich-new\"],\"evidence\":[{\"evidence_hash\":\"731cb890c09674ec65eace34a133294de5e01bfd7015c629ce10b05ce340b2e2\",\"snapshot\":{\"field_id\":\"field_enrich\",\"product_version_id\":\"596-1\",\"source_revision_id\":\"r-enrich-new\",\"parse_attempt_id\":\"attempt:c\",\"parsed_document_hash\":\"870da523c009ef1e30647257c4d2b32980d9193482888f45ca8f61d7f68f8e3a\",\"parse_manifest_hash\":\"768ae6a1f410ce387f2bb0515de5fe61864aac09bbe76e9a628b249fa6acf236\",\"locator\":{\"subject_type\":\"block\",\"subject_ref\":\"locator:c\",\"page_number\":1,\"parent_refs\":[\"page:c\",\"table:c\"],\"content_snapshot\":\"上下文 c\",\"content_snapshot_sha256\":\"9d3296be0cbe467935be913c586115236c9fc0728ca127a284d3364540e94c0a\"},\"quote_snapshot\":\"证据 c\",\"quote_snapshot_sha256\":\"777be11433deaeb3edef911bed1c72b75f26a00fdca59f2a3dab2e90a2117619\",\"value_snapshot\":\"{\\\"enum_value\\\":\\\"相同\\\",\\\"kind\\\":\\\"enum\\\",\\\"operands\\\":[]}\",\"value_snapshot_sha256\":\"8122ec2a7304b2662f0f838bc55f6d03360e1822fd0b9c0170df1aabac3134d1\",\"support_scope\":{\"product_version_id\":\"596-1\",\"subject_id\":\"product:596-1\",\"condition_ids\":[\"plan=standard\"]}}}]}]}}]}",
+  "expected_manifest_digest": "97caa77abac015a2efdca45684667c70b3672791eb68463d67c0dce966b6cd15"
+}
