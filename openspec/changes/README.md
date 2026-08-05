@@ -86,9 +86,9 @@
 | 076 | candidate-wiki-member-manifest-compiler | 🧭 Mission 已批准 / 计划中 | Candidate/HumanBatch → deterministic Wiki pages/member manifest；零 provider/DB/WeKnora |
 | 077 | release-human-review-dossier | 🧭 Mission 已批准 / 计划中 | Candidate/Evidence/ChangeSet → 只读 JSON+HTML 审核包；不得默认选择或自批 |
 | 078 | 596-1-incremental-update-vertical | 🧭 Mission 已批准 / 计划中 | 合成 fixture 验证 affected-only enrich/supersede/conflict/retract；零 Golden/provider/Release |
-| 079 | fair-experiment-executable-bridge | 🧭 Mission 已批准 / strict TDD 实现中 | 074 frozen pair → 066/071 scoring 前门；零 provider/Golden 值读取 |
-| 080 | candidate-review-release-handoff | 🔒 已登记（目录未开） | 独立后续 Mission；079 不预支范围 |
-| 081 | golden18-xlsx-import-bridge | 🔒 已登记（目录未开） | 独立后续 Mission；079 不预支范围 |
+| 079 | fair-experiment-executable-bridge | ✅ 实现与独立验证完成（PR #112） | 074 frozen pair → 066/071 scoring 前门；零 provider/Golden 值读取 |
+| 080 | candidate-review-release-handoff | ✅ 实现与独立验证完成（PR #114） | Candidate → Review dossier → Release preparation 同身份纵切；零签名/激活 |
+| 081 | golden18-xlsx-import-bridge | ✅ 实现与独立验证完成（PR #113） | 当前人工复核包 → typed 18 项决策请求；空白保持 pending、零 Golden 写入 |
 | 082+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
