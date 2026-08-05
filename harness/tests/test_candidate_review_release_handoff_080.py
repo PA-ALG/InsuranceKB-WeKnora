@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -208,11 +209,11 @@ def test_replay_rejects_self_consistent_caller_forged_manifest() -> None:
 
 
 def test_module_is_pure_and_contains_no_release_authority_surface() -> None:
-    source = open(
-        "harness/src/insurance_harness/knowledge_compiler/"
-        "candidate_review_release_handoff.py",
-        encoding="utf-8",
-    ).read()
+    source = (
+        Path(__file__).parents[1]
+        / "src/insurance_harness/knowledge_compiler/"
+        "candidate_review_release_handoff.py"
+    ).read_text(encoding="utf-8")
     tree = ast.parse(source)
     forbidden = {
         "os",
