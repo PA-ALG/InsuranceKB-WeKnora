@@ -216,6 +216,90 @@ func TestRunCLIRejectsCredentialFlagsWithoutEchoingValue(t *testing.T) {
 	}
 }
 
+func TestRunThreeSourceCaptureRetainsFixedReasonAcrossPrefixAndLogFormat(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		failAt int
+		prefix string
+	}{
+		{name: "terms", failAt: 1, prefix: "MinerU terms capture failed"},
+		{name: "partial", failAt: 2, prefix: "MinerU capture failed after earlier evidence was preserved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("LOG_FORMAT", "json")
+			repositoryRoot := copyFrozenCaptureSources(t, false)
+			outputRoot := absentPrivateOutput(t)
+			calls := 0
+			err := runThreeSourceCapture(context.Background(), repositoryRoot, outputRoot, runnerDependencies{
+				lookupEnv: func(string) (string, bool) { return "in-memory-secret", true },
+				capture: func(_ context.Context, req docparser.MinerUArtifactCaptureRequest) (string, error) {
+					calls++
+					if calls == tc.failAt {
+						return "", fmt.Errorf("%w: provider secret https://signed.invalid", docparser.ErrMinerUAllocationFailed)
+					}
+					return writeFakeCaptureArtifact(t, req, 0o600), nil
+				},
+				stdout: &bytes.Buffer{},
+			})
+			stable := stableRunnerError(err)
+			want := tc.prefix + ": ALLOCATION_FAILED"
+			if stable == nil || stable.Error() != want || calls != tc.failAt {
+				t.Fatalf("runner reason drifted: calls=%d got=%v want=%s", calls, stable, want)
+			}
+			for _, forbidden := range []string{"provider secret", "signed.invalid", "in-memory-secret"} {
+				if strings.Contains(stable.Error(), forbidden) {
+					t.Fatalf("runner leaked %q: %v", forbidden, stable)
+				}
+			}
+		})
+	}
+}
+
+func TestStableRunnerErrorUsesClosedReasonCodes(t *testing.T) {
+	tests := []struct {
+		reason error
+		code   string
+	}{
+		{docparser.ErrMinerUAllocationFailed, "ALLOCATION_FAILED"},
+		{docparser.ErrMinerUUploadFailed, "UPLOAD_FAILED"},
+		{docparser.ErrMinerUStatusFailed, "STATUS_FAILED"},
+		{docparser.ErrMinerUProviderTaskFailed, "PROVIDER_TASK_FAILED"},
+		{docparser.ErrMinerUCloudPollBudgetExceeded, "STATUS_BUDGET_EXCEEDED"},
+		{docparser.ErrMinerUDownloadURLInvalid, "DOWNLOAD_URL_INVALID"},
+		{docparser.ErrMinerUZIPDownloadFailed, "ZIP_DOWNLOAD_FAILED"},
+		{docparser.ErrMinerUNativeStructureUnavailable, "NATIVE_STRUCTURE_UNAVAILABLE"},
+		{docparser.ErrMinerUCrossPageProjectionInvalid, "CROSS_PAGE_PROJECTION_INVALID"},
+		{docparser.ErrMinerUArtifactCustodyInvalid, "ARTIFACT_CUSTODY_INVALID"},
+		{docparser.ErrMinerUContentCustodyInvalid, "CONTENT_CUSTODY_INVALID"},
+		{errors.New("unrecognized provider secret"), "CAPTURE_STAGE_UNDETERMINED"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.code, func(t *testing.T) {
+			err := captureFailure(0, fmt.Errorf("%w: provider secret https://signed.invalid", tc.reason))
+			stable := stableRunnerError(err)
+			want := ErrMinerUThreeSourceCaptureFailed.Error() + ": " + tc.code
+			if stable.Error() != want {
+				t.Fatalf("reason=%q, want %q", stable, want)
+			}
+			if strings.Contains(stable.Error(), "provider secret") || strings.Contains(stable.Error(), "signed.invalid") {
+				t.Fatalf("raw detail escaped: %v", stable)
+			}
+		})
+	}
+}
+
+func TestStableRunnerErrorHidesSafeZIPDeadlineSentinel(t *testing.T) {
+	err := captureFailure(0, fmt.Errorf("%w: %w", docparser.ErrMinerUZIPDownloadFailed, context.DeadlineExceeded))
+	stable := stableRunnerError(err)
+	want := ErrMinerUThreeSourceCaptureFailed.Error() + ": ZIP_DOWNLOAD_FAILED"
+	if stable == nil || stable.Error() != want {
+		t.Fatalf("runner deadline reason drifted: got=%v want=%s", stable, want)
+	}
+	if strings.Contains(stable.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("runner exposed internal deadline detail: %v", stable)
+	}
+}
+
 func copyFrozenCaptureSources(t *testing.T, mutateTerms bool) string {
 	t.Helper()
 	repositoryRoot := t.TempDir()

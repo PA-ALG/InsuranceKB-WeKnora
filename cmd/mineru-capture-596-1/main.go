@@ -113,15 +113,15 @@ func runThreeSourceCapture(ctx context.Context, repositoryRoot, outputRoot strin
 			},
 		})
 		if captureErr != nil {
-			return captureFailure(index)
+			return captureFailure(index, captureErr)
 		}
 		digest, relative, err := validateCapturedEvidence(outputRoot, source.role, artifact)
 		if err != nil {
-			return captureFailure(index)
+			return captureFailure(index, err)
 		}
 		if _, err := fmt.Fprintf(stdout, "status=completed role=%s artifact=%s sha256=%s\n",
 			source.maskedRole, relative, digest); err != nil {
-			return captureFailure(index)
+			return captureFailure(index, docparser.ErrMinerUArtifactCustodyInvalid)
 		}
 	}
 	return nil
@@ -183,34 +183,71 @@ func preflightThreeSourceCapture(
 func validateCapturedEvidence(outputRoot, role, artifact string) (string, string, error) {
 	expected := filepath.Join(outputRoot, role, captureArtifactName)
 	if artifact != expected {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	info, err := os.Lstat(expected)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	payload, err := os.ReadFile(expected)
 	if err != nil {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:]), filepath.ToSlash(filepath.Join(role, captureArtifactName)), nil
 }
 
-func captureFailure(index int) error {
+func captureFailure(index int, reason error) error {
+	typed := stableCaptureReason(reason)
 	if index == 0 {
-		return ErrMinerUThreeSourceCaptureFailed
+		return fmt.Errorf("%w: %w", ErrMinerUThreeSourceCaptureFailed, typed)
 	}
-	return ErrMinerUThreeSourceCapturePartial
+	return fmt.Errorf("%w: %w", ErrMinerUThreeSourceCapturePartial, typed)
 }
 
 func stableRunnerError(err error) error {
+	reason := stableCaptureReason(err)
+	code := stableCaptureReasonCode(reason)
 	switch {
 	case errors.Is(err, ErrMinerUThreeSourceCapturePartial):
-		return ErrMinerUThreeSourceCapturePartial
+		return errors.New(ErrMinerUThreeSourceCapturePartial.Error() + ": " + code)
 	case errors.Is(err, ErrMinerUThreeSourceCaptureFailed):
-		return ErrMinerUThreeSourceCaptureFailed
+		return errors.New(ErrMinerUThreeSourceCaptureFailed.Error() + ": " + code)
 	default:
 		return ErrMinerUThreeSourcePreflight
 	}
+}
+
+func stableCaptureReasonCode(reason error) string {
+	switch {
+	case errors.Is(reason, docparser.ErrMinerUCloudPollBudgetExceeded):
+		return "STATUS_BUDGET_EXCEEDED"
+	case errors.Is(reason, docparser.ErrMinerUNativeStructureUnavailable):
+		return "NATIVE_STRUCTURE_UNAVAILABLE"
+	case errors.Is(reason, docparser.ErrMinerUCrossPageProjectionInvalid):
+		return "CROSS_PAGE_PROJECTION_INVALID"
+	default:
+		return reason.Error()
+	}
+}
+
+func stableCaptureReason(err error) error {
+	for _, reason := range []error{
+		docparser.ErrMinerUAllocationFailed,
+		docparser.ErrMinerUUploadFailed,
+		docparser.ErrMinerUStatusFailed,
+		docparser.ErrMinerUProviderTaskFailed,
+		docparser.ErrMinerUCloudPollBudgetExceeded,
+		docparser.ErrMinerUDownloadURLInvalid,
+		docparser.ErrMinerUZIPDownloadFailed,
+		docparser.ErrMinerUNativeStructureUnavailable,
+		docparser.ErrMinerUCrossPageProjectionInvalid,
+		docparser.ErrMinerUArtifactCustodyInvalid,
+		docparser.ErrMinerUContentCustodyInvalid,
+	} {
+		if errors.Is(err, reason) {
+			return reason
+		}
+	}
+	return docparser.ErrMinerUCaptureStageUndetermined
 }

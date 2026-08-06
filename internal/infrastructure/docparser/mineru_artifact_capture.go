@@ -29,6 +29,9 @@ var (
 	ErrMinerUArtifactCaptureInvalidInput = errors.New("MinerU artifact capture input invalid")
 	ErrMinerUArtifactCaptureCredential   = errors.New("MinerU artifact capture credential unavailable")
 	ErrMinerUArtifactCaptureFailed       = errors.New("MinerU artifact capture failed")
+	ErrMinerUCaptureStageUndetermined    = errors.New("CAPTURE_STAGE_UNDETERMINED")
+	ErrMinerUArtifactCustodyInvalid      = errors.New("ARTIFACT_CUSTODY_INVALID")
+	ErrMinerUContentCustodyInvalid       = errors.New("CONTENT_CUSTODY_INVALID")
 )
 
 // MinerUArtifactCaptureRequest binds one caller-owned PDF identity to one
@@ -137,27 +140,33 @@ func captureMinerUNativeStructure(
 		ParserEngineOverrides: overrides,
 	})
 	finished := now()
-	if readErr != nil || result == nil || result.Error != "" || result.NativeStructure == nil {
-		return "", ErrMinerUArtifactCaptureFailed
+	if readErr != nil {
+		return "", minerUCaptureFailure(stableMinerUCaptureReaderFailure(readErr))
+	}
+	if result == nil || result.Error != "" {
+		return "", minerUCaptureFailure(ErrMinerUCaptureStageUndetermined)
+	}
+	if result.NativeStructure == nil {
+		return "", minerUCaptureFailure(ErrMinerUNativeStructureUnavailable)
 	}
 	artifact := result.NativeStructure
 	if err := validateMinerUCaptureArtifact(artifact, req.SourceSHA256, req.SourcePath, apiKey); err != nil {
-		return "", err
+		return "", minerUCaptureFailure(err)
 	}
 	contentSnapshot := result.MarkdownContent
 	if err := validateMinerUCaptureContent(contentSnapshot, req.SourcePath, apiKey); err != nil {
-		return "", err
+		return "", minerUCaptureFailure(err)
 	}
 	contentHash := sha256.Sum256([]byte(contentSnapshot))
 	contentSHA256 := hex.EncodeToString(contentHash[:])
 	calls := reader.captureCallLedger()
 	if calls.AllocationPOST != 1 || calls.UploadPUT != 1 || calls.StatusGET < 1 ||
 		calls.StatusGET > maxMinerUStatusPolls || calls.ZIPGET != 1 {
-		return "", fmt.Errorf("%w: provider call budget violated", ErrMinerUArtifactCaptureFailed)
+		return "", minerUCaptureFailure(ErrMinerUArtifactCustodyInvalid)
 	}
 	crossPageFacts := reader.captureCrossPageProjection()
 	if err := validateMinerUCrossPageProjection(crossPageFacts, req.SourceSHA256); err != nil {
-		return "", fmt.Errorf("%w: cross-page projection custody", ErrMinerUArtifactCaptureFailed)
+		return "", minerUCaptureFailure(ErrMinerUCrossPageProjectionInvalid)
 	}
 	attempt := minerUCaptureAttemptIdentity{
 		AttemptNumber: req.AttemptNumber,
@@ -185,15 +194,19 @@ func captureMinerUNativeStructure(
 	}
 	payload, err := json.Marshal(evidence)
 	if err != nil {
-		return "", ErrMinerUArtifactCaptureFailed
+		return "", minerUCaptureFailure(ErrMinerUArtifactCustodyInvalid)
 	}
 	payload = append(payload, '\n')
-	return publishMinerUCaptureEvidence(req.OutputDir, payload, minerUCapturePublishHooks{})
+	path, err := publishMinerUCaptureEvidence(req.OutputDir, payload, minerUCapturePublishHooks{})
+	if err != nil {
+		return "", minerUCaptureFailure(err)
+	}
+	return path, nil
 }
 
 func publishMinerUCaptureEvidence(outputDir string, payload []byte, hooks minerUCapturePublishHooks) (string, error) {
 	if err := os.Mkdir(outputDir, 0o700); err != nil {
-		return "", fmt.Errorf("%w: create private output", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	removeDir := true
 	defer func() {
@@ -203,13 +216,13 @@ func publishMinerUCaptureEvidence(outputDir string, payload []byte, hooks minerU
 	}()
 	temp, err := os.CreateTemp(outputDir, ".mineru-native-structure-")
 	if err != nil {
-		return "", fmt.Errorf("%w: create evidence", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	tempPath := temp.Name()
 	defer func() { _ = os.Remove(tempPath) }()
 	if err := temp.Chmod(0o600); err != nil {
 		_ = temp.Close()
-		return "", fmt.Errorf("%w: secure evidence", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	writeTemp := hooks.writeTemp
 	if writeTemp == nil {
@@ -222,25 +235,51 @@ func publishMinerUCaptureEvidence(outputDir string, payload []byte, hooks minerU
 	}
 	if err := writeTemp(temp, payload); err != nil {
 		_ = temp.Close()
-		return "", fmt.Errorf("%w: persist evidence", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	if err := temp.Close(); err != nil {
-		return "", fmt.Errorf("%w: close evidence", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	finalPath := filepath.Join(outputDir, minerUCaptureFileName)
 	if hooks.beforePublish != nil {
 		if err := hooks.beforePublish(finalPath); err != nil {
-			return "", fmt.Errorf("%w: publication hook", ErrMinerUArtifactCaptureFailed)
+			return "", ErrMinerUArtifactCustodyInvalid
 		}
 	}
 	if err := os.Link(tempPath, finalPath); err != nil {
-		return "", fmt.Errorf("%w: publish evidence no-replace", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	if err := os.Remove(tempPath); err != nil {
-		return "", fmt.Errorf("%w: clean publication temp", ErrMinerUArtifactCaptureFailed)
+		return "", ErrMinerUArtifactCustodyInvalid
 	}
 	removeDir = false
 	return finalPath, nil
+}
+
+func stableMinerUCaptureReaderFailure(err error) error {
+	if errors.Is(err, ErrMinerUZIPDownloadFailed) && errors.Is(err, context.DeadlineExceeded) {
+		return safeMinerUZIPDeadlineFailure()
+	}
+	for _, sentinel := range []error{
+		ErrMinerUAllocationFailed,
+		ErrMinerUUploadFailed,
+		ErrMinerUStatusFailed,
+		ErrMinerUProviderTaskFailed,
+		ErrMinerUCloudPollBudgetExceeded,
+		ErrMinerUDownloadURLInvalid,
+		ErrMinerUZIPDownloadFailed,
+		ErrMinerUNativeStructureUnavailable,
+		ErrMinerUCrossPageProjectionInvalid,
+	} {
+		if errors.Is(err, sentinel) {
+			return sentinel
+		}
+	}
+	return ErrMinerUCaptureStageUndetermined
+}
+
+func minerUCaptureFailure(reason error) error {
+	return fmt.Errorf("%w: %w", reason, ErrMinerUArtifactCaptureFailed)
 }
 
 func validateMinerUCaptureInput(req MinerUArtifactCaptureRequest) ([]byte, minerUCaptureParserLedger, map[string]string, error) {
@@ -321,19 +360,19 @@ func validateMinerUCaptureArtifact(artifact *types.NativeStructureArtifact, sour
 	if artifact.SchemaVersion != minerUStructureSchema || artifact.SourceSHA256 != sourceSHA ||
 		!validLowerSHA256(artifact.RawSHA256) || !validLowerSHA256(artifact.SanitizedSHA256) ||
 		!json.Valid(artifact.SanitizedJSON) {
-		return fmt.Errorf("%w: native artifact identity invalid", ErrMinerUArtifactCaptureFailed)
+		return ErrMinerUArtifactCustodyInvalid
 	}
 	hash := sha256.Sum256(artifact.SanitizedJSON)
 	if hex.EncodeToString(hash[:]) != artifact.SanitizedSHA256 {
-		return fmt.Errorf("%w: sanitized artifact hash mismatch", ErrMinerUArtifactCaptureFailed)
+		return ErrMinerUArtifactCustodyInvalid
 	}
 	for _, forbidden := range []string{sourcePath, filepath.Base(sourcePath), apiKey, "https://", "http://", "signed_url"} {
 		if forbidden != "" && bytesContains(artifact.SanitizedJSON, forbidden) {
-			return fmt.Errorf("%w: sanitized artifact contains forbidden data", ErrMinerUArtifactCaptureFailed)
+			return ErrMinerUArtifactCustodyInvalid
 		}
 	}
 	if containsAbsolutePathInSanitizedJSON(artifact.SanitizedJSON) {
-		return fmt.Errorf("%w: sanitized artifact contains forbidden data", ErrMinerUArtifactCaptureFailed)
+		return ErrMinerUArtifactCustodyInvalid
 	}
 	return nil
 }
@@ -368,15 +407,15 @@ func containsAbsolutePathInJSONValue(value any) bool {
 
 func validateMinerUCaptureContent(content, sourcePath, apiKey string) error {
 	if strings.TrimSpace(content) == "" {
-		return fmt.Errorf("%w: content snapshot is empty", ErrMinerUArtifactCaptureFailed)
+		return ErrMinerUContentCustodyInvalid
 	}
 	for _, forbidden := range []string{sourcePath, apiKey, "file://", "/Users/", "/private/", "/tmp/"} {
 		if forbidden != "" && strings.Contains(content, forbidden) {
-			return fmt.Errorf("%w: content snapshot contains forbidden data", ErrMinerUArtifactCaptureFailed)
+			return ErrMinerUContentCustodyInvalid
 		}
 	}
 	if containsCrossPlatformAbsolutePath(content) {
-		return fmt.Errorf("%w: content snapshot contains forbidden data", ErrMinerUArtifactCaptureFailed)
+		return ErrMinerUContentCustodyInvalid
 	}
 	return nil
 }

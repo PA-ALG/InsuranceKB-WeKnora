@@ -862,6 +862,82 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 	}
 }
 
+func TestCaptureMinerUNativeStructurePreservesSafeTypedReasonAndCustodyClasses(t *testing.T) {
+	parent := t.TempDir()
+	sourcePath := filepath.Join(parent, "source.pdf")
+	source := []byte("source")
+	if err := os.WriteFile(sourcePath, source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(source)
+	sourceSHA := hex.EncodeToString(digest[:])
+	request := MinerUArtifactCaptureRequest{
+		SourcePath: sourcePath, SourceSHA256: sourceSHA,
+		AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
+		ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+	}
+	sensitiveDetail := "provider secret https://signed.invalid/private.zip"
+	tests := map[string]struct {
+		err          error
+		want         error
+		wantDeadline bool
+	}{
+		"allocation":    {err: fmt.Errorf("%w: %s", ErrMinerUAllocationFailed, sensitiveDetail), want: ErrMinerUAllocationFailed},
+		"upload":        {err: fmt.Errorf("%w: %s", ErrMinerUUploadFailed, sensitiveDetail), want: ErrMinerUUploadFailed},
+		"status":        {err: fmt.Errorf("%w: %s", ErrMinerUStatusFailed, sensitiveDetail), want: ErrMinerUStatusFailed},
+		"provider-task": {err: fmt.Errorf("%w: %s", ErrMinerUProviderTaskFailed, sensitiveDetail), want: ErrMinerUProviderTaskFailed},
+		"poll-budget":   {err: fmt.Errorf("%w: %s", ErrMinerUCloudPollBudgetExceeded, sensitiveDetail), want: ErrMinerUCloudPollBudgetExceeded},
+		"download-url":  {err: fmt.Errorf("%w: %s", ErrMinerUDownloadURLInvalid, sensitiveDetail), want: ErrMinerUDownloadURLInvalid},
+		"zip":           {err: fmt.Errorf("%w: %s", ErrMinerUZIPDownloadFailed, sensitiveDetail), want: ErrMinerUZIPDownloadFailed},
+		"zip-deadline":  {err: fmt.Errorf("%w: %w", ErrMinerUZIPDownloadFailed, context.DeadlineExceeded), want: ErrMinerUZIPDownloadFailed, wantDeadline: true},
+		"native":        {err: fmt.Errorf("%w: %s", ErrMinerUNativeStructureUnavailable, sensitiveDetail), want: ErrMinerUNativeStructureUnavailable},
+		"cross-page":    {err: fmt.Errorf("%w: %s", ErrMinerUCrossPageProjectionInvalid, sensitiveDetail), want: ErrMinerUCrossPageProjectionInvalid},
+		"unknown":       {err: errors.New(sensitiveDetail), want: ErrMinerUCaptureStageUndetermined},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			request.OutputDir = filepath.Join(parent, name)
+			reader := &fakeMinerUCaptureReader{err: tc.err}
+			_, err := captureMinerUNativeStructure(
+				context.Background(), request,
+				func(string) (string, bool) { return "in-memory-secret", true },
+				func(map[string]string) minerUCaptureReader { return reader },
+				fixedCaptureClock(time.Time{}, 0),
+			)
+			if err == nil || !errors.Is(err, tc.want) || !errors.Is(err, ErrMinerUArtifactCaptureFailed) {
+				t.Fatalf("typed reason drifted: got=%v want=%v", err, tc.want)
+			}
+			if errors.Is(err, context.DeadlineExceeded) != tc.wantDeadline {
+				t.Fatalf("deadline custody drifted: got=%v want=%v", err, tc.wantDeadline)
+			}
+			for _, forbidden := range []string{"provider secret", "signed.invalid", "private.zip"} {
+				if strings.Contains(err.Error(), forbidden) {
+					t.Fatalf("sensitive reader detail escaped: %v", err)
+				}
+			}
+			if _, statErr := os.Stat(request.OutputDir); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("failed capture left output: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestMinerUCaptureCustodyFailuresUseDistinctTypedReasons(t *testing.T) {
+	artifact := &types.NativeStructureArtifact{
+		SchemaVersion:   minerUStructureSchema,
+		SourceSHA256:    strings.Repeat("a", 64),
+		RawSHA256:       strings.Repeat("b", 64),
+		SanitizedJSON:   []byte(`{"contract":"mineru-native-structure.v1"}`),
+		SanitizedSHA256: strings.Repeat("c", 64),
+	}
+	if err := validateMinerUCaptureArtifact(artifact, strings.Repeat("a", 64), "/private/source.pdf", "secret"); !errors.Is(err, ErrMinerUArtifactCustodyInvalid) || errors.Is(err, ErrMinerUContentCustodyInvalid) {
+		t.Fatalf("artifact custody reason drifted: %v", err)
+	}
+	if err := validateMinerUCaptureContent("", "/private/source.pdf", "secret"); !errors.Is(err, ErrMinerUContentCustodyInvalid) || errors.Is(err, ErrMinerUArtifactCustodyInvalid) {
+		t.Fatalf("content custody reason drifted: %v", err)
+	}
+}
+
 func TestValidateMinerUCaptureContentAllowsNonPathSlashesAndURLs(t *testing.T) {
 	t.Parallel()
 	for _, content := range []string{

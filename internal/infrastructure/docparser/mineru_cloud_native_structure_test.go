@@ -82,6 +82,73 @@ func TestMinerUCloudPollingIsBoundedAndTransportFailFast(t *testing.T) {
 	}
 }
 
+func TestMinerUCapturePolicyReturnsFixedStageReasonsWithoutRawDetail(t *testing.T) {
+	secret := "Bearer secret provider body https://signed.invalid/private.zip"
+	assertReason := func(t *testing.T, err, want error) {
+		t.Helper()
+		if err == nil || !errors.Is(err, want) || err.Error() != want.Error() {
+			t.Fatalf("reason=%v, want %v", err, want)
+		}
+		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "signed.invalid") {
+			t.Fatalf("sensitive provider detail escaped: %v", err)
+		}
+	}
+
+	t.Run("allocation", func(t *testing.T) {
+		reader := &MinerUCloudReader{apiKey: "synthetic", baseURL: "://" + secret, capturePolicy: true}
+		_, _, err := reader.applyUploadURLs(context.Background(), "document.pdf", "pipeline")
+		assertReason(t, err, ErrMinerUAllocationFailed)
+	})
+
+	t.Run("upload", func(t *testing.T) {
+		reader := &MinerUCloudReader{capturePolicy: true}
+		assertReason(t, reader.uploadFile(context.Background(), "://"+secret, []byte("pdf")), ErrMinerUUploadFailed)
+	})
+
+	t.Run("status", func(t *testing.T) {
+		reader := &MinerUCloudReader{
+			capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				return nil, errors.New(secret)
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		assertReason(t, err, ErrMinerUStatusFailed)
+	})
+
+	t.Run("provider-task", func(t *testing.T) {
+		reader := &MinerUCloudReader{
+			capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				return []extractResultItem{{State: "failed", ErrMsg: secret}}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		assertReason(t, err, ErrMinerUProviderTaskFailed)
+	})
+
+	t.Run("download-url", func(t *testing.T) {
+		reader := &MinerUCloudReader{capturePolicy: true}
+		_, _, _, err := reader.extractDoneResult(
+			context.Background(), &extractResultItem{State: "done"}, strings.Repeat("f", 64), "pipeline",
+		)
+		assertReason(t, err, ErrMinerUDownloadURLInvalid)
+	})
+
+	t.Run("zip-download", func(t *testing.T) {
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New(secret)
+		})}
+		_, _, _, _, err := downloadAndExtractZip(
+			context.Background(), "https://capture.invalid/result.zip", strings.Repeat("f", 64),
+			"pipeline", true, client, func(string) error { return nil },
+		)
+		assertReason(t, err, ErrMinerUZIPDownloadFailed)
+	})
+}
+
 func TestMinerUCloudRedirectPolicyIsCaptureLocal(t *testing.T) {
 	t.Parallel()
 	ordinary := NewMinerUCloudReader(map[string]string{"mineru_api_key": "synthetic"})
@@ -131,7 +198,8 @@ func TestMinerUArtifactCaptureDeadlineCancelsBlockedZIP(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	_, _, _, err := reader.pollBatchResult(ctx, "batch", strings.Repeat("f", 64), "pipeline")
-	if !errors.Is(err, context.DeadlineExceeded) || zipRequests != 1 || time.Since(started) > time.Second {
+	if !errors.Is(err, ErrMinerUZIPDownloadFailed) || !errors.Is(err, context.DeadlineExceeded) ||
+		zipRequests != 1 || time.Since(started) > time.Second {
 		t.Fatalf("real blocked ZIP request did not inherit capture deadline: requests=%d elapsed=%s err=%v", zipRequests, time.Since(started), err)
 	}
 }
