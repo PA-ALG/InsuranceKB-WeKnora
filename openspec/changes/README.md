@@ -89,6 +89,7 @@
 | 079 | fair-experiment-executable-bridge | ✅ 实现与独立验证完成（PR #112） | 074 frozen pair → 066/071 scoring 前门；零 provider/Golden 值读取 |
 | 080 | candidate-review-release-handoff | ✅ 实现与独立验证完成（PR #114） | Candidate → Review dossier → Release preparation 同身份纵切；零签名/激活 |
 | 081 | golden18-xlsx-import-bridge | ✅ 实现与独立验证完成（PR #113） | 当前人工复核包 → typed 18 项决策请求；空白保持 pending、零 Golden 写入 |
+| 083 | mineru-capture-custody-intake | 🚧 独立开发中 | exact Go v2 capture bytes → immutable typed exact-three intake；零 provider/Golden/ADMIT |
 | 082+ | （空闲） | | 先占号再开目录 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
