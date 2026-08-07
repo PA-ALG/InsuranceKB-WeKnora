@@ -24,6 +24,7 @@ type fakeMinerUCaptureReader struct {
 	err            error
 	calls          minerUCloudCallLedger
 	crossPageFacts *minerUCrossPageProjection
+	failureCustody *minerUCrossPageFailureCustody
 	reads          int
 }
 
@@ -179,6 +180,47 @@ func TestProjectMinerUCrossPageFactsFromNativeMiddleOnly(t *testing.T) {
 	})
 }
 
+func TestProjectMinerUCrossPageAcceptsObservedMinerUCloudInventoryMembers(t *testing.T) {
+	t.Parallel()
+	middle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[` +
+		`{"type":"title","index":0,"level":1,"bbox":[0,0,1,1]},` +
+		`{"type":"index","index":1,"bbox":[0,1,1,2]}]}]}`
+	zipBytes := crossPageFixtureZip(t, []crossPageFixtureEntry{
+		{"b5453b64-5123-468b-995e-109604f99c26_content_list_v2.json", `[]`},
+		{"b5453b64-5123-468b-995e-109604f99c26_origin.pdf", "synthetic source copy"},
+		{"layout.json", middle},
+	})
+
+	projection, err := projectMinerUCrossPageZip(zipBytes, minerUTermsSourceSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	categories := make(map[string]int, len(projection.Members))
+	for _, member := range projection.Members {
+		categories[member.Category]++
+	}
+	for category, want := range map[string]int{
+		"middle_json": 1, "content_list_v2_json": 1, "origin_pdf": 1,
+	} {
+		if categories[category] != want {
+			t.Fatalf("observed MinerU member category drifted: category=%s got=%d want=%d all=%v",
+				category, categories[category], want, categories)
+		}
+	}
+	if projection.Status != minerUCrossPageAbsent || projection.NativeMemberSHA256 == "" {
+		t.Fatalf("layout.json was not consumed as native MinerU structure: %#v", projection)
+	}
+	markers, err := projectMinerUCrossPageMarkerProvenanceZip(zipBytes, minerUTermsSourceSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if markers.NativeHierarchy == nil || markers.NativeHierarchy.Status != minerUNativeHierarchyCaptured ||
+		markers.NativeHierarchy.NodeCount != 2 || markers.NativeHierarchy.HierarchyFieldCount != 1 {
+		t.Fatalf("observed MinerU hierarchy schema was not retained: %#v", markers.NativeHierarchy)
+	}
+}
+
 func TestProjectMinerUCrossPageRejectsHostileZIP(t *testing.T) {
 	t.Parallel()
 	validMiddle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[]}`
@@ -269,10 +311,12 @@ func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.
 	middle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
 		`{"page_idx":0,"para_blocks":[{"type":"text","lines":[{"spans":[` +
 		`{"type":"text","cross_page":true}]}]}]},{"page_idx":1,"para_blocks":[]}]}`
-	projection, err := projectMinerUCrossPageZip(
-		crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", middle}}),
-		minerUTermsSourceSHA256,
-	)
+	zipData := crossPageFixtureZip(t, []crossPageFixtureEntry{{"result_middle.json", middle}})
+	projection, err := projectMinerUCrossPageZip(zipData, minerUTermsSourceSHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker, err := projectMinerUCrossPageMarkerProvenanceZip(zipData, minerUTermsSourceSHA256)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +340,9 @@ func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.
 			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
 		},
 		func(string) (string, bool) { return "in-memory-secret", true },
-		func(map[string]string) minerUCaptureReader { return reader },
+		func(map[string]string) minerUCaptureReader {
+			return &markerCustodyFakeReader{fakeMinerUCaptureReader: reader, marker: marker}
+		},
 		fixedCaptureClock(time.Time{}, time.Millisecond),
 	)
 	if err != nil {
@@ -310,7 +356,9 @@ func TestCaptureMinerUNativeStructureCarriesExactCrossPageProjection(t *testing.
 	if err := json.Unmarshal(payload, &evidence); err != nil {
 		t.Fatal(err)
 	}
-	if evidence.CrossPageFacts == nil || evidence.CrossPageFacts.Status != minerUCrossPageAmbiguous ||
+	if evidence.CrossPageFacts == nil || evidence.CrossPageMarkerProvenance == nil ||
+		evidence.CrossPageMarkerProvenance.ReplayDigestSHA256 != marker.ReplayDigestSHA256 ||
+		evidence.CrossPageFacts.Status != minerUCrossPageAmbiguous ||
 		evidence.CrossPageFacts.RelationCount != 0 || len(evidence.CrossPageFacts.Relations) != 0 ||
 		evidence.CrossPageFacts.SourceSHA256 != minerUTermsSourceSHA256 {
 		t.Fatalf("private capture evidence dropped projection custody: %#v", evidence.CrossPageFacts)
@@ -386,6 +434,258 @@ func (f *fakeMinerUCaptureReader) captureCallLedger() minerUCloudCallLedger { re
 
 func (f *fakeMinerUCaptureReader) captureCrossPageProjection() *minerUCrossPageProjection {
 	return f.crossPageFacts
+}
+
+func (f *fakeMinerUCaptureReader) takeCrossPageFailureCustody() *minerUCrossPageFailureCustody {
+	custody := f.failureCustody
+	f.failureCustody = nil
+	return custody
+}
+
+func TestCaptureMinerUNativeStructurePublishesPrivateCrossPageFailureCustody(t *testing.T) {
+	parent := t.TempDir()
+	sourcePath := filepath.Join(parent, "source.pdf")
+	source := []byte("exact synthetic pdf bytes")
+	if err := os.WriteFile(sourcePath, source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(source)
+	sourceSHA := hex.EncodeToString(digest[:])
+	rawZIP := []byte("private raw MinerU ZIP bytes")
+	rawDigest := sha256.Sum256(rawZIP)
+	outputDir := filepath.Join(parent, "failure-custody")
+	reader := &fakeMinerUCaptureReader{
+		err:   fmt.Errorf("%w: structural node", ErrMinerUCrossPageProjectionInvalid),
+		calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 2, ZIPGET: 1},
+		failureCustody: &minerUCrossPageFailureCustody{
+			ReasonCode:   "STRUCTURAL_NODE_INVALID",
+			RawZIP:       append([]byte(nil), rawZIP...),
+			RawZIPSHA256: hex.EncodeToString(rawDigest[:]),
+		},
+	}
+
+	_, err := captureMinerUNativeStructure(
+		context.Background(),
+		MinerUArtifactCaptureRequest{
+			SourcePath: sourcePath, SourceSHA256: sourceSHA, OutputDir: outputDir,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		},
+		func(string) (string, bool) { return "in-memory-secret", true },
+		func(map[string]string) minerUCaptureReader { return reader },
+		fixedCaptureClock(time.Time{}, 0),
+	)
+	if !errors.Is(err, ErrMinerUCrossPageProjectionInvalid) ||
+		!errors.Is(err, ErrMinerUArtifactCaptureFailed) {
+		t.Fatalf("projection failure reason drifted: %v", err)
+	}
+	if reader.failureCustody != nil {
+		t.Fatal("private failure custody was not consumed exactly once")
+	}
+	info, statErr := os.Stat(outputDir)
+	if statErr != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("failure custody directory is not private: info=%v err=%v", info, statErr)
+	}
+	rawPath := filepath.Join(outputDir, minerUCaptureFailureZIPFileName)
+	metadataPath := filepath.Join(outputDir, minerUCaptureFailureFileName)
+	for _, path := range []string{rawPath, metadataPath} {
+		info, statErr := os.Stat(path)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			t.Fatalf("failure custody file is not private: path=%s info=%v err=%v", path, info, statErr)
+		}
+	}
+	gotRaw, readErr := os.ReadFile(rawPath)
+	if readErr != nil || !bytes.Equal(gotRaw, rawZIP) {
+		t.Fatalf("raw ZIP custody drifted: err=%v", readErr)
+	}
+	metadataBytes, readErr := os.ReadFile(metadataPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	var metadata minerUCrossPageFailureEvidence
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode failure evidence: %v", err)
+	}
+	if metadata.Contract != minerUCrossPageFailureContract || metadata.SourceSHA256 != sourceSHA ||
+		metadata.ReasonCode != "STRUCTURAL_NODE_INVALID" ||
+		metadata.RawZIPSHA256 != hex.EncodeToString(rawDigest[:]) ||
+		metadata.RawZIPBytes != len(rawZIP) || metadata.Status != "blocked" ||
+		metadata.Calls != reader.calls {
+		t.Fatalf("failure evidence drifted: %#v", metadata)
+	}
+	if _, statErr := os.Stat(filepath.Join(outputDir, minerUCaptureFileName)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("failed capture published success evidence: %v", statErr)
+	}
+	for _, forbidden := range []string{"private raw MinerU ZIP bytes", sourcePath, "in-memory-secret", "https://"} {
+		if bytes.Contains(metadataBytes, []byte(forbidden)) || strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("failure surface leaked %q", forbidden)
+		}
+	}
+}
+
+func TestCaptureMinerUNativeStructurePublishesPrivateNativeStructureFailureCustody(t *testing.T) {
+	parent := t.TempDir()
+	sourcePath := filepath.Join(parent, "source.pdf")
+	source := []byte("exact synthetic pdf bytes")
+	if err := os.WriteFile(sourcePath, source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(source)
+	sourceSHA := hex.EncodeToString(digest[:])
+	rawZIP := []byte("private raw MinerU ZIP bytes")
+	rawDigest := sha256.Sum256(rawZIP)
+	outputDir := filepath.Join(parent, "failure-custody")
+	reader := &fakeMinerUCaptureReader{
+		err:   ErrMinerUNativeStructureUnavailable,
+		calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 2, ZIPGET: 1},
+		failureCustody: &minerUCrossPageFailureCustody{
+			ReasonCode:   "NATIVE_STRUCTURE_UNAVAILABLE",
+			RawZIP:       append([]byte(nil), rawZIP...),
+			RawZIPSHA256: hex.EncodeToString(rawDigest[:]),
+		},
+	}
+
+	_, err := captureMinerUNativeStructure(
+		context.Background(),
+		MinerUArtifactCaptureRequest{
+			SourcePath: sourcePath, SourceSHA256: sourceSHA, OutputDir: outputDir,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		},
+		func(string) (string, bool) { return "in-memory-secret", true },
+		func(map[string]string) minerUCaptureReader { return reader },
+		fixedCaptureClock(time.Time{}, 0),
+	)
+	if !errors.Is(err, ErrMinerUNativeStructureUnavailable) ||
+		!errors.Is(err, ErrMinerUArtifactCaptureFailed) {
+		t.Fatalf("native structure failure reason drifted: %v", err)
+	}
+	if reader.failureCustody != nil {
+		t.Fatal("private failure custody was not consumed exactly once")
+	}
+	metadataBytes, readErr := os.ReadFile(filepath.Join(outputDir, minerUCaptureFailureFileName))
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	var metadata minerUCrossPageFailureEvidence
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		t.Fatalf("decode failure evidence: %v", err)
+	}
+	if metadata.ReasonCode != "NATIVE_STRUCTURE_UNAVAILABLE" ||
+		metadata.RawZIPSHA256 != hex.EncodeToString(rawDigest[:]) {
+		t.Fatalf("native structure failure evidence drifted: %#v", metadata)
+	}
+	gotRaw, readErr := os.ReadFile(filepath.Join(outputDir, minerUCaptureFailureZIPFileName))
+	if readErr != nil || !bytes.Equal(gotRaw, rawZIP) {
+		t.Fatalf("raw ZIP custody drifted: err=%v", readErr)
+	}
+}
+
+func TestPublishMinerUCrossPageFailureCustodyRejectsUnrecognizedReasonCode(t *testing.T) {
+	rawZIP := []byte("private raw ZIP")
+	digest := sha256.Sum256(rawZIP)
+	outputDir := filepath.Join(t.TempDir(), "failure-custody")
+	err := publishMinerUCrossPageFailureCustody(
+		outputDir,
+		minerUCrossPageFailureEvidence{
+			Contract: minerUCrossPageFailureContract, SourceSHA256: strings.Repeat("a", 64),
+			Attempt:    minerUCaptureAttemptIdentity{AttemptNumber: 2, AttemptRole: "bounded_upgrade"},
+			Parser:     minerUCaptureParserLedger{Engine: "mineru_cloud"},
+			Calls:      minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 1, ZIPGET: 1},
+			ReasonCode: "ATTACKER_CONTROLLED_DETAIL", RawZIPSHA256: hex.EncodeToString(digest[:]),
+			RawZIPBytes: len(rawZIP), RawZIPFileName: minerUCaptureFailureZIPFileName, Status: "blocked",
+		},
+		rawZIP,
+	)
+	if !errors.Is(err, ErrMinerUArtifactCustodyInvalid) {
+		t.Fatalf("unrecognized reason was admitted: %v", err)
+	}
+	if _, statErr := os.Stat(outputDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("rejected reason left failure output: %v", statErr)
+	}
+}
+
+func TestRecoverMinerUNativeStructureFromExactFailureCustody(t *testing.T) {
+	root := t.TempDir()
+	sourcePath := filepath.Join(
+		"..", "..", "..", "dataset", "shouxian_product",
+		"平安e生保（尊享版）医疗保险", "保险条款.pdf",
+	)
+	sourceSHA := minerUTermsSourceSHA256
+	middle := `{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[{"type":"text","lines":[{"spans":[{"type":"text","cross_page":true}]}]}]},` +
+		`{"page_idx":1,"para_blocks":[{"type":"text","lines_deleted":true,"lines":[]}]}]}`
+	contentList := `[{"type":"text","text":"source","page_idx":0,"bbox":[0,0,1,1]},` +
+		`{"type":"text","text":"","page_idx":1,"bbox":[0,0,1,1]}]`
+	rawZIP := crossPageFixtureZip(t, []crossPageFixtureEntry{
+		{"result.md", "source presentation"},
+		{"result_content_list.json", contentList},
+		{"layout.json", middle},
+	})
+	generation := 0
+	req := MinerUArtifactCaptureRequest{
+		SourcePath: sourcePath, SourceSHA256: sourceSHA,
+		AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: &generation,
+		OutputDir:       filepath.Join(root, "recovered"),
+		ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+	}
+	_, parser, _, err := validateMinerUCaptureInput(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failureDir := filepath.Join(root, "failed")
+	rawDigest := sha256.Sum256(rawZIP)
+	if err := publishMinerUCrossPageFailureCustody(
+		failureDir,
+		minerUCrossPageFailureEvidence{
+			Contract: minerUCrossPageFailureContract, SourceSHA256: sourceSHA,
+			Attempt: minerUCaptureAttemptIdentity{AttemptNumber: 2, AttemptRole: "bounded_upgrade"},
+			Parser:  parser, Calls: minerUCloudCallLedger{AllocationPOST: 1, UploadPUT: 1, StatusGET: 2, ZIPGET: 1},
+			ReasonCode: "UNSUPPORTED_MEMBER_CLASS", RawZIPSHA256: hex.EncodeToString(rawDigest[:]),
+			RawZIPBytes: len(rawZIP), RawZIPFileName: minerUCaptureFailureZIPFileName,
+			Status: "blocked",
+		},
+		rawZIP,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	path, err := RecoverMinerUNativeStructureFromFailureCustody(req, failureDir)
+	if err != nil {
+		t.Fatalf("exact failure custody was not recoverable offline: %v", err)
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence minerUCaptureEvidence
+	if err := json.Unmarshal(payload, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Status != "completed" || evidence.Calls.ZIPGET != 1 ||
+		evidence.CrossPageMarkerProvenance == nil || evidence.CrossPageMarkerProvenance.MarkerCount != 2 {
+		t.Fatalf("offline recovered evidence drifted: %#v", evidence)
+	}
+}
+
+func TestCaptureContentAllowsHTMLClosingTagsWithoutAllowingAbsolutePaths(t *testing.T) {
+	for _, valid := range []string{
+		"<table><tr><td>每日1次/Day</td></tr></table>",
+		"责任分组：/境内医疗/境外医疗",
+	} {
+		if err := validateMinerUCaptureContent(valid, "source.pdf", ""); err != nil {
+			t.Fatalf("valid HTML or bilingual slash was treated as an absolute path: %v", err)
+		}
+	}
+	for _, hostile := range []string{
+		"<table></Users/private/file></table>",
+		"<table><td>/private/data</td></table>",
+		"中文句号。/var/private-data",
+	} {
+		if err := validateMinerUCaptureContent(hostile, "source.pdf", ""); err == nil {
+			t.Fatal("absolute path escaped through HTML handling")
+		}
+	}
 }
 
 func TestCaptureMinerUNativeStructureWritesSameReadSemanticCustody(t *testing.T) {
@@ -859,6 +1159,82 @@ func TestCaptureMinerUNativeStructureRejectsProviderAndArtifactFailuresWithoutOu
 				t.Fatalf("failed capture left output: %v", statErr)
 			}
 		})
+	}
+}
+
+func TestCaptureMinerUNativeStructurePreservesSafeTypedReasonAndCustodyClasses(t *testing.T) {
+	parent := t.TempDir()
+	sourcePath := filepath.Join(parent, "source.pdf")
+	source := []byte("source")
+	if err := os.WriteFile(sourcePath, source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(source)
+	sourceSHA := hex.EncodeToString(digest[:])
+	request := MinerUArtifactCaptureRequest{
+		SourcePath: sourcePath, SourceSHA256: sourceSHA,
+		AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: intPointer(0),
+		ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+	}
+	sensitiveDetail := "provider secret https://signed.invalid/private.zip"
+	tests := map[string]struct {
+		err          error
+		want         error
+		wantDeadline bool
+	}{
+		"allocation":    {err: fmt.Errorf("%w: %s", ErrMinerUAllocationFailed, sensitiveDetail), want: ErrMinerUAllocationFailed},
+		"upload":        {err: fmt.Errorf("%w: %s", ErrMinerUUploadFailed, sensitiveDetail), want: ErrMinerUUploadFailed},
+		"status":        {err: fmt.Errorf("%w: %s", ErrMinerUStatusFailed, sensitiveDetail), want: ErrMinerUStatusFailed},
+		"provider-task": {err: fmt.Errorf("%w: %s", ErrMinerUProviderTaskFailed, sensitiveDetail), want: ErrMinerUProviderTaskFailed},
+		"poll-budget":   {err: fmt.Errorf("%w: %s", ErrMinerUCloudPollBudgetExceeded, sensitiveDetail), want: ErrMinerUCloudPollBudgetExceeded},
+		"download-url":  {err: fmt.Errorf("%w: %s", ErrMinerUDownloadURLInvalid, sensitiveDetail), want: ErrMinerUDownloadURLInvalid},
+		"zip":           {err: fmt.Errorf("%w: %s", ErrMinerUZIPDownloadFailed, sensitiveDetail), want: ErrMinerUZIPDownloadFailed},
+		"zip-deadline":  {err: fmt.Errorf("%w: %w", ErrMinerUZIPDownloadFailed, context.DeadlineExceeded), want: ErrMinerUZIPDownloadFailed, wantDeadline: true},
+		"native":        {err: fmt.Errorf("%w: %s", ErrMinerUNativeStructureUnavailable, sensitiveDetail), want: ErrMinerUNativeStructureUnavailable},
+		"cross-page":    {err: fmt.Errorf("%w: %s", ErrMinerUCrossPageProjectionInvalid, sensitiveDetail), want: ErrMinerUCrossPageProjectionInvalid},
+		"unknown":       {err: errors.New(sensitiveDetail), want: ErrMinerUCaptureStageUndetermined},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			request.OutputDir = filepath.Join(parent, name)
+			reader := &fakeMinerUCaptureReader{err: tc.err}
+			_, err := captureMinerUNativeStructure(
+				context.Background(), request,
+				func(string) (string, bool) { return "in-memory-secret", true },
+				func(map[string]string) minerUCaptureReader { return reader },
+				fixedCaptureClock(time.Time{}, 0),
+			)
+			if err == nil || !errors.Is(err, tc.want) || !errors.Is(err, ErrMinerUArtifactCaptureFailed) {
+				t.Fatalf("typed reason drifted: got=%v want=%v", err, tc.want)
+			}
+			if errors.Is(err, context.DeadlineExceeded) != tc.wantDeadline {
+				t.Fatalf("deadline custody drifted: got=%v want=%v", err, tc.wantDeadline)
+			}
+			for _, forbidden := range []string{"provider secret", "signed.invalid", "private.zip"} {
+				if strings.Contains(err.Error(), forbidden) {
+					t.Fatalf("sensitive reader detail escaped: %v", err)
+				}
+			}
+			if _, statErr := os.Stat(request.OutputDir); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("failed capture left output: %v", statErr)
+			}
+		})
+	}
+}
+
+func TestMinerUCaptureCustodyFailuresUseDistinctTypedReasons(t *testing.T) {
+	artifact := &types.NativeStructureArtifact{
+		SchemaVersion:   minerUStructureSchema,
+		SourceSHA256:    strings.Repeat("a", 64),
+		RawSHA256:       strings.Repeat("b", 64),
+		SanitizedJSON:   []byte(`{"contract":"mineru-native-structure.v1"}`),
+		SanitizedSHA256: strings.Repeat("c", 64),
+	}
+	if err := validateMinerUCaptureArtifact(artifact, strings.Repeat("a", 64), "/private/source.pdf", "secret"); !errors.Is(err, ErrMinerUArtifactCustodyInvalid) || errors.Is(err, ErrMinerUContentCustodyInvalid) {
+		t.Fatalf("artifact custody reason drifted: %v", err)
+	}
+	if err := validateMinerUCaptureContent("", "/private/source.pdf", "secret"); !errors.Is(err, ErrMinerUContentCustodyInvalid) || errors.Is(err, ErrMinerUArtifactCustodyInvalid) {
+		t.Fatalf("content custody reason drifted: %v", err)
 	}
 }
 

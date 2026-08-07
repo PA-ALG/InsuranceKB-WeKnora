@@ -473,6 +473,7 @@ class AdmittedParseArtifactV1:
         default=None,
         repr=False,
     )
+    trusted_relation_bindings: tuple[object, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2255,6 +2256,7 @@ def _admitted_parse_artifact_digest(
                     snapshot=document.snapshot,
                     output_facts=document.output_facts,
                     material_profile_resolution=resolution,
+                    trusted_relation_bindings=receipt.trusted_relation_bindings,
                 )
             )
             replayed_document = ParsedDocumentV1.model_validate(replayed_document)

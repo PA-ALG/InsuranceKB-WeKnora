@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +84,73 @@ func TestMinerUCloudPollingIsBoundedAndTransportFailFast(t *testing.T) {
 	}
 }
 
+func TestMinerUCapturePolicyReturnsFixedStageReasonsWithoutRawDetail(t *testing.T) {
+	secret := "Bearer secret provider body https://signed.invalid/private.zip"
+	assertReason := func(t *testing.T, err, want error) {
+		t.Helper()
+		if err == nil || !errors.Is(err, want) || err.Error() != want.Error() {
+			t.Fatalf("reason=%v, want %v", err, want)
+		}
+		if strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "signed.invalid") {
+			t.Fatalf("sensitive provider detail escaped: %v", err)
+		}
+	}
+
+	t.Run("allocation", func(t *testing.T) {
+		reader := &MinerUCloudReader{apiKey: "synthetic", baseURL: "://" + secret, capturePolicy: true}
+		_, _, err := reader.applyUploadURLs(context.Background(), "document.pdf", "pipeline")
+		assertReason(t, err, ErrMinerUAllocationFailed)
+	})
+
+	t.Run("upload", func(t *testing.T) {
+		reader := &MinerUCloudReader{capturePolicy: true}
+		assertReason(t, reader.uploadFile(context.Background(), "://"+secret, []byte("pdf")), ErrMinerUUploadFailed)
+	})
+
+	t.Run("status", func(t *testing.T) {
+		reader := &MinerUCloudReader{
+			capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				return nil, errors.New(secret)
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		assertReason(t, err, ErrMinerUStatusFailed)
+	})
+
+	t.Run("provider-task", func(t *testing.T) {
+		reader := &MinerUCloudReader{
+			capturePolicy: true,
+			fetchStatus: func(context.Context, string, map[string]string) ([]extractResultItem, error) {
+				return []extractResultItem{{State: "failed", ErrMsg: secret}}, nil
+			},
+			sleep: func(context.Context, time.Duration) {},
+		}
+		_, _, _, err := reader.pollBatchResult(context.Background(), "batch", strings.Repeat("f", 64), "pipeline")
+		assertReason(t, err, ErrMinerUProviderTaskFailed)
+	})
+
+	t.Run("download-url", func(t *testing.T) {
+		reader := &MinerUCloudReader{capturePolicy: true}
+		_, _, _, err := reader.extractDoneResult(
+			context.Background(), &extractResultItem{State: "done"}, strings.Repeat("f", 64), "pipeline",
+		)
+		assertReason(t, err, ErrMinerUDownloadURLInvalid)
+	})
+
+	t.Run("zip-download", func(t *testing.T) {
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New(secret)
+		})}
+		_, _, _, _, _, err := downloadAndExtractZip(
+			context.Background(), "https://capture.invalid/result.zip", strings.Repeat("f", 64),
+			"pipeline", true, client, func(string) error { return nil }, nil,
+		)
+		assertReason(t, err, ErrMinerUZIPDownloadFailed)
+	})
+}
+
 func TestMinerUCloudRedirectPolicyIsCaptureLocal(t *testing.T) {
 	t.Parallel()
 	ordinary := NewMinerUCloudReader(map[string]string{"mineru_api_key": "synthetic"})
@@ -131,7 +200,8 @@ func TestMinerUArtifactCaptureDeadlineCancelsBlockedZIP(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	_, _, _, err := reader.pollBatchResult(ctx, "batch", strings.Repeat("f", 64), "pipeline")
-	if !errors.Is(err, context.DeadlineExceeded) || zipRequests != 1 || time.Since(started) > time.Second {
+	if !errors.Is(err, ErrMinerUZIPDownloadFailed) || !errors.Is(err, context.DeadlineExceeded) ||
+		zipRequests != 1 || time.Since(started) > time.Second {
 		t.Fatalf("real blocked ZIP request did not inherit capture deadline: requests=%d elapsed=%s err=%v", zipRequests, time.Since(started), err)
 	}
 }
@@ -139,6 +209,110 @@ func TestMinerUArtifactCaptureDeadlineCancelsBlockedZIP(t *testing.T) {
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestMinerUCaptureRetainsClosedProjectionSubreasonAndRawZIPInMemory(t *testing.T) {
+	middle := []byte(`{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[1]}]}`)
+	rawZIP := minerUFixtureZip(t, map[string][]byte{
+		"result/document.md":                []byte("private presentation"),
+		"result/document_content_list.json": []byte(`[{"type":"text","text":"private","page_idx":0,"bbox":[0,0,1,1]}]`),
+		"result/document_middle.json":       middle,
+	})
+	reader := &MinerUCloudReader{capturePolicy: true}
+	reader.zipURLValidator = func(string) error { return nil }
+	reader.newZIPHTTPClient = func(int) *http.Client {
+		return &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(rawZIP)),
+				Header:     make(http.Header),
+			}, nil
+		})}
+	}
+
+	_, _, _, err := reader.extractDoneResult(
+		context.Background(),
+		&extractResultItem{State: "done", FullZipURL: "https://capture.invalid/result.zip"},
+		minerUTermsSourceSHA256,
+		"pipeline",
+	)
+	if !errors.Is(err, ErrMinerUCrossPageProjectionInvalid) {
+		t.Fatalf("projection failure was not preserved: %v", err)
+	}
+	custody := reader.takeCrossPageFailureCustody()
+	if custody == nil || custody.ReasonCode != "STRUCTURAL_NODE_INVALID" ||
+		!bytes.Equal(custody.RawZIP, rawZIP) {
+		t.Fatalf("projection failure custody drifted: %#v", custody)
+	}
+	digest := sha256.Sum256(rawZIP)
+	if custody.RawZIPSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("raw ZIP digest drifted: %s", custody.RawZIPSHA256)
+	}
+	if reader.takeCrossPageFailureCustody() != nil {
+		t.Fatal("raw failure custody was retained after its single take")
+	}
+}
+
+func TestMinerUCaptureRetainsNativeStructureUnavailableRawZIPInMemory(t *testing.T) {
+	rawZIP := minerUFixtureZip(t, map[string][]byte{
+		"result/document.md": []byte("private presentation"),
+	})
+	reader := &MinerUCloudReader{capturePolicy: true}
+	reader.zipURLValidator = func(string) error { return nil }
+	reader.newZIPHTTPClient = func(int) *http.Client {
+		return &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(rawZIP)),
+				Header:     make(http.Header),
+			}, nil
+		})}
+	}
+
+	_, _, _, err := reader.extractDoneResult(
+		context.Background(),
+		&extractResultItem{State: "done", FullZipURL: "https://capture.invalid/result.zip"},
+		strings.Repeat("e", 64),
+		"pipeline",
+	)
+	if !errors.Is(err, ErrMinerUNativeStructureUnavailable) {
+		t.Fatalf("native structure failure was not preserved: %v", err)
+	}
+	custody := reader.takeCrossPageFailureCustody()
+	if custody == nil || custody.ReasonCode != "NATIVE_STRUCTURE_UNAVAILABLE" ||
+		!bytes.Equal(custody.RawZIP, rawZIP) {
+		t.Fatalf("native structure failure custody drifted: %#v", custody)
+	}
+	digest := sha256.Sum256(rawZIP)
+	if custody.RawZIPSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatalf("raw ZIP digest drifted: %s", custody.RawZIPSHA256)
+	}
+}
+
+func TestMinerUCaptureAcceptsBrochureLinesDeletedPlaceholders(t *testing.T) {
+	const brochureSourceSHA256 = "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279"
+	middle := []byte(`{"_backend":"pipeline","_version_name":"3.4.4","pdf_info":[` +
+		`{"page_idx":0,"para_blocks":[{"type":"text","lines":[{"spans":[{"type":"text","cross_page":true}]}]}]},` +
+		`{"page_idx":1,"para_blocks":[{"type":"text","lines_deleted":true}]}]}`)
+	rawZIP := minerUFixtureZip(t, map[string][]byte{
+		"result/document.md": []byte("private presentation"),
+		"result/document_content_list.json": []byte(`[` +
+			`{"type":"text","text":"first page","page_idx":0,"bbox":[0,0,1,1]},` +
+			`{"type":"text","text":"","page_idx":1,"bbox":[0,0,1,1]}` +
+			`]`),
+		"result/document_middle.json": middle,
+	})
+
+	_, _, artifact, facts, markers, err := extractMinerUZipBytesWithCustody(
+		rawZIP, brochureSourceSHA256, "pipeline", true,
+	)
+	if err != nil || artifact == nil || facts == nil || markers == nil {
+		t.Fatalf("brochure native placeholder was not recovered: artifact=%v facts=%v markers=%v err=%v", artifact != nil, facts != nil, markers != nil, err)
+	}
+	if facts.RequiredCapability != "cross_page_sections" || markers.MarkerCount != 2 {
+		t.Fatalf("brochure cross-page custody drifted: facts=%#v markers=%#v", facts, markers)
+	}
+}
 
 func TestMinerUCloudOrdinaryReaderPreservesLegacyPolling(t *testing.T) {
 	t.Parallel()
@@ -194,11 +368,15 @@ type nativeStructureFixture struct {
 		PageID string `json:"page_id"`
 	} `json:"pages"`
 	Blocks []struct {
-		BlockID string   `json:"block_id"`
-		BBox    []string `json:"bbox"`
+		BlockID     string   `json:"block_id"`
+		PageNumber  int      `json:"page_number"`
+		BlockIndex  int      `json:"block_index"`
+		BBox        []string `json:"bbox"`
+		ContentHash string   `json:"content_hash"`
 	} `json:"blocks"`
 	Tables []struct {
 		TableID     string `json:"table_id"`
+		ContentHash string `json:"content_hash"`
 		RowCount    int    `json:"row_count"`
 		ColumnCount int    `json:"column_count"`
 	} `json:"tables"`
@@ -434,6 +612,53 @@ func TestNormalizeMinerUMalformedTableIsRetainedOnlyAsUnsupportedStructure(t *te
 	}
 }
 
+func TestNormalizeMinerUMergesOnlyUniqueFullyOccupiedOverflowFragment(t *testing.T) {
+	body := `<table>` +
+		`<tr><td rowspan="3">left</td><td rowspan="3" colspan="2">ratio-prefix</td></tr>` +
+		`<tr></tr>` +
+		`<tr><td>ratio-suffix</td></tr>` +
+		`</table>`
+	raw, err := json.Marshal([]map[string]any{{
+		"type":       "table",
+		"page_idx":   0,
+		"bbox":       []int{0, 0, 100, 100},
+		"table_body": body,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := normalizeMinerUContentList(raw, strings.Repeat("f", 64), "pipeline")
+	if err != nil {
+		t.Fatalf("unique occupied overflow fragment was rejected: %v", err)
+	}
+	var decoded nativeStructureFixture
+	if err := json.Unmarshal(artifact.SanitizedJSON, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Tables) != 1 || len(decoded.Cells) != 2 ||
+		decoded.Tables[0].RowCount != 3 || decoded.Tables[0].ColumnCount != 3 {
+		t.Fatalf("bounded overflow repair did not preserve the proven grid: %#v", decoded)
+	}
+	if !containsString(decoded.Unsupported, "table_cell_fragment_merged_to_unique_span") {
+		t.Fatalf("bounded overflow repair is missing its audit fact: %#v", decoded.Unsupported)
+	}
+
+	mutatedRaw := bytes.ReplaceAll(raw, []byte("ratio-suffix"), []byte("changed-suffix"))
+	mutated, err := normalizeMinerUContentList(
+		mutatedRaw, strings.Repeat("f", 64), "pipeline",
+	)
+	if err != nil {
+		t.Fatalf("mutated bounded overflow fragment was rejected: %v", err)
+	}
+	var mutatedDecoded nativeStructureFixture
+	if err := json.Unmarshal(mutated.SanitizedJSON, &mutatedDecoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Tables[0].ContentHash == mutatedDecoded.Tables[0].ContentHash {
+		t.Fatal("overflow fragment bytes did not affect the table content identity")
+	}
+}
+
 func TestNormalizeMinerURejectsNullAndWrongTypedOfficialFields(t *testing.T) {
 	tests := map[string]string{
 		"image-null-img-path":       `{"type":"image","img_path":null,"page_idx":0,"bbox":[0,0,1,1]}`,
@@ -522,5 +747,49 @@ func TestNormalizeMinerUAcceptsDocumentedPipelineContentListTypes(t *testing.T) 
 	}
 	if len(decoded.Blocks) != len(items) {
 		t.Fatalf("documented content-list blocks were lost: got=%d want=%d", len(decoded.Blocks), len(items))
+	}
+}
+
+func TestNormalizeMinerUAllowsOnlyProvenLinesDeletedEmptyTextPlaceholders(t *testing.T) {
+	raw := []byte(`[
+		{"type":"header","text":"","page_idx":0,"bbox":[0,0,1,1]},
+		{"type":"text","text":"kept","page_idx":0,"bbox":[0,1,1,2]},
+		{"type":"text","text":"","page_idx":1,"bbox":[0,0,1,1]},
+		{"type":"text","text":"next","page_idx":1,"bbox":[0,1,1,2]}
+	]`)
+	placeholders := map[minerUPageLocalIndex]string{{PageIndex: 1, LocalIndex: 0}: "text"}
+	artifact, err := normalizeMinerUContentListWithPlaceholders(
+		raw, strings.Repeat("f", 64), "pipeline", placeholders,
+	)
+	if err != nil {
+		t.Fatalf("proven lines_deleted placeholder was rejected: %v", err)
+	}
+	var decoded nativeStructureFixture
+	if err := json.Unmarshal(artifact.SanitizedJSON, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Blocks) != 3 {
+		t.Fatalf("unexpected retained block count: got=%d want=3", len(decoded.Blocks))
+	}
+	got := [][2]int{
+		{decoded.Blocks[0].PageNumber, decoded.Blocks[0].BlockIndex},
+		{decoded.Blocks[1].PageNumber, decoded.Blocks[1].BlockIndex},
+		{decoded.Blocks[2].PageNumber, decoded.Blocks[2].BlockIndex},
+	}
+	want := [][2]int{{1, 1}, {2, 0}, {2, 1}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("source-local block identity drifted: got=%v want=%v", got, want)
+	}
+	if decoded.Blocks[1].ContentHash == "" {
+		t.Fatal("structure-only placeholder is not content-addressed")
+	}
+}
+
+func TestNormalizeMinerURejectsUnprovenEmptyBodyText(t *testing.T) {
+	raw := []byte(`[{"type":"text","text":"","page_idx":0,"bbox":[0,0,1,1]}]`)
+	if _, err := normalizeMinerUContentListWithPlaceholders(
+		raw, strings.Repeat("f", 64), "pipeline", nil,
+	); err == nil {
+		t.Fatal("unproven empty body text was accepted")
 	}
 }
