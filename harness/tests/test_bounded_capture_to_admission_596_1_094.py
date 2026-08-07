@@ -15,6 +15,9 @@ from typing import Any, cast
 import pytest
 from pydantic import SecretStr
 
+from insurance_harness.knowledge_compiler import (
+    bounded_capture_to_admission_596_1 as subject,
+)
 from insurance_harness.knowledge_compiler.bounded_capture_to_admission_596_1 import (
     ADMISSION_CONTRACT_ID,
     ADMISSION_CONTRACT_SHA256,
@@ -81,9 +84,20 @@ def test_frozen_dependency_identity_preimages_have_exact_hashes() -> None:
     } == identities
 
 
+def test_capture_output_root_contract_remains_private_tmp() -> None:
+    nonce = uuid.uuid4().hex
+    assert subject._valid_new_output_root(Path("/private/tmp") / nonce)
+    assert not subject._valid_new_output_root(Path("/tmp") / nonce)
+
+
 @pytest.fixture
-def output_root() -> Iterator[Path]:
-    root = Path("/private/tmp") / f"094-capture-{uuid.uuid4().hex}"
+def output_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    root = tmp_path / f"094-capture-{uuid.uuid4().hex}"
+    monkeypatch.setattr(
+        subject,
+        "_valid_new_output_root",
+        lambda path: path == root and not os.path.lexists(path),
+    )
     assert not root.exists()
     yield root
     shutil.rmtree(root, ignore_errors=True)
