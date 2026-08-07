@@ -328,6 +328,36 @@ def test_native_mineru_sidecar_reaches_only_the_053_bounded_gate() -> None:
     assert len(document.pages) == 1
     assert len(document.blocks) == 1
     assert len(document.tables) == 1
+
+
+def test_native_mineru_unique_span_fragment_is_audited_without_erasing_proven_grid() -> None:
+    subject, parser, attempt, snapshot, output, resolution = _context()
+    payload = json.loads(_sidecar(subject.source_sha256))
+    payload["unsupported"].append("table_cell_fragment_merged_to_unique_span")
+    sidecar = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+
+    document, manifest, decision = build_mineru_parsed_document_v1(
+        sidecar,
+        expected_raw_sha256=RAW_HASH,
+        expected_sanitized_sha256=hashlib.sha256(sidecar).hexdigest(),
+        subject=subject,
+        parser=parser,
+        attempt=attempt,
+        snapshot=snapshot,
+        output_facts=output,
+        material_profile_resolution=resolution,
+    )
+
+    assert decision.decision == "ADMIT"
+    assert "table_grid" in manifest.satisfied_capabilities
+    assert any(
+        item.warning_code == "table_cell_fragment_merged_to_unique_span"
+        for item in document.warnings
+    )
+    assert any(
+        item.capability == "table_cell_fragment_merged_to_unique_span"
+        for item in document.unsupported
+    )
     assert len(document.cells) == 4
     assert document.cells[0].locator.row_span == 2
     assert document.cells[1].locator.column_span == 2

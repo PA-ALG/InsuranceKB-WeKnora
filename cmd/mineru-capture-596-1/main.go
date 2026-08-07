@@ -54,10 +54,12 @@ var frozenCaptureSources = []captureSource{
 }
 
 type captureFunction func(context.Context, docparser.MinerUArtifactCaptureRequest) (string, error)
+type recoveryFunction func(docparser.MinerUArtifactCaptureRequest, string) (string, error)
 
 type runnerDependencies struct {
 	lookupEnv func(string) (string, bool)
 	capture   captureFunction
+	recover   recoveryFunction
 	stdout    io.Writer
 }
 
@@ -67,6 +69,7 @@ func main() {
 		err = runCLI(context.Background(), os.Args[1:], repositoryRoot, runnerDependencies{
 			lookupEnv: os.LookupEnv,
 			capture:   docparser.CaptureMinerUNativeStructure,
+			recover:   docparser.RecoverMinerUNativeStructureFromFailureCustody,
 			stdout:    os.Stdout,
 		})
 	}
@@ -80,8 +83,21 @@ func runCLI(ctx context.Context, args []string, repositoryRoot string, deps runn
 	flags := flag.NewFlagSet("mineru-capture-596-1", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	outputRoot := flags.String("output-root", "", "new direct child of /private/tmp")
+	recoverTermsFrom := flags.String("recover-terms-from", "", "exact prior terms failure custody")
+	offlineRecoveryOnly := flags.Bool("offline-recovery-only", false, "recover terms without provider calls")
 	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *outputRoot == "" {
 		return ErrMinerUThreeSourcePreflight
+	}
+	if *offlineRecoveryOnly {
+		if *recoverTermsFrom == "" {
+			return ErrMinerUThreeSourcePreflight
+		}
+		return runOfflineTermsRecovery(repositoryRoot, *outputRoot, *recoverTermsFrom, deps)
+	}
+	if *recoverTermsFrom != "" {
+		return runThreeSourceCaptureWithRecoveredTerms(
+			ctx, repositoryRoot, *outputRoot, *recoverTermsFrom, deps,
+		)
 	}
 	return runThreeSourceCapture(ctx, repositoryRoot, *outputRoot, deps)
 }
@@ -113,16 +129,120 @@ func runThreeSourceCapture(ctx context.Context, repositoryRoot, outputRoot strin
 			},
 		})
 		if captureErr != nil {
-			return captureFailure(index)
+			return captureFailure(index, captureErr)
 		}
 		digest, relative, err := validateCapturedEvidence(outputRoot, source.role, artifact)
 		if err != nil {
-			return captureFailure(index)
+			return captureFailure(index, err)
 		}
 		if _, err := fmt.Fprintf(stdout, "status=completed role=%s artifact=%s sha256=%s\n",
 			source.maskedRole, relative, digest); err != nil {
-			return captureFailure(index)
+			return captureFailure(index, docparser.ErrMinerUArtifactCustodyInvalid)
 		}
+	}
+	return nil
+}
+
+func runThreeSourceCaptureWithRecoveredTerms(
+	ctx context.Context,
+	repositoryRoot string,
+	outputRoot string,
+	failureDir string,
+	deps runnerDependencies,
+) error {
+	sources, err := preflightThreeSourceCapture(repositoryRoot, outputRoot, deps.lookupEnv)
+	if err != nil || deps.capture == nil || deps.recover == nil || failureDir == "" {
+		return ErrMinerUThreeSourcePreflight
+	}
+	if err := os.Mkdir(outputRoot, 0o700); err != nil {
+		return ErrMinerUThreeSourcePreflight
+	}
+	stdout := deps.stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	generation := 0
+	recovered, err := deps.recover(
+		docparser.MinerUArtifactCaptureRequest{
+			SourcePath: sources[0].path, SourceSHA256: sources[0].sha256,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: &generation,
+			OutputDir:       filepath.Join(outputRoot, sources[0].role),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		},
+		failureDir,
+	)
+	if err != nil {
+		return captureFailure(0, err)
+	}
+	if err := emitCapturedEvidence(stdout, outputRoot, sources[0], recovered); err != nil {
+		return captureFailure(0, err)
+	}
+	for index, source := range sources[1:] {
+		artifact, captureErr := deps.capture(ctx, docparser.MinerUArtifactCaptureRequest{
+			SourcePath: source.path, SourceSHA256: source.sha256,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: &generation,
+			OutputDir:       filepath.Join(outputRoot, source.role),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		})
+		if captureErr != nil {
+			return captureFailure(index+1, captureErr)
+		}
+		if err := emitCapturedEvidence(stdout, outputRoot, source, artifact); err != nil {
+			return captureFailure(index+1, err)
+		}
+	}
+	return nil
+}
+
+func runOfflineTermsRecovery(
+	repositoryRoot string,
+	outputRoot string,
+	failureDir string,
+	deps runnerDependencies,
+) error {
+	sources, err := preflightFrozenCaptureSources(repositoryRoot, outputRoot)
+	if err != nil || deps.recover == nil || failureDir == "" {
+		return ErrMinerUThreeSourcePreflight
+	}
+	if err := os.Mkdir(outputRoot, 0o700); err != nil {
+		return ErrMinerUThreeSourcePreflight
+	}
+	generation := 0
+	artifact, err := deps.recover(
+		docparser.MinerUArtifactCaptureRequest{
+			SourcePath: sources[0].path, SourceSHA256: sources[0].sha256,
+			AttemptNumber: 2, AttemptRole: "bounded_upgrade", Generation: &generation,
+			OutputDir:       filepath.Join(outputRoot, sources[0].role),
+			ParserOverrides: map[string]string{"mineru_cloud_model": "pipeline"},
+		},
+		failureDir,
+	)
+	if err != nil {
+		return captureFailure(0, err)
+	}
+	stdout := deps.stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if err := emitCapturedEvidence(stdout, outputRoot, sources[0], artifact); err != nil {
+		return captureFailure(0, err)
+	}
+	return nil
+}
+
+func emitCapturedEvidence(
+	stdout io.Writer,
+	outputRoot string,
+	source admittedCaptureSource,
+	artifact string,
+) error {
+	digest, relative, err := validateCapturedEvidence(outputRoot, source.role, artifact)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(stdout, "status=completed role=%s artifact=%s sha256=%s\n",
+		source.maskedRole, relative, digest); err != nil {
+		return docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	return nil
 }
@@ -138,13 +258,9 @@ func preflightThreeSourceCapture(
 	repositoryRoot, outputRoot string,
 	lookupEnv func(string) (string, bool),
 ) ([]admittedCaptureSource, error) {
-	cleanOutput := filepath.Clean(outputRoot)
-	if !filepath.IsAbs(cleanOutput) || filepath.Dir(cleanOutput) != "/private/tmp" ||
-		filepath.Base(cleanOutput) == "." || cleanOutput != outputRoot {
-		return nil, ErrMinerUThreeSourcePreflight
-	}
-	if _, err := os.Lstat(cleanOutput); !errors.Is(err, os.ErrNotExist) {
-		return nil, ErrMinerUThreeSourcePreflight
+	sources, err := preflightFrozenCaptureSources(repositoryRoot, outputRoot)
+	if err != nil {
+		return nil, err
 	}
 	if lookupEnv == nil {
 		return nil, ErrMinerUThreeSourcePreflight
@@ -153,7 +269,20 @@ func preflightThreeSourceCapture(
 	if !ok || strings.TrimSpace(credential) == "" {
 		return nil, ErrMinerUThreeSourcePreflight
 	}
+	return sources, nil
+}
 
+func preflightFrozenCaptureSources(
+	repositoryRoot, outputRoot string,
+) ([]admittedCaptureSource, error) {
+	cleanOutput := filepath.Clean(outputRoot)
+	if !filepath.IsAbs(cleanOutput) || filepath.Dir(cleanOutput) != "/private/tmp" ||
+		filepath.Base(cleanOutput) == "." || cleanOutput != outputRoot {
+		return nil, ErrMinerUThreeSourcePreflight
+	}
+	if _, err := os.Lstat(cleanOutput); !errors.Is(err, os.ErrNotExist) {
+		return nil, ErrMinerUThreeSourcePreflight
+	}
 	root, err := filepath.Abs(repositoryRoot)
 	if err != nil {
 		return nil, ErrMinerUThreeSourcePreflight
@@ -183,34 +312,71 @@ func preflightThreeSourceCapture(
 func validateCapturedEvidence(outputRoot, role, artifact string) (string, string, error) {
 	expected := filepath.Join(outputRoot, role, captureArtifactName)
 	if artifact != expected {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	info, err := os.Lstat(expected)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	payload, err := os.ReadFile(expected)
 	if err != nil {
-		return "", "", ErrMinerUThreeSourceCaptureFailed
+		return "", "", docparser.ErrMinerUArtifactCustodyInvalid
 	}
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:]), filepath.ToSlash(filepath.Join(role, captureArtifactName)), nil
 }
 
-func captureFailure(index int) error {
+func captureFailure(index int, reason error) error {
+	typed := stableCaptureReason(reason)
 	if index == 0 {
-		return ErrMinerUThreeSourceCaptureFailed
+		return fmt.Errorf("%w: %w", ErrMinerUThreeSourceCaptureFailed, typed)
 	}
-	return ErrMinerUThreeSourceCapturePartial
+	return fmt.Errorf("%w: %w", ErrMinerUThreeSourceCapturePartial, typed)
 }
 
 func stableRunnerError(err error) error {
+	reason := stableCaptureReason(err)
+	code := stableCaptureReasonCode(reason)
 	switch {
 	case errors.Is(err, ErrMinerUThreeSourceCapturePartial):
-		return ErrMinerUThreeSourceCapturePartial
+		return errors.New(ErrMinerUThreeSourceCapturePartial.Error() + ": " + code)
 	case errors.Is(err, ErrMinerUThreeSourceCaptureFailed):
-		return ErrMinerUThreeSourceCaptureFailed
+		return errors.New(ErrMinerUThreeSourceCaptureFailed.Error() + ": " + code)
 	default:
 		return ErrMinerUThreeSourcePreflight
 	}
+}
+
+func stableCaptureReasonCode(reason error) string {
+	switch {
+	case errors.Is(reason, docparser.ErrMinerUCloudPollBudgetExceeded):
+		return "STATUS_BUDGET_EXCEEDED"
+	case errors.Is(reason, docparser.ErrMinerUNativeStructureUnavailable):
+		return "NATIVE_STRUCTURE_UNAVAILABLE"
+	case errors.Is(reason, docparser.ErrMinerUCrossPageProjectionInvalid):
+		return "CROSS_PAGE_PROJECTION_INVALID"
+	default:
+		return reason.Error()
+	}
+}
+
+func stableCaptureReason(err error) error {
+	for _, reason := range []error{
+		docparser.ErrMinerUAllocationFailed,
+		docparser.ErrMinerUUploadFailed,
+		docparser.ErrMinerUStatusFailed,
+		docparser.ErrMinerUProviderTaskFailed,
+		docparser.ErrMinerUCloudPollBudgetExceeded,
+		docparser.ErrMinerUDownloadURLInvalid,
+		docparser.ErrMinerUZIPDownloadFailed,
+		docparser.ErrMinerUNativeStructureUnavailable,
+		docparser.ErrMinerUCrossPageProjectionInvalid,
+		docparser.ErrMinerUArtifactCustodyInvalid,
+		docparser.ErrMinerUContentCustodyInvalid,
+	} {
+		if errors.Is(err, reason) {
+			return reason
+		}
+	}
+	return docparser.ErrMinerUCaptureStageUndetermined
 }

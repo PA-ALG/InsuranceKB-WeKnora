@@ -49,6 +49,8 @@ type MinerUCloudReader struct {
 	captureTimeout   time.Duration
 	calls            minerUCloudCallLedger
 	crossPageFacts   *minerUCrossPageProjection
+	crossPageMarkers *minerUCrossPageMarkerProvenance
+	crossPageFailure *minerUCrossPageFailureCustody
 	fetchStatus      func(context.Context, string, map[string]string) ([]extractResultItem, error)
 	extractDone      func(context.Context, *extractResultItem, string, string) (string, []types.ImageRef, *types.NativeStructureArtifact, error)
 	newZIPHTTPClient func(int) *http.Client
@@ -111,6 +113,8 @@ func (c *MinerUCloudReader) validateZIPURL(rawURL string) error {
 func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*types.ReadResult, error) {
 	c.calls = minerUCloudCallLedger{}
 	c.crossPageFacts = nil
+	c.crossPageMarkers = nil
+	c.crossPageFailure = nil
 	if c.apiKey == "" {
 		return &types.ReadResult{Error: "MinerU Cloud API key is not configured"}, nil
 	}
@@ -146,16 +150,25 @@ func (c *MinerUCloudReader) Read(ctx context.Context, req *types.ReadRequest) (*
 
 	batchID, uploadURL, err := c.applyUploadURLs(readCtx, fileName, effectiveModel)
 	if err != nil {
+		if c.capturePolicy {
+			return nil, ErrMinerUAllocationFailed
+		}
 		return nil, fmt.Errorf("MinerU Cloud apply upload URLs: %w", err)
 	}
 
 	if err := c.uploadFile(readCtx, uploadURL, content); err != nil {
+		if c.capturePolicy {
+			return nil, ErrMinerUUploadFailed
+		}
 		return nil, fmt.Errorf("MinerU Cloud file upload: %w", err)
 	}
 
 	sourceHash := sha256.Sum256(content)
 	mdContent, imageRefs, nativeStructure, err := c.pollBatchResult(readCtx, batchID, fmt.Sprintf("%x", sourceHash), effectiveModel)
 	if err != nil {
+		if c.capturePolicy {
+			return nil, stableMinerUCapturePollFailure(err)
+		}
 		return nil, fmt.Errorf("MinerU Cloud poll: %w", err)
 	}
 
@@ -174,6 +187,31 @@ func (c *MinerUCloudReader) captureCrossPageProjection() *minerUCrossPageProject
 	return c.crossPageFacts
 }
 
+func (c *MinerUCloudReader) captureCrossPageMarkerProvenance() *minerUCrossPageMarkerProvenance {
+	return c.crossPageMarkers
+}
+
+func (c *MinerUCloudReader) takeCrossPageFailureCustody() *minerUCrossPageFailureCustody {
+	custody := c.crossPageFailure
+	c.crossPageFailure = nil
+	return custody
+}
+
+func (c *MinerUCloudReader) recordCrossPageFailureCustody(zipData []byte, err error) {
+	if !c.capturePolicy || len(zipData) == 0 ||
+		(!errors.Is(err, ErrMinerUCrossPageProjectionInvalid) &&
+			!errors.Is(err, ErrMinerUCrossPageMarkerProvenanceInvalid) &&
+			!errors.Is(err, ErrMinerUNativeStructureUnavailable)) {
+		return
+	}
+	digest := sha256.Sum256(zipData)
+	c.crossPageFailure = &minerUCrossPageFailureCustody{
+		ReasonCode:   safeMinerUCrossPageFailureReasonCode(err),
+		RawZIP:       append([]byte(nil), zipData...),
+		RawZIPSHA256: hex.EncodeToString(digest[:]),
+	}
+}
+
 // --- batch upload API ---
 
 type batchApplyResponse struct {
@@ -186,6 +224,14 @@ type batchApplyResponse struct {
 }
 
 func (c *MinerUCloudReader) applyUploadURLs(ctx context.Context, fileName, modelVersion string) (string, string, error) {
+	batchID, uploadURL, err := c.applyUploadURLsRaw(ctx, fileName, modelVersion)
+	if err != nil && c.capturePolicy {
+		return "", "", ErrMinerUAllocationFailed
+	}
+	return batchID, uploadURL, err
+}
+
+func (c *MinerUCloudReader) applyUploadURLsRaw(ctx context.Context, fileName, modelVersion string) (string, string, error) {
 	payload := map[string]interface{}{
 		"files":          []map[string]string{{"name": fileName, "data_id": uuid.New().String()}},
 		"model_version":  modelVersion,
@@ -236,6 +282,14 @@ func (c *MinerUCloudReader) applyUploadURLs(ctx context.Context, fileName, model
 }
 
 func (c *MinerUCloudReader) uploadFile(ctx context.Context, uploadURL string, content []byte) error {
+	err := c.uploadFileRaw(ctx, uploadURL, content)
+	if err != nil && c.capturePolicy {
+		return ErrMinerUUploadFailed
+	}
+	return err
+}
+
+func (c *MinerUCloudReader) uploadFileRaw(ctx context.Context, uploadURL string, content []byte) error {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(content))
 	if err != nil {
 		return fmt.Errorf("create PUT request: %w", err)
@@ -300,6 +354,12 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 
 	for pollCount := 1; ; pollCount++ {
 		if err := ctx.Err(); err != nil {
+			if c.capturePolicy {
+				if errors.Is(err, context.DeadlineExceeded) {
+					return "", nil, nil, ErrMinerUCloudPollBudgetExceeded
+				}
+				return "", nil, nil, ErrMinerUStatusFailed
+			}
 			return "", nil, nil, err
 		}
 		if c.capturePolicy && pollCount > maxMinerUStatusPolls {
@@ -313,7 +373,7 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 		items, err := fetchStatus(ctx, batchID, headers)
 		if err != nil {
 			if c.capturePolicy {
-				return "", nil, nil, fmt.Errorf("MinerU Cloud status transport failed: %w", err)
+				return "", nil, nil, ErrMinerUStatusFailed
 			}
 			logger.Errorf(context.Background(), "[MinerUCloud] status poll failed; retrying")
 			sleep(ctx, defaultPollInterval)
@@ -339,6 +399,9 @@ func (c *MinerUCloudReader) pollBatchResult(ctx context.Context, batchID, source
 		}
 
 		if state == "failed" {
+			if c.capturePolicy {
+				return "", nil, nil, ErrMinerUProviderTaskFailed
+			}
 			return "", nil, nil, fmt.Errorf("MinerU Cloud task failed: %s", item.ErrMsg)
 		}
 
@@ -408,12 +471,16 @@ func (c *MinerUCloudReader) fetchBatchStatus(ctx context.Context, batchID string
 func (c *MinerUCloudReader) extractDoneResult(ctx context.Context, item *extractResultItem, sourceSHA256, effectiveModel string) (string, []types.ImageRef, *types.NativeStructureArtifact, error) {
 	text := firstNonEmpty(item.Markdown, item.Content, item.Text)
 	if item.FullZipURL == "" {
+		if c.capturePolicy {
+			return "", nil, nil, ErrMinerUDownloadURLInvalid
+		}
 		return "", nil, nil, fmt.Errorf("MinerU Cloud state=done but no native ZIP artifact")
 	}
 
 	c.calls.ZIPGET++
-	md, imageRefs, nativeStructure, crossPageFacts, err := downloadAndExtractZip(
-		ctx, item.FullZipURL, sourceSHA256, effectiveModel, c.capturePolicy, c.zipHTTPClient(), c.validateZIPURL,
+	md, imageRefs, nativeStructure, crossPageFacts, crossPageMarkers, err := downloadAndExtractZip(
+		ctx, item.FullZipURL, sourceSHA256, effectiveModel, c.capturePolicy, c.zipHTTPClient(),
+		c.validateZIPURL, c.recordCrossPageFailureCustody,
 	)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("extract zip: %w", err)
@@ -422,6 +489,7 @@ func (c *MinerUCloudReader) extractDoneResult(ctx context.Context, item *extract
 		md = text
 	}
 	c.crossPageFacts = crossPageFacts
+	c.crossPageMarkers = crossPageMarkers
 
 	logger.Infof(context.Background(), "[MinerUCloud] parsed (zip), markdown=%d chars, images=%d, native_schema=%s", len(md), len(imageRefs), nativeStructure.SchemaVersion)
 	return md, imageRefs, nativeStructure, nil
@@ -441,25 +509,141 @@ var ErrMinerUNativeStructureUnavailable = errors.New("MinerU native structure un
 // the fixed capture budget. Callers must not start a second attempt implicitly.
 var ErrMinerUCloudPollBudgetExceeded = errors.New("MinerU Cloud poll budget exceeded")
 
+var (
+	ErrMinerUAllocationFailed   = errors.New("ALLOCATION_FAILED")
+	ErrMinerUUploadFailed       = errors.New("UPLOAD_FAILED")
+	ErrMinerUStatusFailed       = errors.New("STATUS_FAILED")
+	ErrMinerUProviderTaskFailed = errors.New("PROVIDER_TASK_FAILED")
+	ErrMinerUDownloadURLInvalid = errors.New("DOWNLOAD_URL_INVALID")
+	ErrMinerUZIPDownloadFailed  = errors.New("ZIP_DOWNLOAD_FAILED")
+)
+
+type minerUCrossPageFailureCustody struct {
+	ReasonCode   string
+	RawZIP       []byte
+	RawZIPSHA256 string
+}
+
+func safeMinerUCrossPageFailureReasonCode(err error) string {
+	if errors.Is(err, ErrMinerUNativeStructureUnavailable) {
+		return "NATIVE_STRUCTURE_UNAVAILABLE"
+	}
+	if errors.Is(err, ErrMinerUCrossPageMarkerProvenanceInvalid) {
+		return "MARKER_PROVENANCE_INVALID"
+	}
+	if !errors.Is(err, ErrMinerUCrossPageProjectionInvalid) {
+		return "CROSS_PAGE_FAILURE_UNCLASSIFIED"
+	}
+	prefix := ErrMinerUCrossPageProjectionInvalid.Error() + ": "
+	message := err.Error()
+	index := strings.LastIndex(message, prefix)
+	if index < 0 {
+		return "CROSS_PAGE_CUSTODY_INVALID"
+	}
+	reason := message[index+len(prefix):]
+	codes := map[string]string{
+		"source or ZIP identity":           "SOURCE_OR_ZIP_IDENTITY_INVALID",
+		"ZIP envelope":                     "ZIP_ENVELOPE_INVALID",
+		"duplicate ZIP member":             "DUPLICATE_ZIP_MEMBER",
+		"expanded ZIP budget":              "EXPANDED_ZIP_BUDGET_EXCEEDED",
+		"multiple middle members":          "MULTIPLE_MIDDLE_MEMBERS",
+		"member name":                      "MEMBER_NAME_INVALID",
+		"unsafe member path":               "MEMBER_PATH_INVALID",
+		"sensitive member name":            "SENSITIVE_MEMBER_NAME",
+		"unsupported member class":         "UNSUPPORTED_MEMBER_CLASS",
+		"encrypted member":                 "ENCRYPTED_MEMBER",
+		"member size or compression ratio": "MEMBER_BUDGET_INVALID",
+		"open member":                      "MEMBER_OPEN_FAILED",
+		"read member":                      "MEMBER_READ_FAILED",
+		"decode middle":                    "MIDDLE_JSON_INVALID",
+		"trailing middle data":             "MIDDLE_JSON_TRAILING_DATA",
+		"pdf_info":                         "PDF_INFO_INVALID",
+		"page":                             "PAGE_INVALID",
+		"page index":                       "PAGE_INDEX_INVALID",
+		"duplicate page":                   "DUPLICATE_PAGE",
+		"non-contiguous pages":             "NON_CONTIGUOUS_PAGES",
+		"para_blocks":                      "PARA_BLOCKS_INVALID",
+		"cross_page marker type":           "CROSS_PAGE_MARKER_TYPE_INVALID",
+		"lines_deleted marker type":        "LINES_DELETED_MARKER_TYPE_INVALID",
+		"structural list blocks":           "STRUCTURAL_LIST_BLOCKS_INVALID",
+		"structural list lines":            "STRUCTURAL_LIST_LINES_INVALID",
+		"structural list spans":            "STRUCTURAL_LIST_SPANS_INVALID",
+		"structural node":                  "STRUCTURAL_NODE_INVALID",
+		"sensitive JSON key":               "SENSITIVE_JSON_KEY",
+		"compressed ZIP budget":            "COMPRESSED_ZIP_BUDGET_EXCEEDED",
+	}
+	if code, ok := codes[reason]; ok {
+		return code
+	}
+	return "CROSS_PAGE_PROJECTION_INVALID"
+}
+
+func stableMinerUCapturePollFailure(err error) error {
+	if errors.Is(err, ErrMinerUZIPDownloadFailed) && errors.Is(err, context.DeadlineExceeded) {
+		return safeMinerUZIPDeadlineFailure()
+	}
+	for _, sentinel := range []error{
+		ErrMinerUStatusFailed,
+		ErrMinerUProviderTaskFailed,
+		ErrMinerUCloudPollBudgetExceeded,
+		ErrMinerUDownloadURLInvalid,
+		ErrMinerUZIPDownloadFailed,
+		ErrMinerUNativeStructureUnavailable,
+		ErrMinerUCrossPageProjectionInvalid,
+	} {
+		if errors.Is(err, sentinel) {
+			return sentinel
+		}
+	}
+	return ErrMinerUCaptureStageUndetermined
+}
+
+func safeMinerUZIPDeadlineFailure() error {
+	return fmt.Errorf("%w: %w", ErrMinerUZIPDownloadFailed, context.DeadlineExceeded)
+}
+
 func downloadAndExtractZip(
 	ctx context.Context, zipURL, sourceSHA256, effectiveModel string, captureProjection bool,
 	client *http.Client,
 	validateURL func(string) error,
-) (string, []types.ImageRef, *types.NativeStructureArtifact, *minerUCrossPageProjection, error) {
+	recordCrossPageFailure func([]byte, error),
+) (
+	string,
+	[]types.ImageRef,
+	*types.NativeStructureArtifact,
+	*minerUCrossPageProjection,
+	*minerUCrossPageMarkerProvenance,
+	error,
+) {
 	if err := validateURL(zipURL); err != nil {
-		return "", nil, nil, nil, fmt.Errorf("zip URL blocked by SSRF check: %v", err)
+		if captureProjection {
+			return "", nil, nil, nil, nil, ErrMinerUDownloadURLInvalid
+		}
+		return "", nil, nil, nil, nil, fmt.Errorf("zip URL blocked by SSRF check: %v", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zipURL, nil)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("create zip request: %w", err)
+		if captureProjection {
+			return "", nil, nil, nil, nil, ErrMinerUDownloadURLInvalid
+		}
+		return "", nil, nil, nil, nil, fmt.Errorf("create zip request: %w", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("download zip: %w", err)
+		if captureProjection {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return "", nil, nil, nil, nil, fmt.Errorf("%w: %w", ErrMinerUZIPDownloadFailed, context.DeadlineExceeded)
+			}
+			return "", nil, nil, nil, nil, ErrMinerUZIPDownloadFailed
+		}
+		return "", nil, nil, nil, nil, fmt.Errorf("download zip: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", nil, nil, nil, fmt.Errorf("download zip status %d", resp.StatusCode)
+		if captureProjection {
+			return "", nil, nil, nil, nil, ErrMinerUZIPDownloadFailed
+		}
+		return "", nil, nil, nil, nil, fmt.Errorf("download zip status %d", resp.StatusCode)
 	}
 
 	var zipData []byte
@@ -469,9 +653,31 @@ func downloadAndExtractZip(
 		zipData, err = io.ReadAll(resp.Body)
 	}
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("read zip body: %w", err)
+		if captureProjection {
+			if errors.Is(err, ErrMinerUCrossPageProjectionInvalid) {
+				return "", nil, nil, nil, nil, ErrMinerUCrossPageProjectionInvalid
+			}
+			if errors.Is(err, context.DeadlineExceeded) {
+				return "", nil, nil, nil, nil, fmt.Errorf("%w: %w", ErrMinerUZIPDownloadFailed, context.DeadlineExceeded)
+			}
+			return "", nil, nil, nil, nil, ErrMinerUZIPDownloadFailed
+		}
+		return "", nil, nil, nil, nil, fmt.Errorf("read zip body: %w", err)
 	}
-	return extractMinerUZipBytesWithProjection(zipData, sourceSHA256, effectiveModel, captureProjection)
+	markdown, images, artifact, crossPage, markers, err := extractMinerUZipBytesWithCustody(
+		zipData, sourceSHA256, effectiveModel, captureProjection,
+	)
+	if err != nil && captureProjection {
+		if recordCrossPageFailure != nil {
+			recordCrossPageFailure(zipData, err)
+		}
+		if errors.Is(err, ErrMinerUCrossPageProjectionInvalid) ||
+			errors.Is(err, ErrMinerUCrossPageMarkerProvenanceInvalid) {
+			return "", nil, nil, nil, nil, ErrMinerUCrossPageProjectionInvalid
+		}
+		return "", nil, nil, nil, nil, ErrMinerUNativeStructureUnavailable
+	}
+	return markdown, images, artifact, crossPage, markers, err
 }
 
 func readMinerUCaptureZIPBody(reader io.Reader, maxBytes int64) ([]byte, error) {
@@ -495,9 +701,18 @@ func extractMinerUZipBytesWithProjection(zipData []byte, sourceSHA256, effective
 		return "", nil, nil, nil, fmt.Errorf("%w: effective model %q is not pipeline", ErrMinerUNativeStructureUnavailable, effectiveModel)
 	}
 	var crossPageFacts *minerUCrossPageProjection
+	var emptyTextPlaceholders map[minerUPageLocalIndex]string
 	if _, targeted := minerUCrossPageRequiredCapability(sourceSHA256); captureProjection && targeted {
 		var err error
 		crossPageFacts, err = projectMinerUCrossPageZip(zipData, sourceSHA256)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		markerProvenance, err := projectMinerUCrossPageMarkerProvenanceZip(zipData, sourceSHA256)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		emptyTextPlaceholders, err = minerULinesDeletedEmptyTextPlaceholders(markerProvenance)
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
@@ -543,7 +758,9 @@ func extractMinerUZipBytesWithProjection(zipData []byte, sourceSHA256, effective
 	if err != nil {
 		return "", nil, nil, nil, fmt.Errorf("read native content-list: %w", err)
 	}
-	nativeStructure, err := normalizeMinerUContentList(rawNative, sourceSHA256, effectiveModel)
+	nativeStructure, err := normalizeMinerUContentListWithPlaceholders(
+		rawNative, sourceSHA256, effectiveModel, emptyTextPlaceholders,
+	)
 	if err != nil {
 		return "", nil, nil, nil, fmt.Errorf("%w: %v", ErrMinerUNativeStructureUnavailable, err)
 	}
@@ -595,6 +812,38 @@ func extractMinerUZipBytesWithProjection(zipData []byte, sourceSHA256, effective
 	return mdText, imageRefs, nativeStructure, crossPageFacts, nil
 }
 
+func extractMinerUZipBytesWithCustody(
+	zipData []byte,
+	sourceSHA256 string,
+	effectiveModel string,
+	captureProjection bool,
+) (
+	string,
+	[]types.ImageRef,
+	*types.NativeStructureArtifact,
+	*minerUCrossPageProjection,
+	*minerUCrossPageMarkerProvenance,
+	error,
+) {
+	markdown, images, artifact, facts, err := extractMinerUZipBytesWithProjection(
+		zipData, sourceSHA256, effectiveModel, captureProjection,
+	)
+	if err != nil {
+		return "", nil, nil, nil, nil, err
+	}
+	var markers *minerUCrossPageMarkerProvenance
+	if _, targeted := minerUCrossPageRequiredCapability(sourceSHA256); captureProjection && targeted {
+		markers, err = projectMinerUCrossPageMarkerProvenanceZip(zipData, sourceSHA256)
+		if err != nil {
+			return "", nil, nil, nil, nil, err
+		}
+		if err := validateMinerUCrossPageCustodyPair(facts, markers, sourceSHA256); err != nil {
+			return "", nil, nil, nil, nil, err
+		}
+	}
+	return markdown, images, artifact, facts, markers, nil
+}
+
 const (
 	minerUSourceSchema    = "mineru.content-list.pipeline.v1"
 	minerUStructureSchema = "mineru-native-structure.v1"
@@ -621,6 +870,46 @@ type minerUContentItem struct {
 	CodeCaption   []string      `json:"code_caption"`
 	CodeFootnote  []string      `json:"code_footnote"`
 	ListItems     []string      `json:"list_items"`
+}
+
+type minerUPageLocalIndex struct {
+	PageIndex  int
+	LocalIndex int
+}
+
+func minerULinesDeletedEmptyTextPlaceholders(
+	provenance *minerUCrossPageMarkerProvenance,
+) (map[minerUPageLocalIndex]string, error) {
+	if validateMinerUCrossPageMarkerProvenance(provenance) != nil ||
+		provenance.NativeHierarchy == nil {
+		return nil, ErrMinerUCrossPageMarkerProvenanceInvalid
+	}
+	hierarchyByPath := make(map[string]minerUNativeHierarchyNode, len(provenance.NativeHierarchy.Nodes))
+	for _, node := range provenance.NativeHierarchy.Nodes {
+		if _, duplicate := hierarchyByPath[node.StructuralPathSHA256]; duplicate {
+			return nil, ErrMinerUCrossPageMarkerProvenanceInvalid
+		}
+		hierarchyByPath[node.StructuralPathSHA256] = node
+	}
+	placeholders := make(map[minerUPageLocalIndex]string)
+	for _, marker := range provenance.Markers {
+		if marker.MarkerKind != "lines_deleted" {
+			continue
+		}
+		node, exists := hierarchyByPath[marker.StructuralPathSHA256]
+		expectedPath := "p" + strconv.Itoa(marker.PageIndex) + "/b" + strconv.Itoa(marker.LocalIndex)
+		if !exists || marker.NodeType != "text" || node.NodeType != "text" ||
+			node.PageIndex != marker.PageIndex || node.LocalIndex != marker.LocalIndex ||
+			node.StructuralPath != expectedPath {
+			return nil, ErrMinerUCrossPageMarkerProvenanceInvalid
+		}
+		key := minerUPageLocalIndex{PageIndex: marker.PageIndex, LocalIndex: marker.LocalIndex}
+		if _, duplicate := placeholders[key]; duplicate {
+			return nil, ErrMinerUCrossPageMarkerProvenanceInvalid
+		}
+		placeholders[key] = marker.NodeType
+	}
+	return placeholders, nil
 }
 
 func minerUTypeSpecificKeys(itemType string) (map[string]bool, []string, bool) {
@@ -1036,13 +1325,13 @@ type minerUTableCell struct {
 	contentHash string
 }
 
-func parseMinerUTable(body string) ([]minerUTableCell, int, int, error) {
+func parseMinerUTable(body string) ([]minerUTableCell, int, int, bool, error) {
 	if err := validateMinerUTableHTML(body); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, false, err
 	}
 	document, err := html.Parse(strings.NewReader(body))
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("MinerU native table invalid HTML: %w", err)
+		return nil, 0, 0, false, fmt.Errorf("MinerU native table invalid HTML: %w", err)
 	}
 	var tables []*html.Node
 	var collectTables func(*html.Node)
@@ -1056,7 +1345,7 @@ func parseMinerUTable(body string) ([]minerUTableCell, int, int, error) {
 	}
 	collectTables(document)
 	if len(tables) != 1 {
-		return nil, 0, 0, fmt.Errorf("MinerU native table requires exactly one table element")
+		return nil, 0, 0, false, fmt.Errorf("MinerU native table requires exactly one table element")
 	}
 	table := tables[0]
 	var rows []*html.Node
@@ -1071,39 +1360,69 @@ func parseMinerUTable(body string) ([]minerUTableCell, int, int, error) {
 	}
 	collectRows(table)
 	if len(rows) == 0 {
-		return nil, 0, 0, fmt.Errorf("MinerU native table has no rows")
+		return nil, 0, 0, false, fmt.Errorf("MinerU native table has no rows")
 	}
 
-	occupied := make(map[[2]int]bool)
+	owners := make(map[[2]int]int)
 	var cells []minerUTableCell
 	columnCount := 0
+	mergedUniqueSpanFragment := false
 	for rowIndex, row := range rows {
 		columnIndex := 0
 		for node := row.FirstChild; node != nil; node = node.NextSibling {
 			if node.Type != html.ElementNode || (node.Data != "td" && node.Data != "th") {
 				continue
 			}
-			for occupied[[2]int{rowIndex, columnIndex}] {
+			for {
+				if _, occupied := owners[[2]int{rowIndex, columnIndex}]; !occupied {
+					break
+				}
 				columnIndex++
 			}
 			rowSpan, err := minerUSpan(node, "rowspan")
 			if err != nil {
-				return nil, 0, 0, err
+				return nil, 0, 0, false, err
 			}
 			columnSpan, err := minerUSpan(node, "colspan")
 			if err != nil {
-				return nil, 0, 0, err
+				return nil, 0, 0, false, err
 			}
 			if rowIndex+rowSpan > len(rows) {
-				return nil, 0, 0, fmt.Errorf("MinerU native table rowspan exceeds grid")
+				return nil, 0, 0, false, fmt.Errorf("MinerU native table rowspan exceeds grid")
 			}
+			if columnCount > 0 && columnIndex >= columnCount && rowSpan == 1 && columnSpan == 1 {
+				fullyOccupied := true
+				candidateOwners := make(map[int]bool)
+				for coveredColumn := 0; coveredColumn < columnCount; coveredColumn++ {
+					ownerIndex, occupied := owners[[2]int{rowIndex, coveredColumn}]
+					if !occupied {
+						fullyOccupied = false
+						break
+					}
+					owner := cells[ownerIndex]
+					if owner.rowSpan > 1 && owner.columnSpan > 1 {
+						candidateOwners[ownerIndex] = true
+					}
+				}
+				if fullyOccupied && len(candidateOwners) == 1 {
+					for ownerIndex := range candidateOwners {
+						fragmentHash := minerUHash("cell-content", minerUNodeText(node))
+						cells[ownerIndex].contentHash = minerUHash(
+							"cell-content-fragments", cells[ownerIndex].contentHash, fragmentHash,
+						)
+					}
+					mergedUniqueSpanFragment = true
+					continue
+				}
+			}
+			ownerIndex := len(cells)
 			for coveredRow := rowIndex; coveredRow < rowIndex+rowSpan; coveredRow++ {
 				for coveredColumn := columnIndex; coveredColumn < columnIndex+columnSpan; coveredColumn++ {
 					position := [2]int{coveredRow, coveredColumn}
-					if occupied[position] {
-						return nil, 0, 0, fmt.Errorf("MinerU native table spans overlap")
+					if _, occupied := owners[position]; occupied {
+						return nil, 0, 0, false, fmt.Errorf("MinerU native table spans overlap")
 					}
-					occupied[position] = true
+					owners[position] = ownerIndex
 				}
 			}
 			cells = append(cells, minerUTableCell{
@@ -1121,19 +1440,28 @@ func parseMinerUTable(body string) ([]minerUTableCell, int, int, error) {
 		}
 	}
 	if len(cells) == 0 || columnCount == 0 {
-		return nil, 0, 0, fmt.Errorf("MinerU native table has no cells")
+		return nil, 0, 0, false, fmt.Errorf("MinerU native table has no cells")
 	}
 	for rowIndex := range rows {
 		for columnIndex := 0; columnIndex < columnCount; columnIndex++ {
-			if !occupied[[2]int{rowIndex, columnIndex}] {
-				return nil, 0, 0, fmt.Errorf("MinerU native table grid is incomplete")
+			if _, occupied := owners[[2]int{rowIndex, columnIndex}]; !occupied {
+				return nil, 0, 0, false, fmt.Errorf("MinerU native table grid is incomplete")
 			}
 		}
 	}
-	return cells, len(rows), columnCount, nil
+	return cells, len(rows), columnCount, mergedUniqueSpanFragment, nil
 }
 
-func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string) (*types.NativeStructureArtifact, error) { //nolint:gocyclo
+func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string) (*types.NativeStructureArtifact, error) {
+	return normalizeMinerUContentListWithPlaceholders(raw, sourceSHA256, effectiveModel, nil)
+}
+
+func normalizeMinerUContentListWithPlaceholders( //nolint:gocyclo
+	raw []byte,
+	sourceSHA256 string,
+	effectiveModel string,
+	emptyTextPlaceholders map[minerUPageLocalIndex]string,
+) (*types.NativeStructureArtifact, error) {
 	if effectiveModel != "pipeline" {
 		return nil, fmt.Errorf("MinerU native structure requires pipeline model")
 	}
@@ -1159,7 +1487,7 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 	}
 	pageBlocks := make(map[int][]string)
 	pageTables := make(map[int][]string)
-	pageBlockIndex := make(map[int]int)
+	pageLocalIndex := make(map[int]int)
 	pageTableIndex := make(map[int]int)
 	pageSeen := make(map[int]bool)
 	for itemIndex, item := range items {
@@ -1167,6 +1495,8 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 			return nil, fmt.Errorf("MinerU native content-list identity is incomplete")
 		}
 		pageIndex := *item.PageIndex
+		blockIndex := pageLocalIndex[pageIndex]
+		pageLocalIndex[pageIndex]++
 		pageSeen[pageIndex] = true
 		bbox, err := minerUBBox(item.BBox)
 		if err != nil {
@@ -1186,7 +1516,21 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 		}
 		var content string
 		switch item.Type {
-		case "text", "header", "footer", "page_number", "aside_text", "page_footnote":
+		case "text":
+			if strings.TrimSpace(item.Text) == "" {
+				if emptyTextPlaceholders[minerUPageLocalIndex{
+					PageIndex: pageIndex, LocalIndex: blockIndex,
+				}] != item.Type {
+					return nil, fmt.Errorf("MinerU native text block is empty")
+				}
+			}
+			content = item.Text
+		case "header", "footer":
+			if strings.TrimSpace(item.Text) == "" {
+				continue
+			}
+			content = item.Text
+		case "page_number", "aside_text", "page_footnote":
 			if strings.TrimSpace(item.Text) == "" {
 				return nil, fmt.Errorf("MinerU native text block is empty")
 			}
@@ -1211,8 +1555,6 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 		}
 		contentHash := minerUHash("block-content", content)
 		blockID := minerUStableID("block", rawHash, itemIndex, strconv.Itoa(pageIndex), item.Type, strings.Join(bbox, ","), contentHash)
-		blockIndex := pageBlockIndex[pageIndex]
-		pageBlockIndex[pageIndex]++
 		document.Blocks = append(document.Blocks, minerUSanitizedBlock{
 			BlockID:       blockID,
 			OrderIndex:    len(document.Blocks),
@@ -1227,7 +1569,7 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 			continue
 		}
 
-		parsedCells, rowCount, columnCount, err := parseMinerUTable(item.TableBody)
+		parsedCells, rowCount, columnCount, mergedUniqueSpanFragment, err := parseMinerUTable(item.TableBody)
 		if err != nil {
 			for _, capability := range []string{"table_grid", "cell_locators", "row_column_indices", "merged_cells", "header_hierarchy"} {
 				if !containsString(document.Unsupported, capability) {
@@ -1235,6 +1577,9 @@ func normalizeMinerUContentList(raw []byte, sourceSHA256, effectiveModel string)
 				}
 			}
 			continue
+		}
+		if mergedUniqueSpanFragment && !containsString(document.Unsupported, "table_cell_fragment_merged_to_unique_span") {
+			document.Unsupported = append(document.Unsupported, "table_cell_fragment_merged_to_unique_span")
 		}
 		tableIndex := pageTableIndex[pageIndex]
 		pageTableIndex[pageIndex]++

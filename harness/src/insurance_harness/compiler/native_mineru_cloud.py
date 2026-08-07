@@ -17,6 +17,7 @@ from pydantic import (
     model_validator,
 )
 
+from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.material_profiles import MaterialProfileResolution
 from insurance_harness.compiler.parsed_documents import (
     BlockLocatorV1,
@@ -130,6 +131,7 @@ class _SanitizedStructure(_FrozenModel):
             "cross_page_sections",
             "cross_page_tables",
             "native_structure_invalid",
+            "table_cell_fragment_merged_to_unique_span",
         ],
         ...,
     ]
@@ -268,6 +270,45 @@ def _bbox_is_valid(value: NativeBBox) -> bool:
     return True
 
 
+def _native_leading_rows_signature(
+    table: _Table,
+    cells: tuple[_Cell, ...],
+) -> tuple[tuple[object, ...], ...] | None:
+    if table.row_count < 2:
+        return None
+    selected = tuple(
+        cell
+        for cell in cells
+        if cell.table_id == table.table_id and cell.row_index < 2
+    )
+    occupied: set[tuple[int, int]] = set()
+    signature: list[tuple[object, ...]] = []
+    for cell in sorted(selected, key=lambda item: (item.row_index, item.column_index)):
+        for row_index in range(cell.row_index, min(2, cell.row_index + cell.row_span)):
+            for column_index in range(
+                cell.column_index, cell.column_index + cell.column_span
+            ):
+                position = (row_index, column_index)
+                if position in occupied:
+                    return None
+                occupied.add(position)
+        signature.append(
+            (
+                cell.row_index,
+                cell.column_index,
+                cell.row_span,
+                cell.column_span,
+                cell.content_hash,
+            )
+        )
+    expected = {
+        (row_index, column_index)
+        for row_index in range(2)
+        for column_index in range(table.column_count)
+    }
+    return tuple(signature) if occupied == expected else None
+
+
 def _load_structure(
     sanitized_json: bytes,
     *,
@@ -297,6 +338,7 @@ def build_mineru_parsed_document_v1(  # noqa: C901
     snapshot: ParseSnapshotV1,
     output_facts: ParseOutputFactsV1,
     material_profile_resolution: MaterialProfileResolution,
+    trusted_relation_bindings: tuple[object, ...] = (),
 ) -> tuple[ParsedDocumentV1, ParseManifestV1, ParseQualityDecisionV1]:
     """Validate one sidecar, construct 053 objects, and run the sole quality gate."""
 
@@ -352,6 +394,40 @@ def build_mineru_parsed_document_v1(  # noqa: C901
     )
     bridge_cells = () if invalid_table_bbox or invalid_cell_bbox else structure.cells
 
+    derived_rate_header_ids: dict[str, tuple[str, ...]] = {}
+    derived_rate_table_ids: tuple[str, ...] = ()
+    if (
+        material_profile_resolution.profile.material_role == "rate_table"
+        and not invalid_table_bbox
+        and not invalid_cell_bbox
+    ):
+        candidates: list[tuple[_Table, _Table]] = []
+        for source_table in bridge_tables:
+            source_signature = _native_leading_rows_signature(
+                source_table, bridge_cells
+            )
+            if source_signature is None:
+                continue
+            for target_table in bridge_tables:
+                target_signature = _native_leading_rows_signature(
+                    target_table, bridge_cells
+                )
+                if (
+                    target_table.page_number == source_table.page_number + 1
+                    and target_table.column_count == source_table.column_count
+                    and target_signature == source_signature
+                ):
+                    candidates.append((source_table, target_table))
+        if len(candidates) == 1:
+            source_table, target_table = candidates[0]
+            derived_rate_table_ids = (source_table.table_id, target_table.table_id)
+            for table in candidates[0]:
+                derived_rate_header_ids[table.table_id] = tuple(
+                    cell.cell_id
+                    for cell in bridge_cells
+                    if cell.table_id == table.table_id and cell.row_index < 2
+                )
+
     pages = tuple(
         ParsePageV1(
             page_id=item.page_id,
@@ -389,7 +465,10 @@ def build_mineru_parsed_document_v1(  # noqa: C901
             structure_hash=item.structure_hash,
             row_count=item.row_count,
             column_count=item.column_count,
-            header_cell_ids=item.header_cell_ids,
+            header_cell_ids=(
+                item.header_cell_ids
+                or derived_rate_header_ids.get(item.table_id, ())
+            ),
             continuation_table_ids=(),
         )
         for item in bridge_tables
@@ -471,14 +550,16 @@ def build_mineru_parsed_document_v1(  # noqa: C901
         evidence.append(
             CapabilityEvidenceV1(capability="merged_cells", subject_refs=merged_ids)
         )
-    if (
-        tables
-        and all(table.header_cell_ids for table in tables)
-        and "header_hierarchy" not in unsupported_capabilities
+    if tables and "header_hierarchy" not in unsupported_capabilities and (
+        all(table.header_cell_ids for table in tables) or derived_rate_table_ids
     ):
+        header_table_ids = (
+            derived_rate_table_ids if derived_rate_table_ids else table_ids
+        )
         evidence.append(
             CapabilityEvidenceV1(
-                capability="header_hierarchy", subject_refs=table_ids + header_ids
+                capability="header_hierarchy",
+                subject_refs=header_table_ids + header_ids,
             )
         )
 
@@ -510,6 +591,23 @@ def build_mineru_parsed_document_v1(  # noqa: C901
                         if native_structure_invalid
                         else None
                     ),
+                    (
+                        ParseWarningV1(
+                            warning_code="derived_repeated_leading_rows_header_hierarchy",
+                            subject_refs=derived_rate_table_ids,
+                        )
+                        if derived_rate_table_ids
+                        else None
+                    ),
+                    (
+                        ParseWarningV1(
+                            warning_code="table_cell_fragment_merged_to_unique_span",
+                            subject_refs=table_ids,
+                        )
+                        if "table_cell_fragment_merged_to_unique_span"
+                        in unsupported_capabilities
+                        else None
+                    ),
                 )
                 if warning is not None
             ),
@@ -524,6 +622,131 @@ def build_mineru_parsed_document_v1(  # noqa: C901
         )
     except ValidationError:
         raise NativeMinerUStructureError("invalid_native_relationship") from None
+    if trusted_relation_bindings:
+        from insurance_harness.knowledge_compiler.relation_bound_admission_596_1 import (
+            Trusted090RelationInputV1,
+        )
+
+        try:
+            bindings = tuple(
+                Trusted090RelationInputV1.model_validate(item)
+                for item in trusted_relation_bindings
+            )
+        except (TypeError, ValidationError, ValueError):
+            raise NativeMinerUStructureError("trusted_relation_binding_invalid") from None
+        policy_hash = canonical_hash(
+            "cross-page-relation-policy-context.v1",
+            {
+                "material_profile_binding_hash": material_profile_resolution.binding_hash,
+                "parse_policy_receipt": (
+                    material_profile_resolution.parse_policy_receipt.model_dump(mode="python")
+                ),
+                "output_facts": document.output_facts.model_dump(mode="python"),
+            },
+        )
+        replay_hash = canonical_hash(
+            "cross-page-relation-replay-context.v1",
+            {
+                "subject": document.subject.model_dump(mode="python"),
+                "parser": document.parser.model_dump(mode="python"),
+                "attempt": document.attempt.model_dump(mode="python"),
+                "snapshot": document.snapshot.model_dump(mode="python"),
+                "output_facts": document.output_facts.model_dump(mode="python"),
+                "raw_artifact_sha256": expected_raw_sha256,
+                "sanitized_structure_sha256": expected_sanitized_sha256,
+            },
+        )
+        expected_kind = (
+            "section_continuation"
+            if material_profile_resolution.profile.material_role in {"terms", "brochure"}
+            else "table_continuation"
+            if material_profile_resolution.profile.material_role == "rate_table"
+            else None
+        )
+        block_ids_set = set(block_ids)
+        table_ids_set = set(table_ids)
+        if (
+            expected_kind is None
+            or len({binding.relation_id for binding in bindings}) != len(bindings)
+            or any(
+                binding.relation_kind != expected_kind
+                or binding.source_sha256 != subject.source_sha256
+                or binding.parser_id != parser.parser_id
+                or binding.parser_build_id != parser.parser_build_id
+                or binding.parser_config_hash != parser.parser_config_hash
+                or binding.raw_artifact_sha256 != expected_raw_sha256
+                or binding.sanitized_structure_sha256 != expected_sanitized_sha256
+                or binding.material_profile_binding_hash
+                != material_profile_resolution.binding_hash
+                or binding.policy_context_hash != policy_hash
+                or binding.replay_context_hash != replay_hash
+                for binding in bindings
+            )
+        ):
+            raise NativeMinerUStructureError("trusted_relation_binding_invalid")
+        endpoint_inventory = (
+            block_ids_set if expected_kind == "section_continuation" else table_ids_set
+        )
+        if any(
+            endpoint not in endpoint_inventory
+            for binding in bindings
+            for endpoint in binding.endpoint_ids
+        ):
+            raise NativeMinerUStructureError("trusted_relation_endpoint_invalid")
+
+        capability = (
+            "cross_page_sections"
+            if expected_kind == "section_continuation"
+            else "cross_page_tables"
+        )
+        endpoint_refs = tuple(
+            dict.fromkeys(
+                endpoint
+                for binding in bindings
+                for endpoint in binding.endpoint_ids
+            )
+        )
+        updated_tables = document.tables
+        if expected_kind == "table_continuation":
+            continuation: dict[str, str] = {}
+            for binding in bindings:
+                left, right = binding.endpoint_ids
+                if left in continuation or right in continuation:
+                    raise NativeMinerUStructureError("trusted_relation_endpoint_invalid")
+                continuation[left] = right
+                continuation[right] = left
+            updated_tables = tuple(
+                table.model_copy(
+                    update={
+                        "continuation_table_ids": (
+                            (continuation[table.table_id],)
+                            if table.table_id in continuation
+                            else ()
+                        )
+                    }
+                )
+                for table in document.tables
+            )
+        document = ParsedDocumentV1.model_validate(
+            {
+                **document.model_dump(mode="python", exclude={"document_hash"}),
+                "tables": updated_tables,
+                "capability_evidence": (
+                    *tuple(
+                        row
+                        for row in document.capability_evidence
+                        if row.capability != capability
+                    ),
+                    CapabilityEvidenceV1(
+                        capability=capability,
+                        subject_refs=endpoint_refs,
+                    ),
+                ),
+                "unsupported": tuple(
+                    row for row in document.unsupported if row.capability != capability
+                ),
+            }
+        )
     manifest = build_parse_manifest(document, material_profile_resolution.profile)
     decision = evaluate_parse_quality(
         document=document,
