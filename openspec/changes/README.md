@@ -89,26 +89,30 @@
 | 079 | fair-experiment-executable-bridge | ✅ 实现与独立验证完成（PR #112） | 074 frozen pair → 066/071 scoring 前门；零 provider/Golden 值读取 |
 | 080 | candidate-review-release-handoff | ✅ 实现与独立验证完成（PR #114） | Candidate → Review dossier → Release preparation 同身份纵切；零签名/激活 |
 | 081 | golden18-xlsx-import-bridge | ✅ 实现与独立验证完成（PR #113） | 当前人工复核包 → typed 18 项决策请求；空白保持 pending、零 Golden 写入 |
-| 082 | mineru-capture-typed-failure | 🚧 Draft PR #115 | MinerU capture 固定阶段失败码；provider=0 |
-| 083 | mineru-capture-custody-intake | 🚧 Draft PR #116 | exact Go capture bytes → immutable typed intake；零 ADMIT |
-| 086 | mineru-derived-cross-page-binding | 🧊 frozen successor / integration dependency | 只产出 `DERIVED_STRUCTURAL_BINDING_VERIFIED`；当前无完整 typed endpoint evidence 时 fail closed |
-| 089 | mineru-typed-cross-page-marker-provenance | 🧊 exact candidate `70d32f09` | 062 v1-compatible typed marker companion；无 endpoint/relation |
-| 091 | mineru-marker-evidence-custody-bridge | 🧊 stable integration candidate | PR115 → PR116 → 089 logical stack；marker companion进入同次capture与083 bundle digest |
-| 092 | 596-1-relation-bound-admission-integration | 🧊 stable stacked candidate | 083→086→090→060→061 task-local composition；当前单节点marker仍 typed blocked |
-| 096 | 091-derived-relation-receipt-bridge | 🧺 exact candidate `11867ea8` | 091 actual intake→086 derived binding→私有canonical receipt；证据不足零发布 |
-| 087 | 596-1-private-artifact-admission-runner | 🧺 exact candidate `cda609d0` | 0600 exact four-file snapshot and privacy-safe composition seam; no runtime readiness claim |
-| 097 | 596-1-no-provider-full-synthetic-vertical-rehearsal | 🚧 independent owner in progress | 098 不读取或修改其 mutable 路径 |
-| 098 | actual-marker-endpoint-pair-derivation-input-bridge | 🧺 exact candidate `168f1137` | 091/083 marker custody → 086 rate-table endpoint-pair input；零 relation receipt/ADMIT/READY |
-| 099 | bounded-real-capture-readiness-gate | 🔒 独立 Owner 已占用 | 102 不读取或修改其 mutable 路径 |
-| 095 | 087-actual-dependency-wiring | 🧺 stable stacked candidate | 087 private bytes→083/096/092 actual composition; incompatible dependency fails before partial output |
-| 100 | 096-private-receipt-092-authority-adapter | 🧺 stable candidate `adb1f3c8` | private 096 bytes → exact 092 authority/profile/map/provider inputs; absent dual-map authority remains typed unavailable |
-| 101 | marker-authority-envelope | 🧺 stable candidate `8fc3b62c` | 091 verified marker custody → immutable public `UNBOUND` authority envelope; no relation inference |
-| 102 | 086-marker-preserving-intake-replay-seam | 🧺 stable candidate `90e98c94` | 083/091 marker custody replay compatibility only; zero relation-algorithm change |
-| 103 | terms-section-derived-endpoint-pair-input-bridge | 🚧 implementation in progress | 101 terms marker authority + 053 blocks → derived section pair; no semantic inference |
-| 104 | marker-authority-readiness-wiring | 🚧 independent Owner in progress | 101 public authority → endpoint replay → readiness evidence; 105 does not modify its mutable paths |
-| 105 | dual-map-authority-actual-execution-wiring | 🚧 implementation in progress | 101 + 098/103 + 096/100/092 → 095/087 actual seam; current missing terms map fails closed |
-| 108 | legacy-fixture-marker-envelope-compatibility | 🧺 stable stacked candidate | 086/092 legacy fixtures carry explicit canonical 091 envelopes and enter unchanged assertions; production gates unchanged |
-| 106+ | （空闲，108 已占用） | | 先占号再开目录 |
+| 082 | mineru-capture-typed-failure | ✅ 已由 PR #117 吸收并验证；Draft PR #115 已关闭 | MinerU capture 固定阶段失败码；真实闭环无重试/无 fallback |
+| 083 | mineru-capture-custody-intake | ✅ 已由 PR #117 吸收并验证；Draft PR #116 已关闭 | exact Go capture bytes → immutable typed intake；零隐式 ADMIT |
+| 086 | mineru-derived-cross-page-binding | ✅ 已整合并验证（PR #117） | 原生 marker 归并为有序关系集合；证据不足继续 fail closed |
+| 087 | 596-1-private-artifact-admission-runner | ✅ 已整合并验证（PR #117） | 三份真实私有制品贯穿 Admission；终态 `COMPOSITION_SEAM_VERIFIED` |
+| 089 | mineru-typed-cross-page-marker-provenance | ✅ 已整合并验证（PR #117） | 原生 cross-page / lines-deleted marker 保留路径与 custody |
+| 091 | mineru-marker-evidence-custody-bridge | ✅ 已整合并验证（PR #117） | marker companion 进入同次 capture 与 083 bundle digest |
+| 092 | 596-1-relation-bound-admission-integration | ✅ 已整合并验证（PR #117） | 有序关系集合进入 Admission；终态 `READY_FOR_QUALITY_FALSIFICATION` |
+| 093 | cross-page-authority-compatibility-replay | ✅ 已整合并验证（PR #117） | authority/profile compatibility 离线回放，漂移即 fail closed |
+| 094 | bounded-capture-to-admission-execution-wrapper | ✅ 已整合并验证（PR #117） | bounded capture → custody → relation → Admission 单次执行包装 |
+| 095 | 087-actual-dependency-wiring | ✅ 已整合并验证（PR #117） | 087 私有 bytes 进入真实依赖链；不兼容时零部分输出 |
+| 096 | 091-derived-relation-receipt-bridge | ✅ 已整合并验证（PR #117） | actual intake → derived binding → 私有 canonical receipt |
+| 097 | 596-1-no-provider-full-synthetic-vertical-rehearsal | ✅ 已整合并验证（PR #117） | 无 provider 全链排练已完成，随后由真实三 PDF 闭环取代其交付门 |
+| 098 | actual-marker-endpoint-pair-derivation-input-bridge | ✅ 已整合并验证（PR #117） | marker custody → endpoint-pair input；不从正文相似度推断结构 |
+| 099 | bounded-real-capture-readiness-gate | ✅ 已整合并验证（PR #117） | bounded real capture 前门与 exact identity/custody gate |
+| 100 | 096-private-receipt-092-authority-adapter | ✅ 已整合并验证（PR #117） | private receipt → exact Admission authority/profile/map inputs |
+| 101 | marker-authority-envelope | ✅ 已整合并验证（PR #117） | verified marker custody → immutable authority envelope；无关系臆断 |
+| 102 | 086-marker-preserving-intake-replay-seam | ✅ 已整合并验证（PR #117） | 083/091 marker custody replay compatibility；不改变关系算法 |
+| 103 | terms-section-derived-endpoint-pair-input-bridge | ✅ 已整合并验证（PR #117） | 条款嵌套 marker 归并为真实 section endpoint pairs |
+| 104 | marker-authority-readiness-wiring | ✅ 已整合并验证（PR #117） | public authority → endpoint replay → readiness evidence |
+| 105 | dual-map-authority-actual-execution-wiring | ✅ 已整合并验证（PR #117） | 条款/表格关系映射进入 095/087 actual seam |
+| 106 | mineru-native-section-anchor-evidence | ✅ 已整合并验证（PR #117） | 条款真实 ZIP 得到 3 个可复算 section-anchor relations |
+| 107 | section-anchor-readiness-injection | ✅ 已整合并验证（PR #117） | section anchors 注入 103、Admission 与 087 链 |
+| 108 | legacy-fixture-marker-envelope-compatibility | ✅ 已整合并验证（PR #117） | 旧 fixture 显式携带 canonical envelope；生产 gate 不放宽 |
+| 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
