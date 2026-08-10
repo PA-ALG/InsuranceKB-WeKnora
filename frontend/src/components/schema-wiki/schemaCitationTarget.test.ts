@@ -1,129 +1,136 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
   assertPinnedCitation,
   citationHighlightStyle,
   parseCitationTarget,
+  type CitationPinV1,
+  type CitationTargetV1,
 } from './schemaCitationTarget.ts'
 
 const H = (character: string) => character.repeat(64)
+const vector = JSON.parse(readFileSync(new URL(
+  '../../../../internal/application/service/testdata/schema_wiki_contract_vector.json',
+  import.meta.url,
+), 'utf8')) as {
+  citations: Array<Record<string, unknown>>
+  release: { citation_bindings: Array<Record<string, string>> }
+}
 
-function target(pageNumber: number) {
+function citation(pageNumber = 12): Record<string, unknown> {
+  const exact = structuredClone(vector.citations[0])
+  if (pageNumber === 12) return exact
   return {
-    version: 'citation-target.v1',
+    ...exact,
     citation_id: `citation-page-${pageNumber}`,
     citation_sha256: H('c'),
-    logical_member_ref: 'fields/product_name',
-    knowledge_id: 'knowledge-terms',
-    source_revision_id: 'knowledge-terms:attempt-2',
-    parse_attempt: 2,
-    document_sha256: H('d'),
-    manifest_sha256: H('e'),
     chunk_id: `chunk-page-${pageNumber}`,
+    locator_ref: `block-page-${pageNumber}`,
     page_number: pageNumber,
-    locator_kind: 'block',
-    locator_id: `block-page-${pageNumber}`,
-    bbox: {
-      x0: 100,
-      y0: 200,
-      x1: 400,
-      y1: 300,
-      coordinate_space: 'normalized_0_1000',
-    },
-    quote_sha256: H('f'),
-    content_sha256: H('a'),
   }
 }
 
-function pin() {
+function pin(target: CitationTargetV1): CitationPinV1 {
+  const binding = vector.release.citation_bindings[0]
   return {
     release_id: 'release-r1',
-    field_id: 'product_name',
-    logical_member_ref: 'fields/product_name',
-    member_digest: H('b'),
+    field_id: 'field-a',
+    logical_member_ref: target.logical_member_ref,
+    member_digest: binding.member_digest,
     citation_binding: {
-      citation_sha256: H('c'),
-      member_digest: H('b'),
+      contract: 'citation-member-binding.v1',
+      citation_sha256: binding.citation_sha256,
+      logical_member_ref: binding.logical_member_ref,
+      member_digest: binding.member_digest,
+      binding_sha256: binding.binding_sha256,
     },
-    source_revision_id: 'knowledge-terms:attempt-2',
-    parse_attempt: 2,
-    document_sha256: H('d'),
-    manifest_sha256: H('e'),
+    space_id: target.space_id,
+    entity_version_id: target.entity_version_id,
+    knowledge_id: target.knowledge_id,
+    chunk_id: target.chunk_id,
+    source_revision_id: target.source_revision_id,
+    parse_attempt_id: target.parse_attempt_id,
+    parsed_document_sha256: target.parsed_document_sha256,
+    parse_manifest_sha256: target.parse_manifest_sha256,
+    page_number: target.page_number,
+    locator_ref: target.locator_ref,
+    quote_snapshot: target.quote_snapshot,
+    content_snapshot_sha256: target.content_snapshot_sha256,
   }
 }
 
-test('page 12 and page 27 remain distinct exact targets', () => {
-  assert.equal(parseCitationTarget(target(12)).page_number, 12)
-  assert.equal(parseCitationTarget(target(27)).page_number, 27)
+test('the unchanged A1 vector and independent page 12/page 27 targets parse', () => {
+  assert.equal(parseCitationTarget(citation(12)).page_number, 12)
+  assert.equal(parseCitationTarget(citation(27)).page_number, 27)
 })
 
-test('knowledge-only or current/latest references are not formal citations', () => {
+test('knowledge-only, current/latest, and control-character references are rejected', () => {
+  assert.throws(() => parseCitationTarget({ knowledge_id: 'knowledge-terms' }), {
+    message: 'CITATION_TARGET_INCOMPLETE',
+  })
+  for (const reserved of ['current', 'LATEST']) {
+    assert.throws(() => parseCitationTarget({
+      ...citation(12),
+      source_revision_id: reserved,
+    }), { message: 'CITATION_REVISION_NOT_PINNED' })
+  }
   assert.throws(() => parseCitationTarget({
-    knowledge_id: 'knowledge-terms',
-    title: 'terms.pdf',
-  }), { message: 'CITATION_TARGET_INCOMPLETE' })
-  assert.throws(() => parseCitationTarget({
-    ...target(12),
-    source_revision_id: 'current',
-  }), { message: 'CITATION_REVISION_NOT_PINNED' })
-  assert.throws(() => parseCitationTarget({
-    ...target(12),
-    source_revision_id: 'latest',
-  }), { message: 'CITATION_REVISION_NOT_PINNED' })
-  assert.throws(() => parseCitationTarget({
-    ...target(12),
-    source_revision_id: 'CURRENT',
-  }), { message: 'CITATION_REVISION_NOT_PINNED' })
-  assert.throws(() => parseCitationTarget({
-    ...target(12),
-    locator_id: 'block-12\u0000foreign',
+    ...citation(12),
+    locator_ref: 'block-a\u0000foreign',
   }), { message: 'CITATION_TARGET_INCOMPLETE' })
 })
 
 test('missing or zero page is PAGE_UNAVAILABLE and never defaults to page one', () => {
-  const { page_number: _page, ...missingPage } = target(12)
+  const { page_number: _page, ...missingPage } = citation(12)
   assert.throws(() => parseCitationTarget(missingPage), { message: 'PAGE_UNAVAILABLE' })
-  assert.throws(() => parseCitationTarget({ ...target(12), page_number: 0 }), {
+  assert.throws(() => parseCitationTarget({ ...citation(12), page_number: 0 }), {
     message: 'PAGE_UNAVAILABLE',
   })
 })
 
-test('invalid, degenerate, or fabricated full-page bbox is rejected', () => {
+test('invalid, degenerate, full-page, or unknown-coordinate bbox is rejected', () => {
+  const base = citation(12)
   assert.throws(() => parseCitationTarget({
-    ...target(12),
-    bbox: { x0: 300, y0: 200, x1: 300, y1: 400, coordinate_space: 'normalized_0_1000' },
+    ...base,
+    bbox: { coordinate_system: 'pdf_points', page_width: 600, page_height: 800, x0: 300, y0: 200, x1: 300, y1: 400 },
   }), { message: 'BBOX_UNAVAILABLE' })
   assert.throws(() => parseCitationTarget({
-    ...target(12),
-    bbox: { x0: 0, y0: 0, x1: 1000, y1: 1000, coordinate_space: 'normalized_0_1000' },
+    ...base,
+    bbox: { coordinate_system: 'pdf_points', page_width: 600, page_height: 800, x0: 0, y0: 0, x1: 600, y1: 800 },
   }), { message: 'BBOX_UNAVAILABLE' })
   assert.throws(() => parseCitationTarget({
-    ...target(12),
-    bbox: { x0: 1, y0: 2, x1: 3, y1: 4, coordinate_space: 'unknown' },
+    ...base,
+    bbox: { coordinate_system: 'unknown', page_width: 600, page_height: 800, x0: 1, y0: 2, x1: 3, y1: 4 },
   }), { message: 'BBOX_UNAVAILABLE' })
 })
 
-test('release member, citation binding, revision, and manifest drift fail before preview', () => {
-  const exactTarget = parseCitationTarget(target(12))
-  assert.doesNotThrow(() => assertPinnedCitation(exactTarget, pin()))
+test('member binding and every replay identity drift fail before preview', () => {
+  const exactTarget = parseCitationTarget(citation(12))
+  assert.doesNotThrow(() => assertPinnedCitation(exactTarget, pin(exactTarget)))
   assert.throws(() => assertPinnedCitation(exactTarget, {
-    ...pin(),
+    ...pin(exactTarget),
     member_digest: H('9'),
   }), { message: 'CITATION_MEMBER_BINDING_MISMATCH' })
-  assert.throws(() => assertPinnedCitation({ ...exactTarget, manifest_sha256: H('9') }, pin()), {
-    message: 'CITATION_REPLAY_IDENTITY_MISMATCH',
-  })
+  assert.throws(() => assertPinnedCitation(exactTarget, {
+    ...pin(exactTarget),
+    field_id: 'field-foreign',
+  }), { message: 'CITATION_MEMBER_BINDING_MISMATCH' })
+  assert.throws(() => assertPinnedCitation(exactTarget, {
+    ...pin(exactTarget),
+    parse_manifest_sha256: H('9'),
+  }), { message: 'CITATION_REPLAY_IDENTITY_MISMATCH' })
 })
 
-test('normalized bbox transforms to a visible viewport overlay without page fallback', () => {
-  assert.deepEqual(citationHighlightStyle(parseCitationTarget(target(12)), {
-    width: 800,
-    height: 1200,
+test('A1 pdf_points bbox transforms to a visible viewport overlay without fallback', () => {
+  assert.deepEqual(citationHighlightStyle(parseCitationTarget(citation(12)), {
+    width: 600,
+    height: 800,
   }), {
-    left: 80,
-    top: 240,
-    width: 240,
-    height: 120,
+    left: 100,
+    top: 120,
+    width: 260,
+    height: 60,
   })
 })

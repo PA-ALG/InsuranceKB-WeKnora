@@ -1,7 +1,5 @@
 import {
-  assertPinnedCitation,
   parseCitationTarget,
-  type CitationPinV1,
   type CitationTargetV1,
 } from '../../../components/schema-wiki/schemaCitationTarget.ts'
 
@@ -19,10 +17,11 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return actual.length === expected.length && actual.every((key, index) => key === expected[index])
 }
 
-function isId(value: unknown): value is string {
+function isCanonicalText(value: unknown): value is string {
   return typeof value === 'string'
     && value.length > 0
     && value.trim() === value
+    && value.normalize('NFC') === value
     && !CONTROL_CHARACTER.test(value)
 }
 
@@ -43,7 +42,9 @@ export function parseSchemaWikiScope(value: unknown): SchemaWikiScopeV1 {
   if (
     !isRecord(value) || !hasExactKeys(value, keys)
     || value.version !== 'schema-wiki-scope.v1'
-    || !isId(value.space_id) || !isId(value.raw_kb_id) || !isId(value.wiki_kb_id)
+    || !isCanonicalText(value.space_id)
+    || !isCanonicalText(value.raw_kb_id)
+    || !isCanonicalText(value.wiki_kb_id)
     || !isHash(value.scope_sha256)
   ) {
     throw new Error('SCHEMA_WIKI_SCOPE_INVALID')
@@ -65,178 +66,165 @@ export function assertValidatedSchemaWikiScope(value: SchemaWikiScopeV1): void {
   }
 }
 
+export interface SchemaSectionV1 {
+  readonly section_id: string
+  readonly display_name: string
+  readonly ordered_field_ids: ReadonlyArray<string>
+}
+
 export interface SchemaPackV1 {
-  readonly version: 'schema-pack.v1'
-  readonly domain_id: string
+  readonly contract: 'schema-pack.v1'
   readonly schema_pack_id: string
+  readonly schema_version: string
+  readonly domain_id: string
+  readonly ordered_field_ids: ReadonlyArray<string>
+  readonly sections: ReadonlyArray<SchemaSectionV1>
   readonly schema_pack_sha256: string
-  readonly fields: ReadonlyArray<{ readonly field_id: string; readonly ordinal: number }>
-  readonly sections: ReadonlyArray<{
-    readonly section_id: string
-    readonly ordinal: number
-    readonly field_ids: ReadonlyArray<string>
-  }>
 }
 
 export function parseSchemaPack(value: unknown): SchemaPackV1 {
-  const keys = ['version', 'domain_id', 'schema_pack_id', 'schema_pack_sha256', 'fields', 'sections']
+  const keys = [
+    'contract', 'schema_pack_id', 'schema_version', 'domain_id',
+    'ordered_field_ids', 'sections', 'schema_pack_sha256',
+  ]
   if (
     !isRecord(value) || !hasExactKeys(value, keys)
-    || value.version !== 'schema-pack.v1'
-    || !isId(value.domain_id) || !isId(value.schema_pack_id) || !isHash(value.schema_pack_sha256)
-    || !Array.isArray(value.fields) || !Array.isArray(value.sections)
+    || value.contract !== 'schema-pack.v1'
+    || !isCanonicalText(value.schema_pack_id)
+    || !isCanonicalText(value.schema_version)
+    || !isCanonicalText(value.domain_id)
+    || !isHash(value.schema_pack_sha256)
+    || !Array.isArray(value.ordered_field_ids)
+    || !Array.isArray(value.sections)
   ) {
     throw new Error('SCHEMA_PACK_INVALID')
   }
-  const fields = value.fields.map((field, index) => {
+  const orderedFieldIds = value.ordered_field_ids.map(fieldId => {
+    if (!isCanonicalText(fieldId)) throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
+    return fieldId
+  })
+  if (orderedFieldIds.length === 0 || new Set(orderedFieldIds).size !== orderedFieldIds.length) {
+    throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
+  }
+  const sections = value.sections.map(section => {
     if (
-      !isRecord(field) || !hasExactKeys(field, ['field_id', 'ordinal'])
-      || !isId(field.field_id) || field.ordinal !== index
+      !isRecord(section)
+      || !hasExactKeys(section, ['section_id', 'display_name', 'ordered_field_ids'])
+      || !isCanonicalText(section.section_id)
+      || !isCanonicalText(section.display_name)
+      || !Array.isArray(section.ordered_field_ids)
     ) {
       throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
     }
-    return Object.freeze({ field_id: field.field_id, ordinal: index })
-  })
-  const expectedFieldIds = fields.map(field => field.field_id)
-  if (new Set(expectedFieldIds).size !== expectedFieldIds.length) {
-    throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
-  }
-  const sections = value.sections.map((section, index) => {
-    if (
-      !isRecord(section) || !hasExactKeys(section, ['section_id', 'ordinal', 'field_ids'])
-      || !isId(section.section_id) || section.ordinal !== index || !Array.isArray(section.field_ids)
-      || section.field_ids.some(fieldId => !isId(fieldId))
-    ) {
+    const fieldIds = section.ordered_field_ids.map(fieldId => {
+      if (!isCanonicalText(fieldId)) throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
+      return fieldId
+    })
+    if (fieldIds.length === 0 || new Set(fieldIds).size !== fieldIds.length) {
       throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
     }
     return Object.freeze({
       section_id: section.section_id,
-      ordinal: index,
-      field_ids: Object.freeze([...(section.field_ids as string[])]),
+      display_name: section.display_name,
+      ordered_field_ids: Object.freeze(fieldIds),
     })
   })
-  const sectionFieldIds = sections.flatMap(section => section.field_ids)
+  const flattened = sections.flatMap(section => section.ordered_field_ids)
   if (
-    new Set(sections.map(section => section.section_id)).size !== sections.length
-    || new Set(sectionFieldIds).size !== sectionFieldIds.length
-    || sectionFieldIds.length !== expectedFieldIds.length
-    || sectionFieldIds.some((fieldId, index) => fieldId !== expectedFieldIds[index])
+    sections.length === 0
+    || new Set(sections.map(section => section.section_id)).size !== sections.length
+    || flattened.length !== orderedFieldIds.length
+    || flattened.some((fieldId, index) => fieldId !== orderedFieldIds[index])
   ) {
     throw new Error('SCHEMA_PACK_TOPOLOGY_INVALID')
   }
   return Object.freeze({
-    version: value.version,
-    domain_id: value.domain_id,
+    contract: value.contract,
     schema_pack_id: value.schema_pack_id,
-    schema_pack_sha256: value.schema_pack_sha256,
-    fields: Object.freeze(fields),
+    schema_version: value.schema_version,
+    domain_id: value.domain_id,
+    ordered_field_ids: Object.freeze(orderedFieldIds),
     sections: Object.freeze(sections),
+    schema_pack_sha256: value.schema_pack_sha256,
   })
 }
 
 export type SchemaFieldState = 'present' | 'absent_explicitly' | 'unknown'
 
-export interface SchemaFieldMemberV1 {
-  readonly version: 'schema-field-member.v1'
-  readonly release_id: string
-  readonly member_digest: string
-  readonly logical_slug: string
-  readonly section_id: string
+export interface SchemaFieldPageV1 {
+  readonly contract: 'schema-field-page.v1'
   readonly field_id: string
   readonly state: SchemaFieldState
-  readonly value: unknown
+  readonly value_snapshot: string | null
   readonly citations: ReadonlyArray<CitationTargetV1>
-  readonly citation_bindings: ReadonlyArray<{ citation_sha256: string; member_digest: string }>
-  readonly review_items: ReadonlyArray<Record<string, unknown>>
+  readonly evidence_receipt_sha256s: ReadonlyArray<string>
+  readonly review_item_reason: string | null
+  readonly field_page_sha256: string
 }
 
-export function parseSchemaFieldMember(
+export function parseSchemaFieldPage(
   value: unknown,
-  expected: { releaseId: string; memberDigest: string },
-): SchemaFieldMemberV1 {
+  expected: { fieldId: string; fieldPageSha256: string },
+): SchemaFieldPageV1 {
   const keys = [
-    'version', 'release_id', 'member_digest', 'logical_slug', 'section_id', 'field_id',
-    'state', 'value', 'citations', 'citation_bindings', 'review_items',
+    'contract', 'field_id', 'state', 'value_snapshot', 'citations',
+    'evidence_receipt_sha256s', 'review_item_reason', 'field_page_sha256',
   ]
-  if (!isRecord(value) || !hasExactKeys(value, keys) || value.version !== 'schema-field-member.v1') {
-    throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
-  }
-  if (value.release_id !== expected.releaseId) {
-    throw new Error('SCHEMA_FIELD_RELEASE_PIN_MISMATCH')
-  }
-  if (value.member_digest !== expected.memberDigest) {
-    throw new Error('SCHEMA_FIELD_MEMBER_PIN_MISMATCH')
-  }
   if (
-    !isId(value.logical_slug) || !isId(value.section_id) || !isId(value.field_id)
-    || !isHash(value.member_digest)
-    || !Array.isArray(value.citations) || !Array.isArray(value.citation_bindings)
-    || !Array.isArray(value.review_items)
+    !isRecord(value) || !hasExactKeys(value, keys)
+    || value.contract !== 'schema-field-page.v1'
+    || !isCanonicalText(value.field_id)
     || !['present', 'absent_explicitly', 'unknown'].includes(value.state as string)
+    || !Array.isArray(value.citations)
+    || !Array.isArray(value.evidence_receipt_sha256s)
+    || !isHash(value.field_page_sha256)
   ) {
-    throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
+    throw new Error('SCHEMA_FIELD_PAGE_INVALID')
   }
-  if (value.state === 'unknown' && (value.value !== null || value.citations.length > 0 || value.citation_bindings.length > 0)) {
-    throw new Error('UNKNOWN_FIELD_HAS_AUTHORITY')
-  }
-  if (value.state === 'unknown' && value.review_items.length === 0) {
-    throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
-  }
-  if (value.state === 'absent_explicitly' && (
-    typeof value.value !== 'string' || value.value.length === 0
-    || value.citations.length === 0 || value.citation_bindings.length === 0
-  )) {
-    throw new Error('EXPLICIT_ABSENCE_EVIDENCE_REQUIRED')
-  }
-  if (value.state === 'present' && (
-    value.value === null || value.value === undefined
-    || value.citations.length === 0 || value.citation_bindings.length === 0
-  )) {
-    throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
+  if (value.field_id !== expected.fieldId || value.field_page_sha256 !== expected.fieldPageSha256) {
+    throw new Error('SCHEMA_FIELD_PAGE_PIN_MISMATCH')
   }
   const citations = value.citations.map(parseCitationTarget)
-  const bindings = value.citation_bindings.map(binding => {
-    if (
-      !isRecord(binding) || !hasExactKeys(binding, ['citation_sha256', 'member_digest'])
-      || !isHash(binding.citation_sha256) || !isHash(binding.member_digest)
-    ) {
-      throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
-    }
-    return Object.freeze({ citation_sha256: binding.citation_sha256, member_digest: binding.member_digest })
+  const citationHashes = citations.map(citation => citation.citation_sha256)
+  const evidenceReceipts = value.evidence_receipt_sha256s.map(receipt => {
+    if (!isHash(receipt)) throw new Error('SCHEMA_FIELD_PAGE_INVALID')
+    return receipt
   })
-  if (citations.length !== bindings.length) {
-    throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
+  if (
+    new Set(citationHashes).size !== citationHashes.length
+    || new Set(evidenceReceipts).size !== evidenceReceipts.length
+  ) {
+    throw new Error('SCHEMA_FIELD_PAGE_INVALID')
   }
-  citations.forEach((citation, index) => {
-    const binding = bindings[index]
-    const pin: CitationPinV1 = {
-      release_id: value.release_id as string,
-      field_id: value.field_id as string,
-      logical_member_ref: value.logical_slug as string,
-      member_digest: value.member_digest as string,
-      citation_binding: binding,
-      source_revision_id: citation.source_revision_id,
-      parse_attempt: citation.parse_attempt,
-      document_sha256: citation.document_sha256,
-      manifest_sha256: citation.manifest_sha256,
+  if (value.state === 'unknown') {
+    if (
+      value.value_snapshot !== null || citations.length > 0 || evidenceReceipts.length > 0
+      || value.review_item_reason !== 'FIELD_UNKNOWN'
+    ) {
+      throw new Error('UNKNOWN_FIELD_HAS_AUTHORITY')
     }
-    assertPinnedCitation(citation, pin)
-  })
+  } else {
+    const validKnown = isCanonicalText(value.value_snapshot)
+      && citations.length > 0
+      && evidenceReceipts.length > 0
+      && value.review_item_reason === null
+    if (!validKnown) {
+      throw new Error(
+        value.state === 'absent_explicitly'
+          ? 'EXPLICIT_ABSENCE_EVIDENCE_REQUIRED'
+          : 'SCHEMA_FIELD_PAGE_INVALID',
+      )
+    }
+  }
   return Object.freeze({
-    version: value.version,
-    release_id: value.release_id as string,
-    member_digest: value.member_digest as string,
-    logical_slug: value.logical_slug,
-    section_id: value.section_id,
+    contract: value.contract,
     field_id: value.field_id,
     state: value.state as SchemaFieldState,
-    value: value.value,
+    value_snapshot: value.value_snapshot as string | null,
     citations: Object.freeze(citations),
-    citation_bindings: Object.freeze(bindings),
-    review_items: Object.freeze(value.review_items.map(item => {
-      if (!isRecord(item)) throw new Error('SCHEMA_FIELD_MEMBER_INVALID')
-      return Object.freeze({ ...item })
-    })),
+    evidence_receipt_sha256s: Object.freeze(evidenceReceipts),
+    review_item_reason: value.review_item_reason as string | null,
+    field_page_sha256: value.field_page_sha256,
   })
 }
 

@@ -34,7 +34,10 @@ export function projectSchemaWikiNavigation(input: {
     domains: Object.freeze([...input.domains].sort((left, right) => left.ordinal - right.ordinal)),
     taxonomy: Object.freeze([...input.taxonomy.nodes]),
     sections: schemaPack.sections,
-    fields: schemaPack.fields,
+    fields: Object.freeze(schemaPack.ordered_field_ids.map((fieldId, ordinal) => Object.freeze({
+      field_id: fieldId,
+      ordinal,
+    }))),
   })
 }
 

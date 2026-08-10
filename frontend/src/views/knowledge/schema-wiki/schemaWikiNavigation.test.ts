@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { bootstrapSchemaWikiClient } from '../../../api/schema-wiki/index.ts'
@@ -11,6 +12,10 @@ import {
 } from './schemaWikiNavigation.ts'
 
 const H = (character: string) => character.repeat(64)
+const vector = JSON.parse(readFileSync(new URL(
+  '../../../../../internal/application/service/testdata/schema_wiki_contract_vector.json',
+  import.meta.url,
+), 'utf8')) as { schema_pack: Record<string, unknown> }
 
 test('a Wiki-enabled knowledge base defaults to Schema Wiki without falling back to materials', () => {
   assert.equal(resolveKnowledgeBaseDefaultTab({ wikiEnabled: true }), 'schema')
@@ -19,14 +24,7 @@ test('a Wiki-enabled knowledge base defaults to Schema Wiki without falling back
 })
 
 test('domain and section navigation is produced from validated configuration', () => {
-  const schemaPack = parseSchemaPack({
-    version: 'schema-pack.v1',
-    domain_id: 'configured-domain',
-    schema_pack_id: 'configured-pack.v1',
-    schema_pack_sha256: H('2'),
-    sections: [{ section_id: 'configured-section', ordinal: 0, field_ids: ['configured-field'] }],
-    fields: [{ field_id: 'configured-field', ordinal: 0 }],
-  })
+  const schemaPack = parseSchemaPack(structuredClone(vector.schema_pack))
   const navigation = projectSchemaWikiNavigation({
     domains: [{
       domain_id: 'configured-domain',
@@ -48,17 +46,13 @@ test('domain and section navigation is produced from validated configuration', (
   })
 
   assert.deepEqual(navigation.domains.map(item => item.domain_id), ['configured-domain'])
-  assert.deepEqual(navigation.sections.map(item => item.section_id), ['configured-section'])
+  assert.deepEqual(navigation.sections.map(item => item.section_id), ['section-a', 'section-b'])
   assert.throws(() => projectSchemaWikiNavigation({
     domains: navigation.domains.map(item => ({ ...item })),
     taxonomy: { nodes: [] },
     schemaPack: {
       ...schemaPack,
-      sections: [{
-        section_id: 'configured-section',
-        ordinal: 0,
-        field_ids: ['configured-field', 'configured-field'],
-      }],
+      sections: [{ display_name: 'Broken', section_id: 'broken', ordered_field_ids: ['field-a', 'field-a'] }],
     },
   }), { message: 'SCHEMA_PACK_TOPOLOGY_INVALID' })
 })
