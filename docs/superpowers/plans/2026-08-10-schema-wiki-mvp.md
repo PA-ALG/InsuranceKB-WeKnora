@@ -66,10 +66,13 @@ Create:
 
 Modify:
 
-- `internal/router/routes_knowledge.go` only to mount schema routes under the existing scoped ACL.
 - `internal/application/repository/wiki_release.go` only to add the read-only exact `GetHeadForWikiKB` scope lookup; no write, schema or migration change.
 - `internal/container/container.go` only to provide the new Schema Wiki service/handler.
-- `internal/router/router.go` only to inject the new handler into `routes_schema_wiki.go`.
+- `internal/router/router.go` is the approved mechanical DI and direct mount: `NewRouter`
+  constructs the handler/middleware and registers all 13 Schema Wiki routes under the real
+  `/api/v1` group. `internal/router/routes_knowledge.go` remains unchanged because its
+  existing Wiki group carries ingest policy; moving the Schema routes there would either
+  duplicate registration or alter the retrieve-only policy of Active Schema reads.
 
 ### Lane B — governance, medical pack and sealed-Candidate compiler
 
@@ -115,6 +118,21 @@ Create:
 - `frontend/src/components/schema-wiki/schemaCitationTarget.test.ts`
 - `frontend/src/components/schema-wiki/SchemaCitationViewer.vue`
 - `frontend/src/components/schema-wiki/SchemaCitationViewer.test.ts`
+
+Integration support paths (not Schema Wiki owner-path substitutes):
+
+- `frontend/src/components/schema-wiki/pdfJsPort.ts`
+- `frontend/src/components/sessionSidebarBuckets.ts`
+- `frontend/src/i18n/locales/en-US.ts`
+- `frontend/src/i18n/locales/ko-KR.ts`
+- `frontend/src/i18n/locales/ru-RU.ts`
+- `frontend/src/views/agent/AgentEditorModal.vue`
+- `frontend/src/views/system/SystemSettings.vue`
+
+`pdfJsPort.ts` is the bounded adapter used by the approved viewer. The other six paths are
+the exact integration typecheck/build hygiene delta. These seven paths only close viewer
+runtime, localization and whole-frontend type safety; they do not add routes, DTOs,
+release semantics, citation authority or a substitute for any approved Lane C path.
 
 ## Shared contracts to freeze before dependent GREEN
 
@@ -284,6 +302,14 @@ Expected GREEN: the UI displays one pinned release consistently, and its compone
 
 ## Task 7: Integrate in one direction and prove the vertical slice
 
+Provider-free integration checkpoint: commit
+`4037224dbf30509e9a6144e08b9fe7e94ef0985d`, tree
+`7afa856770956c6d751a159951f35cf7b91239fd`, exact closed owner union 51 paths. This
+identity includes the exact-five-path UI reachability delta and four OpenSpec closeout
+documents; this plan-only correction changes no production byte. The successful sealed
+Candidate, production citation join, deployed release schema, Draft, named-human review
+and activation remain live NO-GO gates rather than implied results of this checkpoint.
+
 - [ ] Merge/rebase in this order only: OpenSpec120 → Lane A1 → Lane B pack/compiler → Lane A2 service/CAS → Lane C UI.
 - [ ] At every step, mechanically verify owner-path disjointness. Resolve only expected OpenSpec registry metadata in Lane B; no semantic conflict may be auto-resolved.
 - [ ] Run the complete scoped matrix once on the integration candidate:
@@ -312,7 +338,10 @@ Expected GREEN: the UI displays one pinned release consistently, and its compone
 - **B4 — Exact revision preview:** current/latest-only preview cannot pass citation acceptance. Before live UI GREEN, amend this plan with the exact concrete storage/revision adapter and DI owner paths; the Port alone is not completion.
 - **B5 — UI bbox:** without approved `pdfjs-dist`, Vitest, `@vue/test-utils` and `happy-dom` (or existing exact equivalents), UI integration stops; page-only navigation or coordinate-only unit tests are insufficient.
 - **B6 — Atomicity:** any design that needs a second Head, new release tables, member-by-member activation or partial publication is rejected.
-- **B7 — Path ownership:** an unplanned path or cross-lane write conflict stops that lane for plan amendment.
+- **B7 — Path ownership:** CLOSED for the provider-free checkpoint above: all 51 changed
+  paths are in the approved lane matrix or the seven explicitly bounded integration-support
+  paths. Any future unplanned path or cross-lane write conflict still stops that lane for a
+  plan amendment.
 - **B8 — Stable identities:** the initial medical domain/category/Ping An entity/version/taxonomy must come from Lane B's code-owned factory. Caller-selectable self-consistent identities are rejected.
 - **B9 — Human review:** the named-human decision must bind the exact `SchemaWikiReviewBundleV1`; Candidate-only approval cannot activate a mutated manifest.
 - **B10 — Live schema:** absence of deployed `wiki_release_*` tables is a deployment blocker, not authority to add a new migration or fall back to ordinary `wiki_pages`.
