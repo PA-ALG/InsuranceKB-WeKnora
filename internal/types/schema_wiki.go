@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/unicode/norm"
@@ -644,6 +645,12 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 			payloadCitations = append(payloadCitations, [2]string{member.MemberRef, citation.CitationSHA256})
 		}
 	}
+	sort.Slice(payloadCitations, func(left, right int) bool {
+		if payloadCitations[left][0] != payloadCitations[right][0] {
+			return payloadCitations[left][0] < payloadCitations[right][0]
+		}
+		return payloadCitations[left][1] < payloadCitations[right][1]
+	})
 	for _, binding := range release.CitationBindings {
 		key := binding.LogicalMemberRef + "\x00" + binding.CitationSHA256
 		if key < previous {
@@ -654,12 +661,6 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 			return ErrSchemaWikiContractInvalid
 		}
 		seenCitations[binding.CitationSHA256] = struct{}{}
-		bindingIndex := len(seenCitations) - 1
-		if bindingIndex >= len(payloadCitations) || payloadCitations[bindingIndex] != [2]string{
-			binding.LogicalMemberRef, binding.CitationSHA256,
-		} {
-			return ErrSchemaWikiContractInvalid
-		}
 		member, exists := membersByRef[binding.LogicalMemberRef]
 		if !exists || member.MemberDigest != binding.MemberDigest ||
 			requireSchemaWikiHash(binding.Contract, binding, "binding_sha256", binding.BindingSHA256) != nil {
@@ -668,6 +669,11 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 	}
 	if len(payloadCitations) != len(release.CitationBindings) {
 		return ErrSchemaWikiContractInvalid
+	}
+	for index, binding := range release.CitationBindings {
+		if payloadCitations[index] != [2]string{binding.LogicalMemberRef, binding.CitationSHA256} {
+			return ErrSchemaWikiContractInvalid
+		}
 	}
 	manifestDigest, err := schemaWikiManifestDigest(release.Members, release.CitationBindings)
 	if err != nil || manifestDigest != release.ManifestDigest {

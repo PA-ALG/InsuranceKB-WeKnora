@@ -784,7 +784,7 @@ def validate_knowledge_wiki_release(
             ):
                 raise SchemaWikiContractError("FIELD_PAYLOAD_CITATION_INVALID")
             payload_citations.append((member.member_ref, citation.citation_sha256))
-    if tuple(payload_citations) != binding_order:
+    if tuple(sorted(payload_citations)) != binding_order:
         raise SchemaWikiContractError("CITATION_PAYLOAD_CLOSURE_INVALID")
     for binding in current.citation_bindings:
         bound_member = members_by_ref.get(binding.logical_member_ref)

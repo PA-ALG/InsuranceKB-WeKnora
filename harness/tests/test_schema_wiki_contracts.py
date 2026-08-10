@@ -215,24 +215,24 @@ def _field_page(
     )
 
 
-def _root_page() -> SchemaRootPageV1:
+def _root_page(pack: SchemaPackV1 | None = None) -> SchemaRootPageV1:
     domain = _domain()
-    pack = _pack()
+    chosen_pack = pack or _pack()
     taxonomy = _taxonomy()
     payload = {
         "contract": "schema-root-page.v1",
         "domain_id": domain.domain_id,
         "domain_sha256": domain.domain_sha256,
-        "schema_pack_id": pack.schema_pack_id,
-        "schema_version": pack.schema_version,
-        "schema_pack_sha256": pack.schema_pack_sha256,
+        "schema_pack_id": chosen_pack.schema_pack_id,
+        "schema_version": chosen_pack.schema_version,
+        "schema_pack_sha256": chosen_pack.schema_pack_sha256,
         "entity_id": "entity-alpha",
         "entity_version_id": "entity-alpha@v1",
         "product_version_id": "product-v1",
         "taxonomy_version": taxonomy.taxonomy_version,
         "taxonomy_sha256": taxonomy.taxonomy_sha256,
         "product_display_name": "Synthetic Product",
-        "ordered_section_ids": tuple(row.section_id for row in pack.sections),
+        "ordered_section_ids": tuple(row.section_id for row in chosen_pack.sections),
     }
     return _sealed(
         SchemaRootPageV1,
@@ -242,18 +242,22 @@ def _root_page() -> SchemaRootPageV1:
     )
 
 
-def _section_page(section_id: str) -> SchemaSectionPageV1:
+def _section_page(
+    section_id: str, pack: SchemaPackV1 | None = None
+) -> SchemaSectionPageV1:
     domain = _domain()
-    pack = _pack()
+    chosen_pack = pack or _pack()
     taxonomy = _taxonomy()
-    section = next(row for row in pack.sections if row.section_id == section_id)
+    section = next(
+        row for row in chosen_pack.sections if row.section_id == section_id
+    )
     payload = {
         "contract": "schema-section-page.v1",
         "domain_id": domain.domain_id,
         "domain_sha256": domain.domain_sha256,
-        "schema_pack_id": pack.schema_pack_id,
-        "schema_version": pack.schema_version,
-        "schema_pack_sha256": pack.schema_pack_sha256,
+        "schema_pack_id": chosen_pack.schema_pack_id,
+        "schema_version": chosen_pack.schema_version,
+        "schema_pack_sha256": chosen_pack.schema_pack_sha256,
         "entity_id": "entity-alpha",
         "entity_version_id": "entity-alpha@v1",
         "product_version_id": "product-v1",
@@ -333,13 +337,14 @@ def _binding(citation: CitationTargetV1, member: SchemaWikiMemberV1) -> Citation
 
 def _release(
     *,
+    pack: SchemaPackV1 | None = None,
     members: tuple[SchemaWikiMemberV1, ...] | None = None,
     bindings: tuple[CitationMemberBindingV1, ...] | None = None,
     state: str = "draft",
 ) -> KnowledgeWikiReleaseV1:
     domain = _domain()
     taxonomy = _taxonomy()
-    pack = _pack()
+    chosen_pack = pack or _pack()
     entity = EntityIdentityV1(
         domain_id=domain.domain_id,
         entity_id="entity-alpha",
@@ -352,9 +357,19 @@ def _release(
     citation = _citation()
     field_page = _field_page(citation=citation)
     chosen_members = members or (
-        _member("root:entity-alpha@v1", "root"),
-        _member("section:section-a", "section", section_id="section-a"),
-        _member("section:section-b", "section", section_id="section-b"),
+        _member("root:entity-alpha@v1", "root", payload=_root_page(chosen_pack)),
+        _member(
+            "section:section-a",
+            "section",
+            section_id="section-a",
+            payload=_section_page("section-a", chosen_pack),
+        ),
+        _member(
+            "section:section-b",
+            "section",
+            section_id="section-b",
+            payload=_section_page("section-b", chosen_pack),
+        ),
         _member(
             "field:field-a",
             "field",
@@ -382,7 +397,7 @@ def _release(
         "release_state": state,
         "domain": domain,
         "taxonomy": taxonomy,
-        "schema_pack": pack,
+        "schema_pack": chosen_pack,
         "entity": entity,
         "entity_version": version,
         "candidate_sha256": _sha("candidate"),
@@ -602,6 +617,84 @@ def test_shared_release_topology_is_derived_from_pack_not_medical_cardinality() 
     assert len(pack.sections) == 2
     assert len(pack.ordered_field_ids) == 3
     assert len(release.members) == 1 + 2 + 3
+
+
+def test_citation_payload_closure_uses_canonical_key_not_nonlexical_field_order() -> None:
+    base = _pack()
+    sections = (
+        base.sections[0].model_copy(
+            update={"ordered_field_ids": ("field-b", "field-a")}
+        ),
+        base.sections[1],
+    )
+    pack_payload = base.model_dump(mode="python", exclude={"schema_pack_sha256"})
+    pack_payload["ordered_field_ids"] = ("field-b", "field-a", "field-c")
+    pack_payload["sections"] = sections
+    pack = _sealed(
+        SchemaPackV1,
+        "schema-pack.v1",
+        "schema_pack_sha256",
+        **pack_payload,
+    )
+    citation_a = _citation(member_ref="field:field-a")
+    citation_b = _citation(member_ref="field:field-b")
+    members = (
+        _member("root:entity-alpha@v1", "root", payload=_root_page(pack)),
+        _member(
+            "section:section-a",
+            "section",
+            section_id="section-a",
+            payload=_section_page("section-a", pack),
+        ),
+        _member(
+            "section:section-b",
+            "section",
+            section_id="section-b",
+            payload=_section_page("section-b", pack),
+        ),
+        _member(
+            "field:field-b",
+            "field",
+            section_id="section-a",
+            field_id="field-b",
+            payload=_field_page(field_id="field-b", citation=citation_b),
+        ),
+        _member(
+            "field:field-a",
+            "field",
+            section_id="section-a",
+            field_id="field-a",
+            payload=_field_page(field_id="field-a", citation=citation_a),
+        ),
+        _member(
+            "field:field-c",
+            "field",
+            section_id="section-b",
+            field_id="field-c",
+            payload=_field_page(field_id="field-c", state="unknown"),
+        ),
+    )
+    bindings = tuple(
+        sorted(
+            (
+                _binding(citation_a, members[4]),
+                _binding(citation_b, members[3]),
+            ),
+            key=lambda row: (row.logical_member_ref, row.citation_sha256),
+        )
+    )
+    release = _release(pack=pack, members=members, bindings=bindings)
+
+    validated = validate_knowledge_wiki_release(release, pack)
+    assert tuple(row.field_id for row in validated.members[3:]) == (
+        "field-b",
+        "field-a",
+        "field-c",
+    )
+    assert tuple(row.logical_member_ref for row in validated.citation_bindings) == (
+        "field:field-a",
+        "field:field-b",
+    )
 
 
 @pytest.mark.parametrize(

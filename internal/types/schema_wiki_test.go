@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -202,6 +203,161 @@ func TestSchemaWikiGoRejectsUnreviewedOrDriftedMemberPayload(t *testing.T) {
 				t.Fatal("mutated payload unexpectedly validated")
 			}
 		})
+	}
+}
+
+func TestSchemaWikiGoCitationClosureUsesCanonicalKeyForNonlexicalFields(t *testing.T) {
+	t.Parallel()
+
+	vector, _ := loadSchemaWikiContractVector(t)
+	pack := vector.SchemaPack
+	pack.OrderedFieldIDs[0], pack.OrderedFieldIDs[1] = pack.OrderedFieldIDs[1], pack.OrderedFieldIDs[0]
+	pack.Sections[0].OrderedFieldIDs[0], pack.Sections[0].OrderedFieldIDs[1] =
+		pack.Sections[0].OrderedFieldIDs[1], pack.Sections[0].OrderedFieldIDs[0]
+	packHash, _, err := schemaWikiHashWithout(pack.Contract, pack, "schema_pack_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pack.SchemaPackSHA256 = packHash
+	vector.Release.SchemaPack = pack
+
+	var root SchemaRootPageV1
+	if err := json.Unmarshal(vector.Release.Members[0].Payload, &root); err != nil {
+		t.Fatal(err)
+	}
+	root.SchemaPackSHA256 = packHash
+	rootHash, _, err := schemaWikiHashWithout(root.Contract, root, "root_page_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root.RootPageSHA256 = rootHash
+	rootRaw, err := schemaWikiCanonicalJSON(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.Members[0].Payload = rootRaw
+	vector.Release.Members[0].PayloadSHA256 = rootHash
+
+	for index := 1; index <= 2; index++ {
+		var section SchemaSectionPageV1
+		if err := json.Unmarshal(vector.Release.Members[index].Payload, &section); err != nil {
+			t.Fatal(err)
+		}
+		section.SchemaPackSHA256 = packHash
+		if section.SectionID == pack.Sections[0].SectionID {
+			section.OrderedFieldIDs = append([]string(nil), pack.Sections[0].OrderedFieldIDs...)
+		}
+		sectionHash, _, hashErr := schemaWikiHashWithout(
+			section.Contract,
+			section,
+			"section_page_sha256",
+		)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		section.SectionPageSHA256 = sectionHash
+		sectionRaw, marshalErr := schemaWikiCanonicalJSON(section)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		vector.Release.Members[index].Payload = sectionRaw
+		vector.Release.Members[index].PayloadSHA256 = sectionHash
+	}
+
+	var fieldB SchemaFieldPageV1
+	if err := json.Unmarshal(vector.Release.Members[4].Payload, &fieldB); err != nil {
+		t.Fatal(err)
+	}
+	citationB := vector.Citations[0]
+	citationB.CitationID = "citation-b"
+	citationB.LogicalMemberRef = "field:field-b"
+	citationHash, _, err := schemaWikiHashWithout(
+		citationB.Contract,
+		citationB,
+		"citation_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	citationB.CitationSHA256 = citationHash
+	valueB := "Synthetic value B"
+	fieldB.State = "present"
+	fieldB.ValueSnapshot = &valueB
+	fieldB.Citations = []CitationTargetV1{citationB}
+	fieldB.EvidenceReceiptSHA256s = []string{
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	fieldB.ReviewItemReason = nil
+	fieldHash, _, err := schemaWikiHashWithout(fieldB.Contract, fieldB, "field_page_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fieldB.FieldPageSHA256 = fieldHash
+	fieldRaw, err := schemaWikiCanonicalJSON(fieldB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.Members[4].Payload = fieldRaw
+	vector.Release.Members[4].PayloadSHA256 = fieldHash
+
+	vector.Release.Members[3], vector.Release.Members[4] =
+		vector.Release.Members[4], vector.Release.Members[3]
+	for index := range vector.Release.Members {
+		digest, _, digestErr := schemaWikiHashWithout(
+			vector.Release.Members[index].Contract,
+			vector.Release.Members[index],
+			"member_digest",
+		)
+		if digestErr != nil {
+			t.Fatal(digestErr)
+		}
+		vector.Release.Members[index].MemberDigest = digest
+	}
+	memberB := vector.Release.Members[3]
+	bindingB := CitationMemberBindingV1{
+		Contract:         "citation-member-binding.v1",
+		CitationSHA256:   citationB.CitationSHA256,
+		LogicalMemberRef: citationB.LogicalMemberRef,
+		MemberDigest:     memberB.MemberDigest,
+	}
+	bindingHash, _, err := schemaWikiHashWithout(
+		bindingB.Contract,
+		bindingB,
+		"binding_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingB.BindingSHA256 = bindingHash
+	vector.Release.CitationBindings = append(vector.Release.CitationBindings, bindingB)
+	sort.Slice(vector.Release.CitationBindings, func(left, right int) bool {
+		leftKey := vector.Release.CitationBindings[left].LogicalMemberRef + "\x00" +
+			vector.Release.CitationBindings[left].CitationSHA256
+		rightKey := vector.Release.CitationBindings[right].LogicalMemberRef + "\x00" +
+			vector.Release.CitationBindings[right].CitationSHA256
+		return leftKey < rightKey
+	})
+	for index := range vector.Release.CitationBindings {
+		memberRef := vector.Release.CitationBindings[index].LogicalMemberRef
+		for _, member := range vector.Release.Members {
+			if member.MemberRef == memberRef {
+				vector.Release.CitationBindings[index].MemberDigest = member.MemberDigest
+			}
+		}
+		bindingDigest, _, digestErr := schemaWikiHashWithout(
+			vector.Release.CitationBindings[index].Contract,
+			vector.Release.CitationBindings[index],
+			"binding_sha256",
+		)
+		if digestErr != nil {
+			t.Fatal(digestErr)
+		}
+		vector.Release.CitationBindings[index].BindingSHA256 = bindingDigest
+	}
+	forged := resealSchemaWikiReleaseForTest(t, vector.Release)
+
+	if err := ValidateKnowledgeWikiRelease(forged, pack); err != nil {
+		t.Fatalf("non-lexical field order rejected canonical citation closure: %v", err)
 	}
 }
 
