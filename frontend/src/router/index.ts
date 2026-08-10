@@ -118,6 +118,26 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "knowledge-bases/:kbId/schema-wiki",
+          name: "schemaWiki",
+          redirect: (to) => ({
+            name: "knowledgeBaseDetail",
+            params: { kbId: to.params.kbId },
+            query: { ...to.query, tab: "schema" },
+          }),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
+          path: "knowledge-bases/:kbId/materials-wiki",
+          name: "materialsWiki",
+          redirect: (to) => ({
+            name: "knowledgeBaseDetail",
+            params: { kbId: to.params.kbId },
+            query: { ...to.query, tab: "materials" },
+          }),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
           path: "knowledge-search",
           // 旧路径保留为重定向，打开全局命令面板（⌘K），带上可选的 q 参数
           redirect: (to) => {

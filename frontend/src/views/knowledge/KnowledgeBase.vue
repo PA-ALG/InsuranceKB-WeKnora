@@ -47,6 +47,7 @@ import KbTagManageDrawer from './components/KbTagManageDrawer.vue';
 import type { KnowledgeProcessOverrides } from '@/types/knowledgeProcess';
 import { useUploadConfirmStore, type UploadConfirmResult } from '@/stores/uploadConfirm';
 import WikiBrowser from './wiki/WikiBrowser.vue';
+import SchemaWikiBrowser from './schema-wiki/SchemaWikiBrowser.vue';
 import { getWikiStats } from '@/api/wiki';
 import {
   isKnowledgeParseInFlight,
@@ -67,9 +68,9 @@ const kbLoading = ref(false);
 const docListLoading = ref(true);
 const isFAQ = computed(() => (kbInfo.value?.type || '') === 'faq');
 const isWiki = computed(() => !!kbInfo.value?.indexing_strategy?.wiki_enabled);
-const validTabs = ['documents', 'wiki', 'graph'] as const
+const validTabs = ['schema', 'materials', 'documents', 'graph'] as const
 type KbTab = typeof validTabs[number]
-const initTab = validTabs.includes(route.query.tab as any) ? (route.query.tab as KbTab) : 'documents'
+const initTab = validTabs.includes(route.query.tab as any) ? (route.query.tab as KbTab) : 'schema'
 const activeKbTab = ref<KbTab>(initTab);
 
 // Wiki 状态用于面包屑上的索引中指示。父组件自行拉取，避免依赖 WikiBrowser 挂载状态
@@ -2004,12 +2005,15 @@ async function createNewSession(value: string): Promise<void> {
               </button>
               <t-icon name="chevron-right" class="breadcrumb-separator" />
               <template v-if="isWiki">
+                <span :class="['breadcrumb-tab', { active: activeKbTab === 'schema' }]"
+                  @click="activeKbTab = 'schema'">{{ $t('knowledgeEditor.wikiBrowser.tabSchemaWiki') }}</span>
+                <span class="breadcrumb-tab-sep">/</span>
                 <span :class="['breadcrumb-tab', { active: activeKbTab === 'documents' }]"
                   @click="activeKbTab = 'documents'">{{ $t('knowledgeEditor.wikiBrowser.tabDocuments') }}</span>
                 <span class="breadcrumb-tab-sep">/</span>
-                <span :class="['breadcrumb-tab', { active: activeKbTab === 'wiki', indexing: wikiIsIndexing }]"
-                  @click="activeKbTab = 'wiki'">
-                  Wiki
+                <span :class="['breadcrumb-tab', { active: activeKbTab === 'materials', indexing: wikiIsIndexing }]"
+                  @click="activeKbTab = 'materials'">
+                  {{ $t('knowledgeEditor.wikiBrowser.tabMaterialsWiki') }}
                   <t-tooltip v-if="wikiIsIndexing" :content="wikiIndexingTip" placement="bottom">
                     <t-loading size="small" class="breadcrumb-tab-indicator" />
                   </t-tooltip>
@@ -2055,8 +2059,12 @@ async function createNewSession(value: string): Promise<void> {
         </div>
       </div>
 
-      <!-- Wiki Browser / Graph (shown when wiki or graph tab is active) -->
-      <div v-if="isWiki && (activeKbTab === 'wiki' || activeKbTab === 'graph')" class="wiki-main-area">
+      <div v-if="isWiki && activeKbTab === 'schema'" class="wiki-main-area">
+        <SchemaWikiBrowser v-if="kbId" :knowledge-base-id="kbId" />
+      </div>
+
+      <!-- Materials Wiki Browser / Graph -->
+      <div v-if="isWiki && (activeKbTab === 'materials' || activeKbTab === 'graph')" class="wiki-main-area">
         <WikiBrowser v-if="kbId" :knowledge-base-id="kbId" :view="activeKbTab === 'graph' ? 'graph' : 'browser'"
           :can-edit="canEdit" @open-source-doc="openSourceDoc" @status-change="onWikiStatusChange"
           @view-graph="onViewWikiInGraph" />
