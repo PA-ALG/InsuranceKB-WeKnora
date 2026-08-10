@@ -146,6 +146,13 @@ authority may activate it. The implementation SHALL add no second Head, CAS, rel
 or migration and SHALL never activate a partial member set. No Active release SHALL return
 `NO_SCHEMA_WIKI_ACTIVE_RELEASE` with no generic fallback.
 
+Production verification SHALL wire the existing named-human and publish-authorization
+verifiers from distinct strict Ed25519 public-key rings. The application configuration
+SHALL expose no private-key field, SHALL reject malformed, duplicate or cross-ring reused
+key IDs/material, and SHALL exclude the complete signing configuration and key bytes from
+JSON output. Empty configuration SHALL remain a reject-all state rather than an implicit
+development signer.
+
 CreateDraft, exact Draft preview and ReviewDraft SHALL be human JWT control-plane
 operations restricted to a trusted tenant role of Admin or Owner. Their route middleware
 order SHALL be `DenyAPIKeyPrincipal`, `Admin`, Wiki ACL/evidence, scope resolution, derived
@@ -184,6 +191,13 @@ closed.
 
 - **WHEN** a reviewed Ready preparation is presented without the exact publish authorization
 - **THEN** `ActivateReviewed` does not run and the existing Head remains unchanged
+
+#### Scenario: one signer is reused across approval domains
+
+- **WHEN** the same key ID or public-key bytes are configured for named-human review and
+  publish authorization, or signing configuration is serialized through the application
+  config object
+- **THEN** configuration validation rejects the reuse and no key bytes appear in JSON
 
 #### Scenario: machine principal or insufficient human role reaches Draft control plane
 
@@ -281,14 +295,18 @@ the Head-derived scope. This exception SHALL NOT be treated as a caller-signed s
 
 ### Requirement: SWM9 exact revision preview remains fail closed until authority exists
 
-Lane A SHALL freeze a `CitationRevisionReadPort` and typed preview errors, but SHALL NOT
-claim real exact-revision preview acceptance until a trusted adapter proves the immutable
-revision bytes and the citation's knowledge/source-revision/parse/document/manifest/page/
-bbox identities. The UI SHALL not substitute current/latest bytes or page 1.
+Lane A SHALL freeze a `CitationRevisionReadPort`, typed preview errors and a production
+native replay adapter. That adapter SHALL replay only server-derived tenant/scope,
+knowledge, source revision/parse attempt, file/document identity, chunk membership and the
+recomputed revision manifest. It SHALL return typed unavailable and zero bytes after that
+replay while immutable attempt-bound blob and canonical coordinate-space/page/bbox
+authority are absent. It SHALL NOT use current/latest, presigned bytes or page 1, and SHALL
+NOT claim real exact-revision preview acceptance until the remaining authority is proven.
 
-#### Scenario: preview adapter is unavailable
+#### Scenario: native custody replays but immutable preview authority is unavailable
 
-- **WHEN** a citation is selected before the trusted adapter is frozen
+- **WHEN** native knowledge/revision/chunk/manifest custody replays successfully but no
+  immutable attempt-bound blob or canonical coordinate-space/page/bbox authority exists
 - **THEN** a typed unavailable result is returned and no document is opened
 
 ### Requirement: SWM10 live acceptance obeys external stop gates
@@ -316,6 +334,14 @@ bounded existing-row state-machine changes in `internal/types/wiki_release.go`,
 `internal/application/repository/wiki_release.go` and
 `internal/application/service/wiki_release.go`; this authorization does not permit a new
 table, migration, Head, CAS or approval model.
+
+The production-readiness amendment additionally authorizes only
+`internal/application/service/schema_wiki_citation_revision.go`, its focused test,
+`internal/config/config.go`, `internal/config/schema_wiki_signing_test.go` and
+`internal/container/schema_wiki_production_readiness_test.go`. These paths may implement
+native citation replay, distinct public-key verifier wiring and JSON redaction only; they
+SHALL NOT add immutable blob inference, a second approval model, private signing keys,
+current/latest fallback or a platform-wide key service.
 
 The actual backend DI/mount authority is `internal/router/router.go`, whose `NewRouter`
 path registers the 13 Schema Wiki routes directly. `internal/router/routes_knowledge.go`

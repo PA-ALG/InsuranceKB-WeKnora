@@ -114,7 +114,16 @@
 - [x] Reuse the single existing Wiki Release Head, CAS, activation, revert and pinning
   transaction; failed preparation/member/receipt/CAS leaves the prior Active intact.
 - [x] Freeze `CitationRevisionReadPort` and typed failures. Do not claim exact-revision
-  preview GREEN until a concrete trusted adapter and wiring are separately frozen.
+  preview GREEN from the Port alone.
+- [x] GREEN the production native custody replay adapter and non-nil DI. It replays exact
+  tenant/scope, knowledge, source revision/parse attempt, file/document identity, chunk and
+  revision manifest, then returns typed unavailable and zero bytes. It has no current,
+  latest, presigned or page-1 fallback and does not claim immutable revision-blob/page/bbox
+  acceptance.
+- [x] GREEN strict public Ed25519 key-ring wiring for the existing named-human and publish-
+  authorization verifiers. Empty/unknown/malformed/private-length configuration fails
+  closed; cross-ring duplicate IDs/material are rejected; signing configuration and key
+  bytes are absent from JSON output.
 - [x] Vet types, repository, service, handler and router packages.
 - [x] Register all 13 Schema Wiki routes through the approved direct DI/mount in
   `internal/router/router.go`. `internal/router/routes_knowledge.go` remains unchanged:
@@ -140,8 +149,9 @@
 - [x] Recheck the exact three completed knowledge identities and external hash/manifest
   custody; do not interpret `pages_affected=14` as total pages.
 - [x] Stop real prepare/activation until a sealed Candidate, trusted revision/page/bbox
-  join, exact preview adapter, approved UI dependencies, deployed standard release tables
-  and clean migration ledger exist.
+  join, immutable attempt-bound blob plus exact coordinate-space/page/bbox preview adapter,
+  approved UI dependencies, deployed standard release tables and clean migration ledger
+  exist. The completed native revision/chunk/manifest replay is not live preview authority.
 - [x] Define the brochure historical-running-subspan policy before a live run; do not
   mutate those runs in this Mission.
 - [x] Keep the 46 generic material Wiki pages isolated from Schema members.

@@ -1409,6 +1409,8 @@ func TestCitationRevisionReadPortUsesExactVectorIdentityAndFailsUnavailable(t *t
 	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
 	require.Empty(t, opened)
 	require.Equal(t, 1, port.calls)
+	require.Equal(t, scope, port.request.Scope,
+		"the exact-revision port must receive the server-derived sealed scope")
 	require.Equal(t, citation, port.request.Citation)
 	require.Equal(t, citation.CitationSHA256, port.request.Binding.CitationSHA256)
 }

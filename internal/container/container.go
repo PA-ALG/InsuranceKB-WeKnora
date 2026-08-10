@@ -221,18 +221,24 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
 	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
-	must(container.Provide(func() service.WikiReleaseAuthorizationVerifier {
-		return service.NewEd25519WikiReleaseAuthorizationVerifier(nil)
+	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
+		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
+		return verifier, err
 	}))
-	must(container.Provide(func() service.WikiReleaseServiceOptions {
-		return service.WikiReleaseServiceOptions{}
+	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseServiceOptions, error) {
+		_, options, err := schemaWikiReleaseVerifierProviders(cfg)
+		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
-	must(container.Provide(func(releaseAuthority *service.WikiReleaseService) *service.SchemaWikiService {
-		// Exact-revision preview remains fail closed until its production
-		// adapter is frozen; SchemaWikiService returns the typed unavailable
-		// reason instead of substituting current/latest/page 1.
-		return service.NewSchemaWikiService(releaseAuthority, nil)
+	must(container.Provide(func(
+		releaseAuthority *service.WikiReleaseService,
+		knowledgeRepository interfaces.KnowledgeRepository,
+		chunkRepository interfaces.ChunkRepository,
+	) *service.SchemaWikiService {
+		citationPort := service.NewSchemaWikiCitationRevisionReadAdapter(
+			knowledgeRepository, chunkRepository,
+		)
+		return service.NewSchemaWikiService(releaseAuthority, citationPort)
 	}))
 	must(container.Provide(service.NewEmbedChannelService))
 
@@ -427,6 +433,19 @@ func BuildContainer(container *dig.Container) *dig.Container {
 
 	logger.Infof(ctx, "[Container] Container initialization completed successfully")
 	return container
+}
+
+func schemaWikiReleaseVerifierProviders(
+	cfg *config.Config,
+) (service.WikiReleaseAuthorizationVerifier, service.WikiReleaseServiceOptions, error) {
+	humanKeys, publishKeys, err := config.DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, service.WikiReleaseServiceOptions{}, err
+	}
+	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
+		service.WikiReleaseServiceOptions{
+			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
+		}, nil
 }
 
 // registerChatLocalImageResolver wires the chat package's LocalImageResolver

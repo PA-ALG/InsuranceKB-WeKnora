@@ -42,8 +42,12 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `internal/types/wiki_release.go` only to add the persisted Draft state used by the
   existing `wiki_release_preparations` model; no table or migration change.
 - `internal/application/service/schema_wiki.go`
+- `internal/application/service/schema_wiki_citation_revision.go`
+- `internal/application/service/schema_wiki_citation_revision_test.go`
 - `internal/application/service/schema_wiki_test.go`
 - `internal/application/service/testdata/schema_wiki_contract_vector.json`
+- `internal/config/config.go`
+- `internal/config/schema_wiki_signing_test.go`
 - `internal/handler/schema_wiki.go`
 - `internal/handler/schema_wiki_test.go`
 - `internal/router/routes_schema_wiki.go`
@@ -52,6 +56,7 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `internal/application/repository/wiki_release.go`
 - `internal/application/service/wiki_release.go`
 - `internal/container/container.go`
+- `internal/container/schema_wiki_production_readiness_test.go`
 - `internal/router/router.go`, the approved mechanical DI/direct-mount path that registers
   all 13 Schema Wiki routes in the real `/api/v1` router. The earlier expectation that
   `internal/router/routes_knowledge.go` would be the mount point is superseded by this
@@ -190,6 +195,15 @@ replace, broaden or satisfy any approved Schema Wiki owner path by themselves:
   `internal/application/service/wiki_release.go` may receive only the narrow existing-row
   Draft persistence/atomic review-transition changes above. This Mission adds no table,
   migration, Head, CAS or parallel approval model.
+- The production citation adapter may replay only the native knowledge, revision, chunk and
+  manifest custody currently available from WeKnora. It returns typed unavailable and zero
+  bytes after that replay because no immutable attempt-bound blob or canonical page/bbox
+  coordinate-space authority exists; it never substitutes current/latest, presigned bytes
+  or page 1.
+- `internal/config/config.go` accepts distinct public Ed25519 key rings for the existing
+  named-human and publish-authorization verifiers. It has no private-key field, rejects
+  cross-ring key ID or material reuse, and excludes signing configuration/key bytes from
+  JSON output. Empty configuration remains a safe reject-all deployment state.
 
 ## Fresh WeKnora preflight and stop conditions
 
@@ -203,12 +217,14 @@ in external custody and must enter a trusted revision/page/bbox join.
 Implementation and real acceptance SHALL stop while any of these remains true:
 
 - no successfully sealed `Schema67CandidateV2` exists;
-- the 057/ParsedDocument Evidence-to-WeKnora knowledge/source-revision/chunk/exact-revision
-  bytes/page/bbox join is not frozen; generic terms `source_refs` provenance is zero and
-  cannot be guessed;
+- the native Evidence-to-WeKnora knowledge/source-revision/chunk/manifest join is replayed,
+  but the immutable attempt-bound revision bytes plus canonical coordinate-space/page/bbox
+  authority are not frozen; generic terms `source_refs` provenance is zero and cannot be
+  guessed;
 - the live database has no deployed `wiki_release_*` tables or a clean standard migration
   ledger; this Mission adds no migration and does not claim Draft/Head availability;
-- the exact-revision preview adapter is absent (A1 freezes only a fail-closed Port);
+- the native replay adapter remains typed unavailable/zero bytes because the immutable
+  revision-blob and page/bbox adapter is absent;
 - the two historical brochure `running` subspans lack an explicit runbook policy;
 - the UI bbox dependencies are not approved and locked.
 

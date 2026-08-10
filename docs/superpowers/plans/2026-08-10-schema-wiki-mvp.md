@@ -56,8 +56,12 @@ Create:
 - `internal/types/schema_wiki.go`
 - `internal/types/schema_wiki_test.go`
 - `internal/application/service/schema_wiki.go`
+- `internal/application/service/schema_wiki_citation_revision.go`
+- `internal/application/service/schema_wiki_citation_revision_test.go`
 - `internal/application/service/schema_wiki_test.go`
 - `internal/application/service/testdata/schema_wiki_contract_vector.json`
+- `internal/config/schema_wiki_signing_test.go`
+- `internal/container/schema_wiki_production_readiness_test.go`
 - `internal/handler/schema_wiki.go`
 - `internal/handler/schema_wiki_test.go`
 - `internal/router/routes_schema_wiki.go`
@@ -77,7 +81,12 @@ Modify:
   preparation lifecycle used by Schema `CreateDraft` / `ReviewDraft`; named-human review
   still happens before the state change and activation still uses the existing separate
   publish authorization and `ActivateReviewed` Head CAS.
-- `internal/container/container.go` only to provide the new Schema Wiki service/handler.
+- `internal/config/config.go` only to load strict public Ed25519 human-decision and publish-
+  authorization key rings. It contains no private-key field, rejects cross-ring key ID or
+  key-material reuse, and excludes the complete signing configuration from JSON output.
+- `internal/container/container.go` only to provide the Schema Wiki service/handler, wire
+  the existing human-decision/publish-authorization verifiers from those distinct public-
+  key rings, and inject the fail-closed native citation replay adapter.
 - `internal/router/router.go` is the approved mechanical DI and direct mount: `NewRouter`
   constructs the handler/middleware and registers all 13 Schema Wiki routes under the real
   `/api/v1` group. `internal/router/routes_knowledge.go` remains unchanged because its
@@ -146,10 +155,10 @@ release semantics, citation authority or a substitute for any approved Lane C pa
 
 ### Machine-readable integrated owner/support closure
 
-The following block is the exact, closed 51-path set for the provider-free integration
-checkpoint. It is the union of governance documents, Lane A/B/C owner paths and the seven
-bounded support paths above; automated verification compares this block byte-for-byte as a
-sorted set with `git diff --name-only` from the authoritative base.
+The following block is the exact, closed 56-path set for the provider-free production-
+readiness checkpoint. It is the union of governance documents, Lane A/B/C owner paths and
+the seven bounded support paths above; automated verification compares this block byte-for-
+byte as a sorted set with `git diff --name-only` from the authoritative base.
 
 <!-- BEGIN SCHEMA_WIKI_EXACT_OWNER_SUPPORT_SET -->
 ```text
@@ -186,11 +195,16 @@ harness/tests/test_schema_wiki_release_596_1.py
 internal/application/repository/wiki_release.go
 internal/application/repository/wiki_release_scope_test.go
 internal/application/service/schema_wiki.go
+internal/application/service/schema_wiki_citation_revision.go
+internal/application/service/schema_wiki_citation_revision_test.go
 internal/application/service/schema_wiki_test.go
 internal/application/service/testdata/schema_wiki_contract_vector.json
 internal/application/service/testdata/schema_wiki_release_596_1_vector.json
 internal/application/service/wiki_release.go
+internal/config/config.go
+internal/config/schema_wiki_signing_test.go
 internal/container/container.go
+internal/container/schema_wiki_production_readiness_test.go
 internal/handler/schema_wiki.go
 internal/handler/schema_wiki_test.go
 internal/router/router.go
@@ -321,9 +335,10 @@ migration or parallel approval path.
 - [ ] RED: after successful R2 activation, an opaque R1 pin still reads R1; each read performs fresh dual ACL.
 - [ ] RED: revert R2→R1 changes Head epoch once and creates no new release/member; concurrent expected-head activation/revert has one winner.
 - [ ] RED: no Active returns `NO_SCHEMA_WIKI_ACTIVE_RELEASE`; the service does not read generic Wiki pages as fallback.
-- [ ] Freeze a narrow `CitationRevisionReadPort` contract and REDs for current/latest substitution, client-supplied authority, revision/attempt/document/manifest/member mismatch, bad page/bbox and ACL failure. Do not register or call an always-blocked preview endpoint as if real bytes were available.
+- [ ] Freeze a narrow `CitationRevisionReadPort` contract and REDs for current/latest substitution, client-supplied authority, revision/attempt/document/manifest/member mismatch, bad page/bbox and ACL failure. The production adapter may replay only the native knowledge/revision/chunk/manifest custody currently available; after that replay it must still return typed unavailable and zero bytes because no immutable attempt-bound blob or canonical page/bbox coordinate authority exists.
 - [ ] Implement `PrepareSchemaReviewed` as validation+mapping into existing `WikiReleaseService.Prepare`; keep `ActivateReviewed` and `Revert` as the only activation paths.
-- [ ] Implement current/pinned/prepared schema reads over release members and the scoped handler/router facade, including the server-derived `SchemaWikiScopeV1` bootstrap. Actual revision-byte preview wiring remains blocked until a concrete existing storage/revision authority adapter and its owner paths are frozen.
+- [ ] Implement current/pinned/prepared schema reads over release members and the scoped handler/router facade, including the server-derived `SchemaWikiScopeV1` bootstrap. Wire the native custody replay adapter without current/latest/presigned/page-1 fallback; actual revision-byte preview remains blocked until an immutable attempt-bound blob plus canonical page/bbox/coordinate-space authority is frozen.
+- [ ] Wire the existing named-human and publish-authorization verifiers from distinct strict Ed25519 public-key rings. Empty/unknown/malformed/private-length input fails closed, cross-ring duplicate IDs or key bytes are rejected, and signing configuration/key bytes are excluded from JSON output.
 - [ ] Implement `GetHeadForWikiKB` as a read-only exact lookup over the existing release Head. Bootstrap must apply Wiki ACL first, then derived RAW-KB ACL and release access seal before returning scope; zero/multiple/cross-tenant results fail closed.
 - [ ] RED the exact bootstrap middleware sequence: Wiki authorized + derived RAW unauthorized, API-key allowlist containing only Wiki KB, caller-supplied conflicting params, cross-tenant Head and zero/multiple Head all return no `SchemaWikiScopeV1` and never create a release seal.
 - [ ] Run:
@@ -331,11 +346,13 @@ migration or parallel approval path.
   - `go test ./internal/handler -run TestSchemaWiki -count=1`
   - `go test ./internal/application/repository -run TestGetHeadForWikiKBScope -count=1`
   - `go test ./internal/router -run TestSchemaWikiScopeBootstrap -count=1`
+  - `go test ./internal/config -run 'TestDecodeSchemaWikiSigningPublicKeys|TestSchemaWikiSigningPublicKeys' -count=1`
+  - `go test ./internal/container -run 'TestSchemaWikiProduction|TestSchemaWikiContainer' -count=1`
   - `go vet ./internal/types ./internal/application/repository ./internal/application/service ./internal/handler ./internal/router ./internal/container`
   - `git diff --check`
 - [ ] Commit with `feat(schema-wiki): add release-pinned schema read foundation`.
 
-Expected GREEN: the existing release transaction remains the sole serving authority; schema taxonomy and members change atomically or not at all. A2 GREEN proves the preview Port fails closed, not that exact revision bytes are yet serviceable.
+Expected GREEN: the existing release transaction remains the sole serving authority; schema taxonomy and members change atomically or not at all. A2 production-readiness GREEN proves the native revision/chunk/manifest replay, non-nil DI and separated public-key verifier wiring fail closed. It does not prove immutable revision bytes, coordinate space, page/bbox authority or real citation preview are serviceable.
 
 ## Task 5: Lane C freezes fail-closed frontend contracts and navigation
 
@@ -386,6 +403,14 @@ documents; this plan-only correction changes no production byte. The successful 
 Candidate, production citation join, deployed release schema, Draft, named-human review
 and activation remain live NO-GO gates rather than implied results of this checkpoint.
 
+The reviewed production-readiness successor is frozen separately as tree
+`db07de2e737a209a1cc8edf59c63914260bc810a` from final3 base
+`0f6a958a203d6813bee057c7d87eb2ad9bc86a49`; its exact eight-path index SHA-256 is
+`8da2663f054891265b58962e1dde0eb2ed8b95759018d217aaa3b3f10d778a63`. Integrating it
+extends the closed owner/support union to 56 paths. It closes native custody replay,
+non-nil DI and separated/redacted public-key verification wiring only; it deliberately
+keeps real citation preview and the overall MVP at live NO-GO.
+
 - [ ] Merge/rebase in this order only: OpenSpec120 → Lane A1 → Lane B pack/compiler → Lane A2 service/CAS → Lane C UI.
 - [ ] At every step, mechanically verify owner-path disjointness. Resolve only expected OpenSpec registry metadata in Lane B; no semantic conflict may be auto-resolved.
 - [ ] Run the complete scoped matrix once on the integration candidate:
@@ -409,13 +434,21 @@ and activation remain live NO-GO gates rather than implied results of this check
 
 - **B0 — OpenSpec:** no production file changes before OpenSpec120 is accepted.
 - **B1 — Candidate:** no real Candidate means no release draft and no generic fallback.
-- **B2 — Citation authority:** the currently missing non-self-issued join from 057/ParsedDocument Evidence to WeKnora knowledge/source-revision/chunk/exact revision bytes/bbox must be frozen. A hand-built ID map is not acceptable.
+- **B2 — Citation authority:** the non-self-issued native join through WeKnora knowledge,
+  source revision, parse attempt, file/document identity, chunk and manifest is now replayed
+  by the production adapter. The remaining immutable attempt-bound blob plus canonical
+  coordinate-space/page/bbox authority is still missing and must be frozen; a hand-built ID
+  map is not acceptable.
 - **B3 — Draft custody:** pre-review Candidate/manifest review remains Lane B dossier custody. The server exposes only a reviewed immutable `preparation_id`; if preserving that preparation requires a new DB/platform instead of the existing Release preparation boundary, stop and narrow the adapter.
-- **B4 — Exact revision preview:** current/latest-only preview cannot pass citation acceptance. Before live UI GREEN, amend this plan with the exact concrete storage/revision adapter and DI owner paths; the Port alone is not completion.
+- **B4 — Exact revision preview:** the native replay adapter and DI are wired, but it
+  intentionally returns typed unavailable and zero bytes. Current/latest/presigned/page-1
+  fallback cannot pass citation acceptance. Live UI GREEN still requires an immutable
+  attempt-bound blob and exact coordinate-space/page/bbox adapter; native replay alone is
+  not completion.
 - **B5 — UI bbox:** without approved `pdfjs-dist`, Vitest, `@vue/test-utils` and `happy-dom` (or existing exact equivalents), UI integration stops; page-only navigation or coordinate-only unit tests are insufficient.
 - **B6 — Atomicity:** any design that needs a second Head, new release tables, member-by-member activation or partial publication is rejected.
-- **B7 — Path ownership:** CLOSED for the provider-free checkpoint above: all 51 changed
-  paths are in the approved lane matrix or the seven explicitly bounded integration-support
+- **B7 — Path ownership:** CLOSED for the provider-free production-readiness checkpoint:
+  all 56 changed paths are in the approved lane matrix or the seven explicitly bounded integration-support
   paths. Any future unplanned path or cross-lane write conflict still stops that lane for a
   plan amendment.
 - **B8 — Stable identities:** the initial medical domain/category/Ping An entity/version/taxonomy must come from Lane B's code-owned factory. Caller-selectable self-consistent identities are rejected.

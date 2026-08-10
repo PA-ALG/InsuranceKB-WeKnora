@@ -11,9 +11,12 @@ Status: `INTEGRATION-CODE-GREEN / LIVE-NO-GO`
   `d014dcd24ab882b7514554b37f46d958cbad18b3` and
   `585cb9dd6f369ca57825e4d63ab35805fb5b6f32`.
 - Integration branch: `codex/schema-wiki-mvp-integration`
-- Integration code identity before this documentation-only closeout:
-  commit `3da54ff80b6106dea6e2b27ca105f3c5238a1864`, tree
-  `c8fcc503bd4f1047bd105a95515646dcf2eb4f8a`.
+- Final3 integration identity before the production-readiness delta: commit
+  `0f6a958a203d6813bee057c7d87eb2ad9bc86a49`, tree
+  `2aa839523e559d2612b9433cdcb3901828f0fd53`.
+- Reviewed production-readiness source: tree
+  `db07de2e737a209a1cc8edf59c63914260bc810a`, exact eight paths, frozen index SHA-256
+  `8da2663f054891265b58962e1dde0eb2ed8b95759018d217aaa3b3f10d778a63`.
 - Scope: A1 contracts, Lane B medical pack/compiler and immutable vector, A2 existing-row
   lifecycle/read facade, and Lane C release-pinned UI. This report and checklist are
   mechanically synchronized without changing production bytes.
@@ -63,6 +66,29 @@ DNS noise did not alter that load-bearing missing-change RED.
 - `frontend/src/components/schema-wiki/pdfJsPort.ts` and the six exact frontend hygiene
   paths listed in the owner matrix are integration support only. They do not replace an
   approved Schema Wiki path or claim release/citation authority.
+- Production-readiness delta gates: focused application-service citation tests `PASS`;
+  focused config signer/redaction tests `PASS`; focused container verifier/DI tests `PASS`;
+  bounded Go vet over service/config/container `PASS`; strict OpenSpec, diff-check,
+  exact owner/support `56/56`, frozen exact8 blob replay and privacy scans `PASS`.
+
+## Production-readiness delta
+
+- Lane A now injects a non-nil native citation replay adapter. It validates server-derived
+  tenant/scope plus exact knowledge, source revision/parse attempt, file/document identity,
+  chunk membership and the recomputed revision manifest. It never opens current/latest or
+  presigned bytes and never substitutes page 1.
+- The adapter deliberately returns typed unavailable and zero bytes after native replay.
+  WeKnora still supplies no immutable attempt-bound blob or canonical coordinate-space/
+  page/bbox authority, so this delta is not real citation-preview acceptance.
+- Deployment configuration now supplies distinct public Ed25519 key rings to the existing
+  named-human and publish-authorization verifiers. Empty and malformed configurations fail
+  closed; duplicate key IDs or key bytes across the rings are rejected.
+- No private-key configuration field exists. The signing configuration and public-key bytes
+  are excluded from JSON serialization, preventing response/log serialization through the
+  application config object.
+- The production-readiness owner amendment adds five paths to the previous closed 51-path
+  integration set: the native adapter and test, config and signing test, and container
+  production-readiness test. The resulting closed owner/support union is 56 paths.
 
 ## A2 owner and state-machine amendment
 
@@ -126,14 +152,16 @@ DNS noise did not alter that load-bearing missing-change RED.
 ## Live NO-GO boundary
 
 - No successful sealed production `Schema67CandidateV2` is available for publication.
-- The production Evidence-to-WeKnora exact revision/page/bbox authority join and concrete
-  preview adapter are not frozen; the UI therefore reports typed unavailable and never
-  falls back to current/latest bytes or page 1.
+- The production Evidence-to-WeKnora native knowledge/revision/chunk/manifest replay is
+  wired, but immutable attempt-bound revision bytes and canonical coordinate-space/page/
+  bbox authority are not frozen. The adapter and UI therefore report typed unavailable,
+  return/open no document bytes, and never fall back to current/latest bytes or page 1.
 - Live `wiki_release_*` deployment/migration custody was not established in this Mission;
   no Draft, named-human review, publish authorization or activation was executed.
 - Provider/model, Golden scoring, DB/WeKnora writes, migration, deployment and activation
   remain `NOT RUN`. Existing 46 generic material Wiki pages are not migrated or converted.
 
 Lane B fixture acceptance uses a real public-factory-sealed Candidate and a synthetic trusted
-citation-authority port. It does not claim that a real Candidate, the production exact-revision
-join, preparation, activation, release tables, deployment or the end-to-end MVP exists.
+citation-authority port. It does not claim that a real Candidate, immutable revision blob,
+page/bbox authority, preparation, activation, release tables, deployment or the end-to-end
+MVP exists.

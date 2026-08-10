@@ -21,6 +21,7 @@ var (
 )
 
 type CitationRevisionReadRequestV1 struct {
+	Scope    types.WikiReleaseScope
 	Citation types.CitationTargetV1
 	Binding  types.CitationMemberBindingV1
 }
@@ -738,7 +739,7 @@ func (s *SchemaWikiService) ReadPinnedSchemaCitation(
 	if err != nil {
 		return nil, err
 	}
-	request, err := schemaWikiCitationRequest(validated, logicalSlug, citationID)
+	request, err := schemaWikiCitationRequest(validated, pin.scope, logicalSlug, citationID)
 	if err != nil {
 		return nil, err
 	}
@@ -803,7 +804,7 @@ func (s *SchemaWikiService) ReadReviewedPreparationCitation(
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	request, err := schemaWikiCitationRequest(validated, logicalSlug, citationID)
+	request, err := schemaWikiCitationRequest(validated, scope, logicalSlug, citationID)
 	if err != nil {
 		return nil, err
 	}
@@ -816,6 +817,7 @@ func (s *SchemaWikiService) ReadReviewedPreparationCitation(
 
 func schemaWikiCitationRequest(
 	validated validatedSchemaWikiCustody,
+	scope types.WikiReleaseScope,
 	logicalSlug string,
 	citationID string,
 ) (CitationRevisionReadRequestV1, error) {
@@ -844,7 +846,7 @@ func schemaWikiCitationRequest(
 	}
 	for _, binding := range validated.release.CitationBindings {
 		if binding.LogicalMemberRef == logicalSlug && binding.CitationSHA256 == selected.CitationSHA256 {
-			return CitationRevisionReadRequestV1{Citation: *selected, Binding: binding}, nil
+			return CitationRevisionReadRequestV1{Scope: scope, Citation: *selected, Binding: binding}, nil
 		}
 	}
 	return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
