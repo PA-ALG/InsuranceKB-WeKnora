@@ -54,9 +54,10 @@ test('scope bootstrap is closed and callers cannot cross-combine Space or KB ide
 
   assert.equal(scope.space_id, 'space-1')
   assert.equal(Object.isFrozen(scope), true)
-  assert.throws(() => {
-    scope.raw_kb_id = 'raw-foreign'
-  }, TypeError)
+  assert.throws(
+    () => Object.defineProperty(scope, 'raw_kb_id', { value: 'raw-foreign' }),
+    TypeError,
+  )
 })
 
 test('generic Wiki source_refs cannot be parsed as a formal Schema field page', () => {

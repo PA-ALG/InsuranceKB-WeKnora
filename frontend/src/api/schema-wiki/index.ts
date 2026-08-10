@@ -5,6 +5,10 @@ export interface SchemaWikiReadTransport {
   get(path: string): Promise<unknown>
 }
 
+export interface SchemaWikiPreviewTransport {
+  getBytes(path: string): Promise<Uint8Array>
+}
+
 export interface SchemaWikiClient {
   readonly scope: SchemaWikiScopeV1
   getDomains(): Promise<unknown>
@@ -29,6 +33,36 @@ function exactId(value: string): string {
 
 export function buildSchemaWikiScopeBootstrapPath(wikiKbId: string): string {
   return `/api/v1/knowledgebase/${exactId(wikiKbId)}/wiki/schema-scope`
+}
+
+export function buildSchemaCitationPreviewPath(
+  scope: SchemaWikiScopeV1,
+  releaseId: string,
+  fieldId: string,
+  citationId: string,
+): string {
+  return buildScopedSchemaWikiPath(
+    scope,
+    `/releases/${exactId(releaseId)}/fields/${exactId(fieldId)}`
+      + `/citations/${exactId(citationId)}/preview`,
+    { expectedScope: scope },
+  )
+}
+
+export async function readPinnedSchemaCitationPreview(
+  scope: SchemaWikiScopeV1,
+  releaseId: string,
+  fieldId: string,
+  citationId: string,
+  transport: SchemaWikiPreviewTransport,
+): Promise<Uint8Array> {
+  const bytes = await transport.getBytes(
+    buildSchemaCitationPreviewPath(scope, releaseId, fieldId, citationId),
+  )
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
+    throw new Error('PDF_PREVIEW_UNAVAILABLE')
+  }
+  return bytes.slice()
 }
 
 export async function bootstrapSchemaWikiClient(

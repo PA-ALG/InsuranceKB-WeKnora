@@ -39,8 +39,6 @@ test('domain and section navigation is produced from validated configuration', (
       ordinal: 3,
     }],
     taxonomy: {
-      version: 'active-taxonomy.v1',
-      taxonomy_sha256: H('3'),
       nodes: [{
         node_id: 'category-configured',
         parent_id: null,
