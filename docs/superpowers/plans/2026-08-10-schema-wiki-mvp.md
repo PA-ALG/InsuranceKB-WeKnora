@@ -66,7 +66,17 @@ Create:
 
 Modify:
 
-- `internal/application/repository/wiki_release.go` only to add the read-only exact `GetHeadForWikiKB` scope lookup; no write, schema or migration change.
+- `internal/types/wiki_release.go` only to add the persisted Draft state to the existing
+  Wiki Release preparation model; no new table, Head or migration.
+- `internal/application/repository/wiki_release.go` for the read-only exact
+  `GetHeadForWikiKB` scope lookup and the bounded existing-row Draft creation / exact
+  Draft-to-Ready compare-and-swap. The CAS binds the previously read preparation digest
+  and custody authorities, while reusing the existing Activate/Revert repository seams;
+  it adds no table, migration, second Head or parallel release model.
+- `internal/application/service/wiki_release.go` only for the bounded existing
+  preparation lifecycle used by Schema `CreateDraft` / `ReviewDraft`; named-human review
+  still happens before the state change and activation still uses the existing separate
+  publish authorization and `ActivateReviewed` Head CAS.
 - `internal/container/container.go` only to provide the new Schema Wiki service/handler.
 - `internal/router/router.go` is the approved mechanical DI and direct mount: `NewRouter`
   constructs the handler/middleware and registers all 13 Schema Wiki routes under the real
@@ -133,6 +143,69 @@ Integration support paths (not Schema Wiki owner-path substitutes):
 the exact integration typecheck/build hygiene delta. These seven paths only close viewer
 runtime, localization and whole-frontend type safety; they do not add routes, DTOs,
 release semantics, citation authority or a substitute for any approved Lane C path.
+
+### Machine-readable integrated owner/support closure
+
+The following block is the exact, closed 51-path set for the provider-free integration
+checkpoint. It is the union of governance documents, Lane A/B/C owner paths and the seven
+bounded support paths above; automated verification compares this block byte-for-byte as a
+sorted set with `git diff --name-only` from the authoritative base.
+
+<!-- BEGIN SCHEMA_WIKI_EXACT_OWNER_SUPPORT_SET -->
+```text
+docs/superpowers/plans/2026-08-10-schema-wiki-mvp.md
+frontend/package-lock.json
+frontend/package.json
+frontend/src/api/schema-wiki/index.ts
+frontend/src/components/schema-wiki/SchemaCitationViewer.test.ts
+frontend/src/components/schema-wiki/SchemaCitationViewer.vue
+frontend/src/components/schema-wiki/pdfJsPort.ts
+frontend/src/components/schema-wiki/schemaCitationTarget.test.ts
+frontend/src/components/schema-wiki/schemaCitationTarget.ts
+frontend/src/components/sessionSidebarBuckets.ts
+frontend/src/i18n/locales/en-US.ts
+frontend/src/i18n/locales/ko-KR.ts
+frontend/src/i18n/locales/ru-RU.ts
+frontend/src/i18n/locales/zh-CN.ts
+frontend/src/router/index.ts
+frontend/src/views/agent/AgentEditorModal.vue
+frontend/src/views/knowledge/KnowledgeBase.vue
+frontend/src/views/knowledge/schema-wiki/SchemaWikiBrowser.vue
+frontend/src/views/knowledge/schema-wiki/SchemaWikiFieldPage.vue
+frontend/src/views/knowledge/schema-wiki/schemaWikiContract.test.ts
+frontend/src/views/knowledge/schema-wiki/schemaWikiContract.ts
+frontend/src/views/knowledge/schema-wiki/schemaWikiNavigation.test.ts
+frontend/src/views/knowledge/schema-wiki/schemaWikiNavigation.ts
+frontend/src/views/system/SystemSettings.vue
+harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py
+harness/tests/test_medical_schema_pack_596_1.py
+harness/tests/test_schema_wiki_contracts.py
+harness/tests/test_schema_wiki_release_596_1.py
+internal/application/repository/wiki_release.go
+internal/application/repository/wiki_release_scope_test.go
+internal/application/service/schema_wiki.go
+internal/application/service/schema_wiki_test.go
+internal/application/service/testdata/schema_wiki_contract_vector.json
+internal/application/service/testdata/schema_wiki_release_596_1_vector.json
+internal/application/service/wiki_release.go
+internal/container/container.go
+internal/handler/schema_wiki.go
+internal/handler/schema_wiki_test.go
+internal/router/router.go
+internal/router/routes_schema_wiki.go
+internal/router/routes_schema_wiki_test.go
+internal/types/schema_wiki.go
+internal/types/schema_wiki_test.go
+internal/types/wiki_release.go
+openspec/changes/120-schema-wiki-medical-596-1-mvp/proposal.md
+openspec/changes/120-schema-wiki-medical-596-1-mvp/specs/schema-wiki-medical-596-1-mvp/spec.md
+openspec/changes/120-schema-wiki-medical-596-1-mvp/tasks.md
+openspec/changes/120-schema-wiki-medical-596-1-mvp/validation-report.md
+openspec/changes/README.md
+```
+<!-- END SCHEMA_WIKI_EXACT_OWNER_SUPPORT_SET -->
 
 ## Shared contracts to freeze before dependent GREEN
 
@@ -237,7 +310,10 @@ Expected GREEN: a synthetic Candidate created only through the real public Candi
 
 ## Task 4: Lane A2 maps the reviewed draft to the existing Release/CAS and read facade
 
-**Files:** Lane A service/handler/router files plus the exact read-only release-scope repository seam/test listed in ownership. Do not change repository writes, release schema or migrations.
+**Files:** Lane A type/service/handler/router files plus the exact release-scope and
+existing-preparation-row repository seams/tests listed in ownership. Only the bounded
+Draft creation and Draft-to-Ready CAS may write; do not add a release table, Head,
+migration or parallel approval path.
 
 - [ ] RED: a schema preparation with malformed vector, incomplete topology, generic member, invalid citation or Candidate/review-bundle drift fails before the existing `Prepare` transaction.
 - [ ] RED: mutate taxonomy/redirect/navigation metadata inside the entity-version root payload and prove preparation rejects it; after activation, pinned/current reads must reconstruct taxonomy only from that immutable root member.
