@@ -76,39 +76,208 @@ Lane B SHALL create `SchemaWikiReviewBundleV1` whose hash covers Candidate hash,
 draft hash, manifest digest, ordered member digests, citation bindings and exact
 domain/taxonomy/schema/entity/version identities. The named-human receipt `HumanBatchHash`
 and the existing `WikiReleasePreparation.ReadyReceiptDigest` SHALL equal that exact bundle
-hash. A decision from another manifest SHALL never authorize preparation.
+hash. The Schema entry SHALL accept the exact validated Lane B release and review bundle,
+not a caller-created generic preparation, and SHALL retain every member's actual canonical
+typed payload. A decision from another manifest SHALL never authorize preparation.
+
+The persisted Schema preparation SHALL additionally contain a strict canonical
+`schema-wiki-preparation-custody.v1` envelope with the complete
+`KnowledgeWikiReleaseV1` and exact `SchemaWikiReviewBundleV1`. The existing preparation
+`ManifestDigest` SHALL hash those envelope bytes. The inner
+`KnowledgeWikiReleaseV1.ManifestDigest` SHALL retain its release-member/citation meaning;
+the two digest domains SHALL be independently recomputed and SHALL NOT be interchanged.
+
+The existing preparation `Manifest` and stored member snapshots SHALL be persisted as
+PostgreSQL JSONB logical values. Create SHALL derive their authority digests from exact
+canonical typed JSON bytes before persistence. Read SHALL NOT compare or trust the raw text
+serialization returned by PostgreSQL. It SHALL strict closed-decode into the concrete
+custody/member DTO, reject unknown fields and trailing JSON, canonical re-marshal the typed
+value, recompute its digest, and then verify the exact envelope-to-snapshot join. A change
+limited to JSONB key order or insignificant whitespace SHALL remain equivalent after this
+typed canonical replay; a value, type, unknown-field, trailing-data or self-hash drift SHALL
+fail closed. Draft review CAS SHALL preserve these JSONB logical values while comparing the
+existing explicit authority columns and digests. This SHALL require no migration.
 
 #### Scenario: a decision is reused after one member changes
 
 - **WHEN** any member, citation binding or manifest digest changes after review
 - **THEN** preparation fails before the existing Wiki Release transaction starts
 
+#### Scenario: caller supplies a generic preparation
+
+- **WHEN** a caller supplies a self-consistent generic preparation or only member
+  descriptors/digests instead of the validated Lane B release and review bundle
+- **THEN** the request fails before a Draft row or partial member output exists
+
+#### Scenario: storage envelope and release manifest digests are substituted
+
+- **WHEN** either digest is copied into the other's field or either canonical preimage is
+  changed and self-rehashed
+- **THEN** Schema preparation fails before persistence, review or member output
+
+#### Scenario: PostgreSQL returns an equivalent JSONB serialization
+
+- **WHEN** stored custody or member JSON differs only in object-key order or insignificant
+  whitespace
+- **THEN** strict concrete decode and canonical re-marshal reproduce the original authority
+  digest and the snapshot join succeeds without trusting the returned text bytes
+
+#### Scenario: stored JSONB authority drifts
+
+- **WHEN** stored custody or member JSON contains an unknown field, trailing JSON, changed
+  typed value or a recomputed self-issued hash
+- **THEN** canonical replay fails before Draft preview, review transition or Active output
+
 ### Requirement: SWM7 activation and reads use the single existing release authority
 
-The implementation SHALL reuse the existing Wiki Release preparation, named-human
-activation, Head CAS, revert and pinned-read service. It SHALL add no second Head, CAS or
-release table and SHALL never activate a partial member set. Reviewed immutable draft reads
-SHALL use `preparation_id`; Active and pinned reads SHALL use the existing release/epoch
-authority. No Active release SHALL return `NO_SCHEMA_WIKI_ACTIVE_RELEASE` with no generic
-fallback.
+The implementation SHALL persist the immutable payload-bearing Draft in the existing
+`wiki_release_preparations` table. The same row SHALL transition Draft to Ready only after
+`ReviewDraft` reloads and replays the complete custody envelope, exact scope and ordered
+75-snapshot bijection, then parses and verifies one concrete named-human approval before
+any state change. The atomic transition SHALL compare exact scope, `preparation_id`, Draft status,
+the previously read `PreparationDigest`, Candidate digest, review-bundle digest, policy ID
+and custody-envelope `ManifestDigest`; concurrent authority drift SHALL return a typed
+conflict without changing the row. Reject, partial, expired or invalid review SHALL leave
+that Draft unchanged. Draft
+SHALL never enter current, pinned, Search or Agent serving; review preview SHALL use exact
+`preparation_id` and member revision identity. Ready SHALL still require a separate publish
+authorization, and only the existing `ActivateReviewed`, Head CAS, revert and pinned-read
+authority may activate it. The implementation SHALL add no second Head, CAS, release table
+or migration and SHALL never activate a partial member set. No Active release SHALL return
+`NO_SCHEMA_WIKI_ACTIVE_RELEASE` with no generic fallback.
+
+CreateDraft, exact Draft preview and ReviewDraft SHALL be human JWT control-plane
+operations restricted to a trusted tenant role of Admin or Owner. Their route middleware
+order SHALL be `DenyAPIKeyPrincipal`, `Admin`, Wiki ACL/evidence, scope resolution, derived
+RAW ACL/evidence, `SealAccess`, then handler. Their service entrypoints SHALL independently
+reject API-key context and require trusted-context Admin+ before any repository row lookup,
+verifier or preview-port call, even when tenant RBAC enforcement is disabled. No caller-supplied role or
+permission field is authority. Active current/pinned/Search reads SHALL remain Viewer+ and
+MAY retain the existing scoped API-key retrieve authority.
+
+Every Draft, Ready and Active Schema read SHALL follow the stored `PreparationID`, decode
+the strict custody envelope, replay the complete release and review bundle, and require an
+exact ordered bijection between all 75 release members and stored snapshots including
+canonical payload bytes. Citation preview SHALL accept only logical slug and citation ID,
+derive the `CitationTargetV1` and binding from the replayed member authority, and require
+each `CitationTargetV1.SpaceID` to equal the exact release scope before invoking the preview
+port. Generic, partial, foreign-scope or caller-supplied citation authority SHALL fail
+closed.
 
 #### Scenario: one new member fails before CAS
 
 - **WHEN** any member, taxonomy, receipt or CAS validation for a new release fails
 - **THEN** the existing Active Head and every existing pin remain unchanged
 
+#### Scenario: review fails before Draft to Ready
+
+- **WHEN** named-human verification rejects, expires or partially decides the exact bundle
+- **THEN** the persisted Draft remains byte-identical, non-serving and in Draft state
+
+#### Scenario: Draft changes between verification read and transition
+
+- **WHEN** the stored Draft `PreparationDigest` differs from the exact digest read and
+  verified by ReviewDraft
+- **THEN** the compare-and-swap returns a typed conflict and changes no status or digest
+
+#### Scenario: Ready lacks separate publish authorization
+
+- **WHEN** a reviewed Ready preparation is presented without the exact publish authorization
+- **THEN** `ActivateReviewed` does not run and the existing Head remains unchanged
+
+#### Scenario: machine principal or insufficient human role reaches Draft control plane
+
+- **WHEN** an API-key principal, missing trusted role, Viewer or Contributor requests
+  CreateDraft, exact Draft preview or ReviewDraft, including while RBAC is disabled
+- **THEN** the request is rejected before handler state change and before any repository
+  row lookup, named-human verifier or preview-port call; preview reveals no row existence
+
+#### Scenario: Active read uses existing retrieve authority
+
+- **WHEN** a Viewer+ JWT principal or correctly scoped API-key principal reads current,
+  pinned or Search Schema members
+- **THEN** the existing dual-ACL/pin checks apply without granting any Draft operation
+
+#### Scenario: stored member or citation drifts from custody envelope
+
+- **WHEN** any snapshot byte/digest/order/revision or citation `SpaceID` differs from the
+  complete release selected through the stored `PreparationID`
+- **THEN** the read returns a typed failure before member bytes or citation preview output
+
 ### Requirement: SWM8 scope bootstrap enforces derived RAW and Wiki ACL
 
-The schema-scope route SHALL resolve exactly one release scope from the authorized Wiki KB,
-inject non-overridable space and RAW KB route parameters, authorize the derived RAW KB using
-the existing `KBAccessRead` middleware and recorded ACL evidence, and only then seal the
-existing dual ACL context. Human/JWT and API-key principals SHALL follow the same checks.
-Cross-tenant, zero, multiple, Wiki-only or RAW-denied scopes SHALL reveal no schema scope.
+The Lane C bootstrap route SHALL be exactly
+`GET /api/v1/knowledgebase/:wiki_kb_id/wiki/schema-scope`. Its response SHALL be the closed
+`SchemaWikiScopeV1` object with exactly `version`, `space_id`, `raw_kb_id`, `wiki_kb_id` and
+`scope_sha256`. Every Lane C read after bootstrap SHALL use the exact scoped base
+`/api/v1/knowledgebase/:wiki_kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema`
+and only these read suffixes:
+
+- `/domains`;
+- `/taxonomy/current`;
+- `/entities/:entity_id/versions/:version_id/current`;
+- `/releases/:release_id/root`, `/sections/:section_id` and `/fields/:field_id`;
+- `/preparations/:preparation_id/root`, `/sections/:section_id` and
+  `/fields/:field_id`; and
+- `/releases/:release_id/fields/:field_id/citations/:citation_id/preview`.
+
+`GET .../entities/:entity_id/versions/:version_id/current` SHALL return exactly the closed
+`SchemaWikiCurrentEntityVersionV1` payload
+`{version: 'schema-wiki-current-entity-version.v1', entity_id, entity_version_id,
+active_release_id, activation_epoch, root: SchemaRootPageV1}`. Its exact
+`active_release_id` and `activation_epoch` SHALL be the sole trusted pin for all following
+`/releases/:release_id/...` reads. `SchemaWikiScopeV1` SHALL contain no release identity.
+A caller-supplied, guessed, current/latest or independently refreshed release ID SHALL NOT
+replace the pin.
+
+Active bootstrap and reads SHALL resolve exactly one release scope from the sole authorized
+Head. Preparation review and preview SHALL derive the same authority from the immutable
+preparation. Those derived values SHALL inject non-overridable space and RAW KB route
+parameters, authorize the derived RAW KB using the existing `KBAccessRead` middleware and
+recorded ACL evidence, and only then seal the existing dual ACL context. Active-read
+Human/JWT and scoped API-key principals SHALL follow the same Wiki/RAW ACL and seal checks.
+Draft control-plane routes SHALL additionally apply the human JWT Admin+ boundary defined
+in SWM7. Cross-tenant, zero, multiple, Wiki-only or RAW-denied scopes SHALL reveal no schema
+scope.
+
+The sole bootstrap exception SHALL be the initial none/e0
+`POST .../schema/preparations`, for which no Head or preparation row yet exists. It MAY use
+the exact `space_id`, `raw_kb_id` and `wiki_kb_id` from the URL path only; no request body
+field may supply or override them. Human JWT Admin+, Wiki then RAW ACL/evidence, `SealAccess`
+and the service's no-conflicting-space and full-custody validation SHALL all complete before
+the first row is written. When a Head exists, every path scope component SHALL exactly equal
+the Head-derived scope. This exception SHALL NOT be treated as a caller-signed scope.
 
 #### Scenario: principal may read Wiki but not the derived RAW KB
 
 - **WHEN** the bootstrap resolves a RAW KB for which the principal lacks read access
 - **THEN** no `SchemaWikiScopeV1`, release seal or member data is returned
+
+#### Scenario: first preparation is created before any Head exists
+
+- **WHEN** a human JWT Admin+ submits the initial none/e0 preparation using an exact path
+  scope and the body omits scope authority
+- **THEN** Wiki and RAW ACL/evidence, seal, no-conflicting-space and complete custody checks
+  authorize that one bootstrap before persistence
+
+#### Scenario: caller overrides or conflicts with scope
+
+- **WHEN** a body supplies scope authority, a preparation-derived scope differs from the
+  path, or an existing Head differs from any path component
+- **THEN** the request fails before repository state change, member output or scope data
+
+#### Scenario: current entity-version pin drifts
+
+- **WHEN** the current response entity/version differs from the requested path, or a
+  subsequent release member request changes `active_release_id` or `activation_epoch`
+- **THEN** the read fails before root, section, field or citation output and does not retry
+  against current/latest
+
+#### Scenario: caller guesses a release without a current pin
+
+- **WHEN** a caller constructs `/releases/:release_id/...` from scope alone or supplies an
+  arbitrary release ID without the closed current entity-version response
+- **THEN** no release member or citation preview is returned
 
 ### Requirement: SWM9 exact revision preview remains fail closed until authority exists
 
@@ -142,7 +311,11 @@ generic Wiki pages and rate `pages_affected=14` SHALL NOT be treated as Schema a
 Each lane SHALL write only its exact approved owner paths and integrate in the order A1
 contracts, B compiler, A2 serving, C UI. A shared-path collision, unlisted wiring path,
 provider/Golden/live DB requirement or second authority SHALL stop implementation until the
-plan and this change are explicitly amended.
+plan and this change are explicitly amended. Lane A is explicitly authorized to make the
+bounded existing-row state-machine changes in `internal/types/wiki_release.go`,
+`internal/application/repository/wiki_release.go` and
+`internal/application/service/wiki_release.go`; this authorization does not permit a new
+table, migration, Head, CAS or approval model.
 
 #### Scenario: a lane needs an unlisted dependency path
 

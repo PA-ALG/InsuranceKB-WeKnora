@@ -3,9 +3,10 @@
 ## Goal
 
 Compile one real, sealed Schema67 `Schema67CandidateV2` for product version `596-1`
-into one deterministic medical-insurance `KnowledgeWikiReleaseV1`, review the exact
-manifest as one named-human batch, prepare it through the existing Wiki Release service,
-and serve only an activated, release-pinned 1-root + 7-section + 67-field Schema Wiki.
+into one deterministic medical-insurance `KnowledgeWikiReleaseV1`, persist the exact
+payload-bearing draft in the existing Wiki Release preparation table, review that manifest
+as one named-human batch, transition the same preparation to Ready, and serve only an
+activated, release-pinned 1-root + 7-section + 67-field Schema Wiki.
 
 If the sealed Candidate, trusted Evidence-to-revision join, reviewed preparation or
 existing Active Head is unavailable, the system SHALL return a typed incomplete/not-active
@@ -38,6 +39,8 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `harness/tests/test_schema_wiki_contracts.py`
 - `internal/types/schema_wiki.go`
 - `internal/types/schema_wiki_test.go`
+- `internal/types/wiki_release.go` only to add the persisted Draft state used by the
+  existing `wiki_release_preparations` model; no table or migration change.
 - `internal/application/service/schema_wiki.go`
 - `internal/application/service/schema_wiki_test.go`
 - `internal/application/service/testdata/schema_wiki_contract_vector.json`
@@ -48,6 +51,7 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `internal/application/repository/wiki_release_scope_test.go`
 - `internal/router/routes_knowledge.go`
 - `internal/application/repository/wiki_release.go`
+- `internal/application/service/wiki_release.go`
 - `internal/container/container.go`
 - `internal/router/router.go`
 
@@ -85,13 +89,89 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - The entity-version root member contains the exact taxonomy snapshot, redirects and
   schema navigation/index metadata. The release still contains exactly 75 content members
   and pinned reads can reconstruct the same taxonomy as the field pages.
+- The Schema entry accepts the exact validated Lane B `KnowledgeWikiReleaseV1` together
+  with its exact validated `SchemaWikiReviewBundleV1`; it never accepts a caller-built
+  generic `WikiReleasePreparation`. It maps every member's actual canonical typed payload
+  into the existing preparation row without reducing it to a descriptor or digest.
+- Without a migration, the Schema Draft reuses `WikiReleasePreparation.Manifest` to store
+  strict canonical bytes for `schema-wiki-preparation-custody.v1`. That closed envelope
+  contains the complete `KnowledgeWikiReleaseV1` and exact `SchemaWikiReviewBundleV1`.
+  `WikiReleasePreparation.ManifestDigest` hashes the custody-envelope bytes; it is a
+  different digest domain from `KnowledgeWikiReleaseV1.ManifestDigest`, which continues to
+  bind the release's ordered 75 members and citation bindings. Neither value may be
+  substituted for the other.
+- `WikiReleasePreparation.Manifest` and its stored member snapshots are PostgreSQL JSONB
+  values. Create computes each authority digest from the exact canonical typed JSON bytes
+  before persistence. Read never treats PostgreSQL's returned key order or whitespace as
+  authority: it performs strict closed decode into the concrete custody/member DTO, rejects
+  unknown fields and trailing JSON, canonical re-marshals the typed value, recomputes the
+  digest, and only then verifies the envelope-to-snapshot join. JSONB-equivalent text is
+  accepted only when that typed canonical replay is identical; value, type or self-hash
+  drift fails closed. The Draft review CAS preserves the JSONB logical values and compares
+  their explicit authority columns/digests; this requires no migration.
+- The 75 stored member snapshots must be an exact ordered bijection with the envelope's
+  release members: kind, logical ref, release revision, member digest and actual canonical
+  payload bytes all match. Draft, Ready and Active reads load the preparation identified by
+  `PreparationID`, replay the complete release/bundle/scope closure and reject any snapshot
+  substitution before returning content. Citation reads accept only logical slug plus
+  citation ID, select the citation from stored authority and require every selected
+  `CitationTarget.SpaceID` to equal the exact release scope.
 - `SchemaWikiReviewBundleV1` binds Candidate hash, release draft hash, manifest digest,
   ordered member digests, citation bindings and domain/taxonomy/schema/entity/version.
   The named-human receipt `HumanBatchHash` and the existing preparation
   `ReadyReceiptDigest` must equal this bundle hash. A reused decision or changed manifest
   fails closed.
-- Before activation, HTTP reads use `preparation_id`, never a nonexistent draft
-  `release_id`. Activation and revert remain the existing whole-release operations.
+- The same `wiki_release_preparations` row follows the closed state machine persisted
+  Draft -> concrete named-human `ReviewDraft` -> Ready. Draft never enters current,
+  pinned, Search or Agent serving; its exact member/revision preview is addressed only by
+  `preparation_id`. Reject, partial, expired or invalid review leaves the exact Draft
+  unchanged. Before named-human verification or transition, `ReviewDraft` reloads and
+  replays the complete custody envelope, scope and exact ordered 75-snapshot bijection.
+  The Draft -> Ready update is an exact compare-and-swap over scope,
+  `preparation_id`, Draft status, the previously read `PreparationDigest`, Candidate,
+  review-bundle, policy and custody-envelope manifest authority columns; concurrent content
+  or identity drift returns a typed conflict with no state change. Ready still
+  requires a separate publish authorization before the existing
+  `ActivateReviewed` transaction may advance the sole Head. Activation and revert remain
+  the existing whole-release operations.
+- Schema Draft creation, exact Draft preview and `ReviewDraft` are human control-plane
+  operations. They require an authenticated JWT principal with trusted tenant role Admin+
+  and use the exact route order `DenyAPIKeyPrincipal -> Admin -> Wiki ACL/evidence -> scope
+  resolution -> RAW ACL/evidence -> SealAccess -> handler`. The service repeats the
+  fail-closed API-key denial and Admin+ check from trusted request context before any
+  repository row lookup, verifier or preview-port call, including while tenant RBAC enforcement is
+  disabled. Callers cannot submit role or permission fields. Active current/pinned/Search
+  reads remain Viewer+ and may use the existing scoped API-key retrieve authority.
+- The Lane C bootstrap is exactly
+  `GET /api/v1/knowledgebase/:wiki_kb_id/wiki/schema-scope` and returns the closed
+  `SchemaWikiScopeV1 {version, space_id, raw_kb_id, wiki_kb_id, scope_sha256}`. Every other
+  UI read is below
+  `/api/v1/knowledgebase/:wiki_kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema`:
+  `/domains`, `/taxonomy/current`,
+  `/entities/:entity_id/versions/:version_id/current`,
+  `/releases/:release_id/{root|sections/:section_id|fields/:field_id}`,
+  `/preparations/:preparation_id/{root|sections/:section_id|fields/:field_id}`, and
+  `/releases/:release_id/fields/:field_id/citations/:citation_id/preview`. These paths and
+  response scope fields are the exact Lane C contract; aliases such as a separate
+  `/drafts` read surface are not authority.
+- `/entities/:entity_id/versions/:version_id/current` returns exactly the closed
+  `{version: 'schema-wiki-current-entity-version.v1', entity_id, entity_version_id,
+  active_release_id, activation_epoch, root: SchemaRootPageV1}`. Its
+  `active_release_id` and `activation_epoch` are the only trusted pin for subsequent
+  `/releases/:release_id/...` reads. `SchemaWikiScopeV1` intentionally contains no release
+  ID; callers may neither guess one nor substitute current/latest behavior.
+- Active bootstrap and reads derive scope from the sole Head. Preparation review and
+  preview derive it from the immutable preparation. Only the initial none/e0
+  `POST .../schema/preparations`, when neither Head nor preparation exists, may bootstrap
+  from the exact path scope. The request body cannot supply or override scope; the human
+  JWT Admin+, Wiki then RAW ACL/evidence, seal and service-level no-conflicting-space/full-
+  custody checks all run before persistence. If a Head exists, every path scope component
+  must exactly match it. This is a bounded first-release bootstrap rule, not caller-issued
+  scope authority.
+- `internal/application/repository/wiki_release.go` and
+  `internal/application/service/wiki_release.go` may receive only the narrow existing-row
+  Draft persistence/atomic review-transition changes above. This Mission adds no table,
+  migration, Head, CAS or parallel approval model.
 
 ## Fresh WeKnora preflight and stop conditions
 
