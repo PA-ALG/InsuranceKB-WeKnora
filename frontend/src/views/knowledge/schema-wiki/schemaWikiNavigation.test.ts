@@ -3,9 +3,14 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { bootstrapSchemaWikiClient } from '../../../api/schema-wiki/index.ts'
-import { parseSchemaPack, parseSchemaWikiScope } from './schemaWikiContract.ts'
+import {
+  parseSchemaPack,
+  parseSchemaWikiCurrentEntityVersion,
+  parseSchemaWikiScope,
+} from './schemaWikiContract.ts'
 import {
   assertStableTaxonomyReparent,
+  buildPinnedSchemaWikiReleasePath,
   buildScopedSchemaWikiPath,
   projectSchemaWikiNavigation,
   resolveKnowledgeBaseDefaultTab,
@@ -16,6 +21,32 @@ const vector = JSON.parse(readFileSync(new URL(
   '../../../../../internal/application/service/testdata/schema_wiki_contract_vector.json',
   import.meta.url,
 ), 'utf8')) as { schema_pack: Record<string, unknown> }
+
+function currentEntityVersion() {
+  return {
+    version: 'schema-wiki-current-entity-version.v1',
+    entity_id: 'entity-596-1',
+    entity_version_id: 'entity-version-596-1',
+    active_release_id: 'release-596-1-active',
+    activation_epoch: 4,
+    root: {
+      contract: 'schema-root-page.v1',
+      domain_id: 'medical-insurance',
+      domain_sha256: H('1'),
+      schema_pack_id: 'medical-596-1-schema67',
+      schema_version: '67',
+      schema_pack_sha256: H('2'),
+      entity_id: 'entity-596-1',
+      entity_version_id: 'entity-version-596-1',
+      product_version_id: 'product-version-596-1',
+      taxonomy_version: 'taxonomy-596-1-v1',
+      taxonomy_sha256: H('3'),
+      product_display_name: '平安e生保医疗险',
+      ordered_section_ids: ['identity', 'coverage'],
+      root_page_sha256: H('4'),
+    },
+  }
+}
 
 function loadMedicalReleaseVector(): Record<string, unknown> {
   return JSON.parse(readFileSync(new URL(
@@ -129,6 +160,39 @@ test('all Schema paths are derived from one bootstrapped scope', () => {
   assert.throws(() => buildScopedSchemaWikiPath({ ...scope }, '/domains'), {
     message: 'SCHEMA_WIKI_SCOPE_INVALID',
   })
+})
+
+test('release member paths use only the validated current response release pin', () => {
+  const scope = parseSchemaWikiScope({
+    version: 'schema-wiki-scope.v1',
+    space_id: 'space-1',
+    raw_kb_id: 'raw-1',
+    wiki_kb_id: 'wiki-1',
+    scope_sha256: H('4'),
+  })
+  const current = parseSchemaWikiCurrentEntityVersion(currentEntityVersion(), {
+    entityId: 'entity-596-1',
+    entityVersionId: 'entity-version-596-1',
+  })
+
+  assert.equal(
+    buildPinnedSchemaWikiReleasePath(scope, current, '/fields/product_name'),
+    '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema'
+      + '/releases/release-596-1-active/fields/product_name',
+  )
+  assert.throws(() => buildPinnedSchemaWikiReleasePath(
+    scope,
+    { ...current, active_release_id: 'release-caller-selected' },
+    '/root',
+  ), { message: 'SCHEMA_WIKI_CURRENT_ENTITY_VERSION_INVALID' })
+  assert.throws(() => buildPinnedSchemaWikiReleasePath(scope, scope as never, '/root'), {
+    message: 'SCHEMA_WIKI_CURRENT_ENTITY_VERSION_INVALID',
+  })
+  assert.throws(() => buildPinnedSchemaWikiReleasePath(
+    scope,
+    current,
+    '/releases/latest/root',
+  ), { message: 'SCHEMA_WIKI_RELEASE_MEMBER_PATH_INVALID' })
 })
 
 test('the API client bootstraps Wiki scope before any scoped Schema request', async () => {

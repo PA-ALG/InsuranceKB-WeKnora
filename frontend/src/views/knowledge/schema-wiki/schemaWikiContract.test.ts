@@ -6,6 +6,7 @@ import {
   assertSchemaReadSurface,
   parseSchemaFieldPage,
   parseSchemaPack,
+  parseSchemaWikiCurrentEntityVersion,
   parseSchemaWikiScope,
 } from './schemaWikiContract.ts'
 
@@ -43,6 +44,32 @@ function presentField() {
   }
 }
 
+function currentEntityVersion() {
+  return {
+    version: 'schema-wiki-current-entity-version.v1',
+    entity_id: 'entity-596-1',
+    entity_version_id: 'entity-version-596-1',
+    active_release_id: 'release-596-1-active',
+    activation_epoch: 4,
+    root: {
+      contract: 'schema-root-page.v1',
+      domain_id: 'medical-insurance',
+      domain_sha256: H('1'),
+      schema_pack_id: 'medical-596-1-schema67',
+      schema_version: '67',
+      schema_pack_sha256: H('2'),
+      entity_id: 'entity-596-1',
+      entity_version_id: 'entity-version-596-1',
+      product_version_id: 'product-version-596-1',
+      taxonomy_version: 'taxonomy-596-1-v1',
+      taxonomy_sha256: H('3'),
+      product_display_name: '平安e生保医疗险',
+      ordered_section_ids: ['identity', 'coverage'],
+      root_page_sha256: H('4'),
+    },
+  }
+}
+
 test('scope bootstrap is closed and callers cannot cross-combine Space or KB identities', () => {
   const scope = parseSchemaWikiScope({
     version: 'schema-wiki-scope.v1',
@@ -58,6 +85,34 @@ test('scope bootstrap is closed and callers cannot cross-combine Space or KB ide
     () => Object.defineProperty(scope, 'raw_kb_id', { value: 'raw-foreign' }),
     TypeError,
   )
+})
+
+test('current entity-version is exact, path-pinned, immutable, and requires an active epoch', () => {
+  const expected = { entityId: 'entity-596-1', entityVersionId: 'entity-version-596-1' }
+  const exact = currentEntityVersion()
+  const current = parseSchemaWikiCurrentEntityVersion(exact, expected)
+
+  assert.equal(current.active_release_id, 'release-596-1-active')
+  assert.equal(current.activation_epoch, 4)
+  assert.equal(current.root.root_page_sha256, H('4'))
+  assert.equal(Object.isFrozen(current), true)
+  assert.equal(Object.isFrozen(current.root), true)
+  assert.equal(Object.isFrozen(current.root.ordered_section_ids), true)
+
+  for (const value of [
+    { ...exact, extra: true },
+    { ...exact, entity_id: 'entity-foreign' },
+    { ...exact, entity_version_id: 'entity-version-foreign' },
+    { ...exact, active_release_id: 'current' },
+    { ...exact, active_release_id: 'latest' },
+    { ...exact, activation_epoch: 0 },
+    { ...exact, activation_epoch: 1.5 },
+    { ...exact, root: { ...exact.root, entity_id: 'entity-foreign' } },
+    { ...exact, root: { ...exact.root, ordered_section_ids: ['identity', 'identity'] } },
+    { ...exact, root: { ...exact.root, source_refs: ['generic'] } },
+  ]) {
+    assert.throws(() => parseSchemaWikiCurrentEntityVersion(value, expected))
+  }
 })
 
 test('generic Wiki source_refs cannot be parsed as a formal Schema field page', () => {

@@ -1,6 +1,8 @@
 import {
+  assertValidatedSchemaWikiCurrentEntityVersion,
   assertValidatedSchemaWikiScope,
   parseSchemaPack,
+  type SchemaWikiCurrentEntityVersionV1,
   type SchemaWikiScopeV1,
 } from './schemaWikiContract.ts'
 
@@ -93,4 +95,19 @@ export function buildScopedSchemaWikiPath(
   return `/api/v1/knowledgebase/${encodeURIComponent(scope.wiki_kb_id)}`
     + `/wiki/release-scopes/${encodeURIComponent(scope.space_id)}`
     + `/raw/${encodeURIComponent(scope.raw_kb_id)}/schema${suffix}`
+}
+
+export function buildPinnedSchemaWikiReleasePath(
+  scope: SchemaWikiScopeIdentity,
+  current: SchemaWikiCurrentEntityVersionV1,
+  memberSuffix: string,
+): string {
+  assertValidatedSchemaWikiCurrentEntityVersion(current)
+  if (!/^\/(?:root|sections\/[A-Za-z0-9_.:-]+|fields\/[A-Za-z0-9_.:-]+(?:\/citations\/[A-Za-z0-9_.:-]+\/preview)?)$/.test(memberSuffix)) {
+    throw new Error('SCHEMA_WIKI_RELEASE_MEMBER_PATH_INVALID')
+  }
+  return buildScopedSchemaWikiPath(
+    scope,
+    `/releases/${encodeURIComponent(current.active_release_id)}${memberSuffix}`,
+  )
 }
