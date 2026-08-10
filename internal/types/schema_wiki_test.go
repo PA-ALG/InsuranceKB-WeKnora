@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -93,5 +94,62 @@ func TestSchemaWikiGoRejectsNonNFCText(t *testing.T) {
 	}
 	if err == nil && validateKnowledgeDomain(domain) == nil {
 		t.Fatal("decomposed Unicode unexpectedly validated")
+	}
+}
+
+func TestSchemaWikiGoRejectsEveryControlCharacter(t *testing.T) {
+	t.Parallel()
+
+	codepoints := make([]rune, 0, 33)
+	for codepoint := rune(0); codepoint < 0x20; codepoint++ {
+		codepoints = append(codepoints, codepoint)
+	}
+	codepoints = append(codepoints, 0x7f)
+	for _, codepoint := range codepoints {
+		codepoint := codepoint
+		t.Run(fmt.Sprintf("U+%04X", codepoint), func(t *testing.T) {
+			t.Parallel()
+			_, err := schemaWikiCanonicalPreimage(
+				"knowledge-domain.v1",
+				map[string]any{"display_name": "医疗险" + string(codepoint) + "产品"},
+			)
+			if err == nil {
+				t.Fatal("control character unexpectedly accepted")
+			}
+		})
+	}
+
+	preimage, err := schemaWikiCanonicalPreimage(
+		"knowledge-domain.v1",
+		map[string]any{"display_name": "医疗保险"},
+	)
+	if err != nil || len(preimage) == 0 {
+		t.Fatalf("ordinary NFC Chinese text rejected: %v", err)
+	}
+}
+
+func TestSchemaWikiVectorRejectsUnknownFieldAfterStandardUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	vector, raw := loadSchemaWikiContractVector(t)
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatal(err)
+	}
+	payload["foreign_authority"] = "caller-selected"
+	mutatedRaw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var silentlyTruncated SchemaWikiContractVectorV1
+	if err := json.Unmarshal(mutatedRaw, &silentlyTruncated); err != nil {
+		t.Fatal(err)
+	}
+	if silentlyTruncated.Contract != vector.Contract {
+		t.Fatal("standard JSON fixture did not preserve the known vector")
+	}
+	if err := ValidateSchemaWikiContractVector(silentlyTruncated, mutatedRaw); err == nil {
+		t.Fatal("unknown authority field escaped the typed closed-world boundary")
 	}
 }

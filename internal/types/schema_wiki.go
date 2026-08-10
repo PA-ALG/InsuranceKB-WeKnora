@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"golang.org/x/text/unicode/norm"
@@ -186,9 +187,20 @@ type SchemaWikiContractVectorV1 struct {
 }
 
 func schemaWikiCanonicalPreimage(objectType string, payload any) ([]byte, error) {
-	if strings.TrimSpace(objectType) == "" || strings.ContainsAny(objectType, "\x00\r\n") {
+	if strings.TrimSpace(objectType) == "" || schemaWikiHasControlCharacter(objectType) {
 		return nil, fmt.Errorf("%w: object type", ErrSchemaWikiContractInvalid)
 	}
+	canonical, err := schemaWikiCanonicalJSON(payload)
+	if err != nil {
+		return nil, err
+	}
+	preimage := append([]byte(schemaWikiHashPrefix), []byte(objectType)...)
+	preimage = append(preimage, 0)
+	preimage = append(preimage, canonical...)
+	return preimage, nil
+}
+
+func schemaWikiCanonicalJSON(payload any) ([]byte, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -208,11 +220,16 @@ func schemaWikiCanonicalPreimage(objectType string, payload any) ([]byte, error)
 	if err := encoder.Encode(tree); err != nil {
 		return nil, err
 	}
-	canonical := bytes.TrimSuffix(encoded.Bytes(), []byte("\n"))
-	preimage := append([]byte(schemaWikiHashPrefix), []byte(objectType)...)
-	preimage = append(preimage, 0)
-	preimage = append(preimage, canonical...)
-	return preimage, nil
+	return bytes.TrimSuffix(encoded.Bytes(), []byte("\n")), nil
+}
+
+func schemaWikiHasControlCharacter(value string) bool {
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return true
+		}
+	}
+	return false
 }
 
 func schemaWikiCanonicalTreeValid(value any) bool {
@@ -220,15 +237,7 @@ func schemaWikiCanonicalTreeValid(value any) bool {
 	case nil, bool, json.Number:
 		return true
 	case string:
-		if !norm.NFC.IsNormalString(typed) {
-			return false
-		}
-		for _, r := range typed {
-			if r < 0x20 {
-				return false
-			}
-		}
-		return true
+		return norm.NFC.IsNormalString(typed) && !schemaWikiHasControlCharacter(typed)
 	case []any:
 		for _, item := range typed {
 			if !schemaWikiCanonicalTreeValid(item) {
@@ -493,14 +502,22 @@ func ValidateSchemaWikiContractVector(vector SchemaWikiContractVectorV1, raw []b
 	if vector.Contract != "schema-wiki-contract-vector.v1" || len(vector.Citations) == 0 {
 		return ErrSchemaWikiContractInvalid
 	}
-	var decoded any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&decoded); err != nil {
-		return err
+	decoder.DisallowUnknownFields()
+	var closed SchemaWikiContractVectorV1
+	if err := decoder.Decode(&closed); err != nil {
+		return ErrSchemaWikiContractInvalid
 	}
-	canonical, err := json.Marshal(decoded)
-	if err != nil || !bytes.Equal(bytes.TrimSpace(raw), canonical) {
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return ErrSchemaWikiContractInvalid
+	}
+	closedCanonical, err := schemaWikiCanonicalJSON(closed)
+	if err != nil || !bytes.Equal(bytes.TrimSpace(raw), closedCanonical) {
+		return ErrSchemaWikiContractInvalid
+	}
+	argumentCanonical, err := schemaWikiCanonicalJSON(vector)
+	if err != nil || !bytes.Equal(argumentCanonical, closedCanonical) {
 		return ErrSchemaWikiContractInvalid
 	}
 	if err := ValidateSchemaPack(vector.SchemaPack); err != nil ||

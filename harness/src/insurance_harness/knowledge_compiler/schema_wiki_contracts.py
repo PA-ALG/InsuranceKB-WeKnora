@@ -44,6 +44,10 @@ class _FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
 
 
+def _has_disallowed_control(value: str) -> bool:
+    return any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+
+
 def _json_tree(value: object) -> object:
     if isinstance(value, BaseModel):
         return _json_tree(
@@ -57,6 +61,8 @@ def _json_tree(value: object) -> object:
     if type(value) is str:
         if unicodedata.normalize("NFC", value) != value:
             raise ValueError("Schema Wiki text must be NFC")
+        if _has_disallowed_control(value):
+            raise ValueError("Schema Wiki text must not contain control characters")
         return value
     if value is None or type(value) in (int, bool):
         return value
@@ -77,7 +83,7 @@ def _json_tree(value: object) -> object:
 def schema_wiki_canonical_bytes(object_type: str, payload: object) -> bytes:
     """Return the exact Python/Go shared hash preimage."""
 
-    if not object_type or any(ch in object_type for ch in "\x00\r\n"):
+    if not object_type or _has_disallowed_control(object_type):
         raise ValueError("invalid Schema Wiki object type")
     encoded = json.dumps(
         _json_tree(payload),

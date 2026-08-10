@@ -397,6 +397,31 @@ def test_non_nfc_text_is_not_canonical() -> None:
         )
 
 
+@pytest.mark.parametrize("codepoint", (*range(0x20), 0x7F))
+def test_control_characters_are_not_canonical(codepoint: int) -> None:
+    with pytest.raises(ValueError, match="control"):
+        schema_wiki_canonical_bytes(
+            "knowledge-domain.v1",
+            {
+                "contract": "knowledge-domain.v1",
+                "domain_id": "synthetic-domain",
+                "display_name": f"医疗险{chr(codepoint)}产品",
+            },
+        )
+
+
+def test_normal_nfc_chinese_text_remains_canonical() -> None:
+    preimage = schema_wiki_canonical_bytes(
+        "knowledge-domain.v1",
+        {
+            "contract": "knowledge-domain.v1",
+            "domain_id": "medical-insurance",
+            "display_name": "医疗保险",
+        },
+    )
+    assert "医疗保险".encode() in preimage
+
+
 @pytest.mark.parametrize("problem", ["cycle", "orphan", "duplicate"])
 def test_taxonomy_rejects_cycle_orphan_and_duplicate_nodes(problem: str) -> None:
     root = TaxonomyNodeV1(
