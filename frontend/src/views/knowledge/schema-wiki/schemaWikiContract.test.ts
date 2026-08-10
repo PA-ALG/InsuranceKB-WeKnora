@@ -111,6 +111,17 @@ test('SchemaPack topology is configurable but remains an exact section-to-field 
       { section_id: 'second', ordinal: 1, field_ids: ['beta'] },
     ],
   }), { message: 'SCHEMA_PACK_TOPOLOGY_INVALID' })
+  assert.throws(() => parseSchemaPack({
+    ...configurablePack,
+    fields: [
+      { field_id: 'alpha\u0000foreign', ordinal: 0 },
+      { field_id: 'beta', ordinal: 1 },
+    ],
+    sections: [
+      { section_id: 'first', ordinal: 0, field_ids: ['alpha\u0000foreign'] },
+      { section_id: 'second', ordinal: 1, field_ids: ['beta'] },
+    ],
+  }), { message: 'SCHEMA_PACK_TOPOLOGY_INVALID' })
 })
 
 test('unknown is an evidence-free abstention and never a hidden answer', () => {

@@ -1,3 +1,9 @@
+import {
+  assertValidatedSchemaWikiScope,
+  parseSchemaPack,
+  type SchemaWikiScopeV1,
+} from './schemaWikiContract.ts'
+
 export type KnowledgeBaseTab = 'schema' | 'materials' | 'documents' | 'graph'
 
 export interface SchemaWikiScopeIdentity {
@@ -21,16 +27,14 @@ export function resolveKnowledgeBaseDefaultTab(input: {
 export function projectSchemaWikiNavigation(input: {
   domains: Array<{ domain_id: string; display_name: string; ordinal: number }>
   taxonomy: { nodes: Array<Record<string, unknown>> }
-  schemaPack: {
-    sections: Array<{ section_id: string; ordinal: number; field_ids: string[] }>
-    fields: Array<{ field_id: string; ordinal: number }>
-  }
+  schemaPack: unknown
 }) {
+  const schemaPack = parseSchemaPack(input.schemaPack)
   return Object.freeze({
     domains: Object.freeze([...input.domains].sort((left, right) => left.ordinal - right.ordinal)),
     taxonomy: Object.freeze([...input.taxonomy.nodes]),
-    sections: Object.freeze([...input.schemaPack.sections].sort((left, right) => left.ordinal - right.ordinal)),
-    fields: Object.freeze([...input.schemaPack.fields].sort((left, right) => left.ordinal - right.ordinal)),
+    sections: schemaPack.sections,
+    fields: schemaPack.fields,
   })
 }
 
@@ -71,6 +75,10 @@ export function buildScopedSchemaWikiPath(
     || scope.scope_sha256 !== expected.scope_sha256
   )) {
     throw new Error('SCHEMA_WIKI_SCOPE_DRIFT')
+  }
+  assertValidatedSchemaWikiScope(scope as SchemaWikiScopeV1)
+  if (expected) {
+    assertValidatedSchemaWikiScope(expected as SchemaWikiScopeV1)
   }
   if (
     !scope.space_id || !scope.raw_kb_id || !scope.wiki_kb_id

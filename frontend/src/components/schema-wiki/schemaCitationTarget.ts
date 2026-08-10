@@ -63,6 +63,7 @@ const TARGET_KEYS = [
 
 const BBOX_KEYS = ['x0', 'y0', 'x1', 'y1', 'coordinate_space'] as const
 const HEX_64 = /^[0-9a-f]{64}$/
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -75,7 +76,10 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
 }
 
 function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim() === value && value.length > 0
+  return typeof value === 'string'
+    && value.trim() === value
+    && value.length > 0
+    && !CONTROL_CHARACTER.test(value)
 }
 
 function isHash(value: unknown): value is string {
@@ -118,8 +122,8 @@ export function parseCitationTarget(value: unknown): CitationTargetV1 {
   }
   if (
     !isNonEmptyString(value.source_revision_id)
-    || value.source_revision_id === 'current'
-    || value.source_revision_id === 'latest'
+    || value.source_revision_id.toLowerCase() === 'current'
+    || value.source_revision_id.toLowerCase() === 'latest'
   ) {
     throw new Error('CITATION_REVISION_NOT_PINNED')
   }

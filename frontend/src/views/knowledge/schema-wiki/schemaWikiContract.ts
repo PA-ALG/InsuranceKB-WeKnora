@@ -6,6 +6,8 @@ import {
 } from '../../../components/schema-wiki/schemaCitationTarget.ts'
 
 const HEX_64 = /^[0-9a-f]{64}$/
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/
+const validatedScopes = new WeakSet<object>()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -18,7 +20,10 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
 }
 
 function isId(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.trim() === value
+  return typeof value === 'string'
+    && value.length > 0
+    && value.trim() === value
+    && !CONTROL_CHARACTER.test(value)
 }
 
 function isHash(value: unknown): value is string {
@@ -43,13 +48,21 @@ export function parseSchemaWikiScope(value: unknown): SchemaWikiScopeV1 {
   ) {
     throw new Error('SCHEMA_WIKI_SCOPE_INVALID')
   }
-  return Object.freeze({
+  const scope = Object.freeze({
     version: value.version,
     space_id: value.space_id,
     raw_kb_id: value.raw_kb_id,
     wiki_kb_id: value.wiki_kb_id,
     scope_sha256: value.scope_sha256,
   })
+  validatedScopes.add(scope)
+  return scope
+}
+
+export function assertValidatedSchemaWikiScope(value: SchemaWikiScopeV1): void {
+  if (!validatedScopes.has(value)) {
+    throw new Error('SCHEMA_WIKI_SCOPE_INVALID')
+  }
 }
 
 export interface SchemaPackV1 {

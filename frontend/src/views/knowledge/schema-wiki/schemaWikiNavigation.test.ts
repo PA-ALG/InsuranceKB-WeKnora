@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { bootstrapSchemaWikiClient } from '../../../api/schema-wiki/index.ts'
+import { parseSchemaPack, parseSchemaWikiScope } from './schemaWikiContract.ts'
 import {
   assertStableTaxonomyReparent,
   buildScopedSchemaWikiPath,
@@ -18,6 +19,14 @@ test('a Wiki-enabled knowledge base defaults to Schema Wiki without falling back
 })
 
 test('domain and section navigation is produced from validated configuration', () => {
+  const schemaPack = parseSchemaPack({
+    version: 'schema-pack.v1',
+    domain_id: 'configured-domain',
+    schema_pack_id: 'configured-pack.v1',
+    schema_pack_sha256: H('2'),
+    sections: [{ section_id: 'configured-section', ordinal: 0, field_ids: ['configured-field'] }],
+    fields: [{ field_id: 'configured-field', ordinal: 0 }],
+  })
   const navigation = projectSchemaWikiNavigation({
     domains: [{
       domain_id: 'configured-domain',
@@ -35,15 +44,23 @@ test('domain and section navigation is produced from validated configuration', (
         ordinal: 0,
       }],
     },
-    schemaPack: {
-      schema_pack_id: 'configured-pack.v1',
-      sections: [{ section_id: 'configured-section', ordinal: 0, field_ids: ['configured-field'] }],
-      fields: [{ field_id: 'configured-field', ordinal: 0 }],
-    },
+    schemaPack,
   })
 
   assert.deepEqual(navigation.domains.map(item => item.domain_id), ['configured-domain'])
   assert.deepEqual(navigation.sections.map(item => item.section_id), ['configured-section'])
+  assert.throws(() => projectSchemaWikiNavigation({
+    domains: navigation.domains.map(item => ({ ...item })),
+    taxonomy: { nodes: [] },
+    schemaPack: {
+      ...schemaPack,
+      sections: [{
+        section_id: 'configured-section',
+        ordinal: 0,
+        field_ids: ['configured-field', 'configured-field'],
+      }],
+    },
+  }), { message: 'SCHEMA_PACK_TOPOLOGY_INVALID' })
 })
 
 test('taxonomy reparent changes navigation only and preserves stable authority identities', () => {
@@ -69,12 +86,13 @@ test('taxonomy reparent changes navigation only and preserves stable authority i
 })
 
 test('all Schema paths are derived from one bootstrapped scope', () => {
-  const scope = {
+  const scope = parseSchemaWikiScope({
+    version: 'schema-wiki-scope.v1',
     space_id: 'space-1',
     raw_kb_id: 'raw-1',
     wiki_kb_id: 'wiki-1',
     scope_sha256: H('4'),
-  }
+  })
   assert.equal(
     buildScopedSchemaWikiPath(scope, '/entities/entity-1/versions/version-1/current'),
     '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema/entities/entity-1/versions/version-1/current',
@@ -82,6 +100,9 @@ test('all Schema paths are derived from one bootstrapped scope', () => {
   assert.throws(() => buildScopedSchemaWikiPath({ ...scope, raw_kb_id: 'raw-foreign' }, '/domains', {
     expectedScope: scope,
   }), { message: 'SCHEMA_WIKI_SCOPE_DRIFT' })
+  assert.throws(() => buildScopedSchemaWikiPath({ ...scope }, '/domains'), {
+    message: 'SCHEMA_WIKI_SCOPE_INVALID',
+  })
 })
 
 test('the API client bootstraps Wiki scope before any scoped Schema request', async () => {

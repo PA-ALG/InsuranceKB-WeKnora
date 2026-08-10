@@ -71,6 +71,14 @@ test('knowledge-only or current/latest references are not formal citations', () 
     ...target(12),
     source_revision_id: 'latest',
   }), { message: 'CITATION_REVISION_NOT_PINNED' })
+  assert.throws(() => parseCitationTarget({
+    ...target(12),
+    source_revision_id: 'CURRENT',
+  }), { message: 'CITATION_REVISION_NOT_PINNED' })
+  assert.throws(() => parseCitationTarget({
+    ...target(12),
+    locator_id: 'block-12\u0000foreign',
+  }), { message: 'CITATION_TARGET_INCOMPLETE' })
 })
 
 test('missing or zero page is PAGE_UNAVAILABLE and never defaults to page one', () => {
