@@ -458,25 +458,6 @@ def build_schema_wiki_review_bundle_596_1(
         raise SchemaWikiCompilationError("REVIEW_BUNDLE_INVALID") from None
 
 
-def require_manifest_bound_review_596_1(
-    *,
-    release: KnowledgeWikiReleaseV1,
-    review_bundle: SchemaWikiReviewBundleV1,
-    human_batch_hash: str,
-    ready_receipt_digest: str,
-) -> SchemaWikiReviewBundleV1:
-    try:
-        exact = validate_schema_wiki_review_bundle(review_bundle, release)
-    except (AttributeError, TypeError, ValueError, SchemaWikiContractError):
-        raise SchemaWikiCompilationError("REVIEW_BUNDLE_INVALID") from None
-    if (
-        human_batch_hash != exact.review_bundle_sha256
-        or ready_receipt_digest != exact.review_bundle_sha256
-    ):
-        raise SchemaWikiCompilationError("REVIEW_HANDOFF_INVALID")
-    return exact
-
-
 __all__ = [
     "CitationAuthority5961Port",
     "SCHEMA_WIKI_REVIEW_POLICY_SHA256",
@@ -484,5 +465,4 @@ __all__ = [
     "build_schema_field_page_596_1",
     "build_schema_wiki_review_bundle_596_1",
     "compile_schema_wiki_release_596_1",
-    "require_manifest_bound_review_596_1",
 ]

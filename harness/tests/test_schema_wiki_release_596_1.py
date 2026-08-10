@@ -16,6 +16,7 @@ from insurance_harness.compiler.evidence_verifier import (
     FreeformEvidenceV1,
     FreeformFieldOutputV1,
 )
+from insurance_harness.knowledge_compiler import schema_wiki_release_596_1
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationBBoxV1,
     CitationMemberBindingV1,
@@ -27,6 +28,7 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     SchemaFieldPageV1,
     SchemaPackV1,
     SchemaSectionV1,
+    SchemaWikiContractError,
     SchemaWikiMemberV1,
     SchemaWikiReviewBundleV1,
     TaxonomyNodeV1,
@@ -40,7 +42,6 @@ from insurance_harness.knowledge_compiler.schema_wiki_release_596_1 import (
     build_schema_field_page_596_1,
     build_schema_wiki_review_bundle_596_1,
     compile_schema_wiki_release_596_1,
-    require_manifest_bound_review_596_1,
 )
 
 
@@ -98,7 +99,6 @@ class _SyntheticTrustedCitationAuthority:
             "32402c40-6131-4049-8080-cc5b68188cd3",
         ),
     }
-
     def resolve(
         self,
         *,
@@ -571,7 +571,7 @@ def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -
         )
 
 
-def test_review_bundle_binds_manifest_members_and_named_human_handoff() -> None:
+def test_review_bundle_binds_manifest_members_for_existing_service_review() -> None:
     release = _review_release()
 
     bundle = build_schema_wiki_review_bundle_596_1(release=release)
@@ -580,37 +580,24 @@ def test_review_bundle_binds_manifest_members_and_named_human_handoff() -> None:
     assert bundle.manifest_digest == release.manifest_digest
     assert bundle.release_sha256 == release.release_sha256
     assert validate_schema_wiki_review_bundle(bundle, release) == bundle
-    assert (
-        require_manifest_bound_review_596_1(
-            release=release,
-            review_bundle=bundle,
-            human_batch_hash=bundle.review_bundle_sha256,
-            ready_receipt_digest=bundle.review_bundle_sha256,
-        )
-        == bundle
+
+
+def test_lane_b_exposes_no_caller_selected_review_approval_handoff() -> None:
+    assert not hasattr(
+        schema_wiki_release_596_1,
+        "require_manifest_bound_review_596_1",
     )
+    assert "require_manifest_bound_review_596_1" not in schema_wiki_release_596_1.__all__
 
 
-@pytest.mark.parametrize("drift", ["human_batch", "ready_receipt", "manifest"])
-def test_review_bundle_rejects_reused_decision_or_manifest_drift(drift: str) -> None:
+def test_review_bundle_rejects_manifest_drift_before_authority_handoff() -> None:
     release = _review_release()
     bundle = build_schema_wiki_review_bundle_596_1(release=release)
-    human_batch_hash = bundle.review_bundle_sha256
-    ready_receipt_digest = bundle.review_bundle_sha256
-    if drift == "human_batch":
-        human_batch_hash = "f" * 64
-    elif drift == "ready_receipt":
-        ready_receipt_digest = "f" * 64
-    else:
-        release = release.model_copy(update={"manifest_digest": "f" * 64})
+    forged_release = release.model_copy()
+    object.__setattr__(forged_release, "manifest_digest", "f" * 64)
 
-    with pytest.raises(SchemaWikiCompilationError):
-        require_manifest_bound_review_596_1(
-            release=release,
-            review_bundle=bundle,
-            human_batch_hash=human_batch_hash,
-            ready_receipt_digest=ready_receipt_digest,
-        )
+    with pytest.raises(SchemaWikiContractError):
+        validate_schema_wiki_review_bundle(bundle, forged_release)
 
 
 def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> None:
