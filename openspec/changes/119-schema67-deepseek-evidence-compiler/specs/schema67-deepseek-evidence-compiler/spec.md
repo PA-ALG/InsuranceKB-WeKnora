@@ -159,10 +159,11 @@ transport. There SHALL be no provider, endpoint or model fallback.
 
 Before credential access, the non-secret authority SHALL join the exact tenant
 ID, Space ID and one unique active `KnowledgeQA` model-row identity. That row
-SHALL bind its stable row ID, source `deepseek`, name `deepseek-v4-flash` and
-base URL `https://api.deepseek.com/v1`. Missing, duplicate, cross-tenant,
-cross-Space or drifted authority SHALL fail closed with credential and provider
-call counts both zero.
+SHALL bind its stable row ID, row source `remote`, runtime provider `deepseek`,
+name `deepseek-v4-flash` and base URL `https://api.deepseek.com/v1`. The
+execution identity SHALL independently bind provider `deepseek`. Missing,
+duplicate, cross-tenant, cross-Space or drifted authority SHALL fail closed with
+credential and provider call counts both zero.
 
 The exact execution SHALL contain
 eight main tasks covering the 46 executable fields and SHALL append the exact 21

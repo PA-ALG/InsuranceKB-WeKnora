@@ -144,20 +144,25 @@
   - The two-file DeepSeek format-check is not claimed as PASS: the production
     module and focused test report historical whole-file formatting differences,
     and no formatting rewrite was performed.
-  - Provider, WeKnora, DB, credential, Excel and Golden actions are all `0`.
-    Real Candidate publication, evaluator execution and real Wiki execution
-    remain NOT RUN; this closes no real vertical loop.
-  - [ ] Correct the successor declaration to provider `deepseek`, official base
+  - At this provider-zero closeout checkpoint, provider, WeKnora, DB,
+    credential, Excel and Golden actions were all `0`; Candidate publication,
+    evaluator execution and real Wiki execution were NOT RUN. The later T16
+    terminal below supersedes only the provider-execution portion.
+  - [x] T15m Correct the successor declaration to provider `deepseek`, official base
     URL `https://api.deepseek.com/v1`, exact model `deepseek-v4-flash`,
     request-level `thinking={"type":"disabled"}`, no `enable_thinking` field
     and JSON-object response format. Explicitly reject `aliyun`, DashScope and
     `deepseek-v4-flash-0731`; require the exact tenant/Space/unique active
-    `KnowledgeQA` model-row non-secret identity before credential access.
+    `KnowledgeQA` model-row non-secret identity before credential access, with
+    row source `remote`, runtime provider `deepseek` and execution provider
+    `deepseek`.
     Preserve the v9 calls made under the old `aliyun` provider label only as
     `prior_provider_calls=2` cross-identity governance-budget history, never as
     new response semantics, model-receipt or Candidate ancestry; keep current
     exact eight and lifetime exact ten. Do not claim a model-quality
-    improvement. This specification corrective is provider-zero.
-- [ ] T16 After total-control verification and explicit user authorization, run
-  one bounded DeepSeek batch, freeze outputs, then perform offline semantic and
-  Evidence scoring against the approved expert package.
+    improvement. This specification corrective was completed provider-zero.
+- [x] T16 After total-control verification and explicit user authorization, the
+  exact8 official-DeepSeek batch was executed exactly once. It terminated
+  `EXTRACTOR_RESPONSE_INVALID`; Candidate remained absent and no offline
+  Candidate semantic/Evidence scoring ran. The failed identity is frozen and
+  MUST NOT be rerun.

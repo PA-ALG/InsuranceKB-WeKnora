@@ -79,9 +79,10 @@ excluded from this Mission.
    access or provider transport; no provider, endpoint or model fallback is
    permitted. Before credential access, the non-secret authority also binds
    the exact tenant ID, Space ID and one unique active `KnowledgeQA` model row:
-   stable row ID, source `deepseek`, name `deepseek-v4-flash` and the exact
-   official base URL. Missing, duplicate or drifted authority remains
-   zero-credential and zero-provider.
+   stable row ID, row source `remote`, runtime provider `deepseek`, name
+   `deepseek-v4-flash` and the exact official base URL. The execution identity
+   independently remains provider `deepseek`. Missing, duplicate or drifted
+   authority remains zero-credential and zero-provider.
    The response format is code-owned, participates in the execution identity
    and is reused unchanged by the initial request, identical retry and
    response-contract repair. The model response is semantic-only: field ID, state,

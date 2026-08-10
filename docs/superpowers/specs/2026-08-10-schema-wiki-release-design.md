@@ -8,17 +8,16 @@
 
 ## 1. 决策摘要
 
-建设一个通用的 **Schema Wiki 引擎**。引擎把任意 `KnowledgeDomain` 的已批准
-`SchemaPack`、冻结 Candidate 和可回放 Evidence，确定性编译成一整版
+本期只建设平安 e 生保 `596-1` 医疗险的 **Schema Wiki 纵切**。它把已批准的
+医疗险 `SchemaPack`、冻结 Candidate 和可回放 Evidence，确定性编译成一整版
 `KnowledgeWikiRelease`，经具名人工审核后，由 WeKnora 原子激活为唯一 Active
-Head。
+Head。下述通用领域对象只冻结未来兼容边界，不授权或交付通用平台。
 
 “产品 Wiki”只是一个 KnowledgeDomain，不是平台硬编码的唯一形态：
 
 - 医疗险产品 Wiki 使用医疗险 SchemaPack；首个纵切是平安 e 生保 `596-1`；
-- 权益 Wiki 使用权益 SchemaPack，覆盖“臻享家医”等权益实体；
-- 后续条款知识、服务知识、运营规则等领域可使用自己的 SchemaPack，但复用同一
-  Candidate、Citation、Release 和审核边界。
+- 权益 Wiki（包括“臻享家医”）和后续条款知识、服务知识、运营规则属于未来
+  Mission；本期不实现这些知识域或跨域复用。
 
 当前 WeKnora 从文档 chunks 自动生成的 Wiki 保留为 **材料 Wiki**。它用于浏览、
 检索和回到原始材料，不因页面看起来结构化就成为 Schema 事实，也不得冒充产品
@@ -51,7 +50,7 @@ Wiki、权益 Wiki 或正式 Active Release。
   正式发布和正式回答。合法的 `unknown` Field member 不属于结构不完整。
 - **No fallback**：Schema 发布失败时不得退回 generic Wiki 页面充当正式页面。
 
-## 3. 通用领域模型
+## 3. 未来兼容领域模型（本期不实现通用平台）
 
 ### 3.1 核心对象
 
@@ -273,8 +272,12 @@ CitationTarget，不能反向覆盖正式字段。
 
 本设计不把目标能力写成当前事实。2026-08-10 的真实状态是：
 
-1. **generic chunks → Wiki 链在线**：`medical-insurance-mvp` 已从三份材料生成 generic
-   Wiki 页面和索引；它们是材料 Wiki，不是 Schema67 Release。
+1. **generic chunks → Wiki 是外部运行快照**：KB
+   `b1f1764c-443d-46b8-98e3-d5aa5e55eb42` 的三份材料已走过 WeKnora generic
+   Wiki 链；该状态不属于本 Git tree，也不是 Schema67 Release 证据。terms 文档
+   ID 为 `f987fc16-222a-4246-8ca0-22c1a81dd6d9`，rate 文档 ID 为
+   `32402c40-6131-4049-8080-cc5b68188cd3`；brochure 文档 ID 未取得，不得虚构。
+   仅 rate ingest 回执记录 `pages_affected=14`，这不是三份材料的总页数或总页面数。
 2. **Schema Candidate absent**：真实 exact8 DeepSeek 执行以
    `EXTRACTOR_RESPONSE_INVALID` 终止，`candidate_published=false`，未产生可发布
    CandidateV2。
@@ -284,8 +287,9 @@ CitationTarget，不能反向覆盖正式字段。
 4. **Release UI 未接**：WeKnora 已有 generic Wiki UI 和 release/custody 能力基础，
    但上述 Domain/Entity/Version/Section/Field 导航、Draft review、Citation viewer 与
    Active Release 读取尚未形成正式纵切。
-5. **不能原地升级 generic 页面**：当前 14 个 generic 页面不得通过改 slug、标题或
-   metadata 冒充 67 个 Field Pages。
+5. **不能原地升级 generic 页面**：外部材料 Wiki 页面不得通过改 slug、标题或
+   metadata 冒充 67 个 Field Pages；rate 的 `pages_affected=14` 也不构成
+   Schema Field Page 闭包。
 
 因此当前终态仍是 `NO_SCHEMA_WIKI_ACTIVE_RELEASE`。这不影响材料 Wiki 的已有浏览
 价值，但应用不得把它当作正式 Schema 结论。
@@ -299,7 +303,9 @@ CitationTarget，不能反向覆盖正式字段。
 2. 注册医疗险 KnowledgeDomain、`medical-schema67.v1` SchemaPack 和 Active
    Taxonomy。
 3. 创建稳定 Entity：平安 e 生保；绑定 ProductVersion `596-1`。
-4. 修复并执行 exact8 Schema67 编译，产生 concrete sealed CandidateV2。
+4. 对已失败 exact8 完成根因分析，形成新的 approved successor identity 和单次
+   授权后才执行 Schema67 编译；不得重跑已冻结的失败 identity。成功后产生
+   concrete sealed CandidateV2。
 5. 确定性生成 1 个 Version root、7 个 Section indexes、67 个 Field Pages、引用、
    redirects、search/index members 和 manifest。
 6. 具名人工审核 exact Candidate/manifest，形成 Draft → PublishAuthorization。
@@ -323,7 +329,7 @@ Entity/Version namespace 独立呈现，而不是为每款产品新建一套 ser
 | 读取一致 | page、Agent payload、search/index 使用同一 release_id |
 | 回滚 | R2 → R1 原子回滚；current 与 pinned read 均不混版 |
 | generic 隔离 | 材料 Wiki 可浏览，但不能进入正式回答或替代 Schema Field Page |
-| taxonomy 演进 | “臻享家医” reparent 后 Entity ID 不变、旧路径重定向、历史 snapshot 可读 |
+| taxonomy 演进 | `596-1` 医疗险分类路径调整后 Entity ID 不变、旧路径重定向、历史 snapshot 可读 |
 
 ## 12. 明确不做
 
@@ -336,6 +342,7 @@ Entity/Version namespace 独立呈现，而不是为每款产品新建一套 ser
 - 不让 unknown 自动变成 absent，不从相邻产品或旧版本补答案；
 - 不把 Harness receipt 或本地 manifest 变成第二个 serving Active Head；
 - 不在本设计中实现 Release Kernel、UI、migration、provider 调用或运行时部署；
+- 不在本期实现权益 Wiki、“臻享家医”或跨知识域通用平台；
 - 不以本设计文档授权生产代码、数据库、OpenSpec 或外部系统写入。
 
 ## 13. 后续实现前置门

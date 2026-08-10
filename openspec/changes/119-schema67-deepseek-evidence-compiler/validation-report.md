@@ -358,21 +358,25 @@ existing `Schema67BatchExecutionReceiptV1` and `Schema67BudgetReportV1` only.
 
 ### Official DeepSeek identity specification correction
 
-- The user-selected successor authority is provider `deepseek`, protocol
-  `openai_compatible`, official endpoint `https://api.deepseek.com/v1`, exact
-  model `deepseek-v4-flash`, request-level
+- The user-selected successor model row binds row source `remote`, runtime
+  provider `deepseek`, protocol `openai_compatible`, official endpoint
+  `https://api.deepseek.com/v1` and exact model `deepseek-v4-flash`. Its
+  execution identity independently binds provider `deepseek`, request-level
   `thinking={"type":"disabled"}`, no `enable_thinking` field and
   `response_format={"type":"json_object"}`.
-- This four-document correction does not claim that production, tests or an
-  execution package already implement the corrected provider declaration.
-  Their RED-to-GREEN evidence and frozen successor identity must be recorded
-  separately before authorization. Provider, credential, DB, WeKnora, Golden,
-  Candidate, evaluator and Wiki actions remain `0` / NOT RUN here.
+- The integrated production compiler, focused tests and frozen execution
+  package implement that corrected declaration. Provider-zero verification
+  covers the declaration and fail-closed foreign-identity paths; it is not a
+  successful real-model result.
 - The immutable v9 external/internal ledger records two calls against the same
   official endpoint, model and request-envelope policy. Those calls remain
   `prior_provider_calls=2` governance-budget history only; their responses and
   receipts are not new response semantics, model-receipt or Candidate ancestry.
   The successor remains fixed at current exact eight, cumulative exact ten and
   zero retry or repair calls.
-- Provider-zero specification correction is not evidence of improved model
-  quality, eight successful responses, Candidate publication or Wiki readiness.
+- After total-control verification and explicit authorization, the exact8
+  official-DeepSeek batch was executed exactly once and terminated
+  `EXTRACTOR_RESPONSE_INVALID`. Candidate remained absent, evaluator/offline
+  Candidate scoring did not run, and the failed execution identity MUST NOT be
+  rerun. This terminal is not evidence of improved model quality, eight
+  successful responses, Candidate publication or Wiki readiness.
