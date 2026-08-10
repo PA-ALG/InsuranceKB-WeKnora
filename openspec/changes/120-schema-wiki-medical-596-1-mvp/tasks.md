@@ -10,31 +10,31 @@
 
 ## Task 1 · Lane A canonical contracts
 
-- [ ] TDD the shared Python/Go canonical Domain, SchemaPack, Entity/Version, Taxonomy,
+- [x] TDD the shared Python/Go canonical Domain, SchemaPack, Entity/Version, Taxonomy,
   Citation, member, release and preparation contracts plus one cross-language vector.
-- [ ] Derive valid member topology from the supplied validated SchemaPack; do not hardcode
+- [x] Derive valid member topology from the supplied validated SchemaPack; do not hardcode
   medical 7/67 rules in shared validators.
-- [ ] Freeze the non-circular citation/member binding equation and the root-member taxonomy
+- [x] Freeze the non-circular citation/member binding equation and the root-member taxonomy
   payload required by pinned reads.
-- [ ] Commit the A1 interface before Lane B production imports it.
+- [x] Commit the A1 interface before Lane B production imports it.
 
 ## Task 2 · Lane B medical pack
 
-- [ ] RED caller-selected schema/domain/entity/version/taxonomy, wrong 7-section order,
+- [x] RED caller-selected schema/domain/entity/version/taxonomy, wrong 7-section order,
   missing/extra/duplicate fields and any ordered67 drift.
-- [ ] GREEN the code-owned `medical-schema67.v1` pack, stable Ping An eShengBao entity,
+- [x] GREEN the code-owned `medical-schema67.v1` pack, stable Ping An eShengBao entity,
   product version `596-1`, initial medical taxonomy and 16/15/6/11/9/5/5 mapping.
 
 ## Task 3 · Lane B sealed Candidate compiler
 
-- [ ] RED absent/duck/self-rehashed/legacy Candidate inputs and prove zero release output
+- [x] RED absent/duck/self-rehashed/legacy Candidate inputs and prove zero release output
   plus `SCHEMA_WIKI_COMPILATION_NOT_COMPLETE` with no generic fallback.
-- [ ] RED every tri-state, Evidence/revision/page/bbox/hash drift, non-circular citation
+- [x] RED every tri-state, Evidence/revision/page/bbox/hash drift, non-circular citation
   binding, 75-member completeness, root taxonomy payload and deterministic vector.
-- [ ] RED manifest mutation and reused named-human receipt; bind exact Candidate, release,
+- [x] RED manifest mutation and reused named-human receipt; bind exact Candidate, release,
   manifest, members, citation bindings and schema/entity/taxonomy identities in
   `SchemaWikiReviewBundleV1`.
-- [ ] GREEN only after the Lane A A1 interface commit is mechanically consumed.
+- [x] GREEN only after the Lane A A1 interface commit is mechanically consumed.
 
 ## Task 4 · Lane A existing-release serving adapter
 
