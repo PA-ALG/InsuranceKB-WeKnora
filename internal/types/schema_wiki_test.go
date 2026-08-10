@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -139,6 +140,97 @@ func TestSchemaWikiGoMembersCarryExactClosedTypedPayloads(t *testing.T) {
 	}
 	if err := ValidateKnowledgeWikiRelease(vector.Release, vector.SchemaPack); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func schemaWikiEquivalentJSONBText(t *testing.T, raw json.RawMessage) json.RawMessage {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
+	var out bytes.Buffer
+	out.WriteString("{ ")
+	for index, key := range keys {
+		if index > 0 {
+			out.WriteString(", ")
+		}
+		encodedKey, err := json.Marshal(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out.Write(encodedKey)
+		out.WriteString(" : ")
+		out.Write(fields[key])
+	}
+	out.WriteString(" }")
+	return out.Bytes()
+}
+
+func TestCanonicalSchemaWikiMemberPayloadNormalizesJSONBWithoutWeakeningClosedWorld(t *testing.T) {
+	t.Parallel()
+	vector, _ := loadSchemaWikiContractVector(t)
+	for _, member := range []SchemaWikiMemberV1{
+		vector.Release.Members[0],
+		vector.Release.Members[1],
+		vector.Release.Members[3],
+	} {
+		member := member
+		t.Run(member.MemberKind, func(t *testing.T) {
+			normalized := schemaWikiEquivalentJSONBText(t, member.Payload)
+			if bytes.Equal(normalized, member.Payload) {
+				t.Fatal("JSONB fixture did not change text formatting")
+			}
+			canonical, err := CanonicalSchemaWikiMemberPayload(member.MemberKind, normalized)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(canonical, member.Payload) {
+				t.Fatal("canonicalized payload differs from frozen A1 payload")
+			}
+		})
+	}
+
+	field := vector.Release.Members[3]
+	var unknown map[string]any
+	if err := json.Unmarshal(field.Payload, &unknown); err != nil {
+		t.Fatal(err)
+	}
+	unknown["foreign_authority"] = true
+	unknownRaw, err := json.Marshal(unknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CanonicalSchemaWikiMemberPayload("field", unknownRaw); err == nil {
+		t.Fatal("unknown payload field unexpectedly canonicalized")
+	}
+	if _, err := CanonicalSchemaWikiMemberPayload(
+		"field", append(append(json.RawMessage(nil), field.Payload...), []byte(" {}")...),
+	); err == nil {
+		t.Fatal("trailing JSON unexpectedly canonicalized")
+	}
+	if _, err := CanonicalSchemaWikiMemberPayload("unknown", field.Payload); err == nil {
+		t.Fatal("unknown member kind unexpectedly canonicalized")
+	}
+	if _, err := CanonicalSchemaWikiMemberPayload("field", vector.Release.Members[0].Payload); err == nil {
+		t.Fatal("kind-swapped payload unexpectedly canonicalized")
+	}
+	unknown = map[string]any{}
+	if err := json.Unmarshal(field.Payload, &unknown); err != nil {
+		t.Fatal(err)
+	}
+	unknown["value_snapshot"] = "Cafe\u0301"
+	nonNFC, err := json.Marshal(unknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CanonicalSchemaWikiMemberPayload("field", nonNFC); err == nil {
+		t.Fatal("non-NFC payload unexpectedly canonicalized")
 	}
 }
 
@@ -358,6 +450,139 @@ func TestSchemaWikiGoCitationClosureUsesCanonicalKeyForNonlexicalFields(t *testi
 
 	if err := ValidateKnowledgeWikiRelease(forged, pack); err != nil {
 		t.Fatalf("non-lexical field order rejected canonical citation closure: %v", err)
+	}
+}
+
+func TestSchemaWikiGoRejectsFullyRehashedDuplicateCitationID(t *testing.T) {
+	t.Parallel()
+	vector, _ := loadSchemaWikiContractVector(t)
+	memberIndex := 3
+	var page SchemaFieldPageV1
+	if err := json.Unmarshal(vector.Release.Members[memberIndex].Payload, &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Citations) != 1 {
+		t.Fatalf("citation count = %d, want 1", len(page.Citations))
+	}
+	duplicate := page.Citations[0]
+	duplicate.LocatorRef = "block-duplicate"
+	duplicate.QuoteSnapshot = "Distinct exact quote for duplicate identifier"
+	quoteHash, _, err := schemaWikiSHA256(
+		"schema-wiki-text.v1", map[string]any{"text": duplicate.QuoteSnapshot},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate.QuoteSHA256 = quoteHash
+	duplicate.ContentSnapshotSHA256 = strings.Repeat("b", 64)
+	duplicate.CitationSHA256 = ""
+	duplicateHash, _, err := schemaWikiHashWithout(
+		duplicate.Contract, duplicate, "citation_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate.CitationSHA256 = duplicateHash
+	if duplicate.CitationID != page.Citations[0].CitationID ||
+		duplicate.CitationSHA256 == page.Citations[0].CitationSHA256 {
+		t.Fatal("duplicate-ID fixture did not isolate identifier reuse")
+	}
+	page.Citations = append(page.Citations, duplicate)
+	page.FieldPageSHA256 = ""
+	fieldHash, _, err := schemaWikiHashWithout(page.Contract, page, "field_page_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page.FieldPageSHA256 = fieldHash
+	pageRaw, err := schemaWikiCanonicalJSON(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.Members[memberIndex].Payload = pageRaw
+	vector.Release.Members[memberIndex].PayloadSHA256 = fieldHash
+	vector.Release.Members[memberIndex].MemberDigest = ""
+	memberDigest, _, err := schemaWikiHashWithout(
+		vector.Release.Members[memberIndex].Contract,
+		vector.Release.Members[memberIndex],
+		"member_digest",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.Members[memberIndex].MemberDigest = memberDigest
+
+	bindings := make([]CitationMemberBindingV1, 0, 2)
+	for _, citation := range page.Citations {
+		binding := CitationMemberBindingV1{
+			Contract:         "citation-member-binding.v1",
+			CitationSHA256:   citation.CitationSHA256,
+			LogicalMemberRef: vector.Release.Members[memberIndex].MemberRef,
+			MemberDigest:     memberDigest,
+		}
+		bindingHash, _, hashErr := schemaWikiHashWithout(
+			binding.Contract, binding, "binding_sha256",
+		)
+		if hashErr != nil {
+			t.Fatal(hashErr)
+		}
+		binding.BindingSHA256 = bindingHash
+		bindings = append(bindings, binding)
+	}
+	sort.Slice(bindings, func(left, right int) bool {
+		leftKey := bindings[left].LogicalMemberRef + "\x00" + bindings[left].CitationSHA256
+		rightKey := bindings[right].LogicalMemberRef + "\x00" + bindings[right].CitationSHA256
+		return leftKey < rightKey
+	})
+	vector.Release.CitationBindings = bindings
+	manifest, err := schemaWikiManifestDigest(vector.Release.Members, bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.ManifestDigest = manifest
+	vector.Release.ReleaseSHA256 = ""
+	releaseHash, _, err := schemaWikiHashWithout(
+		vector.Release.Contract, vector.Release, "release_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vector.Release.ReleaseSHA256 = releaseHash
+
+	memberDigests := make([]string, len(vector.Release.Members))
+	for index, member := range vector.Release.Members {
+		memberDigests[index] = member.MemberDigest
+	}
+	bindingDigests := make([]string, len(bindings))
+	for index, binding := range bindings {
+		bindingDigests[index] = binding.BindingSHA256
+	}
+	bundle := SchemaWikiReviewBundleV1{
+		Contract:              "schema-wiki-review-bundle.v1",
+		CandidateSHA256:       vector.Release.CandidateSHA256,
+		ReleaseSHA256:         vector.Release.ReleaseSHA256,
+		ManifestDigest:        vector.Release.ManifestDigest,
+		OrderedMemberDigests:  memberDigests,
+		OrderedBindingSHA256s: bindingDigests,
+		ReviewPolicySHA256:    vector.Release.ReviewPolicySHA256,
+		DomainSHA256:          vector.Release.Domain.DomainSHA256,
+		TaxonomySHA256:        vector.Release.Taxonomy.TaxonomySHA256,
+		SchemaPackSHA256:      vector.Release.SchemaPack.SchemaPackSHA256,
+		EntityID:              vector.Release.Entity.EntityID,
+		VersionID:             vector.Release.EntityVersion.VersionID,
+	}
+	bundleHash, _, err := schemaWikiHashWithout(
+		bundle.Contract, bundle, "review_bundle_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.ReviewBundleSHA256 = bundleHash
+
+	if err := ValidateKnowledgeWikiRelease(vector.Release, vector.SchemaPack); err == nil {
+		t.Fatal("fully rehashed duplicate citation ID unexpectedly validated")
+	}
+	if err := ValidateSchemaWikiReviewBundle(bundle, vector.Release); err == nil {
+		t.Fatal("fully rehashed duplicate citation ID escaped review-bundle validation")
 	}
 }
 

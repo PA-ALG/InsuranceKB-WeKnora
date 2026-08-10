@@ -85,6 +85,7 @@ type RouterParams struct {
 	WeKnoraCloudHandler          *handler.WeKnoraCloudHandler
 	WikiPageHandler              *handler.WikiPageHandler
 	WikiReleaseHandler           *handler.WikiReleaseHandler
+	SchemaWikiHandler            *handler.SchemaWikiHandler
 }
 
 // NewRouter 创建新的路由
@@ -277,6 +278,12 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterWikiPageRoutesWithRelease(
 			v1,
 			params.WikiPageHandler,
+			params.WikiReleaseHandler,
+			rbacGuards,
+		)
+		RegisterSchemaWikiRoutes(
+			v1,
+			params.SchemaWikiHandler,
 			params.WikiReleaseHandler,
 			rbacGuards,
 		)

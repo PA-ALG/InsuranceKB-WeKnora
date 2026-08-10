@@ -228,6 +228,12 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		return service.WikiReleaseServiceOptions{}
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
+	must(container.Provide(func(releaseAuthority *service.WikiReleaseService) *service.SchemaWikiService {
+		// Exact-revision preview remains fail closed until its production
+		// adapter is frozen; SchemaWikiService returns the typed unavailable
+		// reason instead of substituting current/latest/page 1.
+		return service.NewSchemaWikiService(releaseAuthority, nil)
+	}))
 	must(container.Provide(service.NewEmbedChannelService))
 
 	// Web search service (needed by AgentService)
@@ -385,6 +391,12 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	// Wiki page handler
 	must(container.Provide(handler.NewWikiPageHandler))
 	must(container.Provide(handler.NewWikiReleaseHandler))
+	must(container.Provide(func(
+		repository *repository.WikiReleaseRepository,
+		schemaService *service.SchemaWikiService,
+	) *handler.SchemaWikiHandler {
+		return handler.NewSchemaWikiHandler(repository, schemaService)
+	}))
 	// IM integration
 	logger.Debugf(ctx, "[Container] Registering IM integration...")
 	must(container.Provide(imPkg.NewService))

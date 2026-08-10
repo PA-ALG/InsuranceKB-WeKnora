@@ -16,25 +16,21 @@ from insurance_harness.compiler.evidence_verifier import (
     FreeformEvidenceV1,
     FreeformFieldOutputV1,
 )
+from insurance_harness.goldenset.expert_golden_admission_596_2 import (
+    Schema67CandidateV2,
+)
 from insurance_harness.knowledge_compiler import schema_wiki_release_596_1
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationBBoxV1,
-    CitationMemberBindingV1,
     CitationTargetV1,
-    EntityIdentityV1,
-    EntityVersionV1,
-    KnowledgeDomainV1,
     KnowledgeWikiReleaseV1,
     SchemaFieldPageV1,
-    SchemaPackV1,
-    SchemaSectionV1,
+    SchemaRootPageV1,
+    SchemaSectionPageV1,
     SchemaWikiContractError,
-    SchemaWikiMemberV1,
     SchemaWikiReviewBundleV1,
-    TaxonomyNodeV1,
-    TaxonomySnapshotV1,
-    schema_wiki_manifest_digest,
     schema_wiki_sha256,
+    validate_knowledge_wiki_release,
     validate_schema_wiki_review_bundle,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_release_596_1 import (
@@ -316,148 +312,6 @@ def _known() -> tuple[
     return output, receipt, citation
 
 
-def _member(
-    *,
-    member_ref: str,
-    member_kind: str,
-    payload_sha256: str,
-    section_id: str | None = None,
-    field_id: str | None = None,
-) -> SchemaWikiMemberV1:
-    return _sealed(
-        SchemaWikiMemberV1,
-        "schema-wiki-member.v1",
-        "member_digest",
-        contract="schema-wiki-member.v1",
-        member_ref=member_ref,
-        member_kind=member_kind,
-        section_id=section_id,
-        field_id=field_id,
-        payload_sha256=payload_sha256,
-    )
-
-
-def _review_release() -> KnowledgeWikiReleaseV1:
-    _, receipt, citation = _known()
-    field_page = build_schema_field_page_596_1(
-        output=_known()[0],
-        evidence_receipt=receipt,
-        citation_authority=_ExactCitationAuthority((citation,)),
-    )
-    domain = _sealed(
-        KnowledgeDomainV1,
-        "knowledge-domain.v1",
-        "domain_sha256",
-        contract="knowledge-domain.v1",
-        domain_id="medical-insurance",
-        display_name="医疗险",
-    )
-    pack = _sealed(
-        SchemaPackV1,
-        "schema-pack.v1",
-        "schema_pack_sha256",
-        contract="schema-pack.v1",
-        schema_pack_id="medical-schema67.v1",
-        schema_version="v1",
-        domain_id=domain.domain_id,
-        ordered_field_ids=("product_code",),
-        sections=(
-            SchemaSectionV1(
-                section_id="product-overview",
-                display_name="产品概览",
-                ordered_field_ids=("product_code",),
-            ),
-        ),
-    )
-    taxonomy = _sealed(
-        TaxonomySnapshotV1,
-        "taxonomy-snapshot.v1",
-        "taxonomy_sha256",
-        contract="taxonomy-snapshot.v1",
-        domain_id=domain.domain_id,
-        taxonomy_version="medical-taxonomy.v1",
-        previous_snapshot_sha256=None,
-        nodes=(
-            TaxonomyNodeV1(
-                node_id="medical-product",
-                parent_node_id=None,
-                node_kind="category",
-                slug="medical-product",
-                stable_entity_id=None,
-                position=0,
-            ),
-            TaxonomyNodeV1(
-                node_id="ping-an-e-sheng-bao",
-                parent_node_id="medical-product",
-                node_kind="entity",
-                slug="ping-an-e-sheng-bao",
-                stable_entity_id="ping-an-e-sheng-bao",
-                position=0,
-            ),
-        ),
-        redirects=(),
-    )
-    entity = EntityIdentityV1(
-        domain_id=domain.domain_id,
-        entity_id="ping-an-e-sheng-bao",
-    )
-    version = EntityVersionV1(
-        entity_id=entity.entity_id,
-        version_id="ping-an-e-sheng-bao@596-1",
-        product_version_id="596-1",
-    )
-    members = (
-        _member(
-            member_ref=f"root:{version.version_id}",
-            member_kind="root",
-            payload_sha256=_sha("root-payload"),
-        ),
-        _member(
-            member_ref="section:product-overview",
-            member_kind="section",
-            section_id="product-overview",
-            payload_sha256=_sha("section-payload"),
-        ),
-        _member(
-            member_ref="field:product_code",
-            member_kind="field",
-            section_id="product-overview",
-            field_id="product_code",
-            payload_sha256=field_page.field_page_sha256,
-        ),
-    )
-    field_member = members[-1]
-    binding = _sealed(
-        CitationMemberBindingV1,
-        "citation-member-binding.v1",
-        "binding_sha256",
-        contract="citation-member-binding.v1",
-        citation_sha256=citation.citation_sha256,
-        logical_member_ref=citation.logical_member_ref,
-        member_digest=field_member.member_digest,
-    )
-    payload = {
-        "contract": "knowledge-wiki-release.v1",
-        "release_state": "draft",
-        "domain": domain,
-        "taxonomy": taxonomy,
-        "schema_pack": pack,
-        "entity": entity,
-        "entity_version": version,
-        "candidate_sha256": "a" * 64,
-        "review_policy_sha256": "b" * 64,
-        "members": members,
-        "citation_bindings": (binding,),
-        "manifest_digest": schema_wiki_manifest_digest(members, (binding,)),
-    }
-    return _sealed(
-        KnowledgeWikiReleaseV1,
-        "knowledge-wiki-release.v1",
-        "release_sha256",
-        **payload,
-    )
-
-
 @pytest.mark.parametrize("candidate", [None, _SelfIssuedCandidate(), object()])
 def test_compile_requires_concrete_freshly_replayed_schema67_candidate(
     candidate: object,
@@ -572,9 +426,12 @@ def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -
 
 
 def test_review_bundle_binds_manifest_members_for_existing_service_review() -> None:
-    release = _review_release()
+    candidate, release = _real_candidate_and_release()
 
-    bundle = build_schema_wiki_review_bundle_596_1(release=release)
+    bundle = build_schema_wiki_review_bundle_596_1(
+        candidate=candidate,
+        release=release,
+    )
 
     assert type(bundle) is SchemaWikiReviewBundleV1
     assert bundle.manifest_digest == release.manifest_digest
@@ -591,8 +448,11 @@ def test_lane_b_exposes_no_caller_selected_review_approval_handoff() -> None:
 
 
 def test_review_bundle_rejects_manifest_drift_before_authority_handoff() -> None:
-    release = _review_release()
-    bundle = build_schema_wiki_review_bundle_596_1(release=release)
+    candidate, release = _real_candidate_and_release()
+    bundle = build_schema_wiki_review_bundle_596_1(
+        candidate=candidate,
+        release=release,
+    )
     forged_release = release.model_copy()
     object.__setattr__(forged_release, "manifest_digest", "f" * 64)
 
@@ -623,7 +483,11 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
         candidate.ordered_field_ids
     )
     assert validate_schema_wiki_review_bundle(
-        build_schema_wiki_review_bundle_596_1(release=release), release
+        build_schema_wiki_review_bundle_596_1(
+            candidate=candidate,
+            release=release,
+        ),
+        release,
     )
 
     vector_path = (
@@ -633,3 +497,219 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
     assert json.loads(vector_path.read_text(encoding="utf-8")) == release.model_dump(
         mode="json"
     )
+
+
+def _real_candidate_and_release() -> tuple[
+    Schema67CandidateV2, KnowledgeWikiReleaseV1
+]:
+    from tests.test_expert_golden_admission_596_2_119 import (
+        _approved_cases,
+        _candidate_v2,
+    )
+
+    candidate = _candidate_v2(_approved_cases())
+    release = compile_schema_wiki_release_596_1(
+        candidate=candidate,
+        citation_authority=_SyntheticTrustedCitationAuthority(),
+    )
+    return candidate, release
+
+
+def _rehash_member_payload(member: dict[str, object]) -> None:
+    payload = member["payload"]
+    assert isinstance(payload, dict)
+    payload_contract = payload["contract"]
+    assert isinstance(payload_contract, str)
+    self_hash_field = {
+        "schema-root-page.v1": "root_page_sha256",
+        "schema-section-page.v1": "section_page_sha256",
+        "schema-field-page.v1": "field_page_sha256",
+    }.get(payload_contract)
+    if self_hash_field is not None:
+        payload[self_hash_field] = schema_wiki_sha256(
+            payload_contract,
+            {key: value for key, value in payload.items() if key != self_hash_field},
+        )
+        member["payload_sha256"] = payload[self_hash_field]
+    else:
+        member["payload_sha256"] = schema_wiki_sha256(payload_contract, payload)
+    member["member_digest"] = schema_wiki_sha256(
+        "schema-wiki-member.v1",
+        {key: value for key, value in member.items() if key != "member_digest"},
+    )
+
+
+def _rehash_release_payload(release: dict[str, object]) -> None:
+    members = release["members"]
+    bindings = release["citation_bindings"]
+    assert isinstance(members, list)
+    assert isinstance(bindings, list)
+    release["manifest_digest"] = schema_wiki_sha256(
+        "schema-wiki-manifest.v1",
+        {"members": members, "citation_bindings": bindings},
+    )
+    release["release_sha256"] = schema_wiki_sha256(
+        "knowledge-wiki-release.v1",
+        {key: value for key, value in release.items() if key != "release_sha256"},
+    )
+
+
+def test_compiler_carries_exact75_typed_canonical_member_payloads() -> None:
+    candidate, release = _real_candidate_and_release()
+    rows = release.model_dump(mode="json")["members"]
+
+    assert len(rows) == 75
+    assert all("payload" in row for row in rows), "descriptor-only members are forbidden"
+
+    assert isinstance(release.members[0].payload, SchemaRootPageV1)
+    root = rows[0]["payload"]
+    assert root == {
+        "contract": "schema-root-page.v1",
+        "domain_id": release.domain.domain_id,
+        "domain_sha256": release.domain.domain_sha256,
+        "schema_pack_id": release.schema_pack.schema_pack_id,
+        "schema_version": release.schema_pack.schema_version,
+        "schema_pack_sha256": release.schema_pack.schema_pack_sha256,
+        "entity_id": release.entity.entity_id,
+        "entity_version_id": release.entity_version.version_id,
+        "product_version_id": release.entity_version.product_version_id,
+        "taxonomy_version": release.taxonomy.taxonomy_version,
+        "taxonomy_sha256": release.taxonomy.taxonomy_sha256,
+        "product_display_name": "平安e生保（尊享版）医疗保险",
+        "ordered_section_ids": [
+            section.section_id for section in release.schema_pack.sections
+        ],
+        "root_page_sha256": rows[0]["payload_sha256"],
+    }
+
+    assert all(
+        isinstance(member.payload, SchemaSectionPageV1)
+        for member in release.members[1:8]
+    )
+    expected_section_payloads = [
+        {
+            "contract": "schema-section-page.v1",
+            "domain_id": release.domain.domain_id,
+            "domain_sha256": release.domain.domain_sha256,
+            "schema_pack_id": release.schema_pack.schema_pack_id,
+            "schema_version": release.schema_pack.schema_version,
+            "schema_pack_sha256": release.schema_pack.schema_pack_sha256,
+            "entity_id": release.entity.entity_id,
+            "entity_version_id": release.entity_version.version_id,
+            "product_version_id": release.entity_version.product_version_id,
+            "taxonomy_version": release.taxonomy.taxonomy_version,
+            "taxonomy_sha256": release.taxonomy.taxonomy_sha256,
+            "section_id": section.section_id,
+            "display_name": section.display_name,
+            "ordered_field_ids": list(section.ordered_field_ids),
+            "section_page_sha256": row["payload_sha256"],
+        }
+        for section, row in zip(
+            release.schema_pack.sections, rows[1:8], strict=True
+        )
+    ]
+    section_rows = rows[1:8]
+    assert [row["payload"] for row in section_rows] == expected_section_payloads
+
+    expected_pages = [
+        build_schema_field_page_596_1(
+            output=output,
+            evidence_receipt=receipt,
+            citation_authority=_SyntheticTrustedCitationAuthority(),
+        ).model_dump(mode="json")
+        for output, receipt in zip(
+            candidate.fields,
+            candidate.evidence_receipts,
+            strict=True,
+        )
+    ]
+    field_payloads = [row["payload"] for row in rows[8:]]
+    assert field_payloads == expected_pages
+
+
+def test_descriptor_only_release_is_rejected_even_when_hashes_are_self_consistent() -> None:
+    _, release = _real_candidate_and_release()
+    descriptor_only = release.model_dump(mode="json")
+    for member in descriptor_only["members"]:
+        member.pop("payload", None)
+
+    with pytest.raises((SchemaWikiContractError, ValueError)):
+        validate_knowledge_wiki_release(
+            KnowledgeWikiReleaseV1.model_validate(descriptor_only),
+            release.schema_pack,
+        )
+
+
+def test_generic_payload_is_rejected_after_fully_recomputed_release_hashes() -> None:
+    _, release = _real_candidate_and_release()
+    forged = release.model_dump(mode="json")
+    root = forged["members"][0]
+    root["payload"] = {
+        "contract": "generic-wiki-page.v1",
+        "title": "self-issued generic payload",
+    }
+    _rehash_member_payload(root)
+    _rehash_release_payload(forged)
+
+    with pytest.raises((SchemaWikiContractError, ValueError)):
+        validate_knowledge_wiki_release(
+            KnowledgeWikiReleaseV1.model_validate(forged),
+            release.schema_pack,
+        )
+
+
+def test_payload_substitution_is_rejected_after_fully_recomputed_release_hashes() -> None:
+    _, release = _real_candidate_and_release()
+    forged = release.model_dump(mode="json")
+    first, second = forged["members"][1:3]
+    assert "payload" in first and "payload" in second, (
+        "typed member payloads are required before substitution can be evaluated"
+    )
+    first["payload"], second["payload"] = second["payload"], first["payload"]
+    _rehash_member_payload(first)
+    _rehash_member_payload(second)
+    _rehash_release_payload(forged)
+
+    with pytest.raises((SchemaWikiContractError, ValueError)):
+        validate_knowledge_wiki_release(
+            KnowledgeWikiReleaseV1.model_validate(forged),
+            release.schema_pack,
+        )
+
+
+def test_medical_root_display_name_is_code_owned_after_full_rehash() -> None:
+    candidate, release = _real_candidate_and_release()
+    forged = release.model_dump(mode="json")
+    root = forged["members"][0]
+    root_payload = root["payload"]
+    assert isinstance(root_payload, dict)
+    root_payload["product_display_name"] = "caller-selected product name"
+    _rehash_member_payload(root)
+    _rehash_release_payload(forged)
+    generic_valid = KnowledgeWikiReleaseV1.model_validate(forged)
+    assert validate_knowledge_wiki_release(generic_valid, release.schema_pack)
+
+    with pytest.raises(SchemaWikiCompilationError):
+        build_schema_wiki_review_bundle_596_1(
+            candidate=candidate,
+            release=generic_valid,
+        )
+
+
+def test_foreign_a1_release_cannot_receive_596_1_review_bundle() -> None:
+    candidate, _ = _real_candidate_and_release()
+    vector_path = (
+        Path(__file__).parents[2]
+        / "internal/application/service/testdata/schema_wiki_contract_vector.json"
+    )
+    vector = json.loads(vector_path.read_text(encoding="utf-8"))
+    foreign = KnowledgeWikiReleaseV1.model_validate(vector["release"])
+    assert validate_knowledge_wiki_release(foreign, foreign.schema_pack)
+    assert foreign.entity_version.product_version_id == "product-v1"
+    assert len(foreign.members) == 6
+
+    with pytest.raises(SchemaWikiCompilationError):
+        build_schema_wiki_review_bundle_596_1(
+            candidate=candidate,
+            release=foreign,
+        )

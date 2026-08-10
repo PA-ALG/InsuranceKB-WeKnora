@@ -443,23 +443,52 @@ type schemaWikiDecodedMemberPayload struct {
 }
 
 func decodeClosedSchemaWikiPayload(raw json.RawMessage, target any) error {
-	if len(raw) == 0 {
-		return ErrSchemaWikiContractInvalid
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return ErrSchemaWikiContractInvalid
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return ErrSchemaWikiContractInvalid
-	}
-	canonical, err := schemaWikiCanonicalJSON(target)
+	canonical, err := canonicalizeClosedSchemaWikiPayload(raw, target)
 	if err != nil || !bytes.Equal(raw, canonical) {
 		return ErrSchemaWikiContractInvalid
 	}
 	return nil
+}
+
+func canonicalizeClosedSchemaWikiPayload(raw json.RawMessage, target any) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, ErrSchemaWikiContractInvalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return nil, ErrSchemaWikiContractInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, ErrSchemaWikiContractInvalid
+	}
+	canonical, err := schemaWikiCanonicalJSON(target)
+	if err != nil {
+		return nil, ErrSchemaWikiContractInvalid
+	}
+	return canonical, nil
+}
+
+// CanonicalSchemaWikiMemberPayload accepts the equivalent JSON text
+// forms a JSONB database may return, then reuses the A1 typed validator and
+// canonical encoder. It never treats database text formatting as authority.
+func CanonicalSchemaWikiMemberPayload(
+	memberKind string,
+	raw json.RawMessage,
+) (json.RawMessage, error) {
+	var target any
+	switch memberKind {
+	case "root":
+		target = &SchemaRootPageV1{}
+	case "section":
+		target = &SchemaSectionPageV1{}
+	case "field":
+		target = &SchemaFieldPageV1{}
+	default:
+		return nil, ErrSchemaWikiContractInvalid
+	}
+	return canonicalizeClosedSchemaWikiPayload(raw, target)
 }
 
 func validateSchemaFieldPage(page SchemaFieldPageV1) error {
@@ -467,6 +496,7 @@ func validateSchemaFieldPage(page SchemaFieldPageV1) error {
 		return ErrSchemaWikiContractInvalid
 	}
 	citations := map[string]struct{}{}
+	citationIDs := map[string]struct{}{}
 	for _, citation := range page.Citations {
 		if err := ValidateCitationTarget(citation); err != nil {
 			return err
@@ -474,7 +504,11 @@ func validateSchemaFieldPage(page SchemaFieldPageV1) error {
 		if _, exists := citations[citation.CitationSHA256]; exists {
 			return ErrSchemaWikiContractInvalid
 		}
+		if _, exists := citationIDs[citation.CitationID]; exists {
+			return ErrSchemaWikiContractInvalid
+		}
 		citations[citation.CitationSHA256] = struct{}{}
+		citationIDs[citation.CitationID] = struct{}{}
 	}
 	if hasDuplicateStrings(page.EvidenceReceiptSHA256s) {
 		return ErrSchemaWikiContractInvalid

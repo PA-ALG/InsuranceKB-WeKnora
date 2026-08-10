@@ -31,6 +31,8 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationTargetV1,
     KnowledgeWikiReleaseV1,
     SchemaFieldPageV1,
+    SchemaRootPageV1,
+    SchemaSectionPageV1,
     SchemaWikiContractError,
     SchemaWikiMemberV1,
     SchemaWikiReviewBundleV1,
@@ -54,6 +56,7 @@ SCHEMA_WIKI_REVIEW_POLICY_SHA256: Final[str] = schema_wiki_sha256(
         "partial_activation": False,
     },
 )
+MEDICAL_PRODUCT_DISPLAY_NAME: Final[str] = "平安e生保（尊享版）医疗保险"
 
 
 class SchemaWikiCompilationError(ValueError):
@@ -231,16 +234,23 @@ def _member(
     *,
     member_ref: str,
     member_kind: str,
-    payload_sha256: str,
+    page: SchemaRootPageV1 | SchemaSectionPageV1 | SchemaFieldPageV1,
     section_id: str | None = None,
     field_id: str | None = None,
 ) -> SchemaWikiMemberV1:
+    if isinstance(page, SchemaRootPageV1):
+        payload_sha256 = page.root_page_sha256
+    elif isinstance(page, SchemaSectionPageV1):
+        payload_sha256 = page.section_page_sha256
+    else:
+        payload_sha256 = page.field_page_sha256
     payload = {
         "contract": "schema-wiki-member.v1",
         "member_ref": member_ref,
         "member_kind": member_kind,
         "section_id": section_id,
         "field_id": field_id,
+        "payload": page,
         "payload_sha256": payload_sha256,
     }
     return SchemaWikiMemberV1.model_validate(
@@ -290,6 +300,54 @@ def _validate_sealed_candidate(candidate: object) -> Schema67CandidateV2:
     return exact
 
 
+def _validate_medical_release_596_1(
+    *,
+    candidate: object,
+    release: KnowledgeWikiReleaseV1,
+) -> KnowledgeWikiReleaseV1:
+    exact_candidate = _validate_sealed_candidate(candidate)
+    try:
+        exact = validate_knowledge_wiki_release(release, release.schema_pack)
+        validate_medical_schema_pack_596_1(exact.schema_pack)
+        validate_initial_medical_authority_596_1(
+            domain=exact.domain,
+            entity=exact.entity,
+            entity_version=exact.entity_version,
+            taxonomy=exact.taxonomy,
+        )
+    except (MedicalSchemaPackError, SchemaWikiContractError, TypeError, ValueError):
+        raise SchemaWikiCompilationError("MEDICAL_RELEASE_AUTHORITY_INVALID") from None
+
+    expected_members: list[tuple[str, str, str | None, str | None]] = [
+        (f"root:{exact.entity_version.version_id}", "root", None, None)
+    ]
+    expected_members.extend(
+        (f"section:{section.section_id}", "section", section.section_id, None)
+        for section in exact.schema_pack.sections
+    )
+    expected_members.extend(
+        (f"field:{field_id}", "field", section.section_id, field_id)
+        for section in exact.schema_pack.sections
+        for field_id in section.ordered_field_ids
+    )
+    actual_members = [
+        (member.member_ref, member.member_kind, member.section_id, member.field_id)
+        for member in exact.members
+    ]
+    root_page = exact.members[0].payload
+    if (
+        exact.candidate_sha256 != exact_candidate.candidate_sha256
+        or exact.entity_version.product_version_id != APPROVED_PRODUCT_VERSION_ID
+        or exact.review_policy_sha256 != SCHEMA_WIKI_REVIEW_POLICY_SHA256
+        or actual_members != expected_members
+        or len(actual_members) != 75
+        or not isinstance(root_page, SchemaRootPageV1)
+        or root_page.product_display_name != MEDICAL_PRODUCT_DISPLAY_NAME
+    ):
+        raise SchemaWikiCompilationError("MEDICAL_RELEASE_AUTHORITY_INVALID")
+    return exact
+
+
 def compile_schema_wiki_release_596_1(
     *,
     candidate: object,
@@ -324,29 +382,62 @@ def compile_schema_wiki_release_596_1(
             strict=True,
         )
     )
-    root_payload_sha256 = schema_wiki_sha256(
-        "medical-schema-wiki-root-payload.v1",
+    root_payload = {
+        "contract": "schema-root-page.v1",
+        "domain_id": domain.domain_id,
+        "domain_sha256": domain.domain_sha256,
+        "schema_pack_id": pack.schema_pack_id,
+        "schema_version": pack.schema_version,
+        "schema_pack_sha256": pack.schema_pack_sha256,
+        "entity_id": entity.entity_id,
+        "entity_version_id": entity_version.version_id,
+        "product_version_id": entity_version.product_version_id,
+        "taxonomy_version": taxonomy.taxonomy_version,
+        "taxonomy_sha256": taxonomy.taxonomy_sha256,
+        "product_display_name": MEDICAL_PRODUCT_DISPLAY_NAME,
+        "ordered_section_ids": tuple(section.section_id for section in pack.sections),
+    }
+    root_page = SchemaRootPageV1.model_validate(
         {
-            "domain": domain,
-            "taxonomy": taxonomy,
-            "schema_pack": pack,
-            "entity": entity,
-            "entity_version": entity_version,
-            "navigation": tuple(
-                {
-                    "section_id": section.section_id,
-                    "display_name": section.display_name,
-                    "ordered_field_ids": section.ordered_field_ids,
-                }
-                for section in pack.sections
+            **root_payload,
+            "root_page_sha256": schema_wiki_sha256(
+                "schema-root-page.v1", root_payload
             ),
-        },
+        }
+    )
+    section_pages = tuple(
+        SchemaSectionPageV1.model_validate(
+            {
+                **(
+                    section_payload := {
+                        "contract": "schema-section-page.v1",
+                        "domain_id": domain.domain_id,
+                        "domain_sha256": domain.domain_sha256,
+                        "schema_pack_id": pack.schema_pack_id,
+                        "schema_version": pack.schema_version,
+                        "schema_pack_sha256": pack.schema_pack_sha256,
+                        "entity_id": entity.entity_id,
+                        "entity_version_id": entity_version.version_id,
+                        "product_version_id": entity_version.product_version_id,
+                        "taxonomy_version": taxonomy.taxonomy_version,
+                        "taxonomy_sha256": taxonomy.taxonomy_sha256,
+                        "section_id": section.section_id,
+                        "display_name": section.display_name,
+                        "ordered_field_ids": section.ordered_field_ids,
+                    }
+                ),
+                "section_page_sha256": schema_wiki_sha256(
+                    "schema-section-page.v1", section_payload
+                ),
+            }
+        )
+        for section in pack.sections
     )
     members: list[SchemaWikiMemberV1] = [
         _member(
             member_ref=f"root:{entity_version.version_id}",
             member_kind="root",
-            payload_sha256=root_payload_sha256,
+            page=root_page,
         )
     ]
     members.extend(
@@ -354,16 +445,9 @@ def compile_schema_wiki_release_596_1(
             member_ref=f"section:{section.section_id}",
             member_kind="section",
             section_id=section.section_id,
-            payload_sha256=schema_wiki_sha256(
-                "medical-schema-wiki-section-payload.v1",
-                {
-                    "section_id": section.section_id,
-                    "display_name": section.display_name,
-                    "ordered_field_ids": section.ordered_field_ids,
-                },
-            ),
+            page=section_page,
         )
-        for section in pack.sections
+        for section, section_page in zip(pack.sections, section_pages, strict=True)
     )
     section_by_field = {
         field_id: section.section_id
@@ -378,7 +462,7 @@ def compile_schema_wiki_release_596_1(
                 member_kind="field",
                 section_id=section_by_field[page.field_id],
                 field_id=page.field_id,
-                payload_sha256=page.field_page_sha256,
+                page=page,
             )
         )
     members.extend(field_members)
@@ -417,16 +501,22 @@ def compile_schema_wiki_release_596_1(
                 ),
             }
         )
-        return validate_knowledge_wiki_release(release, pack)
+        return _validate_medical_release_596_1(
+            candidate=exact_candidate,
+            release=release,
+        )
     except (KeyError, TypeError, ValueError, ValidationError, SchemaWikiContractError):
         raise SchemaWikiCompilationError("RELEASE_CUSTODY_INVALID") from None
 
 
 def build_schema_wiki_review_bundle_596_1(
-    *, release: KnowledgeWikiReleaseV1
+    *, candidate: object, release: KnowledgeWikiReleaseV1
 ) -> SchemaWikiReviewBundleV1:
     try:
-        exact = validate_knowledge_wiki_release(release, release.schema_pack)
+        exact = _validate_medical_release_596_1(
+            candidate=candidate,
+            release=release,
+        )
         payload = {
             "contract": "schema-wiki-review-bundle.v1",
             "candidate_sha256": exact.candidate_sha256,

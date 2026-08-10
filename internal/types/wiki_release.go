@@ -76,6 +76,8 @@ type WikiReleaseMemberSnapshot struct {
 }
 
 const (
+	// WikiReleasePreparationDraft is immutable review-only state and is never activatable.
+	WikiReleasePreparationDraft = "draft"
 	// WikiReleasePreparationReady is the only activatable preparation state.
 	WikiReleasePreparationReady = "ready"
 )
