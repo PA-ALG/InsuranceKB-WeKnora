@@ -669,6 +669,39 @@ def _locator_fact(
     return None
 
 
+def _mineru_snapshot_hash(kind: LocatorKind, content: str) -> str | None:
+    domain = "block-content" if kind == "block" else "cell-content" if kind == "cell" else None
+    if domain is None:
+        return None
+    digest = hashlib.sha256()
+    digest.update(f"mineru-060:{domain}".encode())
+    digest.update(b"\0")
+    digest.update(content.encode())
+    return digest.hexdigest()
+
+
+def _content_snapshot_matches(
+    *,
+    document: ParsedDocumentV1,
+    kind: LocatorKind,
+    content_snapshot: str,
+    content_snapshot_sha256: str,
+    parsed_content_hash: str,
+) -> bool:
+    """Replay parser-owned content hashes without weakening plaintext custody."""
+
+    if _sha256_text(content_snapshot) != content_snapshot_sha256:
+        return False
+    is_exact_mineru = (
+        document.parser.parser_id == "mineru-cloud-pipeline"
+        and document.parser.parser_build_id
+        == "NewMinerUCloudReader/mineru-native-structure.v1"
+    )
+    if is_exact_mineru:
+        return _mineru_snapshot_hash(kind, content_snapshot) == parsed_content_hash
+    return content_snapshot_sha256 == parsed_content_hash
+
+
 def _validate_freeform_field_output(value: FreeformFieldOutputV1) -> FreeformFieldOutputV1:
     try:
         return FreeformFieldOutputV1.model_validate(value.model_dump(mode="python"))
@@ -732,7 +765,13 @@ def _verify_freeform_evidence(
         raise VerifierContractError("freeform_locator_page_mismatch")
     if evidence.locator.parent_refs != parent_refs:
         raise VerifierContractError("freeform_locator_parent_mismatch")
-    if evidence.locator.content_snapshot_sha256 != content_hash:
+    if not _content_snapshot_matches(
+        document=document,
+        kind=kind,
+        content_snapshot=evidence.locator.content_snapshot,
+        content_snapshot_sha256=evidence.locator.content_snapshot_sha256,
+        parsed_content_hash=content_hash,
+    ):
         raise VerifierContractError("freeform_content_snapshot_mismatch")
     if not _quote_occurs(evidence.quote_snapshot, evidence.locator.content_snapshot):
         raise VerifierContractError("freeform_quote_not_found")
@@ -954,7 +993,13 @@ def _verify_evidence(
         return "locator_page_mismatch"
     if evidence.locator.parent_refs != parent_refs:
         return "locator_parent_mismatch"
-    if evidence.locator.content_snapshot_sha256 != content_hash:
+    if not _content_snapshot_matches(
+        document=document,
+        kind=kind,
+        content_snapshot=evidence.locator.content_snapshot,
+        content_snapshot_sha256=evidence.locator.content_snapshot_sha256,
+        parsed_content_hash=content_hash,
+    ):
         return "content_snapshot_mismatch"
     if not _quote_occurs(evidence.quote_snapshot, evidence.locator.content_snapshot):
         return "quote_not_found"

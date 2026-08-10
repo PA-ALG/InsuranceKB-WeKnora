@@ -78,6 +78,14 @@ def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _mineru_content_hash(domain: str, value: str) -> str:
+    digest = hashlib.sha256()
+    digest.update(f"mineru-060:{domain}".encode())
+    digest.update(b"\0")
+    digest.update(value.encode())
+    return digest.hexdigest()
+
+
 def _value(kind: str, **updates: object) -> CandidateValueV1:
     return CandidateValueV1.model_validate({"kind": kind, **updates})
 
@@ -1204,6 +1212,104 @@ def test_freeform_multi_source_receipt_is_replayable_without_semantic_judgment()
         documents=documents,
         manifests=manifests,
     ).receipt_hash == receipt.receipt_hash
+
+
+def test_freeform_mineru_block_snapshot_replays_against_native_domain_hash() -> None:
+    document, manifest, contents = _document()
+    block = document.blocks[0]
+    block_text = contents[block.block_id]
+    parser = document.parser.model_copy(
+        update={
+            "parser_id": "mineru-cloud-pipeline",
+            "parser_profile_ref": "approved-parser-profile:parser-neutral-bounded-upgrade.v1",
+            "parser_build_id": "NewMinerUCloudReader/mineru-native-structure.v1",
+        }
+    )
+    mineru_document = ParsedDocumentV1.model_validate(
+        {
+            **document.model_dump(mode="python", exclude={"document_hash"}),
+            "parser": parser,
+            "blocks": (
+                block.model_copy(
+                    update={
+                        "content_hash": _mineru_content_hash("block-content", block_text)
+                    }
+                ),
+            ),
+        }
+    )
+    mineru_manifest = ParseManifestV1.model_validate(
+        {
+            **manifest.model_dump(mode="python", exclude={"manifest_hash"}),
+            "parser": parser,
+            "document_hash": mineru_document.document_hash,
+        }
+    )
+    quote = "标准条件"
+    evidence = FreeformEvidenceV1(
+        field_id="claim_filing_requirements",
+        source_sha256=mineru_document.subject.source_sha256,
+        source_revision_id=mineru_document.subject.source_revision_id,
+        parse_attempt_id=mineru_document.attempt.attempt_id,
+        parsed_document_hash=mineru_document.document_hash,
+        parse_manifest_hash=mineru_manifest.manifest_hash,
+        page_number=block.locator.page_number,
+        block_id=block.block_id,
+        locator=EvidenceLocatorSnapshotV1(
+            subject_type="block",
+            subject_ref=block.block_id,
+            page_number=block.locator.page_number,
+            parent_refs=(mineru_document.pages[0].page_id,),
+            content_snapshot=block_text,
+            content_snapshot_sha256=_sha(block_text),
+        ),
+        quote_snapshot=quote,
+        quote_snapshot_sha256=_sha(quote),
+    )
+    output = FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id="claim_filing_requirements",
+        state="present",
+        value_snapshot=block_text,
+        evidence=(evidence,),
+    )
+
+    receipt = bind_freeform_arm_evidence(
+        field_output=output,
+        documents=(mineru_document,),
+        manifests=(mineru_manifest,),
+    )
+
+    assert replay_freeform_arm_evidence_binding(
+        receipt=receipt,
+        documents=(mineru_document,),
+        manifests=(mineru_manifest,),
+    ) == receipt
+
+
+def test_freeform_mineru_block_rejects_plain_sha_as_parser_owned_hash() -> None:
+    document, _manifest, contents = _document()
+    block = document.blocks[0]
+    block_text = contents[block.block_id]
+    mineru_document = ParsedDocumentV1.model_validate(
+        {
+            **document.model_dump(mode="python", exclude={"document_hash"}),
+            "parser": document.parser.model_copy(
+                update={
+                    "parser_id": "mineru-cloud-pipeline",
+                    "parser_build_id": "NewMinerUCloudReader/mineru-native-structure.v1",
+                }
+            ),
+        }
+    )
+
+    assert not evidence_verifier._content_snapshot_matches(
+        document=mineru_document,
+        kind="block",
+        content_snapshot=block_text,
+        content_snapshot_sha256=_sha(block_text),
+        parsed_content_hash=_sha(block_text),
+    )
 
 
 @pytest.mark.parametrize(

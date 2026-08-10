@@ -201,6 +201,7 @@ class RelationBoundAdmissionResultV1:
     reason_code: str | None = None
     admitted_parse_artifacts: tuple[AdmittedParseArtifactV1, ...] = field(default=(), repr=False)
     admission: VerticalFalsificationAdmission | None = field(default=None, repr=False)
+    intake_bundle_digest_sha256: str | None = None
     integration_digest_sha256: str | None = None
     provider_calls: Literal[0] = 0
     golden_reads: Literal[0] = 0
@@ -597,6 +598,8 @@ def assemble_relation_bound_admission_596_1(
                     sanitized_structure=item.evidence.sanitized_structure,
                     raw_structure_sha256=item.evidence.raw_structure_sha256,
                     sanitized_structure_sha256=item.evidence.sanitized_structure_sha256,
+                    capture_identity_sha256=item.capture_identity_sha256,
+                    content_snapshot_sha256=item.evidence.content_snapshot_sha256,
                     material_profile_resolution=resolution,
                     trusted_relation_bindings=bindings,
                 )
@@ -621,6 +624,7 @@ def assemble_relation_bound_admission_596_1(
         status="READY_FOR_QUALITY_FALSIFICATION",
         admitted_parse_artifacts=exact_receipts,
         admission=admission,
+        intake_bundle_digest_sha256=intake.bundle_digest_sha256,
         integration_digest_sha256=digest,
     )
 

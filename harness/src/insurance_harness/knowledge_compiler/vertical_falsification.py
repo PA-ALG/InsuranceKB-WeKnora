@@ -469,6 +469,8 @@ class AdmittedParseArtifactV1:
     sanitized_structure: bytes | None = field(default=None, repr=False)
     raw_structure_sha256: str | None = None
     sanitized_structure_sha256: str | None = None
+    capture_identity_sha256: str | None = None
+    content_snapshot_sha256: str | None = None
     material_profile_resolution: MaterialProfileResolution | None = field(
         default=None,
         repr=False,
@@ -2183,8 +2185,12 @@ def _admitted_parse_artifact_digest(
             or not isinstance(resolution, MaterialProfileResolution)
             or receipt.raw_structure_sha256 is None
             or receipt.sanitized_structure_sha256 is None
+            or receipt.capture_identity_sha256 is None
+            or receipt.content_snapshot_sha256 is None
             or not _is_sha256(receipt.raw_structure_sha256)
             or not _is_sha256(receipt.sanitized_structure_sha256)
+            or not _is_sha256(receipt.capture_identity_sha256)
+            or not _is_sha256(receipt.content_snapshot_sha256)
         ):
             return None
         try:
@@ -2283,6 +2289,8 @@ def _admitted_parse_artifact_digest(
                 "decision_hash": receipt.decision_sha256,
                 "raw_structure_sha256": receipt.raw_structure_sha256,
                 "sanitized_structure_sha256": receipt.sanitized_structure_sha256,
+                "capture_identity_sha256": receipt.capture_identity_sha256,
+                "content_snapshot_sha256": receipt.content_snapshot_sha256,
                 "sanitized_bytes_sha256": _sha256_bytes(
                     receipt.sanitized_structure
                 ),

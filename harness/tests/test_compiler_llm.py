@@ -9,6 +9,7 @@ from insurance_harness.compiler.llm import (
     MeteredClient,
     OpenAICompatClient,
     TruncatedOutputError,
+    openai_compat_request_bytes,
 )
 
 BASE = "https://gateway.test/compatible-mode/v1"
@@ -55,10 +56,100 @@ async def test_empty_content_finish_length_raises_truncated() -> None:
 
 
 @respx.mock
+async def test_nonempty_content_finish_length_raises_truncated() -> None:
+    respx.post(f"{BASE}/chat/completions").respond(
+        json=_payload('{"partial":true}', "length", reasoning="truncated")
+    )
+    with pytest.raises(TruncatedOutputError, match="finish_reason=length"):
+        await _client().complete("sys", "user")
+
+
+@respx.mock
 async def test_http_error_propagates_for_retry_layer() -> None:
     respx.post(f"{BASE}/chat/completions").respond(status_code=503)
     with pytest.raises(httpx.HTTPStatusError):
         await _client().complete("sys", "user")
+
+
+@respx.mock
+async def test_explicit_thinking_mode_is_serialized_in_exact_http_body() -> None:
+    route = respx.post(f"{BASE}/chat/completions").respond(
+        json=_payload('{"ok":true}', "stop")
+    )
+    client = OpenAICompatClient(
+        base_url=BASE,
+        api_key="sk-test",
+        model="deepseek-v4-flash",
+        temperature=0.0,
+        max_tokens=8192,
+        thinking="disabled",
+    )
+
+    assert await client.complete("sys", "user") == '{"ok":true}'
+    expected = openai_compat_request_bytes(
+        model="deepseek-v4-flash",
+        temperature=0.0,
+        max_tokens=8192,
+        system="sys",
+        user="user",
+        thinking="disabled",
+    )
+    assert route.calls[0].request.content == expected
+    assert b'"thinking":{"type":"disabled"}' in expected
+    await client.aclose()
+
+
+def test_default_request_remains_compatible_without_thinking_field() -> None:
+    body = openai_compat_request_bytes(
+        model="legacy-compatible-model",
+        temperature=0.1,
+        max_tokens=4096,
+        system="sys",
+        user="user",
+    )
+    assert b'"thinking"' not in body
+    assert b'"response_format"' not in body
+    assert body == (
+        b'{"model":"legacy-compatible-model","temperature":0.1,'
+        b'"max_tokens":4096,"messages":[{"role":"system","content":"sys"},'
+        b'{"role":"user","content":"user"}]}'
+    )
+
+
+@respx.mock
+async def test_json_object_response_format_is_exact_http_body() -> None:
+    route = respx.post(f"{BASE}/chat/completions").respond(
+        json=_payload('{"ok":true}', "stop")
+    )
+    client = OpenAICompatClient(
+        base_url=BASE,
+        api_key="sk-test",
+        model="deepseek-v4-flash",
+        temperature=0.0,
+        max_tokens=8192,
+        thinking="disabled",
+        response_format="json_object",
+    )
+
+    assert await client.complete("sys", "user") == '{"ok":true}'
+    expected = openai_compat_request_bytes(
+        model="deepseek-v4-flash",
+        temperature=0.0,
+        max_tokens=8192,
+        system="sys",
+        user="user",
+        thinking="disabled",
+        response_format="json_object",
+    )
+    assert route.calls[0].request.content == expected
+    assert expected == (
+        b'{"model":"deepseek-v4-flash","temperature":0.0,"max_tokens":8192,'
+        b'"thinking":{"type":"disabled"},'
+        b'"response_format":{"type":"json_object"},'
+        b'"messages":[{"role":"system","content":"sys"},'
+        b'{"role":"user","content":"user"}]}'
+    )
+    await client.aclose()
 
 
 async def test_metered_client_records_stats() -> None:

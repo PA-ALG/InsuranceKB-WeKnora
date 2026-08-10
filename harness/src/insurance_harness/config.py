@@ -111,7 +111,7 @@ class HarnessSettings(BaseSettings):
     ] = "disabled"
     production_model_provider: str | None = None
     production_model_deployment_id: str | None = None
-    production_model_family: Literal["minimax", "qwen", "qwen-vl"] | None = None
+    production_model_family: Literal["deepseek", "minimax", "qwen", "qwen-vl"] | None = None
     production_model_policy_version: str | None = None
 
     # 独立 expected request；不得从 verifier 返回的 actual admission 回填。
