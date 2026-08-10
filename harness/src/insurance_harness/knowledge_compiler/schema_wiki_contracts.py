@@ -311,12 +311,74 @@ class SchemaFieldPageV1(_FrozenModel):
         return self
 
 
+class SchemaRootPageV1(_FrozenModel):
+    contract: Literal["schema-root-page.v1"]
+    domain_id: Identifier
+    domain_sha256: Sha256Hex
+    schema_pack_id: Identifier
+    schema_version: Identifier
+    schema_pack_sha256: Sha256Hex
+    entity_id: Identifier
+    entity_version_id: Identifier
+    product_version_id: Identifier
+    taxonomy_version: Identifier
+    taxonomy_sha256: Sha256Hex
+    product_display_name: NonBlankText
+    ordered_section_ids: tuple[Identifier, ...]
+    root_page_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        if not self.ordered_section_ids or len(set(self.ordered_section_ids)) != len(
+            self.ordered_section_ids
+        ):
+            raise ValueError("root section order is empty or duplicated")
+        if not _hash_matches(self, self.contract, "root_page_sha256"):
+            raise ValueError("root_page_sha256 mismatch")
+        return self
+
+
+class SchemaSectionPageV1(_FrozenModel):
+    contract: Literal["schema-section-page.v1"]
+    domain_id: Identifier
+    domain_sha256: Sha256Hex
+    schema_pack_id: Identifier
+    schema_version: Identifier
+    schema_pack_sha256: Sha256Hex
+    entity_id: Identifier
+    entity_version_id: Identifier
+    product_version_id: Identifier
+    taxonomy_version: Identifier
+    taxonomy_sha256: Sha256Hex
+    section_id: Identifier
+    display_name: NonBlankText
+    ordered_field_ids: tuple[Identifier, ...]
+    section_page_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_page(self) -> Self:
+        if not self.ordered_field_ids or len(set(self.ordered_field_ids)) != len(
+            self.ordered_field_ids
+        ):
+            raise ValueError("section field order is empty or duplicated")
+        if not _hash_matches(self, self.contract, "section_page_sha256"):
+            raise ValueError("section_page_sha256 mismatch")
+        return self
+
+
+SchemaWikiPageV1 = Annotated[
+    SchemaRootPageV1 | SchemaSectionPageV1 | SchemaFieldPageV1,
+    Field(discriminator="contract"),
+]
+
+
 class SchemaWikiMemberV1(_FrozenModel):
     contract: Literal["schema-wiki-member.v1"]
     member_ref: Identifier
     member_kind: Literal["root", "section", "field"]
     section_id: Identifier | None
     field_id: Identifier | None
+    payload: SchemaWikiPageV1
     payload_sha256: Sha256Hex
     member_digest: Sha256Hex
 
@@ -330,6 +392,23 @@ class SchemaWikiMemberV1(_FrozenModel):
             valid_shape = self.section_id is not None and self.field_id is not None
         if not valid_shape:
             raise ValueError("member kind/identity mismatch")
+        payload_shape_valid = (
+            self.member_kind == "root"
+            and isinstance(self.payload, SchemaRootPageV1)
+            and self.payload_sha256 == self.payload.root_page_sha256
+        ) or (
+            self.member_kind == "section"
+            and isinstance(self.payload, SchemaSectionPageV1)
+            and self.payload.section_id == self.section_id
+            and self.payload_sha256 == self.payload.section_page_sha256
+        ) or (
+            self.member_kind == "field"
+            and isinstance(self.payload, SchemaFieldPageV1)
+            and self.payload.field_id == self.field_id
+            and self.payload_sha256 == self.payload.field_page_sha256
+        )
+        if not payload_shape_valid:
+            raise ValueError("member payload identity mismatch")
         if not _hash_matches(self, self.contract, "member_digest"):
             raise ValueError("member_digest mismatch")
         return self
@@ -624,6 +703,66 @@ def validate_knowledge_wiki_release(
     if len(set(digests)) != len(digests):
         raise SchemaWikiContractError("MEMBER_DIGEST_DUPLICATE")
     members_by_ref = {row.member_ref: row for row in current.members}
+    root_payload = current.members[0].payload
+    root_expected = (
+        current.domain.domain_id,
+        current.domain.domain_sha256,
+        current.schema_pack.schema_pack_id,
+        current.schema_pack.schema_version,
+        current.schema_pack.schema_pack_sha256,
+        current.entity.entity_id,
+        current.entity_version.version_id,
+        current.entity_version.product_version_id,
+        current.taxonomy.taxonomy_version,
+        current.taxonomy.taxonomy_sha256,
+        tuple(section.section_id for section in current.schema_pack.sections),
+    )
+    if not isinstance(root_payload, SchemaRootPageV1) or (
+        root_payload.domain_id,
+        root_payload.domain_sha256,
+        root_payload.schema_pack_id,
+        root_payload.schema_version,
+        root_payload.schema_pack_sha256,
+        root_payload.entity_id,
+        root_payload.entity_version_id,
+        root_payload.product_version_id,
+        root_payload.taxonomy_version,
+        root_payload.taxonomy_sha256,
+        root_payload.ordered_section_ids,
+    ) != root_expected:
+        raise SchemaWikiContractError("ROOT_PAYLOAD_BINDING_INVALID")
+    for index, section in enumerate(current.schema_pack.sections, start=1):
+        section_payload = current.members[index].payload
+        if not isinstance(section_payload, SchemaSectionPageV1) or (
+            section_payload.domain_id,
+            section_payload.domain_sha256,
+            section_payload.schema_pack_id,
+            section_payload.schema_version,
+            section_payload.schema_pack_sha256,
+            section_payload.entity_id,
+            section_payload.entity_version_id,
+            section_payload.product_version_id,
+            section_payload.taxonomy_version,
+            section_payload.taxonomy_sha256,
+            section_payload.section_id,
+            section_payload.display_name,
+            section_payload.ordered_field_ids,
+        ) != (
+            current.domain.domain_id,
+            current.domain.domain_sha256,
+            current.schema_pack.schema_pack_id,
+            current.schema_pack.schema_version,
+            current.schema_pack.schema_pack_sha256,
+            current.entity.entity_id,
+            current.entity_version.version_id,
+            current.entity_version.product_version_id,
+            current.taxonomy.taxonomy_version,
+            current.taxonomy.taxonomy_sha256,
+            section.section_id,
+            section.display_name,
+            section.ordered_field_ids,
+        ):
+            raise SchemaWikiContractError("SECTION_PAYLOAD_BINDING_INVALID")
     binding_order = tuple(
         (row.logical_member_ref, row.citation_sha256)
         for row in current.citation_bindings
@@ -634,9 +773,22 @@ def validate_knowledge_wiki_release(
         current.citation_bindings
     ):
         raise SchemaWikiContractError("CITATION_BINDING_DUPLICATE")
+    payload_citations: list[tuple[str, str]] = []
+    for member in current.members:
+        if not isinstance(member.payload, SchemaFieldPageV1):
+            continue
+        for citation in member.payload.citations:
+            if (
+                citation.logical_member_ref != member.member_ref
+                or citation.entity_version_id != current.entity_version.version_id
+            ):
+                raise SchemaWikiContractError("FIELD_PAYLOAD_CITATION_INVALID")
+            payload_citations.append((member.member_ref, citation.citation_sha256))
+    if tuple(payload_citations) != binding_order:
+        raise SchemaWikiContractError("CITATION_PAYLOAD_CLOSURE_INVALID")
     for binding in current.citation_bindings:
-        member = members_by_ref.get(binding.logical_member_ref)
-        if member is None or member.member_digest != binding.member_digest:
+        bound_member = members_by_ref.get(binding.logical_member_ref)
+        if bound_member is None or bound_member.member_digest != binding.member_digest:
             raise SchemaWikiContractError("CITATION_MEMBER_BINDING_INVALID")
     if current.manifest_digest != schema_wiki_manifest_digest(
         current.members, current.citation_bindings
@@ -691,7 +843,9 @@ __all__ = [
     "KnowledgeWikiReleaseV1",
     "SchemaFieldPageV1",
     "SchemaPackV1",
+    "SchemaRootPageV1",
     "SchemaSectionV1",
+    "SchemaSectionPageV1",
     "SchemaWikiContractError",
     "SchemaWikiMemberV1",
     "SchemaWikiReviewBundleV1",

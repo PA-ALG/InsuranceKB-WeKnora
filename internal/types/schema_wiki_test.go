@@ -1,12 +1,39 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func resealSchemaWikiReleaseForTest(t *testing.T, release KnowledgeWikiReleaseV1) KnowledgeWikiReleaseV1 {
+	t.Helper()
+	for index := range release.Members {
+		digest, _, err := schemaWikiHashWithout(
+			release.Members[index].Contract,
+			release.Members[index],
+			"member_digest",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release.Members[index].MemberDigest = digest
+	}
+	manifest, err := schemaWikiManifestDigest(release.Members, release.CitationBindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release.ManifestDigest = manifest
+	releaseHash, _, err := schemaWikiHashWithout(release.Contract, release, "release_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release.ReleaseSHA256 = releaseHash
+	return release
+}
 
 func loadSchemaWikiContractVector(t *testing.T) (SchemaWikiContractVectorV1, []byte) {
 	t.Helper()
@@ -79,6 +106,102 @@ func TestSchemaWikiGoTopologyUsesPackCardinality(t *testing.T) {
 	}
 	if err := ValidateKnowledgeWikiRelease(vector.Release, vector.SchemaPack); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSchemaWikiGoMembersCarryExactClosedTypedPayloads(t *testing.T) {
+	t.Parallel()
+
+	vector, _ := loadSchemaWikiContractVector(t)
+	wantContracts := []string{
+		"schema-root-page.v1",
+		"schema-section-page.v1",
+		"schema-section-page.v1",
+		"schema-field-page.v1",
+		"schema-field-page.v1",
+		"schema-field-page.v1",
+	}
+	if len(vector.Release.Members) != len(wantContracts) {
+		t.Fatalf("member count = %d, want %d", len(vector.Release.Members), len(wantContracts))
+	}
+	for index, member := range vector.Release.Members {
+		decoder := json.NewDecoder(bytes.NewReader(member.Payload))
+		var envelope struct {
+			Contract string `json:"contract"`
+		}
+		if err := decoder.Decode(&envelope); err != nil {
+			t.Fatalf("member %d payload: %v", index, err)
+		}
+		if envelope.Contract != wantContracts[index] {
+			t.Fatalf("member %d contract = %q, want %q", index, envelope.Contract, wantContracts[index])
+		}
+	}
+	if err := ValidateKnowledgeWikiRelease(vector.Release, vector.SchemaPack); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSchemaWikiGoRejectsUnreviewedOrDriftedMemberPayload(t *testing.T) {
+	t.Parallel()
+
+	for _, mutation := range []string{
+		"missing",
+		"descriptor-only",
+		"generic",
+		"kind-swap",
+		"foreign-field",
+		"unknown-field",
+		"noncanonical",
+		"self-hash-drift",
+	} {
+		mutation := mutation
+		t.Run(mutation, func(t *testing.T) {
+			t.Parallel()
+			vector, _ := loadSchemaWikiContractVector(t)
+			member := &vector.Release.Members[3]
+			switch mutation {
+			case "missing", "descriptor-only":
+				member.Payload = nil
+			case "generic":
+				member.Payload = json.RawMessage(`{"contract":"generic-wiki-page.v1","body":"caller-selected"}`)
+			case "kind-swap":
+				member.Payload = append(json.RawMessage(nil), vector.Release.Members[1].Payload...)
+				member.PayloadSHA256 = vector.Release.Members[1].PayloadSHA256
+			default:
+				var payload map[string]any
+				if err := json.Unmarshal(member.Payload, &payload); err != nil {
+					t.Fatal(err)
+				}
+				switch mutation {
+				case "foreign-field":
+					payload["field_id"] = "field-b"
+				case "unknown-field":
+					payload["caller_authority"] = "forbidden"
+				case "noncanonical":
+					payload["value_snapshot"] = "Cafe\u0301"
+				case "self-hash-drift":
+					payload["field_page_sha256"] = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+				}
+				mutated, err := json.Marshal(payload)
+				if err != nil {
+					t.Fatal(err)
+				}
+				member.Payload = mutated
+				if claimed, ok := payload["field_page_sha256"].(string); ok {
+					member.PayloadSHA256 = claimed
+				}
+			}
+			if mutation == "noncanonical" {
+				if err := ValidateKnowledgeWikiRelease(vector.Release, vector.SchemaPack); err == nil {
+					t.Fatal("non-canonical payload unexpectedly validated")
+				}
+				return
+			}
+			forged := resealSchemaWikiReleaseForTest(t, vector.Release)
+			if err := ValidateKnowledgeWikiRelease(forged, vector.SchemaPack); err == nil {
+				t.Fatal("mutated payload unexpectedly validated")
+			}
+		})
 	}
 }
 

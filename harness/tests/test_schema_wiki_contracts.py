@@ -20,6 +20,8 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     KnowledgeWikiReleaseV1,
     SchemaFieldPageV1,
     SchemaPackV1,
+    SchemaRootPageV1,
+    SchemaSectionPageV1,
     SchemaSectionV1,
     SchemaWikiContractError,
     SchemaWikiMemberV1,
@@ -176,7 +178,10 @@ def _citation(*, member_ref: str = "field:field-a") -> CitationTargetV1:
 
 
 def _field_page(
-    *, state: str = "present", citation: CitationTargetV1 | None = None
+    *,
+    field_id: str = "field-a",
+    state: str = "present",
+    citation: CitationTargetV1 | None = None,
 ) -> SchemaFieldPageV1:
     citations: tuple[CitationTargetV1, ...]
     if state == "present":
@@ -193,7 +198,7 @@ def _field_page(
         review_reason = "FIELD_UNKNOWN"
     payload = {
         "contract": "schema-field-page.v1",
-        "field_id": "field-a",
+        "field_id": field_id,
         "state": state,
         "value_snapshot": value,
         "citations": citations,
@@ -210,27 +215,104 @@ def _field_page(
     )
 
 
+def _root_page() -> SchemaRootPageV1:
+    domain = _domain()
+    pack = _pack()
+    taxonomy = _taxonomy()
+    payload = {
+        "contract": "schema-root-page.v1",
+        "domain_id": domain.domain_id,
+        "domain_sha256": domain.domain_sha256,
+        "schema_pack_id": pack.schema_pack_id,
+        "schema_version": pack.schema_version,
+        "schema_pack_sha256": pack.schema_pack_sha256,
+        "entity_id": "entity-alpha",
+        "entity_version_id": "entity-alpha@v1",
+        "product_version_id": "product-v1",
+        "taxonomy_version": taxonomy.taxonomy_version,
+        "taxonomy_sha256": taxonomy.taxonomy_sha256,
+        "product_display_name": "Synthetic Product",
+        "ordered_section_ids": tuple(row.section_id for row in pack.sections),
+    }
+    return _sealed(
+        SchemaRootPageV1,
+        "schema-root-page.v1",
+        "root_page_sha256",
+        **payload,
+    )
+
+
+def _section_page(section_id: str) -> SchemaSectionPageV1:
+    domain = _domain()
+    pack = _pack()
+    taxonomy = _taxonomy()
+    section = next(row for row in pack.sections if row.section_id == section_id)
+    payload = {
+        "contract": "schema-section-page.v1",
+        "domain_id": domain.domain_id,
+        "domain_sha256": domain.domain_sha256,
+        "schema_pack_id": pack.schema_pack_id,
+        "schema_version": pack.schema_version,
+        "schema_pack_sha256": pack.schema_pack_sha256,
+        "entity_id": "entity-alpha",
+        "entity_version_id": "entity-alpha@v1",
+        "product_version_id": "product-v1",
+        "taxonomy_version": taxonomy.taxonomy_version,
+        "taxonomy_sha256": taxonomy.taxonomy_sha256,
+        "section_id": section.section_id,
+        "display_name": section.display_name,
+        "ordered_field_ids": section.ordered_field_ids,
+    }
+    return _sealed(
+        SchemaSectionPageV1,
+        "schema-section-page.v1",
+        "section_page_sha256",
+        **payload,
+    )
+
+
 def _member(
     member_ref: str,
     kind: str,
     *,
     section_id: str | None = None,
     field_id: str | None = None,
-    payload_sha256: str | None = None,
+    payload: SchemaRootPageV1 | SchemaSectionPageV1 | SchemaFieldPageV1 | None = None,
 ) -> SchemaWikiMemberV1:
-    payload = {
+    if payload is None:
+        if kind == "root":
+            payload = _root_page()
+        elif kind == "section":
+            assert section_id is not None
+            payload = _section_page(section_id)
+        else:
+            assert field_id is not None
+            payload = _field_page(
+                field_id=field_id,
+                state="present" if field_id == "field-a" else "unknown",
+                citation=_citation() if field_id == "field-a" else None,
+            )
+    page = payload
+    if isinstance(page, SchemaRootPageV1):
+        payload_sha256 = page.root_page_sha256
+    elif isinstance(page, SchemaSectionPageV1):
+        payload_sha256 = page.section_page_sha256
+    else:
+        payload_sha256 = page.field_page_sha256
+    member_payload = {
         "contract": "schema-wiki-member.v1",
         "member_ref": member_ref,
         "member_kind": kind,
         "section_id": section_id,
         "field_id": field_id,
-        "payload_sha256": payload_sha256 or _sha(f"payload:{member_ref}"),
+        "payload": page,
+        "payload_sha256": payload_sha256,
     }
     return _sealed(
         SchemaWikiMemberV1,
         "schema-wiki-member.v1",
         "member_digest",
-        **payload,
+        **member_payload,
     )
 
 
@@ -278,7 +360,7 @@ def _release(
             "field",
             section_id="section-a",
             field_id="field-a",
-            payload_sha256=field_page.field_page_sha256,
+            payload=field_page,
         ),
         _member(
             "field:field-b",
@@ -680,11 +762,90 @@ def test_citation_member_binding_is_outside_citation_hash_preimage() -> None:
         "field",
         section_id="section-a",
         field_id="field-a",
-        payload_sha256=_sha("changed payload"),
+        payload=_field_page(field_id="field-a", state="unknown"),
     )
     second = _binding(citation, changed_member)
     assert first.citation_sha256 == second.citation_sha256 == citation.citation_sha256
     assert first.binding_sha256 != second.binding_sha256
+
+
+def test_release_members_carry_exact_typed_canonical_payloads() -> None:
+    release = validate_knowledge_wiki_release(_release(), _pack())
+    assert isinstance(release.members[0].payload, SchemaRootPageV1)
+    assert isinstance(release.members[1].payload, SchemaSectionPageV1)
+    assert isinstance(release.members[3].payload, SchemaFieldPageV1)
+    assert release.members[0].payload_sha256 == release.members[0].payload.root_page_sha256
+    assert release.members[1].payload_sha256 == release.members[1].payload.section_page_sha256
+    assert release.members[3].payload_sha256 == release.members[3].payload.field_page_sha256
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing-payload",
+        "descriptor-only",
+        "generic-payload",
+        "kind-payload-swap",
+        "foreign-field",
+        "unknown-payload-key",
+        "noncanonical-payload",
+        "payload-self-hash-drift",
+    ],
+)
+def test_release_rejects_unreviewed_or_drifted_member_payload(
+    mutation: str,
+) -> None:
+    release = _release()
+    members = list(release.members)
+    target_index = 3
+    target = members[target_index]
+    target_wire = target.model_dump(mode="python")
+    if mutation in {"missing-payload", "descriptor-only"}:
+        target_wire.pop("payload")
+    elif mutation == "generic-payload":
+        target_wire["payload"] = {
+            "contract": "generic-wiki-page.v1",
+            "body": "caller-selected",
+            "page_sha256": _sha("generic-page"),
+        }
+    elif mutation == "kind-payload-swap":
+        target_wire["payload"] = _section_page("section-a").model_dump(mode="python")
+    else:
+        field_payload = cast(dict[str, object], target_wire["payload"])
+        if mutation == "foreign-field":
+            field_payload["field_id"] = "field-b"
+        elif mutation == "unknown-payload-key":
+            field_payload["caller_authority"] = "forbidden"
+        elif mutation == "noncanonical-payload":
+            field_payload["value_snapshot"] = "Cafe\u0301"
+        else:
+            field_payload["field_page_sha256"] = "f" * 64
+        target_wire["payload"] = field_payload
+    if mutation == "noncanonical-payload":
+        with pytest.raises((ValidationError, ValueError)):
+            SchemaWikiMemberV1.model_validate(target_wire)
+        return
+    target_wire["payload_sha256"] = (
+        cast(dict[str, object], target_wire.get("payload", {})).get(
+            "field_page_sha256", target.payload_sha256
+        )
+    )
+    target_wire["member_digest"] = schema_wiki_sha256(
+        "schema-wiki-member.v1",
+        {key: value for key, value in target_wire.items() if key != "member_digest"},
+    )
+    members[target_index] = SchemaWikiMemberV1.model_construct(**target_wire)
+    forged = _rehashed(
+        release,
+        "knowledge-wiki-release.v1",
+        "release_sha256",
+        members=tuple(members),
+        manifest_digest=schema_wiki_manifest_digest(
+            tuple(members), release.citation_bindings
+        ),
+    )
+    with pytest.raises((ValidationError, SchemaWikiContractError)):
+        validate_knowledge_wiki_release(forged, _pack())
 
 
 @pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate", "generic"])
@@ -711,6 +872,7 @@ def test_release_rejects_invalid_member_closure(mutation: str) -> None:
             member_kind="generic",
             section_id=None,
             field_id=None,
+            payload={"contract": "generic-wiki-page.v1"},
             payload_sha256=_sha("generic"),
             member_digest=_sha("generic-member"),
         )
@@ -734,12 +896,18 @@ def test_release_manifest_digest_is_independent_and_member_sensitive() -> None:
     release = validate_knowledge_wiki_release(_release(), _pack())
     assert release.manifest_digest != release.release_sha256
     changed = list(release.members)
-    changed[-1] = _member(
-        changed[-1].member_ref,
-        "field",
-        section_id=changed[-1].section_id,
-        field_id=changed[-1].field_id,
-        payload_sha256=_sha("mutated-member-payload"),
+    root_payload = cast(SchemaRootPageV1, changed[0].payload)
+    root_values = root_payload.model_dump(mode="python", exclude={"root_page_sha256"})
+    root_values["product_display_name"] = "Mutated product display"
+    changed[0] = _member(
+        changed[0].member_ref,
+        "root",
+        payload=_sealed(
+            SchemaRootPageV1,
+            "schema-root-page.v1",
+            "root_page_sha256",
+            **root_values,
+        ),
     )
     forged = _rehashed(
         release,

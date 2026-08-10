@@ -119,14 +119,50 @@ type SchemaFieldPageV1 struct {
 	FieldPageSHA256        string             `json:"field_page_sha256"`
 }
 
+type SchemaRootPageV1 struct {
+	Contract           string   `json:"contract"`
+	DomainID           string   `json:"domain_id"`
+	DomainSHA256       string   `json:"domain_sha256"`
+	SchemaPackID       string   `json:"schema_pack_id"`
+	SchemaVersion      string   `json:"schema_version"`
+	SchemaPackSHA256   string   `json:"schema_pack_sha256"`
+	EntityID           string   `json:"entity_id"`
+	EntityVersionID    string   `json:"entity_version_id"`
+	ProductVersionID   string   `json:"product_version_id"`
+	TaxonomyVersion    string   `json:"taxonomy_version"`
+	TaxonomySHA256     string   `json:"taxonomy_sha256"`
+	ProductDisplayName string   `json:"product_display_name"`
+	OrderedSectionIDs  []string `json:"ordered_section_ids"`
+	RootPageSHA256     string   `json:"root_page_sha256"`
+}
+
+type SchemaSectionPageV1 struct {
+	Contract          string   `json:"contract"`
+	DomainID          string   `json:"domain_id"`
+	DomainSHA256      string   `json:"domain_sha256"`
+	SchemaPackID      string   `json:"schema_pack_id"`
+	SchemaVersion     string   `json:"schema_version"`
+	SchemaPackSHA256  string   `json:"schema_pack_sha256"`
+	EntityID          string   `json:"entity_id"`
+	EntityVersionID   string   `json:"entity_version_id"`
+	ProductVersionID  string   `json:"product_version_id"`
+	TaxonomyVersion   string   `json:"taxonomy_version"`
+	TaxonomySHA256    string   `json:"taxonomy_sha256"`
+	SectionID         string   `json:"section_id"`
+	DisplayName       string   `json:"display_name"`
+	OrderedFieldIDs   []string `json:"ordered_field_ids"`
+	SectionPageSHA256 string   `json:"section_page_sha256"`
+}
+
 type SchemaWikiMemberV1 struct {
-	Contract      string  `json:"contract"`
-	MemberRef     string  `json:"member_ref"`
-	MemberKind    string  `json:"member_kind"`
-	SectionID     *string `json:"section_id"`
-	FieldID       *string `json:"field_id"`
-	PayloadSHA256 string  `json:"payload_sha256"`
-	MemberDigest  string  `json:"member_digest"`
+	Contract      string          `json:"contract"`
+	MemberRef     string          `json:"member_ref"`
+	MemberKind    string          `json:"member_kind"`
+	SectionID     *string         `json:"section_id"`
+	FieldID       *string         `json:"field_id"`
+	Payload       json.RawMessage `json:"payload"`
+	PayloadSHA256 string          `json:"payload_sha256"`
+	MemberDigest  string          `json:"member_digest"`
 }
 
 type CitationMemberBindingV1 struct {
@@ -399,6 +435,118 @@ func schemaWikiManifestDigest(members []SchemaWikiMemberV1, bindings []CitationM
 	return digest, err
 }
 
+type schemaWikiDecodedMemberPayload struct {
+	root    *SchemaRootPageV1
+	section *SchemaSectionPageV1
+	field   *SchemaFieldPageV1
+}
+
+func decodeClosedSchemaWikiPayload(raw json.RawMessage, target any) error {
+	if len(raw) == 0 {
+		return ErrSchemaWikiContractInvalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return ErrSchemaWikiContractInvalid
+	}
+	canonical, err := schemaWikiCanonicalJSON(target)
+	if err != nil || !bytes.Equal(raw, canonical) {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func validateSchemaFieldPage(page SchemaFieldPageV1) error {
+	if page.Contract != "schema-field-page.v1" || page.FieldID == "" {
+		return ErrSchemaWikiContractInvalid
+	}
+	citations := map[string]struct{}{}
+	for _, citation := range page.Citations {
+		if err := ValidateCitationTarget(citation); err != nil {
+			return err
+		}
+		if _, exists := citations[citation.CitationSHA256]; exists {
+			return ErrSchemaWikiContractInvalid
+		}
+		citations[citation.CitationSHA256] = struct{}{}
+	}
+	if hasDuplicateStrings(page.EvidenceReceiptSHA256s) {
+		return ErrSchemaWikiContractInvalid
+	}
+	known := page.State == "present" || page.State == "absent_explicitly"
+	if known {
+		if page.ValueSnapshot == nil || *page.ValueSnapshot == "" || len(page.Citations) == 0 ||
+			len(page.EvidenceReceiptSHA256s) == 0 || page.ReviewItemReason != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	} else if page.State != "unknown" || page.ValueSnapshot != nil || len(page.Citations) != 0 ||
+		len(page.EvidenceReceiptSHA256s) != 0 || page.ReviewItemReason == nil ||
+		*page.ReviewItemReason != "FIELD_UNKNOWN" {
+		return ErrSchemaWikiContractInvalid
+	}
+	return requireSchemaWikiHash(page.Contract, page, "field_page_sha256", page.FieldPageSHA256)
+}
+
+func validateSchemaWikiMemberPayload(member SchemaWikiMemberV1) (schemaWikiDecodedMemberPayload, error) {
+	var decoded schemaWikiDecodedMemberPayload
+	if member.Contract != "schema-wiki-member.v1" || member.MemberRef == "" {
+		return decoded, ErrSchemaWikiContractInvalid
+	}
+	switch member.MemberKind {
+	case "root":
+		if member.SectionID != nil || member.FieldID != nil {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		var page SchemaRootPageV1
+		if decodeClosedSchemaWikiPayload(member.Payload, &page) != nil ||
+			page.Contract != "schema-root-page.v1" || page.DomainID == "" || page.SchemaPackID == "" ||
+			page.SchemaVersion == "" || page.EntityID == "" || page.EntityVersionID == "" ||
+			page.ProductVersionID == "" || page.TaxonomyVersion == "" || page.ProductDisplayName == "" ||
+			len(page.OrderedSectionIDs) == 0 || hasDuplicateStrings(page.OrderedSectionIDs) ||
+			requireSchemaWikiHash(page.Contract, page, "root_page_sha256", page.RootPageSHA256) != nil ||
+			member.PayloadSHA256 != page.RootPageSHA256 {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		decoded.root = &page
+	case "section":
+		if member.SectionID == nil || member.FieldID != nil {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		var page SchemaSectionPageV1
+		if decodeClosedSchemaWikiPayload(member.Payload, &page) != nil ||
+			page.Contract != "schema-section-page.v1" || page.DomainID == "" || page.SchemaPackID == "" ||
+			page.SchemaVersion == "" || page.EntityID == "" || page.EntityVersionID == "" ||
+			page.ProductVersionID == "" || page.TaxonomyVersion == "" || page.SectionID != *member.SectionID ||
+			page.DisplayName == "" || len(page.OrderedFieldIDs) == 0 || hasDuplicateStrings(page.OrderedFieldIDs) ||
+			requireSchemaWikiHash(page.Contract, page, "section_page_sha256", page.SectionPageSHA256) != nil ||
+			member.PayloadSHA256 != page.SectionPageSHA256 {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		decoded.section = &page
+	case "field":
+		if member.SectionID == nil || member.FieldID == nil {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		var page SchemaFieldPageV1
+		if decodeClosedSchemaWikiPayload(member.Payload, &page) != nil || page.FieldID != *member.FieldID ||
+			validateSchemaFieldPage(page) != nil || member.PayloadSHA256 != page.FieldPageSHA256 {
+			return decoded, ErrSchemaWikiContractInvalid
+		}
+		decoded.field = &page
+	default:
+		return decoded, ErrSchemaWikiContractInvalid
+	}
+	if requireSchemaWikiHash(member.Contract, member, "member_digest", member.MemberDigest) != nil {
+		return decoded, ErrSchemaWikiContractInvalid
+	}
+	return decoded, nil
+}
+
 func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPackV1) error {
 	if err := ValidateSchemaPack(pack); err != nil || release.Contract != "knowledge-wiki-release.v1" ||
 		release.ReleaseState != "draft" || release.SchemaPack.SchemaPackSHA256 != pack.SchemaPackSHA256 ||
@@ -431,6 +579,7 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 	}
 	membersByRef := map[string]SchemaWikiMemberV1{}
 	memberDigests := map[string]struct{}{}
+	decodedPayloads := make([]schemaWikiDecodedMemberPayload, len(release.Members))
 	for index, member := range release.Members {
 		sectionID, fieldID := "", ""
 		if member.SectionID != nil {
@@ -440,17 +589,61 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 			fieldID = *member.FieldID
 		}
 		actual := [4]string{member.MemberRef, member.MemberKind, sectionID, fieldID}
-		if actual != expected[index] || requireSchemaWikiHash(member.Contract, member, "member_digest", member.MemberDigest) != nil {
+		decoded, err := validateSchemaWikiMemberPayload(member)
+		if actual != expected[index] || err != nil {
 			return ErrSchemaWikiContractInvalid
 		}
+		decodedPayloads[index] = decoded
 		if _, exists := memberDigests[member.MemberDigest]; exists {
 			return ErrSchemaWikiContractInvalid
 		}
 		memberDigests[member.MemberDigest] = struct{}{}
 		membersByRef[member.MemberRef] = member
 	}
+	root := decodedPayloads[0].root
+	sectionIDs := make([]string, len(pack.Sections))
+	for index, section := range pack.Sections {
+		sectionIDs[index] = section.SectionID
+	}
+	if root == nil || root.DomainID != release.Domain.DomainID || root.DomainSHA256 != release.Domain.DomainSHA256 ||
+		root.SchemaPackID != pack.SchemaPackID || root.SchemaVersion != pack.SchemaVersion ||
+		root.SchemaPackSHA256 != pack.SchemaPackSHA256 || root.EntityID != release.Entity.EntityID ||
+		root.EntityVersionID != release.EntityVersion.VersionID ||
+		root.ProductVersionID != release.EntityVersion.ProductVersionID ||
+		root.TaxonomyVersion != release.Taxonomy.TaxonomyVersion ||
+		root.TaxonomySHA256 != release.Taxonomy.TaxonomySHA256 ||
+		!equalStrings(root.OrderedSectionIDs, sectionIDs) {
+		return ErrSchemaWikiContractInvalid
+	}
+	for index, section := range pack.Sections {
+		page := decodedPayloads[index+1].section
+		if page == nil || page.DomainID != release.Domain.DomainID || page.DomainSHA256 != release.Domain.DomainSHA256 ||
+			page.SchemaPackID != pack.SchemaPackID || page.SchemaVersion != pack.SchemaVersion ||
+			page.SchemaPackSHA256 != pack.SchemaPackSHA256 || page.EntityID != release.Entity.EntityID ||
+			page.EntityVersionID != release.EntityVersion.VersionID ||
+			page.ProductVersionID != release.EntityVersion.ProductVersionID ||
+			page.TaxonomyVersion != release.Taxonomy.TaxonomyVersion ||
+			page.TaxonomySHA256 != release.Taxonomy.TaxonomySHA256 || page.SectionID != section.SectionID ||
+			page.DisplayName != section.DisplayName || !equalStrings(page.OrderedFieldIDs, section.OrderedFieldIDs) {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
 	previous := ""
 	seenCitations := map[string]struct{}{}
+	payloadCitations := make([][2]string, 0, len(release.CitationBindings))
+	for index, member := range release.Members {
+		page := decodedPayloads[index].field
+		if page == nil {
+			continue
+		}
+		for _, citation := range page.Citations {
+			if citation.LogicalMemberRef != member.MemberRef ||
+				citation.EntityVersionID != release.EntityVersion.VersionID {
+				return ErrSchemaWikiContractInvalid
+			}
+			payloadCitations = append(payloadCitations, [2]string{member.MemberRef, citation.CitationSHA256})
+		}
+	}
 	for _, binding := range release.CitationBindings {
 		key := binding.LogicalMemberRef + "\x00" + binding.CitationSHA256
 		if key < previous {
@@ -461,11 +654,20 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 			return ErrSchemaWikiContractInvalid
 		}
 		seenCitations[binding.CitationSHA256] = struct{}{}
+		bindingIndex := len(seenCitations) - 1
+		if bindingIndex >= len(payloadCitations) || payloadCitations[bindingIndex] != [2]string{
+			binding.LogicalMemberRef, binding.CitationSHA256,
+		} {
+			return ErrSchemaWikiContractInvalid
+		}
 		member, exists := membersByRef[binding.LogicalMemberRef]
 		if !exists || member.MemberDigest != binding.MemberDigest ||
 			requireSchemaWikiHash(binding.Contract, binding, "binding_sha256", binding.BindingSHA256) != nil {
 			return ErrSchemaWikiContractInvalid
 		}
+	}
+	if len(payloadCitations) != len(release.CitationBindings) {
+		return ErrSchemaWikiContractInvalid
 	}
 	manifestDigest, err := schemaWikiManifestDigest(release.Members, release.CitationBindings)
 	if err != nil || manifestDigest != release.ManifestDigest {
