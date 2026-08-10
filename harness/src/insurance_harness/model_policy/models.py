@@ -20,10 +20,10 @@ from pydantic import (
     model_validator,
 )
 
-ModelFamily = Literal["minimax", "qwen", "qwen-vl"]
+ModelFamily = Literal["deepseek", "minimax", "qwen", "qwen-vl"]
 ModelRole = Literal["classify", "extract", "gap", "verify", "consensus"]
 IdentityKey = tuple[str, str, ModelFamily, ModelRole, str]
-_MODEL_FAMILIES = frozenset({"minimax", "qwen", "qwen-vl"})
+_MODEL_FAMILIES = frozenset({"deepseek", "minimax", "qwen", "qwen-vl"})
 _MODEL_ROLES = frozenset({"classify", "extract", "gap", "verify", "consensus"})
 PolicyReasonCode = Literal[
     "policy_allowed",

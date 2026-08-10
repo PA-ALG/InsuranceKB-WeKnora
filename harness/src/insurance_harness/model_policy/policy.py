@@ -43,6 +43,7 @@ _TRUSTED_PROVIDER_FAMILY_KEYS = frozenset(
         ("bailian", "minimax"),
         ("bailian", "qwen"),
         ("bailian", "qwen-vl"),
+        ("deepseek", "deepseek"),
     }
 )
 _DEPLOYMENT_ROOT_GRAMMARS = (
@@ -74,9 +75,7 @@ _SHA256_SUFFIX = re.compile(r"^(?:(.*)-)?sha256-([0-9a-f]{8,64})$")
 _COMPACT_DATE_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{8})$")
 _ISO_DATE_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{4}-[0-9]{2}-[0-9]{2})$")
 _VENDOR_VERSION_SUFFIX = re.compile(r"^(?:(.*)-)?([0-9]{2}(?:0[1-9]|1[0-2]))$")
-_STRONG_MODEL_WORDS = frozenset(
-    {"claude", "deepseek", "gemini", "opus", "sonnet"}
-)
+_STRONG_MODEL_WORDS = frozenset({"claude", "deepseek", "gemini", "opus", "sonnet"})
 _POLICY_DIGEST_DOMAIN = b"insurancekb.model-policy.approved-identities.v2\0"
 _CONTEXT_DIGEST_DOMAIN = b"insurancekb.model-policy.call-context.v1\0"
 _DENY_SCOPE_DIGEST_DOMAIN = b"insurancekb.model-policy.deny-receipt-scope.v1\0"
@@ -274,10 +273,22 @@ def _validate_production_identity_declaration(
         if _contains_strong_model_signature(deployment):
             raise ModelPolicyDenied("strong_model")
         raise ModelPolicyDenied("invalid_identity")
-    if provider != "bailian":
+    if provider not in {item[0] for item in _TRUSTED_PROVIDER_FAMILY_KEYS}:
         raise ModelPolicyDenied("provider_not_approved")
     if (provider, validated.family) not in _TRUSTED_PROVIDER_FAMILY_KEYS:
         raise ModelPolicyDenied("family_not_approved")
+    if provider == "deepseek" and (
+        validated.family,
+        deployment,
+        validated.role,
+        validated.policy_version,
+    ) != (
+        "deepseek",
+        "deepseek-v4-flash",
+        "extract",
+        "schema67-deepseek-v1",
+    ):
+        raise ModelPolicyDenied("invalid_identity")
     tokens = frozenset(filter(None, re.split(r"[^a-z0-9]+", deployment)))
     if deployment in _UNVERSIONED_ALIASES or tokens.intersection(_ROLLING_MARKERS):
         raise ModelPolicyDenied("rolling_identity")
@@ -306,6 +317,12 @@ def _matches_code_owned_deployment_grammar(
     family: str,
     deployment: str,
 ) -> bool:
+    if (provider, family, deployment) == (
+        "deepseek",
+        "deepseek",
+        "deepseek-v4-flash",
+    ):
+        return True
     root_match = next(
         (
             pattern.fullmatch(deployment)
@@ -324,8 +341,7 @@ def _matches_code_owned_deployment_grammar(
         return True
     descriptor_tokens = descriptors.split("-")
     return len(descriptor_tokens) == len(set(descriptor_tokens)) and all(
-        token in _DEPLOYMENT_CAPABILITY_TOKENS
-        or _MODEL_SIZE_TOKEN.fullmatch(token) is not None
+        token in _DEPLOYMENT_CAPABILITY_TOKENS or _MODEL_SIZE_TOKEN.fullmatch(token) is not None
         for token in descriptor_tokens
     )
 
@@ -342,9 +358,7 @@ def _strip_immutable_deployment_anchor(tail: str) -> str | None:
 def _strip_date_or_vendor_anchor(value: str) -> str | None:
     compact_match = _COMPACT_DATE_SUFFIX.fullmatch(value)
     if compact_match is not None and _is_valid_iso_date(
-        f"{compact_match.group(2)[:4]}-"
-        f"{compact_match.group(2)[4:6]}-"
-        f"{compact_match.group(2)[6:]}"
+        f"{compact_match.group(2)[:4]}-{compact_match.group(2)[4:6]}-{compact_match.group(2)[6:]}"
     ):
         return compact_match.group(1) or ""
     iso_match = _ISO_DATE_SUFFIX.fullmatch(value)

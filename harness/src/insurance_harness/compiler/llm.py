@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 from weakref import WeakKeyDictionary
 
 import httpx
@@ -366,20 +366,57 @@ class MeteredClient:
 
 
 class TruncatedOutputError(Exception):
-    """模型输出被截断（content 为空且 finish_reason=length）——按内容级重试处理。
+    """模型输出为空或 finish_reason=length——按内容级重试处理。
 
     推理型模型（deepseek-v4-flash / MiniMax-M2.5 均返回 reasoning_content）在
     max_tokens 不足时会把预算全部耗在推理上，正文为空。
     """
 
 
+def openai_compat_request_bytes(
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    system: str,
+    user: str,
+    thinking: Literal["enabled", "disabled"] | None = None,
+    response_format: Literal["json_object"] | None = None,
+) -> bytes:
+    """Serialize the exact HTTP JSON envelope used by OpenAICompatClient."""
+
+    payload: dict[str, object] = {
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if thinking is not None:
+        payload["thinking"] = {"type": thinking}
+    if response_format is not None:
+        if response_format != "json_object":  # pragma: no cover - typing guard
+            raise ValueError("unsupported OpenAI-compatible response format")
+        payload["response_format"] = {"type": response_format}
+    payload["messages"] = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
+
+
 class OpenAICompatClient:
-    """OpenAI 兼容端点直连（百炼 DashScope compatible-mode；坑清单 #9：trust_env=False）。
+    """OpenAI 兼容端点直连（坑清单 #9：trust_env=False）。
 
     推理型模型约定（业务方 2026-07-12 实测）：
     - max_tokens 必须给足（默认 4096），否则 reasoning_content 吃掉全部预算；
+    - 可由调用方显式冻结官方 ``thinking`` 模式；未指定时保持兼容旧调用；
+    - 可选 ``response_format=json_object``；未指定时保持旧请求 bytes；
     - 只取 message.content，忽略 reasoning_content；
-    - content 为空且 finish_reason=length → 视为截断抛 TruncatedOutputError（可重试）。
+    - content 为空或 finish_reason=length → 抛 TruncatedOutputError（可重试）。
     """
 
     def __init__(
@@ -390,10 +427,14 @@ class OpenAICompatClient:
         temperature: float = 0.1,
         max_tokens: int = 4096,
         timeout_s: float = 180.0,
+        thinking: Literal["enabled", "disabled"] | None = None,
+        response_format: Literal["json_object"] | None = None,
     ) -> None:
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._thinking = thinking
+        self._response_format = response_format
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -406,24 +447,31 @@ class OpenAICompatClient:
         return self._model
 
     async def complete(self, system: str, user: str) -> str:
+        body = openai_compat_request_bytes(
+            model=self._model,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+            system=system,
+            user=user,
+            thinking=self._thinking,
+            response_format=self._response_format,
+        )
         resp = await self._client.post(
             "/chat/completions",
-            json={
-                "model": self._model,
-                "temperature": self._temperature,
-                "max_tokens": self._max_tokens,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            },
+            content=body,
+            headers={"Content-Type": "application/json"},
         )
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
         choice = data["choices"][0]
         content = str(choice.get("message", {}).get("content") or "")
+        finish = str(choice.get("finish_reason", ""))
+        if finish == "length":
+            raise TruncatedOutputError(
+                f"模型 {self._model} 输出被截断（finish_reason={finish}）——"
+                "按截断重试"
+            )
         if not content.strip():
-            finish = str(choice.get("finish_reason", ""))
             raise TruncatedOutputError(
                 f"模型 {self._model} 输出正文为空（finish_reason={finish}）——"
                 "疑似 reasoning 耗尽 max_tokens，按截断重试"

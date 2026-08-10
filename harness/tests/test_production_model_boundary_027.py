@@ -23,6 +23,7 @@ import insurance_harness.model_policy.admission as admission_module
 import insurance_harness.model_policy.composition as composition_module
 import insurance_harness.model_policy.gateway as gateway_module
 import insurance_harness.model_policy.policy as policy_module
+from insurance_harness.config import HarnessSettings
 from insurance_harness.model_policy import (
     AdmissionBinding,
     AdmissionPolicyDenied,
@@ -104,11 +105,11 @@ class _ExplodingIdentityKeys:
         {_MutableIdentityKey(_identity().identity_key)},
         {
             (
-                    _MutableIdentityPart("bailian"),
-                    "qwen3.6-prod-20260715",
-                    "qwen",
-                    "extract",
-                    "pwb-v1",
+                _MutableIdentityPart("bailian"),
+                "qwen3.6-prod-20260715",
+                "qwen",
+                "extract",
+                "pwb-v1",
             )
         },
         (_identity().identity_key, _identity().identity_key),
@@ -186,6 +187,48 @@ def test_pwb1_code_owned_catalog_accepts_supported_immutable_id_shapes(
     identity = _identity(deployment_id, family=family)
 
     assert _policy_for(identity).evaluate(identity) == identity
+
+
+def test_pwb1_exact_deepseek_v4_flash_is_the_only_approved_deepseek_shape() -> None:
+    identity = ModelIdentity(
+        provider="deepseek",
+        deployment_id="deepseek-v4-flash",
+        family="deepseek",
+        role="extract",
+        policy_version="schema67-deepseek-v1",
+    )
+
+    assert _policy_for(identity).evaluate(identity) == identity
+    mixed_provider = identity.model_copy(update={"provider": "aliyun"})
+    with pytest.raises(ModelPolicyDenied):
+        _policy_for(mixed_provider).evaluate(mixed_provider)
+    assert (
+        HarnessSettings.model_validate(
+            {
+                "weknora_base_url": "http://127.0.0.1:8081",
+                "weknora_api_key": "test-only",
+                "production_model_family": "deepseek",
+            }
+        ).production_model_family
+        == "deepseek"
+    )
+
+    for deployment_id in (
+        "deepseek-v4",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash-latest",
+        "deepseek-v4-flash-20260807",
+    ):
+        altered = identity.model_copy(update={"deployment_id": deployment_id})
+        with pytest.raises(ModelPolicyDenied):
+            _policy_for(altered).evaluate(altered)
+
+    for altered in (
+        identity.model_copy(update={"role": "classify"}),
+        identity.model_copy(update={"policy_version": "schema67-deepseek-v2"}),
+    ):
+        with pytest.raises(ModelPolicyDenied):
+            _policy_for(altered).evaluate(altered)
 
 
 @pytest.mark.parametrize(
@@ -292,9 +335,7 @@ def test_pwb1_identity_key_is_exact_and_family_is_constrained() -> None:
     with pytest.raises(ValidationError):
         _identity(family="claude")
 
-    forged_family = ModelIdentity.model_construct(
-        **{**identity.model_dump(), "family": "claude"}
-    )
+    forged_family = ModelIdentity.model_construct(**{**identity.model_dump(), "family": "claude"})
     with pytest.raises(ModelPolicyDenied) as denied:
         _policy_for(identity).evaluate(forged_family)
     assert denied.value.reason_code == "invalid_identity"
@@ -448,10 +489,7 @@ def _verified() -> VerifiedAdmission:
 
 
 def _raw_model_values(value: BaseModel) -> dict[str, object]:
-    return {
-        field: getattr(value, field)
-        for field in type(value).model_fields
-    }
+    return {field: getattr(value, field) for field in type(value).model_fields}
 
 
 def _permit_view(verified: VerifiedAdmission) -> ModelPermitView:
@@ -554,9 +592,7 @@ def test_pwb4_verified_admission_is_process_opaque_and_nontransferable() -> None
     assert verified.binding == binding
     assert len(verified.verified_binding_digest) == 64
     receipt = verified.receipt
-    loaded_receipt = AdmissionVerificationReceipt.model_validate_json(
-        receipt.model_dump_json()
-    )
+    loaded_receipt = AdmissionVerificationReceipt.model_validate_json(receipt.model_dump_json())
     assert loaded_receipt == receipt
     assert receipt.request_digest == request.request_digest
     assert receipt.binding_digest == binding.binding_digest
@@ -937,9 +973,7 @@ def test_pwb4_production_builder_cannot_register_mirror_or_custom_verifier() -> 
     assert tuple(signature(_build_production_model_composition).parameters) == ()
     with pytest.raises(TypeError):
         _build_production_model_composition(  # type: ignore[call-arg]
-            canonical_verifiers={
-                ("attacker-purpose", "attacker-schema"): _CanonicalTestVerifier()
-            },
+            canonical_verifiers={("attacker-purpose", "attacker-schema"): _CanonicalTestVerifier()},
         )
     assert "_build_production_model_composition" not in model_policy_package.__all__
     assert not hasattr(ProductionModelComposition, "register_verifier")
@@ -1100,9 +1134,7 @@ def test_pwb4_issued_permit_cannot_replay_across_full_binding(
         original_verified,
         original_context,
     )
-    next_request = _strict_request().model_copy(
-        update={f"expected_{field}": replacement}
-    )
+    next_request = _strict_request().model_copy(update={f"expected_{field}": replacement})
     next_binding = _binding().model_copy(update={f"actual_{field}": replacement})
     next_verified = _issue_verified_admission(
         next_request,
@@ -1163,9 +1195,7 @@ def test_pwb1_bound_composition_rechecks_complete_admission_identity_set_per_cal
     one_role_verified = _verified()
     two_role_verified = _issue_verified_admission(
         _strict_request(),
-        _binding().model_copy(
-            update={"approved_identities": (extract_identity, gap_identity)}
-        ),
+        _binding().model_copy(update={"approved_identities": (extract_identity, gap_identity)}),
         verifier_id="canonical-admission",
         verifier_version="v1",
         verified_at=datetime(2026, 7, 22, tzinfo=UTC),
@@ -1261,9 +1291,7 @@ def test_pwb1_disguised_strong_identity_cannot_build_guarded_transport(
 
 def test_pwb4_policy_denies_expired_verified_scope_without_issuing_permit() -> None:
     request = _strict_request()
-    binding = _binding().model_copy(
-        update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)}
-    )
+    binding = _binding().model_copy(update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)})
     verified = _issue_verified_admission(
         request,
         binding,
@@ -1362,9 +1390,7 @@ def test_pwb4_transport_matcher_rechecks_permit_expiry_at_use_time() -> None:
 
     old_verified = _issue_verified_admission(
         _strict_request(),
-        _binding().model_copy(
-            update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)}
-        ),
+        _binding().model_copy(update={"actual_expires_at": datetime(2020, 8, 1, tzinfo=UTC)}),
         verifier_id="canonical-admission",
         verifier_version="v1",
         verified_at=datetime(2020, 7, 22, tzinfo=UTC),
@@ -1384,12 +1410,8 @@ def test_pwb4_transport_matcher_rechecks_permit_expiry_at_use_time() -> None:
 def test_pwb4_public_composition_signatures_have_no_clock_rollback() -> None:
     assert "clock" not in signature(ProductionModelComposition.verify).parameters
     assert "checked_at" not in signature(ProductionModelComposition.verify).parameters
-    assert "clock" not in signature(
-        ProductionModelComposition._evaluate_for_guard
-    ).parameters
-    assert "checked_at" not in signature(
-        ProductionModelComposition._evaluate_for_guard
-    ).parameters
+    assert "clock" not in signature(ProductionModelComposition._evaluate_for_guard).parameters
+    assert "checked_at" not in signature(ProductionModelComposition._evaluate_for_guard).parameters
 
 
 def test_pwb4_receipt_sink_protocol_records_receipt_only() -> None:
@@ -1441,9 +1463,7 @@ def test_pwb4_coordinated_permit_view_rebind_cannot_change_call_scope() -> None:
         verified,
         issued_at=datetime(2026, 7, 22, tzinfo=UTC),
     )
-    rebound_context = _call_context(verified).model_copy(
-        update={"call_scope_hash": "0" * 64}
-    )
+    rebound_context = _call_context(verified).model_copy(update={"call_scope_hash": "0" * 64})
     try:
         object.__setattr__(
             permit,
@@ -1453,9 +1473,7 @@ def test_pwb4_coordinated_permit_view_rebind_cannot_change_call_scope() -> None:
     except AttributeError:
         pass
 
-    provider_calls = int(
-        _permit_matches_call_context(permit, verified, rebound_context)
-    )
+    provider_calls = int(_permit_matches_call_context(permit, verified, rebound_context))
 
     assert provider_calls == 0
 
@@ -1481,9 +1499,7 @@ def test_pwb4_coordinated_decision_receipt_permit_context_rebind_is_denied() -> 
     except AttributeError:
         pass
 
-    provider_calls = int(
-        _decision_authorizes_call(decision, verified, rebound_context)
-    )
+    provider_calls = int(_decision_authorizes_call(decision, verified, rebound_context))
 
     assert provider_calls == 0
 
@@ -1561,11 +1577,7 @@ def test_pwb4_deny_receipt_digests_untrusted_context_without_secret_leak(
     if field.startswith("identity_"):
         identity_field = field.removeprefix("identity_")
         context = context.model_copy(
-            update={
-                "identity": context.identity.model_copy(
-                    update={identity_field: sentinel}
-                )
-            }
+            update={"identity": context.identity.model_copy(update={identity_field: sentinel})}
         )
     else:
         context = context.model_copy(update={field: sentinel})
@@ -1662,12 +1674,8 @@ def test_pwb4_authority_registry_concurrent_reads_do_not_transfer_authority() ->
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         valid = tuple(pool.map(lambda _index: _is_verified_admission(verified), range(64)))
-        invalid = tuple(
-            pool.map(lambda _index: _is_verified_admission(forged_verified), range(64))
-        )
-        permits = tuple(
-            pool.map(lambda _index: _is_issued_model_permit(permit), range(64))
-        )
+        invalid = tuple(pool.map(lambda _index: _is_verified_admission(forged_verified), range(64)))
+        permits = tuple(pool.map(lambda _index: _is_issued_model_permit(permit), range(64)))
         forged_permits = tuple(
             pool.map(lambda _index: _is_issued_model_permit(forged_permit), range(64))
         )
@@ -1738,12 +1746,8 @@ def test_pwb4_gateway_public_facts_and_request_are_frozen_without_scope_hash() -
         request.content = b"changed"
 
 
-_TEST_CLIENT_EXECUTORS: weakref.WeakKeyDictionary[object, object] = (
-    weakref.WeakKeyDictionary()
-)
-_raw_build_guarded_model_client_for_test = (
-    gateway_module._build_guarded_model_client_for_test
-)
+_TEST_CLIENT_EXECUTORS: weakref.WeakKeyDictionary[object, object] = weakref.WeakKeyDictionary()
+_raw_build_guarded_model_client_for_test = gateway_module._build_guarded_model_client_for_test
 
 
 def _gateway_executor_terminal_observations(
@@ -1827,9 +1831,7 @@ def _gateway_facts(
         "attempt": 1,
         "input_digest": "b" * 64,
         "content_digest": hashlib.sha256(request.content).hexdigest(),
-        "rendered_prompt_digest": hashlib.sha256(
-            request.rendered_prompt
-        ).hexdigest(),
+        "rendered_prompt_digest": hashlib.sha256(request.rendered_prompt).hexdigest(),
         "purpose": binding.actual_purpose,
         "run_schema_version": binding.actual_run_schema_version,
         "space_id": binding.actual_space_id,
@@ -2072,9 +2074,7 @@ def test_pwb4_gateway_sink_failure_prevents_transport() -> None:
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "receipt_sink_failure"
     assert "api-key-secret-sentinel" not in str(denied.value)
@@ -2093,9 +2093,7 @@ def test_pwb4_gateway_transport_exception_has_no_retry_or_secret_echo() -> None:
     )
 
     with pytest.raises(ModelTransportError) as failed:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert "raw-prompt-secret-sentinel" not in str(failed.value)
     assert len(_gateway_executor_terminal_observations(client)) == 1
@@ -2121,9 +2119,7 @@ def test_pwb4_gateway_rechecks_expiry_before_persisting_allow(
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert _gateway_executor_terminal_observations(client) == []
@@ -2148,9 +2144,7 @@ def test_pwb4_gateway_is_opaque_nontransferable_and_reset_revokes() -> None:
         pickle.dumps(client)
     forged = object.__new__(GuardedModelClient)
     with pytest.raises(ModelGatewayDenied) as forged_denied:
-        _run_gateway_call(
-            forged, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(forged, verified, _gateway_facts(verified, request), request)
     assert forged_denied.value.reason_code == "invalid_gateway"
 
     old_lock = gateway_module._GATEWAY_LOCK
@@ -2160,9 +2154,7 @@ def test_pwb4_gateway_is_opaque_nontransferable_and_reset_revokes() -> None:
     assert gateway_module._GATEWAY_LOCK is not old_lock
     assert gateway_module._GATEWAY_STATES is not old_states
     with pytest.raises(ModelGatewayDenied) as reset_denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     assert reset_denied.value.reason_code == "invalid_gateway"
     assert _gateway_executor_terminal_observations(client) == []
     assert sink.receipts == []
@@ -2203,9 +2195,7 @@ def test_pwb4_gateway_fork_reset_captures_private_authority_resets(
     registered_reset()
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     assert denied.value.reason_code == "invalid_gateway"
     assert _gateway_executor_terminal_observations(client) == []
     assert sink.receipts == []
@@ -2271,9 +2261,7 @@ def test_pwb4_gateway_fails_closed_when_stateful_target_is_dropped() -> None:
 
     assert target_ref() is None
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-    )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     assert denied.value.reason_code == "invalid_gateway"
     assert sink.receipts == []
 
@@ -2305,9 +2293,7 @@ def test_pwb4_gateway_captured_authority_cannot_be_swapped_by_sink() -> None:
     )
     sink.client = client
 
-    result = _run_gateway_call(
-        client, verified, _gateway_facts(verified, request), request
-    )
+    result = _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert result == "weak-result"
     assert len(_gateway_executor_terminal_observations(client)) == 1
@@ -2333,9 +2319,7 @@ def test_pwb4_gateway_authority_mutation_before_receipt_is_zero_call(
     monkeypatch.setattr(gateway_module, "_utc_now", revoke_gateway)
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert _gateway_executor_terminal_observations(client) == []
@@ -2344,12 +2328,12 @@ def test_pwb4_gateway_authority_mutation_before_receipt_is_zero_call(
 
 def test_pwb4_gateway_builder_and_call_expose_no_override_or_fallback_ports() -> None:
     assert "_build_guarded_model_client_for_test" not in model_policy_package.__all__
-    assert not hasattr(
-        model_policy_package, "_build_guarded_model_client_for_test"
+    assert not hasattr(model_policy_package, "_build_guarded_model_client_for_test")
+    assert tuple(signature(gateway_module._build_guarded_model_client_for_test).parameters) == (
+        "composition",
+        "executor",
+        "receipt_sink",
     )
-    assert tuple(
-        signature(gateway_module._build_guarded_model_client_for_test).parameters
-    ) == ("composition", "executor", "receipt_sink")
     verified = _verified()
     request = _gateway_request()
     sink = _CountingReceiptSink()
@@ -2471,10 +2455,7 @@ def test_pwb4_gateway_scope_includes_full_verified_binding() -> None:
 
     assert len(sink.receipts) == 2
     assert sink.receipts[0].call_scope_hash != sink.receipts[1].call_scope_hash
-    assert (
-        sink.receipts[0].verified_binding_digest
-        != sink.receipts[1].verified_binding_digest
-    )
+    assert sink.receipts[0].verified_binding_digest != sink.receipts[1].verified_binding_digest
 
 
 @pytest.mark.parametrize(
@@ -2568,9 +2549,7 @@ def test_pwb4_gateway_executor_is_opaque_and_retained_only_by_live_gateway() -> 
     verified = _verified()
     request = _gateway_request()
     assert (
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
         == "weak-result"
     )
 
@@ -2615,15 +2594,9 @@ def test_pwb4_gateway_factory_rejects_wrong_dependency_execution_model(
             return "unused"
 
     transport: object = (
-        _SyncTransport()
-        if invalid_dependency == "sync_transport"
-        else _AsyncTransport()
+        _SyncTransport() if invalid_dependency == "sync_transport" else _AsyncTransport()
     )
-    sink: object = (
-        _AsyncSink()
-        if invalid_dependency == "async_sink"
-        else _CountingReceiptSink()
-    )
+    sink: object = _AsyncSink() if invalid_dependency == "async_sink" else _CountingReceiptSink()
 
     with pytest.raises(ModelGatewayDenied) as denied:
         _build_raw_arbitrary_gateway(
@@ -2631,7 +2604,7 @@ def test_pwb4_gateway_factory_rejects_wrong_dependency_execution_model(
             transport=transport,
             transport_identity=_identity(),
             receipt_sink=sink,
-    )
+        )
 
     assert denied.value.reason_code == "invalid_gateway"
     assert _AsyncSink.records == 0
@@ -2667,9 +2640,7 @@ def test_pwb4_gateway_transport_code_mutation_before_use_is_zero_call(
     monkeypatch.setattr(gateway_module, "_utc_now", mutate_code)
     try:
         with pytest.raises(ModelGatewayDenied):
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         adapter_type.call.__code__ = original_code
 
@@ -2703,9 +2674,7 @@ def test_pwb4_gateway_sink_advancing_clock_to_expiry_prevents_transport(
     monkeypatch.setattr(gateway_module, "_utc_now", lambda: clock[0])
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert _gateway_executor_terminal_observations(client) == []
@@ -2744,9 +2713,7 @@ def test_pwb4_gateway_clock_crossing_expiry_during_authority_snapshot_is_zero_ca
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert _gateway_executor_terminal_observations(client) == []
@@ -2781,9 +2748,7 @@ def test_pwb4_gateway_sink_revoking_authority_prevents_transport(
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert _gateway_executor_terminal_observations(client) == []
@@ -2824,9 +2789,7 @@ def test_pwb4_gateway_sink_mutating_transport_code_prevents_transport() -> None:
 
     try:
         with pytest.raises(ModelGatewayDenied):
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         adapter_type.call.__code__ = original_code
 
@@ -2878,9 +2841,7 @@ def test_pwb4_gateway_sink_rebinding_bound_snapshot_to_same_identity_executor_is
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "authority_revalidation_failed"
     assert gateway_module._test_executor_terminal_observations(weak_executor) == ()
@@ -2915,9 +2876,7 @@ def test_pwb4_gateway_sink_mutating_own_code_prevents_transport() -> None:
 
     try:
         with pytest.raises(ModelGatewayDenied):
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         _SelfMutatingSink.record.__code__ = original_code
 
@@ -2948,9 +2907,7 @@ def test_pwb4_gateway_sink_code_mutated_before_call_is_zero_transport() -> None:
 
     try:
         with pytest.raises(ModelGatewayDenied) as denied:
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         _MutableSink.record.__code__ = original_code
 
@@ -2973,6 +2930,7 @@ def test_pwb4_gateway_canonical_async_executor_runs_once() -> None:
         transport_identity=_identity(),
         receipt_sink=sink,
     )
+
     async def invoke() -> object:
         expected_loop = asyncio.get_running_loop()
         expected_thread = threading.get_ident()
@@ -3014,6 +2972,7 @@ def test_pwb4_gateway_sealed_stateful_model_client_bridge_maps_utf8_on_same_loop
         executor=executor,
         receipt_sink=sink,
     )
+
     async def invoke() -> object:
         return await client.call(verified, _gateway_facts(verified, request), request)
 
@@ -3069,9 +3028,7 @@ def test_pwb4_gateway_sink_cannot_mutate_stateful_target_route() -> None:
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        _run_gateway_call(
-            client, verified, _gateway_facts(verified, request), request
-        )
+        _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert denied.value.reason_code == "receipt_sink_failure"
     assert gateway_module._test_stateful_target_calls(target) == ()
@@ -3126,9 +3083,7 @@ def test_pwb4_gateway_json_helper_rebind_cannot_redirect_target(
         receipt_sink=sink,
     )
 
-    result = _run_gateway_call(
-        client, verified, _gateway_facts(verified, request), request
-    )
+    result = _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
 
     assert result == "weak-result"
     assert gateway_module._test_stateful_target_calls(target) == (
@@ -3198,21 +3153,13 @@ def test_pwb4_gateway_executor_closure_helper_rebind_is_zero_call(
         transport_identity=_identity(),
         target=target,
     )
-    replacement = (
-        equivalent_snapshot
-        if helper_name == "target_snapshot"
-        else redirected_invoke
-    )
+    replacement = equivalent_snapshot if helper_name == "target_snapshot" else redirected_invoke
     consume = gateway_module._consume_executor
     consume_closure = consume.__closure__
     assert consume_closure is not None
-    consume_cells = dict(
-        zip(consume.__code__.co_freevars, consume_closure, strict=True)
-    )
+    consume_cells = dict(zip(consume.__code__.co_freevars, consume_closure, strict=True))
     mutation_owner = (
-        consume
-        if helper_name in consume_cells
-        else consume_cells["validate_locked"].cell_contents
+        consume if helper_name in consume_cells else consume_cells["validate_locked"].cell_contents
     )
     sink = _ClosureHelperRebindingSink(
         mutation_owner,
@@ -3227,9 +3174,7 @@ def test_pwb4_gateway_executor_closure_helper_rebind_is_zero_call(
 
     try:
         with pytest.raises(ModelGatewayDenied) as denied:
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         sink.restore()
 
@@ -3291,9 +3236,7 @@ def test_pwb4_gateway_executor_helper_dependency_rebind_is_zero_call() -> None:
 
     try:
         with pytest.raises(ModelGatewayDenied) as denied:
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         sink.restore()
 
@@ -3345,9 +3288,7 @@ def test_pwb4_gateway_second_thread_route_mutation_after_validation_is_ignored()
 
     mutator = threading.Thread(target=mutate_route)
     mutator.start()
-    result = _run_gateway_call(
-        client, verified, _gateway_facts(verified, request), request
-    )
+    result = _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     mutator.join(timeout=5)
 
     assert not mutator.is_alive()
@@ -3452,9 +3393,7 @@ def test_pwb4_gateway_sink_mutating_stateful_complete_code_is_zero_target_call()
 
     try:
         with pytest.raises(ModelGatewayDenied) as denied:
-            _run_gateway_call(
-                client, verified, _gateway_facts(verified, request), request
-            )
+            _run_gateway_call(client, verified, _gateway_facts(verified, request), request)
     finally:
         target_type.complete.__code__ = original_code  # type: ignore[attr-defined]
 
@@ -3538,9 +3477,7 @@ def test_pwb4_gateway_rejects_and_closes_nested_transport_awaitable() -> None:
     )
 
     with pytest.raises(ModelTransportError):
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     assert _gateway_executor_terminal_observations(client) == []
     assert len(sink.receipts) == 1
@@ -3569,9 +3506,7 @@ def test_pwb4_gateway_rejects_and_closes_deferred_generator_results(
     )
 
     with pytest.raises(ModelTransportError):
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     executor = _TEST_CLIENT_EXECUTORS[client]
     deferred = gateway_module._test_executor_deferred_results(executor)
@@ -3597,9 +3532,7 @@ def test_pwb4_gateway_accepts_only_exact_str_terminal_values(mode: str) -> None:
     )
 
     with pytest.raises(ModelTransportError):
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     assert _gateway_executor_terminal_observations(client) == []
     assert len(sink.receipts) == 1
@@ -3620,9 +3553,7 @@ def test_pwb4_gateway_rejects_bare_awaitable_without_executing_it(
     )
 
     with pytest.raises(ModelTransportError):
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     executor = _TEST_CLIENT_EXECUTORS[client]
     deferred = gateway_module._test_executor_deferred_results(executor)
@@ -3688,9 +3619,7 @@ def test_pwb4_gateway_sync_sink_returning_awaitable_is_receipt_failure() -> None
     )
 
     with pytest.raises(ModelGatewayDenied) as denied:
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     assert denied.value.reason_code == "receipt_sink_failure"
     assert _gateway_executor_terminal_observations(client) == []
@@ -3742,9 +3671,7 @@ def test_pwb4_gateway_propagates_transport_cancellation_without_retry() -> None:
     )
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(
-            client.call(verified, _gateway_facts(verified, request), request)
-        )
+        asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
 
     assert _gateway_executor_terminal_observations(client) == [(_identity(), request)]
     assert len(sink.receipts) == 1
@@ -4127,9 +4054,7 @@ def test_pwb4_gateway_rejects_noncanonical_adapter_with_indirect_helper(
                 transport_identity=_identity(),
                 receipt_sink=sink,
             )
-            asyncio.run(
-                client.call(verified, _gateway_facts(verified, request), request)
-            )
+            asyncio.run(client.call(verified, _gateway_facts(verified, request), request))
     finally:
         _PWB4_INDIRECT_ROUTE = _weak_async_route
         _pwb4_attribute_route_helper.__dict__["route"] = _weak_async_route
