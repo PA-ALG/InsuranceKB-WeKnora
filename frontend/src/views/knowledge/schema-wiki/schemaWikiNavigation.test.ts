@@ -17,6 +17,13 @@ const vector = JSON.parse(readFileSync(new URL(
   import.meta.url,
 ), 'utf8')) as { schema_pack: Record<string, unknown> }
 
+function loadMedicalReleaseVector(): Record<string, unknown> {
+  return JSON.parse(readFileSync(new URL(
+    '../../../../../internal/application/service/testdata/schema_wiki_release_596_1_vector.json',
+    import.meta.url,
+  ), 'utf8')) as Record<string, unknown>
+}
+
 test('a Wiki-enabled knowledge base defaults to Schema Wiki without falling back to materials', () => {
   assert.equal(resolveKnowledgeBaseDefaultTab({ wikiEnabled: true }), 'schema')
   assert.equal(resolveKnowledgeBaseDefaultTab({ wikiEnabled: false }), 'documents')
@@ -55,6 +62,33 @@ test('domain and section navigation is produced from validated configuration', (
       sections: [{ display_name: 'Broken', section_id: 'broken', ordered_field_ids: ['field-a', 'field-a'] }],
     },
   }), { message: 'SCHEMA_PACK_TOPOLOGY_INVALID' })
+})
+
+test('the medical navigation is projected from the frozen pack and taxonomy rather than UI constants', () => {
+  const release = loadMedicalReleaseVector()
+  const domain = release.domain as Record<string, unknown>
+  const taxonomy = release.taxonomy as { nodes: Array<Record<string, unknown>> }
+  const pack = parseSchemaPack(release.schema_pack)
+  const navigation = projectSchemaWikiNavigation({
+    domains: [{
+      domain_id: domain.domain_id as string,
+      display_name: domain.display_name as string,
+      ordinal: 0,
+    }],
+    taxonomy,
+    schemaPack: pack,
+  })
+
+  assert.deepEqual(
+    navigation.sections.map(section => section.section_id),
+    pack.sections.map(section => section.section_id),
+  )
+  assert.deepEqual(
+    navigation.fields.map(field => field.field_id),
+    pack.ordered_field_ids,
+  )
+  assert.equal(navigation.sections.length, 7)
+  assert.equal(navigation.fields.length, 67)
 })
 
 test('taxonomy reparent changes navigation only and preserves stable authority identities', () => {

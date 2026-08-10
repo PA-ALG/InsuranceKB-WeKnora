@@ -18,6 +18,18 @@ const vector = JSON.parse(readFileSync(new URL(
   citations: Array<Record<string, unknown>>
 }
 
+function loadMedicalReleaseVector(): Record<string, unknown> {
+  return JSON.parse(readFileSync(new URL(
+    '../../../../../internal/application/service/testdata/schema_wiki_release_596_1_vector.json',
+    import.meta.url,
+  ), 'utf8')) as Record<string, unknown>
+}
+
+function records(value: unknown): Array<Record<string, unknown>> {
+  assert.equal(Array.isArray(value), true)
+  return value as Array<Record<string, unknown>>
+}
+
 function presentField() {
   return {
     contract: 'schema-field-page.v1',
@@ -54,6 +66,30 @@ test('generic Wiki source_refs cannot be parsed as a formal Schema field page', 
   }, { fieldId: 'field-a', fieldPageSha256: H('f') }), {
     message: 'SCHEMA_FIELD_PAGE_INVALID',
   })
+})
+
+test('the frozen medical release projects exactly one root, seven ordered sections, and 67 unique field pages', () => {
+  const release = loadMedicalReleaseVector()
+  const pack = parseSchemaPack(release.schema_pack)
+  const members = records(release.members)
+  const roots = members.filter(member => member.member_kind === 'root')
+  const sections = members.filter(member => member.member_kind === 'section')
+  const fields = members.filter(member => member.member_kind === 'field')
+  const fieldIds = fields.map(member => member.field_id)
+
+  assert.equal(members.length, 75)
+  assert.equal(roots.length, 1)
+  assert.equal(sections.length, 7)
+  assert.equal(fields.length, 67)
+  assert.deepEqual(
+    sections.map(member => member.section_id),
+    pack.sections.map(section => section.section_id),
+  )
+  assert.deepEqual(fieldIds, pack.ordered_field_ids)
+  assert.equal(new Set(fieldIds).size, 67)
+  assert.equal(fields.every(member => typeof member.payload_sha256 === 'string'), true)
+  assert.equal(JSON.stringify(release).includes('source_refs'), false)
+  assert.equal(members.some(member => member.member_kind === 'generic'), false)
 })
 
 test('the unchanged A1 SchemaPack is configurable and remains an exact ordered partition', () => {
@@ -102,6 +138,21 @@ test('unknown is an evidence-free abstention and never a hidden answer', () => {
   }, { fieldId: 'field-a', fieldPageSha256: H('f') }), {
     message: 'UNKNOWN_FIELD_HAS_AUTHORITY',
   })
+})
+
+test('every known state requires both a formal citation and a 057 receipt', () => {
+  for (const state of ['present', 'absent_explicitly'] as const) {
+    assert.throws(() => parseSchemaFieldPage({
+      ...presentField(),
+      state,
+      citations: [],
+      evidence_receipt_sha256s: [],
+    }, { fieldId: 'field-a', fieldPageSha256: H('f') }), {
+      message: state === 'absent_explicitly'
+        ? 'EXPLICIT_ABSENCE_EVIDENCE_REQUIRED'
+        : 'SCHEMA_FIELD_PAGE_INVALID',
+    })
+  }
 })
 
 test('absent_explicitly requires a value, citation, and 057 receipt identity', () => {
