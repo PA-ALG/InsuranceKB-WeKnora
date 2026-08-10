@@ -49,15 +49,19 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `internal/router/routes_schema_wiki.go`
 - `internal/router/routes_schema_wiki_test.go`
 - `internal/application/repository/wiki_release_scope_test.go`
-- `internal/router/routes_knowledge.go`
 - `internal/application/repository/wiki_release.go`
 - `internal/application/service/wiki_release.go`
 - `internal/container/container.go`
-- `internal/router/router.go`
+- `internal/router/router.go`, the approved mechanical DI/direct-mount path that registers
+  all 13 Schema Wiki routes in the real `/api/v1` router. The earlier expectation that
+  `internal/router/routes_knowledge.go` would be the mount point is superseded by this
+  existing direct registration; `routes_knowledge.go` remains unchanged and is not a
+  missing reachability path.
 
 ### Lane B only
 
-- the four OpenSpec 120 documents and this registry row;
+- `docs/superpowers/plans/2026-08-10-schema-wiki-mvp.md`, the four OpenSpec 120 documents
+  and this registry row;
 - `harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py`
 - `harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py`
 - `harness/tests/test_medical_schema_pack_596_1.py`
@@ -73,6 +77,20 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - all new files under `frontend/src/views/knowledge/schema-wiki/` named in the approved
   plan, and `frontend/src/components/schema-wiki/{schemaCitationTarget.ts,
   schemaCitationTarget.test.ts,SchemaCitationViewer.vue,SchemaCitationViewer.test.ts}`.
+
+### Integration support paths only
+
+These paths are necessary mechanical support for the approved Lane C paths. They do not
+replace, broaden or satisfy any approved Schema Wiki owner path by themselves:
+
+- `frontend/src/components/schema-wiki/pdfJsPort.ts` provides the bounded PDF.js port used
+  by the approved citation viewer.
+- `frontend/src/components/sessionSidebarBuckets.ts`,
+  `frontend/src/i18n/locales/{en-US.ts,ko-KR.ts,ru-RU.ts}`,
+  `frontend/src/views/agent/AgentEditorModal.vue`, and
+  `frontend/src/views/system/SystemSettings.vue` are the six exact typecheck/build hygiene
+  paths required to make the integrated frontend verifiable. They do not change Schema
+  Wiki routes, contracts, release semantics or authority.
 
 ## Frozen release and review model
 

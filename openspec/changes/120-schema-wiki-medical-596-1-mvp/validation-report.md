@@ -1,6 +1,6 @@
 # 120 · Validation Report
 
-Status: `IMPLEMENTATION-IN-PROGRESS / LANE-B-PAYLOAD-CORRECTIVE-FROZEN / A2-RED`
+Status: `INTEGRATION-CODE-GREEN / LIVE-NO-GO`
 
 ## Identity and scope
 
@@ -10,9 +10,13 @@ Status: `IMPLEMENTATION-IN-PROGRESS / LANE-B-PAYLOAD-CORRECTIVE-FROZEN / A2-RED`
 - Lane A A1 payload/sorting authority: commits
   `d014dcd24ab882b7514554b37f46d958cbad18b3` and
   `585cb9dd6f369ca57825e4d63ab35805fb5b6f32`.
-- Branch: `codex/schema-wiki-compiler`
-- Lane B implementation scope: medical pack/compiler, their two focused tests and one
-  immutable release vector; this report and task checklist are mechanically synchronized.
+- Integration branch: `codex/schema-wiki-mvp-integration`
+- Integration code identity before this documentation-only closeout:
+  commit `3da54ff80b6106dea6e2b27ca105f3c5238a1864`, tree
+  `c8fcc503bd4f1047bd105a95515646dcf2eb4f8a`.
+- Scope: A1 contracts, Lane B medical pack/compiler and immutable vector, A2 existing-row
+  lifecycle/read facade, and Lane C release-pinned UI. This report and checklist are
+  mechanically synchronized without changing production bytes.
 - Provider/model, Golden scoring, DB, WeKnora, migration, activation and live:
   `NOT RUN`.
 
@@ -42,6 +46,23 @@ DNS noise did not alter that load-bearing missing-change RED.
 - Immutable payload-bearing 75-member/111-citation release vector: `216,482` bytes;
   SHA-256 `d1de4362342584374c693776f07f3916edd3879a5dcf562252fdfed063ce22db`.
 - Task 0 exact five-path scope and README status: `PASS`.
+- Integrated repository evidence before the reachability delta: Python Schema
+  contracts/compiler/release/report `160 PASS`; bounded Go types/repository/service/
+  handler/router/container `PASS`; frontend pure contracts/navigation/current/session
+  `30 PASS`; citation viewer `8 PASS`; global frontend typecheck/build, Ruff, strict mypy,
+  Go vet, strict OpenSpec, diff and privacy gates `PASS`.
+- UI reachability successor commit
+  `21ece179e2cfb620975bcd5379fd941923baac41` changes exactly five approved paths.
+  Its load-bearing gates are reachability/current-pin `2 PASS`, Schema contracts/
+  navigation/citation `24 PASS`, citation viewer `8 PASS`, global typecheck/build and
+  diff/privacy `PASS`.
+- Backend mount delta: `NOT REQUIRED`. The real `NewRouter` dependency path in
+  `internal/router/router.go` directly registers all 13 Schema Wiki routes; the exact
+  route test passes. `internal/router/routes_knowledge.go` is intentionally unchanged to
+  avoid duplicate registration and retrieve-policy drift.
+- `frontend/src/components/schema-wiki/pdfJsPort.ts` and the six exact frontend hygiene
+  paths listed in the owner matrix are integration support only. They do not replace an
+  approved Schema Wiki path or claim release/citation authority.
 
 ## A2 owner and state-machine amendment
 
@@ -98,8 +119,20 @@ DNS noise did not alter that load-bearing missing-change RED.
   exact path scope may bootstrap the first row only after human JWT Admin+, Wiki then RAW
   ACL/evidence, seal, no-conflicting-space and complete-custody checks. Once Head exists,
   path scope must match it exactly. This is not caller self-authorization.
-- No new table, migration, Head, CAS or approval model is authorized. A2 production is
-  still RED/not frozen; this amendment does not claim serving acceptance.
+- No new table, migration, Head, CAS or approval model is authorized. A2 repository code
+  and provider-free tests are GREEN and frozen; this does not claim live serving or
+  deployment acceptance.
+
+## Live NO-GO boundary
+
+- No successful sealed production `Schema67CandidateV2` is available for publication.
+- The production Evidence-to-WeKnora exact revision/page/bbox authority join and concrete
+  preview adapter are not frozen; the UI therefore reports typed unavailable and never
+  falls back to current/latest bytes or page 1.
+- Live `wiki_release_*` deployment/migration custody was not established in this Mission;
+  no Draft, named-human review, publish authorization or activation was executed.
+- Provider/model, Golden scoring, DB/WeKnora writes, migration, deployment and activation
+  remain `NOT RUN`. Existing 46 generic material Wiki pages are not migrated or converted.
 
 Lane B fixture acceptance uses a real public-factory-sealed Candidate and a synthetic trusted
 citation-authority port. It does not claim that a real Candidate, the production exact-revision

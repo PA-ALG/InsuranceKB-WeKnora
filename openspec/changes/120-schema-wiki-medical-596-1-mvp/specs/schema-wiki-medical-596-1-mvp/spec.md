@@ -317,6 +317,17 @@ bounded existing-row state-machine changes in `internal/types/wiki_release.go`,
 `internal/application/service/wiki_release.go`; this authorization does not permit a new
 table, migration, Head, CAS or approval model.
 
+The actual backend DI/mount authority is `internal/router/router.go`, whose `NewRouter`
+path registers the 13 Schema Wiki routes directly. `internal/router/routes_knowledge.go`
+is not a missing mount and remains unchanged. The bounded integration-support paths are
+`frontend/src/components/schema-wiki/pdfJsPort.ts`,
+`frontend/src/components/sessionSidebarBuckets.ts`,
+`frontend/src/i18n/locales/{en-US.ts,ko-KR.ts,ru-RU.ts}`,
+`frontend/src/views/agent/AgentEditorModal.vue` and
+`frontend/src/views/system/SystemSettings.vue`; they support the approved citation viewer
+and whole-frontend verification and SHALL NOT substitute for an approved Schema Wiki
+owner path or introduce Schema authority.
+
 #### Scenario: a lane needs an unlisted dependency path
 
 - **WHEN** implementation requires writing a file owned by another lane or outside its list
