@@ -22,7 +22,11 @@ extends the existing Schema Wiki release contract/builder with a PASS-only quali
 adds two distinct domain-separated named-human Golden approvals, and verifies a separately
 signed canonical quality receipt at the existing Go `CreateSchemaDraft` seam before any
 repository access. The Go verifier is fail-closed when its deployment-owned public-key ring
-is absent. It does
+is absent. The Python evaluation method accepts no verifier or signer argument: a sealed
+authority is composed once from exactly two distinct configured human public keys and an
+external evaluator signing credential source; duplicate public material and missing
+production composition fail before scoring. The Go container separately injects the
+configured evaluator receipt public-key ring. It does
 not change CandidateV2, provider/model code, runner, database schema, migration, serving
 Head, frontend or generic Material Wiki behavior.
 
@@ -35,6 +39,8 @@ Head, frontend or generic Material Wiki behavior.
   reparsed or self-rehashed receipt: fail closed before Draft persistence.
 - Self-approved Golden, duplicate/foreign human approval, caller-signed/unknown-key quality
   receipt, signature/content substitution and replay: fail closed; Go repository calls `0`.
+- Per-call key injection is absent; duplicate approver public material under different IDs,
+  missing evaluator signer identity/credential or an unconfigured Go verifier fail closed.
 - Present-value precision/recall use normalized atom TP/FP/FN and macro field F1; bbox IoU
   reports the actual sum of per-fragment IoU values over `count × 1,000,000`, while the
   separately named highlight metric retains threshold pass counts.

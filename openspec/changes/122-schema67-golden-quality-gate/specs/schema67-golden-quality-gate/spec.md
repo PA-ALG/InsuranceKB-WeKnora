@@ -41,7 +41,11 @@ Evaluation SHALL additionally require two distinct, unexpired, domain-separated 
 from a deployment-owned named-human approval key ring. Each approval SHALL bind the exact
 Golden bytes/version, ordered67 digest, SchemaPack/entity/product scope, source-revision
 authority digest and all normalization/risk/metric policies. A caller-selected key ring,
-self-signature, duplicate principal/key or unconfigured verifier SHALL fail before scoring.
+self-signature, duplicate principal/key, duplicate public-key material under different IDs
+or unconfigured verifier SHALL fail before scoring. The public evaluation boundary SHALL be
+a sealed evaluator authority composed once from deployment-owned public-key configuration
+and an external evaluator signing credential source; no per-evaluation verifier, key ring or
+signer argument is permitted. Missing production composition SHALL block evaluation.
 
 The evaluated model SHALL NOT create, replace or adjudicate its own Golden. Model-assisted
 suggestions, if any, SHALL remain non-authoritative until replaced by independent human
@@ -136,7 +140,9 @@ hash, metric-policy hash, all metric numerators/denominators and final PASS stat
 The receipt SHALL also bind the two Golden-approval hashes and carry a domain-separated
 signature/key ID over its full canonical content. Its self-hash is integrity-only. The Go
 Draft boundary SHALL verify that signature against a deployment-owned public-key ring
-before repository access; missing/unknown/foreign signatures or a nil key ring fail closed.
+injected by the production container before repository access; missing/unknown/foreign
+signatures or a nil key ring fail closed. Public configuration carries identities and public
+keys only; evaluator private signing bytes remain behind the credential-source boundary.
 
 Evaluation SHALL occur after Candidate creation and before the review dossier and
 `CreateSchemaDraft`. Only a PASS receipt may be bound into the Schema Wiki review bundle.

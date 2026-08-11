@@ -461,9 +461,16 @@ func schemaWikiReleaseVerifierProviders(
 	if err != nil {
 		return nil, service.WikiReleaseServiceOptions{}, err
 	}
+	qualityGateKeys, err := config.DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg)
+	if err != nil {
+		return nil, service.WikiReleaseServiceOptions{}, err
+	}
 	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
 		service.WikiReleaseServiceOptions{
 			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
+			QualityGateReceiptVerifier: service.NewEd25519Schema67GoldenQualityGateReceiptVerifier(
+				qualityGateKeys,
+			),
 		}, nil
 }
 

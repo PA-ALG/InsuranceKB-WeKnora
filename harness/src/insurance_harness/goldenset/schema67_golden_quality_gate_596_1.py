@@ -10,6 +10,7 @@ import unicodedata
 import weakref
 from collections import Counter
 from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Annotated, Final, Literal, Self
 
 from cryptography.exceptions import InvalidSignature
@@ -17,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -28,6 +30,7 @@ from pydantic import (
     model_validator,
 )
 
+from insurance_harness.config import HarnessSettings
 from insurance_harness.goldenset.expert_golden_admission_596_2 import (
     validate_schema67_candidate_v2,
 )
@@ -193,8 +196,8 @@ def _golden_approval_bindings(golden: Schema67GoldenSet5961V1) -> tuple[str, str
     )
 
 
-class Schema67GoldenApprovalVerifierV1:
-    __slots__ = ("_keys", "_now_epoch")
+class _Schema67GoldenApprovalVerifierV1:
+    __slots__ = ("_key_material", "_keys", "_now_epoch")
 
     def __init__(
         self,
@@ -202,7 +205,18 @@ class Schema67GoldenApprovalVerifierV1:
         *,
         now_epoch: int,
     ) -> None:
-        self._keys = dict(keys)
+        self._key_material = MappingProxyType(
+            {
+                key_id: key.public_bytes(Encoding.Raw, PublicFormat.Raw)
+                for key_id, key in keys.items()
+            }
+        )
+        self._keys = MappingProxyType(
+            {
+                key_id: Ed25519PublicKey.from_public_bytes(material)
+                for key_id, material in self._key_material.items()
+            }
+        )
         self._now_epoch = now_epoch
 
     def verify(
@@ -215,10 +229,12 @@ class Schema67GoldenApprovalVerifierV1:
         ordered_sha, sources_sha, policies_sha = _golden_approval_bindings(golden)
         principals: set[str] = set()
         key_ids: set[str] = set()
+        key_materials: set[bytes] = set()
         for approval in approvals:
             if type(approval) is not Schema67GoldenApprovalV1:
                 raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
             key = self._keys.get(approval.signer_key_id)
+            key_material = self._key_material.get(approval.signer_key_id)
             expected = (
                 golden.golden_set_sha256,
                 golden.golden_version,
@@ -241,10 +257,12 @@ class Schema67GoldenApprovalVerifierV1:
             )
             if (
                 key is None
+                or key_material is None
                 or actual != expected
                 or not approval.issued_at <= self._now_epoch < approval.expires_at
                 or approval.principal_id in principals
                 or approval.signer_key_id in key_ids
+                or key_material in key_materials
             ):
                 raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
             try:
@@ -256,10 +274,11 @@ class Schema67GoldenApprovalVerifierV1:
                 raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID") from None
             principals.add(approval.principal_id)
             key_ids.add(approval.signer_key_id)
+            key_materials.add(key_material)
         return approvals
 
 
-class Schema67QualityGateSignerV1:
+class _Schema67QualityGateSignerV1:
     __slots__ = ("key_id", "_private_key")
 
     def __init__(self, key_id: str, private_key: Ed25519PrivateKey) -> None:
@@ -276,6 +295,163 @@ class Schema67QualityGateSignerV1:
             )
         )
         return base64.urlsafe_b64encode(self._private_key.sign(raw)).rstrip(b"=").decode("ascii")
+
+
+class Schema67GoldenQualityEvaluatorSigningCredentialSource:
+    """Deployment-owned source for the evaluator's private signing key."""
+
+    def load_ed25519_private_key(self, signer_key_id: str) -> Ed25519PrivateKey:
+        raise NotImplementedError
+
+
+_EVALUATOR_AUTHORITY_CONSTRUCTION_TOKEN: Final[object] = object()
+
+
+class Schema67GoldenQualityEvaluatorAuthority:
+    """Sealed evaluator composed once from deployment-owned trust material."""
+
+    _approval_verifier: _Schema67GoldenApprovalVerifierV1
+    _quality_gate_signer: _Schema67QualityGateSignerV1
+    _sealed: bool
+    __slots__ = ("_approval_verifier", "_quality_gate_signer", "_sealed")
+
+    def __init__(
+        self,
+        construction_token: object,
+        approval_verifier: _Schema67GoldenApprovalVerifierV1,
+        quality_gate_signer: _Schema67QualityGateSignerV1,
+    ) -> None:
+        if construction_token is not _EVALUATOR_AUTHORITY_CONSTRUCTION_TOKEN:
+            raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE")
+        object.__setattr__(self, "_approval_verifier", approval_verifier)
+        object.__setattr__(self, "_quality_gate_signer", quality_gate_signer)
+        object.__setattr__(self, "_sealed", True)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if getattr(self, "_sealed", False):
+            raise AttributeError("Schema67 Golden evaluator authority is sealed")
+        object.__setattr__(self, name, value)
+
+    def evaluate(
+        self,
+        *,
+        candidate: object,
+        evidence_authority: object,
+        golden: Schema67GoldenSet5961V1,
+        golden_approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
+    ) -> Schema67GoldenEvaluationResultV1:
+        return _evaluate_schema67_golden_quality_596_1(
+            candidate=candidate,
+            evidence_authority=evidence_authority,
+            golden=golden,
+            golden_approvals=golden_approvals,
+            golden_approval_verifier=self._approval_verifier,
+            quality_gate_signer=self._quality_gate_signer,
+        )
+
+
+def _decode_ed25519_public_key_text(value: str) -> bytes:
+    try:
+        decoded = base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+    except (ValueError, UnicodeEncodeError):
+        raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID") from None
+    if (
+        len(decoded) != 32
+        or base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != value
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID")
+    return bytes(decoded)
+
+
+def compose_schema67_golden_quality_evaluator_authority_596_1(
+    *,
+    signer_credential_source: Schema67GoldenQualityEvaluatorSigningCredentialSource | None,
+    now_epoch: int,
+) -> Schema67GoldenQualityEvaluatorAuthority:
+    """Compose the single 596-1 evaluator from deployment-owned configuration."""
+
+    try:
+        settings = HarnessSettings()  # type: ignore[call-arg]
+    except ValidationError:
+        raise Schema67GoldenQualityGateError(
+            "GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE"
+        ) from None
+
+    return _compose_schema67_golden_quality_evaluator_authority_596_1(
+        settings=settings,
+        signer_credential_source=signer_credential_source,
+        now_epoch=now_epoch,
+    )
+
+
+def _compose_schema67_golden_quality_evaluator_authority_596_1(
+    *,
+    settings: HarnessSettings,
+    signer_credential_source: Schema67GoldenQualityEvaluatorSigningCredentialSource | None,
+    now_epoch: int,
+) -> Schema67GoldenQualityEvaluatorAuthority:
+
+    if (
+        signer_credential_source is None
+        or not isinstance(
+            signer_credential_source,
+            Schema67GoldenQualityEvaluatorSigningCredentialSource,
+        )
+        or len(settings.schema67_golden_approver_public_keys) != 2
+        or not settings.schema67_golden_evaluator_signer_key_id
+        or not settings.schema67_golden_evaluator_public_key_base64
+        or now_epoch <= 0
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE")
+
+    key_material: dict[str, bytes] = {}
+    for key_id, encoded in settings.schema67_golden_approver_public_keys:
+        if not key_id or key_id != key_id.strip() or any(
+            ord(char) < 0x20 or ord(char) == 0x7F for char in key_id
+        ):
+            raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID")
+        if key_id in key_material:
+            raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID")
+        material = _decode_ed25519_public_key_text(encoded)
+        if material in key_material.values():
+            raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID")
+        key_material[key_id] = material
+
+    signer_key_id = settings.schema67_golden_evaluator_signer_key_id
+    if signer_key_id != signer_key_id.strip() or any(
+        ord(char) < 0x20 or ord(char) == 0x7F for char in signer_key_id
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE")
+    evaluator_public_material = _decode_ed25519_public_key_text(
+        settings.schema67_golden_evaluator_public_key_base64
+    )
+    if signer_key_id in key_material or evaluator_public_material in key_material.values():
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE")
+    try:
+        private_key = signer_credential_source.load_ed25519_private_key(signer_key_id)
+        if not isinstance(private_key, Ed25519PrivateKey):
+            raise TypeError
+        actual_public_material = private_key.public_key().public_bytes(
+            Encoding.Raw, PublicFormat.Raw
+        )
+    except Exception:
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE") from None
+    if actual_public_material != evaluator_public_material:
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE")
+
+    verifier = _Schema67GoldenApprovalVerifierV1(
+        {
+            key_id: Ed25519PublicKey.from_public_bytes(material)
+            for key_id, material in key_material.items()
+        },
+        now_epoch=now_epoch,
+    )
+    signer = _Schema67QualityGateSignerV1(signer_key_id, private_key)
+    return Schema67GoldenQualityEvaluatorAuthority(
+        _EVALUATOR_AUTHORITY_CONSTRUCTION_TOKEN,
+        verifier,
+        signer,
+    )
 
 
 class Schema67GoldenEvidenceTargetV1(_FrozenModel):
@@ -1072,14 +1248,14 @@ def validate_schema67_golden_quality_gate_receipt_596_1(
         raise Schema67GoldenQualityGateError("QUALITY_GATE_RECEIPT_INVALID") from None
 
 
-def evaluate_schema67_golden_quality_596_1(
+def _evaluate_schema67_golden_quality_596_1(
     *,
     candidate: object,
     evidence_authority: object,
     golden: Schema67GoldenSet5961V1,
     golden_approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
-    golden_approval_verifier: Schema67GoldenApprovalVerifierV1 | None,
-    quality_gate_signer: Schema67QualityGateSignerV1 | None,
+    golden_approval_verifier: _Schema67GoldenApprovalVerifierV1,
+    quality_gate_signer: _Schema67QualityGateSignerV1,
 ) -> Schema67GoldenEvaluationResultV1:
     if candidate is None:
         raise Schema67GoldenQualityGateError("CANDIDATE_ABSENT")
@@ -1092,10 +1268,10 @@ def evaluate_schema67_golden_quality_596_1(
         exact_golden = Schema67GoldenSet5961V1.model_validate(
             golden.model_dump(mode="python", round_trip=True)
         )
-        if type(golden_approval_verifier) is not Schema67GoldenApprovalVerifierV1:
+        if type(golden_approval_verifier) is not _Schema67GoldenApprovalVerifierV1:
             raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
         approvals = golden_approval_verifier.verify(exact_golden, golden_approvals)
-        if type(quality_gate_signer) is not Schema67QualityGateSignerV1:
+        if type(quality_gate_signer) is not _Schema67QualityGateSignerV1:
             raise Schema67GoldenQualityGateError("QUALITY_GATE_SIGNER_UNAVAILABLE")
         candidate_source_rows = tuple(
             (row["role"], row["source_sha256"]) for row in exact_candidate.source_roles
@@ -1233,7 +1409,6 @@ __all__ = [
     "PROVIDER_ZERO_FIXTURE_CANDIDATE_SHA256",
     "Schema67GoldenEvidenceTargetV1",
     "Schema67GoldenApprovalV1",
-    "Schema67GoldenApprovalVerifierV1",
     "Schema67GoldenEvaluationResultV1",
     "Schema67GoldenFieldDecisionV1",
     "Schema67GoldenFieldV1",
@@ -1241,9 +1416,10 @@ __all__ = [
     "Schema67GoldenPrivateDossierV1",
     "Schema67GoldenPublicAggregateV1",
     "Schema67GoldenQualityGateError",
+    "Schema67GoldenQualityEvaluatorAuthority",
+    "Schema67GoldenQualityEvaluatorSigningCredentialSource",
     "Schema67GoldenSet5961V1",
-    "Schema67QualityGateSignerV1",
-    "evaluate_schema67_golden_quality_596_1",
+    "compose_schema67_golden_quality_evaluator_authority_596_1",
     "schema67_golden_approval_signing_bytes",
     "validate_schema67_golden_quality_gate_receipt_596_1",
 ]

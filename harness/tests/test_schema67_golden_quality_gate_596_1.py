@@ -3,12 +3,15 @@ from __future__ import annotations
 import base64
 import copy
 import hashlib
+import inspect
 import json
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from pydantic import ValidationError
 
+import insurance_harness.goldenset.schema67_golden_quality_gate_596_1 as quality_gate_module
 from insurance_harness.goldenset.expert_golden_admission_596_2 import (
     EvidenceReplayCaseV1,
 )
@@ -18,14 +21,14 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     NORMALIZATION_POLICY_SHA256,
     RISK_POLICY_SHA256,
     Schema67GoldenApprovalV1,
-    Schema67GoldenApprovalVerifierV1,
     Schema67GoldenEvidenceTargetV1,
     Schema67GoldenFieldV1,
     Schema67GoldenMetricV1,
+    Schema67GoldenQualityEvaluatorAuthority,
+    Schema67GoldenQualityEvaluatorSigningCredentialSource,
     Schema67GoldenQualityGateError,
     Schema67GoldenSet5961V1,
-    Schema67QualityGateSignerV1,
-    evaluate_schema67_golden_quality_596_1,
+    compose_schema67_golden_quality_evaluator_authority_596_1,
     schema67_golden_approval_signing_bytes,
     validate_schema67_golden_quality_gate_receipt_596_1,
 )
@@ -196,6 +199,64 @@ _APPROVER_KEYS = (
 _EVALUATOR_KEY = Ed25519PrivateKey.from_private_bytes(b"e" * 32)
 
 
+class _TestCredentialSource(Schema67GoldenQualityEvaluatorSigningCredentialSource):
+    def __init__(self, key: Ed25519PrivateKey = _EVALUATOR_KEY) -> None:
+        self._key = key
+
+    def load_ed25519_private_key(self, signer_key_id: str) -> Ed25519PrivateKey:
+        assert signer_key_id == "test-golden-evaluator"
+        return self._key
+
+
+def _public_key_text(key: Ed25519PrivateKey) -> str:
+    return (
+        base64.urlsafe_b64encode(
+            key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+        )
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+
+
+def _compose_test_evaluator(
+    *,
+    approver_keys: tuple[tuple[str, str], ...] | None = None,
+    credential_source: Schema67GoldenQualityEvaluatorSigningCredentialSource
+    | None = None,
+) -> Schema67GoldenQualityEvaluatorAuthority:
+    configured_approver_keys = (
+        approver_keys
+        if approver_keys is not None
+        else tuple(
+            (f"test-golden-human-{index + 1}", _public_key_text(key))
+            for index, key in enumerate(_APPROVER_KEYS)
+        )
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("HARNESS_WEKNORA_BASE_URL", "https://not-used.invalid")
+        patch.setenv("HARNESS_WEKNORA_API_KEY", "not-used")
+        patch.setenv(
+            "HARNESS_SCHEMA67_GOLDEN_APPROVER_PUBLIC_KEYS",
+            json.dumps(configured_approver_keys),
+        )
+        patch.setenv(
+            "HARNESS_SCHEMA67_GOLDEN_EVALUATOR_SIGNER_KEY_ID",
+            "test-golden-evaluator",
+        )
+        patch.setenv(
+            "HARNESS_SCHEMA67_GOLDEN_EVALUATOR_PUBLIC_KEY_BASE64",
+            _public_key_text(_EVALUATOR_KEY),
+        )
+        return compose_schema67_golden_quality_evaluator_authority_596_1(
+            signer_credential_source=(
+                _TestCredentialSource()
+                if credential_source is None
+                else credential_source
+            ),
+            now_epoch=1_786_000_100,
+        )
+
+
 def _approval(
     golden: Schema67GoldenSet5961V1,
     *,
@@ -259,19 +320,12 @@ def _security(
     golden: Schema67GoldenSet5961V1,
 ) -> tuple[
     tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
-    Schema67GoldenApprovalVerifierV1,
-    Schema67QualityGateSignerV1,
+    Schema67GoldenQualityEvaluatorAuthority,
 ]:
     approvals = (_approval(golden, ordinal=0), _approval(golden, ordinal=1))
-    verifier = Schema67GoldenApprovalVerifierV1(
-        {
-            f"test-golden-human-{index + 1}": key.public_key()
-            for index, key in enumerate(_APPROVER_KEYS)
-        },
-        now_epoch=1_786_000_100,
-    )
-    signer = Schema67QualityGateSignerV1("test-golden-evaluator", _EVALUATOR_KEY)
-    return approvals, verifier, signer
+
+    authority = _compose_test_evaluator()
+    return approvals, authority
 
 
 def _evaluate(
@@ -280,14 +334,12 @@ def _evaluate(
     authority: object,
     golden: Schema67GoldenSet5961V1,
 ):
-    approvals, verifier, signer = _security(golden)
-    return evaluate_schema67_golden_quality_596_1(
+    approvals, evaluator = _security(golden)
+    return evaluator.evaluate(
         candidate=candidate,
         evidence_authority=authority,
         golden=golden,
         golden_approvals=approvals,
-        golden_approval_verifier=verifier,
-        quality_gate_signer=signer,
     )
 
 
@@ -464,27 +516,68 @@ def test_golden_is_closed_and_rejects_self_generated_candidate_authority() -> No
 def test_golden_requires_two_distinct_trusted_human_approvals() -> None:
     candidate, authority = _non_fixture_candidate_and_authority()
     golden = _golden(candidate, authority)
-    approvals, verifier, signer = _security(golden)
+    approvals, evaluator = _security(golden)
 
-    with pytest.raises(Schema67GoldenQualityGateError) as missing:
-        evaluate_schema67_golden_quality_596_1(
-            candidate=candidate,
-            evidence_authority=authority,
-            golden=golden,
-            golden_approvals=approvals,
-            golden_approval_verifier=None,
-            quality_gate_signer=signer,
+    assert not hasattr(quality_gate_module, "evaluate_schema67_golden_quality_596_1")
+    assert tuple(inspect.signature(evaluator.evaluate).parameters) == (
+        "candidate",
+        "evidence_authority",
+        "golden",
+        "golden_approvals",
+    )
+    assert tuple(
+        inspect.signature(
+            compose_schema67_golden_quality_evaluator_authority_596_1
+        ).parameters
+    ) == ("signer_credential_source", "now_epoch")
+    with pytest.raises(Schema67GoldenQualityGateError) as direct_constructor:
+        Schema67GoldenQualityEvaluatorAuthority(
+            object(), object(), object()  # type: ignore[arg-type]
         )
-    assert missing.value.reason_code == "GOLDEN_APPROVAL_INVALID"
+    assert (
+        direct_constructor.value.reason_code
+        == "GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE"
+    )
+    with pytest.raises(AttributeError):
+        evaluator._approval_verifier = object()  # type: ignore[assignment]
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("HARNESS_WEKNORA_BASE_URL", "https://not-used.invalid")
+        patch.setenv("HARNESS_WEKNORA_API_KEY", "not-used")
+        patch.setenv("HARNESS_SCHEMA67_GOLDEN_APPROVER_PUBLIC_KEYS", "[]")
+        patch.setenv("HARNESS_SCHEMA67_GOLDEN_EVALUATOR_SIGNER_KEY_ID", "")
+        patch.setenv("HARNESS_SCHEMA67_GOLDEN_EVALUATOR_PUBLIC_KEY_BASE64", "")
+        with pytest.raises(Schema67GoldenQualityGateError) as missing:
+            compose_schema67_golden_quality_evaluator_authority_596_1(
+                signer_credential_source=None,
+                now_epoch=1_786_000_100,
+            )
+    assert missing.value.reason_code == "GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE"
+
+    duplicate_material = _public_key_text(_APPROVER_KEYS[0])
+    with pytest.raises(Schema67GoldenQualityGateError) as duplicate_keys:
+        _compose_test_evaluator(
+            approver_keys=(
+                ("test-golden-human-1", duplicate_material),
+                ("test-golden-human-2", duplicate_material),
+            )
+        )
+    assert duplicate_keys.value.reason_code == "GOLDEN_APPROVER_KEY_RING_INVALID"
+
+    with pytest.raises(Schema67GoldenQualityGateError) as duplicate_ids:
+        _compose_test_evaluator(
+            approver_keys=(
+                ("test-golden-human", _public_key_text(_APPROVER_KEYS[0])),
+                ("test-golden-human", _public_key_text(_APPROVER_KEYS[1])),
+            )
+        )
+    assert duplicate_ids.value.reason_code == "GOLDEN_APPROVER_KEY_RING_INVALID"
 
     with pytest.raises(Schema67GoldenQualityGateError) as duplicate:
-        evaluate_schema67_golden_quality_596_1(
+        evaluator.evaluate(
             candidate=candidate,
             evidence_authority=authority,
             golden=golden,
             golden_approvals=(approvals[0], approvals[0]),
-            golden_approval_verifier=verifier,
-            quality_gate_signer=signer,
         )
     assert duplicate.value.reason_code == "GOLDEN_APPROVAL_INVALID"
 
@@ -510,13 +603,11 @@ def test_golden_requires_two_distinct_trusted_human_approvals() -> None:
         }
     )
     with pytest.raises(Schema67GoldenQualityGateError) as self_signed:
-        evaluate_schema67_golden_quality_596_1(
+        evaluator.evaluate(
             candidate=candidate,
             evidence_authority=authority,
             golden=golden,
             golden_approvals=(forged_approval, approvals[1]),
-            golden_approval_verifier=verifier,
-            quality_gate_signer=signer,
         )
     assert self_signed.value.reason_code == "GOLDEN_APPROVAL_INVALID"
 
@@ -563,15 +654,13 @@ def test_pass_receipt_is_required_and_factory_provenance_cannot_be_reparsed() ->
 def test_missing_candidate_and_threshold_or_identity_drift_fail_closed() -> None:
     candidate, authority = _non_fixture_candidate_and_authority()
     golden = _golden(candidate, authority)
-    approvals, verifier, signer = _security(golden)
+    approvals, evaluator = _security(golden)
     with pytest.raises(Schema67GoldenQualityGateError) as caught:
-        evaluate_schema67_golden_quality_596_1(
+        evaluator.evaluate(
             candidate=None,
             evidence_authority=authority,
             golden=golden,
             golden_approvals=approvals,
-            golden_approval_verifier=verifier,
-            quality_gate_signer=signer,
         )
     assert caught.value.reason_code == "CANDIDATE_ABSENT"
 

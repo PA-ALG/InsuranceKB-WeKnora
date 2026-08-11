@@ -35,6 +35,9 @@
 - [x] GREEN the product-specific evaluator and Candidate-bound quality receipt.
 - [x] Require two distinct, deployment-trusted, domain-separated named-human Golden
   approvals before evaluation; nil/unconfigured or self-signed authority fails closed.
+- [x] Remove per-call verifier/signer injection; compose one sealed evaluator authority
+  from deployment public-key settings plus an external signing credential source, reject
+  duplicate approver key material, and inject the evaluator receipt public ring in Go.
 - [x] Compute present precision/recall/F1 from frozen normalized atoms and report actual
   per-fragment bbox IoU aggregate separately from threshold pass counts.
 

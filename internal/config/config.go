@@ -71,10 +71,11 @@ type SchemaWikiEd25519PrivateKeyConfig struct {
 // SchemaWikiSigningConfig keeps the human-review and publish-authorization
 // trust domains separate while reusing their existing signed receipt formats.
 type SchemaWikiSigningConfig struct {
-	HumanDecisionPublicKeys        []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
-	PublishAuthorizationPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
-	CitationTokenSigningKeys       []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
-	ActiveCitationTokenKeyID       string                              `yaml:"active_citation_token_key_id" json:"-"`
+	HumanDecisionPublicKeys          []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
+	PublishAuthorizationPublicKeys   []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
+	GoldenQualityEvaluatorPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"golden_quality_evaluator_public_keys" json:"golden_quality_evaluator_public_keys"`
+	CitationTokenSigningKeys         []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
+	ActiveCitationTokenKeyID         string                              `yaml:"active_citation_token_key_id" json:"-"`
 }
 
 // SchemaWikiCitationTokenSigningRing is a decoded runtime-only third signing
@@ -138,6 +139,64 @@ func DecodeSchemaWikiSigningPublicKeys(
 		}
 	}
 	return human, publish, nil
+}
+
+// DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys freezes the deployment-owned
+// evaluator receipt verification ring. Empty configuration is deliberately
+// fail-closed at the service verifier. Key IDs and public material are disjoint
+// from human review, publish authorization, and citation-token signing domains.
+func DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(
+	cfg *Config,
+) (map[string]ed25519.PublicKey, error) {
+	var signing *SchemaWikiSigningConfig
+	if cfg != nil {
+		signing = cfg.SchemaWikiSigning
+	}
+	if signing == nil {
+		return map[string]ed25519.PublicKey{}, nil
+	}
+	golden, err := decodeSchemaWikiPublicKeyRing(
+		"Golden quality evaluator", signing.GoldenQualityEvaluatorPublicKeys,
+	)
+	if err != nil {
+		return nil, err
+	}
+	human, publish, err := DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, err
+	}
+	citation, err := DecodeSchemaWikiCitationTokenSigningRing(cfg)
+	if err != nil {
+		return nil, err
+	}
+	for keyID, goldenKey := range golden {
+		if _, duplicate := human[keyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		if _, duplicate := publish[keyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		for _, existing := range human {
+			if string(existing) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for _, existing := range publish {
+			if string(existing) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for citationKeyID, privateKey := range citation.SigningKeys() {
+			if citationKeyID == keyID {
+				return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+			}
+			publicKey := privateKey.Public().(ed25519.PublicKey)
+			if string(publicKey) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+	}
+	return golden, nil
 }
 
 // DecodeSchemaWikiCitationTokenSigningRing freezes a third Ed25519 authority
@@ -222,6 +281,7 @@ func decodeSchemaWikiPublicKeyRing(
 	entries []SchemaWikiEd25519PublicKeyConfig,
 ) (map[string]ed25519.PublicKey, error) {
 	keys := make(map[string]ed25519.PublicKey, len(entries))
+	publicMaterial := map[string]string{}
 	for _, entry := range entries {
 		if entry.KeyID == "" || entry.KeyID != strings.TrimSpace(entry.KeyID) ||
 			strings.IndexFunc(entry.KeyID, func(character rune) bool {
@@ -237,6 +297,10 @@ func decodeSchemaWikiPublicKeyRing(
 			base64.RawURLEncoding.EncodeToString(decoded) != entry.PublicKeyBase64 {
 			return nil, fmt.Errorf("schema wiki %s public key is invalid", domain)
 		}
+		if _, duplicate := publicMaterial[string(decoded)]; duplicate {
+			return nil, fmt.Errorf("schema wiki %s public key material is duplicated", domain)
+		}
+		publicMaterial[string(decoded)] = entry.KeyID
 		keys[entry.KeyID] = append(ed25519.PublicKey(nil), decoded...)
 	}
 	return keys, nil
@@ -821,6 +885,9 @@ func ValidateConfig(cfg *Config) error {
 		errs = append(errs, err.Error())
 	}
 	if _, err := DecodeSchemaWikiCitationTokenSigningRing(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
 

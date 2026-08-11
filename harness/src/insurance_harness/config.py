@@ -88,6 +88,13 @@ class HarnessSettings(BaseSettings):
     goldenset_model: str | None = None
     goldenset_api_base: str | None = None
     goldenset_api_key: str | None = None
+    # Schema67 Golden quality evaluation uses two deployment-owned human
+    # approval public keys and a separate evaluator signing identity.  Only
+    # public material belongs in settings; the evaluator private key remains
+    # behind the task-local credential-source interface.
+    schema67_golden_approver_public_keys: tuple[tuple[str, str], ...] = ()
+    schema67_golden_evaluator_signer_key_id: str | None = None
+    schema67_golden_evaluator_public_key_base64: str | None = None
     # 单次标注调用送入的文档文本上限（字符）；超限按页窗口过滤（spec G2.6）
     goldenset_doc_char_budget: int = 30_000
 

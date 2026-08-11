@@ -44,6 +44,32 @@ func TestDecodeSchemaWikiSigningPublicKeysKeepsDecisionDomainsSeparate(t *testin
 	require.NotEqual(t, humanKeys["human-key-1"], publishKeys["publish-key-1"])
 }
 
+func TestDecodeSchemaWikiGoldenQualityEvaluatorPublicKeysRejectsDuplicateMaterial(t *testing.T) {
+	t.Parallel()
+	evaluator := schemaWikiPublicKeyConfig(0x33, "golden-evaluator-key-1")
+	second := schemaWikiPublicKeyConfig(0x34, "golden-evaluator-key-2")
+	cfg := &Config{SchemaWikiSigning: &SchemaWikiSigningConfig{
+		GoldenQualityEvaluatorPublicKeys: []SchemaWikiEd25519PublicKeyConfig{
+			evaluator, second,
+		},
+	}}
+
+	keys, err := DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg)
+	require.NoError(t, err)
+	require.Equal(t, []string{"golden-evaluator-key-1", "golden-evaluator-key-2"}, sortedSchemaWikiKeyIDs(keys))
+
+	duplicateMaterial := evaluator
+	duplicateMaterial.KeyID = "golden-evaluator-key-2"
+	_, err = DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(&Config{
+		SchemaWikiSigning: &SchemaWikiSigningConfig{
+			GoldenQualityEvaluatorPublicKeys: []SchemaWikiEd25519PublicKeyConfig{
+				evaluator, duplicateMaterial,
+			},
+		},
+	})
+	require.Error(t, err)
+}
+
 func TestDecodeSchemaWikiSigningPublicKeysDefaultEmptyIsSecurelyEmpty(t *testing.T) {
 	t.Parallel()
 	humanKeys, publishKeys, err := DecodeSchemaWikiSigningPublicKeys(&Config{})
