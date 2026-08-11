@@ -113,6 +113,7 @@
 | 107 | section-anchor-readiness-injection | ✅ 已整合并验证（PR #117） | section anchors 注入 103、Admission 与 087 链 |
 | 108 | legacy-fixture-marker-envelope-compatibility | ✅ 已整合并验证（PR #117） | 旧 fixture 显式携带 canonical envelope；生产 gate 不放宽 |
 | 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
+| 120 | schema-wiki-medical-596-1-mvp | plan-approved / implementation-not-started | 单一 Schema Wiki MVP：A 公共底座 → B sealed Candidate/医疗险 release → C pinned UI；禁止 generic fallback |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

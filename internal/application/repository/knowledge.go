@@ -294,7 +294,69 @@ func insertRevisionLocked(
 	if err := tx.Create(revision).Error; err != nil {
 		return nil, err
 	}
+	if err := pinRevisionSourceLocked(tx, knowledge, revision); err != nil {
+		return nil, err
+	}
 	return revision, nil
+}
+
+func pinRevisionSourceLocked(
+	tx *gorm.DB,
+	knowledge *types.Knowledge,
+	revision *types.KnowledgeRevision,
+) error {
+	handle, ok := types.ParseResourcePath(knowledge.FilePath)
+	if !ok {
+		return fmt.Errorf("%w: source file is not a registered resource", ErrRevisionCommitFailed)
+	}
+	var resource types.StoredResource
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+		"handle = ? AND tenant_id = ? AND state = ?",
+		handle, knowledge.TenantID, types.ResourceStateActive,
+	).First(&resource).Error; err != nil {
+		return fmt.Errorf("%w: source resource unavailable", ErrRevisionCommitFailed)
+	}
+	if resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size <= 0 ||
+		!strings.EqualFold(strings.TrimSpace(resource.MimeType), "application/pdf") {
+		return fmt.Errorf("%w: source resource metadata is incomplete", ErrRevisionCommitFailed)
+	}
+	var bindingCount int64
+	if err := tx.Model(&types.ResourceBinding{}).Where(
+		"resource_id = ? AND tenant_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+		resource.ID, knowledge.TenantID, "knowledge", knowledge.ID, "source_file",
+	).Count(&bindingCount).Error; err != nil || bindingCount != 1 {
+		return fmt.Errorf("%w: source resource binding is invalid", ErrRevisionCommitFailed)
+	}
+	if resource.ContentHash == "" {
+		result := tx.Model(&types.StoredResource{}).Where(
+			"id = ? AND tenant_id = ? AND content_hash = '' AND state = ?",
+			resource.ID, knowledge.TenantID, types.ResourceStateActive,
+		).Update("content_hash", revision.FileSHA256)
+		if result.Error != nil || result.RowsAffected != 1 {
+			return fmt.Errorf("%w: source resource digest backfill conflict", ErrRevisionCommitFailed)
+		}
+		resource.ContentHash = revision.FileSHA256
+	}
+	if resource.ContentHash != revision.FileSHA256 {
+		return fmt.Errorf("%w: source resource digest drift", ErrRevisionCommitFailed)
+	}
+	now := revision.CompletedAt
+	source := &types.KnowledgeRevisionSource{
+		TenantID: knowledge.TenantID, KnowledgeID: knowledge.ID,
+		ParseAttempt: revision.ParseAttempt, ResourceID: resource.ID,
+		FileSHA256: revision.FileSHA256, Size: resource.Size,
+		MimeType: resource.MimeType, RetentionState: types.KnowledgeRevisionSourcePinned,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	revisionSourceID, err := types.ComputeKnowledgeRevisionSourceID(*source)
+	if err != nil {
+		return fmt.Errorf("%w: compute immutable source id", ErrRevisionCommitFailed)
+	}
+	source.RevisionSourceID = revisionSourceID
+	if err := tx.Create(source).Error; err != nil {
+		return fmt.Errorf("%w: persist immutable source pin: %v", ErrRevisionCommitFailed, err)
+	}
+	return nil
 }
 
 func (r *knowledgeRepository) GetRevisionState(
@@ -346,6 +408,118 @@ func (r *knowledgeRepository) GetRevision(
 		return nil, ErrKnowledgeNotFound
 	}
 	return &revision, err
+}
+
+func (r *knowledgeRepository) GetRevisionSource(
+	ctx context.Context,
+	tenantID uint64,
+	knowledgeID string,
+	attempt int64,
+) (*types.KnowledgeRevisionSource, *types.StoredResource, error) {
+	var source types.KnowledgeRevisionSource
+	var resource types.StoredResource
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, knowledgeID, attempt,
+		).First(&source).Error; err != nil {
+			return err
+		}
+		if err := tx.Where(
+			"id = ? AND tenant_id = ? AND state = ?",
+			source.ResourceID, tenantID, types.ResourceStateActive,
+		).First(&resource).Error; err != nil {
+			return err
+		}
+		var bindingCount int64
+		if err := tx.Model(&types.ResourceBinding{}).Where(
+			"resource_id = ? AND tenant_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+			resource.ID, tenantID, "knowledge", knowledgeID, "source_file",
+		).Count(&bindingCount).Error; err != nil {
+			return err
+		}
+		if bindingCount != 1 || source.FileSHA256 != resource.ContentHash ||
+			source.Size != resource.Size || source.MimeType != resource.MimeType {
+			return ErrRevisionCommitFailed
+		}
+		expectedSourceID, digestErr := types.ComputeKnowledgeRevisionSourceID(source)
+		if digestErr != nil || expectedSourceID != source.RevisionSourceID {
+			return ErrRevisionCommitFailed
+		}
+		return nil
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil, ErrKnowledgeNotFound
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return &source, &resource, nil
+}
+
+// SealRevisionSourcePageCount is the only allowed post-insert mutation of a
+// revision source. It is an exact, idempotent write-once CAS used by the
+// ParsedDocument capture lane after native page authority is available.
+func (r *knowledgeRepository) SealRevisionSourcePageCount(
+	ctx context.Context,
+	tenantID uint64,
+	knowledgeID string,
+	attempt int64,
+	expectedRevisionSourceID string,
+	pageCount int,
+) (*types.KnowledgeRevisionSource, error) {
+	if tenantID == 0 || knowledgeID == "" || attempt <= 0 ||
+		!typesDigestSHA256(expectedRevisionSourceID) || pageCount <= 0 {
+		return nil, ErrRevisionCommitFailed
+	}
+	var source types.KnowledgeRevisionSource
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, knowledgeID, attempt,
+		).First(&source).Error; err != nil {
+			return err
+		}
+		computed, err := types.ComputeKnowledgeRevisionSourceID(source)
+		if err != nil || computed != expectedRevisionSourceID ||
+			source.RevisionSourceID != expectedRevisionSourceID {
+			return ErrRevisionCommitFailed
+		}
+		if source.PageCount != nil {
+			if *source.PageCount != pageCount {
+				return ErrRevisionCommitFailed
+			}
+			return nil
+		}
+		result := tx.Model(&types.KnowledgeRevisionSource{}).Where(
+			"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ? AND revision_source_id = ? AND page_count IS NULL",
+			tenantID, knowledgeID, attempt, expectedRevisionSourceID,
+		).Updates(map[string]interface{}{"page_count": pageCount, "updated_at": time.Now().UTC()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrRevisionCommitFailed
+		}
+		source.PageCount = &pageCount
+		return nil
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrKnowledgeNotFound
+	}
+	return &source, err
+}
+
+func typesDigestSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *knowledgeRepository) ListRevisionChunks(

@@ -4027,6 +4027,16 @@ export default {
       rebuildSkip: "稍后可在数据源中手动触发重建",
     },
     wikiBrowser: {
+      tabSchemaWiki: "产品 Schema Wiki",
+      tabMaterialsWiki: "材料 Wiki",
+      schemaLoading: "正在加载产品 Schema Wiki…",
+      schemaNotCompiled: "尚未完成编译",
+      schemaLoadFailed: "产品 Schema Wiki 暂不可用",
+      schemaUnknown: "当前材料未涉及",
+      schemaPresent: "已确认",
+      schemaAbsent: "原文明示无或不适用",
+      schemaCitation: "查看引文",
+      schemaCitationUnavailable: "引文预览暂不可用",
       // --- Manual editing & revision history ---
       editBtn: "编辑",
       historyBtn: "历史",

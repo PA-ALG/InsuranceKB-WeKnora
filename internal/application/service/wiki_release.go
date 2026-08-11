@@ -607,6 +607,175 @@ func isLowerHexSHA256(value string) bool {
 	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 }
 
+// CreateDraft validates and freezes the complete canonical manifest and
+// members without making them activatable or visible through Head reads.
+func (s *WikiReleaseService) createDraft(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	input *types.WikiReleasePreparation,
+) (*types.WikiReleasePreparation, error) {
+	if input == nil || s.repository == nil {
+		return nil, fmt.Errorf("%w: nil draft", ErrWikiReleaseInvalidAuthorization)
+	}
+	if err := s.verifyAccess(ctx, principal, input.WikiReleaseScope, "create-draft"); err != nil {
+		return nil, err
+	}
+	if err := s.verifySpaceBinding(ctx, input.WikiReleaseScope); err != nil {
+		return nil, err
+	}
+	if input.ID == "" || input.CandidateDigest == "" || input.ReadyReceiptDigest == "" ||
+		input.ReviewPolicyID == "" || input.ReviewDecisionDigest != "" || len(input.Members) == 0 ||
+		len(input.Manifest) == 0 || !json.Valid(input.Manifest) ||
+		(input.Status != "" && input.Status != types.WikiReleasePreparationDraft) {
+		return nil, fmt.Errorf("%w: incomplete draft", ErrWikiReleaseInvalidAuthorization)
+	}
+	members, err := wikiReleaseMembersPreservingOrder(input.Members)
+	if err != nil {
+		return nil, err
+	}
+	draft := *input
+	draft.Members = members
+	draft.Manifest = append(json.RawMessage(nil), input.Manifest...)
+	draft.ManifestDigest = digestWikiReleaseBytes(draft.Manifest)
+	draft.ReviewDecisionDigest = ""
+	draft.Status = types.WikiReleasePreparationDraft
+	draft.CreatedAt = s.now().UTC()
+	head, headErr := s.repository.GetHead(ctx, draft.WikiReleaseScope)
+	switch {
+	case headErr == nil:
+		draft.ExpectedReleaseID = head.ActiveReleaseID
+		draft.ExpectedActivationEpoch = head.ActivationEpoch
+	case errors.Is(headErr, wikirepository.ErrWikiReleaseNotFound):
+		draft.ExpectedReleaseID = ""
+		draft.ExpectedActivationEpoch = 0
+	default:
+		return nil, headErr
+	}
+	draft.PreparationDigest = digestWikiReleasePreparation(&draft)
+	if err := s.repository.CreateDraft(ctx, &draft); err != nil {
+		return nil, err
+	}
+	return &draft, nil
+}
+
+func wikiReleaseMembersPreservingOrder(
+	input []types.WikiReleaseMemberSnapshot,
+) ([]types.WikiReleaseMemberSnapshot, error) {
+	members := append([]types.WikiReleaseMemberSnapshot(nil), input...)
+	seen := make(map[string]struct{}, len(members))
+	for index := range members {
+		member := &members[index]
+		member.Kind = norm.NFC.String(member.Kind)
+		if member.Kind == "" {
+			member.Kind = "page"
+		}
+		member.LogicalSlug = norm.NFC.String(member.LogicalSlug)
+		member.RevisionID = norm.NFC.String(member.RevisionID)
+		member.MemberDigest = norm.NFC.String(member.MemberDigest)
+		member.Title = norm.NFC.String(member.Title)
+		member.Content = norm.NFC.String(member.Content)
+		member.Payload = append(json.RawMessage(nil), member.Payload...)
+		if member.LogicalSlug == "" || member.RevisionID == "" || member.MemberDigest == "" ||
+			!json.Valid(member.Payload) {
+			return nil, fmt.Errorf("%w: invalid manifest member", ErrWikiReleaseInvalidAuthorization)
+		}
+		if _, exists := seen[member.LogicalSlug]; exists {
+			return nil, fmt.Errorf("%w: duplicate logical slug", ErrWikiReleaseInvalidAuthorization)
+		}
+		seen[member.LogicalSlug] = struct{}{}
+	}
+	return members, nil
+}
+
+// ReviewDraft validates one canonical named-human whole-batch receipt and
+// atomically promotes the same immutable Draft to Ready. Publish authorization
+// and activation remain a separate operation.
+func (s *WikiReleaseService) reviewDraft(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	rawDecision []byte,
+) (*types.WikiReleasePreparation, error) {
+	if preparationID == "" || s.repository == nil {
+		return nil, fmt.Errorf("%w: missing draft", ErrWikiReleaseInvalidAuthorization)
+	}
+	if err := s.verifyAccess(ctx, principal, scope, "review-draft"); err != nil {
+		return nil, err
+	}
+	draft, err := s.repository.GetDraftPreparation(ctx, scope, preparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	if _, err := validateSchemaWikiPreparation(
+		draft, types.WikiReleasePreparationDraft, scope,
+	); err != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	decision, err := ParseHumanBatchDecisionReceiptV1(rawDecision)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := CanonicalHumanBatchDecisionReceiptV1(decision, true)
+	if err != nil || !bytes.Equal(rawDecision, canonical) {
+		return nil, fmt.Errorf("%w: non-canonical human decision", ErrWikiReleaseInvalidAuthorization)
+	}
+	if s.humanDecisionVerifier == nil {
+		return nil, fmt.Errorf("%w: missing human verifier", ErrWikiReleaseInvalidAuthorization)
+	}
+	if err := s.humanDecisionVerifier.Verify(decision); err != nil {
+		return nil, err
+	}
+	if err := validateHumanBatchDecision059(decision, principal, scope, s.now().Unix(), false); err != nil {
+		return nil, err
+	}
+	if draft.CandidateDigest != decision.CandidateHash ||
+		draft.ReadyReceiptDigest != decision.HumanBatchHash ||
+		draft.ReviewPolicyID != decision.ReviewPolicyHash {
+		return nil, fmt.Errorf("%w: human decision draft mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	reviewDigest := digestWikiReleaseBytes(canonical)
+	reviewed := *draft
+	reviewed.ReviewDecisionDigest = reviewDigest
+	reviewed.Status = types.WikiReleasePreparationReady
+	reviewed.PreparationDigest = digestWikiReleasePreparation(&reviewed)
+	return s.repository.ReviewDraft(
+		ctx,
+		scope,
+		preparationID,
+		draft,
+		reviewDigest,
+		reviewed.PreparationDigest,
+	)
+}
+
+// ReadDraftMember serves reviewer preview only from one exact Draft member
+// revision. It never consults or modifies Head.
+func (s *WikiReleaseService) readDraftMember(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	logicalSlug string,
+	revisionID string,
+) (*types.WikiReleaseMemberSnapshot, error) {
+	if err := s.verifyAccess(ctx, principal, scope, "read-draft"); err != nil {
+		return nil, err
+	}
+	draft, err := s.repository.GetDraftPreparation(ctx, scope, preparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	for _, member := range draft.Members {
+		if member.LogicalSlug == logicalSlug && member.RevisionID == revisionID {
+			copy := member
+			copy.Payload = append(json.RawMessage(nil), member.Payload...)
+			return &copy, nil
+		}
+	}
+	return nil, ErrWikiReleaseNotFound
+}
+
 // Prepare validates and freezes the complete canonical manifest and members.
 func (s *WikiReleaseService) Prepare(
 	ctx context.Context,

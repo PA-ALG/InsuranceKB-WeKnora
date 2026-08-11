@@ -221,13 +221,42 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
 	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
-	must(container.Provide(func() service.WikiReleaseAuthorizationVerifier {
-		return service.NewEd25519WikiReleaseAuthorizationVerifier(nil)
+	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
+		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
+		return verifier, err
 	}))
-	must(container.Provide(func() service.WikiReleaseServiceOptions {
-		return service.WikiReleaseServiceOptions{}
+	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseServiceOptions, error) {
+		_, options, err := schemaWikiReleaseVerifierProviders(cfg)
+		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
+	must(container.Provide(func(
+		releaseAuthority *service.WikiReleaseService,
+		knowledgeRepository interfaces.KnowledgeRepository,
+		chunkRepository interfaces.ChunkRepository,
+		fileService interfaces.FileService,
+		cfg *config.Config,
+	) (*service.SchemaWikiService, error) {
+		citationPort := service.NewSchemaWikiCitationRevisionReadAdapter(
+			knowledgeRepository, chunkRepository,
+		)
+		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
+		if err != nil {
+			return nil, err
+		}
+		codec, err := service.NewSchemaWikiCitationTokenCodec(
+			ring.ActiveKeyID(), ring.SigningKeys(), time.Now,
+		)
+		if err != nil {
+			return nil, err
+		}
+		content := service.NewSchemaWikiCitationContentService(
+			citationPort,
+			service.NewSchemaWikiRevisionBlobReader(knowledgeRepository, fileService),
+			codec,
+		)
+		return service.NewSchemaWikiService(releaseAuthority, citationPort, content), nil
+	}))
 	must(container.Provide(service.NewEmbedChannelService))
 
 	// Web search service (needed by AgentService)
@@ -385,6 +414,12 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	// Wiki page handler
 	must(container.Provide(handler.NewWikiPageHandler))
 	must(container.Provide(handler.NewWikiReleaseHandler))
+	must(container.Provide(func(
+		repository *repository.WikiReleaseRepository,
+		schemaService *service.SchemaWikiService,
+	) *handler.SchemaWikiHandler {
+		return handler.NewSchemaWikiHandler(repository, schemaService)
+	}))
 	// IM integration
 	logger.Debugf(ctx, "[Container] Registering IM integration...")
 	must(container.Provide(imPkg.NewService))
@@ -415,6 +450,19 @@ func BuildContainer(container *dig.Container) *dig.Container {
 
 	logger.Infof(ctx, "[Container] Container initialization completed successfully")
 	return container
+}
+
+func schemaWikiReleaseVerifierProviders(
+	cfg *config.Config,
+) (service.WikiReleaseAuthorizationVerifier, service.WikiReleaseServiceOptions, error) {
+	humanKeys, publishKeys, err := config.DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, service.WikiReleaseServiceOptions{}, err
+	}
+	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
+		service.WikiReleaseServiceOptions{
+			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
+		}, nil
 }
 
 // registerChatLocalImageResolver wires the chat package's LocalImageResolver

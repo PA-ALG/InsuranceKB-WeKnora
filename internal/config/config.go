@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,28 +19,218 @@ import (
 
 // Config 应用程序总配置
 type Config struct {
-	Conversation    *ConversationConfig    `yaml:"conversation"     json:"conversation"`
-	Server          *ServerConfig          `yaml:"server"           json:"server"`
-	KnowledgeBase   *KnowledgeBaseConfig   `yaml:"knowledge_base"   json:"knowledge_base"`
-	Tenant          *TenantConfig          `yaml:"tenant"           json:"tenant"`
-	Auth            *AuthConfig            `yaml:"auth"             json:"auth"`
-	Audit           *AuditConfig           `yaml:"audit"            json:"audit"`
-	OIDCAuth        *OIDCAuthConfig        `yaml:"oidc_auth"        json:"oidc_auth"`
-	Models          []ModelConfig          `yaml:"models"           json:"models"`
-	VectorDatabase  *VectorDatabaseConfig  `yaml:"vector_database"  json:"vector_database"`
-	DocReader       *DocReaderConfig       `yaml:"docreader"        json:"docreader"`
-	StreamManager   *StreamManagerConfig   `yaml:"stream_manager"   json:"stream_manager"`
-	ExtractManager  *ExtractManagerConfig  `yaml:"extract"          json:"extract"`
-	WebSearch       *WebSearchConfig       `yaml:"web_search"       json:"web_search"`
-	PromptTemplates *PromptTemplatesConfig `yaml:"prompt_templates" json:"prompt_templates"`
-	IM              *IMConfig              `yaml:"im"               json:"im"`
-	Agent           *AgentConfig           `yaml:"agent"            json:"agent"`
+	Conversation      *ConversationConfig      `yaml:"conversation"     json:"conversation"`
+	Server            *ServerConfig            `yaml:"server"           json:"server"`
+	KnowledgeBase     *KnowledgeBaseConfig     `yaml:"knowledge_base"   json:"knowledge_base"`
+	Tenant            *TenantConfig            `yaml:"tenant"           json:"tenant"`
+	Auth              *AuthConfig              `yaml:"auth"             json:"auth"`
+	Audit             *AuditConfig             `yaml:"audit"            json:"audit"`
+	OIDCAuth          *OIDCAuthConfig          `yaml:"oidc_auth"        json:"oidc_auth"`
+	Models            []ModelConfig            `yaml:"models"           json:"models"`
+	VectorDatabase    *VectorDatabaseConfig    `yaml:"vector_database"  json:"vector_database"`
+	DocReader         *DocReaderConfig         `yaml:"docreader"        json:"docreader"`
+	StreamManager     *StreamManagerConfig     `yaml:"stream_manager"   json:"stream_manager"`
+	ExtractManager    *ExtractManagerConfig    `yaml:"extract"          json:"extract"`
+	WebSearch         *WebSearchConfig         `yaml:"web_search"       json:"web_search"`
+	PromptTemplates   *PromptTemplatesConfig   `yaml:"prompt_templates" json:"prompt_templates"`
+	IM                *IMConfig                `yaml:"im"               json:"im"`
+	Agent             *AgentConfig             `yaml:"agent"            json:"agent"`
+	SchemaWikiSigning *SchemaWikiSigningConfig `yaml:"schema_wiki_signing" json:"-"`
 	// FrontendBaseURL is the externally-visible origin of the SPA, used
 	// to compose absolute share-link URLs. Empty falls back to a host-
 	// relative URL ("/register?token=…") which the SPA then resolves
 	// against window.location.origin — fine for typical single-origin
 	// deployments. Sourced from FRONTEND_BASE_URL env at startup.
 	FrontendBaseURL string `yaml:"frontend_base_url" json:"frontend_base_url"`
+}
+
+// SchemaWikiEd25519PublicKeyConfig is a deployment-owned verification key.
+// Only public key bytes are accepted; private key material has no production
+// configuration field.
+type SchemaWikiEd25519PublicKeyConfig struct {
+	KeyID           string `yaml:"key_id"            json:"key_id"`
+	PublicKeyBase64 string `yaml:"public_key_base64" json:"-"`
+}
+
+// SchemaWikiEd25519PrivateKeyConfig is deployment-owned signing material for
+// short-lived citation content tokens. Private bytes are never JSON-visible.
+type SchemaWikiEd25519PrivateKeyConfig struct {
+	KeyID            string `yaml:"key_id"             json:"key_id"`
+	PrivateKeyBase64 string `yaml:"private_key_base64" json:"-"`
+}
+
+// SchemaWikiSigningConfig keeps the human-review and publish-authorization
+// trust domains separate while reusing their existing signed receipt formats.
+type SchemaWikiSigningConfig struct {
+	HumanDecisionPublicKeys        []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
+	PublishAuthorizationPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
+	CitationTokenSigningKeys       []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
+	ActiveCitationTokenKeyID       string                              `yaml:"active_citation_token_key_id" json:"-"`
+}
+
+// SchemaWikiCitationTokenSigningRing is a decoded runtime-only third signing
+// domain. It exposes copies solely for dependency construction.
+type SchemaWikiCitationTokenSigningRing struct {
+	activeKeyID string
+	keys        map[string]ed25519.PrivateKey
+}
+
+func (r *SchemaWikiCitationTokenSigningRing) ActiveKeyID() string {
+	if r == nil {
+		return ""
+	}
+	return r.activeKeyID
+}
+
+func (r *SchemaWikiCitationTokenSigningRing) SigningKeys() map[string]ed25519.PrivateKey {
+	result := map[string]ed25519.PrivateKey{}
+	if r == nil {
+		return result
+	}
+	for keyID, key := range r.keys {
+		result[keyID] = append(ed25519.PrivateKey(nil), key...)
+	}
+	return result
+}
+
+// DecodeSchemaWikiSigningPublicKeys strictly decodes the configured public
+// key rings. Empty configuration is valid but deliberately yields verifiers
+// that reject every signed authority.
+func DecodeSchemaWikiSigningPublicKeys(
+	cfg *Config,
+) (map[string]ed25519.PublicKey, map[string]ed25519.PublicKey, error) {
+	var signing *SchemaWikiSigningConfig
+	if cfg != nil {
+		signing = cfg.SchemaWikiSigning
+	}
+	if signing == nil {
+		return map[string]ed25519.PublicKey{}, map[string]ed25519.PublicKey{}, nil
+	}
+	human, err := decodeSchemaWikiPublicKeyRing(
+		"human decision", signing.HumanDecisionPublicKeys,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	publish, err := decodeSchemaWikiPublicKeyRing(
+		"publish authorization", signing.PublishAuthorizationPublicKeys,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	for keyID, humanKey := range human {
+		if _, duplicateID := publish[keyID]; duplicateID {
+			return nil, nil, fmt.Errorf("schema wiki public key id is reused across decision domains")
+		}
+		for _, publishKey := range publish {
+			if string(humanKey) == string(publishKey) {
+				return nil, nil, fmt.Errorf("schema wiki public key material is reused across decision domains")
+			}
+		}
+	}
+	return human, publish, nil
+}
+
+// DecodeSchemaWikiCitationTokenSigningRing freezes a third Ed25519 authority
+// domain. Empty configuration is valid and yields a disabled, fail-closed
+// ring. Configured IDs and derived public material must be disjoint from both
+// review and publish verification domains.
+func DecodeSchemaWikiCitationTokenSigningRing(
+	cfg *Config,
+) (*SchemaWikiCitationTokenSigningRing, error) {
+	var signing *SchemaWikiSigningConfig
+	if cfg != nil {
+		signing = cfg.SchemaWikiSigning
+	}
+	if signing == nil || (len(signing.CitationTokenSigningKeys) == 0 &&
+		strings.TrimSpace(signing.ActiveCitationTokenKeyID) == "") {
+		return &SchemaWikiCitationTokenSigningRing{keys: map[string]ed25519.PrivateKey{}}, nil
+	}
+	if len(signing.CitationTokenSigningKeys) == 0 || signing.ActiveCitationTokenKeyID == "" ||
+		signing.ActiveCitationTokenKeyID != strings.TrimSpace(signing.ActiveCitationTokenKeyID) {
+		return nil, fmt.Errorf("schema wiki citation token signing ring is incomplete")
+	}
+	human, publish, err := DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]ed25519.PrivateKey, len(signing.CitationTokenSigningKeys))
+	publicMaterial := map[string]string{}
+	for _, entry := range signing.CitationTokenSigningKeys {
+		if entry.KeyID == "" || entry.KeyID != strings.TrimSpace(entry.KeyID) ||
+			strings.IndexFunc(entry.KeyID, func(character rune) bool {
+				return character < 0x20 || character == 0x7f
+			}) >= 0 {
+			return nil, fmt.Errorf("schema wiki citation token key id is invalid")
+		}
+		if _, duplicate := keys[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki citation token key id is duplicated")
+		}
+		if _, duplicate := human[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		if _, duplicate := publish[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(entry.PrivateKeyBase64)
+		if decodeErr != nil || len(decoded) != ed25519.PrivateKeySize ||
+			base64.RawURLEncoding.EncodeToString(decoded) != entry.PrivateKeyBase64 {
+			return nil, fmt.Errorf("schema wiki citation token private key is invalid")
+		}
+		privateKey := append(ed25519.PrivateKey(nil), decoded...)
+		publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("schema wiki citation token private key is invalid")
+		}
+		material := string(publicKey)
+		if _, duplicate := publicMaterial[material]; duplicate {
+			return nil, fmt.Errorf("schema wiki citation token key material is duplicated")
+		}
+		for _, existing := range human {
+			if string(existing) == material {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for _, existing := range publish {
+			if string(existing) == material {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		publicMaterial[material] = entry.KeyID
+		keys[entry.KeyID] = privateKey
+	}
+	if _, exists := keys[signing.ActiveCitationTokenKeyID]; !exists {
+		return nil, fmt.Errorf("schema wiki active citation token key is unknown")
+	}
+	return &SchemaWikiCitationTokenSigningRing{
+		activeKeyID: signing.ActiveCitationTokenKeyID,
+		keys:        keys,
+	}, nil
+}
+
+func decodeSchemaWikiPublicKeyRing(
+	domain string,
+	entries []SchemaWikiEd25519PublicKeyConfig,
+) (map[string]ed25519.PublicKey, error) {
+	keys := make(map[string]ed25519.PublicKey, len(entries))
+	for _, entry := range entries {
+		if entry.KeyID == "" || entry.KeyID != strings.TrimSpace(entry.KeyID) ||
+			strings.IndexFunc(entry.KeyID, func(character rune) bool {
+				return character < 0x20 || character == 0x7f
+			}) >= 0 {
+			return nil, fmt.Errorf("schema wiki %s public key has invalid key id", domain)
+		}
+		if _, duplicate := keys[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki %s public key id is duplicated", domain)
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(entry.PublicKeyBase64)
+		if err != nil || len(decoded) != ed25519.PublicKeySize ||
+			base64.RawURLEncoding.EncodeToString(decoded) != entry.PublicKeyBase64 {
+			return nil, fmt.Errorf("schema wiki %s public key is invalid", domain)
+		}
+		keys[entry.KeyID] = append(ed25519.PublicKey(nil), decoded...)
+	}
+	return keys, nil
 }
 
 // AgentConfig represents the global agent settings.
@@ -612,6 +804,12 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
+	if _, _, err := DecodeSchemaWikiSigningPublicKeys(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := DecodeSchemaWikiCitationTokenSigningRing(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
 
 	if cfg.OIDCAuth != nil && cfg.OIDCAuth.Enable {
 		if strings.TrimSpace(cfg.OIDCAuth.ClientID) == "" {
