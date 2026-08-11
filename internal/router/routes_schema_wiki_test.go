@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apprepo "github.com/Tencent/WeKnora/internal/application/repository"
@@ -358,6 +359,15 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/sections/:section_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/fields/:field_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/releases/:release_id/fields/:field_id/citations/:citation_id/preview"])
+	contentPath := http.MethodGet + " /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/citation-content/:token"
+	require.True(t, paths[contentPath])
+	for path := range paths {
+		if strings.Contains(path, "/schema/citation-content/") {
+			require.NotContains(t, path, ":page")
+			require.NotContains(t, path, ":revision")
+			require.NotContains(t, path, ":attempt")
+		}
+	}
 	require.False(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/fields/:field_id/citations/:citation_id/preview"])
 	require.False(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/drafts/:preparation_id/fields/:field_id"])
 

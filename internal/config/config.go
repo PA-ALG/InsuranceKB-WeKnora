@@ -52,11 +52,45 @@ type SchemaWikiEd25519PublicKeyConfig struct {
 	PublicKeyBase64 string `yaml:"public_key_base64" json:"-"`
 }
 
+// SchemaWikiEd25519PrivateKeyConfig is deployment-owned signing material for
+// short-lived citation content tokens. Private bytes are never JSON-visible.
+type SchemaWikiEd25519PrivateKeyConfig struct {
+	KeyID            string `yaml:"key_id"             json:"key_id"`
+	PrivateKeyBase64 string `yaml:"private_key_base64" json:"-"`
+}
+
 // SchemaWikiSigningConfig keeps the human-review and publish-authorization
 // trust domains separate while reusing their existing signed receipt formats.
 type SchemaWikiSigningConfig struct {
-	HumanDecisionPublicKeys        []SchemaWikiEd25519PublicKeyConfig `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
-	PublishAuthorizationPublicKeys []SchemaWikiEd25519PublicKeyConfig `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
+	HumanDecisionPublicKeys        []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
+	PublishAuthorizationPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
+	CitationTokenSigningKeys       []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
+	ActiveCitationTokenKeyID       string                              `yaml:"active_citation_token_key_id" json:"-"`
+}
+
+// SchemaWikiCitationTokenSigningRing is a decoded runtime-only third signing
+// domain. It exposes copies solely for dependency construction.
+type SchemaWikiCitationTokenSigningRing struct {
+	activeKeyID string
+	keys        map[string]ed25519.PrivateKey
+}
+
+func (r *SchemaWikiCitationTokenSigningRing) ActiveKeyID() string {
+	if r == nil {
+		return ""
+	}
+	return r.activeKeyID
+}
+
+func (r *SchemaWikiCitationTokenSigningRing) SigningKeys() map[string]ed25519.PrivateKey {
+	result := map[string]ed25519.PrivateKey{}
+	if r == nil {
+		return result
+	}
+	for keyID, key := range r.keys {
+		result[keyID] = append(ed25519.PrivateKey(nil), key...)
+	}
+	return result
 }
 
 // DecodeSchemaWikiSigningPublicKeys strictly decodes the configured public
@@ -95,6 +129,83 @@ func DecodeSchemaWikiSigningPublicKeys(
 		}
 	}
 	return human, publish, nil
+}
+
+// DecodeSchemaWikiCitationTokenSigningRing freezes a third Ed25519 authority
+// domain. Empty configuration is valid and yields a disabled, fail-closed
+// ring. Configured IDs and derived public material must be disjoint from both
+// review and publish verification domains.
+func DecodeSchemaWikiCitationTokenSigningRing(
+	cfg *Config,
+) (*SchemaWikiCitationTokenSigningRing, error) {
+	var signing *SchemaWikiSigningConfig
+	if cfg != nil {
+		signing = cfg.SchemaWikiSigning
+	}
+	if signing == nil || (len(signing.CitationTokenSigningKeys) == 0 &&
+		strings.TrimSpace(signing.ActiveCitationTokenKeyID) == "") {
+		return &SchemaWikiCitationTokenSigningRing{keys: map[string]ed25519.PrivateKey{}}, nil
+	}
+	if len(signing.CitationTokenSigningKeys) == 0 || signing.ActiveCitationTokenKeyID == "" ||
+		signing.ActiveCitationTokenKeyID != strings.TrimSpace(signing.ActiveCitationTokenKeyID) {
+		return nil, fmt.Errorf("schema wiki citation token signing ring is incomplete")
+	}
+	human, publish, err := DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]ed25519.PrivateKey, len(signing.CitationTokenSigningKeys))
+	publicMaterial := map[string]string{}
+	for _, entry := range signing.CitationTokenSigningKeys {
+		if entry.KeyID == "" || entry.KeyID != strings.TrimSpace(entry.KeyID) ||
+			strings.IndexFunc(entry.KeyID, func(character rune) bool {
+				return character < 0x20 || character == 0x7f
+			}) >= 0 {
+			return nil, fmt.Errorf("schema wiki citation token key id is invalid")
+		}
+		if _, duplicate := keys[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki citation token key id is duplicated")
+		}
+		if _, duplicate := human[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		if _, duplicate := publish[entry.KeyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		decoded, decodeErr := base64.RawURLEncoding.DecodeString(entry.PrivateKeyBase64)
+		if decodeErr != nil || len(decoded) != ed25519.PrivateKeySize ||
+			base64.RawURLEncoding.EncodeToString(decoded) != entry.PrivateKeyBase64 {
+			return nil, fmt.Errorf("schema wiki citation token private key is invalid")
+		}
+		privateKey := append(ed25519.PrivateKey(nil), decoded...)
+		publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("schema wiki citation token private key is invalid")
+		}
+		material := string(publicKey)
+		if _, duplicate := publicMaterial[material]; duplicate {
+			return nil, fmt.Errorf("schema wiki citation token key material is duplicated")
+		}
+		for _, existing := range human {
+			if string(existing) == material {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for _, existing := range publish {
+			if string(existing) == material {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		publicMaterial[material] = entry.KeyID
+		keys[entry.KeyID] = privateKey
+	}
+	if _, exists := keys[signing.ActiveCitationTokenKeyID]; !exists {
+		return nil, fmt.Errorf("schema wiki active citation token key is unknown")
+	}
+	return &SchemaWikiCitationTokenSigningRing{
+		activeKeyID: signing.ActiveCitationTokenKeyID,
+		keys:        keys,
+	}, nil
 }
 
 func decodeSchemaWikiPublicKeyRing(
@@ -694,6 +805,9 @@ func LoadConfig() (*Config, error) {
 func ValidateConfig(cfg *Config) error {
 	var errs []string
 	if _, _, err := DecodeSchemaWikiSigningPublicKeys(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := DecodeSchemaWikiCitationTokenSigningRing(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
 

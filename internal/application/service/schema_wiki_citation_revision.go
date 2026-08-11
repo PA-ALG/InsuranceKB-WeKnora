@@ -310,7 +310,7 @@ type schemaWikiCitationRevisionReadAdapter struct {
 func NewSchemaWikiCitationRevisionReadAdapter(
 	knowledgeRepository interfaces.KnowledgeRepository,
 	chunkRepository interfaces.ChunkRepository,
-) CitationRevisionReadPort {
+) *schemaWikiCitationRevisionReadAdapter {
 	revisions, ok := knowledgeRepository.(schemaWikiCitationRevisionRepository)
 	if !ok {
 		return &schemaWikiCitationRevisionReadAdapter{}
@@ -322,7 +322,7 @@ func newSchemaWikiCitationRevisionReadAdapter(
 	revisions schemaWikiCitationRevisionRepository,
 	chunks schemaWikiCitationChunkRepository,
 	snapshots ...schemaWikiImmutableRevisionSnapshotReader,
-) CitationRevisionReadPort {
+) *schemaWikiCitationRevisionReadAdapter {
 	adapter := &schemaWikiCitationRevisionReadAdapter{revisions: revisions, chunks: chunks}
 	if len(snapshots) == 1 {
 		adapter.snapshots = snapshots[0]
@@ -334,6 +334,18 @@ func (a *schemaWikiCitationRevisionReadAdapter) ReadExactRevision(
 	ctx context.Context,
 	request CitationRevisionReadRequestV1,
 ) ([]byte, error) {
+	if _, err := a.resolveExactRevisionAuthority(ctx, request); err != nil {
+		return nil, err
+	}
+	// The two-phase authority is valid, but this legacy byte-returning port must
+	// not collapse authority issuance and token-only fetch into one operation.
+	return nil, ErrSchemaWikiCitationUnavailable
+}
+
+func (a *schemaWikiCitationRevisionReadAdapter) resolveExactRevisionAuthority(
+	ctx context.Context,
+	request CitationRevisionReadRequestV1,
+) (*SchemaWikiCitationPreviewAuthorityV1, error) {
 	if a == nil || a.revisions == nil || a.chunks == nil ||
 		request.ReleaseID == "" || request.ActivationEpoch == 0 ||
 		!schemaWikiSHA256(request.CandidateSHA256) || request.FieldID == "" ||
@@ -380,6 +392,10 @@ func (a *schemaWikiCitationRevisionReadAdapter) ReadExactRevision(
 		resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size <= 0 ||
 		!strings.EqualFold(resource.MimeType, "application/pdf") {
 		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if source.PageCount == nil || request.Citation.PageNumber <= 0 ||
+		request.Citation.PageNumber > *source.PageCount {
+		return nil, ErrSchemaWikiCitationPageUnavailable
 	}
 
 	selected, err := a.chunks.GetChunkByID(ctx, tenantID, request.Citation.ChunkID)
@@ -469,10 +485,7 @@ func (a *schemaWikiCitationRevisionReadAdapter) ReadExactRevision(
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 
-	// The two-phase authority is valid, but this legacy byte-returning port must
-	// not collapse authority issuance and token-only fetch into one operation.
-	// The HTTP authority/token route is intentionally not mounted in this stage.
-	return nil, ErrSchemaWikiCitationUnavailable
+	return authority, nil
 }
 
 func schemaWikiNativeParseAttempt(citation types.CitationTargetV1) (int64, bool) {

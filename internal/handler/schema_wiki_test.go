@@ -44,6 +44,7 @@ type schemaWikiHTTPServiceSpy struct {
 	currentCitationCalls  int
 	reviewedCitationCalls int
 	citationErr           error
+	citationBytes         []byte
 	currentAuthority      *service.SchemaWikiCurrentAuthorityV1
 }
 
@@ -166,7 +167,38 @@ func (s *schemaWikiHTTPServiceSpy) ReadCurrentSchemaCitation(
 	string,
 ) ([]byte, error) {
 	s.currentCitationCalls++
-	return nil, s.citationErr
+	return append([]byte(nil), s.citationBytes...), s.citationErr
+}
+
+func (s *schemaWikiHTTPServiceSpy) IssueCurrentSchemaCitationAuthority(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	_ string,
+	_ string,
+	_ string,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	s.currentCitationCalls++
+	if s.citationErr != nil {
+		return nil, s.citationErr
+	}
+	var authority types.SchemaWikiCitationContentAuthorityV1
+	if len(s.citationBytes) > 0 {
+		if err := json.Unmarshal(s.citationBytes, &authority); err != nil {
+			return nil, err
+		}
+	}
+	return &authority, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaCitationContent(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	_ string,
+) ([]byte, error) {
+	s.currentCitationCalls++
+	return append([]byte(nil), s.citationBytes...), s.citationErr
 }
 
 func (s *schemaWikiHTTPServiceSpy) ReadReviewedPreparationCitation(
@@ -479,5 +511,40 @@ func TestSchemaWikiCitationPreviewUsesOnlyPathIdentitiesAndFailsClosed(t *testin
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
 	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.Equal(t, 1, spy.currentCitationCalls)
+}
+
+func TestSchemaWikiCitationPreviewReturnsClosedAuthorityJSONNotPDFBytes(t *testing.T) {
+	t.Parallel()
+	authority := `{"contract":"schema-wiki-citation-content-authority.v1"}`
+	spy := &schemaWikiHTTPServiceSpy{citationBytes: []byte(authority)}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-596-1"},
+		{Key: "release_id", Value: "release-596-1"},
+		{Key: "field_id", Value: "product_code"},
+		{Key: "citation_id", Value: "citation-product-code"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
+	ctx := types.WithPrincipal(c.Request.Context(), principal)
+	c.Request = c.Request.WithContext(ctx)
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.PreviewCurrentCitation(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "application/json; charset=utf-8", recorder.Header().Get("Content-Type"))
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Contract string `json:"contract"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	require.Equal(t, "schema-wiki-citation-content-authority.v1", response.Data.Contract)
+	require.NotContains(t, recorder.Body.String(), "%PDF")
 	require.Equal(t, 1, spy.currentCitationCalls)
 }

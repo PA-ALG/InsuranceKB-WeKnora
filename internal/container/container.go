@@ -234,11 +234,28 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		releaseAuthority *service.WikiReleaseService,
 		knowledgeRepository interfaces.KnowledgeRepository,
 		chunkRepository interfaces.ChunkRepository,
-	) *service.SchemaWikiService {
+		fileService interfaces.FileService,
+		cfg *config.Config,
+	) (*service.SchemaWikiService, error) {
 		citationPort := service.NewSchemaWikiCitationRevisionReadAdapter(
 			knowledgeRepository, chunkRepository,
 		)
-		return service.NewSchemaWikiService(releaseAuthority, citationPort)
+		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
+		if err != nil {
+			return nil, err
+		}
+		codec, err := service.NewSchemaWikiCitationTokenCodec(
+			ring.ActiveKeyID(), ring.SigningKeys(), time.Now,
+		)
+		if err != nil {
+			return nil, err
+		}
+		content := service.NewSchemaWikiCitationContentService(
+			citationPort,
+			service.NewSchemaWikiRevisionBlobReader(knowledgeRepository, fileService),
+			codec,
+		)
+		return service.NewSchemaWikiService(releaseAuthority, citationPort, content), nil
 	}))
 	must(container.Provide(service.NewEmbedChannelService))
 

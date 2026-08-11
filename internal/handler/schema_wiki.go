@@ -100,6 +100,20 @@ type schemaWikiHTTPService interface {
 		string,
 		string,
 	) ([]byte, error)
+	IssueCurrentSchemaCitationAuthority(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+		string,
+	) (*types.SchemaWikiCitationContentAuthorityV1, error)
+	ReadSchemaCitationContent(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+	) ([]byte, error)
 	ReadReviewedPreparationCitation(
 		context.Context,
 		types.WikiReleasePrincipal,
@@ -621,7 +635,7 @@ func (h *SchemaWikiHandler) PreviewCurrentCitation(c *gin.Context) {
 		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
 		return
 	}
-	opened, err := h.schemaService.ReadCurrentSchemaCitation(
+	authority, err := h.schemaService.IssueCurrentSchemaCitationAuthority(
 		c.Request.Context(), principal, scope,
 		strings.TrimSpace(c.Param("release_id")),
 		schemaWikiFieldSlug(c.Param("field_id")), strings.TrimSpace(c.Param("citation_id")),
@@ -630,7 +644,30 @@ func (h *SchemaWikiHandler) PreviewCurrentCitation(c *gin.Context) {
 		writeSchemaWikiError(c, err)
 		return
 	}
-	c.Data(http.StatusOK, "application/octet-stream", opened)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": authority})
+}
+
+// ReadCitationContent accepts the opaque token as the sole citation/revision
+// authority. The scoped URL remains only the independently sealed dual-ACL
+// context and cannot select page, attempt, revision, bbox or hashes.
+func (h *SchemaWikiHandler) ReadCitationContent(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
+		return
+	}
+	opened, err := h.schemaService.ReadSchemaCitationContent(
+		c.Request.Context(), principal, scope, strings.TrimSpace(c.Param("token")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/pdf", opened)
 }
 
 // PreviewReviewedCitation is the human-only Ready-preparation counterpart.
@@ -700,6 +737,10 @@ func writeSchemaWikiError(c *gin.Context, err error) {
 	case stderrors.Is(err, service.ErrSchemaWikiCitationUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"success": false, "error": gin.H{"message": "schema wiki citation unavailable"},
+		})
+	case stderrors.Is(err, service.ErrSchemaWikiCitationPageUnavailable):
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"success": false, "error": gin.H{"message": "schema wiki citation page unavailable"},
 		})
 	case stderrors.Is(err, service.ErrNoSchemaWikiActiveRelease):
 		c.JSON(http.StatusNotFound, gin.H{

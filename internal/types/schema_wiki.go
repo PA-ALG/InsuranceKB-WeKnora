@@ -164,6 +164,110 @@ type Schema67CitationAuthorityJoinReceiptV1 struct {
 	ReceiptSHA256                   string                      `json:"receipt_sha256"`
 }
 
+// SchemaWikiCitationContentAuthorityV1 is the closed, public half of the
+// two-stage fixed-revision citation protocol. OpaqueToken is an independently
+// signed capability and is deliberately excluded from AuthoritySHA256; the
+// token signer binds this exact authority hash. Fetch reconstructs the full
+// replay request from validated release custody, so raw quote text never enters
+// the bearer token.
+type SchemaWikiCitationContentAuthorityV1 struct {
+	Contract               string                      `json:"contract"`
+	TokenKeyID             string                      `json:"token_key_id"`
+	ReleaseID              string                      `json:"release_id"`
+	ActivationEpoch        uint64                      `json:"activation_epoch"`
+	CandidateSHA256        string                      `json:"candidate_sha256"`
+	FieldID                string                      `json:"field_id"`
+	CitationID             string                      `json:"citation_id"`
+	RevisionSource         LiveRevisionSourceReceiptV1 `json:"revision_source"`
+	CitationSHA256         string                      `json:"citation_sha256"`
+	BindingSHA256          string                      `json:"binding_sha256"`
+	PageNumber             int                         `json:"page_number"`
+	BBox                   CitationBBoxV1              `json:"bbox"`
+	QuoteSHA256            string                      `json:"quote_sha256"`
+	ContentSnapshotSHA256  string                      `json:"content_snapshot_sha256"`
+	CoordinateSpaceVersion string                      `json:"coordinate_space_version"`
+	PageWidth              int                         `json:"page_width"`
+	PageHeight             int                         `json:"page_height"`
+	RotationDegrees        int                         `json:"rotation_degrees"`
+	RetentionState         string                      `json:"retention_state"`
+	ExpiresAtUnix          int64                       `json:"expires_at_unix"`
+	AuthoritySHA256        string                      `json:"authority_sha256"`
+	OpaqueToken            string                      `json:"opaque_token"`
+}
+
+// ComputeSchemaWikiCitationContentAuthoritySHA256 freezes the public
+// authority independently of the bearer token bytes.
+func ComputeSchemaWikiCitationContentAuthoritySHA256(
+	authority SchemaWikiCitationContentAuthorityV1,
+) (string, error) {
+	if authority.Contract != "schema-wiki-citation-content-authority.v1" {
+		return "", ErrSchemaWikiContractInvalid
+	}
+	authority.OpaqueToken = ""
+	digest, _, err := schemaWikiHashWithout(
+		authority.Contract, authority, "authority_sha256",
+	)
+	return digest, err
+}
+
+// ValidateSchemaWikiCitationContentAuthorityV1 validates every public
+// preimage. It never treats the token or a caller-recomputed outer hash as
+// authority for the embedded revision or citation.
+func ValidateSchemaWikiCitationContentAuthorityV1(
+	authority SchemaWikiCitationContentAuthorityV1,
+) error {
+	if authority.Contract != "schema-wiki-citation-content-authority.v1" ||
+		authority.TokenKeyID == "" || authority.ReleaseID == "" ||
+		authority.ActivationEpoch == 0 || authority.FieldID == "" ||
+		authority.CitationID == "" || authority.ExpiresAtUnix <= 0 ||
+		authority.RetentionState != KnowledgeRevisionSourcePinned ||
+		authority.CoordinateSpaceVersion != "normalized_0_1e6" ||
+		authority.PageWidth != 1_000_000 || authority.PageHeight != 1_000_000 ||
+		(authority.RotationDegrees != 0 && authority.RotationDegrees != 90 &&
+			authority.RotationDegrees != 180 && authority.RotationDegrees != 270) ||
+		ValidateLiveRevisionSourceReceiptV1(authority.RevisionSource) != nil ||
+		!validSchemaWikiSHA256(authority.CandidateSHA256) ||
+		!validSchemaWikiSHA256(authority.CitationSHA256) ||
+		!validSchemaWikiSHA256(authority.BindingSHA256) ||
+		!validSchemaWikiSHA256(authority.QuoteSHA256) ||
+		!validSchemaWikiSHA256(authority.ContentSnapshotSHA256) ||
+		authority.PageNumber <= 0 || authority.PageNumber > authority.RevisionSource.PageCount ||
+		authority.BBox.CoordinateSystem != authority.CoordinateSpaceVersion ||
+		authority.BBox.PageWidth != authority.PageWidth ||
+		authority.BBox.PageHeight != authority.PageHeight || authority.BBox.X0 < 0 ||
+		authority.BBox.Y0 < 0 || authority.BBox.X0 >= authority.BBox.X1 ||
+		authority.BBox.Y0 >= authority.BBox.Y1 || authority.BBox.X1 > authority.PageWidth ||
+		authority.BBox.Y1 > authority.PageHeight {
+		return ErrSchemaWikiContractInvalid
+	}
+	digest, err := ComputeSchemaWikiCitationContentAuthoritySHA256(authority)
+	if err != nil || digest != authority.AuthoritySHA256 {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+// ValidateSchemaWikiCitationContentAuthorityAgainst rejects a fully rehashed
+// caller substitution by comparing the complete canonical public authority.
+func ValidateSchemaWikiCitationContentAuthorityAgainst(
+	presented SchemaWikiCitationContentAuthorityV1,
+	trusted SchemaWikiCitationContentAuthorityV1,
+) error {
+	if ValidateSchemaWikiCitationContentAuthorityV1(presented) != nil ||
+		ValidateSchemaWikiCitationContentAuthorityV1(trusted) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	presentedBytes, err := schemaWikiCanonicalJSON(presented)
+	if err != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	trustedBytes, err := schemaWikiCanonicalJSON(trusted)
+	if err != nil || !bytes.Equal(presentedBytes, trustedBytes) {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
 // ComputeSchema67CitationAuthorityJoinReceiptSHA256 freezes the same
 // schema-wiki canonical JSON equation used by the other cross-language DTOs.
 func ComputeSchema67CitationAuthorityJoinReceiptSHA256(

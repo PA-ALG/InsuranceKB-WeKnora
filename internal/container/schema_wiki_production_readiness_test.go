@@ -86,4 +86,7 @@ func TestSchemaWikiContainerDoesNotInjectNilCitationPort(t *testing.T) {
 	source := string(raw)
 	require.NotContains(t, source, "NewSchemaWikiService(releaseAuthority, nil)")
 	require.Contains(t, source, "NewSchemaWikiCitationRevisionReadAdapter")
+	require.Contains(t, source, "DecodeSchemaWikiCitationTokenSigningRing")
+	require.Contains(t, source, "NewSchemaWikiCitationContentService")
+	require.Contains(t, source, "NewSchemaWikiRevisionBlobReader")
 }

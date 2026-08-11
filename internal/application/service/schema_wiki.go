@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrSchemaWikiPreparationInvalid  = errors.New("schema wiki preparation invalid")
-	ErrSchemaWikiCitationUnavailable = errors.New("schema wiki citation unavailable")
-	ErrNoSchemaWikiActiveRelease     = errors.New("no schema wiki active release")
+	ErrSchemaWikiPreparationInvalid      = errors.New("schema wiki preparation invalid")
+	ErrSchemaWikiCitationUnavailable     = errors.New("schema wiki citation unavailable")
+	ErrSchemaWikiCitationPageUnavailable = errors.New("schema wiki citation page unavailable")
+	ErrNoSchemaWikiActiveRelease         = errors.New("no schema wiki active release")
 )
 
 type CitationRevisionReadRequestV1 struct {
@@ -36,9 +37,22 @@ type CitationRevisionReadPort interface {
 	ReadExactRevision(context.Context, CitationRevisionReadRequestV1) ([]byte, error)
 }
 
+type SchemaWikiCitationContentPort interface {
+	IssueExactRevision(
+		context.Context, CitationRevisionReadRequestV1,
+	) (*types.SchemaWikiCitationContentAuthorityV1, error)
+	ResolveOpaqueToken(
+		context.Context, types.WikiReleaseScope, string,
+	) (*types.SchemaWikiCitationContentAuthorityV1, error)
+	ReadByOpaqueToken(
+		context.Context, types.WikiReleaseScope, string, CitationRevisionReadRequestV1,
+	) ([]byte, error)
+}
+
 type SchemaWikiService struct {
 	releaseAuthority *WikiReleaseService
 	citationPort     CitationRevisionReadPort
+	citationContent  SchemaWikiCitationContentPort
 }
 
 type schemaWikiPreparationCustodyV1 struct {
@@ -56,8 +70,13 @@ type validatedSchemaWikiCustody struct {
 func NewSchemaWikiService(
 	releaseAuthority *WikiReleaseService,
 	citationPort CitationRevisionReadPort,
+	citationContent ...SchemaWikiCitationContentPort,
 ) *SchemaWikiService {
-	return &SchemaWikiService{releaseAuthority: releaseAuthority, citationPort: citationPort}
+	service := &SchemaWikiService{releaseAuthority: releaseAuthority, citationPort: citationPort}
+	if len(citationContent) == 1 {
+		service.citationContent = citationContent[0]
+	}
+	return service
 }
 
 // CreateSchemaDraft is the sole caller-facing Draft entry. It accepts the
@@ -780,6 +799,88 @@ func (s *SchemaWikiService) ReadCurrentSchemaCitation(
 		return nil, ErrWikiReleaseConflict
 	}
 	return s.ReadPinnedSchemaCitation(ctx, principal, pin, logicalSlug, citationID)
+}
+
+// IssueCurrentSchemaCitationAuthority derives the complete citation request
+// from validated Active custody and returns a short-lived, server-signed
+// content authority. The caller supplies only bounded release/field/citation
+// identities.
+func (s *SchemaWikiService) IssueCurrentSchemaCitationAuthority(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	releaseID string,
+	logicalSlug string,
+	citationID string,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	if s == nil || s.releaseAuthority == nil || s.citationContent == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(releaseID) == "" || releaseID != pin.ReleaseID() {
+		return nil, ErrWikiReleaseConflict
+	}
+	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
+	if err != nil {
+		return nil, err
+	}
+	request, err := schemaWikiCitationRequest(
+		validated, pin.scope, pin.ReleaseID(), pin.ActivationEpoch(), logicalSlug, citationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := s.citationContent.IssueExactRevision(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return authority, nil
+}
+
+// ReadSchemaCitationContent accepts only the opaque token as revision/page
+// authority. Scope is independently sealed by the active dual-ACL route and
+// rechecked by the concrete release service before immutable bytes are opened.
+func (s *SchemaWikiService) ReadSchemaCitationContent(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	token string,
+) ([]byte, error) {
+	if s == nil || s.releaseAuthority == nil || s.citationContent == nil ||
+		strings.TrimSpace(token) == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if err := s.releaseAuthority.verifyAccess(ctx, principal, scope, "read-citation-content"); err != nil {
+		return nil, err
+	}
+	authority, err := s.citationContent.ResolveOpaqueToken(ctx, scope, token)
+	if err != nil {
+		return nil, err
+	}
+	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+	if err != nil || authority.ReleaseID != pin.ReleaseID() ||
+		authority.ActivationEpoch != pin.ActivationEpoch() {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
+	if err != nil {
+		return nil, err
+	}
+	request, err := schemaWikiCitationRequest(
+		validated, scope, pin.ReleaseID(), pin.ActivationEpoch(),
+		"field:"+authority.FieldID, authority.CitationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := s.citationContent.ReadByOpaqueToken(ctx, scope, token, request)
+	if err != nil {
+		return nil, err
+	}
+	return opened, nil
 }
 
 // ReadReviewedPreparationCitation is the reviewer-only counterpart of the
