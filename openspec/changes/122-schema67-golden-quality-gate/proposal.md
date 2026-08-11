@@ -70,7 +70,10 @@ The three status authorities are frozen separately as `source_review_status=COMP
 
 ## Current delivery boundary
 
-This successor adds only a bounded status projection over the already frozen source-review
-artifact. It performs no provider, Golden generation/scoring, database, WeKnora,
-migration, Draft, review, activation or deployment action. The formal PASS dossier and its
-admission rules remain unchanged.
+This successor adds a bounded receipt-provenance verifier beside the already frozen
+source-review status projection. It reuses the existing `HumanBatchDecisionReceiptV1`
+wire and deployment-owned human public-key ring, and does not add a receipt protocol,
+table, signer or serving authority. It performs no provider, Golden generation/scoring,
+database, WeKnora, migration, Draft, review, activation or deployment action. No business
+receipt is fabricated: the current complete67 authority remains `UNVERIFIED`, and the
+formal Dossier V2 wire and frozen vector remain unchanged.

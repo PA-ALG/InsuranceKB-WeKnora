@@ -95,6 +95,10 @@ class HarnessSettings(BaseSettings):
     schema67_golden_approver_public_keys: tuple[tuple[str, str], ...] = ()
     schema67_golden_evaluator_signer_key_id: str | None = None
     schema67_golden_evaluator_public_key_base64: str | None = None
+    # Existing HumanBatchDecisionReceiptV1 verification ring reused by the
+    # Golden dossier review subject. Public keys only; callers cannot inject a
+    # per-call ring and private signing material never enters Harness settings.
+    schema_wiki_human_decision_public_keys: tuple[tuple[str, str], ...] = ()
     # 单次标注调用送入的文档文本上限（字符）；超限按页窗口过滤（spec G2.6）
     goldenset_doc_char_budget: int = 30_000
 

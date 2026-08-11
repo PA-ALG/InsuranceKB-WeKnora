@@ -313,6 +313,23 @@ revision/page/bbox/hash authority and no current/latest/presigned/material/page-
 These routes are display-only. They neither expose nor call named-human approval,
 `ReviewDraft`, publish authorization or activation APIs.
 
+### Formal Golden-Dossier receipt provenance
+
+The formal review successor reuses the existing `HumanBatchDecisionReceiptV1` canonical
+wire and deployment-owned human public-key ring. Its domain-separated subject binds the
+exact complete67 Golden artifact/logical identity, mapping/status vector, SchemaPack,
+ordered67/source/attestation authorities, reviewer `linyao`, preparation scope/policy and
+the registered evaluation and Dossier identities. A concrete signature is verified before
+any formal review-successor or Dossier provenance registration. Registration is
+identity-bound and fresh replay rejects reparsed, self-built, foreign, cross-pair and
+nested Evidence-change substitutions.
+
+This seam does not sign a business receipt and does not change the Dossier V2 wire or
+vector. Test fixtures use test-only keys solely to prove Python/Go canonical compatibility.
+The current complete67 authority remains `UNVERIFIED`; its historical `reviewed_at` stays
+null, receipt issuance time is a distinct future event, and evaluator/Draft calls remain
+zero until that real decision is supplied.
+
 ## 8. Future implementation sequence
 
 ### Task 1: Freeze closed Golden DTO and canonical vector

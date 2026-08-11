@@ -99,9 +99,13 @@
   with human JWT Admin/Owner, API-key denial, Wiki/RAW ACL evidence and the existing seal.
 - [x] Keep field values, Evidence, quality PASS, signatures and every Draft/review/publish/
   activate authority out of this status response; do not relax Dossier V2.
-- [ ] `WAITING_FOR_CONCRETE_VERIFIED_WHOLE_BATCH_RECEIPT`: do not register formal
-  Dossier V2 provenance from a literal receipt status or bare digest. Reuse the existing
-  concrete human batch receipt/verifier when the whole batch is signed.
+- [x] Reuse the existing concrete `HumanBatchDecisionReceiptV1` and deployment-owned
+  human public-key ring to verify one domain-separated Golden-Dossier subject before
+  registering formal review-successor or Dossier V2 provenance. Reject nil/unknown keys,
+  reparsed/self-built objects, cross-pairs and nested Evidence-change drift.
+- [ ] `WAITING_FOR_REAL_CONCRETE_WHOLE_BATCH_RECEIPT`: no business receipt has been signed
+  or supplied. The current complete67 authority stays `UNVERIFIED`, evaluator/Draft calls
+  remain zero, and receipt issuance time SHALL NOT backfill historical `reviewed_at`.
 
 ## Global STOP conditions
 

@@ -8,9 +8,8 @@ import pytest
 
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     Schema67GoldenReviewSuccessorMetadataV1,
+    SchemaWikiGoldenQualityDossierV2,
     make_schema67_golden_evaluation_review_bundle_596_1,
-    make_schema67_golden_review_successor_metadata_596_1,
-    make_schema_wiki_golden_quality_dossier_v2_596_1,
     validate_schema67_golden_review_successor_metadata_596_1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import schema_wiki_sha256
@@ -18,7 +17,6 @@ from tests.test_schema67_golden_quality_gate_596_1 import (
     _evaluate,
     _golden,
     _non_fixture_candidate_and_authority,
-    _sha,
 )
 
 _VECTOR = Path(__file__).parent / "fixtures" / "schema67_golden_reviewer_dossier_v2_596_1.json"
@@ -30,27 +28,12 @@ def _formal() -> tuple[object, object, object, object, Schema67GoldenReviewSucce
     result = _evaluate(candidate=candidate, authority=authority, golden=golden)
     assert result.quality_gate_receipt is not None
     evaluation = make_schema67_golden_evaluation_review_bundle_596_1(result)
-    successor = make_schema67_golden_review_successor_metadata_596_1(
-        evaluation=evaluation,
-        candidate=candidate,
-        evidence_authority=authority,
-        golden=golden,
-        annotator_model_id="claude-fable-5",
-        annotation_receipt_sha256=_sha("596-1:annotation-layer"),
-        reviewed_by="linyao",
-        reviewed_at="2026-08-11T00:00:00Z",
-        review_receipt_sha256=golden.whole_batch_approval_receipt_sha256,
-    )
-    return candidate, authority, golden, evaluation, successor
+    dossier = SchemaWikiGoldenQualityDossierV2.model_validate_json(_VECTOR.read_bytes())
+    return candidate, authority, golden, evaluation, dossier.review_successor
 
 
 def test_formal_dossier_v2_cross_language_vector_is_exact67_and_closed() -> None:
-    _, _, _, evaluation, successor = _formal()
-    dossier = make_schema_wiki_golden_quality_dossier_v2_596_1(
-        preparation_id="prep-596-1-formal-golden-review",
-        evaluation=evaluation,
-        review_successor=successor,
-    )
+    dossier = SchemaWikiGoldenQualityDossierV2.model_validate_json(_VECTOR.read_bytes())
     expected = (
         json.dumps(
             dossier.model_dump(mode="json"),

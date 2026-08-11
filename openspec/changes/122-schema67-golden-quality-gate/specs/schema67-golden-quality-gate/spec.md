@@ -391,3 +391,41 @@ repository, database or release-state write.
 - **WHEN** an API key, Viewer, Contributor or foreign scope requests the status
 - **THEN** authorization or exact-scope validation fails closed and no private status is
   returned
+
+### Requirement: SGQ11 formal Dossier provenance requires the existing concrete human receipt
+
+Formal complete67 Dossier provenance SHALL reuse `HumanBatchDecisionReceiptV1`; it SHALL
+NOT introduce a second receipt wire, signer, table or approval protocol. One
+domain-separated Golden-Dossier subject SHALL bind the exact Golden artifact and logical
+hashes, complete67 mapping and status-vector hashes, SchemaPack and ordered67 identities,
+source receipts, named reviewer `linyao`, fact-attestation hash, preparation scope and
+policy, and the registered evaluation/private/public/Dossier identities. Receipt issuance
+and expiry belong to the new formal decision and SHALL NOT fabricate or backfill the
+nullable historical source `reviewed_at`.
+
+The verifier SHALL be sealed from a deployment-owned, nonempty human-decision public-key
+ring. A caller SHALL NOT supply keys. Nil configuration, unknown/duplicate key IDs,
+duplicate key material, invalid signature, principal/scope/policy/nonce/time drift, or any
+subject mismatch SHALL fail before provenance registration. Only after concrete signature
+verification MAY the exact original Golden review successor and Dossier V2 factory objects
+be registered. Public replay SHALL require the original registered evaluation result,
+evaluation bundle, receipt, review successor and Dossier identities and SHALL fresh rebuild
+all complete67 joins; reparsed/self-built/foreign/cross-pair objects or Evidence-change
+drift SHALL fail closed.
+
+This requirement SHALL NOT change the Dossier V2 wire or its frozen vector. The current
+complete67 status remains receipt `UNVERIFIED`; until a real concrete receipt is supplied,
+formal evaluation admission and Draft calls remain zero.
+
+#### Scenario: exact test receipt verifies the portable subject
+
+- **WHEN** a test-only key signs the domain-separated subject for one exact registered
+  complete67 evaluation and Dossier pair
+- **THEN** Python and Go canonical receipt replay agree and only that original pair may be
+  registered in the test authority
+
+#### Scenario: current business authority has no concrete receipt
+
+- **WHEN** the deployment has only the frozen complete67 status with
+  `receipt_status=UNVERIFIED`
+- **THEN** no formal Dossier provenance, evaluator admission or Draft is created

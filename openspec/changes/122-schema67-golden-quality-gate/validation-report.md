@@ -68,10 +68,16 @@ original review time, attestor event, ordered complete67 mapping and unverified 
 block. Missing provider configuration is typed unavailable. It contains no field values,
 Evidence, PASS claim, signature or release action and performs no repository write.
 
-Formal Dossier V2 factory provenance remains
-`WAITING_FOR_CONCRETE_VERIFIED_WHOLE_BATCH_RECEIPT`. A literal `VERIFIED` label or bare
-receipt digest is not elevated to trusted approval; the current Dossier V2 wire/vector and
-its residual-zero admission rules remain unchanged.
+Formal Dossier V2 factory provenance now has a bounded executable verifier seam. It reuses
+the existing `HumanBatchDecisionReceiptV1` canonical bytes and Ed25519 verifier, accepts
+only deployment-owned nonempty public keys, and domain-binds the exact complete67 Golden,
+mapping/status/attestation/source identities, `linyao`, scope/policy, registered evaluation
+and Dossier authorities. Only the original registered evaluation/result, verified receipt,
+review successor and Dossier object identities survive fresh replay; reparsed, self-built,
+foreign, cross-pair and nested Evidence-change substitutions fail closed. Python and Go
+verify one frozen cross-language receipt vector. A literal `VERIFIED` label or bare digest
+is still not approval, no business receipt was created, and the current Dossier V2
+wire/vector and residual-zero admission rules remain unchanged.
 
 ## Validation gates
 
