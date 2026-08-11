@@ -3,6 +3,7 @@ package doc
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Tencent/WeKnora/cli/internal/cmdutil"
@@ -15,6 +16,27 @@ type revisionSourceBackfillStub struct {
 	calls   int
 	gotID   string
 	attempt int64
+}
+
+type revisionSourceExact3BackfillStub struct {
+	calls   int
+	kbID    string
+	request sdk.KnowledgeRevisionSourceExact3RequestV1
+}
+
+func (s *revisionSourceExact3BackfillStub) BackfillKnowledgeRevisionSourcesExact3(
+	_ context.Context,
+	kbID string,
+	request sdk.KnowledgeRevisionSourceExact3RequestV1,
+) (*sdk.KnowledgeRevisionSourceExact3ResultV1, error) {
+	s.calls++
+	s.kbID = kbID
+	s.request = request
+	return &sdk.KnowledgeRevisionSourceExact3ResultV1{
+		Contract:       sdk.KnowledgeRevisionSourceExact3ContractV1,
+		DryRun:         request.DryRun,
+		ValidatedRoles: []string{"terms", "brochure", "rate_table"},
+	}, nil
 }
 
 func (s *revisionSourceBackfillStub) BackfillKnowledgeRevisionSource(
@@ -92,5 +114,35 @@ func TestRevisionSourceBackfillDryRunMakesZeroClientCalls(t *testing.T) {
 		envelope.Meta.Plan.Action != "doc.revision-source-backfill" ||
 		envelope.Meta.Plan.Args["attempt"] != float64(2) {
 		t.Fatalf("unexpected dry-run envelope: %+v", envelope)
+	}
+}
+
+func TestRevisionSourceExact3DryRunCallsServerValidation(t *testing.T) {
+	out, _ := iostreams.SetForTest(t)
+	stub := &revisionSourceExact3BackfillStub{}
+	request := sdk.KnowledgeRevisionSourceExact3RequestV1{
+		Contract: sdk.KnowledgeRevisionSourceExact3ContractV1,
+		DryRun:   true,
+		Sources: []sdk.KnowledgeRevisionSourceExact3ItemV1{
+			{Role: "terms", KnowledgeID: "terms", ParseAttempt: 2},
+			{Role: "brochure", KnowledgeID: "brochure", ParseAttempt: 2},
+			{Role: "rate_table", KnowledgeID: "rate", ParseAttempt: 2},
+		},
+	}
+	err := runRevisionSourceExact3Backfill(
+		context.Background(),
+		&cmdutil.FormatOptions{Mode: cmdutil.FormatJSON},
+		stub,
+		"raw-kb-1",
+		request,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stub.calls != 1 || stub.kbID != "raw-kb-1" || !stub.request.DryRun {
+		t.Fatalf("server dry-run was not called exactly once: %+v", stub)
+	}
+	if !strings.Contains(out.String(), `"dry_run":true`) {
+		t.Fatalf("unexpected output: %s", out.String())
 	}
 }

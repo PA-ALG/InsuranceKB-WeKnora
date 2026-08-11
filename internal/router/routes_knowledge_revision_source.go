@@ -25,4 +25,14 @@ func RegisterKnowledgeRevisionSourceRoutes(
 		g.KBAccessWriteFromKnowledgeIDParam("id"),
 		h.Backfill,
 	)
+	knowledgeBases := g.apiKeyGroup(
+		r.Group("/knowledge-bases"), apiKeyIngest(apiKeyFullAccess()),
+	)
+	knowledgeBases.POST(
+		"/:kb_id/revision-sources/exact3/backfill",
+		middleware.DenyAPIKeyPrincipal(),
+		g.Admin(),
+		g.KBAccessWrite("kb_id"),
+		h.BackfillExact3,
+	)
 }

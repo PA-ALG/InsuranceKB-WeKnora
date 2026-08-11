@@ -569,6 +569,35 @@ func TestSchemaWikiCitationPreviewUsesOnlyPathIdentitiesAndFailsClosed(t *testin
 	require.Equal(t, 1, spy.currentCitationCalls)
 }
 
+func TestSchemaWikiCitationPreviewReturnsStablePageUnavailableCode(t *testing.T) {
+	t.Parallel()
+	spy := &schemaWikiHTTPServiceSpy{citationErr: service.ErrSchemaWikiCitationPageUnavailable}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-596-1"},
+		{Key: "release_id", Value: "release-596-1"},
+		{Key: "field_id", Value: "product_code"},
+		{Key: "citation_id", Value: "citation-secret"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
+	ctx := types.WithPrincipal(c.Request.Context(), principal)
+	c.Request = c.Request.WithContext(ctx)
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.PreviewCurrentCitation(c)
+
+	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code)
+	require.JSONEq(t,
+		`{"success":false,"error":{"code":"PAGE_UNAVAILABLE","message":"schema wiki citation page unavailable"}}`,
+		recorder.Body.String(),
+	)
+	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.NotContains(t, recorder.Body.String(), "opaque_token")
+	require.Equal(t, 1, spy.currentCitationCalls)
+}
+
 func TestSchemaWikiCitationPreviewReturnsClosedAuthorityJSONNotPDFBytes(t *testing.T) {
 	t.Parallel()
 	authority := `{"contract":"schema-wiki-citation-content-authority.v1"}`

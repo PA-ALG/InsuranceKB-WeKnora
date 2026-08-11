@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +16,14 @@ import (
 
 type knowledgeRevisionSourceBackfiller interface {
 	BackfillCurrentCompleted(context.Context, string, int64) (*types.KnowledgeRevisionSource, error)
+}
+
+type knowledgeRevisionSourceExact3Backfiller interface {
+	BackfillExact3(
+		context.Context,
+		string,
+		service.KnowledgeRevisionSourceExact3RequestV1,
+	) (*service.KnowledgeRevisionSourceExact3ResultV1, error)
 }
 
 // KnowledgeRevisionSourceHandler exposes only the human-admin backfill
@@ -72,6 +82,30 @@ func (h *KnowledgeRevisionSourceHandler) Backfill(c *gin.Context) {
 	}})
 }
 
+func (h *KnowledgeRevisionSourceHandler) BackfillExact3(c *gin.Context) {
+	backfiller, ok := any(h.service).(knowledgeRevisionSourceExact3Backfiller)
+	if !ok || strings.TrimSpace(c.Param("kb_id")) == "" || c.Request == nil || c.Request.Body == nil {
+		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
+		return
+	}
+	var request service.KnowledgeRevisionSourceExact3RequestV1
+	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 32<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil || ensureWikiReleaseJSONEOF(decoder) != nil {
+		writeKnowledgeRevisionSourceError(c, service.ErrRevisionSourceMismatch)
+		return
+	}
+	result, err := backfiller.BackfillExact3(c.Request.Context(), c.Param("kb_id"), request)
+	if err != nil || result == nil {
+		if err == nil {
+			err = service.ErrRevisionSourceMismatch
+		}
+		writeKnowledgeRevisionSourceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
 func writeKnowledgeRevisionSourceError(c *gin.Context, err error) {
 	status := http.StatusConflict
 	code := "REVISION_SOURCE_MISMATCH"
@@ -83,8 +117,10 @@ func writeKnowledgeRevisionSourceError(c *gin.Context, err error) {
 		status = http.StatusUnprocessableEntity
 		code = "PAGE_UNAVAILABLE"
 	}
-	c.JSON(status, gin.H{
-		"success": false,
-		"error":   gin.H{"code": code, "message": "revision source request failed"},
-	})
+	errorBody := gin.H{"code": code, "message": "revision source request failed"}
+	var exact3Err *service.KnowledgeRevisionSourceExact3Error
+	if errors.As(err, &exact3Err) && exact3Err.FailedRole != "" {
+		errorBody["failed_role"] = exact3Err.FailedRole
+	}
+	c.JSON(status, gin.H{"success": false, "error": errorBody})
 }

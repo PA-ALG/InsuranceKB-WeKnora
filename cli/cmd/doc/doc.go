@@ -28,6 +28,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(NewCmdList(f))
 	cmd.AddCommand(NewCmdReparse(f))
 	cmd.AddCommand(NewCmdRevisionSourceBackfill(f))
+	cmd.AddCommand(NewCmdRevisionSourceExact3Backfill(f))
 	cmd.AddCommand(NewCmdUpdate(f))
 	cmd.AddCommand(NewCmdUpload(f))
 	cmd.AddCommand(NewCmdView(f))

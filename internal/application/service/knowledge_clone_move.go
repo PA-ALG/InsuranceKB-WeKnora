@@ -1191,6 +1191,11 @@ func (s *knowledgeService) moveOneKnowledge(
 			"reuse_vectors move across different vector stores is not supported "+
 				"(source KB %s, target KB %s); use reparse mode", sourceKB.ID, targetKB.ID)
 	}
+	if mode == "reparse" {
+		if err := requireKnowledgeRevisionSourceReparseAllowed(ctx, s.repo, tenantID, knowledge.ID); err != nil {
+			return err
+		}
+	}
 
 	// Mark as processing during move
 	knowledge.ParseStatus = types.ParseStatusProcessing

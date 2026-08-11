@@ -1,8 +1,12 @@
 package doc
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,6 +23,10 @@ var revisionSourceBackfillFields = []string{
 	"retention_state",
 }
 
+var revisionSourceExact3BackfillFields = []string{
+	"contract", "dry_run", "validated_roles", "sources",
+}
+
 type RevisionSourceBackfillOptions struct {
 	Attempt int64
 	DryRun  bool
@@ -28,6 +36,19 @@ type RevisionSourceBackfillService interface {
 	BackfillKnowledgeRevisionSource(
 		context.Context, string, int64,
 	) (*sdk.KnowledgeRevisionSource, error)
+}
+
+type RevisionSourceExact3BackfillService interface {
+	BackfillKnowledgeRevisionSourcesExact3(
+		context.Context,
+		string,
+		sdk.KnowledgeRevisionSourceExact3RequestV1,
+	) (*sdk.KnowledgeRevisionSourceExact3ResultV1, error)
+}
+
+type RevisionSourceExact3BackfillOptions struct {
+	Manifest string
+	DryRun   bool
 }
 
 func NewCmdRevisionSourceBackfill(f *cmdutil.Factory) *cobra.Command {
@@ -90,6 +111,103 @@ func runRevisionSourceBackfill(
 		iostreams.IO.Out,
 		"revision source sealed: %s attempt=%d pages=%d binding=%s\n",
 		source.KnowledgeID, source.ParseAttempt, source.PageCount, source.BindingDigest,
+	)
+	return err
+}
+
+func NewCmdRevisionSourceExact3Backfill(f *cmdutil.Factory) *cobra.Command {
+	opts := &RevisionSourceExact3BackfillOptions{}
+	cmd := &cobra.Command{
+		Use:   "revision-source-exact3-backfill",
+		Short: "Server-verify and seal the exact terms, brochure, and rate sources",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			if strings.TrimSpace(opts.Manifest) == "" {
+				return cmdutil.NewError(
+					cmdutil.CodeInputInvalidArgument, "--manifest is required",
+				)
+			}
+			fopts, err := cmdutil.CheckFormatFlag(c)
+			if err != nil {
+				return err
+			}
+			fopts.ResolveDefault(iostreams.IO.IsStdoutTTY())
+			manifest, err := readRevisionSourceExact3Manifest(opts.Manifest)
+			if err != nil {
+				return err
+			}
+			manifest.DryRun = opts.DryRun
+			client, err := f.Client()
+			if err != nil {
+				return err
+			}
+			kbID, err := f.ResolveKB(c)
+			if err != nil {
+				return err
+			}
+			return runRevisionSourceExact3Backfill(
+				c.Context(), fopts, client, kbID, manifest,
+			)
+		},
+	}
+	cmd.Flags().StringVar(&opts.Manifest, "manifest", "", "Closed exact3 JSON manifest")
+	cmdutil.AddKBFlag(cmd)
+	cmdutil.AddDryRunFlag(cmd, &opts.DryRun)
+	cmdutil.AddFormatFlag(cmd, revisionSourceExact3BackfillFields...)
+	return cmd
+}
+
+func readRevisionSourceExact3Manifest(
+	path string,
+) (sdk.KnowledgeRevisionSourceExact3RequestV1, error) {
+	var request sdk.KnowledgeRevisionSourceExact3RequestV1
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return request, cmdutil.NewError(
+			cmdutil.CodeInputInvalidArgument, "exact3 manifest is unreadable",
+		)
+	}
+	decoder := json.NewDecoder(io.LimitReader(bytes.NewReader(data), 32<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		return request, cmdutil.NewError(
+			cmdutil.CodeInputInvalidArgument, "exact3 manifest is invalid",
+		)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return request, cmdutil.NewError(
+			cmdutil.CodeInputInvalidArgument, "exact3 manifest is invalid",
+		)
+	}
+	if request.Contract != sdk.KnowledgeRevisionSourceExact3ContractV1 ||
+		len(request.Sources) != 3 {
+		return request, cmdutil.NewError(
+			cmdutil.CodeInputInvalidArgument, "exact3 manifest contract is invalid",
+		)
+	}
+	return request, nil
+}
+
+func runRevisionSourceExact3Backfill(
+	ctx context.Context,
+	fopts *cmdutil.FormatOptions,
+	service RevisionSourceExact3BackfillService,
+	knowledgeBaseID string,
+	request sdk.KnowledgeRevisionSourceExact3RequestV1,
+) error {
+	result, err := service.BackfillKnowledgeRevisionSourcesExact3(
+		ctx, knowledgeBaseID, request,
+	)
+	if err != nil {
+		return cmdutil.WrapHTTP(err, "backfill exact3 revision sources")
+	}
+	if fopts.WantsJSON() {
+		return fopts.Emit(iostreams.IO.Out, result, nil)
+	}
+	_, err = fmt.Fprintf(
+		iostreams.IO.Out,
+		"exact3 revision sources verified: dry_run=%t roles=%s\n",
+		result.DryRun, strings.Join(result.ValidatedRoles, ","),
 	)
 	return err
 }

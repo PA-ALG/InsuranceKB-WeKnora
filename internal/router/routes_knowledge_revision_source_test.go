@@ -1,12 +1,16 @@
 package router
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -15,7 +19,9 @@ import (
 )
 
 type revisionSourceRouteBackfiller struct {
-	calls int
+	calls       int
+	exact3Calls int
+	exact3      service.KnowledgeRevisionSourceExact3RequestV1
 }
 
 func (s *revisionSourceRouteBackfiller) BackfillCurrentCompleted(
@@ -24,6 +30,24 @@ func (s *revisionSourceRouteBackfiller) BackfillCurrentCompleted(
 	s.calls++
 	pages := 2
 	return &types.KnowledgeRevisionSource{PageCount: &pages}, nil
+}
+
+func (s *revisionSourceRouteBackfiller) BackfillExact3(
+	_ context.Context,
+	_ string,
+	request service.KnowledgeRevisionSourceExact3RequestV1,
+) (*service.KnowledgeRevisionSourceExact3ResultV1, error) {
+	s.exact3Calls++
+	s.exact3 = request
+	return &service.KnowledgeRevisionSourceExact3ResultV1{
+		Contract: service.KnowledgeRevisionSourceExact3ContractV1,
+		DryRun:   request.DryRun,
+		ValidatedRoles: []string{
+			service.KnowledgeRevisionSourceRoleTerms,
+			service.KnowledgeRevisionSourceRoleBrochure,
+			service.KnowledgeRevisionSourceRoleRateTable,
+		},
+	}, nil
 }
 
 type revisionSourceRouteKnowledgeLookup struct{}
@@ -56,6 +80,8 @@ func TestKnowledgeRevisionSourceRoutesExposeOnlyAdminBackfill(t *testing.T) {
 	}
 	require.Contains(t, routes,
 		http.MethodPost+" /api/v1/knowledge/:id/revisions/:attempt/source/backfill")
+	require.Contains(t, routes,
+		http.MethodPost+" /api/v1/knowledge-bases/:kb_id/revision-sources/exact3/backfill")
 	require.NotContains(t, routes,
 		http.MethodGet+" /api/v1/knowledge/:id/revisions/:attempt/source/preview")
 }
@@ -135,4 +161,46 @@ func TestKnowledgeRevisionSourceRouteAllowsAdminAfterExactKBAuthority(t *testing
 	engine.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, 1, service.calls)
+}
+
+func TestKnowledgeRevisionSourceExact3DryRunReachesServerAfterExactKBAuthority(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	enabled := true
+	serviceSpy := &revisionSourceRouteBackfiller{}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleAdmin)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+	RegisterKnowledgeRevisionSourceRoutes(
+		engine.Group("/api/v1"),
+		handler.NewKnowledgeRevisionSourceHandler(serviceSpy),
+		&rbacGuards{
+			cfg:       &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
+			kbService: revisionSourceRouteKBLookup{},
+		},
+	)
+	request := service.KnowledgeRevisionSourceExact3RequestV1{
+		Contract: service.KnowledgeRevisionSourceExact3ContractV1,
+		DryRun:   true,
+		Sources: []service.KnowledgeRevisionSourceExact3ItemV1{
+			{Role: service.KnowledgeRevisionSourceRoleTerms, KnowledgeID: "terms", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("a", 64), ExpectedManifestDigest: strings.Repeat("1", 64)},
+			{Role: service.KnowledgeRevisionSourceRoleBrochure, KnowledgeID: "brochure", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("b", 64), ExpectedManifestDigest: strings.Repeat("2", 64)},
+			{Role: service.KnowledgeRevisionSourceRoleRateTable, KnowledgeID: "rate", ParseAttempt: 2, ExpectedFileSHA256: strings.Repeat("c", 64), ExpectedManifestDigest: strings.Repeat("3", 64)},
+		},
+	}
+	body, err := json.Marshal(request)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	httpRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/knowledge-bases/raw-kb-1/revision-sources/exact3/backfill",
+		bytes.NewReader(body),
+	)
+	engine.ServeHTTP(recorder, httpRequest)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, 1, serviceSpy.exact3Calls)
+	require.True(t, serviceSpy.exact3.DryRun)
 }

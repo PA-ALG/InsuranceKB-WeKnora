@@ -1,10 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,30 +15,52 @@ import (
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/stretchr/testify/require"
 )
 
 type revisionSourceRepositoryStub struct {
 	interfaces.KnowledgeRepository
-	knowledge   *types.Knowledge
-	current     *types.KnowledgeRevision
-	last        *types.KnowledgeRevision
-	source      *types.KnowledgeRevisionSource
-	resource    *types.StoredResource
-	stateErr    error
-	stateCalls  int
-	sourceErr   error
-	sealErr     error
-	sealCalls   int
-	captured    types.KnowledgeRevisionSource
-	pinned      bool
-	pinnedCalls int
+	knowledge      *types.Knowledge
+	current        *types.KnowledgeRevision
+	last           *types.KnowledgeRevision
+	source         *types.KnowledgeRevisionSource
+	resource       *types.StoredResource
+	stateErr       error
+	stateCalls     int
+	sourceErr      error
+	sealErr        error
+	sealCalls      int
+	captured       types.KnowledgeRevisionSource
+	pinned         bool
+	pinnedCalls    int
+	knowledgeCalls int
+	states         map[string]revisionSourceState
+	sealErrAt      int
+	sealed         []types.KnowledgeRevisionSource
+}
+
+type revisionSourceState struct {
+	knowledge *types.Knowledge
+	current   *types.KnowledgeRevision
+	last      *types.KnowledgeRevision
+}
+
+func (s *revisionSourceRepositoryStub) GetKnowledgeByID(
+	context.Context, uint64, string,
+) (*types.Knowledge, error) {
+	s.knowledgeCalls++
+	return s.knowledge, s.stateErr
 }
 
 func (s *revisionSourceRepositoryStub) GetRevisionState(
-	context.Context, string,
+	_ context.Context, knowledgeID string,
 ) (*types.Knowledge, *types.KnowledgeRevision, *types.KnowledgeRevision, error) {
 	s.stateCalls++
+	if state, ok := s.states[knowledgeID]; ok {
+		return state.knowledge, state.current, state.last, s.stateErr
+	}
 	return s.knowledge, s.current, s.last, s.stateErr
 }
 
@@ -50,7 +75,11 @@ func (s *revisionSourceRepositoryStub) SealRevisionSourceBinding(
 ) (*types.KnowledgeRevisionSource, error) {
 	s.sealCalls++
 	s.captured = source
-	if s.sealErr != nil {
+	s.sealed = append(s.sealed, source)
+	if s.sealErr != nil || (s.sealErrAt > 0 && s.sealCalls == s.sealErrAt) {
+		if s.sealErr == nil {
+			s.sealErr = fmt.Errorf("seal failed")
+		}
 		return nil, s.sealErr
 	}
 	copy := source
@@ -66,24 +95,29 @@ func (s *revisionSourceRepositoryStub) HasPinnedRevisionSource(
 
 type revisionSourceResourceCatalogStub struct {
 	interfaces.ResourceCatalog
-	resource *types.StoredResource
-	err      error
-	calls    int
+	resource  *types.StoredResource
+	resources map[string]*types.StoredResource
+	err       error
+	calls     int
 }
 
 func (s *revisionSourceResourceCatalogStub) Resolve(
-	context.Context, string,
+	_ context.Context, path string,
 ) (*types.StoredResource, error) {
 	s.calls++
+	if resource, ok := s.resources[path]; ok {
+		return resource, s.err
+	}
 	return s.resource, s.err
 }
 
 type revisionSourceFileServiceStub struct {
 	interfaces.FileService
-	data  []byte
-	err   error
-	calls int
-	paths []string
+	data       []byte
+	dataByPath map[string][]byte
+	err        error
+	calls      int
+	paths      []string
 }
 
 func (s *revisionSourceFileServiceStub) GetFile(_ context.Context, path string) (io.ReadCloser, error) {
@@ -92,27 +126,19 @@ func (s *revisionSourceFileServiceStub) GetFile(_ context.Context, path string) 
 	if s.err != nil {
 		return nil, s.err
 	}
+	if data, ok := s.dataByPath[path]; ok {
+		return io.NopCloser(strings.NewReader(string(data))), nil
+	}
 	return io.NopCloser(strings.NewReader(string(s.data))), nil
-}
-
-func revisionSourcePDF(pageCount int) []byte {
-	var body strings.Builder
-	body.WriteString("%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
-	body.WriteString(fmt.Sprintf("2 0 obj << /Type /Pages /Count %d /Kids [", pageCount))
-	for page := 0; page < pageCount; page++ {
-		body.WriteString(fmt.Sprintf(" %d 0 R", page+3))
-	}
-	body.WriteString(" ] >> endobj\n")
-	for page := 0; page < pageCount; page++ {
-		body.WriteString(fmt.Sprintf("%d 0 obj << /Type /Page /Parent 2 0 R >> endobj\n", page+3))
-	}
-	body.WriteString("trailer << /Root 1 0 R >>\n%%EOF\n")
-	return []byte(body.String())
 }
 
 func revisionSourceFixture(t *testing.T) (*KnowledgeRevisionSourceService, *revisionSourceRepositoryStub, *revisionSourceFileServiceStub) {
 	t.Helper()
-	pdf := revisionSourcePDF(2)
+	pdf, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "dataset", "shouxian_product",
+		"平安e生保（尊享版）医疗保险", "费率表.pdf",
+	))
+	require.NoError(t, err)
 	digest := fmt.Sprintf("%x", sha256.Sum256(pdf))
 	handle := strings.Repeat("h", types.ResourceHandleLength)
 	resource := &types.StoredResource{
@@ -189,6 +215,72 @@ func TestBackfillKnowledgeRevisionSourceUsesOnlyCurrentCompletedAttemptAndRecomp
 	require.NoError(t, types.ValidateKnowledgeRevisionSourceBinding(*sealed))
 }
 
+func TestImmutablePDFPageCounterAcceptsExact5961EncryptedMaterials(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("..", "..", "..", "dataset")
+	for _, test := range []struct {
+		name   string
+		path   string
+		sha256 string
+		pages  int
+	}{
+		{
+			name:   "terms AES object streams",
+			path:   filepath.Join(root, "version-materials", "esb_zunxiang_596-1_tiaokuan.pdf"),
+			sha256: "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+			pages:  39,
+		},
+		{
+			name:   "brochure",
+			path:   filepath.Join(root, "shouxian_product", "平安e生保（尊享版）医疗保险", "产品说明书.pdf"),
+			sha256: "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+			pages:  27,
+		},
+		{
+			name:   "rate table",
+			path:   filepath.Join(root, "shouxian_product", "平安e生保（尊享版）医疗保险", "费率表.pdf"),
+			sha256: "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+			pages:  2,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data, err := os.ReadFile(test.path)
+			require.NoError(t, err)
+			require.Equal(t, test.sha256, fmt.Sprintf("%x", sha256.Sum256(data)))
+			pages, err := countImmutablePDFPages(data)
+			require.NoError(t, err)
+			require.Equal(t, test.pages, pages)
+		})
+	}
+}
+
+func TestImmutablePDFPageCounterRejectsCorruptExactObject(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "dataset", "version-materials",
+		"esb_zunxiang_596-1_tiaokuan.pdf",
+	))
+	require.NoError(t, err)
+	corrupt := append([]byte(nil), data[:len(data)/2]...)
+	pages, err := countImmutablePDFPages(corrupt)
+	require.ErrorIs(t, err, ErrRevisionSourcePageUnavailable)
+	require.Zero(t, pages)
+
+	rate, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "dataset", "shouxian_product",
+		"平安e生保（尊享版）医疗保险", "费率表.pdf",
+	))
+	require.NoError(t, err)
+	var passwordProtected bytes.Buffer
+	require.NoError(t, api.Encrypt(
+		bytes.NewReader(rate),
+		&passwordProtected,
+		model.NewAESConfiguration("required-user-password", "required-owner-password", 256),
+	))
+	pages, err = countImmutablePDFPages(passwordProtected.Bytes())
+	require.ErrorIs(t, err, ErrRevisionSourcePageUnavailable)
+	require.Zero(t, pages)
+}
+
 func TestBackfillKnowledgeRevisionSourceRejectsZeroStaleAndMissingRevisionBeforeObjectRead(t *testing.T) {
 	for name, attempt := range map[string]int64{"zero": 0, "stale": 1} {
 		t.Run(name, func(t *testing.T) {
@@ -254,7 +346,7 @@ func TestReadFixedRevisionSourceReturnsOnlyExactPinnedObject(t *testing.T) {
 		sealed.FileSHA256, sealed.BindingDigest, 2,
 	)
 	require.NoError(t, err)
-	require.Equal(t, revisionSourcePDF(2), opened)
+	require.Equal(t, files.data, opened)
 	require.Equal(t, []string{sealed.ImmutableLocator}, files.paths[len(files.paths)-1:])
 }
 
@@ -265,4 +357,126 @@ func TestPinnedRevisionSourceBlocksKnowledgeDeleteBeforeMutation(t *testing.T) {
 	)
 	require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)
 	require.Equal(t, 1, repo.pinnedCalls)
+}
+
+func TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation(t *testing.T) {
+	_, repo, _ := revisionSourceFixture(t)
+	repo.pinned = true
+	svc := &knowledgeService{repo: repo}
+
+	result, err := svc.ReparseKnowledge(
+		revisionSourceContext(), repo.knowledge.ID, nil,
+	)
+
+	require.ErrorIs(t, err, ErrKnowledgeRevisionSourcePinned)
+	require.Nil(t, result)
+	require.Equal(t, 1, repo.knowledgeCalls)
+	require.Equal(t, 1, repo.pinnedCalls)
+}
+
+func revisionSourceExact3Fixture(t *testing.T) (
+	*KnowledgeRevisionSourceService,
+	*revisionSourceRepositoryStub,
+	*revisionSourceFileServiceStub,
+	KnowledgeRevisionSourceExact3RequestV1,
+) {
+	t.Helper()
+	pdf, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "dataset", "shouxian_product",
+		"平安e生保（尊享版）医疗保险", "费率表.pdf",
+	))
+	require.NoError(t, err)
+	fileSHA := fmt.Sprintf("%x", sha256.Sum256(pdf))
+	repo := &revisionSourceRepositoryStub{states: map[string]revisionSourceState{}}
+	resources := &revisionSourceResourceCatalogStub{resources: map[string]*types.StoredResource{}}
+	files := &revisionSourceFileServiceStub{dataByPath: map[string][]byte{}}
+	request := KnowledgeRevisionSourceExact3RequestV1{
+		Contract: KnowledgeRevisionSourceExact3ContractV1,
+		Sources:  make([]KnowledgeRevisionSourceExact3ItemV1, 0, 3),
+	}
+	for index, role := range []string{
+		KnowledgeRevisionSourceRoleTerms,
+		KnowledgeRevisionSourceRoleBrochure,
+		KnowledgeRevisionSourceRoleRateTable,
+	} {
+		knowledgeID := fmt.Sprintf("knowledge-%d", index+1)
+		handle := strings.Repeat(string(rune('a'+index)), types.ResourceHandleLength)
+		path := types.BuildResourcePath(handle)
+		manifest := strings.Repeat(fmt.Sprintf("%x", index+1), 64)
+		knowledge := &types.Knowledge{
+			ID: knowledgeID, TenantID: 10003, KnowledgeBaseID: "raw-kb-1",
+			ParseStatus: types.ParseStatusCompleted, CurrentParseAttempt: 2,
+			FilePath: path, FileSHA256: fileSHA, FileType: "pdf",
+		}
+		revision := &types.KnowledgeRevision{
+			KnowledgeID: knowledgeID, ParseAttempt: 2, FileSHA256: fileSHA,
+			ManifestAlgorithm: types.RevisionManifestAlgorithm,
+			ManifestDigest:    manifest, ChunkCount: index + 1,
+		}
+		repo.states[knowledgeID] = revisionSourceState{
+			knowledge: knowledge, current: revision, last: revision,
+		}
+		resources.resources[path] = &types.StoredResource{
+			ID: fmt.Sprintf("resource-%d", index+1), Handle: handle, TenantID: 10003,
+			Provider: "local", PhysicalPath: fmt.Sprintf("object-%d", index+1),
+			MimeType: "application/pdf", Size: int64(len(pdf)), ContentHash: fileSHA,
+			Lifecycle: types.ResourceLifecyclePersistent, State: types.ResourceStateActive,
+		}
+		files.dataByPath[path] = pdf
+		request.Sources = append(request.Sources, KnowledgeRevisionSourceExact3ItemV1{
+			Role: role, KnowledgeID: knowledgeID, ParseAttempt: 2,
+			ExpectedFileSHA256: fileSHA, ExpectedManifestDigest: manifest,
+		})
+	}
+	service := NewKnowledgeRevisionSourceService(
+		&config.Config{KnowledgeRevisionSource: &config.KnowledgeRevisionSourceConfig{
+			BackfillEnabled: true, MaxObjectBytes: 2 << 20,
+		}},
+		repo,
+		files,
+		resources,
+	)
+	return service, repo, files, request
+}
+
+func TestExact3BackfillPreflightsAllSourcesBeforeStrictSerialSeal(t *testing.T) {
+	service, repo, _, request := revisionSourceExact3Fixture(t)
+	request.DryRun = true
+
+	result, err := service.BackfillExact3(
+		revisionSourceContext(), "raw-kb-1", request,
+	)
+	require.NoError(t, err)
+	require.True(t, result.DryRun)
+	require.Equal(t, []string{
+		KnowledgeRevisionSourceRoleTerms,
+		KnowledgeRevisionSourceRoleBrochure,
+		KnowledgeRevisionSourceRoleRateTable,
+	}, result.ValidatedRoles)
+	require.Equal(t, 3, repo.stateCalls)
+	require.Zero(t, repo.sealCalls)
+
+	service, repo, _, request = revisionSourceExact3Fixture(t)
+	repo.sealErrAt = 2
+	result, err = service.BackfillExact3(
+		revisionSourceContext(), "raw-kb-1", request,
+	)
+	require.Nil(t, result)
+	var roleErr *KnowledgeRevisionSourceExact3Error
+	require.ErrorAs(t, err, &roleErr)
+	require.Equal(t, KnowledgeRevisionSourceRoleBrochure, roleErr.FailedRole)
+	require.Equal(t, 5, repo.stateCalls, "all sources must preflight before serial fresh seal checks")
+	require.Equal(t, 2, repo.sealCalls, "rate_table must not seal after brochure failure")
+	require.Equal(t, []string{
+		"knowledge-1", "knowledge-2",
+	}, []string{repo.sealed[0].KnowledgeID, repo.sealed[1].KnowledgeID})
+
+	service, repo, _, request = revisionSourceExact3Fixture(t)
+	request.Sources[1].ExpectedManifestDigest = strings.Repeat("f", 64)
+	result, err = service.BackfillExact3(
+		revisionSourceContext(), "raw-kb-1", request,
+	)
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Zero(t, repo.sealCalls, "preflight failure must keep all source rows unwritten")
 }

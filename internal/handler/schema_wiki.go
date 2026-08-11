@@ -872,7 +872,10 @@ func writeSchemaWikiError(c *gin.Context, err error) {
 		})
 	case stderrors.Is(err, service.ErrSchemaWikiCitationPageUnavailable):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"success": false, "error": gin.H{"message": "schema wiki citation page unavailable"},
+			"success": false,
+			"error": gin.H{
+				"code": "PAGE_UNAVAILABLE", "message": "schema wiki citation page unavailable",
+			},
 		})
 	case stderrors.Is(err, service.ErrNoSchemaWikiActiveRelease):
 		c.JSON(http.StatusNotFound, gin.H{
