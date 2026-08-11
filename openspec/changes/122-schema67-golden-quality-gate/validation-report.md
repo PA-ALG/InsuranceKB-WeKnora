@@ -2,6 +2,8 @@
 
 Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REAL-GOLDEN-NOT-RUN`
 
+Review-surface delta: `CONTRACT-FROZEN / IMPLEMENTATION-NOT-RUN`
+
 ## Identity and truth boundary
 
 - Implementation base: merged Schema Wiki main commit
@@ -30,6 +32,15 @@ configured evaluator receipt public-key ring. It does
 not change CandidateV2, provider/model code, runner, database schema, migration, serving
 Head, frontend or generic Material Wiki behavior.
 
+This docs-only successor freezes how a future successful evaluation is retained and read:
+the full signed receipt, redacted aggregate and private ordered-67 dossier become one
+canonical evaluation bundle embedded in the existing Schema Wiki preparation custody
+manifest. It adds no table, migration, Head or CAS. FAIL, `FIXTURE_ONLY`, `INCONCLUSIVE`,
+missing or stale evaluations remain offline-only and cannot create a Draft. The exact
+preparation-scoped summary/dossier/Evidence-preview routes are read-only, Admin/Owner and
+Wiki/RAW dual-ACL bound; dossier/Evidence additionally bind the named reviewer. This delta
+does not implement or execute those routes.
+
 ## Validation gates
 
 - Focused Python evaluator/release/contracts: PASS.
@@ -47,6 +58,8 @@ Head, frontend or generic Material Wiki behavior.
 - Public aggregate omits canonical field values; private dossier remains separately hashed.
 - Ruff, strict mypy, Go formatting and focused type/service gates: PASS.
 - Provider/model/live/DB/WeKnora calls: `0`; Draft/review/activation actions: `0`.
+- Review-surface backend/frontend tests, database writes and HTTP calls: `NOT RUN`; only
+  the contract and route/DTO boundaries are frozen by this successor.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
 or authorize a model run. Task 2 still requires a separately frozen real named-human Golden,

@@ -59,6 +59,24 @@
 - [ ] Evaluate the resulting Candidate once and STOP on any failed gate.
 - [ ] Only after PASS, continue the existing Draft → Review → Publish → Activate runbook.
 
+## Task 6 · Preparation-pinned evaluation review surface
+
+- [x] Freeze one canonical PASS evaluation bundle containing the signed quality receipt,
+  redacted public aggregate and private ordered-67 dossier.
+- [x] Freeze storage inside the existing `schema-wiki-preparation-custody.v1` manifest,
+  with distinct digest domains and JSONB canonical replay; add no table, Head or CAS.
+- [x] Freeze the exact three preparation/evaluation-pinned GET routes and closed public/
+  private DTOs. Public means aggregate-only; pre-activation summary remains human JWT
+  Admin/Owner, while dossier/Evidence also bind the named reviewer and all use Wiki/RAW
+  dual ACL plus the existing release seal.
+- [x] Freeze Evidence preview as server-selected, attempt-bound fixed-revision authority
+  followed by token-only bytes; forbid caller revision/page/bbox/hash authority and every
+  current/latest/presigned/material/page-1 fallback.
+- [ ] RED/GREEN the backend custody replay, fixed safe errors, read-only authorization and
+  exact routes in separately authorized production paths.
+- [ ] RED/GREEN the closed frontend parsers and preparation review UI. The UI SHALL have no
+  approval, review, publish or activation capability.
+
 ## Global STOP conditions
 
 - Evaluated model participates in its own Golden authority.
@@ -68,3 +86,5 @@
 - Any page/current/latest/bbox fallback is proposed.
 - Any provider-zero fixture or old failed execution is presented as semantic acceptance.
 - Any general evaluation platform, DB/migration or second release authority is required.
+- Any evaluation surface exposes private field values in the summary, accepts caller
+  revision authority, bypasses preparation scope/dual ACL, or changes release state.

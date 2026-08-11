@@ -223,8 +223,10 @@ metrics and remains explicitly visible; it cannot become page 1/full-page output
 new authorized provider run
   → concrete sealed Schema67CandidateV2 + Evidence companion
   → deterministic 596-1 Golden evaluation
-  → PASS-only Schema67GoldenQualityGateReceiptV1
-  → SchemaWikiReviewBundleV1 / review dossier binds receipt hash
+  → PASS-only Schema67GoldenEvaluationReviewBundleV1
+      = signed quality receipt + redacted aggregate + private ordered67 dossier
+  → SchemaWikiReviewBundleV1 binds the same concrete receipt
+  → schema-wiki-preparation-custody.v1 embeds the full evaluation bundle
   → CreateSchemaDraft
   → named-human ReviewDraft
   → separate PublishAuthorization
@@ -236,6 +238,60 @@ ordered 67 field-decision hashes, metric-policy hash, evaluator hash, every metr
 numerator/denominator and the final gate status. It is evaluated after Candidate creation
 and before any Draft write. FAIL/PENDING receipts are not reviewable and cannot be
 overridden by a release reviewer.
+
+### Preparation custody equation
+
+`Schema67GoldenEvaluationReviewBundleV1` is the only persisted evaluation form. Its
+`evaluation_id` equals the canonical signed quality receipt SHA-256, and its own
+`evaluation_bundle_sha256` hashes the full receipt + aggregate + dossier content. The
+quality receipt binds the private dossier and public aggregate hashes; the dossier binds
+ordered67 decision hashes; both private/public objects bind the same Candidate, Golden
+and metric identities. The same receipt is already nested in `SchemaWikiReviewBundleV1`.
+
+The existing `schema-wiki-preparation-custody.v1` JSONB manifest embeds the full release,
+the exact review bundle and the full evaluation bundle. Its storage `ManifestDigest`
+hashes canonical custody bytes. The release manifest digest, review-bundle hash and
+evaluation-bundle hash stay separate; none aliases another authority. Existing immutable
+75 member snapshots and `PreparationDigest` close the row. JSONB read accepts equivalent
+database key order/whitespace only after strict closed decode, canonical re-marshal and
+full nested replay. It never treats raw JSONB text as authority.
+
+Only the signed PASS bundle reaches `CreateSchemaDraft`. `FAIL`, `FIXTURE_ONLY`,
+`INCONCLUSIVE`, missing and stale outcomes produce safe offline receipts/aggregates only;
+they never enter a preparation. Creating the Draft still does not review or publish it.
+
+### Exact read-only review surface
+
+The scoped prefix remains:
+
+`/api/v1/knowledgebase/:wiki_kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema`
+
+The new closed route set is exactly:
+
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary`
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/dossier`
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview`
+
+All are preparation-derived, human JWT Admin/Owner, API-key denied and protected by Wiki
+ACL/evidence → RAW ACL/evidence → existing release seal. The dossier and Evidence preview
+also require a nonblank authenticated human principal ID as the named reviewer for that
+read; caller body/query/path data cannot provide it. This plan chooses Admin/Owner for the
+aggregate summary because it is still a pre-activation preparation; `public` means
+redacted DTO, not Viewer access. A later Active-release public summary route is outside
+this 596-1 slice.
+
+The summary wraps the exact frozen `Schema67GoldenPublicAggregateV1`; the private response
+wraps the exact frozen ordered-67 `Schema67GoldenPrivateDossierV1`. Neither wrapper invents
+field values, quotes, locators or Evidence targets. Any richer reviewer display is a
+separate server projection from the validated release and Candidate-Evidence custody in
+the same preparation. Evidence preview selects that exact stored Evidence target and
+returns a preparation-bound authority that reuses the existing immutable revision source
+plus third-ring opaque token; the existing token-only bytes route performs the fetch. No
+response contains raw PDF bytes, paths, secrets or key material. There is no caller
+revision/page/bbox/hash authority and no current/latest/presigned/material/page-1 fallback.
+
+These routes are display-only. They neither expose nor call named-human approval,
+`ReviewDraft`, publish authorization or activation APIs.
 
 ## 8. Future implementation sequence
 
@@ -273,6 +329,17 @@ overridden by a release reviewer.
 - [ ] After Golden and evaluator independent review, obtain explicit provider authorization
   for one new Candidate identity, evaluate it once, and STOP on any failed gate.
 
+### Task 6: Implement the review surface in a separately authorized delta
+
+- [ ] RED the exact PASS bundle/custody equation, JSONB canonical replay, nested
+  substitution and every non-PASS Draft write at zero.
+- [ ] RED the exact three GET routes, immutable preparation/evaluation pin, Admin/Owner +
+  Wiki/RAW dual ACL, named-reviewer private access and fixed safe errors.
+- [ ] RED aggregate privacy, ordered67 dossier invariants and server-derived Evidence
+  preview/token-only bytes with typed unavailable behavior.
+- [ ] GREEN only the existing preparation-manifest adapter and bounded backend/frontend
+  read surface; add no table, Head, CAS, approval action or generic evaluation service.
+
 ## 9. Non-goals
 
 - No provider/model call, Golden answer generation, DB/WeKnora write, migration, Draft,
@@ -283,3 +350,5 @@ overridden by a release reviewer.
 - No default page 1, synthetic bbox, current/latest revision fallback or missing-Evidence
   waiver.
 - No change to CandidateV2 wire or reuse of the failed old exact8 identity.
+- No Viewer/anonymous/API-key access to pre-activation evaluation data, no review or
+  activation control in the evaluation UI, and no generic multi-product evaluation API.

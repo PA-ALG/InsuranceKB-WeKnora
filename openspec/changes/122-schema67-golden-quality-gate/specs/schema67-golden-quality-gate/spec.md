@@ -134,7 +134,7 @@ may convert FAIL/PENDING to PASS.
 
 ### Requirement: SGQ5 the quality receipt is Candidate-bound and pre-Draft
 
-A future `Schema67GoldenQualityGateReceiptV1` SHALL bind the concrete Candidate hash,
+The `Schema67GoldenQualityGateReceiptV1` SHALL bind the concrete Candidate hash,
 Evidence-companion hash, Golden version/hash, ordered 67 field-decision hashes, evaluator
 hash, metric-policy hash, all metric numerators/denominators and final PASS status.
 The receipt SHALL also bind the two Golden-approval hashes and carry a domain-separated
@@ -184,3 +184,120 @@ Head, migration or generic Material Wiki fallback.
 
 - **WHEN** the gate cannot be delivered without a generic experiment/serving subsystem
 - **THEN** implementation stops for a new Mission Card rather than expanding this change
+
+### Requirement: SGQ8 a PASS evaluation bundle is immutable preparation custody
+
+Only a closed canonical `Schema67GoldenEvaluationReviewBundleV1` SHALL cross the Schema
+Wiki Draft boundary. It SHALL contain exactly:
+
+- `contract = schema67-golden-evaluation-review-bundle.v1`;
+- one server-derived `evaluation_id` equal to the embedded signed quality receipt's
+  `receipt_sha256`;
+- the concrete signed PASS `Schema67GoldenQualityGateReceiptV1`;
+- the exact `Schema67GoldenPublicAggregateV1`;
+- the exact `Schema67GoldenPrivateDossierV1`; and
+- `evaluation_bundle_sha256` over the preceding canonical content.
+
+The bundle validator SHALL require status `PASS` in the receipt, public aggregate and
+private dossier; exact equality of every repeated Candidate, Golden and evaluator identity;
+the receipt's Evidence-companion hash equal to the dossier's; exact receipt-to-dossier
+ordered 67 decision hashes; exact receipt-to-public/private hashes; and an exact common
+ordered metric-hash sequence bound to the receipt's metric-policy identity. A fully
+rehashed substitution, missing object, unknown/trailing field or noncanonical value SHALL
+fail before `CreateSchemaDraft`.
+
+The existing `SchemaWikiReviewBundleV1` SHALL continue to embed the same concrete quality
+receipt. The existing canonical `schema-wiki-preparation-custody.v1` JSONB envelope SHALL
+embed the full evaluation review bundle alongside the full release and review bundle.
+Its storage `ManifestDigest` SHALL cover the canonical custody envelope, while the inner
+release manifest, review-bundle hash and evaluation-bundle hash remain distinct digest
+domains. Existing preparation/member snapshots, `PreparationDigest`, Draft-to-Ready CAS,
+publish authorization and sole Active Head remain unchanged; no table, migration, Head or
+CAS is added.
+
+On a JSONB read the server SHALL closed-decode with EOF, canonicalize the concrete nested
+DTOs, revalidate every digest/signature/join and exact-compare the preparation's immutable
+scope and snapshots. Database key order or whitespace is not authority. The validated
+canonical bundle, not database text, is the only response source and remains pinned to the
+same preparation if the Active Head later changes.
+
+#### Scenario: non-PASS evaluation is offered to Draft
+
+- **WHEN** status is `FAIL`, `FIXTURE_ONLY`, `INCONCLUSIVE`, missing or stale
+- **THEN** only a safe offline evaluation result may exist and Draft/review/activation/
+  repository calls are zero; no evaluation bundle is persisted
+
+#### Scenario: public or private result is replaced
+
+- **WHEN** the public aggregate, private ordered-67 dossier, signed receipt or any nested
+  identity is removed or replaced and outer hashes are recomputed
+- **THEN** preparation validation fails before a Draft row is created
+
+### Requirement: SGQ9 the review surface is read-only, scoped and privacy-separated
+
+All review URLs SHALL use the existing exact scoped prefix
+`/api/v1/knowledgebase/:wiki_kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema`.
+The only added routes are:
+
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary`;
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/dossier`;
+- `GET .../preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview`.
+
+The server SHALL derive tenant/Wiki/RAW/space and the evaluation identity from the
+immutable preparation before output, exact-compare all path IDs and then apply the
+existing Wiki ACL/evidence -> RAW ACL/evidence -> release-seal chain. All three routes
+SHALL deny API keys and require human JWT Admin/Owner. The private dossier and Evidence
+preview SHALL additionally require a nonblank authenticated human principal ID, which is
+the named reviewer identity for that read; it is never copied from body/query/path data.
+Missing or foreign authenticated identity is typed unavailable. No Viewer route is added
+for a pre-activation preparation. `public` describes redaction, not authorization.
+
+`SchemaWikiGoldenQualitySummaryV1` SHALL be a closed wrapper with exactly `version`,
+`preparation_id`, `evaluation_id`, `quality_gate_receipt_sha256`, `public_aggregate`,
+`evaluation_bundle_sha256`, `wiki_admission_allowed` and `serving_effect`.
+`public_aggregate` SHALL be the exact validated `Schema67GoldenPublicAggregateV1` already
+bound by the receipt; its status is `PASS`, its reason codes are empty, and its Candidate,
+Golden, evaluator, metrics and aggregate hash exact-join the bundle. The wrapper SHALL set
+`wiki_admission_allowed=false` and `serving_effect=NONE`: quality PASS is not release
+review or publication authority. It SHALL expose no field decisions, Candidate/Golden
+values, quotes, locator text, bbox, raw PDF bytes, local/object-store paths, opaque token,
+key material or private signing values.
+
+`SchemaWikiGoldenQualityDossierV1` SHALL be a closed wrapper with exactly `version`,
+`preparation_id`, `evaluation_id`, `quality_gate_receipt_sha256`, `private_dossier`,
+`evaluation_bundle_sha256` and `serving_effect`. `private_dossier` SHALL be the exact
+validated `Schema67GoldenPrivateDossierV1` already bound by the receipt, including exactly
+the SchemaPack-ordered 67 decision rows and the same ordered metric rows. It SHALL not be
+expanded with caller-supplied values, quotes, locators, paths, keys or evidence targets;
+all richer field/Evidence display data must be projected independently from the validated
+release and Candidate-Evidence custody stored in the same preparation. The wrapper SHALL
+set `serving_effect=NONE`.
+
+Evidence preview SHALL accept only the four immutable path IDs. The server SHALL require
+the field to exist in the ordered private dossier and select the unique exact Evidence/
+citation authority from the validated release and Candidate-Evidence preparation custody,
+then reuse the existing attempt-bound immutable revision reader and third-ring,
+server-derived opaque-token flow. A preparation-bound preview authority SHALL bind the
+preparation/evaluation/field/evidence IDs, full `LiveRevisionSourceReceiptV1`, page, bbox,
+coordinate space/page dimensions/rotation, quote/content/Evidence-receipt hashes,
+expiry/key ID and authority hash. PDF bytes SHALL be fetched only by that opaque token.
+Caller revision/page/bbox/hash/token authority, current/latest/presigned/material fallback,
+page 1 fallback and raw redirect URLs are forbidden. Missing page, bbox or immutable bytes
+is typed unavailable.
+
+The routes SHALL have no POST/PATCH/approve/review/publish/activate operation and SHALL NOT
+call any such authority. Existing named-human `ReviewDraft`, separate publish
+authorization and `ActivateReviewed` remain the only state-changing DAG.
+
+#### Scenario: summary leaks private content
+
+- **WHEN** a summary contains any field row/value, quote, locator, bbox, PDF/path/token or
+  signing-key material, even with a recomputed wrapper or bundle hash
+- **THEN** the closed response validator rejects it before transport
+
+#### Scenario: caller substitutes a preparation or Evidence target
+
+- **WHEN** any scoped path, evaluation, field or Evidence identity differs from immutable
+  preparation custody
+- **THEN** the read returns a fixed typed error with no dossier, token, bytes or release
+  state change and no fallback is attempted
