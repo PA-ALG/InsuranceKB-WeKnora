@@ -516,7 +516,10 @@ type SchemaFieldPageV1 struct {
 	FieldPageSHA256        string             `json:"field_page_sha256"`
 }
 
-const SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+const (
+	SchemaFieldUnknownReasonFieldUnknown                       = "FIELD_UNKNOWN"
+	SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+)
 
 type SchemaRootPageV1 struct {
 	Contract           string   `json:"contract"`
@@ -1156,7 +1159,8 @@ func validateSchemaFieldPage(page SchemaFieldPageV1) error {
 	} else if page.State != "unknown" || page.ValueSnapshot != nil || len(page.Citations) != 0 ||
 		len(page.EvidenceReceiptSHA256s) != 0 || page.ReviewItemReason == nil ||
 		*page.ReviewItemReason != "FIELD_UNKNOWN" || page.UnknownReason == nil ||
-		*page.UnknownReason != SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials {
+		(*page.UnknownReason != SchemaFieldUnknownReasonFieldUnknown &&
+			*page.UnknownReason != SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials) {
 		return ErrSchemaWikiContractInvalid
 	}
 	return requireSchemaWikiHash(page.Contract, page, "field_page_sha256", page.FieldPageSHA256)

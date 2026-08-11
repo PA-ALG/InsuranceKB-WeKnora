@@ -775,6 +775,21 @@ def test_present_absent_and_unknown_valid_shapes() -> None:
     assert unknown.unknown_reason == "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
 
 
+def test_generic_candidate_unknown_uses_closed_field_unknown_reason() -> None:
+    page = _field_page(state="unknown")
+    payload = page.model_dump(mode="python", exclude={"field_page_sha256"})
+    payload["unknown_reason"] = "FIELD_UNKNOWN"
+    payload["field_page_sha256"] = schema_wiki_sha256("schema-field-page.v1", payload)
+
+    validated = SchemaFieldPageV1.model_validate(payload)
+
+    assert validated.state == "unknown"
+    assert validated.value_snapshot is None
+    assert validated.citations == ()
+    assert validated.evidence_receipt_sha256s == ()
+    assert validated.unknown_reason == "FIELD_UNKNOWN"
+
+
 def test_unknown_reason_fully_rehashed_drift_fails_closed() -> None:
     page = _field_page(state="unknown")
     payload = page.model_dump(mode="python", exclude={"field_page_sha256"})

@@ -72,6 +72,21 @@ func TestSchemaFieldUnknownReasonTriStateAndFullyRehashedDrift(t *testing.T) {
 		t.Fatal("unknown field did not carry the frozen coverage reason")
 	}
 
+	genericUnknown := page
+	genericReason := "FIELD_UNKNOWN"
+	genericUnknown.UnknownReason = &genericReason
+	genericUnknown.FieldPageSHA256 = ""
+	digest, _, err := schemaWikiHashWithout(
+		genericUnknown.Contract, genericUnknown, "field_page_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genericUnknown.FieldPageSHA256 = digest
+	if err := validateSchemaFieldPage(genericUnknown); err != nil {
+		t.Fatalf("closed generic unknown reason was rejected: %v", err)
+	}
+
 	for _, test := range []struct {
 		name   string
 		mutate func(*SchemaFieldPageV1)
@@ -115,7 +130,7 @@ func TestSchemaFieldUnknownReasonTriStateAndFullyRehashedDrift(t *testing.T) {
 	known.EvidenceReceiptSHA256s = []string{strings.Repeat("a", 64)}
 	known.ReviewItemReason = nil
 	known.FieldPageSHA256 = ""
-	digest, _, err := schemaWikiHashWithout(known.Contract, known, "field_page_sha256")
+	digest, _, err = schemaWikiHashWithout(known.Contract, known, "field_page_sha256")
 	if err != nil {
 		t.Fatal(err)
 	}

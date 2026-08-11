@@ -28,7 +28,10 @@ NonBlankText = Annotated[
     StrictStr,
     StringConstraints(min_length=1, max_length=4096, pattern=r"^\S(?:[^\r\n]*\S)?$"),
 ]
-SchemaFieldUnknownReason = Literal["NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"]
+SchemaFieldUnknownReason = Literal[
+    "FIELD_UNKNOWN",
+    "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS",
+]
 
 _HASH_PREFIX: Final[bytes] = b"schema-wiki-canonical.v1\x00"
 
@@ -304,7 +307,8 @@ class SchemaFieldPageV1(_FrozenModel):
             or self.citations
             or self.evidence_receipt_sha256s
             or self.review_item_reason != "FIELD_UNKNOWN"
-            or self.unknown_reason != "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+            or self.unknown_reason
+            not in {"FIELD_UNKNOWN", "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"}
         ):
             raise ValueError("unknown field must be value/Evidence-free and reviewable")
         if not _hash_matches(self, self.contract, "field_page_sha256"):
