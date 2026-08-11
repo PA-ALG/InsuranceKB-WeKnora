@@ -40,6 +40,7 @@ type schemaWikiHTTPService interface {
 		types.KnowledgeWikiReleaseV1,
 		types.Schema67CandidateEvidenceAuthorityV1,
 		types.SchemaWikiReviewBundleV1,
+		types.Schema67GoldenEvaluationReviewBundleV1,
 	) (*types.WikiReleasePreparation, error)
 	ReviewSchemaDraft(
 		context.Context,
@@ -123,6 +124,29 @@ type schemaWikiHTTPService interface {
 		string,
 		string,
 	) ([]byte, error)
+	ReadSchemaPreparationGoldenQualitySummary(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenQualitySummaryV1, error)
+	ReadSchemaPreparationGoldenQualityDossier(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenQualityDossierV1, error)
+	IssueSchemaPreparationGoldenEvidencePreview(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error)
 }
 
 // SchemaWikiHandler exposes the bounded Schema Wiki HTTP facade. Release and
@@ -142,10 +166,11 @@ func NewSchemaWikiHandler(
 }
 
 type schemaWikiCreateDraftRequest struct {
-	PreparationID              string                                     `json:"preparation_id"`
-	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1             `json:"review_bundle"`
+	PreparationID              string                                       `json:"preparation_id"`
+	Release                    types.KnowledgeWikiReleaseV1                 `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1   `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1               `json:"review_bundle"`
+	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1 `json:"evaluation_bundle"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -450,6 +475,7 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 	draft, err := h.schemaService.CreateSchemaDraft(
 		c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
 		request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
+		request.EvaluationBundle,
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)
@@ -623,6 +649,80 @@ func (h *SchemaWikiHandler) ReadReviewedRoot(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": read.Payload})
+}
+
+func (h *SchemaWikiHandler) ReadPreparationGoldenQualitySummary(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	summary, err := h.schemaService.ReadSchemaPreparationGoldenQualitySummary(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
+}
+
+func (h *SchemaWikiHandler) ReadPreparationGoldenQualityDossier(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	dossier, err := h.schemaService.ReadSchemaPreparationGoldenQualityDossier(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": dossier})
+}
+
+func (h *SchemaWikiHandler) PreviewPreparationGoldenEvidence(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
+		return
+	}
+	authority, err := h.schemaService.IssueSchemaPreparationGoldenEvidencePreview(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+		strings.TrimSpace(c.Param("field_id")),
+		strings.TrimSpace(c.Param("evidence_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": authority})
 }
 
 // PreviewCurrentCitation selects CitationTarget and binding from the pinned

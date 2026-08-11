@@ -749,6 +749,47 @@ class Schema67GoldenEvaluationResultV1(_FrozenModel):
     activation_calls: Literal[0] = 0
 
 
+class Schema67GoldenEvaluationReviewBundleV1(_FrozenModel):
+    contract: Literal["schema67-golden-evaluation-review-bundle.v1"]
+    evaluation_id: Sha256Hex
+    quality_gate_receipt: Schema67GoldenQualityGateReceiptV1
+    public_aggregate: Schema67GoldenPublicAggregateV1
+    private_dossier: Schema67GoldenPrivateDossierV1
+    evaluation_bundle_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_evaluation_bundle(self) -> Self:
+        receipt = self.quality_gate_receipt
+        public = self.public_aggregate
+        private = self.private_dossier
+        payload = self.model_dump(mode="python", exclude={"evaluation_bundle_sha256"})
+        if (
+            self.evaluation_id != receipt.receipt_sha256
+            or receipt.status != "PASS"
+            or public.status != "PASS"
+            or private.status != "PASS"
+            or public.reason_codes
+            or private.reason_codes
+            or receipt.candidate_sha256 != public.candidate_sha256
+            or receipt.candidate_sha256 != private.candidate_sha256
+            or receipt.candidate_evidence_authority_sha256
+            != private.candidate_evidence_authority_sha256
+            or receipt.golden_set_sha256 != public.golden_set_sha256
+            or receipt.golden_set_sha256 != private.golden_set_sha256
+            or receipt.evaluator_identity_sha256 != public.evaluator_identity_sha256
+            or receipt.ordered_field_decision_sha256s
+            != tuple(row.decision_sha256 for row in private.field_decisions)
+            or receipt.metric_receipt_sha256s
+            != tuple(row.metric_sha256 for row in public.metrics)
+            or public.metrics != private.metrics
+            or receipt.private_dossier_sha256 != private.dossier_sha256
+            or receipt.public_aggregate_sha256 != public.aggregate_sha256
+            or self.evaluation_bundle_sha256 != schema_wiki_sha256(self.contract, payload)
+        ):
+            raise ValueError("Golden evaluation review bundle mismatch")
+        return self
+
+
 _RECEIPT_LOCK = threading.Lock()
 _RECEIPT_REGISTRY: dict[
     int, tuple[weakref.ReferenceType[Schema67GoldenQualityGateReceiptV1], str]
@@ -774,6 +815,38 @@ def _require_registered_receipt(receipt: Schema67GoldenQualityGateReceiptV1) -> 
         current = _RECEIPT_REGISTRY.get(id(receipt))
         if current is None or current[0]() is not receipt or current[1] != receipt.receipt_sha256:
             raise Schema67GoldenQualityGateError("QUALITY_GATE_RECEIPT_INVALID")
+
+
+def make_schema67_golden_evaluation_review_bundle_596_1(
+    result: Schema67GoldenEvaluationResultV1,
+) -> Schema67GoldenEvaluationReviewBundleV1:
+    if (
+        type(result) is not Schema67GoldenEvaluationResultV1
+        or result.status != "PASS"
+        or result.quality_gate_receipt is None
+        or type(result.quality_gate_receipt) is not Schema67GoldenQualityGateReceiptV1
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATION_BUNDLE_INVALID")
+    _require_registered_receipt(result.quality_gate_receipt)
+    payload = {
+        "contract": "schema67-golden-evaluation-review-bundle.v1",
+        "evaluation_id": result.quality_gate_receipt.receipt_sha256,
+        "quality_gate_receipt": result.quality_gate_receipt,
+        "public_aggregate": result.public_aggregate,
+        "private_dossier": result.private_dossier,
+    }
+    try:
+        return Schema67GoldenEvaluationReviewBundleV1.model_validate(
+            {
+                **payload,
+                "evaluation_bundle_sha256": schema_wiki_sha256(
+                    "schema67-golden-evaluation-review-bundle.v1",
+                    payload,
+                ),
+            }
+        )
+    except ValidationError:
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATION_BUNDLE_INVALID") from None
 
 
 def _normalized(value: str | None) -> str | None:
@@ -1410,6 +1483,7 @@ __all__ = [
     "Schema67GoldenEvidenceTargetV1",
     "Schema67GoldenApprovalV1",
     "Schema67GoldenEvaluationResultV1",
+    "Schema67GoldenEvaluationReviewBundleV1",
     "Schema67GoldenFieldDecisionV1",
     "Schema67GoldenFieldV1",
     "Schema67GoldenMetricV1",
@@ -1420,6 +1494,7 @@ __all__ = [
     "Schema67GoldenQualityEvaluatorSigningCredentialSource",
     "Schema67GoldenSet5961V1",
     "compose_schema67_golden_quality_evaluator_authority_596_1",
+    "make_schema67_golden_evaluation_review_bundle_596_1",
     "schema67_golden_approval_signing_bytes",
     "validate_schema67_golden_quality_gate_receipt_596_1",
 ]

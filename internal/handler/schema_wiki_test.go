@@ -46,6 +46,47 @@ type schemaWikiHTTPServiceSpy struct {
 	citationErr           error
 	citationBytes         []byte
 	currentAuthority      *service.SchemaWikiCurrentAuthorityV1
+	goldenSummaryCalls    int
+	goldenPrivateCalls    int
+	goldenPreviewCalls    int
+	goldenSummary         *types.SchemaWikiGoldenQualitySummaryV1
+	goldenPrivate         *types.SchemaWikiGoldenQualityDossierV1
+	goldenPreview         *types.SchemaWikiGoldenEvidencePreviewAuthorityV1
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualitySummary(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+) (*types.SchemaWikiGoldenQualitySummaryV1, error) {
+	s.goldenSummaryCalls++
+	return s.goldenSummary, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualityDossier(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+) (*types.SchemaWikiGoldenQualityDossierV1, error) {
+	s.goldenPrivateCalls++
+	return s.goldenPrivate, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) IssueSchemaPreparationGoldenEvidencePreview(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+	string,
+	string,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	s.goldenPreviewCalls++
+	return s.goldenPreview, nil
 }
 
 func (s *schemaWikiHTTPServiceSpy) ReadCurrentSchemaAuthority(
@@ -80,6 +121,7 @@ func (s *schemaWikiHTTPServiceSpy) CreateSchemaDraft(
 	types.KnowledgeWikiReleaseV1,
 	types.Schema67CandidateEvidenceAuthorityV1,
 	types.SchemaWikiReviewBundleV1,
+	types.Schema67GoldenEvaluationReviewBundleV1,
 ) (*types.WikiReleasePreparation, error) {
 	s.createCalls++
 	return &types.WikiReleasePreparation{ID: "preparation-596-1"}, nil

@@ -72,7 +72,7 @@
 - [x] Freeze Evidence preview as server-selected, attempt-bound fixed-revision authority
   followed by token-only bytes; forbid caller revision/page/bbox/hash authority and every
   current/latest/presigned/material/page-1 fallback.
-- [ ] RED/GREEN the backend custody replay, fixed safe errors, read-only authorization and
+- [x] RED/GREEN the backend custody replay, fixed safe errors, read-only authorization and
   exact routes in separately authorized production paths.
 - [ ] RED/GREEN the closed frontend parsers and preparation review UI. The UI SHALL have no
   approval, review, publish or activation capability.

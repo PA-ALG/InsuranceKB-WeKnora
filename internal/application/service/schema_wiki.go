@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,14 @@ import (
 	"github.com/Tencent/WeKnora/internal/types"
 )
 
+func validServiceSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
 var (
 	ErrSchemaWikiPreparationInvalid      = errors.New("schema wiki preparation invalid")
 	ErrSchemaWikiCitationUnavailable     = errors.New("schema wiki citation unavailable")
@@ -24,6 +33,9 @@ var (
 type CitationRevisionReadRequestV1 struct {
 	ReleaseID                  string
 	ActivationEpoch            uint64
+	PreparationID              string
+	EvaluationID               string
+	EvidenceID                 string
 	CandidateSHA256            string
 	FieldID                    string
 	Scope                      types.WikiReleaseScope
@@ -47,6 +59,16 @@ type SchemaWikiCitationContentPort interface {
 	ReadByOpaqueToken(
 		context.Context, types.WikiReleaseScope, string, CitationRevisionReadRequestV1,
 	) ([]byte, error)
+	IssuePreparationExactRevision(
+		context.Context, string, string, string, CitationRevisionReadRequestV1,
+	) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error)
+	ResolvePreparationOpaqueToken(
+		context.Context, types.WikiReleaseScope, string,
+	) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error)
+	ReadPreparationByOpaqueToken(
+		context.Context, types.WikiReleaseScope, string, string, string, string,
+		CitationRevisionReadRequestV1,
+	) ([]byte, error)
 }
 
 type SchemaWikiService struct {
@@ -56,16 +78,18 @@ type SchemaWikiService struct {
 }
 
 type schemaWikiPreparationCustodyV1 struct {
-	Contract                   string                                     `json:"contract"`
-	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1             `json:"review_bundle"`
+	Contract                   string                                       `json:"contract"`
+	Release                    types.KnowledgeWikiReleaseV1                 `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1   `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1               `json:"review_bundle"`
+	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1 `json:"evaluation_bundle"`
 }
 
 type validatedSchemaWikiCustody struct {
 	release                    types.KnowledgeWikiReleaseV1
 	candidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1
 	reviewBundle               types.SchemaWikiReviewBundleV1
+	evaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1
 	snapshots                  []types.WikiReleaseMemberSnapshot
 }
 
@@ -93,6 +117,7 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 	release types.KnowledgeWikiReleaseV1,
 	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
+	evaluation types.Schema67GoldenEvaluationReviewBundleV1,
 ) (*types.WikiReleasePreparation, error) {
 	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
 		return nil, err
@@ -101,10 +126,15 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 		types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
-		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 {
+		types.ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation) != nil ||
+		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
+		!reflect.DeepEqual(bundle.QualityGateReceipt, evaluation.QualityGateReceipt) ||
+		evaluation.PrivateDossier.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
+		evaluation.QualityGateReceipt.CandidateSHA256 != release.CandidateSHA256 ||
+		!schemaWikiGoldenFieldOrderMatchesPack(evaluation.PrivateDossier, release.SchemaPack) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	if s.releaseAuthority.qualityGateReceiptVerifier.Verify(&bundle.QualityGateReceipt) != nil {
+	if s.releaseAuthority.qualityGateReceiptVerifier.Verify(&evaluation.QualityGateReceipt) != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	head, headErr := s.releaseAuthority.repository.GetHeadForWikiKB(ctx, scope.TenantID, scope.WikiKBID)
@@ -127,7 +157,9 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 			return nil, ErrSchemaWikiPreparationInvalid
 		}
 	}
-	custody, err := schemaWikiPreparationCustodyBytes(release, evidenceAuthority, bundle)
+	custody, err := schemaWikiPreparationCustodyBytes(
+		release, evidenceAuthority, bundle, evaluation,
+	)
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -150,16 +182,23 @@ func schemaWikiPreparationCustodyBytes(
 	release types.KnowledgeWikiReleaseV1,
 	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
+	evaluation types.Schema67GoldenEvaluationReviewBundleV1,
 ) (json.RawMessage, error) {
 	if types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
-		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 {
+		types.ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation) != nil ||
+		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
+		!reflect.DeepEqual(bundle.QualityGateReceipt, evaluation.QualityGateReceipt) ||
+		evaluation.PrivateDossier.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
+		evaluation.QualityGateReceipt.CandidateSHA256 != release.CandidateSHA256 ||
+		!schemaWikiGoldenFieldOrderMatchesPack(evaluation.PrivateDossier, release.SchemaPack) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	raw, err := json.Marshal(schemaWikiPreparationCustodyV1{
 		Contract: "schema-wiki-preparation-custody.v1", Release: release,
 		CandidateEvidenceAuthority: evidenceAuthority, ReviewBundle: bundle,
+		EvaluationBundle: evaluation,
 	})
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
@@ -190,11 +229,180 @@ func parseSchemaWikiPreparationCustody(
 			custody.CandidateEvidenceAuthority, custody.Release,
 		) != nil ||
 		types.ValidateSchemaWikiReviewBundle(custody.ReviewBundle, custody.Release) != nil ||
+		types.ValidateSchema67GoldenEvaluationReviewBundleV1(custody.EvaluationBundle) != nil ||
 		custody.ReviewBundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 !=
-			custody.CandidateEvidenceAuthority.AuthoritySHA256 {
+			custody.CandidateEvidenceAuthority.AuthoritySHA256 ||
+		!reflect.DeepEqual(
+			custody.ReviewBundle.QualityGateReceipt,
+			custody.EvaluationBundle.QualityGateReceipt,
+		) || custody.EvaluationBundle.PrivateDossier.CandidateEvidenceAuthoritySHA256 !=
+		custody.CandidateEvidenceAuthority.AuthoritySHA256 ||
+		!schemaWikiGoldenFieldOrderMatchesPack(
+			custody.EvaluationBundle.PrivateDossier, custody.Release.SchemaPack,
+		) {
 		return custody, nil, ErrSchemaWikiPreparationInvalid
 	}
 	return custody, canonical, nil
+}
+
+func schemaWikiGoldenFieldOrderMatchesPack(
+	dossier types.Schema67GoldenPrivateDossierV1,
+	pack types.SchemaPackV1,
+) bool {
+	if len(dossier.FieldDecisions) != len(pack.OrderedFieldIDs) {
+		return false
+	}
+	for index, fieldID := range pack.OrderedFieldIDs {
+		if dossier.FieldDecisions[index].FieldID != fieldID {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *SchemaWikiService) loadSchemaPreparationGoldenEvaluation(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	evaluationID string,
+	action string,
+) (*types.WikiReleasePreparation, validatedSchemaWikiCustody, error) {
+	var empty validatedSchemaWikiCustody
+	if s == nil || s.releaseAuthority == nil || strings.TrimSpace(preparationID) == "" ||
+		strings.TrimSpace(evaluationID) == "" {
+		return nil, empty, ErrSchemaWikiPreparationInvalid
+	}
+	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
+		return nil, empty, err
+	}
+	if err := s.releaseAuthority.verifyAccess(ctx, principal, scope, action); err != nil {
+		return nil, empty, err
+	}
+	preparation, err := s.releaseAuthority.repository.GetDraftPreparation(ctx, scope, preparationID)
+	expectedStatus := types.WikiReleasePreparationDraft
+	if errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
+		preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, preparationID)
+		expectedStatus = types.WikiReleasePreparationReady
+	}
+	if err != nil {
+		return nil, empty, mapWikiReleaseRepositoryError(err)
+	}
+	validated, err := validateSchemaWikiPreparation(preparation, expectedStatus, scope)
+	if err != nil || validated.evaluationBundle.EvaluationID != evaluationID {
+		return nil, empty, ErrSchemaWikiPreparationInvalid
+	}
+	return preparation, validated, nil
+}
+
+func (s *SchemaWikiService) ReadSchemaPreparationGoldenQualitySummary(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	evaluationID string,
+) (*types.SchemaWikiGoldenQualitySummaryV1, error) {
+	_, validated, err := s.loadSchemaPreparationGoldenEvaluation(
+		ctx, principal, scope, preparationID, evaluationID, "read-golden-quality-summary",
+	)
+	if err != nil {
+		return nil, err
+	}
+	bundle := validated.evaluationBundle
+	return &types.SchemaWikiGoldenQualitySummaryV1{
+		Version:                  "schema-wiki-golden-quality-summary.v1",
+		PreparationID:            preparationID,
+		EvaluationID:             evaluationID,
+		QualityGateReceiptSHA256: bundle.QualityGateReceipt.ReceiptSHA256,
+		PublicAggregate:          bundle.PublicAggregate,
+		EvaluationBundleSHA256:   bundle.EvaluationBundleSHA256,
+		WikiAdmissionAllowed:     false,
+		ServingEffect:            "NONE",
+	}, nil
+}
+
+func (s *SchemaWikiService) ReadSchemaPreparationGoldenQualityDossier(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	evaluationID string,
+) (*types.SchemaWikiGoldenQualityDossierV1, error) {
+	_, validated, err := s.loadSchemaPreparationGoldenEvaluation(
+		ctx, principal, scope, preparationID, evaluationID, "read-golden-quality-dossier",
+	)
+	if err != nil {
+		return nil, err
+	}
+	bundle := validated.evaluationBundle
+	return &types.SchemaWikiGoldenQualityDossierV1{
+		Version:                  "schema-wiki-golden-quality-dossier.v1",
+		PreparationID:            preparationID,
+		EvaluationID:             evaluationID,
+		QualityGateReceiptSHA256: bundle.QualityGateReceipt.ReceiptSHA256,
+		PrivateDossier:           bundle.PrivateDossier,
+		EvaluationBundleSHA256:   bundle.EvaluationBundleSHA256,
+		ServingEffect:            "NONE",
+	}, nil
+}
+
+func (s *SchemaWikiService) IssueSchemaPreparationGoldenEvidencePreview(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	evaluationID string,
+	fieldID string,
+	evidenceID string,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	if s == nil || s.citationContent == nil || strings.TrimSpace(fieldID) == "" ||
+		!validServiceSHA256(evidenceID) {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	_, validated, err := s.loadSchemaPreparationGoldenEvaluation(
+		ctx, principal, scope, preparationID, evaluationID, "read-golden-evidence-preview",
+	)
+	if err != nil {
+		return nil, err
+	}
+	fieldPresent := false
+	for _, decision := range validated.evaluationBundle.PrivateDossier.FieldDecisions {
+		if decision.FieldID == fieldID && decision.EvidenceFragments > 0 {
+			fieldPresent = true
+			break
+		}
+	}
+	if !fieldPresent || len(evidenceID) < 24 {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	request, err := schemaWikiPreparationCitationRequest(
+		validated,
+		scope,
+		preparationID,
+		evaluationID,
+		evidenceID,
+		"field:"+fieldID,
+		"citation-"+evidenceID[:24],
+	)
+	if err != nil || request.CoordinateAuthorityReceipt == nil ||
+		request.CoordinateAuthorityReceipt.ReceiptSHA256 != evidenceID ||
+		request.CoordinateAuthorityReceipt.FieldID != fieldID {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	authority, err := s.citationContent.IssuePreparationExactRevision(
+		ctx, preparationID, evaluationID, evidenceID, request,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if authority == nil || authority.PreparationID != preparationID ||
+		authority.EvaluationID != evaluationID || authority.FieldID != fieldID ||
+		authority.EvidenceID != evidenceID ||
+		authority.CandidateSHA256 != validated.release.CandidateSHA256 ||
+		types.ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(*authority) != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return authority, nil
 }
 
 func canonicalizeSchemaWikiReleasePayloads(release *types.KnowledgeWikiReleaseV1) error {
@@ -676,7 +884,8 @@ func validateSchemaWikiPreparation(
 	}
 	return validatedSchemaWikiCustody{
 		release: custody.Release, candidateEvidenceAuthority: custody.CandidateEvidenceAuthority,
-		reviewBundle: custody.ReviewBundle, snapshots: expectedMembers,
+		reviewBundle: custody.ReviewBundle, evaluationBundle: custody.EvaluationBundle,
+		snapshots: expectedMembers,
 	}, nil
 }
 
@@ -890,7 +1099,51 @@ func (s *SchemaWikiService) ReadSchemaCitationContent(
 	}
 	authority, err := s.citationContent.ResolveOpaqueToken(ctx, scope, token)
 	if err != nil {
-		return nil, err
+		goldenAuthority, goldenErr := s.citationContent.ResolvePreparationOpaqueToken(
+			ctx, scope, token,
+		)
+		if goldenErr != nil || goldenAuthority == nil {
+			return nil, ErrSchemaWikiCitationUnavailable
+		}
+		if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
+			return nil, err
+		}
+		_, validated, loadErr := s.loadSchemaPreparationGoldenEvaluation(
+			ctx,
+			principal,
+			scope,
+			goldenAuthority.PreparationID,
+			goldenAuthority.EvaluationID,
+			"read-golden-evidence-content",
+		)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		request, requestErr := schemaWikiPreparationCitationRequest(
+			validated,
+			scope,
+			goldenAuthority.PreparationID,
+			goldenAuthority.EvaluationID,
+			goldenAuthority.EvidenceID,
+			"field:"+goldenAuthority.FieldID,
+			"citation-"+goldenAuthority.EvidenceID[:24],
+		)
+		if requestErr != nil {
+			return nil, requestErr
+		}
+		opened, readErr := s.citationContent.ReadPreparationByOpaqueToken(
+			ctx,
+			scope,
+			token,
+			goldenAuthority.PreparationID,
+			goldenAuthority.EvaluationID,
+			goldenAuthority.EvidenceID,
+			request,
+		)
+		if readErr != nil {
+			return nil, readErr
+		}
+		return opened, nil
 	}
 	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
 	if err != nil || authority.ReleaseID != pin.ReleaseID() ||
@@ -1020,6 +1273,71 @@ func schemaWikiCitationRequest(
 				EvidenceReceiptSHA256s:     evidenceReceipts,
 				CoordinateAuthorityReceipt: coordinateReceipt,
 			}, nil
+		}
+	}
+	return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+}
+
+func schemaWikiPreparationCitationRequest(
+	validated validatedSchemaWikiCustody,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	evaluationID string,
+	evidenceID string,
+	logicalSlug string,
+	citationID string,
+) (CitationRevisionReadRequestV1, error) {
+	if preparationID == "" || !validServiceSHA256(evaluationID) ||
+		!validServiceSHA256(evidenceID) || logicalSlug == "" || citationID == "" {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	var selected *types.CitationTargetV1
+	var evidenceReceipts []string
+	fieldID := ""
+	for _, member := range validated.release.Members {
+		if member.MemberRef != logicalSlug || member.MemberKind != "field" {
+			continue
+		}
+		var page types.SchemaFieldPageV1
+		if err := json.Unmarshal(member.Payload, &page); err != nil {
+			return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+		}
+		for index := range page.Citations {
+			if page.Citations[index].CitationID == citationID {
+				copy := page.Citations[index]
+				selected = &copy
+				break
+			}
+		}
+		fieldID = page.FieldID
+		evidenceReceipts = append([]string(nil), page.EvidenceReceiptSHA256s...)
+	}
+	if selected == nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	for _, binding := range validated.release.CitationBindings {
+		if binding.LogicalMemberRef != logicalSlug ||
+			binding.CitationSHA256 != selected.CitationSHA256 {
+			continue
+		}
+		for index := range validated.candidateEvidenceAuthority.JoinReceipts {
+			join := &validated.candidateEvidenceAuthority.JoinReceipts[index]
+			if join.ReceiptSHA256 == evidenceID && join.FieldID == fieldID &&
+				selected.CitationID == "citation-"+join.ReceiptSHA256[:24] {
+				copy := *join
+				return CitationRevisionReadRequestV1{
+					PreparationID:              preparationID,
+					EvaluationID:               evaluationID,
+					EvidenceID:                 evidenceID,
+					CandidateSHA256:            validated.release.CandidateSHA256,
+					FieldID:                    fieldID,
+					Scope:                      scope,
+					Citation:                   *selected,
+					Binding:                    binding,
+					EvidenceReceiptSHA256s:     evidenceReceipts,
+					CoordinateAuthorityReceipt: &copy,
+				}, nil
+			}
 		}
 	}
 	return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable

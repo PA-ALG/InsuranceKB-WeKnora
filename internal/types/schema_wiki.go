@@ -610,6 +610,124 @@ type Schema67GoldenQualityGateReceiptV1 struct {
 	ReceiptSHA256                    string   `json:"receipt_sha256"`
 }
 
+type Schema67GoldenFieldDecisionV1 struct {
+	FieldID                  string `json:"field_id"`
+	GoldenFieldSHA256        string `json:"golden_field_sha256"`
+	CandidateState           string `json:"candidate_state"`
+	GoldenState              string `json:"golden_state"`
+	StateCorrect             bool   `json:"state_correct"`
+	ValueCorrect             bool   `json:"value_correct"`
+	AtomTruePositive         int    `json:"atom_true_positive"`
+	AtomFalsePositive        int    `json:"atom_false_positive"`
+	AtomFalseNegative        int    `json:"atom_false_negative"`
+	AtomF1PPM                int    `json:"atom_f1_ppm"`
+	EvidenceFragments        int    `json:"evidence_fragments"`
+	EvidenceFragmentsMatched int    `json:"evidence_fragments_matched"`
+	BBoxRequired             int    `json:"bbox_required"`
+	BBoxPassed               int    `json:"bbox_passed"`
+	BBoxIOUPPMValues         []int  `json:"bbox_iou_ppm_values"`
+	HighRiskPass             bool   `json:"high_risk_pass"`
+	ConflictResolved         bool   `json:"conflict_resolved"`
+	DecisionSHA256           string `json:"decision_sha256"`
+}
+
+type Schema67GoldenMetricV1 struct {
+	MetricID        string `json:"metric_id"`
+	Numerator       *int   `json:"numerator"`
+	Denominator     *int   `json:"denominator"`
+	ValuePPM        *int   `json:"value_ppm"`
+	Supports        []int  `json:"supports"`
+	Evaluability    string `json:"evaluability"`
+	SampleSize      string `json:"sample_size"`
+	WilsonLowPPM    *int   `json:"wilson_low_ppm"`
+	WilsonHighPPM   *int   `json:"wilson_high_ppm"`
+	AdmissionStatus string `json:"admission_status"`
+	MetricSHA256    string `json:"metric_sha256"`
+}
+
+type Schema67GoldenPrivateDossierV1 struct {
+	Contract                         string                          `json:"contract"`
+	CandidateSHA256                  string                          `json:"candidate_sha256"`
+	CandidateEvidenceAuthoritySHA256 string                          `json:"candidate_evidence_authority_sha256"`
+	GoldenSetSHA256                  string                          `json:"golden_set_sha256"`
+	FieldDecisions                   []Schema67GoldenFieldDecisionV1 `json:"field_decisions"`
+	Metrics                          []Schema67GoldenMetricV1        `json:"metrics"`
+	Status                           string                          `json:"status"`
+	ReasonCodes                      []string                        `json:"reason_codes"`
+	DossierSHA256                    string                          `json:"dossier_sha256"`
+}
+
+type Schema67GoldenPublicAggregateV1 struct {
+	Contract                string                   `json:"contract"`
+	ProductVersionID        string                   `json:"product_version_id"`
+	CandidateSHA256         string                   `json:"candidate_sha256"`
+	GoldenSetSHA256         string                   `json:"golden_set_sha256"`
+	EvaluatorIdentitySHA256 string                   `json:"evaluator_identity_sha256"`
+	Metrics                 []Schema67GoldenMetricV1 `json:"metrics"`
+	Status                  string                   `json:"status"`
+	ReasonCodes             []string                 `json:"reason_codes"`
+	AggregateSHA256         string                   `json:"aggregate_sha256"`
+}
+
+type Schema67GoldenEvaluationReviewBundleV1 struct {
+	Contract               string                             `json:"contract"`
+	EvaluationID           string                             `json:"evaluation_id"`
+	QualityGateReceipt     Schema67GoldenQualityGateReceiptV1 `json:"quality_gate_receipt"`
+	PublicAggregate        Schema67GoldenPublicAggregateV1    `json:"public_aggregate"`
+	PrivateDossier         Schema67GoldenPrivateDossierV1     `json:"private_dossier"`
+	EvaluationBundleSHA256 string                             `json:"evaluation_bundle_sha256"`
+}
+
+type SchemaWikiGoldenQualitySummaryV1 struct {
+	Version                  string                          `json:"version"`
+	PreparationID            string                          `json:"preparation_id"`
+	EvaluationID             string                          `json:"evaluation_id"`
+	QualityGateReceiptSHA256 string                          `json:"quality_gate_receipt_sha256"`
+	PublicAggregate          Schema67GoldenPublicAggregateV1 `json:"public_aggregate"`
+	EvaluationBundleSHA256   string                          `json:"evaluation_bundle_sha256"`
+	WikiAdmissionAllowed     bool                            `json:"wiki_admission_allowed"`
+	ServingEffect            string                          `json:"serving_effect"`
+}
+
+type SchemaWikiGoldenQualityDossierV1 struct {
+	Version                  string                         `json:"version"`
+	PreparationID            string                         `json:"preparation_id"`
+	EvaluationID             string                         `json:"evaluation_id"`
+	QualityGateReceiptSHA256 string                         `json:"quality_gate_receipt_sha256"`
+	PrivateDossier           Schema67GoldenPrivateDossierV1 `json:"private_dossier"`
+	EvaluationBundleSHA256   string                         `json:"evaluation_bundle_sha256"`
+	ServingEffect            string                         `json:"serving_effect"`
+}
+
+// SchemaWikiGoldenEvidencePreviewAuthorityV1 is the preparation-pinned,
+// hash-only public half of one Golden reviewer Evidence preview. OpaqueToken
+// is signed by the existing third citation ring and excluded from the hash.
+type SchemaWikiGoldenEvidencePreviewAuthorityV1 struct {
+	Contract               string                      `json:"contract"`
+	TokenKeyID             string                      `json:"token_key_id"`
+	PreparationID          string                      `json:"preparation_id"`
+	EvaluationID           string                      `json:"evaluation_id"`
+	CandidateSHA256        string                      `json:"candidate_sha256"`
+	FieldID                string                      `json:"field_id"`
+	EvidenceID             string                      `json:"evidence_id"`
+	RevisionSource         LiveRevisionSourceReceiptV1 `json:"revision_source"`
+	CitationSHA256         string                      `json:"citation_sha256"`
+	BindingSHA256          string                      `json:"binding_sha256"`
+	EvidenceReceiptSHA256  string                      `json:"evidence_receipt_sha256"`
+	PageNumber             int                         `json:"page_number"`
+	BBox                   CitationBBoxV1              `json:"bbox"`
+	QuoteSHA256            string                      `json:"quote_sha256"`
+	ContentSnapshotSHA256  string                      `json:"content_snapshot_sha256"`
+	CoordinateSpaceVersion string                      `json:"coordinate_space_version"`
+	PageWidth              int                         `json:"page_width"`
+	PageHeight             int                         `json:"page_height"`
+	RotationDegrees        int                         `json:"rotation_degrees"`
+	RetentionState         string                      `json:"retention_state"`
+	ExpiresAtUnix          int64                       `json:"expires_at_unix"`
+	AuthoritySHA256        string                      `json:"authority_sha256"`
+	OpaqueToken            string                      `json:"opaque_token"`
+}
+
 type SchemaWikiReviewBundleV1 struct {
 	Contract              string                             `json:"contract"`
 	CandidateSHA256       string                             `json:"candidate_sha256"`
@@ -1192,6 +1310,345 @@ func ValidateSchema67GoldenQualityGateReceiptV1(receipt Schema67GoldenQualityGat
 		if !validSchemaWikiSHA256(digest) {
 			return ErrSchemaWikiContractInvalid
 		}
+	}
+	return nil
+}
+
+var schema67GoldenMetricIDs = []string{
+	"sgq.state.micro_accuracy.v1",
+	"sgq.state.macro_recall.v1",
+	"sgq.value.present.micro_precision.v1",
+	"sgq.value.present.micro_recall.v1",
+	"sgq.value.present.macro_f1.v1",
+	"sgq.state.absent_to_unknown.v1",
+	"sgq.state.unknown_to_absent.v1",
+	"sgq.value.wrong_fill_rate.v1",
+	"sgq.value.hallucinated_fill_rate.v1",
+	"sgq.evidence.document_revision_page_precision.v1",
+	"sgq.evidence.field_support_recall.v1",
+	"sgq.evidence.bbox_iou.v1",
+	"sgq.evidence.highlight_accuracy.v1",
+	"sgq.human.high_risk_pass.v1",
+	"sgq.human.conflict_resolution_pass.v1",
+}
+
+var schema67GoldenOrderedFieldIDs = []string{
+	"product_code",
+	"product_short_name",
+	"product_name",
+	"sales_start_date",
+	"sales_end_date",
+	"product_type",
+	"insurance_category",
+	"sales_channels",
+	"external_publication_status",
+	"sales_status",
+	"policy_role",
+	"product_summary",
+	"official_product_features",
+	"target_customer_profile",
+	"marketing_tagline",
+	"product_overview",
+	"entry_age_range",
+	"insured_eligibility",
+	"health_declaration_requirements",
+	"geographic_eligibility_requirements",
+	"social_insurance_requirement",
+	"eligible_occupation_classes",
+	"underwriting_method",
+	"premium_payment_term",
+	"premium_payment_frequency",
+	"cooling_off_period",
+	"waiting_period",
+	"premium_grace_period",
+	"coverage_period",
+	"coverage_term_category",
+	"surrender_and_cancellation_terms",
+	"coverage_and_renewal_terms",
+	"guaranteed_renewal_status",
+	"guaranteed_renewal_period",
+	"product_conversion_rules",
+	"premium_adjustment_rules",
+	"post_discontinuation_renewal_arrangement",
+	"covered_risk_categories",
+	"coverage_responsibilities",
+	"coverage_summary",
+	"cancer_medical_coverage",
+	"age_segment_tags",
+	"coverage_limit_category",
+	"special_coverage_and_exclusion_tags",
+	"exclusions",
+	"pre_existing_condition_rules",
+	"out_of_hospital_special_drug_coverage",
+	"indemnity_principle",
+	"zero_deductible_flag",
+	"deductible_rules",
+	"outpatient_inpatient_scope",
+	"reimbursable_expense_scope",
+	"reimbursement_rate_rules",
+	"eligible_hospital_scope",
+	"premium_medical_facility_coverage",
+	"direct_billing_and_advance_payment_rules",
+	"claim_application_deadline_and_documents",
+	"policyholder_rights",
+	"eligible_service_packages",
+	"medical_service_benefits",
+	"tax_qualified_status",
+	"tax_benefit_rules",
+	"product_bundle_rules",
+	"objection_handling_scripts",
+	"product_faq",
+	"four_step_sales_script",
+	"sales_pitch_script",
+}
+
+func validSchema67GoldenState(value string) bool {
+	return value == "present" || value == "absent_explicitly" || value == "unknown"
+}
+
+func validateSchema67GoldenFieldDecisionV1(decision Schema67GoldenFieldDecisionV1) error {
+	if strings.TrimSpace(decision.FieldID) == "" ||
+		!validSchemaWikiSHA256(decision.GoldenFieldSHA256) ||
+		!validSchema67GoldenState(decision.CandidateState) ||
+		!validSchema67GoldenState(decision.GoldenState) ||
+		decision.AtomTruePositive < 0 || decision.AtomFalsePositive < 0 ||
+		decision.AtomFalseNegative < 0 || decision.AtomF1PPM < 0 ||
+		decision.AtomF1PPM > 1_000_000 || decision.EvidenceFragments < 0 ||
+		decision.EvidenceFragmentsMatched < 0 ||
+		decision.EvidenceFragmentsMatched > decision.EvidenceFragments ||
+		decision.BBoxRequired < 0 || decision.BBoxPassed < 0 ||
+		decision.BBoxPassed > decision.BBoxRequired ||
+		len(decision.BBoxIOUPPMValues) != decision.BBoxRequired ||
+		requireSchemaWikiHash(
+			"schema67-golden-field-decision.v1", decision,
+			"decision_sha256", decision.DecisionSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	for _, value := range decision.BBoxIOUPPMValues {
+		if value < 0 || value > 1_000_000 {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	return nil
+}
+
+func validateSchema67GoldenMetricV1(metric Schema67GoldenMetricV1) error {
+	if strings.TrimSpace(metric.MetricID) == "" ||
+		(metric.Evaluability != "EVALUABLE" && metric.Evaluability != "NOT_EVALUABLE") ||
+		(metric.SampleSize != "SMALL_SAMPLE" && metric.SampleSize != "ADEQUATE" &&
+			metric.SampleSize != "NOT_EVALUABLE") ||
+		(metric.AdmissionStatus != "PASS" && metric.AdmissionStatus != "FAIL") ||
+		requireSchemaWikiHash(
+			"schema67-golden-metric.v1", metric, "metric_sha256", metric.MetricSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	for _, support := range metric.Supports {
+		if support < 0 {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	if metric.Evaluability == "EVALUABLE" {
+		if metric.Numerator == nil || metric.Denominator == nil || metric.ValuePPM == nil ||
+			*metric.Numerator < 0 || *metric.Denominator <= 0 ||
+			*metric.Numerator > *metric.Denominator || *metric.ValuePPM < 0 ||
+			*metric.ValuePPM > 1_000_000 || metric.SampleSize == "NOT_EVALUABLE" {
+			return ErrSchemaWikiContractInvalid
+		}
+		for _, bound := range []*int{metric.WilsonLowPPM, metric.WilsonHighPPM} {
+			if bound != nil && (*bound < 0 || *bound > 1_000_000) {
+				return ErrSchemaWikiContractInvalid
+			}
+		}
+		if (metric.WilsonLowPPM == nil) != (metric.WilsonHighPPM == nil) {
+			return ErrSchemaWikiContractInvalid
+		}
+		return nil
+	}
+	if metric.Numerator != nil || metric.Denominator != nil || metric.ValuePPM != nil ||
+		metric.WilsonLowPPM != nil || metric.WilsonHighPPM != nil ||
+		metric.SampleSize != "NOT_EVALUABLE" {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func ValidateSchema67GoldenPrivateDossierV1(dossier Schema67GoldenPrivateDossierV1) error {
+	if dossier.Contract != "schema67-golden-private-dossier.v1" || dossier.Status != "PASS" ||
+		len(dossier.ReasonCodes) != 0 || len(dossier.FieldDecisions) != 67 ||
+		len(dossier.Metrics) != len(schema67GoldenMetricIDs) ||
+		!validSchemaWikiSHA256(dossier.CandidateSHA256) ||
+		!validSchemaWikiSHA256(dossier.CandidateEvidenceAuthoritySHA256) ||
+		!validSchemaWikiSHA256(dossier.GoldenSetSHA256) ||
+		requireSchemaWikiHash(
+			dossier.Contract, dossier, "dossier_sha256", dossier.DossierSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	for index, decision := range dossier.FieldDecisions {
+		if validateSchema67GoldenFieldDecisionV1(decision) != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+		if decision.FieldID != schema67GoldenOrderedFieldIDs[index] {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	for index, metric := range dossier.Metrics {
+		if metric.MetricID != schema67GoldenMetricIDs[index] ||
+			validateSchema67GoldenMetricV1(metric) != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	return nil
+}
+
+func ValidateSchema67GoldenPublicAggregateV1(aggregate Schema67GoldenPublicAggregateV1) error {
+	if aggregate.Contract != "schema67-golden-public-aggregate.v1" ||
+		aggregate.ProductVersionID != "596-1" || aggregate.Status != "PASS" ||
+		len(aggregate.ReasonCodes) != 0 || len(aggregate.Metrics) != len(schema67GoldenMetricIDs) ||
+		!validSchemaWikiSHA256(aggregate.CandidateSHA256) ||
+		!validSchemaWikiSHA256(aggregate.GoldenSetSHA256) ||
+		aggregate.EvaluatorIdentitySHA256 != schema67GoldenEvaluatorIdentitySHA256 ||
+		requireSchemaWikiHash(
+			aggregate.Contract, aggregate, "aggregate_sha256", aggregate.AggregateSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	for index, metric := range aggregate.Metrics {
+		if metric.MetricID != schema67GoldenMetricIDs[index] ||
+			validateSchema67GoldenMetricV1(metric) != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	return nil
+}
+
+func ValidateSchema67GoldenEvaluationReviewBundleV1(
+	bundle Schema67GoldenEvaluationReviewBundleV1,
+) error {
+	receipt := bundle.QualityGateReceipt
+	public := bundle.PublicAggregate
+	private := bundle.PrivateDossier
+	if bundle.Contract != "schema67-golden-evaluation-review-bundle.v1" ||
+		ValidateSchema67GoldenQualityGateReceiptV1(receipt) != nil ||
+		ValidateSchema67GoldenPublicAggregateV1(public) != nil ||
+		ValidateSchema67GoldenPrivateDossierV1(private) != nil ||
+		bundle.EvaluationID != receipt.ReceiptSHA256 ||
+		receipt.CandidateSHA256 != public.CandidateSHA256 ||
+		receipt.CandidateSHA256 != private.CandidateSHA256 ||
+		receipt.CandidateEvidenceAuthoritySHA256 != private.CandidateEvidenceAuthoritySHA256 ||
+		receipt.GoldenSetSHA256 != public.GoldenSetSHA256 ||
+		receipt.GoldenSetSHA256 != private.GoldenSetSHA256 ||
+		receipt.EvaluatorIdentitySHA256 != public.EvaluatorIdentitySHA256 ||
+		receipt.PrivateDossierSHA256 != private.DossierSHA256 ||
+		receipt.PublicAggregateSHA256 != public.AggregateSHA256 ||
+		!reflect.DeepEqual(public.Metrics, private.Metrics) ||
+		requireSchemaWikiHash(
+			bundle.Contract, bundle, "evaluation_bundle_sha256", bundle.EvaluationBundleSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	decisionDigests := make([]string, len(private.FieldDecisions))
+	for index, decision := range private.FieldDecisions {
+		decisionDigests[index] = decision.DecisionSHA256
+	}
+	metricDigests := make([]string, len(private.Metrics))
+	for index, metric := range private.Metrics {
+		metricDigests[index] = metric.MetricSHA256
+	}
+	if !equalStrings(receipt.OrderedFieldDecisionSHA256s, decisionDigests) ||
+		!equalStrings(receipt.MetricReceiptSHA256s, metricDigests) {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func ParseSchema67GoldenEvaluationReviewBundleV1(
+	raw []byte,
+) (Schema67GoldenEvaluationReviewBundleV1, error) {
+	var bundle Schema67GoldenEvaluationReviewBundleV1
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&bundle); err != nil {
+		return bundle, ErrSchemaWikiContractInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return bundle, ErrSchemaWikiContractInvalid
+	}
+	canonical, err := schemaWikiCanonicalJSON(bundle)
+	if err != nil || !bytes.Equal(bytes.TrimSpace(raw), canonical) ||
+		ValidateSchema67GoldenEvaluationReviewBundleV1(bundle) != nil {
+		return bundle, ErrSchemaWikiContractInvalid
+	}
+	return bundle, nil
+}
+
+func ComputeSchemaWikiGoldenEvidencePreviewAuthoritySHA256(
+	authority SchemaWikiGoldenEvidencePreviewAuthorityV1,
+) (string, error) {
+	if authority.Contract != "schema-wiki-golden-evidence-preview-authority.v1" {
+		return "", ErrSchemaWikiContractInvalid
+	}
+	authority.OpaqueToken = ""
+	digest, _, err := schemaWikiHashWithout(
+		authority.Contract, authority, "authority_sha256",
+	)
+	return digest, err
+}
+
+func ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(
+	authority SchemaWikiGoldenEvidencePreviewAuthorityV1,
+) error {
+	if authority.Contract != "schema-wiki-golden-evidence-preview-authority.v1" ||
+		authority.TokenKeyID == "" || authority.PreparationID == "" ||
+		authority.EvaluationID == "" || authority.FieldID == "" || authority.EvidenceID == "" ||
+		authority.ExpiresAtUnix <= 0 || authority.RetentionState != KnowledgeRevisionSourcePinned ||
+		authority.CoordinateSpaceVersion != "normalized_0_1e6" ||
+		authority.PageWidth != 1_000_000 || authority.PageHeight != 1_000_000 ||
+		(authority.RotationDegrees != 0 && authority.RotationDegrees != 90 &&
+			authority.RotationDegrees != 180 && authority.RotationDegrees != 270) ||
+		ValidateLiveRevisionSourceReceiptV1(authority.RevisionSource) != nil ||
+		!validSchemaWikiSHA256(authority.CandidateSHA256) ||
+		!validSchemaWikiSHA256(authority.EvaluationID) ||
+		!validSchemaWikiSHA256(authority.EvidenceID) ||
+		!validSchemaWikiSHA256(authority.CitationSHA256) ||
+		!validSchemaWikiSHA256(authority.BindingSHA256) ||
+		!validSchemaWikiSHA256(authority.EvidenceReceiptSHA256) ||
+		!validSchemaWikiSHA256(authority.QuoteSHA256) ||
+		!validSchemaWikiSHA256(authority.ContentSnapshotSHA256) ||
+		authority.PageNumber <= 0 || authority.PageNumber > authority.RevisionSource.PageCount ||
+		authority.BBox.CoordinateSystem != authority.CoordinateSpaceVersion ||
+		authority.BBox.PageWidth != authority.PageWidth ||
+		authority.BBox.PageHeight != authority.PageHeight || authority.BBox.X0 < 0 ||
+		authority.BBox.Y0 < 0 || authority.BBox.X0 >= authority.BBox.X1 ||
+		authority.BBox.Y0 >= authority.BBox.Y1 || authority.BBox.X1 > authority.PageWidth ||
+		authority.BBox.Y1 > authority.PageHeight {
+		return ErrSchemaWikiContractInvalid
+	}
+	digest, err := ComputeSchemaWikiGoldenEvidencePreviewAuthoritySHA256(authority)
+	if err != nil || digest != authority.AuthoritySHA256 {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func ValidateSchemaWikiGoldenEvidencePreviewAuthorityAgainst(
+	presented SchemaWikiGoldenEvidencePreviewAuthorityV1,
+	trusted SchemaWikiGoldenEvidencePreviewAuthorityV1,
+) error {
+	if ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(presented) != nil ||
+		ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(trusted) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	presentedBytes, err := schemaWikiCanonicalJSON(presented)
+	if err != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	trustedBytes, err := schemaWikiCanonicalJSON(trusted)
+	if err != nil || !bytes.Equal(presentedBytes, trustedBytes) {
+		return ErrSchemaWikiContractInvalid
 	}
 	return nil
 }

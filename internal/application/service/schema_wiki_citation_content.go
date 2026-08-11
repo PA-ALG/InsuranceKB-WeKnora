@@ -27,6 +27,15 @@ type schemaWikiCitationTokenClaimsV1 struct {
 	Authority     types.SchemaWikiCitationContentAuthorityV1 `json:"authority"`
 }
 
+type schemaWikiGoldenEvidenceTokenClaimsV1 struct {
+	Contract      string                                           `json:"contract"`
+	TokenKeyID    string                                           `json:"token_key_id"`
+	IssuedAtUnix  int64                                            `json:"issued_at_unix"`
+	ExpiresAtUnix int64                                            `json:"expires_at_unix"`
+	Scope         types.WikiReleaseScope                           `json:"scope"`
+	Authority     types.SchemaWikiGoldenEvidencePreviewAuthorityV1 `json:"authority"`
+}
+
 // SchemaWikiCitationTokenCodec signs the hash-only public authority and scope
 // using the deployment-owned third signing domain. No review/publish key is
 // accepted, and no quote snapshot is placed in the token.
@@ -148,6 +157,79 @@ func (c *SchemaWikiCitationTokenCodec) verify(
 		claims.ExpiresAtUnix-claims.IssuedAtUnix != int64(schemaWikiCitationTokenTTL/time.Second) ||
 		c.now().UTC().Unix() < claims.IssuedAtUnix || c.now().UTC().Unix() >= claims.ExpiresAtUnix ||
 		types.ValidateSchemaWikiCitationContentAuthorityV1(claims.Authority) != nil {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	return claims, nil
+}
+
+func (c *SchemaWikiCitationTokenCodec) issueGoldenEvidence(
+	claims schemaWikiGoldenEvidenceTokenClaimsV1,
+) (string, error) {
+	if c == nil || c.activeKeyID == "" || claims.TokenKeyID != c.activeKeyID {
+		return "", ErrSchemaWikiCitationUnavailable
+	}
+	privateKey, ok := c.privateKeys[c.activeKeyID]
+	if !ok {
+		return "", ErrSchemaWikiCitationUnavailable
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		return "", ErrSchemaWikiCitationUnavailable
+	}
+	signed := append([]byte("schema-wiki-golden-evidence-preview-token.v1\n"), payload...)
+	signature := ed25519.Sign(privateKey, signed)
+	return strings.Join([]string{
+		base64.RawURLEncoding.EncodeToString([]byte(c.activeKeyID)),
+		base64.RawURLEncoding.EncodeToString(payload),
+		base64.RawURLEncoding.EncodeToString(signature),
+	}, "."), nil
+}
+
+func (c *SchemaWikiCitationTokenCodec) verifyGoldenEvidence(
+	token string,
+) (schemaWikiGoldenEvidenceTokenClaimsV1, error) {
+	empty := schemaWikiGoldenEvidenceTokenClaimsV1{}
+	parts := strings.Split(token, ".")
+	if c == nil || len(parts) != 3 || token != strings.TrimSpace(token) {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	keyIDBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil || base64.RawURLEncoding.EncodeToString(keyIDBytes) != parts[0] {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	keyID := string(keyIDBytes)
+	publicKey, ok := c.publicKeys[keyID]
+	if !ok {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil || base64.RawURLEncoding.EncodeToString(payload) != parts[1] {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(signature) != ed25519.SignatureSize ||
+		base64.RawURLEncoding.EncodeToString(signature) != parts[2] {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	signed := append([]byte("schema-wiki-golden-evidence-preview-token.v1\n"), payload...)
+	if !ed25519.Verify(publicKey, signed, signature) {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	var claims schemaWikiGoldenEvidenceTokenClaimsV1
+	if err := decoder.Decode(&claims); err != nil || !schemaWikiCitationJSONEOF(decoder) {
+		return empty, ErrSchemaWikiCitationUnavailable
+	}
+	canonical, err := json.Marshal(claims)
+	if err != nil || !bytes.Equal(payload, canonical) ||
+		claims.Contract != "schema-wiki-golden-evidence-preview-token-claims.v1" ||
+		claims.TokenKeyID != keyID || claims.Authority.TokenKeyID != keyID ||
+		claims.Authority.OpaqueToken != "" || claims.IssuedAtUnix <= 0 ||
+		claims.ExpiresAtUnix <= claims.IssuedAtUnix ||
+		claims.ExpiresAtUnix-claims.IssuedAtUnix != int64(schemaWikiCitationTokenTTL/time.Second) ||
+		c.now().UTC().Unix() < claims.IssuedAtUnix || c.now().UTC().Unix() >= claims.ExpiresAtUnix ||
+		types.ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(claims.Authority) != nil {
 		return empty, ErrSchemaWikiCitationUnavailable
 	}
 	return claims, nil
@@ -327,6 +409,123 @@ func (s *schemaWikiCitationContentService) ReadByOpaqueToken(
 	return opened, nil
 }
 
+func (s *schemaWikiCitationContentService) IssuePreparationExactRevision(
+	ctx context.Context,
+	preparationID string,
+	evaluationID string,
+	evidenceID string,
+	request CitationRevisionReadRequestV1,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	if s == nil || s.adapter == nil || s.codec == nil || s.codec.activeKeyID == "" ||
+		strings.TrimSpace(preparationID) == "" || strings.TrimSpace(evaluationID) == "" ||
+		strings.TrimSpace(evidenceID) == "" || request.CoordinateAuthorityReceipt == nil ||
+		request.ReleaseID != "" || request.ActivationEpoch != 0 ||
+		request.PreparationID != preparationID || request.EvaluationID != evaluationID ||
+		request.EvidenceID != evidenceID ||
+		request.CoordinateAuthorityReceipt.ReceiptSHA256 != evidenceID {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if request.Citation.PageNumber <= 0 ||
+		request.Citation.PageNumber > request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt.PageCount {
+		return nil, ErrSchemaWikiCitationPageUnavailable
+	}
+	resolved, err := s.adapter.resolveExactRevisionAuthority(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	now := s.codec.now().UTC()
+	authority, err := schemaWikiGoldenEvidencePublicAuthority(
+		preparationID,
+		evaluationID,
+		evidenceID,
+		request,
+		*resolved,
+		s.codec.activeKeyID,
+		now.Add(schemaWikiCitationTokenTTL).Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	claims := schemaWikiGoldenEvidenceTokenClaimsV1{
+		Contract:      "schema-wiki-golden-evidence-preview-token-claims.v1",
+		TokenKeyID:    s.codec.activeKeyID,
+		IssuedAtUnix:  now.Unix(),
+		ExpiresAtUnix: authority.ExpiresAtUnix,
+		Scope:         request.Scope,
+		Authority:     *authority,
+	}
+	token, err := s.codec.issueGoldenEvidence(claims)
+	if err != nil {
+		return nil, err
+	}
+	authority.OpaqueToken = token
+	return authority, nil
+}
+
+func (s *schemaWikiCitationContentService) ResolvePreparationOpaqueToken(
+	_ context.Context,
+	scope types.WikiReleaseScope,
+	token string,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	if s == nil || s.codec == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	claims, err := s.codec.verifyGoldenEvidence(token)
+	if err != nil || claims.Scope != scope {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	authority := claims.Authority
+	authority.OpaqueToken = token
+	return &authority, nil
+}
+
+func (s *schemaWikiCitationContentService) ReadPreparationByOpaqueToken(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	token string,
+	preparationID string,
+	evaluationID string,
+	evidenceID string,
+	request CitationRevisionReadRequestV1,
+) ([]byte, error) {
+	if s == nil || s.adapter == nil || s.blob == nil || s.codec == nil ||
+		request.CoordinateAuthorityReceipt == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	claims, err := s.codec.verifyGoldenEvidence(token)
+	if err != nil || claims.Scope != scope || request.Scope != scope ||
+		claims.Authority.PreparationID != preparationID ||
+		claims.Authority.EvaluationID != evaluationID || claims.Authority.EvidenceID != evidenceID ||
+		request.ReleaseID != "" || request.ActivationEpoch != 0 ||
+		request.PreparationID != preparationID || request.EvaluationID != evaluationID ||
+		request.EvidenceID != evidenceID {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	resolved, err := s.adapter.resolveExactRevisionAuthority(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	expected, err := schemaWikiGoldenEvidencePublicAuthority(
+		preparationID,
+		evaluationID,
+		evidenceID,
+		request,
+		*resolved,
+		claims.TokenKeyID,
+		claims.ExpiresAtUnix,
+	)
+	if err != nil || types.ValidateSchemaWikiGoldenEvidencePreviewAuthorityAgainst(
+		claims.Authority, *expected,
+	) != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	opened, err := s.blob.ReadExactRevisionSource(ctx, claims.Authority.RevisionSource)
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return opened, nil
+}
+
 func schemaWikiCitationPublicAuthority(
 	request CitationRevisionReadRequestV1,
 	resolved SchemaWikiCitationPreviewAuthorityV1,
@@ -360,6 +559,53 @@ func schemaWikiCitationPublicAuthority(
 	}
 	authority.AuthoritySHA256 = digest
 	if types.ValidateSchemaWikiCitationContentAuthorityV1(authority) != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return &authority, nil
+}
+
+func schemaWikiGoldenEvidencePublicAuthority(
+	preparationID string,
+	evaluationID string,
+	evidenceID string,
+	request CitationRevisionReadRequestV1,
+	resolved SchemaWikiCitationPreviewAuthorityV1,
+	keyID string,
+	expiresAtUnix int64,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	receipt := request.CoordinateAuthorityReceipt
+	if receipt == nil || receipt.ReceiptSHA256 != evidenceID {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	authority := types.SchemaWikiGoldenEvidencePreviewAuthorityV1{
+		Contract:               "schema-wiki-golden-evidence-preview-authority.v1",
+		TokenKeyID:             keyID,
+		PreparationID:          preparationID,
+		EvaluationID:           evaluationID,
+		CandidateSHA256:        request.CandidateSHA256,
+		FieldID:                request.FieldID,
+		EvidenceID:             evidenceID,
+		RevisionSource:         receipt.LiveRevisionSourceReceipt,
+		CitationSHA256:         request.Citation.CitationSHA256,
+		BindingSHA256:          request.Binding.BindingSHA256,
+		EvidenceReceiptSHA256:  receipt.EvidenceReceiptSHA256,
+		PageNumber:             request.Citation.PageNumber,
+		BBox:                   request.Citation.BBox,
+		QuoteSHA256:            request.Citation.QuoteSHA256,
+		ContentSnapshotSHA256:  request.Citation.ContentSnapshotSHA256,
+		CoordinateSpaceVersion: resolved.CoordinateSpaceVersion,
+		PageWidth:              resolved.PageWidth,
+		PageHeight:             resolved.PageHeight,
+		RotationDegrees:        resolved.RotationDegrees,
+		RetentionState:         types.KnowledgeRevisionSourcePinned,
+		ExpiresAtUnix:          expiresAtUnix,
+	}
+	digest, err := types.ComputeSchemaWikiGoldenEvidencePreviewAuthoritySHA256(authority)
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	authority.AuthoritySHA256 = digest
+	if types.ValidateSchemaWikiGoldenEvidencePreviewAuthorityV1(authority) != nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	return &authority, nil

@@ -2,7 +2,7 @@
 
 Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REAL-GOLDEN-NOT-RUN`
 
-Review-surface delta: `CONTRACT-FROZEN / IMPLEMENTATION-NOT-RUN`
+Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
 
 ## Identity and truth boundary
 
@@ -32,14 +32,16 @@ configured evaluator receipt public-key ring. It does
 not change CandidateV2, provider/model code, runner, database schema, migration, serving
 Head, frontend or generic Material Wiki behavior.
 
-This docs-only successor freezes how a future successful evaluation is retained and read:
+The review-surface successor retains and reads a future successful evaluation as follows:
 the full signed receipt, redacted aggregate and private ordered-67 dossier become one
 canonical evaluation bundle embedded in the existing Schema Wiki preparation custody
 manifest. It adds no table, migration, Head or CAS. FAIL, `FIXTURE_ONLY`, `INCONCLUSIVE`,
 missing or stale evaluations remain offline-only and cannot create a Draft. The exact
 preparation-scoped summary/dossier/Evidence-preview routes are read-only, Admin/Owner and
 Wiki/RAW dual-ACL bound; dossier/Evidence additionally bind the named reviewer. This delta
-does not implement or execute those routes.
+implements those backend routes and reuses the immutable-revision third signing ring under
+a distinct preparation-Evidence token domain. It does not implement the frontend surface or
+execute any live request.
 
 ## Validation gates
 
@@ -58,8 +60,12 @@ does not implement or execute those routes.
 - Public aggregate omits canonical field values; private dossier remains separately hashed.
 - Ruff, strict mypy, Go formatting and focused type/service gates: PASS.
 - Provider/model/live/DB/WeKnora calls: `0`; Draft/review/activation actions: `0`.
-- Review-surface backend/frontend tests, database writes and HTTP calls: `NOT RUN`; only
-  the contract and route/DTO boundaries are frozen by this successor.
+- Canonical Python evaluation-bundle vector: PASS (`1 passed`).
+- Focused Go review-surface types/service/handler/router: PASS; includes existing
+  preparation JSONB replay, non-PASS repository calls `0`, named-human dossier access,
+  server-selected Evidence and token-only bytes.
+- Review-surface Ruff, strict mypy and Go vet: PASS.
+- Review-surface frontend tests, database writes and live HTTP calls: `NOT RUN`.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
 or authorize a model run. Task 2 still requires a separately frozen real named-human Golden,

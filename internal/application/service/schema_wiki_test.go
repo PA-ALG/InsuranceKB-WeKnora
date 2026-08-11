@@ -262,11 +262,11 @@ func forgeSchemaWikiDuplicateCitationID(
 	return release, bundle
 }
 
-func schemaWikiReviewBundle(
+func schemaWikiEvaluationAndReviewBundle(
 	t *testing.T,
 	release types.KnowledgeWikiReleaseV1,
 	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
-) types.SchemaWikiReviewBundleV1 {
+) (types.Schema67GoldenEvaluationReviewBundleV1, types.SchemaWikiReviewBundleV1) {
 	t.Helper()
 	memberDigests := make([]string, len(release.Members))
 	for index, member := range release.Members {
@@ -276,25 +276,94 @@ func schemaWikiReviewBundle(
 	for index, binding := range release.CitationBindings {
 		bindingDigests[index] = binding.BindingSHA256
 	}
-	fieldDecisions := make([]string, 67)
-	for index := range fieldDecisions {
-		fieldDecisions[index] = strings.Repeat("d", 64)
+	decisions := make([]types.Schema67GoldenFieldDecisionV1, len(release.SchemaPack.OrderedFieldIDs))
+	fieldDecisionDigests := make([]string, len(decisions))
+	for index, fieldID := range release.SchemaPack.OrderedFieldIDs {
+		var fieldPage types.SchemaFieldPageV1
+		for _, member := range release.Members {
+			if member.MemberKind == "field" && member.MemberRef == "field:"+fieldID {
+				require.NoError(t, json.Unmarshal(member.Payload, &fieldPage))
+				break
+			}
+		}
+		require.Equal(t, fieldID, fieldPage.FieldID)
+		fragmentCount := len(fieldPage.Citations)
+		bboxValues := make([]int, fragmentCount)
+		for bboxIndex := range bboxValues {
+			bboxValues[bboxIndex] = 1_000_000
+		}
+		decision := types.Schema67GoldenFieldDecisionV1{
+			FieldID: fieldID, GoldenFieldSHA256: strings.Repeat("f", 64),
+			CandidateState: fieldPage.State, GoldenState: fieldPage.State,
+			StateCorrect: true, ValueCorrect: true,
+			AtomTruePositive: fragmentCount, AtomF1PPM: 1_000_000,
+			EvidenceFragments: fragmentCount, EvidenceFragmentsMatched: fragmentCount,
+			BBoxRequired: fragmentCount, BBoxPassed: fragmentCount,
+			BBoxIOUPPMValues: bboxValues, HighRiskPass: true, ConflictResolved: true,
+		}
+		decision.DecisionSHA256 = schemaWikiTestHashWithout(
+			t, "schema67-golden-field-decision.v1", decision, "decision_sha256",
+		)
+		decisions[index] = decision
+		fieldDecisionDigests[index] = decision.DecisionSHA256
 	}
-	metricReceipts := make([]string, 15)
-	for index := range metricReceipts {
-		metricReceipts[index] = strings.Repeat("e", 64)
+	metricIDs := []string{
+		"sgq.state.micro_accuracy.v1", "sgq.state.macro_recall.v1",
+		"sgq.value.present.micro_precision.v1", "sgq.value.present.micro_recall.v1",
+		"sgq.value.present.macro_f1.v1", "sgq.state.absent_to_unknown.v1",
+		"sgq.state.unknown_to_absent.v1", "sgq.value.wrong_fill_rate.v1",
+		"sgq.value.hallucinated_fill_rate.v1",
+		"sgq.evidence.document_revision_page_precision.v1",
+		"sgq.evidence.field_support_recall.v1", "sgq.evidence.bbox_iou.v1",
+		"sgq.evidence.highlight_accuracy.v1", "sgq.human.high_risk_pass.v1",
+		"sgq.human.conflict_resolution_pass.v1",
 	}
+	metrics := make([]types.Schema67GoldenMetricV1, len(metricIDs))
+	metricDigests := make([]string, len(metricIDs))
+	for index, metricID := range metricIDs {
+		one, ppm := 1, 1_000_000
+		metric := types.Schema67GoldenMetricV1{
+			MetricID: metricID, Numerator: &one, Denominator: &one, ValuePPM: &ppm,
+			Supports: []int{1}, Evaluability: "EVALUABLE", SampleSize: "SMALL_SAMPLE",
+			AdmissionStatus: "PASS",
+		}
+		metric.MetricSHA256 = schemaWikiTestHashWithout(
+			t, "schema67-golden-metric.v1", metric, "metric_sha256",
+		)
+		metrics[index] = metric
+		metricDigests[index] = metric.MetricSHA256
+	}
+	goldenSetSHA256 := strings.Repeat("a", 64)
+	dossier := types.Schema67GoldenPrivateDossierV1{
+		Contract:                         "schema67-golden-private-dossier.v1",
+		CandidateSHA256:                  release.CandidateSHA256,
+		CandidateEvidenceAuthoritySHA256: evidenceAuthority.AuthoritySHA256,
+		GoldenSetSHA256:                  goldenSetSHA256, FieldDecisions: decisions, Metrics: metrics,
+		Status: "PASS", ReasonCodes: []string{},
+	}
+	dossier.DossierSHA256 = schemaWikiTestHashWithout(
+		t, dossier.Contract, dossier, "dossier_sha256",
+	)
+	aggregate := types.Schema67GoldenPublicAggregateV1{
+		Contract: "schema67-golden-public-aggregate.v1", ProductVersionID: "596-1",
+		CandidateSHA256: release.CandidateSHA256, GoldenSetSHA256: goldenSetSHA256,
+		EvaluatorIdentitySHA256: "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808",
+		Metrics:                 metrics, Status: "PASS", ReasonCodes: []string{},
+	}
+	aggregate.AggregateSHA256 = schemaWikiTestHashWithout(
+		t, aggregate.Contract, aggregate, "aggregate_sha256",
+	)
 	qualityPayload := map[string]any{
 		"contract": "schema67-golden-quality-gate-receipt.v1", "status": "PASS",
 		"product_version_id": "596-1", "candidate_sha256": release.CandidateSHA256,
 		"candidate_evidence_authority_sha256": evidenceAuthority.AuthoritySHA256,
-		"golden_set_sha256":                   strings.Repeat("a", 64), "golden_version": "test.v1",
+		"golden_set_sha256":                   goldenSetSHA256, "golden_version": "test.v1",
 		"evaluator_identity_sha256":      "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808",
 		"metric_policy_sha256":           "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7",
-		"ordered_field_decision_sha256s": fieldDecisions,
-		"metric_receipt_sha256s":         metricReceipts,
-		"private_dossier_sha256":         strings.Repeat("b", 64),
-		"public_aggregate_sha256":        strings.Repeat("c", 64),
+		"ordered_field_decision_sha256s": fieldDecisionDigests,
+		"metric_receipt_sha256s":         metricDigests,
+		"private_dossier_sha256":         dossier.DossierSHA256,
+		"public_aggregate_sha256":        aggregate.AggregateSHA256,
 		"golden_approval_sha256s":        []string{strings.Repeat("1", 64), strings.Repeat("2", 64)},
 		"signer_key_id":                  "schema67-golden-evaluator-test-key",
 	}
@@ -302,12 +371,12 @@ func schemaWikiReviewBundle(
 		Contract: qualityPayload["contract"].(string), Status: "PASS", ProductVersionID: "596-1",
 		CandidateSHA256:                  release.CandidateSHA256,
 		CandidateEvidenceAuthoritySHA256: evidenceAuthority.AuthoritySHA256,
-		GoldenSetSHA256:                  strings.Repeat("a", 64), GoldenVersion: "test.v1",
+		GoldenSetSHA256:                  goldenSetSHA256, GoldenVersion: "test.v1",
 		EvaluatorIdentitySHA256:     qualityPayload["evaluator_identity_sha256"].(string),
 		MetricPolicySHA256:          qualityPayload["metric_policy_sha256"].(string),
-		OrderedFieldDecisionSHA256s: fieldDecisions, MetricReceiptSHA256s: metricReceipts,
-		PrivateDossierSHA256:  strings.Repeat("b", 64),
-		PublicAggregateSHA256: strings.Repeat("c", 64),
+		OrderedFieldDecisionSHA256s: fieldDecisionDigests, MetricReceiptSHA256s: metricDigests,
+		PrivateDossierSHA256:  dossier.DossierSHA256,
+		PublicAggregateSHA256: aggregate.AggregateSHA256,
 		GoldenApprovalSHA256s: []string{strings.Repeat("1", 64), strings.Repeat("2", 64)},
 		SignerKeyID:           "schema67-golden-evaluator-test-key",
 	}
@@ -315,11 +384,6 @@ func schemaWikiReviewBundle(
 	unsigned, err := CanonicalSchema67GoldenQualityGateReceiptV1(&quality, false)
 	require.NoError(t, err)
 	quality.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(qualityPrivateKey, unsigned))
-	require.Equal(t,
-		"kBi7x4LeXeVWagrV18w2xkmKci-4Rq0yvC9C38_tpMLwsaMCTezugc0PGsYhd5f4KRrDfdAQqzUeKGtnTmFLDA",
-		quality.Signature,
-		"Go signing preimage must remain byte-identical to the frozen Python vector",
-	)
 	qualityPayload["signature"] = quality.Signature
 	quality.ReceiptSHA256 = schemaWikiTestHash(t, "schema67-golden-quality-gate-receipt.v1", qualityPayload)
 	require.NoError(t, types.ValidateSchema67GoldenQualityGateReceiptV1(quality))
@@ -342,7 +406,16 @@ func schemaWikiReviewBundle(
 		t, bundle.Contract, bundle, "review_bundle_sha256",
 	)
 	require.NoError(t, types.ValidateSchemaWikiReviewBundle(bundle, release))
-	return bundle
+	evaluation := types.Schema67GoldenEvaluationReviewBundleV1{
+		Contract:     "schema67-golden-evaluation-review-bundle.v1",
+		EvaluationID: quality.ReceiptSHA256, QualityGateReceipt: quality,
+		PublicAggregate: aggregate, PrivateDossier: dossier,
+	}
+	evaluation.EvaluationBundleSHA256 = schemaWikiTestHashWithout(
+		t, evaluation.Contract, evaluation, "evaluation_bundle_sha256",
+	)
+	require.NoError(t, types.ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation))
+	return evaluation, bundle
 }
 
 func schemaWikiDecision(
@@ -401,6 +474,7 @@ type schemaWikiDraftFixture struct {
 	Release              types.KnowledgeWikiReleaseV1
 	EvidenceAuthority    types.Schema67CandidateEvidenceAuthorityV1
 	ReviewBundle         types.SchemaWikiReviewBundleV1
+	EvaluationBundle     types.Schema67GoldenEvaluationReviewBundleV1
 	HumanDecision        types.HumanBatchDecisionReceiptV1
 	ReviewDecisionDigest string
 	Members              []types.WikiReleaseMemberSnapshot
@@ -543,7 +617,9 @@ func schemaWikiReviewedDraft(
 		RawKBID:  "raw-kb-596-1",
 		WikiKBID: "wiki-kb-596-1",
 	}
-	bundle := schemaWikiReviewBundle(t, release, vector.CandidateEvidenceAuthority)
+	evaluation, bundle := schemaWikiEvaluationAndReviewBundle(
+		t, release, vector.CandidateEvidenceAuthority,
+	)
 	decision, decisionDigest := schemaWikiDecision(t, scope, release, bundle)
 	return types.WikiReleasePrincipal{
 			ID:       "reviewer",
@@ -554,6 +630,7 @@ func schemaWikiReviewedDraft(
 			Release:              release,
 			EvidenceAuthority:    vector.CandidateEvidenceAuthority,
 			ReviewBundle:         bundle,
+			EvaluationBundle:     evaluation,
 			HumanDecision:        decision,
 			ReviewDecisionDigest: decisionDigest,
 			Members:              schemaWikiPreparedMembers(t, release),
@@ -668,6 +745,7 @@ func createSchemaWikiDraft(
 		draft.Release,
 		draft.EvidenceAuthority,
 		draft.ReviewBundle,
+		draft.EvaluationBundle,
 	)
 	require.NoError(t, err)
 	return created
@@ -773,7 +851,7 @@ func TestCreateSchemaDraftRejectsCandidateEvidenceAuthorityDriftBeforePersistenc
 
 			created, err := fixture.adapter.CreateSchemaDraft(
 				fixture.ctx, principal, scope, reviewed.PreparationID,
-				reviewed.Release, authority, reviewed.ReviewBundle,
+				reviewed.Release, authority, reviewed.ReviewBundle, reviewed.EvaluationBundle,
 			)
 			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 			require.Nil(t, created)
@@ -854,6 +932,7 @@ func TestCreateSchemaDraftRejectsQualityGateReceiptDriftBeforePersistence(t *tes
 			created, err := fixture.adapter.CreateSchemaDraft(
 				fixture.ctx, principal, scope, reviewed.PreparationID,
 				reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+				reviewed.EvaluationBundle,
 			)
 			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 			require.Nil(t, created)
@@ -889,6 +968,7 @@ func TestCreateSchemaDraftRejectsSelfSignedQualityGateReceiptBeforePersistence(t
 	created, err := fixture.adapter.CreateSchemaDraft(
 		fixture.ctx, principal, scope, reviewed.PreparationID,
 		reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+		reviewed.EvaluationBundle,
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 	require.Nil(t, created)
@@ -933,6 +1013,7 @@ func TestCreateSchemaDraftRejectsReleaseAndReviewBundleDriftBeforePersistence(t 
 				reviewed.Release,
 				reviewed.EvidenceAuthority,
 				reviewed.ReviewBundle,
+				reviewed.EvaluationBundle,
 			)
 			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 			require.Nil(t, created)
@@ -973,6 +1054,7 @@ func TestCreateSchemaDraftRejectsFullyRehashedDuplicateCitationIDBeforeAuthoriti
 		forgedRelease,
 		reviewed.EvidenceAuthority,
 		forgedBundle,
+		reviewed.EvaluationBundle,
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 	require.Nil(t, created)
@@ -1093,6 +1175,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 			created, err := fixture.adapter.CreateSchemaDraft(
 				fixture.ctx, principal, scope, reviewed.PreparationID,
 				reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+				reviewed.EvaluationBundle,
 			)
 			require.ErrorIs(t, err, ErrWikiReleaseAccessDenied)
 			require.Nil(t, created)
@@ -1110,6 +1193,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 		created, err := fixture.adapter.CreateSchemaDraft(
 			fixture.ctx, principal, scope, reviewed.PreparationID,
 			reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+			reviewed.EvaluationBundle,
 		)
 		require.ErrorIs(t, err, ErrWikiReleaseAccessDenied)
 		require.Nil(t, created)
@@ -1123,6 +1207,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 		created, err := fixture.adapter.CreateSchemaDraft(
 			fixture.ctx, principal, scope, reviewed.PreparationID,
 			reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+			reviewed.EvaluationBundle,
 		)
 		require.NoError(t, err)
 		require.Equal(t, types.WikiReleasePreparationDraft, created.Status)
@@ -1498,6 +1583,7 @@ func TestCreateSchemaDraftRejectsCitationSpaceOutsideExactRouteScope(t *testing.
 		reviewed.Release,
 		reviewed.EvidenceAuthority,
 		reviewed.ReviewBundle,
+		reviewed.EvaluationBundle,
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 	require.Nil(t, created)

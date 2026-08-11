@@ -102,6 +102,18 @@ func RegisterSchemaWikiRoutes(
 	humanGET("/preparations/:preparation_id/root", schemaHandler.ReadReviewedRoot)
 	humanGET("/preparations/:preparation_id/sections/:section_id", schemaHandler.ReadReviewedSection)
 	humanGET("/preparations/:preparation_id/fields/:field_id", schemaHandler.ReadReviewedField)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary",
+		schemaHandler.ReadPreparationGoldenQualitySummary,
+	)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/dossier",
+		schemaHandler.ReadPreparationGoldenQualityDossier,
+	)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview",
+		schemaHandler.PreviewPreparationGoldenEvidence,
+	)
 }
 
 func schemaWikiKBAccess(guard gin.HandlerFunc) gin.HandlerFunc {

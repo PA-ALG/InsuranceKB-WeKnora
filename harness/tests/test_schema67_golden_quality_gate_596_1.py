@@ -5,6 +5,7 @@ import copy
 import hashlib
 import inspect
 import json
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -21,6 +22,7 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     NORMALIZATION_POLICY_SHA256,
     RISK_POLICY_SHA256,
     Schema67GoldenApprovalV1,
+    Schema67GoldenEvaluationReviewBundleV1,
     Schema67GoldenEvidenceTargetV1,
     Schema67GoldenFieldV1,
     Schema67GoldenMetricV1,
@@ -29,8 +31,12 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     Schema67GoldenQualityGateError,
     Schema67GoldenSet5961V1,
     compose_schema67_golden_quality_evaluator_authority_596_1,
+    make_schema67_golden_evaluation_review_bundle_596_1,
     schema67_golden_approval_signing_bytes,
     validate_schema67_golden_quality_gate_receipt_596_1,
+)
+from insurance_harness.knowledge_compiler.schema_first_contracts import (
+    APPROVED_ORDERED_FIELD_IDS,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     SchemaWikiContractError,
@@ -197,6 +203,11 @@ _APPROVER_KEYS = (
     Ed25519PrivateKey.from_private_bytes(b"b" * 32),
 )
 _EVALUATOR_KEY = Ed25519PrivateKey.from_private_bytes(b"e" * 32)
+_EVALUATION_BUNDLE_VECTOR = (
+    Path(__file__).parent
+    / "fixtures"
+    / "schema67_golden_evaluation_bundle_596_1.json"
+)
 
 
 class _TestCredentialSource(Schema67GoldenQualityEvaluatorSigningCredentialSource):
@@ -340,6 +351,42 @@ def _evaluate(
         evidence_authority=authority,
         golden=golden,
         golden_approvals=approvals,
+    )
+
+
+def _synthetic_evaluation_bundle_vector() -> Schema67GoldenEvaluationReviewBundleV1:
+    candidate, authority = _non_fixture_candidate_and_authority()
+    result = _evaluate(
+        candidate=candidate,
+        authority=authority,
+        golden=_golden(candidate, authority),
+    )
+    assert result.status == "PASS"
+    assert result.quality_gate_receipt is not None
+    return make_schema67_golden_evaluation_review_bundle_596_1(result)
+
+
+def test_synthetic_evaluation_bundle_vector_is_canonical_and_ordered67() -> None:
+    expected = _synthetic_evaluation_bundle_vector()
+    expected_payload = expected.model_dump(mode="json")
+    expected_bytes = (
+        json.dumps(
+            expected_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        + b"\n"
+    )
+
+    assert _EVALUATION_BUNDLE_VECTOR.read_bytes() == expected_bytes
+    assert expected.contract == "schema67-golden-evaluation-review-bundle.v1"
+    assert expected.evaluation_id == expected.quality_gate_receipt.receipt_sha256
+    assert tuple(row.field_id for row in expected.private_dossier.field_decisions) == (
+        APPROVED_ORDERED_FIELD_IDS
+    )
+    assert "canonical_value" not in json.dumps(
+        expected.public_aggregate.model_dump(mode="json"), ensure_ascii=False
     )
 
 
