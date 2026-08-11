@@ -114,6 +114,7 @@
 | 108 | legacy-fixture-marker-envelope-compatibility | ✅ 已整合并验证（PR #117） | 旧 fixture 显式携带 canonical envelope；生产 gate 不放宽 |
 | 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
 | 120 | schema-wiki-medical-596-1-mvp | plan-approved / implementation-not-started | 单一 Schema Wiki MVP：A 公共底座 → B sealed Candidate/医疗险 release → C pinned UI；禁止 generic fallback |
+| 122 | schema67-golden-quality-gate | plan-only / quality-inconclusive / implementation-not-started | 596-1 exact67 Canonical Golden、语义指标/阈值与 Candidate 后 Draft 前 fail-closed gate；旧 exact8 不重跑 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
