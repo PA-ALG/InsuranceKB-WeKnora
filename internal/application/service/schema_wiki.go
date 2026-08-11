@@ -100,7 +100,8 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 	if s == nil || s.releaseAuthority == nil || preparationID == "" ||
 		types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
-		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil {
+		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
+		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	head, headErr := s.releaseAuthority.repository.GetHeadForWikiKB(ctx, scope.TenantID, scope.WikiKBID)
@@ -149,7 +150,8 @@ func schemaWikiPreparationCustodyBytes(
 ) (json.RawMessage, error) {
 	if types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
-		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil {
+		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
+		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	raw, err := json.Marshal(schemaWikiPreparationCustodyV1{
@@ -184,7 +186,9 @@ func parseSchemaWikiPreparationCustody(
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(
 			custody.CandidateEvidenceAuthority, custody.Release,
 		) != nil ||
-		types.ValidateSchemaWikiReviewBundle(custody.ReviewBundle, custody.Release) != nil {
+		types.ValidateSchemaWikiReviewBundle(custody.ReviewBundle, custody.Release) != nil ||
+		custody.ReviewBundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 !=
+			custody.CandidateEvidenceAuthority.AuthoritySHA256 {
 		return custody, nil, ErrSchemaWikiPreparationInvalid
 	}
 	return custody, canonical, nil

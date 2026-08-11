@@ -18,6 +18,7 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     EntityVersionV1,
     KnowledgeDomainV1,
     KnowledgeWikiReleaseV1,
+    Schema67GoldenQualityGateReceiptV1,
     SchemaFieldPageV1,
     SchemaPackV1,
     SchemaRootPageV1,
@@ -163,9 +164,7 @@ def _citation(*, member_ref: str = "field:field-a") -> CitationTargetV1:
         "locator_ref": "block-a",
         "bbox": bbox,
         "quote_snapshot": quote,
-        "quote_sha256": schema_wiki_sha256(
-            "schema-wiki-text.v1", {"text": quote}
-        ),
+        "quote_sha256": schema_wiki_sha256("schema-wiki-text.v1", {"text": quote}),
         "content_snapshot_sha256": _sha("content-a"),
         "logical_member_ref": member_ref,
     }
@@ -202,9 +201,7 @@ def _field_page(
         "state": state,
         "value_snapshot": value,
         "citations": citations,
-        "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),)
-        if state != "unknown"
-        else (),
+        "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),) if state != "unknown" else (),
         "review_item_reason": review_reason,
     }
     return _sealed(
@@ -242,15 +239,11 @@ def _root_page(pack: SchemaPackV1 | None = None) -> SchemaRootPageV1:
     )
 
 
-def _section_page(
-    section_id: str, pack: SchemaPackV1 | None = None
-) -> SchemaSectionPageV1:
+def _section_page(section_id: str, pack: SchemaPackV1 | None = None) -> SchemaSectionPageV1:
     domain = _domain()
     chosen_pack = pack or _pack()
     taxonomy = _taxonomy()
-    section = next(
-        row for row in chosen_pack.sections if row.section_id == section_id
-    )
+    section = next(row for row in chosen_pack.sections if row.section_id == section_id)
     payload = {
         "contract": "schema-section-page.v1",
         "domain_id": domain.domain_id,
@@ -404,9 +397,7 @@ def _release(
         "review_policy_sha256": _sha("review-policy"),
         "members": chosen_members,
         "citation_bindings": chosen_bindings,
-        "manifest_digest": schema_wiki_manifest_digest(
-            chosen_members, chosen_bindings
-        ),
+        "manifest_digest": schema_wiki_manifest_digest(chosen_members, chosen_bindings),
     }
     return _sealed(
         KnowledgeWikiReleaseV1,
@@ -431,21 +422,45 @@ def _rehashed[ModelT: BaseModel](
 
 
 def _review_bundle(release: KnowledgeWikiReleaseV1) -> SchemaWikiReviewBundleV1:
+    quality_payload = {
+        "contract": "schema67-golden-quality-gate-receipt.v1",
+        "status": "PASS",
+        "product_version_id": "596-1",
+        "candidate_sha256": release.candidate_sha256,
+        "candidate_evidence_authority_sha256": _sha("evidence-authority"),
+        "golden_set_sha256": _sha("golden-set"),
+        "golden_version": "test.v1",
+        "evaluator_identity_sha256": (
+            "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c"
+        ),
+        "metric_policy_sha256": (
+            "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
+        ),
+        "ordered_field_decision_sha256s": tuple(_sha(f"field-{index}") for index in range(67)),
+        "metric_receipt_sha256s": tuple(_sha(f"metric-{index}") for index in range(15)),
+        "private_dossier_sha256": _sha("private-dossier"),
+        "public_aggregate_sha256": _sha("public-aggregate"),
+    }
+    quality = _sealed(
+        Schema67GoldenQualityGateReceiptV1,
+        "schema67-golden-quality-gate-receipt.v1",
+        "receipt_sha256",
+        **quality_payload,
+    )
     payload = {
         "contract": "schema-wiki-review-bundle.v1",
         "candidate_sha256": release.candidate_sha256,
         "release_sha256": release.release_sha256,
         "manifest_digest": release.manifest_digest,
         "ordered_member_digests": tuple(row.member_digest for row in release.members),
-        "ordered_binding_sha256s": tuple(
-            row.binding_sha256 for row in release.citation_bindings
-        ),
+        "ordered_binding_sha256s": tuple(row.binding_sha256 for row in release.citation_bindings),
         "review_policy_sha256": release.review_policy_sha256,
         "domain_sha256": release.domain.domain_sha256,
         "taxonomy_sha256": release.taxonomy.taxonomy_sha256,
         "schema_pack_sha256": release.schema_pack.schema_pack_sha256,
         "entity_id": release.entity.entity_id,
         "version_id": release.entity_version.version_id,
+        "quality_gate_receipt": quality,
     }
     return _sealed(
         SchemaWikiReviewBundleV1,
@@ -594,9 +609,7 @@ def test_schema_pack_requires_exact_ordered_field_partition(mutation: str) -> No
     if mutation == "missing":
         sections[0] = sections[0].model_copy(update={"ordered_field_ids": ("field-a",)})
     elif mutation == "extra":
-        sections[1] = sections[1].model_copy(
-            update={"ordered_field_ids": ("field-c", "foreign")}
-        )
+        sections[1] = sections[1].model_copy(update={"ordered_field_ids": ("field-c", "foreign")})
     elif mutation == "duplicate":
         sections[1] = sections[1].model_copy(update={"ordered_field_ids": ("field-a",)})
     else:
@@ -622,9 +635,7 @@ def test_shared_release_topology_is_derived_from_pack_not_medical_cardinality() 
 def test_citation_payload_closure_uses_canonical_key_not_nonlexical_field_order() -> None:
     base = _pack()
     sections = (
-        base.sections[0].model_copy(
-            update={"ordered_field_ids": ("field-b", "field-a")}
-        ),
+        base.sections[0].model_copy(update={"ordered_field_ids": ("field-b", "field-a")}),
         base.sections[1],
     )
     pack_payload = base.model_dump(mode="python", exclude={"schema_pack_sha256"})
@@ -720,9 +731,7 @@ def test_field_page_tri_state_rules(
         "state": state,
         "value_snapshot": value,
         "citations": citations,
-        "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),)
-        if state != "unknown"
-        else (),
+        "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),) if state != "unknown" else (),
         "review_item_reason": review,
     }
     with pytest.raises(ValidationError):
@@ -748,9 +757,7 @@ def test_known_field_requires_replayed_057_receipt_identity(state: str) -> None:
     page = _field_page(state=state)
     payload = page.model_dump(mode="python", exclude={"field_page_sha256"})
     payload["evidence_receipt_sha256s"] = ()
-    payload["field_page_sha256"] = schema_wiki_sha256(
-        "schema-field-page.v1", payload
-    )
+    payload["field_page_sha256"] = schema_wiki_sha256("schema-field-page.v1", payload)
     with pytest.raises(ValidationError):
         SchemaFieldPageV1.model_validate(payload)
 
@@ -774,14 +781,10 @@ def test_known_field_requires_replayed_057_receipt_identity(state: str) -> None:
 )
 def test_citation_identity_and_content_drift_fail_closed(field: str, value: object) -> None:
     citation = _citation()
-    payload: dict[str, object] = citation.model_dump(
-        mode="python", exclude={"citation_sha256"}
-    )
+    payload: dict[str, object] = citation.model_dump(mode="python", exclude={"citation_sha256"})
     payload[field] = value
     if field == "quote_snapshot":
-        payload["quote_sha256"] = schema_wiki_sha256(
-            "schema-wiki-text.v1", {"text": value}
-        )
+        payload["quote_sha256"] = schema_wiki_sha256("schema-wiki-text.v1", {"text": value})
     payload["citation_sha256"] = schema_wiki_sha256("citation-target.v1", payload)
     with pytest.raises((ValidationError, SchemaWikiContractError)):
         changed = CitationTargetV1.model_validate(payload)
@@ -918,10 +921,8 @@ def test_release_rejects_unreviewed_or_drifted_member_payload(
         with pytest.raises((ValidationError, ValueError)):
             SchemaWikiMemberV1.model_validate(target_wire)
         return
-    target_wire["payload_sha256"] = (
-        cast(dict[str, object], target_wire.get("payload", {})).get(
-            "field_page_sha256", target.payload_sha256
-        )
+    target_wire["payload_sha256"] = cast(dict[str, object], target_wire.get("payload", {})).get(
+        "field_page_sha256", target.payload_sha256
     )
     target_wire["member_digest"] = schema_wiki_sha256(
         "schema-wiki-member.v1",
@@ -933,9 +934,7 @@ def test_release_rejects_unreviewed_or_drifted_member_payload(
         "knowledge-wiki-release.v1",
         "release_sha256",
         members=tuple(members),
-        manifest_digest=schema_wiki_manifest_digest(
-            tuple(members), release.citation_bindings
-        ),
+        manifest_digest=schema_wiki_manifest_digest(tuple(members), release.citation_bindings),
     )
     with pytest.raises((ValidationError, SchemaWikiContractError)):
         validate_knowledge_wiki_release(forged, _pack())
@@ -1056,9 +1055,10 @@ def test_python_replays_the_exact_go_contract_vector() -> None:
     )
     raw = path.read_bytes()
     wire = json.loads(raw)
-    assert raw.strip() == json.dumps(
-        wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode()
+    assert (
+        raw.strip()
+        == json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    )
     pack = SchemaPackV1.model_validate(wire["schema_pack"])
     release = KnowledgeWikiReleaseV1.model_validate(wire["release"])
     validate_knowledge_wiki_release(release, pack)

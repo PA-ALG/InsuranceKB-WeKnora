@@ -585,20 +585,43 @@ type KnowledgeWikiReleaseV1 struct {
 	ReleaseSHA256      string                    `json:"release_sha256"`
 }
 
+const (
+	schema67GoldenEvaluatorIdentitySHA256 = "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c"
+	schema67GoldenMetricPolicySHA256      = "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
+)
+
+type Schema67GoldenQualityGateReceiptV1 struct {
+	Contract                         string   `json:"contract"`
+	Status                           string   `json:"status"`
+	ProductVersionID                 string   `json:"product_version_id"`
+	CandidateSHA256                  string   `json:"candidate_sha256"`
+	CandidateEvidenceAuthoritySHA256 string   `json:"candidate_evidence_authority_sha256"`
+	GoldenSetSHA256                  string   `json:"golden_set_sha256"`
+	GoldenVersion                    string   `json:"golden_version"`
+	EvaluatorIdentitySHA256          string   `json:"evaluator_identity_sha256"`
+	MetricPolicySHA256               string   `json:"metric_policy_sha256"`
+	OrderedFieldDecisionSHA256s      []string `json:"ordered_field_decision_sha256s"`
+	MetricReceiptSHA256s             []string `json:"metric_receipt_sha256s"`
+	PrivateDossierSHA256             string   `json:"private_dossier_sha256"`
+	PublicAggregateSHA256            string   `json:"public_aggregate_sha256"`
+	ReceiptSHA256                    string   `json:"receipt_sha256"`
+}
+
 type SchemaWikiReviewBundleV1 struct {
-	Contract              string   `json:"contract"`
-	CandidateSHA256       string   `json:"candidate_sha256"`
-	ReleaseSHA256         string   `json:"release_sha256"`
-	ManifestDigest        string   `json:"manifest_digest"`
-	OrderedMemberDigests  []string `json:"ordered_member_digests"`
-	OrderedBindingSHA256s []string `json:"ordered_binding_sha256s"`
-	ReviewPolicySHA256    string   `json:"review_policy_sha256"`
-	DomainSHA256          string   `json:"domain_sha256"`
-	TaxonomySHA256        string   `json:"taxonomy_sha256"`
-	SchemaPackSHA256      string   `json:"schema_pack_sha256"`
-	EntityID              string   `json:"entity_id"`
-	VersionID             string   `json:"version_id"`
-	ReviewBundleSHA256    string   `json:"review_bundle_sha256"`
+	Contract              string                             `json:"contract"`
+	CandidateSHA256       string                             `json:"candidate_sha256"`
+	ReleaseSHA256         string                             `json:"release_sha256"`
+	ManifestDigest        string                             `json:"manifest_digest"`
+	OrderedMemberDigests  []string                           `json:"ordered_member_digests"`
+	OrderedBindingSHA256s []string                           `json:"ordered_binding_sha256s"`
+	ReviewPolicySHA256    string                             `json:"review_policy_sha256"`
+	DomainSHA256          string                             `json:"domain_sha256"`
+	TaxonomySHA256        string                             `json:"taxonomy_sha256"`
+	SchemaPackSHA256      string                             `json:"schema_pack_sha256"`
+	EntityID              string                             `json:"entity_id"`
+	VersionID             string                             `json:"version_id"`
+	QualityGateReceipt    Schema67GoldenQualityGateReceiptV1 `json:"quality_gate_receipt"`
+	ReviewBundleSHA256    string                             `json:"review_bundle_sha256"`
 }
 
 type SchemaWikiContractVectorExpectedV1 struct {
@@ -1113,6 +1136,7 @@ func ValidateKnowledgeWikiRelease(release KnowledgeWikiReleaseV1, pack SchemaPac
 
 func ValidateSchemaWikiReviewBundle(bundle SchemaWikiReviewBundleV1, release KnowledgeWikiReleaseV1) error {
 	if err := ValidateKnowledgeWikiRelease(release, release.SchemaPack); err != nil ||
+		ValidateSchema67GoldenQualityGateReceiptV1(bundle.QualityGateReceipt) != nil ||
 		requireSchemaWikiHash(bundle.Contract, bundle, "review_bundle_sha256", bundle.ReviewBundleSHA256) != nil {
 		return ErrSchemaWikiContractInvalid
 	}
@@ -1129,8 +1153,39 @@ func ValidateSchemaWikiReviewBundle(bundle SchemaWikiReviewBundleV1, release Kno
 		!equalStrings(bundle.OrderedBindingSHA256s, bindings) || bundle.ReviewPolicySHA256 != release.ReviewPolicySHA256 ||
 		bundle.DomainSHA256 != release.Domain.DomainSHA256 || bundle.TaxonomySHA256 != release.Taxonomy.TaxonomySHA256 ||
 		bundle.SchemaPackSHA256 != release.SchemaPack.SchemaPackSHA256 || bundle.EntityID != release.Entity.EntityID ||
-		bundle.VersionID != release.EntityVersion.VersionID {
+		bundle.VersionID != release.EntityVersion.VersionID ||
+		bundle.QualityGateReceipt.CandidateSHA256 != release.CandidateSHA256 {
 		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func ValidateSchema67GoldenQualityGateReceiptV1(receipt Schema67GoldenQualityGateReceiptV1) error {
+	if receipt.Contract != "schema67-golden-quality-gate-receipt.v1" ||
+		receipt.Status != "PASS" || receipt.ProductVersionID != "596-1" ||
+		strings.TrimSpace(receipt.GoldenVersion) == "" ||
+		receipt.EvaluatorIdentitySHA256 != schema67GoldenEvaluatorIdentitySHA256 ||
+		receipt.MetricPolicySHA256 != schema67GoldenMetricPolicySHA256 ||
+		len(receipt.OrderedFieldDecisionSHA256s) != 67 || len(receipt.MetricReceiptSHA256s) != 15 ||
+		requireSchemaWikiHash(receipt.Contract, receipt, "receipt_sha256", receipt.ReceiptSHA256) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	digests := []string{
+		receipt.CandidateSHA256,
+		receipt.CandidateEvidenceAuthoritySHA256,
+		receipt.GoldenSetSHA256,
+		receipt.EvaluatorIdentitySHA256,
+		receipt.MetricPolicySHA256,
+		receipt.PrivateDossierSHA256,
+		receipt.PublicAggregateSHA256,
+		receipt.ReceiptSHA256,
+	}
+	digests = append(digests, receipt.OrderedFieldDecisionSHA256s...)
+	digests = append(digests, receipt.MetricReceiptSHA256s...)
+	for _, digest := range digests {
+		if !validSchemaWikiSHA256(digest) {
+			return ErrSchemaWikiContractInvalid
+		}
 	}
 	return nil
 }

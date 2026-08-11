@@ -1,35 +1,40 @@
 # 122 · Validation Report
 
-Status: `PLAN-ONLY / QUALITY-INCONCLUSIVE / IMPLEMENTATION-NOT-STARTED`
+Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REAL-GOLDEN-NOT-RUN`
 
 ## Identity and truth boundary
 
-- Base commit: `e53a4235da35a0a06934bfd7db4d14028c048345`.
+- Implementation base: merged Schema Wiki main commit
+  `69e2084805d2411be94742fd7fe4de86b2c9221d`.
 - Previous official exact8 result: typed failure; Candidate absent.
 - Current provider-zero `45 present / 1 absent_explicitly / 21 unknown`: fixture-only
   contract evidence, not a real quality measurement.
 - New provider/model calls: `0`.
-- Golden generation/scoring, DB, WeKnora, migration, Draft, review, activation and live
-  actions: `NOT RUN`.
+- Real named-human Golden creation, official scoring, DB, WeKnora, migration, Draft,
+  review, activation and live actions: `NOT RUN`.
+- Synthetic test-only Golden inputs exercise deterministic metrics and PASS/FAIL plumbing;
+  they are not an official Golden or semantic acceptance result.
 
-## Plan-only scope
+## Implemented bounded scope
 
-The delta contains one implementation plan, four OpenSpec 122 documents and one registry
-row. It changes no production, test, CandidateV2, runner, database, migration, release or
-frontend bytes.
+The implementation adds one product-specific Golden DTO/evaluator module and focused test,
+extends the existing Schema Wiki release contract/builder with a PASS-only quality receipt,
+and adds the same closed receipt check to the existing Go `CreateSchemaDraft` seam. It does
+not change CandidateV2, provider/model code, runner, database schema, migration, serving
+Head, frontend or generic Material Wiki behavior.
 
 ## Validation gates
 
-- Exact six-path scope: PASS; one plan, one registry row and four OpenSpec 122 files,
-  with no production or test path.
-- Ordered Schema67 topology: PASS; the plan's 67 field IDs exactly equal the frozen
-  `schema_wiki_release_596_1_vector.json` SchemaPack order.
-- `DO_NOT_TRACK=1 openspec validate 122-schema67-golden-quality-gate --strict`: PASS.
-- `git diff --check`: PASS.
-- Private-path/high-risk-secret/provider-action scan: PASS; provider/model/DB/WeKnora
-  calls remain zero.
+- Focused Python evaluator/release/contracts: PASS.
+- Focused Go Schema Wiki receipt and pre-persistence rejection: PASS.
+- Provider-zero `45/1/21` fixture: `FIXTURE_ONLY`, no PASS receipt or Draft authority.
+- Wrong value, stale page/bbox, missing Candidate, foreign Evidence authority, non-PASS,
+  reparsed or self-rehashed receipt: fail closed before Draft persistence.
+- Public aggregate omits canonical field values; private dossier remains separately hashed.
+- Ruff, strict mypy, Go formatting and focused type/service gates: PASS.
+- Provider/model/live/DB/WeKnora calls: `0`; Draft/review/activation actions: `0`.
 
-Passing these documentation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
-or authorize a real model run. The next valid action is a separately approved implementation
-Mission for the canonical Golden DTO and evaluator; real execution remains later and
-separately authorized.
+Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
+or authorize a model run. Task 2 still requires a separately frozen real named-human Golden,
+and Task 5 still requires a separately authorized new execution identity and one-shot
+evaluation. Until both complete, no Schema Wiki Draft may be created from this gate.

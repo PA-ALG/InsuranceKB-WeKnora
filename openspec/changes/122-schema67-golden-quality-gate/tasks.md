@@ -15,10 +15,10 @@
 
 ## Task 1 · Canonical 596-1 Golden DTO
 
-- [ ] Obtain a separate implementation Mission Card and exact owner paths.
-- [ ] RED missing/extra/reordered 67 fields, tri-state/value/Evidence violations, committed
+- [x] Obtain a separate implementation Mission Card and exact owner paths.
+- [x] RED missing/extra/reordered 67 fields, tri-state/value/Evidence violations, committed
   revision/page/locator/bbox drift, unknown/trailing JSON and fully rehashed mutation.
-- [ ] GREEN one closed canonical DTO and deterministic hash; do not modify CandidateV2.
+- [x] GREEN one closed canonical DTO and deterministic hash; do not modify CandidateV2.
 
 ## Task 2 · Independent human Golden freeze
 
@@ -29,17 +29,17 @@
 
 ## Task 3 · Deterministic evaluator
 
-- [ ] RED all metric definitions, supports, macro/micro boundaries, Wilson intervals,
+- [x] RED all metric definitions, supports, macro/micro boundaries, Wilson intervals,
   `SMALL_SAMPLE`, required `NOT_EVALUABLE` and threshold edges.
-- [ ] RED provider-zero fixture misuse, self-Golden and stale identity.
-- [ ] GREEN the product-specific evaluator and Candidate-bound quality receipt.
+- [x] RED provider-zero fixture misuse, self-Golden and stale identity.
+- [x] GREEN the product-specific evaluator and Candidate-bound quality receipt.
 
 ## Task 4 · Candidate-to-Draft integration
 
-- [ ] RED FAIL/PENDING/missing/stale quality receipts with review dossier/Draft/review/
+- [x] RED FAIL/PENDING/missing/stale quality receipts with review dossier/Draft/review/
   activation call counts all zero.
-- [ ] Bind PASS receipt into the review dossier/bundle before `CreateSchemaDraft`.
-- [ ] Preserve existing named-human review, publish authorization and sole Active Head.
+- [x] Bind PASS receipt into the review dossier/bundle before `CreateSchemaDraft`.
+- [x] Preserve existing named-human review, publish authorization and sole Active Head.
 
 ## Task 5 · Real acceptance
 
