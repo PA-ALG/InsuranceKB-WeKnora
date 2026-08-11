@@ -10,9 +10,9 @@ import threading
 import unicodedata
 import weakref
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Final, Literal, Protocol, Self
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -1284,26 +1284,7 @@ def schema67_golden_dossier_review_subject_preimage_596_1(
         raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID") from None
 
 
-class Schema67GoldenDossierReviewAuthority:
-    """Sealed verifier composed from deployment-owned human public keys."""
-
-    __slots__ = ("_keys", "_now_epoch", "_sealed", "__weakref__")
-    _keys: Mapping[str, Ed25519PublicKey]
-    _now_epoch: int
-    _sealed: bool
-
-    def __init__(
-        self,
-        *_args: object,
-        **_kwargs: object,
-    ) -> None:
-        raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
-
-    def __setattr__(self, name: str, value: object) -> None:
-        if getattr(self, "_sealed", False):
-            raise AttributeError("Golden dossier review authority is sealed")
-        object.__setattr__(self, name, value)
-
+class _Schema67GoldenDossierReviewAuthorityPort(Protocol):
     def verify_dossier_receipt(
         self,
         *,
@@ -1322,122 +1303,206 @@ class Schema67GoldenDossierReviewAuthority:
         reviewed_by: str,
         reviewed_at: str,
         preparation_id: str,
-    ) -> HumanBatchDecisionReceiptV1:
+    ) -> HumanBatchDecisionReceiptV1: ...
+
+
+class _Schema67GoldenDossierReviewAuthorityComposer(Protocol):
+    def __call__(self, *, now_epoch: int) -> _Schema67GoldenDossierReviewAuthorityPort: ...
+
+
+def _build_schema67_golden_dossier_review_authority_api() -> tuple[
+    _Schema67GoldenDossierReviewAuthorityComposer,
+    Callable[..., tuple[object, ...]],
+]:
+    authority_lock = threading.Lock()
+    deployment_authorities: weakref.WeakValueDictionary[int, object] = weakref.WeakValueDictionary()
+    verified_receipts: dict[int, tuple[object, ...]] = {}
+
+    class DeploymentSchema67GoldenDossierReviewAuthority:
+        __slots__ = ("_keys", "_now_epoch", "_sealed", "__weakref__")
+        _keys: Mapping[str, Ed25519PublicKey]
+        _now_epoch: int
+        _sealed: bool
+
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
+
+        def __setattr__(self, name: str, value: object) -> None:
+            if getattr(self, "_sealed", False):
+                raise AttributeError("Golden dossier review authority is sealed")
+            object.__setattr__(self, name, value)
+
+        def verify_dossier_receipt(
+            self,
+            *,
+            receipt: HumanBatchDecisionReceiptV1,
+            result: Schema67GoldenEvaluationResultV1,
+            evaluation: Schema67GoldenEvaluationReviewBundleV1,
+            candidate: object,
+            evidence_authority: object,
+            golden: Schema67GoldenSet5961V1,
+            mapping_sha256: str,
+            golden_artifact_sha256: str,
+            status_vector_sha256: str,
+            attestation_sha256: str,
+            annotator_model_id: str,
+            annotation_receipt_sha256: str,
+            reviewed_by: str,
+            reviewed_at: str,
+            preparation_id: str,
+        ) -> HumanBatchDecisionReceiptV1:
+            try:
+                with authority_lock:
+                    registered = deployment_authorities.get(id(self))
+                if registered is not self:
+                    raise Schema67GoldenQualityGateError(
+                        "GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE"
+                    )
+                fresh = HumanBatchDecisionReceiptV1.model_validate(
+                    receipt.model_dump(mode="python")
+                )
+                preimage = schema67_golden_dossier_review_subject_preimage_596_1(
+                    result=result,
+                    evaluation=evaluation,
+                    candidate=candidate,
+                    evidence_authority=evidence_authority,
+                    golden=golden,
+                    mapping_sha256=mapping_sha256,
+                    golden_artifact_sha256=golden_artifact_sha256,
+                    status_vector_sha256=status_vector_sha256,
+                    attestation_sha256=attestation_sha256,
+                    annotator_model_id=annotator_model_id,
+                    annotation_receipt_sha256=annotation_receipt_sha256,
+                    reviewed_by=reviewed_by,
+                    reviewed_at=reviewed_at,
+                    preparation_id=preparation_id,
+                )
+                tenant_id, space_id, raw_kb_id, wiki_kb_id = _schema67_dossier_scope(
+                    evidence_authority
+                )
+                key = self._keys.get(fresh.signer_key_id)
+                signature = base64.urlsafe_b64decode(
+                    fresh.signature + "=" * (-len(fresh.signature) % 4)
+                )
+                if (
+                    type(receipt) is not HumanBatchDecisionReceiptV1
+                    or fresh != receipt
+                    or key is None
+                    or fresh.principal_id != reviewed_by
+                    or reviewed_by != "linyao"
+                    or fresh.candidate_hash != evaluation.quality_gate_receipt.candidate_sha256
+                    or fresh.human_batch_hash != hashlib.sha256(preimage).hexdigest()
+                    or fresh.review_policy_hash != GOLDEN_DOSSIER_REVIEW_POLICY_SHA256
+                    or (fresh.tenant_id, fresh.space_id, fresh.raw_kb_id, fresh.wiki_kb_id)
+                    != (tenant_id, space_id, raw_kb_id, wiki_kb_id)
+                    or fresh.nonce != "schema67-golden-dossier-review-596-1"
+                    or not fresh.issued_at <= self._now_epoch < fresh.expires_at
+                ):
+                    raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID")
+                key.verify(
+                    signature,
+                    canonical_human_batch_decision_receipt_v1(fresh, False),
+                )
+                registration = (
+                    receipt,
+                    result,
+                    evaluation,
+                    candidate,
+                    evidence_authority,
+                    golden,
+                    mapping_sha256,
+                    golden_artifact_sha256,
+                    status_vector_sha256,
+                    attestation_sha256,
+                    annotator_model_id,
+                    annotation_receipt_sha256,
+                    reviewed_by,
+                    reviewed_at,
+                    preparation_id,
+                )
+                with authority_lock:
+                    verified_receipts[id(receipt)] = registration
+                return receipt
+            except Schema67GoldenQualityGateError:
+                raise
+            except (AttributeError, InvalidSignature, TypeError, ValueError, ValidationError):
+                raise Schema67GoldenQualityGateError(
+                    "GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID"
+                ) from None
+
+    def compose(*, now_epoch: int) -> _Schema67GoldenDossierReviewAuthorityPort:
         try:
-            _require_deployment_dossier_review_authority(self)
-            fresh = HumanBatchDecisionReceiptV1.model_validate(receipt.model_dump(mode="python"))
-            preimage = schema67_golden_dossier_review_subject_preimage_596_1(
-                result=result,
-                evaluation=evaluation,
-                candidate=candidate,
-                evidence_authority=evidence_authority,
-                golden=golden,
-                mapping_sha256=mapping_sha256,
-                golden_artifact_sha256=golden_artifact_sha256,
-                status_vector_sha256=status_vector_sha256,
-                attestation_sha256=attestation_sha256,
-                annotator_model_id=annotator_model_id,
-                annotation_receipt_sha256=annotation_receipt_sha256,
-                reviewed_by=reviewed_by,
-                reviewed_at=reviewed_at,
-                preparation_id=preparation_id,
-            )
-            tenant_id, space_id, raw_kb_id, wiki_kb_id = _schema67_dossier_scope(evidence_authority)
-            key = self._keys.get(fresh.signer_key_id)
-            signature = base64.urlsafe_b64decode(
-                fresh.signature + "=" * (-len(fresh.signature) % 4)
-            )
-            if (
-                type(receipt) is not HumanBatchDecisionReceiptV1
-                or fresh != receipt
-                or key is None
-                or fresh.principal_id != reviewed_by
-                or reviewed_by != "linyao"
-                or fresh.candidate_hash != evaluation.quality_gate_receipt.candidate_sha256
-                or fresh.human_batch_hash != hashlib.sha256(preimage).hexdigest()
-                or fresh.review_policy_hash != GOLDEN_DOSSIER_REVIEW_POLICY_SHA256
-                or (fresh.tenant_id, fresh.space_id, fresh.raw_kb_id, fresh.wiki_kb_id)
-                != (tenant_id, space_id, raw_kb_id, wiki_kb_id)
-                or fresh.nonce != "schema67-golden-dossier-review-596-1"
-                or not fresh.issued_at <= self._now_epoch < fresh.expires_at
-            ):
-                raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID")
-            key.verify(
-                signature,
-                canonical_human_batch_decision_receipt_v1(fresh, False),
-            )
-            _register_verified_dossier_receipt(
-                receipt,
-                result=result,
-                evaluation=evaluation,
-                candidate=candidate,
-                evidence_authority=evidence_authority,
-                golden=golden,
-                mapping_sha256=mapping_sha256,
-                golden_artifact_sha256=golden_artifact_sha256,
-                status_vector_sha256=status_vector_sha256,
-                attestation_sha256=attestation_sha256,
-                annotator_model_id=annotator_model_id,
-                annotation_receipt_sha256=annotation_receipt_sha256,
-                reviewed_by=reviewed_by,
-                reviewed_at=reviewed_at,
-                preparation_id=preparation_id,
-            )
-            return receipt
-        except Schema67GoldenQualityGateError:
-            raise
-        except (AttributeError, InvalidSignature, TypeError, ValueError, ValidationError):
-            raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID") from None
+            settings = HarnessSettings()  # type: ignore[call-arg]
+            configured = settings.schema_wiki_human_decision_public_keys
+            if not configured:
+                raise ValueError("empty human decision key ring")
+            keys: dict[str, Ed25519PublicKey] = {}
+            material_seen: set[bytes] = set()
+            for key_id, encoded in configured:
+                material = _decode_ed25519_public_key_text(encoded)
+                if not key_id or key_id in keys or material in material_seen:
+                    raise ValueError("duplicate human decision authority")
+                keys[key_id] = Ed25519PublicKey.from_public_bytes(material)
+                material_seen.add(material)
+            authority = object.__new__(DeploymentSchema67GoldenDossierReviewAuthority)
+            object.__setattr__(authority, "_keys", MappingProxyType(dict(keys)))
+            object.__setattr__(authority, "_now_epoch", now_epoch)
+            object.__setattr__(authority, "_sealed", True)
+            with authority_lock:
+                deployment_authorities[id(authority)] = authority
+            return authority
+        except (Schema67GoldenQualityGateError, ValidationError, TypeError, ValueError):
+            raise Schema67GoldenQualityGateError(
+                "GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE"
+            ) from None
+
+    def require_verified_receipt(
+        receipt: HumanBatchDecisionReceiptV1,
+        *,
+        evaluation: Schema67GoldenEvaluationReviewBundleV1,
+        candidate: object,
+        evidence_authority: object,
+        golden: Schema67GoldenSet5961V1,
+        mapping_sha256: str,
+        golden_artifact_sha256: str,
+        status_vector_sha256: str,
+        attestation_sha256: str,
+        annotator_model_id: str,
+        annotation_receipt_sha256: str,
+        reviewed_by: str,
+        reviewed_at: str,
+        preparation_id: str,
+    ) -> tuple[object, ...]:
+        with authority_lock:
+            current = verified_receipts.get(id(receipt))
+        expected = (
+            receipt,
+            evaluation,
+            candidate,
+            evidence_authority,
+            golden,
+            mapping_sha256,
+            golden_artifact_sha256,
+            status_vector_sha256,
+            attestation_sha256,
+            annotator_model_id,
+            annotation_receipt_sha256,
+            reviewed_by,
+            reviewed_at,
+            preparation_id,
+        )
+        if current is None or current[0] is not receipt or current[2:] != expected[1:]:
+            raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID")
+        return current
+
+    return compose, require_verified_receipt
 
 
-_DEPLOYMENT_DOSSIER_AUTHORITY_LOCK = threading.Lock()
-_DEPLOYMENT_DOSSIER_AUTHORITIES: weakref.WeakValueDictionary[
-    int, Schema67GoldenDossierReviewAuthority
-] = weakref.WeakValueDictionary()
-
-
-def _register_deployment_dossier_review_authority(
-    authority: Schema67GoldenDossierReviewAuthority,
-) -> None:
-    with _DEPLOYMENT_DOSSIER_AUTHORITY_LOCK:
-        _DEPLOYMENT_DOSSIER_AUTHORITIES[id(authority)] = authority
-
-
-def _require_deployment_dossier_review_authority(
-    authority: Schema67GoldenDossierReviewAuthority,
-) -> None:
-    with _DEPLOYMENT_DOSSIER_AUTHORITY_LOCK:
-        registered = _DEPLOYMENT_DOSSIER_AUTHORITIES.get(id(authority))
-    if registered is not authority:
-        raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
-
-
-def compose_schema67_golden_dossier_review_authority_596_1(
-    *, now_epoch: int
-) -> Schema67GoldenDossierReviewAuthority:
-    try:
-        settings = HarnessSettings()  # type: ignore[call-arg]
-        configured = settings.schema_wiki_human_decision_public_keys
-        if not configured:
-            raise ValueError("empty human decision key ring")
-        keys: dict[str, Ed25519PublicKey] = {}
-        material_seen: set[bytes] = set()
-        for key_id, encoded in configured:
-            material = _decode_ed25519_public_key_text(encoded)
-            if not key_id or key_id in keys or material in material_seen:
-                raise ValueError("duplicate human decision authority")
-            keys[key_id] = Ed25519PublicKey.from_public_bytes(material)
-            material_seen.add(material)
-        authority = object.__new__(Schema67GoldenDossierReviewAuthority)
-        object.__setattr__(authority, "_keys", MappingProxyType(dict(keys)))
-        object.__setattr__(authority, "_now_epoch", now_epoch)
-        object.__setattr__(authority, "_sealed", True)
-        _register_deployment_dossier_review_authority(authority)
-        return authority
-    except (Schema67GoldenQualityGateError, ValidationError, TypeError, ValueError):
-        raise Schema67GoldenQualityGateError(
-            "GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE"
-        ) from None
+(
+    compose_schema67_golden_dossier_review_authority_596_1,
+    _require_verified_dossier_receipt,
+) = _build_schema67_golden_dossier_review_authority_api()
+del _build_schema67_golden_dossier_review_authority_api
 
 
 def make_schema67_golden_review_successor_metadata_596_1(
@@ -1598,7 +1663,6 @@ _RECEIPT_REGISTRY: dict[
 _EVALUATION_BUNDLE_REGISTRY: dict[
     int, tuple[Schema67GoldenEvaluationReviewBundleV1, Schema67GoldenEvaluationResultV1]
 ] = {}
-_VERIFIED_DOSSIER_RECEIPT_REGISTRY: dict[int, tuple[object, ...]] = {}
 _REVIEW_SUCCESSOR_REGISTRY: dict[int, tuple[object, ...]] = {}
 _QUALITY_DOSSIER_REGISTRY: dict[int, tuple[object, ...]] = {}
 
@@ -1624,85 +1688,6 @@ def _require_registered_evaluation_bundle(
         or (result is not None and current[1] is not result)
     ):
         raise Schema67GoldenQualityGateError("GOLDEN_EVALUATION_BUNDLE_INVALID")
-    return current
-
-
-def _register_verified_dossier_receipt(
-    receipt: HumanBatchDecisionReceiptV1,
-    *,
-    result: Schema67GoldenEvaluationResultV1,
-    evaluation: Schema67GoldenEvaluationReviewBundleV1,
-    candidate: object,
-    evidence_authority: object,
-    golden: Schema67GoldenSet5961V1,
-    mapping_sha256: str,
-    golden_artifact_sha256: str,
-    status_vector_sha256: str,
-    attestation_sha256: str,
-    annotator_model_id: str,
-    annotation_receipt_sha256: str,
-    reviewed_by: str,
-    reviewed_at: str,
-    preparation_id: str,
-) -> None:
-    registration = (
-        receipt,
-        result,
-        evaluation,
-        candidate,
-        evidence_authority,
-        golden,
-        mapping_sha256,
-        golden_artifact_sha256,
-        status_vector_sha256,
-        attestation_sha256,
-        annotator_model_id,
-        annotation_receipt_sha256,
-        reviewed_by,
-        reviewed_at,
-        preparation_id,
-    )
-    with _RECEIPT_LOCK:
-        _VERIFIED_DOSSIER_RECEIPT_REGISTRY[id(receipt)] = registration
-
-
-def _require_verified_dossier_receipt(
-    receipt: HumanBatchDecisionReceiptV1,
-    *,
-    evaluation: Schema67GoldenEvaluationReviewBundleV1,
-    candidate: object,
-    evidence_authority: object,
-    golden: Schema67GoldenSet5961V1,
-    mapping_sha256: str,
-    golden_artifact_sha256: str,
-    status_vector_sha256: str,
-    attestation_sha256: str,
-    annotator_model_id: str,
-    annotation_receipt_sha256: str,
-    reviewed_by: str,
-    reviewed_at: str,
-    preparation_id: str,
-) -> tuple[object, ...]:
-    with _RECEIPT_LOCK:
-        current = _VERIFIED_DOSSIER_RECEIPT_REGISTRY.get(id(receipt))
-    expected = (
-        receipt,
-        evaluation,
-        candidate,
-        evidence_authority,
-        golden,
-        mapping_sha256,
-        golden_artifact_sha256,
-        status_vector_sha256,
-        attestation_sha256,
-        annotator_model_id,
-        annotation_receipt_sha256,
-        reviewed_by,
-        reviewed_at,
-        preparation_id,
-    )
-    if current is None or current[0] is not receipt or current[2:] != expected[1:]:
-        raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID")
     return current
 
 

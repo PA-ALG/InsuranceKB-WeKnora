@@ -458,17 +458,10 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
         signing_key=attacker_key,
         signer_key_id=attacker_key_id,
     )
-    receipt_registry_calls = 0
     successor_registry_calls = 0
     evaluation_registry_calls = 0
-    original_receipt_register = quality_gate._register_verified_dossier_receipt
     original_successor_register = quality_gate._register_review_successor
     original_evaluation_require = quality_gate._require_registered_evaluation_bundle
-
-    def count_receipt_registration(*args, **kwargs):
-        nonlocal receipt_registry_calls
-        receipt_registry_calls += 1
-        return original_receipt_register(*args, **kwargs)
 
     def count_successor_registration(*args, **kwargs):
         nonlocal successor_registry_calls
@@ -482,11 +475,6 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
 
     monkeypatch.setattr(
         quality_gate,
-        "_register_verified_dossier_receipt",
-        count_receipt_registration,
-    )
-    monkeypatch.setattr(
-        quality_gate,
         "_register_review_successor",
         count_successor_registration,
     )
@@ -497,13 +485,19 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
     )
     assert not hasattr(quality_gate, "_GOLDEN_DOSSIER_AUTHORITY_TOKEN")
     assert "Schema67GoldenDossierReviewAuthority" not in quality_gate.__all__
+    assert not hasattr(quality_gate, "_register_verified_dossier_receipt")
+    assert not hasattr(quality_gate, "_VERIFIED_DOSSIER_RECEIPT_REGISTRY")
+    assert not hasattr(quality_gate, "_register_deployment_dossier_review_authority")
+    assert not hasattr(quality_gate, "_DEPLOYMENT_DOSSIER_AUTHORITIES")
+    deployment_authority = _compose_authority(monkeypatch)
+    authority_type = type(deployment_authority)
     with pytest.raises(Schema67GoldenQualityGateError):
-        quality_gate.Schema67GoldenDossierReviewAuthority(
+        authority_type(
             object(),
             {attacker_key_id: attacker_key.public_key()},
             now_epoch=_ISSUED_AT + 1,
         )
-    caller_authority = object.__new__(quality_gate.Schema67GoldenDossierReviewAuthority)
+    caller_authority = object.__new__(authority_type)
     object.__setattr__(
         caller_authority,
         "_keys",
@@ -535,7 +529,6 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
         caller_key_injection_accepted = False
 
     assert caller_key_injection_accepted is False
-    assert receipt_registry_calls == 0
     assert successor_registry_calls == 0
     assert evaluation_registry_calls == 0
     with pytest.raises(Schema67GoldenQualityGateError):
@@ -556,6 +549,129 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
             preparation_id=_PREPARATION_ID,
         )
     assert successor_registry_calls == 0
+
+
+def test_module_registry_injection_cannot_authorize_caller_signed_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate, evidence, golden, result, evaluation = _inputs()
+    attacker_key = Ed25519PrivateKey.from_private_bytes(b"i" * 32)
+    attacker_key_id = "caller-registry-key"
+    receipt = _signed_receipt(
+        candidate=candidate,
+        evidence_authority=evidence,
+        golden=golden,
+        result=result,
+        evaluation=evaluation,
+        signing_key=attacker_key,
+        signer_key_id=attacker_key_id,
+    )
+    receipt_registry_calls = 0
+    successor_registry_calls = 0
+    evaluation_registry_calls = 0
+    receipt_writer = getattr(quality_gate, "_register_verified_dossier_receipt", None)
+    authority_writer = getattr(
+        quality_gate,
+        "_register_deployment_dossier_review_authority",
+        None,
+    )
+    authority_type = getattr(
+        quality_gate,
+        "Schema67GoldenDossierReviewAuthority",
+        None,
+    )
+    original_successor_register = quality_gate._register_review_successor
+    original_evaluation_require = quality_gate._require_registered_evaluation_bundle
+
+    if callable(receipt_writer):
+        original_receipt_writer = receipt_writer
+
+        def count_receipt_registration(*args, **kwargs):
+            nonlocal receipt_registry_calls
+            receipt_registry_calls += 1
+            return original_receipt_writer(*args, **kwargs)
+
+        monkeypatch.setattr(
+            quality_gate,
+            "_register_verified_dossier_receipt",
+            count_receipt_registration,
+        )
+
+    def count_successor_registration(*args, **kwargs):
+        nonlocal successor_registry_calls
+        successor_registry_calls += 1
+        return original_successor_register(*args, **kwargs)
+
+    def count_evaluation_registry(*args, **kwargs):
+        nonlocal evaluation_registry_calls
+        evaluation_registry_calls += 1
+        return original_evaluation_require(*args, **kwargs)
+
+    monkeypatch.setattr(
+        quality_gate,
+        "_register_review_successor",
+        count_successor_registration,
+    )
+    monkeypatch.setattr(
+        quality_gate,
+        "_require_registered_evaluation_bundle",
+        count_evaluation_registry,
+    )
+
+    caller_registry_injection_accepted = False
+    if callable(authority_writer) and isinstance(authority_type, type):
+        caller_authority = object.__new__(authority_type)
+        object.__setattr__(
+            caller_authority,
+            "_keys",
+            {attacker_key_id: attacker_key.public_key()},
+        )
+        object.__setattr__(caller_authority, "_now_epoch", _ISSUED_AT + 1)
+        object.__setattr__(caller_authority, "_sealed", True)
+        authority_writer(caller_authority)
+        caller_authority.verify_dossier_receipt(
+            receipt=receipt,
+            result=result,
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence,
+            golden=golden,
+            mapping_sha256=_MAPPING_SHA256,
+            golden_artifact_sha256=_GOLDEN_ARTIFACT_SHA256,
+            status_vector_sha256=_STATUS_VECTOR_SHA256,
+            attestation_sha256=_ATTESTATION_SHA256,
+            annotator_model_id="claude-fable-5",
+            annotation_receipt_sha256=_ANNOTATION_RECEIPT_SHA256,
+            reviewed_by="linyao",
+            reviewed_at=_REVIEWED_AT,
+            preparation_id=_PREPARATION_ID,
+        )
+        make_schema67_golden_review_successor_metadata_596_1(
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence,
+            golden=golden,
+            annotator_model_id="claude-fable-5",
+            annotation_receipt_sha256=_ANNOTATION_RECEIPT_SHA256,
+            reviewed_by="linyao",
+            reviewed_at=_REVIEWED_AT,
+            human_decision_receipt=receipt,
+            mapping_sha256=_MAPPING_SHA256,
+            golden_artifact_sha256=_GOLDEN_ARTIFACT_SHA256,
+            status_vector_sha256=_STATUS_VECTOR_SHA256,
+            attestation_sha256=_ATTESTATION_SHA256,
+            preparation_id=_PREPARATION_ID,
+        )
+        caller_registry_injection_accepted = True
+
+    assert caller_registry_injection_accepted is False
+    assert receipt_registry_calls == 0
+    assert successor_registry_calls == 0
+    assert evaluation_registry_calls == 0
+    assert not hasattr(quality_gate, "_register_verified_dossier_receipt")
+    assert not hasattr(quality_gate, "_VERIFIED_DOSSIER_RECEIPT_REGISTRY")
+    assert not hasattr(quality_gate, "_register_deployment_dossier_review_authority")
+    assert not hasattr(quality_gate, "_DEPLOYMENT_DOSSIER_AUTHORITIES")
 
 
 @pytest.mark.parametrize(
