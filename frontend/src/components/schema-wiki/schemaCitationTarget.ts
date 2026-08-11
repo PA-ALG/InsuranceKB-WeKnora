@@ -111,7 +111,7 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
-function parseBBox(value: unknown): CitationBBoxV1 {
+export function parseCitationBBoxV1(value: unknown): CitationBBoxV1 {
   if (!isRecord(value) || !hasExactKeys(value, BBOX_KEYS)) {
     throw new Error('BBOX_UNAVAILABLE')
   }
@@ -203,7 +203,7 @@ export function parseCitationTarget(value: unknown): CitationTargetV1 {
     parse_manifest_sha256: value.parse_manifest_sha256 as string,
     page_number: value.page_number,
     locator_ref: value.locator_ref as string,
-    bbox: parseBBox(value.bbox),
+    bbox: parseCitationBBoxV1(value.bbox),
     quote_snapshot: value.quote_snapshot as string,
     quote_sha256: value.quote_sha256 as string,
     content_snapshot_sha256: value.content_snapshot_sha256 as string,
@@ -352,7 +352,7 @@ const CITATION_CONTENT_AUTHORITY_KEYS = [
 ] as const
 const OPAQUE_TOKEN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
 
-function parseRevisionSource(value: unknown): LiveRevisionSourceReceiptV1 {
+export function parseLiveRevisionSourceReceiptV1(value: unknown): LiveRevisionSourceReceiptV1 {
   if (!isRecord(value) || !hasExactKeys(value, REVISION_SOURCE_KEYS)) {
     throw new Error('CITATION_PREVIEW_AUTHORITY_INVALID')
   }
@@ -446,13 +446,13 @@ export function parseSchemaWikiCitationContentAuthorityV1(
   ) {
     throw new Error('CITATION_REPLAY_IDENTITY_MISMATCH')
   }
-  const revisionSource = parseRevisionSource(value.revision_source)
+  const revisionSource = parseLiveRevisionSourceReceiptV1(value.revision_source)
   if (!isPositiveInteger(value.page_number) || value.page_number > revisionSource.page_count) {
     throw new Error('PAGE_UNAVAILABLE')
   }
   let bbox: CitationBBoxV1
   try {
-    bbox = parseBBox(value.bbox)
+    bbox = parseCitationBBoxV1(value.bbox)
   } catch {
     throw new Error('BBOX_UNAVAILABLE')
   }
@@ -514,7 +514,10 @@ export function parseSchemaWikiCitationContentAuthorityV1(
 }
 
 export function citationPreviewHighlightStyle(
-  authority: SchemaWikiCitationContentAuthorityV1,
+  authority: Pick<
+    SchemaWikiCitationContentAuthorityV1,
+    'bbox' | 'page_width' | 'page_height' | 'rotation_degrees'
+  >,
   viewport: { width: number; height: number },
 ): { left: number; top: number; width: number; height: number } {
   if (
