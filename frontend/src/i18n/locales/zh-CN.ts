@@ -4033,6 +4033,7 @@ export default {
       schemaNotCompiled: "尚未完成编译",
       schemaLoadFailed: "产品 Schema Wiki 暂不可用",
       schemaUnknown: "当前材料未提供，待后续材料补充",
+      schemaUndetermined: "尚未确定",
       schemaPresent: "已确认",
       schemaAbsent: "原文明示无或不适用",
       schemaCitation: "查看引文",

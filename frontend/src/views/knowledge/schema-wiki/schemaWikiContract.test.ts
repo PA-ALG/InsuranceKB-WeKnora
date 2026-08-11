@@ -236,6 +236,9 @@ test('unknown is an evidence-free abstention and never a hidden answer', () => {
   })
   assert.equal(parsed.state, 'unknown')
   assert.equal(parsed.unknown_reason, 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS')
+  assert.equal(parseSchemaFieldPage({ ...unknown, unknown_reason: 'FIELD_UNKNOWN' }, {
+    fieldId: 'field-a', fieldPageSha256: H('f'),
+  }).unknown_reason, 'FIELD_UNKNOWN')
   assert.throws(() => parseSchemaFieldPage({ ...unknown, value_snapshot: '猜测值' }, {
     fieldId: 'field-a', fieldPageSha256: H('f'),
   }), { message: 'UNKNOWN_FIELD_HAS_AUTHORITY' })
@@ -274,10 +277,10 @@ test('A1 v2 field payloads carry the closed unknown reason without free-text aut
       fieldId: member.field_id as string,
       fieldPageSha256: member.payload_sha256 as string,
     })
-    assert.equal(
-      parsed.unknown_reason,
-      parsed.state === 'unknown' ? 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS' : null,
-    )
+    const expectedReason = member.field_id === 'field-b'
+      ? 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS'
+      : member.field_id === 'field-c' ? 'FIELD_UNKNOWN' : null
+    assert.equal(parsed.unknown_reason, expectedReason)
   }
 })
 

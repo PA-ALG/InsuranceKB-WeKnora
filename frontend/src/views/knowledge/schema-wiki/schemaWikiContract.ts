@@ -286,15 +286,22 @@ export function parseSchemaPack(value: unknown): SchemaPackV1 {
 }
 
 export type SchemaFieldState = 'present' | 'absent_explicitly' | 'unknown'
-export type SchemaFieldUnknownReason = 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS'
+export type SchemaFieldUnknownReason =
+  | 'FIELD_UNKNOWN'
+  | 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS'
 
 export function schemaFieldUnknownReasonI18nKey(
   reason: SchemaFieldUnknownReason | null,
-): 'knowledgeEditor.wikiBrowser.schemaUnknown' {
-  if (reason !== 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS') {
-    throw new Error('SCHEMA_FIELD_UNKNOWN_REASON_INVALID')
+):
+  | 'knowledgeEditor.wikiBrowser.schemaUndetermined'
+  | 'knowledgeEditor.wikiBrowser.schemaUnknown' {
+  if (reason === 'FIELD_UNKNOWN') {
+    return 'knowledgeEditor.wikiBrowser.schemaUndetermined'
   }
-  return 'knowledgeEditor.wikiBrowser.schemaUnknown'
+  if (reason === 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS') {
+    return 'knowledgeEditor.wikiBrowser.schemaUnknown'
+  }
+  throw new Error('SCHEMA_FIELD_UNKNOWN_REASON_INVALID')
 }
 
 export interface SchemaFieldPageV1 {
@@ -348,7 +355,8 @@ export function parseSchemaFieldPage(
     if (
       value.value_snapshot !== null || citations.length > 0 || evidenceReceipts.length > 0
       || value.review_item_reason !== 'FIELD_UNKNOWN'
-      || value.unknown_reason !== 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS'
+      || !['FIELD_UNKNOWN', 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS']
+        .includes(value.unknown_reason as string)
     ) {
       throw new Error('UNKNOWN_FIELD_HAS_AUTHORITY')
     }

@@ -45,7 +45,7 @@ async function previewCitation(citationId: string): Promise<void> {
       <span class="schema-wiki-field__state">
         <template v-if="fieldPage.state === 'present'">{{ $t('knowledgeEditor.wikiBrowser.schemaPresent') }}</template>
         <template v-else-if="fieldPage.state === 'absent_explicitly'">{{ $t('knowledgeEditor.wikiBrowser.schemaAbsent') }}</template>
-        <template v-else>{{ $t('knowledgeEditor.wikiBrowser.schemaUnknown') }}</template>
+        <template v-else>{{ $t(schemaFieldUnknownReasonI18nKey(fieldPage.unknown_reason)) }}</template>
       </span>
     </header>
     <p v-if="fieldPage.state !== 'unknown'" class="schema-wiki-field__value">
