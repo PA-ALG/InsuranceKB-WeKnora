@@ -19,11 +19,39 @@ const vector = JSON.parse(readFileSync(new URL(
   citations: Array<Record<string, unknown>>
 }
 
-function loadMedicalReleaseVector(): Record<string, unknown> {
-  return JSON.parse(readFileSync(new URL(
+interface MedicalReleaseEnvelope {
+  candidate_evidence_authority: Record<string, unknown>
+  release: Record<string, unknown>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseMedicalReleaseEnvelope(value: unknown): MedicalReleaseEnvelope {
+  if (
+    !isRecord(value)
+    || Object.keys(value).sort().join(',') !== 'candidate_evidence_authority,release'
+    || !isRecord(value.candidate_evidence_authority)
+    || !isRecord(value.release)
+  ) {
+    throw new Error('SCHEMA_WIKI_RELEASE_VECTOR_ENVELOPE_INVALID')
+  }
+  return {
+    candidate_evidence_authority: value.candidate_evidence_authority,
+    release: value.release,
+  }
+}
+
+function loadMedicalReleaseEnvelope(): MedicalReleaseEnvelope {
+  return parseMedicalReleaseEnvelope(JSON.parse(readFileSync(new URL(
     '../../../../../internal/application/service/testdata/schema_wiki_release_596_1_vector.json',
     import.meta.url,
-  ), 'utf8')) as Record<string, unknown>
+  ), 'utf8')))
+}
+
+function loadMedicalReleaseVector(): Record<string, unknown> {
+  return loadMedicalReleaseEnvelope().release
 }
 
 function records(value: unknown): Array<Record<string, unknown>> {
@@ -146,6 +174,24 @@ test('the frozen medical release projects exactly one root, seven ordered sectio
   assert.equal(fields.every(member => typeof member.payload_sha256 === 'string'), true)
   assert.equal(JSON.stringify(release).includes('source_refs'), false)
   assert.equal(members.some(member => member.member_kind === 'generic'), false)
+})
+
+test('the medical fixture rejects missing, extra, or malformed envelope authority', () => {
+  const exact = loadMedicalReleaseEnvelope()
+  assert.equal(typeof exact.candidate_evidence_authority.contract, 'string')
+  assert.equal(typeof exact.release.contract, 'string')
+
+  for (const invalid of [
+    { release: exact.release },
+    { candidate_evidence_authority: exact.candidate_evidence_authority },
+    { ...exact, foreign_authority: true },
+    { ...exact, release: null },
+    { ...exact, candidate_evidence_authority: [] },
+  ]) {
+    assert.throws(() => parseMedicalReleaseEnvelope(invalid), {
+      message: 'SCHEMA_WIKI_RELEASE_VECTOR_ENVELOPE_INVALID',
+    })
+  }
 })
 
 test('the unchanged A1 SchemaPack is configurable and remains an exact ordered partition', () => {
