@@ -10,17 +10,16 @@ import pytest
 import insurance_harness.goldenset.schema67_golden_quality_gate_596_1 as golden_gate_module
 import insurance_harness.goldenset.schema67_quality_metrics_consumer_596_1 as consumer_module
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
+    HumanBatchDecisionReceiptV1,
     Schema67GoldenEvaluationResultV1,
     SchemaWikiGoldenQualityDossierV2,
-    make_schema67_golden_evaluation_review_bundle_596_1,
-    make_schema67_golden_review_successor_metadata_596_1,
-    make_schema_wiki_golden_quality_dossier_v2_596_1,
 )
 from insurance_harness.goldenset.schema67_quality_metrics_596_1 import (
     Schema67MetricBBoxV1,
     Schema67MetricEvidenceV1,
     Schema67MetricRowV1,
     Schema67QualityMetricsV1,
+    compute_schema67_quality_metrics_596_1,
 )
 from insurance_harness.goldenset.schema67_quality_metrics_consumer_596_1 import (
     Schema67QualityMetricsConsumerError,
@@ -29,11 +28,12 @@ from insurance_harness.goldenset.schema67_quality_metrics_consumer_596_1 import 
 from insurance_harness.goldenset.schema67_reviewed_golden_successor_596_1 import (
     Schema67ReviewedGoldenSuccessor5961V1,
 )
-from tests.test_schema67_golden_quality_gate_596_1 import (
-    _sha,
-    _evaluate,
-    _golden,
-    _non_fixture_candidate_and_authority,
+from tests.test_schema67_golden_dossier_receipt_authority_596_1 import (
+    _ATTESTATION_SHA256,
+    _GOLDEN_ARTIFACT_SHA256,
+    _MAPPING_SHA256,
+    _STATUS_VECTOR_SHA256,
+    _registered_formal,
 )
 
 _CURRENT = (
@@ -70,37 +70,34 @@ def _current() -> Schema67ReviewedGoldenSuccessor5961V1:
     )
 
 
-def _formal() -> tuple[
-    Schema67GoldenEvaluationResultV1, SchemaWikiGoldenQualityDossierV2
-]:
-    candidate, authority = _non_fixture_candidate_and_authority()
-    golden = _golden(candidate, authority)
-    result = cast(
-        Schema67GoldenEvaluationResultV1,
-        _evaluate(
-            candidate=candidate,
-            authority=authority,
-            golden=golden,
-        ),
-    )
-    evaluation = make_schema67_golden_evaluation_review_bundle_596_1(result)
-    review_successor = make_schema67_golden_review_successor_metadata_596_1(
-        evaluation=evaluation,
-        candidate=candidate,
-        evidence_authority=authority,
-        golden=golden,
-        annotator_model_id="claude-fable-5",
-        annotation_receipt_sha256=_sha("consumer:annotation"),
-        reviewed_by="linyao",
-        reviewed_at="2026-08-11T00:00:00Z",
-        review_receipt_sha256=golden.whole_batch_approval_receipt_sha256,
-    )
-    dossier = make_schema_wiki_golden_quality_dossier_v2_596_1(
-        preparation_id="prep-consumer-formal-596-1",
-        evaluation=evaluation,
-        review_successor=review_successor,
-    )
-    return result, dossier
+def _formal(monkeypatch: pytest.MonkeyPatch) -> tuple[object, ...]:
+    return cast(tuple[object, ...], _registered_formal(monkeypatch))
+
+
+def _compute_formal(
+    values: tuple[object, ...],
+    *,
+    overrides: dict[str, object] | None = None,
+) -> Schema67QualityMetricsV1:
+    candidate, evidence, golden, result, evaluation, receipt, _, dossier = values
+    assert isinstance(result, Schema67GoldenEvaluationResultV1)
+    arguments: dict[str, object] = {
+        "admission": result,
+        "evaluation": evaluation,
+        "dossier": dossier,
+        "human_batch_decision_receipt": receipt,
+        "candidate": candidate,
+        "evidence_authority": evidence,
+        "golden": golden,
+        "mapping_sha256": _MAPPING_SHA256,
+        "golden_artifact_sha256": _GOLDEN_ARTIFACT_SHA256,
+        "status_vector_sha256": _STATUS_VECTOR_SHA256,
+        "attestation_sha256": _ATTESTATION_SHA256,
+        "rows": _rows(result),
+    }
+    if overrides is not None:
+        arguments.update(overrides)
+    return compute_admitted_schema67_quality_metrics_596_1(**arguments)  # type: ignore[arg-type]
 
 
 def _rows(result: Schema67GoldenEvaluationResultV1) -> tuple[Schema67MetricRowV1, ...]:
@@ -165,16 +162,16 @@ def test_current_complete_67_unverified_successor_blocks_only_for_receipt(
         kernel_calls += 1
         raise AssertionError(rows)
 
-    def forbidden_evaluator(admission: object) -> object:
+    def forbidden_validator(*args: object, **kwargs: object) -> object:
         nonlocal evaluator_calls
         evaluator_calls += 1
-        raise AssertionError(admission)
+        raise AssertionError((args, kwargs))
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     monkeypatch.setattr(
         consumer_module,
-        "make_schema67_golden_evaluation_review_bundle_596_1",
-        forbidden_evaluator,
+        "validate_registered_schema_wiki_golden_quality_dossier_v2_596_1",
+        forbidden_validator,
     )
     current = _current()
     assert current.source_review_status == "COMPLETED"
@@ -221,8 +218,9 @@ def test_exact_16_not_covered_fields_are_normal_unknowns() -> None:
 def test_registered_pair_without_concrete_human_batch_receipt_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, dossier = _formal()
-    rows = _rows(formal)
+    values = _formal(monkeypatch)
+    formal = values[3]
+    assert isinstance(formal, Schema67GoldenEvaluationResultV1)
     calls = 0
 
     def forbidden(exact_rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
@@ -232,11 +230,9 @@ def test_registered_pair_without_concrete_human_batch_receipt_is_blocked(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=dossier,
-            human_batch_decision_receipt=None,
-            rows=rows,
+        _compute_formal(
+            values,
+            overrides={"human_batch_decision_receipt": None},
         )
 
     assert calls == 0
@@ -262,7 +258,9 @@ def test_worktree1_must_supply_registered_pair_human_receipt_validator() -> None
 def test_caller_shaped_human_receipt_cannot_authorize_registered_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, dossier = _formal()
+    values = _formal(monkeypatch)
+    formal = values[3]
+    assert isinstance(formal, Schema67GoldenEvaluationResultV1)
     calls = 0
 
     def forbidden(rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
@@ -271,6 +269,7 @@ def test_caller_shaped_human_receipt_cannot_authorize_registered_pair(
         raise AssertionError(rows)
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
+    assert formal.quality_gate_receipt is not None
     caller_shaped_receipt = {
         "version": "1",
         "decision": "approve",
@@ -279,11 +278,9 @@ def test_caller_shaped_human_receipt_cannot_authorize_registered_pair(
     }
 
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=dossier,
-            human_batch_decision_receipt=caller_shaped_receipt,
-            rows=_rows(formal),
+        _compute_formal(
+            values,
+            overrides={"human_batch_decision_receipt": caller_shaped_receipt},
         )
 
     assert calls == 0
@@ -292,7 +289,9 @@ def test_caller_shaped_human_receipt_cannot_authorize_registered_pair(
 def test_reparsed_self_consistent_pass_result_is_not_a_registered_admission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, dossier = _formal()
+    values = _formal(monkeypatch)
+    formal = values[3]
+    assert isinstance(formal, Schema67GoldenEvaluationResultV1)
     reparsed = Schema67GoldenEvaluationResultV1.model_validate(formal.model_dump(mode="python"))
     calls = 0
 
@@ -303,18 +302,14 @@ def test_reparsed_self_consistent_pass_result_is_not_a_registered_admission(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=reparsed,
-            dossier=dossier,
-            rows=_rows(formal),
-        )
+        _compute_formal(values, overrides={"admission": reparsed})
     assert calls == 0
 
 
 def test_formal_result_without_dossier_is_blocked_before_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, _ = _formal()
+    values = _formal(monkeypatch)
     calls = 0
 
     def forbidden(rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
@@ -324,18 +319,16 @@ def test_formal_result_without_dossier_is_blocked_before_metrics(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=None,
-            rows=_rows(formal),
-        )
+        _compute_formal(values, overrides={"dossier": None})
     assert calls == 0
 
 
 def test_reparsed_self_consistent_dossier_is_not_a_registered_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, dossier = _formal()
+    values = _formal(monkeypatch)
+    dossier = values[7]
+    assert isinstance(dossier, SchemaWikiGoldenQualityDossierV2)
     reparsed = SchemaWikiGoldenQualityDossierV2.model_validate(
         dossier.model_dump(mode="python")
     )
@@ -348,18 +341,16 @@ def test_reparsed_self_consistent_dossier_is_not_a_registered_pair(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=reparsed,
-            rows=_rows(formal),
-        )
+        _compute_formal(values, overrides={"dossier": reparsed})
     assert calls == 0
 
 
 def test_self_built_dossier_reusing_nested_objects_is_not_a_registered_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, dossier = _formal()
+    values = _formal(monkeypatch)
+    dossier = values[7]
+    assert isinstance(dossier, SchemaWikiGoldenQualityDossierV2)
     self_built = SchemaWikiGoldenQualityDossierV2(
         version=dossier.version,
         preparation_id=dossier.preparation_id,
@@ -379,19 +370,17 @@ def test_self_built_dossier_reusing_nested_objects_is_not_a_registered_pair(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=self_built,
-            rows=_rows(formal),
-        )
+        _compute_formal(values, overrides={"dossier": self_built})
     assert calls == 0
 
 
 def test_registered_dossier_cannot_be_cross_joined_to_another_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    formal, _ = _formal()
-    other_formal, other_dossier = _formal()
+    values = _formal(monkeypatch)
+    other_values = _formal(monkeypatch)
+    other_dossier = other_values[7]
+    other_receipt = other_values[5]
     calls = 0
 
     def forbidden(rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
@@ -401,9 +390,74 @@ def test_registered_dossier_cannot_be_cross_joined_to_another_result(
 
     monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
-        compute_admitted_schema67_quality_metrics_596_1(
-            admission=formal,
-            dossier=other_dossier,
-            rows=_rows(other_formal),
+        _compute_formal(
+            values,
+            overrides={
+                "dossier": other_dossier,
+                "human_batch_decision_receipt": other_receipt,
+            },
         )
+    assert calls == 0
+
+
+def test_exact_registered_pair_calls_metrics_kernel_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = _formal(monkeypatch)
+    calls = 0
+
+    def measured(rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
+        nonlocal calls
+        calls += 1
+        return compute_schema67_quality_metrics_596_1(rows)
+
+    monkeypatch.setattr(consumer_module, "_compute_metrics", measured)
+    metrics = _compute_formal(values)
+
+    assert calls == 1
+    assert metrics.evaluated_field_count == 67
+    formal = values[3]
+    assert isinstance(formal, Schema67GoldenEvaluationResultV1)
+    assert formal.provider_calls == formal.draft_calls == formal.review_calls == 0
+    assert formal.activation_calls == 0
+
+
+@pytest.mark.parametrize(
+    "drift",
+    ("receipt_reparse", "foreign_evidence", "mapping", "golden_artifact", "status", "attestation"),
+)
+def test_registered_pair_authority_drift_is_rejected_before_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+    drift: str,
+) -> None:
+    values = _formal(monkeypatch)
+    overrides: dict[str, object]
+    if drift == "receipt_reparse":
+        receipt = values[5]
+        assert isinstance(receipt, HumanBatchDecisionReceiptV1)
+        overrides = {
+            "human_batch_decision_receipt": HumanBatchDecisionReceiptV1.model_validate(
+                receipt.model_dump(mode="python")
+            )
+        }
+    elif drift == "foreign_evidence":
+        overrides = {"evidence_authority": _formal(monkeypatch)[1]}
+    elif drift == "mapping":
+        overrides = {"mapping_sha256": "d" * 64}
+    elif drift == "golden_artifact":
+        overrides = {"golden_artifact_sha256": "d" * 64}
+    elif drift == "status":
+        overrides = {"status_vector_sha256": "d" * 64}
+    else:
+        overrides = {"attestation_sha256": "d" * 64}
+    calls = 0
+
+    def forbidden(rows: Sequence[Schema67MetricRowV1]) -> Schema67QualityMetricsV1:
+        nonlocal calls
+        calls += 1
+        raise AssertionError(rows)
+
+    monkeypatch.setattr(consumer_module, "_compute_metrics", forbidden)
+    with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_INVALID"):
+        _compute_formal(values, overrides=overrides)
     assert calls == 0

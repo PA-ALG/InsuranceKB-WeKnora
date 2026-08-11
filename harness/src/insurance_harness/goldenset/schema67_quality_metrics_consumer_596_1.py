@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import insurance_harness.goldenset.schema67_golden_quality_gate_596_1 as golden_gate_module
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
+    HumanBatchDecisionReceiptV1,
     Schema67GoldenEvaluationResultV1,
+    Schema67GoldenEvaluationReviewBundleV1,
     Schema67GoldenQualityGateError,
+    Schema67GoldenSet5961V1,
     SchemaWikiGoldenQualityDossierV2,
-    make_schema67_golden_evaluation_review_bundle_596_1,
+    validate_registered_schema_wiki_golden_quality_dossier_v2_596_1,
 )
 from insurance_harness.goldenset.schema67_quality_metrics_596_1 import (
     Schema67MetricRowV1,
@@ -38,8 +40,16 @@ def _compute_metrics(
 def compute_admitted_schema67_quality_metrics_596_1(
     *,
     admission: Schema67ReviewedGoldenSuccessor5961V1 | Schema67GoldenEvaluationResultV1,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1 | None = None,
     dossier: SchemaWikiGoldenQualityDossierV2 | None = None,
-    human_batch_decision_receipt: object | None = None,
+    human_batch_decision_receipt: HumanBatchDecisionReceiptV1 | None = None,
+    candidate: object | None = None,
+    evidence_authority: object | None = None,
+    golden: Schema67GoldenSet5961V1 | None = None,
+    mapping_sha256: str | None = None,
+    golden_artifact_sha256: str | None = None,
+    status_vector_sha256: str | None = None,
+    attestation_sha256: str | None = None,
     rows: Sequence[Schema67MetricRowV1],
 ) -> Schema67QualityMetricsV1:
     """Measure only after the existing evaluator has produced a registered PASS receipt."""
@@ -64,34 +74,40 @@ def compute_admitted_schema67_quality_metrics_596_1(
 
     if type(admission) is not Schema67GoldenEvaluationResultV1:
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
-    validator = getattr(
-        golden_gate_module,
-        "validate_registered_schema_wiki_golden_quality_dossier_v2_596_1",
-        None,
-    )
     if (
-        type(dossier) is not SchemaWikiGoldenQualityDossierV2
-        or human_batch_decision_receipt is None
-        or not callable(validator)
+        type(evaluation) is not Schema67GoldenEvaluationReviewBundleV1
+        or type(dossier) is not SchemaWikiGoldenQualityDossierV2
+        or type(human_batch_decision_receipt) is not HumanBatchDecisionReceiptV1
+        or candidate is None
+        or evidence_authority is None
+        or type(golden) is not Schema67GoldenSet5961V1
+        or type(mapping_sha256) is not str
+        or type(golden_artifact_sha256) is not str
+        or type(status_vector_sha256) is not str
+        or type(attestation_sha256) is not str
     ):
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
     try:
-        validated_dossier = validator(
-            evaluation=admission,
-            dossier=dossier,
-            human_batch_decision_receipt=human_batch_decision_receipt,
+        validated_dossier = validate_registered_schema_wiki_golden_quality_dossier_v2_596_1(
+            dossier,
+            result=admission,
+            evaluation=evaluation,
+            human_decision_receipt=human_batch_decision_receipt,
+            candidate=candidate,
+            evidence_authority=evidence_authority,
+            golden=golden,
+            mapping_sha256=mapping_sha256,
+            golden_artifact_sha256=golden_artifact_sha256,
+            status_vector_sha256=status_vector_sha256,
+            attestation_sha256=attestation_sha256,
         )
     except (Schema67GoldenQualityGateError, TypeError, ValueError):
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID") from None
     if validated_dossier is not dossier:
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
-    try:
-        bundle = make_schema67_golden_evaluation_review_bundle_596_1(admission)
-    except Schema67GoldenQualityGateError:
-        raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID") from None
 
     exact_rows = tuple(rows)
-    decisions = bundle.private_dossier.field_decisions
+    decisions = evaluation.private_dossier.field_decisions
     if (
         len(exact_rows) != 67
         or tuple(row.field_id for row in exact_rows) != APPROVED_ORDERED_FIELD_IDS
