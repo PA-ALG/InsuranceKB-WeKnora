@@ -32,6 +32,23 @@ hashes, optional bbox/coordinate authority, risk level and named-human decision 
 
 ### Requirement: SGQ2 Golden truth is independently human-owned
 
+The system SHALL treat the exact latest 71-row source as an already-human-reviewed
+migration source and preserve its annotator-model provenance separately from the human-review layer and
+SHALL NOT describe it as zero human annotation or require a from-scratch 67-field review.
+Mechanical one-to-one mappings MAY enter the Schema67 successor as reviewed; only actual
+conflict, split/merge or missing targets remain pending. The user-attested reviewer
+identity SHALL be exactly `linyao` and SHALL remain distinct from annotator model
+`claude-fable-5` and confirming attestor `workspace-owner-houjing`. Missing `reviewed_at`,
+approval receipt or signature SHALL remain explicit missing authority and SHALL NOT be
+fabricated from the annotator model or the review-completion assertion.
+
+The successor SHALL encode three non-substitutable statuses:
+`source_review_status=COMPLETED`,
+`schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`, and
+`golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. The source Review
+status SHALL NOT be downgraded because mapping or admission remains incomplete, and the
+mapping status SHALL NOT be treated as a Golden admission.
+
 All 67 fields SHALL receive two independent named-human decisions. Disagreements SHALL
 produce a conflict and require named adjudication. A whole-batch Golden receipt SHALL bind
 the exact source receipts, ordered field decisions, normalization/risk/metric policies and
@@ -61,6 +78,13 @@ decisions.
 
 - **WHEN** any field lacks two named decisions or any disagreement lacks named adjudication
 - **THEN** the Golden remains pending and cannot evaluate a release Candidate
+
+#### Scenario: reviewed source lacks cryptographic metadata
+
+- **WHEN** the reviewed source is present but its reviewer identity, review timestamp,
+  whole-batch receipt or required signatures are absent
+- **THEN** the reviewed data remains valid migration input, but formal Golden evaluation
+  and Draft creation remain blocked; the system does not relabel all fields as unreviewed
 
 ### Requirement: SGQ3 metrics have fixed definitions and denominators
 
@@ -263,15 +287,21 @@ review or publication authority. It SHALL expose no field decisions, Candidate/G
 values, quotes, locator text, bbox, raw PDF bytes, local/object-store paths, opaque token,
 key material or private signing values.
 
-`SchemaWikiGoldenQualityDossierV1` SHALL be a closed wrapper with exactly `version`,
+`SchemaWikiGoldenQualityDossierV2` SHALL be a closed wrapper with exactly `version`,
 `preparation_id`, `evaluation_id`, `quality_gate_receipt_sha256`, `private_dossier`,
-`evaluation_bundle_sha256` and `serving_effect`. `private_dossier` SHALL be the exact
+`review_successor`, `evaluation_bundle_sha256` and `serving_effect`. `private_dossier` SHALL be the exact
 validated `Schema67GoldenPrivateDossierV1` already bound by the receipt, including exactly
-the SchemaPack-ordered 67 decision rows and the same ordered metric rows. It SHALL not be
-expanded with caller-supplied values, quotes, locators, paths, keys or evidence targets;
-all richer field/Evidence display data must be projected independently from the validated
-release and Candidate-Evidence custody stored in the same preparation. The wrapper SHALL
-set `serving_effect=NONE`.
+the SchemaPack-ordered 67 decision rows and the same ordered metric rows.
+`review_successor` SHALL be a closed `schema67-golden-review-successor-metadata.v1` object
+whose annotation layer retains `claude-fable-5`, whose distinct human layer names
+`linyao`, and whose formal form requires nonempty `reviewed_at`, `VERIFIED` receipt status,
+and a review receipt exact-joined to the signed evaluation. It SHALL contain exactly the
+ordered67 rows and no `PENDING_RESIDUAL`: each row binds the existing decision hash,
+Candidate/Golden states, literal/digest/none value presentation, risk/conflict status and
+hashed Evidence changes. Every non-null Candidate Evidence ID SHALL be an exact stored
+JoinReceipt ID for the same field and every stored JoinReceipt SHALL occur exactly once.
+Golden-only digests SHALL have no preview. The current 51/16 metadata-incomplete unsigned
+successor SHALL fail before repository access. The wrapper SHALL set `serving_effect=NONE`.
 
 Evidence preview SHALL accept only the four immutable path IDs. The server SHALL require
 the field to exist in the ordered private dossier and select the unique exact Evidence/

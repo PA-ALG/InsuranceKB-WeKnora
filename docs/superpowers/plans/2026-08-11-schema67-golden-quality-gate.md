@@ -21,8 +21,13 @@
 - The previous official exact8 run terminated with a typed failure and produced no
   Candidate. It remains immutable history and MUST NOT be rerun or admitted under its old
   identity.
-- No canonical 67-field Golden artifact, Golden evaluation receipt, Schema Wiki Draft,
-  named-human release review or activation is produced by this plan-only change.
+- The exact latest 71-row source has completed human Review. Its model annotator is retained
+  as provenance, not treated as proof of zero human review. A mechanical Schema67 successor
+  resolves 51 direct fields and retains 16 real residuals. Reviewer identity/time and the
+  cryptographic whole-batch approval receipt remain absent and MUST NOT be invented.
+- No evaluator-authoritative canonical Golden, evaluation receipt, Schema Wiki Draft,
+  named-human release review or activation is produced until those residual and authority
+  gaps close.
 - The existing 46 generic Material Wiki pages are not Golden, Candidate or Schema facts.
 
 ## 2. Exact scope and owner paths
@@ -202,8 +207,12 @@ metrics and remains explicitly visible; it cannot become page 1/full-page output
 
 ## 6. Named-human Golden workflow and custody
 
-1. Two named humans independently annotate all 67 fields against the exact committed
-   three-document revisions.
+The latest reviewed source is the starting authority; the workflow does not restart all 67
+fields. It replays the 51 direct mappings, reviews only the 16 residual conflict/merge/
+missing targets, and supplements only evidence-supported reviewer metadata.
+
+1. Two deployment-verifiable named humans approve the exact completed Schema67 successor
+   against the exact committed three-document revisions.
 2. They cannot see or copy the evaluated Candidate while producing their first decisions.
 3. A disagreement creates a conflict record; a named adjudicator resolves it from source
    custody. Unresolved conflicts block Golden freeze.
@@ -249,14 +258,24 @@ ordered67 decision hashes; both private/public objects bind the same Candidate, 
 and metric identities. The same receipt is already nested in `SchemaWikiReviewBundleV1`.
 
 The existing `schema-wiki-preparation-custody.v1` JSONB manifest embeds the full release,
-the exact review bundle and the full evaluation bundle. Its storage `ManifestDigest`
+the exact review bundle, the full evaluation bundle and one closed
+`Schema67GoldenReviewSuccessorMetadataV1`. Its storage `ManifestDigest`
 hashes canonical custody bytes. The release manifest digest, review-bundle hash and
 evaluation-bundle hash stay separate; none aliases another authority. Existing immutable
 75 member snapshots and `PreparationDigest` close the row. JSONB read accepts equivalent
 database key order/whitespace only after strict closed decode, canonical re-marshal and
 full nested replay. It never treats raw JSONB text as authority.
 
-Only the signed PASS bundle reaches `CreateSchemaDraft`. `FAIL`, `FIXTURE_ONLY`,
+Only a signed PASS bundle with a formal review successor reaches `CreateSchemaDraft`.
+The successor is exact67 with residual count zero, separates annotation model
+`claude-fable-5` from named reviewer `linyao`, requires a known `reviewed_at` and a
+`VERIFIED` whole-batch receipt joined to the evaluation, and binds every Candidate
+Evidence ID to the stored Candidate-Evidence authority. The current source Review is
+`COMPLETED` by `linyao`; independently, its Schema67 mapping is
+`PARTIAL_51_CLOSED_16_RESIDUAL` and its Golden admission is
+`BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. Its `reviewed_at=null` and whole-batch receipt
+is `READY_TO_SIGN/UNVERIFIED`; therefore it
+remains offline and creates zero Draft rows. `FAIL`, `FIXTURE_ONLY`,
 `INCONCLUSIVE`, missing and stale outcomes produce safe offline receipts/aggregates only;
 they never enter a preparation. Creating the Draft still does not review or publish it.
 
@@ -281,10 +300,12 @@ redacted DTO, not Viewer access. A later Active-release public summary route is 
 this 596-1 slice.
 
 The summary wraps the exact frozen `Schema67GoldenPublicAggregateV1`; the private response
-wraps the exact frozen ordered-67 `Schema67GoldenPrivateDossierV1`. Neither wrapper invents
-field values, quotes, locators or Evidence targets. Any richer reviewer display is a
-separate server projection from the validated release and Candidate-Evidence custody in
-the same preparation. Evidence preview selects that exact stored Evidence target and
+is `SchemaWikiGoldenQualityDossierV2`, retaining the exact private dossier and adding one
+closed review-successor projection. Its annotation and human layers are distinct; ordered67
+rows exact-join decision/state/value presentation, risk/conflict status and Evidence
+changes. Candidate Evidence IDs must be the exact stored JoinReceipt IDs accepted by the
+existing preview route; a Golden-only digest has no preview. Evidence preview selects that
+exact stored Candidate Evidence target and
 returns a preparation-bound authority that reuses the existing immutable revision source
 plus third-ring opaque token; the existing token-only bytes route performs the fetch. No
 response contains raw PDF bytes, paths, secrets or key material. There is no caller
@@ -305,7 +326,11 @@ These routes are display-only. They neither expose nor call named-human approval
 ### Task 2: Produce independent human Golden
 
 - [ ] Freeze exact source receipts without provider calls.
-- [ ] Complete two independent named-human passes and adjudicate every disagreement.
+- [x] Preserve the already-reviewed latest71 source and mechanically resolve 51 direct
+  Schema67 mappings.
+- [ ] Resolve the exact 16 residuals; do not re-annotate the other 51 fields.
+- [ ] Backfill only evidence-supported review metadata and obtain two cryptographic
+  named-human approvals.
 - [ ] Replay quotes/pages/locators and freeze the whole-batch Golden identity.
 
 ### Task 3: Implement deterministic evaluator and quality receipt

@@ -605,6 +605,7 @@ type Schema67GoldenQualityGateReceiptV1 struct {
 	PrivateDossierSHA256             string   `json:"private_dossier_sha256"`
 	PublicAggregateSHA256            string   `json:"public_aggregate_sha256"`
 	GoldenApprovalSHA256s            []string `json:"golden_approval_sha256s"`
+	WholeBatchApprovalReceiptSHA256  string   `json:"whole_batch_approval_receipt_sha256"`
 	SignerKeyID                      string   `json:"signer_key_id"`
 	Signature                        string   `json:"signature"`
 	ReceiptSHA256                    string   `json:"receipt_sha256"`
@@ -689,14 +690,72 @@ type SchemaWikiGoldenQualitySummaryV1 struct {
 	ServingEffect            string                          `json:"serving_effect"`
 }
 
-type SchemaWikiGoldenQualityDossierV1 struct {
-	Version                  string                         `json:"version"`
-	PreparationID            string                         `json:"preparation_id"`
-	EvaluationID             string                         `json:"evaluation_id"`
-	QualityGateReceiptSHA256 string                         `json:"quality_gate_receipt_sha256"`
-	PrivateDossier           Schema67GoldenPrivateDossierV1 `json:"private_dossier"`
-	EvaluationBundleSHA256   string                         `json:"evaluation_bundle_sha256"`
-	ServingEffect            string                         `json:"serving_effect"`
+type Schema67GoldenReviewValueV1 struct {
+	Mode    string  `json:"mode"`
+	Literal *string `json:"literal"`
+	SHA256  *string `json:"sha256"`
+}
+
+type Schema67GoldenEvidenceChangeV1 struct {
+	ChangeKind           string  `json:"change_kind"`
+	CandidateEvidenceID  *string `json:"candidate_evidence_id"`
+	GoldenEvidenceSHA256 *string `json:"golden_evidence_sha256"`
+	ChangeSHA256         string  `json:"change_sha256"`
+}
+
+type Schema67GoldenReviewFieldMetadataV1 struct {
+	FieldID             string                           `json:"field_id"`
+	DecisionSHA256      string                           `json:"decision_sha256"`
+	CandidateState      string                           `json:"candidate_state"`
+	GoldenState         string                           `json:"golden_state"`
+	CandidateValue      Schema67GoldenReviewValueV1      `json:"candidate_value"`
+	GoldenValue         Schema67GoldenReviewValueV1      `json:"golden_value"`
+	ValueComparison     string                           `json:"value_comparison"`
+	EvidenceChanges     []Schema67GoldenEvidenceChangeV1 `json:"evidence_changes"`
+	RiskStatus          string                           `json:"risk_status"`
+	ConflictStatus      string                           `json:"conflict_status"`
+	ReviewStatus        string                           `json:"review_status"`
+	ReasonCodes         []string                         `json:"reason_codes"`
+	FieldMetadataSHA256 string                           `json:"field_metadata_sha256"`
+}
+
+type Schema67GoldenAnnotationLayerV1 struct {
+	Contract                string `json:"contract"`
+	AnnotatorModelID        string `json:"annotator_model_id"`
+	AnnotationReceiptSHA256 string `json:"annotation_receipt_sha256"`
+}
+
+type Schema67GoldenHumanReviewLayerV1 struct {
+	Contract            string `json:"contract"`
+	ReviewedBy          string `json:"reviewed_by"`
+	ReviewedAt          string `json:"reviewed_at"`
+	ReceiptStatus       string `json:"receipt_status"`
+	ReviewReceiptSHA256 string `json:"review_receipt_sha256"`
+}
+
+type Schema67GoldenReviewSuccessorMetadataV1 struct {
+	Contract                 string                                `json:"contract"`
+	AuthorityLevel           string                                `json:"authority_level"`
+	CandidateSHA256          string                                `json:"candidate_sha256"`
+	GoldenSetSHA256          string                                `json:"golden_set_sha256"`
+	QualityGateReceiptSHA256 string                                `json:"quality_gate_receipt_sha256"`
+	EvaluationBundleSHA256   string                                `json:"evaluation_bundle_sha256"`
+	GoldenVersion            string                                `json:"golden_version"`
+	AnnotationLayer          Schema67GoldenAnnotationLayerV1       `json:"annotation_layer"`
+	HumanReviewLayer         Schema67GoldenHumanReviewLayerV1      `json:"human_review_layer"`
+	OrderedFields            []Schema67GoldenReviewFieldMetadataV1 `json:"ordered_fields"`
+	MetadataSHA256           string                                `json:"metadata_sha256"`
+}
+
+type SchemaWikiGoldenQualityDossierV2 struct {
+	Version                  string                                  `json:"version"`
+	PreparationID            string                                  `json:"preparation_id"`
+	EvaluationID             string                                  `json:"evaluation_id"`
+	QualityGateReceiptSHA256 string                                  `json:"quality_gate_receipt_sha256"`
+	PrivateDossier           Schema67GoldenPrivateDossierV1          `json:"private_dossier"`
+	ReviewSuccessor          Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
+	EvaluationBundleSHA256   string                                  `json:"evaluation_bundle_sha256"`
+	ServingEffect            string                                  `json:"serving_effect"`
 }
 
 // SchemaWikiGoldenEvidencePreviewAuthorityV1 is the preparation-pinned,
@@ -1301,6 +1360,7 @@ func ValidateSchema67GoldenQualityGateReceiptV1(receipt Schema67GoldenQualityGat
 		receipt.MetricPolicySHA256,
 		receipt.PrivateDossierSHA256,
 		receipt.PublicAggregateSHA256,
+		receipt.WholeBatchApprovalReceiptSHA256,
 		receipt.ReceiptSHA256,
 	}
 	digests = append(digests, receipt.OrderedFieldDecisionSHA256s...)
@@ -1583,6 +1643,200 @@ func ParseSchema67GoldenEvaluationReviewBundleV1(
 		return bundle, ErrSchemaWikiContractInvalid
 	}
 	return bundle, nil
+}
+
+func validateSchema67GoldenReviewValueV1(value Schema67GoldenReviewValueV1) error {
+	switch value.Mode {
+	case "NONE":
+		if value.Literal != nil || value.SHA256 != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	case "SHA256_ONLY":
+		if value.Literal != nil || value.SHA256 == nil || !validSchemaWikiSHA256(*value.SHA256) {
+			return ErrSchemaWikiContractInvalid
+		}
+	case "LITERAL":
+		if value.Literal == nil || value.SHA256 == nil || strings.TrimSpace(*value.Literal) == "" {
+			return ErrSchemaWikiContractInvalid
+		}
+		expected, _, err := schemaWikiSHA256(
+			"schema67-golden-review-value.v1", map[string]string{"literal": *value.Literal},
+		)
+		if err != nil || expected != *value.SHA256 {
+			return ErrSchemaWikiContractInvalid
+		}
+	default:
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func validateSchema67GoldenEvidenceChangeV1(change Schema67GoldenEvidenceChangeV1) error {
+	validShape := false
+	switch change.ChangeKind {
+	case "ADDED":
+		validShape = change.CandidateEvidenceID != nil && change.GoldenEvidenceSHA256 == nil
+	case "REMOVED":
+		validShape = change.CandidateEvidenceID == nil && change.GoldenEvidenceSHA256 != nil
+	case "REPLACED", "UNCHANGED":
+		validShape = change.CandidateEvidenceID != nil && change.GoldenEvidenceSHA256 != nil
+	}
+	if !validShape || (change.CandidateEvidenceID != nil &&
+		!validSchemaWikiSHA256(*change.CandidateEvidenceID)) ||
+		(change.GoldenEvidenceSHA256 != nil && !validSchemaWikiSHA256(*change.GoldenEvidenceSHA256)) ||
+		requireSchemaWikiHash(
+			"schema67-golden-evidence-change.v1", change, "change_sha256", change.ChangeSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func validateSchema67GoldenReviewFieldMetadataV1(
+	field Schema67GoldenReviewFieldMetadataV1,
+) error {
+	if strings.TrimSpace(field.FieldID) == "" || !validSchemaWikiSHA256(field.DecisionSHA256) ||
+		!validSchema67GoldenState(field.CandidateState) || !validSchema67GoldenState(field.GoldenState) ||
+		validateSchema67GoldenReviewValueV1(field.CandidateValue) != nil ||
+		validateSchema67GoldenReviewValueV1(field.GoldenValue) != nil ||
+		(field.ValueComparison != "MATCH" && field.ValueComparison != "DIFF" &&
+			field.ValueComparison != "NOT_COMPARABLE") ||
+		field.RiskStatus != "PASS" || field.ConflictStatus != "RESOLVED" ||
+		field.ReviewStatus != "REVIEWED" || len(field.ReasonCodes) != 0 ||
+		requireSchemaWikiHash(
+			"schema67-golden-review-field-metadata.v1", field,
+			"field_metadata_sha256", field.FieldMetadataSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	if (field.CandidateState == "unknown") != (field.CandidateValue.Mode == "NONE") ||
+		(field.GoldenState == "unknown") != (field.GoldenValue.Mode == "NONE") {
+		return ErrSchemaWikiContractInvalid
+	}
+	for _, change := range field.EvidenceChanges {
+		if validateSchema67GoldenEvidenceChangeV1(change) != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	return nil
+}
+
+func validateSchema67GoldenReviewSuccessorMetadataShape(
+	metadata Schema67GoldenReviewSuccessorMetadataV1,
+) error {
+	if metadata.Contract != "schema67-golden-review-successor-metadata.v1" ||
+		metadata.AuthorityLevel != "REAL_NAMED_HUMAN" ||
+		!validSchemaWikiSHA256(metadata.CandidateSHA256) ||
+		!validSchemaWikiSHA256(metadata.GoldenSetSHA256) ||
+		!validSchemaWikiSHA256(metadata.QualityGateReceiptSHA256) ||
+		!validSchemaWikiSHA256(metadata.EvaluationBundleSHA256) ||
+		strings.TrimSpace(metadata.GoldenVersion) == "" ||
+		metadata.AnnotationLayer.Contract != "schema67-annotation-layer.v1" ||
+		metadata.AnnotationLayer.AnnotatorModelID != "claude-fable-5" ||
+		!validSchemaWikiSHA256(metadata.AnnotationLayer.AnnotationReceiptSHA256) ||
+		metadata.HumanReviewLayer.Contract != "schema67-human-review-layer.v1" ||
+		metadata.HumanReviewLayer.ReviewedBy != "linyao" ||
+		strings.TrimSpace(metadata.HumanReviewLayer.ReviewedAt) == "" ||
+		metadata.HumanReviewLayer.ReceiptStatus != "VERIFIED" ||
+		!validSchemaWikiSHA256(metadata.HumanReviewLayer.ReviewReceiptSHA256) ||
+		len(metadata.OrderedFields) != len(schema67GoldenOrderedFieldIDs) ||
+		requireSchemaWikiHash(
+			metadata.Contract, metadata, "metadata_sha256", metadata.MetadataSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	for index, field := range metadata.OrderedFields {
+		if field.FieldID != schema67GoldenOrderedFieldIDs[index] ||
+			validateSchema67GoldenReviewFieldMetadataV1(field) != nil {
+			return ErrSchemaWikiContractInvalid
+		}
+	}
+	return nil
+}
+
+func ValidateSchema67GoldenReviewSuccessorMetadataV1(
+	metadata Schema67GoldenReviewSuccessorMetadataV1,
+	evaluation Schema67GoldenEvaluationReviewBundleV1,
+	evidenceAuthority Schema67CandidateEvidenceAuthorityV1,
+) error {
+	if validateSchema67GoldenReviewSuccessorMetadataShape(metadata) != nil ||
+		ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation) != nil ||
+		metadata.CandidateSHA256 != evaluation.QualityGateReceipt.CandidateSHA256 ||
+		metadata.CandidateSHA256 != evidenceAuthority.CandidateSHA256 ||
+		metadata.GoldenSetSHA256 != evaluation.QualityGateReceipt.GoldenSetSHA256 ||
+		metadata.QualityGateReceiptSHA256 != evaluation.QualityGateReceipt.ReceiptSHA256 ||
+		metadata.EvaluationBundleSHA256 != evaluation.EvaluationBundleSHA256 ||
+		metadata.GoldenVersion != evaluation.QualityGateReceipt.GoldenVersion ||
+		metadata.HumanReviewLayer.ReviewReceiptSHA256 !=
+			evaluation.QualityGateReceipt.WholeBatchApprovalReceiptSHA256 {
+		return ErrSchemaWikiContractInvalid
+	}
+	decisionByField := make(map[string]Schema67GoldenFieldDecisionV1, 67)
+	for _, decision := range evaluation.PrivateDossier.FieldDecisions {
+		decisionByField[decision.FieldID] = decision
+	}
+	receiptByID := make(map[string]Schema67CitationAuthorityJoinReceiptV1, len(evidenceAuthority.JoinReceipts))
+	for _, receipt := range evidenceAuthority.JoinReceipts {
+		receiptByID[receipt.ReceiptSHA256] = receipt
+	}
+	seenEvidence := make(map[string]struct{}, len(receiptByID))
+	for _, field := range metadata.OrderedFields {
+		decision, exists := decisionByField[field.FieldID]
+		if !exists || field.DecisionSHA256 != decision.DecisionSHA256 ||
+			field.CandidateState != decision.CandidateState || field.GoldenState != decision.GoldenState ||
+			len(field.EvidenceChanges) != decision.EvidenceFragments ||
+			!decision.HighRiskPass || !decision.ConflictResolved {
+			return ErrSchemaWikiContractInvalid
+		}
+		for _, change := range field.EvidenceChanges {
+			if change.CandidateEvidenceID == nil {
+				continue
+			}
+			receipt, exists := receiptByID[*change.CandidateEvidenceID]
+			if !exists || receipt.FieldID != field.FieldID {
+				return ErrSchemaWikiContractInvalid
+			}
+			if _, duplicate := seenEvidence[*change.CandidateEvidenceID]; duplicate {
+				return ErrSchemaWikiContractInvalid
+			}
+			seenEvidence[*change.CandidateEvidenceID] = struct{}{}
+		}
+	}
+	if len(seenEvidence) != len(receiptByID) {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+func ParseSchemaWikiGoldenQualityDossierV2(
+	raw []byte,
+) (SchemaWikiGoldenQualityDossierV2, error) {
+	var dossier SchemaWikiGoldenQualityDossierV2
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&dossier); err != nil {
+		return dossier, ErrSchemaWikiContractInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return dossier, ErrSchemaWikiContractInvalid
+	}
+	canonical, err := schemaWikiCanonicalJSON(dossier)
+	canonicalWithNewline := append(append([]byte(nil), canonical...), '\n')
+	if err != nil || (!bytes.Equal(raw, canonical) && !bytes.Equal(raw, canonicalWithNewline)) ||
+		dossier.Version != "schema-wiki-golden-quality-dossier.v2" ||
+		strings.TrimSpace(dossier.PreparationID) == "" ||
+		dossier.EvaluationID != dossier.QualityGateReceiptSHA256 ||
+		dossier.EvaluationBundleSHA256 != dossier.ReviewSuccessor.EvaluationBundleSHA256 ||
+		dossier.QualityGateReceiptSHA256 != dossier.ReviewSuccessor.QualityGateReceiptSHA256 ||
+		dossier.PrivateDossier.CandidateSHA256 != dossier.ReviewSuccessor.CandidateSHA256 ||
+		dossier.PrivateDossier.GoldenSetSHA256 != dossier.ReviewSuccessor.GoldenSetSHA256 ||
+		dossier.ServingEffect != "NONE" ||
+		ValidateSchema67GoldenPrivateDossierV1(dossier.PrivateDossier) != nil ||
+		validateSchema67GoldenReviewSuccessorMetadataShape(dossier.ReviewSuccessor) != nil {
+		return dossier, ErrSchemaWikiContractInvalid
+	}
+	return dossier, nil
 }
 
 func ComputeSchemaWikiGoldenEvidencePreviewAuthoritySHA256(

@@ -444,6 +444,7 @@ def _review_bundle(release: KnowledgeWikiReleaseV1) -> SchemaWikiReviewBundleV1:
             _sha("golden-approval-a"),
             _sha("golden-approval-b"),
         ),
+        "whole_batch_approval_receipt_sha256": _sha("whole-batch-approval"),
         "signer_key_id": "test-golden-evaluator",
         "signature": "test-only-signature",
     }

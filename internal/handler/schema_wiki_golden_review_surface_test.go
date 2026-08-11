@@ -53,8 +53,8 @@ func TestSchemaWikiPreparationGoldenSummaryIsClosedAndPublic(t *testing.T) {
 
 func TestSchemaWikiPreparationGoldenPrivateDossierUsesPreparationIdentityOnly(t *testing.T) {
 	t.Parallel()
-	spy := &schemaWikiHTTPServiceSpy{goldenPrivate: &types.SchemaWikiGoldenQualityDossierV1{
-		Version: "schema-wiki-golden-quality-dossier.v1",
+	spy := &schemaWikiHTTPServiceSpy{goldenPrivate: &types.SchemaWikiGoldenQualityDossierV2{
+		Version: "schema-wiki-golden-quality-dossier.v2",
 		PrivateDossier: types.Schema67GoldenPrivateDossierV1{
 			Contract: "schema67-golden-private-dossier.v1", Status: "PASS",
 		},
@@ -75,9 +75,28 @@ func TestSchemaWikiPreparationGoldenPrivateDossierUsesPreparationIdentityOnly(t 
 	h.ReadPreparationGoldenQualityDossier(c)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "schema-wiki-golden-quality-dossier.v1")
+	require.Contains(t, recorder.Body.String(), "schema-wiki-golden-quality-dossier.v2")
+	var response struct {
+		Success bool                   `json:"success"`
+		Data    map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.ElementsMatch(t, []string{
+		"version", "preparation_id", "evaluation_id",
+		"quality_gate_receipt_sha256", "private_dossier", "review_successor",
+		"evaluation_bundle_sha256", "serving_effect",
+	}, func() []string {
+		keys := make([]string, 0, len(response.Data))
+		for key := range response.Data {
+			keys = append(keys, key)
+		}
+		return keys
+	}())
 	require.NotContains(t, recorder.Body.String(), "release_id")
 	require.NotContains(t, recorder.Body.String(), "active")
+	for _, forbidden := range []string{"approve", "publish", "activate", "create_draft"} {
+		require.NotContains(t, recorder.Body.String(), forbidden)
+	}
 	require.Equal(t, 1, spy.goldenPrivateCalls)
 }
 

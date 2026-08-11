@@ -470,6 +470,7 @@ class Schema67GoldenQualityGateReceiptV1(_FrozenModel):
     private_dossier_sha256: Sha256Hex
     public_aggregate_sha256: Sha256Hex
     golden_approval_sha256s: tuple[Sha256Hex, Sha256Hex]
+    whole_batch_approval_receipt_sha256: Sha256Hex
     signer_key_id: Identifier
     signature: NonBlankText
     receipt_sha256: Sha256Hex

@@ -1,6 +1,6 @@
 # 122 · Validation Report
 
-Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REAL-GOLDEN-NOT-RUN`
+Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REVIEWED-SOURCE-MIGRATION-IN-PROGRESS`
 
 Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
 
@@ -12,8 +12,18 @@ Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
 - Current provider-zero `45 present / 1 absent_explicitly / 21 unknown`: fixture-only
   contract evidence, not a real quality measurement.
 - New provider/model calls: `0`.
-- Real named-human Golden creation, official scoring, DB, WeKnora, migration, Draft,
-  review, activation and live actions: `NOT RUN`.
+- Exact latest71 human Review: `COMPLETED`, with user-attested reviewer identity `linyao`;
+  annotator provenance `claude-fable-5` and confirming attestor `workspace-owner-houjing`
+  remain separate layers. Original review time and cryptographic approval receipt are not
+  present in the existing bytes and are not invented.
+- Schema67 successor migration: `51 REVIEWED / 16 PENDING_RESIDUAL`; this corrects the
+  superseded all-PENDING intake description without claiming a final approved Golden.
+- Frozen status split: `source_review_status=COMPLETED`,
+  `schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`, and
+  `golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. The attestation
+  creation time is not the unknown original `reviewed_at` and carries no signature.
+- Official scoring, DB, WeKnora, Draft, release review, activation and live actions:
+  `NOT RUN`.
 - Synthetic test-only Golden inputs exercise deterministic metrics and PASS/FAIL plumbing;
   they are not an official Golden or semantic acceptance result.
 
@@ -43,6 +53,13 @@ implements those backend routes and reuses the immutable-revision third signing 
 a distinct preparation-Evidence token domain. It does not implement the frontend surface or
 execute any live request.
 
+The same private route now returns the closed Dossier V2 wrapper with an exact67
+review-successor projection. Formal routing requires residual count zero, named reviewer
+`linyao`, known `reviewed_at`, `VERIFIED` whole-batch receipt and exact Candidate Evidence
+IDs from stored JoinReceipts. The current 51/16 mapping remains admission-blocked and
+receipt-unverified, so it is explicitly unavailable to Draft/review routes and causes
+repository writes `0`; its source Review nevertheless remains completed.
+
 ## Validation gates
 
 - Focused Python evaluator/release/contracts: PASS.
@@ -68,6 +85,8 @@ execute any live request.
 - Review-surface frontend tests, database writes and live HTTP calls: `NOT RUN`.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
-or authorize a model run. Task 2 still requires a separately frozen real named-human Golden,
-and Task 5 still requires a separately authorized new execution identity and one-shot
+or authorize a model run. Task 2 does not restart human review: it must close the exact 16
+Schema67 residuals, backfill only evidence-supported missing review metadata, and obtain the
+required cryptographic approvals before the successor becomes an evaluator-authoritative
+Golden. Task 5 still requires a separately authorized new execution identity and one-shot
 evaluation. Until both complete, no Schema Wiki Draft may be created from this gate.

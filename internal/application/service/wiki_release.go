@@ -238,14 +238,15 @@ func CanonicalSchema67GoldenQualityGateReceiptV1(
 		"candidate_sha256":                    receipt.CandidateSHA256,
 		"candidate_evidence_authority_sha256": receipt.CandidateEvidenceAuthoritySHA256,
 		"golden_set_sha256":                   receipt.GoldenSetSHA256, "golden_version": receipt.GoldenVersion,
-		"evaluator_identity_sha256":      receipt.EvaluatorIdentitySHA256,
-		"metric_policy_sha256":           receipt.MetricPolicySHA256,
-		"ordered_field_decision_sha256s": receipt.OrderedFieldDecisionSHA256s,
-		"metric_receipt_sha256s":         receipt.MetricReceiptSHA256s,
-		"private_dossier_sha256":         receipt.PrivateDossierSHA256,
-		"public_aggregate_sha256":        receipt.PublicAggregateSHA256,
-		"golden_approval_sha256s":        receipt.GoldenApprovalSHA256s,
-		"signer_key_id":                  receipt.SignerKeyID,
+		"evaluator_identity_sha256":           receipt.EvaluatorIdentitySHA256,
+		"metric_policy_sha256":                receipt.MetricPolicySHA256,
+		"ordered_field_decision_sha256s":      receipt.OrderedFieldDecisionSHA256s,
+		"metric_receipt_sha256s":              receipt.MetricReceiptSHA256s,
+		"private_dossier_sha256":              receipt.PrivateDossierSHA256,
+		"public_aggregate_sha256":             receipt.PublicAggregateSHA256,
+		"golden_approval_sha256s":             receipt.GoldenApprovalSHA256s,
+		"whole_batch_approval_receipt_sha256": receipt.WholeBatchApprovalReceiptSHA256,
+		"signer_key_id":                       receipt.SignerKeyID,
 	}
 	if includeSignature {
 		fields["signature"] = receipt.Signature

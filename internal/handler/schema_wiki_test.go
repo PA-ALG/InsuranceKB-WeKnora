@@ -50,7 +50,7 @@ type schemaWikiHTTPServiceSpy struct {
 	goldenPrivateCalls    int
 	goldenPreviewCalls    int
 	goldenSummary         *types.SchemaWikiGoldenQualitySummaryV1
-	goldenPrivate         *types.SchemaWikiGoldenQualityDossierV1
+	goldenPrivate         *types.SchemaWikiGoldenQualityDossierV2
 	goldenPreview         *types.SchemaWikiGoldenEvidencePreviewAuthorityV1
 }
 
@@ -71,7 +71,7 @@ func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualityDossier(
 	types.WikiReleaseScope,
 	string,
 	string,
-) (*types.SchemaWikiGoldenQualityDossierV1, error) {
+) (*types.SchemaWikiGoldenQualityDossierV2, error) {
 	s.goldenPrivateCalls++
 	return s.goldenPrivate, nil
 }
@@ -122,6 +122,7 @@ func (s *schemaWikiHTTPServiceSpy) CreateSchemaDraft(
 	types.Schema67CandidateEvidenceAuthorityV1,
 	types.SchemaWikiReviewBundleV1,
 	types.Schema67GoldenEvaluationReviewBundleV1,
+	types.Schema67GoldenReviewSuccessorMetadataV1,
 ) (*types.WikiReleasePreparation, error) {
 	s.createCalls++
 	return &types.WikiReleasePreparation{ID: "preparation-596-1"}, nil

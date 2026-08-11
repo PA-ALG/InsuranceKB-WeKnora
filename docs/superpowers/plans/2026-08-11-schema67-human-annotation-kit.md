@@ -1,127 +1,89 @@
-# Schema67 Human Annotation Kit Implementation Plan
+# Schema67 Reviewed Golden Successor Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Fact correction, 2026-08-11: the exact latest 71-row source has already completed
+> human Review. Its `annotator_model` provenance does not mean human review was absent.
+> The earlier all-PENDING annotation kit is superseded as the current factual status.
 
-**Goal:** Build one non-authoritative, deterministic human annotation and adjudication kit for the Ping An eShengBao medical-insurance Schema67 Golden workflow without producing an approved Golden or calling a model.
+## Goal and boundary
 
-**Architecture:** A narrow Python module consumes only the exact old S0-Q 60-row human-approved migration input and the exact 71-row model draft, projects both through explicit source-to-Schema67 mapping tables, and emits one closed canonical JSON kit. The kit contains exact current source-revision preflight identities, 67 ordered PENDING annotation rows, page 12/27 work items, reviewer placeholders and a PENDING whole-batch receipt template. Validation rebuilds the expected kit from exact input bytes and requires exact equality, so outer self-rehashing cannot turn proposals into Golden authority.
+Build one deterministic, provider-zero 596-1 Schema67 successor from existing reviewed
+data. This is not a request to re-annotate all 67 fields. It preserves the annotation
+model provenance and separately records the human-review fact and user-attested reviewer
+identity `linyao` while refusing to invent the missing review timestamp, approval receipt,
+key or signature. `workspace-owner-houjing` is only the fact attestor, never the reviewer.
 
-**Tech Stack:** Python 3.12, Pydantic v2, canonical JSON/SHA-256, pytest, Ruff, strict mypy.
+The successor is not yet an evaluator-authoritative Golden: its real Schema67 mapping
+residuals and whole-batch cryptographic approval remain fail-closed. Generic Material Wiki
+content is never an answer source.
 
----
+The frozen statuses are three independent authorities and MUST NOT be collapsed:
 
-## Frozen scope
+- `source_review_status=COMPLETED`: the latest 71-row source was reviewed by `linyao`;
+  `annotator_model_id=claude-fable-5` remains separate provenance and `reviewed_at=null`.
+- `schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`: only the mechanical 71→67
+  mapping has 16 unresolved targets; the 51 closed targets are not re-reviewed.
+- `golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`: formal Golden
+  admission requires residual count zero and a verified whole-batch receipt.
 
-**Create exactly:**
+## Exact input authority
 
-- `docs/superpowers/plans/2026-08-11-schema67-human-annotation-kit.md`
-- `harness/src/insurance_harness/goldenset/schema67_human_annotation_kit_596_1.py`
-- `harness/tests/test_schema67_human_annotation_kit_596_1.py`
-- `dataset/goldenset-drafts/schema67-human-annotation-kit-596-1/kit.json`
+- Old S0-Q migration input: exact 60-row `596.jsonl`, SHA-256
+  `562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb`, with the
+  existing approval artifact SHA-256
+  `484fdb78bdc73109bccd4d771e41089574b26f28c1992b67b2114524a515c868`.
+  It remains a migration input only.
+- Latest reviewed source: exact 71-row `annotations.jsonl`, SHA-256
+  `25c62051d04c8bd56f3770e77d071ae18945daee5dce6b8fb584937555260be4`;
+  `annotator_model=claude-fable-5` is retained. The existing deterministic verification
+  report SHA-256 is
+  `4dde5c35e311af3ce4a0c01e2309ff65e872de77ee4cff0762dc951c42c00e73`.
+- Review completion and `reviewed_by=linyao` are user-authority facts from 2026-08-11.
+  No repository artifact supplies the original `reviewed_at`, signature material or a
+  whole-batch approval receipt, so those fields remain explicitly null/unverified. The
+  confirmation by `workspace-owner-houjing` is recorded only as an attestation source.
+- Target topology is the code-owned `medical-schema67.v1` exact ordered67.
 
-The already-frozen OpenSpec 122 is a dependency, not an owner path. This change does not
-modify CandidateV2, evaluator, release compiler, provider runner, DB/migrations, WeKnora,
-frontend or serving authority.
+## Deterministic migration
 
-## Authority inputs
+Both source mappings remain explicit and use only `reuse/rename/split/merge/new/N-A`.
+The latest reviewed source mechanically resolves 51 one-to-one `reuse/rename` targets.
+Only the following 16 targets remain `PENDING_RESIDUAL`:
 
-- Old S0-Q human-approved migration input: exact 60 rows, `596.jsonl` SHA-256
-  `562c37c7cf262e2e78f0b3ca4b7de4b0dab2f407d3cd7318a8a69b5dca33d8fb`. Its scope
-  remains `S0-Q only`; every reuse is `PROPOSED_MIGRATION/PENDING`.
-- Model draft: exact 71 rows, `annotations.jsonl` SHA-256
-  `25c62051d04c8bd56f3770e77d071ae18945daee5dce6b8fb584937555260be4`. Every row
-  remains `MODEL_SUGGESTION/PENDING`, including 23 high-risk, 11 mandatory-review and
-  8 tri-state-conflict suggestions.
-- Schema topology: code-owned `medical-schema67.v1` exact ordered67.
-- Current revision preflight: exact terms/brochure/rate knowledge IDs, parse attempts,
-  file hashes, chunk-manifest hashes/counts and page counts. These are annotation inputs;
-  Evidence and bbox remain pending until attempt-bound sealed capture exists.
+- tri-state conflicts: `product_type`, `premium_grace_period`,
+  `guaranteed_renewal_status`, `premium_adjustment_rules`,
+  `eligible_service_packages`;
+- multi-source merge: `eligible_occupation_classes`;
+- missing in the latest reviewed source: `marketing_tagline`, `product_overview`,
+  `health_declaration_requirements`, `direct_billing_and_advance_payment_rules`,
+  `tax_qualified_status`, `tax_benefit_rules`, `objection_handling_scripts`,
+  `product_faq`, `four_step_sales_script`, `sales_pitch_script`.
 
-## Task 1: RED the non-authoritative kit contract
+High-risk or mandatory-review flags alone do not turn a reviewed row back into PENDING.
+Each resolved row is an exact projection of the latest reviewed record; pending rows have
+no state, value or Evidence. Bbox remains `PENDING_CAPTURE`, and rate pages 12/27 remain
+out of range.
 
-**Files:**
+## TDD and freeze
 
-- Create: `harness/tests/test_schema67_human_annotation_kit_596_1.py`
-
-- [ ] Import the wished-for builder, loader, validator and safe-summary API.
-- [ ] Assert exact old60/draft71 hashes and source counts.
-- [ ] Assert both explicit mapping tables cover every source row and every ordered67
-  target using only `reuse/rename/split/merge/new/N-A`.
-- [ ] Assert all old60 outputs are `PROPOSED_MIGRATION/PENDING` and all draft71 outputs
-  are `MODEL_SUGGESTION/PENDING`.
-- [ ] Assert exactly 67 ordered annotations, every state/value/Evidence/reviewer decision
-  is pending/empty and every bbox is `PENDING_CAPTURE`.
-- [ ] Assert page12/page27 terms/brochure work stays pending while rate page12/page27 is
-  `PROHIBITED_PAGE_OUT_OF_RANGE` before any Evidence use.
-- [ ] Assert reviewer slots contain role/ID placeholders only and whole-batch receipt is
-  PENDING with no approval/signature/hash.
-- [ ] Assert missing/extra/reordered fields, unknown JSON, noncanonical JSON, outer
-  self-rehash, approved status, copied Material Wiki value and source/hash drift fail.
-- [ ] Assert safe summary exposes counts only and cannot emit Golden.
-
-Run:
-
-```bash
-cd harness
-PYTHONPATH="$PWD/src" /path/to/shared/.venv/bin/pytest \
-  tests/test_schema67_human_annotation_kit_596_1.py -q
-```
-
-Expected RED: import failure because the production module does not exist.
-
-## Task 2: GREEN the closed DTO and explicit mapping
-
-**Files:**
-
-- Create: `harness/src/insurance_harness/goldenset/schema67_human_annotation_kit_596_1.py`
-- Test: `harness/tests/test_schema67_human_annotation_kit_596_1.py`
-
-- [ ] Define frozen, `extra="forbid"`, revalidated Pydantic DTOs for source identities,
-  mappings, revision preflight, PENDING annotations, page work, reviewer slots, receipt
-  template, complete kit and safe summary.
-- [ ] Bind exact source file hashes/counts and the code-owned SchemaPack hash/order.
-- [ ] Encode explicit old60→67 and draft71→67 mappings; validate action cardinality,
-  exact source coverage and complete target coverage. Duplicate targets are legal only for
-  explicit merge rows.
-- [ ] Build 67 blank PENDING rows without copying a value, state, quote, locator or bbox
-  from either source or Material Wiki.
-- [ ] Canonicalize with sorted-key compact UTF-8 JSON, hash the complete preimage and
-  reject duplicate keys, unknown/trailing/noncanonical/self-rehashed payloads.
-- [ ] Make validation rebuild the exact expected kit from the two exact input byte
-  streams; reject any authority mutation even if the outer hash is recomputed.
-- [ ] Implement a fixed-schema safe summary containing counts/status only.
-
-Run the focused test and require GREEN.
-
-## Task 3: Freeze the canonical draft artifact
-
-**Files:**
-
-- Create: `dataset/goldenset-drafts/schema67-human-annotation-kit-596-1/kit.json`
-- Modify only if a test proves necessary: the Task 2 source/test files.
-
-- [ ] Generate bytes from the builder using the exact committed old60/draft71 inputs.
-- [ ] Add the generated bytes through `apply_patch` and assert byte equality with a fresh
-  builder run.
-- [ ] Load the committed artifact through the closed loader and require exact validation.
-- [ ] Confirm the artifact contains no local path, raw secret, approved Golden, model
-  result, Candidate or Material Wiki value.
-
-## Task 4: One bounded verification and freeze
-
-- [ ] Run focused pytest once.
-- [ ] Run the relevant medical SchemaPack test as the bounded compatibility gate.
-- [ ] Run Ruff on the exact source/test and strict mypy on the exact production module.
-- [ ] Run OpenSpec 122 strict validation, `git diff --check`, exact-path and privacy scans.
-- [ ] Commit exact4 with `feat(golden): add pending Schema67 human annotation kit`.
-- [ ] Freeze commit/tree and one durable read-only candidate index; do not push.
-- [ ] Send the exact identity to worktree3 for independent review.
+1. RED exact input identity, 51/16 closure, explicit mappings, tri-state/Evidence rules,
+   missing metadata, unsigned receipt, closed wire and fully rehashed mutations.
+2. GREEN one closed Pydantic successor, canonical field/evidence/package hashes and exact
+   eight-file artifact set, including an unsigned review-attestation event. Its
+   `attested_at=2026-08-11T11:21:07Z` records this fact-capture event and is not the unknown
+   original `reviewed_at`.
+3. Freeze an unsigned ready-to-sign payload. Signing is permitted only after the 16
+   residuals close and deployment-owned key material plus the missing review timestamp and
+   formal receipt authority exist; the signing payload is already bound to `linyao`.
+4. Run one bounded focused pytest, relevant SchemaPack compatibility, Ruff, strict mypy,
+   OpenSpec 122 strict validation, diff and privacy checks; commit and freeze a read-only
+   index without push.
 
 ## STOP rules
 
-- Any provider/model/live/DB/WeKnora call.
-- Any automatic promotion of old60 or draft71 values/states/Evidence into annotation rows.
-- Any generated `APPROVED`, Golden hash/receipt, real reviewer identity or signature.
-- Any page1/full-page bbox fallback; any rate page12/page27 acceptance.
-- Any Material Wiki fallback or Candidate/production interface change.
-- Any mapping or source mutation hidden by recomputing only the outer kit hash.
+- No provider, live, DB, WeKnora, Candidate, Draft, review, publish or activation action.
+- No invented review time/key/signature/approval receipt and no substitution of the
+  attestor for reviewer `linyao`.
+- No evaluated model or Material Wiki as Golden authority.
+- No automatic resolution of the 16 true mapping residuals.
+- No formal evaluator conclusion until the Schema67 canonical successor and required
+  cryptographic approvals are complete.

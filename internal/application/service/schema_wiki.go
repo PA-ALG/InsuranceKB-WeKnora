@@ -78,11 +78,12 @@ type SchemaWikiService struct {
 }
 
 type schemaWikiPreparationCustodyV1 struct {
-	Contract                   string                                       `json:"contract"`
-	Release                    types.KnowledgeWikiReleaseV1                 `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1   `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1               `json:"review_bundle"`
-	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1 `json:"evaluation_bundle"`
+	Contract                   string                                        `json:"contract"`
+	Release                    types.KnowledgeWikiReleaseV1                  `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1    `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
+	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
+	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
 }
 
 type validatedSchemaWikiCustody struct {
@@ -90,6 +91,7 @@ type validatedSchemaWikiCustody struct {
 	candidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1
 	reviewBundle               types.SchemaWikiReviewBundleV1
 	evaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1
+	reviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1
 	snapshots                  []types.WikiReleaseMemberSnapshot
 }
 
@@ -118,6 +120,7 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
 	evaluation types.Schema67GoldenEvaluationReviewBundleV1,
+	reviewSuccessor types.Schema67GoldenReviewSuccessorMetadataV1,
 ) (*types.WikiReleasePreparation, error) {
 	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
 		return nil, err
@@ -127,6 +130,10 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
 		types.ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation) != nil ||
+		types.ValidateSchema67GoldenReviewSuccessorMetadataV1(
+			reviewSuccessor, evaluation, evidenceAuthority,
+		) != nil ||
+		!schemaWikiGoldenReviewSuccessorMatchesRelease(reviewSuccessor, release) ||
 		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
 		!reflect.DeepEqual(bundle.QualityGateReceipt, evaluation.QualityGateReceipt) ||
 		evaluation.PrivateDossier.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
@@ -158,7 +165,7 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 		}
 	}
 	custody, err := schemaWikiPreparationCustodyBytes(
-		release, evidenceAuthority, bundle, evaluation,
+		release, evidenceAuthority, bundle, evaluation, reviewSuccessor,
 	)
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
@@ -183,11 +190,16 @@ func schemaWikiPreparationCustodyBytes(
 	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
 	evaluation types.Schema67GoldenEvaluationReviewBundleV1,
+	reviewSuccessor types.Schema67GoldenReviewSuccessorMetadataV1,
 ) (json.RawMessage, error) {
 	if types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
 		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil ||
 		types.ValidateSchema67GoldenEvaluationReviewBundleV1(evaluation) != nil ||
+		types.ValidateSchema67GoldenReviewSuccessorMetadataV1(
+			reviewSuccessor, evaluation, evidenceAuthority,
+		) != nil ||
+		!schemaWikiGoldenReviewSuccessorMatchesRelease(reviewSuccessor, release) ||
 		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
 		!reflect.DeepEqual(bundle.QualityGateReceipt, evaluation.QualityGateReceipt) ||
 		evaluation.PrivateDossier.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 ||
@@ -198,7 +210,7 @@ func schemaWikiPreparationCustodyBytes(
 	raw, err := json.Marshal(schemaWikiPreparationCustodyV1{
 		Contract: "schema-wiki-preparation-custody.v1", Release: release,
 		CandidateEvidenceAuthority: evidenceAuthority, ReviewBundle: bundle,
-		EvaluationBundle: evaluation,
+		EvaluationBundle: evaluation, ReviewSuccessor: reviewSuccessor,
 	})
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
@@ -230,6 +242,13 @@ func parseSchemaWikiPreparationCustody(
 		) != nil ||
 		types.ValidateSchemaWikiReviewBundle(custody.ReviewBundle, custody.Release) != nil ||
 		types.ValidateSchema67GoldenEvaluationReviewBundleV1(custody.EvaluationBundle) != nil ||
+		types.ValidateSchema67GoldenReviewSuccessorMetadataV1(
+			custody.ReviewSuccessor, custody.EvaluationBundle,
+			custody.CandidateEvidenceAuthority,
+		) != nil ||
+		!schemaWikiGoldenReviewSuccessorMatchesRelease(
+			custody.ReviewSuccessor, custody.Release,
+		) ||
 		custody.ReviewBundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 !=
 			custody.CandidateEvidenceAuthority.AuthoritySHA256 ||
 		!reflect.DeepEqual(
@@ -243,6 +262,46 @@ func parseSchemaWikiPreparationCustody(
 		return custody, nil, ErrSchemaWikiPreparationInvalid
 	}
 	return custody, canonical, nil
+}
+
+func schemaWikiGoldenReviewSuccessorMatchesRelease(
+	metadata types.Schema67GoldenReviewSuccessorMetadataV1,
+	release types.KnowledgeWikiReleaseV1,
+) bool {
+	if metadata.CandidateSHA256 != release.CandidateSHA256 ||
+		len(metadata.OrderedFields) != len(release.SchemaPack.OrderedFieldIDs) {
+		return false
+	}
+	pageByField := make(map[string]types.SchemaFieldPageV1, len(metadata.OrderedFields))
+	for _, member := range release.Members {
+		if member.MemberKind != "field" {
+			continue
+		}
+		var page types.SchemaFieldPageV1
+		if err := json.Unmarshal(member.Payload, &page); err != nil {
+			return false
+		}
+		pageByField[page.FieldID] = page
+	}
+	for index, field := range metadata.OrderedFields {
+		page, exists := pageByField[field.FieldID]
+		if !exists || field.FieldID != release.SchemaPack.OrderedFieldIDs[index] ||
+			field.CandidateState != page.State {
+			return false
+		}
+		if page.ValueSnapshot == nil {
+			if field.CandidateValue.Mode != "NONE" || field.CandidateValue.Literal != nil ||
+				field.CandidateValue.SHA256 != nil {
+				return false
+			}
+			continue
+		}
+		if field.CandidateValue.Mode != "LITERAL" || field.CandidateValue.Literal == nil ||
+			*field.CandidateValue.Literal != *page.ValueSnapshot {
+			return false
+		}
+	}
+	return true
 }
 
 func schemaWikiGoldenFieldOrderMatchesPack(
@@ -327,7 +386,7 @@ func (s *SchemaWikiService) ReadSchemaPreparationGoldenQualityDossier(
 	scope types.WikiReleaseScope,
 	preparationID string,
 	evaluationID string,
-) (*types.SchemaWikiGoldenQualityDossierV1, error) {
+) (*types.SchemaWikiGoldenQualityDossierV2, error) {
 	_, validated, err := s.loadSchemaPreparationGoldenEvaluation(
 		ctx, principal, scope, preparationID, evaluationID, "read-golden-quality-dossier",
 	)
@@ -335,12 +394,13 @@ func (s *SchemaWikiService) ReadSchemaPreparationGoldenQualityDossier(
 		return nil, err
 	}
 	bundle := validated.evaluationBundle
-	return &types.SchemaWikiGoldenQualityDossierV1{
-		Version:                  "schema-wiki-golden-quality-dossier.v1",
+	return &types.SchemaWikiGoldenQualityDossierV2{
+		Version:                  "schema-wiki-golden-quality-dossier.v2",
 		PreparationID:            preparationID,
 		EvaluationID:             evaluationID,
 		QualityGateReceiptSHA256: bundle.QualityGateReceipt.ReceiptSHA256,
 		PrivateDossier:           bundle.PrivateDossier,
+		ReviewSuccessor:          validated.reviewSuccessor,
 		EvaluationBundleSHA256:   bundle.EvaluationBundleSHA256,
 		ServingEffect:            "NONE",
 	}, nil
@@ -885,7 +945,8 @@ func validateSchemaWikiPreparation(
 	return validatedSchemaWikiCustody{
 		release: custody.Release, candidateEvidenceAuthority: custody.CandidateEvidenceAuthority,
 		reviewBundle: custody.ReviewBundle, evaluationBundle: custody.EvaluationBundle,
-		snapshots: expectedMembers,
+		reviewSuccessor: custody.ReviewSuccessor,
+		snapshots:       expectedMembers,
 	}, nil
 }
 

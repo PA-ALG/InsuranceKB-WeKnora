@@ -23,8 +23,17 @@
 ## Task 2 · Independent human Golden freeze
 
 - [ ] Freeze exact three-document revision receipts without provider calls.
-- [ ] Complete two independent named-human annotations for every field.
-- [ ] Adjudicate every disagreement and assign per-field risk/normalization policies.
+- [x] Record the exact latest 71-row human-reviewed source and retain its model-annotator
+  provenance separately from human-review status.
+- [x] Mechanically map 51 direct fields into ordered Schema67 and freeze the exact 16
+  conflict/merge/missing residuals; do not restart all 67 fields.
+- [x] Freeze independent source Review, Schema67 mapping and Golden admission statuses;
+  record `linyao` separately from `claude-fable-5`, keep `reviewed_at=null`, and emit only
+  an unsigned fact-attestation event rather than a forged review receipt.
+- [ ] Resolve only the 16 residuals and backfill evidence-based original review time
+  metadata without inventing historical facts.
+- [ ] Obtain the required two deployment-verifiable named-human approvals and adjudicate
+  remaining disagreements under the existing quality-gate policy.
 - [ ] Replay Evidence and freeze one immutable whole-batch Golden receipt/version/hash.
 
 ## Task 3 · Deterministic evaluator
@@ -74,6 +83,8 @@
   current/latest/presigned/material/page-1 fallback.
 - [x] RED/GREEN the backend custody replay, fixed safe errors, read-only authorization and
   exact routes in separately authorized production paths.
+- [x] RED/GREEN the same-route Dossier V2 review-successor projection, exact67 joins and
+  zero-Draft rejection of residual, metadata-incomplete or unsigned successors.
 - [ ] RED/GREEN the closed frontend parsers and preparation review UI. The UI SHALL have no
   approval, review, publish or activation capability.
 

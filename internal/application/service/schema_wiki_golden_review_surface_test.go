@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,6 +26,7 @@ type schemaWikiGoldenReviewSurfaceRED interface {
 		types.Schema67CandidateEvidenceAuthorityV1,
 		types.SchemaWikiReviewBundleV1,
 		types.Schema67GoldenEvaluationReviewBundleV1,
+		types.Schema67GoldenReviewSuccessorMetadataV1,
 	) (*types.WikiReleasePreparation, error)
 	ReadSchemaPreparationGoldenQualitySummary(
 		context.Context,
@@ -39,7 +41,7 @@ type schemaWikiGoldenReviewSurfaceRED interface {
 		types.WikiReleaseScope,
 		string,
 		string,
-	) (*types.SchemaWikiGoldenQualityDossierV1, error)
+	) (*types.SchemaWikiGoldenQualityDossierV2, error)
 	IssueSchemaPreparationGoldenEvidencePreview(
 		context.Context,
 		types.WikiReleasePrincipal,
@@ -159,6 +161,7 @@ func TestSchemaWikiGoldenEvaluationBundlePersistsInExistingPreparationCustody(t 
 		reviewed.EvidenceAuthority,
 		reviewed.ReviewBundle,
 		bundle,
+		reviewed.ReviewSuccessor,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, created)
@@ -185,9 +188,103 @@ func TestSchemaWikiGoldenEvaluationBundlePersistsInExistingPreparationCustody(t 
 	require.NoError(t, err)
 	require.Equal(t, bundle.PublicAggregate, public.PublicAggregate)
 	require.Equal(t, bundle.PrivateDossier, private.PrivateDossier)
+	require.Equal(t, reviewed.ReviewSuccessor, private.ReviewSuccessor)
+	require.Equal(t, "schema-wiki-golden-quality-dossier.v2", private.Version)
 	require.False(t, public.WikiAdmissionAllowed)
 	require.Equal(t, "NONE", public.ServingEffect)
 	require.Equal(t, "NONE", private.ServingEffect)
+}
+
+func TestSchemaWikiGoldenMetadataIncompleteOrEvidenceSubstitutedCannotCreateDraft(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name   string
+		mutate func(*testing.T, *types.Schema67GoldenReviewSuccessorMetadataV1)
+	}{
+		{
+			name: "metadata incomplete unsigned",
+			mutate: func(t *testing.T, value *types.Schema67GoldenReviewSuccessorMetadataV1) {
+				value.HumanReviewLayer.ReviewedAt = ""
+				value.HumanReviewLayer.ReceiptStatus = "UNVERIFIED"
+				value.MetadataSHA256 = schemaWikiTestHashWithout(
+					t, value.Contract, *value, "metadata_sha256",
+				)
+			},
+		},
+		{
+			name: "candidate evidence substitution",
+			mutate: func(t *testing.T, value *types.Schema67GoldenReviewSuccessorMetadataV1) {
+				for fieldIndex := range value.OrderedFields {
+					field := &value.OrderedFields[fieldIndex]
+					if len(field.EvidenceChanges) == 0 {
+						continue
+					}
+					foreign := strings.Repeat("f", 64)
+					field.EvidenceChanges[0].CandidateEvidenceID = &foreign
+					field.EvidenceChanges[0].ChangeSHA256 = schemaWikiTestHashWithout(
+						t, "schema67-golden-evidence-change.v1",
+						field.EvidenceChanges[0], "change_sha256",
+					)
+					field.FieldMetadataSHA256 = schemaWikiTestHashWithout(
+						t, "schema67-golden-review-field-metadata.v1",
+						*field, "field_metadata_sha256",
+					)
+					break
+				}
+				value.MetadataSHA256 = schemaWikiTestHashWithout(
+					t, value.Contract, *value, "metadata_sha256",
+				)
+			},
+		},
+		{
+			name: "candidate value substitution",
+			mutate: func(t *testing.T, value *types.Schema67GoldenReviewSuccessorMetadataV1) {
+				for fieldIndex := range value.OrderedFields {
+					field := &value.OrderedFields[fieldIndex]
+					if field.CandidateValue.Mode != "LITERAL" {
+						continue
+					}
+					foreign := "caller-selected-value"
+					digest := schemaWikiTestHash(
+						t, "schema67-golden-review-value.v1", map[string]string{"literal": foreign},
+					)
+					field.CandidateValue.Literal = &foreign
+					field.CandidateValue.SHA256 = &digest
+					field.FieldMetadataSHA256 = schemaWikiTestHashWithout(
+						t, "schema67-golden-review-field-metadata.v1",
+						*field, "field_metadata_sha256",
+					)
+					break
+				}
+				value.MetadataSHA256 = schemaWikiTestHashWithout(
+					t, value.Contract, *value, "metadata_sha256",
+				)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			principal, scope, reviewed := schemaWikiReviewedDraft(t)
+			fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+			raw, err := json.Marshal(reviewed.ReviewSuccessor)
+			require.NoError(t, err)
+			var forged types.Schema67GoldenReviewSuccessorMetadataV1
+			require.NoError(t, json.Unmarshal(raw, &forged))
+			testCase.mutate(t, &forged)
+
+			created, err := fixture.adapter.CreateSchemaDraft(
+				fixture.ctx, principal, scope, reviewed.PreparationID,
+				reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+				reviewed.EvaluationBundle, forged,
+			)
+			require.Nil(t, created)
+			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+			require.Zero(t, fixture.storedCount(t))
+			heads, releases, receipts := fixture.stateCounts(t)
+			require.Zero(t, heads)
+			require.Zero(t, releases)
+			require.Zero(t, receipts)
+		})
+	}
 }
 
 func TestSchemaWikiGoldenFailOrFixtureCannotCreateDraft(t *testing.T) {
@@ -208,6 +305,7 @@ func TestSchemaWikiGoldenFailOrFixtureCannotCreateDraft(t *testing.T) {
 				reviewed.EvidenceAuthority,
 				reviewed.ReviewBundle,
 				bundle,
+				reviewed.ReviewSuccessor,
 			)
 			require.Nil(t, created)
 			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
@@ -234,6 +332,7 @@ func TestSchemaWikiGoldenPrivateDossierRequiresNamedHumanReviewer(t *testing.T) 
 		reviewed.EvidenceAuthority,
 		reviewed.ReviewBundle,
 		bundle,
+		reviewed.ReviewSuccessor,
 	)
 	require.NoError(t, err)
 

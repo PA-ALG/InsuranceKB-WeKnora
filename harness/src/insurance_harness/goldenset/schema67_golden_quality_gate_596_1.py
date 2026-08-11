@@ -167,9 +167,7 @@ class Schema67GoldenApprovalV1(_FrozenModel):
 
 
 def schema67_golden_approval_signing_bytes(approval: Schema67GoldenApprovalV1) -> bytes:
-    payload = approval.model_dump(
-        mode="python", exclude={"signature", "approval_sha256"}
-    )
+    payload = approval.model_dump(mode="python", exclude={"signature", "approval_sha256"})
     return b"insurancekb.schema67-golden-approval.596-1.v1\x00" + schema_wiki_canonical_bytes(
         approval.contract, payload
     )
@@ -290,9 +288,7 @@ class _Schema67QualityGateSignerV1:
     def sign(self, payload: Mapping[str, object]) -> str:
         raw = (
             b"insurancekb.schema67-golden-quality-gate-receipt.v1\x00"
-            + schema_wiki_canonical_bytes(
-                "schema67-golden-quality-gate-receipt.v1", payload
-            )
+            + schema_wiki_canonical_bytes("schema67-golden-quality-gate-receipt.v1", payload)
         )
         return base64.urlsafe_b64encode(self._private_key.sign(raw)).rstrip(b"=").decode("ascii")
 
@@ -373,9 +369,7 @@ def compose_schema67_golden_quality_evaluator_authority_596_1(
     try:
         settings = HarnessSettings()  # type: ignore[call-arg]
     except ValidationError:
-        raise Schema67GoldenQualityGateError(
-            "GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE"
-        ) from None
+        raise Schema67GoldenQualityGateError("GOLDEN_EVALUATOR_AUTHORITY_UNAVAILABLE") from None
 
     return _compose_schema67_golden_quality_evaluator_authority_596_1(
         settings=settings,
@@ -406,8 +400,10 @@ def _compose_schema67_golden_quality_evaluator_authority_596_1(
 
     key_material: dict[str, bytes] = {}
     for key_id, encoded in settings.schema67_golden_approver_public_keys:
-        if not key_id or key_id != key_id.strip() or any(
-            ord(char) < 0x20 or ord(char) == 0x7F for char in key_id
+        if (
+            not key_id
+            or key_id != key_id.strip()
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in key_id)
         ):
             raise Schema67GoldenQualityGateError("GOLDEN_APPROVER_KEY_RING_INVALID")
         if key_id in key_material:
@@ -779,8 +775,7 @@ class Schema67GoldenEvaluationReviewBundleV1(_FrozenModel):
             or receipt.evaluator_identity_sha256 != public.evaluator_identity_sha256
             or receipt.ordered_field_decision_sha256s
             != tuple(row.decision_sha256 for row in private.field_decisions)
-            or receipt.metric_receipt_sha256s
-            != tuple(row.metric_sha256 for row in public.metrics)
+            or receipt.metric_receipt_sha256s != tuple(row.metric_sha256 for row in public.metrics)
             or public.metrics != private.metrics
             or receipt.private_dossier_sha256 != private.dossier_sha256
             or receipt.public_aggregate_sha256 != public.aggregate_sha256
@@ -788,6 +783,382 @@ class Schema67GoldenEvaluationReviewBundleV1(_FrozenModel):
         ):
             raise ValueError("Golden evaluation review bundle mismatch")
         return self
+
+
+class Schema67GoldenReviewValueV1(_FrozenModel):
+    mode: Literal["LITERAL", "SHA256_ONLY", "NONE"]
+    literal: StrictStr | None
+    sha256: Sha256Hex | None
+
+    @model_validator(mode="after")
+    def validate_value(self) -> Self:
+        if self.mode == "NONE":
+            if self.literal is not None or self.sha256 is not None:
+                raise ValueError("review value NONE carries data")
+            return self
+        if self.mode == "SHA256_ONLY":
+            if self.literal is not None or self.sha256 is None:
+                raise ValueError("review value digest mismatch")
+            return self
+        if self.literal is None or self.sha256 != schema_wiki_sha256(
+            "schema67-golden-review-value.v1", {"literal": self.literal}
+        ):
+            raise ValueError("review literal hash mismatch")
+        return self
+
+
+class Schema67GoldenEvidenceChangeV1(_FrozenModel):
+    change_kind: Literal["ADDED", "REMOVED", "REPLACED", "UNCHANGED"]
+    candidate_evidence_id: Sha256Hex | None
+    golden_evidence_sha256: Sha256Hex | None
+    change_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_change(self) -> Self:
+        if self.change_kind == "ADDED":
+            valid_shape = (
+                self.candidate_evidence_id is not None and self.golden_evidence_sha256 is None
+            )
+        elif self.change_kind == "REMOVED":
+            valid_shape = (
+                self.candidate_evidence_id is None and self.golden_evidence_sha256 is not None
+            )
+        else:
+            valid_shape = (
+                self.candidate_evidence_id is not None and self.golden_evidence_sha256 is not None
+            )
+        payload = self.model_dump(mode="python", exclude={"change_sha256"})
+        if not valid_shape or self.change_sha256 != schema_wiki_sha256(
+            "schema67-golden-evidence-change.v1", payload
+        ):
+            raise ValueError("review evidence change mismatch")
+        return self
+
+
+class Schema67GoldenReviewFieldMetadataV1(_FrozenModel):
+    field_id: NonBlank
+    decision_sha256: Sha256Hex
+    candidate_state: FieldState
+    golden_state: FieldState
+    candidate_value: Schema67GoldenReviewValueV1
+    golden_value: Schema67GoldenReviewValueV1
+    value_comparison: Literal["MATCH", "DIFF", "NOT_COMPARABLE"]
+    evidence_changes: tuple[Schema67GoldenEvidenceChangeV1, ...]
+    risk_status: Literal["PASS", "HIGH_RISK_PENDING"]
+    conflict_status: Literal["RESOLVED", "PENDING"]
+    review_status: Literal["REVIEWED", "PENDING_RESIDUAL"]
+    reason_codes: tuple[NonBlank, ...]
+    field_metadata_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_field_metadata(self) -> Self:
+        payload = self.model_dump(mode="python", exclude={"field_metadata_sha256"})
+        if (
+            self.review_status != "REVIEWED"
+            or self.reason_codes
+            or self.risk_status != "PASS"
+            or self.conflict_status != "RESOLVED"
+            or self.field_metadata_sha256
+            != schema_wiki_sha256("schema67-golden-review-field-metadata.v1", payload)
+        ):
+            raise ValueError("formal review field metadata mismatch")
+        return self
+
+
+class Schema67GoldenAnnotationLayerV1(_FrozenModel):
+    contract: Literal["schema67-annotation-layer.v1"]
+    annotator_model_id: Literal["claude-fable-5"]
+    annotation_receipt_sha256: Sha256Hex
+
+
+class Schema67GoldenHumanReviewLayerV1(_FrozenModel):
+    contract: Literal["schema67-human-review-layer.v1"]
+    reviewed_by: Literal["linyao"]
+    reviewed_at: NonBlank
+    receipt_status: Literal["VERIFIED"]
+    review_receipt_sha256: Sha256Hex
+
+
+class Schema67GoldenReviewSuccessorMetadataV1(_FrozenModel):
+    contract: Literal["schema67-golden-review-successor-metadata.v1"]
+    authority_level: Literal["REAL_NAMED_HUMAN"]
+    candidate_sha256: Sha256Hex
+    golden_set_sha256: Sha256Hex
+    quality_gate_receipt_sha256: Sha256Hex
+    evaluation_bundle_sha256: Sha256Hex
+    golden_version: NonBlank
+    annotation_layer: Schema67GoldenAnnotationLayerV1
+    human_review_layer: Schema67GoldenHumanReviewLayerV1
+    ordered_fields: tuple[Schema67GoldenReviewFieldMetadataV1, ...]
+    metadata_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_metadata(self) -> Self:
+        payload = self.model_dump(mode="python", exclude={"metadata_sha256"})
+        if tuple(
+            row.field_id for row in self.ordered_fields
+        ) != APPROVED_ORDERED_FIELD_IDS or self.metadata_sha256 != schema_wiki_sha256(
+            "schema67-golden-review-successor-metadata.v1", payload
+        ):
+            raise ValueError("review successor metadata mismatch")
+        return self
+
+
+class SchemaWikiGoldenQualityDossierV2(_FrozenModel):
+    version: Literal["schema-wiki-golden-quality-dossier.v2"]
+    preparation_id: NonBlank
+    evaluation_id: Sha256Hex
+    quality_gate_receipt_sha256: Sha256Hex
+    private_dossier: Schema67GoldenPrivateDossierV1
+    review_successor: Schema67GoldenReviewSuccessorMetadataV1
+    evaluation_bundle_sha256: Sha256Hex
+    serving_effect: Literal["NONE"]
+
+
+def _review_value(value: str | None) -> Schema67GoldenReviewValueV1:
+    if value is None:
+        return Schema67GoldenReviewValueV1(mode="NONE", literal=None, sha256=None)
+    return Schema67GoldenReviewValueV1(
+        mode="LITERAL",
+        literal=value,
+        sha256=schema_wiki_sha256("schema67-golden-review-value.v1", {"literal": value}),
+    )
+
+
+def _evidence_change(
+    *, candidate_evidence_id: str | None, golden_evidence_sha256: str | None
+) -> Schema67GoldenEvidenceChangeV1:
+    if candidate_evidence_id is None:
+        kind = "REMOVED"
+    elif golden_evidence_sha256 is None:
+        kind = "ADDED"
+    else:
+        kind = "UNCHANGED"
+    payload = {
+        "change_kind": kind,
+        "candidate_evidence_id": candidate_evidence_id,
+        "golden_evidence_sha256": golden_evidence_sha256,
+    }
+    return Schema67GoldenEvidenceChangeV1.model_validate(
+        {
+            **payload,
+            "change_sha256": schema_wiki_sha256("schema67-golden-evidence-change.v1", payload),
+        }
+    )
+
+
+def _make_review_successor_metadata(
+    *,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1,
+    candidate: object,
+    evidence_authority: object,
+    golden: Schema67GoldenSet5961V1,
+    annotator_model_id: str,
+    annotation_receipt_sha256: str,
+    reviewed_by: str,
+    reviewed_at: str,
+    review_receipt_sha256: str,
+) -> Schema67GoldenReviewSuccessorMetadataV1:
+    exact_candidate = validate_schema67_candidate_v2(candidate)
+    exact_evidence_authority = validate_schema67_candidate_evidence_authority_596_1(
+        candidate=candidate, authority=evidence_authority
+    )
+    if (
+        annotator_model_id != "claude-fable-5"
+        or reviewed_by != "linyao"
+        or review_receipt_sha256
+        != evaluation.quality_gate_receipt.whole_batch_approval_receipt_sha256
+        or evaluation.quality_gate_receipt.candidate_sha256 != exact_candidate.candidate_sha256
+        or evaluation.quality_gate_receipt.golden_set_sha256 != golden.golden_set_sha256
+        or evaluation.quality_gate_receipt.candidate_evidence_authority_sha256
+        != exact_evidence_authority.authority_sha256
+        or golden.ordered_field_ids != exact_candidate.ordered_field_ids
+    ):
+        raise ValueError("review successor authority mismatch")
+    candidate_by_field = {row.field_id: row for row in exact_candidate.fields}
+    joins_by_field: dict[str, list[Schema67CitationAuthorityJoinReceiptV1]] = {}
+    for join in exact_evidence_authority.join_receipts:
+        joins_by_field.setdefault(join.field_id, []).append(join)
+    decisions = {row.field_id: row for row in evaluation.private_dossier.field_decisions}
+    rows: list[Schema67GoldenReviewFieldMetadataV1] = []
+    for golden_field in golden.fields:
+        candidate_field = candidate_by_field[golden_field.field_id]
+        decision = decisions[golden_field.field_id]
+        candidate_joins = joins_by_field.get(golden_field.field_id, [])
+        target_digests = [target.target_sha256 for target in golden_field.evidence_targets]
+        changes = tuple(
+            _evidence_change(
+                candidate_evidence_id=(
+                    candidate_joins[index].receipt_sha256 if index < len(candidate_joins) else None
+                ),
+                golden_evidence_sha256=(
+                    target_digests[index] if index < len(target_digests) else None
+                ),
+            )
+            for index in range(max(len(candidate_joins), len(target_digests)))
+        )
+        candidate_value = _review_value(candidate_field.value_snapshot)
+        golden_value = _review_value(golden_field.canonical_value)
+        comparison = (
+            "NOT_COMPARABLE"
+            if candidate_field.state == "unknown" or golden_field.state == "unknown"
+            else "MATCH"
+            if candidate_field.state == golden_field.state
+            and candidate_field.value_snapshot == golden_field.canonical_value
+            else "DIFF"
+        )
+        field_payload = {
+            "field_id": golden_field.field_id,
+            "decision_sha256": decision.decision_sha256,
+            "candidate_state": candidate_field.state,
+            "golden_state": golden_field.state,
+            "candidate_value": candidate_value,
+            "golden_value": golden_value,
+            "value_comparison": comparison,
+            "evidence_changes": changes,
+            "risk_status": "PASS",
+            "conflict_status": "RESOLVED",
+            "review_status": "REVIEWED",
+            "reason_codes": (),
+        }
+        rows.append(
+            Schema67GoldenReviewFieldMetadataV1.model_validate(
+                {
+                    **field_payload,
+                    "field_metadata_sha256": schema_wiki_sha256(
+                        "schema67-golden-review-field-metadata.v1", field_payload
+                    ),
+                }
+            )
+        )
+    payload = {
+        "contract": "schema67-golden-review-successor-metadata.v1",
+        "authority_level": "REAL_NAMED_HUMAN",
+        "candidate_sha256": exact_candidate.candidate_sha256,
+        "golden_set_sha256": golden.golden_set_sha256,
+        "quality_gate_receipt_sha256": evaluation.quality_gate_receipt.receipt_sha256,
+        "evaluation_bundle_sha256": evaluation.evaluation_bundle_sha256,
+        "golden_version": golden.golden_version,
+        "annotation_layer": Schema67GoldenAnnotationLayerV1(
+            contract="schema67-annotation-layer.v1",
+            annotator_model_id="claude-fable-5",
+            annotation_receipt_sha256=annotation_receipt_sha256,
+        ),
+        "human_review_layer": Schema67GoldenHumanReviewLayerV1(
+            contract="schema67-human-review-layer.v1",
+            reviewed_by="linyao",
+            reviewed_at=reviewed_at,
+            receipt_status="VERIFIED",
+            review_receipt_sha256=review_receipt_sha256,
+        ),
+        "ordered_fields": tuple(rows),
+    }
+    return Schema67GoldenReviewSuccessorMetadataV1.model_validate(
+        {
+            **payload,
+            "metadata_sha256": schema_wiki_sha256(
+                "schema67-golden-review-successor-metadata.v1", payload
+            ),
+        }
+    )
+
+
+def make_schema67_golden_review_successor_metadata_596_1(
+    *,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1,
+    candidate: object,
+    evidence_authority: object,
+    golden: Schema67GoldenSet5961V1,
+    annotator_model_id: str,
+    annotation_receipt_sha256: str,
+    reviewed_by: str,
+    reviewed_at: str,
+    review_receipt_sha256: str,
+) -> Schema67GoldenReviewSuccessorMetadataV1:
+    try:
+        return _make_review_successor_metadata(
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence_authority,
+            golden=golden,
+            annotator_model_id=annotator_model_id,
+            annotation_receipt_sha256=annotation_receipt_sha256,
+            reviewed_by=reviewed_by,
+            reviewed_at=reviewed_at,
+            review_receipt_sha256=review_receipt_sha256,
+        )
+    except (
+        AttributeError,
+        CandidateEvidenceAuthorityError,
+        KeyError,
+        TypeError,
+        ValueError,
+        ValidationError,
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_REVIEW_SUCCESSOR_INVALID") from None
+
+
+def validate_schema67_golden_review_successor_metadata_596_1(
+    metadata: Schema67GoldenReviewSuccessorMetadataV1,
+    *,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1,
+    candidate: object,
+    evidence_authority: object,
+    golden: Schema67GoldenSet5961V1,
+) -> Schema67GoldenReviewSuccessorMetadataV1:
+    try:
+        expected = _make_review_successor_metadata(
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence_authority,
+            golden=golden,
+            annotator_model_id=metadata.annotation_layer.annotator_model_id,
+            annotation_receipt_sha256=metadata.annotation_layer.annotation_receipt_sha256,
+            reviewed_by=metadata.human_review_layer.reviewed_by,
+            reviewed_at=metadata.human_review_layer.reviewed_at,
+            review_receipt_sha256=metadata.human_review_layer.review_receipt_sha256,
+        )
+        fresh = Schema67GoldenReviewSuccessorMetadataV1.model_validate(
+            metadata.model_dump(mode="python")
+        )
+    except (
+        AttributeError,
+        CandidateEvidenceAuthorityError,
+        KeyError,
+        TypeError,
+        ValueError,
+        ValidationError,
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_REVIEW_SUCCESSOR_INVALID") from None
+    if fresh != expected:
+        raise Schema67GoldenQualityGateError("GOLDEN_REVIEW_SUCCESSOR_INVALID")
+    return fresh
+
+
+def make_schema_wiki_golden_quality_dossier_v2_596_1(
+    *,
+    preparation_id: str,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1,
+    review_successor: Schema67GoldenReviewSuccessorMetadataV1,
+) -> SchemaWikiGoldenQualityDossierV2:
+    if (
+        review_successor.candidate_sha256 != evaluation.quality_gate_receipt.candidate_sha256
+        or review_successor.golden_set_sha256 != evaluation.quality_gate_receipt.golden_set_sha256
+        or review_successor.quality_gate_receipt_sha256
+        != evaluation.quality_gate_receipt.receipt_sha256
+        or review_successor.evaluation_bundle_sha256 != evaluation.evaluation_bundle_sha256
+    ):
+        raise Schema67GoldenQualityGateError("GOLDEN_REVIEW_SUCCESSOR_INVALID")
+    return SchemaWikiGoldenQualityDossierV2(
+        version="schema-wiki-golden-quality-dossier.v2",
+        preparation_id=preparation_id,
+        evaluation_id=evaluation.evaluation_id,
+        quality_gate_receipt_sha256=evaluation.quality_gate_receipt.receipt_sha256,
+        private_dossier=evaluation.private_dossier,
+        review_successor=review_successor,
+        evaluation_bundle_sha256=evaluation.evaluation_bundle_sha256,
+        serving_effect="NONE",
+    )
 
 
 _RECEIPT_LOCK = threading.Lock()
@@ -856,9 +1227,7 @@ def _normalized(value: str | None) -> str | None:
 def _structured_atoms(value: object, path: str = "$") -> tuple[str, ...]:
     if isinstance(value, dict):
         return tuple(
-            atom
-            for key in sorted(value)
-            for atom in _structured_atoms(value[key], f"{path}.{key}")
+            atom for key in sorted(value) for atom in _structured_atoms(value[key], f"{path}.{key}")
         )
     if isinstance(value, list):
         return tuple(
@@ -907,8 +1276,7 @@ def _best_atom_counts(
     except ValueError:
         predicted = Counter()
     alternatives = tuple(
-        Counter(_normalized_atoms(field.value_schema, row))
-        for row in field.accepted_values
+        Counter(_normalized_atoms(field.value_schema, row)) for row in field.accepted_values
     )
     if not alternatives:
         return (0, sum(predicted.values()), 0)
@@ -1015,12 +1383,12 @@ def _decision(
         1_000_000 if atom_denominator == 0 else round(2 * atom_tp * 1_000_000 / atom_denominator)
     )
     value_correct = (
-        candidate_state == "unknown" and field.state == "unknown" and candidate_value is None
-    ) or (
-        candidate_state == field.state == "present" and atom_fp == 0 and atom_fn == 0
-    ) or (
-        candidate_state == field.state == "absent_explicitly"
-        and _normalized(candidate_value) in field.accepted_values
+        (candidate_state == "unknown" and field.state == "unknown" and candidate_value is None)
+        or (candidate_state == field.state == "present" and atom_fp == 0 and atom_fn == 0)
+        or (
+            candidate_state == field.state == "absent_explicitly"
+            and _normalized(candidate_value) in field.accepted_values
+        )
     )
     targets = {_target_projection(target): target for target in field.evidence_targets}
     matched = [join for join in joins if _join_projection(join) in targets]
@@ -1440,6 +1808,9 @@ def _evaluate_schema67_golden_quality_596_1(
                 "golden_approval_sha256s": tuple(
                     approval.approval_sha256 for approval in approvals
                 ),
+                "whole_batch_approval_receipt_sha256": (
+                    exact_golden.whole_batch_approval_receipt_sha256
+                ),
                 "signer_key_id": quality_gate_signer.key_id,
             }
             signature = quality_gate_signer.sign(receipt_payload)
@@ -1484,8 +1855,12 @@ __all__ = [
     "Schema67GoldenApprovalV1",
     "Schema67GoldenEvaluationResultV1",
     "Schema67GoldenEvaluationReviewBundleV1",
+    "Schema67GoldenEvidenceChangeV1",
     "Schema67GoldenFieldDecisionV1",
     "Schema67GoldenFieldV1",
+    "Schema67GoldenReviewFieldMetadataV1",
+    "Schema67GoldenReviewSuccessorMetadataV1",
+    "Schema67GoldenReviewValueV1",
     "Schema67GoldenMetricV1",
     "Schema67GoldenPrivateDossierV1",
     "Schema67GoldenPublicAggregateV1",
@@ -1493,8 +1868,12 @@ __all__ = [
     "Schema67GoldenQualityEvaluatorAuthority",
     "Schema67GoldenQualityEvaluatorSigningCredentialSource",
     "Schema67GoldenSet5961V1",
+    "SchemaWikiGoldenQualityDossierV2",
     "compose_schema67_golden_quality_evaluator_authority_596_1",
     "make_schema67_golden_evaluation_review_bundle_596_1",
+    "make_schema67_golden_review_successor_metadata_596_1",
+    "make_schema_wiki_golden_quality_dossier_v2_596_1",
     "schema67_golden_approval_signing_bytes",
     "validate_schema67_golden_quality_gate_receipt_596_1",
+    "validate_schema67_golden_review_successor_metadata_596_1",
 ]

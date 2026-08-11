@@ -41,6 +41,7 @@ type schemaWikiHTTPService interface {
 		types.Schema67CandidateEvidenceAuthorityV1,
 		types.SchemaWikiReviewBundleV1,
 		types.Schema67GoldenEvaluationReviewBundleV1,
+		types.Schema67GoldenReviewSuccessorMetadataV1,
 	) (*types.WikiReleasePreparation, error)
 	ReviewSchemaDraft(
 		context.Context,
@@ -137,7 +138,7 @@ type schemaWikiHTTPService interface {
 		types.WikiReleaseScope,
 		string,
 		string,
-	) (*types.SchemaWikiGoldenQualityDossierV1, error)
+	) (*types.SchemaWikiGoldenQualityDossierV2, error)
 	IssueSchemaPreparationGoldenEvidencePreview(
 		context.Context,
 		types.WikiReleasePrincipal,
@@ -166,11 +167,12 @@ func NewSchemaWikiHandler(
 }
 
 type schemaWikiCreateDraftRequest struct {
-	PreparationID              string                                       `json:"preparation_id"`
-	Release                    types.KnowledgeWikiReleaseV1                 `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1   `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1               `json:"review_bundle"`
-	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1 `json:"evaluation_bundle"`
+	PreparationID              string                                        `json:"preparation_id"`
+	Release                    types.KnowledgeWikiReleaseV1                  `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1    `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
+	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
+	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -476,6 +478,7 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 		c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
 		request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
 		request.EvaluationBundle,
+		request.ReviewSuccessor,
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)
