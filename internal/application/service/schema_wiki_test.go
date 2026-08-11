@@ -24,7 +24,7 @@ import (
 )
 
 const schemaWikiReleaseVectorPath = "testdata/schema_wiki_release_596_1_vector.json"
-const schemaWikiReleaseVectorSHA256 = "6783e3312199378a51065872278961f10c0e0f6510648e2ff1ce18823f10e6be"
+const schemaWikiReleaseVectorSHA256 = "31b6997b92ec0cc96abb1205ee1cfbdb051fdcee08c338b33dc2dba656a08266"
 
 var schemaWikiReviewSeed = sha256.Sum256([]byte("schema-wiki-review-test-key.v1"))
 var schemaWikiPublishSeed = sha256.Sum256([]byte("schema-wiki-publish-test-key.v1"))
@@ -78,7 +78,7 @@ func loadSchemaWikiReleaseVector(t *testing.T) schemaWikiReleaseAuthorityVectorV
 	))
 	require.Len(t, vector.Release.Members, 75)
 	require.Len(t, vector.CandidateEvidenceAuthority.SourceAuthorities, 3)
-	require.Len(t, vector.CandidateEvidenceAuthority.JoinReceipts, 111)
+	require.Len(t, vector.CandidateEvidenceAuthority.JoinReceipts, 98)
 	return vector
 }
 
@@ -881,7 +881,7 @@ func TestSchemaWikiDraftPersistsExactMembersWithoutServingOrActivationState(t *t
 	require.NoError(t, json.Unmarshal(stored.Manifest, &custody))
 	require.Equal(t, reviewed.EvidenceAuthority, custody.CandidateEvidenceAuthority)
 	require.Len(t, custody.CandidateEvidenceAuthority.SourceAuthorities, 3)
-	require.Len(t, custody.CandidateEvidenceAuthority.JoinReceipts, 111)
+	require.Len(t, custody.CandidateEvidenceAuthority.JoinReceipts, 98)
 	expectedPayloads := make(map[string]json.RawMessage, len(reviewed.Release.Members))
 	for _, member := range reviewed.Release.Members {
 		expectedPayloads[member.MemberRef] = member.Payload

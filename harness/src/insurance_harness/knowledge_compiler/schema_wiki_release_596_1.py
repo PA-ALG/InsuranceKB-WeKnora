@@ -15,6 +15,10 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     Schema67GoldenQualityGateError,
     validate_schema67_golden_quality_gate_receipt_596_1,
 )
+from insurance_harness.goldenset.schema67_reviewed_golden_successor_596_1 import (
+    Schema67ReviewedGoldenSuccessorError,
+    load_schema67_reviewed_golden_successor_596_1,
+)
 from insurance_harness.knowledge_compiler.medical_schema_pack_596_1 import (
     MEDICAL_VERSION_ID,
     MedicalSchemaPackError,
@@ -41,6 +45,7 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationTargetV1,
     KnowledgeWikiReleaseV1,
     SchemaFieldPageV1,
+    SchemaFieldUnknownReason,
     SchemaRootPageV1,
     SchemaSectionPageV1,
     SchemaWikiContractError,
@@ -67,6 +72,10 @@ SCHEMA_WIKI_REVIEW_POLICY_SHA256: Final[str] = schema_wiki_sha256(
     },
 )
 MEDICAL_PRODUCT_DISPLAY_NAME: Final[str] = "平安e生保（尊享版）医疗保险"
+GENERIC_UNKNOWN_REASON: Final[SchemaFieldUnknownReason] = "FIELD_UNKNOWN"
+NOT_COVERED_UNKNOWN_REASON: Final[SchemaFieldUnknownReason] = (
+    "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+)
 
 
 class SchemaWikiCompilationError(ValueError):
@@ -210,6 +219,7 @@ def build_schema_field_page_596_1(
         output=output,
         evidence_receipt=evidence_receipt,
         evidence_authority=evidence_authority,
+        unknown_reason=GENERIC_UNKNOWN_REASON,
     )
 
 
@@ -218,6 +228,7 @@ def _build_schema_field_page_from_validated_authority_596_1(
     output: FreeformFieldOutputV1,
     evidence_receipt: FreeformEvidenceBindingReceiptV1,
     evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+    unknown_reason: SchemaFieldUnknownReason,
 ) -> SchemaFieldPageV1:
     exact_output = _fresh_output(output)
     exact_receipt = _fresh_receipt(evidence_receipt)
@@ -229,6 +240,7 @@ def _build_schema_field_page_from_validated_authority_596_1(
         citations: tuple[CitationTargetV1, ...] = ()
         receipt_hashes: tuple[str, ...] = ()
         review_reason: str | None = "FIELD_UNKNOWN"
+        exact_unknown_reason: SchemaFieldUnknownReason | None = unknown_reason
     else:
         citations = _resolve_known_citations(
             output=exact_output,
@@ -237,6 +249,7 @@ def _build_schema_field_page_from_validated_authority_596_1(
         )
         receipt_hashes = (exact_receipt.receipt_hash,)
         review_reason = None
+        exact_unknown_reason = None
     payload = {
         "contract": "schema-field-page.v1",
         "field_id": exact_output.field_id,
@@ -245,6 +258,7 @@ def _build_schema_field_page_from_validated_authority_596_1(
         "citations": citations,
         "evidence_receipt_sha256s": receipt_hashes,
         "review_item_reason": review_reason,
+        "unknown_reason": exact_unknown_reason,
     }
     try:
         return SchemaFieldPageV1.model_validate(
@@ -372,12 +386,21 @@ def _validate_medical_release_596_1(
     return exact
 
 
-def compile_schema_wiki_release_596_1(
+def _compile_schema_wiki_release_596_1(
     *,
     candidate: object,
     evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+    required_unknown_field_ids: frozenset[str],
 ) -> KnowledgeWikiReleaseV1:
     exact_candidate = _validate_sealed_candidate(candidate)
+    fields_by_id = {field.field_id: field for field in exact_candidate.fields}
+    if any(
+        fields_by_id[field_id].state != "unknown"
+        or fields_by_id[field_id].value_snapshot is not None
+        or fields_by_id[field_id].evidence
+        for field_id in required_unknown_field_ids
+    ):
+        raise SchemaWikiCompilationError("COMPLETE67_CANDIDATE_CUSTODY_INVALID")
     try:
         exact_evidence_authority = validate_schema67_candidate_evidence_authority_596_1(
             candidate=exact_candidate,
@@ -406,6 +429,11 @@ def compile_schema_wiki_release_596_1(
             output=output,
             evidence_receipt=receipt,
             evidence_authority=exact_evidence_authority,
+            unknown_reason=(
+                NOT_COVERED_UNKNOWN_REASON
+                if output.field_id in required_unknown_field_ids
+                else GENERIC_UNKNOWN_REASON
+            ),
         )
         for output, receipt in zip(
             exact_candidate.fields,
@@ -536,6 +564,56 @@ def compile_schema_wiki_release_596_1(
         raise SchemaWikiCompilationError("RELEASE_CUSTODY_INVALID") from None
 
 
+def compile_schema_wiki_release_596_1(
+    *,
+    candidate: object,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+) -> KnowledgeWikiReleaseV1:
+    return _compile_schema_wiki_release_596_1(
+        candidate=candidate,
+        evidence_authority=evidence_authority,
+        required_unknown_field_ids=frozenset(),
+    )
+
+
+def compile_complete67_schema_wiki_release_dry_run_596_1(
+    *,
+    candidate: object,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+    complete67_payload: bytes,
+    old60_bytes: bytes,
+    latest71_bytes: bytes,
+) -> KnowledgeWikiReleaseV1:
+    """Compile the exact75 in memory while the whole-batch receipt is unverified."""
+
+    try:
+        successor = load_schema67_reviewed_golden_successor_596_1(
+            complete67_payload,
+            old60_bytes=old60_bytes,
+            latest71_bytes=latest71_bytes,
+        )
+    except Schema67ReviewedGoldenSuccessorError:
+        raise SchemaWikiCompilationError("COMPLETE67_AUTHORITY_INVALID") from None
+    if (
+        successor.source_review_status != "COMPLETED"
+        or successor.schema67_mapping_status != "COMPLETE_67"
+        or successor.golden_admission_status != "BLOCKED_RECEIPT_UNVERIFIED"
+        or successor.ordered_field_ids != APPROVED_ORDERED_FIELD_IDS
+        or successor.residual_pending_field_ids
+    ):
+        raise SchemaWikiCompilationError("COMPLETE67_AUTHORITY_INVALID")
+    coverage_ids = tuple(
+        row.field_id for row in successor.fields if row.unknown_reason is not None
+    )
+    if len(coverage_ids) != 16:
+        raise SchemaWikiCompilationError("COMPLETE67_AUTHORITY_INVALID")
+    return _compile_schema_wiki_release_596_1(
+        candidate=candidate,
+        evidence_authority=evidence_authority,
+        required_unknown_field_ids=frozenset(coverage_ids),
+    )
+
+
 def build_schema_wiki_review_bundle_596_1(
     *,
     candidate: object,
@@ -588,5 +666,6 @@ __all__ = [
     "SchemaWikiCompilationError",
     "build_schema_field_page_596_1",
     "build_schema_wiki_review_bundle_596_1",
+    "compile_complete67_schema_wiki_release_dry_run_596_1",
     "compile_schema_wiki_release_596_1",
 ]
