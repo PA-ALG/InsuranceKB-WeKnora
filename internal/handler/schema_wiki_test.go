@@ -78,6 +78,7 @@ func (s *schemaWikiHTTPServiceSpy) CreateSchemaDraft(
 	types.WikiReleaseScope,
 	string,
 	types.KnowledgeWikiReleaseV1,
+	types.Schema67CandidateEvidenceAuthorityV1,
 	types.SchemaWikiReviewBundleV1,
 ) (*types.WikiReleasePreparation, error) {
 	s.createCalls++

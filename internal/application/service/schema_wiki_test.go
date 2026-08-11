@@ -24,7 +24,7 @@ import (
 )
 
 const schemaWikiReleaseVectorPath = "testdata/schema_wiki_release_596_1_vector.json"
-const schemaWikiReleaseVectorSHA256 = "d1de4362342584374c693776f07f3916edd3879a5dcf562252fdfed063ce22db"
+const schemaWikiReleaseVectorSHA256 = "6783e3312199378a51065872278961f10c0e0f6510648e2ff1ce18823f10e6be"
 
 var schemaWikiReviewSeed = sha256.Sum256([]byte("schema-wiki-review-test-key.v1"))
 var schemaWikiPublishSeed = sha256.Sum256([]byte("schema-wiki-publish-test-key.v1"))
@@ -43,16 +43,21 @@ func (s *schemaWikiHumanVerifierSpy) Verify(receipt *types.HumanBatchDecisionRec
 	return s.inner.Verify(receipt)
 }
 
-func loadSchemaWikiReleaseVector(t *testing.T) types.KnowledgeWikiReleaseV1 {
+type schemaWikiReleaseAuthorityVectorV1 struct {
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
+	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
+}
+
+func loadSchemaWikiReleaseVector(t *testing.T) schemaWikiReleaseAuthorityVectorV1 {
 	t.Helper()
 	raw, err := os.ReadFile(schemaWikiReleaseVectorPath)
 	require.NoError(t, err)
 	sum := sha256.Sum256(raw)
 	require.Equal(t, schemaWikiReleaseVectorSHA256, hex.EncodeToString(sum[:]))
-	var release types.KnowledgeWikiReleaseV1
+	var vector schemaWikiReleaseAuthorityVectorV1
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	require.NoError(t, decoder.Decode(&release))
+	require.NoError(t, decoder.Decode(&vector))
 	var trailing any
 	require.ErrorIs(t, decoder.Decode(&trailing), io.EOF)
 	var canonicalTree map[string]any
@@ -61,14 +66,19 @@ func loadSchemaWikiReleaseVector(t *testing.T) types.KnowledgeWikiReleaseV1 {
 	require.NoError(t, err)
 	require.Equal(t, bytes.TrimSuffix(raw, []byte("\n")), canonical,
 		"frozen vector must be canonical JSON with only its frozen final newline")
-	typed, err := json.Marshal(release)
+	typed, err := json.Marshal(vector)
 	require.NoError(t, err)
 	var typedTree map[string]any
 	require.NoError(t, json.Unmarshal(typed, &typedTree))
 	require.Equal(t, canonicalTree, typedTree, "typed vector roundtrip must preserve every field")
-	require.NoError(t, types.ValidateKnowledgeWikiRelease(release, release.SchemaPack))
-	require.Len(t, release.Members, 75)
-	return release
+	require.NoError(t, types.ValidateKnowledgeWikiRelease(vector.Release, vector.Release.SchemaPack))
+	require.NoError(t, types.ValidateSchema67CandidateEvidenceAuthorityV1(
+		vector.CandidateEvidenceAuthority, vector.Release,
+	))
+	require.Len(t, vector.Release.Members, 75)
+	require.Len(t, vector.CandidateEvidenceAuthority.SourceAuthorities, 3)
+	require.Len(t, vector.CandidateEvidenceAuthority.JoinReceipts, 111)
+	return vector
 }
 
 func schemaWikiTestHash(t *testing.T, objectType string, payload any) string {
@@ -110,6 +120,34 @@ func schemaWikiTestCanonicalJSON(t *testing.T, value any) json.RawMessage {
 	encoder.SetEscapeHTML(false)
 	require.NoError(t, encoder.Encode(tree))
 	return bytes.TrimSuffix(out.Bytes(), []byte("\n"))
+}
+
+func cloneSchemaWikiEvidenceAuthority(
+	t *testing.T,
+	authority types.Schema67CandidateEvidenceAuthorityV1,
+) types.Schema67CandidateEvidenceAuthorityV1 {
+	t.Helper()
+	var clone types.Schema67CandidateEvidenceAuthorityV1
+	require.NoError(t, json.Unmarshal(mustSchemaWikiJSON(t, authority), &clone))
+	return clone
+}
+
+func resealSchemaWikiEvidenceAuthority(
+	t *testing.T,
+	authority *types.Schema67CandidateEvidenceAuthorityV1,
+) {
+	t.Helper()
+	for index := range authority.JoinReceipts {
+		receipt := &authority.JoinReceipts[index]
+		receipt.ReceiptSHA256 = ""
+		digest, err := types.ComputeSchema67CitationAuthorityJoinReceiptSHA256(*receipt)
+		require.NoError(t, err)
+		receipt.ReceiptSHA256 = digest
+	}
+	authority.AuthoritySHA256 = ""
+	digest, err := types.ComputeSchema67CandidateEvidenceAuthoritySHA256(*authority)
+	require.NoError(t, err)
+	authority.AuthoritySHA256 = digest
 }
 
 func forgeSchemaWikiDuplicateCitationID(
@@ -323,6 +361,7 @@ func schemaWikiDecisionAuthority(verifier HumanBatchDecisionVerifier) *WikiRelea
 type schemaWikiDraftFixture struct {
 	PreparationID        string
 	Release              types.KnowledgeWikiReleaseV1
+	EvidenceAuthority    types.Schema67CandidateEvidenceAuthorityV1
 	ReviewBundle         types.SchemaWikiReviewBundleV1
 	HumanDecision        types.HumanBatchDecisionReceiptV1
 	ReviewDecisionDigest string
@@ -458,12 +497,13 @@ func schemaWikiReviewedDraft(
 	t *testing.T,
 ) (types.WikiReleasePrincipal, types.WikiReleaseScope, schemaWikiDraftFixture) {
 	t.Helper()
-	release := loadSchemaWikiReleaseVector(t)
+	vector := loadSchemaWikiReleaseVector(t)
+	release := vector.Release
 	scope := types.WikiReleaseScope{
 		TenantID: 10003,
 		SpaceID:  "space-596-1",
-		RawKBID:  "raw-596-1",
-		WikiKBID: "wiki-596-1",
+		RawKBID:  "raw-kb-596-1",
+		WikiKBID: "wiki-kb-596-1",
 	}
 	bundle := schemaWikiReviewBundle(t, release)
 	decision, decisionDigest := schemaWikiDecision(t, scope, release, bundle)
@@ -474,6 +514,7 @@ func schemaWikiReviewedDraft(
 		}, scope, schemaWikiDraftFixture{
 			PreparationID:        "schema-wiki-preparation-596-1",
 			Release:              release,
+			EvidenceAuthority:    vector.CandidateEvidenceAuthority,
 			ReviewBundle:         bundle,
 			HumanDecision:        decision,
 			ReviewDecisionDigest: decisionDigest,
@@ -578,6 +619,7 @@ func createSchemaWikiDraft(
 		scope,
 		draft.PreparationID,
 		draft.Release,
+		draft.EvidenceAuthority,
 		draft.ReviewBundle,
 	)
 	require.NoError(t, err)
@@ -605,6 +647,11 @@ func TestSchemaWikiDraftPersistsExactMembersWithoutServingOrActivationState(t *t
 	require.Empty(t, draft.ReviewDecisionDigest)
 	stored := fixture.storedPreparation(t, draft.ID)
 	require.Equal(t, draft, &stored)
+	var custody schemaWikiPreparationCustodyV1
+	require.NoError(t, json.Unmarshal(stored.Manifest, &custody))
+	require.Equal(t, reviewed.EvidenceAuthority, custody.CandidateEvidenceAuthority)
+	require.Len(t, custody.CandidateEvidenceAuthority.SourceAuthorities, 3)
+	require.Len(t, custody.CandidateEvidenceAuthority.JoinReceipts, 111)
 	expectedPayloads := make(map[string]json.RawMessage, len(reviewed.Release.Members))
 	for _, member := range reviewed.Release.Members {
 		expectedPayloads[member.MemberRef] = member.Payload
@@ -633,6 +680,64 @@ func TestSchemaWikiDraftPersistsExactMembersWithoutServingOrActivationState(t *t
 	require.ErrorIs(t, err, ErrNoSchemaWikiActiveRelease)
 	require.Empty(t, search,
 		"Draft must not enter Schema current/page/search/index/Agent release reads")
+}
+
+func TestCreateSchemaDraftRejectsCandidateEvidenceAuthorityDriftBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]func(*testing.T, *types.Schema67CandidateEvidenceAuthorityV1){
+		"missing live receipt preimage": func(_ *testing.T, authority *types.Schema67CandidateEvidenceAuthorityV1) {
+			authority.SourceAuthorities[0].LiveRevisionSourceReceipt = types.LiveRevisionSourceReceiptV1{}
+		},
+		"missing join receipt": func(_ *testing.T, authority *types.Schema67CandidateEvidenceAuthorityV1) {
+			authority.JoinReceipts = authority.JoinReceipts[1:]
+		},
+		"fully rehashed locator substitution": func(t *testing.T, authority *types.Schema67CandidateEvidenceAuthorityV1) {
+			authority.JoinReceipts[0].LocatorRef += "-foreign"
+			resealSchemaWikiEvidenceAuthority(t, authority)
+		},
+		"fully rehashed nested source substitution": func(t *testing.T, authority *types.Schema67CandidateEvidenceAuthorityV1) {
+			source := &authority.SourceAuthorities[0]
+			source.LiveRevisionSourceReceipt.WikiKBID = "wiki-kb-foreign"
+			source.LiveRevisionSourceReceipt.SourceReceiptSHA256 = ""
+			digest, err := types.ComputeLiveRevisionSourceReceiptSHA256(
+				source.LiveRevisionSourceReceipt,
+			)
+			require.NoError(t, err)
+			source.LiveRevisionSourceReceipt.SourceReceiptSHA256 = digest
+			for index := range authority.JoinReceipts {
+				join := &authority.JoinReceipts[index]
+				if join.SourceSHA256 != source.SourceSHA256 {
+					continue
+				}
+				join.LiveRevisionSourceReceipt = source.LiveRevisionSourceReceipt
+				join.LiveRevisionSourceReceiptSHA256 = digest
+			}
+			resealSchemaWikiEvidenceAuthority(t, authority)
+		},
+	}
+
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			principal, scope, reviewed := schemaWikiReviewedDraft(t)
+			fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+			authority := cloneSchemaWikiEvidenceAuthority(t, reviewed.EvidenceAuthority)
+			mutate(t, &authority)
+
+			created, err := fixture.adapter.CreateSchemaDraft(
+				fixture.ctx, principal, scope, reviewed.PreparationID,
+				reviewed.Release, authority, reviewed.ReviewBundle,
+			)
+			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+			require.Nil(t, created)
+			require.Zero(t, fixture.storedCount(t))
+			require.Zero(t, fixture.verifier.calls)
+			heads, releases, receipts := fixture.stateCounts(t)
+			require.Zero(t, heads)
+			require.Zero(t, releases)
+			require.Zero(t, receipts)
+		})
+	}
 }
 
 func TestCreateSchemaDraftRejectsReleaseAndReviewBundleDriftBeforePersistence(t *testing.T) {
@@ -671,6 +776,7 @@ func TestCreateSchemaDraftRejectsReleaseAndReviewBundleDriftBeforePersistence(t 
 				scope,
 				reviewed.PreparationID,
 				reviewed.Release,
+				reviewed.EvidenceAuthority,
 				reviewed.ReviewBundle,
 			)
 			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
@@ -710,6 +816,7 @@ func TestCreateSchemaDraftRejectsFullyRehashedDuplicateCitationIDBeforeAuthoriti
 		scope,
 		reviewed.PreparationID,
 		forgedRelease,
+		reviewed.EvidenceAuthority,
 		forgedBundle,
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
@@ -830,7 +937,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 			fixture.ctx = schemaWikiHumanContext(principal, scope, role)
 			created, err := fixture.adapter.CreateSchemaDraft(
 				fixture.ctx, principal, scope, reviewed.PreparationID,
-				reviewed.Release, reviewed.ReviewBundle,
+				reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
 			)
 			require.ErrorIs(t, err, ErrWikiReleaseAccessDenied)
 			require.Nil(t, created)
@@ -847,7 +954,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 		)
 		created, err := fixture.adapter.CreateSchemaDraft(
 			fixture.ctx, principal, scope, reviewed.PreparationID,
-			reviewed.Release, reviewed.ReviewBundle,
+			reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
 		)
 		require.ErrorIs(t, err, ErrWikiReleaseAccessDenied)
 		require.Nil(t, created)
@@ -860,7 +967,7 @@ func TestSchemaWikiDraftHumanActionsRequireTrustedJWTAdminContext(t *testing.T) 
 		fixture.ctx = schemaWikiHumanContext(principal, scope, types.TenantRoleOwner)
 		created, err := fixture.adapter.CreateSchemaDraft(
 			fixture.ctx, principal, scope, reviewed.PreparationID,
-			reviewed.Release, reviewed.ReviewBundle,
+			reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
 		)
 		require.NoError(t, err)
 		require.Equal(t, types.WikiReleasePreparationDraft, created.Status)
@@ -1234,6 +1341,7 @@ func TestCreateSchemaDraftRejectsCitationSpaceOutsideExactRouteScope(t *testing.
 		scope,
 		reviewed.PreparationID,
 		reviewed.Release,
+		reviewed.EvidenceAuthority,
 		reviewed.ReviewBundle,
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
@@ -1413,6 +1521,12 @@ func TestCitationRevisionReadPortUsesExactVectorIdentityAndFailsUnavailable(t *t
 		"the exact-revision port must receive the server-derived sealed scope")
 	require.Equal(t, citation, port.request.Citation)
 	require.Equal(t, citation.CitationSHA256, port.request.Binding.CitationSHA256)
+	require.NotNil(t, port.request.CoordinateAuthorityReceipt)
+	require.Equal(
+		t, reviewed.EvidenceAuthority.JoinReceipts[0],
+		*port.request.CoordinateAuthorityReceipt,
+		"the server must derive the complete join receipt from stored release custody",
+	)
 }
 
 func firstSchemaWikiCitation(
@@ -1744,6 +1858,9 @@ func TestSchemaWikiPreparationCustodyStrictlyCanonicalizesJSONBAndRejectsDrift(t
 	require.NoError(t, types.ValidateSchemaWikiReviewBundle(
 		normalizedCustody.ReviewBundle, normalizedCustody.Release,
 	))
+	require.NoError(t, types.ValidateSchema67CandidateEvidenceAuthorityV1(
+		normalizedCustody.CandidateEvidenceAuthority, normalizedCustody.Release,
+	))
 
 	_, replayed, err := parseSchemaWikiPreparationCustody(normalized)
 	require.NoError(t, err)
@@ -1754,8 +1871,64 @@ func TestSchemaWikiPreparationCustodyStrictlyCanonicalizesJSONBAndRejectsDrift(t
 	withUnknown["foreign_authority"] = true
 	_, _, err = parseSchemaWikiPreparationCustody(mustSchemaWikiJSON(t, withUnknown))
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	var nestedUnknown map[string]any
+	require.NoError(t, json.Unmarshal(
+		mustSchemaWikiJSON(t, originalCustody.CandidateEvidenceAuthority), &nestedUnknown,
+	))
+	nestedUnknown["foreign_authority"] = true
+	withUnknown = map[string]any{}
+	require.NoError(t, json.Unmarshal(canonical, &withUnknown))
+	withUnknown["candidate_evidence_authority"] = nestedUnknown
+	_, _, err = parseSchemaWikiPreparationCustody(mustSchemaWikiJSON(t, withUnknown))
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
 	_, _, err = parseSchemaWikiPreparationCustody(append(append([]byte(nil), canonical...), []byte(" {}")...))
 	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+
+	reordered := originalCustody
+	reordered.CandidateEvidenceAuthority = cloneSchemaWikiEvidenceAuthority(
+		t, originalCustody.CandidateEvidenceAuthority,
+	)
+	reordered.CandidateEvidenceAuthority.JoinReceipts[0], reordered.CandidateEvidenceAuthority.JoinReceipts[1] =
+		reordered.CandidateEvidenceAuthority.JoinReceipts[1], reordered.CandidateEvidenceAuthority.JoinReceipts[0]
+	resealSchemaWikiEvidenceAuthority(t, &reordered.CandidateEvidenceAuthority)
+	_, _, err = parseSchemaWikiPreparationCustody(mustSchemaWikiJSON(t, reordered))
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid,
+		"outer-rehashed join order drift must not replace the frozen Candidate evidence order")
+
+	missingPreimage := originalCustody
+	missingPreimage.CandidateEvidenceAuthority = cloneSchemaWikiEvidenceAuthority(
+		t, originalCustody.CandidateEvidenceAuthority,
+	)
+	missingPreimage.CandidateEvidenceAuthority.SourceAuthorities[0].LiveRevisionSourceReceipt =
+		types.LiveRevisionSourceReceiptV1{}
+	_, _, err = parseSchemaWikiPreparationCustody(mustSchemaWikiJSON(t, missingPreimage))
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+
+	foreignScope := originalCustody
+	foreignScope.CandidateEvidenceAuthority = cloneSchemaWikiEvidenceAuthority(
+		t, originalCustody.CandidateEvidenceAuthority,
+	)
+	source := &foreignScope.CandidateEvidenceAuthority.SourceAuthorities[0]
+	source.LiveRevisionSourceReceipt.WikiKBID = "wiki-kb-foreign"
+	source.LiveRevisionSourceReceipt.SourceReceiptSHA256 = ""
+	sourceDigest, sourceErr := types.ComputeLiveRevisionSourceReceiptSHA256(
+		source.LiveRevisionSourceReceipt,
+	)
+	require.NoError(t, sourceErr)
+	source.LiveRevisionSourceReceipt.SourceReceiptSHA256 = sourceDigest
+	for index := range foreignScope.CandidateEvidenceAuthority.JoinReceipts {
+		join := &foreignScope.CandidateEvidenceAuthority.JoinReceipts[index]
+		if join.SourceSHA256 != source.SourceSHA256 {
+			continue
+		}
+		join.LiveRevisionSourceReceipt = source.LiveRevisionSourceReceipt
+		join.LiveRevisionSourceReceiptSHA256 = sourceDigest
+	}
+	resealSchemaWikiEvidenceAuthority(t, &foreignScope.CandidateEvidenceAuthority)
+	foreignRaw := mustSchemaWikiJSON(t, foreignScope)
+	_, _, err = parseSchemaWikiPreparationCustody(foreignRaw)
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid,
+		"scope drift changes the join receipt hash and cannot replace the release-bound citation ID")
 
 	drifted := *draft
 	drifted.Manifest = normalized

@@ -38,6 +38,7 @@ type schemaWikiHTTPService interface {
 		types.WikiReleaseScope,
 		string,
 		types.KnowledgeWikiReleaseV1,
+		types.Schema67CandidateEvidenceAuthorityV1,
 		types.SchemaWikiReviewBundleV1,
 	) (*types.WikiReleasePreparation, error)
 	ReviewSchemaDraft(
@@ -141,9 +142,10 @@ func NewSchemaWikiHandler(
 }
 
 type schemaWikiCreateDraftRequest struct {
-	PreparationID string                         `json:"preparation_id"`
-	Release       types.KnowledgeWikiReleaseV1   `json:"release"`
-	ReviewBundle  types.SchemaWikiReviewBundleV1 `json:"review_bundle"`
+	PreparationID              string                                     `json:"preparation_id"`
+	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1             `json:"review_bundle"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -447,7 +449,7 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 	}
 	draft, err := h.schemaService.CreateSchemaDraft(
 		c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
-		request.Release, request.ReviewBundle,
+		request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -15,6 +17,11 @@ import (
 )
 
 const schemaWikiHashPrefix = "schema-wiki-canonical.v1\x00"
+
+const (
+	Schema67CoordinatePolicySHA256 = "fd86399f644e6703e847686080f42799dca5376cdfb96e04fd49e6fa3b97c9ae"
+	Schema67JoinPolicySHA256       = "61148fd29425c09c8e013e6d271531ee8d8a8553dac80e6ca68ae297b4e99314"
+)
 
 var ErrSchemaWikiContractInvalid = errors.New("schema wiki contract invalid")
 
@@ -164,6 +171,26 @@ type Schema67CitationAuthorityJoinReceiptV1 struct {
 	ReceiptSHA256                   string                      `json:"receipt_sha256"`
 }
 
+type Schema67LiveSourceAuthorityV1 struct {
+	SourceRole                string                      `json:"source_role"`
+	SourceSHA256              string                      `json:"source_sha256"`
+	LiveRevisionSourceReceipt LiveRevisionSourceReceiptV1 `json:"live_revision_source_receipt"`
+}
+
+// Schema67CandidateEvidenceAuthorityV1 is the complete Candidate-bound
+// companion persisted with a Schema Wiki release. The outer hash is only an
+// integrity checksum; validation also replays every nested source/join receipt
+// and requires an exact bijection with the release citations.
+type Schema67CandidateEvidenceAuthorityV1 struct {
+	Contract               string                                   `json:"contract"`
+	CandidateSHA256        string                                   `json:"candidate_sha256"`
+	CoordinatePolicySHA256 string                                   `json:"coordinate_policy_sha256"`
+	JoinPolicySHA256       string                                   `json:"join_policy_sha256"`
+	SourceAuthorities      []Schema67LiveSourceAuthorityV1          `json:"source_authorities"`
+	JoinReceipts           []Schema67CitationAuthorityJoinReceiptV1 `json:"join_receipts"`
+	AuthoritySHA256        string                                   `json:"authority_sha256"`
+}
+
 // SchemaWikiCitationContentAuthorityV1 is the closed, public half of the
 // two-stage fixed-revision citation protocol. OpaqueToken is an independently
 // signed capability and is deliberately excluded from AuthoritySHA256; the
@@ -278,6 +305,203 @@ func ComputeSchema67CitationAuthorityJoinReceiptSHA256(
 	}
 	digest, _, err := schemaWikiHashWithout(receipt.Contract, receipt, "receipt_sha256")
 	return digest, err
+}
+
+func schema67ScaledBBoxMatches(source [4]string, normalized CitationBBoxV1) bool {
+	expected := [4]int{normalized.X0, normalized.Y0, normalized.X1, normalized.Y1}
+	for index, value := range source {
+		rational, ok := new(big.Rat).SetString(value)
+		if !ok || rational.Sign() < 0 || rational.Cmp(big.NewRat(1000, 1)) > 0 {
+			return false
+		}
+		rational.Mul(rational, big.NewRat(1000, 1))
+		if !rational.IsInt() || !rational.Num().IsInt64() ||
+			int(rational.Num().Int64()) != expected[index] {
+			return false
+		}
+	}
+	return expected[0] < expected[2] && expected[1] < expected[3] &&
+		expected[2] <= 1_000_000 && expected[3] <= 1_000_000
+}
+
+func schema67LocatorPrecision(kind, precision string) bool {
+	switch kind {
+	case "block", "table":
+		return precision == "locator_exact"
+	case "cell":
+		return precision == "table_scoped_not_cell_exact_stop"
+	default:
+		return false
+	}
+}
+
+func schema67Rotation(rotation int) bool {
+	return rotation == 0 || rotation == 90 || rotation == 180 || rotation == 270
+}
+
+// ValidateSchema67CitationAuthorityJoinReceiptV1 validates the complete
+// language-neutral receipt. A serving adapter must additionally replay its
+// live revision/chunk fields against repositories.
+func ValidateSchema67CitationAuthorityJoinReceiptV1(
+	receipt Schema67CitationAuthorityJoinReceiptV1,
+) error {
+	digest, err := ComputeSchema67CitationAuthorityJoinReceiptSHA256(receipt)
+	if err != nil || digest != receipt.ReceiptSHA256 ||
+		!validSchemaWikiSHA256(receipt.CandidateSHA256) || receipt.FieldID == "" ||
+		receipt.SourceRole == "" || !validSchemaWikiSHA256(receipt.EvidenceReceiptSHA256) ||
+		!validSchemaWikiSHA256(receipt.SourceSHA256) ||
+		!validSchemaWikiSHA256(receipt.ParsedDocumentSHA256) ||
+		!validSchemaWikiSHA256(receipt.ParseManifestSHA256) ||
+		receipt.EvidenceParseAttemptID == "" || receipt.LocatorRef == "" ||
+		receipt.NativePageIndex < 0 || receipt.NativePageIndex+1 != receipt.PageNumber ||
+		!validSchemaWikiSHA256(receipt.LocatorContentSHA256) ||
+		!validSchemaWikiSHA256(receipt.QuoteSHA256) ||
+		!validSchemaWikiSHA256(receipt.CaptureIdentitySHA256) ||
+		!validSchemaWikiSHA256(receipt.RawStructureSHA256) ||
+		!validSchemaWikiSHA256(receipt.SanitizedStructureSHA256) ||
+		!validSchemaWikiSHA256(receipt.ParserIdentitySHA256) ||
+		receipt.CoordinatePolicySHA256 != Schema67CoordinatePolicySHA256 ||
+		receipt.SourceCoordinateSpace != "mineru_content_list_normalized_0_1000_top_left.v1" ||
+		receipt.TargetCoordinateSpace != "normalized_0_1e6" || receipt.Origin != "top_left" ||
+		receipt.PageWidth != 1_000_000 || receipt.PageHeight != 1_000_000 ||
+		!schema67Rotation(receipt.RotationDegrees) ||
+		receipt.NormalizedBBox.CoordinateSystem != receipt.TargetCoordinateSpace ||
+		receipt.NormalizedBBox.PageWidth != receipt.PageWidth ||
+		receipt.NormalizedBBox.PageHeight != receipt.PageHeight ||
+		!schema67ScaledBBoxMatches(receipt.SourceBBoxPreimage, receipt.NormalizedBBox) ||
+		!schema67LocatorPrecision(receipt.LocatorKind, receipt.HighlightPrecision) ||
+		receipt.TenantID == 0 || receipt.SpaceID == "" || receipt.RawKBID == "" ||
+		receipt.KnowledgeID == "" || receipt.WeKnoraParseAttempt <= 0 ||
+		!validSchemaWikiSHA256(receipt.FileSHA256) ||
+		receipt.WeKnoraManifestAlgorithm != RevisionManifestAlgorithm ||
+		!validSchemaWikiSHA256(receipt.WeKnoraManifestDigest) || receipt.ChunkID == "" ||
+		receipt.ChunkIndex < 0 || !validSchemaWikiSHA256(receipt.ChunkContentSHA256) ||
+		receipt.QuoteOccurrenceStart < 0 ||
+		receipt.QuoteOccurrenceEnd <= receipt.QuoteOccurrenceStart ||
+		receipt.QuoteOccurrenceCount != 1 || receipt.JoinPolicySHA256 != Schema67JoinPolicySHA256 ||
+		ValidateLiveRevisionSourceReceiptV1(receipt.LiveRevisionSourceReceipt) != nil ||
+		receipt.LiveRevisionSourceReceiptSHA256 != receipt.LiveRevisionSourceReceipt.SourceReceiptSHA256 {
+		return ErrSchemaWikiContractInvalid
+	}
+	live := receipt.LiveRevisionSourceReceipt
+	if live.TenantID != receipt.TenantID || live.SpaceID != receipt.SpaceID ||
+		live.RawKBID != receipt.RawKBID || live.KnowledgeID != receipt.KnowledgeID ||
+		live.EvidenceParseAttemptID != receipt.EvidenceParseAttemptID ||
+		live.WeKnoraParseAttempt != receipt.WeKnoraParseAttempt ||
+		live.FileSHA256 != receipt.FileSHA256 ||
+		live.ParsedDocumentSHA256 != receipt.ParsedDocumentSHA256 ||
+		live.ParseManifestSHA256 != receipt.ParseManifestSHA256 ||
+		live.WeKnoraManifestAlgorithm != receipt.WeKnoraManifestAlgorithm ||
+		live.WeKnoraManifestDigest != receipt.WeKnoraManifestDigest ||
+		receipt.PageNumber > live.PageCount {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+// ComputeSchema67CandidateEvidenceAuthoritySHA256 freezes the exact Python
+// companion equation.
+func ComputeSchema67CandidateEvidenceAuthoritySHA256(
+	authority Schema67CandidateEvidenceAuthorityV1,
+) (string, error) {
+	if authority.Contract != "schema67-candidate-evidence-authority.v1" {
+		return "", ErrSchemaWikiContractInvalid
+	}
+	digest, _, err := schemaWikiHashWithout(
+		authority.Contract, authority, "authority_sha256",
+	)
+	return digest, err
+}
+
+func schema67ReleaseCitations(release KnowledgeWikiReleaseV1) ([]CitationTargetV1, error) {
+	citations := make([]CitationTargetV1, 0, len(release.CitationBindings))
+	for _, member := range release.Members {
+		if member.MemberKind != "field" {
+			continue
+		}
+		var page SchemaFieldPageV1
+		if decodeClosedSchemaWikiPayload(member.Payload, &page) != nil ||
+			validateSchemaFieldPage(page) != nil {
+			return nil, ErrSchemaWikiContractInvalid
+		}
+		citations = append(citations, page.Citations...)
+	}
+	return citations, nil
+}
+
+// ValidateSchema67CandidateEvidenceAuthorityV1 replays the whole companion
+// and proves its ordered join receipts are a bijection with the exact release
+// citations. It never accepts a naked authority hash as sufficient custody.
+func ValidateSchema67CandidateEvidenceAuthorityV1(
+	authority Schema67CandidateEvidenceAuthorityV1,
+	release KnowledgeWikiReleaseV1,
+) error {
+	digest, err := ComputeSchema67CandidateEvidenceAuthoritySHA256(authority)
+	if err != nil || digest != authority.AuthoritySHA256 ||
+		ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
+		authority.CandidateSHA256 != release.CandidateSHA256 ||
+		authority.CoordinatePolicySHA256 != Schema67CoordinatePolicySHA256 ||
+		authority.JoinPolicySHA256 != Schema67JoinPolicySHA256 ||
+		len(authority.SourceAuthorities) != 3 {
+		return ErrSchemaWikiContractInvalid
+	}
+	expectedRoles := [3]string{"terms", "brochure", "rate_table"}
+	sources := make(map[string]Schema67LiveSourceAuthorityV1, len(authority.SourceAuthorities))
+	seenRoles := make(map[string]struct{}, len(authority.SourceAuthorities))
+	for index, source := range authority.SourceAuthorities {
+		live := source.LiveRevisionSourceReceipt
+		sourceID, sourceErr := ComputeKnowledgeRevisionSourceID(KnowledgeRevisionSource{
+			TenantID: live.TenantID, KnowledgeID: live.KnowledgeID,
+			ParseAttempt: live.WeKnoraParseAttempt, ResourceID: live.ResourceID,
+			FileSHA256: live.FileSHA256, Size: live.Size, MimeType: live.MimeType,
+		})
+		if source.SourceRole != expectedRoles[index] || source.SourceSHA256 != live.FileSHA256 ||
+			ValidateLiveRevisionSourceReceiptV1(live) != nil || sourceErr != nil ||
+			sourceID != live.RevisionSourceID {
+			return ErrSchemaWikiContractInvalid
+		}
+		if _, duplicate := sources[source.SourceSHA256]; duplicate {
+			return ErrSchemaWikiContractInvalid
+		}
+		if _, duplicate := seenRoles[source.SourceRole]; duplicate {
+			return ErrSchemaWikiContractInvalid
+		}
+		sources[source.SourceSHA256] = source
+		seenRoles[source.SourceRole] = struct{}{}
+	}
+	citations, err := schema67ReleaseCitations(release)
+	if err != nil || len(citations) != len(authority.JoinReceipts) {
+		return ErrSchemaWikiContractInvalid
+	}
+	seenReceipts := make(map[string]struct{}, len(authority.JoinReceipts))
+	for index, receipt := range authority.JoinReceipts {
+		citation := citations[index]
+		source, exists := sources[receipt.SourceSHA256]
+		if !exists || ValidateSchema67CitationAuthorityJoinReceiptV1(receipt) != nil ||
+			receipt.CandidateSHA256 != authority.CandidateSHA256 ||
+			receipt.CoordinatePolicySHA256 != authority.CoordinatePolicySHA256 ||
+			receipt.JoinPolicySHA256 != authority.JoinPolicySHA256 ||
+			receipt.SourceRole != source.SourceRole ||
+			!reflect.DeepEqual(receipt.LiveRevisionSourceReceipt, source.LiveRevisionSourceReceipt) ||
+			citation.CitationID != "citation-"+receipt.ReceiptSHA256[:24] ||
+			citation.SourceRole != receipt.SourceRole || citation.SpaceID != receipt.SpaceID ||
+			citation.KnowledgeID != receipt.KnowledgeID || citation.ChunkID != receipt.ChunkID ||
+			citation.ParseAttemptID != receipt.EvidenceParseAttemptID ||
+			citation.ParsedDocumentSHA256 != receipt.ParsedDocumentSHA256 ||
+			citation.ParseManifestSHA256 != receipt.ParseManifestSHA256 ||
+			citation.PageNumber != receipt.PageNumber || citation.LocatorRef != receipt.LocatorRef ||
+			!reflect.DeepEqual(citation.BBox, receipt.NormalizedBBox) ||
+			citation.QuoteSHA256 != receipt.QuoteSHA256 ||
+			citation.ContentSnapshotSHA256 != receipt.LocatorContentSHA256 ||
+			citation.LogicalMemberRef != "field:"+receipt.FieldID {
+			return ErrSchemaWikiContractInvalid
+		}
+		if _, duplicate := seenReceipts[receipt.ReceiptSHA256]; duplicate {
+			return ErrSchemaWikiContractInvalid
+		}
+		seenReceipts[receipt.ReceiptSHA256] = struct{}{}
+	}
+	return nil
 }
 
 type SchemaFieldPageV1 struct {

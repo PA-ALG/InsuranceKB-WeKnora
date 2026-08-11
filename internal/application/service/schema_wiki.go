@@ -56,15 +56,17 @@ type SchemaWikiService struct {
 }
 
 type schemaWikiPreparationCustodyV1 struct {
-	Contract     string                         `json:"contract"`
-	Release      types.KnowledgeWikiReleaseV1   `json:"release"`
-	ReviewBundle types.SchemaWikiReviewBundleV1 `json:"review_bundle"`
+	Contract                   string                                     `json:"contract"`
+	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1             `json:"review_bundle"`
 }
 
 type validatedSchemaWikiCustody struct {
-	release      types.KnowledgeWikiReleaseV1
-	reviewBundle types.SchemaWikiReviewBundleV1
-	snapshots    []types.WikiReleaseMemberSnapshot
+	release                    types.KnowledgeWikiReleaseV1
+	candidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1
+	reviewBundle               types.SchemaWikiReviewBundleV1
+	snapshots                  []types.WikiReleaseMemberSnapshot
 }
 
 func NewSchemaWikiService(
@@ -89,6 +91,7 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 	scope types.WikiReleaseScope,
 	preparationID string,
 	release types.KnowledgeWikiReleaseV1,
+	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
 ) (*types.WikiReleasePreparation, error) {
 	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
@@ -96,6 +99,7 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 	}
 	if s == nil || s.releaseAuthority == nil || preparationID == "" ||
 		types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
+		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -112,7 +116,14 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 			return nil, ErrSchemaWikiPreparationInvalid
 		}
 	}
-	custody, err := schemaWikiPreparationCustodyBytes(release, bundle)
+	for _, source := range evidenceAuthority.SourceAuthorities {
+		live := source.LiveRevisionSourceReceipt
+		if live.TenantID != scope.TenantID || live.SpaceID != scope.SpaceID ||
+			live.RawKBID != scope.RawKBID || live.WikiKBID != scope.WikiKBID {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+	}
+	custody, err := schemaWikiPreparationCustodyBytes(release, evidenceAuthority, bundle)
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -133,14 +144,17 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 
 func schemaWikiPreparationCustodyBytes(
 	release types.KnowledgeWikiReleaseV1,
+	evidenceAuthority types.Schema67CandidateEvidenceAuthorityV1,
 	bundle types.SchemaWikiReviewBundleV1,
 ) (json.RawMessage, error) {
 	if types.ValidateKnowledgeWikiRelease(release, release.SchemaPack) != nil ||
+		types.ValidateSchema67CandidateEvidenceAuthorityV1(evidenceAuthority, release) != nil ||
 		types.ValidateSchemaWikiReviewBundle(bundle, release) != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	raw, err := json.Marshal(schemaWikiPreparationCustodyV1{
-		Contract: "schema-wiki-preparation-custody.v1", Release: release, ReviewBundle: bundle,
+		Contract: "schema-wiki-preparation-custody.v1", Release: release,
+		CandidateEvidenceAuthority: evidenceAuthority, ReviewBundle: bundle,
 	})
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
@@ -167,6 +181,9 @@ func parseSchemaWikiPreparationCustody(
 	canonical, err := json.Marshal(custody)
 	if err != nil || custody.Contract != "schema-wiki-preparation-custody.v1" ||
 		types.ValidateKnowledgeWikiRelease(custody.Release, custody.Release.SchemaPack) != nil ||
+		types.ValidateSchema67CandidateEvidenceAuthorityV1(
+			custody.CandidateEvidenceAuthority, custody.Release,
+		) != nil ||
 		types.ValidateSchemaWikiReviewBundle(custody.ReviewBundle, custody.Release) != nil {
 		return custody, nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -629,6 +646,13 @@ func validateSchemaWikiPreparation(
 	if !schemaWikiStoredSnapshotsEqual(preparation.Members, expectedMembers, true) {
 		return empty, ErrSchemaWikiPreparationInvalid
 	}
+	for _, source := range custody.CandidateEvidenceAuthority.SourceAuthorities {
+		live := source.LiveRevisionSourceReceipt
+		if live.TenantID != scope.TenantID || live.SpaceID != scope.SpaceID ||
+			live.RawKBID != scope.RawKBID || live.WikiKBID != scope.WikiKBID {
+			return empty, ErrSchemaWikiPreparationInvalid
+		}
+	}
 	for _, member := range custody.Release.Members {
 		if member.MemberKind != "field" {
 			continue
@@ -644,7 +668,8 @@ func validateSchemaWikiPreparation(
 		}
 	}
 	return validatedSchemaWikiCustody{
-		release: custody.Release, reviewBundle: custody.ReviewBundle, snapshots: expectedMembers,
+		release: custody.Release, candidateEvidenceAuthority: custody.CandidateEvidenceAuthority,
+		reviewBundle: custody.ReviewBundle, snapshots: expectedMembers,
 	}, nil
 }
 
@@ -968,11 +993,25 @@ func schemaWikiCitationRequest(
 	}
 	for _, binding := range validated.release.CitationBindings {
 		if binding.LogicalMemberRef == logicalSlug && binding.CitationSHA256 == selected.CitationSHA256 {
+			var coordinateReceipt *SchemaWikiCitationCoordinateAuthorityReceiptV1
+			for index := range validated.candidateEvidenceAuthority.JoinReceipts {
+				join := &validated.candidateEvidenceAuthority.JoinReceipts[index]
+				if selected.CitationID == "citation-"+join.ReceiptSHA256[:24] &&
+					join.FieldID == fieldID {
+					copy := *join
+					coordinateReceipt = &copy
+					break
+				}
+			}
+			if coordinateReceipt == nil {
+				return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+			}
 			return CitationRevisionReadRequestV1{
 				ReleaseID: releaseID, ActivationEpoch: activationEpoch,
 				CandidateSHA256: validated.release.CandidateSHA256, FieldID: fieldID,
 				Scope: scope, Citation: *selected, Binding: binding,
-				EvidenceReceiptSHA256s: evidenceReceipts,
+				EvidenceReceiptSHA256s:     evidenceReceipts,
+				CoordinateAuthorityReceipt: coordinateReceipt,
 			}, nil
 		}
 	}

@@ -172,7 +172,7 @@ func (s *schemaWikiProductionChunkRepositoryStub) ListChunksByKnowledgeID(
 
 func newSchemaWikiCitationRevisionFixture(t *testing.T) schemaWikiCitationRevisionFixture {
 	t.Helper()
-	release := loadSchemaWikiReleaseVector(t)
+	release := loadSchemaWikiReleaseVector(t).Release
 	citation := firstSchemaWikiCitation(t, release)
 	content := "prefix " + citation.QuoteSnapshot + " suffix"
 	manifestChunks := []types.RevisionManifestChunk{{
@@ -277,7 +277,7 @@ func newSchemaWikiCitationRevisionFixture(t *testing.T) schemaWikiCitationRevisi
 		QuoteOccurrenceStart:            quoteStart,
 		QuoteOccurrenceEnd:              quoteStart + len(citation.QuoteSnapshot),
 		QuoteOccurrenceCount:            1,
-		JoinPolicySHA256:                strings.Repeat("5", 64),
+		JoinPolicySHA256:                types.Schema67JoinPolicySHA256,
 		LiveRevisionSourceReceipt:       liveReceipt,
 		LiveRevisionSourceReceiptSHA256: liveReceiptSHA256,
 	}
@@ -564,6 +564,15 @@ func TestSchemaWikiCitationRevisionAdapterReplaysNativeAuthorityButDoesNotClaimC
 		&schemaWikiProductionChunkRepositoryStub{delegate: fixture.chunks},
 	)
 	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10003))
+	resolved, resolveErr := adapter.resolveExactRevisionAuthority(ctx, fixture.request)
+	require.NoError(t, resolveErr)
+	require.NotNil(t, resolved)
+	require.Equal(t, fixture.request.CoordinateAuthorityReceipt.ReceiptSHA256, resolved.OpaqueToken)
+	require.Equal(t, fixture.request.CoordinateAuthorityReceipt.NormalizedBBox, resolved.BBox)
+	fixture.revisions.knowledgeCalls = 0
+	fixture.revisions.revisionCalls = 0
+	fixture.chunks.getCalls = 0
+	fixture.chunks.listCalls = 0
 
 	opened, err := adapter.ReadExactRevision(ctx, fixture.request)
 	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)

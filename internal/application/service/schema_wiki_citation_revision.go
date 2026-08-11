@@ -151,6 +151,7 @@ func validateSchemaWikiCitationCoordinateAuthorityReceipt(
 	chunk *types.Chunk,
 ) error {
 	if receipt.Contract != "schema67-citation-authority-join-receipt.v1" ||
+		types.ValidateSchema67CitationAuthorityJoinReceiptV1(receipt) != nil ||
 		receipt.ReceiptSHA256 != schemaWikiCitationCoordinateAuthorityReceiptSHA256(receipt) ||
 		source == nil || source.PageCount == nil || *source.PageCount <= 0 ||
 		receipt.PageNumber <= 0 || receipt.PageNumber > *source.PageCount ||
@@ -436,7 +437,7 @@ func (a *schemaWikiCitationRevisionReadAdapter) resolveExactRevisionAuthority(
 		manifestDigest != revision.ManifestDigest {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
-	if request.CoordinateAuthorityReceipt == nil || a.snapshots == nil {
+	if request.CoordinateAuthorityReceipt == nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	receipt := *request.CoordinateAuthorityReceipt
@@ -479,13 +480,39 @@ func (a *schemaWikiCitationRevisionReadAdapter) resolveExactRevisionAuthority(
 		CoordinateReceipt:      receipt,
 		LiveSourceReceipt:      liveSourceReceipt,
 	}
-	authority, err := a.snapshots.ResolveCitationPreviewAuthority(ctx, snapshotRequest)
+	var authority *SchemaWikiCitationPreviewAuthorityV1
+	if a.snapshots != nil {
+		authority, err = a.snapshots.ResolveCitationPreviewAuthority(ctx, snapshotRequest)
+	} else {
+		authority = schemaWikiCitationAuthorityFromCompanion(snapshotRequest)
+	}
 	if err != nil || authority == nil ||
 		validateSchemaWikiCitationPreviewAuthority(snapshotRequest, *authority) != nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 
 	return authority, nil
+}
+
+func schemaWikiCitationAuthorityFromCompanion(
+	request SchemaWikiImmutableRevisionSnapshotRequestV1,
+) *SchemaWikiCitationPreviewAuthorityV1 {
+	receipt := request.CoordinateReceipt
+	authority := &SchemaWikiCitationPreviewAuthorityV1{
+		Contract: "schema-wiki-citation-preview-authority.v1", Request: request,
+		FieldID: request.FieldID, ChunkID: receipt.ChunkID, LocatorRef: receipt.LocatorRef,
+		PageNumber: receipt.PageNumber, BBox: receipt.NormalizedBBox,
+		CoordinateSpaceVersion: receipt.TargetCoordinateSpace,
+		PageWidth:              receipt.PageWidth, PageHeight: receipt.PageHeight,
+		RotationDegrees: receipt.RotationDegrees, QuoteSHA256: receipt.QuoteSHA256,
+		ContentSnapshotSHA256:  receipt.LocatorContentSHA256,
+		EvidenceReceiptSHA256s: append([]string(nil), request.EvidenceReceiptSHA256s...),
+		// This intermediate value never leaves the server. The public bearer
+		// token is issued separately by the deployment-owned Ed25519 ring.
+		OpaqueToken: receipt.ReceiptSHA256,
+	}
+	authority.AuthoritySHA256 = schemaWikiCitationPreviewAuthoritySHA256(*authority)
+	return authority
 }
 
 func schemaWikiNativeParseAttempt(citation types.CitationTargetV1) (int64, bool) {
