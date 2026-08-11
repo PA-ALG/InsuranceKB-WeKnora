@@ -155,19 +155,26 @@ func (KnowledgeRevision) TableName() string {
 // attempt to the exact stored source object whose bytes produced it. FileSHA256
 // is intentionally distinct from ParsedDocument and chunk-manifest identities.
 type KnowledgeRevisionSource struct {
-	TenantID         uint64     `json:"tenant_id" gorm:"not null"`
-	KnowledgeID      string     `json:"knowledge_id" gorm:"type:varchar(36);primaryKey"`
-	ParseAttempt     int64      `json:"parse_attempt" gorm:"primaryKey"`
-	RevisionSourceID string     `json:"revision_source_id" gorm:"type:varchar(64);not null;uniqueIndex"`
-	ResourceID       string     `json:"resource_id" gorm:"type:varchar(36);not null;index"`
-	FileSHA256       string     `json:"file_sha256" gorm:"type:varchar(64);not null"`
-	Size             int64      `json:"size" gorm:"not null"`
-	MimeType         string     `json:"mime_type" gorm:"type:varchar(255);not null"`
-	PageCount        *int       `json:"page_count,omitempty"`
-	RetentionState   string     `json:"retention_state" gorm:"type:varchar(16);not null"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	ReleasedAt       *time.Time `json:"released_at,omitempty"`
+	TenantID          uint64     `json:"tenant_id" gorm:"primaryKey;not null"`
+	KnowledgeID       string     `json:"knowledge_id" gorm:"type:varchar(36);primaryKey"`
+	ParseAttempt      int64      `json:"parse_attempt" gorm:"primaryKey"`
+	RevisionSourceID  string     `json:"revision_source_id" gorm:"type:varchar(64);not null;uniqueIndex"`
+	ResourceID        string     `json:"resource_id" gorm:"type:varchar(36);not null;index"`
+	ResourceHandle    string     `json:"resource_handle" gorm:"type:varchar(22);not null"`
+	FileSHA256        string     `json:"file_sha256" gorm:"type:varchar(64);not null"`
+	ObjectSHA256      string     `json:"object_sha256" gorm:"type:varchar(64);not null"`
+	Size              int64      `json:"size" gorm:"not null"`
+	MimeType          string     `json:"mime_type" gorm:"type:varchar(255);not null"`
+	PageCount         *int       `json:"page_count,omitempty"`
+	ManifestAlgorithm string     `json:"manifest_algorithm" gorm:"type:varchar(64);not null"`
+	ManifestDigest    string     `json:"manifest_digest" gorm:"type:varchar(64);not null"`
+	ChunkCount        int        `json:"chunk_count" gorm:"not null"`
+	ImmutableLocator  string     `json:"immutable_locator" gorm:"type:text;not null"`
+	BindingDigest     string     `json:"binding_digest" gorm:"type:varchar(64);not null"`
+	RetentionState    string     `json:"retention_state" gorm:"type:varchar(16);not null"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	ReleasedAt        *time.Time `json:"released_at,omitempty"`
 }
 
 func (KnowledgeRevisionSource) TableName() string { return "knowledge_revision_sources" }
@@ -210,6 +217,51 @@ func ComputeKnowledgeRevisionSourceID(source KnowledgeRevisionSource) (string, e
 		strconv.FormatInt(source.ParseAttempt, 10), source.ResourceID,
 		source.FileSHA256, strconv.FormatInt(source.Size, 10), source.MimeType,
 	}), nil
+}
+
+// ComputeKnowledgeRevisionSourceBindingDigest closes the server-owned source
+// row over its immutable object, exact parse attempt, manifest and page count.
+// An empty digest represents an intentionally unsealed legacy row; it is never
+// accepted by fixed-revision readers.
+func ComputeKnowledgeRevisionSourceBindingDigest(source KnowledgeRevisionSource) (string, error) {
+	if source.TenantID == 0 || source.KnowledgeID == "" || source.ParseAttempt <= 0 ||
+		source.ResourceID == "" || source.ResourceHandle == "" ||
+		source.ImmutableLocator != BuildResourcePath(source.ResourceHandle) ||
+		source.Size <= 0 || !strings.EqualFold(strings.TrimSpace(source.MimeType), "application/pdf") ||
+		source.PageCount == nil || *source.PageCount <= 0 ||
+		source.ManifestAlgorithm != RevisionManifestAlgorithm || source.ChunkCount <= 0 ||
+		source.RetentionState != KnowledgeRevisionSourcePinned {
+		return "", ErrInvalidRevisionManifest
+	}
+	for _, digest := range []string{
+		source.RevisionSourceID, source.FileSHA256, source.ObjectSHA256, source.ManifestDigest,
+	} {
+		if !validRevisionSHA256(digest) {
+			return "", ErrInvalidRevisionManifest
+		}
+	}
+	if source.ObjectSHA256 != source.FileSHA256 {
+		return "", ErrInvalidRevisionManifest
+	}
+	return revisionAuthorityDigest("knowledge-revision-source-binding.v1", []string{
+		strconv.FormatUint(source.TenantID, 10), source.KnowledgeID,
+		strconv.FormatInt(source.ParseAttempt, 10), source.RevisionSourceID,
+		source.ResourceID, source.ResourceHandle, source.ImmutableLocator,
+		source.FileSHA256, source.ObjectSHA256, strconv.FormatInt(source.Size, 10),
+		strings.ToLower(strings.TrimSpace(source.MimeType)), strconv.Itoa(*source.PageCount),
+		source.ManifestAlgorithm, source.ManifestDigest, strconv.Itoa(source.ChunkCount),
+		source.RetentionState,
+	}), nil
+}
+
+// ValidateKnowledgeRevisionSourceBinding rejects unsealed, drifted and
+// self-rehashed source rows before any object bytes are opened.
+func ValidateKnowledgeRevisionSourceBinding(source KnowledgeRevisionSource) error {
+	digest, err := ComputeKnowledgeRevisionSourceBindingDigest(source)
+	if err != nil || source.BindingDigest != digest {
+		return ErrInvalidRevisionManifest
+	}
+	return nil
 }
 
 // ComputeLiveRevisionSourceReceiptSHA256 is the cross-language exact equation.

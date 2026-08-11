@@ -97,10 +97,17 @@ CREATE TABLE knowledge_revision_sources (
 	parse_attempt INTEGER NOT NULL,
 	revision_source_id TEXT NOT NULL UNIQUE,
 	resource_id TEXT NOT NULL,
+	resource_handle TEXT NOT NULL DEFAULT '',
 	file_sha256 TEXT NOT NULL,
+	object_sha256 TEXT NOT NULL DEFAULT '',
 	size INTEGER NOT NULL,
 	mime_type TEXT NOT NULL,
 	page_count INTEGER,
+	manifest_algorithm TEXT NOT NULL DEFAULT '',
+	manifest_digest TEXT NOT NULL DEFAULT '',
+	chunk_count INTEGER NOT NULL DEFAULT 0,
+	immutable_locator TEXT NOT NULL DEFAULT '',
+	binding_digest TEXT NOT NULL DEFAULT '',
 	retention_state TEXT NOT NULL,
 	created_at DATETIME NOT NULL,
 	updated_at DATETIME NOT NULL,
@@ -277,9 +284,14 @@ func TestCommitDirectRevisionIsAtomicAndFenced(t *testing.T) {
 	require.Equal(t, revision.FileSHA256, source.FileSHA256)
 	require.Equal(t, int64(1024), source.Size)
 	require.Equal(t, "application/pdf", source.MimeType)
+	require.Equal(t, revision.FileSHA256, source.ObjectSHA256)
+	require.Equal(t, revision.ManifestDigest, source.ManifestDigest)
+	require.Equal(t, revision.ChunkCount, source.ChunkCount)
+	require.Empty(t, source.BindingDigest)
 	require.Equal(t, types.KnowledgeRevisionSourcePinned, source.RetentionState)
 	var resource types.StoredResource
 	require.NoError(t, db.Where("id = ?", source.ResourceID).First(&resource).Error)
+	require.Equal(t, resource.Handle, source.ResourceHandle)
 	require.Equal(t, revision.FileSHA256, resource.ContentHash)
 
 	_, err = repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
@@ -347,6 +359,7 @@ func TestSealRevisionSourcePageCountIsExactIdempotentWriteOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sealed.PageCount)
 	require.Equal(t, 39, *sealed.PageCount)
+	require.NoError(t, types.ValidateKnowledgeRevisionSourceBinding(*sealed))
 
 	again, err := repo.SealRevisionSourcePageCount(
 		context.Background(), 1, id, 1, source.RevisionSourceID, 39,
@@ -368,6 +381,73 @@ func TestSealRevisionSourcePageCountIsExactIdempotentWriteOnce(t *testing.T) {
 		"knowledge_id = ? AND parse_attempt = 1", id,
 	).First(&persisted).Error)
 	require.Equal(t, 39, *persisted.PageCount)
+}
+
+func TestSealRevisionSourceBindingReplaysExactSQLiteAuthoritiesAndIsWriteOnce(t *testing.T) {
+	db := setupRevisionTestDB(t)
+	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+	id := seedRevisionKnowledge(t, db, types.ParseStatusProcessing, 1, 0)
+	seedRevisionChunk(t, db, id, 1, 0, "first")
+	_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
+	require.NoError(t, err)
+
+	var candidate types.KnowledgeRevisionSource
+	require.NoError(t, db.Where(
+		"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?", 1, id, 1,
+	).First(&candidate).Error)
+	pageCount := 2
+	candidate.PageCount = &pageCount
+	candidate.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(candidate)
+	require.NoError(t, err)
+
+	sealed, err := repo.SealRevisionSourceBinding(context.Background(), candidate)
+	require.NoError(t, err)
+	require.NoError(t, types.ValidateKnowledgeRevisionSourceBinding(*sealed))
+	replayed, resource, err := repo.GetRevisionSource(context.Background(), 1, id, 1)
+	require.NoError(t, err)
+	require.Equal(t, candidate.BindingDigest, replayed.BindingDigest)
+	require.Equal(t, candidate.ResourceID, resource.ID)
+
+	drifted := candidate
+	driftedPages := 3
+	drifted.PageCount = &driftedPages
+	drifted.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(drifted)
+	require.NoError(t, err)
+	_, err = repo.SealRevisionSourceBinding(context.Background(), drifted)
+	require.ErrorIs(t, err, ErrRevisionCommitFailed)
+
+	var after types.KnowledgeRevisionSource
+	require.NoError(t, db.Where(
+		"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?", 1, id, 1,
+	).First(&after).Error)
+	require.Equal(t, candidate.BindingDigest, after.BindingDigest)
+	require.Equal(t, pageCount, *after.PageCount)
+}
+
+func TestKnowledgeDeletePathsAtomicallyRejectPinnedRevisionSources(t *testing.T) {
+	for name, deleteRows := range map[string]func(*knowledgeRepository, string) error{
+		"single": func(repo *knowledgeRepository, id string) error {
+			return repo.DeleteKnowledge(context.Background(), 1, id)
+		},
+		"batch": func(repo *knowledgeRepository, id string) error {
+			return repo.DeleteKnowledgeList(context.Background(), 1, []string{id})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			db := setupRevisionTestDB(t)
+			repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+			id := seedRevisionKnowledge(t, db, types.ParseStatusProcessing, 1, 0)
+			seedRevisionChunk(t, db, id, 1, 0, "first")
+			_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
+			require.NoError(t, err)
+
+			err = deleteRows(repo, id)
+			require.ErrorIs(t, err, ErrResourcePinned)
+			var after types.Knowledge
+			require.NoError(t, db.Where("tenant_id = ? AND id = ?", 1, id).First(&after).Error)
+			require.False(t, after.DeletedAt.Valid)
+		})
+	}
 }
 
 func TestCommitDirectRevisionRejectsStaleAttemptWithoutPartialWrite(t *testing.T) {

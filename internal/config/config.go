@@ -19,29 +19,38 @@ import (
 
 // Config 应用程序总配置
 type Config struct {
-	Conversation      *ConversationConfig      `yaml:"conversation"     json:"conversation"`
-	Server            *ServerConfig            `yaml:"server"           json:"server"`
-	KnowledgeBase     *KnowledgeBaseConfig     `yaml:"knowledge_base"   json:"knowledge_base"`
-	Tenant            *TenantConfig            `yaml:"tenant"           json:"tenant"`
-	Auth              *AuthConfig              `yaml:"auth"             json:"auth"`
-	Audit             *AuditConfig             `yaml:"audit"            json:"audit"`
-	OIDCAuth          *OIDCAuthConfig          `yaml:"oidc_auth"        json:"oidc_auth"`
-	Models            []ModelConfig            `yaml:"models"           json:"models"`
-	VectorDatabase    *VectorDatabaseConfig    `yaml:"vector_database"  json:"vector_database"`
-	DocReader         *DocReaderConfig         `yaml:"docreader"        json:"docreader"`
-	StreamManager     *StreamManagerConfig     `yaml:"stream_manager"   json:"stream_manager"`
-	ExtractManager    *ExtractManagerConfig    `yaml:"extract"          json:"extract"`
-	WebSearch         *WebSearchConfig         `yaml:"web_search"       json:"web_search"`
-	PromptTemplates   *PromptTemplatesConfig   `yaml:"prompt_templates" json:"prompt_templates"`
-	IM                *IMConfig                `yaml:"im"               json:"im"`
-	Agent             *AgentConfig             `yaml:"agent"            json:"agent"`
-	SchemaWikiSigning *SchemaWikiSigningConfig `yaml:"schema_wiki_signing" json:"-"`
+	Conversation            *ConversationConfig            `yaml:"conversation"     json:"conversation"`
+	Server                  *ServerConfig                  `yaml:"server"           json:"server"`
+	KnowledgeBase           *KnowledgeBaseConfig           `yaml:"knowledge_base"   json:"knowledge_base"`
+	Tenant                  *TenantConfig                  `yaml:"tenant"           json:"tenant"`
+	Auth                    *AuthConfig                    `yaml:"auth"             json:"auth"`
+	Audit                   *AuditConfig                   `yaml:"audit"            json:"audit"`
+	OIDCAuth                *OIDCAuthConfig                `yaml:"oidc_auth"        json:"oidc_auth"`
+	Models                  []ModelConfig                  `yaml:"models"           json:"models"`
+	VectorDatabase          *VectorDatabaseConfig          `yaml:"vector_database"  json:"vector_database"`
+	DocReader               *DocReaderConfig               `yaml:"docreader"        json:"docreader"`
+	StreamManager           *StreamManagerConfig           `yaml:"stream_manager"   json:"stream_manager"`
+	ExtractManager          *ExtractManagerConfig          `yaml:"extract"          json:"extract"`
+	WebSearch               *WebSearchConfig               `yaml:"web_search"       json:"web_search"`
+	PromptTemplates         *PromptTemplatesConfig         `yaml:"prompt_templates" json:"prompt_templates"`
+	IM                      *IMConfig                      `yaml:"im"               json:"im"`
+	Agent                   *AgentConfig                   `yaml:"agent"            json:"agent"`
+	SchemaWikiSigning       *SchemaWikiSigningConfig       `yaml:"schema_wiki_signing" json:"-"`
+	KnowledgeRevisionSource *KnowledgeRevisionSourceConfig `yaml:"knowledge_revision_source" json:"knowledge_revision_source"`
 	// FrontendBaseURL is the externally-visible origin of the SPA, used
 	// to compose absolute share-link URLs. Empty falls back to a host-
 	// relative URL ("/register?token=…") which the SPA then resolves
 	// against window.location.origin — fine for typical single-origin
 	// deployments. Sourced from FRONTEND_BASE_URL env at startup.
 	FrontendBaseURL string `yaml:"frontend_base_url" json:"frontend_base_url"`
+}
+
+// KnowledgeRevisionSourceConfig gates the one-shot immutable source backfill.
+// Reads remain fail-closed when a source has not been sealed. MaxObjectBytes
+// bounds every hash/page-count pass before any repository mutation.
+type KnowledgeRevisionSourceConfig struct {
+	BackfillEnabled bool  `yaml:"backfill_enabled" json:"backfill_enabled"`
+	MaxObjectBytes  int64 `yaml:"max_object_bytes" json:"max_object_bytes"`
 }
 
 // SchemaWikiEd25519PublicKeyConfig is a deployment-owned verification key.
@@ -804,6 +813,10 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
+	if cfg != nil && cfg.KnowledgeRevisionSource != nil &&
+		cfg.KnowledgeRevisionSource.MaxObjectBytes < 0 {
+		errs = append(errs, "knowledge_revision_source.max_object_bytes cannot be negative")
+	}
 	if _, _, err := DecodeSchemaWikiSigningPublicKeys(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
