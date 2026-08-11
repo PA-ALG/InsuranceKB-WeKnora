@@ -512,8 +512,11 @@ type SchemaFieldPageV1 struct {
 	Citations              []CitationTargetV1 `json:"citations"`
 	EvidenceReceiptSHA256s []string           `json:"evidence_receipt_sha256s"`
 	ReviewItemReason       *string            `json:"review_item_reason"`
+	UnknownReason          *string            `json:"unknown_reason"`
 	FieldPageSHA256        string             `json:"field_page_sha256"`
 }
+
+const SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
 
 type SchemaRootPageV1 struct {
 	Contract           string   `json:"contract"`
@@ -1146,12 +1149,14 @@ func validateSchemaFieldPage(page SchemaFieldPageV1) error {
 	known := page.State == "present" || page.State == "absent_explicitly"
 	if known {
 		if page.ValueSnapshot == nil || *page.ValueSnapshot == "" || len(page.Citations) == 0 ||
-			len(page.EvidenceReceiptSHA256s) == 0 || page.ReviewItemReason != nil {
+			len(page.EvidenceReceiptSHA256s) == 0 || page.ReviewItemReason != nil ||
+			page.UnknownReason != nil {
 			return ErrSchemaWikiContractInvalid
 		}
 	} else if page.State != "unknown" || page.ValueSnapshot != nil || len(page.Citations) != 0 ||
 		len(page.EvidenceReceiptSHA256s) != 0 || page.ReviewItemReason == nil ||
-		*page.ReviewItemReason != "FIELD_UNKNOWN" {
+		*page.ReviewItemReason != "FIELD_UNKNOWN" || page.UnknownReason == nil ||
+		*page.UnknownReason != SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials {
 		return ErrSchemaWikiContractInvalid
 	}
 	return requireSchemaWikiHash(page.Contract, page, "field_page_sha256", page.FieldPageSHA256)
@@ -2014,7 +2019,7 @@ func ValidateSchemaWikiGoldenEvidencePreviewAuthorityAgainst(
 }
 
 func ValidateSchemaWikiContractVector(vector SchemaWikiContractVectorV1, raw []byte) error {
-	if vector.Contract != "schema-wiki-contract-vector.v1" || len(vector.Citations) == 0 {
+	if vector.Contract != "schema-wiki-contract-vector.v2" || len(vector.Citations) == 0 {
 		return ErrSchemaWikiContractInvalid
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))

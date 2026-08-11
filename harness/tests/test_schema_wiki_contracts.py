@@ -187,14 +187,17 @@ def _field_page(
         value = "Synthetic value"
         citations = (citation or _citation(),)
         review_reason = None
+        unknown_reason = None
     elif state == "absent_explicitly":
         value = "Not applicable under the cited clause"
         citations = (citation or _citation(),)
         review_reason = None
+        unknown_reason = None
     else:
         value = None
         citations = ()
         review_reason = "FIELD_UNKNOWN"
+        unknown_reason = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
     payload = {
         "contract": "schema-field-page.v1",
         "field_id": field_id,
@@ -203,6 +206,7 @@ def _field_page(
         "citations": citations,
         "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),) if state != "unknown" else (),
         "review_item_reason": review_reason,
+        "unknown_reason": unknown_reason,
     }
     return _sealed(
         SchemaFieldPageV1,
@@ -716,14 +720,23 @@ def test_citation_payload_closure_uses_canonical_key_not_nonlexical_field_order(
 
 
 @pytest.mark.parametrize(
-    ("state", "value", "citations", "review"),
+    ("state", "value", "citations", "review", "unknown_reason"),
     [
-        ("present", None, (_citation(),), None),
-        ("present", "value", (), None),
-        ("absent_explicitly", "not applicable", (), None),
-        ("unknown", "oracle", (), "FIELD_UNKNOWN"),
-        ("unknown", None, (_citation(),), "FIELD_UNKNOWN"),
-        ("unknown", None, (), None),
+        ("present", None, (_citation(),), None, None),
+        ("present", "value", (), None, None),
+        ("present", "value", (_citation(),), None, "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"),
+        ("absent_explicitly", "not applicable", (), None, None),
+        ("unknown", "oracle", (), "FIELD_UNKNOWN", "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"),
+        (
+            "unknown",
+            None,
+            (_citation(),),
+            "FIELD_UNKNOWN",
+            "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS",
+        ),
+        ("unknown", None, (), None, "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"),
+        ("unknown", None, (), "FIELD_UNKNOWN", None),
+        ("unknown", None, (), "FIELD_UNKNOWN", "FREE_TEXT_REASON"),
     ],
 )
 def test_field_page_tri_state_rules(
@@ -731,6 +744,7 @@ def test_field_page_tri_state_rules(
     value: str | None,
     citations: tuple[CitationTargetV1, ...],
     review: str | None,
+    unknown_reason: str | None,
 ) -> None:
     payload = {
         "contract": "schema-field-page.v1",
@@ -740,6 +754,7 @@ def test_field_page_tri_state_rules(
         "citations": citations,
         "evidence_receipt_sha256s": (_sha("evidence-receipt-a"),) if state != "unknown" else (),
         "review_item_reason": review,
+        "unknown_reason": unknown_reason,
     }
     with pytest.raises(ValidationError):
         _sealed(
@@ -757,6 +772,16 @@ def test_present_absent_and_unknown_valid_shapes() -> None:
     assert unknown.value_snapshot is None
     assert unknown.citations == ()
     assert unknown.evidence_receipt_sha256s == ()
+    assert unknown.unknown_reason == "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+
+
+def test_unknown_reason_fully_rehashed_drift_fails_closed() -> None:
+    page = _field_page(state="unknown")
+    payload = page.model_dump(mode="python", exclude={"field_page_sha256"})
+    payload["unknown_reason"] = "FREE_TEXT_REASON"
+    payload["field_page_sha256"] = schema_wiki_sha256("schema-field-page.v1", payload)
+    with pytest.raises(ValidationError):
+        SchemaFieldPageV1.model_validate(payload)
 
 
 @pytest.mark.parametrize("state", ["present", "absent_explicitly"])
@@ -1062,6 +1087,7 @@ def test_python_replays_the_exact_go_contract_vector() -> None:
     )
     raw = path.read_bytes()
     wire = json.loads(raw)
+    assert wire["contract"] == "schema-wiki-contract-vector.v2"
     assert (
         raw.strip()
         == json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()

@@ -28,6 +28,7 @@ NonBlankText = Annotated[
     StrictStr,
     StringConstraints(min_length=1, max_length=4096, pattern=r"^\S(?:[^\r\n]*\S)?$"),
 ]
+SchemaFieldUnknownReason = Literal["NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"]
 
 _HASH_PREFIX: Final[bytes] = b"schema-wiki-canonical.v1\x00"
 
@@ -279,6 +280,7 @@ class SchemaFieldPageV1(_FrozenModel):
     citations: tuple[CitationTargetV1, ...]
     evidence_receipt_sha256s: tuple[Sha256Hex, ...]
     review_item_reason: Identifier | None
+    unknown_reason: SchemaFieldUnknownReason | None
     field_page_sha256: Sha256Hex
 
     @model_validator(mode="after")
@@ -294,6 +296,7 @@ class SchemaFieldPageV1(_FrozenModel):
                 or not self.citations
                 or not self.evidence_receipt_sha256s
                 or self.review_item_reason is not None
+                or self.unknown_reason is not None
             ):
                 raise ValueError("known field requires value and citation without ReviewItem")
         elif (
@@ -301,6 +304,7 @@ class SchemaFieldPageV1(_FrozenModel):
             or self.citations
             or self.evidence_receipt_sha256s
             or self.review_item_reason != "FIELD_UNKNOWN"
+            or self.unknown_reason != "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
         ):
             raise ValueError("unknown field must be value/Evidence-free and reviewable")
         if not _hash_matches(self, self.contract, "field_page_sha256"):
@@ -878,6 +882,7 @@ __all__ = [
     "KnowledgeDomainV1",
     "KnowledgeWikiReleaseV1",
     "SchemaFieldPageV1",
+    "SchemaFieldUnknownReason",
     "SchemaPackV1",
     "SchemaRootPageV1",
     "SchemaSectionV1",
