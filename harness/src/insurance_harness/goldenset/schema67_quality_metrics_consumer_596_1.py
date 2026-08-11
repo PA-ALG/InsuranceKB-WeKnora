@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import insurance_harness.goldenset.schema67_golden_quality_gate_596_1 as golden_gate_module
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     Schema67GoldenEvaluationResultV1,
     Schema67GoldenQualityGateError,
+    SchemaWikiGoldenQualityDossierV2,
     make_schema67_golden_evaluation_review_bundle_596_1,
 )
 from insurance_harness.goldenset.schema67_quality_metrics_596_1 import (
@@ -36,24 +38,52 @@ def _compute_metrics(
 def compute_admitted_schema67_quality_metrics_596_1(
     *,
     admission: Schema67ReviewedGoldenSuccessor5961V1 | Schema67GoldenEvaluationResultV1,
+    dossier: SchemaWikiGoldenQualityDossierV2 | None = None,
+    human_batch_decision_receipt: object | None = None,
     rows: Sequence[Schema67MetricRowV1],
 ) -> Schema67QualityMetricsV1:
     """Measure only after the existing evaluator has produced a registered PASS receipt."""
 
     if type(admission) is Schema67ReviewedGoldenSuccessor5961V1:
-        if (
-            admission.source_review_status == "COMPLETED"
-            and admission.schema67_mapping_status == "PARTIAL_51_CLOSED_16_RESIDUAL"
-            and admission.golden_admission_status
-            == "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED"
-            and len(admission.residual_pending_field_ids) == 16
-            and admission.review_metadata.reviewed_at is None
-            and admission.ready_to_sign.approval_receipt_sha256 is None
+        try:
+            exact_status = Schema67ReviewedGoldenSuccessor5961V1.model_validate(
+                admission.model_dump(mode="python")
+            )
+        except ValueError:
+            raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID") from None
+        if exact_status == admission and (
+            exact_status.source_review_status == "COMPLETED"
+            and exact_status.schema67_mapping_status == "COMPLETE_67"
+            and exact_status.golden_admission_status == "BLOCKED_RECEIPT_UNVERIFIED"
+            and not exact_status.residual_pending_field_ids
+            and exact_status.review_metadata.reviewed_at is None
+            and exact_status.ready_to_sign.approval_receipt_sha256 is None
         ):
             raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_BLOCKED")
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
 
     if type(admission) is not Schema67GoldenEvaluationResultV1:
+        raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
+    validator = getattr(
+        golden_gate_module,
+        "validate_registered_schema_wiki_golden_quality_dossier_v2_596_1",
+        None,
+    )
+    if (
+        type(dossier) is not SchemaWikiGoldenQualityDossierV2
+        or human_batch_decision_receipt is None
+        or not callable(validator)
+    ):
+        raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
+    try:
+        validated_dossier = validator(
+            evaluation=admission,
+            dossier=dossier,
+            human_batch_decision_receipt=human_batch_decision_receipt,
+        )
+    except (Schema67GoldenQualityGateError, TypeError, ValueError):
+        raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID") from None
+    if validated_dossier is not dossier:
         raise Schema67QualityMetricsConsumerError("GOLDEN_ADMISSION_INVALID")
     try:
         bundle = make_schema67_golden_evaluation_review_bundle_596_1(admission)
