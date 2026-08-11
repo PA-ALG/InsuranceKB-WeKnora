@@ -55,7 +55,7 @@ const HASH = /^[0-9a-f]{64}$/
 const TEXT = /^[^\u0000-\u001f\u007f]+$/
 const ADMISSION_BLOCKING_REASON_CODES = Object.freeze([
   'GOLDEN_APPROVAL_RECEIPT_UNVERIFIED',
-])
+] as const)
 
 function invalid(): never {
   throw new Error('GOLDEN_SUCCESSOR_STATUS_INVALID')
