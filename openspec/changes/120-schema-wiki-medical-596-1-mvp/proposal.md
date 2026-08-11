@@ -19,13 +19,16 @@ state. It SHALL NOT convert, copy or fall back to the live generic material Wiki
   maps reviewed schema preparations to the existing Wiki Release service, and adds
   release-pinned schema reads under the existing dual ACL. It reuses the single existing
   Head, CAS activation, revert and pinning authority; it adds no release table or Head.
+  The immutable-citation delta adds only an attempt-bound revision-source/resource record,
+  an exact byte reader and a third, citation-token-only signing ring.
 - **Lane B · medical compiler** code-owns `medical-schema67.v1`, the initial medical
   domain/category, the stable Ping An eShengBao entity, product version `596-1`, the
-  initial taxonomy, sealed-Candidate compilation, the review bundle and the exact
-  cross-language release vector.
+  initial taxonomy, sealed-Candidate compilation, the factory-provenance-sealed Evidence
+  companion, the review bundle and the exact cross-language release vector.
 - **Lane C · UI and citations** consumes only frozen A/B DTOs, renders Active or reviewed
-  preparation state, and opens exact-revision PDF bytes at the required page/bbox. It
-  cannot mint review authority, use current/latest bytes or substitute page 1.
+  preparation state, and opens token-only exact-revision PDF bytes after SHA-256 validation
+  at the required page/bbox. It cannot mint review authority, use current/latest bytes or
+  substitute page 1.
 
 Integration order is A1 contracts -> B medical compiler -> A2 serving adapter -> C UI.
 No lane may edit another lane's paths. Any physical path overlap, unlisted dependency
@@ -39,15 +42,20 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
 - `harness/tests/test_schema_wiki_contracts.py`
 - `internal/types/schema_wiki.go`
 - `internal/types/schema_wiki_test.go`
+- `internal/types/knowledge_revision.go`, `internal/types/knowledge_revision_test.go`,
+  `internal/types/schema_wiki_citation_content_test.go`
 - `internal/types/wiki_release.go` only to add the persisted Draft state used by the
   existing `wiki_release_preparations` model; no table or migration change.
 - `internal/application/service/schema_wiki.go`
 - `internal/application/service/schema_wiki_citation_revision.go`
 - `internal/application/service/schema_wiki_citation_revision_test.go`
+- `internal/application/service/schema_wiki_citation_content.go`
+- `internal/application/service/schema_wiki_citation_content_test.go`
 - `internal/application/service/schema_wiki_test.go`
 - `internal/application/service/testdata/schema_wiki_contract_vector.json`
 - `internal/config/config.go`
 - `internal/config/schema_wiki_signing_test.go`
+- `internal/config/schema_wiki_citation_token_signing_test.go`
 - `internal/handler/schema_wiki.go`
 - `internal/handler/schema_wiki_test.go`
 - `internal/router/routes_schema_wiki.go`
@@ -62,6 +70,9 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
   `internal/router/routes_knowledge.go` would be the mount point is superseded by this
   existing direct registration; `routes_knowledge.go` remains unchanged and is not a
   missing reachability path.
+- The narrow immutable-source/resource custody paths and
+  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql` listed
+  in the approved plan; these do not add a Release table, Head or approval model.
 
 ### Lane B only
 
@@ -69,7 +80,9 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
   and this registry row;
 - `harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py`
 - `harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py`
+- `harness/src/insurance_harness/knowledge_compiler/schema_wiki_candidate_evidence_join_596_1.py`
 - `harness/tests/test_medical_schema_pack_596_1.py`
+- `harness/tests/test_schema_wiki_candidate_evidence_authority_121.py`
 - `harness/tests/test_schema_wiki_release_596_1.py`
 - `internal/application/service/testdata/schema_wiki_release_596_1_vector.json`
 

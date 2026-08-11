@@ -17,6 +17,12 @@ Status: `INTEGRATION-CODE-GREEN / LIVE-NO-GO`
 - Reviewed production-readiness source: tree
   `db07de2e737a209a1cc8edf59c63914260bc810a`, exact eight paths, frozen index SHA-256
   `8da2663f054891265b58962e1dde0eb2ed8b95759018d217aaa3b3f10d778a63`.
+- Immutable-citation integration sources: commits
+  `82e3b1b1c3aa80962b11b981019a60dfc1b462b1`,
+  `6e5502bfb844753d3f709f1491e881180ec60907`,
+  `8d6fdb89996fb458c093f87e809b0c777d9e7290`,
+  `881edffadff5edf1c6b3ac01773880b4e09ced47` and
+  `bbe67a1e1c65ef2706da3e7fa5a60e97437601ae`, applied in that order.
 - Scope: A1 contracts, Lane B medical pack/compiler and immutable vector, A2 existing-row
   lifecycle/read facade, and Lane C release-pinned UI. This report and checklist are
   mechanically synchronized without changing production bytes.
@@ -70,6 +76,10 @@ DNS noise did not alter that load-bearing missing-change RED.
   focused config signer/redaction tests `PASS`; focused container verifier/DI tests `PASS`;
   bounded Go vet over service/config/container `PASS`; strict OpenSpec, diff-check,
   exact owner/support `56/56`, frozen exact8 blob replay and privacy scans `PASS`.
+- Immutable-citation source checkpoints independently reported focused provider-free GO;
+  their complete-stack verification is recorded only after the single integration matrix
+  is run. Release vector SHA-256 is
+  `6783e3312199378a51065872278961f10c0e0f6510648e2ff1ce18823f10e6be`.
 
 ## Production-readiness delta
 
@@ -89,6 +99,26 @@ DNS noise did not alter that load-bearing missing-change RED.
 - The production-readiness owner amendment adds five paths to the previous closed 51-path
   integration set: the native adapter and test, config and signing test, and container
   production-readiness test. The resulting closed owner/support union is 56 paths.
+
+## Immutable citation and Candidate-companion delta
+
+- `LiveRevisionSourceReceiptV1` and the narrow source migration bind exact knowledge,
+  attempt, resource, file SHA/size/page count, document and manifest identities; deletion
+  cannot silently detach a serving revision.
+- Lane B keeps CandidateV2 wire unchanged and adds a factory-provenance-sealed companion
+  containing all Evidence-to-live-source/chunk/page/bbox receipts. MinerU top-left
+  `0..1000` coordinates normalize deterministically to `normalized_0_1e6`; copied,
+  reparsed, mutated or self-rehashed companions fail closed.
+- A third Ed25519 ring signs only five-minute citation tokens and cannot reuse either
+  named-human or publish-authorization key IDs/material. The public authority contains no
+  source text or private key. The bytes route accepts only the opaque token and replays
+  exact source size/SHA before returning bytes.
+- Lane C requests authority with exact Active release/epoch/field/citation only, verifies
+  returned bytes by SHA-256 before PDF open, renders terms page 12 and brochure page 27,
+  and rejects rate page 12/27 before token/bytes/PDF access. Current/latest/presigned/
+  material/page-1 fallback remains absent.
+- The closed owner/support union is now 74 paths. These are code and provider-free fixture
+  facts, not a record of live model, DB, preparation or activation execution.
 
 ## A2 owner and state-machine amendment
 
@@ -152,16 +182,18 @@ DNS noise did not alter that load-bearing missing-change RED.
 ## Live NO-GO boundary
 
 - No successful sealed production `Schema67CandidateV2` is available for publication.
-- The production Evidence-to-WeKnora native knowledge/revision/chunk/manifest replay is
-  wired, but immutable attempt-bound revision bytes and canonical coordinate-space/page/
-  bbox authority are not frozen. The adapter and UI therefore report typed unavailable,
-  return/open no document bytes, and never fall back to current/latest bytes or page 1.
+- The previous official DeepSeek exact8 run ended in a typed failure and produced no
+  Candidate. No new real model run has been executed with the immutable-citation Candidate
+  companion identity, so the new code and fixtures cannot be used as a publication input.
+- Immutable attempt-bound source custody, canonical coordinate-space/page/bbox receipts,
+  token-only bytes and UI verification are implemented, but their migrations and live
+  source rows have not been deployed/replayed in this Mission. No live citation byte was
+  requested or rendered.
 - Live `wiki_release_*` deployment/migration custody was not established in this Mission;
   no Draft, named-human review, publish authorization or activation was executed.
 - Provider/model, Golden scoring, DB/WeKnora writes, migration, deployment and activation
   remain `NOT RUN`. Existing 46 generic material Wiki pages are not migrated or converted.
 
-Lane B fixture acceptance uses a real public-factory-sealed Candidate and a synthetic trusted
-citation-authority port. It does not claim that a real Candidate, immutable revision blob,
-page/bbox authority, preparation, activation, release tables, deployment or the end-to-end
-MVP exists.
+Lane B fixture acceptance uses a public-factory-sealed synthetic Candidate and the exact
+companion/source receipt contracts. It does not claim that a new real Candidate, deployed
+revision rows, preparation, activation, live release tables or the end-to-end MVP exists.

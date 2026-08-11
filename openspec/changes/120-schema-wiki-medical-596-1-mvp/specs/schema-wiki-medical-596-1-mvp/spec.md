@@ -293,30 +293,39 @@ the Head-derived scope. This exception SHALL NOT be treated as a caller-signed s
   arbitrary release ID without the closed current entity-version response
 - **THEN** no release member or citation preview is returned
 
-### Requirement: SWM9 exact revision preview remains fail closed until authority exists
+### Requirement: SWM9 exact revision preview uses immutable source and token authority
 
-Lane A SHALL freeze a `CitationRevisionReadPort`, typed preview errors and a production
-native replay adapter. That adapter SHALL replay only server-derived tenant/scope,
-knowledge, source revision/parse attempt, file/document identity, chunk membership and the
-recomputed revision manifest. It SHALL return typed unavailable and zero bytes after that
-replay while immutable attempt-bound blob and canonical coordinate-space/page/bbox
-authority are absent. It SHALL NOT use current/latest, presigned bytes or page 1, and SHALL
-NOT claim real exact-revision preview acceptance until the remaining authority is proven.
+Lane A SHALL replay server-derived tenant/scope, knowledge, immutable attempt-bound
+revision source/resource, parse attempt, file/document identity, chunk membership and the
+recomputed revision manifest. It SHALL bind the Candidate companion's exact page and
+`normalized_0_1e6` bbox authority before issuing a five-minute opaque token signed by a
+third Ed25519 ring that cannot reuse the named-human or publish-authorization rings. The
+public authority and token SHALL contain no source text or private key. The bytes endpoint
+SHALL accept only the opaque token, reload the same pinned custody, and return bytes only
+when their size and SHA-256 match. It SHALL NOT use current/latest, presigned/material
+bytes or page 1.
 
-#### Scenario: native custody replays but immutable preview authority is unavailable
+#### Scenario: requested page is outside the immutable source
 
-- **WHEN** native knowledge/revision/chunk/manifest custody replays successfully but no
-  immutable attempt-bound blob or canonical coordinate-space/page/bbox authority exists
-- **THEN** a typed unavailable result is returned and no document is opened
+- **WHEN** the citation requests page 12 or 27 for a two-page rate source
+- **THEN** `PAGE_UNAVAILABLE` is returned before token issue, byte storage access or PDF
+  open
+
+#### Scenario: immutable bytes drift after token issue
+
+- **WHEN** the token is valid but the reloaded byte size or SHA-256 differs
+- **THEN** the request fails closed before any PDF page or bbox is returned
 
 ### Requirement: SWM10 live acceptance obeys external stop gates
 
 Real prepare/activation SHALL remain blocked until the exact three completed knowledge
-identities and sealed hashes/manifests are revalidated, a sealed Candidate exists, the
-trusted revision/page/bbox join and exact preview adapter exist, the standard release
-tables are deployed with a clean migration ledger, UI dependencies are approved, and the
-two historical brochure running subspans have an accepted runbook policy. The existing 46
-generic Wiki pages and rate `pages_affected=14` SHALL NOT be treated as Schema authority.
+identities and sealed hashes/manifests are revalidated, a new successful sealed Candidate
+is produced under the updated Evidence-companion identity, the immutable revision-source
+and standard release migrations are deployed with clean ledgers, UI dependencies are
+approved, and the two historical brochure running subspans have an accepted runbook
+policy. The existing 46 generic Wiki pages and rate `pages_affected=14` SHALL NOT be
+treated as Schema authority. A previous exact8 model run that ended in typed failure and
+produced no Candidate SHALL NOT be reused or represented as acceptance.
 
 #### Scenario: release tables are absent in live WeKnora
 
@@ -335,13 +344,16 @@ bounded existing-row state-machine changes in `internal/types/wiki_release.go`,
 `internal/application/service/wiki_release.go`; this authorization does not permit a new
 table, migration, Head, CAS or approval model.
 
-The production-readiness amendment additionally authorizes only
+The production-readiness and immutable-citation amendments additionally authorize
 `internal/application/service/schema_wiki_citation_revision.go`, its focused test,
 `internal/config/config.go`, `internal/config/schema_wiki_signing_test.go` and
 `internal/container/schema_wiki_production_readiness_test.go`. These paths may implement
 native citation replay, distinct public-key verifier wiring and JSON redaction only; they
 SHALL NOT add immutable blob inference, a second approval model, private signing keys,
-current/latest fallback or a platform-wide key service.
+current/latest fallback or a platform-wide key service. The exact additional source,
+resource, migration, Candidate-companion, citation-content/token and UI paths are the
+closed 74-path set in the approved implementation plan; they may implement only the
+attempt-bound revision custody and citation flow described in SWM9.
 
 The actual backend DI/mount authority is `internal/router/router.go`, whose `NewRouter`
 path registers the 13 Schema Wiki routes directly. `internal/router/routes_knowledge.go`

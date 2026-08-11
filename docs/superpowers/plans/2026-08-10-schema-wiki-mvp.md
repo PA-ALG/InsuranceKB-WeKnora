@@ -23,7 +23,13 @@
 - **Serving authority:** the existing WeKnora Wiki Release Head remains the only Active Head. Existing `Prepare`, `ActivateReviewed`, `Revert`, pinned reads, dual ACL and transaction/CAS behavior are reused.
 - **Current facts:** generic Wiki pages exist, but no real sealed Candidate or Active Schema Release currently exists. Fixtures can prove contracts; they cannot claim MVP completion.
 - **Fresh external preflight (2026-08-10):** tenant `10003`, RAW KB `b1f1764c-443d-46b8-98e3-d5aa5e55eb42`; terms `f987fc16-222a-4246-8ca0-22c1a81dd6d9` completed attempt 2, brochure `1265a343-c408-4620-8eed-c4f6a2adadc2` completed attempt 1, rate `32402c40-6131-4049-8080-cc5b68188cd3` completed attempt 1. Their exact file/revision/manifest hashes remain external custody inputs and must be supplied to the trusted citation join.
-- **Live migration fact:** the live database has no `wiki_release_*` tables. This plan adds no new migration, but real preparation/Head acceptance is blocked until the already-merged standard release migrations are applied in a separately authorized deployment window and their ledger is verified clean.
+- **Live migration fact:** the live database has no `wiki_release_*` tables. This plan adds
+  no new Release/Head migration. The integrated immutable citation-source delta does add
+  the narrow `000004_knowledge_revision_sources` migration for attempt-bound resource
+  custody and delete guards; it is not a second serving authority. Real preparation/Head
+  acceptance remains blocked until the standard release migrations and this source
+  migration are applied in a separately authorized deployment window and their ledgers
+  are verified clean.
 - **Generic-Wiki fact:** 46 generic material pages are already live/published; rate `pages_affected=14` is not a source-document total-page count. Terms generic `source_refs` provenance is zero. None of these pages/counts may be migrated, promoted or guessed into Schema fields/citations.
 - **Operational residue:** brochure retains two historical `running` subspans. The release runbook must freeze an accept/cleanup policy before activation; this plan does not alter the live residue.
 - **Non-goals:** no provider/model run, no Golden mutation, no generic Wiki migration, no new release tables/migration, no second CAS/head, no benefits-domain content, no general CMS/registry platform, no partial activation, no default page 1.
@@ -93,6 +99,23 @@ Modify:
   existing Wiki group carries ingest policy; moving the Schema routes there would either
   duplicate registration or alter the retrieve-only policy of Active Schema reads.
 
+Immutable citation-source and token integration paths:
+
+- `internal/types/knowledge_revision.go`,
+  `internal/types/knowledge_revision_test.go` and
+  `internal/types/schema_wiki_citation_content_test.go`.
+- `internal/application/repository/{knowledge.go,knowledge_revision_test.go,resource.go}`,
+  `internal/application/service/file/{resource_catalog.go,resource_catalog_test.go}` and
+  `internal/application/service/resource_test.go` for the exact attempt/resource custody
+  and delete-guard join.
+- `internal/application/service/schema_wiki_citation_content.go` and its focused test,
+  plus `internal/config/schema_wiki_citation_token_signing_test.go`, for the third,
+  citation-token-only Ed25519 ring and token-bound immutable bytes.
+- `internal/database/enterprise_migration.go`,
+  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql` and
+  `migrations/versioned/knowledge_revision_manifest_test.go` for the narrow source-custody
+  migration only; these paths add no Release table, Head or CAS.
+
 ### Lane B — governance, medical pack and sealed-Candidate compiler
 
 Create:
@@ -103,7 +126,9 @@ Create:
 - `openspec/changes/120-schema-wiki-medical-596-1-mvp/specs/schema-wiki-medical-596-1-mvp/spec.md`
 - `harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py`
 - `harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py`
+- `harness/src/insurance_harness/knowledge_compiler/schema_wiki_candidate_evidence_join_596_1.py`
 - `harness/tests/test_medical_schema_pack_596_1.py`
+- `harness/tests/test_schema_wiki_candidate_evidence_authority_121.py`
 - `harness/tests/test_schema_wiki_release_596_1.py`
 - `internal/application/service/testdata/schema_wiki_release_596_1_vector.json`
 
@@ -155,10 +180,11 @@ release semantics, citation authority or a substitute for any approved Lane C pa
 
 ### Machine-readable integrated owner/support closure
 
-The following block is the exact, closed 56-path set for the provider-free production-
-readiness checkpoint. It is the union of governance documents, Lane A/B/C owner paths and
-the seven bounded support paths above; automated verification compares this block byte-for-
-byte as a sorted set with `git diff --name-only` from the authoritative base.
+The following block is the exact, closed 74-path set for the provider-free immutable-
+citation integration checkpoint. It is the union of governance documents, Lane A/B/C owner
+paths, the seven bounded frontend support paths and the narrow immutable-source/token paths
+above; automated verification compares this block byte-for-byte as a sorted set with
+`git diff --name-only` from the authoritative base.
 
 <!-- BEGIN SCHEMA_WIKI_EXACT_OWNER_SUPPORT_SET -->
 ```text
@@ -187,14 +213,24 @@ frontend/src/views/knowledge/schema-wiki/schemaWikiNavigation.test.ts
 frontend/src/views/knowledge/schema-wiki/schemaWikiNavigation.ts
 frontend/src/views/system/SystemSettings.vue
 harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_candidate_evidence_join_596_1.py
 harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py
 harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py
 harness/tests/test_medical_schema_pack_596_1.py
+harness/tests/test_schema_wiki_candidate_evidence_authority_121.py
 harness/tests/test_schema_wiki_contracts.py
 harness/tests/test_schema_wiki_release_596_1.py
+internal/application/repository/knowledge.go
+internal/application/repository/knowledge_revision_test.go
+internal/application/repository/resource.go
 internal/application/repository/wiki_release.go
 internal/application/repository/wiki_release_scope_test.go
+internal/application/service/file/resource_catalog.go
+internal/application/service/file/resource_catalog_test.go
+internal/application/service/resource_test.go
 internal/application/service/schema_wiki.go
+internal/application/service/schema_wiki_citation_content.go
+internal/application/service/schema_wiki_citation_content_test.go
 internal/application/service/schema_wiki_citation_revision.go
 internal/application/service/schema_wiki_citation_revision_test.go
 internal/application/service/schema_wiki_test.go
@@ -202,17 +238,25 @@ internal/application/service/testdata/schema_wiki_contract_vector.json
 internal/application/service/testdata/schema_wiki_release_596_1_vector.json
 internal/application/service/wiki_release.go
 internal/config/config.go
+internal/config/schema_wiki_citation_token_signing_test.go
 internal/config/schema_wiki_signing_test.go
 internal/container/container.go
 internal/container/schema_wiki_production_readiness_test.go
+internal/database/enterprise_migration.go
 internal/handler/schema_wiki.go
 internal/handler/schema_wiki_test.go
 internal/router/router.go
 internal/router/routes_schema_wiki.go
 internal/router/routes_schema_wiki_test.go
+internal/types/knowledge_revision.go
+internal/types/knowledge_revision_test.go
 internal/types/schema_wiki.go
+internal/types/schema_wiki_citation_content_test.go
 internal/types/schema_wiki_test.go
 internal/types/wiki_release.go
+migrations/enterprise/versioned/000004_knowledge_revision_sources.down.sql
+migrations/enterprise/versioned/000004_knowledge_revision_sources.up.sql
+migrations/versioned/knowledge_revision_manifest_test.go
 openspec/changes/120-schema-wiki-medical-596-1-mvp/proposal.md
 openspec/changes/120-schema-wiki-medical-596-1-mvp/specs/schema-wiki-medical-596-1-mvp/spec.md
 openspec/changes/120-schema-wiki-medical-596-1-mvp/tasks.md
@@ -411,6 +455,15 @@ extends the closed owner/support union to 56 paths. It closes native custody rep
 non-nil DI and separated/redacted public-key verification wiring only; it deliberately
 keeps real citation preview and the overall MVP at live NO-GO.
 
+The provider-free immutable-citation stack then applies, in order, immutable revision
+source custody, token-only citation bytes with a third signing ring, the Go Candidate
+companion replay, the factory-provenance-sealed Python Candidate companion, and the exact
+page/bbox UI. It preserves release vector SHA-256
+`6783e3312199378a51065872278961f10c0e0f6510648e2ff1ce18823f10e6be` and expands the
+closed owner/support union to 74 paths. The previous official DeepSeek exact8 run ended in
+a typed failure with no Candidate; no new real model execution, Draft, review, activation
+or live citation-byte request has been run against this stack.
+
 - [ ] Merge/rebase in this order only: OpenSpec120 → Lane A1 → Lane B pack/compiler → Lane A2 service/CAS → Lane C UI.
 - [ ] At every step, mechanically verify owner-path disjointness. Resolve only expected OpenSpec registry metadata in Lane B; no semantic conflict may be auto-resolved.
 - [ ] Run the complete scoped matrix once on the integration candidate:
@@ -434,23 +487,24 @@ keeps real citation preview and the overall MVP at live NO-GO.
 
 - **B0 — OpenSpec:** no production file changes before OpenSpec120 is accepted.
 - **B1 — Candidate:** no real Candidate means no release draft and no generic fallback.
-- **B2 — Citation authority:** the non-self-issued native join through WeKnora knowledge,
-  source revision, parse attempt, file/document identity, chunk and manifest is now replayed
-  by the production adapter. The remaining immutable attempt-bound blob plus canonical
-  coordinate-space/page/bbox authority is still missing and must be frozen; a hand-built ID
-  map is not acceptable.
+- **B2 — Citation authority:** code now closes the non-self-issued join through WeKnora
+  knowledge, immutable attempt-bound source/resource, parse attempt, file/document identity,
+  chunk and manifest, plus the factory-sealed Candidate companion and canonical
+  `normalized_0_1e6` page/bbox receipt. Live acceptance still requires a newly generated
+  real Candidate and deployed/replayed source rows; a hand-built ID map is not acceptable.
 - **B3 — Draft custody:** pre-review Candidate/manifest review remains Lane B dossier custody. The server exposes only a reviewed immutable `preparation_id`; if preserving that preparation requires a new DB/platform instead of the existing Release preparation boundary, stop and narrow the adapter.
-- **B4 — Exact revision preview:** the native replay adapter and DI are wired, but it
-  intentionally returns typed unavailable and zero bytes. Current/latest/presigned/page-1
-  fallback cannot pass citation acceptance. Live UI GREEN still requires an immutable
-  attempt-bound blob and exact coordinate-space/page/bbox adapter; native replay alone is
-  not completion.
+- **B4 — Exact revision preview:** the immutable source reader, third signing ring,
+  five-minute opaque token and UI exact authority/page/bbox gates are implemented. Bytes
+  are fetched only by token and verified by SHA-256 before PDF open; current/latest/
+  presigned/material/page-1 fallback cannot pass. This code checkpoint is not live UI
+  acceptance because the new real Candidate/model run and authorized live release flow
+  have not occurred.
 - **B5 — UI bbox:** without approved `pdfjs-dist`, Vitest, `@vue/test-utils` and `happy-dom` (or existing exact equivalents), UI integration stops; page-only navigation or coordinate-only unit tests are insufficient.
 - **B6 — Atomicity:** any design that needs a second Head, new release tables, member-by-member activation or partial publication is rejected.
-- **B7 — Path ownership:** CLOSED for the provider-free production-readiness checkpoint:
-  all 56 changed paths are in the approved lane matrix or the seven explicitly bounded integration-support
-  paths. Any future unplanned path or cross-lane write conflict still stops that lane for a
-  plan amendment.
+- **B7 — Path ownership:** CLOSED for the provider-free immutable-citation checkpoint: all
+  74 changed paths are in the approved lane matrix, the seven bounded frontend support
+  paths or the narrow immutable-source/token paths. Any future unplanned path or cross-lane
+  write conflict still stops that lane for a plan amendment.
 - **B8 — Stable identities:** the initial medical domain/category/Ping An entity/version/taxonomy must come from Lane B's code-owned factory. Caller-selectable self-consistent identities are rejected.
 - **B9 — Human review:** the named-human decision must bind the exact `SchemaWikiReviewBundleV1`; Candidate-only approval cannot activate a mutated manifest.
 - **B10 — Live schema:** absence of deployed `wiki_release_*` tables is a deployment blocker, not authority to add a new migration or fall back to ordinary `wiki_pages`.

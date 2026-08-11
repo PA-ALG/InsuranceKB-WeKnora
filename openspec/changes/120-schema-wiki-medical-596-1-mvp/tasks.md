@@ -35,6 +35,10 @@
   manifest, members, citation bindings and schema/entity/taxonomy identities in
   `SchemaWikiReviewBundleV1`.
 - [x] GREEN only after the Lane A A1 interface commit is mechanically consumed.
+- [x] Bind all Evidence to a factory-provenance-sealed
+  `Schema67CandidateEvidenceAuthorityV1` companion without changing CandidateV2 wire;
+  normalize exact MinerU top-left `0..1000` boxes to `normalized_0_1e6`, retain the full
+  live revision-source receipt and reject copy/reparse/nested mutation/self-rehash.
 
 ## Task 4 · Lane A existing-release serving adapter
 
@@ -128,6 +132,9 @@
 - [x] Register all 13 Schema Wiki routes through the approved direct DI/mount in
   `internal/router/router.go`. `internal/router/routes_knowledge.go` remains unchanged:
   mounting there would duplicate registration or alter the retrieve-only policy.
+- [x] Persist immutable attempt-bound revision source/resource custody, replay the Go
+  companion, and issue token-only citation bytes from a third Ed25519 ring. Reject ring
+  reuse, byte size/SHA drift, foreign attempt/resource and out-of-range page before output.
 
 ## Task 5 · Lane C release-pinned UI
 
@@ -141,6 +148,10 @@
   Materials Wiki separate, follow scope -> exact-six-field current pin -> release
   root/section/field, and render unavailable citation custody as a typed state rather than
   inventing a viewer pin.
+- [x] Consume only `schema-wiki-citation-content-authority.v1` from the exact Active
+  release/epoch/field/citation request, fetch bytes only with its opaque token, verify
+  SHA-256 before PDF open, and render terms page 12/brochure page 27 with exact bbox while
+  rejecting rate page 12/27 before token/bytes/PDF access.
 
 ## Task 6 · Integration and external stop gates
 
@@ -158,9 +169,10 @@
 
 Task completion above means the bounded repository code and provider-free integration are
 implemented and verified. It does not mean the live MVP has been deployed or activated:
-the successful sealed Candidate, production revision/page/bbox authority join, deployed
-release storage/migration ledger, persisted Draft, named-human review and activation are
-still explicit external STOP gates.
+the previous official exact8 model run failed and produced no Candidate, and no new real
+model run has been executed against the immutable-citation identity. Deployed source and
+release migration ledgers, persisted Draft, named-human review and activation remain
+explicit external STOP gates.
 
 ## Global stop conditions
 
