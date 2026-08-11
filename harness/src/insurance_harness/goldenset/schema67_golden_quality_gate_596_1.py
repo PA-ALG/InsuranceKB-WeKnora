@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import math
 import threading
+import unicodedata
 import weakref
 from collections import Counter
+from collections.abc import Mapping
 from typing import Annotated, Final, Literal, Self
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -38,6 +47,7 @@ from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_59
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationBBoxV1,
     Schema67GoldenQualityGateReceiptV1,
+    schema_wiki_canonical_bytes,
     schema_wiki_sha256,
 )
 
@@ -77,7 +87,7 @@ METRIC_POLICY_SHA256: Final[str] = schema_wiki_sha256(
 EVALUATOR_IDENTITY_SHA256: Final[str] = schema_wiki_sha256(
     "schema67-golden-evaluator.v1",
     {
-        "implementation": "deterministic-596-1-only",
+        "implementation": "deterministic-596-1-only.v2",
         "metric_policy_sha256": METRIC_POLICY_SHA256,
         "normalization_policy_sha256": NORMALIZATION_POLICY_SHA256,
         "risk_policy_sha256": RISK_POLICY_SHA256,
@@ -111,6 +121,161 @@ class Schema67GoldenQualityGateError(ValueError):
 
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
+
+
+class Schema67GoldenApprovalV1(_FrozenModel):
+    contract: Literal["schema67-golden-approval.v1"]
+    domain: Literal["insurancekb.schema67-golden-approval.596-1.v1"]
+    action: Literal["approve"]
+    principal_id: NonBlank
+    golden_set_sha256: Sha256Hex
+    golden_version: NonBlank
+    product_version_id: Literal["596-1"]
+    entity_version_id: Literal["ping-an-e-sheng-bao@596-1"]
+    schema_pack_sha256: Sha256Hex
+    ordered_field_ids_sha256: Sha256Hex
+    source_authorities_sha256: Sha256Hex
+    policies_sha256: Sha256Hex
+    issued_at: Annotated[StrictInt, Field(gt=0)]
+    expires_at: Annotated[StrictInt, Field(gt=0)]
+    signer_key_id: NonBlank
+    signature: NonBlank
+    approval_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_approval(self) -> Self:
+        payload = self.model_dump(mode="python", exclude={"approval_sha256"})
+        if (
+            not self.principal_id.startswith("human:")
+            or self.expires_at <= self.issued_at
+            or self.approval_sha256 != schema_wiki_sha256(self.contract, payload)
+        ):
+            raise ValueError("Golden approval invalid")
+        try:
+            decoded = base64.urlsafe_b64decode(self.signature + "=" * (-len(self.signature) % 4))
+        except (ValueError, UnicodeEncodeError):
+            raise ValueError("Golden approval signature invalid") from None
+        if (
+            len(decoded) != 64
+            or base64.urlsafe_b64encode(decoded).rstrip(b"=").decode("ascii") != self.signature
+        ):
+            raise ValueError("Golden approval signature invalid")
+        return self
+
+
+def schema67_golden_approval_signing_bytes(approval: Schema67GoldenApprovalV1) -> bytes:
+    payload = approval.model_dump(
+        mode="python", exclude={"signature", "approval_sha256"}
+    )
+    return b"insurancekb.schema67-golden-approval.596-1.v1\x00" + schema_wiki_canonical_bytes(
+        approval.contract, payload
+    )
+
+
+def _golden_approval_bindings(golden: Schema67GoldenSet5961V1) -> tuple[str, str, str]:
+    return (
+        schema_wiki_sha256(
+            "schema67-golden-ordered-fields.v1",
+            {"ordered_field_ids": golden.ordered_field_ids},
+        ),
+        schema_wiki_sha256(
+            "schema67-golden-source-authorities.v1",
+            {"source_authorities": golden.source_authorities},
+        ),
+        schema_wiki_sha256(
+            "schema67-golden-policies.v1",
+            {
+                "normalization_policy_sha256": golden.normalization_policy_sha256,
+                "risk_policy_sha256": golden.risk_policy_sha256,
+                "metric_policy_sha256": golden.metric_policy_sha256,
+            },
+        ),
+    )
+
+
+class Schema67GoldenApprovalVerifierV1:
+    __slots__ = ("_keys", "_now_epoch")
+
+    def __init__(
+        self,
+        keys: dict[str, Ed25519PublicKey],
+        *,
+        now_epoch: int,
+    ) -> None:
+        self._keys = dict(keys)
+        self._now_epoch = now_epoch
+
+    def verify(
+        self,
+        golden: Schema67GoldenSet5961V1,
+        approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
+    ) -> tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1]:
+        if len(approvals) != 2:
+            raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
+        ordered_sha, sources_sha, policies_sha = _golden_approval_bindings(golden)
+        principals: set[str] = set()
+        key_ids: set[str] = set()
+        for approval in approvals:
+            if type(approval) is not Schema67GoldenApprovalV1:
+                raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
+            key = self._keys.get(approval.signer_key_id)
+            expected = (
+                golden.golden_set_sha256,
+                golden.golden_version,
+                golden.product_version_id,
+                golden.entity_version_id,
+                golden.schema_pack_sha256,
+                ordered_sha,
+                sources_sha,
+                policies_sha,
+            )
+            actual = (
+                approval.golden_set_sha256,
+                approval.golden_version,
+                approval.product_version_id,
+                approval.entity_version_id,
+                approval.schema_pack_sha256,
+                approval.ordered_field_ids_sha256,
+                approval.source_authorities_sha256,
+                approval.policies_sha256,
+            )
+            if (
+                key is None
+                or actual != expected
+                or not approval.issued_at <= self._now_epoch < approval.expires_at
+                or approval.principal_id in principals
+                or approval.signer_key_id in key_ids
+            ):
+                raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
+            try:
+                signature = base64.urlsafe_b64decode(
+                    approval.signature + "=" * (-len(approval.signature) % 4)
+                )
+                key.verify(signature, schema67_golden_approval_signing_bytes(approval))
+            except (InvalidSignature, ValueError):
+                raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID") from None
+            principals.add(approval.principal_id)
+            key_ids.add(approval.signer_key_id)
+        return approvals
+
+
+class Schema67QualityGateSignerV1:
+    __slots__ = ("key_id", "_private_key")
+
+    def __init__(self, key_id: str, private_key: Ed25519PrivateKey) -> None:
+        if not key_id:
+            raise ValueError("quality gate signer key id required")
+        self.key_id = key_id
+        self._private_key = private_key
+
+    def sign(self, payload: Mapping[str, object]) -> str:
+        raw = (
+            b"insurancekb.schema67-golden-quality-gate-receipt.v1\x00"
+            + schema_wiki_canonical_bytes(
+                "schema67-golden-quality-gate-receipt.v1", payload
+            )
+        )
+        return base64.urlsafe_b64encode(self._private_key.sign(raw)).rstrip(b"=").decode("ascii")
 
 
 class Schema67GoldenEvidenceTargetV1(_FrozenModel):
@@ -192,6 +357,9 @@ class Schema67GoldenFieldV1(_FrozenModel):
             raise ValueError("independent annotator decisions required")
         if (self.conflict_status == "resolved") != (self.adjudication_sha256 is not None):
             raise ValueError("conflict adjudication mismatch")
+        if known:
+            for value in self.accepted_values:
+                _normalized_atoms(self.value_schema, value)
         payload = self.model_dump(mode="python", exclude={"field_sha256"})
         if self.field_sha256 != schema_wiki_sha256(self.contract, payload):
             raise ValueError("Golden field hash mismatch")
@@ -271,10 +439,15 @@ class Schema67GoldenFieldDecisionV1(_FrozenModel):
     golden_state: FieldState
     state_correct: bool
     value_correct: bool
+    atom_true_positive: StrictInt
+    atom_false_positive: StrictInt
+    atom_false_negative: StrictInt
+    atom_f1_ppm: Annotated[StrictInt, Field(ge=0, le=1_000_000)]
     evidence_fragments: StrictInt
     evidence_fragments_matched: StrictInt
     bbox_required: StrictInt
     bbox_passed: StrictInt
+    bbox_iou_ppm_values: tuple[Annotated[StrictInt, Field(ge=0, le=1_000_000)], ...]
     high_risk_pass: bool
     conflict_resolved: bool
     decision_sha256: Sha256Hex
@@ -286,12 +459,16 @@ class Schema67GoldenFieldDecisionV1(_FrozenModel):
             min(
                 self.evidence_fragments,
                 self.evidence_fragments_matched,
+                self.atom_true_positive,
+                self.atom_false_positive,
+                self.atom_false_negative,
                 self.bbox_required,
                 self.bbox_passed,
             )
             < 0
             or self.evidence_fragments_matched > self.evidence_fragments
             or self.bbox_passed > self.bbox_required
+            or len(self.bbox_iou_ppm_values) != self.bbox_required
             or self.decision_sha256
             != schema_wiki_sha256("schema67-golden-field-decision.v1", payload)
         ):
@@ -424,7 +601,80 @@ def _require_registered_receipt(receipt: Schema67GoldenQualityGateReceiptV1) -> 
 
 
 def _normalized(value: str | None) -> str | None:
-    return None if value is None else value.strip()
+    return None if value is None else unicodedata.normalize("NFC", value).strip()
+
+
+def _structured_atoms(value: object, path: str = "$") -> tuple[str, ...]:
+    if isinstance(value, dict):
+        return tuple(
+            atom
+            for key in sorted(value)
+            for atom in _structured_atoms(value[key], f"{path}.{key}")
+        )
+    if isinstance(value, list):
+        return tuple(
+            atom
+            for index, item in enumerate(value)
+            for atom in _structured_atoms(item, f"{path}[{index}]")
+        )
+    scalar = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return (f"{path}={scalar}",)
+
+
+def _normalized_atoms(value_schema: str, value: str | None) -> tuple[str, ...]:
+    normalized = _normalized(value)
+    if normalized is None:
+        return ()
+    if value_schema == "scalar":
+        return (normalized,)
+    try:
+        decoded = json.loads(normalized)
+    except (json.JSONDecodeError, TypeError):
+        raise ValueError("structured Golden value is not canonical JSON") from None
+    if value_schema in {"ordered_list", "unordered_set"}:
+        if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+            raise ValueError("Golden collection value invalid")
+        values = tuple(unicodedata.normalize("NFC", item).strip() for item in decoded)
+        if any(not item for item in values):
+            raise ValueError("Golden collection value invalid")
+        if value_schema == "ordered_list":
+            return tuple(f"{index}:{item}" for index, item in enumerate(values))
+        if len(set(values)) != len(values):
+            raise ValueError("Golden set contains duplicates")
+        return tuple(sorted(values))
+    if value_schema in {"range", "structured"}:
+        if not isinstance(decoded, (dict, list)):
+            raise ValueError("Golden structured value invalid")
+        return _structured_atoms(decoded)
+    raise ValueError("unknown Golden value schema")
+
+
+def _best_atom_counts(
+    field: Schema67GoldenFieldV1,
+    candidate_value: str | None,
+) -> tuple[int, int, int]:
+    try:
+        predicted = Counter(_normalized_atoms(field.value_schema, candidate_value))
+    except ValueError:
+        predicted = Counter()
+    alternatives = tuple(
+        Counter(_normalized_atoms(field.value_schema, row))
+        for row in field.accepted_values
+    )
+    if not alternatives:
+        return (0, sum(predicted.values()), 0)
+    scored: list[tuple[tuple[int, int, int], tuple[int, int, int]]] = []
+    for expected in alternatives:
+        true_positive = sum((predicted & expected).values())
+        false_positive = sum((predicted - expected).values())
+        false_negative = sum((expected - predicted).values())
+        scored.append(
+            (
+                (true_positive, -false_positive, -false_negative),
+                (true_positive, false_positive, false_negative),
+            )
+        )
+    return max(scored, key=lambda row: row[0])[1]
 
 
 def _join_projection(join: Schema67CitationAuthorityJoinReceiptV1) -> tuple[object, ...]:
@@ -505,22 +755,39 @@ def _decision(
     joins: tuple[Schema67CitationAuthorityJoinReceiptV1, ...],
 ) -> Schema67GoldenFieldDecisionV1:
     state_correct = candidate_state == field.state
+    if field.state == "present" and candidate_state == "present":
+        atom_tp, atom_fp, atom_fn = _best_atom_counts(field, candidate_value)
+    elif field.state == "present":
+        atom_tp, atom_fp, atom_fn = _best_atom_counts(field, None)
+    else:
+        atom_tp = atom_fp = atom_fn = 0
+    atom_denominator = 2 * atom_tp + atom_fp + atom_fn
+    atom_f1_ppm = (
+        1_000_000 if atom_denominator == 0 else round(2 * atom_tp * 1_000_000 / atom_denominator)
+    )
     value_correct = (
         candidate_state == "unknown" and field.state == "unknown" and candidate_value is None
     ) or (
-        candidate_state == field.state != "unknown"
+        candidate_state == field.state == "present" and atom_fp == 0 and atom_fn == 0
+    ) or (
+        candidate_state == field.state == "absent_explicitly"
         and _normalized(candidate_value) in field.accepted_values
     )
     targets = {_target_projection(target): target for target in field.evidence_targets}
     matched = [join for join in joins if _join_projection(join) in targets]
-    bbox_scores = [
-        score
-        for join in matched
-        if (score := _bbox_iou_ppm(join, targets[_join_projection(join)])) is not None
-    ]
+    joins_by_projection = {_join_projection(join): join for join in matched}
+    bbox_scores = tuple(
+        0
+        if (join := joins_by_projection.get(_target_projection(target))) is None
+        else (_bbox_iou_ppm(join, target) or 0)
+        for target in field.evidence_targets
+        if target.bbox_evaluation == "required"
+    )
     bbox_required = sum(target.bbox_evaluation == "required" for target in field.evidence_targets)
     bbox_passed = sum(score >= 800_000 for score in bbox_scores)
-    evidence_exact = len(matched) == len(joins) and (field.state == "unknown" or bool(matched))
+    evidence_exact = len(matched) == len(joins) == len(field.evidence_targets) and (
+        field.state == "unknown" or bool(matched)
+    )
     conflict_resolved = field.conflict_status == "agreed" or field.adjudication_sha256 is not None
     high_risk_pass = field.risk_level == "standard" or (
         state_correct
@@ -535,10 +802,15 @@ def _decision(
         "golden_state": field.state,
         "state_correct": state_correct,
         "value_correct": value_correct,
+        "atom_true_positive": atom_tp,
+        "atom_false_positive": atom_fp,
+        "atom_false_negative": atom_fn,
+        "atom_f1_ppm": atom_f1_ppm,
         "evidence_fragments": len(joins),
         "evidence_fragments_matched": len(matched),
         "bbox_required": bbox_required,
         "bbox_passed": bbox_passed,
+        "bbox_iou_ppm_values": bbox_scores,
         "high_risk_pass": high_risk_pass,
         "conflict_resolved": conflict_resolved,
     }
@@ -627,11 +899,12 @@ def _metrics(
     )
     macro_numerator = sum(class_recall_ppm)
     present_indexes = tuple(index for index, field in enumerate(fields) if field.state == "present")
-    present_predicted = sum(state == "present" for state in candidate_states)
-    present_correct = sum(decisions[index].value_correct for index in present_indexes)
-    macro_f1_numerator = sum(
-        1_000_000 if decisions[index].value_correct else 0 for index in present_indexes
-    )
+    atom_true_positive = sum(decisions[index].atom_true_positive for index in present_indexes)
+    atom_false_positive = sum(decisions[index].atom_false_positive for index in present_indexes)
+    atom_false_negative = sum(decisions[index].atom_false_negative for index in present_indexes)
+    predicted_atoms = atom_true_positive + atom_false_positive
+    golden_atoms = atom_true_positive + atom_false_negative
+    macro_f1_numerator = sum(decisions[index].atom_f1_ppm for index in present_indexes)
     absent_to_unknown = sum(
         field.state == "absent_explicitly" and candidate_states[index] == "unknown"
         for index, field in enumerate(fields)
@@ -663,6 +936,7 @@ def _metrics(
     )
     bbox_total = sum(row.bbox_required for row in decisions)
     bbox_passed = sum(row.bbox_passed for row in decisions)
+    bbox_iou_total = sum(value for row in decisions for value in row.bbox_iou_ppm_values)
     high_indexes = tuple(
         index for index, field in enumerate(fields) if field.risk_level in {"critical", "high"}
     )
@@ -689,15 +963,15 @@ def _metrics(
         ),
         _metric(
             GOLDEN_METRIC_IDS[2],
-            present_correct,
-            present_predicted,
-            passing=present_predicted > 0 and present_correct * 100 >= present_predicted * 95,
+            atom_true_positive,
+            predicted_atoms,
+            passing=predicted_atoms > 0 and atom_true_positive * 100 >= predicted_atoms * 95,
         ),
         _metric(
             GOLDEN_METRIC_IDS[3],
-            present_correct,
-            len(present_indexes),
-            passing=bool(present_indexes) and present_correct * 100 >= len(present_indexes) * 95,
+            atom_true_positive,
+            golden_atoms,
+            passing=golden_atoms > 0 and atom_true_positive * 100 >= golden_atoms * 95,
         ),
         _metric(
             GOLDEN_METRIC_IDS[4],
@@ -745,9 +1019,10 @@ def _metrics(
         ),
         _metric(
             GOLDEN_METRIC_IDS[11],
-            bbox_passed,
-            bbox_total,
-            passing=bbox_total > 0 and bbox_passed == bbox_total,
+            bbox_iou_total,
+            bbox_total * 1_000_000 if bbox_total else None,
+            passing=bbox_total > 0 and bbox_iou_total >= bbox_total * 800_000,
+            binomial=False,
         ),
         _metric(
             GOLDEN_METRIC_IDS[12],
@@ -802,6 +1077,9 @@ def evaluate_schema67_golden_quality_596_1(
     candidate: object,
     evidence_authority: object,
     golden: Schema67GoldenSet5961V1,
+    golden_approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
+    golden_approval_verifier: Schema67GoldenApprovalVerifierV1 | None,
+    quality_gate_signer: Schema67QualityGateSignerV1 | None,
 ) -> Schema67GoldenEvaluationResultV1:
     if candidate is None:
         raise Schema67GoldenQualityGateError("CANDIDATE_ABSENT")
@@ -814,6 +1092,11 @@ def evaluate_schema67_golden_quality_596_1(
         exact_golden = Schema67GoldenSet5961V1.model_validate(
             golden.model_dump(mode="python", round_trip=True)
         )
+        if type(golden_approval_verifier) is not Schema67GoldenApprovalVerifierV1:
+            raise Schema67GoldenQualityGateError("GOLDEN_APPROVAL_INVALID")
+        approvals = golden_approval_verifier.verify(exact_golden, golden_approvals)
+        if type(quality_gate_signer) is not Schema67QualityGateSignerV1:
+            raise Schema67GoldenQualityGateError("QUALITY_GATE_SIGNER_UNAVAILABLE")
         candidate_source_rows = tuple(
             (row["role"], row["source_sha256"]) for row in exact_candidate.source_roles
         )
@@ -905,12 +1188,18 @@ def evaluate_schema67_golden_quality_596_1(
                 "metric_receipt_sha256s": tuple(row.metric_sha256 for row in metrics),
                 "private_dossier_sha256": dossier.dossier_sha256,
                 "public_aggregate_sha256": aggregate.aggregate_sha256,
+                "golden_approval_sha256s": tuple(
+                    approval.approval_sha256 for approval in approvals
+                ),
+                "signer_key_id": quality_gate_signer.key_id,
             }
+            signature = quality_gate_signer.sign(receipt_payload)
+            signed_receipt_payload = {**receipt_payload, "signature": signature}
             receipt = Schema67GoldenQualityGateReceiptV1.model_validate(
                 {
-                    **receipt_payload,
+                    **signed_receipt_payload,
                     "receipt_sha256": schema_wiki_sha256(
-                        "schema67-golden-quality-gate-receipt.v1", receipt_payload
+                        "schema67-golden-quality-gate-receipt.v1", signed_receipt_payload
                     ),
                 }
             )
@@ -943,6 +1232,8 @@ __all__ = [
     "METRIC_POLICY_SHA256",
     "PROVIDER_ZERO_FIXTURE_CANDIDATE_SHA256",
     "Schema67GoldenEvidenceTargetV1",
+    "Schema67GoldenApprovalV1",
+    "Schema67GoldenApprovalVerifierV1",
     "Schema67GoldenEvaluationResultV1",
     "Schema67GoldenFieldDecisionV1",
     "Schema67GoldenFieldV1",
@@ -951,6 +1242,8 @@ __all__ = [
     "Schema67GoldenPublicAggregateV1",
     "Schema67GoldenQualityGateError",
     "Schema67GoldenSet5961V1",
+    "Schema67QualityGateSignerV1",
     "evaluate_schema67_golden_quality_596_1",
+    "schema67_golden_approval_signing_bytes",
     "validate_schema67_golden_quality_gate_receipt_596_1",
 ]

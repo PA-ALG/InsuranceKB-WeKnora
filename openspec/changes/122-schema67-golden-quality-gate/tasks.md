@@ -33,12 +33,19 @@
   `SMALL_SAMPLE`, required `NOT_EVALUABLE` and threshold edges.
 - [x] RED provider-zero fixture misuse, self-Golden and stale identity.
 - [x] GREEN the product-specific evaluator and Candidate-bound quality receipt.
+- [x] Require two distinct, deployment-trusted, domain-separated named-human Golden
+  approvals before evaluation; nil/unconfigured or self-signed authority fails closed.
+- [x] Compute present precision/recall/F1 from frozen normalized atoms and report actual
+  per-fragment bbox IoU aggregate separately from threshold pass counts.
 
 ## Task 4 · Candidate-to-Draft integration
 
 - [x] RED FAIL/PENDING/missing/stale quality receipts with review dossier/Draft/review/
   activation call counts all zero.
 - [x] Bind PASS receipt into the review dossier/bundle before `CreateSchemaDraft`.
+- [x] Sign the full canonical PASS receipt with a dedicated evaluator key and verify it
+  against an injected frozen public-key ring at the Go boundary before repository access;
+  the receipt self-hash remains integrity-only.
 - [x] Preserve existing named-human review, publish authorization and sole Active Head.
 
 ## Task 5 · Real acceptance

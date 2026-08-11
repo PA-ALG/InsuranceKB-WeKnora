@@ -104,6 +104,9 @@ func (s *SchemaWikiService) CreateSchemaDraft(
 		bundle.QualityGateReceipt.CandidateEvidenceAuthoritySHA256 != evidenceAuthority.AuthoritySHA256 {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
+	if s.releaseAuthority.qualityGateReceiptVerifier.Verify(&bundle.QualityGateReceipt) != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
 	head, headErr := s.releaseAuthority.repository.GetHeadForWikiKB(ctx, scope.TenantID, scope.WikiKBID)
 	if headErr == nil {
 		if head == nil || head.WikiReleaseScope != scope {

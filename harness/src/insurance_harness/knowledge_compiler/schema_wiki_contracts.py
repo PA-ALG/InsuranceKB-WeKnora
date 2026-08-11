@@ -460,7 +460,7 @@ class Schema67GoldenQualityGateReceiptV1(_FrozenModel):
     golden_set_sha256: Sha256Hex
     golden_version: Identifier
     evaluator_identity_sha256: Literal[
-        "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c"
+        "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808"
     ]
     metric_policy_sha256: Literal[
         "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
@@ -469,6 +469,9 @@ class Schema67GoldenQualityGateReceiptV1(_FrozenModel):
     metric_receipt_sha256s: tuple[Sha256Hex, ...]
     private_dossier_sha256: Sha256Hex
     public_aggregate_sha256: Sha256Hex
+    golden_approval_sha256s: tuple[Sha256Hex, Sha256Hex]
+    signer_key_id: Identifier
+    signature: NonBlankText
     receipt_sha256: Sha256Hex
 
     @model_validator(mode="after")
@@ -476,6 +479,7 @@ class Schema67GoldenQualityGateReceiptV1(_FrozenModel):
         if (
             len(self.ordered_field_decision_sha256s) != 67
             or len(self.metric_receipt_sha256s) != 15
+            or len(set(self.golden_approval_sha256s)) != 2
             or not _hash_matches(self, self.contract, "receipt_sha256")
         ):
             raise ValueError("quality gate receipt mismatch")

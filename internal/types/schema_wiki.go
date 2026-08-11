@@ -586,7 +586,7 @@ type KnowledgeWikiReleaseV1 struct {
 }
 
 const (
-	schema67GoldenEvaluatorIdentitySHA256 = "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c"
+	schema67GoldenEvaluatorIdentitySHA256 = "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808"
 	schema67GoldenMetricPolicySHA256      = "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
 )
 
@@ -604,6 +604,9 @@ type Schema67GoldenQualityGateReceiptV1 struct {
 	MetricReceiptSHA256s             []string `json:"metric_receipt_sha256s"`
 	PrivateDossierSHA256             string   `json:"private_dossier_sha256"`
 	PublicAggregateSHA256            string   `json:"public_aggregate_sha256"`
+	GoldenApprovalSHA256s            []string `json:"golden_approval_sha256s"`
+	SignerKeyID                      string   `json:"signer_key_id"`
+	Signature                        string   `json:"signature"`
 	ReceiptSHA256                    string   `json:"receipt_sha256"`
 }
 
@@ -1167,6 +1170,8 @@ func ValidateSchema67GoldenQualityGateReceiptV1(receipt Schema67GoldenQualityGat
 		receipt.EvaluatorIdentitySHA256 != schema67GoldenEvaluatorIdentitySHA256 ||
 		receipt.MetricPolicySHA256 != schema67GoldenMetricPolicySHA256 ||
 		len(receipt.OrderedFieldDecisionSHA256s) != 67 || len(receipt.MetricReceiptSHA256s) != 15 ||
+		len(receipt.GoldenApprovalSHA256s) != 2 || receipt.GoldenApprovalSHA256s[0] == receipt.GoldenApprovalSHA256s[1] ||
+		strings.TrimSpace(receipt.SignerKeyID) == "" || strings.TrimSpace(receipt.Signature) == "" ||
 		requireSchemaWikiHash(receipt.Contract, receipt, "receipt_sha256", receipt.ReceiptSHA256) != nil {
 		return ErrSchemaWikiContractInvalid
 	}
@@ -1182,6 +1187,7 @@ func ValidateSchema67GoldenQualityGateReceiptV1(receipt Schema67GoldenQualityGat
 	}
 	digests = append(digests, receipt.OrderedFieldDecisionSHA256s...)
 	digests = append(digests, receipt.MetricReceiptSHA256s...)
+	digests = append(digests, receipt.GoldenApprovalSHA256s...)
 	for _, digest := range digests {
 		if !validSchemaWikiSHA256(digest) {
 			return ErrSchemaWikiContractInvalid

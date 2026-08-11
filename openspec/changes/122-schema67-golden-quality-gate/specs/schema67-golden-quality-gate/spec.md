@@ -37,6 +37,12 @@ produce a conflict and require named adjudication. A whole-batch Golden receipt 
 the exact source receipts, ordered field decisions, normalization/risk/metric policies and
 Golden hash. A correction SHALL create a new Golden version/hash.
 
+Evaluation SHALL additionally require two distinct, unexpired, domain-separated signatures
+from a deployment-owned named-human approval key ring. Each approval SHALL bind the exact
+Golden bytes/version, ordered67 digest, SchemaPack/entity/product scope, source-revision
+authority digest and all normalization/risk/metric policies. A caller-selected key ring,
+self-signature, duplicate principal/key or unconfigured verifier SHALL fail before scoring.
+
 The evaluated model SHALL NOT create, replace or adjudicate its own Golden. Model-assisted
 suggestions, if any, SHALL remain non-authoritative until replaced by independent human
 decisions.
@@ -74,6 +80,13 @@ Micro metrics SHALL aggregate exact atoms/fragments. Macro metrics SHALL weight 
 equally. Binomial metrics SHALL report Wilson 95% intervals. Every metric SHALL report
 support; support below 20 SHALL be marked `SMALL_SAMPLE`. A single-product result SHALL
 authorize only `596-1` and SHALL NOT be generalized into model-wide quality.
+
+For Golden-present fields, present precision SHALL be `TP/(TP+FP)` and recall SHALL be
+`TP/(TP+FN)` over the frozen normalized atoms; macro F1 SHALL average each present field's
+atom F1. Predicted present values on Golden absent/unknown fields SHALL be counted only in
+the separately named hallucination metric. Bbox IoU SHALL report the actual per-fragment
+IoU values and their `sum/(fragment_count × 1,000,000)` aggregate; the threshold pass count
+SHALL remain only in the separately named highlight metric.
 
 #### Scenario: denominator is absent or hidden
 
@@ -120,6 +133,10 @@ may convert FAIL/PENDING to PASS.
 A future `Schema67GoldenQualityGateReceiptV1` SHALL bind the concrete Candidate hash,
 Evidence-companion hash, Golden version/hash, ordered 67 field-decision hashes, evaluator
 hash, metric-policy hash, all metric numerators/denominators and final PASS status.
+The receipt SHALL also bind the two Golden-approval hashes and carry a domain-separated
+signature/key ID over its full canonical content. Its self-hash is integrity-only. The Go
+Draft boundary SHALL verify that signature against a deployment-owned public-key ring
+before repository access; missing/unknown/foreign signatures or a nil key ring fail closed.
 
 Evaluation SHALL occur after Candidate creation and before the review dossier and
 `CreateSchemaDraft`. Only a PASS receipt may be bound into the Schema Wiki review bundle.

@@ -201,6 +201,84 @@ type HumanBatchDecisionVerifier interface {
 	Verify(*types.HumanBatchDecisionReceiptV1) error
 }
 
+// Schema67GoldenQualityGateReceiptVerifier verifies the portable evaluator
+// signature independently of the named-human release review and publish rings.
+type Schema67GoldenQualityGateReceiptVerifier interface {
+	Verify(*types.Schema67GoldenQualityGateReceiptV1) error
+}
+
+type ed25519Schema67GoldenQualityGateReceiptVerifier struct {
+	keys map[string]ed25519.PublicKey
+}
+
+// NewEd25519Schema67GoldenQualityGateReceiptVerifier freezes the deployment-owned key set.
+func NewEd25519Schema67GoldenQualityGateReceiptVerifier(
+	keys map[string]ed25519.PublicKey,
+) Schema67GoldenQualityGateReceiptVerifier {
+	frozen := make(map[string]ed25519.PublicKey, len(keys))
+	for keyID, publicKey := range keys {
+		frozen[keyID] = append(ed25519.PublicKey(nil), publicKey...)
+	}
+	return &ed25519Schema67GoldenQualityGateReceiptVerifier{keys: frozen}
+}
+
+// CanonicalSchema67GoldenQualityGateReceiptV1 returns the exact domain-separated
+// bytes signed by the deterministic Python evaluator. The receipt self-hash is
+// deliberately excluded; includeSignature controls only the signature member.
+func CanonicalSchema67GoldenQualityGateReceiptV1(
+	receipt *types.Schema67GoldenQualityGateReceiptV1,
+	includeSignature bool,
+) ([]byte, error) {
+	if receipt == nil {
+		return nil, fmt.Errorf("%w: nil quality gate receipt", ErrWikiReleaseInvalidAuthorization)
+	}
+	fields := map[string]any{
+		"contract": receipt.Contract, "status": receipt.Status,
+		"product_version_id":                  receipt.ProductVersionID,
+		"candidate_sha256":                    receipt.CandidateSHA256,
+		"candidate_evidence_authority_sha256": receipt.CandidateEvidenceAuthoritySHA256,
+		"golden_set_sha256":                   receipt.GoldenSetSHA256, "golden_version": receipt.GoldenVersion,
+		"evaluator_identity_sha256":      receipt.EvaluatorIdentitySHA256,
+		"metric_policy_sha256":           receipt.MetricPolicySHA256,
+		"ordered_field_decision_sha256s": receipt.OrderedFieldDecisionSHA256s,
+		"metric_receipt_sha256s":         receipt.MetricReceiptSHA256s,
+		"private_dossier_sha256":         receipt.PrivateDossierSHA256,
+		"public_aggregate_sha256":        receipt.PublicAggregateSHA256,
+		"golden_approval_sha256s":        receipt.GoldenApprovalSHA256s,
+		"signer_key_id":                  receipt.SignerKeyID,
+	}
+	if includeSignature {
+		fields["signature"] = receipt.Signature
+	}
+	canonical, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: quality receipt canonicalization", ErrWikiReleaseInvalidAuthorization)
+	}
+	preimage := append([]byte("insurancekb.schema67-golden-quality-gate-receipt.v1\x00schema-wiki-canonical.v1\x00schema67-golden-quality-gate-receipt.v1\x00"), canonical...)
+	return preimage, nil
+}
+
+func (v *ed25519Schema67GoldenQualityGateReceiptVerifier) Verify(
+	receipt *types.Schema67GoldenQualityGateReceiptV1,
+) error {
+	if receipt == nil || types.ValidateSchema67GoldenQualityGateReceiptV1(*receipt) != nil {
+		return fmt.Errorf("%w: invalid quality gate receipt", ErrWikiReleaseInvalidAuthorization)
+	}
+	publicKey, ok := v.keys[receipt.SignerKeyID]
+	if !ok || len(publicKey) != ed25519.PublicKeySize {
+		return fmt.Errorf("%w: unknown quality gate signer", ErrWikiReleaseInvalidAuthorization)
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(receipt.Signature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return fmt.Errorf("%w: malformed quality gate signature", ErrWikiReleaseInvalidAuthorization)
+	}
+	signingBytes, err := CanonicalSchema67GoldenQualityGateReceiptV1(receipt, false)
+	if err != nil || !ed25519.Verify(publicKey, signingBytes, signature) {
+		return fmt.Errorf("%w: quality gate signature mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	return nil
+}
+
 type ed25519HumanBatchDecisionVerifier struct {
 	keys map[string]ed25519.PublicKey
 }
@@ -449,10 +527,11 @@ type WikiReleaseFaults struct {
 // WikiReleaseServiceOptions keeps time, identities, and bounded faults
 // injectable without creating a general workflow platform.
 type WikiReleaseServiceOptions struct {
-	Now                   func() time.Time
-	NewID                 func(kind string) string
-	Faults                WikiReleaseFaults
-	HumanDecisionVerifier HumanBatchDecisionVerifier
+	Now                        func() time.Time
+	NewID                      func(kind string) string
+	Faults                     WikiReleaseFaults
+	HumanDecisionVerifier      HumanBatchDecisionVerifier
+	QualityGateReceiptVerifier Schema67GoldenQualityGateReceiptVerifier
 }
 
 // WikiReleaseConflictError is the typed expected-head/CAS loser result.
@@ -471,13 +550,14 @@ func (e *WikiReleaseConflictError) Unwrap() error { return ErrWikiReleaseConflic
 
 // WikiReleaseService is the isolated S0-R core, not a production Kernel.
 type WikiReleaseService struct {
-	repository            *wikirepository.WikiReleaseRepository
-	accessVerifier        WikiReleaseAccessVerifier
-	authorizationVerifier WikiReleaseAuthorizationVerifier
-	humanDecisionVerifier HumanBatchDecisionVerifier
-	now                   func() time.Time
-	newID                 func(kind string) string
-	faults                WikiReleaseFaults
+	repository                 *wikirepository.WikiReleaseRepository
+	accessVerifier             WikiReleaseAccessVerifier
+	authorizationVerifier      WikiReleaseAuthorizationVerifier
+	humanDecisionVerifier      HumanBatchDecisionVerifier
+	qualityGateReceiptVerifier Schema67GoldenQualityGateReceiptVerifier
+	now                        func() time.Time
+	newID                      func(kind string) string
+	faults                     WikiReleaseFaults
 }
 
 // NewWikiReleaseService creates the bounded experimental service.
@@ -496,6 +576,9 @@ func NewWikiReleaseService(
 	if options.HumanDecisionVerifier == nil {
 		options.HumanDecisionVerifier = NewEd25519HumanBatchDecisionVerifier(nil)
 	}
+	if options.QualityGateReceiptVerifier == nil {
+		options.QualityGateReceiptVerifier = NewEd25519Schema67GoldenQualityGateReceiptVerifier(nil)
+	}
 	if options.Now == nil {
 		options.Now = time.Now
 	}
@@ -505,13 +588,14 @@ func NewWikiReleaseService(
 		}
 	}
 	return &WikiReleaseService{
-		repository:            repository,
-		accessVerifier:        accessVerifier,
-		authorizationVerifier: authorizationVerifier,
-		humanDecisionVerifier: options.HumanDecisionVerifier,
-		now:                   options.Now,
-		newID:                 options.NewID,
-		faults:                options.Faults,
+		repository:                 repository,
+		accessVerifier:             accessVerifier,
+		authorizationVerifier:      authorizationVerifier,
+		humanDecisionVerifier:      options.HumanDecisionVerifier,
+		qualityGateReceiptVerifier: options.QualityGateReceiptVerifier,
+		now:                        options.Now,
+		newID:                      options.NewID,
+		faults:                     options.Faults,
 	}
 }
 

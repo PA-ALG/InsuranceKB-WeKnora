@@ -19,7 +19,10 @@ Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REAL-GOLDEN-NOT-RUN`
 
 The implementation adds one product-specific Golden DTO/evaluator module and focused test,
 extends the existing Schema Wiki release contract/builder with a PASS-only quality receipt,
-and adds the same closed receipt check to the existing Go `CreateSchemaDraft` seam. It does
+adds two distinct domain-separated named-human Golden approvals, and verifies a separately
+signed canonical quality receipt at the existing Go `CreateSchemaDraft` seam before any
+repository access. The Go verifier is fail-closed when its deployment-owned public-key ring
+is absent. It does
 not change CandidateV2, provider/model code, runner, database schema, migration, serving
 Head, frontend or generic Material Wiki behavior.
 
@@ -30,6 +33,11 @@ Head, frontend or generic Material Wiki behavior.
 - Provider-zero `45/1/21` fixture: `FIXTURE_ONLY`, no PASS receipt or Draft authority.
 - Wrong value, stale page/bbox, missing Candidate, foreign Evidence authority, non-PASS,
   reparsed or self-rehashed receipt: fail closed before Draft persistence.
+- Self-approved Golden, duplicate/foreign human approval, caller-signed/unknown-key quality
+  receipt, signature/content substitution and replay: fail closed; Go repository calls `0`.
+- Present-value precision/recall use normalized atom TP/FP/FN and macro field F1; bbox IoU
+  reports the actual sum of per-fragment IoU values over `count × 1,000,000`, while the
+  separately named highlight metric retains threshold pass counts.
 - Public aggregate omits canonical field values; private dossier remains separately hashed.
 - Ruff, strict mypy, Go formatting and focused type/service gates: PASS.
 - Provider/model/live/DB/WeKnora calls: `0`; Draft/review/activation actions: `0`.

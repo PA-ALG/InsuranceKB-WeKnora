@@ -431,7 +431,7 @@ def _review_bundle(release: KnowledgeWikiReleaseV1) -> SchemaWikiReviewBundleV1:
         "golden_set_sha256": _sha("golden-set"),
         "golden_version": "test.v1",
         "evaluator_identity_sha256": (
-            "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c"
+            "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808"
         ),
         "metric_policy_sha256": (
             "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
@@ -440,6 +440,12 @@ def _review_bundle(release: KnowledgeWikiReleaseV1) -> SchemaWikiReviewBundleV1:
         "metric_receipt_sha256s": tuple(_sha(f"metric-{index}") for index in range(15)),
         "private_dossier_sha256": _sha("private-dossier"),
         "public_aggregate_sha256": _sha("public-aggregate"),
+        "golden_approval_sha256s": (
+            _sha("golden-approval-a"),
+            _sha("golden-approval-b"),
+        ),
+        "signer_key_id": "test-golden-evaluator",
+        "signature": "test-only-signature",
     }
     quality = _sealed(
         Schema67GoldenQualityGateReceiptV1,

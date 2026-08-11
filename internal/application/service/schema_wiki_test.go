@@ -28,6 +28,7 @@ const schemaWikiReleaseVectorSHA256 = "6783e3312199378a51065872278961f10c0e0f651
 
 var schemaWikiReviewSeed = sha256.Sum256([]byte("schema-wiki-review-test-key.v1"))
 var schemaWikiPublishSeed = sha256.Sum256([]byte("schema-wiki-publish-test-key.v1"))
+var schemaWikiQualityGateSeed = sha256.Sum256([]byte("schema67-golden-quality-gate-test-key.v1"))
 
 type schemaWikiHumanVerifierSpy struct {
 	inner        HumanBatchDecisionVerifier
@@ -288,12 +289,14 @@ func schemaWikiReviewBundle(
 		"product_version_id": "596-1", "candidate_sha256": release.CandidateSHA256,
 		"candidate_evidence_authority_sha256": evidenceAuthority.AuthoritySHA256,
 		"golden_set_sha256":                   strings.Repeat("a", 64), "golden_version": "test.v1",
-		"evaluator_identity_sha256":      "446b4f42039310a2264c5820f674a73f1be117cac072a3603e5a0228cb1f485c",
+		"evaluator_identity_sha256":      "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808",
 		"metric_policy_sha256":           "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7",
 		"ordered_field_decision_sha256s": fieldDecisions,
 		"metric_receipt_sha256s":         metricReceipts,
 		"private_dossier_sha256":         strings.Repeat("b", 64),
 		"public_aggregate_sha256":        strings.Repeat("c", 64),
+		"golden_approval_sha256s":        []string{strings.Repeat("1", 64), strings.Repeat("2", 64)},
+		"signer_key_id":                  "schema67-golden-evaluator-test-key",
 	}
 	quality := types.Schema67GoldenQualityGateReceiptV1{
 		Contract: qualityPayload["contract"].(string), Status: "PASS", ProductVersionID: "596-1",
@@ -305,8 +308,20 @@ func schemaWikiReviewBundle(
 		OrderedFieldDecisionSHA256s: fieldDecisions, MetricReceiptSHA256s: metricReceipts,
 		PrivateDossierSHA256:  strings.Repeat("b", 64),
 		PublicAggregateSHA256: strings.Repeat("c", 64),
-		ReceiptSHA256:         schemaWikiTestHash(t, "schema67-golden-quality-gate-receipt.v1", qualityPayload),
+		GoldenApprovalSHA256s: []string{strings.Repeat("1", 64), strings.Repeat("2", 64)},
+		SignerKeyID:           "schema67-golden-evaluator-test-key",
 	}
+	qualityPrivateKey := ed25519.NewKeyFromSeed(schemaWikiQualityGateSeed[:])
+	unsigned, err := CanonicalSchema67GoldenQualityGateReceiptV1(&quality, false)
+	require.NoError(t, err)
+	quality.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(qualityPrivateKey, unsigned))
+	require.Equal(t,
+		"kBi7x4LeXeVWagrV18w2xkmKci-4Rq0yvC9C38_tpMLwsaMCTezugc0PGsYhd5f4KRrDfdAQqzUeKGtnTmFLDA",
+		quality.Signature,
+		"Go signing preimage must remain byte-identical to the frozen Python vector",
+	)
+	qualityPayload["signature"] = quality.Signature
+	quality.ReceiptSHA256 = schemaWikiTestHash(t, "schema67-golden-quality-gate-receipt.v1", qualityPayload)
 	require.NoError(t, types.ValidateSchema67GoldenQualityGateReceiptV1(quality))
 	bundle := types.SchemaWikiReviewBundleV1{
 		Contract:              "schema-wiki-review-bundle.v1",
@@ -589,7 +604,16 @@ func newSchemaWikiPrepareFixture(
 		NewEd25519WikiReleaseAuthorizationVerifier(map[string]ed25519.PublicKey{
 			"signer-1": publishPrivateKey.Public().(ed25519.PublicKey),
 		}),
-		WikiReleaseServiceOptions{Now: time.Now, HumanDecisionVerifier: verifier},
+		WikiReleaseServiceOptions{
+			Now: time.Now, HumanDecisionVerifier: verifier,
+			QualityGateReceiptVerifier: NewEd25519Schema67GoldenQualityGateReceiptVerifier(
+				map[string]ed25519.PublicKey{
+					"schema67-golden-evaluator-test-key": ed25519.NewKeyFromSeed(
+						schemaWikiQualityGateSeed[:],
+					).Public().(ed25519.PublicKey),
+				},
+			),
+		},
 	)
 	return &schemaWikiPrepareFixture{
 		db: db, authority: authority, verifier: verifier,
@@ -780,6 +804,29 @@ func TestCreateSchemaDraftRejectsQualityGateReceiptDriftBeforePersistence(t *tes
 				t, bundle.Contract, *bundle, "review_bundle_sha256",
 			)
 		},
+		"missing evaluator signature": func(t *testing.T, bundle *types.SchemaWikiReviewBundleV1) {
+			bundle.QualityGateReceipt.Signature = ""
+			bundle.QualityGateReceipt.ReceiptSHA256 = schemaWikiTestHashWithout(
+				t, bundle.QualityGateReceipt.Contract,
+				bundle.QualityGateReceipt, "receipt_sha256",
+			)
+			bundle.ReviewBundleSHA256 = schemaWikiTestHashWithout(
+				t, bundle.Contract, *bundle, "review_bundle_sha256",
+			)
+		},
+		"signed content substitution": func(t *testing.T, bundle *types.SchemaWikiReviewBundleV1) {
+			bundle.QualityGateReceipt.PrivateDossierSHA256 = strings.Repeat("f", 64)
+			bundle.QualityGateReceipt.ReceiptSHA256 = schemaWikiTestHashWithout(
+				t, bundle.QualityGateReceipt.Contract,
+				bundle.QualityGateReceipt, "receipt_sha256",
+			)
+			require.NoError(t, types.ValidateSchema67GoldenQualityGateReceiptV1(
+				bundle.QualityGateReceipt,
+			), "the substituted receipt remains self-hash-valid but has a stale signature")
+			bundle.ReviewBundleSHA256 = schemaWikiTestHashWithout(
+				t, bundle.Contract, *bundle, "review_bundle_sha256",
+			)
+		},
 		"fully rehashed foreign evidence authority": func(
 			t *testing.T,
 			bundle *types.SchemaWikiReviewBundleV1,
@@ -818,6 +865,34 @@ func TestCreateSchemaDraftRejectsQualityGateReceiptDriftBeforePersistence(t *tes
 			require.Zero(t, receipts)
 		})
 	}
+}
+
+func TestCreateSchemaDraftRejectsSelfSignedQualityGateReceiptBeforePersistence(t *testing.T) {
+	t.Parallel()
+	principal, scope, reviewed := schemaWikiReviewedDraft(t)
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	attacker := ed25519.NewKeyFromSeed(bytes.Repeat([]byte("x"), ed25519.SeedSize))
+	receipt := &reviewed.ReviewBundle.QualityGateReceipt
+	receipt.SignerKeyID = "caller-selected-key"
+	receipt.Signature = "placeholder"
+	unsigned, err := CanonicalSchema67GoldenQualityGateReceiptV1(receipt, false)
+	require.NoError(t, err)
+	receipt.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(attacker, unsigned))
+	receipt.ReceiptSHA256 = schemaWikiTestHashWithout(
+		t, receipt.Contract, *receipt, "receipt_sha256",
+	)
+	reviewed.ReviewBundle.ReviewBundleSHA256 = schemaWikiTestHashWithout(
+		t, reviewed.ReviewBundle.Contract, reviewed.ReviewBundle, "review_bundle_sha256",
+	)
+	require.NoError(t, types.ValidateSchemaWikiReviewBundle(reviewed.ReviewBundle, reviewed.Release))
+
+	created, err := fixture.adapter.CreateSchemaDraft(
+		fixture.ctx, principal, scope, reviewed.PreparationID,
+		reviewed.Release, reviewed.EvidenceAuthority, reviewed.ReviewBundle,
+	)
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	require.Nil(t, created)
+	require.Zero(t, fixture.storedCount(t))
 }
 
 func TestCreateSchemaDraftRejectsReleaseAndReviewBundleDriftBeforePersistence(t *testing.T) {
