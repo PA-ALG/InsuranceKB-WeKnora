@@ -142,11 +142,11 @@ func TestSchemaWikiGoldenSuccessorStatusResponseIsClosedNonServingMetadata(t *te
 		WikiKBID: "wiki-kb-596-1", ProductVersionID: "596-1",
 		SchemaPackID: "medical-schema67.v1", SourceReviewStatus: "COMPLETED",
 		ReviewedBy: "linyao", AnnotatorModelID: "claude-fable-5",
-		Schema67MappingStatus: "PARTIAL_51_CLOSED_16_RESIDUAL",
-		ClosedCount:           51, ResidualCount: 16,
-		GoldenAdmissionStatus: "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED",
+		Schema67MappingStatus: "COMPLETE_67",
+		ClosedCount:           67, ResidualCount: 0,
+		GoldenAdmissionStatus: "BLOCKED_RECEIPT_UNVERIFIED",
 		ReceiptStatus:         "UNVERIFIED",
-		ReadyToSignStatus:     "READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE",
+		ReadyToSignStatus:     "READY_TO_SIGN",
 	}
 	spy := &schemaWikiHTTPServiceSpy{goldenSuccessor: status}
 	h := NewSchemaWikiHandler(nil, spy)

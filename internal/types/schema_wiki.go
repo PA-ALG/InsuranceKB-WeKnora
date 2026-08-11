@@ -759,7 +759,7 @@ type SchemaWikiGoldenQualityDossierV2 struct {
 }
 
 // SchemaWikiGoldenSuccessorStatusV1 is the closed, non-serving status of the
-// current 596-1 reviewed-source migration. It is deliberately separate from
+// current 596-1 reviewed-source closure. It is deliberately separate from
 // the formal PASS-only dossier and contains no field values or Evidence.
 type SchemaWikiGoldenSuccessorStatusV1 struct {
 	Version               string   `json:"version"`
@@ -788,25 +788,6 @@ type SchemaWikiGoldenSuccessorStatusV1 struct {
 	ReceiptStatus         string   `json:"receipt_status"`
 	ReadyToSignStatus     string   `json:"ready_to_sign_status"`
 	StatusSHA256          string   `json:"status_sha256"`
-}
-
-var schemaWikiGoldenSuccessorResidualFieldIDs = []string{
-	"product_type",
-	"marketing_tagline",
-	"product_overview",
-	"health_declaration_requirements",
-	"eligible_occupation_classes",
-	"premium_grace_period",
-	"guaranteed_renewal_status",
-	"premium_adjustment_rules",
-	"direct_billing_and_advance_payment_rules",
-	"eligible_service_packages",
-	"tax_qualified_status",
-	"tax_benefit_rules",
-	"objection_handling_scripts",
-	"product_faq",
-	"four_step_sales_script",
-	"sales_pitch_script",
 }
 
 // SchemaWikiGoldenEvidencePreviewAuthorityV1 is the preparation-pinned,
@@ -1915,22 +1896,22 @@ func ValidateSchemaWikiGoldenSuccessorStatusV1(
 		status.WikiKBID != "wiki-kb-596-1" ||
 		status.ProductVersionID != "596-1" ||
 		status.SchemaPackID != "medical-schema67.v1" ||
-		status.GoldenSetSHA256 != "8475cd6876ad117282bac9f2317fa80b79a5c0f69e49f6d4175fa414c4335504" ||
+		status.GoldenSetSHA256 != "6ce87e0d1352b9f3435baa232c01f0dfdb6fd968b959b2462038849da40c8ad0" ||
 		status.MappingSHA256 != "85646d263932d33a2dbb02fbbc93425252618d162c3c1e012b2fede5addf2f43" ||
-		status.SuccessorFileSHA256 != "1ad6586241300edab00aa794e7ad794da73ea9f5a52386abb25b86d7aa511f3c" ||
-		status.AttestationSHA256 != "8217f6aac177fbc08b7fb069c6dc98e360d831bbfa3e149e3a0cd798040916f0" ||
+		status.SuccessorFileSHA256 != "8ff7e476b41f737427a72dd08a86a28a0057b4b5d085b7e23399bc5d38671e71" ||
+		status.AttestationSHA256 != "7fdbfde1b57de76a59c79b5e0535a48766c896e6ee7615bc055bb9bec73b0d5d" ||
 		status.SourceReviewStatus != "COMPLETED" ||
 		status.ReviewedBy != "linyao" ||
 		status.AnnotatorModelID != "claude-fable-5" ||
 		status.ReviewedAt != nil ||
 		status.AttestorID != "workspace-owner-houjing" ||
 		status.AttestedAt != "2026-08-11T11:21:07Z" ||
-		status.Schema67MappingStatus != "PARTIAL_51_CLOSED_16_RESIDUAL" ||
-		status.ClosedCount != 51 || status.ResidualCount != 16 ||
-		!reflect.DeepEqual(status.ResidualFieldIDs, schemaWikiGoldenSuccessorResidualFieldIDs) ||
-		status.GoldenAdmissionStatus != "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED" ||
+		status.Schema67MappingStatus != "COMPLETE_67" ||
+		status.ClosedCount != 67 || status.ResidualCount != 0 ||
+		len(status.ResidualFieldIDs) != 0 ||
+		status.GoldenAdmissionStatus != "BLOCKED_RECEIPT_UNVERIFIED" ||
 		status.ReceiptStatus != "UNVERIFIED" ||
-		status.ReadyToSignStatus != "READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE" ||
+		status.ReadyToSignStatus != "READY_TO_SIGN" ||
 		requireSchemaWikiHash(
 			"schema-wiki-golden-successor-status.v1", status,
 			"status_sha256", status.StatusSHA256,

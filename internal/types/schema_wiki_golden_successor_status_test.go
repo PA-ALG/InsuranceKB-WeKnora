@@ -23,9 +23,12 @@ func TestSchemaWikiGoldenSuccessorStatusVectorIsClosedAndCanonical(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, "linyao", status.ReviewedBy)
 	require.Nil(t, status.ReviewedAt)
-	require.Equal(t, 51, status.ClosedCount)
-	require.Equal(t, 16, status.ResidualCount)
-	require.Len(t, status.ResidualFieldIDs, 16)
+	require.Equal(t, "COMPLETE_67", status.Schema67MappingStatus)
+	require.Equal(t, 67, status.ClosedCount)
+	require.Zero(t, status.ResidualCount)
+	require.Empty(t, status.ResidualFieldIDs)
+	require.Equal(t, "BLOCKED_RECEIPT_UNVERIFIED", status.GoldenAdmissionStatus)
+	require.Equal(t, "READY_TO_SIGN", status.ReadyToSignStatus)
 
 	var object map[string]any
 	require.NoError(t, json.Unmarshal(raw, &object))
@@ -60,15 +63,13 @@ func TestSchemaWikiGoldenSuccessorStatusRejectsEveryAuthorityDrift(t *testing.T)
 		"attestation hash": func(v *SchemaWikiGoldenSuccessorStatusV1) {
 			v.AttestationSHA256 = string(bytes.Repeat([]byte{'c'}, 64))
 		},
-		"source status":  func(v *SchemaWikiGoldenSuccessorStatusV1) { v.SourceReviewStatus = "PENDING" },
-		"reviewer":       func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ReviewedBy = "caller" },
-		"annotator":      func(v *SchemaWikiGoldenSuccessorStatusV1) { v.AnnotatorModelID = "caller-model" },
-		"mapping status": func(v *SchemaWikiGoldenSuccessorStatusV1) { v.Schema67MappingStatus = "COMPLETE" },
-		"closed count":   func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ClosedCount = 52 },
-		"residual count": func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ResidualCount = 15 },
-		"residual order": func(v *SchemaWikiGoldenSuccessorStatusV1) {
-			v.ResidualFieldIDs[0], v.ResidualFieldIDs[1] = v.ResidualFieldIDs[1], v.ResidualFieldIDs[0]
-		},
+		"source status":     func(v *SchemaWikiGoldenSuccessorStatusV1) { v.SourceReviewStatus = "PENDING" },
+		"reviewer":          func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ReviewedBy = "caller" },
+		"annotator":         func(v *SchemaWikiGoldenSuccessorStatusV1) { v.AnnotatorModelID = "caller-model" },
+		"mapping status":    func(v *SchemaWikiGoldenSuccessorStatusV1) { v.Schema67MappingStatus = "PARTIAL_51_CLOSED_16_RESIDUAL" },
+		"closed count":      func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ClosedCount = 66 },
+		"residual count":    func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ResidualCount = 1 },
+		"residual list":     func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ResidualFieldIDs = []string{"product_type"} },
 		"admission status":  func(v *SchemaWikiGoldenSuccessorStatusV1) { v.GoldenAdmissionStatus = "PASS" },
 		"receipt status":    func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ReceiptStatus = "VERIFIED" },
 		"ready to sign":     func(v *SchemaWikiGoldenSuccessorStatusV1) { v.ReadyToSignStatus = "SIGNED" },

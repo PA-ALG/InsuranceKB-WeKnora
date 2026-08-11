@@ -23,11 +23,11 @@
   identity.
 - The exact latest 71-row source has completed human Review. Its model annotator is retained
   as provenance, not treated as proof of zero human review. A mechanical Schema67 successor
-  resolves 51 direct fields and retains 16 real residuals. Reviewer identity/time and the
-  cryptographic whole-batch approval receipt remain absent and MUST NOT be invented.
+  preserves 51 direct fields and closes the remaining 16 as reviewed `unknown` because the
+  current source materials do not cover them. The cryptographic whole-batch approval receipt
+  remains absent and MUST NOT be invented.
 - No evaluator-authoritative canonical Golden, evaluation receipt, Schema Wiki Draft,
-  named-human release review or activation is produced until those residual and authority
-  gaps close.
+  named-human release review or activation is produced until receipt authority closes.
 - The existing 46 generic Material Wiki pages are not Golden, Candidate or Schema facts.
 
 ## 2. Exact scope and owner paths
@@ -208,8 +208,8 @@ metrics and remains explicitly visible; it cannot become page 1/full-page output
 ## 6. Named-human Golden workflow and custody
 
 The latest reviewed source is the starting authority; the workflow does not restart all 67
-fields. It replays the 51 direct mappings, reviews only the 16 residual conflict/merge/
-missing targets, and supplements only evidence-supported reviewer metadata.
+fields. It replays the 51 direct mappings and closes 16 source-coverage gaps as normal
+`unknown` fields without value, Evidence, page or bbox.
 
 1. Two deployment-verifiable named humans approve the exact completed Schema67 successor
    against the exact committed three-document revisions.
@@ -271,9 +271,8 @@ The successor is exact67 with residual count zero, separates annotation model
 `claude-fable-5` from named reviewer `linyao`, requires a known `reviewed_at` and a
 `VERIFIED` whole-batch receipt joined to the evaluation, and binds every Candidate
 Evidence ID to the stored Candidate-Evidence authority. The current source Review is
-`COMPLETED` by `linyao`; independently, its Schema67 mapping is
-`PARTIAL_51_CLOSED_16_RESIDUAL` and its Golden admission is
-`BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. Its `reviewed_at=null` and whole-batch receipt
+`COMPLETED` by `linyao`; independently, its Schema67 mapping is `COMPLETE_67` and its
+Golden admission is `BLOCKED_RECEIPT_UNVERIFIED`. Its `reviewed_at=null` and whole-batch receipt
 is `READY_TO_SIGN/UNVERIFIED`; therefore it
 remains offline and creates zero Draft rows. `FAIL`, `FIXTURE_ONLY`,
 `INCONCLUSIVE`, missing and stale outcomes produce safe offline receipts/aggregates only;
@@ -328,7 +327,8 @@ These routes are display-only. They neither expose nor call named-human approval
 - [ ] Freeze exact source receipts without provider calls.
 - [x] Preserve the already-reviewed latest71 source and mechanically resolve 51 direct
   Schema67 mappings.
-- [ ] Resolve the exact 16 residuals; do not re-annotate the other 51 fields.
+- [x] Close the exact 16 current-material gaps as reviewed `unknown`; do not re-annotate the
+  other 51 fields and do not invent value, Evidence or page authority.
 - [ ] Backfill only evidence-supported review metadata and obtain two cryptographic
   named-human approvals.
 - [ ] Replay quotes/pages/locators and freeze the whole-batch Golden identity.

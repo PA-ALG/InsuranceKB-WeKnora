@@ -41,10 +41,10 @@ func TestCanonicalSchemaWikiGoldenSuccessorStatusProviderFreezesExactBytes(t *te
 	first, err := provider.GoldenSuccessorStatus(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, expected, *first)
-	first.ResidualFieldIDs[0] = "caller"
+	first.ResidualFieldIDs = append(first.ResidualFieldIDs, "caller")
 	second, err := provider.GoldenSuccessorStatus(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, expected.ResidualFieldIDs[0], second.ResidualFieldIDs[0])
+	require.Empty(t, second.ResidualFieldIDs)
 
 	_, err = NewCanonicalSchemaWikiGoldenSuccessorStatusProvider(append(bytes.TrimSpace(raw), []byte(` {}`)...))
 	require.ErrorIs(t, err, types.ErrSchemaWikiContractInvalid)

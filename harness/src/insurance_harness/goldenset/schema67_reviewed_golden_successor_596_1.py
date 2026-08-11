@@ -1,10 +1,10 @@
 """Canonical reviewed-data successor for product 596-1 medical Schema67.
 
-This module does not create a final approved Golden.  It migrates the exact latest
-71-field reviewed source into Schema67 where the mapping is mechanically one-to-one,
-keeps only real conflicts/merges/missing targets pending, and emits an unsigned
-whole-batch payload.  The user's review-completed and reviewer-identity facts are
-recorded without inventing the missing timestamp, key, signature, or approval receipt.
+This module does not create a final approved Golden.  It preserves the exact 51
+directly projected reviewed rows and closes the remaining 16 Schema67 fields as
+reviewed ``unknown`` because the current three source materials do not cover them.
+It emits an unsigned whole-batch payload without inventing a value, Evidence, page,
+timestamp, key, signature, or approval receipt.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ ResidualReason = Literal[
     "MULTI_SOURCE_MERGE_REQUIRES_CANONICAL_DECISION",
     "LATEST_REVIEWED_SOURCE_MISSING",
 ]
+UnknownReason = Literal["NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"]
 
 _CONTRACT: Final[Literal["schema67-reviewed-golden-successor-596-1.v1"]] = (
     "schema67-reviewed-golden-successor-596-1.v1"
@@ -56,6 +57,33 @@ _OLD60_APPROVAL_SHA256: Final[str] = (
 _USER_REVIEW_FACT_REF: Final[str] = "user-authority:2026-08-11:latest71-human-review-completed"
 _USER_REVIEWER_FACT_REF: Final[str] = (
     "user-authority:2026-08-11:latest71-reviewed-by-linyao-confirmed-by-workspace-owner-houjing"
+)
+_COVERAGE_GAP_SOURCE_SHA256: Final[str] = (
+    "e58d0ffdc7e0c16d98df13f1be51b5d747bf81102f0e35f01612a969c2164506"
+)
+_COVERAGE_GAP_MANIFEST_EXTERNAL_SHA256: Final[str] = (
+    "2e98c5e45f9c4447b61e9b0055f12774062a8ce2e96e6f48ed59156d4a11acf2"
+)
+_COVERAGE_GAP_MANIFEST_SELF_SHA256: Final[str] = (
+    "9071fe763efd18aea7afca22d3dfe2d7911067237c118999744e72cfeceda70d"
+)
+_NOT_COVERED_FIELD_IDS: Final[tuple[str, ...]] = (
+    "product_type",
+    "marketing_tagline",
+    "product_overview",
+    "health_declaration_requirements",
+    "eligible_occupation_classes",
+    "premium_grace_period",
+    "guaranteed_renewal_status",
+    "premium_adjustment_rules",
+    "direct_billing_and_advance_payment_rules",
+    "eligible_service_packages",
+    "tax_qualified_status",
+    "tax_benefit_rules",
+    "objection_handling_scripts",
+    "product_faq",
+    "four_step_sales_script",
+    "sales_pitch_script",
 )
 
 
@@ -157,6 +185,9 @@ class Schema67SuccessorFieldV1(_ClosedModel):
     section_id: NonBlankStr
     review_status: ReviewStatus
     residual_reason: ResidualReason | None
+    unknown_reason: UnknownReason | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     mapping_action: MappingAction
     source_field_ids: tuple[NonBlankStr, ...]
     source_record_sha256: Sha256Hex | None
@@ -175,14 +206,16 @@ class Schema67SuccessorFieldV1(_ClosedModel):
     def _validate_state_and_hash(self) -> Schema67SuccessorFieldV1:
         reviewed = self.review_status == "REVIEWED"
         if reviewed:
-            if (
-                self.residual_reason is not None
-                or len(self.source_field_ids) != 1
+            if self.residual_reason is not None or self.state is None:
+                raise ValueError("SCHEMA67_SUCCESSOR_REVIEWED_FIELD_INVALID")
+            if self.unknown_reason is None and (
+                len(self.source_field_ids) != 1
                 or len(self.source_record_sha256s) != 1
                 or self.source_record_sha256 != self.source_record_sha256s[0]
-                or self.state is None
                 or self.mapping_action not in {"reuse", "rename"}
             ):
+                raise ValueError("SCHEMA67_SUCCESSOR_REVIEWED_FIELD_INVALID")
+            if self.unknown_reason is not None and self.state != "unknown":
                 raise ValueError("SCHEMA67_SUCCESSOR_REVIEWED_FIELD_INVALID")
             if self.state == "present" and (self.value is None or not self.evidence):
                 raise ValueError("SCHEMA67_SUCCESSOR_REVIEWED_FIELD_INVALID")
@@ -192,6 +225,7 @@ class Schema67SuccessorFieldV1(_ClosedModel):
                 raise ValueError("SCHEMA67_SUCCESSOR_REVIEWED_FIELD_INVALID")
         elif (
             self.residual_reason is None
+            or self.unknown_reason is not None
             or self.state is not None
             or self.value is not None
             or self.evidence
@@ -205,8 +239,8 @@ class Schema67SuccessorFieldV1(_ClosedModel):
 class Schema67SuccessorSummaryV1(_ClosedModel):
     contract: Literal["schema67-reviewed-golden-successor-summary-596-1.v1"]
     field_count: Literal[67]
-    reviewed_field_count: Literal[51]
-    pending_residual_field_count: Literal[16]
+    reviewed_field_count: Literal[67]
+    pending_residual_field_count: Literal[0]
     human_annotation_zero: Literal[False]
     review_completed: Literal[True]
     authority_metadata_complete: Literal[False]
@@ -216,12 +250,12 @@ class Schema67SuccessorSummaryV1(_ClosedModel):
 
 class Schema67WholeBatchReadyToSignV1(_ClosedModel):
     contract: Literal["schema67-reviewed-golden-whole-batch-ready-to-sign-596-1.v1"]
-    status: Literal["READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE"]
+    status: Literal["READY_TO_SIGN"]
     product_version_id: Literal["596-1"]
     schema_pack_id: Literal["medical-schema67.v1"]
     schema_pack_sha256: Sha256Hex
     golden_set_sha256: Sha256Hex
-    reviewed_field_count: Literal[51]
+    reviewed_field_count: Literal[67]
     residual_pending_field_ids: tuple[NonBlankStr, ...]
     reviewed_by: Literal["linyao"]
     reviewed_at: None = None
@@ -240,8 +274,8 @@ class Schema67WholeBatchReadyToSignV1(_ClosedModel):
 class Schema67ReviewedGoldenSuccessor5961V1(_ClosedModel):
     contract: Literal["schema67-reviewed-golden-successor-596-1.v1"]
     source_review_status: Literal["COMPLETED"]
-    schema67_mapping_status: Literal["PARTIAL_51_CLOSED_16_RESIDUAL"]
-    golden_admission_status: Literal["BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED"]
+    schema67_mapping_status: Literal["COMPLETE_67"]
+    golden_admission_status: Literal["BLOCKED_RECEIPT_UNVERIFIED"]
     product_version_id: Literal["596-1"]
     schema_pack_id: Literal["medical-schema67.v1"]
     schema_pack_sha256: Sha256Hex
@@ -264,10 +298,11 @@ class Schema67ReviewedGoldenSuccessor5961V1(_ClosedModel):
             or len(set(self.ordered_field_ids)) != 67
             or tuple(row.field_id for row in self.fields) != self.ordered_field_ids
             or tuple(row.ordinal for row in self.fields) != tuple(range(1, 68))
-            or tuple(row.field_id for row in self.fields if row.review_status == "PENDING_RESIDUAL")
-            != self.residual_pending_field_ids
-            or sum(row.review_status == "REVIEWED" for row in self.fields) != 51
-            or len(self.residual_pending_field_ids) != 16
+            or any(row.review_status != "REVIEWED" for row in self.fields)
+            or any(row.residual_reason is not None for row in self.fields)
+            or self.residual_pending_field_ids
+            or tuple(row.field_id for row in self.fields if row.unknown_reason is not None)
+            != _NOT_COVERED_FIELD_IDS
             or self.ready_to_sign.residual_pending_field_ids != self.residual_pending_field_ids
             or self.ready_to_sign.golden_set_sha256 != self.golden_set_sha256
         ):
@@ -424,16 +459,35 @@ def canonical_schema67_reviewed_golden_artifact_files(
             },
             hash_field="attestation_sha256",
         ),
-        "residual-pending.json": _sealed_artifact_payload(
-            contract="schema67-reviewed-successor-residuals-596-1.v1",
+        "source-coverage-gaps.json": _sealed_artifact_payload(
+            contract="schema67-current-source-coverage-gaps-596-1.v1",
             payload={
                 "golden_set_sha256": successor.golden_set_sha256,
-                "field_ids": successor.residual_pending_field_ids,
+                "source_artifact_sha256": _COVERAGE_GAP_SOURCE_SHA256,
+                "source_manifest_external_sha256": _COVERAGE_GAP_MANIFEST_EXTERNAL_SHA256,
+                "source_manifest_self_sha256": _COVERAGE_GAP_MANIFEST_SELF_SHA256,
+                "informational_only": True,
+                "decision_required": False,
+                "publish_blocking": False,
+                "field_ids": _NOT_COVERED_FIELD_IDS,
                 "rows": tuple(
-                    row for row in successor.fields if row.review_status == "PENDING_RESIDUAL"
+                    {
+                        "ordinal": row.ordinal,
+                        "field_id": row.field_id,
+                        "state": row.state,
+                        "value": row.value,
+                        "evidence": row.evidence,
+                        "unknown_reason": row.unknown_reason,
+                        "page": None,
+                        "citation_status": "NOT_APPLICABLE_UNTIL_SOURCE_EXISTS",
+                        "bbox": None,
+                        "bbox_status": "NOT_APPLICABLE_UNTIL_SOURCE_EXISTS",
+                    }
+                    for row in successor.fields
+                    if row.unknown_reason is not None
                 ),
             },
-            hash_field="residual_sha256",
+            hash_field="coverage_gap_sha256",
         ),
         "whole-batch-ready-to-sign.json": _canonical_json_bytes(
             successor.ready_to_sign.model_dump(mode="json")
@@ -616,7 +670,11 @@ def _field_rows(
         source_records = tuple(latest_rows[source_id] for source_id in source_ids)
         record_hashes = tuple(_record_sha256(item) for item in source_records)
         source = source_records[0] if len(source_records) == 1 else None
-        reviewed = status == "REVIEWED"
+        not_covered = field_id in _NOT_COVERED_FIELD_IDS
+        if not_covered:
+            status = "REVIEWED"
+            reason = None
+        reviewed = status == "REVIEWED" and not not_covered
         payload: dict[str, object] = {
             "ordinal": ordinal,
             "field_id": field_id,
@@ -628,7 +686,11 @@ def _field_rows(
             "source_record_sha256": record_hashes[0] if len(record_hashes) == 1 else None,
             "source_record_sha256s": record_hashes,
             "annotator_model_id": "claude-fable-5",
-            "state": source.get("tri_state") if reviewed and source else None,
+            "state": "unknown"
+            if not_covered
+            else source.get("tri_state")
+            if reviewed and source
+            else None,
             "value": source.get("value") if reviewed and source else None,
             "confidence": source.get("confidence") if reviewed and source else None,
             "risk_level": source.get("risk_level") if source else None,
@@ -636,6 +698,8 @@ def _field_rows(
             "flags": tuple(source.get("flags", ())) if source else (),
             "evidence": _evidence_rows(source) if reviewed and source else (),
         }
+        if not_covered:
+            payload["unknown_reason"] = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
         payload["field_metadata_sha256"] = _field_metadata_sha256(payload)
         try:
             output.append(Schema67SuccessorFieldV1.model_validate(payload))
@@ -694,12 +758,12 @@ def build_schema67_reviewed_golden_successor_596_1(
         latest_rows={str(row["field_id"]): row for row in latest71_rows},
         ordered67=pack.ordered_field_ids,
     )
-    residual = tuple(row.field_id for row in fields if row.review_status == "PENDING_RESIDUAL")
+    residual: tuple[str, ...] = ()
     payload: dict[str, object] = {
         "contract": _CONTRACT,
         "source_review_status": "COMPLETED",
-        "schema67_mapping_status": "PARTIAL_51_CLOSED_16_RESIDUAL",
-        "golden_admission_status": "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED",
+        "schema67_mapping_status": "COMPLETE_67",
+        "golden_admission_status": "BLOCKED_RECEIPT_UNVERIFIED",
         "product_version_id": "596-1",
         "schema_pack_id": "medical-schema67.v1",
         "schema_pack_sha256": pack.schema_pack_sha256,
@@ -727,8 +791,8 @@ def build_schema67_reviewed_golden_successor_596_1(
         "summary": Schema67SuccessorSummaryV1(
             contract="schema67-reviewed-golden-successor-summary-596-1.v1",
             field_count=67,
-            reviewed_field_count=51,
-            pending_residual_field_count=16,
+            reviewed_field_count=67,
+            pending_residual_field_count=0,
             human_annotation_zero=False,
             review_completed=True,
             authority_metadata_complete=False,
@@ -739,12 +803,12 @@ def build_schema67_reviewed_golden_successor_596_1(
     payload["golden_set_sha256"] = schema67_reviewed_golden_successor_sha256(payload)
     ready_payload: dict[str, object] = {
         "contract": "schema67-reviewed-golden-whole-batch-ready-to-sign-596-1.v1",
-        "status": "READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE",
+        "status": "READY_TO_SIGN",
         "product_version_id": "596-1",
         "schema_pack_id": "medical-schema67.v1",
         "schema_pack_sha256": pack.schema_pack_sha256,
         "golden_set_sha256": payload["golden_set_sha256"],
-        "reviewed_field_count": 51,
+        "reviewed_field_count": 67,
         "residual_pending_field_ids": residual,
         "reviewed_by": "linyao",
         "reviewed_at": None,

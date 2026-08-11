@@ -44,8 +44,8 @@ fabricated from the annotator model or the review-completion assertion.
 
 The successor SHALL encode three non-substitutable statuses:
 `source_review_status=COMPLETED`,
-`schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`, and
-`golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. The source Review
+`schema67_mapping_status=COMPLETE_67`, and
+`golden_admission_status=BLOCKED_RECEIPT_UNVERIFIED`. The source Review
 status SHALL NOT be downgraded because mapping or admission remains incomplete, and the
 mapping status SHALL NOT be treated as a Golden admission.
 
@@ -300,7 +300,7 @@ ordered67 rows and no `PENDING_RESIDUAL`: each row binds the existing decision h
 Candidate/Golden states, literal/digest/none value presentation, risk/conflict status and
 hashed Evidence changes. Every non-null Candidate Evidence ID SHALL be an exact stored
 JoinReceipt ID for the same field and every stored JoinReceipt SHALL occur exactly once.
-Golden-only digests SHALL have no preview. The current 51/16 metadata-incomplete unsigned
+Golden-only digests SHALL have no preview. The current complete67 receipt-unverified
 successor SHALL fail before repository access. The wrapper SHALL set `serving_effect=NONE`.
 
 Evidence preview SHALL accept only the four immutable path IDs. The server SHALL require
@@ -343,10 +343,17 @@ exact tenant, space, RAW KB, Wiki KB, product version and SchemaPack identities;
 Golden-set, Schema67 mapping, successor-file and review-attestation hashes; the source
 Review state `COMPLETED` with `reviewed_by=linyao`, `annotator_model_id=claude-fable-5`
 and nullable `reviewed_at`; the distinct attestor and attestation creation time; the
-mapping state `PARTIAL_51_CLOSED_16_RESIDUAL` with counts `51/16` and the exact ordered
-16 residual field IDs; and Golden admission
-`BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED` with receipt state `UNVERIFIED` and
+mapping state `COMPLETE_67` with counts `67/0` and an empty residual field list; and Golden
+admission `BLOCKED_RECEIPT_UNVERIFIED` with receipt state `UNVERIFIED` and
 `READY_TO_SIGN`. A status self-hash SHALL cover every preceding field.
+
+The corresponding canonical successor SHALL preserve the 51 direct reviewed field rows
+byte-for-byte. The exact 16 fields not covered by the current three materials SHALL be
+`REVIEWED`, `state=unknown`, null-valued and Evidence-free, with closed
+`unknown_reason=NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS`. Every `residual_reason` SHALL be
+null. These fields SHALL generate ordinary unknown Schema field pages and participate in the
+exact75 release; they SHALL NOT block Candidate, Draft, whole-batch review or publication,
+and SHALL NOT acquire an inferred value, absent state, citation, bbox or page-1 fallback.
 
 The status SHALL contain no field value, Evidence, metric or PASS assertion, signature,
 opaque token, path, key material, approval action, Draft identity, release Head or serving
@@ -366,7 +373,7 @@ independently require trusted Admin/Owner context and exact-compare the provider
 space, RAW and Wiki scope before output. It SHALL perform no preparation, Draft, Head,
 repository, database or release-state write.
 
-#### Scenario: current 51/16 status is requested
+#### Scenario: current complete67 receipt-blocked status is requested
 
 - **WHEN** a human Admin/Owner presents the exact sealed Wiki/RAW scope and deployment
   authority is configured

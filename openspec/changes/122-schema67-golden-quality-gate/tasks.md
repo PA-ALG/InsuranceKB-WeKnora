@@ -25,13 +25,14 @@
 - [ ] Freeze exact three-document revision receipts without provider calls.
 - [x] Record the exact latest 71-row human-reviewed source and retain its model-annotator
   provenance separately from human-review status.
-- [x] Mechanically map 51 direct fields into ordered Schema67 and freeze the exact 16
-  conflict/merge/missing residuals; do not restart all 67 fields.
+- [x] Mechanically map 51 direct fields byte-identically and close the exact 16 uncovered
+  targets as reviewed `unknown` with null value, empty Evidence and
+  `NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS`; do not restart all 67 fields.
 - [x] Freeze independent source Review, Schema67 mapping and Golden admission statuses;
   record `linyao` separately from `claude-fable-5`, keep `reviewed_at=null`, and emit only
   an unsigned fact-attestation event rather than a forged review receipt.
-- [ ] Resolve only the 16 residuals and backfill evidence-based original review time
-  metadata without inventing historical facts.
+- [x] Record the 16 source-coverage gaps as informational and non-blocking; never use them as
+  a decision queue or invent the historical review time.
 - [ ] Obtain the required two deployment-verifiable named-human approvals and adjudicate
   remaining disagreements under the existing quality-gate policy.
 - [ ] Replay Evidence and freeze one immutable whole-batch Golden receipt/version/hash.
@@ -91,7 +92,7 @@
 ## Task 7 · Current Golden successor status
 
 - [x] Freeze a separate closed status DTO for the completed latest71 source Review, the
-  partial 51/16 Schema67 mapping and blocked/unverified Golden admission state.
+  complete67 Schema67 mapping and receipt-unverified Golden admission state.
 - [x] Freeze one deployment-owned canonical provider contract: exact bytes and SHA are
   revalidated at startup; nil/unconfigured is typed `NO_GOLDEN_SUCCESSOR_STATUS`.
 - [x] RED/GREEN one read-only private GET under the existing scoped Schema Wiki surface,
@@ -100,7 +101,7 @@
   activate authority out of this status response; do not relax Dossier V2.
 - [ ] `WAITING_FOR_CONCRETE_VERIFIED_WHOLE_BATCH_RECEIPT`: do not register formal
   Dossier V2 provenance from a literal receipt status or bare digest. Reuse the existing
-  concrete human batch receipt/verifier only after the residual whole batch is signed.
+  concrete human batch receipt/verifier when the whole batch is signed.
 
 ## Global STOP conditions
 

@@ -16,11 +16,12 @@ Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
   annotator provenance `claude-fable-5` and confirming attestor `workspace-owner-houjing`
   remain separate layers. Original review time and cryptographic approval receipt are not
   present in the existing bytes and are not invented.
-- Schema67 successor migration: `51 REVIEWED / 16 PENDING_RESIDUAL`; this corrects the
-  superseded all-PENDING intake description without claiming a final approved Golden.
+- Schema67 successor migration: `67 REVIEWED / 0 PENDING_RESIDUAL`; 51 reviewed rows remain
+  byte-identical and 16 current-material gaps are `unknown` with no value/Evidence/page and
+  `NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS`.
 - Frozen status split: `source_review_status=COMPLETED`,
-  `schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`, and
-  `golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`. The attestation
+  `schema67_mapping_status=COMPLETE_67`, and
+  `golden_admission_status=BLOCKED_RECEIPT_UNVERIFIED`. The attestation
   creation time is not the unknown original `reviewed_at` and carries no signature.
 - Official scoring, DB, WeKnora, Draft, release review, activation and live actions:
   `NOT RUN`.
@@ -56,14 +57,14 @@ execute any live request.
 The same private route now returns the closed Dossier V2 wrapper with an exact67
 review-successor projection. Formal routing requires residual count zero, named reviewer
 `linyao`, known `reviewed_at`, `VERIFIED` whole-batch receipt and exact Candidate Evidence
-IDs from stored JoinReceipts. The current 51/16 mapping remains admission-blocked and
-receipt-unverified, so it is explicitly unavailable to Draft/review routes and causes
+IDs from stored JoinReceipts. The current complete67 mapping remains receipt-unverified,
+so it is explicitly unavailable to Draft/review routes and causes
 repository writes `0`; its source Review nevertheless remains completed.
 
 The distinct `golden-quality/successor-status` route now exposes only that current
 three-layer state from a deployment-owned canonical provider. Its DTO binds the exact
 596-1 scope and artifact hashes, `linyao`/`claude-fable-5` provenance separation, nullable
-original review time, attestor event, ordered 51/16 mapping gap and unverified admission
+original review time, attestor event, ordered complete67 mapping and unverified admission
 block. Missing provider configuration is typed unavailable. It contains no field values,
 Evidence, PASS claim, signature or release action and performs no repository write.
 
@@ -100,8 +101,8 @@ its residual-zero admission rules remain unchanged.
 - Review-surface frontend tests, database writes and live HTTP calls: `NOT RUN`.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
-or authorize a model run. Task 2 does not restart human review: it must close the exact 16
-Schema67 residuals, backfill only evidence-supported missing review metadata, and obtain the
+or authorize a model run. Task 2 does not restart human review: it preserves the 51 direct
+rows, records 16 current-material gaps as non-blocking unknowns, and must obtain the
 required cryptographic approvals before the successor becomes an evaluator-authoritative
 Golden. Task 5 still requires a separately authorized new execution identity and one-shot
 evaluation. Until both complete, no Schema Wiki Draft may be created from this gate.

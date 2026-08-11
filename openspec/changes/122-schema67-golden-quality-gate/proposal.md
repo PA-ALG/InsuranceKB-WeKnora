@@ -13,14 +13,14 @@ change does not rerun or reinterpret it.
 The exact latest 71-row annotation source has completed human Review by user-attested
 reviewer `linyao`. Its model annotator provenance is retained and is not evidence that
 human review was absent. The existing bytes do not contain the original `reviewed_at` or a
-cryptographic whole-batch approval receipt, and the mechanical Schema67 migration retains
-16 real conflict/merge/missing residuals. `workspace-owner-houjing` is the fact attestor,
-not the reviewer.
+cryptographic whole-batch approval receipt. The mechanical Schema67 successor keeps 51
+reviewed rows unchanged and closes 16 fields as reviewed `unknown` because the current three
+materials do not cover them. `workspace-owner-houjing` is the fact attestor, not the reviewer.
 Therefore human annotation is not zero and need not restart, while formal Golden evaluation
-remains blocked until authority metadata, residual decisions and signatures are frozen.
+remains blocked until the concrete receipt is verified.
 The three status authorities are frozen separately as `source_review_status=COMPLETED`,
-`schema67_mapping_status=PARTIAL_51_CLOSED_16_RESIDUAL`, and
-`golden_admission_status=BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED`; none implies another.
+`schema67_mapping_status=COMPLETE_67`, and
+`golden_admission_status=BLOCKED_RECEIPT_UNVERIFIED`; none implies another.
 
 ## Scope
 
@@ -38,8 +38,8 @@ The three status authorities are frozen separately as `source_review_status=COMP
   inside the existing canonical Schema Wiki preparation custody/manifest; it adds no
   table, Head, CAS or serving authority.
 - One same-route closed Dossier V2 projection that adds a formal exact67 review successor
-  only after residual closure, named reviewer/time completion and verified receipt joins;
-  the current 51/16 unsigned successor remains offline and creates no Draft.
+  only after named reviewer/time completion and verified receipt joins; the current
+  complete67 unsigned successor remains offline and creates no Draft.
 - Read-only, preparation/evaluation-pinned summary, dossier and Evidence-preview routes.
   The summary is aggregate-only but remains a human-JWT Admin/Owner preparation surface;
   the dossier additionally requires the authenticated named reviewer. Both traverse the

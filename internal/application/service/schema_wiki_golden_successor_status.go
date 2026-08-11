@@ -45,8 +45,9 @@ func (p *canonicalSchemaWikiGoldenSuccessorStatusProvider) GoldenSuccessorStatus
 	return &status, nil
 }
 
-// ReadSchemaWikiGoldenSuccessorStatus returns only the current blocked 51/16
-// migration state. It has no preparation, Draft, Head or serving side effect.
+// ReadSchemaWikiGoldenSuccessorStatus returns the complete67 source-coverage
+// status that remains blocked only by receipt verification. It has no
+// preparation, Draft, Head or serving side effect.
 func (s *SchemaWikiService) ReadSchemaWikiGoldenSuccessorStatus(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
@@ -74,6 +75,6 @@ func (s *SchemaWikiService) ReadSchemaWikiGoldenSuccessorStatus(
 		return nil, ErrNoGoldenSuccessorStatus
 	}
 	copy := *status
-	copy.ResidualFieldIDs = append([]string(nil), status.ResidualFieldIDs...)
+	copy.ResidualFieldIDs = append([]string{}, status.ResidualFieldIDs...)
 	return &copy, nil
 }
