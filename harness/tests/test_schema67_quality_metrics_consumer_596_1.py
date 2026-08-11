@@ -43,6 +43,25 @@ _CURRENT = (
 _A = "a" * 64
 _B = "b" * 64
 _C = "c" * 64
+_NOT_COVERED_FIELD_IDS = (
+    "product_type",
+    "marketing_tagline",
+    "product_overview",
+    "health_declaration_requirements",
+    "eligible_occupation_classes",
+    "premium_grace_period",
+    "guaranteed_renewal_status",
+    "premium_adjustment_rules",
+    "direct_billing_and_advance_payment_rules",
+    "eligible_service_packages",
+    "tax_qualified_status",
+    "tax_benefit_rules",
+    "objection_handling_scripts",
+    "product_faq",
+    "four_step_sales_script",
+    "sales_pitch_script",
+)
+_NOT_COVERED_REASON = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
 
 
 def _current() -> Schema67ReviewedGoldenSuccessor5961V1:
@@ -135,7 +154,7 @@ def _rows(result: Schema67GoldenEvaluationResultV1) -> tuple[Schema67MetricRowV1
     return tuple(rows)
 
 
-def test_current_51_16_unverified_successor_blocks_before_metrics(
+def test_current_complete_67_unverified_successor_blocks_only_for_receipt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evaluator_calls = 0
@@ -158,14 +177,41 @@ def test_current_51_16_unverified_successor_blocks_before_metrics(
         forbidden_evaluator,
     )
     current = _current()
-    assert current.schema67_mapping_status == "PARTIAL_51_CLOSED_16_RESIDUAL"
-    assert current.golden_admission_status == "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED"
+    assert current.source_review_status == "COMPLETED"
+    assert current.review_metadata.reviewed_by == "linyao"
+    assert current.review_metadata.annotator_model_id == "claude-fable-5"
+    assert current.review_metadata.reviewed_at is None
+    assert current.schema67_mapping_status == "COMPLETE_67"
+    assert current.residual_pending_field_ids == ()
+    assert tuple(row.field_id for row in current.fields) == current.ordered_field_ids
+    assert len(current.fields) == 67
+    assert all(row.review_status == "REVIEWED" for row in current.fields)
+    assert "RESIDUAL" not in current.golden_admission_status
+    assert "RECEIPT_UNVERIFIED" in current.golden_admission_status
 
     with pytest.raises(Schema67QualityMetricsConsumerError, match="GOLDEN_ADMISSION_BLOCKED"):
         compute_admitted_schema67_quality_metrics_596_1(admission=current, rows=())
 
     assert evaluator_calls == 0
     assert kernel_calls == 0
+
+
+def test_exact_16_not_covered_fields_are_normal_unknowns() -> None:
+    current = _current()
+    by_field_id = {row.field_id: row for row in current.fields}
+
+    assert tuple(
+        row.field_id
+        for row in current.fields
+        if _NOT_COVERED_REASON in row.model_dump_json()
+    ) == _NOT_COVERED_FIELD_IDS
+    for field_id in _NOT_COVERED_FIELD_IDS:
+        row = by_field_id[field_id]
+        assert row.review_status == "REVIEWED"
+        assert row.state == "unknown"
+        assert row.value is None
+        assert row.evidence == ()
+        assert _NOT_COVERED_REASON in row.model_dump_json()
 
 
 def test_registered_pair_without_concrete_human_batch_receipt_is_blocked(
