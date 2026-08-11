@@ -60,6 +60,90 @@ func TestSchemaWikiCrossLanguageVector(t *testing.T) {
 	}
 }
 
+func TestSchema67CitationAuthorityJoinReceiptCanonicalVector(t *testing.T) {
+	t.Parallel()
+
+	liveSource := LiveRevisionSourceReceiptV1{
+		Contract: "live-revision-source-receipt.v1", RevisionSourceID: strings.Repeat("0", 64),
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-kb-596-1", WikiKBID: "wiki-kb-596-1",
+		KnowledgeID: "knowledge-terms-596-1", EvidenceParseAttemptID: "evidence-attempt-01",
+		WeKnoraParseAttempt: 2, ResourceID: "resource-terms-596-1",
+		FileSHA256: strings.Repeat("c", 64), Size: 4096, MimeType: "application/pdf", PageCount: 39,
+		ParsedDocumentSHA256: strings.Repeat("d", 64), ParseManifestSHA256: strings.Repeat("e", 64),
+		WeKnoraManifestAlgorithm: RevisionManifestAlgorithm,
+		WeKnoraManifestDigest:    strings.Repeat("7", 64), WeKnoraChunkCount: 162,
+	}
+	liveDigest, err := ComputeLiveRevisionSourceReceiptSHA256(liveSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	liveSource.SourceReceiptSHA256 = liveDigest
+	receipt := Schema67CitationAuthorityJoinReceiptV1{
+		Contract:                 "schema67-citation-authority-join-receipt.v1",
+		CandidateSHA256:          strings.Repeat("a", 64),
+		FieldID:                  "coverage_scope",
+		SourceRole:               "terms",
+		EvidenceReceiptSHA256:    strings.Repeat("b", 64),
+		SourceSHA256:             strings.Repeat("c", 64),
+		ParsedDocumentSHA256:     strings.Repeat("d", 64),
+		ParseManifestSHA256:      strings.Repeat("e", 64),
+		EvidenceParseAttemptID:   "evidence-attempt-01",
+		LocatorKind:              "block",
+		LocatorRef:               "block-terms-coverage_scope",
+		NativePageIndex:          11,
+		PageNumber:               12,
+		LocatorContentSHA256:     strings.Repeat("f", 64),
+		QuoteSHA256:              strings.Repeat("1", 64),
+		CaptureIdentitySHA256:    strings.Repeat("2", 64),
+		RawStructureSHA256:       strings.Repeat("3", 64),
+		SanitizedStructureSHA256: strings.Repeat("4", 64),
+		ParserIdentitySHA256:     strings.Repeat("5", 64),
+		CoordinatePolicySHA256:   strings.Repeat("6", 64),
+		SourceCoordinateSpace:    "mineru_content_list_normalized_0_1000_top_left.v1",
+		TargetCoordinateSpace:    "normalized_0_1e6",
+		Origin:                   "top_left",
+		SourceBBoxPreimage:       [4]string{"100", "200", "800", "900"},
+		NormalizedBBox: CitationBBoxV1{
+			CoordinateSystem: "normalized_0_1e6",
+			PageWidth:        1000000,
+			PageHeight:       1000000,
+			X0:               100000,
+			Y0:               200000,
+			X1:               800000,
+			Y1:               900000,
+		},
+		PageWidth:                       1000000,
+		PageHeight:                      1000000,
+		RotationDegrees:                 0,
+		HighlightPrecision:              "block_exact",
+		TenantID:                        10003,
+		SpaceID:                         "space-596-1",
+		RawKBID:                         "raw-kb-596-1",
+		KnowledgeID:                     "knowledge-terms-596-1",
+		WeKnoraParseAttempt:             2,
+		FileSHA256:                      strings.Repeat("c", 64),
+		WeKnoraManifestAlgorithm:        "weknora.chunk_manifest.v1",
+		WeKnoraManifestDigest:           strings.Repeat("7", 64),
+		ChunkID:                         "chunk-terms-12",
+		ChunkIndex:                      37,
+		ChunkContentSHA256:              strings.Repeat("8", 64),
+		QuoteOccurrenceStart:            120,
+		QuoteOccurrenceEnd:              168,
+		QuoteOccurrenceCount:            1,
+		JoinPolicySHA256:                strings.Repeat("9", 64),
+		LiveRevisionSourceReceipt:       liveSource,
+		LiveRevisionSourceReceiptSHA256: liveDigest,
+	}
+	got, err := ComputeSchema67CitationAuthorityJoinReceiptSHA256(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "91cfeec949019e30843c0b384c4420b5eb50db70017a3718cdc741fe71bf2928"
+	if got != want {
+		t.Fatalf("receipt sha256 = %s, want %s", got, want)
+	}
+}
+
 func TestSchemaWikiVectorRejectsMutation(t *testing.T) {
 	t.Parallel()
 

@@ -13,6 +13,8 @@ import (
 
 type resourceRepository struct{ db *gorm.DB }
 
+var ErrResourcePinned = errors.New("resource is pinned by an immutable knowledge revision")
+
 // NewResourceRepository creates the persistence adapter for resource metadata.
 func NewResourceRepository(db *gorm.DB) interfaces.ResourceRepository {
 	return &resourceRepository{db: db}
@@ -63,8 +65,42 @@ func (r *resourceRepository) GetByTenantLocation(
 }
 
 func (r *resourceRepository) MarkDeleted(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Model(&types.StoredResource{}).Where("id = ?", id).
-		Updates(map[string]interface{}{"state": types.ResourceStateDeleted, "deleted_at": time.Now()}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var resource types.StoredResource
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"id = ? AND state = ?", id, types.ResourceStateActive,
+		).First(&resource).Error; err != nil {
+			return err
+		}
+		var pinned int64
+		hasRevisionSources := tx.Migrator().HasTable(&types.KnowledgeRevisionSource{})
+		if !hasRevisionSources && tx.Dialector.Name() != "sqlite" {
+			return errors.New("immutable revision source guard is unavailable")
+		}
+		if hasRevisionSources {
+			if err := tx.Model(&types.KnowledgeRevisionSource{}).Where(
+				"resource_id = ? AND retention_state = ?",
+				id, types.KnowledgeRevisionSourcePinned,
+			).Count(&pinned).Error; err != nil {
+				return err
+			}
+		}
+		if pinned != 0 {
+			return ErrResourcePinned
+		}
+		result := tx.Model(&types.StoredResource{}).Where(
+			"id = ? AND state = ?", id, types.ResourceStateActive,
+		).Updates(map[string]interface{}{
+			"state": types.ResourceStateDeleted, "deleted_at": time.Now(),
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
 func (r *resourceRepository) CreateBinding(ctx context.Context, binding *types.ResourceBinding) error {

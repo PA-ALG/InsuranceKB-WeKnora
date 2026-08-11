@@ -154,11 +154,16 @@ func (s *resourceCatalogFileService) DeleteFile(ctx context.Context, filePath st
 	if err != nil {
 		return err
 	}
+	// The registry guard runs before physical deletion. A resource pinned by an
+	// immutable parse attempt must never be removed merely because the current
+	// knowledge row is being cleaned up.
+	if isResource {
+		if err := s.catalog.MarkDeleted(ctx, filePath); err != nil {
+			return err
+		}
+	}
 	if err := s.inner.DeleteFile(ctx, physical); err != nil {
 		return err
-	}
-	if isResource {
-		return s.catalog.MarkDeleted(ctx, filePath)
 	}
 	return nil
 }

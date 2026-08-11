@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -63,6 +64,49 @@ CREATE TABLE knowledge_revisions (
 	completed_at DATETIME NOT NULL,
 	PRIMARY KEY (knowledge_id, parse_attempt)
 );
+CREATE TABLE resources (
+	id TEXT PRIMARY KEY,
+	handle TEXT NOT NULL UNIQUE,
+	tenant_id INTEGER NOT NULL,
+	provider TEXT NOT NULL,
+	physical_path TEXT NOT NULL,
+	location_hash TEXT NOT NULL,
+	kind TEXT NOT NULL,
+	mime_type TEXT NOT NULL,
+	original_name TEXT NOT NULL,
+	size INTEGER NOT NULL,
+	content_hash TEXT NOT NULL DEFAULT '',
+	lifecycle TEXT NOT NULL,
+	state TEXT NOT NULL,
+	created_at DATETIME,
+	updated_at DATETIME,
+	deleted_at DATETIME
+);
+CREATE TABLE resource_bindings (
+	id TEXT PRIMARY KEY,
+	resource_id TEXT NOT NULL,
+	tenant_id INTEGER NOT NULL,
+	owner_type TEXT NOT NULL,
+	owner_id TEXT NOT NULL,
+	relation TEXT NOT NULL,
+	created_at DATETIME
+);
+CREATE TABLE knowledge_revision_sources (
+	tenant_id INTEGER NOT NULL,
+	knowledge_id TEXT NOT NULL,
+	parse_attempt INTEGER NOT NULL,
+	revision_source_id TEXT NOT NULL UNIQUE,
+	resource_id TEXT NOT NULL,
+	file_sha256 TEXT NOT NULL,
+	size INTEGER NOT NULL,
+	mime_type TEXT NOT NULL,
+	page_count INTEGER,
+	retention_state TEXT NOT NULL,
+	created_at DATETIME NOT NULL,
+	updated_at DATETIME NOT NULL,
+	released_at DATETIME,
+	PRIMARY KEY (knowledge_id, parse_attempt)
+);
 `).Error)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db
@@ -71,14 +115,28 @@ CREATE TABLE knowledge_revisions (
 func seedRevisionKnowledge(t *testing.T, db *gorm.DB, status string, attempt int64, pending int) string {
 	t.Helper()
 	id := uuid.NewString()
+	resourceID := uuid.NewString()
+	handle := strings.ReplaceAll(uuid.NewString(), "-", "")[:types.ResourceHandleLength]
+	fileSHA256 := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	require.NoError(t, db.Exec(`
+INSERT INTO resources (
+	id, handle, tenant_id, provider, physical_path, location_hash, kind,
+	mime_type, original_name, size, content_hash, lifecycle, state, created_at, updated_at
+) VALUES (?, ?, 1, 'local', ?, ?, 'file', 'application/pdf', 'input.pdf', 1024, '', 'persistent', 'active', ?, ?)
+`, resourceID, handle, "/files/"+id+".pdf", strings.Repeat("f", 64),
+		time.Now().UTC(), time.Now().UTC()).Error)
+	require.NoError(t, db.Exec(`
+INSERT INTO resource_bindings (
+	id, resource_id, tenant_id, owner_type, owner_id, relation, created_at
+) VALUES (?, ?, 1, 'knowledge', ?, 'source_file', ?)
+`, uuid.NewString(), resourceID, id, time.Now().UTC()).Error)
 	require.NoError(t, db.Exec(`
 INSERT INTO knowledges (
 	id, tenant_id, knowledge_base_id, parse_status, enable_status,
 	pending_subtasks_count, current_parse_attempt, file_path, file_sha256,
 	embedding_model_id, updated_at
-) VALUES (?, 1, 'kb-1', ?, 'disabled', ?, ?, '/files/input.pdf', ?, 'embed-1', ?)
-`, id, status, pending, attempt,
-		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+) VALUES (?, 1, 'kb-1', ?, 'disabled', ?, ?, ?, ?, 'embed-1', ?)
+`, id, status, pending, attempt, types.BuildResourcePath(handle), fileSHA256,
 		time.Now().UTC()).Error)
 	return id
 }
@@ -211,8 +269,105 @@ func TestCommitDirectRevisionIsAtomicAndFenced(t *testing.T) {
 		Count(&revisionCount).Error)
 	require.Equal(t, int64(1), revisionCount)
 
+	var source types.KnowledgeRevisionSource
+	require.NoError(t, db.Where(
+		"knowledge_id = ? AND parse_attempt = ?", id, 1,
+	).First(&source).Error)
+	require.Equal(t, uint64(1), source.TenantID)
+	require.Equal(t, revision.FileSHA256, source.FileSHA256)
+	require.Equal(t, int64(1024), source.Size)
+	require.Equal(t, "application/pdf", source.MimeType)
+	require.Equal(t, types.KnowledgeRevisionSourcePinned, source.RetentionState)
+	var resource types.StoredResource
+	require.NoError(t, db.Where("id = ?", source.ResourceID).First(&resource).Error)
+	require.Equal(t, revision.FileSHA256, resource.ContentHash)
+
 	_, err = repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
 	require.ErrorIs(t, err, ErrRevisionAlreadyCommitted)
+}
+
+func TestCommitDirectRevisionRejectsResourceDigestOrBindingDriftWithoutPartialWrite(t *testing.T) {
+	tests := map[string]func(*testing.T, *gorm.DB, string){
+		"foreign knowledge binding": func(t *testing.T, db *gorm.DB, id string) {
+			require.NoError(t, db.Model(&types.ResourceBinding{}).
+				Where("owner_id = ?", id).Update("owner_id", "foreign").Error)
+		},
+		"foreign tenant": func(t *testing.T, db *gorm.DB, id string) {
+			require.NoError(t, db.Model(&types.StoredResource{}).
+				Where("id IN (SELECT resource_id FROM resource_bindings WHERE owner_id = ?)", id).
+				Update("tenant_id", 2).Error)
+		},
+		"existing content digest": func(t *testing.T, db *gorm.DB, id string) {
+			require.NoError(t, db.Model(&types.StoredResource{}).
+				Where("id IN (SELECT resource_id FROM resource_bindings WHERE owner_id = ?)", id).
+				Update("content_hash", strings.Repeat("b", 64)).Error)
+		},
+		"zero size": func(t *testing.T, db *gorm.DB, id string) {
+			require.NoError(t, db.Model(&types.StoredResource{}).
+				Where("id IN (SELECT resource_id FROM resource_bindings WHERE owner_id = ?)", id).
+				Update("size", 0).Error)
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			db := setupRevisionTestDB(t)
+			repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+			id := seedRevisionKnowledge(t, db, types.ParseStatusProcessing, 1, 0)
+			seedRevisionChunk(t, db, id, 1, 0, "first")
+			mutate(t, db, id)
+
+			_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
+			require.ErrorIs(t, err, ErrRevisionCommitFailed)
+			var revisionCount int64
+			require.NoError(t, db.Table("knowledge_revisions").Count(&revisionCount).Error)
+			require.Zero(t, revisionCount)
+			var sourceCount int64
+			require.NoError(t, db.Table("knowledge_revision_sources").Count(&sourceCount).Error)
+			require.Zero(t, sourceCount)
+		})
+	}
+}
+
+func TestSealRevisionSourcePageCountIsExactIdempotentWriteOnce(t *testing.T) {
+	db := setupRevisionTestDB(t)
+	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+	id := seedRevisionKnowledge(t, db, types.ParseStatusProcessing, 1, 0)
+	seedRevisionChunk(t, db, id, 1, 0, "first")
+	_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
+	require.NoError(t, err)
+	var source types.KnowledgeRevisionSource
+	require.NoError(t, db.Where(
+		"knowledge_id = ? AND parse_attempt = 1", id,
+	).First(&source).Error)
+	require.Nil(t, source.PageCount)
+
+	sealed, err := repo.SealRevisionSourcePageCount(
+		context.Background(), 1, id, 1, source.RevisionSourceID, 39,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, sealed.PageCount)
+	require.Equal(t, 39, *sealed.PageCount)
+
+	again, err := repo.SealRevisionSourcePageCount(
+		context.Background(), 1, id, 1, source.RevisionSourceID, 39,
+	)
+	require.NoError(t, err)
+	require.Equal(t, 39, *again.PageCount)
+
+	_, err = repo.SealRevisionSourcePageCount(
+		context.Background(), 1, id, 1, source.RevisionSourceID, 40,
+	)
+	require.ErrorIs(t, err, ErrRevisionCommitFailed)
+	_, err = repo.SealRevisionSourcePageCount(
+		context.Background(), 1, id, 1, strings.Repeat("f", 64), 39,
+	)
+	require.ErrorIs(t, err, ErrRevisionCommitFailed)
+
+	var persisted types.KnowledgeRevisionSource
+	require.NoError(t, db.Where(
+		"knowledge_id = ? AND parse_attempt = 1", id,
+	).First(&persisted).Error)
+	require.Equal(t, 39, *persisted.PageCount)
 }
 
 func TestCommitDirectRevisionRejectsStaleAttemptWithoutPartialWrite(t *testing.T) {

@@ -13,6 +13,9 @@ import (
 const (
 	RevisionManifestAlgorithm = "weknora.chunk_manifest.v1"
 	RevisionUnknownIdentity   = "unknown"
+
+	KnowledgeRevisionSourcePinned   = "pinned"
+	KnowledgeRevisionSourceReleased = "released"
 )
 
 var ErrInvalidRevisionManifest = errors.New("invalid revision manifest")
@@ -146,6 +149,134 @@ type KnowledgeRevision struct {
 
 func (KnowledgeRevision) TableName() string {
 	return "knowledge_revisions"
+}
+
+// KnowledgeRevisionSource is the write-once link from one immutable parse
+// attempt to the exact stored source object whose bytes produced it. FileSHA256
+// is intentionally distinct from ParsedDocument and chunk-manifest identities.
+type KnowledgeRevisionSource struct {
+	TenantID         uint64     `json:"tenant_id" gorm:"not null"`
+	KnowledgeID      string     `json:"knowledge_id" gorm:"type:varchar(36);primaryKey"`
+	ParseAttempt     int64      `json:"parse_attempt" gorm:"primaryKey"`
+	RevisionSourceID string     `json:"revision_source_id" gorm:"type:varchar(64);not null;uniqueIndex"`
+	ResourceID       string     `json:"resource_id" gorm:"type:varchar(36);not null;index"`
+	FileSHA256       string     `json:"file_sha256" gorm:"type:varchar(64);not null"`
+	Size             int64      `json:"size" gorm:"not null"`
+	MimeType         string     `json:"mime_type" gorm:"type:varchar(255);not null"`
+	PageCount        *int       `json:"page_count,omitempty"`
+	RetentionState   string     `json:"retention_state" gorm:"type:varchar(16);not null"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	ReleasedAt       *time.Time `json:"released_at,omitempty"`
+}
+
+func (KnowledgeRevisionSource) TableName() string { return "knowledge_revision_sources" }
+
+// LiveRevisionSourceReceiptV1 is the language-neutral source half of the
+// Candidate evidence companion. Evidence/ParsedDocument and live WeKnora
+// identities remain distinct; no digest can stand in for another authority.
+type LiveRevisionSourceReceiptV1 struct {
+	Contract                 string `json:"contract"`
+	RevisionSourceID         string `json:"revision_source_id"`
+	TenantID                 uint64 `json:"tenant_id"`
+	SpaceID                  string `json:"space_id"`
+	RawKBID                  string `json:"raw_kb_id"`
+	WikiKBID                 string `json:"wiki_kb_id"`
+	KnowledgeID              string `json:"knowledge_id"`
+	EvidenceParseAttemptID   string `json:"evidence_parse_attempt_id"`
+	WeKnoraParseAttempt      int64  `json:"weknora_parse_attempt"`
+	ResourceID               string `json:"resource_id"`
+	FileSHA256               string `json:"file_sha256"`
+	Size                     int64  `json:"size"`
+	MimeType                 string `json:"mime_type"`
+	PageCount                int    `json:"page_count"`
+	ParsedDocumentSHA256     string `json:"parsed_document_sha256"`
+	ParseManifestSHA256      string `json:"parse_manifest_sha256"`
+	WeKnoraManifestAlgorithm string `json:"weknora_manifest_algorithm"`
+	WeKnoraManifestDigest    string `json:"weknora_manifest_digest"`
+	WeKnoraChunkCount        int    `json:"weknora_chunk_count"`
+	SourceReceiptSHA256      string `json:"source_receipt_sha256"`
+}
+
+// ComputeKnowledgeRevisionSourceID freezes the server-owned source-row key.
+func ComputeKnowledgeRevisionSourceID(source KnowledgeRevisionSource) (string, error) {
+	if source.TenantID == 0 || source.KnowledgeID == "" || source.ParseAttempt <= 0 ||
+		source.ResourceID == "" || source.Size <= 0 || strings.TrimSpace(source.MimeType) == "" ||
+		!validRevisionSHA256(source.FileSHA256) {
+		return "", ErrInvalidRevisionManifest
+	}
+	return revisionAuthorityDigest("knowledge-revision-source-id.v1", []string{
+		strconv.FormatUint(source.TenantID, 10), source.KnowledgeID,
+		strconv.FormatInt(source.ParseAttempt, 10), source.ResourceID,
+		source.FileSHA256, strconv.FormatInt(source.Size, 10), source.MimeType,
+	}), nil
+}
+
+// ComputeLiveRevisionSourceReceiptSHA256 is the cross-language exact equation.
+// SourceReceiptSHA256 itself is excluded from the preimage.
+func ComputeLiveRevisionSourceReceiptSHA256(receipt LiveRevisionSourceReceiptV1) (string, error) {
+	if receipt.Contract != "live-revision-source-receipt.v1" ||
+		receipt.TenantID == 0 || receipt.SpaceID == "" || receipt.RawKBID == "" ||
+		receipt.WikiKBID == "" || receipt.KnowledgeID == "" ||
+		receipt.EvidenceParseAttemptID == "" || receipt.WeKnoraParseAttempt <= 0 ||
+		receipt.ResourceID == "" || receipt.Size <= 0 || receipt.PageCount <= 0 ||
+		receipt.WeKnoraManifestAlgorithm != RevisionManifestAlgorithm ||
+		receipt.WeKnoraChunkCount <= 0 {
+		return "", ErrInvalidRevisionManifest
+	}
+	for _, digest := range []string{
+		receipt.RevisionSourceID, receipt.FileSHA256,
+		receipt.ParsedDocumentSHA256, receipt.ParseManifestSHA256,
+		receipt.WeKnoraManifestDigest,
+	} {
+		if !validRevisionSHA256(digest) {
+			return "", ErrInvalidRevisionManifest
+		}
+	}
+	return revisionAuthorityDigest(receipt.Contract, []string{
+		receipt.RevisionSourceID, strconv.FormatUint(receipt.TenantID, 10),
+		receipt.SpaceID, receipt.RawKBID, receipt.WikiKBID, receipt.KnowledgeID,
+		receipt.EvidenceParseAttemptID, strconv.FormatInt(receipt.WeKnoraParseAttempt, 10),
+		receipt.ResourceID, receipt.FileSHA256, strconv.FormatInt(receipt.Size, 10),
+		receipt.MimeType, strconv.Itoa(receipt.PageCount), receipt.ParsedDocumentSHA256,
+		receipt.ParseManifestSHA256, receipt.WeKnoraManifestAlgorithm,
+		receipt.WeKnoraManifestDigest, strconv.Itoa(receipt.WeKnoraChunkCount),
+	}), nil
+}
+
+// ValidateLiveRevisionSourceReceiptV1 validates the closed receipt equation.
+// Callers must additionally replay its fields against server-owned source and
+// revision rows; a self-consistent digest alone is never sufficient authority.
+func ValidateLiveRevisionSourceReceiptV1(receipt LiveRevisionSourceReceiptV1) error {
+	digest, err := ComputeLiveRevisionSourceReceiptSHA256(receipt)
+	if err != nil || receipt.SourceReceiptSHA256 != digest {
+		return ErrInvalidRevisionManifest
+	}
+	return nil
+}
+
+func revisionAuthorityDigest(contract string, fields []string) string {
+	var input strings.Builder
+	input.WriteString(contract)
+	input.WriteByte('\n')
+	input.WriteString(strconv.Itoa(len(fields)))
+	input.WriteByte('\n')
+	for _, field := range fields {
+		input.WriteString(strconv.Itoa(len([]byte(field))))
+		input.WriteByte(':')
+		input.WriteString(field)
+		input.WriteByte('\n')
+	}
+	sum := sha256.Sum256([]byte(input.String()))
+	return hex.EncodeToString(sum[:])
+}
+
+func validRevisionSHA256(value string) bool {
+	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 // ComputeRevisionManifestDigest implements weknora.chunk_manifest.v1 exactly.

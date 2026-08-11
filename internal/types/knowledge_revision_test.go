@@ -101,3 +101,42 @@ func TestRevisionFieldsRemainVisibleAtLegacyZeroValues(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(chunkJSON), `"parse_attempt":0`)
 }
+
+func TestLiveRevisionSourceReceiptLanguageNeutralDigestAndSeparatedAuthorities(t *testing.T) {
+	t.Parallel()
+	source := KnowledgeRevisionSource{
+		TenantID: 10003, KnowledgeID: "knowledge-596-1", ParseAttempt: 2,
+		ResourceID: "resource-source-596-1", FileSHA256: strings.Repeat("a", 64),
+		Size: 4096, MimeType: "application/pdf",
+	}
+	sourceID, err := ComputeKnowledgeRevisionSourceID(source)
+	require.NoError(t, err)
+	source.RevisionSourceID = sourceID
+	receipt := LiveRevisionSourceReceiptV1{
+		Contract: "live-revision-source-receipt.v1", RevisionSourceID: sourceID,
+		TenantID: source.TenantID, SpaceID: "space-596-1",
+		RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+		KnowledgeID: source.KnowledgeID, EvidenceParseAttemptID: "capture-attempt-8",
+		WeKnoraParseAttempt: source.ParseAttempt, ResourceID: source.ResourceID,
+		FileSHA256: source.FileSHA256, Size: source.Size, MimeType: source.MimeType,
+		PageCount: 39, ParsedDocumentSHA256: strings.Repeat("b", 64),
+		ParseManifestSHA256:      strings.Repeat("c", 64),
+		WeKnoraManifestAlgorithm: RevisionManifestAlgorithm,
+		WeKnoraManifestDigest:    strings.Repeat("d", 64), WeKnoraChunkCount: 162,
+	}
+	digest, err := ComputeLiveRevisionSourceReceiptSHA256(receipt)
+	require.NoError(t, err)
+	receipt.SourceReceiptSHA256 = digest
+	require.Equal(t, "a2fcf7b660b3e92535582ef47d7ddcd4a87ed6c0db2336e77cf64db7a7f5d908", sourceID)
+	require.Equal(t, "3b38e914df2375489ba2a06a710a689be0a71e813437604007235741533423f6", digest)
+	require.NotEqual(t, receipt.FileSHA256, receipt.ParsedDocumentSHA256)
+	require.NotEqual(t, receipt.ParseManifestSHA256, receipt.WeKnoraManifestDigest)
+	require.NoError(t, ValidateLiveRevisionSourceReceiptV1(receipt))
+
+	mutated := receipt
+	mutated.WeKnoraParseAttempt++
+	changed, err := ComputeLiveRevisionSourceReceiptSHA256(mutated)
+	require.NoError(t, err)
+	require.NotEqual(t, digest, changed)
+	require.ErrorIs(t, ValidateLiveRevisionSourceReceiptV1(mutated), ErrInvalidRevisionManifest)
+}

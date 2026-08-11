@@ -2,6 +2,7 @@ package file
 
 import (
 	"context"
+	"errors"
 	"io"
 	"mime/multipart"
 	"strings"
@@ -14,8 +15,10 @@ import (
 )
 
 type catalogStub struct {
-	resource *types.StoredResource
-	ref      string
+	resource      *types.StoredResource
+	ref           string
+	markDeleteErr error
+	markCalls     int
 }
 
 func (c *catalogStub) Register(
@@ -46,7 +49,10 @@ func (c *catalogStub) ResolvePath(_ context.Context, value string) (string, *typ
 	return value, nil, nil
 }
 func (c *catalogStub) Bind(context.Context, string, string, string, string) error { return nil }
-func (c *catalogStub) MarkDeleted(context.Context, string) error                  { return nil }
+func (c *catalogStub) MarkDeleted(context.Context, string) error {
+	c.markCalls++
+	return c.markDeleteErr
+}
 func (c *catalogStub) CreateAccessGrant(context.Context, string, time.Duration) (string, error) {
 	return "GrantTokenAbCdEfGhIjKl", nil
 }
@@ -58,6 +64,7 @@ func (c *catalogStub) ResolveAccessGrant(context.Context, string) (*types.Stored
 type physicalFileStub struct {
 	savedPath string
 	readPath  string
+	deletes   int
 }
 
 func (s *physicalFileStub) CheckConnectivity(context.Context) error { return nil }
@@ -74,7 +81,10 @@ func (s *physicalFileStub) GetFile(_ context.Context, path string) (io.ReadClose
 	return io.NopCloser(strings.NewReader("body")), nil
 }
 func (s *physicalFileStub) GetFileURL(context.Context, string) (string, error) { return "", nil }
-func (s *physicalFileStub) DeleteFile(context.Context, string) error           { return nil }
+func (s *physicalFileStub) DeleteFile(context.Context, string) error {
+	s.deletes++
+	return nil
+}
 func (s *physicalFileStub) CopyFile(context.Context, string, uint64, string) (string, error) {
 	return "", nil
 }
@@ -104,4 +114,17 @@ func TestResourceCatalogFileServiceReturnsShortExternalGrantURL(t *testing.T) {
 	externalURL, err := svc.GetFileURL(context.Background(), ref)
 	require.NoError(t, err)
 	require.Equal(t, "https://weknora.example.com/r/GrantTokenAbCdEfGhIjKl", externalURL)
+}
+
+func TestResourceCatalogFileServiceChecksPinnedGuardBeforePhysicalDelete(t *testing.T) {
+	inner := &physicalFileStub{savedPath: "local://7/immutable/a.pdf"}
+	catalog := &catalogStub{markDeleteErr: errors.New("resource is revision-pinned")}
+	svc := NewResourceCatalogFileService(inner, catalog)
+	ref, err := svc.SaveBytes(context.Background(), []byte("pdf"), 7, "a.pdf", false)
+	require.NoError(t, err)
+
+	err = svc.DeleteFile(context.Background(), ref)
+	require.ErrorContains(t, err, "revision-pinned")
+	require.Equal(t, 1, catalog.markCalls)
+	require.Zero(t, inner.deletes)
 }

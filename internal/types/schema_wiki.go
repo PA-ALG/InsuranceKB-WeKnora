@@ -109,6 +109,73 @@ type CitationTargetV1 struct {
 	CitationSHA256        string         `json:"citation_sha256"`
 }
 
+// Schema67CitationAuthorityJoinReceiptV1 is the closed cross-language
+// companion receipt that joins Candidate Evidence, captured ParsedDocument
+// coordinates and one live immutable WeKnora revision source. It is not
+// authority merely because its self-hash is valid; serving code must replay
+// every field against code-owned source/capture repositories.
+type Schema67CitationAuthorityJoinReceiptV1 struct {
+	Contract                        string                      `json:"contract"`
+	CandidateSHA256                 string                      `json:"candidate_sha256"`
+	FieldID                         string                      `json:"field_id"`
+	SourceRole                      string                      `json:"source_role"`
+	EvidenceReceiptSHA256           string                      `json:"evidence_receipt_sha256"`
+	SourceSHA256                    string                      `json:"source_sha256"`
+	ParsedDocumentSHA256            string                      `json:"parsed_document_sha256"`
+	ParseManifestSHA256             string                      `json:"parse_manifest_sha256"`
+	EvidenceParseAttemptID          string                      `json:"evidence_parse_attempt_id"`
+	LocatorKind                     string                      `json:"locator_kind"`
+	LocatorRef                      string                      `json:"locator_ref"`
+	NativePageIndex                 int                         `json:"native_page_index"`
+	PageNumber                      int                         `json:"page_number"`
+	LocatorContentSHA256            string                      `json:"locator_content_sha256"`
+	QuoteSHA256                     string                      `json:"quote_sha256"`
+	CaptureIdentitySHA256           string                      `json:"capture_identity_sha256"`
+	RawStructureSHA256              string                      `json:"raw_structure_sha256"`
+	SanitizedStructureSHA256        string                      `json:"sanitized_structure_sha256"`
+	ParserIdentitySHA256            string                      `json:"parser_identity_sha256"`
+	CoordinatePolicySHA256          string                      `json:"coordinate_policy_sha256"`
+	SourceCoordinateSpace           string                      `json:"source_coordinate_space"`
+	TargetCoordinateSpace           string                      `json:"target_coordinate_space"`
+	Origin                          string                      `json:"origin"`
+	SourceBBoxPreimage              [4]string                   `json:"source_bbox_preimage"`
+	NormalizedBBox                  CitationBBoxV1              `json:"normalized_bbox"`
+	PageWidth                       int                         `json:"page_width"`
+	PageHeight                      int                         `json:"page_height"`
+	RotationDegrees                 int                         `json:"rotation_degrees"`
+	HighlightPrecision              string                      `json:"highlight_precision"`
+	TenantID                        uint64                      `json:"tenant_id"`
+	SpaceID                         string                      `json:"space_id"`
+	RawKBID                         string                      `json:"raw_kb_id"`
+	KnowledgeID                     string                      `json:"knowledge_id"`
+	WeKnoraParseAttempt             int64                       `json:"weknora_parse_attempt"`
+	FileSHA256                      string                      `json:"file_sha256"`
+	WeKnoraManifestAlgorithm        string                      `json:"weknora_manifest_algorithm"`
+	WeKnoraManifestDigest           string                      `json:"weknora_manifest_digest"`
+	ChunkID                         string                      `json:"chunk_id"`
+	ChunkIndex                      int                         `json:"chunk_index"`
+	ChunkContentSHA256              string                      `json:"chunk_content_sha256"`
+	QuoteOccurrenceStart            int                         `json:"quote_occurrence_start"`
+	QuoteOccurrenceEnd              int                         `json:"quote_occurrence_end"`
+	QuoteOccurrenceCount            int                         `json:"quote_occurrence_count"`
+	JoinPolicySHA256                string                      `json:"join_policy_sha256"`
+	LiveRevisionSourceReceipt       LiveRevisionSourceReceiptV1 `json:"live_revision_source_receipt"`
+	LiveRevisionSourceReceiptSHA256 string                      `json:"live_revision_source_receipt_sha256"`
+	ReceiptSHA256                   string                      `json:"receipt_sha256"`
+}
+
+// ComputeSchema67CitationAuthorityJoinReceiptSHA256 freezes the same
+// schema-wiki canonical JSON equation used by the other cross-language DTOs.
+func ComputeSchema67CitationAuthorityJoinReceiptSHA256(
+	receipt Schema67CitationAuthorityJoinReceiptV1,
+) (string, error) {
+	if receipt.Contract != "schema67-citation-authority-join-receipt.v1" {
+		return "", ErrSchemaWikiContractInvalid
+	}
+	digest, _, err := schemaWikiHashWithout(receipt.Contract, receipt, "receipt_sha256")
+	return digest, err
+}
+
 type SchemaFieldPageV1 struct {
 	Contract               string             `json:"contract"`
 	FieldID                string             `json:"field_id"`

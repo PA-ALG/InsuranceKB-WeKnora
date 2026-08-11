@@ -21,9 +21,15 @@ var (
 )
 
 type CitationRevisionReadRequestV1 struct {
-	Scope    types.WikiReleaseScope
-	Citation types.CitationTargetV1
-	Binding  types.CitationMemberBindingV1
+	ReleaseID                  string
+	ActivationEpoch            uint64
+	CandidateSHA256            string
+	FieldID                    string
+	Scope                      types.WikiReleaseScope
+	Citation                   types.CitationTargetV1
+	Binding                    types.CitationMemberBindingV1
+	EvidenceReceiptSHA256s     []string
+	CoordinateAuthorityReceipt *SchemaWikiCitationCoordinateAuthorityReceiptV1
 }
 
 type CitationRevisionReadPort interface {
@@ -739,7 +745,9 @@ func (s *SchemaWikiService) ReadPinnedSchemaCitation(
 	if err != nil {
 		return nil, err
 	}
-	request, err := schemaWikiCitationRequest(validated, pin.scope, logicalSlug, citationID)
+	request, err := schemaWikiCitationRequest(
+		validated, pin.scope, pin.ReleaseID(), pin.ActivationEpoch(), logicalSlug, citationID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -804,7 +812,14 @@ func (s *SchemaWikiService) ReadReviewedPreparationCitation(
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	request, err := schemaWikiCitationRequest(validated, scope, logicalSlug, citationID)
+	request, err := schemaWikiCitationRequest(
+		validated,
+		scope,
+		preparation.ExpectedReleaseID,
+		preparation.ExpectedActivationEpoch,
+		logicalSlug,
+		citationID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -818,13 +833,17 @@ func (s *SchemaWikiService) ReadReviewedPreparationCitation(
 func schemaWikiCitationRequest(
 	validated validatedSchemaWikiCustody,
 	scope types.WikiReleaseScope,
+	releaseID string,
+	activationEpoch uint64,
 	logicalSlug string,
 	citationID string,
 ) (CitationRevisionReadRequestV1, error) {
-	if logicalSlug == "" || citationID == "" {
+	if releaseID == "" || activationEpoch == 0 || logicalSlug == "" || citationID == "" {
 		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
 	}
 	var selected *types.CitationTargetV1
+	var evidenceReceipts []string
+	fieldID := ""
 	for _, member := range validated.release.Members {
 		if member.MemberRef != logicalSlug || member.MemberKind != "field" {
 			continue
@@ -840,13 +859,20 @@ func schemaWikiCitationRequest(
 				break
 			}
 		}
+		fieldID = page.FieldID
+		evidenceReceipts = append([]string(nil), page.EvidenceReceiptSHA256s...)
 	}
 	if selected == nil {
 		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
 	}
 	for _, binding := range validated.release.CitationBindings {
 		if binding.LogicalMemberRef == logicalSlug && binding.CitationSHA256 == selected.CitationSHA256 {
-			return CitationRevisionReadRequestV1{Scope: scope, Citation: *selected, Binding: binding}, nil
+			return CitationRevisionReadRequestV1{
+				ReleaseID: releaseID, ActivationEpoch: activationEpoch,
+				CandidateSHA256: validated.release.CandidateSHA256, FieldID: fieldID,
+				Scope: scope, Citation: *selected, Binding: binding,
+				EvidenceReceiptSHA256s: evidenceReceipts,
+			}, nil
 		}
 	}
 	return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
