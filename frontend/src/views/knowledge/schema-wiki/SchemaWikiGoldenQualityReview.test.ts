@@ -227,7 +227,7 @@ describe('SchemaWikiGoldenQualityReview', () => {
       },
     })
     await vi.waitFor(() => expect(wrapper.find('[data-testid="golden-quality-error"]').exists()).toBe(true))
-    expect(wrapper.get('[data-testid="golden-quality-error"]').text()).toBe('GOLDEN_QUALITY_UNAVAILABLE')
+    expect(wrapper.get('[data-testid="golden-quality-error"]').text()).toBe('尚无有效语义质量结论')
     expect(wrapper.findAll('[data-testid="golden-field-row"]')).toHaveLength(0)
     expect(wrapper.text()).not.toContain('foreign reviewer secret')
   })

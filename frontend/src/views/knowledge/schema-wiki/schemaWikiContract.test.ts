@@ -15,6 +15,8 @@ const vector = JSON.parse(readFileSync(new URL(
   '../../../../../internal/application/service/testdata/schema_wiki_contract_vector.json',
   import.meta.url,
 ), 'utf8')) as {
+  contract: string
+  release: { members: Array<Record<string, unknown>> }
   schema_pack: Record<string, unknown>
   citations: Array<Record<string, unknown>>
 }
@@ -68,6 +70,7 @@ function presentField() {
     citations: [structuredClone(vector.citations[0])],
     evidence_receipt_sha256s: [H('e')],
     review_item_reason: null,
+    unknown_reason: null,
     field_page_sha256: H('f'),
   }
 }
@@ -224,12 +227,15 @@ test('unknown is an evidence-free abstention and never a hidden answer', () => {
     citations: [],
     evidence_receipt_sha256s: [],
     review_item_reason: 'FIELD_UNKNOWN',
+    unknown_reason: 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS',
   }
 
-  assert.equal(parseSchemaFieldPage(unknown, {
+  const parsed = parseSchemaFieldPage(unknown, {
     fieldId: 'field-a',
     fieldPageSha256: H('f'),
-  }).state, 'unknown')
+  })
+  assert.equal(parsed.state, 'unknown')
+  assert.equal(parsed.unknown_reason, 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS')
   assert.throws(() => parseSchemaFieldPage({ ...unknown, value_snapshot: '猜测值' }, {
     fieldId: 'field-a', fieldPageSha256: H('f'),
   }), { message: 'UNKNOWN_FIELD_HAS_AUTHORITY' })
@@ -240,6 +246,39 @@ test('unknown is an evidence-free abstention and never a hidden answer', () => {
   }, { fieldId: 'field-a', fieldPageSha256: H('f') }), {
     message: 'UNKNOWN_FIELD_HAS_AUTHORITY',
   })
+
+  for (const invalid of [
+    { ...unknown, unknown_reason: null },
+    { ...unknown, unknown_reason: '待人工判断' },
+    Object.fromEntries(Object.entries(unknown).filter(([key]) => key !== 'unknown_reason')),
+  ]) {
+    assert.throws(() => parseSchemaFieldPage(invalid, {
+      fieldId: 'field-a', fieldPageSha256: H('f'),
+    }))
+  }
+  assert.throws(() => parseSchemaFieldPage({
+    ...presentField(),
+    unknown_reason: 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS',
+  }, { fieldId: 'field-a', fieldPageSha256: H('f') }))
+})
+
+test('A1 v2 field payloads carry the closed unknown reason without free-text authority', () => {
+  assert.equal(vector.contract, 'schema-wiki-contract-vector.v2')
+  const fields = vector.release.members.filter(member => member.member_kind === 'field')
+  assert.equal(fields.length, 3)
+
+  for (const member of fields) {
+    assert.equal(isRecord(member.payload), true)
+    const payload = member.payload as Record<string, unknown>
+    const parsed = parseSchemaFieldPage(payload, {
+      fieldId: member.field_id as string,
+      fieldPageSha256: member.payload_sha256 as string,
+    })
+    assert.equal(
+      parsed.unknown_reason,
+      parsed.state === 'unknown' ? 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS' : null,
+    )
+  }
 })
 
 test('every known state requires both a formal citation and a 057 receipt', () => {

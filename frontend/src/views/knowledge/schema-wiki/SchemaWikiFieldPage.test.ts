@@ -19,6 +19,7 @@ describe('SchemaWikiFieldPage unknown coverage', () => {
       citations: [],
       evidence_receipt_sha256s: [],
       review_item_reason: 'FIELD_UNKNOWN',
+      unknown_reason: 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS',
       field_page_sha256: H('f'),
     }, { fieldId: 'coverage_gap_field', fieldPageSha256: H('f') })
     const scope = parseSchemaWikiScope({
@@ -50,5 +51,6 @@ describe('SchemaWikiFieldPage unknown coverage', () => {
     expect(fieldPage.value_snapshot).toBeNull()
     expect(fieldPage.citations).toEqual([])
     expect(fieldPage.evidence_receipt_sha256s).toEqual([])
+    expect(fieldPage.unknown_reason).toBe('NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS')
   })
 })

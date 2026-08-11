@@ -145,7 +145,7 @@ onMounted(async () => {
   } catch {
     summary.value = null
     dossier.value = null
-    qualityError.value = 'GOLDEN_QUALITY_UNAVAILABLE'
+    qualityError.value = '尚无有效语义质量结论'
   }
 })
 </script>

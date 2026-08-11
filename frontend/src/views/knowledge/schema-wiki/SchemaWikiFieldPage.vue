@@ -3,7 +3,11 @@ import { ref } from 'vue'
 
 import { readPinnedSchemaCitationPreview } from '@/api/schema-wiki'
 import { getDown } from '@/utils/request'
-import type { SchemaFieldPageV1, SchemaWikiScopeV1 } from './schemaWikiContract.ts'
+import {
+  schemaFieldUnknownReasonI18nKey,
+  type SchemaFieldPageV1,
+  type SchemaWikiScopeV1,
+} from './schemaWikiContract.ts'
 
 const props = defineProps<{
   fieldPage: SchemaFieldPageV1
@@ -48,7 +52,7 @@ async function previewCitation(citationId: string): Promise<void> {
       {{ fieldPage.value_snapshot }}
     </p>
     <p v-else class="schema-wiki-field__unknown" role="status">
-      {{ $t('knowledgeEditor.wikiBrowser.schemaUnknown') }}
+      {{ $t(schemaFieldUnknownReasonI18nKey(fieldPage.unknown_reason)) }}
     </p>
     <div v-if="fieldPage.state !== 'unknown'" class="schema-wiki-field__citations">
       <button
