@@ -61,9 +61,7 @@ FieldState = Literal["present", "absent_explicitly", "unknown"]
 RiskLevel = Literal["critical", "high", "standard"]
 EvaluationStatus = Literal["PASS", "FAIL", "FIXTURE_ONLY"]
 
-PROVIDER_ZERO_FIXTURE_CANDIDATE_SHA256: Final[str] = (
-    "fa891bb1c6a67590e49ef35a305146da087ea2dbf1c4b34fd30b56be25f76cee"
-)
+_PROVIDER_ZERO_FIXTURE_ID: Final[str] = "schema67-provider-zero-fixture-596-1.v1"
 NORMALIZATION_POLICY_SHA256: Final[str] = schema_wiki_sha256(
     "schema67-golden-normalization-policy.v1",
     {"product_version_id": "596-1", "rule": "schema67-nfc-trim-exact.v1"},
@@ -372,6 +370,120 @@ class Schema67GoldenQualityEvaluatorSigningCredentialSource:
 
 
 _EVALUATOR_AUTHORITY_CONSTRUCTION_TOKEN: Final[object] = object()
+_FIXTURE_PROVENANCE_CONSTRUCTION_TOKEN: Final[object] = object()
+
+
+class Schema67ProviderZeroFixtureProvenanceV1:
+    """Factory-sealed, non-authoritative provider-zero evaluation provenance."""
+
+    __slots__ = (
+        "_sealed",
+        "candidate_evidence_authority_sha256",
+        "candidate_sha256",
+        "fixture_id",
+        "provenance_sha256",
+    )
+
+    def __init__(
+        self,
+        construction_token: object,
+        *,
+        candidate_sha256: str,
+        candidate_evidence_authority_sha256: str,
+    ) -> None:
+        if construction_token is not _FIXTURE_PROVENANCE_CONSTRUCTION_TOKEN:
+            raise Schema67GoldenQualityGateError(
+                "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
+            )
+        payload = {
+            "contract": "schema67-provider-zero-fixture-provenance.v1",
+            "fixture_id": _PROVIDER_ZERO_FIXTURE_ID,
+            "product_version_id": "596-1",
+            "candidate_sha256": candidate_sha256,
+            "candidate_evidence_authority_sha256": (
+                candidate_evidence_authority_sha256
+            ),
+        }
+        object.__setattr__(self, "fixture_id", _PROVIDER_ZERO_FIXTURE_ID)
+        object.__setattr__(self, "candidate_sha256", candidate_sha256)
+        object.__setattr__(
+            self,
+            "candidate_evidence_authority_sha256",
+            candidate_evidence_authority_sha256,
+        )
+        object.__setattr__(
+            self,
+            "provenance_sha256",
+            schema_wiki_sha256(
+                "schema67-provider-zero-fixture-provenance.v1", payload
+            ),
+        )
+        object.__setattr__(self, "_sealed", True)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if getattr(self, "_sealed", False):
+            raise AttributeError("Schema67 provider-zero fixture provenance is sealed")
+        object.__setattr__(self, name, value)
+
+
+def _require_provider_zero_fixture_provenance_596_1(
+    provenance: object,
+    *,
+    candidate_sha256: str,
+    candidate_evidence_authority_sha256: str,
+) -> Schema67ProviderZeroFixtureProvenanceV1:
+    try:
+        if type(provenance) is not Schema67ProviderZeroFixtureProvenanceV1:
+            raise TypeError
+        payload = {
+            "contract": "schema67-provider-zero-fixture-provenance.v1",
+            "fixture_id": _PROVIDER_ZERO_FIXTURE_ID,
+            "product_version_id": "596-1",
+            "candidate_sha256": candidate_sha256,
+            "candidate_evidence_authority_sha256": (
+                candidate_evidence_authority_sha256
+            ),
+        }
+        if (
+            provenance.fixture_id != _PROVIDER_ZERO_FIXTURE_ID
+            or provenance.candidate_sha256 != candidate_sha256
+            or provenance.candidate_evidence_authority_sha256
+            != candidate_evidence_authority_sha256
+            or provenance.provenance_sha256
+            != schema_wiki_sha256(
+                "schema67-provider-zero-fixture-provenance.v1", payload
+            )
+        ):
+            raise ValueError
+        return provenance
+    except (AttributeError, TypeError, ValueError):
+        raise Schema67GoldenQualityGateError(
+            "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
+        ) from None
+
+
+def make_schema67_provider_zero_fixture_provenance_596_1(
+    *,
+    candidate: object,
+    evidence_authority: object,
+) -> Schema67ProviderZeroFixtureProvenanceV1:
+    """Bind one exact Candidate/authority pair to non-authoritative fixture use."""
+
+    try:
+        exact_candidate = validate_schema67_candidate_v2(candidate)
+        exact_authority = validate_schema67_candidate_evidence_authority_596_1(
+            candidate=exact_candidate,
+            authority=evidence_authority,
+        )
+    except (CandidateEvidenceAuthorityError, TypeError, ValueError, ValidationError):
+        raise Schema67GoldenQualityGateError(
+            "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
+        ) from None
+    return Schema67ProviderZeroFixtureProvenanceV1(
+        _FIXTURE_PROVENANCE_CONSTRUCTION_TOKEN,
+        candidate_sha256=exact_candidate.candidate_sha256,
+        candidate_evidence_authority_sha256=exact_authority.authority_sha256,
+    )
 
 
 class Schema67GoldenQualityEvaluatorAuthority:
@@ -414,6 +526,28 @@ class Schema67GoldenQualityEvaluatorAuthority:
             golden_approvals=golden_approvals,
             golden_approval_verifier=self._approval_verifier,
             quality_gate_signer=self._quality_gate_signer,
+            fixture_provenance=None,
+            require_fixture_provenance=False,
+        )
+
+    def evaluate_provider_zero_fixture(
+        self,
+        *,
+        candidate: object,
+        evidence_authority: object,
+        fixture_provenance: object,
+        golden: Schema67GoldenSet5961V1,
+        golden_approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
+    ) -> Schema67GoldenEvaluationResultV1:
+        return _evaluate_schema67_golden_quality_596_1(
+            candidate=candidate,
+            evidence_authority=evidence_authority,
+            golden=golden,
+            golden_approvals=golden_approvals,
+            golden_approval_verifier=self._approval_verifier,
+            quality_gate_signer=self._quality_gate_signer,
+            fixture_provenance=fixture_provenance,
+            require_fixture_provenance=True,
         )
 
 
@@ -2394,6 +2528,8 @@ def _evaluate_schema67_golden_quality_596_1(
     golden_approvals: tuple[Schema67GoldenApprovalV1, Schema67GoldenApprovalV1],
     golden_approval_verifier: _Schema67GoldenApprovalVerifierV1,
     quality_gate_signer: _Schema67QualityGateSignerV1,
+    fixture_provenance: object | None,
+    require_fixture_provenance: bool,
 ) -> Schema67GoldenEvaluationResultV1:
     if candidate is None:
         raise Schema67GoldenQualityGateError("CANDIDATE_ABSENT")
@@ -2403,6 +2539,16 @@ def _evaluate_schema67_golden_quality_596_1(
             candidate=exact_candidate,
             authority=evidence_authority,
         )
+        if require_fixture_provenance:
+            _require_provider_zero_fixture_provenance_596_1(
+                fixture_provenance,
+                candidate_sha256=exact_candidate.candidate_sha256,
+                candidate_evidence_authority_sha256=exact_authority.authority_sha256,
+            )
+        elif fixture_provenance is not None:
+            raise Schema67GoldenQualityGateError(
+                "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
+            )
         exact_golden = Schema67GoldenSet5961V1.model_validate(
             golden.model_dump(mode="python", round_trip=True)
         )
@@ -2440,7 +2586,7 @@ def _evaluate_schema67_golden_quality_596_1(
             decisions,
             tuple(outputs[field_id].state for field_id in APPROVED_ORDERED_FIELD_IDS),
         )
-        fixture = exact_candidate.candidate_sha256 == PROVIDER_ZERO_FIXTURE_CANDIDATE_SHA256
+        fixture = require_fixture_provenance
         passed = not fixture and all(row.admission_status == "PASS" for row in metrics)
         status: EvaluationStatus = "FIXTURE_ONLY" if fixture else "PASS" if passed else "FAIL"
         reasons = (
@@ -2548,7 +2694,6 @@ __all__ = [
     "GOLDEN_DOSSIER_REVIEW_POLICY_SHA256",
     "GOLDEN_METRIC_IDS",
     "METRIC_POLICY_SHA256",
-    "PROVIDER_ZERO_FIXTURE_CANDIDATE_SHA256",
     "HumanBatchDecisionReceiptV1",
     "Schema67GoldenEvidenceTargetV1",
     "Schema67GoldenApprovalV1",
@@ -2566,12 +2711,14 @@ __all__ = [
     "Schema67GoldenQualityGateError",
     "Schema67GoldenQualityEvaluatorAuthority",
     "Schema67GoldenQualityEvaluatorSigningCredentialSource",
+    "Schema67ProviderZeroFixtureProvenanceV1",
     "Schema67GoldenSet5961V1",
     "SchemaWikiGoldenQualityDossierV2",
     "compose_schema67_golden_quality_evaluator_authority_596_1",
     "compose_schema67_golden_dossier_review_authority_596_1",
     "canonical_human_batch_decision_receipt_v1",
     "make_schema67_golden_evaluation_review_bundle_596_1",
+    "make_schema67_provider_zero_fixture_provenance_596_1",
     "make_schema67_golden_review_successor_metadata_596_1",
     "make_schema_wiki_golden_quality_dossier_v2_596_1",
     "schema67_golden_approval_signing_bytes",

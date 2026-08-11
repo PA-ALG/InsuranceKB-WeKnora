@@ -344,14 +344,35 @@ def _evaluate(
     candidate: object,
     authority: object,
     golden: Schema67GoldenSet5961V1,
+    fixture_provenance: object | None = None,
 ):
     approvals, evaluator = _security(golden)
+    if fixture_provenance is not None:
+        evaluate_fixture = getattr(evaluator, "evaluate_provider_zero_fixture", None)
+        assert callable(evaluate_fixture), "provider-zero fixture evaluator is missing"
+        return evaluate_fixture(
+            candidate=candidate,
+            evidence_authority=authority,
+            fixture_provenance=fixture_provenance,
+            golden=golden,
+            golden_approvals=approvals,
+        )
     return evaluator.evaluate(
         candidate=candidate,
         evidence_authority=authority,
         golden=golden,
         golden_approvals=approvals,
     )
+
+
+def _fixture_provenance(candidate: object, authority: object) -> object:
+    factory = getattr(
+        quality_gate_module,
+        "make_schema67_provider_zero_fixture_provenance_596_1",
+        None,
+    )
+    assert callable(factory), "provider-zero fixture provenance factory is missing"
+    return factory(candidate=candidate, evidence_authority=authority)
 
 
 def _synthetic_evaluation_bundle_vector() -> Schema67GoldenEvaluationReviewBundleV1:
@@ -396,12 +417,59 @@ def test_provider_zero_candidate_is_fixture_only_and_never_issues_pass() -> None
         candidate=candidate,
         authority=authority,
         golden=_golden(candidate, authority),
+        fixture_provenance=_fixture_provenance(candidate, authority),
     )
 
     assert result.status == "FIXTURE_ONLY"
     assert result.quality_gate_receipt is None
     assert result.provider_calls == 0
     assert result.draft_calls == 0
+
+
+def test_provider_zero_fixture_status_does_not_depend_on_candidate_sha256() -> None:
+    candidate, authority = _non_fixture_candidate_and_authority()
+    result = _evaluate(
+        candidate=candidate,
+        authority=authority,
+        golden=_golden(candidate, authority),
+        fixture_provenance=_fixture_provenance(candidate, authority),
+    )
+
+    assert result.status == "FIXTURE_ONLY"
+    assert result.quality_gate_receipt is None
+
+
+def test_provider_zero_fixture_provenance_is_required_and_bound_closed_world() -> None:
+    candidate, authority = _candidate_and_authority()
+    golden = _golden(candidate, authority)
+    approvals, evaluator = _security(golden)
+    evaluate_fixture = getattr(evaluator, "evaluate_provider_zero_fixture", None)
+    assert callable(evaluate_fixture), "provider-zero fixture evaluator is missing"
+    provenance = _fixture_provenance(candidate, authority)
+
+    for invalid in (None, object(), object.__new__(type(provenance))):
+        with pytest.raises(Schema67GoldenQualityGateError) as caught:
+            evaluate_fixture(
+                candidate=candidate,
+                evidence_authority=authority,
+                fixture_provenance=invalid,
+                golden=golden,
+                golden_approvals=approvals,
+            )
+        assert caught.value.reason_code == "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
+
+    drifted_candidate, drifted_authority = _non_fixture_candidate_and_authority()
+    with pytest.raises(Schema67GoldenQualityGateError) as drifted:
+        evaluate_fixture(
+            candidate=drifted_candidate,
+            evidence_authority=drifted_authority,
+            fixture_provenance=provenance,
+            golden=_golden(drifted_candidate, drifted_authority),
+            golden_approvals=_security(
+                _golden(drifted_candidate, drifted_authority)
+            )[0],
+        )
+    assert drifted.value.reason_code == "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
 
 
 def test_exact_candidate_and_revision_custody_produce_private_and_public_outputs() -> None:
