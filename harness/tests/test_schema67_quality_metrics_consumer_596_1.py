@@ -203,15 +203,19 @@ def test_exact_16_not_covered_fields_are_normal_unknowns() -> None:
     assert tuple(
         row.field_id
         for row in current.fields
-        if _NOT_COVERED_REASON in row.model_dump_json()
+        if row.model_dump(mode="json").get("unknown_reason") == _NOT_COVERED_REASON
     ) == _NOT_COVERED_FIELD_IDS
     for field_id in _NOT_COVERED_FIELD_IDS:
         row = by_field_id[field_id]
+        payload = row.model_dump(mode="json")
         assert row.review_status == "REVIEWED"
         assert row.state == "unknown"
         assert row.value is None
         assert row.evidence == ()
-        assert _NOT_COVERED_REASON in row.model_dump_json()
+        assert payload.get("unknown_reason") == _NOT_COVERED_REASON
+        assert payload.get("residual_reason") is None
+        assert "PENDING" not in row.model_dump_json()
+        assert "RESIDUAL" not in row.model_dump_json()
 
 
 def test_registered_pair_without_concrete_human_batch_receipt_is_blocked(
