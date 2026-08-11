@@ -111,3 +111,18 @@ export function buildPinnedSchemaWikiReleasePath(
     `/releases/${encodeURIComponent(current.active_release_id)}${memberSuffix}`,
   )
 }
+
+export function buildSchemaCitationBackNavigation(
+  current: SchemaWikiCurrentEntityVersionV1,
+  fieldId: string,
+): { release_id: string; activation_epoch: number; field_id: string } {
+  assertValidatedSchemaWikiCurrentEntityVersion(current)
+  if (!/^[A-Za-z0-9_.:-]+$/.test(fieldId)) {
+    throw new Error('SCHEMA_WIKI_CURRENT_ENTITY_VERSION_INVALID')
+  }
+  return Object.freeze({
+    release_id: current.active_release_id,
+    activation_epoch: current.activation_epoch,
+    field_id: fieldId,
+  })
+}

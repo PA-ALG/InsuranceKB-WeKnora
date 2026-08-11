@@ -15,6 +15,7 @@ import {
   projectSchemaWikiNavigation,
   resolveKnowledgeBaseDefaultTab,
 } from './schemaWikiNavigation.ts'
+import * as schemaWikiNavigation from './schemaWikiNavigation.ts'
 
 const H = (character: string) => character.repeat(64)
 const vector = JSON.parse(readFileSync(new URL(
@@ -241,4 +242,27 @@ test('a foreign bootstrap scope is rejected before any scoped Schema request', a
     message: 'SCHEMA_WIKI_SCOPE_DRIFT',
   })
   assert.deepEqual(calls, ['/api/v1/knowledgebase/wiki-1/wiki/schema-scope'])
+})
+
+test('citation back navigation preserves the validated Active release and activation epoch', () => {
+  const current = parseSchemaWikiCurrentEntityVersion(currentEntityVersion(), {
+    entityId: 'entity-596-1',
+    entityVersionId: 'entity-version-596-1',
+  })
+  const futureNavigation = schemaWikiNavigation as unknown as {
+    buildSchemaCitationBackNavigation(
+      value: typeof current,
+      fieldId: string,
+    ): { release_id: string; activation_epoch: number; field_id: string }
+  }
+
+  assert.deepEqual(futureNavigation.buildSchemaCitationBackNavigation(current, 'product_name'), {
+    release_id: 'release-596-1-active',
+    activation_epoch: 4,
+    field_id: 'product_name',
+  })
+  assert.throws(() => futureNavigation.buildSchemaCitationBackNavigation(
+    { ...current, active_release_id: 'release-foreign' },
+    'product_name',
+  ), { message: 'SCHEMA_WIKI_CURRENT_ENTITY_VERSION_INVALID' })
 })

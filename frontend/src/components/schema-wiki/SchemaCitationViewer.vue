@@ -2,18 +2,26 @@
 import { nextTick, onMounted, ref, shallowRef } from 'vue'
 
 import {
-  assertPinnedCitation,
-  citationHighlightStyle,
-  parseCitationTarget,
-  type CitationPinV1,
+  citationPreviewHighlightStyle,
+  parseSchemaWikiCitationContentAuthorityV1,
+  type SchemaWikiCitationContentAuthorityV1,
+  type SchemaWikiCitationPreviewRequestV1,
 } from './schemaCitationTarget.ts'
 import type { PdfPort, RenderedPdfPage } from './pdfJsPort.ts'
 
+interface ImmutablePreviewTransport {
+  getAuthority(request: SchemaWikiCitationPreviewRequestV1): Promise<unknown>
+  getBytesByToken(opaqueToken: string): Promise<Uint8Array>
+}
+
 const props = defineProps<{
-  target: unknown
-  pin: CitationPinV1
-  previewBytes: Uint8Array
+  request: SchemaWikiCitationPreviewRequestV1
+  previewTransport: ImmutablePreviewTransport
   pdfPort: PdfPort
+}>()
+
+const emit = defineEmits<{
+  back: [value: { release_id: string; activation_epoch: number }]
 }>()
 
 const errorCode = ref<string | null>(null)
@@ -24,15 +32,20 @@ const canvasHost = ref<HTMLElement | null>(null)
 const SAFE_ERRORS = new Set([
   'BBOX_UNAVAILABLE',
   'CITATION_MEMBER_BINDING_MISMATCH',
+  'CITATION_PREVIEW_AUTHORITY_INVALID',
+  'CITATION_PREVIEW_REQUEST_INVALID',
   'CITATION_REPLAY_IDENTITY_MISMATCH',
   'CITATION_REVISION_NOT_PINNED',
   'CITATION_TARGET_INCOMPLETE',
   'PAGE_UNAVAILABLE',
   'PDF_PREVIEW_UNAVAILABLE',
+  'PREVIEW_BYTES_HASH_MISMATCH',
 ])
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const copy = Uint8Array.from(bytes)
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', copy.buffer)
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
 function safeError(error: unknown): string {
@@ -43,23 +56,34 @@ function safeError(error: unknown): string {
 
 onMounted(async () => {
   try {
-    if (isRecord(props.target) && !Object.hasOwn(props.target, 'page_number')) {
+    const authority: SchemaWikiCitationContentAuthorityV1 = (
+      parseSchemaWikiCitationContentAuthorityV1(
+        await props.previewTransport.getAuthority(props.request),
+        props.request,
+      )
+    )
+    const bytes = await props.previewTransport.getBytesByToken(authority.opaque_token)
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
+      throw new Error('PDF_PREVIEW_UNAVAILABLE')
+    }
+    if (await sha256Hex(bytes) !== authority.revision_source.file_sha256) {
+      throw new Error('PREVIEW_BYTES_HASH_MISMATCH')
+    }
+    const opened = await props.pdfPort.open(bytes.slice())
+    if (
+      opened.pageCount !== authority.revision_source.page_count
+      || authority.page_number > opened.pageCount
+    ) {
       throw new Error('PAGE_UNAVAILABLE')
     }
-    if (isRecord(props.target) && !Object.hasOwn(props.target, 'bbox')) {
-      throw new Error('BBOX_UNAVAILABLE')
-    }
-    const target = parseCitationTarget(props.target)
-    assertPinnedCitation(target, props.pin)
-    const opened = await props.pdfPort.open(props.previewBytes.slice())
-    if (target.page_number > opened.pageCount) {
+    const page = await opened.renderPage(authority.page_number)
+    if (page.pageNumber !== authority.page_number) {
       throw new Error('PAGE_UNAVAILABLE')
     }
-    const page = await opened.renderPage(target.page_number)
-    if (page.pageNumber !== target.page_number) {
-      throw new Error('PAGE_UNAVAILABLE')
-    }
-    const bbox = citationHighlightStyle(target, { width: page.width, height: page.height })
+    const bbox = citationPreviewHighlightStyle(
+      authority,
+      { width: page.width, height: page.height },
+    )
     renderedPage.value = page
     highlightStyle.value = {
       left: `${bbox.left}px`,
@@ -75,10 +99,24 @@ onMounted(async () => {
     errorCode.value = safeError(error)
   }
 })
+
+function back(): void {
+  emit('back', {
+    release_id: props.request.release_id,
+    activation_epoch: props.request.activation_epoch,
+  })
+}
 </script>
 
 <template>
   <div class="schema-citation-viewer">
+    <button
+      type="button"
+      data-testid="citation-back"
+      @click="back"
+    >
+      Back
+    </button>
     <p
       v-if="errorCode"
       data-testid="citation-error"

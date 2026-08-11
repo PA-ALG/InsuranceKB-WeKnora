@@ -1,5 +1,6 @@
 import { parseSchemaWikiScope, type SchemaWikiScopeV1 } from '../../views/knowledge/schema-wiki/schemaWikiContract.ts'
 import { buildScopedSchemaWikiPath } from '../../views/knowledge/schema-wiki/schemaWikiNavigation.ts'
+import type { SchemaWikiCitationPreviewRequestV1 } from '../../components/schema-wiki/schemaCitationTarget.ts'
 
 export interface SchemaWikiReadTransport {
   get(path: string): Promise<unknown>
@@ -7,6 +8,11 @@ export interface SchemaWikiReadTransport {
 
 export interface SchemaWikiPreviewTransport {
   getBytes(path: string): Promise<Uint8Array>
+}
+
+export interface SchemaWikiCitationPreviewTransport {
+  getAuthority(request: SchemaWikiCitationPreviewRequestV1): Promise<unknown>
+  getBytesByToken(opaqueToken: string): Promise<Uint8Array>
 }
 
 export interface SchemaWikiClient {
@@ -23,6 +29,21 @@ export interface SchemaWikiClient {
 }
 
 const ID_SEGMENT = /^[A-Za-z0-9._:-]+$/
+
+export function buildSchemaCitationPreviewRequest(
+  input: SchemaWikiCitationPreviewRequestV1,
+): SchemaWikiCitationPreviewRequestV1 {
+  if (
+    !input || Object.keys(input).sort().join(',') !== 'activation_epoch,citation_id,field_id,release_id'
+    || !ID_SEGMENT.test(input.release_id)
+    || !Number.isSafeInteger(input.activation_epoch) || input.activation_epoch <= 0
+    || !ID_SEGMENT.test(input.field_id)
+    || !ID_SEGMENT.test(input.citation_id)
+  ) {
+    throw new Error('CITATION_PREVIEW_REQUEST_INVALID')
+  }
+  return Object.freeze({ ...input })
+}
 
 function exactId(value: string): string {
   if (!ID_SEGMENT.test(value)) {
@@ -49,6 +70,41 @@ export function buildSchemaCitationPreviewPath(
   )
 }
 
+export function buildSchemaCitationContentPath(
+  scope: SchemaWikiScopeV1,
+  opaqueToken: string,
+): string {
+  return buildScopedSchemaWikiPath(
+    scope,
+    `/citation-content/${exactId(opaqueToken)}`,
+    { expectedScope: scope },
+  )
+}
+
+export function createSchemaWikiCitationPreviewTransport(
+  scope: SchemaWikiScopeV1,
+  transport: SchemaWikiReadTransport & SchemaWikiPreviewTransport,
+): SchemaWikiCitationPreviewTransport {
+  return Object.freeze({
+    getAuthority(request: SchemaWikiCitationPreviewRequestV1): Promise<unknown> {
+      const exact = buildSchemaCitationPreviewRequest(request)
+      return transport.get(buildSchemaCitationPreviewPath(
+        scope,
+        exact.release_id,
+        exact.field_id,
+        exact.citation_id,
+      ))
+    },
+    async getBytesByToken(opaqueToken: string): Promise<Uint8Array> {
+      const bytes = await transport.getBytes(buildSchemaCitationContentPath(scope, opaqueToken))
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
+        throw new Error('PDF_PREVIEW_UNAVAILABLE')
+      }
+      return bytes.slice()
+    },
+  })
+}
+
 export async function readPinnedSchemaCitationPreview(
   scope: SchemaWikiScopeV1,
   releaseId: string,
@@ -56,13 +112,12 @@ export async function readPinnedSchemaCitationPreview(
   citationId: string,
   transport: SchemaWikiPreviewTransport,
 ): Promise<Uint8Array> {
-  const bytes = await transport.getBytes(
-    buildSchemaCitationPreviewPath(scope, releaseId, fieldId, citationId),
-  )
-  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
-    throw new Error('PDF_PREVIEW_UNAVAILABLE')
-  }
-  return bytes.slice()
+  void scope
+  void releaseId
+  void fieldId
+  void citationId
+  void transport
+  throw new Error('CITATION_PREVIEW_AUTHORITY_REQUIRED')
 }
 
 export async function bootstrapSchemaWikiClient(
