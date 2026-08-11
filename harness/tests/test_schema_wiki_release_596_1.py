@@ -1,28 +1,44 @@
 from __future__ import annotations
 
+import copy
+import gc
 import hashlib
 import json
+import weakref
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel
 
-from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.evidence_verifier import (
-    EvidenceLocatorSnapshotV1,
-    FreeformDocumentBindingV1,
-    FreeformEvidenceBindingReceiptV1,
-    FreeformEvidenceV1,
     FreeformFieldOutputV1,
+)
+from insurance_harness.compiler.parsed_documents import (
+    ParseQualityDecisionV1,
+    ParseQualityMeasuredFactsV1,
 )
 from insurance_harness.goldenset.expert_golden_admission_596_2 import (
     Schema67CandidateV2,
 )
-from insurance_harness.knowledge_compiler import schema_wiki_release_596_1
+from insurance_harness.knowledge_compiler import (
+    schema_wiki_candidate_evidence_join_596_1 as candidate_evidence_join,
+)
+from insurance_harness.knowledge_compiler import (
+    schema_wiki_release_596_1,
+)
+from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    LiveChunkAuthorityInputV1,
+    LiveRevisionSourceReceiptV1,
+    Schema67CandidateEvidenceAuthorityV1,
+    Schema67CitationAuthorityJoinReceiptV1,
+    build_schema67_candidate_evidence_authority_596_1,
+    knowledge_revision_source_id,
+    live_revision_source_receipt_sha256,
+    validate_schema67_candidate_evidence_authority_596_1,
+)
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
-    CitationBBoxV1,
-    CitationTargetV1,
     KnowledgeWikiReleaseV1,
     SchemaFieldPageV1,
     SchemaRootPageV1,
@@ -39,6 +55,9 @@ from insurance_harness.knowledge_compiler.schema_wiki_release_596_1 import (
     build_schema_wiki_review_bundle_596_1,
     compile_schema_wiki_release_596_1,
 )
+from insurance_harness.knowledge_compiler.vertical_falsification import (
+    AdmittedParseArtifactV1,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,268 +67,210 @@ class _SelfIssuedCandidate:
     candidate_sha256: str = "a" * 64
 
 
-class _FailIfCalledCitationAuthority:
-    def resolve(
-        self,
-        *,
-        output: FreeformFieldOutputV1,
-        evidence_receipt: FreeformEvidenceBindingReceiptV1,
-        entity_version_id: str,
-    ) -> tuple[CitationTargetV1, ...]:
-        del output, evidence_receipt, entity_version_id
-        raise AssertionError("citation authority must not run for an unsealed Candidate")
-
-
-@dataclass(frozen=True, slots=True)
-class _ExactCitationAuthority:
-    expected: tuple[CitationTargetV1, ...]
-    returned: tuple[CitationTargetV1, ...] | None = None
-
-    def resolve(
-        self,
-        *,
-        output: FreeformFieldOutputV1,
-        evidence_receipt: FreeformEvidenceBindingReceiptV1,
-        entity_version_id: str,
-    ) -> tuple[CitationTargetV1, ...]:
-        assert output.field_id == evidence_receipt.field_id
-        assert entity_version_id == "ping-an-e-sheng-bao@596-1"
-        resolved = self.expected if self.returned is None else self.returned
-        if resolved != self.expected:
-            raise ValueError("trusted revision join rejected foreign citation")
-        return resolved
-
-
-class _SyntheticTrustedCitationAuthority:
-    _ROLE_BY_SOURCE = {
-        "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc": (
-            "terms",
-            "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
-        ),
-        "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279": (
-            "brochure",
-            "1265a343-c408-4620-8eed-c4f6a2adadc2",
-        ),
-        "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb": (
-            "rate_table",
-            "32402c40-6131-4049-8080-cc5b68188cd3",
-        ),
-    }
-    def resolve(
-        self,
-        *,
-        output: FreeformFieldOutputV1,
-        evidence_receipt: FreeformEvidenceBindingReceiptV1,
-        entity_version_id: str,
-    ) -> tuple[CitationTargetV1, ...]:
-        assert output.evidence == evidence_receipt.evidence
-        assert entity_version_id == "ping-an-e-sheng-bao@596-1"
-        citations: list[CitationTargetV1] = []
-        for evidence in output.evidence:
-            role, knowledge_id = self._ROLE_BY_SOURCE[evidence.source_sha256]
-            identity = _sha(
-                "|".join(
-                    (
-                        output.field_id,
-                        role,
-                        evidence.source_revision_id,
-                        evidence.locator.subject_ref,
-                        evidence.quote_snapshot_sha256,
-                    )
-                )
-            )
-            payload = {
-                "contract": "citation-target.v1",
-                "citation_id": f"citation-{identity[:24]}",
-                "source_role": role,
-                "space_id": "space-596-1",
-                "entity_version_id": entity_version_id,
-                "knowledge_id": knowledge_id,
-                "chunk_id": f"chunk-{identity[24:48]}",
-                "source_revision_id": evidence.source_revision_id,
-                "parse_attempt_id": evidence.parse_attempt_id,
-                "parsed_document_sha256": evidence.parsed_document_hash,
-                "parse_manifest_sha256": evidence.parse_manifest_hash,
-                "page_number": evidence.page_number,
-                "locator_ref": evidence.locator.subject_ref,
-                "bbox": CitationBBoxV1(
-                    coordinate_system="pdf_points",
-                    page_width=600,
-                    page_height=800,
-                    x0=100,
-                    y0=120,
-                    x1=360,
-                    y1=180,
-                ),
-                "quote_snapshot": evidence.quote_snapshot,
-                "quote_sha256": schema_wiki_sha256(
-                    "schema-wiki-text.v1", {"text": evidence.quote_snapshot}
-                ),
-                "content_snapshot_sha256": (
-                    evidence.locator.content_snapshot_sha256
-                ),
-                "logical_member_ref": f"field:{output.field_id}",
-            }
-            citations.append(
-                CitationTargetV1.model_validate(
-                    {
-                        **payload,
-                        "citation_sha256": schema_wiki_sha256(
-                            "citation-target.v1", payload
-                        ),
-                    }
-                )
-            )
-        return tuple(citations)
-
-
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _sealed[ModelT: BaseModel](
-    model: type[ModelT], object_type: str, hash_field: str, **payload: object
-) -> ModelT:
-    return model.model_validate(
-        {
-            **payload,
-            hash_field: schema_wiki_sha256(object_type, payload),
-        }
-    )
-
-
-def _receipt_payload(
+def _live_receipt(
     *,
-    output: FreeformFieldOutputV1,
-    documents: tuple[FreeformDocumentBindingV1, ...],
-) -> dict[str, object]:
-    return {
-        "contract": "freeform-arm-evidence-binding-receipt.v1",
-        "product_version_id": output.product_version_id,
-        "field_id": output.field_id,
-        "state": output.state,
-        "value_snapshot": output.value_snapshot,
-        "documents": tuple(item.model_dump(mode="python") for item in documents),
-        "evidence": tuple(item.model_dump(mode="python") for item in output.evidence),
+    source_sha256: str,
+    role: str,
+    parsed_document_sha256: str,
+    parse_manifest_sha256: str,
+    evidence_parse_attempt_id: str,
+) -> LiveRevisionSourceReceiptV1:
+    identities = {
+        "terms": (
+            "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+            2,
+            39,
+        ),
+        "brochure": (
+            "1265a343-c408-4620-8eed-c4f6a2adadc2",
+            1,
+            27,
+        ),
+        "rate_table": (
+            "32402c40-6131-4049-8080-cc5b68188cd3",
+            1,
+            2,
+        ),
     }
-
-
-def _unknown() -> tuple[FreeformFieldOutputV1, FreeformEvidenceBindingReceiptV1]:
-    output = FreeformFieldOutputV1(
-        product_version_id="596-1",
-        field_id="sales_end_date",
-        state="unknown",
-        value_snapshot=None,
-        evidence=(),
+    knowledge_id, attempt, page_count = identities[role]
+    resource_id = f"resource-{role}-596-1"
+    mime_type = "application/pdf"
+    size = 4096 + len(role)
+    source_id = knowledge_revision_source_id(
+        tenant_id=10003,
+        knowledge_id=knowledge_id,
+        weknora_parse_attempt=attempt,
+        resource_id=resource_id,
+        file_sha256=source_sha256,
+        size=size,
+        mime_type=mime_type,
     )
-    payload = _receipt_payload(output=output, documents=())
-    return output, FreeformEvidenceBindingReceiptV1.model_validate(
+    payload = {
+        "contract": "live-revision-source-receipt.v1",
+        "revision_source_id": source_id,
+        "tenant_id": 10003,
+        "space_id": "space-596-1",
+        "raw_kb_id": "raw-kb-596-1",
+        "wiki_kb_id": "wiki-kb-596-1",
+        "knowledge_id": knowledge_id,
+        "evidence_parse_attempt_id": evidence_parse_attempt_id,
+        "weknora_parse_attempt": attempt,
+        "resource_id": resource_id,
+        "file_sha256": source_sha256,
+        "size": size,
+        "mime_type": mime_type,
+        "page_count": page_count,
+        "parsed_document_sha256": parsed_document_sha256,
+        "parse_manifest_sha256": parse_manifest_sha256,
+        "weknora_manifest_algorithm": "weknora.chunk_manifest.v1",
+        "weknora_manifest_digest": _sha(f"weknora-manifest-{role}"),
+        "weknora_chunk_count": 100 + len(role),
+    }
+    return LiveRevisionSourceReceiptV1.model_validate(
         {
             **payload,
-            "receipt_hash": canonical_hash(
-                "freeform-arm-evidence-binding-receipt.v1", payload
-            ),
+            "source_receipt_sha256": live_revision_source_receipt_sha256(payload),
         }
     )
 
 
-def _known() -> tuple[
-    FreeformFieldOutputV1,
-    FreeformEvidenceBindingReceiptV1,
-    CitationTargetV1,
+@lru_cache(maxsize=1)
+def _candidate_and_authority() -> tuple[
+    Schema67CandidateV2,
+    Schema67CandidateEvidenceAuthorityV1,
 ]:
-    field_id = "product_code"
-    quote = "条款明确载明产品代码。"
-    content = f"前文 {quote} 后文"
-    source_sha256 = "8" * 64
-    revision_id = "terms-revision-attempt-2"
-    attempt_id = "terms-attempt-2"
-    document_sha256 = "4" * 64
-    manifest_sha256 = "5" * 64
-    evidence = FreeformEvidenceV1(
-        field_id=field_id,
-        source_sha256=source_sha256,
-        source_revision_id=revision_id,
-        parse_attempt_id=attempt_id,
-        parsed_document_hash=document_sha256,
-        parse_manifest_hash=manifest_sha256,
-        page_number=12,
-        block_id="block-12-3",
-        locator=EvidenceLocatorSnapshotV1(
-            subject_type="block",
-            subject_ref="block-12-3",
-            page_number=12,
-            parent_refs=("page-12",),
-            content_snapshot=content,
-            content_snapshot_sha256=_sha(content),
+    from tests.test_expert_golden_admission_596_2_119 import (
+        _approved_cases,
+        _candidate_v2,
+    )
+
+    cases = _approved_cases()
+    candidate = _candidate_v2(cases)
+    document = cases[0].documents[0]
+    manifest = cases[0].manifests[0]
+    decision = ParseQualityDecisionV1(
+        contract="parse-quality-decision.v1",
+        subject=document.subject,
+        manifest_hash=manifest.manifest_hash,
+        parse_policy_receipt=None,
+        measured_facts=ParseQualityMeasuredFactsV1(
+            threshold_version="parse-quality-structural.v1",
+            required_capabilities=manifest.required_capabilities,
+            satisfied_capabilities=manifest.satisfied_capabilities,
+            unsatisfied_capabilities=manifest.unsatisfied_capabilities,
+            trigger_conditions=(),
+            attempts_exhausted=True,
         ),
-        quote_snapshot=quote,
-        quote_snapshot_sha256=_sha(quote),
+        decision="ADMIT",
+        reason_codes=(),
+        admitted_attempt_id=document.attempt.attempt_id,
+        next_parser_profile_ref=None,
+        review_item=None,
     )
-    output = FreeformFieldOutputV1(
-        product_version_id="596-1",
-        field_id=field_id,
-        state="present",
-        value_snapshot="P000001",
-        evidence=(evidence,),
+    artifact = AdmittedParseArtifactV1(
+        role="terms",
+        source_sha256=document.subject.source_sha256,
+        artifact_sha256=document.document_hash,
+        document=document,
+        manifest=manifest,
+        decision=decision,
+        manifest_sha256=manifest.manifest_hash,
+        decision_sha256=decision.decision_hash,
+        sanitized_structure=b"{}",
+        raw_structure_sha256=_sha("raw-structure-terms"),
+        sanitized_structure_sha256=hashlib.sha256(b"{}").hexdigest(),
+        capture_identity_sha256=_sha("capture-identity-terms"),
+        content_snapshot_sha256=_sha("content-snapshot-terms"),
     )
-    document = FreeformDocumentBindingV1(
-        source_id="terms-source",
-        source_revision_id=revision_id,
-        source_sha256=source_sha256,
-        parse_attempt_id=attempt_id,
-        parsed_document_hash=document_sha256,
-        parse_manifest_hash=manifest_sha256,
-    )
-    receipt_payload = _receipt_payload(output=output, documents=(document,))
-    receipt = FreeformEvidenceBindingReceiptV1.model_validate(
-        {
-            **receipt_payload,
-            "receipt_hash": canonical_hash(
-                "freeform-arm-evidence-binding-receipt.v1", receipt_payload
-            ),
-        }
-    )
-    bbox = CitationBBoxV1(
-        coordinate_system="pdf_points",
-        page_width=600,
-        page_height=800,
-        x0=100,
-        y0=120,
-        x1=360,
-        y1=180,
-    )
-    citation_payload = {
-        "contract": "citation-target.v1",
-        "citation_id": "citation-product-code-terms",
-        "source_role": "terms",
-        "space_id": "space-596-1",
-        "entity_version_id": "ping-an-e-sheng-bao@596-1",
-        "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
-        "chunk_id": "chunk-terms-12-3",
-        "source_revision_id": revision_id,
-        "parse_attempt_id": attempt_id,
-        "parsed_document_sha256": document_sha256,
-        "parse_manifest_sha256": manifest_sha256,
-        "page_number": 12,
-        "locator_ref": "block-12-3",
-        "bbox": bbox,
-        "quote_snapshot": quote,
-        "quote_sha256": schema_wiki_sha256(
-            "schema-wiki-text.v1", {"text": quote}
+    source_roles = tuple(candidate.source_roles)
+    receipts = (
+        _live_receipt(
+            source_sha256=source_roles[0]["source_sha256"],
+            role="terms",
+            parsed_document_sha256=document.document_hash,
+            parse_manifest_sha256=manifest.manifest_hash,
+            evidence_parse_attempt_id=document.attempt.attempt_id,
         ),
-        "content_snapshot_sha256": _sha(content),
-        "logical_member_ref": f"field:{field_id}",
+        _live_receipt(
+            source_sha256=source_roles[1]["source_sha256"],
+            role="brochure",
+            parsed_document_sha256=_sha("parsed-document-brochure"),
+            parse_manifest_sha256=_sha("parse-manifest-brochure"),
+            evidence_parse_attempt_id="brochure-attempt-1",
+        ),
+        _live_receipt(
+            source_sha256=source_roles[2]["source_sha256"],
+            role="rate_table",
+            parsed_document_sha256=_sha("parsed-document-rate"),
+            parse_manifest_sha256=_sha("parse-manifest-rate"),
+            evidence_parse_attempt_id="rate-attempt-1",
+        ),
+    )
+    unique_evidence = {
+        (evidence.locator.subject_ref, evidence.locator.content_snapshot): evidence
+        for output in candidate.fields
+        for evidence in output.evidence
     }
-    citation = CitationTargetV1.model_validate(
+    chunks = tuple(
+        LiveChunkAuthorityInputV1(
+            source_role="terms",
+            locator_ref=locator_ref,
+            chunk_id=f"chunk-terms-{index}",
+            chunk_index=index,
+            content_snapshot=content,
+            chunk_content_sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        )
+        for index, ((locator_ref, content), _) in enumerate(
+            sorted(unique_evidence.items()),
+            start=1,
+        )
+    )
+    authority = build_schema67_candidate_evidence_authority_596_1(
+        candidate=candidate,
+        admitted_parse_artifacts=(artifact,),
+        live_source_receipts=receipts,
+        chunk_authorities=chunks,
+    )
+    return candidate, authority
+
+
+def _fully_rehashed_authority_join_mutation(
+    authority: Schema67CandidateEvidenceAuthorityV1,
+    *,
+    index: int,
+    field: str,
+    value: object,
+) -> Schema67CandidateEvidenceAuthorityV1:
+    joins = list(authority.join_receipts)
+    payload = joins[index].model_dump(mode="python", exclude={"receipt_sha256"})
+    payload[field] = value
+    if field == "page_number":
+        assert type(value) is int
+        payload["native_page_index"] = value - 1
+    joins[index] = Schema67CitationAuthorityJoinReceiptV1.model_validate(
         {
-            **citation_payload,
-            "citation_sha256": schema_wiki_sha256(
-                "citation-target.v1", citation_payload
+            **payload,
+            "receipt_sha256": schema_wiki_sha256(
+                "schema67-citation-authority-join-receipt.v1", payload
             ),
         }
     )
-    return output, receipt, citation
+    authority_payload = authority.model_dump(
+        mode="python", exclude={"authority_sha256"}
+    )
+    authority_payload["join_receipts"] = tuple(joins)
+    return authority.model_copy(
+        update={
+            "join_receipts": tuple(joins),
+            "authority_sha256": schema_wiki_sha256(
+                "schema67-candidate-evidence-authority.v1", authority_payload
+            ),
+        }
+    )
 
 
 @pytest.mark.parametrize("candidate", [None, _SelfIssuedCandidate(), object()])
@@ -319,19 +280,17 @@ def test_compile_requires_concrete_freshly_replayed_schema67_candidate(
     with pytest.raises(SchemaWikiCompilationError) as caught:
         compile_schema_wiki_release_596_1(
             candidate=candidate,
-            citation_authority=_FailIfCalledCitationAuthority(),
+            evidence_authority=object(),  # type: ignore[arg-type]
         )
 
     assert caught.value.reason_code == "SCHEMA_WIKI_COMPILATION_NOT_COMPLETE"
 
 
 def test_missing_candidate_never_requests_generic_wiki_fallback() -> None:
-    authority = _FailIfCalledCitationAuthority()
-
     with pytest.raises(SchemaWikiCompilationError) as caught:
         compile_schema_wiki_release_596_1(
             candidate=None,
-            citation_authority=authority,
+            evidence_authority=object(),  # type: ignore[arg-type]
         )
 
     assert caught.value.reason_code == "SCHEMA_WIKI_COMPILATION_NOT_COMPLETE"
@@ -339,27 +298,44 @@ def test_missing_candidate_never_requests_generic_wiki_fallback() -> None:
 
 
 def test_known_field_page_binds_057_receipt_and_exact_revision_citation() -> None:
-    output, receipt, citation = _known()
+    candidate, authority = _candidate_and_authority()
+    output = next(item for item in candidate.fields if item.field_id == "product_code")
+    receipt = next(
+        item for item in candidate.evidence_receipts if item.field_id == output.field_id
+    )
 
     page = build_schema_field_page_596_1(
+        candidate=candidate,
         output=output,
         evidence_receipt=receipt,
-        citation_authority=_ExactCitationAuthority((citation,)),
+        evidence_authority=authority,
     )
 
     assert type(page) is SchemaFieldPageV1
     assert page.state == "present"
     assert page.evidence_receipt_sha256s == (receipt.receipt_hash,)
-    assert page.citations == (citation,)
+    assert len(page.citations) == len(output.evidence)
+    assert all(
+        citation.source_revision_id == evidence.source_revision_id
+        and citation.parse_attempt_id == evidence.parse_attempt_id
+        and citation.locator_ref == evidence.locator.subject_ref
+        and citation.bbox.coordinate_system == "normalized_0_1e6"
+        for citation, evidence in zip(page.citations, output.evidence, strict=True)
+    )
 
 
 def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
-    output, receipt = _unknown()
+    candidate, authority = _candidate_and_authority()
+    output = next(item for item in candidate.fields if item.field_id == "sales_end_date")
+    receipt = next(
+        item for item in candidate.evidence_receipts if item.field_id == output.field_id
+    )
 
     page = build_schema_field_page_596_1(
+        candidate=candidate,
         output=output,
         evidence_receipt=receipt,
-        citation_authority=_FailIfCalledCitationAuthority(),
+        evidence_authority=authority,
     )
 
     assert page.state == "unknown"
@@ -372,8 +348,7 @@ def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
 @pytest.mark.parametrize(
     ("field", "foreign"),
     [
-        ("source_revision_id", "foreign-revision"),
-        ("parse_attempt_id", "foreign-attempt"),
+        ("evidence_parse_attempt_id", "foreign-attempt"),
         ("chunk_id", "foreign-chunk"),
         ("page_number", 27),
         ("locator_ref", "foreign-block"),
@@ -382,33 +357,182 @@ def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
 def test_known_field_page_rejects_foreign_citation_custody(
     field: str, foreign: object
 ) -> None:
-    output, receipt, citation = _known()
-    payload = citation.model_dump(mode="python", exclude={"citation_sha256"})
-    payload[field] = foreign
-    forged = CitationTargetV1.model_construct(
-        **payload,
-        citation_sha256=schema_wiki_sha256("citation-target.v1", payload),
+    candidate, authority = _candidate_and_authority()
+    output = next(item for item in candidate.fields if item.field_id == "product_code")
+    receipt = next(
+        item for item in candidate.evidence_receipts if item.field_id == output.field_id
+    )
+    join_index = next(
+        index
+        for index, item in enumerate(authority.join_receipts)
+        if item.field_id == output.field_id
+    )
+    forged = _fully_rehashed_authority_join_mutation(
+        authority,
+        index=join_index,
+        field=field,
+        value=foreign,
     )
 
     with pytest.raises(SchemaWikiCompilationError):
         build_schema_field_page_596_1(
+            candidate=candidate,
             output=output,
             evidence_receipt=receipt,
-            citation_authority=_ExactCitationAuthority(
-                expected=(citation,), returned=(forged,)
-            ),
+            evidence_authority=forged,
         )
 
 
+def test_full_rehash_and_privateattr_reseal_cannot_forge_companion() -> None:
+    candidate, authority = _candidate_and_authority()
+    forged = _fully_rehashed_authority_join_mutation(
+        authority,
+        index=0,
+        field="chunk_id",
+        value="foreign-chunk",
+    )
+    object.__setattr__(forged, "_seal", getattr(authority, "_seal", object()))
+    object.__setattr__(
+        forged,
+        "_sealed_authority_sha256",
+        forged.authority_sha256,
+    )
+
+    with pytest.raises(SchemaWikiCompilationError) as caught:
+        compile_schema_wiki_release_596_1(
+            candidate=candidate,
+            evidence_authority=forged,
+        )
+
+    assert caught.value.reason_code == "CITATION_AUTHORITY_INVALID"
+
+
+@pytest.mark.parametrize(
+    "clone_kind",
+    ["model_copy", "deepcopy", "reparse", "model_construct"],
+)
+def test_only_exact_factory_instance_is_compiler_authority(clone_kind: str) -> None:
+    candidate, authority = _candidate_and_authority()
+    payload = authority.model_dump(mode="python")
+    if clone_kind == "model_copy":
+        clone = authority.model_copy()
+    elif clone_kind == "deepcopy":
+        clone = copy.deepcopy(authority)
+    elif clone_kind == "reparse":
+        clone = Schema67CandidateEvidenceAuthorityV1.model_validate(payload)
+    else:
+        clone = Schema67CandidateEvidenceAuthorityV1.model_construct(**payload)
+
+    with pytest.raises(SchemaWikiCompilationError) as caught:
+        compile_schema_wiki_release_596_1(
+            candidate=candidate,
+            evidence_authority=clone,
+        )
+
+    assert caught.value.reason_code == "CITATION_AUTHORITY_INVALID"
+
+
+def test_registered_instance_rejects_nested_mutation_and_full_rehash() -> None:
+    _candidate_and_authority.cache_clear()
+    candidate, authority = _candidate_and_authority()
+    joins = list(authority.join_receipts)
+    join_payload = joins[0].model_dump(mode="python", exclude={"receipt_sha256"})
+    join_payload["chunk_id"] = "foreign-chunk"
+    joins[0] = Schema67CitationAuthorityJoinReceiptV1.model_validate(
+        {
+            **join_payload,
+            "receipt_sha256": schema_wiki_sha256(
+                "schema67-citation-authority-join-receipt.v1",
+                join_payload,
+            ),
+        }
+    )
+    authority_payload = authority.model_dump(
+        mode="python",
+        exclude={"authority_sha256"},
+    )
+    authority_payload["join_receipts"] = tuple(joins)
+    object.__setattr__(authority, "join_receipts", tuple(joins))
+    object.__setattr__(
+        authority,
+        "authority_sha256",
+        schema_wiki_sha256(
+            "schema67-candidate-evidence-authority.v1",
+            authority_payload,
+        ),
+    )
+
+    try:
+        with pytest.raises(SchemaWikiCompilationError) as caught:
+            compile_schema_wiki_release_596_1(
+                candidate=candidate,
+                evidence_authority=authority,
+            )
+        assert caught.value.reason_code == "CITATION_AUTHORITY_INVALID"
+    finally:
+        _candidate_and_authority.cache_clear()
+
+
+def test_factory_provenance_is_not_stored_as_private_model_state() -> None:
+    assert "_seal" not in Schema67CandidateEvidenceAuthorityV1.__private_attributes__
+    assert (
+        "_sealed_authority_sha256"
+        not in Schema67CandidateEvidenceAuthorityV1.__private_attributes__
+    )
+
+
+def test_factory_registry_entry_is_removed_when_authority_is_collected() -> None:
+    _candidate_and_authority.cache_clear()
+    _, authority = _candidate_and_authority()
+    identity = id(authority)
+    authority_ref = weakref.ref(authority)
+    assert identity in candidate_evidence_join._FACTORY_AUTHORITY_REGISTRY
+
+    _candidate_and_authority.cache_clear()
+    del authority
+    gc.collect()
+
+    assert authority_ref() is None
+    assert identity not in candidate_evidence_join._FACTORY_AUTHORITY_REGISTRY
+
+
+def test_factory_registry_validation_is_thread_safe() -> None:
+    candidate, authority = _candidate_and_authority()
+
+    def replay(_: int) -> bool:
+        return (
+            validate_schema67_candidate_evidence_authority_596_1(
+                candidate=candidate,
+                authority=authority,
+            )
+            is authority
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        assert all(executor.map(replay, range(8)))
+
+
 def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -> None:
-    output, receipt = _unknown()
-    known_output, known_receipt, _ = _known()
+    candidate, authority = _candidate_and_authority()
+    output = next(item for item in candidate.fields if item.field_id == "sales_end_date")
+    receipt = next(
+        item for item in candidate.evidence_receipts if item.field_id == output.field_id
+    )
+    known_output = next(
+        item for item in candidate.fields if item.field_id == "product_code"
+    )
+    known_receipt = next(
+        item
+        for item in candidate.evidence_receipts
+        if item.field_id == known_output.field_id
+    )
 
     with pytest.raises(SchemaWikiCompilationError):
         build_schema_field_page_596_1(
+            candidate=candidate,
             output=output,
             evidence_receipt=known_receipt,
-            citation_authority=_FailIfCalledCitationAuthority(),
+            evidence_authority=authority,
         )
     forged_unknown = FreeformFieldOutputV1.model_construct(
         product_version_id=output.product_version_id,
@@ -419,9 +543,10 @@ def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -
     )
     with pytest.raises(SchemaWikiCompilationError):
         build_schema_field_page_596_1(
+            candidate=candidate,
             output=forged_unknown,
             evidence_receipt=receipt,
-            citation_authority=_FailIfCalledCitationAuthority(),
+            evidence_authority=authority,
         )
 
 
@@ -461,19 +586,25 @@ def test_review_bundle_rejects_manifest_drift_before_authority_handoff() -> None
 
 
 def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> None:
-    from tests.test_expert_golden_admission_596_2_119 import (
-        _approved_cases,
-        _candidate_v2,
-    )
-
-    candidate = _candidate_v2(_approved_cases())
+    candidate, authority = _candidate_and_authority()
     release = compile_schema_wiki_release_596_1(
         candidate=candidate,
-        citation_authority=_SyntheticTrustedCitationAuthority(),
+        evidence_authority=authority,
     )
 
     assert type(release) is KnowledgeWikiReleaseV1
     assert release.candidate_sha256 == candidate.candidate_sha256
+    assert tuple(
+        (
+            row.source_role,
+            row.live_revision_source_receipt.page_count,
+            row.live_revision_source_receipt.weknora_parse_attempt,
+        )
+        for row in authority.source_authorities
+    ) == (("terms", 39, 2), ("brochure", 27, 1), ("rate_table", 2, 1))
+    assert len(authority.join_receipts) == sum(
+        len(field.evidence) for field in candidate.fields
+    ) == 111
     assert len(release.members) == 75
     assert tuple(item.member_kind for item in release.members[:8]) == (
         "root",
@@ -494,23 +625,19 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
         Path(__file__).parents[2]
         / "internal/application/service/testdata/schema_wiki_release_596_1_vector.json"
     )
-    assert json.loads(vector_path.read_text(encoding="utf-8")) == release.model_dump(
-        mode="json"
-    )
+    assert json.loads(vector_path.read_text(encoding="utf-8")) == {
+        "candidate_evidence_authority": authority.model_dump(mode="json"),
+        "release": release.model_dump(mode="json"),
+    }
 
 
 def _real_candidate_and_release() -> tuple[
     Schema67CandidateV2, KnowledgeWikiReleaseV1
 ]:
-    from tests.test_expert_golden_admission_596_2_119 import (
-        _approved_cases,
-        _candidate_v2,
-    )
-
-    candidate = _candidate_v2(_approved_cases())
+    candidate, authority = _candidate_and_authority()
     release = compile_schema_wiki_release_596_1(
         candidate=candidate,
-        citation_authority=_SyntheticTrustedCitationAuthority(),
+        evidence_authority=authority,
     )
     return candidate, release
 
@@ -556,6 +683,7 @@ def _rehash_release_payload(release: dict[str, object]) -> None:
 
 def test_compiler_carries_exact75_typed_canonical_member_payloads() -> None:
     candidate, release = _real_candidate_and_release()
+    _, authority = _candidate_and_authority()
     rows = release.model_dump(mode="json")["members"]
 
     assert len(rows) == 75
@@ -613,9 +741,10 @@ def test_compiler_carries_exact75_typed_canonical_member_payloads() -> None:
 
     expected_pages = [
         build_schema_field_page_596_1(
+            candidate=candidate,
             output=output,
             evidence_receipt=receipt,
-            citation_authority=_SyntheticTrustedCitationAuthority(),
+            evidence_authority=authority,
         ).model_dump(mode="json")
         for output, receipt in zip(
             candidate.fields,

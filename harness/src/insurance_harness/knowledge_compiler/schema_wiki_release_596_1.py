@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final
 
 from pydantic import ValidationError
 
@@ -25,6 +25,12 @@ from insurance_harness.knowledge_compiler.medical_schema_pack_596_1 import (
 from insurance_harness.knowledge_compiler.schema_first_contracts import (
     APPROVED_ORDERED_FIELD_IDS,
     APPROVED_PRODUCT_VERSION_ID,
+)
+from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    CandidateEvidenceAuthorityError,
+    Schema67CandidateEvidenceAuthorityV1,
+    _citation_targets_from_validated_authority_596_1,
+    validate_schema67_candidate_evidence_authority_596_1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     CitationMemberBindingV1,
@@ -65,18 +71,6 @@ class SchemaWikiCompilationError(ValueError):
     def __init__(self, reason_code: str) -> None:
         self.reason_code = reason_code
         super().__init__(reason_code)
-
-
-class CitationAuthority5961Port(Protocol):
-    """Trusted exact-revision join supplied outside the pure compiler."""
-
-    def resolve(
-        self,
-        *,
-        output: FreeformFieldOutputV1,
-        evidence_receipt: FreeformEvidenceBindingReceiptV1,
-        entity_version_id: str,
-    ) -> tuple[CitationTargetV1, ...]: ...
 
 
 def _fresh_output(output: FreeformFieldOutputV1) -> FreeformFieldOutputV1:
@@ -142,15 +136,16 @@ def _resolve_known_citations(
     *,
     output: FreeformFieldOutputV1,
     receipt: FreeformEvidenceBindingReceiptV1,
-    citation_authority: CitationAuthority5961Port,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
 ) -> tuple[CitationTargetV1, ...]:
     try:
-        citations = citation_authority.resolve(
+        citations = _citation_targets_from_validated_authority_596_1(
+            authority=evidence_authority,
             output=output,
             evidence_receipt=receipt,
             entity_version_id=MEDICAL_VERSION_ID,
         )
-    except Exception:
+    except CandidateEvidenceAuthorityError:
         raise SchemaWikiCompilationError("CITATION_AUTHORITY_INVALID") from None
     if type(citations) is not tuple or len(citations) != len(output.evidence):
         raise SchemaWikiCompilationError("CITATION_AUTHORITY_INVALID")
@@ -186,9 +181,42 @@ def _resolve_known_citations(
 
 def build_schema_field_page_596_1(
     *,
+    candidate: object,
     output: FreeformFieldOutputV1,
     evidence_receipt: FreeformEvidenceBindingReceiptV1,
-    citation_authority: CitationAuthority5961Port,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+) -> SchemaFieldPageV1:
+    exact_candidate = _validate_sealed_candidate(candidate)
+    try:
+        validate_schema67_candidate_evidence_authority_596_1(
+            candidate=exact_candidate,
+            authority=evidence_authority,
+        )
+    except CandidateEvidenceAuthorityError:
+        raise SchemaWikiCompilationError("CITATION_AUTHORITY_INVALID") from None
+    expected_pairs = tuple(
+        (field, receipt)
+        for field, receipt in zip(
+            exact_candidate.fields,
+            exact_candidate.evidence_receipts,
+            strict=True,
+        )
+        if field.field_id == output.field_id
+    )
+    if expected_pairs != ((output, evidence_receipt),):
+        raise SchemaWikiCompilationError("EVIDENCE_RECEIPT_BINDING_INVALID")
+    return _build_schema_field_page_from_validated_authority_596_1(
+        output=output,
+        evidence_receipt=evidence_receipt,
+        evidence_authority=evidence_authority,
+    )
+
+
+def _build_schema_field_page_from_validated_authority_596_1(
+    *,
+    output: FreeformFieldOutputV1,
+    evidence_receipt: FreeformEvidenceBindingReceiptV1,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
 ) -> SchemaFieldPageV1:
     exact_output = _fresh_output(output)
     exact_receipt = _fresh_receipt(evidence_receipt)
@@ -204,7 +232,7 @@ def build_schema_field_page_596_1(
         citations = _resolve_known_citations(
             output=exact_output,
             receipt=exact_receipt,
-            citation_authority=citation_authority,
+            evidence_authority=evidence_authority,
         )
         receipt_hashes = (exact_receipt.receipt_hash,)
         review_reason = None
@@ -351,9 +379,18 @@ def _validate_medical_release_596_1(
 def compile_schema_wiki_release_596_1(
     *,
     candidate: object,
-    citation_authority: CitationAuthority5961Port,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
 ) -> KnowledgeWikiReleaseV1:
     exact_candidate = _validate_sealed_candidate(candidate)
+    try:
+        exact_evidence_authority = (
+            validate_schema67_candidate_evidence_authority_596_1(
+                candidate=exact_candidate,
+                authority=evidence_authority,
+            )
+        )
+    except CandidateEvidenceAuthorityError:
+        raise SchemaWikiCompilationError("CITATION_AUTHORITY_INVALID") from None
     pack = make_medical_schema_pack_596_1()
     domain = make_initial_medical_domain_596_1()
     entity = make_initial_medical_entity_596_1()
@@ -371,10 +408,10 @@ def compile_schema_wiki_release_596_1(
         raise SchemaWikiCompilationError("MEDICAL_AUTHORITY_INVALID") from None
 
     field_pages = tuple(
-        build_schema_field_page_596_1(
+        _build_schema_field_page_from_validated_authority_596_1(
             output=output,
             evidence_receipt=receipt,
-            citation_authority=citation_authority,
+            evidence_authority=exact_evidence_authority,
         )
         for output, receipt in zip(
             exact_candidate.fields,
@@ -549,7 +586,6 @@ def build_schema_wiki_review_bundle_596_1(
 
 
 __all__ = [
-    "CitationAuthority5961Port",
     "SCHEMA_WIKI_REVIEW_POLICY_SHA256",
     "SchemaWikiCompilationError",
     "build_schema_field_page_596_1",
