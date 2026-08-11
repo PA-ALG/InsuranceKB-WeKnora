@@ -44,6 +44,10 @@ The three status authorities are frozen separately as `source_review_status=COMP
   The summary is aggregate-only but remains a human-JWT Admin/Owner preparation surface;
   the dossier additionally requires the authenticated named reviewer. Both traverse the
   existing Wiki/RAW dual ACL and release seal.
+- One distinct read-only `golden-quality/successor-status` response for the current
+  reviewed-source migration. It exposes only the three independent status layers and
+  their frozen artifact hashes; it is not a PASS dossier and has no Draft, review,
+  publication or serving authority.
 
 ## Authority boundaries
 
@@ -60,10 +64,13 @@ The three status authorities are frozen separately as `source_review_status=COMP
   Evidence or quality metrics.
 - The gate is specific to product version `596-1`; it is not a general evaluation platform
   or model admission service.
+- The current successor-status authority is deployment-owned canonical JSON. Startup
+  closed-decodes and revalidates its canonical hash and frozen status/count/order joins.
+  Missing configuration is a typed unavailable state, never a synthesized default.
 
 ## Current delivery boundary
 
-This successor is a plan/OpenSpec-only review-surface contract over the already frozen
-corrective evaluator. It performs no provider, Golden generation/scoring, database,
-WeKnora, migration, Draft, review, activation or deployment action and does not implement
-the HTTP surface.
+This successor adds only a bounded status projection over the already frozen source-review
+artifact. It performs no provider, Golden generation/scoring, database, WeKnora,
+migration, Draft, review, activation or deployment action. The formal PASS dossier and its
+admission rules remain unchanged.

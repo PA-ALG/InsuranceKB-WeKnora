@@ -132,3 +132,61 @@ func TestSchemaWikiPreparationGoldenEvidencePreviewAcceptsOnlyPathIdentities(t *
 	require.NotContains(t, recorder.Body.String(), "file_path")
 	require.Equal(t, 1, spy.goldenPreviewCalls)
 }
+
+func TestSchemaWikiGoldenSuccessorStatusResponseIsClosedNonServingMetadata(t *testing.T) {
+	t.Parallel()
+	status := &types.SchemaWikiGoldenSuccessorStatusV1{
+		Version:  "schema-wiki-golden-successor-status.v1",
+		Contract: "schema-wiki-golden-successor-status.v1",
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-kb-596-1",
+		WikiKBID: "wiki-kb-596-1", ProductVersionID: "596-1",
+		SchemaPackID: "medical-schema67.v1", SourceReviewStatus: "COMPLETED",
+		ReviewedBy: "linyao", AnnotatorModelID: "claude-fable-5",
+		Schema67MappingStatus: "PARTIAL_51_CLOSED_16_RESIDUAL",
+		ClosedCount:           51, ResidualCount: 16,
+		GoldenAdmissionStatus: "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED",
+		ReceiptStatus:         "UNVERIFIED",
+		ReadyToSignStatus:     "READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE",
+	}
+	spy := &schemaWikiHTTPServiceSpy{goldenSuccessor: status}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-kb-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-kb-596-1"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "named-reviewer-1"}
+	c.Request = c.Request.WithContext(types.WithPrincipal(c.Request.Context(), principal))
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.ReadGoldenSuccessorStatus(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Success bool                   `json:"success"`
+		Data    map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	require.ElementsMatch(t, []string{
+		"version", "contract", "tenant_id", "space_id", "raw_kb_id", "wiki_kb_id",
+		"product_version_id", "schema_pack_id", "golden_set_sha256", "mapping_sha256",
+		"successor_file_sha256", "attestation_sha256", "source_review_status",
+		"reviewed_by", "annotator_model_id", "reviewed_at", "attestor_id", "attested_at",
+		"schema67_mapping_status", "closed_count", "residual_count", "residual_field_ids",
+		"golden_admission_status", "receipt_status", "ready_to_sign_status", "status_sha256",
+	}, func() []string {
+		keys := make([]string, 0, len(response.Data))
+		for key := range response.Data {
+			keys = append(keys, key)
+		}
+		return keys
+	}())
+	for _, forbidden := range []string{
+		"field_value", "evidence", "quality_pass", "signature", "approve", "publish",
+		"activate", "preparation_id", "release_id",
+	} {
+		require.NotContains(t, recorder.Body.String(), forbidden)
+	}
+	require.Equal(t, 1, spy.goldenSuccessorCalls)
+}

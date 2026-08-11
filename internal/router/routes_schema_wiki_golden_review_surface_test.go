@@ -27,6 +27,7 @@ func TestSchemaWikiGoldenReviewSurfaceRoutesArePreparationScoped(t *testing.T) {
 	require.True(t, paths[http.MethodGet+" "+prefix+"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary"])
 	require.True(t, paths[http.MethodGet+" "+prefix+"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/dossier"])
 	require.True(t, paths[http.MethodGet+" "+prefix+"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview"])
+	require.True(t, paths[http.MethodGet+" "+prefix+"/golden-quality/successor-status"])
 	require.False(t, paths[http.MethodGet+" "+prefix+"/releases/:release_id/quality-dossier"])
 	require.False(t, paths[http.MethodGet+" "+prefix+"/quality/latest"])
 	require.False(t, paths[http.MethodGet+" "+prefix+"/quality/current"])

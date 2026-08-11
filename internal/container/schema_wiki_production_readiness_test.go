@@ -97,4 +97,7 @@ func TestSchemaWikiContainerDoesNotInjectNilCitationPort(t *testing.T) {
 	require.Contains(t, source, "DecodeSchemaWikiCitationTokenSigningRing")
 	require.Contains(t, source, "NewSchemaWikiCitationContentService")
 	require.Contains(t, source, "NewSchemaWikiRevisionBlobReader")
+	require.Contains(t, source, "DecodeSchemaWikiGoldenSuccessorStatus")
+	require.Contains(t, source, "NewCanonicalSchemaWikiGoldenSuccessorStatusProvider")
+	require.Contains(t, source, "NewSchemaWikiServiceWithGoldenSuccessorStatus")
 }

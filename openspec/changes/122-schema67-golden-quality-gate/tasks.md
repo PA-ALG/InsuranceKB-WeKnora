@@ -88,6 +88,20 @@
 - [ ] RED/GREEN the closed frontend parsers and preparation review UI. The UI SHALL have no
   approval, review, publish or activation capability.
 
+## Task 7 · Current Golden successor status
+
+- [x] Freeze a separate closed status DTO for the completed latest71 source Review, the
+  partial 51/16 Schema67 mapping and blocked/unverified Golden admission state.
+- [x] Freeze one deployment-owned canonical provider contract: exact bytes and SHA are
+  revalidated at startup; nil/unconfigured is typed `NO_GOLDEN_SUCCESSOR_STATUS`.
+- [x] RED/GREEN one read-only private GET under the existing scoped Schema Wiki surface,
+  with human JWT Admin/Owner, API-key denial, Wiki/RAW ACL evidence and the existing seal.
+- [x] Keep field values, Evidence, quality PASS, signatures and every Draft/review/publish/
+  activate authority out of this status response; do not relax Dossier V2.
+- [ ] `WAITING_FOR_CONCRETE_VERIFIED_WHOLE_BATCH_RECEIPT`: do not register formal
+  Dossier V2 provenance from a literal receipt status or bare digest. Reuse the existing
+  concrete human batch receipt/verifier only after the residual whole batch is signed.
+
 ## Global STOP conditions
 
 - Evaluated model participates in its own Golden authority.

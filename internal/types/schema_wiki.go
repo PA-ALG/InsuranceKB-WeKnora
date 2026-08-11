@@ -758,6 +758,57 @@ type SchemaWikiGoldenQualityDossierV2 struct {
 	ServingEffect            string                                  `json:"serving_effect"`
 }
 
+// SchemaWikiGoldenSuccessorStatusV1 is the closed, non-serving status of the
+// current 596-1 reviewed-source migration. It is deliberately separate from
+// the formal PASS-only dossier and contains no field values or Evidence.
+type SchemaWikiGoldenSuccessorStatusV1 struct {
+	Version               string   `json:"version"`
+	Contract              string   `json:"contract"`
+	TenantID              uint64   `json:"tenant_id"`
+	SpaceID               string   `json:"space_id"`
+	RawKBID               string   `json:"raw_kb_id"`
+	WikiKBID              string   `json:"wiki_kb_id"`
+	ProductVersionID      string   `json:"product_version_id"`
+	SchemaPackID          string   `json:"schema_pack_id"`
+	GoldenSetSHA256       string   `json:"golden_set_sha256"`
+	MappingSHA256         string   `json:"mapping_sha256"`
+	SuccessorFileSHA256   string   `json:"successor_file_sha256"`
+	AttestationSHA256     string   `json:"attestation_sha256"`
+	SourceReviewStatus    string   `json:"source_review_status"`
+	ReviewedBy            string   `json:"reviewed_by"`
+	AnnotatorModelID      string   `json:"annotator_model_id"`
+	ReviewedAt            *string  `json:"reviewed_at"`
+	AttestorID            string   `json:"attestor_id"`
+	AttestedAt            string   `json:"attested_at"`
+	Schema67MappingStatus string   `json:"schema67_mapping_status"`
+	ClosedCount           int      `json:"closed_count"`
+	ResidualCount         int      `json:"residual_count"`
+	ResidualFieldIDs      []string `json:"residual_field_ids"`
+	GoldenAdmissionStatus string   `json:"golden_admission_status"`
+	ReceiptStatus         string   `json:"receipt_status"`
+	ReadyToSignStatus     string   `json:"ready_to_sign_status"`
+	StatusSHA256          string   `json:"status_sha256"`
+}
+
+var schemaWikiGoldenSuccessorResidualFieldIDs = []string{
+	"product_type",
+	"marketing_tagline",
+	"product_overview",
+	"health_declaration_requirements",
+	"eligible_occupation_classes",
+	"premium_grace_period",
+	"guaranteed_renewal_status",
+	"premium_adjustment_rules",
+	"direct_billing_and_advance_payment_rules",
+	"eligible_service_packages",
+	"tax_qualified_status",
+	"tax_benefit_rules",
+	"objection_handling_scripts",
+	"product_faq",
+	"four_step_sales_script",
+	"sales_pitch_script",
+}
+
 // SchemaWikiGoldenEvidencePreviewAuthorityV1 is the preparation-pinned,
 // hash-only public half of one Golden reviewer Evidence preview. OpaqueToken
 // is signed by the existing third citation ring and excluded from the hash.
@@ -1837,6 +1888,80 @@ func ParseSchemaWikiGoldenQualityDossierV2(
 		return dossier, ErrSchemaWikiContractInvalid
 	}
 	return dossier, nil
+}
+
+// ComputeSchemaWikiGoldenSuccessorStatusSHA256 hashes the complete closed
+// status except for its self-hash field.
+func ComputeSchemaWikiGoldenSuccessorStatusSHA256(
+	status SchemaWikiGoldenSuccessorStatusV1,
+) (string, error) {
+	digest, _, err := schemaWikiHashWithout(
+		"schema-wiki-golden-successor-status.v1", status, "status_sha256",
+	)
+	return digest, err
+}
+
+// ValidateSchemaWikiGoldenSuccessorStatusV1 freezes the exact current 596-1
+// migration status. A later successor needs a new canonical authority rather
+// than relabeling this blocked status as admitted.
+func ValidateSchemaWikiGoldenSuccessorStatusV1(
+	status SchemaWikiGoldenSuccessorStatusV1,
+) error {
+	if status.Version != "schema-wiki-golden-successor-status.v1" ||
+		status.Contract != status.Version ||
+		status.TenantID != 10003 ||
+		status.SpaceID != "space-596-1" ||
+		status.RawKBID != "raw-kb-596-1" ||
+		status.WikiKBID != "wiki-kb-596-1" ||
+		status.ProductVersionID != "596-1" ||
+		status.SchemaPackID != "medical-schema67.v1" ||
+		status.GoldenSetSHA256 != "8475cd6876ad117282bac9f2317fa80b79a5c0f69e49f6d4175fa414c4335504" ||
+		status.MappingSHA256 != "85646d263932d33a2dbb02fbbc93425252618d162c3c1e012b2fede5addf2f43" ||
+		status.SuccessorFileSHA256 != "1ad6586241300edab00aa794e7ad794da73ea9f5a52386abb25b86d7aa511f3c" ||
+		status.AttestationSHA256 != "8217f6aac177fbc08b7fb069c6dc98e360d831bbfa3e149e3a0cd798040916f0" ||
+		status.SourceReviewStatus != "COMPLETED" ||
+		status.ReviewedBy != "linyao" ||
+		status.AnnotatorModelID != "claude-fable-5" ||
+		status.ReviewedAt != nil ||
+		status.AttestorID != "workspace-owner-houjing" ||
+		status.AttestedAt != "2026-08-11T11:21:07Z" ||
+		status.Schema67MappingStatus != "PARTIAL_51_CLOSED_16_RESIDUAL" ||
+		status.ClosedCount != 51 || status.ResidualCount != 16 ||
+		!reflect.DeepEqual(status.ResidualFieldIDs, schemaWikiGoldenSuccessorResidualFieldIDs) ||
+		status.GoldenAdmissionStatus != "BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED" ||
+		status.ReceiptStatus != "UNVERIFIED" ||
+		status.ReadyToSignStatus != "READY_TO_SIGN_AFTER_RESIDUAL_CLOSURE" ||
+		requireSchemaWikiHash(
+			"schema-wiki-golden-successor-status.v1", status,
+			"status_sha256", status.StatusSHA256,
+		) != nil {
+		return ErrSchemaWikiContractInvalid
+	}
+	return nil
+}
+
+// ParseSchemaWikiGoldenSuccessorStatusV1 strictly admits only canonical JSON
+// (with an optional final newline for cross-language fixtures).
+func ParseSchemaWikiGoldenSuccessorStatusV1(
+	raw []byte,
+) (SchemaWikiGoldenSuccessorStatusV1, error) {
+	var status SchemaWikiGoldenSuccessorStatusV1
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&status); err != nil {
+		return status, ErrSchemaWikiContractInvalid
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return status, ErrSchemaWikiContractInvalid
+	}
+	canonical, err := schemaWikiCanonicalJSON(status)
+	canonicalWithNewline := append(append([]byte(nil), canonical...), '\n')
+	if err != nil || (!bytes.Equal(raw, canonical) && !bytes.Equal(raw, canonicalWithNewline)) ||
+		ValidateSchemaWikiGoldenSuccessorStatusV1(status) != nil {
+		return status, ErrSchemaWikiContractInvalid
+	}
+	return status, nil
 }
 
 func ComputeSchemaWikiGoldenEvidencePreviewAuthoritySHA256(

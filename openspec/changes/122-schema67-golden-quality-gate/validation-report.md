@@ -60,6 +60,18 @@ IDs from stored JoinReceipts. The current 51/16 mapping remains admission-blocke
 receipt-unverified, so it is explicitly unavailable to Draft/review routes and causes
 repository writes `0`; its source Review nevertheless remains completed.
 
+The distinct `golden-quality/successor-status` route now exposes only that current
+three-layer state from a deployment-owned canonical provider. Its DTO binds the exact
+596-1 scope and artifact hashes, `linyao`/`claude-fable-5` provenance separation, nullable
+original review time, attestor event, ordered 51/16 mapping gap and unverified admission
+block. Missing provider configuration is typed unavailable. It contains no field values,
+Evidence, PASS claim, signature or release action and performs no repository write.
+
+Formal Dossier V2 factory provenance remains
+`WAITING_FOR_CONCRETE_VERIFIED_WHOLE_BATCH_RECEIPT`. A literal `VERIFIED` label or bare
+receipt digest is not elevated to trusted approval; the current Dossier V2 wire/vector and
+its residual-zero admission rules remain unchanged.
+
 ## Validation gates
 
 - Focused Python evaluator/release/contracts: PASS.
@@ -82,6 +94,9 @@ repository writes `0`; its source Review nevertheless remains completed.
   preparation JSONB replay, non-PASS repository calls `0`, named-human dossier access,
   server-selected Evidence and token-only bytes.
 - Review-surface Ruff, strict mypy and Go vet: PASS.
+- Successor-status closed DTO/provider/service/handler/router/config/container focused
+  tests: PASS; unknown/trailing/noncanonical, hash/status/count/order/scope drift and
+  API-key/Viewer access fail closed.
 - Review-surface frontend tests, database writes and live HTTP calls: `NOT RUN`.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`

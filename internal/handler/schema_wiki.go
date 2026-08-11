@@ -148,6 +148,11 @@ type schemaWikiHTTPService interface {
 		string,
 		string,
 	) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error)
+	ReadSchemaWikiGoldenSuccessorStatus(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+	) (*types.SchemaWikiGoldenSuccessorStatusV1, error)
 }
 
 // SchemaWikiHandler exposes the bounded Schema Wiki HTTP facade. Release and
@@ -702,6 +707,28 @@ func (h *SchemaWikiHandler) ReadPreparationGoldenQualityDossier(c *gin.Context) 
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": dossier})
 }
 
+// ReadGoldenSuccessorStatus exposes only the deployment-frozen, non-serving
+// source-review/mapping/admission status. It accepts no caller payload.
+func (h *SchemaWikiHandler) ReadGoldenSuccessorStatus(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrNoGoldenSuccessorStatus)
+		return
+	}
+	status, err := h.schemaService.ReadSchemaWikiGoldenSuccessorStatus(
+		c.Request.Context(), principal, scope,
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": status})
+}
+
 func (h *SchemaWikiHandler) PreviewPreparationGoldenEvidence(c *gin.Context) {
 	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
 	if err != nil {
@@ -850,6 +877,13 @@ func writeSchemaWikiError(c *gin.Context, err error) {
 	case stderrors.Is(err, service.ErrNoSchemaWikiActiveRelease):
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false, "error": gin.H{"message": "no schema wiki active release"},
+		})
+	case stderrors.Is(err, service.ErrNoGoldenSuccessorStatus):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code": "NO_GOLDEN_SUCCESSOR_STATUS", "message": "golden successor status unavailable",
+			},
 		})
 	default:
 		writeWikiReleaseError(c, err)

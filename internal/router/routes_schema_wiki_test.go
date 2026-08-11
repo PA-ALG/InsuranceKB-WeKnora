@@ -129,6 +129,20 @@ func newSchemaWikiScopeRouteEngine(
 	events *[]string,
 	accessMiddleware schemaWikiReleaseAccessMiddleware,
 ) *gin.Engine {
+	return newSchemaWikiScopeRouteEngineWithRole(
+		t, resolver, apiKeyScope, kbs, events, accessMiddleware, types.TenantRoleViewer,
+	)
+}
+
+func newSchemaWikiScopeRouteEngineWithRole(
+	t *testing.T,
+	resolver *schemaWikiRouteScopeResolver,
+	apiKeyScope *types.TenantAPIKeyScope,
+	kbs map[string]*types.KnowledgeBase,
+	events *[]string,
+	accessMiddleware schemaWikiReleaseAccessMiddleware,
+	role types.TenantRole,
+) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	enabled := true
@@ -146,7 +160,7 @@ func newSchemaWikiScopeRouteEngine(
 	engine.Use(func(c *gin.Context) {
 		principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
 		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
-		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleViewer)
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, role)
 		ctx = types.WithPrincipal(ctx, principal)
 		if apiKeyScope != nil {
 			ctx = types.WithTenantAPIKeyScope(ctx, *apiKeyScope)
@@ -166,6 +180,38 @@ func newSchemaWikiScopeRouteEngine(
 	}
 	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), schemaHandler, accessMiddleware, guards)
 	return engine
+}
+
+func TestSchemaWikiGoldenSuccessorStatusUsesExactHumanDualACLSealOrder(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngineWithRole(
+		t,
+		&schemaWikiRouteScopeResolver{},
+		nil,
+		map[string]*types.KnowledgeBase{
+			"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+			"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+		},
+		&events,
+		access,
+		types.TenantRoleAdmin,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/golden-quality/successor-status",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "NO_GOLDEN_SUCCESSOR_STATUS")
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+	require.Equal(t, 1, access.sealCalls)
 }
 
 func TestSchemaWikiScopeBootstrapRequiresWikiThenDerivedRawACL(t *testing.T) {
@@ -291,16 +337,25 @@ func TestSchemaWikiHumanRoutesDenyMachineAndViewerBeforeScopeOrSeal(t *testing.T
 				"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
 			}, &events, access)
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(
-				http.MethodPost,
-				"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/review",
-				nil,
-			)
-			engine.ServeHTTP(recorder, request)
-			require.Equal(t, http.StatusForbidden, recorder.Code)
-			require.Zero(t, resolver.preparationCalls)
-			require.Zero(t, access.sealCalls)
-			require.Empty(t, events)
+			for _, request := range []*http.Request{
+				httptest.NewRequest(
+					http.MethodPost,
+					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/review",
+					nil,
+				),
+				httptest.NewRequest(
+					http.MethodGet,
+					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-kb-596-1/schema/golden-quality/successor-status",
+					nil,
+				),
+			} {
+				recorder = httptest.NewRecorder()
+				engine.ServeHTTP(recorder, request)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Zero(t, resolver.preparationCalls)
+				require.Zero(t, access.sealCalls)
+				require.Empty(t, events)
+			}
 		})
 	}
 }
@@ -350,6 +405,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/domains"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/review"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/golden-quality/successor-status"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/taxonomy/current"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/entities/:entity_id/versions/:version_id/current"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/releases/:release_id/root"])

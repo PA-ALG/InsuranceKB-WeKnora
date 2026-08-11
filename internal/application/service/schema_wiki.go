@@ -28,6 +28,7 @@ var (
 	ErrSchemaWikiCitationUnavailable     = errors.New("schema wiki citation unavailable")
 	ErrSchemaWikiCitationPageUnavailable = errors.New("schema wiki citation page unavailable")
 	ErrNoSchemaWikiActiveRelease         = errors.New("no schema wiki active release")
+	ErrNoGoldenSuccessorStatus           = errors.New("no golden successor status")
 )
 
 type CitationRevisionReadRequestV1 struct {
@@ -72,9 +73,10 @@ type SchemaWikiCitationContentPort interface {
 }
 
 type SchemaWikiService struct {
-	releaseAuthority *WikiReleaseService
-	citationPort     CitationRevisionReadPort
-	citationContent  SchemaWikiCitationContentPort
+	releaseAuthority      *WikiReleaseService
+	citationPort          CitationRevisionReadPort
+	citationContent       SchemaWikiCitationContentPort
+	goldenSuccessorStatus SchemaWikiGoldenSuccessorStatusProvider
 }
 
 type schemaWikiPreparationCustodyV1 struct {
@@ -104,6 +106,21 @@ func NewSchemaWikiService(
 	if len(citationContent) == 1 {
 		service.citationContent = citationContent[0]
 	}
+	return service
+}
+
+// NewSchemaWikiServiceWithGoldenSuccessorStatus is the production composition
+// seam for the deployment-owned, non-serving 596-1 successor status. The
+// existing constructor remains unchanged for callers that intentionally run
+// with this status unavailable.
+func NewSchemaWikiServiceWithGoldenSuccessorStatus(
+	releaseAuthority *WikiReleaseService,
+	citationPort CitationRevisionReadPort,
+	citationContent SchemaWikiCitationContentPort,
+	statusProvider SchemaWikiGoldenSuccessorStatusProvider,
+) *SchemaWikiService {
+	service := NewSchemaWikiService(releaseAuthority, citationPort, citationContent)
+	service.goldenSuccessorStatus = statusProvider
 	return service
 }
 

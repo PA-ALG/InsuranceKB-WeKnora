@@ -255,7 +255,19 @@ func BuildContainer(container *dig.Container) *dig.Container {
 			service.NewSchemaWikiRevisionBlobReader(knowledgeRepository, fileService),
 			codec,
 		)
-		return service.NewSchemaWikiService(releaseAuthority, citationPort, content), nil
+		statusRaw, err := config.DecodeSchemaWikiGoldenSuccessorStatus(cfg)
+		if err != nil {
+			return nil, err
+		}
+		statusProvider, err := service.NewCanonicalSchemaWikiGoldenSuccessorStatusProvider(
+			statusRaw,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return service.NewSchemaWikiServiceWithGoldenSuccessorStatus(
+			releaseAuthority, citationPort, content, statusProvider,
+		), nil
 	}))
 	must(container.Provide(service.NewEmbedChannelService))
 

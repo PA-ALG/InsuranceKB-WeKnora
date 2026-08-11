@@ -331,3 +331,56 @@ authorization and `ActivateReviewed` remain the only state-changing DAG.
   preparation custody
 - **THEN** the read returns a fixed typed error with no dossier, token, bytes or release
   state change and no fallback is attempted
+
+### Requirement: SGQ10 current reviewed-source status is separate from formal PASS custody
+
+The private Schema review surface SHALL add exactly one independent read-only route:
+
+- `GET .../golden-quality/successor-status`.
+
+The route SHALL return a closed `SchemaWikiGoldenSuccessorStatusV1`. It SHALL bind the
+exact tenant, space, RAW KB, Wiki KB, product version and SchemaPack identities; the
+Golden-set, Schema67 mapping, successor-file and review-attestation hashes; the source
+Review state `COMPLETED` with `reviewed_by=linyao`, `annotator_model_id=claude-fable-5`
+and nullable `reviewed_at`; the distinct attestor and attestation creation time; the
+mapping state `PARTIAL_51_CLOSED_16_RESIDUAL` with counts `51/16` and the exact ordered
+16 residual field IDs; and Golden admission
+`BLOCKED_RESIDUALS_AND_RECEIPT_UNVERIFIED` with receipt state `UNVERIFIED` and
+`READY_TO_SIGN`. A status self-hash SHALL cover every preceding field.
+
+The status SHALL contain no field value, Evidence, metric or PASS assertion, signature,
+opaque token, path, key material, approval action, Draft identity, release Head or serving
+effect. It SHALL NOT satisfy or weaken `SchemaWikiGoldenQualityDossierV2`, whose formal
+67/0, known-review-time and VERIFIED-receipt requirements remain unchanged.
+
+The sole production authority SHALL be deployment-owned canonical JSON plus its exact
+SHA-256. Startup/injection SHALL closed-decode with EOF, reject unknown/trailing or
+noncanonical bytes, verify the external artifact SHA and status self-hash, and freeze an
+immutable provider. Nil, empty or unconfigured authority SHALL return the fixed typed
+`NO_GOLDEN_SUCCESSOR_STATUS`; request body/query/path data SHALL NOT provide or override
+status or hashes and the server SHALL NOT read a caller filesystem path.
+
+The route SHALL deny API keys and require a human JWT Admin/Owner, then traverse the
+existing Wiki ACL/evidence -> RAW ACL/evidence -> release-seal chain. The service SHALL
+independently require trusted Admin/Owner context and exact-compare the provider's tenant,
+space, RAW and Wiki scope before output. It SHALL perform no preparation, Draft, Head,
+repository, database or release-state write.
+
+#### Scenario: current 51/16 status is requested
+
+- **WHEN** a human Admin/Owner presents the exact sealed Wiki/RAW scope and deployment
+  authority is configured
+- **THEN** the closed status is returned without a PASS dossier or any state change
+
+#### Scenario: status authority is absent or substituted
+
+- **WHEN** deployment authority is nil, or any hash/status/count/residual/scope byte is
+  changed, removed, reordered, extended or self-rehashed outside the frozen authority
+- **THEN** the route returns a fixed typed unavailable/invalid response with no status,
+  repository call, Draft, Head or release write
+
+#### Scenario: untrusted principal requests current status
+
+- **WHEN** an API key, Viewer, Contributor or foreign scope requests the status
+- **THEN** authorization or exact-scope validation fails closed and no private status is
+  returned

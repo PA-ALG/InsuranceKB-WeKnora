@@ -52,6 +52,17 @@ type schemaWikiHTTPServiceSpy struct {
 	goldenSummary         *types.SchemaWikiGoldenQualitySummaryV1
 	goldenPrivate         *types.SchemaWikiGoldenQualityDossierV2
 	goldenPreview         *types.SchemaWikiGoldenEvidencePreviewAuthorityV1
+	goldenSuccessorCalls  int
+	goldenSuccessor       *types.SchemaWikiGoldenSuccessorStatusV1
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaWikiGoldenSuccessorStatus(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+) (*types.SchemaWikiGoldenSuccessorStatusV1, error) {
+	s.goldenSuccessorCalls++
+	return s.goldenSuccessor, nil
 }
 
 func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualitySummary(

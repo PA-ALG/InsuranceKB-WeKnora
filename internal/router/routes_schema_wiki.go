@@ -88,6 +88,13 @@ func RegisterSchemaWikiRoutes(
 		access.RecordRawAccessEvidence(),
 		access.SealAccess(),
 	)
+	humanStatusGuards := append(append([]gin.HandlerFunc(nil), humanPrefix...),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+	)
 	human.POST(
 		"/preparations",
 		append(append([]gin.HandlerFunc(nil), humanCreateGuards...), schemaHandler.CreateDraft)...,
@@ -113,6 +120,10 @@ func RegisterSchemaWikiRoutes(
 	humanGET(
 		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview",
 		schemaHandler.PreviewPreparationGoldenEvidence,
+	)
+	human.GET(
+		"/golden-quality/successor-status",
+		append(append([]gin.HandlerFunc(nil), humanStatusGuards...), schemaHandler.ReadGoldenSuccessorStatus)...,
 	)
 }
 
