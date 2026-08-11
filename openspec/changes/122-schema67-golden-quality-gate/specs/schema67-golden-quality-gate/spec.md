@@ -413,6 +413,12 @@ evaluation bundle, receipt, review successor and Dossier identities and SHALL fr
 all complete67 joins; reparsed/self-built/foreign/cross-pair objects or Evidence-change
 drift SHALL fail closed.
 
+The verifier object SHALL itself be an opaque capability registered only by deployment
+composition. Its class SHALL NOT be a public export, no module construction token SHALL be
+obtainable, and direct construction SHALL reject. Even if a caller bypasses the constructor
+and installs a self-controlled public key in a forged object, object-identity validation
+SHALL fail before evaluation lookup, receipt registration or review-successor registration.
+
 This requirement SHALL NOT change the Dossier V2 wire or its frozen vector. The current
 complete67 status remains receipt `UNVERIFIED`; until a real concrete receipt is supplied,
 formal evaluation admission and Draft calls remain zero.
@@ -429,3 +435,10 @@ formal evaluation admission and Draft calls remain zero.
 - **WHEN** the deployment has only the frozen complete67 status with
   `receipt_status=UNVERIFIED`
 - **THEN** no formal Dossier provenance, evaluator admission or Draft is created
+
+#### Scenario: caller constructs a verifier with a self-controlled key
+
+- **WHEN** a caller directly constructs or forges the verifier and signs an otherwise
+  complete receipt with its own key
+- **THEN** `CALLER_KEY_INJECTION_ACCEPTED=false` and evaluation/receipt/successor registry
+  calls are all zero

@@ -77,3 +77,6 @@ table, signer or serving authority. It performs no provider, Golden generation/s
 database, WeKnora, migration, Draft, review, activation or deployment action. No business
 receipt is fabricated: the current complete67 authority remains `UNVERIFIED`, and the
 formal Dossier V2 wire and frozen vector remain unchanged.
+The verifier capability itself is identity-registered only by deployment composition.
+There is no obtainable construction token or public authority-class export; a directly
+constructed or forged verifier fails before evaluation or provenance registries.

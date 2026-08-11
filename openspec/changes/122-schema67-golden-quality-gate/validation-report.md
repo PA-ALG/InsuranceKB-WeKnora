@@ -79,6 +79,14 @@ verify one frozen cross-language receipt vector. A literal `VERIFIED` label or b
 is still not approval, no business receipt was created, and the current Dossier V2
 wire/vector and residual-zero admission rules remain unchanged.
 
+The superseded authority allowed a caller to recover its module construction token,
+construct the exported verifier with a caller key map and register a self-signed receipt.
+The corrective removes both token and public export, makes direct construction reject, and
+requires the exact verifier object identity registered by deployment composition before
+subject replay or any evaluation/receipt/successor registry access. The original attack,
+including an `object.__new__` construction bypass, now yields
+`CALLER_KEY_INJECTION_ACCEPTED=False` and all three downstream call counts remain zero.
+
 ## Validation gates
 
 - Focused Python evaluator/release/contracts: PASS.

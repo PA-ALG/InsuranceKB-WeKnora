@@ -1284,29 +1284,20 @@ def schema67_golden_dossier_review_subject_preimage_596_1(
         raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID") from None
 
 
-_GOLDEN_DOSSIER_AUTHORITY_TOKEN: Final[object] = object()
-
-
 class Schema67GoldenDossierReviewAuthority:
     """Sealed verifier composed from deployment-owned human public keys."""
 
-    __slots__ = ("_keys", "_now_epoch", "_sealed")
+    __slots__ = ("_keys", "_now_epoch", "_sealed", "__weakref__")
     _keys: Mapping[str, Ed25519PublicKey]
     _now_epoch: int
     _sealed: bool
 
     def __init__(
         self,
-        construction_token: object,
-        keys: Mapping[str, Ed25519PublicKey],
-        *,
-        now_epoch: int,
+        *_args: object,
+        **_kwargs: object,
     ) -> None:
-        if construction_token is not _GOLDEN_DOSSIER_AUTHORITY_TOKEN or not keys:
-            raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
-        object.__setattr__(self, "_keys", MappingProxyType(dict(keys)))
-        object.__setattr__(self, "_now_epoch", now_epoch)
-        object.__setattr__(self, "_sealed", True)
+        raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
 
     def __setattr__(self, name: str, value: object) -> None:
         if getattr(self, "_sealed", False):
@@ -1333,6 +1324,7 @@ class Schema67GoldenDossierReviewAuthority:
         preparation_id: str,
     ) -> HumanBatchDecisionReceiptV1:
         try:
+            _require_deployment_dossier_review_authority(self)
             fresh = HumanBatchDecisionReceiptV1.model_validate(receipt.model_dump(mode="python"))
             preimage = schema67_golden_dossier_review_subject_preimage_596_1(
                 result=result,
@@ -1398,6 +1390,28 @@ class Schema67GoldenDossierReviewAuthority:
             raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_RECEIPT_INVALID") from None
 
 
+_DEPLOYMENT_DOSSIER_AUTHORITY_LOCK = threading.Lock()
+_DEPLOYMENT_DOSSIER_AUTHORITIES: weakref.WeakValueDictionary[
+    int, Schema67GoldenDossierReviewAuthority
+] = weakref.WeakValueDictionary()
+
+
+def _register_deployment_dossier_review_authority(
+    authority: Schema67GoldenDossierReviewAuthority,
+) -> None:
+    with _DEPLOYMENT_DOSSIER_AUTHORITY_LOCK:
+        _DEPLOYMENT_DOSSIER_AUTHORITIES[id(authority)] = authority
+
+
+def _require_deployment_dossier_review_authority(
+    authority: Schema67GoldenDossierReviewAuthority,
+) -> None:
+    with _DEPLOYMENT_DOSSIER_AUTHORITY_LOCK:
+        registered = _DEPLOYMENT_DOSSIER_AUTHORITIES.get(id(authority))
+    if registered is not authority:
+        raise Schema67GoldenQualityGateError("GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE")
+
+
 def compose_schema67_golden_dossier_review_authority_596_1(
     *, now_epoch: int
 ) -> Schema67GoldenDossierReviewAuthority:
@@ -1414,11 +1428,12 @@ def compose_schema67_golden_dossier_review_authority_596_1(
                 raise ValueError("duplicate human decision authority")
             keys[key_id] = Ed25519PublicKey.from_public_bytes(material)
             material_seen.add(material)
-        return Schema67GoldenDossierReviewAuthority(
-            _GOLDEN_DOSSIER_AUTHORITY_TOKEN,
-            keys,
-            now_epoch=now_epoch,
-        )
+        authority = object.__new__(Schema67GoldenDossierReviewAuthority)
+        object.__setattr__(authority, "_keys", MappingProxyType(dict(keys)))
+        object.__setattr__(authority, "_now_epoch", now_epoch)
+        object.__setattr__(authority, "_sealed", True)
+        _register_deployment_dossier_review_authority(authority)
+        return authority
     except (Schema67GoldenQualityGateError, ValidationError, TypeError, ValueError):
         raise Schema67GoldenQualityGateError(
             "GOLDEN_DOSSIER_REVIEW_AUTHORITY_UNAVAILABLE"
@@ -2566,7 +2581,6 @@ __all__ = [
     "Schema67GoldenQualityGateError",
     "Schema67GoldenQualityEvaluatorAuthority",
     "Schema67GoldenQualityEvaluatorSigningCredentialSource",
-    "Schema67GoldenDossierReviewAuthority",
     "Schema67GoldenSet5961V1",
     "SchemaWikiGoldenQualityDossierV2",
     "compose_schema67_golden_quality_evaluator_authority_596_1",

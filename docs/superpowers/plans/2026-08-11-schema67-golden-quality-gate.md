@@ -324,6 +324,11 @@ any formal review-successor or Dossier provenance registration. Registration is
 identity-bound and fresh replay rejects reparsed, self-built, foreign, cross-pair and
 nested Evidence-change substitutions.
 
+Deployment composition also registers the verifier object as an opaque capability. The
+module exports neither the authority class nor a construction token; direct construction
+rejects, and a forged object with caller key material fails the identity check before any
+evaluation, receipt or successor registry access.
+
 This seam does not sign a business receipt and does not change the Dossier V2 wire or
 vector. Test fixtures use test-only keys solely to prove Python/Go canonical compatibility.
 The current complete67 authority remains `UNVERIFIED`; its historical `reviewed_at` stays

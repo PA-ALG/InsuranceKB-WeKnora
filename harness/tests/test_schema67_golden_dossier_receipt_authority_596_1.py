@@ -11,6 +11,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
+from insurance_harness.goldenset import schema67_golden_quality_gate_596_1 as quality_gate
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     GOLDEN_DOSSIER_REVIEW_POLICY_SHA256,
     HumanBatchDecisionReceiptV1,
@@ -80,7 +81,17 @@ def _inputs():
     return candidate, evidence_authority, golden, result, evaluation
 
 
-def _signed_receipt(*, candidate, evidence_authority, golden, result, evaluation, **updates):
+def _signed_receipt(
+    *,
+    candidate,
+    evidence_authority,
+    golden,
+    result,
+    evaluation,
+    signing_key: Ed25519PrivateKey = _RECEIPT_KEY,
+    signer_key_id: str = _RECEIPT_KEY_ID,
+    **updates,
+):
     subject_preimage = schema67_golden_dossier_review_subject_preimage_596_1(
         result=result,
         evaluation=evaluation,
@@ -112,13 +123,13 @@ def _signed_receipt(*, candidate, evidence_authority, golden, result, evaluation
         "issued_at": _ISSUED_AT,
         "expires_at": _EXPIRES_AT,
         "nonce": "schema67-golden-dossier-review-596-1",
-        "signer_key_id": _RECEIPT_KEY_ID,
+        "signer_key_id": signer_key_id,
     }
     payload.update(updates)
     unsigned = HumanBatchDecisionReceiptV1.model_construct(**payload, signature="")
     signature = (
         base64.urlsafe_b64encode(
-            _RECEIPT_KEY.sign(canonical_human_batch_decision_receipt_v1(unsigned, False))
+            signing_key.sign(canonical_human_batch_decision_receipt_v1(unsigned, False))
         )
         .rstrip(b"=")
         .decode("ascii")
@@ -425,13 +436,126 @@ def test_deployment_human_key_ring_is_required_and_caller_cannot_inject_keys(
             json.dumps(configured),
         )
         with pytest.raises(Schema67GoldenQualityGateError):
-            compose_schema67_golden_dossier_review_authority_596_1(
-                now_epoch=_ISSUED_AT + 1
-            )
+            compose_schema67_golden_dossier_review_authority_596_1(now_epoch=_ISSUED_AT + 1)
 
     assert tuple(
         inspect.signature(compose_schema67_golden_dossier_review_authority_596_1).parameters
     ) == ("now_epoch",)
+
+
+def test_caller_constructed_authority_cannot_register_self_signed_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate, evidence, golden, result, evaluation = _inputs()
+    attacker_key = Ed25519PrivateKey.from_private_bytes(b"a" * 32)
+    attacker_key_id = "caller-controlled-key"
+    receipt = _signed_receipt(
+        candidate=candidate,
+        evidence_authority=evidence,
+        golden=golden,
+        result=result,
+        evaluation=evaluation,
+        signing_key=attacker_key,
+        signer_key_id=attacker_key_id,
+    )
+    receipt_registry_calls = 0
+    successor_registry_calls = 0
+    evaluation_registry_calls = 0
+    original_receipt_register = quality_gate._register_verified_dossier_receipt
+    original_successor_register = quality_gate._register_review_successor
+    original_evaluation_require = quality_gate._require_registered_evaluation_bundle
+
+    def count_receipt_registration(*args, **kwargs):
+        nonlocal receipt_registry_calls
+        receipt_registry_calls += 1
+        return original_receipt_register(*args, **kwargs)
+
+    def count_successor_registration(*args, **kwargs):
+        nonlocal successor_registry_calls
+        successor_registry_calls += 1
+        return original_successor_register(*args, **kwargs)
+
+    def count_evaluation_registry(*args, **kwargs):
+        nonlocal evaluation_registry_calls
+        evaluation_registry_calls += 1
+        return original_evaluation_require(*args, **kwargs)
+
+    monkeypatch.setattr(
+        quality_gate,
+        "_register_verified_dossier_receipt",
+        count_receipt_registration,
+    )
+    monkeypatch.setattr(
+        quality_gate,
+        "_register_review_successor",
+        count_successor_registration,
+    )
+    monkeypatch.setattr(
+        quality_gate,
+        "_require_registered_evaluation_bundle",
+        count_evaluation_registry,
+    )
+    assert not hasattr(quality_gate, "_GOLDEN_DOSSIER_AUTHORITY_TOKEN")
+    assert "Schema67GoldenDossierReviewAuthority" not in quality_gate.__all__
+    with pytest.raises(Schema67GoldenQualityGateError):
+        quality_gate.Schema67GoldenDossierReviewAuthority(
+            object(),
+            {attacker_key_id: attacker_key.public_key()},
+            now_epoch=_ISSUED_AT + 1,
+        )
+    caller_authority = object.__new__(quality_gate.Schema67GoldenDossierReviewAuthority)
+    object.__setattr__(
+        caller_authority,
+        "_keys",
+        {attacker_key_id: attacker_key.public_key()},
+    )
+    object.__setattr__(caller_authority, "_now_epoch", _ISSUED_AT + 1)
+    object.__setattr__(caller_authority, "_sealed", True)
+
+    caller_key_injection_accepted = True
+    try:
+        caller_authority.verify_dossier_receipt(
+            receipt=receipt,
+            result=result,
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence,
+            golden=golden,
+            mapping_sha256=_MAPPING_SHA256,
+            golden_artifact_sha256=_GOLDEN_ARTIFACT_SHA256,
+            status_vector_sha256=_STATUS_VECTOR_SHA256,
+            attestation_sha256=_ATTESTATION_SHA256,
+            annotator_model_id="claude-fable-5",
+            annotation_receipt_sha256=_ANNOTATION_RECEIPT_SHA256,
+            reviewed_by="linyao",
+            reviewed_at=_REVIEWED_AT,
+            preparation_id=_PREPARATION_ID,
+        )
+    except Schema67GoldenQualityGateError:
+        caller_key_injection_accepted = False
+
+    assert caller_key_injection_accepted is False
+    assert receipt_registry_calls == 0
+    assert successor_registry_calls == 0
+    assert evaluation_registry_calls == 0
+    with pytest.raises(Schema67GoldenQualityGateError):
+        make_schema67_golden_review_successor_metadata_596_1(
+            evaluation=evaluation,
+            candidate=candidate,
+            evidence_authority=evidence,
+            golden=golden,
+            annotator_model_id="claude-fable-5",
+            annotation_receipt_sha256=_ANNOTATION_RECEIPT_SHA256,
+            reviewed_by="linyao",
+            reviewed_at=_REVIEWED_AT,
+            human_decision_receipt=receipt,
+            mapping_sha256=_MAPPING_SHA256,
+            golden_artifact_sha256=_GOLDEN_ARTIFACT_SHA256,
+            status_vector_sha256=_STATUS_VECTOR_SHA256,
+            attestation_sha256=_ATTESTATION_SHA256,
+            preparation_id=_PREPARATION_ID,
+        )
+    assert successor_registry_calls == 0
 
 
 @pytest.mark.parametrize(

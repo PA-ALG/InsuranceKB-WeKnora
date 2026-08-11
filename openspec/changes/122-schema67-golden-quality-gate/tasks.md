@@ -103,6 +103,9 @@
   human public-key ring to verify one domain-separated Golden-Dossier subject before
   registering formal review-successor or Dossier V2 provenance. Reject nil/unknown keys,
   reparsed/self-built objects, cross-pairs and nested Evidence-change drift.
+- [x] Register the verifier capability only during deployment composition. Remove the
+  obtainable construction token/public class export and reject direct/forged authority
+  identities with evaluation, receipt and successor registry calls fixed at zero.
 - [ ] `WAITING_FOR_REAL_CONCRETE_WHOLE_BATCH_RECEIPT`: no business receipt has been signed
   or supplied. The current complete67 authority stays `UNVERIFIED`, evaluator/Draft calls
   remain zero, and receipt issuance time SHALL NOT backfill historical `reviewed_at`.
