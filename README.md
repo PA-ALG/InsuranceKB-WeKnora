@@ -46,7 +46,8 @@
 
 插件边界与历史架构背景见
 [`docs/insurance-kb/02-architecture.md`](docs/insurance-kb/02-architecture.md)，
-当前执行裁决以本页顶部列出的 ADR、Amendment 2 与适用 OpenSpec 为准。
+这些链接只提供上下文；当前执行入口与阅读顺序仅以 [`AGENTS.md`](AGENTS.md)
+为准。
 [`13-blueprint-status.md`](docs/insurance-kb/13-blueprint-status.md) 只作历史建设账本。
 
 ## 快速开始

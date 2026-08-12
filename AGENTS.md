@@ -75,7 +75,8 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 `DELIVERY` 必须再拆成以下六个互不替代的观测维度，每个维度只允许
 `PASS | BLOCKED | NOT RUN`，并绑定自己的 identity/receipt：
 
-1. `software/CI`：源码、测试和 CI 结果；不得推导镜像或 live 状态。
+1. `software`：源码、local build 与 bounded tests；不得包含远端 CI，也不得推导
+   镜像或 live 状态。
 2. `container health`：exact image/container 的进程与健康；不得由 CI 或宿主端口推导。
 3. `provider probe`：exact provider/model/endpoint 的受控调用；provider-zero 只能记
    `NOT RUN`，不得推导语义效果。
@@ -83,8 +84,8 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
    存在实现不等于已 provision。
 5. `local live`：本地/Colima exact runtime 的实时观察；runtime 停止只能记
    `NOT RUN`，不得写成应用失败。
-6. `GitHub live`：GitHub Actions、environment/deployment 与远端回执；本地 GREEN
-   不得推导 GitHub live，GitHub CI 也不得推导本地 live。
+6. `GitHub live`：GitHub Actions CI、environment/deployment 与远端回执；本地
+   software GREEN 不得推导 GitHub live，GitHub CI 也不得推导本地 live。
 
 六个维度之间禁止横向推断；只有各自证据才能改变该维度状态。
 
