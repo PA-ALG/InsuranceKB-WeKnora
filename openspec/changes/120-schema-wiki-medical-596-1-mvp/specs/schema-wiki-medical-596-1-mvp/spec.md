@@ -305,6 +305,18 @@ SHALL accept only the opaque token, reload the same pinned custody, and return b
 when their size and SHA-256 match. It SHALL NOT use current/latest, presigned/material
 bytes or page 1.
 
+The packaged enterprise migration chain SHALL apply
+`000004_knowledge_revision_sources` before
+`000005_knowledge_revision_source_binding`. Migration 000005 SHALL complete the immutable
+resource/object/manifest/binding custody used by the server replay; it SHALL NOT create a
+second release table, Head, CAS or generic blob platform.
+
+Preparation-bound citation preview SHALL derive its token authority from the immutable
+preparation custody and SHALL NOT require an Active Head. Active citation preview SHALL
+derive the same fields from the exact opaque Active Head pin. Preparation and Active token
+domains are not substitutable, and neither may fall back to current/latest, Material Wiki,
+presigned-current or page 1.
+
 #### Scenario: requested page is outside the immutable source
 
 - **WHEN** the citation requests page 12 or 27 for a two-page rate source
@@ -315,6 +327,14 @@ bytes or page 1.
 
 - **WHEN** the token is valid but the reloaded byte size or SHA-256 differs
 - **THEN** the request fails closed before any PDF page or bbox is returned
+
+#### Scenario: a pinned source is reparsed, moved by reparse or deleted
+
+- **WHEN** any direct/batch reparse, move-with-reparse, single delete or batch delete path
+  encounters an existing pinned revision source
+- **THEN** it returns `KNOWLEDGE_REVISION_SOURCE_PINNED` before attempt allocation,
+  cleanup, enqueue, move or deletion; the immutable source and prior chunks/manifests remain
+  unchanged
 
 ### Requirement: SWM9A exact3 dry-run is one honest database snapshot
 
@@ -356,6 +376,12 @@ produced no Candidate SHALL NOT be reused or represented as acceptance.
 - **WHEN** the live preflight finds no deployed `wiki_release_*` tables
 - **THEN** implementation tests may continue offline but real preparation and activation
   remain blocked without creating a Mission-local migration
+
+#### Scenario: local runtime is stopped
+
+- **WHEN** Colima or the local runtime is stopped and no current health observation exists
+- **THEN** live state is recorded as unknown/`NOT RUN`, not as application failure or
+  deployment success
 
 ### Requirement: SWM11 lane ownership is closed world
 

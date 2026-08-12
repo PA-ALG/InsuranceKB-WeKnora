@@ -112,7 +112,8 @@ Immutable citation-source and token integration paths:
   plus `internal/config/schema_wiki_citation_token_signing_test.go`, for the third,
   citation-token-only Ed25519 ring and token-bound immutable bytes.
 - `internal/database/enterprise_migration.go`,
-  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql` and
+  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql`,
+  `migrations/enterprise/versioned/000005_knowledge_revision_source_binding.{up,down}.sql` and
   `migrations/versioned/knowledge_revision_manifest_test.go` for the narrow source-custody
   migration only; these paths add no Release table, Head or CAS.
 
@@ -295,13 +296,15 @@ Pre-review Candidate/manifest review remains Lane B dossier custody. The shared 
 
 **Files:** Lane B OpenSpec/registry paths only.
 
-- [ ] Add registry row `120-schema-wiki-medical-596-1-mvp` with status `plan-approved / implementation-not-started`.
-- [ ] Specify the three-lane ownership matrix above and make path overlap a stopping condition.
-- [ ] Specify Candidate-only compilation, the exact medical pack, tri-state rules, exact citation custody, all-or-nothing preparation/activation, pinned reads and no generic fallback.
-- [ ] Specify current blockers separately from fixture-based implementation acceptance.
-- [ ] Run `openspec validate 120-schema-wiki-medical-596-1-mvp --strict` and record the initial missing-spec RED, then complete the four OpenSpec documents until GREEN.
-- [ ] Run `git diff --check -- openspec/changes/README.md openspec/changes/120-schema-wiki-medical-596-1-mvp`.
-- [ ] Commit only these five paths with `docs(120): specify Schema Wiki medical MVP` after plan approval.
+- [x] Register OpenSpec 120 at the initial `plan-approved / implementation-not-started`
+  phase; the current registry row is reconciled separately to `CODE-INTEGRATED /
+  LIVE-NOT-RUN`.
+- [x] Specify the three-lane ownership matrix above and make path overlap a stopping condition.
+- [x] Specify Candidate-only compilation, the exact medical pack, tri-state rules, exact citation custody, all-or-nothing preparation/activation, pinned reads and no generic fallback.
+- [x] Specify current blockers separately from fixture-based implementation acceptance.
+- [x] Run `openspec validate 120-schema-wiki-medical-596-1-mvp --strict` and record the initial missing-spec RED, then complete the four OpenSpec documents until GREEN.
+- [x] Run `git diff --check -- openspec/changes/README.md openspec/changes/120-schema-wiki-medical-596-1-mvp`.
+- [x] Commit only these five paths with `docs(120): specify Schema Wiki medical MVP` after plan approval.
 
 Expected RED: the change ID is absent. Expected GREEN: strict validation passes and no production path is changed.
 
@@ -521,3 +524,31 @@ or live citation-byte request has been run against this stack.
 ## Completion definition
 
 Code/tests passing is not the Goal terminal. The MVP is complete only when one real sealed Candidate for `596-1` is compiled, reviewed and atomically activated as the sole WeKnora Active Schema Release; the UI and Agent read the same pinned member digests; all 67 fields preserve tri-state semantics; formal citations replay exact revisions/pages/bboxes; and failure leaves the previous Active release intact. Until then, status remains implementation complete or blocked, never “Schema Wiki MVP complete.”
+
+## Governance reconciliation at merged main
+
+### Docs-only owner and phase SPEC
+
+- `SPEC-1 / unique entry`: `AGENTS.md`, pointer-only `CLAUDE.md`, `README.md` and
+  `openspec/changes/README.md`.
+- `SPEC-2 / OpenSpec 120`: its proposal, normative spec, tasks and validation report.
+- `SPEC-3 / OpenSpec 122`: its proposal, tasks and validation report; the existing
+  normative spec is read-only because its Requirement text already reflects COMPLETE67.
+- `SPEC-4 / contribution gate`: `.github/pull_request_template.md`.
+- `SPEC-5 / plan custody`: this plan file only.
+
+These thirteen paths are the complete docs-only owner set for this reconciliation. No
+production, migration, test, fixture, workflow or live-state path is authorized.
+
+`main@bee91696131efa3a3aa5ea1339557eaa68e63f0a` merges PR #121 with green CI. The
+packaged migration boundary is official head 75 plus enterprise head 5; the reviewed
+migration tree is `e8446dff` and route manifest is `ffa548b9`. Exact3 is code-closed as one
+`REPEATABLE READ READ ONLY` preflight snapshot followed, only after PASS, by fresh-rechecked
+strict serial sealing with partial-stop semantics.
+
+Delivery is still blocked/not run: no immutable `bee91696` image/SBOM/OCI proof, no three
+deployment public-key ID rings, no clone rehearsal/migration/backfill, and no real provider,
+Candidate, Draft, review, publish or activation. Colima is stopped, which makes live current
+state unknown; it is not evidence of application failure. OpenSpec 122 remains
+`COMPLETE_67` (51 preserved + 16 reviewed unknown, exact75) but semantic quality stays
+`INCONCLUSIVE` until a real official DeepSeek Candidate and formal Golden evaluation run.

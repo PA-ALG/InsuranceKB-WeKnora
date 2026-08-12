@@ -67,7 +67,7 @@
 | 你是谁 | 入口 |
 |---|---|
 | 想 5 分钟了解项目 | [`docs/insurance-kb/00-project-overview.md`](docs/insurance-kb/00-project-overview.md) |
-| 接手开发（人或 AI 会话） | [`HANDOFF.md`](HANDOFF.md) → 认领任务 → 对应 `openspec/changes/` 的 specs（AI 会话自动加载 `CLAUDE.md` 约定） |
+| 接手开发（人或 AI 会话） | 先读唯一必读/贡献规范 [`AGENTS.md`](AGENTS.md)，再按其阅读序列进入 [`HANDOFF.md`](HANDOFF.md) 与对应 OpenSpec |
 | 想懂知识模型/抽取原理 | docs 03 / 04 / 05 |
 | 排期与协作 | docs 16（Roadmap）/ 17（三人分工）/ 18（AI 协作机制） |
 | WeKnora 平台本身 | 上游文档 [`README_CN.md`](README_CN.md)（本 fork 保持零分岔跟随 [Tencent/WeKnora](https://github.com/Tencent/WeKnora)） |

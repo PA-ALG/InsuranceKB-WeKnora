@@ -1,5 +1,8 @@
 # OpenSpec Change 编号注册表（权威占号处）
 
+> **开发入口**：先读仓库唯一必读/贡献规范 [`AGENTS.md`](../../AGENTS.md)，再按
+> 其中 SDD 队列使用本注册表。本文只负责 OpenSpec/迁移占号与状态，不复制流程。
+>
 > **规则（2026-07-16 起生效）**：开新 change 或新 Alembic 迁移前，**先在本表占号**，与 change 目录同 PR 提交；两个 PR 抢同号时，以先合入 main 者为准，后者改号。
 > 背景：022 曾被两个独立 change 同时使用（见下），多轨并行后必须先占号再开工。
 
@@ -113,8 +116,8 @@
 | 107 | section-anchor-readiness-injection | ✅ 已整合并验证（PR #117） | section anchors 注入 103、Admission 与 087 链 |
 | 108 | legacy-fixture-marker-envelope-compatibility | ✅ 已整合并验证（PR #117） | 旧 fixture 显式携带 canonical envelope；生产 gate 不放宽 |
 | 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
-| 120 | schema-wiki-medical-596-1-mvp | plan-approved / implementation-not-started | 单一 Schema Wiki MVP：A 公共底座 → B sealed Candidate/医疗险 release → C pinned UI；禁止 generic fallback |
-| 122 | schema67-golden-quality-gate | plan-only / quality-inconclusive / implementation-not-started | 596-1 exact67 Canonical Golden、语义指标/阈值与 Candidate 后 Draft 前 fail-closed gate；旧 exact8 不重跑 |
+| 120 | schema-wiki-medical-596-1-mvp | CODE-INTEGRATED / LIVE-NOT-RUN | PR #121 已合入：A 公共底座 → B sealed Candidate/医疗险 release → C pinned UI、000004/000005 immutable revision source 与 exact3；禁止 generic fallback。部署/migration/backfill/provider/Candidate/Draft/publish/activate 未执行 |
+| 122 | schema67-golden-quality-gate | CODE-INTEGRATED / QUALITY-INCONCLUSIVE | `linyao` source Review COMPLETED；Schema67 `COMPLETE_67`（67/0，51保留+16合法 unknown）；provider-zero 仅 fixture，真实 DeepSeek Candidate/正式 Golden 评测未执行 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

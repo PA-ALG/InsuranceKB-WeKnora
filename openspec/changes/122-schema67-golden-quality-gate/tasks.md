@@ -68,6 +68,8 @@
   the old exact8 identity.
 - [ ] Evaluate the resulting Candidate once and STOP on any failed gate.
 - [ ] Only after PASS, continue the existing Draft → Review → Publish → Activate runbook.
+- [ ] Configure and verify the three distinct deployment public-key ID rings before any
+  formal evaluator/Draft flow; current unconfigured rings remain a deployment blocker.
 
 ## Task 6 · Preparation-pinned evaluation review surface
 
@@ -110,6 +112,14 @@
   or supplied. The current complete67 authority stays `UNVERIFIED`, evaluator/Draft calls
   remain zero, and receipt issuance time SHALL NOT backfill historical `reviewed_at`.
 
+## Requirement closure index
+
+The detailed `Requirement → implementation → test → commit → PASS|BLOCKED|NOT RUN`
+matrix is authoritative in `validation-report.md`. Tasks 1–4 and 6–7 close the bounded
+provider-zero/code contracts for SGQ1–SGQ11. Task 5 remains `NOT RUN`: there is no new real
+official DeepSeek Candidate or formal Golden evaluation, and no fixture result may advance
+Draft or business admission.
+
 ## Global STOP conditions
 
 - Evaluated model participates in its own Golden authority.
@@ -119,5 +129,7 @@
 - Any page/current/latest/bbox fallback is proposed.
 - Any provider-zero fixture or old failed execution is presented as semantic acceptance.
 - Any general evaluation platform, DB/migration or second release authority is required.
+- Any code/fixture/provider-zero PASS is represented as the real DeepSeek Candidate or
+  formal Golden evaluation.
 - Any evaluation surface exposes private field values in the summary, accepts caller
   revision authority, bypasses preparation scope/dual ACL, or changes release state.

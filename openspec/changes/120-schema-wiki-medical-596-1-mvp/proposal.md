@@ -74,8 +74,9 @@ wiring, or need for a second authority is a mandatory STOP and plan amendment.
   existing direct registration; `routes_knowledge.go` remains unchanged and is not a
   missing reachability path.
 - The narrow immutable-source/resource custody paths and
-  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql` listed
-  in the approved plan; these do not add a Release table, Head or approval model.
+  `migrations/enterprise/versioned/000004_knowledge_revision_sources.{up,down}.sql` and
+  `000005_knowledge_revision_source_binding.{up,down}.sql` listed in the approved plan;
+  these do not add a Release table, Head or approval model.
 
 ### Lane B only
 
@@ -253,3 +254,17 @@ No provider/model/Golden run, Candidate fabrication, generic Wiki migration, sec
 new release schema, migration, partial activation, generic CMS/search platform, benefits
 business content, page-1 fallback, current/latest preview substitution, live DB write or
 WeKnora deployment is authorized by this change.
+
+## Integrated delivery boundary at `main@bee91696`
+
+The bounded repository implementation is merged. It packages official migration head 75
+and enterprise head 5 (including `000005`), and its exact3 contract, Draft/preparation
+token authority without an Active Head, Active Head/pin reads, immutable-source guards and
+fallback prohibitions are code-complete. The reviewed integration identities record
+migration tree `e8446dff` and route manifest `ffa548b9`.
+
+This is not deployment acceptance. No immutable `bee91696` image, SBOM or OCI provenance
+has been frozen; the three deployment public-key ID rings are absent; live Colima is
+stopped, so current live state is unknown rather than failed. Clone rehearsal, migration,
+backfill, provider/model execution, Candidate creation, Draft, review, publish and
+activation are `NOT RUN`.

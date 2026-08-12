@@ -1,4 +1,9 @@
-# Enterprise LLM Wiki 项目指令
+# Enterprise LLM Wiki 项目必读与贡献规范
+
+> 本文件是仓库唯一的项目必读、贡献与 SDD 流程入口。`README.md`、
+> `CLAUDE.md`、`HANDOFF.md` 和 OpenSpec 注册表只能链接到这里，不得复制或
+> 改写本文件的流程规则。`HANDOFF.md` 只记录运行/交接状态；适用 OpenSpec
+> 只记录某个 Goal 的 Requirement 与验证事实。
 
 本仓库的产品本体是 **Enterprise LLM Wiki**。WeKnora 提供企业平台、权限、
 上传、解析、检索和 Wiki 载体；Python Harness 负责寿险语义编译、治理、
@@ -7,7 +12,9 @@ authority；当前条件接受 WeKnora 承载该 Active Head。Harness 不保存
 serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只作
 冻结审计，不构成当前实现授权。
 
-任何任务开始前必须依次阅读：
+## 开工前唯一阅读序列
+
+任何任务开始前必须从本文件开始，并依次阅读：
 
 1. `docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md`
 2. `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
@@ -16,11 +23,68 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 4. `HANDOFF.md` 的最顶部当前状态块
 5. 对应的 `openspec/changes/<NNN>/`
 
+`CLAUDE.md` 不再维护另一份必读清单；其他开发入口必须指回本节。
+
+## 强制 SDD 流程
+
+所有会写仓库、改变行为、迁移、配置、外部状态或验证口径的工作必须按以下
+队列推进；后一步不得补写前一步证据：
+
+1. `Goal`：记录业务目标、唯一 Owner、范围、非目标和 STOP 条件；需要外部写入
+   或新授权时先取得 Mission Card 批准。
+2. `OpenSpec`：先占号并冻结适用 OpenSpec；每项 Requirement 使用稳定 ID。
+3. `RED`：为每个 Requirement 记录能在旧实现上失败的最小测试/检查；环境错误
+   和缺依赖不得冒充 RED。
+4. `Implementation`：仅修改 Owner matrix 中的路径；跨 Owner 或范围扩张立即
+   `BLOCKER`，回到 OpenSpec/计划修订。
+5. `Validation`：建立 `Requirement → implementation → test → commit → status`
+   矩阵；状态只能是 `PASS | BLOCKED | NOT RUN`，fixture/provider-zero 不得冒充
+   真实业务效果。
+6. `Deployment`：代码 GREEN 不等于已部署。migration、backfill、provider、
+   Candidate、Draft、review、publish、activation、live probe 均须逐项写
+   `PASS/BLOCKED/NOT RUN`，未执行不得推断为成功。
+7. `Review/Integration`：独立 reviewer 只复核冻结 identity；唯一 integration
+   Owner 在 CI 与矩阵闭合后才可合入。不得从 review lane 顺手改生产。
+
+### 豁免
+
+仅纯只读事实核验、审查、监控，或已批准 Goal 内不改变行为的正常验证可以免于
+新建 Mission Card/OpenSpec。机械文档/格式修正可以免 RED，但必须在 PR 中写明
+豁免理由、精确路径、适用 Requirement ID（若有）及 Reviewer 明确确认。豁免
+不能授权 production、migration、provider、DB、deployment 或外部写入。
+
+### 队列与角色
+
+- `Owner`：唯一写者，维护 `CURRENT / BLOCKER / NEXT_READY / TERMINAL`，当前项
+  完成后自动进入已批准的下一项。
+- `Reviewer`：只读、基于冻结 commit/tree/index 审查；只输出
+  `BLOCKER / BACKLOG / REJECTED`，不得形成第二写 lane。
+- `Integration Owner`：只负责已批准的机械集成、CI 与最终 identity；不得扩大
+  Requirement 或替各 lane 设计新协议。
+- `Deployment Executor`：只在单独授权窗口按 runbook 执行，失败即 STOP 并保留
+  部分回执；不得把本地/fixture 结果写成 live 事实。
+
+### 状态分层
+
+- `SPEC`：Requirement 已冻结，未说明代码或部署完成。
+- `CODE`：实现和 bounded tests 已闭合，未说明真实 provider/DB/live 已执行。
+- `DELIVERY`：构建、迁移、配置、部署与 live 回执各自独立记账。
+- `BUSINESS`：真实 Candidate/Golden/Review/Active 等业务结果；不得由 fixture、
+  provider-zero、代码 GREEN 或容器停止状态推导。
+
+### 当前 120/122 状态
+
+`main@bee91696131efa3a3aa5ea1339557eaa68e63f0a` 已合入 Schema Wiki 596-1
+代码，GitHub CI 为绿色；这只证明 `CODE` 层。当前 `DELIVERY` 与 `BUSINESS`
+仍受 OpenSpec 120/122 validation matrix 约束：live migration/backfill/deploy、
+真实 official DeepSeek Candidate、正式 Golden evaluation、Draft、review、publish
+和 activation 均未运行。Colima 停止只表示 live current 未观测，不能写成应用失败。
+
 2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
 弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、
 P11/P12 Projector 与 fenced projection 执行方向已经 superseded。
 
-当前唯一开发顺序：
+历史 Mission 0 顺序（仅作架构背景，不是当前任务队列）：
 
 ```text
 Mission 0

@@ -80,3 +80,10 @@ formal Dossier V2 wire and frozen vector remain unchanged.
 The verifier capability itself is identity-registered only by deployment composition.
 There is no obtainable construction token or public authority-class export; a directly
 constructed or forged verifier fails before evaluation or provenance registries.
+
+At merged `main@bee91696`, provider-zero fixture typing and authority corrections are
+integrated and CI is green. This does not change business quality: no real official
+DeepSeek Candidate exists, no formal Golden evaluation has run, and the three deployment
+public-key ID rings remain unconfigured. The exact release remains 75 members
+(`1 + 7 + 67`); the 16 reviewed unknown fields are valid nonblocking pages, not residual
+review work.

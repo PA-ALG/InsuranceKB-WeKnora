@@ -1,16 +1,21 @@
 # 122 · Validation Report
 
-Status: `IMPLEMENTATION-GREEN / QUALITY-INCONCLUSIVE / REVIEWED-SOURCE-MIGRATION-IN-PROGRESS`
+Status: `MERGED-CODE-GREEN / COMPLETE67 / QUALITY-INCONCLUSIVE / LIVE-NOT-RUN`
 
 Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
 
 ## Identity and truth boundary
+
+- Merged authority: `main@bee91696131efa3a3aa5ea1339557eaa68e63f0a`
+  (PR #121); merged main CI: `PASS`.
 
 - Implementation base: merged Schema Wiki main commit
   `69e2084805d2411be94742fd7fe4de86b2c9221d`.
 - Previous official exact8 result: typed failure; Candidate absent.
 - Current provider-zero `45 present / 1 absent_explicitly / 21 unknown`: fixture-only
   contract evidence, not a real quality measurement.
+- The provider-zero custody/type corrective is integrated and green; it remains
+  `FIXTURE_ONLY` and does not change semantic quality.
 - New provider/model calls: `0`.
 - Exact latest71 human Review: `COMPLETED`, with user-attested reviewer identity `linyao`;
   annotator provenance `claude-fable-5` and confirming attestor `workspace-owner-houjing`
@@ -25,6 +30,8 @@ Review-surface delta: `BACKEND-IMPLEMENTATION-GREEN / FRONTEND-NOT-RUN`
   creation time is not the unknown original `reviewed_at` and carries no signature.
 - Official scoring, DB, WeKnora, Draft, release review, activation and live actions:
   `NOT RUN`.
+- Real official DeepSeek Candidate and formal Golden evaluation: `NOT RUN`.
+- Deployment public-key ID rings: `BLOCKED / UNCONFIGURED`.
 - Synthetic test-only Golden inputs exercise deterministic metrics and PASS/FAIL plumbing;
   they are not an official Golden or semantic acceptance result.
 
@@ -113,6 +120,8 @@ including an `object.__new__` construction bypass, now yields
   tests: PASS; unknown/trailing/noncanonical, hash/status/count/order/scope drift and
   API-key/Viewer access fail closed.
 - Review-surface frontend tests, database writes and live HTTP calls: `NOT RUN`.
+- The complete67 release topology remains exactly 75 members (`1 root + 7 sections + 67
+  fields`); the 16 source-coverage unknowns are nonblocking and carry no value/Evidence.
 
 Passing these implementation gates SHALL NOT change semantic quality from `INCONCLUSIVE`
 or authorize a model run. Task 2 does not restart human review: it preserves the 51 direct
@@ -120,3 +129,19 @@ rows, records 16 current-material gaps as non-blocking unknowns, and must obtain
 required cryptographic approvals before the successor becomes an evaluator-authoritative
 Golden. Task 5 still requires a separately authorized new execution identity and one-shot
 evaluation. Until both complete, no Schema Wiki Draft may be created from this gate.
+
+## Requirement-to-evidence matrix
+
+| Requirement | Implementation | Representative test | Commit | Status |
+|---|---|---|---|---|
+| SGQ1–SGQ2 | ordered67 Golden/successor; `linyao` source Review; 51 preserved + 16 legal unknown; COMPLETE67/67/0 | `test_complete67_unverified_dry_run_compiles_exact75_without_authority_calls`, Golden successor/status closed-vector tests | `a97c63a0` | PASS |
+| SGQ3–SGQ4 | deterministic metrics/denominators/threshold STOP | focused quality-metric and bbox-IoU tests | `4c43c91b`, `9f2535b4` | PASS |
+| SGQ5 | signed Candidate-bound PASS receipt and Go pre-Draft verifier | quality receipt signature/substitution tests and repository-calls-zero tests | `a04ba29f` | PASS |
+| SGQ6 | old exact8 immutable failure; provider-zero custody typed `FIXTURE_ONLY` | `test_provider_zero_candidate_cannot_build_a_review_bundle` and provider-zero corrective gates | `7199043c` | PASS |
+| SGQ7 | bounded 596-1-only implementation; no generic evaluation platform | exact owner/diff scan | `bee91696` | PASS |
+| SGQ8–SGQ10 | preparation JSONB PASS bundle, private review routes, Dossier V2 and complete67 status split | review-surface, dossier and successor-status focused tests | `e5ecdef6`, `adf1ec95`, `a97c63a0` | PASS |
+| SGQ11 | deployment-composed existing receipt verifier and provenance registry closure | caller-key/module-registry injection regressions and Go cross-language vector | `1f6cfae4` | PASS |
+| Formal business admission | real official DeepSeek Candidate, concrete whole-batch receipt and formal Golden evaluation | no authorized execution | — | NOT RUN |
+
+All implementation rows are provider-zero/code facts. They do not convert the final
+`NOT RUN` row into semantic PASS or authorize Draft creation.

@@ -5,7 +5,8 @@
 - [x] Commit the approved implementation plan by itself.
 - [x] Record the strict missing-change RED before creating this change.
 - [x] Freeze the A/B/C exact owner matrix, integration order and path-overlap STOP.
-- [x] Register OpenSpec 120 as `plan-approved / implementation-not-started`.
+- [x] Register OpenSpec 120 at its initial `plan-approved / implementation-not-started`
+  phase; reconcile the current row to `CODE-INTEGRATED / LIVE-NOT-RUN` after merge.
 - [x] Run strict OpenSpec validation and diff-check; record the exact result.
 
 ## Task 1 · Lane A canonical contracts
@@ -135,6 +136,9 @@
 - [x] Persist immutable attempt-bound revision source/resource custody, replay the Go
   companion, and issue token-only citation bytes from a third Ed25519 ring. Reject ring
   reuse, byte size/SHA drift, foreign attempt/resource and out-of-range page before output.
+- [x] Package enterprise migration `000005` after the source table, and fail closed before
+  any direct/batch reparse, move-reparse, single delete or batch delete mutation when a
+  pinned revision source exists.
 - [x] Make exact3 dry-run one `REPEATABLE READ READ ONLY` database snapshot; classify the
   ordered terms/brochure/rate-table rows as `WOULD_INSERT`, exact-authority `NOOP`, or
   `CONFLICT_STOP`; return redacted digest/count receipts with `writes=0`. Keep actual
@@ -170,6 +174,11 @@
 - [x] Define the brochure historical-running-subspan policy before a live run; do not
   mutate those runs in this Mission.
 - [x] Keep the 46 generic material Wiki pages isolated from Schema members.
+- [ ] Build one immutable image from merged `bee91696` and freeze its SBOM/OCI provenance.
+- [ ] Configure three distinct deployment public-key ID rings and verify their identities.
+- [ ] Execute clone rehearsal, enterprise migration, exact3 dry-run/backfill and live
+  health checks in a separately authorized window. Colima being stopped is `UNKNOWN`, not
+  an application failure.
 
 Task completion above means the bounded repository code and provider-free integration are
 implemented and verified. It does not mean the live MVP has been deployed or activated:
@@ -177,6 +186,13 @@ the previous official exact8 model run failed and produced no Candidate, and no 
 model run has been executed against the immutable-citation identity. Deployed source and
 release migration ledgers, persisted Draft, named-human review and activation remain
 explicit external STOP gates.
+
+## Requirement closure index
+
+The detailed `Requirement → implementation → test → commit → PASS|BLOCKED|NOT RUN`
+matrix is authoritative in `validation-report.md`. Tasks 1–5 close SWM1–SWM9A at the code
+layer. Task 6 leaves SWM10 external delivery/live acceptance `BLOCKED` or `NOT RUN` and
+does not convert a stopped Colima runtime into an application failure.
 
 ## Global stop conditions
 
