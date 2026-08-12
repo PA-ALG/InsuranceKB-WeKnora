@@ -147,9 +147,11 @@
 > 实际 head**；不允许产生 multi-head；合入后在本表“备注”记录实际链序。
 > 数字顺序仅为可读性，不承载任何拓扑语义。
 
-## 当前可执行入口（2026-07-29 · Mission 0）
+## 历史入口背景（2026-07-29 · Mission 0，`HISTORY-ONLY`）
 
-当前生产架构工作只以以下入口为准：
+当前唯一项目必读、贡献与 SDD 入口是仓库根目录的 [`AGENTS.md`](../../AGENTS.md)。
+以下列表仅保留 2026-07 Mission 0 的历史审计上下文；不得绕过 `AGENTS.md` 的
+当前阅读序列、适用 OpenSpec 或状态矩阵形成实现授权：
 
 - [WeKnora sole serving Active authority ADR](../../docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)；
 - [Enterprise LLM Wiki Authority Amendment 2](../../docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)；

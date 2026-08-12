@@ -1,5 +1,11 @@
 <!-- Title should follow Conventional Commits, e.g. `feat: ...`, `fix: ...`, `docs: ...` -->
 
+> **READY REQUIRED GATE:** Any production-affecting PR MUST remain **Draft** and MUST NOT
+> be marked Ready while Goal, OpenSpec ID, Requirement IDs, frozen Spec identity, RED (or
+> reviewer-confirmed mechanical exemption), unique Owner/paths, implementation evidence,
+> validation matrix, or deployment status is blank or unconfirmed. Unchecked boxes are
+> unresolved gates, not optional reminders.
+
 ## Description
 <!-- Briefly describe the purpose and changes of this PR -->
 

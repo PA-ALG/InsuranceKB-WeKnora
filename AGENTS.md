@@ -72,6 +72,22 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 - `BUSINESS`：真实 Candidate/Golden/Review/Active 等业务结果；不得由 fixture、
   provider-zero、代码 GREEN 或容器停止状态推导。
 
+`DELIVERY` 必须再拆成以下六个互不替代的观测维度，每个维度只允许
+`PASS | BLOCKED | NOT RUN`，并绑定自己的 identity/receipt：
+
+1. `software/CI`：源码、测试和 CI 结果；不得推导镜像或 live 状态。
+2. `container health`：exact image/container 的进程与健康；不得由 CI 或宿主端口推导。
+3. `provider probe`：exact provider/model/endpoint 的受控调用；provider-zero 只能记
+   `NOT RUN`，不得推导语义效果。
+4. `provisioning`：migration、配置、public-key rings、backfill 与部署前置；代码中
+   存在实现不等于已 provision。
+5. `local live`：本地/Colima exact runtime 的实时观察；runtime 停止只能记
+   `NOT RUN`，不得写成应用失败。
+6. `GitHub live`：GitHub Actions、environment/deployment 与远端回执；本地 GREEN
+   不得推导 GitHub live，GitHub CI 也不得推导本地 live。
+
+六个维度之间禁止横向推断；只有各自证据才能改变该维度状态。
+
 ### 当前 120/122 状态
 
 `main@bee91696131efa3a3aa5ea1339557eaa68e63f0a` 已合入 Schema Wiki 596-1
