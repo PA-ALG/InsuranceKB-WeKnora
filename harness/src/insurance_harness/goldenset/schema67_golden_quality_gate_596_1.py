@@ -12,7 +12,7 @@ import weakref
 from collections import Counter
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, Protocol, Self
+from typing import Annotated, Final, Literal, Protocol, Self, cast
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -373,7 +373,7 @@ _EVALUATOR_AUTHORITY_CONSTRUCTION_TOKEN: Final[object] = object()
 _FIXTURE_PROVENANCE_CONSTRUCTION_TOKEN: Final[object] = object()
 
 
-class Schema67ProviderZeroFixtureProvenanceV1:
+class _Schema67ProviderZeroFixtureProvenanceV1:
     """Factory-sealed, non-authoritative provider-zero evaluation provenance."""
 
     __slots__ = (
@@ -426,15 +426,23 @@ class Schema67ProviderZeroFixtureProvenanceV1:
         object.__setattr__(self, name, value)
 
 
+class _Schema67ProviderZeroFixtureProvenanceFields(Protocol):
+    fixture_id: str
+    candidate_sha256: str
+    candidate_evidence_authority_sha256: str
+    provenance_sha256: str
+
+
 def _require_provider_zero_fixture_provenance_596_1(
     provenance: object,
     *,
     candidate_sha256: str,
     candidate_evidence_authority_sha256: str,
-) -> Schema67ProviderZeroFixtureProvenanceV1:
+) -> _Schema67ProviderZeroFixtureProvenanceV1:
     try:
-        if type(provenance) is not Schema67ProviderZeroFixtureProvenanceV1:
+        if type(provenance) is not _Schema67ProviderZeroFixtureProvenanceV1:
             raise TypeError
+        exact_provenance = cast(_Schema67ProviderZeroFixtureProvenanceFields, provenance)
         payload = {
             "contract": "schema67-provider-zero-fixture-provenance.v1",
             "fixture_id": _PROVIDER_ZERO_FIXTURE_ID,
@@ -445,11 +453,11 @@ def _require_provider_zero_fixture_provenance_596_1(
             ),
         }
         if (
-            provenance.fixture_id != _PROVIDER_ZERO_FIXTURE_ID
-            or provenance.candidate_sha256 != candidate_sha256
-            or provenance.candidate_evidence_authority_sha256
+            exact_provenance.fixture_id != _PROVIDER_ZERO_FIXTURE_ID
+            or exact_provenance.candidate_sha256 != candidate_sha256
+            or exact_provenance.candidate_evidence_authority_sha256
             != candidate_evidence_authority_sha256
-            or provenance.provenance_sha256
+            or exact_provenance.provenance_sha256
             != schema_wiki_sha256(
                 "schema67-provider-zero-fixture-provenance.v1", payload
             )
@@ -466,7 +474,7 @@ def make_schema67_provider_zero_fixture_provenance_596_1(
     *,
     candidate: object,
     evidence_authority: object,
-) -> Schema67ProviderZeroFixtureProvenanceV1:
+) -> _Schema67ProviderZeroFixtureProvenanceV1:
     """Bind one exact Candidate/authority pair to non-authoritative fixture use."""
 
     try:
@@ -479,7 +487,7 @@ def make_schema67_provider_zero_fixture_provenance_596_1(
         raise Schema67GoldenQualityGateError(
             "PROVIDER_ZERO_FIXTURE_PROVENANCE_INVALID"
         ) from None
-    return Schema67ProviderZeroFixtureProvenanceV1(
+    return _Schema67ProviderZeroFixtureProvenanceV1(
         _FIXTURE_PROVENANCE_CONSTRUCTION_TOKEN,
         candidate_sha256=exact_candidate.candidate_sha256,
         candidate_evidence_authority_sha256=exact_authority.authority_sha256,
@@ -2711,7 +2719,6 @@ __all__ = [
     "Schema67GoldenQualityGateError",
     "Schema67GoldenQualityEvaluatorAuthority",
     "Schema67GoldenQualityEvaluatorSigningCredentialSource",
-    "Schema67ProviderZeroFixtureProvenanceV1",
     "Schema67GoldenSet5961V1",
     "SchemaWikiGoldenQualityDossierV2",
     "compose_schema67_golden_quality_evaluator_authority_596_1",

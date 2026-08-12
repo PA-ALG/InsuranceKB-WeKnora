@@ -15,6 +15,7 @@ from pydantic import ValidationError
 import insurance_harness.goldenset.schema67_golden_quality_gate_596_1 as quality_gate_module
 from insurance_harness.goldenset.expert_golden_admission_596_2 import (
     EvidenceReplayCaseV1,
+    Schema67CandidateV2,
 )
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     GOLDEN_METRIC_IDS,
@@ -22,6 +23,7 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     NORMALIZATION_POLICY_SHA256,
     RISK_POLICY_SHA256,
     Schema67GoldenApprovalV1,
+    Schema67GoldenEvaluationResultV1,
     Schema67GoldenEvaluationReviewBundleV1,
     Schema67GoldenEvidenceTargetV1,
     Schema67GoldenFieldV1,
@@ -37,6 +39,10 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
 )
 from insurance_harness.knowledge_compiler.schema_first_contracts import (
     APPROVED_ORDERED_FIELD_IDS,
+)
+from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    Schema67CandidateEvidenceAuthorityV1,
+    Schema67CitationAuthorityJoinReceiptV1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     SchemaWikiContractError,
@@ -62,8 +68,8 @@ def _sha(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-def _target(join: object) -> Schema67GoldenEvidenceTargetV1:
-    payload = {
+def _target(join: Schema67CitationAuthorityJoinReceiptV1) -> Schema67GoldenEvidenceTargetV1:
+    payload: dict[str, object] = {
         "contract": "schema67-golden-evidence-target.v1",
         "source_role": join.source_role,
         "live_revision_source_receipt_sha256": (join.live_revision_source_receipt_sha256),
@@ -97,15 +103,18 @@ def _target(join: object) -> Schema67GoldenEvidenceTargetV1:
     )
 
 
-def _golden(candidate: object, authority: object) -> Schema67GoldenSet5961V1:
-    joins_by_field: dict[str, list[object]] = {}
+def _golden(
+    candidate: Schema67CandidateV2,
+    authority: Schema67CandidateEvidenceAuthorityV1,
+) -> Schema67GoldenSet5961V1:
+    joins_by_field: dict[str, list[Schema67CitationAuthorityJoinReceiptV1]] = {}
     for join in authority.join_receipts:
         joins_by_field.setdefault(join.field_id, []).append(join)
     fields: list[Schema67GoldenFieldV1] = []
     for output in candidate.fields:
         evidence_targets = tuple(_target(join) for join in joins_by_field.get(output.field_id, ()))
         canonical_value = output.value_snapshot
-        payload = {
+        field_payload = {
             "contract": "schema67-golden-field.v1",
             "field_id": output.field_id,
             "state": output.state,
@@ -127,8 +136,10 @@ def _golden(candidate: object, authority: object) -> Schema67GoldenSet5961V1:
         fields.append(
             Schema67GoldenFieldV1.model_validate(
                 {
-                    **payload,
-                    "field_sha256": schema_wiki_sha256("schema67-golden-field.v1", payload),
+                    **field_payload,
+                    "field_sha256": schema_wiki_sha256(
+                        "schema67-golden-field.v1", field_payload
+                    ),
                 }
             )
         )
@@ -136,7 +147,7 @@ def _golden(candidate: object, authority: object) -> Schema67GoldenSet5961V1:
         candidate=candidate,
         evidence_authority=authority,
     ).schema_pack
-    payload = {
+    golden_payload: dict[str, object] = {
         "contract": "schema67-golden-set-596-1.v1",
         "golden_id": "596-1-test-only-human-golden",
         "golden_version": "test.v1",
@@ -158,15 +169,17 @@ def _golden(candidate: object, authority: object) -> Schema67GoldenSet5961V1:
     }
     return Schema67GoldenSet5961V1.model_validate(
         {
-            **payload,
-            "golden_set_sha256": schema_wiki_sha256("schema67-golden-set-596-1.v1", payload),
+            **golden_payload,
+            "golden_set_sha256": schema_wiki_sha256(
+                "schema67-golden-set-596-1.v1", golden_payload
+            ),
         }
     )
 
 
 def _non_fixture_candidate_and_authority(
     *, value_snapshot: str | None = None,
-) -> tuple[object, object]:
+) -> tuple[Schema67CandidateV2, Schema67CandidateEvidenceAuthorityV1]:
     cases = list(_approved_cases())
     case_index = (
         next(
@@ -305,7 +318,7 @@ def _approval(
         "signer_key_id": key_id,
     }
     unsigned = Schema67GoldenApprovalV1.model_construct(
-        **payload,
+        **payload,  # type: ignore[arg-type]
         signature="",
         approval_sha256="0" * 64,
     )
@@ -341,16 +354,14 @@ def _security(
 
 def _evaluate(
     *,
-    candidate: object,
-    authority: object,
+    candidate: Schema67CandidateV2,
+    authority: Schema67CandidateEvidenceAuthorityV1,
     golden: Schema67GoldenSet5961V1,
     fixture_provenance: object | None = None,
-):
+) -> Schema67GoldenEvaluationResultV1:
     approvals, evaluator = _security(golden)
     if fixture_provenance is not None:
-        evaluate_fixture = getattr(evaluator, "evaluate_provider_zero_fixture", None)
-        assert callable(evaluate_fixture), "provider-zero fixture evaluator is missing"
-        return evaluate_fixture(
+        return evaluator.evaluate_provider_zero_fixture(
             candidate=candidate,
             evidence_authority=authority,
             fixture_provenance=fixture_provenance,
@@ -365,7 +376,10 @@ def _evaluate(
     )
 
 
-def _fixture_provenance(candidate: object, authority: object) -> object:
+def _fixture_provenance(
+    candidate: Schema67CandidateV2,
+    authority: Schema67CandidateEvidenceAuthorityV1,
+) -> object:
     factory = getattr(
         quality_gate_module,
         "make_schema67_provider_zero_fixture_provenance_596_1",
@@ -600,9 +614,12 @@ def test_present_value_metrics_use_normalized_atom_tp_fp_fn() -> None:
         metrics[GOLDEN_METRIC_IDS[3]].numerator,
         metrics[GOLDEN_METRIC_IDS[3]].denominator,
     ) == (atom_tp, atom_tp + atom_fn)
-    assert metrics[GOLDEN_METRIC_IDS[2]].value_ppm < 1_000_000
-    assert metrics[GOLDEN_METRIC_IDS[3]].value_ppm < 1_000_000
-    assert metrics[GOLDEN_METRIC_IDS[4]].value_ppm < 1_000_000
+    precision_ppm = metrics[GOLDEN_METRIC_IDS[2]].value_ppm
+    recall_ppm = metrics[GOLDEN_METRIC_IDS[3]].value_ppm
+    f1_ppm = metrics[GOLDEN_METRIC_IDS[4]].value_ppm
+    assert precision_ppm is not None and precision_ppm < 1_000_000
+    assert recall_ppm is not None and recall_ppm < 1_000_000
+    assert f1_ppm is not None and f1_ppm < 1_000_000
     assert result.status == "FAIL"
     assert result.quality_gate_receipt is None
 
@@ -741,7 +758,9 @@ def test_pass_receipt_is_required_and_factory_provenance_cannot_be_reparsed() ->
     )
 
     with pytest.raises(TypeError):
-        build_schema_wiki_review_bundle_596_1(candidate=candidate, release=release)
+        build_schema_wiki_review_bundle_596_1(  # type: ignore[call-arg]
+            candidate=candidate, release=release
+        )
 
     bundle = build_schema_wiki_review_bundle_596_1(
         candidate=candidate,
