@@ -5,17 +5,24 @@ import copy
 import hashlib
 import inspect
 import json
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from insurance_harness.goldenset import schema67_golden_quality_gate_596_1 as quality_gate
+from insurance_harness.goldenset.expert_golden_admission_596_2 import Schema67CandidateV2
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     GOLDEN_DOSSIER_REVIEW_POLICY_SHA256,
     HumanBatchDecisionReceiptV1,
+    Schema67GoldenEvaluationResultV1,
+    Schema67GoldenEvaluationReviewBundleV1,
     Schema67GoldenQualityGateError,
+    Schema67GoldenReviewSuccessorMetadataV1,
+    Schema67GoldenSet5961V1,
     SchemaWikiGoldenQualityDossierV2,
     canonical_human_batch_decision_receipt_v1,
     compose_schema67_golden_dossier_review_authority_596_1,
@@ -24,6 +31,9 @@ from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
     make_schema_wiki_golden_quality_dossier_v2_596_1,
     schema67_golden_dossier_review_subject_preimage_596_1,
     validate_registered_schema_wiki_golden_quality_dossier_v2_596_1,
+)
+from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    Schema67CandidateEvidenceAuthorityV1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import schema_wiki_sha256
 from tests.test_schema67_golden_quality_gate_596_1 import (
@@ -62,7 +72,9 @@ def _public_key_text(key: Ed25519PrivateKey) -> str:
     )
 
 
-def _compose_authority(monkeypatch: pytest.MonkeyPatch):
+def _compose_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> quality_gate._Schema67GoldenDossierReviewAuthorityPort:
     monkeypatch.setenv("HARNESS_WEKNORA_BASE_URL", "https://not-used.invalid")
     monkeypatch.setenv("HARNESS_WEKNORA_API_KEY", "not-used")
     monkeypatch.setenv(
@@ -72,7 +84,13 @@ def _compose_authority(monkeypatch: pytest.MonkeyPatch):
     return compose_schema67_golden_dossier_review_authority_596_1(now_epoch=_ISSUED_AT + 1)
 
 
-def _inputs():
+def _inputs() -> tuple[
+    Schema67CandidateV2,
+    Schema67CandidateEvidenceAuthorityV1,
+    Schema67GoldenSet5961V1,
+    Schema67GoldenEvaluationResultV1,
+    Schema67GoldenEvaluationReviewBundleV1,
+]:
     candidate, evidence_authority = _non_fixture_candidate_and_authority()
     golden = _golden(candidate, evidence_authority)
     result = _evaluate(candidate=candidate, authority=evidence_authority, golden=golden)
@@ -83,15 +101,15 @@ def _inputs():
 
 def _signed_receipt(
     *,
-    candidate,
-    evidence_authority,
-    golden,
-    result,
-    evaluation,
+    candidate: Schema67CandidateV2,
+    evidence_authority: Schema67CandidateEvidenceAuthorityV1,
+    golden: Schema67GoldenSet5961V1,
+    result: Schema67GoldenEvaluationResultV1,
+    evaluation: Schema67GoldenEvaluationReviewBundleV1,
     signing_key: Ed25519PrivateKey = _RECEIPT_KEY,
     signer_key_id: str = _RECEIPT_KEY_ID,
-    **updates,
-):
+    receipt_updates: Mapping[str, object] | None = None,
+) -> HumanBatchDecisionReceiptV1:
     subject_preimage = schema67_golden_dossier_review_subject_preimage_596_1(
         result=result,
         evaluation=evaluation,
@@ -125,8 +143,9 @@ def _signed_receipt(
         "nonce": "schema67-golden-dossier-review-596-1",
         "signer_key_id": signer_key_id,
     }
-    payload.update(updates)
-    unsigned = HumanBatchDecisionReceiptV1.model_construct(**payload, signature="")
+    payload.update(receipt_updates or {})
+    receipt_type: Any = HumanBatchDecisionReceiptV1
+    unsigned = receipt_type.model_construct(**payload, signature="")
     signature = (
         base64.urlsafe_b64encode(
             signing_key.sign(canonical_human_batch_decision_receipt_v1(unsigned, False))
@@ -137,7 +156,18 @@ def _signed_receipt(
     return HumanBatchDecisionReceiptV1.model_validate({**payload, "signature": signature})
 
 
-def _registered_formal(monkeypatch: pytest.MonkeyPatch):
+def _registered_formal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[
+    Schema67CandidateV2,
+    Schema67CandidateEvidenceAuthorityV1,
+    Schema67GoldenSet5961V1,
+    Schema67GoldenEvaluationResultV1,
+    Schema67GoldenEvaluationReviewBundleV1,
+    HumanBatchDecisionReceiptV1,
+    Schema67GoldenReviewSuccessorMetadataV1,
+    SchemaWikiGoldenQualityDossierV2,
+]:
     candidate, evidence_authority, golden, result, evaluation = _inputs()
     receipt = _signed_receipt(
         candidate=candidate,
@@ -351,7 +381,7 @@ def test_signed_subject_policy_scope_and_principal_drift_are_rejected(
         golden=golden,
         result=result,
         evaluation=evaluation,
-        **updates,
+        receipt_updates=updates,
     )
     authority = _compose_authority(monkeypatch)
     with pytest.raises(Schema67GoldenQualityGateError):
@@ -463,15 +493,18 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
     original_successor_register = quality_gate._register_review_successor
     original_evaluation_require = quality_gate._require_registered_evaluation_bundle
 
-    def count_successor_registration(*args, **kwargs):
+    successor_register = cast(Callable[..., None], original_successor_register)
+    evaluation_require = cast(Callable[..., object], original_evaluation_require)
+
+    def count_successor_registration(*args: object, **kwargs: object) -> None:
         nonlocal successor_registry_calls
         successor_registry_calls += 1
-        return original_successor_register(*args, **kwargs)
+        successor_register(*args, **kwargs)
 
-    def count_evaluation_registry(*args, **kwargs):
+    def count_evaluation_registry(*args: object, **kwargs: object) -> object:
         nonlocal evaluation_registry_calls
         evaluation_registry_calls += 1
-        return original_evaluation_require(*args, **kwargs)
+        return evaluation_require(*args, **kwargs)
 
     monkeypatch.setattr(
         quality_gate,
@@ -491,8 +524,9 @@ def test_caller_constructed_authority_cannot_register_self_signed_receipt(
     assert not hasattr(quality_gate, "_DEPLOYMENT_DOSSIER_AUTHORITIES")
     deployment_authority = _compose_authority(monkeypatch)
     authority_type = type(deployment_authority)
+    authority_constructor = cast(Callable[..., object], authority_type)
     with pytest.raises(Schema67GoldenQualityGateError):
-        authority_type(
+        authority_constructor(
             object(),
             {attacker_key_id: attacker_key.public_key()},
             now_epoch=_ISSUED_AT + 1,
@@ -586,10 +620,12 @@ def test_module_registry_injection_cannot_authorize_caller_signed_receipt(
     if callable(receipt_writer):
         original_receipt_writer = receipt_writer
 
-        def count_receipt_registration(*args, **kwargs):
+        typed_receipt_writer = cast(Callable[..., object], original_receipt_writer)
+
+        def count_receipt_registration(*args: object, **kwargs: object) -> object:
             nonlocal receipt_registry_calls
             receipt_registry_calls += 1
-            return original_receipt_writer(*args, **kwargs)
+            return typed_receipt_writer(*args, **kwargs)
 
         monkeypatch.setattr(
             quality_gate,
@@ -597,15 +633,18 @@ def test_module_registry_injection_cannot_authorize_caller_signed_receipt(
             count_receipt_registration,
         )
 
-    def count_successor_registration(*args, **kwargs):
+    successor_register = cast(Callable[..., None], original_successor_register)
+    evaluation_require = cast(Callable[..., object], original_evaluation_require)
+
+    def count_successor_registration(*args: object, **kwargs: object) -> None:
         nonlocal successor_registry_calls
         successor_registry_calls += 1
-        return original_successor_register(*args, **kwargs)
+        successor_register(*args, **kwargs)
 
-    def count_evaluation_registry(*args, **kwargs):
+    def count_evaluation_registry(*args: object, **kwargs: object) -> object:
         nonlocal evaluation_registry_calls
         evaluation_registry_calls += 1
-        return original_evaluation_require(*args, **kwargs)
+        return evaluation_require(*args, **kwargs)
 
     monkeypatch.setattr(
         quality_gate,
@@ -620,7 +659,7 @@ def test_module_registry_injection_cannot_authorize_caller_signed_receipt(
 
     caller_registry_injection_accepted = False
     if callable(authority_writer) and isinstance(authority_type, type):
-        caller_authority = object.__new__(authority_type)
+        caller_authority: Any = object.__new__(authority_type)
         object.__setattr__(
             caller_authority,
             "_keys",

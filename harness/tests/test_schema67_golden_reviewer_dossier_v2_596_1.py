@@ -6,11 +6,17 @@ from pathlib import Path
 
 import pytest
 
+from insurance_harness.goldenset.expert_golden_admission_596_2 import Schema67CandidateV2
 from insurance_harness.goldenset.schema67_golden_quality_gate_596_1 import (
+    Schema67GoldenEvaluationReviewBundleV1,
     Schema67GoldenReviewSuccessorMetadataV1,
+    Schema67GoldenSet5961V1,
     SchemaWikiGoldenQualityDossierV2,
     make_schema67_golden_evaluation_review_bundle_596_1,
     validate_schema67_golden_review_successor_metadata_596_1,
+)
+from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    Schema67CandidateEvidenceAuthorityV1,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_contracts import schema_wiki_sha256
 from tests.test_schema67_golden_quality_gate_596_1 import (
@@ -22,7 +28,13 @@ from tests.test_schema67_golden_quality_gate_596_1 import (
 _VECTOR = Path(__file__).parent / "fixtures" / "schema67_golden_reviewer_dossier_v2_596_1.json"
 
 
-def _formal() -> tuple[object, object, object, object, Schema67GoldenReviewSuccessorMetadataV1]:
+def _formal() -> tuple[
+    Schema67CandidateV2,
+    Schema67CandidateEvidenceAuthorityV1,
+    Schema67GoldenSet5961V1,
+    Schema67GoldenEvaluationReviewBundleV1,
+    Schema67GoldenReviewSuccessorMetadataV1,
+]:
     candidate, authority = _non_fixture_candidate_and_authority()
     golden = _golden(candidate, authority)
     result = _evaluate(candidate=candidate, authority=authority, golden=golden)

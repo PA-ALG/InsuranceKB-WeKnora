@@ -26,6 +26,10 @@ var dryRunExpectation = map[string]bool{
 	"doc create": true, "doc upload": true, "doc fetch": true, "doc delete": true,
 	"doc reparse": true, // re-triggers server-side parsing (a state change)
 	"doc update":  true, // edits title/description server-side
+
+	"doc revision-source-backfill":        true,
+	"doc revision-source-exact3-backfill": true,
+
 	"chunk delete": true, "message delete": true,
 	"session delete": true, "session stop": true, "session tool-approval resolve": true,
 	"agent create": true, "agent update": true, "agent delete": true,

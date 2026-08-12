@@ -90,6 +90,15 @@ func NewCmdRevisionSourceBackfill(f *cmdutil.Factory) *cobra.Command {
 	cmdutil.AddDryRunFlag(cmd, &opts.DryRun)
 	cmdutil.AddFormatFlag(cmd, revisionSourceBackfillFields...)
 	cmdutil.AddIgnoredKBFlag(cmd)
+	cmdutil.SetAgentHelp(cmd, cmdutil.AgentHelp{
+		UsedFor:       "seal one exact completed PDF revision source",
+		RequiredFlags: []string{"<doc-id> (positional)", "--attempt"},
+		Examples: []string{
+			"weknora doc revision-source-backfill doc_abc --attempt 2 --dry-run",
+			"weknora doc revision-source-backfill doc_abc --attempt 2 --format json",
+		},
+		Output: "dry-run emits a no-write plan; execution emits the sealed KnowledgeRevisionSource with exact revision, object, page-count, and binding digests",
+	})
 	return cmd
 }
 
@@ -154,6 +163,15 @@ func NewCmdRevisionSourceExact3Backfill(f *cmdutil.Factory) *cobra.Command {
 	cmdutil.AddKBFlag(cmd)
 	cmdutil.AddDryRunFlag(cmd, &opts.DryRun)
 	cmdutil.AddFormatFlag(cmd, revisionSourceExact3BackfillFields...)
+	cmdutil.SetAgentHelp(cmd, cmdutil.AgentHelp{
+		UsedFor:       "server-verify and seal the exact terms, brochure, and rate revision sources",
+		RequiredFlags: []string{"--manifest"},
+		Examples: []string{
+			"weknora doc revision-source-exact3-backfill --manifest exact3.json --kb kb_abc --dry-run",
+			"weknora doc revision-source-exact3-backfill --manifest exact3.json --kb kb_abc --format json",
+		},
+		Output: "dry-run emits the safe exact3 classification receipt; execution emits the strict serial seal result with validated roles and write counts",
+	})
 	return cmd
 }
 
