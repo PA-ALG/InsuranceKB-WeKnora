@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import gc
 import hashlib
+import inspect
 import json
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -20,7 +21,12 @@ from insurance_harness.compiler.parsed_documents import (
     ParseQualityMeasuredFactsV1,
 )
 from insurance_harness.goldenset.expert_golden_admission_596_2 import (
+    EvidenceReplayCaseV1,
     Schema67CandidateV2,
+)
+from insurance_harness.goldenset.schema67_reviewed_golden_successor_596_1 import (
+    Schema67ReviewedGoldenSuccessor5961V1,
+    load_schema67_reviewed_golden_successor_596_1,
 )
 from insurance_harness.knowledge_compiler import (
     schema_wiki_candidate_evidence_join_596_1 as candidate_evidence_join,
@@ -44,10 +50,8 @@ from insurance_harness.knowledge_compiler.schema_wiki_contracts import (
     SchemaRootPageV1,
     SchemaSectionPageV1,
     SchemaWikiContractError,
-    SchemaWikiReviewBundleV1,
     schema_wiki_sha256,
     validate_knowledge_wiki_release,
-    validate_schema_wiki_review_bundle,
 )
 from insurance_harness.knowledge_compiler.schema_wiki_release_596_1 import (
     SchemaWikiCompilationError,
@@ -67,8 +71,47 @@ class _SelfIssuedCandidate:
     candidate_sha256: str = "a" * 64
 
 
+_REPO = Path(__file__).parents[2]
+_COMPLETE67 = (
+    _REPO
+    / "dataset/goldenset-drafts/schema67-reviewed-golden-successor-596-1/golden67-successor.json"
+)
+_OLD60 = _REPO / "dataset/goldenset/gs-s0q-596-v1/596.jsonl"
+_LATEST71 = _REPO / "dataset/goldenset-drafts/esheng-zunxiang-v0/annotations.jsonl"
+_GENERIC_UNKNOWN_REASON = "FIELD_UNKNOWN"
+_NOT_COVERED_REASON = "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"
+
+
 def _sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _complete67() -> Schema67ReviewedGoldenSuccessor5961V1:
+    return load_schema67_reviewed_golden_successor_596_1(
+        _COMPLETE67.read_bytes(),
+        old60_bytes=_OLD60.read_bytes(),
+        latest71_bytes=_LATEST71.read_bytes(),
+    )
+
+
+def _coverage_field_ids() -> frozenset[str]:
+    return frozenset(
+        row.field_id for row in _complete67().fields if row.unknown_reason is not None
+    )
+
+
+def _compile_complete67(
+    *,
+    candidate: Schema67CandidateV2,
+    authority: Schema67CandidateEvidenceAuthorityV1,
+) -> KnowledgeWikiReleaseV1:
+    return schema_wiki_release_596_1.compile_complete67_schema_wiki_release_dry_run_596_1(
+        candidate=candidate,
+        evidence_authority=authority,
+        complete67_payload=_COMPLETE67.read_bytes(),
+        old60_bytes=_OLD60.read_bytes(),
+        latest71_bytes=_LATEST71.read_bytes(),
+    )
 
 
 def _live_receipt(
@@ -148,8 +191,32 @@ def _candidate_and_authority() -> tuple[
         _candidate_v2,
     )
 
+    coverage_ids = _coverage_field_ids()
+    cases = tuple(
+        case for case in _approved_cases() if case.field_output.field_id not in coverage_ids
+    )
+    candidate = _candidate_v2(cases)
+    return _candidate_and_authority_from_cases(candidate, cases)
+
+
+def _candidate_with_foreign_coverage_state() -> tuple[
+    Schema67CandidateV2,
+    Schema67CandidateEvidenceAuthorityV1,
+]:
+    from tests.test_expert_golden_admission_596_2_119 import (
+        _approved_cases,
+        _candidate_v2,
+    )
+
     cases = _approved_cases()
     candidate = _candidate_v2(cases)
+    return _candidate_and_authority_from_cases(candidate, cases)
+
+
+def _candidate_and_authority_from_cases(
+    candidate: Schema67CandidateV2,
+    cases: tuple[EvidenceReplayCaseV1, ...],
+) -> tuple[Schema67CandidateV2, Schema67CandidateEvidenceAuthorityV1]:
     document = cases[0].documents[0]
     manifest = cases[0].manifests[0]
     decision = ParseQualityDecisionV1(
@@ -259,9 +326,7 @@ def _fully_rehashed_authority_join_mutation(
             ),
         }
     )
-    authority_payload = authority.model_dump(
-        mode="python", exclude={"authority_sha256"}
-    )
+    authority_payload = authority.model_dump(mode="python", exclude={"authority_sha256"})
     authority_payload["join_receipts"] = tuple(joins)
     return authority.model_copy(
         update={
@@ -300,9 +365,7 @@ def test_missing_candidate_never_requests_generic_wiki_fallback() -> None:
 def test_known_field_page_binds_057_receipt_and_exact_revision_citation() -> None:
     candidate, authority = _candidate_and_authority()
     output = next(item for item in candidate.fields if item.field_id == "product_code")
-    receipt = next(
-        item for item in candidate.evidence_receipts if item.field_id == output.field_id
-    )
+    receipt = next(item for item in candidate.evidence_receipts if item.field_id == output.field_id)
 
     page = build_schema_field_page_596_1(
         candidate=candidate,
@@ -327,9 +390,7 @@ def test_known_field_page_binds_057_receipt_and_exact_revision_citation() -> Non
 def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
     candidate, authority = _candidate_and_authority()
     output = next(item for item in candidate.fields if item.field_id == "sales_end_date")
-    receipt = next(
-        item for item in candidate.evidence_receipts if item.field_id == output.field_id
-    )
+    receipt = next(item for item in candidate.evidence_receipts if item.field_id == output.field_id)
 
     page = build_schema_field_page_596_1(
         candidate=candidate,
@@ -343,6 +404,125 @@ def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
     assert page.evidence_receipt_sha256s == ()
     assert page.citations == ()
     assert page.review_item_reason == "FIELD_UNKNOWN"
+    assert page.unknown_reason == _GENERIC_UNKNOWN_REASON
+
+
+def test_complete67_unverified_dry_run_compiles_exact75_without_authority_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate, authority = _candidate_and_authority()
+    successor = _complete67()
+    compile_dry_run = getattr(
+        schema_wiki_release_596_1,
+        "compile_complete67_schema_wiki_release_dry_run_596_1",
+        None,
+    )
+    assert callable(compile_dry_run), "COMPLETE67 dry-run compiler is missing"
+    assert tuple(inspect.signature(compile_dry_run).parameters) == (
+        "candidate",
+        "evidence_authority",
+        "complete67_payload",
+        "old60_bytes",
+        "latest71_bytes",
+    )
+    authority_calls = 0
+
+    def forbidden_receipt_authority(*args: object, **kwargs: object) -> object:
+        nonlocal authority_calls
+        authority_calls += 1
+        raise AssertionError((args, kwargs))
+
+    monkeypatch.setattr(
+        schema_wiki_release_596_1,
+        "validate_schema67_golden_quality_gate_receipt_596_1",
+        forbidden_receipt_authority,
+    )
+    release = _compile_complete67(candidate=candidate, authority=authority)
+
+    assert successor.golden_admission_status == "BLOCKED_RECEIPT_UNVERIFIED"
+    assert authority_calls == 0
+    assert len(release.members) == 75
+    assert tuple(member.member_kind for member in release.members) == (
+        "root",
+        *("section" for _ in range(7)),
+        *("field" for _ in range(67)),
+    )
+    assert all(
+        member.member_ref.startswith(("root:", "section:", "field:"))
+        for member in release.members
+    )
+    fields = {item.field_id: item for item in candidate.fields}
+    pages = {
+        member.field_id: member.payload
+        for member in release.members
+        if member.member_kind == "field"
+    }
+    coverage_ids = tuple(
+        row.field_id for row in successor.fields if row.unknown_reason is not None
+    )
+    assert len(coverage_ids) == 16
+    assert all(fields[field_id].state == "unknown" for field_id in coverage_ids)
+    for row in successor.fields:
+        page = pages[row.field_id]
+        assert isinstance(page, SchemaFieldPageV1)
+        if row.field_id in coverage_ids:
+            assert page.state == "unknown"
+            assert page.value_snapshot is None
+            assert page.citations == ()
+            assert page.evidence_receipt_sha256s == ()
+            assert page.review_item_reason == "FIELD_UNKNOWN"
+            assert page.unknown_reason == _NOT_COVERED_REASON
+        else:
+            candidate_field = fields[row.field_id]
+            assert page.state == candidate_field.state
+            assert page.value_snapshot == candidate_field.value_snapshot
+            assert len(page.citations) == len(candidate_field.evidence)
+            if candidate_field.state == "unknown":
+                assert page.unknown_reason == _GENERIC_UNKNOWN_REASON
+
+
+def test_complete67_dry_run_rejects_known_coverage_field_without_mutating_candidate() -> None:
+    candidate, authority = _candidate_with_foreign_coverage_state()
+    coverage_ids = _coverage_field_ids()
+    original = candidate.model_dump(mode="json")
+    assert any(
+        field.state != "unknown" for field in candidate.fields if field.field_id in coverage_ids
+    )
+
+    with pytest.raises(SchemaWikiCompilationError) as caught:
+        _compile_complete67(candidate=candidate, authority=authority)
+
+    assert caught.value.reason_code == "COMPLETE67_CANDIDATE_CUSTODY_INVALID"
+    assert candidate.model_dump(mode="json") == original
+
+
+def test_complete67_dry_run_rejects_unknown_reason_drift_before_compilation() -> None:
+    candidate, authority = _candidate_and_authority()
+    compile_dry_run = getattr(
+        schema_wiki_release_596_1,
+        "compile_complete67_schema_wiki_release_dry_run_596_1",
+        None,
+    )
+    assert callable(compile_dry_run), "COMPLETE67 dry-run compiler is missing"
+    payload = json.loads(_COMPLETE67.read_bytes())
+    row = next(item for item in payload["fields"] if item.get("unknown_reason") is not None)
+    row["unknown_reason"] = None
+
+    with pytest.raises(SchemaWikiCompilationError) as caught:
+        compile_dry_run(
+            candidate=candidate,
+            evidence_authority=authority,
+            complete67_payload=json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            old60_bytes=_OLD60.read_bytes(),
+            latest71_bytes=_LATEST71.read_bytes(),
+        )
+
+    assert caught.value.reason_code == "COMPLETE67_AUTHORITY_INVALID"
 
 
 @pytest.mark.parametrize(
@@ -354,14 +534,10 @@ def test_unknown_field_page_has_no_value_receipt_or_citation() -> None:
         ("locator_ref", "foreign-block"),
     ],
 )
-def test_known_field_page_rejects_foreign_citation_custody(
-    field: str, foreign: object
-) -> None:
+def test_known_field_page_rejects_foreign_citation_custody(field: str, foreign: object) -> None:
     candidate, authority = _candidate_and_authority()
     output = next(item for item in candidate.fields if item.field_id == "product_code")
-    receipt = next(
-        item for item in candidate.evidence_receipts if item.field_id == output.field_id
-    )
+    receipt = next(item for item in candidate.evidence_receipts if item.field_id == output.field_id)
     join_index = next(
         index
         for index, item in enumerate(authority.join_receipts)
@@ -515,16 +691,10 @@ def test_factory_registry_validation_is_thread_safe() -> None:
 def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -> None:
     candidate, authority = _candidate_and_authority()
     output = next(item for item in candidate.fields if item.field_id == "sales_end_date")
-    receipt = next(
-        item for item in candidate.evidence_receipts if item.field_id == output.field_id
-    )
-    known_output = next(
-        item for item in candidate.fields if item.field_id == "product_code"
-    )
+    receipt = next(item for item in candidate.evidence_receipts if item.field_id == output.field_id)
+    known_output = next(item for item in candidate.fields if item.field_id == "product_code")
     known_receipt = next(
-        item
-        for item in candidate.evidence_receipts
-        if item.field_id == known_output.field_id
+        item for item in candidate.evidence_receipts if item.field_id == known_output.field_id
     )
 
     with pytest.raises(SchemaWikiCompilationError):
@@ -550,18 +720,22 @@ def test_unknown_field_rejects_forged_evidence_and_cannot_express_a_citation() -
         )
 
 
-def test_review_bundle_binds_manifest_members_for_existing_service_review() -> None:
-    candidate, release = _real_candidate_and_release()
-
-    bundle = build_schema_wiki_review_bundle_596_1(
+def test_provider_zero_candidate_cannot_build_a_review_bundle() -> None:
+    candidate, authority = _candidate_and_authority()
+    release = compile_schema_wiki_release_596_1(
         candidate=candidate,
-        release=release,
+        evidence_authority=authority,
     )
 
-    assert type(bundle) is SchemaWikiReviewBundleV1
-    assert bundle.manifest_digest == release.manifest_digest
-    assert bundle.release_sha256 == release.release_sha256
-    assert validate_schema_wiki_review_bundle(bundle, release) == bundle
+    with pytest.raises(SchemaWikiCompilationError) as caught:
+        build_schema_wiki_review_bundle_596_1(
+            candidate=candidate,
+            evidence_authority=authority,
+            release=release,
+            quality_gate_receipt=object(),
+        )
+
+    assert caught.value.reason_code == "QUALITY_GATE_RECEIPT_INVALID"
 
 
 def test_lane_b_exposes_no_caller_selected_review_approval_handoff() -> None:
@@ -572,25 +746,9 @@ def test_lane_b_exposes_no_caller_selected_review_approval_handoff() -> None:
     assert "require_manifest_bound_review_596_1" not in schema_wiki_release_596_1.__all__
 
 
-def test_review_bundle_rejects_manifest_drift_before_authority_handoff() -> None:
-    candidate, release = _real_candidate_and_release()
-    bundle = build_schema_wiki_review_bundle_596_1(
-        candidate=candidate,
-        release=release,
-    )
-    forged_release = release.model_copy()
-    object.__setattr__(forged_release, "manifest_digest", "f" * 64)
-
-    with pytest.raises(SchemaWikiContractError):
-        validate_schema_wiki_review_bundle(bundle, forged_release)
-
-
 def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> None:
     candidate, authority = _candidate_and_authority()
-    release = compile_schema_wiki_release_596_1(
-        candidate=candidate,
-        evidence_authority=authority,
-    )
+    release = _compile_complete67(candidate=candidate, authority=authority)
 
     assert type(release) is KnowledgeWikiReleaseV1
     assert release.candidate_sha256 == candidate.candidate_sha256
@@ -604,23 +762,14 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
     ) == (("terms", 39, 2), ("brochure", 27, 1), ("rate_table", 2, 1))
     assert len(authority.join_receipts) == sum(
         len(field.evidence) for field in candidate.fields
-    ) == 111
+    )
+    assert authority.join_receipts
     assert len(release.members) == 75
     assert tuple(item.member_kind for item in release.members[:8]) == (
         "root",
         *("section" for _ in range(7)),
     )
-    assert tuple(item.field_id for item in release.members[8:]) == (
-        candidate.ordered_field_ids
-    )
-    assert validate_schema_wiki_review_bundle(
-        build_schema_wiki_review_bundle_596_1(
-            candidate=candidate,
-            release=release,
-        ),
-        release,
-    )
-
+    assert tuple(item.field_id for item in release.members[8:]) == (candidate.ordered_field_ids)
     vector_path = (
         Path(__file__).parents[2]
         / "internal/application/service/testdata/schema_wiki_release_596_1_vector.json"
@@ -631,14 +780,9 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
     }
 
 
-def _real_candidate_and_release() -> tuple[
-    Schema67CandidateV2, KnowledgeWikiReleaseV1
-]:
+def _real_candidate_and_release() -> tuple[Schema67CandidateV2, KnowledgeWikiReleaseV1]:
     candidate, authority = _candidate_and_authority()
-    release = compile_schema_wiki_release_596_1(
-        candidate=candidate,
-        evidence_authority=authority,
-    )
+    release = _compile_complete67(candidate=candidate, authority=authority)
     return candidate, release
 
 
@@ -704,16 +848,11 @@ def test_compiler_carries_exact75_typed_canonical_member_payloads() -> None:
         "taxonomy_version": release.taxonomy.taxonomy_version,
         "taxonomy_sha256": release.taxonomy.taxonomy_sha256,
         "product_display_name": "平安e生保（尊享版）医疗保险",
-        "ordered_section_ids": [
-            section.section_id for section in release.schema_pack.sections
-        ],
+        "ordered_section_ids": [section.section_id for section in release.schema_pack.sections],
         "root_page_sha256": rows[0]["payload_sha256"],
     }
 
-    assert all(
-        isinstance(member.payload, SchemaSectionPageV1)
-        for member in release.members[1:8]
-    )
+    assert all(isinstance(member.payload, SchemaSectionPageV1) for member in release.members[1:8])
     expected_section_payloads = [
         {
             "contract": "schema-section-page.v1",
@@ -732,26 +871,49 @@ def test_compiler_carries_exact75_typed_canonical_member_payloads() -> None:
             "ordered_field_ids": list(section.ordered_field_ids),
             "section_page_sha256": row["payload_sha256"],
         }
-        for section, row in zip(
-            release.schema_pack.sections, rows[1:8], strict=True
-        )
+        for section, row in zip(release.schema_pack.sections, rows[1:8], strict=True)
     ]
     section_rows = rows[1:8]
     assert [row["payload"] for row in section_rows] == expected_section_payloads
 
-    expected_pages = [
-        build_schema_field_page_596_1(
-            candidate=candidate,
-            output=output,
-            evidence_receipt=receipt,
-            evidence_authority=authority,
-        ).model_dump(mode="json")
-        for output, receipt in zip(
-            candidate.fields,
-            candidate.evidence_receipts,
-            strict=True,
-        )
-    ]
+    coverage_ids = _coverage_field_ids()
+    expected_pages = []
+    for output, receipt in zip(
+        candidate.fields,
+        candidate.evidence_receipts,
+        strict=True,
+    ):
+        if output.field_id in coverage_ids:
+            payload = {
+                "contract": "schema-field-page.v1",
+                "field_id": output.field_id,
+                "state": "unknown",
+                "value_snapshot": None,
+                "citations": (),
+                "evidence_receipt_sha256s": (),
+                "review_item_reason": "FIELD_UNKNOWN",
+                "unknown_reason": _NOT_COVERED_REASON,
+            }
+            expected_pages.append(
+                SchemaFieldPageV1.model_validate(
+                    {
+                        **payload,
+                        "field_page_sha256": schema_wiki_sha256(
+                            "schema-field-page.v1",
+                            payload,
+                        ),
+                    }
+                ).model_dump(mode="json")
+            )
+        else:
+            expected_pages.append(
+                build_schema_field_page_596_1(
+                    candidate=candidate,
+                    output=output,
+                    evidence_receipt=receipt,
+                    evidence_authority=authority,
+                ).model_dump(mode="json")
+            )
     field_payloads = [row["payload"] for row in rows[8:]]
     assert field_payloads == expected_pages
 
@@ -821,7 +983,9 @@ def test_medical_root_display_name_is_code_owned_after_full_rehash() -> None:
     with pytest.raises(SchemaWikiCompilationError):
         build_schema_wiki_review_bundle_596_1(
             candidate=candidate,
+            evidence_authority=object(),  # type: ignore[arg-type]
             release=generic_valid,
+            quality_gate_receipt=object(),
         )
 
 
@@ -840,5 +1004,7 @@ def test_foreign_a1_release_cannot_receive_596_1_review_bundle() -> None:
     with pytest.raises(SchemaWikiCompilationError):
         build_schema_wiki_review_bundle_596_1(
             candidate=candidate,
+            evidence_authority=object(),  # type: ignore[arg-type]
             release=foreign,
+            quality_gate_receipt=object(),
         )

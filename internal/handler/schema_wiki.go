@@ -31,6 +31,12 @@ type schemaWikiPreparationScopeResolver interface {
 	GetPreparationScopeForWikiKB(context.Context, uint64, string, string) (*types.WikiReleaseScope, error)
 }
 
+type SchemaWikiCitationContentRouteAuthorityResolver interface {
+	ResolveSchemaCitationContentRouteAuthority(
+		context.Context, string,
+	) (*service.SchemaWikiCitationContentRouteAuthorityV1, error)
+}
+
 type schemaWikiHTTPService interface {
 	CreateSchemaDraft(
 		context.Context,
@@ -40,6 +46,8 @@ type schemaWikiHTTPService interface {
 		types.KnowledgeWikiReleaseV1,
 		types.Schema67CandidateEvidenceAuthorityV1,
 		types.SchemaWikiReviewBundleV1,
+		types.Schema67GoldenEvaluationReviewBundleV1,
+		types.Schema67GoldenReviewSuccessorMetadataV1,
 	) (*types.WikiReleasePreparation, error)
 	ReviewSchemaDraft(
 		context.Context,
@@ -123,29 +131,67 @@ type schemaWikiHTTPService interface {
 		string,
 		string,
 	) ([]byte, error)
+	ReadSchemaPreparationGoldenQualitySummary(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenQualitySummaryV1, error)
+	ReadSchemaPreparationGoldenQualityDossier(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenQualityDossierV2, error)
+	IssueSchemaPreparationGoldenEvidencePreview(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+		string,
+		string,
+	) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error)
+	ReadSchemaWikiGoldenSuccessorStatus(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+	) (*types.SchemaWikiGoldenSuccessorStatusV1, error)
 }
 
 // SchemaWikiHandler exposes the bounded Schema Wiki HTTP facade. Release and
 // citation authority stays inside SchemaWikiService; HTTP callers provide only
 // path identities and never custody DTOs.
 type SchemaWikiHandler struct {
-	scopeResolver SchemaWikiScopeResolver
-	schemaService schemaWikiHTTPService
+	scopeResolver          SchemaWikiScopeResolver
+	schemaService          schemaWikiHTTPService
+	citationRouteAuthority SchemaWikiCitationContentRouteAuthorityResolver
 }
 
 // NewSchemaWikiHandler constructs the explicitly injected Schema Wiki facade.
 func NewSchemaWikiHandler(
 	scopeResolver SchemaWikiScopeResolver,
 	schemaService schemaWikiHTTPService,
+	citationResolvers ...SchemaWikiCitationContentRouteAuthorityResolver,
 ) *SchemaWikiHandler {
-	return &SchemaWikiHandler{scopeResolver: scopeResolver, schemaService: schemaService}
+	handler := &SchemaWikiHandler{scopeResolver: scopeResolver, schemaService: schemaService}
+	if len(citationResolvers) == 1 {
+		handler.citationRouteAuthority = citationResolvers[0]
+	} else if resolver, ok := schemaService.(SchemaWikiCitationContentRouteAuthorityResolver); ok {
+		handler.citationRouteAuthority = resolver
+	}
+	return handler
 }
 
 type schemaWikiCreateDraftRequest struct {
-	PreparationID              string                                     `json:"preparation_id"`
-	Release                    types.KnowledgeWikiReleaseV1               `json:"release"`
-	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1 `json:"candidate_evidence_authority"`
-	ReviewBundle               types.SchemaWikiReviewBundleV1             `json:"review_bundle"`
+	PreparationID              string                                        `json:"preparation_id"`
+	Release                    types.KnowledgeWikiReleaseV1                  `json:"release"`
+	CandidateEvidenceAuthority types.Schema67CandidateEvidenceAuthorityV1    `json:"candidate_evidence_authority"`
+	ReviewBundle               types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
+	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
+	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -208,6 +254,69 @@ func (h *SchemaWikiHandler) RequireScopeParams() gin.HandlerFunc {
 			return
 		}
 		c.Set(schemaWikiResolvedHeadContextKey, *head)
+		c.Next()
+	}
+}
+
+// RequireCitationContentScope verifies the opaque token before RAW ACL. The
+// caller path may identify the Wiki KB for its first ACL only; Space/RAW must
+// match the signed token and, for preparation tokens, immutable preparation
+// custody. Active reads also re-resolve Head here and are pinned again before
+// bytes open in the service.
+func (h *SchemaWikiHandler) RequireCitationContentScope() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantID, wikiKBID, pathScope, ok := schemaWikiPathScope(c)
+		if !ok || h == nil || h.scopeResolver == nil || h.citationRouteAuthority == nil {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		authority, err := h.citationRouteAuthority.ResolveSchemaCitationContentRouteAuthority(
+			c.Request.Context(), strings.TrimSpace(c.Param("token")),
+		)
+		if err != nil || authority == nil || authority.Scope != pathScope ||
+			authority.Scope.TenantID != tenantID || authority.Scope.WikiKBID != wikiKBID {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		switch authority.Kind {
+		case "active":
+			head, headErr := h.scopeResolver.GetHeadForWikiKB(c.Request.Context(), tenantID, wikiKBID)
+			if headErr != nil || head == nil || head.WikiReleaseScope != authority.Scope {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			c.Set(schemaWikiResolvedHeadContextKey, *head)
+		case "preparation":
+			principal, principalOK := types.PrincipalFromContext(c.Request.Context())
+			_, apiKey := types.TenantAPIKeyScopeFromContext(c.Request.Context())
+			if apiKey || !principalOK || principal.Type != types.PrincipalWebUser ||
+				!types.TenantRoleFromContext(c.Request.Context()).HasPermission(types.TenantRoleAdmin) {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			resolver, resolverOK := h.scopeResolver.(schemaWikiPreparationScopeResolver)
+			if !resolverOK || strings.TrimSpace(authority.PreparationID) == "" {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			stored, scopeErr := resolver.GetPreparationScopeForWikiKB(
+				c.Request.Context(), tenantID, wikiKBID, authority.PreparationID,
+			)
+			if scopeErr != nil || stored == nil || *stored != authority.Scope {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+		default:
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }
@@ -450,6 +559,8 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 	draft, err := h.schemaService.CreateSchemaDraft(
 		c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
 		request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
+		request.EvaluationBundle,
+		request.ReviewSuccessor,
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)
@@ -625,6 +736,102 @@ func (h *SchemaWikiHandler) ReadReviewedRoot(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": read.Payload})
 }
 
+func (h *SchemaWikiHandler) ReadPreparationGoldenQualitySummary(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	summary, err := h.schemaService.ReadSchemaPreparationGoldenQualitySummary(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
+}
+
+func (h *SchemaWikiHandler) ReadPreparationGoldenQualityDossier(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiPreparationInvalid)
+		return
+	}
+	dossier, err := h.schemaService.ReadSchemaPreparationGoldenQualityDossier(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": dossier})
+}
+
+// ReadGoldenSuccessorStatus exposes only the deployment-frozen, non-serving
+// source-review/mapping/admission status. It accepts no caller payload.
+func (h *SchemaWikiHandler) ReadGoldenSuccessorStatus(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrNoGoldenSuccessorStatus)
+		return
+	}
+	status, err := h.schemaService.ReadSchemaWikiGoldenSuccessorStatus(
+		c.Request.Context(), principal, scope,
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": status})
+}
+
+func (h *SchemaWikiHandler) PreviewPreparationGoldenEvidence(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
+		return
+	}
+	authority, err := h.schemaService.IssueSchemaPreparationGoldenEvidencePreview(
+		c.Request.Context(),
+		principal,
+		scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("evaluation_id")),
+		strings.TrimSpace(c.Param("field_id")),
+		strings.TrimSpace(c.Param("evidence_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": authority})
+}
+
 // PreviewCurrentCitation selects CitationTarget and binding from the pinned
 // release inside the service. Only field/citation IDs cross the HTTP boundary.
 func (h *SchemaWikiHandler) PreviewCurrentCitation(c *gin.Context) {
@@ -742,11 +949,21 @@ func writeSchemaWikiError(c *gin.Context, err error) {
 		})
 	case stderrors.Is(err, service.ErrSchemaWikiCitationPageUnavailable):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"success": false, "error": gin.H{"message": "schema wiki citation page unavailable"},
+			"success": false,
+			"error": gin.H{
+				"code": "PAGE_UNAVAILABLE", "message": "schema wiki citation page unavailable",
+			},
 		})
 	case stderrors.Is(err, service.ErrNoSchemaWikiActiveRelease):
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false, "error": gin.H{"message": "no schema wiki active release"},
+		})
+	case stderrors.Is(err, service.ErrNoGoldenSuccessorStatus):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code": "NO_GOLDEN_SUCCESSOR_STATUS", "message": "golden successor status unavailable",
+			},
 		})
 	default:
 		writeWikiReleaseError(c, err)

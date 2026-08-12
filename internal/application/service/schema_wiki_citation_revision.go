@@ -42,8 +42,11 @@ type SchemaWikiCitationCoordinateAuthorityReceiptV1 = types.Schema67CitationAuth
 
 type SchemaWikiImmutableRevisionSnapshotRequestV1 struct {
 	Contract               string                                         `json:"contract"`
-	ReleaseID              string                                         `json:"release_id"`
-	ActivationEpoch        uint64                                         `json:"activation_epoch"`
+	ReleaseID              string                                         `json:"release_id,omitempty"`
+	ActivationEpoch        uint64                                         `json:"activation_epoch,omitempty"`
+	PreparationID          string                                         `json:"preparation_id,omitempty"`
+	EvaluationID           string                                         `json:"evaluation_id,omitempty"`
+	EvidenceID             string                                         `json:"evidence_id,omitempty"`
 	Scope                  types.WikiReleaseScope                         `json:"scope"`
 	CandidateSHA256        string                                         `json:"candidate_sha256"`
 	LogicalMemberRef       string                                         `json:"logical_member_ref"`
@@ -347,8 +350,13 @@ func (a *schemaWikiCitationRevisionReadAdapter) resolveExactRevisionAuthority(
 	ctx context.Context,
 	request CitationRevisionReadRequestV1,
 ) (*SchemaWikiCitationPreviewAuthorityV1, error) {
+	activeAuthority := request.ReleaseID != "" && request.ActivationEpoch > 0 &&
+		request.PreparationID == "" && request.EvaluationID == "" && request.EvidenceID == ""
+	preparationAuthority := request.ReleaseID == "" && request.ActivationEpoch == 0 &&
+		request.PreparationID != "" && schemaWikiSHA256(request.EvaluationID) &&
+		schemaWikiSHA256(request.EvidenceID)
 	if a == nil || a.revisions == nil || a.chunks == nil ||
-		request.ReleaseID == "" || request.ActivationEpoch == 0 ||
+		(!activeAuthority && !preparationAuthority) ||
 		!schemaWikiSHA256(request.CandidateSHA256) || request.FieldID == "" ||
 		request.Scope.TenantID == 0 || request.Scope.SpaceID == "" ||
 		request.Scope.RawKBID == "" || request.Scope.WikiKBID == "" ||
@@ -465,7 +473,9 @@ func (a *schemaWikiCitationRevisionReadAdapter) resolveExactRevisionAuthority(
 	snapshotRequest := SchemaWikiImmutableRevisionSnapshotRequestV1{
 		Contract:  "schema-wiki-immutable-revision-snapshot-request.v1",
 		ReleaseID: request.ReleaseID, ActivationEpoch: request.ActivationEpoch,
-		Scope: request.Scope, CandidateSHA256: request.CandidateSHA256,
+		PreparationID: request.PreparationID, EvaluationID: request.EvaluationID,
+		EvidenceID: request.EvidenceID,
+		Scope:      request.Scope, CandidateSHA256: request.CandidateSHA256,
 		LogicalMemberRef: request.Citation.LogicalMemberRef, FieldID: request.FieldID,
 		CitationID:     request.Citation.CitationID,
 		CitationSHA256: request.Citation.CitationSHA256,

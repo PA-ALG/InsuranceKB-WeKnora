@@ -20,7 +20,10 @@ state. It SHALL NOT convert, copy or fall back to the live generic material Wiki
   release-pinned schema reads under the existing dual ACL. It reuses the single existing
   Head, CAS activation, revert and pinning authority; it adds no release table or Head.
   The immutable-citation delta adds only an attempt-bound revision-source/resource record,
-  an exact byte reader and a third, citation-token-only signing ring.
+  an exact byte reader and a third, citation-token-only signing ring. Its exact3 dry-run
+  uses one narrow read-only repeatable-read repository snapshot and safe digest/count
+  receipts; actual sealing remains ordered, fresh-rechecked and partial-stop rather than
+  pretending that three source rows are one atomic write.
 - **Lane B · medical compiler** code-owns `medical-schema67.v1`, the initial medical
   domain/category, the stable Ping An eShengBao entity, product version `596-1`, the
   initial taxonomy, sealed-Candidate compilation, the factory-provenance-sealed Evidence

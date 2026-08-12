@@ -2,7 +2,9 @@ package config
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,29 +21,74 @@ import (
 
 // Config 应用程序总配置
 type Config struct {
-	Conversation      *ConversationConfig      `yaml:"conversation"     json:"conversation"`
-	Server            *ServerConfig            `yaml:"server"           json:"server"`
-	KnowledgeBase     *KnowledgeBaseConfig     `yaml:"knowledge_base"   json:"knowledge_base"`
-	Tenant            *TenantConfig            `yaml:"tenant"           json:"tenant"`
-	Auth              *AuthConfig              `yaml:"auth"             json:"auth"`
-	Audit             *AuditConfig             `yaml:"audit"            json:"audit"`
-	OIDCAuth          *OIDCAuthConfig          `yaml:"oidc_auth"        json:"oidc_auth"`
-	Models            []ModelConfig            `yaml:"models"           json:"models"`
-	VectorDatabase    *VectorDatabaseConfig    `yaml:"vector_database"  json:"vector_database"`
-	DocReader         *DocReaderConfig         `yaml:"docreader"        json:"docreader"`
-	StreamManager     *StreamManagerConfig     `yaml:"stream_manager"   json:"stream_manager"`
-	ExtractManager    *ExtractManagerConfig    `yaml:"extract"          json:"extract"`
-	WebSearch         *WebSearchConfig         `yaml:"web_search"       json:"web_search"`
-	PromptTemplates   *PromptTemplatesConfig   `yaml:"prompt_templates" json:"prompt_templates"`
-	IM                *IMConfig                `yaml:"im"               json:"im"`
-	Agent             *AgentConfig             `yaml:"agent"            json:"agent"`
-	SchemaWikiSigning *SchemaWikiSigningConfig `yaml:"schema_wiki_signing" json:"-"`
+	Conversation                    *ConversationConfig                    `yaml:"conversation"     json:"conversation"`
+	Server                          *ServerConfig                          `yaml:"server"           json:"server"`
+	KnowledgeBase                   *KnowledgeBaseConfig                   `yaml:"knowledge_base"   json:"knowledge_base"`
+	Tenant                          *TenantConfig                          `yaml:"tenant"           json:"tenant"`
+	Auth                            *AuthConfig                            `yaml:"auth"             json:"auth"`
+	Audit                           *AuditConfig                           `yaml:"audit"            json:"audit"`
+	OIDCAuth                        *OIDCAuthConfig                        `yaml:"oidc_auth"        json:"oidc_auth"`
+	Models                          []ModelConfig                          `yaml:"models"           json:"models"`
+	VectorDatabase                  *VectorDatabaseConfig                  `yaml:"vector_database"  json:"vector_database"`
+	DocReader                       *DocReaderConfig                       `yaml:"docreader"        json:"docreader"`
+	StreamManager                   *StreamManagerConfig                   `yaml:"stream_manager"   json:"stream_manager"`
+	ExtractManager                  *ExtractManagerConfig                  `yaml:"extract"          json:"extract"`
+	WebSearch                       *WebSearchConfig                       `yaml:"web_search"       json:"web_search"`
+	PromptTemplates                 *PromptTemplatesConfig                 `yaml:"prompt_templates" json:"prompt_templates"`
+	IM                              *IMConfig                              `yaml:"im"               json:"im"`
+	Agent                           *AgentConfig                           `yaml:"agent"            json:"agent"`
+	SchemaWikiSigning               *SchemaWikiSigningConfig               `yaml:"schema_wiki_signing" json:"-"`
+	KnowledgeRevisionSource         *KnowledgeRevisionSourceConfig         `yaml:"knowledge_revision_source" json:"knowledge_revision_source"`
+	SchemaWikiGoldenSuccessorStatus *SchemaWikiGoldenSuccessorStatusConfig `yaml:"schema_wiki_golden_successor_status" json:"-"`
 	// FrontendBaseURL is the externally-visible origin of the SPA, used
 	// to compose absolute share-link URLs. Empty falls back to a host-
 	// relative URL ("/register?token=…") which the SPA then resolves
 	// against window.location.origin — fine for typical single-origin
 	// deployments. Sourced from FRONTEND_BASE_URL env at startup.
 	FrontendBaseURL string `yaml:"frontend_base_url" json:"frontend_base_url"`
+}
+
+// KnowledgeRevisionSourceConfig gates the one-shot immutable source backfill.
+// Reads remain fail-closed when a source has not been sealed. MaxObjectBytes
+// bounds every hash/page-count pass before any repository mutation.
+type KnowledgeRevisionSourceConfig struct {
+	BackfillEnabled bool  `yaml:"backfill_enabled" json:"backfill_enabled"`
+	MaxObjectBytes  int64 `yaml:"max_object_bytes" json:"max_object_bytes"`
+}
+
+// SchemaWikiGoldenSuccessorStatusConfig accepts one deployment-owned canonical
+// status artifact inline. There is deliberately no caller filesystem path.
+type SchemaWikiGoldenSuccessorStatusConfig struct {
+	CanonicalJSON   string `yaml:"canonical_json" json:"-"`
+	CanonicalSHA256 string `yaml:"canonical_sha256" json:"-"`
+}
+
+// DecodeSchemaWikiGoldenSuccessorStatus freezes the exact configured bytes.
+// Empty configuration is valid and keeps the private route typed unavailable.
+func DecodeSchemaWikiGoldenSuccessorStatus(cfg *Config) ([]byte, error) {
+	var configured *SchemaWikiGoldenSuccessorStatusConfig
+	if cfg != nil {
+		configured = cfg.SchemaWikiGoldenSuccessorStatus
+	}
+	if configured == nil {
+		return nil, nil
+	}
+	if configured.CanonicalJSON == "" || len(configured.CanonicalSHA256) != 64 ||
+		configured.CanonicalSHA256 != strings.ToLower(configured.CanonicalSHA256) {
+		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
+	}
+	if _, err := hex.DecodeString(configured.CanonicalSHA256); err != nil {
+		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
+	}
+	raw := []byte(configured.CanonicalJSON)
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != configured.CanonicalSHA256 {
+		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
+	}
+	if _, err := types.ParseSchemaWikiGoldenSuccessorStatusV1(raw); err != nil {
+		return nil, fmt.Errorf("schema wiki golden successor status configuration invalid")
+	}
+	return append([]byte(nil), raw...), nil
 }
 
 // SchemaWikiEd25519PublicKeyConfig is a deployment-owned verification key.
@@ -62,10 +109,11 @@ type SchemaWikiEd25519PrivateKeyConfig struct {
 // SchemaWikiSigningConfig keeps the human-review and publish-authorization
 // trust domains separate while reusing their existing signed receipt formats.
 type SchemaWikiSigningConfig struct {
-	HumanDecisionPublicKeys        []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
-	PublishAuthorizationPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
-	CitationTokenSigningKeys       []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
-	ActiveCitationTokenKeyID       string                              `yaml:"active_citation_token_key_id" json:"-"`
+	HumanDecisionPublicKeys          []SchemaWikiEd25519PublicKeyConfig  `yaml:"human_decision_public_keys" json:"human_decision_public_keys"`
+	PublishAuthorizationPublicKeys   []SchemaWikiEd25519PublicKeyConfig  `yaml:"publish_authorization_public_keys" json:"publish_authorization_public_keys"`
+	GoldenQualityEvaluatorPublicKeys []SchemaWikiEd25519PublicKeyConfig  `yaml:"golden_quality_evaluator_public_keys" json:"golden_quality_evaluator_public_keys"`
+	CitationTokenSigningKeys         []SchemaWikiEd25519PrivateKeyConfig `yaml:"citation_token_signing_keys" json:"-"`
+	ActiveCitationTokenKeyID         string                              `yaml:"active_citation_token_key_id" json:"-"`
 }
 
 // SchemaWikiCitationTokenSigningRing is a decoded runtime-only third signing
@@ -129,6 +177,64 @@ func DecodeSchemaWikiSigningPublicKeys(
 		}
 	}
 	return human, publish, nil
+}
+
+// DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys freezes the deployment-owned
+// evaluator receipt verification ring. Empty configuration is deliberately
+// fail-closed at the service verifier. Key IDs and public material are disjoint
+// from human review, publish authorization, and citation-token signing domains.
+func DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(
+	cfg *Config,
+) (map[string]ed25519.PublicKey, error) {
+	var signing *SchemaWikiSigningConfig
+	if cfg != nil {
+		signing = cfg.SchemaWikiSigning
+	}
+	if signing == nil {
+		return map[string]ed25519.PublicKey{}, nil
+	}
+	golden, err := decodeSchemaWikiPublicKeyRing(
+		"Golden quality evaluator", signing.GoldenQualityEvaluatorPublicKeys,
+	)
+	if err != nil {
+		return nil, err
+	}
+	human, publish, err := DecodeSchemaWikiSigningPublicKeys(cfg)
+	if err != nil {
+		return nil, err
+	}
+	citation, err := DecodeSchemaWikiCitationTokenSigningRing(cfg)
+	if err != nil {
+		return nil, err
+	}
+	for keyID, goldenKey := range golden {
+		if _, duplicate := human[keyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		if _, duplicate := publish[keyID]; duplicate {
+			return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+		}
+		for _, existing := range human {
+			if string(existing) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for _, existing := range publish {
+			if string(existing) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+		for citationKeyID, privateKey := range citation.SigningKeys() {
+			if citationKeyID == keyID {
+				return nil, fmt.Errorf("schema wiki key id is reused across signing domains")
+			}
+			publicKey := privateKey.Public().(ed25519.PublicKey)
+			if string(publicKey) == string(goldenKey) {
+				return nil, fmt.Errorf("schema wiki key material is reused across signing domains")
+			}
+		}
+	}
+	return golden, nil
 }
 
 // DecodeSchemaWikiCitationTokenSigningRing freezes a third Ed25519 authority
@@ -213,6 +319,7 @@ func decodeSchemaWikiPublicKeyRing(
 	entries []SchemaWikiEd25519PublicKeyConfig,
 ) (map[string]ed25519.PublicKey, error) {
 	keys := make(map[string]ed25519.PublicKey, len(entries))
+	publicMaterial := map[string]string{}
 	for _, entry := range entries {
 		if entry.KeyID == "" || entry.KeyID != strings.TrimSpace(entry.KeyID) ||
 			strings.IndexFunc(entry.KeyID, func(character rune) bool {
@@ -228,6 +335,10 @@ func decodeSchemaWikiPublicKeyRing(
 			base64.RawURLEncoding.EncodeToString(decoded) != entry.PublicKeyBase64 {
 			return nil, fmt.Errorf("schema wiki %s public key is invalid", domain)
 		}
+		if _, duplicate := publicMaterial[string(decoded)]; duplicate {
+			return nil, fmt.Errorf("schema wiki %s public key material is duplicated", domain)
+		}
+		publicMaterial[string(decoded)] = entry.KeyID
 		keys[entry.KeyID] = append(ed25519.PublicKey(nil), decoded...)
 	}
 	return keys, nil
@@ -804,10 +915,20 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
+	if cfg != nil && cfg.KnowledgeRevisionSource != nil &&
+		cfg.KnowledgeRevisionSource.MaxObjectBytes < 0 {
+		errs = append(errs, "knowledge_revision_source.max_object_bytes cannot be negative")
+	}
 	if _, _, err := DecodeSchemaWikiSigningPublicKeys(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
 	if _, err := DecodeSchemaWikiCitationTokenSigningRing(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg); err != nil {
+		errs = append(errs, err.Error())
+	}
+	if _, err := DecodeSchemaWikiGoldenSuccessorStatus(cfg); err != nil {
 		errs = append(errs, err.Error())
 	}
 

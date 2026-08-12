@@ -2011,6 +2011,9 @@ func (s *knowledgeService) ReparseKnowledge(
 		logger.Errorf(ctx, "Failed to load knowledge: %v", err)
 		return nil, err
 	}
+	if err := requireKnowledgeRevisionSourceReparseAllowed(ctx, s.repo, tenantID, knowledgeID); err != nil {
+		return nil, err
+	}
 
 	// Allocate a fresh span tree attempt up front. Doing this BEFORE
 	// the cleanup + enqueue means: (a) the UI immediately sees a new

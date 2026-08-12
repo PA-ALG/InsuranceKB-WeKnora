@@ -26,6 +26,15 @@ export interface SchemaWikiClient {
   getPreparationRoot(preparationId: string): Promise<unknown>
   getPreparationSection(preparationId: string, sectionId: string): Promise<unknown>
   getPreparationField(preparationId: string, fieldId: string): Promise<unknown>
+  getGoldenQualitySummary(preparationId: string, evaluationId: string): Promise<unknown>
+  getGoldenQualityDossier(preparationId: string, evaluationId: string): Promise<unknown>
+  getGoldenSuccessorStatus(): Promise<unknown>
+  getGoldenEvidencePreview(
+    preparationId: string,
+    evaluationId: string,
+    fieldId: string,
+    evidenceId: string,
+  ): Promise<unknown>
 }
 
 const ID_SEGMENT = /^[A-Za-z0-9._:-]+$/
@@ -139,6 +148,14 @@ export async function bootstrapSchemaWikiClient(
   const preparationPath = (preparationId: string, suffix: string): string => (
     `/preparations/${exactId(preparationId)}/${suffix}`
   )
+  const goldenQualityPath = (
+    preparationId: string,
+    evaluationId: string,
+    suffix: string,
+  ): string => preparationPath(
+    preparationId,
+    `golden-quality/evaluations/${exactId(evaluationId)}/${suffix}`,
+  )
 
   return Object.freeze({
     scope,
@@ -161,5 +178,22 @@ export async function bootstrapSchemaWikiClient(
     getPreparationField: (preparationId: string, fieldId: string) => read(
       preparationPath(preparationId, `fields/${exactId(fieldId)}`),
     ),
+    getGoldenQualitySummary: (preparationId: string, evaluationId: string) => read(
+      goldenQualityPath(preparationId, evaluationId, 'summary'),
+    ),
+    getGoldenQualityDossier: (preparationId: string, evaluationId: string) => read(
+      goldenQualityPath(preparationId, evaluationId, 'dossier'),
+    ),
+    getGoldenSuccessorStatus: () => read('/golden-quality/successor-status'),
+    getGoldenEvidencePreview: (
+      preparationId: string,
+      evaluationId: string,
+      fieldId: string,
+      evidenceId: string,
+    ) => read(goldenQualityPath(
+      preparationId,
+      evaluationId,
+      `fields/${exactId(fieldId)}/evidence/${exactId(evidenceId)}/preview`,
+    )),
   })
 }

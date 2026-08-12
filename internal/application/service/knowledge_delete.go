@@ -57,8 +57,12 @@ func deleteExtractedImages(ctx context.Context, fileSvc interfaces.FileService, 
 
 // DeleteKnowledge deletes a knowledge entry and all related resources
 func (s *knowledgeService) DeleteKnowledge(ctx context.Context, id string) error {
+	tenantID := ctx.Value(types.TenantIDContextKey).(uint64)
+	if err := requireKnowledgeRevisionSourceDeleteAllowed(ctx, s.repo, tenantID, id); err != nil {
+		return err
+	}
 	// Get the knowledge entry
-	knowledge, err := s.repo.GetKnowledgeByID(ctx, ctx.Value(types.TenantIDContextKey).(uint64), id)
+	knowledge, err := s.repo.GetKnowledgeByID(ctx, tenantID, id)
 	if err != nil {
 		return err
 	}
@@ -91,7 +95,6 @@ func (s *knowledgeService) DeleteKnowledge(ctx context.Context, id string) error
 	kbFileSvc := s.resolveFileService(ctx, kb)
 
 	// Collect image URLs before chunks are deleted (ImageInfo references are lost after deletion)
-	tenantID := ctx.Value(types.TenantIDContextKey).(uint64)
 	chunkImageInfos, err := s.chunkService.GetRepository().ListImageInfoByKnowledgeIDs(ctx, tenantID, []string{id})
 	if err != nil {
 		logger.Errorf(ctx, "Failed to collect image URLs for cleanup: %v", err)
@@ -494,6 +497,11 @@ func (s *knowledgeService) DeleteKnowledgeList(ctx context.Context, ids []string
 	}
 	// 1. Get the knowledge entry
 	tenantInfo := ctx.Value(types.TenantInfoContextKey).(*types.Tenant)
+	for _, id := range ids {
+		if err := requireKnowledgeRevisionSourceDeleteAllowed(ctx, s.repo, tenantInfo.ID, id); err != nil {
+			return err
+		}
+	}
 	knowledgeList, err := s.repo.GetKnowledgeBatch(ctx, tenantInfo.ID, ids)
 	if err != nil {
 		return err

@@ -128,6 +128,35 @@ func TestKnowledgeRevisionSourceMigrationContract(t *testing.T) {
 	require.NotContains(t, string(down), "DROP COLUMN content_hash")
 }
 
+func TestKnowledgeRevisionSourceBindingMigrationPreservesRowsAndFreezesTenantAttemptKey(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	enterpriseDir := filepath.Join(filepath.Dir(file), "..", "enterprise", "versioned")
+
+	up := readMigrationContractFile(t, enterpriseDir, "000005_knowledge_revision_source_binding.up.sql")
+	down := readMigrationContractFile(t, enterpriseDir, "000005_knowledge_revision_source_binding.down.sql")
+	for _, fragment := range []string{
+		"ALTER TABLE knowledge_revision_sources",
+		"resource_handle VARCHAR(22)",
+		"object_sha256 VARCHAR(64)",
+		"manifest_algorithm VARCHAR(64)",
+		"manifest_digest VARCHAR(64)",
+		"chunk_count INTEGER",
+		"immutable_locator TEXT",
+		"binding_digest VARCHAR(64)",
+		"PRIMARY KEY (tenant_id, knowledge_id, parse_attempt)",
+		"UNIQUE (knowledge_id, parse_attempt)",
+		"knowledge_revision_source_binding_state",
+	} {
+		require.Contains(t, string(up), fragment)
+	}
+	require.NotContains(t, string(up), "DROP TABLE knowledge_revision_sources")
+	require.NotContains(t, string(up), "DELETE FROM knowledge_revision_sources")
+	require.Contains(t, string(down), "PRIMARY KEY (knowledge_id, parse_attempt)")
+	require.Contains(t, string(down), "DROP COLUMN binding_digest")
+	require.NotContains(t, string(down), "DROP TABLE knowledge_revision_sources")
+}
+
 func TestMigrationSafetyFailureStopsContainerStartup(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)

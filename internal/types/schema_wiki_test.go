@@ -60,6 +60,86 @@ func TestSchemaWikiCrossLanguageVector(t *testing.T) {
 	}
 }
 
+func TestSchemaFieldUnknownReasonTriStateAndFullyRehashedDrift(t *testing.T) {
+	t.Parallel()
+	vector, _ := loadSchemaWikiContractVector(t)
+	var page SchemaFieldPageV1
+	if err := json.Unmarshal(vector.Release.Members[4].Payload, &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.UnknownReason == nil ||
+		*page.UnknownReason != SchemaFieldUnknownReasonNotCoveredByCurrentSourceMaterials {
+		t.Fatal("unknown field did not carry the frozen coverage reason")
+	}
+
+	genericUnknown := page
+	genericReason := "FIELD_UNKNOWN"
+	genericUnknown.UnknownReason = &genericReason
+	genericUnknown.FieldPageSHA256 = ""
+	digest, _, err := schemaWikiHashWithout(
+		genericUnknown.Contract, genericUnknown, "field_page_sha256",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	genericUnknown.FieldPageSHA256 = digest
+	if err := validateSchemaFieldPage(genericUnknown); err != nil {
+		t.Fatalf("closed generic unknown reason was rejected: %v", err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*SchemaFieldPageV1)
+	}{
+		{
+			name: "missing unknown reason",
+			mutate: func(page *SchemaFieldPageV1) {
+				page.UnknownReason = nil
+			},
+		},
+		{
+			name: "free text unknown reason",
+			mutate: func(page *SchemaFieldPageV1) {
+				value := "FREE_TEXT_REASON"
+				page.UnknownReason = &value
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			forged := page
+			test.mutate(&forged)
+			forged.FieldPageSHA256 = ""
+			digest, _, err := schemaWikiHashWithout(
+				forged.Contract, forged, "field_page_sha256",
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			forged.FieldPageSHA256 = digest
+			if err := validateSchemaFieldPage(forged); err == nil {
+				t.Fatal("fully rehashed unknown reason drift was accepted")
+			}
+		})
+	}
+
+	known := page
+	known.State = "present"
+	value := "Synthetic value"
+	known.ValueSnapshot = &value
+	known.Citations = vector.Citations
+	known.EvidenceReceiptSHA256s = []string{strings.Repeat("a", 64)}
+	known.ReviewItemReason = nil
+	known.FieldPageSHA256 = ""
+	digest, _, err = schemaWikiHashWithout(known.Contract, known, "field_page_sha256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	known.FieldPageSHA256 = digest
+	if err := validateSchemaFieldPage(known); err == nil {
+		t.Fatal("known field carrying unknown_reason was accepted")
+	}
+}
+
 func TestSchema67CitationAuthorityJoinReceiptCanonicalVector(t *testing.T) {
 	t.Parallel()
 
@@ -464,6 +544,7 @@ func TestSchemaWikiGoCitationClosureUsesCanonicalKeyForNonlexicalFields(t *testi
 		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	fieldB.ReviewItemReason = nil
+	fieldB.UnknownReason = nil
 	fieldHash, _, err := schemaWikiHashWithout(fieldB.Contract, fieldB, "field_page_sha256")
 	if err != nil {
 		t.Fatal(err)

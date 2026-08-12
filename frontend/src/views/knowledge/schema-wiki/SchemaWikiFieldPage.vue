@@ -3,7 +3,11 @@ import { ref } from 'vue'
 
 import { readPinnedSchemaCitationPreview } from '@/api/schema-wiki'
 import { getDown } from '@/utils/request'
-import type { SchemaFieldPageV1, SchemaWikiScopeV1 } from './schemaWikiContract.ts'
+import {
+  schemaFieldUnknownReasonI18nKey,
+  type SchemaFieldPageV1,
+  type SchemaWikiScopeV1,
+} from './schemaWikiContract.ts'
 
 const props = defineProps<{
   fieldPage: SchemaFieldPageV1
@@ -41,14 +45,14 @@ async function previewCitation(citationId: string): Promise<void> {
       <span class="schema-wiki-field__state">
         <template v-if="fieldPage.state === 'present'">{{ $t('knowledgeEditor.wikiBrowser.schemaPresent') }}</template>
         <template v-else-if="fieldPage.state === 'absent_explicitly'">{{ $t('knowledgeEditor.wikiBrowser.schemaAbsent') }}</template>
-        <template v-else>{{ $t('knowledgeEditor.wikiBrowser.schemaUnknown') }}</template>
+        <template v-else>{{ $t(schemaFieldUnknownReasonI18nKey(fieldPage.unknown_reason)) }}</template>
       </span>
     </header>
     <p v-if="fieldPage.state !== 'unknown'" class="schema-wiki-field__value">
       {{ fieldPage.value_snapshot }}
     </p>
     <p v-else class="schema-wiki-field__unknown" role="status">
-      {{ $t('knowledgeEditor.wikiBrowser.schemaUnknown') }}
+      {{ $t(schemaFieldUnknownReasonI18nKey(fieldPage.unknown_reason)) }}
     </p>
     <div v-if="fieldPage.state !== 'unknown'" class="schema-wiki-field__citations">
       <button

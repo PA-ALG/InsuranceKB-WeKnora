@@ -68,7 +68,17 @@ func RegisterSchemaWikiRoutes(
 		"/releases/:release_id/fields/:field_id/citations/:citation_id/preview",
 		schemaHandler.PreviewCurrentCitation,
 	)
-	activeGET("/citation-content/:token", schemaHandler.ReadCitationContent)
+	read.GET(
+		"/citation-content/:token",
+		g.Viewer(),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaHandler.RequireCitationContentScope(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+		schemaHandler.ReadCitationContent,
+	)
 
 	human := read.With(apiKeyAny())
 	humanPrefix := []gin.HandlerFunc{middleware.DenyAPIKeyPrincipal(), g.Admin()}
@@ -88,6 +98,13 @@ func RegisterSchemaWikiRoutes(
 		access.RecordRawAccessEvidence(),
 		access.SealAccess(),
 	)
+	humanStatusGuards := append(append([]gin.HandlerFunc(nil), humanPrefix...),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+	)
 	human.POST(
 		"/preparations",
 		append(append([]gin.HandlerFunc(nil), humanCreateGuards...), schemaHandler.CreateDraft)...,
@@ -102,6 +119,22 @@ func RegisterSchemaWikiRoutes(
 	humanGET("/preparations/:preparation_id/root", schemaHandler.ReadReviewedRoot)
 	humanGET("/preparations/:preparation_id/sections/:section_id", schemaHandler.ReadReviewedSection)
 	humanGET("/preparations/:preparation_id/fields/:field_id", schemaHandler.ReadReviewedField)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary",
+		schemaHandler.ReadPreparationGoldenQualitySummary,
+	)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/dossier",
+		schemaHandler.ReadPreparationGoldenQualityDossier,
+	)
+	humanGET(
+		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/fields/:field_id/evidence/:evidence_id/preview",
+		schemaHandler.PreviewPreparationGoldenEvidence,
+	)
+	human.GET(
+		"/golden-quality/successor-status",
+		append(append([]gin.HandlerFunc(nil), humanStatusGuards...), schemaHandler.ReadGoldenSuccessorStatus)...,
+	)
 }
 
 func schemaWikiKBAccess(guard gin.HandlerFunc) gin.HandlerFunc {

@@ -286,6 +286,23 @@ export function parseSchemaPack(value: unknown): SchemaPackV1 {
 }
 
 export type SchemaFieldState = 'present' | 'absent_explicitly' | 'unknown'
+export type SchemaFieldUnknownReason =
+  | 'FIELD_UNKNOWN'
+  | 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS'
+
+export function schemaFieldUnknownReasonI18nKey(
+  reason: SchemaFieldUnknownReason | null,
+):
+  | 'knowledgeEditor.wikiBrowser.schemaUndetermined'
+  | 'knowledgeEditor.wikiBrowser.schemaUnknown' {
+  if (reason === 'FIELD_UNKNOWN') {
+    return 'knowledgeEditor.wikiBrowser.schemaUndetermined'
+  }
+  if (reason === 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS') {
+    return 'knowledgeEditor.wikiBrowser.schemaUnknown'
+  }
+  throw new Error('SCHEMA_FIELD_UNKNOWN_REASON_INVALID')
+}
 
 export interface SchemaFieldPageV1 {
   readonly contract: 'schema-field-page.v1'
@@ -295,6 +312,7 @@ export interface SchemaFieldPageV1 {
   readonly citations: ReadonlyArray<CitationTargetV1>
   readonly evidence_receipt_sha256s: ReadonlyArray<string>
   readonly review_item_reason: string | null
+  readonly unknown_reason: SchemaFieldUnknownReason | null
   readonly field_page_sha256: string
 }
 
@@ -304,7 +322,8 @@ export function parseSchemaFieldPage(
 ): SchemaFieldPageV1 {
   const keys = [
     'contract', 'field_id', 'state', 'value_snapshot', 'citations',
-    'evidence_receipt_sha256s', 'review_item_reason', 'field_page_sha256',
+    'evidence_receipt_sha256s', 'review_item_reason', 'unknown_reason',
+    'field_page_sha256',
   ]
   if (
     !isRecord(value) || !hasExactKeys(value, keys)
@@ -336,6 +355,8 @@ export function parseSchemaFieldPage(
     if (
       value.value_snapshot !== null || citations.length > 0 || evidenceReceipts.length > 0
       || value.review_item_reason !== 'FIELD_UNKNOWN'
+      || !['FIELD_UNKNOWN', 'NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS']
+        .includes(value.unknown_reason as string)
     ) {
       throw new Error('UNKNOWN_FIELD_HAS_AUTHORITY')
     }
@@ -344,6 +365,7 @@ export function parseSchemaFieldPage(
       && citations.length > 0
       && evidenceReceipts.length > 0
       && value.review_item_reason === null
+      && value.unknown_reason === null
     if (!validKnown) {
       throw new Error(
         value.state === 'absent_explicitly'
@@ -360,6 +382,7 @@ export function parseSchemaFieldPage(
     citations: Object.freeze(citations),
     evidence_receipt_sha256s: Object.freeze(evidenceReceipts),
     review_item_reason: value.review_item_reason as string | null,
+    unknown_reason: value.unknown_reason as SchemaFieldUnknownReason | null,
     field_page_sha256: value.field_page_sha256,
   })
 }

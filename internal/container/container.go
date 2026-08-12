@@ -255,7 +255,19 @@ func BuildContainer(container *dig.Container) *dig.Container {
 			service.NewSchemaWikiRevisionBlobReader(knowledgeRepository, fileService),
 			codec,
 		)
-		return service.NewSchemaWikiService(releaseAuthority, citationPort, content), nil
+		statusRaw, err := config.DecodeSchemaWikiGoldenSuccessorStatus(cfg)
+		if err != nil {
+			return nil, err
+		}
+		statusProvider, err := service.NewCanonicalSchemaWikiGoldenSuccessorStatusProvider(
+			statusRaw,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return service.NewSchemaWikiServiceWithGoldenSuccessorStatus(
+			releaseAuthority, citationPort, content, statusProvider,
+		), nil
 	}))
 	must(container.Provide(service.NewEmbedChannelService))
 
@@ -269,6 +281,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewResourceRepository))
 	must(container.Provide(repository.NewTemporaryDocumentRepository))
 	must(container.Provide(service.NewResourceCatalog))
+	must(container.Provide(service.NewKnowledgeRevisionSourceService))
 	// TenantStoreOwnership adapter used by the retriever factory functions
 	// to verify that a resolved VectorStore belongs to the caller's tenant.
 	must(container.Provide(retriever.NewVectorStoreRepoOwnership))
@@ -382,6 +395,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewAuditLogHandler))
 	must(container.Provide(handler.NewKnowledgeBaseHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
+	must(container.Provide(handler.NewKnowledgeRevisionSourceHandler))
 	must(container.Provide(handler.NewChunkHandler))
 	must(container.Provide(handler.NewFAQHandler))
 	must(container.Provide(handler.NewTagHandler))
@@ -459,9 +473,16 @@ func schemaWikiReleaseVerifierProviders(
 	if err != nil {
 		return nil, service.WikiReleaseServiceOptions{}, err
 	}
+	qualityGateKeys, err := config.DecodeSchemaWikiGoldenQualityEvaluatorPublicKeys(cfg)
+	if err != nil {
+		return nil, service.WikiReleaseServiceOptions{}, err
+	}
 	return service.NewEd25519WikiReleaseAuthorizationVerifier(publishKeys),
 		service.WikiReleaseServiceOptions{
 			HumanDecisionVerifier: service.NewEd25519HumanBatchDecisionVerifier(humanKeys),
+			QualityGateReceiptVerifier: service.NewEd25519Schema67GoldenQualityGateReceiptVerifier(
+				qualityGateKeys,
+			),
 		}, nil
 }
 

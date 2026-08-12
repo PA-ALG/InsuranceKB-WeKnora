@@ -140,3 +140,65 @@ func TestLiveRevisionSourceReceiptLanguageNeutralDigestAndSeparatedAuthorities(t
 	require.NotEqual(t, digest, changed)
 	require.ErrorIs(t, ValidateLiveRevisionSourceReceiptV1(mutated), ErrInvalidRevisionManifest)
 }
+
+func TestKnowledgeRevisionSourceBindingDigestClosesAttemptObjectAndManifest(t *testing.T) {
+	t.Parallel()
+	pageCount := 39
+	source := KnowledgeRevisionSource{
+		TenantID: 10003, KnowledgeID: "knowledge-596-1", ParseAttempt: 2,
+		RevisionSourceID: strings.Repeat("a", 64), ResourceID: "resource-596-1",
+		ResourceHandle: "resourceHandle5961AAA", ImmutableLocator: "resource://resourceHandle5961AAA",
+		FileSHA256: strings.Repeat("b", 64), ObjectSHA256: strings.Repeat("b", 64),
+		Size: 4096, MimeType: "application/pdf", PageCount: &pageCount,
+		ManifestAlgorithm: RevisionManifestAlgorithm, ManifestDigest: strings.Repeat("c", 64),
+		ChunkCount: 162, RetentionState: KnowledgeRevisionSourcePinned,
+	}
+	digest, err := ComputeKnowledgeRevisionSourceBindingDigest(source)
+	require.NoError(t, err)
+	require.Len(t, digest, 64)
+	source.BindingDigest = digest
+	require.NoError(t, ValidateKnowledgeRevisionSourceBinding(source))
+
+	mutations := map[string]func(*KnowledgeRevisionSource){
+		"tenant":            func(v *KnowledgeRevisionSource) { v.TenantID++ },
+		"attempt":           func(v *KnowledgeRevisionSource) { v.ParseAttempt++ },
+		"resource handle":   func(v *KnowledgeRevisionSource) { v.ResourceHandle = "foreignHandle5961AAA" },
+		"immutable locator": func(v *KnowledgeRevisionSource) { v.ImmutableLocator = "resource://foreignHandle5961AAA" },
+		"object digest":     func(v *KnowledgeRevisionSource) { v.ObjectSHA256 = strings.Repeat("d", 64) },
+		"page count":        func(v *KnowledgeRevisionSource) { changed := 40; v.PageCount = &changed },
+		"manifest":          func(v *KnowledgeRevisionSource) { v.ManifestDigest = strings.Repeat("e", 64) },
+		"chunk count":       func(v *KnowledgeRevisionSource) { v.ChunkCount++ },
+		"retention":         func(v *KnowledgeRevisionSource) { v.RetentionState = KnowledgeRevisionSourceReleased },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			changed := source
+			mutate(&changed)
+			require.ErrorIs(t, ValidateKnowledgeRevisionSourceBinding(changed), ErrInvalidRevisionManifest)
+		})
+	}
+}
+
+func TestKnowledgeRevisionSourceBindingRejectsUnsealedOrNonPDFAuthority(t *testing.T) {
+	t.Parallel()
+	source := KnowledgeRevisionSource{
+		TenantID: 1, KnowledgeID: "knowledge-1", ParseAttempt: 1,
+		RevisionSourceID: strings.Repeat("a", 64), ResourceID: "resource-1",
+		FileSHA256: strings.Repeat("b", 64), Size: 1024, MimeType: "application/pdf",
+		RetentionState: KnowledgeRevisionSourcePinned,
+	}
+	_, err := ComputeKnowledgeRevisionSourceBindingDigest(source)
+	require.ErrorIs(t, err, ErrInvalidRevisionManifest)
+
+	pageCount := 1
+	source.ResourceHandle = "resourceHandle0000001"
+	source.ImmutableLocator = "resource://resourceHandle0000001"
+	source.ObjectSHA256 = source.FileSHA256
+	source.PageCount = &pageCount
+	source.ManifestAlgorithm = RevisionManifestAlgorithm
+	source.ManifestDigest = strings.Repeat("c", 64)
+	source.ChunkCount = 1
+	source.MimeType = "text/plain"
+	_, err = ComputeKnowledgeRevisionSourceBindingDigest(source)
+	require.ErrorIs(t, err, ErrInvalidRevisionManifest)
+}

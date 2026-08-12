@@ -28,14 +28,19 @@ func TestSchemaWikiProductionVerifierProvidersUseConfiguredExistingProtocols(t *
 	t.Parallel()
 	humanPrivate, humanPublic := schemaWikiContainerPublicKey(0x51, "human-key")
 	publishPrivate, publishPublic := schemaWikiContainerPublicKey(0x52, "publish-key")
+	_, evaluatorPublic := schemaWikiContainerPublicKey(0x53, "golden-evaluator-key")
 	cfg := &config.Config{SchemaWikiSigning: &config.SchemaWikiSigningConfig{
 		HumanDecisionPublicKeys:        []config.SchemaWikiEd25519PublicKeyConfig{humanPublic},
 		PublishAuthorizationPublicKeys: []config.SchemaWikiEd25519PublicKeyConfig{publishPublic},
+		GoldenQualityEvaluatorPublicKeys: []config.SchemaWikiEd25519PublicKeyConfig{
+			evaluatorPublic,
+		},
 	}}
 	authorizationVerifier, options, err := schemaWikiReleaseVerifierProviders(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, authorizationVerifier)
 	require.NotNil(t, options.HumanDecisionVerifier)
+	require.NotNil(t, options.QualityGateReceiptVerifier)
 
 	scope := types.WikiReleaseScope{
 		TenantID: 10003, SpaceID: "space-596-1",
@@ -77,6 +82,9 @@ func TestSchemaWikiProductionVerifierProvidersDefaultEmptyRejectsBothAuthorities
 	require.Error(t, authorizationVerifier.Verify(&types.PublishAuthorizationV0{
 		SignerKeyID: "unknown",
 	}))
+	require.Error(t, options.QualityGateReceiptVerifier.Verify(
+		&types.Schema67GoldenQualityGateReceiptV1{SignerKeyID: "unknown"},
+	))
 }
 
 func TestSchemaWikiContainerDoesNotInjectNilCitationPort(t *testing.T) {
@@ -89,4 +97,7 @@ func TestSchemaWikiContainerDoesNotInjectNilCitationPort(t *testing.T) {
 	require.Contains(t, source, "DecodeSchemaWikiCitationTokenSigningRing")
 	require.Contains(t, source, "NewSchemaWikiCitationContentService")
 	require.Contains(t, source, "NewSchemaWikiRevisionBlobReader")
+	require.Contains(t, source, "DecodeSchemaWikiGoldenSuccessorStatus")
+	require.Contains(t, source, "NewCanonicalSchemaWikiGoldenSuccessorStatusProvider")
+	require.Contains(t, source, "NewSchemaWikiServiceWithGoldenSuccessorStatus")
 }

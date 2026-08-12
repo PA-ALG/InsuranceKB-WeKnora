@@ -20,12 +20,31 @@ import (
 
 type schemaWikiRouteScopeResolver struct {
 	head             *types.WikiReleaseHead
+	headErr          error
 	calls            int
 	tenantIDs        []uint64
 	wikiKBIDs        []string
 	events           *[]string
 	preparationScope *types.WikiReleaseScope
 	preparationCalls int
+}
+
+type schemaWikiRouteCitationAuthorityResolver struct {
+	authority *service.SchemaWikiCitationContentRouteAuthorityV1
+	err       error
+	calls     int
+	events    *[]string
+}
+
+func (s *schemaWikiRouteCitationAuthorityResolver) ResolveSchemaCitationContentRouteAuthority(
+	_ context.Context,
+	_ string,
+) (*service.SchemaWikiCitationContentRouteAuthorityV1, error) {
+	s.calls++
+	if s.events != nil {
+		*s.events = append(*s.events, "token")
+	}
+	return s.authority, s.err
 }
 
 func (s *schemaWikiRouteScopeResolver) GetPreparationScopeForWikiKB(
@@ -49,7 +68,7 @@ func (s *schemaWikiRouteScopeResolver) GetHeadForWikiKB(
 	if s.events != nil {
 		*s.events = append(*s.events, "resolve")
 	}
-	return s.head, nil
+	return s.head, s.headErr
 }
 
 type schemaWikiRouteAccessMiddlewareSpy struct {
@@ -128,6 +147,23 @@ func newSchemaWikiScopeRouteEngine(
 	kbs map[string]*types.KnowledgeBase,
 	events *[]string,
 	accessMiddleware schemaWikiReleaseAccessMiddleware,
+	citationResolvers ...handler.SchemaWikiCitationContentRouteAuthorityResolver,
+) *gin.Engine {
+	return newSchemaWikiScopeRouteEngineWithRole(
+		t, resolver, apiKeyScope, kbs, events, accessMiddleware, types.TenantRoleViewer,
+		citationResolvers...,
+	)
+}
+
+func newSchemaWikiScopeRouteEngineWithRole(
+	t *testing.T,
+	resolver *schemaWikiRouteScopeResolver,
+	apiKeyScope *types.TenantAPIKeyScope,
+	kbs map[string]*types.KnowledgeBase,
+	events *[]string,
+	accessMiddleware schemaWikiReleaseAccessMiddleware,
+	role types.TenantRole,
+	citationResolvers ...handler.SchemaWikiCitationContentRouteAuthorityResolver,
 ) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -136,7 +172,7 @@ func newSchemaWikiScopeRouteEngine(
 		cfg:       &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
 		kbService: &orderedSchemaWikiKBLookup{kbs: kbs, events: events},
 	}
-	schemaHandler := handler.NewSchemaWikiHandler(resolver, nil)
+	schemaHandler := handler.NewSchemaWikiHandler(resolver, nil, citationResolvers...)
 	if accessMiddleware == nil {
 		accessMiddleware = handler.NewWikiReleaseHandler(nil)
 	}
@@ -146,7 +182,7 @@ func newSchemaWikiScopeRouteEngine(
 	engine.Use(func(c *gin.Context) {
 		principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
 		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
-		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleViewer)
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, role)
 		ctx = types.WithPrincipal(ctx, principal)
 		if apiKeyScope != nil {
 			ctx = types.WithTenantAPIKeyScope(ctx, *apiKeyScope)
@@ -166,6 +202,38 @@ func newSchemaWikiScopeRouteEngine(
 	}
 	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), schemaHandler, accessMiddleware, guards)
 	return engine
+}
+
+func TestSchemaWikiGoldenSuccessorStatusUsesExactHumanDualACLSealOrder(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngineWithRole(
+		t,
+		&schemaWikiRouteScopeResolver{},
+		nil,
+		map[string]*types.KnowledgeBase{
+			"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+			"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+		},
+		&events,
+		access,
+		types.TenantRoleAdmin,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/golden-quality/successor-status",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "NO_GOLDEN_SUCCESSOR_STATUS")
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+	require.Equal(t, 1, access.sealCalls)
 }
 
 func TestSchemaWikiScopeBootstrapRequiresWikiThenDerivedRawACL(t *testing.T) {
@@ -291,16 +359,25 @@ func TestSchemaWikiHumanRoutesDenyMachineAndViewerBeforeScopeOrSeal(t *testing.T
 				"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
 			}, &events, access)
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(
-				http.MethodPost,
-				"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/review",
-				nil,
-			)
-			engine.ServeHTTP(recorder, request)
-			require.Equal(t, http.StatusForbidden, recorder.Code)
-			require.Zero(t, resolver.preparationCalls)
-			require.Zero(t, access.sealCalls)
-			require.Empty(t, events)
+			for _, request := range []*http.Request{
+				httptest.NewRequest(
+					http.MethodPost,
+					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/preparations/preparation-596-1/review",
+					nil,
+				),
+				httptest.NewRequest(
+					http.MethodGet,
+					"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-kb-596-1/schema/golden-quality/successor-status",
+					nil,
+				),
+			} {
+				recorder = httptest.NewRecorder()
+				engine.ServeHTTP(recorder, request)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Zero(t, resolver.preparationCalls)
+				require.Zero(t, access.sealCalls)
+				require.Empty(t, events)
+			}
 		})
 	}
 }
@@ -331,6 +408,181 @@ func TestSchemaWikiActiveScopedPathDriftStopsBeforeRawACLAndSeal(t *testing.T) {
 	require.NotContains(t, recorder.Body.String(), "raw-foreign")
 }
 
+func TestSchemaWikiCitationContentNoHeadStillReachesSealedDualACLHandler(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	resolver := &schemaWikiRouteScopeResolver{
+		events: &events, headErr: apprepo.ErrWikiReleaseNotFound,
+		preparationScope: &types.WikiReleaseScope{
+			TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+		},
+	}
+	citationResolver := &schemaWikiRouteCitationAuthorityResolver{
+		events: &events,
+		authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "preparation",
+			Scope: types.WikiReleaseScope{
+				TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+			},
+			PreparationID: "preparation-596-1",
+		},
+	}
+	engine := newSchemaWikiScopeRouteEngineWithRole(
+		t,
+		resolver,
+		nil,
+		map[string]*types.KnowledgeBase{
+			"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+			"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+		},
+		&events,
+		access,
+		types.TenantRoleAdmin,
+		citationResolver,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/citation-content/preparation-token",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, "body=%s", recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "schema wiki citation unavailable")
+	require.Equal(t, []string{
+		"acl:wiki-596-1",
+		"evidence:wiki",
+		"token",
+		"acl:raw-596-1",
+		"evidence:raw",
+		"seal",
+	}, events)
+	require.Zero(t, resolver.calls, "opaque content route must not require an Active Head")
+	require.Equal(t, 1, resolver.preparationCalls)
+	require.Equal(t, 1, citationResolver.calls)
+	require.Equal(t, 1, access.sealCalls)
+}
+
+func TestSchemaWikiCitationContentTokenAuthorityFailsBeforeRawACLAndSeal(t *testing.T) {
+	t.Parallel()
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	for name, setup := range map[string]func(
+		*schemaWikiRouteScopeResolver,
+		*schemaWikiRouteCitationAuthorityResolver,
+		*types.TenantAPIKeyScope,
+	){
+		"invalid token": func(_ *schemaWikiRouteScopeResolver, token *schemaWikiRouteCitationAuthorityResolver, _ *types.TenantAPIKeyScope) {
+			token.authority = nil
+			token.err = service.ErrSchemaWikiCitationUnavailable
+		},
+		"preparation scope drift": func(resolver *schemaWikiRouteScopeResolver, _ *schemaWikiRouteCitationAuthorityResolver, _ *types.TenantAPIKeyScope) {
+			foreign := exact
+			foreign.RawKBID = "raw-foreign"
+			resolver.preparationScope = &foreign
+		},
+		"preparation id absent": func(_ *schemaWikiRouteScopeResolver, token *schemaWikiRouteCitationAuthorityResolver, _ *types.TenantAPIKeyScope) {
+			token.authority.PreparationID = ""
+		},
+		"api key preparation": func(_ *schemaWikiRouteScopeResolver, _ *schemaWikiRouteCitationAuthorityResolver, apiKey *types.TenantAPIKeyScope) {
+			*apiKey = types.TenantAPIKeyScope{
+				KeyID: 120, KnowledgeBaseIDs: types.StringArray{exact.WikiKBID, exact.RawKBID},
+				Capabilities: types.StringArray{string(types.APIKeyCapabilityRetrieve)},
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			events := []string{}
+			access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+			resolver := &schemaWikiRouteScopeResolver{events: &events, preparationScope: &exact}
+			token := &schemaWikiRouteCitationAuthorityResolver{events: &events, authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+				Kind: "preparation", Scope: exact, PreparationID: "preparation-596-1",
+			}}
+			var apiKey types.TenantAPIKeyScope
+			setup(resolver, token, &apiKey)
+			var scope *types.TenantAPIKeyScope
+			if apiKey.KeyID != 0 {
+				scope = &apiKey
+			}
+			engine := newSchemaWikiScopeRouteEngineWithRole(
+				t, resolver, scope,
+				map[string]*types.KnowledgeBase{
+					exact.WikiKBID: {ID: exact.WikiKBID, TenantID: exact.TenantID, Type: types.KnowledgeBaseTypeWiki},
+					exact.RawKBID:  {ID: exact.RawKBID, TenantID: exact.TenantID},
+				},
+				&events, access, types.TenantRoleAdmin, token,
+			)
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/citation-content/token",
+				nil,
+			)
+			engine.ServeHTTP(recorder, request)
+
+			require.Equal(t, http.StatusForbidden, recorder.Code, "body=%s", recorder.Body.String())
+			require.Zero(t, access.sealCalls)
+			require.NotContains(t, events, "acl:raw-596-1")
+			require.NotContains(t, events, "handler")
+		})
+	}
+}
+
+func TestSchemaWikiCitationContentActiveTokenStillRequiresExactHeadBeforeRawACL(t *testing.T) {
+	t.Parallel()
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	for name, head := range map[string]*types.WikiReleaseHead{
+		"exact active": {
+			WikiReleaseScope: exact, ActiveReleaseID: "release-596-1", ActivationEpoch: 7,
+		},
+		"head drift": {
+			WikiReleaseScope: types.WikiReleaseScope{
+				TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-foreign", WikiKBID: "wiki-596-1",
+			},
+			ActiveReleaseID: "release-596-1", ActivationEpoch: 7,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			events := []string{}
+			access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+			resolver := &schemaWikiRouteScopeResolver{events: &events, head: head}
+			token := &schemaWikiRouteCitationAuthorityResolver{events: &events, authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+				Kind: "active", Scope: exact,
+			}}
+			engine := newSchemaWikiScopeRouteEngine(
+				t, resolver, nil,
+				map[string]*types.KnowledgeBase{
+					exact.WikiKBID: {ID: exact.WikiKBID, TenantID: exact.TenantID, Type: types.KnowledgeBaseTypeWiki},
+					exact.RawKBID:  {ID: exact.RawKBID, TenantID: exact.TenantID},
+				},
+				&events, access, token,
+			)
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/citation-content/token",
+				nil,
+			)
+			engine.ServeHTTP(recorder, request)
+
+			if name == "exact active" {
+				require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+				require.Equal(t, 1, access.sealCalls)
+				require.Contains(t, events, "acl:raw-596-1")
+			} else {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Zero(t, access.sealCalls)
+				require.NotContains(t, events, "acl:raw-596-1")
+			}
+		})
+	}
+}
+
 func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T) {
 	t.Parallel()
 	guards := &rbacGuards{}
@@ -350,6 +602,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/domains"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/review"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/golden-quality/successor-status"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/taxonomy/current"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/entities/:entity_id/versions/:version_id/current"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/releases/:release_id/root"])

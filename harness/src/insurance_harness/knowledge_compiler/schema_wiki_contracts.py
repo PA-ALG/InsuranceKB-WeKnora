@@ -28,6 +28,10 @@ NonBlankText = Annotated[
     StrictStr,
     StringConstraints(min_length=1, max_length=4096, pattern=r"^\S(?:[^\r\n]*\S)?$"),
 ]
+SchemaFieldUnknownReason = Literal[
+    "FIELD_UNKNOWN",
+    "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS",
+]
 
 _HASH_PREFIX: Final[bytes] = b"schema-wiki-canonical.v1\x00"
 
@@ -111,8 +115,7 @@ def _payload(model: BaseModel, hash_field: str) -> dict[str, object]:
 
 def _hash_matches(model: BaseModel, object_type: str, hash_field: str) -> bool:
     return bool(
-        getattr(model, hash_field)
-        == schema_wiki_sha256(object_type, _payload(model, hash_field))
+        getattr(model, hash_field) == schema_wiki_sha256(object_type, _payload(model, hash_field))
     )
 
 
@@ -280,6 +283,7 @@ class SchemaFieldPageV1(_FrozenModel):
     citations: tuple[CitationTargetV1, ...]
     evidence_receipt_sha256s: tuple[Sha256Hex, ...]
     review_item_reason: Identifier | None
+    unknown_reason: SchemaFieldUnknownReason | None
     field_page_sha256: Sha256Hex
 
     @model_validator(mode="after")
@@ -287,9 +291,7 @@ class SchemaFieldPageV1(_FrozenModel):
         hashes = tuple(item.citation_sha256 for item in self.citations)
         if len(set(hashes)) != len(hashes):
             raise ValueError("duplicate field citations")
-        if len(set(self.evidence_receipt_sha256s)) != len(
-            self.evidence_receipt_sha256s
-        ):
+        if len(set(self.evidence_receipt_sha256s)) != len(self.evidence_receipt_sha256s):
             raise ValueError("duplicate Evidence receipt identities")
         if self.state in {"present", "absent_explicitly"}:
             if (
@@ -297,6 +299,7 @@ class SchemaFieldPageV1(_FrozenModel):
                 or not self.citations
                 or not self.evidence_receipt_sha256s
                 or self.review_item_reason is not None
+                or self.unknown_reason is not None
             ):
                 raise ValueError("known field requires value and citation without ReviewItem")
         elif (
@@ -304,6 +307,8 @@ class SchemaFieldPageV1(_FrozenModel):
             or self.citations
             or self.evidence_receipt_sha256s
             or self.review_item_reason != "FIELD_UNKNOWN"
+            or self.unknown_reason
+            not in {"FIELD_UNKNOWN", "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS"}
         ):
             raise ValueError("unknown field must be value/Evidence-free and reviewable")
         if not _hash_matches(self, self.contract, "field_page_sha256"):
@@ -393,19 +398,23 @@ class SchemaWikiMemberV1(_FrozenModel):
         if not valid_shape:
             raise ValueError("member kind/identity mismatch")
         payload_shape_valid = (
-            self.member_kind == "root"
-            and isinstance(self.payload, SchemaRootPageV1)
-            and self.payload_sha256 == self.payload.root_page_sha256
-        ) or (
-            self.member_kind == "section"
-            and isinstance(self.payload, SchemaSectionPageV1)
-            and self.payload.section_id == self.section_id
-            and self.payload_sha256 == self.payload.section_page_sha256
-        ) or (
-            self.member_kind == "field"
-            and isinstance(self.payload, SchemaFieldPageV1)
-            and self.payload.field_id == self.field_id
-            and self.payload_sha256 == self.payload.field_page_sha256
+            (
+                self.member_kind == "root"
+                and isinstance(self.payload, SchemaRootPageV1)
+                and self.payload_sha256 == self.payload.root_page_sha256
+            )
+            or (
+                self.member_kind == "section"
+                and isinstance(self.payload, SchemaSectionPageV1)
+                and self.payload.section_id == self.section_id
+                and self.payload_sha256 == self.payload.section_page_sha256
+            )
+            or (
+                self.member_kind == "field"
+                and isinstance(self.payload, SchemaFieldPageV1)
+                and self.payload.field_id == self.field_id
+                and self.payload_sha256 == self.payload.field_page_sha256
+            )
         )
         if not payload_shape_valid:
             raise ValueError("member payload identity mismatch")
@@ -450,6 +459,42 @@ class KnowledgeWikiReleaseV1(_FrozenModel):
         return self
 
 
+class Schema67GoldenQualityGateReceiptV1(_FrozenModel):
+    contract: Literal["schema67-golden-quality-gate-receipt.v1"]
+    status: Literal["PASS"]
+    product_version_id: Literal["596-1"]
+    candidate_sha256: Sha256Hex
+    candidate_evidence_authority_sha256: Sha256Hex
+    golden_set_sha256: Sha256Hex
+    golden_version: Identifier
+    evaluator_identity_sha256: Literal[
+        "525f208a404d996caf5f806a9b065ea5af81f0b7d2996b9b50c25e4878400808"
+    ]
+    metric_policy_sha256: Literal[
+        "5d2ffd2379f9f1902a0ab834de6e1e8e593d400115878b9c565331b121d6f0d7"
+    ]
+    ordered_field_decision_sha256s: tuple[Sha256Hex, ...]
+    metric_receipt_sha256s: tuple[Sha256Hex, ...]
+    private_dossier_sha256: Sha256Hex
+    public_aggregate_sha256: Sha256Hex
+    golden_approval_sha256s: tuple[Sha256Hex, Sha256Hex]
+    whole_batch_approval_receipt_sha256: Sha256Hex
+    signer_key_id: Identifier
+    signature: NonBlankText
+    receipt_sha256: Sha256Hex
+
+    @model_validator(mode="after")
+    def validate_hash(self) -> Self:
+        if (
+            len(self.ordered_field_decision_sha256s) != 67
+            or len(self.metric_receipt_sha256s) != 15
+            or len(set(self.golden_approval_sha256s)) != 2
+            or not _hash_matches(self, self.contract, "receipt_sha256")
+        ):
+            raise ValueError("quality gate receipt mismatch")
+        return self
+
+
 class SchemaWikiReviewBundleV1(_FrozenModel):
     contract: Literal["schema-wiki-review-bundle.v1"]
     candidate_sha256: Sha256Hex
@@ -463,6 +508,7 @@ class SchemaWikiReviewBundleV1(_FrozenModel):
     schema_pack_sha256: Sha256Hex
     entity_id: Identifier
     version_id: Identifier
+    quality_gate_receipt: Schema67GoldenQualityGateReceiptV1
     review_bundle_sha256: Sha256Hex
 
     @model_validator(mode="after")
@@ -497,9 +543,7 @@ def _validate_taxonomy_graph(
     from_paths = [row.from_path for row in redirects]
     if len(from_paths) != len(set(from_paths)):
         raise ValueError("duplicate taxonomy redirect")
-    entity_ids = {
-        node.stable_entity_id for node in nodes if node.stable_entity_id is not None
-    }
+    entity_ids = {node.stable_entity_id for node in nodes if node.stable_entity_id is not None}
     if any(row.stable_entity_id not in entity_ids for row in redirects):
         raise ValueError("taxonomy redirect targets a foreign entity")
 
@@ -546,14 +590,10 @@ def validate_taxonomy_snapshot(
     if current.previous_snapshot_sha256 != prior.taxonomy_sha256:
         raise SchemaWikiContractError("TAXONOMY_PREDECESSOR_INVALID")
     old_entities = {
-        node.stable_entity_id: node
-        for node in prior.nodes
-        if node.stable_entity_id is not None
+        node.stable_entity_id: node for node in prior.nodes if node.stable_entity_id is not None
     }
     new_entities = {
-        node.stable_entity_id: node
-        for node in current.nodes
-        if node.stable_entity_id is not None
+        node.stable_entity_id: node for node in current.nodes if node.stable_entity_id is not None
     }
     if set(old_entities) != set(new_entities):
         raise SchemaWikiContractError("STABLE_ENTITY_IDENTITY_INVALID")
@@ -644,9 +684,9 @@ def schema_wiki_manifest_digest(
     )
 
 
-def _expected_members(pack: SchemaPackV1, entity_version: EntityVersionV1) -> tuple[
-    tuple[str, str, str | None, str | None], ...
-]:
+def _expected_members(
+    pack: SchemaPackV1, entity_version: EntityVersionV1
+) -> tuple[tuple[str, str, str | None, str | None], ...]:
     rows: list[tuple[str, str, str | None, str | None]] = [
         (f"root:{entity_version.version_id}", "root", None, None)
     ]
@@ -694,8 +734,7 @@ def validate_knowledge_wiki_release(
 
     expected = _expected_members(current_pack, current.entity_version)
     actual = tuple(
-        (row.member_ref, row.member_kind, row.section_id, row.field_id)
-        for row in current.members
+        (row.member_ref, row.member_kind, row.section_id, row.field_id) for row in current.members
     )
     if actual != expected:
         raise SchemaWikiContractError("MEMBER_ORDER_INVALID")
@@ -717,19 +756,23 @@ def validate_knowledge_wiki_release(
         current.taxonomy.taxonomy_sha256,
         tuple(section.section_id for section in current.schema_pack.sections),
     )
-    if not isinstance(root_payload, SchemaRootPageV1) or (
-        root_payload.domain_id,
-        root_payload.domain_sha256,
-        root_payload.schema_pack_id,
-        root_payload.schema_version,
-        root_payload.schema_pack_sha256,
-        root_payload.entity_id,
-        root_payload.entity_version_id,
-        root_payload.product_version_id,
-        root_payload.taxonomy_version,
-        root_payload.taxonomy_sha256,
-        root_payload.ordered_section_ids,
-    ) != root_expected:
+    if (
+        not isinstance(root_payload, SchemaRootPageV1)
+        or (
+            root_payload.domain_id,
+            root_payload.domain_sha256,
+            root_payload.schema_pack_id,
+            root_payload.schema_version,
+            root_payload.schema_pack_sha256,
+            root_payload.entity_id,
+            root_payload.entity_version_id,
+            root_payload.product_version_id,
+            root_payload.taxonomy_version,
+            root_payload.taxonomy_sha256,
+            root_payload.ordered_section_ids,
+        )
+        != root_expected
+    ):
         raise SchemaWikiContractError("ROOT_PAYLOAD_BINDING_INVALID")
     for index, section in enumerate(current.schema_pack.sections, start=1):
         section_payload = current.members[index].payload
@@ -764,8 +807,7 @@ def validate_knowledge_wiki_release(
         ):
             raise SchemaWikiContractError("SECTION_PAYLOAD_BINDING_INVALID")
     binding_order = tuple(
-        (row.logical_member_ref, row.citation_sha256)
-        for row in current.citation_bindings
+        (row.logical_member_ref, row.citation_sha256) for row in current.citation_bindings
     )
     if binding_order != tuple(sorted(binding_order)):
         raise SchemaWikiContractError("CITATION_BINDING_ORDER_INVALID")
@@ -814,6 +856,7 @@ def validate_schema_wiki_review_bundle(
         current_release.schema_pack.schema_pack_sha256,
         current_release.entity.entity_id,
         current_release.entity_version.version_id,
+        current_release.candidate_sha256,
     )
     actual = (
         current.candidate_sha256,
@@ -827,6 +870,7 @@ def validate_schema_wiki_review_bundle(
         current.schema_pack_sha256,
         current.entity_id,
         current.version_id,
+        current.quality_gate_receipt.candidate_sha256,
     )
     if actual != expected:
         raise SchemaWikiContractError("REVIEW_BUNDLE_INVALID")
@@ -842,9 +886,11 @@ __all__ = [
     "KnowledgeDomainV1",
     "KnowledgeWikiReleaseV1",
     "SchemaFieldPageV1",
+    "SchemaFieldUnknownReason",
     "SchemaPackV1",
     "SchemaRootPageV1",
     "SchemaSectionV1",
+    "Schema67GoldenQualityGateReceiptV1",
     "SchemaSectionPageV1",
     "SchemaWikiContractError",
     "SchemaWikiMemberV1",

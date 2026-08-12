@@ -46,6 +46,58 @@ type schemaWikiHTTPServiceSpy struct {
 	citationErr           error
 	citationBytes         []byte
 	currentAuthority      *service.SchemaWikiCurrentAuthorityV1
+	goldenSummaryCalls    int
+	goldenPrivateCalls    int
+	goldenPreviewCalls    int
+	goldenSummary         *types.SchemaWikiGoldenQualitySummaryV1
+	goldenPrivate         *types.SchemaWikiGoldenQualityDossierV2
+	goldenPreview         *types.SchemaWikiGoldenEvidencePreviewAuthorityV1
+	goldenSuccessorCalls  int
+	goldenSuccessor       *types.SchemaWikiGoldenSuccessorStatusV1
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaWikiGoldenSuccessorStatus(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+) (*types.SchemaWikiGoldenSuccessorStatusV1, error) {
+	s.goldenSuccessorCalls++
+	return s.goldenSuccessor, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualitySummary(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+) (*types.SchemaWikiGoldenQualitySummaryV1, error) {
+	s.goldenSummaryCalls++
+	return s.goldenSummary, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) ReadSchemaPreparationGoldenQualityDossier(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+) (*types.SchemaWikiGoldenQualityDossierV2, error) {
+	s.goldenPrivateCalls++
+	return s.goldenPrivate, nil
+}
+
+func (s *schemaWikiHTTPServiceSpy) IssueSchemaPreparationGoldenEvidencePreview(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	string,
+	string,
+	string,
+) (*types.SchemaWikiGoldenEvidencePreviewAuthorityV1, error) {
+	s.goldenPreviewCalls++
+	return s.goldenPreview, nil
 }
 
 func (s *schemaWikiHTTPServiceSpy) ReadCurrentSchemaAuthority(
@@ -80,6 +132,8 @@ func (s *schemaWikiHTTPServiceSpy) CreateSchemaDraft(
 	types.KnowledgeWikiReleaseV1,
 	types.Schema67CandidateEvidenceAuthorityV1,
 	types.SchemaWikiReviewBundleV1,
+	types.Schema67GoldenEvaluationReviewBundleV1,
+	types.Schema67GoldenReviewSuccessorMetadataV1,
 ) (*types.WikiReleasePreparation, error) {
 	s.createCalls++
 	return &types.WikiReleasePreparation{ID: "preparation-596-1"}, nil
@@ -512,6 +566,35 @@ func TestSchemaWikiCitationPreviewUsesOnlyPathIdentitiesAndFailsClosed(t *testin
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
 	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.Equal(t, 1, spy.currentCitationCalls)
+}
+
+func TestSchemaWikiCitationPreviewReturnsStablePageUnavailableCode(t *testing.T) {
+	t.Parallel()
+	spy := &schemaWikiHTTPServiceSpy{citationErr: service.ErrSchemaWikiCitationPageUnavailable}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-596-1"},
+		{Key: "release_id", Value: "release-596-1"},
+		{Key: "field_id", Value: "product_code"},
+		{Key: "citation_id", Value: "citation-secret"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
+	ctx := types.WithPrincipal(c.Request.Context(), principal)
+	c.Request = c.Request.WithContext(ctx)
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.PreviewCurrentCitation(c)
+
+	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code)
+	require.JSONEq(t,
+		`{"success":false,"error":{"code":"PAGE_UNAVAILABLE","message":"schema wiki citation page unavailable"}}`,
+		recorder.Body.String(),
+	)
+	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.NotContains(t, recorder.Body.String(), "opaque_token")
 	require.Equal(t, 1, spy.currentCitationCalls)
 }
 

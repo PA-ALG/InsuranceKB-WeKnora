@@ -109,6 +109,78 @@ func TestSchemaWikiCitationContentIssuesBoundAuthorityThenFetchesByTokenOnly(t *
 	require.Equal(t, 1, blob.calls)
 }
 
+func TestSchemaWikiGoldenEvidencePreviewUsesSeparatePreparationTokenClaims(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x77}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-golden",
+		map[string]ed25519.PrivateKey{"citation-token-key-golden": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	pdf := []byte("%PDF-1.7\ngolden preparation immutable source\n%%EOF")
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	bindSchemaWikiCitationFixtureToBlob(t, &fixture, pdf)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	evidenceID := fixture.request.CoordinateAuthorityReceipt.ReceiptSHA256
+	fixture.request.ReleaseID = ""
+	fixture.request.ActivationEpoch = 0
+	fixture.request.PreparationID = "preparation-596-1"
+	fixture.request.EvaluationID = strings.Repeat("e", 64)
+	fixture.request.EvidenceID = evidenceID
+	snapshot := &schemaWikiImmutableRevisionSnapshotReaderStub{
+		authority: schemaWikiCitationPreviewAuthorityForFixture(t, fixture, pdf),
+	}
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: pdf}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks, snapshot),
+		blob,
+		codec,
+	)
+	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10003))
+	authority, err := content.IssuePreparationExactRevision(
+		ctx,
+		"preparation-596-1",
+		strings.Repeat("e", 64),
+		evidenceID,
+		fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, "preparation-596-1", authority.PreparationID)
+	require.Equal(t, evidenceID, authority.EvidenceID)
+	require.NotEmpty(t, authority.OpaqueToken)
+	parts := strings.Split(authority.OpaqueToken, ".")
+	require.Len(t, parts, 3)
+	payload, decodeErr := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, decodeErr)
+	require.NotContains(t, string(payload), fixture.request.Citation.QuoteSnapshot)
+	require.NotContains(t, string(payload), "quote_snapshot")
+	require.Zero(t, blob.calls)
+
+	resolved, err := content.ResolvePreparationOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken,
+	)
+	require.NoError(t, err)
+	require.Equal(t, authority.AuthoritySHA256, resolved.AuthoritySHA256)
+	opened, err := content.ReadPreparationByOpaqueToken(
+		ctx,
+		fixture.request.Scope,
+		authority.OpaqueToken,
+		"preparation-596-1",
+		strings.Repeat("e", 64),
+		evidenceID,
+		fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, pdf, opened)
+	require.Equal(t, 1, blob.calls)
+
+	_, err = content.ResolveOpaqueToken(ctx, fixture.request.Scope, authority.OpaqueToken)
+	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable,
+		"preparation token must not be accepted as an Active-release token")
+}
+
 func TestSchemaWikiCitationContentRejectsDeleteGuardAndPageRangeBeforeBytes(t *testing.T) {
 	t.Parallel()
 	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x76}, ed25519.SeedSize))
@@ -156,4 +228,75 @@ func TestSchemaWikiCitationContentRejectsDeleteGuardAndPageRangeBeforeBytes(t *t
 	)
 	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
 	require.Zero(t, blob.calls)
+}
+
+func TestSchemaWikiCitationContentRouteAuthorityDerivesSignedTokenKindAndScope(t *testing.T) {
+	t.Parallel()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x77}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-route",
+		map[string]ed25519.PrivateKey{"citation-token-key-route": privateKey},
+		time.Now,
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks),
+		&schemaWikiRevisionBlobReaderSpy{},
+		codec,
+	)
+	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10003))
+
+	active, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	activeRoute, err := content.ResolveRouteAuthority(ctx, active.OpaqueToken)
+	require.NoError(t, err)
+	require.Equal(t, "active", activeRoute.Kind)
+	require.Equal(t, fixture.request.Scope, activeRoute.Scope)
+	require.Empty(t, activeRoute.PreparationID)
+
+	pdf := []byte("%PDF-1.7\npreparation route authority\n%%EOF")
+	bindSchemaWikiCitationFixtureToBlob(t, &fixture, pdf)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	fixture.request.ReleaseID = ""
+	fixture.request.ActivationEpoch = 0
+	fixture.request.PreparationID = "preparation-596-1"
+	fixture.request.EvaluationID = strings.Repeat("e", 64)
+	fixture.request.EvidenceID = fixture.request.CoordinateAuthorityReceipt.ReceiptSHA256
+	content = newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(
+			fixture.revisions,
+			fixture.chunks,
+			&schemaWikiImmutableRevisionSnapshotReaderStub{
+				authority: schemaWikiCitationPreviewAuthorityForFixture(t, fixture, pdf),
+			},
+		),
+		&schemaWikiRevisionBlobReaderSpy{},
+		codec,
+	)
+	preparation, err := content.IssuePreparationExactRevision(
+		ctx,
+		fixture.request.PreparationID,
+		fixture.request.EvaluationID,
+		fixture.request.EvidenceID,
+		fixture.request,
+	)
+	require.NoError(t, err)
+	preparationRoute, err := content.ResolveRouteAuthority(ctx, preparation.OpaqueToken)
+	require.NoError(t, err)
+	require.Equal(t, "preparation", preparationRoute.Kind)
+	require.Equal(t, fixture.request.Scope, preparationRoute.Scope)
+	require.Equal(t, fixture.request.PreparationID, preparationRoute.PreparationID)
+
+	for _, invalid := range []string{
+		"",
+		"caller-supplied-current",
+		active.OpaqueToken + "drift",
+		preparation.OpaqueToken + "drift",
+	} {
+		resolved, resolveErr := content.ResolveRouteAuthority(ctx, invalid)
+		require.Nil(t, resolved)
+		require.ErrorIs(t, resolveErr, ErrSchemaWikiCitationUnavailable)
+	}
 }
