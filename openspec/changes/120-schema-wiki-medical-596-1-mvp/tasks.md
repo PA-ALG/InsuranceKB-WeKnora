@@ -135,6 +135,10 @@
 - [x] Persist immutable attempt-bound revision source/resource custody, replay the Go
   companion, and issue token-only citation bytes from a third Ed25519 ring. Reject ring
   reuse, byte size/SHA drift, foreign attempt/resource and out-of-range page before output.
+- [x] Make exact3 dry-run one `REPEATABLE READ READ ONLY` database snapshot; classify the
+  ordered terms/brochure/rate-table rows as `WOULD_INSERT`, exact-authority `NOOP`, or
+  `CONFLICT_STOP`; return redacted digest/count receipts with `writes=0`. Keep actual
+  execution explicitly serial and partial-stop without rollback/unseal.
 
 ## Task 5 · Lane C release-pinned UI
 

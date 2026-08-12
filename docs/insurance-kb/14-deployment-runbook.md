@@ -126,3 +126,20 @@ P15 至少需要以下带时间、版本和结果的证据：
 10. 选定消费画像的真实 E2E。
 
 本次 D0 不运行或声称上述证据。
+
+## 8. Schema Wiki 596-1 exact3 revision-source gate
+
+真实回填前，Admin+ 真人 JWT 必须经 exact RAW-KB 写权限调用同一个 server-side
+`dry_run=true` endpoint；API key 禁止。请求只允许固定顺序
+`terms → brochure → rate_table`、严格 closed JSON/EOF、互异 knowledge ID 和精确
+attempt/file/manifest 预期值，tenant 与数据库行身份全部由服务端绑定。
+
+dry-run 在单一 `REPEATABLE READ READ ONLY` 数据库快照中读取三项 authority 与已有
+revision-source 行，结果只可为 `WOULD_INSERT`、完整 sealed authority 相等的 `NOOP`
+或 `CONFLICT_STOP`。回执仅含安全的 snapshot/source/result digest 与
+planned/duplicate/conflict/writes 计数；`writes` 必须为 0，不输出 row/resource/locator。
+任一 conflict 立即 STOP，且不 seal。
+
+只有三项 dry-run 全部闭合后才执行一次 actual。actual 逐项 fresh recheck 并按固定顺序
+串行 seal；它不是三行原子事务。若 terms 已成功、brochure 失败，则 terms 保持 pinned，
+rate_table 不执行，不 rollback、不 unseal，冻结部分回执后 STOP。

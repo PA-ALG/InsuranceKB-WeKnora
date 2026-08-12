@@ -153,6 +153,12 @@ DNS noise did not alter that load-bearing missing-change RED.
   manifest authority columns; concurrent drift is a typed conflict with no state change.
 - ReviewDraft must replay the full custody envelope and ordered 75-snapshot bijection before
   named-human verification or transition; corrupted Draft custody never becomes Ready.
+- Exact3 dry-run reads all three database authorities and existing source rows in one
+  `REPEATABLE READ READ ONLY` snapshot, returns only redacted source/result/snapshot
+  digests and `WOULD_INSERT|NOOP|CONFLICT_STOP` counts, and always reports `writes=0`.
+  `NOOP` is a full sealed-row equality check. Actual remains ordered serial execution:
+  a later failure preserves an earlier pin and skips later seals; it is not a three-row
+  atomic transaction.
 - Draft creation, exact Draft preview and ReviewDraft are now explicitly constrained to
   human JWT Admin+ with route order `DenyAPIKeyPrincipal -> g.Admin -> Wiki ACL/evidence ->
   scope resolution -> RAW ACL/evidence -> SealAccess -> handler`. The service must repeat

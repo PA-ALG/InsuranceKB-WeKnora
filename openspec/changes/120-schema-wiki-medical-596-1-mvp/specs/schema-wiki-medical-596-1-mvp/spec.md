@@ -316,6 +316,30 @@ bytes or page 1.
 - **WHEN** the token is valid but the reloaded byte size or SHA-256 differs
 - **THEN** the request fails closed before any PDF page or bbox is returned
 
+### Requirement: SWM9A exact3 dry-run is one honest database snapshot
+
+The exact three revision-source dry-run SHALL read terms, brochure and rate-table database
+authority and any existing source rows in that order inside one `REPEATABLE READ READ ONLY`
+snapshot. Each safe row result SHALL be exactly `WOULD_INSERT`, `NOOP` or `CONFLICT_STOP`.
+`NOOP` requires equality of the complete sealed source authority, not merely the row key.
+The receipt SHALL bind source/result and snapshot digests plus planned, duplicate, conflict
+and write counts, SHALL report `writes=0`, and SHALL not expose row, resource or locator
+identity. A conflict SHALL stop the whole dry-run with no seal.
+
+#### Scenario: dry-run sees one conflicting sealed row
+
+- **WHEN** terms is an exact `NOOP` and the brochure source row differs in any authority
+  field while rate-table is otherwise valid
+- **THEN** the safe receipt reports one duplicate and one conflict, rate-table object
+  validation is not attempted, and database/source seal writes remain zero
+
+#### Scenario: actual exact3 stops after a later serial failure
+
+- **WHEN** the one-snapshot preflight passes and actual sealing succeeds for terms but the
+  fresh brochure recheck or seal fails
+- **THEN** terms remains pinned, brochure returns a typed stop, rate-table is not sealed,
+  and the service does not rollback or unseal terms or claim that all three writes were atomic
+
 ### Requirement: SWM10 live acceptance obeys external stop gates
 
 Real prepare/activation SHALL remain blocked until the exact three completed knowledge

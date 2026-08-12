@@ -473,6 +473,14 @@ or live citation-byte request has been run against this stack.
   - Lane C unit/type-check/build tests from Tasks 5/6.
   - Ruff changed Python, strict mypy changed production/test modules, Go vet changed packages, `git diff --check`, exact-path and privacy/secret scans.
 - [ ] Before any external write, verify the exact tenant/RAW-KB and three completed knowledge identities/attempts listed in the Mission Card facts, plus their frozen source/revision/manifest hashes. Treat rate `pages_affected=14` only as a processing count, never page authority.
+- [ ] Run the server-side exact3 `dry_run=true` first. It must validate ordered
+  terms→brochure→rate-table database authority and existing source rows in one
+  `REPEATABLE READ READ ONLY` snapshot, return only redacted snapshot/source/result
+  digests and `WOULD_INSERT|NOOP|CONFLICT_STOP` counts, and report `writes=0`. Any
+  conflict is a whole dry-run STOP; `NOOP` requires full sealed authority equality.
+- [ ] If that receipt has no conflict, authorize actual once. Actual fresh-rechecks and
+  seals serially in the same order. If terms succeeds and brochure fails, retain the terms
+  pin, do not run rate-table, and do not rollback/unseal or describe the three writes as atomic.
 - [ ] Verify the live database has the existing `wiki_release_*` schema and a clean standard migration ledger. If absent, stop with `RELEASE_SCHEMA_NOT_DEPLOYED`; do not create ad-hoc tables or auto-migrate from the application.
 - [ ] Freeze an explicit runbook decision for the two historical brochure `running` subspans. Do not silently treat them as current work, retry them or clean them inside this Mission.
 - [ ] Use a real sealed Candidate and trusted citation-authority join for the real acceptance run. Terms citation authority must come from the sealed revision/page/bbox chain because generic terms `source_refs=0`. If Candidate or join is absent, report `SCHEMA_WIKI_COMPILATION_NOT_COMPLETE`; do not substitute fixtures, the 46 generic pages or generic Wiki refs.

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -472,6 +473,98 @@ func (r *knowledgeRepository) GetRevisionSource(
 		return nil, nil, err
 	}
 	return &source, &resource, nil
+}
+
+// WithExact3ReadSnapshot is the only transaction seam used by the medical
+// exact3 preflight. The callback receives no write methods and PostgreSQL is
+// instructed to enforce one repeatable-read, read-only database snapshot.
+func (r *knowledgeRepository) WithExact3ReadSnapshot(
+	ctx context.Context,
+	read func(interfaces.KnowledgeRevisionSourceExact3SnapshotReader) error,
+) error {
+	if r == nil || r.db == nil || read == nil {
+		return ErrRevisionCommitFailed
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return read(&knowledgeRepository{db: tx})
+	}, exact3ReadOnlyTxOptions())
+}
+
+func exact3ReadOnlyTxOptions() *sql.TxOptions {
+	return &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true}
+}
+
+// GetExact3RevisionSourceAuthority must only be called through
+// WithExact3ReadSnapshot. It returns the database-owned preimage without
+// exposing a physical locator on the wire.
+func (r *knowledgeRepository) GetExact3RevisionSourceAuthority(
+	ctx context.Context,
+	tenantID uint64,
+	knowledgeBaseID string,
+	knowledgeID string,
+	parseAttempt int64,
+) (*interfaces.KnowledgeRevisionSourceExact3Authority, error) {
+	if tenantID == 0 || knowledgeBaseID == "" || knowledgeID == "" || parseAttempt <= 0 {
+		return nil, ErrRevisionCommitFailed
+	}
+	var knowledge types.Knowledge
+	if err := r.db.WithContext(ctx).Unscoped().Where(
+		"tenant_id = ? AND knowledge_base_id = ? AND id = ? AND deleted_at IS NULL",
+		tenantID, knowledgeBaseID, knowledgeID,
+	).First(&knowledge).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrKnowledgeNotFound
+		}
+		return nil, err
+	}
+	var current types.KnowledgeRevision
+	if err := r.db.WithContext(ctx).Where(
+		"knowledge_id = ? AND parse_attempt = ?", knowledgeID, parseAttempt,
+	).First(&current).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrKnowledgeNotFound
+		}
+		return nil, err
+	}
+	var last types.KnowledgeRevision
+	if err := r.db.WithContext(ctx).Where("knowledge_id = ?", knowledgeID).
+		Order("parse_attempt DESC").First(&last).Error; err != nil {
+		return nil, err
+	}
+	handle, ok := types.ParseResourcePath(knowledge.FilePath)
+	if !ok {
+		return nil, ErrRevisionCommitFailed
+	}
+	var resource types.StoredResource
+	if err := r.db.WithContext(ctx).Where(
+		"tenant_id = ? AND handle = ? AND state = ?",
+		tenantID, handle, types.ResourceStateActive,
+	).First(&resource).Error; err != nil {
+		return nil, err
+	}
+	var bindingCount int64
+	if err := r.db.WithContext(ctx).Model(&types.ResourceBinding{}).Where(
+		"resource_id = ? AND tenant_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
+		resource.ID, tenantID, "knowledge", knowledgeID, "source_file",
+	).Count(&bindingCount).Error; err != nil {
+		return nil, err
+	}
+	var existing types.KnowledgeRevisionSource
+	err := r.db.WithContext(ctx).Where(
+		"tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+		tenantID, knowledgeID, parseAttempt,
+	).First(&existing).Error
+	var existingPtr *types.KnowledgeRevisionSource
+	if err == nil {
+		existingPtr = &existing
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	return &interfaces.KnowledgeRevisionSourceExact3Authority{
+		Knowledge: &knowledge, Current: &current, Last: &last,
+		Resource: &resource, ResourceBindingCount: bindingCount,
+		ExistingSource: existingPtr,
+	}, nil
 }
 
 // SealRevisionSourcePageCount is the only allowed post-insert mutation of a

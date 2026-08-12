@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -483,6 +485,38 @@ func TestFailedAndCancelledAttemptsNeverCommitRevision(t *testing.T) {
 			require.Zero(t, count)
 		})
 	}
+}
+
+func TestExact3AuthorityReadsAllRowsInsideOneReadOnlySnapshot(t *testing.T) {
+	txOptions := exact3ReadOnlyTxOptions()
+	require.Equal(t, sql.LevelRepeatableRead, txOptions.Isolation)
+	require.True(t, txOptions.ReadOnly)
+	db := setupRevisionTestDB(t)
+	knowledgeID := seedRevisionKnowledge(t, db, types.ParseStatusProcessing, 2, 0)
+	seedRevisionChunk(t, db, knowledgeID, 2, 0, "exact3")
+	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+	_, err := repo.CommitDirectRevision(context.Background(), knowledgeID, testRevisionBinding(2))
+	require.NoError(t, err)
+	var row *interfaces.KnowledgeRevisionSourceExact3Authority
+	err = repo.WithExact3ReadSnapshot(
+		context.Background(),
+		func(reader interfaces.KnowledgeRevisionSourceExact3SnapshotReader) error {
+			var readErr error
+			row, readErr = reader.GetExact3RevisionSourceAuthority(
+				context.Background(), 1, "kb-1", knowledgeID, 2,
+			)
+			return readErr
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, row)
+	require.Equal(t, knowledgeID, row.Knowledge.ID)
+	require.Equal(t, int64(2), row.Current.ParseAttempt)
+	require.Equal(t, int64(2), row.Last.ParseAttempt)
+	require.Equal(t, int64(1), row.ResourceBindingCount)
+
+	err = repo.WithExact3ReadSnapshot(context.Background(), nil)
+	require.ErrorIs(t, err, ErrRevisionCommitFailed)
 }
 
 func TestFinalizeSubtaskRevisionCommitsOnLastSlotInSameTransaction(t *testing.T) {

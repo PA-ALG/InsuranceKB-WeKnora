@@ -43,22 +43,24 @@ type KnowledgeRevisionSourceExact3RequestV1 struct {
 }
 
 type KnowledgeRevisionSourceExact3ReceiptV1 struct {
-	Role             string `json:"role"`
-	KnowledgeID      string `json:"knowledge_id"`
-	ParseAttempt     int64  `json:"parse_attempt"`
-	RevisionSourceID string `json:"revision_source_id"`
-	FileSHA256       string `json:"file_sha256"`
-	PageCount        int    `json:"page_count"`
-	ManifestDigest   string `json:"manifest_digest"`
-	BindingDigest    string `json:"binding_digest"`
-	RetentionState   string `json:"retention_state"`
+	Role         string `json:"role"`
+	PlanCode     string `json:"plan_code"`
+	SourceSHA256 string `json:"source_sha256"`
+	ResultSHA256 string `json:"result_sha256"`
 }
 
 type KnowledgeRevisionSourceExact3ResultV1 struct {
-	Contract       string                                   `json:"contract"`
-	DryRun         bool                                     `json:"dry_run"`
-	ValidatedRoles []string                                 `json:"validated_roles"`
-	Sources        []KnowledgeRevisionSourceExact3ReceiptV1 `json:"sources"`
+	Contract          string                                   `json:"contract"`
+	DryRun            bool                                     `json:"dry_run"`
+	SnapshotIsolation string                                   `json:"snapshot_isolation"`
+	SnapshotReadOnly  bool                                     `json:"snapshot_read_only"`
+	SnapshotSHA256    string                                   `json:"snapshot_sha256"`
+	ValidatedRoles    []string                                 `json:"validated_roles"`
+	PlannedRows       int                                      `json:"planned_rows"`
+	DuplicateRows     int                                      `json:"duplicate_rows"`
+	ConflictRows      int                                      `json:"conflict_rows"`
+	Writes            int                                      `json:"writes"`
+	Sources           []KnowledgeRevisionSourceExact3ReceiptV1 `json:"sources"`
 }
 
 func (c *Client) BackfillKnowledgeRevisionSource(

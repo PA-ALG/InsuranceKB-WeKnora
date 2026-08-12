@@ -206,8 +206,9 @@ func runRevisionSourceExact3Backfill(
 	}
 	_, err = fmt.Fprintf(
 		iostreams.IO.Out,
-		"exact3 revision sources verified: dry_run=%t roles=%s\n",
-		result.DryRun, strings.Join(result.ValidatedRoles, ","),
+		"exact3 revision sources verified: dry_run=%t roles=%s planned=%d duplicate=%d conflict=%d writes=%d\n",
+		result.DryRun, strings.Join(result.ValidatedRoles, ","), result.PlannedRows,
+		result.DuplicateRows, result.ConflictRows, result.Writes,
 	)
 	return err
 }

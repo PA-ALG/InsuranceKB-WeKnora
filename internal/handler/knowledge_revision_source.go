@@ -116,11 +116,16 @@ func writeKnowledgeRevisionSourceError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrRevisionSourcePageUnavailable):
 		status = http.StatusUnprocessableEntity
 		code = "PAGE_UNAVAILABLE"
+	case errors.Is(err, service.ErrRevisionSourceExact3Conflict):
+		code = "REVISION_SOURCE_EXACT3_CONFLICT_STOP"
 	}
 	errorBody := gin.H{"code": code, "message": "revision source request failed"}
 	var exact3Err *service.KnowledgeRevisionSourceExact3Error
 	if errors.As(err, &exact3Err) && exact3Err.FailedRole != "" {
 		errorBody["failed_role"] = exact3Err.FailedRole
+		if exact3Err.Receipt != nil {
+			errorBody["receipt"] = exact3Err.Receipt
+		}
 	}
 	c.JSON(status, gin.H{"success": false, "error": errorBody})
 }
