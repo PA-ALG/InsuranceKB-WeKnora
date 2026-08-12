@@ -1,8 +1,13 @@
 # 120 · Validation Report
 
-Status: `INTEGRATION-CODE-GREEN / LIVE-NO-GO`
+Status: `MERGED-CODE-GREEN / DELIVERY-BLOCKED / LIVE-NOT-RUN`
 
 ## Identity and scope
+
+- Merged authority: `main@bee91696131efa3a3aa5ea1339557eaa68e63f0a`
+  (PR #121); merged main CI: `PASS`.
+- Packaged migration heads: official `75`, enterprise `5`; migration-tree evidence
+  `e8446dff`; route-manifest evidence `ffa548b9`.
 
 - Coordination base: `db6fd60bbf9cf4529db43ded24934c7bbdd422f9`
 - Plan commit: `db0e52320e461a13863d8c803cd80d255c25b815`
@@ -26,8 +31,8 @@ Status: `INTEGRATION-CODE-GREEN / LIVE-NO-GO`
 - Scope: A1 contracts, Lane B medical pack/compiler and immutable vector, A2 existing-row
   lifecycle/read facade, and Lane C release-pinned UI. This report and checklist are
   mechanically synchronized without changing production bytes.
-- Provider/model, Golden scoring, DB, WeKnora, migration, activation and live:
-  `NOT RUN`.
+- Provider/model, real Candidate, Golden scoring, DB/WeKnora migration/backfill, clone
+  rehearsal, Draft, review, publish, activation and live: `NOT RUN`.
 
 ## RED evidence
 
@@ -41,6 +46,7 @@ DNS noise did not alter that load-bearing missing-change RED.
 ## GREEN gates
 
 - Strict OpenSpec: `PASS` (`Change '120-schema-wiki-medical-596-1-mvp' is valid`).
+- Merged `bee91696` GitHub CI: `PASS`.
 - `git diff --check`: `PASS`.
 - A1 corrective delta: Python control/C0/vector gates `36 PASS`; Go control/unknown/
   typed-roundtrip/vector gates `PASS`.
@@ -80,6 +86,10 @@ DNS noise did not alter that load-bearing missing-change RED.
   their complete-stack verification is recorded only after the single integration matrix
   is run. Release vector SHA-256 is
   `6783e3312199378a51065872278961f10c0e0f6510648e2ff1ce18823f10e6be`.
+- Migration packaging: official head `75`, enterprise head `5`; `000004` creates the
+  attempt-bound source row and `000005` closes resource/object/manifest/binding custody.
+- Pinned-source destructive guards: direct/batch reparse, move-reparse and single/batch
+  delete reject before mutation; previous source/chunk/manifest custody is retained.
 
 ## Production-readiness delta
 
@@ -187,6 +197,11 @@ DNS noise did not alter that load-bearing missing-change RED.
 
 ## Live NO-GO boundary
 
+- Immutable image/SBOM/OCI proof for `bee91696`: `BLOCKED / NOT RUN`.
+- Three deployment public-key ID rings: `BLOCKED / UNCONFIGURED`.
+- Colima is stopped; therefore live current state is `UNKNOWN / NOT RUN`, not an
+  application failure.
+
 - No successful sealed production `Schema67CandidateV2` is available for publication.
 - The previous official DeepSeek exact8 run ended in a typed failure and produced no
   Candidate. No new real model run has been executed with the immutable-citation Candidate
@@ -203,3 +218,18 @@ DNS noise did not alter that load-bearing missing-change RED.
 Lane B fixture acceptance uses a public-factory-sealed synthetic Candidate and the exact
 companion/source receipt contracts. It does not claim that a new real Candidate, deployed
 revision rows, preparation, activation, live release tables or the end-to-end MVP exists.
+
+## Requirement-to-evidence matrix
+
+| Requirement | Implementation | Representative test | Commit | Status |
+|---|---|---|---|---|
+| SWM1–SWM3 | Python/Go contracts, medical pack, sealed compiler and tri-state pages | `test_compile_requires_concrete_freshly_replayed_schema67_candidate`, `test_unknown_field_page_has_no_value_receipt_or_citation`, `TestSchemaFieldUnknownReasonTriStateAndFullyRehashedDrift` | `2cbe7991`, `a97c63a0` | PASS |
+| SWM4–SWM6 | full typed 75-member/111-citation release, Evidence companion and canonical preparation custody | `test_factory_provenance_is_not_stored_as_private_model_state`, `TestSchemaWikiDraftPersistsExactMembersWithoutServingOrActivationState` | `bbe67a1e`, `5d4e7e01` | PASS |
+| SWM7–SWM8 | existing Draft→Ready→Activate authority, no-Head preparation scope/token, Active Head/pin and dual ACL routes | `TestSchemaWikiReviewDraftVerifiesBeforeAtomicDraftToReady`, `TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy`, `TestSchemaWikiCitationContentNoHeadStillReachesSealedDualACLHandler` | `5d4e7e01` | PASS |
+| SWM9 | `000004`/`000005` immutable source/binding, token-only bytes, page bounds and pinned reparse/move/delete guards | `TestImmutablePDFPageCounterAcceptsExact5961EncryptedMaterials`, `TestPinnedRevisionSourceBlocksDirectReparseBeforeAnyMutation`, `TestMoveReparseRejectsPinnedRevisionSourceBeforeMutation`, `TestKnowledgeDeletePathsAtomicallyRejectPinnedRevisionSources` | `fac63173`, `0791abf1` | PASS |
+| SWM9A | one RR/RO exact3 snapshot; `WOULD_INSERT/NOOP/CONFLICT_STOP`; actual serial partial-stop | `TestExact3AuthorityReadsAllRowsInsideOneReadOnlySnapshot`, `TestExact3DryRunClassifiesExactExistingRowsAndStopsOnConflict`, `TestExact3BackfillPreflightsAllSourcesBeforeStrictSerialSeal` | `4b7795fa` | PASS |
+| SWM10 | merged code/CI identity and explicit external STOP gates | this report; PR #121 CI | `bee91696` | BLOCKED |
+| SWM11 | closed owner/integration plan and docs-only reconciliation | exact-path/diff/docs-only checks | this docs commit | PASS |
+
+`BLOCKED` in SWM10 means the immutable image/SBOM/OCI proof and key rings are absent.
+Migration/backfill/provider/Candidate/Draft/review/publish/activation/live remain `NOT RUN`.

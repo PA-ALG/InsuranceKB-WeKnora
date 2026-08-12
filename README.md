@@ -5,15 +5,10 @@
 > 本仓库同时是一个**企业级 Harness Agent 示范项目**：文档驱动（SDD）、测试驱动（TDD）、人机协作规范齐备，任何人/任何 AI 会话都能随时接手。
 
 > [!IMPORTANT]
-> **2026-07-29 当前执行权威。** Enterprise LLM Wiki 仍是产品本体；当前规范
-> 层级依次为 [Sole Serving Active Release Authority ADR](docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md)
-> → [Authority Amendment 2](docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md)
-> → 适用 OpenSpec。`jlx_enterprise_llm_wiki_complete_728_v3.md` 是设计输入与
-> 合订说明，不单独授予实现权。当前状态为
-> `NO_PRODUCTION_ACTIVE_RELEASE`：目标 Release Kernel 尚未实现，Harness P3
-> 生产 Worker 也未注册发布业务 Handler。下文 P-1、`ReleaseSnapshot`、
-> `CurrentRelease`、Projector 与旧 publisher 的 serving 描述只保留历史和定向
-> 移植价值；与上述权威冲突时不得据此开发或宣称线上已有 Active Release。
+> **唯一当前执行入口。** 开工必须先读 [`AGENTS.md`](AGENTS.md)，再按其中的
+> 唯一阅读序列进入适用 ADR、Amendment、`HANDOFF.md` 与 OpenSpec。下文保留的
+> 2026-07 架构层级、P-1、`ReleaseSnapshot`、`CurrentRelease`、Projector 和旧
+> publisher 描述均为 `HISTORY-ONLY` 背景，不构成独立当前权威或实现授权。
 
 ## 要解决的问题
 
@@ -51,7 +46,8 @@
 
 插件边界与历史架构背景见
 [`docs/insurance-kb/02-architecture.md`](docs/insurance-kb/02-architecture.md)，
-当前执行裁决以本页顶部列出的 ADR、Amendment 2 与适用 OpenSpec 为准。
+这些链接只提供上下文；当前执行入口与阅读顺序仅以 [`AGENTS.md`](AGENTS.md)
+为准。
 [`13-blueprint-status.md`](docs/insurance-kb/13-blueprint-status.md) 只作历史建设账本。
 
 ## 快速开始
@@ -67,7 +63,7 @@
 | 你是谁 | 入口 |
 |---|---|
 | 想 5 分钟了解项目 | [`docs/insurance-kb/00-project-overview.md`](docs/insurance-kb/00-project-overview.md) |
-| 接手开发（人或 AI 会话） | [`HANDOFF.md`](HANDOFF.md) → 认领任务 → 对应 `openspec/changes/` 的 specs（AI 会话自动加载 `CLAUDE.md` 约定） |
+| 接手开发（人或 AI 会话） | 先读唯一必读/贡献规范 [`AGENTS.md`](AGENTS.md)，再按其阅读序列进入 [`HANDOFF.md`](HANDOFF.md) 与对应 OpenSpec |
 | 想懂知识模型/抽取原理 | docs 03 / 04 / 05 |
 | 排期与协作 | docs 16（Roadmap）/ 17（三人分工）/ 18（AI 协作机制） |
 | WeKnora 平台本身 | 上游文档 [`README_CN.md`](README_CN.md)（本 fork 保持零分岔跟随 [Tencent/WeKnora](https://github.com/Tencent/WeKnora)） |
