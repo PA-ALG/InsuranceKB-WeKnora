@@ -68,7 +68,17 @@ func RegisterSchemaWikiRoutes(
 		"/releases/:release_id/fields/:field_id/citations/:citation_id/preview",
 		schemaHandler.PreviewCurrentCitation,
 	)
-	activeGET("/citation-content/:token", schemaHandler.ReadCitationContent)
+	read.GET(
+		"/citation-content/:token",
+		g.Viewer(),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaHandler.RequireCitationContentScope(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+		schemaHandler.ReadCitationContent,
+	)
 
 	human := read.With(apiKeyAny())
 	humanPrefix := []gin.HandlerFunc{middleware.DenyAPIKeyPrincipal(), g.Admin()}

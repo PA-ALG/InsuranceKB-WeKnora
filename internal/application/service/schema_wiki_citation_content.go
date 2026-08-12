@@ -377,6 +377,28 @@ func (s *schemaWikiCitationContentService) ResolveOpaqueToken(
 	return &authority, nil
 }
 
+func (s *schemaWikiCitationContentService) ResolveRouteAuthority(
+	_ context.Context,
+	token string,
+) (*SchemaWikiCitationContentRouteAuthorityV1, error) {
+	if s == nil || s.codec == nil || strings.TrimSpace(token) == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if claims, err := s.codec.verify(token); err == nil {
+		return &SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "active", Scope: claims.Scope,
+		}, nil
+	}
+	claims, err := s.codec.verifyGoldenEvidence(token)
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return &SchemaWikiCitationContentRouteAuthorityV1{
+		Kind: "preparation", Scope: claims.Scope,
+		PreparationID: claims.Authority.PreparationID,
+	}, nil
+}
+
 func (s *schemaWikiCitationContentService) ReadByOpaqueToken(
 	ctx context.Context,
 	scope types.WikiReleaseScope,

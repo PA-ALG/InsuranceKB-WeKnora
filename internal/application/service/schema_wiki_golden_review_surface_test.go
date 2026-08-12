@@ -146,6 +146,22 @@ func (s *schemaWikiGoldenEvidenceContentSpy) ReadPreparationByOpaqueToken(
 	return []byte("%PDF-1.7\nreview-only\n%%EOF"), nil
 }
 
+func (s *schemaWikiGoldenEvidenceContentSpy) ResolveRouteAuthority(
+	context.Context,
+	string,
+) (*SchemaWikiCitationContentRouteAuthorityV1, error) {
+	if s.authority == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return &SchemaWikiCitationContentRouteAuthorityV1{
+		Kind: "preparation",
+		Scope: types.WikiReleaseScope{
+			TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+		},
+		PreparationID: s.authority.PreparationID,
+	}, nil
+}
+
 func TestSchemaWikiGoldenEvaluationBundlePersistsInExistingPreparationCustody(t *testing.T) {
 	t.Parallel()
 	principal, scope, reviewed := schemaWikiReviewedDraft(t)

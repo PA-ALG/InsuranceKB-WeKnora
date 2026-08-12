@@ -229,3 +229,74 @@ func TestSchemaWikiCitationContentRejectsDeleteGuardAndPageRangeBeforeBytes(t *t
 	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
 	require.Zero(t, blob.calls)
 }
+
+func TestSchemaWikiCitationContentRouteAuthorityDerivesSignedTokenKindAndScope(t *testing.T) {
+	t.Parallel()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x77}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-route",
+		map[string]ed25519.PrivateKey{"citation-token-key-route": privateKey},
+		time.Now,
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks),
+		&schemaWikiRevisionBlobReaderSpy{},
+		codec,
+	)
+	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10003))
+
+	active, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	activeRoute, err := content.ResolveRouteAuthority(ctx, active.OpaqueToken)
+	require.NoError(t, err)
+	require.Equal(t, "active", activeRoute.Kind)
+	require.Equal(t, fixture.request.Scope, activeRoute.Scope)
+	require.Empty(t, activeRoute.PreparationID)
+
+	pdf := []byte("%PDF-1.7\npreparation route authority\n%%EOF")
+	bindSchemaWikiCitationFixtureToBlob(t, &fixture, pdf)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	fixture.request.ReleaseID = ""
+	fixture.request.ActivationEpoch = 0
+	fixture.request.PreparationID = "preparation-596-1"
+	fixture.request.EvaluationID = strings.Repeat("e", 64)
+	fixture.request.EvidenceID = fixture.request.CoordinateAuthorityReceipt.ReceiptSHA256
+	content = newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(
+			fixture.revisions,
+			fixture.chunks,
+			&schemaWikiImmutableRevisionSnapshotReaderStub{
+				authority: schemaWikiCitationPreviewAuthorityForFixture(t, fixture, pdf),
+			},
+		),
+		&schemaWikiRevisionBlobReaderSpy{},
+		codec,
+	)
+	preparation, err := content.IssuePreparationExactRevision(
+		ctx,
+		fixture.request.PreparationID,
+		fixture.request.EvaluationID,
+		fixture.request.EvidenceID,
+		fixture.request,
+	)
+	require.NoError(t, err)
+	preparationRoute, err := content.ResolveRouteAuthority(ctx, preparation.OpaqueToken)
+	require.NoError(t, err)
+	require.Equal(t, "preparation", preparationRoute.Kind)
+	require.Equal(t, fixture.request.Scope, preparationRoute.Scope)
+	require.Equal(t, fixture.request.PreparationID, preparationRoute.PreparationID)
+
+	for _, invalid := range []string{
+		"",
+		"caller-supplied-current",
+		active.OpaqueToken + "drift",
+		preparation.OpaqueToken + "drift",
+	} {
+		resolved, resolveErr := content.ResolveRouteAuthority(ctx, invalid)
+		require.Nil(t, resolved)
+		require.ErrorIs(t, resolveErr, ErrSchemaWikiCitationUnavailable)
+	}
+}

@@ -31,6 +31,12 @@ type schemaWikiPreparationScopeResolver interface {
 	GetPreparationScopeForWikiKB(context.Context, uint64, string, string) (*types.WikiReleaseScope, error)
 }
 
+type SchemaWikiCitationContentRouteAuthorityResolver interface {
+	ResolveSchemaCitationContentRouteAuthority(
+		context.Context, string,
+	) (*service.SchemaWikiCitationContentRouteAuthorityV1, error)
+}
+
 type schemaWikiHTTPService interface {
 	CreateSchemaDraft(
 		context.Context,
@@ -159,16 +165,24 @@ type schemaWikiHTTPService interface {
 // citation authority stays inside SchemaWikiService; HTTP callers provide only
 // path identities and never custody DTOs.
 type SchemaWikiHandler struct {
-	scopeResolver SchemaWikiScopeResolver
-	schemaService schemaWikiHTTPService
+	scopeResolver          SchemaWikiScopeResolver
+	schemaService          schemaWikiHTTPService
+	citationRouteAuthority SchemaWikiCitationContentRouteAuthorityResolver
 }
 
 // NewSchemaWikiHandler constructs the explicitly injected Schema Wiki facade.
 func NewSchemaWikiHandler(
 	scopeResolver SchemaWikiScopeResolver,
 	schemaService schemaWikiHTTPService,
+	citationResolvers ...SchemaWikiCitationContentRouteAuthorityResolver,
 ) *SchemaWikiHandler {
-	return &SchemaWikiHandler{scopeResolver: scopeResolver, schemaService: schemaService}
+	handler := &SchemaWikiHandler{scopeResolver: scopeResolver, schemaService: schemaService}
+	if len(citationResolvers) == 1 {
+		handler.citationRouteAuthority = citationResolvers[0]
+	} else if resolver, ok := schemaService.(SchemaWikiCitationContentRouteAuthorityResolver); ok {
+		handler.citationRouteAuthority = resolver
+	}
+	return handler
 }
 
 type schemaWikiCreateDraftRequest struct {
@@ -240,6 +254,69 @@ func (h *SchemaWikiHandler) RequireScopeParams() gin.HandlerFunc {
 			return
 		}
 		c.Set(schemaWikiResolvedHeadContextKey, *head)
+		c.Next()
+	}
+}
+
+// RequireCitationContentScope verifies the opaque token before RAW ACL. The
+// caller path may identify the Wiki KB for its first ACL only; Space/RAW must
+// match the signed token and, for preparation tokens, immutable preparation
+// custody. Active reads also re-resolve Head here and are pinned again before
+// bytes open in the service.
+func (h *SchemaWikiHandler) RequireCitationContentScope() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantID, wikiKBID, pathScope, ok := schemaWikiPathScope(c)
+		if !ok || h == nil || h.scopeResolver == nil || h.citationRouteAuthority == nil {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		authority, err := h.citationRouteAuthority.ResolveSchemaCitationContentRouteAuthority(
+			c.Request.Context(), strings.TrimSpace(c.Param("token")),
+		)
+		if err != nil || authority == nil || authority.Scope != pathScope ||
+			authority.Scope.TenantID != tenantID || authority.Scope.WikiKBID != wikiKBID {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		switch authority.Kind {
+		case "active":
+			head, headErr := h.scopeResolver.GetHeadForWikiKB(c.Request.Context(), tenantID, wikiKBID)
+			if headErr != nil || head == nil || head.WikiReleaseScope != authority.Scope {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			c.Set(schemaWikiResolvedHeadContextKey, *head)
+		case "preparation":
+			principal, principalOK := types.PrincipalFromContext(c.Request.Context())
+			_, apiKey := types.TenantAPIKeyScopeFromContext(c.Request.Context())
+			if apiKey || !principalOK || principal.Type != types.PrincipalWebUser ||
+				!types.TenantRoleFromContext(c.Request.Context()).HasPermission(types.TenantRoleAdmin) {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			resolver, resolverOK := h.scopeResolver.(schemaWikiPreparationScopeResolver)
+			if !resolverOK || strings.TrimSpace(authority.PreparationID) == "" {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+			stored, scopeErr := resolver.GetPreparationScopeForWikiKB(
+				c.Request.Context(), tenantID, wikiKBID, authority.PreparationID,
+			)
+			if scopeErr != nil || stored == nil || *stored != authority.Scope {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
+		default:
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

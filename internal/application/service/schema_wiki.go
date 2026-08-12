@@ -70,6 +70,15 @@ type SchemaWikiCitationContentPort interface {
 		context.Context, types.WikiReleaseScope, string, string, string, string,
 		CitationRevisionReadRequestV1,
 	) ([]byte, error)
+	ResolveRouteAuthority(
+		context.Context, string,
+	) (*SchemaWikiCitationContentRouteAuthorityV1, error)
+}
+
+type SchemaWikiCitationContentRouteAuthorityV1 struct {
+	Kind          string
+	Scope         types.WikiReleaseScope
+	PreparationID string
 }
 
 type SchemaWikiService struct {
@@ -107,6 +116,19 @@ func NewSchemaWikiService(
 		service.citationContent = citationContent[0]
 	}
 	return service
+}
+
+// ResolveSchemaCitationContentRouteAuthority verifies the opaque token and
+// returns only the server-owned scope needed by the HTTP dual-ACL gate. The
+// full token is replayed again by ReadSchemaCitationContent before bytes open.
+func (s *SchemaWikiService) ResolveSchemaCitationContentRouteAuthority(
+	ctx context.Context,
+	token string,
+) (*SchemaWikiCitationContentRouteAuthorityV1, error) {
+	if s == nil || s.citationContent == nil || strings.TrimSpace(token) == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	return s.citationContent.ResolveRouteAuthority(ctx, token)
 }
 
 // NewSchemaWikiServiceWithGoldenSuccessorStatus is the production composition
