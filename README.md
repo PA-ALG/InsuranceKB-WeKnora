@@ -1,4 +1,4 @@
-# InsuranceKB —— 寿险企业级知识平台（WeKnora 底座 + AI 知识编译 Harness）
+# InsuranceKB —— 企业级知识平台（WeKnora 底座 + AI 知识编译 Harness）
 
 > 把散落在产品说明书、条款、FAQ、培训材料里的寿险知识，**编译**成原子化、有版本、可溯源、可进化的知识体系——既供 Agent 精准调用，也供人像维基百科一样阅读与审核。
 >
