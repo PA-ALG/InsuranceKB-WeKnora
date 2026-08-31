@@ -143,7 +143,9 @@ Win1 除上述三个 exact path 外无任何写域；不得修改现有 Harness 
 - `internal/application/service/schema_wiki_citation_revision_test.go`；
 - `internal/handler/schema_wiki.go`；
 - `internal/handler/schema_wiki_test.go`；
-- 不改 migration、数据库表、第二发布器或通用 Wiki 核心。
+- 不改 migration、数据库表或第二发布器。允许修改上列既有通用 Wiki 文件，但只能增加
+  与旧 Schema request 严格互斥的 G1 variant、Head-independent preparation read 与
+  server-verified source bridge；不得改变旧 Schema contract、旧 route 或旧 lifecycle 语义。
 
 外部对象写域为 `∅`。Win2 仅在 Win1 contract vector 被总控冻结、上述路径与 Win1 完全
 互斥且并行直接推进同一个 M1 Preview 时创建；否则维持单写窗口。Win2 不 commit、不
