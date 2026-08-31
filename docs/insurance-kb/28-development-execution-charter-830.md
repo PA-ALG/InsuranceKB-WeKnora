@@ -3,6 +3,9 @@
 > 适用范围：830 技术蓝图的开发、联调、验收与合并
 > 本文只定义 HOW：队列、WIP、证据、停线、写域与合并纪律；WHY/WHAT、数据合同和
 > 组件归属只引用 830 技术蓝图，不在此重复。
+>
+> 当前执行态：`B0_ONLY / EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`；G1 及后续
+> Goal 为 `LOCKED`，总控裁决前不得推进。
 
 ## 1. 唯一权威与唯一队列
 

@@ -1,14 +1,15 @@
 # 29 · 830 Goal Cards（统一知识库与真实验收版）
 
 > 修订日期：2026-08-31
-> 当前授权：`DOCUMENTATION_ONLY`
-> 当前产品状态：`830_PRODUCT_GOAL=NOT_STARTED`
+> 当前授权：`B0_ONLY`
+> 当前产品状态：`830_PRODUCT_GOAL=B0_EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`
 > Schema Catalog：`11_PRODUCT_PACKS_SOURCE_VERIFIED_NOT_REGISTERED`
 > 执行 WIP 上限：`WIP_LIMIT=1`
 
-本文件是 830 唯一 Goal 队列和逐卡验收权威。它不启动产品代码、Provider、运行
-环境、迁移或真实写入。用户另行授权后只可从 `B0` 开始；一张卡获得真实 PASS 并
-封存 Evidence Pack 后，下一张卡才可进入 WIP。
+本文件是 830 唯一 Goal 队列和逐卡验收权威。用户当前只授权 B0 的证据冻结、资产
+裁决和必要 authority/Handoff 指针；它不启动产品代码、Provider、运行环境、迁移或
+真实写入。B0 Evidence Pack 已冻结并等待总控复核；只有总控裁决 B0 为 PASS 后，
+下一张卡才可另行获授权进入 WIP。G1 及后续 Goal 当前均为 `LOCKED`。
 
 ```text
 B0 -> G1 -> G2 -> G3 -> G4 -> G5 -> G6A -> G6B -> G6C -> G6D -> Q0 -> G7

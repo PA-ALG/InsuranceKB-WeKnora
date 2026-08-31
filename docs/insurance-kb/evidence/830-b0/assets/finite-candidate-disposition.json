@@ -1,0 +1,120 @@
+{
+  "contract": "weknora.830.b0-finite-candidate-disposition.v1",
+  "scope_rule": "Only assets consumed by G1, conflicting legacy execution semantics, and the current 830 integration diff.",
+  "allowed_dispositions": ["KEEP", "REWIRE", "FREEZE", "SUPERSEDE"],
+  "items": [
+    {
+      "id": "A01-815-flow-runtime-evidence",
+      "asset": "815 C7 commit/tree/release/runtime/receipt/page-quote evidence",
+      "paths": ["openspec/changes/120-schema-wiki-medical-596-1-mvp/validation-report.md", "docs/insurance-kb/evidence/830-b0/baseline/815-flow-baseline.json"],
+      "disposition": "KEEP",
+      "target_goal": "G1",
+      "reason": "G1 must inherit the frozen FLOW lineage and cannot rerun or replace 815."
+    },
+    {
+      "id": "A02-sole-release-active-read",
+      "asset": "WeKnora sole Release/Active/current/pinned implementation",
+      "paths": ["internal/application/service/wiki_release.go", "internal/application/service/schema_wiki.go", "internal/handler/schema_wiki.go", "internal/router/routes_schema_wiki.go"],
+      "disposition": "KEEP",
+      "target_goal": "G1",
+      "reason": "830 extends the proven sole serving authority without introducing a second Head."
+    },
+    {
+      "id": "A03-source-revision-citation-custody",
+      "asset": "Immutable SourceRevision/citation content and fail-closed locator seam",
+      "paths": ["internal/application/service/schema_wiki_citation_revision.go", "internal/application/service/schema_wiki_citation_content.go", "frontend/src/components/schema-wiki/SchemaCitationViewer.vue"],
+      "disposition": "KEEP",
+      "target_goal": "G1",
+      "reason": "G1 reuses exact release-bound PDF source reopening."
+    },
+    {
+      "id": "A04-medical-schema67-pack",
+      "asset": "medical-schema67.v1 definitions and release compiler",
+      "paths": ["harness/src/insurance_harness/knowledge_compiler/medical_schema_pack_596_1.py", "harness/src/insurance_harness/knowledge_compiler/schema_wiki_release_596_1.py"],
+      "disposition": "REWIRE",
+      "target_goal": "G1",
+      "reason": "Preserve medical semantics while making Schema67 a medical SchemaPack, not the enterprise ontology."
+    },
+    {
+      "id": "A05-harness-formal-candidate-seam",
+      "asset": "815 Formal Candidate/derivation/preview compiler seams",
+      "paths": ["harness/src/insurance_harness/knowledge_compiler/ec01_formal_candidate_run_815.py", "harness/src/insurance_harness/knowledge_compiler/formal_candidate_derivation_validator_815.py", "harness/src/insurance_harness/knowledge_compiler/schema_wiki_c5_preview_815.py"],
+      "disposition": "REWIRE",
+      "target_goal": "G1",
+      "reason": "G1 consumes proven compiler behavior through SchemaPack and FieldAssertion identities."
+    },
+    {
+      "id": "A06-schema-wiki-page-graph-ui",
+      "asset": "Current Schema Wiki browser and field-page UI",
+      "paths": ["frontend/src/views/knowledge/schema-wiki/SchemaWikiBrowser.vue", "frontend/src/views/knowledge/schema-wiki/SchemaWikiFieldPage.vue"],
+      "disposition": "REWIRE",
+      "target_goal": "G1",
+      "reason": "Retain visible behavior while routing each entity field to its stable FieldAssertion URL/page."
+    },
+    {
+      "id": "A07-830-authority-documents",
+      "asset": "830 blueprint, execution charter and Goal Cards",
+      "paths": ["jlx_enterprise_llm_wiki_technical_blueprint_830.md", "docs/insurance-kb/28-development-execution-charter-830.md", "docs/insurance-kb/29-goal-cards-830.md"],
+      "disposition": "KEEP",
+      "target_goal": "G1",
+      "reason": "These three files are the authorized 830 authority chain selectively brought from 1b1d9286."
+    },
+    {
+      "id": "A09-815-route-and-rebuild-history",
+      "asset": "815 technical route and PR 123 rebuild history",
+      "paths": ["docs/insurance-kb/26-mvp-815-engineering-handoff.md", "docs/insurance-kb/27-mvp-815-repository-cleanup.md"],
+      "disposition": "FREEZE",
+      "target_goal": null,
+      "reason": "Retain audit facts; do not treat the old route as the active 830 execution queue."
+    },
+    {
+      "id": "A10-728-historical-status",
+      "asset": "728 historical design/status narrative below §M0",
+      "paths": ["jlx_enterprise_llm_wiki_complete_728_v3.md"],
+      "disposition": "FREEZE",
+      "target_goal": null,
+      "reason": "Informative history remains readable but cannot override the 830 authority chain."
+    },
+    {
+      "id": "A11-old-next-goal-c4",
+      "asset": "Legacy statement that C4 is the next product goal",
+      "paths": ["AGENTS.md", "HANDOFF.md"],
+      "disposition": "SUPERSEDE",
+      "target_goal": null,
+      "reason": "830 authorizes B0 only; G1 and every later goal remain locked."
+    },
+    {
+      "id": "A12-schema67-global-model",
+      "asset": "Schema67 and seven medical sections as a fixed enterprise model",
+      "paths": ["historical design semantics"],
+      "disposition": "SUPERSEDE",
+      "target_goal": null,
+      "reason": "Schema67/7 sections are only the medical SchemaPack/Profile instance."
+    },
+    {
+      "id": "A13-continuous-pages-content-authority",
+      "asset": "Continuous pages or 75 release members as an independently editable content authority",
+      "paths": ["historical Schema Wiki presentation semantics"],
+      "disposition": "SUPERSEDE",
+      "target_goal": null,
+      "reason": "Claim/Evidence/Release is the sole content source; pages are projections."
+    },
+    {
+      "id": "A14-second-serving-authority",
+      "asset": "Any second Wiki/review/Active/Evidence/current_release serving interpretation",
+      "paths": ["legacy current_release/SnapshotReader/projector execution semantics"],
+      "disposition": "SUPERSEDE",
+      "target_goal": null,
+      "reason": "WeKnora remains the sole Wiki, review entry and serving Active Head."
+    }
+  ],
+  "counts": {
+    "total": 13,
+    "KEEP": 4,
+    "REWIRE": 3,
+    "FREEZE": 2,
+    "SUPERSEDE": 4,
+    "unclassified": 0,
+    "multi_classified": 0
+  }
+}

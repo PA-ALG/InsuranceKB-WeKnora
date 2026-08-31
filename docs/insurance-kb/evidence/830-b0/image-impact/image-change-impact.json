@@ -1,0 +1,102 @@
+{
+  "contract": "weknora.830.b0-image-change-impact.v1",
+  "goal_id": "B0",
+  "integration_base": "99205db986eae2a9fa4bc956c053b94298d0b114",
+  "change_class": "DOCS_AND_EVIDENCE_ONLY",
+  "runtime_source_changed": false,
+  "dockerfile_changed": false,
+  "lockfile_changed": false,
+  "entrypoint_changed": false,
+  "build_args_changed": false,
+  "platform_changed": false,
+  "docker_action": "SKIP",
+  "builds_executed": 0,
+  "services": [
+    {
+      "service": "app",
+      "source_subset": ["cmd/**", "internal/**", "config/**", "migrations/**", "scripts/**", "dataset/samples/**", "skills/preloaded/**", "go.mod", "go.sum", "Makefile"],
+      "context": ".",
+      "dockerfile": "docker/Dockerfile.app",
+      "lockfiles": ["go.mod", "go.sum"],
+      "base_images": ["golang:1.26-bookworm (NOT_PINNED_IN_DOCKERFILE)", "debian:12.12-slim (NOT_PINNED_IN_DOCKERFILE)"],
+      "build_args": ["GOPRIVATE_ARG", "GOPROXY_ARG", "GOSUMDB_ARG", "APK_MIRROR_ARG", "VERSION_ARG", "COMMIT_ID_ARG", "BUILD_TIME_ARG", "GO_VERSION_ARG"],
+      "platform": "NOT_RECORDED_IN_815_RECEIPT",
+      "existing_local_live_digest": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+      "b0_affected": false
+    },
+    {
+      "service": "frontend",
+      "source_subset": ["frontend/src/**", "frontend/public/**", "frontend/package.json", "frontend/package-lock.json", "frontend/nginx.conf", "frontend/docker-entrypoint.sh", "frontend/dist/**"],
+      "context": "frontend",
+      "dockerfile": "frontend/Dockerfile",
+      "lockfiles": ["frontend/package-lock.json"],
+      "base_images": ["nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1"],
+      "build_args": [],
+      "platform": "NOT_RECORDED_IN_815_RECEIPT",
+      "existing_local_live_digest": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+      "c7_frontend_image_id": "sha256:0b32d79b728e4dfeb4b8b90e1ad465602773f2fdb7b25dae2b59e8b3084a0a04",
+      "b0_affected": false
+    },
+    {
+      "service": "docreader",
+      "source_subset": ["docreader/**", "packages/**"],
+      "context": ".",
+      "dockerfile": "docker/Dockerfile.docreader",
+      "lockfiles": ["docreader/pyproject.toml", "docreader/uv.lock"],
+      "base_images": ["python:3.10.18-bookworm (NOT_PINNED_IN_DOCKERFILE)"],
+      "build_args": ["APT_MIRROR", "TARGETARCH"],
+      "platform": "NOT_RECORDED_IN_815_RECEIPT",
+      "existing_local_live_digest": "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+      "b0_affected": false
+    },
+    {
+      "service": "sandbox",
+      "source_subset": ["docker/Dockerfile.sandbox"],
+      "context": ".",
+      "dockerfile": "docker/Dockerfile.sandbox",
+      "lockfiles": [],
+      "base_images": ["node:20-slim (NOT_PINNED_IN_DOCKERFILE)", "python:3.11-slim (NOT_PINNED_IN_DOCKERFILE)"],
+      "build_args": [],
+      "platform": "NOT_RECORDED",
+      "b0_affected": false
+    },
+    {
+      "service": "odl-hybrid",
+      "source_subset": ["docker/Dockerfile.odl-hybrid"],
+      "context": ".",
+      "dockerfile": "docker/Dockerfile.odl-hybrid",
+      "lockfiles": [],
+      "base_images": ["python:3.10.18-bookworm (NOT_PINNED_IN_DOCKERFILE)"],
+      "build_args": [],
+      "platform": "NOT_RECORDED",
+      "b0_affected": false
+    },
+    {
+      "service": "mcp",
+      "source_subset": ["mcp-server/**"],
+      "context": "mcp-server",
+      "dockerfile": "mcp-server/Dockerfile",
+      "lockfiles": ["mcp-server/requirements.txt"],
+      "base_images": ["python:3.11-slim (NOT_PINNED_IN_DOCKERFILE)"],
+      "build_args": [],
+      "platform": "NOT_RECORDED",
+      "b0_affected": false
+    },
+    {
+      "service": "local-live-runner",
+      "source_subset": ["deploy/local-live/runner/Dockerfile", "deploy/local-live/runner/entrypoint.sh"],
+      "context": "deploy/local-live/runner",
+      "dockerfile": "deploy/local-live/runner/Dockerfile",
+      "lockfiles": [],
+      "base_images": ["debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"],
+      "build_args": ["RUNNER_VERSION", "RUNNER_ARCH", "RUNNER_ARCHIVE", "RUNNER_SHA256", "RUNNER_DEBIAN_MIRROR", "RUNNER_DEBIAN_SECURITY_MIRROR", "RUNNER_RELEASE_BASE", "RUNNER_RELEASE_PROTO"],
+      "platform": "DERIVED_FROM_RUNNER_ARCH_BUILD_ARG; NOT_FROZEN_FOR_B0",
+      "b0_affected": false
+    }
+  ],
+  "artifact_identity_rule": {
+    "required_fields": ["service", "relevant_source_subset_digest", "dockerfile_digest", "context_definition", "lockfile_digests", "base_image_digests", "build_args", "platform"],
+    "reuse_gate": "Every required field and the immutable output digest must match; a Git SHA, mutable tag, port, container name or cache hit is insufficient.",
+    "b0_result": "SKIP: no runtime/image input changed and no image was built or reused as a B0 validation action."
+  }
+}

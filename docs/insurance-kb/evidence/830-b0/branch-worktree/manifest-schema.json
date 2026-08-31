@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weknora.830.b0-branch-worktree-manifest.schema.v1",
+  "title": "B0 branch/worktree mechanical index",
+  "type": "object",
+  "required": ["contract", "generated_at", "repository", "formal_base", "observed_branch", "observed_head_before_evidence_commit", "head_binding_rule", "refs", "worktrees", "counts"],
+  "properties": {
+    "contract": {"const": "weknora.830.b0-branch-worktree-manifest.v1"},
+    "generated_at": {"type": "string"},
+    "repository": {"type": "string"},
+    "formal_base": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "observed_branch": {"const": "codex/830-b0-asset-baseline"},
+    "observed_head_before_evidence_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "head_binding_rule": {"type": "string"},
+    "refs": {"type": "array", "items": {"$ref": "#/$defs/ref"}},
+    "worktrees": {"type": "array", "items": {"$ref": "#/$defs/worktree"}},
+    "counts": {"type": "object"}
+  },
+  "$defs": {
+    "disposition": {"enum": ["KEEP", "REWIRE", "FREEZE", "SUPERSEDE", null]},
+    "ref": {
+      "type": "object",
+      "required": ["ref", "kind", "head", "last_activity", "owner", "goal_or_pr", "review_scope", "physical_action"],
+      "properties": {
+        "ref": {"type": "string"},
+        "kind": {"enum": ["LOCAL_BRANCH", "REMOTE_TRACKING_BRANCH"]},
+        "head": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "last_activity": {"type": "string"},
+        "owner": {"type": "string"},
+        "goal_or_pr": {"type": "string"},
+        "review_scope": {"enum": ["FINITE_CANDIDATE", "INDEX_ONLY/OUT_OF_SCOPE"]},
+        "disposition": {"$ref": "#/$defs/disposition"},
+        "target_goal": {"type": ["string", "null"]},
+        "physical_action": {"type": "string"}
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "required": ["path", "head", "clean", "dirty_entry_count", "review_scope", "physical_action"],
+      "properties": {
+        "path": {"type": "string"},
+        "head": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "branch": {"type": ["string", "null"]},
+        "clean": {"type": "boolean"},
+        "dirty_entry_count": {"type": "integer", "minimum": 0},
+        "review_scope": {"enum": ["FINITE_CANDIDATE", "INDEX_ONLY/OUT_OF_SCOPE"]},
+        "disposition": {"$ref": "#/$defs/disposition"},
+        "target_goal": {"type": ["string", "null"]},
+        "physical_action": {"type": "string"}
+      }
+    }
+  }
+}

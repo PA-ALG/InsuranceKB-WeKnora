@@ -1,0 +1,30 @@
+{
+  "contract": "weknora.830.b0-worktree-closure.v1",
+  "goal_id": "B0",
+  "state": "EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW",
+  "branch": "codex/830-b0-asset-baseline",
+  "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-b0-asset-baseline",
+  "formal_base": "99205db986eae2a9fa4bc956c053b94298d0b114",
+  "evidence_candidate_head": "81383e538963b03db729546fba05882dde88ea18",
+  "final_head_binding": "VERIFIER_RUNTIME_OUTPUT_AND_CONTROLLER_REVIEW",
+  "self_reference_rule": "The candidate head is an ancestor observation. The containing commit cannot embed its own SHA; final exact HEAD is emitted by the verifier and frozen by controller review.",
+  "authorized_exact_paths": [
+    "AGENTS.md",
+    "HANDOFF.md",
+    "jlx_enterprise_llm_wiki_technical_blueprint_830.md",
+    "docs/insurance-kb/28-development-execution-charter-830.md",
+    "docs/insurance-kb/29-goal-cards-830.md"
+  ],
+  "authorized_prefix": "docs/insurance-kb/evidence/830-b0/",
+  "product_code_changed_paths": 0,
+  "openspec_changed_paths": 0,
+  "refs_deleted": 0,
+  "worktrees_removed": 0,
+  "services_started": 0,
+  "images_built": 0,
+  "docker_action": "SKIP",
+  "physical_removal": "NOT_AUTHORIZED; MANIFEST_ONLY",
+  "verification_command": "python3 docs/insurance-kb/evidence/830-b0/tools/verify_b0_evidence.py",
+  "clean_status_contract": "The final verifier fails unless git status --porcelain=v1 is empty.",
+  "controller_decision": "PENDING"
+}

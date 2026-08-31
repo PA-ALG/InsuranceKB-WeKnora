@@ -1,0 +1,31 @@
+{
+  "contract": "weknora.830.b0-schema-workbook-audit.v1",
+  "source_path": "/Users/houjing/Downloads/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
+  "audit_copy_path": "【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
+  "source_size_bytes": 112185,
+  "audit_copy_size_bytes": 112185,
+  "source_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+  "audit_copy_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+  "sheet_count": 12,
+  "summary_sheet_count": 1,
+  "product_schema_sheet_count": 11,
+  "deduplicated_summary_fields": 154,
+  "fields_present_in_all_11_products": 47,
+  "sheet_names": [
+    "汇总表",
+    "医疗险",
+    "意外医疗",
+    "意外险",
+    "重疾险",
+    "定期寿险",
+    "终身寿险",
+    "两全保险",
+    "年金险",
+    "护理保险",
+    "补充养老保险",
+    "失能收入损失保险"
+  ],
+  "catalog_status": "SOURCE_VERIFIED_NOT_REGISTERED_NOT_QUALITY_ADMITTED",
+  "production_dependency": false,
+  "temporary_download_path_required_after_b0": false
+}
