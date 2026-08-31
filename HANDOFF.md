@@ -12,6 +12,9 @@ squash commit 合入 `main`：
 - MVP code commit（已在 main）：`ef47bee2b93d6a9cb4511133deaef6e700d915ce`；
 - tree：`d868e8f2fd51250c71366c8c723f500482e7de44`；
 - parent：`dfa87e11d5a434b6823582285c17498e715dd8f1`；
+- 工程交接文档：[PR #124](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/124)；
+- PR #124 合并后的最终 `origin/main` HEAD：
+  `DEFERRED-UNTIL-PR-124-MERGE`，由 PR 合并元数据和总控终态报告机械解析；
 - 交付方式：从当时最新 `origin/main` 重建最终状态，**未合入或整体 squash
   149 条历史迭代提交**；
 - 远端门禁：两套 deterministic、两套 PostgreSQL integration、两套
@@ -32,8 +35,14 @@ squash commit 合入 `main`：
 - 可从字段打开“原文来源”，切换来源并查看固定页码、框选与引文。
 
 `C6-ISOLATED-R1-ACCEPTANCE-*` 是历史隔离验收库，不是产品入口。页面显示
-“产品 Schema Wiki 暂不可用”表示当前运行实例没有满足 frozen scope、Active
-Head、签名环或前端入口映射中的至少一项，不能据此判断代码版本不存在。
+“产品 Schema Wiki 暂不可用”是 fail-closed 状态，不能据此判断代码版本不存在。
+整个页面不可用时先查 entry/serving 映射、唯一 Active Head/release members 和
+Wiki + RAW 双 ACL；只有引文正文不可用时再查 native source custody 与
+citation-token 运行时签名环。
+
+frozen release scope、named-human decision ring 与 publish-authorization ring 只
+属于 Candidate 决策/发布链，Golden evaluator ring 只属于后续 C4；它们都不是 C7
+只读体验的前置条件。只读演示不得为了“让页面可用”而打开这些写链路。
 
 端口也不是版本号：
 

@@ -12,6 +12,8 @@ MVP 代码由 PR #123 作为一个提交进入 main：
 | MVP code commit（已在 main） | `ef47bee2b93d6a9cb4511133deaef6e700d915ce` |
 | tree | `d868e8f2fd51250c71366c8c723f500482e7de44` |
 | parent | `dfa87e11d5a434b6823582285c17498e715dd8f1` |
+| 工程交接文档 | [PR #124](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/124) |
+| PR #124 合并后的最终 main HEAD | `DEFERRED-UNTIL-PR-124-MERGE`；以 PR 合并元数据与总控终态报告机械解析 |
 | OpenSpec | `120-schema-wiki-medical-596-1-mvp` / SWM1–SWM11（含 SWM9A） |
 | C7 状态 | FLOW PASS / UI PASS / 17 of 17 citations / 3 PDFs |
 | C4 状态 | DEFERRED / new Mission required |
@@ -28,7 +30,7 @@ MVP 代码由 PR #123 作为一个提交进入 main：
 | Go repository | `internal/application/repository/schema_wiki_formal_candidate_preview.go`、`wiki_release.go` | 只读 current/pinned 与 persisted custody |
 | Go service | `internal/application/service/schema_wiki*.go` | frozen scope、Unicode offset、parent→canonical child、overlap owner |
 | Go HTTP/DI | `internal/handler/schema_wiki.go`、`internal/router/routes_schema_wiki.go`、`internal/container/` | 既有 route/ACL/Head/CAS；无第二套平台 |
-| 部署配置 | `internal/config/config.go`、`config/config.yaml` | frozen scope 和三个互异签名环；缺失即 fail closed |
+| 部署配置 | `internal/config/config.go`、`config/config.yaml` | serving、citation token、decision/publish、Golden evaluator 四域分离；各自在适用动作中 fail closed |
 | Vue 产品体验 | `frontend/src/views/knowledge/schema-wiki/` | 中文 7 分类/67 字段、Active pin、无 current/latest fallback |
 | PDF 引文 | `frontend/src/components/schema-wiki/` | token-only bytes、SHA 后打开、页码/bbox/quote 固定 |
 | 前端运行映射 | `frontend/public/config.js`、`frontend/docker-entrypoint.sh` | entry KB 与 serving KB 显式映射；未配置即不冒充 MVP |
@@ -46,9 +48,20 @@ MVP 代码由 PR #123 作为一个提交进入 main：
 - `SCHEMA_WIKI_MVP_ENTRY_KB_ID`
 - `SCHEMA_WIKI_MVP_SERVING_KB_ID`
 
-后端需要完整的 `schema_wiki_frozen_release_scope`（tenant/space/raw/wiki 四项）
-以及 named-human、publish-authorization、citation-token 三个互异 key ring。
-私钥只由部署层注入；仓库没有默认私钥，禁止把验收私钥写入配置文件。
+后端配置必须按用途拆开：
+
+- **只读 serving**：使用数据库中既有 release/Head/members、native revision/source
+  custody 与当前用户的 Wiki + RAW 双 ACL；不创建、不推进任何发布对象。
+- **引文正文**：需要 citation-token 运行时签名环来签发短期读取令牌。私钥只由
+  部署层注入，仓库没有默认私钥。
+- **Candidate 决策/发布**：`schema_wiki_frozen_release_scope`
+  （tenant/space/raw/wiki 四项）、named-human decision ring 与
+  publish-authorization ring 只在显式决策/发布时需要；只读演示必须保持禁用或为空。
+- **未来 C4**：Golden quality evaluator ring 只服务质量评估，不是 C7 serving
+  前置条件。
+
+四个信任域在启用时必须互异；不得复用 key，也不得把任何私钥写进配置文件、Git
+或回执。
 
 正常页面特征：
 
@@ -58,9 +71,11 @@ MVP 代码由 PR #123 作为一个提交进入 main：
 - 字段状态和值；
 - 有证据的字段可打开“原文来源”，切换来源并查看 PDF 高亮。
 
-“产品 Schema Wiki 暂不可用”是 fail-closed 状态。先按顺序检查 runtime mapping、
-frozen scope、Active Head、key ring 和当前用户的 Wiki + RAW 双 ACL；不要改前端
-做 generic fallback。
+“产品 Schema Wiki 暂不可用”是 fail-closed 状态。整个页面不可用时按顺序检查
+runtime mapping、当前用户可访问的唯一 Active Head/release members 与 Wiki + RAW
+双 ACL；只有引文正文不可用时，再检查 native revision/source custody 与
+citation-token ring。不要打开 decision/publish/C4 配置来修复只读页面，也不要改
+前端做 generic fallback。
 
 ## 4. Chrome UI 验收
 

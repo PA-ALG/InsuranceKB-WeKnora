@@ -21,6 +21,8 @@ MVP-815 最终代码已由
 | MVP code commit（已在 main） | `ef47bee2b93d6a9cb4511133deaef6e700d915ce` |
 | tree | `d868e8f2fd51250c71366c8c723f500482e7de44` |
 | parent | `dfa87e11d5a434b6823582285c17498e715dd8f1` |
+| 工程交接文档 | [PR #124](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/124) |
+| PR #124 合并后的最终 main HEAD | `DEFERRED-UNTIL-PR-124-MERGE`；以 PR 合并元数据与总控终态报告机械解析 |
 | OpenSpec | `120-schema-wiki-medical-596-1-mvp` |
 | C7 | FLOW PASS / UI PASS / 7 分类 / 67 字段 / 17 of 17 citations / 3 PDFs |
 | C4 | DEFERRED；必须从最新 main 新开 Mission |
@@ -41,8 +43,15 @@ MVP-815 最终代码已由
 - “原文来源”、来源切换、固定页码/bbox/引文和三份 PDF 高亮。
 
 `C6-ISOLATED-R1-ACCEPTANCE-*` 是历史隔离验收库，不是正式产品入口。“产品
-Schema Wiki 暂不可用”是 fail-closed 状态，表示当前实例缺少 frozen scope、Active
-Head、签名环或前端入口映射中的至少一项，不表示功能代码不存在。
+Schema Wiki 暂不可用”是 fail-closed 状态，不表示功能代码不存在。若整个页面不可
+用，先检查前端 entry/serving 映射、当前用户可访问的唯一 Active Head/release members
+以及 Wiki + RAW 双 ACL；若只有引文正文不可用，再检查 native revision/source custody
+与 citation-token 运行时签名环。
+
+`schema_wiki_frozen_release_scope`、named-human decision ring 和
+publish-authorization ring 只服务 Candidate 决策/发布，不是只读体验前置条件；只读
+演示应保持这些写链路禁用或为空。Golden quality evaluator ring 属于未来 C4 质量
+评估，同样不属于 C7 只读体验。
 
 端口不是版本号。C7 时 `18085` 是 UI、`18094` 是隔离后端，旧生产 `8081` 明确
 保持不变。版本必须用 Git commit/tree、制品 SHA、release ID 和 activation epoch
