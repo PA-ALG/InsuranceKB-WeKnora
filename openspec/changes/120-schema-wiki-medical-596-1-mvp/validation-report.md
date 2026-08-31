@@ -1,6 +1,29 @@
 # 120 · Validation Report
 
-Status: `MERGED-CODE-GREEN / DELIVERY-BLOCKED / LIVE-NOT-RUN`
+> [!IMPORTANT]
+> **2026-08-31 final delivery amendment.** MVP-815 的最终有效代码已由 PR #123
+> 从 `origin/main@dfa87e11` 重建，并以单个 commit
+> `ef47bee2b93d6a9cb4511133deaef6e700d915ce`（tree
+> `d868e8f2fd51250c71366c8c723f500482e7de44`）进入 main；未合入或整体 squash
+> 149 条历史迭代提交。
+>
+> C7 使用既有 epoch2 做纯 GET 重开。验收源码 `9fcf3386`、tree `7314d1c9`，
+> 隔离后端 SHA-256
+> `aa069e2566fd0b88fb6280bae8f1759d390fefdcfd32e1820602e0bdaa2ebc34`；
+> active-current、explicit-pinned/no-fallback、7 分类/67 字段、17/17 citation
+> preview/content、1 text + 16 parent_text canonical owner、三 PDF 及可见 UI
+> 来源切换全部 PASS。五表保持 `2/2/150/1/2`，旧 R1、epoch2
+> release/receipt/Head/75 members 与生产 8081 不变；DB/provider/model/C4、
+> Candidate/release/receipt/Head、审批/签名 effects 均为 0。
+>
+> mode-0600 终态回执不进入仓库；其外部文件 SHA-256 为
+> `0e24db1d6ae4632acb538d03b18d84d2ffd0d41b8c39ef6cb5d251318dfa3396`，
+> self-check PASS。当前状态为
+> `MVP-ACCEPTED / C7 FLOW+UI PASS / PRODUCTION-8081-UNCHANGED / C4-DEFERRED`。
+> 下方正文保留为 C7 前的历史代码集成报告，不得再用其中的
+> `DELIVERY-BLOCKED / LIVE-NOT-RUN` 覆盖本修订。
+
+Historical status (pre-C7): `MERGED-CODE-GREEN / DELIVERY-BLOCKED / LIVE-NOT-RUN`
 
 ## Identity and scope
 

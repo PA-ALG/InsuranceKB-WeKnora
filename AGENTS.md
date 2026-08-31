@@ -91,11 +91,18 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 
 ### 当前 120/122 状态
 
-`main@bee91696131efa3a3aa5ea1339557eaa68e63f0a` 已合入 Schema Wiki 596-1
-代码，GitHub CI 为绿色；这只证明 `CODE` 层。当前 `DELIVERY` 与 `BUSINESS`
-仍受 OpenSpec 120/122 validation matrix 约束：live migration/backfill/deploy、
-真实 official DeepSeek Candidate、正式 Golden evaluation、Draft、review、publish
-和 activation 均未运行。Colima 停止只表示 live current 未观测，不能写成应用失败。
+截至 2026-08-31，MVP-815 最终有效代码已由 PR #123 以单个重建提交
+`ef47bee2b93d6a9cb4511133deaef6e700d915ce` 进入 main，未合入或整体 squash
+149 条历史迭代提交。OpenSpec 120 的既有 epoch2 纯 GET C7 已完成 FLOW/UI、
+7 分类/67 字段、17/17 citation 与三 PDF 验收；旧 R1、release/receipt/Head/
+75 members、五表与生产 8081 不变，DB/provider/model/C4/审批/签名/发布 effects
+均为 0。精确源码/tree/制品/回执身份见 `HANDOFF.md` 与 OpenSpec 120
+validation report。
+
+OpenSpec 122 与旧 EC-02 只保留历史质量证据；旧实验结论是 `QUALITY_FAIL`，
+不在 main。C4 定制仍为 `DEFERRED`，必须从执行时最新 main 新开 Mission，重新
+冻结 Candidate/Golden/Evidence、Metric、人工责任、provider/model 与预算；不得
+从 C7 PASS 推导 C4 PASS，也不得修改已验收 serving release。
 
 2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
 弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、
