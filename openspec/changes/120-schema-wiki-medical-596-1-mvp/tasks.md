@@ -1,12 +1,37 @@
 # 120 · Implementation Tasks
 
+## 2026-08-31 final MVP closeout
+
+- [x] Reconstruct the final effective MVP code from the latest main and merge it through
+  PR #123 as one commit, without merging or squashing the 149 historical iteration
+  commits.
+- [x] Build and freeze the isolated backend identity for the accepted C7 source/tree.
+- [x] Keep all three task-private signing roles distinct and memory-only; persist no
+  secret value in Git, receipts, DB or release objects.
+- [x] Reopen the existing epoch2 with pure GET only and pass active-current,
+  explicit-pinned/no-fallback, 7 categories/67 fields, 17/17 citation preview/content,
+  canonical lineage and three-PDF authority checks.
+- [x] Complete the visible SchemaCitationViewer/source-click/source-switch/three-PDF UI
+  acceptance through the user's existing authenticated Chrome session.
+- [x] Reconfirm five-table counts `2/2/150/1/2`, old R1, epoch2
+  release/receipt/Head/75 members and production 8081 identity unchanged, with all
+  business DB/provider/model/C4/approval/signature/publish effects at zero.
+- [x] Defer C4 customization to a new Mission from the latest main; do not import the old
+  fixed-Candidate/fixed-reviewer `QUALITY_FAIL` experiment.
+
+This closeout used the already-persisted epoch2 and therefore did **not** rerun the old
+clone/migration/backfill/prepare/approve/publish/activate checklist below. Those unchecked
+items remain a historical description of the earlier proposed delivery path, not work
+silently performed by C7.
+
 ## Task 0 · Governance and OpenSpec
 
 - [x] Commit the approved implementation plan by itself.
 - [x] Record the strict missing-change RED before creating this change.
 - [x] Freeze the A/B/C exact owner matrix, integration order and path-overlap STOP.
 - [x] Register OpenSpec 120 at its initial `plan-approved / implementation-not-started`
-  phase; reconcile the current row to `CODE-INTEGRATED / LIVE-NOT-RUN` after merge.
+  phase; reconcile the row to `CODE-INTEGRATED / LIVE-NOT-RUN` after the initial code
+  merge. The final C7 closeout above supersedes that historical intermediate status.
 - [x] Run strict OpenSpec validation and diff-check; record the exact result.
 
 ## Task 1 · Lane A canonical contracts

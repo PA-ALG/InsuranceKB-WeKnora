@@ -116,8 +116,8 @@
 | 107 | section-anchor-readiness-injection | ✅ 已整合并验证（PR #117） | section anchors 注入 103、Admission 与 087 链 |
 | 108 | legacy-fixture-marker-envelope-compatibility | ✅ 已整合并验证（PR #117） | 旧 fixture 显式携带 canonical envelope；生产 gate 不放宽 |
 | 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
-| 120 | schema-wiki-medical-596-1-mvp | CODE-INTEGRATED / LIVE-NOT-RUN | PR #121 已合入：A 公共底座 → B sealed Candidate/医疗险 release → C pinned UI、000004/000005 immutable revision source 与 exact3；禁止 generic fallback。部署/migration/backfill/provider/Candidate/Draft/publish/activate 未执行 |
-| 122 | schema67-golden-quality-gate | CODE-INTEGRATED / QUALITY-INCONCLUSIVE | `linyao` source Review COMPLETED；Schema67 `COMPLETE_67`（67/0，51保留+16合法 unknown）；provider-zero 仅 fixture，真实 DeepSeek Candidate/正式 Golden 评测未执行 |
+| 120 | schema-wiki-medical-596-1-mvp | MVP-ACCEPTED / C7 FLOW+UI PASS / C4 DEFERRED | 最终有效代码经 PR #123 以一个重建提交进入 main；既有 epoch2 纯 GET 重开完成 7 分类/67 字段、17/17 citation、三 PDF 与 exact authority。旧 R1、release/receipt/Head/75 members、五表和生产 8081 不变；DB/provider/model/C4/审批/签名/发布 effects 0 |
+| 122 | schema67-golden-quality-gate | CODE-INTEGRATED / QUALITY-INCONCLUSIVE / HISTORY REFERENCE | `linyao` source Review COMPLETED；Schema67 `COMPLETE_67`（67/0，51保留+16合法 unknown）；旧 EC-02 真实结论 `QUALITY_FAIL` 且不在 main。后续 C4 从最新 main 新开 Mission，不继承旧 Candidate/reviewer/attestor |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 
