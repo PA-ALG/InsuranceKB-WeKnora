@@ -37,6 +37,27 @@
   free_wiki、短标题、完整 namespace 与至少 1 个 exact source click。
 - [ ] 提交 M1 最薄纵切；若 48 小时无真实 Preview，STOP。
 
+M1 接线现冻结为同一 lifecycle 的四个原子边界：
+
+1. 同一 `POST .../schema/preparations` 接受严格互斥的 G1 manifest request；服务端从已
+   验证 manifest 派生 76 snapshots、`Content=""`，并使用 embedded canonical
+   `manifest_sha256`；review policy/batch identity 只能从重放后的 815 source Release
+   派生。
+2. 增加不依赖 Head 的 human-admin preparation scope bootstrap 和 Draft/Ready entity
+   overview/section/field/free-wiki reads；前端稳定路由使用严格单值 `preparation_id`。
+3. 增加 preparation-scoped G1 citation authority：服务器从完整 G1 citation 回放并核对
+   旧 815 C5 citation/join/source custody 后才签发既有 opaque token；前端不得自行截断
+   citation 后越过该核对。
+4. 此阶段只形成真实 Candidate Preview；不激活、不创建 successor Release、不修改
+   production `8081`。historical release scope bootstrap 与 successor source bridge 保留
+   为 R7/M3 后续，不得混入本次 M1 完成声明。
+
+独立 Review 对 `dc5d4ef34845f59f75cfaa843f4342616754ac63` / tree
+`854b187db15f69e1da9aff90b2b8979fefedbbe1` 的纠偏复核：11-path diff 无新增 finding；
+显式 pin、UNKNOWN typed reason、空 Content read custody 与 TS bbox 子项关闭。仍保留
+writer lifecycle、Candidate preparation read、真实 source click、Head-independent
+historical pin 四个结构 blocker；本轮 M1 只关闭前三者中的 M1 范围，不提前宣称 M3。
+
 Harness 合同冻结于 `8fa27956c6368502f21d52245d2cea905f0e2ce1` /
 `82e490ef47da775aed0d8176c7f31a27f6d537e9`。独立只读 Review
 `01a05917-a8e7-7b00-bf36-82bef310c2a5` 报告 PASS、`UNRESOLVED_COUNT=0`；这只关闭

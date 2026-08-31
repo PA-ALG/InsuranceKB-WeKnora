@@ -49,8 +49,8 @@ Evidence identity。来源点击 SHALL 使用 exact source revision、PDF、1-ba
 
 ### Requirement: G1-R5 short titles are separate from canonical namespace
 
-页面默认显示中文短标题，例如“投保年龄”“犹豫期”“保证续保期”；payload、manifest
-和索引 SHALL 同时保留完整稳定 namespace/page ID，不得把长 namespace 当默认标题。
+页面 MUST 默认显示中文短标题，例如“投保年龄”“犹豫期”“保证续保期”；payload、
+manifest 和索引同时保留完整稳定 namespace/page ID，不得把长 namespace 当默认标题。
 
 #### Scenario: open a field page
 

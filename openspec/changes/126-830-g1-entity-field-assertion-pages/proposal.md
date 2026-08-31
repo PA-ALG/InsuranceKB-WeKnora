@@ -75,6 +75,34 @@ G1 只注册一个医疗险 Profile。它绑定 7 个有序 section 与 67 个 f
 - known source click 必须按 exact revision/PDF/page/quote 打开，任何不一致 typed fail
   closed，绝不跳第 1 页。
 
+### M1 Candidate Preview 接线
+
+M1 不新建 lifecycle。现有 scoped `POST .../schema/preparations` 仍是唯一 Draft 写入口；
+它增加一个与旧 Schema release request 严格互斥的 `entity_page_manifest` 变体。服务端必须
+解析并完整重放 G1 manifest，只从 manifest 的 76 个结构化 member 派生
+`WikiReleaseMemberSnapshot`，所有 `Content` 必须为空；不得接受调用方另传 members、
+Markdown 或 review hash。`ManifestDigest` 对 G1 必须使用 manifest 内已验证的 canonical
+`manifest_sha256`，而不是数据库 JSON 字节的普通 SHA。
+
+M1 的真实 vector 是 815 已激活 Candidate 的页面投影：服务端必须先用现有 pinned Schema
+custody 重放 `release-42a3dd0c-ec76-4017-a288-37f1b13519a0@epoch2`，再从该唯一来源
+派生既有 `ready_receipt_digest` 与 `review_policy_id` 后创建 Draft。调用方不得选择或覆盖
+这两个值。M1 不激活该 projection，也不把旧 75-member Release 改写成 76 members。
+
+Candidate 页面只通过现有 preparation authority 读取：增加一个按
+`wiki_kb_id + preparation_id` 解析 immutable scope、且不依赖 Head 的 human-admin bootstrap，
+以及同一 scoped preparation 下的 overview/section/field/free-wiki read。用户稳定实体路由
+保持不变，使用严格单值 `preparation_id` query 标识 Candidate Preview；它与
+`release_id` 互斥，空白、重复、别名或同时出现全部在 transport 前 fail closed。
+
+M1 source click 不允许前端把 `citation_<64hex>` 截断后直接当 authority。冻结 vector 的
+17 个 join receipt 与 `citation-<first24>` 映射是 17/17 唯一，且全部
+`source_release_id` 都绑定上述 815 epoch2 Release；但服务器仍必须先从 G1 preparation
+定位完整 citation，重放当前旧 815 Schema release 的 field/citation/join/source custody，
+逐字段核对 revision、PDF page、bbox、quote 与 receipt 后，才能复用既有 opaque-token
+source viewer。M1 激活前旧 815 Release 仍是唯一 current，因此此桥只关闭 M1 Preview；
+successor 激活后的 historical-source bridge 留在 M3，不得在 M1 冒充已完成。
+
 ## Owner matrix
 
 总控是唯一 integration/commit/push/PR/merge Owner。默认只有一个可写 lane。
@@ -107,11 +135,23 @@ Win1 除上述三个 exact path 外无任何写域；不得修改现有 Harness 
 - `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.vue`；
 - `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts`；
 - `frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.ts`；
+- `internal/application/repository/wiki_release.go`；
+- `internal/application/repository/wiki_release_scope_test.go`；
+- `internal/application/service/wiki_release.go`；
+- `internal/application/service/schema_wiki.go`；
+- `internal/application/service/schema_wiki_test.go`；
+- `internal/application/service/schema_wiki_citation_revision_test.go`；
+- `internal/handler/schema_wiki.go`；
+- `internal/handler/schema_wiki_test.go`；
 - 不改 migration、数据库表、第二发布器或通用 Wiki 核心。
 
 外部对象写域为 `∅`。Win2 仅在 Win1 contract vector 被总控冻结、上述路径与 Win1 完全
 互斥且并行直接推进同一个 M1 Preview 时创建；否则维持单写窗口。Win2 不 commit、不
 合并、不启动生产或修改 `8081`。任何额外路径必须先由总控修改本矩阵并重新复核。
+
+本次扩域只允许把冻结的 G1 manifest 接入现有 repository/service/handler 生命周期、
+增加 Head-independent preparation scope/read，以及复用既有 source authority；不得改变
+generic Schema release 的旧合同、不得新增 release 表或 endpoint 级第二审核/发布语义。
 
 ### G1-Review · read only
 
