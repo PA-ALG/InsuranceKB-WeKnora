@@ -128,6 +128,30 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true },
         },
         {
+          path: "knowledge-bases/:kbId/schema-wiki/entities/:entityId/overview",
+          name: "entityPageOverview830G1",
+          component: () => import("../views/knowledge/schema-wiki/EntityPageGraph830G1.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
+          path: "knowledge-bases/:kbId/schema-wiki/entities/:entityId/sections/:sectionKey",
+          name: "entityPageSection830G1",
+          component: () => import("../views/knowledge/schema-wiki/EntityPageGraph830G1.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
+          path: "knowledge-bases/:kbId/schema-wiki/entities/:entityId/fields/:fieldKey",
+          name: "entityPageField830G1",
+          component: () => import("../views/knowledge/schema-wiki/EntityPageGraph830G1.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
+          path: "knowledge-bases/:kbId/schema-wiki/entities/:entityId/free-wiki",
+          name: "entityPageFreeWiki830G1",
+          component: () => import("../views/knowledge/schema-wiki/EntityPageGraph830G1.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
           path: "knowledge-bases/:kbId/materials-wiki",
           name: "materialsWiki",
           redirect: (to) => ({

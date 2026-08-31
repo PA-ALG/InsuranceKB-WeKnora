@@ -206,6 +206,55 @@ func newSchemaWikiScopeRouteEngineWithRole(
 	return engine
 }
 
+func TestEntityPageGraph830G1SemanticRoutesAreMounted(t *testing.T) {
+	t.Parallel()
+	engine := newSchemaWikiScopeRouteEngine(
+		t,
+		&schemaWikiRouteScopeResolver{},
+		nil,
+		map[string]*types.KnowledgeBase{},
+		nil,
+		&schemaWikiRouteAccessMiddlewareSpy{events: &[]string{}},
+	)
+	paths := map[string]bool{}
+	for _, route := range engine.Routes() {
+		paths[route.Path] = true
+	}
+	base := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/entities/:entity_id"
+	for _, path := range []string{
+		base + "/overview",
+		base + "/sections/:section_key",
+		base + "/fields/:field_key",
+		base + "/free-wiki",
+	} {
+		require.True(t, paths[path], "missing route %s", path)
+	}
+}
+
+func TestEntityPageGraph830G1RouteBoundaryDoesNotObserveCurrentHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	resolver := &schemaWikiRouteScopeResolver{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngine(t, resolver, nil, map[string]*types.KnowledgeBase{
+		"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+		"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+	}, &events, access)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/entities/entity-1/overview?release_id=release-exact",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Zero(t, resolver.calls)
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+}
+
 func TestSchemaWikiGoldenSuccessorStatusUsesExactHumanDualACLSealOrder(t *testing.T) {
 	t.Parallel()
 	events := []string{}

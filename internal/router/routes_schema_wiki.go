@@ -79,6 +79,22 @@ func RegisterSchemaWikiRoutes(
 	activeGET("/domains", schemaHandler.Domains)
 	activeGET("/taxonomy/current", schemaHandler.CurrentTaxonomy)
 	activeGET("/entities/:entity_id/versions/:version_id/current", schemaHandler.CurrentEntityVersion)
+	entityPages := handler.NewEntityPageGraphHandler830G1(schemaHandler)
+	entityGuards := []gin.HandlerFunc{
+		g.Viewer(),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+	}
+	entityGET := func(path string, endpoint gin.HandlerFunc) {
+		read.GET(path, append(append([]gin.HandlerFunc(nil), entityGuards...), endpoint)...)
+	}
+	entityGET("/entities/:entity_id/overview", entityPages.ReadOverview)
+	entityGET("/entities/:entity_id/sections/:section_key", entityPages.ReadSection)
+	entityGET("/entities/:entity_id/fields/:field_key", entityPages.ReadField)
+	entityGET("/entities/:entity_id/free-wiki", entityPages.ReadFreeWiki)
 	activeGET("/releases/:release_id/root", schemaHandler.ReadActiveRoot)
 	activeGET("/releases/:release_id/sections/:section_id", schemaHandler.ReadActiveSection)
 	activeGET("/releases/:release_id/fields/:field_id", schemaHandler.ReadActiveField)
