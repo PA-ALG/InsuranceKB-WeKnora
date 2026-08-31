@@ -15,7 +15,8 @@
     "815_tree": "7314d1c9bc82dc7efb114affb6f2450d0dbd36ae",
     "release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
     "activation_epoch": 2,
-    "reopen_index_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c"
+    "reopen_index_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c",
+    "release_row_sha256": "bab420533f23db86ca41049a2ea2d1fb234c5817b82725d9defc7ad5cfb473b8"
   },
   "entity": {
     "entity_id": "ping-an-e-sheng-bao",
@@ -31,6 +32,94 @@
     "field_count": 67,
     "section_count": 7
   },
+  "actual_candidate_claim_evidence": {
+    "authority_path": "docs/insurance-kb/evidence/830-g1/actual-input-authority.json",
+    "authority_manifest_sha256": "b30486c9d84adfe705147dc10656790004131788891e39a7048dc10967bfd391",
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "candidate_file_sha256": "7799539c4b44e74e1b157ccfae2ab6f32b0eecfb1e9415e70b15751a3f5fb3ca",
+    "claim_set_sha256": "2586b88cae0f3a13c55e2be7f08fa9f892261264c01f9ca75a21ff05b614354c",
+    "evidence_receipt_set_sha256": "6f868c773d652a46347ce4b3c38aa55fa50e8b09d56a05906070307f3abec2b4",
+    "evidence_authority_sha256": "d56cd38c18ccc1aa511b0a1f89ffdf52899d477cbf5336b6f84ee9662bc995d0",
+    "evidence_authority_file_sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1",
+    "bundle_manifest_sha256": "b2a8f157e097502bc5074c5930a28a73c08c7dbd99fd76439b65eb1c66694a3b",
+    "bundle_manifest_file_sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25",
+    "join_receipt_count": 17,
+    "state_distribution": {
+      "present": 2,
+      "absent_explicitly": 1,
+      "unknown": 64
+    }
+  },
+  "presentation_profile": {
+    "path": "docs/insurance-kb/evidence/830-g1/medical-presentation-profile.v1.json",
+    "profile_id": "medical-schema67.presentation.v1",
+    "profile_version": "v1",
+    "profile_sha256": "d83a3b38e3b72bd986823d373b86fe1077e0baa6333a27dc74a2545f58bfd3e9",
+    "file_sha256": "72a1e36215c313b26092c9fd640a03c7d6ba8d7f95a94b11005edc9710ab8859",
+    "mapping": "ORDERED_7_SECTIONS_AND_67_SHORT_TITLES",
+    "section_count": 7,
+    "field_mapping_count": 67
+  },
+  "current_milestone": {
+    "milestone": "M1",
+    "deadline": "2026-09-02T23:42:03+08:00",
+    "next_physical_result": "REAL_815_CANDIDATE_WEKNORA_PREVIEW_OVERVIEW_ONE_SECTION_THREE_TRISTATE_FIELDS_EMPTY_FREE_WIKI_STABLE_ROUTES_ONE_EXACT_SOURCE_CLICK",
+    "section_key": "application-and-contract",
+    "field_keys": [
+      "insured_eligibility",
+      "guaranteed_renewal_period",
+      "cooling_off_period"
+    ]
+  },
+  "window_contract": {
+    "controller_only_actions": [
+      "integration",
+      "commit",
+      "push",
+      "pull_request",
+      "merge",
+      "route_change"
+    ],
+    "win1": {
+      "task_name": "830-G1-Win1｜Harness 实体页编译",
+      "write_paths": [
+        "harness/src/insurance_harness/knowledge_compiler/entity_page_graph_830_g1.py",
+        "harness/tests/test_entity_page_graph_830_g1.py",
+        "harness/tests/fixtures/entity_page_graph_830_g1_contract_vector.json"
+      ],
+      "external_write_objects": [],
+      "may_commit": false
+    },
+    "win2": {
+      "task_name": "830-G1-Win2｜WeKnora 实体页路由与展示",
+      "creation_condition": "WIN1_CONTRACT_VECTOR_FROZEN_AND_WRITE_DOMAINS_DISJOINT_AND_DIRECT_M1_PARALLEL_VALUE",
+      "write_paths": [
+        "internal/types/entity_page_graph_830_g1.go",
+        "internal/types/entity_page_graph_830_g1_test.go",
+        "internal/application/service/entity_page_graph_830_g1.go",
+        "internal/application/service/entity_page_graph_830_g1_test.go",
+        "internal/handler/entity_page_graph_830_g1.go",
+        "internal/handler/entity_page_graph_830_g1_test.go",
+        "internal/router/routes_schema_wiki.go",
+        "internal/router/routes_schema_wiki_test.go",
+        "frontend/src/router/index.ts",
+        "frontend/src/views/knowledge/KnowledgeBase.vue",
+        "frontend/src/api/schema-wiki/entityPageGraph830G1.ts",
+        "frontend/src/api/schema-wiki/entityPageGraph830G1.spec.ts",
+        "frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.vue",
+        "frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts",
+        "frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.ts"
+      ],
+      "external_write_objects": [],
+      "may_commit": false
+    },
+    "review": {
+      "task_name": "830-G1-Review｜独立只读验收",
+      "write_paths": [],
+      "external_write_objects": [],
+      "may_commit": false
+    }
+  },
   "page_graph_expected": {
     "overview": 1,
     "sections": 7,
@@ -43,5 +132,5 @@
   "model_calls_authorized": 0,
   "production_8081_changes_authorized": 0,
   "manifest_sha256_contract": "sha256(canonical-json-with-null-manifest_sha256)",
-  "manifest_sha256": "a77df8f2021eed89e56c0ad9fa8d5c9adc3ff9b189067d19e47634b486d6367c"
+  "manifest_sha256": "3ccbdc0a998088451fd2b700a157ae1726f82633f2b5dbd402b5a2539c1165d7"
 }

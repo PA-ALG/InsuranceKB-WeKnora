@@ -16,8 +16,36 @@
     "single_g1_openspec": true,
     "requirements_g1_r1_through_g1_r9": true,
     "owner_matrix_declared": true,
+    "highest_authority_documents_authorize_g1_only": true,
+    "win1_exact_write_paths_frozen": true,
+    "win2_exact_conditional_write_paths_frozen": true,
+    "external_write_objects_empty": true,
+    "single_m1_next_physical_result_frozen": true,
+    "m1_deadline_frozen": true,
+    "actual_candidate_file_identity_frozen": true,
+    "actual_claim_set_identity_frozen": true,
+    "actual_evidence_authority_identity_frozen": true,
+    "actual_input_matches_b0_release_receipt": true,
+    "presentation_profile_ordered_mapping_frozen": true,
+    "presentation_profile_internal_hash_valid": true,
     "frozen_input_manifest_self_hash_valid": true,
     "diff_check_clean": true
+  },
+  "baseline_tests": {
+    "harness_command": "PYTHONPATH=src harness/.venv/bin/python -m pytest tests/test_medical_schema_pack_596_1.py tests/test_schema_wiki_release_596_1.py -q",
+    "harness_result": "43 passed",
+    "harness_duration_seconds": 819.95,
+    "go_command": "GOCACHE=/private/tmp/weknora-830-g1-go-cache go test ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+    "go_passed_packages": [
+      "./internal/types",
+      "./internal/application/service",
+      "./internal/handler",
+      "./internal/router"
+    ],
+    "initial_sandbox_result": "ENVIRONMENT_BLOCKED_BY_LOCAL_LOOPBACK_BIND_NOT_RED",
+    "authorized_local_loopback_rerun": "PASS",
+    "go_business_assertion_failures": 0,
+    "go_result_class": "PASS"
   },
   "effects": {
     "product_code_writes": 0,
@@ -29,7 +57,13 @@
     "production_8081_changes": 0,
     "g2_actions": 0
   },
-  "status": "PASS",
+  "independent_review": {
+    "task_id": "01a0587d-b726-7370-b758-ec93723c9e64",
+    "initial_result": "FAIL",
+    "initial_unresolved_count": 3,
+    "correction_status": "PENDING_EXACT_HEAD_TREE_REREVIEW"
+  },
+  "status": "CONTROLLER_D0_PASS_PENDING_INDEPENDENT_REREVIEW",
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "2c0617e90d0002c9afacd138cba604d4b86dc7589d50b11c016edfb30b67776b"
+  "receipt_sha256": "69c03b2f0ccb32722a4ecd469d0148ed36afc2d75b03e8435564dbb7abf263af"
 }

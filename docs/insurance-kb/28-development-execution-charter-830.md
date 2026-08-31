@@ -4,8 +4,9 @@
 > 本文只定义 HOW：队列、WIP、证据、停线、写域与合并纪律；WHY/WHAT、数据合同和
 > 组件归属只引用 830 技术蓝图，不在此重复。
 >
-> 当前执行态：`B0_ONLY / EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`；G1 及后续
-> Goal 为 `LOCKED`，总控裁决前不得推进。
+> 当前执行态：`G1_ONLY / NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`；B0 已由总控依据
+> 用户明确授权和独立复核裁决为 `PASS`。G2 及后续 Goal 仍为 `LOCKED`，G1 PASS 也不
+> 自动启动 G2。
 
 ## 1. 唯一权威与唯一队列
 

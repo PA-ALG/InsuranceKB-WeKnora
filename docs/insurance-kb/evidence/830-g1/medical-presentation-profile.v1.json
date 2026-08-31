@@ -1,0 +1,120 @@
+{
+  "contract": "presentation-profile.v1",
+  "profile_id": "medical-schema67.presentation.v1",
+  "profile_version": "v1",
+  "schema_pack_id": "medical-schema67.v1",
+  "schema_version": "v1",
+  "schema_pack_sha256": "fe3b390222108614d3ff07409fbd81d17e915e066eb9c25c03d3268bc49ef7ac",
+  "sections": [
+    {
+      "section_key": "product-overview",
+      "display_name": "产品概览",
+      "fields": [
+        {"field_key": "product_code", "short_title": "险种代码"},
+        {"field_key": "product_short_name", "short_title": "险种简称"},
+        {"field_key": "product_name", "short_title": "险种名称"},
+        {"field_key": "sales_start_date", "short_title": "开始使用时间"},
+        {"field_key": "sales_end_date", "short_title": "结束使用时间"},
+        {"field_key": "product_type", "short_title": "产品类型"},
+        {"field_key": "insurance_category", "short_title": "产品类别"},
+        {"field_key": "sales_channels", "short_title": "销售渠道"},
+        {"field_key": "external_publication_status", "short_title": "发布外网"},
+        {"field_key": "sales_status", "short_title": "销售状态"},
+        {"field_key": "policy_role", "short_title": "主附加险"},
+        {"field_key": "product_summary", "short_title": "产品简介"},
+        {"field_key": "official_product_features", "short_title": "产品特色"},
+        {"field_key": "target_customer_profile", "short_title": "适用人群"},
+        {"field_key": "marketing_tagline", "short_title": "产品宣传语"},
+        {"field_key": "product_overview", "short_title": "产品概览"}
+      ]
+    },
+    {
+      "section_key": "application-and-contract",
+      "display_name": "投保与合同",
+      "fields": [
+        {"field_key": "entry_age_range", "short_title": "投保年龄"},
+        {"field_key": "insured_eligibility", "short_title": "投保范围"},
+        {"field_key": "health_declaration_requirements", "short_title": "健康告知要求"},
+        {"field_key": "geographic_eligibility_requirements", "short_title": "投保地区或常住地限制"},
+        {"field_key": "social_insurance_requirement", "short_title": "不限社保"},
+        {"field_key": "eligible_occupation_classes", "short_title": "可投保职业"},
+        {"field_key": "underwriting_method", "short_title": "核保方式"},
+        {"field_key": "premium_payment_term", "short_title": "缴费期限"},
+        {"field_key": "premium_payment_frequency", "short_title": "缴费方式"},
+        {"field_key": "cooling_off_period", "short_title": "犹豫期"},
+        {"field_key": "waiting_period", "short_title": "等待期"},
+        {"field_key": "premium_grace_period", "short_title": "宽限期"},
+        {"field_key": "coverage_period", "short_title": "保障期间"},
+        {"field_key": "coverage_term_category", "short_title": "保障期间分类"},
+        {"field_key": "surrender_and_cancellation_terms", "short_title": "犹豫期及合同解除（退保）"}
+      ]
+    },
+    {
+      "section_key": "renewal-and-pricing",
+      "display_name": "续保与费率",
+      "fields": [
+        {"field_key": "coverage_and_renewal_terms", "short_title": "保险期间和续保"},
+        {"field_key": "guaranteed_renewal_status", "short_title": "保证续保"},
+        {"field_key": "guaranteed_renewal_period", "short_title": "保证续保期"},
+        {"field_key": "product_conversion_rules", "short_title": "险种转换"},
+        {"field_key": "premium_adjustment_rules", "short_title": "费率可调"},
+        {"field_key": "post_discontinuation_renewal_arrangement", "short_title": "停售后续保安排"}
+      ]
+    },
+    {
+      "section_key": "coverage-and-exclusions",
+      "display_name": "保障与除外",
+      "fields": [
+        {"field_key": "covered_risk_categories", "short_title": "可覆盖风险"},
+        {"field_key": "coverage_responsibilities", "short_title": "保险责任"},
+        {"field_key": "coverage_summary", "short_title": "保什么"},
+        {"field_key": "cancer_medical_coverage", "short_title": "癌症医疗"},
+        {"field_key": "age_segment_tags", "short_title": "保障人群"},
+        {"field_key": "coverage_limit_category", "short_title": "额度类型"},
+        {"field_key": "special_coverage_and_exclusion_tags", "short_title": "特殊承保与除外标签"},
+        {"field_key": "exclusions", "short_title": "责任免除"},
+        {"field_key": "pre_existing_condition_rules", "short_title": "既往症定义与处理"},
+        {"field_key": "out_of_hospital_special_drug_coverage", "short_title": "外购药/特药责任"},
+        {"field_key": "indemnity_principle", "short_title": "补偿原则"}
+      ]
+    },
+    {
+      "section_key": "claims-and-reimbursement",
+      "display_name": "理赔与报销",
+      "fields": [
+        {"field_key": "zero_deductible_flag", "short_title": "0免赔"},
+        {"field_key": "deductible_rules", "short_title": "免赔额"},
+        {"field_key": "outpatient_inpatient_scope", "short_title": "报销门诊/住院范围"},
+        {"field_key": "reimbursable_expense_scope", "short_title": "报销范围"},
+        {"field_key": "reimbursement_rate_rules", "short_title": "报销比例"},
+        {"field_key": "eligible_hospital_scope", "short_title": "医院范围"},
+        {"field_key": "premium_medical_facility_coverage", "short_title": "高端医疗"},
+        {"field_key": "direct_billing_and_advance_payment_rules", "short_title": "直付或垫付规则"},
+        {"field_key": "claim_application_deadline_and_documents", "short_title": "理赔申请时效与申请材料"}
+      ]
+    },
+    {
+      "section_key": "services-and-benefits",
+      "display_name": "服务与权益",
+      "fields": [
+        {"field_key": "policyholder_rights", "short_title": "保单权益"},
+        {"field_key": "eligible_service_packages", "short_title": "可享服务"},
+        {"field_key": "medical_service_benefits", "short_title": "增值服务"},
+        {"field_key": "tax_qualified_status", "short_title": "可享税优"},
+        {"field_key": "tax_benefit_rules", "short_title": "税优规则"}
+      ]
+    },
+    {
+      "section_key": "sales-support",
+      "display_name": "销售支持",
+      "fields": [
+        {"field_key": "product_bundle_rules", "short_title": "产品搭配规则"},
+        {"field_key": "objection_handling_scripts", "short_title": "产品异议话术"},
+        {"field_key": "product_faq", "short_title": "产品Q&A"},
+        {"field_key": "four_step_sales_script", "short_title": "四步法讲解话术"},
+        {"field_key": "sales_pitch_script", "short_title": "Pitch话术"}
+      ]
+    }
+  ],
+  "profile_sha256": "d83a3b38e3b72bd986823d373b86fe1077e0baa6333a27dc74a2545f58bfd3e9"
+}

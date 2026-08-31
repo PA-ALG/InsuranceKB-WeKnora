@@ -104,8 +104,15 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 ## 3. G1 · 实体页图与独立 FieldAssertion
 
 - **CURRENT_RED**：`NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`。
-- **NEXT_PHYSICAL_RESULT**：一个真实医疗险实体的 overview、7 个 section、67 个
+- **GOAL_FINAL_PHYSICAL_RESULT**：一个真实医疗险实体的 overview、7 个 section、67 个
   独立 FieldAssertion 页面和空 `free_wiki` 分组进入同一原子 Release。
+- **CURRENT_MILESTONE_NEXT_PHYSICAL_RESULT**：在 2026-09-02 23:42:03 +08:00 前，真实
+  815 Candidate 的 WeKnora Preview 可打开同一实体的 overview、`application-and-contract`
+  section、`insured_eligibility`（present）、`guaranteed_renewal_period`
+  （absent_explicitly）、`cooling_off_period`（unknown）三个独立字段页及空 `free_wiki`；
+  页面使用稳定 URL、中文短标题、完整 namespace，并至少从 `insured_eligibility` 成功
+  exact source click。该 M1 结果是当前唯一 `NEXT_PHYSICAL_RESULT`；76/76 是 G1 最终 DoD，
+  不是另一个并行产品结果。
 - **目标**：把 815 连续页能力 REWIRE 成实体页图；字段仍由 SchemaPack 保底，但每个
   FieldAssertion 成为可独立访问、可回点、可链接共享概念的实体作用域页面。
 - **冻结输入**：B0 release/evidence identity、一个真实实体及稳定 `entity_id`、11 类

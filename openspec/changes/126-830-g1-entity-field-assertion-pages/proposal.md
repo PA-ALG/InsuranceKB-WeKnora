@@ -18,6 +18,10 @@ Field/Evidence，不保存第二份可编辑事实。
 - SchemaPack：`medical-schema67.v1@v1+fe3b390222108614d3ff07409fbd81d17e915e066eb9c25c03d3268bc49ef7ac`；
 - ordered67 digest：`8ffe2a043dfae6e65d84f213d42818de3c6c1c39c1fcb0c9eccd14367a30db24`；
 - B0 frozen-input manifest：`docs/insurance-kb/evidence/830-g1/frozen-input-manifest.json`。
+- actual Candidate/Claim/Evidence authority：
+  `docs/insurance-kb/evidence/830-g1/actual-input-authority.json`；
+- PresentationProfile：
+  `docs/insurance-kb/evidence/830-g1/medical-presentation-profile.v1.json`。
 
 `Schema67 QUALITY=DEFERRED`。G1 只验收 FLOW，不运行或调用 Provider/模型。
 
@@ -78,17 +82,36 @@ G1 只注册一个医疗险 Profile。它绑定 7 个有序 section 与 67 个 f
 ### G1-Win1 · Harness and shared contract
 
 - `harness/src/insurance_harness/knowledge_compiler/entity_page_graph_830_g1.py`；
-- G1 所需的最小现有 Harness contract/compiler 接缝；
-- `harness/tests/test_entity_page_graph_830_g1.py` 与直接受影响测试；
-- 跨语言 fixture/vector 的 G1 新文件。
+- `harness/tests/test_entity_page_graph_830_g1.py`；
+- `harness/tests/fixtures/entity_page_graph_830_g1_contract_vector.json`。
+
+Win1 除上述三个 exact path 外无任何写域；不得修改现有 Harness contract/compiler 文件。
+如上述单文件实现无法闭合，必须停下向总控请求改写域，不得自行扩展。外部对象写域为
+`∅`；只读输入仅为 `actual-input-authority.json` 指定的 C5 bundle 四个文件、B0 回执和
+`medical-presentation-profile.v1.json`。Win1 不 commit、不合并、不写数据库、不启动服务。
 
 ### G1-Win2 · WeKnora/frontend（共享合同冻结后才可启用）
 
-- `internal/types/`、`internal/application/service/`、`internal/handler/`、
-  `internal/router/` 中仅 G1 entity page graph 的窄扩展与 focused tests；
-- `frontend/src/router/index.ts`、`frontend/src/api/schema-wiki/`、
-  `frontend/src/views/knowledge/schema-wiki/` 中仅 G1 route/read/navigation；
+- `internal/types/entity_page_graph_830_g1.go`；
+- `internal/types/entity_page_graph_830_g1_test.go`；
+- `internal/application/service/entity_page_graph_830_g1.go`；
+- `internal/application/service/entity_page_graph_830_g1_test.go`；
+- `internal/handler/entity_page_graph_830_g1.go`；
+- `internal/handler/entity_page_graph_830_g1_test.go`；
+- `internal/router/routes_schema_wiki.go`；
+- `internal/router/routes_schema_wiki_test.go`；
+- `frontend/src/router/index.ts`；
+- `frontend/src/views/knowledge/KnowledgeBase.vue`；
+- `frontend/src/api/schema-wiki/entityPageGraph830G1.ts`；
+- `frontend/src/api/schema-wiki/entityPageGraph830G1.spec.ts`；
+- `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.vue`；
+- `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts`；
+- `frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.ts`；
 - 不改 migration、数据库表、第二发布器或通用 Wiki 核心。
+
+外部对象写域为 `∅`。Win2 仅在 Win1 contract vector 被总控冻结、上述路径与 Win1 完全
+互斥且并行直接推进同一个 M1 Preview 时创建；否则维持单写窗口。Win2 不 commit、不
+合并、不启动生产或修改 `8081`。任何额外路径必须先由总控修改本矩阵并重新复核。
 
 ### G1-Review · read only
 
@@ -108,6 +131,13 @@ G1 只注册一个医疗险 Profile。它绑定 7 个有序 section 与 67 个 f
 
 验证矩阵必须逐项记录 `Requirement → RED → Implementation → Focused Test → Commit →
 Live Evidence → Status`。环境未启动、依赖缺失、fixture 或接口未调用不得冒充 RED/live。
+
+当前唯一 `NEXT_PHYSICAL_RESULT` 固定为 M1：在 `2026-09-02 23:42:03 +08:00` 前，
+真实 815 Candidate 的 WeKnora Preview 可打开 overview、
+`application-and-contract` section、`insured_eligibility`（present）、
+`guaranteed_renewal_period`（absent_explicitly）、`cooling_off_period`（unknown）三个
+独立字段页和空 `free_wiki`，并满足稳定 URL、短标题/完整 namespace 与至少一个 exact
+source click。M2/M3 是同一 G1 的后续里程碑，当前不得并行宣称为 NEXT。
 
 ## STOP and non-goals
 

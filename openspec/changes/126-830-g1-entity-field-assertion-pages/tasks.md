@@ -7,6 +7,12 @@
 - [x] 冻结 base/entity/release/SchemaPack/ordered67/B0 Evidence digest；D0、Docker SKIP。
 - [ ] 由独立只读 reviewer 复核 M0 exact head/tree；未通过前不写功能代码。
 
+初次只读复核在 `0f1cbe1840774aca6e1a3eb74bbc65687d97680b` /
+`447dcbde22641136effc6d612134caeb7348fc4f` 报告 3 个 BLOCKER。总控已限定纠偏为：
+最高权威 G1_ONLY 指针、exact Win1/Win2 写域与单一 M1 物理结果、实际 815
+Candidate/Claim/Evidence 及有序 PresentationProfile 身份。新 exact head/tree 复核通过前，
+本项保持未完成，Win1 不创建。
+
 ## Requirement-first RED ledger
 
 | Requirement | 旧实现上必须先出现的最小 RED | 预期失败原因 |

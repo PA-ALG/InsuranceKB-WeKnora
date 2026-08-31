@@ -1,0 +1,121 @@
+{
+  "contract": "weknora.830.g1-actual-input-authority.v1",
+  "goal_id": "G1",
+  "source_kind": "815_RELEASE_BOUND_C5_BUNDLE",
+  "local_read_only_bundle": {
+    "path": "/private/tmp/weknora-815-final-06e08c.sbD1nuoR/c5-bundle-v3",
+    "availability": "PRESENT_AND_HASH_VERIFIED_AT_M0",
+    "persistence": "LOCAL_EPHEMERAL_READ_ONLY",
+    "missing_input_policy": "STOP_NO_SYNTHETIC_OR_FIXTURE_FALLBACK",
+    "files": {
+      "formal_candidate": {
+        "name": "formal-candidate.json",
+        "sha256": "7799539c4b44e74e1b157ccfae2ab6f32b0eecfb1e9415e70b15751a3f5fb3ca"
+      },
+      "candidate_evidence_authority": {
+        "name": "candidate-evidence-authority.json",
+        "sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1"
+      },
+      "bundle_manifest": {
+        "name": "manifest.json",
+        "sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25"
+      },
+      "preview": {
+        "name": "preview.json",
+        "sha256": "7c9c59a8486268a9d2ff4cb5a0d09b2790affabfeb147b93ebc710f9cc4e3934"
+      }
+    }
+  },
+  "candidate": {
+    "contract": "schema67-candidate.v2",
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "candidate_file_sha256": "7799539c4b44e74e1b157ccfae2ab6f32b0eecfb1e9415e70b15751a3f5fb3ca",
+    "product_version_id": "596-1",
+    "field_count": 67,
+    "state_distribution": {
+      "present": 2,
+      "absent_explicitly": 1,
+      "unknown": 64
+    }
+  },
+  "claim_input": {
+    "contract": "g1-claim-input-set.v1",
+    "derivation": "schema_wiki_sha256(contract,{contract,candidate_sha256,product_version_id,claims:[ordered {field_id,state,value_snapshot}]})",
+    "claim_count": 67,
+    "claim_set_sha256": "2586b88cae0f3a13c55e2be7f08fa9f892261264c01f9ca75a21ff05b614354c"
+  },
+  "evidence_input": {
+    "receipt_set_contract": "g1-evidence-receipt-input-set.v1",
+    "receipt_set_derivation": "schema_wiki_sha256(contract,{contract,candidate_sha256,evidence_receipts})",
+    "evidence_receipt_count": 67,
+    "evidence_receipt_set_sha256": "6f868c773d652a46347ce4b3c38aa55fa50e8b09d56a05906070307f3abec2b4",
+    "authority_contract": "schema67-candidate-evidence-authority.v1",
+    "authority_sha256": "d56cd38c18ccc1aa511b0a1f89ffdf52899d477cbf5336b6f84ee9662bc995d0",
+    "authority_file_sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1",
+    "join_receipt_count": 17
+  },
+  "source_authorities": [
+    {
+      "role": "terms",
+      "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+      "resource_id": "46ea6872-d26e-4bab-b3ad-151ab6eedd29",
+      "revision_source_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+      "evidence_parse_attempt_id": "ec01-terms-parse-attempt-2",
+      "weknora_parse_attempt": 2,
+      "parsed_document_sha256": "92926b3367f72ca178567652a1c7e2cdca77f89541376c57910283ed6ba26ab4",
+      "parse_manifest_sha256": "790a5092a98a929093312a090a9a1bc7aec1cbba22af22c113184350eae442f5",
+      "source_receipt_sha256": "39fdfb8f30205c612ca00b34f6d8dd70cee608cde88af01d6d39b712fc1bc532"
+    },
+    {
+      "role": "brochure",
+      "source_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "knowledge_id": "1265a343-c408-4620-8eed-c4f6a2adadc2",
+      "resource_id": "8af0b514-6be0-49f0-b1d7-6cb9f7e7822a",
+      "revision_source_id": "89944ff7ecbfdcb0d00b7ceacfbdac4407389af078514317e2a3affe1973de50",
+      "evidence_parse_attempt_id": "ec01-brochure-parse-attempt-1",
+      "weknora_parse_attempt": 1,
+      "parsed_document_sha256": "081bc1a83a4edb7b559e12a4ded45298c86afe9d66b099181e0a8326231d44ed",
+      "parse_manifest_sha256": "108535b4539c5479a68e9696d7655eee5e939d5bf524deec09442de976168aa7",
+      "source_receipt_sha256": "800d835416cd6225474d2be018e30ae7afc868b4f5b3deb69e1c8ee9138d8c1b"
+    },
+    {
+      "role": "rate_table",
+      "source_sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+      "knowledge_id": "32402c40-6131-4049-8080-cc5b68188cd3",
+      "resource_id": "722380dc-e8b4-4977-8aef-26d3dc09e051",
+      "revision_source_id": "1c29dfab5f72de0a8490cd91e0eaeba901967f83f4a8d1aed0065c20db564a4e",
+      "evidence_parse_attempt_id": "ec01-rate_table-parse-attempt-1",
+      "weknora_parse_attempt": 1,
+      "parsed_document_sha256": "cae4190055914e1481aac685c4f801a121a7352f9558a6d899f51731e9db8221",
+      "parse_manifest_sha256": "73cb3032d4d015429a13df115a154c8a50c689b54953acfc5d3823e4046e3395",
+      "source_receipt_sha256": "9eb8827621e855983be5fd80effa8e14ae609d57667b34da4a1a7063494cf9df"
+    }
+  ],
+  "release_link": {
+    "release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "activation_epoch": 2,
+    "release_row_sha256": "bab420533f23db86ca41049a2ea2d1fb234c5817b82725d9defc7ad5cfb473b8",
+    "release_member_count": 75,
+    "bundle_manifest_contract_sha256": "b2a8f157e097502bc5074c5930a28a73c08c7dbd99fd76439b65eb1c66694a3b",
+    "bundle_manifest_file_sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25",
+    "b0_server_receipt_path": "docs/insurance-kb/evidence/830-b0/receipts/c7-server-base.json",
+    "b0_server_receipt_sha256": "7984025a43d78e174f1bc1ea5159204147b6595df22322801bbb6f87e7fe7806",
+    "b0_reopen_index_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c",
+    "link_checks": {
+      "bundle_authority_file_matches_b0": true,
+      "bundle_manifest_file_matches_b0": true,
+      "source_pdf_hashes_match_b0": true,
+      "state_distribution_matches_b0": true,
+      "citation_count_matches_b0": true
+    }
+  },
+  "scope": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "authority_sha256_contract": "sha256(canonical-json-with-null-authority_manifest_sha256)",
+  "authority_manifest_sha256": "b30486c9d84adfe705147dc10656790004131788891e39a7048dc10967bfd391"
+}
