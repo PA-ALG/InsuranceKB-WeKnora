@@ -185,7 +185,7 @@ def verify_origin_main_diff(repo: Path, integration: dict) -> None:
     left, right = [int(value) for value in run("git", "rev-list", "--left-right", "--count", f"{FORMAL_BASE}...{source}").split()]
     assert left == integration["formal_base_unique_commits"]
     assert right == integration["source_unique_commits"]
-    source_paths = run("git", "diff", "--name-only", f"{FORMAL_BASE}..{source}").splitlines()
+    source_paths = run("git", "-c", "core.quotePath=false", "diff", "--name-only", f"{FORMAL_BASE}..{source}").splitlines()
     assert len(source_paths) == integration["source_changed_path_count"]
     assert integration["whole_branch_merged"] is False
     for item in integration["selected_authority_blobs"]:
@@ -201,7 +201,9 @@ def verify_closure(closure: dict, head: str, manifest_observed: str) -> None:
     candidate = closure["evidence_candidate_head"]
     assert candidate == manifest_observed
     run("git", "merge-base", "--is-ancestor", candidate, head)
-    assert_authorized_paths(run("git", "diff", "--name-only", f"{candidate}..{head}").splitlines())
+    assert_authorized_paths(
+        run("git", "-c", "core.quotePath=false", "diff", "--name-only", f"{candidate}..{head}").splitlines()
+    )
     assert_compliant_commits(f"{candidate}..{head}")
     assert closure["product_code_changed_paths"] == 0
     assert closure["openspec_changed_paths"] == 0
@@ -261,7 +263,9 @@ def verify_branch_manifest(branch_manifest: dict, head: str) -> None:
     current = next(item for item in refs if item["ref"] == "refs/heads/codex/830-b0-asset-baseline")
     assert current["head"] == observed, "current ref record must equal the generation-time observed head"
     run("git", "merge-base", "--is-ancestor", observed, head)
-    intervening_paths = run("git", "diff", "--name-only", f"{observed}..{head}").splitlines()
+    intervening_paths = run(
+        "git", "-c", "core.quotePath=false", "diff", "--name-only", f"{observed}..{head}"
+    ).splitlines()
     assert_authorized_paths(intervening_paths)
     assert_compliant_commits(f"{observed}..{head}")
 
@@ -271,7 +275,9 @@ def verify_repo_scope(repo: Path, allow_dirty: bool) -> tuple[str, list[str]]:
     head = run("git", "rev-parse", "HEAD")
     assert run("git", "merge-base", FORMAL_BASE, head) == FORMAL_BASE
     assert run("git", "rev-parse", f"{EVIDENCE_BASE}^{{tree}}") == EVIDENCE_TREE
-    changed = run("git", "diff", "--name-only", f"{FORMAL_BASE}..{head}").splitlines()
+    changed = run(
+        "git", "-c", "core.quotePath=false", "diff", "--name-only", f"{FORMAL_BASE}..{head}"
+    ).splitlines()
     assert_authorized_paths(changed)
     assert not any(path.startswith(("internal/", "frontend/", "harness/", "migrations/")) for path in changed)
     assert not any(path.startswith("openspec/changes/") for path in changed)
