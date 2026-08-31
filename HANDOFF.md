@@ -20,11 +20,18 @@ squash commit 合入 `main`：
 - 远端门禁：两套 deterministic、两套 PostgreSQL integration、两套
   wheel-smoke 全部通过。
 
-830 当前唯一 WIP 是 **B0 · 815 证据基线与资产裁决**。执行分支为
-`codex/830-b0-asset-baseline`，正式 base 为上述 `origin/main` HEAD，Evidence Pack
-位于 `docs/insurance-kb/evidence/830-b0/`，当前状态为
-`EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`。B0 不改产品代码、不启动环境或
-Docker；总控给出最终 B0 裁决前不得启动 G1，G1 及后续 Goal 全部 `LOCKED`。
+830 当前唯一 WIP 是 **G1 · 实体页图与独立 FieldAssertion**。B0 Evidence Pack 的
+独立复核为 `PASS`、未解决问题为 0；用户已在 2026-08-31 明确授权总控裁决
+`B0=PASS` 并只启动 G1。G1 的正式 base 为
+`d2ce44cb2107575f7624b3735c653078ae2a98b6`，分支为
+`codex/830-g1-field-assertion-pages`，适用 OpenSpec 为
+`126-830-g1-entity-field-assertion-pages`。
+
+当前指针为 `CURRENT_AUTHORIZATION=G1_ONLY`、`CURRENT_GOAL=G1`、
+`CURRENT_RED=NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`、
+`830_PRODUCT_GOAL=G1_IN_PROGRESS`。G2 及后续全部 `LOCKED`。G1 只在隔离环境形成
+`NOT_FOR_PRODUCTION` Release，不调用 Provider/模型，不修改生产 `8081` 或生产 Active；
+Schema67 质量保持 `DEFERRED`。
 
 ## 2. 用户应体验什么
 

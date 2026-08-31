@@ -1,0 +1,35 @@
+{
+  "contract": "weknora.830.g1-m0-validation.v1",
+  "goal_id": "G1",
+  "phase": "M0",
+  "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "base_tree": "c7853fa71a5fbe826c3faf04ce3e8a2ad1168255",
+  "branch": "codex/830-g1-field-assertion-pages",
+  "checks": {
+    "base_commit_exact": true,
+    "base_tree_exact": true,
+    "branch_exact": true,
+    "b0_final_adjudication_pass": true,
+    "current_authorization_g1_only": true,
+    "current_red_declared": true,
+    "g2_and_later_locked": true,
+    "single_g1_openspec": true,
+    "requirements_g1_r1_through_g1_r9": true,
+    "owner_matrix_declared": true,
+    "frozen_input_manifest_self_hash_valid": true,
+    "diff_check_clean": true
+  },
+  "effects": {
+    "product_code_writes": 0,
+    "database_writes": 0,
+    "docker_builds": 0,
+    "environment_starts": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_8081_changes": 0,
+    "g2_actions": 0
+  },
+  "status": "PASS",
+  "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
+  "receipt_sha256": "2c0617e90d0002c9afacd138cba604d4b86dc7589d50b11c016edfb30b67776b"
+}

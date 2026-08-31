@@ -1,0 +1,47 @@
+{
+  "contract": "weknora.830.g1-frozen-input-manifest.v1",
+  "goal_id": "G1",
+  "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "base_tree": "c7853fa71a5fbe826c3faf04ce3e8a2ad1168255",
+  "b0": {
+    "status": "PASS",
+    "flow_baseline_path": "docs/insurance-kb/evidence/830-b0/baseline/815-flow-baseline.json",
+    "flow_baseline_sha256": "413ce98bb23b0abb8f56e2614a7af85554e18cd602c56c88f27b8194933889b7",
+    "independent_review": "PASS",
+    "unresolved_count": 0
+  },
+  "source": {
+    "815_commit": "9fcf3386833d822a31f2de13fdf76c3eb6b13795",
+    "815_tree": "7314d1c9bc82dc7efb114affb6f2450d0dbd36ae",
+    "release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "activation_epoch": 2,
+    "reopen_index_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c"
+  },
+  "entity": {
+    "entity_id": "ping-an-e-sheng-bao",
+    "entity_version_id": "ping-an-e-sheng-bao@596-1",
+    "product_version_id": "596-1",
+    "display_name": "平安e生保（尊享版）医疗保险"
+  },
+  "schema_pack": {
+    "schema_pack_id": "medical-schema67.v1",
+    "schema_version": "v1",
+    "schema_pack_sha256": "fe3b390222108614d3ff07409fbd81d17e915e066eb9c25c03d3268bc49ef7ac",
+    "ordered_field_ids_sha256": "8ffe2a043dfae6e65d84f213d42818de3c6c1c39c1fcb0c9eccd14367a30db24",
+    "field_count": 67,
+    "section_count": 7
+  },
+  "page_graph_expected": {
+    "overview": 1,
+    "sections": 7,
+    "field_assertions": 67,
+    "free_wiki": 1,
+    "total": 76
+  },
+  "quality_status": "DEFERRED",
+  "provider_calls_authorized": 0,
+  "model_calls_authorized": 0,
+  "production_8081_changes_authorized": 0,
+  "manifest_sha256_contract": "sha256(canonical-json-with-null-manifest_sha256)",
+  "manifest_sha256": "a77df8f2021eed89e56c0ad9fa8d5c9adc3ff9b189067d19e47634b486d6367c"
+}
