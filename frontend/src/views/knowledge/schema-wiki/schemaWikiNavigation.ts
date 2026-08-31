@@ -87,7 +87,7 @@ export function buildScopedSchemaWikiPath(
   }
   if (
     !scope.space_id || !scope.raw_kb_id || !scope.wiki_kb_id
-    || !/^\/[A-Za-z0-9_./:-]+$/.test(suffix)
+    || !/^\/[A-Za-z0-9_./:@-]+$/.test(suffix)
     || suffix.includes('..')
   ) {
     throw new Error('SCHEMA_WIKI_SCOPE_INVALID')

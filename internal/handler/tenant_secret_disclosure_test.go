@@ -10,6 +10,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/types"
+	secutils "github.com/Tencent/WeKnora/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -163,6 +164,10 @@ func TestGetTenantKVViewerAllowedForNonSecretKey(t *testing.T) {
 }
 
 func TestPutTenantParserConfigAdminPreservesRedactedSecrets(t *testing.T) {
+	secutils.ResetSSRFWhitelistForTest()
+	t.Setenv("SSRF_WHITELIST", "example.com")
+	t.Cleanup(secutils.ResetSSRFWhitelistForTest)
+
 	tenant := secretTenantFixture()
 	engine := newTenantHandlerTestEngine(t, types.TenantRoleAdmin, tenant)
 

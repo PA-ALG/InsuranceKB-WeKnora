@@ -182,6 +182,9 @@ def test_exact_schema67_compiles_one_contract_per_field_without_values() -> None
     assert tuple(item.ordinal for item in first.contracts) == tuple(range(1, 68))
     assert len({item.field_id for item in first.contracts}) == 67
     assert first.contract_set_sha256 == second.contract_set_sha256
+    assert first.contract_set_sha256 == (
+        "c51d4a01ee90177397b8a5f14c35a0a3ee8cad5bd175c5f94826639792d92f0c"
+    )
     assert _fields()[0].description == (
         "产品在公司产品主数据中的唯一标识代码，用于关联产品元数据、条款、计划表及其他业务材料；"
         "优先从产品主数据获取，必要时可从条款首页核验。"
@@ -195,6 +198,21 @@ def test_exact_schema67_compiles_one_contract_per_field_without_values() -> None
     assert "candidate_value" not in serialized
     assert "candidate_evidence" not in serialized
     assert "allowed_states" not in serialized
+
+
+def test_approved_raw_guidance_survives_field_contract_projection() -> None:
+    rows = _fields()
+    contracts = compile_schema_contracts(_snapshot()).contracts
+
+    assert len(rows) == len(contracts) == 67
+    for row, contract in zip(rows, contracts, strict=True):
+        assert contract.field_name == row.field_name
+        assert contract.category == row.category
+        assert contract.description == row.description
+        assert contract.value_shape_raw == row.value_shape_raw
+        assert contract.source_authority_raw == row.source_authority_raw
+        assert contract.formation_raw == row.formation_raw
+        assert contract.source_roles == row.source_roles
 
 
 def test_schema67_duplicate_reorder_and_declared_hash_drift_fail_closed() -> None:
@@ -784,6 +802,15 @@ def test_production_catalogs_bind_schema67_roles_and_052_resolutions() -> None:
 def test_production_catalogs_reject_mutation_revocation_and_ambiguity() -> None:
     snapshot = _snapshot()
     contracts = compile_schema_contracts(snapshot)
+    legacy_contracts = contracts.model_copy(
+        update={
+            "contract_set_sha256": (
+                "e0832ec970d572982a2fdd493ec0cd496282d99f363e2544addb6474f4d013de"
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="SCHEMA67_CATALOG_INVALID"):
+        build_596_1_schema67_material_profile_catalog(legacy_contracts)
     forged_contracts = contracts.model_copy(
         update={"contract_set_sha256": _sha("foreign-contract-set")}
     )

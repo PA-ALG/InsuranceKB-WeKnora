@@ -10,9 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from insurance_harness.canonical import canonical_hash
 from insurance_harness.compiler.evidence_verifier import (
     FreeformFieldOutputV1,
 )
@@ -34,7 +36,12 @@ from insurance_harness.knowledge_compiler import (
 from insurance_harness.knowledge_compiler import (
     schema_wiki_release_596_1,
 )
+from insurance_harness.knowledge_compiler.schema67_native_pdf_selection_815 import (
+    CoordinateEvidence815V1,
+    CoordinateEvidenceCompanion815V1,
+)
 from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
+    CandidateEvidenceAuthorityError,
     LiveChunkAuthorityInputV1,
     LiveRevisionSourceReceiptV1,
     Schema67CandidateEvidenceAuthorityV1,
@@ -95,9 +102,7 @@ def _complete67() -> Schema67ReviewedGoldenSuccessor5961V1:
 
 
 def _coverage_field_ids() -> frozenset[str]:
-    return frozenset(
-        row.field_id for row in _complete67().fields if row.unknown_reason is not None
-    )
+    return frozenset(row.field_id for row in _complete67().fields if row.unknown_reason is not None)
 
 
 def _compile_complete67(
@@ -217,6 +222,24 @@ def _candidate_and_authority_from_cases(
     candidate: Schema67CandidateV2,
     cases: tuple[EvidenceReplayCaseV1, ...],
 ) -> tuple[Schema67CandidateV2, Schema67CandidateEvidenceAuthorityV1]:
+    artifacts, receipts, chunks = _authority_inputs_from_cases(candidate, cases)
+    authority = build_schema67_candidate_evidence_authority_596_1(
+        candidate=candidate,
+        admitted_parse_artifacts=artifacts,
+        live_source_receipts=receipts,
+        chunk_authorities=chunks,
+    )
+    return candidate, authority
+
+
+def _authority_inputs_from_cases(
+    candidate: Schema67CandidateV2,
+    cases: tuple[EvidenceReplayCaseV1, ...],
+) -> tuple[
+    tuple[AdmittedParseArtifactV1, ...],
+    tuple[LiveRevisionSourceReceiptV1, ...],
+    tuple[LiveChunkAuthorityInputV1, ...],
+]:
     document = cases[0].documents[0]
     manifest = cases[0].manifests[0]
     decision = ParseQualityDecisionV1(
@@ -296,13 +319,185 @@ def _candidate_and_authority_from_cases(
             start=1,
         )
     )
+    return (artifact,), receipts, chunks
+
+
+def _native_coordinate_companion(
+    candidate: Schema67CandidateV2,
+    artifact: AdmittedParseArtifactV1,
+) -> CoordinateEvidenceCompanion815V1:
+    assert artifact.raw_structure_sha256 is not None
+    blocks = {row.block_id: row for row in artifact.document.blocks}
+    rows = tuple(
+        CoordinateEvidence815V1(
+            field_id=output.field_id,
+            source_revision_id=evidence.source_revision_id,
+            source_role="terms",
+            original_file_sha256=evidence.source_sha256,
+            parse_manifest_sha256=artifact.raw_structure_sha256,
+            selection_id=f"selection-native-{field_index}-{evidence_index}",
+            selection_type="TEXT_SPAN",
+            page_number=evidence.page_number,
+            page_text_char_start=0,
+            page_text_char_end=len(evidence.quote_snapshot),
+            coordinate_space="PDF_POINTS_TOP_LEFT_V1",
+            page_width_points="1000",
+            page_height_points="1000",
+            bbox=cast(
+                tuple[str, str, str, str],
+                tuple(str(value) for value in blocks[evidence.locator.subject_ref].locator.bbox),
+            ),
+            rects=(
+                cast(
+                    tuple[str, str, str, str],
+                    tuple(
+                        str(value) for value in blocks[evidence.locator.subject_ref].locator.bbox
+                    ),
+                ),
+            ),
+            quote=evidence.quote_snapshot,
+            quote_sha256=hashlib.sha256(evidence.quote_snapshot.encode("utf-8")).hexdigest(),
+            block_id=evidence.locator.subject_ref,
+            span_id=f"span-native-{field_index}-{evidence_index}",
+        )
+        for field_index, output in enumerate(candidate.fields)
+        for evidence_index, evidence in enumerate(output.evidence)
+    )
+    payload = {
+        "contract": "schema67-coordinate-evidence-companion.815.v1",
+        "candidate_sha256": candidate.candidate_sha256,
+        "provider_visible_field_ids": tuple(field.field_id for field in candidate.fields),
+        "coordinate_rows": tuple(row.model_dump(mode="python") for row in rows),
+        "selection_catalog_sha256": _sha("selection-catalog-native-pdf-authority"),
+        "parse_manifest_sha256s": (artifact.raw_structure_sha256,),
+    }
+    return CoordinateEvidenceCompanion815V1.model_validate(
+        {
+            **payload,
+            "companion_sha256": canonical_hash(
+                "schema67-coordinate-evidence-companion.815.v1",
+                payload,
+            ),
+        }
+    )
+
+
+def _rehashed_native_coordinate_companion(
+    companion: CoordinateEvidenceCompanion815V1,
+    **changes: object,
+) -> CoordinateEvidenceCompanion815V1:
+    payload = companion.model_dump(mode="python", exclude={"companion_sha256"})
+    payload.update(changes)
+    if "coordinate_rows" in changes:
+        rows = cast(tuple[CoordinateEvidence815V1, ...], changes["coordinate_rows"])
+        payload["coordinate_rows"] = tuple(row.model_dump(mode="python") for row in rows)
+    return CoordinateEvidenceCompanion815V1.model_validate(
+        {
+            **payload,
+            "companion_sha256": canonical_hash(
+                "schema67-coordinate-evidence-companion.815.v1",
+                payload,
+            ),
+        }
+    )
+
+
+def test_factory_projects_native_pdf_companion_without_changing_receipt_wire() -> None:
+    from tests.test_expert_golden_admission_596_2_119 import (
+        _approved_cases,
+        _candidate_v2,
+    )
+
+    cases = _approved_cases()
+    candidate = _candidate_v2(cases)
+    artifacts, receipts, chunks = _authority_inputs_from_cases(candidate, cases)
+    companion = _native_coordinate_companion(candidate, artifacts[0])
+
+    assert (
+        "coordinate_evidence_companion"
+        in inspect.signature(build_schema67_candidate_evidence_authority_596_1).parameters
+    )
     authority = build_schema67_candidate_evidence_authority_596_1(
         candidate=candidate,
-        admitted_parse_artifacts=(artifact,),
+        admitted_parse_artifacts=artifacts,
         live_source_receipts=receipts,
         chunk_authorities=chunks,
+        coordinate_evidence_companion=companion,
     )
-    return candidate, authority
+
+    row = companion.coordinate_rows[0]
+    join = next(
+        receipt
+        for receipt in authority.join_receipts
+        if receipt.field_id == row.field_id and receipt.locator_ref == row.block_id
+    )
+    assert join.source_coordinate_space == ("mineru_content_list_normalized_0_1000_top_left.v1")
+    assert join.source_bbox_preimage == ("0", "0", "1", "1")
+    assert (
+        join.normalized_bbox.x0,
+        join.normalized_bbox.y0,
+        join.normalized_bbox.x1,
+        join.normalized_bbox.y1,
+    ) == (0, 0, 1_000, 1_000)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["candidate", "duplicate", "dimensions", "source", "omitted"],
+)
+def test_factory_rejects_unbound_or_ambiguous_native_pdf_companion(
+    mutation: str,
+) -> None:
+    from tests.test_expert_golden_admission_596_2_119 import (
+        _approved_cases,
+        _candidate_v2,
+    )
+
+    cases = _approved_cases()
+    candidate = _candidate_v2(cases)
+    artifacts, receipts, chunks = _authority_inputs_from_cases(candidate, cases)
+    companion = _native_coordinate_companion(candidate, artifacts[0])
+    row = companion.coordinate_rows[0]
+    if mutation == "candidate":
+        companion = _rehashed_native_coordinate_companion(
+            companion,
+            candidate_sha256=_sha("foreign-candidate"),
+        )
+    elif mutation == "duplicate":
+        duplicate = row.model_copy(update={"selection_id": "selection-native-duplicate"})
+        companion = _rehashed_native_coordinate_companion(
+            companion,
+            coordinate_rows=(row, duplicate, *companion.coordinate_rows[1:]),
+        )
+    elif mutation == "dimensions":
+        invalid = row.model_copy(update={"page_width_points": "0"})
+        companion = _rehashed_native_coordinate_companion(
+            companion,
+            coordinate_rows=(invalid, *companion.coordinate_rows[1:]),
+        )
+    elif mutation == "source":
+        foreign = row.model_copy(update={"original_file_sha256": _sha("foreign-file")})
+        companion = _rehashed_native_coordinate_companion(
+            companion,
+            coordinate_rows=(foreign, *companion.coordinate_rows[1:]),
+        )
+    else:
+        companion = _rehashed_native_coordinate_companion(
+            companion,
+            coordinate_rows=companion.coordinate_rows[1:],
+        )
+
+    with pytest.raises(
+        CandidateEvidenceAuthorityError,
+        match="COORDINATE_AUTHORITY_INVALID",
+    ):
+        build_schema67_candidate_evidence_authority_596_1(
+            candidate=candidate,
+            admitted_parse_artifacts=artifacts,
+            live_source_receipts=receipts,
+            chunk_authorities=chunks,
+            coordinate_evidence_companion=companion,
+        )
 
 
 def _fully_rehashed_authority_join_mutation(
@@ -448,8 +643,7 @@ def test_complete67_unverified_dry_run_compiles_exact75_without_authority_calls(
         *("field" for _ in range(67)),
     )
     assert all(
-        member.member_ref.startswith(("root:", "section:", "field:"))
-        for member in release.members
+        member.member_ref.startswith(("root:", "section:", "field:")) for member in release.members
     )
     fields = {item.field_id: item for item in candidate.fields}
     pages = {
@@ -457,9 +651,7 @@ def test_complete67_unverified_dry_run_compiles_exact75_without_authority_calls(
         for member in release.members
         if member.member_kind == "field"
     }
-    coverage_ids = tuple(
-        row.field_id for row in successor.fields if row.unknown_reason is not None
-    )
+    coverage_ids = tuple(row.field_id for row in successor.fields if row.unknown_reason is not None)
     assert len(coverage_ids) == 16
     assert all(fields[field_id].state == "unknown" for field_id in coverage_ids)
     for row in successor.fields:
@@ -746,7 +938,7 @@ def test_lane_b_exposes_no_caller_selected_review_approval_handoff() -> None:
     assert "require_manifest_bound_review_596_1" not in schema_wiki_release_596_1.__all__
 
 
-def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> None:
+def test_real_factory_compiles_exact75_and_frozen_vector_remains_reopenable() -> None:
     candidate, authority = _candidate_and_authority()
     release = _compile_complete67(candidate=candidate, authority=authority)
 
@@ -760,9 +952,7 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
         )
         for row in authority.source_authorities
     ) == (("terms", 39, 2), ("brochure", 27, 1), ("rate_table", 2, 1))
-    assert len(authority.join_receipts) == sum(
-        len(field.evidence) for field in candidate.fields
-    )
+    assert len(authority.join_receipts) == sum(len(field.evidence) for field in candidate.fields)
     assert authority.join_receipts
     assert len(release.members) == 75
     assert tuple(item.member_kind for item in release.members[:8]) == (
@@ -774,10 +964,16 @@ def test_real_factory_sealed_candidate_compiles_exact75_and_matches_vector() -> 
         Path(__file__).parents[2]
         / "internal/application/service/testdata/schema_wiki_release_596_1_vector.json"
     )
-    assert json.loads(vector_path.read_text(encoding="utf-8")) == {
-        "candidate_evidence_authority": authority.model_dump(mode="json"),
-        "release": release.model_dump(mode="json"),
-    }
+    frozen = json.loads(vector_path.read_text(encoding="utf-8"))
+    frozen_authority = Schema67CandidateEvidenceAuthorityV1.model_validate(
+        frozen["candidate_evidence_authority"]
+    )
+    frozen_release = KnowledgeWikiReleaseV1.model_validate(frozen["release"])
+    assert validate_knowledge_wiki_release(frozen_release, frozen_release.schema_pack)
+    assert len(frozen_release.members) == len(release.members) == 75
+    assert len(frozen_authority.source_authorities) == len(authority.source_authorities) == 3
+    assert frozen_release.contract == release.contract
+    assert frozen_authority.contract == authority.contract
 
 
 def _real_candidate_and_release() -> tuple[Schema67CandidateV2, KnowledgeWikiReleaseV1]:

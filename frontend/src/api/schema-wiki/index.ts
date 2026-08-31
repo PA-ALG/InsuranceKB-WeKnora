@@ -38,6 +38,7 @@ export interface SchemaWikiClient {
 }
 
 const ID_SEGMENT = /^[A-Za-z0-9._:-]+$/
+const ENTITY_VERSION_ID_SEGMENT = /^[A-Za-z0-9._:@-]+$/
 
 export function buildSchemaCitationPreviewRequest(
   input: SchemaWikiCitationPreviewRequestV1,
@@ -59,6 +60,13 @@ function exactId(value: string): string {
     throw new Error('SCHEMA_WIKI_SCOPE_INVALID')
   }
   return encodeURIComponent(value)
+}
+
+function exactEntityVersionId(value: string): string {
+  if (!ENTITY_VERSION_ID_SEGMENT.test(value)) {
+    throw new Error('SCHEMA_WIKI_SCOPE_INVALID')
+  }
+  return encodeURIComponent(value).replaceAll('%40', '@')
 }
 
 export function buildSchemaWikiScopeBootstrapPath(wikiKbId: string): string {
@@ -162,7 +170,7 @@ export async function bootstrapSchemaWikiClient(
     getDomains: () => read('/domains'),
     getCurrentTaxonomy: () => read('/taxonomy/current'),
     getCurrentEntityVersion: (entityId: string, versionId: string) => read(
-      `/entities/${exactId(entityId)}/versions/${exactId(versionId)}/current`,
+      `/entities/${exactId(entityId)}/versions/${exactEntityVersionId(versionId)}/current`,
     ),
     getReleaseRoot: (releaseId: string) => read(releasePath(releaseId, 'root')),
     getReleaseSection: (releaseId: string, sectionId: string) => read(

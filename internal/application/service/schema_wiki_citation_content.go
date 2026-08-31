@@ -424,6 +424,14 @@ func (s *schemaWikiCitationContentService) ReadByOpaqueToken(
 	) != nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
+	if request.frozenNativeSource != nil {
+		opened := request.frozenNativeSource.sourceBytes
+		if int64(len(opened)) != claims.Authority.RevisionSource.Size ||
+			schemaWikiBytesSHA256(opened) != claims.Authority.RevisionSource.FileSHA256 {
+			return nil, ErrSchemaWikiCitationUnavailable
+		}
+		return append([]byte(nil), opened...), nil
+	}
 	opened, err := s.blob.ReadExactRevisionSource(ctx, claims.Authority.RevisionSource)
 	if err != nil {
 		return nil, ErrSchemaWikiCitationUnavailable

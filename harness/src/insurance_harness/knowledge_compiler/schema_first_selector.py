@@ -52,23 +52,19 @@ _EXECUTABLE_MATERIAL_ROLES = frozenset({"terms", "brochure", "rate_table"})
 _PROFILE_OBJECT_TYPE = "schema67-approved-material-profile.v1"
 _SELECTION_OBJECT_TYPE = "schema67-compilation-selection.v1"
 _APPROVED_CONTRACT_SET_SHA256: Final[str] = (
-    "e0832ec970d572982a2fdd493ec0cd496282d99f363e2544addb6474f4d013de"
+    "c51d4a01ee90177397b8a5f14c35a0a3ee8cad5bd175c5f94826639792d92f0c"
 )
 _APPROVED_PRODUCT_LINE_ID: Final[str] = "medical"
 _APPROVED_PRODUCT_FAMILY_ID: Final[str] = "pingan-eshengbao-zunxiang-medical"
-_APPROVED_PROFILE_BINDINGS: Final[
-    tuple[tuple[MaterialRole, str, str], ...]
-] = (
+_APPROVED_PROFILE_BINDINGS: Final[tuple[tuple[MaterialRole, str, str], ...]] = (
     ("terms", "596-1-terms-v1", "insurance-terms"),
     ("brochure", "596-1-brochure-v1", "product-brochure"),
     ("rate_table", "596-1-rate-table-v1", "rate-table"),
 )
-APPROVED_596_1_TEMPLATE_CONTENT_HASHES: Final[
-    tuple[tuple[MaterialRole, str], ...]
-] = (
-    ("terms", "cd097cf48574ae1d84f66b53a4325df1b86c7fd80f82ef9282af83f876d46b72"),
-    ("brochure", "c4d24dc76df9fa4cd545566313483c1059c9d54b8b7b546f3838364f5528017c"),
-    ("rate_table", "3f800dfb8649364ed8b809a46a6b15fbeac852c198461727c50644fc69a55686"),
+APPROVED_596_1_TEMPLATE_CONTENT_HASHES: Final[tuple[tuple[MaterialRole, str], ...]] = (
+    ("terms", "8d9c3b2897007200c700203bb0ff0824481281ea36b323d7432647214bc039b1"),
+    ("brochure", "c33dd5d20d577c3c3d79419b35a2d9843ea13aa91cea130e334c93d846e170a7"),
+    ("rate_table", "26c37ab91ce4f885087eafc6c70b2d56c10a9b76416cecf7042bfdd6076fbf9c"),
 )
 
 
@@ -381,9 +377,10 @@ def _exact_596_1_contract_set(value: object) -> FieldContractSetV1:
             len(_field_task_partition(checked, role)[0])
             for role, _profile_id, _document_type_id in _APPROVED_PROFILE_BINDINGS
         )
-        if (
-            checked.contract_set_sha256 != _APPROVED_CONTRACT_SET_SHA256
-            or role_counts != (35, 4, 1)
+        if checked.contract_set_sha256 != _APPROVED_CONTRACT_SET_SHA256 or role_counts != (
+            35,
+            4,
+            1,
         ):
             raise ValueError("contract authority mismatch")
         return checked
@@ -457,8 +454,7 @@ def _build_approved_template_content(
         ),
         role_prompts={
             "extract": (
-                f"Extract only approved 596-1 Schema67 {role} fields with "
-                "replayable Evidence."
+                f"Extract only approved 596-1 Schema67 {role} fields with replayable Evidence."
             )
         },
         validators=(
@@ -489,8 +485,7 @@ def _build_approved_template_content(
                     "fuzzy dispatch, runtime answer custody, and cross-role field duplication"
                 ),
                 python_target=(
-                    "harness/src/insurance_harness/knowledge_compiler/"
-                    "schema_first_selector.py"
+                    "harness/src/insurance_harness/knowledge_compiler/schema_first_selector.py"
                 ),
                 translation_method="behavior_port_with_characterization_tests",
                 characterization_tests=(

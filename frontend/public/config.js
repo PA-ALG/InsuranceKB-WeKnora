@@ -3,4 +3,7 @@ window.__RUNTIME_CONFIG__ = {
   MAX_FILE_SIZE_MB: 50,
   // Optional: serve embed on a dedicated origin, e.g. 'https://embed.example.com'
   EMBED_BASE_URL: '',
+  SCHEMA_WIKI_MVP_ENTRY_KB_ID: '',
+  SCHEMA_WIKI_MVP_SERVING_KB_ID: '',
+  SCHEMA_WIKI_MVP_LABEL: '当前 MVP · 只读',
 };

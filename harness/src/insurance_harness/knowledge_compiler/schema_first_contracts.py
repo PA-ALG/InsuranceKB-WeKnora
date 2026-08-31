@@ -129,9 +129,7 @@ APPROVED_SCHEMA_ROWS_SHA256: Final[str] = (
     "cb49f9e27356316a72c258b2b9030257bf434d47a988f61dc820b826c222a57c"
 )
 APPROVAL_STATUS: Final[Literal["EXPERT_APPROVED_NO_CHANGES"]] = "EXPERT_APPROVED_NO_CHANGES"
-EXACT_APPROVAL_AUTHORITY_REF: Final[str] = (
-    "user-message:019fda9b-schema67-approved-no-changes"
-)
+EXACT_APPROVAL_AUTHORITY_REF: Final[str] = "user-message:019fda9b-schema67-approved-no-changes"
 
 _ApprovedSchemaRowValues = tuple[int, str, str, str, str, str | None, str, str]
 _APPROVED_SCHEMA_ROW_VALUES: Final[tuple[_ApprovedSchemaRowValues, ...]] = (
@@ -1206,6 +1204,9 @@ class FieldContractV1(_FrozenModel):
     field_name: NonBlankStr
     category: NonBlankStr
     description: NonBlankStr
+    value_shape_raw: NonBlankStr | None
+    source_authority_raw: NonBlankStr
+    formation_raw: NonBlankStr
     value_shape: ValueShape
     formation_modes: tuple[FormationMode, ...]
     source_roles: tuple[NonBlankStr, ...]
@@ -1229,6 +1230,9 @@ def _field_contract_payload(value: FieldContractV1, *, include_hash: bool) -> di
         "field_name": value.field_name,
         "category": value.category,
         "description": value.description,
+        "value_shape_raw": value.value_shape_raw,
+        "source_authority_raw": value.source_authority_raw,
+        "formation_raw": value.formation_raw,
         "value_shape": value.value_shape,
         "formation_modes": value.formation_modes,
         "source_roles": value.source_roles,
@@ -1261,6 +1265,24 @@ class FieldContractSetV1(_FrozenModel):
             or tuple(item.ordinal for item in self.contracts)
             != tuple(range(1, APPROVED_FIELD_COUNT + 1))
             or tuple(item.field_id for item in self.contracts) != APPROVED_ORDERED_FIELD_IDS
+            or any(
+                (
+                    contract.ordinal,
+                    contract.category,
+                    contract.field_name,
+                    contract.field_id,
+                    contract.description,
+                    contract.value_shape_raw,
+                    contract.source_authority_raw,
+                    contract.formation_raw,
+                )
+                != approved
+                for contract, approved in zip(
+                    self.contracts,
+                    _APPROVED_SCHEMA_ROW_VALUES,
+                    strict=True,
+                )
+            )
             or self.schema_rows_sha256 != APPROVED_SCHEMA_ROWS_SHA256
             or self.ordered_field_ids_sha256 != APPROVED_ORDERED_FIELD_IDS_SHA256
             or self.authority_ref != EXACT_APPROVAL_AUTHORITY_REF
@@ -1310,6 +1332,9 @@ def compile_schema_contracts(snapshot: ApprovedSchemaSnapshotV1) -> FieldContrac
                 field_name=row.field_name,
                 category=row.category,
                 description=row.description,
+                value_shape_raw=row.value_shape_raw,
+                source_authority_raw=row.source_authority_raw,
+                formation_raw=row.formation_raw,
                 value_shape=row.value_shape,
                 formation_modes=row.formation_modes,
                 source_roles=row.source_roles,
@@ -1325,6 +1350,9 @@ def compile_schema_contracts(snapshot: ApprovedSchemaSnapshotV1) -> FieldContrac
                     field_name=row.field_name,
                     category=row.category,
                     description=row.description,
+                    value_shape_raw=row.value_shape_raw,
+                    source_authority_raw=row.source_authority_raw,
+                    formation_raw=row.formation_raw,
                     value_shape=row.value_shape,
                     formation_modes=row.formation_modes,
                     source_roles=row.source_roles,

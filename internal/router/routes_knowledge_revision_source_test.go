@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -21,6 +20,7 @@ import (
 type revisionSourceRouteBackfiller struct {
 	calls       int
 	exact3Calls int
+	exact3KBID  string
 	exact3      service.KnowledgeRevisionSourceExact3RequestV1
 }
 
@@ -34,10 +34,11 @@ func (s *revisionSourceRouteBackfiller) BackfillCurrentCompleted(
 
 func (s *revisionSourceRouteBackfiller) BackfillExact3(
 	_ context.Context,
-	_ string,
+	kbID string,
 	request service.KnowledgeRevisionSourceExact3RequestV1,
 ) (*service.KnowledgeRevisionSourceExact3ResultV1, error) {
 	s.exact3Calls++
+	s.exact3KBID = kbID
 	s.exact3 = request
 	return &service.KnowledgeRevisionSourceExact3ResultV1{
 		Contract: service.KnowledgeRevisionSourceExact3ContractV1,
@@ -81,17 +82,33 @@ func TestKnowledgeRevisionSourceRoutesExposeOnlyAdminBackfill(t *testing.T) {
 	require.Contains(t, routes,
 		http.MethodPost+" /api/v1/knowledge/:id/revisions/:attempt/source/backfill")
 	require.Contains(t, routes,
-		http.MethodPost+" /api/v1/knowledge-bases/:kb_id/revision-sources/exact3/backfill")
+		http.MethodPost+" /api/v1/knowledge-bases/:id/revision-sources/exact3/backfill")
 	require.NotContains(t, routes,
 		http.MethodGet+" /api/v1/knowledge/:id/revisions/:attempt/source/preview")
 }
 
 func TestMainRouterMountsKnowledgeRevisionSourceRoutes(t *testing.T) {
-	raw, err := os.ReadFile("router.go")
-	require.NoError(t, err)
-	source := string(raw)
-	require.Contains(t, source, "KnowledgeRevisionSourceHandler *handler.KnowledgeRevisionSourceHandler")
-	require.Contains(t, source, "RegisterKnowledgeRevisionSourceRoutes(")
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	v1 := engine.Group("/api/v1")
+	guards := &rbacGuards{}
+	RegisterKnowledgeRoutes(v1, &handler.KnowledgeHandler{}, guards)
+	require.NotPanics(t, func() {
+		RegisterKnowledgeRevisionSourceRoutes(
+			v1,
+			handler.NewKnowledgeRevisionSourceHandler(nil),
+			guards,
+		)
+	})
+
+	routes := map[string]struct{}{}
+	for _, route := range engine.Routes() {
+		routes[route.Method+" "+route.Path] = struct{}{}
+	}
+	require.Contains(t, routes,
+		http.MethodPost+" /api/v1/knowledge-bases/:id/knowledge/file")
+	require.Contains(t, routes,
+		http.MethodPost+" /api/v1/knowledge-bases/:id/revision-sources/exact3/backfill")
 }
 
 func TestKnowledgeRevisionSourceRouteDeniesAPIKeyAndViewerBeforeService(t *testing.T) {
@@ -202,5 +219,6 @@ func TestKnowledgeRevisionSourceExact3DryRunReachesServerAfterExactKBAuthority(t
 	engine.ServeHTTP(recorder, httpRequest)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, 1, serviceSpy.exact3Calls)
+	require.Equal(t, "raw-kb-1", serviceSpy.exact3KBID)
 	require.True(t, serviceSpy.exact3.DryRun)
 }

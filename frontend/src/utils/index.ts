@@ -6,6 +6,9 @@ declare global {
   interface Window {
     __RUNTIME_CONFIG__?: {
       MAX_FILE_SIZE_MB?: number;
+      SCHEMA_WIKI_MVP_ENTRY_KB_ID?: string;
+      SCHEMA_WIKI_MVP_SERVING_KB_ID?: string;
+      SCHEMA_WIKI_MVP_LABEL?: string;
     };
   }
 }

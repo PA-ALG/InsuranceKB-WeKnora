@@ -123,6 +123,60 @@ func schemaWikiTestCanonicalJSON(t *testing.T, value any) json.RawMessage {
 	return bytes.TrimSuffix(out.Bytes(), []byte("\n"))
 }
 
+func TestSchemaWikiFormalCandidatePreviewResponseHashMatchesFrontendLineSeparators(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			name: "literal U+2028",
+			text: "before\u2028after",
+			want: "8858e3714d5d9c8b7403deaa834b944f00d9367d5f9833bfcd0f44c24fc9cc0a",
+		},
+		{
+			name: "literal U+2029",
+			text: "before\u2029after",
+			want: "a5316cbadef2d31b0eb764bf94e59df19fe9316256b5cd2760343486c3a45bcc",
+		},
+		{
+			name: "literal backslash-u2028",
+			text: `before\u2028after`,
+			want: "602c279a5587d17a6a757a6e8510ada2a98cae02eee8037befb7de2d8ad1c4ed",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reader, key := schemaWikiFormalCandidatePreviewServiceFixture()
+			preview, err := json.Marshal(map[string]any{
+				"contract":       "schema-wiki-formal-candidate-preview.815.v1",
+				"preview_sha256": strings.Repeat("f", 64),
+				"text":           test.text,
+			})
+			require.NoError(t, err)
+			reader.record.Preview = preview
+			service := NewSchemaWikiServiceWithFormalCandidatePreview(reader)
+
+			response, err := service.ReadSchemaWikiFormalCandidatePreview(
+				context.Background(), 10003, key,
+			)
+			require.NoError(t, err)
+			require.Equal(t, test.want, response.ResponseSHA256)
+
+			drifted := *response
+			drifted.Preview, err = json.Marshal(map[string]any{
+				"contract":       "schema-wiki-formal-candidate-preview.815.v1",
+				"preview_sha256": strings.Repeat("f", 64),
+				"text":           test.text + "-drift",
+			})
+			require.NoError(t, err)
+			driftedHash, err := schemaWikiFormalCandidatePreviewResponseSHA256(&drifted)
+			require.NoError(t, err)
+			require.NotEqual(t, response.ResponseSHA256, driftedHash)
+		})
+	}
+}
+
 func cloneSchemaWikiEvidenceAuthority(
 	t *testing.T,
 	authority types.Schema67CandidateEvidenceAuthorityV1,

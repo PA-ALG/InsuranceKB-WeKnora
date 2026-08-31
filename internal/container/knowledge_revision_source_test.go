@@ -12,5 +12,7 @@ func TestContainerWiresKnowledgeRevisionSourceServiceAndHandler(t *testing.T) {
 	require.NoError(t, err)
 	source := string(raw)
 	require.Contains(t, source, "container.Provide(service.NewKnowledgeRevisionSourceService)")
-	require.Contains(t, source, "container.Provide(handler.NewKnowledgeRevisionSourceHandler)")
+	require.Contains(t, source, "revisionSourceService *service.KnowledgeRevisionSourceService")
+	require.Contains(t, source, "return handler.NewKnowledgeRevisionSourceHandler(revisionSourceService)")
+	require.NotContains(t, source, "container.Provide(handler.NewKnowledgeRevisionSourceHandler)")
 }

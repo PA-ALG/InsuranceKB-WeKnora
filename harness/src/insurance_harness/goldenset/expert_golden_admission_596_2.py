@@ -23,9 +23,11 @@ from insurance_harness.compiler.evidence_verifier import (
     VerifierContractError,
     bind_freeform_arm_evidence,
 )
+from insurance_harness.compiler.extraction_tasks import MaterialRole
 from insurance_harness.compiler.parsed_documents import ParsedDocumentV1, ParseManifestV1
 from insurance_harness.knowledge_compiler.deepseek_locator_extractor_596_1 import (
     DEEPSEEK_EXECUTION_IDENTITY_SHA256,
+    DeepSeekCompilerError,
     DeepSeekExecutionReceiptV1,
     DeepSeekTaskExecutionV1,
     EvidenceRepairTraceV2,
@@ -37,8 +39,8 @@ from insurance_harness.knowledge_compiler.deepseek_locator_extractor_596_1 impor
     Schema67ExecutionPlanV1,
     Schema67PreparedTaskV1,
     Schema67RoleTaskInputV1,
+    _require_schema67_execution_plan_mode_815,
     build_schema67_batch_receipt,
-    build_schema67_execution_plan,
     prepare_schema67_deepseek_tasks,
 )
 from insurance_harness.knowledge_compiler.schema_first_contracts import (
@@ -1957,12 +1959,21 @@ def make_total_control_schema67_candidate_v2(
             execution_plan.model_dump(mode="python", round_trip=True)
         )
         inputs = tuple(role_inputs)
+        available_source_roles: tuple[MaterialRole, ...] = tuple(
+            role
+            for role in ("terms", "brochure", "rate_table")
+            if any(item.material_role == role for item in inputs)
+        )
+        _require_schema67_execution_plan_mode_815(
+            field_contracts=contracts,
+            execution_plan=plan,
+            available_source_roles=available_source_roles,
+        )
         if (
             type(field_contracts) is not FieldContractSetV1
             or contracts != field_contracts
             or type(execution_plan) is not Schema67ExecutionPlanV1
             or plan != execution_plan
-            or plan != build_schema67_execution_plan(contracts)
             or contracts.workbook_sha256 != WORKBOOK_SHA256
             or tuple(item.field_id for item in contracts.contracts) != ORDERED_FIELD_IDS
             or type(role_inputs) is not tuple
@@ -1999,7 +2010,7 @@ def make_total_control_schema67_candidate_v2(
         )
     except LaneCReportGateError:
         raise
-    except (AttributeError, TypeError, ValueError, ValidationError):
+    except (AttributeError, DeepSeekCompilerError, TypeError, ValueError, ValidationError):
         raise LaneCReportGateError("CANDIDATE_V2_CUSTODY_INVALID") from None
 
 

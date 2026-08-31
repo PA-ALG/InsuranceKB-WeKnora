@@ -29,10 +29,13 @@ func RegisterKnowledgeRevisionSourceRoutes(
 		r.Group("/knowledge-bases"), apiKeyIngest(apiKeyFullAccess()),
 	)
 	knowledgeBases.POST(
-		"/:kb_id/revision-sources/exact3/backfill",
+		"/:id/revision-sources/exact3/backfill",
 		middleware.DenyAPIKeyPrincipal(),
 		g.Admin(),
-		g.KBAccessWrite("kb_id"),
-		h.BackfillExact3,
+		g.KBAccessWrite("id"),
+		func(c *gin.Context) {
+			c.Params = append(c.Params, gin.Param{Key: "kb_id", Value: c.Param("id")})
+			h.BackfillExact3(c)
+		},
 	)
 }

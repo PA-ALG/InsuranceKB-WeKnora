@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const schemaWikiResolvedHeadContextKey = "schema_wiki.resolved_head"
@@ -35,6 +37,31 @@ type SchemaWikiCitationContentRouteAuthorityResolver interface {
 	ResolveSchemaCitationContentRouteAuthority(
 		context.Context, string,
 	) (*service.SchemaWikiCitationContentRouteAuthorityV1, error)
+}
+
+type schemaWikiFormalCandidatePreviewHTTPService interface {
+	ReadSchemaWikiFormalCandidatePreview(
+		context.Context,
+		uint64,
+		apprepo.SchemaWikiFormalCandidatePreviewKey,
+	) (*service.SchemaWikiFormalCandidatePreviewResponseV1, error)
+	ReadSchemaWikiFormalCandidatePreviewContent(
+		context.Context,
+		uint64,
+		apprepo.SchemaWikiFormalCandidatePreviewKey,
+		apprepo.SchemaWikiFormalCandidatePreviewContentRequest,
+	) ([]byte, error)
+}
+
+type schemaWikiFormalCandidateDecisionHTTPService interface {
+	DecideSchemaWikiFormalCandidatePreview(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		apprepo.SchemaWikiFormalCandidatePreviewKey,
+		[]byte,
+		[]byte,
+	) (*types.HumanBatchDecisionReceiptV1, *types.WikiReleaseReceipt, error)
 }
 
 type schemaWikiHTTPService interface {
@@ -165,9 +192,11 @@ type schemaWikiHTTPService interface {
 // citation authority stays inside SchemaWikiService; HTTP callers provide only
 // path identities and never custody DTOs.
 type SchemaWikiHandler struct {
-	scopeResolver          SchemaWikiScopeResolver
-	schemaService          schemaWikiHTTPService
-	citationRouteAuthority SchemaWikiCitationContentRouteAuthorityResolver
+	scopeResolver           SchemaWikiScopeResolver
+	schemaService           schemaWikiHTTPService
+	citationRouteAuthority  SchemaWikiCitationContentRouteAuthorityResolver
+	formalCandidatePreview  schemaWikiFormalCandidatePreviewHTTPService
+	formalCandidateDecision schemaWikiFormalCandidateDecisionHTTPService
 }
 
 // NewSchemaWikiHandler constructs the explicitly injected Schema Wiki facade.
@@ -182,7 +211,198 @@ func NewSchemaWikiHandler(
 	} else if resolver, ok := schemaService.(SchemaWikiCitationContentRouteAuthorityResolver); ok {
 		handler.citationRouteAuthority = resolver
 	}
+	if preview, ok := schemaService.(schemaWikiFormalCandidatePreviewHTTPService); ok {
+		handler.formalCandidatePreview = preview
+	}
+	if decision, ok := schemaService.(schemaWikiFormalCandidateDecisionHTTPService); ok {
+		handler.formalCandidateDecision = decision
+	}
 	return handler
+}
+
+func schemaWikiFormalCandidatePreviewKeyFromParams(c *gin.Context) apprepo.SchemaWikiFormalCandidatePreviewKey {
+	if c == nil {
+		return apprepo.SchemaWikiFormalCandidatePreviewKey{}
+	}
+	return apprepo.SchemaWikiFormalCandidatePreviewKey{
+		KBID: strings.TrimSpace(c.Param("kb_id")), ExperimentID: strings.TrimSpace(c.Param("experiment_id")),
+		VersionIdentity: strings.TrimSpace(c.Param("version_identity")),
+	}
+}
+
+func (h *SchemaWikiHandler) ReadFormalCandidatePreview(c *gin.Context) {
+	tenantID, key, err := h.formalCandidatePreviewRequest(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	response, err := h.formalCandidatePreview.ReadSchemaWikiFormalCandidatePreview(
+		c.Request.Context(), tenantID, key,
+	)
+	if err != nil || response == nil {
+		if err == nil {
+			err = service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch
+		}
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
+}
+
+func (h *SchemaWikiHandler) ReadFormalCandidatePreviewContent(c *gin.Context) {
+	tenantID, key, err := h.formalCandidatePreviewRequest(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	request := apprepo.SchemaWikiFormalCandidatePreviewContentRequest{
+		FieldID:     strings.TrimSpace(c.Param("field_id")),
+		SelectionID: strings.TrimSpace(c.Param("selection_id")),
+	}
+	if request.FieldID == "" || request.SelectionID == "" {
+		writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid)
+		return
+	}
+	content, err := h.formalCandidatePreview.ReadSchemaWikiFormalCandidatePreviewContent(
+		c.Request.Context(), tenantID, key, request,
+	)
+	if err != nil || len(content) == 0 {
+		if err == nil {
+			err = service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch
+		}
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.Data(http.StatusOK, "application/pdf", content)
+}
+
+func (h *SchemaWikiHandler) formalCandidatePreviewRequest(
+	c *gin.Context,
+) (uint64, apprepo.SchemaWikiFormalCandidatePreviewKey, error) {
+	if h == nil || h.formalCandidatePreview == nil || c == nil || c.Request == nil ||
+		c.Request.URL.RawQuery != "" || c.Request.ContentLength != 0 {
+		return 0, apprepo.SchemaWikiFormalCandidatePreviewKey{}, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+	}
+	tenantValue, exists := c.Get(types.TenantIDContextKey.String())
+	tenantID, ok := tenantValue.(uint64)
+	key := schemaWikiFormalCandidatePreviewKeyFromParams(c)
+	if !exists || !ok || tenantID == 0 || key.KBID == "" || key.ExperimentID == "" ||
+		!validSchemaWikiC5HandlerSHA256(key.VersionIdentity) {
+		return 0, apprepo.SchemaWikiFormalCandidatePreviewKey{}, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+	}
+	return tenantID, key, nil
+}
+
+func validSchemaWikiC5HandlerSHA256(value string) bool {
+	if len(value) != 64 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+// DecideFormalCandidatePreview wires the one bounded human decision action to
+// the existing C6 service. The path supplies only the exact C5 identity; raw
+// decision and authorization values are forwarded byte-for-byte.
+func (h *SchemaWikiHandler) DecideFormalCandidatePreview(c *gin.Context) {
+	if h == nil || h.formalCandidateDecision == nil || c == nil || c.Request == nil ||
+		c.Request.URL.RawQuery != "" {
+		writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid)
+		return
+	}
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	experimentID := c.Param("experiment_id")
+	versionIdentity := c.Param("version_identity")
+	parsedExperimentID, parseErr := uuid.Parse(experimentID)
+	if parseErr != nil || parsedExperimentID.String() != experimentID ||
+		!validSchemaWikiC5HandlerSHA256(versionIdentity) {
+		writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid)
+		return
+	}
+	request, err := decodeSchemaWikiC6DecisionRequest(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	decision, receipt, err := h.formalCandidateDecision.DecideSchemaWikiFormalCandidatePreview(
+		c.Request.Context(), principal, scope,
+		apprepo.SchemaWikiFormalCandidatePreviewKey{
+			KBID: scope.RawKBID, ExperimentID: experimentID, VersionIdentity: versionIdentity,
+		},
+		request.HumanDecision,
+		request.PublishAuthorization,
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if decision == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch)
+		return
+	}
+	switch decision.Decision {
+	case "reject":
+		if receipt != nil {
+			writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": decision})
+	case "approve":
+		if receipt == nil {
+			writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": receipt})
+	default:
+		writeSchemaWikiError(c, service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch)
+	}
+}
+
+func decodeSchemaWikiC6DecisionRequest(c *gin.Context) (wikiReleaseActivationRequest, error) {
+	var request wikiReleaseActivationRequest
+	if c == nil || c.Request == nil || c.Request.Body == nil {
+		return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+	}
+	decoder := json.NewDecoder(io.LimitReader(c.Request.Body, 2*maxWikiReleaseAuthorizationBytes+1))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+	}
+	seen := map[string]struct{}{}
+	for decoder.More() {
+		fieldToken, fieldErr := decoder.Token()
+		field, ok := fieldToken.(string)
+		if fieldErr != nil || !ok {
+			return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+		}
+		if _, duplicate := seen[field]; duplicate {
+			return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+		}
+		seen[field] = struct{}{}
+		switch field {
+		case "human_decision":
+			err = decoder.Decode(&request.HumanDecision)
+		case "publish_authorization":
+			err = decoder.Decode(&request.PublishAuthorization)
+		default:
+			return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+		}
+		if err != nil {
+			return request, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+		}
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || ensureWikiReleaseJSONEOF(decoder) != nil ||
+		len(seen) != 2 || len(request.HumanDecision) == 0 || len(request.PublishAuthorization) == 0 ||
+		len(request.HumanDecision) > maxWikiReleaseAuthorizationBytes ||
+		len(request.PublishAuthorization) > maxWikiReleaseAuthorizationBytes {
+		return wikiReleaseActivationRequest{}, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid
+	}
+	return request, nil
 }
 
 type schemaWikiCreateDraftRequest struct {
@@ -939,6 +1159,21 @@ func decodeClosedSchemaWikiRequest(c *gin.Context, destination any) error {
 
 func writeSchemaWikiError(c *gin.Context, err error) {
 	switch {
+	case stderrors.Is(err, service.ErrSchemaWikiFormalCandidatePreviewRequestInvalid):
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": gin.H{
+			"code":    "SCHEMA_WIKI_FORMAL_CANDIDATE_PREVIEW_REQUEST_INVALID",
+			"message": "schema wiki formal candidate preview request invalid",
+		}})
+	case stderrors.Is(err, service.ErrSchemaWikiFormalCandidatePreviewNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": gin.H{
+			"code":    "SCHEMA_WIKI_FORMAL_CANDIDATE_PREVIEW_NOT_FOUND",
+			"message": "schema wiki formal candidate preview not found",
+		}})
+	case stderrors.Is(err, service.ErrSchemaWikiFormalCandidatePreviewBindingMismatch):
+		c.JSON(http.StatusConflict, gin.H{"success": false, "error": gin.H{
+			"code":    "SCHEMA_WIKI_FORMAL_CANDIDATE_PREVIEW_BINDING_MISMATCH",
+			"message": "schema wiki formal candidate preview binding mismatch",
+		}})
 	case stderrors.Is(err, service.ErrSchemaWikiPreparationInvalid):
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false, "error": gin.H{"message": "schema wiki preparation invalid"},

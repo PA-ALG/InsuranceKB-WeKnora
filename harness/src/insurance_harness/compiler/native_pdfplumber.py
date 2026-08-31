@@ -13,7 +13,7 @@ import math
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
-from typing import Any, Final, cast
+from typing import Any, Final, Literal, cast
 
 from insurance_harness.compiler.material_profiles import MaterialProfileResolution
 from insurance_harness.compiler.parsed_documents import (
@@ -39,6 +39,10 @@ from insurance_harness.compiler.parsed_documents import (
 )
 
 NativeBBox = tuple[str, str, str, str]
+
+_NATIVE_SELECTION_ADAPTER_VERSION_815: Final[str] = (
+    "pdfplumber-0.11.10/native-text-position.815.v1"
+)
 
 _FIXED_UNSUPPORTED: Final[tuple[str, ...]] = (
     "block_locators",
@@ -126,6 +130,91 @@ class NativePdfplumberFacts:
         return hashlib.sha256(payload).hexdigest()
 
 
+@dataclass(frozen=True, slots=True)
+class NativeTextWord815V1:
+    word_id: str
+    text: str
+    char_start: int
+    char_end: int
+    bbox: NativeBBox
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTextSpan815V1:
+    span_id: str
+    parent_block_id: str
+    page_number: int
+    char_start: int
+    char_end: int
+    rects: tuple[NativeBBox, ...]
+    exact_text: str
+    text_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTableCell815V1:
+    cell_id: str
+    table_id: str
+    page_number: int
+    row_index: int
+    column_index: int
+    exact_text: str
+    text_sha256: str
+    bbox: NativeBBox
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTableSlice815V1:
+    table_slice_id: str
+    table_id: str
+    page_numbers: tuple[int, ...]
+    ordered_cell_ids: tuple[str, ...]
+    exact_text_parts: tuple[str, ...]
+    slice_sha256: str
+
+
+NativeTableUnavailabilityReason815 = Literal[
+    "TABLE_SHAPE_INCOMPLETE",
+    "TABLE_CELL_COORDINATE_INCOMPLETE",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class NativeTableUnavailability815V1:
+    table_index: int
+    reason: NativeTableUnavailabilityReason815
+
+
+@dataclass(frozen=True, slots=True)
+class NativePdfPageProjection815V1:
+    page_number: int
+    page_width_points: str
+    page_height_points: str
+    canonical_page_text: str
+    page_text_sha256: str
+    words: tuple[NativeTextWord815V1, ...]
+    spans: tuple[NativeTextSpan815V1, ...]
+    cells: tuple[NativeTableCell815V1, ...]
+    table_slices: tuple[NativeTableSlice815V1, ...]
+    table_unavailability: tuple[NativeTableUnavailability815V1, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NativePdfSelectionProjection815V1:
+    adapter_version: str
+    coordinate_space: Literal["PDF_POINTS_TOP_LEFT_V1"]
+    source_revision_id: str
+    source_role: Literal["terms", "brochure", "rate_table"]
+    original_file_sha256: str
+    pages: tuple[NativePdfPageProjection815V1, ...]
+    parse_manifest_sha256: str
+
+    def recomputed_manifest_sha256(self) -> str:
+        payload = asdict(self)
+        payload.pop("parse_manifest_sha256")
+        return _native_815_hash("parse-manifest", payload)
+
+
 def _content_sha256(value: object) -> tuple[str, int]:
     text = "" if value is None else str(value)
     return hashlib.sha256(text.encode()).hexdigest(), len(text)
@@ -141,6 +230,41 @@ def _native_structure_hash(label: str, payload: object) -> str:
         separators=(",", ":"),
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _native_815_hash(label: str, payload: object) -> str:
+    encoded = json.dumps(
+        {"domain": f"native-pdf-selection.815:{label}", "payload": payload},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _native_subject_id_815(
+    *,
+    prefix: str,
+    source_revision_id: str,
+    file_sha256: str,
+    page_number: int,
+    subject_type: str,
+    subject_range: tuple[int, ...],
+    exact_text_sha256: str,
+) -> str:
+    digest = _native_815_hash(
+        "subject-id",
+        {
+            "adapter_version": _NATIVE_SELECTION_ADAPTER_VERSION_815,
+            "source_revision_id": source_revision_id,
+            "file_sha256": file_sha256,
+            "page_number": page_number,
+            "subject_type": subject_type,
+            "subject_range": subject_range,
+            "exact_text_sha256": exact_text_sha256,
+        },
+    )
+    return f"{prefix}-{digest}"
 
 
 def _canonical_number(value: object) -> str:
@@ -324,6 +448,376 @@ def extract_native_pdfplumber_facts(
         capability_evidence=tuple(evidence),
         supported_capabilities=tuple(supported),
         unsupported_capabilities=ordered_unsupported,
+    )
+
+
+def _union_bbox_815(values: tuple[NativeBBox, ...]) -> NativeBBox:
+    if not values:
+        raise NativePdfplumberError("native_selection_span_empty")
+    decimals = tuple(_decimal_bbox(item) for item in values)
+    return (
+        _canonical_number(min(item[0] for item in decimals)),
+        _canonical_number(min(item[1] for item in decimals)),
+        _canonical_number(max(item[2] for item in decimals)),
+        _canonical_number(max(item[3] for item in decimals)),
+    )
+
+
+def _native_text_projection_815(
+    raw_words: object,
+    *,
+    source_revision_id: str,
+    file_sha256: str,
+    page_number: int,
+) -> tuple[str, tuple[NativeTextWord815V1, ...], tuple[NativeTextSpan815V1, ...]]:
+    if not isinstance(raw_words, list):
+        raise NativePdfplumberError("invalid_native_word")
+    parsed: list[tuple[str, NativeBBox, Decimal]] = []
+    for raw in raw_words:
+        if not isinstance(raw, dict) or not {"text", "x0", "top", "x1", "bottom"}.issubset(
+            raw
+        ):
+            raise NativePdfplumberError("invalid_native_word")
+        text = raw["text"]
+        if not isinstance(text, str) or not text:
+            raise NativePdfplumberError("invalid_native_word")
+        parsed.append(
+            (
+                text,
+                _bbox((raw["x0"], raw["top"], raw["x1"], raw["bottom"])),
+                Decimal(_canonical_number(raw["top"])),
+            )
+        )
+
+    lines: list[list[tuple[str, NativeBBox, Decimal]]] = []
+    for item in parsed:
+        if not lines or abs(item[2] - lines[-1][-1][2]) > Decimal("2"):
+            lines.append([item])
+        else:
+            lines[-1].append(item)
+
+    page_parts: list[str] = []
+    words: list[NativeTextWord815V1] = []
+    spans: list[NativeTextSpan815V1] = []
+    cursor = 0
+    for line_index, line in enumerate(lines):
+        if line_index:
+            page_parts.append("\n")
+            cursor += 1
+        line_start = cursor
+        line_word_boxes: list[NativeBBox] = []
+        for word_index, (text, bbox, _top) in enumerate(line):
+            if word_index:
+                page_parts.append(" ")
+                cursor += 1
+            start = cursor
+            page_parts.append(text)
+            cursor += len(text)
+            text_sha256 = hashlib.sha256(text.encode()).hexdigest()
+            words.append(
+                NativeTextWord815V1(
+                    word_id=_native_subject_id_815(
+                        prefix="word",
+                        source_revision_id=source_revision_id,
+                        file_sha256=file_sha256,
+                        page_number=page_number,
+                        subject_type="TEXT_WORD",
+                        subject_range=(start, cursor),
+                        exact_text_sha256=text_sha256,
+                    ),
+                    text=text,
+                    char_start=start,
+                    char_end=cursor,
+                    bbox=bbox,
+                )
+            )
+            line_word_boxes.append(bbox)
+        line_end = cursor
+        exact_text = " ".join(item[0] for item in line)
+        text_sha256 = hashlib.sha256(exact_text.encode()).hexdigest()
+        spans.append(
+            NativeTextSpan815V1(
+                span_id=_native_subject_id_815(
+                    prefix="span",
+                    source_revision_id=source_revision_id,
+                    file_sha256=file_sha256,
+                    page_number=page_number,
+                    subject_type="TEXT_SPAN",
+                    subject_range=(line_start, line_end),
+                    exact_text_sha256=text_sha256,
+                ),
+                parent_block_id=_native_subject_id_815(
+                    prefix="block",
+                    source_revision_id=source_revision_id,
+                    file_sha256=file_sha256,
+                    page_number=page_number,
+                    subject_type="TEXT_BLOCK",
+                    subject_range=(line_start, line_end),
+                    exact_text_sha256=text_sha256,
+                ),
+                page_number=page_number,
+                char_start=line_start,
+                char_end=line_end,
+                rects=(_union_bbox_815(tuple(line_word_boxes)),),
+                exact_text=exact_text,
+                text_sha256=text_sha256,
+            )
+        )
+    return "".join(page_parts), tuple(words), tuple(spans)
+
+
+def _has_table_context_815(parts: tuple[str, ...]) -> bool:
+    return any(character.isalpha() for part in parts for character in part)
+
+
+def _native_table_projection_815(
+    raw_tables: object,
+    *,
+    source_revision_id: str,
+    file_sha256: str,
+    page_number: int,
+) -> tuple[
+    tuple[NativeTableCell815V1, ...],
+    tuple[NativeTableSlice815V1, ...],
+    tuple[NativeTableUnavailability815V1, ...],
+]:
+    if not isinstance(raw_tables, list):
+        raise NativePdfplumberError("native_table_shape_mismatch")
+    all_cells: list[NativeTableCell815V1] = []
+    all_slices: list[NativeTableSlice815V1] = []
+    unavailability: list[NativeTableUnavailability815V1] = []
+    for table_index, raw in enumerate(raw_tables):
+        try:
+            rows = tuple(tuple(row.cells) for row in raw.rows)
+            values = tuple(tuple(row) for row in raw.extract())
+        except (AttributeError, TypeError, ValueError, NativePdfplumberError):
+            unavailability.append(
+                NativeTableUnavailability815V1(
+                    table_index=table_index,
+                    reason="TABLE_SHAPE_INCOMPLETE",
+                )
+            )
+            continue
+        if (
+            not rows
+            or len(rows) != len(values)
+            or not rows[0]
+            or any(len(row) != len(rows[0]) for row in rows + values)
+        ):
+            unavailability.append(
+                NativeTableUnavailability815V1(
+                    table_index=table_index,
+                    reason="TABLE_SHAPE_INCOMPLETE",
+                )
+            )
+            continue
+        if any(cell_bbox is None for row in rows for cell_bbox in row):
+            unavailability.append(
+                NativeTableUnavailability815V1(
+                    table_index=table_index,
+                    reason="TABLE_CELL_COORDINATE_INCOMPLETE",
+                )
+            )
+            continue
+        normalized_values = tuple(
+            tuple("" if value is None else str(value) for value in row)
+            for row in values
+        )
+        table_text_sha256 = hashlib.sha256(
+            "\n".join("\t".join(row) for row in normalized_values).encode()
+        ).hexdigest()
+        table_id = _native_subject_id_815(
+            prefix="table",
+            source_revision_id=source_revision_id,
+            file_sha256=file_sha256,
+            page_number=page_number,
+            subject_type="TABLE",
+            subject_range=(table_index,),
+            exact_text_sha256=table_text_sha256,
+        )
+        cells_by_position: dict[tuple[int, int], NativeTableCell815V1] = {}
+        table_cells: list[NativeTableCell815V1] = []
+        try:
+            for row_index, (row_boxes, row_values) in enumerate(
+                zip(rows, normalized_values, strict=True)
+            ):
+                for column_index, (cell_bbox, exact_text) in enumerate(
+                    zip(row_boxes, row_values, strict=True)
+                ):
+                    text_sha256 = hashlib.sha256(exact_text.encode()).hexdigest()
+                    cell = NativeTableCell815V1(
+                        cell_id=_native_subject_id_815(
+                            prefix="cell",
+                            source_revision_id=source_revision_id,
+                            file_sha256=file_sha256,
+                            page_number=page_number,
+                            subject_type="TABLE_CELL",
+                            subject_range=(table_index, row_index, column_index),
+                            exact_text_sha256=text_sha256,
+                        ),
+                        table_id=table_id,
+                        page_number=page_number,
+                        row_index=row_index,
+                        column_index=column_index,
+                        exact_text=exact_text,
+                        text_sha256=text_sha256,
+                        bbox=_bbox(cell_bbox),
+                    )
+                    cells_by_position[(row_index, column_index)] = cell
+                    table_cells.append(cell)
+        except (TypeError, ValueError, NativePdfplumberError):
+            unavailability.append(
+                NativeTableUnavailability815V1(
+                    table_index=table_index,
+                    reason="TABLE_CELL_COORDINATE_INCOMPLETE",
+                )
+            )
+            continue
+        all_cells.extend(table_cells)
+
+        nonempty_positions = tuple(
+            tuple(
+                (row_index, column_index)
+                for column_index, value in enumerate(row_values)
+                if value
+            )
+            for row_index, row_values in enumerate(normalized_values)
+        )
+        header_positions = nonempty_positions[0]
+        footnote_rows = tuple(
+            row_index
+            for row_index in range(1, len(normalized_values))
+            if (positions := nonempty_positions[row_index])
+            and normalized_values[positions[0][0]][positions[0][1]].startswith(
+                ("注", "说明", "备注")
+            )
+        )
+        footnote_positions = tuple(
+            position
+            for row_index in footnote_rows
+            for position in nonempty_positions[row_index]
+        )
+        for row_index in range(1, len(normalized_values)):
+            if row_index in footnote_rows:
+                continue
+            row_positions = nonempty_positions[row_index]
+            ordered_positions = (
+                *header_positions,
+                *row_positions,
+                *footnote_positions,
+            )
+            if len(header_positions) < 2 or len(row_positions) < 2:
+                continue
+            parts = tuple(
+                normalized_values[row][column] for row, column in ordered_positions
+            )
+            if not _has_table_context_815(parts):
+                continue
+            ordered_cells = tuple(cells_by_position[position] for position in ordered_positions)
+            slice_payload = {
+                "table_id": table_id,
+                "page_numbers": (page_number,),
+                "ordered_cell_ids": tuple(item.cell_id for item in ordered_cells),
+                "exact_text_parts": parts,
+            }
+            slice_sha256 = _native_815_hash("table-slice", slice_payload)
+            all_slices.append(
+                NativeTableSlice815V1(
+                    table_slice_id=_native_subject_id_815(
+                        prefix="table-slice",
+                        source_revision_id=source_revision_id,
+                        file_sha256=file_sha256,
+                        page_number=page_number,
+                        subject_type="TABLE_SLICE",
+                        subject_range=(table_index, row_index),
+                        exact_text_sha256=hashlib.sha256(
+                            "\n".join(parts).encode()
+                        ).hexdigest(),
+                    ),
+                    table_id=table_id,
+                    page_numbers=(page_number,),
+                    ordered_cell_ids=tuple(item.cell_id for item in ordered_cells),
+                    exact_text_parts=parts,
+                    slice_sha256=slice_sha256,
+                )
+            )
+    return tuple(all_cells), tuple(all_slices), tuple(unavailability)
+
+
+def extract_native_pdf_selection_projection_815(
+    pdf_bytes: bytes,
+    *,
+    expected_source_sha256: str,
+    source_revision_id: str,
+    source_role: Literal["terms", "brochure", "rate_table"],
+) -> NativePdfSelectionProjection815V1:
+    """Project exact native text and positions from one read of the source PDF."""
+
+    actual_source_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    if actual_source_sha256 != expected_source_sha256:
+        raise NativePdfplumberError("source_digest_mismatch")
+    if not source_revision_id.strip() or source_role not in {
+        "terms",
+        "brochure",
+        "rate_table",
+    }:
+        raise NativePdfplumberError("native_selection_identity_invalid")
+
+    import pdfplumber
+
+    pages: list[NativePdfPageProjection815V1] = []
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            canonical_text, words, spans = _native_text_projection_815(
+                page.extract_words(
+                    use_text_flow=True,
+                    keep_blank_chars=False,
+                    x_tolerance=3,
+                    y_tolerance=3,
+                ),
+                source_revision_id=source_revision_id,
+                file_sha256=actual_source_sha256,
+                page_number=page_number,
+            )
+            cells, table_slices, table_unavailability = _native_table_projection_815(
+                page.find_tables(),
+                source_revision_id=source_revision_id,
+                file_sha256=actual_source_sha256,
+                page_number=page_number,
+            )
+            pages.append(
+                NativePdfPageProjection815V1(
+                    page_number=page_number,
+                    page_width_points=_canonical_number(page.width),
+                    page_height_points=_canonical_number(page.height),
+                    canonical_page_text=canonical_text,
+                    page_text_sha256=hashlib.sha256(canonical_text.encode()).hexdigest(),
+                    words=words,
+                    spans=spans,
+                    cells=cells,
+                    table_slices=table_slices,
+                    table_unavailability=table_unavailability,
+                )
+            )
+    if not pages:
+        raise NativePdfplumberError("native_document_empty")
+    provisional = NativePdfSelectionProjection815V1(
+        adapter_version=_NATIVE_SELECTION_ADAPTER_VERSION_815,
+        coordinate_space="PDF_POINTS_TOP_LEFT_V1",
+        source_revision_id=source_revision_id,
+        source_role=source_role,
+        original_file_sha256=actual_source_sha256,
+        pages=tuple(pages),
+        parse_manifest_sha256="",
+    )
+    return NativePdfSelectionProjection815V1(
+        adapter_version=provisional.adapter_version,
+        coordinate_space=provisional.coordinate_space,
+        source_revision_id=provisional.source_revision_id,
+        source_role=provisional.source_role,
+        original_file_sha256=provisional.original_file_sha256,
+        pages=provisional.pages,
+        parse_manifest_sha256=provisional.recomputed_manifest_sha256(),
     )
 
 

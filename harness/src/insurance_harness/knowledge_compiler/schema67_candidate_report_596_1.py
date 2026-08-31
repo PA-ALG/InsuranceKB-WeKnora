@@ -470,7 +470,7 @@ def compile_schema67_candidate_report(
         provider_calls=batch.provider_calls,
         transport_retries=batch.transport_retries,
         response_contract_repairs=batch.response_contract_repairs,
-        evidence_repairs=batch.evidence_repairs,
+        evidence_repairs=cast(Literal[0, 1], batch.evidence_repairs),
         repair_calls=batch.repair_calls,
         prior_provider_calls=batch.prior_provider_calls,
         cumulative_provider_calls=batch.cumulative_provider_calls,
