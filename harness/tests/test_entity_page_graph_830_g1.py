@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -28,6 +29,38 @@ _SHA_B = "b" * 64
 _SHA_C = "c" * 64
 _SHA_D = "d" * 64
 _VECTOR_SHA256 = "cffb39e5a7214e2720b54a80acacab6923afa8e00e6174befc88b3cd44e069d1"
+
+
+def _canonical_json_bytes(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
+
+
+def _c5_object_sha256(contract: str, value: object) -> str:
+    return hashlib.sha256(
+        b"weknora.schema-wiki-c5.815.v1\0"
+        + contract.encode("ascii")
+        + b"\0"
+        + _canonical_json_bytes(value)
+    ).hexdigest()
+
+
+def _rehash_member(member: dict[str, object]) -> None:
+    payload = member["payload"]
+    assert type(payload) is dict
+    member["payload_sha256"] = schema_wiki_sha256(payload["contract"], payload)
+    preimage = {key: value for key, value in member.items() if key != "member_digest"}
+    member["member_digest"] = schema_wiki_sha256(member["contract"], preimage)
+
+
+def _rehash_manifest(wire: dict[str, object]) -> None:
+    preimage = {key: value for key, value in wire.items() if key != "manifest_sha256"}
+    wire["manifest_sha256"] = schema_wiki_sha256(wire["contract"], preimage)
 
 
 def _graph_module() -> ModuleType | None:
@@ -114,6 +147,7 @@ def _compile_actual_with(
     context_updates: dict[str, object] | None = None,
     candidate_bytes: bytes | None = None,
     evidence_authority_bytes: bytes | None = None,
+    bundle_manifest_bytes: bytes | None = None,
     profile_bytes: bytes | None = None,
 ) -> object:
     paths = _actual_paths_or_skip()
@@ -126,7 +160,11 @@ def _compile_actual_with(
             if evidence_authority_bytes is not None
             else paths["authority"].read_bytes()
         ),
-        bundle_manifest_bytes=paths["manifest"].read_bytes(),
+        bundle_manifest_bytes=(
+            bundle_manifest_bytes
+            if bundle_manifest_bytes is not None
+            else paths["manifest"].read_bytes()
+        ),
         preview_bytes=paths["preview"].read_bytes(),
         profile_bytes=profile_bytes if profile_bytes is not None else paths["profile"].read_bytes(),
         context=_actual_context(graph, **(context_updates or {})),
@@ -323,15 +361,70 @@ def test_g1_r4_fully_rehashed_section_cross_reference_drift_fails_closed() -> No
     wire = json.loads(_VECTOR.read_bytes())
     section = next(item for item in wire["members"] if item["page_kind"] == "section")
     section["payload"]["field_assertions"][0]["page_id"] = "page_crossref_drift"
-    section["payload_sha256"] = schema_wiki_sha256(
-        section["payload"]["contract"], section["payload"]
-    )
-    member_payload = {key: value for key, value in section.items() if key != "member_digest"}
-    section["member_digest"] = schema_wiki_sha256(section["contract"], member_payload)
-    manifest_payload = {key: value for key, value in wire.items() if key != "manifest_sha256"}
-    wire["manifest_sha256"] = schema_wiki_sha256(wire["contract"], manifest_payload)
+    _rehash_member(section)
+    _rehash_manifest(wire)
 
     with pytest.raises(ValueError, match="entity page manifest closure or hash mismatch"):
+        graph.EntityPageManifestV1.model_validate(wire)
+
+
+def test_g1_r2_fully_rehashed_overview_section_page_drift_fails_closed() -> None:
+    graph = _graph_module()
+    if graph is None:
+        _legacy_fail("G1-R2", "overview-to-section page topology closure", "no compiler")
+
+    wire = json.loads(_VECTOR.read_bytes())
+    overview = next(item for item in wire["members"] if item["page_kind"] == "overview")
+    overview["payload"]["ordered_section_page_ids"][0] = "page_section_drift"
+    _rehash_member(overview)
+    _rehash_manifest(wire)
+
+    with pytest.raises(ValueError, match="entity page manifest closure or hash mismatch"):
+        graph.EntityPageManifestV1.model_validate(wire)
+
+
+@pytest.mark.parametrize(
+    "reference_key",
+    ("citation_sha256s", "evidence_receipt_sha256s"),
+)
+def test_g1_r4_fully_rehashed_field_reference_evidence_drift_fails_closed(
+    reference_key: str,
+) -> None:
+    graph = _graph_module()
+    if graph is None:
+        _legacy_fail("G1-R4", "field citation and receipt reference closure", "no compiler")
+
+    wire = json.loads(_VECTOR.read_bytes())
+    members = wire["members"]
+    field = next(
+        item
+        for item in members
+        if item["page_kind"] == "field" and item["stable_key"] == "insured_eligibility"
+    )
+    replacement = list(field["payload"]["reference"][reference_key])
+    if reference_key == "citation_sha256s":
+        replacement[0] = _SHA_A
+    else:
+        replacement.append(_SHA_A)
+
+    affected = [field]
+    field["payload"]["reference"][reference_key] = replacement
+    for member in members:
+        if member["page_kind"] not in ("overview", "section"):
+            continue
+        matching = [
+            reference
+            for reference in member["payload"]["field_assertions"]
+            if reference["field_key"] == "insured_eligibility"
+        ]
+        if matching:
+            matching[0][reference_key] = replacement
+            affected.append(member)
+    for member in affected:
+        _rehash_member(member)
+    _rehash_manifest(wire)
+
+    with pytest.raises(ValueError, match="FieldAssertion evidence reference mismatch"):
         graph.EntityPageManifestV1.model_validate(wire)
 
 
@@ -495,6 +588,47 @@ def test_actual_c5_replay_matches_frozen_contract_vector_or_skips_explicitly() -
     actual = _compile_actual_with(graph)
 
     assert actual == vector
+
+
+def test_actual_fully_rehashed_missing_source_authority_fails_closed() -> None:
+    graph = _graph_module()
+    if graph is None:
+        _legacy_fail("G1-R4", "every citation has one source authority", "no compiler")
+
+    paths = _actual_paths_or_skip()
+    authority = json.loads(paths["authority"].read_bytes())
+    authority["source_authorities"] = []
+    authority_payload = {
+        key: value for key, value in authority.items() if key != "authority_sha256"
+    }
+    authority["authority_sha256"] = schema_wiki_sha256(authority["contract"], authority_payload)
+    authority_bytes = _canonical_json_bytes(authority)
+    authority_file_sha256 = graph.sha256_hex(authority_bytes)
+
+    bundle = json.loads(paths["manifest"].read_bytes())
+    bundle["candidate_evidence_authority_sha256"] = authority["authority_sha256"]
+    bundle["candidate_evidence_authority_file_sha256"] = authority_file_sha256
+    authority_member = next(
+        item for item in bundle["members"] if item["name"] == "candidate-evidence-authority.json"
+    )
+    authority_member["sha256"] = authority_file_sha256
+    authority_member["size_bytes"] = len(authority_bytes)
+    bundle_payload = {key: value for key, value in bundle.items() if key != "manifest_sha256"}
+    bundle["manifest_sha256"] = _c5_object_sha256(bundle["contract"], bundle_payload)
+    bundle_bytes = _canonical_json_bytes(bundle)
+
+    with pytest.raises(graph.EntityPageGraphError):
+        _compile_actual_with(
+            graph,
+            evidence_authority_bytes=authority_bytes,
+            bundle_manifest_bytes=bundle_bytes,
+            context_updates={
+                "expected_evidence_authority_sha256": authority["authority_sha256"],
+                "expected_evidence_authority_file_sha256": authority_file_sha256,
+                "expected_bundle_manifest_sha256": bundle["manifest_sha256"],
+                "expected_bundle_manifest_file_sha256": graph.sha256_hex(bundle_bytes),
+            },
+        )
 
 
 def test_actual_external_drift_always_raises_stable_graph_error() -> None:

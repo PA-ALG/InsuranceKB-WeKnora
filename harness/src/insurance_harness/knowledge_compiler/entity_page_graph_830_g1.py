@@ -302,6 +302,15 @@ class FieldAssertionPayloadV1(_FrozenModel):
             value_snapshot=self.value_snapshot,
         ):
             raise ValueError("FieldAssertion claim hash mismatch")
+        citation_sha256s = tuple(item.citation_sha256 for item in self.citations)
+        evidence_receipt_sha256s = tuple(
+            dict.fromkeys(item.evidence_receipt_sha256 for item in self.citations)
+        )
+        if (
+            self.reference.citation_sha256s != citation_sha256s
+            or self.reference.evidence_receipt_sha256s != evidence_receipt_sha256s
+        ):
+            raise ValueError("FieldAssertion evidence reference mismatch")
         if self.state == "unknown":
             valid = (
                 self.value_snapshot is None
@@ -480,6 +489,8 @@ class EntityPageManifestV1(_FrozenModel):
             canonical_reference_by_field.get(field_key)
             for field_key in self.profile.ordered_field_keys
         )
+        section_members = [item for item in self.members if item.page_kind == "section"]
+        expected_section_page_ids = tuple(item.page_id for item in section_members)
         overview_members = [item for item in self.members if item.page_kind == "overview"]
         overview_topology_valid = len(overview_members) == 1 and isinstance(
             overview_members[0].payload, EntityOverviewPayloadV1
@@ -489,9 +500,9 @@ class EntityPageManifestV1(_FrozenModel):
             overview_topology_valid = (
                 overview_payload.entity_id == self.entity_id
                 and overview_payload.entity_version_id == self.entity_version_id
+                and overview_payload.ordered_section_page_ids == expected_section_page_ids
                 and overview_payload.field_assertions == expected_overview_references
             )
-        section_members = [item for item in self.members if item.page_kind == "section"]
         section_topology_valid = len(section_members) == len(self.profile.sections) and all(
             isinstance(member.payload, EntitySectionPayloadV1)
             and member.stable_key == section.section_key
@@ -558,6 +569,35 @@ class EntityPageManifestV1(_FrozenModel):
             )
             for item in references
         )
+        source_authority_keys = tuple(
+            (
+                item.source_role,
+                item.source_sha256,
+                item.knowledge_id,
+                item.revision_source_id,
+                item.evidence_parse_attempt_id,
+                item.parsed_document_sha256,
+                item.parse_manifest_sha256,
+            )
+            for item in self.input_authority.source_authorities
+        )
+        source_authority_key_set = set(source_authority_keys)
+        citation_authority_keys = tuple(
+            (
+                citation.source_role,
+                citation.source_sha256,
+                citation.knowledge_id,
+                citation.source_revision_id,
+                citation.parse_attempt_id,
+                citation.parsed_document_sha256,
+                citation.parse_manifest_sha256,
+            )
+            for payload in field_payloads
+            for citation in payload.citations
+        )
+        citation_source_authority_valid = len(source_authority_keys) == len(
+            source_authority_key_set
+        ) and all(item in source_authority_key_set for item in citation_authority_keys)
         if (
             actual_order != expected_order
             or len(page_ids) != len(set(page_ids))
@@ -572,6 +612,7 @@ class EntityPageManifestV1(_FrozenModel):
             }
             or not common_valid
             or not reference_authority_valid
+            or not citation_source_authority_valid
             or not overview_topology_valid
             or not section_topology_valid
             or not field_topology_valid
