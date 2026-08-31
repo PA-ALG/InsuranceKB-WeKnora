@@ -1,0 +1,18 @@
+{
+  "contract": "weknora.830.b0-branch-symbolic-alias-accounting.v1",
+  "manifest_branch_count": 392,
+  "local_branch_count": 310,
+  "concrete_remote_tracking_branch_count": 82,
+  "count_equation": "392 = 310 local + 82 concrete remote-tracking branches",
+  "live_ref_count_including_symbolic_alias": 393,
+  "excluded_symbolic_aliases": [
+    {
+      "ref": "refs/remotes/origin/HEAD",
+      "target": "refs/remotes/origin/main",
+      "counted_as_independent_branch_history": false,
+      "reason": "A symbolic default-branch alias has no independent branch history and would double-count origin/main."
+    }
+  ],
+  "history_manifest_regenerated": false,
+  "accounting_rule": "Only concrete refs are counted in the 392-branch manifest; symbolic aliases are recorded separately."
+}

@@ -25,9 +25,12 @@ Schema67、不启动服务、不构建镜像、不修改产品代码或运行数
 - `validation/validation-baseline.json`：当前 D0–D3 入口和既有 CI 样本 p50/p95；
 - `image-impact/image-change-impact.json`：service→构建输入和 artifact identity；
 - `branch-worktree/branch-worktree-manifest.json`：全量当前 refs/worktrees 机械索引；
+- `branch-worktree/symbolic-alias-accounting.json`：392 个具体 branch 与
+  `refs/remotes/origin/HEAD` symbolic alias 的非重复计数口径；
 - `integration/origin-main-diff.json`：正式 base、选择性 authority 导入与 B0 写域差异；
 - `closure/worktree-closure.json`：B0 写域、diff/status 与未集成提交闭环；
-- `review/controller-review.md`：总控集成复核占位与最终裁决边界；
+- `review/independent-review.json`：独立只读复核任务、exact candidate identity 与结论；
+- `review/controller-review.md`：独立复核结果与总控最终裁决边界；
 - `tools/verify_b0_evidence.py`：仅重算本包 hash/identity/穷尽性，不启动环境。
 
 ## Receipt 身份说明
@@ -40,8 +43,18 @@ canonical self-hash 是 `1d57527f…`。Handoff 中记录的 `0e24db1…` 实际
 ## 裁决边界
 
 本包可证明 B0 所需证据已经冻结并可机械重算，但执行窗口不会自行宣布最终路线 PASS。
-`INDEPENDENT_REVIEW=WAITING_FOR_CONTROLLER`；只有总控在冻结 commit 上复核后才能改变
-B0 状态。G1 及后续 Goal 全部保持 `LOCKED`。
+独立只读任务 `B0-独立复核`（`01a057ef-b006-7362-9ac1-b1ddf4e5f851`）对
+`1c752133afd204cc9fb93d1948d78e6490fb1c7b` / tree
+`b8d503233128ac21607ef86dd39d9f8eb5311af9` 给出 `INDEPENDENT_REVIEW=PASS`，
+`unresolved=0`。这不替代总控最终裁决；`CONTROLLER_FINAL_ADJUDICATION=PENDING`，
+G1 及后续 Goal 全部保持 `LOCKED`。
+
+## Branch 计数口径
+
+机械索引的 392 个 branch 恰好等于 `310 local + 82 concrete remote-tracking`。
+`refs/remotes/origin/HEAD` 是指向 `refs/remotes/origin/main` 的 symbolic alias，
+不是独立 branch history，因此不计入 392；含该 alias 的 live ref 枚举为 393。
+此口径单独冻结，不重新生成或改写 392 项历史清单。
 
 ## 非自指 Git 身份合同
 

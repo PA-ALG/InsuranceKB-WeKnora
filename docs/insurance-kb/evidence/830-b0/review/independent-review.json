@@ -1,0 +1,26 @@
+{
+  "contract": "weknora.830.b0-independent-review.v1",
+  "goal_id": "B0",
+  "reviewer_task_title": "B0-独立复核",
+  "reviewer_task_id": "01a057ef-b006-7362-9ac1-b1ddf4e5f851",
+  "review_mode": "READ_ONLY",
+  "reviewed_head": "1c752133afd204cc9fb93d1948d78e6490fb1c7b",
+  "reviewed_tree": "b8d503233128ac21607ef86dd39d9f8eb5311af9",
+  "formal_base": "99205db986eae2a9fa4bc956c053b94298d0b114",
+  "result": "PASS",
+  "checks": [
+    {"id": "IDENTITY_AND_CLEAN_STATE", "status": "PASS", "summary": "Exact candidate HEAD/tree and clean worktree/index were independently observed."},
+    {"id": "FINAL_VERIFIER", "status": "PASS", "summary": "The read-only verifier returned PASS at the reviewed HEAD."},
+    {"id": "815_FLOW_CHAIN", "status": "PASS", "summary": "Commit/tree/runtime/release/current/pinned and 7 sections, 67 fields, 17 citations were cross-checked without inferring quality PASS."},
+    {"id": "CITATION_AND_WORKBOOK", "status": "PASS", "summary": "All 17 page/quote/file bindings and the durable v5 workbook hash/count audit were checked."},
+    {"id": "FINITE_DISPOSITION", "status": "PASS", "summary": "The 13-item KEEP/REWIRE/FREEZE/SUPERSEDE set is mutually exclusive, exhaustive, and has zero unresolved classifications."},
+    {"id": "VALIDATION_AND_IMAGE_IMPACT", "status": "PASS", "summary": "D0-D3 measurement truth, existing CI aggregates, artifact identity, and DOCKER_ACTION=SKIP were checked."},
+    {"id": "BRANCH_WORKTREE_INDEX", "status": "PASS", "summary": "The 392-ref and 41-worktree mechanical index, candidate scopes, and zero deletion/removal assertions were checked."},
+    {"id": "AUTHORIZED_SCOPE_AND_CLOSURE", "status": "PASS", "summary": "Only authorized B0 paths changed; product/OpenSpec/runtime effects are zero and the non-self-referential closure chain is valid."}
+  ],
+  "unresolved_issues": [],
+  "unresolved_count": 0,
+  "controller_final_adjudication": "PENDING",
+  "g1_and_later": "LOCKED",
+  "recorded_from": "Independent reviewer task result supplied to the sole B0 write lane by the controller."
+}

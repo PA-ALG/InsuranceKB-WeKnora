@@ -21,6 +21,9 @@ EVIDENCE_BASE = "9fcf3386833d822a31f2de13fdf76c3eb6b13795"
 EVIDENCE_TREE = "7314d1c9bc82dc7efb114affb6f2450d0dbd36ae"
 WORKBOOK_SHA256 = "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec"
 WORKBOOK_SIZE = 112185
+INDEPENDENT_REVIEW_TASK_ID = "01a057ef-b006-7362-9ac1-b1ddf4e5f851"
+INDEPENDENT_REVIEW_HEAD = "1c752133afd204cc9fb93d1948d78e6490fb1c7b"
+INDEPENDENT_REVIEW_TREE = "b8d503233128ac21607ef86dd39d9f8eb5311af9"
 ALLOWED_DISPOSITIONS = {"KEEP", "REWIRE", "FREEZE", "SUPERSEDE"}
 EXPECTED_DISPOSITIONS = {"KEEP": 4, "REWIRE": 3, "FREEZE": 2, "SUPERSEDE": 4}
 ALLOWED_CHANGED_EXACT = {
@@ -210,6 +213,13 @@ def verify_closure(closure: dict, head: str, manifest_observed: str) -> None:
     assert closure["refs_deleted"] == 0 and closure["worktrees_removed"] == 0
     assert closure["services_started"] == 0 and closure["images_built"] == 0
     assert closure["final_head_binding"] == "VERIFIER_RUNTIME_OUTPUT_AND_CONTROLLER_REVIEW"
+    independent = closure["independent_review"]
+    assert independent["task_title"] == "B0-独立复核"
+    assert independent["task_id"] == INDEPENDENT_REVIEW_TASK_ID
+    assert independent["reviewed_head"] == INDEPENDENT_REVIEW_HEAD
+    assert independent["reviewed_tree"] == INDEPENDENT_REVIEW_TREE
+    assert independent["result"] == "PASS" and independent["unresolved_count"] == 0
+    assert closure["controller_decision"] == "PENDING"
 
 
 def verify_dispositions(dispositions: dict) -> None:
@@ -250,6 +260,10 @@ def verify_branch_manifest(branch_manifest: dict, head: str) -> None:
     assert counts["candidate_refs"] + counts["index_only_refs"] == len(refs)
     assert counts["candidate_worktrees"] + counts["index_only_worktrees"] == len(worktrees)
     assert counts["deleted_refs"] == 0 and counts["removed_worktrees"] == 0
+    ref_kinds = Counter(item["kind"] for item in refs)
+    assert counts["refs"] == 392
+    assert counts["local_branches"] == ref_kinds["LOCAL_BRANCH"] == 310
+    assert counts["remote_tracking_branches"] == ref_kinds["REMOTE_TRACKING_BRANCH"] == 82
     for item in [*refs, *worktrees]:
         if item["review_scope"] == "FINITE_CANDIDATE":
             assert item["disposition"] in ALLOWED_DISPOSITIONS
@@ -268,6 +282,62 @@ def verify_branch_manifest(branch_manifest: dict, head: str) -> None:
     ).splitlines()
     assert_authorized_paths(intervening_paths)
     assert_compliant_commits(f"{observed}..{head}")
+
+
+def verify_symbolic_alias_accounting(accounting: dict, branch_manifest: dict) -> None:
+    alias = accounting["excluded_symbolic_aliases"]
+    assert accounting["manifest_branch_count"] == branch_manifest["counts"]["refs"] == 392
+    assert accounting["local_branch_count"] == branch_manifest["counts"]["local_branches"] == 310
+    assert accounting["concrete_remote_tracking_branch_count"] == branch_manifest["counts"]["remote_tracking_branches"] == 82
+    assert accounting["live_ref_count_including_symbolic_alias"] == 393
+    assert accounting["history_manifest_regenerated"] is False
+    assert len(alias) == 1
+    item = alias[0]
+    assert item["ref"] == "refs/remotes/origin/HEAD"
+    assert item["target"] == "refs/remotes/origin/main"
+    assert item["counted_as_independent_branch_history"] is False
+    assert run("git", "symbolic-ref", item["ref"]) == item["target"]
+    manifest_refs = {entry["ref"] for entry in branch_manifest["refs"]}
+    assert item["ref"] not in manifest_refs and item["target"] in manifest_refs
+    local_refs = run("git", "for-each-ref", "--format=%(refname)", "refs/heads").splitlines()
+    remote_refs = run("git", "for-each-ref", "--format=%(refname)%09%(symref)", "refs/remotes").splitlines()
+    symbolic = [line.split("\t", 1) for line in remote_refs if line.split("\t", 1)[1]]
+    concrete_remote = [line.split("\t", 1)[0] for line in remote_refs if not line.split("\t", 1)[1]]
+    assert len(local_refs) == 310 and len(concrete_remote) == 82
+    assert symbolic == [[item["ref"], item["target"]]]
+    assert len(local_refs) + len(concrete_remote) == 392
+    assert len(local_refs) + len(remote_refs) == 393
+
+
+def verify_independent_review(review: dict, head: str) -> None:
+    assert review["contract"] == "weknora.830.b0-independent-review.v1"
+    assert review["goal_id"] == "B0"
+    assert review["reviewer_task_title"] == "B0-独立复核"
+    assert review["reviewer_task_id"] == INDEPENDENT_REVIEW_TASK_ID
+    assert review["review_mode"] == "READ_ONLY"
+    assert review["reviewed_head"] == INDEPENDENT_REVIEW_HEAD
+    assert review["reviewed_tree"] == INDEPENDENT_REVIEW_TREE
+    assert run("git", "rev-parse", f"{INDEPENDENT_REVIEW_HEAD}^{{tree}}") == INDEPENDENT_REVIEW_TREE
+    run("git", "merge-base", "--is-ancestor", INDEPENDENT_REVIEW_HEAD, head)
+    assert_authorized_paths(
+        run("git", "-c", "core.quotePath=false", "diff", "--name-only", f"{INDEPENDENT_REVIEW_HEAD}..{head}").splitlines()
+    )
+    assert review["result"] == "PASS"
+    assert review["unresolved_issues"] == [] and review["unresolved_count"] == 0
+    assert review["controller_final_adjudication"] == "PENDING"
+    assert review["g1_and_later"] == "LOCKED"
+    expected_checks = {
+        "IDENTITY_AND_CLEAN_STATE",
+        "FINAL_VERIFIER",
+        "815_FLOW_CHAIN",
+        "CITATION_AND_WORKBOOK",
+        "FINITE_DISPOSITION",
+        "VALIDATION_AND_IMAGE_IMPACT",
+        "BRANCH_WORKTREE_INDEX",
+        "AUTHORIZED_SCOPE_AND_CLOSURE",
+    }
+    assert {item["id"] for item in review["checks"]} == expected_checks
+    assert all(item["status"] == "PASS" for item in review["checks"])
 
 
 def verify_repo_scope(repo: Path, allow_dirty: bool) -> tuple[str, list[str]]:
@@ -362,14 +432,25 @@ def main() -> int:
     assert all(service["b0_affected"] is False for service in image["services"])
     branch_manifest = load_json(root / "branch-worktree/branch-worktree-manifest.json")
     verify_branch_manifest(branch_manifest, head)
+    verify_symbolic_alias_accounting(
+        load_json(root / "branch-worktree/symbolic-alias-accounting.json"),
+        branch_manifest,
+    )
+    verify_independent_review(load_json(root / "review/independent-review.json"), head)
     verify_closure(
         load_json(root / "closure/worktree-closure.json"),
         head,
         branch_manifest["observed_head_before_evidence_commit"],
     )
     review = (root / "review/controller-review.md").read_text(encoding="utf-8")
-    assert "INDEPENDENT_REVIEW=WAITING_FOR_CONTROLLER" in review
+    assert "INDEPENDENT_REVIEW=PASS" in review
+    assert f"INDEPENDENT_REVIEW_TASK_ID={INDEPENDENT_REVIEW_TASK_ID}" in review
+    assert f"REVIEWED_HEAD={INDEPENDENT_REVIEW_HEAD}" in review
+    assert f"REVIEWED_TREE={INDEPENDENT_REVIEW_TREE}" in review
+    assert "INDEPENDENT_REVIEW_UNRESOLVED=0" in review
+    assert "CONTROLLER_FINAL_ADJUDICATION=PENDING" in review
     assert "B0_FINAL_ROUTE_DECISION=NOT_DECLARED_BY_EXECUTOR" in review
+    assert "G1_AND_LATER=LOCKED" in review
 
     result = {
         "contract": "weknora.830.b0-verification-result.v1",
@@ -380,6 +461,11 @@ def main() -> int:
         "schema67_quality_status": "DEFERRED",
         "finite_candidate_counts": EXPECTED_DISPOSITIONS,
         "finite_candidate_unclassified": 0,
+        "independent_review": "PASS",
+        "independent_review_unresolved": 0,
+        "controller_final_adjudication": "PENDING",
+        "branch_count": 392,
+        "branch_count_equation": "310 local + 82 concrete remote-tracking; origin/HEAD symbolic alias excluded",
         "docker_action": "SKIP",
         "services_started": 0,
         "images_built": 0,

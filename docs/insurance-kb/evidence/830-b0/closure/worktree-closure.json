@@ -26,5 +26,13 @@
   "physical_removal": "NOT_AUTHORIZED; MANIFEST_ONLY",
   "verification_command": "python3 docs/insurance-kb/evidence/830-b0/tools/verify_b0_evidence.py",
   "clean_status_contract": "The final verifier fails unless git status --porcelain=v1 is empty.",
+  "independent_review": {
+    "task_title": "B0-独立复核",
+    "task_id": "01a057ef-b006-7362-9ac1-b1ddf4e5f851",
+    "reviewed_head": "1c752133afd204cc9fb93d1948d78e6490fb1c7b",
+    "reviewed_tree": "b8d503233128ac21607ef86dd39d9f8eb5311af9",
+    "result": "PASS",
+    "unresolved_count": 0
+  },
   "controller_decision": "PENDING"
 }
