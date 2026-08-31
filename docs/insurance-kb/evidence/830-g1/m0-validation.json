@@ -29,6 +29,7 @@
     "presentation_profile_ordered_mapping_frozen": true,
     "presentation_profile_internal_hash_valid": true,
     "frozen_input_manifest_self_hash_valid": true,
+    "independent_rereview_unresolved_zero": true,
     "diff_check_clean": true
   },
   "baseline_tests": {
@@ -61,9 +62,12 @@
     "task_id": "01a0587d-b726-7370-b758-ec93723c9e64",
     "initial_result": "FAIL",
     "initial_unresolved_count": 3,
-    "correction_status": "PENDING_EXACT_HEAD_TREE_REREVIEW"
+    "correction_status": "PASS",
+    "reviewed_head": "bc93bbef19e24877f0a8816dc49395bc662d703f",
+    "reviewed_tree": "71601455e486fe7b21b358032939b0799cafbc8f",
+    "unresolved_count": 0
   },
-  "status": "CONTROLLER_D0_PASS_PENDING_INDEPENDENT_REREVIEW",
+  "status": "PASS",
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "69c03b2f0ccb32722a4ecd469d0148ed36afc2d75b03e8435564dbb7abf263af"
+  "receipt_sha256": "f00a90f0ca978bd396c22545e4cb4f91205df35976f0dfa8f4cebbc14b0ec492"
 }

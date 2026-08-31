@@ -5,13 +5,12 @@
 - [x] 裁决 `B0=PASS`、写入 `G1_ONLY` 状态，并保持 G2+ 锁定。
 - [x] 占用唯一 OpenSpec 126，冻结 G1-R1..G1-R9、Owner matrix 与 STOP 条件。
 - [x] 冻结 base/entity/release/SchemaPack/ordered67/B0 Evidence digest；D0、Docker SKIP。
-- [ ] 由独立只读 reviewer 复核 M0 exact head/tree；未通过前不写功能代码。
+- [x] 由独立只读 reviewer 复核 M0 exact head/tree；未通过前不写功能代码。
 
 初次只读复核在 `0f1cbe1840774aca6e1a3eb74bbc65687d97680b` /
-`447dcbde22641136effc6d612134caeb7348fc4f` 报告 3 个 BLOCKER。总控已限定纠偏为：
-最高权威 G1_ONLY 指针、exact Win1/Win2 写域与单一 M1 物理结果、实际 815
-Candidate/Claim/Evidence 及有序 PresentationProfile 身份。新 exact head/tree 复核通过前，
-本项保持未完成，Win1 不创建。
+`447dcbde22641136effc6d612134caeb7348fc4f` 报告 3 个 BLOCKER。总控在
+`bc93bbef19e24877f0a8816dc49395bc662d703f` / `71601455e486fe7b21b358032939b0799cafbc8f`
+完成唯一纠偏；同一只读 Review 随后报告 PASS、`UNRESOLVED_COUNT=0`，Win1 才启动。
 
 ## Requirement-first RED ledger
 
@@ -31,12 +30,17 @@ Candidate/Claim/Evidence 及有序 PresentationProfile 身份。新 exact head/t
 
 ## M1 · Thin real Candidate Preview
 
-- [ ] 按 G1-R1/R2/R3/R5/R9 先写并运行 Harness RED，再实现最小 entity page compiler。
+- [x] 按 G1-R1/R2/R3/R5/R9 先写并运行 Harness RED，再实现最小 entity page compiler。
 - [ ] 共享 payload contract/hash 冻结后，按 G1-R6/R7 先写 Go RED，再扩展现有 Release read。
 - [ ] 按 G1-R1/R5 先写前端 RED，再增加实体 overview/section/field/free-wiki route/navigation。
 - [ ] 使用真实 815 Candidate/Claim/Evidence Preview 证明 1 overview、1 section、3 field、空
   free_wiki、短标题、完整 namespace 与至少 1 个 exact source click。
 - [ ] 提交 M1 最薄纵切；若 48 小时无真实 Preview，STOP。
+
+Harness 合同冻结于 `8fa27956c6368502f21d52245d2cea905f0e2ce1` /
+`82e490ef47da775aed0d8176c7f31a27f6d537e9`。独立只读 Review
+`01a05917-a8e7-7b00-bf36-82bef310c2a5` 报告 PASS、`UNRESOLVED_COUNT=0`；这只关闭
+R1-R5/R8/R9 的离线合同层，不改变 R6/R7/live UI/source-click 的 NOT RUN 状态。
 
 ## M2 · Complete 76-page graph
 
