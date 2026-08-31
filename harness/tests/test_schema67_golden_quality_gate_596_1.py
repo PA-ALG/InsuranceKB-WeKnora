@@ -401,28 +401,44 @@ def _synthetic_evaluation_bundle_vector() -> Schema67GoldenEvaluationReviewBundl
     return make_schema67_golden_evaluation_review_bundle_596_1(result)
 
 
-def test_synthetic_evaluation_bundle_vector_is_canonical_and_ordered67() -> None:
-    expected = _synthetic_evaluation_bundle_vector()
-    expected_payload = expected.model_dump(mode="json")
-    expected_bytes = (
+def test_current_and_frozen_evaluation_bundles_are_canonical_and_ordered67() -> None:
+    current = _synthetic_evaluation_bundle_vector()
+    current_payload = current.model_dump(mode="json")
+    current_bytes = (
         json.dumps(
-            expected_payload,
+            current_payload,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
         + b"\n"
     )
+    assert (
+        Schema67GoldenEvaluationReviewBundleV1.model_validate_json(current_bytes)
+        == current
+    )
+    frozen_bytes = _EVALUATION_BUNDLE_VECTOR.read_bytes()
+    frozen_payload = json.loads(frozen_bytes)
+    assert frozen_bytes == (
+        json.dumps(
+            frozen_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        + b"\n"
+    )
+    frozen = Schema67GoldenEvaluationReviewBundleV1.model_validate(frozen_payload)
 
-    assert _EVALUATION_BUNDLE_VECTOR.read_bytes() == expected_bytes
-    assert expected.contract == "schema67-golden-evaluation-review-bundle.v1"
-    assert expected.evaluation_id == expected.quality_gate_receipt.receipt_sha256
-    assert tuple(row.field_id for row in expected.private_dossier.field_decisions) == (
-        APPROVED_ORDERED_FIELD_IDS
-    )
-    assert "canonical_value" not in json.dumps(
-        expected.public_aggregate.model_dump(mode="json"), ensure_ascii=False
-    )
+    for bundle in (frozen, current):
+        assert bundle.contract == "schema67-golden-evaluation-review-bundle.v1"
+        assert bundle.evaluation_id == bundle.quality_gate_receipt.receipt_sha256
+        assert tuple(row.field_id for row in bundle.private_dossier.field_decisions) == (
+            APPROVED_ORDERED_FIELD_IDS
+        )
+        assert "canonical_value" not in json.dumps(
+            bundle.public_aggregate.model_dump(mode="json"), ensure_ascii=False
+        )
 
 
 def test_provider_zero_candidate_is_fixture_only_and_never_issues_pass() -> None:

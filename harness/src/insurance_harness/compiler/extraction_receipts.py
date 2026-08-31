@@ -35,11 +35,7 @@ class _FrozenModel(BaseModel):
 
 
 def _require_canonical_fields(field_ids: tuple[str, ...]) -> None:
-    if (
-        not field_ids
-        or len(field_ids) != len(set(field_ids))
-        or field_ids != tuple(sorted(field_ids))
-    ):
+    if not field_ids or len(field_ids) != len(set(field_ids)):
         raise ValueError("invalid_attempt_field_partition")
 
 

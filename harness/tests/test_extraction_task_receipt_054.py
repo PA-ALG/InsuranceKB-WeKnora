@@ -712,6 +712,53 @@ def test_receipt_hash_round_trip_and_extra_fields_fail_closed() -> None:
         )
 
 
+def test_attempt_and_receipt_preserve_unique_task_contract_order() -> None:
+    field_ids = ("product_code", "entry_age_range")
+    payload = {
+        "task_hash": HASH_A,
+        "attempt_number": 2,
+        "purpose": "targeted_repair",
+        "field_ids": field_ids,
+        "parent_receipt_hash": HASH_B,
+    }
+    attempt = AttemptRequestV1.model_validate(
+        {
+            **payload,
+            "attempt_hash": canonical_hash(EXTRACTION_ATTEMPT_OBJECT_TYPE, payload),
+        }
+    )
+    receipt = build_attempt_receipt(
+        attempt,
+        field_outcomes=tuple(_candidate(field_id) for field_id in field_ids),
+        outcome="completed",
+        reason_code=None,
+    )
+
+    assert attempt.field_ids == field_ids
+    assert receipt.attempted_fields == field_ids
+    assert tuple(item.field_id for item in receipt.field_outcomes) == field_ids
+    assert AttemptReceiptV1.model_validate_json(receipt.model_dump_json()) == receipt
+
+    duplicate_payload = {**payload, "field_ids": ("product_code", "product_code")}
+    with pytest.raises(ValidationError, match="invalid_attempt_field_partition"):
+        AttemptRequestV1.model_validate(
+            {
+                **duplicate_payload,
+                "attempt_hash": canonical_hash(
+                    EXTRACTION_ATTEMPT_OBJECT_TYPE,
+                    duplicate_payload,
+                ),
+            }
+        )
+    with pytest.raises(ValidationError, match="receipt_field_bijection_mismatch"):
+        AttemptReceiptV1.model_validate(
+            {
+                **receipt.model_dump(mode="python"),
+                "field_outcomes": tuple(reversed(receipt.field_outcomes)),
+            }
+        )
+
+
 def test_targeted_repair_is_exact_unresolved_subset_and_only_once() -> None:
     task = _task()
     initial = build_initial_attempt(task)

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { bootstrapSchemaWikiClient } from '@/api/schema-wiki'
+import {
+  bootstrapSchemaWikiClient,
+  createSchemaWikiCitationPreviewTransport,
+  type SchemaWikiCitationPreviewTransport,
+} from '@/api/schema-wiki'
 import { get } from '@/utils/request'
 import {
   parseSchemaFieldPage,
@@ -9,6 +13,11 @@ import {
   type SchemaFieldPageV1,
   type SchemaRootPageV1,
 } from './schemaWikiContract.ts'
+import {
+  assertMedicalSchema67Presentation,
+  resolveSchemaWikiMvpExperience,
+  type SchemaWikiMvpRuntimeConfig,
+} from './schemaWikiMvpPresentation.ts'
 import SchemaWikiFieldPage from './SchemaWikiFieldPage.vue'
 
 const props = defineProps<{ knowledgeBaseId: string }>()
@@ -29,14 +38,28 @@ const loading = ref(false)
 const status = ref<'ready' | 'not-compiled' | 'error'>('error')
 const root = ref<SchemaRootPageV1 | null>(null)
 const releaseId = ref<string | null>(null)
+const activationEpoch = ref<number | null>(null)
+const activeCitationTransport = ref<SchemaWikiCitationPreviewTransport | null>(null)
 const sections = ref<ReadonlyArray<SchemaSectionPageV1>>([])
 const selectedSectionId = ref<string | null>(null)
 const selectedFieldId = ref<string | null>(null)
 const selectedField = ref<SchemaFieldPageV1 | null>(null)
+const fieldPresentation = ref<ReadonlyMap<string, string>>(new Map())
 
-const selectedSection = computed(() => sections.value.find(
-  section => section.section_id === selectedSectionId.value,
-) ?? null)
+const mvpExperience = computed(() => resolveSchemaWikiMvpExperience(
+  props.knowledgeBaseId,
+  (window.__RUNTIME_CONFIG__ ?? {}) as SchemaWikiMvpRuntimeConfig,
+))
+const fieldCount = computed(() => sections.value.reduce(
+  (count, section) => count + section.ordered_field_ids.length,
+  0,
+))
+
+function fieldTitle(fieldId: string): string {
+  const title = fieldPresentation.value.get(fieldId)
+  if (!title) throw new Error('SCHEMA_WIKI_MVP_PRESENTATION_TOPOLOGY_INVALID')
+  return title
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -180,13 +203,16 @@ async function load(): Promise<void> {
   status.value = 'error'
   root.value = null
   releaseId.value = null
+  activationEpoch.value = null
+  activeCitationTransport.value = null
   sections.value = []
   selectedSectionId.value = null
   selectedFieldId.value = null
   selectedField.value = null
+  fieldPresentation.value = new Map()
   activeClient.value = null
   try {
-    const client = await bootstrapSchemaWikiClient(props.knowledgeBaseId, {
+    const client = await bootstrapSchemaWikiClient(mvpExperience.value.servingKnowledgeBaseId, {
       get: async path => unwrapResponse(await get(path)),
     })
     const current = parseSchemaWikiCurrentEntityVersion(
@@ -198,7 +224,14 @@ async function load(): Promise<void> {
       client.getCurrentTaxonomy(),
       client.getReleaseRoot(current.active_release_id),
     ])
-    if (JSON.stringify(rootValue) !== JSON.stringify(current.root)) {
+    const pinnedRoot = parseSchemaWikiCurrentEntityVersion({
+      ...current,
+      root: rootValue,
+    }, {
+      entityId: MEDICAL_ENTITY_ID,
+      entityVersionId: MEDICAL_ENTITY_VERSION_ID,
+    }).root
+    if (JSON.stringify(pinnedRoot) !== JSON.stringify(current.root)) {
       throw new Error('SCHEMA_WIKI_RELEASE_PIN_MISMATCH')
     }
     assertConfiguredAuthority(domainsValue, taxonomyValue, current.root)
@@ -213,9 +246,17 @@ async function load(): Promise<void> {
     if (new Set(flattened).size !== flattened.length) {
       throw new Error('SCHEMA_WIKI_FIELD_TOPOLOGY_INVALID')
     }
+    fieldPresentation.value = assertMedicalSchema67Presentation(flattened)
     activeClient.value = client
     root.value = current.root
     releaseId.value = current.active_release_id
+    activationEpoch.value = current.activation_epoch
+    activeCitationTransport.value = createSchemaWikiCitationPreviewTransport(client.scope, {
+      get: async path => unwrapResponse(await get(path)),
+      getBytes: async path => new Uint8Array(await get<ArrayBuffer>(path, {
+        responseType: 'arraybuffer',
+      })),
+    })
     sections.value = Object.freeze(sectionPages)
     status.value = 'ready'
     await selectSection(sectionPages[0].section_id)
@@ -238,16 +279,30 @@ watch(() => props.knowledgeBaseId, load, { immediate: true })
     <p v-else-if="status === 'error'" class="schema-wiki-browser__state" role="alert">
       {{ $t('knowledgeEditor.wikiBrowser.schemaLoadFailed') }}
     </p>
-    <template v-else-if="root && releaseId">
+    <template v-else-if="root && releaseId && activationEpoch && activeCitationTransport">
       <aside class="schema-wiki-browser__navigation">
-        <h3>{{ root.product_display_name }}</h3>
+        <div class="schema-wiki-browser__heading">
+          <h3>{{ root.product_display_name }}</h3>
+          <span
+            v-if="mvpExperience.active && mvpExperience.label"
+            class="schema-wiki-browser__badge"
+            data-testid="schema-mvp-badge"
+          >
+            {{ mvpExperience.label }}
+          </span>
+          <p class="schema-wiki-browser__counts" data-testid="schema-mvp-counts">
+            {{ sections.length }} 个分类 · {{ fieldCount }} 个字段
+          </p>
+        </div>
         <div v-for="section in sections" :key="section.section_id" class="schema-wiki-browser__section">
           <button
             type="button"
+            data-testid="schema-section-action"
             :class="{ active: selectedSectionId === section.section_id }"
             @click="selectSection(section.section_id)"
           >
-            {{ section.display_name }}
+            <span>{{ section.display_name }}</span>
+            <small>{{ section.ordered_field_ids.length }}</small>
           </button>
           <ul v-if="selectedSectionId === section.section_id">
             <li v-for="fieldId in section.ordered_field_ids" :key="fieldId">
@@ -256,7 +311,8 @@ watch(() => props.knowledgeBaseId, load, { immediate: true })
                 :class="{ active: selectedFieldId === fieldId }"
                 @click="loadField(fieldId)"
               >
-                {{ fieldId }}
+                <span data-testid="schema-field-label">{{ fieldTitle(fieldId) }}</span>
+                <code data-testid="schema-field-code">{{ fieldId }}</code>
               </button>
             </li>
           </ul>
@@ -266,8 +322,10 @@ watch(() => props.knowledgeBaseId, load, { immediate: true })
         <SchemaWikiFieldPage
           v-if="selectedField"
           :field-page="selectedField"
-          :scope="activeClient!.scope"
+          :field-display-name="fieldTitle(selectedField.field_id)"
           :release-id="releaseId"
+          :activation-epoch="activationEpoch"
+          :preview-transport="activeCitationTransport"
         />
       </main>
     </template>
@@ -275,12 +333,23 @@ watch(() => props.knowledgeBaseId, load, { immediate: true })
 </template>
 
 <style scoped>
-.schema-wiki-browser { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; background: var(--td-bg-color-container); }
+.schema-wiki-browser { display: grid; grid-template-columns: 320px minmax(0, 1fr); height: 100%; background: var(--td-bg-color-container); }
 .schema-wiki-browser__state { grid-column: 1 / -1; margin: auto; color: var(--td-text-color-secondary); }
 .schema-wiki-browser__navigation { overflow: auto; padding: 24px 16px; border-right: 1px solid var(--td-component-border); }
-.schema-wiki-browser__navigation h3 { margin: 0 8px 20px; }
+.schema-wiki-browser__heading { margin: 0 8px 20px; }
+.schema-wiki-browser__navigation h3 { margin: 0 0 10px; }
+.schema-wiki-browser__badge { display: inline-flex; padding: 3px 9px; border-radius: 999px; background: var(--td-success-color-light); color: var(--td-success-color); font-size: 12px; }
+.schema-wiki-browser__counts { margin: 10px 0 0; color: var(--td-text-color-secondary); font-size: 12px; }
 .schema-wiki-browser__navigation button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.schema-wiki-browser__section > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
+.schema-wiki-browser__section > button small { color: var(--td-text-color-placeholder); font-weight: 400; }
 .schema-wiki-browser__navigation button.active { background: var(--td-brand-color-light); color: var(--td-brand-color); }
 .schema-wiki-browser__section ul { margin: 4px 0 12px; padding: 0 0 0 16px; list-style: none; }
+.schema-wiki-browser__section li button span { display: block; }
+.schema-wiki-browser__section li button code { display: block; margin-top: 3px; overflow: hidden; color: var(--td-text-color-placeholder); font-size: 11px; text-overflow: ellipsis; }
 .schema-wiki-browser__content { min-width: 0; overflow: auto; padding: 32px; }
+@media (max-width: 900px) {
+  .schema-wiki-browser { grid-template-columns: 260px minmax(0, 1fr); }
+  .schema-wiki-browser__content { padding: 24px; }
+}
 </style>

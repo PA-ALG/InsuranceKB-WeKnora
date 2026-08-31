@@ -26,6 +26,24 @@ func RegisterSchemaWikiRoutes(
 	if r == nil || schemaHandler == nil || access == nil || g == nil {
 		return
 	}
+	c5Guards := []gin.HandlerFunc{
+		g.Viewer(),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+	}
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/knowledgebase/:kb_id/wiki/schema-experiments/:experiment_id/versions/:version_identity",
+		apiKeyRetrieve(apiKeyFullAccess()),
+		append(append([]gin.HandlerFunc(nil), c5Guards...), schemaHandler.ReadFormalCandidatePreview)...,
+	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/knowledgebase/:kb_id/wiki/schema-experiments/:experiment_id/versions/:version_identity/fields/:field_id/selections/:selection_id/content",
+		apiKeyRetrieve(apiKeyFullAccess()),
+		append(append([]gin.HandlerFunc(nil), c5Guards...), schemaHandler.ReadFormalCandidatePreviewContent)...,
+	)
 
 	g.apiKeyRoute(
 		r,
@@ -104,6 +122,23 @@ func RegisterSchemaWikiRoutes(
 		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
 		access.RecordRawAccessEvidence(),
 		access.SealAccess(),
+	)
+	decision := g.apiKeyGroup(
+		r.Group("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id"),
+		apiKeyAny(),
+	)
+	humanDecisionGuards := append(append([]gin.HandlerFunc(nil), humanPrefix...),
+		schemaWikiKBAccess(g.KBAccessWrite("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaHandler.BindCreateScopeParams(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+	)
+	decision.POST(
+		"/schema-experiments/:experiment_id/versions/:version_identity/decision",
+		append(append([]gin.HandlerFunc(nil), humanDecisionGuards...),
+			schemaHandler.DecideFormalCandidatePreview)...,
 	)
 	human.POST(
 		"/preparations",

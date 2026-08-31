@@ -101,3 +101,44 @@ func TestSchemaWikiContainerDoesNotInjectNilCitationPort(t *testing.T) {
 	require.Contains(t, source, "NewCanonicalSchemaWikiGoldenSuccessorStatusProvider")
 	require.Contains(t, source, "NewSchemaWikiServiceWithGoldenSuccessorStatus")
 }
+
+func TestSchemaWikiFormalCandidatePreviewContainerIsConstructorSealedAndOptional(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("container.go")
+	require.NoError(t, err)
+	source := string(raw)
+	require.Contains(t, source, "WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST")
+	require.Contains(t, source, "NewSchemaWikiFormalCandidatePreviewRegistry")
+	require.Contains(t, source, "NewSchemaWikiServiceWithGoldenSuccessorStatusAndFormalCandidatePreview")
+	require.NotContains(t, source, "current/latest")
+	require.NotContains(t, source, "SchemaWikiFormalCandidatePreviewReleaseScope")
+}
+
+func TestSchemaWikiFormalCandidatePreviewContainerUsesOnlyConfiguredFrozenReleaseScope(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("container.go")
+	require.NoError(t, err)
+	source := string(raw)
+
+	disabled, err := schemaWikiFormalCandidateScopeArgs(&config.Config{})
+	require.NoError(t, err)
+	require.Empty(t, disabled)
+
+	configured := &config.Config{SchemaWikiFrozenReleaseScope: &config.SchemaWikiFrozenReleaseScopeConfig{
+		Enabled:  true,
+		TenantID: 42,
+		SpaceID:  "11111111-1111-4111-8111-111111111111",
+		RawKBID:  "22222222-2222-4222-8222-222222222222",
+		WikiKBID: "33333333-3333-4333-8333-333333333333",
+	}}
+	enabled, err := schemaWikiFormalCandidateScopeArgs(configured)
+	require.NoError(t, err)
+	require.Equal(t, []types.WikiReleaseScope{{
+		TenantID: 42,
+		SpaceID:  "11111111-1111-4111-8111-111111111111",
+		RawKBID:  "22222222-2222-4222-8222-222222222222",
+		WikiKBID: "33333333-3333-4333-8333-333333333333",
+	}}, enabled)
+	require.Contains(t, source, "formalCandidateScope...")
+	require.NotContains(t, source, "TenantID: 42")
+}

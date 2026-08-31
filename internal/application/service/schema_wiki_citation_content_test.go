@@ -109,6 +109,149 @@ func TestSchemaWikiCitationContentIssuesBoundAuthorityThenFetchesByTokenOnly(t *
 	require.Equal(t, 1, blob.calls)
 }
 
+func TestSchemaWikiCitationContentReplaysC6EvidenceIdentityThroughNativeParseAttempt(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x78}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-c6-native",
+		map[string]ed25519.PrivateKey{"citation-token-key-c6-native": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+
+	pdf := []byte("%PDF-1.7\nfixed C6 native revision\n%%EOF")
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	bindSchemaWikiCitationFixtureToBlob(t, &fixture, pdf)
+	bindSchemaWikiCitationFixtureToC6NativeIdentity(
+		t, &fixture, "c3-evidence-parse-identity", 2,
+	)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	snapshot := &schemaWikiImmutableRevisionSnapshotReaderStub{
+		authority: schemaWikiCitationPreviewAuthorityForFixture(t, fixture, pdf),
+	}
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: pdf}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks, snapshot),
+		blob,
+		codec,
+	)
+	ctx := context.WithValue(context.Background(), types.TenantIDContextKey, uint64(10003))
+
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoErrorf(t, err,
+		"knowledge=%d revision=%d attempt=%d chunks=%d/%d snapshot=%d",
+		fixture.revisions.knowledgeCalls, fixture.revisions.revisionCalls,
+		fixture.revisions.lastAttempt, fixture.chunks.getCalls, fixture.chunks.listCalls,
+		snapshot.resolveCalls,
+	)
+	require.Equal(t, int64(2), fixture.revisions.lastAttempt)
+	require.Equal(t,
+		fixture.request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt,
+		authority.RevisionSource,
+	)
+	opened, err := content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken, fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, pdf, opened)
+	require.Equal(t, 1, blob.calls)
+}
+
+func TestSchemaWikiCitationContentReadsFrozenC5SourceWithoutRewritingPublicAuthority(t *testing.T) {
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x79}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-c5-frozen",
+		map[string]ed25519.PrivateKey{"citation-token-key-c5-frozen": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	bindSchemaWikiCitationFixtureToFrozenC5ParentLineage(t, &fixture)
+	publicReceipt := fixture.request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("must not be read")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks), blob, codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	require.Equal(t, publicReceipt, authority.RevisionSource)
+	require.Zero(t, blob.calls)
+	opened, err := content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken, fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.request.frozenNativeSource.sourceBytes, opened)
+	require.Zero(t, blob.calls, "exact15 source bytes replace no database custody")
+}
+
+func TestSchemaWikiCitationContentIssuesAndReadsFrozenC5OverlappingParentOccurrence(t *testing.T) {
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x7b}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-c5-overlap",
+		map[string]ed25519.PrivateKey{"citation-token-key-c5-overlap": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	_, _ = bindSchemaWikiCitationFixtureToFrozenC5OverlappingParentLineage(t, &fixture)
+	publicReceipt := fixture.request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("must not be read")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks), blob, codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	require.Equal(t, publicReceipt, authority.RevisionSource)
+	require.Zero(t, blob.calls)
+	opened, err := content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken, fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.request.frozenNativeSource.sourceBytes, opened)
+	require.Zero(t, blob.calls)
+}
+
+func TestSchemaWikiCitationContentIssuesAndReadsFrozenC5UnicodeCodePointReceipt(t *testing.T) {
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x7a}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-c5-unicode",
+		map[string]ed25519.PrivateKey{"citation-token-key-c5-unicode": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	_, _, _, _ = bindSchemaWikiCitationFixtureToFrozenC5UnicodeQuote(t, &fixture)
+	publicReceipt := fixture.request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("must not be read")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks), blob, codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	require.Equal(t, publicReceipt, authority.RevisionSource)
+	require.Zero(t, blob.calls)
+	opened, err := content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken, fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.request.frozenNativeSource.sourceBytes, opened)
+	require.Zero(t, blob.calls)
+}
+
 func TestSchemaWikiGoldenEvidencePreviewUsesSeparatePreparationTokenClaims(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1786441800, 0).UTC()

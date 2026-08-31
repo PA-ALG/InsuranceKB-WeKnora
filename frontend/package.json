@@ -11,7 +11,8 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "test": "tsx --test",
-    "test:schema-wiki-component": "vitest run"
+    "test:component": "vitest run --config vitest.config.ts",
+    "test:schema-wiki-component": "npm run test:component"
   },
   "dependencies": {
     "@microsoft/fetch-event-source": "^2.0.1",

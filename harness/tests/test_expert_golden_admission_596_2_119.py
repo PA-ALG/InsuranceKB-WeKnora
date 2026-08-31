@@ -1331,34 +1331,10 @@ def _accepted_task_executions_with_dual_repair(
         target_final_receipt if item.field_id == target_field_id else item
         for item in execution.evidence_receipts
     )
-    initial_outputs = tuple(
-        (
-            FreeformFieldOutputV1(
-                product_version_id="596-1",
-                field_id=item.field_id,
-                state="unknown",
-                value_snapshot=None,
-                evidence=(),
-            )
-            if item.field_id == target_field_id
-            else item
-        )
-        for item in final_outputs
-    )
-    initial_receipts = tuple(
-        (
-            bind_freeform_arm_evidence(
-                field_output=next(
-                    item for item in initial_outputs if item.field_id == target_field_id
-                ),
-                documents=(),
-                manifests=(),
-            )
-            if item.field_id == target_field_id
-            else item
-        )
-        for item in final_receipts
-    )
+    # Evidence repair starts from a parsed known field whose verification failed;
+    # an explicit UNKNOWN is already a valid terminal state and is not repairable.
+    initial_outputs = final_outputs
+    initial_receipts = final_receipts
     ordered_verification_ids = tuple(sorted(item.field_id for item in execution.final_outputs))
     verification = VerificationBatchV1(
         contract="evidence-verification-batch.v1",
@@ -2314,19 +2290,10 @@ def test_candidate_rejects_fully_rehashed_dual_repair_missing_prior_pass_field()
         if item.verification_hash == execution.evidence_repair.repair_plan.parent_verification_hash
     )
     removed = next(item for item in verification.results if item.status == "PASS")
-    drifted_verification = verification.model_copy(
-        update={
-            "results": tuple(
-                item for item in verification.results if item.field_id != removed.field_id
-            )
-        }
-    )
-    drifted_plan = execution.evidence_repair.repair_plan.model_copy(
-        update={"parent_verification_hash": drifted_verification.verification_hash}
-    )
+    drifted_plan = execution.evidence_repair.repair_plan
     drifted_resolution = RepairResolutionV1(
         contract="targeted-repair-resolution.v1",
-        parent_verification_hash=drifted_verification.verification_hash,
+        parent_verification_hash=verification.verification_hash,
         repair_plan_hash=drifted_plan.plan_hash,
         results=tuple(
             item
@@ -2336,39 +2303,13 @@ def test_candidate_rejects_fully_rehashed_dual_repair_missing_prior_pass_field()
         gaps=(),
         review_items=(),
     )
-    initial_payload = {
-        "task_id": execution.initial.task_id,
-        "attempt_hash": execution.initial.attempt_hash,
-        "execution_plan_sha256": execution.initial.execution_plan_sha256,
-        "task_slice_sha256": execution.initial.task_slice_sha256,
-        "output_hashes": tuple(
-            canonical_hash("schema67-deepseek-field-output.v1", item.model_dump(mode="python"))
-            for item in execution.initial.outputs
-        ),
-        "evidence_receipt_hashes": tuple(
-            item.receipt_hash for item in execution.initial.evidence_receipts
-        ),
-        "verification_hashes": (drifted_verification.verification_hash,),
-        "receipt_chain_hashes": (),
-    }
-    drifted_initial = Schema67BoundAttemptV1(
-        task_id=execution.initial.task_id,
-        attempt_hash=execution.initial.attempt_hash,
-        execution_plan_sha256=execution.initial.execution_plan_sha256,
-        task_slice_sha256=execution.initial.task_slice_sha256,
-        outputs=execution.initial.outputs,
-        evidence_receipts=execution.initial.evidence_receipts,
-        verification_batches=(drifted_verification,),
-        receipt_chains=(),
-        bound_attempt_hash=canonical_hash("schema67-deepseek-bound-attempt.v1", initial_payload),
-    )
     trace_values = {
         "contract": "schema67-evidence-repair-trace.v2",
         "kind": "evidence_repair",
         "repair_request_sha256": execution.evidence_repair.repair_request_sha256,
         "accepted_response_sha256": execution.evidence_repair.accepted_response_sha256,
         "repair_plan_sha256": drifted_plan.plan_hash,
-        "parent_bound_attempt_hash": drifted_initial.bound_attempt_hash,
+        "parent_bound_attempt_hash": execution.initial.bound_attempt_hash,
         "repair_plan": drifted_plan.model_dump(mode="python", exclude={"plan_hash"}),
         "verifier_resolution": drifted_resolution.model_dump(
             mode="python", exclude={"resolution_hash"}
@@ -2383,7 +2324,7 @@ def test_candidate_rejects_fully_rehashed_dual_repair_missing_prior_pass_field()
     receipt_values = execution.receipt.model_dump(mode="python", exclude={"receipt_hash"})
     receipt_values.update(
         {
-            "initial_bound_attempt_hash": drifted_initial.bound_attempt_hash,
+            "initial_bound_attempt_hash": execution.initial.bound_attempt_hash,
             "evidence_repair_summary": deepseek_119._evidence_repair_summary(
                 drifted_trace
             ).model_dump(mode="python"),
@@ -2400,7 +2341,7 @@ def test_candidate_rejects_fully_rehashed_dual_repair_missing_prior_pass_field()
         match="deepseek_evidence_repair_custody_mismatch",
     ):
         DeepSeekTaskExecutionV1(
-            initial=drifted_initial,
+            initial=execution.initial,
             initial_outputs=execution.initial_outputs,
             final_outputs=execution.final_outputs,
             evidence_receipts=execution.evidence_receipts,

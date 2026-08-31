@@ -23,19 +23,21 @@ var (
 
 // WikiReleaseActivationWrite is the bounded repository transaction input.
 type WikiReleaseActivationWrite struct {
-	Release                   *types.WikiRelease
-	Members                   []types.WikiReleaseMemberSnapshot
-	ExpectedReleaseID         string
-	ExpectedActivationEpoch   uint64
-	Nonce                     string
-	AuthorizationDigest       string
-	ActivatedBy               string
-	ActivatedAt               time.Time
-	ActivationReceiptID       string
-	ExpectedPreparationID     string
-	ExpectedPreparationDigest string
-	CASFault                  func() error
-	ReceiptFault              func() error
+	Preparation                 *types.WikiReleasePreparation
+	Release                     *types.WikiRelease
+	Members                     []types.WikiReleaseMemberSnapshot
+	ExpectedReleaseID           string
+	ExpectedActivationEpoch     uint64
+	Nonce                       string
+	AuthorizationDigest         string
+	ActivatedBy                 string
+	ActivatedAt                 time.Time
+	ActivationReceiptID         string
+	ExpectedPreparationID       string
+	ExpectedPreparationDigest   string
+	RequireInitialWikiKBUnbound bool
+	CASFault                    func() error
+	ReceiptFault                func() error
 }
 
 // WikiReleaseRevertWrite moves Head to an existing immutable release without
@@ -215,6 +217,17 @@ func (r *WikiReleaseRepository) Activate(
 	}
 	var receipt *types.WikiReleaseReceipt
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if write.RequireInitialWikiKBUnbound {
+			var headCount int64
+			if err := tx.Model(&types.WikiReleaseHead{}).
+				Where("tenant_id = ? AND wiki_kb_id = ?", write.Release.TenantID, write.Release.WikiKBID).
+				Count(&headCount).Error; err != nil {
+				return err
+			}
+			if headCount != 0 {
+				return ErrWikiReleaseConflict
+			}
+		}
 		head, err := getHead(tx, write.Release.WikiReleaseScope)
 		switch {
 		case err == nil:
@@ -229,6 +242,24 @@ func (r *WikiReleaseRepository) Activate(
 			head = nil
 		default:
 			return err
+		}
+		if write.Preparation != nil {
+			preparation := *write.Preparation
+			if preparation.ID == "" || preparation.ID != write.Release.PreparationID ||
+				preparation.WikiReleaseScope != write.Release.WikiReleaseScope ||
+				preparation.Status != types.WikiReleasePreparationReady ||
+				preparation.CandidateDigest != write.Release.CandidateDigest ||
+				preparation.ManifestDigest != write.Release.ManifestDigest ||
+				preparation.ExpectedReleaseID != write.ExpectedReleaseID ||
+				preparation.ExpectedActivationEpoch != write.ExpectedActivationEpoch ||
+				preparation.ID != write.ExpectedPreparationID ||
+				preparation.PreparationDigest != write.ExpectedPreparationDigest ||
+				!wikiReleaseJSONLogicalEqualValue(preparation.Members, write.Members) {
+				return ErrWikiReleaseConflict
+			}
+			if err := tx.Create(&preparation).Error; err != nil {
+				return err
+			}
 		}
 
 		if err := tx.Create(write.Release).Error; err != nil {

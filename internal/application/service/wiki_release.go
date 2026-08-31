@@ -967,6 +967,13 @@ func digestWikiReleaseBytes(raw []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func digestSchemaWikiC6StoredManifest(raw json.RawMessage) string {
+	if digest, ok := schemaWikiC6StoredManifestDigest(raw); ok {
+		return digest
+	}
+	return ""
+}
+
 // activate is the private atomic release/member/CAS/receipt implementation.
 // Production callers must enter through ActivateReviewed.
 func (s *WikiReleaseService) activate(
@@ -1075,6 +1082,230 @@ func (s *WikiReleaseService) activate(
 		err,
 		"activate-retry",
 	)
+}
+
+func (s *WikiReleaseService) activateIsolatedFormalCandidatePreview(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	preparation *types.WikiReleasePreparation,
+	nonce string,
+	authorizationDigest string,
+) (*types.WikiReleaseReceipt, error) {
+	if s == nil || s.repository == nil || preparation == nil ||
+		!isLowerHexSHA256(preparation.CandidateDigest) ||
+		!isLowerHexSHA256(preparation.ManifestDigest) ||
+		!isLowerHexSHA256(preparation.ReviewDecisionDigest) ||
+		!isLowerHexSHA256(authorizationDigest) || nonce == "" ||
+		preparation.ID != preparation.ReviewDecisionDigest ||
+		preparation.Status != types.WikiReleasePreparationReady ||
+		len(preparation.Members) != 75 ||
+		(preparation.ExpectedReleaseID == "") != (preparation.ExpectedActivationEpoch == 0) ||
+		digestSchemaWikiC6StoredManifest(preparation.Manifest) != preparation.ManifestDigest ||
+		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest {
+		return nil, fmt.Errorf("%w: invalid isolated R1", ErrWikiReleaseInvalidAuthorization)
+	}
+	scope := preparation.WikiReleaseScope
+	if err := s.verifyAccess(ctx, principal, scope, "c6-activate-isolated-r1"); err != nil {
+		return nil, err
+	}
+	if existing, err := s.repository.GetReceipt(ctx, scope, nonce); err == nil {
+		if existing.AuthorizationDigest != authorizationDigest {
+			return nil, &WikiReleaseConflictError{Cause: errors.New("nonce digest mismatch")}
+		}
+		return existing, nil
+	} else if !errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
+		return nil, err
+	}
+	if err := s.verifyIsolatedFormalCandidateExpectedHead(
+		ctx, scope, preparation.ExpectedReleaseID, preparation.ExpectedActivationEpoch,
+	); err != nil {
+		return nil, err
+	}
+	frozenMembers, err := wikiReleaseMembersPreservingOrder(preparation.Members)
+	if err != nil {
+		return nil, err
+	}
+	if !wikiReleaseMemberSnapshotsEqual(frozenMembers, preparation.Members) {
+		return nil, fmt.Errorf("%w: changed isolated R1 members", ErrWikiReleaseInvalidAuthorization)
+	}
+	activatedAt := preparation.CreatedAt
+	release := &types.WikiRelease{
+		ID: s.newID("release"), WikiReleaseScope: scope,
+		CandidateDigest: preparation.CandidateDigest, ManifestDigest: preparation.ManifestDigest,
+		BaseReleaseID:       preparation.ExpectedReleaseID,
+		BaseActivationEpoch: preparation.ExpectedActivationEpoch, PreparationID: preparation.ID,
+		CreatedAt: activatedAt, ActivatedAt: activatedAt,
+	}
+	if s.faults.Preparation != nil {
+		if err := s.faults.Preparation(); err != nil {
+			return nil, err
+		}
+	}
+	receipt, err := s.repository.Activate(ctx, wikirepository.WikiReleaseActivationWrite{
+		Preparation: preparation, Release: release, Members: frozenMembers,
+		ExpectedReleaseID:       preparation.ExpectedReleaseID,
+		ExpectedActivationEpoch: preparation.ExpectedActivationEpoch,
+		Nonce:                   nonce, AuthorizationDigest: authorizationDigest, ActivatedBy: principal.ID,
+		ActivatedAt: activatedAt, ActivationReceiptID: s.newID("receipt"),
+		ExpectedPreparationID: preparation.ID, ExpectedPreparationDigest: preparation.PreparationDigest,
+		RequireInitialWikiKBUnbound: preparation.ExpectedReleaseID == "",
+		CASFault:                    s.faults.CAS, ReceiptFault: s.faults.Receipt,
+	})
+	if err != nil {
+		return s.resolveActivationErrorForOperation(
+			ctx, principal, scope, nonce, authorizationDigest, err, "c6-activate-isolated-r1-retry",
+		)
+	}
+	return receipt, err
+}
+
+func (s *WikiReleaseService) requireIsolatedFormalCandidateAuthorization(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	preparation *types.WikiReleasePreparation,
+	decision *types.HumanBatchDecisionReceiptV1,
+	decisionDigest string,
+	rawAuthorization []byte,
+) (string, *types.WikiReleaseReceipt, error) {
+	if s == nil || s.repository == nil || preparation == nil || decision == nil {
+		return "", nil, fmt.Errorf("%w: missing isolated authorization input", ErrWikiReleaseInvalidAuthorization)
+	}
+	authorization, err := ParsePublishAuthorizationV0(rawAuthorization)
+	if err != nil {
+		return "", nil, err
+	}
+	canonical, err := CanonicalPublishAuthorizationV0(authorization, true)
+	if err != nil || !bytes.Equal(rawAuthorization, canonical) {
+		return "", nil, fmt.Errorf("%w: non-canonical isolated authorization", ErrWikiReleaseInvalidAuthorization)
+	}
+	if s.authorizationVerifier == nil || s.authorizationVerifier.Verify(authorization) != nil {
+		return "", nil, fmt.Errorf("%w: invalid isolated authorization signature", ErrWikiReleaseInvalidAuthorization)
+	}
+	authorizationDigest := digestWikiReleaseBytes(canonical)
+	scope := types.WikiReleaseScope{
+		TenantID: authorization.TenantID, SpaceID: authorization.SpaceID,
+		RawKBID: authorization.RawKBID, WikiKBID: authorization.WikiKBID,
+	}
+	if authorization.Nonce != decision.Nonce || authorization.Nonce == "" {
+		return "", nil, fmt.Errorf("%w: isolated authorization nonce mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	existing, receiptErr := s.repository.GetReceipt(ctx, scope, authorization.Nonce)
+	exactRetry := receiptErr == nil
+	if receiptErr == nil {
+		if existing.AuthorizationDigest != authorizationDigest ||
+			authorization.ReviewDecisionDigest != decisionDigest {
+			return "", nil, &WikiReleaseConflictError{Cause: errors.New("nonce input mismatch")}
+		}
+	}
+	if authorization.Version != "0" || authorization.Action != "activate" ||
+		scope != preparation.WikiReleaseScope ||
+		authorization.PreparationID != preparation.ID ||
+		authorization.CandidateDigest != preparation.CandidateDigest ||
+		authorization.ManifestDigest != preparation.ManifestDigest ||
+		authorization.ReadyReceiptDigest != preparation.ReadyReceiptDigest ||
+		authorization.ReviewDecisionDigest != decisionDigest ||
+		authorization.ReviewPolicyID != preparation.ReviewPolicyID ||
+		(!exactRetry && authorization.ExpiresAt <= s.now().Unix()) {
+		return "", nil, fmt.Errorf("%w: isolated authorization binding mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	if authorization.ExpectedReleaseID != preparation.ExpectedReleaseID ||
+		authorization.ExpectedActivationEpoch != preparation.ExpectedActivationEpoch {
+		return "", nil, &WikiReleaseConflictError{Cause: errors.New("isolated expected head mismatch")}
+	}
+	switch {
+	case receiptErr == nil:
+		if err := s.verifyAccess(ctx, principal, scope, "c6-activate-isolated-r1-retry"); err != nil {
+			return "", nil, err
+		}
+		return authorizationDigest, existing, nil
+	case !errors.Is(receiptErr, wikirepository.ErrWikiReleaseNotFound):
+		return "", nil, receiptErr
+	}
+	if err := s.verifyAccess(ctx, principal, scope, "c6-activate-isolated-r1"); err != nil {
+		return "", nil, err
+	}
+	if err := s.verifyIsolatedFormalCandidateExpectedHead(
+		ctx, scope, preparation.ExpectedReleaseID, preparation.ExpectedActivationEpoch,
+	); err != nil {
+		return "", nil, err
+	}
+	return authorizationDigest, nil, nil
+}
+
+func (s *WikiReleaseService) isolatedFormalCandidatePreparationHead(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	nonce string,
+) (string, uint64, error) {
+	if s == nil || s.repository == nil || nonce == "" {
+		return "", 0, fmt.Errorf("%w: missing isolated head input", ErrWikiReleaseInvalidAuthorization)
+	}
+	if receipt, err := s.repository.GetReceipt(ctx, scope, nonce); err == nil {
+		if receipt.ActivationEpoch == 0 ||
+			(receipt.PreviousReleaseID == "") != (receipt.ActivationEpoch == 1) {
+			return "", 0, &WikiReleaseConflictError{Cause: errors.New("invalid prior activation receipt")}
+		}
+		return receipt.PreviousReleaseID, receipt.ActivationEpoch - 1, nil
+	} else if !errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
+		return "", 0, err
+	}
+	head, err := s.repository.GetHead(ctx, scope)
+	switch {
+	case err == nil:
+		if head.ActiveReleaseID == "" || head.ActivationEpoch == 0 {
+			return "", 0, &WikiReleaseConflictError{Cause: errors.New("invalid isolated release head")}
+		}
+		if err := s.verifyIsolatedFormalCandidateExpectedHead(
+			ctx, scope, head.ActiveReleaseID, head.ActivationEpoch,
+		); err != nil {
+			return "", 0, err
+		}
+		return head.ActiveReleaseID, head.ActivationEpoch, nil
+	case errors.Is(err, wikirepository.ErrWikiReleaseNotFound):
+		if err := s.verifyIsolatedFormalCandidateExpectedHead(ctx, scope, "", 0); err != nil {
+			return "", 0, err
+		}
+		return "", 0, nil
+	default:
+		return "", 0, err
+	}
+}
+
+func (s *WikiReleaseService) verifyIsolatedFormalCandidateExpectedHead(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	expectedReleaseID string,
+	expectedActivationEpoch uint64,
+) error {
+	if (expectedReleaseID == "") != (expectedActivationEpoch == 0) {
+		return &WikiReleaseConflictError{Cause: errors.New("invalid isolated expected head")}
+	}
+	if err := s.verifyExpectedHead(ctx, scope, &types.PublishAuthorizationV0{
+		ExpectedReleaseID: expectedReleaseID, ExpectedActivationEpoch: expectedActivationEpoch,
+	}); err != nil {
+		return err
+	}
+	wikiHead, err := s.repository.GetHeadForWikiKB(ctx, scope.TenantID, scope.WikiKBID)
+	if expectedReleaseID == "" {
+		if errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return &WikiReleaseConflictError{Cause: errors.New("isolated Wiki KB head already exists")}
+	}
+	if err != nil {
+		if errors.Is(err, wikirepository.ErrWikiReleaseNotFound) {
+			return &WikiReleaseConflictError{Cause: errors.New("isolated Wiki KB head missing")}
+		}
+		return err
+	}
+	if wikiHead.WikiReleaseScope != scope || wikiHead.ActiveReleaseID != expectedReleaseID ||
+		wikiHead.ActivationEpoch != expectedActivationEpoch {
+		return &WikiReleaseConflictError{Cause: errors.New("isolated Wiki KB head mismatch")}
+	}
+	return nil
 }
 
 func (s *WikiReleaseService) resolveActivationError(
@@ -1423,7 +1654,74 @@ func (s *WikiReleaseService) readMembers(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
+	release, err := s.repository.GetRelease(ctx, scope, releaseID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	preparation, err := s.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	storedManifestDigest := digestWikiReleaseBytes(preparation.Manifest)
+	if isSchemaWikiC6StoredManifest(preparation.Manifest) {
+		c6Digest, validC6 := schemaWikiC6StoredManifestDigest(preparation.Manifest)
+		if !validC6 {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		var ok bool
+		preparation.Members, ok = restoreSchemaWikiC6JSONBMemberPayloads(preparation.Members)
+		if !ok {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		members, ok = restoreSchemaWikiC6JSONBMemberPayloads(members)
+		if !ok {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		storedManifestDigest = c6Digest
+	}
+	if preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
+		preparation.Status != types.WikiReleasePreparationReady ||
+		preparation.CandidateDigest != release.CandidateDigest ||
+		preparation.ManifestDigest != release.ManifestDigest ||
+		storedManifestDigest != preparation.ManifestDigest ||
+		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
+		!wikiReleaseMemberSnapshotsEqual(preparation.Members, members) {
+		return nil, ErrWikiReleaseInvalidAuthorization
+	}
 	return members, nil
+}
+
+func wikiReleaseMemberSnapshotsEqual(
+	left []types.WikiReleaseMemberSnapshot,
+	right []types.WikiReleaseMemberSnapshot,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	rightBySlug := make(map[string]types.WikiReleaseMemberSnapshot, len(right))
+	for _, member := range right {
+		if member.LogicalSlug == "" {
+			return false
+		}
+		if _, exists := rightBySlug[member.LogicalSlug]; exists {
+			return false
+		}
+		rightBySlug[member.LogicalSlug] = member
+	}
+	seen := make(map[string]struct{}, len(left))
+	for _, member := range left {
+		want, exists := rightBySlug[member.LogicalSlug]
+		if !exists || member.Kind != want.Kind || member.RevisionID != want.RevisionID ||
+			member.MemberDigest != want.MemberDigest || member.Title != want.Title ||
+			member.Content != want.Content || !bytes.Equal(member.Payload, want.Payload) {
+			return false
+		}
+		if _, exists := seen[member.LogicalSlug]; exists {
+			return false
+		}
+		seen[member.LogicalSlug] = struct{}{}
+	}
+	return true
 }
 
 // IsManagedWikiKB is the only Task B guard support; ordinary PUT/DELETE

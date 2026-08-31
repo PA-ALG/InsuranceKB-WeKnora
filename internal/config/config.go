@@ -15,6 +15,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -38,6 +39,7 @@ type Config struct {
 	IM                              *IMConfig                              `yaml:"im"               json:"im"`
 	Agent                           *AgentConfig                           `yaml:"agent"            json:"agent"`
 	SchemaWikiSigning               *SchemaWikiSigningConfig               `yaml:"schema_wiki_signing" json:"-"`
+	SchemaWikiFrozenReleaseScope    *SchemaWikiFrozenReleaseScopeConfig    `yaml:"schema_wiki_frozen_release_scope" json:"-"`
 	KnowledgeRevisionSource         *KnowledgeRevisionSourceConfig         `yaml:"knowledge_revision_source" json:"knowledge_revision_source"`
 	SchemaWikiGoldenSuccessorStatus *SchemaWikiGoldenSuccessorStatusConfig `yaml:"schema_wiki_golden_successor_status" json:"-"`
 	// FrontendBaseURL is the externally-visible origin of the SPA, used
@@ -46,6 +48,66 @@ type Config struct {
 	// against window.location.origin — fine for typical single-origin
 	// deployments. Sourced from FRONTEND_BASE_URL env at startup.
 	FrontendBaseURL string `yaml:"frontend_base_url" json:"frontend_base_url"`
+}
+
+// SchemaWikiFrozenReleaseScopeConfig enables one deployment-owned immutable
+// release boundary for formal Candidate decisions. It is disabled by default;
+// identities must be supplied by deployment configuration, never source code.
+type SchemaWikiFrozenReleaseScopeConfig struct {
+	Enabled  bool   `yaml:"enabled" json:"enabled"`
+	TenantID uint64 `yaml:"tenant_id" json:"tenant_id"`
+	SpaceID  string `yaml:"space_id" json:"space_id"`
+	RawKBID  string `yaml:"raw_kb_id" json:"raw_kb_id"`
+	WikiKBID string `yaml:"wiki_kb_id" json:"wiki_kb_id"`
+}
+
+// DecodeSchemaWikiFrozenReleaseScope validates the deployment-owned boundary.
+// Missing configuration keeps formal Candidate decisions disabled. Partial,
+// stale, or non-canonical identities fail startup rather than changing scope.
+func DecodeSchemaWikiFrozenReleaseScope(cfg *Config) (*types.WikiReleaseScope, error) {
+	var configured *SchemaWikiFrozenReleaseScopeConfig
+	if cfg != nil {
+		configured = cfg.SchemaWikiFrozenReleaseScope
+	}
+	if configured == nil {
+		return nil, nil
+	}
+	ids := []string{configured.SpaceID, configured.RawKBID, configured.WikiKBID}
+	if !configured.Enabled {
+		if configured.TenantID != 0 || slicesContainNonEmpty(ids) {
+			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
+		}
+		return nil, nil
+	}
+	if configured.TenantID == 0 {
+		return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		parsed, err := uuid.Parse(id)
+		if err != nil || parsed.String() != id {
+			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
+		}
+		if _, exists := seen[id]; exists {
+			return nil, fmt.Errorf("schema wiki frozen release scope configuration invalid")
+		}
+		seen[id] = struct{}{}
+	}
+	return &types.WikiReleaseScope{
+		TenantID: configured.TenantID,
+		SpaceID:  configured.SpaceID,
+		RawKBID:  configured.RawKBID,
+		WikiKBID: configured.WikiKBID,
+	}, nil
+}
+
+func slicesContainNonEmpty(values []string) bool {
+	for _, value := range values {
+		if value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // KnowledgeRevisionSourceConfig gates the one-shot immutable source backfill.

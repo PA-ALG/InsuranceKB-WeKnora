@@ -29,9 +29,17 @@ export interface PdfJsApi {
 
 const defaultPdfJsApi: PdfJsApi = { getDocument }
 
+export function resolvePdfWorkerModuleUrl(workerUrl: string): string {
+  const separator = workerUrl.includes('?') ? '&' : '?'
+  return `${workerUrl}${separator}module-worker=mime-v1`
+}
+
 export function createPdfJsPort(api: PdfJsApi = defaultPdfJsApi): PdfPort {
   if (api === defaultPdfJsApi) {
-    GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+    // The worker asset content did not change when its nginx MIME mapping was
+    // corrected. Use a distinct URL so browsers cannot reuse the former
+    // immutable application/octet-stream cache metadata.
+    GlobalWorkerOptions.workerSrc = resolvePdfWorkerModuleUrl(pdfWorkerUrl)
   }
   return Object.freeze({
     async open(bytes: Uint8Array): Promise<OpenedPdfDocument> {

@@ -2,6 +2,8 @@ package router
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -531,6 +533,108 @@ func TestSchemaWikiCitationContentTokenAuthorityFailsBeforeRawACLAndSeal(t *test
 	}
 }
 
+type schemaWikiC5RouteReaderStub struct {
+	record  apprepo.SchemaWikiFormalCandidatePreviewRecord
+	content apprepo.SchemaWikiFormalCandidatePreviewContent
+}
+
+func (s *schemaWikiC5RouteReaderStub) ReadExact(
+	_ uint64,
+	_ apprepo.SchemaWikiFormalCandidatePreviewKey,
+) (apprepo.SchemaWikiFormalCandidatePreviewRecord, error) {
+	return s.record, nil
+}
+
+func (s *schemaWikiC5RouteReaderStub) ReadContentExact(
+	_ uint64,
+	_ apprepo.SchemaWikiFormalCandidatePreviewKey,
+	_ apprepo.SchemaWikiFormalCandidatePreviewContentRequest,
+) (apprepo.SchemaWikiFormalCandidatePreviewContent, error) {
+	return s.content, nil
+}
+
+func TestSchemaWikiFormalCandidatePreviewRoutesUseOnlyMaterialKBReadACL(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	enabled := true
+	guards := &rbacGuards{
+		cfg: &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
+		kbService: &orderedSchemaWikiKBLookup{kbs: map[string]*types.KnowledgeBase{
+			"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003},
+		}, events: &events},
+	}
+	contentBytes := []byte("%PDF exact")
+	contentSum := sha256.Sum256(contentBytes)
+	reader := &schemaWikiC5RouteReaderStub{
+		record: apprepo.SchemaWikiFormalCandidatePreviewRecord{
+			TenantID: 10003, KBID: "wiki-596-1",
+			ExperimentID:   "2a92f197-4b33-41de-a6af-c60252d6347d",
+			ManifestSHA256: strings.Repeat("a", 64), CandidateSHA256: strings.Repeat("b", 64),
+			CompanionSHA256: strings.Repeat("c", 64), TerminalSHA256: strings.Repeat("d", 64),
+			RevisionSetSHA256: strings.Repeat("e", 64), PreviewSHA256: strings.Repeat("f", 64),
+			Preview: json.RawMessage(`{"contract":"schema-wiki-formal-candidate-preview.815.v1","preview_sha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}`),
+		},
+		content: apprepo.SchemaWikiFormalCandidatePreviewContent{
+			Bytes: contentBytes, OriginalFileSHA256: hex.EncodeToString(contentSum[:]),
+		},
+	}
+	schemaService := service.NewSchemaWikiServiceWithFormalCandidatePreview(reader)
+	schemaHandler := handler.NewSchemaWikiHandler(nil, schemaService)
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
+	engine.Use(func(c *gin.Context) {
+		principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
+		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleViewer)
+		ctx = types.WithPrincipal(ctx, principal)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(types.TenantIDContextKey.String(), uint64(10003))
+		c.Set(types.PrincipalContextKey.String(), principal)
+		c.Next()
+	})
+	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), schemaHandler, access, guards)
+	base := "/api/v1/knowledgebase/wiki-596-1/wiki/schema-experiments/2a92f197-4b33-41de-a6af-c60252d6347d/versions/" + strings.Repeat("a", 64)
+	for _, path := range []string{base, base + "/fields/field-01/selections/selection-01/content"} {
+		events = nil
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		require.Equal(t, http.StatusOK, recorder.Code, "body=%s", recorder.Body.String())
+		require.Equal(t, []string{"acl:wiki-596-1"}, events)
+		require.Zero(t, access.sealCalls, "C5 must not require release scope or Active seal")
+	}
+}
+
+func TestSchemaWikiFormalCandidatePreviewRoutesRejectCurrentLatestAndWrongKB(t *testing.T) {
+	t.Parallel()
+	// Route existence and query rejection are exercised through the real handler;
+	// a foreign material KB must stop at the existing KB ACL before the service.
+	events := []string{}
+	enabled := true
+	guards := &rbacGuards{
+		cfg:       &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
+		kbService: &orderedSchemaWikiKBLookup{kbs: map[string]*types.KnowledgeBase{}, events: &events},
+	}
+	reader := &schemaWikiC5RouteReaderStub{}
+	schemaHandler := handler.NewSchemaWikiHandler(nil, service.NewSchemaWikiServiceWithFormalCandidatePreview(reader))
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		principal := types.Principal{Type: types.PrincipalWebUser, ID: "viewer"}
+		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, types.TenantRoleViewer)
+		ctx = types.WithPrincipal(ctx, principal)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(types.TenantIDContextKey.String(), uint64(10003))
+		c.Next()
+	})
+	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), schemaHandler, &schemaWikiRouteAccessMiddlewareSpy{events: &events}, guards)
+	path := "/api/v1/knowledgebase/foreign/wiki/schema-experiments/2a92f197-4b33-41de-a6af-c60252d6347d/versions/" + strings.Repeat("a", 64) + "?latest=1"
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+	require.Equal(t, http.StatusForbidden, recorder.Code)
+	require.Equal(t, []string{"acl:foreign"}, events)
+}
+
 func TestSchemaWikiCitationContentActiveTokenStillRequiresExactHeadBeforeRawACL(t *testing.T) {
 	t.Parallel()
 	exact := types.WikiReleaseScope{
@@ -631,4 +735,151 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 		"/api/v1/knowledgebase/:kb_id/wiki/schema-scope",
 	)
 	require.True(t, policyHasCapability(policy, types.APIKeyCapabilityRetrieve))
+}
+
+const (
+	schemaWikiC6RouteSpaceID      = "a8751a40-83ce-55c8-a160-079b283483ca"
+	schemaWikiC6RouteRawKBID      = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42"
+	schemaWikiC6RouteWikiKBID     = "8d5695de-f255-42d5-9a41-042ba86e97b9"
+	schemaWikiC6RouteExperimentID = "5655e43c-1adb-4282-95f7-305e58441512"
+)
+
+func schemaWikiC6DecisionRoutePath() string {
+	return "/api/v1/knowledgebase/" + schemaWikiC6RouteWikiKBID +
+		"/wiki/release-scopes/" + schemaWikiC6RouteSpaceID +
+		"/raw/" + schemaWikiC6RouteRawKBID +
+		"/schema-experiments/" + schemaWikiC6RouteExperimentID +
+		"/versions/" + strings.Repeat("a", 64) + "/decision"
+}
+
+func newSchemaWikiC6DecisionRouteEngine(
+	t *testing.T,
+	role types.TenantRole,
+	apiKeyScope *types.TenantAPIKeyScope,
+	events *[]string,
+) (*gin.Engine, *schemaWikiRouteScopeResolver, *schemaWikiRouteAccessMiddlewareSpy) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	enabled := true
+	resolver := &schemaWikiRouteScopeResolver{
+		headErr: apprepo.ErrWikiReleaseNotFound,
+		events:  events,
+	}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: events}
+	guards := &rbacGuards{
+		cfg: &config.Config{Tenant: &config.TenantConfig{EnableRBAC: &enabled}},
+		kbService: &orderedSchemaWikiKBLookup{
+			events: events,
+			kbs: map[string]*types.KnowledgeBase{
+				schemaWikiC6RouteWikiKBID: {
+					ID: schemaWikiC6RouteWikiKBID, TenantID: 10003, Type: types.KnowledgeBaseTypeWiki,
+				},
+				schemaWikiC6RouteRawKBID: {ID: schemaWikiC6RouteRawKBID, TenantID: 10003},
+			},
+		},
+	}
+	reader := &schemaWikiC5RouteReaderStub{}
+	schemaService := service.NewSchemaWikiServiceWithFormalCandidatePreview(reader)
+	schemaHandler := handler.NewSchemaWikiHandler(resolver, schemaService)
+	engine := gin.New()
+	engine.Use(middleware.ErrorHandler())
+	engine.Use(func(c *gin.Context) {
+		principal := types.Principal{Type: types.PrincipalWebUser, ID: "reviewer-815"}
+		ctx := context.WithValue(c.Request.Context(), types.TenantIDContextKey, uint64(10003))
+		ctx = context.WithValue(ctx, types.UserIDContextKey, principal.ID)
+		ctx = context.WithValue(ctx, types.TenantRoleContextKey, role)
+		ctx = types.WithPrincipal(ctx, principal)
+		if apiKeyScope != nil {
+			ctx = types.WithTenantAPIKeyScope(ctx, *apiKeyScope)
+		}
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(types.TenantIDContextKey.String(), uint64(10003))
+		c.Set(types.PrincipalContextKey.String(), principal)
+		c.Next()
+	})
+	RegisterSchemaWikiRoutes(engine.Group("/api/v1"), schemaHandler, access, guards)
+	return engine, resolver, access
+}
+
+func TestSchemaWikiC6DecisionRouteUsesExactHumanAdminDualACLSealOrder(t *testing.T) {
+	events := []string{}
+	engine, resolver, access := newSchemaWikiC6DecisionRouteEngine(
+		t, types.TenantRoleAdmin, nil, &events,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		schemaWikiC6DecisionRoutePath(),
+		strings.NewReader(`{"human_decision":{"nonce":"route-815"},"publish_authorization":null}`),
+	)
+	engine.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusBadRequest, recorder.Code, "body=%s", recorder.Body.String())
+	require.Equal(t, []string{
+		"acl:" + schemaWikiC6RouteWikiKBID,
+		"evidence:wiki",
+		"resolve",
+		"acl:" + schemaWikiC6RouteRawKBID,
+		"evidence:raw",
+		"seal",
+	}, events)
+	require.Equal(t, 1, resolver.calls)
+	require.Equal(t, 1, access.sealCalls)
+
+	for _, test := range []struct {
+		name        string
+		role        types.TenantRole
+		apiKeyScope *types.TenantAPIKeyScope
+	}{
+		{name: "viewer", role: types.TenantRoleViewer},
+		{name: "api key", role: types.TenantRoleAdmin, apiKeyScope: &types.TenantAPIKeyScope{
+			KnowledgeBaseIDs: types.StringArray{schemaWikiC6RouteWikiKBID, schemaWikiC6RouteRawKBID},
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			blockedEvents := []string{}
+			blocked, _, blockedAccess := newSchemaWikiC6DecisionRouteEngine(
+				t, test.role, test.apiKeyScope, &blockedEvents,
+			)
+			blockedRecorder := httptest.NewRecorder()
+			blockedRequest := httptest.NewRequest(
+				http.MethodPost,
+				schemaWikiC6DecisionRoutePath(),
+				strings.NewReader(`{"human_decision":{},"publish_authorization":null}`),
+			)
+			blocked.ServeHTTP(blockedRecorder, blockedRequest)
+			require.Equal(t, http.StatusForbidden, blockedRecorder.Code)
+			require.Empty(t, blockedEvents)
+			require.Zero(t, blockedAccess.sealCalls)
+		})
+	}
+}
+
+func TestSchemaWikiC6DecisionRouteRegistersOnlyBoundedPOSTPath(t *testing.T) {
+	guards := &rbacGuards{}
+	engine := gin.New()
+	RegisterSchemaWikiRoutes(
+		engine.Group("/api/v1"),
+		&handler.SchemaWikiHandler{},
+		&handler.WikiReleaseHandler{},
+		guards,
+	)
+	want := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/" +
+		"schema-experiments/:experiment_id/versions/:version_identity/decision"
+	decisionRoutes := []gin.RouteInfo{}
+	for _, route := range engine.Routes() {
+		if strings.HasSuffix(route.Path, "/decision") {
+			decisionRoutes = append(decisionRoutes, route)
+		}
+	}
+	require.Len(t, decisionRoutes, 1)
+	require.Equal(t, http.MethodPost, decisionRoutes[0].Method)
+	require.Equal(t, want, decisionRoutes[0].Path)
+
+	readEngine, _, _ := newSchemaWikiC6DecisionRouteEngine(
+		t, types.TenantRoleAdmin, nil, &[]string{},
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, schemaWikiC6DecisionRoutePath(), nil)
+	readEngine.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusNotFound, recorder.Code)
 }

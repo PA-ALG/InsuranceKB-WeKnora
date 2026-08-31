@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
+from collections.abc import Callable
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, cast
 
 import pytest
 
@@ -451,6 +453,83 @@ def test_exact_source_attempt_document_and_manifest_identity_cannot_drift() -> N
     ):
         drifted = candidate.model_copy(update={"evidence": (evidence.model_copy(update=update),)})
         assert _verify(drifted, rule).results[0].reason_codes == ("evidence_identity_mismatch",)
+
+
+@pytest.mark.parametrize(
+    (
+        "tri_state",
+        "evidence_updates",
+        "expected_reason",
+        "expected_batch_json",
+        "expected_verification_hash",
+    ),
+    [
+        (
+            "present",
+            {"field_id": "other_field", "parse_manifest_hash": "0" * 64},
+            "evidence_field_mismatch",
+            (
+                '{"contract":"evidence-verification-batch.v1",'
+                '"product_version_id":"596-1",'
+                '"source_revision_id":"revision-057",'
+                '"parse_attempt_id":"parse-attempt-1",'
+                '"parsed_document_hash":"d9d54c308d051521fbfb0fb2b3eb045fe23cb6b7095a82521e4b67b218dedf65",'
+                '"parse_manifest_hash":"b09033804e638bbd5169f1cfcaca2dd4e3f01fcefec928b2c72fce12d77b2af1",'
+                '"results":[{"field_id":"annual_deductible","status":"FAIL",'
+                '"reason_codes":["evidence_field_mismatch"],'
+                '"candidate_snapshot_hash":"51abc87f8b3dba36c823d0cc2de73124f545597cafdfa9396568fc67d9d09196"}],'
+                '"verification_hash":"c364044f6b4d9f21c27efd29293781d9093af2c60cf94b2fbcb0ebd4f449602e"}'
+            ),
+            "c364044f6b4d9f21c27efd29293781d9093af2c60cf94b2fbcb0ebd4f449602e",
+        ),
+        (
+            "absent_explicitly",
+            {"parse_manifest_hash": "0" * 64},
+            "absence_not_allowed",
+            (
+                '{"contract":"evidence-verification-batch.v1",'
+                '"product_version_id":"596-1",'
+                '"source_revision_id":"revision-057",'
+                '"parse_attempt_id":"parse-attempt-1",'
+                '"parsed_document_hash":"d9d54c308d051521fbfb0fb2b3eb045fe23cb6b7095a82521e4b67b218dedf65",'
+                '"parse_manifest_hash":"b09033804e638bbd5169f1cfcaca2dd4e3f01fcefec928b2c72fce12d77b2af1",'
+                '"results":[{"field_id":"annual_deductible","status":"FAIL",'
+                '"reason_codes":["absence_not_allowed"],'
+                '"candidate_snapshot_hash":"ec4b01b6014304aa1b81eb11bdea0d95ef49f00056d5537eabf2f49cf69fc93b"}],'
+                '"verification_hash":"5278669b4d2eb39f4250e7db91cb5fc98861ef4a84e6b700b0e9f8f52adb60d1"}'
+            ),
+            "5278669b4d2eb39f4250e7db91cb5fc98861ef4a84e6b700b0e9f8f52adb60d1",
+        ),
+    ],
+)
+def test_combined_evidence_errors_preserve_legacy_precedence_and_batch_bytes(
+    tri_state: str,
+    evidence_updates: dict[str, object],
+    expected_reason: str,
+    expected_batch_json: str,
+    expected_verification_hash: str,
+) -> None:
+    candidate = _candidate(tri_state=tri_state)
+    candidate = candidate.model_copy(
+        update={
+            "evidence": (
+                candidate.evidence[0].model_copy(update=evidence_updates),
+            )
+        }
+    )
+    batch = _verify(
+        candidate,
+        FieldRuleV1(
+            field_id=candidate.field_id,
+            value_kind="number_unit",
+            expected_unit="CNY",
+            allow_absent=False,
+        ),
+    )
+
+    assert batch.results[0].reason_codes == (expected_reason,)
+    assert batch.model_dump_json() == expected_batch_json
+    assert batch.verification_hash == expected_verification_hash
 
 
 def test_matching_quote_must_contain_the_candidate_value_snapshot() -> None:
@@ -938,6 +1017,42 @@ def test_manual_repair_plan_must_cover_every_failure_and_real_locators() -> None
         )
 
 
+def test_targeted_repair_plan_preserves_contract_order_and_exact_bijection() -> None:
+    ordered_fields = ("product_code", "entry_age_range")
+    approved = (
+        ApprovedLocatorSetV1(field_id="product_code", locator_refs=("page-1",)),
+        ApprovedLocatorSetV1(field_id="entry_age_range", locator_refs=("page-1",)),
+    )
+
+    plan = TargetedRepairPlanV1(
+        contract="targeted-repair-plan.v1",
+        parent_verification_hash="a" * 64,
+        repair_number=1,
+        field_ids=ordered_fields,
+        approved_locators=approved,
+    )
+
+    assert plan.field_ids == ordered_fields
+    assert tuple(item.field_id for item in plan.approved_locators) == ordered_fields
+
+    with pytest.raises(ValueError, match="repair locator/field bijection mismatch"):
+        TargetedRepairPlanV1(
+            contract="targeted-repair-plan.v1",
+            parent_verification_hash="a" * 64,
+            repair_number=1,
+            field_ids=("product_code", "product_code"),
+            approved_locators=(approved[0], approved[0]),
+        )
+    with pytest.raises(ValueError, match="repair locator/field bijection mismatch"):
+        TargetedRepairPlanV1(
+            contract="targeted-repair-plan.v1",
+            parent_verification_hash="a" * 64,
+            repair_number=1,
+            field_ids=ordered_fields,
+            approved_locators=tuple(reversed(approved)),
+        )
+
+
 def _task_for_verification(
     verification: VerificationBatchV1,
 ) -> ExtractionTaskV1:
@@ -1212,6 +1327,95 @@ def test_freeform_multi_source_receipt_is_replayable_without_semantic_judgment()
         documents=documents,
         manifests=manifests,
     ).receipt_hash == receipt.receipt_hash
+
+
+def test_expected_identity_scalar_injection_is_not_a_verifier_interface() -> None:
+    zero_hash = "0" * 64
+    document, manifest, _contents = _document()
+    candidate = _candidate()
+    forged_candidate = candidate.model_copy(
+        update={
+            "evidence": tuple(
+                item.model_copy(
+                    update={
+                        "parsed_document_hash": zero_hash,
+                        "parse_manifest_hash": zero_hash,
+                    }
+                )
+                for item in candidate.evidence
+            )
+        }
+    )
+    forged_manifest = manifest.model_copy(update={"document_hash": zero_hash})
+    rule = FieldRuleV1(
+        field_id=candidate.field_id,
+        value_kind="number_unit",
+        expected_unit="CNY",
+        minimum=Decimal("0"),
+        maximum=Decimal("100000"),
+        allow_absent=False,
+    )
+    signature = inspect.signature(verify_evidence_batch)
+    if "_expected_document_hash" in signature.parameters:
+        injected = cast(Callable[..., VerificationBatchV1], verify_evidence_batch)(
+            document=document,
+            manifest=forged_manifest,
+            candidates=(forged_candidate,),
+            rules=(rule,),
+            _expected_document_hash=zero_hash,
+            _expected_manifest_hash=zero_hash,
+        )
+        assert injected.results[0].status != "PASS"
+
+    assert "_expected_document_hash" not in signature.parameters
+    assert "_expected_manifest_hash" not in signature.parameters
+    with pytest.raises(VerifierContractError, match="parsed_document_manifest_mismatch"):
+        verify_evidence_batch(
+            document=document,
+            manifest=forged_manifest,
+            candidates=(forged_candidate,),
+            rules=(rule,),
+        )
+
+
+def test_expected_identity_scalar_injection_is_not_a_freeform_binding_interface() -> None:
+    zero_hash = "0" * 64
+    output, documents, manifests = _freeform_fixture()
+    forged_output = output.model_copy(
+        update={
+            "evidence": tuple(
+                item.model_copy(
+                    update={
+                        "parsed_document_hash": zero_hash,
+                        "parse_manifest_hash": zero_hash,
+                    }
+                )
+                for item in output.evidence
+            )
+        }
+    )
+    forged_manifests = tuple(
+        item.model_copy(update={"document_hash": zero_hash}) for item in manifests
+    )
+    signature = inspect.signature(bind_freeform_arm_evidence)
+    if "_expected_document_hashes" in signature.parameters:
+        with pytest.raises(VerifierContractError):
+            cast(Callable[..., FreeformEvidenceBindingReceiptV1], bind_freeform_arm_evidence)(
+                field_output=forged_output,
+                documents=documents,
+                manifests=forged_manifests,
+                _expected_document_hashes=tuple(zero_hash for _item in documents),
+                _expected_manifest_hashes=tuple(zero_hash for _item in manifests),
+            )
+
+    assert "_expected_document_hashes" not in signature.parameters
+    assert "_expected_manifest_hashes" not in signature.parameters
+    with pytest.raises(VerifierContractError, match="freeform_document_manifest_mismatch"):
+        bind_freeform_arm_evidence(
+            field_output=forged_output,
+            documents=documents,
+            manifests=forged_manifests,
+        )
 
 
 def test_freeform_mineru_block_snapshot_replays_against_native_domain_hash() -> None:

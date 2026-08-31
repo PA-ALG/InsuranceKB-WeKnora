@@ -1,3 +1,5 @@
+//go:build docreader_integration
+
 package client
 
 import (

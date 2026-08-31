@@ -526,7 +526,11 @@ class TargetedRepairPlanV1(_FrozenModel):
     @model_validator(mode="after")
     def require_exact_locator_bijection(self) -> Self:
         fields = tuple(item.field_id for item in self.approved_locators)
-        if not _canonical_tuple(self.field_ids) or fields != self.field_ids:
+        if (
+            not self.field_ids
+            or len(self.field_ids) != len(set(self.field_ids))
+            or fields != self.field_ids
+        ):
             raise ValueError("repair locator/field bijection mismatch")
         return self
 
@@ -632,7 +636,10 @@ def _quote_occurs(quote: str, content: str) -> bool:
     return bool(normalized) and normalized in _normalize_text(content)
 
 
-def _document_manifest_match(document: ParsedDocumentV1, manifest: ParseManifestV1) -> bool:
+def _document_manifest_match(
+    document: ParsedDocumentV1,
+    manifest: ParseManifestV1,
+) -> bool:
     return (
         manifest.subject == document.subject
         and manifest.parser == document.parser
@@ -712,7 +719,7 @@ def _validate_freeform_field_output(value: FreeformFieldOutputV1) -> FreeformFie
 def _validate_parsed_pair(
     document: ParsedDocumentV1,
     manifest: ParseManifestV1,
-) -> tuple[ParsedDocumentV1, ParseManifestV1]:
+) -> tuple[ParsedDocumentV1, ParseManifestV1, FreeformDocumentBindingV1]:
     try:
         exact_document = ParsedDocumentV1.model_validate(
             document.model_dump(mode="python", exclude={"document_hash"})
@@ -722,22 +729,29 @@ def _validate_parsed_pair(
         )
     except (ValidationError, AttributeError, TypeError, ValueError):
         raise VerifierContractError("freeform_parsed_pair_invalid") from None
-    if not _document_manifest_match(exact_document, exact_manifest):
+    document_hash = exact_document.document_hash
+    manifest_hash = exact_manifest.manifest_hash
+    if (
+        exact_document != document
+        or exact_manifest != manifest
+        or exact_manifest.subject != exact_document.subject
+        or exact_manifest.parser != exact_document.parser
+        or exact_manifest.attempt != exact_document.attempt
+        or exact_manifest.snapshot != exact_document.snapshot
+        or exact_manifest.document_hash != document_hash
+    ):
         raise VerifierContractError("freeform_document_manifest_mismatch")
-    return exact_document, exact_manifest
-
-
-def _freeform_binding_from_pair(
-    document: ParsedDocumentV1,
-    manifest: ParseManifestV1,
-) -> FreeformDocumentBindingV1:
-    return FreeformDocumentBindingV1(
-        source_id=document.subject.source_id,
-        source_revision_id=document.subject.source_revision_id,
-        source_sha256=document.subject.source_sha256,
-        parse_attempt_id=document.attempt.attempt_id,
-        parsed_document_hash=document.document_hash,
-        parse_manifest_hash=manifest.manifest_hash,
+    return (
+        exact_document,
+        exact_manifest,
+        FreeformDocumentBindingV1(
+            source_id=exact_document.subject.source_id,
+            source_revision_id=exact_document.subject.source_revision_id,
+            source_sha256=exact_document.subject.source_sha256,
+            parse_attempt_id=exact_document.attempt.attempt_id,
+            parsed_document_hash=document_hash,
+            parse_manifest_hash=manifest_hash,
+        ),
     )
 
 
@@ -745,14 +759,11 @@ def _verify_freeform_evidence(
     *,
     evidence: FreeformEvidenceV1,
     document: ParsedDocumentV1,
-    manifest: ParseManifestV1,
 ) -> None:
     if (
         evidence.source_sha256 != document.subject.source_sha256
         or evidence.source_revision_id != document.subject.source_revision_id
         or evidence.parse_attempt_id != document.attempt.attempt_id
-        or evidence.parsed_document_hash != document.document_hash
-        or evidence.parse_manifest_hash != manifest.manifest_hash
     ):
         raise VerifierContractError("freeform_evidence_identity_mismatch")
     fact = _locator_fact(document, evidence.locator.subject_ref)
@@ -854,26 +865,23 @@ def bind_freeform_arm_evidence(
     else:
         if not documents or len(documents) != len(manifests):
             raise VerifierContractError("freeform_document_membership_mismatch")
-        pairs = tuple(
+        validated_pairs = tuple(
             _validate_parsed_pair(document, manifest)
             for document, manifest in zip(documents, manifests, strict=True)
         )
         if any(
             document.subject.product_version_id != output.product_version_id
-            for document, _ in pairs
+            for document, _manifest, _binding in validated_pairs
         ):
             raise VerifierContractError("freeform_product_version_mismatch")
-        bindings = tuple(
-            _freeform_binding_from_pair(document, manifest)
-            for document, manifest in pairs
-        )
+        bindings = tuple(item[2] for item in validated_pairs)
         document_keys = tuple(_freeform_document_key(item) for item in bindings)
         if (
             document_keys != tuple(sorted(document_keys))
             or len(document_keys) != len(set(document_keys))
         ):
             raise VerifierContractError("freeform_document_order_invalid")
-        pairs_by_key = dict(zip(document_keys, pairs, strict=True))
+        pairs_by_key = dict(zip(document_keys, validated_pairs, strict=True))
         evidence_member_keys = {
             (
                 item.source_revision_id,
@@ -892,11 +900,10 @@ def bind_freeform_arm_evidence(
                 item.parsed_document_hash,
                 item.parse_manifest_hash,
             )
-            document, manifest = pairs_by_key[member_key]
+            document, _manifest, _binding = pairs_by_key[member_key]
             _verify_freeform_evidence(
                 evidence=item,
                 document=document,
-                manifest=manifest,
             )
 
     payload = _freeform_receipt_payload(
@@ -968,7 +975,7 @@ def replay_freeform_arm_evidence_binding(
 def _verify_evidence(
     *,
     document: ParsedDocumentV1,
-    manifest: ParseManifestV1,
+    identity: tuple[str, str],
     candidate: FieldCandidateV1,
     evidence: EvidenceSnapshotV1,
 ) -> str | None:
@@ -979,8 +986,8 @@ def _verify_evidence(
         or candidate.product_version_id != document.subject.product_version_id
         or evidence.source_revision_id != document.subject.source_revision_id
         or evidence.parse_attempt_id != document.attempt.attempt_id
-        or evidence.parsed_document_hash != document.document_hash
-        or evidence.parse_manifest_hash != manifest.manifest_hash
+        or evidence.parsed_document_hash != identity[0]
+        or evidence.parse_manifest_hash != identity[1]
     ):
         return "evidence_identity_mismatch"
     fact = _locator_fact(document, evidence.locator.subject_ref)
@@ -1112,7 +1119,7 @@ def _explicit_absence_supported(rule: FieldRuleV1, quote: str) -> bool:
 def _verify_field(
     *,
     document: ParsedDocumentV1,
-    manifest: ParseManifestV1,
+    identity: tuple[str, str],
     candidate: FieldCandidateV1,
     rule: FieldRuleV1,
 ) -> FieldVerificationV1:
@@ -1140,7 +1147,7 @@ def _verify_field(
                 if (
                     found := _verify_evidence(
                         document=document,
-                        manifest=manifest,
+                        identity=identity,
                         candidate=candidate,
                         evidence=evidence,
                     )
@@ -1184,19 +1191,38 @@ def verify_evidence_batch(
     rule_fields = tuple(item.field_id for item in rules)
     if not _canonical_tuple(fields) or fields != rule_fields:
         raise VerifierContractError("candidate_rule_field_bijection_mismatch")
-    if not _document_manifest_match(document, manifest):
+    try:
+        exact_document = ParsedDocumentV1.model_validate(
+            document.model_dump(mode="python", exclude={"document_hash"})
+        )
+        exact_manifest = ParseManifestV1.model_validate(
+            manifest.model_dump(mode="python", exclude={"manifest_hash"})
+        )
+        identity = (exact_document.document_hash, exact_manifest.manifest_hash)
+    except (ValidationError, AttributeError, TypeError, ValueError):
+        raise VerifierContractError("parsed_document_manifest_mismatch") from None
+    if (
+        exact_document != document
+        or exact_manifest != manifest
+        or exact_manifest.subject != exact_document.subject
+        or exact_manifest.parser != exact_document.parser
+        or exact_manifest.attempt != exact_document.attempt
+        or exact_manifest.snapshot != exact_document.snapshot
+        or exact_manifest.document_hash != identity[0]
+    ):
         raise VerifierContractError("parsed_document_manifest_mismatch")
+
     return VerificationBatchV1(
         contract="evidence-verification-batch.v1",
-        product_version_id=document.subject.product_version_id,
-        source_revision_id=document.subject.source_revision_id,
-        parse_attempt_id=document.attempt.attempt_id,
-        parsed_document_hash=document.document_hash,
-        parse_manifest_hash=manifest.manifest_hash,
+        product_version_id=exact_document.subject.product_version_id,
+        source_revision_id=exact_document.subject.source_revision_id,
+        parse_attempt_id=exact_document.attempt.attempt_id,
+        parsed_document_hash=identity[0],
+        parse_manifest_hash=identity[1],
         results=tuple(
             _verify_field(
-                document=document,
-                manifest=manifest,
+                document=exact_document,
+                identity=identity,
                 candidate=candidate,
                 rule=rule,
             )

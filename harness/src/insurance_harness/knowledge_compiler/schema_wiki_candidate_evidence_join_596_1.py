@@ -14,6 +14,7 @@ import threading
 import weakref
 from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from typing import TYPE_CHECKING, Annotated, Final, Literal, cast
 
 from pydantic import (
@@ -49,6 +50,10 @@ if TYPE_CHECKING:
     from insurance_harness.goldenset.expert_golden_admission_596_2 import (
         Schema67CandidateV2,
     )
+    from insurance_harness.knowledge_compiler.schema67_native_pdf_selection_815 import (
+        CoordinateEvidence815V1,
+        CoordinateEvidenceCompanion815V1,
+    )
 
 Sha256Hex = Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{64}$")]
 NonBlank = Annotated[StrictStr, Field(min_length=1)]
@@ -60,11 +65,10 @@ LocatorKind = Literal["block", "table", "cell"]
 COORDINATE_POLICY_SHA256: Final[str] = (
     "fd86399f644e6703e847686080f42799dca5376cdfb96e04fd49e6fa3b97c9ae"
 )
-SOURCE_COORDINATE_SPACE: Final[str] = (
-    "mineru_content_list_normalized_0_1000_top_left.v1"
-)
+SOURCE_COORDINATE_SPACE: Final[str] = "mineru_content_list_normalized_0_1000_top_left.v1"
 TARGET_COORDINATE_SPACE: Final[str] = "normalized_0_1e6"
 WEKNORA_MANIFEST_ALGORITHM: Final[str] = "weknora.chunk_manifest.v1"
+NATIVE_VALUE_PART_SEPARATOR_815: Final[str] = "\N{LINE SEPARATOR}"
 
 JOIN_POLICY_SHA256: Final[str] = schema_wiki_sha256(
     "schema67-citation-authority-join-policy.v1",
@@ -166,14 +170,17 @@ class LiveRevisionSourceReceiptV1(_FrozenModel):
         )
         if self.revision_source_id != expected_source:
             raise ValueError("revision_source_id mismatch")
-        if len(
-            {
-                self.file_sha256,
-                self.parsed_document_sha256,
-                self.parse_manifest_sha256,
-                self.weknora_manifest_digest,
-            }
-        ) != 4:
+        if (
+            len(
+                {
+                    self.file_sha256,
+                    self.parsed_document_sha256,
+                    self.parse_manifest_sha256,
+                    self.weknora_manifest_digest,
+                }
+            )
+            != 4
+        ):
             raise ValueError("revision digest domains must remain distinct")
         if self.source_receipt_sha256 != live_revision_source_receipt_sha256(self):
             raise ValueError("source_receipt_sha256 mismatch")
@@ -262,9 +269,7 @@ class Schema67CitationAuthorityJoinReceiptV1(_FrozenModel):
     sanitized_structure_sha256: Sha256Hex
     parser_identity_sha256: Sha256Hex
     coordinate_policy_sha256: Sha256Hex
-    source_coordinate_space: Literal[
-        "mineru_content_list_normalized_0_1000_top_left.v1"
-    ]
+    source_coordinate_space: Literal["mineru_content_list_normalized_0_1000_top_left.v1"]
     target_coordinate_space: Literal["normalized_0_1e6"]
     origin: Literal["top_left"]
     source_bbox_preimage: tuple[StrictStr, StrictStr, StrictStr, StrictStr]
@@ -272,9 +277,7 @@ class Schema67CitationAuthorityJoinReceiptV1(_FrozenModel):
     page_width: Literal[1_000_000]
     page_height: Literal[1_000_000]
     rotation_degrees: Literal[0, 90, 180, 270]
-    highlight_precision: Literal[
-        "locator_exact", "table_scoped_not_cell_exact_stop"
-    ]
+    highlight_precision: Literal["locator_exact", "table_scoped_not_cell_exact_stop"]
     tenant_id: PositiveInt
     space_id: NonBlank
     raw_kb_id: NonBlank
@@ -310,9 +313,7 @@ class Schema67CitationAuthorityJoinReceiptV1(_FrozenModel):
         ):
             raise ValueError("coordinate or join policy mismatch")
         expected_precision = (
-            "table_scoped_not_cell_exact_stop"
-            if self.locator_kind == "cell"
-            else "locator_exact"
+            "table_scoped_not_cell_exact_stop" if self.locator_kind == "cell" else "locator_exact"
         )
         if self.highlight_precision != expected_precision:
             raise ValueError("locator precision mismatch")
@@ -382,9 +383,7 @@ def _register_factory_authority(
     with _FACTORY_AUTHORITY_LOCK:
         registered = _FACTORY_AUTHORITY_REGISTRY.get(identity)
         if registered is not None and registered[0]() is not None:
-            raise CandidateEvidenceAuthorityError(
-                "CANDIDATE_EVIDENCE_AUTHORITY_INVALID"
-            )
+            raise CandidateEvidenceAuthorityError("CANDIDATE_EVIDENCE_AUTHORITY_INVALID")
         _FACTORY_AUTHORITY_REGISTRY[identity] = (
             authority_ref,
             authority.authority_sha256,
@@ -411,9 +410,7 @@ def _require_factory_authority(
             or registered[0]() is not authority
             or registered[1] != authority.authority_sha256
         ):
-            raise CandidateEvidenceAuthorityError(
-                "CANDIDATE_EVIDENCE_AUTHORITY_INVALID"
-            )
+            raise CandidateEvidenceAuthorityError("CANDIDATE_EVIDENCE_AUTHORITY_INVALID")
 
 
 def _decimal_preimage(value: object) -> tuple[Decimal, str]:
@@ -468,6 +465,72 @@ def normalize_mineru_bbox_596_1(
     return preimage, normalized
 
 
+def normalize_native_pdf_bbox_815(
+    *,
+    bbox: Sequence[object],
+    page_number: int,
+    page_count: int,
+    page_width_points: object,
+    page_height_points: object,
+) -> tuple[tuple[str, str, str, str], CitationBBoxV1]:
+    """Project exact top-left PDF points through the existing 0..1000 receipt wire."""
+
+    if (
+        type(page_number) is not int
+        or type(page_count) is not int
+        or page_number <= 0
+        or page_number > page_count
+    ):
+        raise CandidateEvidenceAuthorityError("PAGE_OUT_OF_RANGE")
+    try:
+        if len(bbox) != 4:
+            raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+        width = Decimal(str(page_width_points))
+        height = Decimal(str(page_height_points))
+        decimals = tuple(Decimal(str(value)) for value in bbox)
+    except (InvalidOperation, TypeError, ValueError):
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID") from None
+    if (
+        not width.is_finite()
+        or not height.is_finite()
+        or width <= 0
+        or height <= 0
+        or any(not value.is_finite() or value < 0 for value in decimals)
+        or decimals[0] >= decimals[2]
+        or decimals[1] >= decimals[3]
+        or decimals[2] > width
+        or decimals[3] > height
+    ):
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+
+    dimensions = (width, height, width, height)
+    scaled_values: list[int] = []
+    for coordinate, dimension in zip(decimals, dimensions, strict=True):
+        exact = Fraction(coordinate) * 1_000_000 / Fraction(dimension)
+        quotient, remainder = divmod(exact.numerator, exact.denominator)
+        if remainder * 2 >= exact.denominator:
+            quotient += 1
+        scaled_values.append(quotient)
+    scaled = tuple(scaled_values)
+    preimage = cast(
+        tuple[str, str, str, str],
+        tuple(_decimal_preimage(Decimal(value) / Decimal(1000))[1] for value in scaled),
+    )
+    try:
+        normalized = CitationBBoxV1(
+            coordinate_system="normalized_0_1e6",
+            page_width=1_000_000,
+            page_height=1_000_000,
+            x0=scaled[0],
+            y0=scaled[1],
+            x1=scaled[2],
+            y1=scaled[3],
+        )
+    except (TypeError, ValueError, ValidationError):
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID") from None
+    return preimage, normalized
+
+
 def _parser_identity_sha256(document: ParsedDocumentV1) -> str:
     return schema_wiki_sha256(
         "schema67-parser-identity.v1",
@@ -483,21 +546,15 @@ def _artifact_locator(
     rows: tuple[ParseBlockV1 | ParseTableV1 | ParseCellV1, ...]
     if kind == "block":
         rows = tuple(
-            row
-            for row in artifact.document.blocks
-            if row.block_id == evidence.locator.subject_ref
+            row for row in artifact.document.blocks if row.block_id == evidence.locator.subject_ref
         )
     elif kind == "table":
         rows = tuple(
-            row
-            for row in artifact.document.tables
-            if row.table_id == evidence.locator.subject_ref
+            row for row in artifact.document.tables if row.table_id == evidence.locator.subject_ref
         )
     elif kind == "cell":
         rows = tuple(
-            row
-            for row in artifact.document.cells
-            if row.cell_id == evidence.locator.subject_ref
+            row for row in artifact.document.cells if row.cell_id == evidence.locator.subject_ref
         )
     else:
         raise CandidateEvidenceAuthorityError("LOCATOR_AUTHORITY_INVALID")
@@ -552,23 +609,104 @@ def _fresh_candidate(candidate: object) -> Schema67CandidateV2:
         raise CandidateEvidenceAuthorityError("CANDIDATE_CUSTODY_INVALID") from None
 
 
+def _fresh_coordinate_evidence_companion(
+    companion: object | None,
+    *,
+    candidate_sha256: str,
+) -> CoordinateEvidenceCompanion815V1 | None:
+    if companion is None:
+        return None
+    from insurance_harness.knowledge_compiler.schema67_native_pdf_selection_815 import (
+        CoordinateEvidenceCompanion815V1,
+    )
+
+    if type(companion) is not CoordinateEvidenceCompanion815V1:
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+    try:
+        exact = CoordinateEvidenceCompanion815V1.model_validate(companion.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError, ValidationError):
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID") from None
+    if exact.candidate_sha256 != candidate_sha256:
+        raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+    return exact
+
+
+def _native_coordinate_bbox_for_evidence(
+    *,
+    row: CoordinateEvidence815V1,
+    field_id: str,
+    role: SourceRole,
+    evidence: FreeformEvidenceV1,
+    locator_kind: LocatorKind,
+    locator_ref: str,
+    artifact_bbox: Sequence[object],
+    coordinate_manifest_sha256: str | None,
+) -> tuple[str, str, str, str] | None:
+    if (
+        row.field_id != field_id
+        or row.source_role != role
+        or row.source_revision_id != evidence.source_revision_id
+        or row.original_file_sha256 != evidence.source_sha256
+        or row.parse_manifest_sha256 != coordinate_manifest_sha256
+        or row.page_number != evidence.page_number
+    ):
+        return None
+    native_bbox: tuple[str, str, str, str]
+    if row.selection_type == "TEXT_SPAN":
+        if (
+            locator_kind != "block"
+            or row.block_id != locator_ref
+            or row.quote != evidence.quote_snapshot
+        ):
+            return None
+        native_bbox = row.bbox
+    elif locator_kind == "table" and row.table_id == locator_ref:
+        if row.quote != evidence.quote_snapshot:
+            return None
+        native_bbox = row.bbox
+    elif locator_kind == "cell" and locator_ref in row.cell_ids:
+        if len(row.rects) != len(row.cell_ids):
+            return None
+        quote_parts = tuple(row.quote.split(NATIVE_VALUE_PART_SEPARATOR_815))
+        if len(quote_parts) != len(row.cell_ids):
+            return None
+        cell_index = row.cell_ids.index(locator_ref)
+        if quote_parts[cell_index] != evidence.quote_snapshot:
+            return None
+        native_bbox = row.rects[cell_index]
+    else:
+        return None
+    try:
+        if tuple(Decimal(str(value)) for value in artifact_bbox) != tuple(
+            Decimal(value) for value in native_bbox
+        ):
+            return None
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return native_bbox
+
+
 def build_schema67_candidate_evidence_authority_596_1(
     *,
     candidate: object,
     admitted_parse_artifacts: tuple[AdmittedParseArtifactV1, ...],
     live_source_receipts: tuple[LiveRevisionSourceReceiptV1, ...],
     chunk_authorities: tuple[LiveChunkAuthorityInputV1, ...],
+    coordinate_evidence_companion: CoordinateEvidenceCompanion815V1 | None = None,
 ) -> Schema67CandidateEvidenceAuthorityV1:
     """Build one factory-sealed companion; no provider or live read occurs."""
 
     exact_candidate = _fresh_candidate(candidate)
+    native_companion = _fresh_coordinate_evidence_companion(
+        coordinate_evidence_companion,
+        candidate_sha256=exact_candidate.candidate_sha256,
+    )
     source_rows = tuple(exact_candidate.source_roles)
     if (
         type(admitted_parse_artifacts) is not tuple
         or type(live_source_receipts) is not tuple
         or type(chunk_authorities) is not tuple
-        or tuple(row["role"] for row in source_rows)
-        != ("terms", "brochure", "rate_table")
+        or tuple(row["role"] for row in source_rows) != ("terms", "brochure", "rate_table")
         or len(live_source_receipts) != len(source_rows)
     ):
         raise CandidateEvidenceAuthorityError("SOURCE_AUTHORITY_INVALID")
@@ -617,6 +755,7 @@ def build_schema67_candidate_evidence_authority_596_1(
 
     joins: list[Schema67CitationAuthorityJoinReceiptV1] = []
     used_chunks: set[tuple[str, str]] = set()
+    native_row_usage: dict[int, set[tuple[str, str]]] = {}
     fields = tuple(exact_candidate.fields)
     evidence_receipts = tuple(exact_candidate.evidence_receipts)
     for output, evidence_receipt in zip(fields, evidence_receipts, strict=True):
@@ -640,11 +779,48 @@ def build_schema67_candidate_evidence_authority_596_1(
             ):
                 raise CandidateEvidenceAuthorityError("LIVE_SOURCE_RECEIPT_INVALID")
             locator_kind, bbox = _artifact_locator(bound_artifact, evidence)
-            bbox_preimage, normalized_bbox = normalize_mineru_bbox_596_1(
-                bbox=bbox,
-                page_number=evidence.page_number,
-                page_count=live.page_count,
+            native_matches = (
+                tuple(
+                    (index, row, native_bbox)
+                    for index, row in enumerate(native_companion.coordinate_rows)
+                    if (
+                        native_bbox := _native_coordinate_bbox_for_evidence(
+                            row=row,
+                            field_id=output.field_id,
+                            role=role,
+                            evidence=evidence,
+                            locator_kind=locator_kind,
+                            locator_ref=evidence.locator.subject_ref,
+                            artifact_bbox=bbox,
+                            coordinate_manifest_sha256=bound_artifact.raw_structure_sha256,
+                        )
+                    )
+                )
+                if native_companion is not None
+                else ()
             )
+            if native_companion is not None and len(native_matches) != 1:
+                raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+            if native_matches:
+                native_index, native_row, native_bbox = native_matches[0]
+                native_usage_key = (locator_kind, evidence.locator.subject_ref)
+                used_native_locators = native_row_usage.setdefault(native_index, set())
+                if native_usage_key in used_native_locators:
+                    raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
+                used_native_locators.add(native_usage_key)
+                bbox_preimage, normalized_bbox = normalize_native_pdf_bbox_815(
+                    bbox=native_bbox,
+                    page_number=native_row.page_number,
+                    page_count=live.page_count,
+                    page_width_points=native_row.page_width_points,
+                    page_height_points=native_row.page_height_points,
+                )
+            else:
+                bbox_preimage, normalized_bbox = normalize_mineru_bbox_596_1(
+                    bbox=bbox,
+                    page_number=evidence.page_number,
+                    page_count=live.page_count,
+                )
             chunk_key = (role, evidence.locator.subject_ref)
             bound_chunk = chunks.get(chunk_key)
             if bound_chunk is None:
@@ -721,6 +897,22 @@ def build_schema67_candidate_evidence_authority_596_1(
             )
     if used_chunks != set(chunks):
         raise CandidateEvidenceAuthorityError("CHUNK_AUTHORITY_INVALID")
+    if native_companion is not None:
+        for index, coordinate_row in enumerate(native_companion.coordinate_rows):
+            usage = native_row_usage.get(index, set())
+            valid_usage = (
+                ({("block", coordinate_row.block_id or "")},)
+                if coordinate_row.selection_type == "TEXT_SPAN"
+                else (
+                    {("table", coordinate_row.table_id or "")},
+                    {
+                        ("cell", cell_id)
+                        for cell_id in coordinate_row.cell_ids or ()
+                    },
+                )
+            )
+            if usage not in valid_usage:
+                raise CandidateEvidenceAuthorityError("COORDINATE_AUTHORITY_INVALID")
     authority_payload = {
         "contract": "schema67-candidate-evidence-authority.v1",
         "candidate_sha256": exact_candidate.candidate_sha256,
@@ -759,18 +951,15 @@ def validate_schema67_candidate_evidence_authority_596_1(
     exact = authority
     _require_factory_authority(exact)
     try:
-        Schema67CandidateEvidenceAuthorityV1.model_validate(
-            exact.model_dump(mode="python")
-        )
+        Schema67CandidateEvidenceAuthorityV1.model_validate(exact.model_dump(mode="python"))
     except (TypeError, ValueError, ValidationError):
         raise CandidateEvidenceAuthorityError("CANDIDATE_EVIDENCE_AUTHORITY_INVALID") from None
     if exact.candidate_sha256 != exact_candidate.candidate_sha256:
         raise CandidateEvidenceAuthorityError("CANDIDATE_EVIDENCE_AUTHORITY_INVALID")
     source_rows = tuple(exact_candidate.source_roles)
-    if tuple(
-        (item.source_role, item.source_sha256)
-        for item in exact.source_authorities
-    ) != tuple((row["role"], row["source_sha256"]) for row in source_rows):
+    if tuple((item.source_role, item.source_sha256) for item in exact.source_authorities) != tuple(
+        (row["role"], row["source_sha256"]) for row in source_rows
+    ):
         raise CandidateEvidenceAuthorityError("CANDIDATE_EVIDENCE_AUTHORITY_INVALID")
     expected: list[tuple[object, ...]] = []
     for output, receipt in zip(
@@ -790,9 +979,7 @@ def validate_schema67_candidate_evidence_authority_596_1(
                     evidence.locator.subject_ref,
                     evidence.page_number,
                     evidence.locator.content_snapshot_sha256,
-                    schema_wiki_sha256(
-                        "schema-wiki-text.v1", {"text": evidence.quote_snapshot}
-                    ),
+                    schema_wiki_sha256("schema-wiki-text.v1", {"text": evidence.quote_snapshot}),
                 )
             )
     actual = [
@@ -879,9 +1066,7 @@ def _citation_targets_from_validated_authority_596_1(
             CitationTargetV1.model_validate(
                 {
                     **payload,
-                    "citation_sha256": schema_wiki_sha256(
-                        "citation-target.v1", payload
-                    ),
+                    "citation_sha256": schema_wiki_sha256("citation-target.v1", payload),
                 }
             )
         )
@@ -901,6 +1086,7 @@ __all__ = [
     "citation_targets_for_field_596_1",
     "knowledge_revision_source_id",
     "live_revision_source_receipt_sha256",
+    "normalize_native_pdf_bbox_815",
     "normalize_mineru_bbox_596_1",
     "validate_schema67_candidate_evidence_authority_596_1",
 ]

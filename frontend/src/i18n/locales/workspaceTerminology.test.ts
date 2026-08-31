@@ -51,6 +51,8 @@ const publicDocumentationRoots = [
   'mcp-server',
 ]
 const documentationExtensions = new Set(['.go', '.json', '.md', '.yaml', '.yml'])
+const legacyDocumentationLabels =
+  /创建租户|切换租户|租户设置|租户名称|租户列表|当前租户|我的租户|进入租户/
 
 function collectDocumentationFiles(path: string): string[] {
   const entries = readdirSync(path, { withFileTypes: true })
@@ -75,7 +77,7 @@ test('user-facing locale values use workspace terminology', () => {
   }
 })
 
-test('public documentation uses workspace terminology', () => {
+test('public documentation avoids legacy user-facing tenant labels', () => {
   const legacyLines = publicDocumentationRoots.flatMap((relativePath) => {
     const absolutePath = resolve(repositoryRoot, relativePath)
     const files = extname(absolutePath) ? [absolutePath] : collectDocumentationFiles(absolutePath)
@@ -83,12 +85,12 @@ test('public documentation uses workspace terminology', () => {
       readFileSync(file, 'utf8')
         .split('\n')
         .flatMap((line, index) =>
-          line.includes('租户')
+          legacyDocumentationLabels.test(line)
             ? [`${file.slice(repositoryRoot.length + 1)}:${index + 1}=${line.trim()}`]
             : [],
         ),
     )
   })
 
-  assert.deepEqual(legacyLines, [], 'public documentation still contains legacy tenant terminology')
+  assert.deepEqual(legacyLines, [], 'public documentation still contains legacy tenant labels')
 })

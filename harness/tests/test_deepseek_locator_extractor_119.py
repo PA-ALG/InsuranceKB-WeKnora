@@ -125,6 +125,65 @@ def _mineru_hash(domain: str, value: str) -> str:
     return digest.hexdigest()
 
 
+def _freeform_output_with_quote(
+    *,
+    value_snapshot: str,
+    quote_snapshot: str,
+    field_id: str = "entry_age_range",
+    content_snapshot: str | None = None,
+) -> FreeformFieldOutputV1:
+    locator_content = content_snapshot or quote_snapshot
+    return FreeformFieldOutputV1(
+        product_version_id="596-1",
+        field_id=field_id,
+        state="present",
+        value_snapshot=value_snapshot,
+        evidence=(
+            FreeformEvidenceV1(
+                field_id=field_id,
+                source_sha256="1" * 64,
+                source_revision_id="revision-terms-119",
+                parse_attempt_id="parse-attempt-terms",
+                parsed_document_hash="2" * 64,
+                parse_manifest_hash="3" * 64,
+                page_number=1,
+                block_id="block-terms-entry-age-range",
+                locator=evidence_verifier_module.EvidenceLocatorSnapshotV1(
+                    subject_type="block",
+                    subject_ref="block-terms-entry-age-range",
+                    page_number=1,
+                    parent_refs=("page-terms",),
+                    content_snapshot=locator_content,
+                    content_snapshot_sha256=_sha(locator_content),
+                ),
+                quote_snapshot=quote_snapshot,
+                quote_snapshot_sha256=_sha(quote_snapshot),
+            ),
+        ),
+    )
+
+
+def _passing_freeform_verification(
+    field_id: str,
+) -> evidence_verifier_module.VerificationBatchV1:
+    return evidence_verifier_module.VerificationBatchV1(
+        contract="evidence-verification-batch.v1",
+        product_version_id="596-1",
+        source_revision_id="revision-terms-119",
+        parse_attempt_id="parse-attempt-terms",
+        parsed_document_hash="2" * 64,
+        parse_manifest_hash="3" * 64,
+        results=(
+            evidence_verifier_module.FieldVerificationV1(
+                field_id=field_id,
+                status="PASS",
+                reason_codes=(),
+                candidate_snapshot_hash="4" * 64,
+            ),
+        ),
+    )
+
+
 def _bound(task_id: str = "task-119") -> semantic.BoundSemanticAttemptV1:
     payload = semantic._bound_attempt_payload(
         task_id=task_id,
@@ -207,6 +266,11 @@ def _shape_invalid_response(
     )
 
 
+def _response_with_task_key(response: str, task_key: str) -> str:
+    payload = json.loads(response)
+    return json.dumps({"task_key": task_key, **payload}, separators=(",", ":"))
+
+
 class _FakeTransport:
     def __init__(self, outputs: Sequence[str | Exception]) -> None:
         self.outputs = list(outputs)
@@ -221,8 +285,9 @@ class _FakeTransport:
 
 
 class _UnknownExtractorTransport:
-    def __init__(self) -> None:
+    def __init__(self, *, include_task_key: bool = True) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.include_task_key = include_task_key
 
     async def complete(self, system: str, user: str) -> str:
         self.calls.append((system, user))
@@ -233,20 +298,20 @@ class _UnknownExtractorTransport:
             for item in payload["field_contracts"]
             if not selected_field_ids or item["field_id"] in selected_field_ids
         ]
-        return json.dumps(
-            {
-                "fields": [
-                    {
-                        "field_id": field_id,
-                        "state": "unknown",
-                        "value_snapshot": None,
-                        "evidence": [],
-                    }
-                    for field_id in field_ids
-                ],
-            },
-            separators=(",", ":"),
-        )
+        response: dict[str, object] = {
+            "fields": [
+                {
+                    "field_id": field_id,
+                    "state": "unknown",
+                    "value_snapshot": None,
+                    "evidence": [],
+                }
+                for field_id in field_ids
+            ],
+        }
+        if self.include_task_key and "task_key" in payload:
+            response["task_key"] = payload["task_key"]
+        return json.dumps(response, separators=(",", ":"))
 
 
 @dataclass(frozen=True)
@@ -368,17 +433,7 @@ class _FakePort:
 
 def _inputs() -> tuple[tuple[DeepSeekFieldPromptInputV1, ...], tuple[CanonicalLocatorInputV1, ...]]:
     contract = _schema67_contract_set().contracts[0]
-    prompt_payload = {
-        "field_id": contract.field_id,
-        "description": contract.description,
-        "value_shape": contract.value_shape,
-        "formation_modes": contract.formation_modes,
-        "source_roles": contract.source_roles,
-        "evidence_required": contract.evidence_required,
-        "output_state_policy": contract.output_state_policy,
-        "hardness": contract.hardness.model_dump(mode="python"),
-        "field_contract_sha256": contract.field_contract_sha256,
-    }
+    prompt_payload = deepseek._field_prompt_payload(contract)
     prompt = DeepSeekFieldPromptInputV1(
         contract=contract,
         prompt_payload_sha256=canonical_hash("schema67-deepseek-field-prompt.v1", prompt_payload),
@@ -483,9 +538,7 @@ async def test_119_exact_authority_and_locator_extractor_happy_path() -> None:
     assert extractor_payload["field_locator_slots"] == [
         {
             "field_id": "product_code",
-            "sources": [
-                {"source_role": "terms", "allowed_slots": ["slot-0001"]}
-            ],
+            "sources": [{"source_role": "terms", "allowed_slots": ["slot-0001"]}],
         }
     ]
     assert "locator_ref" not in extractor_payload
@@ -493,8 +546,15 @@ async def test_119_exact_authority_and_locator_extractor_happy_path() -> None:
         "schema67-deterministic-locator-selection-policy.v1",
         {
             "source": "field-contract-plus-mineru-locators",
-            "contract_terms": ("field_name", "description", "category"),
-            "algorithm_version": "schema67-contract-lexical-locator-v2",
+            "contract_terms": (
+                "field_name",
+                "description",
+                "category",
+                "value_shape_raw",
+                "source_authority_raw",
+                "formation_raw",
+            ),
+            "algorithm_version": "schema67-contract-lexical-locator-v3",
             "normalization": "str.casefold",
             "unicode_sequence_regex": r"[\u3400-\u9fff]+",
             "whole_sequence_min_chars": 2,
@@ -538,6 +598,7 @@ async def test_119_exact_authority_and_locator_extractor_happy_path() -> None:
                     "prompt_payload_sha256": contracts[0].prompt_payload_sha256,
                     "source_locator_refs": (("terms", ("block-1",)),),
                     "requires_unknown_review": False,
+                    "unknown_reason_code": None,
                 },
             ),
             "canonical_locators": (
@@ -664,7 +725,9 @@ async def test_119_extractor_response_contract_is_isomorphic_to_validator() -> N
         "state": "present",
         "normalization": "existing_057_nfkc_whitespace_punctuation_case",
         "value_quote_relation": (
-            "value_snapshot_normalized_equals_at_least_one_complete_quote_snapshot"
+            "value_snapshot_semantically_equivalent_to_exact_quote;"
+            "short_values_prefer_source_wording;long_values_may_faithfully_abbreviate_"
+            "without_dropping_conditions_exceptions_or_ranges"
         ),
         "required_source_roles": "all_contract_required_roles",
         "locator_authority": "same_field_field_locator_slots_only",
@@ -672,6 +735,7 @@ async def test_119_extractor_response_contract_is_isomorphic_to_validator() -> N
     }
     assert "field_source_locator_refs" not in response_contract
     assert response_contract["forced_unknown_field_ids"] == []
+    assert response_contract["forced_unknown_reasons"] == []
     assert response_contract["response_skeleton"] == {
         "fields": [
             {
@@ -685,9 +749,9 @@ async def test_119_extractor_response_contract_is_isomorphic_to_validator() -> N
     assert "only the JSON object" in system
     assert "null" in system
     assert "literal substring" in system
-    assert "present value_snapshot" in system
-    assert "at least one quote_snapshot" in system
-    assert "exactly equal after the same 057 normalization" in system
+    assert "value_snapshot must preserve the same meaning" in system
+    assert "all material conditions" in system
+    assert "abbreviated without dropping a condition" in system
     assert evidence_verifier_module._quote_occurs("保险 责任。", "保险责任.")
     assert not evidence_verifier_module._quote_occurs("保险免责", "保险责任.")
 
@@ -1071,16 +1135,13 @@ def test_119_execution_identity_is_exact_and_unique_before_provider() -> None:
             "response_format": {"type": "json_object"},
             "response_contract_repair_policy_sha256": repair_policy_sha256,
             "locator_slot_policy_sha256": slot_policy_sha256,
-            "fixed_dual_repair_policy": {
-                "max_shared_extra_calls": 2,
+            "grouped_targeted_repair_policy": {
+                "max_shared_extra_calls": 8,
                 "max_transport_retries": 1,
                 "max_response_contract_repairs": 1,
-                "max_evidence_repairs": 1,
-                "allowed_pairs": (
-                    "retry+response_contract_repair",
-                    "retry+evidence_repair",
-                    "response_contract_repair+evidence_repair",
-                ),
+                "max_evidence_repairs": 8,
+                "evidence_partition": "original_task_group",
+                "max_one_evidence_repair_per_task_group": True,
             },
         },
     )
@@ -1100,6 +1161,14 @@ def test_119_execution_identity_is_exact_and_unique_before_provider() -> None:
         "response_format": {"type": "json_object"},
         "response_contract_repair_policy_sha256": repair_policy_sha256,
         "locator_slot_policy_sha256": slot_policy_sha256,
+        "grouped_targeted_repair_policy": {
+            "max_shared_extra_calls": 8,
+            "max_transport_retries": 1,
+            "max_response_contract_repairs": 1,
+            "max_evidence_repairs": 8,
+            "evidence_partition": "original_task_group",
+            "max_one_evidence_repair_per_task_group": True,
+        },
     }
     for key, drifted in (
         ("temperature", "0.1"),
@@ -1288,6 +1357,7 @@ def _admitted_source_for_prepared(
     prepared: Schema67PreparedTaskV1,
     *,
     source_index: int = 0,
+    content_padding: str = "",
 ) -> tuple[
     Schema67PreparedTaskV1,
     AdmittedParseArtifactV1,
@@ -1319,7 +1389,7 @@ def _admitted_source_for_prepared(
                 block_index=index,
                 bbox=(Decimal(index), Decimal(0), Decimal(index + 1), Decimal(1)),
             ),
-            content_hash=_sha(f"content-{ref}"),
+            content_hash=_sha(f"content-{ref}{content_padding}"),
             structure_hash=_sha(f"structure-{ref}"),
         )
         for index, ref in enumerate(document_locator_refs)
@@ -1484,9 +1554,7 @@ def _admitted_source_for_prepared(
             "schema67-deepseek-provider-attempt.v1",
             {
                 "provider_task_sha256": provider_task_sha256,
-                "source_attempt_hashes": tuple(
-                    item.attempt_hash for item in initial_attempts
-                ),
+                "source_attempt_hashes": tuple(item.attempt_hash for item in initial_attempts),
             },
         ),
     )
@@ -1496,8 +1564,8 @@ def _admitted_source_for_prepared(
             locator_kind="block",
             page_number=1,
             parent_refs=(page.page_id,),
-            content_snapshot=f"content-{ref}",
-            content_snapshot_sha256=_sha(f"content-{ref}"),
+            content_snapshot=f"content-{ref}{content_padding}",
+            content_snapshot_sha256=_sha(f"content-{ref}{content_padding}"),
         )
         for ref in locator_refs
     )
@@ -1505,7 +1573,7 @@ def _admitted_source_for_prepared(
 
 
 @pytest.mark.asyncio
-async def test_119_lane_a_role_subsets_build_exact_054_tasks_before_fake_run() -> None:
+async def test_119_exact_eight_tasks_attempt_all_ordered67_fields_before_fake_run() -> None:
     contracts = _schema67_contract_set()
     plan = _execution_plan(contracts)
     prepared = prepare_schema67_deepseek_tasks(
@@ -1514,23 +1582,25 @@ async def test_119_lane_a_role_subsets_build_exact_054_tasks_before_fake_run() -
         role_inputs=_schema67_role_inputs(contracts, plan),
     )
     assert len(prepared) == 8
-    assert all(len(item.field_prompts) <= 8 for item in prepared)
-    assert sum(len(item.field_prompts) for item in prepared) == 46
+    assert tuple(len(item.field_prompts) for item in prepared) == (8, 8, 8, 8, 9, 9, 9, 8)
+    assert sum(len(item.field_prompts) for item in prepared) == 67
+    prompt_field_ids = tuple(
+        prompt.field_id for item in prepared for prompt in item.field_prompts
+    )
+    assert len(prompt_field_ids) == len(set(prompt_field_ids)) == 67
+    approved_order = tuple(item.field_id for item in contracts.contracts)
+    assert tuple(
+        field_id for field_id in approved_order if field_id in prompt_field_ids
+    ) == approved_order
     assert tuple(item.task_kind for item in prepared).count("synthesis") == 1
     synthesis = next(item for item in prepared if item.task_kind == "synthesis")
-    assert len(synthesis.field_prompts) == 6
+    assert len(synthesis.field_prompts) in {8, 9}
     assert {item.material_role for item in synthesis.source_tasks} == {
         "terms",
         "brochure",
         "rate_table",
     }
-    assert len(plan.deferred_unknown_field_ids) == 21
-    assert all(len(item.field_prompts) <= 8 for item in prepared)
-    assert all(
-        field_id not in {prompt.field_id for prompt in item.field_prompts}
-        for field_id in plan.deferred_unknown_field_ids
-        for item in prepared
-    )
+    assert plan.deferred_unknown_field_ids == ()
     assert all(
         attempt.task_hash == task.task_hash
         for item in prepared
@@ -1548,6 +1618,7 @@ async def test_119_lane_a_role_subsets_build_exact_054_tasks_before_fake_run() -
             content_snapshot_sha256=_sha(f"source content for {contract.field_id}"),
         )
         for contract in first.field_prompts
+        if contract.allowed_locator_refs
     )
     extractor_response = json.dumps(
         {
@@ -1580,8 +1651,6 @@ async def test_119_lane_a_role_subsets_build_exact_054_tasks_before_fake_run() -
     assert result.receipt.task_id == first.provider_task_sha256
     assert result.receipt.attempt_hash == first.provider_attempt_sha256
     assert len(transport.calls) == 1
-    prompt_bytes = "\n".join(value for call in transport.calls for value in call)
-    assert all(field_id not in prompt_bytes for field_id in plan.deferred_unknown_field_ids)
 
 
 def test_119_concrete_schema67_binding_consumes_admitted_artifact_and_keeps_receipts() -> None:
@@ -1626,49 +1695,7 @@ def test_119_concrete_schema67_binding_consumes_admitted_artifact_and_keeps_rece
 
     selected = tuple((item.field_id, item.allowed_locator_refs) for item in prepared.field_prompts)
     request = port.prepare_repair(bound, selected)
-    assert request is not None
-    prompt_by_field = {item.field_id: item for item in prepared.field_prompts}
-    repair_fields = []
-    for field_id in request.field_ids:
-        locator_ref = prompt_by_field[field_id].allowed_locator_refs[0]
-        quote = f"content-{locator_ref}"
-        repair_fields.append(
-            {
-                "product_version_id": "596-1",
-                "field_id": field_id,
-                "state": "present",
-                "value_snapshot": quote,
-                "evidence": [
-                    {
-                        "field_id": field_id,
-                        "source_sha256": admitted.source_sha256,
-                        "source_revision_id": admitted.document.subject.source_revision_id,
-                        "parse_attempt_id": admitted.document.attempt.attempt_id,
-                        "parsed_document_hash": admitted.document.document_hash,
-                        "parse_manifest_hash": admitted.manifest.manifest_hash,
-                        "page_number": 1,
-                        "block_id": locator_ref,
-                        "locator": {
-                            "subject_type": "block",
-                            "subject_ref": locator_ref,
-                            "page_number": 1,
-                            "parent_refs": ["page-terms"],
-                            "content_snapshot": quote,
-                            "content_snapshot_sha256": _sha(quote),
-                        },
-                        "quote_snapshot": quote,
-                        "quote_snapshot_sha256": _sha(quote),
-                    }
-                ],
-            }
-        )
-    repaired = port.bind_repair(
-        json.dumps({"fields": repair_fields}, separators=(",", ":")).encode(),
-        request,
-    )
-    assert all(item.state == "present" for item in repaired.outputs)
-    assert tuple(item.field_id for item in repaired.evidence_receipts) == request.field_ids
-    assert len(repaired.receipt_chains[0].receipts) == 2
+    assert request is None
 
 
 def test_119_concrete_binding_accepts_exact_mineru_domain_hash_snapshot() -> None:
@@ -1861,7 +1888,9 @@ def test_119_cropped_capture_snapshot_is_rejected_before_execution_preparation(
 
 
 def test_119_field_contract_locator_narrowing_is_deterministic_and_contract_only() -> None:
-    contract = _schema67_contract_set().contracts[0]
+    contract = next(
+        item for item in _schema67_contract_set().contracts if item.field_id == "product_summary"
+    )
     locators = tuple(
         CanonicalLocatorInputV1(
             locator_ref=f"block-{index:03d}",
@@ -1869,10 +1898,14 @@ def test_119_field_contract_locator_narrowing_is_deterministic_and_contract_only
             page_number=1,
             parent_refs=("page-1",),
             content_snapshot=(
-                f"{contract.field_name} 对应原始材料" if index == 50 else f"普通条款 {index}"
+                "培训专供文字用于验证原始取值来源说明参与定位排序"
+                if index == 50
+                else f"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz {index}"
             ),
             content_snapshot_sha256=_sha(
-                f"{contract.field_name} 对应原始材料" if index == 50 else f"普通条款 {index}"
+                "培训专供文字用于验证原始取值来源说明参与定位排序"
+                if index == 50
+                else f"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz {index}"
             ),
         )
         for index in range(100)
@@ -1885,6 +1918,70 @@ def test_119_field_contract_locator_narrowing_is_deterministic_and_contract_only
     assert "block-050" in first
     assert set(first).issubset({item.locator_ref for item in locators})
     assert len(first) <= 24
+
+
+def test_119_exact_request_binds_all_guidance_and_strict_source_intersection() -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    prompts = {prompt.field_id: prompt for task in prepared for prompt in task.field_prompts}
+
+    assert len(prompts) == 67
+    guidance_keys = {
+        "category",
+        "field_name",
+        "value_shape_raw",
+        "source_authority_raw",
+        "formation_raw",
+    }
+    for task in prepared:
+        projected = tuple(
+            deepseek._request_field_contract_payload(item) for item in task.field_prompts
+        )
+        assert tuple(item["field_id"] for item in projected) == tuple(
+            item.field_id for item in task.field_prompts
+        )
+        assert all(guidance_keys.issubset(item) for item in projected)
+    for prompt in prompts.values():
+        payload = deepseek._field_prompt_payload(prompt.contract)
+        assert payload["field_name"] == prompt.contract.field_name
+        assert payload["category"] == prompt.contract.category
+        assert payload["description"] == prompt.contract.description
+        assert payload["value_shape_raw"] == prompt.contract.value_shape_raw
+        assert payload["source_authority_raw"] == prompt.contract.source_authority_raw
+        assert payload["formation_raw"] == prompt.contract.formation_raw
+        assert prompt.prompt_payload_sha256 == canonical_hash(
+            "schema67-deepseek-field-prompt.v1",
+            payload,
+        )
+
+    summary = prompts["product_summary"]
+    assert summary.contract.source_roles == ("brochure", "terms")
+    assert tuple(role for role, _ in summary.source_locator_refs) == ("brochure",)
+    assert summary.requires_unknown_review is False
+    assert summary.unknown_reason_code is None
+
+    payment = prompts["premium_payment_term"]
+    assert payment.contract.source_roles == ("terms",)
+    assert payment.source_locator_refs == ()
+    assert payment.allowed_locator_refs == ()
+    assert payment.requires_unknown_review is True
+    assert payment.unknown_reason_code == "SOURCE_GUIDANCE_ROLE_INTERSECTION_EMPTY"
+
+    response_contract = deepseek._extractor_response_contract(
+        contracts=(payment,),
+        task_key="terms-01",
+    )
+    assert response_contract["forced_unknown_reasons"] == (
+        {
+            "field_id": "premium_payment_term",
+            "reason_code": "SOURCE_GUIDANCE_ROLE_INTERSECTION_EMPTY",
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -1955,14 +2052,10 @@ def test_119_all_request_stages_share_json_object_serializer() -> None:
         ("repair-system", "repair-user"),
     )
     bodies = tuple(
-        deepseek._deepseek_request_bytes(system=system, user=user)
-        for system, user in calls
+        deepseek._deepseek_request_bytes(system=system, user=user) for system, user in calls
     )
     decoded = tuple(json.loads(body) for body in bodies)
-    assert all(
-        item["response_format"] == {"type": "json_object"}
-        for item in decoded
-    )
+    assert all(item["response_format"] == {"type": "json_object"} for item in decoded)
     assert bodies[1] == bodies[2]
     assert max(len(body) for body in bodies) < deepseek.DEEPSEEK_MAX_REQUEST_BYTES
 
@@ -2072,10 +2165,26 @@ async def test_119_fake_transport_runs_through_production_concrete_factory(
 def test_119_lane_a_partition_drift_blocks_before_any_task_or_provider() -> None:
     contracts = _schema67_contract_set()
     plan = _execution_plan(contracts)
+    first = plan.task_slices[0]
+    drifted_first_payload = {
+        **first.model_dump(mode="python", exclude={"task_slice_sha256"}),
+        "field_ids": first.field_ids[1:],
+    }
+    drifted_first = type(first).model_validate(
+        {
+            **drifted_first_payload,
+            "task_slice_sha256": canonical_hash(
+                "schema67-deepseek-task-slice.v1", drifted_first_payload
+            ),
+        }
+    )
     forged_payload = {
         "contract_set_sha256": plan.contract_set_sha256,
-        "task_slices": tuple(item.model_dump(mode="python") for item in plan.task_slices),
-        "deferred_unknown_field_ids": plan.deferred_unknown_field_ids[1:],
+        "task_slices": tuple(
+            item.model_dump(mode="python")
+            for item in (drifted_first, *plan.task_slices[1:])
+        ),
+        "deferred_unknown_field_ids": plan.deferred_unknown_field_ids,
         "batch_budget": plan.batch_budget.model_dump(mode="python"),
     }
     forged = Schema67ExecutionPlanV1.model_validate(
@@ -2107,6 +2216,31 @@ def test_119_lane_a_partition_drift_blocks_before_any_task_or_provider() -> None
             role_inputs=_schema67_role_inputs(contracts, plan),
         )
     assert caught.value.reason_code == "SCHEMA67_CONTRACT_SET_INVALID"
+
+
+def test_119_native_pdf_projected_plan_is_freshly_recognized() -> None:
+    contracts = _schema67_contract_set()
+    base = _execution_plan(contracts)
+    projection = deepseek.build_schema67_native_pdf_execution_projection_815(
+        field_contracts=contracts,
+        base_execution_plan=base,
+        available_source_roles=("terms", "brochure", "rate_table"),
+    )
+
+    prepared = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=projection.execution_plan,
+        role_inputs=_schema67_role_inputs(contracts, projection.execution_plan),
+    )
+
+    assert len(prepared) == 8
+    assert tuple(
+        field.field_id for task in prepared for field in task.field_prompts
+    ) == tuple(
+        field_id
+        for task in projection.execution_plan.task_slices
+        for field_id in task.field_ids
+    )
 
 
 def test_119_rejects_giant_or_single_source_multisource_plans() -> None:
@@ -2184,21 +2318,21 @@ async def test_119_shape_invalid_gets_one_response_contract_repair() -> None:
     )
     assert sentinel not in transport.calls[1][1]
     assert repair_payload["field_contracts"] == json.loads(transport.calls[0][1])["field_contracts"]
-    assert repair_payload["locator_slot_catalog"] == json.loads(
-        transport.calls[0][1]
-    )["locator_slot_catalog"]
-    assert repair_payload["field_locator_slots"] == json.loads(
-        transport.calls[0][1]
-    )["field_locator_slots"]
+    assert (
+        repair_payload["locator_slot_catalog"]
+        == json.loads(transport.calls[0][1])["locator_slot_catalog"]
+    )
+    assert (
+        repair_payload["field_locator_slots"]
+        == json.loads(transport.calls[0][1])["field_locator_slots"]
+    )
     assert (
         repair_payload["response_contract"]
         == json.loads(transport.calls[0][1])["response_contract"]
     )
     forged = result.receipt.model_dump(mode="python", exclude={"receipt_hash"})
     assert isinstance(forged["response_contract_repair"], dict)
-    forged["response_contract_repair"]["failure_code"] = (
-        "CODE_OWNED_AUTHORITY_MISMATCH"
-    )
+    forged["response_contract_repair"]["failure_code"] = "CODE_OWNED_AUTHORITY_MISMATCH"
     with pytest.raises(ValueError):
         deepseek.DeepSeekExecutionReceiptV1.model_validate(
             {
@@ -2229,12 +2363,9 @@ async def test_119_locator_membership_repair_binds_only_failed_field_ids(
     ref_b = target_b.allowed_locator_refs[0]
     quote_a = f"content-{ref_a}"
     quote_b = f"content-{ref_b}"
-    slot_authority = _slot_authority(
-        prepared.field_prompts, locators, port=port
-    )
+    slot_authority = _slot_authority(prepared.field_prompts, locators, port=port)
     slot_by_ref = {
-        locator_ref: slot
-        for _field_id, _role, slot, locator_ref in slot_authority.code_mapping
+        locator_ref: slot for _field_id, _role, slot, locator_ref in slot_authority.code_mapping
     }
     invalid_fields: list[dict[str, object]] = [
         {
@@ -2320,9 +2451,7 @@ async def test_119_locator_membership_repair_binds_only_failed_field_ids(
     initial_payload = json.loads(transport.calls[0][1])
     repair_payload = json.loads(transport.calls[1][1])
     assert repair_payload["failed_field_ids"] == list(expected_failed)
-    assert set(repair_payload).isdisjoint(
-        {"failed_locator_refs", "failed_quotes", "raw_response"}
-    )
+    assert set(repair_payload).isdisjoint({"failed_locator_refs", "failed_quotes", "raw_response"})
     for key in (
         "field_contracts",
         "locator_authority_sha256",
@@ -2334,14 +2463,10 @@ async def test_119_locator_membership_repair_binds_only_failed_field_ids(
         "response_contract",
     ):
         assert repair_payload[key] == initial_payload[key]
-    assert result.receipt.field_ids == tuple(
-        prompt.field_id for prompt in prepared.field_prompts
-    )
+    assert result.receipt.field_ids == tuple(prompt.field_id for prompt in prepared.field_prompts)
     assert result.response_contract_repair is not None
     assert result.response_contract_repair.failed_field_ids == expected_failed
-    assert isinstance(
-        result.response_contract_repair, deepseek.ResponseContractRepairResolutionV2
-    )
+    assert isinstance(result.response_contract_repair, deepseek.ResponseContractRepairResolutionV2)
     assert result.response_contract_repair.field_ids == result.receipt.field_ids
     assert result.response_contract_repair.response_contract_repair_policy_sha256 == (
         result.receipt.response_contract_repair_policy_sha256
@@ -2374,11 +2499,11 @@ async def test_119_locator_membership_repair_binds_only_failed_field_ids(
             deepseek.DeepSeekExecutionReceiptV1.model_validate(
                 {
                     **forged,
-                    "receipt_hash": canonical_hash(
-                        "deepseek-evidence-compiler-596-1.v2", forged
-                    ),
+                    "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", forged),
                 }
             )
+
+
 @pytest.mark.asyncio
 async def test_119_locator_membership_repair_stays_fail_closed_after_exact_two_calls(
     monkeypatch: pytest.MonkeyPatch,
@@ -2472,9 +2597,7 @@ async def test_119_field_local_slots_make_foreign_locator_unrepresentable(
             assert "selected_locators" not in payload
             assert "deterministic_locator_selection" not in payload
             assert "locator_ref" not in json.dumps(tuple(payload.keys()))
-            slot_rows = {
-                row["field_id"]: row for row in payload["field_locator_slots"]
-            }
+            slot_rows = {row["field_id"]: row for row in payload["field_locator_slots"]}
             target_role = slot_rows[target.field_id]["sources"][0]
             foreign_role = slot_rows[foreign.field_id]["sources"][0]
             assert target_role["source_role"] == foreign_role["source_role"] == "terms"
@@ -2496,12 +2619,12 @@ async def test_119_field_local_slots_make_foreign_locator_unrepresentable(
             fields[0] = {
                 "field_id": target.field_id,
                 "state": "present",
-                "value_snapshot": "candidate",
+                "value_snapshot": f"content-{target_ref}",
                 "evidence": [
-                        {
-                            "source_role": "terms",
-                            "locator_slot": attempted_slot,
-                            "quote_snapshot": f"content-{target_ref}",
+                    {
+                        "source_role": "terms",
+                        "locator_slot": attempted_slot,
+                        "quote_snapshot": f"content-{target_ref}",
                     }
                 ],
             }
@@ -2529,8 +2652,9 @@ async def test_119_field_local_slots_make_foreign_locator_unrepresentable(
     assert output.evidence[0].locator.subject_ref == target_ref
     assert output.evidence[0].locator.subject_ref != foreign_ref
     assert len(transport.calls) == 2
-    assert result.receipt.locator_slot_authority_sha256 == (
-        json.loads(transport.calls[0][1])["locator_slot_authority_sha256"]
+    assert (
+        result.receipt.locator_slot_authority_sha256
+        == (json.loads(transport.calls[0][1])["locator_slot_authority_sha256"])
     )
     forged = result.receipt.model_dump(mode="python", exclude={"receipt_hash"})
     forged["locator_slot_policy_sha256"] = "f" * 64
@@ -2538,9 +2662,7 @@ async def test_119_field_local_slots_make_foreign_locator_unrepresentable(
         deepseek.DeepSeekExecutionReceiptV1.model_validate(
             {
                 **forged,
-                "receipt_hash": canonical_hash(
-                    "deepseek-evidence-compiler-596-1.v2", forged
-                ),
+                "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", forged),
             }
         )
     with pytest.raises(ValueError):
@@ -2632,17 +2754,7 @@ async def test_119_self_consistent_slot_reordering_is_rejected_before_transport(
     locators: list[CanonicalLocatorInputV1] = []
     for ordinal, contract in enumerate(contracts, start=1):
         ref = f"block-{ordinal}"
-        prompt_payload = {
-            "field_id": contract.field_id,
-            "description": contract.description,
-            "value_shape": contract.value_shape,
-            "formation_modes": contract.formation_modes,
-            "source_roles": contract.source_roles,
-            "evidence_required": contract.evidence_required,
-            "output_state_policy": contract.output_state_policy,
-            "hardness": contract.hardness.model_dump(mode="python"),
-            "field_contract_sha256": contract.field_contract_sha256,
-        }
+        prompt_payload = deepseek._field_prompt_payload(contract)
         prompts.append(
             DeepSeekFieldPromptInputV1(
                 contract=contract,
@@ -2695,18 +2807,14 @@ async def test_119_self_consistent_slot_reordering_is_rejected_before_transport(
         first_row.model_copy(
             update={
                 "sources": (
-                    first_row.sources[0].model_copy(
-                        update={"allowed_slots": ("slot-0002",)}
-                    ),
+                    first_row.sources[0].model_copy(update={"allowed_slots": ("slot-0002",)}),
                 )
             }
         ),
         second_row.model_copy(
             update={
                 "sources": (
-                    second_row.sources[0].model_copy(
-                        update={"allowed_slots": ("slot-0001",)}
-                    ),
+                    second_row.sources[0].model_copy(update={"allowed_slots": ("slot-0001",)}),
                 )
             }
         ),
@@ -2730,9 +2838,7 @@ async def test_119_self_consistent_slot_reordering_is_rejected_before_transport(
         "attempt_hash": authority.attempt_hash,
         "policy_sha256": deepseek.LOCATOR_SLOT_POLICY_SHA256,
         "catalog": tuple(item.model_dump(mode="python") for item in swapped_catalog),
-        "field_locator_slots": tuple(
-            item.model_dump(mode="python") for item in swapped_rows
-        ),
+        "field_locator_slots": tuple(item.model_dump(mode="python") for item in swapped_rows),
         "code_mapping": swapped_mapping,
     }
     forged = replace(
@@ -2740,13 +2846,9 @@ async def test_119_self_consistent_slot_reordering_is_rejected_before_transport(
         catalog=swapped_catalog,
         field_locator_slots=swapped_rows,
         code_mapping=swapped_mapping,
-        authority_sha256=canonical_hash(
-            "schema67-locator-slot-authority.v1", authority_payload
-        ),
+        authority_sha256=canonical_hash("schema67-locator-slot-authority.v1", authority_payload),
     )
-    monkeypatch.setattr(
-        deepseek, "_build_locator_slot_authority", lambda **_kwargs: forged
-    )
+    monkeypatch.setattr(deepseek, "_build_locator_slot_authority", lambda **_kwargs: forged)
     transport = _FakeTransport(
         [_unknown_fields_response(tuple(item.field_id for item in exact_prompts))]
     )
@@ -2777,11 +2879,7 @@ def test_119_multisource_known_output_requires_each_exact_role_slot() -> None:
         )
         if item.task_kind == "synthesis"
     )
-    prompt = next(
-        item
-        for item in synthesis.field_prompts
-        if len(tuple((role, refs) for role, refs in item.source_locator_refs if refs)) > 1
-    )
+    prompt = next(item for item in synthesis.field_prompts if item.field_id == "product_summary")
     refs = tuple(ref for _role, values in prompt.source_locator_refs for ref in values)
     locators = tuple(
         CanonicalLocatorInputV1(
@@ -2810,7 +2908,7 @@ def test_119_multisource_known_output_requires_each_exact_role_slot() -> None:
                 "value_snapshot": "candidate",
                 "evidence": [
                     {
-                        "source_role": first_role.source_role,
+                        "source_role": "terms",
                         "locator_slot": first_role.allowed_slots[0],
                         "quote_snapshot": next(
                             item.content_snapshot
@@ -2823,9 +2921,7 @@ def test_119_multisource_known_output_requires_each_exact_role_slot() -> None:
         ]
     }
     with pytest.raises(DeepSeekCompilerError) as caught:
-        deepseek._require_extractor_envelope(
-            payload, contracts=(prompt,), slot_authority=authority
-        )
+        deepseek._require_extractor_envelope(payload, contracts=(prompt,), slot_authority=authority)
     assert caught.value.reason_code == "EXTRACTOR_LOCATOR_NOT_ALLOWED_INVALID"
     assert isinstance(caught.value, deepseek._LocatorMembershipFailure)
     assert caught.value.failed_field_ids == (prompt.field_id,)
@@ -3006,9 +3102,7 @@ async def test_119_response_contract_then_evidence_repair_retains_both_typed_slo
     assert result.receipt.evidence_repair_summary == deepseek._evidence_repair_summary(
         result.evidence_repair
     )
-    assert result.receipt.evidence_repair_summary.trace_hash == (
-        result.evidence_repair.trace_hash
-    )
+    assert result.receipt.evidence_repair_summary.trace_hash == (result.evidence_repair.trace_hash)
 
     private_fragments = (
         "保险责任以条款约定为准。",
@@ -3036,9 +3130,7 @@ async def test_119_response_contract_then_evidence_repair_retains_both_typed_slo
         deepseek.DeepSeekExecutionReceiptV1.model_validate(
             {
                 **impossible,
-                "receipt_hash": canonical_hash(
-                    "deepseek-evidence-compiler-596-1.v2", impossible
-                ),
+                "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", impossible),
             }
         )
 
@@ -3056,11 +3148,9 @@ async def test_119_response_contract_then_evidence_repair_retains_both_typed_slo
     forged_response_repair = result.response_contract_repair.model_copy(
         update={"resolution_hash": "f" * 64}
     )
-    forged_receipt_payload = result.receipt.model_dump(
-        mode="python", exclude={"receipt_hash"}
-    )
-    forged_receipt_payload["response_contract_repair"] = (
-        forged_response_repair.model_dump(mode="python")
+    forged_receipt_payload = result.receipt.model_dump(mode="python", exclude={"receipt_hash"})
+    forged_receipt_payload["response_contract_repair"] = forged_response_repair.model_dump(
+        mode="python"
     )
     forged_receipt = result.receipt.model_copy(
         update={
@@ -3079,9 +3169,7 @@ async def test_119_response_contract_then_evidence_repair_retains_both_typed_slo
     with pytest.raises(ValueError, match="deepseek_task_execution_custody_mismatch"):
         replace(
             result,
-            evidence_repair=result.evidence_repair.model_copy(
-                update={"trace_hash": "f" * 64}
-            ),
+            evidence_repair=result.evidence_repair.model_copy(update={"trace_hash": "f" * 64}),
         )
     with pytest.raises(ValueError, match="deepseek_task_execution_custody_mismatch"):
         replace(
@@ -3236,19 +3324,9 @@ async def test_119_complete_eight_task_fake_batch_has_bounded_receipt(
             )
             for ref in locator_refs
         )
-        extractor_response = json.dumps(
-            {
-                "fields": [
-                    {
-                        "field_id": prompt.field_id,
-                        "state": "unknown",
-                        "value_snapshot": None,
-                        "evidence": [],
-                    }
-                    for prompt in item.field_prompts
-                ],
-            },
-            separators=(",", ":"),
+        extractor_response = _response_with_task_key(
+            _unknown_fields_response(tuple(prompt.field_id for prompt in item.field_prompts)),
+            item.task_key,
         )
         outputs.append(extractor_response)
         ports.append(
@@ -3264,15 +3342,22 @@ async def test_119_complete_eight_task_fake_batch_has_bounded_receipt(
     monkeypatch.setattr(deepseek, "_schema67_binding_ports", lambda **_: tuple(ports))
     orchestrated_budget = Schema67BatchBudgetV1()
     monkeypatch.setattr(deepseek, "Schema67BatchBudgetV1", lambda: orchestrated_budget)
-    third_field_ids = tuple(
-        prompt.field_id for prompt in prepared[2].field_prompts
-    )
+    third_field_ids = tuple(prompt.field_id for prompt in prepared[2].field_prompts)
     transport = _FakeTransport(
         [
             *outputs[:2],
-            _shape_invalid_response(third_field_ids),
-            _unknown_fields_response(third_field_ids),
-            _unknown_fields_response((third_field_ids[0],)),
+            _response_with_task_key(
+                _shape_invalid_response(third_field_ids),
+                prepared[2].task_key,
+            ),
+            _response_with_task_key(
+                _unknown_fields_response(third_field_ids),
+                prepared[2].task_key,
+            ),
+            _response_with_task_key(
+                _unknown_fields_response((third_field_ids[0],)),
+                prepared[2].task_key,
+            ),
             *outputs[3:],
         ]
     )
@@ -3288,7 +3373,7 @@ async def test_119_complete_eight_task_fake_batch_has_bounded_receipt(
     )
     receipt = result.receipt
     assert receipt.task_count == 8
-    assert plan.batch_budget.max_provider_calls == 10
+    assert plan.batch_budget.max_provider_calls == 16
     assert receipt.locator_calls == 0
     assert receipt.extractor_calls == 8
     assert receipt.provider_calls == 10
@@ -3306,19 +3391,13 @@ async def test_119_complete_eight_task_fake_batch_has_bounded_receipt(
     assert result.executions[2].evidence_repair is not None
     assert result.executions[2].response_contract_repair.failure_code == "FIELD_ITEM_SHAPE"
     assert len(transport.calls) == 10
-    all_raw_refs = {
-        locator.locator_ref for group in locator_groups for locator in group
-    }
+    all_raw_refs = {locator.locator_ref for group in locator_groups for locator in group}
 
     def strings(value: object) -> tuple[str, ...]:
         if isinstance(value, str):
             return (value,)
         if isinstance(value, dict):
-            return tuple(
-                item
-                for key, nested in value.items()
-                for item in (key, *strings(nested))
-            )
+            return tuple(item for key, nested in value.items() for item in (key, *strings(nested)))
         if isinstance(value, list):
             return tuple(item for nested in value for item in strings(nested))
         return ()
@@ -3416,7 +3495,12 @@ async def test_119_missing_synthesis_source_forces_unknown_review() -> None:
         if item.task_key == synthesis_key and item.material_role == "rate_table"
     )
     rate_input = inputs[rate_index]
-    missing_field = rate_input.allowed_locator_refs[0][0]
+    contract_by_id = {item.field_id: item for item in contracts.contracts}
+    missing_field = next(
+        field_id
+        for field_id, _refs in rate_input.allowed_locator_refs
+        if deepseek._prompt_source_roles(contract_by_id[field_id]) == ("rate_table",)
+    )
     inputs[rate_index] = replace(
         rate_input,
         allowed_locator_refs=tuple(
@@ -3486,7 +3570,9 @@ async def test_119_missing_synthesis_source_forces_unknown_review() -> None:
         )
     assert caught.value.reason_code == "EXTRACTOR_FORCED_UNKNOWN_INVALID"
     prompt_payload = json.loads(transport.calls[0][1])
-    assert prompt_payload["response_contract"]["forced_unknown_field_ids"] == [missing_field]
+    assert prompt_payload["response_contract"]["forced_unknown_field_ids"] == [
+        item.field_id for item in synthesis.field_prompts if item.requires_unknown_review
+    ]
 
 
 @pytest.mark.asyncio
@@ -3544,9 +3630,7 @@ async def test_119_decode_failure_after_identical_retry_gets_one_contract_repair
         deepseek.DeepSeekExecutionReceiptV1.model_validate(
             {
                 **forged,
-                "receipt_hash": canonical_hash(
-                    "deepseek-evidence-compiler-596-1.v2", forged
-                ),
+                "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", forged),
             }
         )
 
@@ -3583,9 +3667,7 @@ async def test_119_decode_contract_repair_failure_stops_without_fourth_call(
 @pytest.mark.asyncio
 async def test_119_decode_contract_repair_parseable_failure_stops_without_fourth_call() -> None:
     contracts, locators = _inputs()
-    transport = _FakeTransport(
-        ["not-json", "not-json", _shape_invalid_response(("product_code",))]
-    )
+    transport = _FakeTransport(["not-json", "not-json", _shape_invalid_response(("product_code",))])
 
     with pytest.raises(DeepSeekCompilerError) as caught:
         await _run_deepseek_task(
@@ -3632,9 +3714,7 @@ async def test_119_decode_repair_receipt_requires_exact_retry_history() -> None:
         deepseek.DeepSeekExecutionReceiptV1.model_validate(
             {
                 **forged,
-                "receipt_hash": canonical_hash(
-                    "deepseek-evidence-compiler-596-1.v2", forged
-                ),
+                "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", forged),
             }
         )
 
@@ -3893,6 +3973,7 @@ async def test_119_model_returns_only_semantic_fields_and_code_hydrates_identity
         }
         for prompt in prepared.field_prompts
     ]
+
     class _ExactSlotTransport(_FakeTransport):
         async def complete(self, system: str, user: str) -> str:
             self.calls.append((system, user))
@@ -4158,7 +4239,7 @@ async def test_119_rate_table_block_locators_cannot_authorize_known_values(
         prompt.requires_unknown_review
         for task in prepared_again
         for prompt in task.field_prompts
-        if "rate_table" in prompt.contract.source_roles
+        if "rate_table" in deepseek._prompt_source_roles(prompt.contract)
     )
     rate_task = next(
         task
@@ -4236,9 +4317,16 @@ async def test_119_rate_table_block_locators_cannot_authorize_known_values(
 
 def test_119_locator_policy_and_provider_identity_bind_complete_authority() -> None:
     policy_payload = {
-        "algorithm_version": "schema67-contract-lexical-locator-v2",
+        "algorithm_version": "schema67-contract-lexical-locator-v3",
         "source": "field-contract-plus-mineru-locators",
-        "contract_terms": ("field_name", "description", "category"),
+        "contract_terms": (
+            "field_name",
+            "description",
+            "category",
+            "value_shape_raw",
+            "source_authority_raw",
+            "formation_raw",
+        ),
         "normalization": "str.casefold",
         "unicode_sequence_regex": r"[\u3400-\u9fff]+",
         "whole_sequence_min_chars": 2,
@@ -4374,24 +4462,39 @@ async def test_119_exact_tenth_call_allowed_and_eleventh_blocked_pretransport() 
 
 
 class _Schema67KnownTransport(_FakeTransport):
-    def __init__(self, *, mismatch_field_id: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        mismatch_field_id: str | None = None,
+        mismatch_source_role: str | None = None,
+    ) -> None:
         super().__init__(())
         self.mismatch_field_id = mismatch_field_id
+        self.mismatch_source_role = mismatch_source_role
 
     async def complete(self, system: str, user: str) -> str:
         self.calls.append((system, user))
         payload = json.loads(user)
         content_by_slot = {
-            item["slot"]: item["content_snapshot"]
-            for item in payload["locator_slot_catalog"]
+            item["slot"]: item["content_snapshot"] for item in payload["locator_slot_catalog"]
         }
         sources_by_field = {
-            item["field_id"]: item["sources"]
-            for item in payload["field_locator_slots"]
+            item["field_id"]: item["sources"] for item in payload["field_locator_slots"]
         }
+        forced_unknown = set(payload["response_contract"]["forced_unknown_field_ids"])
         fields = []
         for contract in payload["field_contracts"]:
             field_id = contract["field_id"]
+            if field_id in forced_unknown:
+                fields.append(
+                    {
+                        "field_id": field_id,
+                        "state": "unknown",
+                        "value_snapshot": None,
+                        "evidence": [],
+                    }
+                )
+                continue
             evidence = []
             for source in sources_by_field[field_id]:
                 slot = source["allowed_slots"][0]
@@ -4404,7 +4507,16 @@ class _Schema67KnownTransport(_FakeTransport):
                 )
             value = evidence[0]["quote_snapshot"]
             if field_id == self.mismatch_field_id:
-                value = "normalized-value-does-not-equal-any-quote"
+                for item in evidence:
+                    if (
+                        self.mismatch_source_role is not None
+                        and item["source_role"] != self.mismatch_source_role
+                    ):
+                        continue
+                    quote = item["quote_snapshot"]
+                    assert isinstance(quote, str)
+                    item["quote_snapshot"] = quote[:1] + quote[2:]
+                value = evidence[0]["quote_snapshot"]
             fields.append(
                 {
                     "field_id": field_id,
@@ -4414,6 +4526,833 @@ class _Schema67KnownTransport(_FakeTransport):
                 }
             )
         return json.dumps({"fields": fields}, ensure_ascii=False, separators=(",", ":"))
+
+
+class _Schema67QuoteRepairTransport(_FakeTransport):
+    def __init__(
+        self,
+        *,
+        repair_quote_is_exact: bool,
+        initial_quote_is_exact: bool = False,
+        initial_target_value: str | None = None,
+        repair_target_value_is_exact_quote: bool = False,
+        initial_unknown_field_id: str | None = None,
+        initial_normalization_only_quote: bool = False,
+    ) -> None:
+        super().__init__(())
+        self.repair_quote_is_exact = repair_quote_is_exact
+        self.initial_quote_is_exact = initial_quote_is_exact
+        self.initial_target_value = initial_target_value
+        self.repair_target_value_is_exact_quote = repair_target_value_is_exact_quote
+        self.initial_unknown_field_id = initial_unknown_field_id
+        self.initial_normalization_only_quote = initial_normalization_only_quote
+        self.initial_bytes: bytes | None = None
+        self.repair_bytes: bytes | None = None
+        self.target_field_id: str | None = None
+
+    async def complete(self, system: str, user: str) -> str:
+        self.calls.append((system, user))
+        payload = json.loads(user)
+        content_by_slot = {
+            item["slot"]: item["content_snapshot"] for item in payload["locator_slot_catalog"]
+        }
+        sources_by_field = {
+            item["field_id"]: item["sources"] for item in payload["field_locator_slots"]
+        }
+        repair_field_ids = tuple(payload.get("field_ids", ()))
+        is_repair = payload.get("repair_kind") == "evidence"
+        forced_unknown = set(payload["response_contract"]["forced_unknown_field_ids"])
+        contracts = tuple(
+            item
+            for item in payload["field_contracts"]
+            if not is_repair or item["field_id"] in repair_field_ids
+        )
+        if not is_repair:
+            self.target_field_id = next(
+                item["field_id"]
+                for item in reversed(contracts)
+                if item["field_id"] not in forced_unknown
+            )
+        fields: list[dict[str, object]] = []
+        for contract in contracts:
+            field_id = contract["field_id"]
+            if not is_repair and (
+                field_id == self.initial_unknown_field_id or field_id in forced_unknown
+            ):
+                fields.append(
+                    {
+                        "field_id": field_id,
+                        "state": "unknown",
+                        "value_snapshot": None,
+                        "evidence": [],
+                    }
+                )
+                continue
+            evidence: list[dict[str, object]] = []
+            for source in sources_by_field[field_id]:
+                slot = source["allowed_slots"][0]
+                exact_quote = content_by_slot[slot]
+                quote = exact_quote
+                if field_id == self.target_field_id and (
+                    (not is_repair and not self.initial_quote_is_exact)
+                    or (is_repair and not self.repair_quote_is_exact)
+                ):
+                    quote = (
+                        exact_quote.replace("-", "—", 1)
+                        if not is_repair and self.initial_normalization_only_quote
+                        else exact_quote[:1] + exact_quote[2:]
+                    )
+                evidence.append(
+                    {
+                        "source_role": source["source_role"],
+                        "locator_slot": slot,
+                        "quote_snapshot": quote,
+                    }
+                )
+            fields.append(
+                {
+                    "field_id": field_id,
+                    "state": "present",
+                    "value_snapshot": (
+                        evidence[0]["quote_snapshot"]
+                        if is_repair
+                        and field_id == self.target_field_id
+                        and self.repair_target_value_is_exact_quote
+                        else (
+                            "语义等价的必要条件摘要"
+                            if is_repair and field_id == self.target_field_id
+                            else (
+                                self.initial_target_value
+                                if field_id == self.target_field_id
+                                and self.initial_target_value is not None
+                                else evidence[0]["quote_snapshot"]
+                            )
+                        )
+                    ),
+                    "evidence": evidence,
+                }
+            )
+        response = json.dumps({"fields": fields}, ensure_ascii=False, separators=(",", ":"))
+        if is_repair:
+            self.repair_bytes = response.encode()
+        else:
+            self.initial_bytes = response.encode()
+        return response
+
+
+class _Schema67BatchLocatorRepairTransport(_FakeTransport):
+    def __init__(self, *, failure_mode: str = "locator_membership") -> None:
+        super().__init__(())
+        self.failure_mode = failure_mode
+        self.initial_responses: list[str] = []
+        self.initial_call_count = 0
+        self.forced_unknown_present_field_id: str | None = None
+        self.preserved_field_id: str | None = None
+        self.forced_unknown_task_index: int | None = None
+
+    async def complete(self, system: str, user: str) -> str:
+        self.calls.append((system, user))
+        payload = json.loads(user)
+        is_repair = payload.get("repair_kind") == "evidence"
+        if not is_repair:
+            self.initial_call_count += 1
+        repair_fields = set(payload.get("field_ids", ()))
+        forced_unknown = set(payload["response_contract"]["forced_unknown_field_ids"])
+        if is_repair:
+            local_contexts = tuple(payload["field_local_contexts"])
+            contracts = tuple(item["field_contract"] for item in local_contexts)
+            sources_by_field = {
+                item["field_id"]: tuple(
+                    {
+                        "source_role": source["source_role"],
+                        "allowed_slots": tuple(
+                            locator["slot"]
+                            for locator in source["allowed_locators"]
+                        ),
+                    }
+                    for source in item["sources"]
+                )
+                for item in local_contexts
+            }
+            content_by_slot = {
+                locator["slot"]: locator["content_snapshot"]
+                for item in local_contexts
+                for source in item["sources"]
+                for locator in source["allowed_locators"]
+            }
+        else:
+            content_by_slot = {
+                item["slot"]: item["content_snapshot"]
+                for item in payload["locator_slot_catalog"]
+            }
+            sources_by_field = {
+                item["field_id"]: item["sources"]
+                for item in payload["field_locator_slots"]
+            }
+            contracts = tuple(payload["field_contracts"])
+        assert {item["field_id"] for item in contracts} == repair_fields or not is_repair
+        if (
+            not is_repair
+            and self.failure_mode
+            in {"forced_unknown_present", "forced_unknown_present_and_field_order"}
+            and self.forced_unknown_present_field_id is None
+        ):
+            forced_candidates = tuple(
+                item["field_id"]
+                for item in contracts
+                if item["field_id"] in forced_unknown
+            )
+            preserved_candidates = tuple(
+                item["field_id"]
+                for item in contracts
+                if item["field_id"] not in forced_unknown
+            )
+            if forced_candidates and preserved_candidates:
+                self.forced_unknown_present_field_id = forced_candidates[0]
+                self.preserved_field_id = preserved_candidates[0]
+                self.forced_unknown_task_index = self.initial_call_count - 1
+        fields: list[dict[str, object]] = []
+        for contract in contracts:
+            field_id = contract["field_id"]
+            if field_id in forced_unknown:
+                if field_id == self.forced_unknown_present_field_id:
+                    fields.append(
+                        {
+                            "field_id": field_id,
+                            "state": "present",
+                            "value_snapshot": "unsupported-model-value",
+                            "evidence": [],
+                        }
+                    )
+                    continue
+                fields.append(
+                    {
+                        "field_id": field_id,
+                        "state": "unknown",
+                        "value_snapshot": None,
+                        "evidence": [],
+                    }
+                )
+                continue
+            evidence = []
+            for source in sources_by_field[field_id]:
+                slot = source["allowed_slots"][0]
+                if (
+                    not is_repair
+                    and (
+                        (
+                            self.failure_mode == "locator_membership"
+                            and self.initial_call_count == 3
+                            and field_id == "exclusions"
+                        )
+                        or (
+                            self.failure_mode == "combined_locator_failures"
+                            and self.initial_call_count == 4
+                            and field_id
+                            in {"reimbursement_rate_rules", "eligible_hospital_scope"}
+                        )
+                    )
+                ):
+                    other_field_id = next(
+                        item["field_id"]
+                        for item in contracts
+                        if item["field_id"] != field_id
+                    )
+                    slot = sources_by_field[other_field_id][0]["allowed_slots"][0]
+                evidence.append(
+                    {
+                        "source_role": source["source_role"],
+                        "locator_slot": slot,
+                        "quote_snapshot": content_by_slot[slot],
+                    }
+                )
+            if (
+                not is_repair
+                and self.failure_mode
+                in {"duplicate_locator_ref", "combined_locator_failures"}
+                and self.initial_call_count == 4
+                and field_id == "deductible_rules"
+            ):
+                original_quote = evidence[0]["quote_snapshot"]
+                evidence.append(
+                    {
+                        **evidence[0],
+                        "quote_snapshot": original_quote[:-1],
+                    }
+                )
+            fields.append(
+                {
+                    "field_id": field_id,
+                    "state": "present",
+                    "value_snapshot": evidence[0]["quote_snapshot"],
+                    "evidence": evidence,
+                }
+            )
+        if (
+            not is_repair
+            and self.failure_mode == "forced_unknown_present_and_field_order"
+            and self.forced_unknown_task_index == self.initial_call_count - 1
+        ):
+            target_index = next(
+                index
+                for index, item in enumerate(fields)
+                if item["field_id"] == self.forced_unknown_present_field_id
+            )
+            other_index = 1 if target_index == 0 else 0
+            fields[target_index], fields[other_index] = (
+                fields[other_index],
+                fields[target_index],
+            )
+        if (
+            not is_repair
+            and self.initial_call_count == 4
+            and self.failure_mode
+            in {"field_missing", "field_duplicate", "field_order"}
+        ):
+            if self.failure_mode == "field_missing":
+                fields.pop()
+            elif self.failure_mode == "field_duplicate":
+                fields[1] = dict(fields[0])
+            else:
+                fields[0], fields[1] = fields[1], fields[0]
+        response = deepseek._canonical_bytes(
+            {"task_key": payload["task_key"], "fields": fields}
+        ).decode("utf-8")
+        if not is_repair:
+            self.initial_responses.append(response)
+        return response
+
+
+class _Schema67LargeSharedRepairTransport(_FakeTransport):
+    def __init__(
+        self,
+        *,
+        failed_field_ids: tuple[str, ...],
+        retain_initial_locator_field_ids: tuple[str, ...] = (),
+        unsupported_repair_field_ids: tuple[str, ...] = (),
+    ) -> None:
+        super().__init__(())
+        self.failed_field_ids = frozenset(failed_field_ids)
+        self.retain_initial_locator_field_ids = frozenset(
+            retain_initial_locator_field_ids
+        )
+        self.unsupported_repair_field_ids = frozenset(
+            unsupported_repair_field_ids
+        )
+        self.initial_responses: list[str] = []
+        self.initial_locator_slots: dict[str, tuple[str, ...]] = {}
+        self.repair_request_bytes: int | None = None
+        self.repair_user: str | None = None
+        self.repair_response: str | None = None
+        self.repair_request_byte_sizes: list[int] = []
+        self.repair_users: list[str] = []
+        self.repair_responses: list[str] = []
+
+    async def complete(self, system: str, user: str) -> str:
+        self.calls.append((system, user))
+        payload = json.loads(user)
+        is_repair = payload.get("repair_kind") == "evidence"
+        if is_repair:
+            request_byte_size = len(
+                deepseek._deepseek_request_bytes(system=system, user=user)
+            )
+            self.repair_request_bytes = request_byte_size
+            self.repair_user = user
+            self.repair_request_byte_sizes.append(request_byte_size)
+            self.repair_users.append(user)
+        repair_fields = set(payload.get("field_ids", ()))
+        forced_unknown = set(payload["response_contract"]["forced_unknown_field_ids"])
+        if is_repair:
+            local_contexts = tuple(payload["field_local_contexts"])
+            contracts = tuple(item["field_contract"] for item in local_contexts)
+            sources_by_field = {
+                item["field_id"]: tuple(
+                    {
+                        "source_role": source["source_role"],
+                        "allowed_slots": tuple(
+                            locator["slot"]
+                            for locator in source["allowed_locators"]
+                        ),
+                    }
+                    for source in item["sources"]
+                )
+                for item in local_contexts
+            }
+            content_by_slot = {
+                locator["slot"]: locator["content_snapshot"]
+                for item in local_contexts
+                for source in item["sources"]
+                for locator in source["allowed_locators"]
+            }
+        else:
+            content_by_slot = {
+                item["slot"]: item["content_snapshot"]
+                for item in payload["locator_slot_catalog"]
+            }
+            sources_by_field = {
+                item["field_id"]: item["sources"]
+                for item in payload["field_locator_slots"]
+            }
+            contracts = tuple(payload["field_contracts"])
+        assert {item["field_id"] for item in contracts} == repair_fields or not is_repair
+        fields: list[dict[str, object]] = []
+        for contract in contracts:
+            field_id = contract["field_id"]
+            if field_id in forced_unknown or (
+                is_repair and field_id in self.unsupported_repair_field_ids
+            ):
+                fields.append(
+                    {
+                        "field_id": field_id,
+                        "state": "unknown",
+                        "value_snapshot": None,
+                        "evidence": [],
+                    }
+                )
+                continue
+            evidence: list[dict[str, str]] = []
+            for source in sources_by_field[field_id]:
+                slot_index = (
+                    1
+                    if not is_repair
+                    and field_id in self.retain_initial_locator_field_ids
+                    else 0
+                )
+                slot = source["allowed_slots"][slot_index]
+                quote = content_by_slot[slot]
+                if not is_repair and field_id in self.failed_field_ids:
+                    quote = f"[not-literal]{quote}"
+                evidence.append(
+                    {
+                        "source_role": source["source_role"],
+                        "locator_slot": slot,
+                        "quote_snapshot": quote,
+                    }
+                )
+            if not is_repair:
+                self.initial_locator_slots[field_id] = tuple(
+                    item["locator_slot"] for item in evidence
+                )
+            fields.append(
+                {
+                    "field_id": field_id,
+                    "state": "present",
+                    "value_snapshot": evidence[0]["quote_snapshot"],
+                    "evidence": evidence,
+                }
+            )
+        response = deepseek._canonical_bytes(
+            {"task_key": payload["task_key"], "fields": fields}
+        ).decode("utf-8")
+        if not is_repair:
+            self.initial_responses.append(response)
+        else:
+            self.repair_response = response
+            self.repair_responses.append(response)
+        return response
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("repair_quote_is_exact", "expected_state", "expected_reason"),
+    (
+        (True, "present", None),
+        (False, "unknown", "quote_not_found"),
+    ),
+)
+async def test_119_quote_failure_uses_one_batch_repair_then_typed_unknown(
+    repair_quote_is_exact: bool,
+    expected_state: str,
+    expected_reason: str | None,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = next(
+        item
+        for item in prepare_schema67_deepseek_tasks(
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=_schema67_role_inputs(contracts, plan),
+        )
+        if item.task_kind == "material" and len(item.field_prompts) == 8
+    )
+    prepared, admitted, locators = _admitted_source_for_prepared(prepared)
+    transport = _Schema67QuoteRepairTransport(
+        repair_quote_is_exact=repair_quote_is_exact,
+        repair_target_value_is_exact_quote=True,
+    )
+
+    result = await _run_deepseek_task(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        port=_Schema67EvidenceBindingPort(
+            prepared=prepared,
+            admitted_sources=(admitted,),
+        ),
+        field_contracts=prepared.field_prompts,
+        locators=locators,
+        execution_plan_sha256=plan.execution_plan_sha256,
+        task_slice_sha256=prepared.task_slice_sha256,
+    )
+
+    assert transport.target_field_id is not None
+    assert transport.initial_bytes is not None
+    assert transport.repair_bytes is not None
+    assert len(transport.calls) == 2
+    initial_payload = json.loads(transport.calls[0][1])
+    assert initial_payload["schema_rows_sha256"] == contracts.schema_rows_sha256
+    assert initial_payload["response_contract"]["present_value_057_support"][
+        "value_quote_relation"
+    ].startswith("value_snapshot_semantically_equivalent_to_exact_quote")
+    assert "exactly equal" not in transport.calls[0][0]
+    repair_payload = json.loads(transport.calls[1][1])
+    assert tuple(repair_payload["field_ids"]) == (transport.target_field_id,)
+    initial_contract = next(
+        item
+        for item in initial_payload["field_contracts"]
+        if item["field_id"] == transport.target_field_id
+    )
+    repair_contract = next(
+        item
+        for item in repair_payload["field_contracts"]
+        if item["field_id"] == transport.target_field_id
+    )
+    assert repair_contract == initial_contract
+    assert {
+        "field_name",
+        "category",
+        "value_shape_raw",
+        "source_authority_raw",
+        "formation_raw",
+    }.issubset(repair_contract)
+    assert {"description", "source_guidance_roles"}.issubset(repair_contract["contract"])
+    assert (
+        repair_payload["parent_response_sha256"]
+        == hashlib.sha256(transport.initial_bytes).hexdigest()
+    )
+    assert repair_payload["failure_reasons"] == [
+        {"field_id": transport.target_field_id, "reason_code": "quote_not_found"},
+    ]
+    assert result.evidence_repair is not None
+    assert (
+        result.evidence_repair.accepted_response_sha256
+        == hashlib.sha256(transport.repair_bytes).hexdigest()
+    )
+    assert result.receipt.evidence_repairs == 1
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+    assert result.receipt.total_calls == 2
+    initial_by_field = {item.field_id: item for item in result.initial_outputs}
+    final_by_field = {item.field_id: item for item in result.final_outputs}
+    for field_id in result.receipt.field_ids:
+        if field_id == transport.target_field_id:
+            continue
+        assert final_by_field[field_id] == initial_by_field[field_id]
+    target = final_by_field[transport.target_field_id]
+    assert target.state == expected_state
+    if expected_state == "present":
+        assert target.value_snapshot == target.evidence[0].quote_snapshot
+        assert target.evidence
+    else:
+        assert target.value_snapshot is None
+        assert target.evidence == ()
+    repair_results = {
+        item.field_id: item for item in result.evidence_repair.verifier_resolution.results
+    }
+    target_result = repair_results[transport.target_field_id]
+    assert (target_result.reason_codes[0] if target_result.reason_codes else None) == (
+        expected_reason
+    )
+
+
+@pytest.mark.asyncio
+async def test_119_ec01_quote_requires_exact_original_literal_not_057_equivalence() -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = next(
+        item
+        for item in prepare_schema67_deepseek_tasks(
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=_schema67_role_inputs(contracts, plan),
+        )
+        if item.task_kind == "material" and len(item.field_prompts) == 8
+    )
+    prepared, admitted, locators = _admitted_source_for_prepared(prepared)
+    transport = _Schema67QuoteRepairTransport(
+        repair_quote_is_exact=True,
+        repair_target_value_is_exact_quote=True,
+        initial_normalization_only_quote=True,
+    )
+
+    result = await _run_deepseek_task(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        port=_Schema67EvidenceBindingPort(
+            prepared=prepared,
+            admitted_sources=(admitted,),
+        ),
+        field_contracts=prepared.field_prompts,
+        locators=locators,
+        execution_plan_sha256=plan.execution_plan_sha256,
+        task_slice_sha256=prepared.task_slice_sha256,
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert transport.target_field_id is not None
+    assert len(transport.calls) == 2
+    initial_payload = json.loads(transport.calls[0][1])
+    assert (
+        initial_payload["response_contract"]["evidence"]["quote_snapshot"]["constraint"]
+        == "exact_utf8_literal_substring_of_original_content_snapshot"
+    )
+    assert "after exact 057 normalization" not in transport.calls[0][0]
+    assert isinstance(result.initial, deepseek.Schema67BoundAttemptV1)
+    initial_results = {
+        item.field_id: item
+        for batch in result.initial.verification_batches
+        for item in batch.results
+    }
+    assert initial_results[transport.target_field_id].reason_codes == ("quote_not_found",)
+    assert (
+        next(
+            item for item in result.final_outputs if item.field_id == transport.target_field_id
+        ).state
+        == "present"
+    )
+
+
+def test_119_ec01_quote_preserves_adjacent_footnote_marker() -> None:
+    field_id = "entry_age_range"
+    page_text = "正文¹；后续无关内容"
+    passing = _passing_freeform_verification(field_id)
+
+    omitted_marker = deepseek._require_exact_literal_quote_results(
+        passing,
+        (
+            _freeform_output_with_quote(
+                field_id=field_id,
+                value_snapshot="正文",
+                quote_snapshot="正文",
+                content_snapshot=page_text,
+            ),
+        ),
+    )
+    complete_quote = deepseek._require_exact_literal_quote_results(
+        passing,
+        (
+            _freeform_output_with_quote(
+                field_id=field_id,
+                value_snapshot="正文",
+                quote_snapshot="正文¹",
+                content_snapshot=page_text,
+            ),
+        ),
+    )
+
+    assert omitted_marker.results[0].status == "FAIL"
+    assert omitted_marker.results[0].reason_codes == ("quote_not_found",)
+    assert complete_quote.results[0].status == "PASS"
+    assert complete_quote.results[0].reason_codes == ()
+
+
+@pytest.mark.asyncio
+async def test_119_unrelated_freeform_value_is_the_only_targeted_repair_scope() -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = next(
+        item
+        for item in prepare_schema67_deepseek_tasks(
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=_schema67_role_inputs(contracts, plan),
+        )
+        if item.task_kind == "material" and len(item.field_prompts) == 8
+    )
+    prepared, admitted, locators = _admitted_source_for_prepared(prepared)
+    unknown_field_id = prepared.field_prompts[0].field_id
+    transport = _Schema67QuoteRepairTransport(
+        repair_quote_is_exact=True,
+        initial_quote_is_exact=True,
+        initial_target_value="缴费期限为20年，与所引页面内容无关",
+        repair_target_value_is_exact_quote=True,
+        initial_unknown_field_id=unknown_field_id,
+    )
+
+    result = await _run_deepseek_task(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        port=_Schema67EvidenceBindingPort(
+            prepared=prepared,
+            admitted_sources=(admitted,),
+        ),
+        field_contracts=prepared.field_prompts,
+        locators=locators,
+        execution_plan_sha256=plan.execution_plan_sha256,
+        task_slice_sha256=prepared.task_slice_sha256,
+    )
+
+    assert transport.target_field_id is not None
+    assert len(transport.calls) == 2
+    repair_payload = json.loads(transport.calls[1][1])
+    assert tuple(repair_payload["field_ids"]) == (transport.target_field_id,)
+    assert repair_payload["failure_reasons"] == [
+        {
+            "field_id": transport.target_field_id,
+            "reason_code": "value_not_supported_by_quote",
+        }
+    ]
+    assert isinstance(result.initial, deepseek.Schema67BoundAttemptV1)
+    initial_results = {
+        item.field_id: item
+        for batch in result.initial.verification_batches
+        for item in batch.results
+    }
+    assert initial_results[unknown_field_id].status == "GAP"
+    assert initial_results[unknown_field_id].reason_codes == ("unknown_value",)
+    assert initial_results[transport.target_field_id].status == "FAIL"
+    assert initial_results[transport.target_field_id].reason_codes == (
+        "value_not_supported_by_quote",
+    )
+    final_by_field = {item.field_id: item for item in result.final_outputs}
+    assert final_by_field[unknown_field_id].state == "unknown"
+    assert final_by_field[unknown_field_id].value_snapshot is None
+    assert final_by_field[unknown_field_id].evidence == ()
+    assert final_by_field[transport.target_field_id].state == "present"
+    assert result.receipt.evidence_repairs == 1
+
+
+def test_119_freeform_semantic_value_requires_source_preserving_material_facts() -> None:
+    quote = "被保险人须年满18周岁，且无未披露既往症；但紧急医疗除外，最高给付100万元。"
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot=("须年满18周岁；且无未披露既往症；但紧急医疗除外；最高给付100万元"),
+            quote_snapshot=quote,
+        )
+    )
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="紧急医疗除外",
+            quote_snapshot="紧急医疗除外",
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="缴费期限为20年，与该引文无关",
+            quote_snapshot=quote,
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="须年满18周岁；且无未披露既往症；最高给付100万元",
+            quote_snapshot=quote,
+        )
+    )
+
+
+def test_119_freeform_semantic_value_preserves_clause_local_marker_multiplicity() -> None:
+    quote = "不得销售；不得赠送；必须审核"
+
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="不得销售；不得赠送；必须审核",
+            quote_snapshot=quote,
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="不得销售；赠送；必须审核",
+            quote_snapshot=quote,
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("quote_snapshot", "value_snapshot"),
+    (
+        ("本合同不承担战争责任", "承担战争责任"),
+        ("保障尚未生效", "生效"),
+        ("本产品无等待期", "等待期"),
+        ("非保险责任", "保险责任"),
+        ("请勿重复投保", "重复投保"),
+        ("禁止销售", "销售"),
+        ("本合同不能退保", "退保"),
+        ("本合同不予赔付", "赔付"),
+    ),
+)
+def test_119_freeform_semantic_value_binds_polarity_to_selected_source_clause(
+    quote_snapshot: str,
+    value_snapshot: str,
+) -> None:
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="保障一般医疗",
+            quote_snapshot="不承担战争责任；保障一般医疗",
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot=value_snapshot,
+            quote_snapshot=quote_snapshot,
+        )
+    )
+
+
+def test_119_freeform_semantic_value_only_removes_frozen_neutral_wrappers() -> None:
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="保障一般医疗",
+            quote_snapshot="本合同保障一般医疗",
+        )
+    )
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="保障一般医疗",
+            quote_snapshot="不承担战争责任；保障一般医疗",
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot="发生事故；承担责任",
+            quote_snapshot="若发生事故；则承担责任",
+        )
+    )
+
+
+def test_119_freeform_semantic_value_neutral_subject_wrapper_is_field_specific() -> None:
+    assert deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            field_id="entry_age_range",
+            value_snapshot="须年满18周岁",
+            quote_snapshot="被保险人须年满18周岁",
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            field_id="policyholder_rights",
+            value_snapshot="享有合同解除权",
+            quote_snapshot="被保险人享有合同解除权",
+        )
+    )
+
+
+def test_119_freeform_semantic_value_rejects_markers_bound_to_wrong_propositions() -> None:
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot=("若发生事故；则承担责任；若及时报案；则不承担责任"),
+            quote_snapshot=("若发生事故；则不承担责任；若及时报案；则承担责任"),
+        )
+    )
+    assert not deepseek._semantic_freeform_value_supported(
+        _freeform_output_with_quote(
+            value_snapshot=("投保人不得替投保人签名；被保险人不得替被保险人签名"),
+            quote_snapshot=("投保人不得替被保险人签名；被保险人不得替投保人签名"),
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -4445,9 +5384,7 @@ async def test_119_mvp_single_call_demotes_only_complete_057_nonpass_union() -> 
     assert result.evidence_demotion.demoted_field_ids == (target,)
     initial_by_id = {item.field_id: item for item in result.initial_outputs}
     final_by_id = {item.field_id: item for item in result.final_outputs}
-    initial_receipts = {
-        item.field_id: item for item in result.initial.evidence_receipts
-    }
+    initial_receipts = {item.field_id: item for item in result.initial.evidence_receipts}
     final_receipts = {item.field_id: item for item in result.evidence_receipts}
     assert final_by_id[target].state == "unknown"
     assert final_by_id[target].value_snapshot is None
@@ -4455,7 +5392,9 @@ async def test_119_mvp_single_call_demotes_only_complete_057_nonpass_union() -> 
     assert final_receipts[target].state == "unknown"
     assert final_receipts[target].value_snapshot is None
     assert final_receipts[target].evidence == ()
-    for field_id in result.receipt.field_ids[:-1]:
+    for field_id in result.receipt.field_ids:
+        if field_id == target:
+            continue
         assert final_by_id[field_id] == initial_by_id[field_id]
         assert final_receipts[field_id] == initial_receipts[field_id]
 
@@ -4476,7 +5415,11 @@ async def _mvp_demoted_execution() -> tuple[
         if item.task_kind == "material" and len(item.field_prompts) == 8
     )
     prepared, admitted, locators = _admitted_source_for_prepared(prepared)
-    target = prepared.field_prompts[-1].field_id
+    target = next(
+        item.field_id
+        for item in reversed(prepared.field_prompts)
+        if not item.requires_unknown_review
+    )
     transport = _Schema67KnownTransport(mismatch_field_id=target)
 
     result = await _run_deepseek_task(
@@ -4506,9 +5449,7 @@ def _rehash_mvp_demotion(
     demotion = deepseek.EvidenceDemotionReceiptV1.model_validate(
         {
             **values,
-            "receipt_hash": canonical_hash(
-                "schema67-evidence-demotion-receipt.v1", values
-            ),
+            "receipt_hash": canonical_hash("schema67-evidence-demotion-receipt.v1", values),
         }
     )
     receipt_values = result.receipt.model_dump(mode="python", exclude={"receipt_hash"})
@@ -4516,9 +5457,7 @@ def _rehash_mvp_demotion(
     receipt = deepseek.DeepSeekExecutionReceiptV1.model_validate(
         {
             **receipt_values,
-            "receipt_hash": canonical_hash(
-                "deepseek-evidence-compiler-596-1.v2", receipt_values
-            ),
+            "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", receipt_values),
         }
     )
     return demotion, receipt
@@ -4533,12 +5472,8 @@ async def test_119_mvp_task_execution_recomputes_demotion_scope() -> None:
         (target, pass_field),
         (pass_field, target),
     ):
-        demotion, receipt = _rehash_mvp_demotion(
-            result, demoted_field_ids=scope
-        )
-        with pytest.raises(
-            ValueError, match="deepseek_evidence_demotion_custody_mismatch"
-        ):
+        demotion, receipt = _rehash_mvp_demotion(result, demoted_field_ids=scope)
+        with pytest.raises(ValueError, match="deepseek_evidence_demotion_custody_mismatch"):
             replace(
                 result,
                 evidence_demotion=demotion,
@@ -4551,12 +5486,8 @@ async def test_119_mvp_task_execution_recomputes_demotion_scope() -> None:
             demoted_field_ids=(target, target),
         )
 
-    demotion, receipt = _rehash_mvp_demotion(
-        result, verification_batch_hashes=("f" * 64,)
-    )
-    with pytest.raises(
-        ValueError, match="deepseek_evidence_demotion_custody_mismatch"
-    ):
+    demotion, receipt = _rehash_mvp_demotion(result, verification_batch_hashes=("f" * 64,))
+    with pytest.raises(ValueError, match="deepseek_evidence_demotion_custody_mismatch"):
         replace(result, evidence_demotion=demotion, receipt=receipt)
 
     initial_receipts = result.initial.evidence_receipts
@@ -4565,22 +5496,16 @@ async def test_119_mvp_task_execution_recomputes_demotion_scope() -> None:
         {
             "evidence_demotion": None,
             "final_outputs_sha256": deepseek._outputs_sha256(result.initial_outputs),
-            "evidence_receipt_hashes": tuple(
-                item.receipt_hash for item in initial_receipts
-            ),
+            "evidence_receipt_hashes": tuple(item.receipt_hash for item in initial_receipts),
         }
     )
     forged_receipt = deepseek.DeepSeekExecutionReceiptV1.model_validate(
         {
             **receipt_values,
-            "receipt_hash": canonical_hash(
-                "deepseek-evidence-compiler-596-1.v2", receipt_values
-            ),
+            "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", receipt_values),
         }
     )
-    with pytest.raises(
-        ValueError, match="deepseek_evidence_demotion_custody_mismatch"
-    ):
+    with pytest.raises(ValueError, match="deepseek_task_execution_custody_mismatch"):
         replace(
             result,
             final_outputs=result.initial_outputs,
@@ -4606,9 +5531,7 @@ async def test_119_mvp_task_execution_rejects_pass_output_or_receipt_mutation() 
     receipt = deepseek.DeepSeekExecutionReceiptV1.model_validate(
         {
             **receipt_values,
-            "receipt_hash": canonical_hash(
-                "deepseek-evidence-compiler-596-1.v2", receipt_values
-            ),
+            "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", receipt_values),
         }
     )
     with pytest.raises(ValueError):
@@ -4625,9 +5548,7 @@ async def test_119_mvp_task_execution_rejects_pass_output_or_receipt_mutation() 
     )
     demotion, receipt = _rehash_mvp_demotion(
         result,
-        final_evidence_receipt_hashes=tuple(
-            item.receipt_hash for item in mutated_receipts
-        ),
+        final_evidence_receipt_hashes=tuple(item.receipt_hash for item in mutated_receipts),
     )
     receipt_values = receipt.model_dump(mode="python", exclude={"receipt_hash"})
     receipt_values["evidence_receipt_hashes"] = tuple(
@@ -4636,9 +5557,7 @@ async def test_119_mvp_task_execution_rejects_pass_output_or_receipt_mutation() 
     receipt = deepseek.DeepSeekExecutionReceiptV1.model_validate(
         {
             **receipt_values,
-            "receipt_hash": canonical_hash(
-                "deepseek-evidence-compiler-596-1.v2", receipt_values
-            ),
+            "receipt_hash": canonical_hash("deepseek-evidence-compiler-596-1.v2", receipt_values),
         }
     )
     with pytest.raises(ValueError):
@@ -4648,6 +5567,75 @@ async def test_119_mvp_task_execution_rejects_pass_output_or_receipt_mutation() 
             evidence_demotion=demotion,
             receipt=receipt,
         )
+
+
+@pytest.mark.asyncio
+async def test_119_effective_source_roles_exclude_nonapplicable_verification_batches() -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = next(
+        item
+        for item in prepare_schema67_deepseek_tasks(
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=_schema67_role_inputs(contracts, plan),
+        )
+        if item.task_kind == "synthesis"
+    )
+    admitted = []
+    locators: list[CanonicalLocatorInputV1] = []
+    for source_index in range(len(prepared.source_tasks)):
+        prepared, source, source_locators = _admitted_source_for_prepared(
+            prepared, source_index=source_index
+        )
+        admitted.append(source)
+        locators.extend(source_locators)
+    prompt = next(
+        item for item in prepared.field_prompts if item.field_id == "product_summary"
+    )
+    assert tuple(role for role, _refs in prompt.source_locator_refs) == ("brochure",)
+
+    result = await _run_deepseek_task(
+        profile=_profile(),
+        policy=_policy(),
+        transport=_Schema67KnownTransport(),
+        port=_Schema67EvidenceBindingPort(
+            prepared=prepared,
+            admitted_sources=tuple(admitted),
+        ),
+        field_contracts=prepared.field_prompts,
+        locators=tuple(locators),
+        execution_plan_sha256=plan.execution_plan_sha256,
+        task_slice_sha256=prepared.task_slice_sha256,
+        _single_pass_mvp=True,
+        _allow_evidence_repair=False,
+    )
+
+    assert isinstance(result.initial, deepseek.Schema67BoundAttemptV1)
+    source_role_by_revision = {
+        source.document.subject.source_revision_id: source.role for source in admitted
+    }
+    results_by_role = {
+        source_role_by_revision[batch.source_revision_id]: tuple(
+            item for item in batch.results if item.field_id == prompt.field_id
+        )
+        for batch in result.initial.verification_batches
+    }
+    assert results_by_role["terms"] == ()
+    assert tuple(item.status for item in results_by_role["brochure"]) == ("PASS",)
+    assert next(
+        item for item in result.final_outputs if item.field_id == prompt.field_id
+    ).state == "present"
+    receipt = next(
+        item for item in result.evidence_receipts if item.field_id == prompt.field_id
+    )
+    assert tuple(item.source_revision_id for item in receipt.documents) == (
+        next(
+            source.document.subject.source_revision_id
+            for source in admitted
+            if source.role == "brochure"
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -4671,10 +5659,16 @@ async def test_119_mvp_multisource_any_nonpass_demotes_whole_field() -> None:
         )
         admitted.append(source)
         locators.extend(source_locators)
+    target_prompt = next(
+        item for item in prepared.field_prompts if item.field_id == "product_summary"
+    )
     result = await _run_deepseek_task(
         profile=_profile(),
         policy=_policy(),
-        transport=_Schema67KnownTransport(),
+        transport=_Schema67KnownTransport(
+            mismatch_field_id=target_prompt.field_id,
+            mismatch_source_role=target_prompt.source_locator_refs[-1][0],
+        ),
         port=_Schema67EvidenceBindingPort(
             prepared=prepared,
             admitted_sources=tuple(admitted),
@@ -4696,13 +5690,10 @@ async def test_119_mvp_multisource_any_nonpass_demotes_whole_field() -> None:
         )
         for field_id in result.receipt.field_ids
     }
-    target, source_statuses = next(
-        (field_id, statuses)
-        for field_id, statuses in statuses_by_field.items()
-        if "PASS" in statuses and any(status != "PASS" for status in statuses)
-    )
-    assert "PASS" in source_statuses
-    assert any(status != "PASS" for status in source_statuses)
+    target = target_prompt.field_id
+    source_statuses = statuses_by_field[target]
+    assert source_statuses
+    assert all(status != "PASS" for status in source_statuses)
     assert target in result.evidence_demotion.demoted_field_ids
     assert next(item for item in result.final_outputs if item.field_id == target).state == (
         "unknown"
@@ -4731,8 +5722,7 @@ async def test_119_mvp_forced_unknown_stays_unknown_without_repair() -> None:
             execution_plan=plan,
             role_inputs=role_inputs,
         )
-        if item.task_kind == "material"
-        and item.source_tasks[0].material_role == "rate_table"
+        if item.task_kind == "material" and item.source_tasks[0].material_role == "rate_table"
     )
     assert all(item.requires_unknown_review for item in prepared.field_prompts)
     prepared, admitted, locators = _admitted_source_for_prepared(prepared)
@@ -4756,6 +5746,12 @@ async def test_119_mvp_forced_unknown_stays_unknown_without_repair() -> None:
     assert all(
         item.state == "unknown" and item.value_snapshot is None and item.evidence == ()
         for item in result.final_outputs
+    )
+    assert isinstance(result.initial, deepseek.Schema67BoundAttemptV1)
+    assert all(
+        item.status == "GAP" and item.reason_codes == ("unknown_value",)
+        for batch in result.initial.verification_batches
+        for item in batch.results
     )
     assert result.evidence_demotion is None
     assert result.receipt.total_calls == 1
@@ -4895,13 +5891,9 @@ async def test_119_mvp_hydration_and_verifier_exceptions_produce_no_execution(
             locators: tuple[CanonicalLocatorInputV1, ...],
         ) -> tuple[FreeformFieldOutputV1, ...]:
             del selections, contracts, locators
-            raise DeepSeekCompilerError(
-                "EXTRACTOR_CODE_OWNED_AUTHORITY_MISMATCH_INVALID"
-            )
+            raise DeepSeekCompilerError("EXTRACTOR_CODE_OWNED_AUTHORITY_MISMATCH_INVALID")
 
-    hydration_transport = _FakeTransport(
-        (_unknown_fields_response(("product_code",)),)
-    )
+    hydration_transport = _FakeTransport((_unknown_fields_response(("product_code",)),))
     with pytest.raises(DeepSeekCompilerError) as hydration_failure:
         await _run_deepseek_task(
             profile=_profile(),
@@ -4946,6 +5938,1196 @@ async def test_119_mvp_hydration_and_verifier_exceptions_produce_no_execution(
         )
     assert caught.value.reason_code == "EVIDENCE_BINDING_FAILED"
     assert len(transport.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_119_staged_batch_captures_exact8_before_offline_binding_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+
+    def local_binding_failure(
+        _self: _Schema67EvidenceBindingPort,
+        _response_json: bytes,
+    ) -> object:
+        raise RuntimeError("offline Evidence binding failed")
+
+    monkeypatch.setattr(
+        _Schema67EvidenceBindingPort,
+        "bind_initial_exact_literal",
+        local_binding_failure,
+    )
+    transport = _Schema67BatchLocatorRepairTransport()
+
+    with pytest.raises(DeepSeekCompilerError) as caught:
+        await _run_schema67_deepseek_batch(
+            profile=_profile(),
+            policy=_policy(),
+            transport=transport,
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=(),
+            admitted_sources=(),
+            locators_by_task=tuple(locator_groups),
+            _single_pass_mvp=True,
+            _allow_evidence_repair=True,
+        )
+
+    assert caught.value.reason_code == "EVIDENCE_BINDING_FAILED"
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 8
+
+
+@pytest.mark.asyncio
+async def test_119_shared_locator_failure_repairs_exclusions_after_exact8_initials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67BatchLocatorRepairTransport()
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 9
+    repair_payload = json.loads(transport.calls[-1][1])
+    assert repair_payload["repair_kind"] == "evidence"
+    assert tuple(repair_payload["field_ids"]) == ("exclusions",)
+    assert {
+        "field_contracts",
+        "failure_reasons",
+        "field_locator_slots",
+        "locator_slot_catalog",
+    }.isdisjoint(repair_payload)
+    local_contexts = tuple(repair_payload["field_local_contexts"])
+    assert tuple(item["field_id"] for item in local_contexts) == ("exclusions",)
+    exclusion_context = local_contexts[0]
+    assert exclusion_context["failure_reason"]["reason_code"] == (
+        "EXTRACTOR_LOCATOR_NOT_ALLOWED_INVALID"
+    )
+    parent = next(
+        item for item in repair_payload["parent_attempts"] if item["task_index"] == 2
+    )
+    assert parent["parent_response_sha256"] == _sha(transport.initial_responses[2])
+    third_request = json.loads(transport.calls[2][1])
+    allowed_exclusion_slots = next(
+        item for item in third_request["field_locator_slots"]
+        if item["field_id"] == "exclusions"
+    )["sources"][0]["allowed_slots"]
+    original_exclusion_slot = next(
+        item for item in json.loads(transport.initial_responses[2])["fields"]
+        if item["field_id"] == "exclusions"
+    )["evidence"][0]["locator_slot"]
+    assert original_exclusion_slot not in allowed_exclusion_slots
+    local_exclusion_slots = tuple(
+        locator["slot"]
+        for source in exclusion_context["sources"]
+        for locator in source["allowed_locators"]
+    )
+    assert original_exclusion_slot not in local_exclusion_slots
+    repaired = result.executions[2]
+    assert repaired.evidence_repair is not None
+    assert next(
+        item for item in repaired.final_outputs if item.field_id == "exclusions"
+    ).state == "present"
+    initial_by_field = {item.field_id: item for item in repaired.initial_outputs}
+    final_by_field = {item.field_id: item for item in repaired.final_outputs}
+    assert all(
+        final_by_field[field_id] == initial
+        for field_id, initial in initial_by_field.items()
+        if field_id != "exclusions"
+    )
+    assert result.receipt.provider_calls == 9
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == 1
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+    assert result.receipt.repair_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_119_forced_unknown_present_is_field_local_after_exact8_initials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67BatchLocatorRepairTransport(
+        failure_mode="forced_unknown_present"
+    )
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 8
+    target = transport.forced_unknown_present_field_id
+    preserved = transport.preserved_field_id
+    task_index = transport.forced_unknown_task_index
+    assert target is not None and preserved is not None and task_index is not None
+    original = json.loads(transport.initial_responses[task_index])
+    projected, reason_code = deepseek._replace_structurally_invalid_initial_response(
+        response_text=transport.initial_responses[task_index],
+        port=ports[task_index],
+        contracts=tuple(corrected_tasks[task_index].field_prompts),
+        locators=locator_groups[task_index],
+        task_key=corrected_tasks[task_index].task_key,
+    )
+    projected_payload = json.loads(projected)
+    original_by_field = {item["field_id"]: item for item in original["fields"]}
+    projected_by_field = {
+        item["field_id"]: item for item in projected_payload["fields"]
+    }
+    assert reason_code == "EXTRACTOR_FORCED_UNKNOWN_INVALID"
+    assert projected_by_field[target] == {
+        "field_id": target,
+        "state": "unknown",
+        "value_snapshot": None,
+        "evidence": [],
+    }
+    assert projected_by_field[preserved] == original_by_field[preserved]
+
+    execution = result.executions[task_index]
+    initial_by_field = {item.field_id: item for item in execution.initial_outputs}
+    final_by_field = {item.field_id: item for item in execution.final_outputs}
+    initial_receipts = {
+        item.field_id: item for item in execution.initial.evidence_receipts
+    }
+    final_receipts = {item.field_id: item for item in execution.evidence_receipts}
+    assert initial_by_field[target].state == "unknown"
+    assert initial_by_field[target].value_snapshot is None
+    assert initial_by_field[target].evidence == ()
+    assert final_by_field[preserved] == initial_by_field[preserved]
+    assert final_receipts[preserved] == initial_receipts[preserved]
+    assert execution.receipt.initial_bound_attempt_hash == execution.initial.bound_attempt_hash
+    assert execution.evidence_repair is None
+    assert result.receipt.provider_calls == 8
+    assert result.receipt.evidence_repairs == 0
+
+@pytest.mark.asyncio
+async def test_119_shared_duplicate_locator_ref_repairs_deductible_rules_after_exact8_initials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67BatchLocatorRepairTransport(
+        failure_mode="duplicate_locator_ref"
+    )
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 9
+    repair_payload = json.loads(transport.calls[-1][1])
+    assert repair_payload["repair_kind"] == "evidence"
+    assert tuple(repair_payload["field_ids"]) == ("deductible_rules",)
+    assert {
+        "field_contracts",
+        "failure_reasons",
+        "field_locator_slots",
+        "locator_slot_catalog",
+    }.isdisjoint(repair_payload)
+    local_contexts = tuple(repair_payload["field_local_contexts"])
+    assert tuple(item["field_id"] for item in local_contexts) == (
+        "deductible_rules",
+    )
+    deductible_context = local_contexts[0]
+    assert deductible_context["failure_reason"]["reason_code"] == (
+        "EVIDENCE_BINDING_FAILED"
+    )
+    parent = next(
+        item for item in repair_payload["parent_attempts"] if item["task_index"] == 3
+    )
+    assert parent["parent_response_sha256"] == _sha(transport.initial_responses[3])
+    initial_deductible = next(
+        item for item in json.loads(transport.initial_responses[3])["fields"]
+        if item["field_id"] == "deductible_rules"
+    )
+    assert len(initial_deductible["evidence"]) == 2
+    assert len(
+        {item["locator_slot"] for item in initial_deductible["evidence"]}
+    ) == 1
+    assert len(
+        {item["quote_snapshot"] for item in initial_deductible["evidence"]}
+    ) == 2
+    initial_deductible_slot = initial_deductible["evidence"][0]["locator_slot"]
+    local_deductible_slots = tuple(
+        locator["slot"]
+        for source in deductible_context["sources"]
+        for locator in source["allowed_locators"]
+    )
+    assert initial_deductible_slot not in local_deductible_slots
+    repaired = result.executions[3]
+    assert repaired.evidence_repair is not None
+    assert next(
+        item for item in repaired.final_outputs if item.field_id == "deductible_rules"
+    ).state == "present"
+    initial_by_field = {item.field_id: item for item in repaired.initial_outputs}
+    final_by_field = {item.field_id: item for item in repaired.final_outputs}
+    assert all(
+        final_by_field[field_id] == initial
+        for field_id, initial in initial_by_field.items()
+        if field_id != "deductible_rules"
+    )
+    assert result.receipt.provider_calls == 9
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == 1
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+    assert result.receipt.repair_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_119_shared_locator_and_duplicate_failures_use_one_contract_ordered_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67BatchLocatorRepairTransport(
+        failure_mode="combined_locator_failures"
+    )
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 9
+    repair_payload = json.loads(transport.calls[-1][1])
+    assert tuple(repair_payload["field_ids"]) == (
+        "deductible_rules",
+        "reimbursement_rate_rules",
+        "eligible_hospital_scope",
+    )
+    assert tuple(
+        item["field_id"] for item in repair_payload["field_local_contexts"]
+    ) == (
+        "deductible_rules",
+        "reimbursement_rate_rules",
+        "eligible_hospital_scope",
+    )
+    parent = next(
+        item for item in repair_payload["parent_attempts"] if item["task_index"] == 3
+    )
+    assert parent["parent_response_sha256"] == _sha(transport.initial_responses[3])
+    original_fields = {
+        item["field_id"]: item
+        for item in json.loads(transport.initial_responses[3])["fields"]
+    }
+    assert len(original_fields["deductible_rules"]["evidence"]) == 2
+    assert len(
+        {
+            item["locator_slot"]
+            for item in original_fields["deductible_rules"]["evidence"]
+        }
+    ) == 1
+    assert len(
+        {
+            item["quote_snapshot"]
+            for item in original_fields["deductible_rules"]["evidence"]
+        }
+    ) == 2
+    fourth_request = json.loads(transport.calls[3][1])
+    allowed_slots_by_field = {
+        item["field_id"]: {
+            slot for source in item["sources"] for slot in source["allowed_slots"]
+        }
+        for item in fourth_request["field_locator_slots"]
+    }
+    for field_id in ("reimbursement_rate_rules", "eligible_hospital_scope"):
+        assert (
+            original_fields[field_id]["evidence"][0]["locator_slot"]
+            not in allowed_slots_by_field[field_id]
+        )
+    repaired = result.executions[3]
+    initial_by_field = {item.field_id: item for item in repaired.initial_outputs}
+    final_by_field = {item.field_id: item for item in repaired.final_outputs}
+    repaired_field_ids = set(repair_payload["field_ids"])
+    assert all(
+        final_by_field[field_id] == initial
+        for field_id, initial in initial_by_field.items()
+        if field_id not in repaired_field_ids
+    )
+    assert all(final_by_field[field_id].state == "present" for field_id in repaired_field_ids)
+    assert result.receipt.provider_calls == 9
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == 1
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+    assert result.receipt.repair_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure_mode", "reason_code"),
+    (
+        ("field_missing", "EXTRACTOR_FIELD_COUNT_OR_SET_INVALID"),
+        ("field_duplicate", "EXTRACTOR_FIELD_COUNT_OR_SET_INVALID"),
+        ("field_order", "EXTRACTOR_FIELD_ORDER_INVALID"),
+        ("forced_unknown_present_and_field_order", "EXTRACTOR_FIELD_ORDER_INVALID"),
+    ),
+)
+async def test_119_initial_field_structure_drift_fails_after_exact8_without_shared_repair(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_mode: str,
+    reason_code: str,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared, source_index=source_index
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67BatchLocatorRepairTransport(failure_mode=failure_mode)
+
+    with pytest.raises(DeepSeekCompilerError) as caught:
+        await _run_schema67_deepseek_batch(
+            profile=_profile(),
+            policy=_policy(),
+            transport=transport,
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=(),
+            admitted_sources=(),
+            locators_by_task=tuple(locator_groups),
+            _single_pass_mvp=True,
+            _allow_evidence_repair=True,
+        )
+
+    assert caught.value.reason_code == reason_code
+    assert transport.initial_call_count == 8
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 8
+
+
+@pytest.mark.asyncio
+async def test_119_shared_repair_binds_each_synthesis_source_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    corrected_tasks = []
+    ports = []
+    locator_groups: list[tuple[CanonicalLocatorInputV1, ...]] = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared,
+                source_index=source_index,
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    failed_field_ids = (
+        "product_summary",
+        "social_insurance_requirement",
+        "underwriting_method",
+    )
+    transport = _Schema67LargeSharedRepairTransport(
+        failed_field_ids=failed_field_ids,
+    )
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 9
+    assert transport.repair_user is not None
+    repair_payload = json.loads(transport.repair_user)
+    assert tuple(repair_payload["field_ids"]) == failed_field_ids
+    parent_attempts = tuple(repair_payload["parent_attempts"])
+    assert tuple(item["source_role"] for item in parent_attempts) == (
+        "terms",
+        "brochure",
+        "rate_table",
+    )
+    assert tuple(tuple(item["field_ids"]) for item in parent_attempts) == (
+        ("social_insurance_requirement",),
+        ("product_summary",),
+        ("underwriting_method",),
+    )
+    assert all(
+        {
+            "task_index",
+            "source_role",
+            "source_revision_id",
+            "source_task_hash",
+            "attempt_hash",
+            "parent_receipt_hash",
+            "parent_verification_hash",
+            "repair_plan_sha256",
+            "field_ids",
+        }
+        <= set(item)
+        for item in parent_attempts
+    )
+    synthesis = result.executions[7]
+    final_by_field = {item.field_id: item for item in synthesis.final_outputs}
+    assert all(final_by_field[field_id].state == "present" for field_id in failed_field_ids)
+    assert synthesis.evidence_repair is not None
+    assert synthesis.evidence_repair.repair_plan.field_ids == failed_field_ids
+    assert synthesis.evidence_repair.repair_plan.parent_verification_hash == (
+        canonical_hash(
+            "schema67-repair-parent-verification-set.815.v1",
+            tuple(item["parent_verification_hash"] for item in parent_attempts),
+        )
+    )
+    assert result.receipt.provider_calls == 9
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == 1
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+    assert result.receipt.repair_calls == 1
+
+    assert isinstance(synthesis.initial, deepseek.Schema67BoundAttemptV1)
+    initial = synthesis.initial
+    original_chain = initial.receipt_chains[0]
+    original_receipt = original_chain.receipts[0]
+    changed_outcomes = tuple(
+        item.model_copy(update={"reason_code": "changed_reason"})
+        if item.status != "candidate"
+        else item
+        for item in original_receipt.field_outcomes
+    )
+    receipt_payload = original_receipt.model_dump(
+        mode="python", exclude={"receipt_hash"}
+    )
+    receipt_payload["field_outcomes"] = tuple(
+        item.model_dump(mode="python") for item in changed_outcomes
+    )
+    changed_receipt = type(original_receipt).model_validate(
+        {
+            **receipt_payload,
+            "receipt_hash": canonical_hash(
+                "extraction-attempt-receipt.v1", receipt_payload
+            ),
+        }
+    )
+    changed_chain = type(original_chain).model_validate(
+        original_chain.model_copy(
+            update={"receipts": (changed_receipt,)}
+        ).model_dump(mode="python")
+    )
+    changed_chains = (changed_chain, *initial.receipt_chains[1:])
+    changed_bound_payload = deepseek._schema67_bound_payload(
+        port=ports[7],
+        outputs=initial.outputs,
+        evidence_receipts=initial.evidence_receipts,
+        verification_batches=initial.verification_batches,
+        receipt_chains=changed_chains,
+    )
+    changed_initial = type(initial)(
+        task_id=initial.task_id,
+        attempt_hash=initial.attempt_hash,
+        execution_plan_sha256=initial.execution_plan_sha256,
+        task_slice_sha256=initial.task_slice_sha256,
+        outputs=initial.outputs,
+        evidence_receipts=initial.evidence_receipts,
+        verification_batches=initial.verification_batches,
+        receipt_chains=changed_chains,
+        bound_attempt_hash=canonical_hash(
+            "schema67-deepseek-bound-attempt.v1", changed_bound_payload
+        ),
+    )
+    with pytest.raises(DeepSeekCompilerError) as caught:
+        deepseek._schema67_repair_children(
+            initial=changed_initial,
+            locator_refs=tuple(
+                (item.field_id, item.locator_refs)
+                for item in synthesis.evidence_repair.repair_plan.approved_locators
+            ),
+        )
+    assert caught.value.reason_code == "EVIDENCE_REPAIR_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_119_shared_repair_narrows_224_catalog_to_one_slot_per_field_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    failed_field_ids = tuple(
+        prompt.field_id
+        for prepared in prepared_all
+        for prompt in prepared.field_prompts
+        if not prompt.requires_unknown_review
+    )[:30]
+    assert len(failed_field_ids) == 30
+    field_ordinal = {field_id: index for index, field_id in enumerate(failed_field_ids)}
+    expanded_tasks: list[Schema67PreparedTaskV1] = []
+    expanded_prompt_by_field: dict[str, DeepSeekFieldPromptInputV1] = {}
+    for prepared in prepared_all:
+        expanded_prompts: list[DeepSeekFieldPromptInputV1] = []
+        for prompt in prepared.field_prompts:
+            if prompt.field_id not in field_ordinal:
+                expanded_prompts.append(prompt)
+                expanded_prompt_by_field[prompt.field_id] = prompt
+                continue
+            assert len(prompt.source_locator_refs) == 1
+            locator_count = 8 if field_ordinal[prompt.field_id] < 14 else 7
+            source_locator_refs = tuple(
+                (
+                    role,
+                    tuple(
+                        f"{refs[0]}-shared-{index:02d}" for index in range(locator_count)
+                    ),
+                )
+                for role, refs in prompt.source_locator_refs
+            )
+            expanded = prompt.model_copy(
+                update={
+                    "source_locator_refs": source_locator_refs,
+                    "allowed_locator_refs": tuple(
+                        sorted(ref for _role, refs in source_locator_refs for ref in refs)
+                    ),
+                }
+            )
+            expanded_prompts.append(expanded)
+            expanded_prompt_by_field[prompt.field_id] = expanded
+        expanded_tasks.append(replace(prepared, field_prompts=tuple(expanded_prompts)))
+    assert (
+        sum(
+            len(refs)
+            for field_id in failed_field_ids
+            for _role, refs in expanded_prompt_by_field[field_id].source_locator_refs
+        )
+        == 224
+    )
+
+    corrected_tasks = []
+    ports = []
+    locator_groups: list[tuple[CanonicalLocatorInputV1, ...]] = []
+    for prepared in expanded_tasks:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared,
+                source_index=source_index,
+                content_padding="x" * 400,
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    retained_field_ids = ("entry_age_range", "insured_eligibility")
+    assert all(field_id in failed_field_ids for field_id in retained_field_ids)
+    transport = _Schema67LargeSharedRepairTransport(
+        failed_field_ids=failed_field_ids,
+        retain_initial_locator_field_ids=retained_field_ids,
+        unsupported_repair_field_ids=("insured_eligibility",),
+    )
+
+    try:
+        result = await _run_schema67_deepseek_batch(
+            profile=_profile(),
+            policy=_policy(),
+            transport=transport,
+            field_contracts=contracts,
+            execution_plan=plan,
+            role_inputs=(),
+            admitted_sources=(),
+            locators_by_task=tuple(locator_groups),
+            _single_pass_mvp=True,
+            _allow_evidence_repair=True,
+        )
+    except DeepSeekCompilerError as error:
+        repair_calls = sum(
+            json.loads(user).get("repair_kind") == "evidence"
+            for _, user in transport.calls
+        )
+        pytest.fail(
+            f"{error.reason_code}: initial_raw={len(transport.initial_responses)} "
+            f"transport_calls={len(transport.calls)} repair_calls="
+            f"{repair_calls}"
+        )
+
+    assert len(transport.initial_responses) == 8
+    expected_groups = tuple(
+        (
+            task_index,
+            tuple(
+                prompt.field_id
+                for prompt in prepared.field_prompts
+                if prompt.field_id in transport.failed_field_ids
+            ),
+        )
+        for task_index, prepared in enumerate(corrected_tasks)
+        if any(
+            prompt.field_id in transport.failed_field_ids
+            for prompt in prepared.field_prompts
+        )
+    )
+    assert len(transport.calls) == 8 + len(expected_groups)
+    assert len(transport.repair_users) == len(expected_groups)
+    grouped_payloads = tuple(json.loads(item) for item in transport.repair_users)
+    assert tuple(tuple(item["field_ids"]) for item in grouped_payloads) == tuple(
+        field_ids for _task_index, field_ids in expected_groups
+    )
+    assert sum(
+        len(payload["field_local_contexts"])
+        for payload in grouped_payloads
+    ) == 30
+    assert all(
+        len(source["allowed_locators"]) == 1
+        for payload in grouped_payloads
+        for row in payload["field_local_contexts"]
+        for source in row["sources"]
+    )
+    assert all(
+        "task-" not in repair_user
+        for repair_user in transport.repair_users
+    )
+    assert all(
+        parent["parent_response_sha256"]
+        == _sha(transport.initial_responses[parent["task_index"]])
+        for payload in grouped_payloads
+        for parent in payload["parent_attempts"]
+    )
+    for execution in result.executions:
+        initial_by_field = {
+            item.field_id: item for item in execution.initial_outputs
+        }
+        final_by_field = {
+            item.field_id: item for item in execution.final_outputs
+        }
+        assert all(
+            final_by_field[field_id] == initial
+            for field_id, initial in initial_by_field.items()
+            if field_id not in transport.failed_field_ids
+        )
+    final_by_field = {
+        item.field_id: item
+        for execution in result.executions
+        for item in execution.final_outputs
+    }
+    assert final_by_field["entry_age_range"].state == "present"
+    assert final_by_field["insured_eligibility"].state == "unknown"
+    assert final_by_field["insured_eligibility"].value_snapshot is None
+    assert final_by_field["insured_eligibility"].evidence == ()
+    assert result.receipt.provider_calls == 8 + len(expected_groups)
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == len(expected_groups)
+    assert result.receipt.repair_calls == len(expected_groups)
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+
+@pytest.mark.asyncio
+async def test_119_targeted_repairs_partition_33_failures_by_original_task_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared_all = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )
+    failed_field_ids = tuple(
+        prompt.field_id
+        for prepared in prepared_all
+        for prompt in prepared.field_prompts
+        if not prompt.requires_unknown_review
+    )[:33]
+    assert len(failed_field_ids) == 33
+    failed = frozenset(failed_field_ids)
+    expected_groups = tuple(
+        (
+            task_index,
+            tuple(
+                prompt.field_id
+                for prompt in prepared.field_prompts
+                if prompt.field_id in failed
+            ),
+        )
+        for task_index, prepared in enumerate(prepared_all)
+        if any(prompt.field_id in failed for prompt in prepared.field_prompts)
+    )
+    assert len(expected_groups) > 1
+
+    corrected_tasks: list[Schema67PreparedTaskV1] = []
+    ports: list[_Schema67EvidenceBindingPort] = []
+    locator_groups: list[tuple[CanonicalLocatorInputV1, ...]] = []
+    for prepared in prepared_all:
+        admitted = []
+        locators: list[CanonicalLocatorInputV1] = []
+        for source_index in range(len(prepared.source_tasks)):
+            prepared, source, source_locators = _admitted_source_for_prepared(
+                prepared,
+                source_index=source_index,
+            )
+            admitted.append(source)
+            locators.extend(source_locators)
+        corrected_tasks.append(prepared)
+        ports.append(
+            _Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=tuple(admitted),
+            )
+        )
+        locator_groups.append(tuple(locators))
+    monkeypatch.setattr(
+        deepseek,
+        "prepare_schema67_deepseek_tasks",
+        lambda **_kwargs: tuple(corrected_tasks),
+    )
+    monkeypatch.setattr(
+        deepseek,
+        "_schema67_binding_ports",
+        lambda **_kwargs: tuple(ports),
+    )
+    transport = _Schema67LargeSharedRepairTransport(
+        failed_field_ids=failed_field_ids,
+    )
+
+    result = await _run_schema67_deepseek_batch(
+        profile=_profile(),
+        policy=_policy(),
+        transport=transport,
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=(),
+        admitted_sources=(),
+        locators_by_task=tuple(locator_groups),
+        _single_pass_mvp=True,
+        _allow_evidence_repair=True,
+    )
+
+    assert len(transport.initial_responses) == 8
+    assert len(transport.calls) == 8 + len(expected_groups)
+    assert len(transport.repair_users) == len(expected_groups)
+    repair_payloads = tuple(json.loads(item) for item in transport.repair_users)
+    assert tuple(tuple(item["field_ids"]) for item in repair_payloads) == tuple(
+        field_ids for _task_index, field_ids in expected_groups
+    )
+    assert tuple(
+        tuple(
+            dict.fromkeys(
+                int(parent["task_index"])
+                for parent in payload["parent_attempts"]
+            )
+        )
+        for payload in repair_payloads
+    ) == tuple((task_index,) for task_index, _field_ids in expected_groups)
+    assert all(
+        tuple(row["field_id"] for row in payload["field_local_contexts"])
+        == field_ids
+        for payload, (_task_index, field_ids) in zip(
+            repair_payloads,
+            expected_groups,
+            strict=True,
+        )
+    )
+    assert all(
+        len(source["allowed_locators"]) == 1
+        for payload in repair_payloads
+        for row in payload["field_local_contexts"]
+        for source in row["sources"]
+    )
+    repaired_indexes = tuple(
+        index
+        for index, execution in enumerate(result.executions)
+        if execution.evidence_repair is not None
+    )
+    assert repaired_indexes == tuple(index for index, _field_ids in expected_groups)
+    assert result.receipt.provider_calls == 8 + len(expected_groups)
+    assert result.receipt.extractor_calls == 8
+    assert result.receipt.evidence_repairs == len(expected_groups)
+    assert result.receipt.repair_calls == len(expected_groups)
+    assert result.receipt.transport_retries == 0
+    assert result.receipt.response_contract_repairs == 0
+
+
+def test_119_real_repair_locator_mismatches_are_absent_from_field_local_contexts() -> None:
+    catalog = tuple(
+        deepseek._LocatorSlotCatalogEntryV1(
+            slot=slot,
+            locator_kind="block",
+            page_number=page_number,
+            content_snapshot=f"literal text for field {page_number}",
+            content_snapshot_sha256=_sha(f"literal text for field {page_number}"),
+        )
+        for slot, page_number in (
+            ("field-0001-locator-0001", 1),
+            ("field-0002-locator-0001", 3),
+        )
+    )
+    rows = (
+        deepseek._FieldLocatorSlotsV1(
+            field_id="exclusions",
+            sources=(
+                deepseek._FieldRoleSlotsV1(
+                    source_role="terms",
+                    allowed_slots=("field-0001-locator-0001",),
+                ),
+            ),
+        ),
+        deepseek._FieldLocatorSlotsV1(
+            field_id="deductible_rules",
+            sources=(
+                deepseek._FieldRoleSlotsV1(
+                    source_role="terms",
+                    allowed_slots=("field-0002-locator-0001",),
+                ),
+            ),
+        ),
+    )
+
+    contexts = deepseek._field_local_repair_contexts(
+        contract_payloads=(
+            {"field_id": "exclusions", "field_name": "除外责任"},
+            {"field_id": "deductible_rules", "field_name": "免赔额规则"},
+        ),
+        failure_reasons=(
+            {
+                "field_id": "exclusions",
+                "reason_code": "EXTRACTOR_LOCATOR_NOT_ALLOWED_INVALID",
+            },
+            {
+                "field_id": "deductible_rules",
+                "reason_code": "EXTRACTOR_LOCATOR_NOT_ALLOWED_INVALID",
+            },
+        ),
+        catalog=catalog,
+        field_locator_slots=rows,
+    )
+
+    by_field = {item["field_id"]: item for item in contexts}
+    exclusions_sources = cast(
+        tuple[dict[str, object], ...], by_field["exclusions"]["sources"]
+    )
+    deductible_sources = cast(
+        tuple[dict[str, object], ...], by_field["deductible_rules"]["sources"]
+    )
+    exclusions_slots = tuple(
+        locator["slot"]
+        for source in exclusions_sources
+        for locator in cast(tuple[dict[str, object], ...], source["allowed_locators"])
+    )
+    deductible_slots = tuple(
+        locator["slot"]
+        for source in deductible_sources
+        for locator in cast(tuple[dict[str, object], ...], source["allowed_locators"])
+    )
+    assert exclusions_slots == ("field-0001-locator-0001",)
+    assert deductible_slots == ("field-0002-locator-0001",)
+    serialized = deepseek._canonical_bytes(contexts).decode("utf-8")
+    assert all(
+        original_slot not in serialized
+        for original_slot in (
+            "task-03-slot-0001",
+            "task-03-slot-0019",
+            "task-04-slot-0003",
+            "task-04-slot-0030",
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -5027,9 +7209,7 @@ async def test_119_mvp_exact_eight_calls_bind_cumulative_budget_and_request_size
     )
     assert receipt.batch_budget_identity_sha256 == plan.batch_budget.budget_identity_sha256
     assert type(receipt).model_validate(receipt.model_dump(mode="python")) == receipt
-    receipt_payload = receipt.model_dump(
-        mode="python", exclude={"batch_receipt_sha256"}
-    )
+    receipt_payload = receipt.model_dump(mode="python", exclude={"batch_receipt_sha256"})
     assert receipt.batch_receipt_sha256 == canonical_hash(
         "schema67-deepseek-batch-receipt.v2",
         {
@@ -5075,11 +7255,20 @@ async def test_119_mvp_exact_eight_calls_bind_cumulative_budget_and_request_size
     for execution in result.executions:
         assert replace(execution) == execution
         assert (
-            type(execution.receipt).model_validate(
-                execution.receipt.model_dump(mode="python")
-            )
+            type(execution.receipt).model_validate(execution.receipt.model_dump(mode="python"))
             == execution.receipt
         )
+    request_payloads = tuple(json.loads(user) for _system, user in transport.calls)
+    assert tuple(payload["task_key"] for payload in request_payloads) == tuple(
+        task.task_key for task in corrected_tasks
+    )
+    for task, payload in zip(corrected_tasks, request_payloads, strict=True):
+        assert payload["response_contract"]["top_level"] == {
+            "required_keys": ["task_key", "fields"],
+            "additional_properties": False,
+            "task_key": {"type": "string", "const": task.task_key},
+        }
+        assert payload["response_contract"]["response_skeleton"]["task_key"] == (task.task_key)
     bodies = tuple(
         openai_compat_request_bytes(
             model="deepseek-v4-flash",
@@ -5094,3 +7283,36 @@ async def test_119_mvp_exact_eight_calls_bind_cumulative_budget_and_request_size
     )
     assert len(bodies) == 8
     assert all(len(body) < 131072 for body in bodies)
+
+
+@pytest.mark.asyncio
+async def test_119_mvp_saved_response_without_task_key_is_rejected_once() -> None:
+    contracts = _schema67_contract_set()
+    plan = _execution_plan(contracts)
+    prepared = prepare_schema67_deepseek_tasks(
+        field_contracts=contracts,
+        execution_plan=plan,
+        role_inputs=_schema67_role_inputs(contracts, plan),
+    )[0]
+    prepared, admitted, locators = _admitted_source_for_prepared(prepared)
+    transport = _UnknownExtractorTransport(include_task_key=False)
+
+    with pytest.raises(DeepSeekCompilerError) as caught:
+        await _run_deepseek_task(
+            profile=_profile(),
+            policy=_policy(),
+            transport=transport,
+            port=_Schema67EvidenceBindingPort(
+                prepared=prepared,
+                admitted_sources=(admitted,),
+            ),
+            field_contracts=prepared.field_prompts,
+            locators=locators,
+            execution_plan_sha256=plan.execution_plan_sha256,
+            task_slice_sha256=prepared.task_slice_sha256,
+            task_key=prepared.task_key,
+            _single_pass_mvp=True,
+        )
+
+    assert caught.value.reason_code == "EXTRACTOR_TOP_LEVEL_SHAPE_INVALID"
+    assert len(transport.calls) == 1

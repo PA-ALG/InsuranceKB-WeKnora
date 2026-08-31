@@ -15,6 +15,12 @@ from insurance_harness.compiler.evidence_verifier import (
     FreeformEvidenceV1,
     FreeformFieldOutputV1,
 )
+from insurance_harness.knowledge_compiler import (
+    schema_wiki_candidate_evidence_join_596_1 as candidate_evidence_join,
+)
+from insurance_harness.knowledge_compiler.schema67_native_pdf_selection_815 import (
+    CoordinateEvidence815V1,
+)
 from insurance_harness.knowledge_compiler.schema_wiki_candidate_evidence_join_596_1 import (
     COORDINATE_POLICY_SHA256,
     CandidateEvidenceAuthorityError,
@@ -274,9 +280,7 @@ def test_citation_join_receipt_matches_frozen_go_canonical_vector() -> None:
         "weknora_manifest_digest": "7" * 64,
         "weknora_chunk_count": 162,
     }
-    live_payload["source_receipt_sha256"] = live_revision_source_receipt_sha256(
-        live_payload
-    )
+    live_payload["source_receipt_sha256"] = live_revision_source_receipt_sha256(live_payload)
     payload = {
         "contract": "schema67-citation-authority-join-receipt.v1",
         "candidate_sha256": "a" * 64,
@@ -298,9 +302,7 @@ def test_citation_join_receipt_matches_frozen_go_canonical_vector() -> None:
         "sanitized_structure_sha256": "4" * 64,
         "parser_identity_sha256": "5" * 64,
         "coordinate_policy_sha256": "6" * 64,
-        "source_coordinate_space": (
-            "mineru_content_list_normalized_0_1000_top_left.v1"
-        ),
+        "source_coordinate_space": ("mineru_content_list_normalized_0_1000_top_left.v1"),
         "target_coordinate_space": "normalized_0_1e6",
         "origin": "top_left",
         "source_bbox_preimage": ("100", "200", "800", "900"),
@@ -333,14 +335,13 @@ def test_citation_join_receipt_matches_frozen_go_canonical_vector() -> None:
         "quote_occurrence_count": 1,
         "join_policy_sha256": "9" * 64,
         "live_revision_source_receipt": live_payload,
-        "live_revision_source_receipt_sha256": live_payload[
-            "source_receipt_sha256"
-        ],
+        "live_revision_source_receipt_sha256": live_payload["source_receipt_sha256"],
     }
 
-    assert schema_wiki_sha256(
-        "schema67-citation-authority-join-receipt.v1", payload
-    ) == "91cfeec949019e30843c0b384c4420b5eb50db70017a3718cdc741fe71bf2928"
+    assert (
+        schema_wiki_sha256("schema67-citation-authority-join-receipt.v1", payload)
+        == "91cfeec949019e30843c0b384c4420b5eb50db70017a3718cdc741fe71bf2928"
+    )
 
 
 @pytest.mark.parametrize(
@@ -378,7 +379,140 @@ def test_rate_page_27_is_typed_out_of_range_instead_of_guessed() -> None:
         )
 
 
+def test_native_pdf_points_use_frozen_page_dimensions_and_go_half_up_rounding() -> None:
+    normalizer = getattr(
+        candidate_evidence_join,
+        "normalize_native_pdf_bbox_815",
+        None,
+    )
+    assert normalizer is not None, "native PDF coordinate normalizer is missing"
+
+    preimage, bbox = normalizer(
+        bbox=("61.2", "79.2", "306", "396"),
+        page_number=1,
+        page_count=1,
+        page_width_points="612",
+        page_height_points="792",
+    )
+
+    assert preimage == ("100", "100", "500", "500")
+    assert bbox.coordinate_system == "normalized_0_1e6"
+    assert (bbox.x0, bbox.y0, bbox.x1, bbox.y1) == (
+        100_000,
+        100_000,
+        500_000,
+        500_000,
+    )
+
+    _, half_up = normalizer(
+        bbox=("0.000001", "0", "1", "1"),
+        page_number=1,
+        page_count=1,
+        page_width_points="2",
+        page_height_points="2",
+    )
+    assert half_up.x0 == 1
+
+
+@pytest.mark.parametrize(
+    ("bbox", "page_number", "page_count", "width", "height", "reason"),
+    [
+        (("0", "0", "1", "1"), 1, 1, "0", "792", "COORDINATE_AUTHORITY_INVALID"),
+        (("0", "0", "613", "1"), 1, 1, "612", "792", "COORDINATE_AUTHORITY_INVALID"),
+        (("1", "0", "1", "1"), 1, 1, "612", "792", "COORDINATE_AUTHORITY_INVALID"),
+        (("2", "0", "1", "1"), 1, 1, "612", "792", "COORDINATE_AUTHORITY_INVALID"),
+        (("0", "2", "1", "1"), 1, 1, "612", "792", "COORDINATE_AUTHORITY_INVALID"),
+        (("0", "0", "1", "1"), 2, 1, "612", "792", "PAGE_OUT_OF_RANGE"),
+    ],
+)
+def test_native_pdf_points_fail_closed_without_valid_frozen_page_authority(
+    bbox: tuple[str, str, str, str],
+    page_number: int,
+    page_count: int,
+    width: str,
+    height: str,
+    reason: str,
+) -> None:
+    normalizer = getattr(
+        candidate_evidence_join,
+        "normalize_native_pdf_bbox_815",
+        None,
+    )
+    assert normalizer is not None, "native PDF coordinate normalizer is missing"
+
+    with pytest.raises(CandidateEvidenceAuthorityError, match=reason):
+        normalizer(
+            bbox=bbox,
+            page_number=page_number,
+            page_count=page_count,
+            page_width_points=width,
+            page_height_points=height,
+        )
+
+
+def test_native_pdf_table_slice_binds_each_cell_to_its_exact_rect_and_quote() -> None:
+    quote = "covered\N{LINE SEPARATOR}not covered"
+    row = CoordinateEvidence815V1(
+        field_id="coverage_summary",
+        source_revision_id="revision-table",
+        source_role="rate_table",
+        original_file_sha256="1" * 64,
+        parse_manifest_sha256="2" * 64,
+        selection_id="selection-table",
+        selection_type="TABLE_SLICE",
+        page_number=2,
+        page_text_char_start=None,
+        page_text_char_end=None,
+        coordinate_space="PDF_POINTS_TOP_LEFT_V1",
+        page_width_points="100",
+        page_height_points="100",
+        bbox=("0", "0", "20", "10"),
+        rects=(("0", "0", "10", "10"), ("10", "0", "20", "10")),
+        quote=quote,
+        quote_sha256=_sha(quote),
+        table_slice_id="slice-table",
+        table_id="table-1",
+        cell_ids=("cell-1", "cell-2"),
+    )
+    cell_quote = "not covered"
+    cell_content = f"prefix {cell_quote} suffix"
+    evidence = FreeformEvidenceV1(
+        field_id="coverage_summary",
+        source_sha256="1" * 64,
+        source_revision_id="revision-table",
+        parse_attempt_id="attempt-table",
+        parsed_document_hash="3" * 64,
+        parse_manifest_hash="4" * 64,
+        page_number=2,
+        table_id="table-1",
+        cell_id="cell-2",
+        row_index=0,
+        column_index=1,
+        row_span=1,
+        column_span=1,
+        locator=EvidenceLocatorSnapshotV1(
+            subject_type="cell",
+            subject_ref="cell-2",
+            page_number=2,
+            parent_refs=("table-1",),
+            content_snapshot=cell_content,
+            content_snapshot_sha256=_sha(cell_content),
+        ),
+        quote_snapshot=cell_quote,
+        quote_snapshot_sha256=_sha(cell_quote),
+    )
+
+    assert candidate_evidence_join._native_coordinate_bbox_for_evidence(
+        row=row,
+        field_id=evidence.field_id,
+        role="rate_table",
+        evidence=evidence,
+        locator_kind="cell",
+        locator_ref="cell-2",
+        artifact_bbox=("10", "0", "20", "10"),
+        coordinate_manifest_sha256="2" * 64,
+    ) == ("10", "0", "20", "10")
+
+
 def test_release_compiler_exposes_no_caller_selected_citation_authority_port() -> None:
-    assert "citation_authority" not in inspect.signature(
-        build_schema_field_page_596_1
-    ).parameters
+    assert "citation_authority" not in inspect.signature(build_schema_field_page_596_1).parameters

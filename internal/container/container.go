@@ -92,6 +92,17 @@ import (
 	wgrpc "github.com/weaviate/weaviate-go-client/v5/weaviate/grpc"
 )
 
+func schemaWikiFormalCandidateScopeArgs(cfg *config.Config) ([]types.WikiReleaseScope, error) {
+	scope, err := config.DecodeSchemaWikiFrozenReleaseScope(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if scope == nil {
+		return nil, nil
+	}
+	return []types.WikiReleaseScope{*scope}, nil
+}
+
 // BuildContainer constructs the dependency injection container
 // Registers all components, services, repositories and handlers needed by the application
 // Creates a fully configured application container with proper dependency resolution
@@ -230,11 +241,17 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
+	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
+		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
+			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),
+		)
+	}))
 	must(container.Provide(func(
 		releaseAuthority *service.WikiReleaseService,
 		knowledgeRepository interfaces.KnowledgeRepository,
 		chunkRepository interfaces.ChunkRepository,
 		fileService interfaces.FileService,
+		formalCandidatePreview *repository.SchemaWikiFormalCandidatePreviewRegistry,
 		cfg *config.Config,
 	) (*service.SchemaWikiService, error) {
 		citationPort := service.NewSchemaWikiCitationRevisionReadAdapter(
@@ -265,8 +282,13 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		if err != nil {
 			return nil, err
 		}
-		return service.NewSchemaWikiServiceWithGoldenSuccessorStatus(
-			releaseAuthority, citationPort, content, statusProvider,
+		formalCandidateScope, err := schemaWikiFormalCandidateScopeArgs(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return service.NewSchemaWikiServiceWithGoldenSuccessorStatusAndFormalCandidatePreview(
+			releaseAuthority, citationPort, content, statusProvider, formalCandidatePreview,
+			formalCandidateScope...,
 		), nil
 	}))
 	must(container.Provide(service.NewEmbedChannelService))
@@ -395,7 +417,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewAuditLogHandler))
 	must(container.Provide(handler.NewKnowledgeBaseHandler))
 	must(container.Provide(handler.NewKnowledgeHandler))
-	must(container.Provide(handler.NewKnowledgeRevisionSourceHandler))
+	must(container.Provide(func(
+		revisionSourceService *service.KnowledgeRevisionSourceService,
+	) *handler.KnowledgeRevisionSourceHandler {
+		return handler.NewKnowledgeRevisionSourceHandler(revisionSourceService)
+	}))
 	must(container.Provide(handler.NewChunkHandler))
 	must(container.Provide(handler.NewFAQHandler))
 	must(container.Provide(handler.NewTagHandler))

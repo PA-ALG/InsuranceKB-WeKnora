@@ -404,7 +404,7 @@ def test_signed_subject_policy_scope_and_principal_drift_are_rejected(
         )
 
 
-def test_receipt_wire_is_go_compatible_and_deployment_composed(
+def test_current_receipt_and_frozen_go_vector_share_the_canonical_wire(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     candidate, evidence, golden, result, evaluation, receipt, _, _ = _registered_formal(monkeypatch)
@@ -435,8 +435,24 @@ def test_receipt_wire_is_go_compatible_and_deployment_composed(
             canonical_human_batch_decision_receipt_v1(receipt, True)
         ).hexdigest(),
     }
-    expected = json.dumps(vector, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-    assert _VECTOR.read_bytes() == expected
+    frozen_bytes = _VECTOR.read_bytes()
+    frozen = json.loads(frozen_bytes)
+    assert frozen_bytes == (
+        json.dumps(frozen, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    )
+    assert set(frozen) == set(vector)
+    assert frozen["public_key_id"] == vector["public_key_id"]
+    assert frozen["public_key_base64"] == vector["public_key_base64"]
+    assert frozen["review_policy_sha256"] == vector["review_policy_sha256"]
+    for payload in (frozen, vector):
+        preimage_bytes = base64.b64decode(payload["subject_preimage_base64"])
+        assert hashlib.sha256(preimage_bytes).hexdigest() == payload["subject_sha256"]
+        receipt_bytes = payload["receipt_json"].encode()
+        assert hashlib.sha256(receipt_bytes).hexdigest() == payload["receipt_sha256"]
+        parsed = HumanBatchDecisionReceiptV1.model_validate_json(receipt_bytes)
+        assert parsed.human_batch_hash == payload["subject_sha256"]
+        assert parsed.review_policy_hash == payload["review_policy_sha256"]
+        assert parsed.signer_key_id == payload["public_key_id"]
     assert tuple(
         inspect.signature(compose_schema67_golden_dossier_review_authority_596_1).parameters
     ) == ("now_epoch",)

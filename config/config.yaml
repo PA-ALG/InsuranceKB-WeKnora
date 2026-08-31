@@ -111,3 +111,13 @@ extract:
 tenant:
   # Enable cross-tenant access (can be enabled for intranet environments)
   enable_cross_tenant_access: false
+
+# Optional immutable Schema Wiki decision boundary. Keep disabled unless a
+# deployment explicitly supplies all four identities through this config (or
+# the corresponding SCHEMA_WIKI_FROZEN_RELEASE_SCOPE_* environment values).
+schema_wiki_frozen_release_scope:
+  enabled: false
+  tenant_id: 0
+  space_id: ""
+  raw_kb_id: ""
+  wiki_kb_id: ""

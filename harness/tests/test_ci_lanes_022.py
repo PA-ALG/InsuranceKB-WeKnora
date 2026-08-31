@@ -5,6 +5,7 @@ import shlex
 import subprocess
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -283,27 +284,23 @@ def _terms_in_order(text: str, *terms: str) -> bool:
     return True
 
 
-def test_rh6_1_claude_default_gate_selects_only_deterministic_lane() -> None:
-    section = _level_two_section((REPO_ROOT / "CLAUDE.md").read_text(), "默认验证")
+def test_rh6_1_claude_points_to_single_authority_and_ci_defaults_deterministic() -> None:
+    document = (REPO_ROOT / "CLAUDE.md").read_text()
+    assert _pytest_commands(document) == []
+    prose = _prose_text(document)
+    assert _terms_in_order(prose, "唯一", "`AGENTS.md`", "先读")
 
-    assert _pytest_commands(section) == [
-        ["uv", "run", "pytest", "-m", "not live and not integration_postgres", "-q"]
+    workflow = _workflow(CI_WORKFLOW)
+    deterministic = _mapping(_mapping(workflow["jobs"])["deterministic"])
+    command = _string(_named_step(deterministic, "Tests (deterministic)")["run"])
+    assert shlex.split(command) == [
+        "uv",
+        "run",
+        "pytest",
+        "-m",
+        "not live and not integration_postgres",
+        "-q",
     ]
-
-    prose = _prose_text(section)
-    assert _terms_in_order(prose, "默认", "deterministic")
-    assert _terms_in_order(
-        prose,
-        "`integration_postgres`",
-        "`.github/workflows/harness-ci.yml`",
-        "PostgreSQL 16",
-    )
-    assert _terms_in_order(
-        prose,
-        "`live`",
-        "`.github/workflows/harness-live.yml`",
-        "`NOT RUN`",
-    )
 
 
 @pytest.mark.parametrize(
@@ -370,6 +367,43 @@ def test_p0_4_three_collections_are_disjoint_exhaustive_and_precise() -> None:
     assert deterministic | integration | live == full
     assert integration == POSTGRES_NODES
     assert live == WEKNORA_NODES
+
+
+def test_p0_4_private_artifact_replays_do_not_skip_postgres_collection(
+    tmp_path: Path,
+) -> None:
+    junit_path = tmp_path / "postgres-collection.xml"
+    environment = os.environ.copy()
+    for name in (
+        "WEKNORA_EC01_REVISION_SET_ROOT",
+        "WEKNORA_C5_TEST_C3_ROOT",
+        "WEKNORA_C5_TEST_C3_NEW_ROOT",
+        "WEKNORA_C5_TEST_C3_ABSENT_ROOT",
+        "WEKNORA_C5_TEST_C3_HYDRATION_SUCCESSOR_ROOT",
+        "WEKNORA_C5_TEST_REVISION_SET_ROOT",
+    ):
+        environment.pop(name, None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-m",
+            "integration_postgres",
+            "-q",
+            f"--junitxml={junit_path}",
+        ],
+        cwd=HARNESS_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    suites = ET.parse(junit_path).getroot().findall("testsuite")  # noqa: S314
+    assert sum(int(suite.attrib["skipped"]) for suite in suites) == 0
 
 
 def test_p0_2_postgres_ci_has_service_preflight_and_junit_evidence() -> None:
