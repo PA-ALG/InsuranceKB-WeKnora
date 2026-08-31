@@ -59,6 +59,24 @@ function responseFor(stableKey: string) {
   }
 }
 
+function firstCitationBBox(response: ReturnType<typeof responseFor>): Record<string, unknown> {
+  const payload = response.data.member.payload
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    throw new Error('fixture field payload missing')
+  }
+  const citations = (payload as Record<string, unknown>).citations
+  if (!Array.isArray(citations) || citations.length === 0) throw new Error('fixture citation missing')
+  const citation = citations[0]
+  if (typeof citation !== 'object' || citation === null || Array.isArray(citation)) {
+    throw new Error('fixture citation invalid')
+  }
+  const bbox = (citation as Record<string, unknown>).bbox
+  if (typeof bbox !== 'object' || bbox === null || Array.isArray(bbox)) {
+    throw new Error('fixture bbox missing')
+  }
+  return bbox as Record<string, unknown>
+}
+
 describe('entity page graph 830 G1 API', () => {
   it('accepts the frozen profile-driven 7/67 field wire and retains short title plus namespace', () => {
     const read = parseEntityPageGraphRead830G1(responseFor('insured_eligibility'), {
@@ -76,6 +94,23 @@ describe('entity page graph 830 G1 API', () => {
     response.data.member.short_title = '漂移标题'
     expect(() => parseEntityPageGraphRead830G1(response, {
       entityId: vector.entity_id, pageKind: 'field', stableKey: 'cooling_off_period',
+    })).toThrow('ENTITY_PAGE_GRAPH_RESPONSE_INVALID')
+  })
+
+  it.each([
+    ['coordinate system', 'coordinate_system', 'pdf_points'],
+    ['fixed width', 'page_width', 999_999],
+    ['fixed height', 'page_height', 999_999],
+    ['integer coordinate', 'x0', 100_000.5],
+    ['ordered x coordinates', 'x0', 1_000_000],
+    ['ordered y coordinates', 'y1', 200_000],
+    ['nonnegative coordinates', 'x0', -1],
+    ['bounded coordinates', 'x1', 1_000_001],
+  ])('rejects citation bbox with invalid %s', (_name, key, value) => {
+    const response = responseFor('insured_eligibility')
+    firstCitationBBox(response)[key] = value
+    expect(() => parseEntityPageGraphRead830G1(response, {
+      entityId: vector.entity_id, pageKind: 'field', stableKey: 'insured_eligibility',
     })).toThrow('ENTITY_PAGE_GRAPH_RESPONSE_INVALID')
   })
 
@@ -139,7 +174,7 @@ describe('entity page graph 830 G1 API', () => {
     ])
   })
 
-  it.each(['current', 'latest'])('rejects the reserved pinned alias %s before transport', async releaseId => {
+  it.each(['', ' ', ' current', 'current', 'latest'])('rejects the invalid explicit pin %j before transport', async releaseId => {
     const get = vi.fn()
     await expect(readEntityPageGraph830G1(
       'wiki-1',

@@ -184,6 +184,18 @@ describe('EntityPageGraph830G1', () => {
     expect(apiState.calls).toHaveLength(1)
   })
 
+  it.each([
+    '?release_id=',
+    '?release_id=release-one&release_id=release-two',
+  ])('fails closed before transport for malformed route query %s', async query => {
+    apiState.result = fieldRead()
+    const wrapper = await mountAt(
+      `/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1${query}`,
+    )
+    expect(wrapper.get('[role="alert"]').text()).toContain('固定版本页面读取失败')
+    expect(apiState.calls).toEqual([])
+  })
+
   it('lazy-loads the entity page component directly for all four semantic URLs', async () => {
     const paths = [
       '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/overview',

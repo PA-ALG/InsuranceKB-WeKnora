@@ -292,7 +292,7 @@ func entityPageGraphMemberSetsEqual830G1(
 	}
 	rightBySlug := make(map[string]types.WikiReleaseMemberSnapshot, len(right))
 	for _, member := range right {
-		if member.LogicalSlug == "" {
+		if member.LogicalSlug == "" || member.Content != "" {
 			return false
 		}
 		if _, duplicate := rightBySlug[member.LogicalSlug]; duplicate {
@@ -302,9 +302,10 @@ func entityPageGraphMemberSetsEqual830G1(
 	}
 	for _, member := range left {
 		stored, exists := rightBySlug[member.LogicalSlug]
-		if !exists || member.Kind != stored.Kind || member.RevisionID != stored.RevisionID ||
+		if !exists || member.Content != "" || stored.Content != "" ||
+			member.Kind != stored.Kind || member.RevisionID != stored.RevisionID ||
 			member.MemberDigest != stored.MemberDigest || member.Title != stored.Title ||
-			member.Content != stored.Content || !entityPageGraphJSONEqual830G1(member.Payload, stored.Payload) {
+			!entityPageGraphJSONEqual830G1(member.Payload, stored.Payload) {
 			return false
 		}
 		delete(rightBySlug, member.LogicalSlug)

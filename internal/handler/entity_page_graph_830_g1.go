@@ -75,11 +75,17 @@ func (h *EntityPageGraphHandler830G1) read(c *gin.Context, pageKind, stableKey s
 		PageKind:  pageKind,
 		StableKey: stableKey,
 	}
-	releaseID := strings.TrimSpace(c.Query("release_id"))
+	releaseIDs, hasReleaseID := c.Request.URL.Query()["release_id"]
 	var read *service.EntityPageGraphRead830G1
-	if releaseID == "" {
+	if !hasReleaseID {
 		read, err = h.service.ReadCurrentEntityPage830G1(c.Request.Context(), principal, scope, selector)
 	} else {
+		if len(releaseIDs) != 1 || releaseIDs[0] == "" || releaseIDs[0] != strings.TrimSpace(releaseIDs[0]) ||
+			strings.EqualFold(releaseIDs[0], "current") || strings.EqualFold(releaseIDs[0], "latest") {
+			writeEntityPageGraphError830G1(c, service.ErrEntityPageGraphIntegrity830G1)
+			return
+		}
+		releaseID := releaseIDs[0]
 		read, err = h.service.ReadPinnedEntityPage830G1(c.Request.Context(), principal, scope, releaseID, selector)
 	}
 	if err != nil {

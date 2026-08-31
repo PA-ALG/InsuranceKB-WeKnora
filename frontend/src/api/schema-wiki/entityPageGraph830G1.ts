@@ -18,6 +18,15 @@ function exactID(value: string, errorCode: string): string {
   return encodeURIComponent(value).replaceAll('%40', '@')
 }
 
+function exactReleaseID(releaseID: string | undefined): string | undefined {
+  if (releaseID === undefined) return undefined
+  if (releaseID === '' || releaseID !== releaseID.trim() || !ID_SEGMENT.test(releaseID)
+    || ['current', 'latest'].includes(releaseID.toLowerCase())) {
+    throw new Error('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
+  }
+  return releaseID
+}
+
 function scopePayload(value: unknown): unknown {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const record = value as Record<string, unknown>
@@ -39,11 +48,8 @@ export function buildEntityPageGraphPath830G1(
   if (target.pageKind === 'field') suffix += `/fields/${exactID(target.stableKey, 'ENTITY_PAGE_GRAPH_TARGET_INVALID')}`
   if (target.pageKind === 'free_wiki') suffix += '/free-wiki'
   const path = buildScopedSchemaWikiPath(scope, suffix, { expectedScope: scope })
-  if (releaseID === undefined || releaseID === '') return path
-  if (!ID_SEGMENT.test(releaseID) || ['current', 'latest'].includes(releaseID.toLowerCase())) {
-    throw new Error('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
-  }
-  return `${path}?release_id=${encodeURIComponent(releaseID)}`
+  const pinnedReleaseID = exactReleaseID(releaseID)
+  return pinnedReleaseID === undefined ? path : `${path}?release_id=${encodeURIComponent(pinnedReleaseID)}`
 }
 
 export async function readEntityPageGraph830G1(
@@ -73,17 +79,17 @@ export async function readEntityPageGraphSession830G1(
 ): Promise<EntityPageGraphSession830G1> {
   assertEntityPageTarget830G1(target)
   exactID(wikiKBID, 'ENTITY_PAGE_GRAPH_SCOPE_INVALID')
-  if (releaseID && (!ID_SEGMENT.test(releaseID) || ['current', 'latest'].includes(releaseID.toLowerCase()))) {
-    throw new Error('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
-  }
+  const pinnedReleaseID = exactReleaseID(releaseID)
   const scope = parseSchemaWikiScope(scopePayload(
     await transport.get(buildSchemaWikiScopeBootstrapPath(wikiKBID)),
   ))
   if (scope.wiki_kb_id !== wikiKBID) throw new Error('ENTITY_PAGE_GRAPH_SCOPE_INVALID')
-  const response = await transport.get(buildEntityPageGraphPath830G1(scope, target, releaseID))
+  const response = await transport.get(buildEntityPageGraphPath830G1(scope, target, pinnedReleaseID))
   const read = parseEntityPageGraphRead830G1(response, target)
   if (read.member.space_id !== scope.space_id || read.member.wiki_kb_id !== scope.wiki_kb_id
-    || (releaseID ? read.read_mode !== 'pinned' || read.release_id !== releaseID : read.read_mode !== 'current')) {
+    || (pinnedReleaseID !== undefined
+      ? read.read_mode !== 'pinned' || read.release_id !== pinnedReleaseID
+      : read.read_mode !== 'current')) {
     throw new Error('ENTITY_PAGE_GRAPH_RESPONSE_INVALID')
   }
   return Object.freeze({ scope, read })

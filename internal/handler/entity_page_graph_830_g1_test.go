@@ -50,16 +50,22 @@ func TestEntityPageGraphHandler830G1CurrentAndPinnedAreDisjoint(t *testing.T) {
 	for _, test := range []struct {
 		name          string
 		query         string
+		wantStatus    int
 		wantCurrent   int
 		wantPinned    int
 		wantReleaseID []string
 	}{
-		{name: "current", wantCurrent: 1},
-		{name: "pinned", query: "?release_id=release-exact", wantPinned: 1, wantReleaseID: []string{"release-exact"}},
+		{name: "missing is current", wantStatus: http.StatusOK, wantCurrent: 1},
+		{name: "exact pin", query: "?release_id=release-exact", wantStatus: http.StatusOK, wantPinned: 1, wantReleaseID: []string{"release-exact"}},
+		{name: "explicit empty pin", query: "?release_id=", wantStatus: http.StatusServiceUnavailable},
+		{name: "blank pin", query: "?release_id=%20", wantStatus: http.StatusServiceUnavailable},
+		{name: "repeated pin", query: "?release_id=release-one&release_id=release-two", wantStatus: http.StatusServiceUnavailable},
+		{name: "current alias", query: "?release_id=current", wantStatus: http.StatusServiceUnavailable},
+		{name: "latest alias", query: "?release_id=latest", wantStatus: http.StatusServiceUnavailable},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			spy := &entityPageGraphHTTPService830G1Spy{result: &service.EntityPageGraphRead830G1{
-				Contract: "entity-page-read.830.g1.v1", ReadMode: test.name,
+				Contract: "entity-page-read.830.g1.v1", ReadMode: "test",
 				ReleaseID: "release-exact", ActivationEpoch: 2,
 			}}
 			engine := entityPageGraphHandlerEngine830G1(spy)
@@ -70,7 +76,7 @@ func TestEntityPageGraphHandler830G1CurrentAndPinnedAreDisjoint(t *testing.T) {
 				nil,
 			)
 			engine.ServeHTTP(recorder, request)
-			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			require.Equal(t, test.wantStatus, recorder.Code, recorder.Body.String())
 			require.Equal(t, test.wantCurrent, spy.currentCalls)
 			require.Equal(t, test.wantPinned, spy.pinnedCalls)
 			require.Equal(t, test.wantReleaseID, spy.releaseIDs)

@@ -31,9 +31,6 @@ const pdfPort = createPdfJsPort()
 
 const wikiKBID = computed(() => String(route.params.kbId ?? ''))
 const entityID = computed(() => String(route.params.entityId ?? ''))
-const requestedReleaseID = computed(() => typeof route.query.release_id === 'string'
-  ? route.query.release_id
-  : undefined)
 
 const target = computed<EntityPageTarget830G1>(() => {
   if (route.name === 'entityPageSection830G1') {
@@ -48,8 +45,8 @@ const target = computed<EntityPageTarget830G1>(() => {
   return { entityId: entityID.value, pageKind: 'overview', stableKey: 'overview' }
 })
 
-const pinnedQuery = computed(() => requestedReleaseID.value
-  ? { release_id: requestedReleaseID.value }
+const pinnedQuery = computed(() => read.value?.read_mode === 'pinned'
+  ? { release_id: read.value.release_id }
   : {})
 
 const fieldPayload = computed(() => read.value?.member.payload.contract === 'field-assertion-page.830.g1.v1'
@@ -103,6 +100,15 @@ function unwrapResponse(value: unknown): unknown {
   return record.data
 }
 
+function requestedReleaseIDFromRoute(): string | undefined {
+  const value = route.query.release_id
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value === '' || value !== value.trim()) {
+    throw new Error('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
+  }
+  return value
+}
+
 function openSources(): void {
   const first = fieldPayload.value?.citations[0]
   if (!first || !previewTransport.value) return
@@ -125,16 +131,18 @@ function updateSourceDrawerVisible(visible: boolean): void {
 }
 
 async function load(): Promise<void> {
+  const hasPinnedQuery = Object.prototype.hasOwnProperty.call(route.query, 'release_id')
   loading.value = true
   read.value = null
   error.value = ''
   previewTransport.value = null
   closeSources()
   try {
+    const requestedReleaseID = requestedReleaseIDFromRoute()
     const session = await readEntityPageGraphSession830G1(
       wikiKBID.value,
       target.value,
-      requestedReleaseID.value,
+      requestedReleaseID,
       { get: path => get(path) },
     )
     read.value = session.read
@@ -146,7 +154,7 @@ async function load(): Promise<void> {
       },
     })
   } catch {
-    error.value = requestedReleaseID.value ? '固定版本页面读取失败' : '当前版本页面读取失败'
+    error.value = hasPinnedQuery ? '固定版本页面读取失败' : '当前版本页面读取失败'
   } finally {
     loading.value = false
   }

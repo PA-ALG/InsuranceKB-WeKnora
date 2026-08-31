@@ -33,9 +33,20 @@ export interface EntityPageCitation830G1 {
   readonly citation_id: string
   readonly join_receipt_sha256: string
   readonly page_number: number
+  readonly bbox: EntityPageCitationBBox830G1
   readonly quote_snapshot: string
   readonly citation_sha256: string
   readonly [key: string]: unknown
+}
+
+export interface EntityPageCitationBBox830G1 {
+  readonly coordinate_system: 'normalized_0_1e6'
+  readonly page_width: 1_000_000
+  readonly page_height: 1_000_000
+  readonly x0: number
+  readonly y0: number
+  readonly x1: number
+  readonly y1: number
 }
 
 export interface EntityPageFieldPayload830G1 {
@@ -194,16 +205,34 @@ const CITATION_KEYS = [
   'locator_content_sha256', 'bbox', 'quote_snapshot', 'quote_sha256', 'citation_sha256',
 ] as const
 
+const CITATION_BBOX_KEYS = [
+  'coordinate_system', 'page_width', 'page_height', 'x0', 'y0', 'x1', 'y1',
+] as const
+
+function integer(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value)
+}
+
+function validCitationBBox(value: unknown): value is EntityPageCitationBBox830G1 {
+  if (!record(value) || !exact(value, CITATION_BBOX_KEYS)
+    || value.coordinate_system !== 'normalized_0_1e6'
+    || value.page_width !== 1_000_000 || value.page_height !== 1_000_000
+    || !integer(value.x0) || !integer(value.y0) || !integer(value.x1) || !integer(value.y1)) {
+    return false
+  }
+  return value.x0 >= 0 && value.y0 >= 0
+    && value.x0 < value.x1 && value.y0 < value.y1
+    && value.x1 <= value.page_width && value.y1 <= value.page_height
+}
+
 function validCitation(value: unknown): value is EntityPageCitation830G1 {
   if (!record(value) || !exact(value, CITATION_KEYS)
     || value.contract !== 'entity-page-exact-citation.830.g1.v1'
     || !text(value.citation_id) || !text(value.source_role) || !text(value.source_revision_id)
     || !text(value.knowledge_id) || !text(value.chunk_id) || !text(value.parse_attempt_id)
     || !text(value.locator_kind) || !text(value.locator_ref) || !text(value.quote_snapshot)
-    || !Number.isSafeInteger(value.page_number) || (value.page_number as number) <= 0
-    || !record(value.bbox) || !exact(value.bbox, [
-      'coordinate_system', 'page_width', 'page_height', 'x0', 'y0', 'x1', 'y1',
-    ])) return false
+    || !integer(value.page_number) || value.page_number <= 0
+    || !validCitationBBox(value.bbox)) return false
   return [
     value.join_receipt_sha256, value.evidence_receipt_sha256, value.source_sha256,
     value.parsed_document_sha256, value.parse_manifest_sha256, value.locator_content_sha256,

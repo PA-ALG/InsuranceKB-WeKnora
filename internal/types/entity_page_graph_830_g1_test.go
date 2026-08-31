@@ -72,6 +72,32 @@ func TestParseEntityPageManifest830G1RejectsHashAndTopologyDrift(t *testing.T) {
 	require.ErrorIs(t, err, ErrEntityPageGraphContract830G1)
 }
 
+func TestParseEntityPageManifest830G1RejectsEmptyUnknownSourceTypedReasonAfterFullRehash(t *testing.T) {
+	var manifest EntityPageManifest830G1
+	require.NoError(t, json.Unmarshal(loadEntityPageGraph830G1Vector(t), &manifest))
+
+	for index := range manifest.Members {
+		if manifest.Members[index].PageKind != "field" || manifest.Members[index].StableKey != "cooling_off_period" {
+			continue
+		}
+		payload, err := manifest.Members[index].FieldAssertionPayload()
+		require.NoError(t, err)
+		emptyReason := ""
+		payload.SourceTypedReason = &emptyReason
+		manifest.Members[index].Payload = mustEntityPageJSON830G1(t, payload)
+		manifest.Members[index].PayloadSHA256 = mustEntityPageSHA256830G1(t, payload.Contract, manifest.Members[index].Payload)
+		manifest.Members[index].MemberDigest = mustEntityPageHashWithout830G1(
+			t, manifest.Members[index].Contract, manifest.Members[index], "member_digest",
+		)
+		manifest.ManifestSHA256 = mustEntityPageHashWithout830G1(t, manifest.Contract, manifest, "manifest_sha256")
+
+		_, err = ParseEntityPageManifest830G1(mustEntityPageJSON830G1(t, manifest))
+		require.ErrorIs(t, err, ErrEntityPageGraphContract830G1)
+		return
+	}
+	t.Fatal("cooling_off_period fixture member not found")
+}
+
 func TestEntityPageManifest830G1TopologyIsProfileDriven(t *testing.T) {
 	t.Parallel()
 

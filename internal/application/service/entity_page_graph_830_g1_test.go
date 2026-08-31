@@ -234,6 +234,35 @@ func TestSchemaWikiServiceLoadEntityPageGraphRelease830G1RejectsManifestCustodyD
 	require.ErrorIs(t, err, ErrEntityPageGraphIntegrity830G1)
 }
 
+func TestEntityPageGraphMemberSetsEqual830G1RequiresEmptyContentInBothCopies(t *testing.T) {
+	base := types.WikiReleaseMemberSnapshot{
+		Kind: "field", LogicalSlug: "page-1", RevisionID: "revision-1",
+		MemberDigest: "digest-1", Title: "字段一", Payload: json.RawMessage(`{"contract":"field"}`),
+	}
+	for _, test := range []struct {
+		name               string
+		preparationContent string
+		releaseContent     string
+		want               bool
+	}{
+		{name: "both empty", want: true},
+		{name: "preparation only", preparationContent: "second body"},
+		{name: "release only", releaseContent: "second body"},
+		{name: "both nonempty", preparationContent: "second body", releaseContent: "second body"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			preparationMember := base
+			preparationMember.Content = test.preparationContent
+			releaseMember := base
+			releaseMember.Content = test.releaseContent
+			require.Equal(t, test.want, entityPageGraphMemberSetsEqual830G1(
+				[]types.WikiReleaseMemberSnapshot{preparationMember},
+				[]types.WikiReleaseMemberSnapshot{releaseMember},
+			))
+		})
+	}
+}
+
 func entityPageGraphManifestDigest830G1ForTest(t *testing.T, manifest types.EntityPageManifest830G1) string {
 	t.Helper()
 	raw, err := json.Marshal(manifest)

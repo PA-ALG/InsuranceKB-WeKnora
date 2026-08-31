@@ -513,7 +513,7 @@ func validateEntityPageFieldPayload830G1(member EntityPageMember830G1, payload E
 	}
 	if payload.State == "unknown" {
 		if payload.ValueSnapshot != nil || payload.DisplayValue != nil || payload.UnknownReason == nil ||
-			payload.SourceTypedReason == nil || len(payload.Citations) != 0 {
+			payload.SourceTypedReason == nil || !entityPageText830G1(*payload.SourceTypedReason) || len(payload.Citations) != 0 {
 			return ErrEntityPageGraphContract830G1
 		}
 		if *payload.UnknownReason != "FIELD_UNKNOWN" && *payload.UnknownReason != "NOT_COVERED_BY_CURRENT_SOURCE_MATERIALS" {
