@@ -1,0 +1,30 @@
+{
+  "contract": "weknora.830.b0-origin-main-diff.v1",
+  "goal_id": "B0",
+  "formal_base": "99205db986eae2a9fa4bc956c053b94298d0b114",
+  "formal_base_tree": "c1d1c5d0631ad282f6edc9f25cfa38e78aedafa1",
+  "authority_source_commit": "1b1d928688522fa50c2410969c09ae6c76edce8a",
+  "merge_base": "b8faa965a2a91b0c627e13319cca97c9e21b8c0f",
+  "formal_base_unique_commits": 4,
+  "source_unique_commits": 152,
+  "source_changed_path_count": 80,
+  "whole_branch_merged": false,
+  "selective_import_commit": "81383e538963b03db729546fba05882dde88ea18",
+  "selected_authority_blobs": [
+    {"path": "jlx_enterprise_llm_wiki_technical_blueprint_830.md", "blob": "299355ea3b633924c38f6d3bd98c0bc2ba9dcc04"},
+    {"path": "docs/insurance-kb/28-development-execution-charter-830.md", "blob": "a7442461c533725f560f073b788840542557e600"},
+    {"path": "docs/insurance-kb/29-goal-cards-830.md", "blob": "f0035a0a6b23eb7d4f5887ce04509d4a09d525b9"}
+  ],
+  "post_import_state_pointer_changes": [
+    "AGENTS.md",
+    "HANDOFF.md",
+    "jlx_enterprise_llm_wiki_technical_blueprint_830.md",
+    "docs/insurance-kb/28-development-execution-charter-830.md",
+    "docs/insurance-kb/29-goal-cards-830.md"
+  ],
+  "evidence_prefix": "docs/insurance-kb/evidence/830-b0/",
+  "product_code_changed": false,
+  "openspec_changed": false,
+  "workbook_scope": "FROZEN_INPUT_ONLY; EXCLUDED_FROM_G1_FINITE_CANDIDATE_DISPOSITION",
+  "current_b0_diff_rule": "Verifier recomputes formal_base..HEAD and rejects every path outside the exact authority/Handoff set and evidence prefix."
+}

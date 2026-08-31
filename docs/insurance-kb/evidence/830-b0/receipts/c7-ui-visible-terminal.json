@@ -1,0 +1,151 @@
+{
+  "contract": "weknora.815.c7-ui-visible-terminal.v1",
+  "created_at": "2026-08-30T18:11:11+08:00",
+  "status": "GO",
+  "terminal": true,
+  "server_c7_status": "GO",
+  "ui_c7_status": "GO",
+  "blocker": null,
+  "integration": {
+    "head": "9fcf3386833d822a31f2de13fdf76c3eb6b13795",
+    "tree": "7314d1c9bc82dc7efb114affb6f2450d0dbd36ae",
+    "parent": "42093e48f389d4c2f0b7d3e83ff77f02f9948c9f",
+    "clean": true,
+    "diff_check": true
+  },
+  "runtime": {
+    "isolated_binary_sha256": "aa069e2566fd0b88fb6280bae8f1759d390fefdcfd32e1820602e0bdaa2ebc34",
+    "health": {
+      "18085": 200,
+      "18094": 200,
+      "8081": 200
+    },
+    "production_8081_unchanged": true
+  },
+  "release": {
+    "activation_epoch": 2,
+    "release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "receipt_id": "receipt-87aadab1-e5ba-405a-ac9e-e285f82133ad",
+    "previous_release_id": "release-f7d0ed7c-e772-4851-9358-ce7351905421",
+    "members": 150
+  },
+  "immutability": {
+    "five_tables": {
+      "releases": 2,
+      "receipts": 2,
+      "members": 150,
+      "heads": 1,
+      "preparations": 2
+    },
+    "old_r1_equal_baseline": true,
+    "epoch2_equal_baseline": true,
+    "release_receipt_head_members_unchanged": true
+  },
+  "server_reopen": {
+    "sections": 7,
+    "fields": 67,
+    "citations": 17,
+    "preview_200": 17,
+    "content_pdf_200": 17,
+    "active_current_pass": true,
+    "explicit_pinned_no_fallback_pass": true,
+    "canonical_lineage": {
+      "unique": 17,
+      "text": 1,
+      "parent_text": 16
+    },
+    "c1_self_hash_and_native_manifest_pass": true,
+    "dual_parse_digest_pass": true,
+    "unicode_code_point_authority_pass": true,
+    "frozen_pdf_identity_count": 3
+  },
+  "chrome": {
+    "control_path": "Computer Use direct com.google.Chrome via @oai/sky",
+    "extension_required": false,
+    "profile_changed": false,
+    "extension_changed": false,
+    "credentials_read": 0,
+    "relogin_attempts": 0,
+    "authenticated_session_visible": true,
+    "final_url": "http://127.0.0.1:18085/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9?tab=schema&c7=visible-go-20260830",
+    "raw_knowledge_base_id_rejected": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_knowledge_base_id_accepted": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+    "prior_403_root_cause": "raw knowledge-base id was used instead of the epoch2 Wiki knowledge-base id"
+  },
+  "visible_ui": {
+    "knowledge_base_title": "C6-ISOLATED-R1-ACCEPTANCE-WIKI",
+    "product_title": "平安e生保（尊享版）医疗保险",
+    "schema_navigation_loaded": true,
+    "section_labels_visible": [
+      "产品概览",
+      "投保与合同",
+      "续保与费率",
+      "保障与除外",
+      "理赔与报销",
+      "服务与权益",
+      "销售支持"
+    ],
+    "citation_groups": [
+      {
+        "field": "insured_eligibility",
+        "sources": 3,
+        "rendered_sources": [1, 2, 3]
+      },
+      {
+        "field": "health_declaration_requirements",
+        "sources": 9,
+        "rendered_sources": [7],
+        "overlap_regression_citation_rendered": true
+      },
+      {
+        "field": "guaranteed_renewal_period",
+        "sources": 5,
+        "rendered_sources": [5]
+      }
+    ],
+    "citation_source_total": 17,
+    "schema_citation_viewer_opened": true,
+    "source_tabs_switched": true,
+    "pdf_rendered": true,
+    "highlighted_quote_visible": true,
+    "three_distinct_citation_view_contexts_rendered": true,
+    "frozen_three_pdf_bundle_identity_verified_server_side": true
+  },
+  "screenshots": [
+    "/var/folders/tb/xv5fvb815kq2mmtt9sfqn6b00000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-30 at 6.01.37 PM.jpeg",
+    "/var/folders/tb/xv5fvb815kq2mmtt9sfqn6b00000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-30 at 6.04.18 PM.jpeg",
+    "/var/folders/tb/xv5fvb815kq2mmtt9sfqn6b00000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-30 at 6.06.51 PM.jpeg",
+    "/var/folders/tb/xv5fvb815kq2mmtt9sfqn6b00000gn/T/com.openai.sky.CUAService/Chrome Screenshot 2026-08-30 at 6.09.20 PM.jpeg"
+  ],
+  "evidence": {
+    "server_terminal_receipt": {
+      "path": "/private/tmp/weknora-815-final-9fcf3386/receipts/c7-terminal.json",
+      "external_sha256": "7e9a91101d899ea50054555157b14e277c58c97e02ddcda68b65c7614c2b9b5c",
+      "self_sha256": "70cd113b2d3d26162e20388f7194e9e31bfa25d4f14e2d68d7f40aa8a80e3dd3"
+    },
+    "readonly_baseline_sha256": "e6f88cd126ad58dbd420a4867ffd6c26455f173106159b093eb10fce078b50f3",
+    "server_base_sha256": "7984025a43d78e174f1bc1ea5159204147b6595df22322801bbb6f87e7fe7806",
+    "server_corrected_sha256": "c42ce01edd6d879ea69cddac2be37746b202f7b63d5a137b7651c0c7fce25b9d",
+    "original_predicate_sha256": "2e50e1f3c1068205003c07fa99491a2f08721fdad62d884c77ea7104226a5671",
+    "runtime_switch_sha256": "b36d84840a13351fdfccc91f0f048e2d84cfb944b17b986f82a2aab6570c19f3",
+    "server_index_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c"
+  },
+  "effects": {
+    "database_writes": 0,
+    "approvals": 0,
+    "signatures": 0,
+    "new_candidates": 0,
+    "new_releases": 0,
+    "new_receipts": 0,
+    "head_updates": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "c4_runs": 0,
+    "production_8081_changes": 0,
+    "surface_additions": 0
+  },
+  "sensitive_values_persisted": false,
+  "self_sha256_contract": "sha256(canonical-json-without-self_sha256)",
+  "self_check_pass": true,
+  "self_sha256": "1d57527fbfa3dbfae9b11d14295a4efde0cc0c379b8d5c506c05ce8a0ea59ff6"
+}

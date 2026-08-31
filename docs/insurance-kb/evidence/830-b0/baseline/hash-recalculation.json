@@ -1,0 +1,20 @@
+{
+  "contract": "weknora.830.b0-hash-recalculation.v1",
+  "goal_id": "B0",
+  "calculated_at": "2026-08-31",
+  "algorithm": "SHA-256 over exact file bytes",
+  "status": "PASS",
+  "artifacts": [
+    {"path": "receipts/c7-ui-visible-terminal.json", "size_bytes": 5523, "expected_sha256": "20575de17ca3a5a98e540848a245ef1af4a27d3e2feca12c7a38424350d45b50", "actual_sha256": "20575de17ca3a5a98e540848a245ef1af4a27d3e2feca12c7a38424350d45b50"},
+    {"path": "receipts/c7-ui-cache-corrected-terminal-20260831.json", "size_bytes": 3687, "expected_sha256": "0e24db1d6ae4632acb538d03b18d84d2ffd0d41b8c39ef6cb5d251318dfa3396", "actual_sha256": "0e24db1d6ae4632acb538d03b18d84d2ffd0d41b8c39ef6cb5d251318dfa3396"},
+    {"path": "receipts/c7-server-base.json", "size_bytes": 5143, "expected_sha256": "7984025a43d78e174f1bc1ea5159204147b6595df22322801bbb6f87e7fe7806", "actual_sha256": "7984025a43d78e174f1bc1ea5159204147b6595df22322801bbb6f87e7fe7806"},
+    {"path": "receipts/c7-server-corrected.json", "size_bytes": 9922, "expected_sha256": "c42ce01edd6d879ea69cddac2be37746b202f7b63d5a137b7651c0c7fce25b9d", "actual_sha256": "c42ce01edd6d879ea69cddac2be37746b202f7b63d5a137b7651c0c7fce25b9d"},
+    {"path": "receipts/c7-terminal.json", "size_bytes": 4692, "expected_sha256": "7e9a91101d899ea50054555157b14e277c58c97e02ddcda68b65c7614c2b9b5c", "actual_sha256": "7e9a91101d899ea50054555157b14e277c58c97e02ddcda68b65c7614c2b9b5c"},
+    {"path": "receipts/readonly-baseline.json", "size_bytes": 2194, "expected_sha256": "e6f88cd126ad58dbd420a4867ffd6c26455f173106159b093eb10fce078b50f3", "actual_sha256": "e6f88cd126ad58dbd420a4867ffd6c26455f173106159b093eb10fce078b50f3"},
+    {"path": "receipts/c7-original-chunk-predicate.json", "size_bytes": 7346, "expected_sha256": "2e50e1f3c1068205003c07fa99491a2f08721fdad62d884c77ea7104226a5671", "actual_sha256": "2e50e1f3c1068205003c07fa99491a2f08721fdad62d884c77ea7104226a5671"},
+    {"path": "runtime/c7-server-reopen-index.json", "size_bytes": 30396, "expected_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c", "actual_sha256": "96d64b79508d2f210e2ce896ed43131e3615f86ec14574303e30d5c6bfdc574c"},
+    {"path": "inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx", "size_bytes": 112185, "expected_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec", "actual_sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec"}
+  ],
+  "environment_started": false,
+  "docker_started": false
+}

@@ -16,12 +16,16 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 
 任何任务开始前必须从本文件开始，并依次阅读：
 
-1. `docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md`
-2. `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
-3. `jlx_enterprise_llm_wiki_complete_728_v3.md` 的 `§M0` 与当前任务相关章节；
+1. 830 任务先读 `jlx_enterprise_llm_wiki_technical_blueprint_830.md`、
+   `docs/insurance-kb/28-development-execution-charter-830.md` 与
+   `docs/insurance-kb/29-goal-cards-830.md`；非 830 任务跳过本项
+2. `docs/superpowers/specs/2026-07-29-weknora-sole-serving-active-release-authority-adr.md`
+3. `docs/superpowers/specs/2026-07-29-enterprise-llm-wiki-authority-amendment-2.md`
+4. `jlx_enterprise_llm_wiki_complete_728_v3.md` 的 `§M0` 与当前任务相关章节；
    只有总体架构评审才要求阅读全文
-4. `HANDOFF.md` 的最顶部当前状态块
-5. 对应的 `openspec/changes/<NNN>/`
+5. `HANDOFF.md` 的最顶部当前状态块
+6. 对应的 `openspec/changes/<NNN>/`；B0 是已授权的证据冻结/资产裁决，不新建
+   OpenSpec，也不授权产品实现
 
 `CLAUDE.md` 不再维护另一份必读清单；其他开发入口必须指回本节。
 
@@ -103,6 +107,17 @@ OpenSpec 122 与旧 EC-02 只保留历史质量证据；旧实验结论是 `QUAL
 不在 main。C4 定制仍为 `DEFERRED`，必须从执行时最新 main 新开 Mission，重新
 冻结 Candidate/Golden/Evidence、Metric、人工责任、provider/model 与预算；不得
 从 C7 PASS 推导 C4 PASS，也不得修改已验收 serving release。
+
+### 当前 830 B0 状态
+
+830 当前唯一 WIP 是 `B0`，正式 base 为
+`99205db986eae2a9fa4bc956c053b94298d0b114`，执行分支为
+`codex/830-b0-asset-baseline`。B0 只冻结 815 FLOW 证据、11 类 Schema v5 输入、
+有限候选四态裁决、验证/镜像影响和 branch/worktree 机械索引；产品代码、Provider、
+环境、Docker 与 G1+ 均未获授权。Evidence Pack 位于
+`docs/insurance-kb/evidence/830-b0/`，状态为
+`EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`；总控复核前不得宣布 B0 最终 PASS，
+G1 及后续 Goal 保持 `LOCKED`。下文 C4 描述只保留历史边界，不是当前下一项队列。
 
 2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
 弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、

@@ -1,0 +1,131 @@
+{
+  "contract": "weknora.830.b0-validation-baseline.v1",
+  "goal_id": "B0",
+  "validation_level": "D0",
+  "docker_action": "SKIP",
+  "measurement_policy": {
+    "source": "Existing receipts and GitHub PR 123 statusCheckRollup only",
+    "sample_window": "2026-08-31 PR 123 pre-merge checks",
+    "quantile_method": "NEAREST_RANK: sorted_samples[ceil(p*n)-1]",
+    "environment_started_for_measurement": false,
+    "build_started_for_measurement": false
+  },
+  "levels": [
+    {
+      "level": "D0",
+      "current_entrypoints": [
+        "python3 docs/insurance-kb/evidence/830-b0/tools/verify_b0_evidence.py",
+        "git diff --check 99205db986eae2a9fa4bc956c053b94298d0b114..HEAD",
+        "git status --porcelain=v1"
+      ],
+      "applies_to_b0": true,
+      "docker_action": "SKIP",
+      "sample_count": 0,
+      "p50_seconds": null,
+      "p95_seconds": null,
+      "measurement_status": "NOT_MEASURED",
+      "reason": "PR 124 carried no status checks and no prior receipt records start/end boundaries for this docs/evidence-only entry."
+    },
+    {
+      "level": "D1",
+      "current_entrypoints": [
+        "cd harness && uv run ruff check . && uv run mypy src tests && uv run pytest -m 'not live and not integration_postgres' -q",
+        "cd harness && uv run pytest -m integration_postgres -q --junitxml=reports/postgres.xml",
+        "cd harness && uv build && install wheel into a clean venv and run scripts/wheel_smoke_workbench.py",
+        "go test -v ./...",
+        "cd frontend && npm run test:component"
+      ],
+      "applies_to_b0": false,
+      "docker_action": "SKIP_OR_EXACT_REUSE_ONLY",
+      "ci_samples": [
+        {
+          "entry": "harness-ci/deterministic",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378704264/job/99445906135",
+          "started_at": "2026-08-31T09:38:55Z",
+          "completed_at": "2026-08-31T09:57:51Z",
+          "duration_seconds": 1136,
+          "conclusion": "SUCCESS"
+        },
+        {
+          "entry": "harness-ci/deterministic",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378701029/job/99445894496",
+          "started_at": "2026-08-31T09:38:52Z",
+          "completed_at": "2026-08-31T09:57:56Z",
+          "duration_seconds": 1144,
+          "conclusion": "SUCCESS"
+        },
+        {
+          "entry": "harness-ci/integration-postgres",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378704264/job/99445906395",
+          "started_at": "2026-08-31T09:38:54Z",
+          "completed_at": "2026-08-31T09:39:53Z",
+          "duration_seconds": 59,
+          "conclusion": "SUCCESS"
+        },
+        {
+          "entry": "harness-ci/integration-postgres",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378701029/job/99445894374",
+          "started_at": "2026-08-31T09:38:52Z",
+          "completed_at": "2026-08-31T09:39:48Z",
+          "duration_seconds": 56,
+          "conclusion": "SUCCESS"
+        },
+        {
+          "entry": "harness-ci/wheel-smoke",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378704264/job/99445906360",
+          "started_at": "2026-08-31T09:38:54Z",
+          "completed_at": "2026-08-31T09:39:07Z",
+          "duration_seconds": 13,
+          "conclusion": "SUCCESS"
+        },
+        {
+          "entry": "harness-ci/wheel-smoke",
+          "source": "https://github.com/PA-ALG/InsuranceKB-WeKnora/actions/runs/33378701029/job/99445894492",
+          "started_at": "2026-08-31T09:38:52Z",
+          "completed_at": "2026-08-31T09:39:10Z",
+          "duration_seconds": 18,
+          "conclusion": "SUCCESS"
+        }
+      ],
+      "aggregates": {
+        "harness-ci/deterministic": {"sample_count": 2, "samples_seconds": [1136, 1144], "p50_seconds": 1136, "p95_seconds": 1144},
+        "harness-ci/integration-postgres": {"sample_count": 2, "samples_seconds": [56, 59], "p50_seconds": 56, "p95_seconds": 59},
+        "harness-ci/wheel-smoke": {"sample_count": 2, "samples_seconds": [13, 18], "p50_seconds": 13, "p95_seconds": 18}
+      },
+      "measurement_status": "MEASURED_EXISTING_CI_SAMPLES"
+    },
+    {
+      "level": "D2",
+      "current_entrypoints": [
+        "Controller freezes integration head, evaluates image-impact manifest, and builds each actually affected image once."
+      ],
+      "applies_to_b0": false,
+      "docker_action": "BUILD_AFFECTED_ONLY",
+      "sample_count": 0,
+      "p50_seconds": null,
+      "p95_seconds": null,
+      "measurement_status": "NOT_MEASURED",
+      "reason": "No authorized D2 build sample with complete artifact identity exists in the frozen B0 receipts; B0 does not build to measure."
+    },
+    {
+      "level": "D3",
+      "current_entrypoints": [
+        "Deploy only the exact D2 digest and execute the current Goal's REAL_DOD without rebuilding."
+      ],
+      "applies_to_b0": false,
+      "docker_action": "REUSE",
+      "sample_count": 0,
+      "p50_seconds": null,
+      "p95_seconds": null,
+      "measurement_status": "NOT_MEASURED",
+      "reason": "815 C7 receipts prove the result but do not carry start/end boundaries for a D3 duration sample; B0 does not restart the environment."
+    }
+  ],
+  "forbidden_commands_for_b0": [
+    "make docker-build-all",
+    "make start-all",
+    "start-all --no-pull",
+    "docker build",
+    "docker compose build"
+  ]
+}

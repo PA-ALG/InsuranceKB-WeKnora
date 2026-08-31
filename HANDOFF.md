@@ -14,13 +14,17 @@ squash commit 合入 `main`：
 - parent：`dfa87e11d5a434b6823582285c17498e715dd8f1`；
 - 工程交接文档：[PR #124](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/124)；
 - PR #124 合并后的最终 `origin/main` HEAD：
-  `DEFERRED-UNTIL-PR-124-MERGE`，由 PR 合并元数据和总控终态报告机械解析；
+  `99205db986eae2a9fa4bc956c053b94298d0b114`；
 - 交付方式：从当时最新 `origin/main` 重建最终状态，**未合入或整体 squash
   149 条历史迭代提交**；
 - 远端门禁：两套 deterministic、两套 PostgreSQL integration、两套
   wheel-smoke 全部通过。
 
-下一项业务开发是 **C4 定制质量能力**。它尚未开始，也不属于已完成 MVP。
+830 当前唯一 WIP 是 **B0 · 815 证据基线与资产裁决**。执行分支为
+`codex/830-b0-asset-baseline`，正式 base 为上述 `origin/main` HEAD，Evidence Pack
+位于 `docs/insurance-kb/evidence/830-b0/`，当前状态为
+`EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`。B0 不改产品代码、不启动环境或
+Docker；总控给出最终 B0 裁决前不得启动 G1，G1 及后续 Goal 全部 `LOCKED`。
 
 ## 2. 用户应体验什么
 
@@ -72,9 +76,14 @@ C7 使用既有 epoch2 做纯读重开，没有重新审批、签名、发布或
 - business DB writes、provider/model、C4、Candidate、release、receipt、Head、
   approval、signature effects：全部为 0；隔离角色密码轮换 1 次，未持久化敏感值。
 
-终态回执保留在任务私有 mode-0600 目录，不进入仓库。回执外部 SHA-256 为
-`0e24db1d6ae4632acb538d03b18d84d2ffd0d41b8c39ef6cb5d251318dfa3396`，
-self-check 为 PASS。
+B0 已把授权范围内的只读副本放入 Evidence Pack。用户冻结输入
+`c7-ui-visible-terminal.json` 的 external SHA-256 为
+`20575de17ca3a5a98e540848a245ef1af4a27d3e2feca12c7a38424350d45b50`，
+canonical self-hash 为
+`1d57527fbfa3dbfae9b11d14295a4efde0cc0c379b8d5c506c05ce8a0ea59ff6`。
+此前记录的 `0e24db1d6ae4632acb538d03b18d84d2ffd0d41b8c39ef6cb5d251318dfa3396`
+对应后续 `c7-ui-cache-corrected-terminal-20260831.json`；两份回执绑定同一 815
+commit/tree/backend binary/epoch2 release，但必须分别登记，不能互相替代。
 
 ## 4. Chrome 可见验收的正确路径
 
@@ -91,13 +100,13 @@ self-check 为 PASS。
 不得把密码、session、token 写入仓库、回执或日志；需要登录时由用户在可见页面
 自行完成。
 
-## 5. C4 后续开发边界
+## 5. C4 历史后续边界（不是当前队列）
 
 旧提交 `6d56618d0d9796e10d87f93e6b04188a49da9296` 只作历史参考，**不在
 main**。它绑定旧 Candidate、固定 reviewer=`linyao`、固定
 attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
 
-后续 C4 必须：
+若未来路线重新授权 C4，则必须：
 
 1. 从最新 `origin/main` 新建独立 OpenSpec/Mission；
 2. 先冻结业务目标、Metric ID、输入权威、预算、provider/model 边界和人工责任；
@@ -107,7 +116,7 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
    记录，默认均为 `NOT RUN`；
 5. C4 的失败不能修改当前已验收的 C7 serving release。
 
-详细接手卡见
+历史详细接手卡见
 [`docs/insurance-kb/26-mvp-815-engineering-handoff.md`](docs/insurance-kb/26-mvp-815-engineering-handoff.md)。
 
 ## 6. 仓库整理状态
@@ -146,7 +155,11 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
 ## 8. 接手阅读顺序
 
 1. [`AGENTS.md`](AGENTS.md)
-2. 本文件
-3. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md)
-4. [OpenSpec 120](openspec/changes/120-schema-wiki-medical-596-1-mvp/)
-5. 新任务对应的 OpenSpec；历史合订文档只作背景，不授予实现权。
+2. [830 技术蓝图](jlx_enterprise_llm_wiki_technical_blueprint_830.md)
+3. [830 开发执行章程](docs/insurance-kb/28-development-execution-charter-830.md)
+4. [830 Goal Cards](docs/insurance-kb/29-goal-cards-830.md)
+5. 本文件
+6. [B0 Evidence Pack](docs/insurance-kb/evidence/830-b0/)
+7. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md) 与
+   [OpenSpec 120](openspec/changes/120-schema-wiki-medical-596-1-mvp/) 只作已冻结历史
+   证据；后续 Goal 仍须自己的授权与适用 OpenSpec。
