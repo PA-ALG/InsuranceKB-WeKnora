@@ -93,6 +93,14 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 - [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
 - [ ] 证明生产 `8081`、生产 Active、Provider/model calls 均未变化。
 
+M3 在 D2 安全门禁 STOP：integration `06b101665921844cabf666574514c2b71ebd4b12` / tree
+`e14c5057f87427670f8a0382b357b6970ecd74f8` 已冻结，B0 映射只影响 app/frontend。
+frontend dist 构建完成；唯一 app image build 进入 production `go build` 后，default
+Colima/Lima instance 消失，未产出 image identity。D2 前 production `8081=200`，之后为
+connection refused；总控未重启 default VM、未执行 replacement build、未启动 Release/Head、
+Provider/model 或 G2。继续需要生产恢复或第二次 build 的新授权，因此 G1 按 STOP 门禁停止。
+不可变回执为 `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`。
+
 ## Closeout
 
 - [ ] 完成 `docs/insurance-kb/evidence/830-g1/` 全部清单与复现步骤。

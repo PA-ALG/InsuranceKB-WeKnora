@@ -1,0 +1,113 @@
+{
+  "contract": "weknora.830.g1-m3-d2-build-stop.v1",
+  "goal_id": "G1",
+  "phase": "M3_D2",
+  "observed_at": "2026-09-02T01:45:54+08:00",
+  "integration": {
+    "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+    "head": "06b101665921844cabf666574514c2b71ebd4b12",
+    "tree": "e14c5057f87427670f8a0382b357b6970ecd74f8",
+    "branch": "codex/830-g1-field-assertion-pages",
+    "worktree_clean_after_stop": true
+  },
+  "image_impact": {
+    "b0_receipt": "docs/insurance-kb/evidence/830-b0/image-impact/image-change-impact.json",
+    "b0_receipt_file_sha256": "c59388ad17ea25d6d6d505a4073cf26eab081694b47a1b58a7282c858e8df250",
+    "affected_services": [
+      "app",
+      "frontend"
+    ],
+    "unaffected_services": [
+      "docreader",
+      "sandbox",
+      "odl-hybrid",
+      "mcp",
+      "local-live-runner"
+    ],
+    "dockerfile_changed": false,
+    "lockfile_changed": false
+  },
+  "frozen_build_inputs": {
+    "platform": "linux/arm64",
+    "app_source_subset_sha256": "2d0cab1d69dca42357b3fd2016dea4e48bd1d6f5d002ac45f8b95285d3321b27",
+    "frontend_source_subset_sha256": "b1bad86d3e1735086ac2fc1b835ea90d313ac4978aa3a3235c449c2211680935",
+    "app_dockerfile_sha256": "b4a8bf435191c97068862e8766bd0d7ec28d052fce50640f49faee64898654cc",
+    "frontend_dockerfile_sha256": "3435582ac2165ee65357baff3fd7be4b68f6c191f8901bd5288f99f96d79fb68",
+    "root_dockerignore_sha256": "4172901b56207e1cb472d8a46cd261d6d5f211e4da645450b8660fa6e0406d53",
+    "frontend_dockerignore_sha256": "84c12bd74f1b311ae266fa5c8515a4eb366337da0f0d0e32553bf360795494f2",
+    "go_mod_sha256": "60057dbeba4404605f659dfbf9f6a5ea426ab1a9a1d958795d108d7a3ab9fc3a",
+    "go_sum_sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7",
+    "frontend_package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+    "frontend_dist_sha256": "9e0edb54f29ebbeb17cdfdeb13fdf50d6ebaf042a5430fc102fdb3791fea67eb",
+    "frontend_dist_file_count": 182,
+    "frontend_dist_size_kib": 26580,
+    "app_base_images": [
+      "golang:1.26-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd",
+      "debian:12.12-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"
+    ],
+    "frontend_base_image": "nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1",
+    "app_build_args": {
+      "GOPRIVATE_ARG": "",
+      "GOPROXY_ARG": "https://goproxy.cn,direct",
+      "GOSUMDB_ARG": "off",
+      "APK_MIRROR_ARG": "",
+      "VERSION_ARG": "0.7.1-g1-m3",
+      "COMMIT_ID_ARG": "06b101665921844cabf666574514c2b71ebd4b12",
+      "BUILD_TIME_ARG": "2026-09-01T10:17:35Z",
+      "GO_VERSION_ARG": "go1.26.0"
+    }
+  },
+  "d2_execution": {
+    "frontend_dist_build": "PASS",
+    "app_image_build": "ENVIRONMENT_STOPPED",
+    "app_build_terminal_exit_code": 130,
+    "app_build_last_completed_step": "Dockerfile.app builder step 9 of 11 COPY . .",
+    "app_build_in_progress_step_when_vm_lost": "Dockerfile.app builder step 10 of 11 make build-prod / go build ./cmd/server",
+    "app_build_progress_evidence": "go build PID 906016 used 44.6 percent CPU after 17 minutes; later host SSH was stale for more than 3 hours at zero host CPU",
+    "lima_final_status": "No instance matching colima found",
+    "app_image_identity": "NOT_OBTAINED",
+    "app_artifact_admitted": false,
+    "frontend_image_build": "NOT_RUN",
+    "successful_image_build_count": 0,
+    "replacement_build_attempted": false
+  },
+  "production_before_d2": {
+    "frontend_http_status": 200,
+    "app_health_http_status": 200,
+    "frontend_container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+    "frontend_image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+    "frontend_started_at": "2026-08-30T16:56:35.934568702Z",
+    "app_container_id": "fca85321234ebc2a41910343f6d032de32596773be46fc04757282b0359cf3f4",
+    "app_image_id": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+    "app_started_at": "2026-08-30T16:56:36.177364061Z",
+    "production_release_head_table": "NOT_PROVISIONED_IN_PRODUCTION_DATABASE"
+  },
+  "state_after_stop": {
+    "production_frontend_http_status": 0,
+    "production_frontend_observation": "connection refused at 127.0.0.1:8081",
+    "colima_instance": "MISSING",
+    "m1_isolated_frontend_http_status": 200,
+    "m1_isolated_backend_health_http_status": 200,
+    "release_lifecycle_started": false,
+    "release_created": false,
+    "head_cas_attempted": false
+  },
+  "effects": {
+    "provider_calls": 0,
+    "model_calls": 0,
+    "release_writes": 0,
+    "head_writes": 0,
+    "production_container_replace_or_restart_actions_by_controller": 0,
+    "production_8081_availability_observed_change": "200_TO_CONNECTION_REFUSED",
+    "g2_actions": 0
+  },
+  "stop_gate": {
+    "reason": "DEFAULT_COLIMA_INSTANCE_LOST_DURING_THE_ONLY_D2_APP_BUILD_ATTEMPT",
+    "production_recovery_requires_prohibited_mutation": true,
+    "replacement_profile_requires_new_build_authorization": true,
+    "g1_status": "STOPPED",
+    "g2_readiness": "NO_LOCKED"
+  },
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "7a0ba4b8edddd0130161ae66b9a9cddb7857cfb724a6e490e95809e684cf9aa8"
+}

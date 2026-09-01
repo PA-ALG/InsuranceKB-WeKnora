@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_ATOMIC_ISOLATED_RELEASE_NOT_YET_CLOSED
-FLOW=M2_PASS
+CURRENT_RED=M3_D2_DEFAULT_COLIMA_INSTANCE_LOST_AND_PRODUCTION_8081_UNAVAILABLE
+FLOW=G1_STOPPED
 QUALITY=DEFERRED
-DOCKER_ACTION=SKIP
+DOCKER_ACTION=STOPPED_AFTER_ONLY_APP_BUILD_ATTEMPT
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=M3_ATOMIC_ISOLATED_NOT_FOR_PRODUCTION_RELEASE
+NEXT_PHYSICAL_RESULT=USER_DECISION_ON_PRODUCTION_RECOVERY_AND_REPLACEMENT_D2_AUTHORIZATION
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -46,6 +46,16 @@ M2_REVIEWED_TREE=4ada9652d998f3b2effcaea29552aaee840f2ebd
 M2_REVIEW=PASS
 M2_REVIEW_UNRESOLVED_COUNT=0
 M2_EVIDENCE=PASS
+M3_INTEGRATION_HEAD=06b101665921844cabf666574514c2b71ebd4b12
+M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
+M3_D2=STOPPED
+M3_D2_APP_BUILD_EXIT=130
+M3_D2_APP_IMAGE=NOT_OBTAINED
+M3_D2_FRONTEND_IMAGE=NOT_RUN
+M3_PRODUCTION_8081_BEFORE=200
+M3_PRODUCTION_8081_AFTER=CONNECTION_REFUSED
+M3_RELEASE_LIFECYCLE=NOT_RUN
+M3_PROVIDER_MODEL_CALLS=0
 G2_AND_LATER=LOCKED
 ```
 
@@ -148,3 +158,20 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
 - Visible read-only Review `01a05c5d-0483-7641-9bec-948442015a0d` accepted that exact corrected
   head/tree with `REVIEW=PASS`, `UNRESOLVED_COUNT=0`; M2 is closed. Evidence records zero
   DB/release/head/Provider/model/production/G2 effects. M3 remains NOT RUN.
+
+## M3 D2 stop
+
+- Integration identity was frozen at `06b101665921844cabf666574514c2b71ebd4b12` / tree
+  `e14c5057f87427670f8a0382b357b6970ecd74f8`. B0 impact mapping selected only app and
+  frontend; Dockerfiles and lockfiles were unchanged.
+- The exact frontend dist build completed. The only app image build reached the production
+  `go build ./cmd/server` step, but the default Colima/Lima instance disappeared before an image
+  identity was produced. The stale build transport was terminated with exit `130`; no replacement
+  build was attempted and the frontend image build did not start.
+- Before D2, production frontend/app health was `200` with the frozen container/image identities.
+  After the VM loss, `127.0.0.1:8081` refused connections and Lima reported
+  `No instance matching colima found`. Restoring the default VM could restart production containers;
+  using another profile would require a second app build. Both exceed the frozen execution authority.
+- Exact incident receipt: `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`. Release review,
+  Release creation, Head CAS, Provider/model and G2 actions were all NOT RUN/zero. G1 is STOPPED;
+  G2 remains locked.
