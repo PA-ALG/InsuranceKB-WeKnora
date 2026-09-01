@@ -76,7 +76,14 @@ Candidate Preview，不把 Draft 冒充 Review/Release/Active，也不提前关�
 - [x] 关闭 76/76 唯一 ID、67/67 三态、unknown typed reason、全部稳定 route。
 - [x] 关闭 Section→FieldAssertion、known 同源 Evidence、标题/分类不改变 identity。
 - [x] 关闭公共 renderer 的非 7 节点单测；不得注册其余 10 类产品 Profile。
-- [ ] 提交 M2 完整页面图并更新 Requirement 矩阵。
+- [x] 提交 M2 完整页面图并更新 Requirement 矩阵。
+
+M2 candidate `d1b8d8e9e1213a28d4b762f0767120b121b218c1` 的内容树已通过页面图复核，但其
+commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。总控仅重写未推送 tip；
+纠正 head `edc74ac7fb82dcb8e443020bab151a116f57ef32` 保持 tree
+`4ada9652d998f3b2effcaea29552aaee840f2ebd` 不变，并与树内 NEXT 同为 M2。可见只读 Review
+`01a05c5d-0483-7641-9bec-948442015a0d` 随后报告 `REVIEW=PASS`、
+`UNRESOLVED_COUNT=0`。M2 关闭后才允许推进 M3；G2 继续锁定。
 
 ## M3 · Atomic isolated Release
 

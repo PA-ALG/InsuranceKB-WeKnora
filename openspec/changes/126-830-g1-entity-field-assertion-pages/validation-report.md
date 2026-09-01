@@ -6,8 +6,8 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M2_COMPLETE_76_PAGE_GRAPH_EVIDENCE_AND_M3_ATOMIC_ISOLATED_RELEASE_NOT_YET_CLOSED
-FLOW=M1_PASS
+CURRENT_RED=M3_ATOMIC_ISOLATED_RELEASE_NOT_YET_CLOSED
+FLOW=M2_PASS
 QUALITY=DEFERRED
 DOCKER_ACTION=SKIP
 G2_AND_LATER=LOCKED
@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=M2_COMPLETE_76_PAGE_GRAPH_EVIDENCE
+NEXT_PHYSICAL_RESULT=M3_ATOMIC_ISOLATED_NOT_FOR_PRODUCTION_RELEASE
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -35,7 +35,17 @@ M1_EVIDENCE_REVIEW=PASS
 M1_EVIDENCE_REVIEWED_HEAD=6ed49abab3cc9e0428b8648e93e1c2e0a313d8e5
 M1_EVIDENCE_REVIEWED_TREE=83792e58f0b453c13af7543649391b0ff71d8b74
 M1_EVIDENCE_REVIEW_UNRESOLVED_COUNT=0
-M2_EVIDENCE=PREPARED_PENDING_INDEPENDENT_REVIEW
+M2_INITIAL_REVIEW=FAIL
+M2_INITIAL_REVIEWED_HEAD=d1b8d8e9e1213a28d4b762f0767120b121b218c1
+M2_INITIAL_REVIEWED_TREE=4ada9652d998f3b2effcaea29552aaee840f2ebd
+M2_INITIAL_REVIEW_UNRESOLVED_COUNT=1
+M2_CORRECTION=PASS
+M2_REVIEW_TASK=01a05c5d-0483-7641-9bec-948442015a0d
+M2_REVIEWED_HEAD=edc74ac7fb82dcb8e443020bab151a116f57ef32
+M2_REVIEWED_TREE=4ada9652d998f3b2effcaea29552aaee840f2ebd
+M2_REVIEW=PASS
+M2_REVIEW_UNRESOLVED_COUNT=0
+M2_EVIDENCE=PASS
 G2_AND_LATER=LOCKED
 ```
 
@@ -43,15 +53,15 @@ G2_AND_LATER=LOCKED
 
 | Requirement | RED | Implementation | Focused test | Commit | Live evidence | Status |
 |---|---|---|---|---|---|---|
-| G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `740d9b7c` | stable entity URLs/UI PASS | M1 PASS |
-| G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS | M1 PASS |
-| G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `740d9b7c` | present/absent/unknown UI PASS | M1 PASS |
-| G1-R4 | PASS | server-verified source bridge | focused PASS | `740d9b7c` | exact PDF page/bbox PASS | M1 PASS |
-| G1-R5 | PASS | payload Profile + namespace metadata | focused PASS | `740d9b7c` | short title + full namespace PASS | M1 PASS |
+| G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
+| G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
+| G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
+| G1-R4 | PASS | server-verified source bridge | focused PASS | `edc74ac7` | M1 exact click + M2 known custody 17/17 PASS | M2 PASS |
+| G1-R5 | PASS | payload Profile + namespace metadata | focused PASS | `edc74ac7` | short titles + 76/76 namespaces PASS | M2 PASS |
 | G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
 | G1-R7 | PASS | current/pinned/preparation no-fallback reads | focused PASS | `740d9b7c` | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 NOT RUN |
-| G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `740d9b7c` | exact source bridge PASS | M1 PASS |
-| G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `740d9b7c` | seven-section actual UI PASS | M1 PASS |
+| G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
+| G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
 M0 文档/规格变更采用 D0；当时功能 RED、实现、Docker 和 live 均未运行。只有实际命令与
 不可变回执可改变本表状态，fixture/code GREEN 不得改变 FLOW 或 BUSINESS 状态。
@@ -119,7 +129,7 @@ WeKnora validation/read/UI，两者直接汇合到同一个 M1 Preview。最多�
 M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Release/activation，
 也尚未形成 M3 successor current/pinned/no-mix 物理证据。G2 继续锁定。
 
-## M2 complete page graph candidate
+## M2 complete page graph accepted
 
 - `docs/insurance-kb/evidence/830-g1/m2/identity-hash-index.json` lists all 76 ordered
   page identities, routes, namespaces, member digests and payload hashes; all four identity domains
@@ -131,6 +141,10 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
 - Fresh verification: Harness `14 passed`; exact Go source-custody pair `2 passed`; Go full package
   regression PASS after the authorized loopback rerun; Go vet PASS; focused frontend `36 passed`;
   frontend typecheck, Ruff and diff-check PASS.
-- M2 evidence is controller-prepared with zero DB/release/head/Provider/model/production/G2 effects.
-  It is not admitted or committed as M2 PASS until the visible read-only Review accepts its exact
-  candidate head/tree.
+- The first candidate metadata at `d1b8d8e9e1213a28d4b762f0767120b121b218c1` advanced NEXT
+  to M3 before the tree's M2 gate closed. The reviewer reported one BLOCKER; the controller only
+  reworded the unpushed tip. Corrected head `edc74ac7fb82dcb8e443020bab151a116f57ef32`
+  retained exact tree `4ada9652d998f3b2effcaea29552aaee840f2ebd` and aligned both NEXT values to M2.
+- Visible read-only Review `01a05c5d-0483-7641-9bec-948442015a0d` accepted that exact corrected
+  head/tree with `REVIEW=PASS`, `UNRESOLVED_COUNT=0`; M2 is closed. Evidence records zero
+  DB/release/head/Provider/model/production/G2 effects. M3 remains NOT RUN.

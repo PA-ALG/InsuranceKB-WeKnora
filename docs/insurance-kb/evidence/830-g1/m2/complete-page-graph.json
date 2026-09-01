@@ -2,7 +2,7 @@
   "contract": "weknora.830.g1-m2-complete-page-graph.v1",
   "goal_id": "G1",
   "phase": "M2",
-  "observed_at": "2026-09-01T16:32:09+08:00",
+  "observed_at": "2026-09-01T18:02:22+08:00",
   "parent_m1_commit": "6ed49abab3cc9e0428b8648e93e1c2e0a313d8e5",
   "parent_m1_tree": "83792e58f0b453c13af7543649391b0ff71d8b74",
   "preparation_id": "g1-m1-740d9b7c-preview",
@@ -158,10 +158,21 @@
     "g2_actions": 0
   },
   "independent_review": {
-    "task_id": "01a05a7d-5d6b-7510-849f-a9da7b6b1255",
-    "status": "PENDING_M2_CANDIDATE_COMMIT"
+    "initial_task_id": "01a05a7d-5d6b-7510-849f-a9da7b6b1255",
+    "initial_reviewed_head": "d1b8d8e9e1213a28d4b762f0767120b121b218c1",
+    "initial_reviewed_tree": "4ada9652d998f3b2effcaea29552aaee840f2ebd",
+    "initial_result": "FAIL",
+    "initial_unresolved_count": 1,
+    "initial_finding": "candidate commit metadata advanced NEXT to M3 before the M2 independent-review gate closed",
+    "correction": "reworded the unpushed candidate tip so commit and validation-report NEXT both remain M2",
+    "final_task_id": "01a05c5d-0483-7641-9bec-948442015a0d",
+    "final_reviewed_head": "edc74ac7fb82dcb8e443020bab151a116f57ef32",
+    "final_reviewed_tree": "4ada9652d998f3b2effcaea29552aaee840f2ebd",
+    "tree_unchanged_by_correction": true,
+    "final_result": "PASS",
+    "final_unresolved_count": 0
   },
-  "status": "VERIFIED_PENDING_INDEPENDENT_REVIEW",
+  "status": "M2_PASS",
   "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
-  "self_sha256": "0216c4eaddbc2a6a99966f73ad5abfe93da756534f6633df835dbcac921df0bf"
+  "self_sha256": "b408461d1d115e78762229e92b02e8951227fda07c342539dc3ed6798dad9da2"
 }
