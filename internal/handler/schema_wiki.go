@@ -65,6 +65,13 @@ type schemaWikiFormalCandidateDecisionHTTPService interface {
 }
 
 type schemaWikiHTTPService interface {
+	CreateEntityPageGraphDraft830G1(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		json.RawMessage,
+	) (*types.WikiReleasePreparation, error)
 	CreateSchemaDraft(
 		context.Context,
 		types.WikiReleasePrincipal,
@@ -137,6 +144,14 @@ type schemaWikiHTTPService interface {
 		string,
 	) ([]byte, error)
 	IssueCurrentSchemaCitationAuthority(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		string,
+		string,
+	) (*types.SchemaWikiCitationContentAuthorityV1, error)
+	IssueEntityPageGraphPreparationCitationAuthority830G1(
 		context.Context,
 		types.WikiReleasePrincipal,
 		types.WikiReleaseScope,
@@ -412,6 +427,7 @@ type schemaWikiCreateDraftRequest struct {
 	ReviewBundle               types.SchemaWikiReviewBundleV1                `json:"review_bundle"`
 	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
 	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
+	EntityPageManifest         json.RawMessage                               `json:"entity_page_manifest,omitempty"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -456,6 +472,40 @@ func (h *SchemaWikiHandler) ResolveScopeParams() gin.HandlerFunc {
 			gin.Param{Key: "raw_kb_id", Value: head.RawKBID},
 		)
 		c.Set(schemaWikiResolvedHeadContextKey, *head)
+		c.Next()
+	}
+}
+
+// ResolvePreparationScopeParams derives a Draft/Ready scope without consulting
+// Head. It is used only by the human-admin Candidate Preview bootstrap.
+func (h *SchemaWikiHandler) ResolvePreparationScopeParams() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tenantValue, exists := c.Get(types.TenantIDContextKey.String())
+		tenantID, tenantOK := tenantValue.(uint64)
+		wikiKBID := strings.TrimSpace(c.Param("kb_id"))
+		preparationID := strings.TrimSpace(c.Param("preparation_id"))
+		resolver, resolverOK := h.scopeResolver.(schemaWikiPreparationScopeResolver)
+		if !exists || !tenantOK || tenantID == 0 || wikiKBID == "" || preparationID == "" ||
+			!resolverOK || strings.TrimSpace(c.Param("space_id")) != "" ||
+			strings.TrimSpace(c.Param("raw_kb_id")) != "" {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		scope, err := resolver.GetPreparationScopeForWikiKB(
+			c.Request.Context(), tenantID, wikiKBID, preparationID,
+		)
+		if err != nil || scope == nil || scope.TenantID != tenantID ||
+			scope.WikiKBID != wikiKBID || strings.TrimSpace(scope.SpaceID) == "" ||
+			strings.TrimSpace(scope.RawKBID) == "" {
+			writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+			c.Abort()
+			return
+		}
+		c.Params = append(c.Params,
+			gin.Param{Key: "space_id", Value: scope.SpaceID},
+			gin.Param{Key: "raw_kb_id", Value: scope.RawKBID},
+		)
 		c.Next()
 	}
 }
@@ -655,6 +705,20 @@ func (h *SchemaWikiHandler) Scope(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": scope})
 }
 
+func (h *SchemaWikiHandler) PreparationScope(c *gin.Context) {
+	_, _, scope, ok := schemaWikiPathScope(c)
+	if !ok {
+		writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+		return
+	}
+	response, err := newSchemaWikiScopeV1(scope)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
+}
+
 func newSchemaWikiScopeV1(scope types.WikiReleaseScope) (schemaWikiScopeV1, error) {
 	preimage := struct {
 		Version  string `json:"version"`
@@ -772,21 +836,98 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 		return
 	}
 	var request schemaWikiCreateDraftRequest
-	if err := decodeClosedSchemaWikiRequest(c, &request); err != nil {
+	variant, err := decodeSchemaWikiCreateDraftRequest(c, &request)
+	if err != nil {
 		writeSchemaWikiError(c, err)
 		return
 	}
-	draft, err := h.schemaService.CreateSchemaDraft(
-		c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
-		request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
-		request.EvaluationBundle,
-		request.ReviewSuccessor,
-	)
+	var draft *types.WikiReleasePreparation
+	if variant == "entity-page-graph-830-g1" {
+		draft, err = h.schemaService.CreateEntityPageGraphDraft830G1(
+			c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
+			request.EntityPageManifest,
+		)
+	} else {
+		draft, err = h.schemaService.CreateSchemaDraft(
+			c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
+			request.Release, request.CandidateEvidenceAuthority, request.ReviewBundle,
+			request.EvaluationBundle,
+			request.ReviewSuccessor,
+		)
+	}
 	if err != nil {
 		writeSchemaWikiError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": draft})
+}
+
+func decodeSchemaWikiCreateDraftRequest(
+	c *gin.Context,
+	destination *schemaWikiCreateDraftRequest,
+) (string, error) {
+	if c == nil || c.Request == nil || c.Request.Body == nil || destination == nil {
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	raw, err := io.ReadAll(io.LimitReader(c.Request.Body, maxSchemaWikiRequestBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxSchemaWikiRequestBytes {
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	fields := map[string]json.RawMessage{}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	opening, tokenErr := decoder.Token()
+	if tokenErr != nil || opening != json.Delim('{') {
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	for decoder.More() {
+		token, tokenErr := decoder.Token()
+		key, keyOK := token.(string)
+		if tokenErr != nil || !keyOK {
+			return "", service.ErrSchemaWikiPreparationInvalid
+		}
+		if _, duplicate := fields[key]; duplicate {
+			return "", service.ErrSchemaWikiPreparationInvalid
+		}
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			return "", service.ErrSchemaWikiPreparationInvalid
+		}
+		fields[key] = value
+	}
+	closing, tokenErr := decoder.Token()
+	if tokenErr != nil || closing != json.Delim('}') || ensureWikiReleaseJSONEOF(decoder) != nil {
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	hasExactKeys := func(expected ...string) bool {
+		if len(fields) != len(expected) {
+			return false
+		}
+		for _, key := range expected {
+			if _, ok := fields[key]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+	variant := ""
+	switch {
+	case hasExactKeys("preparation_id", "entity_page_manifest"):
+		variant = "entity-page-graph-830-g1"
+	case hasExactKeys(
+		"preparation_id", "release", "candidate_evidence_authority", "review_bundle",
+		"evaluation_bundle", "review_successor",
+	):
+		variant = "schema-wiki"
+	default:
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	decoder = json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(destination) != nil || ensureWikiReleaseJSONEOF(decoder) != nil ||
+		strings.TrimSpace(destination.PreparationID) == "" {
+		return "", service.ErrSchemaWikiPreparationInvalid
+	}
+	return variant, nil
 }
 
 // ReviewDraft passes one closed named-human receipt to the existing concrete
@@ -1068,6 +1209,29 @@ func (h *SchemaWikiHandler) PreviewCurrentCitation(c *gin.Context) {
 		c.Request.Context(), principal, scope,
 		strings.TrimSpace(c.Param("release_id")),
 		schemaWikiFieldSlug(c.Param("field_id")), strings.TrimSpace(c.Param("citation_id")),
+	)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": authority})
+}
+
+func (h *SchemaWikiHandler) PreviewEntityPagePreparationCitation830G1(c *gin.Context) {
+	principal, scope, err := (&WikiReleaseHandler{}).requestIdentity(c)
+	if err != nil {
+		writeSchemaWikiError(c, err)
+		return
+	}
+	if h == nil || h.schemaService == nil {
+		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
+		return
+	}
+	authority, err := h.schemaService.IssueEntityPageGraphPreparationCitationAuthority830G1(
+		c.Request.Context(), principal, scope,
+		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("field_key")),
+		strings.TrimSpace(c.Param("citation_id")),
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)

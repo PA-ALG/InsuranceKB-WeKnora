@@ -70,6 +70,17 @@ type schemaWikiHTTPServiceSpy struct {
 	decisionFunc          func([]byte, []byte) (*types.HumanBatchDecisionReceiptV1, *types.WikiReleaseReceipt, error)
 }
 
+func (s *schemaWikiHTTPServiceSpy) CreateEntityPageGraphDraft830G1(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	json.RawMessage,
+) (*types.WikiReleasePreparation, error) {
+	s.createCalls++
+	return &types.WikiReleasePreparation{ID: "preparation-g1"}, nil
+}
+
 func (s *schemaWikiHTTPServiceSpy) DecideSchemaWikiFormalCandidatePreview(
 	_ context.Context,
 	principal types.WikiReleasePrincipal,
@@ -280,6 +291,21 @@ func (s *schemaWikiHTTPServiceSpy) IssueCurrentSchemaCitationAuthority(
 	return &authority, nil
 }
 
+func (s *schemaWikiHTTPServiceSpy) IssueEntityPageGraphPreparationCitationAuthority830G1(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	_ string,
+	_ string,
+	_ string,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	s.reviewedCitationCalls++
+	if s.citationErr != nil {
+		return nil, s.citationErr
+	}
+	return &types.SchemaWikiCitationContentAuthorityV1{}, nil
+}
+
 func (s *schemaWikiHTTPServiceSpy) ReadSchemaCitationContent(
 	_ context.Context,
 	_ types.WikiReleasePrincipal,
@@ -322,6 +348,41 @@ func schemaWikiScopeContext(t *testing.T, params gin.Params) (*gin.Context, *htt
 	return c, recorder
 }
 
+func TestDecodeSchemaWikiCreateDraftRequestAcceptsOnlyMutuallyExclusiveClosedVariants(t *testing.T) {
+	t.Parallel()
+	old := `{"preparation_id":"old-preparation","release":{},"candidate_evidence_authority":{},"review_bundle":{},"evaluation_bundle":{},"review_successor":{}}`
+	g1 := `{"preparation_id":"g1-preparation","entity_page_manifest":{"contract":"entity-page-manifest.830.g1.v1"}}`
+	for _, test := range []struct {
+		name        string
+		body        string
+		wantVariant string
+		wantError   bool
+	}{
+		{name: "legacy schema", body: old, wantVariant: "schema-wiki"},
+		{name: "g1 manifest", body: g1, wantVariant: "entity-page-graph-830-g1"},
+		{name: "mixed", body: strings.TrimSuffix(g1, "}") + `,"release":{}}`, wantError: true},
+		{name: "unknown member authority", body: `{"preparation_id":"g1","entity_page_manifest":{},"members":[]}`, wantError: true},
+		{name: "missing preparation", body: `{"entity_page_manifest":{}}`, wantError: true},
+		{name: "blank preparation", body: `{"preparation_id":" ","entity_page_manifest":{}}`, wantError: true},
+		{name: "duplicate preparation", body: `{"preparation_id":"g1","preparation_id":"g2","entity_page_manifest":{}}`, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(test.body))
+			var request schemaWikiCreateDraftRequest
+			variant, err := decodeSchemaWikiCreateDraftRequest(c, &request)
+			if test.wantError {
+				require.ErrorIs(t, err, service.ErrSchemaWikiPreparationInvalid)
+				require.Empty(t, variant)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, test.wantVariant, variant)
+		})
+	}
+}
+
 func TestResolveScopeParamsDerivesNonOverridableReleaseScope(t *testing.T) {
 	t.Parallel()
 	resolver := &schemaWikiScopeResolverStub{head: &types.WikiReleaseHead{
@@ -343,6 +404,29 @@ func TestResolveScopeParamsDerivesNonOverridableReleaseScope(t *testing.T) {
 	require.Equal(t, "space-596-1", c.Param("space_id"))
 	require.Equal(t, "raw-596-1", c.Param("raw_kb_id"))
 	require.Equal(t, 1, resolver.calls)
+}
+
+func TestResolvePreparationScopeParamsBootstrapsWithoutHead(t *testing.T) {
+	t.Parallel()
+	scope := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-preparation", RawKBID: "raw-preparation", WikiKBID: "wiki-preparation",
+	}
+	resolver := &schemaWikiScopeResolverStub{preparationScope: &scope}
+	handler := NewSchemaWikiHandler(resolver, nil)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: scope.WikiKBID},
+		{Key: "preparation_id", Value: "preparation-g1"},
+	})
+	handler.ResolvePreparationScopeParams()(c)
+	require.False(t, c.IsAborted())
+	require.Equal(t, scope.SpaceID, c.Param("space_id"))
+	require.Equal(t, scope.RawKBID, c.Param("raw_kb_id"))
+	require.Equal(t, 1, resolver.preparationCalls)
+	require.Zero(t, resolver.calls, "Candidate Preview bootstrap must not consult Head")
+
+	handler.PreparationScope(c)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"wiki_kb_id":"wiki-preparation"`)
 }
 
 func TestSchemaWikiScopeResponseHasExactLaneCContract(t *testing.T) {

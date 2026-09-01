@@ -13,12 +13,27 @@ import (
 )
 
 type entityPageGraphHTTPService830G1Spy struct {
-	result       *service.EntityPageGraphRead830G1
-	err          error
-	currentCalls int
-	pinnedCalls  int
-	releaseIDs   []string
-	selectors    []service.EntityPageGraphSelector830G1
+	result           *service.EntityPageGraphRead830G1
+	err              error
+	currentCalls     int
+	pinnedCalls      int
+	preparationCalls int
+	releaseIDs       []string
+	preparationIDs   []string
+	selectors        []service.EntityPageGraphSelector830G1
+}
+
+func (s *entityPageGraphHTTPService830G1Spy) ReadPreparationEntityPage830G1(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	preparationID string,
+	selector service.EntityPageGraphSelector830G1,
+) (*service.EntityPageGraphRead830G1, error) {
+	s.preparationCalls++
+	s.preparationIDs = append(s.preparationIDs, preparationID)
+	s.selectors = append(s.selectors, selector)
+	return s.result, s.err
 }
 
 func (s *entityPageGraphHTTPService830G1Spy) ReadCurrentEntityPage830G1(
@@ -48,12 +63,14 @@ func TestEntityPageGraphHandler830G1CurrentAndPinnedAreDisjoint(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
 	for _, test := range []struct {
-		name          string
-		query         string
-		wantStatus    int
-		wantCurrent   int
-		wantPinned    int
-		wantReleaseID []string
+		name              string
+		query             string
+		wantStatus        int
+		wantCurrent       int
+		wantPinned        int
+		wantPreparation   int
+		wantReleaseID     []string
+		wantPreparationID []string
 	}{
 		{name: "missing is current", wantStatus: http.StatusOK, wantCurrent: 1},
 		{name: "exact pin", query: "?release_id=release-exact", wantStatus: http.StatusOK, wantPinned: 1, wantReleaseID: []string{"release-exact"}},
@@ -62,6 +79,13 @@ func TestEntityPageGraphHandler830G1CurrentAndPinnedAreDisjoint(t *testing.T) {
 		{name: "repeated pin", query: "?release_id=release-one&release_id=release-two", wantStatus: http.StatusServiceUnavailable},
 		{name: "current alias", query: "?release_id=current", wantStatus: http.StatusServiceUnavailable},
 		{name: "latest alias", query: "?release_id=latest", wantStatus: http.StatusServiceUnavailable},
+		{name: "exact preparation", query: "?preparation_id=preparation-exact", wantStatus: http.StatusOK, wantPreparation: 1, wantPreparationID: []string{"preparation-exact"}},
+		{name: "explicit empty preparation", query: "?preparation_id=", wantStatus: http.StatusServiceUnavailable},
+		{name: "blank preparation", query: "?preparation_id=%20", wantStatus: http.StatusServiceUnavailable},
+		{name: "repeated preparation", query: "?preparation_id=one&preparation_id=two", wantStatus: http.StatusServiceUnavailable},
+		{name: "preparation alias", query: "?preparation_id=current", wantStatus: http.StatusServiceUnavailable},
+		{name: "both modes", query: "?release_id=release-one&preparation_id=preparation-one", wantStatus: http.StatusServiceUnavailable},
+		{name: "unknown query", query: "?candidate_id=candidate-one", wantStatus: http.StatusServiceUnavailable},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			spy := &entityPageGraphHTTPService830G1Spy{result: &service.EntityPageGraphRead830G1{
@@ -79,7 +103,9 @@ func TestEntityPageGraphHandler830G1CurrentAndPinnedAreDisjoint(t *testing.T) {
 			require.Equal(t, test.wantStatus, recorder.Code, recorder.Body.String())
 			require.Equal(t, test.wantCurrent, spy.currentCalls)
 			require.Equal(t, test.wantPinned, spy.pinnedCalls)
+			require.Equal(t, test.wantPreparation, spy.preparationCalls)
 			require.Equal(t, test.wantReleaseID, spy.releaseIDs)
+			require.Equal(t, test.wantPreparationID, spy.preparationIDs)
 		})
 	}
 }

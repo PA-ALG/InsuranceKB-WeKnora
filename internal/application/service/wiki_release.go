@@ -722,6 +722,9 @@ func (s *WikiReleaseService) createDraft(
 	draft.Members = members
 	draft.Manifest = append(json.RawMessage(nil), input.Manifest...)
 	draft.ManifestDigest = digestWikiReleaseBytes(draft.Manifest)
+	if manifest, manifestErr := types.ParseEntityPageManifest830G1(draft.Manifest); manifestErr == nil {
+		draft.ManifestDigest = manifest.ManifestSHA256
+	}
 	draft.ReviewDecisionDigest = ""
 	draft.Status = types.WikiReleasePreparationDraft
 	draft.CreatedAt = s.now().UTC()
@@ -792,9 +795,23 @@ func (s *WikiReleaseService) reviewDraft(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	if _, err := validateSchemaWikiPreparation(
-		draft, types.WikiReleasePreparationDraft, scope,
-	); err != nil {
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(draft.Manifest, &manifestHeader) != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	var validationErr error
+	if manifestHeader.Contract == "entity-page-manifest.830.g1.v1" {
+		_, _, validationErr = validateEntityPageGraphPreparation830G1(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
+	} else {
+		_, validationErr = validateSchemaWikiPreparation(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
+	}
+	if validationErr != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	decision, err := ParseHumanBatchDecisionReceiptV1(rawDecision)

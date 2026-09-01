@@ -28,6 +28,23 @@ vi.mock('@/api/schema-wiki/entityPageGraph830G1.ts', () => ({
     if (apiState.failure) throw apiState.failure
     return { scope: apiState.scope, read: apiState.result }
   },
+  createEntityPageGraphPreparationCitationTransport830G1: (
+    scopeValue: typeof scope,
+    preparationID: string,
+    entityID: string,
+    fullCitationID: string,
+  ) => ({
+    getAuthority: async (request: { field_id: string }) => {
+      requestState.calls.push([
+        `/api/v1/knowledgebase/${scopeValue.wiki_kb_id}/wiki/release-scopes/${scopeValue.space_id}`
+          + `/raw/${scopeValue.raw_kb_id}/schema/preparations/${preparationID}`
+          + `/entities/${entityID}/fields/${request.field_id}/citations/${fullCitationID}/preview`,
+      ])
+      if (requestState.failure) throw requestState.failure
+      return requestState.result
+    },
+    getBytesByToken: async () => new Uint8Array([1]),
+  }),
 }))
 vi.mock('@/utils/request', () => ({
   get: async (...args: unknown[]) => {
@@ -187,13 +204,34 @@ describe('EntityPageGraph830G1', () => {
   it.each([
     '?release_id=',
     '?release_id=release-one&release_id=release-two',
+      '?preparation_id=',
+      '?preparation_id=preparation-one&preparation_id=preparation-two',
+      '?preparation_id=current',
+      '?release_id=release-one&preparation_id=preparation-one',
   ])('fails closed before transport for malformed route query %s', async query => {
     apiState.result = fieldRead()
     const wrapper = await mountAt(
       `/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1${query}`,
     )
-    expect(wrapper.get('[role="alert"]').text()).toContain('固定版本页面读取失败')
+    expect(wrapper.get('[role="alert"]').text()).toContain('页面读取失败')
     expect(apiState.calls).toEqual([])
+  })
+
+  it('loads and preserves one exact Candidate Preview preparation mode', async () => {
+    const preparationRead = fieldRead() as ReturnType<typeof fieldRead> & { preparation_id: string }
+    preparationRead.read_mode = 'preparation'
+    preparationRead.preparation_id = 'preparation-g1'
+    apiState.result = preparationRead
+    const wrapper = await mountAt(
+      '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1?preparation_id=preparation-g1',
+    )
+
+    expect(wrapper.text()).toContain('候选预览')
+    expect(apiState.calls).toHaveLength(1)
+    expect(apiState.calls[0][2]).toBeUndefined()
+    expect(apiState.calls[0][4]).toBe('preparation-g1')
+    const sectionLink = wrapper.get('[data-testid="entity-section-link"]')
+    expect(sectionLink.attributes('href')).toContain('preparation_id=preparation-g1')
   })
 
   it('lazy-loads the entity page component directly for all four semantic URLs', async () => {
@@ -244,6 +282,30 @@ describe('EntityPageGraph830G1', () => {
       '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema'
       + `/releases/release-1/fields/field-1/citations/citation-${JOIN_RECEIPT_SHA256.slice(0, 24)}/preview`,
     ]])
+  })
+
+  it('uses the full G1 citation ID as Candidate Preview route authority', async () => {
+    const preparationRead = fieldRead('present', [citation()]) as ReturnType<typeof fieldRead> & { preparation_id: string }
+    preparationRead.read_mode = 'preparation'
+    preparationRead.preparation_id = 'preparation-g1'
+    apiState.result = preparationRead
+    requestState.result = { success: true, data: { authority: true } }
+    const wrapper = await mountAt(
+      '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1?preparation_id=preparation-g1',
+      { SettingDrawer: settingDrawerStub, SchemaCitationViewer: citationViewerStub },
+    )
+
+    await wrapper.get('[data-testid="entity-source-action"]').trigger('click')
+    const viewer = wrapper.getComponent({ name: 'SchemaCitationViewer' })
+    const previewTransport = viewer.props('previewTransport') as {
+      getAuthority(value: { release_id: string, activation_epoch: number, field_id: string, citation_id: string }): Promise<unknown>
+    }
+    await previewTransport.getAuthority(viewer.props('request') as never)
+    expect(requestState.calls).toEqual([[
+      '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema'
+      + `/preparations/preparation-g1/entities/entity-1/fields/field-1/citations/citation_${JOIN_RECEIPT_SHA256}/preview`,
+    ]])
+    expect(wrapper.getComponent({ name: 'SettingDrawer' }).props('description')).toBe('候选预览的原始证据')
   })
 
   it('does not offer a source action for an unknown field', async () => {

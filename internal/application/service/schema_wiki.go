@@ -1162,6 +1162,23 @@ func (s *SchemaWikiService) ReviewSchemaDraft(
 	if s == nil || s.releaseAuthority == nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
+	if draft, loadErr := s.releaseAuthority.repository.GetDraftPreparation(
+		ctx, scope, preparationID,
+	); loadErr == nil {
+		var header struct {
+			Contract string `json:"contract"`
+		}
+		if json.Unmarshal(draft.Manifest, &header) != nil {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		if header.Contract == "entity-page-manifest.830.g1.v1" {
+			if _, _, validationErr := validateEntityPageGraphPreparation830G1(
+				draft, types.WikiReleasePreparationDraft, scope,
+			); validationErr != nil {
+				return nil, ErrSchemaWikiPreparationInvalid
+			}
+		}
+	}
 	return s.releaseAuthority.reviewDraft(ctx, principal, scope, preparationID, rawDecision)
 }
 

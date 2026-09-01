@@ -37,6 +37,12 @@ type EntityPageGraphReleaseSource830G1 interface {
 		types.WikiReleaseScope,
 		string,
 	) (EntityPageGraphReleaseSnapshot830G1, error)
+	LoadPreparationEntityPageGraph830G1(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+	) (EntityPageGraphReleaseSnapshot830G1, error)
 }
 
 type EntityPageGraphSelector830G1 struct {
@@ -49,6 +55,7 @@ type EntityPageGraphRead830G1 struct {
 	Contract        string                                   `json:"contract"`
 	ReadMode        string                                   `json:"read_mode"`
 	ReleaseID       string                                   `json:"release_id"`
+	PreparationID   string                                   `json:"preparation_id,omitempty"`
 	ActivationEpoch uint64                                   `json:"activation_epoch"`
 	ManifestSHA256  string                                   `json:"manifest_sha256"`
 	EntityID        string                                   `json:"entity_id"`
@@ -107,6 +114,33 @@ func (s *EntityPageGraphService830G1) ReadPinnedEntityPage830G1(
 	return readEntityPageGraphSnapshot830G1(scope, snapshot, selector, "pinned")
 }
 
+func (s *EntityPageGraphService830G1) ReadPreparationEntityPage830G1(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	selector EntityPageGraphSelector830G1,
+) (*EntityPageGraphRead830G1, error) {
+	preparationID = strings.TrimSpace(preparationID)
+	if s == nil || s.source == nil {
+		return nil, ErrEntityPageGraphIntegrity830G1
+	}
+	if preparationID == "" || strings.EqualFold(preparationID, "current") ||
+		strings.EqualFold(preparationID, "latest") {
+		return nil, ErrEntityPageGraphNotFound830G1
+	}
+	snapshot, err := s.source.LoadPreparationEntityPageGraph830G1(ctx, principal, scope, preparationID)
+	if err != nil {
+		return nil, mapEntityPageGraphSourceError830G1(err)
+	}
+	read, err := readEntityPageGraphSnapshot830G1(scope, snapshot, selector, "preparation")
+	if err != nil {
+		return nil, err
+	}
+	read.PreparationID = preparationID
+	return read, nil
+}
+
 func readEntityPageGraphSnapshot830G1(
 	scope types.WikiReleaseScope,
 	snapshot EntityPageGraphReleaseSnapshot830G1,
@@ -115,7 +149,7 @@ func readEntityPageGraphSnapshot830G1(
 ) (*EntityPageGraphRead830G1, error) {
 	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
 	if err != nil || snapshot.ReleaseID != manifest.ReleaseID ||
-		(readMode == "current" && snapshot.ActivationEpoch == 0) ||
+		((readMode == "current" || readMode == "preparation") && snapshot.ActivationEpoch == 0) ||
 		(snapshot.ActivationEpoch != 0 && snapshot.ActivationEpoch != manifest.ActivationEpoch) ||
 		scope.SpaceID != manifest.SpaceID || scope.WikiKBID != manifest.WikiKBID ||
 		len(snapshot.Members) != len(manifest.Members) {
@@ -160,6 +194,320 @@ func readEntityPageGraphSnapshot830G1(
 		EntityVersionID: manifest.EntityVersionID, DisplayName: manifest.DisplayName,
 		Classification: manifest.ClassificationDisplayName, Profile: manifest.Profile, Member: member,
 	}, nil
+}
+
+func entityPageGraphSnapshots830G1(
+	manifest types.EntityPageManifest830G1,
+) []types.WikiReleaseMemberSnapshot {
+	snapshots := make([]types.WikiReleaseMemberSnapshot, 0, len(manifest.Members))
+	for _, member := range manifest.Members {
+		snapshots = append(snapshots, types.WikiReleaseMemberSnapshot{
+			Kind: member.PageKind, LogicalSlug: member.PageID,
+			RevisionID: member.PayloadSHA256, MemberDigest: member.MemberDigest,
+			Title: member.ShortTitle, Content: "",
+			Payload: append(json.RawMessage(nil), member.Payload...),
+		})
+	}
+	return snapshots
+}
+
+func validateEntityPageGraphPreparation830G1(
+	preparation *types.WikiReleasePreparation,
+	expectedStatus string,
+	scope types.WikiReleaseScope,
+) (types.EntityPageManifest830G1, []types.WikiReleaseMemberSnapshot, error) {
+	var empty types.EntityPageManifest830G1
+	if preparation == nil || preparation.Status != expectedStatus || preparation.WikiReleaseScope != scope ||
+		(preparation.ExpectedReleaseID == "") != (preparation.ExpectedActivationEpoch == 0) {
+		return empty, nil, ErrSchemaWikiPreparationInvalid
+	}
+	manifest, err := types.ParseEntityPageManifest830G1(preparation.Manifest)
+	if err != nil || preparation.ID == "" || preparation.CandidateDigest != manifest.InputAuthority.CandidateSHA256 ||
+		preparation.ManifestDigest != manifest.ManifestSHA256 ||
+		preparation.ExpectedReleaseID != manifest.ReleaseID ||
+		preparation.ExpectedActivationEpoch != manifest.ActivationEpoch ||
+		preparation.ReadyReceiptDigest == "" || preparation.ReviewPolicyID == "" ||
+		manifest.SpaceID != scope.SpaceID || manifest.WikiKBID != scope.WikiKBID ||
+		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest {
+		return empty, nil, ErrSchemaWikiPreparationInvalid
+	}
+	expectedMembers := entityPageGraphSnapshots830G1(manifest)
+	if !entityPageGraphMemberSetsEqual830G1(preparation.Members, expectedMembers) {
+		return empty, nil, ErrSchemaWikiPreparationInvalid
+	}
+	return manifest, expectedMembers, nil
+}
+
+func (s *SchemaWikiService) CreateEntityPageGraphDraft830G1(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	rawManifest json.RawMessage,
+) (*types.WikiReleasePreparation, error) {
+	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
+		return nil, err
+	}
+	preparationID = strings.TrimSpace(preparationID)
+	manifest, err := types.ParseEntityPageManifest830G1(rawManifest)
+	if s == nil || s.releaseAuthority == nil || preparationID == "" ||
+		strings.EqualFold(preparationID, "current") || strings.EqualFold(preparationID, "latest") || err != nil ||
+		manifest.SpaceID != scope.SpaceID || manifest.WikiKBID != scope.WikiKBID {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+	if err != nil || pin.ReleaseID() != manifest.ReleaseID || pin.ActivationEpoch() != manifest.ActivationEpoch {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
+	if err != nil || !entityPageGraphManifestMatchesSchemaSource830G1(manifest, validated) {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	release, err := s.releaseAuthority.repository.GetRelease(ctx, scope, pin.ReleaseID())
+	if err != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	sourcePreparation, err := s.releaseAuthority.repository.GetReadyPreparation(
+		ctx, scope, release.PreparationID,
+	)
+	if err != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	if _, validationErr := validateSchemaWikiPreparation(
+		sourcePreparation, types.WikiReleasePreparationReady, scope,
+	); validationErr != nil || sourcePreparation.CandidateDigest != manifest.InputAuthority.CandidateSHA256 {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	draft, err := s.releaseAuthority.createDraft(ctx, principal, &types.WikiReleasePreparation{
+		ID: preparationID, WikiReleaseScope: scope,
+		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+		ReadyReceiptDigest: sourcePreparation.ReadyReceiptDigest,
+		ReviewPolicyID:     sourcePreparation.ReviewPolicyID,
+		Manifest:           append(json.RawMessage(nil), rawManifest...),
+		Members:            entityPageGraphSnapshots830G1(manifest),
+	})
+	if err != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	if _, _, err := validateEntityPageGraphPreparation830G1(
+		draft, types.WikiReleasePreparationDraft, scope,
+	); err != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	return draft, nil
+}
+
+func entityPageGraphManifestMatchesSchemaSource830G1(
+	manifest types.EntityPageManifest830G1,
+	validated validatedSchemaWikiCustody,
+) bool {
+	release := validated.release
+	evidence := validated.candidateEvidenceAuthority
+	if manifest.ReleaseID == "" || manifest.EntityID != release.Entity.EntityID ||
+		manifest.EntityVersionID != release.EntityVersion.VersionID ||
+		manifest.InputAuthority.ProductVersionID != release.EntityVersion.ProductVersionID ||
+		manifest.Profile.SchemaPackID != release.SchemaPack.SchemaPackID ||
+		manifest.Profile.SchemaVersion != release.SchemaPack.SchemaVersion ||
+		manifest.Profile.SchemaPackSHA256 != release.SchemaPack.SchemaPackSHA256 ||
+		manifest.InputAuthority.CandidateContract != "schema67-candidate.v2" ||
+		manifest.InputAuthority.CandidateSHA256 != release.CandidateSHA256 ||
+		manifest.InputAuthority.EvidenceAuthorityContract != evidence.Contract ||
+		manifest.InputAuthority.EvidenceAuthoritySHA256 != evidence.AuthoritySHA256 ||
+		len(manifest.InputAuthority.SourceAuthorities) != len(evidence.SourceAuthorities) {
+		return false
+	}
+	for index, source := range evidence.SourceAuthorities {
+		actual := manifest.InputAuthority.SourceAuthorities[index]
+		live := source.LiveRevisionSourceReceipt
+		if actual.SourceRole != source.SourceRole || actual.SourceSHA256 != source.SourceSHA256 ||
+			actual.KnowledgeID != live.KnowledgeID || actual.ResourceID != live.ResourceID ||
+			actual.RevisionSourceID != live.RevisionSourceID ||
+			actual.EvidenceParseAttemptID != live.EvidenceParseAttemptID ||
+			int64(actual.WeKnoraParseAttempt) != live.WeKnoraParseAttempt ||
+			actual.ParsedDocumentSHA256 != live.ParsedDocumentSHA256 ||
+			actual.ParseManifestSHA256 != live.ParseManifestSHA256 ||
+			actual.SourceReceiptSHA256 != live.SourceReceiptSHA256 {
+			return false
+		}
+	}
+	oldFields := make(map[string]types.SchemaFieldPageV1, len(release.SchemaPack.OrderedFieldIDs))
+	for _, member := range release.Members {
+		if member.MemberKind != "field" {
+			continue
+		}
+		var field types.SchemaFieldPageV1
+		if json.Unmarshal(member.Payload, &field) != nil {
+			return false
+		}
+		oldFields[field.FieldID] = field
+	}
+	joins := make(map[string]types.Schema67CitationAuthorityJoinReceiptV1, len(evidence.JoinReceipts))
+	for _, join := range evidence.JoinReceipts {
+		if _, duplicate := joins[join.ReceiptSHA256]; duplicate {
+			return false
+		}
+		joins[join.ReceiptSHA256] = join
+	}
+	usedJoins := make(map[string]struct{}, len(joins))
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		candidate, payloadErr := member.FieldAssertionPayload()
+		old, exists := oldFields[member.StableKey]
+		if payloadErr != nil || !exists || candidate.State != old.State ||
+			!reflect.DeepEqual(candidate.ValueSnapshot, old.ValueSnapshot) ||
+			candidate.Reference.SourceReleaseID != manifest.ReleaseID ||
+			candidate.Reference.SourceCandidateSHA256 != release.CandidateSHA256 ||
+			candidate.Reference.ProductVersionID != release.EntityVersion.ProductVersionID ||
+			!reflect.DeepEqual(candidate.Reference.EvidenceReceiptSHA256s, old.EvidenceReceiptSHA256s) ||
+			len(candidate.Citations) != len(old.Citations) {
+			return false
+		}
+		for _, citation := range candidate.Citations {
+			join, exists := joins[citation.JoinReceiptSHA256]
+			if !exists || citation.CitationID != "citation_"+join.ReceiptSHA256 ||
+				join.FieldID != member.StableKey {
+				return false
+			}
+			if _, duplicate := usedJoins[join.ReceiptSHA256]; duplicate {
+				return false
+			}
+			usedJoins[join.ReceiptSHA256] = struct{}{}
+			oldCitationID := "citation-" + join.ReceiptSHA256[:24]
+			matched := false
+			for _, sourceCitation := range old.Citations {
+				if sourceCitation.CitationID != oldCitationID {
+					continue
+				}
+				matched = entityPageGraphCitationMatchesSchemaSource830G1(
+					citation, join, sourceCitation,
+				)
+				break
+			}
+			if !matched {
+				return false
+			}
+		}
+	}
+	return len(oldFields) == manifest.FieldAssertionCount && len(usedJoins) == len(joins)
+}
+
+func entityPageGraphCitationMatchesSchemaSource830G1(
+	candidate types.EntityPageExactCitation830G1,
+	join types.Schema67CitationAuthorityJoinReceiptV1,
+	source types.CitationTargetV1,
+) bool {
+	return candidate.JoinReceiptSHA256 == join.ReceiptSHA256 &&
+		candidate.EvidenceReceiptSHA256 == join.EvidenceReceiptSHA256 &&
+		candidate.SourceRole == join.SourceRole && candidate.SourceSHA256 == join.SourceSHA256 &&
+		candidate.SourceRevisionID == join.LiveRevisionSourceReceipt.RevisionSourceID &&
+		candidate.KnowledgeID == join.KnowledgeID && candidate.ChunkID == join.ChunkID &&
+		candidate.ParseAttemptID == join.EvidenceParseAttemptID &&
+		candidate.ParsedDocumentSHA256 == join.ParsedDocumentSHA256 &&
+		candidate.ParseManifestSHA256 == join.ParseManifestSHA256 &&
+		candidate.PageNumber == join.PageNumber && candidate.LocatorKind == join.LocatorKind &&
+		candidate.LocatorRef == join.LocatorRef &&
+		candidate.LocatorContentSHA256 == join.LocatorContentSHA256 &&
+		candidate.BBox == join.NormalizedBBox && candidate.QuoteSnapshot == source.QuoteSnapshot &&
+		candidate.QuoteSHA256 == join.QuoteSHA256 && source.SourceRole == join.SourceRole &&
+		source.KnowledgeID == join.KnowledgeID && source.ChunkID == join.ChunkID &&
+		source.SourceRevisionID == join.LiveRevisionSourceReceipt.RevisionSourceID &&
+		source.ParseAttemptID == join.EvidenceParseAttemptID &&
+		source.ParsedDocumentSHA256 == join.ParsedDocumentSHA256 &&
+		source.ParseManifestSHA256 == join.ParseManifestSHA256 &&
+		source.PageNumber == join.PageNumber && source.LocatorRef == join.LocatorRef &&
+		source.BBox == join.NormalizedBBox && source.QuoteSHA256 == join.QuoteSHA256 &&
+		source.ContentSnapshotSHA256 == join.LocatorContentSHA256
+}
+
+func (s *SchemaWikiService) IssueEntityPageGraphPreparationCitationAuthority830G1(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+	fieldKey string,
+	citationID string,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	if s == nil || s.releaseAuthority == nil || s.citationContent == nil ||
+		strings.TrimSpace(preparationID) == "" || strings.TrimSpace(fieldKey) == "" ||
+		strings.TrimSpace(citationID) == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
+		return nil, err
+	}
+	preparation, err := s.releaseAuthority.repository.GetDraftPreparation(ctx, scope, preparationID)
+	status := types.WikiReleasePreparationDraft
+	if err != nil {
+		preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, preparationID)
+		status = types.WikiReleasePreparationReady
+	}
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	manifest, _, err := validateEntityPageGraphPreparation830G1(preparation, status, scope)
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	member, found := manifest.Member("field", fieldKey)
+	if !found {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	payload, err := member.FieldAssertionPayload()
+	if err != nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	var candidate *types.EntityPageExactCitation830G1
+	for index := range payload.Citations {
+		if payload.Citations[index].CitationID == citationID {
+			copy := payload.Citations[index]
+			candidate = &copy
+			break
+		}
+	}
+	if candidate == nil || candidate.CitationID != "citation_"+candidate.JoinReceiptSHA256 {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+	if err != nil || pin.ReleaseID() != manifest.ReleaseID || pin.ActivationEpoch() != manifest.ActivationEpoch {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
+	if err != nil || !entityPageGraphManifestMatchesSchemaSource830G1(manifest, validated) {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	var join *types.Schema67CitationAuthorityJoinReceiptV1
+	for index := range validated.candidateEvidenceAuthority.JoinReceipts {
+		receipt := &validated.candidateEvidenceAuthority.JoinReceipts[index]
+		if receipt.ReceiptSHA256 == candidate.JoinReceiptSHA256 && receipt.FieldID == fieldKey {
+			join = receipt
+			break
+		}
+	}
+	if join == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	request, err := schemaWikiCitationRequest(
+		validated, scope, pin.ReleaseID(), pin.ActivationEpoch(),
+		"field:"+fieldKey, "citation-"+join.ReceiptSHA256[:24],
+	)
+	if err != nil || request.CoordinateAuthorityReceipt == nil ||
+		!entityPageGraphCitationMatchesSchemaSource830G1(
+			*candidate, *join, request.Citation,
+		) || request.CandidateSHA256 != manifest.InputAuthority.CandidateSHA256 ||
+		request.FieldID != fieldKey || request.CoordinateAuthorityReceipt.ReceiptSHA256 != join.ReceiptSHA256 {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	request, err = s.bindSchemaWikiC6FrozenNativeSource(validated, request)
+	if err != nil {
+		return nil, err
+	}
+	authority, err := s.citationContent.IssueExactRevision(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return authority, nil
 }
 
 func entityPageGraphJSONEqual830G1(left, right json.RawMessage) bool {
@@ -236,6 +584,40 @@ func (s *SchemaWikiService) LoadPinnedEntityPageGraphRelease830G1(
 		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphNotFound830G1
 	}
 	return s.loadEntityPageGraphRelease830G1(ctx, principal, scope, releaseID, 0)
+}
+
+func (s *SchemaWikiService) LoadPreparationEntityPageGraph830G1(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparationID string,
+) (EntityPageGraphReleaseSnapshot830G1, error) {
+	if s == nil || s.releaseAuthority == nil || strings.TrimSpace(preparationID) == "" {
+		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphNotFound830G1
+	}
+	if err := requireSchemaWikiHumanAdmin(ctx, principal, scope); err != nil {
+		return EntityPageGraphReleaseSnapshot830G1{}, err
+	}
+	if err := s.releaseAuthority.verifyAccess(ctx, principal, scope, "entity-page-graph-preparation-830-g1"); err != nil {
+		return EntityPageGraphReleaseSnapshot830G1{}, err
+	}
+	preparation, err := s.releaseAuthority.repository.GetDraftPreparation(ctx, scope, preparationID)
+	status := types.WikiReleasePreparationDraft
+	if err != nil {
+		preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, preparationID)
+		status = types.WikiReleasePreparationReady
+	}
+	if err != nil {
+		return EntityPageGraphReleaseSnapshot830G1{}, mapWikiReleaseRepositoryError(err)
+	}
+	manifest, members, err := validateEntityPageGraphPreparation830G1(preparation, status, scope)
+	if err != nil {
+		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphIntegrity830G1
+	}
+	return EntityPageGraphReleaseSnapshot830G1{
+		ReleaseID: manifest.ReleaseID, ActivationEpoch: manifest.ActivationEpoch,
+		Manifest: append(json.RawMessage(nil), preparation.Manifest...), Members: members,
+	}, nil
 }
 
 func (s *SchemaWikiService) loadEntityPageGraphRelease830G1(

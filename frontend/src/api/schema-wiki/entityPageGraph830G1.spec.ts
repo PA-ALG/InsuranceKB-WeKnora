@@ -6,6 +6,7 @@ import { parseSchemaWikiScope } from '../../views/knowledge/schema-wiki/schemaWi
 import { parseEntityPageGraphRead830G1 } from '../../views/knowledge/schema-wiki/entityPageGraph830G1Contract.ts'
 import {
   buildEntityPageGraphPath830G1,
+  createEntityPageGraphPreparationCitationTransport830G1,
   readEntityPageGraph830G1,
   readEntityPageGraphSession830G1,
 } from './entityPageGraph830G1.ts'
@@ -183,5 +184,71 @@ describe('entity page graph 830 G1 API', () => {
       { get },
     )).rejects.toThrow('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
     expect(get).not.toHaveBeenCalled()
+  })
+
+  it('bootstraps one exact preparation scope and preserves Candidate Preview mode', async () => {
+    const response = responseFor('insured_eligibility')
+    response.data.read_mode = 'preparation'
+    const preparationRead = response.data as typeof response.data & { preparation_id: string }
+    preparationRead.preparation_id = 'preparation-g1'
+    const actualScope = {
+      version: 'schema-wiki-scope.v1', space_id: vector.space_id, raw_kb_id: 'raw-596-1',
+      wiki_kb_id: vector.wiki_kb_id, scope_sha256: '4'.repeat(64),
+    }
+    const get = vi.fn()
+      .mockResolvedValueOnce({ success: true, data: actualScope })
+      .mockResolvedValueOnce(response)
+
+    const session = await readEntityPageGraphSession830G1(
+      vector.wiki_kb_id,
+      { entityId: vector.entity_id, pageKind: 'field', stableKey: 'insured_eligibility' },
+      undefined,
+      { get },
+      'preparation-g1',
+    )
+
+    expect(session.read.read_mode).toBe('preparation')
+    expect(session.read.preparation_id).toBe('preparation-g1')
+    expect(get.mock.calls).toEqual([
+      [`/api/v1/knowledgebase/${vector.wiki_kb_id}/wiki/preparations/preparation-g1/schema-scope`],
+      [expect.stringContaining('?preparation_id=preparation-g1')],
+    ])
+  })
+
+  it('rejects mixed or aliased preparation mode before transport', async () => {
+    const get = vi.fn()
+    await expect(readEntityPageGraphSession830G1(
+      'wiki-1',
+      { entityId: 'entity-1', pageKind: 'overview', stableKey: 'overview' },
+      'release-1',
+      { get },
+      'preparation-1',
+    )).rejects.toThrow('ENTITY_PAGE_GRAPH_READ_MODE_INVALID')
+    await expect(readEntityPageGraphSession830G1(
+      'wiki-1',
+      { entityId: 'entity-1', pageKind: 'overview', stableKey: 'overview' },
+      undefined,
+      { get },
+      'latest',
+    )).rejects.toThrow('ENTITY_PAGE_GRAPH_PREPARATION_ID_INVALID')
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('uses the full G1 citation identity for preparation authority and the old token content path', async () => {
+    const fullCitationID = `citation_${'3'.repeat(64)}`
+    const get = vi.fn().mockResolvedValue({ authority: true })
+    const getBytes = vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]))
+    const transport = createEntityPageGraphPreparationCitationTransport830G1(
+      scope, 'preparation-g1', 'entity-1', fullCitationID, { get, getBytes },
+    )
+    await transport.getAuthority({
+      release_id: 'release-source', activation_epoch: 2, field_id: 'field-1',
+      citation_id: `citation-${'3'.repeat(24)}`,
+    })
+    expect(get).toHaveBeenCalledWith(
+      expect.stringContaining(`/preparations/preparation-g1/entities/entity-1/fields/field-1/citations/${fullCitationID}/preview`),
+    )
+    await expect(transport.getBytesByToken('opaque-token')).resolves.toEqual(new Uint8Array([1, 2, 3]))
+    expect(getBytes).toHaveBeenCalledWith(expect.stringContaining('/schema/citation-content/opaque-token'))
   })
 })

@@ -59,6 +59,21 @@ func RegisterSchemaWikiRoutes(
 		access.SealAccess(),
 		schemaHandler.Scope,
 	)
+	g.apiKeyRoute(
+		r,
+		http.MethodGet,
+		"/knowledgebase/:kb_id/wiki/preparations/:preparation_id/schema-scope",
+		apiKeyAny(),
+		middleware.DenyAPIKeyPrincipal(),
+		g.Admin(),
+		schemaWikiKBAccess(g.KBAccessRead("kb_id")),
+		access.RecordWikiAccessEvidence(),
+		schemaHandler.ResolvePreparationScopeParams(),
+		schemaWikiKBAccess(g.KBAccessRead("raw_kb_id")),
+		access.RecordRawAccessEvidence(),
+		access.SealAccess(),
+		schemaHandler.PreparationScope,
+	)
 
 	read := g.apiKeyGroup(
 		r.Group("/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema"),
@@ -170,6 +185,10 @@ func RegisterSchemaWikiRoutes(
 	humanGET("/preparations/:preparation_id/root", schemaHandler.ReadReviewedRoot)
 	humanGET("/preparations/:preparation_id/sections/:section_id", schemaHandler.ReadReviewedSection)
 	humanGET("/preparations/:preparation_id/fields/:field_id", schemaHandler.ReadReviewedField)
+	humanGET(
+		"/preparations/:preparation_id/entities/:entity_id/fields/:field_key/citations/:citation_id/preview",
+		schemaHandler.PreviewEntityPagePreparationCitation830G1,
+	)
 	humanGET(
 		"/preparations/:preparation_id/golden-quality/evaluations/:evaluation_id/summary",
 		schemaHandler.ReadPreparationGoldenQualitySummary,

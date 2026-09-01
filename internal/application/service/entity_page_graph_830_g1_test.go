@@ -3,10 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,13 +21,28 @@ import (
 )
 
 type entityPageGraphReleaseSource830G1Spy struct {
-	current       EntityPageGraphReleaseSnapshot830G1
-	pinned        EntityPageGraphReleaseSnapshot830G1
-	currentErr    error
-	pinnedErr     error
-	currentCalls  int
-	pinnedCalls   int
-	pinnedRelease []string
+	current          EntityPageGraphReleaseSnapshot830G1
+	pinned           EntityPageGraphReleaseSnapshot830G1
+	currentErr       error
+	pinnedErr        error
+	currentCalls     int
+	pinnedCalls      int
+	pinnedRelease    []string
+	preparation      EntityPageGraphReleaseSnapshot830G1
+	preparationErr   error
+	preparationCalls int
+	preparationIDs   []string
+}
+
+func (s *entityPageGraphReleaseSource830G1Spy) LoadPreparationEntityPageGraph830G1(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	preparationID string,
+) (EntityPageGraphReleaseSnapshot830G1, error) {
+	s.preparationCalls++
+	s.preparationIDs = append(s.preparationIDs, preparationID)
+	return s.preparation, s.preparationErr
 }
 
 func (s *entityPageGraphReleaseSource830G1Spy) LoadCurrentEntityPageGraphRelease830G1(
@@ -105,6 +123,209 @@ func TestEntityPageGraphService830G1CurrentPinsOnceAndPinnedNeverFallsBack(t *te
 		require.Zero(t, spy.currentCalls)
 		require.Equal(t, 1, spy.pinnedCalls)
 	})
+}
+
+func TestWikiReleaseCreateDraftUsesEmbeddedEntityPageManifestDigest830G1(t *testing.T) {
+	t.Parallel()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+
+	draft, err := fixture.authority.createDraft(
+		fixture.ctx,
+		principal,
+		&types.WikiReleasePreparation{
+			ID: "preparation-g1-manifest-digest", WikiReleaseScope: scope,
+			CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+			ReadyReceiptDigest: strings.Repeat("a", 64), ReviewPolicyID: strings.Repeat("b", 64),
+			Manifest: append(json.RawMessage(nil), snapshot.Manifest...), Members: snapshot.Members,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, manifest.ManifestSHA256, draft.ManifestDigest)
+	require.NotEqual(t, digestWikiReleaseBytes(snapshot.Manifest), draft.ManifestDigest,
+		"the frozen embedded manifest hash, not the transport bytes hash, is G1 custody authority")
+}
+
+func TestEntityPageGraphPreparation830G1ReadsDraftAndReadyPageKindsWithExactHeadBindingAndEmptyContent(t *testing.T) {
+	t.Parallel()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	require.NoError(t, fixture.db.Create(&types.WikiReleaseHead{
+		ID: "head-g1", WikiReleaseScope: scope, ActiveReleaseID: manifest.ReleaseID,
+		ActivationEpoch: manifest.ActivationEpoch, UpdatedAt: time.Now().UTC(),
+	}).Error)
+	draft, err := fixture.authority.createDraft(fixture.ctx, principal, &types.WikiReleasePreparation{
+		ID: "preparation-g1-preview", WikiReleaseScope: scope,
+		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+		ReadyReceiptDigest: strings.Repeat("a", 64), ReviewPolicyID: strings.Repeat("b", 64),
+		Manifest: append(json.RawMessage(nil), snapshot.Manifest...), Members: snapshot.Members,
+	})
+	require.NoError(t, err)
+	require.Equal(t, manifest.ReleaseID, draft.ExpectedReleaseID)
+	require.Equal(t, manifest.ActivationEpoch, draft.ExpectedActivationEpoch)
+
+	selectors := []EntityPageGraphSelector830G1{
+		{EntityID: manifest.EntityID, PageKind: "overview", StableKey: "overview"},
+		{EntityID: manifest.EntityID, PageKind: "section", StableKey: "application-and-contract"},
+		{EntityID: manifest.EntityID, PageKind: "field", StableKey: "insured_eligibility"},
+		{EntityID: manifest.EntityID, PageKind: "free_wiki", StableKey: "free-wiki"},
+	}
+	assertReads := func(status string) {
+		t.Helper()
+		for _, selector := range selectors {
+			t.Run(status+"/"+selector.PageKind, func(t *testing.T) {
+				read, readErr := NewEntityPageGraphService830G1(fixture.adapter).
+					ReadPreparationEntityPage830G1(
+						fixture.ctx, principal, scope, draft.ID, selector,
+					)
+				require.NoError(t, readErr)
+				require.Equal(t, "preparation", read.ReadMode)
+				require.Equal(t, draft.ID, read.PreparationID)
+				require.Equal(t, manifest.ReleaseID, read.ReleaseID)
+				require.Equal(t, manifest.ActivationEpoch, read.ActivationEpoch)
+				require.Equal(t, selector.PageKind, read.Member.PageKind)
+				require.Equal(t, selector.StableKey, read.Member.StableKey)
+			})
+		}
+	}
+	assertReads(types.WikiReleasePreparationDraft)
+	for _, member := range draft.Members {
+		require.Empty(t, member.Content)
+	}
+	ready := reviewEntityPageGraphPreparation830G1(t, fixture, principal, scope, draft)
+	validatedManifest, validatedMembers, err := validateEntityPageGraphPreparation830G1(
+		ready, types.WikiReleasePreparationReady, scope,
+	)
+	require.NoError(t, err)
+	require.Equal(t, manifest.ManifestSHA256, validatedManifest.ManifestSHA256)
+	require.Len(t, validatedMembers, 76)
+	assertReads(types.WikiReleasePreparationReady)
+}
+
+func TestReviewSchemaDraftPromotesEntityPageGraphPreparation830G1(t *testing.T) {
+	t.Parallel()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	require.NoError(t, fixture.db.Create(&types.WikiReleaseHead{
+		ID: "head-g1-review", WikiReleaseScope: scope, ActiveReleaseID: manifest.ReleaseID,
+		ActivationEpoch: manifest.ActivationEpoch, UpdatedAt: time.Now().UTC(),
+	}).Error)
+	draft, err := fixture.authority.createDraft(fixture.ctx, principal, &types.WikiReleasePreparation{
+		ID: "preparation-g1-review", WikiReleaseScope: scope,
+		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+		ReadyReceiptDigest: strings.Repeat("a", 64), ReviewPolicyID: strings.Repeat("b", 64),
+		Manifest: append(json.RawMessage(nil), snapshot.Manifest...), Members: snapshot.Members,
+	})
+	require.NoError(t, err)
+	ready := reviewEntityPageGraphPreparation830G1(t, fixture, principal, scope, draft)
+	require.Equal(t, draft.ID, ready.ID)
+	require.Equal(t, types.WikiReleasePreparationReady, ready.Status)
+	_, _, err = validateEntityPageGraphPreparation830G1(
+		ready, types.WikiReleasePreparationReady, scope,
+	)
+	require.NoError(t, err)
+}
+
+func reviewEntityPageGraphPreparation830G1(
+	t *testing.T,
+	fixture *schemaWikiPrepareFixture,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	draft *types.WikiReleasePreparation,
+) *types.WikiReleasePreparation {
+	t.Helper()
+	decision := types.HumanBatchDecisionReceiptV1{
+		Version: "1", Decision: "approve", PrincipalID: principal.ID, WikiReleaseScope: scope,
+		CandidateHash: draft.CandidateDigest, HumanBatchHash: draft.ReadyReceiptDigest,
+		ReviewPolicyHash: draft.ReviewPolicyID,
+		IssuedAt:         time.Now().Add(-time.Minute).Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		Nonce: "entity-page-graph-review-830-g1", SignerKeyID: "named-human-review-key",
+	}
+	privateKey := ed25519.NewKeyFromSeed(schemaWikiReviewSeed[:])
+	unsigned, err := CanonicalHumanBatchDecisionReceiptV1(&decision, false)
+	require.NoError(t, err)
+	decision.Signature = base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, unsigned))
+	rawDecision, err := CanonicalHumanBatchDecisionReceiptV1(&decision, true)
+	require.NoError(t, err)
+
+	ready, err := fixture.adapter.ReviewSchemaDraft(
+		fixture.ctx, principal, scope, draft.ID, rawDecision,
+	)
+	require.NoError(t, err)
+	return ready
+}
+
+func TestCreateEntityPageGraphDraft830G1RequiresCurrentSourceReleaseCustodyBeforePersistence(t *testing.T) {
+	t.Parallel()
+	raw := loadEntityPageGraph830G1ServiceVector(t)
+	manifest, err := types.ParseEntityPageManifest830G1(raw)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	require.NoError(t, fixture.db.Create(&types.WikiReleaseHead{
+		ID: "head-g1-without-source", WikiReleaseScope: scope,
+		ActiveReleaseID: manifest.ReleaseID, ActivationEpoch: manifest.ActivationEpoch,
+		UpdatedAt: time.Now().UTC(),
+	}).Error)
+
+	draft, err := fixture.adapter.CreateEntityPageGraphDraft830G1(
+		fixture.ctx, principal, scope, "preparation-g1-no-source", raw,
+	)
+	require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	require.Nil(t, draft)
+	require.Zero(t, fixture.storedCount(t))
+}
+
+func TestCreateEntityPageGraphDraft830G1RejectsUnreadablePreparationIDsBeforeRepositoryAccess(t *testing.T) {
+	t.Parallel()
+	raw := loadEntityPageGraph830G1ServiceVector(t)
+	manifest, err := types.ParseEntityPageManifest830G1(raw)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	queryCount := 0
+	require.NoError(t, fixture.db.Callback().Query().Before("gorm:query").Register(
+		"test:count-invalid-g1-preparation-id-queries",
+		func(*gorm.DB) { queryCount++ },
+	))
+
+	for _, preparationID := range []string{"", " ", "current", "CURRENT", "latest", "LaTeSt"} {
+		t.Run(preparationID, func(t *testing.T) {
+			before := queryCount
+			draft, err := fixture.adapter.CreateEntityPageGraphDraft830G1(
+				fixture.ctx, principal, scope, preparationID, raw,
+			)
+			require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+			require.Nil(t, draft)
+			require.Equal(t, before, queryCount,
+				"an unreadable preparation ID must fail closed before repository access")
+		})
+	}
+	require.Zero(t, fixture.storedCount(t))
 }
 
 func TestEntityPageGraphService830G1PinnedFailuresAreTypedAndNeverFallback(t *testing.T) {
@@ -261,6 +482,254 @@ func TestEntityPageGraphMemberSetsEqual830G1RequiresEmptyContentInBothCopies(t *
 			))
 		})
 	}
+}
+
+func TestEntityPageGraphPreparationCitation830G1UsesFullUniqueJoinIdentityAndExactSourceTuple(t *testing.T) {
+	t.Parallel()
+	manifest, err := types.ParseEntityPageManifest830G1(loadEntityPageGraph830G1ServiceVector(t))
+	require.NoError(t, err)
+	seen := map[string]struct{}{}
+	var candidate types.EntityPageExactCitation830G1
+	candidateFieldKey := ""
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		payload, payloadErr := member.FieldAssertionPayload()
+		require.NoError(t, payloadErr)
+		for _, citation := range payload.Citations {
+			require.Equal(t, "citation_"+citation.JoinReceiptSHA256, citation.CitationID)
+			require.Len(t, citation.CitationID, len("citation_")+64)
+			_, duplicate := seen[citation.JoinReceiptSHA256]
+			require.False(t, duplicate)
+			seen[citation.JoinReceiptSHA256] = struct{}{}
+			if candidate.CitationID == "" {
+				candidate = citation
+				candidateFieldKey = member.StableKey
+			}
+		}
+	}
+	require.Len(t, seen, 17)
+	require.NotEmpty(t, candidate.CitationID)
+	join := types.Schema67CitationAuthorityJoinReceiptV1{
+		FieldID:               candidateFieldKey,
+		ReceiptSHA256:         candidate.JoinReceiptSHA256,
+		EvidenceReceiptSHA256: candidate.EvidenceReceiptSHA256,
+		SourceRole:            candidate.SourceRole, SourceSHA256: candidate.SourceSHA256,
+		ParsedDocumentSHA256:   candidate.ParsedDocumentSHA256,
+		ParseManifestSHA256:    candidate.ParseManifestSHA256,
+		EvidenceParseAttemptID: candidate.ParseAttemptID,
+		LocatorKind:            candidate.LocatorKind, LocatorRef: candidate.LocatorRef,
+		PageNumber: candidate.PageNumber, LocatorContentSHA256: candidate.LocatorContentSHA256,
+		NormalizedBBox: candidate.BBox, KnowledgeID: candidate.KnowledgeID,
+		ChunkID: candidate.ChunkID, QuoteSHA256: candidate.QuoteSHA256,
+		LiveRevisionSourceReceipt: types.LiveRevisionSourceReceiptV1{
+			RevisionSourceID: candidate.SourceRevisionID,
+		},
+	}
+	logicalMemberRef := "field:" + candidateFieldKey
+	source := types.CitationTargetV1{
+		Contract: "citation-target.v1", CitationID: "citation-" + candidate.JoinReceiptSHA256[:24],
+		SpaceID: manifest.SpaceID, EntityVersionID: manifest.EntityVersionID,
+		SourceRole: candidate.SourceRole, KnowledgeID: candidate.KnowledgeID,
+		ChunkID: candidate.ChunkID, SourceRevisionID: candidate.SourceRevisionID,
+		ParseAttemptID:       candidate.ParseAttemptID,
+		ParsedDocumentSHA256: candidate.ParsedDocumentSHA256,
+		ParseManifestSHA256:  candidate.ParseManifestSHA256,
+		PageNumber:           candidate.PageNumber, LocatorRef: candidate.LocatorRef,
+		BBox: candidate.BBox, QuoteSnapshot: candidate.QuoteSnapshot,
+		QuoteSHA256:           candidate.QuoteSHA256,
+		ContentSnapshotSHA256: candidate.LocatorContentSHA256,
+		LogicalMemberRef:      logicalMemberRef,
+	}
+	source.CitationSHA256 = schemaWikiTestHashWithout(
+		t, source.Contract, source, "citation_sha256",
+	)
+	require.True(t, entityPageGraphCitationMatchesSchemaSource830G1(candidate, join, source))
+	tampered := candidate
+	tampered.PageNumber++
+	require.False(t, entityPageGraphCitationMatchesSchemaSource830G1(tampered, join, source))
+
+	memberDigest := strings.Repeat("d", 64)
+	binding := types.CitationMemberBindingV1{
+		Contract: "citation-member-binding.v1", CitationSHA256: source.CitationSHA256,
+		LogicalMemberRef: logicalMemberRef, MemberDigest: memberDigest,
+	}
+	binding.BindingSHA256 = schemaWikiTestHashWithout(
+		t, binding.Contract, binding, "binding_sha256",
+	)
+	pagePayload, err := json.Marshal(types.SchemaFieldPageV1{
+		Contract: "schema-field-page.v1", FieldID: candidateFieldKey, State: "present",
+		ValueSnapshot:          &candidate.QuoteSnapshot,
+		Citations:              []types.CitationTargetV1{source},
+		EvidenceReceiptSHA256s: []string{candidate.EvidenceReceiptSHA256},
+	})
+	require.NoError(t, err)
+	validated := validatedSchemaWikiCustody{
+		release: types.KnowledgeWikiReleaseV1{
+			CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+			EntityVersion:   types.EntityVersionV1{VersionID: manifest.EntityVersionID},
+			Members: []types.SchemaWikiMemberV1{{
+				MemberKind: "field", MemberRef: logicalMemberRef,
+				Payload: pagePayload, MemberDigest: memberDigest,
+			}},
+			CitationBindings: []types.CitationMemberBindingV1{binding},
+		},
+		candidateEvidenceAuthority: types.Schema67CandidateEvidenceAuthorityV1{
+			CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+			JoinReceipts:    []types.Schema67CitationAuthorityJoinReceiptV1{join},
+		},
+	}
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	request, err := schemaWikiCitationRequest(
+		validated, scope, manifest.ReleaseID, manifest.ActivationEpoch,
+		logicalMemberRef, source.CitationID,
+	)
+	require.NoError(t, err)
+	require.Equal(t, candidate.JoinReceiptSHA256, request.CoordinateAuthorityReceipt.ReceiptSHA256)
+	require.Equal(t, candidate.SourceRevisionID, request.Citation.SourceRevisionID)
+	require.Equal(t, candidate.PageNumber, request.Citation.PageNumber)
+	require.Equal(t, candidate.BBox, request.Citation.BBox)
+	require.Equal(t, candidate.QuoteSHA256, request.Citation.QuoteSHA256)
+
+	content := &schemaWikiC6CitationContentSpy{}
+	authority, err := content.IssueExactRevision(context.Background(), request)
+	require.NoError(t, err)
+	require.Equal(t, 1, content.issueCurrentCalls)
+	require.Equal(t, request, content.request)
+	require.Equal(t, "c6-citation-test-token", authority.OpaqueToken)
+}
+
+func TestEntityPageGraphManifest830G1ReplaysExactSchemaSourceCustody(t *testing.T) {
+	t.Parallel()
+	manifest, err := types.ParseEntityPageManifest830G1(loadEntityPageGraph830G1ServiceVector(t))
+	require.NoError(t, err)
+	release := types.KnowledgeWikiReleaseV1{
+		CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+		Entity:          types.EntityIdentityV1{EntityID: manifest.EntityID},
+		EntityVersion: types.EntityVersionV1{
+			EntityID: manifest.EntityID, VersionID: manifest.EntityVersionID,
+			ProductVersionID: manifest.InputAuthority.ProductVersionID,
+		},
+		SchemaPack: types.SchemaPackV1{
+			SchemaPackID:     manifest.Profile.SchemaPackID,
+			SchemaVersion:    manifest.Profile.SchemaVersion,
+			SchemaPackSHA256: manifest.Profile.SchemaPackSHA256,
+		},
+	}
+	evidence := types.Schema67CandidateEvidenceAuthorityV1{
+		Contract:        manifest.InputAuthority.EvidenceAuthorityContract,
+		CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+		AuthoritySHA256: manifest.InputAuthority.EvidenceAuthoritySHA256,
+	}
+	for _, source := range manifest.InputAuthority.SourceAuthorities {
+		evidence.SourceAuthorities = append(evidence.SourceAuthorities, types.Schema67LiveSourceAuthorityV1{
+			SourceRole: source.SourceRole, SourceSHA256: source.SourceSHA256,
+			LiveRevisionSourceReceipt: types.LiveRevisionSourceReceiptV1{
+				RevisionSourceID: source.RevisionSourceID, KnowledgeID: source.KnowledgeID,
+				ResourceID: source.ResourceID, EvidenceParseAttemptID: source.EvidenceParseAttemptID,
+				WeKnoraParseAttempt:  int64(source.WeKnoraParseAttempt),
+				ParsedDocumentSHA256: source.ParsedDocumentSHA256,
+				ParseManifestSHA256:  source.ParseManifestSHA256,
+				SourceReceiptSHA256:  source.SourceReceiptSHA256,
+			},
+		})
+	}
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		candidate, payloadErr := member.FieldAssertionPayload()
+		require.NoError(t, payloadErr)
+		page := types.SchemaFieldPageV1{
+			FieldID: candidate.FieldKey, State: candidate.State,
+			ValueSnapshot:          candidate.ValueSnapshot,
+			Citations:              []types.CitationTargetV1{},
+			EvidenceReceiptSHA256s: append([]string{}, candidate.Reference.EvidenceReceiptSHA256s...),
+		}
+		for _, citation := range candidate.Citations {
+			page.Citations = append(page.Citations, types.CitationTargetV1{
+				CitationID: "citation-" + citation.JoinReceiptSHA256[:24],
+				SourceRole: citation.SourceRole, KnowledgeID: citation.KnowledgeID,
+				ChunkID: citation.ChunkID, SourceRevisionID: citation.SourceRevisionID,
+				ParseAttemptID:       citation.ParseAttemptID,
+				ParsedDocumentSHA256: citation.ParsedDocumentSHA256,
+				ParseManifestSHA256:  citation.ParseManifestSHA256,
+				PageNumber:           citation.PageNumber, LocatorRef: citation.LocatorRef,
+				BBox: citation.BBox, QuoteSnapshot: citation.QuoteSnapshot,
+				QuoteSHA256:           citation.QuoteSHA256,
+				ContentSnapshotSHA256: citation.LocatorContentSHA256,
+			})
+			evidence.JoinReceipts = append(evidence.JoinReceipts, types.Schema67CitationAuthorityJoinReceiptV1{
+				ReceiptSHA256: citation.JoinReceiptSHA256, FieldID: candidate.FieldKey,
+				EvidenceReceiptSHA256: citation.EvidenceReceiptSHA256,
+				SourceRole:            citation.SourceRole, SourceSHA256: citation.SourceSHA256,
+				ParsedDocumentSHA256:   citation.ParsedDocumentSHA256,
+				ParseManifestSHA256:    citation.ParseManifestSHA256,
+				EvidenceParseAttemptID: citation.ParseAttemptID,
+				LocatorKind:            citation.LocatorKind, LocatorRef: citation.LocatorRef,
+				PageNumber: citation.PageNumber, LocatorContentSHA256: citation.LocatorContentSHA256,
+				NormalizedBBox: citation.BBox, KnowledgeID: citation.KnowledgeID,
+				ChunkID: citation.ChunkID, QuoteSHA256: citation.QuoteSHA256,
+				LiveRevisionSourceReceipt: types.LiveRevisionSourceReceiptV1{
+					RevisionSourceID: citation.SourceRevisionID,
+				},
+			})
+		}
+		payload, marshalErr := json.Marshal(page)
+		require.NoError(t, marshalErr)
+		release.Members = append(release.Members, types.SchemaWikiMemberV1{
+			MemberKind: "field", Payload: payload,
+		})
+	}
+	validated := validatedSchemaWikiCustody{release: release, candidateEvidenceAuthority: evidence}
+	require.Equal(t, manifest.FieldAssertionCount, len(release.Members))
+	require.Len(t, evidence.JoinReceipts, 17)
+	require.Equal(t, manifest.InputAuthority.EvidenceAuthoritySHA256, evidence.AuthoritySHA256)
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		candidate, payloadErr := member.FieldAssertionPayload()
+		require.NoError(t, payloadErr)
+		var old types.SchemaFieldPageV1
+		for _, sourceMember := range release.Members {
+			var page types.SchemaFieldPageV1
+			require.NoError(t, json.Unmarshal(sourceMember.Payload, &page))
+			if page.FieldID == member.StableKey {
+				old = page
+				break
+			}
+		}
+		require.Equal(t, candidate.State, old.State, member.StableKey)
+		require.Equal(t, candidate.Reference.EvidenceReceiptSHA256s, old.EvidenceReceiptSHA256s, member.StableKey)
+		for index, citation := range candidate.Citations {
+			require.True(t, entityPageGraphCitationMatchesSchemaSource830G1(
+				citation, evidence.JoinReceipts[indexOfEntityPageJoin830G1(t, evidence.JoinReceipts, citation.JoinReceiptSHA256)],
+				old.Citations[index],
+			), member.StableKey)
+		}
+	}
+	require.True(t, entityPageGraphManifestMatchesSchemaSource830G1(manifest, validated))
+	validated.release.CandidateSHA256 = strings.Repeat("f", 64)
+	require.False(t, entityPageGraphManifestMatchesSchemaSource830G1(manifest, validated))
+}
+
+func indexOfEntityPageJoin830G1(
+	t *testing.T,
+	joins []types.Schema67CitationAuthorityJoinReceiptV1,
+	digest string,
+) int {
+	t.Helper()
+	for index := range joins {
+		if joins[index].ReceiptSHA256 == digest {
+			return index
+		}
+	}
+	require.FailNow(t, "missing join", digest)
+	return -1
 }
 
 func entityPageGraphManifestDigest830G1ForTest(t *testing.T, manifest types.EntityPageManifest830G1) string {

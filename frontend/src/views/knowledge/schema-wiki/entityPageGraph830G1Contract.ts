@@ -109,8 +109,9 @@ export interface EntityPageMember830G1 {
 
 export interface EntityPageGraphRead830G1 {
   readonly contract: 'entity-page-read.830.g1.v1'
-  readonly read_mode: 'current' | 'pinned'
+  readonly read_mode: 'current' | 'pinned' | 'preparation'
   readonly release_id: string
+  readonly preparation_id?: string
   readonly activation_epoch: number
   readonly manifest_sha256: string
   readonly entity_id: string
@@ -311,11 +312,17 @@ export function parseEntityPageGraphRead830G1(
       throw new Error()
     }
     const data = value.data
-    if (!exact(data, [
+    const readKeys = [
       'contract', 'read_mode', 'release_id', 'activation_epoch', 'manifest_sha256', 'entity_id',
       'entity_version_id', 'display_name', 'classification_display_name', 'profile', 'member',
-    ]) || data.contract !== 'entity-page-read.830.g1.v1'
-      || (data.read_mode !== 'current' && data.read_mode !== 'pinned') || !text(data.release_id)
+    ]
+    if (data.read_mode === 'preparation') readKeys.push('preparation_id')
+    if (!exact(data, readKeys) || data.contract !== 'entity-page-read.830.g1.v1'
+      || (data.read_mode !== 'current' && data.read_mode !== 'pinned' && data.read_mode !== 'preparation')
+      || (data.read_mode === 'preparation'
+        ? !text(data.preparation_id) || ['current', 'latest'].includes(data.preparation_id.toLowerCase())
+        : 'preparation_id' in data)
+      || !text(data.release_id)
       || ['current', 'latest'].includes(data.release_id.toLowerCase())
       || !Number.isSafeInteger(data.activation_epoch) || (data.activation_epoch as number) <= 0
       || !hash(data.manifest_sha256) || data.entity_id !== target.entityId || !text(data.entity_version_id)

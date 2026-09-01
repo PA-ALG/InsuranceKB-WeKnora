@@ -7,7 +7,10 @@ import {
   createSchemaWikiCitationPreviewTransport,
   type SchemaWikiCitationPreviewTransport,
 } from '@/api/schema-wiki'
-import { readEntityPageGraphSession830G1 } from '@/api/schema-wiki/entityPageGraph830G1.ts'
+import {
+  createEntityPageGraphPreparationCitationTransport830G1,
+  readEntityPageGraphSession830G1,
+} from '@/api/schema-wiki/entityPageGraph830G1.ts'
 import SchemaCitationViewer from '@/components/schema-wiki/SchemaCitationViewer.vue'
 import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort.ts'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
@@ -19,6 +22,7 @@ import type {
   EntityPageSectionPayload830G1,
   EntityPageTarget830G1,
 } from './entityPageGraph830G1Contract.ts'
+import type { SchemaWikiScopeV1 } from './schemaWikiContract.ts'
 
 const route = useRoute()
 const loading = ref(true)
@@ -27,6 +31,7 @@ const error = ref('')
 const previewTransport = ref<SchemaWikiCitationPreviewTransport | null>(null)
 const sourceDrawerVisible = ref(false)
 const selectedCitation = ref<EntityPageCitation830G1 | null>(null)
+const loadedScope = ref<SchemaWikiScopeV1 | null>(null)
 const pdfPort = createPdfJsPort()
 
 const wikiKBID = computed(() => String(route.params.kbId ?? ''))
@@ -47,7 +52,9 @@ const target = computed<EntityPageTarget830G1>(() => {
 
 const pinnedQuery = computed(() => read.value?.read_mode === 'pinned'
   ? { release_id: read.value.release_id }
-  : {})
+  : read.value?.read_mode === 'preparation'
+    ? { preparation_id: read.value.preparation_id }
+    : {})
 
 const fieldPayload = computed(() => read.value?.member.payload.contract === 'field-assertion-page.830.g1.v1'
   ? read.value.member.payload as EntityPageFieldPayload830G1
@@ -64,7 +71,9 @@ const fieldCount = computed(() => read.value?.profile.sections.reduce(
 ) ?? 0)
 const sourceDrawerDescription = computed(() => read.value?.read_mode === 'pinned'
   ? '固定发布版本的原始证据'
-  : '当前发布版本的原始证据')
+  : read.value?.read_mode === 'preparation'
+    ? '候选预览的原始证据'
+    : '当前发布版本的原始证据')
 const previewRequest = computed(() => {
   if (!read.value || !fieldPayload.value || !selectedCitation.value) return null
   return buildSchemaCitationPreviewRequest({
@@ -100,24 +109,59 @@ function unwrapResponse(value: unknown): unknown {
   return record.data
 }
 
-function requestedReleaseIDFromRoute(): string | undefined {
-  const value = route.query.release_id
-  if (value === undefined) return undefined
-  if (typeof value !== 'string' || value === '' || value !== value.trim()) {
-    throw new Error('ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID')
+function requestedReadIdentityFromRoute(): { releaseID?: string, preparationID?: string } {
+  const keys = Object.keys(route.query)
+  if (keys.some(key => key !== 'release_id' && key !== 'preparation_id')
+    || keys.includes('release_id') && keys.includes('preparation_id')) {
+    throw new Error('ENTITY_PAGE_GRAPH_READ_MODE_INVALID')
   }
-  return value
+  const release = route.query.release_id
+  const preparation = route.query.preparation_id
+  const exact = (value: unknown, code: string): string | undefined => {
+    if (value === undefined) return undefined
+    if (typeof value !== 'string' || value === '' || value !== value.trim()
+      || ['current', 'latest'].includes(value.toLowerCase())) throw new Error(code)
+    return value
+  }
+  return {
+    releaseID: exact(release, 'ENTITY_PAGE_GRAPH_RELEASE_ID_INVALID'),
+    preparationID: exact(preparation, 'ENTITY_PAGE_GRAPH_PREPARATION_ID_INVALID'),
+  }
+}
+
+function previewIO() {
+  return {
+    get: async (path: string) => unwrapResponse(await get(path)),
+    getBytes: async (path: string) => {
+      const bytes = await get<ArrayBuffer>(path, { responseType: 'arraybuffer' })
+      return new Uint8Array(bytes)
+    },
+  }
+}
+
+function setPreparationPreviewTransport(citation: EntityPageCitation830G1): void {
+  if (read.value?.read_mode !== 'preparation' || !read.value.preparation_id || !loadedScope.value) return
+  previewTransport.value = createEntityPageGraphPreparationCitationTransport830G1(
+    loadedScope.value,
+    read.value.preparation_id,
+    read.value.entity_id,
+    citation.citation_id,
+    previewIO(),
+  )
 }
 
 function openSources(): void {
   const first = fieldPayload.value?.citations[0]
-  if (!first || !previewTransport.value) return
+  if (!first) return
+  setPreparationPreviewTransport(first)
+  if (!previewTransport.value) return
   selectedCitation.value = first
   sourceDrawerVisible.value = true
 }
 
 function selectCitation(citation: EntityPageCitation830G1): void {
   if (!fieldPayload.value?.citations.includes(citation)) return
+  setPreparationPreviewTransport(citation)
   selectedCitation.value = citation
 }
 
@@ -132,29 +176,36 @@ function updateSourceDrawerVisible(visible: boolean): void {
 
 async function load(): Promise<void> {
   const hasPinnedQuery = Object.prototype.hasOwnProperty.call(route.query, 'release_id')
+  const hasPreparationQuery = Object.prototype.hasOwnProperty.call(route.query, 'preparation_id')
   loading.value = true
   read.value = null
   error.value = ''
   previewTransport.value = null
+  loadedScope.value = null
   closeSources()
   try {
-    const requestedReleaseID = requestedReleaseIDFromRoute()
+    const identity = requestedReadIdentityFromRoute()
     const session = await readEntityPageGraphSession830G1(
       wikiKBID.value,
       target.value,
-      requestedReleaseID,
+      identity.releaseID,
       { get: path => get(path) },
+      identity.preparationID,
     )
     read.value = session.read
-    previewTransport.value = createSchemaWikiCitationPreviewTransport(session.scope, {
-      get: async path => unwrapResponse(await get(path)),
-      getBytes: async path => {
-        const bytes = await get<ArrayBuffer>(path, { responseType: 'arraybuffer' })
-        return new Uint8Array(bytes)
-      },
-    })
+    loadedScope.value = session.scope
+    if (session.read.read_mode === 'preparation') {
+      const payload = session.read.member.payload
+      if (payload.contract === 'field-assertion-page.830.g1.v1' && payload.citations[0]) {
+        setPreparationPreviewTransport(payload.citations[0])
+      }
+    } else {
+      previewTransport.value = createSchemaWikiCitationPreviewTransport(session.scope, previewIO())
+    }
   } catch {
-    error.value = hasPinnedQuery ? '固定版本页面读取失败' : '当前版本页面读取失败'
+    error.value = hasPinnedQuery
+      ? '固定版本页面读取失败'
+      : hasPreparationQuery ? '候选预览页面读取失败' : '当前版本页面读取失败'
   } finally {
     loading.value = false
   }
@@ -214,7 +265,7 @@ watch(() => route.fullPath, load, { immediate: true })
         <header>
           <div>
             <p class="entity-page-graph__eyebrow">
-              {{ read.read_mode === 'pinned' ? '固定版本' : '当前版本' }} · {{ read.release_id }}
+              {{ read.read_mode === 'pinned' ? '固定版本' : read.read_mode === 'preparation' ? '候选预览' : '当前版本' }} · {{ read.release_id }}
             </p>
             <h1>{{ read.member.short_title }}</h1>
             <code data-testid="entity-page-namespace">{{ read.member.namespace }}</code>

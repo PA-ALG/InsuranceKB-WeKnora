@@ -25,6 +25,13 @@ type entityPageGraphHTTPService830G1 interface {
 		string,
 		service.EntityPageGraphSelector830G1,
 	) (*service.EntityPageGraphRead830G1, error)
+	ReadPreparationEntityPage830G1(
+		context.Context,
+		types.WikiReleasePrincipal,
+		types.WikiReleaseScope,
+		string,
+		service.EntityPageGraphSelector830G1,
+	) (*service.EntityPageGraphRead830G1, error)
 }
 
 type EntityPageGraphHandler830G1 struct {
@@ -75,11 +82,13 @@ func (h *EntityPageGraphHandler830G1) read(c *gin.Context, pageKind, stableKey s
 		PageKind:  pageKind,
 		StableKey: stableKey,
 	}
-	releaseIDs, hasReleaseID := c.Request.URL.Query()["release_id"]
+	query := c.Request.URL.Query()
+	releaseIDs, hasReleaseID := query["release_id"]
+	preparationIDs, hasPreparationID := query["preparation_id"]
 	var read *service.EntityPageGraphRead830G1
-	if !hasReleaseID {
+	if len(query) == 0 {
 		read, err = h.service.ReadCurrentEntityPage830G1(c.Request.Context(), principal, scope, selector)
-	} else {
+	} else if len(query) == 1 && hasReleaseID && !hasPreparationID {
 		if len(releaseIDs) != 1 || releaseIDs[0] == "" || releaseIDs[0] != strings.TrimSpace(releaseIDs[0]) ||
 			strings.EqualFold(releaseIDs[0], "current") || strings.EqualFold(releaseIDs[0], "latest") {
 			writeEntityPageGraphError830G1(c, service.ErrEntityPageGraphIntegrity830G1)
@@ -87,6 +96,20 @@ func (h *EntityPageGraphHandler830G1) read(c *gin.Context, pageKind, stableKey s
 		}
 		releaseID := releaseIDs[0]
 		read, err = h.service.ReadPinnedEntityPage830G1(c.Request.Context(), principal, scope, releaseID, selector)
+	} else if len(query) == 1 && hasPreparationID && !hasReleaseID {
+		if len(preparationIDs) != 1 || preparationIDs[0] == "" ||
+			preparationIDs[0] != strings.TrimSpace(preparationIDs[0]) ||
+			strings.EqualFold(preparationIDs[0], "current") ||
+			strings.EqualFold(preparationIDs[0], "latest") {
+			writeEntityPageGraphError830G1(c, service.ErrEntityPageGraphIntegrity830G1)
+			return
+		}
+		read, err = h.service.ReadPreparationEntityPage830G1(
+			c.Request.Context(), principal, scope, preparationIDs[0], selector,
+		)
+	} else {
+		writeEntityPageGraphError830G1(c, service.ErrEntityPageGraphIntegrity830G1)
+		return
 	}
 	if err != nil {
 		writeEntityPageGraphError830G1(c, err)

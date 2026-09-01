@@ -752,6 +752,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 		paths[route.Method+" "+route.Path] = true
 	}
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/schema-scope"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/preparations/:preparation_id/schema-scope"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/domains"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/review"])
@@ -765,6 +766,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/sections/:section_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/fields/:field_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/releases/:release_id/fields/:field_id/citations/:citation_id/preview"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/entities/:entity_id/fields/:field_key/citations/:citation_id/preview"])
 	contentPath := http.MethodGet + " /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/citation-content/:token"
 	require.True(t, paths[contentPath])
 	for path := range paths {
