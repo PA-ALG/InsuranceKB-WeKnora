@@ -73,9 +73,9 @@ Candidate Preview，不把 Draft 冒充 Review/Release/Active，也不提前关�
 
 ## M2 · Complete 76-page graph
 
-- [ ] 关闭 76/76 唯一 ID、67/67 三态、unknown typed reason、全部稳定 route。
-- [ ] 关闭 Section→FieldAssertion、known 同源 Evidence、标题/分类不改变 identity。
-- [ ] 关闭公共 renderer 的非 7 节点单测；不得注册其余 10 类产品 Profile。
+- [x] 关闭 76/76 唯一 ID、67/67 三态、unknown typed reason、全部稳定 route。
+- [x] 关闭 Section→FieldAssertion、known 同源 Evidence、标题/分类不改变 identity。
+- [x] 关闭公共 renderer 的非 7 节点单测；不得注册其余 10 类产品 Profile。
 - [ ] 提交 M2 完整页面图并更新 Requirement 矩阵。
 
 ## M3 · Atomic isolated Release

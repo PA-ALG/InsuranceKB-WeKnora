@@ -31,6 +31,11 @@ M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
 M1_PREPARATION_ID=g1-m1-740d9b7c-preview
 M1_MANIFEST_SHA256=3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c
 M1_PREVIEW=PASS
+M1_EVIDENCE_REVIEW=PASS
+M1_EVIDENCE_REVIEWED_HEAD=6ed49abab3cc9e0428b8648e93e1c2e0a313d8e5
+M1_EVIDENCE_REVIEWED_TREE=83792e58f0b453c13af7543649391b0ff71d8b74
+M1_EVIDENCE_REVIEW_UNRESOLVED_COUNT=0
+M2_EVIDENCE=PREPARED_PENDING_INDEPENDENT_REVIEW
 G2_AND_LATER=LOCKED
 ```
 
@@ -106,6 +111,26 @@ WeKnora validation/read/UI，两者直接汇合到同一个 M1 Preview。最多�
   evidence appeared in the shared worktree before the M1 gate closed. The M2 files were preserved
   outside the worktree and the NEXT pointer was corrected; the correction still requires the same
   independent read-only re-review.
+- Corrected commit `6ed49abab3cc9e0428b8648e93e1c2e0a313d8e5` / tree
+  `83792e58f0b453c13af7543649391b0ff71d8b74` advanced NEXT to M2 and restored a clean
+  M1 review tree. The same independent read-only Review returned `REVIEW=PASS`,
+  `UNRESOLVED_COUNT=0`.
 
 M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Release/activation，
 也尚未形成 M3 successor current/pinned/no-mix 物理证据。G2 继续锁定。
+
+## M2 complete page graph candidate
+
+- `docs/insurance-kb/evidence/830-g1/m2/identity-hash-index.json` lists all 76 ordered
+  page identities, routes, namespaces, member digests and payload hashes; all four identity domains
+  are 76/76 unique and replay from the exact M1 manifest.
+- `docs/insurance-kb/evidence/830-g1/m2/complete-page-graph.json` records the 1/7/67/1
+  topology, exact section membership, `2/1/64` tri-state distribution, all 17 citations for the
+  three known fields, title/classification identity mutations, and the generic 2-section compiler
+  and renderer tests.
+- Fresh verification: Harness `14 passed`; exact Go source-custody pair `2 passed`; Go full package
+  regression PASS after the authorized loopback rerun; Go vet PASS; focused frontend `36 passed`;
+  frontend typecheck, Ruff and diff-check PASS.
+- M2 evidence is controller-prepared with zero DB/release/head/Provider/model/production/G2 effects.
+  It is not admitted or committed as M2 PASS until the visible read-only Review accepts its exact
+  candidate head/tree.

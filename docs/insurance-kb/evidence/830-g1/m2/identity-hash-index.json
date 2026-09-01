@@ -1,0 +1,776 @@
+{
+  "contract": "weknora.830.g1-m2-identity-hash-index.v1",
+  "goal_id": "G1",
+  "phase": "M2",
+  "source_manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+  "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+  "source_activation_epoch": 2,
+  "entity_id": "ping-an-e-sheng-bao",
+  "member_count": 76,
+  "unique_page_id_count": 76,
+  "members": [
+    {
+      "ordinal": 1,
+      "page_kind": "overview",
+      "stable_key": "overview",
+      "page_id": "page_11c0695a22101eb6450429d74e02dc0d61cd4356455a186b3facef4074e9d841",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/overview",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:overview:overview",
+      "member_digest": "e0e8b9920aec7cf17e654f986b89d1499bff717d0d6e57754872c51c10b95ec8",
+      "payload_sha256": "4e09226599ea49323bf40b391acf4973cc1609695d6e9767ce0687379444c298"
+    },
+    {
+      "ordinal": 2,
+      "page_kind": "section",
+      "stable_key": "product-overview",
+      "page_id": "page_2ed108a6e454b0099893e80f28f95193c2217b03fd43e26abeb4a48717127af8",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/product-overview",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:product-overview",
+      "member_digest": "3b840423165fff77de0d1eb50d503d47f5e631d6d90d697b4900e8ca4bc40922",
+      "payload_sha256": "f89a1c8d8b071e425a6ce2c6957facdc031fbc8fccdbfc6776ca39e50e4947a2"
+    },
+    {
+      "ordinal": 3,
+      "page_kind": "section",
+      "stable_key": "application-and-contract",
+      "page_id": "page_16e8cd58dc489b9404fd2fce0138713aee2e9e5751fd2a9fc77f97969948f4bf",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/application-and-contract",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:application-and-contract",
+      "member_digest": "f4af8e171e77f74705f8642919988972fc56019376ba336ac99566a87ee9f15f",
+      "payload_sha256": "83bbc2dda031873bc80627f480cb67ccc99c8b72e8a9da794573232f5c3b1012"
+    },
+    {
+      "ordinal": 4,
+      "page_kind": "section",
+      "stable_key": "renewal-and-pricing",
+      "page_id": "page_b3aabb9538f3825007fc9be3596195fe38d12675b317b8b5ab9a42021237dd00",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/renewal-and-pricing",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:renewal-and-pricing",
+      "member_digest": "69dc9703d1bdc901c9ed4604fd1d72587efd766b35ecefc75bd2360e2c1ca84c",
+      "payload_sha256": "19375e48d79854773dd0d09aa95b334315498fc57a9a85a3ae9242a609d939a5"
+    },
+    {
+      "ordinal": 5,
+      "page_kind": "section",
+      "stable_key": "coverage-and-exclusions",
+      "page_id": "page_d9ec3b8a6f7b12ee9cb3c9a435b6b264a53f334da7ed5419ca8becbf6e2146ec",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/coverage-and-exclusions",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:coverage-and-exclusions",
+      "member_digest": "5ebb19c328c2eb041bd42aff2a4926636e21301e4757f632a2034047afbb6f53",
+      "payload_sha256": "9ba4e764d7ad35870edcfb6fc52e9c7825661e78c03b91bb19ef182101d7f82a"
+    },
+    {
+      "ordinal": 6,
+      "page_kind": "section",
+      "stable_key": "claims-and-reimbursement",
+      "page_id": "page_36869cbba148f28a26e799165e367b9c2ee2ccc86cebc3194c854036cd8e805f",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/claims-and-reimbursement",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:claims-and-reimbursement",
+      "member_digest": "aef63950a69059fc5bd321cf3efa06e889a84036aa36b5943996dda5e185c840",
+      "payload_sha256": "741413d7448e1293e3e47688a137304ed585726a1730606302ab8636e93247a1"
+    },
+    {
+      "ordinal": 7,
+      "page_kind": "section",
+      "stable_key": "services-and-benefits",
+      "page_id": "page_a1c6caef903d08e8f9d70cd754db95e24c09924e4bfffdf4355c72f4caf2f9a9",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/services-and-benefits",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:services-and-benefits",
+      "member_digest": "f7803c8aea25d23e813879cf0755bf76864738d23a4259a47512279cc0e373a3",
+      "payload_sha256": "90c4778229919a7a85e9b91ad5cffae4ef984564df0efd0cc22c13127aa2a581"
+    },
+    {
+      "ordinal": 8,
+      "page_kind": "section",
+      "stable_key": "sales-support",
+      "page_id": "page_2a16253feb70ea35a632913b18697c7793a02d604d1b07351b6e70a093fe6440",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/sales-support",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:sales-support",
+      "member_digest": "9ef0f77363779158f4dac87db398aa35acd4f52ada4293b8bc2949b453f42ee9",
+      "payload_sha256": "4f373019a40dfb76a830c1d029d3a729d1e7136e6df0870c16faa81e0256424b"
+    },
+    {
+      "ordinal": 9,
+      "page_kind": "field",
+      "stable_key": "product_code",
+      "page_id": "page_57c95cf56cd3841bdf2d5f8d711d2c04851510b491b5336038636fb1efdef7ef",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_code",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_code",
+      "member_digest": "144b16fe56c5c15c562c2aa7100c7acb7913e8b40d783c4959c24ba162b24d3b",
+      "payload_sha256": "4b92df3b1197d4e4e0c6236b55f4cc6b3dddc52887491f6ac8eb5f417422f6b9"
+    },
+    {
+      "ordinal": 10,
+      "page_kind": "field",
+      "stable_key": "product_short_name",
+      "page_id": "page_8790249299a9e54b96f7079bbbe1e4775eb10710d377585e8fc3dd7a6522400d",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_short_name",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_short_name",
+      "member_digest": "7e133c82ba01224a22edbe2555d4ad182cc6015652afd29bc671131c7a088843",
+      "payload_sha256": "7db18cec31189c44c2e31c0142b20dc69d9cb9d6a0110c91550143e9241f480d"
+    },
+    {
+      "ordinal": 11,
+      "page_kind": "field",
+      "stable_key": "product_name",
+      "page_id": "page_021432f2fc94fd5c9a7eb1e4933c8e07b3129e36af2b194f0e7bd2e8510b1fd7",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_name",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_name",
+      "member_digest": "fb51d5c6924d5e0e8795cc77db57f986eeb991e7a49f90e7aa209d514b2010ae",
+      "payload_sha256": "adc533ae9382ec49effc96b7d0d9e83860853db749021a71eb4180b5fc38e4ad"
+    },
+    {
+      "ordinal": 12,
+      "page_kind": "field",
+      "stable_key": "sales_start_date",
+      "page_id": "page_9358091483afbb376e659b42f25a4976c7150e455c6550d950e3f2499ecd3732",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/sales_start_date",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:sales_start_date",
+      "member_digest": "4a3442983a4b8a4cc2fd4c52de9ca6b6ee6e3171d4497a86b734d043a9003802",
+      "payload_sha256": "a64dd266bf33095f3831761550e4cd9465f9c3ad87bd84be6cea8db43c1bed05"
+    },
+    {
+      "ordinal": 13,
+      "page_kind": "field",
+      "stable_key": "sales_end_date",
+      "page_id": "page_62fc8fbcb934e1c5d19fcf13617e80a997ff3bd3463e02d4db43ab55ac240d5e",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/sales_end_date",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:sales_end_date",
+      "member_digest": "f8e0156c79b0bfe53c9871da10035e548f15898c38fb74c23f792c7a19cb4d1d",
+      "payload_sha256": "19a161b2dd2badf80d855315d5a1cb81f2da141296fca167b6526d51a19c2187"
+    },
+    {
+      "ordinal": 14,
+      "page_kind": "field",
+      "stable_key": "product_type",
+      "page_id": "page_5ae0dceac00be008910afd0f4e220ed309c586741ed489d910bc117bf2db6b5a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_type",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_type",
+      "member_digest": "8cfa14a6e7b8a9a8b73beb391803b8b1199ff8742274d49af33241b0ead4fb58",
+      "payload_sha256": "dcbde4c344f505dba34018f1d219dfe3b34a7ebfcb5826ff367db503fc125634"
+    },
+    {
+      "ordinal": 15,
+      "page_kind": "field",
+      "stable_key": "insurance_category",
+      "page_id": "page_4c670dafe2baeac5b28acbcff253c228fd5072baebe6856c13d554780cd38e90",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/insurance_category",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:insurance_category",
+      "member_digest": "77fc971b6be3a1c51131e9883f1d5ba7bf80d8aa6a664b70e2862b791757a826",
+      "payload_sha256": "1940950e72915e6301aba5471e15c0c6ad7b0b8e3862a46c47fbdf53faf3c9cb"
+    },
+    {
+      "ordinal": 16,
+      "page_kind": "field",
+      "stable_key": "sales_channels",
+      "page_id": "page_1ecfe7fae1f0ed6bd59b7f987341e588a9033b5d513030357eadcd7087bcf6bc",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/sales_channels",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:sales_channels",
+      "member_digest": "df2eaddc2bd62b3fc2597c2f8d4e277f1638d47bdf7d66370253f4534f14a3f7",
+      "payload_sha256": "c2d91c3f2aa1cf4760fa61cc36ab1eb1c0dcb5451dda22970c17b33624f4c117"
+    },
+    {
+      "ordinal": 17,
+      "page_kind": "field",
+      "stable_key": "external_publication_status",
+      "page_id": "page_d8ee471bebe5559116295b9844862a4aebf67297298532917f8371adee8173e4",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/external_publication_status",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:external_publication_status",
+      "member_digest": "eb62096cfd23e7f2660db8458b867384e0eb98206ea8ce294b8c37610ce8d3ea",
+      "payload_sha256": "5d0d3d25a12dd827d1163ffecbc8a6e8db50b518e441f580f68ed673547ada87"
+    },
+    {
+      "ordinal": 18,
+      "page_kind": "field",
+      "stable_key": "sales_status",
+      "page_id": "page_ebeb0a09dd4c2dff9fb9cdeaafee51b40acaefb7e6158c5491473cb2df4d7852",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/sales_status",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:sales_status",
+      "member_digest": "eb777918a1f9201e4b730a7a2a4f636fa4e507e794b39a4cde9c19270e55063a",
+      "payload_sha256": "00a1784137e632e16ebe685f4ab53398fc7e1047acf63d25e3a57f7d38b2703c"
+    },
+    {
+      "ordinal": 19,
+      "page_kind": "field",
+      "stable_key": "policy_role",
+      "page_id": "page_92828a6e897379f6bd952d8b5c865608ebe2406c0021d7e23ade3e7c0ac62364",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/policy_role",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:policy_role",
+      "member_digest": "f75184e06a9cd58f87622c69b79628fcfa4eedc33e4f39f470ebf677502fe805",
+      "payload_sha256": "f37db84bc968f11f23aab754a936f75044bd3a3ec9bf4282cd426656eaca2b31"
+    },
+    {
+      "ordinal": 20,
+      "page_kind": "field",
+      "stable_key": "product_summary",
+      "page_id": "page_b6e324df431050998cce1a85991dc698067ef358b84a7a339751f86525fc042a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_summary",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_summary",
+      "member_digest": "160d40fc3a50df8241b05d78e204bc3c56981b8922f0cbf2ead86290da36108f",
+      "payload_sha256": "ac5ab14e5086a17367fe87f39634a6085de33c6a2a252e92762b8b6e587cf09a"
+    },
+    {
+      "ordinal": 21,
+      "page_kind": "field",
+      "stable_key": "official_product_features",
+      "page_id": "page_7aa81e2362f13b62c7c76b1ad5f32c4f6ae10b8fb51d84c02f7d85d4c1c84325",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/official_product_features",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:official_product_features",
+      "member_digest": "a533f233637a3dba84621e2e61521b9b4982a7a6d1e23241373a7900e6bd5acc",
+      "payload_sha256": "fb88057ee1d56303bbcea9ecfd9ed009f64564528874741d5530ec9d44681eb8"
+    },
+    {
+      "ordinal": 22,
+      "page_kind": "field",
+      "stable_key": "target_customer_profile",
+      "page_id": "page_2d607260c06e2f8e644602e9caf2215bec2fcf8d0522e4c08425d6e4204d3d74",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/target_customer_profile",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:target_customer_profile",
+      "member_digest": "c25e81a359f6acd0bbe137306b679c8d8c9c5d8027a84201609b156fcd00da92",
+      "payload_sha256": "3d3b6d0764663041a230c41d2ff0acbc10dcac813c802d32865d55fb6bd56a59"
+    },
+    {
+      "ordinal": 23,
+      "page_kind": "field",
+      "stable_key": "marketing_tagline",
+      "page_id": "page_b6096cd6dda6d7aa5735b7511ea0cd3422ccc0304312c4743d225698d10f05c4",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/marketing_tagline",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:marketing_tagline",
+      "member_digest": "1a11040635e34c15cdfb168033f0feb1c355b148f85462a5a79b8f8bb34d1fcb",
+      "payload_sha256": "8c5c305f8a5a9c61b5e739307563f035be59a55fd65a7dd829ccf12794cc906c"
+    },
+    {
+      "ordinal": 24,
+      "page_kind": "field",
+      "stable_key": "product_overview",
+      "page_id": "page_843f4c3125c2cd39877007265924323015b9cebe7ad6095f5773a3b796199372",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_overview",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_overview",
+      "member_digest": "b47b84b504e02d2c02bc7d0e4f2944f2ba5bbfa784ff71bd3a5fea49ecceaebd",
+      "payload_sha256": "5626107234251939ef04a7c162db23d1e707b559d913f787d64923bd6c826bb7"
+    },
+    {
+      "ordinal": 25,
+      "page_kind": "field",
+      "stable_key": "entry_age_range",
+      "page_id": "page_cdd5069069543f6bb6712a72db05f29f3b2e7680a5c8adfab432272ce189c697",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/entry_age_range",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:entry_age_range",
+      "member_digest": "3c529b90ab9ee20429c29226733a5080901f19a17c489bb97be3b973baae4bf3",
+      "payload_sha256": "823222681e0ca9a68ed878e6b135180496414e7c33713d87253a40d8fbcd02ad"
+    },
+    {
+      "ordinal": 26,
+      "page_kind": "field",
+      "stable_key": "insured_eligibility",
+      "page_id": "page_023e1e477d9570b2b7d8903d653de0da7a3d5c672a4bd5f063b3d9b19f6871ae",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/insured_eligibility",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:insured_eligibility",
+      "member_digest": "3453ea204930efb07aa71ecc2b2e5e55635b269b901f5019c4366860a17b3c80",
+      "payload_sha256": "45acd8f470b11edc8a4584b4c8289e8722a1ac0a5f5d59b93e00db732e524c66"
+    },
+    {
+      "ordinal": 27,
+      "page_kind": "field",
+      "stable_key": "health_declaration_requirements",
+      "page_id": "page_820343fc9f80d65e722a2f7fecd7ef0477dfb8d7ec1441671f992ba5bf40ccad",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/health_declaration_requirements",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:health_declaration_requirements",
+      "member_digest": "45d49414d1b68b3122331302f894f513c5d94e445362a378ee2bfd1d8d7defc8",
+      "payload_sha256": "4fb7186974fc1c61f23d7bc0bdd5b01e6e0418e2be34a06e2190062f9784a663"
+    },
+    {
+      "ordinal": 28,
+      "page_kind": "field",
+      "stable_key": "geographic_eligibility_requirements",
+      "page_id": "page_00a66b235cfdca6c1847e54142025a20eaa455a6b7f5be669ad67473dad4e1ac",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/geographic_eligibility_requirements",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:geographic_eligibility_requirements",
+      "member_digest": "4d4ba2aa084acc63c856b929e81eef0894502525e0d88e6ad97d8e093bb93efb",
+      "payload_sha256": "c3f26ca09c6da71afd7cd329ef010c099e6d305002c98ecb43ccfb1e5524ed26"
+    },
+    {
+      "ordinal": 29,
+      "page_kind": "field",
+      "stable_key": "social_insurance_requirement",
+      "page_id": "page_ca27ca92fcefa617ec060bf6a7eb49744d52fcb4fd83d81470b20f3208bef307",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/social_insurance_requirement",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:social_insurance_requirement",
+      "member_digest": "e76621ffad69dffe221efc4fd984952c64c7534e4f9baef352285f71483973be",
+      "payload_sha256": "51850732f38aef6212d6fe27b07186a55999f674b22d19d9342bef3d14c33464"
+    },
+    {
+      "ordinal": 30,
+      "page_kind": "field",
+      "stable_key": "eligible_occupation_classes",
+      "page_id": "page_ff4044dceb4c6a65b2fdba148a412a61c2dfc21c13448ea32073cf1ed66aa3ad",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/eligible_occupation_classes",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:eligible_occupation_classes",
+      "member_digest": "88bf1abe2277b0fbb487c859375694ded74596bf067bca7d682607a58ad73bea",
+      "payload_sha256": "8047f8343a9204348e902cc2b4ed7f03bf8fc98a89176d167a1fd35e076e996c"
+    },
+    {
+      "ordinal": 31,
+      "page_kind": "field",
+      "stable_key": "underwriting_method",
+      "page_id": "page_67e043b1badd85e726184f4d456c9cc322142c8716b1a7f96d30c4846e0432d3",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/underwriting_method",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:underwriting_method",
+      "member_digest": "c80c2f425d899d494cae9179488fa4f2ccc110f49eb25a94ed118a343f998ff0",
+      "payload_sha256": "05917894f1abb984b10d1b8966e290d164e832a4c7b8171999f38da5923c8459"
+    },
+    {
+      "ordinal": 32,
+      "page_kind": "field",
+      "stable_key": "premium_payment_term",
+      "page_id": "page_49d0581b5c6b3e16e6d3bdca4813a531db3ce3c76f8f693fddcb4881a0dc2393",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/premium_payment_term",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:premium_payment_term",
+      "member_digest": "f4183c90cefc13a136c09a3a0cc16a02097a0221610479aef7d674c96fce9115",
+      "payload_sha256": "d4a8fc6b8d8aa1786fb472142f857425389ab73967eddc52d6922a1951f48a19"
+    },
+    {
+      "ordinal": 33,
+      "page_kind": "field",
+      "stable_key": "premium_payment_frequency",
+      "page_id": "page_c66bd7e7d3892fc01cc1af26163226ecd62a3891db20cc4f3b7758730a81e38a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/premium_payment_frequency",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:premium_payment_frequency",
+      "member_digest": "259deec20d61e3821db5282dd42f7f9d4293808ea7ea0b0f6fca70acdc6c657c",
+      "payload_sha256": "1a934bb39425e62673a0141cf4614e27aa8cef24717dae148ce6281b7ca546aa"
+    },
+    {
+      "ordinal": 34,
+      "page_kind": "field",
+      "stable_key": "cooling_off_period",
+      "page_id": "page_a6488224f1f195502c2db0077b3d9bd487f58434839369f1da61b31f6549425b",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/cooling_off_period",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:cooling_off_period",
+      "member_digest": "67cc9c1fb8f00864c8e490503f392063ae7629ce02058cdc86f12a9703310aa7",
+      "payload_sha256": "de5ba0ad358bfeae24114d3817146b11da914690354594b1a8aca34da6c82070"
+    },
+    {
+      "ordinal": 35,
+      "page_kind": "field",
+      "stable_key": "waiting_period",
+      "page_id": "page_70150f8f95d12349e457712bf03b57d83f79a98372ce7eac999cd501881c97c0",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/waiting_period",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:waiting_period",
+      "member_digest": "68164cf2d6919a2be067c9fb502e30fafc60015f9a2896a7c38bfb1203fe9cc0",
+      "payload_sha256": "5ef292b5a993a2b6743dfa4f6d4e7bdb73e386e1b7836884fac06813e1739ac8"
+    },
+    {
+      "ordinal": 36,
+      "page_kind": "field",
+      "stable_key": "premium_grace_period",
+      "page_id": "page_e9a393ec9e40f45361c54b9bef211414564acadf4917f721ab284c4caa55d80b",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/premium_grace_period",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:premium_grace_period",
+      "member_digest": "6583a737fecf6f1615be8e4ad2ddd8896b1e24e9813e3ac36c142a5961b71d48",
+      "payload_sha256": "75d6324f058df09f67611ef6864856eba1099d471fa36c2117a5c48fdf968a13"
+    },
+    {
+      "ordinal": 37,
+      "page_kind": "field",
+      "stable_key": "coverage_period",
+      "page_id": "page_8414ff5d3d1f320d11f7cded13aa77d60716e4e3ab1e958ac27cda6b244dd094",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_period",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_period",
+      "member_digest": "585fc3d4f8c9989726bbabc0394536e24a51a118c7d12133454582911a540764",
+      "payload_sha256": "aa1af7d29f715a2ec0fec99c1722bd9293f82830955b3939f48fad22a1aec896"
+    },
+    {
+      "ordinal": 38,
+      "page_kind": "field",
+      "stable_key": "coverage_term_category",
+      "page_id": "page_cd539417aa4c4c393081309ff5a4f49b61931ab02c5da89dda423cd775b4538b",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_term_category",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_term_category",
+      "member_digest": "5e1120337720c6760132b9114655031d9fae60df9297dd2010197d5eac084ddf",
+      "payload_sha256": "b4a94c5d6538db21466f84cb8f68ffa9764a49015b2b3e2a6620a6a833720a17"
+    },
+    {
+      "ordinal": 39,
+      "page_kind": "field",
+      "stable_key": "surrender_and_cancellation_terms",
+      "page_id": "page_82143a4a7e0c11766ff2558ce2401c2b37252c829d2f9cc747f0f1b563bc6ed3",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/surrender_and_cancellation_terms",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:surrender_and_cancellation_terms",
+      "member_digest": "2b2f2d0f208fa9b61315719de7fc681db1726cbe02784875f93269a96b1206b7",
+      "payload_sha256": "0ba47a645c41717910b5ee54026d9611717f8a8633d21fe36a20197989eb52a4"
+    },
+    {
+      "ordinal": 40,
+      "page_kind": "field",
+      "stable_key": "coverage_and_renewal_terms",
+      "page_id": "page_b4622cc911d5da829f678766d3b5e0026547544d63ad78402d70cc0a6d67ef99",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_and_renewal_terms",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_and_renewal_terms",
+      "member_digest": "95e2d61221648a5341759e66b413a25651b1ed5ccf7320bc88c1f920185f34af",
+      "payload_sha256": "bc686da7a4a921c9b625a8a75517d29ff43689efc22bc6b3a16cfac89fea0672"
+    },
+    {
+      "ordinal": 41,
+      "page_kind": "field",
+      "stable_key": "guaranteed_renewal_status",
+      "page_id": "page_21be7af16d0496c05e7ef971d3ecf2479fe8cc837ffb046981fefff83328a6f6",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/guaranteed_renewal_status",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:guaranteed_renewal_status",
+      "member_digest": "4a350b914b75019d347dc2812ef4fe566f7b15f834a41b08f34b76da07e66743",
+      "payload_sha256": "a5f08fe448e8612211a51ae054077ed84d968f5a90a670cf701c64073ea72296"
+    },
+    {
+      "ordinal": 42,
+      "page_kind": "field",
+      "stable_key": "guaranteed_renewal_period",
+      "page_id": "page_afe0aec51018fb3c3a0fe7e3f6dc953b97170de005dc7590774631e9170a3bbb",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/guaranteed_renewal_period",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:guaranteed_renewal_period",
+      "member_digest": "3b253e09d2e62028eb3cd2808f62d24caa999664abf6e0acdb5c9fb38802d898",
+      "payload_sha256": "0989b01a256aad41e0ff061acb55b840511186459ec7437557db77a43c44fa56"
+    },
+    {
+      "ordinal": 43,
+      "page_kind": "field",
+      "stable_key": "product_conversion_rules",
+      "page_id": "page_1542fc4586a2215b72118ee36f2b7a22d41e87cb08285bb6ed93909fc007b244",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_conversion_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_conversion_rules",
+      "member_digest": "3e721d0659e455d743e16fe400973209c02e0a4e25271dfb1981a3f1f9cd5a2e",
+      "payload_sha256": "127a1f4ec5767bf2d0e68c2f99a7dccc640ad1d0a12e1ee4da37bfe245b91dca"
+    },
+    {
+      "ordinal": 44,
+      "page_kind": "field",
+      "stable_key": "premium_adjustment_rules",
+      "page_id": "page_85ba6e6a1e2630aa003b564104ef05c1d42c73451941405abf2ecda8495c5723",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/premium_adjustment_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:premium_adjustment_rules",
+      "member_digest": "8297c32147d118b8b8b4eaa337c813501d40e04d996ea32c8f4af96604d66235",
+      "payload_sha256": "89b1940308ded7824dec4d1d97329183f12d6e72bc80631fc728d76c50c26531"
+    },
+    {
+      "ordinal": 45,
+      "page_kind": "field",
+      "stable_key": "post_discontinuation_renewal_arrangement",
+      "page_id": "page_dfe44219ff23cd2847267c408e93547738e3d27bef5b6c6e03c7e66bcc0dad5a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/post_discontinuation_renewal_arrangement",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:post_discontinuation_renewal_arrangement",
+      "member_digest": "c12e36649618a4d7ee580302f08e6ba60e00f4b6532a6900a2b5bed14f209706",
+      "payload_sha256": "b67cf08cbff79ec9ed471e2ca8896b14789c134134b9dc05d5f84932f6577f85"
+    },
+    {
+      "ordinal": 46,
+      "page_kind": "field",
+      "stable_key": "covered_risk_categories",
+      "page_id": "page_1f64ce4e4d0ee52f53ea71acb1edfde9ab6ac12b963435490c21f1f019e89a89",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/covered_risk_categories",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:covered_risk_categories",
+      "member_digest": "aada9d09c8a881325f332f095297cb293d860697f5b903f7a8b3c1ebcbc6a992",
+      "payload_sha256": "939991a49db4ff98b3cb5ec855f384eb711bb27b28496528a4030594fc31d271"
+    },
+    {
+      "ordinal": 47,
+      "page_kind": "field",
+      "stable_key": "coverage_responsibilities",
+      "page_id": "page_b26c5cfd9ada6be81acf5207c84d91b35fc753e734bf4b62a60b4bf7427fd845",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_responsibilities",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_responsibilities",
+      "member_digest": "139b57dd42467aa0e552986c3e2aff3f39a216196a220834e235d6fc6b73e114",
+      "payload_sha256": "3a9942d4219f9f7b022f8a530e16599948c514d916cc4fc9350eb2770bc7882f"
+    },
+    {
+      "ordinal": 48,
+      "page_kind": "field",
+      "stable_key": "coverage_summary",
+      "page_id": "page_bf33a69a3628390e269a1c4c864b9938be84c4d1d165f2d18a5085408973befd",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_summary",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_summary",
+      "member_digest": "7529cf183e1c1cb0a9d34af11ab8d7ea0e0c2ccdad548adbb97645d8cd747b4f",
+      "payload_sha256": "41c90d61dc90f215dccd0f9a1abad3af9ab40e40d72944e3514b48dc31c1a570"
+    },
+    {
+      "ordinal": 49,
+      "page_kind": "field",
+      "stable_key": "cancer_medical_coverage",
+      "page_id": "page_387e05ecc200175d4d6639ba5eb4c30c2f3462ce64809ad8c95c730e9f897b54",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/cancer_medical_coverage",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:cancer_medical_coverage",
+      "member_digest": "12a6bd5af3f7c30e36c012e72161da5e837a51ec2f6f206e0a6e033140e700f8",
+      "payload_sha256": "0ee2c875ac94d224bb376d6de162de67435905a76140e229d1383543bcfe0482"
+    },
+    {
+      "ordinal": 50,
+      "page_kind": "field",
+      "stable_key": "age_segment_tags",
+      "page_id": "page_76d9eb9dc3f9a1ec9312c2260a35e7c6f48a2ddf5ef1edac2b7340712cefc540",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/age_segment_tags",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:age_segment_tags",
+      "member_digest": "074210497dc46b8bc0da0d19fd5e7a08a888548291149729af019d58ed775241",
+      "payload_sha256": "d8b7e81c9e8225787e11256d12e4e0f4ac60e1dba5a5e295fa5b67652922c305"
+    },
+    {
+      "ordinal": 51,
+      "page_kind": "field",
+      "stable_key": "coverage_limit_category",
+      "page_id": "page_1cbd5e2ee42b1a0c8eb3a72b649ebda447f466ae561990bf2140ded010524ed5",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/coverage_limit_category",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:coverage_limit_category",
+      "member_digest": "562c263e83fc22b918cd10525b133ad94200d38a219aa2d48d124cdc441ec3f2",
+      "payload_sha256": "e1ceddfd5863eb0bdc7f3d38ee67b0baac71b8244e098f503e7e0093b35ae587"
+    },
+    {
+      "ordinal": 52,
+      "page_kind": "field",
+      "stable_key": "special_coverage_and_exclusion_tags",
+      "page_id": "page_2681b008405a4c0f83ad200e15ea9ac23e7e551ca0f49152cdfa7b76c6e94ccd",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/special_coverage_and_exclusion_tags",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:special_coverage_and_exclusion_tags",
+      "member_digest": "43ba57a9bb9bceb8f1e9e8a3cb967b7e947244b701cef09195330ee167a757a9",
+      "payload_sha256": "5509f73eccecc4d38c49102a278e404050b30bf0d3a9328918bbae1bd2f6e568"
+    },
+    {
+      "ordinal": 53,
+      "page_kind": "field",
+      "stable_key": "exclusions",
+      "page_id": "page_84a5602aed090257df85ccfbf0e52e632fbe506f4fa0d2195fcabdc32a0f7f4c",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/exclusions",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:exclusions",
+      "member_digest": "5bc11a733307c189c25de041397a8ae3b19d565874c9c23349765d313ab10a7e",
+      "payload_sha256": "7ee0266b0abe64802e0ae9d6843615eb48a41e12f401ab75b67f44ceca89cb0e"
+    },
+    {
+      "ordinal": 54,
+      "page_kind": "field",
+      "stable_key": "pre_existing_condition_rules",
+      "page_id": "page_5a4b1e948cb0328f6ec30972138151347a391c3d982e27162f0509dbe5c47587",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/pre_existing_condition_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:pre_existing_condition_rules",
+      "member_digest": "d2363b7899cb7660759c5948ee4d8ca04219616d81b87dd42a3297b8bfc78fb6",
+      "payload_sha256": "444e92e49a6d43e99a139cc748799979c70aa9fc500f4db4d2cedce5afdb742d"
+    },
+    {
+      "ordinal": 55,
+      "page_kind": "field",
+      "stable_key": "out_of_hospital_special_drug_coverage",
+      "page_id": "page_5f502f4a8eeebb409c7cb81d00b806b785c51e4c2cb4a27548154188915c14f3",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/out_of_hospital_special_drug_coverage",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:out_of_hospital_special_drug_coverage",
+      "member_digest": "f40164597ed4c06a47342d71d8ab889f5876270e72d5e2513cb349c74d69955f",
+      "payload_sha256": "6774e5fcf18c508a6bae5d9aa9114ac08f4839bcde9bec2f165d90ebb54cbf8f"
+    },
+    {
+      "ordinal": 56,
+      "page_kind": "field",
+      "stable_key": "indemnity_principle",
+      "page_id": "page_aba5147076f616f317809ed003b959da7df9547254bf1d9f71565ff5fa37d5cb",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/indemnity_principle",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:indemnity_principle",
+      "member_digest": "4987efad1342e9ff92691cfb4d9647ed1b5b6a2aad0f94830379264277be35ab",
+      "payload_sha256": "48c863540e8a6ccdab5ad2813e03ebd9eb8ebcd6251113ef3ff17badb165e54a"
+    },
+    {
+      "ordinal": 57,
+      "page_kind": "field",
+      "stable_key": "zero_deductible_flag",
+      "page_id": "page_066a843f0c08bd37b53b7a6c21bc3b06cfa24be6f61a9b3700fe583c91659d8a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/zero_deductible_flag",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:zero_deductible_flag",
+      "member_digest": "6d495360950e27524cc4ff8f7ff299e532b9cf39844b8186b21547a10ca17e5b",
+      "payload_sha256": "aa1347b9eeefb8b6dc64cba12a3387290cb020e51dc8cfd99438407b371ea6b9"
+    },
+    {
+      "ordinal": 58,
+      "page_kind": "field",
+      "stable_key": "deductible_rules",
+      "page_id": "page_802ac378babb1f66356f7870e0b2eb76c220b4b796bafde73641a958981d5bc3",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/deductible_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:deductible_rules",
+      "member_digest": "d7a6d7c900ff3887e6006f40602df2a621b83d51648a4cae95fd1b33ef2cfe9f",
+      "payload_sha256": "04f0f6a98fee0c8795bff66b28facf6c85b29e4869e7d41dfa9124e87f89ffbd"
+    },
+    {
+      "ordinal": 59,
+      "page_kind": "field",
+      "stable_key": "outpatient_inpatient_scope",
+      "page_id": "page_19d8ad6e4546525a840e68771b0c97ea95e0d32c59b21709a19775f8ffbf4dbe",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/outpatient_inpatient_scope",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:outpatient_inpatient_scope",
+      "member_digest": "a1cc846c73711707be600d367afe6ce91079e9fdaeb54257af989181b403d855",
+      "payload_sha256": "57b09131ce5386bde7a9b55eb90dbc5c42076caf75b1af876c745140591194fb"
+    },
+    {
+      "ordinal": 60,
+      "page_kind": "field",
+      "stable_key": "reimbursable_expense_scope",
+      "page_id": "page_7bc5c8b9e2f7e6478ebc1b722fc78a399c935e4152b9b2803c743b48fd01d872",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/reimbursable_expense_scope",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:reimbursable_expense_scope",
+      "member_digest": "205ab8e37b29807a62340ac7da7b033042f003c92528af72a6273e8a01860ffc",
+      "payload_sha256": "47a2880af647c6daafca3be54a8106733690ed3cea422bc1224fad675b65c11b"
+    },
+    {
+      "ordinal": 61,
+      "page_kind": "field",
+      "stable_key": "reimbursement_rate_rules",
+      "page_id": "page_02da0a485c1144704955c7be0663aa005e23f373e892e41d6f333c7f957d8269",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/reimbursement_rate_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:reimbursement_rate_rules",
+      "member_digest": "dda5818995c5781e47f26adba2805ef423056516c5876e48879602af31651af4",
+      "payload_sha256": "cd7c985e5e2aef98552007769a3f50d7c9c7598f1377d65f24b75ece5d6f48fa"
+    },
+    {
+      "ordinal": 62,
+      "page_kind": "field",
+      "stable_key": "eligible_hospital_scope",
+      "page_id": "page_3b18fc69b125a8aa9ab4980daedcba2604d0ce30e3771ff0d19cbcfaf67a3d25",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/eligible_hospital_scope",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:eligible_hospital_scope",
+      "member_digest": "e383b2f1f982b7b21e9110e328535567feab37c33e878fe9cf0a68b68b5fb194",
+      "payload_sha256": "47be21cebd4e015a03e5b6a734f55ae20ea57858d5018363b5d4e3ee4988bcac"
+    },
+    {
+      "ordinal": 63,
+      "page_kind": "field",
+      "stable_key": "premium_medical_facility_coverage",
+      "page_id": "page_fcfe6ff9c36b6abc42193804c061b85d1405e096b0afff8cfe93c24bbc9b3fd9",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/premium_medical_facility_coverage",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:premium_medical_facility_coverage",
+      "member_digest": "8c4d29cbc4704f09d94ae084007cc05b6b3d04aba548726f494a9a3aef195af0",
+      "payload_sha256": "9a2343edae2ef6ab87211ed99cba02378e5832b06a43d501aa3c762e4c5561bc"
+    },
+    {
+      "ordinal": 64,
+      "page_kind": "field",
+      "stable_key": "direct_billing_and_advance_payment_rules",
+      "page_id": "page_b35dd4d55c615b923aaa83beda72481ecf2f6ae9061d5d382abc831726b8bdfb",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/direct_billing_and_advance_payment_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:direct_billing_and_advance_payment_rules",
+      "member_digest": "1fcfbc1c3f50ccd3e2c844cdc6de0d601c39ec533a164fccd39f2afb2b3f4226",
+      "payload_sha256": "cb2c59139f4d740bf1b72f6a430b13c1c457c676d74feb64af1842c595905521"
+    },
+    {
+      "ordinal": 65,
+      "page_kind": "field",
+      "stable_key": "claim_application_deadline_and_documents",
+      "page_id": "page_f3915a34c2a499701a11795d39c4907fe51c32c6838faea2374f32299563d598",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/claim_application_deadline_and_documents",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:claim_application_deadline_and_documents",
+      "member_digest": "c67b0ad18e108aa2c027014ad54d65fc3ba51cfba669b087a3689b367278edad",
+      "payload_sha256": "8dc5a01b2b2c4ed77330c9669a74040b892ee5796e8f9b00137b89577cb9a066"
+    },
+    {
+      "ordinal": 66,
+      "page_kind": "field",
+      "stable_key": "policyholder_rights",
+      "page_id": "page_e4d5b976de67c0b8cf39ea77924721edd7ade1c32313091c6b3442d169bbd5fd",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/policyholder_rights",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:policyholder_rights",
+      "member_digest": "70b89fe960d325fbf1ce18fbdd0c398ee398fa8cf209486a134b5aaa4e96a099",
+      "payload_sha256": "3bbeb1c5cc16f1003636a312fbf4dd39d449425f34747747de24ba1aa01518e1"
+    },
+    {
+      "ordinal": 67,
+      "page_kind": "field",
+      "stable_key": "eligible_service_packages",
+      "page_id": "page_e049c3ed8cc3ced1f625f438e56543f16a93ea570db6959792eb4078a587136a",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/eligible_service_packages",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:eligible_service_packages",
+      "member_digest": "bf99498061c29debf9b168c8dffe8bb916aee8be4c116d2a3c088b5261858c04",
+      "payload_sha256": "41187d38f220787ae6724ebf9822c663ad5ee97571d080ceeac1866d693a2fe2"
+    },
+    {
+      "ordinal": 68,
+      "page_kind": "field",
+      "stable_key": "medical_service_benefits",
+      "page_id": "page_79ca036627bc9b1680da4899b988d9ffe82c096e5ecfbbb7e204fece66815580",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/medical_service_benefits",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:medical_service_benefits",
+      "member_digest": "73b8db7bb6135a85a33b2dedbe75118d8981148bc192935639f80d1afe9c0733",
+      "payload_sha256": "c746ba95f52005a2bf55523ea518caf0d90867bfb7578bea4e78f0dd97af2924"
+    },
+    {
+      "ordinal": 69,
+      "page_kind": "field",
+      "stable_key": "tax_qualified_status",
+      "page_id": "page_e3282eff05ba5723cd4138c6826ccd9e2975fcb2657d958b0cb44d3654ce7593",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/tax_qualified_status",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:tax_qualified_status",
+      "member_digest": "c8838befe4abce6f9a72e118e96aef5e902c9856bf0e1e8b39fcdda9db3238e9",
+      "payload_sha256": "1f2a97fc24927d4355c2717550b87186c7b53523c771dab09cb775866d936474"
+    },
+    {
+      "ordinal": 70,
+      "page_kind": "field",
+      "stable_key": "tax_benefit_rules",
+      "page_id": "page_27c2fdb67ccdac6eda73815008dc522035299ecde804600bf1d15219a779e84b",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/tax_benefit_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:tax_benefit_rules",
+      "member_digest": "d06ad9e6696f76ef65ac52e36e22492be5d1e3ad0f768146e1ed8bad22472353",
+      "payload_sha256": "179aacbbd6530465c0488d3ef9044534abf347f44765fe3d25dd8681d3f878d8"
+    },
+    {
+      "ordinal": 71,
+      "page_kind": "field",
+      "stable_key": "product_bundle_rules",
+      "page_id": "page_70a66a8f90e028de7d754f9518e3ee4debffb4dd26f7f8ace641d117499f0e12",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_bundle_rules",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_bundle_rules",
+      "member_digest": "04bd205fae80432ce0f0a61f3b79c21782ca8dbeafd89b1f88ed7d1d81ccc17a",
+      "payload_sha256": "bcc05799e85ca746a5b6dccd43f7c84d8fda5642189f9fa9580102a38e121fe1"
+    },
+    {
+      "ordinal": 72,
+      "page_kind": "field",
+      "stable_key": "objection_handling_scripts",
+      "page_id": "page_5c8914dd394c0800964f913aaa869ffba8df822a06c21db55e1124b4e583e39e",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/objection_handling_scripts",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:objection_handling_scripts",
+      "member_digest": "2d5ffb07589c3caf9491c9916db0d8d2bcf6cde5133aed6c7ec2d3ae03ae899a",
+      "payload_sha256": "75c84a6b92374570ee8082e237a9e0e7dbe423d37f7fcd62b053fb9ef5279f61"
+    },
+    {
+      "ordinal": 73,
+      "page_kind": "field",
+      "stable_key": "product_faq",
+      "page_id": "page_2b79f05ed4eeddd53ec1e15d831c0d8ceca13b9b927cc5a8319d69e70d44640e",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/product_faq",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:product_faq",
+      "member_digest": "25aa27730551f03958bdd7f3abea5d887a823f7e7b809313ec341e00d4c6f070",
+      "payload_sha256": "68bca687cbc70933dd92094e440d64aa7f61f5d5103f40998bf12e5890867b72"
+    },
+    {
+      "ordinal": 74,
+      "page_kind": "field",
+      "stable_key": "four_step_sales_script",
+      "page_id": "page_904adb8a5da1c633c004a7fa00fb6443cf1104b87806c2c166b1f822ff77a9e9",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/four_step_sales_script",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:four_step_sales_script",
+      "member_digest": "55d5647f141219a56c26ecc4f675daf33dc50a2fc752bbcf55d3329761ab3115",
+      "payload_sha256": "42bec08a43e09ac0ab7087b93f15082ecca813534b811f545aa862f3489886e3"
+    },
+    {
+      "ordinal": 75,
+      "page_kind": "field",
+      "stable_key": "sales_pitch_script",
+      "page_id": "page_685208d54510e0fd02713e8bde326407eb645c8a36b19f253312c26179bc77e6",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/sales_pitch_script",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:sales_pitch_script",
+      "member_digest": "fd05c13df06c04957d17d4000a5e3360c766f7e20d21dd42d629935c48e64d76",
+      "payload_sha256": "033088b2eefec8c8af513109ab5f92d587aeb91496357f4802d346ffeffa333b"
+    },
+    {
+      "ordinal": 76,
+      "page_kind": "free_wiki",
+      "stable_key": "free-wiki",
+      "page_id": "page_b4ab8e862fd88ebb18a7d24acc89594b794f4226e0feeaf31f8270e3c2b3549d",
+      "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/free-wiki",
+      "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:free-wiki:free-wiki",
+      "member_digest": "a3f8f51767962d6a211d97350f20f06488b92e5d4b6ca27128aa102d1a245656",
+      "payload_sha256": "125f37d6d96ccd1479c19df14ea6a551c7d717482e6f88a10c0830c2c02c7c46"
+    }
+  ],
+  "status": "PASS",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "65a46a8ad7ca3c27f0c2567bc882183129cd7e4c81a3b2add52bf20a06c7d1f3"
+}
