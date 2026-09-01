@@ -6,8 +6,8 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=NO_WEKNORA_ENTITY_PAGE_GRAPH_CURRENT_PINNED_OR_UI
-FLOW=NOT_RUN
+CURRENT_RED=M2_COMPLETE_76_PAGE_GRAPH_EVIDENCE_AND_M3_ATOMIC_ISOLATED_RELEASE_NOT_YET_CLOSED
+FLOW=M1_PASS
 QUALITY=DEFERRED
 DOCKER_ACTION=SKIP
 G2_AND_LATER=LOCKED
@@ -26,21 +26,27 @@ WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
 NEXT_PHYSICAL_RESULT=M1_REAL_815_CANDIDATE_WEKNORA_PREVIEW
 M1_DEADLINE=2026-09-02T23:42:03+08:00
+M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
+M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
+M1_PREPARATION_ID=g1-m1-740d9b7c-preview
+M1_MANIFEST_SHA256=3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c
+M1_PREVIEW=PASS
+G2_AND_LATER=LOCKED
 ```
 
 ## Requirement matrix
 
 | Requirement | RED | Implementation | Focused test | Commit | Live evidence | Status |
 |---|---|---|---|---|---|---|
-| G1-R1 | PASS | Harness compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R2 | PASS | Harness compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R3 | PASS | Harness compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R4 | PASS | Harness compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R5 | PASS | Harness compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R6 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| G1-R7 | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| G1-R8 | PASS | Harness authority boundary | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
-| G1-R9 | PASS | Profile-driven compiler | 14 PASS | `8fa27956c` | NOT RUN | CONTRACT PASS / LIVE NOT RUN |
+| G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `740d9b7c` | stable entity URLs/UI PASS | M1 PASS |
+| G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS | M1 PASS |
+| G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `740d9b7c` | present/absent/unknown UI PASS | M1 PASS |
+| G1-R4 | PASS | server-verified source bridge | focused PASS | `740d9b7c` | exact PDF page/bbox PASS | M1 PASS |
+| G1-R5 | PASS | payload Profile + namespace metadata | focused PASS | `740d9b7c` | short title + full namespace PASS | M1 PASS |
+| G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
+| G1-R7 | PASS | current/pinned/preparation no-fallback reads | focused PASS | `740d9b7c` | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 NOT RUN |
+| G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `740d9b7c` | exact source bridge PASS | M1 PASS |
+| G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `740d9b7c` | seven-section actual UI PASS | M1 PASS |
 
 M0 文档/规格变更采用 D0；当时功能 RED、实现、Docker 和 live 均未运行。只有实际命令与
 不可变回执可改变本表状态，fixture/code GREEN 不得改变 FLOW 或 BUSINESS 状态。
@@ -73,3 +79,27 @@ Win2 条件成立：Win1 三条 Harness 写域已经冻结；Win2 的 Go/Fronten
 共享 vector 经独立 Review PASS；Win1 继续负责 actual 815 编译重放/证据支持，Win2 负责
 WeKnora validation/read/UI，两者直接汇合到同一个 M1 Preview。最多仍为两个可写 lane，
 不得扩大到 G2 或新增服务/表/authority。
+
+## M1 real Candidate Preview
+
+- Runtime source: `740d9b7c55f047e30c59c087dc29b943e3849726` / tree
+  `bb29b5d6cf9533f69bd14728736e916513f3119c`; isolated backend `18094`, frontend
+  `18085`, Draft `g1-m1-740d9b7c-preview`.
+- Exact manifest: `3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c`;
+  source release `release-42a3dd0c-ec76-4017-a288-37f1b13519a0`, epoch `2`; 76 members,
+  67 fields, `present=2 / absent_explicitly=1 / unknown=64`, empty free_wiki.
+- UI evidence: `docs/insurance-kb/evidence/830-g1/m1/entity-page-preview.json` and seven
+  screenshots under `docs/insurance-kb/evidence/830-g1/m1/ui/`.
+- Source evidence: `docs/insurance-kb/evidence/830-g1/m1/source-click.json`; real click opened
+  the frozen source PDF on page 2 with exact bbox. Page/locator mutation tests return typed
+  unavailable before snapshot fetch; UI emits `PDF_PREVIEW_UNAVAILABLE` and makes no
+  current/latest/content/page-1 fallback.
+- Runtime/effects: `docs/insurance-kb/evidence/830-g1/m1/runtime-identity.json`; Preview read
+  window counts stayed `3/2/150/1/2`, Head stayed on the source release/epoch, Provider/model
+  calls were zero, and production `8081` container/image/start identity stayed unchanged.
+- Independent read-only Review of the implementation candidate at the same head/tree reported
+  `REVIEW=PASS`, `UNRESOLVED_COUNT=0`. M1 evidence itself remains controller-owned and must be
+  committed/re-reviewed before advancing to M2.
+
+M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Release/activation，
+也尚未形成 M3 successor current/pinned/no-mix 物理证据。G2 继续锁定。

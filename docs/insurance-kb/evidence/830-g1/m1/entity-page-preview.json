@@ -1,0 +1,159 @@
+{
+  "contract": "weknora.830.g1-m1-entity-page-preview.v1",
+  "goal_id": "G1",
+  "phase": "M1",
+  "observed_at": "2026-09-01T16:06:32+08:00",
+  "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "head": "740d9b7c55f047e30c59c087dc29b943e3849726",
+  "tree": "bb29b5d6cf9533f69bd14728736e916513f3119c",
+  "scope": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "preparation": {
+    "preparation_id": "g1-m1-740d9b7c-preview",
+    "status": "draft",
+    "manifest_contract": "entity-page-manifest.830.g1.v1",
+    "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "source_activation_epoch": 2,
+    "review_created": false,
+    "release_created": false,
+    "activated": false
+  },
+  "graph": {
+    "entity_id": "ping-an-e-sheng-bao",
+    "entity_version_id": "ping-an-e-sheng-bao@596-1",
+    "profile_id": "medical-schema67.presentation.v1",
+    "profile_sha256": "d83a3b38e3b72bd986823d373b86fe1077e0baa6333a27dc74a2545f58bfd3e9",
+    "member_count": 76,
+    "unique_page_id_count": 76,
+    "overview_count": 1,
+    "section_count": 7,
+    "field_assertion_count": 67,
+    "free_wiki_count": 1,
+    "free_wiki_empty": true,
+    "state_distribution": {
+      "present": 2,
+      "absent_explicitly": 1,
+      "unknown": 64
+    },
+    "citation_count": 17
+  },
+  "live_ui": {
+    "frontend_origin": "http://127.0.0.1:18085",
+    "backend_origin": "http://127.0.0.1:18094",
+    "query": "preparation_id=g1-m1-740d9b7c-preview",
+    "checks": [
+      {
+        "page_kind": "overview",
+        "stable_key": "overview",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/overview",
+        "short_title": "平安e生保（尊享版）医疗保险",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:overview:overview",
+        "page_id": "page_11c0695a22101eb6450429d74e02dc0d61cd4356455a186b3facef4074e9d841",
+        "screenshot": "ui/overview.png",
+        "screenshot_sha256": "63ae0a6041289998b3d5248e1fa483c7dc1c65ec1ae35f290c525eb7a45cafb5"
+      },
+      {
+        "page_kind": "section",
+        "stable_key": "application-and-contract",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/sections/application-and-contract",
+        "short_title": "投保与合同",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:section:application-and-contract",
+        "page_id": "page_16e8cd58dc489b9404fd2fce0138713aee2e9e5751fd2a9fc77f97969948f4bf",
+        "field_count": 15,
+        "screenshot": "ui/section-application-and-contract.png",
+        "screenshot_sha256": "245fc8b4447624fc6e610ca36938c96b6d9140dfd330a49e4d4bba78f69f92e1"
+      },
+      {
+        "page_kind": "field",
+        "stable_key": "insured_eligibility",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/insured_eligibility",
+        "short_title": "投保范围",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:insured_eligibility",
+        "page_id": "page_023e1e477d9570b2b7d8903d653de0da7a3d5c672a4bd5f063b3d9b19f6871ae",
+        "state": "present",
+        "citation_count": 3,
+        "screenshot": "ui/field-present-insured-eligibility.png",
+        "screenshot_sha256": "92e0122cea585373fd335cac8a73f3e1925408f31b91a56ee5b6f6f1622e28f9"
+      },
+      {
+        "page_kind": "field",
+        "stable_key": "guaranteed_renewal_period",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/guaranteed_renewal_period",
+        "short_title": "保证续保期",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:guaranteed_renewal_period",
+        "page_id": "page_afe0aec51018fb3c3a0fe7e3f6dc953b97170de005dc7590774631e9170a3bbb",
+        "state": "absent_explicitly",
+        "citation_count": 5,
+        "screenshot": "ui/field-absent-guaranteed-renewal-period.png",
+        "screenshot_sha256": "8b4e1f2dc78f01bcf1cf1e6c2a790bb4dc8354de185b66c3edecce970a8503bb"
+      },
+      {
+        "page_kind": "field",
+        "stable_key": "cooling_off_period",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/cooling_off_period",
+        "short_title": "犹豫期",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:field:cooling_off_period",
+        "page_id": "page_a6488224f1f195502c2db0077b3d9bd487f58434839369f1da61b31f6549425b",
+        "state": "unknown",
+        "unknown_reason": "FIELD_UNKNOWN",
+        "source_typed_reason": "live_chunk_quote_not_unique",
+        "display_value": "尚未确定",
+        "citation_count": 0,
+        "screenshot": "ui/field-unknown-cooling-off-period.png",
+        "screenshot_sha256": "9362b24a6073a7d633a7a570238b4983fb8c74df1c27db3cf81b9605fd6c8d63"
+      },
+      {
+        "page_kind": "free_wiki",
+        "stable_key": "free-wiki",
+        "route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/free-wiki",
+        "short_title": "自由知识",
+        "namespace": "urn:jlx:wiki:a8751a40-83ce-55c8-a160-079b283483ca:entity:ping-an-e-sheng-bao:free-wiki:free-wiki",
+        "page_id": "page_b4ab8e862fd88ebb18a7d24acc89594b794f4226e0feeaf31f8270e3c2b3549d",
+        "entry_count": 0,
+        "screenshot": "ui/free-wiki-empty.png",
+        "screenshot_sha256": "cb7af66e97e5a6079f99208b961326aaff5622f274c05e328b376b616dee1707"
+      }
+    ],
+    "stable_urls_preserved": true,
+    "short_titles_and_full_namespaces_visible": true
+  },
+  "effects": {
+    "draft_provisioning_before_preview": {
+      "preparations_created": 1,
+      "embedded_member_snapshots_created": 76,
+      "reviews_created": 0,
+      "releases_created": 0,
+      "activations": 0
+    },
+    "preview_read_window_counts_before": {
+      "preparations": 3,
+      "releases": 2,
+      "members": 150,
+      "heads": 1,
+      "receipts": 2
+    },
+    "preview_read_window_counts_after": {
+      "preparations": 3,
+      "releases": 2,
+      "members": 150,
+      "heads": 1,
+      "receipts": 2
+    },
+    "preview_read_window_database_writes": 0,
+    "preview_read_window_release_writes": 0,
+    "preview_read_window_head_writes": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_8081_changes": 0,
+    "g2_actions": 0
+  },
+  "status": "PASS",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "6c6ecb113350c12e206013737fbcf80097c5022d24acafc418549bb5e8932a89"
+}

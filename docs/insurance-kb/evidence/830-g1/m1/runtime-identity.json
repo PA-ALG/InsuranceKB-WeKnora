@@ -1,0 +1,70 @@
+{
+  "contract": "weknora.830.g1-m1-runtime-identity.v1",
+  "goal_id": "G1",
+  "phase": "M1",
+  "observed_at": "2026-09-01T16:06:32+08:00",
+  "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "head": "740d9b7c55f047e30c59c087dc29b943e3849726",
+  "tree": "bb29b5d6cf9533f69bd14728736e916513f3119c",
+  "branch": "codex/830-g1-field-assertion-pages",
+  "isolated_backend": {
+    "origin": "http://127.0.0.1:18094",
+    "health_http_status": 200,
+    "pid": 72441,
+    "binary": "/private/tmp/weknora-g1-m1-740d9b7c/weknora-g1",
+    "binary_sha256": "f90091a232f42a794ee5c9d758a495abe988417c79630cde40f3bdc3e3b8dd8d",
+    "database_role": "g1_m1_draft_740d9b7c",
+    "head_table_update_allowed": false,
+    "citation_token_key_id": "c7-citation-token-1cc4482b",
+    "citation_token_private_key_persisted": false,
+    "credential_output": false,
+    "credential_persisted": false
+  },
+  "isolated_frontend": {
+    "origin": "http://127.0.0.1:18085",
+    "pid": 70891,
+    "backend_proxy_origin": "http://127.0.0.1:18094"
+  },
+  "isolated_scope_after_preview": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+    "preparations": 3,
+    "releases": 2,
+    "members": 150,
+    "heads": 1,
+    "receipts": 2,
+    "active_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "activation_epoch": 2
+  },
+  "production_8081": {
+    "origin": "http://127.0.0.1:8081",
+    "http_status": 200,
+    "container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+    "image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+    "state": "running",
+    "started_at": "2026-08-30T16:56:35.934568702Z",
+    "identity_matches_pre_preview_receipts": true,
+    "changes": 0
+  },
+  "runtime_log": {
+    "path": "/private/tmp/weknora-g1-m1-740d9b7c/backend-g1-scoped-role.log",
+    "sha256_after_preview": "35c9530e7dfe76176eefb68b11febce87cf6a008f26c5330fbcb6caf537c72fe",
+    "source_click_http_status": 200,
+    "provider_calls_observed": 0,
+    "model_calls_observed": 0
+  },
+  "effects": {
+    "preview_read_window_database_writes": 0,
+    "preview_read_window_release_writes": 0,
+    "preview_read_window_head_writes": 0,
+    "production_8081_changes": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "g2_actions": 0
+  },
+  "status": "PASS",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "010a942625101448f233d856493eb1aef723046f1fab99f78f12bb0770a12098"
+}

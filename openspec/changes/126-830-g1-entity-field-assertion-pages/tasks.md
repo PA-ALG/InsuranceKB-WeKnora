@@ -31,9 +31,9 @@
 ## M1 · Thin real Candidate Preview
 
 - [x] 按 G1-R1/R2/R3/R5/R9 先写并运行 Harness RED，再实现最小 entity page compiler。
-- [ ] 共享 payload contract/hash 冻结后，按 G1-R6/R7 先写 Go RED，再扩展现有 Release read。
-- [ ] 按 G1-R1/R5 先写前端 RED，再增加实体 overview/section/field/free-wiki route/navigation。
-- [ ] 使用真实 815 Candidate/Claim/Evidence Preview 证明 1 overview、1 section、3 field、空
+- [x] 共享 payload contract/hash 冻结后，按 G1-R6/R7 先写 Go RED，再扩展现有 Release read。
+- [x] 按 G1-R1/R5 先写前端 RED，再增加实体 overview/section/field/free-wiki route/navigation。
+- [x] 使用真实 815 Candidate/Claim/Evidence Preview 证明 1 overview、1 section、3 field、空
   free_wiki、短标题、完整 namespace 与至少 1 个 exact source click。
 - [ ] 提交 M1 最薄纵切；若 48 小时无真实 Preview，STOP。
 
@@ -62,6 +62,14 @@ Harness 合同冻结于 `8fa27956c6368502f21d52245d2cea905f0e2ce1` /
 `82e490ef47da775aed0d8176c7f31a27f6d537e9`。独立只读 Review
 `01a05917-a8e7-7b00-bf36-82bef310c2a5` 报告 PASS、`UNRESOLVED_COUNT=0`；这只关闭
 R1-R5/R8/R9 的离线合同层，不改变 R6/R7/live UI/source-click 的 NOT RUN 状态。
+
+M1 真实 Preview 已在 `740d9b7c55f047e30c59c087dc29b943e3849726` /
+`bb29b5d6cf9533f69bd14728736e916513f3119c` 的隔离 D1 runtime 形成。Draft
+`g1-m1-740d9b7c-preview` 使用真实 815 source release/epoch，UI 实测 overview、
+`application-and-contract`、present/absent_explicitly/unknown 三个 FieldAssertion 与空
+free_wiki；`insured_eligibility` 的 source click 命中原 PDF 第 2 页 exact bbox。Preview
+读窗口前后 scope counts 与 Head 完全相同，production `8081` 身份不变。M1 只关闭
+Candidate Preview，不把 Draft 冒充 Review/Release/Active，也不提前关闭 M3 current/pinned。
 
 ## M2 · Complete 76-page graph
 

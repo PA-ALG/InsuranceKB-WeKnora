@@ -1,0 +1,98 @@
+{
+  "contract": "weknora.830.g1-m1-source-click.v1",
+  "goal_id": "G1",
+  "phase": "M1",
+  "observed_at": "2026-09-01T14:42:12.788+08:00",
+  "head": "740d9b7c55f047e30c59c087dc29b943e3849726",
+  "tree": "bb29b5d6cf9533f69bd14728736e916513f3119c",
+  "preparation_id": "g1-m1-740d9b7c-preview",
+  "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+  "field": {
+    "entity_id": "ping-an-e-sheng-bao",
+    "field_key": "insured_eligibility",
+    "short_title": "投保范围",
+    "state": "present",
+    "ui_route": "/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/entities/ping-an-e-sheng-bao/fields/insured_eligibility?preparation_id=g1-m1-740d9b7c-preview"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/schema/preparations/g1-m1-740d9b7c-preview/entities/ping-an-e-sheng-bao/fields/insured_eligibility/citations/citation_aeecb686f6f593349c19426f515a982423b948bf89e73a769d8436184eb6363a/preview",
+    "http_status": 200,
+    "candidate_citation_id": "citation_aeecb686f6f593349c19426f515a982423b948bf89e73a769d8436184eb6363a",
+    "source_citation_id": "citation-aeecb686f6f593349c19426f",
+    "join_receipt_sha256": "aeecb686f6f593349c19426f515a982423b948bf89e73a769d8436184eb6363a"
+  },
+  "exact_source_authority": {
+    "contract": "schema-wiki-citation-content-authority.v1",
+    "token_key_id": "c7-citation-token-1cc4482b",
+    "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "activation_epoch": 2,
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+    "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+    "resource_id": "46ea6872-d26e-4bab-b3ad-151ab6eedd29",
+    "parse_attempt_id": "ec01-terms-parse-attempt-2",
+    "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+    "parsed_document_sha256": "92926b3367f72ca178567652a1c7e2cdca77f89541376c57910283ed6ba26ab4",
+    "parse_manifest_sha256": "790a5092a98a929093312a090a9a1bc7aec1cbba22af22c113184350eae442f5",
+    "pdf_size_bytes": 1047811,
+    "pdf_page_count": 39,
+    "page_number": 2,
+    "locator_kind": "block",
+    "locator_ref": "block-35d8d0accd7cc0e9669496a7512fb82ba417d7cde0175f824b67d924dd5d379d",
+    "bbox": {
+      "coordinate_system": "normalized_0_1e6",
+      "page_width": 1000000,
+      "page_height": 1000000,
+      "x0": 332404,
+      "y0": 667850,
+      "x1": 914777,
+      "y1": 680263
+    },
+    "quote_snapshot": "您可以同时为符合我们承保条件的家庭成员投保本产品，家庭成员仅指投保",
+    "quote_sha256": "d2eb96c037436f16c99431400661254fbe31a60002b460996965de9d4f193a0e",
+    "locator_content_sha256": "f0823348454d3cf7618e46dcfef82b397ca13e39ef169c208cf11546edf27067",
+    "citation_binding_sha256": "d307ab1911b65b1da67339a91abcc2824a829025caa3fd497ce144a163fa2780"
+  },
+  "ui_result": {
+    "drawer_opened": true,
+    "rendered_pdf_page": 2,
+    "highlight_visible": true,
+    "screenshot": "ui/source-click-insured-eligibility-page-2.png",
+    "screenshot_sha256": "582dbc52cfd79cc09c1eacc59d14b2a4921a47c1e0c29c1cebdd2f660e7060cd"
+  },
+  "fail_closed_proof": {
+    "mutation": {
+      "component": "page_number",
+      "from": 2,
+      "to": 3,
+      "all_other_components_unchanged": true
+    },
+    "g1_join_gate": {
+      "command": "GOCACHE=/private/tmp/weknora-830-g1-go-cache go test ./internal/application/service -run 'TestEntityPageGraphPreparationCitation830G1UsesFullUniqueJoinIdentityAndExactSourceTuple|TestSchemaWikiCitationRevisionAdapterRejectsRehashedSnapshotAuthorityDrift/(locator|page)' -count=1 -v",
+      "test": "TestEntityPageGraphPreparationCitation830G1UsesFullUniqueJoinIdentityAndExactSourceTuple",
+      "result": "PASS",
+      "assertion": "page-number mutation makes entityPageGraphCitationMatchesSchemaSource830G1 return false"
+    },
+    "exact_source_resolver": {
+      "test": "TestSchemaWikiCitationRevisionAdapterRejectsRehashedSnapshotAuthorityDrift/page",
+      "result": "PASS",
+      "typed_error": "ErrSchemaWikiCitationUnavailable",
+      "snapshot_fetch_calls": 0
+    },
+    "ui_no_fallback": {
+      "command": "npm run test:component -- src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts -t 'shows preview transport failure explicitly without quote, current, latest, or content fallback'",
+      "result": "1 passed, 14 skipped",
+      "typed_error": "PDF_PREVIEW_UNAVAILABLE",
+      "request_count": 1,
+      "fallback_to_current": false,
+      "fallback_to_latest": false,
+      "fallback_to_content": false,
+      "fallback_to_page_1": false
+    }
+  },
+  "secrets_persisted": false,
+  "status": "PASS",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "0211c746fa69e4e1896ba507cebd81f831860e8de0807091822901e010c64322"
+}
