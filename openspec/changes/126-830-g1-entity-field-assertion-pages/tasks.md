@@ -35,7 +35,7 @@
 - [x] 按 G1-R1/R5 先写前端 RED，再增加实体 overview/section/field/free-wiki route/navigation。
 - [x] 使用真实 815 Candidate/Claim/Evidence Preview 证明 1 overview、1 section、3 field、空
   free_wiki、短标题、完整 namespace 与至少 1 个 exact source click。
-- [ ] 提交 M1 最薄纵切；若 48 小时无真实 Preview，STOP。
+- [x] 提交 M1 最薄纵切；若 48 小时无真实 Preview，STOP。
 
 M1 接线现冻结为同一 lifecycle 的四个原子边界：
 

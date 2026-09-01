@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=M1_REAL_815_CANDIDATE_WEKNORA_PREVIEW
+NEXT_PHYSICAL_RESULT=M2_COMPLETE_76_PAGE_GRAPH_EVIDENCE
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -100,6 +100,12 @@ WeKnora validation/read/UI，两者直接汇合到同一个 M1 Preview。最多�
 - Independent read-only Review of the implementation candidate at the same head/tree reported
   `REVIEW=PASS`, `UNRESOLVED_COUNT=0`. M1 evidence itself remains controller-owned and must be
   committed/re-reviewed before advancing to M2.
+- The first evidence-commit review at `cf05e8af372aed8336bf3f6945b2be27ca54d70f` /
+  `4b1b20d799b940fb312bb8cb75cdb5c7c74d2fa9` reported `REVIEW=FAIL`,
+  `UNRESOLVED_COUNT=2`: the NEXT pointer still named completed M1, and controller-created M2
+  evidence appeared in the shared worktree before the M1 gate closed. The M2 files were preserved
+  outside the worktree and the NEXT pointer was corrected; the correction still requires the same
+  independent read-only re-review.
 
 M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Release/activation，
 也尚未形成 M3 successor current/pinned/no-mix 物理证据。G2 继续锁定。
