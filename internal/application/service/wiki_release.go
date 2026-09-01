@@ -699,6 +699,35 @@ func (s *WikiReleaseService) createDraft(
 	principal types.WikiReleasePrincipal,
 	input *types.WikiReleasePreparation,
 ) (*types.WikiReleasePreparation, error) {
+	return s.createDraftAtExpectedHead(ctx, principal, input, nil)
+}
+
+type wikiReleaseDraftExpectedHead struct {
+	releaseID       string
+	activationEpoch uint64
+}
+
+func (s *WikiReleaseService) createDraftWithExpectedHead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	input *types.WikiReleasePreparation,
+	expectedReleaseID string,
+	expectedActivationEpoch uint64,
+) (*types.WikiReleasePreparation, error) {
+	if expectedReleaseID == "" || expectedActivationEpoch == 0 {
+		return nil, fmt.Errorf("%w: incomplete expected head", ErrWikiReleaseInvalidAuthorization)
+	}
+	return s.createDraftAtExpectedHead(ctx, principal, input, &wikiReleaseDraftExpectedHead{
+		releaseID: expectedReleaseID, activationEpoch: expectedActivationEpoch,
+	})
+}
+
+func (s *WikiReleaseService) createDraftAtExpectedHead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	input *types.WikiReleasePreparation,
+	expected *wikiReleaseDraftExpectedHead,
+) (*types.WikiReleasePreparation, error) {
 	if input == nil || s.repository == nil {
 		return nil, fmt.Errorf("%w: nil draft", ErrWikiReleaseInvalidAuthorization)
 	}
@@ -728,16 +757,21 @@ func (s *WikiReleaseService) createDraft(
 	draft.ReviewDecisionDigest = ""
 	draft.Status = types.WikiReleasePreparationDraft
 	draft.CreatedAt = s.now().UTC()
-	head, headErr := s.repository.GetHead(ctx, draft.WikiReleaseScope)
-	switch {
-	case headErr == nil:
-		draft.ExpectedReleaseID = head.ActiveReleaseID
-		draft.ExpectedActivationEpoch = head.ActivationEpoch
-	case errors.Is(headErr, wikirepository.ErrWikiReleaseNotFound):
-		draft.ExpectedReleaseID = ""
-		draft.ExpectedActivationEpoch = 0
-	default:
-		return nil, headErr
+	if expected != nil {
+		draft.ExpectedReleaseID = expected.releaseID
+		draft.ExpectedActivationEpoch = expected.activationEpoch
+	} else {
+		head, headErr := s.repository.GetHead(ctx, draft.WikiReleaseScope)
+		switch {
+		case headErr == nil:
+			draft.ExpectedReleaseID = head.ActiveReleaseID
+			draft.ExpectedActivationEpoch = head.ActivationEpoch
+		case errors.Is(headErr, wikirepository.ErrWikiReleaseNotFound):
+			draft.ExpectedReleaseID = ""
+			draft.ExpectedActivationEpoch = 0
+		default:
+			return nil, headErr
+		}
 	}
 	draft.PreparationDigest = digestWikiReleasePreparation(&draft)
 	if err := s.repository.CreateDraft(ctx, &draft); err != nil {

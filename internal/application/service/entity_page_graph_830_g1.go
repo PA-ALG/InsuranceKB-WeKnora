@@ -278,14 +278,14 @@ func (s *SchemaWikiService) CreateEntityPageGraphDraft830G1(
 	); validationErr != nil || sourcePreparation.CandidateDigest != manifest.InputAuthority.CandidateSHA256 {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	draft, err := s.releaseAuthority.createDraft(ctx, principal, &types.WikiReleasePreparation{
+	draft, err := s.releaseAuthority.createDraftWithExpectedHead(ctx, principal, &types.WikiReleasePreparation{
 		ID: preparationID, WikiReleaseScope: scope,
 		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
 		ReadyReceiptDigest: sourcePreparation.ReadyReceiptDigest,
 		ReviewPolicyID:     sourcePreparation.ReviewPolicyID,
 		Manifest:           append(json.RawMessage(nil), rawManifest...),
 		Members:            entityPageGraphSnapshots830G1(manifest),
-	})
+	}, manifest.ReleaseID, manifest.ActivationEpoch)
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -426,11 +426,13 @@ func (s *SchemaWikiService) IssueEntityPageGraphPreparationCitationAuthority830G
 	principal types.WikiReleasePrincipal,
 	scope types.WikiReleaseScope,
 	preparationID string,
+	entityID string,
 	fieldKey string,
 	citationID string,
 ) (*types.SchemaWikiCitationContentAuthorityV1, error) {
 	if s == nil || s.releaseAuthority == nil || s.citationContent == nil ||
-		strings.TrimSpace(preparationID) == "" || strings.TrimSpace(fieldKey) == "" ||
+		strings.TrimSpace(preparationID) == "" || strings.TrimSpace(entityID) == "" ||
+		strings.TrimSpace(fieldKey) == "" ||
 		strings.TrimSpace(citationID) == "" {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
@@ -447,7 +449,7 @@ func (s *SchemaWikiService) IssueEntityPageGraphPreparationCitationAuthority830G
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	manifest, _, err := validateEntityPageGraphPreparation830G1(preparation, status, scope)
-	if err != nil {
+	if err != nil || manifest.EntityID != entityID {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	member, found := manifest.Member("field", fieldKey)

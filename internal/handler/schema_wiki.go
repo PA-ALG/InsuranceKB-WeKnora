@@ -158,6 +158,7 @@ type schemaWikiHTTPService interface {
 		string,
 		string,
 		string,
+		string,
 	) (*types.SchemaWikiCitationContentAuthorityV1, error)
 	ReadSchemaCitationContent(
 		context.Context,
@@ -1230,6 +1231,7 @@ func (h *SchemaWikiHandler) PreviewEntityPagePreparationCitation830G1(c *gin.Con
 	authority, err := h.schemaService.IssueEntityPageGraphPreparationCitationAuthority830G1(
 		c.Request.Context(), principal, scope,
 		strings.TrimSpace(c.Param("preparation_id")),
+		strings.TrimSpace(c.Param("entity_id")),
 		strings.TrimSpace(c.Param("field_key")),
 		strings.TrimSpace(c.Param("citation_id")),
 	)

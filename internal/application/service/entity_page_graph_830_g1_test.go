@@ -297,6 +297,51 @@ func TestCreateEntityPageGraphDraft830G1RequiresCurrentSourceReleaseCustodyBefor
 	require.Zero(t, fixture.storedCount(t))
 }
 
+func TestCreateEntityPageGraphDraft830G1RejectsHeadDriftBeforePersistenceAndKeepsIDRetryable(t *testing.T) {
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	require.NoError(t, fixture.db.Create(&types.WikiReleaseHead{
+		ID: "head-after-815-replay", WikiReleaseScope: scope,
+		ActiveReleaseID: "release-after-815", ActivationEpoch: manifest.ActivationEpoch + 1,
+		UpdatedAt: time.Now().UTC(),
+	}).Error)
+	input := &types.WikiReleasePreparation{
+		ID: "preparation-g1-head-drift", WikiReleaseScope: scope,
+		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+		ReadyReceiptDigest: strings.Repeat("a", 64), ReviewPolicyID: strings.Repeat("b", 64),
+		ExpectedReleaseID: manifest.ReleaseID, ExpectedActivationEpoch: manifest.ActivationEpoch,
+		Manifest: append(json.RawMessage(nil), snapshot.Manifest...), Members: snapshot.Members,
+	}
+
+	// The expected tuple above is the exact result frozen by the successful
+	// current-815 replay. Head has moved before the G1 Draft persistence edge.
+	draft, err := fixture.authority.createDraftWithExpectedHead(
+		fixture.ctx, principal, input, manifest.ReleaseID, manifest.ActivationEpoch,
+	)
+
+	require.ErrorIs(t, err, wikirepository.ErrWikiReleaseConflict)
+	require.Nil(t, draft)
+	require.Zero(t, fixture.storedCount(t))
+
+	require.NoError(t, fixture.db.Model(&types.WikiReleaseHead{}).
+		Where("id = ?", "head-after-815-replay").
+		Updates(map[string]any{
+			"active_release_id": manifest.ReleaseID, "activation_epoch": manifest.ActivationEpoch,
+		}).Error)
+	retry, err := fixture.authority.createDraftWithExpectedHead(
+		fixture.ctx, principal, input, manifest.ReleaseID, manifest.ActivationEpoch,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, retry)
+	require.Equal(t, input.ID, retry.ID)
+}
+
 func TestCreateEntityPageGraphDraft830G1RejectsUnreadablePreparationIDsBeforeRepositoryAccess(t *testing.T) {
 	t.Parallel()
 	raw := loadEntityPageGraph830G1ServiceVector(t)
@@ -482,6 +527,66 @@ func TestEntityPageGraphMemberSetsEqual830G1RequiresEmptyContentInBothCopies(t *
 			))
 		})
 	}
+}
+
+func TestEntityPageGraphPreparationCitation830G1RejectsForeignEntityBeforePinnedSourceOrContent(t *testing.T) {
+	t.Parallel()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{ID: "reviewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID}
+	fixture := newSchemaWikiPrepareFixture(t, principal, scope)
+	require.NoError(t, fixture.db.Create(&types.WikiReleaseHead{
+		ID: "head-g1-foreign-entity", WikiReleaseScope: scope, ActiveReleaseID: manifest.ReleaseID,
+		ActivationEpoch: manifest.ActivationEpoch, UpdatedAt: time.Now().UTC(),
+	}).Error)
+	draft, err := fixture.authority.createDraft(fixture.ctx, principal, &types.WikiReleasePreparation{
+		ID: "preparation-g1-foreign-entity", WikiReleaseScope: scope,
+		CandidateDigest:    manifest.InputAuthority.CandidateSHA256,
+		ReadyReceiptDigest: strings.Repeat("a", 64), ReviewPolicyID: strings.Repeat("b", 64),
+		Manifest: append(json.RawMessage(nil), snapshot.Manifest...), Members: snapshot.Members,
+	})
+	require.NoError(t, err)
+
+	var member types.EntityPageMember830G1
+	var citationID string
+	for _, candidate := range manifest.Members {
+		if candidate.PageKind != "field" {
+			continue
+		}
+		payload, payloadErr := candidate.FieldAssertionPayload()
+		require.NoError(t, payloadErr)
+		if len(payload.Citations) > 0 {
+			member = candidate
+			citationID = payload.Citations[0].CitationID
+			break
+		}
+	}
+	require.NotEmpty(t, citationID)
+	content := &schemaWikiC6CitationContentSpy{}
+	fixture.adapter = NewSchemaWikiService(fixture.authority, nil, content)
+	headQueries := 0
+	require.NoError(t, fixture.db.Callback().Query().Before("gorm:query").Register(
+		"test:count-g1-foreign-entity-head-queries",
+		func(tx *gorm.DB) {
+			if tx.Statement != nil && tx.Statement.Table == "wiki_release_heads" {
+				headQueries++
+			}
+		},
+	))
+
+	authority, err := fixture.adapter.IssueEntityPageGraphPreparationCitationAuthority830G1(
+		fixture.ctx, principal, scope, draft.ID, "foreign-product",
+		member.StableKey, citationID,
+	)
+
+	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
+	require.Nil(t, authority)
+	require.Zero(t, headQueries, "foreign entity must fail before pinned source custody")
+	require.Zero(t, content.issueCurrentCalls, "foreign entity must never reach citation content")
 }
 
 func TestEntityPageGraphPreparationCitation830G1UsesFullUniqueJoinIdentityAndExactSourceTuple(t *testing.T) {

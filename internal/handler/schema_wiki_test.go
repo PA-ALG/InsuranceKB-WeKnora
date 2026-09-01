@@ -47,6 +47,8 @@ type schemaWikiHTTPServiceSpy struct {
 	reviewedReadCalls     int
 	currentCitationCalls  int
 	reviewedCitationCalls int
+	expectedEntityID      string
+	reviewedEntityIDs     []string
 	citationErr           error
 	citationBytes         []byte
 	currentAuthority      *service.SchemaWikiCurrentAuthorityV1
@@ -296,9 +298,14 @@ func (s *schemaWikiHTTPServiceSpy) IssueEntityPageGraphPreparationCitationAuthor
 	_ types.WikiReleasePrincipal,
 	_ types.WikiReleaseScope,
 	_ string,
+	entityID string,
 	_ string,
 	_ string,
 ) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	s.reviewedEntityIDs = append(s.reviewedEntityIDs, entityID)
+	if s.expectedEntityID != "" && entityID != s.expectedEntityID {
+		return nil, service.ErrSchemaWikiCitationUnavailable
+	}
 	s.reviewedCitationCalls++
 	if s.citationErr != nil {
 		return nil, s.citationErr
@@ -685,6 +692,33 @@ func TestSchemaWikiCitationPreviewUsesOnlyPathIdentitiesAndFailsClosed(t *testin
 	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
 	require.NotContains(t, recorder.Body.String(), "citation-secret")
 	require.Equal(t, 1, spy.currentCitationCalls)
+}
+
+func TestSchemaWikiEntityPagePreparationCitationRejectsForeignEntityBeforeContentAuthority(t *testing.T) {
+	t.Parallel()
+	spy := &schemaWikiHTTPServiceSpy{expectedEntityID: "ping-an-e-sheng-bao"}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-596-1"},
+		{Key: "preparation_id", Value: "preparation-830-g1"},
+		{Key: "entity_id", Value: "foreign-product"},
+		{Key: "field_key", Value: "cooling_off_period"},
+		{Key: "citation_id", Value: "citation-secret"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "reviewer"}
+	c.Request = c.Request.WithContext(types.WithPrincipal(c.Request.Context(), principal))
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.PreviewEntityPagePreparationCitation830G1(c)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
+	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.NotContains(t, recorder.Body.String(), "foreign-product")
+	require.Zero(t, spy.reviewedCitationCalls)
+	require.Equal(t, []string{"foreign-product"}, spy.reviewedEntityIDs)
 }
 
 func TestSchemaWikiCitationPreviewReturnsStablePageUnavailableCode(t *testing.T) {

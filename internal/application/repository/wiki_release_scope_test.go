@@ -111,3 +111,37 @@ func TestGetHeadForWikiKBScopeRequiresExactlyOneTenantScopedHead(t *testing.T) {
 		require.True(t, errors.Is(err, ErrWikiReleaseNotFound), "err=%v", err)
 	})
 }
+
+func TestCreateDraftRejectsExpectedHeadDriftAtomicallyAndKeepsIDRetryable(t *testing.T) {
+	t.Parallel()
+	repo, db := newSchemaWikiScopeRepository(t)
+	scope := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-medical",
+	}
+	head := schemaWikiScopeHead("head-draft-drift", scope.TenantID, scope.WikiKBID)
+	head.WikiReleaseScope = scope
+	head.ActiveReleaseID = "release-new"
+	head.ActivationEpoch = 2
+	require.NoError(t, db.Create(head).Error)
+	draft := &types.WikiReleasePreparation{
+		ID: "preparation-retryable", WikiReleaseScope: scope,
+		ExpectedReleaseID: "release-old", ExpectedActivationEpoch: 1,
+		Status: types.WikiReleasePreparationDraft,
+	}
+
+	err := repo.CreateDraft(context.Background(), draft)
+
+	require.ErrorIs(t, err, ErrWikiReleaseConflict)
+	var count int64
+	require.NoError(t, db.Model(&types.WikiReleasePreparation{}).
+		Where("preparation_id = ?", draft.ID).Count(&count).Error)
+	require.Zero(t, count)
+
+	require.NoError(t, db.Model(&types.WikiReleaseHead{}).
+		Where("id = ?", head.ID).
+		Updates(map[string]any{"active_release_id": "release-old", "activation_epoch": 1}).Error)
+	require.NoError(t, repo.CreateDraft(context.Background(), draft))
+	require.NoError(t, db.Model(&types.WikiReleasePreparation{}).
+		Where("preparation_id = ?", draft.ID).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+}
