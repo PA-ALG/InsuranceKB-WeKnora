@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_D2_FRONTEND_IMAGE_NOT_BUILT_AND_HOST_PORT_FORWARDING_UNAVAILABLE
+CURRENT_RED=M3_D3_ISOLATED_RELEASE_NOT_ACTIVATED
 FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
-DOCKER_ACTION=APP_PASS_LATE_FRONTEND_NOT_RUN
+DOCKER_ACTION=D2_PASS_NO_MORE_BUILDS
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=BUILD_AND_FREEZE_THE_SINGLE_FRONTEND_D2_IMAGE
+NEXT_PHYSICAL_RESULT=START_ISOLATED_D3_WITH_EXACT_APP_AND_FRONTEND_IMAGE_IDS
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -48,11 +48,12 @@ M2_REVIEW_UNRESOLVED_COUNT=0
 M2_EVIDENCE=PASS
 M3_INTEGRATION_HEAD=06b101665921844cabf666574514c2b71ebd4b12
 M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
-M3_D2=IN_PROGRESS
+M3_D2=PASS
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
-M3_D2_FRONTEND_IMAGE=NOT_RUN
+M3_D2_FRONTEND_BUILD_RESULT=PASS
+M3_D2_FRONTEND_IMAGE=sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0
 M3_PRODUCTION_8081_BEFORE=200
 M3_PRODUCTION_8081_GUEST=200
 M3_PRODUCTION_8081_HOST=CONNECTION_REFUSED
@@ -182,6 +183,12 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   HTTP 200 inside the guest; only host `8080/8081` forwarding is unavailable.
 - Original incident receipt remains immutable at
   `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`; superseding conclusions are recorded in
-  `docs/insurance-kb/evidence/830-g1/m3/d2-app-build-reconciliation.json`. App D2 is `PASS_LATE`;
-  frontend image D2, D3 Release/Head, Provider/model and G2 remain NOT RUN/zero. G1 continues;
-  G2 remains locked.
+  `docs/insurance-kb/evidence/830-g1/m3/d2-app-build-reconciliation.json`. App D2 is `PASS_LATE`.
+- The one and only frontend D2 build produced `linux/arm64` image
+  `sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0` at
+  `2026-09-02T22:46:28.632832031+08:00`. Its labels bind the same frozen commit/tree, frontend
+  source subset `b1bad86d3e1735086ac2fc1b835ea90d313ac4978aa3a3235c449c2211680935` and
+  package lock `dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb`.
+- Unified D2 receipt: `docs/insurance-kb/evidence/830-g1/m3/d2-image-build.json`. D2 is PASS;
+  D3 Release/Head, Provider/model and G2 remain NOT RUN/zero. D3 may only reuse app `f913037c...`
+  and frontend `ebf4f45a...`; no further build is allowed. G2 remains locked.

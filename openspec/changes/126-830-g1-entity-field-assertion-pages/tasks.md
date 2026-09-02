@@ -87,7 +87,7 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 
 ## M3 · Atomic isolated Release
 
-- [ ] 冻结 integration head 与 image change-impact；总控仅构建受影响镜像一次（D2）。
+- [x] 冻结 integration head 与 image change-impact；总控仅构建受影响镜像一次（D2）。
 - [ ] 复用 D2 exact digest，在隔离环境形成一个 `NOT_FOR_PRODUCTION` Release（D3）。
 - [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
 - [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
@@ -109,6 +109,13 @@ commit/tree/source-subset/lock labels 全部匹配冻结输入，因此计为原
 内保持 exact identity、healthy/HTTP 200。宿主 `8080/8081` 转发仍待在不替换、不重启生产
 容器的前提下恢复。frontend dist 已 PASS，但 frontend image 的唯一 D2 build 尚未开始；
 当前继续 G1 M3，不启动 Release/Head、Provider/model 或 G2。
+
+frontend 的唯一 D2 build 随后形成
+`sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0`，其
+commit/tree/source-subset/package-lock labels、`linux/arm64` 与固定 nginx base digest
+全部匹配冻结输入。D2 以 app `f913037c...` + frontend `ebf4f45a...` 两个 exact image
+identity 关闭；统一回执为 `docs/insurance-kb/evidence/830-g1/m3/d2-image-build.json`。D3
+只能复用这两个 identity，不得再次 build。
 
 ## Closeout
 
