@@ -62,10 +62,15 @@ identity to match the manifest source identity. The response exposes the
 successor serving Release ID. Current reads expose the Head epoch captured at
 request start.
 
-An explicit pinned read accepts only the exact requested successor Release.
-When that Release is current, it uses the same Head epoch. A missing, foreign,
-source-only, stale or malformed release fails closed; it never falls back to
-`current`, `latest` or another release.
+An explicit pinned entity read is Head-independent and accepts the exact
+requested G1 successor Release even after Head advances. Its stable serving
+epoch is the successor's original activation epoch,
+`WikiRelease.BaseActivationEpoch + 1`; a current read instead reports the Head
+epoch pinned at request start. Missing, foreign, source-only or malformed
+entity releases fail closed and never fall back to `current`, `latest` or
+another release. The historical 815 source Release remains readable through
+its existing Schema pinned routes; it is not reinterpreted as a G1 entity
+successor.
 
 ### Historical-source evidence bridge
 
@@ -105,6 +110,11 @@ the replacement build is app-only; the frozen frontend image is reused.
   of scope. D3 runs on the isolated clone and an internal no-egress network.
 - The original D2 app image is never overwritten or retagged. Evidence records
   why it was superseded and the exact replacement identity.
+- Before implementation, OpenSpec tasks and validation custody must record the
+  user's explicit app-only replacement authorization. It supersedes only the
+  previous `NO_MORE_BUILDS` conclusion for the app image, grants a budget of
+  exactly one replacement app build, and leaves the frontend no-rebuild rule
+  intact.
 
 ## Test and verification design
 
@@ -121,8 +131,9 @@ Implementation follows TDD:
    bbox, quote and join identity to prove typed failure with zero fallback.
 4. Run focused Go tests, the full affected Go packages, focused frontend
    component tests and the existing G1 Harness tests.
-5. Build exactly one replacement app image with the new frozen commit/tree and
-   package-lock/source labels. Do not rebuild frontend.
+5. After OpenSpec custody records the authorization, build exactly one
+   replacement app image with the new frozen commit/tree and Go-lock/source
+   labels. Do not rebuild frontend.
 6. In isolated D3, verify Draft -> Ready -> Release -> Active, 76/76 members,
    current/pinned no-mix reads, three known-field source clicks, negative
    fail-closed cases, zero egress/provider/model calls and unchanged production

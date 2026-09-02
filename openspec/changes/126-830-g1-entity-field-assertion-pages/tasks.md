@@ -87,8 +87,10 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 
 ## M3 · Atomic isolated Release
 
-- [x] 冻结 integration head 与 image change-impact；总控仅构建受影响镜像一次（D2）。
-- [ ] 复用 D2 exact digest，在隔离环境形成一个 `NOT_FOR_PRODUCTION` Release（D3）。
+- [ ] 原 D2 identity 已冻结并保留；按用户追加授权仅重开 app-only replacement build，
+  build budget=1，frontend exact digest 继续复用。
+- [ ] 复用 replacement app + 原 frontend exact digest，在隔离环境形成一个
+  `NOT_FOR_PRODUCTION` Release（D3）。
 - [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
 - [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
 - [ ] 证明生产 `8081`、生产 Active、Provider/model calls 均未变化。
@@ -116,6 +118,14 @@ commit/tree/source-subset/package-lock labels、`linux/arm64` 与固定 nginx ba
 全部匹配冻结输入。D2 以 app `f913037c...` + frontend `ebf4f45a...` 两个 exact image
 identity 关闭；统一回执为 `docs/insurance-kb/evidence/830-g1/m3/d2-image-build.json`。D3
 只能复用这两个 identity，不得再次 build。
+
+后续 D3 静态路径核对发现原 app image 尚缺 M3 明确保留的 successor historical-source
+bridge，并把新 serving Release identity 错同旧 815 source Release identity；真实 CAS 后会
+形成不可读 successor，不能以运行时绕过冒充 G1 PASS。用户已明确授权保持原回执与镜像
+不可变、仅重新打开 app-only D2：先 TDD 修正 serving/source identity 与 historical-source
+bridge，再执行且只执行一次 replacement app build。frontend `ebf4f45a...` 继续复用、不得
+重建；replacement app exact identity 形成前不得启动 D3 写入。该授权只 supersede 原
+`不得重建 app` 结论，不改变 G1 Goal/DoD、生产禁写、Provider/model=0 或 G2 锁定。
 
 ## Closeout
 
