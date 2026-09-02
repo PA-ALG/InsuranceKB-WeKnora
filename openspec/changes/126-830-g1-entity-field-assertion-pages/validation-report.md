@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=TDD_RED_FOR_SUCCESSOR_READ_AND_HISTORICAL_SOURCE_BRIDGE
+NEXT_PHYSICAL_RESULT=SPEC_REVIEW_PASS_THEN_TDD_RED
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -74,10 +74,10 @@ G2_AND_LATER=LOCKED
 | G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
-| G1-R4 | PASS | server-verified source bridge | focused PASS | `edc74ac7` | M1 exact click + M2 known custody 17/17 PASS | M2 PASS |
+| G1-R4 | M3 RED | M1 preview bridge PASS; successor historical-source bridge missing | M1/M2 focused PASS; M3 NOT RUN | `edc74ac7` + pending | M1 exact click + M2 known custody 17/17 PASS; successor click NOT RUN | M2 PASS / M3 OPEN |
 | G1-R5 | PASS | payload Profile + namespace metadata | focused PASS | `edc74ac7` | short titles + 76/76 namespaces PASS | M2 PASS |
 | G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
-| G1-R7 | PASS | current/pinned/preparation no-fallback reads | focused PASS | `740d9b7c` | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 NOT RUN |
+| G1-R7 | M3 RED | preparation no-fallback PASS; successor current/pinned exact identity missing | M1 focused PASS; M3 NOT RUN | `740d9b7c` + pending | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 OPEN |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
 | G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
@@ -206,8 +206,9 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
 - The user explicitly authorized the recommended minimal repair and one app-only replacement
   build. This supersedes only the previous `D2_PASS_NO_MORE_BUILDS` conclusion for app; it does
   not erase or retag the original image/receipts and does not reopen frontend.
-- Replacement app build budget is exactly one and remains unused. Before it is consumed, TDD must
-  prove RED/GREEN for Head-independent historical successor pinning, immutable base source binding
-  and the active historical-source citation bridge. D3 must then use the replacement app identity
-  plus unchanged frontend `ebf4f45a...`.
+- Replacement app build budget is exactly one and remains unused. Before it is consumed, the
+  written design must pass independent review, then TDD must prove RED/GREEN for Head-independent
+  historical successor pinning, immutable base source binding and both current and exact-pinned
+  historical-source citation bridges. D3 must then use the replacement app identity plus unchanged
+  frontend `ebf4f45a...`.
 - Production containers/Head, Provider/model paths and G2 remain untouched and locked.

@@ -167,19 +167,24 @@ generic Schema release 的旧合同、不得新增 release 表或 endpoint 级�
 - M1（D1）：真实 815 Candidate Preview 可见 overview、1 section、3 field pages、空
   free_wiki、稳定 URL、短标题及至少 1 个 exact source click；
 - M2（D1）：76/76 manifest、67/67 三态、稳定 identity、非 7 renderer 测试；
-- M3（D2→D3）：总控只构建受影响 app/frontend 镜像一次，D3 复用同一 digest，在
-  隔离环境形成一个 `NOT_FOR_PRODUCTION` Release；current/pinned/source-click 通过，
-  生产 `8081` 和原生产 Active 不变。
+- M3（D2→D3）：原 D2 的 app/frontend 各一次构建及 exact digest 保留为不可变历史证据。
+  D3 前静态复核发现 successor serving/source identity 与 historical-source bridge blocker；
+  用户随后明确授权仅重开 app，且只允许一次 replacement app build。frontend 不重建，
+  D3 复用原 frontend exact digest 与 replacement app exact digest，在隔离环境形成一个
+  `NOT_FOR_PRODUCTION` Release；current/pinned/source-click 通过，生产 `8081` 和原生产
+  Active 不变。
 
 验证矩阵必须逐项记录 `Requirement → RED → Implementation → Focused Test → Commit →
 Live Evidence → Status`。环境未启动、依赖缺失、fixture 或接口未调用不得冒充 RED/live。
 
-当前唯一 `NEXT_PHYSICAL_RESULT` 固定为 M1：在 `2026-09-02 23:42:03 +08:00` 前，
+以下为方案冻结时的历史 M1 `NEXT_PHYSICAL_RESULT`（现已完成）：在
+`2026-09-02 23:42:03 +08:00` 前，
 真实 815 Candidate 的 WeKnora Preview 可打开 overview、
 `application-and-contract` section、`insured_eligibility`（present）、
 `guaranteed_renewal_period`（absent_explicitly）、`cooling_off_period`（unknown）三个
 独立字段页和空 `free_wiki`，并满足稳定 URL、短标题/完整 namespace 与至少一个 exact
-source click。M2/M3 是同一 G1 的后续里程碑，当前不得并行宣称为 NEXT。
+source click。当前 M3 的唯一 NEXT 以 validation report 为准；规格复核通过前固定为
+`SPEC_REVIEW_PASS_THEN_TDD_RED`，不得提前实现、构建或宣称 D3。
 
 ## STOP and non-goals
 

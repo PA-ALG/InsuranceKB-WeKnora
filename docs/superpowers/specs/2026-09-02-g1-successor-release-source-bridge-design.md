@@ -74,18 +74,29 @@ successor.
 
 ### Historical-source evidence bridge
 
-For an active G1 field citation, the server begins from the current successor
-Head and Ready preparation. It verifies the full G1 manifest/member custody,
-then derives the historical source Release exclusively from the successor's
-immutable base identity. It loads that exact 815 Release without consulting a
-caller-selected source release.
+For a G1 field citation, the server begins from the successor selected by the
+entity route, not unconditionally from the current Head. A current request
+resolves and pins Head once. A pinned request loads the exact requested G1
+successor independently of Head. In both cases the server verifies the Ready
+preparation and full G1 manifest/member custody, then derives the historical
+source Release exclusively from that successor's immutable base identity. It
+loads that exact 815 Release without consulting a caller-selected source
+release.
 
 The existing 17/17 bridge checks remain mandatory: field mapping, full join
 receipt, source revision, parse attempt, parsed document, parse manifest, PDF
 page, bbox, locator content, quote and all hashes must match. Only after those
-checks may the server issue the existing opaque citation token. Any drift or
-missing historical source returns the existing typed citation-unavailable
-error; there is no page-1, current/latest, raw-content or quote fallback.
+checks may the server issue the existing opaque citation token. The token's
+private claims preserve both domains: the route-selected successor serving
+identity and the derived 815 source replay identity. They also distinguish an
+`active` route authority from an exact `release` authority. `active` content
+reads revalidate the once-selected current Head; exact `release` content reads
+validate the immutable successor and its scope without consulting Head, then
+reconstruct the source bridge from that same successor. The public citation
+authority remains the serving successor identity; the source replay identity
+is never caller-selectable. Any drift or missing historical source returns the
+existing typed citation-unavailable error; there is no page-1,
+current/latest, raw-content or quote fallback.
 
 ## API and UI boundary
 
@@ -95,17 +106,22 @@ No route is added. Existing stable entity routes continue to support:
 - one exact `release_id` for pinned;
 - one exact `preparation_id` for Candidate Preview.
 
-The existing active citation preview route remains the frontend transport.
-The frontend already distinguishes current, pinned and preparation modes, so
-the replacement build is app-only; the frozen frontend image is reused.
+The existing citation preview route remains the frontend transport for both
+current and exact pinned successor pages. No public authority field or route
+shape is added. The opaque token may gain private serving/source and
+active/release claims needed for the closed server-side replay above. The
+frontend already distinguishes current, pinned and preparation modes, so the
+replacement build is app-only; the frozen frontend image is reused.
 
 ## Failure handling and invariants
 
 - CAS remains the sole activation authority and still atomically writes one
   successor Release, exactly 76 members, one Head transition and one receipt.
 - The manifest and all 76 payloads remain byte-for-byte immutable.
-- Old 815 source Release rows remain immutable and readable only as derived
-  provenance for the bridge.
+- Old 815 source Release rows remain immutable, and their existing Schema
+  pinned reads remain unchanged. G1 entity/citation code may reach them only
+  as server-derived provenance from a validated successor, never through a
+  caller-selected source identity.
 - Production containers, production Head and provider/model paths remain out
   of scope. D3 runs on the isolated clone and an internal no-egress network.
 - The original D2 app image is never overwritten or retagged. Evidence records
@@ -126,15 +142,18 @@ Implementation follows TDD:
    old source binding.
 2. Add negative tests for base Release/epoch drift and caller-selected source
    identity; all must fail closed.
-3. Add an active citation regression that derives the old 815 source through
+3. Add a current citation regression that derives the old 815 source through
    successor base custody and issues the exact token; mutate revision, page,
    bbox, quote and join identity to prove typed failure with zero fallback.
-4. Run focused Go tests, the full affected Go packages, focused frontend
+4. Activate successor R1, advance Head to successor R2, then prove an exact
+   pinned R1 page and its source click still bind R1 and R1's old source while
+   current binds R2. Prove neither route mixes serving or source identities.
+5. Run focused Go tests, the full affected Go packages, focused frontend
    component tests and the existing G1 Harness tests.
-5. After OpenSpec custody records the authorization, build exactly one
+6. After OpenSpec custody records the authorization, build exactly one
    replacement app image with the new frozen commit/tree and Go-lock/source
    labels. Do not rebuild frontend.
-6. In isolated D3, verify Draft -> Ready -> Release -> Active, 76/76 members,
+7. In isolated D3, verify Draft -> Ready -> Release -> Active, 76/76 members,
    current/pinned no-mix reads, three known-field source clicks, negative
    fail-closed cases, zero egress/provider/model calls and unchanged production
    identities.
