@@ -145,9 +145,12 @@ Implementation follows TDD:
 3. Add a current citation regression that derives the old 815 source through
    successor base custody and issues the exact token; mutate revision, page,
    bbox, quote and join identity to prove typed failure with zero fallback.
-4. Activate successor R1, advance Head to successor R2, then prove an exact
-   pinned R1 page and its source click still bind R1 and R1's old source while
-   current binds R2. Prove neither route mixes serving or source identities.
+4. Activate the sole frozen-manifest G1 successor R1, then move Head legally
+   through the existing CAS to a non-G1 control Release. Prove an exact pinned
+   R1 page and its source click still bind R1 and R1's old source without
+   consulting Head, while the current G1 entity route fails closed because the
+   new Head is not a valid G1 successor. Do not construct an impossible second
+   G1 successor from the frozen manifest or reinterpret R1 as its old source.
 5. Run focused Go tests, the full affected Go packages, focused frontend
    component tests and the existing G1 Harness tests.
 6. After OpenSpec custody records the authorization, build exactly one

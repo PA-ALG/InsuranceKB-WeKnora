@@ -211,4 +211,9 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   historical successor pinning, immutable base source binding and both current and exact-pinned
   historical-source citation bridges. D3 must then use the replacement app identity plus unchanged
   frontend `ebf4f45a...`.
+- The final independent design review closed all five prior findings but found one remaining test
+  contradiction: the frozen manifest cannot legally create G1 successor R2 because CAS would bind
+  R2 to R1 rather than to the old 815 source. The design now uses a non-G1 control Head to prove
+  current fail-closed plus Head-independent pinned R1/source replay. This exact correction still
+  requires user review before TDD starts; no fourth independent review is silently assumed.
 - Production containers/Head, Provider/model paths and G2 remain untouched and locked.
