@@ -1,0 +1,93 @@
+{
+  "contract": "weknora.830.g1-m3-d2-app-build-reconciliation.v1",
+  "goal_id": "G1",
+  "phase": "M3_D2",
+  "observed_at": "2026-09-02T22:30:56+08:00",
+  "supersedes_conclusions_in": {
+    "path": "docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json",
+    "file_sha256": "8b6e96ad0300638690464c5ec397b664817e163c4f69f86e8b7032038570d22a",
+    "preserved_immutable": true,
+    "incorrect_conclusions": [
+      "app_image_build=ENVIRONMENT_STOPPED",
+      "app_image_identity=NOT_OBTAINED",
+      "colima_instance=MISSING",
+      "successful_image_build_count=0"
+    ]
+  },
+  "integration": {
+    "build_source_commit": "06b101665921844cabf666574514c2b71ebd4b12",
+    "build_source_tree": "e14c5057f87427670f8a0382b357b6970ecd74f8",
+    "current_evidence_head": "61c095caa1e968fe82ffd5f7d9595f31b3b2ba94",
+    "current_evidence_tree": "98bea99745d7b8663fb79e6b9df754b7da990496",
+    "branch": "codex/830-g1-field-assertion-pages"
+  },
+  "app_artifact": {
+    "build_attempt_ordinal": 1,
+    "replacement_build_attempted": false,
+    "tag": "local/insurancekb-weknora-app:g1-m3-06b101665921",
+    "image_id": "sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+    "local_repo_digest": "local/insurancekb-weknora-app@sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+    "created_at": "2026-09-02T02:45:38.736896529+08:00",
+    "platform": "linux/arm64",
+    "size_bytes": 532878293,
+    "labels": {
+      "org.opencontainers.image.revision": "06b101665921844cabf666574514c2b71ebd4b12",
+      "io.insurancekb.source.tree": "e14c5057f87427670f8a0382b357b6970ecd74f8",
+      "io.insurancekb.source.subset.sha256": "2d0cab1d69dca42357b3fd2016dea4e48bd1d6f5d002ac45f8b95285d3321b27",
+      "io.insurancekb.source.lock.sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7"
+    },
+    "frozen_identity_match": true,
+    "status": "PASS_LATE"
+  },
+  "root_cause": {
+    "build_result": "SUCCESS",
+    "observer_result": "FALSE_STOP",
+    "client_exit_code": 130,
+    "timeline_inference": "The SSH client observation was terminated before the remote BuildKit job completed; the exact requested tag was materialized later by the original build attempt.",
+    "incorrect_probe": "limactl list colima --json",
+    "incorrect_probe_result": "No instance matching colima found",
+    "incorrect_probe_home": "default ~/.lima",
+    "correct_probe": "LIMA_HOME=$HOME/.colima/_lima limactl list colima --json",
+    "correct_probe_result": "Running",
+    "colima_instance_dir": "$HOME/.colima/_lima/colima",
+    "host_agent_log_continued_after_false_stop": true,
+    "vm_restarted_during_build": false,
+    "docker_daemon_restarts": 0,
+    "kernel_oom_evidence": false,
+    "disk_full_evidence": false
+  },
+  "production_observation": {
+    "app_container_id": "fca85321234ebc2a41910343f6d032de32596773be46fc04757282b0359cf3f4",
+    "app_image_id": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+    "app_guest_health_http_status": 200,
+    "frontend_container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+    "frontend_image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+    "frontend_guest_http_status": 200,
+    "containers_restarted_or_replaced": false,
+    "host_8080_http_status": 0,
+    "host_8081_http_status": 0,
+    "host_observation": "connection refused; Colima host port forwarding is unavailable while the exact production containers remain healthy in the guest"
+  },
+  "effects": {
+    "app_rebuilds_after_reconciliation": 0,
+    "frontend_image_builds": 0,
+    "production_container_restarts": 0,
+    "production_container_replacements": 0,
+    "release_writes": 0,
+    "head_writes": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "g2_actions": 0
+  },
+  "decision": {
+    "app_d2_status": "PASS",
+    "app_build_count": 1,
+    "app_rebuild_required": false,
+    "frontend_d2_status": "NOT_RUN",
+    "m3_status": "IN_PROGRESS",
+    "next_physical_result": "BUILD_AND_FREEZE_THE_SINGLE_FRONTEND_D2_IMAGE",
+    "g2_readiness": "LOCKED"
+  },
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "9a232169d02b6f03e0864149541ba7c7343361b2c147f8c6e65d09d315d40be4"
+}

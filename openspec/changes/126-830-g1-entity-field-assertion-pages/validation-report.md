@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_D2_DEFAULT_COLIMA_INSTANCE_LOST_AND_PRODUCTION_8081_UNAVAILABLE
-FLOW=G1_STOPPED
+CURRENT_RED=M3_D2_FRONTEND_IMAGE_NOT_BUILT_AND_HOST_PORT_FORWARDING_UNAVAILABLE
+FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
-DOCKER_ACTION=STOPPED_AFTER_ONLY_APP_BUILD_ATTEMPT
+DOCKER_ACTION=APP_PASS_LATE_FRONTEND_NOT_RUN
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -24,7 +24,7 @@ WIN1_REVIEW_UNRESOLVED_COUNT=0
 WIN2_CONDITION=PASS
 WIN2_WRITE_DOMAIN_DISJOINT=true
 WIN1_ACTUAL_EVIDENCE_LANE=OPEN
-NEXT_PHYSICAL_RESULT=USER_DECISION_ON_PRODUCTION_RECOVERY_AND_REPLACEMENT_D2_AUTHORIZATION
+NEXT_PHYSICAL_RESULT=BUILD_AND_FREEZE_THE_SINGLE_FRONTEND_D2_IMAGE
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -48,12 +48,14 @@ M2_REVIEW_UNRESOLVED_COUNT=0
 M2_EVIDENCE=PASS
 M3_INTEGRATION_HEAD=06b101665921844cabf666574514c2b71ebd4b12
 M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
-M3_D2=STOPPED
-M3_D2_APP_BUILD_EXIT=130
-M3_D2_APP_IMAGE=NOT_OBTAINED
+M3_D2=IN_PROGRESS
+M3_D2_APP_BUILD_CLIENT_EXIT=130
+M3_D2_APP_BUILD_RESULT=PASS_LATE
+M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
 M3_D2_FRONTEND_IMAGE=NOT_RUN
 M3_PRODUCTION_8081_BEFORE=200
-M3_PRODUCTION_8081_AFTER=CONNECTION_REFUSED
+M3_PRODUCTION_8081_GUEST=200
+M3_PRODUCTION_8081_HOST=CONNECTION_REFUSED
 M3_RELEASE_LIFECYCLE=NOT_RUN
 M3_PROVIDER_MODEL_CALLS=0
 G2_AND_LATER=LOCKED
@@ -159,19 +161,27 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   head/tree with `REVIEW=PASS`, `UNRESOLVED_COUNT=0`; M2 is closed. Evidence records zero
   DB/release/head/Provider/model/production/G2 effects. M3 remains NOT RUN.
 
-## M3 D2 stop
+## M3 D2 app-build reconciliation
 
-- Integration identity was frozen at `06b101665921844cabf666574514c2b71ebd4b12` / tree
+- Integration identity remains frozen at `06b101665921844cabf666574514c2b71ebd4b12` / tree
   `e14c5057f87427670f8a0382b357b6970ecd74f8`. B0 impact mapping selected only app and
   frontend; Dockerfiles and lockfiles were unchanged.
-- The exact frontend dist build completed. The only app image build reached the production
-  `go build ./cmd/server` step, but the default Colima/Lima instance disappeared before an image
-  identity was produced. The stale build transport was terminated with exit `130`; no replacement
-  build was attempted and the frontend image build did not start.
-- Before D2, production frontend/app health was `200` with the frozen container/image identities.
-  After the VM loss, `127.0.0.1:8081` refused connections and Lima reported
-  `No instance matching colima found`. Restoring the default VM could restart production containers;
-  using another profile would require a second app build. Both exceed the frozen execution authority.
-- Exact incident receipt: `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`. Release review,
-  Release creation, Head CAS, Provider/model and G2 actions were all NOT RUN/zero. G1 is STOPPED;
+- The exact frontend dist build completed. The only app image build reached
+  `go build ./cmd/server`; its SSH client observation was terminated with exit `130`, but the
+  original BuildKit job continued and materialized the requested tag at
+  `2026-09-02T02:45:38.736896529+08:00`. The resulting `linux/arm64` image is
+  `sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327`.
+- The image labels bind exact commit `06b101665921844cabf666574514c2b71ebd4b12`, tree
+  `e14c5057f87427670f8a0382b357b6970ecd74f8`, app source subset
+  `2d0cab1d69dca42357b3fd2016dea4e48bd1d6f5d002ac45f8b95285d3321b27` and Go lock
+  `5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7`; it is therefore
+  the first build's delayed success, not a replacement build.
+- The false STOP used raw `limactl`, which queried default `~/.lima`; Colima's actual
+  `$HOME/.colima/_lima` instance is continuously `Running`. VM/Docker restart count, OOM and
+  disk-full evidence are all zero. Exact production app/frontend containers remain healthy and
+  HTTP 200 inside the guest; only host `8080/8081` forwarding is unavailable.
+- Original incident receipt remains immutable at
+  `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`; superseding conclusions are recorded in
+  `docs/insurance-kb/evidence/830-g1/m3/d2-app-build-reconciliation.json`. App D2 is `PASS_LATE`;
+  frontend image D2, D3 Release/Head, Provider/model and G2 remain NOT RUN/zero. G1 continues;
   G2 remains locked.

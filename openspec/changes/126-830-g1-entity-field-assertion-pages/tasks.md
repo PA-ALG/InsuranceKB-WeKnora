@@ -93,13 +93,22 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 - [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
 - [ ] 证明生产 `8081`、生产 Active、Provider/model calls 均未变化。
 
-M3 在 D2 安全门禁 STOP：integration `06b101665921844cabf666574514c2b71ebd4b12` / tree
-`e14c5057f87427670f8a0382b357b6970ecd74f8` 已冻结，B0 映射只影响 app/frontend。
-frontend dist 构建完成；唯一 app image build 进入 production `go build` 后，default
-Colima/Lima instance 消失，未产出 image identity。D2 前 production `8081=200`，之后为
-connection refused；总控未重启 default VM、未执行 replacement build、未启动 Release/Head、
-Provider/model 或 G2。继续需要生产恢复或第二次 build 的新授权，因此 G1 按 STOP 门禁停止。
-不可变回执为 `docs/insurance-kb/evidence/830-g1/m3/d2-build-stop.json`。
+M3 D2 的首个观察结论已被后续只读取证纠正。integration
+`06b101665921844cabf666574514c2b71ebd4b12` / tree
+`e14c5057f87427670f8a0382b357b6970ecd74f8` 保持冻结，B0 映射仍只影响 app/frontend。
+唯一 app build 的 SSH 客户端观察链退出 `130` 后，原 BuildKit job 继续运行并在
+`2026-09-02T02:45:38.736896529+08:00` 形成 exact tag，镜像为
+`sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327`；其
+commit/tree/source-subset/lock labels 全部匹配冻结输入，因此计为原第一次 build 的
+`PASS_LATE`，不得重建 app。原 STOP 回执保持不可变；superseding 纠正回执为
+`docs/insurance-kb/evidence/830-g1/m3/d2-app-build-reconciliation.json`。
+
+根因是 raw `limactl` 在默认 `~/.lima` 查询，未使用 Colima 的
+`$HOME/.colima/_lima`，从而把 SSH/host-port-forwarding 异常误判为实例丢失。正确实例持续
+`Running`，Docker/VM 无重启、无 OOM、无磁盘满；原 production app/frontend 容器在 guest
+内保持 exact identity、healthy/HTTP 200。宿主 `8080/8081` 转发仍待在不替换、不重启生产
+容器的前提下恢复。frontend dist 已 PASS，但 frontend image 的唯一 D2 build 尚未开始；
+当前继续 G1 M3，不启动 Release/Head、Provider/model 或 G2。
 
 ## Closeout
 
