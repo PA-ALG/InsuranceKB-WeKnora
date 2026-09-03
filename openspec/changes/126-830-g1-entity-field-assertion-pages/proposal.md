@@ -135,11 +135,14 @@ Win1 除上述三个 exact path 外无任何写域；不得修改现有 Harness 
 - `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.vue`；
 - `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts`；
 - `frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.ts`；
+- `frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts`；
 - `internal/application/repository/wiki_release.go`；
 - `internal/application/repository/wiki_release_scope_test.go`；
 - `internal/application/service/wiki_release.go`；
 - `internal/application/service/schema_wiki.go`；
 - `internal/application/service/schema_wiki_test.go`；
+- `internal/application/service/schema_wiki_citation_content.go`；
+- `internal/application/service/schema_wiki_citation_content_test.go`；
 - `internal/application/service/schema_wiki_citation_revision_test.go`；
 - `internal/handler/schema_wiki.go`；
 - `internal/handler/schema_wiki_test.go`；

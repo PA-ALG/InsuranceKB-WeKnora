@@ -17,7 +17,8 @@
 - Frozen manifest/vector: `harness/tests/fixtures/entity_page_graph_830_g1_contract_vector.json`
 - Product-code write domain: the exact Go and frontend files listed below; no migrations, new routes, payload rewrites, frontend redesign, second Head, second publisher, production mutation, Provider/model calls, or G2 work.
 - Build budget after all source tests pass: one replacement app image and one replacement frontend image. The original D2 images and receipts remain immutable.
-- Controller alone commits, builds, integrates, and writes evidence. Review windows are read-only.
+- Controller alone executes every commit step below, builds, integrates, and writes evidence.
+  Review windows are read-only.
 
 ## File map
 
@@ -34,6 +35,39 @@
 - `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts`: current/pinned source-click regression using the unchanged route.
 - `openspec/changes/126-830-g1-entity-field-assertion-pages/{tasks.md,validation-report.md}`: RED/GREEN/build/D3 custody.
 - `docs/insurance-kb/evidence/830-g1/m3/`: append-only replacement-build and D3 receipts; never rewrite the original D2 receipts.
+
+### Task 0: Freeze the expanded exact-path Owner matrix
+
+**Files:**
+- Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/proposal.md`
+- Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/validation-report.md`
+
+- [ ] **Step 1: Add only the newly required exact paths**
+
+Add these three paths to the G1-Win2 matrix before any product-code write:
+
+```text
+internal/application/service/schema_wiki_citation_content.go
+internal/application/service/schema_wiki_citation_content_test.go
+frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts
+```
+
+The first two are limited to private token claims/validation; the third is a
+focused parser test. Governance/evidence remains controller-only.
+
+- [ ] **Step 2: Commit the matrix amendment**
+
+The G1 controller alone runs:
+
+```bash
+git add openspec/changes/126-830-g1-entity-field-assertion-pages/proposal.md openspec/changes/126-830-g1-entity-field-assertion-pages/validation-report.md docs/superpowers/plans/2026-09-03-g1-successor-source-bridge.md
+git commit -m "docs(G1): freeze successor bridge write paths"
+```
+
+- [ ] **Step 3: Obtain read-only matrix/plan approval**
+
+Dispatch the existing plan-document reviewer against the new exact commit/tree.
+Do not start Task 1 until status is `Approved` with no blocking issue.
 
 ### Task 1: Prove and implement successor page identity
 
@@ -407,7 +441,10 @@ Dispatch the mandatory independent read-only review against the exact commit/tre
 
 - [ ] **Step 1: Freeze inputs before invoking Docker**
 
-Record literal final source commit/tree; SHA-256 of `go.mod`, `go.sum`, `frontend/package-lock.json`, both Dockerfiles, `.dockerignore` files, the app source subset, frontend source subset, and `frontend/dist`. Confirm replacement counters are app `0` and frontend `0`.
+Record literal final source commit/tree; SHA-256 of `go.mod`, `go.sum`,
+`frontend/package-lock.json`, both Dockerfiles, `.dockerignore` files, the app
+source subset, and frontend source subset. Confirm replacement counters are app
+`0` and frontend `0`. Do not hash or admit the stale D2 `frontend/dist`.
 
 - [ ] **Step 2: Build the app once**
 
@@ -415,7 +452,13 @@ Use `docker build --platform linux/arm64 -f docker/Dockerfile.app` with a unique
 
 - [ ] **Step 3: Build frontend dist and image once**
 
-Run the repository's pinned frontend dist build, hash the completed dist, then invoke exactly one `docker build --platform linux/arm64 -f frontend/Dockerfile` with a unique immutable tag and matching labels. Do not rebuild on failure; record the actual result and stop G1 if either single budget is consumed without an admissible image.
+Run the repository's pinned frontend dist build exactly once. Immediately after
+it succeeds, freeze the completed dist's hash, file count and size; verify the
+source/lock/Docker inputs still equal Step 1; then invoke exactly one
+`docker build --platform linux/arm64 -f frontend/Dockerfile` with a unique
+immutable tag and matching labels. Do not rebuild dist or image on failure;
+record the actual result and stop G1 if either single budget is consumed
+without an admissible image.
 
 - [ ] **Step 4: Verify exact image identities**
 
