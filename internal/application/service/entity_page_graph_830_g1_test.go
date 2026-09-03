@@ -339,6 +339,246 @@ func TestEntityPageGraph830G1RejectsSuccessorBaseIdentityDrift(t *testing.T) {
 	require.ErrorIs(t, err, ErrEntityPageGraphIntegrity830G1)
 }
 
+func entityPageGraphSourceCustody830G1(
+	t *testing.T,
+	manifest types.EntityPageManifest830G1,
+) validatedSchemaWikiCustody {
+	t.Helper()
+	release := types.KnowledgeWikiReleaseV1{
+		CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+		Entity:          types.EntityIdentityV1{EntityID: manifest.EntityID},
+		EntityVersion: types.EntityVersionV1{
+			EntityID: manifest.EntityID, VersionID: manifest.EntityVersionID,
+			ProductVersionID: manifest.InputAuthority.ProductVersionID,
+		},
+		SchemaPack: types.SchemaPackV1{
+			SchemaPackID: manifest.Profile.SchemaPackID, SchemaVersion: manifest.Profile.SchemaVersion,
+			SchemaPackSHA256: manifest.Profile.SchemaPackSHA256,
+		},
+	}
+	evidence := types.Schema67CandidateEvidenceAuthorityV1{
+		Contract:        manifest.InputAuthority.EvidenceAuthorityContract,
+		CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+		AuthoritySHA256: manifest.InputAuthority.EvidenceAuthoritySHA256,
+	}
+	for _, source := range manifest.InputAuthority.SourceAuthorities {
+		evidence.SourceAuthorities = append(evidence.SourceAuthorities, types.Schema67LiveSourceAuthorityV1{
+			SourceRole: source.SourceRole, SourceSHA256: source.SourceSHA256,
+			LiveRevisionSourceReceipt: types.LiveRevisionSourceReceiptV1{
+				RevisionSourceID: source.RevisionSourceID, KnowledgeID: source.KnowledgeID,
+				ResourceID: source.ResourceID, EvidenceParseAttemptID: source.EvidenceParseAttemptID,
+				WeKnoraParseAttempt:  int64(source.WeKnoraParseAttempt),
+				ParsedDocumentSHA256: source.ParsedDocumentSHA256,
+				ParseManifestSHA256:  source.ParseManifestSHA256,
+				SourceReceiptSHA256:  source.SourceReceiptSHA256,
+			},
+		})
+	}
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		candidate, err := member.FieldAssertionPayload()
+		require.NoError(t, err)
+		logicalMemberRef := "field:" + member.StableKey
+		page := types.SchemaFieldPageV1{
+			Contract: "schema-field-page.v1", FieldID: member.StableKey,
+			State: candidate.State, ValueSnapshot: candidate.ValueSnapshot,
+			EvidenceReceiptSHA256s: append([]string{}, candidate.Reference.EvidenceReceiptSHA256s...),
+		}
+		for _, exact := range candidate.Citations {
+			source := types.CitationTargetV1{
+				Contract: "citation-target.v1", CitationID: "citation-" + exact.JoinReceiptSHA256[:24],
+				SourceRole: exact.SourceRole, SpaceID: manifest.SpaceID,
+				EntityVersionID: manifest.EntityVersionID, KnowledgeID: exact.KnowledgeID,
+				ChunkID: exact.ChunkID, SourceRevisionID: exact.SourceRevisionID,
+				ParseAttemptID: exact.ParseAttemptID, ParsedDocumentSHA256: exact.ParsedDocumentSHA256,
+				ParseManifestSHA256: exact.ParseManifestSHA256, PageNumber: exact.PageNumber,
+				LocatorRef: exact.LocatorRef, BBox: exact.BBox, QuoteSnapshot: exact.QuoteSnapshot,
+				QuoteSHA256: exact.QuoteSHA256, ContentSnapshotSHA256: exact.LocatorContentSHA256,
+				LogicalMemberRef: logicalMemberRef,
+			}
+			source.CitationSHA256 = schemaWikiTestHashWithout(
+				t, source.Contract, source, "citation_sha256",
+			)
+			page.Citations = append(page.Citations, source)
+			binding := types.CitationMemberBindingV1{
+				Contract: "citation-member-binding.v1", CitationSHA256: source.CitationSHA256,
+				LogicalMemberRef: logicalMemberRef, MemberDigest: member.MemberDigest,
+			}
+			binding.BindingSHA256 = schemaWikiTestHashWithout(
+				t, binding.Contract, binding, "binding_sha256",
+			)
+			release.CitationBindings = append(release.CitationBindings, binding)
+			evidence.JoinReceipts = append(evidence.JoinReceipts, types.Schema67CitationAuthorityJoinReceiptV1{
+				CandidateSHA256: manifest.InputAuthority.CandidateSHA256,
+				FieldID:         member.StableKey, ReceiptSHA256: exact.JoinReceiptSHA256,
+				EvidenceReceiptSHA256: exact.EvidenceReceiptSHA256,
+				SourceRole:            exact.SourceRole, SourceSHA256: exact.SourceSHA256,
+				ParsedDocumentSHA256:   exact.ParsedDocumentSHA256,
+				ParseManifestSHA256:    exact.ParseManifestSHA256,
+				EvidenceParseAttemptID: exact.ParseAttemptID,
+				LocatorKind:            exact.LocatorKind, LocatorRef: exact.LocatorRef,
+				PageNumber: exact.PageNumber, LocatorContentSHA256: exact.LocatorContentSHA256,
+				NormalizedBBox: exact.BBox, KnowledgeID: exact.KnowledgeID,
+				ChunkID: exact.ChunkID, QuoteSHA256: exact.QuoteSHA256,
+				LiveRevisionSourceReceipt: types.LiveRevisionSourceReceiptV1{
+					RevisionSourceID: exact.SourceRevisionID,
+				},
+			})
+		}
+		payload, err := json.Marshal(page)
+		require.NoError(t, err)
+		release.Members = append(release.Members, types.SchemaWikiMemberV1{
+			MemberKind: "field", MemberRef: logicalMemberRef,
+			MemberDigest: member.MemberDigest, Payload: payload,
+		})
+		release.SchemaPack.OrderedFieldIDs = append(
+			release.SchemaPack.OrderedFieldIDs, member.StableKey,
+		)
+	}
+	require.Len(t, evidence.JoinReceipts, 17)
+	validated := validatedSchemaWikiCustody{release: release, candidateEvidenceAuthority: evidence}
+	require.True(t, entityPageGraphManifestMatchesSchemaSource830G1(manifest, validated))
+	return validated
+}
+
+func firstEntityPageGraphCitation830G1(
+	t *testing.T,
+	manifest types.EntityPageManifest830G1,
+) (string, string, string) {
+	t.Helper()
+	for _, member := range manifest.Members {
+		if member.PageKind != "field" {
+			continue
+		}
+		payload, err := member.FieldAssertionPayload()
+		require.NoError(t, err)
+		if len(payload.Citations) > 0 {
+			join := payload.Citations[0].JoinReceiptSHA256
+			return member.StableKey, "citation-" + join[:24], join
+		}
+	}
+	require.FailNow(t, "frozen G1 manifest has no citation")
+	return "", "", ""
+}
+
+func TestEntityPageGraph830G1CurrentSuccessorCitationUsesHistoricalSource(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	snapshot, err := fixture.service.LoadCurrentEntityPageGraphRelease830G1(
+		fixture.ctx, fixture.principal, fixture.scope,
+	)
+	require.NoError(t, err)
+	fieldKey, citationID, joinID := firstEntityPageGraphCitation830G1(t, fixture.manifest)
+	request, err := entityPageGraphCitationRequestFromSource830G1(
+		fixture.manifest, snapshot, entityPageGraphSourceCustody830G1(t, fixture.manifest),
+		fixture.scope, "field:"+fieldKey, citationID,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.manifest.ReleaseID, request.ReleaseID)
+	require.Equal(t, fixture.manifest.ActivationEpoch, request.ActivationEpoch)
+	require.Equal(t, fixture.successorID, request.citationServingReleaseID)
+	require.Equal(t, fixture.manifest.ActivationEpoch+1, request.citationServingActivationEpoch)
+	require.Equal(t, "release", request.citationRouteAuthorityKind)
+	require.Equal(t, joinID, request.CoordinateAuthorityReceipt.ReceiptSHA256)
+
+	content := &schemaWikiC6CitationContentSpy{}
+	_, err = content.IssueExactRevision(fixture.ctx, request)
+	require.NoError(t, err)
+	require.Equal(t, request, content.request)
+	require.Equal(t, 1, content.issueCurrentCalls)
+}
+
+func TestEntityPageGraph830G1PinnedCitationSurvivesNonG1HeadMove(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	fixture.moveHeadToNonG1Control(t)
+	_, err := fixture.service.LoadCurrentEntityPageGraphRelease830G1(
+		fixture.ctx, fixture.principal, fixture.scope,
+	)
+	require.ErrorIs(t, err, ErrEntityPageGraphIntegrity830G1)
+	headQueries := 0
+	require.NoError(t, fixture.db.Callback().Query().Before("gorm:query").Register(
+		"test:count-g1-pinned-citation-head-queries",
+		func(tx *gorm.DB) {
+			if tx.Statement != nil && tx.Statement.Table == "wiki_release_heads" {
+				headQueries++
+			}
+		},
+	))
+	snapshot, err := fixture.service.LoadPinnedEntityPageGraphRelease830G1(
+		fixture.ctx, fixture.principal, fixture.scope, fixture.successorID,
+	)
+	require.NoError(t, err)
+	fieldKey, citationID, _ := firstEntityPageGraphCitation830G1(t, fixture.manifest)
+	request, err := entityPageGraphCitationRequestFromSource830G1(
+		fixture.manifest, snapshot, entityPageGraphSourceCustody830G1(t, fixture.manifest),
+		fixture.scope, "field:"+fieldKey, citationID,
+	)
+	require.NoError(t, err)
+	require.Equal(t, "release", request.citationRouteAuthorityKind)
+	require.Equal(t, fixture.successorID, request.citationServingReleaseID)
+	require.Equal(t, fixture.manifest.ReleaseID, request.ReleaseID)
+	require.Zero(t, headQueries)
+}
+
+func TestEntityPageGraph830G1CitationBridgeRejectsCustodyDrift(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	snapshot, err := fixture.service.LoadPinnedEntityPageGraphRelease830G1(
+		fixture.ctx, fixture.principal, fixture.scope, fixture.successorID,
+	)
+	require.NoError(t, err)
+	fieldKey, citationID, joinID := firstEntityPageGraphCitation830G1(t, fixture.manifest)
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*EntityPageGraphReleaseSnapshot830G1, *validatedSchemaWikiCustody)
+	}{
+		{name: "base identity", mutate: func(serving *EntityPageGraphReleaseSnapshot830G1, _ *validatedSchemaWikiCustody) {
+			serving.SourceReleaseID = "release-foreign-source"
+		}},
+		{name: "revision", mutate: func(_ *EntityPageGraphReleaseSnapshot830G1, source *validatedSchemaWikiCustody) {
+			index := indexOfEntityPageJoin830G1(t, source.candidateEvidenceAuthority.JoinReceipts, joinID)
+			source.candidateEvidenceAuthority.JoinReceipts[index].LiveRevisionSourceReceipt.RevisionSourceID += "-drift"
+		}},
+		{name: "page", mutate: func(_ *EntityPageGraphReleaseSnapshot830G1, source *validatedSchemaWikiCustody) {
+			index := indexOfEntityPageJoin830G1(t, source.candidateEvidenceAuthority.JoinReceipts, joinID)
+			source.candidateEvidenceAuthority.JoinReceipts[index].PageNumber++
+		}},
+		{name: "bbox", mutate: func(_ *EntityPageGraphReleaseSnapshot830G1, source *validatedSchemaWikiCustody) {
+			index := indexOfEntityPageJoin830G1(t, source.candidateEvidenceAuthority.JoinReceipts, joinID)
+			source.candidateEvidenceAuthority.JoinReceipts[index].NormalizedBBox.X0++
+		}},
+		{name: "quote", mutate: func(_ *EntityPageGraphReleaseSnapshot830G1, source *validatedSchemaWikiCustody) {
+			for index := range source.release.Members {
+				if source.release.Members[index].MemberRef != "field:"+fieldKey {
+					continue
+				}
+				var page types.SchemaFieldPageV1
+				require.NoError(t, json.Unmarshal(source.release.Members[index].Payload, &page))
+				page.Citations[0].QuoteSnapshot += " drift"
+				source.release.Members[index].Payload, err = json.Marshal(page)
+				require.NoError(t, err)
+			}
+		}},
+		{name: "join", mutate: func(_ *EntityPageGraphReleaseSnapshot830G1, source *validatedSchemaWikiCustody) {
+			index := indexOfEntityPageJoin830G1(t, source.candidateEvidenceAuthority.JoinReceipts, joinID)
+			source.candidateEvidenceAuthority.JoinReceipts[index].ReceiptSHA256 = strings.Repeat("0", 64)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			serving := snapshot
+			source := entityPageGraphSourceCustody830G1(t, fixture.manifest)
+			test.mutate(&serving, &source)
+			request, requestErr := entityPageGraphCitationRequestFromSource830G1(
+				fixture.manifest, serving, source, fixture.scope,
+				"field:"+fieldKey, citationID,
+			)
+			require.Zero(t, request)
+			require.ErrorIs(t, requestErr, ErrSchemaWikiCitationUnavailable)
+		})
+	}
+}
+
 func TestWikiReleaseCreateDraftUsesEmbeddedEntityPageManifestDigest830G1(t *testing.T) {
 	t.Parallel()
 	snapshot := entityPageGraphReleaseFixture830G1(t)

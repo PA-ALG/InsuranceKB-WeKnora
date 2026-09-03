@@ -436,6 +436,132 @@ func entityPageGraphCitationMatchesSchemaSource830G1(
 		source.ContentSnapshotSHA256 == join.LocatorContentSHA256
 }
 
+func entityPageGraphCitationRequestFromSource830G1(
+	manifest types.EntityPageManifest830G1,
+	serving EntityPageGraphReleaseSnapshot830G1,
+	validatedSource validatedSchemaWikiCustody,
+	scope types.WikiReleaseScope,
+	logicalSlug string,
+	citationID string,
+) (CitationRevisionReadRequestV1, error) {
+	fieldKey, fieldRoute := strings.CutPrefix(logicalSlug, "field:")
+	servingManifest, manifestErr := types.ParseEntityPageManifest830G1(serving.Manifest)
+	if !fieldRoute || strings.TrimSpace(fieldKey) == "" || logicalSlug != "field:"+fieldKey ||
+		strings.TrimSpace(citationID) == "" || manifestErr != nil ||
+		servingManifest.ManifestSHA256 != manifest.ManifestSHA256 ||
+		serving.SourceReleaseID != manifest.ReleaseID ||
+		serving.SourceActivationEpoch != manifest.ActivationEpoch ||
+		!entityPageGraphManifestMatchesSchemaSource830G1(manifest, validatedSource) {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	if _, err := readEntityPageGraphSnapshot830G1(
+		scope,
+		serving,
+		EntityPageGraphSelector830G1{
+			EntityID: manifest.EntityID, PageKind: "field", StableKey: fieldKey,
+		},
+		"pinned",
+	); err != nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	member, found := manifest.Member("field", fieldKey)
+	if !found {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	payload, err := member.FieldAssertionPayload()
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	var candidate *types.EntityPageExactCitation830G1
+	for index := range payload.Citations {
+		joinSHA256 := payload.Citations[index].JoinReceiptSHA256
+		if !validServiceSHA256(joinSHA256) || citationID != "citation-"+joinSHA256[:24] {
+			continue
+		}
+		copy := payload.Citations[index]
+		candidate = &copy
+		break
+	}
+	if candidate == nil || candidate.CitationID != "citation_"+candidate.JoinReceiptSHA256 {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	var join *types.Schema67CitationAuthorityJoinReceiptV1
+	for index := range validatedSource.candidateEvidenceAuthority.JoinReceipts {
+		receipt := &validatedSource.candidateEvidenceAuthority.JoinReceipts[index]
+		if receipt.ReceiptSHA256 == candidate.JoinReceiptSHA256 && receipt.FieldID == fieldKey {
+			copy := *receipt
+			join = &copy
+			break
+		}
+	}
+	if join == nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	request, err := schemaWikiCitationRequest(
+		validatedSource,
+		scope,
+		manifest.ReleaseID,
+		manifest.ActivationEpoch,
+		logicalSlug,
+		citationID,
+	)
+	if err != nil || request.CoordinateAuthorityReceipt == nil ||
+		request.ReleaseID != serving.SourceReleaseID ||
+		request.ActivationEpoch != serving.SourceActivationEpoch ||
+		request.CandidateSHA256 != manifest.InputAuthority.CandidateSHA256 ||
+		request.FieldID != fieldKey ||
+		request.CoordinateAuthorityReceipt.ReceiptSHA256 != join.ReceiptSHA256 ||
+		!entityPageGraphCitationMatchesSchemaSource830G1(*candidate, *join, request.Citation) {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	request.citationRouteAuthorityKind = "release"
+	request.citationServingReleaseID = serving.ReleaseID
+	request.citationServingActivationEpoch = serving.ActivationEpoch
+	return request, nil
+}
+
+func (s *SchemaWikiService) entityPageGraphCitationRequest830G1(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	servingReleaseID string,
+	logicalSlug string,
+	citationID string,
+) (CitationRevisionReadRequestV1, error) {
+	if s == nil || s.releaseAuthority == nil || strings.TrimSpace(servingReleaseID) == "" {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	serving, err := s.loadEntityPageGraphRelease830G1(
+		ctx, principal, scope, servingReleaseID, 0,
+	)
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	manifest, err := types.ParseEntityPageManifest830G1(serving.Manifest)
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	sourcePin := WikiReleasePinnedRead{
+		scope: scope, releaseID: serving.SourceReleaseID,
+		activationEpoch: serving.SourceActivationEpoch,
+	}
+	validatedSource, _, err := s.loadPinnedSchemaRelease(ctx, principal, sourcePin)
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, ErrSchemaWikiCitationUnavailable
+	}
+	request, err := entityPageGraphCitationRequestFromSource830G1(
+		manifest, serving, validatedSource, scope, logicalSlug, citationID,
+	)
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, err
+	}
+	request, err = s.bindSchemaWikiC6FrozenNativeSource(validatedSource, request)
+	if err != nil {
+		return CitationRevisionReadRequestV1{}, err
+	}
+	return request, nil
+}
+
 func (s *SchemaWikiService) IssueEntityPageGraphPreparationCitationAuthority830G1(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
