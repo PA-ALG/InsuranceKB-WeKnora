@@ -6,7 +6,7 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_ISOLATED_D3_RELEASE_HEAD_AND_LIVE_SOURCE_CLICK_NOT_RUN
+CURRENT_RED=FINAL_INDEPENDENT_READ_ONLY_ACCEPTANCE_NOT_RUN
 FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
 DOCKER_ACTION=REUSE_EXACT_REPLACEMENT_IMAGES_NO_BUILD
@@ -52,7 +52,7 @@ M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
 M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
 M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
-NEXT_PHYSICAL_RESULT=RUN_ISOLATED_D3_WITH_EXACT_REPLACEMENT_IMAGE_IDS
+NEXT_PHYSICAL_RESULT=COMMIT_D3_CLOSEOUT_AND_DISPATCH_FINAL_INDEPENDENT_REVIEW
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -114,7 +114,20 @@ M3_D2_ORIGINAL_APP_DISPOSITION=IMMUTABLE_SUPERSEDED_PENDING_REPLACEMENT
 M3_PRODUCTION_8081_BEFORE=200
 M3_PRODUCTION_8081_GUEST=200
 M3_PRODUCTION_8081_HOST=CONNECTION_REFUSED
-M3_RELEASE_LIFECYCLE=NOT_RUN
+M3_D3_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json
+M3_D3_APP_IMAGE=sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb
+M3_D3_FRONTEND_IMAGE=sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4
+M3_RELEASE_LIFECYCLE=PASS
+M3_D3_RELEASE_ID=release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28
+M3_D3_ACTIVATION_EPOCH=3
+M3_D3_MEMBER_COUNT=76
+M3_D3_CURRENT_PAGE_COUNT=76
+M3_D3_PINNED_PAGE_COUNT=76
+M3_D3_SOURCE_CLICK_COUNT=3
+M3_D3_PRODUCTION_UNCHANGED=true
+M3_D3_TEMP_RUNTIME_CLEANUP=PASS
+M3_FINAL_VERIFICATION=PASS
+M3_FINAL_INDEPENDENT_REVIEW=NOT_RUN
 M3_PROVIDER_MODEL_CALLS=0
 G1_PRIOR_BUSINESS_STATUS=STOPPED
 G1_BUSINESS_STATUS=IN_PROGRESS
@@ -128,10 +141,10 @@ G2_AND_LATER=LOCKED
 | G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
-| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626`, `623c2ac12` | M1 exact click + M2 known custody PASS; successor D3 click NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
-| G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | short titles + 76/76 namespaces PASS; successor D3 UI NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
-| G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
-| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626`, `623c2ac12` | preparation Preview PASS; successor D3 no-mix NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
+| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626`, `623c2ac12` | three successor D3 source clicks return exact old-source PDF bytes | M3 D3 PASS / FINAL REVIEW PENDING |
+| G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | 76 current + 76 pinned envelopes preserve immutable source members | M3 D3 PASS / FINAL REVIEW PENDING |
+| G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft→Ready→one successor Release with 76 members PASS | M3 D3 PASS / FINAL REVIEW PENDING |
+| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626`, `623c2ac12` | successor current/pinned 76/76 no-mix; tampered/missing fail closed | M3 D3 PASS / FINAL REVIEW PENDING |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
 | G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
@@ -351,3 +364,41 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   images/receipts and the first replacement failure remain immutable. The isolated build window
   started/stopped no containers and made zero DB/Release/Head/production/Provider/model/G2 writes.
   D3 must reuse these two exact image IDs; G1 remains `IN_PROGRESS` and G2 remains locked.
+
+## M3 isolated D3 result
+
+- D3 reused the exact replacement App `sha256:37918140...e6eeb` and Frontend
+  `sha256:338758bc...f4d4` images on `weknora-g1-d3-450112-internal`, whose Docker network was
+  `Internal=true`. App and Frontend were attached only to that network; no egress route was added.
+- The first App start failed closed before HTTP listen because the copied C5 directory/members had
+  `0755/0644` modes while the sealed Go reader requires exact `0700/0600`. The content hashes were
+  unchanged. Correcting only the temporary copy's modes made the repository real-bundle test PASS;
+  the same App image then started healthy. No replacement image was rebuilt and no business row was
+  written by the failed start.
+- Before activation, the old Active release `release-42a3dd0c-ec76-4017-a288-37f1b13519a0` at
+  epoch `2` and all 75 of its pinned members were read successfully through the real HTTP path.
+  The existing 76-member Draft `g1-m1-740d9b7c-preview` was reviewed to Ready with one signed
+  whole-batch decision and activated once through the existing CAS.
+- The resulting `NOT_FOR_PRODUCTION` successor is
+  `release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28` at epoch `3`, based exactly on the old release/
+  epoch. Clone counts moved from `3/2/150/1/2` to `3/3/226/1/3`; this is exactly one Release,
+  76 members, one Head transition and one receipt.
+- All 76 current and 76 exact-pinned entity routes returned the successor serving envelope while
+  retaining byte-equivalent frozen old-source members. Unique page IDs were 76/76, no member was
+  mixed or rewritten, and all current/pinned pairs matched.
+- The first citation for `insured_eligibility`, `health_declaration_requirements`, and
+  `guaranteed_renewal_period` returned HTTP 200 and exact 1,047,811-byte source PDF SHA-256
+  `88b784c6...45edc` on pages 2, 27 and 1. A tampered opaque token returned 403 and a missing
+  citation returned 400, with zero fallback requests.
+- Production App/Frontend container IDs, image IDs and start times matched before/after; production
+  `8081` stayed HTTP 200 and its DB still contained zero `wiki_release_%` tables. Provider calls,
+  model calls, production writes/restarts/replacements, second publisher/Head and G2 actions were
+  all zero.
+- Temporary App/Frontend containers, internal network, DB role, auth token, JWT/signing keys,
+  scripts and transfer tar were removed after capture. The Clone successor/Head/receipt remain as
+  the reviewable D3 result. Full receipt:
+  `docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json`.
+- Fresh closeout verification passed: Go service/handler/router packages, Go vet, Harness
+  `54 passed, 3 skipped`, Frontend contract `7/7`, component/API `36/36`, typecheck and strict
+  OpenSpec validation. G1 remains `IN_PROGRESS` only until the required final independent read-only
+  acceptance reports `UNRESOLVED_COUNT=0`; G2 remains locked.

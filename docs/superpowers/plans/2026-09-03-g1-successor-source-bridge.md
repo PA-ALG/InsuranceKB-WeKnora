@@ -78,7 +78,7 @@ Approved at `63b4a11ddebdfdc310bff087d90919209eef3e58` /
 - Modify: `internal/application/service/entity_page_graph_830_g1.go`
 - Modify: `internal/application/service/entity_page_graph_830_g1_test.go`
 
-- [ ] **Step 1: Write the failing real-successor tests**
+- [x] **Step 1: Write the failing real-successor tests**
 
 Add tests named:
 
@@ -100,7 +100,7 @@ require.Equal(t, rawManifestBefore, rawManifestAfter)
 
 After a legal non-G1 control Release moves Head, current entity read must fail with `ErrEntityPageGraphIntegrity830G1`, while exact pinned `release-g1-successor` still returns the same bytes and original activation epoch. Base Release or epoch drift must fail with the same typed integrity error and perform no fallback read.
 
-- [ ] **Step 2: Run the tests and capture RED**
+- [x] **Step 2: Run the tests and capture RED**
 
 Run:
 
@@ -110,7 +110,7 @@ go test ./internal/application/service -run 'TestEntityPageGraph830G1(ReadsSucce
 
 Expected: FAIL because the current loader requires `manifest.ReleaseID == release.ID` and `manifest.ActivationEpoch == serving epoch`.
 
-- [ ] **Step 3: Add explicit source identity to the internal snapshot**
+- [x] **Step 3: Add explicit source identity to the internal snapshot**
 
 Extend the private snapshot only:
 
@@ -127,7 +127,7 @@ type EntityPageGraphReleaseSnapshot830G1 struct {
 
 Preparation snapshots set serving and source identities to the manifest tuple. Current/pinned successor snapshots set serving identity from the successor/Head and source identity from `WikiRelease.BaseReleaseID/BaseActivationEpoch`.
 
-- [ ] **Step 4: Implement the closed successor loader**
+- [x] **Step 4: Implement the closed successor loader**
 
 In `loadEntityPageGraphRelease830G1`, require all of:
 
@@ -144,7 +144,7 @@ preparation.ExpectedActivationEpoch == manifest.ActivationEpoch
 
 For an exact pinned read, derive `servingActivationEpoch` as `release.BaseActivationEpoch + 1`; do not query Head. In `readEntityPageGraphSnapshot830G1`, return `snapshot.ReleaseID` in the envelope but never mutate `manifest`, `member`, payload, digest, or source reference.
 
-- [ ] **Step 5: Run GREEN and compatibility tests**
+- [x] **Step 5: Run GREEN and compatibility tests**
 
 Run:
 
@@ -154,7 +154,7 @@ go test ./internal/application/service -run 'Test(EntityPageGraph|SchemaWikiServ
 
 Expected: PASS, including preparation behavior and existing custody-drift tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/application/service/entity_page_graph_830_g1.go internal/application/service/entity_page_graph_830_g1_test.go
@@ -168,7 +168,7 @@ git commit -m "fix(G1): separate successor and source identities"
 - Create: `frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts`
 - Modify: `frontend/src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts`
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Create response fixtures with:
 
@@ -189,7 +189,7 @@ Assert current and pinned parse successfully, preparation still requires all thr
 
 Update the component test to prove both current and pinned pages continue to send the serving successor ID to the unchanged `/releases/:release_id/.../preview` route.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -199,7 +199,7 @@ cd frontend && npm run test:unit -- --run src/views/knowledge/schema-wiki/entity
 
 Expected: FAIL at the old equality checks against `data.release_id`.
 
-- [ ] **Step 3: Implement the mode-dependent identity predicate**
+- [x] **Step 3: Implement the mode-dependent identity predicate**
 
 Replace the two serving/source conflations with one explicit invariant:
 
@@ -216,7 +216,7 @@ if (reference.source_release_id !== sourceReleaseID) throw new Error()
 
 Do not add keys, routes, fallback, or payload transformations.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run the command from Step 2 and expect PASS, then:
 
@@ -232,7 +232,7 @@ git commit -m "fix(G1): parse serving and source release identities"
 - Modify: `internal/application/service/schema_wiki_citation_content.go`
 - Modify: `internal/application/service/schema_wiki_citation_content_test.go`
 
-- [ ] **Step 1: Write failing token tests**
+- [x] **Step 1: Write failing token tests**
 
 Add tests proving:
 
@@ -250,7 +250,7 @@ public.ActivationEpoch == sourceEpoch+1
 
 Tampering route kind, serving Release/epoch, source Release/epoch, scope, or signature must return `ErrSchemaWikiCitationUnavailable` before blob access. Existing preparation token tests must remain unchanged.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -260,7 +260,7 @@ go test ./internal/application/service -run 'TestSchemaWikiCitationContent(Route
 
 Expected: FAIL because token claims currently imply every standard token is `active` and expose only one Release tuple.
 
-- [ ] **Step 3: Add private request and token binding fields**
+- [x] **Step 3: Add private request and token binding fields**
 
 Add only unexported request fields:
 
@@ -280,11 +280,11 @@ SourceActivationEpoch uint64 `json:"source_activation_epoch"`
 
 Add `ReleaseID string` to `SchemaWikiCitationContentRouteAuthorityV1`. A normalization helper must default existing Schema requests to `active` with serving identity equal to the request's source identity; only `active` and `release` are valid.
 
-- [ ] **Step 4: Make public authority use serving identity**
+- [x] **Step 4: Make public authority use serving identity**
 
 `schemaWikiCitationPublicAuthority` must populate `ReleaseID/ActivationEpoch` from the normalized serving tuple. `IssueExactRevision`, `verify`, `ResolveRouteAuthority`, and `ReadByOpaqueToken` must validate route kind, serving tuple, source tuple, public authority, scope, and exact reconstructed request together. The token remains quote-free and the public authority schema remains unchanged.
 
-- [ ] **Step 5: Run GREEN and all citation-content tests**
+- [x] **Step 5: Run GREEN and all citation-content tests**
 
 Run:
 
@@ -294,7 +294,7 @@ go test ./internal/application/service -run 'TestSchemaWikiCitationContent' -cou
 
 Expected: PASS; generic active and preparation behavior unchanged.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/application/service/schema_wiki.go internal/application/service/schema_wiki_citation_content.go internal/application/service/schema_wiki_citation_content_test.go
@@ -308,7 +308,7 @@ git commit -m "fix(G1): seal citation serving and source identity"
 - Modify: `internal/application/service/entity_page_graph_830_g1_test.go`
 - Modify: `internal/application/service/schema_wiki.go`
 
-- [ ] **Step 1: Write failing bridge tests**
+- [x] **Step 1: Write failing bridge tests**
 
 Add real-custody tests for current and pinned successor citations. They must select the full G1 citation through the route's legacy short citation ID, validate the existing 17/17 join, and assert the issued public authority uses the successor tuple while the recorded content request uses the old source tuple.
 
@@ -319,7 +319,7 @@ After moving Head to a non-G1 control Release:
 - content read reconstructs from the exact successor and opens the same old 815 source bytes;
 - revision/page/bbox/quote/join/base identity mutations each return `ErrSchemaWikiCitationUnavailable` with zero blob fallback.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -329,7 +329,7 @@ go test ./internal/application/service -run 'TestEntityPageGraph830G1(CurrentSuc
 
 Expected: FAIL because only preparation citations currently traverse the G1 bridge and they require the old source to remain current.
 
-- [ ] **Step 3: Extract one request constructor**
+- [x] **Step 3: Extract one request constructor**
 
 Implement a private helper in `entity_page_graph_830_g1.go` that:
 
@@ -344,13 +344,13 @@ Implement a private helper in `entity_page_graph_830_g1.go` that:
 
 The helper accepts no caller-supplied source identity.
 
-- [ ] **Step 4: Preserve generic Schema and add G1 dispatch**
+- [x] **Step 4: Preserve generic Schema and add G1 dispatch**
 
 In `IssueCurrentSchemaCitationAuthority`, first try the requested concrete Release ID as an exact G1 successor. If it is valid, use the helper and issue `release` authority without querying Head; this is the same for a click originating from current rendering and one originating from pinned rendering because the unchanged HTTP route carries no read mode. If the requested Release is not a G1 successor, keep the existing generic Schema path: require it to be current, validate full Schema custody, and issue `active`. Do not permit historical generic Schema preview as a side effect, and do not turn malformed G1 custody into fallback success.
 
 In `ReadSchemaCitationContent`, resolve both public and route authority. For generic `active`, preserve the existing path: pin current Head and require the token's serving tuple to match. For G1 `release`, load the exact successor named by the signed serving identity without Head. Reconstruct the same old-source request and pass it to `ReadByOpaqueToken` so all signed identities are compared again before bytes open.
 
-- [ ] **Step 5: Run GREEN and regression packages**
+- [x] **Step 5: Run GREEN and regression packages**
 
 Run:
 
@@ -361,7 +361,7 @@ go test ./internal/application/service -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/application/service/entity_page_graph_830_g1.go internal/application/service/entity_page_graph_830_g1_test.go internal/application/service/schema_wiki.go
@@ -375,11 +375,11 @@ git commit -m "fix(G1): bridge successor citations to historical source"
 - Modify: `internal/handler/schema_wiki_test.go`
 - Modify: `internal/router/routes_schema_wiki_test.go`
 
-- [ ] **Step 1: Write failing middleware tests**
+- [x] **Step 1: Write failing middleware tests**
 
 Add one `release` route-authority case whose signed scope matches the path. Assert it reaches the downstream RAW ACL without calling `GetHeadForWikiKB`. Add foreign scope, empty Release ID, and unknown kind cases that abort with 403 and leak no identity.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -389,11 +389,11 @@ go test ./internal/handler ./internal/router -run 'Test.*Citation.*(Release|Scop
 
 Expected: FAIL because `RequireCitationContentScope` accepts only `active` and `preparation`.
 
-- [ ] **Step 3: Add the exact-release branch**
+- [x] **Step 3: Add the exact-release branch**
 
 For `authority.Kind == "release"`, require non-empty canonical `authority.ReleaseID` and the already-verified signed scope/path equality. Do not query or set Head. The service performs immutable successor custody validation before bytes open. Keep active and preparation branches byte-for-byte equivalent.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run the command from Step 2 plus `go test ./internal/handler ./internal/router -count=1`; expect PASS, then:
 
@@ -409,7 +409,7 @@ git commit -m "fix(G1): authorize exact release citation tokens"
 - Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/validation-report.md`
 - Create: `docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json`
 
-- [ ] **Step 1: Run formatting and focused suites**
+- [x] **Step 1: Run formatting and focused suites**
 
 ```bash
 gofmt -w internal/application/service/entity_page_graph_830_g1.go internal/application/service/entity_page_graph_830_g1_test.go internal/application/service/schema_wiki.go internal/application/service/schema_wiki_citation_content.go internal/application/service/schema_wiki_citation_content_test.go internal/handler/schema_wiki.go internal/handler/schema_wiki_test.go internal/router/routes_schema_wiki_test.go
@@ -419,15 +419,15 @@ cd frontend && npm run test:unit -- --run src/views/knowledge/schema-wiki/entity
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the frozen Harness and applicable broad checks**
+- [x] **Step 2: Run the frozen Harness and applicable broad checks**
 
 Use the existing repository commands recorded by the original G1 plan for Harness contract/vector tests, frontend type checking, and the full affected Go packages. No Docker yet. Every command, exit code, commit, tree, manifest hash, and clean/dirty state goes into the new append-only receipt.
 
-- [ ] **Step 3: Update OpenSpec from RED to source GREEN**
+- [x] **Step 3: Update OpenSpec from RED to source GREEN**
 
 Record actual commands and results only. Keep D3, production evidence, and business `G1=PASS` as NOT RUN. Change `NEXT_PHYSICAL_RESULT` to `FREEZE_REPLACEMENT_BUILD_INPUTS` only after all source checks pass.
 
-- [ ] **Step 4: Commit and obtain read-only code review**
+- [x] **Step 4: Commit and obtain read-only code review**
 
 ```bash
 git add internal frontend/src openspec/changes/126-830-g1-entity-field-assertion-pages docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json
@@ -442,18 +442,18 @@ Dispatch the mandatory independent read-only review against the exact commit/tre
 - Create: `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json`
 - Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/{tasks.md,validation-report.md}`
 
-- [ ] **Step 1: Freeze inputs before invoking Docker**
+- [x] **Step 1: Freeze inputs before invoking Docker**
 
 Record literal final source commit/tree; SHA-256 of `go.mod`, `go.sum`,
 `frontend/package-lock.json`, both Dockerfiles, `.dockerignore` files, the app
 source subset, and frontend source subset. Confirm replacement counters are app
 `0` and frontend `0`. Do not hash or admit the stale D2 `frontend/dist`.
 
-- [ ] **Step 2: Build the app once**
+- [x] **Step 2: Build the app once**
 
 Use `docker build --platform linux/arm64 -f docker/Dockerfile.app` with a unique immutable tag containing the literal final commit. Apply OCI revision plus frozen tree/source-subset/lock labels. Network/package retrieval is allowed only for the build; it must not touch production containers.
 
-- [ ] **Step 3: Build frontend dist and image once**
+- [x] **Step 3: Build frontend dist and image once**
 
 Run the repository's pinned frontend dist build exactly once. Immediately after
 it succeeds, freeze the completed dist's hash, file count and size; verify the
@@ -463,7 +463,7 @@ immutable tag and matching labels. Do not rebuild dist or image on failure;
 record the actual result and stop G1 if either single budget is consumed
 without an admissible image.
 
-- [ ] **Step 4: Verify exact image identities**
+- [x] **Step 4: Verify exact image identities**
 
 Use `docker image inspect` to record image ID, repo digest, platform, created time, size, labels, and base digests. Set both replacement counters to `1` and `NEXT_PHYSICAL_RESULT=START_ISOLATED_D3_WITH_REPLACEMENT_IMAGE_IDS`. Commit only the new receipt and OpenSpec state; never edit `d2-image-build.json` or `d2-app-build-reconciliation.json`.
 
@@ -474,19 +474,19 @@ Use `docker image inspect` to record image ID, repo digest, platform, created ti
 - Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/{tasks.md,validation-report.md}`
 - Modify/Create only the existing G1 closeout index files under `docs/insurance-kb/evidence/830-g1/`
 
-- [ ] **Step 1: Reconfirm isolation and production before-state**
+- [x] **Step 1: Reconfirm isolation and production before-state**
 
 Run D3 only on the isolated clone/network with no egress and the two exact replacement image IDs. Record production container IDs/image IDs/Head counts read-only before D3. Do not restart, replace, or write production.
 
-- [ ] **Step 2: Execute one real lifecycle**
+- [x] **Step 2: Execute one real lifecycle**
 
 Create G1 Draft from the frozen manifest, review to Ready, activate through the existing CAS, and record exactly one new successor Release, 76 members, one Head transition, and one receipt. Mark it `NOT_FOR_PRODUCTION` in evidence.
 
-- [ ] **Step 3: Verify live current, pinned, and source behavior**
+- [x] **Step 3: Verify live current, pinned, and source behavior**
 
 Assert all 76 pages use the successor serving envelope and immutable old-source members, current and exact pinned reads do not mix, all three known field source clicks return exact old-source bytes, and tampered/missing source cases fail closed. Move an isolated control Head only in the dedicated regression environment to prove pinned R1 survives while current G1 fails.
 
-- [ ] **Step 4: Prove negative effects remain zero**
+- [x] **Step 4: Prove negative effects remain zero**
 
 Record zero egress, Provider/model calls, second publisher/Head, G2 actions, and production writes/restarts/replacements. Re-read production identities and counts and compare to before-state.
 

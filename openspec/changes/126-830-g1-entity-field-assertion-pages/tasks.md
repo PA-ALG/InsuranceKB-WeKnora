@@ -90,11 +90,11 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 - [x] 原 D2 app/frontend identity 与首次 replacement 失败回执均冻结保留；用户重新授权的
   additional App 1/1 与 Frontend 1/1 build 均已成功，形成 exact replacement identities
   `sha256:37918140...e6eeb` 与 `sha256:338758bc...f4d4`，后续禁止重建。
-- [ ] 使用 replacement app + replacement frontend exact digest，在隔离环境形成一个
+- [x] 使用 replacement app + replacement frontend exact digest，在隔离环境形成一个
   `NOT_FOR_PRODUCTION` Release（D3）。
-- [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
-- [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
-- [ ] 证明生产 `8081`、生产 Active、Provider/model calls 均未变化。
+- [x] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
+- [x] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
+- [x] 证明生产 `8081`、生产 Active、Provider/model calls 均未变化。
 
 M3 D2 的首个观察结论已被后续只读取证纠正。integration
 `06b101665921844cabf666574514c2b71ebd4b12` / tree
@@ -170,12 +170,17 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
   Frontend 随后一次构建成功。两张 `linux/arm64` 镜像的 commit/tree/subset/lock labels
   全部匹配冻结输入；追加式回执：
   `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build-retry.json`。
-- [ ] D3 Release/Head/live source click、production before/after 复核与业务 `G1=PASS` 均
-  NOT RUN；G1 已重新进入 `IN_PROGRESS`，G2 继续锁定。
+- [x] D3 已使用两张 exact replacement images 形成唯一 successor
+  `release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28`；Head 从旧 815 release/epoch 2 原子前进到
+  epoch 3，新增 76 members 与 1 receipt。76 current + 76 pinned、三个 known field exact
+  source click、tampered/missing fail-closed、production before/after 和 Provider/model=0 全部
+  PASS。临时容器、internal network、DB role、auth token、JWT/签名私钥和一次性脚本均已清理；
+  回执：`docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json`。业务 `G1=PASS` 仍等待
+  最终 exact commit/tree 的独立只读验收，G2 继续锁定。
 
 ## Closeout
 
-- [ ] 完成 `docs/insurance-kb/evidence/830-g1/` 全部清单与复现步骤。
+- [x] 完成 `docs/insurance-kb/evidence/830-g1/` 全部清单与复现步骤。
 - [ ] 独立 reviewer 只读复核 exact head/tree/runtime/release/evidence pack，unresolved=0。
-- [ ] focused tests、适用 CI、git diff/status、worktree clean 全部有新证据。
+- [x] focused tests、适用 CI、git diff/status、worktree clean 全部有新证据。
 - [ ] 最终只报告 `G1=PASS|FAIL|STOPPED`；G2 readiness 只读，不启动 G2。
