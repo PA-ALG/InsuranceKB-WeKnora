@@ -39,19 +39,22 @@ var (
 )
 
 type CitationRevisionReadRequestV1 struct {
-	ReleaseID                  string
-	ActivationEpoch            uint64
-	PreparationID              string
-	EvaluationID               string
-	EvidenceID                 string
-	CandidateSHA256            string
-	FieldID                    string
-	Scope                      types.WikiReleaseScope
-	Citation                   types.CitationTargetV1
-	Binding                    types.CitationMemberBindingV1
-	EvidenceReceiptSHA256s     []string
-	CoordinateAuthorityReceipt *SchemaWikiCitationCoordinateAuthorityReceiptV1
-	frozenNativeSource         *schemaWikiC5FrozenNativeSource
+	ReleaseID                      string
+	ActivationEpoch                uint64
+	PreparationID                  string
+	EvaluationID                   string
+	EvidenceID                     string
+	CandidateSHA256                string
+	FieldID                        string
+	Scope                          types.WikiReleaseScope
+	Citation                       types.CitationTargetV1
+	Binding                        types.CitationMemberBindingV1
+	EvidenceReceiptSHA256s         []string
+	CoordinateAuthorityReceipt     *SchemaWikiCitationCoordinateAuthorityReceiptV1
+	frozenNativeSource             *schemaWikiC5FrozenNativeSource
+	citationRouteAuthorityKind     string
+	citationServingReleaseID       string
+	citationServingActivationEpoch uint64
 }
 
 type schemaWikiC5FrozenNativeSource struct {
@@ -95,6 +98,7 @@ type SchemaWikiCitationContentPort interface {
 type SchemaWikiCitationContentRouteAuthorityV1 struct {
 	Kind          string
 	Scope         types.WikiReleaseScope
+	ReleaseID     string
 	PreparationID string
 }
 

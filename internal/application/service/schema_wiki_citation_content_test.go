@@ -397,6 +397,7 @@ func TestSchemaWikiCitationContentRouteAuthorityDerivesSignedTokenKindAndScope(t
 	require.NoError(t, err)
 	require.Equal(t, "active", activeRoute.Kind)
 	require.Equal(t, fixture.request.Scope, activeRoute.Scope)
+	require.Equal(t, fixture.request.ReleaseID, activeRoute.ReleaseID)
 	require.Empty(t, activeRoute.PreparationID)
 
 	pdf := []byte("%PDF-1.7\npreparation route authority\n%%EOF")
@@ -442,4 +443,126 @@ func TestSchemaWikiCitationContentRouteAuthorityDerivesSignedTokenKindAndScope(t
 		require.Nil(t, resolved)
 		require.ErrorIs(t, resolveErr, ErrSchemaWikiCitationUnavailable)
 	}
+}
+
+func TestSchemaWikiCitationContentBindsSuccessorServingAndSourceIdentity(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x7c}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-successor",
+		map[string]ed25519.PrivateKey{"citation-token-key-successor": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	fixture.request.citationRouteAuthorityKind = "release"
+	fixture.request.citationServingReleaseID = "release-g1-successor"
+	fixture.request.citationServingActivationEpoch = fixture.request.ActivationEpoch + 1
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("successor source bytes")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks),
+		blob,
+		codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+	require.Equal(t, "release-g1-successor", authority.ReleaseID)
+	require.Equal(t, fixture.request.ActivationEpoch+1, authority.ActivationEpoch)
+	route, err := content.ResolveRouteAuthority(ctx, authority.OpaqueToken)
+	require.NoError(t, err)
+	require.Equal(t, "release", route.Kind)
+	require.Equal(t, "release-g1-successor", route.ReleaseID)
+	require.Equal(t, fixture.request.Scope, route.Scope)
+
+	opened, err := content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken, fixture.request,
+	)
+	require.NoError(t, err)
+	require.Equal(t, []byte("successor source bytes"), opened)
+	require.Equal(t, 1, blob.calls)
+}
+
+func TestSchemaWikiCitationContentRejectsIdentityClaimDrift(t *testing.T) {
+	t.Parallel()
+	now := time.Unix(1786441800, 0).UTC()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x7d}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-identity-drift",
+		map[string]ed25519.PrivateKey{"citation-token-key-identity-drift": privateKey},
+		func() time.Time { return now },
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	fixture.chunks.allChunks = []*types.Chunk{fixture.chunks.chunk}
+	fixture.request.citationRouteAuthorityKind = "release"
+	fixture.request.citationServingReleaseID = "release-g1-successor"
+	fixture.request.citationServingActivationEpoch = fixture.request.ActivationEpoch + 1
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("must not be read")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks),
+		blob,
+		codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.NoError(t, err)
+
+	for _, test := range []struct {
+		name   string
+		mutate func(*CitationRevisionReadRequestV1)
+	}{
+		{name: "route kind", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.citationRouteAuthorityKind = "active"
+		}},
+		{name: "serving release", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.citationServingReleaseID = "release-other-successor"
+		}},
+		{name: "serving epoch", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.citationServingActivationEpoch++
+		}},
+		{name: "source release", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.ReleaseID = "release-other-source"
+		}},
+		{name: "source epoch", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.ActivationEpoch++
+		}},
+		{name: "request scope", mutate: func(request *CitationRevisionReadRequestV1) {
+			request.Scope.SpaceID = "space-other"
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := fixture.request
+			test.mutate(&request)
+			opened, readErr := content.ReadByOpaqueToken(
+				ctx, fixture.request.Scope, authority.OpaqueToken, request,
+			)
+			require.Nil(t, opened)
+			require.ErrorIs(t, readErr, ErrSchemaWikiCitationUnavailable)
+			require.Zero(t, blob.calls)
+		})
+	}
+
+	foreignScope := fixture.request.Scope
+	foreignScope.SpaceID = "space-other"
+	opened, err := content.ReadByOpaqueToken(
+		ctx, foreignScope, authority.OpaqueToken, fixture.request,
+	)
+	require.Nil(t, opened)
+	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
+	require.Zero(t, blob.calls)
+
+	opened, err = content.ReadByOpaqueToken(
+		ctx, fixture.request.Scope, authority.OpaqueToken+"drift", fixture.request,
+	)
+	require.Nil(t, opened)
+	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
+	require.Zero(t, blob.calls)
 }
