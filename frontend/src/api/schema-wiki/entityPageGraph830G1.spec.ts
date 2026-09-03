@@ -38,6 +38,8 @@ const vector = JSON.parse(readFileSync(new URL(
   import.meta.url,
 ), 'utf8')) as EntityPageGraphVector830G1
 
+const successorReleaseID = 'release-g1-successor'
+
 function responseFor(stableKey: string) {
   const fixtureMember = vector.members.find(item => item.stable_key === stableKey)
   if (!fixtureMember) throw new Error(`missing fixture member: ${stableKey}`)
@@ -47,8 +49,8 @@ function responseFor(stableKey: string) {
     data: {
       contract: 'entity-page-read.830.g1.v1',
       read_mode: 'current',
-      release_id: vector.release_id,
-      activation_epoch: vector.activation_epoch,
+      release_id: successorReleaseID,
+      activation_epoch: vector.activation_epoch + 1,
       manifest_sha256: vector.manifest_sha256,
       entity_id: vector.entity_id,
       entity_version_id: vector.entity_version_id,
@@ -189,6 +191,8 @@ describe('entity page graph 830 G1 API', () => {
   it('bootstraps one exact preparation scope and preserves Candidate Preview mode', async () => {
     const response = responseFor('insured_eligibility')
     response.data.read_mode = 'preparation'
+    response.data.release_id = vector.release_id
+    response.data.activation_epoch = vector.activation_epoch
     const preparationRead = response.data as typeof response.data & { preparation_id: string }
     preparationRead.preparation_id = 'preparation-g1'
     const actualScope = {

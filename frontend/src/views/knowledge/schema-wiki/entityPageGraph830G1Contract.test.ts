@@ -92,7 +92,7 @@ for (const mode of ['current', 'pinned'] as const) {
     assert.equal(parsed.release_id, SUCCESSOR_RELEASE_ID)
     assert.equal(parsed.member.release_id, SOURCE_RELEASE_ID)
     assert.equal(
-      (parsed.member.payload as { reference: { source_release_id: string } }).reference.source_release_id,
+      (parsed.member.payload as unknown as { reference: { source_release_id: string } }).reference.source_release_id,
       SOURCE_RELEASE_ID,
     )
   })
@@ -103,7 +103,7 @@ test('keeps preparation serving, member, and reference identities equal', () => 
   assert.equal(parsed.release_id, SOURCE_RELEASE_ID)
   assert.equal(parsed.member.release_id, SOURCE_RELEASE_ID)
   assert.equal(
-    (parsed.member.payload as { reference: { source_release_id: string } }).reference.source_release_id,
+    (parsed.member.payload as unknown as { reference: { source_release_id: string } }).reference.source_release_id,
     SOURCE_RELEASE_ID,
   )
 })
