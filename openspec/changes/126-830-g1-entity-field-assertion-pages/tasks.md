@@ -87,9 +87,9 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 
 ## M3 · Atomic isolated Release
 
-- [x] 原 D2 app/frontend identity 已冻结并保留；replacement app 的唯一 build 已消费，
-  app budget=1/1、frontend budget=0/1。App 在 `go mod download` 因代理连接 EOF/TLS
-  timeout 失败且未导出镜像；按冻结 STOP 规则不重试、不启动 frontend build/D3。
+- [x] 原 D2 app/frontend identity 与首次 replacement 失败回执均冻结保留；用户重新授权的
+  additional App 1/1 与 Frontend 1/1 build 均已成功，形成 exact replacement identities
+  `sha256:37918140...e6eeb` 与 `sha256:338758bc...f4d4`，后续禁止重建。
 - [ ] 使用 replacement app + replacement frontend exact digest，在隔离环境形成一个
   `NOT_FOR_PRODUCTION` Release（D3）。
 - [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
@@ -165,6 +165,11 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
 - [x] 用户随后明确授权“继续构建，推进 G1 pass”，仅 supersede App 不得重试、
   Frontend 不得继续和 G1 STOPPED 三项结论：新增 replacement App budget=1，重新放行
   尚未消费的 Frontend budget=1；失败事实与原回执继续不可变，G2 仍锁定。
+- [x] 代理回退链在隔离 `g1-build` profile 复核为可用；additional App 使用
+  `GOPROXY=https://goproxy.cn|direct` 成功越过原 `go mod download` 失败点并完成业务编译，
+  Frontend 随后一次构建成功。两张 `linux/arm64` 镜像的 commit/tree/subset/lock labels
+  全部匹配冻结输入；追加式回执：
+  `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build-retry.json`。
 - [ ] D3 Release/Head/live source click、production before/after 复核与业务 `G1=PASS` 均
   NOT RUN；G1 已重新进入 `IN_PROGRESS`，G2 继续锁定。
 

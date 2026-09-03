@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_REPLACEMENT_IMAGES_AND_ISOLATED_D3_NOT_RUN_AFTER_REBUILD_AUTHORIZATION
+CURRENT_RED=M3_ISOLATED_D3_RELEASE_HEAD_AND_LIVE_SOURCE_CLICK_NOT_RUN
 FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
-DOCKER_ACTION=ONE_ADDITIONAL_APP_BUILD_THEN_ONE_FRONTEND_BUILD
+DOCKER_ACTION=REUSE_EXACT_REPLACEMENT_IMAGES_NO_BUILD
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -52,7 +52,7 @@ M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
 M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
 M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
-NEXT_PHYSICAL_RESULT=VALIDATE_PROXY_FALLBACK_AND_BUILD_REPLACEMENT_APP
+NEXT_PHYSICAL_RESULT=RUN_ISOLATED_D3_WITH_EXACT_REPLACEMENT_IMAGE_IDS
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -77,7 +77,7 @@ M2_EVIDENCE=PASS
 M3_INTEGRATION_HEAD=06b101665921844cabf666574514c2b71ebd4b12
 M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
 M3_D2_ORIGINAL=PASS
-M3_D2=REOPENED_APP_AND_FRONTEND
+M3_D2=REPLACEMENT_EXACT_IMAGES_PASS
 M3_D2_REPLACEMENT_APP_BUILD_BUDGET=1
 M3_D2_REPLACEMENT_APP_BUILDS_USED=1
 M3_D2_REPLACEMENT_FRONTEND_BUILD_BUDGET=1
@@ -95,9 +95,15 @@ M3_D2_REPLACEMENT_STOP_REVIEW=PASS
 M3_D2_REPLACEMENT_STOP_REVIEW_UNRESOLVED_COUNT=0
 M3_D2_REPLACEMENT_REBUILD_AUTHORIZED=true
 M3_D2_REPLACEMENT_ADDITIONAL_APP_BUILD_BUDGET=1
-M3_D2_REPLACEMENT_ADDITIONAL_APP_BUILDS_USED=0
+M3_D2_REPLACEMENT_ADDITIONAL_APP_BUILDS_USED=1
 M3_D2_REPLACEMENT_FRONTEND_REENABLED=true
 M3_D2_REPLACEMENT_REBUILD_AUTHORIZATION_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d2-replacement-rebuild-authorization.json
+M3_D2_REPLACEMENT_REBUILD_APP_RESULT=PASS
+M3_D2_REPLACEMENT_REBUILD_APP_IMAGE=sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb
+M3_D2_REPLACEMENT_REBUILD_FRONTEND_BUILDS_USED=1
+M3_D2_REPLACEMENT_REBUILD_FRONTEND_RESULT=PASS
+M3_D2_REPLACEMENT_REBUILD_FRONTEND_IMAGE=sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4
+M3_D2_REPLACEMENT_REBUILD_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build-retry.json
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
@@ -326,3 +332,22 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
 - Authorization receipt:
   `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-rebuild-authorization.json`. G1 returns to
   `IN_PROGRESS`; production mutation, Provider/model calls and G2 remain prohibited/zero/locked.
+
+## M3 replacement rebuild result
+
+- The controller reused the persisted isolated `g1-build` profile and verified `goproxy.cn`, the
+  official Go proxy and GitHub were reachable before consuming the additional App budget. The
+  authorized `GOPROXY=https://goproxy.cn|direct` invocation crossed the previous dependency-fetch
+  failure point (`go mod download` PASS in 404.1 s), downloaded DuckDB, completed
+  `make build-prod`, and exported `linux/arm64` App image
+  `sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb`.
+- With the exact commit/tree and fresh frozen 182-file dist unchanged, the one authorized Frontend
+  build exported `linux/arm64` image
+  `sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4`.
+  Both images' commit/tree/source-subset/lock labels match the frozen inputs. Both build budgets
+  are consumed; further rebuilds are prohibited.
+- Append-only success receipt:
+  `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build-retry.json`. The original D2
+  images/receipts and the first replacement failure remain immutable. The isolated build window
+  started/stopped no containers and made zero DB/Release/Head/production/Provider/model/G2 writes.
+  D3 must reuse these two exact image IDs; G1 remains `IN_PROGRESS` and G2 remains locked.
