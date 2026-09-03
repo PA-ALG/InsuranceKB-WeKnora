@@ -42,7 +42,7 @@
 - Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/proposal.md`
 - Modify: `openspec/changes/126-830-g1-entity-field-assertion-pages/validation-report.md`
 
-- [ ] **Step 1: Add only the newly required exact paths**
+- [x] **Step 1: Add only the newly required exact paths**
 
 Add these three paths to the G1-Win2 matrix before any product-code write:
 
@@ -55,7 +55,7 @@ frontend/src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts
 The first two are limited to private token claims/validation; the third is a
 focused parser test. Governance/evidence remains controller-only.
 
-- [ ] **Step 2: Commit the matrix amendment**
+- [x] **Step 2: Commit the matrix amendment**
 
 The G1 controller alone runs:
 
@@ -64,10 +64,13 @@ git add openspec/changes/126-830-g1-entity-field-assertion-pages/proposal.md ope
 git commit -m "docs(G1): freeze successor bridge write paths"
 ```
 
-- [ ] **Step 3: Obtain read-only matrix/plan approval**
+- [x] **Step 3: Obtain read-only matrix/plan approval**
 
 Dispatch the existing plan-document reviewer against the new exact commit/tree.
 Do not start Task 1 until status is `Approved` with no blocking issue.
+
+Approved at `63b4a11ddebdfdc310bff087d90919209eef3e58` /
+`07796e78dca06286a10ace32f88383de0b28db19`; blocking issues: zero.
 
 ### Task 1: Prove and implement successor page identity
 
