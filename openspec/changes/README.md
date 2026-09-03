@@ -118,6 +118,7 @@
 | 109+ | 暂停新增外围 Mission | ⏸️ MVP 主航道收口 | 不再用微型 OpenSpec、adapter 或 synthetic 任务替代真实闭环 |
 | 120 | schema-wiki-medical-596-1-mvp | MVP-ACCEPTED / C7 FLOW+UI PASS / C4 DEFERRED | 最终有效代码经 PR #123 以一个重建提交进入 main；既有 epoch2 纯 GET 重开完成 7 分类/67 字段、17/17 citation、三 PDF 与 exact authority。旧 R1、release/receipt/Head/75 members、五表和生产 8081 不变；DB/provider/model/C4/审批/签名/发布 effects 0 |
 | 122 | schema67-golden-quality-gate | CODE-INTEGRATED / QUALITY-INCONCLUSIVE / HISTORY REFERENCE | `linyao` source Review COMPLETED；Schema67 `COMPLETE_67`（67/0，51保留+16合法 unknown）；旧 EC-02 真实结论 `QUALITY_FAIL` 且不在 main。后续 C4 从最新 main 新开 Mission，不继承旧 Candidate/reviewer/attestor |
+| 126 | 830-g1-entity-field-assertion-pages | G1 AUTHORIZED / SPEC FROZEN / IMPLEMENTATION NOT STARTED | 只把 815 的真实医疗险 Candidate/Claim/Evidence 编译为 1 overview + 7 section + 67 实体作用域 FieldAssertion + 1 空 free_wiki 的 76 页原子图；G2+、质量优化、Provider、生产 8081 均锁定 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

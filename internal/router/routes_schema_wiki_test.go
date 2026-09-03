@@ -206,6 +206,82 @@ func newSchemaWikiScopeRouteEngineWithRole(
 	return engine
 }
 
+func TestEntityPageGraph830G1SemanticRoutesAreMounted(t *testing.T) {
+	t.Parallel()
+	engine := newSchemaWikiScopeRouteEngine(
+		t,
+		&schemaWikiRouteScopeResolver{},
+		nil,
+		map[string]*types.KnowledgeBase{},
+		nil,
+		&schemaWikiRouteAccessMiddlewareSpy{events: &[]string{}},
+	)
+	paths := map[string]bool{}
+	for _, route := range engine.Routes() {
+		paths[route.Path] = true
+	}
+	base := "/api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/entities/:entity_id"
+	for _, path := range []string{
+		base + "/overview",
+		base + "/sections/:section_key",
+		base + "/fields/:field_key",
+		base + "/free-wiki",
+	} {
+		require.True(t, paths[path], "missing route %s", path)
+	}
+}
+
+func TestEntityPageGraph830G1RouteBoundaryDoesNotObserveCurrentHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	resolver := &schemaWikiRouteScopeResolver{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngine(t, resolver, nil, map[string]*types.KnowledgeBase{
+		"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+		"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+	}, &events, access)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/entities/entity-1/overview?release_id=release-exact",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Zero(t, resolver.calls)
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+}
+
+func TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	resolver := &schemaWikiRouteScopeResolver{
+		events: &events, headErr: apprepo.ErrWikiReleaseNotFound,
+	}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngine(t, resolver, nil, map[string]*types.KnowledgeBase{
+		"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+		"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+	}, &events, access)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/releases/release-g1-successor/fields/field-1/citations/citation-1/preview",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, "body=%s", recorder.Body.String())
+	require.Zero(t, resolver.calls, "exact G1 citation issuance must not require an Active Head")
+	require.Equal(t, 1, access.sealCalls)
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+}
+
 func TestSchemaWikiGoldenSuccessorStatusUsesExactHumanDualACLSealOrder(t *testing.T) {
 	t.Parallel()
 	events := []string{}
@@ -467,6 +543,58 @@ func TestSchemaWikiCitationContentNoHeadStillReachesSealedDualACLHandler(t *test
 	require.Equal(t, 1, access.sealCalls)
 }
 
+func TestSchemaWikiCitationContentReleaseScopeReachesRawACLWithoutHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	resolver := &schemaWikiRouteScopeResolver{
+		events: &events, headErr: apprepo.ErrWikiReleaseNotFound,
+	}
+	citationResolver := &schemaWikiRouteCitationAuthorityResolver{
+		events: &events,
+		authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact, ReleaseID: "release-g1-successor",
+		},
+	}
+	engine := newSchemaWikiScopeRouteEngine(
+		t,
+		resolver,
+		nil,
+		map[string]*types.KnowledgeBase{
+			exact.WikiKBID: {ID: exact.WikiKBID, TenantID: exact.TenantID, Type: types.KnowledgeBaseTypeWiki},
+			exact.RawKBID:  {ID: exact.RawKBID, TenantID: exact.TenantID},
+		},
+		&events,
+		access,
+		citationResolver,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/citation-content/release-token",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, "body=%s", recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "schema wiki citation unavailable")
+	require.Equal(t, []string{
+		"acl:wiki-596-1",
+		"evidence:wiki",
+		"token",
+		"acl:raw-596-1",
+		"evidence:raw",
+		"seal",
+	}, events)
+	require.Zero(t, resolver.calls, "exact release content route must not resolve Head")
+	require.Zero(t, resolver.preparationCalls)
+	require.Equal(t, 1, citationResolver.calls)
+	require.Equal(t, 1, access.sealCalls)
+}
+
 func TestSchemaWikiCitationContentTokenAuthorityFailsBeforeRawACLAndSeal(t *testing.T) {
 	t.Parallel()
 	exact := types.WikiReleaseScope{
@@ -703,6 +831,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 		paths[route.Method+" "+route.Path] = true
 	}
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/schema-scope"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/preparations/:preparation_id/schema-scope"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/domains"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations"])
 	require.True(t, paths[http.MethodPost+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/review"])
@@ -716,6 +845,7 @@ func TestSchemaWikiRoutesDeclareExactScopedPrefixAndRetrievePolicy(t *testing.T)
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/sections/:section_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/fields/:field_id"])
 	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/releases/:release_id/fields/:field_id/citations/:citation_id/preview"])
+	require.True(t, paths[http.MethodGet+" /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/preparations/:preparation_id/entities/:entity_id/fields/:field_key/citations/:citation_id/preview"])
 	contentPath := http.MethodGet + " /api/v1/knowledgebase/:kb_id/wiki/release-scopes/:space_id/raw/:raw_kb_id/schema/citation-content/:token"
 	require.True(t, paths[contentPath])
 	for path := range paths {

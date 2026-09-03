@@ -1,0 +1,71 @@
+{
+  "contract": "weknora.830.g1-harness-red-green.v1",
+  "goal_id": "G1",
+  "phase": "M1_HARNESS_CONTRACT",
+  "base_commit": "bc93bbef19e24877f0a8816dc49395bc662d703f",
+  "contract_commit": "8fa27956c6368502f21d52245d2cea905f0e2ce1",
+  "contract_tree": "82e490ef47da775aed0d8176c7f31a27f6d537e9",
+  "next_physical_result": "M1_REAL_815_ENTITY_PAGE_PREVIEW",
+  "red": {
+    "initial_requirement_red": "7 business requirement failures",
+    "authority_and_portability_red": "5 failed, 4 passed",
+    "cross_reference_red": "1 failed: CROSS_REFERENCE_DRIFT_ACCEPTED",
+    "independent_review_red": "4 failed: overview section, citation digest, evidence receipt digest, missing source authorities"
+  },
+  "green": {
+    "focused_actual": "14 passed",
+    "focused_hermetic": "11 passed, 3 skipped",
+    "legacy_regression": "43 passed in 91.01s",
+    "ruff_check": "PASS",
+    "ruff_format_check": "PASS",
+    "py_compile": "PASS",
+    "mypy_strict": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "contract_result": {
+    "member_count": 76,
+    "unique_page_id_count": 76,
+    "overview_count": 1,
+    "section_count": 7,
+    "field_assertion_count": 67,
+    "free_wiki_count": 1,
+    "free_wiki_empty": true,
+    "state_distribution": {
+      "present": 2,
+      "absent_explicitly": 1,
+      "unknown": 64
+    },
+    "citation_count": 17,
+    "source_authority_count": 3,
+    "vector_file_sha256": "cffb39e5a7214e2720b54a80acacab6923afa8e00e6174befc88b3cd44e069d1",
+    "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c"
+  },
+  "independent_review": {
+    "task_id": "01a05917-a8e7-7b00-bf36-82bef310c2a5",
+    "initial_reviewed_head": "b33c7f8be0e9c41dbed194b94725a2a208db5c4b",
+    "initial_result": "FAIL",
+    "initial_unresolved_count": 3,
+    "final_reviewed_head": "8fa27956c6368502f21d52245d2cea905f0e2ce1",
+    "final_reviewed_tree": "82e490ef47da775aed0d8176c7f31a27f6d537e9",
+    "final_result": "PASS",
+    "final_unresolved_count": 0
+  },
+  "not_run": [
+    "G1-R6",
+    "G1-R7",
+    "WEKNORA_LIVE_PREVIEW",
+    "CURRENT_PINNED_READ",
+    "LIVE_UI",
+    "SOURCE_CLICK"
+  ],
+  "effects": {
+    "database_writes": 0,
+    "network_calls": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "docker_builds": 0,
+    "g2_actions": 0
+  },
+  "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
+  "receipt_sha256": "57fa72eb9a3106514e516dcf75bda17eac7040c6e82c42342b8dcee125f072a3"
+}

@@ -108,16 +108,19 @@ OpenSpec 122 与旧 EC-02 只保留历史质量证据；旧实验结论是 `QUAL
 冻结 Candidate/Golden/Evidence、Metric、人工责任、provider/model 与预算；不得
 从 C7 PASS 推导 C4 PASS，也不得修改已验收 serving release。
 
-### 当前 830 B0 状态
+### 当前 830 G1 状态
 
-830 当前唯一 WIP 是 `B0`，正式 base 为
-`99205db986eae2a9fa4bc956c053b94298d0b114`，执行分支为
-`codex/830-b0-asset-baseline`。B0 只冻结 815 FLOW 证据、11 类 Schema v5 输入、
-有限候选四态裁决、验证/镜像影响和 branch/worktree 机械索引；产品代码、Provider、
-环境、Docker 与 G1+ 均未获授权。Evidence Pack 位于
-`docs/insurance-kb/evidence/830-b0/`，状态为
-`EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`；总控复核前不得宣布 B0 最终 PASS，
-G1 及后续 Goal 保持 `LOCKED`。下文 C4 描述只保留历史边界，不是当前下一项队列。
+830 当前唯一 WIP 是 `G1 · 实体页图与独立 FieldAssertion`。B0 Evidence Pack 位于
+`docs/insurance-kb/evidence/830-b0/`；其独立复核为 `PASS`、未解决问题为 0，且用户已
+在 2026-08-31 明确授权总控作出 `B0=PASS` 裁决并只启动 G1。G1 正式 base 为
+`d2ce44cb2107575f7624b3735c653078ae2a98b6`，执行分支为
+`codex/830-g1-field-assertion-pages`，适用 OpenSpec 为
+`openspec/changes/126-830-g1-entity-field-assertion-pages/`。
+
+当前状态固定为 `CURRENT_AUTHORIZATION=G1_ONLY`、`CURRENT_GOAL=G1`、
+`CURRENT_RED=NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`、
+`830_PRODUCT_GOAL=G1_IN_PROGRESS`。G2 及后续 Goal 全部保持 `LOCKED`；Schema67
+质量仍为 `DEFERRED`，G1 不调用 Provider/模型、不修改生产 `8081` 或生产 Active。
 
 2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
 弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、

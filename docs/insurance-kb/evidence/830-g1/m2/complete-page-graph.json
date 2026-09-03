@@ -1,0 +1,178 @@
+{
+  "contract": "weknora.830.g1-m2-complete-page-graph.v1",
+  "goal_id": "G1",
+  "phase": "M2",
+  "observed_at": "2026-09-01T18:02:22+08:00",
+  "parent_m1_commit": "6ed49abab3cc9e0428b8648e93e1c2e0a313d8e5",
+  "parent_m1_tree": "83792e58f0b453c13af7543649391b0ff71d8b74",
+  "preparation_id": "g1-m1-740d9b7c-preview",
+  "actual_manifest": {
+    "contract": "entity-page-manifest.830.g1.v1",
+    "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+    "vector_file": "harness/tests/fixtures/entity_page_graph_830_g1_contract_vector.json",
+    "vector_file_sha256": "cffb39e5a7214e2720b54a80acacab6923afa8e00e6174befc88b3cd44e069d1",
+    "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "source_activation_epoch": 2,
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "entity_id": "ping-an-e-sheng-bao",
+    "entity_version_id": "ping-an-e-sheng-bao@596-1"
+  },
+  "identity_index": {
+    "path": "identity-hash-index.json",
+    "file_sha256": "064141446567ecf0583130c82099f714e2026d90cf2188ac5c520563b45cf6df",
+    "self_sha256": "65a46a8ad7ca3c27f0c2567bc882183129cd7e4c81a3b2add52bf20a06c7d1f3",
+    "member_count": 76,
+    "unique_page_id_count": 76,
+    "unique_route_count": 76,
+    "unique_namespace_count": 76
+  },
+  "topology": {
+    "overview_count": 1,
+    "section_count": 7,
+    "field_assertion_count": 67,
+    "free_wiki_count": 1,
+    "free_wiki_empty": true,
+    "ordered_section_field_counts": [
+      {
+        "section_key": "product-overview",
+        "field_count": 16
+      },
+      {
+        "section_key": "application-and-contract",
+        "field_count": 15
+      },
+      {
+        "section_key": "renewal-and-pricing",
+        "field_count": 6
+      },
+      {
+        "section_key": "coverage-and-exclusions",
+        "field_count": 11
+      },
+      {
+        "section_key": "claims-and-reimbursement",
+        "field_count": 9
+      },
+      {
+        "section_key": "services-and-benefits",
+        "field_count": 5
+      },
+      {
+        "section_key": "sales-support",
+        "field_count": 5
+      }
+    ],
+    "field_to_section_bijection_count": 67,
+    "duplicate_field_mappings": 0,
+    "missing_field_mappings": 0
+  },
+  "tri_state": {
+    "present": 2,
+    "absent_explicitly": 1,
+    "unknown": 64,
+    "unknown_reason": "FIELD_UNKNOWN",
+    "unknown_source_reason_distribution": {
+      "ANSWER_NOT_FOUND": 3,
+      "FORMATION_MODE_DEFERRED": 32,
+      "SOURCE_LOCATION_UNRESOLVED": 10,
+      "SOURCE_NOT_AVAILABLE": 10,
+      "live_chunk_quote_not_unique": 9
+    },
+    "unknown_values_non_null": 0,
+    "unknown_citations": 0
+  },
+  "known_claim_evidence_custody": {
+    "known_field_count": 3,
+    "citation_count": 17,
+    "fields": [
+      {
+        "field_key": "insured_eligibility",
+        "state": "present",
+        "citation_count": 3,
+        "evidence_receipt_count": 1
+      },
+      {
+        "field_key": "health_declaration_requirements",
+        "state": "present",
+        "citation_count": 9,
+        "evidence_receipt_count": 1
+      },
+      {
+        "field_key": "guaranteed_renewal_period",
+        "state": "absent_explicitly",
+        "citation_count": 5,
+        "evidence_receipt_count": 1
+      }
+    ],
+    "field_section_overview_reference_equality": true,
+    "revision_pdf_page_quote_locator_content_equality": "17/17",
+    "source_authority_count": 3,
+    "second_serving_authority_created": false
+  },
+  "identity_stability": {
+    "mutations": [
+      "entity display_name",
+      "classification display_name",
+      "section display_name",
+      "field short_title"
+    ],
+    "page_id_unchanged": "76/76",
+    "route_unchanged": "76/76",
+    "namespace_unchanged": "76/76",
+    "claim_evidence_reference_unchanged": "67/67",
+    "taxonomy_parent_in_identity_preimage": false,
+    "category_in_identity_preimage": false,
+    "title_in_identity_preimage": false
+  },
+  "generic_renderer": {
+    "profile_section_count": 2,
+    "profile_field_count": 2,
+    "compiled_member_count": 6,
+    "frontend_rendered_section_links": 2,
+    "medical_section_count_hardcoded_in_shared_validator": false,
+    "additional_product_profiles_registered": 0
+  },
+  "verification": {
+    "harness_command": "PYTHONPATH=src /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.venv/bin/python -m pytest tests/test_entity_page_graph_830_g1.py -q",
+    "harness_result": "14 passed in 52.99s",
+    "actual_c5_replay_result": "PASS_EQUAL_TO_FROZEN_VECTOR",
+    "go_custody_command": "GOCACHE=/private/tmp/weknora-830-g1-go-cache go test ./internal/application/service -run 'TestEntityPageGraphManifest830G1ReplaysExactSchemaSourceCustody|TestEntityPageGraphPreparationCitation830G1UsesFullUniqueJoinIdentityAndExactSourceTuple' -count=1 -v",
+    "go_custody_result": "2 passed",
+    "go_full_command": "GOCACHE=/private/tmp/weknora-830-g1-go-cache go test ./internal/types ./internal/application/repository ./internal/application/service ./internal/handler ./internal/router",
+    "go_full_result": "PASS after authorized loopback rerun",
+    "go_initial_sandbox_result": "ENVIRONMENT_BLOCKED_BY_LOOPBACK_BIND_EPERM_NOT_RED",
+    "go_vet_result": "PASS",
+    "frontend_command": "npm run test:component -- src/api/schema-wiki/entityPageGraph830G1.spec.ts src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts",
+    "frontend_result": "36 passed",
+    "frontend_typecheck_result": "PASS",
+    "ruff_result": "PASS",
+    "git_diff_check_result": "PASS"
+  },
+  "effects": {
+    "database_writes": 0,
+    "release_writes": 0,
+    "head_writes": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_8081_changes": 0,
+    "g2_actions": 0
+  },
+  "independent_review": {
+    "initial_task_id": "01a05a7d-5d6b-7510-849f-a9da7b6b1255",
+    "initial_reviewed_head": "d1b8d8e9e1213a28d4b762f0767120b121b218c1",
+    "initial_reviewed_tree": "4ada9652d998f3b2effcaea29552aaee840f2ebd",
+    "initial_result": "FAIL",
+    "initial_unresolved_count": 1,
+    "initial_finding": "candidate commit metadata advanced NEXT to M3 before the M2 independent-review gate closed",
+    "correction": "reworded the unpushed candidate tip so commit and validation-report NEXT both remain M2",
+    "final_task_id": "01a05c5d-0483-7641-9bec-948442015a0d",
+    "final_reviewed_head": "edc74ac7fb82dcb8e443020bab151a116f57ef32",
+    "final_reviewed_tree": "4ada9652d998f3b2effcaea29552aaee840f2ebd",
+    "tree_unchanged_by_correction": true,
+    "final_result": "PASS",
+    "final_unresolved_count": 0
+  },
+  "status": "M2_PASS",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "b408461d1d115e78762229e92b02e8951227fda07c342539dc3ed6798dad9da2"
+}

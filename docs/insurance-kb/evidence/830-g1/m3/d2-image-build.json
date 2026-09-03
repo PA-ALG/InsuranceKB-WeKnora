@@ -1,0 +1,103 @@
+{
+  "contract": "weknora.830.g1-m3-d2-image-build.v1",
+  "goal_id": "G1",
+  "phase": "M3_D2",
+  "status": "PASS",
+  "observed_at": "2026-09-02T22:49:20+08:00",
+  "integration": {
+    "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+    "source_commit": "06b101665921844cabf666574514c2b71ebd4b12",
+    "source_tree": "e14c5057f87427670f8a0382b357b6970ecd74f8",
+    "branch": "codex/830-g1-field-assertion-pages"
+  },
+  "impact": {
+    "receipt": "docs/insurance-kb/evidence/830-b0/image-impact/image-change-impact.json",
+    "affected_services": [
+      "app",
+      "frontend"
+    ],
+    "unaffected_services": [
+      "docreader",
+      "sandbox",
+      "odl-hybrid",
+      "mcp",
+      "local-live-runner"
+    ],
+    "unaffected_images_built": 0
+  },
+  "app": {
+    "build_count": 1,
+    "replacement_build_count": 0,
+    "result": "PASS_LATE",
+    "reconciliation_receipt": "docs/insurance-kb/evidence/830-g1/m3/d2-app-build-reconciliation.json",
+    "tag": "local/insurancekb-weknora-app:g1-m3-06b101665921",
+    "image_id": "sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+    "local_repo_digest": "local/insurancekb-weknora-app@sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327",
+    "created_at": "2026-09-02T02:45:38.736896529+08:00",
+    "platform": "linux/arm64",
+    "size_bytes": 532878293,
+    "source_subset_sha256": "2d0cab1d69dca42357b3fd2016dea4e48bd1d6f5d002ac45f8b95285d3321b27",
+    "dockerfile_sha256": "b4a8bf435191c97068862e8766bd0d7ec28d052fce50640f49faee64898654cc",
+    "dockerignore_sha256": "4172901b56207e1cb472d8a46cd261d6d5f211e4da645450b8660fa6e0406d53",
+    "lockfile_sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7",
+    "base_images": [
+      "golang:1.26-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd",
+      "debian:12.12-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818"
+    ],
+    "labels_match_frozen_inputs": true,
+    "admitted_for_d3": true
+  },
+  "frontend": {
+    "build_count": 1,
+    "replacement_build_count": 0,
+    "result": "PASS",
+    "tag": "local/insurancekb-weknora-frontend:g1-m3-06b101665921",
+    "image_id": "sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0",
+    "local_repo_digest": "local/insurancekb-weknora-frontend@sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0",
+    "created_at": "2026-09-02T22:46:28.632832031+08:00",
+    "platform": "linux/arm64",
+    "size_bytes": 37538976,
+    "source_subset_sha256": "b1bad86d3e1735086ac2fc1b835ea90d313ac4978aa3a3235c449c2211680935",
+    "dockerfile_sha256": "3435582ac2165ee65357baff3fd7be4b68f6c191f8901bd5288f99f96d79fb68",
+    "dockerignore_sha256": "84c12bd74f1b311ae266fa5c8515a4eb366337da0f0d0e32553bf360795494f2",
+    "lockfile_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+    "dist_sha256": "9e0edb54f29ebbeb17cdfdeb13fdf50d6ebaf042a5430fc102fdb3791fea67eb",
+    "dist_file_count": 182,
+    "dist_size_kib": 26580,
+    "base_image": "nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1",
+    "labels_match_frozen_inputs": true,
+    "admitted_for_d3": true
+  },
+  "production_during_d2": {
+    "app_container_id": "fca85321234ebc2a41910343f6d032de32596773be46fc04757282b0359cf3f4",
+    "app_image_id": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+    "app_guest_health_http_status": 200,
+    "frontend_container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+    "frontend_image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+    "frontend_guest_http_status": 200,
+    "containers_restarted_or_replaced": false,
+    "active_head_writes": 0,
+    "host_port_forwarding_status": "UNAVAILABLE"
+  },
+  "effects": {
+    "images_built": 2,
+    "app_builds": 1,
+    "frontend_builds": 1,
+    "container_starts": 0,
+    "container_stops": 0,
+    "container_replacements": 0,
+    "release_writes": 0,
+    "head_writes": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "g2_actions": 0
+  },
+  "decision": {
+    "d2_status": "PASS",
+    "rebuilds_allowed_before_d3": 0,
+    "next_physical_result": "START_ISOLATED_D3_WITH_EXACT_APP_AND_FRONTEND_IMAGE_IDS",
+    "g2_readiness": "LOCKED"
+  },
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "1d2e40662bb7dbc755c33948e0eeffa7cbcd99112dba772fe9537fbea6c9dad4"
+}

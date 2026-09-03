@@ -1,0 +1,122 @@
+{
+  "goal_id": "G1",
+  "phase": "FINAL_CLOSEOUT",
+  "status": "PASS",
+  "flow": "PASS",
+  "quality": "DEFERRED",
+  "production_acceptance": "NOT_ACCEPTED_FOR_PRODUCTION",
+  "observed_at": "2026-09-04T01:34:04+08:00",
+  "base": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "accepted_candidate": {
+    "head": "f40dc7afad4299f93c7cecb8d533a12c42811df4",
+    "tree": "5aaccc50e3d20359be24c0aa36df8a2567f47e44"
+  },
+  "independent_review": {
+    "task_id": "01a06844-69da-7423-ac59-d28c8fa7e0d9",
+    "review": "PASS",
+    "unresolved_count": 0,
+    "blockers": [],
+    "evidence_self_hash": "PASS",
+    "production_unchanged": "PASS",
+    "worktree_unchanged": "PASS",
+    "g2_actions": 0
+  },
+  "pull_request": {
+    "number": 126,
+    "url": "https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/126",
+    "base": "main",
+    "branch": "codex/830-g1-field-assertion-pages",
+    "ci_verified_head": "d83641c6acb16d47b684519dffe0c58a928a3357",
+    "ci_verified_tree": "f3f38affa83762cfb2f167a114c5fd33ed3ce10e"
+  },
+  "post_push_ci": {
+    "initial_failure": {
+      "run_id": 33786515774,
+      "job": "deterministic",
+      "result": "FAIL",
+      "step": "Type check (mypy strict)",
+      "scope": "harness/tests/test_entity_page_graph_830_g1.py",
+      "error_count": 88,
+      "cause": "dynamic compatibility helpers were annotated as object or optional module"
+    },
+    "correction": {
+      "head": "d83641c6acb16d47b684519dffe0c58a928a3357",
+      "tree": "f3f38affa83762cfb2f167a114c5fd33ed3ce10e",
+      "changed_files": [
+        "harness/tests/test_entity_page_graph_830_g1.py"
+      ],
+      "assertions_unchanged": true,
+      "product_code_unchanged": true
+    },
+    "local": {
+      "mypy_src_tests": "PASS_501_FILES",
+      "ruff_full_tree": "PASS",
+      "target_test": "PASS_11_PASSED_3_SKIPPED"
+    },
+    "remote": {
+      "push_run": {
+        "run_id": 33787355899,
+        "result": "PASS_3_OF_3",
+        "deterministic": "PASS_19M06S",
+        "integration_postgres": "PASS",
+        "wheel_smoke": "PASS"
+      },
+      "pull_request_run": {
+        "run_id": 33787362582,
+        "result": "PASS_3_OF_3",
+        "deterministic": "PASS_18M04S",
+        "integration_postgres": "PASS",
+        "wheel_smoke": "PASS"
+      }
+    },
+    "independent_review": {
+      "task_id": "01a06844-69da-7423-ac59-d28c8fa7e0d9",
+      "review": "PASS",
+      "unresolved_count": 0,
+      "blockers": [],
+      "reviewed_head": "d83641c6acb16d47b684519dffe0c58a928a3357",
+      "reviewed_tree": "f3f38affa83762cfb2f167a114c5fd33ed3ce10e",
+      "assertions_unchanged": "PASS",
+      "product_code_unchanged": "PASS",
+      "remote_ci": "PASS",
+      "g2_actions": 0
+    }
+  },
+  "d3": {
+    "receipt": "docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json",
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3,
+    "activation_receipt_id": "receipt-f0eca262-b060-46db-9d18-8390b9a1a8a8",
+    "app_image": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+    "frontend_image": "sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4",
+    "member_count": 76,
+    "current_page_count": 76,
+    "pinned_page_count": 76,
+    "source_click_count": 3,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_writes": 0,
+    "g2_actions": 0,
+    "disposition": "NOT_FOR_PRODUCTION"
+  },
+  "final_verification": {
+    "go_test_service_handler_router": "PASS",
+    "go_vet": "PASS",
+    "harness": "54 passed, 3 skipped",
+    "frontend_contract": "7 passed",
+    "frontend_component_api": "36 passed",
+    "frontend_typecheck": "PASS",
+    "openspec_strict": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "cleanup": {
+    "temporary_runtime": "REMOVED",
+    "temporary_credentials": "REMOVED",
+    "temporary_transfer_archive": "PERMANENTLY_DELETED",
+    "clone_successor_head_receipt": "RETAINED"
+  },
+  "next_physical_result": "G2_READINESS_ONLY_AWAIT_EXPLICIT_G2_START",
+  "g2_and_later": "LOCKED",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "9fa4bc87b1285cf44c3462beb57abeebb47dc7c6cabdc9e6e0c601a996ae6d56"
+}

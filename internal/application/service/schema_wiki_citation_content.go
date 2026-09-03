@@ -19,12 +19,76 @@ import (
 const schemaWikiCitationTokenTTL = 5 * time.Minute
 
 type schemaWikiCitationTokenClaimsV1 struct {
-	Contract      string                                     `json:"contract"`
-	TokenKeyID    string                                     `json:"token_key_id"`
-	IssuedAtUnix  int64                                      `json:"issued_at_unix"`
-	ExpiresAtUnix int64                                      `json:"expires_at_unix"`
-	Scope         types.WikiReleaseScope                     `json:"scope"`
-	Authority     types.SchemaWikiCitationContentAuthorityV1 `json:"authority"`
+	Contract              string                                     `json:"contract"`
+	TokenKeyID            string                                     `json:"token_key_id"`
+	IssuedAtUnix          int64                                      `json:"issued_at_unix"`
+	ExpiresAtUnix         int64                                      `json:"expires_at_unix"`
+	Scope                 types.WikiReleaseScope                     `json:"scope"`
+	RouteAuthorityKind    string                                     `json:"route_authority_kind"`
+	SourceReleaseID       string                                     `json:"source_release_id"`
+	SourceActivationEpoch uint64                                     `json:"source_activation_epoch"`
+	Authority             types.SchemaWikiCitationContentAuthorityV1 `json:"authority"`
+}
+
+type schemaWikiCitationIdentityBinding struct {
+	routeAuthorityKind     string
+	servingReleaseID       string
+	servingActivationEpoch uint64
+	sourceReleaseID        string
+	sourceActivationEpoch  uint64
+}
+
+func normalizeSchemaWikiCitationIdentity(
+	request CitationRevisionReadRequestV1,
+) (schemaWikiCitationIdentityBinding, error) {
+	identity := schemaWikiCitationIdentityBinding{
+		routeAuthorityKind:     request.citationRouteAuthorityKind,
+		servingReleaseID:       request.citationServingReleaseID,
+		servingActivationEpoch: request.citationServingActivationEpoch,
+		sourceReleaseID:        request.ReleaseID,
+		sourceActivationEpoch:  request.ActivationEpoch,
+	}
+	if identity.routeAuthorityKind == "" && identity.servingReleaseID == "" &&
+		identity.servingActivationEpoch == 0 {
+		identity.routeAuthorityKind = "active"
+		identity.servingReleaseID = identity.sourceReleaseID
+		identity.servingActivationEpoch = identity.sourceActivationEpoch
+	}
+	if !validSchemaWikiCitationIdentity(
+		identity.routeAuthorityKind,
+		identity.servingReleaseID,
+		identity.servingActivationEpoch,
+		identity.sourceReleaseID,
+		identity.sourceActivationEpoch,
+	) {
+		return schemaWikiCitationIdentityBinding{}, ErrSchemaWikiCitationUnavailable
+	}
+	return identity, nil
+}
+
+func validSchemaWikiCitationIdentity(
+	routeAuthorityKind string,
+	servingReleaseID string,
+	servingActivationEpoch uint64,
+	sourceReleaseID string,
+	sourceActivationEpoch uint64,
+) bool {
+	if (routeAuthorityKind != "active" && routeAuthorityKind != "release") ||
+		!validSchemaWikiCitationReleaseID(servingReleaseID) ||
+		!validSchemaWikiCitationReleaseID(sourceReleaseID) ||
+		servingActivationEpoch == 0 || sourceActivationEpoch == 0 {
+		return false
+	}
+	if servingReleaseID == sourceReleaseID {
+		return routeAuthorityKind == "active" && servingActivationEpoch == sourceActivationEpoch
+	}
+	return routeAuthorityKind == "release" && sourceActivationEpoch != ^uint64(0) &&
+		servingActivationEpoch == sourceActivationEpoch+1
+}
+
+func validSchemaWikiCitationReleaseID(value string) bool {
+	return value != "" && value == strings.TrimSpace(value) &&
+		!strings.EqualFold(value, "current") && !strings.EqualFold(value, "latest")
 }
 
 type schemaWikiGoldenEvidenceTokenClaimsV1 struct {
@@ -156,7 +220,14 @@ func (c *SchemaWikiCitationTokenCodec) verify(
 		claims.IssuedAtUnix <= 0 || claims.ExpiresAtUnix <= claims.IssuedAtUnix ||
 		claims.ExpiresAtUnix-claims.IssuedAtUnix != int64(schemaWikiCitationTokenTTL/time.Second) ||
 		c.now().UTC().Unix() < claims.IssuedAtUnix || c.now().UTC().Unix() >= claims.ExpiresAtUnix ||
-		types.ValidateSchemaWikiCitationContentAuthorityV1(claims.Authority) != nil {
+		types.ValidateSchemaWikiCitationContentAuthorityV1(claims.Authority) != nil ||
+		!validSchemaWikiCitationIdentity(
+			claims.RouteAuthorityKind,
+			claims.Authority.ReleaseID,
+			claims.Authority.ActivationEpoch,
+			claims.SourceReleaseID,
+			claims.SourceActivationEpoch,
+		) {
 		return empty, ErrSchemaWikiCitationUnavailable
 	}
 	return claims, nil
@@ -330,6 +401,10 @@ func (s *schemaWikiCitationContentService) IssueExactRevision(
 	if s == nil || s.adapter == nil || s.codec == nil || s.codec.activeKeyID == "" {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
+	identity, err := normalizeSchemaWikiCitationIdentity(request)
+	if err != nil {
+		return nil, err
+	}
 	if request.CoordinateAuthorityReceipt != nil &&
 		(request.Citation.PageNumber <= 0 ||
 			request.Citation.PageNumber > request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt.PageCount) {
@@ -347,10 +422,15 @@ func (s *schemaWikiCitationContentService) IssueExactRevision(
 		return nil, err
 	}
 	claims := schemaWikiCitationTokenClaimsV1{
-		Contract:   "schema-wiki-citation-content-token-claims.v1",
-		TokenKeyID: s.codec.activeKeyID, IssuedAtUnix: now.Unix(),
-		ExpiresAtUnix: authority.ExpiresAtUnix, Scope: request.Scope,
-		Authority: *authority,
+		Contract:              "schema-wiki-citation-content-token-claims.v1",
+		TokenKeyID:            s.codec.activeKeyID,
+		IssuedAtUnix:          now.Unix(),
+		ExpiresAtUnix:         authority.ExpiresAtUnix,
+		Scope:                 request.Scope,
+		RouteAuthorityKind:    identity.routeAuthorityKind,
+		SourceReleaseID:       identity.sourceReleaseID,
+		SourceActivationEpoch: identity.sourceActivationEpoch,
+		Authority:             *authority,
 	}
 	token, err := s.codec.issue(claims)
 	if err != nil {
@@ -386,7 +466,8 @@ func (s *schemaWikiCitationContentService) ResolveRouteAuthority(
 	}
 	if claims, err := s.codec.verify(token); err == nil {
 		return &SchemaWikiCitationContentRouteAuthorityV1{
-			Kind: "active", Scope: claims.Scope,
+			Kind: claims.RouteAuthorityKind, Scope: claims.Scope,
+			ReleaseID: claims.Authority.ReleaseID,
 		}, nil
 	}
 	claims, err := s.codec.verifyGoldenEvidence(token)
@@ -410,6 +491,14 @@ func (s *schemaWikiCitationContentService) ReadByOpaqueToken(
 	}
 	claims, err := s.codec.verify(token)
 	if err != nil || claims.Scope != scope || request.Scope != scope {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	identity, err := normalizeSchemaWikiCitationIdentity(request)
+	if err != nil || claims.RouteAuthorityKind != identity.routeAuthorityKind ||
+		claims.SourceReleaseID != identity.sourceReleaseID ||
+		claims.SourceActivationEpoch != identity.sourceActivationEpoch ||
+		claims.Authority.ReleaseID != identity.servingReleaseID ||
+		claims.Authority.ActivationEpoch != identity.servingActivationEpoch {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	resolved, err := s.adapter.resolveExactRevisionAuthority(ctx, request)
@@ -565,10 +654,14 @@ func schemaWikiCitationPublicAuthority(
 	if request.CoordinateAuthorityReceipt == nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
+	identity, err := normalizeSchemaWikiCitationIdentity(request)
+	if err != nil {
+		return nil, err
+	}
 	authority := types.SchemaWikiCitationContentAuthorityV1{
 		Contract:   "schema-wiki-citation-content-authority.v1",
-		TokenKeyID: keyID, ReleaseID: request.ReleaseID,
-		ActivationEpoch: request.ActivationEpoch, CandidateSHA256: request.CandidateSHA256,
+		TokenKeyID: keyID, ReleaseID: identity.servingReleaseID,
+		ActivationEpoch: identity.servingActivationEpoch, CandidateSHA256: request.CandidateSHA256,
 		FieldID: request.FieldID, CitationID: request.Citation.CitationID,
 		RevisionSource:         request.CoordinateAuthorityReceipt.LiveRevisionSourceReceipt,
 		CitationSHA256:         request.Citation.CitationSHA256,

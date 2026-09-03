@@ -12,6 +12,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -71,10 +72,45 @@ func (r *WikiReleaseRepository) CreateDraft(
 	ctx context.Context,
 	preparation *types.WikiReleasePreparation,
 ) error {
-	if preparation == nil || preparation.Status != types.WikiReleasePreparationDraft {
+	if preparation == nil || preparation.Status != types.WikiReleasePreparationDraft ||
+		(preparation.ExpectedReleaseID == "") != (preparation.ExpectedActivationEpoch == 0) {
 		return ErrWikiReleaseConflict
 	}
-	return r.db.WithContext(ctx).Create(preparation).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireDraftExpectedHead(tx, preparation); err != nil {
+			return err
+		}
+		if err := tx.Create(preparation).Error; err != nil {
+			return err
+		}
+		return requireDraftExpectedHead(tx, preparation)
+	})
+}
+
+func requireDraftExpectedHead(
+	tx *gorm.DB,
+	preparation *types.WikiReleasePreparation,
+) error {
+	headDB := tx
+	if tx.Dialector.Name() == "postgres" {
+		headDB = tx.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	head, err := getHead(headDB, preparation.WikiReleaseScope)
+	switch {
+	case err == nil:
+		if head.ActiveReleaseID != preparation.ExpectedReleaseID ||
+			head.ActivationEpoch != preparation.ExpectedActivationEpoch {
+			return ErrWikiReleaseConflict
+		}
+		return nil
+	case errors.Is(err, ErrWikiReleaseNotFound):
+		if preparation.ExpectedReleaseID != "" || preparation.ExpectedActivationEpoch != 0 {
+			return ErrWikiReleaseConflict
+		}
+		return nil
+	default:
+		return err
+	}
 }
 
 // CreateReadyPreparation stores the complete frozen preparation.

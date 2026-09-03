@@ -39,19 +39,22 @@ var (
 )
 
 type CitationRevisionReadRequestV1 struct {
-	ReleaseID                  string
-	ActivationEpoch            uint64
-	PreparationID              string
-	EvaluationID               string
-	EvidenceID                 string
-	CandidateSHA256            string
-	FieldID                    string
-	Scope                      types.WikiReleaseScope
-	Citation                   types.CitationTargetV1
-	Binding                    types.CitationMemberBindingV1
-	EvidenceReceiptSHA256s     []string
-	CoordinateAuthorityReceipt *SchemaWikiCitationCoordinateAuthorityReceiptV1
-	frozenNativeSource         *schemaWikiC5FrozenNativeSource
+	ReleaseID                      string
+	ActivationEpoch                uint64
+	PreparationID                  string
+	EvaluationID                   string
+	EvidenceID                     string
+	CandidateSHA256                string
+	FieldID                        string
+	Scope                          types.WikiReleaseScope
+	Citation                       types.CitationTargetV1
+	Binding                        types.CitationMemberBindingV1
+	EvidenceReceiptSHA256s         []string
+	CoordinateAuthorityReceipt     *SchemaWikiCitationCoordinateAuthorityReceiptV1
+	frozenNativeSource             *schemaWikiC5FrozenNativeSource
+	citationRouteAuthorityKind     string
+	citationServingReleaseID       string
+	citationServingActivationEpoch uint64
 }
 
 type schemaWikiC5FrozenNativeSource struct {
@@ -95,6 +98,7 @@ type SchemaWikiCitationContentPort interface {
 type SchemaWikiCitationContentRouteAuthorityV1 struct {
 	Kind          string
 	Scope         types.WikiReleaseScope
+	ReleaseID     string
 	PreparationID string
 }
 
@@ -1161,6 +1165,23 @@ func (s *SchemaWikiService) ReviewSchemaDraft(
 	}
 	if s == nil || s.releaseAuthority == nil {
 		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	if draft, loadErr := s.releaseAuthority.repository.GetDraftPreparation(
+		ctx, scope, preparationID,
+	); loadErr == nil {
+		var header struct {
+			Contract string `json:"contract"`
+		}
+		if json.Unmarshal(draft.Manifest, &header) != nil {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		if header.Contract == "entity-page-manifest.830.g1.v1" {
+			if _, _, validationErr := validateEntityPageGraphPreparation830G1(
+				draft, types.WikiReleasePreparationDraft, scope,
+			); validationErr != nil {
+				return nil, ErrSchemaWikiPreparationInvalid
+			}
+		}
 	}
 	return s.releaseAuthority.reviewDraft(ctx, principal, scope, preparationID, rawDecision)
 }
@@ -2464,9 +2485,9 @@ func (s *SchemaWikiService) ReadCurrentSchemaCitation(
 }
 
 // IssueCurrentSchemaCitationAuthority derives the complete citation request
-// from validated Active custody and returns a short-lived, server-signed
-// content authority. The caller supplies only bounded release/field/citation
-// identities.
+// from either an exact G1 successor or validated Active generic Schema custody
+// and returns a short-lived, server-signed content authority. The caller
+// supplies only bounded release/field/citation identities.
 func (s *SchemaWikiService) IssueCurrentSchemaCitationAuthority(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,
@@ -2478,11 +2499,24 @@ func (s *SchemaWikiService) IssueCurrentSchemaCitationAuthority(
 	if s == nil || s.releaseAuthority == nil || s.citationContent == nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
+	releaseID = strings.TrimSpace(releaseID)
+	if releaseID == "" {
+		return nil, ErrWikiReleaseConflict
+	}
+	if request, requestErr := s.entityPageGraphCitationRequest830G1(
+		ctx, principal, scope, releaseID, logicalSlug, citationID,
+	); requestErr == nil {
+		authority, issueErr := s.citationContent.IssueExactRevision(ctx, request)
+		if issueErr != nil {
+			return nil, issueErr
+		}
+		return authority, nil
+	}
 	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(releaseID) == "" || releaseID != pin.ReleaseID() {
+	if releaseID != pin.ReleaseID() {
 		return nil, ErrWikiReleaseConflict
 	}
 	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
@@ -2570,25 +2604,48 @@ func (s *SchemaWikiService) ReadSchemaCitationContent(
 		}
 		return opened, nil
 	}
-	pin, err := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
-	if err != nil || authority.ReleaseID != pin.ReleaseID() ||
-		authority.ActivationEpoch != pin.ActivationEpoch() {
+	routeAuthority, err := s.citationContent.ResolveRouteAuthority(ctx, token)
+	if err != nil || routeAuthority == nil || routeAuthority.Scope != scope ||
+		routeAuthority.ReleaseID != authority.ReleaseID {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
-	validated, _, err := s.loadPinnedSchemaRelease(ctx, principal, pin)
-	if err != nil {
-		return nil, err
-	}
-	request, err := schemaWikiCitationRequest(
-		validated, scope, pin.ReleaseID(), pin.ActivationEpoch(),
-		"field:"+authority.FieldID, authority.CitationID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	request, err = s.bindSchemaWikiC6FrozenNativeSource(validated, request)
-	if err != nil {
-		return nil, err
+	var request CitationRevisionReadRequestV1
+	switch routeAuthority.Kind {
+	case "active":
+		pin, pinErr := s.releaseAuthority.BeginPinnedRead(ctx, principal, scope)
+		if pinErr != nil || authority.ReleaseID != pin.ReleaseID() ||
+			authority.ActivationEpoch != pin.ActivationEpoch() {
+			return nil, ErrSchemaWikiCitationUnavailable
+		}
+		validated, _, loadErr := s.loadPinnedSchemaRelease(ctx, principal, pin)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		request, err = schemaWikiCitationRequest(
+			validated, scope, pin.ReleaseID(), pin.ActivationEpoch(),
+			"field:"+authority.FieldID, authority.CitationID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		request, err = s.bindSchemaWikiC6FrozenNativeSource(validated, request)
+		if err != nil {
+			return nil, err
+		}
+	case "release":
+		request, err = s.entityPageGraphCitationRequest830G1(
+			ctx,
+			principal,
+			scope,
+			authority.ReleaseID,
+			"field:"+authority.FieldID,
+			authority.CitationID,
+		)
+		if err != nil || request.citationServingActivationEpoch != authority.ActivationEpoch {
+			return nil, ErrSchemaWikiCitationUnavailable
+		}
+	default:
+		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	opened, err := s.citationContent.ReadByOpaqueToken(ctx, scope, token, request)
 	if err != nil {

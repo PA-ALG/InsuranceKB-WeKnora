@@ -699,6 +699,35 @@ func (s *WikiReleaseService) createDraft(
 	principal types.WikiReleasePrincipal,
 	input *types.WikiReleasePreparation,
 ) (*types.WikiReleasePreparation, error) {
+	return s.createDraftAtExpectedHead(ctx, principal, input, nil)
+}
+
+type wikiReleaseDraftExpectedHead struct {
+	releaseID       string
+	activationEpoch uint64
+}
+
+func (s *WikiReleaseService) createDraftWithExpectedHead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	input *types.WikiReleasePreparation,
+	expectedReleaseID string,
+	expectedActivationEpoch uint64,
+) (*types.WikiReleasePreparation, error) {
+	if expectedReleaseID == "" || expectedActivationEpoch == 0 {
+		return nil, fmt.Errorf("%w: incomplete expected head", ErrWikiReleaseInvalidAuthorization)
+	}
+	return s.createDraftAtExpectedHead(ctx, principal, input, &wikiReleaseDraftExpectedHead{
+		releaseID: expectedReleaseID, activationEpoch: expectedActivationEpoch,
+	})
+}
+
+func (s *WikiReleaseService) createDraftAtExpectedHead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	input *types.WikiReleasePreparation,
+	expected *wikiReleaseDraftExpectedHead,
+) (*types.WikiReleasePreparation, error) {
 	if input == nil || s.repository == nil {
 		return nil, fmt.Errorf("%w: nil draft", ErrWikiReleaseInvalidAuthorization)
 	}
@@ -722,19 +751,27 @@ func (s *WikiReleaseService) createDraft(
 	draft.Members = members
 	draft.Manifest = append(json.RawMessage(nil), input.Manifest...)
 	draft.ManifestDigest = digestWikiReleaseBytes(draft.Manifest)
+	if manifest, manifestErr := types.ParseEntityPageManifest830G1(draft.Manifest); manifestErr == nil {
+		draft.ManifestDigest = manifest.ManifestSHA256
+	}
 	draft.ReviewDecisionDigest = ""
 	draft.Status = types.WikiReleasePreparationDraft
 	draft.CreatedAt = s.now().UTC()
-	head, headErr := s.repository.GetHead(ctx, draft.WikiReleaseScope)
-	switch {
-	case headErr == nil:
-		draft.ExpectedReleaseID = head.ActiveReleaseID
-		draft.ExpectedActivationEpoch = head.ActivationEpoch
-	case errors.Is(headErr, wikirepository.ErrWikiReleaseNotFound):
-		draft.ExpectedReleaseID = ""
-		draft.ExpectedActivationEpoch = 0
-	default:
-		return nil, headErr
+	if expected != nil {
+		draft.ExpectedReleaseID = expected.releaseID
+		draft.ExpectedActivationEpoch = expected.activationEpoch
+	} else {
+		head, headErr := s.repository.GetHead(ctx, draft.WikiReleaseScope)
+		switch {
+		case headErr == nil:
+			draft.ExpectedReleaseID = head.ActiveReleaseID
+			draft.ExpectedActivationEpoch = head.ActivationEpoch
+		case errors.Is(headErr, wikirepository.ErrWikiReleaseNotFound):
+			draft.ExpectedReleaseID = ""
+			draft.ExpectedActivationEpoch = 0
+		default:
+			return nil, headErr
+		}
 	}
 	draft.PreparationDigest = digestWikiReleasePreparation(&draft)
 	if err := s.repository.CreateDraft(ctx, &draft); err != nil {
@@ -792,9 +829,23 @@ func (s *WikiReleaseService) reviewDraft(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	if _, err := validateSchemaWikiPreparation(
-		draft, types.WikiReleasePreparationDraft, scope,
-	); err != nil {
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(draft.Manifest, &manifestHeader) != nil {
+		return nil, ErrSchemaWikiPreparationInvalid
+	}
+	var validationErr error
+	if manifestHeader.Contract == "entity-page-manifest.830.g1.v1" {
+		_, _, validationErr = validateEntityPageGraphPreparation830G1(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
+	} else {
+		_, validationErr = validateSchemaWikiPreparation(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
+	}
+	if validationErr != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	decision, err := ParseHumanBatchDecisionReceiptV1(rawDecision)

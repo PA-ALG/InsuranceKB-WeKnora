@@ -1,0 +1,291 @@
+{
+  "contract": "weknora.830.g1.m3-d3-isolated-release.v1",
+  "goal_id": "G1",
+  "phase": "M3_D3",
+  "observed_at": "2026-09-04T00:56:26+08:00",
+  "source_head": "4501125611e4bb8a58a13dbedded78c55cf1a7ac",
+  "source_tree": "ba33f11031a12af8853df34c19c8971973d82f9e",
+  "status": "PASS",
+  "disposition": "NOT_FOR_PRODUCTION",
+  "scope": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "exact_inputs": {
+    "preparation_id": "g1-m1-740d9b7c-preview",
+    "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+    "candidate_sha256": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+    "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "source_activation_epoch": 2,
+    "app_image_id": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+    "frontend_image_id": "sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4",
+    "c5_manifest_internal_sha256": "b2a8f157e097502bc5074c5930a28a73c08c7dbd99fd76439b65eb1c66694a3b",
+    "c5_manifest_external_sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25",
+    "c5_preview_internal_sha256": "742b98610caf4fb7440c448575f12b5c9c4361238c7d7a18a881a4b172db2e2a",
+    "c5_preview_external_sha256": "7c9c59a8486268a9d2ff4cb5a0d09b2790affabfeb147b93ebc710f9cc4e3934",
+    "candidate_evidence_authority_internal_sha256": "d56cd38c18ccc1aa511b0a1f89ffdf52899d477cbf5336b6f84ee9662bc995d0",
+    "candidate_evidence_authority_external_sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1"
+  },
+  "startup_diagnosis": {
+    "initial_app_result": "EXITED_BEFORE_HTTP_LISTEN",
+    "business_rows_written": 0,
+    "error_surface": "schema wiki formal candidate preview binding mismatch",
+    "root_cause": "the isolated C5 copy inherited directory mode 0755 and member mode 0644 while the Go sealed-bundle reader requires exact 0700 and 0600",
+    "correction": "changed only temporary-copy filesystem modes to 0700/0600; no member bytes or hashes changed",
+    "real_bundle_test": {
+      "command": "WEKNORA_C5_REAL_BUNDLE_MANIFEST=$PWD/.g1-d3-runtime/c5/manifest.json go test ./internal/application/repository -run 'TestSchemaWikiFormalCandidatePreviewRegistryReadsFrozenRealBundle$' -count=1 -v",
+      "result": "PASS"
+    },
+    "app_restart_count_after_correction": 1,
+    "replacement_image_rebuilds": 0
+  },
+  "runtime": {
+    "network": "weknora-g1-d3-450112-internal",
+    "network_internal": true,
+    "egress_routes": 0,
+    "attached_containers": [
+      "WeKnora-c5-1e6-redis",
+      "WeKnora-p0-clone-postgres-vsnd11r2",
+      "weknora-g1-d3-450112-app",
+      "weknora-g1-d3-450112-frontend"
+    ],
+    "app": {
+      "container_id": "bc23dcb7b6a4cd347166af1b797b1810284f6a38eab79a081f9998b248ef0821",
+      "image_id": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+      "started_at": "2026-09-03T16:37:02.638142694Z",
+      "http_status": 200,
+      "networks": [
+        "weknora-g1-d3-450112-internal"
+      ]
+    },
+    "frontend": {
+      "container_id": "82682967dad46f528428ef9b88f3e4f316e9886535061aace6a0fa54e847b2cf",
+      "image_id": "sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4",
+      "started_at": "2026-09-03T16:40:36.717864396Z",
+      "http_status": 200,
+      "html_sha256": "f35c61729c8c003fcfbd306b2a204aa2d681c6ee343d24c8cefdfe804b280b63",
+      "html_size": 4660,
+      "networks": [
+        "weknora-g1-d3-450112-internal"
+      ]
+    }
+  },
+  "clone_before": {
+    "counts": {
+      "preparations": 3,
+      "releases": 2,
+      "members": 150,
+      "heads": 1,
+      "receipts": 2
+    },
+    "head": {
+      "active_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+      "activation_epoch": 2
+    },
+    "draft": {
+      "status": "draft",
+      "member_count": 76,
+      "review_decision_digest": ""
+    },
+    "old_active_pinned_http_reads": 75,
+    "old_active_pinned_http_failures": 0
+  },
+  "lifecycle": {
+    "review": {
+      "preparation_id": "g1-m1-740d9b7c-preview",
+      "from": "draft",
+      "to": "ready",
+      "review_decision_digest": "b18f76af2ab941e98a6be40ae43c63dbc8600deea2d989ebcbca6b19cf86a6a9",
+      "member_count": 76
+    },
+    "activation": {
+      "receipt_id": "receipt-f0eca262-b060-46db-9d18-8390b9a1a8a8",
+      "authorization_digest": "9f370fb87ca8af16754d4361f62c70466df048d7457a77a87281d410073300ac",
+      "nonce": "g1-d3-450112-activation",
+      "previous_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+      "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+      "activation_epoch": 3,
+      "base_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+      "base_activation_epoch": 2,
+      "new_release_count": 1,
+      "new_member_count": 76,
+      "head_transition_count": 1,
+      "new_receipt_count": 1
+    }
+  },
+  "clone_after": {
+    "counts": {
+      "preparations": 3,
+      "releases": 3,
+      "members": 226,
+      "heads": 1,
+      "receipts": 3
+    },
+    "head": {
+      "active_release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+      "activation_epoch": 3
+    },
+    "preparation_status": "ready",
+    "successor": {
+      "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+      "base_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+      "base_activation_epoch": 2,
+      "preparation_id": "g1-m1-740d9b7c-preview",
+      "candidate_digest": "4aebf1e1b755e7d4dee4ea62dac86318f6229aeca6bc2ca52510dcf8883efea1",
+      "manifest_digest": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+      "member_count": 76
+    }
+  },
+  "page_verification": {
+    "serving_release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "serving_activation_epoch": 3,
+    "immutable_source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+    "current_count": 76,
+    "pinned_count": 76,
+    "unique_page_id_count": 76,
+    "current_pinned_exact_match_count": 76,
+    "mixed_member_count": 0,
+    "member_payload_rewrites": 0,
+    "ordered_checks_sha256": "03d4a14b9c5aa81a3b9be2bdcad1c6df3ebe40e538f511ba489acc286e8b973d"
+  },
+  "source_clicks": [
+    {
+      "field_key": "insured_eligibility",
+      "citation_id": "citation-aeecb686f6f593349c19426f",
+      "page_number": 2,
+      "authority_sha256": "04ab320a4e178ab8bb9fcd68e001c56abe2fab26b9dcae0d91304e9a9b8d8508",
+      "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_size": 1047811,
+      "http_status": 200
+    },
+    {
+      "field_key": "health_declaration_requirements",
+      "citation_id": "citation-96735edecb28f4157ead634b",
+      "page_number": 27,
+      "authority_sha256": "daebd0dc97218129e59cda1d036195e255a4ad9b03622148e754bf3e6168f3e6",
+      "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_size": 1047811,
+      "http_status": 200
+    },
+    {
+      "field_key": "guaranteed_renewal_period",
+      "citation_id": "citation-80016ab93a279ed9e3b04f18",
+      "page_number": 1,
+      "authority_sha256": "c8ab57df661497c39bd9f4b3d287db3b78a30c970abef6e27f6f5038cec5be4b",
+      "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "response_size": 1047811,
+      "http_status": 200
+    }
+  ],
+  "fail_closed": {
+    "tampered_opaque_token_http_status": 403,
+    "missing_citation_http_status": 400,
+    "fallback_requests": 0,
+    "control_head_regression": "covered by focused source tests; no second runtime Head transition was introduced"
+  },
+  "production_guard": {
+    "before": {
+      "app_container_id": "fca85321234ebc2a41910343f6d032de32596773be46fc04757282b0359cf3f4",
+      "app_image_id": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+      "app_started_at": "2026-08-30T16:56:36.177364061Z",
+      "frontend_container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+      "frontend_image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+      "frontend_started_at": "2026-08-30T16:56:35.934568702Z",
+      "frontend_http_status": 200,
+      "frontend_html_sha256": "acd8567f914210059a7435dce565e92028b4e3b9ce1d8236e07bbdb20d330992",
+      "wiki_release_table_count": 0
+    },
+    "after": {
+      "app_container_id": "fca85321234ebc2a41910343f6d032de32596773be46fc04757282b0359cf3f4",
+      "app_image_id": "sha256:37dfa969939cd9e48e4f65fcabee49920ecb28139d584bf000a2355ac5cf1d55",
+      "app_started_at": "2026-08-30T16:56:36.177364061Z",
+      "frontend_container_id": "d0e2a5e05087a244a68bd3fc7a2f7d71133a2e84ec853eaa4d2c1cc776a0fb13",
+      "frontend_image_id": "sha256:5e5555166307ab65f4b9b118766c778231c81a0b1aff2326c3da7a99f2527243",
+      "frontend_started_at": "2026-08-30T16:56:35.934568702Z",
+      "frontend_http_status": 200,
+      "frontend_html_sha256": "acd8567f914210059a7435dce565e92028b4e3b9ce1d8236e07bbdb20d330992",
+      "wiki_release_table_count": 0
+    },
+    "identities_equal": true,
+    "writes": 0,
+    "restarts": 0,
+    "replacements": 0
+  },
+  "cleanup": {
+    "status": "PASS",
+    "temporary_containers_remaining": 0,
+    "temporary_network_remaining": false,
+    "temporary_role_remaining": false,
+    "temporary_auth_token_remaining": false,
+    "temporary_secret_files_remaining": false,
+    "clone_counts_after_cleanup": {
+      "preparations": 3,
+      "releases": 3,
+      "members": 226,
+      "heads": 1,
+      "receipts": 3
+    },
+    "successor_members_after_cleanup": 76,
+    "production_frontend_http_status_after_cleanup": 200
+  },
+  "final_verification": [
+    {
+      "command": "go test ./internal/application/service ./internal/handler ./internal/router -count=1",
+      "result": "PASS_AFTER_AUTHORIZED_LOOPBACK_RERUN",
+      "detail": "service 199.480s; handler 8.830s; router 7.484s; the first sandbox run was inadmissible because httptest/miniredis loopback bind returned EPERM"
+    },
+    {
+      "command": "go vet ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+      "result": "PASS"
+    },
+    {
+      "command": "cd harness && PYTHONPATH=src .venv/bin/python -m pytest tests/test_entity_page_graph_830_g1.py tests/test_medical_schema_pack_596_1.py tests/test_schema_wiki_release_596_1.py -q",
+      "result": "PASS",
+      "detail": "54 passed, 3 skipped in 281.88s"
+    },
+    {
+      "command": "cd frontend && npm test -- src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts",
+      "result": "PASS_AFTER_AUTHORIZED_IPC_RERUN",
+      "detail": "7 passed, 0 failed; the first sandbox run was inadmissible because tsx IPC socket creation returned EPERM"
+    },
+    {
+      "command": "cd frontend && npm run test:component -- src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts src/api/schema-wiki/entityPageGraph830G1.spec.ts",
+      "result": "PASS",
+      "detail": "2 files passed; 36 tests passed"
+    },
+    {
+      "command": "cd frontend && npm run type-check",
+      "result": "PASS"
+    },
+    {
+      "command": "openspec validate 126-830-g1-entity-field-assertion-pages --strict",
+      "result": "PASS",
+      "detail": "change valid; optional telemetry flush could not resolve edge.openspec.dev in the restricted environment"
+    },
+    {
+      "command": "git diff --check; evidence self-hash validation; git status --short",
+      "result": "PASS"
+    }
+  ],
+  "effects": {
+    "provider_calls": 0,
+    "model_calls": 0,
+    "egress": 0,
+    "second_publisher": 0,
+    "second_head": 0,
+    "g2_actions": 0,
+    "production_writes": 0,
+    "production_restarts": 0,
+    "production_replacements": 0
+  },
+  "secrets_output": false,
+  "current_red": "FINAL_VERIFICATION_AND_INDEPENDENT_READ_ONLY_ACCEPTANCE_NOT_RUN",
+  "next_physical_result": "CLEAN_TEMP_RUNTIME_RUN_FINAL_VERIFICATION_AND_INDEPENDENT_REVIEW",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "c7ddfaac23b262d6a99d583822c369678c2d655578bb7774b1a21f5dbdef8dc1"
+}

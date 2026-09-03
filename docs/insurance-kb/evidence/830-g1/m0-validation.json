@@ -1,0 +1,73 @@
+{
+  "contract": "weknora.830.g1-m0-validation.v1",
+  "goal_id": "G1",
+  "phase": "M0",
+  "base_commit": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "base_tree": "c7853fa71a5fbe826c3faf04ce3e8a2ad1168255",
+  "branch": "codex/830-g1-field-assertion-pages",
+  "checks": {
+    "base_commit_exact": true,
+    "base_tree_exact": true,
+    "branch_exact": true,
+    "b0_final_adjudication_pass": true,
+    "current_authorization_g1_only": true,
+    "current_red_declared": true,
+    "g2_and_later_locked": true,
+    "single_g1_openspec": true,
+    "requirements_g1_r1_through_g1_r9": true,
+    "owner_matrix_declared": true,
+    "highest_authority_documents_authorize_g1_only": true,
+    "win1_exact_write_paths_frozen": true,
+    "win2_exact_conditional_write_paths_frozen": true,
+    "external_write_objects_empty": true,
+    "single_m1_next_physical_result_frozen": true,
+    "m1_deadline_frozen": true,
+    "actual_candidate_file_identity_frozen": true,
+    "actual_claim_set_identity_frozen": true,
+    "actual_evidence_authority_identity_frozen": true,
+    "actual_input_matches_b0_release_receipt": true,
+    "presentation_profile_ordered_mapping_frozen": true,
+    "presentation_profile_internal_hash_valid": true,
+    "frozen_input_manifest_self_hash_valid": true,
+    "independent_rereview_unresolved_zero": true,
+    "diff_check_clean": true
+  },
+  "baseline_tests": {
+    "harness_command": "PYTHONPATH=src harness/.venv/bin/python -m pytest tests/test_medical_schema_pack_596_1.py tests/test_schema_wiki_release_596_1.py -q",
+    "harness_result": "43 passed",
+    "harness_duration_seconds": 819.95,
+    "go_command": "GOCACHE=/private/tmp/weknora-830-g1-go-cache go test ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+    "go_passed_packages": [
+      "./internal/types",
+      "./internal/application/service",
+      "./internal/handler",
+      "./internal/router"
+    ],
+    "initial_sandbox_result": "ENVIRONMENT_BLOCKED_BY_LOCAL_LOOPBACK_BIND_NOT_RED",
+    "authorized_local_loopback_rerun": "PASS",
+    "go_business_assertion_failures": 0,
+    "go_result_class": "PASS"
+  },
+  "effects": {
+    "product_code_writes": 0,
+    "database_writes": 0,
+    "docker_builds": 0,
+    "environment_starts": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_8081_changes": 0,
+    "g2_actions": 0
+  },
+  "independent_review": {
+    "task_id": "01a0587d-b726-7370-b758-ec93723c9e64",
+    "initial_result": "FAIL",
+    "initial_unresolved_count": 3,
+    "correction_status": "PASS",
+    "reviewed_head": "bc93bbef19e24877f0a8816dc49395bc662d703f",
+    "reviewed_tree": "71601455e486fe7b21b358032939b0799cafbc8f",
+    "unresolved_count": 0
+  },
+  "status": "PASS",
+  "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
+  "receipt_sha256": "f00a90f0ca978bd396c22545e4cb4f91205df35976f0dfa8f4cebbc14b0ec492"
+}

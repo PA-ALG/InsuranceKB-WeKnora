@@ -1,15 +1,14 @@
 # 29 · 830 Goal Cards（统一知识库与真实验收版）
 
 > 修订日期：2026-08-31
-> 当前授权：`B0_ONLY`
-> 当前产品状态：`830_PRODUCT_GOAL=B0_EVIDENCE_FROZEN_PENDING_CONTROLLER_REVIEW`
+> 当前授权：`G1_ONLY`
+> 当前产品状态：`830_PRODUCT_GOAL=G1_IN_PROGRESS`
 > Schema Catalog：`11_PRODUCT_PACKS_SOURCE_VERIFIED_NOT_REGISTERED`
 > 执行 WIP 上限：`WIP_LIMIT=1`
 
-本文件是 830 唯一 Goal 队列和逐卡验收权威。用户当前只授权 B0 的证据冻结、资产
-裁决和必要 authority/Handoff 指针；它不启动产品代码、Provider、运行环境、迁移或
-真实写入。B0 Evidence Pack 已冻结并等待总控复核；只有总控裁决 B0 为 PASS 后，
-下一张卡才可另行获授权进入 WIP。G1 及后续 Goal 当前均为 `LOCKED`。
+本文件是 830 唯一 Goal 队列和逐卡验收权威。B0 Evidence Pack 的独立复核为 PASS、
+未解决问题为 0；用户已明确授权总控裁决 `B0=PASS` 并只启动 G1。当前唯一 WIP 是
+G1；G2 及后续 Goal 均为 `LOCKED`，不得因 G1 进展或 PASS 自动启动。
 
 ```text
 B0 -> G1 -> G2 -> G3 -> G4 -> G5 -> G6A -> G6B -> G6C -> G6D -> Q0 -> G7
@@ -104,10 +103,16 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 
 ## 3. G1 · 实体页图与独立 FieldAssertion
 
-- **CURRENT_RED**：`LOCKED_BY_B0`；B0 PASS 后转为
-  `NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`。
-- **NEXT_PHYSICAL_RESULT**：一个真实医疗险实体的 overview、7 个 section、67 个
+- **CURRENT_RED**：`NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`。
+- **GOAL_FINAL_PHYSICAL_RESULT**：一个真实医疗险实体的 overview、7 个 section、67 个
   独立 FieldAssertion 页面和空 `free_wiki` 分组进入同一原子 Release。
+- **CURRENT_MILESTONE_NEXT_PHYSICAL_RESULT**：在 2026-09-02 23:42:03 +08:00 前，真实
+  815 Candidate 的 WeKnora Preview 可打开同一实体的 overview、`application-and-contract`
+  section、`insured_eligibility`（present）、`guaranteed_renewal_period`
+  （absent_explicitly）、`cooling_off_period`（unknown）三个独立字段页及空 `free_wiki`；
+  页面使用稳定 URL、中文短标题、完整 namespace，并至少从 `insured_eligibility` 成功
+  exact source click。该 M1 结果是当前唯一 `NEXT_PHYSICAL_RESULT`；76/76 是 G1 最终 DoD，
+  不是另一个并行产品结果。
 - **目标**：把 815 连续页能力 REWIRE 成实体页图；字段仍由 SchemaPack 保底，但每个
   FieldAssertion 成为可独立访问、可回点、可链接共享概念的实体作用域页面。
 - **冻结输入**：B0 release/evidence identity、一个真实实体及稳定 `entity_id`、11 类

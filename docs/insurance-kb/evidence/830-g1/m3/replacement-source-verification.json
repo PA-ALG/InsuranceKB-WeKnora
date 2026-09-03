@@ -1,0 +1,213 @@
+{
+  "contract": "weknora.830.g1-m3-replacement-source-verification.v1",
+  "goal_id": "G1",
+  "phase": "M3_SOURCE_VERIFICATION",
+  "status": "PASS",
+  "observed_at": "2026-09-03T13:49:30+08:00",
+  "source": {
+    "branch": "codex/830-g1-field-assertion-pages",
+    "commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
+    "tree": "7f82343fc2ff9eb157fdc122b34e3472e682a951",
+    "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+    "contract_vector_file_sha256": "cffb39e5a7214e2720b54a80acacab6923afa8e00e6174befc88b3cd44e069d1",
+    "go_sum_sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7",
+    "frontend_package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb"
+  },
+  "implementation_commits": {
+    "successor_source_identity": "e1f74c757",
+    "frontend_dual_identity": "59dad6bda",
+    "citation_token_identity": "8c45e9daf",
+    "exact_citation_spec_correction": "57e4b5b24",
+    "successor_historical_source_bridge": "a8e677b80",
+    "exact_release_scope_gate": "9e3aec626",
+    "frontend_verification_fixture_correction": "f97c8636d",
+    "exact_citation_review_correction": "623c2ac12"
+  },
+  "independent_spec_review": {
+    "reviewer": "/root/g1_m3_spec_review",
+    "reviewed_commit": "57e4b5b2470e2a9c347fba832ae0ba2af95a97f2",
+    "reviewed_tree": "8cd24fc51dbd2699f326ff43c8f272c6a9cdb9fc",
+    "result": "PASS",
+    "unresolved_count": 0,
+    "frozen_decision": "G1_CURRENT_AND_PINNED_CITATIONS_EXACT_RELEASE_GENERIC_SCHEMA_ACTIVE_UNCHANGED"
+  },
+  "independent_code_review": {
+    "reviewer": "/root/g1_m3_plan_review",
+    "reviewed_commit": "80d663a87207adaa602c88a8a5bb872c64e52998",
+    "reviewed_tree": "9808ecb8ff5a027523798102f9559bb45879fdb5",
+    "result": "FAIL",
+    "unresolved_count": 2,
+    "findings": [
+      "active route kind incorrectly admitted distinct successor/source identities",
+      "exact-release citation preview consulted Active Head before the service"
+    ],
+    "correction_commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
+    "correction_tree": "7f82343fc2ff9eb157fdc122b34e3472e682a951",
+    "re_review": "PASS",
+    "re_reviewed_commit": "ef6b246e85733e9a89d8d4e9ad50271096f3aaac",
+    "re_reviewed_tree": "ce239651a94db1cae6e1807dab037e12996cc344",
+    "re_review_unresolved_count": 0,
+    "backlog_count": 0
+  },
+  "tdd_red": [
+    {
+      "surface": "successor historical-source request constructor",
+      "command": "go test ./internal/application/service -run 'TestEntityPageGraph830G1(CurrentSuccessorCitationUsesHistoricalSource|PinnedCitationSurvivesNonG1HeadMove|CitationBridgeRejectsCustodyDrift)$' -count=1",
+      "result": "EXPECTED_FAIL",
+      "evidence": "three compile errors: undefined entityPageGraphCitationRequestFromSource830G1"
+    },
+    {
+      "surface": "exact-release dual-ACL scope gate",
+      "command": "go test ./internal/handler ./internal/router -run 'Test.*Citation.*(Release|Scope|Order)' -count=1",
+      "result": "EXPECTED_FAIL",
+      "evidence": "valid release authority aborted in handler and returned 403 at router"
+    },
+    {
+      "surface": "active route kind with distinct serving/source identities",
+      "command": "go test ./internal/application/service ./internal/router -run 'TestSchemaWikiCitationContentRejectsActiveDualIdentityBeforeAdapter|TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead' -count=1 -v",
+      "result": "EXPECTED_FAIL",
+      "evidence": "service reached the revision adapter instead of failing closed; exact preview returned 403 after a Head lookup"
+    }
+  ],
+  "verification": [
+    {
+      "command": "go test ./internal/application/service ./internal/handler ./internal/router -count=1",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "service 249.603s; handler 9.044s; router 11.055s; wall 305.24s"
+    },
+    {
+      "command": "go vet ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "wall 19.12s"
+    },
+    {
+      "command": "cd harness && PYTHONPATH=src .venv/bin/python -m pytest tests/test_entity_page_graph_830_g1.py tests/test_medical_schema_pack_596_1.py tests/test_schema_wiki_release_596_1.py -q",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "54 passed, 3 skipped in 260.96s; wall 269.36s"
+    },
+    {
+      "command": "cd harness && PYTHONPATH=src .venv/bin/python -m ruff check src/insurance_harness/knowledge_compiler/entity_page_graph_830_g1.py tests/test_entity_page_graph_830_g1.py",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "All checks passed; wall 0.87s"
+    },
+    {
+      "command": "cd frontend && npm test -- src/views/knowledge/schema-wiki/entityPageGraph830G1Contract.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "7 passed, 0 failed"
+    },
+    {
+      "command": "cd frontend && npm run test:component -- src/views/knowledge/schema-wiki/EntityPageGraph830G1.spec.ts src/api/schema-wiki/entityPageGraph830G1.spec.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "2 files passed; 36 tests passed; 0 failed; final duration 6.12s"
+    },
+    {
+      "command": "cd frontend && npm run type-check",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "vue-tsc --build; wall 231.13s"
+    },
+    {
+      "command": "cd frontend && npm run build",
+      "exit_code": 0,
+      "result": "PASS_WITH_EXISTING_SIZE_WARNING",
+      "detail": "6331 modules transformed; built in 3m 4s; wall 195.24s"
+    },
+    {
+      "command": "gofmt owned Go paths; git diff --check; git status --porcelain=v1",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "formatted; no whitespace errors; clean at source commit"
+    },
+    {
+      "command": "go test ./internal/application/service ./internal/router -run 'TestSchemaWikiCitationContentRejectsActiveDualIdentityBeforeAdapter|TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead' -count=1 -v",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "both independent-review regressions passed after the bounded correction"
+    },
+    {
+      "command": "go test ./internal/application/service ./internal/handler ./internal/router -count=1",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "service 295.191s; handler 11.803s; router 13.835s"
+    },
+    {
+      "command": "go vet ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "wall 12.99s"
+    }
+  ],
+  "verification_corrections": [
+    {
+      "finding": "API component fixture represented a current read with the same serving and source tuple",
+      "initial_result": "2 failed, 34 passed",
+      "correction": "use a successor serving release and source_epoch+1; restore same identity only for preparation",
+      "commit": "f97c8636d"
+    },
+    {
+      "finding": "strict vue-tsc rejected a direct field-payload assertion across the payload union",
+      "initial_result": "2 TS2352 diagnostics",
+      "correction": "make the test's intentional narrowing explicit through unknown without changing production types",
+      "commit": "f97c8636d"
+    },
+    {
+      "finding": "independent code review found active dual identity and exact-preview pre-service Head lookup",
+      "initial_result": "CODE_REVIEW=FAIL; UNRESOLVED_COUNT=2",
+      "correction": "require release route kind for distinct successor/source identity and mount preview on the existing no-Head dual-ACL seal guards",
+      "commit": "623c2ac12"
+    }
+  ],
+  "invariants": {
+    "g1_current_citation_route_kind": "release",
+    "g1_pinned_citation_route_kind": "release",
+    "generic_schema_route_kind": "active",
+    "g1_citation_head_queries": 0,
+    "historical_source_join_count": 17,
+    "entity_page_member_count": 76,
+    "new_routes": 0,
+    "payload_rewrites": 0
+  },
+  "build_budget": {
+    "replacement_app_allowed": 1,
+    "replacement_app_used": 0,
+    "replacement_frontend_allowed": 1,
+    "replacement_frontend_used": 0,
+    "docker_builds_in_this_receipt": 0
+  },
+  "not_run": [
+    "REPLACEMENT_APP_IMAGE_BUILD",
+    "REPLACEMENT_FRONTEND_IMAGE_BUILD",
+    "M3_D3_ISOLATED_RELEASE",
+    "M3_D3_HEAD_ACTIVATION",
+    "M3_D3_LIVE_SOURCE_CLICK",
+    "BUSINESS_G1_PASS",
+    "G2"
+  ],
+  "effects": {
+    "database_writes": 0,
+    "release_writes": 0,
+    "head_writes": 0,
+    "container_starts": 0,
+    "container_stops": 0,
+    "docker_images_built": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_mutations": 0,
+    "g2_actions": 0
+  },
+  "decision": {
+    "source_status": "PASS",
+    "code_review": "PASS",
+    "next_physical_result": "FREEZE_REPLACEMENT_BUILD_INPUTS",
+    "g1_business_status": "IN_PROGRESS",
+    "g2_readiness": "LOCKED"
+  },
+  "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
+  "receipt_sha256": "2ac9f69ce342221e177f28b81631b61e45fa60b9f9789611d4e6bc56e0775834"
+}

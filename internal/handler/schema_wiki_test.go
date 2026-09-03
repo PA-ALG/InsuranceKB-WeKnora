@@ -28,6 +28,20 @@ type schemaWikiScopeResolverStub struct {
 	preparationCalls int
 }
 
+type schemaWikiCitationRouteAuthorityResolverStub struct {
+	authority *service.SchemaWikiCitationContentRouteAuthorityV1
+	err       error
+	calls     int
+}
+
+func (s *schemaWikiCitationRouteAuthorityResolverStub) ResolveSchemaCitationContentRouteAuthority(
+	context.Context,
+	string,
+) (*service.SchemaWikiCitationContentRouteAuthorityV1, error) {
+	s.calls++
+	return s.authority, s.err
+}
+
 func (s *schemaWikiScopeResolverStub) GetPreparationScopeForWikiKB(
 	_ context.Context,
 	_ uint64,
@@ -47,6 +61,8 @@ type schemaWikiHTTPServiceSpy struct {
 	reviewedReadCalls     int
 	currentCitationCalls  int
 	reviewedCitationCalls int
+	expectedEntityID      string
+	reviewedEntityIDs     []string
 	citationErr           error
 	citationBytes         []byte
 	currentAuthority      *service.SchemaWikiCurrentAuthorityV1
@@ -68,6 +84,17 @@ type schemaWikiHTTPServiceSpy struct {
 	releaseResult         *types.WikiReleaseReceipt
 	decisionErr           error
 	decisionFunc          func([]byte, []byte) (*types.HumanBatchDecisionReceiptV1, *types.WikiReleaseReceipt, error)
+}
+
+func (s *schemaWikiHTTPServiceSpy) CreateEntityPageGraphDraft830G1(
+	context.Context,
+	types.WikiReleasePrincipal,
+	types.WikiReleaseScope,
+	string,
+	json.RawMessage,
+) (*types.WikiReleasePreparation, error) {
+	s.createCalls++
+	return &types.WikiReleasePreparation{ID: "preparation-g1"}, nil
 }
 
 func (s *schemaWikiHTTPServiceSpy) DecideSchemaWikiFormalCandidatePreview(
@@ -280,6 +307,26 @@ func (s *schemaWikiHTTPServiceSpy) IssueCurrentSchemaCitationAuthority(
 	return &authority, nil
 }
 
+func (s *schemaWikiHTTPServiceSpy) IssueEntityPageGraphPreparationCitationAuthority830G1(
+	_ context.Context,
+	_ types.WikiReleasePrincipal,
+	_ types.WikiReleaseScope,
+	_ string,
+	entityID string,
+	_ string,
+	_ string,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
+	s.reviewedEntityIDs = append(s.reviewedEntityIDs, entityID)
+	if s.expectedEntityID != "" && entityID != s.expectedEntityID {
+		return nil, service.ErrSchemaWikiCitationUnavailable
+	}
+	s.reviewedCitationCalls++
+	if s.citationErr != nil {
+		return nil, s.citationErr
+	}
+	return &types.SchemaWikiCitationContentAuthorityV1{}, nil
+}
+
 func (s *schemaWikiHTTPServiceSpy) ReadSchemaCitationContent(
 	_ context.Context,
 	_ types.WikiReleasePrincipal,
@@ -322,6 +369,41 @@ func schemaWikiScopeContext(t *testing.T, params gin.Params) (*gin.Context, *htt
 	return c, recorder
 }
 
+func TestDecodeSchemaWikiCreateDraftRequestAcceptsOnlyMutuallyExclusiveClosedVariants(t *testing.T) {
+	t.Parallel()
+	old := `{"preparation_id":"old-preparation","release":{},"candidate_evidence_authority":{},"review_bundle":{},"evaluation_bundle":{},"review_successor":{}}`
+	g1 := `{"preparation_id":"g1-preparation","entity_page_manifest":{"contract":"entity-page-manifest.830.g1.v1"}}`
+	for _, test := range []struct {
+		name        string
+		body        string
+		wantVariant string
+		wantError   bool
+	}{
+		{name: "legacy schema", body: old, wantVariant: "schema-wiki"},
+		{name: "g1 manifest", body: g1, wantVariant: "entity-page-graph-830-g1"},
+		{name: "mixed", body: strings.TrimSuffix(g1, "}") + `,"release":{}}`, wantError: true},
+		{name: "unknown member authority", body: `{"preparation_id":"g1","entity_page_manifest":{},"members":[]}`, wantError: true},
+		{name: "missing preparation", body: `{"entity_page_manifest":{}}`, wantError: true},
+		{name: "blank preparation", body: `{"preparation_id":" ","entity_page_manifest":{}}`, wantError: true},
+		{name: "duplicate preparation", body: `{"preparation_id":"g1","preparation_id":"g2","entity_page_manifest":{}}`, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(test.body))
+			var request schemaWikiCreateDraftRequest
+			variant, err := decodeSchemaWikiCreateDraftRequest(c, &request)
+			if test.wantError {
+				require.ErrorIs(t, err, service.ErrSchemaWikiPreparationInvalid)
+				require.Empty(t, variant)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, test.wantVariant, variant)
+		})
+	}
+}
+
 func TestResolveScopeParamsDerivesNonOverridableReleaseScope(t *testing.T) {
 	t.Parallel()
 	resolver := &schemaWikiScopeResolverStub{head: &types.WikiReleaseHead{
@@ -343,6 +425,29 @@ func TestResolveScopeParamsDerivesNonOverridableReleaseScope(t *testing.T) {
 	require.Equal(t, "space-596-1", c.Param("space_id"))
 	require.Equal(t, "raw-596-1", c.Param("raw_kb_id"))
 	require.Equal(t, 1, resolver.calls)
+}
+
+func TestResolvePreparationScopeParamsBootstrapsWithoutHead(t *testing.T) {
+	t.Parallel()
+	scope := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-preparation", RawKBID: "raw-preparation", WikiKBID: "wiki-preparation",
+	}
+	resolver := &schemaWikiScopeResolverStub{preparationScope: &scope}
+	handler := NewSchemaWikiHandler(resolver, nil)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: scope.WikiKBID},
+		{Key: "preparation_id", Value: "preparation-g1"},
+	})
+	handler.ResolvePreparationScopeParams()(c)
+	require.False(t, c.IsAborted())
+	require.Equal(t, scope.SpaceID, c.Param("space_id"))
+	require.Equal(t, scope.RawKBID, c.Param("raw_kb_id"))
+	require.Equal(t, 1, resolver.preparationCalls)
+	require.Zero(t, resolver.calls, "Candidate Preview bootstrap must not consult Head")
+
+	handler.PreparationScope(c)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"wiki_kb_id":"wiki-preparation"`)
 }
 
 func TestSchemaWikiScopeResponseHasExactLaneCContract(t *testing.T) {
@@ -533,6 +638,74 @@ func TestSchemaWikiLifecycleScopeBindersFailClosed(t *testing.T) {
 	})
 }
 
+func TestSchemaWikiCitationReleaseScopeIsExactAndHeadIndependent(t *testing.T) {
+	t.Parallel()
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	params := gin.Params{
+		{Key: "kb_id", Value: exact.WikiKBID}, {Key: "space_id", Value: exact.SpaceID},
+		{Key: "raw_kb_id", Value: exact.RawKBID}, {Key: "token", Value: "opaque-release-token"},
+	}
+
+	t.Run("exact release", func(t *testing.T) {
+		head := &schemaWikiScopeResolverStub{err: apprepo.ErrWikiReleaseNotFound}
+		token := &schemaWikiCitationRouteAuthorityResolverStub{
+			authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+				Kind: "release", Scope: exact, ReleaseID: "release-g1-successor",
+			},
+		}
+		handler := NewSchemaWikiHandler(head, nil, token)
+		c, _ := schemaWikiScopeContext(t, params)
+
+		handler.RequireCitationContentScope()(c)
+
+		require.False(t, c.IsAborted())
+		require.Equal(t, 1, token.calls)
+		require.Zero(t, head.calls, "exact release authority must not resolve Head")
+		require.Zero(t, head.preparationCalls)
+	})
+
+	for _, test := range []struct {
+		name      string
+		authority service.SchemaWikiCitationContentRouteAuthorityV1
+	}{
+		{name: "foreign scope", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release",
+			Scope: types.WikiReleaseScope{
+				TenantID: exact.TenantID, SpaceID: exact.SpaceID,
+				RawKBID: "raw-foreign", WikiKBID: exact.WikiKBID,
+			},
+			ReleaseID: "release-secret",
+		}},
+		{name: "empty release", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact,
+		}},
+		{name: "noncanonical release", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact, ReleaseID: " current ",
+		}},
+		{name: "unknown kind", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "successor", Scope: exact, ReleaseID: "release-secret",
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			head := &schemaWikiScopeResolverStub{}
+			token := &schemaWikiCitationRouteAuthorityResolverStub{authority: &test.authority}
+			handler := NewSchemaWikiHandler(head, nil, token)
+			c, recorder := schemaWikiScopeContext(t, params)
+
+			handler.RequireCitationContentScope()(c)
+
+			require.True(t, c.IsAborted())
+			require.Equal(t, http.StatusForbidden, recorder.Code)
+			require.NotContains(t, recorder.Body.String(), "release-secret")
+			require.NotContains(t, recorder.Body.String(), "raw-foreign")
+			require.Zero(t, head.calls)
+			require.Zero(t, head.preparationCalls)
+		})
+	}
+}
+
 func TestResolveScopeParamsRejectsConflictAndMissingOrForeignHead(t *testing.T) {
 	t.Parallel()
 
@@ -601,6 +774,33 @@ func TestSchemaWikiCitationPreviewUsesOnlyPathIdentitiesAndFailsClosed(t *testin
 	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
 	require.NotContains(t, recorder.Body.String(), "citation-secret")
 	require.Equal(t, 1, spy.currentCitationCalls)
+}
+
+func TestSchemaWikiEntityPagePreparationCitationRejectsForeignEntityBeforeContentAuthority(t *testing.T) {
+	t.Parallel()
+	spy := &schemaWikiHTTPServiceSpy{expectedEntityID: "ping-an-e-sheng-bao"}
+	h := NewSchemaWikiHandler(nil, spy)
+	c, recorder := schemaWikiScopeContext(t, gin.Params{
+		{Key: "kb_id", Value: "wiki-596-1"},
+		{Key: "space_id", Value: "space-596-1"},
+		{Key: "raw_kb_id", Value: "raw-596-1"},
+		{Key: "preparation_id", Value: "preparation-830-g1"},
+		{Key: "entity_id", Value: "foreign-product"},
+		{Key: "field_key", Value: "cooling_off_period"},
+		{Key: "citation_id", Value: "citation-secret"},
+	})
+	principal := types.Principal{Type: types.PrincipalWebUser, ID: "reviewer"}
+	c.Request = c.Request.WithContext(types.WithPrincipal(c.Request.Context(), principal))
+	c.Set(types.PrincipalContextKey.String(), principal)
+
+	h.PreviewEntityPagePreparationCitation830G1(c)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.JSONEq(t, `{"success":false,"error":{"message":"schema wiki citation unavailable"}}`, recorder.Body.String())
+	require.NotContains(t, recorder.Body.String(), "citation-secret")
+	require.NotContains(t, recorder.Body.String(), "foreign-product")
+	require.Zero(t, spy.reviewedCitationCalls)
+	require.Equal(t, []string{"foreign-product"}, spy.reviewedEntityIDs)
 }
 
 func TestSchemaWikiCitationPreviewReturnsStablePageUnavailableCode(t *testing.T) {
