@@ -136,6 +136,24 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
 原 D2 回执继续不可变；这项纠正 supersede 上段的 frontend reuse/no-rebuild 结论，不扩大
 路由、payload、UI、生产、Provider/model 或 G2 范围。
 
+### M3 successor/source bridge source GREEN
+
+- [x] 冻结 serving successor 与 immutable 815 source 双身份；G1 current/pinned citation
+  均为 exact `release`，Generic Schema 保持 `active`。相同 HTTP 输入歧义的独立只读复核在
+  `57e4b5b2470e2a9c347fba832ae0ba2af95a97f2` / tree
+  `8cd24fc51dbd2699f326ff43c8f272c6a9cdb9fc` PASS，unresolved=0。
+- [x] TDD 完成 successor current/pinned、17/17 historical-source bridge、token 双身份、
+  exact-release 双 ACL scope gate 与全部漂移 fail-closed；产品实现提交为 `e1f74c757`、
+  `59dad6bda`、`8c45e9daf`、`a8e677b80`、`9e3aec626`。
+- [x] source verification 在 `f97c8636d9ef54e15b191326c5c8b6c2cb4b8745` / tree
+  `facc1a3467a6329bf62f3fb6c74e530edee14561` PASS：Go service/handler/router、Go vet、
+  Harness 54 passed/3 skipped、frontend 7 + 36 tests、typecheck、Vite dist build 全通过。
+  回执：`docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json`。
+- [ ] 独立 reviewer 只读复核 exact source head/tree 与本回执，unresolved=0 后冻结
+  replacement build inputs。
+- [ ] replacement app/frontend image build 各仍为 0/1；D3 Release/Head/live source click、
+  production unchanged 复核与业务 `G1=PASS` 均 NOT RUN。G2 继续锁定。
+
 ## Closeout
 
 - [ ] 完成 `docs/insurance-kb/evidence/830-g1/` 全部清单与复现步骤。

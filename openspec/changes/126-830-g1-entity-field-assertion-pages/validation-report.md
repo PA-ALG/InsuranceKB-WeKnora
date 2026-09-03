@@ -6,7 +6,7 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_SUCCESSOR_SOURCE_BRIDGE_AND_FRONTEND_DUAL_IDENTITY_MISSING
+CURRENT_RED=M3_REPLACEMENT_IMAGES_AND_ISOLATED_D3_NOT_RUN
 FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
 DOCKER_ACTION=APP_AND_FRONTEND_REPLACEMENTS_AUTHORIZED_ONE_BUILD_EACH
@@ -33,7 +33,16 @@ M3_PLAN_REVIEW=PASS
 M3_PLAN_REVIEWED_HEAD=63b4a11ddebdfdc310bff087d90919209eef3e58
 M3_PLAN_REVIEWED_TREE=07796e78dca06286a10ace32f88383de0b28db19
 M3_PLAN_REVIEW_UNRESOLVED_COUNT=0
-NEXT_PHYSICAL_RESULT=TDD_RED_SUCCESSOR_SERVING_SOURCE_IDENTITY
+M3_EXACT_CITATION_SPEC_REVIEW=PASS
+M3_EXACT_CITATION_SPEC_REVIEWED_HEAD=57e4b5b2470e2a9c347fba832ae0ba2af95a97f2
+M3_EXACT_CITATION_SPEC_REVIEWED_TREE=8cd24fc51dbd2699f326ff43c8f272c6a9cdb9fc
+M3_EXACT_CITATION_SPEC_REVIEW_UNRESOLVED_COUNT=0
+M3_SOURCE_VERIFICATION=PASS
+M3_SOURCE_VERIFIED_HEAD=f97c8636d9ef54e15b191326c5c8b6c2cb4b8745
+M3_SOURCE_VERIFIED_TREE=facc1a3467a6329bf62f3fb6c74e530edee14561
+M3_SOURCE_VERIFICATION_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json
+M3_SOURCE_CODE_REVIEW=PENDING
+NEXT_PHYSICAL_RESULT=FREEZE_REPLACEMENT_BUILD_INPUTS
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -85,10 +94,10 @@ G2_AND_LATER=LOCKED
 | G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
-| G1-R4 | M3 RED | M1 preview bridge PASS; successor historical-source bridge missing | M1/M2 focused PASS; M3 NOT RUN | `edc74ac7` + pending | M1 exact click + M2 known custody 17/17 PASS; successor click NOT RUN | M2 PASS / M3 OPEN |
-| G1-R5 | M3 RED | payload Profile/namespace PASS; serving envelope vs source member parser missing | M2 focused PASS; M3 frontend NOT RUN | `edc74ac7` + pending | short titles + 76/76 namespaces PASS; successor UI NOT RUN | M2 PASS / M3 OPEN |
+| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626` | M1 exact click + M2 known custody PASS; successor D3 click NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
+| G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | short titles + 76/76 namespaces PASS; successor D3 UI NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
 | G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
-| G1-R7 | M3 RED | preparation no-fallback PASS; successor current/pinned exact identity missing | M1 focused PASS; M3 NOT RUN | `740d9b7c` + pending | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 OPEN |
+| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626` | preparation Preview PASS; successor D3 no-mix NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
 | G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
