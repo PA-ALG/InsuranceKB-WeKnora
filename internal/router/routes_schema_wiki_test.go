@@ -255,6 +255,33 @@ func TestEntityPageGraph830G1RouteBoundaryDoesNotObserveCurrentHead(t *testing.T
 	}, events)
 }
 
+func TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	resolver := &schemaWikiRouteScopeResolver{
+		events: &events, headErr: apprepo.ErrWikiReleaseNotFound,
+	}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	engine := newSchemaWikiScopeRouteEngine(t, resolver, nil, map[string]*types.KnowledgeBase{
+		"wiki-596-1": {ID: "wiki-596-1", TenantID: 10003, Type: types.KnowledgeBaseTypeWiki},
+		"raw-596-1":  {ID: "raw-596-1", TenantID: 10003},
+	}, &events, access)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/releases/release-g1-successor/fields/field-1/citations/citation-1/preview",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, "body=%s", recorder.Body.String())
+	require.Zero(t, resolver.calls, "exact G1 citation issuance must not require an Active Head")
+	require.Equal(t, 1, access.sealCalls)
+	require.Equal(t, []string{
+		"acl:wiki-596-1", "evidence:wiki", "acl:raw-596-1", "evidence:raw", "seal",
+	}, events)
+}
+
 func TestSchemaWikiGoldenSuccessorStatusUsesExactHumanDualACLSealOrder(t *testing.T) {
 	t.Parallel()
 	events := []string{}

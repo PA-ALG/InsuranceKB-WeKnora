@@ -82,7 +82,7 @@ func validSchemaWikiCitationIdentity(
 	if servingReleaseID == sourceReleaseID {
 		return routeAuthorityKind == "active" && servingActivationEpoch == sourceActivationEpoch
 	}
-	return sourceActivationEpoch != ^uint64(0) &&
+	return routeAuthorityKind == "release" && sourceActivationEpoch != ^uint64(0) &&
 		servingActivationEpoch == sourceActivationEpoch+1
 }
 

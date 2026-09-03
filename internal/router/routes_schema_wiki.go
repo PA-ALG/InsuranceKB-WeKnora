@@ -113,7 +113,7 @@ func RegisterSchemaWikiRoutes(
 	activeGET("/releases/:release_id/root", schemaHandler.ReadActiveRoot)
 	activeGET("/releases/:release_id/sections/:section_id", schemaHandler.ReadActiveSection)
 	activeGET("/releases/:release_id/fields/:field_id", schemaHandler.ReadActiveField)
-	activeGET(
+	entityGET(
 		"/releases/:release_id/fields/:field_id/citations/:citation_id/preview",
 		schemaHandler.PreviewCurrentCitation,
 	)

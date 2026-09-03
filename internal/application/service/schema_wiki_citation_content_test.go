@@ -488,6 +488,39 @@ func TestSchemaWikiCitationContentBindsSuccessorServingAndSourceIdentity(t *test
 	require.Equal(t, 1, blob.calls)
 }
 
+func TestSchemaWikiCitationContentRejectsActiveDualIdentityBeforeAdapter(t *testing.T) {
+	t.Parallel()
+	privateKey := ed25519.NewKeyFromSeed(bytes.Repeat([]byte{0x7e}, ed25519.SeedSize))
+	codec, err := NewSchemaWikiCitationTokenCodec(
+		"citation-token-key-active-dual",
+		map[string]ed25519.PrivateKey{"citation-token-key-active-dual": privateKey},
+		time.Now,
+	)
+	require.NoError(t, err)
+	fixture := newSchemaWikiCitationRevisionFixture(t)
+	fixture.request.citationRouteAuthorityKind = "active"
+	fixture.request.citationServingReleaseID = "release-g1-successor"
+	fixture.request.citationServingActivationEpoch = fixture.request.ActivationEpoch + 1
+	blob := &schemaWikiRevisionBlobReaderSpy{bytes: []byte("must not be read")}
+	content := newSchemaWikiCitationContentService(
+		newSchemaWikiCitationRevisionReadAdapter(fixture.revisions, fixture.chunks),
+		blob,
+		codec,
+	)
+	ctx := context.WithValue(
+		context.Background(), types.TenantIDContextKey, fixture.request.Scope.TenantID,
+	)
+
+	authority, err := content.IssueExactRevision(ctx, fixture.request)
+	require.Nil(t, authority)
+	require.ErrorIs(t, err, ErrSchemaWikiCitationUnavailable)
+	require.Zero(t, fixture.revisions.knowledgeCalls)
+	require.Zero(t, fixture.revisions.revisionCalls)
+	require.Zero(t, fixture.chunks.getCalls)
+	require.Zero(t, fixture.chunks.listCalls)
+	require.Zero(t, blob.calls)
+}
+
 func TestSchemaWikiCitationContentRejectsIdentityClaimDrift(t *testing.T) {
 	t.Parallel()
 	now := time.Unix(1786441800, 0).UTC()
