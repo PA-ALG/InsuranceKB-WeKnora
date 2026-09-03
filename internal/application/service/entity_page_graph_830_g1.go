@@ -19,10 +19,12 @@ var (
 )
 
 type EntityPageGraphReleaseSnapshot830G1 struct {
-	ReleaseID       string
-	ActivationEpoch uint64
-	Manifest        json.RawMessage
-	Members         []types.WikiReleaseMemberSnapshot
+	ReleaseID             string
+	ActivationEpoch       uint64
+	SourceReleaseID       string
+	SourceActivationEpoch uint64
+	Manifest              json.RawMessage
+	Members               []types.WikiReleaseMemberSnapshot
 }
 
 type EntityPageGraphReleaseSource830G1 interface {
@@ -148,11 +150,28 @@ func readEntityPageGraphSnapshot830G1(
 	readMode string,
 ) (*EntityPageGraphRead830G1, error) {
 	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
-	if err != nil || snapshot.ReleaseID != manifest.ReleaseID ||
-		((readMode == "current" || readMode == "preparation") && snapshot.ActivationEpoch == 0) ||
-		(snapshot.ActivationEpoch != 0 && snapshot.ActivationEpoch != manifest.ActivationEpoch) ||
-		scope.SpaceID != manifest.SpaceID || scope.WikiKBID != manifest.WikiKBID ||
+	if err != nil || scope.SpaceID != manifest.SpaceID || scope.WikiKBID != manifest.WikiKBID ||
 		len(snapshot.Members) != len(manifest.Members) {
+		return nil, ErrEntityPageGraphIntegrity830G1
+	}
+	switch readMode {
+	case "preparation":
+		if snapshot.ReleaseID != manifest.ReleaseID ||
+			snapshot.ActivationEpoch == 0 || snapshot.ActivationEpoch != manifest.ActivationEpoch ||
+			snapshot.SourceReleaseID != manifest.ReleaseID ||
+			snapshot.SourceActivationEpoch != manifest.ActivationEpoch {
+			return nil, ErrEntityPageGraphIntegrity830G1
+		}
+	case "current", "pinned":
+		if snapshot.ReleaseID == "" || snapshot.ReleaseID == manifest.ReleaseID ||
+			snapshot.ActivationEpoch == 0 ||
+			snapshot.SourceReleaseID != manifest.ReleaseID ||
+			snapshot.SourceActivationEpoch != manifest.ActivationEpoch ||
+			snapshot.SourceActivationEpoch == ^uint64(0) ||
+			snapshot.ActivationEpoch != snapshot.SourceActivationEpoch+1 {
+			return nil, ErrEntityPageGraphIntegrity830G1
+		}
+	default:
 		return nil, ErrEntityPageGraphIntegrity830G1
 	}
 	storedByPageID := make(map[string]types.WikiReleaseMemberSnapshot, len(snapshot.Members))
@@ -183,13 +202,9 @@ func readEntityPageGraphSnapshot830G1(
 	if !found {
 		return nil, ErrEntityPageGraphNotFound830G1
 	}
-	activationEpoch := snapshot.ActivationEpoch
-	if activationEpoch == 0 {
-		activationEpoch = manifest.ActivationEpoch
-	}
 	return &EntityPageGraphRead830G1{
 		Contract: "entity-page-read.830.g1.v1", ReadMode: readMode,
-		ReleaseID: manifest.ReleaseID, ActivationEpoch: activationEpoch,
+		ReleaseID: snapshot.ReleaseID, ActivationEpoch: snapshot.ActivationEpoch,
 		ManifestSHA256: manifest.ManifestSHA256, EntityID: manifest.EntityID,
 		EntityVersionID: manifest.EntityVersionID, DisplayName: manifest.DisplayName,
 		Classification: manifest.ClassificationDisplayName, Profile: manifest.Profile, Member: member,
@@ -618,6 +633,7 @@ func (s *SchemaWikiService) LoadPreparationEntityPageGraph830G1(
 	}
 	return EntityPageGraphReleaseSnapshot830G1{
 		ReleaseID: manifest.ReleaseID, ActivationEpoch: manifest.ActivationEpoch,
+		SourceReleaseID: manifest.ReleaseID, SourceActivationEpoch: manifest.ActivationEpoch,
 		Manifest: append(json.RawMessage(nil), preparation.Manifest...), Members: members,
 	}, nil
 }
@@ -649,20 +665,36 @@ func (s *SchemaWikiService) loadEntityPageGraphRelease830G1(
 	}
 	manifest, manifestErr := types.ParseEntityPageManifest830G1(preparation.Manifest)
 	if manifestErr != nil || release.ID != releaseID || release.WikiReleaseScope != scope ||
+		release.ID == release.BaseReleaseID ||
 		preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
 		preparation.CandidateDigest != release.CandidateDigest ||
 		preparation.ManifestDigest != release.ManifestDigest ||
 		manifest.ManifestSHA256 != preparation.ManifestDigest ||
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
-		manifest.ReleaseID != releaseID || manifest.SpaceID != scope.SpaceID ||
+		release.BaseReleaseID != manifest.ReleaseID ||
+		release.BaseActivationEpoch != manifest.ActivationEpoch ||
+		preparation.ExpectedReleaseID != manifest.ReleaseID ||
+		preparation.ExpectedActivationEpoch != manifest.ActivationEpoch ||
+		manifest.SpaceID != scope.SpaceID ||
 		manifest.WikiKBID != scope.WikiKBID ||
 		manifest.InputAuthority.CandidateSHA256 != release.CandidateDigest ||
 		!entityPageGraphMemberSetsEqual830G1(preparation.Members, members) {
 		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphIntegrity830G1
 	}
+	if release.BaseActivationEpoch == ^uint64(0) {
+		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphIntegrity830G1
+	}
+	servingActivationEpoch := activationEpoch
+	if servingActivationEpoch == 0 {
+		servingActivationEpoch = release.BaseActivationEpoch + 1
+	}
+	if servingActivationEpoch != release.BaseActivationEpoch+1 {
+		return EntityPageGraphReleaseSnapshot830G1{}, ErrEntityPageGraphIntegrity830G1
+	}
 	return EntityPageGraphReleaseSnapshot830G1{
-		ReleaseID: releaseID, ActivationEpoch: activationEpoch,
+		ReleaseID: releaseID, ActivationEpoch: servingActivationEpoch,
+		SourceReleaseID: release.BaseReleaseID, SourceActivationEpoch: release.BaseActivationEpoch,
 		Manifest: append(json.RawMessage(nil), preparation.Manifest...), Members: members,
 	}, nil
 }

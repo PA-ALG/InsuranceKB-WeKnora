@@ -80,8 +80,17 @@ func entityPageGraphReleaseFixture830G1(t *testing.T) EntityPageGraphReleaseSnap
 	}
 	return EntityPageGraphReleaseSnapshot830G1{
 		ReleaseID: manifest.ReleaseID, ActivationEpoch: manifest.ActivationEpoch,
+		SourceReleaseID: manifest.ReleaseID, SourceActivationEpoch: manifest.ActivationEpoch,
 		Manifest: append(json.RawMessage(nil), raw...), Members: members,
 	}
+}
+
+func entityPageGraphSuccessorSnapshot830G1(t *testing.T) EntityPageGraphReleaseSnapshot830G1 {
+	t.Helper()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	snapshot.ReleaseID = "release-g1-successor-fixture"
+	snapshot.ActivationEpoch = snapshot.SourceActivationEpoch + 1
+	return snapshot
 }
 
 func loadEntityPageGraph830G1ServiceVector(t *testing.T) []byte {
@@ -91,7 +100,7 @@ func loadEntityPageGraph830G1ServiceVector(t *testing.T) []byte {
 
 func TestEntityPageGraphService830G1CurrentPinsOnceAndPinnedNeverFallsBack(t *testing.T) {
 	t.Parallel()
-	snapshot := entityPageGraphReleaseFixture830G1(t)
+	snapshot := entityPageGraphSuccessorSnapshot830G1(t)
 	selector := EntityPageGraphSelector830G1{
 		EntityID: "ping-an-e-sheng-bao", PageKind: "field", StableKey: "cooling_off_period",
 	}
@@ -123,6 +132,211 @@ func TestEntityPageGraphService830G1CurrentPinsOnceAndPinnedNeverFallsBack(t *te
 		require.Zero(t, spy.currentCalls)
 		require.Equal(t, 1, spy.pinnedCalls)
 	})
+}
+
+type entityPageGraphSuccessorFixture830G1 struct {
+	ctx         context.Context
+	db          *gorm.DB
+	repository  *wikirepository.WikiReleaseRepository
+	service     *SchemaWikiService
+	principal   types.WikiReleasePrincipal
+	scope       types.WikiReleaseScope
+	manifest    types.EntityPageManifest830G1
+	rawManifest []byte
+	members     []types.WikiReleaseMemberSnapshot
+	successorID string
+}
+
+func newEntityPageGraphSuccessorFixture830G1(t *testing.T) *entityPageGraphSuccessorFixture830G1 {
+	t.Helper()
+	snapshot := entityPageGraphReleaseFixture830G1(t)
+	manifest, err := types.ParseEntityPageManifest830G1(snapshot.Manifest)
+	require.NoError(t, err)
+	scope := types.WikiReleaseScope{
+		TenantID: 7, SpaceID: manifest.SpaceID, RawKBID: "raw-596-1", WikiKBID: manifest.WikiKBID,
+	}
+	principal := types.WikiReleasePrincipal{
+		ID: "viewer", TenantID: scope.TenantID, SpaceID: scope.SpaceID,
+	}
+	databaseName := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	db, err := gorm.Open(
+		sqlite.Open("file:"+databaseName+"?mode=memory&cache=shared"),
+		&gorm.Config{},
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(
+		&types.WikiReleasePreparation{}, &types.WikiRelease{}, &types.WikiReleaseMember{},
+		&types.WikiReleaseHead{}, &types.WikiReleaseReceipt{},
+	))
+	repository := wikirepository.NewWikiReleaseRepository(db)
+	now := time.Unix(1_830_000_000, 0).UTC()
+	require.NoError(t, db.Create(&types.WikiReleaseHead{
+		ID: "head-g1-successor", WikiReleaseScope: scope,
+		ActiveReleaseID: manifest.ReleaseID, ActivationEpoch: manifest.ActivationEpoch,
+		UpdatedAt: now,
+	}).Error)
+	preparation := &types.WikiReleasePreparation{
+		ID: "preparation-g1-successor", WikiReleaseScope: scope,
+		CandidateDigest:         manifest.InputAuthority.CandidateSHA256,
+		ManifestDigest:          manifest.ManifestSHA256,
+		ReadyReceiptDigest:      strings.Repeat("a", 64),
+		ReviewDecisionDigest:    strings.Repeat("b", 64),
+		ReviewPolicyID:          strings.Repeat("c", 64),
+		ExpectedReleaseID:       manifest.ReleaseID,
+		ExpectedActivationEpoch: manifest.ActivationEpoch,
+		Status:                  types.WikiReleasePreparationReady,
+		Manifest:                append(json.RawMessage(nil), snapshot.Manifest...),
+		Members:                 append([]types.WikiReleaseMemberSnapshot(nil), snapshot.Members...),
+		CreatedAt:               now,
+	}
+	preparation.PreparationDigest = digestWikiReleasePreparation(preparation)
+	successorID := "release-g1-successor"
+	receipt, err := repository.Activate(
+		SealWikiReleaseAccess(context.Background(), principal, scope),
+		wikirepository.WikiReleaseActivationWrite{
+			Preparation: preparation,
+			Release: &types.WikiRelease{
+				ID: successorID, WikiReleaseScope: scope,
+				CandidateDigest:     preparation.CandidateDigest,
+				ManifestDigest:      preparation.ManifestDigest,
+				BaseReleaseID:       manifest.ReleaseID,
+				BaseActivationEpoch: manifest.ActivationEpoch,
+				PreparationID:       preparation.ID, CreatedAt: now, ActivatedAt: now,
+			},
+			Members:                 snapshot.Members,
+			ExpectedReleaseID:       manifest.ReleaseID,
+			ExpectedActivationEpoch: manifest.ActivationEpoch,
+			Nonce:                   "nonce-g1-successor", AuthorizationDigest: "authorization-g1-successor",
+			ActivatedBy: principal.ID, ActivatedAt: now,
+			ActivationReceiptID:       "receipt-g1-successor",
+			ExpectedPreparationID:     preparation.ID,
+			ExpectedPreparationDigest: preparation.PreparationDigest,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, successorID, receipt.ReleaseID)
+	require.Equal(t, manifest.ActivationEpoch+1, receipt.ActivationEpoch)
+	storedPreparation, err := repository.GetReadyPreparation(
+		SealWikiReleaseAccess(context.Background(), principal, scope), scope, preparation.ID,
+	)
+	require.NoError(t, err)
+	authority := NewWikiReleaseService(
+		repository, NewContextWikiReleaseAccessVerifier(), nil, WikiReleaseServiceOptions{},
+	)
+	return &entityPageGraphSuccessorFixture830G1{
+		ctx: SealWikiReleaseAccess(context.Background(), principal, scope),
+		db:  db, repository: repository, service: NewSchemaWikiService(authority, nil),
+		principal: principal, scope: scope, manifest: manifest,
+		rawManifest: append([]byte(nil), storedPreparation.Manifest...),
+		members:     append([]types.WikiReleaseMemberSnapshot(nil), snapshot.Members...),
+		successorID: successorID,
+	}
+}
+
+func (f *entityPageGraphSuccessorFixture830G1) moveHeadToNonG1Control(t *testing.T) {
+	t.Helper()
+	now := time.Unix(1_830_000_100, 0).UTC()
+	manifest := json.RawMessage(`{"contract":"non-g1-control.v1"}`)
+	members := []types.WikiReleaseMemberSnapshot{{
+		Kind: "root", LogicalSlug: "root", RevisionID: "control-revision",
+		MemberDigest: "control-member", Title: "control", Payload: json.RawMessage(`{"control":true}`),
+	}}
+	preparation := &types.WikiReleasePreparation{
+		ID: "preparation-non-g1-control", WikiReleaseScope: f.scope,
+		CandidateDigest:         strings.Repeat("d", 64),
+		ManifestDigest:          digestWikiReleaseBytes(manifest),
+		ReadyReceiptDigest:      strings.Repeat("e", 64),
+		ReviewDecisionDigest:    strings.Repeat("f", 64),
+		ReviewPolicyID:          strings.Repeat("1", 64),
+		ExpectedReleaseID:       f.successorID,
+		ExpectedActivationEpoch: f.manifest.ActivationEpoch + 1,
+		Status:                  types.WikiReleasePreparationReady,
+		Manifest:                manifest, Members: members, CreatedAt: now,
+	}
+	preparation.PreparationDigest = digestWikiReleasePreparation(preparation)
+	_, err := f.repository.Activate(f.ctx, wikirepository.WikiReleaseActivationWrite{
+		Preparation: preparation,
+		Release: &types.WikiRelease{
+			ID: "release-non-g1-control", WikiReleaseScope: f.scope,
+			CandidateDigest:     preparation.CandidateDigest,
+			ManifestDigest:      preparation.ManifestDigest,
+			BaseReleaseID:       f.successorID,
+			BaseActivationEpoch: f.manifest.ActivationEpoch + 1,
+			PreparationID:       preparation.ID, CreatedAt: now, ActivatedAt: now,
+		},
+		Members:                 members,
+		ExpectedReleaseID:       f.successorID,
+		ExpectedActivationEpoch: f.manifest.ActivationEpoch + 1,
+		Nonce:                   "nonce-non-g1-control", AuthorizationDigest: "authorization-non-g1-control",
+		ActivatedBy: f.principal.ID, ActivatedAt: now,
+		ActivationReceiptID:       "receipt-non-g1-control",
+		ExpectedPreparationID:     preparation.ID,
+		ExpectedPreparationDigest: preparation.PreparationDigest,
+	})
+	require.NoError(t, err)
+}
+
+func TestEntityPageGraph830G1ReadsSuccessorServingIdentityWithoutRewritingSourceMembers(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	selector := EntityPageGraphSelector830G1{
+		EntityID: fixture.manifest.EntityID, PageKind: "field", StableKey: "insured_eligibility",
+	}
+	read, err := NewEntityPageGraphService830G1(fixture.service).ReadCurrentEntityPage830G1(
+		fixture.ctx, fixture.principal, fixture.scope, selector,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.successorID, read.ReleaseID)
+	require.Equal(t, fixture.manifest.ActivationEpoch+1, read.ActivationEpoch)
+	require.Equal(t, fixture.manifest.ReleaseID, read.Member.ReleaseID)
+	field, err := read.Member.FieldAssertionPayload()
+	require.NoError(t, err)
+	require.Equal(t, fixture.manifest.ReleaseID, field.Reference.SourceReleaseID)
+	stored, err := fixture.repository.GetReadyPreparation(
+		fixture.ctx, fixture.scope, "preparation-g1-successor",
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.rawManifest, []byte(stored.Manifest))
+}
+
+func TestEntityPageGraph830G1PinnedReadSurvivesNonG1HeadMove(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	fixture.moveHeadToNonG1Control(t)
+	selector := EntityPageGraphSelector830G1{
+		EntityID: fixture.manifest.EntityID, PageKind: "field", StableKey: "insured_eligibility",
+	}
+	_, err := NewEntityPageGraphService830G1(fixture.service).ReadCurrentEntityPage830G1(
+		fixture.ctx, fixture.principal, fixture.scope, selector,
+	)
+	require.ErrorIs(t, err, ErrEntityPageGraphIntegrity830G1)
+
+	headQueries := 0
+	require.NoError(t, fixture.db.Callback().Query().Before("gorm:query").Register(
+		"test:count-g1-pinned-successor-head-queries",
+		func(tx *gorm.DB) {
+			if tx.Statement != nil && tx.Statement.Table == "wiki_release_heads" {
+				headQueries++
+			}
+		},
+	))
+	read, err := NewEntityPageGraphService830G1(fixture.service).ReadPinnedEntityPage830G1(
+		fixture.ctx, fixture.principal, fixture.scope, fixture.successorID, selector,
+	)
+	require.NoError(t, err)
+	require.Equal(t, fixture.successorID, read.ReleaseID)
+	require.Equal(t, fixture.manifest.ActivationEpoch+1, read.ActivationEpoch)
+	require.Equal(t, fixture.manifest.ReleaseID, read.Member.ReleaseID)
+	require.Zero(t, headQueries)
+}
+
+func TestEntityPageGraph830G1RejectsSuccessorBaseIdentityDrift(t *testing.T) {
+	fixture := newEntityPageGraphSuccessorFixture830G1(t)
+	require.NoError(t, fixture.db.Model(&types.WikiRelease{}).
+		Where("release_id = ?", fixture.successorID).
+		Update("base_release_id", "release-foreign-source").Error)
+	_, err := fixture.service.LoadPinnedEntityPageGraphRelease830G1(
+		fixture.ctx, fixture.principal, fixture.scope, fixture.successorID,
+	)
+	require.ErrorIs(t, err, ErrEntityPageGraphIntegrity830G1)
 }
 
 func TestWikiReleaseCreateDraftUsesEmbeddedEntityPageManifestDigest830G1(t *testing.T) {
@@ -375,7 +589,7 @@ func TestCreateEntityPageGraphDraft830G1RejectsUnreadablePreparationIDsBeforeRep
 
 func TestEntityPageGraphService830G1PinnedFailuresAreTypedAndNeverFallback(t *testing.T) {
 	t.Parallel()
-	snapshot := entityPageGraphReleaseFixture830G1(t)
+	snapshot := entityPageGraphSuccessorSnapshot830G1(t)
 	selector := EntityPageGraphSelector830G1{
 		EntityID: "ping-an-e-sheng-bao", PageKind: "overview", StableKey: "overview",
 	}
