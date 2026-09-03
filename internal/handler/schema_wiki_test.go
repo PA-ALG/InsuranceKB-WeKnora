@@ -28,6 +28,20 @@ type schemaWikiScopeResolverStub struct {
 	preparationCalls int
 }
 
+type schemaWikiCitationRouteAuthorityResolverStub struct {
+	authority *service.SchemaWikiCitationContentRouteAuthorityV1
+	err       error
+	calls     int
+}
+
+func (s *schemaWikiCitationRouteAuthorityResolverStub) ResolveSchemaCitationContentRouteAuthority(
+	context.Context,
+	string,
+) (*service.SchemaWikiCitationContentRouteAuthorityV1, error) {
+	s.calls++
+	return s.authority, s.err
+}
+
 func (s *schemaWikiScopeResolverStub) GetPreparationScopeForWikiKB(
 	_ context.Context,
 	_ uint64,
@@ -622,6 +636,74 @@ func TestSchemaWikiLifecycleScopeBindersFailClosed(t *testing.T) {
 		require.False(t, c.IsAborted())
 		require.Equal(t, 1, resolver.preparationCalls)
 	})
+}
+
+func TestSchemaWikiCitationReleaseScopeIsExactAndHeadIndependent(t *testing.T) {
+	t.Parallel()
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	params := gin.Params{
+		{Key: "kb_id", Value: exact.WikiKBID}, {Key: "space_id", Value: exact.SpaceID},
+		{Key: "raw_kb_id", Value: exact.RawKBID}, {Key: "token", Value: "opaque-release-token"},
+	}
+
+	t.Run("exact release", func(t *testing.T) {
+		head := &schemaWikiScopeResolverStub{err: apprepo.ErrWikiReleaseNotFound}
+		token := &schemaWikiCitationRouteAuthorityResolverStub{
+			authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+				Kind: "release", Scope: exact, ReleaseID: "release-g1-successor",
+			},
+		}
+		handler := NewSchemaWikiHandler(head, nil, token)
+		c, _ := schemaWikiScopeContext(t, params)
+
+		handler.RequireCitationContentScope()(c)
+
+		require.False(t, c.IsAborted())
+		require.Equal(t, 1, token.calls)
+		require.Zero(t, head.calls, "exact release authority must not resolve Head")
+		require.Zero(t, head.preparationCalls)
+	})
+
+	for _, test := range []struct {
+		name      string
+		authority service.SchemaWikiCitationContentRouteAuthorityV1
+	}{
+		{name: "foreign scope", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release",
+			Scope: types.WikiReleaseScope{
+				TenantID: exact.TenantID, SpaceID: exact.SpaceID,
+				RawKBID: "raw-foreign", WikiKBID: exact.WikiKBID,
+			},
+			ReleaseID: "release-secret",
+		}},
+		{name: "empty release", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact,
+		}},
+		{name: "noncanonical release", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact, ReleaseID: " current ",
+		}},
+		{name: "unknown kind", authority: service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "successor", Scope: exact, ReleaseID: "release-secret",
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			head := &schemaWikiScopeResolverStub{}
+			token := &schemaWikiCitationRouteAuthorityResolverStub{authority: &test.authority}
+			handler := NewSchemaWikiHandler(head, nil, token)
+			c, recorder := schemaWikiScopeContext(t, params)
+
+			handler.RequireCitationContentScope()(c)
+
+			require.True(t, c.IsAborted())
+			require.Equal(t, http.StatusForbidden, recorder.Code)
+			require.NotContains(t, recorder.Body.String(), "release-secret")
+			require.NotContains(t, recorder.Body.String(), "raw-foreign")
+			require.Zero(t, head.calls)
+			require.Zero(t, head.preparationCalls)
+		})
+	}
 }
 
 func TestResolveScopeParamsRejectsConflictAndMissingOrForeignHead(t *testing.T) {

@@ -560,6 +560,14 @@ func (h *SchemaWikiHandler) RequireCitationContentScope() gin.HandlerFunc {
 				return
 			}
 			c.Set(schemaWikiResolvedHeadContextKey, *head)
+		case "release":
+			releaseID := strings.TrimSpace(authority.ReleaseID)
+			if releaseID == "" || releaseID != authority.ReleaseID ||
+				strings.EqualFold(releaseID, "current") || strings.EqualFold(releaseID, "latest") {
+				writeSchemaWikiError(c, service.ErrWikiReleaseAccessDenied)
+				c.Abort()
+				return
+			}
 		case "preparation":
 			principal, principalOK := types.PrincipalFromContext(c.Request.Context())
 			_, apiKey := types.TenantAPIKeyScopeFromContext(c.Request.Context())

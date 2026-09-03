@@ -516,6 +516,58 @@ func TestSchemaWikiCitationContentNoHeadStillReachesSealedDualACLHandler(t *test
 	require.Equal(t, 1, access.sealCalls)
 }
 
+func TestSchemaWikiCitationContentReleaseScopeReachesRawACLWithoutHead(t *testing.T) {
+	t.Parallel()
+	events := []string{}
+	access := &schemaWikiRouteAccessMiddlewareSpy{events: &events}
+	exact := types.WikiReleaseScope{
+		TenantID: 10003, SpaceID: "space-596-1", RawKBID: "raw-596-1", WikiKBID: "wiki-596-1",
+	}
+	resolver := &schemaWikiRouteScopeResolver{
+		events: &events, headErr: apprepo.ErrWikiReleaseNotFound,
+	}
+	citationResolver := &schemaWikiRouteCitationAuthorityResolver{
+		events: &events,
+		authority: &service.SchemaWikiCitationContentRouteAuthorityV1{
+			Kind: "release", Scope: exact, ReleaseID: "release-g1-successor",
+		},
+	}
+	engine := newSchemaWikiScopeRouteEngine(
+		t,
+		resolver,
+		nil,
+		map[string]*types.KnowledgeBase{
+			exact.WikiKBID: {ID: exact.WikiKBID, TenantID: exact.TenantID, Type: types.KnowledgeBaseTypeWiki},
+			exact.RawKBID:  {ID: exact.RawKBID, TenantID: exact.TenantID},
+		},
+		&events,
+		access,
+		citationResolver,
+	)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/knowledgebase/wiki-596-1/wiki/release-scopes/space-596-1/raw/raw-596-1/schema/citation-content/release-token",
+		nil,
+	)
+	engine.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, "body=%s", recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "schema wiki citation unavailable")
+	require.Equal(t, []string{
+		"acl:wiki-596-1",
+		"evidence:wiki",
+		"token",
+		"acl:raw-596-1",
+		"evidence:raw",
+		"seal",
+	}, events)
+	require.Zero(t, resolver.calls, "exact release content route must not resolve Head")
+	require.Zero(t, resolver.preparationCalls)
+	require.Equal(t, 1, citationResolver.calls)
+	require.Equal(t, 1, access.sealCalls)
+}
+
 func TestSchemaWikiCitationContentTokenAuthorityFailsBeforeRawACLAndSeal(t *testing.T) {
 	t.Parallel()
 	exact := types.WikiReleaseScope{
