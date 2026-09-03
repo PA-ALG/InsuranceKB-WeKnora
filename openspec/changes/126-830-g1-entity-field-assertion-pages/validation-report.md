@@ -136,6 +136,22 @@ M3_FINAL_REVIEW_UNRESOLVED_COUNT=0
 M3_FINAL_REVIEW_BLOCKERS=NONE
 M3_FINAL_REVIEW_G2_ACTIONS=0
 M3_FINAL_CLOSEOUT_RECEIPT=docs/insurance-kb/evidence/830-g1/g1-closeout.json
+G1_PR_NUMBER=126
+G1_PR_URL=https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/126
+G1_POST_PUSH_CI_INITIAL_RUN=33786515774
+G1_POST_PUSH_CI_INITIAL_RESULT=FAIL_MYPY_STRICT_88_ERRORS_ONE_TEST_FILE
+G1_CI_FIX_HEAD=d83641c6acb16d47b684519dffe0c58a928a3357
+G1_CI_FIX_TREE=f3f38affa83762cfb2f167a114c5fd33ed3ce10e
+G1_CI_FIX_LOCAL_MYPY=PASS_501_FILES
+G1_CI_FIX_LOCAL_RUFF=PASS
+G1_CI_FIX_LOCAL_TARGET_TEST=PASS_11_PASSED_3_SKIPPED
+G1_CI_PUSH_RUN=33787355899_PASS_3_OF_3
+G1_CI_PR_RUN=33787362582_PASS_3_OF_3
+G1_CI=PASS_6_OF_6
+G1_CI_FIX_REVIEW=PASS
+G1_CI_FIX_REVIEWED_HEAD=d83641c6acb16d47b684519dffe0c58a928a3357
+G1_CI_FIX_REVIEWED_TREE=f3f38affa83762cfb2f167a114c5fd33ed3ce10e
+G1_CI_FIX_REVIEW_UNRESOLVED_COUNT=0
 M3_PROVIDER_MODEL_CALLS=0
 G1_PRIOR_BUSINESS_STATUS=STOPPED
 G1_BUSINESS_STATUS=PASS
@@ -423,6 +439,23 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   exact Release/receipt identity and Clone table totals `3/3/226/1/3`. Production container IDs,
   image IDs, start times, `8081` content hash and zero `wiki_release_%` tables remained unchanged.
 - `docs/insurance-kb/evidence/830-g1/g1-closeout.json` indexes the accepted candidate, exact D3
-  Release/receipt/images, verification suite and negative effects. The final metadata-only tree is
-  sent back to the same visible Review task for exact-tree consistency confirmation; no repository
-  write follows that confirmation.
+  Release/receipt/images, verification suite and negative effects.
+
+## Post-push CI correction and acceptance
+
+- PR [#126](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/126) initially exposed 88 strict
+  mypy errors in `harness/tests/test_entity_page_graph_830_g1.py`: dynamic compatibility helpers
+  were annotated as `object`/optional module, so mypy could not narrow attributes that the runtime
+  tests had already exercised successfully. This was a test typing defect, not a product compile,
+  Release, Clone or production failure.
+- Commit `d83641c6acb16d47b684519dffe0c58a928a3357` / tree
+  `f3f38affa83762cfb2f167a114c5fd33ed3ce10e` changed only that test file: explicit string casts,
+  `NoReturn` narrowing, dynamic helper `Any` annotations and a `TypedDict` for variant kwargs.
+  Test names, assertions and skip/xfail counts were unchanged; product code was untouched.
+- Local correction verification passed: strict mypy `501` files with zero issues, Ruff full tree,
+  and the G1 target `11 passed, 3 skipped`. GitHub push run `33787355899` and PR run
+  `33787362582` each passed deterministic, PostgreSQL integration and wheel-smoke, for `6/6` jobs.
+- The same visible independent Review task accepted the exact CI-fix head/tree with
+  `CI_FIX_REVIEW=PASS`, `UNRESOLVED_COUNT=0`, assertions/product code unchanged, local and remote
+  verification PASS, worktree unchanged and `G2_ACTIONS=0`. The final metadata-only tree is sent
+  back to that task for exact-tree consistency confirmation; no repository write follows it.
