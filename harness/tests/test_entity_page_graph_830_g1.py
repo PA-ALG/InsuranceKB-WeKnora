@@ -9,6 +9,7 @@ from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
+from typing import Any, NoReturn, TypedDict, cast
 
 import pytest
 
@@ -53,14 +54,14 @@ def _c5_object_sha256(contract: str, value: object) -> str:
 def _rehash_member(member: dict[str, object]) -> None:
     payload = member["payload"]
     assert type(payload) is dict
-    member["payload_sha256"] = schema_wiki_sha256(payload["contract"], payload)
+    member["payload_sha256"] = schema_wiki_sha256(cast(str, payload["contract"]), payload)
     preimage = {key: value for key, value in member.items() if key != "member_digest"}
-    member["member_digest"] = schema_wiki_sha256(member["contract"], preimage)
+    member["member_digest"] = schema_wiki_sha256(cast(str, member["contract"]), preimage)
 
 
 def _rehash_manifest(wire: dict[str, object]) -> None:
     preimage = {key: value for key, value in wire.items() if key != "manifest_sha256"}
-    wire["manifest_sha256"] = schema_wiki_sha256(wire["contract"], preimage)
+    wire["manifest_sha256"] = schema_wiki_sha256(cast(str, wire["contract"]), preimage)
 
 
 def _graph_module() -> ModuleType | None:
@@ -69,14 +70,14 @@ def _graph_module() -> ModuleType | None:
     return importlib.import_module(_MODULE)
 
 
-def _legacy_fail(requirement: str, expected: str, actual: str) -> None:
+def _legacy_fail(requirement: str, expected: str, actual: str) -> NoReturn:
     pytest.fail(
         f"{requirement} business RED: expected {expected}; actual {actual} "
         "(legacy Schema Wiki contract has 75 root/section/field members and no entity page graph)"
     )
 
 
-def _actual_context(graph: ModuleType, **updates: object) -> object:
+def _actual_context(graph: ModuleType, **updates: object) -> Any:
     values: dict[str, object] = {
         "release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
         "activation_epoch": 2,
@@ -149,7 +150,7 @@ def _compile_actual_with(
     evidence_authority_bytes: bytes | None = None,
     bundle_manifest_bytes: bytes | None = None,
     profile_bytes: bytes | None = None,
-) -> object:
+) -> Any:
     paths = _actual_paths_or_skip()
     return graph.compile_actual_815_entity_page_manifest(
         candidate_bytes=(
@@ -172,7 +173,7 @@ def _compile_actual_with(
 
 
 @lru_cache(maxsize=1)
-def _vector_manifest() -> object | None:
+def _vector_manifest() -> Any | None:
     graph = _graph_module()
     return (
         None
@@ -181,7 +182,7 @@ def _vector_manifest() -> object | None:
     )
 
 
-def _vector_assertions(graph: ModuleType, manifest: object) -> tuple[object, ...]:
+def _vector_assertions(graph: ModuleType, manifest: Any) -> tuple[Any, ...]:
     return tuple(
         graph.FieldAssertionInputV1(
             field_key=member.payload.field_key,
@@ -197,7 +198,7 @@ def _vector_assertions(graph: ModuleType, manifest: object) -> tuple[object, ...
     )
 
 
-def _vector_context(graph: ModuleType, manifest: object, **updates: object) -> object:
+def _vector_context(graph: ModuleType, manifest: Any, **updates: object) -> Any:
     values = {
         "release_id": manifest.release_id,
         "activation_epoch": manifest.activation_epoch,
@@ -212,7 +213,7 @@ def _vector_context(graph: ModuleType, manifest: object, **updates: object) -> o
     return graph.EntityPageCompileContextV1(**values)
 
 
-def _member(manifest: object, *, kind: str, key: str) -> object:
+def _member(manifest: Any, *, kind: str, key: str) -> Any:
     matches = [
         item for item in manifest.members if item.page_kind == kind and item.stable_key == key
     ]
@@ -220,7 +221,7 @@ def _member(manifest: object, *, kind: str, key: str) -> object:
     return matches[0]
 
 
-def _mutated_profile(graph: ModuleType, manifest: object) -> object:
+def _mutated_profile(graph: ModuleType, manifest: Any) -> Any:
     payload = manifest.profile.model_dump(mode="json")
     payload["sections"][1]["display_name"] = "合同与投保（新标题）"
     payload["sections"][1]["fields"][1]["short_title"] = "谁可以投保"
@@ -663,7 +664,13 @@ def test_actual_external_drift_always_raises_stable_graph_error() -> None:
         profile, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()
 
-    cases = (
+    class CompileActualKwargs(TypedDict, total=False):
+        candidate_bytes: bytes
+        evidence_authority_bytes: bytes
+        profile_bytes: bytes
+        context_updates: dict[str, object]
+
+    cases: tuple[CompileActualKwargs, ...] = (
         {
             "candidate_bytes": candidate_bytes,
             "context_updates": {
