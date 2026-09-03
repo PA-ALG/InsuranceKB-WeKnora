@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_REPLACEMENT_APP_IMAGE_BUILD_NETWORK_FAILURE_NO_RETRY_BUDGET_EXHAUSTED
-FLOW=G1_STOPPED
+CURRENT_RED=M3_REPLACEMENT_IMAGES_AND_ISOLATED_D3_NOT_RUN_AFTER_REBUILD_AUTHORIZATION
+FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
-DOCKER_ACTION=STOP_NO_RETRY
+DOCKER_ACTION=ONE_ADDITIONAL_APP_BUILD_THEN_ONE_FRONTEND_BUILD
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -52,7 +52,7 @@ M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
 M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
 M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
-NEXT_PHYSICAL_RESULT=NONE_WITHIN_FROZEN_G1_BUILD_BUDGET
+NEXT_PHYSICAL_RESULT=VALIDATE_PROXY_FALLBACK_AND_BUILD_REPLACEMENT_APP
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -93,6 +93,11 @@ M3_D2_REPLACEMENT_STOP_REVIEW_CORRECTION_HEAD=09214df8100670809bdbbf168c239936d1
 M3_D2_REPLACEMENT_STOP_REVIEW_CORRECTION_TREE=011b535222cabf971964e5cdf4f611457ec61fef
 M3_D2_REPLACEMENT_STOP_REVIEW=PASS
 M3_D2_REPLACEMENT_STOP_REVIEW_UNRESOLVED_COUNT=0
+M3_D2_REPLACEMENT_REBUILD_AUTHORIZED=true
+M3_D2_REPLACEMENT_ADDITIONAL_APP_BUILD_BUDGET=1
+M3_D2_REPLACEMENT_ADDITIONAL_APP_BUILDS_USED=0
+M3_D2_REPLACEMENT_FRONTEND_REENABLED=true
+M3_D2_REPLACEMENT_REBUILD_AUTHORIZATION_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d2-replacement-rebuild-authorization.json
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
@@ -105,7 +110,8 @@ M3_PRODUCTION_8081_GUEST=200
 M3_PRODUCTION_8081_HOST=CONNECTION_REFUSED
 M3_RELEASE_LIFECYCLE=NOT_RUN
 M3_PROVIDER_MODEL_CALLS=0
-G1_BUSINESS_STATUS=STOPPED
+G1_PRIOR_BUSINESS_STATUS=STOPPED
+G1_BUSINESS_STATUS=IN_PROGRESS
 G2_AND_LATER=LOCKED
 ```
 
@@ -306,3 +312,17 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   canonicalization defect. Commit `09214df8100670809bdbbf168c239936d11c67d0` changed only that
   field to the sorted compact-canonical SHA-256. Re-review returned `STOP_REVIEW=PASS`,
   `UNRESOLVED_COUNT=0`, with no backlog; it did not authorize a build retry, D3 or G2.
+
+## M3 replacement rebuild reopening
+
+- The user then explicitly instructed “继续构建，推进G1 pass”. This supersedes only the prior
+  no-retry/stop decisions and authorizes one additional replacement App build plus the still-unused
+  single Frontend build. The failed invocation, STOP review and all original D2 evidence remain
+  immutable historical facts.
+- The bounded root-cause correction changes only the runtime build argument from
+  `GOPROXY=https://goproxy.cn,direct` to `GOPROXY=https://goproxy.cn|direct`, allowing network
+  failures—not only proxy not-found responses—to fall through to direct retrieval. Product source,
+  Dockerfiles, locks and frozen source subset hashes remain unchanged.
+- Authorization receipt:
+  `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-rebuild-authorization.json`. G1 returns to
+  `IN_PROGRESS`; production mutation, Provider/model calls and G2 remain prohibited/zero/locked.

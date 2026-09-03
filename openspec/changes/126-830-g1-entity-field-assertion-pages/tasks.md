@@ -162,8 +162,11 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
 - [x] 独立只读 STOP 复核首轮仅发现回执 canonical 自哈希格式错误；总控在
   `09214df8100670809bdbbf168c239936d11c67d0` 修正后，同一 reviewer 返回
   `STOP_REVIEW=PASS`、`UNRESOLVED_COUNT=0`、无 backlog。
+- [x] 用户随后明确授权“继续构建，推进 G1 pass”，仅 supersede App 不得重试、
+  Frontend 不得继续和 G1 STOPPED 三项结论：新增 replacement App budget=1，重新放行
+  尚未消费的 Frontend budget=1；失败事实与原回执继续不可变，G2 仍锁定。
 - [ ] D3 Release/Head/live source click、production before/after 复核与业务 `G1=PASS` 均
-  NOT RUN；G1=`STOPPED`，G2 继续锁定。
+  NOT RUN；G1 已重新进入 `IN_PROGRESS`，G2 继续锁定。
 
 ## Closeout
 

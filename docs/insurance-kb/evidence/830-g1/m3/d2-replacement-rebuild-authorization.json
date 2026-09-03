@@ -1,0 +1,71 @@
+{
+  "contract": "weknora.830.g1-m3-d2-replacement-rebuild-authorization.v1",
+  "goal_id": "G1",
+  "phase": "M3_D2_REPLACEMENT_REOPEN",
+  "status": "AUTHORIZED",
+  "authorized_at": "2026-09-03T07:29:16Z",
+  "user_authorization": "继续构建，推进G1 pass",
+  "supersedes": {
+    "receipt": "docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json",
+    "receipt_file_sha256": "60c53f61d3f3fbc64801aeb40fbb8c3d78ff77998c7a306a7093e1f3b00fb997",
+    "only_decisions": [
+      "replacement_app_retry=PROHIBITED",
+      "replacement_frontend_build=PROHIBITED_AFTER_APP_STOP",
+      "next_physical_result=NONE_WITHIN_FROZEN_G1_BUILD_BUDGET",
+      "g1_status=STOPPED"
+    ],
+    "historical_failure_facts_remain_immutable": true
+  },
+  "build_authority": {
+    "additional_replacement_app_build_allowed": 1,
+    "additional_replacement_app_build_used": 0,
+    "cumulative_app_build_invocations_before_reopen": 1,
+    "cumulative_app_build_invocations_max_after_reopen": 2,
+    "replacement_frontend_build_allowed": 1,
+    "replacement_frontend_build_used": 0,
+    "frontend_budget_reenabled_after_app_stop": true,
+    "controller_only": true
+  },
+  "root_cause_and_bounded_change": {
+    "prior_failure_stage": "Dockerfile.app:29 go mod download",
+    "prior_failure_class": "goproxy.cn unexpected EOF and TLS handshake timeout",
+    "source_compile_failure_observed": false,
+    "single_variable_change": "use GOPROXY pipe fallback so network errors may fall through to direct",
+    "prior_go_proxy": "https://goproxy.cn,direct",
+    "authorized_go_proxy": "https://goproxy.cn|direct",
+    "dockerfile_change": false,
+    "product_source_change": false,
+    "reuse_persisted_isolated_build_cache": true
+  },
+  "frozen_inputs": {
+    "pre_authorization_commit": "c496d01e734ce4124d069472278366fee1ee82bf",
+    "pre_authorization_tree": "5b228aa291e150c05f4669f7deb033c0b033c5f8",
+    "app_source_subset_sha256": "679d51d6c3f156d190f636c8e7424b5bc4063ed1f3922ff339a252c4132be70b",
+    "frontend_source_subset_sha256": "1f30d349820b4985b87c3ad2901f8fa5499fca2acafcb078e8b5e2de834cbdc0",
+    "go_mod_sha256": "60057dbeba4404605f659dfbf9f6a5ea426ab1a9a1d958795d108d7a3ab9fc3a",
+    "go_sum_sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7",
+    "app_dockerfile_sha256": "b4a8bf435191c97068862e8766bd0d7ec28d052fce50640f49faee64898654cc",
+    "root_dockerignore_sha256": "4172901b56207e1cb472d8a46cd261d6d5f211e4da645450b8660fa6e0406d53",
+    "frontend_package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+    "frontend_dockerfile_sha256": "3435582ac2165ee65357baff3fd7be4b68f6c191f8901bd5288f99f96d79fb68",
+    "frontend_dockerignore_sha256": "84c12bd74f1b311ae266fa5c8515a4eb366337da0f0d0e32553bf360795494f2",
+    "frontend_dist_sha256": "86628b5bd75713979776a6925ad84c9dc4a4cca04682d81d5e70d8cf4f9d02b8"
+  },
+  "constraints": {
+    "original_d2_receipts_and_images": "IMMUTABLE",
+    "failed_replacement_receipt": "IMMUTABLE",
+    "production_writes_restarts_replacements": 0,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "g2": "LOCKED",
+    "d3_must_use_exact_admitted_replacement_image_ids": true
+  },
+  "decision": {
+    "g1_status": "IN_PROGRESS",
+    "current_red": "M3_REPLACEMENT_IMAGES_AND_ISOLATED_D3_NOT_RUN_AFTER_REBUILD_AUTHORIZATION",
+    "next_physical_result": "VALIDATE_PROXY_FALLBACK_AND_BUILD_REPLACEMENT_APP",
+    "g2": "LOCKED"
+  },
+  "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
+  "receipt_sha256": "1af3c3815f4ce863f44ab44be340042181599464d4f36d10b1c36548bdccd6c0"
+}
