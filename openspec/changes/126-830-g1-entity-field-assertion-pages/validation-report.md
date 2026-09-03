@@ -38,9 +38,15 @@ M3_EXACT_CITATION_SPEC_REVIEWED_HEAD=57e4b5b2470e2a9c347fba832ae0ba2af95a97f2
 M3_EXACT_CITATION_SPEC_REVIEWED_TREE=8cd24fc51dbd2699f326ff43c8f272c6a9cdb9fc
 M3_EXACT_CITATION_SPEC_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_VERIFICATION=PASS
-M3_SOURCE_VERIFIED_HEAD=f97c8636d9ef54e15b191326c5c8b6c2cb4b8745
-M3_SOURCE_VERIFIED_TREE=facc1a3467a6329bf62f3fb6c74e530edee14561
+M3_SOURCE_VERIFIED_HEAD=623c2ac12559c864d36caaea38e2e56a29bd879a
+M3_SOURCE_VERIFIED_TREE=7f82343fc2ff9eb157fdc122b34e3472e682a951
 M3_SOURCE_VERIFICATION_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json
+M3_SOURCE_INITIAL_CODE_REVIEW=FAIL
+M3_SOURCE_INITIAL_CODE_REVIEWED_HEAD=80d663a87207adaa602c88a8a5bb872c64e52998
+M3_SOURCE_INITIAL_CODE_REVIEWED_TREE=9808ecb8ff5a027523798102f9559bb45879fdb5
+M3_SOURCE_INITIAL_CODE_REVIEW_UNRESOLVED_COUNT=2
+M3_SOURCE_REVIEW_CORRECTION_HEAD=623c2ac12559c864d36caaea38e2e56a29bd879a
+M3_SOURCE_REVIEW_CORRECTION_TREE=7f82343fc2ff9eb157fdc122b34e3472e682a951
 M3_SOURCE_CODE_REVIEW=PENDING
 NEXT_PHYSICAL_RESULT=FREEZE_REPLACEMENT_BUILD_INPUTS
 M1_DEADLINE=2026-09-02T23:42:03+08:00
@@ -94,10 +100,10 @@ G2_AND_LATER=LOCKED
 | G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
-| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626` | M1 exact click + M2 known custody PASS; successor D3 click NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
+| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626`, `623c2ac12` | M1 exact click + M2 known custody PASS; successor D3 click NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
 | G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | short titles + 76/76 namespaces PASS; successor D3 UI NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
 | G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
-| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626` | preparation Preview PASS; successor D3 no-mix NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
+| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626`, `623c2ac12` | preparation Preview PASS; successor D3 no-mix NOT RUN | SOURCE GREEN / M3 LIVE OPEN |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
 | G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
@@ -242,6 +248,13 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
 - The prior review loop's final correction remains part of the design: the frozen manifest cannot
   legally create G1 successor R2 because CAS would bind R2 to R1 rather than to the old 815 source.
   A non-G1 control Head proves current fail-closed plus Head-independent pinned R1/source replay.
+- The first independent source-code review at `80d663a87207adaa602c88a8a5bb872c64e52998` /
+  `9808ecb8ff5a027523798102f9559bb45879fdb5` returned `FAIL` with two blockers: distinct
+  successor/source identities still admitted route kind `active`, and the exact-release citation
+  preview route consulted Head before the service. Both defects were reproduced as RED and fixed
+  in `623c2ac12559c864d36caaea38e2e56a29bd879a` /
+  `7f82343fc2ff9eb157fdc122b34e3472e682a951`; focused regressions, full service/handler/router
+  tests, and Go vet now pass. Independent re-review remains required before build-input freeze.
 - Production containers/Head, Provider/model paths and G2 remain untouched and locked.
 - Historical note: before the frontend source contradiction was found, the plan stated that the
   written design must pass independent review, then TDD must prove RED/GREEN for Head-independent

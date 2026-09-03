@@ -144,9 +144,11 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
   `8cd24fc51dbd2699f326ff43c8f272c6a9cdb9fc` PASS，unresolved=0。
 - [x] TDD 完成 successor current/pinned、17/17 historical-source bridge、token 双身份、
   exact-release 双 ACL scope gate 与全部漂移 fail-closed；产品实现提交为 `e1f74c757`、
-  `59dad6bda`、`8c45e9daf`、`a8e677b80`、`9e3aec626`。
-- [x] source verification 在 `f97c8636d9ef54e15b191326c5c8b6c2cb4b8745` / tree
-  `facc1a3467a6329bf62f3fb6c74e530edee14561` PASS：Go service/handler/router、Go vet、
+  `59dad6bda`、`8c45e9daf`、`a8e677b80`、`9e3aec626`。首轮代码复核发现 `active`
+  双身份放行与 exact preview 预先查询 Head 两个 blocker；总控以 RED 复现后在
+  `623c2ac12` 作最小修正，新增测试均 GREEN。
+- [x] source verification 在 `623c2ac12559c864d36caaea38e2e56a29bd879a` / tree
+  `7f82343fc2ff9eb157fdc122b34e3472e682a951` PASS：Go service/handler/router、Go vet、
   Harness 54 passed/3 skipped、frontend 7 + 36 tests、typecheck、Vite dist build 全通过。
   回执：`docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json`。
 - [ ] 独立 reviewer 只读复核 exact source head/tree 与本回执，unresolved=0 后冻结

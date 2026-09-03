@@ -3,11 +3,11 @@
   "goal_id": "G1",
   "phase": "M3_SOURCE_VERIFICATION",
   "status": "PASS",
-  "observed_at": "2026-09-03T13:06:39+08:00",
+  "observed_at": "2026-09-03T13:38:16+08:00",
   "source": {
     "branch": "codex/830-g1-field-assertion-pages",
-    "commit": "f97c8636d9ef54e15b191326c5c8b6c2cb4b8745",
-    "tree": "facc1a3467a6329bf62f3fb6c74e530edee14561",
+    "commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
+    "tree": "7f82343fc2ff9eb157fdc122b34e3472e682a951",
     "manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
     "contract_vector_file_sha256": "cffb39e5a7214e2720b54a80acacab6923afa8e00e6174befc88b3cd44e069d1",
     "go_sum_sha256": "5969f57adb73d1c607c6d8389950d36761d8f967e92af7d1b8a6e1b97baebfe7",
@@ -20,7 +20,8 @@
     "exact_citation_spec_correction": "57e4b5b24",
     "successor_historical_source_bridge": "a8e677b80",
     "exact_release_scope_gate": "9e3aec626",
-    "frontend_verification_fixture_correction": "f97c8636d"
+    "frontend_verification_fixture_correction": "f97c8636d",
+    "exact_citation_review_correction": "623c2ac12"
   },
   "independent_spec_review": {
     "reviewer": "/root/g1_m3_spec_review",
@@ -29,6 +30,20 @@
     "result": "PASS",
     "unresolved_count": 0,
     "frozen_decision": "G1_CURRENT_AND_PINNED_CITATIONS_EXACT_RELEASE_GENERIC_SCHEMA_ACTIVE_UNCHANGED"
+  },
+  "independent_code_review": {
+    "reviewer": "/root/g1_m3_plan_review",
+    "reviewed_commit": "80d663a87207adaa602c88a8a5bb872c64e52998",
+    "reviewed_tree": "9808ecb8ff5a027523798102f9559bb45879fdb5",
+    "result": "FAIL",
+    "unresolved_count": 2,
+    "findings": [
+      "active route kind incorrectly admitted distinct successor/source identities",
+      "exact-release citation preview consulted Active Head before the service"
+    ],
+    "correction_commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
+    "correction_tree": "7f82343fc2ff9eb157fdc122b34e3472e682a951",
+    "re_review": "PENDING"
   },
   "tdd_red": [
     {
@@ -42,6 +57,12 @@
       "command": "go test ./internal/handler ./internal/router -run 'Test.*Citation.*(Release|Scope|Order)' -count=1",
       "result": "EXPECTED_FAIL",
       "evidence": "valid release authority aborted in handler and returned 403 at router"
+    },
+    {
+      "surface": "active route kind with distinct serving/source identities",
+      "command": "go test ./internal/application/service ./internal/router -run 'TestSchemaWikiCitationContentRejectsActiveDualIdentityBeforeAdapter|TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead' -count=1 -v",
+      "result": "EXPECTED_FAIL",
+      "evidence": "service reached the revision adapter instead of failing closed; exact preview returned 403 after a Head lookup"
     }
   ],
   "verification": [
@@ -98,6 +119,24 @@
       "exit_code": 0,
       "result": "PASS",
       "detail": "formatted; no whitespace errors; clean at source commit"
+    },
+    {
+      "command": "go test ./internal/application/service ./internal/router -run 'TestSchemaWikiCitationContentRejectsActiveDualIdentityBeforeAdapter|TestSchemaWikiCitationPreviewExactReleaseDoesNotObserveCurrentHead' -count=1 -v",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "both independent-review regressions passed after the bounded correction"
+    },
+    {
+      "command": "go test ./internal/application/service ./internal/handler ./internal/router -count=1",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "service 295.191s; handler 11.803s; router 13.835s"
+    },
+    {
+      "command": "go vet ./internal/types ./internal/application/service ./internal/handler ./internal/router",
+      "exit_code": 0,
+      "result": "PASS",
+      "detail": "wall 12.99s"
     }
   ],
   "verification_corrections": [
@@ -112,6 +151,12 @@
       "initial_result": "2 TS2352 diagnostics",
       "correction": "make the test's intentional narrowing explicit through unknown without changing production types",
       "commit": "f97c8636d"
+    },
+    {
+      "finding": "independent code review found active dual identity and exact-preview pre-service Head lookup",
+      "initial_result": "CODE_REVIEW=FAIL; UNRESOLVED_COUNT=2",
+      "correction": "require release route kind for distinct successor/source identity and mount preview on the existing no-Head dual-ACL seal guards",
+      "commit": "623c2ac12"
     }
   ],
   "invariants": {
@@ -160,5 +205,5 @@
     "g2_readiness": "LOCKED"
   },
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "4d6d1ade93219bbfeb2dfa9acb6b6b83832bdfeda6ff0dcd81ef8e768ce48ee5"
+  "receipt_sha256": "7f21b261713ebfcd3a7fa4f808159394c92ce2575ff4baecf4eec502cf8ac594"
 }
