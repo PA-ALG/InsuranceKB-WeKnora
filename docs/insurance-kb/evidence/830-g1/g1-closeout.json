@@ -2,6 +2,9 @@
   "goal_id": "G1",
   "phase": "FINAL_CLOSEOUT",
   "status": "PASS",
+  "flow": "PASS",
+  "quality": "DEFERRED",
+  "production_acceptance": "NOT_ACCEPTED_FOR_PRODUCTION",
   "observed_at": "2026-09-04T01:34:04+08:00",
   "base": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
   "accepted_candidate": {
@@ -54,5 +57,5 @@
   "next_physical_result": "G2_READINESS_ONLY_AWAIT_EXPLICIT_G2_START",
   "g2_and_later": "LOCKED",
   "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
-  "self_sha256": "296253e707638d37ab94d5a1da4e534258bfc2bd5944190e74c80988ce2d705c"
+  "self_sha256": "95366ae85777c6161ab5ac63263893a644fbc131c88450b27a7f28485b52639a"
 }
