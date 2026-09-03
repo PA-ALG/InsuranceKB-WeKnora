@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_REPLACEMENT_IMAGES_AND_ISOLATED_D3_NOT_RUN
-FLOW=G1_IN_PROGRESS
+CURRENT_RED=M3_REPLACEMENT_APP_IMAGE_BUILD_NETWORK_FAILURE_NO_RETRY_BUDGET_EXHAUSTED
+FLOW=G1_STOPPED
 QUALITY=DEFERRED
-DOCKER_ACTION=APP_AND_FRONTEND_REPLACEMENTS_AUTHORIZED_ONE_BUILD_EACH
+DOCKER_ACTION=STOP_NO_RETRY
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -52,7 +52,7 @@ M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
 M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
 M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
-NEXT_PHYSICAL_RESULT=FREEZE_REPLACEMENT_BUILD_INPUTS
+NEXT_PHYSICAL_RESULT=NONE_WITHIN_FROZEN_G1_BUILD_BUDGET
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -79,9 +79,14 @@ M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
 M3_D2_ORIGINAL=PASS
 M3_D2=REOPENED_APP_AND_FRONTEND
 M3_D2_REPLACEMENT_APP_BUILD_BUDGET=1
-M3_D2_REPLACEMENT_APP_BUILDS_USED=0
+M3_D2_REPLACEMENT_APP_BUILDS_USED=1
 M3_D2_REPLACEMENT_FRONTEND_BUILD_BUDGET=1
 M3_D2_REPLACEMENT_FRONTEND_BUILDS_USED=0
+M3_D2_REPLACEMENT_APP_BUILD_RESULT=FAIL_DEPENDENCY_FETCH_NETWORK
+M3_D2_REPLACEMENT_APP_BUILD_EXIT=1
+M3_D2_REPLACEMENT_APP_IMAGE=NONE
+M3_D2_REPLACEMENT_FRONTEND_BUILD_RESULT=NOT_RUN_AFTER_APP_STOP
+M3_D2_REPLACEMENT_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
@@ -94,6 +99,7 @@ M3_PRODUCTION_8081_GUEST=200
 M3_PRODUCTION_8081_HOST=CONNECTION_REFUSED
 M3_RELEASE_LIFECYCLE=NOT_RUN
 M3_PROVIDER_MODEL_CALLS=0
+G1_BUSINESS_STATUS=STOPPED
 G2_AND_LATER=LOCKED
 ```
 
@@ -268,3 +274,25 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   historical successor pinning, immutable base source binding and both current and exact-pinned
   historical-source citation bridges. The strengthened plan retains those requirements and adds
   the frontend dual-identity proof; it does not weaken prior custody.
+
+## M3 replacement D2 STOP
+
+- Build inputs were frozen at commit `f865b46c89d20795b90c107dec382f5d08220da9` / tree
+  `fb18efdf8152e086aba50b1f5915eb54a257de3f`, after source review PASS with unresolved=0.
+  The app/frontend source subsets, locks, Dockerfiles, dockerignore files and fresh frontend dist
+  were rehashed after the failure and remained identical; the worktree was clean.
+- The controller invoked exactly one replacement App build on isolated Docker context
+  `colima-g1-build`, `linux/arm64`, tag
+  `local/insurancekb-weknora-app:g1-m3-replacement-f865b46c89d2`. BuildKit resolved the pinned
+  Golang and Debian base digests, then failed at Dockerfile line 29 `go mod download` after
+  `goproxy.cn` returned widespread `unexpected EOF`, `EOF` and TLS handshake timeouts.
+- The failure occurred before application compilation and image export. Exact tag inspection
+  returned `No such image`; therefore no admissible replacement App identity exists. This is an
+  infrastructure dependency-fetch failure, not evidence of a G1 source compile failure.
+- The single App build budget is consumed (`1/1`) by invocation. Per the frozen plan, there is no
+  retry; frontend remains `0/1` and is not invoked, while D3, live source click, production
+  before/after and business `G1=PASS` remain NOT RUN. G1 is `STOPPED`; G2 remains locked.
+- Append-only receipt:
+  `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json`. Original D2 receipts and
+  image identities remain immutable; production containers/Head, Provider/model and G2 received
+  zero mutations/actions in the replacement build window.

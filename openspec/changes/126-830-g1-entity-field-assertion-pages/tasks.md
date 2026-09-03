@@ -87,8 +87,9 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 
 ## M3 · Atomic isolated Release
 
-- [ ] 原 D2 app/frontend identity 已冻结并保留；按用户 G1 全面授权仅重开各一次
-  replacement build，app budget=1、frontend budget=1。
+- [x] 原 D2 app/frontend identity 已冻结并保留；replacement app 的唯一 build 已消费，
+  app budget=1/1、frontend budget=0/1。App 在 `go mod download` 因代理连接 EOF/TLS
+  timeout 失败且未导出镜像；按冻结 STOP 规则不重试、不启动 frontend build/D3。
 - [ ] 使用 replacement app + replacement frontend exact digest，在隔离环境形成一个
   `NOT_FOR_PRODUCTION` Release（D3）。
 - [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
@@ -154,8 +155,12 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
 - [x] 独立 reviewer 在 `ef6b246e85733e9a89d8d4e9ad50271096f3aaac` / tree
   `ce239651a94db1cae6e1807dab037e12996cc344` 只读复核 exact source 与回执，
   `CODE_REVIEW=PASS`、`UNRESOLVED_COUNT=0`、无 backlog；允许冻结 replacement build inputs。
-- [ ] replacement app/frontend image build 各仍为 0/1；D3 Release/Head/live source click、
-  production unchanged 复核与业务 `G1=PASS` 均 NOT RUN。G2 继续锁定。
+- [x] replacement app build 已消费 1/1，在业务编译前因 `goproxy.cn` 大量
+  `unexpected EOF / TLS handshake timeout` 失败；目标 tag 不存在，未导出镜像。
+  frontend 保持 0/1 且不得在本次 STOP 后启动。回执：
+  `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json`。
+- [ ] D3 Release/Head/live source click、production before/after 复核与业务 `G1=PASS` 均
+  NOT RUN；G1=`STOPPED`，G2 继续锁定。
 
 ## Closeout
 
