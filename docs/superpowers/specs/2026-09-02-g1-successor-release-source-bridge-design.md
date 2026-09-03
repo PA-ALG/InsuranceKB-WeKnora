@@ -86,10 +86,11 @@ successor.
 
 ### Historical-source evidence bridge
 
-For a G1 field citation, the server begins from the successor selected by the
-entity route, not unconditionally from the current Head. A current request
-resolves and pins Head once. A pinned request loads the exact requested G1
-successor independently of Head. In both cases the server verifies the Ready
+For a G1 field citation, the entity response has already selected and exposed
+one concrete successor Release ID. The unchanged citation preview route sends
+that exact successor ID for both a current page and an explicitly pinned page;
+it carries no read-mode discriminator. Citation issuance therefore loads that
+exact G1 successor independently of Head in both cases. It verifies the Ready
 preparation and full G1 manifest/member custody, then derives the historical
 source Release exclusively from that successor's immutable base identity. It
 loads that exact 815 Release without consulting a caller-selected source
@@ -100,15 +101,16 @@ receipt, source revision, parse attempt, parsed document, parse manifest, PDF
 page, bbox, locator content, quote and all hashes must match. Only after those
 checks may the server issue the existing opaque citation token. The token's
 private claims preserve both domains: the route-selected successor serving
-identity and the derived 815 source replay identity. They also distinguish an
-`active` route authority from an exact `release` authority. `active` content
-reads revalidate the once-selected current Head; exact `release` content reads
-validate the immutable successor and its scope without consulting Head, then
-reconstruct the source bridge from that same successor. The public citation
-authority remains the serving successor identity; the source replay identity
-is never caller-selectable. Any drift or missing historical source returns the
-existing typed citation-unavailable error; there is no page-1,
-current/latest, raw-content or quote fallback.
+identity and the derived 815 source replay identity. Every G1 entity citation
+uses exact `release` route authority, whether its page was reached through the
+current or pinned entity route. Issuance and content replay validate the exact
+immutable successor and scope without consulting Head, then reconstruct the
+source bridge from that same successor. Existing generic Schema citations
+remain `active` and continue to use their existing Head-bound behavior. The
+public citation authority remains the serving successor identity; the source
+replay identity is never caller-selectable. Any drift or missing historical
+source returns the existing typed citation-unavailable error; there is no
+page-1, current/latest, raw-content or quote fallback.
 
 ## API and UI boundary
 
@@ -119,9 +121,12 @@ No route is added. Existing stable entity routes continue to support:
 - one exact `preparation_id` for Candidate Preview.
 
 The existing citation preview route remains the frontend transport for both
-current and exact pinned successor pages. No public authority field or route
-shape is added. The opaque token may gain private serving/source and
-active/release claims needed for the closed server-side replay above. The
+current and exact pinned successor pages. Because those clicks are identical
+HTTP requests once a concrete successor is rendered, all G1 clicks use exact
+`release` authority; the server does not infer page read mode from Head. No
+public authority field or route shape is added. The opaque token may gain
+private serving/source and route-kind claims needed for the closed server-side
+replay above. The
 frontend parser must validate the split explicitly: preparation requires the
 member/source identity to equal the envelope identity; current and pinned
 require the immutable member/source identity to equal each other and differ

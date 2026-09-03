@@ -4,7 +4,7 @@
 
 **Goal:** Make the frozen 76-member G1 entity graph readable through its real successor Release identity, while preserving and replaying the exact historical 815 source identity for citations.
 
-**Architecture:** The existing Wiki Release CAS remains the only publisher. The response envelope and opaque citation authority carry the successor serving identity; the immutable manifest members and source replay request retain the old 815 identity, joined only through the successor's existing `BaseReleaseID/BaseActivationEpoch`. Exact pinned successor reads and citation content replay do not consult Head, while current reads pin Head once and fail closed when Head is not a valid G1 successor.
+**Architecture:** The existing Wiki Release CAS remains the only publisher. The response envelope and opaque citation authority carry the successor serving identity; the immutable manifest members and source replay request retain the old 815 identity, joined only through the successor's existing `BaseReleaseID/BaseActivationEpoch`. Current entity-page reads pin Head once and fail closed when Head is not a valid G1 successor. Once either current or pinned rendering exposes a concrete G1 successor ID, its unchanged citation route is exact-`release`: issuance and content replay load that successor without Head. Generic Schema citations retain their existing `active` Head-bound behavior.
 
 **Tech Stack:** Go 1.26, GORM/SQLite service tests, Gin handler tests, Ed25519 opaque citation tokens, Vue 3/TypeScript/Vitest, Docker/BuildKit, OpenSpec evidence JSON.
 
@@ -24,7 +24,7 @@
 
 - `internal/application/service/entity_page_graph_830_g1.go`: validate successor-to-source custody; construct current/pinned entity responses; derive exact historical citation requests from a route-selected successor.
 - `internal/application/service/entity_page_graph_830_g1_test.go`: real CAS/read/source-bridge regressions and tamper/no-fallback tests.
-- `internal/application/service/schema_wiki.go`: carry private serving/source request metadata, preserve generic Schema behavior, reconstruct active or exact-release citation reads.
+- `internal/application/service/schema_wiki.go`: carry private serving/source request metadata, preserve generic Schema `active` behavior, and reconstruct exact-release G1 citation reads.
 - `internal/application/service/schema_wiki_citation_content.go`: sign and verify private route kind plus serving/source identities without changing the public authority contract.
 - `internal/application/service/schema_wiki_citation_content_test.go`: token-kind, source-binding, tamper, and generic compatibility tests.
 - `internal/handler/schema_wiki.go`: admit signed exact-release citation tokens through the existing dual-ACL route without consulting Head.
@@ -340,15 +340,15 @@ Implement a private helper in `entity_page_graph_830_g1.go` that:
 5. runs `entityPageGraphCitationMatchesSchemaSource830G1` against the exact join;
 6. calls `schemaWikiCitationRequest` with the old source tuple;
 7. binds C6 frozen native source when applicable;
-8. annotates the request with the successor serving tuple and `active` or `release` route kind.
+8. annotates every G1 request with the successor serving tuple and exact `release` route kind.
 
 The helper accepts no caller-supplied source identity.
 
 - [ ] **Step 4: Preserve generic Schema and add G1 dispatch**
 
-In `IssueCurrentSchemaCitationAuthority`, keep the existing generic path when `release_id` is current and full Schema custody validates. If it is a G1 successor, use the helper; current successor gets `active`, historical exact successor gets `release`. Do not permit historical generic Schema preview as a side effect.
+In `IssueCurrentSchemaCitationAuthority`, first try the requested concrete Release ID as an exact G1 successor. If it is valid, use the helper and issue `release` authority without querying Head; this is the same for a click originating from current rendering and one originating from pinned rendering because the unchanged HTTP route carries no read mode. If the requested Release is not a G1 successor, keep the existing generic Schema path: require it to be current, validate full Schema custody, and issue `active`. Do not permit historical generic Schema preview as a side effect, and do not turn malformed G1 custody into fallback success.
 
-In `ReadSchemaCitationContent`, resolve both public and route authority. For `active`, pin current Head and require the token's serving tuple to match; for `release`, load the exact G1 successor without Head. Reconstruct the same old-source request and pass it to `ReadByOpaqueToken` so all signed identities are compared again before bytes open.
+In `ReadSchemaCitationContent`, resolve both public and route authority. For generic `active`, preserve the existing path: pin current Head and require the token's serving tuple to match. For G1 `release`, load the exact successor named by the signed serving identity without Head. Reconstruct the same old-source request and pass it to `ReadByOpaqueToken` so all signed identities are compared again before bytes open.
 
 - [ ] **Step 5: Run GREEN and regression packages**
 
