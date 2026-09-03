@@ -3,7 +3,7 @@
   "goal_id": "G1",
   "phase": "M3_SOURCE_VERIFICATION",
   "status": "PASS",
-  "observed_at": "2026-09-03T13:38:16+08:00",
+  "observed_at": "2026-09-03T13:49:30+08:00",
   "source": {
     "branch": "codex/830-g1-field-assertion-pages",
     "commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
@@ -43,7 +43,11 @@
     ],
     "correction_commit": "623c2ac12559c864d36caaea38e2e56a29bd879a",
     "correction_tree": "7f82343fc2ff9eb157fdc122b34e3472e682a951",
-    "re_review": "PENDING"
+    "re_review": "PASS",
+    "re_reviewed_commit": "ef6b246e85733e9a89d8d4e9ad50271096f3aaac",
+    "re_reviewed_tree": "ce239651a94db1cae6e1807dab037e12996cc344",
+    "re_review_unresolved_count": 0,
+    "backlog_count": 0
   },
   "tdd_red": [
     {
@@ -199,11 +203,11 @@
   },
   "decision": {
     "source_status": "PASS",
-    "code_review": "PENDING",
+    "code_review": "PASS",
     "next_physical_result": "FREEZE_REPLACEMENT_BUILD_INPUTS",
     "g1_business_status": "IN_PROGRESS",
     "g2_readiness": "LOCKED"
   },
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "7f21b261713ebfcd3a7fa4f808159394c92ce2575ff4baecf4eec502cf8ac594"
+  "receipt_sha256": "2ac9f69ce342221e177f28b81631b61e45fa60b9f9789611d4e6bc56e0775834"
 }

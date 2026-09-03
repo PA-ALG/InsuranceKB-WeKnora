@@ -47,7 +47,11 @@ M3_SOURCE_INITIAL_CODE_REVIEWED_TREE=9808ecb8ff5a027523798102f9559bb45879fdb5
 M3_SOURCE_INITIAL_CODE_REVIEW_UNRESOLVED_COUNT=2
 M3_SOURCE_REVIEW_CORRECTION_HEAD=623c2ac12559c864d36caaea38e2e56a29bd879a
 M3_SOURCE_REVIEW_CORRECTION_TREE=7f82343fc2ff9eb157fdc122b34e3472e682a951
-M3_SOURCE_CODE_REVIEW=PENDING
+M3_SOURCE_CODE_REVIEW=PASS
+M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
+M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
+M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
+M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
 NEXT_PHYSICAL_RESULT=FREEZE_REPLACEMENT_BUILD_INPUTS
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
@@ -254,7 +258,10 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   preview route consulted Head before the service. Both defects were reproduced as RED and fixed
   in `623c2ac12559c864d36caaea38e2e56a29bd879a` /
   `7f82343fc2ff9eb157fdc122b34e3472e682a951`; focused regressions, full service/handler/router
-  tests, and Go vet now pass. Independent re-review remains required before build-input freeze.
+  tests, and Go vet now pass. Independent re-review at
+  `ef6b246e85733e9a89d8d4e9ad50271096f3aaac` /
+  `ce239651a94db1cae6e1807dab037e12996cc344` returned `CODE_REVIEW=PASS`,
+  `UNRESOLVED_COUNT=0`, with no backlog; replacement build inputs may now be frozen.
 - Production containers/Head, Provider/model paths and G2 remain untouched and locked.
 - Historical note: before the frontend source contradiction was found, the plan stated that the
   written design must pass independent review, then TDD must prove RED/GREEN for Head-independent

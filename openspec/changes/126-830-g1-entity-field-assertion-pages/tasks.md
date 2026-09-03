@@ -151,8 +151,9 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
   `7f82343fc2ff9eb157fdc122b34e3472e682a951` PASS：Go service/handler/router、Go vet、
   Harness 54 passed/3 skipped、frontend 7 + 36 tests、typecheck、Vite dist build 全通过。
   回执：`docs/insurance-kb/evidence/830-g1/m3/replacement-source-verification.json`。
-- [ ] 独立 reviewer 只读复核 exact source head/tree 与本回执，unresolved=0 后冻结
-  replacement build inputs。
+- [x] 独立 reviewer 在 `ef6b246e85733e9a89d8d4e9ad50271096f3aaac` / tree
+  `ce239651a94db1cae6e1807dab037e12996cc344` 只读复核 exact source 与回执，
+  `CODE_REVIEW=PASS`、`UNRESOLVED_COUNT=0`、无 backlog；允许冻结 replacement build inputs。
 - [ ] replacement app/frontend image build 各仍为 0/1；D3 Release/Head/live source click、
   production unchanged 复核与业务 `G1=PASS` 均 NOT RUN。G2 继续锁定。
 
