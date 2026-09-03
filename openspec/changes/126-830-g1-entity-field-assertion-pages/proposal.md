@@ -169,8 +169,10 @@ generic Schema release 的旧合同、不得新增 release 表或 endpoint 级�
 - M2（D1）：76/76 manifest、67/67 三态、稳定 identity、非 7 renderer 测试；
 - M3（D2→D3）：原 D2 的 app/frontend 各一次构建及 exact digest 保留为不可变历史证据。
   D3 前静态复核发现 successor serving/source identity 与 historical-source bridge blocker；
-  用户随后明确授权仅重开 app，且只允许一次 replacement app build。frontend 不重建，
-  D3 复用原 frontend exact digest 与 replacement app exact digest，在隔离环境形成一个
+  随后的实施计划映射又证明原 frontend parser 会把冻结 source identity 错当 serving
+  identity，无法读取合法 successor。用户已明确对本次 G1 全面授权且不再逐项询问；因此
+  app/frontend 各只允许一次 replacement build，原镜像与回执均不覆盖、不改标签。D3 使用
+  两个 replacement exact digest，在隔离环境形成一个
   `NOT_FOR_PRODUCTION` Release；current/pinned/source-click 通过，生产 `8081` 和原生产
   Active 不变。
 

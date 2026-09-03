@@ -6,10 +6,10 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=M3_SUCCESSOR_SERVING_IDENTITY_AND_HISTORICAL_SOURCE_BRIDGE_MISSING
+CURRENT_RED=M3_SUCCESSOR_SOURCE_BRIDGE_AND_FRONTEND_DUAL_IDENTITY_MISSING
 FLOW=G1_IN_PROGRESS
 QUALITY=DEFERRED
-DOCKER_ACTION=APP_REPLACEMENT_AUTHORIZED_ONE_BUILD_FRONTEND_REUSE
+DOCKER_ACTION=APP_AND_FRONTEND_REPLACEMENTS_AUTHORIZED_ONE_BUILD_EACH
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
 M0_INITIAL_UNRESOLVED_COUNT=3
@@ -49,15 +49,17 @@ M2_EVIDENCE=PASS
 M3_INTEGRATION_HEAD=06b101665921844cabf666574514c2b71ebd4b12
 M3_INTEGRATION_TREE=e14c5057f87427670f8a0382b357b6970ecd74f8
 M3_D2_ORIGINAL=PASS
-M3_D2=REOPENED_APP_ONLY
-M3_D2_REPLACEMENT_BUILD_BUDGET=1
-M3_D2_REPLACEMENT_BUILDS_USED=0
+M3_D2=REOPENED_APP_AND_FRONTEND
+M3_D2_REPLACEMENT_APP_BUILD_BUDGET=1
+M3_D2_REPLACEMENT_APP_BUILDS_USED=0
+M3_D2_REPLACEMENT_FRONTEND_BUILD_BUDGET=1
+M3_D2_REPLACEMENT_FRONTEND_BUILDS_USED=0
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
 M3_D2_FRONTEND_BUILD_RESULT=PASS
 M3_D2_FRONTEND_IMAGE=sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0
-M3_D2_FRONTEND_DISPOSITION=REUSE_NO_REBUILD
+M3_D2_FRONTEND_DISPOSITION=IMMUTABLE_SUPERSEDED_PENDING_REPLACEMENT
 M3_D2_ORIGINAL_APP_DISPOSITION=IMMUTABLE_SUPERSEDED_PENDING_REPLACEMENT
 M3_PRODUCTION_8081_BEFORE=200
 M3_PRODUCTION_8081_GUEST=200
@@ -75,7 +77,7 @@ G2_AND_LATER=LOCKED
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
 | G1-R4 | M3 RED | M1 preview bridge PASS; successor historical-source bridge missing | M1/M2 focused PASS; M3 NOT RUN | `edc74ac7` + pending | M1 exact click + M2 known custody 17/17 PASS; successor click NOT RUN | M2 PASS / M3 OPEN |
-| G1-R5 | PASS | payload Profile + namespace metadata | focused PASS | `edc74ac7` | short titles + 76/76 namespaces PASS | M2 PASS |
+| G1-R5 | M3 RED | payload Profile/namespace PASS; serving envelope vs source member parser missing | M2 focused PASS; M3 frontend NOT RUN | `edc74ac7` + pending | short titles + 76/76 namespaces PASS; successor UI NOT RUN | M2 PASS / M3 OPEN |
 | G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft 76/76 PASS; Release NOT RUN | M1 PREPARATION PASS / M3 RELEASE NOT RUN |
 | G1-R7 | M3 RED | preparation no-fallback PASS; successor current/pinned exact identity missing | M1 focused PASS; M3 NOT RUN | `740d9b7c` + pending | preparation Preview PASS; successor current/pinned NOT RUN | M1 PARTIAL / M3 OPEN |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
@@ -198,22 +200,33 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   immutable evidence that app `f913037c...` and frontend `ebf4f45a...` were built successfully;
   D3 Release/Head, Provider/model and G2 remained NOT RUN/zero at that checkpoint.
 
-## M3 app-only D2 reopening authorization
+## M3 replacement D2 reopening authorization
 
 - Pre-D3 static path review found that app `f913037c...` lacks the M3 successor
   historical-source bridge and equates the successor serving identity with the old 815 source
   identity. A real CAS would therefore create a successor that the entity reader rejects.
 - The user explicitly authorized the recommended minimal repair and one app-only replacement
-  build. This supersedes only the previous `D2_PASS_NO_MORE_BUILDS` conclusion for app; it does
-  not erase or retag the original image/receipts and does not reopen frontend.
-- Replacement app build budget is exactly one and remains unused. Before it is consumed, the
+  build. That first correction superseded only the previous `D2_PASS_NO_MORE_BUILDS` conclusion
+  for app and did not erase or retag original image/receipts.
+- The corrected identity design passed the user-authorized additional independent review at
+  `a079f6cfb9b7db100910da1513ec707696c1be6a` /
+  `80f58b36acd719aad9732510694ed7d6df001ffb` with `UNRESOLVED_COUNT=0`.
+- Implementation-plan source mapping then proved the frozen frontend parser requires embedded
+  source IDs to equal the successor serving ID. Those immutable identities must differ, and the
+  backend may not rewrite the 76 frozen payloads. Under the user's explicit blanket G1
+  authorization, frontend is therefore reopened only for the bounded dual-identity parser/test
+  correction and one replacement build. The original frontend image remains immutable evidence.
+- Replacement app and frontend build budgets are exactly one each and remain unused. Before either
+  is consumed, the revised written design must pass independent review, then TDD must prove
+  frontend same/source-split parsing plus RED/GREEN for Head-independent historical successor
+  pinning, immutable base source binding and both current and exact-pinned historical-source
+  citation bridges. D3 must then use both replacement identities.
+- The prior review loop's final correction remains part of the design: the frozen manifest cannot
+  legally create G1 successor R2 because CAS would bind R2 to R1 rather than to the old 815 source.
+  A non-G1 control Head proves current fail-closed plus Head-independent pinned R1/source replay.
+- Production containers/Head, Provider/model paths and G2 remain untouched and locked.
+- Historical note: before the frontend source contradiction was found, the plan stated that the
   written design must pass independent review, then TDD must prove RED/GREEN for Head-independent
   historical successor pinning, immutable base source binding and both current and exact-pinned
-  historical-source citation bridges. D3 must then use the replacement app identity plus unchanged
-  frontend `ebf4f45a...`.
-- The final independent design review closed all five prior findings but found one remaining test
-  contradiction: the frozen manifest cannot legally create G1 successor R2 because CAS would bind
-  R2 to R1 rather than to the old 815 source. The design now uses a non-G1 control Head to prove
-  current fail-closed plus Head-independent pinned R1/source replay. This exact correction still
-  requires user review before TDD starts; no fourth independent review is silently assumed.
-- Production containers/Head, Provider/model paths and G2 remain untouched and locked.
+  historical-source citation bridges. The strengthened plan retains those requirements and adds
+  the frontend dual-identity proof; it does not weaken prior custody.

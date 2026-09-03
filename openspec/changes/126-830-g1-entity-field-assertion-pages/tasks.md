@@ -87,9 +87,9 @@ commit message 提前把 NEXT 指向 M3，独立 Review 报告唯一 BLOCKER。�
 
 ## M3 · Atomic isolated Release
 
-- [ ] 原 D2 identity 已冻结并保留；按用户追加授权仅重开 app-only replacement build，
-  build budget=1，frontend exact digest 继续复用。
-- [ ] 复用 replacement app + 原 frontend exact digest，在隔离环境形成一个
+- [ ] 原 D2 app/frontend identity 已冻结并保留；按用户 G1 全面授权仅重开各一次
+  replacement build，app budget=1、frontend budget=1。
+- [ ] 使用 replacement app + replacement frontend exact digest，在隔离环境形成一个
   `NOT_FOR_PRODUCTION` Release（D3）。
 - [ ] 验证 activation 前旧 Active 完整可读，activation 后 current/pinned 只读 exact 新 Release。
 - [ ] 验证 76 页同 release、无混版，以及三个 known field exact source click/fail closed。
@@ -126,6 +126,15 @@ bridge，并把新 serving Release identity 错同旧 815 source Release identit
 bridge，再执行且只执行一次 replacement app build。frontend `ebf4f45a...` 继续复用、不得
 重建；replacement app exact identity 形成前不得启动 D3 写入。该授权只 supersede 原
 `不得重建 app` 结论，不改变 G1 Goal/DoD、生产禁写、Provider/model=0 或 G2 锁定。
+
+实施计划映射随后对照 frozen frontend image 的 exact source，确认其 parser 强制
+`member.release_id == response.release_id` 且
+`reference.source_release_id == response.release_id`；这与已复核通过的 successor serving
+envelope + immutable 815 source member 模型不可同时成立，也不得由后端改写 76 个冻结
+payload 规避。用户已明确“本次 G1 都授权，不要再问”；因此仅追加一个 bounded frontend
+parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 frontend image 与
+原 D2 回执继续不可变；这项纠正 supersede 上段的 frontend reuse/no-rebuild 结论，不扩大
+路由、payload、UI、生产、Provider/model 或 G2 范围。
 
 ## Closeout
 

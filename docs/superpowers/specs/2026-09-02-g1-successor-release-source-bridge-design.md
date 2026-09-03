@@ -11,10 +11,10 @@ recorded by the G1 manifest.
 The implementation base is branch `codex/830-g1-field-assertion-pages` at
 `d648f53b8`. The original D2 app image
 `sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327`
-remains immutable diagnostic evidence. The frontend image
+and original D2 frontend image
 `sha256:ebf4f45a7279e44a9a6dea9394a58d90b6f6c70d259dd0c9b4a472c906783da0`
-remains reusable. User authorization permits one app-only replacement build
-after this fix.
+remain immutable diagnostic evidence. The user's blanket G1 authorization
+permits exactly one replacement build for each affected image after this fix.
 
 ## Problem
 
@@ -28,6 +28,12 @@ and epoch to equal the old source Release ID and epoch embedded in the
 manifest. A successful CAS therefore makes the successor unreadable. The
 Candidate Preview source bridge also requires the old source Release to remain
 current, so it cannot serve evidence after Head advances to the successor.
+
+The original frontend parser has the same conflation: it requires both the
+immutable member `release_id` and field `reference.source_release_id` to equal
+the response's serving `release_id`. The frozen member payloads correctly hold
+the old 815 source identity, so the parser would reject every valid successor
+response. The server must not rewrite those frozen payloads to satisfy it.
 
 ## Chosen identity model
 
@@ -45,6 +51,12 @@ The successor Release binds the two domains with existing immutable fields:
 `WikiRelease.BaseReleaseID` must equal the manifest source Release ID and
 `WikiRelease.BaseActivationEpoch` must equal the manifest source epoch. No new
 table, column, Head, publisher or mutable projection is introduced.
+
+The read envelope carries serving identity. Embedded manifest members retain
+source identity: `member.release_id` and a field assertion's
+`reference.source_release_id` both remain the old 815 Release. Candidate
+Preview is the only mode where serving and source identities are equal because
+no successor exists yet.
 
 ## Read behavior
 
@@ -110,8 +122,11 @@ The existing citation preview route remains the frontend transport for both
 current and exact pinned successor pages. No public authority field or route
 shape is added. The opaque token may gain private serving/source and
 active/release claims needed for the closed server-side replay above. The
-frontend already distinguishes current, pinned and preparation modes, so the
-replacement build is app-only; the frozen frontend image is reused.
+frontend parser must validate the split explicitly: preparation requires the
+member/source identity to equal the envelope identity; current and pinned
+require the immutable member/source identity to equal each other and differ
+from the successor envelope identity. This is a bounded parser correction, not
+a route, payload or UI redesign.
 
 ## Failure handling and invariants
 
@@ -124,13 +139,13 @@ replacement build is app-only; the frozen frontend image is reused.
   caller-selected source identity.
 - Production containers, production Head and provider/model paths remain out
   of scope. D3 runs on the isolated clone and an internal no-egress network.
-- The original D2 app image is never overwritten or retagged. Evidence records
-  why it was superseded and the exact replacement identity.
+- The original D2 app and frontend images are never overwritten or retagged.
+  Evidence records why each was superseded and both exact replacement
+  identities.
 - Before implementation, OpenSpec tasks and validation custody must record the
-  user's explicit app-only replacement authorization. It supersedes only the
-  previous `NO_MORE_BUILDS` conclusion for the app image, grants a budget of
-  exactly one replacement app build, and leaves the frontend no-rebuild rule
-  intact.
+  user's blanket G1 authorization. It supersedes only the previous
+  `NO_MORE_BUILDS` conclusions for the affected images and grants a budget of
+  exactly one replacement app build plus one replacement frontend build.
 
 ## Test and verification design
 
@@ -151,12 +166,15 @@ Implementation follows TDD:
    consulting Head, while the current G1 entity route fails closed because the
    new Head is not a valid G1 successor. Do not construct an impossible second
    G1 successor from the frozen manifest or reinterpret R1 as its old source.
-5. Run focused Go tests, the full affected Go packages, focused frontend
+5. Add frontend parser regressions proving preparation same-identity and
+   current/pinned successor-envelope plus immutable-source-member identity;
+   mixed or rewritten identities fail closed.
+6. Run focused Go tests, the full affected Go packages, focused frontend
    component tests and the existing G1 Harness tests.
-6. After OpenSpec custody records the authorization, build exactly one
-   replacement app image with the new frozen commit/tree and Go-lock/source
-   labels. Do not rebuild frontend.
-7. In isolated D3, verify Draft -> Ready -> Release -> Active, 76/76 members,
+7. After OpenSpec custody records the authorization, build exactly one
+   replacement app image and exactly one replacement frontend image with the
+   new frozen commit/tree and lock/source labels.
+8. In isolated D3, verify Draft -> Ready -> Release -> Active, 76/76 members,
    current/pinned no-mix reads, three known-field source clicks, negative
    fail-closed cases, zero egress/provider/model calls and unchanged production
    identities.
@@ -167,4 +185,4 @@ Implementation follows TDD:
 - No new manifest version or recompile of the frozen 76-page graph.
 - No database migration, new release table, second Head or second publisher.
 - No production deployment, restart, activation or credential change.
-- No frontend redesign and no second frontend image build.
+- No frontend redesign and no more than one replacement frontend image build.
