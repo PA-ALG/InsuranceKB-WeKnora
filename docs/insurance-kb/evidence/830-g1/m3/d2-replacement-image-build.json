@@ -151,5 +151,5 @@
     "g2": "LOCKED"
   },
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "13fdf98c61d1bb3d694ac5dae291f31f92a3e8eef0490a0dc0932076bbd4079e"
+  "receipt_sha256": "ecd4f1677d61788f2e5e49b956799d3b20130e237824be5a9eaa5e9e3075fe7b"
 }
