@@ -336,7 +336,11 @@ export function parseEntityPageGraphRead830G1(
       'payload_sha256', 'member_digest',
     ]) || member.contract !== 'entity-page-member.830.g1.v1' || member.page_kind !== target.pageKind
       || member.stable_key !== target.stableKey || member.entity_id !== target.entityId
-      || member.release_id !== data.release_id || member.profile_sha256 !== profile.profile_sha256
+      || !text(member.release_id)
+      || (data.read_mode === 'preparation'
+        ? member.release_id !== data.release_id
+        : member.release_id === data.release_id)
+      || member.profile_sha256 !== profile.profile_sha256
       || member.schema_pack_sha256 !== profile.schema_pack_sha256 || !text(member.page_id)
       || !text(member.namespace) || !text(member.route) || !text(member.short_title)
       || !text(member.space_id) || !text(member.wiki_kb_id)
@@ -353,7 +357,7 @@ export function parseEntityPageGraphRead830G1(
       const reference = payload.reference
       const citationHashes = payload.citations.map(citation => citation.citation_sha256)
       const receiptHashes = [...new Set(payload.citations.map(citation => citation.evidence_receipt_sha256 as string))]
-      if (reference.page_id !== member.page_id || reference.source_release_id !== data.release_id
+      if (reference.page_id !== member.page_id || reference.source_release_id !== member.release_id
         || reference.source_candidate_sha256 !== member.candidate_sha256
         || !sameStrings(reference.citation_sha256s, citationHashes)
         || !sameStrings(reference.evidence_receipt_sha256s, receiptHashes)) throw new Error()

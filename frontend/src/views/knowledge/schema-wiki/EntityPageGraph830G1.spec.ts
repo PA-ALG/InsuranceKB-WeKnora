@@ -252,7 +252,10 @@ describe('EntityPageGraph830G1', () => {
   })
 
   it('opens the existing citation viewer with the exact Active tuple and frozen 815 citation identity', async () => {
-    apiState.result = fieldRead('present', [citation()])
+    const successorRead = fieldRead('present', [citation()])
+    successorRead.release_id = 'release-g1-successor'
+    successorRead.member.release_id = 'release-815-source'
+    apiState.result = successorRead
     requestState.result = { success: true, data: { authority: true } }
     const wrapper = await mountAt(
       '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1',
@@ -268,7 +271,7 @@ describe('EntityPageGraph830G1', () => {
       citation_id: string
     }
     expect(request).toEqual({
-      release_id: 'release-1',
+      release_id: 'release-g1-successor',
       activation_epoch: 2,
       field_id: 'field-1',
       citation_id: `citation-${JOIN_RECEIPT_SHA256.slice(0, 24)}`,
@@ -280,7 +283,7 @@ describe('EntityPageGraph830G1', () => {
     await previewTransport.getAuthority(request)
     expect(requestState.calls).toEqual([[
       '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema'
-      + `/releases/release-1/fields/field-1/citations/citation-${JOIN_RECEIPT_SHA256.slice(0, 24)}/preview`,
+      + `/releases/release-g1-successor/fields/field-1/citations/citation-${JOIN_RECEIPT_SHA256.slice(0, 24)}/preview`,
     ]])
   })
 
@@ -324,16 +327,29 @@ describe('EntityPageGraph830G1', () => {
   it('labels a pinned source drawer as a fixed release without calling it Active', async () => {
     const pinnedRead = fieldRead('present', [citation()])
     pinnedRead.read_mode = 'pinned'
+    pinnedRead.release_id = 'release-g1-successor'
+    pinnedRead.member.release_id = 'release-815-source'
     apiState.result = pinnedRead
+    requestState.result = { success: true, data: { authority: true } }
     const wrapper = await mountAt(
-      '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1?release_id=release-1',
+      '/platform/knowledge-bases/wiki-1/schema-wiki/entities/entity-1/fields/field-1?release_id=release-g1-successor',
       { SettingDrawer: settingDrawerStub, SchemaCitationViewer: citationViewerStub },
     )
 
     await wrapper.get('[data-testid="entity-source-action"]').trigger('click')
-    const description = String(wrapper.getComponent({ name: 'SettingDrawer' }).props('description'))
+    const drawer = wrapper.getComponent({ name: 'SettingDrawer' })
+    const description = String(drawer.props('description'))
     expect(description).toBe('固定发布版本的原始证据')
     expect(description).not.toContain('Active')
+    const viewer = wrapper.getComponent({ name: 'SchemaCitationViewer' })
+    const previewTransport = viewer.props('previewTransport') as {
+      getAuthority(value: { release_id: string, activation_epoch: number, field_id: string, citation_id: string }): Promise<unknown>
+    }
+    await previewTransport.getAuthority(viewer.props('request') as never)
+    expect(requestState.calls).toEqual([[
+      '/api/v1/knowledgebase/wiki-1/wiki/release-scopes/space-1/raw/raw-1/schema'
+      + `/releases/release-g1-successor/fields/field-1/citations/citation-${JOIN_RECEIPT_SHA256.slice(0, 24)}/preview`,
+    ]])
   })
 
   it('shows preview transport failure explicitly without quote, current, latest, or content fallback', async () => {
