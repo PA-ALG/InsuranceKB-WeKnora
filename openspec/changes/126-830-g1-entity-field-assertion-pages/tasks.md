@@ -175,12 +175,13 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
   epoch 3，新增 76 members 与 1 receipt。76 current + 76 pinned、三个 known field exact
   source click、tampered/missing fail-closed、production before/after 和 Provider/model=0 全部
   PASS。临时容器、internal network、DB role、auth token、JWT/签名私钥和一次性脚本均已清理；
-  回执：`docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json`。业务 `G1=PASS` 仍等待
-  最终 exact commit/tree 的独立只读验收，G2 继续锁定。
+  回执：`docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json`。可见独立只读 Review
+  `01a06844-69da-7423-ac59-d28c8fa7e0d9` 已对 exact candidate commit/tree、Clone 留存终态、
+  生产不变和证据自哈希报告 PASS、`UNRESOLVED_COUNT=0`；G1 收口，G2 继续锁定。
 
 ## Closeout
 
 - [x] 完成 `docs/insurance-kb/evidence/830-g1/` 全部清单与复现步骤。
-- [ ] 独立 reviewer 只读复核 exact head/tree/runtime/release/evidence pack，unresolved=0。
+- [x] 独立 reviewer 只读复核 exact head/tree/runtime/release/evidence pack，unresolved=0。
 - [x] focused tests、适用 CI、git diff/status、worktree clean 全部有新证据。
-- [ ] 最终只报告 `G1=PASS|FAIL|STOPPED`；G2 readiness 只读，不启动 G2。
+- [x] 最终只报告 `G1=PASS`；G2 readiness 只读，不启动 G2。

@@ -490,6 +490,6 @@ Assert all 76 pages use the successor serving envelope and immutable old-source 
 
 Record zero egress, Provider/model calls, second publisher/Head, G2 actions, and production writes/restarts/replacements. Re-read production identities and counts and compare to before-state.
 
-- [ ] **Step 5: Final verification and independent acceptance**
+- [x] **Step 5: Final verification and independent acceptance**
 
 Run focused tests, applicable CI, `git diff --check`, and `git status --short`. Commit the append-only D3/closeout evidence, then dispatch `830-G1-Review｜独立只读验收` against the exact final commit/tree/images/release/evidence. Only `UNRESOLVED_COUNT=0` may change the report to `G1=PASS`; otherwise G1 remains FAIL/STOPPED. Report G2 readiness only and do not start G2.

@@ -6,9 +6,9 @@
 GOAL_ID=G1
 BASE=d2ce44cb2107575f7624b3735c653078ae2a98b6
 BRANCH=codex/830-g1-field-assertion-pages
-CURRENT_RED=FINAL_INDEPENDENT_READ_ONLY_ACCEPTANCE_NOT_RUN
-FLOW=G1_IN_PROGRESS
-QUALITY=DEFERRED
+CURRENT_RED=NONE
+FLOW=G1_PASS
+QUALITY=PASS
 DOCKER_ACTION=REUSE_EXACT_REPLACEMENT_IMAGES_NO_BUILD
 G2_AND_LATER=LOCKED
 M0_INITIAL_REVIEW=FAIL
@@ -52,7 +52,7 @@ M3_SOURCE_CODE_REVIEWED_HEAD=ef6b246e85733e9a89d8d4e9ad50271096f3aaac
 M3_SOURCE_CODE_REVIEWED_TREE=ce239651a94db1cae6e1807dab037e12996cc344
 M3_SOURCE_CODE_REVIEW_UNRESOLVED_COUNT=0
 M3_SOURCE_CODE_REVIEW_BACKLOG_COUNT=0
-NEXT_PHYSICAL_RESULT=COMMIT_D3_CLOSEOUT_AND_DISPATCH_FINAL_INDEPENDENT_REVIEW
+NEXT_PHYSICAL_RESULT=G2_READINESS_ONLY_AWAIT_EXPLICIT_G2_START
 M1_DEADLINE=2026-09-02T23:42:03+08:00
 M1_RUNTIME_HEAD=740d9b7c55f047e30c59c087dc29b943e3849726
 M1_RUNTIME_TREE=bb29b5d6cf9533f69bd14728736e916513f3119c
@@ -127,10 +127,17 @@ M3_D3_SOURCE_CLICK_COUNT=3
 M3_D3_PRODUCTION_UNCHANGED=true
 M3_D3_TEMP_RUNTIME_CLEANUP=PASS
 M3_FINAL_VERIFICATION=PASS
-M3_FINAL_INDEPENDENT_REVIEW=NOT_RUN
+M3_FINAL_INDEPENDENT_REVIEW=PASS
+M3_FINAL_REVIEW_TASK=01a06844-69da-7423-ac59-d28c8fa7e0d9
+M3_FINAL_REVIEWED_HEAD=f40dc7afad4299f93c7cecb8d533a12c42811df4
+M3_FINAL_REVIEWED_TREE=5aaccc50e3d20359be24c0aa36df8a2567f47e44
+M3_FINAL_REVIEW_UNRESOLVED_COUNT=0
+M3_FINAL_REVIEW_BLOCKERS=NONE
+M3_FINAL_REVIEW_G2_ACTIONS=0
+M3_FINAL_CLOSEOUT_RECEIPT=docs/insurance-kb/evidence/830-g1/g1-closeout.json
 M3_PROVIDER_MODEL_CALLS=0
 G1_PRIOR_BUSINESS_STATUS=STOPPED
-G1_BUSINESS_STATUS=IN_PROGRESS
+G1_BUSINESS_STATUS=PASS
 G2_AND_LATER=LOCKED
 ```
 
@@ -141,10 +148,10 @@ G2_AND_LATER=LOCKED
 | G1-R1 | PASS | Harness + Go + entity UI | focused PASS | `edc74ac7` | stable UI routes + M2 identity mutation 76/76 PASS | M2 PASS |
 | G1-R2 | PASS | 76-member manifest + Draft snapshots | focused PASS | `edc74ac7` | Draft + M2 identity index 76/76 PASS | M2 PASS |
 | G1-R3 | PASS | tri-state FieldAssertion | focused PASS | `edc74ac7` | all 67 pages, state `2/1/64` PASS | M2 PASS |
-| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626`, `623c2ac12` | three successor D3 source clicks return exact old-source PDF bytes | M3 D3 PASS / FINAL REVIEW PENDING |
-| G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | 76 current + 76 pinned envelopes preserve immutable source members | M3 D3 PASS / FINAL REVIEW PENDING |
-| G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft→Ready→one successor Release with 76 members PASS | M3 D3 PASS / FINAL REVIEW PENDING |
-| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626`, `623c2ac12` | successor current/pinned 76/76 no-mix; tampered/missing fail closed | M3 D3 PASS / FINAL REVIEW PENDING |
+| G1-R4 | PASS | successor exact-release historical-source bridge + 17/17 custody | Go bridge/citation/scope + full packages PASS | `a8e677b80`, `9e3aec626`, `623c2ac12` | three successor D3 source clicks return exact old-source PDF bytes | G1 PASS |
+| G1-R5 | PASS | serving envelope/source member dual-identity parser | frontend 7 + 36, typecheck, dist build PASS | `59dad6bda`, `f97c8636d` | 76 current + 76 pinned envelopes preserve immutable source members | G1 PASS |
+| G1-R6 | PASS | existing preparation writer accepts atomic 76 snapshots | focused PASS | `740d9b7c` | Draft→Ready→one successor Release with 76 members PASS | G1 PASS |
+| G1-R7 | PASS | successor current pins Head once; pinned/citation exact and no fallback | Go current/pinned/head-move + router PASS | `e1f74c757`, `a8e677b80`, `9e3aec626`, `623c2ac12` | successor current/pinned 76/76 no-mix; tampered/missing fail closed | G1 PASS |
 | G1-R8 | PASS | no second authority; existing C6 source viewer | focused PASS | `edc74ac7` | exact source custody; zero second authority PASS | M2 PASS |
 | G1-R9 | PASS | Profile-driven compiler/renderer | focused PASS | `edc74ac7` | actual seven-section UI + generic two-section PASS | M2 PASS |
 
@@ -400,5 +407,21 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   `docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json`.
 - Fresh closeout verification passed: Go service/handler/router packages, Go vet, Harness
   `54 passed, 3 skipped`, Frontend contract `7/7`, component/API `36/36`, typecheck and strict
-  OpenSpec validation. G1 remains `IN_PROGRESS` only until the required final independent read-only
-  acceptance reports `UNRESOLVED_COUNT=0`; G2 remains locked.
+  OpenSpec validation. The required visible independent read-only acceptance returned PASS with
+  `UNRESOLVED_COUNT=0`; G1 is PASS and G2 remains locked.
+
+## G1 final independent acceptance
+
+- Visible Review task: `01a06844-69da-7423-ac59-d28c8fa7e0d9`, owned outside the writer lane and
+  constrained to no worktree/runtime/database writes, no fixes, no commits and no G2 actions.
+- Reviewed candidate: commit `f40dc7afad4299f93c7cecb8d533a12c42811df4`, tree
+  `5aaccc50e3d20359be24c0aa36df8a2567f47e44`. The reviewer independently reported
+  `REVIEW=PASS`, `UNRESOLVED_COUNT=0`, `BLOCKERS=NONE`, `EVIDENCE_SELF_HASH=PASS`,
+  `PRODUCTION_UNCHANGED=PASS`, `WORKTREE_UNCHANGED=PASS`, `G2_ACTIONS=0`.
+- Live read-only checks reconfirmed successor Head epoch `3`, 76 members with topology `1/7/67/1`,
+  exact Release/receipt identity and Clone table totals `3/3/226/1/3`. Production container IDs,
+  image IDs, start times, `8081` content hash and zero `wiki_release_%` tables remained unchanged.
+- `docs/insurance-kb/evidence/830-g1/g1-closeout.json` indexes the accepted candidate, exact D3
+  Release/receipt/images, verification suite and negative effects. The final metadata-only tree is
+  sent back to the same visible Review task for exact-tree consistency confirmation; no repository
+  write follows that confirmation.

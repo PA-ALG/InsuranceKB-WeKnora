@@ -1,0 +1,58 @@
+{
+  "goal_id": "G1",
+  "phase": "FINAL_CLOSEOUT",
+  "status": "PASS",
+  "observed_at": "2026-09-04T01:34:04+08:00",
+  "base": "d2ce44cb2107575f7624b3735c653078ae2a98b6",
+  "accepted_candidate": {
+    "head": "f40dc7afad4299f93c7cecb8d533a12c42811df4",
+    "tree": "5aaccc50e3d20359be24c0aa36df8a2567f47e44"
+  },
+  "independent_review": {
+    "task_id": "01a06844-69da-7423-ac59-d28c8fa7e0d9",
+    "review": "PASS",
+    "unresolved_count": 0,
+    "blockers": [],
+    "evidence_self_hash": "PASS",
+    "production_unchanged": "PASS",
+    "worktree_unchanged": "PASS",
+    "g2_actions": 0
+  },
+  "d3": {
+    "receipt": "docs/insurance-kb/evidence/830-g1/m3/d3-isolated-release.json",
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3,
+    "activation_receipt_id": "receipt-f0eca262-b060-46db-9d18-8390b9a1a8a8",
+    "app_image": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+    "frontend_image": "sha256:338758bc663f2227cb9fae1adf70ec1ac63c17690510ec21d4aa951df51df4d4",
+    "member_count": 76,
+    "current_page_count": 76,
+    "pinned_page_count": 76,
+    "source_click_count": 3,
+    "provider_calls": 0,
+    "model_calls": 0,
+    "production_writes": 0,
+    "g2_actions": 0,
+    "disposition": "NOT_FOR_PRODUCTION"
+  },
+  "final_verification": {
+    "go_test_service_handler_router": "PASS",
+    "go_vet": "PASS",
+    "harness": "54 passed, 3 skipped",
+    "frontend_contract": "7 passed",
+    "frontend_component_api": "36 passed",
+    "frontend_typecheck": "PASS",
+    "openspec_strict": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "cleanup": {
+    "temporary_runtime": "REMOVED",
+    "temporary_credentials": "REMOVED",
+    "temporary_transfer_archive": "PERMANENTLY_DELETED",
+    "clone_successor_head_receipt": "RETAINED"
+  },
+  "next_physical_result": "G2_READINESS_ONLY_AWAIT_EXPLICIT_G2_START",
+  "g2_and_later": "LOCKED",
+  "self_sha256_contract": "sha256(canonical-json-with-null-self_sha256)",
+  "self_sha256": "296253e707638d37ab94d5a1da4e534258bfc2bd5944190e74c80988ce2d705c"
+}
