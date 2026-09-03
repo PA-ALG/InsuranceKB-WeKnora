@@ -136,10 +136,19 @@
     "G2"
   ],
   "independent_stop_review": {
-    "status": "PENDING",
-    "reviewed_commit": null,
-    "reviewed_tree": null,
-    "unresolved_count": null
+    "reviewer": "/root/g1_m3_plan_review",
+    "initial_status": "FAIL",
+    "initial_reviewed_commit": "58d7505dba9206f0360bc20e7406a3de06ec4031",
+    "initial_reviewed_tree": "4a195f1c0cdba14f6510262c9bb3031ada1804c5",
+    "initial_unresolved_count": 1,
+    "initial_finding": "receipt self-hash used sorted pretty JSON instead of sorted compact canonical JSON",
+    "correction_commit": "09214df8100670809bdbbf168c239936d11c67d0",
+    "correction_tree": "011b535222cabf971964e5cdf4f611457ec61fef",
+    "status": "PASS",
+    "reviewed_commit": "09214df8100670809bdbbf168c239936d11c67d0",
+    "reviewed_tree": "011b535222cabf971964e5cdf4f611457ec61fef",
+    "unresolved_count": 0,
+    "backlog_count": 0
   },
   "decision": {
     "g1_status": "STOPPED",
@@ -151,5 +160,5 @@
     "g2": "LOCKED"
   },
   "receipt_sha256_contract": "sha256(canonical-json-with-null-receipt_sha256)",
-  "receipt_sha256": "ecd4f1677d61788f2e5e49b956799d3b20130e237824be5a9eaa5e9e3075fe7b"
+  "receipt_sha256": "3901caf237ba39ef7aa63051d1afc3bb6a4ebf531fe56dcf4e18d408a6cd0485"
 }

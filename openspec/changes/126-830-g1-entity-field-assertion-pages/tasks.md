@@ -159,6 +159,9 @@ parser/test 写域，并将 frontend replacement build budget 冻结为 1。原 
   `unexpected EOF / TLS handshake timeout` 失败；目标 tag 不存在，未导出镜像。
   frontend 保持 0/1 且不得在本次 STOP 后启动。回执：
   `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json`。
+- [x] 独立只读 STOP 复核首轮仅发现回执 canonical 自哈希格式错误；总控在
+  `09214df8100670809bdbbf168c239936d11c67d0` 修正后，同一 reviewer 返回
+  `STOP_REVIEW=PASS`、`UNRESOLVED_COUNT=0`、无 backlog。
 - [ ] D3 Release/Head/live source click、production before/after 复核与业务 `G1=PASS` 均
   NOT RUN；G1=`STOPPED`，G2 继续锁定。
 

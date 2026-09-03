@@ -87,6 +87,12 @@ M3_D2_REPLACEMENT_APP_BUILD_EXIT=1
 M3_D2_REPLACEMENT_APP_IMAGE=NONE
 M3_D2_REPLACEMENT_FRONTEND_BUILD_RESULT=NOT_RUN_AFTER_APP_STOP
 M3_D2_REPLACEMENT_RECEIPT=docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json
+M3_D2_REPLACEMENT_STOP_INITIAL_REVIEW=FAIL
+M3_D2_REPLACEMENT_STOP_INITIAL_REVIEW_UNRESOLVED_COUNT=1
+M3_D2_REPLACEMENT_STOP_REVIEW_CORRECTION_HEAD=09214df8100670809bdbbf168c239936d11c67d0
+M3_D2_REPLACEMENT_STOP_REVIEW_CORRECTION_TREE=011b535222cabf971964e5cdf4f611457ec61fef
+M3_D2_REPLACEMENT_STOP_REVIEW=PASS
+M3_D2_REPLACEMENT_STOP_REVIEW_UNRESOLVED_COUNT=0
 M3_D2_APP_BUILD_CLIENT_EXIT=130
 M3_D2_APP_BUILD_RESULT=PASS_LATE
 M3_D2_APP_IMAGE=sha256:f913037cfe74a7bbd7e8a819a56ccb92fea32ae3da4b6511d460a04f3b920327
@@ -296,3 +302,7 @@ M1 是真实 Candidate Preview PASS，不是 G1 最终 PASS：没有 Review/Rele
   `docs/insurance-kb/evidence/830-g1/m3/d2-replacement-image-build.json`. Original D2 receipts and
   image identities remain immutable; production containers/Head, Provider/model and G2 received
   zero mutations/actions in the replacement build window.
+- The additional independent read-only STOP review initially found one receipt self-hash
+  canonicalization defect. Commit `09214df8100670809bdbbf168c239936d11c67d0` changed only that
+  field to the sorted compact-canonical SHA-256. Re-review returned `STOP_REVIEW=PASS`,
+  `UNRESOLVED_COUNT=0`, with no backlog; it did not authorize a build retry, D3 or G2.
