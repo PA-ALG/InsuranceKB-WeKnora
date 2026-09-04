@@ -2352,9 +2352,11 @@ def test_lookup_miss_post_build_invalid_inspect_fails_closed_after_one_build(
     _assert_exact_candidate_inspect(inspect_calls[0], IMAGE_ID)
     assert runner.calls.index(query_calls[0]) < runner.calls.index(build_calls[0])
     assert runner.calls.index(build_calls[0]) < runner.calls.index(inspect_calls[0])
-    if evidence.exists():
-        failure_receipt = json.loads(evidence.read_text(encoding="utf-8"))
-        assert failure_receipt.get("status") != "PASS"
+    assert evidence.is_file()
+    failure_receipt = json.loads(evidence.read_text(encoding="utf-8"))
+    assert failure_receipt.get("status") != "PASS"
+    assert failure_receipt["selector"] == "BUILD_AFFECTED"
+    assert failure_receipt["build_invocations"] == 1
 
 
 @pytest.mark.parametrize(
@@ -2518,6 +2520,54 @@ def test_lookup_rejects_incomplete_build_metadata_before_docker(tmp_path: Path) 
         )
 
     assert runner.calls == []
+
+
+def test_lookup_rejects_unwritable_evidence_target_before_docker(
+    tmp_path: Path,
+) -> None:
+    module = _artifact_module()
+    evidence_directory = tmp_path / "receipt-is-a-directory"
+    evidence_directory.mkdir()
+    runner = _selector_runner(candidates="")
+
+    with pytest.raises(module.ArtifactContractError, match="evidence|receipt|output"):
+        module.select_or_build_app(
+            repo_root=REPO_ROOT,
+            identity=_identity_record(),
+            evidence_out=evidence_directory,
+            runner=runner,
+            secret_values={},
+            real_build_budget_remaining=1,
+        )
+
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ("--definitely-unknown",),
+        ("--app", "--build-source-head"),
+        (
+            "--app",
+            "--docreader",
+            "--build-source-head",
+            BUILD_SOURCE_HEAD,
+            "--evidence-out",
+            "/private/tmp/ba0-should-not-run.json",
+        ),
+    ),
+)
+def test_public_app_entry_rejects_bad_or_mixed_arguments(arguments: tuple[str, ...]) -> None:
+    result = subprocess.run(
+        ("bash", "scripts/build_images.sh", *arguments),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
 
 
 def _executable_text(source: str) -> str:

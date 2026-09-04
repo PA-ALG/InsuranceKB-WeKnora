@@ -15,9 +15,10 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -726,7 +727,7 @@ def build_metadata(
         raise ArtifactContractError("build source commit timestamp is not an epoch") from exc
     if source_date_epoch < 0:
         raise ArtifactContractError("build source commit timestamp is negative")
-    build_time = datetime.fromtimestamp(source_date_epoch, tz=UTC).strftime(
+    build_time = datetime.fromtimestamp(source_date_epoch, tz=timezone.utc).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
     return {
@@ -894,7 +895,19 @@ def _docker(
     repo_root: Path,
     description: str,
 ) -> subprocess.CompletedProcess[str]:
-    result = runner(arguments, cwd=repo_root, capture_output=True, text=True)
+    docker_environment = {
+        name: value
+        for name in ("PATH", "HOME", "TMPDIR", "DOCKER_CONFIG")
+        if (value := os.environ.get(name))
+    }
+    docker_environment.setdefault("PATH", os.defpath)
+    result = runner(
+        arguments,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        env=docker_environment,
+    )
     if result.returncode != 0:
         raise ArtifactContractError(f"Docker {description} failed: {result.stderr.strip()}")
     return result
@@ -964,7 +977,9 @@ def _source_metadata(identity: Mapping[str, Any]) -> tuple[str, str, int]:
         raise ArtifactContractError("build metadata source_date_epoch is invalid") from exc
     if source_date_epoch < 0:
         raise ArtifactContractError("build metadata source_date_epoch is negative")
-    expected_build_time = datetime.fromtimestamp(source_date_epoch, tz=UTC).strftime(
+    expected_build_time = datetime.fromtimestamp(
+        source_date_epoch, tz=timezone.utc
+    ).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
     )
     if build_time != expected_build_time:
@@ -1020,6 +1035,37 @@ def _receipt(
     }
 
 
+def _write_evidence(path: Path, document: Mapping[str, Any]) -> None:
+    """Atomically persist a receipt, failing before Docker when preflighted."""
+
+    if path.exists() and not path.is_file():
+        raise ArtifactContractError("evidence output must be a regular file path")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        )
+    except OSError as exc:
+        raise ArtifactContractError(f"cannot prepare evidence output: {path}") from exc
+    temporary = Path(temporary_name)
+    try:
+        payload = (
+            json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except OSError as exc:
+        raise ArtifactContractError(f"cannot write evidence receipt: {path}") from exc
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def select_or_build_app(
     *,
     repo_root: str | os.PathLike[str],
@@ -1035,6 +1081,23 @@ def select_or_build_app(
     root = Path(repo_root).resolve(strict=True)
     labels = _required_labels(identity)
     _source_metadata(identity)
+    output = Path(evidence_out)
+    _write_evidence(
+        output,
+        {
+            "contract": "ba0-app-build-receipt.v1",
+            "status": "INCOMPLETE",
+            "selector": "PREFLIGHT",
+            "artifact_identity": identity["artifact_identity"],
+            "build_source_head": identity["build_source_head"],
+            "integration_head": identity["integration_head"],
+            "manifest_sha256": identity["manifest_sha256"],
+            "dependency_lock_sha256": identity["dependency_lock_sha256"],
+            "platform": identity["platform"],
+            "target": identity["target"],
+            "build_invocations": 0,
+        },
+    )
     query = _docker(
         runner,
         (
@@ -1105,6 +1168,23 @@ def select_or_build_app(
             for name, value in sorted(labels.items()):
                 command.extend(("--label", f"{name}={value}"))
             command.append(".")
+            _write_evidence(
+                output,
+                {
+                    "contract": "ba0-app-build-receipt.v1",
+                    "status": "INCOMPLETE",
+                    "selector": "BUILD_AFFECTED",
+                    "artifact_identity": identity["artifact_identity"],
+                    "build_source_head": identity["build_source_head"],
+                    "integration_head": identity["integration_head"],
+                    "manifest_sha256": identity["manifest_sha256"],
+                    "dependency_lock_sha256": identity["dependency_lock_sha256"],
+                    "platform": identity["platform"],
+                    "target": identity["target"],
+                    "candidate_image_ids": [],
+                    "build_invocations": 1,
+                },
+            )
             _docker(
                 runner,
                 tuple(command),
@@ -1132,12 +1212,7 @@ def select_or_build_app(
             build_invocations=1,
         )
 
-    output = Path(evidence_out)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
+    _write_evidence(output, receipt)
     return receipt
 
 
@@ -1147,6 +1222,11 @@ def _main(arguments: Sequence[str] | None = None) -> int:
     plan_parser = subparsers.add_parser("dependency-plan")
     plan_parser.add_argument("--lock", required=True)
     plan_parser.add_argument("--output", required=True)
+    selector_parser = subparsers.add_parser("select-or-build")
+    selector_parser.add_argument("--repo-root", default=".")
+    selector_parser.add_argument("--context", required=True, choices=(_DOCKER_CONTEXT,))
+    selector_parser.add_argument("--build-source-head", required=True)
+    selector_parser.add_argument("--evidence-out", required=True)
     parsed = parser.parse_args(arguments)
     if parsed.command == "dependency-plan":
         lock = load_dependency_lock(parsed.lock)
@@ -1155,8 +1235,49 @@ def _main(arguments: Sequence[str] | None = None) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(plan["output_bytes"])
         return 0
+    if parsed.command == "select-or-build":
+        root = Path(parsed.repo_root).resolve(strict=True)
+        integration_head = _checked_output(
+            subprocess.run,
+            ("git", "rev-parse", "--verify", "HEAD^{commit}"),
+            repo_root=root,
+            description="integration commit",
+        )
+        identity = canonical_identity(
+            repo_root=root,
+            manifest_path=root / "deploy/local-build/app-build-inputs.v1.json",
+            dependency_lock_path=(
+                root / "deploy/local-build/app-external-dependencies.v1.json"
+            ),
+            build_source_head=parsed.build_source_head,
+            integration_head=integration_head,
+            runner=subprocess.run,
+            effective_build_args={
+                "CGO_ENABLED": "1",
+                "GOOS": "linux",
+                "GOARCH": "arm64",
+            },
+            environment=os.environ,
+        )
+        evidence = Path(parsed.evidence_out)
+        if not evidence.is_absolute():
+            evidence = root / evidence
+        receipt = select_or_build_app(
+            repo_root=root,
+            identity=identity,
+            evidence_out=evidence,
+            runner=subprocess.run,
+            secret_values={},
+            real_build_budget_remaining=1,
+        )
+        print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+        return 0
     raise ArtifactContractError("unsupported command")
 
 
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    try:
+        raise SystemExit(_main())
+    except ArtifactContractError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
