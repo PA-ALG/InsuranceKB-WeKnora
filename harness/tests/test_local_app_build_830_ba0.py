@@ -684,9 +684,16 @@ def _invalid_image_inspections() -> tuple[tuple[str, str, int, str], ...]:
         "io.insurancekb.app.target": "builder",
         "io.insurancekb.app.platform": "linux/amd64",
     }
+    slugs = {
+        "io.insurancekb.app.artifact-identity": "artifact-label",
+        "io.insurancekb.app.manifest-sha256": "input-sha-label",
+        "io.insurancekb.app.dependency-lock-sha256": "lock-label",
+    }
     cases: list[tuple[str, str, int, str]] = []
     for label, drift in drift_values.items():
-        slug = label.removeprefix("io.insurancekb.app.").replace("-", "_")
+        slug = slugs.get(
+            label, label.removeprefix("io.insurancekb.app.").replace("-", "_")
+        )
         missing = {name: value for name, value in REQUIRED_LABELS.items() if name != label}
         changed = {**REQUIRED_LABELS, label: drift}
         cases.extend(
@@ -1675,7 +1682,9 @@ def test_identity_is_stable_across_docs_only_integration_heads() -> None:
     )
 
 
-@pytest.mark.parametrize("changed", ("app_input", "dependency_lock"))
+@pytest.mark.parametrize(
+    "changed", ("app_input", "dependency_lock"), ids=("app-input", "lock-input")
+)
 def test_identity_changes_when_one_effective_input_changes(
     tmp_path: Path,
     changed: str,
@@ -1950,9 +1959,7 @@ def test_dockerfile_go_runs_share_locked_module_build_cache_ids_and_probe() -> N
 
 
 def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> None:
-    module = _artifact_module()
     document = _load_json(DEPENDENCY_LOCK_PATH, description="external dependency lock")
-    module.load_dependency_lock(DEPENDENCY_LOCK_PATH)
 
     assert document["schema_version"] == 1
     assert document["platform"]["os"] == "linux"
@@ -2024,7 +2031,7 @@ def test_dependency_lock_covers_all_versioned_external_facts_without_proxy() -> 
     assert "latest" not in public
 
 
-def test_docker_build_path_wires_versioned_lock_facts_into_consuming_instructions(
+def test_dockerfile_build_path_wires_locked_facts_into_consuming_instructions(
     tmp_path: Path,
 ) -> None:
     module = _artifact_module()
@@ -2094,7 +2101,7 @@ def test_docker_build_path_wires_versioned_lock_facts_into_consuming_instruction
         "floating-install",
     ),
 )
-def test_dependency_lock_dataflow_rejects_ineffective_consumers(
+def test_lock_dataflow_guard_rejects_ineffective_consumers(
     malicious_fixture: str,
 ) -> None:
     if malicious_fixture == "floating-install":
@@ -2199,13 +2206,14 @@ def test_dependency_lock_dataflow_rejects_ineffective_consumers(
     ),
     ids=("unknown", "floating", "missing-duckdb-extension"),
 )
-def test_dependency_lock_loader_rejects_unknown_floating_or_missing_facts(
+def test_manifest_lock_loader_rejects_unknown_floating_or_missing_facts(
     tmp_path: Path,
     mutation: str,
     message: str,
 ) -> None:
     module = _artifact_module()
     document = _load_json(DEPENDENCY_LOCK_PATH, description="external dependency lock")
+    module.load_dependency_lock(DEPENDENCY_LOCK_PATH)
     mutated = deepcopy(document)
     if mutation == "unknown":
         mutated["unbounded_fallback"] = True
@@ -2891,7 +2899,9 @@ def test_d3_exact_image_runner_order_and_exact_no_build_no_pull_argv(
     assert sum(_is_docker_pull(call.arguments) for call in runner.calls) == 0
 
 
-def test_d3_invalid_receipt_is_rejected_before_runner_or_mutation(tmp_path: Path) -> None:
+def test_d3_exact_image_invalid_receipt_is_rejected_before_runner_or_mutation(
+    tmp_path: Path,
+) -> None:
     module = _smoke_module()
     receipt_path = tmp_path / "invalid-d2.json"
     receipt_path.write_text(
@@ -2931,7 +2941,7 @@ def test_d3_invalid_receipt_is_rejected_before_runner_or_mutation(tmp_path: Path
     ),
     ids=("image-id", "label", "platform"),
 )
-def test_d3_image_preflight_failure_has_zero_mutations(
+def test_d3_exact_image_preflight_failure_has_zero_mutations(
     tmp_path: Path,
     case: str,
     inspect: str,
@@ -2956,7 +2966,7 @@ def test_d3_image_preflight_failure_has_zero_mutations(
         ("masking-healthcheck", "health|fail.fast|mask|command"),
     ),
 )
-def test_d3_static_topology_or_argv_failure_precedes_collision_with_zero_mutations(
+def test_d3_exact_image_static_topology_or_argv_failure_precedes_collision_with_zero_mutations(
     tmp_path: Path,
     mutation: str,
     message: str,
@@ -2992,7 +3002,9 @@ def test_d3_static_topology_or_argv_failure_precedes_collision_with_zero_mutatio
     assert _d3_mutation_calls(runner) == []
 
 
-def test_d3_project_collision_fails_before_up_with_zero_mutations(tmp_path: Path) -> None:
+def test_d3_exact_image_project_collision_fails_before_up_with_zero_mutations(
+    tmp_path: Path,
+) -> None:
     module = _smoke_module()
     runner = D3Runner(collision=True)
 
@@ -3003,7 +3015,9 @@ def test_d3_project_collision_fails_before_up_with_zero_mutations(tmp_path: Path
     assert _d3_mutation_calls(runner) == []
 
 
-def test_d3_runtime_failure_still_cleans_up_before_failure_receipt(tmp_path: Path) -> None:
+def test_d3_exact_image_runtime_failure_still_cleans_up_before_failure_receipt(
+    tmp_path: Path,
+) -> None:
     module = _smoke_module()
     d2_receipt_path = tmp_path / "d2.json"
     evidence_path = tmp_path / "d3-failure.json"
@@ -3028,7 +3042,7 @@ def test_d3_runtime_failure_still_cleans_up_before_failure_receipt(tmp_path: Pat
     assert runner.receipt_existed_at_cleanup is False
 
 
-def test_d3_receipt_proves_exact_runtime_and_all_forbidden_effects_zero(
+def test_d3_exact_image_receipt_proves_exact_runtime_and_all_forbidden_effects_zero(
     tmp_path: Path,
 ) -> None:
     module = _smoke_module()
