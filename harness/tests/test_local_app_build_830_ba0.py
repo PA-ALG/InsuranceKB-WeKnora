@@ -3011,6 +3011,86 @@ def test_d3_exact_image_invalid_receipt_is_rejected_before_runner_or_mutation(
 
 
 @pytest.mark.parametrize(
+    ("field", "value", "label"),
+    (
+        ("integration_head", "CANARY-SECRET-PROVENANCE", None),
+        (
+            "artifact_identity",
+            "sha256:CANARY-SECRET-PROVENANCE",
+            "io.insurancekb.app.artifact-identity",
+        ),
+        (
+            "manifest_sha256",
+            "CANARY-SECRET-PROVENANCE",
+            "io.insurancekb.app.manifest-sha256",
+        ),
+        (
+            "dependency_lock_sha256",
+            "CANARY-SECRET-PROVENANCE",
+            "io.insurancekb.app.dependency-lock-sha256",
+        ),
+    ),
+    ids=("integration-head", "artifact-identity", "manifest", "dependency-lock"),
+)
+def test_d3_malformed_provenance_is_rejected_before_runner_or_copy(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    label: str | None,
+) -> None:
+    module = _smoke_module()
+    d2_receipt_path = tmp_path / "d2-malformed-provenance.json"
+    d2_receipt = _d2_receipt(d2_receipt_path)
+    d2_receipt[field] = value
+    if label is not None:
+        d2_receipt["labels"][label] = value
+    d2_receipt_path.write_text(
+        json.dumps(d2_receipt, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    evidence_path = tmp_path / "d3.json"
+    runner = D3Runner()
+
+    with pytest.raises(
+        module.ArtifactSmokeError,
+        match="provenance|commit|identity|sha256|hash",
+    ):
+        module.run_exact_image_smoke(
+            repo_root=REPO_ROOT,
+            d2_receipt_path=d2_receipt_path,
+            evidence_out=evidence_path,
+            nonce=D3_NONCE,
+            runner=runner,
+        )
+
+    assert runner.calls == []
+    assert _d3_mutation_calls(runner) == []
+    assert not evidence_path.exists()
+
+
+def test_d3_existing_evidence_path_is_rejected_before_runner_or_mutation(
+    tmp_path: Path,
+) -> None:
+    module = _smoke_module()
+    d2_receipt_path = tmp_path / "d2.json"
+    evidence_path = tmp_path / "stale-d3.json"
+    _d2_receipt(d2_receipt_path)
+    evidence_path.write_text('{"status":"PASS","stale":true}\n', encoding="utf-8")
+    runner = D3Runner()
+
+    with pytest.raises(module.ArtifactSmokeError, match="evidence|exist|output"):
+        module.run_exact_image_smoke(
+            repo_root=REPO_ROOT,
+            d2_receipt_path=d2_receipt_path,
+            evidence_out=evidence_path,
+            nonce=D3_NONCE,
+            runner=runner,
+        )
+
+    assert runner.calls == []
+    assert _d3_mutation_calls(runner) == []
+
+
+@pytest.mark.parametrize(
     ("case", "inspect", "message"),
     (
         ("image", _image_inspect(image_id="sha256:" + "e" * 64), "image|identity"),
@@ -3049,6 +3129,12 @@ def test_d3_exact_image_preflight_failure_has_zero_mutations(
     ("mutation", "message"),
     (
         ("ports", "port|topology|standalone"),
+        ("privileged", "privileged|unknown|topology|standalone"),
+        ("secret-environment", "environment|unknown|topology|standalone"),
+        ("entrypoint-no-fail-fast", "fail.fast|set -e|entrypoint|command"),
+        ("healthcheck-missing-path", "config|path|health|command"),
+        ("commented-required-path", "comment|config|path|command"),
+        ("no-op-required-path", "entrypoint|health|command|contract"),
         ("trailing-decoy", "argv|operand|entrypoint|smoke|command"),
         ("masking-healthcheck", "health|fail.fast|mask|command"),
     ),
@@ -3063,6 +3149,40 @@ def test_d3_exact_image_static_topology_or_argv_failure_precedes_collision_with_
     service = rendered["services"]["app-smoke"]
     if mutation == "ports":
         service["ports"] = ["8081:8080"]
+    elif mutation == "privileged":
+        service["privileged"] = True
+        service["pid"] = "host"
+        service["devices"] = ["/dev/null:/dev/ba0"]
+    elif mutation == "secret-environment":
+        service["environment"]["OPENAI_API_KEY"] = CANARY_SECRET
+    elif mutation == "entrypoint-no-fail-fast":
+        assert isinstance(service["entrypoint"], list)
+        service["entrypoint"][2] = service["entrypoint"][2].replace(
+            "set -eu\n", "true\n", 1
+        )
+    elif mutation == "healthcheck-missing-path":
+        assert isinstance(service["healthcheck"]["test"], list)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
+            1
+        ].replace("test -d /app/config;", "", 1)
+    elif mutation == "commented-required-path":
+        assert isinstance(service["entrypoint"], list)
+        service["entrypoint"][2] = service["entrypoint"][2].replace(
+            "test -d /app/config", "# test -d /app/config", 1
+        )
+        assert isinstance(service["healthcheck"]["test"], list)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
+            1
+        ].replace("test -d /app/config", "# test -d /app/config", 1)
+    elif mutation == "no-op-required-path":
+        assert isinstance(service["entrypoint"], list)
+        service["entrypoint"][2] = service["entrypoint"][2].replace(
+            "test -d /app/config", ": test -d /app/config", 1
+        )
+        assert isinstance(service["healthcheck"]["test"], list)
+        service["healthcheck"]["test"][1] = service["healthcheck"]["test"][
+            1
+        ].replace("test -d /app/config", ": test -d /app/config", 1)
     elif mutation == "trailing-decoy":
         assert isinstance(service["entrypoint"], list)
         service["entrypoint"] = [
