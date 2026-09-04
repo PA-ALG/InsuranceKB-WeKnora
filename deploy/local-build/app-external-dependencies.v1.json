@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "platform": {
+    "os": "linux",
+    "arch": "arm64",
+    "duckdb": "linux_arm64"
+  },
+  "base_images": {
+    "builder": {
+      "reference": "golang:1.26-bookworm@sha256:9fdc884aacc3bec89b20ffc69f4bb369c78210e3e4f600387b5128b12c199f81"
+    },
+    "runtime": {
+      "reference": "debian:12.12-slim@sha256:d5d3f9c23164ea16f31852f95bd5959aad1c5e854332fe00f7b3a20fcc9f635c"
+    }
+  },
+  "debian": {
+    "repositories": {
+      "debian": {
+        "snapshot": "https://snapshot.debian.org/archive/debian/20260903T023604Z/",
+        "release_sha256": "abcf5882746e0f68171f41adbb4ac01b74b49d62d203379befb9265804311a4f"
+      },
+      "debian-security": {
+        "snapshot": "https://snapshot.debian.org/archive/debian-security/20260904T011450Z/",
+        "release_sha256": "eec2c34756fbfa0c006d3a161d27ef4656d1a3756d4860ac418cce3188a34920"
+      }
+    },
+    "packages": {
+      "git": "1:2.39.5-0+deb12u3",
+      "build-essential": "12.9",
+      "libsqlite3-dev": "3.40.1-2+deb12u2",
+      "ca-certificates": "20250419~deb12u1",
+      "postgresql-client": "15+248+deb12u1",
+      "default-mysql-client": "1.1.0",
+      "tzdata": "2026b-0+deb12u1",
+      "sed": "4.9-1+deb12u1",
+      "curl": "7.88.1-10+deb12u15",
+      "bash": "5.2.15-2+b13",
+      "vim": "2:9.0.1378-2+deb12u2",
+      "wget": "1.21.3-1+deb12u1",
+      "libsqlite3-0": "3.40.1-2+deb12u2",
+      "python3": "3.11.2-1+b1",
+      "python3-pip": "23.0.1+dfsg-1",
+      "python3-dev": "3.11.2-1+b1",
+      "libffi-dev": "3.4.4-1",
+      "libssl-dev": "3.0.20-1~deb12u2",
+      "nodejs": "18.20.4+dfsg-1~deb12u2",
+      "npm": "9.2.0~ds1-1",
+      "gosu": "1.14-1+b10",
+      "ffmpeg": "7:5.1.9-0+deb12u1"
+    }
+  },
+  "python_tools": {
+    "pip": {
+      "version": "26.2.1",
+      "origin": "https://files.pythonhosted.org/packages/f3/6e/1736e5b4ae2b778ef2f81c47d797de9f891d4d8acb047a24ca37a60294dd/pip-26.2.1-py3-none-any.whl",
+      "sha256": "71138adf1f4ca900cdb7d289c21b7494329f2332b6d85f0e1c42108c0384ed3e"
+    },
+    "setuptools": {
+      "version": "84.0.0",
+      "origin": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl",
+      "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670"
+    },
+    "wheel": {
+      "version": "0.48.0",
+      "origin": "https://files.pythonhosted.org/packages/2e/29/69cfbb602cd91690c55d38ba9fe53e6a7e76a6fa647bf38f19c138d25449/wheel-0.48.0-py3-none-any.whl",
+      "sha256": "3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab"
+    },
+    "packaging": {
+      "version": "26.3",
+      "origin": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+    }
+  },
+  "downloads": {
+    "go_tools": {
+      "migrate": {
+        "module": "github.com/golang-migrate/migrate/v4/cmd/migrate",
+        "version": "v4.19.1",
+        "go_sum": "h1:OCyb44lFuQfYXYLx1SCxPZQGU7mcaZ7gH9yH4jSFbBA="
+      }
+    },
+    "uv": {
+      "version": "0.9.26",
+      "platform": "aarch64-unknown-linux-gnu",
+      "origin": "https://github.com/astral-sh/uv/releases/download/0.9.26/uv-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "f71040c59798f79c44c08a7a1c1af7de95a8d334ea924b47b67ad6b9632be270"
+    },
+    "duckdb": {
+      "version": "v1.5.2",
+      "extensions": {
+        "spatial": {
+          "platform": "linux_arm64",
+          "origin": "http://extensions.duckdb.org/v1.5.2/linux_arm64/spatial.duckdb_extension.gz",
+          "sha256": "8409481f5b9e8ebd7bebb986b8f7117b5f221bbbd75caf82e5808ae659f17d2d"
+        },
+        "excel": {
+          "platform": "linux_arm64",
+          "origin": "http://extensions.duckdb.org/v1.5.2/linux_arm64/excel.duckdb_extension.gz",
+          "sha256": "25a39120e6623556851a513d3f1664693eae92be06da611d219bbd89f57ddd1c"
+        }
+      }
+    }
+  }
+}
