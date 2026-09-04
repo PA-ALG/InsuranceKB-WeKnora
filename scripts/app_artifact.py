@@ -9,12 +9,15 @@ only effective public build inputs.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
 import re
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -127,6 +130,10 @@ def _mapping(value: object, description: str) -> Mapping[str, Any]:
 def _nonempty_string(value: object, description: str) -> str:
     if not isinstance(value, str) or not value or re.search(r"\s", value):
         raise ArtifactContractError(f"{description} must be a non-empty single token")
+    if re.search(r"[$`\\]", value):
+        raise ArtifactContractError(
+            f"{description} contains an unsafe shell-active token"
+        )
     return value
 
 
@@ -628,10 +635,16 @@ def canonical_identity(
 
     manifest_sha256 = hashlib.sha256(_canonical_json(manifest)).hexdigest()
     dependency_lock_sha256 = hashlib.sha256(_canonical_json(lock)).hexdigest()
+    metadata = build_metadata(
+        repo_root=root,
+        build_source_head=build_source_head,
+        runner=runner,
+    )
     identity_document = {
         "schema_version": 1,
         "artifact": manifest["artifact"],
         "build_source_head": build_source_head,
+        "build_metadata": metadata,
         "manifest_sha256": manifest_sha256,
         "dependency_lock_sha256": dependency_lock_sha256,
         "build_contract": manifest["build_contract"],
@@ -650,4 +663,500 @@ def canonical_identity(
         "integration_head": integration_head,
         "target": manifest["build_contract"]["target"],
         "platform": manifest["build_contract"]["platform"],
+        **metadata,
     }
+
+
+def _checked_output(
+    runner: Runner,
+    arguments: tuple[str, ...],
+    *,
+    repo_root: Path,
+    description: str,
+) -> str:
+    result = runner(
+        arguments,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        env=_operational_environment(),
+    )
+    if result.returncode != 0:
+        raise ArtifactContractError(f"cannot resolve {description}: {result.stderr.strip()}")
+    value = result.stdout.strip()
+    if not value:
+        raise ArtifactContractError(f"resolved {description} is empty")
+    return value
+
+
+def build_metadata(
+    *,
+    repo_root: str | os.PathLike[str],
+    build_source_head: str,
+    runner: Runner = subprocess.run,
+) -> dict[str, Any]:
+    """Resolve stable binary metadata exclusively from one build-source commit."""
+
+    if re.fullmatch(r"[0-9a-f]{40}", build_source_head) is None:
+        raise ArtifactContractError("build_source_head must be a full commit id")
+    root = Path(repo_root).resolve(strict=True)
+    resolved_head = _checked_output(
+        runner,
+        ("git", "rev-parse", "--verify", f"{build_source_head}^{{commit}}"),
+        repo_root=root,
+        description="build source commit",
+    )
+    if resolved_head != build_source_head:
+        raise ArtifactContractError("build source commit resolution drift")
+    version = _checked_output(
+        runner,
+        ("git", "show", f"{build_source_head}:VERSION"),
+        repo_root=root,
+        description="build source VERSION",
+    )
+    raw_epoch = _checked_output(
+        runner,
+        ("git", "show", "-s", "--format=%ct", build_source_head),
+        repo_root=root,
+        description="build source commit timestamp",
+    )
+    try:
+        source_date_epoch = int(raw_epoch)
+    except ValueError as exc:
+        raise ArtifactContractError("build source commit timestamp is not an epoch") from exc
+    if source_date_epoch < 0:
+        raise ArtifactContractError("build source commit timestamp is negative")
+    build_time = datetime.fromtimestamp(source_date_epoch, tz=UTC).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
+    return {
+        "version": version,
+        "commit_id": build_source_head,
+        "source_date_epoch": source_date_epoch,
+        "build_time": build_time,
+    }
+
+
+def _dependency_facts(
+    lock: Mapping[str, Any],
+) -> tuple[tuple[str, str, str], ...]:
+    """Map every non-FROM lock fact to its one allowed consuming operation."""
+
+    repositories = _mapping(lock["debian"], "Debian lock")["repositories"]
+    packages = _mapping(lock["debian"], "Debian lock")["packages"]
+    python_tools = _mapping(lock["python_tools"], "Python tools")
+    downloads = _mapping(lock["downloads"], "downloads")
+    migrate = _mapping(
+        _mapping(downloads["go_tools"], "Go tools")["migrate"],
+        "migrate tool",
+    )
+    duckdb = _mapping(downloads["duckdb"], "DuckDB download")
+    extensions = _mapping(duckdb["extensions"], "DuckDB extensions")
+
+    facts: list[tuple[str, str, str]] = [
+        ("schema_version", "validate", str(lock["schema_version"])),
+        ("platform.os", "validate", str(lock["platform"]["os"])),
+        ("platform.arch", "validate", str(lock["platform"]["arch"])),
+    ]
+    facts.extend(
+        (
+            f"debian.repositories.{name}.snapshot",
+            "apt-source",
+            str(record["snapshot"]),
+        )
+        for name, record in _mapping(repositories, "Debian repositories").items()
+    )
+    facts.extend(
+        (
+            f"debian.repositories.{name}.release_sha256",
+            "sha256",
+            str(record["release_sha256"]),
+        )
+        for name, record in _mapping(repositories, "Debian repositories").items()
+    )
+    facts.extend(
+        (f"debian.packages.{name}", "apt", str(value))
+        for name, value in _mapping(packages, "Debian packages").items()
+    )
+    for name, record in python_tools.items():
+        facts.extend(
+            (
+                (f"python_tools.{name}.version", "pip", str(record["version"])),
+                (f"python_tools.{name}.origin", "download", str(record["origin"])),
+                (f"python_tools.{name}.sha256", "sha256", str(record["sha256"])),
+            )
+        )
+    uv = _mapping(downloads["uv"], "uv download")
+    facts.extend(
+        (f"downloads.uv.{name}", "download", str(uv[name]))
+        for name in ("version", "platform", "origin")
+    )
+    facts.append(("downloads.uv.sha256", "sha256", str(uv["sha256"])))
+    facts.extend(
+        (
+            f"downloads.go_tools.migrate.{name}",
+            "go-install",
+            str(migrate[name]),
+        )
+        for name in ("module", "version")
+    )
+    facts.append(
+        ("downloads.go_tools.migrate.go_sum", "go-sum", str(migrate["go_sum"]))
+    )
+    facts.extend(
+        (
+            ("platform.duckdb", "duckdb-download", str(lock["platform"]["duckdb"])),
+            (
+                "downloads.duckdb.version",
+                "duckdb-download",
+                str(duckdb["version"]),
+            ),
+        )
+    )
+    for extension_name, record in extensions.items():
+        facts.extend(
+            (
+                (
+                    f"downloads.duckdb.extensions.{extension_name}.{name}",
+                    "duckdb-download",
+                    str(record[name]),
+                )
+                for name in ("platform", "origin", "sha256")
+            )
+        )
+    return tuple(sorted(facts))
+
+
+def _dependency_plan(lock: Mapping[str, Any]) -> dict[str, Any]:
+    """Render deterministic shell assignments from a validated dependency lock."""
+
+    facts = _dependency_facts(lock)
+    bindings: list[dict[str, str]] = []
+    names: set[str] = set()
+    for fact_path, consumer, value in facts:
+        name = "BA0_" + re.sub(r"[^A-Za-z0-9]+", "_", fact_path).upper()
+        if name in names:
+            raise ArtifactContractError(f"dependency plan name collision for {fact_path}")
+        names.add(name)
+        bindings.append(
+            {
+                "name": name,
+                "consumer": consumer,
+                "fact_path": fact_path,
+                "value": value,
+            }
+        )
+    output_bytes = "".join(
+        f"{binding['name']}={json.dumps(binding['value'], ensure_ascii=False)}\n"
+        for binding in bindings
+    ).encode("utf-8")
+    return {
+        "lock_sha256": hashlib.sha256(_canonical_json(lock)).hexdigest(),
+        "output_path": "/tmp/ba0-dependency-plan.env",
+        "bindings": bindings,
+        "output_bytes": output_bytes,
+    }
+
+
+_DOCKER_CONTEXT = "colima-g1-build"
+_APP_REPOSITORY = "wechatopenai/weknora-app"
+_LABEL_PREFIX = "io.insurancekb.app."
+
+
+def _required_labels(identity: Mapping[str, Any]) -> dict[str, str]:
+    fields = {
+        "artifact-identity": "artifact_identity",
+        "build-source-head": "build_source_head",
+        "manifest-sha256": "manifest_sha256",
+        "dependency-lock-sha256": "dependency_lock_sha256",
+        "target": "target",
+        "platform": "platform",
+    }
+    labels: dict[str, str] = {}
+    for suffix, field in fields.items():
+        value = identity.get(field)
+        if not isinstance(value, str) or not value:
+            raise ArtifactContractError(f"identity {field} is missing")
+        labels[_LABEL_PREFIX + suffix] = value
+    if identity.get("artifact") != "weknora-app":
+        raise ArtifactContractError("identity artifact is not weknora-app")
+    if labels[_LABEL_PREFIX + "platform"] != "linux/arm64":
+        raise ArtifactContractError("identity platform must be linux/arm64")
+    if labels[_LABEL_PREFIX + "target"] != "runtime":
+        raise ArtifactContractError("identity target must be runtime")
+    return labels
+
+
+def _docker(
+    runner: Runner,
+    arguments: tuple[str, ...],
+    *,
+    repo_root: Path,
+    description: str,
+) -> subprocess.CompletedProcess[str]:
+    result = runner(arguments, cwd=repo_root, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ArtifactContractError(f"Docker {description} failed: {result.stderr.strip()}")
+    return result
+
+
+def _inspect_image(
+    runner: Runner,
+    *,
+    repo_root: Path,
+    candidate: str,
+    labels: Mapping[str, str],
+) -> None:
+    result = _docker(
+        runner,
+        (
+            "docker",
+            "--context",
+            _DOCKER_CONTEXT,
+            "image",
+            "inspect",
+            candidate,
+            "--format",
+            "{{json .}}",
+        ),
+        repo_root=repo_root,
+        description="image inspect",
+    )
+    try:
+        record = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ArtifactContractError("Docker image inspect returned invalid JSON") from exc
+    if not isinstance(record, Mapping):
+        raise ArtifactContractError("Docker image inspect returned a non-object")
+    if record.get("Id") != candidate:
+        raise ArtifactContractError("Docker image candidate differs from inspect image id")
+    if record.get("Os") != "linux":
+        raise ArtifactContractError("Docker image OS is not linux")
+    if record.get("Architecture") != "arm64":
+        raise ArtifactContractError("Docker image architecture is not arm64")
+    config = record.get("Config")
+    actual_labels = config.get("Labels") if isinstance(config, Mapping) else None
+    if not isinstance(actual_labels, Mapping):
+        raise ArtifactContractError("Docker image labels are missing")
+    for name, expected in labels.items():
+        if name not in actual_labels:
+            raise ArtifactContractError(f"Docker image label missing: {name}")
+        if actual_labels[name] != expected:
+            raise ArtifactContractError(f"Docker image label mismatch: {name}")
+
+
+def _source_metadata(identity: Mapping[str, Any]) -> tuple[str, str, int]:
+    metadata_fields = {"version", "commit_id", "source_date_epoch", "build_time"}
+    present_metadata = metadata_fields & set(identity)
+    if present_metadata != metadata_fields:
+        raise ArtifactContractError("build-source metadata is incomplete")
+    version = str(identity["version"])
+    commit_id = str(identity["commit_id"])
+    raw_epoch = identity["source_date_epoch"]
+    build_time = str(identity["build_time"])
+    if not version or re.search(r"\s", version):
+        raise ArtifactContractError("build-source VERSION is invalid")
+    if commit_id != identity["build_source_head"]:
+        raise ArtifactContractError("build metadata commit differs from build_source_head")
+    try:
+        source_date_epoch = int(raw_epoch)
+    except (TypeError, ValueError) as exc:
+        raise ArtifactContractError("build metadata source_date_epoch is invalid") from exc
+    if source_date_epoch < 0:
+        raise ArtifactContractError("build metadata source_date_epoch is negative")
+    expected_build_time = datetime.fromtimestamp(source_date_epoch, tz=UTC).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
+    if build_time != expected_build_time:
+        raise ArtifactContractError("build metadata time differs from source_date_epoch")
+    return version, commit_id, source_date_epoch
+
+
+def _selector_build_args(root: Path, identity: Mapping[str, Any]) -> dict[str, str]:
+    manifest = load_manifest(root / "deploy/local-build/app-build-inputs.v1.json")
+    lock = load_dependency_lock(root / str(manifest["external_dependency_lock"]))
+    repositories = lock["debian"]["repositories"]
+    version, commit_id, source_date_epoch = _source_metadata(identity)
+
+    arguments = {
+        "BUILDER_IMAGE": lock["base_images"]["builder"]["reference"],
+        "RUNTIME_IMAGE": lock["base_images"]["runtime"]["reference"],
+        "DEBIAN_SNAPSHOT_BOOTSTRAP": repositories["debian"]["snapshot"],
+        "DEBIAN_SECURITY_SNAPSHOT_BOOTSTRAP": repositories["debian-security"]["snapshot"],
+        "DEBIAN_RELEASE_SHA256_BOOTSTRAP": repositories["debian"]["release_sha256"],
+        "DEBIAN_SECURITY_RELEASE_SHA256_BOOTSTRAP": repositories["debian-security"]["release_sha256"],
+        "PYTHON3_VERSION_BOOTSTRAP": lock["debian"]["packages"]["python3"],
+        "VERSION_ARG": version,
+        "COMMIT_ID_ARG": commit_id,
+        "SOURCE_DATE_EPOCH": str(source_date_epoch),
+    }
+    return dict(sorted(arguments.items()))
+
+
+def _receipt(
+    identity: Mapping[str, Any],
+    *,
+    selector: str,
+    image_id: str,
+    labels: Mapping[str, str],
+    candidates: Sequence[str],
+    build_invocations: int,
+) -> dict[str, Any]:
+    return {
+        "contract": "ba0-app-build-receipt.v1",
+        "status": "PASS",
+        "selector": selector,
+        "artifact_identity": identity["artifact_identity"],
+        "image_id": image_id,
+        "build_source_head": identity["build_source_head"],
+        "integration_head": identity["integration_head"],
+        "manifest_sha256": identity["manifest_sha256"],
+        "dependency_lock_sha256": identity["dependency_lock_sha256"],
+        "platform": identity["platform"],
+        "target": identity["target"],
+        "labels": dict(labels),
+        "candidate_image_ids": list(candidates),
+        "build_invocations": build_invocations,
+    }
+
+
+def select_or_build_app(
+    *,
+    repo_root: str | os.PathLike[str],
+    identity: Mapping[str, Any],
+    evidence_out: str | os.PathLike[str],
+    runner: Runner = subprocess.run,
+    secret_values: Mapping[str, str] | None = None,
+    real_build_budget_remaining: int,
+) -> dict[str, Any]:
+    """Reuse one exactly-labelled image, or spend the one authorized build."""
+
+    del secret_values  # credentials cannot influence or cross the Docker boundary
+    root = Path(repo_root).resolve(strict=True)
+    labels = _required_labels(identity)
+    _source_metadata(identity)
+    query = _docker(
+        runner,
+        (
+            "docker",
+            "--context",
+            _DOCKER_CONTEXT,
+            "image",
+            "ls",
+            "--quiet",
+            "--no-trunc",
+            "--filter",
+            f"label={_LABEL_PREFIX}artifact-identity={identity['artifact_identity']}",
+            "--filter",
+            f"reference={_APP_REPOSITORY}:*",
+        ),
+        repo_root=root,
+        description="image lookup query",
+    )
+    candidates = sorted({line.strip() for line in query.stdout.splitlines() if line.strip()})
+    if len(candidates) > 1:
+        raise ArtifactContractError("multiple candidate image conflict")
+    if candidates:
+        image_id = candidates[0]
+        _inspect_image(
+            runner,
+            repo_root=root,
+            candidate=image_id,
+            labels=labels,
+        )
+        receipt = _receipt(
+            identity,
+            selector="REUSE",
+            image_id=image_id,
+            labels=labels,
+            candidates=candidates,
+            build_invocations=0,
+        )
+    else:
+        if real_build_budget_remaining < 1:
+            raise ArtifactContractError(
+                "STOP: real app build budget exhausted; RETURN_TO_USER"
+            )
+        tag = (
+            f"{_APP_REPOSITORY}:ba0-"
+            f"{str(identity['artifact_identity']).removeprefix('sha256:')}"
+        )
+        build_args = _selector_build_args(root, identity)
+        with tempfile.TemporaryDirectory(prefix="ba0-app-build-") as temporary:
+            iidfile = Path(temporary).resolve() / "image-id"
+            command: list[str] = [
+                "docker",
+                "--context",
+                _DOCKER_CONTEXT,
+                "build",
+                "--file",
+                "docker/Dockerfile.app",
+                "--platform",
+                "linux/arm64",
+                "--target",
+                "runtime",
+                "--iidfile",
+                str(iidfile),
+                "--tag",
+                tag,
+            ]
+            for name, value in build_args.items():
+                command.extend(("--build-arg", f"{name}={value}"))
+            for name, value in sorted(labels.items()):
+                command.extend(("--label", f"{name}={value}"))
+            command.append(".")
+            _docker(
+                runner,
+                tuple(command),
+                repo_root=root,
+                description="app image build",
+            )
+            try:
+                image_id = iidfile.read_text(encoding="utf-8").strip()
+            except OSError as exc:
+                raise ArtifactContractError("Docker build did not write an iidfile") from exc
+            if not image_id:
+                raise ArtifactContractError("Docker build wrote an empty iidfile")
+        _inspect_image(
+            runner,
+            repo_root=root,
+            candidate=image_id,
+            labels=labels,
+        )
+        receipt = _receipt(
+            identity,
+            selector="BUILD_AFFECTED",
+            image_id=image_id,
+            labels=labels,
+            candidates=(),
+            build_invocations=1,
+        )
+
+    output = Path(evidence_out)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    return receipt
+
+
+def _main(arguments: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    plan_parser = subparsers.add_parser("dependency-plan")
+    plan_parser.add_argument("--lock", required=True)
+    plan_parser.add_argument("--output", required=True)
+    parsed = parser.parse_args(arguments)
+    if parsed.command == "dependency-plan":
+        lock = load_dependency_lock(parsed.lock)
+        plan = _dependency_plan(lock)
+        output = Path(parsed.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(plan["output_bytes"])
+        return 0
+    raise ArtifactContractError("unsupported command")
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

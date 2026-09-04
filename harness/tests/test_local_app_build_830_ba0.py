@@ -63,6 +63,7 @@ PLATFORM = "linux/arm64"
 APP_REPOSITORY = "wechatopenai/weknora-app"
 BUILD_SOURCE_HEAD = "b" * 40
 INTEGRATION_HEAD = "c" * 40
+SOURCE_DATE_EPOCH = 1_700_000_000
 IMAGE_ID = "sha256:" + "d" * 64
 ARTIFACT_IDENTITY = "sha256:" + "a" * 64
 MANIFEST_SHA256 = "1" * 64
@@ -650,6 +651,12 @@ def _identity_record() -> dict[str, Any]:
         "dependency_lock_sha256": LOCK_SHA256,
         "build_source_head": BUILD_SOURCE_HEAD,
         "integration_head": INTEGRATION_HEAD,
+        "version": "v1.2.3",
+        "commit_id": BUILD_SOURCE_HEAD,
+        "source_date_epoch": SOURCE_DATE_EPOCH,
+        "build_time": datetime.fromtimestamp(SOURCE_DATE_EPOCH, tz=UTC).strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        ),
         "target": "runtime",
         "platform": PLATFORM,
         "labels": dict(REQUIRED_LABELS),
@@ -2228,6 +2235,17 @@ def test_manifest_lock_loader_rejects_unknown_floating_or_missing_facts(
         module.load_dependency_lock(path)
 
 
+def test_dependency_lock_rejects_shell_active_tokens(tmp_path: Path) -> None:
+    module = _artifact_module()
+    document = _load_json(DEPENDENCY_LOCK_PATH, description="external dependency lock")
+    document["debian"]["packages"]["git"] = "$(touch${IFS}/tmp/ba0-injection)"
+    path = tmp_path / "shell-active-lock.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(module.ArtifactContractError, match="shell|token|unsafe"):
+        module.load_dependency_lock(path)
+
+
 # BA0-REQ-02/06: deterministic lookup, fail-closed reuse, secrecy, build budget.
 
 
@@ -2481,6 +2499,25 @@ def test_lookup_miss_with_exhausted_budget_stops_before_mutation(
         _selector_call(module, tmp_path, runner, budget=0)
 
     assert sum(_is_docker_build(call.arguments) for call in runner.calls) == 0
+
+
+def test_lookup_rejects_incomplete_build_metadata_before_docker(tmp_path: Path) -> None:
+    module = _artifact_module()
+    identity = _identity_record()
+    del identity["source_date_epoch"]
+    runner = _selector_runner(candidates="")
+
+    with pytest.raises(module.ArtifactContractError, match="metadata|incomplete"):
+        module.select_or_build_app(
+            repo_root=REPO_ROOT,
+            identity=identity,
+            evidence_out=tmp_path / "selector-receipt.json",
+            runner=runner,
+            secret_values={},
+            real_build_budget_remaining=1,
+        )
+
+    assert runner.calls == []
 
 
 def _executable_text(source: str) -> str:

@@ -1,90 +1,56 @@
 #!/bin/bash
-# 统一的版本信息获取脚本
-# 支持本地构建和CI构建环境
+set -euo pipefail
 
-# 设置默认值
-VERSION="unknown"
+# Binary metadata is anchored to the immutable build source rather than the
+# integration checkout or wall clock. The Linux builder supplies GO_VERSION.
+BUILD_SOURCE_HEAD="${BUILD_SOURCE_HEAD:-$(git rev-parse HEAD)}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct "$BUILD_SOURCE_HEAD")}"
+VERSION="$(git show "$BUILD_SOURCE_HEAD:VERSION" | tr -d '\n\r')"
 EDITION="${EDITION:-standard}"
-COMMIT_ID="unknown"
-BUILD_TIME="unknown"
-GO_VERSION="unknown"
+COMMIT_ID="$BUILD_SOURCE_HEAD"
+GO_VERSION="${GO_VERSION:-unknown}"
 
-# 获取版本号
-if [ -f "VERSION" ]; then
-    VERSION=$(cat VERSION | tr -d '\n\r')
-fi
-
-# 获取commit ID
-if [ -n "$GITHUB_SHA" ]; then
-    # GitHub Actions环境
-    COMMIT_ID="${GITHUB_SHA:0:7}"
-elif command -v git >/dev/null 2>&1; then
-    # 本地环境
-    COMMIT_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-fi
-
-# 获取构建时间
-if [ -n "$GITHUB_ACTIONS" ]; then
-    # GitHub Actions环境，使用标准时间格式
-    BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+if BUILD_TIME="$(date -u -r "$SOURCE_DATE_EPOCH" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null)"; then
+    :
 else
-    # 本地环境
-    BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+    BUILD_TIME="$(date -u -d "@$SOURCE_DATE_EPOCH" '+%Y-%m-%d %H:%M:%S UTC')"
 fi
 
-# 获取Go版本
-if command -v go >/dev/null 2>&1; then
-    GO_VERSION=$(go version 2>/dev/null || echo "unknown")
-fi
-
-# 根据参数输出不同格式
 case "${1:-env}" in
-    "env")
-        # 输出环境变量格式，对包含空格的值进行转义
+    env)
         echo "VERSION=$VERSION"
         echo "EDITION=$EDITION"
         echo "COMMIT_ID=$COMMIT_ID"
+        echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
         echo "BUILD_TIME=\"$BUILD_TIME\""
         echo "GO_VERSION=\"$GO_VERSION\""
         ;;
-    "json")
-        # 输出JSON格式
-        cat << EOF
-{
-  "version": "$VERSION",
-  "edition": "$EDITION",
-  "commit_id": "$COMMIT_ID",
-  "build_time": "$BUILD_TIME",
-  "go_version": "$GO_VERSION"
-}
-EOF
+    json)
+        printf '{\n'
+        printf '  "version": "%s",\n' "$VERSION"
+        printf '  "edition": "%s",\n' "$EDITION"
+        printf '  "commit_id": "%s",\n' "$COMMIT_ID"
+        printf '  "source_date_epoch": %s,\n' "$SOURCE_DATE_EPOCH"
+        printf '  "build_time": "%s"\n' "$BUILD_TIME"
+        printf '}\n'
         ;;
-    "docker-args")
-        # 输出Docker构建参数格式
+    docker-args)
         echo "--build-arg VERSION_ARG=$VERSION"
         echo "--build-arg COMMIT_ID_ARG=$COMMIT_ID"
-        echo "--build-arg BUILD_TIME_ARG=$BUILD_TIME"
-        echo "--build-arg GO_VERSION_ARG=$GO_VERSION"
+        echo "--build-arg SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
         ;;
-    "ldflags")
-        # 输出Go ldflags格式
+    ldflags)
         echo "-X 'github.com/Tencent/WeKnora/internal/handler.Version=$VERSION' -X 'github.com/Tencent/WeKnora/internal/handler.Edition=$EDITION' -X 'github.com/Tencent/WeKnora/internal/handler.CommitID=$COMMIT_ID' -X 'github.com/Tencent/WeKnora/internal/handler.BuildTime=$BUILD_TIME' -X 'github.com/Tencent/WeKnora/internal/handler.GoVersion=$GO_VERSION' -X 'github.com/Tencent/WeKnora/internal/application/service.RevisionBuildVersion=$VERSION' -X 'github.com/Tencent/WeKnora/internal/application/service.RevisionBuildCommit=$COMMIT_ID'"
         ;;
-    "info")
-        # 输出信息格式
-        echo "版本信息: $VERSION"
-        echo "版本类型: $EDITION"
+    info)
+        echo "Version: $VERSION"
+        echo "Edition: $EDITION"
         echo "Commit ID: $COMMIT_ID"
-        echo "构建时间: $BUILD_TIME"
-        echo "Go版本: $GO_VERSION"
+        echo "Source date epoch: $SOURCE_DATE_EPOCH"
+        echo "Build time: $BUILD_TIME"
         ;;
     *)
-        echo "用法: $0 [env|json|docker-args|ldflags|info]"
-        echo "  env        - 输出环境变量格式 (默认)"
-        echo "  json       - 输出JSON格式"
-        echo "  docker-args - 输出Docker构建参数格式"
-        echo "  ldflags    - 输出Go ldflags格式"
-        echo "  info       - 输出信息格式"
-        exit 1
+        echo "usage: $0 [env|json|docker-args|ldflags|info]" >&2
+        exit 2
         ;;
 esac
