@@ -67,6 +67,28 @@ _INPUT_FILE_FIELDS = (
     "SysoFiles",
     "EmbedFiles",
 )
+_GO_PACKAGE_SOURCE_GLOBS = (
+    "*.go",
+    "*.c",
+    "*.cc",
+    "*.cpp",
+    "*.cxx",
+    "*.m",
+    "*.h",
+    "*.hh",
+    "*.hpp",
+    "*.hxx",
+    "*.f",
+    "*.F",
+    "*.for",
+    "*.f90",
+    "*.s",
+    "*.S",
+    "*.sx",
+    "*.swig",
+    "*.swigcxx",
+    "*.syso",
+)
 _PUBLIC_BUILD_ARGUMENTS = {
     "CGO_ENABLED": {"0", "1"},
     "GOOS": {"linux"},
@@ -349,6 +371,32 @@ def _relative(repo_root: Path, candidate: Path) -> str:
     return candidate.relative_to(repo_root).as_posix()
 
 
+def _go_embed_pathspecs(
+    package_directory: str, raw_patterns: object
+) -> tuple[str, ...]:
+    if not isinstance(raw_patterns, Sequence) or isinstance(raw_patterns, (str, bytes)):
+        raise ArtifactContractError("go list EmbedPatterns field is invalid")
+    pathspecs: set[str] = set()
+    prefix = "" if package_directory == "." else package_directory + "/"
+    for raw_pattern in raw_patterns:
+        if not isinstance(raw_pattern, str) or not raw_pattern:
+            raise ArtifactContractError("go list EmbedPatterns field is invalid")
+        pattern = raw_pattern.removeprefix("all:")
+        path = PurePosixPath(pattern)
+        if (
+            not pattern
+            or path.is_absolute()
+            or ".." in path.parts
+            or "\\" in pattern
+            or "\x00" in pattern
+        ):
+            raise ArtifactContractError("go list EmbedPatterns path is invalid")
+        scoped = prefix + pattern
+        pathspecs.add(f":(top,glob){scoped}")
+        pathspecs.add(f":(top,glob){scoped}/**")
+    return tuple(sorted(pathspecs))
+
+
 def _manifest_files(repo_root: Path, manifest: Mapping[str, Any]) -> set[Path]:
     entries: set[Path] = set()
     relative_names = {
@@ -426,6 +474,7 @@ def resolve_inputs(
     root = Path(repo_root).resolve(strict=True)
     files = _manifest_files(root, manifest)
     go_package_directories_by_file: dict[Path, set[str]] = {}
+    go_embed_pathspecs_by_file: dict[Path, set[str]] = {}
     contract = _mapping(manifest["build_contract"], "manifest build_contract")
     environment = {
         **_operational_environment(),
@@ -471,6 +520,9 @@ def resolve_inputs(
             package_directory = directory.relative_to(root).as_posix()
         except ValueError:
             continue
+        embed_pathspecs = _go_embed_pathspecs(
+            package_directory, package.get("EmbedPatterns", [])
+        )
         for field in _INPUT_FILE_FIELDS:
             values = package.get(field, [])
             if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
@@ -492,6 +544,10 @@ def resolve_inputs(
                 go_package_directories_by_file.setdefault(resolved_file, set()).add(
                     package_directory
                 )
+                if embed_pathspecs:
+                    go_embed_pathspecs_by_file.setdefault(resolved_file, set()).update(
+                        embed_pathspecs
+                    )
 
     resolved: list[dict[str, Any]] = []
     for path in sorted(files, key=lambda item: _relative(root, item)):
@@ -504,6 +560,9 @@ def resolve_inputs(
         package_directories = go_package_directories_by_file.get(path)
         if package_directories:
             record["go_package_directories"] = sorted(package_directories)
+        embed_pathspecs = go_embed_pathspecs_by_file.get(path)
+        if embed_pathspecs:
+            record["go_embed_pathspecs"] = sorted(embed_pathspecs)
         resolved.append(record)
     return tuple(resolved)
 
@@ -548,6 +607,16 @@ def _declared_input_pathspecs(
         for record in inputs
         for directory in record.get("go_package_directories", [])
     }
+    go_source_pathspecs = {
+        f":(top,glob){'' if directory == '.' else directory + '/'}{pattern}"
+        for directory in go_package_directories
+        for pattern in _GO_PACKAGE_SOURCE_GLOBS
+    }
+    go_embed_pathspecs = {
+        str(pathspec)
+        for record in inputs
+        for pathspec in record.get("go_embed_pathspecs", [])
+    }
     return sorted(
         {
             _relative(root, manifest_file),
@@ -559,7 +628,8 @@ def _declared_input_pathspecs(
             "go.sum",
             *[str(value) for value in manifest["required_paths"]],
             *[str(record["path"]) for record in inputs],
-            *go_package_directories,
+            *go_source_pathspecs,
+            *go_embed_pathspecs,
         }
     )
 

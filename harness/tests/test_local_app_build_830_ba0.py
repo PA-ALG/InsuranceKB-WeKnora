@@ -1689,6 +1689,192 @@ def test_identity_is_stable_across_docs_only_integration_heads() -> None:
     )
 
 
+def test_identity_drift_scope_ignores_ba0_receipts_but_catches_new_go_source(
+    tmp_path: Path,
+) -> None:
+    module = _artifact_module()
+    repo_root = tmp_path / "repository"
+    manifest_path, lock_path = _write_synthetic_contract(repo_root)
+    subprocess.run(("git", "init", "-q"), cwd=repo_root, check=True)
+    subprocess.run(("git", "add", "."), cwd=repo_root, check=True)
+    subprocess.run(
+        (
+            "git",
+            "-c",
+            "user.name=BA0 Test",
+            "-c",
+            "user.email=ba0-test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ),
+        cwd=repo_root,
+        check=True,
+    )
+    source_head = subprocess.check_output(
+        ("git", "rev-parse", "HEAD"), cwd=repo_root, text=True
+    ).strip()
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        env: Mapping[str, str],
+    ) -> subprocess.CompletedProcess[str]:
+        if arguments[:2] == ("go", "list"):
+            return _completed(arguments, stdout=_go_list_stream(repo_root))
+        return subprocess.run(
+            arguments,
+            cwd=cwd,
+            capture_output=capture_output,
+            text=text,
+            env=env,
+            check=False,
+        )
+
+    arguments = {
+        "repo_root": repo_root,
+        "manifest_path": manifest_path,
+        "dependency_lock_path": lock_path,
+        "build_source_head": source_head,
+        "integration_head": source_head,
+        "runner": runner,
+        "effective_build_args": {
+            "CGO_ENABLED": "1",
+            "GOOS": "linux",
+            "GOARCH": "arm64",
+        },
+        "environment": {},
+    }
+    before = module.canonical_identity(**arguments)
+    receipt = repo_root / "docs/insurance-kb/evidence/830-ba0/d2/initialization-build.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text('{"status":"PASS"}\n', encoding="utf-8")
+
+    after_receipt = module.canonical_identity(**arguments)
+    assert after_receipt["artifact_identity"] == before["artifact_identity"]
+
+    (repo_root / "docs/untracked.go").write_text("package docs\n", encoding="utf-8")
+    with pytest.raises(module.ArtifactContractError, match="untracked|drift"):
+        module.canonical_identity(**arguments)
+
+
+@pytest.mark.parametrize(
+    ("embed_pattern", "asset_paths", "deleted_path"),
+    (
+        ("*.asset", ("keep.asset", "deleted.asset"), "deleted.asset"),
+        (
+            "assets/*",
+            (
+                "assets/keep.asset",
+                "assets/sub/keep.asset",
+                "assets/sub/deleted.asset",
+            ),
+            "assets/sub/deleted.asset",
+        ),
+    ),
+    ids=("flat-glob", "wildcard-directory-descendant"),
+)
+def test_identity_drift_scope_catches_deleted_file_from_go_embed_pattern(
+    tmp_path: Path,
+    embed_pattern: str,
+    asset_paths: tuple[str, ...],
+    deleted_path: str,
+) -> None:
+    module = _artifact_module()
+    repo_root = tmp_path / "repository"
+    manifest_path, lock_path = _write_synthetic_contract(repo_root)
+    (repo_root / "docs/docs.go").write_text(
+        "package docs\n\n"
+        'import "embed"\n\n'
+        f"//go:embed {embed_pattern}\n"
+        "var Assets embed.FS\n",
+        encoding="utf-8",
+    )
+    for relative in asset_paths:
+        asset = repo_root / "docs" / relative
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_text(f"{relative}\n", encoding="utf-8")
+    deleted = repo_root / "docs" / deleted_path
+    subprocess.run(("git", "init", "-q"), cwd=repo_root, check=True)
+    subprocess.run(("git", "add", "."), cwd=repo_root, check=True)
+    subprocess.run(
+        (
+            "git",
+            "-c",
+            "user.name=BA0 Test",
+            "-c",
+            "user.email=ba0-test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ),
+        cwd=repo_root,
+        check=True,
+    )
+    source_head = subprocess.check_output(
+        ("git", "rev-parse", "HEAD"), cwd=repo_root, text=True
+    ).strip()
+
+    def go_list_stream() -> str:
+        records = [
+            json.loads(line)
+            for line in _go_list_stream(repo_root).splitlines()
+            if line
+        ]
+        docs = next(record for record in records if record.get("ImportPath", "").endswith("/docs"))
+        docs["EmbedPatterns"] = [embed_pattern]
+        docs["EmbedFiles"] = sorted(
+            relative
+            for relative in asset_paths
+            if (repo_root / "docs" / relative).is_file()
+        )
+        return "".join(json.dumps(record) + "\n" for record in records)
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        env: Mapping[str, str],
+    ) -> subprocess.CompletedProcess[str]:
+        if arguments[:2] == ("go", "list"):
+            return _completed(arguments, stdout=go_list_stream())
+        return subprocess.run(
+            arguments,
+            cwd=cwd,
+            capture_output=capture_output,
+            text=text,
+            env=env,
+            check=False,
+        )
+
+    arguments = {
+        "repo_root": repo_root,
+        "manifest_path": manifest_path,
+        "dependency_lock_path": lock_path,
+        "build_source_head": source_head,
+        "integration_head": source_head,
+        "runner": runner,
+        "effective_build_args": {
+            "CGO_ENABLED": "1",
+            "GOOS": "linux",
+            "GOARCH": "arm64",
+        },
+        "environment": {},
+    }
+    module.canonical_identity(**arguments)
+    deleted.unlink()
+
+    with pytest.raises(module.ArtifactContractError, match="manifest|input|drift"):
+        module.canonical_identity(**arguments)
+
+
 @pytest.mark.parametrize(
     "changed", ("app_input", "dependency_lock"), ids=("app-input", "lock-input")
 )
