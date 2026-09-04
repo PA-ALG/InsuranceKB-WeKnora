@@ -108,19 +108,22 @@ OpenSpec 122 与旧 EC-02 只保留历史质量证据；旧实验结论是 `QUAL
 冻结 Candidate/Golden/Evidence、Metric、人工责任、provider/model 与预算；不得
 从 C7 PASS 推导 C4 PASS，也不得修改已验收 serving release。
 
-### 当前 830 G1 状态
+### 当前 830 G1 / BA0 状态
 
-830 当前唯一 WIP 是 `G1 · 实体页图与独立 FieldAssertion`。B0 Evidence Pack 位于
-`docs/insurance-kb/evidence/830-b0/`；其独立复核为 `PASS`、未解决问题为 0，且用户已
-在 2026-08-31 明确授权总控作出 `B0=PASS` 裁决并只启动 G1。G1 正式 base 为
-`d2ce44cb2107575f7624b3735c653078ae2a98b6`，执行分支为
-`codex/830-g1-field-assertion-pages`，适用 OpenSpec 为
-`openspec/changes/126-830-g1-entity-field-assertion-pages/`。
+`G1 · 实体页图与独立 FieldAssertion` 已由 PR #126 合入
+`origin/main=0e7a26568` 并终态 `PASS`；冻结回执为
+`docs/insurance-kb/evidence/830-g1/g1-closeout.json`，适用历史 OpenSpec 为
+`openspec/changes/126-830-g1-entity-field-assertion-pages/`。G1 的隔离 Release 仍为
+`NOT_FOR_PRODUCTION`，Schema67 质量仍为 `DEFERRED`。
 
-当前状态固定为 `CURRENT_AUTHORIZATION=G1_ONLY`、`CURRENT_GOAL=G1`、
-`CURRENT_RED=NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`、
-`830_PRODUCT_GOAL=G1_IN_PROGRESS`。G2 及后续 Goal 全部保持 `LOCKED`；Schema67
-质量仍为 `DEFERRED`，G1 不调用 Provider/模型、不修改生产 `8081` 或生产 Active。
+当前短指针为 `CURRENT_AUTHORIZATION=BA0_DESIGN_AND_PLAN_ONLY`、
+`CURRENT_PRODUCT_GOAL=NONE`、`CURRENT_WORK=BA0_LOCAL_BUILD_REUSE`、
+`BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL`、
+`CURRENT_RED=LOCAL_APP_EXACT_REUSE_NOT_IMPLEMENTED`。BA0 设计入口为
+`docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md`，实施计划为
+`docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md`。G2 及后续
+仍为 `LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION`；BA0 `PASS` 后总控
+必须先 `RETURN_TO_USER`，不得自动创建 G2 worktree/OpenSpec、写 G2 代码或产生外部 effect。
 
 2026-07-24 生产架构设计与 2026-07-21 北极星继续保留产品、Evidence、Conflict、
 弱模型、Candidate 批审和过程护栏，但其 PostgreSQL serving authority、

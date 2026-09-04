@@ -1,7 +1,7 @@
 # 830 BA0：固定 Colima 的本地构建复用设计
 
 > 日期：2026-09-04  
-> 状态：已完成方案讨论，待书面规格复核与用户确认  
+> 状态：设计已于 2026-09-04 经用户确认并完成独立复核；下一门为紧凑 OpenSpec/RED
 > 设计基线：`origin/main=0e7a26568`，tree=`b96aa35`  
 > G1 终态证据：`docs/insurance-kb/evidence/830-g1/g1-closeout.json`  
 > 适用范围：当前 Mac、固定 `g1-build` Colima profile、Linux ARM64 本地构建
@@ -42,9 +42,10 @@ BA0 是一次工程维护门，不是新的 Enterprise LLM Wiki 产品能力，�
 
 ```text
 G1=PASS
-CURRENT_AUTHORIZATION=BA0_ONLY
-CURRENT_WORK=LOCAL_BUILD_REUSE
-G2=LOCKED_PENDING_BA0_AND_USER_AUTHORIZATION
+CURRENT_AUTHORIZATION=BA0_DESIGN_AND_PLAN_ONLY
+CURRENT_WORK=BA0_LOCAL_BUILD_REUSE
+EXECUTION_TRANSITION=EXPLICIT_USER_AUTHORIZATION→BA0_ONLY
+G2=LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION
 ```
 
 BA0 完成后不得自动启动 G2；总控先报告结果，再由用户授权下一张产品卡。
@@ -55,7 +56,7 @@ BA0 完成后不得自动启动 G2；总控先报告结果，再由用户授权�
 - Go module cache、Go build cache 和稳定 Docker layer cache；
 - build 前本地 exact artifact 查询；
 - 一个 versioned app 构建输入清单和薄 identity 计算；
-- D2 单次构建和 D3 exact image 复用；
+- D2 单次构建和 D3 exact image 制品自检；
 - 构建耗时、cache hit/miss、image identity 和失败阶段的最小记录；
 - G1 `PASS` 与当前 BA0 状态的权威指针同步。
 
@@ -143,6 +144,11 @@ B0 Evidence Pack 中已有的 app source subset 是历史证据，不得原地�
 Pack 必须同时记录“当前 integration head”和“该镜像原始 build-source head”，不得
 伪造镜像是在当前 head 重新构建的。
 
+D2 前必须显式冻结 `D2_BUILD_SOURCE_HEAD`。构建入口校验当前工作树的全部 manifest 输入
+与该 commit 一致，并用该 commit 的版本、时间和 commit ID 生成 binary metadata；随后
+validation/Evidence 等 docs-only integration commit 不得改变 artifact identity。任一 app
+input 与冻结 build-source 不一致时必须回到 D0/D1，不能静默改用当前 HEAD。
+
 ### 4.4 缓存层次
 
 缓存按以下顺序使用：
@@ -172,7 +178,6 @@ identity、镜像内容或验收结论。
   `SOURCE_DATE_EPOCH`，不使用调用时墙钟；
 - `GO_VERSION` 使用 Linux builder 内真实值，不使用 Mac 宿主值；
 - `VERSION`、`COMMIT_ID` 和其他有效 ldflags 必须由冻结 build source 确定；
--运行编号、操作者和当前时间属于 provenance/Evidence，不进入会破坏编译缓存的
 - 运行编号、操作者和当前时间属于 provenance/Evidence，不进入会破坏编译缓存的
   二进制输入。
 
@@ -198,11 +203,17 @@ base，但必须用一个受版本控制的依赖锁把这些解析结果冻结�
 - D1：focused tests 和受影响 package 验证，不构建镜像；
 - D2：唯一总控在固定 Colima 上执行一次 lookup；hit 为 `REUSE`，miss 才允许一次
   `BUILD_AFFECTED`；
-- D3：使用 D2 的 exact image identity，以 `--no-build --pull never` 启动隔离环境。
+- D3：使用 D2 的 exact image identity，以 `--no-build --pull never` 运行隔离的
+  `CONTAINER_ARTIFACT_SMOKE`。
 
 不得复用当前 `start_all.sh --no-pull` 代表 D3。实施应增加语义明确的 exact-image
-入口，或由 D3 runbook 直接调用等价 compose 命令；不得悄悄改变普通开发者现有
-`--no-pull` 语义。
+入口；不得悄悄改变普通开发者现有 `--no-pull` 语义。该入口使用 standalone Compose，
+只创建无网络、无端口、无依赖、只读的 app image 自检容器，验证 exact runtime image、
+二进制/必要文件与动态依赖，不连接 PostgreSQL、Redis、Docreader 或任何业务数据。
+
+BA0 不把该自检描述为 WeKnora HTTP application health。当前没有冻结的空库 schema seed；
+若为了 HTTP `/health` 临时增加数据库初始化或迁移，就会把构建复用门扩张成另一套运行流程。
+完整业务 HTTP health 继续由获授权产品 Goal 的真实 D3 验证。
 
 ## 5. 错误处理与可观测性
 
@@ -233,9 +244,10 @@ Goal/authority → compact OpenSpec → RED → implementation → validation
 RED 必须证明旧实现至少存在以下失败：
 
 - 相同 identity 会进入 Docker build；
+- 仅有 docs-only integration head 变化时 artifact identity 也会错误变化；
 - build time 随墙钟变化；
 - Go build cache 未挂载；
-- D3 路径仍可能带 `--build`；
+- D3 路径仍可能带 `--build`，或为制品自检错误接入业务数据库；
 - app input manifest 漏掉已知实际依赖时验证失败。
 
 测试通过 fake Docker/process runner 证明控制流，不用真实构建冒充单元测试。
@@ -260,10 +272,11 @@ no-build 的硬验收。
 - G1 的 `109m18s` business compile 作为 before 基线；不再主动清缓存复测冷构建；
 - same identity 的唯一硬门是 Docker build invocation=`0` 且返回同一 image identity；
 - miss 的唯一硬门是最多一次 `BUILD_AFFECTED`；
-- D3 的唯一构建硬门是 build invocation=`0`、pull invocation=`0`；
+- D3 的唯一构建硬门是 build invocation=`0`、pull invocation=`0`，并且 standalone
+  `CONTAINER_ARTIFACT_SMOKE` 的 runtime image 与 D2 image identity 一致；
 - `60s` 的 exact lookup 和 `30m` 的自然增量编译只是观察目标，不是 BA0 PASS
   的预写死门槛；样本不足时记录 `NOT_MEASURED + reason`；
--第一个自然增量样本若明显偏离目标，按当时 BuildKit step、cache hit/miss 和 G1
+- 第一个自然增量样本若明显偏离目标，按当时 BuildKit step、cache hit/miss 和 G1
   基线决定是否授权一次有界纠偏，不得自动叠加 builder-base 等方案。
 
 这些性能观察目标只用于固定 Mac/Colima 的当前资源配置，不外推到 CI 或其他主机，
@@ -282,7 +295,8 @@ no-build 的硬验收。
 6. 第二次相同 identity 请求不调用 Docker build并返回相同 image identity；
 7. 初始化构建后可证明 Go cache mount 持续存在且未被清理；自然增量样本尚不存在时
    明确记录 `NOT_MEASURED + reason`；
-8. D3 exact-image 启动日志中没有 build/pull，健康检查通过；
+8. D3 standalone exact-image 制品自检中没有 build/pull、网络、端口、依赖或业务数据，
+   runtime image 与 D2 identity 一致且只读 smoke healthcheck 通过；不宣称 HTTP app health；
 9. Provider/model、生产 `8081`、生产 Active、业务数据库和 G2 effects 均为 `0`；
 10. 独立 reviewer 对冻结 commit/tree、测试和 Evidence Pack 给出 `PASS`；
 11. 最终报告记录 before/after、cache hit/miss、构建调用数、image identity、
@@ -295,11 +309,13 @@ no-build 的硬验收。
 实施阶段只允许同步：
 
 - `HANDOFF.md`：G1 PASS、BA0 current state、G2 lock 和最终 Evidence 指针；
+- `AGENTS.md` 与 830 蓝图 `§0`：只同步当前状态和本设计入口，不扩写产品架构；
 - `docs/insurance-kb/28-development-execution-charter-830.md`：lookup-before-build、
   缓存丢失语义、D3 no-build；
 - `docs/insurance-kb/29-goal-cards-830.md`：一张简短 BA0 工程维护卡及当前状态；
--本设计、一个紧凑中文 OpenSpec、后续实施计划、focused tests 与 BA0 Evidence Pack；
--为完成上述合同所需的最小 Dockerfile、构建脚本和本地启动脚本。
+- OpenSpec 注册表：只同步 G1 终态并登记一个紧凑 BA0 OpenSpec；
+- 本设计、一个紧凑中文 OpenSpec、后续实施计划、focused tests 与 BA0 Evidence Pack；
+- 为完成上述合同所需的最小 Dockerfile、构建脚本和本地启动脚本。
 
 不修改 `docs/insurance-kb/02-architecture.md`、历史
 `docs/insurance-kb/16-roadmap.md`，不建立大型或平行 OpenSpec。BA0 的紧凑 OpenSpec
@@ -308,10 +324,10 @@ no-build 的硬验收。
 
 ## 8. 预计工期
 
--规格确认、RED 与实现：`4–6` 小时；
--缓存初始化构建：可能接近 G1 冷构建，预计约 `2` 小时；
--same-identity 复用验证与证据整理：预计 `1–2` 小时；
--独立复核和收尾：`1–2` 小时。
+- 规格确认、RED 与实现：`4–6` 小时；
+- 缓存初始化构建：可能接近 G1 冷构建，预计约 `2` 小时；
+- same-identity 复用验证与证据整理：预计 `1–2` 小时；
+- 独立复核和收尾：`1–2` 小时。
 
 正常预计 `1` 个工作日；若首次初始化遇到网络、Colima 或依赖异常，最多时间盒为
 `2` 个工作日。超过时间盒仍未满足 DoD，必须停止并报告，不得通过新增前置继续延长。
