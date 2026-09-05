@@ -8,6 +8,9 @@
 > G1 与 G2 之间的一次性工程门，不是产品 Goal；G2 及后续仍为
 > `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`。
 
+以下保留 BA0 关闭时的产品状态和构建身份，不代表本次文档修订分支/写域；
+文档修订授权与边界见蓝图 §0.1。
+
 ```text
 CURRENT_AUTHORIZATION=NONE
 CURRENT_PRODUCT_GOAL=NONE
@@ -35,7 +38,8 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
 冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
 见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
-`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+`recovery-authorization.md`。本地 Git 已确认 BA0 经 PR #127 合入
+`origin/main@a4e6a15c8`；本次文档修订未重跑 HTTP/业务或 GitHub live 验收。
 
 
 ## 1. 唯一权威与唯一队列
@@ -70,8 +74,10 @@ BA0 占用唯一执行 WIP，但不进入产品 Goal 顺序、不增加产品进
   结果 Owner；纠偏也占用该 WIP。默认一个实现写域，满足第 7 节的同 Goal 受控并行条件
   时最多允许两个互斥写域，但不能形成第二个产品结果或提前建设下游 Goal。
 - 不得跳卡、并卡、倒序、预开 successor，或以“可并行”为由提前实现下游。
-- `Q0` 必须在 `G6D` 后、`G7` 前运行。此前只保留已批准的扩展点和冻结输入，
-  不提前建设 Golden/调参支线、通用质量平台或 Q0 的替代入口。
+- `Q0` 必须在 `G6D` 后、`G7` 前运行。此前按当前 Goal 实现可替换编译与独立审核的
+  初始实现、协议回放、真实隔离链路和确定性负向检查，持续报告 `QUALITY=DEFERRED`；
+  不以提前完成专家标注/领域优化阻塞平台开发，也不把接口桩或 Seed Cases 当成真实流程。
+  专家 Canonical Golden、领域指标和生产准入由 Q0 承接，不另建质量平台或调参支线。
 - 下一 Goal 只有在当前 Goal 真实 `PASS`、Evidence Pack 完整、总控关闭当前写域、
   适用工程门通过且用户明确授权后才能启动；前卡 PASS 是必要条件，不是自动开工授权。
 
@@ -123,7 +129,8 @@ BA0 占用唯一执行 WIP，但不进入产品 Goal 顺序、不增加产品进
 
 1. 29 号 Goal Card 的唯一物理结果在冻结真实输入与真实集成运行时中成立；
 2. 运行代码、输入、输出及 WeKnora 对象具有可重算的 exact identity 和 lineage；
-3. 该卡所有正向门、反向门和不变量均由机器结果或真实回点证明；
+3. 该卡当前阶段的正向门、反向门和不变量由可复核结果或真实回点证明；协议/来源定位
+   正确不等于领域语义正确，Q0 业务裁决还须独立专家金标和逐项评估，不能由生成者自评替代；
 4. 验收分母、阈值和预期集合在运行前冻结，运行后未删除失败样本；
 5. 没有第二 Wiki、第二审核、第二 Active、第二 Evidence authority 或未授权外部写入；
 6. Evidence Pack 完整，并经只读审查 lane 核对；
@@ -133,6 +140,10 @@ BA0 占用唯一执行 WIP，但不进入产品 Goal 顺序、不增加产品进
 失败或缺失证据改写为 `UNKNOWN` 来过门；不得跳过字段、格式、样本或负向场景；
 不得用人工补齐后的内容冒充模型成功。模型原始输出/指标与专家修订后的输出/指标必须
 分别冻结、分别报告，人工修订产生新 revision，不回写原始模型分数。
+
+本次已获用户授权的文档修订仅按蓝图 §0.1 的 R830-01—06 检查五份现有文档的覆盖与
+一致性，并独立复核冻结 diff；不为文档检查启动 Provider、Docker 或重跑产品验收。
+该文档检查通过只说明规格修订可用，不解锁产品 Goal、不构成领域质量 PASS。
 
 ### 3.2 Evidence Pack
 

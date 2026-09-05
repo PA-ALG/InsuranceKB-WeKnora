@@ -29,6 +29,11 @@ serving Head，旧 PostgreSQL `current_release`/ReleaseSnapshot/publisher 链只
 
 `CLAUDE.md` 不再维护另一份必读清单；其他开发入口必须指回本节。
 
+2026-09-05 用户已批准的现有 830 有限修订范围及 R830-01—06 见
+[830 蓝图 §0.1](jlx_enterprise_llm_wiki_technical_blueprint_830.md#01-2026-09-05-有限修订范围)。
+本次只修改该节列出的五份文档，在现有规格内修订并执行 D0/独立复核；不新建产品
+Goal/OpenSpec。后续实现消费修订后的蓝图与 Goal Cards，G2 启动授权仍独立。
+
 ## 强制 SDD 流程
 
 所有会写仓库、改变行为、迁移、配置、外部状态或验证口径的工作必须按以下
@@ -116,7 +121,7 @@ OpenSpec 122 与旧 EC-02 只保留历史质量证据；旧实验结论是 `QUAL
 `openspec/changes/126-830-g1-entity-field-assertion-pages/`。G1 的隔离 Release 仍为
 `NOT_FOR_PRODUCTION`，Schema67 质量仍为 `DEFERRED`。
 
-用户已明确授权 BA0 implementation，当前唯一执行态原子冻结为：
+以下保留 BA0 关闭时的产品状态和构建身份；不代表当前文档修订的分支/写域：
 
 ```text
 CURRENT_AUTHORIZATION=NONE
@@ -145,7 +150,8 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
 冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
 见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
-`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+`recovery-authorization.md`。本地 Git 已确认 BA0 经 PR #127 合入
+`origin/main@a4e6a15c8`；本次文档修订未重跑 HTTP/业务或 GitHub live 验收。
 
 
 BA0 设计入口为

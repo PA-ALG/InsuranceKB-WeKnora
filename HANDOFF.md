@@ -22,7 +22,7 @@ squash commit 合入 `main`：
 
 **830 G1 已完成。** PR #126 已合入：
 
-- 当前 `origin/main`：`0e7a26568`；tree：`b96aa35fd2fe86283757deb258920c489de4b4b6`；
+- G1 合并基线 `origin/main`：`0e7a26568`；tree：`b96aa35fd2fe86283757deb258920c489de4b4b6`；
 - G1 状态：`PASS / FLOW=PASS / QUALITY=DEFERRED / NOT_ACCEPTED_FOR_PRODUCTION`；
 - G1 closeout：[`g1-closeout.json`](docs/insurance-kb/evidence/830-g1/g1-closeout.json)；
 - G1 D3 app image：`sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb`；
@@ -30,7 +30,7 @@ squash commit 合入 `main`：
 
 用户已于 2026-09-04 确认在 G1 与 G2 之间先完成一次性 **BA0 本地构建复用工程门**，
 并已明确授权 BA0 implementation。BA0 不是产品 Goal，不改变 WeKnora/Harness 架构或
-G2 DoD。当前指针原子切换为：
+G2 DoD。以下保留 BA0 关闭时的产品状态和构建身份，不代表本次文档修订分支：
 
 ```text
 CURRENT_AUTHORIZATION=NONE
@@ -59,7 +59,8 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
 冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
 见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
-`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+`recovery-authorization.md`。本地 Git 已确认 BA0 经 PR #127 合入
+`origin/main@a4e6a15c8`；本次文档修订未重跑 HTTP/业务或 GitHub live 验收。
 
 
 批准设计：[`2026-09-04-830-ba0-local-build-reuse-design.md`](docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md)。
@@ -67,6 +68,22 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 适用规格：[`127-830-ba0-local-build-reuse`](openspec/changes/127-830-ba0-local-build-reuse/)。
 BA0 `PASS` 后必须把授权清零并
 `RETURN_TO_USER_FOR_G2_AUTHORIZATION`；不得自动启动 G2。
+
+### 830 有限修订交接（仅文档）
+
+用户已授权把本次确认内容写回现有 830。文档 Owner 为本任务；分支
+`codex/830-discussion-amendment`，base 为本地 `origin/main@a4e6a15c8`，worktree 为
+`.worktrees/830-discussion-amendment`。写域仅蓝图、28 执行章程、29 Goal Cards、
+AGENTS 与本文件；原工作区及 B0/G1/BA0 历史证据保留。
+
+修订项与对应 Goal 见[蓝图 §0.1](jlx_enterprise_llm_wiki_technical_blueprint_830.md#01-2026-09-05-有限修订范围)：
+可替换编译/独立审核、原文优先与知识价值、专家修订来源、Schema/缺口增量、实体级
+发布隔离、平台流程与 Q0 质量分层。实现仍待各卡开工和验证；本次不改变产品 PASS 状态，
+不启动 G2，也不产生 Provider/Docker/部署效果。
+
+D0 已核对 R830-01—06 的蓝图/Goal 卡覆盖、五文件边界、Markdown 本地链接与格式，
+以及五份 BA0 状态块与 base 逐字一致；结果为文档检查 PASS。独立复核针对本次冻结
+diff，结果随交付报告给出。产品实现、业务质量、HTTP/容器和远端 CI 均不由此推断。
 
 ## 2. 用户应体验什么
 

@@ -15,7 +15,7 @@
 3. `docs/insurance-kb/29-goal-cards-830.md`；
 4. `AGENTS.md` / `HANDOFF.md` 当前执行与交接事实。
 
-状态固定为：
+以下保留 BA0 关闭时的产品状态与冻结构建身份；不是本次文档修订的写域或分支：
 
 ```text
 815_FLOW=PASS
@@ -50,7 +50,8 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
 冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
 见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
-`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+`recovery-authorization.md`。本地 `origin/main` 已包含 PR #127 合并提交
+`a4e6a15c8dba18e04f7e5320d3222cad5ca4a17e`；本次未重跑 HTTP/业务或 GitHub live 验收。
 
 
 `FLOW=PASS` 指 815 已在同一 lineage 跑通：
@@ -74,6 +75,26 @@ image lookup、持久 Go cache、稳定构建输入和 D3 no-build 制品自检�
 BA0 已于 2026-09-05 完成 D2 构建/复用与 D3 制品烟测并独立复核 PASS，
 证据见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`。G2 仍须用户明确启动授权。
 
+### 0.1 2026-09-05 有限修订范围
+
+用户已批准把本次讨论落实到现有 830；唯一写 Owner 为当前 830 文档修订任务。
+写域仅为本蓝图、28 执行章程、29 Goal Cards、AGENTS 与 HANDOFF；从本地已合并的
+`origin/main@a4e6a15c8` 建立独立文档分支。不新建产品 Goal 或平行蓝图，不重编号、
+不重排既有队列，不改 B0/G1/BA0 已完成结论、历史 Evidence Pack、产品代码和生产状态。
+本次执行 D0 文档检查与独立复核；不启动 G2、Provider、Docker 或部署。
+
+| 修订 Requirement | 唯一设计位置 | 由现有 Goal 承接 |
+|---|---|---|
+| R830-01 可替换编译与独立审核 | §9.1 | G2/G3，Q0 领域准入 |
+| R830-02 原文优先、保义压缩、开放知识价值 | §9.2、§10 | G2，Q0 质量评估 |
+| R830-03 专家修订记录作为来源 | §7、§8、§12 | G5，Q0 分类验收 |
+| R830-04 材料采信、Schema 演进与缺口补编 | §4、§6、§11 | G3/G4 |
+| R830-05 实体级批量隔离与同版消费 | §13 | G3/G4/G7 |
+| R830-06 平台验证与领域质量分层 | §9.1、§14 | G2—G6D、Q0/G7 |
+
+这六项是本次文档检查清单，不增加运行时门禁或回执体系；发现互相矛盾的条款就在原节
+修正。产品实现和领域质量仍待各 Goal 验证，本文修订通过不能替代其 PASS。
+
 ## 1. 背景与总裁决
 
 815 已解决“真实来源能否到正式 Active 并点回来源”的物理不确定性。830 要解决的
@@ -96,8 +117,8 @@ WeKnora 上传 / 解析 / SourceRevision
 
 ## 2. 第一性原理与不变量
 
-1. **结构化事实先于页面。** `Claim + Evidence` 是唯一内容源；Markdown/HTML 是
-   同一 Release 的可重建投影，不是第二事实库。
+1. **正式 Wiki 是统一事实层。** `Claim + Evidence` 是其结构化内容模型；Markdown/HTML
+   是同一 Release 的可重建呈现，页面、字段和索引不能维护各自独立可改的事实副本。
 2. **身份与分类分离。** 实体 ID 回答“是谁”，分类回答“在哪个视图展示”；重新
    分类不改变 ID、Evidence、Claim 历史或旧 Release。
 3. **Evidence 先于自动化。** 模型可提出分类、事实和概念候选，不能创造来源、
@@ -142,6 +163,13 @@ Harness 的 `ec01_formal_candidate_run_815.py`、
 - 项目定制分支：复用已迁移到 Harness/WeKnora 的 Schema、Evidence、Candidate 和
   815 物理接线；不恢复旧 TypeScript 事实库、localStorage、逐页 publisher 或
   Harness Active。
+
+自动编译继续吸收两者方法：nashsu 的用途约束、分析后生成、已有页面关联与异步待审；
+WeKnora 的候选发现、分块引文、增量合并、保守消歧（相关不等于同一）与确定性收尾。
+参考 [nashsu 项目说明](https://github.com/nashsu/llm_wiki#readme) 与
+[WeKnora Wiki 流程](https://github.com/Tencent/WeKnora/blob/main/website-docs/03-features/14-wiki.md)。
+这些方法用于 §10 的可替换策略，不直接继承上游页数/字数门槛或升级依赖；功能实现时
+记录实际参考 commit，既有冻结基线不因在线文档变化而改变。
 
 ### 3.1 11 类保险产品 Schema Catalog 输入
 
@@ -207,6 +235,13 @@ parse → classify → resolve identity → select SchemaPack → compile
 批量冷启动时，exact identity key 唯一、身份/分类高置信、关键身份字段有 Evidence、
 且无别名/版本冲突的新实体可自动创建 `EntityCandidate`。这只是自动建 Candidate，
 不是自动 Active；歧义名称、混合材料和同名多版本进入人工队列。
+
+人工只配置少量材料类型及字段级采信规则，系统自动识别逐文件的材料角色，不要求每个
+文件人工登记。类型包括正式条款/监管材料、官方面客材料、正式内部制度、培训材料、
+销售经验、普通/外部/未知片段；分类器提出角色及依据，版本化 TrustPolicy 结合可信来源、
+允许支持的字段、产品版本、作用域和有效期决定采信，不能由模型置信度自行提升权威。
+实体/材料允许多个分类标签和一个主要导航路径。来源采信策略变化只重算采信与冲突，
+不自动重抽全部材料；具体业务规则由后续领域专家替换和准入。
 
 ## 5. 页面图与 FieldAssertion
 
@@ -305,8 +340,8 @@ FieldDefinition 恰好进入一个主 section，且正式 Profile 不产生空�
 id/version/hash。非产品实体同样选择适合自身的 profile。
 
 G3 可依据工作簿业务分类和医疗险既有布局批量生成 11 个 `PresentationProfile Candidate`，
-由专家整包确认或调整节点数量及映射；不要求专家逐字段配置，也不允许为此手写 11 套
-页面代码。
+由具名产品负责人整包确认结构和展示映射，领域专家在 Q0 收口业务合理性；不以专家提前
+到位阻塞 G3，不要求逐字段手工配置，也不允许为此手写 11 套页面代码。
 
 11 个 pack 从同一 Catalog 版本导入，例如
 `schema_catalog_insurance_product@2026-08-12-v5+<hash>`，每个 pack 仍有自己的
@@ -341,15 +376,22 @@ Claim:
   revision_no/previous_revision_id: {}
 ```
 
-`SourceEvidence` 只表达原始材料支持，绑定 exact `source_revision_id + SourceLocator +
-quote/value snapshot + authority policy`。专家修改记录使用独立但同属一个 ClaimRevision
-生命周期的 `EditProvenance`，自动绑定 actor/time/before/after、可选 reason 和可选新
-SourceEvidence，不能把人的决定包装成来源 Evidence。
+`SourceEvidence` 绑定 exact `source_revision_id + SourceLocator + quote/value snapshot +
+authority policy`；来源类型明确区分文档材料与 `EXPERT_REVISION_RECORD`（专家修订记录）。
+后者是系统在授权专家修改时自动固化的一项原始材料，保存 actor/role、记录时间、实体/
+字段/概念、修改前后完整值及条件、base revision、审核状态，以及按策略产生的审核人/
+审核时间和发布关联。原因和另附文件均选填，不要求专家重复上传或手填审计表。
 
-专家改值而未补新来源时，新 ClaimRevision 的 `supporting_source_evidence_ids` 为空，并显示
-“专家修改（无新增来源证据）”；旧 SourceEvidence 只作为 `prior_source_evidence_ids` 在历史
-区展示，不得继续标成支持新值。专家补充了材料时，新增证据仍必须走普通 SourceEvidence
-校验。这样既保留原始抽取和原文，也不会把原文与专家结论混成同一种证明。
+`EditProvenance` 继续记录编辑行为，引用同一不可变专家记录，不维护另一份可改正文。
+专家新值引用该记录的 after 内容；来源点击打开“谁在何时把什么改成什么”的记录。
+记录证明专家作出了该修订，不声称旧文档写有新值；旧文档只保留为历史依据，除非重新
+验证它确实支持新值。修改前后值、身份与记录时间不可原地更新；后续审核/发布决定追加
+关联，不回填改变已冻结来源。模型和普通编辑者不能伪造授权专家来源。
+
+专家记录与文档来源共用 WeKnora SourceRevision/ACL/Evidence 生命周期和版本化合同，
+允许在现有材料模型内扩展类型，不新建服务或审计库。下一轮编译必须消费专家记录并
+保留专家优先级。一个字段页可承载多条带条件、版本和时间的 Claim；不得因页面唯一
+而把不同适用条件的值压成一个无条件字符串。
 
 Harness 在编译中形成 canonical Claim/Evidence Candidate；WeKnora 验证并把获准对象
 绑定 immutable Release；Wiki/Search/Agent/source viewer 都读该 Release。Harness job
@@ -370,6 +412,11 @@ parser_identity/locator_version/quote_hash`。联合类型 ID 固定为：
 | `PPTX_SLIDE_SHAPE_RANGE` | slide id/number、shape id、text range、可选 bbox |
 | `XLSX_SHEET_CELL_RANGE` | sheet stable id/name、A1 range、value/formula snapshot |
 
+`EXPERT_REVISION_RECORD` 是来源类型，不新增一种文件解析格式；其定位复用
+`TEXT_BLOCK_OFFSET`，绑定冻结记录中的 before/after 结构化块及 exact value snapshot。
+该来源的 `parser_identity` 使用版本化记录序列化器，`parse_manifest_hash` 绑定生成的
+块清单；不伪造 PDF 页码或 OCR 结果。
+
 这些 adapter 复用 WeKnora parse/manifest，不建第二解析平台或无界 parser ladder。
 若 parse contract 缺少稳定 locator，只补现有接缝的最小字段并版本化 adapter，不深 fork。
 
@@ -378,6 +425,10 @@ hash → 按 kind resolve → 回验 quote/value → 成功才渲染。失败返
 `SOURCE_REVISION_NOT_FOUND`、`PARSE_MANIFEST_MISMATCH`、`LOCATOR_UNRESOLVABLE`、
 `QUOTE_MISMATCH` 或 `UNSUPPORTED_LOCATOR_KIND`；不得打开 current revision、相似 quote
 或第 1 页。
+
+文件来源默认打开该 SourceRevision 的标准化可定位快照并高亮，同时提供原始文件
+查看/下载；两个入口均绑定历史版本。专家来源打开固定修订记录。总览、字段、概念
+和审核界面共享 EvidenceID，不各存一份来源正文。
 
 ## 9. 逻辑与物理架构
 
@@ -407,17 +458,70 @@ review plan 和 compiler identity。
 flag 和 contract test。若 Goal 要求替换 WeKnora 核心 parser、复制 Wiki runtime、
 新 serving 数据库或持续侵入大面积上游热点，立即 STOP；不得以“定制分支”名义深 fork。
 
+### 9.1 可替换领域编译协议
+
+复用 815 接缝收敛版本化 `CompileRequest → CandidateBundle`；公共输入包含原始材料及
+定位索引、Schema/Profile、已有 Wiki/实体快照、材料采信和编译策略、任务预算。输出包含
+逐字段处理状态、带作用域/时间的 Claim/Evidence、开放知识及关系、实体消歧与知识变更
+提案、缺口/不确定项、编译器/规则/模型版本和输入身份。必选字段要求完整尝试和独立页面，
+不要求虚构非空值；无关或未发现信息可以诚实 unknown。
+
+模板、规则抽取和 LLM 编译实现共用该协议；专家以后可替换分类/抽取/归一化、概念准入、
+关系、补缺及冲突判断中的适用实现，而无需重写平台展示、审核与发布。领域算法放在
+Harness，WeKnora 接口不新增 Schema67/Golden 专用依赖；协议保留版本和兼容规则。
+不要求专家一次重写全部模块，也不新建插件市场、服务或通用编排平台。
+
+独立审核器消费候选、来源、Schema、作用域、时间与策略，输出通过/拒绝/需人工及依据；
+它与抽取器的执行、Prompt 和上下文隔离，不依赖抽取模型的自评分或内部推理。同一基座
+模型可按现有模型边界分别执行；审核器与编译器各自可替换。平台校验类型、引用真实性、
+版本、权限和发布完整性；业务支持度与价值由领域审核实现判断，不能用字符串匹配或
+哈希一致宣称语义完整。
+
+G2—G6D 通过协议替换回放、初始实现的真实隔离链路和确定性负向检查推进，持续报告
+`FLOW` 与 `QUALITY=DEFERRED`。回放样例不冒充真实运行或业务 Golden；专家实现与真实
+领域准确性在 Q0 最后准入，不以提前取得专家标注或完成抽取优化阻塞平台开发。
+接口空桩不能代替当前 Goal 的真实物理出口。
+
+### 9.2 原文优先与信息等价
+
+默认按 `EXTRACT → NORMALIZE → COMPRESS → SYNTHESIZE` 选择必要的处理方式，记录
+采用的方式和输入来源：原文合适时直接摘录；单位/格式整理优先确定性规范化；较长内容
+可忠实压缩；分散信息可多来源综合。允许多种方式组合，但最终值必须保留该字段/概念
+所需的数值、否定、条件、例外、主体、版本和时间，不能凭常识补全材料没有的事实。
+
+引文保留逐字原文与准确定位，值允许经过验证的语义等价表达；必要时引用上文、表头和
+脚注，不能截取结论丢掉条件。字数、出现次数和每文档页数只能作预算或筛选信号，不能
+作为业务重要性硬门；一句关键规则也可有价值。页面可摘要/折叠完整内容，不以视觉缩短
+代替事实删减。后续重编回读原材料、专家来源及已确认事实，不反复压缩上一版摘要。
+
 ## 10. free_wiki 高价值概念轨
 
 free_wiki 处理 Schema 外但值得长期治理的概念、规则、流程、限制或关系。它仍走同一
 Claim/Evidence→Candidate→Review→Release，不是自由 Markdown 区或图数据库。
 
+`free_wiki` 是实体下的导航分组：可共享概念保持跨实体稳定身份与义项，实体特有规则
+保留自身作用域。已有 Schema/专家定义优先；没有定义时允许模型依据材料编译候选，
+经策略审核后生效。动态聚合只读取该次查询固定的实体修订集合，不能回写专家定义。
+
 评分前有两个硬门：
 
-1. **Evidence 硬门**：至少一条按策略合格且 SourceLocator 可回验的 `SOURCE` Evidence；
+1. **Evidence 硬门**：事实有按 §7 来源类型策略合格且 SourceLocator 可回验的 Evidence；
 2. **身份硬门**：稳定主语/概念边界/去重键明确，能区分新概念、别名、局部备注和营销词。
 
-任一硬门失败，强制 `mention-only`，即使评分 100 也不得成页。通过后按 100 分评分：
+任一硬门失败，不得成为正式页面；证据不足的有效线索可保留待处理，噪声直接拒绝。
+先判断知识应放在哪里，不把所有候选都变成新页面：
+
+| 处置 | 条件 |
+|---|---|
+| 新建候选页 | 有独立业务用途、明确边界和实质内容，独立引用/维护有价值且来源充分 |
+| 更新已有页/增加义项 | 已有知识的新说明、证据或可区分含义；先核实同一身份 |
+| 写入实体字段/规则 | 金额、次数、条件等应归属具体实体，不另建孤立数值页 |
+| 别名/链接 | 确认同指一物时复用身份；相关概念只关联，不能错误合并 |
+| 线索待处理 | 有潜在价值但材料或身份不足，后续补编，不进入 Active |
+| 拒绝 | 广告口号、目录/标题碎片、OCR 噪声或无依据内容 |
+
+不独立成页不等于丢弃有价值字段；业务关系必须有材料依据，导航标签/共现相似度只作
+组织和召回信号，不能冒充业务事实。独立成页候选通过硬门后按 100 分评分：
 
 | 维度 | 分值 |
 |---|---:|
@@ -428,17 +532,20 @@ Claim/Evidence→Candidate→Review→Release，不是自由 Markdown 区或图�
 | 新颖身份 | 10 |
 | 名称稳定性 | 10 |
 
-`>=80` 自动进入 Candidate；`60–79` 人工决定；`<60` mention-only。自动入 Candidate
-不等于 Active。顺序固定为 analyze → resolve/link existing → deduplicate → hard gates/
-score → structured Claim/Evidence → page compile → orphan/broken-link/evidence lint，禁止
-先生成 Markdown 再事后去重。
+`>=80` 自动进入 Candidate；`60–79` 人工决定；`<60` mention-only。这些是既有初始策略，
+G2 验证执行与边界，Q0 校准业务效果；高分不能抵消硬门失败，不为过验收临时调分。
+Schema 必选字段不受自由概念评分淘汰。自动入 Candidate 不等于 Active。
+顺序固定为用途/材料分析 → resolve/link existing → 去重/义项 → Evidence/价值与归属判断
+→ 原文优先编译 → 独立审核 → 按策略发布；发布前 lint 检查孤立页、断链和来源完整性，
+发布后的 lint 产生修订提案，不能直接改 Active。相关不等于同一，短内容不等于低价值。
+待审自由概念留候选池，不阻塞无依赖的合格内容；不能通过省略关键字段错误绕过发布门。
 
 ## 11. 增量语义与双时态
 
 | 语义 | 定义与结果 |
 |---|---|
 | `SAME` | 规范化事实、作用域、有效期相同且无新增 Evidence/信息；只记观察 |
-| `ENRICH` | 事实不变但新增/增强 Evidence、条件或元数据；候选修订 |
+| `ENRICH` | 命题、作用域及有效期不变，仅补充 Evidence 或不改变事实的元数据 |
 | `SUPERSEDE` | 同一作用域/重叠有效期的新权威事实取代旧事实；旧事实留历史 |
 | `COEXIST` | 值不同但版本/地域/渠道/人群/场景/有效期不重叠；明确范围后并存 |
 | `CONFLICT` | 同一作用域、有效期重叠且值矛盾、规则不能裁决；强制人工 |
@@ -446,9 +553,34 @@ score → structured Claim/Evidence → page compile → orphan/broken-link/evid
 | `UNCHANGED` | 受影响闭包/Release diff 无语义影响；不生成 ClaimRevision/page delta |
 
 `SAME` 是 incoming-vs-existing 逐事实比较，`UNCHANGED` 是闭包/Release 级结果。
+SourceRevision 表示材料版本，ProductVersion 表示产品的业务版本，ClaimRevision 表示
+知识断言修订，Wiki Release 表示获准发布的知识快照；四者分别标识并关联。新上传或补证
+不自动创建新产品版本，材料发布日期、产品生效时间与系统获知时间也不能混用。
 每个 ClaimRevision 同时记录业务有效时间 `valid_time` 和系统知晓时间 `system_time`，
 支持 `as_of_valid_time(t)` 与 `as_known_at(t)`。晚到材料追加 revision，不改旧时间段。
-七语义都不能直接覆盖 Active；R2 审核完成前 R1 继续服务。
+七语义都不能直接覆盖 Active；R2 审核完成前仍有有效证据的 R1 继续服务。唯一支持已失效
+的知识须走同一撤回/发布链及时停止服务，不能借等待替代值继续作为当前事实。
+
+改变条件/例外可能改变命题，必须重新比较作用域并判定替代、并存或冲突，不能统一计为
+ENRICH。逻辑事实身份、语义内容 hash、ClaimRevision 与整批 Candidate/Release 身份分离；
+无关字段沿用旧修订，不因整批审计身份改变而制造事实变更。
+
+G4 在现有任务/缓存接口内实现最小 GapTask：根据 Schema、关联和相似实体发现缺口，
+反查本实体/版本已有材料，定向抽取并记录查询、来源及结果。其他产品只提供缺口线索，
+不能成为本产品值的替代证据；输入未变化时复用已有结果与失败尝试，按任务预算终止。
+
+| 触发 | 最小处理 |
+|---|---|
+| 新材料/新材料版本 | 定向补缺、补证或比较受影响知识 |
+| Schema 新增字段 | 对适用实体建立 unknown 页和 GapTask，反查已有材料，无需重新上传 |
+| 字段语义变化/废弃 | 新 key/版本或 deprecated；迁移候选，历史可读，不静默沿用旧结论 |
+| 校验/采信策略改变 | 重验或重算裁决，材料和抽取输入未变时不重抽 |
+| 来源撤回/失效 | 检查其它有效支持；唯一支持失效时撤回对应正式知识，不等待替代值 |
+| 展示模板/标签改变 | 重建展示/分类投影，不重抽且不改变事实身份 |
+
+优先字段级复用和声明式依赖；必要时允许有界实体范围重编，但必须给出实际影响范围、
+调用成本和无关事实不变证据，不以无界全库重编替代增量。完整依赖图和任意双时态查询
+仍在企业阶段；当前保留双时态数据及 current/as_of_date/pinned 必要查询。
 
 ## 12. 审核策略与专家编辑
 
@@ -467,10 +599,11 @@ pack Q0 PASS 前，其知识内容无论使用 `AUTO_ACTIVE`、`ONE_CLICK_BATCH`
 事实的分类/导航元数据可以注册。pack Q0 PASS 后才开放生产人工审核；只有质量门通过且
 策略另行获批后，低风险内容才允许在生产启用 AUTO_ACTIVE。所有策略仍产生 ReviewDecision。
 
-专家编辑作用于结构化 Claim，而非 managed Markdown。结果以专家为准：原因和新 Evidence
-均可选；系统以 EditProvenance 自动记录 actor/time/before/after/revision/base/target
-release；无新来源标“专家修改”且不伪造 SourceEvidence。编辑形成 `EXPERT_EDIT` ClaimRevision/Candidate/
-Release，并置 `expert_lock=true`。以后模型可以携新 Evidence 发起冲突候选，但不得自动
+专家编辑作用于结构化 Claim，而非 managed Markdown。结果以专家为准：原因和另附文件
+均可选；系统按 §7 自动固化专家修订来源并由 EditProvenance 引用。页面标示
+“来源：专家修订记录”，来源链接打开 actor/time/before/after 及审核/发布关联，不把该记录
+冒充原文文档。编辑形成 `EXPERT_EDIT` ClaimRevision/Candidate/Release，并置
+`expert_lock=true`；无发布权限者仍进入 pending。以后模型可以携新 Evidence 发起冲突候选，但不得自动
 覆盖、SUPERSEDE 或解锁；只有具名专家的新决定可以更新/解锁。
 
 ## 13. 端到端流程
@@ -487,17 +620,26 @@ ingest/parse → classify → resolve existing/new EntityCandidate → exact Sch
 增量：
 
 ```text
-new SourceRevision | SchemaPackVersion | Reclassification | ExpertEdit
-→ affected entity/field closure → recompile → seven semantics
+new SourceRevision | SchemaPackVersion | TrustPolicyVersion | Reclassification | ExpertEdit
+→ affected entity/field closure
+→ 按事件定向补编 / 重验裁决 / 重渲染（纯标签变化不重抽；换 pack 走迁移候选）
+→ seven semantics / presentation diff
 → Candidate Rn+1(base=Rn) → review → Active Rn+1
 ```
 
-批量新实体先在批内做 identity/alias/version 去重；低风险可分批 Candidate，但不得把
-全企业做成一个不可审核巨包。Candidate 激活前不进入正式分类视图、Search 或 Agent。
+批量新实体先在批内做 identity/alias/version 去重。审核可一键处理整批，发布/回退默认
+以实体及其必要依赖为原子单位；强关联变更才组成一个原子 ChangeSet。某实体的关键
+错误阻断该实体及依赖者，待审自由概念或无关异常实体不阻塞其它合格实体。
+沿现有 WeKnora scope 的唯一 Head 合并实体修订，保留未改实体，不建立 Harness Head。
+实体级回退也形成新 Release，保留其它实体后续合法修订；完整 Release 回滚另按已冻结
+范围执行，均保留历史。共享概念及聚合绑定同一读取快照；并发候选基于旧 Head 时须
+重验/合并，不能覆盖其他实体的新修订。Candidate 激活前不进入正式视图、Search 或 Agent。
 
 Wiki/Search/Agent 必须绑定同一 release_id/activation epoch。产品页默认链接顺序为
 Entity → FieldAssertion → Evidence/ConceptDefinition。禁止 Wiki R2、Search R1，禁止
 Agent 读 Harness Candidate，禁止 RAW chunk 和 free_wiki Candidate 旁路正式 Release。
+正式检索必须覆盖字段值、条件与开放知识正文，不能只索引标题；以真实问题验证可检索、
+回答保持作用域并引用同版来源。复用 WeKnora 搜索/Agent 接口，不另建检索产品。
 
 ## 14. MVP、企业路线与唯一 Goal 顺序
 
@@ -509,15 +651,15 @@ Agent 读 Harness Candidate，禁止 RAW chunk 和 free_wiki Candidate 旁路正
 |---|---|---|
 | B0 · 815 证据基线与资产裁决 | 冻结 FLOW/QUALITY、KEEP/REWIRE/FREEZE/SUPERSEDE、双系统红线 | 可重放基线/接缝清单 |
 | G1 · 实体页图与独立 FieldAssertion | stable entity；overview/section/field/free_wiki | 每必填字段 canonical page |
-| G2 · 共享 ConceptDefinition 与 free_wiki 准入 | FieldAssertion→Concept；硬门/评分/去重/lint | Candidate 或 mention-only |
-| G3 · SchemaPack Catalog、展示 Profile、统一分类与批量实体识别 | 11/11 pack/profile 注册校验；节点数按实际；分类先判；高置信冷启动 | 多实体/多 pack Candidate |
-| G4 · 增量更新、冲突、双时态与 R2 | 七语义、affected closure、valid/system time | R2 不覆盖 R1 |
-| G5 · 专家编辑、审核策略与审计 | expert lock；三审核策略；唯一审计 | 专家/策略新 Release |
+| G2 · 共享 ConceptDefinition 与 free_wiki 准入 | 可替换编译/独立审核；原文优先；概念与价值准入 | 有来源的 Candidate 或其它明确处置 |
+| G3 · SchemaPack Catalog、展示 Profile、统一分类与批量实体识别 | 11/11 pack/profile；材料角色/采信配置；高置信冷启动 | 多实体/多 pack Candidate |
+| G4 · 增量更新、冲突、双时态与 R2 | 七语义、GapTask/Schema 触发；实体原子发布与回滚 | 增量 R2，保留历史和无关实体 |
+| G5 · 专家编辑、审核策略与审计 | 专家修订作为来源；expert lock；三审核策略 | 可追溯专家/策略新 Release |
 | G6A · OCR PDF / 图片纵切 | 冻结 union；PDF/OCR/图片；Text 基线 | exact click/fail closed |
 | G6B · Word 纵切 | 段落/表格 range | Word 来源点击 |
 | G6C · PPT 纵切 | slide/shape range | PPT 来源点击 |
 | G6D · Excel / 表格纵切 | sheet/cell range/value snapshot | Excel 来源点击 |
-| Q0 · Pack-scoped 领域专家质量门 | 医疗险 Schema67 先行；其它 pack 逐包准入 | 每个启用 pack 独立 PASS/FAIL |
+| Q0 · Pack-scoped 领域专家质量门 | 专家实现/标注；保义编译与开放知识质量；逐 pack 准入 | 每个启用 pack 独立 PASS/FAIL |
 | G7 · 多格式 FLOW + QUALITY 联合验收 | 11/11 结构注册；只对已质量准入 pack 发布 | 联合结论，不新增能力 |
 
 Q0 开卡时冻结首个 `QUALITY_ADMISSION_WAVE_1`，至少覆盖医疗险、重疾险、寿险/储蓄型
@@ -532,7 +674,9 @@ schema category 与展示节点不混淆；统一产品/权益/服务视图；
 联合结论。
 
 企业阶段仍沿同一节点增加更多 SchemaPack、实体/别名/版本、分类视图、专家队列、
-结构化 connector、时态检索和 release-aware ranking。扩展不改变唯一 WeKnora Active，
+结构化 connector、时态检索和 release-aware ranking；逐步补充反馈、过期/死链/来源失效
+巡检与更大规模材料的吞吐/成本治理。830 先落实当前链路的必要校验与有界任务，不提前建设
+全套运营平台或几十万碎片规模的所有能力。扩展不改变唯一 WeKnora Active，
 不新增图数据库、Prompt 平台或独立审核产品。
 
 ## 15. 难点与取舍
@@ -572,13 +716,17 @@ Search/Agent 旁路 Candidate/RAW；多格式另建解析平台；分类靠复�
 - 每实体必填字段恰好一个 FieldAssertion，字段先到自身页再到 ConceptDefinition；
 - free_wiki 硬门失败不成页，80/60 边界正确；
 - 高置信冷启动只自动建 Candidate；不确定项人工；
-- 七语义齐全，R2 前 R1 服务，valid/system time 可分别回放；
-- 无新 Evidence 的专家修改有标签，模型不能覆盖 expert_lock；
+- 七语义齐全，R2 前有有效支持的 R1 服务，唯一支持失效则撤回，valid/system time 可分别回放；
+- 专家修改自动产生可定位的修订来源，actor/time/before/after/review 可查，模型不能覆盖 expert_lock；
 - 高风险/CONFLICT 永不 AUTO_ACTIVE；
 - 六种 SourceLocator 均可 exact reopen，失败 typed 且不跳第 1 页；
 - Wiki/Search/Agent/current/pinned 绑定相同 release/epoch。
 
 ## 18. 参考与 SUPERSEDE
+
+本次明确替代两项旧口径：专家未上传额外文件就把新值来源设为空；G2/G3 在平台流程
+验收前必须取得专家 Golden 并通过领域语义指标。前者改为专家修订记录作为来源，后者
+改为协议与真实隔离流程先行、专家业务质量在 Q0 验收；原有业务阈值保留在 Q0。
 
 参考：
 
