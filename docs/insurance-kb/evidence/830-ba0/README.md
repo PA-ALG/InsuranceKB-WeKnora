@@ -1,9 +1,15 @@
 # 830 BA0 · 本地构建复用 Evidence Pack
 
-> 当前状态：`AWAITING_D2_D3_EVIDENCE`
+> 当前状态：`PASS`
 > 范围：`BA0_LOCAL_BUILD_REUSE`
 > 产品 Goal：`NONE`
-> G2：`LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION`
+> G2：`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`
+
+2026-09-05 完成：恢复构建 PASS/build=1、同身份复用 PASS/build=0、D3 PASS/build=0/pull=0。
+累计真实构建为 **2/2**（旧失败1 + 用户追加授权恢复成功1）。closeout v1 的 `build_budget`
+仅记录恢复 identity 窗口 1/1；完整累计历史见
+[recovery-authorization.md](recovery-authorization.md) 与原始失败收据
+[failed-initialization-build.json](d2/failed-initialization-build.json)。
 
 本包只证明 BA0 工程门：同一 app artifact identity 的首次请求真实构建不超过一次，第二次
 请求严格复用同一 image ID 且 build=0；D3 仅运行该 exact image 的 standalone

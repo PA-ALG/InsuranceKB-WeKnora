@@ -3,7 +3,7 @@
 > 当前运行/交接状态的唯一入口。贡献规则只以 [`AGENTS.md`](AGENTS.md) 为准；
 > 规格和历史讨论分别留在适用 OpenSpec 与历史合订文档，不在这里重复。
 
-## 1. 当前结论（2026-09-04）
+## 1. 当前结论（2026-09-05）
 
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个
@@ -33,13 +33,13 @@ squash commit 合入 `main`：
 G2 DoD。当前指针原子切换为：
 
 ```text
-CURRENT_AUTHORIZATION=BA0_ONLY
+CURRENT_AUTHORIZATION=NONE
 CURRENT_PRODUCT_GOAL=NONE
 CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
 BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
-BA0_STATUS=WIP
+BA0_STATUS=PASS
 G1_STATUS=PASS
-G2_STATUS=LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
 ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
 ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
 IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
@@ -47,11 +47,20 @@ IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
 WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
 BRANCH=codex/830-ba0-implementation
 OWNER=830-BA0总控
-CURRENT_RED=TASK_2_COMPLETE_RED_NOT_YET_CAPTURED
-NEXT_PHYSICAL_RESULT=TASK_2_COMPLETE_RED_AND_YELLOW_SCOPE_GATE
-REAL_APP_BUILD_BUDGET=1
-REAL_APP_BUILDS_USED=0
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
 ```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
 
 批准设计：[`2026-09-04-830-ba0-local-build-reuse-design.md`](docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md)。
 可执行计划：[`2026-09-04-830-ba0-local-build-reuse.md`](docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md)。

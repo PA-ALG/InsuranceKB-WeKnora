@@ -2,11 +2,11 @@
   "contract": "weknora.830.ba0-closeout.v1",
   "evidence_status": "PASS",
   "state": {
-    "ba0_status": "WIP",
-    "current_authorization": "BA0_ONLY",
+    "ba0_status": "PASS",
+    "current_authorization": "NONE",
     "current_product_goal": "NONE",
-    "g2_status": "LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION",
-    "next_action": "INDEPENDENT_REVIEW_AND_CLOSEOUT"
+    "g2_status": "LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION",
+    "next_action": "RETURN_TO_USER_FOR_G2_AUTHORIZATION"
   },
   "identity": {
     "origin_main_base": "0e7a26568a2164f9501e409f38fee0d4a62539cb",
@@ -78,5 +78,5 @@
       "reason": "NO_SECOND_IDENTITY_OR_BUILD_CREATED"
     }
   },
-  "self_sha256": "c1177dbad9c900bd762e87a0b0fdcfd2c6e1e3abc41205f46027dca61b0ad0d6"
+  "self_sha256": "a35bbd26cb5b93a3fdc90d63f4e647304fd4f94236cad6db8ce15c3227faaee5"
 }

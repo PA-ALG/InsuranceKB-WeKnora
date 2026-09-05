@@ -1,25 +1,25 @@
 # 29 · 830 Goal Cards（统一知识库与真实验收版）
 
-> 修订日期：2026-09-04
-> 当前授权：`BA0_ONLY`
+> 修订日期：2026-09-05
+> 当前授权：`NONE`
 > 当前产品状态：`G1_PASS / AFTER_G1_BEFORE_G2`
-> 当前工程门：`BA0_LOCAL_BUILD_REUSE / WIP`
+> 当前工程门：`BA0_LOCAL_BUILD_REUSE / PASS`
 > Schema Catalog：`11_PRODUCT_PACKS_SOURCE_VERIFIED_NOT_REGISTERED`
 > 执行 WIP 上限：`WIP_LIMIT=1`
 
 本文件是 830 唯一 Goal 队列和逐卡验收权威。B0、G1 均为 `PASS`；G1 closeout 见
 `docs/insurance-kb/evidence/830-g1/g1-closeout.json`。用户已确认在 G2 前先完成一次性
 BA0 本地构建复用工程门；BA0 不属于产品 Goal，也不增加 830 产品进度。G2 及后续均为
-`LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION`。
+`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`。
 
 ```text
-CURRENT_AUTHORIZATION=BA0_ONLY
+CURRENT_AUTHORIZATION=NONE
 CURRENT_PRODUCT_GOAL=NONE
 CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
 BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
-BA0_STATUS=WIP
+BA0_STATUS=PASS
 G1_STATUS=PASS
-G2_STATUS=LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
 ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
 ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
 IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
@@ -27,11 +27,20 @@ IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
 WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
 BRANCH=codex/830-ba0-implementation
 OWNER=830-BA0总控
-CURRENT_RED=TASK_2_COMPLETE_RED_NOT_YET_CAPTURED
-NEXT_PHYSICAL_RESULT=TASK_2_COMPLETE_RED_AND_YELLOW_SCOPE_GATE
-REAL_APP_BUILD_BUDGET=1
-REAL_APP_BUILDS_USED=0
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
 ```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
 
 ```text
 B0 -> G1 -> G2 -> G3 -> G4 -> G5 -> G6A -> G6B -> G6C -> G6D -> Q0 -> G7
@@ -162,12 +171,11 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 
 ### BA0 · 本地构建复用工程门（非产品 Goal）
 
-- **KIND / STATUS**：`ENGINEERING_GATE_NOT_PRODUCT_GOAL / WIP`；唯一 Owner 为
+- **KIND / STATUS**：`ENGINEERING_GATE_NOT_PRODUCT_GOAL / PASS`；唯一 Owner 为
   `830-BA0总控`，固定工作树为
   `/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation`。
-- **CURRENT_RED / NEXT**：Task 1 missing-change RED 已捕获并由规格关闭；当前为
-  `TASK_2_COMPLETE_RED_NOT_YET_CAPTURED`，下一物理结果仅为
-  `TASK_2_COMPLETE_RED_AND_YELLOW_SCOPE_GATE`。
+- **CURRENT_RED / NEXT**：`NONE / RETURN_TO_USER_FOR_G2_AUTHORIZATION`；
+  D2 build=1/reuse=0、D3 build/pull=0，独立复核 PASS。
 - **唯一工程结果**：固定 Colima 中一个新 app identity 最多构建一次；随后相同 identity
   请求 Docker build invocation=`0`，D3 使用 exact image 完成无业务依赖的
   `CONTAINER_ARTIFACT_SMOKE`，且 build/pull invocation=`0`；不冒充 G2 HTTP health。
@@ -176,19 +184,20 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   `b96aa35fd2fe86283757deb258920c489de4b4b6`；BA0 implementation 起点为
   `874e50d44aec5941faae045e761280aa69aee1a3` / tree
   `2ec76af38258a0220d5dc117a9b789890345e7d7`，branch=`codex/830-ba0-implementation`；
-  真实 app build 总预算=`1`，当前已用=`0`。
+  2026-09-05 用户新增恢复授权一次，累计总预算=`2`、已用=`2`（历史失败1 + 恢复成功1）。
 - **权威设计**：`docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md`；
   实施计划为 `docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md`；适用规格为
-  `openspec/changes/127-830-ba0-local-build-reuse/`，Evidence Pack 仍为后续任务。
+  `openspec/changes/127-830-ba0-local-build-reuse/`；Evidence Pack 已完成，见
+  `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json` 与 `recovery-authorization.md`。
 - **明确非目标**：不改产品架构或 G2 DoD，不建 CI/远端 cache/基础镜像产品线/第二制品
   平台，不调用 Provider，不修改生产 `8081`、生产 Active 或业务数据库。
-- **时间盒 / 停止**：正常 1 个、最多 2 个工作日；最多一次真实 app build。超时、第二层
+- **时间盒 / 停止**：正常 1 个、最多 2 个工作日；原预算1次，用户追加恢复1次，现已用尽。超时、第二层
   前置或要求第二次真实探针构建时停止并返回用户。
 - **PASS 动作**：关闭写域、更新 Evidence/Handoff，然后 `RETURN_TO_USER`；不得自动启动 G2。
 
 ## 4. G2 · 共享 ConceptDefinition 与 free_wiki 准入
 
-- **CURRENT_RED**：`LOCKED_PENDING_BA0_PASS_AND_EXPLICIT_USER_AUTHORIZATION`；BA0 PASS 后
+- **CURRENT_RED**：`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`；BA0 PASS 后
   仍保持 `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`，获批开工才转为
   `NO_SHARED_CONCEPT_OR_VALUE_ADMISSION`。
 - **NEXT_PHYSICAL_RESULT**：首批共享 ConceptDefinition 由实体 FieldAssertion 链接并
