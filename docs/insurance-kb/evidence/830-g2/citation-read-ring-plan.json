@@ -1,0 +1,15 @@
+{
+  "contract": "830-g2-citation-read-ring-plan.v1",
+  "authorization": "standing user approval for necessary bounded G2 source-preview work",
+  "runtime_target": "weknora-g2-594-app",
+  "purpose": "dedicated read-only source token signer; no human review or publish authorization keys",
+  "key_id": "g2-isolated-citation-read-20260906",
+  "public_key_sha256": "ad60212341473c720de12e9c096257529c7e7a5233c38b189995d4c2318f0d08",
+  "config_sha256": "693e9996366c2d6dc17ad13c2ddd7419d4c1992e9b5572e7a5d487184837e034",
+  "provider_calls": 0,
+  "status": "APPLIED_HEALTH_LOGIN_AND_G1_SOURCE_READ_PASS",
+  "health_http": 200,
+  "login_http": 200,
+  "g1_preview_http": 200,
+  "g1_bytes_http": 200
+}

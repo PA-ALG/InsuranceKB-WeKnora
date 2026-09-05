@@ -1,0 +1,31 @@
+{
+  "contract": "g2-interim-app-build-plan.v1",
+  "authorization": "User standing approval for reasonable necessary G2 extensions",
+  "build_source_head": "3c655294daa3aecf3b27fcba2e408d63a4a17f60",
+  "builder": "colima-g1-build",
+  "entrypoint": "scripts/build_images.sh --app",
+  "lookup_before_build": true,
+  "purpose": "Deploy the verified source-backend repair to the existing isolated G2 runtime and physically verify A backfill while B external-data approval is pending. This artifact is not final G2 FLOW acceptance.",
+  "bounded_extension": {
+    "app_builds_total_max": 2,
+    "previous_app_builds_max": 1,
+    "additional_app_builds": 1,
+    "reason": "One intermediate source repair artifact plus one final affected G2 artifact after native source bridge integration",
+    "frontend_builds_max": 1,
+    "actual_app_builds_before_this_action": 0,
+    "actual_frontend_builds_before_this_action": 0
+  },
+  "runtime_target": "weknora-g2-594-app",
+  "runtime_port": 18194,
+  "database": "weknora_g2_594",
+  "source_document": "existing A 596-1 terms only",
+  "provider_calls": 0,
+  "blocked_external_action": "B upload / DashScope embedding remains unexecuted pending explicit response",
+  "guards": [
+    "reuse exact artifact on identity match, build count0",
+    "no source changes during build; any later bridge changes use a different frozen head",
+    "no rebuild of unchanged docreader/frontend in this step",
+    "no production8081 or original DB changes",
+    "stop on selector preflight identity mismatch; do not bypass"
+  ]
+}

@@ -121,3 +121,36 @@ R5集成补充：来源 verifier 未接入或核验失败时，Review 与 Activa
 总控追加 internal/handler/wiki_release.go 最小错误映射，沿现有 handler 错误响应返回 HTTP503，
 code=CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE；不得把受控不可用映射成无区分500。
 定向测试复用 concept_free_wiki_830_g2_test.go，分别覆盖 schema review 与 release activation 错误路径。
+
+R4受托原文桥实施切片（2026-09-06，用户持续授权）：新增来源不复用旧C5的17条坐标，
+也不把离线pdfplumber自hash作为线上权威。仅复用既有docreader builtin pypdfium与固定
+SourceRevision字节，进行服务端只读页内位置重放；历史WeKnora parse attempt/chunk manifest
+与本次locator producer身份分别校验，不回写历史revision。源引用的BLOCK_ID必须精确指向
+durable chunk，quote在该chunk内按code point逐字回验，再在所声明native页内唯一定位；
+重叠chunk不得凭quote猜身份。无法唯一定位、扫描页、parser/parse/file drift均typed拒绝。
+
+第一并发Owner g2_bundle_review独占隔离worktree830-g2-native-source-producer：
+docreader/parser/pdf_parser.py及其focused tests、internal/infrastructure/docparser/grpc_parser.go
+及其focused tests。通过已存在parser overrides明确请求只读native capture；无新proto字段，
+通过既有metadata传递NativeStructureArtifact，SanitizedJSON仍不含正文。正文保留在既有
+ReadResult.MarkdownContent，sidecar可用页/字符范围和hash绑定正文及bbox。默认导入行为保持。
+实现前把最小wire schema/override入口交总控冻结；额外生产文件先报具体必要性。
+
+第二并发Owner g2_sources独占隔离worktree830-g2-native-source-bridge的后端12文件：
+service/concept_source_authority_830_g2.go及测试（新增），service/wiki_release.go、
+service/concept_free_wiki_830_g2.go、service/schema_wiki.go及各自测试，
+handler/concept_free_wiki_830_g2.go及测试，container/container.go及
+schema_wiki_production_readiness_test.go（路径均在internal下对应目录）。
+来源桥依赖KnowledgeRevisionSourceService、knowledge/chunk repositories与DocumentReader，
+不依赖SchemaWikiService而引入循环。Review/Activate的双KB ACL必须先于原文IO；
+逐字引文匹配所声明页，不要求旧parser的完整Markdown chunk与新native正文格式相同。
+
+G2采用独立封闭concept-source-content-token.830.g2.v1，复用既有citation读签名环，
+不得伪造旧G1 authority要求的parsed_document或coordinate receipt。token绑定固定
+scope/release/epoch/candidate/member/citation/source/页/bbox/quote及TTL；读取时重新绑定
+同版成员并执行ACL，再读取固定PDF。沿现有citation-content路由按独立contract分派，
+不改变旧Schema token的验证域。总控负责独立G2原文viewer，复用pdfJsPort，避免放宽旧解析器。
+
+不在构建工作树内改正在构建的源码。
+此切片不上传B，不调用embedding/compiler，不新表或部署服务；发布继续默认拒绝直到
+真实revision/bytes/native capture/ACL均有服务端回验。

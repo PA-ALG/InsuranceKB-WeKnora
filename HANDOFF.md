@@ -3,14 +3,37 @@
 > 当前运行/交接状态的唯一入口。贡献规则只以 [`AGENTS.md`](AGENTS.md) 为准；
 > 规格和历史讨论分别留在适用 OpenSpec 与历史合订文档，不在这里重复。
 
-## 1. 当前结论（2026-09-05）
+## 1. 当前结论（2026-09-06）
 
-**G2 已按用户追加授权恢复推进（2026-09-06）。** 实体版本绑定修复已独立复审
-BLOCKER=0，25项离线定向测试通过；当前离线协议切片可小提交，不代表G2全卡通过。
+**G2 正在按用户追加授权并行推进，尚未完成。** 已提交六个代码切片：
+离线编译/独立审核合同 `e88f27fe6`（25项定向测试），固定Release页面 `5b9ddb265`
+（25项前端测试及typecheck），原文存储后端解析修复 `03a2b96aa`（RevisionSource套件通过）。
+另有 Go 发布/固定页面合同 `77f8fea05` 和 Agent 同版消费 `3c655294d`。
+原生PDF定位生产者 `b8cde87d8` 已通过真实A的Python解析及Go传输校验：
+39页、45120 code points、40657字符框；20条种子文档引文均在指定页唯一匹配。
+均有独立复核；最终六个 Go 包定向测试通过，不代表真实 G2 发布验收通过。
+
+Go合同/发布/页面、Agent同版消费已集成。来源校验缺失时 Review/Activate 必须拒绝，
+HTTP503具明确错误码；真实来源桥未接通前不能发布G2。真实G1的17条引文已逐字核对，
+迁移的旧/新hash转换与两阶段来源凭据接线已通过测试；旧封存文件未修改。
+新 G2 的 PDF 原生定位生产者已提交部署；后端受托来源桥与专用前端查看器在桥接 worktree 整合并独立复核。
+
+FLOW=NOT RUN，QUALITY=DEFERRED。Provider调用为0；应用构建1次已PASS，
+源码`3c655294d`，镜像`sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6`。
+合理扩展后应用构建上限2次，前端上限1次；docreader原生定位构建追加1次，构建及隔离升级均PASS，gRPC健康SERVING。
+正式gRPC unary/stream实际读取A均PASS，39页原文凭据与冻结artifact完全一致；provider调用0。
+G2专用数据库
+`weknora_g2_594`已复制，专用来源runtime health200，测试操作员正常login通过。
+原库Head epoch3及source表0均不变；G2的A backfill实际HTTP200，来源封存实表0→1，
+精确PDF SHA/大小/39页及pinned状态通过，G2 Head epoch3不变。
+隔离升级曾因root-owned 0600配置无法被appuser读取而退出，已保持字节不变修复owner，
+同镜像health/login200；旧容器保留为weknora-g2-594-app-before-3c655294。
+B upload未执行：自动审批拦截PDF外发，已请求具体DashScope embedding授权。
 [执行记录](docs/insurance-kb/evidence/830-g2/execution.md)，
-[冻结代码与样例身份](docs/insurance-kb/evidence/830-g2/task1-review-identity.json)。
-当前Go合同接线恢复，FLOW=NOT RUN，QUALITY=DEFERRED。Provider/构建/部署/DB写入均为0。
-用户已授权G2合理必要的有界扩展，由总控记录后执行；G3/Q0及生产发布仍未授权。
+[外发授权状态](docs/insurance-kb/evidence/830-g2/source-upload-approval.json)。
+
+用户已预批合理必要的G2有界扩展，由总控登记后推进；此授权不替代被自动审批明确拦截的
+具体外发确认。G3/Q0及生产发布仍未授权。首个物理演示截止仍为2026-09-07 18:25 +08:00。
 
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个

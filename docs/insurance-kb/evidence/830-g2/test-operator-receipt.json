@@ -1,0 +1,10 @@
+{
+  "database": "weknora_g2_594",
+  "user_id": "399ea48b-3987-55f3-8f19-58f65f53e663",
+  "tenant_id": 10003,
+  "role": "admin",
+  "system_admin": false,
+  "cross_tenant": false,
+  "existing_password_changes": 0,
+  "purpose": "automated isolated G2 tests; no human semantic review claim"
+}

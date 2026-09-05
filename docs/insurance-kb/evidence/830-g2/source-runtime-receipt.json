@@ -1,0 +1,56 @@
+{
+  "phase": "D1_SOURCE_RUNTIME",
+  "builds": 0,
+  "pulls": 0,
+  "provider_calls": 0,
+  "steps": [
+    "Exact existing app/docreader image lookup PASS",
+    "Allowlisted private env generated; copied database AES source matched",
+    "G2 internal network created",
+    "G2 app egress network created",
+    "Three dedicated G2 volumes created",
+    "Existing clone Postgres/Redis attached to G2 internal network",
+    "Exact A files and sealed C5 bundle seeded into G2-only volumes",
+    "Exact reused docreader started without pull/build",
+    "Exact reused source app started on dedicated DB and loopback18194",
+    "Container identities captured; health/auth/import remain NOT RUN"
+  ],
+  "weknora-g2-594-app": {
+    "id": "18f5ba5bc31116e1d2631899bedc1d18fadd8e3a214b5782a947687eeb2b13e8",
+    "image": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+    "state": "running",
+    "networks": [
+      "weknora-g2-594-egress",
+      "weknora-g2-594-internal"
+    ]
+  },
+  "weknora-g2-594-docreader": {
+    "id": "4de97a824d9bb91718eb225008203b8d27d2039c61907d62d1d103669c31baeb",
+    "image": "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+    "state": "running",
+    "networks": [
+      "weknora-g2-594-internal"
+    ]
+  },
+  "health": {
+    "http_status": 200,
+    "status": "PASS"
+  },
+  "auth": {
+    "method": "normal auth/login",
+    "tenant_id": 10003,
+    "role": "admin",
+    "test_operator": true,
+    "status": "PASS"
+  },
+  "config_sha256": "5ad9a21f1968e2be73b91dbcc11603f39016ab23765dfa29d4ebbb060f6d50ee",
+  "app_restart_for_source_config": 1,
+  "backfill": {
+    "status": "BLOCKED",
+    "http_status": 409,
+    "cause": "storage backend path bug",
+    "fix_commit": "03a2b96aa",
+    "fix_runtime": "NOT RUN"
+  },
+  "B_upload": "BLOCKED_AUTOMATIC_APPROVAL_NOT_EXECUTED"
+}

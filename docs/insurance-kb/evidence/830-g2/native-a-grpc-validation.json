@@ -1,0 +1,15 @@
+{
+  "codepoints": 45120,
+  "contract": "830-g2-native-a-grpc-probe.v1",
+  "grpc_calls": 2,
+  "native_sha256": "8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6",
+  "page_count": 39,
+  "provider_calls": 0,
+  "raw_metadata_sha256": "7198b642b819c904401b2fd8bd90bde2e5957e07a35a35cecd97cb8f867dc2af",
+  "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+  "status": "PASS",
+  "stream": "PASS",
+  "unary": "PASS",
+  "docreader_image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "flow": "NOT_RUN"
+}

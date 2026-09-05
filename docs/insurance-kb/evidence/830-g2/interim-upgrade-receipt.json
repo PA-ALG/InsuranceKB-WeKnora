@@ -1,0 +1,37 @@
+{
+  "contract": "830-g2-interim-runtime-upgrade.v1",
+  "status": "PASS",
+  "source_head": "3c655294daa3aecf3b27fcba2e408d63a4a17f60",
+  "image_id": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6",
+  "previous_image_id": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+  "container": "weknora-g2-594-app",
+  "rollback_container": "weknora-g2-594-app-before-3c655294",
+  "database": "weknora_g2_594",
+  "provider_calls": 0,
+  "pulls": 0,
+  "steps": [
+    "Artifact, old G2 container, database, networks, mounts and config guards PASS",
+    "Exact image available in target engine; no registry push or pull",
+    "G2 env prepared with the actual C5 registry key",
+    "Previous G2 app stopped and preserved under the frozen rollback name",
+    "Verified interim G2 app started with the preserved backfill config",
+    "Initial health failed because root-owned private config was unreadable to appuser; config/C5 owner repaired, exact bytes preserved, same app health/login200 verified"
+  ],
+  "container_id": "1feed240de0856d3f8ca9f1690a8184122d373d8fe7da05e1077e8351b14ca24",
+  "health_http": 200,
+  "normal_login_http": 200,
+  "source_backfill": "NOT_RUN",
+  "ownership_repair": {
+    "contract": "830-g2-runtime-owner-repair.v1",
+    "status": "STARTED_HEALTH_PENDING",
+    "cause": "docker cp created root-owned 0600 config; entrypoint drops to appuser",
+    "uid": 1000,
+    "gid": 1000,
+    "config_sha256": "5ad9a21f1968e2be73b91dbcc11603f39016ab23765dfa29d4ebbb060f6d50ee",
+    "config_bytes_unchanged": true,
+    "c5_volume": "weknora-g2-594-c5",
+    "c5_change": "ownership only; original readonly app mount preserved",
+    "provider_calls": 0,
+    "image_id": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6"
+  }
+}

@@ -88,3 +88,72 @@ FieldAssertion.entity_version为空，bundle仍通过；冻结candidate为71074e
 快照的实体版本绑定，定向RED后GREEN和独立复审，随后恢复同一Go合同接线。
 写域：总控concept_compile_830_g2.py、同名tests、vector和evidence；Go lane待新vector冻结恢复。
 不据此启动G3/Q0或生产发布，预算扩展须仍有具体原因及实用量记录。
+
+## 并行实施与隔离来源复制 · 2026-09-06 01:15 +08:00
+
+首个代码提交e88f27fe6208822a56ee28bd6e8d9a3698e3445f：离线协议25 tests、ruff、
+mypy及独立复核通过；真实G2 FLOW仍NOT RUN。Go lane推进原发布链，主控推进UI和来源运行时。
+UI修正已有身份漂移，15 tests通过；导航集合补充六个有效RED负例后继续修复，未冒充完整UI验收。
+
+按用户合理扩展授权，执行runtime-plan.json中D1隔离来源准备。只读核验纠正：原数据库
+knowledge_revision_sources实际为0，历史C5来源文件存在不等于该表有封存记录。
+目标weknora_g2_594创建前不存在；通过现有PG容器pg_dump/createdb/pg_restore复制完成。
+源/目标Head均release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28、epoch3，source表均0。
+原库无写入；新库复制PASS，文件卷/容器/auth/backfill/import尚NOT RUN。
+当前实际用量：DB新建复制1次；provider=0；app/frontend build=0；应用部署=0。
+来源准备目标为新隔离DB和runtime，非生产；首次SourceRevision补齐不能省略。
+
+## 有界测试操作员配置 · 2026-09-06 01:32 +08:00
+
+G2来源应用与docreader已复用精确镜像启动；应用health HTTP200，构建/pull仍0。
+两处已有runtime文件中的已知管理员凭据均正常login HTTP401，不继续猜测或重用历史临时JWT。
+按用户已批准的合理必要G2扩展，冻结新增provisioning：只在weknora_g2_594现有users和
+tenant_members各增加一行明确标记的G2测试操作员，tenant10003 admin、非system admin、无跨租户权；
+不改已有用户密码、不注册无关tenant、不改原weknora或生产。随机密码仅0600私有文件，使用既有
+密码哈希算法，再走正常auth/login核验角色。该操作员的自动化测试不代表专家人工语义背书，Q0仍DEFERRED。
+同时仅修改新G2容器内config/config.yaml启用既有knowledge_revision_source.backfill_enabled，
+记录配置SHA后重启同一精确容器；不改变镜像、不新增schema/table/authority。
+
+## 真实输入与集成修复 · 2026-09-06 02:35 +08:00
+
+原文backend读取修复已独立复核BLOCKER=0，RevisionSource定向套件PASS3.524s，提交03a2b96aa。
+runtime仍为旧G1 exact image；修复后的实际backfill不能提前记PASS。UI切片已提交5b9ddb265。
+Go发布及Agent两lane并行实施、总控独立审查；共享Go cache轮流编译，避免多包冷编译相互争用。
+
+真实G1四个chunk已从隔离库导出，内容SHA匹配C5；17条code-point引文逐字匹配，旧quote
+以schema-wiki-text.v1校验，再为G2转换raw UTF-8 SHA。导出的source projection只作冻结输入，
+不冒充live source authority。C5 manifest_self与WeKnora chunk manifest是不同preimage；
+后者与当前DB f2190b...一致，未发现该处漂移。
+
+根因修复范围：G1→G2引文hash转换；迁移必须使用两阶段source authority，旧ReadExactRevision
+按设计永久拒绝，不可作为成功校验；页面/Agent release与epoch绑定；Agent显式RAW target、
+缺失provider和跨租户seal边界。sources真实bridge仍需接入，Review/Activate默认失败关闭。
+HTTP错误映射已有效RED（两路径500非503）后GREEN3.310s，g2_sources独立复核BLOCKER=0。
+
+B upload被自动审批拒绝，工具未启动，provider调用0。已核实两份公开PDF来源与现有
+DashScope/qwen3.7-text-embedding目的地，具体2PDF/20请求授权问题仍待用户回答。
+原有合理额度授权继续覆盖独立代码工作；未用替代服务或路径绕过外发拦截。
+
+## 代码集成完成与 A 原文修复实跑 · 2026-09-06 02:55 +08:00
+
+平台切片77f8fea05、Agent切片3c655294d已提交；19个代码/测试文件SHA冻结，6个Go包检查
+通过，原始输出见integration-validation.json。67个G1字段与17条引文已生成离线迁移输入，
+保留64unknown/2present/1absent_explicitly，没有重写旧事实或冒充真实发布。
+
+依用户持续授权，登记一次合理构建额度扩展：app总上限由1增至2，以一份中间来源修复镜像
+解除A backfill阻断，另一份留最终source bridge集成；未受影响frontend/docreader不在本步骤构建。
+固定中间build_source_head=3c655294daa3aecf3b27fcba2e408d63a4a17f60，builder=g1-build，
+先按既有BA0 selector精确lookup，命中则build0。仅更新既有G2隔离应用，再对A source backfill
+做实际HTTP核验；不依赖B外发授权，不调用embedding/compiler，不改变生产。见interim-build-plan.json。
+
+### R4 physical A progress (2026-09-06)
+
+- Sixth code commit `b8cde87d8`: native PDF producer/Go decoder; independent root review0.
+- Actual isolated docreader Python capture: 39 pages / 45120 codepoints / 40657 bboxes; actual A artifact accepted by Go decoder (1.775s). Native 8 unittest cases also ran in actual docreader dependency environment (0.022s), no bootstrap dependency stubs; raw log `/private/tmp/g2-native-runtime-unit.log`.
+- Intermediate app build from `3c655294d` PASS, image `sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6`; installed only in G2 app. Initial config owner error was observed and repaired without changing config bytes; health/login200.
+- A backfill HTTP200: source row0→1 in G2; source file SHA/1047811bytes/39pages/pinned verified. Original DB/source rows0 and both release heads epoch3 unchanged.
+- Read-only citation signing ring prepared/applied only for isolated source previews, separate from human review/publish authority. No human review/publish key configured.
+- Native source bridge and dedicated G2 viewer are integrated in separate bridge worktree; UI37 tests/typecheck + independent review0, including persisted Go authority vector. Legacy G1 carryover source revalidation remains under implementation/review.
+- B upload/embedding still unexecuted pending the specific external-data approval. Provider calls0. FLOW NOT_RUN; QUALITY DEFERRED.
+
+- Docreader build and isolated exact-image upgrade PASS (`sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868`), gRPC health SERVING; previous container preserved. Formal gRPC Read and ReadStream both returned identical actual A Markdown/native metadata: 39 pages, 45120 codepoints, native artifact SHA `8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6`. See `native-a-grpc-validation.json`; two local gRPC calls, zero provider calls, FLOW remains NOT_RUN.

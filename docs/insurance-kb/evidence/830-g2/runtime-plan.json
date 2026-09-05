@@ -1,0 +1,43 @@
+{
+  "authorization": "User authorized G2 and reasonable necessary extensions, 2026-09-06",
+  "phase": "D1_ISOLATED_SOURCE_PROVISIONING",
+  "builds": 0,
+  "source_database": "weknora",
+  "target_database": "weknora_g2_594",
+  "postgres_container": "WeKnora-p0-clone-postgres-vsnd11r2",
+  "postgres_role": "p0clone",
+  "redis_container": "WeKnora-c5-1e6-redis",
+  "redis_db": 14,
+  "networks": [
+    "weknora-g2-594-internal",
+    "weknora-g2-594-egress"
+  ],
+  "volumes": [
+    "weknora-g2-594-files",
+    "weknora-g2-594-c5",
+    "weknora-g2-594-docreader-tmp"
+  ],
+  "containers": [
+    "weknora-g2-594-app",
+    "weknora-g2-594-docreader"
+  ],
+  "http_origin": "http://127.0.0.1:18194",
+  "app_image": "sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb",
+  "docreader_image": "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+  "purpose": "Reuse source upload/revision capabilities only; not G2 app/flow acceptance",
+  "input_pdf": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+  "input_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+  "source_import_budget": {
+    "files_max": 2,
+    "embedding_http_requests_max": 20,
+    "model_policy": "reuse existing copied model configuration; no alternate paid model",
+    "compiler_reviewer_calls_max": 4
+  },
+  "guards": [
+    "target DB must not already exist unless exact prior G2 receipt confirms identity",
+    "Source DB/G1 epoch3 and production8081 unchanged",
+    "No new schema/table/service architecture; existing runtime instances only",
+    "All temporary runtime secrets stay in0600 files; never print values",
+    "Check exact images locally and use --pull=never; no image build"
+  ]
+}

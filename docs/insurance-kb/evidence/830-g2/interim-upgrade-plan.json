@@ -1,0 +1,24 @@
+{
+  "contract": "830-g2-interim-upgrade-plan.v1",
+  "authorization": "standing user approval for reasonable necessary G2 extensions",
+  "script_sha256": "b3256e574788dad246f2f869c8b1dd68794deb1e309c6c09522873f955be26c5",
+  "reviewer": "g2_sources",
+  "blocking_findings": 0,
+  "status": "PREPARED_NOT_RUN",
+  "runtime_target": "weknora-g2-594-app",
+  "backup_container": "weknora-g2-594-app-before-3c655294",
+  "database": "weknora_g2_594",
+  "port": 18194,
+  "expected_source_head": "3c655294daa3aecf3b27fcba2e408d63a4a17f60",
+  "guards": [
+    "artifact PASS and exact image identity",
+    "no optimized Python; explicit reject verified before Docker",
+    "old image/DB/port/mount/network guards",
+    "old stopped container retained",
+    "no registry push/pull or provider calls"
+  ],
+  "config_changes": [
+    "correct C5 env registry key to WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST; existing exact manifest",
+    "preserve existing source backfill config"
+  ]
+}
