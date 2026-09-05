@@ -4,9 +4,39 @@
 > 本文只定义 HOW：队列、WIP、证据、停线、写域与合并纪律；WHY/WHAT、数据合同和
 > 组件归属只引用 830 技术蓝图，不在此重复。
 >
-> 当前执行态：`G1_ONLY / NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`；B0 已由总控依据
-> 用户明确授权和独立复核裁决为 `PASS`。G2 及后续 Goal 仍为 `LOCKED`，G1 PASS 也不
-> 自动启动 G2。
+> 当前执行态：`G1=PASS / CURRENT_AUTHORIZATION=NONE / BA0_STATUS=PASS`。BA0 是
+> G1 与 G2 之间的一次性工程门，不是产品 Goal；G2 及后续仍为
+> `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`。
+
+```text
+CURRENT_AUTHORIZATION=NONE
+CURRENT_PRODUCT_GOAL=NONE
+CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
+BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
+BA0_STATUS=PASS
+G1_STATUS=PASS
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
+ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
+ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
+IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
+IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
+WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
+BRANCH=codex/830-ba0-implementation
+OWNER=830-BA0总控
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
+```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
 
 ## 1. 唯一权威与唯一队列
 
@@ -26,9 +56,15 @@ WeKnora Preview/Review → unique Active Release → source click`，冲突的�
 标为 `SUPERSEDE`。WeKnora 始终是唯一 Wiki、唯一审核入口和唯一 serving Active；
 Harness 不得产生第二 Wiki、第二审核或第二 Active。
 
-唯一执行顺序为：
+唯一产品 Goal 顺序为：
 
     B0 → G1 → G2 → G3 → G4 → G5 → G6A → G6B → G6C → G6D → Q0 → G7
+
+当前一次性交付 transition 为：
+
+    G1 PASS → BA0 engineering gate → RETURN_TO_USER → explicit G2 authorization → G2
+
+BA0 占用唯一执行 WIP，但不进入产品 Goal 顺序、不增加产品进度，也不得改变 G2 DoD。
 
 - 全程产品 `WIP=1`：同一时刻只能有一个 Goal、一个 `NEXT_PHYSICAL_RESULT` 和一个
   结果 Owner；纠偏也占用该 WIP。默认一个实现写域，满足第 7 节的同 Goal 受控并行条件
@@ -36,8 +72,8 @@ Harness 不得产生第二 Wiki、第二审核或第二 Active。
 - 不得跳卡、并卡、倒序、预开 successor，或以“可并行”为由提前实现下游。
 - `Q0` 必须在 `G6D` 后、`G7` 前运行。此前只保留已批准的扩展点和冻结输入，
   不提前建设 Golden/调参支线、通用质量平台或 Q0 的替代入口。
-- 下一 Goal 只有在当前 Goal 真实 `PASS`、Evidence Pack 完整且总控关闭当前写域后
-  才能启动。
+- 下一 Goal 只有在当前 Goal 真实 `PASS`、Evidence Pack 完整、总控关闭当前写域、
+  适用工程门通过且用户明确授权后才能启动；前卡 PASS 是必要条件，不是自动开工授权。
 
 ## 2. 结果硬、路径软
 
@@ -148,6 +184,14 @@ D2 输出必须把该 identity 绑定到不可变 image digest。只有 runtime�
 identity 全部一致时，Goal 真实运行结果才可复用；真实物理边必须重新成立时，不得拿旧缓存、
 旧 receipt 或同名 tag 冒充本次结果。
 
+D2 必须 `lookup-before-build`：exact hit 只能返回 `REUSE`，Docker build invocation=`0`；
+miss 最多执行一次 `BUILD_AFFECTED`。同一 identity 命中多个 image、label/OS/arch 不符或
+inspect 失败时一律 fail closed，不能按 `latest` 或创建时间选择。D3 只启动 D2 绑定的 exact
+image，必须显式 `--no-build --pull never`；当前会执行 `compose up --build` 的
+`start_all.sh --no-pull` 不构成 D3 入口。BA0 的 D3 只做 standalone、无业务依赖的
+`CONTAINER_ARTIFACT_SMOKE`；不得为它另建数据库初始化链或把它写成后续产品 Goal 的 HTTP
+health 验收。
+
 ### 4.3 集成、单一实现与 worktree 收尾
 
 总控拥有唯一 D2 integration build 权。Win1、Win2、Win3、WeKnora 窗口和只读审查 lane
@@ -175,6 +219,12 @@ B0 只从已有日志、receipt 或 CI history 重算当前验证入口的样本
 D0–D3 只约束选择成本与制品复用，不降低任何现有 Goal DoD 或 Evidence Pack，也不授权
 建立第二验证、receipt 或制品平台；所需 identity、digest 和结果只写入现有 manifest 与
 Evidence Pack。
+
+缓存只是固定本机 builder 的性能状态，不是制品 authority。缓存被安全清理只允许导致
+下一次变慢，不能改变 artifact identity 或正确性；不得为了测量主动 prune cache、重复冷建
+或构造临时源码 identity。当前 BA0 的详细边界以
+`docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md` 为准：最多一次合法
+app image build，随后同 identity 请求必须在 lookup 阶段零构建复用。
 
 ## 5. SDD、TDD、OpenSpec 与提交纪律
 

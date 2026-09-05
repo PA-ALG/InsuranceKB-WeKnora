@@ -3,7 +3,7 @@
 > 当前运行/交接状态的唯一入口。贡献规则只以 [`AGENTS.md`](AGENTS.md) 为准；
 > 规格和历史讨论分别留在适用 OpenSpec 与历史合订文档，不在这里重复。
 
-## 1. 当前结论（2026-08-31）
+## 1. 当前结论（2026-09-05）
 
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个
@@ -20,18 +20,53 @@ squash commit 合入 `main`：
 - 远端门禁：两套 deterministic、两套 PostgreSQL integration、两套
   wheel-smoke 全部通过。
 
-830 当前唯一 WIP 是 **G1 · 实体页图与独立 FieldAssertion**。B0 Evidence Pack 的
-独立复核为 `PASS`、未解决问题为 0；用户已在 2026-08-31 明确授权总控裁决
-`B0=PASS` 并只启动 G1。G1 的正式 base 为
-`d2ce44cb2107575f7624b3735c653078ae2a98b6`，分支为
-`codex/830-g1-field-assertion-pages`，适用 OpenSpec 为
-`126-830-g1-entity-field-assertion-pages`。
+**830 G1 已完成。** PR #126 已合入：
 
-当前指针为 `CURRENT_AUTHORIZATION=G1_ONLY`、`CURRENT_GOAL=G1`、
-`CURRENT_RED=NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`、
-`830_PRODUCT_GOAL=G1_IN_PROGRESS`。G2 及后续全部 `LOCKED`。G1 只在隔离环境形成
-`NOT_FOR_PRODUCTION` Release，不调用 Provider/模型，不修改生产 `8081` 或生产 Active；
-Schema67 质量保持 `DEFERRED`。
+- 当前 `origin/main`：`0e7a26568`；tree：`b96aa35fd2fe86283757deb258920c489de4b4b6`；
+- G1 状态：`PASS / FLOW=PASS / QUALITY=DEFERRED / NOT_ACCEPTED_FOR_PRODUCTION`；
+- G1 closeout：[`g1-closeout.json`](docs/insurance-kb/evidence/830-g1/g1-closeout.json)；
+- G1 D3 app image：`sha256:37918140b2902918f8e7cbb89008bc47d1480e9e65d2056c54b6b5317a5e6eeb`；
+- G1 真实 app build：总墙钟约 `131m07s`，其中 `make build-prod=6557.9s`。
+
+用户已于 2026-09-04 确认在 G1 与 G2 之间先完成一次性 **BA0 本地构建复用工程门**，
+并已明确授权 BA0 implementation。BA0 不是产品 Goal，不改变 WeKnora/Harness 架构或
+G2 DoD。当前指针原子切换为：
+
+```text
+CURRENT_AUTHORIZATION=NONE
+CURRENT_PRODUCT_GOAL=NONE
+CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
+BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
+BA0_STATUS=PASS
+G1_STATUS=PASS
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
+ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
+ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
+IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
+IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
+WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
+BRANCH=codex/830-ba0-implementation
+OWNER=830-BA0总控
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
+```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
+
+批准设计：[`2026-09-04-830-ba0-local-build-reuse-design.md`](docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md)。
+可执行计划：[`2026-09-04-830-ba0-local-build-reuse.md`](docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md)。
+适用规格：[`127-830-ba0-local-build-reuse`](openspec/changes/127-830-ba0-local-build-reuse/)。
+BA0 `PASS` 后必须把授权清零并
+`RETURN_TO_USER_FOR_G2_AUTHORIZATION`；不得自动启动 G2。
 
 ## 2. 用户应体验什么
 
@@ -157,6 +192,11 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
   的中间实现。
 - 启动 Docker/Colima 可能自动恢复 `8081` 容器；未确认生产影响前不得把“启动
   本地依赖”当作无副作用操作。
+- `start_all.sh --no-pull` 当前仍会执行 `compose up --build`，不能当作 D3 复用入口；
+  BA0 D3 必须使用 exact image 和 standalone `CONTAINER_ARTIFACT_SMOKE`，且
+  `--no-build --pull never`；它不连接业务数据库，也不冒充 G2 的 HTTP 产品验收。
+- 不得为测量主动清空 BuildKit/Go cache 或重复冷构建；相同 artifact identity 必须先
+  lookup，命中时 Docker build invocation 必须为 0。
 - 凭据不得出现在命令行 DSN、traceback、文档或 Git；异常泄漏后先轮换再继续。
 
 ## 8. 接手阅读顺序
@@ -166,7 +206,9 @@ attestor=`workspace-owner-houjing`，真实结论是 `QUALITY_FAIL`。
 3. [830 开发执行章程](docs/insurance-kb/28-development-execution-charter-830.md)
 4. [830 Goal Cards](docs/insurance-kb/29-goal-cards-830.md)
 5. 本文件
-6. [B0 Evidence Pack](docs/insurance-kb/evidence/830-b0/)
-7. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md) 与
+6. [BA0 本地构建复用设计](docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md)
+7. [BA0 实施计划](docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md)
+8. [B0 Evidence Pack](docs/insurance-kb/evidence/830-b0/)
+9. [MVP-815 工程接手卡](docs/insurance-kb/26-mvp-815-engineering-handoff.md) 与
    [OpenSpec 120](openspec/changes/120-schema-wiki-medical-596-1-mvp/) 只作已冻结历史
    证据；后续 Goal 仍须自己的授权与适用 OpenSpec。

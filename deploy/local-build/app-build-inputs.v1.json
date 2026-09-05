@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "artifact": "weknora-app",
+  "context": ".",
+  "dockerfile": "docker/Dockerfile.app",
+  "dockerignore": ".dockerignore",
+  "go_packages": [
+    "./cmd/server",
+    "./cmd/download/duckdb"
+  ],
+  "required_paths": [
+    "VERSION",
+    "Makefile",
+    "cmd/server/main.go",
+    "cmd/server/bootstrap.go",
+    "cmd/server/listen.go",
+    "cmd/server/signals_unix.go",
+    "cmd/download/duckdb/duckdb.go",
+    "config",
+    "dataset/samples",
+    "deploy/upstream/adoption_target.go",
+    "deploy/upstream/weknora-adoption-target.json",
+    "deploy/upstream/weknora-plugin-contract.yaml",
+    "docreader/client/auth.go",
+    "docreader/client/client.go",
+    "docreader/proto/docreader.pb.go",
+    "docreader/proto/docreader_grpc.pb.go",
+    "docs/docs.go",
+    "docs/swagger.json",
+    "docs/swagger.yaml",
+    "internal/assets/embed.go",
+    "internal/assets/asr_test.wav",
+    "internal/config/config.go",
+    "internal/container/container.go",
+    "internal/logger/logger.go",
+    "internal/router/router.go",
+    "internal/runtime/server.go",
+    "internal/types/interfaces/user.go",
+    "migrations",
+    "scripts",
+    "scripts/build_images.sh",
+    "scripts/get_version.sh",
+    "skills/preloaded"
+  ],
+  "external_dependency_lock": "deploy/local-build/app-external-dependencies.v1.json",
+  "build_contract": {
+    "target": "runtime",
+    "platform": "linux/arm64",
+    "goos": "linux",
+    "goarch": "arm64",
+    "cgo_enabled": true
+  }
+}

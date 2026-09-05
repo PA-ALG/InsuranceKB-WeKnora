@@ -1,0 +1,43 @@
+services:
+  app-smoke:
+    image: ${BA0_APP_IMAGE:?BA0_APP_IMAGE must be an exact sha256 image ID}
+    pull_policy: never
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      AUTO_MIGRATE: "false"
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        set -eu
+        test -x /app/WeKnora
+        test -d /app/config
+        test -d /app/scripts
+        test -d /app/migrations
+        test -d /app/dataset/samples
+        test -d /app/skills/preloaded
+        test -d /home/appuser/.duckdb
+        ldd /app/WeKnora > /tmp/ba0-ldd.out
+        ! grep -q 'not found' /tmp/ba0-ldd.out
+        sleep infinity
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          set -eu;
+          test -x /app/WeKnora;
+          test -d /app/config;
+          test -d /app/scripts;
+          test -d /app/migrations;
+          test -d /app/dataset/samples;
+          test -d /app/skills/preloaded;
+          test -d /home/appuser/.duckdb;
+          ldd /app/WeKnora > /tmp/ba0-health-ldd.out;
+          ! grep -q 'not found' /tmp/ba0-health-ldd.out
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 1s

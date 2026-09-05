@@ -1,6 +1,6 @@
 # Enterprise LLM Wiki 技术蓝图 830 · 统一企业知识库扩展版
 
-> 修订日期：2026-08-31
+> 修订日期：2026-09-05
 > 状态：`CURRENT_830_TECHNICAL_BLUEPRINT`
 > 基线：`815 FLOW=PASS`；`QUALITY=DEFERRED`
 > 核心裁决：830 只扩展已跑通的 815 节点，不新建平行系统
@@ -21,14 +21,37 @@
 815_FLOW=PASS
 815_QUALITY=DEFERRED
 SCHEMA_CATALOG=11_PRODUCT_PACKS_SOURCE_VERIFIED_NOT_REGISTERED
-CURRENT_AUTHORIZATION=G1_ONLY
-CURRENT_GOAL=G1
+CURRENT_AUTHORIZATION=NONE
+CURRENT_PRODUCT_GOAL=NONE
+CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
+BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
+BA0_STATUS=PASS
 B0_STATUS=PASS
-G1_STATUS=IN_PROGRESS
-CURRENT_RED=NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES
-G2_AND_LATER=LOCKED
+G1_STATUS=PASS
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
+ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
+ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
+IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
+IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
+WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
+BRANCH=codex/830-ba0-implementation
+OWNER=830-BA0总控
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
 830_ORDER=B0→G1→G2→G3→G4→G5→G6A→G6B→G6C→G6D→Q0→G7
+CURRENT_DELIVERY_GATE=G1_PASS→BA0_PASS→USER_CONFIRMATION→G2
 ```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
 
 `FLOW=PASS` 指 815 已在同一 lineage 跑通：
 
@@ -39,8 +62,17 @@ WeKnora parse → Harness → Formal Candidate → Preview → Review → Active
 `QUALITY=DEFERRED` 既非 PASS 也非 FAIL。Q0 是 830 最后质量门；G7 只消费 Q0
 完成多格式 FLOW + QUALITY 联合验收，不新增功能、不改样本和阈值。
 
-B0 的独立复核未解决问题为 0；用户已在 2026-08-31 明确授权总控裁决
-`B0=PASS` 并只启动 G1。该状态切换不改变上述执行顺序，G2 及后续仍锁定。
+B0 与 G1 均已 `PASS`。G1 由 PR #126 合入 `origin/main=0e7a26568`，最终回执见
+`docs/insurance-kb/evidence/830-g1/g1-closeout.json`。G1 暴露一次 app 构建约
+`109m18s` 的重复成本，因此用户于 2026-09-04 批准在 G2 前增加一次性工程门 BA0。
+BA0 不改变本蓝图的产品架构、Goal DoD 或产品顺序；它只实现本地固定 Colima 的 exact
+image lookup、持久 Go cache、稳定构建输入和 D3 no-build 制品自检；该自检不连接业务
+数据库、不替代 G2 的真实 HTTP 验收。BA0 设计见
+`docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md`，实施计划见
+`docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md`，适用 OpenSpec 为
+`openspec/changes/127-830-ba0-local-build-reuse/`。用户已授权 BA0-only implementation；
+BA0 已于 2026-09-05 完成 D2 构建/复用与 D3 制品烟测并独立复核 PASS，
+证据见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`。G2 仍须用户明确启动授权。
 
 ## 1. 背景与总裁决
 
@@ -468,6 +500,10 @@ Entity → FieldAssertion → Evidence/ConceptDefinition。禁止 Wiki R2、Sear
 Agent 读 Harness Candidate，禁止 RAW chunk 和 free_wiki Candidate 旁路正式 Release。
 
 ## 14. MVP、企业路线与唯一 Goal 顺序
+
+下表仍是产品 Goal 顺序。当前仅叠加一次性交付工程门
+`G1 PASS → BA0 PASS → 用户确认 → G2`；BA0 不计作 Enterprise LLM Wiki 产品能力，
+不得借此修改 Harness/WeKnora 职责、增加服务或降低任一 Goal 的真实 DoD。
 
 | Goal | 技术目标 | 物理出口 |
 |---|---|---|

@@ -100,18 +100,6 @@ clean:
 	go clean
 	rm -f $(BINARY_NAME)
 
-# Build Docker image
-docker-build-app:
-	@echo "获取版本信息..."
-	@eval $$(./scripts/get_version.sh env); \
-	./scripts/get_version.sh info; \
-	docker build --platform $(PLATFORM) \
-		--build-arg VERSION_ARG="$$VERSION" \
-		--build-arg COMMIT_ID_ARG="$$COMMIT_ID" \
-		--build-arg BUILD_TIME_ARG="$$BUILD_TIME" \
-		--build-arg GO_VERSION_ARG="$$GO_VERSION" \
-		-f docker/Dockerfile.app -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-
 # Build docreader Docker image
 docker-build-docreader:
 	docker build --platform $(PLATFORM) -f docker/Dockerfile.docreader -t wechatopenai/weknora-docreader:latest .
@@ -332,4 +320,9 @@ dev-app:
 dev-frontend:
 	./scripts/dev.sh frontend
 
-
+# The app image has one public build authority. Keep this target last so audits
+# can treat its recipe as an isolated delegation boundary.
+docker-build-app:
+	@test -n "$(BUILD_SOURCE_HEAD)"
+	@test -n "$(EVIDENCE_OUT)"
+	./scripts/build_images.sh --app --build-source-head "$(BUILD_SOURCE_HEAD)" --evidence-out "$(EVIDENCE_OUT)"

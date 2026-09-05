@@ -1,0 +1,82 @@
+{
+  "contract": "weknora.830.ba0-closeout.v1",
+  "evidence_status": "PASS",
+  "state": {
+    "ba0_status": "PASS",
+    "current_authorization": "NONE",
+    "current_product_goal": "NONE",
+    "g2_status": "LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION",
+    "next_action": "RETURN_TO_USER_FOR_G2_AUTHORIZATION"
+  },
+  "identity": {
+    "origin_main_base": "0e7a26568a2164f9501e409f38fee0d4a62539cb",
+    "origin_main_tree": "b96aa35fd2fe86283757deb258920c489de4b4b6",
+    "implementation_head": "fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9",
+    "implementation_tree": "c4843cfb4c6949900e47a2a57af6493011dc8fda",
+    "d2_build_source_head": "fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9",
+    "d2_build_source_tree": "c4843cfb4c6949900e47a2a57af6493011dc8fda",
+    "execution_integration_head": "fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9",
+    "image_id": "sha256:8cb32d7f638669b2f741ab82ba86d84517e3ec6569e036970d5412d62c75e9eb",
+    "artifact_identity": "sha256:afbc7c23f072459b3fa1f786b7f13dcedb47a6437ba5b69f9fb38f2fbb2e2235"
+  },
+  "inputs": {
+    "manifest": {
+      "path": "deploy/local-build/app-build-inputs.v1.json",
+      "sha256": "4433d74442d07ff2a172c0e2079954a2f53fe01009fe1be094dd793abc803e87"
+    },
+    "dependency_lock": {
+      "path": "deploy/local-build/app-external-dependencies.v1.json",
+      "sha256": "681026d97cc7a7f4c6c31c324e7a0faec6a1aae316455804fedffdf19ef65258"
+    }
+  },
+  "receipts": {
+    "initialization_build": {
+      "path": "d2/initialization-build.json",
+      "sha256": "c7d651ab10aa0ed71368c1f492b2be083fd81a2c130bb83aa6a061da54693c59"
+    },
+    "same_identity_reuse": {
+      "path": "d2/same-identity-reuse.json",
+      "sha256": "27cc5e561aea51e4107903b3312bd5eb40aaae18e4c0fd10b871a683c215a956"
+    },
+    "exact_image_smoke": {
+      "path": "d3/exact-image-smoke.json",
+      "sha256": "bc0b98ff06626da8a2050f2b53e114169758851affebe429e1bd7cc9f25e2d23"
+    }
+  },
+  "build_budget": {
+    "authorized": 1,
+    "used": 1
+  },
+  "cache_probe": {
+    "status": "PASS",
+    "source": "docker/Dockerfile.app",
+    "authority": false,
+    "producer_consumer_contract_verified": true
+  },
+  "g1_history": {
+    "status": "PASS",
+    "changed_paths": 0
+  },
+  "effects": {
+    "networks": 0,
+    "published_ports": 0,
+    "volumes": 0,
+    "dependencies": 0,
+    "provider_model": 0,
+    "business_db": 0,
+    "production_8081": 0,
+    "production_active": 0,
+    "g2": 0
+  },
+  "measurements": {
+    "exact_lookup": {
+      "status": "NOT_MEASURED",
+      "reason": "NO_MONOTONIC_LOOKUP_SAMPLE_CAPTURED"
+    },
+    "natural_incremental_build": {
+      "status": "NOT_MEASURED",
+      "reason": "NO_SECOND_IDENTITY_OR_BUILD_CREATED"
+    }
+  },
+  "self_sha256": "a35bbd26cb5b93a3fdc90d63f4e647304fd4f94236cad6db8ce15c3227faaee5"
+}

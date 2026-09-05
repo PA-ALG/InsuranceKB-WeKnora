@@ -1,14 +1,46 @@
 # 29 · 830 Goal Cards（统一知识库与真实验收版）
 
-> 修订日期：2026-08-31
-> 当前授权：`G1_ONLY`
-> 当前产品状态：`830_PRODUCT_GOAL=G1_IN_PROGRESS`
+> 修订日期：2026-09-05
+> 当前授权：`NONE`
+> 当前产品状态：`G1_PASS / AFTER_G1_BEFORE_G2`
+> 当前工程门：`BA0_LOCAL_BUILD_REUSE / PASS`
 > Schema Catalog：`11_PRODUCT_PACKS_SOURCE_VERIFIED_NOT_REGISTERED`
 > 执行 WIP 上限：`WIP_LIMIT=1`
 
-本文件是 830 唯一 Goal 队列和逐卡验收权威。B0 Evidence Pack 的独立复核为 PASS、
-未解决问题为 0；用户已明确授权总控裁决 `B0=PASS` 并只启动 G1。当前唯一 WIP 是
-G1；G2 及后续 Goal 均为 `LOCKED`，不得因 G1 进展或 PASS 自动启动。
+本文件是 830 唯一 Goal 队列和逐卡验收权威。B0、G1 均为 `PASS`；G1 closeout 见
+`docs/insurance-kb/evidence/830-g1/g1-closeout.json`。用户已确认在 G2 前先完成一次性
+BA0 本地构建复用工程门；BA0 不属于产品 Goal，也不增加 830 产品进度。G2 及后续均为
+`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`。
+
+```text
+CURRENT_AUTHORIZATION=NONE
+CURRENT_PRODUCT_GOAL=NONE
+CURRENT_ENGINEERING_GATE=BA0_LOCAL_BUILD_REUSE
+BA0_KIND=ENGINEERING_GATE_NOT_PRODUCT_GOAL
+BA0_STATUS=PASS
+G1_STATUS=PASS
+G2_STATUS=LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION
+ORIGIN_MAIN_BASE=0e7a26568a2164f9501e409f38fee0d4a62539cb
+ORIGIN_MAIN_TREE=b96aa35fd2fe86283757deb258920c489de4b4b6
+IMPLEMENTATION_BASE=874e50d44aec5941faae045e761280aa69aee1a3
+IMPLEMENTATION_BASE_TREE=2ec76af38258a0220d5dc117a9b789890345e7d7
+WORKTREE=/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation
+BRANCH=codex/830-ba0-implementation
+OWNER=830-BA0总控
+CURRENT_RED=NONE
+NEXT_PHYSICAL_RESULT=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+NEXT_ACTION=RETURN_TO_USER_FOR_G2_AUTHORIZATION
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
+```
+
+BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟测 PASS；
+累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
+冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
+见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
+`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+
 
 ```text
 B0 -> G1 -> G2 -> G3 -> G4 -> G5 -> G6A -> G6B -> G6C -> G6D -> Q0 -> G7
@@ -103,15 +135,17 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 
 ## 3. G1 · 实体页图与独立 FieldAssertion
 
-- **CURRENT_RED**：`NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`。
+- **TERMINAL**：`PASS`；PR #126 已合入 `origin/main=0e7a26568`，终态回执为
+  `docs/insurance-kb/evidence/830-g1/g1-closeout.json`，未解决 blocker=0。
+- **PRIOR_RED（已被 PASS 取代）**：`NO_ENTITY_SCOPED_INDEPENDENT_FIELD_PAGES`。
 - **GOAL_FINAL_PHYSICAL_RESULT**：一个真实医疗险实体的 overview、7 个 section、67 个
   独立 FieldAssertion 页面和空 `free_wiki` 分组进入同一原子 Release。
-- **CURRENT_MILESTONE_NEXT_PHYSICAL_RESULT**：在 2026-09-02 23:42:03 +08:00 前，真实
+- **HISTORICAL_MILESTONE_PHYSICAL_RESULT**：在 2026-09-02 23:42:03 +08:00 前，真实
   815 Candidate 的 WeKnora Preview 可打开同一实体的 overview、`application-and-contract`
   section、`insured_eligibility`（present）、`guaranteed_renewal_period`
   （absent_explicitly）、`cooling_off_period`（unknown）三个独立字段页及空 `free_wiki`；
   页面使用稳定 URL、中文短标题、完整 namespace，并至少从 `insured_eligibility` 成功
-  exact source click。该 M1 结果是当前唯一 `NEXT_PHYSICAL_RESULT`；76/76 是 G1 最终 DoD，
+  exact source click。该 M1 结果曾是 G1 当时唯一的 `NEXT_PHYSICAL_RESULT`；76/76 是 G1 最终 DoD，
   不是另一个并行产品结果。
 - **目标**：把 815 连续页能力 REWIRE 成实体页图；字段仍由 SchemaPack 保底，但每个
   FieldAssertion 成为可独立访问、可回点、可链接共享概念的实体作用域页面。
@@ -135,9 +169,36 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 - **Evidence Pack**：entity/page manifest、67 页清单及 hash、route 稳定性结果、
   source-click 样本、release 原子性读证据、UI 录屏/截图、测试和 diff/status。
 
+### BA0 · 本地构建复用工程门（非产品 Goal）
+
+- **KIND / STATUS**：`ENGINEERING_GATE_NOT_PRODUCT_GOAL / PASS`；唯一 Owner 为
+  `830-BA0总控`，固定工作树为
+  `/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-ba0-implementation`。
+- **CURRENT_RED / NEXT**：`NONE / RETURN_TO_USER_FOR_G2_AUTHORIZATION`；
+  D2 build=1/reuse=0、D3 build/pull=0，独立复核 PASS。
+- **唯一工程结果**：固定 Colima 中一个新 app identity 最多构建一次；随后相同 identity
+  请求 Docker build invocation=`0`，D3 使用 exact image 完成无业务依赖的
+  `CONTAINER_ARTIFACT_SMOKE`，且 build/pull invocation=`0`；不冒充 G2 HTTP health。
+- **冻结身份 / 预算**：G1 已合入的 origin/main 基线为
+  `0e7a26568a2164f9501e409f38fee0d4a62539cb` / tree
+  `b96aa35fd2fe86283757deb258920c489de4b4b6`；BA0 implementation 起点为
+  `874e50d44aec5941faae045e761280aa69aee1a3` / tree
+  `2ec76af38258a0220d5dc117a9b789890345e7d7`，branch=`codex/830-ba0-implementation`；
+  2026-09-05 用户新增恢复授权一次，累计总预算=`2`、已用=`2`（历史失败1 + 恢复成功1）。
+- **权威设计**：`docs/superpowers/specs/2026-09-04-830-ba0-local-build-reuse-design.md`；
+  实施计划为 `docs/superpowers/plans/2026-09-04-830-ba0-local-build-reuse.md`；适用规格为
+  `openspec/changes/127-830-ba0-local-build-reuse/`；Evidence Pack 已完成，见
+  `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json` 与 `recovery-authorization.md`。
+- **明确非目标**：不改产品架构或 G2 DoD，不建 CI/远端 cache/基础镜像产品线/第二制品
+  平台，不调用 Provider，不修改生产 `8081`、生产 Active 或业务数据库。
+- **时间盒 / 停止**：正常 1 个、最多 2 个工作日；原预算1次，用户追加恢复1次，现已用尽。超时、第二层
+  前置或要求第二次真实探针构建时停止并返回用户。
+- **PASS 动作**：关闭写域、更新 Evidence/Handoff，然后 `RETURN_TO_USER`；不得自动启动 G2。
+
 ## 4. G2 · 共享 ConceptDefinition 与 free_wiki 准入
 
-- **CURRENT_RED**：`LOCKED_BY_G1`；G1 PASS 后转为
+- **CURRENT_RED**：`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`；BA0 PASS 后
+  仍保持 `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`，获批开工才转为
   `NO_SHARED_CONCEPT_OR_VALUE_ADMISSION`。
 - **NEXT_PHYSICAL_RESULT**：首批共享 ConceptDefinition 由实体 FieldAssertion 链接并
   动态聚合；实体独立 `free_wiki` 分组同时承载首批通过价值准入的模型发现页面。两条
@@ -485,6 +546,8 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 
 每张卡只能由总控依据本卡 Evidence Pack 把状态从 `LOCKED/RED` 改为 `WIP`，再改为
 `PASS`、`FAIL` 或 `STOPPED`。任何窗口不得自行宣布产品 PASS。每次状态变更至少报告：
+
+BA0 的状态只记工程 readiness，不计产品 Goal 进度；其 PASS 不能自动改变 G2 状态。
 
 ```text
 GOAL_ID

@@ -18,18 +18,21 @@ SCRIPT_NAME=$(basename "$0")
 
 # 显示帮助信息
 show_help() {
+    local status="${1:-0}"
     echo -e "${GREEN}WeKnora 镜像构建脚本 v${VERSION}${NC}"
     echo -e "${GREEN}用法:${NC} $0 [选项]"
     echo "选项:"
     echo "  -h, --help     显示帮助信息"
     echo "  -a, --all      构建所有镜像（默认）"
     echo "  -p, --app      仅构建应用镜像"
+    echo "      --build-source-head SHA  app 构建源完整提交 SHA（必填）"
+    echo "      --evidence-out PATH      app 构建/复用回执路径（必填）"
     echo "  -d, --docreader 仅构建文档读取器镜像"
     echo "  -f, --frontend 仅构建前端镜像"
     echo "  -s, --sandbox  仅构建沙箱镜像"
     echo "  -c, --clean    清理所有本地镜像"
     echo "  -v, --version  显示版本信息"
-    exit 0
+    exit "$status"
 }
 
 # 显示版本信息
@@ -61,12 +64,6 @@ check_docker() {
     
     if ! command -v docker &> /dev/null; then
         log_error "未安装Docker，请先安装Docker"
-        return 1
-    fi
-    
-    # 检查Docker服务运行状态
-    if ! docker info &> /dev/null; then
-        log_error "Docker服务未运行，请启动Docker服务"
         return 1
     fi
     
@@ -127,32 +124,23 @@ get_version_info() {
 # 构建应用镜像
 build_app_image() {
     log_info "构建应用镜像 (weknora-app)..."
-    
-    cd "$PROJECT_ROOT"
-    
-    # 获取版本信息
-    get_version_info
-    
-    docker build \
-        --platform $PLATFORM \
-        --build-arg GOPRIVATE_ARG=${GOPRIVATE:-""} \
-        --build-arg GOPROXY_ARG=${GOPROXY:-"https://goproxy.cn,direct"} \
-        --build-arg GOSUMDB_ARG=${GOSUMDB:-"off"} \
-        --build-arg VERSION_ARG="$VERSION" \
-        --build-arg COMMIT_ID_ARG="$COMMIT_ID" \
-        --build-arg BUILD_TIME_ARG="$BUILD_TIME" \
-        --build-arg GO_VERSION_ARG="$GO_VERSION" \
-        -f docker/Dockerfile.app \
-        -t wechatopenai/weknora-app:latest \
-        .
-    
-    if [ $? -eq 0 ]; then
-        log_success "应用镜像构建成功"
-        return 0
-    else
-        log_error "应用镜像构建失败"
-        return 1
+
+    if [ -z "$BUILD_SOURCE_HEAD" ] || [ -z "$APP_EVIDENCE_OUT" ]; then
+        log_error "--app 要求 --build-source-head 与 --evidence-out"
+        return 2
     fi
+
+    cd "$PROJECT_ROOT"
+    if python3 scripts/app_artifact.py select-or-build \
+        --repo-root "$PROJECT_ROOT" \
+        --context colima-g1-build \
+        --build-source-head "$BUILD_SOURCE_HEAD" \
+        --evidence-out "$APP_EVIDENCE_OUT"; then
+        log_success "应用镜像构建/复用成功"
+        return 0
+    fi
+    log_error "应用镜像构建/复用失败"
+    return 1
 }
 
 # 构建文档读取器镜像
@@ -324,13 +312,16 @@ BUILD_DOCREADER=false
 BUILD_FRONTEND=false
 BUILD_SANDBOX=false
 CLEAN_IMAGES=false
+BUILD_SOURCE_HEAD=""
+APP_EVIDENCE_OUT=""
+APP_RESULT=0
 
 # 没有参数时默认构建所有镜像
 if [ $# -eq 0 ]; then
     BUILD_ALL=true
 fi
 
-while [ "$1" != "" ]; do
+while [ $# -gt 0 ]; do
     case $1 in
         -h | --help )       show_help
                             ;;
@@ -348,12 +339,37 @@ while [ "$1" != "" ]; do
                             ;;
         -v | --version )    show_version
                             ;;
+        --build-source-head )
+                            if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
+                                log_error "--build-source-head 缺少 SHA 参数"
+                                show_help 2
+                            fi
+                            BUILD_SOURCE_HEAD="$2"
+                            shift
+                            ;;
+        --evidence-out )    shift
+                            if [ $# -lt 1 ] || [ -z "${1:-}" ] || [[ "${1:-}" == -* ]]; then
+                                log_error "--evidence-out 缺少 PATH 参数"
+                                show_help 2
+                            fi
+                            APP_EVIDENCE_OUT="$1"
+                            ;;
         * )                 log_error "未知选项: $1"
-                            show_help
+                            show_help 2
                             ;;
     esac
     shift
 done
+
+if [ "$BUILD_APP" = true ] && { [ "$BUILD_ALL" = true ] || [ "$BUILD_DOCREADER" = true ] || [ "$BUILD_FRONTEND" = true ] || [ "$BUILD_SANDBOX" = true ] || [ "$CLEAN_IMAGES" = true ]; }; then
+    log_error "--app 不得与其它构建或清理模式组合"
+    exit 2
+fi
+
+if { [ "$BUILD_APP" = true ] || [ "$BUILD_ALL" = true ]; } && { [ -z "$BUILD_SOURCE_HEAD" ] || [ -z "$APP_EVIDENCE_OUT" ]; }; then
+    log_error "app 构建要求 --build-source-head 与 --evidence-out"
+    exit 2
+fi
 
 # 检查Docker环境
 check_docker
@@ -378,7 +394,7 @@ fi
 
 if [ "$BUILD_APP" = true ]; then
     build_app_image
-    exit $?
+    APP_RESULT=$?
 fi
 
 if [ "$BUILD_DOCREADER" = true ]; then
@@ -396,4 +412,4 @@ if [ "$BUILD_SANDBOX" = true ]; then
     exit $?
 fi
 
-exit 0
+exit "$APP_RESULT"
