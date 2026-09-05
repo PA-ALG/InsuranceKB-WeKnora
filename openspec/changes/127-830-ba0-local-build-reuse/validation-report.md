@@ -19,16 +19,16 @@ BRANCH=codex/830-ba0-implementation
 OWNER=830-BA0总控
 TASK1_RED=OPENSPEC_CHANGE_MISSING_CAPTURED
 D0_D1_STATUS=PASS
-CURRENT_RED=D2_AWAITING_SINGLE_BUILD_AUTHORIZATION
-NEXT_PHYSICAL_RESULT=RUN_FIRST_EXACT_SELECTOR_REQUEST_WITH_BUILD_BUDGET_1
-REAL_APP_BUILD_BUDGET=1
-REAL_APP_BUILDS_USED=0
-REAL_APP_BUILD_BUDGET_REMAINING=1
-IMPLEMENTATION_HEAD=869c9fef6badbcd3f789caa3a4bd53977499b594
-IMPLEMENTATION_TREE=0ee4bb0302cce554093f959b256ab8ef8e443f69
-D2_BUILD_SOURCE_HEAD=869c9fef6badbcd3f789caa3a4bd53977499b594
-D2_BUILD_SOURCE_TREE=0ee4bb0302cce554093f959b256ab8ef8e443f69
-APP_ARTIFACT_IDENTITY=sha256:7c1c1891365c74b41fdb120278bf6d240f767a18bc54e1e8df72f191b3d30255
+CURRENT_RED=INDEPENDENT_CLOSEOUT_REVIEW_PENDING
+NEXT_PHYSICAL_RESULT=INDEPENDENT_REVIEW_AND_CLOSEOUT
+REAL_APP_BUILD_BUDGET=2
+REAL_APP_BUILDS_USED=2
+REAL_APP_BUILD_BUDGET_REMAINING=0
+IMPLEMENTATION_HEAD=fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9
+IMPLEMENTATION_TREE=c4843cfb4c6949900e47a2a57af6493011dc8fda
+D2_BUILD_SOURCE_HEAD=fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9
+D2_BUILD_SOURCE_TREE=c4843cfb4c6949900e47a2a57af6493011dc8fda
+APP_ARTIFACT_IDENTITY=sha256:afbc7c23f072459b3fa1f786b7f13dcedb47a6437ba5b69f9fb38f2fbb2e2235
 APP_MANIFEST_SHA256=4433d74442d07ff2a172c0e2079954a2f53fe01009fe1be094dd793abc803e87
 APP_DEPENDENCY_LOCK_SHA256=681026d97cc7a7f4c6c31c324e7a0faec6a1aae316455804fedffdf19ef65258
 DOCKER_CONTEXT=colima-g1-build
@@ -39,6 +39,23 @@ PRODUCTION_ACTIVE_EFFECTS=0
 BUSINESS_DB_EFFECTS=0
 G2_EFFECTS=0
 ```
+
+## Task 10 · Recovery D2/D3 (2026-09-05)
+
+用户“继续授权，执行”批准 wheel 文件名修复和新增一次真实构建。历史失败 1 次加本轮
+成功 1 次，累计 2/2；授权与原失败收据见
+[recovery-authorization.md](../../../docs/insurance-kb/evidence/830-ba0/recovery-authorization.md)。
+该修订只增加一次恢复预算，不改变 G2 或业务授权。
+
+- 修复提交与 build source：`fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`；
+  tree `c4843cfb4c6949900e47a2a57af6493011dc8fda`。
+- RED：真实 wheel 文件名解析器拒绝旧名称；GREEN：123 focused Python tests PASS。
+- 独立修复审查 PASS，12 处 download/hash/install 路径与锁定 origin 完全匹配。
+- D2 初始化：PASS / BUILD_AFFECTED / build=1；同身份复用：PASS / REUSE / build=0。
+  复用直接调用同一 selector API 并设置 remaining budget=0，避免 CLI 默认额度允许新构建。
+- D3：CONTAINER_ARTIFACT_SMOKE PASS / build=0 / pull=0 / cleanup=PASS；九项 effects=0。
+- Evidence verifier：PASS，真实重算 identity 与三张收据一致，G1 changed_paths=0。
+- 当前 BA0 保持 WIP，等待独立 closeout 审查。HTTP health、业务验收与 GitHub live 未执行。
 
 ## Task 1 RED
 
@@ -57,14 +74,14 @@ Unknown item '127-830-ba0-local-build-reuse'
 
 | Requirement | Task 1 specification | Task 2 focused RED | Implementation / live | Status |
 |---|---|---|---|---|
-| BA0-REQ-01 | 完整可重算 identity 已冻结 | focused + 独立重算 PASS | D2 NOT RUN | D0_D1_PASS |
-| BA0-REQ-02 | hit=0 / miss≤1 / conflict fail closed 已冻结 | fake-runner PASS | D2 NOT RUN | D0_D1_PASS |
-| BA0-REQ-03 | 稳定 metadata 与两个 Go RUN 共享 cache 已冻结 | metadata/cache contract PASS | D2 NOT RUN | D0_D1_PASS |
-| BA0-REQ-04 | versioned external dependency facts 已冻结 | lock/parser/Go locked tests PASS | D2 NOT RUN | D0_D1_PASS |
-| BA0-REQ-05 | standalone exact-image artifact smoke 已冻结 | Compose/runner contract PASS | D3 NOT RUN | D0_D1_PASS |
-| BA0-REQ-06 | 全程 build≤1、effects=0、STOP/return 已冻结 | budget/effects gate PASS | D2/D3 NOT RUN | D0_D1_PASS |
+| BA0-REQ-01 | 完整可重算 identity 已冻结 | focused + 独立重算 PASS | D2 identity PASS | PASS |
+| BA0-REQ-02 | hit=0 / 每个授权窗口 miss≤1 / conflict fail closed | fake-runner PASS | D2 build=1、reuse=0 | PASS |
+| BA0-REQ-03 | 稳定 metadata 与两个 Go RUN 共享 cache | metadata/cache contract PASS | D2 PASS；速度 NOT_MEASURED | PASS |
+| BA0-REQ-04 | versioned external dependency facts | lock/parser/Go locked tests PASS | 修复后 D2 PASS | PASS |
+| BA0-REQ-05 | standalone exact-image artifact smoke | Compose/runner contract PASS | D3 artifact smoke PASS | PASS |
+| BA0-REQ-06 | 追加授权累计≤2、每窗口≤1、effects=0 | budget/effects gate PASS | 历史1 + 恢复1；D3 effects=0 | PASS |
 
-本报告只记录 D0 规格事实，不声称 Task 2 RED、实现、真实 Docker build、D3 或 BA0 PASS。
+以下 Task 1 章节保留当时 D0 规格事实；当前 D2/D3 事实以上方 Task 10 与收据为准。
 Task 1 未运行 Docker、Provider/model、数据库、生产 `8081`、生产 Active 或 G2 动作。
 
 ## Task 1 quality review correction

@@ -21,3 +21,13 @@ The regression checks valid wheel syntax, distribution, version, tags and exact
 agreement with the locked origin filename.
 
 No further real build is authorized if the recovery build fails. G2 remains locked.
+
+Recovery result: BUILD_AFFECTED/PASS/build=1; exact reuse PASS/build=0;
+D3 artifact smoke PASS/build=0/pull=0/cleanup=PASS. Cumulative used: 2/2.
+The second request invoked the same selector API with real_build_budget_remaining=0
+instead of the CLI's default allowance of 1, enforcing the exhausted budget.
+The identity and selection algorithm were unchanged between the two requests.
+
+The closeout's NOT_MEASURED natural-incremental reason applies to the recovery
+measurement window: no additional identity or build was created for benchmarking.
+The separately authorized correction identity above remains part of the history.
