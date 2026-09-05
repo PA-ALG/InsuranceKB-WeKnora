@@ -128,6 +128,12 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true },
         },
         {
+          path: "knowledge-bases/:kbId/schema-wiki/concept-pages/:memberId",
+          name: "conceptPage830G2",
+          component: () => import("../views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue"),
+          meta: { requiresInit: true, requiresAuth: true },
+        },
+        {
           path: "knowledge-bases/:kbId/schema-wiki/entities/:entityId/overview",
           name: "entityPageOverview830G1",
           component: () => import("../views/knowledge/schema-wiki/EntityPageGraph830G1.vue"),

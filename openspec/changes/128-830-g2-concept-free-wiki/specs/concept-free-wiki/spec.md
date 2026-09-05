@@ -83,3 +83,19 @@ Candidate/拒绝项 SHALL 不进入Active导航或默认检索；缺依赖、孤
 - **WHEN** 以只出现在正文的真实问题检索或通过Agent读取晋级页
 - **THEN** 命中该Release内容并保留实体条件，source click重开同版准确来源
 - **AND** 未发布/拒绝候选在默认导航和检索中零出现
+
+
+冻结G2页面接线（R2/R6）：在既有scope/ACL下新增GET `/concept-pages/:member_id`，
+无query时解析一次Active Head；`release_id`显式固定旧版，不接受current/latest占位或失败回退。
+返回`concept-page-read.830.g2.v1`，含read_mode/release_id/activation_epoch/candidate_hash、
+space_id/raw_kb_id/wiki_kb_id、一个PageMember、同版related_members、citations、
+definition_hash/aggregate_hash（不适用空字符串）。PageMember仍为已冻结vector结构。
+related_members只来自同一固定Release；概念页返回引用字段；entity_overview/free_wiki
+返回payload.member_ids指定的完整成员集合且owner与当前实体一致；field_assertion/free_wiki_item
+返回payload.concept_ids指定的完整概念集合。返回集合不得丢失、重复或增加这些导航目标。
+来源入口GET `/concept-pages/:member_id/citations/:citation_id/preview?release_id=...`，
+返回既有citation authority，PDF内容继续走现有opaque-token source viewer。citation条目仅
+citation_id/page_number/quote，服务端从固定成员Evidence派生，禁止浏览器拼来源身份。
+前端路由`knowledge-bases/:kbId/schema-wiki/concept-pages/:memberId`，导航固定读取所得release_id。
+总控独占本次API/Vue新增文件和测试，Go lane独占两个types文件；共同消费vector d3654617...，
+集成顺序为types→service/handler→UI；共同截止仍原M1物理演示截止，不另开Goal。

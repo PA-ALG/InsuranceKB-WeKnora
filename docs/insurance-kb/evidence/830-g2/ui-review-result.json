@@ -1,0 +1,23 @@
+{
+  "slice": "G2 R2/R6 page client",
+  "reviewer": "g2_bundle_review",
+  "blockers": 0,
+  "sha256": {
+    "frontend/src/api/schema-wiki/conceptFreeWiki830G2.ts": "0db528922f4b5cf01c38e965cb3a9a28355f429558625af1284e8756f49540ea",
+    "frontend/src/api/schema-wiki/conceptFreeWiki830G2.spec.ts": "d99e6f9ad310f8424c69843e2fed75067d3d95239371afb81fb5160958e4a481",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue": "a30736cf6f386ed4cb323e609879b6b281c6d787c9c0494ae0b54e32ce1b48ca",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts": "102d14230da6fd9f234e0fa8f894b67436fe5ce846f0065846b95a9d155f55e3",
+    "frontend/src/router/index.ts": "7e65b6cbd57bdf5a95f885e937115094c46b32be2b3391bfbfb1405ed89bc467"
+  },
+  "validation": {
+    "component_tests": "25 PASS",
+    "typecheck": "vue-tsc --build PASS",
+    "red_before_fix": [
+      "5 owner/evidence/relation negatives failed with7PASS",
+      "6 navigation/evidence negatives failed with16PASS"
+    ]
+  },
+  "actual_backend_ui_flow": "NOT RUN",
+  "source_preview": "NOT RUN",
+  "scope": "read client/UI only; typed source errors remain visible"
+}
