@@ -1,0 +1,13 @@
+{
+  "contract": "830-g2-ui-network-repair.v1",
+  "authorization": "Standing reasonable necessary G2 isolated-delivery repair",
+  "diagnosis": "nginx running and container-local HTTP200; Docker NetworkSettings.Ports empty despite loopback HostConfig port binding when only attached to internal network",
+  "action": "Connect existing G2 UI to existing weknora-g2-594-egress network so Docker activates the configured127.0.0.1:18195 publication",
+  "guard_image": "sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5",
+  "preserve_internal_upstream": true,
+  "new_networks": 0,
+  "port_widening": false,
+  "provider_calls": 0,
+  "production_changes": 0,
+  "flow": "NOT_RUN"
+}

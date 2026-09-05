@@ -5,30 +5,35 @@
 
 ## 1. 当前结论（2026-09-06）
 
-**G2 正在按用户追加授权并行推进，尚未完成。** 已提交六个代码切片：
+**G2 正在按用户追加授权并行推进，尚未完成。** 已提交八个代码切片：
 离线编译/独立审核合同 `e88f27fe6`（25项定向测试），固定Release页面 `5b9ddb265`
 （25项前端测试及typecheck），原文存储后端解析修复 `03a2b96aa`（RevisionSource套件通过）。
 另有 Go 发布/固定页面合同 `77f8fea05` 和 Agent 同版消费 `3c655294d`。
 原生PDF定位生产者 `b8cde87d8` 已通过真实A的Python解析及Go传输校验：
 39页、45120 code points、40657字符框；20条种子文档引文均在指定页唯一匹配。
-均有独立复核；最终六个 Go 包定向测试通过，不代表真实 G2 发布验收通过。
+原文桥与专用G2查看器 `4c5aea9bf` 已提交，7个Go包集成验证、37项前端测试及typecheck通过，独立复核0阻断。
+真实A编译预检另发现多行source hashing被旧canonical拒绝，兼容修复 `f23e2d7e6` 已通过27项Python/7包Go集成及独立复核；不代表真实G2发布验收通过。
 
 Go合同/发布/页面、Agent同版消费已集成。来源校验缺失时 Review/Activate 必须拒绝，
-HTTP503具明确错误码；真实来源桥未接通前不能发布G2。真实G1的17条引文已逐字核对，
+HTTP503具明确错误码；来源桥已集成部署，真实G2候选的发布回验尚未执行。真实G1的17条引文已逐字核对，
 迁移的旧/新hash转换与两阶段来源凭据接线已通过测试；旧封存文件未修改。
-新 G2 的 PDF 原生定位生产者已提交部署；后端受托来源桥与专用前端查看器在桥接 worktree 整合并独立复核。
+新 G2 的 PDF 原生定位生产者已提交部署；受托来源桥与专用前端查看器已集成提交，修复真实多行输入后最终镜像构建及隔离app升级均PASS。
 
-FLOW=NOT RUN，QUALITY=DEFERRED。Provider调用为0；应用构建1次已PASS，
-源码`3c655294d`，镜像`sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6`。
-合理扩展后应用构建上限2次，前端上限1次；docreader原生定位构建追加1次，构建及隔离升级均PASS，gRPC健康SERVING。
+FLOW=NOT RUN，QUALITY=DEFERRED。Provider调用为0；应用构建累计3次（2 PASS、1因专用构建数据盘满而失败），当前运行镜像为
+源码`f23e2d7e6`，镜像`sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43`。
+合理扩展后应用构建上限3次，未启动构建余量0；构建数据盘20→40GB扩容已PASS，实测剩余19GB。前端静态/镜像各1次已PASS，隔离UI18195实际index/login200；docreader原生定位构建追加1次，构建及隔离升级均PASS，gRPC健康SERVING。
 正式gRPC unary/stream实际读取A均PASS，39页原文凭据与冻结artifact完全一致；provider调用0。
 G2专用数据库
 `weknora_g2_594`已复制，专用来源runtime health200，测试操作员正常login通过。
 原库Head epoch3及source表0均不变；G2的A backfill实际HTTP200，来源封存实表0→1，
 精确PDF SHA/大小/39页及pinned状态通过，G2 Head epoch3不变。
 隔离升级曾因root-owned 0600配置无法被appuser读取而退出，已保持字节不变修复owner，
-同镜像health/login200；旧容器保留为weknora-g2-594-app-before-3c655294。
-B upload未执行：自动审批拦截PDF外发，已请求具体DashScope embedding授权。
+中间镜像health/login200；最终升级也已通过health/login，前端nginx重载后代理login200。
+最终固定Release读取、旧G1引文预览和1047811字节精确PDF均HTTP200；原库/G2的Head epoch3与source行数0/1保持不变。
+最近回滚容器保留为weknora-g2-594-app-before-f23e2d7e6；此前中间升级备份也保留。
+[最终运行核验](docs/insurance-kb/evidence/830-g2/final-runtime-read-verification.json)。
+A DeepSeek编译及B upload均未执行：自动审批分别拦截派生67字段快照外发及PDF embedding，
+已分别请求具体DeepSeek/DashScope授权；A命令未启动，provider ledger尚不存在。
 [执行记录](docs/insurance-kb/evidence/830-g2/execution.md)，
 [外发授权状态](docs/insurance-kb/evidence/830-g2/source-upload-approval.json)。
 

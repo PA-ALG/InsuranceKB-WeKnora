@@ -35,8 +35,8 @@
 - D1：focused Python/Go/Vue tests及局部编译；复用既有依赖，Docker SKIP，不调用全构建。
 - D2：冻结integration head及可重算artifact identity后，受影响app最多1次、frontend最多1次构建；均先lookup，同identity命中必须build=0。未影响镜像REUSE。此为本卡必要构建上限，不继承BA0历史预算。
 - D3：只运行D2 exact image，`--no-build --pull never`；真实业务HTTP/页面/source click，不能替用BA0 artifact smoke。
-- 当前实际用量：Provider=0；app build=0；frontend build=0；部署/DB写入=0。
-- Provider候选复用815既有配置：`https://api.deepseek.com/v1` / `deepseek-v4-flash`（私有request identity只读核验）。具体G2请求输入、模型参数与执行identity未冻结前调用=0。首轮最小预算为分析1、编译1、独立审核1；仅同一失败允许一次登记纠偏调用，总上限4，不换模型、不新增服务。后续需要扩大必须按章程报告。
+- 启动时实际用量：Provider=0；app build=0；frontend build=0；部署/DB写入=0。
+- 启动时Provider预算（后续修订见下文）：复用815既有配置：`https://api.deepseek.com/v1` / `deepseek-v4-flash`（私有request identity只读核验）。具体G2请求输入、模型参数与执行identity未冻结前调用=0。首轮最小预算为分析1、编译1、独立审核1；仅同一失败允许一次登记纠偏调用，总上限4，不换模型、不新增服务。后续需要扩大必须按章程报告。
 - 固定builder=`g1-build`；BA0 app `sha256:8cb32d7f638669b2f741ab82ba86d84517e3ec6569e036970d5412d62c75e9eb` 已本地查到；它不是G2制品身份。
 - 默认Colima宿主socket不通；官方 `colima ssh --profile default -- sudo docker ps` 可读，既有clone `WeKnora-p0-clone-postgres-vsnd11r2`、redis保留；未重启profile或生产。后续复用官方CLI通道，不把socket故障当产品RED。
 - 外部写域仅待冻结的G2隔离NOT_FOR_PRODUCTION对象、隔离runtime及唯一D2镜像；生产8081、生产Active、G1历史Release只读。具体scope、端口、credential文件与命令在执行前列明；未列对象不写。
@@ -153,7 +153,54 @@ DashScope/qwen3.7-text-embedding目的地，具体2PDF/20请求授权问题仍�
 - Intermediate app build from `3c655294d` PASS, image `sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6`; installed only in G2 app. Initial config owner error was observed and repaired without changing config bytes; health/login200.
 - A backfill HTTP200: source row0→1 in G2; source file SHA/1047811bytes/39pages/pinned verified. Original DB/source rows0 and both release heads epoch3 unchanged.
 - Read-only citation signing ring prepared/applied only for isolated source previews, separate from human review/publish authority. No human review/publish key configured.
-- Native source bridge and dedicated G2 viewer are integrated in separate bridge worktree; UI37 tests/typecheck + independent review0, including persisted Go authority vector. Legacy G1 carryover source revalidation remains under implementation/review.
+- Native source bridge and dedicated G2 viewer are integrated in separate bridge worktree; UI37 tests/typecheck + independent review0, including persisted Go authority vector. Legacy G1 carryover source revalidation was then under implementation/review; it subsequently passed review and was integrated in4c5aea9bf below.
 - B upload/embedding still unexecuted pending the specific external-data approval. Provider calls0. FLOW NOT_RUN; QUALITY DEFERRED.
 
 - Docreader build and isolated exact-image upgrade PASS (`sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868`), gRPC health SERVING; previous container preserved. Formal gRPC Read and ReadStream both returned identical actual A Markdown/native metadata: 39 pages, 45120 codepoints, native artifact SHA `8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6`. See `native-a-grpc-validation.json`; two local gRPC calls, zero provider calls, FLOW remains NOT_RUN.
+
+
+### Integrated source bridge and delivery recovery (2026-09-06)
+
+- `4c5aea9bf` commits the source bridge and dedicated viewer after independent BLOCKER0 and root7-package Go /37 frontend tests/typecheck PASS. This is code evidence only.
+- Actual-A provider0 compile-request preflight then exposed multiline text rejected by reused Schema canonical. G2-only canonical repair was sent for independent review and subsequently committed asf23e2d7e6 below; prior passing short vectors did not establish this path. The real request has17 legacy locator SourceBlocks (derived from4 durable legacy chunks) plus1 native leaf; preserve all source text exactly.
+- The second app build failed before code compilation because builder `/dev/vdb1` had20G used and0 available. Failed BA0 receipt is preserved in `final-app-build-failure-4c5aea9bf.json`. Attempts are now2 (one prior PASS, one failure); standing user approval supplies one recovery attempt, total max3.
+- Dedicated builder `g1-build` data disk resized20→40GiB, Docker28.4.0 restored, actual19G free. No image/volume deletion or cache prune; default runtime unchanged.
+- Frontend static build and Docker image PASS, source4c5aea9bf, exact image `sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5`. New isolated UI at127.0.0.1:18195 has actualindex200 and proxy login200 for tenant10003. Docker did not publish the loopback port on the internal-only network; the existing G2 egress network was attached, publication verified, no new network or widened binding. Receipt preserves the initial incomplete outcome and repair.
+- At this recovery checkpoint UI talked to the already-verified intermediate app3c655294d; final G2 app/candidate/activation had not run. Final app delivery is recorded below. Provider calls0, B external-data approval still pending, FLOW NOT_RUN and QUALITY DEFERRED.
+
+- Canonical recovery committed `f23e2d7e6` after final7-package Go and27 Python tests, independent BLOCKER0; actualA request hash67bd6ad8…a7e3. Recovery app build started at this frozen head.
+- Actual A provider command was rejected by automatic approval review before process creation: derived67-field snapshot/public terms transmission to DeepSeek lacked destination/payload-specific approval despite standing G2 budget authorization. No attempt-started marker or provider ledger exists; calls0. A-specific async approval requested. No workaround or alternate external call made.
+
+- Captured actual A gRPC output passed the service native-quote resolver for page1 insured definition and page2 eligibility, with wrong-page/altered-quote/parser-drift rejection. Service test PASS3.467s; source/native/parser hashes unchanged, no provider/DB/Docker calls. `a-native-service-quote-validation.json` is captured-data validation only, not online G2 release/FLOW.
+
+### Provider预算修订登记 · 2026-09-06
+
+启动预算总4次，后续总6次的口头计划（A/B共用1次纠偏）由当前冻结预算替代为总7次：
+seed分析1、A编译/独立审核/编译纠偏各1、B编译/独立审核/编译纠偏各1。原因是两个真实实体快照
+各需独立编译审核，且完整67字段输出超出早期8192 token余量；每实体只预留一次有据纠偏，
+不含隐藏重试或换模型。依用户“合理必要扩展均通过”授权登记，精确身份见
+provider-budget-revision.json（文件SHA d3cd597e060d2939837d08531cb19c02c03f69544e9e6c391a46d056f65ab70b）。
+这是预留额度，实际Provider仍0。A最多3次的具体DeepSeek外发申请及B的DashScope外发申请仍待回复，
+总预算不替代目的地与payload审批；未批准部分不得执行。
+
+### 最终构建结果 · 2026-09-06
+
+恢复app build已PASS，源码f23e2d7e62cffebc076cd453dbcf6be6be8b16bc，
+image sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43，
+linux/arm64、750931118字节，BA0六个制品标签一致。累计app3/3次（2PASS、1磁盘满失败），
+未启动额度0。前端累计静态1次/镜像1次，恢复阶段复用0新增构建。最终隔离app升级已启动，
+尚不把构建成功计作G2快照或FLOW验收。
+
+### 最终隔离交付核验 · 2026-09-06 05:30 +08:00
+
+最终f23 app镜像已通过身份校验并部署至weknora-g2-594-app；旧中间容器保留为
+weknora-g2-594-app-before-f23e2d7e6。UI nginx重载解析新容器地址后，app health、
+app正常login、UI代理login及index均200，tenant10003。当前Release读取200、epoch3；
+既有G1引用预览和PDF读取200，1047811字节及SHA与冻结A原文完全一致。
+首次回读脚本曾把citation_id末尾多抄一字符而400，从已有真实authority读取准确ID后复验PASS；
+没有产品代码/配置修改。原库source0、G2 source1及两库Head均精确等于此前backfill后的状态。
+升级及只读验证见final-upgrade-receipt.json和final-runtime-read-verification.json。
+
+当前产品验收仍为G2真实快照0/2、Provider0、FLOW NOT_RUN、QUALITY DEFERRED。
+下一关键路径为获准的真实A编译与独立审核、实际候选人工确认及隔离发布，随后B导入/第二快照与
+定义hash不变、聚合hash变化、页面/搜索/Agent/source-click联合验收。没有虚构模型执行或人工签名。

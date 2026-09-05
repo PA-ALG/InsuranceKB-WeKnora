@@ -1,0 +1,43 @@
+{
+  "contract": "830-g2-provider-budget-revision.v1",
+  "authorization": "User standing approval: all reasonable necessary G2 extensions approved",
+  "status": "RESERVED_NOT_EXECUTED",
+  "endpoint": "https://api.deepseek.com/v1",
+  "model": "deepseek-v4-flash",
+  "temperature": 0,
+  "thinking": {
+    "type": "disabled"
+  },
+  "response_format": {
+    "type": "json_object"
+  },
+  "previous_max_calls": 4,
+  "max_calls": 7,
+  "allocation": {
+    "seed_analysis": 1,
+    "a_compile": 1,
+    "a_review": 1,
+    "a_compile_correction": 1,
+    "b_compile": 1,
+    "b_review": 1,
+    "b_compile_correction": 1
+  },
+  "compiler_max_tokens": 32768,
+  "reviewer_max_tokens": 8192,
+  "seed_analysis_max_tokens": 8192,
+  "reason": "Full67-field first snapshot and subsequent entity snapshot require independent compiler/reviewer executions; a36.9KB existing-field serialization already approaches the former8192-token output cap",
+  "guards": [
+    "provider0 request and hash catalog preflight before any model call",
+    "freeze exact actual system/user and complete HTTP request hashes before call",
+    "preserve raw response and reject empty/truncated/invalid outputs without post-hoc hash repair",
+    "record usage, finish_reason, response model and execution IDs",
+    "no hidden retries or model switching",
+    "B upload/embedding and any B provider submission remain blocked until specific outstanding external-data approval arrives"
+  ],
+  "official_parameter_sources": [
+    "https://api-docs.deepseek.com/api/create-chat-completion/",
+    "https://api-docs.deepseek.com/quick_start/agent_integrations/crush/"
+  ],
+  "provider_calls_so_far": 0,
+  "flow": "NOT_RUN"
+}

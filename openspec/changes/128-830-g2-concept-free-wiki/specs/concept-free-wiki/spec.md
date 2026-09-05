@@ -154,3 +154,17 @@ scope/release/epoch/candidate/member/citation/source/页/bbox/quote及TTL；读�
 不在构建工作树内改正在构建的源码。
 此切片不上传B，不调用embedding/compiler，不新表或部署服务；发布继续默认拒绝直到
 真实revision/bytes/native capture/ACL均有服务端回验。
+
+
+R4/R5真实输入必要纠偏（2026-09-06，用户持续预批合理扩展）：真实A的SourceBlock包含LF，
+G2此前复用旧Schema canonical会在request hash阶段拒绝。仅G2增加兼容canonical：
+文本value允许LF/CR/TAB并以JSON转义保留原字节及Unicode offset；对象key与identity保持严格，
+其他C0/DEL、non-NFC、float及不合法Unicode仍拒绝。无这些新增合法文本的既有G2 vector
+及旧G1/Schema hash必须完全不变，禁止改写durable原文以绕过限制。
+Owner g2_sources独占concept_free_wiki_830_g2.py及对应Python test、
+internal/types/concept_free_wiki_830_g2.go及对应Go test，以及新增
+harness/tests/fixtures/concept_free_wiki_830_g2_canonical_vector.json。
+RED绑定真实A source/request hashing与LF/CRLF/TAB/non-BMP跨语言vector，另有非法文本负例；
+总控集成、g2_bundle_review独立复核。此修复不改变旧canonical、不扩大provider调用。
+应用第二次构建因专用builder数据盘20GB已满而在编译前失败；保留失败回执，按用户持续授权
+增加一次恢复构建额度（累计上限3），builder数据盘有界扩到40GB，不清理任何旧镜像或volume。

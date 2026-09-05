@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-final-app-upgrade-plan.v1",
+  "authorization": "User standing approval for necessary reasonable G2 isolated delivery",
+  "status": "EXECUTED_PASS",
+  "script": "/private/tmp/weknora_g2_upgrade_final.py",
+  "script_sha256": "9af54b39faa5a91accfa78f038b6d0e73b30ed0b01294b0f26cccf9eb36a2eda",
+  "requires_artifact_pass": "final-app-artifact.json",
+  "build_source_head": "f23e2d7e62cffebc076cd453dbcf6be6be8b16bc",
+  "old_image": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6",
+  "container": "weknora-g2-594-app",
+  "rollback_container": "weknora-g2-594-app-before-f23e2d7e6",
+  "database": "weknora_g2_594",
+  "port": "127.0.0.1:18194",
+  "preserved_runtime_config": "Existing isolated storage resolver and dedicated citation read ring",
+  "private_file_policy": "No secrets in repository; config archive0600 uid/gid1000 with docker cp -a",
+  "provider_calls": 0,
+  "original_db_mutations": 0,
+  "production_mutations": 0,
+  "g2_publish": "NOT_RUN",
+  "image_guards": "BA0 contract, selector/count, exact six artifact labels, linux/arm64, verified on builder and target",
+  "post_upgrade_ui": "After app health200, verify existing G2 UI image and reload nginx to re-resolve recreated app hostname; recheck proxy login tenant10003. No frontend rebuild.",
+  "runtime_disk_preflight": {
+    "data_disk_size": "98G",
+    "available": "4.8G",
+    "observed_before_final_image_transfer": true,
+    "transfer_method": "host private archive streamed to docker load, no VM archive copy",
+    "original_profile_restart": false
+  },
+  "execution_receipt": "final-upgrade-receipt.json",
+  "read_verification": "final-runtime-read-verification.json"
+}

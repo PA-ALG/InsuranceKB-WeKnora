@@ -1,0 +1,70 @@
+{
+  "contract": "830-g2-final-runtime-read-verification.v1",
+  "status": "PASS",
+  "source_head": "f23e2d7e62cffebc076cd453dbcf6be6be8b16bc",
+  "containers": {
+    "weknora-g2-594-app": {
+      "container_id": "7677440e0f4b87ca827c0df123c63f9d5ba5f71396df26a96dcdef0401113c9e",
+      "image_id": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+      "running": true
+    },
+    "weknora-g2-594-ui": {
+      "container_id": "3c67ef40d8517aee4bffdb34a41236a950692bf2a56592e30767185c3e75757a",
+      "image_id": "sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5",
+      "running": true
+    },
+    "weknora-g2-594-docreader": {
+      "container_id": "c8644a8f546a1eb9958cfbc2ef5eda2ffe5e2a916051bc9f984447b0a0b72f3e",
+      "image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+      "running": true
+    }
+  },
+  "app_health_http": 200,
+  "app_login_http": 200,
+  "ui_proxy_login_http": 200,
+  "login_tenant": 10003,
+  "ui_nginx_reloaded_after_app_recreate": true,
+  "ui_index_http": 200,
+  "current_http": 200,
+  "current": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  },
+  "existing_g1_source_preview_http": 200,
+  "existing_g1_pdf_http": 200,
+  "pdf_bytes": 1047811,
+  "pdf_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+  "authority_page": 2,
+  "databases": {
+    "weknora": {
+      "database": "weknora",
+      "source_rows": 0,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    },
+    "weknora_g2_594": {
+      "database": "weknora_g2_594",
+      "source_rows": 1,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    }
+  },
+  "comparison": "Exact match to a-source-backfill-verified.json after-state",
+  "provider_calls": 0,
+  "g2_activations": 0,
+  "flow": "NOT_RUN",
+  "quality": "DEFERRED",
+  "initial_probe_failure": {
+    "http": 400,
+    "cause": "Temporary verification script copied citation ID with one extra trailing character; corrected from previously frozen real authority, no product change"
+  },
+  "limits": "Existing G1 source compatibility and local deployment verification; no new G2 candidate or release exists"
+}
