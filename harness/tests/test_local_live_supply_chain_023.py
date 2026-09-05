@@ -56,6 +56,18 @@ def _git(path: Path, *arguments: str) -> str:
     return completed.stdout.strip()
 
 
+def _locked_source_bytes(path: str) -> bytes:
+    # The publication workflow checks out build_source, not the current BA0 tree.
+    build_source = _load_json(LOCK_PATH)["build_source"]
+    assert isinstance(build_source, dict)
+    commit = str(build_source["commit"])
+    assert _git(REPO_ROOT, "rev-parse", f"{commit}^{{tree}}") == build_source["tree"]
+    _git(REPO_ROOT, "merge-base", "--is-ancestor", commit, "HEAD")
+    return subprocess.check_output(
+        ("git", "show", f"{commit}:{path}"), cwd=REPO_ROOT
+    )
+
+
 def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() -> None:
     lock = _load_json(LOCK_PATH)
     manifest = _load_json(MANIFEST_PATH)
@@ -109,7 +121,7 @@ def test_source_lock_is_closed_and_pins_runtime_build_target_and_three_images() 
         assert isinstance(dockerfile, dict)
         assert dockerfile == {
             "path": dockerfile_path,
-            "sha256": _sha256(REPO_ROOT / dockerfile_path),
+            "sha256": hashlib.sha256(_locked_source_bytes(dockerfile_path)).hexdigest(),
         }
 
 
@@ -341,7 +353,7 @@ def test_model_debug_redaction_is_in_merged_source_not_a_workflow_patch() -> Non
     test_source = (REPO_ROOT / "internal/middleware/logger_test.go").read_text(
         encoding="utf-8"
     )
-    dockerfile = (REPO_ROOT / "docker/Dockerfile.app").read_text(encoding="utf-8")
+    dockerfile = _locked_source_bytes("docker/Dockerfile.app").decode("utf-8")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "[model debug response omitted]" in source
