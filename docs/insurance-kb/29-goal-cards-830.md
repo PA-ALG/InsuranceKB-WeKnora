@@ -12,6 +12,9 @@
 BA0 本地构建复用工程门；BA0 不属于产品 Goal，也不增加 830 产品进度。G2 及后续均为
 `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`。
 
+以下保留 BA0 关闭时的产品状态和构建身份，不代表本次文档修订分支/写域；
+文档修订授权与边界见蓝图 §0.1。
+
 ```text
 CURRENT_AUTHORIZATION=NONE
 CURRENT_PRODUCT_GOAL=NONE
@@ -39,7 +42,8 @@ BA0 终态（2026-09-05）：D2 恢复构建与 exact reuse PASS，D3 制品烟�
 累计真实构建 2/2（原失败1 + 用户新增授权恢复成功1），复用 build=0，D3 build/pull=0。
 冻结构建源 `fe9a97d092fbb470985bf32c5c4e5a9e6ec135c9`，完整 identity/image/receipt
 见 `docs/insurance-kb/evidence/830-ba0/ba0-closeout.json`；累计授权历史见同目录
-`recovery-authorization.md`。尚未合入 main，未进行 HTTP/业务或 GitHub live 验收。
+`recovery-authorization.md`。本地 Git 已确认 BA0 经 PR #127 合入
+`origin/main@a4e6a15c8`；本次文档修订未重跑 HTTP/业务或 GitHub live 验收。
 
 
 ```text
@@ -197,32 +201,46 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 
 ## 4. G2 · 共享 ConceptDefinition 与 free_wiki 准入
 
+G2—G6D 共用蓝图 §9.1 的阶段边界：接口回放验证可替换性，初始实现必须跑真实隔离
+链路；Seed Cases 不冒充专家金标，领域质量留在末尾 Q0。各卡验收当前阶段的接口与
+流程，不能前置实现后卡功能，也不能把来源可定位直接当成语义质量通过。
+
 - **CURRENT_RED**：`LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`；BA0 PASS 后
   仍保持 `LOCKED_PENDING_EXPLICIT_USER_AUTHORIZATION`，获批开工才转为
   `NO_SHARED_CONCEPT_OR_VALUE_ADMISSION`。
 - **NEXT_PHYSICAL_RESULT**：首批共享 ConceptDefinition 由实体 FieldAssertion 链接并
   动态聚合；实体独立 `free_wiki` 分组同时承载首批通过价值准入的模型发现页面。两条
   链共用同一 Candidate/Review/Release，但不互相冒充。
-- **目标**：把专家维护的稳定概念定义和由当前 Active 数据计算的实体/字段聚合彻底
-  分开；允许模型发现 schema 外知识，但只有有价值且有 Evidence 的概念可以晋级。
+- **目标**：分离稳定概念定义和由当前 Active 数据计算的实体/字段聚合。已有 Schema/
+  专家定义直接复用；缺少定义时允许模型从来源编译候选。实体 free_wiki 可链接共享概念
+  及义项，实体条件仍留在自己的断言中；有价值且有 Evidence 的开放知识可以晋级。
 - **冻结输入**：G1 entity release、ConceptDefinition/alias/link identity 规则、概念
-  准入策略，以及由具名专家批准并带 digest 的 24 项小 Golden；Golden 同时含应晋级
-  项和重复、广告词、OCR 噪声、无证据碎片等垃圾项。
+  准入策略、24 项带 digest 的协议/准入回放样本及真实材料。样本覆盖应晋级、更新既有页、
+  不同义项、字段补充、别名/行内提及、重复、广告词、OCR 噪声和无证据碎片；此时是
+  Seed Cases，不冒充专家 Canonical Golden。领域专家标注和业务指标在 Q0 验收。
 - **允许写域**：Harness concept candidate、去重/准入、Evidence 与 aggregation query；
-  WeKnora 通用 concept/free_wiki 页面和 FieldAssertion→ConceptDefinition 链接；测试与证据。
+  蓝图 §9.1 编译器与独立审核器的版本化协议、初始实现和替换适配；WeKnora 通用
+  concept/free_wiki 页面、FieldAssertion→ConceptDefinition 链接及既有 Search/Agent 内容读取
+  接线；测试与证据。
 - **明确非目标**：不建全局本体平台、Graph DB、自动研究或通用 Prompt 平台；动态聚合
   不得回写专家定义；free_wiki 不得绕过 Candidate/Review/Release。
-- **Day 2 物理结果**：至少一个专家定义页与两个真实 FieldAssertion 链接；定义正文在
+- **Day 2 物理结果**：至少一个已有定义页与两个真实 FieldAssertion 链接；定义正文在
   Active 实体数量变化时 hash 不变，聚合列表随 Active 数据变化；至少一个垃圾候选被拒。
-- **真实 DoD / 验收证据**：24/24 attempted；所有晋级概念 Evidence 语义支持与精确
-  回点率=100%；垃圾晋级=0；promotion precision≥90%；expected promotion recall≥80%；
-  零分母不得通过；专家定义、动态聚合和实体断言的 provenance/hash 可分别重算；拒绝项
-  不出现在 Active concept、free_wiki、导航或默认检索结果。
+- **真实 DoD / 验收证据**：24/24 attempted，协议样本处置与硬门断言全部通过；真实材料
+  经初始编译、独立审核和隔离发布产生可打开页面，不能只交接口桩。编译器替换、审核器替换
+  均不修改平台 UI/Review/Release；独立审核拥有独立输入上下文与调用记录，不接受生成者
+  自评代替审核。实际晋级项来源存在、locator/quote 精确回验=100%；机械可判定的无来源、
+  无身份、重复和拒绝样本不得晋级。按照蓝图 §9.2 验证原文提取、规范化、保义压缩和综合
+  的协议及保留条件/例外的反例；领域语义正确性、垃圾识别效果、precision/recall 留到 Q0。
+  定义、动态聚合和实体断言的 provenance/hash 可分别重算；拒绝项不出现在 Active concept、
+  free_wiki、导航或默认检索结果。G2 在既有读取链中接入概念/free_wiki 正文及其来源，
+  G3 延伸验证多 pack 字段值/条件，G4 验证跨实体同版读取，G7 只做联合消费验收。
+  结论为真实 FLOW 与 `QUALITY=DEFERRED`。
 - **时间盒**：4–6 个工作日。
-- **停止条件**：需要复制定义到每个实体、聚合结果成为可编辑权威、垃圾晋级大于 0、
-  Evidence 低于 100%，或必须引入新概念平台，立即停止。
-- **Evidence Pack**：24 项 Golden/hash、逐项预测和裁决、precision/recall 分母、垃圾
-  拒绝清单、定义/聚合独立 hash、链接与 source click 录屏、Release/test/diff 证据。
+- **停止条件**：需要复制定义到每个实体、聚合结果成为可编辑权威、硬门失败仍被发布、
+  来源精确回验低于 100%、协议替换需要重写平台，或必须引入新概念平台，立即停止。
+- **Evidence Pack**：24 项 Seed Cases/hash、逐项实际处置、拒绝清单、编译/独立审核原始
+  输出与替换回放、真实隔离链路、定义/聚合独立 hash、链接与 source click 录屏及 diff。
 
 ## 5. G3 · 11 类 SchemaPack Catalog、展示 Profile、统一分类与批量实体识别
 
@@ -241,17 +259,19 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   产品 pack：医疗险、重疾险、寿险/储蓄型之一、意外/护理/失能之一；同时冻结 v5 工作簿
   exact hash、11 个 pack 的字段数与业务分类数、154 个去重字段、47 个全产品共用字段；
   同时冻结“有序 section 集合 + 字段映射”的可变节点 renderer 合同、每个 pack 的预期
-  section count/keys/显示名和 category→section 映射；冻结专家标注的预期 entity identity、分类、SchemaPack 和
-  处置结果，以及相互独立的
+  section count/keys/显示名和 category→section 映射；冻结协议样本预期 entity identity、
+  分类、SchemaPack 和处置结果，并标记 Seed 标签来源、与 Q0 专家金标分开；冻结相互独立的
   identity/classification threshold、policy hash、自动流转条件与人工队列条件。
-- **允许写域**：Harness SchemaPack registry、entity resolver、classification Candidate
-  与 Evidence；WeKnora 统一导航/标签投影；测试和 Evidence Pack。
+- **允许写域**：Harness SchemaPack registry、entity resolver、classification Candidate、
+  材料角色识别、配置式 TrustPolicy 与 Evidence；WeKnora 统一导航/标签投影、既有多 pack
+  字段检索读取接线；测试和 Evidence Pack。
 - **明确非目标**：不按产品/权益另建 KB，不让分类决定来源权威，不因改分类重抽字段，
   不自动合并歧义实体，不建设低代码 Schema/分类平台。
 - **Day 2 物理结果**：11/11 pack 已生成 manifest，字段数严格为
   `67/70/62/67/66/75/79/82/74/83/76`，154 个去重字段和 47 个全产品共用字段可重算；
   11/11 pack 从工作簿业务分类和医疗险既有布局批量生成各自的 PresentationProfile
-  Candidate，并完成一次整包确认；各 pack 节点数按业务实际可不同，所有字段恰好映射到
+  Candidate，并由具名产品负责人完成一次结构/展示整包确认，业务质量由 Q0 专家裁决；
+  各 pack 节点数按业务实际可不同，所有字段恰好映射到
   一个主节点，正式 Profile 空节点=0，不要求专家逐字段手工配置；
   冻结 corpus 全量预检完成，至少 3 份真实材料分别产生 MATCH、CREATE 和
   NEEDS_CONFIRM/MULTI 的可打开 Candidate；每个决定带 Evidence 和置信原因。
@@ -264,7 +284,8 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   duplicate primary mapping=0，不以
   分类编号硬编码目录。
   10–15/10–15 真实材料 attempted；`MATCH / CREATE / MULTI /
-  NEEDS_CONFIRM / QUARANTINE` 五种结果各有真实用例；专家 adjudication 下错合并=0；
+  NEEDS_CONFIRM / QUARANTINE` 五种结果各有真实用例；协议反例中错合并=0，真实领域错合并率
+  由 Q0 专家裁决，不能用 Seed 标签声称已通过领域质量；
   达到 classification threshold 的明确分类自动形成可审计决定；满足 exact identity key、
   关键身份 Evidence、identity threshold 且无别名/版本冲突的新实体自动创建幂等
   `EntityCandidate`（不是 Active）；低置信、同名多版本、身份冲突和混合材料必须进入
@@ -274,13 +295,17 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   每个实体使用自己的 SchemaPack，非医疗产品无 Schema67 填充；对每个已选 SchemaPack，FieldDefinition 数量必须与该
   实体的独立 FieldAssertion 页面数量完全相等，所有字段均 attempted，不能用组合表格
   或锚点替代；修改分类后 entity ID、Evidence、历史和字段 hash 不变，仅版本化标签/
-  主导航路径变化。
+  主导航路径变化。材料类型采用少量版本化采信配置后自动识别，不逐份手工配置；模型提出
+  material role，TrustPolicy 按字段、作用域、版本/有效时间裁决，不能以最后上传自动覆盖。
+  多标签与一个主导航共存；编译必须覆盖所有字段但允许三态，不强制填入无来源的非空值。
+  冻结问题能检索实际字段值/条件和其来源，沿用同一 Release 读取接口。
 - **时间盒**：5–7 个工作日。
 - **停止条件**：出现一次错合并、歧义被静默 MATCH、冻结阈值被临场修改、高置信样本
   全被推给人工、低置信样本被自动流转、分类改变 identity/Evidence、非医疗内容依赖
   Schema67、节点数量被写死为 7、Catalog 数量/字段数与 v5 不一致、schema category 被当成固定 UI 目录、公共
   字段仅凭同名静默合并，或统一 KB 必须被拆分，立即停止。
-- **Evidence Pack**：corpus/revision manifest、专家 expected labels、逐材料 disposition、
+- **Evidence Pack**：corpus/revision manifest、Seed expected labels 与来源、逐材料 disposition、
+  material role/TrustPolicy identity 与决策、
   Catalog/11 pack manifests、字段计数与去重检查、11 个 PresentationProfile
   identity/hash、section count、category→section mapping、entity
   merge/split graph、分类前后 hash、SchemaPack 选择证据、Active/隔离清单和 UI 录屏。
@@ -291,18 +316,22 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   `NO_INCREMENTAL_R2_OR_CONFLICT_SAFETY`。
 - **NEXT_PHYSICAL_RESULT**：冻结第二批真实材料从 R1 生成原子 R2，并可证明冲突隔离、
   无关字段不变、双时态、pinned read 与 release-level rollback。
-- **目标**：只重算受影响闭包，以七种冻结语义表达增量；模型永远不能覆盖专家已确认
+- **目标**：优先复用未变字段、只重算受影响范围，以七种冻结语义表达增量；模型永远不能覆盖专家已确认
   事实，未决冲突永远不能改变 current。
 - **冻结输入**：G3 的 exact R1、第二批 SourceRevision、受影响实体/字段和 expected
   change matrix、专家锁定项、权威序、有效时间/获知时间、R2 与 rollback 查询脚本。
-- **允许写域**：Harness ChangeSet、merge/conflict、affected closure 与 temporal model；
+- **允许写域**：Harness ChangeSet、merge/conflict、affected closure、最小 GapTask、
+  Schema 演进触发与 temporal model；
   WeKnora 唯一 Release/current/pinned/revert 通用接口；测试和 Evidence Pack。
-- **明确非目标**：不做全量重编替代增量，不物理删除历史，不建第二 current pointer，
+- **明确非目标**：不做无界全库重编替代增量，不物理删除历史，不建第二 current pointer，
   不实现任意双时态查询语言，不允许单页 cherry-pick 冒充整版 rollback。
+  必要时允许有界实体重编，但须复用未变结果并报告范围、调用成本和无关事实不变证据。
+  专家保护先消费已有锁定记录/冻结协议样本，不提前建设 G5 编辑器；真实 G5 编辑回归由 G7 消费。
 - **Day 2 物理结果**：第二批真实输入已产生可重算 ChangeSet；至少可观察 SAME、ENRICH、
   CONFLICT 和 UNCHANGED，冲突字段 current 仍等于 R1，无关 FieldAssertion hash 不变。
 - **七种语义**：`SAME`=incoming 与既有规范化事实、作用域、有效期相同且无新增信息，
-  只记观察；`ENRICH`=事实不变但新增/更强 Evidence、限定条件或元数据；
+  只记观察；`ENRICH`=命题、作用域及有效期不变，仅新增/更强 Evidence 或不改变事实的元数据；
+  条件/例外改变必须重新判定替代、并存或冲突；
   `SUPERSEDE`=同一作用域/重叠有效期内新权威事实取代旧事实且旧值留历史；
   `COEXIST`=值不同但版本、地域、渠道、人群或有效期不重叠；`CONFLICT`=同一作用域、
   重叠有效期内矛盾且规则不能裁决；`RETRACT`=来源撤回、证据失效或专家撤销形成候选
@@ -311,11 +340,18 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   无半新半旧；CONFLICT 不改 current；全部无关字段 content hash 相同；至少一个迟到材料
   同时显示 `effective_from/effective_to` 与可信 `known_at`，current/as_of_date/release_id
   结果正确；专家锁定值面对模型新值仍保留并产生 pending conflict；R2 pinned 不漂移；
-  rollback 后 current 回 R1、历史 R2 可 pinned 且两者均可 source click。
+  整版 rollback 后 current 回 R1、历史 R2 可 pinned 且两者均可 source click。
+  增量以实体及强依赖组原子发布，批次内独立的合格实体不被异常实体/待审 free_wiki 阻塞；
+  强依赖内容不得拆成半套发布。沿用唯一 scope Head 合并新实体修订；回滚实体 A 形成新
+  Release 且保留已发布实体 B，不能退回整库旧 Head 而丢失 B；共享聚合按同一读快照计算。
+  GapTask 反查本实体已有材料，关联/相似产品只提示缺口、不提供替代事实；新增 Schema 字段
+  不要求重上传，语义变化/废弃保留版本历史；验证蓝图 §11 各类触发的定向补编、重验或重渲染。
+  无变化重试有缓存与预算上限；唯一有效来源撤回时须撤回对应知识，不等待新值审核。
 - **时间盒**：5–7 个工作日。
-- **停止条件**：冲突污染 current、模型覆盖专家、无关字段 hash 漂移、需要全量重编或
+- **停止条件**：冲突污染 current、模型覆盖专家、无关字段语义 hash 漂移、需要无界全库重编或
   第二 Active、时间由模型猜测、rollback 混版，立即停止。
 - **Evidence Pack**：R1/R2/activation identities、七语义逐项 ledger、affected closure、
+  GapTask/Schema 触发结果、调用与缓存记录、实体批次隔离和 A 回滚保留 B 的证据、
   前后 field/page hashes、冲突 UI、双时态查询、pinned/rollback/source-click 录屏与并发读证据。
 
 ## 7. G5 · 专家编辑、审核策略与审计
@@ -326,17 +362,17 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   pending、再 Revert；全过程只产生同一 Candidate/Review/Release/Active 链。
 - **目标**：复用 WeKnora 现有 edit/diff/history/revert，给专家最小负担的业务编辑面；
   审计自动记录，专家决定优先于后续模型建议。
-- **冻结输入**：G4 后 exact Active Release、角色/ACL、字段风险、专家锁定规则、独立
-  `EditProvenance` 合同、可选 `reason`/`new_source_evidence` 合同，以及三类
+- **冻结输入**：G4 后 exact Active Release、角色/ACL、字段风险、专家锁定规则、
+  `EXPERT_REVISION_RECORD` 来源与引用该记录的 `EditProvenance` 合同、可选 reason/补充材料，以及三类
   ReviewPolicy 的准入条件和策略 hash。
 - **允许写域**：Harness 专家变更语义、precedence 与 ReviewPolicy；WeKnora 现有页面
   编辑、diff、history、revert、ACL 和唯一 Release wiring；测试和 Evidence Pack。
 - **明确非目标**：不建第二编辑器、审计库、审核队列或 Active；不要求专家填写冗长
   表单；不允许原地改 Active payload；不让模型自动解除专家锁定；不把
-  EditProvenance 或旧 SourceEvidence 包装成支持专家新值的 SourceEvidence。
+  旧文档或模型伪造的专家身份包装成支持专家新值的 SourceEvidence。
 - **Day 2 物理结果**：一个发布者编辑显示 before/after Diff，并在隔离环境形成新 immutable
   `NOT_FOR_PRODUCTION` Release/current；一个非发布者编辑形成 pending 且 current 不变；
-  reason/new evidence 可留空但审计完整。
+  reason/额外上传材料可留空，系统自动生成不可变专家修订来源并可精确打开。
 - **三类审核策略**：`AUTO_ACTIVE` 仅限低风险、无冲突且 identity/Evidence/quality 硬门
   全过，仍走 Candidate→可审计决定→Release→CAS；`ONE_CLICK_BATCH` 用于中风险或批量
   新实体，具名审核人看到摘要、Diff、Evidence 后整批批准/拒绝；`MANDATORY_REVIEW`
@@ -348,17 +384,20 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 - **真实 DoD / 验收证据**：三策略各有真实决定记录；其中 Q0 前三策略都只计隔离
   流程能力，不计生产质量放行。有发布权限者在隔离环境保存后直接形成新 immutable
   Release/current（不是原地修改），无发布权限者只能 pending；拒绝不改 current；actor、role、
-  time、before/after hash、policy、decision、可选 reason/new source evidence 进入独立
-  EditProvenance；无新来源时 `supporting_source_evidence_ids=∅` 并明确显示“专家修改
-  （无新增来源证据）”，旧来源只能作为 `prior_source_evidence_ids` 显示且不得计入新值的
-  Evidence/质量门；history/diff 可打开；revert 形成新的不可变 Release；后续模型冲突
+  time、before/after 的值与条件/作用域及 hash、policy、decision 由系统记录；专家修改自身
+  冻结为 `EXPERT_REVISION_RECORD` SourceRevision，审核者/时间/状态与 Release 关联可查。
+  后续审核以追加记录关联，不能原地改冻结的 before/after。新值 Evidence 定位该记录的
+  after 原文块（沿用 TEXT_BLOCK_OFFSET），EditProvenance 引用同一记录，无第二审计权威。
+  未额外上传文件仍有合法专家来源；旧文档仅保留为 prior 来源，不能假称支持已改变的新值。
+  界面显示“专家修订”及谁、何时、从什么改为什么、审核情况；模型无法创建专家来源身份。
+  history/diff 可打开；revert 形成新的不可变 Release；后续模型冲突
   只进 pending，专家值不变。
 - **时间盒**：3–5 个工作日。
 - **停止条件**：任何角色可绕过服务端授权、编辑原地改 Active、审核记录依赖手填日志、
-  EditProvenance 被当成 SourceEvidence、旧来源继续支持已被专家改写的新值、Revert 删除
+  专家记录缺失/被伪造、旧来源被错误计为新值证据、Revert 删除
   历史、模型覆盖专家，或需要另建审核系统，立即停止。
-- **Evidence Pack**：角色矩阵、三策略 decision records、EditProvenance 与
-  SourceEvidence 隔离断言、编辑/diff/history/revert 录屏、Release/Head 前后 hash、
+- **Evidence Pack**：角色矩阵、三策略 decision records、专家 SourceRevision/locator 与
+  EditProvenance 同源引用及反伪造断言、编辑/diff/history/revert 录屏、Release/Head 前后 hash、
   pending/reject 不变证据、专家优先级冲突证据和 source click。
 
 ## 8. G6A · OCR PDF / 图片纵切
@@ -382,6 +421,8 @@ receipt 数量都不能代替本文件要求的真实物理结果。
 - **真实 DoD / 验收证据**：扫描 PDF 和图片分别完整跑通；Candidate/page/release/source
   identity 可追溯；点击打开 exact PDF page+bbox 或 exact image region，quote 与 OCR
   产物一致；刷新、pinned read 后 locator 不漂移；原生文本 block/offset 未回归。
+  所有文件来源同时提供固定解析快照定位和 exact 原文件入口；G5 专家记录继续使用同一
+  Evidence viewer 的文本记录入口，不伪造成文件，也不新增平行来源系统。
 - **时间盒**：3–5 个工作日。
 - **停止条件**：解析器无稳定 locator、点击只能近似定位、需要第二 OCR/viewer、文件
   identity 变化或 locator 验证失败，立即 fail closed 并关闭 G6A。
@@ -479,7 +520,9 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   expected-present、critical/high-risk exact set、Golden answers/Evidence、comparator、
   evaluator、分母、阈值和 gate hash；具名专家、时间与 Golden digest。
 - **允许写域**：Golden、benchmark manifest、独立 evaluator、质量报告与 Evidence Pack；
-  首轮失败后仅可修改预先声明的一个 prompt/model-config/normalizer 变量。
+  首轮冻结前，专家可在本卡明确的既有领域适配写域内补充/替换编译或审核实现，沿用 §9.1
+  协议，不改平台页面、审核发布主链。先冻结实现与评估 identity，再运行首轮；首轮失败后
+  仍仅允许一次预先声明的单变量纠偏，不以接口替换绕过轮次、预算或质量门。
 - **明确非目标**：不改 benchmark、答案、风险集合、阈值或分母，不跳字段，不把 UNKNOWN
   当未尝试，不以专家修订冒充模型抽取，不在 Q0 新增产品功能。
 - **Day 2 物理结果**：医疗险 benchmark 67/67 已由模型原始输出 attempted；后续 pack
@@ -487,11 +530,22 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   `EXPERT_REVISED_RELEASE`，所有错误有 pack/field ID。
 - **真实 DoD / 验收证据**：医疗险 67/67、其它 pack N/N attempted；critical/high-risk 逐字段 state、normalized
   value、适用范围和 Evidence 正确且无遗漏；其他 expected-present recall≥90%；present
-  precision≥95%；进入 Release 的全部正式值 Evidence 语义支持与 exact source click=100%；
+  precision≥95%；进入 Release 的全部正式值按来源类型验收，Evidence 支持与 exact source click=100%；
   hallucinated fact=0；每个 UNKNOWN 有具体 typed reason；零分母、漏评和 locator fallback
   均 fail closed。MODEL_RAW 与专家修改量/修改后 Release 分报；每个 pack 的 Q0 PASS
   都需要模型门和 Release 门分别 PASS。未评估 pack 保持
   `REGISTERED_NOT_QUALITY_ADMITTED`，不阻塞 Catalog 注册，但禁止生产内容发布。
+  文档来源必须语义支持对应断言；专家修订来源必须为获授权的真实记录，after 与新值、
+  条件/作用域一致，且身份、时间、审核链和精确定位可复核。后者证明专家决定的来源，
+  不假称原文支持，也不计入 MODEL_RAW 成功率。
+  将 G2 Seed Cases 独立专家裁决为至少 24 项 Canonical Golden，覆盖开放知识归属、
+  概念/义项/别名、原文与长文压缩中的条件/例外、短但重要的事实：垃圾晋级=0、
+  promotion precision≥90%、expected promotion recall≥80%，零分母不得通过；
+  晋级事实语义支持=100%。对 G3 冻结真实批次专家 adjudication，错合并=0。
+  分开报告独立审核漏检/误拒及原文、规范化、压缩、综合各类错误，不以生成者自评过门；
+  新增专家标签保留 Seed/原始输出身份，不事后改原输出或混用分母。
+  上述开放知识、保义编译、实体及 Profile 专家标签与预期集合必须在本轮评估前冻结，
+  用本轮 exact 编译器/审核器重新运行并计分；G2/G3 历史输出仅作审计，不能替代本轮结果。
 - **Q0 PASS 语义**：`QUALITY_ADMISSION_WAVE_1` 中每个 pack 均独立 PASS；这不表示其余
   注册 pack 已准入。后续启用其它 pack 时复用同一 Q0 模板逐包执行，不新增平行质量平台。
 - **时间盒**：每个 pack 每轮 2–4 个工作日，每个 pack 最多两轮；医疗险先行，其它 pack
@@ -501,7 +555,8 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   仍失败固定为 `QUALITY_FAIL`，G7 不解锁。
 - **Evidence Pack**：catalog/pack identity、benchmark/Golden/gate hashes、专家身份/时间、
   医疗险 67 行或其它 pack N 行逐字段报告、
-  原始与修订双报、指标分子分母、错误桶、UNKNOWN reasons、Release source-click 结果、
+  原始与修订双报、指标分子分母、开放知识/保义编译/实体裁决报告、编译及审核实现 identity、
+  错误桶、UNKNOWN reasons、按来源类型的 Release source-click 结果、
   单变量 diff 和两轮（如有）完整 run identities。
 
 ## 13. G7 · 多格式 FLOW + QUALITY 联合验收
@@ -531,6 +586,10 @@ receipt 数量都不能代替本文件要求的真实物理结果。
   `FieldDefinition count == independent FieldAssertion page count`，并可从所属的 pack-specific
   PresentationProfile 节点进入；歧义不误合并、冲突
   不改 current、页面不混版。未完成 pack-scoped Q0 的其它注册 pack 不生成生产 Active。
+  消费 G4/G5 已实现的 Schema 变化、缺口补编、来源撤回、批次部分待审及实体 A 回滚
+  保留 B 的场景，验证强依赖组完整发布；专家修改可打开自动生成的修订来源。
+  真实问题须命中字段值、条件和 free_wiki 正文，Wiki/Search/Agent/共享概念聚合在同一
+  release 读快照下返回一致内容及来源；不以标题检索成功替代知识可用性。
   所有参与 E2E 的 pack Q0 gate/hash 仍有效且联合样本 Release Evidence=100%、
   hallucinated fact=0。只有
   `FLOW=PASS AND QUALITY=PASS` 才可写 `830_ACCEPTED`；其他组合均为 NOT_ACCEPTED。
