@@ -34,7 +34,7 @@ import shlex
 import stat
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -235,8 +235,9 @@ def _record_value(record: object, name: str) -> Any:
 
 def _resolved_paths(records: object) -> set[str]:
     assert not isinstance(records, (str, bytes, Mapping))
+    assert isinstance(records, Iterable)
     paths: set[str] = set()
-    for record in records:  # type: ignore[union-attr]
+    for record in records:
         value = record if isinstance(record, str) else _record_value(record, "path")
         paths.add(Path(str(value)).as_posix().removeprefix("./"))
     return paths
@@ -269,7 +270,7 @@ def _go_list_stream(repo_root: Path, *, incomplete: bool = False) -> str:
             package["IgnoredGoFiles"] = ignored_go_files
         return package
 
-    packages = [
+    packages: list[dict[str, Any]] = [
         {
             "Dir": "/usr/local/go/src/context",
             "ImportPath": "context",
@@ -1954,7 +1955,7 @@ def test_canonical_identity_secret_canary_is_absent_from_bytes_trace_and_output(
     module = _artifact_module()
     repo_root = tmp_path / "repository"
     manifest_path, lock_path = _write_synthetic_contract(repo_root)
-    environments = (
+    environments: tuple[dict[str, str], ...] = (
         {},
         {"GOPRIVATE": CANARY_SECRET, "REPOSITORY_TOKEN": CANARY_SECRET},
         {"GOPRIVATE": CANARY_SECRET_B, "REPOSITORY_TOKEN": CANARY_SECRET_B},
@@ -2634,7 +2635,7 @@ def test_lookup_secret_canary_never_enters_argv_trace_labels_receipt_or_output(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     module = _artifact_module()
-    secret_variants = (
+    secret_variants: tuple[dict[str, str], ...] = (
         {},
         {"GOPRIVATE": CANARY_SECRET, "repository_token": CANARY_SECRET},
         {"GOPRIVATE": CANARY_SECRET_B, "repository_token": CANARY_SECRET_B},

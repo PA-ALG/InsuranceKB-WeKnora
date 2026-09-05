@@ -268,11 +268,13 @@ def _fixture_identity_resolver(
 
 
 def _verify(module: ModuleType, pack: Path) -> dict[str, Any]:
-    return module.verify_evidence_pack(
+    result = module.verify_evidence_pack(
         repo_root=REPO_ROOT,
         evidence_root=pack,
         identity_resolver=_fixture_identity_resolver,
     )
+    assert isinstance(result, dict)
+    return result
 
 
 def _refresh_receipt_hash(
@@ -624,7 +626,9 @@ def test_ba0_identity_custody_connects_frozen_origin_to_implementation(
 
     def observe(repo_root: Path, arguments: tuple[str, ...]) -> str:
         calls.append(arguments)
-        return original(repo_root, arguments)
+        result = original(repo_root, arguments)
+        assert isinstance(result, str)
+        return result
 
     monkeypatch.setattr(module, "_run", observe)
     _verify(module, pack)
