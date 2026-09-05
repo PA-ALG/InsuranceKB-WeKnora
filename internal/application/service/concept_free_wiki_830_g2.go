@@ -219,24 +219,33 @@ func (s *SchemaWikiService) verifyConceptG1Citation830G2(
 	custody validatedSchemaWikiCustody,
 	request CitationRevisionReadRequestV1,
 ) error {
+	_, err := s.issueConceptG1Citation830G2(ctx, custody, request)
+	return err
+}
+
+func (s *SchemaWikiService) issueConceptG1Citation830G2(
+	ctx context.Context,
+	custody validatedSchemaWikiCustody,
+	request CitationRevisionReadRequestV1,
+) (*types.SchemaWikiCitationContentAuthorityV1, error) {
 	if s == nil || s.citationContent == nil || !custody.isolatedC6 ||
 		request.CoordinateAuthorityReceipt == nil {
-		return ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	receipt := request.CoordinateAuthorityReceipt
 	if request.Scope.TenantID == 0 || request.Scope.SpaceID == "" || request.Scope.RawKBID == "" ||
 		request.Scope.WikiKBID == "" || receipt.TenantID != request.Scope.TenantID ||
 		receipt.SpaceID != request.Scope.SpaceID || receipt.RawKBID != request.Scope.RawKBID ||
 		receipt.LiveRevisionSourceReceipt.WikiKBID != request.Scope.WikiKBID {
-		return ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	bound, err := s.bindSchemaWikiC6FrozenNativeSource(custody, request)
 	if err != nil || bound.frozenNativeSource == nil {
-		return ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	authority, err := s.citationContent.IssueExactRevision(ctx, bound)
 	if err != nil || authority == nil || authority.OpaqueToken == "" {
-		return ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	authorityDigest, digestErr := types.ComputeSchemaWikiCitationContentAuthoritySHA256(*authority)
 	if digestErr != nil || authorityDigest != authority.AuthoritySHA256 ||
@@ -249,9 +258,9 @@ func (s *SchemaWikiService) verifyConceptG1Citation830G2(
 		authority.PageNumber != request.Citation.PageNumber || authority.BBox != request.Citation.BBox ||
 		authority.QuoteSHA256 != request.Citation.QuoteSHA256 ||
 		authority.ContentSnapshotSHA256 != request.Citation.ContentSnapshotSHA256 {
-		return ErrSchemaWikiPreparationInvalid
+		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	return nil
+	return authority, nil
 }
 
 func conceptG1ExistingSnapshot830G2(
@@ -481,6 +490,81 @@ func (s *SchemaWikiService) ReadConceptPage830G2(
 		}
 	}
 	return result, nil
+}
+
+// IssueConceptCitationAuthority830G2 replays one citation from an exact,
+// immutable G2 release before the trusted source bridge signs a short-lived
+// content capability.
+func (s *SchemaWikiService) IssueConceptCitationAuthority830G2(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	releaseID string,
+	memberID string,
+	citationID string,
+) (*ConceptCitationContentAuthority830G2, error) {
+	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil || s.conceptSourceAuthority == nil || releaseID == "" || memberID == "" || citationID == "" {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	pin, bundle, err := s.loadExactConceptBundle830G2(ctx, principal, scope, releaseID)
+	if err != nil {
+		return nil, err
+	}
+	evidence, ok := conceptEvidenceByCitationID830G2(bundle, memberID, citationID)
+	if !ok {
+		return nil, ErrWikiReleaseNotFound
+	}
+	sourceBlock, ok := conceptSourceBlockForEvidence830G2(bundle, evidence)
+	if !ok {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	return s.conceptSourceAuthority.IssueConceptCitationAuthority830G2(ctx, ConceptCitationAuthorityRequest830G2{
+		Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(),
+		CandidateHash: bundle.CandidateHash, MemberID: memberID, CitationID: citationID, Evidence: evidence, SourceBlock: sourceBlock, Bundle: &bundle,
+	})
+}
+
+func (s *SchemaWikiService) loadExactConceptBundle830G2(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, releaseID string) (WikiReleasePinnedRead, types.ConceptCandidateBundle830G2, error) {
+	empty := WikiReleasePinnedRead{}
+	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil {
+		return empty, types.ConceptCandidateBundle830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	pin, err := s.releaseAuthority.BeginExactPinnedRead(ctx, principal, scope, releaseID)
+	if err != nil {
+		return empty, types.ConceptCandidateBundle830G2{}, err
+	}
+	members, err := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+	if err != nil {
+		return empty, types.ConceptCandidateBundle830G2{}, err
+	}
+	release, err := s.releaseAuthority.repository.GetRelease(ctx, scope, pin.ReleaseID())
+	if err != nil {
+		return empty, types.ConceptCandidateBundle830G2{}, mapWikiReleaseRepositoryError(err)
+	}
+	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	if err != nil {
+		return empty, types.ConceptCandidateBundle830G2{}, mapWikiReleaseRepositoryError(err)
+	}
+	bundle, expected, err := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
+	if err != nil || release.CandidateDigest != bundle.CandidateHash || release.ManifestDigest != preparation.ManifestDigest || release.BaseReleaseID != preparation.ExpectedReleaseID || release.BaseActivationEpoch != preparation.ExpectedActivationEpoch || release.BaseReleaseID != bundle.Request.BaseReleaseID || release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch || release.BaseActivationEpoch == ^uint64(0) || pin.ActivationEpoch() != release.BaseActivationEpoch+1 || !wikiReleaseMemberSnapshotsEqual(expected, members) {
+		return empty, types.ConceptCandidateBundle830G2{}, ErrSchemaWikiPreparationInvalid
+	}
+	return pin, bundle, nil
+}
+
+func conceptEvidenceByCitationID830G2(bundle types.ConceptCandidateBundle830G2, memberID, citationID string) (types.ConceptEvidence830G2, bool) {
+	member, ok := conceptPageMemberByID830G2(bundle.PageManifest.Members, memberID)
+	if !ok {
+		return types.ConceptEvidence830G2{}, false
+	}
+	for _, evidence := range conceptMemberEvidence830G2(bundle, member.MemberID) {
+		raw, _ := json.Marshal([]any{bundle.CandidateHash, member.MemberID, evidence.RevisionID, evidence.BlockID, evidence.PageNumber, evidence.Start, evidence.End, evidence.QuoteHash})
+		sum := sha256.Sum256(raw)
+		if citationID == "citation-"+hex.EncodeToString(sum[:])[:24] {
+			return evidence, true
+		}
+	}
+	return types.ConceptEvidence830G2{}, false
 }
 
 func conceptPageMemberByID830G2(

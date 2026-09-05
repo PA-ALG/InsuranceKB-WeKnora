@@ -13,7 +13,7 @@ vi.mock('@/api/schema-wiki/conceptFreeWiki830G2', () => ({
 }))
 vi.mock('@/components/schema-wiki/pdfJsPort', () => ({ createPdfJsPort: () => ({}) }))
 const stubs = { RouterLink: { props: ['to'], template: '<a :data-target="JSON.stringify(to)"><slot /></a>' },
-  SchemaCitationViewer: { props: ['request'], template: '<div data-testid="source-viewer">{{request.release_id}}</div>' },
+  ConceptCitationViewer830G2: { props: ['session'], template: '<div data-testid="source-viewer">{{session.read.release_id}}</div>' },
   SettingDrawer: { props: ['visible'], template: '<aside v-if="visible"><slot /></aside>' } }
 function response() {
   return { scope: {}, read: { contract: 'concept-page-read.830.g2.v1', read_mode: 'current',
@@ -33,7 +33,7 @@ describe('G2 shared concept page', () => {
     expect(wrapper.text()).toContain('entity-a'); expect(wrapper.text()).toContain('待补充')
     expect(wrapper.find('[data-target]').attributes('data-target')).toContain('release-a')
   })
-  it('opens the existing source viewer using the release that supplied the page', async () => {
+  it('opens the G2 source viewer using the release that supplied the page', async () => {
     const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises()
     await wrapper.get('[data-testid="g2-source"]').trigger('click')
     expect(wrapper.get('[data-testid="source-viewer"]').text()).toBe('release-a')

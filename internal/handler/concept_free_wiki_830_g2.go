@@ -20,6 +20,10 @@ type conceptFreeWikiHTTPService830G2 interface {
 	) (*service.ConceptPageRead830G2, error)
 }
 
+type conceptCitationAuthorityIssuer830G2 interface {
+	IssueConceptCitationAuthority830G2(context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope, string, string, string) (*service.ConceptCitationContentAuthority830G2, error)
+}
+
 type ConceptFreeWikiHandler830G2 struct {
 	service conceptFreeWikiHTTPService830G2
 }
@@ -78,18 +82,17 @@ func (h *ConceptFreeWikiHandler830G2) PreviewCitation(c *gin.Context) {
 		writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
 		return
 	}
-	read, err := h.service.ReadConceptPage830G2(
-		c.Request.Context(), principal, scope, memberID, releaseID,
+	issuer, ok := h.service.(conceptCitationAuthorityIssuer830G2)
+	if !ok {
+		writeSchemaWikiError(c, service.ErrConceptSourceAuthorityUnavailable830G2)
+		return
+	}
+	authority, err := issuer.IssueConceptCitationAuthority830G2(
+		c.Request.Context(), principal, scope, releaseID, memberID, citationID,
 	)
 	if err != nil {
 		writeSchemaWikiError(c, err)
 		return
 	}
-	for _, citation := range read.Citations {
-		if citation.CitationID == citationID {
-			writeSchemaWikiError(c, service.ErrSchemaWikiCitationUnavailable)
-			return
-		}
-	}
-	writeSchemaWikiError(c, service.ErrWikiReleaseNotFound)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": authority})
 }

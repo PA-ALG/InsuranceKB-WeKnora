@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { readConceptPage830G2, conceptCitationTransport830G2,
   type ConceptSession830G2, type ConceptMember830G2 } from '@/api/schema-wiki/conceptFreeWiki830G2'
 import { buildSchemaCitationPreviewRequest } from '@/api/schema-wiki'
-import SchemaCitationViewer from '@/components/schema-wiki/SchemaCitationViewer.vue'
+import ConceptCitationViewer830G2 from '@/components/schema-wiki/ConceptCitationViewer830G2.vue'
 import { createPdfJsPort } from '@/components/schema-wiki/pdfJsPort'
 import SettingDrawer from '@/components/settings/SettingDrawer.vue'
 import { get } from '@/utils/request'
@@ -88,7 +88,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         title="查看原文" description="当前页面所引用的固定版本原文" icon="file" width="760px"
         :min-width="560" :max-width="1000" storage-key="setting-drawer:width:concept-source-830-g2"
         hide-footer @update:visible="visible => { if (!visible) selected = null }">
-        <SchemaCitationViewer :key="selected!" :request="previewRequest"
+        <ConceptCitationViewer830G2 v-if="session" :key="selected!" :session="session" :citation-id="selected!"
           :preview-transport="previewTransport" :pdf-port="pdfPort" />
       </SettingDrawer>
     </template>

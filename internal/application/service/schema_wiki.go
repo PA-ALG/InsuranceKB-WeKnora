@@ -17,6 +17,7 @@ import (
 
 	wikirepository "github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/types"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
 func validServiceSHA256(value string) bool {
@@ -109,6 +110,7 @@ type SchemaWikiService struct {
 	goldenSuccessorStatus  SchemaWikiGoldenSuccessorStatusProvider
 	formalCandidatePreview SchemaWikiFormalCandidatePreviewReader
 	formalCandidateScope   *types.WikiReleaseScope
+	conceptSourceAuthority *ConceptSourceAuthorityService830G2
 }
 
 type SchemaWikiFormalCandidatePreviewReader interface {
@@ -210,10 +212,26 @@ func NewSchemaWikiService(
 	citationContent ...SchemaWikiCitationContentPort,
 ) *SchemaWikiService {
 	service := &SchemaWikiService{releaseAuthority: releaseAuthority, citationPort: citationPort}
+	if releaseAuthority != nil {
+		service.conceptSourceAuthority, _ = releaseAuthority.conceptSourceAuthorityVerifier830G2.(*ConceptSourceAuthorityService830G2)
+	}
 	if len(citationContent) == 1 {
 		service.citationContent = citationContent[0]
 	}
 	return service
+}
+
+// NewSchemaWikiCitationPorts creates the one production citation adapter and
+// signing service shared by legacy C5 replay and G2 source verification.
+func NewSchemaWikiCitationPorts(
+	knowledge interfaces.KnowledgeRepository,
+	chunks interfaces.ChunkRepository,
+	files interfaces.FileService,
+	codec *SchemaWikiCitationTokenCodec,
+) (CitationRevisionReadPort, SchemaWikiCitationContentPort) {
+	adapter := NewSchemaWikiCitationRevisionReadAdapter(knowledge, chunks)
+	content := NewSchemaWikiCitationContentService(adapter, NewSchemaWikiRevisionBlobReader(knowledge, files), codec)
+	return adapter, content
 }
 
 // ResolveSchemaCitationContentRouteAuthority verifies the opaque token and
@@ -223,7 +241,15 @@ func (s *SchemaWikiService) ResolveSchemaCitationContentRouteAuthority(
 	ctx context.Context,
 	token string,
 ) (*SchemaWikiCitationContentRouteAuthorityV1, error) {
-	if s == nil || s.citationContent == nil || strings.TrimSpace(token) == "" {
+	if s == nil || strings.TrimSpace(token) == "" {
+		return nil, ErrSchemaWikiCitationUnavailable
+	}
+	if s.conceptSourceAuthority != nil {
+		if concept, conceptErr := s.conceptSourceAuthority.ResolveConceptCitationRouteAuthority830G2(token); conceptErr == nil {
+			return &SchemaWikiCitationContentRouteAuthorityV1{Kind: "release", Scope: concept.Scope, ReleaseID: concept.ReleaseID}, nil
+		}
+	}
+	if s.citationContent == nil {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	return s.citationContent.ResolveRouteAuthority(ctx, token)
@@ -2549,12 +2575,38 @@ func (s *SchemaWikiService) ReadSchemaCitationContent(
 	scope types.WikiReleaseScope,
 	token string,
 ) ([]byte, error) {
-	if s == nil || s.releaseAuthority == nil || s.citationContent == nil ||
+	if s == nil || s.releaseAuthority == nil ||
 		strings.TrimSpace(token) == "" {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	if err := s.releaseAuthority.verifyAccess(ctx, principal, scope, "read-citation-content"); err != nil {
 		return nil, err
+	}
+	if s.conceptSourceAuthority != nil {
+		if route, routeErr := s.conceptSourceAuthority.ResolveConceptCitationRouteAuthority830G2(token); routeErr == nil {
+			if route.Scope != scope {
+				return nil, ErrSchemaWikiCitationUnavailable
+			}
+			pin, bundle, loadErr := s.loadExactConceptBundle830G2(ctx, principal, scope, route.ReleaseID)
+			if loadErr != nil || pin.ActivationEpoch() != route.ActivationEpoch {
+				return nil, ErrSchemaWikiCitationUnavailable
+			}
+			evidence, ok := conceptEvidenceByCitationID830G2(bundle, route.MemberID, route.CitationID)
+			if !ok {
+				return nil, ErrSchemaWikiCitationUnavailable
+			}
+			sourceBlock, ok := conceptSourceBlockForEvidence830G2(bundle, evidence)
+			if !ok {
+				return nil, ErrSchemaWikiCitationUnavailable
+			}
+			return s.conceptSourceAuthority.ReadConceptCitationByOpaqueToken830G2(ctx, scope, token, ConceptCitationAuthorityRequest830G2{
+				Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(), CandidateHash: bundle.CandidateHash,
+				MemberID: route.MemberID, CitationID: route.CitationID, Evidence: evidence, SourceBlock: sourceBlock, Bundle: &bundle,
+			})
+		}
+	}
+	if s.citationContent == nil {
+		return nil, ErrSchemaWikiCitationUnavailable
 	}
 	authority, err := s.citationContent.ResolveOpaqueToken(ctx, scope, token)
 	if err != nil {

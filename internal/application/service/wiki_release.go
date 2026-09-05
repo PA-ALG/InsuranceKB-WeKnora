@@ -701,6 +701,11 @@ func (s *WikiReleaseService) ActivateReviewed(
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
+		// Activation verifies the same current dual-KB ACL before opening any
+		// immutable source object. s.activate repeats this gate at the CAS edge.
+		if err := s.verifyAccess(ctx, principal, scope, "activate"); err != nil {
+			return nil, err
+		}
 		if err := s.verifyConceptSourceAuthority830G2(
 			ctx, principal, scope, preparation, "activate",
 		); err != nil {
