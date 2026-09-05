@@ -1,0 +1,23 @@
+{
+  "goal_id": "G2",
+  "observed_at": "2026-09-05T10:19:49.834791+00:00",
+  "base": "e7f57b3628adf97929471de9b4add3ff75c29b8b",
+  "current_red": "NO_SHARED_CONCEPT_OR_VALUE_ADMISSION",
+  "observation_kind": "REAL_FROZEN_INPUT_COMPILER_REPLAY_NOT_HTTP",
+  "source_bundle": "/private/tmp/weknora-815-final-06e08c.sbD1nuoR/c5-bundle-v3-recovered",
+  "actual_manifest_sha256": "3ae19c3254df73d9ed678a440404c9c2ec67319709c33c9bb8000c0a15da6a3c",
+  "actual_member_count": 76,
+  "actual_free_wiki_items": 0,
+  "concept_links_supported": false,
+  "nonempty_free_wiki_error": "Value error, G1 free_wiki must remain empty",
+  "existing_contract_cannot_solve": "OpenSpec126 explicitly requires empty free_wiki and has no shared concept payload. OpenSpec009 uses retired Harness tables/current revision and cannot be reactivated.",
+  "baseline_tests": "14 passed / 0 skipped",
+  "http": "NOT RUN",
+  "flow": "NOT RUN",
+  "quality": "DEFERRED",
+  "provider_calls": 0,
+  "builds": 0,
+  "durable_inputs": "docs/insurance-kb/evidence/830-g2/frozen-inputs.json",
+  "replay_command": "G1_ACTUAL_C5_BUNDLE=$PWD/docs/insurance-kb/evidence/830-g2/inputs/c5 PYTHONPATH=harness/src /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.venv/bin/python -m pytest harness/tests/test_entity_page_graph_830_g1.py -q --tb=short",
+  "raw_test_output": "docs/insurance-kb/evidence/830-g2/g1-baseline.log"
+}

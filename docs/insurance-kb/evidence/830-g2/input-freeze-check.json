@@ -1,0 +1,13 @@
+{
+  "goal_id": "G2",
+  "observed_at": "2026-09-05T15:09:12.154002+00:00",
+  "status": "PASS",
+  "scope": "INPUT_FREEZE_ONLY_NOT_G2_FLOW",
+  "case_count": 24,
+  "seed_file_sha256": "7725bc78806e6889fff56543819bb790435eaf122844573caf103aae86090a2b",
+  "quote_locator_exact_replay": "PASS",
+  "native_parse_identity_matches_815": "PASS",
+  "provider_calls": 0,
+  "g2_compilations": 0,
+  "quality": "DEFERRED"
+}

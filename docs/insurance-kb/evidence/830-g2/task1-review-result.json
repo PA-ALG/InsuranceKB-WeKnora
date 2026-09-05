@@ -1,0 +1,22 @@
+{
+  "scope": "OFFLINE_PROTOCOL_SLICE_ONLY",
+  "identity": "task1-review-identity.json",
+  "reviewer": "g2_bundle_review",
+  "result": "PASS",
+  "blockers": 0,
+  "tests": "25 passed in 0.55s",
+  "ruff": "PASS",
+  "mypy": "PASS",
+  "backlog": [
+    "Expert revision-record tagged source shape (G5 editing remains out of scope)",
+    "Explicit sense selection in extraction rule"
+  ],
+  "not_claimed": [
+    "Full Task1",
+    "G2 FLOW",
+    "Q0 quality",
+    "Go/UI",
+    "provider",
+    "live"
+  ]
+}

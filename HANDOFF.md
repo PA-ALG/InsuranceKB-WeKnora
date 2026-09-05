@@ -5,6 +5,13 @@
 
 ## 1. 当前结论（2026-09-05）
 
+**G2 已按用户追加授权恢复推进（2026-09-06）。** 实体版本绑定修复已独立复审
+BLOCKER=0，25项离线定向测试通过；当前离线协议切片可小提交，不代表G2全卡通过。
+[执行记录](docs/insurance-kb/evidence/830-g2/execution.md)，
+[冻结代码与样例身份](docs/insurance-kb/evidence/830-g2/task1-review-identity.json)。
+当前Go合同接线恢复，FLOW=NOT RUN，QUALITY=DEFERRED。Provider/构建/部署/DB写入均为0。
+用户已授权G2合理必要的有界扩展，由总控记录后执行；G3/Q0及生产发布仍未授权。
+
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个
 squash commit 合入 `main`：

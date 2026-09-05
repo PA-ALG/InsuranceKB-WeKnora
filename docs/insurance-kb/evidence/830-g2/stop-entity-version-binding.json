@@ -1,0 +1,53 @@
+{
+  "goal": "G2",
+  "status": "STOPPED_RETURN_TO_USER",
+  "reason": "ENTITY_VERSION_BINDING_REMAINS_AFTER_ONE_REVIEW_CORRECTION",
+  "authority": "docs/insurance-kb/28-development-execution-charter-830.md section 6",
+  "frozen_identity": "task1-review-identity.json",
+  "software_tests": "22 passed in 0.70s",
+  "blocking_example": {
+    "request_entity_version": "v1",
+    "output_field_versions": [
+      "",
+      ""
+    ],
+    "candidate_hash": "71074e3306b0a132ba6f63b6497cb1b5427ba3bfc15e846cee31a6827edb512d"
+  },
+  "closed_findings": [
+    "source_scope_binding",
+    "protected_existing_definition",
+    "disposition_member_closure",
+    "aliases_excluded_from_definition_hash"
+  ],
+  "next_proposed_correction": [
+    "Write request.entity_versions[entity] on every generated field",
+    "Validate output fields and pages against request.entity_versions",
+    "Validate existing fields and pages against existing_entity_versions",
+    "Add version mismatch regression tests and regenerate one contract vector for independent rereview"
+  ],
+  "effects": {
+    "provider_calls": 0,
+    "image_builds": 0,
+    "deployment_writes": 0,
+    "database_writes": 0,
+    "commits": 0,
+    "production_writes": 0
+  },
+  "delivery": {
+    "software": "BLOCKED",
+    "container_health": "NOT RUN",
+    "provider_probe": "NOT RUN",
+    "provisioning": "NOT RUN",
+    "local_live": "NOT RUN",
+    "github_live": "NOT RUN"
+  },
+  "asset_disposition": {
+    "controller_worktree": "FREEZE in place; retain uncommitted files for bounded correction; no removal",
+    "platform_worktree": "FREEZE in place; only new Go test draft; no production implementation",
+    "platform_test_sha256": "9fe5e1dd1706257bcd3660a9f197f82269c6bb6a24a33242e1431d60f84c125f",
+    "unintegrated_commits": [],
+    "old_pending_agent": "write authorization revoked"
+  },
+  "flow": "NOT RUN",
+  "quality": "DEFERRED"
+}

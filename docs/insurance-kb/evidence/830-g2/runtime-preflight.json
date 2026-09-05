@@ -1,0 +1,29 @@
+{
+  "goal_id": "G2",
+  "observed_at": "2026-09-05T15:04:35.313585+00:00",
+  "operation": "READ_ONLY_PREFLIGHT",
+  "builder_profile": "g1-build",
+  "builder_available": true,
+  "default_profile_host_socket": "UNAVAILABLE",
+  "default_profile_cli": "colima ssh --profile default -- sudo docker",
+  "retained_clone_container": "WeKnora-p0-clone-postgres-vsnd11r2",
+  "clone_database": "weknora",
+  "clone_user": "p0clone",
+  "head": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  },
+  "head_matches_g1_closeout": true,
+  "effects": {
+    "provider": 0,
+    "build": 0,
+    "db_write": 0,
+    "production_8081": 0,
+    "restart": 0
+  },
+  "notes": [
+    "Default profile official CLI works; do not restart to repair host socket.",
+    "Initial read used nonexistent postgres role; corrected from container POSTGRES_USER/POSTGRES_DB only, no credentials printed.",
+    "Later G2 writes must preserve retained G1 Head; freeze isolated G2 target before any provisioning."
+  ]
+}
