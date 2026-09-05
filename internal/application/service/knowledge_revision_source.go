@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/config"
@@ -115,11 +116,13 @@ type knowledgeRevisionSourceDeleteGuard interface {
 // KnowledgeRevisionSourceService owns the sole operational backfill and exact
 // fixed-revision byte path. It never resolves a current/latest/presigned file.
 type KnowledgeRevisionSourceService struct {
-	config     *config.Config
-	repo       knowledgeRevisionSourceRepository
-	exact3Repo knowledgeRevisionSourceExact3Repository
-	files      interfaces.FileService
-	resources  interfaces.ResourceCatalog
+	config          *config.Config
+	repo            knowledgeRevisionSourceRepository
+	exact3Repo      knowledgeRevisionSourceExact3Repository
+	files           interfaces.FileService
+	resources       interfaces.ResourceCatalog
+	storageResolver interfaces.StorageBackendResolver
+	tenants         interfaces.TenantRepository
 }
 
 func NewKnowledgeRevisionSourceService(
@@ -127,12 +130,14 @@ func NewKnowledgeRevisionSourceService(
 	repo interfaces.KnowledgeRepository,
 	files interfaces.FileService,
 	resources interfaces.ResourceCatalog,
+	storageResolver interfaces.StorageBackendResolver,
+	tenants interfaces.TenantRepository,
 ) *KnowledgeRevisionSourceService {
 	revisionRepo, _ := repo.(knowledgeRevisionSourceRepository)
 	exact3Repo, _ := repo.(knowledgeRevisionSourceExact3Repository)
 	return &KnowledgeRevisionSourceService{
 		config: cfg, repo: revisionRepo, exact3Repo: exact3Repo,
-		files: files, resources: resources,
+		files: files, resources: resources, storageResolver: storageResolver, tenants: tenants,
 	}
 }
 
@@ -207,9 +212,7 @@ func (s *KnowledgeRevisionSourceService) prepareCurrentCompleted(
 		resource.Size <= 0 || resource.Handle == "" {
 		return types.KnowledgeRevisionSource{}, ErrRevisionSourceMismatch
 	}
-	data, err := readExactRevisionSourceObject(
-		ctx, s.files, types.BuildResourcePath(resource.Handle), s.maxObjectBytes(),
-	)
+	data, err := s.readResourceObject(ctx, resource)
 	if err != nil || int64(len(data)) != resource.Size {
 		return types.KnowledgeRevisionSource{}, ErrRevisionSourceMismatch
 	}
@@ -411,9 +414,7 @@ func (s *KnowledgeRevisionSourceService) prepareExact3Authority(
 		resource.Size <= 0 || knowledge.FilePath != types.BuildResourcePath(resource.Handle) {
 		return types.KnowledgeRevisionSource{}, ErrRevisionSourceMismatch
 	}
-	data, err := readExactRevisionSourceObject(
-		ctx, s.files, types.BuildResourcePath(resource.Handle), s.maxObjectBytes(),
-	)
+	data, err := s.readResourceObject(ctx, resource)
 	if err != nil || int64(len(data)) != resource.Size {
 		return types.KnowledgeRevisionSource{}, ErrRevisionSourceMismatch
 	}
@@ -583,9 +584,7 @@ func (s *KnowledgeRevisionSourceService) ReadFixedRevision(
 	if source.PageCount == nil || pageNumber > *source.PageCount {
 		return nil, ErrRevisionSourcePageUnavailable
 	}
-	data, err := readExactRevisionSourceObject(
-		ctx, s.files, source.ImmutableLocator, s.maxObjectBytes(),
-	)
+	data, err := s.readResourceObject(ctx, resource)
 	if err != nil || int64(len(data)) != source.Size {
 		return nil, ErrRevisionSourceMismatch
 	}
@@ -598,6 +597,32 @@ func (s *KnowledgeRevisionSourceService) ReadFixedRevision(
 		return nil, ErrRevisionSourcePageUnavailable
 	}
 	return data, nil
+}
+
+// Resolve the stored backend before opening a resource. A deployment default
+// cannot interpret storage:// paths or select another backend on failure.
+func (s *KnowledgeRevisionSourceService) readResourceObject(ctx context.Context, resource *types.StoredResource) ([]byte, error) {
+	tenantID, ok := ctx.Value(types.TenantIDContextKey).(uint64)
+	if !ok || tenantID == 0 || resource == nil || resource.TenantID != tenantID {
+		return nil, ErrRevisionSourceMismatch
+	}
+	reader := s.files
+	backendID, _, scoped := types.ParseStorageBackendPath(resource.PhysicalPath)
+	if resource.StorageBackendID != "" || scoped {
+		if !scoped || backendID != resource.StorageBackendID || s.storageResolver == nil || s.tenants == nil {
+			return nil, ErrRevisionSourceMismatch
+		}
+		tenant, err := s.tenants.GetTenantByID(ctx, tenantID)
+		if err != nil || tenant == nil || tenant.ID != tenantID {
+			return nil, ErrRevisionSourceMismatch
+		}
+		var provider string
+		reader, provider, err = s.storageResolver.ResolveFileService(ctx, tenant, backendID, resource.Provider, os.Getenv("LOCAL_STORAGE_BASE_DIR"))
+		if err != nil || reader == nil || provider != resource.Provider {
+			return nil, ErrRevisionSourceMismatch
+		}
+	}
+	return readExactRevisionSourceObject(ctx, reader, types.BuildResourcePath(resource.Handle), s.maxObjectBytes())
 }
 
 func requireKnowledgeRevisionSourceDeleteAllowed(

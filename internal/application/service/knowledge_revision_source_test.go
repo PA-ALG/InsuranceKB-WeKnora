@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
+	filesvc "github.com/Tencent/WeKnora/internal/application/service/file"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -142,6 +143,96 @@ func (s *revisionSourceResourceCatalogStub) Resolve(
 	return s.resource, s.err
 }
 
+func (s *revisionSourceResourceCatalogStub) ResolvePath(ctx context.Context, path string) (string, *types.StoredResource, error) {
+	r, err := s.Resolve(ctx, path)
+	if err != nil || r == nil {
+		return "", r, err
+	}
+	return r.PhysicalPath, r, nil
+}
+
+type revisionSourceTenantStub struct {
+	interfaces.TenantRepository
+	tenant *types.Tenant
+}
+
+func (s *revisionSourceTenantStub) GetTenantByID(context.Context, uint64) (*types.Tenant, error) {
+	return s.tenant, nil
+}
+
+type revisionSourceBackendStub struct {
+	interfaces.StorageBackendResolver
+	reader    interfaces.FileService
+	provider  string
+	err       error
+	backendID string
+	tenantID  uint64
+}
+
+func (s *revisionSourceBackendStub) ResolveFileService(_ context.Context, tenant *types.Tenant, backendID, provider, base string) (interfaces.FileService, string, error) {
+	s.backendID, s.tenantID = backendID, tenant.ID
+	return s.reader, s.provider, s.err
+}
+
+func TestRevisionSourceUsesStoredBackendForBackfillAndFixedRead(t *testing.T) {
+	s, repo, defaultFiles := revisionSourceFixture(t)
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "terms.pdf"), defaultFiles.data, 0600))
+	backendID := "30545abd-ae95-4de0-a796-29b5c4bc32c7"
+	repo.resource.StorageBackendID = backendID
+	repo.resource.PhysicalPath = types.BuildStorageBackendPath(backendID, "local://terms.pdf")
+	catalog := s.resources.(*revisionSourceResourceCatalogStub)
+	local := filesvc.NewLocalFileService(root, "")
+	// This is the live failing deployment chain: resource:// resolves to a
+	// storage:// path, which the unscoped local reader cannot interpret.
+	legacy := filesvc.NewResourceCatalogFileService(local, catalog)
+	_, err := legacy.GetFile(revisionSourceContext(), repo.knowledge.FilePath)
+	require.Error(t, err)
+	s.files = defaultFiles
+	backend := &revisionSourceBackendStub{reader: filesvc.NewResourceCatalogFileService(filesvc.NewBackendScopedFileService(backendID, local), catalog), provider: "local"}
+	s.storageResolver = backend
+	s.tenants = &revisionSourceTenantStub{tenant: &types.Tenant{ID: 10003}}
+	source, err := s.BackfillCurrentCompleted(revisionSourceContext(), repo.knowledge.ID, 2)
+	require.NoError(t, err)
+	require.Equal(t, backendID, backend.backendID)
+	require.Equal(t, uint64(10003), backend.tenantID)
+	repo.source, repo.sourceErr = source, nil
+	actual, err := s.ReadFixedRevision(revisionSourceContext(), repo.knowledge.ID, 2, source.FileSHA256, source.BindingDigest, 1)
+	require.NoError(t, err)
+	require.Equal(t, defaultFiles.data, actual)
+	require.Zero(t, defaultFiles.calls)
+}
+
+func TestRevisionSourceStoredBackendFailureNeverReadsDefault(t *testing.T) {
+	for _, scenario := range []string{"missing-resolver", "backend-drift", "resolver-error", "provider-drift", "tenant-drift"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, repo, files := revisionSourceFixture(t)
+			backendID := "30545abd-ae95-4de0-a796-29b5c4bc32c7"
+			repo.resource.StorageBackendID = backendID
+			repo.resource.PhysicalPath = types.BuildStorageBackendPath(backendID, "local://terms.pdf")
+			resolver := &revisionSourceBackendStub{reader: files, provider: "local"}
+			s.storageResolver = resolver
+			s.tenants = &revisionSourceTenantStub{tenant: &types.Tenant{ID: 10003}}
+			switch scenario {
+			case "missing-resolver":
+				s.storageResolver = nil
+			case "backend-drift":
+				repo.resource.StorageBackendID = "foreign-backend"
+			case "resolver-error":
+				resolver.err = fmt.Errorf("backend unavailable")
+			case "provider-drift":
+				resolver.provider = "foreign-provider"
+			case "tenant-drift":
+				s.tenants = &revisionSourceTenantStub{tenant: &types.Tenant{ID: 10004}}
+			}
+			_, err := s.BackfillCurrentCompleted(revisionSourceContext(), repo.knowledge.ID, 2)
+			require.ErrorIs(t, err, ErrRevisionSourceMismatch)
+			require.Zero(t, files.calls)
+			require.Zero(t, repo.sealCalls)
+		})
+	}
+}
+
 type revisionSourceFileServiceStub struct {
 	interfaces.FileService
 	data       []byte
@@ -198,6 +289,7 @@ func revisionSourceFixture(t *testing.T) (*KnowledgeRevisionSourceService, *revi
 	}}
 	service := NewKnowledgeRevisionSourceService(
 		cfg, repo, files, &revisionSourceResourceCatalogStub{resource: resource},
+		nil, nil,
 	)
 	return service, repo, files
 }
@@ -473,6 +565,7 @@ func revisionSourceExact3Fixture(t *testing.T) (
 		repo,
 		files,
 		resources,
+		nil, nil,
 	)
 	return service, repo, files, request
 }
