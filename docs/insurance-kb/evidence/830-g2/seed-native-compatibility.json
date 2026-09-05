@@ -1,0 +1,127 @@
+{
+  "contract": "g2-seed-native-compatibility.v1",
+  "status": "INPUT_COMPATIBILITY_ONLY",
+  "seed_execution": "NOT_RUN",
+  "items": [
+    {
+      "case_id": "G2-SEED-01",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-02",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+    },
+    {
+      "case_id": "G2-SEED-03",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-04",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc"
+    },
+    {
+      "case_id": "G2-SEED-05",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd"
+    },
+    {
+      "case_id": "G2-SEED-06",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+    },
+    {
+      "case_id": "G2-SEED-07",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-08",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-12",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-13",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-14",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-15",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-18",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145"
+    },
+    {
+      "case_id": "G2-SEED-19",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc"
+    },
+    {
+      "case_id": "G2-SEED-20",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd"
+    },
+    {
+      "case_id": "G2-SEED-21",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145"
+    },
+    {
+      "case_id": "G2-SEED-22",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-22",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+    },
+    {
+      "case_id": "G2-SEED-23",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    },
+    {
+      "case_id": "G2-SEED-24",
+      "page": 1,
+      "exact_native_matches": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+    }
+  ]
+}

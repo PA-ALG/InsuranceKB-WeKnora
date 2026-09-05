@@ -17,8 +17,11 @@ self-sufficient using pypdfium2 + the Go-side OCR that already exists.
 """
 
 import base64
+import hashlib
 import io
+import json
 import logging
+import math
 import os
 import re
 import statistics
@@ -133,6 +136,87 @@ MAX_FIGURE_HEIGHT_RATIO = _env_float("DOCREADER_PDF_MAX_FIGURE_HEIGHT_RATIO", 0.
 # with a low-quality or misleading text layer (web-print, scanned, image-heavy).
 # Can be overridden per-upload via parser_engine_overrides.pdf_force_scanned.
 FORCE_SCANNED_PDF = _env_bool("DOCREADER_PDF_FORCE_SCANNED", False)
+
+PDF_NATIVE_CAPTURE_MODE = "builtin-pdfium-charbox-v1"
+PDF_NATIVE_STRUCTURE_SCHEMA = "builtin-pdfium-native-locators.v1"
+PDF_NATIVE_STRUCTURE_METADATA_KEY = "native_structure_artifact_v1"
+PDF_NATIVE_LOCATOR_PRODUCER = "weknora.docreader.builtin-pdfium-charbox.v1"
+
+
+def _canonical_json(value) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _point_string(value: float) -> str:
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric <= 0:
+        raise ValueError("PDF native page dimensions are invalid")
+    return f"{numeric:.6f}".rstrip("0").rstrip(".")
+
+
+def _native_bbox(box, width: float, height: float, page_number: int, char_index: int):
+    try:
+        left, bottom, right, top = (float(value) for value in box)
+    except Exception as exc:
+        raise ValueError(
+            f"page {page_number} character {char_index} bbox is unavailable"
+        ) from exc
+    if not all(math.isfinite(value) for value in (left, bottom, right, top)):
+        raise ValueError(f"page {page_number} character {char_index} bbox is invalid")
+    x0, x1 = sorted((left, right))
+    y0, y1 = sorted((bottom, top))
+    if (
+        width <= 0
+        or height <= 0
+        or x0 < 0
+        or y0 < 0
+        or x1 > width
+        or y1 > height
+        or x0 >= x1
+        or y0 >= y1
+    ):
+        raise ValueError(f"page {page_number} character {char_index} bbox is invalid")
+    normalized = [
+        round(x0 / width * 1_000_000),
+        round((height - y1) / height * 1_000_000),
+        round(x1 / width * 1_000_000),
+        round((height - y0) / height * 1_000_000),
+    ]
+    if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:
+        raise ValueError(f"page {page_number} character {char_index} bbox is invalid")
+    return normalized
+
+
+def _native_image_area_ratio(page, raw, page_number: int) -> float:
+    width, height = (float(value) for value in page.get_size())
+    page_area = width * height
+    if not math.isfinite(page_area) or page_area <= 0:
+        raise ValueError(f"page {page_number} image geometry is invalid")
+    image_area = 0.0
+    try:
+        objects = page.get_objects()
+    except Exception as exc:
+        raise ValueError(f"page {page_number} image geometry is unavailable") from exc
+    for obj in objects:
+        if obj.type != raw.FPDF_PAGEOBJ_IMAGE:
+            continue
+        try:
+            left, bottom, right, top = (float(value) for value in obj.get_bounds())
+        except Exception as exc:
+            raise ValueError(f"page {page_number} image geometry is unavailable") from exc
+        if not all(math.isfinite(value) for value in (left, bottom, right, top)):
+            raise ValueError(f"page {page_number} image geometry is invalid")
+        image_area += abs((right - left) * (top - bottom))
+    return image_area / page_area
 
 # pdfium / Adobe text layers often emit U+FFFE for missing hyphenation or ligatures.
 _PDF_ARTIFACT_RE = re.compile(r"[\u00ad\u200b-\u200f\ufeff\ufffe\uffff]")
@@ -1386,6 +1470,7 @@ class PDFParser(BaseParser):
     def __init__(self, file_name: str = "", file_type=None, **kwargs):
         # Capture per-upload override before BaseParser consumes kwargs.
         raw = kwargs.pop("pdf_force_scanned", None)
+        native_capture = kwargs.pop("pdf_native_structure_capture", None)
         super().__init__(file_name=file_name, file_type=file_type, **kwargs)
         # Priority: per-upload override > global env > default (False).
         if raw is not None:
@@ -1394,8 +1479,23 @@ class PDFParser(BaseParser):
             }
         else:
             self._force_scanned = FORCE_SCANNED_PDF
+        self._native_capture_mode = (
+            "" if native_capture is None else str(native_capture).strip()
+        )
+        if (
+            native_capture is not None
+            and self._native_capture_mode != PDF_NATIVE_CAPTURE_MODE
+        ):
+            raise ValueError(
+                f"unsupported PDF native capture mode: {self._native_capture_mode}"
+            )
 
     def parse_into_text(self, content: bytes) -> Document:
+        # This opt-in route is an evidence producer. Its failures must surface;
+        # rendering images would discard the native locator authority.
+        if self._native_capture_mode:
+            return self._route_native_capture(content)
+
         # Force-scanned short-circuit: render every page as an image.
         if self._force_scanned:
             logger.info(
@@ -1435,6 +1535,164 @@ class PDFParser(BaseParser):
         # pure-Python so keeping it inside the lock costs nothing meaningful.
         with _PDFIUM_LOCK:
             return self._route_locked(content)
+
+    def _route_native_capture(self, content: bytes) -> Document:
+        import pypdfium2 as pdfium
+        import pypdfium2.raw as pdfium_r
+        from pypdfium2.version import PDFIUM_INFO, PYPDFIUM_INFO
+
+        if not content:
+            raise ValueError("PDF native structure capture requires source bytes")
+
+        with _PDFIUM_LOCK:
+            pdf = pdfium.PdfDocument(content)
+            page_texts = []
+            pages = []
+            global_offset = 0
+            try:
+                page_count = len(pdf)
+                if page_count <= 0:
+                    raise ValueError("PDF native structure capture requires pages")
+                for page_index in range(page_count):
+                    page_number = page_index + 1
+                    page = pdf[page_index]
+                    textpage = None
+                    try:
+                        try:
+                            rotation = int(page.get_rotation())
+                        except Exception as exc:
+                            raise ValueError(
+                                f"page {page_number} rotation is unavailable"
+                            ) from exc
+                        if rotation != 0:
+                            raise ValueError(
+                                f"page {page_number} rotation is unsupported"
+                            )
+                        width, height = (float(value) for value in page.get_size())
+                        width_points = _point_string(width)
+                        height_points = _point_string(height)
+                        textpage = page.get_textpage()
+                        page_text = textpage.get_text_range()
+                        if not isinstance(page_text, str):
+                            raise ValueError(f"page {page_number} text is not Unicode")
+                        try:
+                            page_text.encode("utf-8", errors="strict")
+                        except UnicodeError as exc:
+                            raise ValueError(
+                                f"page {page_number} text is not valid UTF-8"
+                            ) from exc
+                        ratio = _native_image_area_ratio(page, pdfium_r, page_number)
+                        if _classify_page(ratio, len(page_text.strip())) == "scanned":
+                            raise ValueError(f"page {page_number} is scanned")
+
+                        char_count = textpage.count_chars()
+                        if char_count != len(page_text):
+                            raise ValueError(
+                                f"page {page_number} native character mapping is ambiguous"
+                            )
+                        replay = []
+                        bboxes = []
+                        for char_index in range(char_count):
+                            ch = textpage.get_text_range(char_index, 1)
+                            if not isinstance(ch, str) or len(ch) != 1:
+                                raise ValueError(
+                                    f"page {page_number} character {char_index} mapping is ambiguous"
+                                )
+                            try:
+                                ch.encode("utf-8", errors="strict")
+                            except UnicodeError as exc:
+                                raise ValueError(
+                                    f"page {page_number} character {char_index} is not valid UTF-8"
+                                ) from exc
+                            replay.append(ch)
+                            if ch.isspace():
+                                continue
+                            try:
+                                raw_box = textpage.get_charbox(char_index)
+                            except Exception as exc:
+                                raise ValueError(
+                                    f"page {page_number} character {char_index} bbox is unavailable"
+                                ) from exc
+                            bboxes.append(
+                                {
+                                    "bbox": _native_bbox(
+                                        raw_box,
+                                        width,
+                                        height,
+                                        page_number,
+                                        char_index,
+                                    ),
+                                    "global_codepoint_end": global_offset + char_index + 1,
+                                    "global_codepoint_start": global_offset + char_index,
+                                }
+                            )
+                        if "".join(replay) != page_text:
+                            raise ValueError(
+                                f"page {page_number} native character mapping is ambiguous"
+                            )
+
+                        page_end = global_offset + len(page_text)
+                        pages.append(
+                            {
+                                "bboxes": bboxes,
+                                "global_codepoint_end": page_end,
+                                "global_codepoint_start": global_offset,
+                                "height_points": height_points,
+                                "page_number": page_number,
+                                "page_text_sha256": _sha256(page_text.encode("utf-8")),
+                                "width_points": width_points,
+                            }
+                        )
+                        page_texts.append(page_text)
+                        global_offset = page_end
+                        if page_index + 1 < page_count:
+                            global_offset += 2
+                    finally:
+                        _close_pdfium_resource(textpage)
+                        _close_pdfium_resource(page)
+            finally:
+                _close_pdfium_resource(pdf)
+
+        markdown = "\n\n".join(page_texts)
+        parser_identity = {
+            "capture_mode": PDF_NATIVE_CAPTURE_MODE,
+            "pdfium_version": str(PDFIUM_INFO),
+            "producer_contract": PDF_NATIVE_LOCATOR_PRODUCER,
+            "pypdfium2_version": str(PYPDFIUM_INFO),
+        }
+        sanitized = {
+            "contract": PDF_NATIVE_STRUCTURE_SCHEMA,
+            "coordinate_space": "normalized_0_1e6_top_left",
+            "markdown_sha256": _sha256(markdown.encode("utf-8")),
+            "pages": pages,
+            "parser_identity": parser_identity,
+            "parser_identity_sha256": _sha256(_canonical_json(parser_identity)),
+            "source_sha256": _sha256(content),
+        }
+        sanitized_bytes = _canonical_json(sanitized)
+        structure_sha256 = _sha256(sanitized_bytes)
+        envelope = {
+            "raw_sha256": structure_sha256,
+            "sanitized_json": sanitized,
+            "sanitized_sha256": structure_sha256,
+            "schema_version": PDF_NATIVE_STRUCTURE_SCHEMA,
+            "source_sha256": sanitized["source_sha256"],
+        }
+        return Document(
+            content=markdown,
+            images={},
+            metadata={
+                "embedded_image_count": 0,
+                "image_source_type": "pdf_text_layer",
+                PDF_NATIVE_STRUCTURE_METADATA_KEY: _canonical_json(envelope).decode(
+                    "utf-8"
+                ),
+                "page_count": len(pages),
+                "scanned_page_count": 0,
+                "text_page_count": len(pages),
+                "vector_figure_count": 0,
+            },
+        )
 
     def _route_locked(self, content: bytes) -> Document:
         import pypdfium2 as pdfium
