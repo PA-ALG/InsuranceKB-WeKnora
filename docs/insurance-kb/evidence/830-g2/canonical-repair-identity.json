@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-multiline-canonical-repair.v1",
+  "status": "CODE_PASS_INDEPENDENT_REVIEW_BLOCKER_0",
+  "files": {
+    "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py": "9065688ccf9c0f37590ff6d580daabc4fd113a73ed41880b37ac5684b95cd1dc",
+    "harness/tests/test_concept_free_wiki_830_g2.py": "2bdccf64b167429cb6f360e502f30be7ec57625fe153db3c40e3c26bdb771a92",
+    "internal/types/concept_free_wiki_830_g2.go": "bbbfc67a3df16f28b92f24fd606cd6ff0e685e3bddd3c0c3c15b0c18cf139064",
+    "internal/types/concept_free_wiki_830_g2_test.go": "0076725f0ad0f42f857b98d35702b0f86183da339c475af91572976377165949",
+    "harness/tests/fixtures/concept_free_wiki_830_g2_canonical_vector.json": "02787ba2c17af49078349d37ac024f5e9e1bb06ab0b23c0640278adcba86d795"
+  },
+  "behavior_red": [
+    "Python actual multiline digest rejected source LF",
+    "Go LF/CR/TAB and actual A request rejected",
+    "Go formerly accepted float",
+    "Python and Go formerly accepted internal TAB identity",
+    "Full multiline candidate failed Go parsing at missed page-member hash sites",
+    "Go raw invalid UTF8 and unpaired surrogate previously accepted",
+    "Go programmatic invalid string/key previously normalized"
+  ],
+  "compile_red_separate": "Missing newly named helper is only interface/compile RED",
+  "actual_a_text_unchanged": true,
+  "old_schema_g1_canonical_changed": false,
+  "provider_calls": 0,
+  "flow": "NOT_RUN",
+  "freeze": "FINAL_MULTILINE_CANDIDATE_AND_UNICODE",
+  "python_tests": 27,
+  "python_validation_log": "/private/tmp/g2-canonical-final-python.log",
+  "root_go_packages": 7,
+  "root_go_validation_log": "/private/tmp/g2-canonical-final-go.log",
+  "actual_full_a_request_hash": "67bd6ad89f9681837b189ebacc72e6d743ea74ade007f48ba0c212f32cd6a7e3"
+}

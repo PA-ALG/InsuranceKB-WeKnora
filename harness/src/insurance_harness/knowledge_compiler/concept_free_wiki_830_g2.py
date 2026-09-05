@@ -3,16 +3,34 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import unicodedata
-from collections.abc import Sequence
-from typing import Annotated, Literal, Self
+from collections.abc import Mapping, Sequence
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
-
-from insurance_harness.knowledge_compiler.schema_wiki_contracts import schema_wiki_sha256
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-Identity = Annotated[str, StringConstraints(min_length=1, max_length=512, pattern=r"^\S.*\S$|^\S$")]
+
+
+def _control_free_identity(value: str) -> str:
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+        raise ValueError("G2 concept identity contains a control character")
+    return value
+
+
+Identity = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=512, pattern=r"^\S.*\S$|^\S$"),
+    AfterValidator(_control_free_identity),
+]
 State = Literal["present", "absent_explicitly", "unknown"]
 Disposition = Literal[
     "new_page",
@@ -26,13 +44,70 @@ Disposition = Literal[
     "duplicate",
 ]
 
+_CONCEPT_HASH_PREFIX: Final[bytes] = b"schema-wiki-canonical.v1\x00"
+
 
 class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
 
 
+def _concept_text_is_canonical(value: str, *, object_key: bool = False) -> bool:
+    if unicodedata.normalize("NFC", value) != value:
+        return False
+    return not any(
+        ord(character) == 0x7F
+        or (ord(character) < 0x20 and (object_key or character not in "\t\n\r"))
+        for character in value
+    )
+
+
+def _concept_json_tree(value: object) -> object:
+    if isinstance(value, BaseModel):
+        return _concept_json_tree(
+            value.model_dump(
+                mode="python",
+                round_trip=True,
+                warnings=False,
+                exclude_computed_fields=True,
+            )
+        )
+    if type(value) is str:
+        if not _concept_text_is_canonical(value):
+            raise ValueError("G2 concept text is not canonical NFC or contains a forbidden control")
+        return value
+    if value is None or type(value) in (int, bool):
+        return value
+    if type(value) is float:
+        raise TypeError("binary floats are not canonical G2 concept values")
+    if isinstance(value, tuple | list):
+        return [_concept_json_tree(item) for item in value]
+    if isinstance(value, Mapping):
+        tree: dict[str, object] = {}
+        for key, item in value.items():
+            if type(key) is not str or not _concept_text_is_canonical(key, object_key=True):
+                raise ValueError("G2 concept object keys must be canonical control-free strings")
+            tree[key] = _concept_json_tree(item)
+        return tree
+    raise TypeError(f"unsupported canonical G2 concept type: {type(value).__name__}")
+
+
+def concept_canonical_bytes(object_type: str, payload: object) -> bytes:
+    """Return the G2 hash preimage while preserving exact multiline source text."""
+
+    if not object_type or not _concept_text_is_canonical(object_type, object_key=True):
+        raise ValueError("invalid G2 concept object type")
+    encoded = json.dumps(
+        _concept_json_tree(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return _CONCEPT_HASH_PREFIX + object_type.encode("ascii") + b"\x00" + encoded
+
+
 def digest(kind: str, value: object) -> str:
-    return schema_wiki_sha256(f"{kind}.830.g2.v1", value)
+    return hashlib.sha256(concept_canonical_bytes(f"{kind}.830.g2.v1", value)).hexdigest()
 
 
 def concept_id(space_id: str, canonical_key: str, sense_key: str) -> str:

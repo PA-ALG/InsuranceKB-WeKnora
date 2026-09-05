@@ -1,0 +1,633 @@
+{
+  "contract": "concept-canonical-vector.830.g2.v1",
+  "hash_prefix_hex": "736368656d612d77696b692d63616e6f6e6963616c2e763100",
+  "valid_cases": [
+    {
+      "name": "legacy_no_control",
+      "kind": "canonical-vector",
+      "payload": {
+        "a": [
+          1,
+          true,
+          null
+        ],
+        "z": "被保险人"
+      },
+      "canonical_json_hex": "7b2261223a5b312c747275652c6e756c6c5d2c227a223a22e8a2abe4bf9de999a9e4baba227d",
+      "expected_sha256": "166360b4a5156774724716da5dfa42a8f12690614d8a8db0906a0257d872f540"
+    },
+    {
+      "name": "line_feed",
+      "kind": "canonical-vector",
+      "payload": {
+        "text": "甲\n乙"
+      },
+      "canonical_json_hex": "7b2274657874223a22e794b25c6ee4b999227d",
+      "expected_sha256": "9d817b4e668228a7fa3142c16a2546e005ed265c4a5bbf673ec38f86dba1e7a7"
+    },
+    {
+      "name": "carriage_return",
+      "kind": "canonical-vector",
+      "payload": {
+        "text": "甲\r乙"
+      },
+      "canonical_json_hex": "7b2274657874223a22e794b25c72e4b999227d",
+      "expected_sha256": "745d810ce0e5d5ddf9c4910d3fafcd5054d52b899eefd10a614eaf3f3dbb7609"
+    },
+    {
+      "name": "horizontal_tab",
+      "kind": "canonical-vector",
+      "payload": {
+        "text": "甲\t乙"
+      },
+      "canonical_json_hex": "7b2274657874223a22e794b25c74e4b999227d",
+      "expected_sha256": "da872fa0e3f4d4123827bf7e6c8e17693fe318608237b97ed35eaab178adf4f1"
+    },
+    {
+      "name": "combined_escaped_and_non_bmp",
+      "kind": "canonical-vector",
+      "payload": {
+        "text": "甲\r\n\t乙😀\\n"
+      },
+      "canonical_json_hex": "7b2274657874223a22e794b25c725c6e5c74e4b999f09f98805c5c6e227d",
+      "expected_sha256": "2278b2b74d0ce6a5d310c3e326e6ba22e065bb856e50a593590408cd9980ca95"
+    }
+  ],
+  "invalid_cases": [
+    {
+      "name": "nul",
+      "payload": {
+        "text": "a\u0000b"
+      }
+    },
+    {
+      "name": "backspace",
+      "payload": {
+        "text": "a\bb"
+      }
+    },
+    {
+      "name": "vertical_tab",
+      "payload": {
+        "text": "a\u000bb"
+      }
+    },
+    {
+      "name": "form_feed",
+      "payload": {
+        "text": "a\fb"
+      }
+    },
+    {
+      "name": "unit_separator",
+      "payload": {
+        "text": "a\u001fb"
+      }
+    },
+    {
+      "name": "delete",
+      "payload": {
+        "text": "ab"
+      }
+    },
+    {
+      "name": "control_in_object_key",
+      "payload": {
+        "bad\nkey": "value"
+      }
+    },
+    {
+      "name": "non_nfc",
+      "payload": {
+        "text": "é"
+      }
+    },
+    {
+      "name": "binary_float",
+      "payload": {
+        "value": 1.5
+      }
+    }
+  ],
+  "real_a_source": {
+    "input_file_sha256": "b6d6a7d793bbc281dfecc250bae892c1471eb50eed5c91225abd49468c2c6c02",
+    "source_block": {
+      "tenant_id": 10003,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+      "parse_attempt": 2,
+      "revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+      "source_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "parse_hash": "f2190b125469819ea0d97603c71f4fb19e4a92fa09117582b4d581947a0de414",
+      "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+      "block_id": "696b1c7f-a52f-4871-a521-4cb526570245",
+      "page_number": 1,
+      "text": "险种简称：e 生保尊享\n险种代码：596\n平安 e 生保（尊享版）医疗保险\n阅读指引\n平安 e 生保（尊享版）医疗保险产品提供医疗费用保障\n为了帮助您更好地了解产品，我们先介绍几个保险条款中常用的术语\n 被保险人就是受保险合同保障的人。\n 投保人就是购买保险并交纳保险费的人。\n 受益人就是发生保险事故后享有保险金请求权的人。\n 保险人就是保险公司。 与您有重大利害关系的条款事关您的切身利益，请您务必仔细、认真阅读\n 本保险条款中背景突出的内容属于免除保险人责任的条款。\n 本保险条款中加了下划直线的标题及该标题下的所有内容属于其他与您有重大利害关系的条款。\n 本保险条款中加了下划波浪线的内容为其他我们认为需要特别提示您注意的内容。 您拥有的重要权益\n",
+      "source_type": "DOCUMENT"
+    },
+    "source_text_utf8_sha256": "7bb50e3527e9bdf240ebfc81a2c084a9d515fe2a15cc008e6f4f4f6b628c037d",
+    "source_text_codepoints": 339,
+    "source_text_line_feeds": 13,
+    "compile_request": {
+      "contract": "concept-compile-request.830.g2.v1",
+      "request_id": "g2-a-canonical-real-source-vector",
+      "tenant_id": 10003,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+      "policy_identity": "g2-initial-80-60.v1",
+      "sources": [
+        {
+          "tenant_id": 10003,
+          "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+          "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+          "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+          "parse_attempt": 2,
+          "revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+          "source_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+          "parse_hash": "f2190b125469819ea0d97603c71f4fb19e4a92fa09117582b4d581947a0de414",
+          "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+          "block_id": "696b1c7f-a52f-4871-a521-4cb526570245",
+          "page_number": 1,
+          "text": "险种简称：e 生保尊享\n险种代码：596\n平安 e 生保（尊享版）医疗保险\n阅读指引\n平安 e 生保（尊享版）医疗保险产品提供医疗费用保障\n为了帮助您更好地了解产品，我们先介绍几个保险条款中常用的术语\n 被保险人就是受保险合同保障的人。\n 投保人就是购买保险并交纳保险费的人。\n 受益人就是发生保险事故后享有保险金请求权的人。\n 保险人就是保险公司。 与您有重大利害关系的条款事关您的切身利益，请您务必仔细、认真阅读\n 本保险条款中背景突出的内容属于免除保险人责任的条款。\n 本保险条款中加了下划直线的标题及该标题下的所有内容属于其他与您有重大利害关系的条款。\n 本保险条款中加了下划波浪线的内容为其他我们认为需要特别提示您注意的内容。 您拥有的重要权益\n",
+          "source_type": "DOCUMENT"
+        }
+      ],
+      "required_fields": {
+        "ping-an-e-sheng-bao": [
+          "insured_eligibility"
+        ]
+      },
+      "existing_definitions": [],
+      "existing_fields": [],
+      "existing_pages": [],
+      "existing_entity_versions": {},
+      "entity_versions": {
+        "ping-an-e-sheng-bao": "ping-an-e-sheng-bao@596-1"
+      },
+      "schema_identity": "schema67@real-a",
+      "profile_identity": "596-1@real-a",
+      "purpose": "G2 canonical real A source vector",
+      "budget_identity": "provider-zero",
+      "base_release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+      "base_activation_epoch": 3
+    },
+    "compile_request_canonical_json_hex": "7b22626173655f61637469766174696f6e5f65706f6368223a332c22626173655f72656c656173655f6964223a2272656c656173652d36323339633463382d613365622d343134612d623035632d653363373466366464633238222c226275646765745f6964656e74697479223a2270726f76696465722d7a65726f222c22636f6e7472616374223a22636f6e636570742d636f6d70696c652d726571756573742e3833302e67322e7631222c22656e746974795f76657273696f6e73223a7b2270696e672d616e2d652d7368656e672d62616f223a2270696e672d616e2d652d7368656e672d62616f403539362d31227d2c226578697374696e675f646566696e6974696f6e73223a5b5d2c226578697374696e675f656e746974795f76657273696f6e73223a7b7d2c226578697374696e675f6669656c6473223a5b5d2c226578697374696e675f7061676573223a5b5d2c22706f6c6963795f6964656e74697479223a2267322d696e697469616c2d38302d36302e7631222c2270726f66696c655f6964656e74697479223a223539362d31407265616c2d61222c22707572706f7365223a2247322063616e6f6e6963616c207265616c204120736f7572636520766563746f72222c227261775f6b625f6964223a2262316631373634632d343433642d343662382d393865332d643561613565353565623432222c22726571756573745f6964223a2267322d612d63616e6f6e6963616c2d7265616c2d736f757263652d766563746f72222c2272657175697265645f6669656c6473223a7b2270696e672d616e2d652d7368656e672d62616f223a5b22696e73757265645f656c69676962696c697479225d7d2c22736368656d615f6964656e74697479223a22736368656d613637407265616c2d61222c22736f7572636573223a5b7b22626c6f636b5f6964223a2236393662316337662d613532662d343837312d613532312d346362353236353730323435222c226b6e6f776c656467655f6964223a2266393837666331362d323232612d343234362d386361302d323263316138316464366439222c22706167655f6e756d626572223a312c2270617273655f617474656d7074223a322c2270617273655f68617368223a2266323139306231323534363938313965613064393736303363373166346662313965346139326661303931313735383262346435383139343761306465343134222c227061727365725f6964656e74697479223a2264646239653362636463643230623632396165366561303332633834373466666438373030386238613238616466386337333461646161336134356366646236222c227261775f6b625f6964223a2262316631373634632d343433642d343662382d393865332d643561613565353565623432222c227265766973696f6e5f6964223a2265613731363031343964326664393965613461343936306335306266613663613336343165343533323935363637316239393536663466386235376164363831222c22736f757263655f68617368223a2238386237383463363166353261326532316132613132663936626135643733343132646539356536386134343533616630336132376538616231323435656463222c22736f757263655f74797065223a22444f43554d454e54222c2273706163655f6964223a2261383735316134302d383363652d353563382d613136302d303739623238333438336361222c2274656e616e745f6964223a31303030332c2274657874223a22e999a9e7a78de7ae80e7a7b0efbc9a6520e7949fe4bf9de5b08ae4baab5c6ee999a9e7a78de4bba3e7a081efbc9a3539365c6ee5b9b3e5ae89206520e7949fe4bf9defbc88e5b08ae4baabe78988efbc89e58cbbe79697e4bf9de999a95c6ee99885e8afbbe68c87e5bc955c6eef8183e5b9b3e5ae89206520e7949fe4bf9defbc88e5b08ae4baabe78988efbc89e58cbbe79697e4bf9de999a9e4baa7e59381e68f90e4be9be58cbbe79697e8b4b9e794a8e4bf9de99a9c5c6eef8183e4b8bae4ba86e5b8aee58aa9e682a8e69bb4e5a5bde59cb0e4ba86e8a7a3e4baa7e59381efbc8ce68891e4bbace58588e4bb8be7bb8de587a0e4b8aae4bf9de999a9e69da1e6acbee4b8ade5b8b8e794a8e79a84e69cafe8afad5c6eef81b620e8a2abe4bf9de999a9e4babae5b0b1e698afe58f97e4bf9de999a9e59088e5908ce4bf9de99a9ce79a84e4babae380825c6eef81b620e68a95e4bf9de4babae5b0b1e698afe8b4ade4b9b0e4bf9de999a9e5b9b6e4baa4e7bab3e4bf9de999a9e8b4b9e79a84e4babae380825c6eef81b620e58f97e79b8ae4babae5b0b1e698afe58f91e7949fe4bf9de999a9e4ba8be69585e5908ee4baabe69c89e4bf9de999a9e98791e8afb7e6b182e69d83e79a84e4babae380825c6eef81b620e4bf9de999a9e4babae5b0b1e698afe4bf9de999a9e585ace58fb8e3808220ef8183e4b88ee682a8e69c89e9878de5a4a7e588a9e5aeb3e585b3e7b3bbe79a84e69da1e6acbee4ba8be585b3e682a8e79a84e58887e8baabe588a9e79b8aefbc8ce8afb7e682a8e58aa1e5bf85e4bb94e7bb86e38081e8aea4e79c9fe99885e8afbb5c6eef81b620e69cace4bf9de999a9e69da1e6acbee4b8ade8838ce699afe7aa81e587bae79a84e58685e5aeb9e5b19ee4ba8ee5858de999a4e4bf9de999a9e4babae8b4a3e4bbbbe79a84e69da1e6acbee380825c6eef81b620e69cace4bf9de999a9e69da1e6acbee4b8ade58aa0e4ba86e4b88be58892e79bb4e7babfe79a84e6a087e9a298e58f8ae8afa5e6a087e9a298e4b88be79a84e68980e69c89e58685e5aeb9e5b19ee4ba8ee585b6e4bb96e4b88ee682a8e69c89e9878de5a4a7e588a9e5aeb3e585b3e7b3bbe79a84e69da1e6acbee380825c6eef81b620e69cace4bf9de999a9e69da1e6acbee4b8ade58aa0e4ba86e4b88be58892e6b3a2e6b5aae7babfe79a84e58685e5aeb9e4b8bae585b6e4bb96e68891e4bbace8aea4e4b8bae99c80e8a681e789b9e588abe68f90e7a4bae682a8e6b3a8e6848fe79a84e58685e5aeb9e3808220ef8183e682a8e68ba5e69c89e79a84e9878de8a681e69d83e79b8a5c6e227d5d2c2273706163655f6964223a2261383735316134302d383363652d353563382d613136302d303739623238333438336361222c2274656e616e745f6964223a31303030332c2277696b695f6b625f6964223a2238643536393564652d663235352d343264352d396134312d303432626138366539376239227d",
+    "compile_request_sha256": "3d92274604e37aec7d525157dd26dbd671e8c1f654d8c306e992e195b8fb0e9a"
+  },
+  "multiline_bundle": {
+    "bundle": {
+      "contract": "concept-candidate-bundle.830.g2.v1",
+      "request": {
+        "contract": "concept-compile-request.830.g2.v1",
+        "request_id": "req-a",
+        "tenant_id": 1,
+        "space_id": "space-a",
+        "raw_kb_id": "raw-a",
+        "wiki_kb_id": "wiki-a",
+        "policy_identity": "g2-initial-80-60.v1",
+        "sources": [
+          {
+            "tenant_id": 1,
+            "space_id": "space-a",
+            "raw_kb_id": "raw-a",
+            "knowledge_id": "knowledge-a",
+            "parse_attempt": 1,
+            "revision_id": "r1",
+            "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "parser_identity": "native-v1",
+            "block_id": "p1",
+            "page_number": 1,
+            "text": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+            "source_type": "DOCUMENT"
+          }
+        ],
+        "required_fields": {
+          "entity-a": [
+            "eligibility",
+            "unobserved"
+          ]
+        },
+        "existing_definitions": [],
+        "existing_fields": [],
+        "existing_pages": [],
+        "existing_entity_versions": {},
+        "entity_versions": {
+          "entity-a": "v1"
+        },
+        "schema_identity": "fixture-schema",
+        "profile_identity": "fixture-profile",
+        "purpose": "Source-grounded knowledge compilation",
+        "budget_identity": "provider-zero",
+        "base_release_id": "",
+        "base_activation_epoch": 0
+      },
+      "compile_result": {
+        "output": {
+          "contract": "concept-compile-output.830.g2.v1",
+          "request_hash": "5d0167ac899b5174a1dd72a4d3c51d6394679adddb6dc6a5ad9b1e9405dc0a1c",
+          "definitions": [
+            {
+              "space_id": "space-a",
+              "canonical_key": "insured",
+              "sense_key": "insurance",
+              "title": "被保险人",
+              "body": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "aliases": [],
+              "origin": "MODEL_COMPILE"
+            }
+          ],
+          "fields": [
+            {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "field_key": "eligibility",
+              "state": "present",
+              "value": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "attempted": true,
+              "unknown_reason": null,
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "concept_ids": [
+                "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+              ],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            },
+            {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "field_key": "unobserved",
+              "state": "unknown",
+              "value": null,
+              "attempted": true,
+              "unknown_reason": "NO_MATCHING_EXTRACTION_RULE",
+              "evidence": [],
+              "concept_ids": [],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            }
+          ],
+          "pages": [
+            {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "stable_key": "insured-note",
+              "title": "被保险人说明",
+              "body": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "concept_ids": [
+                "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+              ],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            }
+          ],
+          "audit": [
+            {
+              "key": "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3",
+              "disposition": "new_page",
+              "reason": "EXACT_EXTRACTION"
+            },
+            {
+              "key": "assertion_b1157f22ec5827b7873eee56aed736cb9e99e9a2779e3b9a389089b17d8ffb62",
+              "disposition": "field_rule",
+              "reason": "REQUIRED_FIELD_ATTEMPT"
+            },
+            {
+              "key": "assertion_f32a799a349c1f6261a6b5a2a9c356a1a3ad15ce3cdf95ee17c324f0903465b9",
+              "disposition": "field_rule",
+              "reason": "REQUIRED_FIELD_ATTEMPT"
+            },
+            {
+              "key": "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d",
+              "disposition": "new_page",
+              "reason": "FIXTURE_INDEPENDENT_NOTE"
+            }
+          ],
+          "transformation": "EXTRACT"
+        },
+        "execution": {
+          "run_id": "compile-vector-v3",
+          "implementation": "fixture-compiler",
+          "context_hash": "5bdc2f26d0a183b856f544b457c5b6c637a0843dd28e528f6e5c9972a547e8c2",
+          "raw_output": "{\"audit\":[{\"disposition\":\"new_page\",\"key\":\"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3\",\"reason\":\"EXACT_EXTRACTION\"},{\"disposition\":\"field_rule\",\"key\":\"assertion_b1157f22ec5827b7873eee56aed736cb9e99e9a2779e3b9a389089b17d8ffb62\",\"reason\":\"REQUIRED_FIELD_ATTEMPT\"},{\"disposition\":\"field_rule\",\"key\":\"assertion_f32a799a349c1f6261a6b5a2a9c356a1a3ad15ce3cdf95ee17c324f0903465b9\",\"reason\":\"REQUIRED_FIELD_ATTEMPT\"},{\"disposition\":\"new_page\",\"key\":\"free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d\",\"reason\":\"FIXTURE_INDEPENDENT_NOTE\"}],\"contract\":\"concept-compile-output.830.g2.v1\",\"definitions\":[{\"aliases\":[],\"body\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\",\"canonical_key\":\"insured\",\"evidence\":[{\"block_id\":\"p1\",\"end\":21,\"knowledge_id\":\"knowledge-a\",\"offset_unit\":\"UNICODE_CODE_POINT\",\"page_number\":1,\"parse_attempt\":1,\"parse_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parser_identity\":\"native-v1\",\"quote\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\",\"quote_hash\":\"698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1\",\"raw_kb_id\":\"raw-a\",\"revision_id\":\"r1\",\"source_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_type\":\"DOCUMENT\",\"space_id\":\"space-a\",\"start\":0,\"tenant_id\":1}],\"origin\":\"MODEL_COMPILE\",\"sense_key\":\"insurance\",\"space_id\":\"space-a\",\"title\":\"被保险人\"}],\"fields\":[{\"attempted\":true,\"concept_ids\":[\"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3\"],\"conditions\":[],\"entity_id\":\"entity-a\",\"entity_version\":\"v1\",\"evidence\":[{\"block_id\":\"p1\",\"end\":21,\"knowledge_id\":\"knowledge-a\",\"offset_unit\":\"UNICODE_CODE_POINT\",\"page_number\":1,\"parse_attempt\":1,\"parse_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parser_identity\":\"native-v1\",\"quote\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\",\"quote_hash\":\"698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1\",\"raw_kb_id\":\"raw-a\",\"revision_id\":\"r1\",\"source_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_type\":\"DOCUMENT\",\"space_id\":\"space-a\",\"start\":0,\"tenant_id\":1}],\"exceptions\":[],\"field_key\":\"eligibility\",\"space_id\":\"space-a\",\"state\":\"present\",\"unknown_reason\":null,\"valid_time\":\"\",\"value\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\"},{\"attempted\":true,\"concept_ids\":[],\"conditions\":[],\"entity_id\":\"entity-a\",\"entity_version\":\"v1\",\"evidence\":[],\"exceptions\":[],\"field_key\":\"unobserved\",\"space_id\":\"space-a\",\"state\":\"unknown\",\"unknown_reason\":\"NO_MATCHING_EXTRACTION_RULE\",\"valid_time\":\"\",\"value\":null}],\"pages\":[{\"body\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\",\"concept_ids\":[\"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3\"],\"conditions\":[],\"entity_id\":\"entity-a\",\"entity_version\":\"v1\",\"evidence\":[{\"block_id\":\"p1\",\"end\":21,\"knowledge_id\":\"knowledge-a\",\"offset_unit\":\"UNICODE_CODE_POINT\",\"page_number\":1,\"parse_attempt\":1,\"parse_hash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parser_identity\":\"native-v1\",\"quote\":\"被保险人\\n就是\\r\\n\\t受保险合同保障的人😀。\",\"quote_hash\":\"698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1\",\"raw_kb_id\":\"raw-a\",\"revision_id\":\"r1\",\"source_hash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"source_type\":\"DOCUMENT\",\"space_id\":\"space-a\",\"start\":0,\"tenant_id\":1}],\"exceptions\":[],\"space_id\":\"space-a\",\"stable_key\":\"insured-note\",\"title\":\"被保险人说明\",\"valid_time\":\"\"}],\"request_hash\":\"5d0167ac899b5174a1dd72a4d3c51d6394679adddb6dc6a5ad9b1e9405dc0a1c\",\"transformation\":\"EXTRACT\"}",
+          "raw_output_hash": "183fb02a9b3cba2bb6f3ec5356b2b396a1ece6b71370eadeacf4f7b56bba31ed"
+        }
+      },
+      "review_result": {
+        "output": {
+          "contract": "concept-review-output.830.g2.v1",
+          "request_hash": "5d0167ac899b5174a1dd72a4d3c51d6394679adddb6dc6a5ad9b1e9405dc0a1c",
+          "output_hash": "26e5413dfd0246aa95213ea332015a2fc810c398decfd9cb9d17c6a82a94e1b6",
+          "decision": "PASS",
+          "reasons": [],
+          "page_scores": {
+            "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3": {
+              "business_value": 25,
+              "reuse": 20,
+              "evidence_quality": 20,
+              "definability": 15,
+              "novel_identity": 10,
+              "name_stability": 10
+            },
+            "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d": {
+              "business_value": 25,
+              "reuse": 20,
+              "evidence_quality": 20,
+              "definability": 15,
+              "novel_identity": 10,
+              "name_stability": 10
+            }
+          }
+        },
+        "execution": {
+          "run_id": "review-vector-v3",
+          "implementation": "extract-reviewer.830.g2.v1",
+          "context_hash": "4d025712109c5c988826044ea13b826e9461823643e99991eb6acab48b50edf9",
+          "raw_output": "{\"contract\":\"concept-review-output.830.g2.v1\",\"decision\":\"PASS\",\"output_hash\":\"26e5413dfd0246aa95213ea332015a2fc810c398decfd9cb9d17c6a82a94e1b6\",\"page_scores\":{\"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3\":{\"business_value\":25,\"definability\":15,\"evidence_quality\":20,\"name_stability\":10,\"novel_identity\":10,\"reuse\":20},\"free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d\":{\"business_value\":25,\"definability\":15,\"evidence_quality\":20,\"name_stability\":10,\"novel_identity\":10,\"reuse\":20}},\"reasons\":[],\"request_hash\":\"5d0167ac899b5174a1dd72a4d3c51d6394679adddb6dc6a5ad9b1e9405dc0a1c\"}",
+          "raw_output_hash": "033a33f1ac95e06f633cd02d566f65d796a818fc3598005ac1f71855f226e165"
+        }
+      },
+      "page_manifest": {
+        "contract": "concept-page-manifest.830.g2.v1",
+        "members": [
+          {
+            "kind": "concept",
+            "member_id": "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3",
+            "owner_id": "space-a",
+            "title": "被保险人",
+            "content": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+            "payload": {
+              "space_id": "space-a",
+              "canonical_key": "insured",
+              "sense_key": "insurance",
+              "title": "被保险人",
+              "body": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "aliases": [],
+              "origin": "MODEL_COMPILE"
+            }
+          },
+          {
+            "kind": "entity_overview",
+            "member_id": "entity_overview_ec948fb3c2c13bf92f987a22d3750417a1942bee4821ff39fbb8acf35c588815",
+            "owner_id": "entity-a",
+            "title": "entity-a",
+            "content": "",
+            "payload": {
+              "member_ids": [
+                "assertion_b1157f22ec5827b7873eee56aed736cb9e99e9a2779e3b9a389089b17d8ffb62",
+                "assertion_f32a799a349c1f6261a6b5a2a9c356a1a3ad15ce3cdf95ee17c324f0903465b9",
+                "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d"
+              ]
+            }
+          },
+          {
+            "kind": "field_assertion",
+            "member_id": "assertion_b1157f22ec5827b7873eee56aed736cb9e99e9a2779e3b9a389089b17d8ffb62",
+            "owner_id": "entity-a",
+            "title": "eligibility",
+            "content": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+            "payload": {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "field_key": "eligibility",
+              "state": "present",
+              "value": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "attempted": true,
+              "unknown_reason": null,
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "concept_ids": [
+                "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+              ],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            }
+          },
+          {
+            "kind": "field_assertion",
+            "member_id": "assertion_f32a799a349c1f6261a6b5a2a9c356a1a3ad15ce3cdf95ee17c324f0903465b9",
+            "owner_id": "entity-a",
+            "title": "unobserved",
+            "content": "未知：NO_MATCHING_EXTRACTION_RULE",
+            "payload": {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "field_key": "unobserved",
+              "state": "unknown",
+              "value": null,
+              "attempted": true,
+              "unknown_reason": "NO_MATCHING_EXTRACTION_RULE",
+              "evidence": [],
+              "concept_ids": [],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            }
+          },
+          {
+            "kind": "free_wiki",
+            "member_id": "free_wiki_63de3c831915a708e3df00251c67c9e2895c5b8aa9dc5d2276c191f585508cd6",
+            "owner_id": "entity-a",
+            "title": "开放知识",
+            "content": "",
+            "payload": {
+              "member_ids": [
+                "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d"
+              ]
+            }
+          },
+          {
+            "kind": "free_wiki_item",
+            "member_id": "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d",
+            "owner_id": "entity-a",
+            "title": "被保险人说明",
+            "content": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+            "payload": {
+              "space_id": "space-a",
+              "entity_id": "entity-a",
+              "stable_key": "insured-note",
+              "title": "被保险人说明",
+              "body": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+              "evidence": [
+                {
+                  "tenant_id": 1,
+                  "space_id": "space-a",
+                  "raw_kb_id": "raw-a",
+                  "knowledge_id": "knowledge-a",
+                  "parse_attempt": 1,
+                  "revision_id": "r1",
+                  "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "parse_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                  "parser_identity": "native-v1",
+                  "source_type": "DOCUMENT",
+                  "block_id": "p1",
+                  "page_number": 1,
+                  "offset_unit": "UNICODE_CODE_POINT",
+                  "start": 0,
+                  "end": 21,
+                  "quote": "被保险人\n就是\r\n\t受保险合同保障的人😀。",
+                  "quote_hash": "698dab0adef01108a2e62be16ac2af85c47dff9ad40db87f7a519b7db1064df1"
+                }
+              ],
+              "concept_ids": [
+                "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+              ],
+              "conditions": [],
+              "exceptions": [],
+              "entity_version": "v1",
+              "valid_time": ""
+            }
+          }
+        ],
+        "members_hash": "e400e75beba5a01d05b4ccca745378acb7fb683941ddca9066283be6d72ed700",
+        "audit": [
+          {
+            "key": "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3",
+            "disposition": "new_page",
+            "reason": "EXACT_EXTRACTION"
+          },
+          {
+            "key": "assertion_b1157f22ec5827b7873eee56aed736cb9e99e9a2779e3b9a389089b17d8ffb62",
+            "disposition": "field_rule",
+            "reason": "REQUIRED_FIELD_ATTEMPT"
+          },
+          {
+            "key": "assertion_f32a799a349c1f6261a6b5a2a9c356a1a3ad15ce3cdf95ee17c324f0903465b9",
+            "disposition": "field_rule",
+            "reason": "REQUIRED_FIELD_ATTEMPT"
+          },
+          {
+            "key": "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d",
+            "disposition": "new_page",
+            "reason": "FIXTURE_INDEPENDENT_NOTE"
+          }
+        ]
+      },
+      "candidate_hash": "491ec4b52d12f6f64cde86cea634d744b577369afd1f0908d7aef0ea9210d38d"
+    },
+    "members_hash": "e400e75beba5a01d05b4ccca745378acb7fb683941ddca9066283be6d72ed700",
+    "candidate_hash": "491ec4b52d12f6f64cde86cea634d744b577369afd1f0908d7aef0ea9210d38d",
+    "snapshot_member_sha256": [
+      "dc94800d0e86d0f9c26d74e33c8bbadf960a74cad9f2a2ae182b8bf265c7c22f",
+      "cba697bcc3990512e4f9330c76ce3a5498413e52f5c8acb4f60a40dbbaf0d7ff",
+      "017e699df390e44aa6ae66442597ceead66845dbc8203591b6714171792a349a",
+      "2b275cf846204d7215ac0a04ea2bb8c50ad85b69e52a6ee4185c874340d46e48",
+      "7a416dd67f2b515bb494abd8462d9be3909881d3d7471a1edd0d232607e2b279",
+      "e99f7012209ed223ffd0f8b0482c7ad224fc89d038e67f614179b27d910e9e37"
+    ]
+  },
+  "legacy_bundle_request_sha256": "92f6f3b87f2e7908ce30b7b46ffdec323f4b73f0f5d676d83fc7a2db24fa0d6b"
+}

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import json
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +12,64 @@ def api():
     name = "insurance_harness.knowledge_compiler.concept_free_wiki_830_g2"
     assert importlib.util.find_spec(name) is not None, "G2-R2: no shared concept/member contract"
     return importlib.import_module(name)
+
+
+def canonical_vector():
+    return json.loads(
+        (
+            Path(__file__).parent / "fixtures/concept_free_wiki_830_g2_canonical_vector.json"
+        ).read_text()
+    )
+
+
+def test_g2_canonical_vector_allows_source_text_controls_and_real_a_request():
+    g = api()
+    vector = canonical_vector()
+    for case in vector["valid_cases"]:
+        assert g.digest(case["kind"], case["payload"]) == case["expected_sha256"]
+
+    real = vector["real_a_source"]
+    source = g.SourceBlock.model_validate(real["source_block"])
+    assert len(source.text) == real["source_text_codepoints"]
+    assert source.text.count("\n") == real["source_text_line_feeds"]
+    compiler = importlib.import_module(
+        "insurance_harness.knowledge_compiler.concept_compile_830_g2"
+    )
+    request = compiler.CompileRequest.model_validate(real["compile_request"])
+    assert request.request_hash == real["compile_request_sha256"]
+
+    multiline = vector["multiline_bundle"]
+    bundle = compiler.CandidateBundle.model_validate(multiline["bundle"])
+    assert bundle.page_manifest.members_hash == multiline["members_hash"]
+    assert bundle.candidate_hash == multiline["candidate_hash"]
+    assert [
+        g.digest("concept-member", member.model_dump(mode="json"))
+        for member in bundle.page_manifest.members
+    ] == multiline["snapshot_member_sha256"]
+
+
+def test_g2_canonical_vector_keeps_old_bundle_hash_and_rejects_ambiguous_values():
+    g = api()
+    vector = canonical_vector()
+    old = json.loads(
+        (
+            Path(__file__).parent / "fixtures/concept_free_wiki_830_g2_contract_vector.json"
+        ).read_text()
+    )
+    assert g.digest("compile-request", old["request"]) == vector["legacy_bundle_request_sha256"]
+    for case in vector["invalid_cases"]:
+        with pytest.raises((TypeError, ValueError), match="canonical|control|NFC|float"):
+            g.digest("canonical-vector", case["payload"])
+    source = vector["real_a_source"]["source_block"]
+    for invalid_identity in (
+        "native\tv1",
+        "native\rv1",
+        "native\nv1",
+        "native\0v1",
+        "native\x7fv1",
+    ):
+        with pytest.raises(ValueError):
+            g.SourceBlock.model_validate({**source, "parser_identity": invalid_identity})
 
 
 def test_shared_definition_identity_ignores_entity_collection():

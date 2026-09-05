@@ -9,6 +9,148 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func conceptCanonicalVector830G2(t *testing.T) struct {
+	HashPrefixHex string `json:"hash_prefix_hex"`
+	ValidCases    []struct {
+		Name             string         `json:"name"`
+		Kind             string         `json:"kind"`
+		Payload          map[string]any `json:"payload"`
+		CanonicalJSONHex string         `json:"canonical_json_hex"`
+		ExpectedSHA256   string         `json:"expected_sha256"`
+	} `json:"valid_cases"`
+	InvalidCases []struct {
+		Name    string         `json:"name"`
+		Payload map[string]any `json:"payload"`
+	} `json:"invalid_cases"`
+	RealA struct {
+		SourceBlock          ConceptSourceBlock830G2    `json:"source_block"`
+		SourceTextCodepoints int                        `json:"source_text_codepoints"`
+		SourceTextLineFeeds  int                        `json:"source_text_line_feeds"`
+		CompileRequest       ConceptCompileRequest830G2 `json:"compile_request"`
+		CompileRequestSHA256 string                     `json:"compile_request_sha256"`
+	} `json:"real_a_source"`
+	Multiline struct {
+		Bundle               json.RawMessage `json:"bundle"`
+		MembersHash          string          `json:"members_hash"`
+		CandidateHash        string          `json:"candidate_hash"`
+		SnapshotMemberSHA256 []string        `json:"snapshot_member_sha256"`
+	} `json:"multiline_bundle"`
+	LegacyBundleRequestSHA256 string `json:"legacy_bundle_request_sha256"`
+} {
+	t.Helper()
+	raw, err := os.ReadFile("../../harness/tests/fixtures/concept_free_wiki_830_g2_canonical_vector.json")
+	require.NoError(t, err)
+	var vector struct {
+		HashPrefixHex string `json:"hash_prefix_hex"`
+		ValidCases    []struct {
+			Name             string         `json:"name"`
+			Kind             string         `json:"kind"`
+			Payload          map[string]any `json:"payload"`
+			CanonicalJSONHex string         `json:"canonical_json_hex"`
+			ExpectedSHA256   string         `json:"expected_sha256"`
+		} `json:"valid_cases"`
+		InvalidCases []struct {
+			Name    string         `json:"name"`
+			Payload map[string]any `json:"payload"`
+		} `json:"invalid_cases"`
+		RealA struct {
+			SourceBlock          ConceptSourceBlock830G2    `json:"source_block"`
+			SourceTextCodepoints int                        `json:"source_text_codepoints"`
+			SourceTextLineFeeds  int                        `json:"source_text_line_feeds"`
+			CompileRequest       ConceptCompileRequest830G2 `json:"compile_request"`
+			CompileRequestSHA256 string                     `json:"compile_request_sha256"`
+		} `json:"real_a_source"`
+		Multiline struct {
+			Bundle               json.RawMessage `json:"bundle"`
+			MembersHash          string          `json:"members_hash"`
+			CandidateHash        string          `json:"candidate_hash"`
+			SnapshotMemberSHA256 []string        `json:"snapshot_member_sha256"`
+		} `json:"multiline_bundle"`
+		LegacyBundleRequestSHA256 string `json:"legacy_bundle_request_sha256"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	require.NoError(t, decoder.Decode(&vector))
+	return vector
+}
+
+func TestConceptCanonical830G2AllowsSourceTextControlsAndRealARequest(t *testing.T) {
+	vector := conceptCanonicalVector830G2(t)
+	for _, testCase := range vector.ValidCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			hash, err := conceptDigest830G2(testCase.Kind, testCase.Payload)
+			require.NoError(t, err)
+			require.Equal(t, testCase.ExpectedSHA256, hash)
+		})
+	}
+	require.Equal(t, vector.RealA.SourceTextCodepoints, len([]rune(vector.RealA.SourceBlock.Text)))
+	require.Equal(t, vector.RealA.SourceTextLineFeeds, bytes.Count([]byte(vector.RealA.SourceBlock.Text), []byte("\n")))
+	hash, err := conceptDigest830G2("compile-request", vector.RealA.CompileRequest)
+	require.NoError(t, err)
+	require.Equal(t, vector.RealA.CompileRequestSHA256, hash)
+
+	bundle, err := ParseConceptCandidateBundle830G2(vector.Multiline.Bundle)
+	require.NoError(t, err)
+	require.Equal(t, vector.Multiline.MembersHash, bundle.PageManifest.MembersHash)
+	require.Equal(t, vector.Multiline.CandidateHash, bundle.CandidateHash)
+	snapshots, err := bundle.SnapshotMembers()
+	require.NoError(t, err)
+	require.Len(t, snapshots, len(vector.Multiline.SnapshotMemberSHA256))
+	for index := range snapshots {
+		require.Equal(t, vector.Multiline.SnapshotMemberSHA256[index], snapshots[index].MemberDigest)
+	}
+}
+
+func TestConceptCanonical830G2KeepsOldBundleHashAndRejectsAmbiguousValues(t *testing.T) {
+	vector := conceptCanonicalVector830G2(t)
+	for _, testCase := range vector.InvalidCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			_, err := conceptDigest830G2("canonical-vector", testCase.Payload)
+			require.Error(t, err)
+		})
+	}
+	var old struct {
+		Request ConceptCompileRequest830G2 `json:"request"`
+	}
+	require.NoError(t, json.Unmarshal(conceptVector830G2(t), &old))
+	hash, err := conceptDigest830G2("compile-request", old.Request)
+	require.NoError(t, err)
+	require.Equal(t, vector.LegacyBundleRequestSHA256, hash)
+	for _, invalidIdentity := range []string{"native\tv1", "native\rv1", "native\nv1", "native\x00v1", "native\x7fv1"} {
+		require.False(t, conceptIdentity830G2(invalidIdentity), "identity %q contains a control character", invalidIdentity)
+	}
+}
+
+func TestConceptCanonical830G2RejectsInvalidUTF8AndUnpairedSurrogates(t *testing.T) {
+	type wire struct {
+		Value string `json:"value"`
+	}
+	invalidUTF8 := append([]byte(`{"value":"`), 0xff)
+	invalidUTF8 = append(invalidUTF8, []byte(`"}`)...)
+	for name, raw := range map[string][]byte{
+		"invalid utf8":        invalidUTF8,
+		"lone high surrogate": []byte(`{"value":"\ud800"}`),
+		"lone low surrogate":  []byte(`{"value":"\udc00"}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var value wire
+			require.Error(t, strictConceptDecode830G2(raw, &value))
+		})
+	}
+	var valid wire
+	require.NoError(t, strictConceptDecode830G2([]byte(`{"value":"\ud83d\ude00"}`), &valid))
+	require.Equal(t, "😀", valid.Value)
+	for name, payload := range map[string]any{
+		"invalid string":  map[string]any{"text": string([]byte{0xff})},
+		"invalid map key": map[string]any{string([]byte{0xff}): "text"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := conceptDigest830G2("canonical-vector", payload)
+			require.Error(t, err)
+		})
+	}
+}
+
 func conceptVector830G2(t *testing.T) []byte {
 	t.Helper()
 	raw, err := os.ReadFile("../../harness/tests/fixtures/concept_free_wiki_830_g2_contract_vector.json")

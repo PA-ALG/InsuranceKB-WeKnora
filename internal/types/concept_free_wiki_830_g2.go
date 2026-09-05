@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"sort"
@@ -291,7 +292,7 @@ func (bundle ConceptCandidateBundle830G2) SnapshotMembers() ([]WikiReleaseMember
 	}
 	result := make([]WikiReleaseMemberSnapshot, 0, len(bundle.PageManifest.Members))
 	for _, member := range bundle.PageManifest.Members {
-		digest, _, err := entityPageSHA256830G1("concept-member.830.g2.v1", member)
+		digest, err := conceptDigest830G2("concept-member", member)
 		if err != nil {
 			return nil, ErrConceptCandidateBundle830G2
 		}
@@ -305,7 +306,7 @@ func (bundle ConceptCandidateBundle830G2) SnapshotMembers() ([]WikiReleaseMember
 }
 
 func strictConceptDecode830G2(raw []byte, destination any) error {
-	if !conceptJSONUniqueKeys830G2(raw) || !conceptJSONExactKeys830G2(raw, reflect.TypeOf(destination)) {
+	if !conceptJSONUnicodeValid830G2(raw) || !conceptJSONUniqueKeys830G2(raw) || !conceptJSONExactKeys830G2(raw, reflect.TypeOf(destination)) {
 		return ErrConceptCandidateBundle830G2
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -567,9 +568,7 @@ func validateConceptBundle830G2(bundle ConceptCandidateBundle830G2) error {
 			return ErrConceptCandidateBundle830G2
 		}
 	}
-	candidateHash, _, err := entityPageHashWithout830G1(
-		"candidate-bundle.830.g2.v1", bundle, "candidate_hash",
-	)
+	candidateHash, err := conceptHashWithout830G2("candidate-bundle", bundle, "candidate_hash")
 	if err != nil || candidateHash != bundle.CandidateHash {
 		return ErrConceptCandidateBundle830G2
 	}
@@ -1024,7 +1023,7 @@ func projectConceptMembers830G2(request ConceptCompileRequest830G2, output Conce
 			kind, title string
 			refs        []string
 		}{{"entity_overview", entity, refs}, {"free_wiki", "开放知识", freeRefs}} {
-			idHash, _, err := entityPageSHA256830G1("entity-group.830.g2.v1", []string{request.SpaceID, entity, group.kind})
+			idHash, err := conceptDigest830G2("entity-group", []string{request.SpaceID, entity, group.kind})
 			if err != nil {
 				return ConceptPageManifest830G2{}, err
 			}
@@ -1038,7 +1037,7 @@ func projectConceptMembers830G2(request ConceptCompileRequest830G2, output Conce
 		}
 		return members[i].Kind < members[j].Kind
 	})
-	membersHash, _, err := entityPageSHA256830G1("page-members.830.g2.v1", members)
+	membersHash, err := conceptDigest830G2("page-members", members)
 	if err != nil {
 		return ConceptPageManifest830G2{}, err
 	}
@@ -1100,16 +1099,234 @@ func novelConceptPages830G2(request ConceptCompileRequest830G2, output ConceptCo
 }
 
 func conceptDigest830G2(kind string, value any) (string, error) {
-	hash, _, err := entityPageSHA256830G1(kind+".830.g2.v1", value)
-	return hash, err
+	objectType := kind + ".830.g2.v1"
+	if strings.TrimSpace(objectType) == "" || schemaWikiHasControlCharacter(objectType) {
+		return "", ErrConceptCandidateBundle830G2
+	}
+	canonical, err := conceptCanonicalJSON830G2(value)
+	if err != nil {
+		return "", err
+	}
+	preimage := append([]byte(schemaWikiHashPrefix), []byte(objectType)...)
+	preimage = append(preimage, 0)
+	preimage = append(preimage, canonical...)
+	sum := sha256.Sum256(preimage)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func conceptHashWithout830G2(kind string, value any, hashKey string) (string, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var payload map[string]any
+	if err := decoder.Decode(&payload); err != nil {
+		return "", err
+	}
+	delete(payload, hashKey)
+	return conceptDigest830G2(kind, payload)
 }
 func conceptCanonicalEqual830G2(left, right any) bool {
-	a, errA := schemaWikiCanonicalJSON(left)
-	b, errB := schemaWikiCanonicalJSON(right)
-	return errA == nil && errB == nil && bytes.Equal(entityPageUnescapeLineSeparators830G1(a), entityPageUnescapeLineSeparators830G1(b))
+	a, errA := conceptCanonicalJSON830G2(left)
+	b, errB := conceptCanonicalJSON830G2(right)
+	return errA == nil && errB == nil && bytes.Equal(a, b)
+}
+
+func conceptCanonicalJSON830G2(payload any) ([]byte, error) {
+	if !conceptCanonicalInputValid830G2(reflect.ValueOf(payload)) {
+		return nil, fmt.Errorf("%w: invalid UTF-8", ErrConceptCandidateBundle830G2)
+	}
+	if conceptHasBinaryFloat830G2(reflect.ValueOf(payload)) {
+		return nil, fmt.Errorf("%w: binary float", ErrConceptCandidateBundle830G2)
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var tree any
+	if err := decoder.Decode(&tree); err != nil || !conceptCanonicalTreeValid830G2(tree, false) {
+		return nil, fmt.Errorf("%w: non-canonical value", ErrConceptCandidateBundle830G2)
+	}
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(tree); err != nil {
+		return nil, err
+	}
+	canonical := bytes.TrimSuffix(encoded.Bytes(), []byte("\n"))
+	return entityPageUnescapeLineSeparators830G1(canonical), nil
+}
+
+func conceptJSONUnicodeValid830G2(raw []byte) bool {
+	if !utf8.Valid(raw) {
+		return false
+	}
+	inString := false
+	for index := 0; index < len(raw); index++ {
+		switch raw[index] {
+		case '"':
+			inString = !inString
+		case '\\':
+			if !inString || index+1 >= len(raw) {
+				continue
+			}
+			if raw[index+1] != 'u' {
+				index++
+				continue
+			}
+			code, ok := conceptJSONHex4830G2(raw, index+2)
+			if !ok {
+				return false
+			}
+			if code >= 0xd800 && code <= 0xdbff {
+				if index+11 >= len(raw) || raw[index+6] != '\\' || raw[index+7] != 'u' {
+					return false
+				}
+				low, validLow := conceptJSONHex4830G2(raw, index+8)
+				if !validLow || low < 0xdc00 || low > 0xdfff {
+					return false
+				}
+				index += 11
+				continue
+			}
+			if code >= 0xdc00 && code <= 0xdfff {
+				return false
+			}
+			index += 5
+		}
+	}
+	return true
+}
+
+func conceptJSONHex4830G2(raw []byte, start int) (uint16, bool) {
+	if start+4 > len(raw) {
+		return 0, false
+	}
+	var result uint16
+	for _, character := range raw[start : start+4] {
+		result <<= 4
+		switch {
+		case character >= '0' && character <= '9':
+			result += uint16(character - '0')
+		case character >= 'a' && character <= 'f':
+			result += uint16(character-'a') + 10
+		case character >= 'A' && character <= 'F':
+			result += uint16(character-'A') + 10
+		default:
+			return 0, false
+		}
+	}
+	return result, true
+}
+
+func conceptCanonicalInputValid830G2(value reflect.Value) bool {
+	if !value.IsValid() {
+		return true
+	}
+	if value.Type() == reflect.TypeOf(json.RawMessage{}) {
+		return conceptJSONUnicodeValid830G2(value.Bytes())
+	}
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		return value.IsNil() || conceptCanonicalInputValid830G2(value.Elem())
+	case reflect.String:
+		return utf8.ValidString(value.String())
+	case reflect.Struct:
+		for index := 0; index < value.NumField(); index++ {
+			if !conceptCanonicalInputValid830G2(value.Field(index)) {
+				return false
+			}
+		}
+	case reflect.Map:
+		iterator := value.MapRange()
+		for iterator.Next() {
+			if !conceptCanonicalInputValid830G2(iterator.Key()) || !conceptCanonicalInputValid830G2(iterator.Value()) {
+				return false
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for index := 0; index < value.Len(); index++ {
+			if !conceptCanonicalInputValid830G2(value.Index(index)) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func conceptCanonicalTreeValid830G2(value any, objectKey bool) bool {
+	switch typed := value.(type) {
+	case nil, bool:
+		return true
+	case json.Number:
+		return !strings.ContainsAny(typed.String(), ".eE")
+	case string:
+		if !norm.NFC.IsNormalString(typed) {
+			return false
+		}
+		for _, character := range typed {
+			if character == 0x7f || character < 0x20 && (objectKey || character != '\t' && character != '\n' && character != '\r') {
+				return false
+			}
+		}
+		return true
+	case []any:
+		for _, item := range typed {
+			if !conceptCanonicalTreeValid830G2(item, false) {
+				return false
+			}
+		}
+		return true
+	case map[string]any:
+		for key, item := range typed {
+			if !conceptCanonicalTreeValid830G2(key, true) || !conceptCanonicalTreeValid830G2(item, false) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func conceptHasBinaryFloat830G2(value reflect.Value) bool {
+	if !value.IsValid() {
+		return false
+	}
+	switch value.Kind() {
+	case reflect.Interface, reflect.Pointer:
+		return !value.IsNil() && conceptHasBinaryFloat830G2(value.Elem())
+	case reflect.Float32, reflect.Float64:
+		return true
+	case reflect.Struct:
+		for index := 0; index < value.NumField(); index++ {
+			if conceptHasBinaryFloat830G2(value.Field(index)) {
+				return true
+			}
+		}
+	case reflect.Map:
+		iterator := value.MapRange()
+		for iterator.Next() {
+			if conceptHasBinaryFloat830G2(iterator.Key()) || conceptHasBinaryFloat830G2(iterator.Value()) {
+				return true
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for index := 0; index < value.Len(); index++ {
+			if conceptHasBinaryFloat830G2(value.Index(index)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 func conceptIdentity830G2(value string) bool {
-	return value != "" && len(value) <= 512 && strings.TrimSpace(value) == value && norm.NFC.IsNormalString(value)
+	return value != "" && len(value) <= 512 && strings.TrimSpace(value) == value &&
+		norm.NFC.IsNormalString(value) && !schemaWikiHasControlCharacter(value)
 }
 func conceptHash830G2(value string) bool {
 	if len(value) != 64 || value != strings.ToLower(value) {
