@@ -429,6 +429,7 @@ type schemaWikiCreateDraftRequest struct {
 	EvaluationBundle           types.Schema67GoldenEvaluationReviewBundleV1  `json:"evaluation_bundle"`
 	ReviewSuccessor            types.Schema67GoldenReviewSuccessorMetadataV1 `json:"review_successor"`
 	EntityPageManifest         json.RawMessage                               `json:"entity_page_manifest,omitempty"`
+	ConceptCandidateBundle     json.RawMessage                               `json:"concept_candidate_bundle,omitempty"`
 }
 
 type schemaWikiReviewDraftRequest struct {
@@ -856,6 +857,21 @@ func (h *SchemaWikiHandler) CreateDraft(c *gin.Context) {
 			c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
 			request.EntityPageManifest,
 		)
+	} else if variant == "concept-free-wiki-830-g2" {
+		creator, ok := h.schemaService.(interface {
+			CreateConceptFreeWikiDraft830G2(
+				context.Context, types.WikiReleasePrincipal, types.WikiReleaseScope,
+				string, json.RawMessage,
+			) (*types.WikiReleasePreparation, error)
+		})
+		if !ok {
+			err = service.ErrSchemaWikiPreparationInvalid
+		} else {
+			draft, err = creator.CreateConceptFreeWikiDraft830G2(
+				c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
+				request.ConceptCandidateBundle,
+			)
+		}
 	} else {
 		draft, err = h.schemaService.CreateSchemaDraft(
 			c.Request.Context(), principal, scope, strings.TrimSpace(request.PreparationID),
@@ -922,6 +938,8 @@ func decodeSchemaWikiCreateDraftRequest(
 	switch {
 	case hasExactKeys("preparation_id", "entity_page_manifest"):
 		variant = "entity-page-graph-830-g1"
+	case hasExactKeys("preparation_id", "concept_candidate_bundle"):
+		variant = "concept-free-wiki-830-g2"
 	case hasExactKeys(
 		"preparation_id", "release", "candidate_evidence_authority", "review_bundle",
 		"evaluation_bundle", "review_successor",

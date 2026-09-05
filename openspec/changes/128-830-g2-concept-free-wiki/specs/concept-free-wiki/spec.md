@@ -99,3 +99,25 @@ citation_id/page_number/quote，服务端从固定成员Evidence派生，禁止�
 前端路由`knowledge-bases/:kbId/schema-wiki/concept-pages/:memberId`，导航固定读取所得release_id。
 总控独占本次API/Vue新增文件和测试，Go lane独占两个types文件；共同消费vector d3654617...，
 集成顺序为types→service/handler→UI；共同截止仍原M1物理演示截止，不另开Goal。
+
+冻结R6 Agent接线（2026-09-06，用户已授权合理必要扩展）：managed Wiki KB的Agent turn
+首次创建工具时解析并持有唯一WeKnora Release pin；同turn的search/read/多query共同消费该pin，
+返回release_id/activation_epoch/member identity和来源身份。managed检测或pin验证失败必须失败关闭，
+不得调用mutable wiki_pages、RAW或Harness candidate作为其正式内容。普通unmanaged路径维持既有行为。
+并行写Owner g2_bundle_review转实施lane：新增internal/agent/tools/wiki_release_830_g2.go及tests，
+internal/application/service/agent_service.go、新增service/concept_agent_830_g2.go及tests、
+internal/container/container.go的最小依赖接线；如需接口仅新增interfaces/concept_agent_830_g2.go。
+不改平台lane独占的11文件；必要跨界先给总控具体理由。RED为Head切换后同turn仍同epoch、
+错误下mutable/RAW调用0、正文独有查询命中、未发布/拒绝成员不出现。先定向RED后实现和独立复核。
+
+R4来源必要修复（2026-09-06）：真实隔离backfill HTTP409，日志证实现有全局FileService
+将storage://backend/local://path误读为普通本地路径。总控独占knowledge_revision_source.go及其
+tests，注入已有StorageBackendResolver/TenantRepository，按已验证Resource的tenant/backend/provider
+解析读取服务；普通backfill、exact3与fixed read均保持原source hash/size/locator校验。
+缺少指定backend或tenant漂移必须失败关闭，不读取默认backend或修改Resource定位。
+RED采用真实BackendScopedFileService包装的本地文件，重现已有字节却读不到的路径错误。
+
+R5集成补充：来源 verifier 未接入或核验失败时，Review 与 Activate 必须在变更前拒绝。
+总控追加 internal/handler/wiki_release.go 最小错误映射，沿现有 handler 错误响应返回 HTTP503，
+code=CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE；不得把受控不可用映射成无区分500。
+定向测试复用 concept_free_wiki_830_g2_test.go，分别覆盖 schema review 与 release activation 错误路径。
