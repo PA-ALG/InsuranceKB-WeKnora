@@ -1,0 +1,48 @@
+{
+  "contract": "g2-code-integration-validation.v1",
+  "scope": "code slices only; real G2 source bridge pending",
+  "reviewed_files_sha256": {
+    "internal/types/concept_free_wiki_830_g2.go": "4e7f66a26207c3564021e3a3df20dfcd002e94fd0465fbec96f4d1e6b16bd28f",
+    "internal/types/concept_free_wiki_830_g2_test.go": "73866bc182139ac6e19d47936836b5142929cdecb72205d4302e1436ad314e78",
+    "internal/application/service/concept_free_wiki_830_g2.go": "03d5894977b9ffd70ba6ab230fbff9a5cae646b52c7e70dbe3bd136d7b97d07d",
+    "internal/application/service/concept_free_wiki_830_g2_test.go": "cb4132308b5c5a6df6aecf0620f57d449fe921cbd54446b6ac418bd0fe29817c",
+    "internal/application/service/wiki_release.go": "4b34ce0c9f502bf3af1e14a557e28a48e808e920dadc2a215dfff93e475a7ff1",
+    "internal/handler/concept_free_wiki_830_g2.go": "f86167fbf510d0dd2cab9d51653d964286c699255070d57cbea70e9da205bcbc",
+    "internal/handler/concept_free_wiki_830_g2_test.go": "b954b9eb178e73f11ad438ff80b5ae940fbeed2acd02ffe96496817b8b76e4e6",
+    "internal/handler/schema_wiki.go": "4e587204b98d7b6740f9e94feea8ccc9f5eb2ee1ef8ec05e77c222adc1025006",
+    "internal/handler/schema_wiki_test.go": "89858a73a27f2c006ff738ae2d63345c0478a05f5199e6e5f48ea0340cfff2fd",
+    "internal/router/routes_schema_wiki.go": "2c12e8570488f3b80132541a08a68184bf4d8a29475d128e6be3c025f449fe9a",
+    "internal/router/routes_schema_wiki_test.go": "87b03cd5574efefb960f99962605ac02dbf1e5cfb01b5601008c150308d1cdbf",
+    "internal/handler/wiki_release.go": "27ae2aa151617a965177d6d893035973f2e1d59425cc7537d2137b308121b567",
+    "internal/types/interfaces/concept_agent_830_g2.go": "4b8b8f77cce4a10fe251f45d5d9ff5979b8ee4709ddc2b8eda3637c30b18c3ca",
+    "internal/agent/tools/wiki_release_830_g2.go": "e9fd7d337995ce68d1c0fff8163e0d896d79fb3dafa4d33d73d02eca4bde0e3b",
+    "internal/agent/tools/wiki_release_830_g2_test.go": "1ae0ff866af21b423a30ab5ffbf263348c5af5ba05a9af6921233c296edab662",
+    "internal/application/service/agent_service.go": "29a14785c0d087e69a469f1d00215b6093d7c4fdfd55931161bbec084cb26bed",
+    "internal/application/service/concept_agent_830_g2.go": "9a088faa01a60a166505521b5e72195d5f6f3416eabd0a9c066b344dd7fb0516",
+    "internal/application/service/concept_agent_830_g2_test.go": "6062f9dcb515c473a56d4cf2d05e741b32dd28456836851f3815ff7d9b1bc88f",
+    "internal/container/container.go": "79403bfca683bfdf4dc4b182aad2d8e9b114eefc7fb345c8c271e3b8baa83fa5"
+  },
+  "focused_command": "GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p 2 ./internal/types ./internal/application/service ./internal/handler ./internal/router ./internal/agent/tools -run '830G2|ConceptFreeWiki|ConceptPage|ConceptAgentService|RegisterTools.*(Managed|Wiki|RawKB|ProviderIsMissing)|EntityPageGraph|RevisionSource' -count=1",
+  "focused_exit_code": 0,
+  "focused_output": "ok  \tgithub.com/Tencent/WeKnora/internal/types\t3.079s\nok  \tgithub.com/Tencent/WeKnora/internal/application/service\t17.138s\nok  \tgithub.com/Tencent/WeKnora/internal/handler\t5.171s\nok  \tgithub.com/Tencent/WeKnora/internal/router\t6.839s\nok  \tgithub.com/Tencent/WeKnora/internal/agent/tools\t5.225s\n",
+  "container_command": "GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p 2 ./internal/container -run 'TestSchemaWikiContainerDoesNotInjectNilCitationPort|TestContainerWiresKnowledgeRevisionSourceServiceAndHandler' -count=1",
+  "container_exit_code": 0,
+  "container_output": "# github.com/asg017/sqlite-vec-go-bindings/cgo\ncgo-gcc-prolog:55:11: warning: 'sqlite3_auto_extension' is deprecated: first deprecated in macOS 10.10 - Process-global auto extensions are not supported on Apple platforms [-Wdeprecated-declarations]\n/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sqlite3.h:6870:16: note: 'sqlite3_auto_extension' has been explicitly marked deprecated here\ncgo-gcc-prolog:74:11: warning: 'sqlite3_cancel_auto_extension' is deprecated: first deprecated in macOS 10.14 - Process-global auto extensions are not supported on Apple platforms [-Wdeprecated-declarations]\n/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sqlite3.h:6883:16: note: 'sqlite3_cancel_auto_extension' has been explicitly marked deprecated here\nok  \tgithub.com/Tencent/WeKnora/internal/container\t5.940s\n",
+  "openspec_strict": "PASS; optional telemetry DNS failure after successful validation, exit0",
+  "diff_check": "PASS",
+  "independent_review": {
+    "platform_11_files": "root: NO_BLOCKER for bounded code slice; new G2 source gate intentionally closed",
+    "HTTP503_mapping": "g2_sources: NO_BLOCKER",
+    "agent_7_files": "root: NO_BLOCKER; G1 metadata correction included in final tests"
+  },
+  "FLOW": "NOT RUN",
+  "QUALITY": "DEFERRED",
+  "provider_calls": 0,
+  "app_builds": 0,
+  "frontend_builds": 0,
+  "remaining": [
+    "trusted native source bridge and citation preview",
+    "actual two-entity compiler/reviewer and admission replay",
+    "exact app/frontend artifacts and live release/search/Agent/source clicks"
+  ]
+}

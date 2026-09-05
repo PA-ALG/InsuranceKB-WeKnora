@@ -1,0 +1,18 @@
+{
+  "files": {
+    "internal/types/interfaces/concept_agent_830_g2.go": "4b8b8f77cce4a10fe251f45d5d9ff5979b8ee4709ddc2b8eda3637c30b18c3ca",
+    "internal/agent/tools/wiki_release_830_g2.go": "e9fd7d337995ce68d1c0fff8163e0d896d79fb3dafa4d33d73d02eca4bde0e3b",
+    "internal/agent/tools/wiki_release_830_g2_test.go": "1ae0ff866af21b423a30ab5ffbf263348c5af5ba05a9af6921233c296edab662",
+    "internal/application/service/agent_service.go": "29a14785c0d087e69a469f1d00215b6093d7c4fdfd55931161bbec084cb26bed",
+    "internal/application/service/concept_agent_830_g2.go": "9a088faa01a60a166505521b5e72195d5f6f3416eabd0a9c066b344dd7fb0516",
+    "internal/application/service/concept_agent_830_g2_test.go": "6062f9dcb515c473a56d4cf2d05e741b32dd28456836851f3815ff7d9b1bc88f",
+    "internal/container/container.go": "79403bfca683bfdf4dc4b182aad2d8e9b114eefc7fb345c8c271e3b8baa83fa5"
+  },
+  "independent_reviewer": "root",
+  "review_status": "NO_BLOCKER_CODE_SLICE",
+  "validation": "PASS: integration-validation.json",
+  "limitations": [
+    "managed cross-tenant dual ACL is unavailable; fail closed",
+    "source bridge and runtime FLOW not complete"
+  ]
+}

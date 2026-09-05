@@ -86,23 +86,24 @@ func knowledgeBaseIDsForPrompt(config *types.AgentConfig) []string {
 
 // agentService implements agent-related business logic
 type agentService struct {
-	cfg                   *config.Config
-	modelService          interfaces.ModelService
-	mcpServiceService     interfaces.MCPServiceService
-	mcpManager            *mcp.MCPManager
-	eventBus              *event.EventBus
-	db                    *gorm.DB
-	webSearchService      interfaces.WebSearchService
-	knowledgeBaseService  interfaces.KnowledgeBaseService
-	knowledgeService      interfaces.KnowledgeService
-	fileService           interfaces.FileService
-	chunkService          interfaces.ChunkService
-	duckdb                *sql.DB
-	webSearchStateService interfaces.WebSearchStateService
-	wikiPageService       interfaces.WikiPageService
-	tenantService         interfaces.TenantService
-	storageResolver       interfaces.StorageBackendResolver
-	toolApprovalGate      approval.MCPApproval
+	cfg                           *config.Config
+	modelService                  interfaces.ModelService
+	mcpServiceService             interfaces.MCPServiceService
+	mcpManager                    *mcp.MCPManager
+	eventBus                      *event.EventBus
+	db                            *gorm.DB
+	webSearchService              interfaces.WebSearchService
+	knowledgeBaseService          interfaces.KnowledgeBaseService
+	knowledgeService              interfaces.KnowledgeService
+	fileService                   interfaces.FileService
+	chunkService                  interfaces.ChunkService
+	duckdb                        *sql.DB
+	webSearchStateService         interfaces.WebSearchStateService
+	wikiPageService               interfaces.WikiPageService
+	conceptAgentTurnProvider830G2 interfaces.ConceptAgentTurnProvider830G2
+	tenantService                 interfaces.TenantService
+	storageResolver               interfaces.StorageBackendResolver
+	toolApprovalGate              approval.MCPApproval
 }
 
 // NewAgentService creates a new agent service
@@ -121,28 +122,30 @@ func NewAgentService(
 	duckdb *sql.DB,
 	webSearchStateService interfaces.WebSearchStateService,
 	wikiPageService interfaces.WikiPageService,
+	conceptAgentTurnProvider830G2 *ConceptAgentService830G2,
 	tenantService interfaces.TenantService,
 	storageResolver interfaces.StorageBackendResolver,
 	toolApprovalGate approval.MCPApproval,
 ) interfaces.AgentService {
 	return &agentService{
-		cfg:                   cfg,
-		modelService:          modelService,
-		knowledgeBaseService:  knowledgeBaseService,
-		knowledgeService:      knowledgeService,
-		fileService:           fileService,
-		chunkService:          chunkService,
-		mcpServiceService:     mcpServiceService,
-		mcpManager:            mcpManager,
-		eventBus:              eventBus,
-		db:                    db,
-		webSearchService:      webSearchService,
-		duckdb:                duckdb,
-		webSearchStateService: webSearchStateService,
-		wikiPageService:       wikiPageService,
-		tenantService:         tenantService,
-		storageResolver:       storageResolver,
-		toolApprovalGate:      toolApprovalGate,
+		cfg:                           cfg,
+		modelService:                  modelService,
+		knowledgeBaseService:          knowledgeBaseService,
+		knowledgeService:              knowledgeService,
+		fileService:                   fileService,
+		chunkService:                  chunkService,
+		mcpServiceService:             mcpServiceService,
+		mcpManager:                    mcpManager,
+		eventBus:                      eventBus,
+		db:                            db,
+		webSearchService:              webSearchService,
+		duckdb:                        duckdb,
+		webSearchStateService:         webSearchStateService,
+		wikiPageService:               wikiPageService,
+		conceptAgentTurnProvider830G2: conceptAgentTurnProvider830G2,
+		tenantService:                 tenantService,
+		storageResolver:               storageResolver,
+		toolApprovalGate:              toolApprovalGate,
 	}
 }
 
@@ -442,6 +445,7 @@ func (s *agentService) registerTools(
 	// ---- Capability detection from SearchTargets ----
 	var hasVectorKB bool
 	var wikiKBIDs []string
+	wikiKBTenants830G2 := make(map[string]uint64)
 	wikiRoutes := tools.NewWikiRouteResolver()
 	for _, target := range config.SearchTargets {
 		if target == nil || target.KnowledgeBaseID == "" {
@@ -451,11 +455,12 @@ func (s *agentService) registerTools(
 		if err != nil {
 			continue
 		}
-		if kb.IsVectorEnabled() || kb.IsKeywordEnabled() {
-			hasVectorKB = true
-		}
 		if kb.IsWikiEnabled() {
+			if target.TenantID != 0 && target.TenantID != kb.TenantID {
+				return fmt.Errorf("wiki search target tenant does not match current KB owner")
+			}
 			wikiKBIDs = append(wikiKBIDs, kb.ID)
+			wikiKBTenants830G2[kb.ID] = kb.TenantID
 		}
 	}
 	wikiKBIDs = dedupStrings(wikiKBIDs)
@@ -469,6 +474,60 @@ func (s *agentService) registerTools(
 	}
 	wikiKBIDs = scopedWikiKBIDs
 	hasWikiKB := len(wikiKBIDs) > 0
+	conceptTurn830G2 := &interfaces.ConceptAgentTurn830G2{}
+	if hasWikiKB && s.conceptAgentTurnProvider830G2 == nil {
+		return fmt.Errorf("managed Wiki release service unavailable")
+	}
+	if hasWikiKB {
+		resolvedWikiScopes830G2 := make([]interfaces.ConceptAgentWikiScope830G2, 0, len(wikiKBIDs))
+		for _, kbID := range wikiKBIDs {
+			resolvedWikiScopes830G2 = append(resolvedWikiScopes830G2, interfaces.ConceptAgentWikiScope830G2{
+				WikiKBID: kbID,
+				TenantID: wikiKBTenants830G2[kbID],
+			})
+		}
+		var err error
+		conceptTurn830G2, err = s.conceptAgentTurnProvider830G2.PinConceptAgentTurn830G2(
+			ctx, resolvedWikiScopes830G2,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: %w", err)
+		}
+		if conceptTurn830G2 == nil {
+			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: empty result")
+		}
+	}
+	managedWikiKBs830G2 := make(map[string]struct{}, len(conceptTurn830G2.Releases))
+	managedRetrievalKBs830G2 := make(map[string]struct{}, len(conceptTurn830G2.Releases)*2)
+	for kbID, release := range conceptTurn830G2.Releases {
+		if kbID == "" || release.WikiKBID != kbID || release.SpaceID == "" || release.RawKBID == "" ||
+			release.ReleaseID == "" || release.ActivationEpoch == 0 {
+			return fmt.Errorf("failed to pin managed Wiki release for Agent turn: invalid release authority")
+		}
+		managedWikiKBs830G2[kbID] = struct{}{}
+		managedRetrievalKBs830G2[kbID] = struct{}{}
+		managedRetrievalKBs830G2[release.RawKBID] = struct{}{}
+	}
+	unmanagedSearchTargets830G2 := make(types.SearchTargets, 0, len(config.SearchTargets))
+	for _, target := range config.SearchTargets {
+		if target == nil {
+			continue
+		}
+		if _, managed := managedRetrievalKBs830G2[target.KnowledgeBaseID]; managed {
+			continue
+		}
+		unmanagedSearchTargets830G2 = append(unmanagedSearchTargets830G2, target)
+		kb, err := s.knowledgeBaseService.GetKnowledgeBaseByIDOnly(ctx, target.KnowledgeBaseID)
+		if err == nil && kb != nil && (kb.IsVectorEnabled() || kb.IsKeywordEnabled()) {
+			hasVectorKB = true
+		}
+	}
+	unmanagedWikiKBIDs830G2 := make([]string, 0, len(wikiKBIDs))
+	for _, kbID := range wikiKBIDs {
+		if _, managed := managedWikiKBs830G2[kbID]; !managed {
+			unmanagedWikiKBIDs830G2 = append(unmanagedWikiKBIDs830G2, kbID)
+		}
+	}
 
 	// Filter out knowledge base tools if no knowledge scope is configured for this turn.
 	hasKnowledge := agentHasKnowledgeScope(config)
@@ -595,23 +654,23 @@ func (s *agentService) registerTools(
 				s.knowledgeBaseService,
 				s.knowledgeService,
 				s.chunkService,
-				config.SearchTargets,
+				unmanagedSearchTargets830G2,
 				rerankModel,
 				chatModel,
 				s.cfg,
 			)
 		case tools.ToolGrepChunks:
-			toolToRegister = tools.NewGrepChunksTool(s.db, config.SearchTargets)
-			logger.Infof(ctx, "Registered grep_chunks tool with searchTargets: %d targets", len(config.SearchTargets))
+			toolToRegister = tools.NewGrepChunksTool(s.db, unmanagedSearchTargets830G2)
+			logger.Infof(ctx, "Registered grep_chunks tool with searchTargets: %d targets", len(unmanagedSearchTargets830G2))
 		case tools.ToolListKnowledgeChunks:
-			toolToRegister = tools.NewListKnowledgeChunksTool(s.knowledgeService, s.chunkService, config.SearchTargets)
+			toolToRegister = tools.NewListKnowledgeChunksTool(s.knowledgeService, s.chunkService, unmanagedSearchTargets830G2)
 		case tools.ToolQueryKnowledgeGraph:
-			toolToRegister = tools.NewQueryKnowledgeGraphTool(s.knowledgeBaseService, config.SearchTargets).
+			toolToRegister = tools.NewQueryKnowledgeGraphTool(s.knowledgeBaseService, unmanagedSearchTargets830G2).
 				WithKnowledgeScope(s.knowledgeService)
 		case tools.ToolGetDocumentInfo:
-			toolToRegister = tools.NewGetDocumentInfoTool(s.knowledgeService, s.chunkService, config.SearchTargets)
+			toolToRegister = tools.NewGetDocumentInfoTool(s.knowledgeService, s.chunkService, unmanagedSearchTargets830G2)
 		case tools.ToolDatabaseQuery:
-			toolToRegister = tools.NewDatabaseQueryTool(s.db, config.SearchTargets)
+			toolToRegister = tools.NewDatabaseQueryTool(s.db, unmanagedSearchTargets830G2)
 		case tools.ToolWebSearch:
 			toolToRegister = tools.NewWebSearchTool(
 				s.webSearchService,
@@ -629,39 +688,67 @@ func (s *agentService) registerTools(
 			logger.Infof(ctx, "Registered web_fetch tool for session: %s", sessionID)
 
 		case tools.ToolDataAnalysis:
+			if len(unmanagedSearchTargets830G2) == 0 {
+				break
+			}
 			toolToRegister = tools.NewDataAnalysisTool(s.knowledgeBaseService, s.knowledgeService, s.tenantService, s.fileService, s.duckdb, sessionID, s.storageResolver).
-				WithSearchTargets(config.SearchTargets)
+				WithSearchTargets(unmanagedSearchTargets830G2)
 			logger.Infof(ctx, "Registered data_analysis tool for session: %s", sessionID)
 
 		case tools.ToolDataSchema:
+			if len(unmanagedSearchTargets830G2) == 0 {
+				break
+			}
 			toolToRegister = tools.NewDataSchemaTool(s.knowledgeService, s.chunkService.GetRepository()).
-				WithSearchTargets(config.SearchTargets)
+				WithSearchTargets(unmanagedSearchTargets830G2)
 			logger.Infof(ctx, "Registered data_schema tool")
 
 		// Wiki tools — only registered when wiki KBs are detected
 		case tools.ToolWikiReadPage:
-			toolToRegister = tools.NewWikiReadPageTool(s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes)
+			toolToRegister = tools.NewWikiReleaseReadPageTool830G2(
+				s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes, conceptTurn830G2,
+			)
 		case tools.ToolWikiSearch:
-			toolToRegister = tools.NewWikiSearchTool(s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes)
+			toolToRegister = tools.NewWikiReleaseSearchTool830G2(
+				s.wikiPageService, s.knowledgeService, wikiScopes, wikiRoutes, conceptTurn830G2,
+			)
 		case tools.ToolWikiReadSourceDoc:
-			toolToRegister = tools.NewWikiReadSourceDocTool(s.knowledgeService, s.chunkService, config.SearchTargets)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiReadSourceDocTool(
+					s.knowledgeService, s.chunkService, unmanagedSearchTargets830G2,
+				)
+			}
 		case tools.ToolWikiFlagIssue:
-			toolToRegister = tools.NewWikiFlagIssueTool(s.wikiPageService, wikiKBIDs, wikiRoutes).
-				WithKnowledgeScope(s.knowledgeService, config.SearchTargets)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiFlagIssueTool(s.wikiPageService, unmanagedWikiKBIDs830G2, wikiRoutes).
+					WithKnowledgeScope(s.knowledgeService, unmanagedSearchTargets830G2)
+			}
 		case tools.ToolWikiReadIssue:
-			toolToRegister = tools.NewWikiReadIssueTool(s.wikiPageService, wikiKBIDs)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiReadIssueTool(s.wikiPageService, unmanagedWikiKBIDs830G2)
+			}
 		case tools.ToolWikiUpdateIssue:
-			toolToRegister = tools.NewWikiUpdateIssueTool(s.wikiPageService, wikiKBIDs)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiUpdateIssueTool(s.wikiPageService, unmanagedWikiKBIDs830G2)
+			}
 		case tools.ToolWikiWritePage:
-			toolToRegister = tools.NewWikiWritePageTool(s.wikiPageService, wikiKBIDs, s.knowledgeService, wikiRoutes).
-				WithSearchTargets(config.SearchTargets)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiWritePageTool(s.wikiPageService, unmanagedWikiKBIDs830G2, s.knowledgeService, wikiRoutes).
+					WithSearchTargets(unmanagedSearchTargets830G2)
+			}
 		case tools.ToolWikiReplaceText:
-			toolToRegister = tools.NewWikiReplaceTextTool(s.wikiPageService, wikiKBIDs, s.knowledgeService, wikiRoutes).
-				WithSearchTargets(config.SearchTargets)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiReplaceTextTool(s.wikiPageService, unmanagedWikiKBIDs830G2, s.knowledgeService, wikiRoutes).
+					WithSearchTargets(unmanagedSearchTargets830G2)
+			}
 		case tools.ToolWikiRenamePage:
-			toolToRegister = tools.NewWikiRenamePageTool(s.wikiPageService, wikiKBIDs, wikiRoutes)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiRenamePageTool(s.wikiPageService, unmanagedWikiKBIDs830G2, wikiRoutes)
+			}
 		case tools.ToolWikiDeletePage:
-			toolToRegister = tools.NewWikiDeletePageTool(s.wikiPageService, wikiKBIDs, wikiRoutes)
+			if len(unmanagedWikiKBIDs830G2) > 0 {
+				toolToRegister = tools.NewWikiDeletePageTool(s.wikiPageService, unmanagedWikiKBIDs830G2, wikiRoutes)
+			}
 
 		default:
 			logger.Warnf(ctx, "Unknown tool: %s", toolName)

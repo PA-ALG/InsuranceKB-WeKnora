@@ -241,6 +241,7 @@ func BuildContainer(container *dig.Container) *dig.Container {
 		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
+	must(container.Provide(service.NewConceptAgentService830G2))
 	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
 		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
 			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),
