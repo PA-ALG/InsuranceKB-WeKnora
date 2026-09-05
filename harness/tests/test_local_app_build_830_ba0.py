@@ -868,6 +868,24 @@ class LockUse:
     description: str
 
 
+def test_python_tool_local_wheels_have_valid_matching_filenames() -> None:
+    from packaging.utils import parse_wheel_filename
+
+    lock = json.loads(DEPENDENCY_LOCK_PATH.read_text())
+    dockerfile = DOCKERFILE_PATH.read_text()
+    for name, tool in lock["python_tools"].items():
+        variable = f"$BA0_PYTHON_TOOLS_{name.upper()}_VERSION"
+        paths = re.findall(r'"(/tmp/[^"\n]+\.whl)"', dockerfile)
+        paths = [path.replace(variable, tool["version"]) for path in paths if variable in path]
+        assert paths, f"missing wheel consumption for {name}"
+        for path in paths:
+            distribution, version, _, tags = parse_wheel_filename(Path(path).name)
+            assert distribution == name
+            assert str(version) == tool["version"]
+            assert tags
+            assert Path(path).name == tool["origin"].rsplit("/", 1)[-1]
+
+
 def _dependency_lock_uses(lock: Mapping[str, Any]) -> tuple[LockUse, ...]:
     repositories = lock["debian"]["repositories"]
     packages = lock["debian"]["packages"]

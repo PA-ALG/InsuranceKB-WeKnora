@@ -148,19 +148,19 @@ RUN . /tmp/ba0-dependency-plan.env && \
 RUN useradd -m -s /bin/bash appuser
 
 RUN . /tmp/ba0-dependency-plan.env && \
-    curl -fsSL "$BA0_PYTHON_TOOLS_PIP_ORIGIN" -o "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION.whl" && \
-    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_PIP_SHA256" "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION.whl" | sha256sum -c - && \
-    curl -fsSL "$BA0_PYTHON_TOOLS_SETUPTOOLS_ORIGIN" -o "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION.whl" && \
-    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_SETUPTOOLS_SHA256" "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION.whl" | sha256sum -c - && \
-    curl -fsSL "$BA0_PYTHON_TOOLS_WHEEL_ORIGIN" -o "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION.whl" && \
-    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_WHEEL_SHA256" "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION.whl" | sha256sum -c - && \
-    curl -fsSL "$BA0_PYTHON_TOOLS_PACKAGING_ORIGIN" -o "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION.whl" && \
-    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_PACKAGING_SHA256" "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION.whl" | sha256sum -c - && \
+    curl -fsSL "$BA0_PYTHON_TOOLS_PIP_ORIGIN" -o "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION-py3-none-any.whl" && \
+    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_PIP_SHA256" "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION-py3-none-any.whl" | sha256sum -c - && \
+    curl -fsSL "$BA0_PYTHON_TOOLS_SETUPTOOLS_ORIGIN" -o "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION-py3-none-any.whl" && \
+    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_SETUPTOOLS_SHA256" "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION-py3-none-any.whl" | sha256sum -c - && \
+    curl -fsSL "$BA0_PYTHON_TOOLS_WHEEL_ORIGIN" -o "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION-py3-none-any.whl" && \
+    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_WHEEL_SHA256" "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION-py3-none-any.whl" | sha256sum -c - && \
+    curl -fsSL "$BA0_PYTHON_TOOLS_PACKAGING_ORIGIN" -o "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION-py3-none-any.whl" && \
+    printf '%s  %s\n' "$BA0_PYTHON_TOOLS_PACKAGING_SHA256" "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION-py3-none-any.whl" | sha256sum -c - && \
     pip3 install --break-system-packages --no-index \
-        "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION.whl" \
-        "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION.whl" \
-        "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION.whl" \
-        "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION.whl"
+        "/tmp/pip-$BA0_PYTHON_TOOLS_PIP_VERSION-py3-none-any.whl" \
+        "/tmp/setuptools-$BA0_PYTHON_TOOLS_SETUPTOOLS_VERSION-py3-none-any.whl" \
+        "/tmp/wheel-$BA0_PYTHON_TOOLS_WHEEL_VERSION-py3-none-any.whl" \
+        "/tmp/packaging-$BA0_PYTHON_TOOLS_PACKAGING_VERSION-py3-none-any.whl"
 
 RUN . /tmp/ba0-dependency-plan.env && \
     curl -fsSL "$BA0_DOWNLOADS_UV_ORIGIN" -o "/tmp/uv-$BA0_DOWNLOADS_UV_VERSION-$BA0_DOWNLOADS_UV_PLATFORM.tar.gz" && \

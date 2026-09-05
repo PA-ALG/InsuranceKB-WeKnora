@@ -258,6 +258,14 @@ OpenSpec 1.2.0 固定入口为 /Users/houjing/.nvm/versions/node/v24.13.1/bin/op
 
 ## Task 10：唯一 D2、零构建复用与 artifact smoke
 
+### 2026-09-05 用户授权修订
+
+首轮真实构建因 wheel 本地文件名缺失兼容性标签而退出 1；旧 identity 的预算已使用 1/1。
+用户回复“继续授权，执行”，批准修复 wheel 文件名、补回归验证、重新冻结 identity，以及
+新增至多一次真实 app 构建。累计授权预算为 2，历史已使用 1，本修订剩余 1。
+旧失败收据保留至 `d2/failed-initialization-build.json`；后续成功证据不可抹去该历史消耗。
+新的 identity 仍仅允许一次实际构建；复用请求 build=0。其余 BA0/G2/effects 边界不变。
+
 **Files:**
 
 - Create: docs/insurance-kb/evidence/830-ba0/d2/initialization-build.json
