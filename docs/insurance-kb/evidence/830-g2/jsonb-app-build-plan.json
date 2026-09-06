@@ -1,0 +1,22 @@
+{
+  "contract": "830-g2-jsonb-app-build-plan.v1",
+  "status": "REGISTERED",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "prior_app_builds": 4,
+  "max_app_builds": 5,
+  "lookup_before_build": true,
+  "max_new_app_builds": 1,
+  "frontend_new_builds": 0,
+  "docreader_new_builds": 0,
+  "provider_calls": 0,
+  "previous_image_id": "sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a",
+  "authorization": "Standing user approval for reasonable necessary bounded G2 extensions; exact A whole-batch approval remains unchanged",
+  "independent_code_review": "BLOCKER0",
+  "code_verification": "jsonb-code-verification.json",
+  "scripts": {
+    "weknora_g2_upgrade_jsonb.py": "def5e3c5ed2a4e97d2b49f4350a5f3b9521b3001c46583248943ec3a0897b65f",
+    "weknora_g2_create_a_jsonb_draft.py": "df5ef01223567541ab4f9e03264b5bdb9a347765d6df8ad9e388cc9f8f6f1e15"
+  },
+  "current_config_sha256": "f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+  "disk_preflight": "target3.3GB free/builder14GB free, existing image751MB; no deletion or capacity expansion"
+}

@@ -18,8 +18,9 @@ const pdfPort = createPdfJsPort()
 let generation = 0
 const read = computed(() => session.value?.read)
 const previewTransport = computed(() => session.value ? conceptCitationTransport830G2(session.value, {
-  get: path => get(path),
-  getBytes: async path => new Uint8Array(await get<ArrayBuffer>(path, { responseType: 'arraybuffer' })),
+  // Source verification can exceed the ordinary request timeout before PDF rendering.
+  get: path => get(path, { timeout: 60_000 }),
+  getBytes: async path => new Uint8Array(await get<ArrayBuffer>(path, { responseType: 'arraybuffer', timeout: 60_000 })),
 }) : null)
 const previewRequest = computed(() => read.value && selected.value ? buildSchemaCitationPreviewRequest({
   release_id: read.value.release_id, activation_epoch: read.value.activation_epoch,

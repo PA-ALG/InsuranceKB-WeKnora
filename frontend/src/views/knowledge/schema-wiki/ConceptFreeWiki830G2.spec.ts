@@ -9,11 +9,11 @@ const route = reactive({ params: { kbId: 'wiki-a', memberId: 'concept-a' }, quer
 vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/utils/request', () => ({ get: mocks.get }))
 vi.mock('@/api/schema-wiki/conceptFreeWiki830G2', () => ({
-  readConceptPage830G2: mocks.read, conceptCitationTransport830G2: () => ({}),
+  readConceptPage830G2: mocks.read, conceptCitationTransport830G2: (_session: unknown, io: any) => ({ getAuthority: io.get, getBytesByToken: io.getBytes }),
 }))
 vi.mock('@/components/schema-wiki/pdfJsPort', () => ({ createPdfJsPort: () => ({}) }))
 const stubs = { RouterLink: { props: ['to'], template: '<a :data-target="JSON.stringify(to)"><slot /></a>' },
-  ConceptCitationViewer830G2: { props: ['session'], template: '<div data-testid="source-viewer">{{session.read.release_id}}</div>' },
+  ConceptCitationViewer830G2: { props: ['session', 'previewTransport'], template: '<div data-testid="source-viewer">{{session.read.release_id}}</div>' },
   SettingDrawer: { props: ['visible'], template: '<aside v-if="visible"><slot /></aside>' } }
 function response() {
   return { scope: {}, read: { contract: 'concept-page-read.830.g2.v1', read_mode: 'current',
@@ -45,3 +45,22 @@ describe('G2 shared concept page', () => {
     expect(wrapper.text()).not.toContain('受保险合同保障')
   })
 })
+
+describe('G2 source preview under slow source verification', () => {
+  it('allows a verified source taking 35 seconds while preserving binary response handling', async () => {
+    mocks.get.mockImplementation((_path: string, config?: any) => {
+      if ((config?.timeout ?? 30000) < 35000) return Promise.reject(new Error('timeout'));
+      return Promise.resolve(config?.responseType === 'arraybuffer' ? new Uint8Array([37,80,68,70]).buffer : { verified: true });
+    });
+    const wrapper = mount(ConceptPage, { global: { stubs } }); await flushPromises();
+    await wrapper.get('[data-testid="g2-source"]').trigger('click');
+    const io = wrapper.findComponent(stubs.ConceptCitationViewer830G2).props('previewTransport') as any;
+    await expect(io.getAuthority('/authority')).resolves.toEqual({ verified: true });
+    await expect(io.getBytesByToken('/content')).resolves.toEqual(new Uint8Array([37,80,68,70]));
+    const calls = mocks.get.mock.calls.slice(-2);
+    expect(calls.every((call: any[]) => call[1].timeout > 35000 && call[1].timeout <= 60000)).toBe(true);
+    mocks.get.mockClear(); mocks.get.mockRejectedValue(new Error('source unavailable'));
+    await expect(io.getAuthority('/authority')).rejects.toThrow('source unavailable');
+    expect(mocks.get).toHaveBeenCalledTimes(1);
+  });
+});

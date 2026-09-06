@@ -1,0 +1,18 @@
+{
+  "contract": "830-g2-preview-and-delivery-code-review.v1",
+  "reviewer": "g2_bundle_review",
+  "blockers": 0,
+  "scope": [
+    "Two ConceptFreeWiki830G2 preview timeout files",
+    "Bounded UI delivery script"
+  ],
+  "files": {
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue": "7d4f962e6a5f28bdcaad0391c1dcb153d0fd2db05fa07f7940b0a72ea31efb15",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts": "4c6ede5efe09ed133858c15450f8d4abfe2e669c9997089518c21ea13802b832",
+    "directory_ui_delivery.py": "c37f2c2e4575553044462f6558c036507e3860141796b9aae8996cd53a97994b"
+  },
+  "fixed_review_findings": [
+    "Upgrade phase independently binds exact source/dist labels, current dist and imported image labels before replacement"
+  ],
+  "execution": "NOT_RUN_PENDING_SOURCE_HEAD_AND_PLAN_FREEZE"
+}

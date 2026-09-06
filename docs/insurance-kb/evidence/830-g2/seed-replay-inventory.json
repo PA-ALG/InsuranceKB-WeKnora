@@ -1,0 +1,14 @@
+{
+  "contract": "830-g2-seed-replay-inventory.v1",
+  "classification": "SYNTHETIC_PROTOCOL_SETUP_NOT_ACTIVE_INVENTORY",
+  "scope": "g2-isolated-seed-space",
+  "seed_sha256": "7725bc78806e6889fff56543819bb790435eaf122844573caf103aae86090a2b",
+  "canonical_targets": [
+    "beneficiary",
+    "insured",
+    "policyholder"
+  ],
+  "basis": "Explicit existing-identity, same-identity-confirmed, or existing-evidence input setup; expected dispositions not read",
+  "database_reads": 0,
+  "active_inventory_verified": false
+}

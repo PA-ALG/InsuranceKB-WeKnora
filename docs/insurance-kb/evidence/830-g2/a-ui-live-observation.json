@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-a-ui-live-observation.v1",
+  "definition_and_two_fields": "PASS",
+  "exact_release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+  "original_pdf_bytes_api": "PASS",
+  "pdf_visual_preview_before_fix": "BLOCKED_CLIENT_30_SECOND_TIMEOUT",
+  "pdf_visual_preview_after_fix": "NOT_RUN",
+  "main_directory": "NOT_RUN_PENDING_UI_REPLACEMENT",
+  "observed_with": "CUA in-app browser tab 2",
+  "source": "a-ui-preview-before-timeout-fix.txt",
+  "source_sha256": "0f5cb1089374dcdd17b86c2c060514699052acc9e83ea6ff929b4345b69d29fd",
+  "provider_calls": 0,
+  "linked_field_navigation": "PASS",
+  "linked_field_returns_same_release_concept": "PASS",
+  "linked_field_state_sha256": "7327ff0397c0945495db080cb51543b859457527a77bd14a4672fa86f20f8a16"
+}

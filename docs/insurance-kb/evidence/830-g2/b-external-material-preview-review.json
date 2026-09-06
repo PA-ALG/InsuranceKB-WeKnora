@@ -1,0 +1,25 @@
+{
+  "contract": "830-g2-b-external-material-preview-review.v1",
+  "status": "PASS",
+  "reviewer": "g2_bundle_review",
+  "blockers": 0,
+  "backlog": 0,
+  "material_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "source_blocks": 21,
+  "source_codepoints": 56422,
+  "a_exact_members": 70,
+  "provider_calls": 0,
+  "database_writes": 0,
+  "actual_request_created": false,
+  "actual_candidate_created": false,
+  "checks": [
+    "Actual A eighteen plus frozen B three SourceBlocks equal preview",
+    "A seventy members and required fields/schema/profile equal approved candidate",
+    "B proposal exact bounded input and auxiliary identity evidence",
+    "No claim of actual A Active or B Candidate/release",
+    "Material preview SHA is not actual request/HTTP identity",
+    "B compile/review max3 and final one-turn Agent engine bound13 explicit",
+    "Raw compiler reasoning excluded from independent reviewer"
+  ],
+  "authorization": "PENDING_USER_REPLY"
+}

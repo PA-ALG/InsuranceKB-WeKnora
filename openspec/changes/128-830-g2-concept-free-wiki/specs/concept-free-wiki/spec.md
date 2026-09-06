@@ -225,3 +225,13 @@ Create→存储回读→Review→Activate/source/base/current/pinned完整通过
 不把SQLite或仅格式化模拟替代实际PG证据，不写原库或手改现有Draft摘要。
 依用户合理必要扩展预批登记app构建累计上限4→5，仅本修复一次affected build，先BA0 lookup；
 frontend/docreader新增build0、模型调用0。构建源码先冻结复核，小提交后仅升级G2，保留当前双public rings。
+
+2026-09-06 JSONB首次构建在应用编译前因固定spatial依赖下载unexpected EOF终止。保留原INCOMPLETE回执与exit1日志；按用户合理扩展预批登记累计app上限5→6，仅同源码d7c673039、同依赖lock与BA0入口一次网络恢复重试。无代码/协议/依赖版本变动，不替换镜像层或绕过SHA；独立复核后执行。
+
+
+G2 R6 主目录补齐（2026-09-06，用户要求串通流程及合理必要扩展授权）：实际浏览器的 Schema tab 仍读取旧 Schema/C6 协议，scope/current200 但 domains/taxonomy400。本次仅前端接入已有严格的 scope→current→exact-release search 目录，完整校验 G2 成员与实体闭包后显示概念及实体 overview/free wiki 的 pinned 导航；已判为 G2、网络或形状失败不得降级旧 Schema/RAW。原有 legacy 正向判型路径保留，MVP serving KB 映射沿用。sources 在 /private/tmp 副本设计/RED/实现，reviewer 独立复核；root 独占集成提交、一次前端构建和一次隔离 UI 替换。新增后端代码/authority/数据库变更/provider 调用均为0；当前 d7 后端构建保持原始来源。计划与测试范围见 schema-ui-entry-completion-plan.json。
+
+
+#### R6 原文预览有界等待（实际 UI 断点修复）
+
+G2 原文预览的来源复验和 PDF 字节 GET MUST 使用 60 秒有界等待，以容纳实测超过通用 30 秒默认值的合法复验；普通页面请求默认值、校验规则和自动重试行为不变。父组件传输接线测试与实际 PDF/定位显示分别记录。该前端修复纳入已登记的一次目录 UI 构建，不增加后端构建或 provider 调用。

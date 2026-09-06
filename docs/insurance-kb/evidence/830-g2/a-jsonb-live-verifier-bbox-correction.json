@@ -1,0 +1,11 @@
+{
+  "status": "CORRECTED_VERIFIER_RERUN_PASS",
+  "failed_check": "coordinate_space expected normalized_0_1e6",
+  "actual_contract": "normalized_0_1e6_top_left",
+  "contract_source": "internal/application/service/concept_source_authority_830_g2.go:600",
+  "before_sha256": "68e61458e60ead3790270897e68b053464ed87f6d9ca83514880fcbef8c0926b",
+  "after_sha256": "fc34bf6c6d95009b78db2e7ae3c8d29fce6e060104d28c5a9c1e548544697294",
+  "application_changes": 0,
+  "publication_retries": 0,
+  "live_receipt": "a-jsonb-local-live-verification.json"
+}

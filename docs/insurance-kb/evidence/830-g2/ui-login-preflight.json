@@ -1,0 +1,19 @@
+{
+  "contract": "830-g2-ui-login-preflight.v1",
+  "status": "PASS",
+  "origin": "http://127.0.0.1:18195",
+  "observed_url": "http://127.0.0.1:18195/platform/knowledge-bases",
+  "principal": "G2 Runtime Test Operator 594",
+  "user_id": "399ea48b-3987-55f3-8f19-58f65f53e663",
+  "observed_knowledge_bases": [
+    "C6-ISOLATED-R1-ACCEPTANCE-WIKI",
+    "medical-insurance-mvp",
+    "MINERU-SMOKE-20260801",
+    "S0-Q-596-1-RAW"
+  ],
+  "method": "Actual CUA browser login via existing dedicated isolated account, followed by visible knowledge-base list",
+  "fixture_credential_receipt": "operator-ui-credential-receipt.json",
+  "provider_calls": 0,
+  "g2_active_snapshots": 0,
+  "post_publication_ui_validation": "NOT_RUN"
+}

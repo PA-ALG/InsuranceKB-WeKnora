@@ -1,0 +1,23 @@
+{
+  "contract": "830-g2-a-human-draft-create.v1",
+  "status": "PASS",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "preparation_id": "g2-a-human-jsonb-70cb4b6eb57c",
+  "published": false,
+  "human_confirmation": "APPROVED_EXACT_BATCH_PENDING_SIGNED_REVIEW",
+  "provider_calls": 0,
+  "flow": "NOT_RUN",
+  "image_id": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+  "http_status": 201,
+  "preparation_status": "draft",
+  "candidate_digest": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "manifest_digest": "5121fb825633c0ebe5cff5c87f8a4a22e8a5d33784197d8cdee46b76bc796e7f",
+  "preparation_digest": "4877c0f50f00b94c2180e295b43ee894d914a0d3e9001226fde3298a2441c78a",
+  "ready_receipt_digest": "36a9c25a558c420d3863c82da799ad659d8a07b63052081b7f555d030146836a",
+  "review_policy_id": "52e24cb2b78832acbd74ccba422093485f621841731de18e0e6b06d83ee79107",
+  "proposed_members": 70,
+  "unchanged_head": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  }
+}

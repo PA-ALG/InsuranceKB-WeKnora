@@ -1,0 +1,44 @@
+{
+  "contract": "830-g2-b-input-provider-closure-preflight.v1",
+  "status": "PASS_PROVIDER_ZERO",
+  "provider_calls": 0,
+  "network_calls": 0,
+  "database_writes": 0,
+  "candidate_created": false,
+  "builder_sha256": "2898565e65008520919034bd4b2139f8c1b696ff816030513fb289716df6357f",
+  "provider_runner_sha256": "79cc6077976f1816f6709948410f6e81e7d8764b185429cf003b539d27b1e21b",
+  "sealed_inputs": {
+    "b_source_sealing_receipt_sha256": "b8b4d88c040b1f1f8c5ee45f09d909a5415659bd8f4156c6d1bf05092068daf7",
+    "terms_durable_export_sha256": "15f78942d729bfd349181b2a71810c3b54e363945dee8fbbd2e731ea6e33349f",
+    "brochure_durable_export_sha256": "3c0dc1412ed9c961a7126ff458e14e88f93b6395ae2a969d2167e81dcf4f16b4",
+    "selected_sourceblocks_sha256": "f33c0848689908d95f5860d0aab072d41d9ec916c4140ca50a4e71573aa47601"
+  },
+  "product_identity": {
+    "classification": "AUXILIARY_IDENTITY_ONLY_NOT_COMPILE_REQUEST_SOURCE",
+    "block_id": "8bdec5c0-e7e0-4a61-bdb9-ea78e6158353",
+    "page_number": 1,
+    "start": 35,
+    "end": 69,
+    "quote": "险种代码：594\r\n平安 e 生保（惠享版）长期医疗保险（费率可调）",
+    "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+    "entity_version": "ping-an-e-sheng-bao-hui-xiang@594-1",
+    "request_source_count_unchanged": 21
+  },
+  "checks": [
+    "sealed revision/file/manifest/binding/page/chunk facts match exact PASS receipt",
+    "all three selected source blocks equal durable chunk IDs and content",
+    "all three selected Evidence locators replay exactly",
+    "product identity auxiliary SourceBlock and Evidence replay exactly",
+    "auxiliary product identity block is absent from CompileRequest.sources",
+    "validated compile result requires exact provider-runs path, compiler context hash, unique VALIDATED ledger row and result SHA",
+    "copied compile result path rejected",
+    "compiler context tamper rejected",
+    "review request identity binds compile result SHA and compile run ID",
+    "format correction binds prior request identity/raw/failure hashes and independently classified wire error",
+    "format receipt hash tamper rejected",
+    "format correction after any B review start rejected"
+  ],
+  "current_gate": "WAITING_A_JSONB_ACTIVE_AND_B_DEEPSEEK_AUTHORIZATION_MISSING",
+  "test_scope": "Actual B sealed data plus synthetic in-memory A activation gate; no live A claim",
+  "private_validation_sha256": "cd45fc82b422fa0140c399e52d445a8983512ab4efca40753eb6d98a56815a9c"
+}

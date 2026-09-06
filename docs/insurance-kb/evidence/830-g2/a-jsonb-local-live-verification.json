@@ -1,0 +1,87 @@
+{
+  "contract": "830-g2-a-jsonb-local-live-verification.v1",
+  "status": "PASS",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "head": {
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+    "activation_epoch": 4
+  },
+  "member_count": 70,
+  "definition_count": 1,
+  "linked_fields": 2,
+  "definition_hash": "edab19075496f0ae02753065e97b63607105c37cc578b235f407499a7f64b9e1",
+  "aggregate_hash": "c96ac2ff412185b3ae015ad0eef5818ae25cb8b71718c530686a5d8715aec064",
+  "observations": [
+    {
+      "path": "/current",
+      "http": 200,
+      "body_sha256": "a339054b9726c496ebcca787c74562bb3fb213a1b346598142d6dbb7fb4f5576"
+    },
+    {
+      "path": "/releases/release-0236279f-df73-4433-bebc-cad70f95b989/search",
+      "http": 200,
+      "body_sha256": "7afef5850fdf8a2ec775f795bd8d25bd55975876b24f8fd08bb208327d89e65e"
+    },
+    {
+      "path": "/releases/release-0236279f-df73-4433-bebc-cad70f95b989/pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "9ff66d55a9130dea364a997791156a92610da77a91e9240cfb0a9bafa48df7a4"
+    },
+    {
+      "path": "/releases/release-0236279f-df73-4433-bebc-cad70f95b989/payloads/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "bbfd045aee37e2137efa885dd4ac5e5560a17a0cf1314ad0eb782cb62b3a6f34"
+    },
+    {
+      "path": "/releases/release-0236279f-df73-4433-bebc-cad70f95b989/search?q=%E5%8F%97%E4%BF%9D%E9%99%A9%E5%90%88%E5%90%8C%E4%BF%9D%E9%9A%9C%E7%9A%84%E4%BA%BA",
+      "http": 200,
+      "body_sha256": "5951d06688454259fea77ae82f0e17934d0e1f5ab600f9d47aad784e12c42034"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "5ea7686101548a8a5a87209b94b9de81b4186b5d05ff80e421c476952e47b778"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c?release_id=release-0236279f-df73-4433-bebc-cad70f95b989",
+      "http": 200,
+      "body_sha256": "d0633a14f0d882b516b8adc3de5ee8fe13afb82f74566adc8b2a273aff0d784b"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c/citations/citation-7ab3c39314b199ea496e17e4/preview?release_id=release-0236279f-df73-4433-bebc-cad70f95b989",
+      "http": 200,
+      "body_sha256": "7c239caad7e9decc1fffaff430b171320575c581d1964e090ea91c485a4bc992"
+    },
+    {
+      "path": "/schema/citation-content/[opaque-token]",
+      "http": 200,
+      "body_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+    }
+  ],
+  "original_database": {
+    "source_rows": 0,
+    "heads": [
+      {
+        "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+        "epoch": 3
+      }
+    ]
+  },
+  "isolated_database": {
+    "source_rows": 3,
+    "heads": [
+      {
+        "release": "release-0236279f-df73-4433-bebc-cad70f95b989",
+        "epoch": 4
+      }
+    ]
+  },
+  "old_failed_draft_unchanged": true,
+  "pdf_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+  "provider_calls": 0,
+  "agent": "NOT_RUN",
+  "g2_active_snapshots": 1,
+  "required_snapshots": 2,
+  "flow": "NOT_RUN",
+  "quality": "DEFERRED_TO_Q0"
+}

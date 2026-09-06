@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-jsonb-app-network-recovery-result.v1",
+  "status": "PASS",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "artifact_identity": "sha256:1eed81b3cf9de14a7d9b79afc7fa5fea109758bd7a87be6fd71b9d9d5788ba9f",
+  "image_id": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+  "artifact_receipt_sha256": "78bc08abd3b2368de2ef2afc10636dde87ec39a65b4b962ede24d45148c9f023",
+  "recovery_plan_sha256": "93d18fe790db748e8bc272f9f145b599025b5626034cfb9ff8749fb6a1a0d830",
+  "recovery_build_exit_code": 0,
+  "recovery_build_invocations": 1,
+  "cumulative_app_build_invocations": 6,
+  "previous_attempt": "unexpected EOF downloading pinned DuckDB extension; preserved attempt1 receipt/logs",
+  "recovery_log_sha256": "72efc22ee7025df5e8f57f460325d35de99e561e339398e2ef378951e8d4e1ad",
+  "provider_calls": 0,
+  "candidate_or_head_changes": 0
+}

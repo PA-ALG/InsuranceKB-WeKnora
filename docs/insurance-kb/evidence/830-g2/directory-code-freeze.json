@@ -1,0 +1,65 @@
+{
+  "contract": "g2-fe-directory-temp-freeze.v1",
+  "source_worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g2-concept-free-wiki",
+  "temp_root": "/private/tmp/g2-fe-directory/frontend",
+  "repo_modified": false,
+  "files": [
+    {
+      "path": "src/api/schema-wiki/conceptDirectory830G2.ts",
+      "sha256": "331f74ddccbbf31697dd7c5f5106b05a2d4b133bb6c5f30f84ef0c3d2892f79e"
+    },
+    {
+      "path": "src/api/schema-wiki/conceptDirectory830G2.spec.ts",
+      "sha256": "a97eec306f6d391235d3e9a2a8c41026ea4b9f1e1d3a883e73d79aa6be73395c"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "d987a8fd9ca5de085f056f283b39a993071c8bc24798ca079423e9f5a68c3067"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "5084356dc17b62cfc8ec04750c6bb9a8b2e430731e43d3bba9ec41f01d2e8190"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "fd72fd12f5de4c058a50ff1571491bee88054a6d9a43b96ca7464c62d0a0cdd0"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "5126ba80b857bbbeb55f68017118d27900386c0cb505c7536eec0101dad7fa11"
+    },
+    {
+      "path": "src/views/knowledge/KnowledgeBase.vue",
+      "sha256": "0d12b862d098cc33887264fbff59427eba1c0dcd63b93fb0a12f8682e660635f"
+    }
+  ],
+  "patch_sha256": "c4f3848d23190a342dc8720f2c8a494d24eb0eb0bc7dcc0374af1f509eed6039",
+  "red": [
+    {
+      "kind": "behavior",
+      "command": "npm run test:component -- --run src/api/schema-wiki/conceptDirectory830G2.spec.ts",
+      "result": "4 failed, 6 passed; G2_DIRECTORY_NOT_IMPLEMENTED"
+    },
+    {
+      "kind": "behavior",
+      "result": "generic route exact assertion rejected erroneous /schema/current and /schema/releases paths"
+    },
+    {
+      "kind": "behavior",
+      "result": "stored C6 1/7/67 envelope positive failed before C6 classifier"
+    }
+  ],
+  "setup_failure": {
+    "result": "missing component imports; excluded from behavioral RED count"
+  },
+  "green": [
+    {
+      "log": "/private/tmp/g2-fe-directory/final-component-tests.log",
+      "result": "4 files passed, 30 tests passed"
+    },
+    {
+      "log": "/private/tmp/g2-fe-directory/final-type-check.log",
+      "result": "vue-tsc exit 0"
+    }
+  ]
+}

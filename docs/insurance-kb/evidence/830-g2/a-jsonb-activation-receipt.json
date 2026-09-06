@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+  "activation_epoch": 4,
+  "provider_calls": 0,
+  "activation_posts": 1,
+  "final_head": {
+    "activation_epoch": 4,
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989"
+  },
+  "contract": "830-g2-a-jsonb-activation-receipt.v1",
+  "private_execution_sha256": "9a1dbf2a03cc076c4dace5bc7492f5a512b7ec607d28c6c92405cf2b10461ded",
+  "quality": "DEFERRED_TO_Q0",
+  "full_g2_flow": "NOT_RUN"
+}

@@ -1,0 +1,1017 @@
+{
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "protocol_module_sha256": {
+    "concept_compile_830_g2.py": "025420e7c047ef3d7ced42d2f2f3a18105a2e42058e50d01f8ff9f6d6f8a9d94",
+    "concept_free_wiki_830_g2.py": "9065688ccf9c0f37590ff6d580daabc4fd113a73ed41880b37ac5684b95cd1dc"
+  },
+  "contract": "830-g2-seed-admission-replay.v1",
+  "classification": "PROTOCOL_REPLAY_NOT_GOLDEN",
+  "status": "PASS",
+  "seed_sha256": "7725bc78806e6889fff56543819bb790435eaf122844573caf103aae86090a2b",
+  "projection_sha256": "f4fd8a439ffb1ef5a2c01c4363f8f9692748d10254c611cba1f0112d2dc7de6b",
+  "inventory_sha256": "d1dc56984ca4233225b3e7f8f4da7e549287a6246e86f0f5303943c22ccafa2b",
+  "runner_sha256": "7f9d2f19f81591a781c9cd7469895b031c96c76c2cbd13e02cba2a729fa22515",
+  "denominator": 24,
+  "admission_pass": 24,
+  "native_evidence_checks": 20,
+  "score_shape_checks": 15,
+  "provider_calls": 0,
+  "database_reads": 0,
+  "database_writes": 0,
+  "active_snapshots_created": 0,
+  "full_compile_request_validation": "NOT_RUN",
+  "independent_reviewer": "NOT_RUN",
+  "semantic_quality": "Q0_DEFERRED",
+  "cases": [
+    {
+      "case_id": "G2-SEED-01",
+      "seed_digest": "61e846792fd4332dc3242035720c76ded57e7c57f4886b99b5d8414752ca6690",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "new_page",
+      "expected": "new_page",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-02",
+      "seed_digest": "cbf2e149fb814fae225e42f51ee8d79a87d48672c379384e64789016caedbb79",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "new_page",
+      "expected": "new_page",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-03",
+      "seed_digest": "3f33d5eb60874b29a5264e071ff97fb9386972f45e6a8e6d2c879ce8e334e523",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 95
+      },
+      "pre_admission": {
+        "placement": "update",
+        "basis": "same existing identity input",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "update",
+      "expected": "update",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-04",
+      "seed_digest": "5aed997f725cfe7c86e7c0e1b5388ed98e8a95dba774782c4f087ab62baf8d3e",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "sense",
+        "basis": "different existing sense input",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "sense",
+      "expected": "sense",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-05",
+      "seed_digest": "f2c20acff03f710631dd2867b566fcaeaacf5b5c6557feed4ae575e41a289ca7",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "field_rule",
+        "basis": "input declares a schema field",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "field_rule",
+      "expected": "field_rule",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-06",
+      "seed_digest": "5627a630859e804e22f48a3a2172191f29be2b58fc6b5005e023ab39dbc0f2b2",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "alias_link",
+          "alias_link"
+        ]
+      },
+      "pre_admission": {
+        "placement": "alias_link",
+        "basis": "frozen same-identity and alias input",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "alias_link",
+      "expected": "alias_link",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-07",
+      "seed_digest": "289236f3a2ecf447249c54260b9f05a73532e5d8a2568ef0a06f09bbb7ce0bc6",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 59
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "mention",
+      "expected": "mention",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-08",
+      "seed_digest": "cd058679bf988fabb952d578c8d4191ee8de5703dcb10d6f4d6f4b5b221f2339",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "duplicate",
+          "duplicate"
+        ]
+      },
+      "pre_admission": {
+        "placement": "duplicate",
+        "basis": "incoming content and evidence exactly equal existing input",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "duplicate",
+      "expected": "duplicate",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-09",
+      "seed_digest": "7aca0a27173c013a76f01cd1e8362d15af9f1c46fa8d399c20411bd847c6d5f6",
+      "native_evidence": [],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "reject",
+          "reject"
+        ]
+      },
+      "pre_admission": {
+        "placement": "reject",
+        "basis": "frozen synthetic noise signal; semantic classifier NOT_RUN",
+        "evidence_valid": false,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-10",
+      "seed_digest": "e55e94187ca2033479cd4e116eb0c818d09afb4c5d01aaa53ab37ec86d8df189",
+      "native_evidence": [],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "reject",
+          "reject"
+        ]
+      },
+      "pre_admission": {
+        "placement": "reject",
+        "basis": "frozen synthetic noise signal; semantic classifier NOT_RUN",
+        "evidence_valid": false,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-11",
+      "seed_digest": "1a17e96d452da3a97dabe9b8ae47804cc68312e8cdcd33e88bafa1346aa0684e",
+      "native_evidence": [],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": false,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-12",
+      "seed_digest": "599ea5c264969faa89664bbc570c495bb75b1bb0c14aa88c4a1c5765df3c2de0",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": false,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "pending",
+      "expected": "pending",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-13",
+      "seed_digest": "471fa8a64a44dcf1b207bb9392630133d163e0ee2aaeb77c673e495ff644e11a",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 60
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "pending",
+      "expected": "pending",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-14",
+      "seed_digest": "53cb2e79e8994e789ccecefbdb228149ce8947eff1415e17a7d0264ba2c09831",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 79
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "pending",
+      "expected": "pending",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-15",
+      "seed_digest": "eafb28c6b5f30907903a29e3681db32599cc03f9f1061b62b938e061b510a295",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 80
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "new_page",
+      "expected": "new_page",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-16",
+      "seed_digest": "43911fa0611269e7e1c43664ed4ae6d2feb9e1e771abc6c09d5a0ab635939fe2",
+      "native_evidence": [],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": false,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-17",
+      "seed_digest": "fde9a27b128bd3e857531a11b8a71f1f6433fcbd98294a4cd647add77404e5df",
+      "native_evidence": [],
+      "value_score": {
+        "status": "PASS",
+        "total": 0
+      },
+      "pre_admission": {
+        "placement": "field_rule",
+        "basis": "input declares a schema field",
+        "evidence_valid": false,
+        "identity_valid": true,
+        "required": true,
+        "attempted": true,
+        "value_state": "unknown"
+      },
+      "admission_actual": "field_rule",
+      "expected": "field_rule",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-18",
+      "seed_digest": "9f1357c5c2466bf32cc4f5235d1457737bd9578ba4bcf18fde3cc29e7bbec8e3",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "field_rule",
+          "field_rule"
+        ]
+      },
+      "pre_admission": {
+        "placement": "field_rule",
+        "basis": "input declares a schema field",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "absent_explicitly"
+      },
+      "admission_actual": "field_rule",
+      "expected": "field_rule",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-19",
+      "seed_digest": "4492c40695f889afa3727e38ea36acf5284be243ce7dc67fbae531fb8aaddd6d",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "new_page",
+      "expected": "new_page",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-20",
+      "seed_digest": "304a22696e8a2bfeb8faf2244bb215c2191d1f15930396f36480f3ecf8caf4ce",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "field_rule",
+          "field_rule"
+        ]
+      },
+      "pre_admission": {
+        "placement": "field_rule",
+        "basis": "input declares a schema field",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "field_rule",
+      "expected": "field_rule",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-21",
+      "seed_digest": "a0c05e4e075251bdd5ed30aec1f140b1e566920393898e6b40a47d7fc3a6771b",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "reject",
+          "reject"
+        ]
+      },
+      "pre_admission": {
+        "placement": "reject",
+        "basis": "frozen upstream reject signal; actual independent reviewer NOT_RUN",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-22",
+      "seed_digest": "f27fd621bbb5cc39fcf882cda91f98cd3a47b9eba7a3218a7af310e339d85a91",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        },
+        {
+          "status": "PASS",
+          "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "PASS",
+        "total": 100
+      },
+      "pre_admission": {
+        "placement": "new_page",
+        "basis": "default concept admission candidate",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "new_page",
+      "expected": "new_page",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-23",
+      "seed_digest": "4a3073a9f52d3d739c1c37fe087f49abfcd4ce71eccb01a0e7b589328957b629",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "reject",
+          "reject"
+        ]
+      },
+      "pre_admission": {
+        "placement": "reject",
+        "basis": "link target is outside input scope",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    },
+    {
+      "case_id": "G2-SEED-24",
+      "seed_digest": "3beabc89a3b05f89c443561de3d96203ddd192d41d908b9226115bd5740b179b",
+      "native_evidence": [
+        {
+          "status": "PASS",
+          "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+          "checks": {
+            "document": true,
+            "revision": true,
+            "file": true,
+            "manifest": true,
+            "parser": true,
+            "locator": true,
+            "page_hash": true,
+            "quote": true,
+            "quote_hash": true,
+            "span_unique": true,
+            "span_ranges": true,
+            "span_text": true,
+            "rectangles": true
+          }
+        }
+      ],
+      "value_score": {
+        "status": "NOT_REQUIRED_FOR_THIS_BRANCH",
+        "boundary_scores": [
+          0,
+          100
+        ],
+        "boundary_outputs": [
+          "reject",
+          "reject"
+        ]
+      },
+      "pre_admission": {
+        "placement": "reject",
+        "basis": "target absent in frozen synthetic inventory; live DB NOT_RUN",
+        "evidence_valid": true,
+        "identity_valid": true,
+        "required": false,
+        "attempted": true,
+        "value_state": "present"
+      },
+      "admission_actual": "reject",
+      "expected": "reject",
+      "comparison": "PASS",
+      "full_compile_review_active": "NOT_RUN"
+    }
+  ]
+}

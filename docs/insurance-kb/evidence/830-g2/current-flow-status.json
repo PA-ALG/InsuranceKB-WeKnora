@@ -1,0 +1,39 @@
+{
+  "contract": "830-g2-current-flow-status.v1",
+  "overall": "IN_PROGRESS",
+  "priority": "Complete core flow; keep score 66 unchanged; quality deferred to Q0",
+  "snapshots": {
+    "active": 1,
+    "required": 2,
+    "a_release": "release-0236279f-df73-4433-bebc-cad70f95b989",
+    "a_epoch": 4
+  },
+  "a": {
+    "explicit_human_approval": "PASS",
+    "review_and_activation": "PASS",
+    "all_70_members_and_two_links": "PASS",
+    "source_identity_and_pdf_bytes": "PASS",
+    "original_database_unchanged": "PASS",
+    "browser_definition_and_links": "PASS",
+    "browser_pdf_preview": "BLOCKED_PENDING_BOUNDED_TIMEOUT_UI_DEPLOYMENT"
+  },
+  "b": {
+    "actual_sources_sealed": "PASS",
+    "local_compile_request": "PASS",
+    "external_material_authorization": "PENDING_USER_REPLY_FOR_DEEPSEEK",
+    "provider_compile": "NOT_RUN",
+    "independent_review": "NOT_RUN",
+    "activation": "NOT_RUN"
+  },
+  "directory_ui": "IN_FINAL_REVIEW",
+  "final_agent_turn": "NOT_RUN_AFTER_B_ACTIVE_AND_EXTERNAL_AUTHORIZATION",
+  "seed_admission": "24_OF_24_PASS_ADMISSION_LAYER_ONLY",
+  "full_seed_compile_review_active": "NOT_RUN",
+  "provider_calls_this_execution": 0,
+  "next": [
+    "Finish reviewed frontend build and isolated UI update",
+    "Verify real browser directory and PDF highlight",
+    "After requested material authorization, run B compile/review within max3, obtain candidate-specific approval if required, activate second snapshot",
+    "Run one final agent turn within approved engine upper bound"
+  ]
+}
