@@ -1,0 +1,39 @@
+{
+  "contract": "830-g2-b-guarded-import.v1",
+  "status": "FAIL",
+  "max_provider_requests": 20,
+  "documents": [
+    {
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "file_name": "esb_huixiang_594-1_tiaokuan.pdf",
+      "upload_http": 200,
+      "states": [
+        "pending",
+        "processing",
+        "failed"
+      ]
+    }
+  ],
+  "steps": [
+    "Exact G2 app/DB/models, no in-flight or existing B documents, and two source SHA guards PASS",
+    "Temporary loopback guard and exact whitelist ready; summary/wiki/qgen disabled only in G2",
+    "B 1 upload HTTP200; knowledge 5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+    "B 1 parse pending",
+    "B 1 parse processing",
+    "B 1 parse failed",
+    "B execution stopped; restoring temporary settings",
+    "Temporary model/KB/SSRF settings restored exactly; guard stopped; exact G2 app health200; original DB unchanged"
+  ],
+  "app_image_id": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+  "flow": "NOT_RUN",
+  "g2_activations": 0,
+  "error_type": "RuntimeError",
+  "error": "B document reached failed",
+  "provider_attempts": 0,
+  "provider_successes": 0,
+  "configuration_restored": true,
+  "guard_stopped": true,
+  "app_health_http": 200,
+  "original_database_unchanged": true
+}

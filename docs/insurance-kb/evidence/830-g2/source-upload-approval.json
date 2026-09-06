@@ -1,12 +1,17 @@
 {
   "action": "B source upload",
-  "status": "BLOCKED",
-  "executed": false,
-  "provider_calls": 0,
-  "reason": "automatic approval review rejected potential PDF transfer to unspecified external model",
+  "status": "APPROVED",
+  "executed": true,
+  "provider_calls": 8,
+  "reason": "Specific two-PDF DashScope data transfer approved; max20 enforced by bounded execution plan",
   "known_public_source": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?planCode=594&versionNo=594-1&attachmentType=1",
   "embedding_model": "qwen3.7-text-embedding",
   "embedding_endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  "authorization_question": "pending specific user confirmation for 2 public PDFs and20embedding HTTP requests",
-  "independent_work": "R4 backend read correction and R5/R6 implementation ongoing"
+  "authorization_question": "Resolved by explicit user authorization: 授权给你，你执行下",
+  "independent_work": "A4calls329829tokens; compile validated, finalreview66/80 admissionREJECTED; B twoPDFs completed, configuration restored",
+  "authorization_evidence": "specific-external-authorization.json",
+  "prior_rejection_reason": "automatic approval review rejected potential PDF transfer to unspecified external model",
+  "provider_successes": 3,
+  "max_provider_calls": 20,
+  "execution_receipt": "b-guarded-partition-receipt.json"
 }

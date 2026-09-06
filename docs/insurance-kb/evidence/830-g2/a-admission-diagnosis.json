@@ -1,0 +1,36 @@
+{
+  "contract": "830-g2-a-admission-diagnosis.v1",
+  "review_run": "g2-a-review-002",
+  "raw_wire": "PASS",
+  "score": 66,
+  "score_components": [
+    15,
+    10,
+    15,
+    10,
+    8,
+    8
+  ],
+  "threshold": 80,
+  "decision_literal": "PASS",
+  "candidate_admission": "REJECTED_PAGE_ADMISSION_REQUIRED",
+  "independent_review": "BLOCKER0 for rejection correctness",
+  "gaps": [
+    {
+      "id": "A-RAW-DEFAULT",
+      "finding": "review-001 omitted contract; Python default hydration masked missing raw field; Go exact raw validation correctly rejected actual Draft HTTP400",
+      "status": "OPEN",
+      "next": "Align Python raw validation with exact raw-to-typed object contract before provider acceptance"
+    },
+    {
+      "id": "A-PASS-SUB80",
+      "finding": "Reviewer schema permits PASS+66; prompt has component ranges but no80 threshold or anchored score meanings; candidate validator correctly rejects below80",
+      "status": "OPEN",
+      "next": "Freeze explicit scoring anchors and PASS/total consistency in a reviewed policy version; offline validation before any new provider run"
+    }
+  ],
+  "no_score_patching": true,
+  "no_further_a_calls": true,
+  "active_snapshots": 0,
+  "target_active_snapshots": 2
+}

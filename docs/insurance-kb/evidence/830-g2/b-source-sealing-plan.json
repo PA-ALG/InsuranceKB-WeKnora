@@ -1,0 +1,13 @@
+{
+  "contract": "830-g2-b-source-seal-plan.v1",
+  "script_sha256": "d937182f405ff2b725441dbc5b92f34c260dd9fe174e01a9bb5eec50ecb27e8d",
+  "prior_preflight_sha256": "337e6df55ce0e840edbba4c7991c833f96208b08b51a7c1ee0d9cad6e5e79efe",
+  "independent_review": "BLOCKER0",
+  "scope": "Seal two completed B versions within G2 only; preserve exact A+B+B source IDs and unchanged Heads",
+  "initial_preflight": "STOP before any backfill: original guard expected only A source but automatic upload capture already created two pinned B source IDs with empty binding",
+  "revised_preflight": "Exact frozen three source rows; A sealed; B terms attempt3 and brochure attempt1 with empty bindings",
+  "external_provider_calls": 0,
+  "status": "READY_NOT_EXECUTED",
+  "execution_receipt": "b-source-sealing-verification.json",
+  "current_execution_state": "PASS"
+}

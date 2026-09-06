@@ -1,0 +1,12 @@
+{
+  "contract": "830-g2-b-embedding-attempts.v1",
+  "max_attempts": 20,
+  "upstream": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "model": "qwen3.7-text-embedding",
+  "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "source_sha256": [
+    "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+    "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+  ],
+  "attempts": []
+}

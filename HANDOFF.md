@@ -19,26 +19,32 @@ HTTP503具明确错误码；来源桥已集成部署，真实G2候选的发布�
 迁移的旧/新hash转换与两阶段来源凭据接线已通过测试；旧封存文件未修改。
 新 G2 的 PDF 原生定位生产者已提交部署；受托来源桥与专用前端查看器已集成提交，修复真实多行输入后最终镜像构建及隔离app升级均PASS。
 
-FLOW=NOT RUN，QUALITY=DEFERRED。Provider调用为0；应用构建累计3次（2 PASS、1因专用构建数据盘满而失败），当前运行镜像为
-源码`f23e2d7e6`，镜像`sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43`。
-合理扩展后应用构建上限3次，未启动构建余量0；构建数据盘20→40GB扩容已PASS，实测剩余19GB。前端静态/镜像各1次已PASS，隔离UI18195实际index/login200；docreader原生定位构建追加1次，构建及隔离升级均PASS，gRPC健康SERVING。
-正式gRPC unary/stream实际读取A均PASS，39页原文凭据与冻结artifact完全一致；provider调用0。
-G2专用数据库
-`weknora_g2_594`已复制，专用来源runtime health200，测试操作员正常login通过。
-原库Head epoch3及source表0均不变；G2的A backfill实际HTTP200，来源封存实表0→1，
-精确PDF SHA/大小/39页及pinned状态通过，G2 Head epoch3不变。
-隔离升级曾因root-owned 0600配置无法被appuser读取而退出，已保持字节不变修复owner，
-中间镜像health/login200；最终升级也已通过health/login，前端nginx重载后代理login200。
-最终固定Release读取、旧G1引文预览和1047811字节精确PDF均HTTP200；原库/G2的Head epoch3与source行数0/1保持不变。
-最近回滚容器保留为weknora-g2-594-app-before-f23e2d7e6；此前中间升级备份也保留。
-[最终运行核验](docs/insurance-kb/evidence/830-g2/final-runtime-read-verification.json)。
-A DeepSeek编译及B upload均未执行：自动审批分别拦截派生67字段快照外发及PDF embedding，
-已分别请求具体DeepSeek/DashScope授权；A命令未启动，provider ledger尚不存在。
+FLOW=NOT RUN，QUALITY=DEFERRED。2026-09-06 用户已明确批准两项具体外发。
+A DeepSeek实际调用4/4次，共329829 tokens：首次编译拒绝、一次纠偏通过；review001原始响应
+缺少contract，Python默认值掩盖遗漏，实际平台Draft HTTP400，旧89分候选/预览已作废。
+登记unused seed槽转给A后，全局模型预算仍7；第4次review002 raw完整，但66分低于80准入线，
+assemble_bundle正确拒绝PAGE_ADMISSION_REQUIRED。没有合格G2 Draft/Active，不改分、不刷分。
+A剩余阻断为review raw严格校验与评分锚点/PASS分数一致性；须离线修正及独立审查，不能降低80门槛。
+B两份PDF本地原生解析PASS（44/17页），实际Go拆块37/9。首次因顺序校验失败而外发0；
+改为精确多重集后provider5次HTTP400，明确单批最多20。第三次已按20/17/9分批，
+两份均completed（terms attempt3、brochure attempt1），共46 chunks；实际总8/20请求
+（5次HTTP400+3次HTTP200），KB/model/SSRF配置准确恢复、guard已停止、app health200。两B来源封存及完整SHA/44与17页/37与9段校验PASS；两库Head仍epoch3。
+
+当前运行源码`f23e2d7e6`，镜像`sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43`。
+应用构建累计3/3次（2PASS、1磁盘满失败），构建数据盘20→40GB已扩容；前端静态/镜像各1次PASS。
+隔离UI18195、app18194及原生docreader此前已完成健康/login/实际A PDF回读核验；原库Head epoch3/source0、
+G2 Head epoch3/source3（A+B+B精确身份集合）已核验。当前执行不代表G2发布验收完成。
+[最终隔离交付核验](docs/insurance-kb/evidence/830-g2/final-runtime-read-verification.json)，
+[A模型执行回执](docs/insurance-kb/evidence/830-g2/a-real-provider-executions.json)，
+[A已作废候选预览](docs/insurance-kb/evidence/830-g2/a-review-preview.md)，
+[A准入拒绝诊断](docs/insurance-kb/evidence/830-g2/a-admission-diagnosis.json)，
+[B实际导入](docs/insurance-kb/evidence/830-g2/b-guarded-partition-receipt.json)，
+[B来源封存回验](docs/insurance-kb/evidence/830-g2/b-source-sealing-verification.json)。
 [执行记录](docs/insurance-kb/evidence/830-g2/execution.md)，
 [外发授权状态](docs/insurance-kb/evidence/830-g2/source-upload-approval.json)。
 
-用户已预批合理必要的G2有界扩展，由总控登记后推进；此授权不替代被自动审批明确拦截的
-具体外发确认。G3/Q0及生产发布仍未授权。首个物理演示截止仍为2026-09-07 18:25 +08:00。
+用户已预批合理必要的G2有界扩展，由总控登记后推进；此前自动审批拦截的两项具体外发
+现已由用户明确批准，不再等待重复确认。G3/Q0及生产发布仍未授权。首个物理演示截止仍为2026-09-07 18:25 +08:00。
 
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个

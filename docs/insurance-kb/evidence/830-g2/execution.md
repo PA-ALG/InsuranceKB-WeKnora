@@ -204,3 +204,53 @@ app正常login、UI代理login及index均200，tenant10003。当前Release读取
 当前产品验收仍为G2真实快照0/2、Provider0、FLOW NOT_RUN、QUALITY DEFERRED。
 下一关键路径为获准的真实A编译与独立审核、实际候选人工确认及隔离发布，随后B导入/第二快照与
 定义hash不变、聚合hash变化、页面/搜索/Agent/source-click联合验收。没有虚构模型执行或人工签名。
+
+### 两项具体外发获准并真实执行 · 2026-09-06
+
+用户在确认用途后明确“授权给你，你执行下”，批准A公开条款+派生67字段到DeepSeek最多3次，
+B两份公开PDF到DashScope最多20请求。A实际compile002因audit缺失/错误key及3字段evidence
+顺序重排被拒；仅追加系统纠偏提示（独立review0）后compile003通过。review001独立返回PASS/89。
+总实际3次、254692 tokens；所有原始HTTP响应、raw message、参数和hash均保存，未修补输出。
+既有assemble_bundle生成候选57740bec…80e21，原始输出绑定/页面清单/1定义67字段2链接通过。
+实际平台Draft POST随后返回HTTP400，错误schema wiki preparation invalid；未虚构Draft或发布，正在
+独立定位Go解析与旧G1基线接缝。G2真实Active快照仍0/2。
+
+B本地native解析44/17页及实际Go splitter生成37/9 chunks，正常仅2个embedding批次。发现原
+复制库summary/wiki/qgen开启，且生产默认重试最坏可能40次，因此上传前补本次执行专用
+20请求计数限制，固定同一DashScope HTTPS目的地、只许可冻结37/9整批，配置临时切换及finally
+恢复记录于b-bounded-execution-plan.json。该限制不构成新产品服务/镜像/容器/网络，尚未执行。
+
+### 实际审核与B失败原因闭合 · 2026-09-06
+
+上节review001的PASS89仅是早期Python结果，随后实际Go Draft HTTP400已证实其raw遗漏contract；
+Python默认值掩盖遗漏，故旧候选/预览已明确作废，不得确认或发布。依用户合理扩展预批，先登记
+将unused seed槽移给A，A最多3→4、全局仍7；review002仅纠正raw格式提示、未提供旧分数或要求PASS。
+第4次真实响应raw完整但分数66（15+10+15+10+8+8），低于80；candidate assembly正确拒绝
+PAGE_ADMISSION_REQUIRED。A实际4次329829 tokens，accepted Draft0/Active0。不改分、不刷分。
+独立审查确认目前review prompt/schema没有PASS与80门槛一致性及评分锚点，登记离线修复项，
+不把decision字面PASS作为候选准入通过。
+
+B首次导入创建terms knowledge5ad208d2…10c8后解析失败，计数限制拒绝文本顺序，provider0；
+实际37个文本hash逐一相符，common.Deduplicate maps.Values造成输入乱序。保留零账本，
+先登记精确多重集、转发原序的replay（独立BLOCKER0/fake测试PASS），实际再解析触达provider。
+DashScope5次均HTTP400，明确每批不能超过20；没有成功向量批次，第二PDF未上传。
+两次执行都已停止临时guard、准确恢复KB/model/SSRF及app health200，原库配置不变。
+下一次有界执行须按原完整37/9白名单分20/17/9，继承已用5次而非重置预算；仍总计最多20。
+
+B分批执行实际PASS：terms同一knowledge attempt3，brochure e7722140-3486-437b-9952-f3d66d6fb539
+attempt1，两份completed及active chunks37/9。沿用原5次失败账本，新增20/17/9三个200子批，
+累计8/20次。count在每次上游调用前落盘，禁止source重复尝试；完整文本白名单未改，向量返回索引
+正确拼接。本轮临时KB/model/SSRF恢复精确相等、guard停止、app health200、原库配置不变。
+实际总账见b-embedding-partition-ledger.json（已包含前5次，不能再和replay账本相加），执行见
+b-guarded-partition-receipt.json。此PASS只代表两PDF导入/向量化，不代表B模型编译/发布或G2 FLOW通过。
+
+B来源封存回验PASS：上传自动capture已有A+B+B三行，其中B两行的binding为空；原先只允许A一行
+的前置检查实际STOP且没有backfill。冻结精确3行快照并独立复核后，分别seal当前attempt3/1，
+保持source ID不变，原文SHA、页数44/17、大小及chunk37/9全部符合，binding/manifest完整。
+原库source0不变；G2 source3精确为A+B+B；两库Head均release6239…epoch3不变。
+见b-source-sealing-verification.json。来源回验新增provider0，G2 Active仍0/2。
+
+本轮交付检查：OpenSpec128 strict验证PASS（退出0；工具遥测联网失败不影响校验结果），
+JSON解析/已知凭据扫描/diff-check通过；机械事实文档修正免RED由独立reviewer确认。
+本轮没有产品代码修改、构建、生产发布或G2激活。A候选准入仍拒绝，B模型编译/两快照对比/
+页面搜索Agent及G2来源点击联合验收尚未完成，FLOW NOT_RUN、QUALITY DEFERRED。

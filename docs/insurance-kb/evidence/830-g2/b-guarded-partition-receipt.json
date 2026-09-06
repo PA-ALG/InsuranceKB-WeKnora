@@ -1,0 +1,63 @@
+{
+  "contract": "830-g2-b-guarded-import.v1",
+  "status": "PASS",
+  "max_provider_requests": 20,
+  "documents": [
+    {
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "file_name": "esb_huixiang_594-1_tiaokuan.pdf",
+      "upload_or_reparse_http": 200,
+      "action": "reparse_existing_failed",
+      "states": [
+        "pending",
+        "processing",
+        "completed"
+      ],
+      "status": "PASS",
+      "parse_attempt": 3,
+      "chunks": 37
+    },
+    {
+      "source_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+      "file_name": "esb_huixiang_594-1_shuomingshu.pdf",
+      "upload_or_reparse_http": 200,
+      "action": "upload_second_pdf",
+      "states": [
+        "pending",
+        "processing",
+        "finalizing",
+        "completed"
+      ],
+      "status": "PASS",
+      "parse_attempt": 1,
+      "chunks": 9
+    }
+  ],
+  "steps": [
+    "Exact G2 app/DB/model, prior external5 rejected for batch>20, only one failed B knowledge, no in-flight tasks, two sourceSHA guards PASS",
+    "Temporary loopback guard and exact whitelist ready; summary/wiki/qgen disabled only in G2",
+    "B 1 upload HTTP200; knowledge 5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+    "B 1 parse pending",
+    "B 1 parse processing",
+    "B 1 parse completed",
+    "B 1 exact chunk count and expected successful provider sub-batches PASS",
+    "B 2 upload HTTP200; knowledge e7722140-3486-437b-9952-f3d66d6fb539",
+    "B 2 parse pending",
+    "B 2 parse processing",
+    "B 2 parse finalizing",
+    "B 2 parse completed",
+    "B 2 exact chunk count and expected successful provider sub-batches PASS",
+    "Temporary model/KB/SSRF settings restored exactly; guard stopped; exact G2 app health200; original DB unchanged"
+  ],
+  "app_image_id": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+  "flow": "NOT_RUN",
+  "g2_activations": 0,
+  "provider_attempts": 8,
+  "provider_successes": 3,
+  "configuration_restored": true,
+  "guard_stopped": true,
+  "app_health_http": 200,
+  "original_database_unchanged": true
+}

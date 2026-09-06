@@ -1,0 +1,21 @@
+{
+  "contract": "830-g2-specific-external-authorization.v1",
+  "status": "APPROVED",
+  "user_instruction": "授权给你，你执行下",
+  "confirmed_at": "2026-09-06T00:34:30.497216+00:00",
+  "a": {
+    "data": "Public596-1 terms and derived67-field snapshot",
+    "destination": "https://api.deepseek.com/v1",
+    "model": "deepseek-v4-flash",
+    "max_calls": 3,
+    "compiler_max_tokens": 32768
+  },
+  "b": {
+    "data": "Two public594-1 terms/brochure PDFs",
+    "destination": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "model": "qwen3.7-text-embedding",
+    "max_pdf_count": 2,
+    "max_embedding_requests": 20
+  },
+  "scope": "G2 isolated validation only"
+}

@@ -1,0 +1,73 @@
+{
+  "contract": "830-g2-b-embedding-attempts.v1",
+  "max_attempts": 20,
+  "upstream": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "model": "qwen3.7-text-embedding",
+  "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "source_sha256": [
+    "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+    "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657895,
+      "http_status": 400,
+      "response_sha256": "e402d984d817519d1a3d987e1e78f6ff609f6d278baaee7b45cc94a1699bfea3",
+      "provider_id": "1f483a84-4716-9f7d-bbb8-f99818b04533",
+      "usage": null
+    },
+    {
+      "attempt": 2,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657896,
+      "http_status": 400,
+      "response_sha256": "9dd96c7e461a00ecb4ceb6a049ae72c05f21e730c4948af50a08f10d091d5e89",
+      "provider_id": "8d18c346-8c20-9a9f-9a47-1f69b5549b60",
+      "usage": null
+    },
+    {
+      "attempt": 3,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657897,
+      "http_status": 400,
+      "response_sha256": "3b8fca258e15c533aca1e086ac1fe5c844727f92246c28bd66f3740b133e55ee",
+      "provider_id": "ef72cf7c-dc22-9a0f-a28f-b544a676ff97",
+      "usage": null
+    },
+    {
+      "attempt": 4,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657899,
+      "http_status": 400,
+      "response_sha256": "c391424027752de052019951e9120954e1d59b62873d3abe738df0caa4e7b4e1",
+      "provider_id": "030ac012-c6d7-98c8-9b82-1f88e13dba85",
+      "usage": null
+    },
+    {
+      "attempt": 5,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657901,
+      "http_status": 400,
+      "response_sha256": "efcb51eb05e968b9ee17501a5adf76c212ce7536f5208dbbcf9ec5f143325f97",
+      "provider_id": "c09bed03-be1f-9b2b-979d-d1babe5b98a9",
+      "usage": null
+    }
+  ]
+}

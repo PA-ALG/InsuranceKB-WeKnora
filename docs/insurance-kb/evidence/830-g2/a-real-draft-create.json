@@ -1,0 +1,14 @@
+{
+  "contract": "830-g2-a-real-draft-create.v1",
+  "http_status": 400,
+  "candidate_hash": "57740bec1972727793867620716cdfe539f4e06e2470b92587bc11a32a680e21",
+  "preparation_id": "g2-a-57740bec1972",
+  "published": false,
+  "human_confirmation": "PENDING",
+  "provider_calls": 0,
+  "flow": "NOT_RUN",
+  "status": "FAIL",
+  "error": {
+    "message": "schema wiki preparation invalid"
+  }
+}

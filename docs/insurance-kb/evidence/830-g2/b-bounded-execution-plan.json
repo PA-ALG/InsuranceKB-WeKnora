@@ -1,0 +1,36 @@
+{
+  "contract": "830-g2-b-bounded-execution-plan.v1",
+  "status": "PREPARED",
+  "authorization": "User explicitly approved two public B PDFs to DashScope, totalmax20 requests; standing G2 authorization covers necessary reversible isolated preparation",
+  "destination": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "model": "qwen3.7-text-embedding",
+  "hard_max_external_attempts": 20,
+  "normal_expected_attempts": 2,
+  "temporary_control": {
+    "location": "Existing G2 app Python process, 127.0.0.1:19020, no published port",
+    "purpose": "Count before every upstream attempt; deny21+, accept only exact frozen37/9text batches",
+    "new_product_code": false,
+    "new_images": 0,
+    "new_containers": 0,
+    "new_networks": 0,
+    "fixed_upstream_no_redirect_no_retry": true,
+    "credentials": "Existing request Authorization passed only in memory; never logged or persisted"
+  },
+  "temporary_database_changes": {
+    "database": "weknora_g2_594",
+    "raw_kb": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "model": "42df7f04-f53f-42d5-909d-63b0e78a1223",
+    "fields": "Clear summary model; disable qgen/wiki; model base_url to same-container loopback; single127.0.0.1 ssrf whitelist for this isolated instance"
+  },
+  "cleanup": "finally stop G2 app before restoring direct endpoint; preserve ledger; cancel unfinished B rows only; restore exact before config; start same image; prove guard port closed and original DB config unchanged",
+  "scripts": {
+    "/private/tmp/weknora_g2_embedding_guard.py": "1c2b956295e1f817fa2c35ccdbc9cc47f7b4dcc1b82a484300eaa78f49d61d2a",
+    "/private/tmp/weknora_g2_execute_b_guarded.py": "8fc57886d57a61ee70a9e11f68508c6cd1f5ccd15320a25b417d8f169050bf0f"
+  },
+  "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "local_negative_verification": "PASS duplicate/extra/nonwhitelisted input rejected; max20 durable counter; no ledger reset; success dedup; fake sender only, actual calls0",
+  "flow": "NOT_RUN",
+  "independent_review": "BLOCKER0",
+  "execution_receipt": "b-guarded-import-receipt.json",
+  "current_execution_state": "FAIL"
+}

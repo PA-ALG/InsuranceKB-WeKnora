@@ -1,0 +1,24 @@
+{
+  "contract": "830-g2-b-native-preflight.v1",
+  "status": "PASS",
+  "sources": {
+    "terms": {
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "pages": 44,
+      "codepoints": 48859,
+      "utf8_bytes": 123380,
+      "native_sha256": "5a6488fa79f8e7da65496a7617ecca8806bd41c446eb3b91ecf082ad1163ff05",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6"
+    },
+    "brochure": {
+      "source_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "pages": 17,
+      "codepoints": 13739,
+      "utf8_bytes": 35849,
+      "native_sha256": "64dc878eb0764686b34b9321ee4b08ff3c407a74d731ceebb05fe15aa8d784a4",
+      "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6"
+    }
+  },
+  "provider_calls": 0,
+  "knowledge_uploads": 0
+}
