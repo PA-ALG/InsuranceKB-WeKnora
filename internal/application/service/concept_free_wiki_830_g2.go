@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -53,7 +54,7 @@ func (s *SchemaWikiService) CreateConceptFreeWikiDraft830G2(
 	if s == nil || s.releaseAuthority == nil || preparationID == "" {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
-	bundle, err := types.ParseConceptCandidateBundle830G2(rawBundle)
+	bundle, canonicalBundle, err := types.CanonicalConceptCandidateBundle830G2(rawBundle)
 	if err != nil || bundle.Request.TenantID != scope.TenantID ||
 		bundle.Request.SpaceID != scope.SpaceID || bundle.Request.RawKBID != scope.RawKBID ||
 		bundle.Request.WikiKBID != scope.WikiKBID {
@@ -63,10 +64,6 @@ func (s *SchemaWikiService) CreateConceptFreeWikiDraft830G2(
 		return nil, err
 	}
 	members, err := bundle.SnapshotMembers()
-	if err != nil {
-		return nil, ErrSchemaWikiPreparationInvalid
-	}
-	canonicalBundle, err := json.Marshal(bundle)
 	if err != nil {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
@@ -158,7 +155,7 @@ func (s *SchemaWikiService) validateConceptBase830G2(
 	if err != nil ||
 		release.BaseReleaseID != base.Request.BaseReleaseID ||
 		release.BaseActivationEpoch != base.Request.BaseActivationEpoch ||
-		!wikiReleaseMemberSnapshotsEqual(expectedMembers, storedMembers) ||
+		!conceptMemberSnapshotSetsEqual830G2(expectedMembers, storedMembers) ||
 		!reflect.DeepEqual(bundle.Request.ExistingDefinitions, base.CompileResult.Output.Definitions) ||
 		!reflect.DeepEqual(bundle.Request.ExistingFields, base.CompileResult.Output.Fields) ||
 		!reflect.DeepEqual(bundle.Request.ExistingPages, base.CompileResult.Output.Pages) ||
@@ -387,13 +384,14 @@ func validateConceptPreparation830G2(
 	scope types.WikiReleaseScope,
 ) (types.ConceptCandidateBundle830G2, []types.WikiReleaseMemberSnapshot, error) {
 	if preparation == nil || preparation.WikiReleaseScope != scope || preparation.ID == "" ||
-		preparation.Status != expectedStatus || preparation.ManifestDigest != digestWikiReleaseBytes(preparation.Manifest) ||
+		preparation.Status != expectedStatus ||
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest {
 		return types.ConceptCandidateBundle830G2{}, nil, ErrSchemaWikiPreparationInvalid
 	}
-	bundle, err := types.ParseConceptCandidateBundle830G2(preparation.Manifest)
+	bundle, canonicalManifest, err := types.CanonicalConceptCandidateBundle830G2(preparation.Manifest)
 	if err != nil || bundle.Request.TenantID != scope.TenantID || bundle.Request.SpaceID != scope.SpaceID ||
 		bundle.Request.RawKBID != scope.RawKBID || bundle.Request.WikiKBID != scope.WikiKBID ||
+		preparation.ManifestDigest != digestWikiReleaseBytes(canonicalManifest) ||
 		preparation.CandidateDigest != bundle.CandidateHash ||
 		preparation.ReadyReceiptDigest != bundle.ReviewResult.Execution.RawOutputHash ||
 		preparation.ReviewPolicyID != conceptReviewPolicyHash830G2(bundle.Request.PolicyIdentity) ||
@@ -406,10 +404,66 @@ func validateConceptPreparation830G2(
 		return types.ConceptCandidateBundle830G2{}, nil, ErrSchemaWikiPreparationInvalid
 	}
 	snapshots, err := bundle.SnapshotMembers()
-	if err != nil || !wikiReleaseMemberSnapshotsEqual(snapshots, preparation.Members) {
+	if err != nil || !conceptMemberSnapshotsEqual830G2(snapshots, preparation.Members) {
 		return types.ConceptCandidateBundle830G2{}, nil, ErrSchemaWikiPreparationInvalid
 	}
 	return bundle, snapshots, nil
+}
+
+func conceptMemberSnapshotsEqual830G2(
+	left []types.WikiReleaseMemberSnapshot,
+	right []types.WikiReleaseMemberSnapshot,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if !conceptMemberSnapshotEqual830G2(left[index], right[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func conceptMemberSnapshotSetsEqual830G2(
+	left []types.WikiReleaseMemberSnapshot,
+	right []types.WikiReleaseMemberSnapshot,
+) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	rightBySlug := make(map[string]types.WikiReleaseMemberSnapshot, len(right))
+	for _, member := range right {
+		if member.LogicalSlug == "" {
+			return false
+		}
+		if _, duplicate := rightBySlug[member.LogicalSlug]; duplicate {
+			return false
+		}
+		rightBySlug[member.LogicalSlug] = member
+	}
+	for _, member := range left {
+		stored, exists := rightBySlug[member.LogicalSlug]
+		if !exists || !conceptMemberSnapshotEqual830G2(member, stored) {
+			return false
+		}
+		delete(rightBySlug, member.LogicalSlug)
+	}
+	return len(rightBySlug) == 0
+}
+
+func conceptMemberSnapshotEqual830G2(
+	want types.WikiReleaseMemberSnapshot,
+	got types.WikiReleaseMemberSnapshot,
+) bool {
+	if want.Kind != got.Kind || want.LogicalSlug != got.LogicalSlug ||
+		want.RevisionID != got.RevisionID || want.MemberDigest != got.MemberDigest ||
+		want.Title != got.Title || want.Content != got.Content {
+		return false
+	}
+	wantPayload, wantErr := types.CanonicalConceptMemberPayload830G2(want.Payload)
+	gotPayload, gotErr := types.CanonicalConceptMemberPayload830G2(got.Payload)
+	return wantErr == nil && gotErr == nil && bytes.Equal(wantPayload, gotPayload)
 }
 
 func (s *SchemaWikiService) ReadConceptPage830G2(
@@ -457,7 +511,7 @@ func (s *SchemaWikiService) ReadConceptPage830G2(
 		release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch ||
 		release.BaseActivationEpoch == ^uint64(0) ||
 		pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
-		!wikiReleaseMemberSnapshotsEqual(expected, members) {
+		!conceptMemberSnapshotSetsEqual830G2(expected, members) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	member, ok := conceptPageMemberByID830G2(bundle.PageManifest.Members, memberID)
@@ -551,7 +605,7 @@ func (s *SchemaWikiService) loadExactConceptBundle830G2(ctx context.Context, pri
 		return empty, types.ConceptCandidateBundle830G2{}, mapWikiReleaseRepositoryError(err)
 	}
 	bundle, expected, err := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
-	if err != nil || release.CandidateDigest != bundle.CandidateHash || release.ManifestDigest != preparation.ManifestDigest || release.BaseReleaseID != preparation.ExpectedReleaseID || release.BaseActivationEpoch != preparation.ExpectedActivationEpoch || release.BaseReleaseID != bundle.Request.BaseReleaseID || release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch || release.BaseActivationEpoch == ^uint64(0) || pin.ActivationEpoch() != release.BaseActivationEpoch+1 || !wikiReleaseMemberSnapshotsEqual(expected, members) {
+	if err != nil || release.CandidateDigest != bundle.CandidateHash || release.ManifestDigest != preparation.ManifestDigest || release.BaseReleaseID != preparation.ExpectedReleaseID || release.BaseActivationEpoch != preparation.ExpectedActivationEpoch || release.BaseReleaseID != bundle.Request.BaseReleaseID || release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch || release.BaseActivationEpoch == ^uint64(0) || pin.ActivationEpoch() != release.BaseActivationEpoch+1 || !conceptMemberSnapshotSetsEqual830G2(expected, members) {
 		return empty, types.ConceptCandidateBundle830G2{}, ErrSchemaWikiPreparationInvalid
 	}
 	return pin, bundle, nil

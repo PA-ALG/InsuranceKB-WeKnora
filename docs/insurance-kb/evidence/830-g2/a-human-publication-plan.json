@@ -1,0 +1,42 @@
+{
+  "contract": "830-g2-a-human-publication-plan.v1",
+  "status": "REGISTERED",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "approval_receipt_sha256": "257e9144436094bcd6a669710ffee20cc188a98b72de7ddf9374cbc9ace82a8a",
+  "authorization": "User explicitly approved this exact whole batch and publication in G2 isolated environment",
+  "source_head": "871f6e1028ebbde453cdd60b0b787f95103ad7c9",
+  "required_before_execute": [
+    "human-app-artifact PASS exact source/image",
+    "human-upgrade-receipt PASS",
+    "a-human-draft-create PASS exact complete candidate and scope"
+  ],
+  "app_container": "weknora-g2-594-app",
+  "database": "weknora_g2_594",
+  "tenant_id": 10003,
+  "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+  "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+  "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+  "preparation_id": "g2-a-human-70cb4b6eb57c",
+  "expected_head": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  },
+  "expected_new_epoch": 4,
+  "current_config_sha256": "693e9996366c2d6dc17ad13c2ddd7419d4c1992e9b5572e7a5d487184837e034",
+  "allowed_config_change": "Add one distinct public-only key to each existing human_decision_public_keys and publish_authorization_public_keys ring; all other config unchanged. Restart only the same exact G2 app to load them.",
+  "private_key_location": "Task-private directory only, mode0600; never repository/app/container config",
+  "operations": [
+    "verify exact Draft/source/scope and original Head",
+    "provision separate public keys and verify health/UI login",
+    "sign explicitly approved whole-batch human receipt using exact current JWT web StorageID",
+    "POST Review and verify Ready/all digests",
+    "sign separate publish authorization bound to actual Ready and same nonce",
+    "POST activation once",
+    "verify returned release and Head epoch4; preserve original database Head"
+  ],
+  "failure_policy": "Before effects save INCOMPLETE receipt; stop on any error and retain partial results. Never blindly retry a POST or infer success.",
+  "extra_image_builds": 0,
+  "provider_calls": 0,
+  "production_effects": 0,
+  "independent_runbook_review": "PENDING"
+}

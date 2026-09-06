@@ -1,0 +1,15 @@
+{
+  "contract": "830-g2-a-human-explicit-approval.v1",
+  "status": "APPROVED",
+  "recorded_at": "2026-09-06T05:05:40.450621+00:00",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "candidate_file_sha256": "bb831c30806d7c9e815a32390d3a17d86890298ac1808a077c27201f1711255e",
+  "preview_sha256": "d4ff9445855f22ff5cc43619cb336618862b3ed7acde26480ad9839ab3df6146",
+  "user_answer": "批准整包并在 G2 隔离环境发布",
+  "scope": "G2 isolated flow validation only; source verification required before publication",
+  "review_score": 66,
+  "quality": "DEFERRED_TO_Q0",
+  "signed_human_authority": "NOT_YET_CREATED",
+  "review_api": "NOT_RUN",
+  "publish_api": "NOT_RUN"
+}

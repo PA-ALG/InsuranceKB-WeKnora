@@ -195,3 +195,33 @@ RED绑定真实A source/request hashing与LF/CRLF/TAB/non-BMP跨语言vector，�
 总控集成、g2_bundle_review独立复核。此修复不改变旧canonical、不扩大provider调用。
 应用第二次构建因专用builder数据盘20GB已满而在编译前失败；保留失败回执，按用户持续授权
 增加一次恢复构建额度（累计上限3），builder数据盘有界扩到40GB，不清理任何旧镜像或volume。
+
+
+### 2026-09-06 PostgreSQL回读纠偏（既有G2-R1/R3/R6）
+
+实际A v2 Draft创建HTTP201后，Review在验签前400：JSONB重排Manifest和Payload键序/空白，
+原candidate/raw字符串及70项内容完全相同，却被G2的raw byte digest/equality拒绝。
+此修复只闭合既有Draft→Review→Activate→同版读取流程，不增加质量目标、表、服务或candidate版本。
+
+G2存储摘要必须由严格解析后的bundle经既有G2递归JSON canonical派生；Create与Review/Activate/
+source verifier使用同一规则。只改变JSON对象表示，不改任何字符串内容、数组顺序、Unicode offset、
+原模型raw文本、score、candidate hash、页面hash、source/身份/审核/ACL/CAS硬门。成员标量及member
+digest仍精确相等，Payload按严格G2 canonical等值；重复键/不合法Unicode/非法数字与内容篡改仍拒绝。
+同一G2口径覆盖base chain、current/pinned页与聚合读取；旧G1/Schema和全局member比较语义不改变。
+既有合法v1/v2 candidate wire/hash保持不变。旧preparation只有在严格解析及原有摘要可被完整验证时
+才可继续接受；禁止因数据库格式改变而跳过或重写摘要。
+
+实际失败Draft g2-a-human-70cb4b6eb57c的原byte digest已无法从JSONB无损恢复，必须保留不变。
+修复后同一已获用户批准的candidate70cb4b6e…363c5创建replacement Draft，重新派生manifest/
+preparation摘要、执行来源复验及既有人工/发布签名。既有用户整包批准持续有效；不修改内容、不刷分。
+
+Owner：g2_sources独占internal/types/concept_free_wiki_830_g2.go及test，
+internal/application/service/concept_free_wiki_830_g2.go及test、concept_source_authority_830_g2.go
+及test、wiki_release.go中G2比较分派及对应G2测试；concept_agent_830_g2.go 中既有 G2 member 比较接点及对应测试（G1分支保持原比较）。root独占文档、实际PG只读向量及
+harness/tests/fixtures/concept_free_wiki_830_g2_postgres_roundtrip.json；g2_bundle_review只读复核。
+
+RED以真实PG JSONB roundtrip小向量和实际失败行诊断为依据：旧实现拒绝无语义变化；修复后
+Create→存储回读→Review→Activate/source/base/current/pinned完整通过，Payload/manifest事实篡改仍拒绝。
+不把SQLite或仅格式化模拟替代实际PG证据，不写原库或手改现有Draft摘要。
+依用户合理必要扩展预批登记app构建累计上限4→5，仅本修复一次affected build，先BA0 lookup；
+frontend/docreader新增build0、模型调用0。构建源码先冻结复核，小提交后仅升级G2，保留当前双public rings。

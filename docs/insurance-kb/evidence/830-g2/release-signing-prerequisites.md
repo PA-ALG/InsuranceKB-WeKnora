@@ -1,6 +1,6 @@
 # G2 isolated release prerequisites — read-only audit
 
-Status: NOT_RUN. There is no actual G2 candidate or model execution yet. This record grants no review or publish approval.
+Review/publish status: NOT_RUN. Actual A compiler and independent reviewer outputs now exist; the v2 candidate is frozen in a-human-candidate-preflight.json. The actual Draft result is recorded separately in a-human-draft-create.json when executed. This record grants no review or publish approval.
 
 The current isolated configuration contains only the citation-read ring. Human-decision and publish-authorization public-key rings are empty and therefore fail closed. The user’s standing G2 budget/continuation approval covers bounded isolated configuration and API operations; it is not evidence that a named human reviewed a particular future candidate, and it must not be converted into a fabricated human decision or signature. Independent LLM review is a separate fact.
 

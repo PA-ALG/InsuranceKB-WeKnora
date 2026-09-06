@@ -270,3 +270,56 @@ Go types/service/四个release分支/source verifier接线及负向测试完成�
 旧app、固定G2 DB/两网/三卷/loopback18194/configSHA，UI代理登录成功后才PASS，独立review0。
 真实Draft脚本只允许固定candidate/Head、正常tenant10003登录和POST，严核完整scope/70成员/
 空reviewdecision，未签署或激活，独立review0。尚未执行build/upgrade/Draft；必须等Go最终复核和代码冻结。
+
+构建等待期间只读审计24 Seed：原case冻结未变，缺准入前分类与完整编译/审核执行输入，不能反灌expected形成循环测试。
+完整处置attempted0/24，仍NOT_RUN；仅15项ValueScore结构/边界检查15/15 PASS。详细缺项见seed-execution-gap-audit.json，
+此审计无provider/DB/Active效果，不能作为M1/M2或24/24验收通过。
+
+B第二快照provider-zero预检v2：总控只读导出说明书9个durable chunks（SQL SELECT，仅隔离库）；
+其原文和生产embedding输入hash逐项/按序/多重集均与冻结白名单一致，无重传/重嵌入。真实条款第1页
+定义句与A body逐字相同，native全文/page/chunk唯一匹配，16字符bbox完整，仅登记来源备选，不创造字段事实。
+见b-second-snapshot-preflight-v2.json；仍待A Active精确基线及B实体版本/事实目录/实际引用SourceBlocks。
+
+### v2交付执行进行中
+
+代码冻结commit871f6e1028ebbde453cdd60b0b787f95103ad7c9，Python42PASS、Go定向包PASS及独立review0后提交。
+先写human-app-build-plan.json，再走BA0唯一入口；lookup miss后单次BUILD_AFFECTED，累计真实app构建4/4。
+构建会话12623、builder ID u6gomwa7sqadszfj7o55o225w仍运行，human-app-artifact.json保留INCOMPLETE；
+不能重复启动构建。只读资源复查编译进程持续运行、Docker卷40G可用13G，无已观察到的资源耗尽。
+本记录不是构建/升级/Draft成功回执，完成后分别补实证。
+
+构建期间完整候选预览已提供，用户对exact候选70cb4b6e…363c5明确“批准整包并在 G2 隔离环境发布”。
+批准事实冻结a-human-explicit-approval.json，随后先登记a-human-publication-plan.json，再准备一次性执行脚本。
+Draft脚本仅增批准身份守卫及回执时态，SHA730c34e916da4dee747b9fe6c701197aa9b329871844693f79d8eb804078ee8e，
+独立增量review0确认还原后逐字回到旧已审SHA，机械修订免RED；不修改旧build注册时脚本SHA历史。
+用户批准不代表平台Review/Activate已经发生，这两项仍待实际回执。
+
+### 实际v2 Draft完成
+
+BA0 app构建PASS，exact image sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a，
+source/integration均871f6e1028ebbde453cdd60b0b787f95103ad7c9。隔离升级及UI proxy login200 PASS，
+旧app保留app-before-human-v2；随后只读app/UI/docreader身份、G1 preview/PDF200及PDF SHA/bytes、
+原库source0/G2 source3和双Head epoch3精确验证PASS。见human-upgrade-receipt及human-runtime-read-verification。
+已批准A候选实际POST Draft HTTP201，70成员、完整manifest/candidate/source/scope/expected Head全部相符，
+review decision仍空且Head不变。见a-human-draft-create.json；human Review/Activate尚未发生。
+真实Draft review_policy_id=52e24cb2b78832acbd74ccba422093485f621841731de18e0e6b06d83ee79107；
+后续执行稿须按平台现有policy派生（含真实NUL分隔）绑定此值，不能沿用离线错误转义预估。
+
+### 真实Review停止：PostgreSQL表示差异
+
+用户批准后实际一次执行已配置两独立public rings，app配置SHA f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947，
+仅同一G2 app重启、正常login/Head3 PASS；human receipt已按exact批准签署，Review POST一次返回400，
+activation POST0，停止并保存a-human-review-failure.json。私钥仅保存在任务私有目录，未进入app/仓库。
+只读实际DB证明stored manifest与候选JSON树完全相同，但JSONB变更键序/空格，原ManifestDigest799769...04d5b
+与读取字节SHA0eb51...97838不同，G2直接byte digest拒绝发生在签名检查前。Draft仍draft且review_digest空，
+原库source0/G2source3、双Head epoch3不变。见a-postgres-review-diagnosis.json。不得重跑原state脚本或改数据库摘要。
+
+
+### 2026-09-06 JSONB 修复设计与真实数据库向量
+
+独立设计复核 g2_bundle_review：BLOCKER0。G2 严格 canonical 解析失败必须直接拒绝，不能回落宽松/raw 比较；replacement 使用新 preparation_id 和普通 Create/source 复验，旧失败 Draft 不修改。
+真实 PostgreSQL17.9 SELECT-only fixture：`harness/tests/fixtures/concept_free_wiki_830_g2_postgres_roundtrip.json` SHA `db0a3f80cb4fe6a5f6230f9cfc4f51deead04b192e9c8dc60335d3a7ef2dd349`；6成员，before/after 精确 JSON 字符串保存；树相等、raw manifest 不等。查询SHA `b33d60d96405d6d6146bdd6a95f806a69889e8026ef8cdc4f04d77f73444e849`，DB写/provider0。
+当前 CODE 修复进行中，尚未新构建/部署/Review成功/Activate。双 public rings 已在上次失败前正确配置，修复升级必须保留 config SHA `f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947`。
+
+Task6 broad service regression completed with exactly two failures: the G2 Agent branch still called the global raw/order member comparator, and one older test asserted that obsolete comparator. Agent production correction was registered in the existing R6/Task6 owner scope and independently reviewed BLOCKER0 before implementation; G1 branch unchanged. Final corrective focused run pending at this record.
+B provider-zero local source proposal is frozen at `/private/tmp/g2-b-local-source-catalog-proposal.json` SHA `59e2a65e7ae75dbb3fdd452374d4c9d6a129623b222cda37457882d8c783a731`: two B field quote candidates (waiting_period, coverage_and_renewal_terms) and one complete scenario example for free_wiki. These are source selections only; no B Candidate/Active/provider result is inferred.

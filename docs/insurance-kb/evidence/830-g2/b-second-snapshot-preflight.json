@@ -1,0 +1,206 @@
+{
+  "contract": "830-g2-b-second-snapshot-preflight.v1",
+  "status": "PRECHECK_COMPLETE_REQUEST_NOT_BUILDABLE_YET",
+  "authority": "NONE",
+  "provider_calls": 0,
+  "network_calls": 0,
+  "database_reads": 0,
+  "database_writes": 0,
+  "docker_calls": 0,
+  "facts_inferred": 0,
+  "source_blocks_created": 0,
+  "verified_b_custody": {
+    "status": "PASS",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "documents": [
+      {
+        "role": "terms",
+        "file_path": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+        "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+        "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+        "parse_attempt": 3,
+        "revision_source_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "binding_digest": "3b3796a0376b469593bb7fd19c091d9ff29a991f8035635126c2ce752ce5a110",
+        "manifest_digest": "0ffe45e1ddd83576fdee7a68718693637b51a38a666952303aaa0bc942431aaa",
+        "page_count": 44,
+        "chunk_count": 37,
+        "native_sha256": "5a6488fa79f8e7da65496a7617ecca8806bd41c446eb3b91ecf082ad1163ff05",
+        "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+        "durable_chunk_export": "/private/tmp/weknora-g2-594/b-terms-actual-chunks.private.json",
+        "durable_chunk_export_status": "PRESENT_37_CONTENT_MULTISET_MATCHES_PRECHECK"
+      },
+      {
+        "role": "brochure",
+        "file_path": "dataset/version-materials/esb_huixiang_594-1_shuomingshu.pdf",
+        "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+        "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+        "parse_attempt": 1,
+        "revision_source_id": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e",
+        "binding_digest": "212b52240bd16a3cabe77841c1f6cf595c7f7a107efed71d4b470c55c601bec1",
+        "manifest_digest": "7c9bf9d1d54824129a382232750aa8cae393ce5fec2899996071396d8fe7672c",
+        "page_count": 17,
+        "chunk_count": 9,
+        "native_sha256": "64dc878eb0764686b34b9321ee4b08ff3c407a74d731ceebb05fe15aa8d784a4",
+        "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+        "durable_chunk_export": null,
+        "durable_chunk_export_status": "MISSING"
+      }
+    ],
+    "evidence": {
+      "guarded_partition_receipt": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-guarded-partition-receipt.json",
+        "sha256": "c95b878160d3274e8978717e59f92e707461e09c57f42dc5f41b2fa665da154c"
+      },
+      "source_sealing_verification": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-source-sealing-verification.json",
+        "sha256": "b8b4d88c040b1f1f8c5ee45f09d909a5415659bd8f4156c6d1bf05092068daf7"
+      },
+      "native_preflight": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-native-preflight.json",
+        "sha256": "e0089a90566472d957c0810a46958ae3e85dddd7acda99385511f1f40df3f0b1"
+      },
+      "precomputed_chunk_catalog": {
+        "path": "/private/tmp/g2-b-chunks.json",
+        "sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d"
+      }
+    }
+  },
+  "required_after_a_active": [
+    {
+      "item": "exact_active_head",
+      "fields": [
+        "release_id",
+        "activation_epoch"
+      ],
+      "rule": "Must be read after A activation; expected to replace historical release-6239.../epoch3. No value is predicted here."
+    },
+    {
+      "item": "exact_a_active_base_bundle",
+      "fields": [
+        "candidate_hash",
+        "preparation_id",
+        "manifest_digest",
+        "preparation_digest",
+        "compile_result.output.definitions",
+        "compile_result.output.fields",
+        "compile_result.output.pages",
+        "request.entity_versions",
+        "request.sources"
+      ],
+      "rule": "B ExistingDefinitions/Fields/Pages must exactly equal the immediately active A output; ExistingEntityVersions must exactly equal A request.entity_versions. The stored Ready preparation and release members must be retained as the server-authoritative binding."
+    },
+    {
+      "item": "combined_required_field_domain",
+      "fields": [
+        "A entity_id and version",
+        "B frozen entity_id and version",
+        "the exact 67 field keys for every entity retained in the next release"
+      ],
+      "rule": "Output fields are an exact bijection with Request.RequiredFields. If the second snapshot must retain A and add B, RequiredFields and EntityVersions must contain both entities and the output must contain both complete 67-field sets."
+    },
+    {
+      "item": "exact_source_closure",
+      "fields": [
+        "all A SourceBlocks referenced by A Existing definitions/fields/pages",
+        "only B durable SourceBlocks actually referenced by B output evidence"
+      ],
+      "rule": "Do not copy all 37+9 B chunks into Request.Sources. Unreferenced padding is rejected. Existing-only A source blocks remain required and must stay byte-identical."
+    }
+  ],
+  "directly_reusable": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py",
+      "symbols": [
+        "CompileRequest",
+        "LLMCompiler",
+        "LLMReviewer",
+        "assemble_bundle"
+      ],
+      "reuse": "DIRECT_GENERIC_CONTRACT_CODE"
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py",
+      "symbols": [
+        "SourceBlock",
+        "Evidence",
+        "verify_evidence",
+        "digest",
+        "concept_id"
+      ],
+      "reuse": "DIRECT_GENERIC_VALIDATION_CODE"
+    },
+    {
+      "path": "/private/tmp/g2-a-human-candidate/candidate-bundle.json",
+      "sha256": "bb831c30806d7c9e815a32390d3a17d86890298ac1808a077c27201f1711255e",
+      "reuse": "ONLY_AFTER_MATCHING_IT_TO_THE_ACTUAL_A_ACTIVE_RELEASE_AND_READY_PREPARATION"
+    },
+    {
+      "path": "/private/tmp/g2-a-compile-prep/compile-request.json",
+      "sha256": "1b656280378bb1c5883c01f24639d1bb69d77527aa2002c63f3f6a8143e5ee85",
+      "reuse": "SCHEMA_PROFILE_AND_SOURCE_SHAPE_REFERENCE_ONLY"
+    }
+  ],
+  "not_directly_reusable": [
+    {
+      "path": "/private/tmp/g2-a-compile-prep/prepare_g2_a_compile.py",
+      "sha256": "463713f7ed07fa8841895dca1d734c4152dcf192b6e9a65de5a55fa1878e565a",
+      "reason": "Hard-codes A historical base, A entity/version, A legacy17 migration, A native leaf, insured definition and A-only catalog/counts. Its construction pattern is reusable, its executable is not."
+    },
+    {
+      "path": "/private/tmp/weknora_g2_run_a_provider.py",
+      "reason": "Hard-codes A paths, A source SHA, g2-a run IDs, A catalog enforcement and A credential path. It must not be pointed at B."
+    },
+    {
+      "path": "/private/tmp/g2-a-compile-prep/check_native_quotes.py",
+      "reason": "Hard-codes two A quotes and A native capture."
+    },
+    {
+      "path": "/private/tmp/g2-b-chunks.json",
+      "reason": "This proves splitter/embedding input hashes and counts. It lacks durable brochure Chunk IDs and is not a Concept SourceBlock or evidence catalog."
+    }
+  ],
+  "missing_before_provider_zero_b_request": [
+    {
+      "blocker": "A_ACTIVE_BASE_NOT_YET_AVAILABLE",
+      "detail": "A is not yet active, so B base release/epoch and exact Existing snapshots cannot be frozen."
+    },
+    {
+      "blocker": "B_ENTITY_IDENTITY_NOT_FROZEN",
+      "detail": "No reviewed artifact currently freezes B entity_id and entity_version. These must not be inferred from filenames."
+    },
+    {
+      "blocker": "B_REQUIRED_RESULT_AND_FACT_CATALOG_NOT_FROZEN",
+      "detail": "No bounded B catalog selects real fields, permitted dispositions, existing shared concept reuse, or exact source-supported evidence. No B field fact is created by this preflight."
+    },
+    {
+      "blocker": "B_BROCHURE_DURABLE_CHUNKS_MISSING",
+      "detail": "The sealed source and native capture exist, but there is no local export of the 9 durable chunk IDs and exact contents."
+    },
+    {
+      "blocker": "B_SOURCEBLOCKS_AND_VERIFIED_QUOTES_MISSING",
+      "detail": "No artifact yet joins selected exact B quotes to durable Chunk.ID/content, exact codepoint offsets, page number, revision source, parse manifest and native unique-page locator. Do not synthesize these from splitter offsets."
+    },
+    {
+      "blocker": "B_DEEPSEEK_EXECUTION_NOT_CURRENTLY_AUTHORIZED_BY_THE_B_IMPORT_GRANT",
+      "detail": "The completed B authorization covered the two public PDFs sent to DashScope embedding. The repository budget reserves B compile/review slots but explicitly records B provider submission as blocked pending specific external-data approval. Provider-zero request preparation remains local; an actual DeepSeek call requires that approval to be resolved."
+    }
+  ],
+  "provider_zero_build_sequence": [
+    "After A activates, capture the exact current Head and stored A Ready/bundle/member identities without latest/fallback ambiguity.",
+    "Freeze B entity/version and decide whether the next release retains both complete 67-field entities; construct RequiredFields and EntityVersions accordingly.",
+    "Set ExistingDefinitions/Fields/Pages from exact A output and ExistingEntityVersions from exact A request entity versions.",
+    "Export the 9 durable brochure chunks; retain the existing 37-term export and recheck both against their sealed manifest/count/source identities.",
+    "Select only source-supported B outcomes; for each evidence quote, join exact durable chunk text/offset to a unique native page and producer identity, then form SourceBlocks. Do not normalize source text.",
+    "Build a B identity catalog that supplies all copyable hashes/IDs and constrains shared-concept reuse and field facts; keep model computation away from SHA identities.",
+    "Build CompileRequest with A existing-source closure plus only referenced B SourceBlocks; validate the full existing/output source closure locally.",
+    "Run only the existing G2 Python model/assembler contracts after a separately frozen B transport and external-data authorization; preserve raw compiler and independent reviewer responses."
+  ],
+  "known_reusable_schema_identity": "medical-schema67.v1@fe3b390222108614d3ff07409fbd81d17e915e066eb9c25c03d3268bc49ef7ac",
+  "known_reusable_profile_identity": "medical-schema67.presentation.v1@d83a3b38e3b72bd986823d373b86fe1077e0baa6333a27dc74a2545f58bfd3e9",
+  "notes": [
+    "The sealed B source identities are complete and pinned; no re-upload or re-embedding is needed for request preparation.",
+    "The local native captures match the completed source file SHA values, but they do not replace runtime source/ACL verification at Review and Activate.",
+    "The historical A request base release-6239.../epoch3 must not be copied into B after A advances the Head.",
+    "No B Candidate, Review, Draft, Ready, Release or serving authority was produced."
+  ]
+}

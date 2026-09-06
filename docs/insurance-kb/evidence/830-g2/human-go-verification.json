@@ -1,0 +1,18 @@
+{
+  "contract": "830-g2-human-go-verification.v1",
+  "status": "PASS",
+  "source_head": "871f6e1028ebbde453cdd60b0b787f95103ad7c9",
+  "command": "GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p 2 ./internal/types ./internal/application/service ./internal/handler ./internal/router -run 'G2|HumanBatch' -count=1",
+  "results": {
+    "types": "PASS 3.071s",
+    "service": "PASS 11.578s",
+    "handler": "PASS 7.603s",
+    "router": "PASS 4.307s; no matching tests"
+  },
+  "evidence_origin": "Writer tool output; service/handler/router recaptured in exec session2577. No original filesystem log was written. This is a retrospective factual receipt, not an original log.",
+  "independent_frozen_review": "BLOCKER0 / BACKLOG0 / REJECTED0",
+  "diff_check": "PASS",
+  "actual_a_types_parse": "PASS",
+  "provider_calls": 0,
+  "recapture_command": "GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p 2 ./internal/application/service ./internal/handler ./internal/router -run 'G2|HumanBatch' -count=1"
+}

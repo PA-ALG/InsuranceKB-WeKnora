@@ -9,8 +9,10 @@
 当前补齐v2整包人工待审分支：v1>=80自动准入不变；v2保留真实raw PASS/66并生成NEEDS_HUMAN准入处置，
 Draft拟议成员只有具名whole-batch决定和原发布授权后才能Active。Python42项测试/ruff/mypy及独立复核PASS，
 真实A v2 candidate `70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5` 已离线装配，
-1定义/67字段/2链接、70拟议成员；新增模型调用0。Go四包定向回归及独立复核PASS，尚未部署新版或创建实际v2 Draft。
+1定义/67字段/2链接、70拟议成员；新增模型调用0。Go四包定向回归及独立复核PASS；代码已提交871f6e1028ebbde453cdd60b0b787f95103ad7c9。新版app单次构建及隔离升级PASS（本轮1次、累计4/4）；实际v2 Draft HTTP201/70成员PASS，Head仍epoch3。
 [A整包候选预览](docs/insurance-kb/evidence/830-g2/a-human-review-preview.md)。
+用户已明确“批准整包并在 G2 隔离环境发布”，exact候选批准记录见a-human-explicit-approval.json；该候选不再等待用户授权。
+实际 Review POST 一次 HTTP400、Activate POST0；已定位 PostgreSQL JSONB 格式变化触发 raw digest/member 校验误拒，candidate 内容未变。G2-only canonical 修复设计独立复核0，真实 PG17.9 roundtrip fixture 已冻结，修复/实际A本地回放/最终定向回归及独立代码复核0均PASS；待root提交与唯一修复构建。当前仍0/2 G2 Active；修复后创建新 preparation_id，保留旧失败 Draft，复用本次整包批准与已有两套独立签名钥匙继续流程。
 
 已提交八个代码切片：
 离线编译/独立审核合同 `e88f27fe6`（25项定向测试），固定Release页面 `5b9ddb265`
@@ -37,8 +39,8 @@ B两份PDF本地原生解析PASS（44/17页），实际Go拆块37/9。首次因�
 两份均completed（terms attempt3、brochure attempt1），共46 chunks；实际总8/20请求
 （5次HTTP400+3次HTTP200），KB/model/SSRF配置准确恢复、guard已停止、app health200。两B来源封存及完整SHA/44与17页/37与9段校验PASS；两库Head仍epoch3。
 
-当前运行源码`f23e2d7e6`，镜像`sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43`。
-应用构建累计3/3次（2PASS、1磁盘满失败），构建数据盘20→40GB已扩容；前端静态/镜像各1次PASS。
+当前运行源码`871f6e1028ebbde453cdd60b0b787f95103ad7c9`，镜像`sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a`。
+应用构建累计4次（3PASS、1磁盘满失败）；已按用户预批将必要JSONB修复预算登记至5，最多新增一次affected app构建。构建数据盘20→40GB已扩容；前端静态/镜像各1次PASS。
 隔离UI18195、app18194及原生docreader此前已完成健康/login/实际A PDF回读核验；原库Head epoch3/source0、
 G2 Head epoch3/source3（A+B+B精确身份集合）已核验。当前执行不代表G2发布验收完成。
 [最终隔离交付核验](docs/insurance-kb/evidence/830-g2/final-runtime-read-verification.json)，

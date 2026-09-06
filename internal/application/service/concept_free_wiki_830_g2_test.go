@@ -229,6 +229,177 @@ func conceptHumanBundleVector830G2(t *testing.T) json.RawMessage {
 	return raw
 }
 
+type conceptPostgresRoundTripVector830G2 struct {
+	Contract string `json:"contract"`
+	Identity struct {
+		CandidateHash string `json:"candidate_hash"`
+		MemberCount   int    `json:"member_count"`
+	} `json:"identity"`
+	Before struct {
+		ManifestJSON   string `json:"manifest_json"`
+		MembersJSON    string `json:"members_json"`
+		ManifestSHA256 string `json:"manifest_raw_sha256"`
+		MembersSHA256  string `json:"members_raw_sha256"`
+	} `json:"before"`
+	After struct {
+		ManifestJSON   string `json:"manifest_json"`
+		MembersJSON    string `json:"members_json"`
+		ManifestSHA256 string `json:"manifest_raw_sha256"`
+		MembersSHA256  string `json:"members_raw_sha256"`
+	} `json:"after"`
+	Expected struct {
+		CanonicalManifestSHA256 string `json:"canonical_manifest_sha256"`
+		CanonicalMembersSHA256  string `json:"canonical_members_sha256"`
+	} `json:"expected"`
+}
+
+func loadConceptPostgresRoundTripVector830G2(t *testing.T) conceptPostgresRoundTripVector830G2 {
+	t.Helper()
+	raw, err := os.ReadFile("../../../harness/tests/fixtures/concept_free_wiki_830_g2_postgres_roundtrip.json")
+	require.NoError(t, err)
+	var vector conceptPostgresRoundTripVector830G2
+	require.NoError(t, json.Unmarshal(raw, &vector))
+	require.Equal(t, "concept-postgres-roundtrip.830.g2.v1", vector.Contract)
+	require.Equal(t, vector.Before.ManifestSHA256, digestWikiReleaseBytes([]byte(vector.Before.ManifestJSON)))
+	require.Equal(t, vector.After.ManifestSHA256, digestWikiReleaseBytes([]byte(vector.After.ManifestJSON)))
+	require.Equal(t, vector.Before.MembersSHA256, digestWikiReleaseBytes([]byte(vector.Before.MembersJSON)))
+	require.Equal(t, vector.After.MembersSHA256, digestWikiReleaseBytes([]byte(vector.After.MembersJSON)))
+	return vector
+}
+
+func conceptPostgresPreparation830G2(
+	t *testing.T,
+	vector conceptPostgresRoundTripVector830G2,
+	manifest string,
+	membersJSON string,
+	preparationID string,
+) (*types.WikiReleasePreparation, types.ConceptCandidateBundle830G2) {
+	t.Helper()
+	bundle, err := types.ParseConceptCandidateBundle830G2([]byte(manifest))
+	require.NoError(t, err)
+	var members []types.WikiReleaseMemberSnapshot
+	require.NoError(t, json.Unmarshal([]byte(membersJSON), &members))
+	require.Len(t, members, vector.Identity.MemberCount)
+	preparation := &types.WikiReleasePreparation{
+		ID: preparationID,
+		WikiReleaseScope: types.WikiReleaseScope{
+			TenantID: bundle.Request.TenantID, SpaceID: bundle.Request.SpaceID,
+			RawKBID: bundle.Request.RawKBID, WikiKBID: bundle.Request.WikiKBID,
+		},
+		CandidateDigest: bundle.CandidateHash, ManifestDigest: vector.Expected.CanonicalManifestSHA256,
+		ReadyReceiptDigest: bundle.ReviewResult.Execution.RawOutputHash,
+		ReviewPolicyID:     conceptReviewPolicyHash830G2(bundle.Request.PolicyIdentity),
+		ExpectedReleaseID:  bundle.Request.BaseReleaseID, ExpectedActivationEpoch: bundle.Request.BaseActivationEpoch,
+		Status: types.WikiReleasePreparationDraft, Manifest: json.RawMessage(manifest), Members: members,
+		CreatedAt: time.Unix(1_000, 0).UTC(),
+	}
+	preparation.PreparationDigest = digestWikiReleasePreparation(preparation)
+	return preparation, bundle
+}
+
+func cloneConceptPreparation830G2(t *testing.T, input *types.WikiReleasePreparation) *types.WikiReleasePreparation {
+	t.Helper()
+	raw, err := json.Marshal(input)
+	require.NoError(t, err)
+	var cloned types.WikiReleasePreparation
+	require.NoError(t, json.Unmarshal(raw, &cloned))
+	return &cloned
+}
+
+func TestConceptPostgresRoundTripPreparation830G2UsesSemanticCanonicalCustody(t *testing.T) {
+	vector := loadConceptPostgresRoundTripVector830G2(t)
+	require.NotEqual(t, vector.Before.ManifestJSON, vector.After.ManifestJSON)
+	before, beforeBundle := conceptPostgresPreparation830G2(t, vector, vector.Before.ManifestJSON, vector.Before.MembersJSON, "g2-pg-before")
+	after, afterBundle := conceptPostgresPreparation830G2(t, vector, vector.After.ManifestJSON, vector.After.MembersJSON, "g2-pg-after")
+	require.Equal(t, beforeBundle.CandidateHash, afterBundle.CandidateHash)
+	require.Equal(t, vector.Identity.CandidateHash, afterBundle.CandidateHash)
+
+	_, beforeMembers, err := validateConceptPreparation830G2(before, types.WikiReleasePreparationDraft, before.WikiReleaseScope)
+	require.NoError(t, err)
+	_, afterMembers, err := validateConceptPreparation830G2(after, types.WikiReleasePreparationDraft, after.WikiReleaseScope)
+	require.NoError(t, err)
+	require.Len(t, beforeMembers, vector.Identity.MemberCount)
+	require.Len(t, afterMembers, vector.Identity.MemberCount)
+
+	t.Run("member order drift", func(t *testing.T) {
+		drifted := cloneConceptPreparation830G2(t, after)
+		drifted.Members[0], drifted.Members[1] = drifted.Members[1], drifted.Members[0]
+		_, _, err := validateConceptPreparation830G2(drifted, types.WikiReleasePreparationDraft, drifted.WikiReleaseScope)
+		require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	})
+	t.Run("member scalar drift", func(t *testing.T) {
+		drifted := cloneConceptPreparation830G2(t, after)
+		drifted.Members[0].Title += "漂移"
+		_, _, err := validateConceptPreparation830G2(drifted, types.WikiReleasePreparationDraft, drifted.WikiReleaseScope)
+		require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	})
+	t.Run("member payload string drift", func(t *testing.T) {
+		drifted := cloneConceptPreparation830G2(t, after)
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(drifted.Members[0].Payload, &payload))
+		payload["title"] = "错误定义"
+		drifted.Members[0].Payload, err = json.Marshal(payload)
+		require.NoError(t, err)
+		_, _, err = validateConceptPreparation830G2(drifted, types.WikiReleasePreparationDraft, drifted.WikiReleaseScope)
+		require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	})
+	t.Run("member payload integer drift", func(t *testing.T) {
+		drifted := cloneConceptPreparation830G2(t, after)
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(drifted.Members[0].Payload, &payload))
+		evidence := payload["evidence"].([]any)
+		evidence[0].(map[string]any)["page_number"] = float64(2)
+		drifted.Members[0].Payload, err = json.Marshal(payload)
+		require.NoError(t, err)
+		_, _, err = validateConceptPreparation830G2(drifted, types.WikiReleasePreparationDraft, drifted.WikiReleaseScope)
+		require.ErrorIs(t, err, ErrSchemaWikiPreparationInvalid)
+	})
+}
+
+func TestCreateConceptFreeWikiDraft830G2PersistsStableCanonicalManifest(t *testing.T) {
+	vector := loadConceptPostgresRoundTripVector830G2(t)
+	fixture, schema := conceptReleaseFixture830G2(t)
+	draft, err := schema.CreateConceptFreeWikiDraft830G2(
+		fixture.ctx, fixture.principal1, fixture.scope,
+		"g2-pg-stable-create", json.RawMessage(vector.Before.ManifestJSON),
+	)
+	require.NoError(t, err)
+	require.Equal(t, vector.Expected.CanonicalManifestSHA256, draft.ManifestDigest)
+	require.Equal(t, draft.ManifestDigest, digestWikiReleaseBytes(draft.Manifest))
+	_, canonical, err := types.CanonicalConceptCandidateBundle830G2(draft.Manifest)
+	require.NoError(t, err)
+	require.Equal(t, string(canonical), string(draft.Manifest))
+	require.NotEqual(t, vector.Before.ManifestSHA256, draft.ManifestDigest)
+	require.NotEqual(t, vector.After.ManifestSHA256, draft.ManifestDigest)
+}
+
+func TestConceptPostgresRoundTrip830G2ReviewActivateCurrentAndPinned(t *testing.T) {
+	vector := loadConceptPostgresRoundTripVector830G2(t)
+	preparation, bundle := conceptPostgresPreparation830G2(t, vector, vector.After.ManifestJSON, vector.After.MembersJSON, "g2-pg-flow")
+	fixture, schema := conceptReleaseFixture830G2(t)
+	fixture.scope = preparation.WikiReleaseScope
+	fixture.principal1.TenantID = fixture.scope.TenantID
+	fixture.principal1.SpaceID = fixture.scope.SpaceID
+	fixture.access.allowed[fixture.principal1.ID] = fixture.scope
+	fixture.ctx = schemaWikiHumanContext(fixture.principal1, fixture.scope, types.TenantRoleAdmin)
+	require.NoError(t, fixture.repo.CreateDraft(fixture.ctx, preparation))
+	rawDecision, decision := conceptDecision830G2(t, fixture, preparation, "g2-pg-flow")
+	ready, err := schema.ReviewSchemaDraft(fixture.ctx, fixture.principal1, fixture.scope, preparation.ID, rawDecision)
+	require.NoError(t, err)
+	receipt, err := fixture.service.ActivateReviewed(
+		fixture.ctx, fixture.principal1, rawDecision,
+		conceptAuthorization830G2(t, fixture, ready, decision),
+	)
+	require.NoError(t, err)
+	memberID := bundle.PageManifest.Members[0].MemberID
+	current, err := schema.ReadConceptPage830G2(fixture.ctx, fixture.principal1, fixture.scope, memberID, "")
+	require.NoError(t, err)
+	require.Equal(t, receipt.ReleaseID, current.ReleaseID)
+	pinned, err := schema.ReadConceptPage830G2(fixture.ctx, fixture.principal1, fixture.scope, memberID, receipt.ReleaseID)
+	require.NoError(t, err)
+	require.Equal(t, "pinned", pinned.ReadMode)
+}
+
 func conceptReleaseFixture830G2(t *testing.T) (*wikiReleaseFixture, *SchemaWikiService) {
 	t.Helper()
 	fixture := newWikiReleaseFixture(t, WikiReleaseFaults{})

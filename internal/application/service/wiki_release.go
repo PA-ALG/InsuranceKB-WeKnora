@@ -1842,6 +1842,20 @@ func (s *WikiReleaseService) readMembers(
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
 	storedManifestDigest := digestWikiReleaseBytes(preparation.Manifest)
+	conceptG2 := false
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
+		conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		storedManifestDigest = preparation.ManifestDigest
+		conceptG2 = true
+	}
 	if isSchemaWikiC6StoredManifest(preparation.Manifest) {
 		c6Digest, validC6 := schemaWikiC6StoredManifestDigest(preparation.Manifest)
 		if !validC6 {
@@ -1858,13 +1872,17 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = c6Digest
 	}
+	membersEqual := wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
+	if conceptG2 {
+		membersEqual = conceptMemberSnapshotSetsEqual830G2(preparation.Members, members)
+	}
 	if preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
 		preparation.CandidateDigest != release.CandidateDigest ||
 		preparation.ManifestDigest != release.ManifestDigest ||
 		storedManifestDigest != preparation.ManifestDigest ||
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
-		!wikiReleaseMemberSnapshotsEqual(preparation.Members, members) {
+		!membersEqual {
 		return nil, ErrWikiReleaseInvalidAuthorization
 	}
 	return members, nil

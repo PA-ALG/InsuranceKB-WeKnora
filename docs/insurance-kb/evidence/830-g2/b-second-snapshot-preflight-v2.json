@@ -1,0 +1,292 @@
+{
+  "authority": "NONE",
+  "brochure_durable_chunk_verification": {
+    "chunk_count": 9,
+    "chunk_index_sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "embedding_formula": "TrimSpace(knowledge.title) + LF + TrimSpace(chunk.content)",
+    "embedding_input_sha256_multiset_equal": true,
+    "embedding_input_sha256_ordered_equal": true,
+    "expected_ordered_embedding_inputs_json_sha256": "d6571faadf77b3494a31b9942b75f9a142e174b18ba46974a806f44b35db22eb",
+    "export_path": "/private/tmp/weknora-g2-594/b-brochure-actual-chunks.private.json",
+    "export_sha256": "3c0dc1412ed9c961a7126ff458e14e88f93b6395ae2a969d2167e81dcf4f16b4",
+    "ordered_embedding_inputs_json_sha256": "d6571faadf77b3494a31b9942b75f9a142e174b18ba46974a806f44b35db22eb",
+    "raw_content_sha256_multiset_equal": true,
+    "raw_content_sha256_ordered_equal": true,
+    "status": "PASS",
+    "unique_chunk_ids": 9,
+    "whitelist_path": "/private/tmp/g2-b-chunks.json",
+    "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d"
+  },
+  "brochure_shared_definition_exact_body_match": {
+    "match_count": 0,
+    "quote": "被保险人就是受保险合同保障的人。",
+    "status": "NO_EXACT_MATCH_NOT_USED_AS_LOCATOR_CANDIDATE"
+  },
+  "contract": "830-g2-b-second-snapshot-preflight.v2",
+  "database_reads": 0,
+  "database_writes": 0,
+  "directly_reusable": [
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py",
+      "reuse": "DIRECT_GENERIC_CONTRACT_CODE",
+      "symbols": [
+        "CompileRequest",
+        "LLMCompiler",
+        "LLMReviewer",
+        "assemble_bundle"
+      ]
+    },
+    {
+      "path": "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py",
+      "reuse": "DIRECT_GENERIC_VALIDATION_CODE",
+      "symbols": [
+        "SourceBlock",
+        "Evidence",
+        "verify_evidence",
+        "digest",
+        "concept_id"
+      ]
+    },
+    {
+      "path": "/private/tmp/g2-a-human-candidate/candidate-bundle.json",
+      "reuse": "ONLY_AFTER_MATCHING_IT_TO_THE_ACTUAL_A_ACTIVE_RELEASE_AND_READY_PREPARATION",
+      "sha256": "bb831c30806d7c9e815a32390d3a17d86890298ac1808a077c27201f1711255e"
+    },
+    {
+      "path": "/private/tmp/g2-a-compile-prep/compile-request.json",
+      "reuse": "SCHEMA_PROFILE_AND_SOURCE_SHAPE_REFERENCE_ONLY",
+      "sha256": "1b656280378bb1c5883c01f24639d1bb69d77527aa2002c63f3f6a8143e5ee85"
+    }
+  ],
+  "docker_calls": 0,
+  "facts_inferred": 0,
+  "known_reusable_profile_identity": "medical-schema67.presentation.v1@d83a3b38e3b72bd986823d373b86fe1077e0baa6333a27dc74a2545f58bfd3e9",
+  "known_reusable_schema_identity": "medical-schema67.v1@fe3b390222108614d3ff07409fbd81d17e915e066eb9c25c03d3268bc49ef7ac",
+  "missing_before_provider_zero_b_request": [
+    {
+      "blocker": "A_ACTIVE_BASE_NOT_YET_AVAILABLE",
+      "detail": "A is not yet active, so B base release/epoch and exact Existing snapshots cannot be frozen."
+    },
+    {
+      "blocker": "B_ENTITY_IDENTITY_NOT_FROZEN",
+      "detail": "No reviewed artifact currently freezes B entity_id and entity_version. These must not be inferred from filenames."
+    },
+    {
+      "blocker": "B_REQUIRED_RESULT_AND_FACT_CATALOG_NOT_FROZEN",
+      "detail": "No bounded B catalog selects real fields, permitted dispositions, existing shared concept reuse, or exact source-supported evidence. No B field fact is created by this preflight."
+    },
+    {
+      "blocker": "B_SOURCEBLOCKS_AND_VERIFIED_QUOTES_MISSING",
+      "detail": "One exact shared-definition locator candidate is now locally validated in the terms source. A reviewed B catalog still has not selected output evidence or built exact SourceBlocks for every selected B fact. Do not convert this locator candidate into a fact automatically."
+    },
+    {
+      "blocker": "B_DEEPSEEK_EXECUTION_NOT_CURRENTLY_AUTHORIZED_BY_THE_B_IMPORT_GRANT",
+      "detail": "The completed B authorization covered the two public PDFs sent to DashScope embedding. The repository budget reserves B compile/review slots but explicitly records B provider submission as blocked pending specific external-data approval. Provider-zero request preparation remains local; an actual DeepSeek call requires that approval to be resolved."
+    }
+  ],
+  "network_calls": 0,
+  "not_directly_reusable": [
+    {
+      "path": "/private/tmp/g2-a-compile-prep/prepare_g2_a_compile.py",
+      "reason": "Hard-codes A historical base, A entity/version, A legacy17 migration, A native leaf, insured definition and A-only catalog/counts. Its construction pattern is reusable, its executable is not.",
+      "sha256": "463713f7ed07fa8841895dca1d734c4152dcf192b6e9a65de5a55fa1878e565a"
+    },
+    {
+      "path": "/private/tmp/weknora_g2_run_a_provider.py",
+      "reason": "Hard-codes A paths, A source SHA, g2-a run IDs, A catalog enforcement and A credential path. It must not be pointed at B."
+    },
+    {
+      "path": "/private/tmp/g2-a-compile-prep/check_native_quotes.py",
+      "reason": "Hard-codes two A quotes and A native capture."
+    },
+    {
+      "path": "/private/tmp/g2-b-chunks.json",
+      "reason": "This proves splitter/embedding input hashes and counts. It lacks durable brochure Chunk IDs and is not a Concept SourceBlock or evidence catalog."
+    }
+  ],
+  "notes": [
+    "The sealed B source identities are complete and pinned; no re-upload or re-embedding is needed for request preparation.",
+    "The local native captures match the completed source file SHA values, but they do not replace runtime source/ACL verification at Review and Activate.",
+    "The historical A request base release-6239.../epoch3 must not be copied into B after A advances the Head.",
+    "No B Candidate, Review, Draft, Ready, Release or serving authority was produced.",
+    "Both B durable chunk exports are now present; this closes custody input enumeration, not semantic fact selection."
+  ],
+  "provider_calls": 0,
+  "provider_zero_build_sequence": [
+    "After A activates, capture the exact current Head and stored A Ready/bundle/member identities without latest/fallback ambiguity.",
+    "Freeze B entity/version and decide whether the next release retains both complete 67-field entities; construct RequiredFields and EntityVersions accordingly.",
+    "Set ExistingDefinitions/Fields/Pages from exact A output and ExistingEntityVersions from exact A request entity versions.",
+    "Use the verified 37 terms and 9 brochure durable chunk exports; recheck selected blocks against their sealed manifest/count/source identities.",
+    "Select only source-supported B outcomes; for each evidence quote, join exact durable chunk text/offset to a unique native page and producer identity, then form SourceBlocks. Do not normalize source text.",
+    "Build a B identity catalog that supplies all copyable hashes/IDs and constrains shared-concept reuse and field facts; keep model computation away from SHA identities.",
+    "Build CompileRequest with A existing-source closure plus only referenced B SourceBlocks; validate the full existing/output source closure locally.",
+    "Run only the existing G2 Python model/assembler contracts after a separately frozen B transport and external-data authorization; preserve raw compiler and independent reviewer responses."
+  ],
+  "required_after_a_active": [
+    {
+      "fields": [
+        "release_id",
+        "activation_epoch"
+      ],
+      "item": "exact_active_head",
+      "rule": "Must be read after A activation; expected to replace historical release-6239.../epoch3. No value is predicted here."
+    },
+    {
+      "fields": [
+        "candidate_hash",
+        "preparation_id",
+        "manifest_digest",
+        "preparation_digest",
+        "compile_result.output.definitions",
+        "compile_result.output.fields",
+        "compile_result.output.pages",
+        "request.entity_versions",
+        "request.sources"
+      ],
+      "item": "exact_a_active_base_bundle",
+      "rule": "B ExistingDefinitions/Fields/Pages must exactly equal the immediately active A output; ExistingEntityVersions must exactly equal A request.entity_versions. The stored Ready preparation and release members must be retained as the server-authoritative binding."
+    },
+    {
+      "fields": [
+        "A entity_id and version",
+        "B frozen entity_id and version",
+        "the exact 67 field keys for every entity retained in the next release"
+      ],
+      "item": "combined_required_field_domain",
+      "rule": "Output fields are an exact bijection with Request.RequiredFields. If the second snapshot must retain A and add B, RequiredFields and EntityVersions must contain both entities and the output must contain both complete 67-field sets."
+    },
+    {
+      "fields": [
+        "all A SourceBlocks referenced by A Existing definitions/fields/pages",
+        "only B durable SourceBlocks actually referenced by B output evidence"
+      ],
+      "item": "exact_source_closure",
+      "rule": "Do not copy all 37+9 B chunks into Request.Sources. Unreferenced padding is rejected. Existing-only A source blocks remain required and must stay byte-identical."
+    }
+  ],
+  "source_blocks_created": 0,
+  "source_locator_candidates": [
+    {
+      "candidate_role": "shared_insured_definition_exact_body_match",
+      "durable_block": {
+        "block_id": "8bdec5c0-e7e0-4a61-bdb9-ea78e6158353",
+        "chunk_index": 0,
+        "content_codepoints": 1574,
+        "content_sha256": "f9111528c911ae724247a70217e9c5d47e17d5afb6174bffd9a9c395c48891ce",
+        "end": 212,
+        "exact_quote_match_count": 1,
+        "offset_unit": "UNICODE_CODE_POINT",
+        "start": 196
+      },
+      "matches_a_definition_body_exactly": true,
+      "native_locator": {
+        "bbox_union": [
+          168265,
+          200987,
+          437997,
+          213163
+        ],
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "document_exact_quote_match_count": 1,
+        "native_artifact_sha256": "5a6488fa79f8e7da65496a7617ecca8806bd41c446eb3b91ecf082ad1163ff05",
+        "native_capture_path": "/private/tmp/weknora-g2-594/b-terms-native.private.json",
+        "native_capture_sha256": "a3735e0d92a4e39f73829dd278660ef67ad7c9d67678857eabfb17b75c57b5be",
+        "page_exact_quote_match_count": 1,
+        "page_global_codepoint_end": 1572,
+        "page_global_codepoint_start": 0,
+        "page_number": 1,
+        "page_text_sha256": "35f2fac92bc6edb004c6ab379ba4fd8410cadaa6212166a9bbf2bc047859b9f6",
+        "quote_global_codepoint_end": 212,
+        "quote_global_codepoint_start": 196,
+        "visible_character_bbox_complete": true,
+        "visible_character_bbox_count": 16
+      },
+      "quote": "被保险人就是受保险合同保障的人。",
+      "quote_sha256_raw_utf8": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+      "selection_warning": "This validates source location only. A later compiler/reviewer must decide whether B reuses the A concept; this report creates no definition, field, SourceBlock, evidence member, review, signature, draft, or release.",
+      "source": {
+        "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+        "parse_attempt": 3,
+        "parse_manifest_sha256": "0ffe45e1ddd83576fdee7a68718693637b51a38a666952303aaa0bc942431aaa",
+        "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+        "revision_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "revision_source_binding_digest": "3b3796a0376b469593bb7fd19c091d9ff29a991f8035635126c2ce752ce5a110",
+        "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+      },
+      "status": "VALIDATED_LOCATOR_CANDIDATE_NOT_SELECTED_AS_OUTPUT_FACT"
+    }
+  ],
+  "status": "PRECHECK_COMPLETE_AWAITING_A_ACTIVE_AND_B_CATALOG",
+  "supersedes": {
+    "path": "/private/tmp/g2-b-second-snapshot-preflight.json",
+    "preserved": true,
+    "sha256": "b731b1c006062130d9ef52c375c5cc939e1ddf9b080cfa92be0b74ca594806c0"
+  },
+  "verified_b_custody": {
+    "documents": [
+      {
+        "binding_digest": "3b3796a0376b469593bb7fd19c091d9ff29a991f8035635126c2ce752ce5a110",
+        "chunk_count": 37,
+        "durable_chunk_export": "/private/tmp/weknora-g2-594/b-terms-actual-chunks.private.json",
+        "durable_chunk_export_status": "PRESENT_37_CONTENT_MULTISET_MATCHES_PRECHECK",
+        "file_path": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+        "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+        "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+        "manifest_digest": "0ffe45e1ddd83576fdee7a68718693637b51a38a666952303aaa0bc942431aaa",
+        "native_sha256": "5a6488fa79f8e7da65496a7617ecca8806bd41c446eb3b91ecf082ad1163ff05",
+        "page_count": 44,
+        "parse_attempt": 3,
+        "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+        "revision_source_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "role": "terms"
+      },
+      {
+        "binding_digest": "212b52240bd16a3cabe77841c1f6cf595c7f7a107efed71d4b470c55c601bec1",
+        "chunk_count": 9,
+        "durable_chunk_export": "/private/tmp/weknora-g2-594/b-brochure-actual-chunks.private.json",
+        "durable_chunk_export_sha256": "3c0dc1412ed9c961a7126ff458e14e88f93b6395ae2a969d2167e81dcf4f16b4",
+        "durable_chunk_export_status": "PRESENT_9_CONTENT_AND_EMBEDDING_HASHES_MATCH_PRECHECK_IN_ORDER",
+        "file_path": "dataset/version-materials/esb_huixiang_594-1_shuomingshu.pdf",
+        "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+        "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+        "manifest_digest": "7c9bf9d1d54824129a382232750aa8cae393ce5fec2899996071396d8fe7672c",
+        "native_sha256": "64dc878eb0764686b34b9321ee4b08ff3c407a74d731ceebb05fe15aa8d784a4",
+        "page_count": 17,
+        "parse_attempt": 1,
+        "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+        "revision_source_id": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e",
+        "role": "brochure"
+      }
+    ],
+    "evidence": {
+      "guarded_partition_receipt": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-guarded-partition-receipt.json",
+        "sha256": "c95b878160d3274e8978717e59f92e707461e09c57f42dc5f41b2fa665da154c"
+      },
+      "native_preflight": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-native-preflight.json",
+        "sha256": "e0089a90566472d957c0810a46958ae3e85dddd7acda99385511f1f40df3f0b1"
+      },
+      "precomputed_chunk_catalog": {
+        "path": "/private/tmp/g2-b-chunks.json",
+        "sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d"
+      },
+      "source_sealing_verification": {
+        "path": "docs/insurance-kb/evidence/830-g2/b-source-sealing-verification.json",
+        "sha256": "b8b4d88c040b1f1f8c5ee45f09d909a5415659bd8f4156c6d1bf05092068daf7"
+      }
+    },
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "status": "PASS"
+  }
+}

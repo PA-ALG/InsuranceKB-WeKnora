@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -381,6 +382,34 @@ func TestConceptLegacyEvidenceReuse830G2ReviewFailsWithoutNativeAuthority(t *tes
 	require.Equal(t, types.WikiReleasePreparationDraft, persisted.Status)
 }
 
+func TestConceptSourceAuthority830G2AcceptsPostgresRepresentationOnlyWithSameCanonicalManifest(t *testing.T) {
+	vector := loadConceptPostgresRoundTripVector830G2(t)
+	preparation, _ := conceptPostgresPreparation830G2(
+		t, vector, vector.After.ManifestJSON, vector.After.MembersJSON, "g2-pg-source-gate",
+	)
+	calls := 0
+	bridge := &ConceptSourceAuthorityService830G2{
+		legacyProofResolver: func(context.Context, types.WikiReleaseScope, types.ConceptCandidateBundle830G2) (map[string]conceptLegacyProof830G2, error) {
+			calls++
+			return nil, errors.New("stop after stable manifest gate")
+		},
+	}
+	request := ConceptSourceAuthorityVerificationRequest830G2{
+		Scope: preparation.WikiReleaseScope, Operation: "review", PreparationID: preparation.ID,
+		CandidateHash: preparation.CandidateDigest, ManifestDigest: preparation.ManifestDigest,
+		PreparationDigest: preparation.PreparationDigest, Manifest: preparation.Manifest,
+	}
+	err := bridge.VerifyConceptSources830G2(context.Background(), request)
+	require.ErrorIs(t, err, ErrConceptSourceAuthorityUnavailable830G2)
+	require.Equal(t, 1, calls, "the semantic manifest gate must admit the exact PostgreSQL representation")
+
+	calls = 0
+	request.Manifest = bytes.Replace(request.Manifest, []byte("fixture-schema"), []byte("fixture-schema-drift"), 1)
+	err = bridge.VerifyConceptSources830G2(context.Background(), request)
+	require.ErrorIs(t, err, ErrConceptSourceAuthorityUnavailable830G2)
+	require.Zero(t, calls, "semantic drift must fail before any source authority work")
+}
+
 func TestConceptLegacyBaseChain830G2RecognizesHumanAdmissionRelease(t *testing.T) {
 	fixture, schema := conceptReleaseFixture830G2(t)
 	draft, err := schema.CreateConceptFreeWikiDraft830G2(
@@ -412,7 +441,7 @@ func TestConceptLegacyBaseChain830G2RecognizesHumanAdmissionRelease(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, storedRelease.BaseReleaseID, storedBundle.Request.BaseReleaseID)
 	require.Equal(t, storedRelease.BaseActivationEpoch, storedBundle.Request.BaseActivationEpoch)
-	require.True(t, wikiReleaseMemberSnapshotsEqual(expectedMembers, storedMembers))
+	require.True(t, conceptMemberSnapshotSetsEqual830G2(expectedMembers, storedMembers))
 	bridge := &ConceptSourceAuthorityService830G2{releases: fixture.repo}
 	proofs, err := bridge.verifyLegacyCarryover830G2(fixture.ctx, fixture.scope, next)
 	require.NoError(t, err)

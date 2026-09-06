@@ -1,0 +1,427 @@
+{
+  "contract": "830-g2-seed-protocol-execution-audit.v1",
+  "status": "BLOCKED_INPUT_CONTRACT_INSUFFICIENT",
+  "scope": "read-only direct existing-Python-protocol audit; no provider/DB/Docker/Active",
+  "seed_path": "docs/insurance-kb/evidence/830-g2/seed-cases.json",
+  "seed_sha256": "7725bc78806e6889fff56543819bb790435eaf122844573caf103aae86090a2b",
+  "denominator": 24,
+  "cases_loaded": 24,
+  "existing_seed_runner_found": false,
+  "full_disposition_cases_attempted": 0,
+  "full_disposition_pass": 0,
+  "full_disposition_fail": 0,
+  "partial_score_shape_checks": 15,
+  "partial_score_shape_pass": 15,
+  "partial_score_shape_fail": 0,
+  "why_no_full_execution": "Calling admission_disposition requires a pre-admission Disposition. The seed inputs do not supply that value; the only placement values are concept_definition, which are outside the function domain. Using expected.disposition as the argument would make the replay circular. Full compiler/reviewer execution also lacks complete SourceBlock, CompileRequest, rule/output and review inputs.",
+  "cases": [
+    {
+      "case_id": "G2-SEED-01",
+      "expected_disposition": "new_page",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; seed placement='concept_definition' uses a different vocabulary",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-02",
+      "expected_disposition": "new_page",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; seed placement='concept_definition' uses a different vocabulary",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-03",
+      "expected_disposition": "update",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 95
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-04",
+      "expected_disposition": "sense",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-05",
+      "expected_disposition": "field_rule",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-06",
+      "expected_disposition": "alias_link",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-07",
+      "expected_disposition": "mention",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 59
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-08",
+      "expected_disposition": "duplicate",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-09",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-10",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-11",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-12",
+      "expected_disposition": "pending",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-13",
+      "expected_disposition": "pending",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 60
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-14",
+      "expected_disposition": "pending",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 79
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-15",
+      "expected_disposition": "new_page",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 80
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-16",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-17",
+      "expected_disposition": "field_rule",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 0
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-18",
+      "expected_disposition": "field_rule",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-19",
+      "expected_disposition": "new_page",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-20",
+      "expected_disposition": "field_rule",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-21",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-22",
+      "expected_disposition": "new_page",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "PASS",
+        "total": 100
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-23",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    },
+    {
+      "case_id": "G2-SEED-24",
+      "expected_disposition": "reject",
+      "actual_disposition": null,
+      "full_case_status": "NOT_RUN",
+      "score_shape_validation": {
+        "status": "NOT_APPLICABLE"
+      },
+      "missing_for_direct_protocol_execution": [
+        "pre_admission_disposition: one of the protocol Disposition values; not supplied",
+        "six-component ValueScore",
+        "complete SourceBlock(s): tenant_id/raw_kb_id/knowledge_id/parse_attempt/block_id/full text",
+        "complete CompileRequest: request/wiki/policy/schema/profile/budget identities, required_fields, entity_versions and existing snapshots",
+        "compiler rule set or frozen compiler output that determines update/sense/alias/duplicate/reject semantics independently of expected",
+        "independent ReviewOutput/context for semantic and transformation-preservation cases"
+      ]
+    }
+  ]
+}

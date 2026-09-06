@@ -514,3 +514,64 @@ func TestParseConceptCandidateBundle830G2RejectsAuditMemberDrift(t *testing.T) {
 	_, err := ParseConceptCandidateBundle830G2(raw)
 	require.ErrorIs(t, err, ErrConceptCandidateBundle830G2)
 }
+
+func TestConceptCandidateBundle830G2CanonicalSurvivesPostgresJSONBRoundTrip(t *testing.T) {
+	raw, err := os.ReadFile("../../harness/tests/fixtures/concept_free_wiki_830_g2_postgres_roundtrip.json")
+	require.NoError(t, err)
+	var vector struct {
+		Before struct {
+			ManifestJSON string `json:"manifest_json"`
+			MembersJSON  string `json:"members_json"`
+		} `json:"before"`
+		After struct {
+			ManifestJSON string `json:"manifest_json"`
+			MembersJSON  string `json:"members_json"`
+		} `json:"after"`
+		Expected struct {
+			CanonicalManifestSHA256 string `json:"canonical_manifest_sha256"`
+			CanonicalMembersSHA256  string `json:"canonical_members_sha256"`
+		} `json:"expected"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &vector))
+
+	beforeBundle, beforeCanonical, err := CanonicalConceptCandidateBundle830G2([]byte(vector.Before.ManifestJSON))
+	require.NoError(t, err)
+	afterBundle, afterCanonical, err := CanonicalConceptCandidateBundle830G2([]byte(vector.After.ManifestJSON))
+	require.NoError(t, err)
+	require.Equal(t, beforeBundle.CandidateHash, afterBundle.CandidateHash)
+	require.Equal(t, beforeCanonical, afterCanonical)
+	manifestDigest := sha256.Sum256(beforeCanonical)
+	require.Equal(t, vector.Expected.CanonicalManifestSHA256, hex.EncodeToString(manifestDigest[:]))
+
+	var beforeMembers, afterMembers []WikiReleaseMemberSnapshot
+	require.NoError(t, json.Unmarshal([]byte(vector.Before.MembersJSON), &beforeMembers))
+	require.NoError(t, json.Unmarshal([]byte(vector.After.MembersJSON), &afterMembers))
+	require.Len(t, beforeMembers, len(afterMembers))
+	beforeMembersCanonical, err := conceptCanonicalJSON830G2(beforeMembers)
+	require.NoError(t, err)
+	afterMembersCanonical, err := conceptCanonicalJSON830G2(afterMembers)
+	require.NoError(t, err)
+	require.Equal(t, beforeMembersCanonical, afterMembersCanonical)
+	membersDigest := sha256.Sum256(beforeMembersCanonical)
+	require.Equal(t, vector.Expected.CanonicalMembersSHA256, hex.EncodeToString(membersDigest[:]))
+	for index := range beforeMembers {
+		beforePayload, beforeErr := CanonicalConceptMemberPayload830G2(beforeMembers[index].Payload)
+		afterPayload, afterErr := CanonicalConceptMemberPayload830G2(afterMembers[index].Payload)
+		require.NoError(t, beforeErr)
+		require.NoError(t, afterErr)
+		require.Equal(t, beforePayload, afterPayload)
+	}
+}
+
+func TestCanonicalConceptMemberPayload830G2RejectsAmbiguousOrInvalidJSON(t *testing.T) {
+	for name, raw := range map[string]json.RawMessage{
+		"duplicate key":   json.RawMessage(`{"title":"a","title":"b"}`),
+		"binary float":    json.RawMessage(`{"page_number":1.0}`),
+		"invalid control": json.RawMessage("{\"title\":\"bad\\u0000\"}"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := CanonicalConceptMemberPayload830G2(raw)
+			require.ErrorIs(t, err, ErrConceptCandidateBundle830G2)
+		})
+	}
+}

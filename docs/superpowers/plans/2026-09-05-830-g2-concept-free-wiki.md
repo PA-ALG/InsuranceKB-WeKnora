@@ -83,3 +83,23 @@ Commands：`go test ./internal/types ./internal/application/service ./internal/h
 
 Commands: Python两G2模块pytest；Go `GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p2 ./internal/types ./internal/application/service ./internal/handler ./internal/router -run 'G2|EntityPageGraph|HumanBatch' -count=1`。
 No new LLM calls to repair the stored66; no quality calibration or lowering thresholds. FLOW与Q0 QUALITY继续分开。
+
+
+### Task 6：真实PostgreSQL回读与整包发布接线修复
+
+**Goal:** 修复真实Review400的JSONB表示差异，继续已批准A整包的隔离发布，不改变其内容/hash。
+**Owner:** 沿Spec中G2专属文件写域；root负责实际PG向量/外部执行，g2_sources实现，g2_bundle_review复核。
+
+- [ ] 冻结并独立复核G2-only存储canonical及member比较方案，保留所有来源/身份/内容硬门。
+- [ ] root从真实PG只读生成小型roundtrip vector；记录原实现对无语义变化失败的RED和真实A诊断。
+- [ ] 最小实现统一canonical存储摘要；G2专属payload等值；覆盖Create/Review/Activate/source/base/current/pinned。
+- [ ] v1/v2 candidate hash兼容及内容/raw/成员/来源篡改负例通过，实际PG序列化向量通过，独立review0。
+- [ ] root小提交；先登记exact build head，累计app预算4→5、一次miss构建，前端/docreader/provider0。
+- [ ] 仅G2升级，保持已有双public rings，旧失败Draft及私有部分执行回执保留。
+- [ ] 同candidate创建新的replacement Draft、核完整内容/新摘要/Head3不变；无需重复用户内容批准。
+- [ ] 登记恢复执行plan，复用现有两套独立keys并新鲜签署，Review与Activate分别一次，核实际Head3→4。
+- [ ] 同版页面/搜索/Agent/来源验收，继续B第二快照；全卡FLOW仍按实际结果记账。
+
+不改原数据库、旧Draft摘要、candidate/raw/score；不新增质量门或重建服务架构。
+
+Task6回归定位的同域漏接点：`internal/application/service/concept_agent_830_g2.go` G2分支仍用global raw/order比较，交g2_sources仅改为G2 member set比较；同文件G1分支不变。这是既定R6同版Agent消费范围，先独立复核该单点后改码。

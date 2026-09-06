@@ -309,6 +309,53 @@ func ParseConceptCandidateBundle830G2(raw []byte) (ConceptCandidateBundle830G2, 
 	return bundle, nil
 }
 
+// CanonicalConceptCandidateBundle830G2 validates one complete G2 bundle and
+// returns its recursive canonical JSON. The canonical bytes remain stable when
+// PostgreSQL jsonb changes only object-key order or insignificant whitespace.
+func CanonicalConceptCandidateBundle830G2(raw []byte) (ConceptCandidateBundle830G2, []byte, error) {
+	bundle, err := ParseConceptCandidateBundle830G2(raw)
+	if err != nil {
+		return ConceptCandidateBundle830G2{}, nil, ErrConceptCandidateBundle830G2
+	}
+	canonical, err := canonicalConceptRawJSON830G2(raw)
+	if err != nil {
+		return ConceptCandidateBundle830G2{}, nil, ErrConceptCandidateBundle830G2
+	}
+	return bundle, canonical, nil
+}
+
+// CanonicalConceptMemberPayload830G2 canonicalizes a stored G2 page-member
+// payload without changing strings, integers, or array order. Callers compare
+// it with a payload from a fully validated candidate bundle.
+func CanonicalConceptMemberPayload830G2(raw json.RawMessage) ([]byte, error) {
+	canonical, err := canonicalConceptRawJSON830G2(raw)
+	if err != nil {
+		return nil, ErrConceptCandidateBundle830G2
+	}
+	return canonical, nil
+}
+
+func canonicalConceptRawJSON830G2(raw []byte) ([]byte, error) {
+	if !conceptJSONUnicodeValid830G2(raw) || !conceptJSONUniqueKeys830G2(raw) {
+		return nil, ErrConceptCandidateBundle830G2
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var tree any
+	if err := decoder.Decode(&tree); err != nil {
+		return nil, ErrConceptCandidateBundle830G2
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, ErrConceptCandidateBundle830G2
+	}
+	canonical, err := conceptCanonicalJSON830G2(tree)
+	if err != nil {
+		return nil, ErrConceptCandidateBundle830G2
+	}
+	return canonical, nil
+}
+
 func (bundle ConceptCandidateBundle830G2) SnapshotMembers() ([]WikiReleaseMemberSnapshot, error) {
 	if validateConceptBundle830G2(bundle) != nil {
 		return nil, ErrConceptCandidateBundle830G2

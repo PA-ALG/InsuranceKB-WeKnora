@@ -174,11 +174,11 @@ func NewConceptSourceAuthorityService830G2(fixed *KnowledgeRevisionSourceService
 }
 
 func (s *ConceptSourceAuthorityService830G2) VerifyConceptSources830G2(ctx context.Context, request ConceptSourceAuthorityVerificationRequest830G2) error {
-	if s == nil || (request.Operation != "review" && request.Operation != "activate") || request.PreparationID == "" || !validServiceSHA256(request.CandidateHash) || digestWikiReleaseBytes(request.Manifest) != request.ManifestDigest {
+	if s == nil || (request.Operation != "review" && request.Operation != "activate") || request.PreparationID == "" || !validServiceSHA256(request.CandidateHash) {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
-	bundle, err := types.ParseConceptCandidateBundle830G2(request.Manifest)
-	if err != nil || bundle.CandidateHash != request.CandidateHash || bundle.Request.TenantID != request.Scope.TenantID || bundle.Request.SpaceID != request.Scope.SpaceID || bundle.Request.RawKBID != request.Scope.RawKBID || bundle.Request.WikiKBID != request.Scope.WikiKBID {
+	bundle, canonicalManifest, err := types.CanonicalConceptCandidateBundle830G2(request.Manifest)
+	if err != nil || digestWikiReleaseBytes(canonicalManifest) != request.ManifestDigest || bundle.CandidateHash != request.CandidateHash || bundle.Request.TenantID != request.Scope.TenantID || bundle.Request.SpaceID != request.Scope.SpaceID || bundle.Request.RawKBID != request.Scope.RawKBID || bundle.Request.WikiKBID != request.Scope.WikiKBID {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	ctx = context.WithValue(ctx, conceptNativeCaptureCacheKey830G2{}, map[string]conceptNativeCaptureEntry830G2{})
@@ -743,7 +743,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 		switch header.Contract {
 		case "concept-candidate-bundle.830.g2.v1", "concept-candidate-bundle.830.g2.v2":
 			base, expected, validationErr := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
-			if validationErr != nil || release.CandidateDigest != preparation.CandidateDigest || release.ManifestDigest != preparation.ManifestDigest || !wikiReleaseMemberSnapshotsEqual(expected, members) || release.BaseReleaseID != base.Request.BaseReleaseID || release.BaseActivationEpoch != base.Request.BaseActivationEpoch {
+			if validationErr != nil || release.CandidateDigest != preparation.CandidateDigest || release.ManifestDigest != preparation.ManifestDigest || !conceptMemberSnapshotSetsEqual830G2(expected, members) || release.BaseReleaseID != base.Request.BaseReleaseID || release.BaseActivationEpoch != base.Request.BaseActivationEpoch {
 				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			releaseID = base.Request.BaseReleaseID

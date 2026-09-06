@@ -197,7 +197,7 @@ func (s *ConceptAgentService830G2) pinConceptAgentRelease830G2(
 		preparation, types.WikiReleasePreparationReady, pin.scope,
 	)
 	if conceptErr == nil && release.CandidateDigest == bundle.CandidateHash &&
-		wikiReleaseMemberSnapshotsEqual(expected, members) {
+		conceptMemberSnapshotSetsEqual830G2(expected, members) {
 		return projectConceptAgentRelease830G2(bundle, members, pin), nil
 	}
 	manifest, expected, g1Err := validateEntityPageGraphPreparation830G1(

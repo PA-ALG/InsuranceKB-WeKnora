@@ -1,0 +1,29 @@
+{
+  "contract": "830-g2-jsonb-upgrade-draft-runbook-review.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "scope": "Only prepared isolated upgrade and replacement Draft scripts; no execution or publication approval inferred",
+  "scripts": {
+    "weknora_g2_upgrade_jsonb.py": "def5e3c5ed2a4e97d2b49f4350a5f3b9521b3001c46583248943ec3a0897b65f",
+    "weknora_g2_create_a_jsonb_draft.py": "df5ef01223567541ab4f9e03264b5bdb9a347765d6df8ad9e388cc9f8f6f1e15"
+  },
+  "required_before_execute": [
+    "Code GREEN and independent frozen review0",
+    "Root commit and exact registered build source head",
+    "BA0 PASS artifact",
+    "Preserve live public-rings config f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+    "Retain old failed Draft; new preparation_id g2-a-human-jsonb-70cb4b6eb57c"
+  ],
+  "actual_effects": 0,
+  "provider_calls": 0,
+  "post_activation_read_script": {
+    "path": "/private/tmp/g2_verify_a_jsonb_live.py",
+    "sha256": "68e61458e60ead3790270897e68b053464ed87f6d9ca83514880fcbef8c0926b",
+    "reviewer": "g2_bundle_review",
+    "status": "BLOCKER0",
+    "review_rounds": 2,
+    "closed_finding": "Verify exact complete70-member contents and full source/scope/citation authority, not just counts or partial identifiers",
+    "provider_calls": 0,
+    "execution": "NOT_RUN"
+  }
+}
