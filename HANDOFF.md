@@ -5,7 +5,14 @@
 
 ## 1. 当前结论（2026-09-06）
 
-**G2 正在按用户追加授权并行推进，尚未完成。** 已提交八个代码切片：
+**G2 正在按用户追加授权并行推进，尚未完成。** 用户已明确纠正阶段目标：G2先跑真实流程，66分属于60–79人工区间，不能当作全卡停工的质量门。
+当前补齐v2整包人工待审分支：v1>=80自动准入不变；v2保留真实raw PASS/66并生成NEEDS_HUMAN准入处置，
+Draft拟议成员只有具名whole-batch决定和原发布授权后才能Active。Python42项测试/ruff/mypy及独立复核PASS，
+真实A v2 candidate `70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5` 已离线装配，
+1定义/67字段/2链接、70拟议成员；新增模型调用0。Go四包定向回归及独立复核PASS，尚未部署新版或创建实际v2 Draft。
+[A整包候选预览](docs/insurance-kb/evidence/830-g2/a-human-review-preview.md)。
+
+已提交八个代码切片：
 离线编译/独立审核合同 `e88f27fe6`（25项定向测试），固定Release页面 `5b9ddb265`
 （25项前端测试及typecheck），原文存储后端解析修复 `03a2b96aa`（RevisionSource套件通过）。
 另有 Go 发布/固定页面合同 `77f8fea05` 和 Agent 同版消费 `3c655294d`。
@@ -24,7 +31,7 @@ A DeepSeek实际调用4/4次，共329829 tokens：首次编译拒绝、一次纠
 缺少contract，Python默认值掩盖遗漏，实际平台Draft HTTP400，旧89分候选/预览已作废。
 登记unused seed槽转给A后，全局模型预算仍7；第4次review002 raw完整，但66分低于80准入线，
 assemble_bundle正确拒绝PAGE_ADMISSION_REQUIRED。没有合格G2 Draft/Active，不改分、不刷分。
-A剩余阻断为review raw严格校验与评分锚点/PASS分数一致性；须离线修正及独立审查，不能降低80门槛。
+上段为v1自动准入路径的历史拒绝事实；当前以v2人工分支接续，不调分、不前置Q0质量优化。
 B两份PDF本地原生解析PASS（44/17页），实际Go拆块37/9。首次因顺序校验失败而外发0；
 改为精确多重集后provider5次HTTP400，明确单批最多20。第三次已按20/17/9分批，
 两份均completed（terms attempt3、brochure attempt1），共46 chunks；实际总8/20请求

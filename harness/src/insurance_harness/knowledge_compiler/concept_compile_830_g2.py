@@ -152,6 +152,25 @@ class ReviewResult(Frozen):
     execution: ExecutionRecord
 
 
+def _validate_raw_output(raw: str, output: CompileOutput | ReviewOutput) -> None:
+    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("RAW_OUTPUT_DUPLICATE_KEY")
+            result[key] = value
+        return result
+
+    try:
+        original = json.loads(raw, object_pairs_hook=unique_object)
+        if digest("raw-output-object", original) != digest(
+            "raw-output-object", output.model_dump(mode="json")
+        ):
+            raise ValueError("RAW_OUTPUT_BINDING_MISMATCH")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("RAW_OUTPUT_BINDING_MISMATCH") from exc
+
+
 def record_output(
     run_id: str,
     implementation: str,
@@ -160,6 +179,7 @@ def record_output(
     raw: str | None = None,
 ) -> ExecutionRecord:
     raw = output.model_dump_json() if raw is None else raw
+    _validate_raw_output(raw, output)
     return ExecutionRecord(
         run_id=run_id,
         implementation=implementation,
@@ -611,8 +631,8 @@ def project_members(request: CompileRequest, output: CompileOutput) -> PageManif
     )
 
 
-class CandidateBundle(Frozen):
-    contract: Literal["concept-candidate-bundle.830.g2.v1"] = "concept-candidate-bundle.830.g2.v1"
+class _CandidateBundleBase(Frozen):
+    contract: str
     request: CompileRequest
     compile_result: CompileResult
     review_result: ReviewResult
@@ -639,30 +659,78 @@ class CandidateBundle(Frozen):
         ):
             if result.execution.context_hash != digest("execution-context", context):
                 raise ValueError("EXECUTION_CONTEXT_MISMATCH")
-            if (
-                type(result.output).model_validate_json(result.execution.raw_output)
-                != result.output
-            ):
-                raise ValueError("RAW_OUTPUT_BINDING_MISMATCH")
-        if (checked.output.request_hash, checked.output.output_hash, checked.output.decision) != (
+            _validate_raw_output(result.execution.raw_output, result.output)
+        if (checked.output.request_hash, checked.output.output_hash) != (
             req.request_hash,
             compiled.output.output_hash,
-            "PASS",
         ):
             raise ValueError("REVIEW_NOT_APPROVED_OR_STALE")
+        self._validate_admission(req, compiled.output, checked.output)
         if self.page_manifest != project_members(req, compiled.output):
             raise ValueError("PAGE_MANIFEST_MISMATCH")
-        if any(
-            checked.output.page_scores.get(key) is None
-            or checked.output.page_scores[key].total < 80
-            for key in novel_page_ids(req, compiled.output)
-        ):
-            raise ValueError("PAGE_ADMISSION_REQUIRED")
         if self.candidate_hash != digest(
             "candidate-bundle", self.model_dump(mode="json", exclude={"candidate_hash"})
         ):
             raise ValueError("CANDIDATE_HASH_MISMATCH")
         return self
+
+    def _validate_admission(
+        self, request: CompileRequest, output: CompileOutput, checked: ReviewOutput
+    ) -> None:
+        raise ValueError("UNKNOWN_CANDIDATE_CONTRACT")
+
+
+class CandidateBundle(_CandidateBundleBase):
+    contract: Literal["concept-candidate-bundle.830.g2.v1"] = "concept-candidate-bundle.830.g2.v1"
+
+    def _validate_admission(
+        self, request: CompileRequest, output: CompileOutput, checked: ReviewOutput
+    ) -> None:
+        if checked.decision != "PASS":
+            raise ValueError("REVIEW_NOT_APPROVED_OR_STALE")
+        if any(
+            checked.page_scores.get(key) is None or checked.page_scores[key].total < 80
+            for key in novel_page_ids(request, output)
+        ):
+            raise ValueError("PAGE_ADMISSION_REQUIRED")
+
+
+class HumanBatchAdmission(Frozen):
+    contract: Literal["concept-admission.830.g2.v1"]
+    status: Literal["NEEDS_HUMAN"]
+    pending_page_ids: tuple[Identity, ...]
+
+
+def _human_admission(
+    request: CompileRequest, output: CompileOutput, checked: ReviewOutput
+) -> HumanBatchAdmission:
+    if checked.decision not in ("PASS", "NEEDS_HUMAN"):
+        raise ValueError("REVIEW_NOT_APPROVED_OR_STALE")
+    pending = []
+    for key in sorted(novel_page_ids(request, output)):
+        score = checked.page_scores.get(key)
+        if score is None or score.total < 60:
+            raise ValueError("PAGE_ADMISSION_REJECTED")
+        if score.total < 80:
+            pending.append(key)
+    return HumanBatchAdmission(
+        contract="concept-admission.830.g2.v1",
+        status="NEEDS_HUMAN",
+        pending_page_ids=tuple(pending),
+    )
+
+
+class HumanReviewCandidateBundle(_CandidateBundleBase):
+    """Proposed Draft members only; the platform must verify a whole-batch human decision."""
+
+    contract: Literal["concept-candidate-bundle.830.g2.v2"]
+    admission: HumanBatchAdmission
+
+    def _validate_admission(
+        self, request: CompileRequest, output: CompileOutput, checked: ReviewOutput
+    ) -> None:
+        if self.admission != _human_admission(request, output, checked):
+            raise ValueError("HUMAN_ADMISSION_BINDING_MISMATCH")
 
 
 def assemble_bundle(
@@ -676,5 +744,23 @@ def assemble_bundle(
         "page_manifest": project_members(request, compiled.output).model_dump(mode="json"),
     }
     return CandidateBundle.model_validate(
+        {**data, "candidate_hash": digest("candidate-bundle", data)}
+    )
+
+
+def assemble_human_review_bundle(
+    request: CompileRequest, compiled: CompileResult, checked: ReviewResult
+) -> HumanReviewCandidateBundle:
+    data = {
+        "contract": "concept-candidate-bundle.830.g2.v2",
+        "request": request.model_dump(mode="json"),
+        "compile_result": compiled.model_dump(mode="json"),
+        "review_result": checked.model_dump(mode="json"),
+        "page_manifest": project_members(request, compiled.output).model_dump(mode="json"),
+        "admission": _human_admission(request, compiled.output, checked.output).model_dump(
+            mode="json"
+        ),
+    }
+    return HumanReviewCandidateBundle.model_validate(
         {**data, "candidate_hash": digest("candidate-bundle", data)}
     )

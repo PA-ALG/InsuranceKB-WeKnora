@@ -222,6 +222,13 @@ func conceptBundleVector830G2(t *testing.T) json.RawMessage {
 	return raw
 }
 
+func conceptHumanBundleVector830G2(t *testing.T) json.RawMessage {
+	t.Helper()
+	raw, err := os.ReadFile("../../../harness/tests/fixtures/concept_free_wiki_830_g2_human_contract_vector.json")
+	require.NoError(t, err)
+	return raw
+}
+
 func conceptReleaseFixture830G2(t *testing.T) (*wikiReleaseFixture, *SchemaWikiService) {
 	t.Helper()
 	fixture := newWikiReleaseFixture(t, WikiReleaseFaults{})
@@ -462,6 +469,97 @@ func TestCreateConceptFreeWikiDraft830G2AndReadOnePinnedRelease(t *testing.T) {
 		fixture.ctx, fixture.principal1, fixture.scope, memberID, "other-release",
 	)
 	require.ErrorIs(t, err, ErrWikiReleaseNotFound)
+}
+
+func TestConceptHumanAdmission830G2RequiresWholeBatchReviewAndSeparatePublish(t *testing.T) {
+	fixture, schema := conceptReleaseFixture830G2(t)
+	draft, err := schema.CreateConceptFreeWikiDraft830G2(
+		fixture.ctx, fixture.principal1, fixture.scope,
+		"g2-human-preparation", conceptHumanBundleVector830G2(t),
+	)
+	require.NoError(t, err)
+	require.Equal(t, types.WikiReleasePreparationDraft, draft.Status)
+	require.Empty(t, draft.ReviewDecisionDigest)
+	bundle, err := types.ParseConceptCandidateBundle830G2(draft.Manifest)
+	require.NoError(t, err)
+	require.Equal(t, "NEEDS_HUMAN", bundle.Admission.Status)
+	require.Equal(t, bundle.ReviewResult.Execution.RawOutputHash, draft.ReadyReceiptDigest)
+
+	rawDecision, decision := conceptDecision830G2(t, fixture, draft, "g2-human-review")
+	_, err = fixture.service.ActivateReviewed(fixture.ctx, fixture.principal1, rawDecision, nil)
+	require.Error(t, err)
+	_, headErr := fixture.repo.GetHead(fixture.ctx, fixture.scope)
+	require.ErrorIs(t, headErr, wikirepository.ErrWikiReleaseNotFound)
+
+	ready, err := schema.ReviewSchemaDraft(
+		fixture.ctx, fixture.principal1, fixture.scope, draft.ID, rawDecision,
+	)
+	require.NoError(t, err)
+	require.Equal(t, types.WikiReleasePreparationReady, ready.Status)
+	require.NotEmpty(t, ready.ReviewDecisionDigest)
+	authority := fixture.service.conceptSourceAuthorityVerifier830G2.(*conceptSourceAuthorityVerifierFake830G2)
+	require.Len(t, authority.requests, 1)
+	require.Equal(t, "review", authority.requests[0].Operation)
+
+	_, err = fixture.service.ActivateReviewed(fixture.ctx, fixture.principal1, rawDecision, nil)
+	require.Error(t, err, "whole-batch review is not publish authorization")
+	_, headErr = fixture.repo.GetHead(fixture.ctx, fixture.scope)
+	require.ErrorIs(t, headErr, wikirepository.ErrWikiReleaseNotFound)
+
+	receipt, err := fixture.service.ActivateReviewed(
+		fixture.ctx, fixture.principal1, rawDecision,
+		conceptAuthorization830G2(t, fixture, ready, decision),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+	require.Len(t, authority.requests, 2)
+	require.Equal(t, "activate", authority.requests[1].Operation)
+}
+
+func TestConceptHumanAdmission830G2ReviewFailuresLeaveDraftAndHeadUnchanged(t *testing.T) {
+	tests := map[string]func(*testing.T, *wikiReleaseFixture, *types.WikiReleasePreparation, []byte, *types.HumanBatchDecisionReceiptV1) ([]byte, error){
+		"missing signature": func(_ *testing.T, _ *wikiReleaseFixture, _ *types.WikiReleasePreparation, _ []byte, decision *types.HumanBatchDecisionReceiptV1) ([]byte, error) {
+			decision.Signature = ""
+			return CanonicalHumanBatchDecisionReceiptV1(decision, true)
+		},
+		"candidate hash drift": func(t *testing.T, fixture *wikiReleaseFixture, _ *types.WikiReleasePreparation, _ []byte, decision *types.HumanBatchDecisionReceiptV1) ([]byte, error) {
+			decision.CandidateHash = strings.Repeat("a", 64)
+			unsigned, err := CanonicalHumanBatchDecisionReceiptV1(decision, false)
+			require.NoError(t, err)
+			decision.Signature = EncodeWikiReleaseSignature(ed25519.Sign(fixture.privateKey, unsigned))
+			return CanonicalHumanBatchDecisionReceiptV1(decision, true)
+		},
+		"source authority unavailable": func(_ *testing.T, fixture *wikiReleaseFixture, _ *types.WikiReleasePreparation, raw []byte, _ *types.HumanBatchDecisionReceiptV1) ([]byte, error) {
+			fixture.service.conceptSourceAuthorityVerifier830G2 = nil
+			return raw, nil
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			fixture, schema := conceptReleaseFixture830G2(t)
+			draft, err := schema.CreateConceptFreeWikiDraft830G2(
+				fixture.ctx, fixture.principal1, fixture.scope,
+				"g2-human-failure-"+strings.ReplaceAll(name, " ", "-"), conceptHumanBundleVector830G2(t),
+			)
+			require.NoError(t, err)
+			before, err := fixture.repo.GetDraftPreparation(fixture.ctx, fixture.scope, draft.ID)
+			require.NoError(t, err)
+			raw, decision := conceptDecision830G2(t, fixture, draft, "g2-human-failure")
+			raw, err = mutate(t, fixture, draft, raw, decision)
+			require.NoError(t, err)
+
+			ready, reviewErr := schema.ReviewSchemaDraft(
+				fixture.ctx, fixture.principal1, fixture.scope, draft.ID, raw,
+			)
+			require.Error(t, reviewErr)
+			require.Nil(t, ready)
+			after, err := fixture.repo.GetDraftPreparation(fixture.ctx, fixture.scope, draft.ID)
+			require.NoError(t, err)
+			require.Equal(t, before, after)
+			_, headErr := fixture.repo.GetHead(fixture.ctx, fixture.scope)
+			require.ErrorIs(t, headErr, wikirepository.ErrWikiReleaseNotFound)
+		})
+	}
 }
 
 func TestCreateConceptFreeWikiDraft830G2RejectsCallerScopeDrift(t *testing.T) {

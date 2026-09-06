@@ -64,3 +64,22 @@ Commands：`go test ./internal/types ./internal/application/service ./internal/h
 - [ ] D3用exact image显式no-build/pull never；完整24/24及真实发布、页面/搜索/Agent/source click验收，production8081/Active不变。
 - [ ] Evidence矩阵分别记录software/container/provider/provisioning/local live/GitHub live；FLOW与QUALITY分开。
 - [ ] 小提交、远端CI与独立复核按现有章程集成；G2真实PASS或STOP才关闭写域与交接，G3仍待新授权。
+
+### Task 5：60–79整包人工待审，保留真实66（2026-09-06修订）
+
+**Goal:** 将已生成的真实66分候选送到可审Draft，用户确认后沿既有整包签名/发布链继续G2。
+**Architecture:** v1不变；v2追加确定性admission，不修改原始模型输出。Draft拟议成员和Active正式成员以既有状态/签名区分。
+**Owner:** root写Python/文档/外部；g2_sources唯一Go writer；g2_bundle_review只读。
+
+- [ ] 独立审查上述v2设计，冻结接口后再开始实现。
+- [ ] Python RED：v2组装60/66/79待审、80可人工；v1拒66；缺分/<60/REJECT拒绝；raw遗漏contract拒绝；pending集合篡改拒绝。
+- [ ] 最小实现HumanReviewCandidateBundle及assemble_human_review_bundle；raw JSON对象与typed dump逐项一致而非Pydantic默认填补；保存v2跨语言fixture。
+- [ ] Go RED后接受并重算v2admission；v1不变；同一Draft→human Review→publish路径测试未签名/错误hash不可Ready或Active，source verifier fail closed。
+- [ ] 跨语言fixed fixture、真实A四个已存raw边界及focused Python/Go套件通过；独立审查冻结diff，root提交。
+- [ ] 登记一次必要app增量构建预算（总3→4，standing合理扩展），先BA0 lookup；只隔离G2升级，不动原库。前端无变动不build。
+- [ ] 使用compile003/review002真实产物无新provider调用装配v2，实际HTTP创建Draft，生成可读整包预览及精确candidate hash。
+- [ ] 在具体候选可审后请求用户整包决定；继续开发授权不是伪造human receipt。可独立完成B输入准备、负向检查及部署配置准备。
+- [ ] 获具名整包确认后才签署已有receipt、隔离发布、同版页面/搜索/Agent/来源回验，随后第二快照与G2剩余验收。
+
+Commands: Python两G2模块pytest；Go `GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p2 ./internal/types ./internal/application/service ./internal/handler ./internal/router -run 'G2|EntityPageGraph|HumanBatch' -count=1`。
+No new LLM calls to repair the stored66; no quality calibration or lowering thresholds. FLOW与Q0 QUALITY继续分开。

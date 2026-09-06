@@ -35,6 +35,11 @@ type ConceptPageRead830G2 struct {
 	AggregateHash   string                         `json:"aggregate_hash"`
 }
 
+func conceptCandidateBundleContract830G2(contract string) bool {
+	return contract == "concept-candidate-bundle.830.g2.v1" ||
+		contract == "concept-candidate-bundle.830.g2.v2"
+}
+
 func (s *SchemaWikiService) CreateConceptFreeWikiDraft830G2(
 	ctx context.Context,
 	principal types.WikiReleasePrincipal,

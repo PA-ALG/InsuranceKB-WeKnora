@@ -695,7 +695,7 @@ func (s *WikiReleaseService) ActivateReviewed(
 	if json.Unmarshal(preparation.Manifest, &manifestHeader) != nil {
 		return nil, ErrWikiReleaseInvalidAuthorization
 	}
-	if manifestHeader.Contract == "concept-candidate-bundle.830.g2.v1" {
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
 			preparation, types.WikiReleasePreparationReady, scope,
 		); validationErr != nil {
@@ -890,7 +890,7 @@ func (s *WikiReleaseService) reviewDraft(
 		_, _, validationErr = validateEntityPageGraphPreparation830G1(
 			draft, types.WikiReleasePreparationDraft, scope,
 		)
-	} else if manifestHeader.Contract == "concept-candidate-bundle.830.g2.v1" {
+	} else if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		_, _, validationErr = validateConceptPreparation830G2(
 			draft, types.WikiReleasePreparationDraft, scope,
 		)
@@ -924,7 +924,7 @@ func (s *WikiReleaseService) reviewDraft(
 		draft.ReviewPolicyID != decision.ReviewPolicyHash {
 		return nil, fmt.Errorf("%w: human decision draft mismatch", ErrWikiReleaseInvalidAuthorization)
 	}
-	if manifestHeader.Contract == "concept-candidate-bundle.830.g2.v1" {
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if err := s.verifyConceptSourceAuthority830G2(
 			ctx, principal, scope, draft, "review",
 		); err != nil {
@@ -1180,7 +1180,7 @@ func (s *WikiReleaseService) activate(
 	if json.Unmarshal(preparation.Manifest, &manifestHeader) != nil {
 		return nil, ErrWikiReleaseInvalidAuthorization
 	}
-	if manifestHeader.Contract == "concept-candidate-bundle.830.g2.v1" {
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
 			preparation, types.WikiReleasePreparationReady, scope,
 		); validationErr != nil {

@@ -254,3 +254,19 @@ B来源封存回验PASS：上传自动capture已有A+B+B三行，其中B两行�
 JSON解析/已知凭据扫描/diff-check通过；机械事实文档修正免RED由独立reviewer确认。
 本轮没有产品代码修改、构建、生产发布或G2激活。A候选准入仍拒绝，B模型编译/两快照对比/
 页面搜索Agent及G2来源点击联合验收尚未完成，FLOW NOT_RUN、QUALITY DEFERRED。
+
+### 用户纠正阶段目标后补齐人工分支 · 2026-09-06
+
+用户明确G2当前核心是串流程，随后“继续推进g2”。原蓝图80为自动候选门，60–79人工决定，
+G2验FLOW而Q0验领域质量；此前将66作为全卡停工依据不准确。OpenSpec128/原plan Task5先登记
+v2人工候选+admission，设计独立BLOCKER0后RED→实现。v1字节及>=80不变；v2原review/raw/66
+保持不变，确定性pending集合进入candidate hash，拟议Draft与正式Active分离，沿原具名整包签名。
+Python新增15项RED后两模块42GREEN，ruff/mypy及独立review BLOCKER0；真实compile003/review002
+无新增provider装配v2 candidate70cb4b6e…363c5，pending1/proposed70。完整67字段预览已保存。
+Go types/service/四个release分支/source verifier接线及负向测试完成；四包定向回归PASS，独立复核BLOCKER0。
+
+按用户合理必要扩展预批，登记新增一次app构建额度：累计上限3→4，先BA0lookup，只有miss构建。
+前端协议/代码不变，frontend/docreader新增build0。已只读核对builder40G/可用15G；升级脚本保留
+旧app、固定G2 DB/两网/三卷/loopback18194/configSHA，UI代理登录成功后才PASS，独立review0。
+真实Draft脚本只允许固定candidate/Head、正常tenant10003登录和POST，严核完整scope/70成员/
+空reviewdecision，未签署或激活，独立review0。尚未执行build/upgrade/Draft；必须等Go最终复核和代码冻结。

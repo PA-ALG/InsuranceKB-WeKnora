@@ -12,6 +12,33 @@ CandidateBundle包含严格版本PageManifest（有序member集合及digest）�
 聚合纳入同版真实FieldAssertion的present/absent_explicitly/unknown三态并显式标记；unknown无值无证据，
 不得作为肯定/否定的业务结论，也不得省略其独立页。概念链接是导航关系，不能冒充证据支持。
 
+### 2026-09-06 人工准入分支补齐（G2-R1/R3/R6）
+
+用户在确认66分属于60–79人工区间、G2先验真实流程而Q0再验质量后，明确“继续推进g2”。
+保留原80/60边界及所有模型raw输出；不重新抽样拿高分，不把继续开发冒充整包候选已获人工批准。
+
+新增 `concept-candidate-bundle.830.g2.v2`，仅承载需要具名人工整包决定的拟议候选，v1字节及>=80行为不变。
+v2新增严格 `admission` 对象：contract=`concept-admission.830.g2.v1`、status=`NEEDS_HUMAN`、
+`pending_page_ids`为所有新建/更新页中60–79分身份的排序集合；该对象必须由request/output/review确定性复算，
+进入candidate hash。原始review的PASS+66仍原样保存；此处NEEDS_HUMAN是准入处置，不伪造模型输出。
+v2允许原始review PASS或NEEDS_HUMAN，拒绝REJECT；新页必须有完整评分且均>=60，Evidence/身份/字段完整性
+与raw真实性硬门不变。未达60或缺分者保持拒绝，不通过拟议成员绕过。
+
+Draft的PageManifest/Members只冻结待审的拟议内容，不是正式Release成员；在具名人对同一完整candidate hash、
+policy hash与独立review raw hash签署whole-batch ReviewDecision之前，不能Ready、不能Active、不能在线检索。
+不增加逐页批准开关、不新增审核权威或表。旧whole-batch签名/ACL/CAS机制在v2上必须同样执行，
+review/activate/fixed read/source verifier均显式识别v2，不能落入绕过来源检查的默认分支。
+
+#### Scenario: 66分走人工整包待审
+- **GIVEN** 真实compile/review完整且新概念66分，review raw为PASS，所有来源硬门通过
+- **WHEN** 确定性装配v2并创建Draft
+- **THEN** 保留原66及raw/hash，admission为NEEDS_HUMAN，pending集合包含该概念，Draft可审而不可激活
+- **AND** 未签名/错误candidate hash/错误scope/过期人类决定均拒绝；正确whole-batch决定与既有publish授权才能激活
+
+#### Scenario: 不以人工流程消除硬门
+- **WHEN** 输入低于60、缺失评分、原审核REJECT、来源或raw被篡改
+- **THEN** v2装配或平台校验拒绝；v1仍拒66，旧合格v1继续可读，模型raw省略默认contract也必须拒绝
+
 ### Requirement: G2-R1 可替换编译与独立审核
 
 系统 SHALL 接受版本化CompileRequest（原始材料/定位索引、Schema/Profile、已有知识快照、策略、预算、exact identity），输出CandidateBundle（完整字段attempt/state、Claim/Evidence、开放知识、关系/义项、缺口与编译identity）。

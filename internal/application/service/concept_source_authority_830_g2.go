@@ -718,7 +718,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 	if releaseID == "" {
 		return allowed, nil
 	}
-	if s == nil || s.releases == nil || s.legacyCitationContent == nil || s.formalCandidatePreview == nil {
+	if s == nil || s.releases == nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	for depth := 0; depth < 64; depth++ {
@@ -741,7 +741,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		switch header.Contract {
-		case "concept-candidate-bundle.830.g2.v1":
+		case "concept-candidate-bundle.830.g2.v1", "concept-candidate-bundle.830.g2.v2":
 			base, expected, validationErr := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
 			if validationErr != nil || release.CandidateDigest != preparation.CandidateDigest || release.ManifestDigest != preparation.ManifestDigest || !wikiReleaseMemberSnapshotsEqual(expected, members) || release.BaseReleaseID != base.Request.BaseReleaseID || release.BaseActivationEpoch != base.Request.BaseActivationEpoch {
 				return nil, ErrConceptSourceAuthorityUnavailable830G2
@@ -751,6 +751,9 @@ func (s *ConceptSourceAuthorityService830G2) verifyLegacyCarryover830G2(ctx cont
 				return allowed, nil
 			}
 		case "entity-page-manifest.830.g1.v1":
+			if s.legacyCitationContent == nil || s.formalCandidatePreview == nil {
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
+			}
 			manifest, expected, validationErr := validateEntityPageGraphPreparation830G1(preparation, types.WikiReleasePreparationReady, scope)
 			if validationErr != nil || release.CandidateDigest != preparation.CandidateDigest || release.ManifestDigest != preparation.ManifestDigest || release.BaseReleaseID != manifest.ReleaseID || release.BaseActivationEpoch != manifest.ActivationEpoch || !entityPageGraphMemberSetsEqual830G1(expected, members) {
 				return nil, ErrConceptSourceAuthorityUnavailable830G2

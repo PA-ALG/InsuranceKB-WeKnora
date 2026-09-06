@@ -2,6 +2,8 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"testing"
@@ -168,6 +170,43 @@ func mutateConceptVector830G2(t *testing.T, mutate func(map[string]any)) []byte 
 	return raw
 }
 
+func conceptHumanVector830G2(t *testing.T, mutate func(map[string]any)) []byte {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(conceptVector830G2(t)))
+	decoder.UseNumber()
+	var value map[string]any
+	require.NoError(t, decoder.Decode(&value))
+	value["contract"] = "concept-candidate-bundle.830.g2.v2"
+	review := object830G2(t, object830G2(t, value, "review_result"), "output")
+	scores := object830G2(t, review, "page_scores")
+	conceptID := "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+	scores[conceptID] = map[string]any{
+		"business_value": json.Number("15"), "reuse": json.Number("10"),
+		"evidence_quality": json.Number("15"), "definability": json.Number("10"),
+		"novel_identity": json.Number("8"), "name_stability": json.Number("8"),
+	}
+	value["admission"] = map[string]any{
+		"contract": "concept-admission.830.g2.v1", "status": "NEEDS_HUMAN",
+		"pending_page_ids": []any{conceptID},
+	}
+	if mutate != nil {
+		mutate(value)
+	}
+	reviewRaw, err := json.Marshal(review)
+	require.NoError(t, err)
+	reviewExecution := object830G2(t, object830G2(t, value, "review_result"), "execution")
+	reviewExecution["raw_output"] = string(reviewRaw)
+	rawSum := sha256.Sum256(reviewRaw)
+	reviewExecution["raw_output_hash"] = hex.EncodeToString(rawSum[:])
+	delete(value, "candidate_hash")
+	candidateHash, err := conceptDigest830G2("candidate-bundle", value)
+	require.NoError(t, err)
+	value["candidate_hash"] = candidateHash
+	raw, err := json.Marshal(value)
+	require.NoError(t, err)
+	return raw
+}
+
 func object830G2(t *testing.T, value any, key string) map[string]any {
 	t.Helper()
 	result, ok := value.(map[string]any)[key].(map[string]any)
@@ -215,6 +254,106 @@ func TestParseConceptCandidateBundle830G2ProjectsFrozenVector(t *testing.T) {
 		require.Regexp(t, "^[0-9a-f]{64}$", snapshot.MemberDigest)
 		require.JSONEq(t, string(bundle.PageManifest.Members[index].Payload), string(snapshot.Payload))
 	}
+}
+
+func TestParseConceptCandidateBundle830G2AcceptsWholeBatchHumanAdmission(t *testing.T) {
+	bundle, err := ParseConceptCandidateBundle830G2(conceptHumanVector830G2(t, nil))
+	require.NoError(t, err)
+	require.Equal(t, "concept-candidate-bundle.830.g2.v2", bundle.Contract)
+	require.Equal(t, "NEEDS_HUMAN", bundle.Admission.Status)
+	require.Equal(t, []string{"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"}, bundle.Admission.PendingPageIDs)
+}
+
+func TestParseConceptCandidateBundle830G2AcceptsHumanAdmissionWithNoPendingPages(t *testing.T) {
+	conceptID := "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+	raw := conceptHumanVector830G2(t, func(value map[string]any) {
+		score := object830G2(t, object830G2(t, object830G2(t, value, "review_result"), "output"), "page_scores")[conceptID].(map[string]any)
+		score["business_value"] = json.Number("25")
+		score["reuse"] = json.Number("20")
+		score["evidence_quality"] = json.Number("20")
+		score["definability"] = json.Number("15")
+		score["novel_identity"] = json.Number("10")
+		score["name_stability"] = json.Number("10")
+		object830G2(t, value, "admission")["pending_page_ids"] = []any{}
+	})
+	bundle, err := ParseConceptCandidateBundle830G2(raw)
+	require.NoError(t, err)
+	require.NotNil(t, bundle.Admission.PendingPageIDs)
+	require.Empty(t, bundle.Admission.PendingPageIDs)
+}
+
+func TestParseConceptCandidateBundle830G2ProjectsFrozenHumanVector(t *testing.T) {
+	raw, err := os.ReadFile("../../harness/tests/fixtures/concept_free_wiki_830_g2_human_contract_vector.json")
+	require.NoError(t, err)
+	bundle, err := ParseConceptCandidateBundle830G2(raw)
+	require.NoError(t, err)
+	require.Equal(t, "445eb52d26e123d3c80ebee08dcb2c3a36e5290a2ce9189159204a086b907c3e", bundle.CandidateHash)
+	require.Equal(t, "PASS", bundle.ReviewResult.Output.Decision)
+	require.Equal(t, "57b5b37fd80044a18ac67ce86c20dad93eeb4e6ada95fb351cd41ad14ede129f", bundle.ReviewResult.Execution.RawOutputHash)
+	require.Equal(t, "NEEDS_HUMAN", bundle.Admission.Status)
+	require.Equal(t, []string{
+		"concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3",
+		"free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d",
+	}, bundle.Admission.PendingPageIDs)
+	for _, pageID := range bundle.Admission.PendingPageIDs {
+		require.Equal(t, 66, conceptScoreTotal830G2(bundle.ReviewResult.Output.PageScores[pageID]))
+	}
+}
+
+func TestParseConceptCandidateBundle830G2RejectsInvalidHumanAdmission(t *testing.T) {
+	conceptID := "concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"
+	freeID := "free_12a02ea3d724ad27839226067cfc8ae5389788df04db58fdf4e5d2b4bd38ef7d"
+	tests := map[string]func(map[string]any){
+		"missing admission": func(value map[string]any) { delete(value, "admission") },
+		"null pending": func(value map[string]any) {
+			object830G2(t, value, "admission")["pending_page_ids"] = nil
+		},
+		"score below sixty": func(value map[string]any) {
+			score := object830G2(t, object830G2(t, object830G2(t, value, "review_result"), "output"), "page_scores")[conceptID].(map[string]any)
+			score["business_value"] = json.Number("8")
+		},
+		"review rejected": func(value map[string]any) {
+			object830G2(t, object830G2(t, value, "review_result"), "output")["decision"] = "REJECT"
+		},
+		"pending order drift": func(value map[string]any) {
+			scores := object830G2(t, object830G2(t, object830G2(t, value, "review_result"), "output"), "page_scores")
+			scores[freeID] = map[string]any{
+				"business_value": json.Number("15"), "reuse": json.Number("10"),
+				"evidence_quality": json.Number("15"), "definability": json.Number("10"),
+				"novel_identity": json.Number("10"), "name_stability": json.Number("10"),
+			}
+			object830G2(t, value, "admission")["pending_page_ids"] = []any{freeID, conceptID}
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseConceptCandidateBundle830G2(conceptHumanVector830G2(t, mutate))
+			require.ErrorIs(t, err, ErrConceptCandidateBundle830G2)
+		})
+	}
+}
+
+func TestParseConceptCandidateBundle830G2KeepsV1AdmissionClosed(t *testing.T) {
+	raw := conceptHumanVector830G2(t, func(value map[string]any) {
+		value["contract"] = "concept-candidate-bundle.830.g2.v1"
+		score := object830G2(t, object830G2(t, object830G2(t, value, "review_result"), "output"), "page_scores")["concept_c730e23edec4bc4fa3035b05ad32ddffb0a0e38a841fff3c58a0eef88cdcc4b3"].(map[string]any)
+		score["business_value"] = json.Number("25")
+		score["reuse"] = json.Number("20")
+		score["evidence_quality"] = json.Number("20")
+		score["definability"] = json.Number("15")
+		score["novel_identity"] = json.Number("10")
+		score["name_stability"] = json.Number("10")
+	})
+	_, err := ParseConceptCandidateBundle830G2(raw)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G2)
+
+	var value map[string]any
+	require.NoError(t, json.Unmarshal(conceptVector830G2(t), &value))
+	value["admission"] = nil
+	raw, err = json.Marshal(value)
+	require.NoError(t, err)
+	_, err = ParseConceptCandidateBundle830G2(raw)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G2)
 }
 
 func TestParseConceptCandidateBundle830G2RejectsSourceScopeAndExistingSnapshotDrift(t *testing.T) {

@@ -1,0 +1,20 @@
+{
+  "contract": "830-g2-human-python-verification.v1",
+  "status": "PASS",
+  "tests": 42,
+  "red_cases": 15,
+  "red_log_sha256": "08f90460784c3a6fb0acc68abe12bdad4df117d5c246485045daa0165db6202a",
+  "green_log_sha256": "0963038475c7c78b95e818a97273c5e91f59fb48033ba70592cdd120135d82ec",
+  "ruff": "PASS",
+  "mypy": "PASS",
+  "independent_review": "BLOCKER0",
+  "actual_saved_raw_replay": {
+    "g2-a-review-001": "REJECT_RAW_CONTRACT_MISSING",
+    "g2-a-review-002": "PASS_V2_NEEDS_HUMAN_SCORE66_RAW_UNCHANGED"
+  },
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "new_provider_calls": 0,
+  "platform_draft": "NOT_RUN",
+  "publish": "NOT_RUN",
+  "required_wire_fields_red_log_sha256": "90dabd48b0e882a01b0652e835d6940176e86067f1ff9a6177b736568bbbfe63"
+}

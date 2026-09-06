@@ -45,3 +45,11 @@ G1及815旧合同、历史payload、来源和Release不改。
 协议允许EXPERT_REVISION_RECORD来源，但不能恢复“未另附文件就无来源”规则。
 精确合同见spec.md，分步执行和命令见计划；首切片D0/D1，最终D2/D3。
 调用、构建、数据/运行身份及STOP只以G2 execution记录和章程为准。
+
+## 2026-09-06 人工准入补齐写域
+
+总控负责Python两文件/测试、协议及计划；g2_sources负责Go types/service与测试。
+本次新增机械dispatch允许域：`internal/application/service/concept_source_authority_830_g2.go`及其tests，
+用于v2继承同一来源检查，不改存储协议。跨语言v2向量新增
+`harness/tests/fixtures/concept_free_wiki_830_g2_human_contract_vector.json`。g2_bundle_review只读审核。
+前端read协议不变，若实际发现UI缺口先登记精确路径；不预先扩UI范围。

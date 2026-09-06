@@ -208,13 +208,36 @@ type ConceptPageManifest830G2 struct {
 	Audit       []ConceptAuditDisposition830G2 `json:"audit"`
 }
 
+type ConceptAdmission830G2 struct {
+	Contract       string   `json:"contract"`
+	Status         string   `json:"status"`
+	PendingPageIDs []string `json:"pending_page_ids"`
+}
+
 type ConceptCandidateBundle830G2 struct {
 	Contract      string                     `json:"contract"`
 	Request       ConceptCompileRequest830G2 `json:"request"`
 	CompileResult ConceptCompileResult830G2  `json:"compile_result"`
 	ReviewResult  ConceptReviewResult830G2   `json:"review_result"`
 	PageManifest  ConceptPageManifest830G2   `json:"page_manifest"`
+	Admission     *ConceptAdmission830G2     `json:"admission,omitempty"`
 	CandidateHash string                     `json:"candidate_hash"`
+	admissionSeen bool
+}
+
+func (bundle *ConceptCandidateBundle830G2) UnmarshalJSON(raw []byte) error {
+	type wire ConceptCandidateBundle830G2
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	*bundle = ConceptCandidateBundle830G2(decoded)
+	_, bundle.admissionSeen = fields["admission"]
+	return nil
 }
 
 func (value ConceptDefinition830G2) DefinitionID() (string, error) {
@@ -514,7 +537,8 @@ func conceptJSONUniqueKeys830G2(raw []byte) bool {
 }
 
 func validateConceptBundle830G2(bundle ConceptCandidateBundle830G2) error {
-	if bundle.Contract != "concept-candidate-bundle.830.g2.v1" ||
+	if (bundle.Contract != "concept-candidate-bundle.830.g2.v1" &&
+		bundle.Contract != "concept-candidate-bundle.830.g2.v2") ||
 		validateConceptRequest830G2(bundle.Request) != nil ||
 		validateConceptOutput830G2(bundle.Request, bundle.CompileResult.Output) != nil ||
 		validateExecution830G2(bundle.CompileResult.Execution) != nil ||
@@ -531,7 +555,7 @@ func validateConceptBundle830G2(bundle ConceptCandidateBundle830G2) error {
 		return ErrConceptCandidateBundle830G2
 	}
 	checked := bundle.ReviewResult.Output
-	if checked.Contract != "concept-review-output.830.g2.v1" || checked.Decision != "PASS" ||
+	if checked.Contract != "concept-review-output.830.g2.v1" ||
 		checked.RequestHash != requestHash || checked.OutputHash != outputHash {
 		return ErrConceptCandidateBundle830G2
 	}
@@ -562,14 +586,47 @@ func validateConceptBundle830G2(bundle ConceptCandidateBundle830G2) error {
 	if err != nil || !conceptCanonicalEqual830G2(expectedManifest, bundle.PageManifest) {
 		return ErrConceptCandidateBundle830G2
 	}
-	for key := range novelConceptPages830G2(bundle.Request, bundle.CompileResult.Output) {
-		score, ok := checked.PageScores[key]
-		if !ok || !validConceptScore830G2(score) || conceptScoreTotal830G2(score) < 80 {
-			return ErrConceptCandidateBundle830G2
-		}
+	if validateConceptAdmission830G2(bundle) != nil {
+		return ErrConceptCandidateBundle830G2
 	}
 	candidateHash, err := conceptHashWithout830G2("candidate-bundle", bundle, "candidate_hash")
 	if err != nil || candidateHash != bundle.CandidateHash {
+		return ErrConceptCandidateBundle830G2
+	}
+	return nil
+}
+
+func validateConceptAdmission830G2(bundle ConceptCandidateBundle830G2) error {
+	novel := novelConceptPages830G2(bundle.Request, bundle.CompileResult.Output)
+	if bundle.Contract == "concept-candidate-bundle.830.g2.v1" {
+		if bundle.admissionSeen || bundle.Admission != nil || bundle.ReviewResult.Output.Decision != "PASS" {
+			return ErrConceptCandidateBundle830G2
+		}
+		for pageID := range novel {
+			score, ok := bundle.ReviewResult.Output.PageScores[pageID]
+			if !ok || !validConceptScore830G2(score) || conceptScoreTotal830G2(score) < 80 {
+				return ErrConceptCandidateBundle830G2
+			}
+		}
+		return nil
+	}
+	if bundle.Admission == nil || bundle.Admission.Contract != "concept-admission.830.g2.v1" ||
+		bundle.Admission.Status != "NEEDS_HUMAN" ||
+		(bundle.ReviewResult.Output.Decision != "PASS" && bundle.ReviewResult.Output.Decision != "NEEDS_HUMAN") {
+		return ErrConceptCandidateBundle830G2
+	}
+	pending := make([]string, 0, len(novel))
+	for pageID := range novel {
+		score, ok := bundle.ReviewResult.Output.PageScores[pageID]
+		if !ok || !validConceptScore830G2(score) || conceptScoreTotal830G2(score) < 60 {
+			return ErrConceptCandidateBundle830G2
+		}
+		if conceptScoreTotal830G2(score) < 80 {
+			pending = append(pending, pageID)
+		}
+	}
+	sort.Strings(pending)
+	if !reflect.DeepEqual(bundle.Admission.PendingPageIDs, pending) {
 		return ErrConceptCandidateBundle830G2
 	}
 	return nil

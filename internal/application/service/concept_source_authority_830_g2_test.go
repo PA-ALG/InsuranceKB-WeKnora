@@ -381,6 +381,44 @@ func TestConceptLegacyEvidenceReuse830G2ReviewFailsWithoutNativeAuthority(t *tes
 	require.Equal(t, types.WikiReleasePreparationDraft, persisted.Status)
 }
 
+func TestConceptLegacyBaseChain830G2RecognizesHumanAdmissionRelease(t *testing.T) {
+	fixture, schema := conceptReleaseFixture830G2(t)
+	draft, err := schema.CreateConceptFreeWikiDraft830G2(
+		fixture.ctx, fixture.principal1, fixture.scope,
+		"g2-human-base-chain", conceptHumanBundleVector830G2(t),
+	)
+	require.NoError(t, err)
+	rawDecision, decision := conceptDecision830G2(t, fixture, draft, "g2-human-base-chain")
+	ready, err := schema.ReviewSchemaDraft(
+		fixture.ctx, fixture.principal1, fixture.scope, draft.ID, rawDecision,
+	)
+	require.NoError(t, err)
+	receipt, err := fixture.service.ActivateReviewed(
+		fixture.ctx, fixture.principal1, rawDecision,
+		conceptAuthorization830G2(t, fixture, ready, decision),
+	)
+	require.NoError(t, err)
+
+	next, err := types.ParseConceptCandidateBundle830G2(conceptHumanBundleVector830G2(t))
+	require.NoError(t, err)
+	next.Request.BaseReleaseID = receipt.ReleaseID
+	storedRelease, err := fixture.repo.GetRelease(fixture.ctx, fixture.scope, receipt.ReleaseID)
+	require.NoError(t, err)
+	storedPreparation, err := fixture.repo.GetReadyPreparation(fixture.ctx, fixture.scope, storedRelease.PreparationID)
+	require.NoError(t, err)
+	storedMembers, err := fixture.repo.GetReleaseMembers(fixture.ctx, fixture.scope, storedRelease.ID)
+	require.NoError(t, err)
+	storedBundle, expectedMembers, err := validateConceptPreparation830G2(storedPreparation, types.WikiReleasePreparationReady, fixture.scope)
+	require.NoError(t, err)
+	require.Equal(t, storedRelease.BaseReleaseID, storedBundle.Request.BaseReleaseID)
+	require.Equal(t, storedRelease.BaseActivationEpoch, storedBundle.Request.BaseActivationEpoch)
+	require.True(t, wikiReleaseMemberSnapshotsEqual(expectedMembers, storedMembers))
+	bridge := &ConceptSourceAuthorityService830G2{releases: fixture.repo}
+	proofs, err := bridge.verifyLegacyCarryover830G2(fixture.ctx, fixture.scope, next)
+	require.NoError(t, err)
+	require.Empty(t, proofs)
+}
+
 func TestConceptCitationAuthority830G2HalfConstructedServicesFailClosed(t *testing.T) {
 	var nilBridge *ConceptSourceAuthorityService830G2
 	_, err := nilBridge.ResolveConceptCitationRouteAuthority830G2("token")

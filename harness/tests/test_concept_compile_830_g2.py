@@ -384,3 +384,139 @@ def test_generated_and_existing_members_bind_exact_entity_version(version):
                 update={"existing_pages": (page,), "existing_entity_versions": {"entity-a": "v1"}}
             )
         )
+
+
+def human_review_case(g, total=66, decision="PASS"):
+    req = request(g)
+    compiled = compiler(g).compile(req, run_id="compile-human")
+    remaining = total
+    values = []
+    for ceiling in (25, 20, 20, 15, 10, 10):
+        value = min(remaining, ceiling)
+        values.append(value)
+        remaining -= value
+    score = g.ValueScore(
+        **dict(
+            zip(
+                (
+                    "business_value",
+                    "reuse",
+                    "evidence_quality",
+                    "definability",
+                    "novel_identity",
+                    "name_stability",
+                ),
+                values,
+                strict=True,
+            )
+        )
+    )
+    checked = g.ReviewOutput(
+        request_hash=req.request_hash,
+        output_hash=compiled.output.output_hash,
+        decision=decision,
+        page_scores={compiled.output.definitions[0].concept_id: score},
+        reasons=("Independent review retained without score adjustment",),
+    )
+    review = g.ReviewResult(
+        output=checked,
+        execution=g.record_output(
+            "review-human",
+            "independent-fixture-reviewer",
+            g.review_context(req, compiled.output),
+            checked,
+        ),
+    )
+    return req, compiled, review
+
+
+@pytest.mark.parametrize("total", [60, 66, 79, 80])
+@pytest.mark.parametrize("decision", ["PASS", "NEEDS_HUMAN"])
+def test_human_bundle_keeps_raw_score_and_freezes_whole_pending_set(total, decision):
+    g = api()
+    req, compiled, checked = human_review_case(g, total, decision)
+    bundle = g.assemble_human_review_bundle(req, compiled, checked)
+    assert bundle.contract == "concept-candidate-bundle.830.g2.v2"
+    assert bundle.admission.status == "NEEDS_HUMAN"
+    expected = (compiled.output.definitions[0].concept_id,) if total < 80 else ()
+    assert bundle.admission.pending_page_ids == expected
+    assert bundle.review_result == checked
+    assert bundle.review_result.execution.raw_output == checked.execution.raw_output
+    assert bundle.page_manifest == g.project_members(req, compiled.output)
+    assert g.HumanReviewCandidateBundle.model_validate_json(bundle.model_dump_json()) == bundle
+    if total < 80 or decision != "PASS":
+        with pytest.raises(ValueError):
+            g.assemble_bundle(req, compiled, checked)
+
+
+@pytest.mark.parametrize("total,decision", [(59, "PASS"), (66, "REJECT")])
+def test_human_bundle_does_not_override_low_score_or_rejection(total, decision):
+    g = api()
+    with pytest.raises(ValueError):
+        g.assemble_human_review_bundle(*human_review_case(g, total, decision))
+
+
+def test_human_bundle_rejects_missing_score_and_pending_set_tampering():
+    g = api()
+    req, compiled, checked = human_review_case(g)
+    missing = checked.output.model_copy(update={"page_scores": {}})
+    missing_review = g.ReviewResult(
+        output=missing,
+        execution=g.record_output(
+            "missing-score",
+            "independent-fixture-reviewer",
+            g.review_context(req, compiled.output),
+            missing,
+        ),
+    )
+    with pytest.raises(ValueError):
+        g.assemble_human_review_bundle(req, compiled, missing_review)
+    bundle = g.assemble_human_review_bundle(req, compiled, checked)
+    for pending in ([], ["unrelated"], list(bundle.admission.pending_page_ids) * 2):
+        wire = bundle.model_dump(mode="json")
+        wire["admission"]["pending_page_ids"] = pending
+        wire["candidate_hash"] = g.digest(
+            "candidate-bundle", {k: v for k, v in wire.items() if k != "candidate_hash"}
+        )
+        with pytest.raises(ValueError, match="ADMISSION"):
+            g.HumanReviewCandidateBundle.model_validate(wire)
+
+
+def test_llm_raw_review_cannot_omit_contract_default_or_repeat_keys():
+    g = api()
+    req, compiled, checked = human_review_case(g)
+    wire = checked.output.model_dump(mode="json")
+    del wire["contract"]
+    malformed = [
+        json.dumps(wire),
+        checked.output.model_dump_json().replace(
+            '"decision":"PASS"',
+            '"decision":"PASS","decision":"PASS"',
+            1,
+        ),
+    ]
+    for raw in malformed:
+
+        class Transport:
+            def __init__(self, response):
+                self.response = response
+
+            def complete(self, system, user):
+                return self.response
+
+        with pytest.raises(ValueError, match="RAW_OUTPUT"):
+            g.LLMReviewer(Transport(raw), "fake-local").review(
+                req, compiled.output, run_id="bad-wire"
+            )
+
+
+@pytest.mark.parametrize(
+    "location,key", [("bundle", "contract"), ("admission", "contract"), ("admission", "status")]
+)
+def test_human_wire_cannot_hide_missing_admission_fields_with_defaults(location, key):
+    g = api()
+    bundle = g.assemble_human_review_bundle(*human_review_case(g))
+    wire = bundle.model_dump(mode="json")
+    del (wire if location == "bundle" else wire["admission"])[key]
+    with pytest.raises(ValueError):
+        g.HumanReviewCandidateBundle.model_validate(wire)

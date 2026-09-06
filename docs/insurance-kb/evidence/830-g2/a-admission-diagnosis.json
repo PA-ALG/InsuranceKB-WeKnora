@@ -19,18 +19,19 @@
     {
       "id": "A-RAW-DEFAULT",
       "finding": "review-001 omitted contract; Python default hydration masked missing raw field; Go exact raw validation correctly rejected actual Draft HTTP400",
-      "status": "OPEN",
-      "next": "Align Python raw validation with exact raw-to-typed object contract before provider acceptance"
+      "status": "CODE_FIXED_AWAITING_DELIVERY",
+      "next": "Strict raw-object validation implemented; actual oldreview001 rejected and actualreview002 preserved. See human-python-verification.json."
     },
     {
       "id": "A-PASS-SUB80",
       "finding": "Reviewer schema permits PASS+66; prompt has component ranges but no80 threshold or anchored score meanings; candidate validator correctly rejects below80",
-      "status": "OPEN",
-      "next": "Freeze explicit scoring anchors and PASS/total consistency in a reviewed policy version; offline validation before any new provider run"
+      "status": "RESOLVED_BY_SEPARATE_ADMISSION_PROJECTION",
+      "next": "Preserve independent raw review PASS66; v2 admission deterministically NEEDS_HUMAN. 80 is automatic-entry boundary, not G2 quality gate. Scoring calibration belongs Q0 and does not block G2."
     }
   ],
   "no_score_patching": true,
   "no_further_a_calls": true,
   "active_snapshots": 0,
-  "target_active_snapshots": 2
+  "target_active_snapshots": 2,
+  "scope_note": "Historical v1 automatic-admission diagnosis; current user-approved G2 route is v2 whole-batch human admission, preserving raw PASS66."
 }
