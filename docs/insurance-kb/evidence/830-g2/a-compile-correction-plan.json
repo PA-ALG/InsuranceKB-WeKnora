@@ -1,0 +1,30 @@
+{
+  "budget_file_sha256": "d3cd597e060d2939837d08531cb19c02c03f69544e9e6c391a46d056f65ab70b",
+  "canonical_module_sha256": "9065688ccf9c0f37590ff6d580daabc4fd113a73ed41880b37ac5684b95cd1dc",
+  "catalog_sha256": "4b4a66c36fc48b8a2465e43950ccb1a700c3c0ea165320dbc86b8d2249c5465e",
+  "contract": "830-g2-real-a-model-request.v1",
+  "endpoint": "https://api.deepseek.com/v1/chat/completions",
+  "http_payload_sha256": "45a6c69fd30e08edb006a35c75cba9aef5c3aa570dc4981142fe3350de6eb16f",
+  "max_tokens": 32768,
+  "model": "deepseek-v4-flash",
+  "module_sha256": "1cddec967352090964783eea6363bff05a3a14b36689f109a00dd0f6de9c1c8b",
+  "output_hash": null,
+  "request_hash": "67bd6ad89f9681837b189ebacc72e6d743ea74ade007f48ba0c212f32cd6a7e3",
+  "run_id": "g2-a-compile-003",
+  "runner_sha256": "13b9c1e0fd3c1d092e13e9602cb5381af13db5296507e770fae736835c90d6cd",
+  "source_head": "a3add0b46a664444aaa0e41c3ae26577fc8f5e1c",
+  "stage": "compile",
+  "system_sha256": "90bf46d7987c6354eaae2f20a076d1b73e93955282622f7904716de0a8e33014",
+  "user_sha256": "9dec75eb076d1336466c82dcdf68695b4bf3be4d5764a4284e6d763462a83000",
+  "status": "PREPARED",
+  "authorization": "Explicit user approval for A max3 provider calls",
+  "attempts_used_before": 1,
+  "planned_attempt_number": 2,
+  "reserved_independent_review_calls": 1,
+  "reason": [
+    "Missing67 exactassertion field audit rows; incorrect2 alias keys",
+    "Existing evidence tuple order changed in3fields"
+  ],
+  "independent_review": "BLOCKER0",
+  "raw_output_repair": false
+}

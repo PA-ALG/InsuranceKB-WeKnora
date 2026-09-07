@@ -1,0 +1,66 @@
+Browser tab: 1, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b".
+1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b
+	2 container app
+		3 container
+			4 container 搜索
+			5 text 新对话
+			6 text 知识库
+			7 text 智能体
+			8 text 共享空间
+			14 text 暂无对话
+			9 container
+				15 text G G2 Runtime Test Operator 594 g2-594-operator@example.invalid
+				11 image
+		16 container
+			17 text 共享定义
+			18 heading 被保险人, Value: 1
+				19 text 被保险人
+			20 text 被保险人就是受保险合同保障的人。
+			21 container 原文证据
+				22 heading 原文证据, Value: 2
+					23 text 原文证据
+				24 button 查看第 1 页原文
+			25 container 相关知识
+				26 heading 各实体的具体规定, Value: 2
+					27 text 各实体的具体规定
+				28 content list
+					29 container
+						30 link Description: insured_eligibility, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_30866b0d77bf7de64a5006c05b63dc1438c8beca312fec3016bc82abd9e5496f?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b
+						31 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 材料已确认 您可以同时为符合我们承保条件的家庭成员投保本产品，家庭成员仅指投保 人本人、投保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保 人的子女。
+					32 container
+						33 link Description: waiting_period, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_4f657a2ca7db206ada1a53caf611c6d1d143727d3de9f43ab0136923bbf9e6e0?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b
+						34 text ping-an-e-sheng-bao-hui-xiang · ping-an-e-sheng-bao-hui-xiang@594-1 · 材料已确认 1.6.1 等待期 被保险人在本合同生效之日起（含生效当日）90 日内经医院
+2确诊发生疾病，因
+该疾病而导致住院
+3治疗、指定门诊治疗或住院前后的门急诊治疗的，无论上述
+治疗时间与本合同生效之日是否间隔超过 90 日，我们都不承担给付保险金的责
+任。
+被保险人在本合同生效之日起（含生效当日）90 日内经医院确诊本合同“7.重
+大疾病”所定义的“重大疾病”，我们不承担给付保险金的责任，向您返还所交
+保险费，本合同终止。上述 90 日的时间为等待期。
+以下四种情形，无等待期：
+1. 被保险人因意外伤害
+4发生上述情形的；
+2. 您在保证续保期间内续保本产品的；
+3. 您在不迟于上一保证续保期间届满后60日重新投保本产品且经我们审核同意
+的；
+4. 您已投保指定的产品，并在我们指定的期限内首次投保本产品且经我们审核
+同意的。
+					35 container
+						36 link Description: health_declaration_requirements, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_6102237700e9f5ea127389b90ca89cb2e5487f6a6ca8bc6296c6be585da98b80?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b
+						37 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 材料已确认 订立本合同时，我们应当向您说明本合同的内容。对保险条款中免除我们责 任的条款，我们在订立合同时应当在投保单、保险单或者其他保险凭证上作 出足以引起您注意的提示，并对该条款的内容以书面或者口头形式向您作出 明确说明，未作提示或者明确说明的，该条款不成为合同的内容。 订立本合同时，我们就您和被保险人的有关情况提出询问，您应当如实告知。 如果您故意或者因重大过失未履行前款规定的如实告知义务，足以影响我们 决定是否同意承保或者提高保险费率的，我们有权解除本合同。 如果您故意不履行如实告知义务，对于本合同解除前发生的保险事故，我们 不承担保险责任，并不退还保险费。
+					38 container
+						39 link Description: coverage_and_renewal_terms, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_e8704b04f30dfe708840d113877f0dd7e3a52f79afea75ea8264937db2c1a4ab?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b
+						40 text ping-an-e-sheng-bao-hui-xiang · ping-an-e-sheng-bao-hui-xiang@594-1 · 材料已确认 1.7 保险期间和续保 本合同的保险期间为 1 年。
+每 20 年为一个保证续保期间。保证续保期间内，每一保险期间届满之前，若我
+们未收到您不再继续投保的书面通知，则视作您申请续保，我们将按照以下约定
+续保本合同：
+在保证续保期间内每一保险期间届满时，我们按续保时被保险人的年龄所对应的
+费率收取保险费，续保后的保险合同生效。
+每个保证续保期间届满时，您需要重新向我们申请投保本产品，并经我们审核同
+意，交纳保险费，获得新的保险合同。
+若保证续保期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您
+提供投保其他保险产品的建议。
+	13 container
+
+The focused UI element is 13 container

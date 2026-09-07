@@ -1,0 +1,15 @@
+{
+  "contract": "830-g2-docreader-build-receipt.v1",
+  "status": "PASS",
+  "source_head": "b8cde87d87c805a55042234e44453c7e2229f4ee",
+  "source_manifest_sha256": "74504d4088696414e757b6ce45c209b9ebfbe86a3aef7dd6819899202ccf960f",
+  "source_files_verified": 73,
+  "image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "build_invocations": 1,
+  "builds_max": 1,
+  "platform": "linux/arm64",
+  "entrypoint": "DOCKER_CONTEXT=colima-g1-build bash scripts/build_images.sh --docreader",
+  "raw_log_sha256": "70b0fd7dbf888f0b1cd7f804c134ca47da52be62e76ab8f764988fdfc741c3c0",
+  "upgrade": "NOT_RUN",
+  "provider_calls": 0
+}

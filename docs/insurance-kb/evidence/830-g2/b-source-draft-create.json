@@ -1,0 +1,21 @@
+{
+  "candidate_contract": "concept-candidate-bundle.830.g2.v1",
+  "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "contract": "830-g2-b-draft-create.private.v1",
+  "human_approved": false,
+  "manifest_digest": "4a055f5d376e7399e58aa6b0b883623b59c26d600a14a25893cfaa1f403fa4c3",
+  "members": 140,
+  "post_attempts": 1,
+  "preparation_digest": "fd487d06d703443e3328e5127431350a5244655c7eaf077f42bb86106b7ed709",
+  "preparation_id": "g2-b-draft-bdc806e2084a",
+  "provider_calls": 0,
+  "published": false,
+  "review_policy_id": "52e24cb2b78832acbd74ccba422093485f621841731de18e0e6b06d83ee79107",
+  "signed": false,
+  "source_authority": "FROZEN_R4_AND_B_SEALED_INPUTS_EXACT; SERVER_REVALIDATION_REMAINS_REQUIRED_AT_REVIEW_AND_ACTIVATE",
+  "status": "PASS_DRAFT_ONLY_NOT_HUMAN_APPROVED_NOT_ACTIVE",
+  "unchanged_head": {
+    "activation_epoch": 4,
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989"
+  }
+}

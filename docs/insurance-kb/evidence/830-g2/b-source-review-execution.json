@@ -1,0 +1,41 @@
+{
+  "contract": "830-g2-b-source-review-execution.v1",
+  "status": "VALIDATED",
+  "run_id": "g2-b-source-review-001",
+  "http_status": 200,
+  "usage": {
+    "completion_tokens": 209,
+    "prompt_cache_hit_tokens": 512,
+    "prompt_cache_miss_tokens": 94195,
+    "prompt_tokens": 94707,
+    "prompt_tokens_details": {
+      "cached_tokens": 512
+    },
+    "total_tokens": 94916
+  },
+  "review_output": {
+    "contract": "concept-review-output.830.g2.v1",
+    "decision": "PASS",
+    "output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+    "page_scores": {
+      "free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4": {
+        "business_value": 25,
+        "definability": 15,
+        "evidence_quality": 20,
+        "name_stability": 10,
+        "novel_identity": 10,
+        "reuse": 15
+      }
+    },
+    "reasons": [
+      "Page is a novel page with a clear identity and high business value, supported by strong evidence from the source document."
+    ],
+    "request_hash": "1f989dc8cf668a4ff6912004f5fc9eb0bd8cad2e63f14fc9e76a62478c7ed107"
+  },
+  "review_result_sha256": "1c4a2dcbae545cea7b8a5d752e10cc349e31ab9b1dbb4b45ed69382199ab1999",
+  "response_receipt_sha256": "914e1b033a93572ad5988f4b8dae43d756a6de6dd2aeed1e099853fb193f4ecc",
+  "provider_calls_this_recovery": 2,
+  "global_calls": 10,
+  "global_max": 10,
+  "published": false
+}

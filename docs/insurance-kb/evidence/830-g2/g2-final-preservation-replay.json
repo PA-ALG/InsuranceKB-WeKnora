@@ -1,0 +1,141 @@
+{
+  "business_effects": 0,
+  "cases": [
+    {
+      "actual_conditions": [],
+      "actual_exceptions": [],
+      "category": "condition",
+      "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+      "field_key": "coverage_and_renewal_terms",
+      "fixture_reviewer": {
+        "baseline_candidate_hash": "aef5e2f9457396827126387f972596ead439123cbf3d65655cdd8abbefe7bbb9",
+        "baseline_context_hash": "ae285548d649317b48edf1948d2b197f636896f6cbb58787eb6ed23a0f24f775",
+        "baseline_decision": "PASS",
+        "focused_mutated_output_hash": "9760895a434da4a34dac157457b86c1dee5535094673447d432a2718b8ee679e",
+        "focused_original_output_hash": "ad881113d0da24c96c69222a11a07f1a6a251e6fa53929496f0ce9e9f384da14",
+        "focused_request_hash": "11092ecfe2827a8a4c693236bc1fd71586916259c7db777701a7974b68fd7648",
+        "implementation": "extract-reviewer.830.g2.v1",
+        "mutated_assembly_error": "1 validation error for CandidateBundle\n  Value error, REVIEW_NOT_APPROVED_OR_STALE [type=value_error, input_value={'contract': 'concept-can...ffb3037b1858d4fd229914'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+        "mutated_assembly_status": "REJECTED",
+        "mutated_context_hash": "ce7a64788690fe1f58f2d170d34d7fff2c2a61f410fa3ea625ff3e6fcad1cc95",
+        "mutated_decision": "REJECT",
+        "mutated_reasons": [
+          "NOT_EXACT_EXTRACTION"
+        ]
+      },
+      "frozen_quote": {
+        "block_id": "63b06a1c-dda1-465c-9261-419ab89ff9c4",
+        "end": 277,
+        "evidence_object_digest": "943df9f6f36212a74e311ebb98ac4f20503b5ea1b346355432ba643c42e6f744",
+        "page_number": 9,
+        "quote_hash": "85a433dd88c9f225438f1c39bee3650a282375cea6f24ed8f0245de5815b48b7",
+        "quote_utf8_sha256": "85a433dd88c9f225438f1c39bee3650a282375cea6f24ed8f0245de5815b48b7",
+        "revision_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "start": 0
+      },
+      "full_candidate_assembly": {
+        "error": "1 validation error for CandidateBundle\n  Value error, EXECUTION_CONTEXT_MISMATCH [type=value_error, input_value={'contract': 'concept-can...ea38582b7477a28af1f857'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+        "frozen_independent_review_output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+        "mutated_review_context_hash": "45904c3230fc654b914e5cbe8612e85e7091d07830a237d8f6c4a0d6f1ba7041",
+        "original_review_context_hash": "add1f8a0e3469b56de3df6a8fd69233aa0ab4c8720182c3f0f68521540104d5b",
+        "status": "REJECTED"
+      },
+      "mutation": {
+        "conditions_unchanged": true,
+        "evidence_unchanged": true,
+        "exceptions_unchanged": true,
+        "mutated_full_output_hash": "aee30417d9e8cd9037714da735a962fa4df8e406217fb2ad078fd4e309c42e3f",
+        "mutated_value_utf8_sha256": "db467e1f8b2040beb73d8459d62f6584f23ebbbb1bb3c5e6527a2a03abb8de11",
+        "only_field_value_changed": true,
+        "original_full_output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+        "original_value_utf8_sha256": "85a433dd88c9f225438f1c39bee3650a282375cea6f24ed8f0245de5815b48b7"
+      },
+      "omitted_text": "若保证续保期间届满时，本产品已停止销售，我们不再接受投保申请，但会向您\r\n提供投保其他保险产品的建议。",
+      "omitted_text_sha256": "4d49c126e0e3cff9b7a67dd7cbd882a6362fcb24e29e979091a8d399758015e2",
+      "representation_scope": "condition_or_exception_is_embedded_in_exact_value_and_quote"
+    },
+    {
+      "actual_conditions": [],
+      "actual_exceptions": [],
+      "category": "exception",
+      "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+      "field_key": "waiting_period",
+      "fixture_reviewer": {
+        "baseline_candidate_hash": "0600848dd089ec8794dd5c184d2c1c9c426a247303232ef5efbc9c952c8ff09e",
+        "baseline_context_hash": "2dc345c79471dc4b5e43cd04add8e48e75cc6aaeb25b2c02d91cc98143703e83",
+        "baseline_decision": "PASS",
+        "focused_mutated_output_hash": "26707661440011bf4dbc1c5b8f25ef758df0add490c60ac26fd90542493bc176",
+        "focused_original_output_hash": "491c8aec8dfb4c372642a87bcf35605e2ea4219b576688a86c4cc86097a3cf33",
+        "focused_request_hash": "d94adbb558b5d4d4048f8ced6449f2444684c45a71499af555be34e4f8965992",
+        "implementation": "extract-reviewer.830.g2.v1",
+        "mutated_assembly_error": "1 validation error for CandidateBundle\n  Value error, REVIEW_NOT_APPROVED_OR_STALE [type=value_error, input_value={'contract': 'concept-can...2dc316fa6dcdf3e91f18a0'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+        "mutated_assembly_status": "REJECTED",
+        "mutated_context_hash": "ee4d60d1b8f56c95525bac8033cf3c9655952d9f4f3aca6e5f94bde654e9d230",
+        "mutated_decision": "REJECT",
+        "mutated_reasons": [
+          "NOT_EXACT_EXTRACTION"
+        ]
+      },
+      "frozen_quote": {
+        "block_id": "cbc501f6-efe4-4ea8-af11-465da4c5f135",
+        "end": 510,
+        "evidence_object_digest": "d69516f737183daa8f450e28a2e999406a30c82b1808e5ac9226e61a1f57eb29",
+        "page_number": 3,
+        "quote_hash": "1aca6c4c3d529ee2d5f8711ecf50ff3c2fc85c5b5f775705fdcfeebfbb9a7348",
+        "quote_utf8_sha256": "1aca6c4c3d529ee2d5f8711ecf50ff3c2fc85c5b5f775705fdcfeebfbb9a7348",
+        "revision_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+        "start": 129
+      },
+      "full_candidate_assembly": {
+        "error": "1 validation error for CandidateBundle\n  Value error, EXECUTION_CONTEXT_MISMATCH [type=value_error, input_value={'contract': 'concept-can...7bc0ec3c1bb508a4ec37f1'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/value_error",
+        "frozen_independent_review_output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+        "mutated_review_context_hash": "8841257785442b5399cf18e183fd5b4d12d7eb277041ad1cfa7951c8cd828067",
+        "original_review_context_hash": "add1f8a0e3469b56de3df6a8fd69233aa0ab4c8720182c3f0f68521540104d5b",
+        "status": "REJECTED"
+      },
+      "mutation": {
+        "conditions_unchanged": true,
+        "evidence_unchanged": true,
+        "exceptions_unchanged": true,
+        "mutated_full_output_hash": "8c7509958484d382239d64226dac5e72be35035a6ea33781414287124d4b0876",
+        "mutated_value_utf8_sha256": "835a3aa84e3690365568faf6fd2e6657ff627435f2a8530aaf48361d51436704",
+        "only_field_value_changed": true,
+        "original_full_output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+        "original_value_utf8_sha256": "1aca6c4c3d529ee2d5f8711ecf50ff3c2fc85c5b5f775705fdcfeebfbb9a7348"
+      },
+      "omitted_text": "2. 您在保证续保期间内续保本产品的；\r\n",
+      "omitted_text_sha256": "d02cec106a21c897b138f334d277d398f09fb35f35541181326a5fccd2da891d",
+      "representation_scope": "condition_or_exception_is_embedded_in_exact_value_and_quote"
+    }
+  ],
+  "contract": "830-g2-final-preservation-replay.v1",
+  "original_candidate": {
+    "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+    "contract": "concept-candidate-bundle.830.g2.v1",
+    "field_count": 134,
+    "file_sha256": "69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1",
+    "member_count": 140,
+    "output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+    "path": "/private/tmp/g2-b-source-candidate-assembly/output/candidate-bundle.json",
+    "request_hash": "1f989dc8cf668a4ff6912004f5fc9eb0bd8cad2e63f14fc9e76a62478c7ed107",
+    "review_context_excludes": [
+      "compiler_execution",
+      "compiler_reasoning",
+      "compiler_self_score"
+    ],
+    "review_context_hash": "add1f8a0e3469b56de3df6a8fd69233aa0ab4c8720182c3f0f68521540104d5b",
+    "review_context_keys": [
+      "candidate",
+      "output_hash",
+      "request",
+      "request_hash"
+    ],
+    "review_decision": "PASS",
+    "review_execution_implementation": "llm-reviewer:deepseek-v4-flash@api.deepseek.com/g2-b-v1",
+    "review_raw_output_hash": "a05350f442f6020883d66bbeb3824e61378878d83a38ec37fc19f5fae8a7a3ad"
+  },
+  "provider_calls": 0,
+  "scope": "The actual output stores conditions/exceptions inside exact value/quote text; both arrays are empty. This replay proves exact-text tamper rejection only.",
+  "semantic_quality_claim": "NOT_MADE",
+  "status": "PASS"
+}

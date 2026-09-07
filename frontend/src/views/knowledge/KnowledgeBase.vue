@@ -47,7 +47,7 @@ import KbTagManageDrawer from './components/KbTagManageDrawer.vue';
 import type { KnowledgeProcessOverrides } from '@/types/knowledgeProcess';
 import { useUploadConfirmStore, type UploadConfirmResult } from '@/stores/uploadConfirm';
 import WikiBrowser from './wiki/WikiBrowser.vue';
-import SchemaWikiBrowser from './schema-wiki/SchemaWikiBrowser.vue';
+import SchemaWikiCatalogEntry830G2 from './schema-wiki/SchemaWikiCatalogEntry830G2.vue';
 import { getWikiStats } from '@/api/wiki';
 import {
   isKnowledgeParseInFlight,
@@ -2060,7 +2060,7 @@ async function createNewSession(value: string): Promise<void> {
       </div>
 
       <div v-if="isWiki && activeKbTab === 'schema'" class="wiki-main-area">
-        <SchemaWikiBrowser v-if="kbId" :knowledge-base-id="kbId" />
+        <SchemaWikiCatalogEntry830G2 v-if="kbId" :knowledge-base-id="kbId" />
       </div>
 
       <!-- Materials Wiki Browser / Graph -->

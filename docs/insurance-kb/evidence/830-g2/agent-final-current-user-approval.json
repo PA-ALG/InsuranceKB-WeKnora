@@ -1,0 +1,15 @@
+{
+  "contract": "830-g2-agent-final-current-user-approval.v1",
+  "status": "APPROVED",
+  "user_instruction": "批准这些材料发给 DeepSeek 并执行",
+  "question_reference": "call_luNO20oskivPuZ9t9zK3yMTo",
+  "destination": "https://api.deepseek.com/v1",
+  "purpose": "Final1 G2 Agent turn search/read/answer",
+  "data": "Approved final preview: question, published insured definition and search/source/release identities",
+  "preview_sha256": "45ac04113b62c081162983f313d256faa7ea2164980f0934312ed00d03100ce3",
+  "plan_sha256": "067878b3c9001eb08519361475b437669f7105c7ab2f1109bd853e7e4f9414cc",
+  "agent_turns": 1,
+  "model_http_attempts_max": 13,
+  "whole_turn_retries": 0,
+  "recorded_at": "2026-09-07T02:51:56.438678+00:00"
+}

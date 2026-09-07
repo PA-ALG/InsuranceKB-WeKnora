@@ -1,0 +1,156 @@
+{
+  "contract": "830-g2-b-local-live-verification.v1",
+  "status": "PASS",
+  "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "provider_calls": 0,
+  "observations": [
+    {
+      "path": "/current",
+      "http": 200,
+      "body_sha256": "283900c1d8807611a61e8f164c91df9660fe81dc5200c9ce13f66d9d665b3215"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search",
+      "http": 200,
+      "body_sha256": "3514858af60f4929fe0020986a710ba990f3e0c4d10c439bf08100d7bbcbdd92"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "65bd3116d2214a44ab2ff412c60b2927e9899e2a644f15dc761b401999e76c04"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/payloads/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "bbfd045aee37e2137efa885dd4ac5e5560a17a0cf1314ad0eb782cb62b3a6f34"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=%E5%8F%97%E4%BF%9D%E9%99%A9%E5%90%88%E5%90%8C%E4%BF%9D%E9%9A%9C%E7%9A%84%E4%BA%BA",
+      "http": 200,
+      "body_sha256": "a427222657b7d429827bbad450d71f48ecd10c2b7df9e8f0febc5e2ff37cbf60"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "http": 200,
+      "body_sha256": "6591341fb739a5a1b0c493a3f49551b0cd7204e97ddd999a9fd52664fe32c352"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "343c3dffacb9d3634cd857446f738ee499b97f47dab5d99209a824c9790ff8b8"
+    },
+    {
+      "path": "/schema/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c/citations/citation-63a42ceffc815ade51b08583/preview?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "e6c5e2e59036f7baf984d4517313c35f368a68e1a5d8d4e6d082bfb07f23557c"
+    },
+    {
+      "path": "/schema/citation-content/[opaque-token]",
+      "http": 200,
+      "body_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+    },
+    {
+      "path": "/schema/concept-pages/assertion_4f657a2ca7db206ada1a53caf611c6d1d143727d3de9f43ab0136923bbf9e6e0?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "81ea7be7500c2ace7837767655a1d30b08f6b621d013b6f3029ea87b3b11914c"
+    },
+    {
+      "path": "/schema/concept-pages/assertion_4f657a2ca7db206ada1a53caf611c6d1d143727d3de9f43ab0136923bbf9e6e0/citations/citation-57ff09810a0547a7e2f152ed/preview?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "b340aef930710e6999485dbfedacec67e433a5e23e8dc6be5b79e219c8f92d5d"
+    },
+    {
+      "path": "/schema/citation-content/[opaque-token]",
+      "http": 200,
+      "body_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+    },
+    {
+      "path": "/schema/concept-pages/assertion_e8704b04f30dfe708840d113877f0dd7e3a52f79afea75ea8264937db2c1a4ab?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "2642281405577a68fa701b8dcb741431b640cafe47354746e1392bc6333f98f4"
+    },
+    {
+      "path": "/schema/concept-pages/assertion_e8704b04f30dfe708840d113877f0dd7e3a52f79afea75ea8264937db2c1a4ab/citations/citation-e4927419d77d1b6a0eb0acf6/preview?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "963bcfe2300229177b2a3c905fe09efd9dacc34097f55102eb9f5594560f7a28"
+    },
+    {
+      "path": "/schema/concept-pages/free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "bbec6359ac8d250d76e096ae63f867735b617bb8715555800e7c2614e0878f22"
+    },
+    {
+      "path": "/schema/concept-pages/free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4/citations/citation-f803e2e6c3b5502284b5e30d/preview?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "88f8b8d5dea0167e9c619fe5e79596e3073472253ac68392eb80a60ed4bcb817"
+    },
+    {
+      "path": "/schema/citation-content/[opaque-token]",
+      "http": 200,
+      "body_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f"
+    },
+    {
+      "path": "/schema/concept-pages/entity_overview_edcc954dc0e5043f1a2d0ac7a9a3e4ddd173e967efbfcc2ec640e86c20be9418?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "20d13bf7ea19d9faca023842f23f08c3b8b8491c3ebcad8fa2946fc17840204e"
+    },
+    {
+      "path": "/schema/concept-pages/free_wiki_b8a6d66b347f3d84ca6959e17b349291d192d82e34b94b40e9f529873c5cae65?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+      "http": 200,
+      "body_sha256": "7287ae006a722a5a79535e66eef596a6d4e1d0b05c62d28c15b49d44f61d17c2"
+    },
+    {
+      "path": "/current",
+      "http": 200,
+      "body_sha256": "283900c1d8807611a61e8f164c91df9660fe81dc5200c9ce13f66d9d665b3215"
+    }
+  ],
+  "head": {
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+    "activation_epoch": 5
+  },
+  "member_count": 140,
+  "a_preserved_members": 70,
+  "definition_hash": "edab19075496f0ae02753065e97b63607105c37cc578b235f407499a7f64b9e1",
+  "aggregate_hash": "d9e8b6b7deb3aa58a6d58109aad1434292f82615eeba400f50c6567ded45bf89",
+  "linked_fields": 4,
+  "checked_citations": 4,
+  "pdf_proofs": {
+    "f987fc16-222a-4246-8ca0-22c1a81dd6d9": {
+      "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "bytes": 1047811,
+      "pages": 39
+    },
+    "5ad208d2-a9a1-4b66-a292-45ab06cb10c8": {
+      "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "bytes": 1332078,
+      "pages": 44
+    },
+    "e7722140-3486-437b-9952-f3d66d6fb539": {
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "bytes": 395696,
+      "pages": 17
+    }
+  },
+  "original_database": {
+    "source_rows": 0,
+    "heads": [
+      {
+        "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+        "epoch": 3
+      }
+    ]
+  },
+  "isolated_database": {
+    "source_rows": 3,
+    "heads": [
+      {
+        "release": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+        "epoch": 5
+      }
+    ]
+  },
+  "g2_active_snapshots": 2,
+  "required_snapshots": 2,
+  "final_agent": "NOT_RUN"
+}

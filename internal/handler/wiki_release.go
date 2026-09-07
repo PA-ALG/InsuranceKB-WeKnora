@@ -383,6 +383,16 @@ func errorsUnavailableWikiReleaseService() error {
 }
 
 func writeWikiReleaseError(c *gin.Context, err error) {
+	if stderrors.Is(err, service.ErrConceptSourceAuthorityUnavailable830G2) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE",
+				"message": "concept source authority unavailable",
+			},
+		})
+		return
+	}
 	status := http.StatusInternalServerError
 	message := "wiki release request failed"
 	switch {

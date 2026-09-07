@@ -1,0 +1,24 @@
+{
+  "contract": "g2-b-source-and-provider-closure-review.private.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "builder_sha256": "2898565e65008520919034bd4b2139f8c1b696ff816030513fb289716df6357f",
+  "provider_runner_sha256": "79cc6077976f1816f6709948410f6e81e7d8764b185429cf003b539d27b1e21b",
+  "closure_fix_validation_sha256": "cd45fc82b422fa0140c399e52d445a8983512ab4efca40753eb6d98a56815a9c",
+  "provider_calls": 0,
+  "network_calls": 0,
+  "database_writes": 0,
+  "a_active": false,
+  "limitations": [
+    "This review does not claim that A is Active.",
+    "This review is not a run-specific provider authorization or provider runbook approval."
+  ],
+  "findings": {
+    "BLOCKER": [],
+    "BACKLOG": [],
+    "REJECTED": [
+      "Treating the auxiliary product identity as a twenty-second CompileRequest source.",
+      "Allowing a copied or unvalidated compile result to enter independent review."
+    ]
+  }
+}

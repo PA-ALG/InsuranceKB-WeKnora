@@ -1,0 +1,1154 @@
+{
+  "goal_id": "G2",
+  "version": "g2-seed-cases.v1",
+  "frozen_at": "2026-09-05T15:07:53.456086+00:00",
+  "classification": "SEED_CASES_NOT_EXPERT_CANONICAL_GOLDEN",
+  "denominator": 24,
+  "expected_basis": "协议处置/硬门/边界；合成噪声与反例明确标注；领域价值及语义质量留Q0",
+  "thresholds": {
+    "candidate": 80,
+    "human": 60,
+    "weights": [
+      25,
+      20,
+      20,
+      15,
+      10,
+      10
+    ]
+  },
+  "source_projection": {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/terms-native-projection.json",
+    "sha256": "f4fd8a439ffb1ef5a2c01c4363f8f9692748d10254c611cba1f0112d2dc7de6b",
+    "source_hash_matches_g1": true,
+    "parse_hash_matches_815_coordinate_companion": true
+  },
+  "cases": [
+    {
+      "case_id": "G2-SEED-01",
+      "key": "insured",
+      "scenario": "充分来源新概念晋级",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "insured",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "placement": "concept_definition",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "new_page"
+      },
+      "digest": "61e846792fd4332dc3242035720c76ded57e7c57f4886b99b5d8414752ca6690"
+    },
+    {
+      "case_id": "G2-SEED-02",
+      "key": "policyholder",
+      "scenario": "短但有独立业务意义的定义",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "policyholder",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 123,
+              "char_end": 141,
+              "span_ids": [
+                "span-2f9eb3d74c4938f4a1581695c66546faaa9ef9ebe588792a4fcd9e96869238a5"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "184.50300000000004",
+                  "279.12475000000006",
+                  "195.68449999999996"
+                ]
+              ]
+            },
+            "quote": "投保人就是购买保险并交纳保险费的人。",
+            "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+          }
+        ],
+        "placement": "concept_definition",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "new_page"
+      },
+      "digest": "cbf2e149fb814fae225e42f51ee8d79a87d48672c379384e64789016caedbb79"
+    },
+    {
+      "case_id": "G2-SEED-03",
+      "key": "insured_update",
+      "scenario": "已有同一身份的新说明形成更新提案",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "insured_update",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "canonical_target": "insured",
+        "existing_identity": "same",
+        "existing_content": "保障对象",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          5,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "update"
+      },
+      "digest": "3f33d5eb60874b29a5264e071ff97fb9386972f45e6a8e6d2c879ce8e334e523"
+    },
+    {
+      "case_id": "G2-SEED-04",
+      "key": "beneficiary_sense",
+      "scenario": "同名但明确不同义项保持独立",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "beneficiary_sense",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 144,
+              "char_end": 167,
+              "span_ids": [
+                "span-5d95723561a73b9659c67cb1f39fb1a716b1df5d199b0cad733e3049389dab20"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "202.50300000000004",
+                  "331.56309999999996",
+                  "213.68449999999996"
+                ]
+              ]
+            },
+            "quote": "受益人就是发生保险事故后享有保险金请求权的人。",
+            "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc"
+          }
+        ],
+        "canonical_target": "beneficiary",
+        "existing_identity": "different_sense",
+        "sense_key": "insurance-benefit",
+        "existing_sense": "general-recipient",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "sense"
+      },
+      "digest": "5aed997f725cfe7c86e7c0e1b5388ed98e8a95dba774782c4f087ab62baf8d3e"
+    },
+    {
+      "case_id": "G2-SEED-05",
+      "key": "waiting_period",
+      "scenario": "实体30日归字段而非孤立数值页",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "waiting_period",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 540,
+              "char_end": 551,
+              "span_ids": [
+                "span-b14e7ccf5ca5a399b03a3bfa6746412c99a277b9cf2b744c743779d85098c82d"
+              ],
+              "rects": [
+                [
+                  "75.84",
+                  "402.18199999999996",
+                  "525.784",
+                  "413.4845"
+                ]
+              ]
+            },
+            "quote": "本合同有30日的等待期",
+            "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd"
+          }
+        ],
+        "field_key": "waiting_period",
+        "entity_id": "ping-an-e-sheng-bao",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "field_rule"
+      },
+      "digest": "f2c20acff03f710631dd2867b566fcaeaacf5b5c6557feed4ae575e41a289ca7"
+    },
+    {
+      "case_id": "G2-SEED-06",
+      "key": "policyholder_alias",
+      "scenario": "已确认同指的别名复用身份",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "policyholder_alias",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 123,
+              "char_end": 141,
+              "span_ids": [
+                "span-2f9eb3d74c4938f4a1581695c66546faaa9ef9ebe588792a4fcd9e96869238a5"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "184.50300000000004",
+                  "279.12475000000006",
+                  "195.68449999999996"
+                ]
+              ]
+            },
+            "quote": "投保人就是购买保险并交纳保险费的人。",
+            "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+          }
+        ],
+        "canonical_target": "policyholder",
+        "same_identity_confirmed": true,
+        "alias": "投保人"
+      },
+      "expected": {
+        "disposition": "alias_link"
+      },
+      "digest": "5627a630859e804e22f48a3a2172191f29be2b58fc6b5005e023ab39dbc0f2b2"
+    },
+    {
+      "case_id": "G2-SEED-07",
+      "key": "low_value_mention",
+      "scenario": "59分仅提及",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "low_value_mention",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "score_components": [
+          15,
+          10,
+          15,
+          9,
+          5,
+          5
+        ]
+      },
+      "expected": {
+        "disposition": "mention"
+      },
+      "digest": "289236f3a2ecf447249c54260b9f05a73532e5d8a2568ef0a06f09bbb7ce0bc6"
+    },
+    {
+      "case_id": "G2-SEED-08",
+      "key": "duplicate_insured",
+      "scenario": "相同知识及来源重复不再成页",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "duplicate_insured",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "canonical_target": "insured",
+        "existing_content": "被保险人就是受保险合同保障的人。",
+        "existing_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ]
+      },
+      "expected": {
+        "disposition": "duplicate"
+      },
+      "digest": "cd058679bf988fabb952d578c8d4191ee8de5703dcb10d6f4d6f4b5b221f2339"
+    },
+    {
+      "case_id": "G2-SEED-09",
+      "key": "advertisement",
+      "scenario": "广告口号拒绝",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "advertisement",
+        "source_evidence": [],
+        "synthetic_mutation": "advertising_noise",
+        "text": "至尊守护，幸福一生！"
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "7aca0a27173c013a76f01cd1e8362d15af9f1c46fa8d399c20411bd847c6d5f6"
+    },
+    {
+      "case_id": "G2-SEED-10",
+      "key": "ocr_noise",
+      "scenario": "OCR噪声拒绝",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "ocr_noise",
+        "source_evidence": [],
+        "synthetic_mutation": "ocr_noise",
+        "text": "丨丨l0O□□�"
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "e55e94187ca2033479cd4e116eb0c818d09afb4c5d01aaa53ab37ec86d8df189"
+    },
+    {
+      "case_id": "G2-SEED-11",
+      "key": "unsupported_claim",
+      "scenario": "无证据内容拒绝",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "unsupported_claim",
+        "source_evidence": [],
+        "text": "所有费用均无条件报销",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "1a17e96d452da3a97dabe9b8ae47804cc68312e8cdcd33e88bafa1346aa0684e"
+    },
+    {
+      "case_id": "G2-SEED-12",
+      "key": "missing_identity",
+      "scenario": "有引文无稳定主体/身份不晋级",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "missing_identity",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "identity_missing": true,
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "pending"
+      },
+      "digest": "599ea5c264969faa89664bbc570c495bb75b1bb0c14aa88c4a1c5765df3c2de0"
+    },
+    {
+      "case_id": "G2-SEED-13",
+      "key": "score_60",
+      "scenario": "60分需人工、未决不入Members",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "score_60",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "score_components": [
+          15,
+          10,
+          15,
+          10,
+          5,
+          5
+        ],
+        "review": "NEEDS_HUMAN"
+      },
+      "expected": {
+        "disposition": "pending"
+      },
+      "digest": "471fa8a64a44dcf1b207bb9392630133d163e0ee2aaeb77c673e495ff644e11a"
+    },
+    {
+      "case_id": "G2-SEED-14",
+      "key": "score_79",
+      "scenario": "79分需人工、未决不入Members",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "score_79",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "score_components": [
+          20,
+          15,
+          19,
+          10,
+          5,
+          10
+        ],
+        "review": "NEEDS_HUMAN"
+      },
+      "expected": {
+        "disposition": "pending"
+      },
+      "digest": "53cb2e79e8994e789ccecefbdb228149ce8947eff1415e17a7d0264ba2c09831"
+    },
+    {
+      "case_id": "G2-SEED-15",
+      "key": "score_80",
+      "scenario": "80分可进入Candidate但不是Active",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "score_80",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "score_components": [
+          20,
+          15,
+          20,
+          10,
+          5,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "new_page"
+      },
+      "digest": "eafb28c6b5f30907903a29e3681db32599cc03f9f1061b62b938e061b510a295"
+    },
+    {
+      "case_id": "G2-SEED-16",
+      "key": "score_100_without_source",
+      "scenario": "满分不能抵消Evidence硬门",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "score_100_without_source",
+        "source_evidence": [],
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "43911fa0611269e7e1c43664ed4ae6d2feb9e1e771abc6c09d5a0ab635939fe2"
+    },
+    {
+      "case_id": "G2-SEED-17",
+      "key": "required_unknown",
+      "scenario": "必选字段完整尝试但未发现值仍独立unknown页",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "required_unknown",
+        "source_evidence": [],
+        "field_key": "cooling_off_period",
+        "required": true,
+        "attempted": true,
+        "value_state": "unknown",
+        "value": null,
+        "score_components": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "expected": {
+        "disposition": "field_rule"
+      },
+      "digest": "fde9a27b128bd3e857531a11b8a71f1f6433fcbd98294a4cd647add77404e5df"
+    },
+    {
+      "case_id": "G2-SEED-18",
+      "key": "explicit_negative",
+      "scenario": "保留原文明确否定",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "explicit_negative",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 817,
+              "char_end": 848,
+              "span_ids": [
+                "span-54e49f57fe9df91b5cb49c51718aa02de44bb2197f37aab6fdf432272fa18010"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "499.62199999999996",
+                  "525.784",
+                  "510.8035"
+                ]
+              ]
+            },
+            "quote": "本合同为不保证续保合同，保险期间为1年，保险期间届满需重新投保",
+            "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145"
+          }
+        ],
+        "field_key": "guaranteed_renewal_period",
+        "value_state": "absent_explicitly",
+        "value": "本合同为不保证续保合同，保险期间为1年，保险期间届满需重新投保"
+      },
+      "expected": {
+        "disposition": "field_rule"
+      },
+      "digest": "9f1357c5c2466bf32cc4f5235d1457737bd9578ba4bcf18fde3cc29e7bbec8e3"
+    },
+    {
+      "case_id": "G2-SEED-19",
+      "key": "extract_original",
+      "scenario": "原文合适直接摘录",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "extract_original",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 144,
+              "char_end": 167,
+              "span_ids": [
+                "span-5d95723561a73b9659c67cb1f39fb1a716b1df5d199b0cad733e3049389dab20"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "202.50300000000004",
+                  "331.56309999999996",
+                  "213.68449999999996"
+                ]
+              ]
+            },
+            "quote": "受益人就是发生保险事故后享有保险金请求权的人。",
+            "quote_sha256": "b874f6c687590509cbff7614dc08b654ed1e4727f1740e89c63acf50eafb12fc"
+          }
+        ],
+        "mode": "EXTRACT",
+        "value": "受益人就是发生保险事故后享有保险金请求权的人。",
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "new_page"
+      },
+      "digest": "4492c40695f889afa3727e38ea36acf5284be243ce7dc67fbae531fb8aaddd6d"
+    },
+    {
+      "case_id": "G2-SEED-20",
+      "key": "normalize_value",
+      "scenario": "单位/格式可规范化但quote不变",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "normalize_value",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 540,
+              "char_end": 551,
+              "span_ids": [
+                "span-b14e7ccf5ca5a399b03a3bfa6746412c99a277b9cf2b744c743779d85098c82d"
+              ],
+              "rects": [
+                [
+                  "75.84",
+                  "402.18199999999996",
+                  "525.784",
+                  "413.4845"
+                ]
+              ]
+            },
+            "quote": "本合同有30日的等待期",
+            "quote_sha256": "0cbb56032dd99c2c9e49d5db6440a4fb9805504fb0b93dff534767f86d0472cd"
+          }
+        ],
+        "mode": "NORMALIZE",
+        "field_key": "waiting_period",
+        "value": "30天",
+        "preserved_facts": [
+          "30",
+          "日与天单位等价"
+        ]
+      },
+      "expected": {
+        "disposition": "field_rule"
+      },
+      "digest": "304a22696e8a2bfeb8faf2244bb215c2191d1f15930396f36480f3ecf8caf4ce"
+    },
+    {
+      "case_id": "G2-SEED-21",
+      "key": "compression_drops_negation",
+      "scenario": "删掉否定的压缩反例不得通过审核",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "compression_drops_negation",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 817,
+              "char_end": 848,
+              "span_ids": [
+                "span-54e49f57fe9df91b5cb49c51718aa02de44bb2197f37aab6fdf432272fa18010"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "499.62199999999996",
+                  "525.784",
+                  "510.8035"
+                ]
+              ]
+            },
+            "quote": "本合同为不保证续保合同，保险期间为1年，保险期间届满需重新投保",
+            "quote_sha256": "98df51a726d467e20d673dd66796b98bfc6f9be09626830ba99de87016330145"
+          }
+        ],
+        "mode": "COMPRESS",
+        "value": "本合同保证续保",
+        "independent_review_expected": "REJECT",
+        "synthetic_mutation": "negation_removed"
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "a0c05e4e075251bdd5ed30aec1f140b1e566920393898e6b40a47d7fc3a6771b"
+    },
+    {
+      "case_id": "G2-SEED-22",
+      "key": "synthesis_scoped",
+      "scenario": "有来源的综合保留两个主体不同定义",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "synthesis_scoped",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          },
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 123,
+              "char_end": 141,
+              "span_ids": [
+                "span-2f9eb3d74c4938f4a1581695c66546faaa9ef9ebe588792a4fcd9e96869238a5"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "184.50300000000004",
+                  "279.12475000000006",
+                  "195.68449999999996"
+                ]
+              ]
+            },
+            "quote": "投保人就是购买保险并交纳保险费的人。",
+            "quote_sha256": "beffea6b51424f0b8cf5f5e0e01aa93b34c6cfcc0c9148026ae5ca7bede0fd96"
+          }
+        ],
+        "mode": "SYNTHESIZE",
+        "value": "被保险人就是受保险合同保障的人。投保人就是购买保险并交纳保险费的人。",
+        "preserved_facts": [
+          "被保险人",
+          "受保险合同保障",
+          "投保人",
+          "购买保险并交纳保险费"
+        ],
+        "score_components": [
+          25,
+          20,
+          20,
+          15,
+          10,
+          10
+        ]
+      },
+      "expected": {
+        "disposition": "new_page"
+      },
+      "digest": "f27fd621bbb5cc39fcf882cda91f98cd3a47b9eba7a3218a7af310e339d85a91"
+    },
+    {
+      "case_id": "G2-SEED-23",
+      "key": "foreign_identity",
+      "scenario": "跨Space引用硬拒绝",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "foreign_identity",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "link_target_scope": "foreign-space",
+        "canonical_target": "insured"
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "4a3073a9f52d3d739c1c37fe087f49abfcd4ce71eccb01a0e7b589328957b629"
+    },
+    {
+      "case_id": "G2-SEED-24",
+      "key": "dangling_link",
+      "scenario": "引用不存在概念的页面发布前lint失败",
+      "case_kind": "PROTOCOL_REPLAY_NOT_GOLDEN",
+      "input": {
+        "scope": "g2-isolated-seed-space",
+        "canonical_key": "dangling_link",
+        "source_evidence": [
+          {
+            "source_type": "DOCUMENT",
+            "source_revision_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+            "source_content_hash": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+            "parse_manifest_hash": "fd7d26f349fbf4416b2b7013d4e845c53467d372b16f803ebe0626111a6c4666",
+            "parser_identity": "pdfplumber-0.11.10/native-text-position.815.v1",
+            "locator": {
+              "kind": "PDF_PAGE_BBOX",
+              "page_number": 1,
+              "offset_unit": "UNICODE_CODE_POINT",
+              "char_start": 104,
+              "char_end": 120,
+              "span_ids": [
+                "span-8dd80b3349bf35f76fc04729a8dfe4d1ca769891affcd59d3ad558428a3b4e0a"
+              ],
+              "rects": [
+                [
+                  "74.4",
+                  "166.50300000000004",
+                  "258.1261000000001",
+                  "177.68449999999996"
+                ]
+              ]
+            },
+            "quote": "被保险人就是受保险合同保障的人。",
+            "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+          }
+        ],
+        "canonical_target": "missing-concept",
+        "link_only": true
+      },
+      "expected": {
+        "disposition": "reject"
+      },
+      "digest": "3beabc89a3b05f89c443561de3d96203ddd192d41d908b9226115bd5740b179b"
+    }
+  ],
+  "digest": "c633cf3c530ffec64c7b6cf7471164ebdd31ba3fa7aa97b13fddfe505b7c0986"
+}

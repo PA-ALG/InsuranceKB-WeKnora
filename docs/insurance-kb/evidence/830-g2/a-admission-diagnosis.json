@@ -1,0 +1,37 @@
+{
+  "contract": "830-g2-a-admission-diagnosis.v1",
+  "review_run": "g2-a-review-002",
+  "raw_wire": "PASS",
+  "score": 66,
+  "score_components": [
+    15,
+    10,
+    15,
+    10,
+    8,
+    8
+  ],
+  "threshold": 80,
+  "decision_literal": "PASS",
+  "candidate_admission": "REJECTED_PAGE_ADMISSION_REQUIRED",
+  "independent_review": "BLOCKER0 for rejection correctness",
+  "gaps": [
+    {
+      "id": "A-RAW-DEFAULT",
+      "finding": "review-001 omitted contract; Python default hydration masked missing raw field; Go exact raw validation correctly rejected actual Draft HTTP400",
+      "status": "CODE_FIXED_AWAITING_DELIVERY",
+      "next": "Strict raw-object validation implemented; actual oldreview001 rejected and actualreview002 preserved. See human-python-verification.json."
+    },
+    {
+      "id": "A-PASS-SUB80",
+      "finding": "Reviewer schema permits PASS+66; prompt has component ranges but no80 threshold or anchored score meanings; candidate validator correctly rejects below80",
+      "status": "RESOLVED_BY_SEPARATE_ADMISSION_PROJECTION",
+      "next": "Preserve independent raw review PASS66; v2 admission deterministically NEEDS_HUMAN. 80 is automatic-entry boundary, not G2 quality gate. Scoring calibration belongs Q0 and does not block G2."
+    }
+  ],
+  "no_score_patching": true,
+  "no_further_a_calls": true,
+  "active_snapshots": 0,
+  "target_active_snapshots": 2,
+  "scope_note": "Historical v1 automatic-admission diagnosis; current user-approved G2 route is v2 whole-batch human admission, preserving raw PASS66."
+}

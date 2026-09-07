@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-a-human-candidate-preflight.v1",
+  "status": "OFFLINE_ASSEMBLED_NOT_PLATFORM_VERIFIED",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "candidate_file_sha256": "bb831c30806d7c9e815a32390d3a17d86890298ac1808a077c27201f1711255e",
+  "compile_run": "g2-a-compile-003",
+  "review_run": "g2-a-review-002",
+  "review_score": 66,
+  "raw_review_preserved": true,
+  "admission": {
+    "contract": "concept-admission.830.g2.v1",
+    "status": "NEEDS_HUMAN",
+    "pending_page_ids": [
+      "concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c"
+    ]
+  },
+  "proposed_members": 70,
+  "fields": 67,
+  "field_states": {
+    "unknown": 64,
+    "present": 2,
+    "absent_explicitly": 1
+  },
+  "definitions": 1,
+  "concept_links": 2,
+  "free_content_pages": 0,
+  "new_provider_calls": 0,
+  "human_decision": "NOT_GIVEN",
+  "published": false,
+  "flow": "NOT_RUN"
+}

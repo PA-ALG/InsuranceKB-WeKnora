@@ -1,0 +1,18 @@
+{
+  "contract": "830-g2-b-source-recovery-automatic-approval-block.v1",
+  "status": "BLOCKED_AWAITING_EXPLICIT_CURRENT_USER_DATA_AUTHORIZATION",
+  "rejections": 2,
+  "action": "Exact one source-recovery compile POST to DeepSeek",
+  "first_reason": "Visible user consent not specific to this payload and destination",
+  "second_reason": "Retrieved original authorization history and proof file rejected as untrusted evidence",
+  "payload_sha256": "3996ab27291375557c50f87438c0247589df240629e433aeda0993d54173633f",
+  "original_history_proof_sha256": "3b914c22040deb8dbe2c5150c584a5ce1d360f6f2df9cb12f2071efe67312f1c",
+  "attempt_started": false,
+  "response_exists": false,
+  "ledger_calls": 8,
+  "provider_calls_this_recovery": 0,
+  "candidate_created": false,
+  "g2_active_snapshots": 1,
+  "required_snapshots": 2,
+  "next": "User must explicitly authorize shown payload to DeepSeek; do not execute or route around denial"
+}

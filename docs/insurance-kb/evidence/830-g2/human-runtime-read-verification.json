@@ -1,0 +1,92 @@
+{
+  "contract": "830-g2-final-runtime-read-verification.v1",
+  "status": "PASS",
+  "source_head": "871f6e1028ebbde453cdd60b0b787f95103ad7c9",
+  "containers": {
+    "weknora-g2-594-app": {
+      "container_id": "2e6bb101fcc9b0545fee638c99254826cf2240212cdd628912a55d6fd1151de1",
+      "image_id": "sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a",
+      "running": true
+    },
+    "weknora-g2-594-ui": {
+      "container_id": "3c67ef40d8517aee4bffdb34a41236a950692bf2a56592e30767185c3e75757a",
+      "image_id": "sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5",
+      "running": true
+    },
+    "weknora-g2-594-docreader": {
+      "container_id": "c8644a8f546a1eb9958cfbc2ef5eda2ffe5e2a916051bc9f984447b0a0b72f3e",
+      "image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+      "running": true
+    }
+  },
+  "app_health_http": 200,
+  "ui_proxy_login_http": 200,
+  "login_tenant": 10003,
+  "ui_nginx_reloaded_after_app_recreate": true,
+  "ui_index_http": 200,
+  "current_http": 200,
+  "current": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  },
+  "existing_g1_source_preview_http": 200,
+  "existing_g1_pdf_http": 200,
+  "pdf_bytes": 1047811,
+  "pdf_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+  "authority_page": 2,
+  "databases": {
+    "weknora": {
+      "database": "weknora",
+      "source_rows": 0,
+      "sources": [],
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    },
+    "weknora_g2_594": {
+      "database": "weknora_g2_594",
+      "source_rows": 3,
+      "sources": [
+        {
+          "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+          "parse_attempt": 3,
+          "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+          "retention_state": "pinned",
+          "revision_source_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+          "binding_digest": "3b3796a0376b469593bb7fd19c091d9ff29a991f8035635126c2ce752ce5a110"
+        },
+        {
+          "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+          "parse_attempt": 1,
+          "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+          "retention_state": "pinned",
+          "revision_source_id": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e",
+          "binding_digest": "212b52240bd16a3cabe77841c1f6cf595c7f7a107efed71d4b470c55c601bec1"
+        },
+        {
+          "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+          "parse_attempt": 2,
+          "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+          "retention_state": "pinned",
+          "revision_source_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+          "binding_digest": "299502a83c9f776c84f097c2ef5b05c92ce6afaabe5ceb722214be275cf418c0"
+        }
+      ],
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    }
+  },
+  "comparison": "Exact match to b-source-sealing-verification.json after-state",
+  "provider_calls": 0,
+  "g2_activations": 0,
+  "flow": "NOT_RUN",
+  "quality": "DEFERRED",
+  "limits": "Existing G1 source compatibility and local deployment verification; new v2 candidate exists offline; no G2 activation has occurred"
+}

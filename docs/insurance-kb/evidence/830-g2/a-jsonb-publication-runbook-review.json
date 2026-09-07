@@ -1,0 +1,8 @@
+{
+  "contract": "830-g2-a-human-publication-runbook-review.v1",
+  "status": "BLOCKER0",
+  "plan_sha256": "8a0570ee1ed30b4990cda290fe64a5fd845daadc4e9a5190c3ebca21b1f76f61",
+  "script_sha256": "fc2fce5e72e3a47be0184dcaaa9317fa5114711e2d748b066f4b380e3512c8d2",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "reviewer": "g2_bundle_review"
+}

@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-b-source-publication-execution.v1",
+  "status": "PASS",
+  "authority": "SERVER_VERIFIED_HUMAN_AND_PUBLISH",
+  "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "preparation_id": "g2-b-draft-bdc806e2084a",
+  "plan_sha256": "c39faa4472148db53c69192856e767ba6930851795d3340788f2485d8db70eb4",
+  "script_sha256": "20a624bc4a4e777ed5d24b4797df3d0162062a6313f6f313183a681d40e976c2",
+  "runbook_sha256": "fcff8ed8b5d99af1f345b99f6554cb2fa8155f9ca1962d71e5cff270f0a6fce8",
+  "expected_head": {
+    "activation_epoch": 4,
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989"
+  },
+  "review_posts": 1,
+  "activation_posts": 1,
+  "provider_calls": 0,
+  "config_changes": 0,
+  "restarts": 0,
+  "steps": [
+    "R4 runtime and distinct existing signing rings verified",
+    "Review once, source revalidation and exact Ready bindings PASS",
+    "Activation once and exact R4-to-R5 Head PASS"
+  ],
+  "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+  "activation_epoch": 5,
+  "final_head": {
+    "activation_epoch": 5,
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+  },
+  "private_receipt_sha256": "ed45f49c967b77e6578abe76151c790c3cc2f7857ed78fb6761d0b55a784e36c"
+}

@@ -1,0 +1,10 @@
+{
+  "contract": "830-g2-agent-final-auto-review-block.v1",
+  "status": "BLOCKED_CURRENT_EXPLICIT_DATA_DESTINATION_CONFIRMATION_REQUIRED",
+  "attempts_rejected_before_launch": 2,
+  "state_exists": false,
+  "model_calls": 0,
+  "reason": "Automatic review did not accept recovered historical consent and requested current exact private insurance content/source identifiers approval to DeepSeek",
+  "preview_sha256": "45ac04113b62c081162983f313d256faa7ea2164980f0934312ed00d03100ce3",
+  "plan_sha256": "067878b3c9001eb08519361475b437669f7105c7ab2f1109bd853e7e4f9414cc"
+}

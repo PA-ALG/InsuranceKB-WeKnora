@@ -1,0 +1,45 @@
+{
+  "contract": "830-g2-actual-a-native-service-quote-validation.v1",
+  "status": "PASS",
+  "capture_sha256": "2652c8e5745819d5501921a8b8c510de6e515fed930a6e764f67e6478707a09a",
+  "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+  "native_sha256": "8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6",
+  "markdown_sha256": "f37287894e8d8c023094ec185263e53cf000fa9a9fc8a88183ad65a44cadff39",
+  "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+  "page_count": 39,
+  "bbox_count": 40657,
+  "quotes": [
+    {
+      "name": "insured_definition",
+      "page_number": 1,
+      "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+      "quote_codepoints": 16,
+      "bbox": {
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "x0": 151737,
+        "y0": 197708,
+        "x1": 421266,
+        "y1": 209885
+      }
+    },
+    {
+      "name": "insured_eligibility",
+      "page_number": 2,
+      "quote_sha256": "f0823348454d3cf7618e46dcfef82b397ca13e39ef169c208cf11546edf27067",
+      "quote_codepoints": 33,
+      "bbox": {
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "x0": 333229,
+        "y0": 668098,
+        "x1": 914162,
+        "y1": 679816
+      }
+    }
+  ],
+  "negative_checks": [
+    "wrong_page_rejected",
+    "changed_quote_rejected",
+    "parser_drift_rejected"
+  ],
+  "scope": "captured_data_service_validation_not_release_or_flow"
+}

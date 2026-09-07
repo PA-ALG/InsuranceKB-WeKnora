@@ -1,0 +1,40 @@
+{
+  "contract": "830-g2-ui-final-evidence-review.v1",
+  "status": "BLOCKER0",
+  "blockers": 0,
+  "reviewer": "g2_bundle_review",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "reviewed_sha256": {
+    "directory-ui-browser-verification.json": "3c0f5a421a0effbbd759c3002866f2f9bfcf7169b7dd11790ae7c555bfc05283",
+    "directory-ui-mode-upgrade-receipt.json": "b8ccbcc96b33d15e6e14d028372eae32b107d04ae6eeb6188e6b088781153131",
+    "directory-frontend-mode-recovery-artifact.json": "6364ca32ab0911824e385addbf52bf312f0f1ee4db380567ffc2403f7d7d3a6b",
+    "current-flow-status.json": "8b7ed1c903e93038fed1f304425c79dd9f2c1b79c9cd64c22312a78c3a71b9c0",
+    "directory-ui-live.png": "e7e28651f211061a5831dcb9f3e16b3ee3fb9bd37a4d6272bd1c0477c203fa1f",
+    "directory-ui-pdf-live.png": "87df984fda6e12a8127758db42e105b5ce9d5cc8db26ce719795a1c311d0a5af"
+  },
+  "runtime": {
+    "status": "PASS",
+    "ui_image": "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+    "ui_container": "030bdaf68876198e48f8235524d84703b783fa05b7cc8df70b87719e75bb5a30",
+    "failed_image_preserved": "sha256:a22aa7feb2ac810144aebecdfa3dfdca2af052c760615a8bf8eadf8a1ad459f1"
+  },
+  "browser_scope": {
+    "status": "PASS_A_ONLY",
+    "activation_epoch": 4,
+    "members": 70,
+    "field_links": 67,
+    "free_wiki_items": 0,
+    "pdf_page": 1,
+    "definition_highlight_visible": true
+  },
+  "flow_scope": {
+    "active_snapshots": 1,
+    "required_snapshots": 2,
+    "b_model_provider_calls": 0,
+    "b_external_authorization": "PENDING",
+    "b_activation": "NOT_RUN",
+    "agent_turn": "NOT_RUN",
+    "whole_g2_flow": "NOT_RUN"
+  },
+  "finding": "Browser and runtime PASS evidence is internally consistent and limited to the first A snapshot; it does not assert completion of B or Agent execution."
+}

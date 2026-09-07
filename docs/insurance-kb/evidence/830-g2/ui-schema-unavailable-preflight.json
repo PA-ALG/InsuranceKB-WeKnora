@@ -1,0 +1,47 @@
+[
+  {
+    "path": "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/schema-scope",
+    "http": 200,
+    "body": {
+      "data": {
+        "version": "schema-wiki-scope.v1",
+        "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+        "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+        "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+        "scope_sha256": "a835b251edfebd05328cc58d0e60fda4cb96f5ca0ca0727b5db9766283a67354"
+      },
+      "success": true
+    }
+  },
+  {
+    "path": "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/schema/domains",
+    "http": 400,
+    "body": {
+      "error": {
+        "message": "schema wiki preparation invalid"
+      },
+      "success": false
+    }
+  },
+  {
+    "path": "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/schema/taxonomy/current",
+    "http": 400,
+    "body": {
+      "error": {
+        "message": "schema wiki preparation invalid"
+      },
+      "success": false
+    }
+  },
+  {
+    "path": "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/current",
+    "http": 200,
+    "body": {
+      "data": {
+        "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+        "activation_epoch": 3
+      },
+      "success": true
+    }
+  }
+]

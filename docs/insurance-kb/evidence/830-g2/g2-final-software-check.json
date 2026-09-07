@@ -1,0 +1,11 @@
+{
+  "contract": "830-g2-final-software-check.v1",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "harness": "PASS 42 tests in0.69s",
+  "harness_command": "PYTHONPATH=src python -m pytest tests/test_concept_free_wiki_830_g2.py tests/test_concept_compile_830_g2.py -q",
+  "log_sha256": "83717c5f9d91f43d7d392e05b972764ff0df8dce87f27e77d5c6720fbfba0ec5",
+  "initial_invocation": "ENVIRONMENT_ERROR: shared venv loaded main package without worktree PYTHONPATH; no source modification",
+  "openspec_strict": "PASS",
+  "git_diff_check": "PASS",
+  "provider_calls": 0
+}

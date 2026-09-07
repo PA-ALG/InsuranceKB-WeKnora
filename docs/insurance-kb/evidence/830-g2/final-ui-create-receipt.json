@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-ui-create.v1",
+  "status": "PASS",
+  "source_head": "4c5aea9bfb9cf460b361b81a18132a335c3d7cc2",
+  "image_id": "sha256:ad6f3c8944bb081f022ad74267787ab9f3d647d4b6f4360beeebdf6123836fa5",
+  "container": "weknora-g2-594-ui",
+  "port": "127.0.0.1:18195",
+  "upstream": "weknora-g2-594-app:8080",
+  "provider_calls": 0,
+  "pulls": 0,
+  "flow": "NOT_RUN",
+  "steps": [
+    "Isolated upstream, free container/port and frozen image guards PASS",
+    "G2 UI created on loopback18195 with isolated upstream"
+  ],
+  "upstream_health_http": 200,
+  "container_id": "3c67ef40d8517aee4bffdb34a41236a950692bf2a56592e30767185c3e75757a",
+  "index_http": 200,
+  "index_sha256": "71c7f5da19eb7cd4e656d773dd0a91ced74c97140b16f5387c4857adc25d7289",
+  "networks": [
+    "weknora-g2-594-egress",
+    "weknora-g2-594-internal"
+  ],
+  "network_repair": "Container-local HTTP200 but Docker disabled publication on internal-only network; attached existing G2 egress, exact loopback publication then HTTP200 PASS",
+  "initial_create_outcome": "INCOMPLETE_HOST_HTTP_UNAVAILABLE",
+  "proxy_login_http": 200,
+  "proxy_login_tenant_id": 10003,
+  "proxy_login_actor": "G2 isolated test operator",
+  "serving_app_source_head_at_probe": "3c655294daa3aecf3b27fcba2e408d63a4a17f60",
+  "serving_app_image_at_probe": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6"
+}

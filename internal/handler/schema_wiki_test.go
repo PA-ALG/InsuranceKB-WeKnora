@@ -373,6 +373,7 @@ func TestDecodeSchemaWikiCreateDraftRequestAcceptsOnlyMutuallyExclusiveClosedVar
 	t.Parallel()
 	old := `{"preparation_id":"old-preparation","release":{},"candidate_evidence_authority":{},"review_bundle":{},"evaluation_bundle":{},"review_successor":{}}`
 	g1 := `{"preparation_id":"g1-preparation","entity_page_manifest":{"contract":"entity-page-manifest.830.g1.v1"}}`
+	g2 := `{"preparation_id":"g2-preparation","concept_candidate_bundle":{"contract":"concept-candidate-bundle.830.g2.v1"}}`
 	for _, test := range []struct {
 		name        string
 		body        string
@@ -381,7 +382,9 @@ func TestDecodeSchemaWikiCreateDraftRequestAcceptsOnlyMutuallyExclusiveClosedVar
 	}{
 		{name: "legacy schema", body: old, wantVariant: "schema-wiki"},
 		{name: "g1 manifest", body: g1, wantVariant: "entity-page-graph-830-g1"},
+		{name: "g2 candidate", body: g2, wantVariant: "concept-free-wiki-830-g2"},
 		{name: "mixed", body: strings.TrimSuffix(g1, "}") + `,"release":{}}`, wantError: true},
+		{name: "mixed g1 g2", body: strings.TrimSuffix(g1, "}") + `,"concept_candidate_bundle":{}}`, wantError: true},
 		{name: "unknown member authority", body: `{"preparation_id":"g1","entity_page_manifest":{},"members":[]}`, wantError: true},
 		{name: "missing preparation", body: `{"entity_page_manifest":{}}`, wantError: true},
 		{name: "blank preparation", body: `{"preparation_id":" ","entity_page_manifest":{}}`, wantError: true},

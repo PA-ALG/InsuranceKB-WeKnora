@@ -25,10 +25,11 @@ import (
 // ErrWikiReleaseInvalidAuthorization is returned for any closed-envelope,
 // canonicalization, signer, or signature failure.
 var (
-	ErrWikiReleaseInvalidAuthorization = errors.New("invalid wiki release authorization")
-	ErrWikiReleaseAccessDenied         = errors.New("wiki release access denied")
-	ErrWikiReleaseConflict             = errors.New("wiki release conflict")
-	ErrWikiReleaseNotFound             = errors.New("wiki release not found")
+	ErrWikiReleaseInvalidAuthorization        = errors.New("invalid wiki release authorization")
+	ErrWikiReleaseAccessDenied                = errors.New("wiki release access denied")
+	ErrWikiReleaseConflict                    = errors.New("wiki release conflict")
+	ErrWikiReleaseNotFound                    = errors.New("wiki release not found")
+	ErrConceptSourceAuthorityUnavailable830G2 = errors.New("concept source authority unavailable 830 g2")
 )
 
 var publishAuthorizationV0Fields = map[string]struct{}{
@@ -525,14 +526,38 @@ type WikiReleaseFaults struct {
 	Receipt     func() error
 }
 
+// ConceptSourceAuthorityVerificationRequest830G2 binds one verification to
+// the exact server-loaded preparation. Manifest is an immutable copy; its
+// caller-declared source identities are inputs to verify against server-owned
+// source revisions, coordinates, and current ACLs, never authority themselves.
+type ConceptSourceAuthorityVerificationRequest830G2 struct {
+	Principal         types.WikiReleasePrincipal
+	Scope             types.WikiReleaseScope
+	Operation         string
+	PreparationID     string
+	CandidateHash     string
+	ManifestDigest    string
+	PreparationDigest string
+	Manifest          json.RawMessage
+}
+
+// ConceptSourceAuthorityVerifier830G2 verifies every G2 evidence locator
+// against server-owned immutable source data and current access control.
+// Production must inject a real implementation; nil and every verifier error
+// fail closed at both Review and Activate.
+type ConceptSourceAuthorityVerifier830G2 interface {
+	VerifyConceptSources830G2(context.Context, ConceptSourceAuthorityVerificationRequest830G2) error
+}
+
 // WikiReleaseServiceOptions keeps time, identities, and bounded faults
 // injectable without creating a general workflow platform.
 type WikiReleaseServiceOptions struct {
-	Now                        func() time.Time
-	NewID                      func(kind string) string
-	Faults                     WikiReleaseFaults
-	HumanDecisionVerifier      HumanBatchDecisionVerifier
-	QualityGateReceiptVerifier Schema67GoldenQualityGateReceiptVerifier
+	Now                                 func() time.Time
+	NewID                               func(kind string) string
+	Faults                              WikiReleaseFaults
+	HumanDecisionVerifier               HumanBatchDecisionVerifier
+	QualityGateReceiptVerifier          Schema67GoldenQualityGateReceiptVerifier
+	ConceptSourceAuthorityVerifier830G2 ConceptSourceAuthorityVerifier830G2
 }
 
 // WikiReleaseConflictError is the typed expected-head/CAS loser result.
@@ -551,14 +576,15 @@ func (e *WikiReleaseConflictError) Unwrap() error { return ErrWikiReleaseConflic
 
 // WikiReleaseService is the isolated S0-R core, not a production Kernel.
 type WikiReleaseService struct {
-	repository                 *wikirepository.WikiReleaseRepository
-	accessVerifier             WikiReleaseAccessVerifier
-	authorizationVerifier      WikiReleaseAuthorizationVerifier
-	humanDecisionVerifier      HumanBatchDecisionVerifier
-	qualityGateReceiptVerifier Schema67GoldenQualityGateReceiptVerifier
-	now                        func() time.Time
-	newID                      func(kind string) string
-	faults                     WikiReleaseFaults
+	repository                          *wikirepository.WikiReleaseRepository
+	accessVerifier                      WikiReleaseAccessVerifier
+	authorizationVerifier               WikiReleaseAuthorizationVerifier
+	humanDecisionVerifier               HumanBatchDecisionVerifier
+	qualityGateReceiptVerifier          Schema67GoldenQualityGateReceiptVerifier
+	conceptSourceAuthorityVerifier830G2 ConceptSourceAuthorityVerifier830G2
+	now                                 func() time.Time
+	newID                               func(kind string) string
+	faults                              WikiReleaseFaults
 }
 
 // NewWikiReleaseService creates the bounded experimental service.
@@ -589,14 +615,15 @@ func NewWikiReleaseService(
 		}
 	}
 	return &WikiReleaseService{
-		repository:                 repository,
-		accessVerifier:             accessVerifier,
-		authorizationVerifier:      authorizationVerifier,
-		humanDecisionVerifier:      options.HumanDecisionVerifier,
-		qualityGateReceiptVerifier: options.QualityGateReceiptVerifier,
-		now:                        options.Now,
-		newID:                      options.NewID,
-		faults:                     options.Faults,
+		repository:                          repository,
+		accessVerifier:                      accessVerifier,
+		authorizationVerifier:               authorizationVerifier,
+		humanDecisionVerifier:               options.HumanDecisionVerifier,
+		qualityGateReceiptVerifier:          options.QualityGateReceiptVerifier,
+		conceptSourceAuthorityVerifier830G2: options.ConceptSourceAuthorityVerifier830G2,
+		now:                                 options.Now,
+		newID:                               options.NewID,
+		faults:                              options.Faults,
 	}
 }
 
@@ -661,6 +688,29 @@ func (s *WikiReleaseService) ActivateReviewed(
 		preparation.ReviewPolicyID != decision.ReviewPolicyHash ||
 		preparation.ReviewDecisionDigest != digestWikiReleaseBytes(decisionCanonical) {
 		return nil, fmt.Errorf("%w: human decision preparation mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &manifestHeader) != nil {
+		return nil, ErrWikiReleaseInvalidAuthorization
+	}
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		// Activation verifies the same current dual-KB ACL before opening any
+		// immutable source object. s.activate repeats this gate at the CAS edge.
+		if err := s.verifyAccess(ctx, principal, scope, "activate"); err != nil {
+			return nil, err
+		}
+		if err := s.verifyConceptSourceAuthority830G2(
+			ctx, principal, scope, preparation, "activate",
+		); err != nil {
+			return nil, err
+		}
 	}
 	return s.activate(ctx, principal, rawAuthorization)
 }
@@ -840,6 +890,10 @@ func (s *WikiReleaseService) reviewDraft(
 		_, _, validationErr = validateEntityPageGraphPreparation830G1(
 			draft, types.WikiReleasePreparationDraft, scope,
 		)
+	} else if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		_, _, validationErr = validateConceptPreparation830G2(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
 	} else {
 		_, validationErr = validateSchemaWikiPreparation(
 			draft, types.WikiReleasePreparationDraft, scope,
@@ -870,6 +924,13 @@ func (s *WikiReleaseService) reviewDraft(
 		draft.ReviewPolicyID != decision.ReviewPolicyHash {
 		return nil, fmt.Errorf("%w: human decision draft mismatch", ErrWikiReleaseInvalidAuthorization)
 	}
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		if err := s.verifyConceptSourceAuthority830G2(
+			ctx, principal, scope, draft, "review",
+		); err != nil {
+			return nil, err
+		}
+	}
 	reviewDigest := digestWikiReleaseBytes(canonical)
 	reviewed := *draft
 	reviewed.ReviewDecisionDigest = reviewDigest
@@ -883,6 +944,32 @@ func (s *WikiReleaseService) reviewDraft(
 		reviewDigest,
 		reviewed.PreparationDigest,
 	)
+}
+
+func (s *WikiReleaseService) verifyConceptSourceAuthority830G2(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	preparation *types.WikiReleasePreparation,
+	operation string,
+) error {
+	if preparation == nil || s.conceptSourceAuthorityVerifier830G2 == nil {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	request := ConceptSourceAuthorityVerificationRequest830G2{
+		Principal:         principal,
+		Scope:             scope,
+		Operation:         operation,
+		PreparationID:     preparation.ID,
+		CandidateHash:     preparation.CandidateDigest,
+		ManifestDigest:    preparation.ManifestDigest,
+		PreparationDigest: preparation.PreparationDigest,
+		Manifest:          append(json.RawMessage(nil), preparation.Manifest...),
+	}
+	if err := s.conceptSourceAuthorityVerifier830G2.VerifyConceptSources830G2(ctx, request); err != nil {
+		return fmt.Errorf("%w: %v", ErrConceptSourceAuthorityUnavailable830G2, err)
+	}
+	return nil
 }
 
 // ReadDraftMember serves reviewer preview only from one exact Draft member
@@ -1086,6 +1173,19 @@ func (s *WikiReleaseService) activate(
 		preparation.ExpectedReleaseID != authorization.ExpectedReleaseID ||
 		preparation.ExpectedActivationEpoch != authorization.ExpectedActivationEpoch {
 		return nil, fmt.Errorf("%w: preparation binding mismatch", ErrWikiReleaseInvalidAuthorization)
+	}
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &manifestHeader) != nil {
+		return nil, ErrWikiReleaseInvalidAuthorization
+	}
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
 	}
 	if err := s.verifyAccess(ctx, principal, scope, "activate"); err != nil {
 		return nil, err
@@ -1586,6 +1686,34 @@ func (s *WikiReleaseService) BeginPinnedRead(
 	}, nil
 }
 
+// BeginExactPinnedRead validates one immutable historical release and creates
+// a request-local pin at the epoch where that release was first activated.
+func (s *WikiReleaseService) BeginExactPinnedRead(
+	ctx context.Context,
+	principal types.WikiReleasePrincipal,
+	scope types.WikiReleaseScope,
+	releaseID string,
+) (WikiReleasePinnedRead, error) {
+	if s == nil || s.repository == nil || releaseID == "" {
+		return WikiReleasePinnedRead{}, ErrWikiReleaseNotFound
+	}
+	if err := s.verifyAccess(ctx, principal, scope, "exact-pinned-read"); err != nil {
+		return WikiReleasePinnedRead{}, err
+	}
+	release, err := s.repository.GetRelease(ctx, scope, releaseID)
+	if err != nil {
+		return WikiReleasePinnedRead{}, mapWikiReleaseRepositoryError(err)
+	}
+	if release == nil || release.ID != releaseID || release.WikiReleaseScope != scope ||
+		release.BaseActivationEpoch == ^uint64(0) {
+		return WikiReleasePinnedRead{}, ErrWikiReleaseNotFound
+	}
+	return WikiReleasePinnedRead{
+		scope: scope, releaseID: releaseID,
+		activationEpoch: release.BaseActivationEpoch + 1,
+	}, nil
+}
+
 // ReadPinnedPage reads from the immutable release captured at request start
 // and rechecks current dual ACL without consulting Head again.
 func (s *WikiReleaseService) ReadPinnedPage(
@@ -1714,6 +1842,20 @@ func (s *WikiReleaseService) readMembers(
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
 	storedManifestDigest := digestWikiReleaseBytes(preparation.Manifest)
+	conceptG2 := false
+	var manifestHeader struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
+		conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		storedManifestDigest = preparation.ManifestDigest
+		conceptG2 = true
+	}
 	if isSchemaWikiC6StoredManifest(preparation.Manifest) {
 		c6Digest, validC6 := schemaWikiC6StoredManifestDigest(preparation.Manifest)
 		if !validC6 {
@@ -1730,13 +1872,17 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = c6Digest
 	}
+	membersEqual := wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
+	if conceptG2 {
+		membersEqual = conceptMemberSnapshotSetsEqual830G2(preparation.Members, members)
+	}
 	if preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
 		preparation.CandidateDigest != release.CandidateDigest ||
 		preparation.ManifestDigest != release.ManifestDigest ||
 		storedManifestDigest != preparation.ManifestDigest ||
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
-		!wikiReleaseMemberSnapshotsEqual(preparation.Members, members) {
+		!membersEqual {
 		return nil, ErrWikiReleaseInvalidAuthorization
 	}
 	return members, nil

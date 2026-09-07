@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-b-deepseek-external-authorization.v1",
+  "status": "APPROVED",
+  "destination": "https://api.deepseek.com/v1",
+  "model": "deepseek-v4-flash",
+  "max_calls": 3,
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "request_hash": "119e897033745b384d1246606f62b9076b445476f6fde0dd364b3a799ebef3b7",
+  "catalog_sha256": "f2a6fc0e03386567336f4b4b5c65ada58403a1840a06129f330b2f6fcfa7a1ba",
+  "scope": "G2 isolated B compile/review only",
+  "user_instruction": "授权",
+  "approval_reference": "Current task: user replied “授权” to the pending DeepSeek material-processing approval, immediately after the first-package completion and outstanding authorization summary.",
+  "recorded_at": "2026-09-06T10:58:39.743536+00:00",
+  "material_preview_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "whole_candidate_approval": "This authorizes processing, not automatic approval of unknown future candidate content."
+}

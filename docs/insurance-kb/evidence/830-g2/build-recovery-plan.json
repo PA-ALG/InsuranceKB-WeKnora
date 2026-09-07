@@ -1,0 +1,43 @@
+{
+  "contract": "830-g2-build-recovery-plan.v1",
+  "authorization": "User standing approval for reasonable necessary G2 resource extensions",
+  "failure": {
+    "source_head": "4c5aea9bfb9cf460b361b81a18132a335c3d7cc2",
+    "build_invocations": 1,
+    "result": "FAILED_NO_SPACE_LEFT_ON_DEVICE",
+    "phase": "builder WORKDIR layer before app code compilation",
+    "builder_data_filesystem": "/dev/vdb1",
+    "size": "20G",
+    "used": "20G",
+    "available": "0",
+    "root_filesystem": "18G free; separate from builder data disk"
+  },
+  "app_budget": {
+    "prior_max": 2,
+    "attempts_used": 2,
+    "successful": 1,
+    "failed": 1,
+    "new_max": 3,
+    "remaining": 1
+  },
+  "builder_expansion": {
+    "profile": "g1-build",
+    "data_disk_gib_before": 20,
+    "data_disk_gib_after": 40,
+    "restart_builder_only": true,
+    "delete_images_or_volumes": false,
+    "production_runtime_profile": "default is untouched",
+    "host_available_gib": 27,
+    "reason": "Add20GiB capacity bounded below27GiB current host free space; no image/cache deletion"
+  },
+  "code_recovery": {
+    "reason": "Real multiline A source/request cannot pass reused Schema Wiki canonical hash",
+    "owner": "g2_sources",
+    "independent_reviewer": "g2_bundle_review",
+    "scope": "G2-only canonical + tests + shared vector; preserve Schema/G1 contracts and existing vector identities",
+    "provider_calls": 0
+  },
+  "retry_guard": "Only after G2 canonical actual-A preflight, focused tests, independent review0 and new frozen commit",
+  "frontend_static": "PASS at4c5aea9bf; frontend sources unchanged and will be reused",
+  "g2_publish": "NOT_RUN"
+}

@@ -1,0 +1,130 @@
+{
+  "contract": "830-g2-b-embedding-attempts.v1",
+  "max_attempts": 20,
+  "upstream": "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+  "model": "qwen3.7-text-embedding",
+  "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "source_sha256": [
+    "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+    "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5"
+  ],
+  "attempts": [
+    {
+      "attempt": 1,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657895,
+      "http_status": 400,
+      "response_sha256": "e402d984d817519d1a3d987e1e78f6ff609f6d278baaee7b45cc94a1699bfea3",
+      "provider_id": "1f483a84-4716-9f7d-bbb8-f99818b04533",
+      "usage": null
+    },
+    {
+      "attempt": 2,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657896,
+      "http_status": 400,
+      "response_sha256": "9dd96c7e461a00ecb4ceb6a049ae72c05f21e730c4948af50a08f10d091d5e89",
+      "provider_id": "8d18c346-8c20-9a9f-9a47-1f69b5549b60",
+      "usage": null
+    },
+    {
+      "attempt": 3,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657897,
+      "http_status": 400,
+      "response_sha256": "3b8fca258e15c533aca1e086ac1fe5c844727f92246c28bd66f3740b133e55ee",
+      "provider_id": "ef72cf7c-dc22-9a0f-a28f-b544a676ff97",
+      "usage": null
+    },
+    {
+      "attempt": 4,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657899,
+      "http_status": 400,
+      "response_sha256": "c391424027752de052019951e9120954e1d59b62873d3abe738df0caa4e7b4e1",
+      "provider_id": "030ac012-c6d7-98c8-9b82-1f88e13dba85",
+      "usage": null
+    },
+    {
+      "attempt": 5,
+      "status": "RESPONSE",
+      "request_sha256": "4d5db3ed6476277ba43cfbe20f158440f5a418f04a78f70b44ccc530ecf7c069",
+      "input_count": 37,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "started_at_unix": 1788657901,
+      "http_status": 400,
+      "response_sha256": "efcb51eb05e968b9ee17501a5adf76c212ce7536f5208dbbcf9ec5f143325f97",
+      "provider_id": "c09bed03-be1f-9b2b-979d-d1babe5b98a9",
+      "usage": null
+    },
+    {
+      "attempt": 6,
+      "status": "RESPONSE",
+      "request_sha256": "c5c1b1996cf910c89f75203ebbac0ebb94dacaed8af5dabb53d7a79cea3ebc87",
+      "input_count": 20,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "batch_offset": 0,
+      "started_at_unix": 1788658212,
+      "http_status": 200,
+      "response_sha256": "80c6d45a4a18d1f0fec77309516c4fac61a8a6203121e19aad25b42a1914b036",
+      "provider_id": "f7102f62-7102-9cfb-b03c-4d04fbb65945",
+      "usage": {
+        "prompt_tokens": 19140,
+        "total_tokens": 19140
+      }
+    },
+    {
+      "attempt": 7,
+      "status": "RESPONSE",
+      "request_sha256": "52a71b9bc601d3f2f1e0d7e377e679f1b37a386f7c8c432d5e6f79e385fab941",
+      "input_count": 17,
+      "source_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "batch_offset": 20,
+      "started_at_unix": 1788658215,
+      "http_status": 200,
+      "response_sha256": "2da9712701e7b88be736f6b0c896f61e6c4f36135dce6a0b0b92a98d9a4bc10b",
+      "provider_id": "f0bdbf5a-7414-9a12-a206-097080682562",
+      "usage": {
+        "prompt_tokens": 13008,
+        "total_tokens": 13008
+      }
+    },
+    {
+      "attempt": 8,
+      "status": "RESPONSE",
+      "request_sha256": "3b93ab42d264d500ba767cf2864d9c68b406d88c71a8f7aec1902eed5c0a193b",
+      "input_count": 9,
+      "source_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "batch_offset": 0,
+      "started_at_unix": 1788658228,
+      "http_status": 200,
+      "response_sha256": "e613eb395294ec7e2cafe3737b92565b9917df3328a62c8622b7d27093ab1241",
+      "provider_id": "47fa1181-af9d-9b4d-93ed-eae4329c71bc",
+      "usage": {
+        "prompt_tokens": 8653,
+        "total_tokens": 8653
+      }
+    }
+  ],
+  "prior_ledger_sha256": "b8a5480efe46845e9365d36bb9dd6f87b1d21106d6864658a870f6f584457eab",
+  "started_sources": [
+    "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+    "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f"
+  ],
+  "completed_sources": [
+    "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+    "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f"
+  ]
+}

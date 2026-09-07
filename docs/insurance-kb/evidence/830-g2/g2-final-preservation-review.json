@@ -1,0 +1,9 @@
+{
+  "status": "BLOCKER0",
+  "reviewer": "root",
+  "runner_sha256": "12d553805d8008eb96a67b1f5d8f7fa46e045c7ce54f844ed4e0053701a20358",
+  "result_sha256": "195caef8bb02da8ce5bd95fe4b36e418fa2b38054c65df3a426e24e48b9bc0ac",
+  "independent_self_test": "PASS",
+  "scope": "Existing protocol validation, no product implementation. Source fullquote condition/exception deletion gets independent ExtractReviewer REJECT and cannot assemble. Semantic quality deferred. No new product RED claimed.",
+  "provider_calls": 0
+}

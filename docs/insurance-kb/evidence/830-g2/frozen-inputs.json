@@ -1,0 +1,90 @@
+{
+  "goal_id": "G2",
+  "copied_at": "2026-09-05T11:08:48.724643+00:00",
+  "source_identity": "G1_FROZEN_C5_BUNDLE_BYTES_UNCHANGED",
+  "source_release_id": "release-42a3dd0c-ec76-4017-a288-37f1b13519a0",
+  "g1_release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+  "files": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/brochure.manifest.json",
+      "sha256": "05baeea40d46c6256b6fec60c8e5389bb36f9470f9ff40a75d7a37775e90ffbc",
+      "bytes": 13606
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/brochure.pdf",
+      "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "bytes": 492101
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/candidate-evidence-authority.json",
+      "sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1",
+      "bytes": 71099
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/coordinate-evidence-companion.json",
+      "sha256": "ea01c8309517e761ef8607db1104127816494fc01d6d3d40e2aa33633f405419",
+      "bytes": 20550
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/field-attempt-manifest.json",
+      "sha256": "185d24df39f92bf532439ca80b30f2d4ddd45ff00c1969bb8c0c2763519633d1",
+      "bytes": 77481
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/formal-candidate.json",
+      "sha256": "7799539c4b44e74e1b157ccfae2ab6f32b0eecfb1e9415e70b15751a3f5fb3ca",
+      "bytes": 932728
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/formal-derivation-validation.json",
+      "sha256": "61845b2fcedd4e8784fd26a0c42f88e521bca2bdd07d76416a85f792b8863e24",
+      "bytes": 688
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/manifest.json",
+      "sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25",
+      "bytes": 3317
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/preview.json",
+      "sha256": "7c9c59a8486268a9d2ff4cb5a0d09b2790affabfeb147b93ebc710f9cc4e3934",
+      "bytes": 38647
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/rate_table.manifest.json",
+      "sha256": "d7e191aca5bc770b4583d12a7324e5fd92bca9f91538417ec5dce8ee7b976a75",
+      "bytes": 2132
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/rate_table.pdf",
+      "sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+      "bytes": 51961
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/result-manifest.json",
+      "sha256": "0996380dd47504e90b453000b6fb1732514adc4d23b6263381e11dbc27f28dac",
+      "bytes": 8473
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/revision-set.json",
+      "sha256": "ef0db0f1fc9ebd7800d94ad1f53a496115e1aaa5d7d3f1c62bd15fe9f30a6b02",
+      "bytes": 3260
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terminal.json",
+      "sha256": "f1e842723b26052e564a914520189150a627ad8be72157895182ac10a134480f",
+      "bytes": 1425
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terms.manifest.json",
+      "sha256": "2ec06b342f81ac10b09d9923a32d0e5e05c597a5d531e49ab50f1912c705d0b0",
+      "bytes": 26360
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terms.pdf",
+      "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "bytes": 1047811
+    }
+  ],
+  "replay_command": "G1_ACTUAL_C5_BUNDLE=$PWD/docs/insurance-kb/evidence/830-g2/inputs/c5 PYTHONPATH=harness/src /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/harness/.venv/bin/python -m pytest harness/tests/test_entity_page_graph_830_g1.py -q --tb=short"
+}

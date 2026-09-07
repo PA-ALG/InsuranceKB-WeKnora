@@ -1,0 +1,14 @@
+{
+  "contract": "830-g2-agent-dns-failure.v1",
+  "status": "BLOCKED_BEFORE_MODEL_CONNECTION",
+  "run_id": "g2-agent-smoke-7a51c7d6adb18036",
+  "session_id": "d33a6973-5996-4d81-a0eb-7bd4ee4a7518",
+  "failure": "SSRF check correctly rejected api.deepseek.com resolved to198.18.0.6",
+  "provider_attempt_markers": 0,
+  "application_failure_at": "2026-09-07T02:52:35.444Z",
+  "sse_client": "Still waiting for stream termination; old execution not retried",
+  "source_log_sha256": "95a79c532601444affb8260d572918731e655b8e0a6931a31e870e2d6f233d66",
+  "dns_diagnosis_sha256": "f516c29d7f620017838b1d1da4445b44e70c9439939e394f731eb1a4c3a3a507",
+  "head": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+  "activation_epoch": 5
+}

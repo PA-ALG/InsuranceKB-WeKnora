@@ -1,0 +1,30 @@
+{
+  "contract": "830-g2-b-provider-runbook-review.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "run_id": "g2-b-compile-001",
+  "stage": "compile",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "request_hash": "119e897033745b384d1246606f62b9076b445476f6fde0dd364b3a799ebef3b7",
+  "catalog_sha256": "f2a6fc0e03386567336f4b4b5c65ada58403a1840a06129f330b2f6fcfa7a1ba",
+  "proposal_output_hash": "3e6f0d2db9f6890008207894219a695607de20951e66df0069af323710cc989e",
+  "http_payload_sha256": "4aa0e5fc01bf2f3e3cebfac6ae2791f952f8302f25db7a9f768b9ab247d9ce1a",
+  "runner_sha256": "79cc6077976f1816f6709948410f6e81e7d8764b185429cf003b539d27b1e21b",
+  "module_sha256": "025420e7c047ef3d7ced42d2f2f3a18105a2e42058e50d01f8ff9f6d6f8a9d94",
+  "canonical_module_sha256": "9065688ccf9c0f37590ff6d580daabc4fd113a73ed41880b37ac5684b95cd1dc",
+  "request_identity_file_sha256": "8dec5e605bc5d0b34f50e3f726e56a843868b434ceea42b57b7525ef5235bc99",
+  "material_preview_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "material_scope": {
+    "source_blocks": 21,
+    "source_codepoints": 56422,
+    "a_display_members": 70,
+    "a_protocol_members": 68,
+    "b_fields": 67,
+    "b_free_pages": 1
+  },
+  "provider_calls_at_review": 0,
+  "candidate_created": false,
+  "execution_state": "WAITING_EXTERNAL_AUTHORIZATION",
+  "external_authorization": "MISSING",
+  "review_scope": "Frozen input and transport boundary only; this review is not authorization to transmit data and does not validate a model result or candidate."
+}

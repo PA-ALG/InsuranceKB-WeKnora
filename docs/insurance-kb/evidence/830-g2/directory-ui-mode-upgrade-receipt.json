@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "artifact_sha256": "6364ca32ab0911824e385addbf52bf312f0f1ee4db380567ffc2403f7d7d3a6b",
+  "image_id": "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+  "previous_container_id": "4ebb98a8f9a011239b3a0eab974ddfed71dd5b730eb280cf9c71623253080d49",
+  "provider_calls": 0,
+  "steps": [
+    "Old UI identity, isolated app and active release guards PASS",
+    "Frozen UI image transferred and checked",
+    "Old UI preserved for rollback",
+    "Replacement UI started on existing loopback port",
+    "UI identity, index and same active release PASS"
+  ],
+  "container_id": "030bdaf68876198e48f8235524d84703b783fa05b7cc8df70b87719e75bb5a30",
+  "head": {
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+    "activation_epoch": 4
+  },
+  "index_http": 200,
+  "index_sha256": "6e7d4e847d198ade39600bdd3fca530a374fab964f239cde7b2386f838e1181a",
+  "browser_verification": "NOT_RUN"
+}

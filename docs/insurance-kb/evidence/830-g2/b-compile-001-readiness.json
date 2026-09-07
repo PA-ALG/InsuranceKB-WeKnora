@@ -1,0 +1,11 @@
+{
+  "contract": "830-g2-b-compile-001-readiness.v1",
+  "status": "WAITING_EXTERNAL_AUTHORIZATION",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "request_hash": "119e897033745b384d1246606f62b9076b445476f6fde0dd364b3a799ebef3b7",
+  "http_payload_sha256": "4aa0e5fc01bf2f3e3cebfac6ae2791f952f8302f25db7a9f768b9ab247d9ce1a",
+  "material_preview_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "independent_review_blockers": 0,
+  "provider_calls": 0,
+  "candidate_created": false
+}

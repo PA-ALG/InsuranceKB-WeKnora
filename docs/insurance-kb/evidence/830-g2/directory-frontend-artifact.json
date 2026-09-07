@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "static_builds": 1,
+  "image_builds": 1,
+  "provider_calls": 0,
+  "dist_sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc",
+  "contract": "830-g2-directory-frontend-artifact.v1",
+  "image_id": "sha256:a22aa7feb2ac810144aebecdfa3dfdca2af052c760615a8bf8eadf8a1ad459f1",
+  "labels": {
+    "io.insurancekb.g2.frontend.source-head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+    "io.insurancekb.g2.frontend.dist-sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc"
+  },
+  "platform": "linux/arm64"
+}

@@ -1,0 +1,47 @@
+{
+  "contract": "830-g2-agent-runtime-config-preflight.v1",
+  "status": "PASS_READ_ONLY_CONFIGURATION_GAP",
+  "tenant_id": 10003,
+  "ui_origin": "http://127.0.0.1:18195",
+  "http_reads": [
+    {
+      "path": "/api/v1/agents",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/models",
+      "status": 200
+    }
+  ],
+  "existing_wiki_agent": [
+    {
+      "id": "builtin-wiki-researcher",
+      "name": "维基问答",
+      "config": {
+        "agent_mode": "smart-reasoning",
+        "model_id": "",
+        "max_iterations": 30,
+        "allowed_tools": [
+          "wiki_search",
+          "wiki_read_page",
+          "wiki_read_source_doc",
+          "wiki_flag_issue"
+        ],
+        "kb_selection_mode": "all",
+        "knowledge_bases": null
+      }
+    }
+  ],
+  "available_qa_model": [
+    {
+      "id": "b2034da8-942c-4a19-945d-1bc09459222e",
+      "name": "deepseek-v4-flash",
+      "type": "KnowledgeQA"
+    }
+  ],
+  "next_step": "Prepare bounded isolated custom-agent configuration with explicit Wiki scope and only wiki_search/wiki_read_page, then review before a real model smoke. Existing builtin model is unset and iterations not suitably bounded.",
+  "provider_calls": 0,
+  "database_writes": 0,
+  "agent_turns": 0,
+  "active_runtime_smoke": "NOT_RUN"
+}

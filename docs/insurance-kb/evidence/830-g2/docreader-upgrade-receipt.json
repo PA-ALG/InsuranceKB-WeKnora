@@ -1,0 +1,19 @@
+{
+  "contract": "830-g2-docreader-upgrade.v1",
+  "status": "PASS",
+  "source_head": "b8cde87d87c805a55042234e44453c7e2229f4ee",
+  "source_manifest_sha256": "74504d4088696414e757b6ce45c209b9ebfbe86a3aef7dd6819899202ccf960f",
+  "image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "previous_image_id": "sha256:418de99a454fdfee1592cc8346fad6f8e2601ed27107561aa745474d94b8b207",
+  "backup_container": "weknora-g2-594-docreader-before-b8cde87d",
+  "provider_calls": 0,
+  "builds": 1,
+  "steps": [
+    "Frozen source and old dedicated docreader guards PASS",
+    "Exact docreader artifact transferred locally; no registry push/pull",
+    "New exact producer installed; previous docreader kept for rollback",
+    "New docreader gRPC health SERVING"
+  ],
+  "grpc_health": "SERVING",
+  "container_id": "c8644a8f546a1eb9958cfbc2ef5eda2ffe5e2a916051bc9f984447b0a0b72f3e"
+}

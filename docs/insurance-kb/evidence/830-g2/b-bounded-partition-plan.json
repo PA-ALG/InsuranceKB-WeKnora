@@ -1,0 +1,24 @@
+{
+  "contract": "830-g2-b-bounded-partition-plan.v1",
+  "registered_at": "2026-09-06T01:29:15.320566+00:00",
+  "authorization": "standing reasonable G2 execution extension; same specifically approved two publicPDFs/model/endpoint; unchanged20total",
+  "prior_attempts": 5,
+  "prior_ledger_sha256": "b8a5480efe46845e9365d36bb9dd6f87b1d21106d6864658a870f6f584457eab",
+  "root_cause": "actual DashScope InvalidParameter response requires batch size <=20",
+  "planned_batch_sizes": [
+    20,
+    17,
+    9
+  ],
+  "new_expected_attempts": 3,
+  "expected_combined_attempts": 8,
+  "hard_total_attempt_limit": 20,
+  "input_whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "guard_sha256": "b1c8331e63cb818d82ceba67662907972a44db0732943b535c5a7f73c1be7251",
+  "executor_sha256": "ca890f03c60a911dec54be1a49a0291fccc7918eb766a899e0286fe5df8fa8be",
+  "independent_review": "BLOCKER0",
+  "fake_tests": "PASS exact multiset, partition and merge index/value, durable prior5 plus3=8, no repeated source attempts, combined20cap",
+  "status": "READY_NOT_EXECUTED",
+  "execution_receipt": "b-guarded-partition-receipt.json",
+  "current_execution_state": "PASS"
+}

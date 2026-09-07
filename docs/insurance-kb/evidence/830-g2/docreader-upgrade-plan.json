@@ -1,0 +1,12 @@
+{
+  "contract": "830-g2-docreader-upgrade-plan.v1",
+  "authorization": "standing user approval for reasonable necessary G2 extensions",
+  "script_sha256": "d112856eb2d45d4cc3ce011b9cce20c35c93c38d58fb95e4994df7643fd6cc65",
+  "reviewer": "g2_bundle_review",
+  "blocking_findings": 0,
+  "image_id": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "runtime_target": "weknora-g2-594-docreader",
+  "backup_container": "weknora-g2-594-docreader-before-b8cde87d",
+  "provider_calls": 0,
+  "status": "PREPARED_NOT_RUN"
+}

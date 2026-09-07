@@ -1,0 +1,17 @@
+{
+  "contract": "830-g2-a-postgres-review-diagnosis.v1",
+  "status": "CONFIRMED_REPRESENTATION_MISMATCH",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "manifest_logically_identical": true,
+  "stored_manifest_digest": "7997692d7935e3fb30e71c0d9d82e3cee923744e78becfe324d2e0642c104d5b",
+  "postgres_manifest_text_sha256": "0eb51f67d1a3bbc50c91bd2fb84c3796295172e2b5a0855a1be4f383d3597838",
+  "stored_status": "draft",
+  "review_decision_digest": "",
+  "members": 70,
+  "original_and_g2_epoch": 3,
+  "activation_posts": 0,
+  "provider_calls": 0,
+  "private_export_sha256": "e029a1f47c3c1d71547d4bfff65ff43d3eb8915335dc13b8020c7d64b088a792",
+  "root_cause": "G2 validates raw serialized Manifest/Payload bytes after JSONB storage rewrites object key order and spacing. Candidate logical content and original model raw strings are unchanged.",
+  "remediation_status": "DESIGN_PENDING; no DB digest rewrite or new code/build yet"
+}

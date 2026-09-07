@@ -1,0 +1,36 @@
+{
+  "contract": "830-g2-b-compile-attempt-status.v1",
+  "run_id": "g2-b-compile-001",
+  "status": "FAILED_FORMAT_VALIDATION",
+  "http_status": 200,
+  "finish_reason": "stop",
+  "usage": {
+    "completion_tokens": 31238,
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 110164,
+    "prompt_tokens": 110164,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 141402
+  },
+  "failure": "DISPOSITION_MEMBER_MISMATCH",
+  "independent_finding": "NO_SEMANTIC_DRIFT_FORMAT_CORRECTION_APPLICABLE",
+  "corrections": {
+    "missing_offset_unit": 21,
+    "missing_audit_records": 136,
+    "a_fields_with_evidence_order_change": 2
+  },
+  "candidate_created": false,
+  "review_started": false,
+  "published": false,
+  "b_calls_used": 1,
+  "b_calls_remaining": 2,
+  "artifacts": {
+    "response-receipt.json": "0243ba974c407b63192d9e593956925c5fced99ea20c3dbaf53bfb95a19ba9a4",
+    "raw-model-output.txt": "5ccca8b74671dc0dd4a0869b0bb31981790632054de8d62c7e9a00f3abd15861",
+    "failure.private.json": "b64f23b85c76f072f103aeca408c1451f512b875023eb3623a4c611abd205b68",
+    "independent-format-diagnosis.json": "ab40d24845d45f918849aca0bbfa1a5512ca76aba51bf7333d520993e540c7a0",
+    "known-format-error.json": "468db9210adb858a158daf49b088e8b1428356553ee5df8078b8be5b7f36b305"
+  }
+}

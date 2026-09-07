@@ -1,0 +1,33 @@
+{
+  "contract": "830-g2-jsonb-app-network-recovery-plan.v1",
+  "status": "REGISTERED",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "artifact_identity": "sha256:1eed81b3cf9de14a7d9b79afc7fa5fea109758bd7a87be6fd71b9d9d5788ba9f",
+  "reason": "First JSONB build exited1 before application compilation: locked spatial extension download returned unexpected EOF after387.1s",
+  "failed_attempt_receipt": "docs/insurance-kb/evidence/830-g2/jsonb-app-artifact-attempt1-incomplete.json",
+  "failed_attempt_receipt_sha256": "dd080f4836353d030d91a8ed6b12ee933ad59a41df1c117144f06b05cc98fe81",
+  "failure_logs": {
+    "g2-jsonb-app-build.log": {
+      "path": "/private/tmp/g2-jsonb-app-build.log",
+      "sha256": "70bb6676d2f34b00b67d1396e6b939d16d7f303c0c0ca660eab73fc4292a9599"
+    },
+    "g2-jsonb-build-progress.log": {
+      "path": "/private/tmp/g2-jsonb-build-progress.log",
+      "sha256": "f17f46291fb3ea9dcb2aa52464eb55e1227a187e1937ccef734ba0f2f30f61e8"
+    }
+  },
+  "prior_app_builds": 5,
+  "max_app_builds": 6,
+  "max_new_app_builds": 1,
+  "lookup_before_build": true,
+  "same_failure_allowed_retries": 1,
+  "authorization": "User standing approval for reasonable necessary bounded G2 extensions; retry one interrupted pinned dependency fetch, unchanged reviewed source/lock/build entry",
+  "source_code_changes": 0,
+  "dependency_lock_changes": 0,
+  "frontend_new_builds": 0,
+  "docreader_new_builds": 0,
+  "provider_calls": 0,
+  "script_changes": 0,
+  "receipt_policy": "Original incomplete BA0 receipt and both failed logs retained. New BA0 attempt may write standard jsonb-app-artifact.json current receipt; consumers still require PASS/exact source/artifact identity. Original source build plan remains historical; this plan is the additional bounded retry authorization.",
+  "physical_effects_so_far": "One failed build, no upgrade/newDraft/Review/Activate"
+}

@@ -1,0 +1,129 @@
+{
+  "candidate": {
+    "candidate_file_sha256": "313f190cb8e457afe851b294d92a512e04060a579b1d0c05c1d93e71c589a1e1",
+    "candidate_hash": "57740bec1972727793867620716cdfe539f4e06e2470b92587bc11a32a680e21",
+    "output_hash": "796e0505789eb699d0b45d1e39bd399256b5de2b9195bb85fccd97a17165bf32",
+    "request_hash": "67bd6ad89f9681837b189ebacc72e6d743ea74ade007f48ba0c212f32cd6a7e3"
+  },
+  "compiler_binding": {
+    "implementation": "llm-compiler:deepseek-v4-flash@api.deepseek.com/g2-a-v1",
+    "raw_output_sha256": "9850f919dda7dcfa60ef29bcb9654b206512ab4d82c32479866b29d82c4d7c53",
+    "raw_output_typed_equal": true,
+    "run_id": "g2-a-compile-003"
+  },
+  "contract": "concept-candidate-summary.830.g2.v1",
+  "definition": {
+    "body_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30",
+    "concept_id": "concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+    "evidence": [
+      {
+        "page_number": 1,
+        "quote_sha256": "0977effd449c84298ef44b547b40b3905908820cd682f358280b0c4d77354d30"
+      }
+    ],
+    "origin": "MODEL_COMPILE",
+    "title": "被保险人"
+  },
+  "draft_created": false,
+  "human_confirmation": "NOT_READY_REJECTED_CANDIDATE",
+  "linked_fields": [
+    {
+      "concept_id": "concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "evidence": [
+        {
+          "page_number": 2,
+          "quote_sha256": "f0823348454d3cf7618e46dcfef82b397ca13e39ef169c208cf11546edf27067"
+        },
+        {
+          "page_number": 2,
+          "quote_sha256": "5c1ecb08148eb85cb5485ebcb124a50df16a80001760fbbb91ea65dfe2a9f2f1"
+        },
+        {
+          "page_number": 2,
+          "quote_sha256": "2583325db06bbb7767749cfd929c6b34676fe3889143704dcd64c39a57a3a5ba"
+        }
+      ],
+      "field_key": "insured_eligibility",
+      "state": "present",
+      "value_sha256": "0ce6d5131fef15bed3d5d3bea2b9a62cf729013713365ccc9d06578dae58eb86"
+    },
+    {
+      "concept_id": "concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+      "evidence": [
+        {
+          "page_number": 27,
+          "quote_sha256": "9f2e93250dac2de65f2b3c361ed964d1b5042646d80d88a0e0fa2f677418f3bd"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "59357c1f108e2b31c1ca9ed4973f72c57239272d144064fa96725ea60a4b84da"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "858308ba7b33d048b178afbf4f7e033efda66185e760a2ac2799e178026e1644"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "7a5604ecb166b5c974cd096cc8d60fea6bcd245cb4bdbe7611e7cc369c483822"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "1e8ff4e60a768dd0127f2c8eb934a7ac9d50cda132710e53d6631dbacd3ea7e5"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "8339b8adfd43eee0489db1616028757c1a7166ae3ccacf56915b6e6ddaaa9b54"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "7936ca77c1f5a4df12b306c94baf1825115c3f1c4f3096d3b65e9903b5441717"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "a299e74f0b0b6ac6559aa624397ade8db2665e2c35999778d87d53e95676817b"
+        },
+        {
+          "page_number": 27,
+          "quote_sha256": "60932af94bf5184d88ec0fef564fb89b0a8cad67ec1a175eaf6cffa2fd210aef"
+        }
+      ],
+      "field_key": "health_declaration_requirements",
+      "state": "present",
+      "value_sha256": "2e4cb8279adff4670a8d46b66c3e99541c444f9baeaaae2397eff87df9b40cba"
+    }
+  ],
+  "published": false,
+  "reviewer_binding": {
+    "decision": "PASS",
+    "implementation": "llm-reviewer:deepseek-v4-flash@api.deepseek.com/g2-a-v1",
+    "raw_output_sha256": "f025d20c26e3561240fa9d4a2fb6c38635a5c5fed4db0ab326f8c806056d8810",
+    "raw_output_typed_equal": false,
+    "run_id": "g2-a-review-001",
+    "score": 89,
+    "wire_validation": "REJECTED_MISSING_CONTRACT",
+    "score_is_historical_invalid_review": true
+  },
+  "signed": false,
+  "source": {
+    "file_name": "esb_zunxiang_596-1_tiaokuan.pdf",
+    "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+    "parse_attempt": 2,
+    "pdf_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc"
+  },
+  "validation": {
+    "candidate_hash_valid": true,
+    "candidate_round_trip": true,
+    "counts": {
+      "audit": 68,
+      "concept_links": 2,
+      "definitions": 1,
+      "fields": 67,
+      "free_pages": 0,
+      "page_manifest_members": 70
+    },
+    "page_manifest_recomputed_equal": true,
+    "platform_acceptance": false
+  },
+  "status": "SUPERSEDED_REJECTED_DO_NOT_PUBLISH",
+  "rejection": "review-001 raw contract missing; actual Draft HTTP400. Subsequent review-002 raw-complete score66 below80 rejected during assembly."
+}

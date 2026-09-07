@@ -1,0 +1,192 @@
+[
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/execution.md",
+    "sha256": "13c8541eaf6448cc859d699dc6c803721abf3d87f48d41698ecc224de9adf54d",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/frozen-inputs.json",
+    "sha256": "00b25c988ba9fa6a1041f6aeba50e1d67a2250852248959a8118969d29da7d4f",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/initial-gap.json",
+    "sha256": "c3a2dd51e6d3d0395a4bcc0a1c2e2e433585c23b8852188d35c5e5d30f340abd",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/input-freeze-check.json",
+    "sha256": "1b7cccdaeb7b3665487e12ddda6d177941bd8f51021e9f90e29a350926146ce1",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/brochure.manifest.json",
+    "sha256": "05baeea40d46c6256b6fec60c8e5389bb36f9470f9ff40a75d7a37775e90ffbc",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/brochure.pdf",
+    "sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/candidate-evidence-authority.json",
+    "sha256": "35023c59acebc1b1c4131b24da6019d91c5f18f81c99b444db0c39e11db521c1",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/coordinate-evidence-companion.json",
+    "sha256": "ea01c8309517e761ef8607db1104127816494fc01d6d3d40e2aa33633f405419",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/field-attempt-manifest.json",
+    "sha256": "185d24df39f92bf532439ca80b30f2d4ddd45ff00c1969bb8c0c2763519633d1",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/formal-candidate.json",
+    "sha256": "7799539c4b44e74e1b157ccfae2ab6f32b0eecfb1e9415e70b15751a3f5fb3ca",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/formal-derivation-validation.json",
+    "sha256": "61845b2fcedd4e8784fd26a0c42f88e521bca2bdd07d76416a85f792b8863e24",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/manifest.json",
+    "sha256": "d4efedad59f5e8c4301cd655bb9fc75b491315e310c42066086d6c963e447c25",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/preview.json",
+    "sha256": "7c9c59a8486268a9d2ff4cb5a0d09b2790affabfeb147b93ebc710f9cc4e3934",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/rate_table.manifest.json",
+    "sha256": "d7e191aca5bc770b4583d12a7324e5fd92bca9f91538417ec5dce8ee7b976a75",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/rate_table.pdf",
+    "sha256": "7b35fa3b0e1820860dafc2fec9858949d387f2aab19006d3d3e02b92e0bb75fb",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/result-manifest.json",
+    "sha256": "0996380dd47504e90b453000b6fb1732514adc4d23b6263381e11dbc27f28dac",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/revision-set.json",
+    "sha256": "ef0db0f1fc9ebd7800d94ad1f53a496115e1aaa5d7d3f1c62bd15fe9f30a6b02",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terminal.json",
+    "sha256": "f1e842723b26052e564a914520189150a627ad8be72157895182ac10a134480f",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terms.manifest.json",
+    "sha256": "2ec06b342f81ac10b09d9923a32d0e5e05c597a5d531e49ab50f1912c705d0b0",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terms.pdf",
+    "sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/g1-actual-manifest.json",
+    "sha256": "302df73f098a7c6f3f1ba5b37981deee7a1e8dfcdcdf0b469cd92b1b1e6f2759",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/inputs/terms-native-projection.json",
+    "sha256": "f4fd8a439ffb1ef5a2c01c4363f8f9692748d10254c611cba1f0112d2dc7de6b",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/runtime-preflight.json",
+    "sha256": "fb10e63fe85e2e40872ba61d17d027907298e3e231ab5cfb2a15f0d910debf77",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/seed-cases.json",
+    "sha256": "7725bc78806e6889fff56543819bb790435eaf122844573caf103aae86090a2b",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/stop-entity-version-binding.json",
+    "sha256": "57d62a2104dbba760fa13238578e7033e5355204d94f3af1b759e488ff956a82",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/task1-review-identity.json",
+    "sha256": "a892ee4b96d39b8de6e026acc80c1e702b5ea8bc02ddd722e66fa157153e2219",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/task1-review-initial-identity.json",
+    "sha256": "a5ef991705b9fbf04a74ae23d68625e2e317432b7df3c29a09850688310782e4",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/insurance-kb/evidence/830-g2/task1-review-initial-vector.json",
+    "sha256": "a1051fbecdc6600e02f896308226ae3b58548023380b15977edbb6ea6cef4ea4",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "docs/superpowers/plans/2026-09-05-830-g2-concept-free-wiki.md",
+    "sha256": "abcbf1f4abf8a2105999302ebec3f19dbd4f1dff666dab56ad3be75cf5db643a",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py",
+    "sha256": "53f7e3dd98acc892db828828cab2181318ce21240be26a56471a61d3a2abcf06",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py",
+    "sha256": "dca01236ab044116baf2457043ad869abaaed70074b3463c2bbc09d471d068bc",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "harness/tests/fixtures/concept_free_wiki_830_g2_contract_vector.json",
+    "sha256": "a0a0f45813823f94661d340f72bb4986436dc2f0428a2f797c6320bc6531767e",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "harness/tests/test_concept_compile_830_g2.py",
+    "sha256": "b79b620a4f91c33afffa68a6914e8e21559e967a46dfa1dbd3054e00670ef3bb",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "harness/tests/test_concept_free_wiki_830_g2.py",
+    "sha256": "8ed3df7ac0b7c1b94c4e6bb837d50ed3e49486ad956617206347ee1d616bcfdc",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "openspec/changes/128-830-g2-concept-free-wiki/proposal.md",
+    "sha256": "a4b41dba753139ab3faebb4775d180f122b77b09153439fa188d2a16d9b97139",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "openspec/changes/128-830-g2-concept-free-wiki/specs/concept-free-wiki/spec.md",
+    "sha256": "c51cfd339d54749a5e0849b24108f35f40308a712fe8dce34532832e96b4797e",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "openspec/changes/128-830-g2-concept-free-wiki/tasks.md",
+    "sha256": "c8eb9c839d9a867849096ef33813d495fd89a21c119099d703a6f5f347404143",
+    "disposition": "FREEZE"
+  },
+  {
+    "path": "openspec/changes/128-830-g2-concept-free-wiki/validation-report.md",
+    "sha256": "8ba2fe3323a6f6563fd038097cc418b4d6fbc2eabf651ad0e85a53a62c5dfe4e",
+    "disposition": "FREEZE"
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "contract": "830-g2-final-runtime-upgrade.v1",
+  "status": "PASS",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "image_id": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+  "previous_image_id": "sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a",
+  "container": "weknora-g2-594-app",
+  "rollback_container": "weknora-g2-594-app-before-jsonb",
+  "database": "weknora_g2_594",
+  "provider_calls": 0,
+  "pulls": 0,
+  "steps": [
+    "Artifact, old G2 container, database, networks, mounts and config guards PASS",
+    "Exact image available in target engine; no registry push or pull",
+    "G2 env prepared with the actual C5 registry key",
+    "Previous G2 app stopped and preserved under the frozen rollback name",
+    "Verified final G2 app started with the preserved backfill config",
+    "G2 health HTTP 200 and installed image identity PASS",
+    "Existing G2 UI reloaded and proxy login200 verified against new app; no frontend rebuild"
+  ],
+  "container_id": "7f76414e6a1593570b786caf762e6e2cd732cea2dbd0cd1b81e9bd6e4f333ddf",
+  "health_http": 200,
+  "config_sha256": "f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+  "source_backfill": "PREVIOUS_EXACT_A_B_B_SEAL_PASS",
+  "g2_publish": "NOT_RUN",
+  "ui_nginx_reloaded": true,
+  "ui_proxy_login_http": 200,
+  "login_tenant": 10003
+}

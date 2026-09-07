@@ -1,0 +1,32 @@
+{
+  "contract": "830-g2-agent-smoke-freeze-review.private.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "script_sha256": "787e729c0ea6c644fc96edb69d67dd2c367555c5334c132706447663a9bd05bc",
+  "runbook_sha256": "0a7770aaab99135292a4e33ceec93ca3839b25e670d8fe49044aab32683d382f",
+  "preflight_sha256": "f1f88f10696849316d5af841625308b885837b5528d0ab1fb2484a2bfb3b8cc5",
+  "preparation_receipt_sha256": "d746b298c36a23dd52a93f572e0b5950436d29234fc143d45166773669089da4",
+  "selftest_log_sha256": "b35764a8b56600aa31b3f2798038cb36c4af7b91dfefb3aa8ba8ebdd82d38424",
+  "preflight_log_sha256": "82f34217c962d6fc7c78a2152622edeec83b2c4606d15a64e4076381fef864ee",
+  "provider_calls": 0,
+  "http_calls": 0,
+  "database_writes": 0,
+  "execution_gate": "WAITING_SECOND_PACKAGE_ACTIVE_APPROVAL_AND_RUN_SPECIFIC_REVIEW",
+  "limits": {
+    "agent_turns": 1,
+    "max_model_http_attempts": 13,
+    "script_http_retries": 0,
+    "engine_internal_retries_included_in_max": true,
+    "whole_turn_retries": 0,
+    "score_retries": 0
+  },
+  "findings": {
+    "BLOCKER": [],
+    "BACKLOG": [
+      "Actual model HTTP attempts require the documented post-run application-log audit keyed by the turn request ID."
+    ],
+    "REJECTED": [
+      "Adding a new egress proxy for this bounded smoke; the reviewed engine limit and one raw transport Do per application attempt are sufficient."
+    ]
+  }
+}

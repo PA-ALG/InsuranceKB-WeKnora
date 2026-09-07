@@ -1,0 +1,8 @@
+{
+  "contract": "830-g2-jsonb-app-network-recovery-review.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "plan_sha256": "93d18fe790db748e8bc272f9f145b599025b5626034cfb9ff8749fb6a1a0d830",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "frozen_failed_receipt_sha256": "dd080f4836353d030d91a8ed6b12ee933ad59a41df1c117144f06b05cc98fe81"
+}

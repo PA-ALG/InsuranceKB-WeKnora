@@ -1,0 +1,41 @@
+{
+  "contract": "830-g2-final-artifact-build-plan.v1",
+  "authorization": "User standing approval for reasonable necessary G2 extensions",
+  "source_head": "f23e2d7e62cffebc076cd453dbcf6be6be8b16bc",
+  "source_freeze": "No tracked code changes until both builds finish",
+  "app": {
+    "builder": "colima-g1-build",
+    "entrypoint": "DOCKER_CONTEXT=colima-g1-build bash scripts/build_images.sh --app --build-source-head f23e2d7e62cffebc076cd453dbcf6be6be8b16bc --evidence-out docs/insurance-kb/evidence/830-g2/final-app-artifact.json",
+    "lookup_before_build": true,
+    "prior_builds": 2,
+    "max_total": 3,
+    "target": "weknora-g2-594-app"
+  },
+  "frontend": {
+    "max_total": 1,
+    "static_entrypoint": "VITE_IS_DOCKER=true VITE_FRONTEND_COMMIT=4c5aea9bf npm run build",
+    "image_entrypoint": "docker --context colima-g1-build build --platform linux/arm64 --label io.insurancekb.g2.frontend.source-head=4c5aea9bfb9cf460b361b81a18132a335c3d7cc2 --label io.insurancekb.g2.frontend.dist-sha256=87418ef6cf0d17021370ac9c026958261a39c6d278f4e2ccb74a90e9e835f29b -f frontend/Dockerfile -t weknora-ui:g2-594-4c5aea9bf frontend/",
+    "dependency_reuse": {
+      "package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+      "source": "830-g1-field-assertion-pages/frontend/node_modules",
+      "reason": "Identical frozen lock and validated node_modules symlink; skip npm ci to preserve the shared dependency directory",
+      "node_modules_mutations": false
+    },
+    "planned_target": "weknora-g2-594-ui",
+    "planned_loopback_port": 18195,
+    "upstream": "weknora-g2-594-app:8080",
+    "dist_sha256": "87418ef6cf0d17021370ac9c026958261a39c6d278f4e2ccb74a90e9e835f29b",
+    "source_head": "4c5aea9bfb9cf460b361b81a18132a335c3d7cc2",
+    "status": "BUILT_AND_DEPLOYED_PASS_REUSED_DURING_RECOVERY",
+    "cumulative_static_builds": 1,
+    "cumulative_image_builds": 1,
+    "recovery_new_builds": 0
+  },
+  "docreader": {
+    "new_builds": 0,
+    "existing_image": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868"
+  },
+  "provider_calls": 0,
+  "flow": "NOT_RUN",
+  "recovery_plan": "build-recovery-plan.json"
+}

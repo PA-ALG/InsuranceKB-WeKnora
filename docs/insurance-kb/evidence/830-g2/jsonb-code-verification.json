@@ -1,0 +1,91 @@
+{
+  "contract": "830-g2-jsonb-code-verification.v1",
+  "status": "PASS",
+  "code_files": {
+    "internal/application/service/concept_agent_830_g2.go": "28c38e4068decf608e4cc3b68971d428c861a11da703a6557f15c74c91e3fa01",
+    "internal/application/service/concept_free_wiki_830_g2.go": "8b6aae45d4344f3dbc1cdd17198eb148cbbe6e046cf7ab22d9a8abea754e5bf5",
+    "internal/application/service/concept_free_wiki_830_g2_test.go": "54941362afa7ab8429af62ef68b93e83ec00f9e32d18999c7d2d00cb8b11fa86",
+    "internal/application/service/concept_source_authority_830_g2.go": "e90eda15dc6b9211f01a035520f2b4ef19a9f79adbc5ecedb5df2ca3c8f38b42",
+    "internal/application/service/concept_source_authority_830_g2_test.go": "70c3ec84a8c1c863eab872d3d4baec74567956157972d936110c455bdc196119",
+    "internal/application/service/wiki_release.go": "41881d0781a7cb94b3dac12411f8567710045bc66019512a387db96d29256895",
+    "internal/types/concept_free_wiki_830_g2.go": "9679aba74ad04578fcf4bafa1713b68422e5714336f60411583b939a36a42d85",
+    "internal/types/concept_free_wiki_830_g2_test.go": "dfbf34b516961eca29bcd45e98a74e25a3c67a9f963179c71029a9af9f78490c",
+    "harness/tests/fixtures/concept_free_wiki_830_g2_postgres_roundtrip.json": "db0a3f80cb4fe6a5f6230f9cfc4f51deead04b192e9c8dc60335d3a7ef2dd349"
+  },
+  "evidence": {
+    "g2-jsonb-service-compat-green.log": {
+      "path": "/private/tmp/g2-jsonb-service-compat-green.log",
+      "sha256": "38260157a588f24e35e1c6725c4a8a98c6eae5dd7a844c0bd4f086d26bbe8844",
+      "top_level_pass": 109,
+      "top_level_fail": [
+        "TestConceptAgentServicePinsValidatedReleaseAndSourceIdentity",
+        "TestConceptLegacyBaseChain830G2RecognizesHumanAdmissionRelease"
+      ]
+    },
+    "g2-jsonb-focused-green.log": {
+      "path": "/private/tmp/g2-jsonb-focused-green.log",
+      "sha256": "366fc113bcf6fef624d6314e0e80855168596189b63d780b3ef83368456a528b",
+      "top_level_pass": 5,
+      "top_level_fail": []
+    },
+    "g2-jsonb-focused-red.log": {
+      "path": "/private/tmp/g2-jsonb-focused-red.log",
+      "sha256": "e1231f1efe7dc7d1bb4d44dad0adf49602559461f4ebf15324ccc1bc50da9166",
+      "top_level_pass": 0,
+      "top_level_fail": [
+        "TestConceptPostgresRoundTripPreparation830G2UsesSemanticCanonicalCustody",
+        "TestConceptPostgresRoundTrip830G2ReviewActivateCurrentAndPinned"
+      ]
+    },
+    "g2-jsonb-final-service-green.log": {
+      "path": "/private/tmp/g2-jsonb-final-service-green.log",
+      "sha256": "842228c2eb8687f778027d3753ff2d62092448a4508eb5bf8ac156dc55f4c04f",
+      "top_level_pass": 6,
+      "top_level_fail": []
+    },
+    "g2-jsonb-types-green.log": {
+      "path": "/private/tmp/g2-jsonb-types-green.log",
+      "sha256": "381b4355b09da523b8854fdd416c68703721c1b6041b25ed77fcf56b9e8b2b97",
+      "top_level_pass": 19,
+      "top_level_fail": []
+    },
+    "g2-jsonb-final-types-green.log": {
+      "path": "/private/tmp/g2-jsonb-final-types-green.log",
+      "sha256": "4ece3b9a2f980ff078a82ca2883082f5663fc446e69dac0254ecff3b9a6b1782",
+      "top_level_pass": 20,
+      "top_level_fail": []
+    },
+    "g2-jsonb-two-failures-green.log": {
+      "path": "/private/tmp/g2-jsonb-two-failures-green.log",
+      "sha256": "4c97dd20c5b96656181c2cc415d86651c599e143237e36f0cd6d5289bc0f13c8",
+      "top_level_pass": 2,
+      "top_level_fail": []
+    }
+  },
+  "red": "Old implementation rejected actual PostgreSQL17.9 representation-only changes in preparation and review flow",
+  "broad_regression": "193.761s completed with two failures; preserved as failure, not mislabeled PASS despite legacy filename. Agent production G2 comparator and outdated legacy test corrected, both passed in final focused run. No untouched broad tests were repeated.",
+  "final_focused_service": "6 top-level tests PASS,5.718s",
+  "final_focused_types": "20 top-level tests PASS including two new PostgreSQL/strict-canonical tests,1.734s",
+  "actual_a_replay": {
+    "status": "PASS",
+    "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+    "members": 70,
+    "candidate_tree_unchanged": true,
+    "replacement_canonical_manifest_sha256": "5121fb825633c0ebe5cff5c87f8a4a22e8a5d33784197d8cdee46b76bc796e7f",
+    "old_failed_draft_still_rejected": true
+  },
+  "openspec_strict": "PASS",
+  "diff_check": "PASS",
+  "independent_code_review": {
+    "status": "BLOCKER0",
+    "reviewer": "g2_bundle_review",
+    "freeze_diff_sha256": "12c38d3e37ea84a17b228ef00ac1617fe031fabfc72000185f663d9b4310a94c",
+    "final_files_exact_match": true
+  },
+  "new_image_builds": 0,
+  "deployment": "NOT_RUN",
+  "actual_review_success": "NOT_RUN",
+  "actual_activation": "NOT_RUN",
+  "flow": "NOT_RUN",
+  "quality": "DEFERRED_TO_Q0"
+}

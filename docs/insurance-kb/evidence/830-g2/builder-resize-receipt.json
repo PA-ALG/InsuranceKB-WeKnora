@@ -1,0 +1,18 @@
+{
+  "contract": "830-g2-builder-resize.v1",
+  "status": "PASS",
+  "profile": "g1-build",
+  "disk_gib_before": 20,
+  "disk_gib_after": 40,
+  "data_filesystem": "/dev/vdb1",
+  "observed_data_size": "40G",
+  "observed_used": "20G",
+  "observed_free": "19G",
+  "observed_used_percent": 52,
+  "docker_engine": "28.4.0",
+  "image_deletions": 0,
+  "volume_deletions": 0,
+  "cache_prunes": 0,
+  "default_runtime_profile_changes": 0,
+  "provider_calls": 0
+}

@@ -1,0 +1,48 @@
+{
+  "activation_posts": 0,
+  "approval_sha256": "257e9144436094bcd6a669710ffee20cc188a98b72de7ddf9374cbc9ace82a8a",
+  "authority": "NO_SUCCESS_CLAIM",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "configured_sha256": "f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+  "container_id": "2e6bb101fcc9b0545fee638c99254826cf2240212cdd628912a55d6fd1151de1",
+  "contract": "830-g2-a-human-publication-execution.v1",
+  "error": "review_http_or_response_invalid:400:22f82e22b4d6b29de9ebce6a04d58f31f256431e98e3bd6e1bfc35ab7f3b9795",
+  "error_type": "RuntimeError",
+  "expected_head": {
+    "activation_epoch": 3,
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28"
+  },
+  "expected_new_epoch": 4,
+  "human_key_id": "g2-a-human-70cb4b6eb57c",
+  "human_public_sha256": "2f244a831e48822fa89f1432d334441ee9aecac057a154501f8e915ce5170eed",
+  "human_signed_sha256": "a48a38d0d91c7dfaff058dbeba5249a7bc47e77dabb96d226bb66d3de99ce118",
+  "image_builds": 0,
+  "image_id": "sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a",
+  "image_pulls": 0,
+  "nonce": "g2-a-70cb4b6e-425c093cfc11301fed390d0a142e57d0",
+  "plan_sha256": "a5a2fb585afe897120c569739c9f1c5a82fb523db741505beec7b9f5aeab06c1",
+  "previous_config_sha256": "693e9996366c2d6dc17ad13c2ddd7419d4c1992e9b5572e7a5d487184837e034",
+  "principal_id": "web_user:399ea48b-3987-55f3-8f19-58f65f53e663",
+  "provider_calls": 0,
+  "publish_key_id": "g2-a-publish-70cb4b6eb57c",
+  "publish_public_sha256": "aea2adb56800d9179cbed70fadd5d38b8dbb57f7786243aabde5a2429e236d8b",
+  "review_posts": 1,
+  "review_request_sha256": "ac7a39885be3928667c2017bfbbbbe65951d0c9958c2e6c87c6604f5d0f17880",
+  "runbook_sha256": "0bb85107d81ff22816696137a0e6af7aaa7123d82fe57a3eae0f0f870823952a",
+  "scope": {
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "tenant_id": 10003,
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "script_sha256": "9a6453efa1489030fb3a8d5581b8745189f76c3dc8346ecd5d154261a5487fc7",
+  "status": "STOPPED",
+  "steps": [
+    "Local frozen prerequisites and independent runbook review PASS",
+    "Exact G2 login, Head epoch3, container, image, database and config PASS",
+    "Two independent task-private keys generated; public-only config frozen",
+    "Only the same G2 app restarted; health/login/Head epoch3 PASS",
+    "Exact approved whole-batch human authority signed and review request frozen"
+  ],
+  "unsigned_helper_sha256": "12a4d6083b3ddbef99a0481bef9f308a823c36b88a982d6c13e8aa9e3bf4c458"
+}

@@ -1,0 +1,33 @@
+{
+  "contract": "830-g2-b-correction-outbound-delta-check.v1",
+  "status": "PASS_NO_ADDITIONAL_SOURCE_OR_PERSONAL_CONTENT",
+  "rejected_action": "same frozen g2-b-compile-002 DeepSeek POST",
+  "approval_reviewer_reason": "Derived audit payload not explicitly covered",
+  "actual_delta": {
+    "prior_material_context_exact": true,
+    "new_property": "audit_projection",
+    "records": 136,
+    "all_record_ids_already_in_approved_material": true,
+    "record_fields": [
+      "key",
+      "disposition",
+      "reason"
+    ],
+    "unique_reasons": [
+      "B_EXACT_SOURCE_PAGE_PROPOSAL",
+      "B_REQUIRED_FIELD_ATTEMPT_PROPOSAL",
+      "EXACT_A_ACTIVE_CARRYOVER"
+    ],
+    "unique_dispositions": [
+      "alias_link",
+      "field_rule",
+      "new_page"
+    ],
+    "new_source_text": false,
+    "new_personal_data": false
+  },
+  "http_payload_sha256": "ef3b6b50bdb30c9e182601cdf5891631bde7a1c2499c94536579d1a4fcfd99bc",
+  "authorization_basis": "User authorized G2 DeepSeek material processing, and all reasonable necessary G2 quota extensions",
+  "attempt_started": false,
+  "provider_calls_this_check": 0
+}

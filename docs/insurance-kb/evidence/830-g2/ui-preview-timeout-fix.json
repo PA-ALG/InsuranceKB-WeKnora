@@ -1,0 +1,22 @@
+{
+  "contract": "830-g2-preview-timeout-fix.v1",
+  "scope": "only ConceptFreeWiki830G2 authority/bytes preview GET",
+  "actual_before_ui": "PDF_PREVIEW_UNAVAILABLE",
+  "actual_request_id": "0ovaxMwCFn0I",
+  "actual_cancel_seconds": 30.272750909,
+  "successful_authority_seconds": [
+    35.041084759,
+    16.868342764
+  ],
+  "old_timeout_ms": 30000,
+  "new_timeout_ms": 60000,
+  "red": "1 failed timeout, 3 passed",
+  "green": "4 passed",
+  "browser_after": "NOT_RUN",
+  "provider_calls": 0,
+  "backend_changes": 0,
+  "files": {
+    "ConceptFreeWiki830G2.vue": "7d4f962e6a5f28bdcaad0391c1dcb153d0fd2db05fa07f7940b0a72ea31efb15",
+    "ConceptFreeWiki830G2.spec.ts": "4c6ede5efe09ed133858c15450f8d4abfe2e669c9997089518c21ea13802b832"
+  }
+}

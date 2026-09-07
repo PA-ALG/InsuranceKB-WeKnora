@@ -1,0 +1,30 @@
+{
+  "contract": "830-g2-b-browser-verification.v1",
+  "status": "PASS",
+  "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+  "activation_epoch": 5,
+  "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "observations": {
+    "directory_products": 2,
+    "fields_per_product": 67,
+    "free_wiki_items": 1,
+    "concept_links": 4,
+    "all_concept_links_pinned_to_same_release": true,
+    "free_wiki_click_through": "PASS",
+    "free_page_body_and_conditions": "PASS",
+    "pdf_page": 15,
+    "canvas_count": 1,
+    "citation_highlight": "PASS_RENDERED"
+  },
+  "limitations": [
+    "Narrow current desktop panel clips part of the PDF; full-page screenshot and DOM confirm page15 canvas and highlight. Responsive layout polish remains backlog."
+  ],
+  "artifacts_sha256": {
+    "b-ui-directory.txt": "6195f320b2955552d44304e93c28632ded6b32daec36ccbebc137a0b47a7b04a",
+    "b-ui-free-page.txt": "53263ece89fee7464d816805efff6450c16ea75b3eb1d0c4082339414a589a81",
+    "b-ui-pdf-page15.png": "e713e8f57075d578c62be26b76fc57f6b88842c2fb4bdc33501d33bd91b17dfd",
+    "b-ui-pdf-page15-dom.json": "3be8dbeaeeec64980879e5c298dddc6aa78184959d63b96d85a9858507e0e0e0",
+    "b-ui-concept-links.txt": "0ffe65b7a915076630e864886fa5ba591507b9e64ec64a9031e3fd8d5a11ac2e"
+  },
+  "provider_calls": 0
+}

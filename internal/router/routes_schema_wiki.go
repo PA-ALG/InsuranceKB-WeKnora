@@ -94,6 +94,12 @@ func RegisterSchemaWikiRoutes(
 	activeGET("/domains", schemaHandler.Domains)
 	activeGET("/taxonomy/current", schemaHandler.CurrentTaxonomy)
 	activeGET("/entities/:entity_id/versions/:version_id/current", schemaHandler.CurrentEntityVersion)
+	conceptPages := handler.NewConceptFreeWikiHandler830G2(schemaHandler)
+	activeGET("/concept-pages/:member_id", conceptPages.ReadPage)
+	activeGET(
+		"/concept-pages/:member_id/citations/:citation_id/preview",
+		conceptPages.PreviewCitation,
+	)
 	entityPages := handler.NewEntityPageGraphHandler830G1(schemaHandler)
 	entityGuards := []gin.HandlerFunc{
 		g.Viewer(),

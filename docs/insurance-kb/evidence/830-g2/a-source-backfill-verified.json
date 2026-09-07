@@ -1,0 +1,71 @@
+{
+  "contract": "830-g2-a-backfill-verification.v1",
+  "status": "PASS",
+  "image_id": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6",
+  "source_head": "3c655294daa3aecf3b27fcba2e408d63a4a17f60",
+  "backfill_http": 200,
+  "source": {
+    "contract": "knowledge-revision-source.v1",
+    "knowledge_id": "f987fc16-222a-4246-8ca0-22c1a81dd6d9",
+    "parse_attempt": 2,
+    "revision_source_id": "ea7160149d2fd99ea4a4960c50bfa6ca3641e4532956671b9956f4f8b57ad681",
+    "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+    "object_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+    "size": 1047811,
+    "mime_type": "application/pdf",
+    "page_count": 39,
+    "manifest_algorithm": "weknora.chunk_manifest.v1",
+    "manifest_digest": "f2190b125469819ea0d97603c71f4fb19e4a92fa09117582b4d581947a0de414",
+    "chunk_count": 162,
+    "binding_digest": "299502a83c9f776c84f097c2ef5b05c92ce6afaabe5ceb722214be275cf418c0",
+    "retention_state": "pinned"
+  },
+  "before": {
+    "weknora": {
+      "database": "weknora",
+      "source_rows": 0,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    },
+    "weknora_g2_594": {
+      "database": "weknora_g2_594",
+      "source_rows": 0,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    }
+  },
+  "after": {
+    "weknora": {
+      "database": "weknora",
+      "source_rows": 0,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    },
+    "weknora_g2_594": {
+      "database": "weknora_g2_594",
+      "source_rows": 1,
+      "heads": [
+        {
+          "release": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+          "epoch": 3
+        }
+      ]
+    }
+  },
+  "provider_calls": 0,
+  "b_uploads": 0,
+  "flow": "NOT_RUN",
+  "fixed_revision_http_read": "NOT_RUN; no public fixed-read endpoint in this slice"
+}

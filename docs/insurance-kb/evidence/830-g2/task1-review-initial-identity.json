@@ -1,0 +1,11 @@
+{
+  "scope": "TASK1_OFFLINE_PROTOCOL_ONLY",
+  "candidate_hash": "e86131bddf7d328880b63fbd54fdda2a04e6b425ed088c135d7bb64a57e821a4",
+  "files": {
+    "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py": "bf197146898c54ef2c5b172393ac4cd2bd17d92f1fcd1e2c8b3c33e13b4dce57",
+    "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py": "d73693e2498a25c49061b4de8a3e981b0dc71d713e5dabc6f8db9a7637abd897",
+    "harness/tests/test_concept_free_wiki_830_g2.py": "2b1c3c850e9408146e652da60d9d62f4de356366687ef96ea5e32c9dc2437933",
+    "harness/tests/test_concept_compile_830_g2.py": "903117a507dcaf22538901fd8bdf51c6b2cd472902460f7be925c613ccf0b618",
+    "harness/tests/fixtures/concept_free_wiki_830_g2_contract_vector.json": "a1051fbecdc6600e02f896308226ae3b58548023380b15977edbb6ea6cef4ea4"
+  }
+}

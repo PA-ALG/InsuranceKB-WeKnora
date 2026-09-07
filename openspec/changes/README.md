@@ -8,6 +8,9 @@
 
 ## Change 编号台账
 
+当前 G2 占号：128（2026-09-05）。启动授权及独立工作树见G2 Evidence Pack；
+126/127行仍保留原登记历史，不能覆盖本轮授权。
+
 | 号 | change | 状态 | 备注 |
 |---|---|---|---|
 | 001 | harness-scaffold | ✅ 已交付 | |
@@ -120,6 +123,7 @@
 | 122 | schema67-golden-quality-gate | CODE-INTEGRATED / QUALITY-INCONCLUSIVE / HISTORY REFERENCE | `linyao` source Review COMPLETED；Schema67 `COMPLETE_67`（67/0，51保留+16合法 unknown）；旧 EC-02 真实结论 `QUALITY_FAIL` 且不在 main。后续 C4 从最新 main 新开 Mission，不继承旧 Candidate/reviewer/attestor |
 | 126 | 830-g1-entity-field-assertion-pages | ✅ G1 PASS / MERGED PR #126 | 1 overview + 7 section + 67 实体作用域 FieldAssertion + 1 空 free_wiki 的 76 页原子图已进入同一隔离 Release；以 [validation-report](126-830-g1-entity-field-assertion-pages/validation-report.md) 与 [G1 closeout](../../docs/insurance-kb/evidence/830-g1/g1-closeout.json) 为准；G2+、质量优化、Provider、生产 8081 仍锁定 |
 | 127 | 830-ba0-local-build-reuse | 🚧 BA0 SPEC / WIP | 一次性非产品工程门；冻结完整 identity、lookup-before-build、共享 Go cache、versioned 外部依赖事实与 standalone exact-image smoke；真实 app build 总预算 1，effects=0，G1 保持 PASS，G2 保持锁定 |
+| 128 | 830-g2-concept-free-wiki | 🚧 G2 SPEC / WIP | 用户明确授权G2；真实G1输入回放先保存缺口，新版本候选/独立审核/共享定义与free_wiki，复用唯一WeKnora Release；QUALITY=DEFERRED，G3与生产未授权 |
 
 ## Alembic 迁移编号台账（harness/migrations/versions/）
 

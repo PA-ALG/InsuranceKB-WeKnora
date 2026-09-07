@@ -1,0 +1,10 @@
+{
+  "contract": "830-g2-b-live-verifier-review-record.v1",
+  "status": "BLOCKER0",
+  "script_sha256": "5cbb270b38994dab67f00ac9f98b4402c9d62d4c4ec48f0f53e9f1c3db0597a8",
+  "reviewer": "g2_sources",
+  "recorded_by": "root",
+  "review_basis": "Independent g2_sources message after exact SHA verification and current-R5 A70 preservation correction",
+  "scope": "Readonly actual R5 snapshot, 140 members, A70 preservation, four links, four citations, three PDFs, unchanged original database, final Agent input wrapper",
+  "http_calls_by_review": 0
+}

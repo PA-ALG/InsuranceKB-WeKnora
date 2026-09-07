@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-b-format-correction-preparation.v1",
+  "status": "FROZEN_RUNNER_REVIEW_PASS_REQUEST_PREPARED_PROVIDER_ZERO",
+  "provider_calls": 0,
+  "b_calls_used": 1,
+  "b_max_calls": 3,
+  "max_output_tokens": 65536,
+  "files": {
+    "/private/tmp/g2-b-format-correction-runner/weknora_g2_run_b_format_correction.py": "a2a444611cb5d473039f509e50cb71af1c5fe6ce5ad7138aaa95292fe9263c27",
+    "/private/tmp/g2-b-format-correction-runner/freeze-review.json": "e956ea5981a2a94ef62f234de52929ac86574b5f924f6469669cbb6263e1728a",
+    "/private/tmp/g2-b-format-correction-runner/freeze-identity.json": "9f7cb7ddb8afa609f89c9dffe7bd6c1c4dd60468effe5c63f3f444dc629a0609",
+    "/private/tmp/g2-b-format-correction-runner/green.log": "67654c9f0205fd378b532a8bd24a687c8f9c81b48d683584966e9fdfa469698b",
+    "/private/tmp/weknora-g2-594/provider-runs/g2-b-compile-002/request-identity.json": "9a393ff740edc1192fe8831bb4c7b1bea1e1ac4f9c135fd68d80db3967812816",
+    "/private/tmp/weknora-g2-594/provider-runs/g2-b-compile-002/http-request.json": "ef3b6b50bdb30c9e182601cdf5891631bde7a1c2499c94536579d1a4fcfd99bc"
+  }
+}

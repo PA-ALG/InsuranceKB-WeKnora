@@ -1,0 +1,45 @@
+{
+  "contract": "830-g2-a-human-publication-plan.v1",
+  "status": "REGISTERED",
+  "candidate_hash": "70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5",
+  "approval_receipt_sha256": "257e9144436094bcd6a669710ffee20cc188a98b72de7ddf9374cbc9ace82a8a",
+  "authorization": "User explicitly approved this exact whole batch and publication in G2 isolated environment",
+  "source_head": "d7c67303916e6f608458de4980cf83d807390022",
+  "required_before_execute": [
+    "jsonb-app-artifact PASS exact source/image",
+    "jsonb-upgrade-receipt PASS preserving current public rings",
+    "a-jsonb-draft-create PASS exact complete candidate and scope"
+  ],
+  "app_container": "weknora-g2-594-app",
+  "database": "weknora_g2_594",
+  "tenant_id": 10003,
+  "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+  "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+  "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+  "preparation_id": "g2-a-human-jsonb-70cb4b6eb57c",
+  "expected_head": {
+    "release_id": "release-6239c4c8-a3eb-414a-b05c-e3c74f6ddc28",
+    "activation_epoch": 3
+  },
+  "expected_new_epoch": 4,
+  "current_config_sha256": "f0c30a2d9fef33d727e00f06845247d0137dac0376c4e23f1ec646445b478947",
+  "allowed_config_change": "None during publication; upgrade preserves the already provisioned distinct public rings byte-for-byte",
+  "private_key_location": "Task-private directory only, mode0600; never repository/app/container config",
+  "operations": [
+    "verify exact replacement Draft/source/scope and Head3",
+    "verify existing separate private keys by exact public identities; no key generation/config change/restart",
+    "freshly sign explicitly approved same whole-batch human receipt using exact JWT web StorageID and new nonce",
+    "POST Review once and verify Ready/all digests",
+    "sign separate publish authorization bound to actual Ready and same new nonce",
+    "POST activation once",
+    "verify returned release and Head epoch4; preserve original database Head and old failed Draft"
+  ],
+  "failure_policy": "Before effects save INCOMPLETE receipt; stop on any error and retain partial results. Never blindly retry a POST or infer success.",
+  "extra_image_builds": 0,
+  "provider_calls": 0,
+  "production_effects": 0,
+  "independent_runbook_review": "PENDING",
+  "recovery_of_preparation_id": "g2-a-human-70cb4b6eb57c",
+  "recovery_of_plan_sha256": "a5a2fb585afe897120c569739c9f1c5a82fb523db741505beec7b9f5aeab06c1",
+  "expected_manifest_digest": "5121fb825633c0ebe5cff5c87f8a4a22e8a5d33784197d8cdee46b76bc796e7f"
+}

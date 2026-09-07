@@ -232,15 +232,27 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewWikiIngestService, dig.Name("wikiIngest")))
 	must(container.Provide(service.NewWikiLintService))
 	must(container.Provide(service.NewContextWikiReleaseAccessVerifier))
+	must(container.Provide(func(cfg *config.Config) (*service.SchemaWikiCitationTokenCodec, error) {
+		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return service.NewSchemaWikiCitationTokenCodec(ring.ActiveKeyID(), ring.SigningKeys(), time.Now)
+	}))
+	must(container.Provide(service.NewSchemaWikiCitationPorts))
+	must(container.Provide(service.NewKnowledgeRevisionSourceService))
+	must(container.Provide(service.NewConceptSourceAuthorityService830G2))
 	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseAuthorizationVerifier, error) {
 		verifier, _, err := schemaWikiReleaseVerifierProviders(cfg)
 		return verifier, err
 	}))
-	must(container.Provide(func(cfg *config.Config) (service.WikiReleaseServiceOptions, error) {
+	must(container.Provide(func(cfg *config.Config, conceptSource *service.ConceptSourceAuthorityService830G2) (service.WikiReleaseServiceOptions, error) {
 		_, options, err := schemaWikiReleaseVerifierProviders(cfg)
+		options.ConceptSourceAuthorityVerifier830G2 = conceptSource
 		return options, err
 	}))
 	must(container.Provide(service.NewWikiReleaseService))
+	must(container.Provide(service.NewConceptAgentService830G2))
 	must(container.Provide(func() (*repository.SchemaWikiFormalCandidatePreviewRegistry, error) {
 		return repository.NewSchemaWikiFormalCandidatePreviewRegistry(
 			os.Getenv("WEKNORA_SCHEMA_WIKI_C5_INPUT_MANIFEST"),
@@ -248,30 +260,11 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	}))
 	must(container.Provide(func(
 		releaseAuthority *service.WikiReleaseService,
-		knowledgeRepository interfaces.KnowledgeRepository,
-		chunkRepository interfaces.ChunkRepository,
-		fileService interfaces.FileService,
+		citationPort service.CitationRevisionReadPort,
+		content service.SchemaWikiCitationContentPort,
 		formalCandidatePreview *repository.SchemaWikiFormalCandidatePreviewRegistry,
 		cfg *config.Config,
 	) (*service.SchemaWikiService, error) {
-		citationPort := service.NewSchemaWikiCitationRevisionReadAdapter(
-			knowledgeRepository, chunkRepository,
-		)
-		ring, err := config.DecodeSchemaWikiCitationTokenSigningRing(cfg)
-		if err != nil {
-			return nil, err
-		}
-		codec, err := service.NewSchemaWikiCitationTokenCodec(
-			ring.ActiveKeyID(), ring.SigningKeys(), time.Now,
-		)
-		if err != nil {
-			return nil, err
-		}
-		content := service.NewSchemaWikiCitationContentService(
-			citationPort,
-			service.NewSchemaWikiRevisionBlobReader(knowledgeRepository, fileService),
-			codec,
-		)
 		statusRaw, err := config.DecodeSchemaWikiGoldenSuccessorStatus(cfg)
 		if err != nil {
 			return nil, err
@@ -303,7 +296,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewResourceRepository))
 	must(container.Provide(repository.NewTemporaryDocumentRepository))
 	must(container.Provide(service.NewResourceCatalog))
-	must(container.Provide(service.NewKnowledgeRevisionSourceService))
 	// TenantStoreOwnership adapter used by the retriever factory functions
 	// to verify that a resolved VectorStore belongs to the caller's tenant.
 	must(container.Provide(retriever.NewVectorStoreRepoOwnership))

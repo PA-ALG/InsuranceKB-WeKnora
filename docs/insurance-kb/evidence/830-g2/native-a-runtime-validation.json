@@ -1,0 +1,47 @@
+{
+  "contract": "830-g2-native-a-runtime-probe.v1",
+  "producer_sha256": "6f7b4637c1f4e52838b6fabd6dbe1a837e61371e0aa44da54cebfdd65d1f20e2",
+  "provider_calls": 0,
+  "exit_code": 0,
+  "status": "PASS",
+  "error": "onnxruntime cpuid_info warning: Unknown CPU vendor. cpuinfo_vendor value: 0\n",
+  "native_result": {
+    "bbox_count": 40657,
+    "markdown_codepoints": 45120,
+    "page_count": 39,
+    "parser_identity": {
+      "capture_mode": "builtin-pdfium-charbox-v1",
+      "pdfium_version": "149.0.7825.0",
+      "producer_contract": "weknora.docreader.builtin-pdfium-charbox.v1",
+      "pypdfium2_version": "5.8.0"
+    },
+    "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+    "sanitized_sha256": "8f735c46740c4988a6d742a0c15f4baacc7c42ed8668e81aef922a0aff5a1bf6",
+    "schema": "builtin-pdfium-native-locators.v1",
+    "source_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+    "status": "PASS"
+  },
+  "runtime_scope": "existing G2 docreader; independent Python process with producer copied under /tmp; running GRPC code unchanged",
+  "go_transport": {
+    "status": "PASS",
+    "command": "GOMAXPROCS=2 GOCACHE=/private/tmp/codex-go-cache-g2 go test -p 2 ./internal/infrastructure/docparser -run TestRootRealANativeTransport830G2 -count=1 -v",
+    "package_seconds": 1.775,
+    "actual_test_seconds": 0.39,
+    "probe_test_sha256": "c1dd98a9431d2193c9e498a192e8792cf4f7111d6aa7ffe799ec587a8054ea42",
+    "temporary_test_removed": true
+  },
+  "flow": "NOT_RUN",
+  "quality": "DEFERRED",
+  "producer_review": {
+    "reviewer": "root independent of producer author",
+    "blocking_findings": 0,
+    "checks": [
+      "explicit capture only; no image fallback",
+      "source/Markdown/parser/native canonical identity checks",
+      "Unicode codepoint page and bbox coverage",
+      "rotation/nonfinite/degenerate geometry rejected",
+      "stream and unary share decoder",
+      "actual A capture accepted by Go decoder"
+    ]
+  }
+}

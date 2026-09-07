@@ -1,0 +1,47 @@
+{
+  "contract": "830-g2-schema-ui-entry-completion-plan.v1",
+  "status": "REGISTERED_DESIGN_IN_PROGRESS",
+  "authorization": "User requests core G2 flow and standing approval of reasonable necessary extensions",
+  "trigger": "Actual browser Schema tab unavailable; schema-scope200/current200 epoch3, domains/taxonomy400. Existing Schema tab only reads legacy/C6 protocol and cannot display G2 even after activation.",
+  "source_head_before": "d7c67303916e6f608458de4980cf83d807390022",
+  "scope": "Frontend G2 member directory entry using existing strictly validated release API and existing pinned concept page navigation",
+  "backend_changes": 0,
+  "provider_calls": 0,
+  "database_changes": 0,
+  "new_authority": false,
+  "temporary_implementation": "g2_sources /private/tmp only until root lifts source freeze",
+  "reviewer": "g2_bundle_review",
+  "root_ownership": [
+    "spec and execution record",
+    "integration and commit",
+    "frontend build and isolated UI replacement",
+    "actual browser validation"
+  ],
+  "required_behavior": [
+    "scope bootstrap with existing dual KB ACL",
+    "generic current followed by exact-release search; conflicts fail closed",
+    "strict full G2 members and owner/navigation closure, one pinned release/candidate revision",
+    "concept and per-entity overview/free-wiki navigation via existing conceptPage830G2 serving KB",
+    "legacy path only on positive legacy classification; no fallback after G2/network/shape errors",
+    "existing MVP entry-to-serving KB mapping preserved"
+  ],
+  "required_tests": [
+    "actual A70 member directory",
+    "two-entity B shape",
+    "release/revision/scope drift rejection",
+    "mixed/duplicate/missing overview closure rejection",
+    "no error-to-legacy fallback",
+    "legacy path compatibility"
+  ],
+  "runtime_execution": "NOT_RUN",
+  "frontend_builds_reserved": 1,
+  "frontend_upgrade_max": 1,
+  "backend_builds_additional": 0,
+  "additional_bounded_fix": {
+    "trigger": "Actual G2 UI preview request 0ovaxMwCFn0I cancelled at 30.27 s. Same source authority succeeded at 35.04 s via 60 s read-only verifier.",
+    "scope": "ConceptFreeWiki830G2 preview authority and byte GET use 60 s timeout; no global timeout or server changes",
+    "owner": "root",
+    "tests": "Parent component passes scoped timeout to preview transport; normal reads unchanged; rejection propagates without retry",
+    "builds": "Included in same already reserved frontend build"
+  }
+}

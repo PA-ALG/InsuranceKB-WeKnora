@@ -1,0 +1,23 @@
+{
+  "contract": "830-g2-agent-dns-recovery-budget.v1",
+  "basis": "User standing approval for reasonable necessary G2 extensions and current explicit DeepSeek data approval",
+  "original_app_turns_attempted": 1,
+  "original_turn_outcome": "FAILED_BEFORE_MODEL_SSRF_DNS",
+  "original_model_http_attempts": 0,
+  "recovery_app_turns_max": 1,
+  "total_app_turns_max": 2,
+  "total_model_http_attempts_max": 13,
+  "automatic_whole_turn_retries": 0,
+  "old_state_preserved": true,
+  "question_material_destination_unchanged": true,
+  "production_changes": 0,
+  "source_code_changes": 0,
+  "temporary_change": "Only G2 app api.deepseek.com hosts mapping to two-DoH-consistent TLS-verified public IP; restore original hosts after turn",
+  "stop_conditions": [
+    "Any nonpublic/disagreeing DNS result",
+    "TLS failure",
+    "hosts or container drift",
+    "Provider attempts no longer zero for original request",
+    "Recovery failure: preserve, restore, no further retry"
+  ]
+}

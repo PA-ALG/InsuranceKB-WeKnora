@@ -1,0 +1,31 @@
+{
+  "contract": "830-g2-directory-ui-mode-recovery-plan.v1",
+  "status": "REGISTERED",
+  "authorization": "User standing approval for reasonable necessary isolated G2 repair",
+  "root_cause": "Delivery script private umask 077 inherited by static build; nginx cannot read copied public files, host /403; actual port published correctly",
+  "observed_modes": {
+    ".": "0o755",
+    "index.html": "0o600",
+    "assets": "0o700"
+  },
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "dist_content_sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc",
+  "scope": "Normalize only exact frozen public frontend/dist directories0755/files0644; image-only build once; replace only isolated UI once preserving failed container",
+  "limits": {
+    "additional_static_builds": 0,
+    "additional_ui_image_builds": 1,
+    "additional_ui_replacements": 1,
+    "backend_builds": 0,
+    "provider_calls": 0,
+    "database_writes": 0,
+    "new_networks": 0
+  },
+  "failed_image": "sha256:a22aa7feb2ac810144aebecdfa3dfdca2af052c760615a8bf8eadf8a1ad459f1",
+  "failed_container_backup": "weknora-g2-594-ui-before-mode-recovery",
+  "evidence": "Preserve first artifact/build and incomplete upgrade receipts; independently record exact content and mode manifest before/after; new image/source binding; runtime PASS separate from browser PASS",
+  "script": "/private/tmp/g2_ui_mode_recovery.py",
+  "script_sha256": "dfea617d8f55f8d8eaed76d4ebf84a912829dc0759b9902c826464800d47882b",
+  "package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+  "runtime_pass_scope": "Runtime only. Independent browser directory and PDF verification remain required in directory-ui-browser-verification.json.",
+  "network_scope_changes": false
+}

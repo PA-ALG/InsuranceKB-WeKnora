@@ -1,0 +1,12 @@
+{
+  "scope": "TASK1_OFFLINE_PROTOCOL_ONLY",
+  "review_round": "ONE_CONCENTRATED_CORRECTION",
+  "candidate_hash": "71074e3306b0a132ba6f63b6497cb1b5427ba3bfc15e846cee31a6827edb512d",
+  "files": {
+    "harness/src/insurance_harness/knowledge_compiler/concept_free_wiki_830_g2.py": "dca01236ab044116baf2457043ad869abaaed70074b3463c2bbc09d471d068bc",
+    "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py": "53f7e3dd98acc892db828828cab2181318ce21240be26a56471a61d3a2abcf06",
+    "harness/tests/test_concept_free_wiki_830_g2.py": "8ed3df7ac0b7c1b94c4e6bb837d50ed3e49486ad956617206347ee1d616bcfdc",
+    "harness/tests/test_concept_compile_830_g2.py": "b79b620a4f91c33afffa68a6914e8e21559e967a46dfa1dbd3054e00670ef3bb",
+    "harness/tests/fixtures/concept_free_wiki_830_g2_contract_vector.json": "a0a0f45813823f94661d340f72bb4986436dc2f0428a2f797c6320bc6531767e"
+  }
+}

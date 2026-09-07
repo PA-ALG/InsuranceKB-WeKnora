@@ -1,0 +1,18 @@
+{
+  "contract": "830-g2-b-deepseek-authorization-extension.v1",
+  "status": "APPROVED_STANDING_G2_SCOPE",
+  "destination": "https://api.deepseek.com/v1",
+  "model": "deepseek-v4-flash",
+  "max_calls": 4,
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "request_hash": "119e897033745b384d1246606f62b9076b445476f6fde0dd364b3a799ebef3b7",
+  "catalog_sha256": "f2a6fc0e03386567336f4b4b5c65ada58403a1840a06129f330b2f6fcfa7a1ba",
+  "scope": "G2 isolated B compile/review only",
+  "original_authorization_sha256": "7590869160f704a82383d51a788c08f8922ee647f38bb287d55e2174dbcceafa",
+  "budget_revision_sha256": "24d4ed6038f3785f9b0d1ef9f02f44ba9cd7074513b92cab082f54568a9d9bb7",
+  "user_instruction": "可以追加，如果不是很不合理的扩展，G2的申请的额度都给予通过",
+  "subsequent_material_approval": "授权",
+  "interpretation": "One extra necessary mechanical recovery call on same already authorized B materials; total B4 includes independent review. Existing proposal is repeated as explicit format template, no new source text, person data, or facts. This is not approval of a future candidate.",
+  "candidate_approval": false,
+  "recorded_at": "2026-09-06T11:35:45.975239+00:00"
+}

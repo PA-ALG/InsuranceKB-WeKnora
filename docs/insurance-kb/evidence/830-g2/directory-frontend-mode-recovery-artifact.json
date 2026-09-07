@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "static_builds": 0,
+  "image_builds": 1,
+  "provider_calls": 0,
+  "modes_before_sha256": "9d7e8280c0ae251e2e6f4bd6869b50a03d56b68474036e3cab88038bb69e8a63",
+  "dist_sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc",
+  "modes_after_sha256": "af9732aabe5069319974b00bf3c34eaf826c3f5cdd90aa7127a8f749141a6c7b",
+  "contract": "830-g2-directory-frontend-mode-artifact.v1",
+  "image_id": "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+  "labels": {
+    "io.insurancekb.g2.frontend.source-head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+    "io.insurancekb.g2.frontend.dist-sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc"
+  },
+  "platform": "linux/arm64"
+}

@@ -1,0 +1,96 @@
+{
+  "contract": "830-g2-b-selected-sourceblocks-validation.v1",
+  "status": "PASS",
+  "selected_sourceblocks_sha256": "f33c0848689908d95f5860d0aab072d41d9ec916c4140ca50a4e71573aa47601",
+  "proposal_sha256": "59e2a65e7ae75dbb3fdd452374d4c9d6a129623b222cda37457882d8c783a731",
+  "source_count": 3,
+  "evidence_count": 3,
+  "sources": [
+    {
+      "key": "waiting_period",
+      "role": "terms",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "parse_attempt": 3,
+      "revision_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+      "block_id": "43872b4b-be30-43cf-8324-cbcd11028d7d",
+      "page_number": 3,
+      "start": 129,
+      "end": 510,
+      "quote_sha256": "1aca6c4c3d529ee2d5f8711ecf50ff3c2fc85c5b5f775705fdcfeebfbb9a7348",
+      "native_quote_global_start": 2791,
+      "native_quote_global_end": 3172,
+      "visible_character_bbox_count": 337,
+      "bbox_union": {
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "x0": 96409,
+        "y0": 198409,
+        "x1": 928940,
+        "y1": 470245
+      }
+    },
+    {
+      "key": "coverage_and_renewal_terms",
+      "role": "terms",
+      "knowledge_id": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+      "parse_attempt": 3,
+      "revision_id": "d82d39ff488f8965b62bb9cb1bb5f147b6690617ba1c45a06ce9ea37659c7cd3",
+      "block_id": "cd7500ab-0090-4049-9b91-9c2ba24e5b98",
+      "page_number": 9,
+      "start": 0,
+      "end": 277,
+      "quote_sha256": "85a433dd88c9f225438f1c39bee3650a282375cea6f24ed8f0245de5815b48b7",
+      "native_quote_global_start": 10794,
+      "native_quote_global_end": 11071,
+      "visible_character_bbox_count": 253,
+      "bbox_union": {
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "x0": 101967,
+        "y0": 70641,
+        "x1": 929202,
+        "y1": 249074
+      }
+    },
+    {
+      "key": "general-medical-claim-example",
+      "role": "brochure",
+      "knowledge_id": "e7722140-3486-437b-9952-f3d66d6fb539",
+      "parse_attempt": 1,
+      "revision_id": "aed62bb6045daf632084f85970244cb840a2ea81932d3620bfa4efb1a4a03d0e",
+      "block_id": "ba3653f3-bb46-414f-844c-206bc77fb1aa",
+      "page_number": 15,
+      "start": 3,
+      "end": 904,
+      "quote_sha256": "516e03e69677275e311a2e9300a5de03bcdd770f46a2b6522755d7ddd0906b06",
+      "native_quote_global_start": 11293,
+      "native_quote_global_end": 12194,
+      "visible_character_bbox_count": 815,
+      "bbox_union": {
+        "coordinate_space": "normalized_0_1e6_top_left",
+        "x0": 95609,
+        "y0": 105553,
+        "x1": 904221,
+        "y1": 718634
+      }
+    }
+  ],
+  "checks": [
+    "proposal_sha256_exact",
+    "sealed_revision_identity_binding_and_manifest_exact",
+    "durable_chunk_export_sha256_and_count_exact",
+    "durable_block_id_unique",
+    "unicode_codepoint_slice_equals_quote",
+    "raw_utf8_quote_sha256_exact",
+    "sourceblock_and_evidence_models_valid",
+    "native_source_markdown_page_and_parser_hashes_exact",
+    "quote_unique_in_native_page_and_document",
+    "all_visible_quote_codepoints_have_exactly_one_normalized_integer_charbox"
+  ],
+  "candidate_created": false,
+  "model_result_created": false,
+  "a_active_assumed": false,
+  "provider_calls": 0,
+  "database_reads": 0,
+  "database_writes": 0,
+  "scope": "Local frozen B source custody and exact locators only; not compiler/reviewer/Candidate/Active",
+  "original_private_receipt_sha256": "e8281f42bb5a6115044e52ec1e6eafdd5f63b540e46acdfbd4a7c301e5902402"
+}

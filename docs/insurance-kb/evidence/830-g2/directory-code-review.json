@@ -1,0 +1,53 @@
+{
+  "contract": "830-g2-directory-code-review.v1",
+  "reviewer": "g2_bundle_review",
+  "blockers": 0,
+  "files": [
+    {
+      "path": "src/api/schema-wiki/conceptDirectory830G2.ts",
+      "sha256": "331f74ddccbbf31697dd7c5f5106b05a2d4b133bb6c5f30f84ef0c3d2892f79e"
+    },
+    {
+      "path": "src/api/schema-wiki/conceptDirectory830G2.spec.ts",
+      "sha256": "a97eec306f6d391235d3e9a2a8c41026ea4b9f1e1d3a883e73d79aa6be73395c"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "d987a8fd9ca5de085f056f283b39a993071c8bc24798ca079423e9f5a68c3067"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "5084356dc17b62cfc8ec04750c6bb9a8b2e430731e43d3bba9ec41f01d2e8190"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "fd72fd12f5de4c058a50ff1571491bee88054a6d9a43b96ca7464c62d0a0cdd0"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "5126ba80b857bbbeb55f68017118d27900386c0cb505c7536eec0101dad7fa11"
+    },
+    {
+      "path": "src/views/knowledge/KnowledgeBase.vue",
+      "sha256": "0d12b862d098cc33887264fbff59427eba1c0dcd63b93fb0a12f8682e660635f"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "sha256": "7d4f962e6a5f28bdcaad0391c1dcb153d0fd2db05fa07f7940b0a72ea31efb15"
+    },
+    {
+      "path": "src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "sha256": "4c6ede5efe09ed133858c15450f8d4abfe2e669c9997089518c21ea13802b832"
+    }
+  ],
+  "tests": "30/30 PASS across four specs",
+  "typecheck": "PASS",
+  "integration": "Exact SHA copies to worktree; not deployed",
+  "logs": {
+    "final-component-tests.log": "daf24f22ee28217e869f8693de2fde38d93f4cbc1c63f8178820780aa85e2088",
+    "final-type-check.log": "391ce47974cc4a4fc65785cd31ed434614260f757308186a7cc50c07c993abdf"
+  },
+  "spec_validation": "OpenSpec strict PASS",
+  "backend_changes": 0,
+  "provider_calls": 0
+}

@@ -1,0 +1,25 @@
+{
+  "contract": "830-g2-final-runtime-upgrade.v1",
+  "status": "PASS",
+  "source_head": "f23e2d7e62cffebc076cd453dbcf6be6be8b16bc",
+  "image_id": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+  "previous_image_id": "sha256:8916569d1bc2fe068febb68e7bfdebe95ac1ae03a9fd6dec8b096aa9270682b6",
+  "container": "weknora-g2-594-app",
+  "rollback_container": "weknora-g2-594-app-before-f23e2d7e6",
+  "database": "weknora_g2_594",
+  "provider_calls": 0,
+  "pulls": 0,
+  "steps": [
+    "Artifact, old G2 container, database, networks, mounts and config guards PASS",
+    "Exact image available in target engine; no registry push or pull",
+    "G2 env prepared with the actual C5 registry key",
+    "Previous G2 app stopped and preserved under the frozen rollback name",
+    "Verified final G2 app started with the preserved backfill config",
+    "G2 health HTTP 200 and installed image identity PASS"
+  ],
+  "container_id": "7677440e0f4b87ca827c0df123c63f9d5ba5f71396df26a96dcdef0401113c9e",
+  "health_http": 200,
+  "config_sha256": "693e9996366c2d6dc17ad13c2ddd7419d4c1992e9b5572e7a5d487184837e034",
+  "source_backfill": "PREVIOUS_A_BACKFILL_PASS",
+  "g2_publish": "NOT_RUN"
+}

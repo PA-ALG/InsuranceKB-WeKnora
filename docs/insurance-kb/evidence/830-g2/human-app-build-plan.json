@@ -1,0 +1,20 @@
+{
+  "contract": "830-g2-human-app-build-plan.v1",
+  "status": "REGISTERED",
+  "source_head": "871f6e1028ebbde453cdd60b0b787f95103ad7c9",
+  "prior_app_builds": 3,
+  "max_app_builds": 4,
+  "lookup_before_build": true,
+  "max_new_app_builds": 1,
+  "frontend_new_builds": 0,
+  "docreader_new_builds": 0,
+  "previous_image_id": "sha256:2bbd893134c4979580ce0b451c394020af8af61a4d1dd0c3d75d100dd4b01c43",
+  "authorization": "User approved reasonable necessary bounded G2 extensions and continued flow integration",
+  "independent_code_review": "BLOCKER0",
+  "python_tests": 42,
+  "go_focused_packages": "types/service/handler/router PASS",
+  "scripts": {
+    "weknora_g2_upgrade_human.py": "4a3a76610b17aa71e5da0adb285d0020c8bd1376be6394a3da388dd0868c7785",
+    "weknora_g2_create_a_human_draft.py": "7040bd5f298d23b8daa96e0d26c9a8879409d5f0ba7e92af69746b02df3bcd66"
+  }
+}

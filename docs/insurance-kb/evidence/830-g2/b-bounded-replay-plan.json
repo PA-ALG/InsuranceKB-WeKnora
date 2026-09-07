@@ -1,0 +1,21 @@
+{
+  "contract": "830-g2-b-bounded-replay-plan.v1",
+  "registered_at": "2026-09-06T01:23:30.771576+00:00",
+  "authorization": "User explicitly authorized A/B external execution; standing reasonable G2 extension approval",
+  "prior_external_attempts": 0,
+  "prior_ledger_preserved": "b-embedding-ledger.json",
+  "root_cause": "common.Deduplicate uses maps.Values; exact same 37 frozen embedding inputs arrive in nondeterministic order",
+  "change": "Compare exact complete SHA multiset, preserve actual outbound input order",
+  "knowledge_id_reparse": "5ad208d2-a9a1-4b66-a292-45ab06cb10c8",
+  "second_action": "upload frozen brochure once",
+  "max_combined_external_attempts": 20,
+  "guard_sha256": "bfee588796f0257e960ea8c02e8924fbb3aa24b07ebbd8d790fb3bc6ffda7c31",
+  "executor_sha256": "3aa91d1e9153e28683801ed57967808cf6c18fc4ab0933728e9944650dfef8c5",
+  "whitelist_sha256": "85482b5464bc3025b7cb84454df4b7f44359c5d2fe54d32ed8636ab3dc51a55d",
+  "independent_review": "BLOCKER0",
+  "source_verification": "37/37 content and input hashes; two disjoint complete batches37/9",
+  "fake_validation": "PASS exact shuffled multiset/original forward order; invalid batch rejection; durable20cap; ledger reset refusal",
+  "status": "READY_NOT_YET_EXECUTED",
+  "execution_receipt": "b-guarded-replay-receipt.json",
+  "current_execution_state": "FAIL"
+}

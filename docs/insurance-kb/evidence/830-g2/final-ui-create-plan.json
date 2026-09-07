@@ -1,0 +1,11 @@
+{
+  "contract": "830-g2-ui-create-plan.v1",
+  "authorization": "User standing approval for reasonable necessary G2 isolated delivery",
+  "script": "/private/tmp/weknora_g2_create_ui.py",
+  "script_sha256": "e3d45358701330f55b3cd75b987fdf2bbccee7dc3a6fa356c0e520ac79ccd5c4",
+  "requires": "Frozen frontend artifact PASS and existing isolated G2 app health",
+  "scope": "One new G2 UI container, loopback18195, existing G2 internal network, no mounts",
+  "provider_calls": 0,
+  "production_mutations": 0,
+  "flow": "NOT_RUN"
+}
