@@ -1,0 +1,11 @@
+--- FAIL: TestSchemaPackCatalog830G3AuthorizedRouteReturnsCatalog (0.00s)
+    routes_schema_pack_catalog_830_g3_test.go:46: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_schema_pack_catalog_830_g3_test.go:46
+        	Error:      	Not equal: 
+        	            	expected: 200
+        	            	actual  : 404
+        	Test:       	TestSchemaPackCatalog830G3AuthorizedRouteReturnsCatalog
+        	Messages:   	body=404 page not found
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/router	2.785s
+FAIL

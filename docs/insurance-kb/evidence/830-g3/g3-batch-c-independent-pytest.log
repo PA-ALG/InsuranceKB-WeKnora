@@ -1,0 +1,7 @@
+Using CPython 3.12.12
+Creating virtual environment at: harness/.venv
+   Building insurance-harness @ file:///Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness
+      Built insurance-harness @ file:///Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness
+Installed 76 packages in 468ms
+..................                                                       [100%]
+18 passed in 4.66s
