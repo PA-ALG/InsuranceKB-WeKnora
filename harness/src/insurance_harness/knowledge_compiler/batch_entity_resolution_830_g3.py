@@ -10,7 +10,7 @@ import json
 import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, Self, cast
 
@@ -28,10 +28,10 @@ from pydantic import (
 
 from insurance_harness.model_policy.models import PolicyReceipt
 
+from .batch_canonical_830_g3 import batch_sha256_830_g3 as _canonical_batch_sha256
 from .concept_free_wiki_830_g2 import Evidence, SourceBlock, verify_evidence
 from .schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 from .schema_wiki_candidate_evidence_join_596_1 import LiveRevisionSourceReceiptV1
-from .schema_wiki_contracts import schema_wiki_sha256
 
 Hash = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Confidence = Annotated[
@@ -108,7 +108,11 @@ class BatchEntityResolutionError(ValueError):
 
 
 def _text(value: str) -> str:
-    if unicodedata.normalize("NFC", value) != value or not value.strip():
+    if (
+        unicodedata.normalize("NFC", value) != value
+        or not value.strip()
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    ):
         raise ValueError("text must be non-empty canonical NFC")
     return value
 
@@ -133,8 +137,71 @@ def _payload(model: BaseModel, hash_field: str) -> dict[str, object]:
     )
 
 
+def _validate_body_text(value: str) -> None:
+    if unicodedata.normalize("NFC", value) != value or any(
+        (ord(character) < 0x20 and character not in "\t\n\r")
+        or ord(character) == 0x7F
+        for character in value
+    ):
+        raise ValueError("batch body text is not canonical")
+
+
+def _validate_structured_text(value: str) -> None:
+    if unicodedata.normalize("NFC", value) != value or any(
+        ord(character) < 0x20 or ord(character) == 0x7F for character in value
+    ):
+        raise ValueError("batch structured text is not canonical control-free text")
+
+
+def _validate_typed_batch_text(value: object) -> None:
+    """Validate typed C trees before serialization; only exact G2 bodies allow line controls."""
+
+    if isinstance(value, SourceBlock):
+        for name in value.__class__.model_fields:
+            item = getattr(value, name)
+            if name == "text":
+                _validate_body_text(cast(str, item))
+            else:
+                _validate_typed_batch_text(item)
+        return
+    if isinstance(value, Evidence):
+        for name in value.__class__.model_fields:
+            item = getattr(value, name)
+            if name == "quote":
+                _validate_body_text(cast(str, item))
+            else:
+                _validate_typed_batch_text(item)
+        return
+    if isinstance(value, BaseModel):
+        for name in value.__class__.model_fields:
+            _validate_typed_batch_text(getattr(value, name))
+        return
+    if type(value) is str:
+        _validate_structured_text(value)
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if type(key) is not str:
+                raise ValueError("batch object keys must be strings")
+            _validate_structured_text(key)
+            _validate_typed_batch_text(item)
+        return
+    if isinstance(value, Sequence) and not isinstance(value, bytes | bytearray):
+        for item in value:
+            _validate_typed_batch_text(item)
+        return
+    if value is None or type(value) in (bool, int, float) or isinstance(value, date | datetime):
+        return
+
+
+def _batch_sha256(object_type: str, payload: object) -> str:
+    _validate_typed_batch_text(payload)
+    return _canonical_batch_sha256(object_type, payload)
+
+
 def _hash_matches(model: BaseModel, hash_field: str, object_type: str) -> bool:
-    return cast(str, getattr(model, hash_field)) == schema_wiki_sha256(
+    _validate_typed_batch_text(model)
+    return cast(str, getattr(model, hash_field)) == _canonical_batch_sha256(
         object_type, _payload(model, hash_field)
     )
 
@@ -163,8 +230,9 @@ def _hashed[ModelT: BaseModel](
     hash_field: str,
     payload: dict[str, object],
 ) -> ModelT:
+    _validate_typed_batch_text(payload)
     wire = {key: _json_value(value) for key, value in payload.items()}
-    wire[hash_field] = schema_wiki_sha256(object_type, wire)
+    wire[hash_field] = _canonical_batch_sha256(object_type, wire)
     return model_type.model_validate(wire)
 
 
@@ -871,14 +939,14 @@ def _resolution_wire_semantics_valid(resolution: BatchEntityResolutionV1) -> boo
         candidate = children[0].entity_candidate
         if candidate is None:
             return False
-        expected_entity_key = schema_wiki_sha256(
+        expected_entity_key = _batch_sha256(
             "entity-candidate-key.830.g3.v1",
             {
                 "space_id": resolution.space_id,
                 "product_code": candidate.product_code.normalized_value,
             },
         )
-        expected_version_key = schema_wiki_sha256(
+        expected_version_key = _batch_sha256(
             "entity-version-candidate-key.830.g3.v1",
             {
                 "entity_key_sha256": expected_entity_key,
@@ -951,7 +1019,7 @@ def _valid_model_receipt(
 ) -> bool:
     receipt = binding.policy_receipt
     material_payload = [item.model_dump(mode="json") for item in binding.material_bindings]
-    expected_input = schema_wiki_sha256(
+    expected_input = _batch_sha256(
         "batch-classifier-input.830.g3.v1",
         {"corpus_sha256": corpus.corpus_sha256, "material_bindings": material_payload},
     )
@@ -1290,7 +1358,7 @@ def _evidence_occurrence(evidence: Evidence) -> tuple[object, ...]:
 
 
 def _identity_key(space_id: str, code: str) -> str:
-    return schema_wiki_sha256(
+    return _batch_sha256(
         "entity-candidate-key.830.g3.v1",
         {"space_id": space_id, "product_code": _normalized(code)},
     )
@@ -1299,7 +1367,7 @@ def _identity_key(space_id: str, code: str) -> str:
 def _version_key(entity_key: str, entity: EntityProposalV1) -> str | None:
     if entity.version_label is None or entity.filing_or_registration is None:
         return None
-    return schema_wiki_sha256(
+    return _batch_sha256(
         "entity-version-candidate-key.830.g3.v1",
         {
             "entity_key_sha256": entity_key,

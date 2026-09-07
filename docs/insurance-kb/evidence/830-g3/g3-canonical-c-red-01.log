@@ -1,0 +1,201 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____ test_multiline_source_and_evidence_round_trip_without_normalization ______
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multiline_source_and_evidence_round_trip_without_normalization(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        text = (
+            "平安保险\r\n平安安心医疗保险\n产品代码 MED-MULTILINE 登记编号 REG-MULTILINE "
+            "版本 2026 医疗保险 官方条款"
+        )
+        result = _resolve(
+            catalog,
+>           (_entry(material_id="multiline", text=text),),
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            (
+                (
+                    {
+                        "proposal_ref": "product-main",
+                        "name": "平安安心医疗保险",
+                        "product_code": "MED-MULTILINE",
+                        "filing": "REG-MULTILINE",
+                    },
+                ),
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:649: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:141: in _entry
+    return _new(
+harness/tests/test_batch_entity_resolution_830_g3.py:65: in _new
+    return model(**values, **{hash_field: schema_wiki_sha256(object_type, payload)})
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:103: in schema_wiki_sha256
+    return hashlib.sha256(schema_wiki_canonical_bytes(object_type, payload)).hexdigest()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:93: in schema_wiki_canonical_bytes
+    _json_tree(payload),
+    ^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:76: in _json_tree
+    return [_json_tree(item) for item in value]
+            ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = '平安保险\r\n平安安心医疗保险\n产品代码 MED-MULTILINE 登记编号 REG-MULTILINE 版本 2026 医疗保险 官方条款'
+
+    def _json_tree(value: object) -> object:
+        if isinstance(value, BaseModel):
+            return _json_tree(
+                value.model_dump(
+                    mode="python",
+                    round_trip=True,
+                    warnings=False,
+                    exclude_computed_fields=True,
+                )
+            )
+        if type(value) is str:
+            if unicodedata.normalize("NFC", value) != value:
+                raise ValueError("Schema Wiki text must be NFC")
+            if _has_disallowed_control(value):
+>               raise ValueError("Schema Wiki text must not contain control characters")
+E               ValueError: Schema Wiki text must not contain control characters
+
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:69: ValueError
+____________ test_nested_policy_receipt_control_text_is_quarantined ____________
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_nested_policy_receipt_control_text_is_quarantined(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="nested-control",
+            text=(
+                "平安保险 平安安心医疗保险 产品代码 MED-NESTED 登记编号 REG-NESTED "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        clean = _policy_receipt()
+        assert clean.permit_view is not None
+        bad_identity = ModelIdentity(
+            provider="fixture-provider",
+            deployment_id="fixture\tclassifier",
+            family="deepseek",
+            role="classify",
+            policy_version="fixture-policy-v1",
+        )
+        bad_permit = ModelPermitView.model_validate(
+            {**clean.permit_view.model_dump(mode="python"), "identity": bad_identity}
+        )
+        bad_receipt = PolicyReceipt.model_validate(
+            {
+                **clean.model_dump(mode="python"),
+                "identity_key": bad_identity.identity_key,
+                "permit_view": bad_permit,
+                "permit_digest": _model_permit_view_digest(bad_permit),
+            }
+        )
+        material_binding = g.MaterialBindingV1(
+            material_id=entry.material_id,
+            corpus_entry_sha256=entry.entry_sha256,
+        )
+        receipt = g.ModelReceiptBindingV1(
+            policy_receipt=bad_receipt,
+            material_bindings=(material_binding,),
+            request_sha256=hashlib.sha256(b"nested-control-request").hexdigest(),
+            input_sha256=schema_wiki_sha256(
+                "batch-classifier-input.830.g3.v1",
+                {
+                    "corpus_sha256": corpus.corpus_sha256,
+                    "material_bindings": [material_binding.model_dump(mode="json")],
+                },
+            ),
+            raw_output_sha256=hashlib.sha256(b"nested-control-output").hexdigest(),
+            execution_receipt_sha256=hashlib.sha256(b"nested-control-execution").hexdigest(),
+        )
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "product-main",
+                    "name": "平安安心医疗保险",
+                    "product_code": "MED-NESTED",
+                    "filing": "REG-NESTED",
+                },
+            ),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+>           proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:732: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:434: in _proposal_batch
+    return _new(
+harness/tests/test_batch_entity_resolution_830_g3.py:65: in _new
+    return model(**values, **{hash_field: schema_wiki_sha256(object_type, payload)})
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:103: in schema_wiki_sha256
+    return hashlib.sha256(schema_wiki_canonical_bytes(object_type, payload)).hexdigest()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:93: in schema_wiki_canonical_bytes
+    _json_tree(payload),
+    ^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:76: in _json_tree
+    return [_json_tree(item) for item in value]
+            ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:76: in _json_tree
+    return [_json_tree(item) for item in value]
+            ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = 'fixture\tclassifier'
+
+    def _json_tree(value: object) -> object:
+        if isinstance(value, BaseModel):
+            return _json_tree(
+                value.model_dump(
+                    mode="python",
+                    round_trip=True,
+                    warnings=False,
+                    exclude_computed_fields=True,
+                )
+            )
+        if type(value) is str:
+            if unicodedata.normalize("NFC", value) != value:
+                raise ValueError("Schema Wiki text must be NFC")
+            if _has_disallowed_control(value):
+>               raise ValueError("Schema Wiki text must not contain control characters")
+E               ValueError: Schema Wiki text must not contain control characters
+
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:69: ValueError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multiline_source_and_evidence_round_trip_without_normalization
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_nested_policy_receipt_control_text_is_quarantined
+2 failed in 6.24s

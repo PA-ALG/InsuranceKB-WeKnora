@@ -1,0 +1,63 @@
+F.F                                                                      [100%]
+=================================== FAILURES ===================================
+________ test_multiline_body_is_preserved_and_line_endings_are_distinct ________
+
+    def test_multiline_body_is_preserved_and_line_endings_are_distinct() -> None:
+        canonical, sha256 = _canonical_api()
+        lf = {"material_id": "m1", "body": "first\nsecond"}
+        crlf = {"material_id": "m1", "body": "first\r\nsecond"}
+    
+>       lf_bytes = canonical("corpus-entry.830.g3.v1", lf)  # type: ignore[operator]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_canonical_830_g3.py:31: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:93: in schema_wiki_canonical_bytes
+    _json_tree(payload),
+    ^^^^^^^^^^^^^^^^^^^
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:82: in _json_tree
+    tree[key] = _json_tree(item)
+                ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = 'first\nsecond'
+
+    def _json_tree(value: object) -> object:
+        if isinstance(value, BaseModel):
+            return _json_tree(
+                value.model_dump(
+                    mode="python",
+                    round_trip=True,
+                    warnings=False,
+                    exclude_computed_fields=True,
+                )
+            )
+        if type(value) is str:
+            if unicodedata.normalize("NFC", value) != value:
+                raise ValueError("Schema Wiki text must be NFC")
+            if _has_disallowed_control(value):
+>               raise ValueError("Schema Wiki text must not contain control characters")
+E               ValueError: Schema Wiki text must not contain control characters
+
+harness/src/insurance_harness/knowledge_compiler/schema_wiki_contracts.py:69: ValueError
+_____________ test_domain_and_body_invalid_values_remain_rejected ______________
+
+    def test_domain_and_body_invalid_values_remain_rejected() -> None:
+        canonical, _ = _canonical_api()
+        for domain in ("", "域.v1", "bad\ndomain"):
+            with pytest.raises((TypeError, ValueError, UnicodeEncodeError)):
+                canonical(domain, {"value": "ok"})  # type: ignore[operator]
+        for value in ("bad\x00body", "bad\x7fbody", "e\u0301"):
+            with pytest.raises((TypeError, ValueError)):
+                canonical("fixture.v1", {"value": value})  # type: ignore[operator]
+        with pytest.raises((TypeError, ValueError)):
+            canonical("fixture.v1", {"value": 1.5})  # type: ignore[operator]
+>       with pytest.raises((TypeError, ValueError)):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE any of (TypeError, ValueError)
+
+harness/tests/test_batch_canonical_830_g3.py:59: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_canonical_830_g3.py::test_multiline_body_is_preserved_and_line_endings_are_distinct
+FAILED harness/tests/test_batch_canonical_830_g3.py::test_domain_and_body_invalid_values_remain_rejected
+2 failed, 1 passed in 0.36s

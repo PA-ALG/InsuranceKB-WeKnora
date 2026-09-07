@@ -12,6 +12,7 @@ import pytest
 from pydantic import BaseModel
 
 from insurance_harness.knowledge_compiler import batch_entity_resolution_830_g3 as g
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_sha256_830_g3
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     Evidence,
     SourceBlock,
@@ -62,7 +63,7 @@ def _jsonable(value: object) -> object:
 
 def _new(model: type[Any], object_type: str, hash_field: str, **values: object) -> Any:
     payload = {key: _jsonable(value) for key, value in values.items()}
-    return model(**values, **{hash_field: schema_wiki_sha256(object_type, payload)})
+    return model(**values, **{hash_field: batch_sha256_830_g3(object_type, payload)})
 
 
 @pytest.fixture(scope="module")
@@ -635,6 +636,128 @@ def test_high_confidence_exact_evidence_creates_only_not_active_candidate(
         "QUARANTINE": 0,
     }
     assert g.validate_batch(result.model_dump_json()) == result
+
+
+def test_multiline_source_and_evidence_round_trip_without_normalization(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    text = (
+        "平安保险\r\n平安安心医疗保险\n产品代码 MED-MULTILINE 登记编号 REG-MULTILINE "
+        "版本 2026 医疗保险 官方条款"
+    )
+    result = _resolve(
+        catalog,
+        (_entry(material_id="multiline", text=text),),
+        (
+            (
+                {
+                    "proposal_ref": "product-main",
+                    "name": "平安安心医疗保险",
+                    "product_code": "MED-MULTILINE",
+                    "filing": "REG-MULTILINE",
+                },
+            ),
+        ),
+    )
+
+    assert result.decisions[0].disposition == "CREATE"
+    assert result.decisions[0].children[0].disposition == "CREATE"
+    assert result.decisions[0].children[0].anchors.name is not None
+    assert result.decisions[0].children[0].anchors.name.observed_value == "平安安心医疗保险"
+
+
+def test_nested_policy_receipt_control_text_is_rejected(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="nested-control",
+        text=(
+            "平安保险 平安安心医疗保险 产品代码 MED-NESTED 登记编号 REG-NESTED "
+            "版本 2026 医疗保险 官方条款"
+        ),
+    )
+    corpus = _corpus(entry)
+    clean = _policy_receipt()
+    assert clean.permit_view is not None
+    bad_identity = ModelIdentity(
+        provider="fixture-provider",
+        deployment_id="fixture\tclassifier",
+        family="deepseek",
+        role="classify",
+        policy_version="fixture-policy-v1",
+    )
+    bad_permit = ModelPermitView.model_validate(
+        {**clean.permit_view.model_dump(mode="python"), "identity": bad_identity}
+    )
+    bad_receipt = PolicyReceipt.model_validate(
+        {
+            **clean.model_dump(mode="python"),
+            "identity_key": bad_identity.identity_key,
+            "permit_view": bad_permit,
+            "permit_digest": _model_permit_view_digest(bad_permit),
+        }
+    )
+    material_binding = g.MaterialBindingV1(
+        material_id=entry.material_id,
+        corpus_entry_sha256=entry.entry_sha256,
+    )
+    receipt = g.ModelReceiptBindingV1(
+        policy_receipt=bad_receipt,
+        material_bindings=(material_binding,),
+        request_sha256=hashlib.sha256(b"nested-control-request").hexdigest(),
+        input_sha256=schema_wiki_sha256(
+            "batch-classifier-input.830.g3.v1",
+            {
+                "corpus_sha256": corpus.corpus_sha256,
+                "material_bindings": [material_binding.model_dump(mode="json")],
+            },
+        ),
+        raw_output_sha256=hashlib.sha256(b"nested-control-output").hexdigest(),
+        execution_receipt_sha256=hashlib.sha256(b"nested-control-execution").hexdigest(),
+    )
+    proposal = _material_proposal(
+        entry,
+        receipt,
+        entities=(
+            {
+                "proposal_ref": "product-main",
+                "name": "平安安心医疗保险",
+                "product_code": "MED-NESTED",
+                "filing": "REG-NESTED",
+            },
+        ),
+    )
+    with pytest.raises(ValueError, match="structured text"):
+        _proposal_batch(corpus, (receipt,), (proposal,))
+
+
+def test_nested_live_receipt_control_text_is_rejected() -> None:
+    original = _entry(
+        material_id="live-receipt-control",
+        text="平安保险 产品代码 CTRL 登记编号 CTRL 版本 2026 医疗保险 官方条款",
+    )
+    receipt_values = original.receipt.model_dump(mode="python")
+    receipt_values["evidence_parse_attempt_id"] = "parse\tattempt"
+    receipt_values["source_receipt_sha256"] = "0" * 64
+    receipt_values["source_receipt_sha256"] = live_revision_source_receipt_sha256(
+        receipt_values
+    )
+    bad_receipt = LiveRevisionSourceReceiptV1.model_validate(receipt_values)
+
+    with pytest.raises(ValueError, match="structured text"):
+        _new(
+            g.CorpusEntryV1,
+            "corpus-entry.830.g3.v1",
+            "entry_sha256",
+            **original.model_dump(mode="python", exclude={"receipt", "entry_sha256"}),
+            receipt=bad_receipt,
+        )
+
+
+@pytest.mark.parametrize("key", ("text", "quote"))
+def test_untyped_text_or_quote_key_does_not_bypass_structured_validation(key: str) -> None:
+    with pytest.raises(ValueError, match="structured text"):
+        g._batch_sha256("fixture-typed-boundary.830.g3.v1", {key: "bad\nidentifier"})
 
 
 def test_exact_existing_match_preserves_serving_ids_and_issuer_vetoes_reuse(
@@ -1624,7 +1747,8 @@ def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonic
         )
     with pytest.raises(ValueError):
         g.VersionAnchorV1(kind="registration_number", value="e\u0301")
-    assert g.VersionAnchorV1(kind="registration_number", value="A\nB").value == "A\nB"
+    with pytest.raises(ValueError):
+        g.VersionAnchorV1(kind="registration_number", value="A\nB")
 
 
 @pytest.mark.parametrize("competition", ["name", "alias", "anchor"])
