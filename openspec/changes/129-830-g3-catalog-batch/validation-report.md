@@ -40,3 +40,5 @@ D Python首审BLOCKED（3项）：原11/root110 bounded PASS与完整342/2,247,5
 D Python repair1原B1/B2/B3独立PASS（24tests/8probes，ruff/mypy），root4额外重哈希攻击PASS。新同域source coverage阻断：身份块外的selected材料字段正文被请求拒绝。已回设计2，明确request精确selected+carry并集与per-owner selected+owncarry+实际关联concept来源；独立设计0/0后派第二次/最后D Python修复，Go继续冻结。旧code/fixture gzip快照和原始失败日志保留；active page envelope复用澄清独立PASS，仅设计，无部署。
 
 D source coverage第二次最终复审PASS：30 tests in97.68s，ruff/strict mypy及独立精确source并集/owner引用探针通过，BLOCKER0/BACKLOG0。source e8e0dbcd…、test86edf3d9…、candidate e7be83db…、POST09b64b3e…（2,254,490bytes），freeze811eb4d0…。root独立actual G2 134字段/27来源/3 raw/canonical/容量核对PASS。报告lane-d-source-coverage2-independent-review.json SHA0b21ea94…；Python两轮修复关闭，Go两文件恢复，handler/service/UI门禁不变；全部fixture为synthetic protocol，真实批次、provider、DB、部署均NOT RUN。
+
+D下游执行计划及待审对齐展示设计完成独立复审（初审2项已修，终审BLOCKER0/BACKLOG0），exact冻结见lane-d-downstream-design-freeze-1.json。已明确Create前source验证、G3-only create-draft operation和授权历史snapshot派生两行展示；不增加DTO或公开KB元数据。Go完整C重算仍有有效RED，当前实现未闭合，下游写域仍关闭；实际C/profile执行方案仅只读候选，未派新生产实现。

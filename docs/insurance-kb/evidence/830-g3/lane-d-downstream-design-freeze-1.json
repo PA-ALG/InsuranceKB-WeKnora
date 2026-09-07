@@ -1,0 +1,28 @@
+{
+  "contract": "830-g3-d-downstream-design-freeze.v1",
+  "recorded_at": "2026-09-07T14:56:44.185208+00:00",
+  "status": "DESIGN_PASS_IMPLEMENTATION_GATE_STILL_CLOSED",
+  "files": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/lane-d-downstream-execution-plan-1.md",
+      "sha256": "a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/d-preparation-alignment-display-clarification-1.md",
+      "sha256": "5e12a1e0f81677986aa8483c79e6376f9266b410655564be8ee96ec858b0daab"
+    }
+  ],
+  "review_sha256": "1dac90f0f67c0ddf84d969e2b0e6861e5f9dfd6a6365e36f868f2e951cb2e500",
+  "review": "lane-d-downstream-plan-independent-review-2.md",
+  "blockers": 0,
+  "backlog": 0,
+  "remaining_entry_gate": "Full strict Go/C replay/source closure and Python-Go equality independent PASS; existing Python342/2254490-byte capacity PASS",
+  "write_authority": "No downstream production path dispatched",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "upload": 0,
+    "product_write": 0
+  }
+}

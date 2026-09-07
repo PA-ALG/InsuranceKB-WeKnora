@@ -354,5 +354,26 @@
     "status": "PASS_DESIGN_ONLY",
     "sha256": "26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26",
     "review": "d-active-page-transport-design-review-1.json"
+  },
+  "d_go_progress": {
+    "status": "IN_PROGRESS_FULL_C_SEMANTIC_REPLAY_NOT_CLOSED",
+    "logs": [
+      {
+        "path": "g3-d-go-fullfixture-red-20260907-03.log",
+        "sha256": "536935c955eee13e118ec5759b4ebed3d57d574f7ac86d6d1ab0cefc8d731953"
+      },
+      {
+        "path": "g3-d-go-c-replay-red-20260907-06.log",
+        "sha256": "4ae4f447a91da08f41257cc5f37b7437844575eec959f8e31ef900699fb7860d"
+      }
+    ],
+    "owner": "g3_catalog_impl",
+    "write_paths": [
+      "internal/types/concept_free_wiki_830_g3.go",
+      "internal/types/concept_free_wiki_830_g3_test.go"
+    ],
+    "independent_review": "NOT RUN",
+    "downstream_design": "lane-d-downstream-design-freeze-1.json",
+    "scope_review": "yellow-scope-control-d-go-02.json"
   }
 }

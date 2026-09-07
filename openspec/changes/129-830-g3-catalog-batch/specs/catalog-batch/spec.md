@@ -32,6 +32,8 @@
 - THEN 首切片正向和容量 fixture 使用 actual G2 base 两医疗实体与重疾、两全、意外三新实体，合计 342 个标准字段页；完整 POST 使用真实 serializer 测量且不得超过现有 8 MiB，容量闭合前不得实施 handler/service/UI。
 - THEN 旧 134 行 existing input 原样进入 request；132 行事实逐字继承，仅按修订6冻结的两行 exact unknown-only lineage 对齐旧单数 key 到新 Profile key，旧 Release 不变；每医疗仍恰好 67 页，禁止额外 legacy 页或删 base 压缩容量。
 - THEN Active概念页复用现有concept-page-read.830.g2.v1 envelope；G3 overview related从sections字段引用严格构造同版同owner集合，G3服务端拒绝冲突查询。按 `d-active-page-transport-clarification-1.md`（SHA-256 `26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26`）分派，旧G2行为不变，Preparation仍用独立冻结响应。
+- THEN 按独立复核的 `lane-d-downstream-execution-plan-1.md`（SHA-256 `a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab`），G3在落Draft前调用同一source verifier；仅G3允许create-draft operation且此时PreparationDigest为空/非存储权威；Review/Activate使用真实存储digest，G2 operation集合不变。
+- THEN 按 `d-preparation-alignment-display-clarification-1.md`（SHA-256 `5e12a1e0f81677986aa8483c79e6376f9266b410655564be8ee96ec858b0daab`），前端不内联租户entity/release/member标识；在鉴权preparation后从expected base pin经现有双KB ACL historical search派生旧成员，并与当前manifest验证两行展示绑定。完整14字段lineage仍由服务端重验，不扩响应DTO，不以当前Head替代历史pin。
 - THEN 使用既有 Draft/Ready/Review/Activate 和唯一 Head CAS；preparation 与 active 读取分开，真实 source authority 在 Draft/Review/Activate 按原 G1/C5 链重开；fixture 不替代实际模型、来源或业务验收。
 
 ### Requirement: G3-R4 批量身份与材料采信
