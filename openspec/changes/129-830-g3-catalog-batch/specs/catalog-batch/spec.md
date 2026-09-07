@@ -43,6 +43,11 @@
 - THEN 按 `cd-multiline-canonical-amendment-7-v2.md`（SHA-256 `975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380`）复用既有 G2 正文 canonical，保持 G3 domain/prefix 与合法旧向量 hash；不清洗原文、不改变 Catalog/G2 shared helper。
 - THEN C 构造/重验在 typed 对象转字典前递归拒绝全部嵌套结构化字符串的控制字符，唯 exact SourceBlock.text/Evidence.quote 为正文豁免；D 沿该修订的 G2 正文与 control-free 身份边界，Python/Go 同时拒绝非 ASCII 域。
 
+#### Scenario: 直接消费当前来源登记回执
+- WHEN 真实来源已通过现有 knowledge-revision-source.v1 HTTP 登记
+- THEN 按 `c-source-registration-amendment-8.md`（SHA-256 `0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66`）接入 exact 14-key 镜像，与原 LiveReceipt 组成严格 contract discriminated union；不伪造 admission/resource/self-hash 字段，不新增历史 admission 前置。
+- THEN Registered scope 由实际 authenticated acquisition 与 BatchCorpus 绑定；来源校验、信任规则、候选 key 与重复来源 key 同步使用明确分支；Legacy 校验不变，D 继续重开服务端完整 source authority 与旧 G1/C5 carryover 链。
+
 ### Requirement: G3-R5 分类稳定与真实隔离验收
 系统 MUST 保持重分类前后实体/字段/Evidence/历史身份，复用 G2 概念/free_wiki 与原始质量记录。G3 PASS 只由全卡真实批次、11 包注册、对应独立字段页与来源/搜索、具名结构确认和独立复核共同产生；QUALITY=DEFERRED_TO_Q0。
 

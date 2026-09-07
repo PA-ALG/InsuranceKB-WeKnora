@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "C_DESIGN2_CODE_PASS_BLOCKER0_56_INDEPENDENT_73_ROOT",
-  "NEXT_PHYSICAL_RESULT": "D exact342 DTO/Go cross-language fixture capacity and independent review; upload runner review then concrete external approval",
+  "CURRENT_RED": "SOURCE_RECEIPT8_OLD_DTO_REJECTION_TO_RECORD; MULTILINE7_CODE_PASS",
+  "NEXT_PHYSICAL_RESULT": "当前来源回执兼容8实现与独立复核；上传执行器独立复审；真实候选编译D完整342",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -60,7 +60,9 @@
       "harness/tests/test_batch_concept_compile_830_g3.py",
       "internal/types/concept_free_wiki_830_g3.go",
       "internal/types/concept_free_wiki_830_g3_test.go",
-      "harness/tests/fixtures/batch_concept_compile_830_g3/**"
+      "harness/tests/fixtures/batch_concept_compile_830_g3/**",
+      "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+      "harness/tests/test_batch_canonical_830_g3.py"
     ],
     "g3_catalog_ui": [
       "internal/handler/schema_pack_catalog_830_g3.go",
@@ -75,7 +77,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "A_B_C_CODE_PASS; D_DTO_TYPES_FIXTURE_RED_GREEN; SOURCE_UPLOAD_RUNNER_PREP",
+  "parallel_implementation": "C_SOURCE_RECEIPT8_RED_GREEN; D_FULL342_PENDING_C8; UPLOAD_RUNNER_REVIEW",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -143,5 +145,114 @@
     "sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
     "status": "FROZEN_PASS_BLOCKER0",
     "review": "lane-d-final-contract-independent-review.json"
+  },
+  "c_multiline_gap": {
+    "reproduction": "cd-multiline-canonical-reproduction.log",
+    "scope": "actual base27 multiline values; C corpus/Evidence also blocked; prior bounded56/73 pass history retained",
+    "state": "BLOCKED_PENDING_BOUNDED_DESIGN7",
+    "status": "C_COMMON_CODE_PASS_ROOT_INDEPENDENT81; D_FULL342_NOT_RUN"
+  },
+  "multiline_design7": {
+    "contract": "830-g3-cd-multiline-design-review.v1",
+    "status": "PASS",
+    "reviewer": "g3_seam_audit",
+    "design": "cd-multiline-canonical-amendment-7-v2.md",
+    "design_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+    "blockers": [],
+    "backlog": [],
+    "closed": [
+      "Typed recursive nested structural strings checked before dumping on construction/revalidation; only exact C SourceBlock.text/Evidence.quote body exceptions",
+      "Object type nonempty ASCII control-free in both languages"
+    ],
+    "prior_probe_sha256": "1b86c0f5b6053b8b9990b267d8a6280fc61e20dad7e101ad0e100d320aa0d39d",
+    "authorization": "C/common bounded compatibility slice only; independent review before D continuation"
+  },
+  "multiline_code_review": {
+    "status": "PASS",
+    "receipt": "cd-multiline-code-independent-review.json",
+    "files": [
+      {
+        "path": "harness/src/insurance_harness/knowledge_compiler/batch_canonical_830_g3.py",
+        "sha256": "1f9b655221d2fad058a8693d5058b943159b9e8da0e5422f68ae1479498d1d02"
+      },
+      {
+        "path": "harness/tests/test_batch_canonical_830_g3.py",
+        "sha256": "49b12c1acd2d4e6786678b2dd7baf4bcbf5194c32e60261561b4d0a7efe5d2ec"
+      },
+      {
+        "path": "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+        "sha256": "07dc26da46c3b2204ac6f21243e2af45f339f530304d9d2a81094f52dc79e310"
+      },
+      {
+        "path": "harness/tests/test_batch_entity_resolution_830_g3.py",
+        "sha256": "7dab537cd0ad11ef0c907d790796b19f0ed80dbb666d62a8b94e462ee239908d"
+      }
+    ],
+    "commit": "de38eb252979713415d8fa34946084f7f344cbc0"
+  },
+  "source_registration_design_review": {
+    "contract": "830-g3-source-registration-design-review.v1",
+    "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+    "reviewer": "g3_catalog_ui",
+    "design": "c-source-registration-amendment-8.md",
+    "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "status": "PASS",
+    "blockers": [],
+    "backlog": [
+      {
+        "item": "Early non-PDF MIME quarantine",
+        "reason": "Current actual service normalizes and requires application/pdf; D authoritative re-open remains required; not part of this bounded amendment"
+      }
+    ],
+    "verified": [
+      "Exact 14 JSON keys incl contract mirror handler lines42-56/74-81",
+      "C identity/classification do not consume three legacy admission fields; no generic admission adapter prerequisite",
+      "Exact nested outer hash binding; legacy self-hash and scope preserved",
+      "Actual authenticated acquisition capture binds BatchCorpus scope; D reopens current server authority and historical G1/C5 chain",
+      "Require real discriminated union; reject unknown/mixed/extra shapes"
+    ],
+    "required_implementation_sites": [
+      "_entry_source_reasons",
+      "_matching_rule",
+      "CREATE _decision candidate scope/key",
+      "resolve_batch.source_keys"
+    ],
+    "source_scope": "Registered uses exact BatchCorpus scope, never guesses from block/receipt; legacy retains receipt scope checks",
+    "effects": {
+      "http": 0,
+      "database": 0,
+      "provider": 0,
+      "container": 0
+    }
+  },
+  "source_registration_dispatch": {
+    "contract": "830-g3-source-registration-dispatch.v1",
+    "recorded_at": "2026-09-07T11:31:37.343546+00:00",
+    "owner": "g3_catalog_impl",
+    "status": "AUTHORIZED_WITHIN_G3_AFTER_DESIGN_REVIEW",
+    "design_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+    "predecessor_common_c_commit": "de38eb252",
+    "write_paths": [
+      "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "harness/tests/test_batch_entity_resolution_830_g3.py"
+    ],
+    "required_implementation_sites": [
+      "_entry_source_reasons",
+      "_matching_rule",
+      "CREATE _decision candidate scope/key",
+      "resolve_batch.source_keys"
+    ],
+    "sequence": "RED actual HTTP receipt rejected by old DTO; implementation and focused/AC regressions; frozen files and independent review before actual C corpus",
+    "non_goals": [
+      "No new admission prerequisite/resource_id/self-hash",
+      "No shared legacy receipt/server/DB/model/upload changes",
+      "No D handler/service/UI expansion"
+    ],
+    "effects": {
+      "http": 0,
+      "database": 0,
+      "provider": 0,
+      "container": 0
+    }
   }
 }
