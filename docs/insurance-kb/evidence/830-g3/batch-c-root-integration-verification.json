@@ -1,0 +1,13 @@
+{
+  "contract": "830-g3-root-catalog-batch-integration.v1",
+  "status": "PASS",
+  "catalog_tests": 17,
+  "batch_tests": 39,
+  "total_passed": 56,
+  "log": "g3-root-catalog-batch-integration.log",
+  "log_sha256": "bc91a51fae12f7148374c00a3b26c32b706fff98334bfb8c55bdf27e2e207ac1",
+  "python": "existing main harness/.venv/bin/python; no install",
+  "independent_review": "batch-c-independent-review-2.json; BLOCKER0",
+  "provider_calls": 0,
+  "runtime_effects": 0
+}

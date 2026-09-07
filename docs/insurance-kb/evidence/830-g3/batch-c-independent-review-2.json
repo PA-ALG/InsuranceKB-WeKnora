@@ -1,0 +1,51 @@
+{
+  "contract": "830-g3-batch-c-independent-review-2.v1",
+  "reviewer": "g3_seam_audit",
+  "checked_at": "2026-09-07T08:04:59.460295+00:00",
+  "spec_compliance": "PASS",
+  "code_quality": "PASS",
+  "blockers": 0,
+  "backlog": 0,
+  "rejected": 0,
+  "amendment_sha256": "990872578886efa22593a3fa38da2ef61bc0faaf5a03c3fa3831e72d5d4d2efa",
+  "files": {
+    "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py": "e9158e1c707fdedc9e783947d51ab110ae706d3d37d656edb965f9d66f4d1425",
+    "harness/tests/test_batch_entity_resolution_830_g3.py": "c601f77c23f8545f69cef02870af3f8fd9357845c16cf9e728f157b563650b47"
+  },
+  "findings_closed": [
+    "B1 normalized formal name/approved alias/formal anchor collision",
+    "B2 distinct qualified stable identities and independent evidence for MULTI",
+    "B3 per-row qualification before aggregation; conflict fallback",
+    "B4 exact model purpose/schema/classify identity",
+    "B5 strict policy dates; proposal interval/version evidence binding",
+    "B6 actual source tuple deduplication",
+    "B7 space/key/hash/anchor/evidence/threshold wire closure"
+  ],
+  "validation": {
+    "tests_passed": 39,
+    "independent_scenarios": 4,
+    "independent_assertions": 8,
+    "ruff": "PASS",
+    "strict_mypy": "PASS"
+  },
+  "logs": {
+    "g3-batch-c-independent-review-green.log": "c2b52261152571767123d9cc5f2a679321f3f173186a863f8888bb0418414b7c",
+    "g3-batch-c-independent-review-ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "g3-batch-c-independent-review-mypy.log": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e",
+    "g3-batch-c-independent-review-probes.log": "79df342bab6470998d659ddfc1044b581b867963322cb24c8da88fbcb85907c4",
+    "g3_batch_c_independent_review_probe.py": "c4f434b23db4b53bf322f728293ca1e4994e2dd025c0ad75edf5f2824484e28f"
+  },
+  "effects": {
+    "product_model_calls": 0,
+    "db": 0,
+    "runtime": 0,
+    "temporary_dependency_install": "Reviewer uv created worktree harness/.venv and installed76 packages; removed only newly created environment. Subsequent probes reused main harness/.venv."
+  },
+  "log_identity_correction": {
+    "owner_historical_green_sha256": "1aa88629f3998b18fc583513e036b8393765525b8268df5c5e0b22d2e0e25880",
+    "owner_original_bytes": "not currently retained; historical tool record only",
+    "current_g3_batch_c_review_green_sha256": "c2b52261152571767123d9cc5f2a679321f3f173186a863f8888bb0418414b7c",
+    "reason": "reviewer overwrote owner same-name temp log before receiving unique-name correction; independent copies now preserved"
+  },
+  "scope": "CODE only; actual batch/provider/source custody/serving NOT RUN"
+}
