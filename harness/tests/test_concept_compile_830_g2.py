@@ -3,17 +3,19 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
+from types import ModuleType
+from typing import Any
 
 import pytest
 
 
-def api():
+def api() -> ModuleType:
     name = "insurance_harness.knowledge_compiler.concept_compile_830_g2"
     assert importlib.util.find_spec(name) is not None, "G2-R1: no independent compile/review bundle"
     return importlib.import_module(name)
 
 
-def request(g):
+def request(g: ModuleType) -> Any:
     return g.CompileRequest(
         request_id="req-a",
         tenant_id=1,
@@ -45,7 +47,7 @@ def request(g):
     )
 
 
-def compiler(g):
+def compiler(g: ModuleType) -> Any:
     return g.ExtractCompiler(
         definitions=(
             g.DefinitionRule(
@@ -72,7 +74,7 @@ def compiler(g):
     )
 
 
-def test_separate_compiler_reviewer_records_and_manifest_are_replayable():
+def test_separate_compiler_reviewer_records_and_manifest_are_replayable() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -87,7 +89,7 @@ def test_separate_compiler_reviewer_records_and_manifest_are_replayable():
     assert g.CandidateBundle.model_validate_json(bundle.model_dump_json()) == bundle
 
 
-def test_reviewer_rejects_changed_value_without_generator_self_scoring():
+def test_reviewer_rejects_changed_value_without_generator_self_scoring() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -106,17 +108,17 @@ def test_reviewer_rejects_changed_value_without_generator_self_scoring():
         g.assemble_bundle(req, out.model_copy(update={"output": bad}), checked)
 
 
-def test_compiler_and_reviewer_can_be_replaced_independently():
+def test_compiler_and_reviewer_can_be_replaced_independently() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="rule-compile")
 
     class Transport:
-        def __init__(self, wire):
+        def __init__(self, wire: str) -> None:
             self.wire = wire
-            self.calls = []
+            self.calls: list[tuple[str, str]] = []
 
-        def complete(self, system, user):
+        def complete(self, system: str, user: str) -> str:
             self.calls.append((system, user))
             return self.wire
 
@@ -138,7 +140,7 @@ def test_compiler_and_reviewer_can_be_replaced_independently():
     assert other.execution.raw_output == out.output.model_dump_json()
 
 
-def test_candidate_binding_and_complete_required_fields_fail_closed():
+def test_candidate_binding_and_complete_required_fields_fail_closed() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -156,7 +158,7 @@ def test_candidate_binding_and_complete_required_fields_fail_closed():
         g.assemble_bundle(req, out.model_copy(update={"output": missing}), checked)
 
 
-def test_pending_rejected_and_duplicate_are_audit_only():
+def test_pending_rejected_and_duplicate_are_audit_only() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -178,7 +180,7 @@ def test_pending_rejected_and_duplicate_are_audit_only():
     assert not any(x.title in {"ad", "uncertain", "repeat"} for x in bundle.page_manifest.members)
 
 
-def test_reloaded_bundle_rejects_member_content_and_review_tampering():
+def test_reloaded_bundle_rejects_member_content_and_review_tampering() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -195,7 +197,7 @@ def test_reloaded_bundle_rejects_member_content_and_review_tampering():
         g.CandidateBundle.model_validate(wire)
 
 
-def test_orphan_definition_and_unknown_entity_rejected_before_review():
+def test_orphan_definition_and_unknown_entity_rejected_before_review() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -209,7 +211,7 @@ def test_orphan_definition_and_unknown_entity_rejected_before_review():
     assert "ORPHAN_CONCEPT" in result.output.reasons
 
 
-def fixture_reviewer(g, output):
+def fixture_reviewer(g: ModuleType, output: Any) -> Any:
     score = g.ValueScore(
         business_value=25,
         reuse=20,
@@ -221,7 +223,7 @@ def fixture_reviewer(g, output):
     return g.ExtractReviewer(scores={d.concept_id: score for d in output.definitions})
 
 
-def test_independent_page_score_is_required_and_cannot_be_offset_by_evidence():
+def test_independent_page_score_is_required_and_cannot_be_offset_by_evidence() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -254,7 +256,7 @@ def test_independent_page_score_is_required_and_cannot_be_offset_by_evidence():
         )
 
 
-def test_scoped_source_and_existing_expert_definition_cannot_be_rebound():
+def test_scoped_source_and_existing_expert_definition_cannot_be_rebound() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -268,7 +270,7 @@ def test_scoped_source_and_existing_expert_definition_cannot_be_rebound():
         g.validate_output(req, changed)
 
 
-def test_disposition_must_cover_every_member_without_ghost_admission():
+def test_disposition_must_cover_every_member_without_ghost_admission() -> None:
     g = api()
     req = request(g)
     out = compiler(g).compile(req, run_id="compile-a")
@@ -282,7 +284,7 @@ def test_disposition_must_cover_every_member_without_ghost_admission():
             g.validate_output(req, changed)
 
 
-def test_existing_snapshot_supports_reuse_without_changing_definition_body_hash():
+def test_existing_snapshot_supports_reuse_without_changing_definition_body_hash() -> None:
     g = api()
     req = request(g)
     initial = compiler(g).compile(req, run_id="compile-a")
@@ -303,7 +305,7 @@ def test_existing_snapshot_supports_reuse_without_changing_definition_body_hash(
     assert g.ExtractReviewer().review(req, out.output, run_id="review-b").output.decision == "PASS"
 
 
-def test_free_wiki_page_has_independent_admission_and_source_bound_member():
+def test_free_wiki_page_has_independent_admission_and_source_bound_member() -> None:
     g = api()
     req = request(g)
     first = compiler(g).compile(req, run_id="compile-a")
@@ -347,7 +349,7 @@ def test_free_wiki_page_has_independent_admission_and_source_bound_member():
 
 
 @pytest.mark.parametrize("version", ["", "v0", "v2"])
-def test_generated_and_existing_members_bind_exact_entity_version(version):
+def test_generated_and_existing_members_bind_exact_entity_version(version: str) -> None:
     g = api()
     req = request(g)
     first = compiler(g).compile(req, run_id="compile-version")
@@ -386,7 +388,9 @@ def test_generated_and_existing_members_bind_exact_entity_version(version):
         )
 
 
-def human_review_case(g, total=66, decision="PASS"):
+def human_review_case(
+    g: ModuleType, total: int = 66, decision: str = "PASS"
+) -> tuple[Any, Any, Any]:
     req = request(g)
     compiled = compiler(g).compile(req, run_id="compile-human")
     remaining = total
@@ -432,7 +436,9 @@ def human_review_case(g, total=66, decision="PASS"):
 
 @pytest.mark.parametrize("total", [60, 66, 79, 80])
 @pytest.mark.parametrize("decision", ["PASS", "NEEDS_HUMAN"])
-def test_human_bundle_keeps_raw_score_and_freezes_whole_pending_set(total, decision):
+def test_human_bundle_keeps_raw_score_and_freezes_whole_pending_set(
+    total: int, decision: str
+) -> None:
     g = api()
     req, compiled, checked = human_review_case(g, total, decision)
     bundle = g.assemble_human_review_bundle(req, compiled, checked)
@@ -450,13 +456,15 @@ def test_human_bundle_keeps_raw_score_and_freezes_whole_pending_set(total, decis
 
 
 @pytest.mark.parametrize("total,decision", [(59, "PASS"), (66, "REJECT")])
-def test_human_bundle_does_not_override_low_score_or_rejection(total, decision):
+def test_human_bundle_does_not_override_low_score_or_rejection(
+    total: int, decision: str
+) -> None:
     g = api()
     with pytest.raises(ValueError):
         g.assemble_human_review_bundle(*human_review_case(g, total, decision))
 
 
-def test_human_bundle_rejects_missing_score_and_pending_set_tampering():
+def test_human_bundle_rejects_missing_score_and_pending_set_tampering() -> None:
     g = api()
     req, compiled, checked = human_review_case(g)
     missing = checked.output.model_copy(update={"page_scores": {}})
@@ -482,7 +490,7 @@ def test_human_bundle_rejects_missing_score_and_pending_set_tampering():
             g.HumanReviewCandidateBundle.model_validate(wire)
 
 
-def test_llm_raw_review_cannot_omit_contract_default_or_repeat_keys():
+def test_llm_raw_review_cannot_omit_contract_default_or_repeat_keys() -> None:
     g = api()
     req, compiled, checked = human_review_case(g)
     wire = checked.output.model_dump(mode="json")
@@ -498,10 +506,10 @@ def test_llm_raw_review_cannot_omit_contract_default_or_repeat_keys():
     for raw in malformed:
 
         class Transport:
-            def __init__(self, response):
+            def __init__(self, response: str) -> None:
                 self.response = response
 
-            def complete(self, system, user):
+            def complete(self, system: str, user: str) -> str:
                 return self.response
 
         with pytest.raises(ValueError, match="RAW_OUTPUT"):
@@ -513,7 +521,9 @@ def test_llm_raw_review_cannot_omit_contract_default_or_repeat_keys():
 @pytest.mark.parametrize(
     "location,key", [("bundle", "contract"), ("admission", "contract"), ("admission", "status")]
 )
-def test_human_wire_cannot_hide_missing_admission_fields_with_defaults(location, key):
+def test_human_wire_cannot_hide_missing_admission_fields_with_defaults(
+    location: str, key: str
+) -> None:
     g = api()
     bundle = g.assemble_human_review_bundle(*human_review_case(g))
     wire = bundle.model_dump(mode="json")

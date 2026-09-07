@@ -4,25 +4,30 @@ import importlib
 import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType
+from typing import Any, cast
 
 import pytest
 
 
-def api():
+def api() -> ModuleType:
     name = "insurance_harness.knowledge_compiler.concept_free_wiki_830_g2"
     assert importlib.util.find_spec(name) is not None, "G2-R2: no shared concept/member contract"
     return importlib.import_module(name)
 
 
-def canonical_vector():
-    return json.loads(
-        (
-            Path(__file__).parent / "fixtures/concept_free_wiki_830_g2_canonical_vector.json"
-        ).read_text()
+def canonical_vector() -> dict[str, Any]:
+    return cast(
+        dict[str, Any],
+        json.loads(
+            (
+                Path(__file__).parent / "fixtures/concept_free_wiki_830_g2_canonical_vector.json"
+            ).read_text()
+        ),
     )
 
 
-def test_g2_canonical_vector_allows_source_text_controls_and_real_a_request():
+def test_g2_canonical_vector_allows_source_text_controls_and_real_a_request() -> None:
     g = api()
     vector = canonical_vector()
     for case in vector["valid_cases"]:
@@ -48,7 +53,7 @@ def test_g2_canonical_vector_allows_source_text_controls_and_real_a_request():
     ] == multiline["snapshot_member_sha256"]
 
 
-def test_g2_canonical_vector_keeps_old_bundle_hash_and_rejects_ambiguous_values():
+def test_g2_canonical_vector_keeps_old_bundle_hash_and_rejects_ambiguous_values() -> None:
     g = api()
     vector = canonical_vector()
     old = json.loads(
@@ -72,7 +77,7 @@ def test_g2_canonical_vector_keeps_old_bundle_hash_and_rejects_ambiguous_values(
             g.SourceBlock.model_validate({**source, "parser_identity": invalid_identity})
 
 
-def test_shared_definition_identity_ignores_entity_collection():
+def test_shared_definition_identity_ignores_entity_collection() -> None:
     g = api()
     source = g.SourceBlock(
         tenant_id=1,
@@ -125,14 +130,14 @@ def test_shared_definition_identity_ignores_entity_collection():
     assert b.assertions[1].state == "unknown"
 
 
-def test_identity_is_space_and_sense_scoped_and_aliases_do_not_replace_identity():
+def test_identity_is_space_and_sense_scoped_and_aliases_do_not_replace_identity() -> None:
     g = api()
     assert g.concept_id("a", "insured", "insurance") != g.concept_id("b", "insured", "insurance")
     assert g.concept_id("a", "insured", "insurance") != g.concept_id("a", "insured", "other")
     assert g.concept_id("a", " INSURED ", "insurance") == g.concept_id("a", "insured", "insurance")
 
 
-def test_quote_verification_rejects_text_revision_and_offsets():
+def test_quote_verification_rejects_text_revision_and_offsets() -> None:
     g = api()
     source = g.SourceBlock(
         tenant_id=1,
@@ -160,7 +165,7 @@ def test_quote_verification_rejects_text_revision_and_offsets():
     "score,expected",
     [(59, "mention"), (60, "pending"), (79, "pending"), (80, "new_page"), (100, "new_page")],
 )
-def test_admission_score_boundary(score, expected):
+def test_admission_score_boundary(score: int, expected: str) -> None:
     g = api()
     assert (
         g.admission_disposition("new_page", score, evidence_valid=True, identity_valid=True)
@@ -172,7 +177,7 @@ def test_admission_score_boundary(score, expected):
     )
 
 
-def test_required_unknown_bypasses_value_score_but_must_be_attempted():
+def test_required_unknown_bypasses_value_score_but_must_be_attempted() -> None:
     g = api()
     assert (
         g.admission_disposition(
@@ -198,7 +203,7 @@ def test_required_unknown_bypasses_value_score_but_must_be_attempted():
         )
 
 
-def test_foreign_assertion_and_dangling_concept_link_fail_closed():
+def test_foreign_assertion_and_dangling_concept_link_fail_closed() -> None:
     g = api()
     source = g.SourceBlock(
         tenant_id=1,
