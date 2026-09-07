@@ -1,0 +1,17 @@
+{
+  "contract": "830-g2-b-source-recovery-explicit-user-authorization.v1",
+  "status": "APPROVED",
+  "user_instruction": "批准",
+  "approval_reference": "User current reply to explicit request to send complete source-recovery materials to DeepSeek for one compile and one independent review",
+  "destination": "https://api.deepseek.com/v1",
+  "model": "deepseek-v4-flash",
+  "max_compile_calls": 1,
+  "max_review_calls": 1,
+  "automatic_retries": 0,
+  "http_payload_sha256": "3996ab27291375557c50f87438c0247589df240629e433aeda0993d54173633f",
+  "material_preview_sha256": "8bb6941b01bea7421cf5593d5e213fff91b56c8e0e416450c726d83a0bec8a66",
+  "runner_sha256": "76222a14592e38d3eb9deda65bdec396117a1e9e162701428545f7a2aed091f5",
+  "budget_sha256": "ce70848a91927c1067743b204e0b710a11e54d8628f9d9beacde6ad6b471015f",
+  "candidate_approval": false,
+  "recorded_at": "2026-09-06T13:50:03.740115+00:00"
+}

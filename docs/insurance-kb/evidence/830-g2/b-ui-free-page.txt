@@ -1,0 +1,3 @@
+Browser tab: 1, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b".
+There has been no change in the accessibility tree.
+The focused UI element is 0 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4?release_id=release-9cb493e3-8d27-4a0f-8f29-93e2a078725b

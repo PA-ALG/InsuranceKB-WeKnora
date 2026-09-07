@@ -1,0 +1,44 @@
+{
+  "contract": "830-g2-b-source-recovery-original-authorization-proof.v1",
+  "status": "ACTUAL_USER_HISTORY_RECOVERED",
+  "thread_id": "01a07102-1adc-7210-8bb7-9f7ea9d653d3",
+  "history_source": "/Users/houjing/.codex/sessions/2026/09/05/rollout-2026-09-05T17-59-18-01a07102-1adc-7210-8bb7-9f7ea9d653d3.jsonl",
+  "authorization_records": [
+    {
+      "timestamp": "2026-09-06T07:31:58.999Z",
+      "type": "function_call",
+      "role": null,
+      "name": "request_user_input_async",
+      "arguments": "{\"questions\":[{\"title\":\"是否批准将[这份完整材料预览](/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g2-concept-free-wiki/docs/insurance-kb/evidence/830-g2/b-external-material-preview.md)（材料 SHA 07924441…e111）交给 DeepSeek，用于第二包生成与独立审核（最多 3 次），以及正式发布后 1 轮问答验证（模型调用保守上限 13 次）？此前 B 材料的数据外发批准指向 DashScope，本次需补齐 DeepSeek 的处理授权。首包已获准的隔离发布会继续推进。\",\"options\":[\"批准上述材料处理和调用范围\",\"暂不批准，先完成首包发布\"]}]}",
+      "text": ""
+    },
+    {
+      "timestamp": "2026-09-06T09:59:34.384Z",
+      "type": "message",
+      "role": "assistant",
+      "name": null,
+      "arguments": null,
+      "text": "已按你的批准完成首包发布，**G2 的两次发布目前完成 1 次，整体尚未完成。**\n\n- 已实测走通：目录 → 概念 → 字段关联 → PDF 原文高亮。\n- 还差：第二包发布，以及最后一次真实问答验证。\n- 第二包输入和复核已准备好，当前等待前面的 **DeepSeek 材料处理授权**回复；此前这部分授权指向 DashScope。\n\n[查看 G2 知识目录](http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9?tab=schema)"
+    },
+    {
+      "timestamp": "2026-09-06T10:56:42.584Z",
+      "type": "message",
+      "role": "user",
+      "name": null,
+      "arguments": null,
+      "text": "授权\n"
+    }
+  ],
+  "original_material_preview_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "original_preview_describes_destination": "DeepSeek api.deepseek.com; A approved members and18sourceblocks+B3publicPDF excerpts+productidentity; B compile and independent review then1Agentturn",
+  "current_payload_sha256": "3996ab27291375557c50f87438c0247589df240629e433aeda0993d54173633f",
+  "current_request_sha256": "193ea081f47106c9bb2508cf4ed672a8f0b2d33737381293fac31f132f8f6672",
+  "semantic_delta_sha256": "554ecfc2db043ed0d9cff8828dfa9c567ce3414ae8c8df2726ea7dff269b7813",
+  "independent_runbook_review_sha256": "29d05fc87b68a2f0ae25554e411c56c2fea31007214e3b3458d8c553de2456c3",
+  "new_factual_text": false,
+  "changes": "Only two current chunk IDs in CompileRequest and derived request hash/output source IDs; auxiliary third product ID only in local catalog; no new source/fact/person-data",
+  "budget_basis": "User standing approval for reasonable G2 quota extensions; exact2calls in ce70848a budget, no retry",
+  "automatic_review_rejection": "2026-09-06 denied command because visible authorization did not show exact DeepSeek material consent. No process launched; no provider request/attempt/ledger increment. This record restores the original actual question and subsequent user authorization as new evidence.",
+  "attempt_started": false,
+  "response_exists": false
+}

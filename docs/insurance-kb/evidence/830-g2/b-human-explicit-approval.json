@@ -1,0 +1,21 @@
+{
+  "contract": "830-g2-b-human-explicit-approval.v1",
+  "status": "APPROVED",
+  "candidate_hash": "9edc805e52950e5363d0d0c9d84e286015f9d47c8d662e4ee7b0f74f1ed9a5ad",
+  "candidate_file_sha256": "a193255504f44fd163df5d96d8dc1d94da9e45e773d25c27d91d2d16e723ef2a",
+  "preview_sha256": "416db733cec1e15cd17faa314ead4810c94d6fee209c87cd95af409ef375fef1",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "scope": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "base_release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+  "base_activation_epoch": 4,
+  "user_instruction": "批准第二包并发布到 G2 隔离环境",
+  "approval_reference": "Current thread user response to call_e0zetliizitorx87E3WAlpfE exact complete B candidate publication question",
+  "approved_at": "2026-09-06T12:10:24.210890+00:00",
+  "publication_condition": "Source revalidation passes; G2 isolated only",
+  "final_agent_turn": "Prior approval remains valid"
+}

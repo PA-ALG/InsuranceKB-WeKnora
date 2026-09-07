@@ -1,0 +1,19 @@
+{
+  "contract": "830-g2-b-source-recovery-authorization.v1",
+  "status": "APPROVED_STANDING_G2_SCOPE",
+  "destination": "https://api.deepseek.com/v1",
+  "model": "deepseek-v4-flash",
+  "scope": "G2 isolated B source-identity recovery compile/review only",
+  "max_calls": 2,
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "request_hash": "1f989dc8cf668a4ff6912004f5fc9eb0bd8cad2e63f14fc9e76a62478c7ed107",
+  "catalog_sha256": "8b6c249624282296eae28720d790c157748b109caae678d70ccf631e31fb0753",
+  "proposal_output_hash": "bd6a116ed916658cc3d20886d2781a5505cd9a5e572802d9f5bc8f2dca4a03e6",
+  "budget_revision_sha256": "ce70848a91927c1067743b204e0b710a11e54d8628f9d9beacde6ad6b471015f",
+  "original_authorization_sha256": "7590869160f704a82383d51a788c08f8922ee647f38bb287d55e2174dbcceafa",
+  "prior_extension_sha256": "b4ba85147ada04f93626525259c27f3b50b7afd5a426520acfa96c0766bb8643",
+  "user_instruction": "可以追加，如果不是很不合理的扩展，G2的申请的额度都给予通过",
+  "subsequent_material_approval": "授权",
+  "interpretation": "Necessary two-call source-identity correction for identical previously authorized B text/PDFs; only corrected immutable chunk IDs and derived hashes; no new facts or personal material. This is not approval for the resulting candidate.",
+  "candidate_approval": false
+}

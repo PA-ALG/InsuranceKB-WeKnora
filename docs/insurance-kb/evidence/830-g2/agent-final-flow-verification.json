@@ -1,0 +1,29 @@
+{
+  "contract": "830-g2-final-agent-flow.v1",
+  "status": "PASS",
+  "release": {
+    "activation_epoch": 5,
+    "read_mode": "current",
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+  },
+  "logical_tool_calls": [
+    "wiki_search",
+    "wiki_read_page"
+  ],
+  "source_identity_count": 1,
+  "answer": "被保险人就是受保险合同保障的人。",
+  "question": "被保险人是什么意思？",
+  "session_id": "a28701d8-dcd7-47d7-a017-57cbc3648381",
+  "app_turns": {
+    "dns_failure_before_provider": 1,
+    "successful_recovery": 1
+  },
+  "actual_model_http_attempts": 3,
+  "model_attempts_max": 13,
+  "raw_sse_sha256": "835733e1418eee6cb387309f8a199c7072dc79242b4e9992e47b8fedc917ab22",
+  "raw_event_count": 286,
+  "verification_note": "Original executor receipt remains FAILED_NO_RETRY for duplicate lifecycle event counting; strict independently reviewed sidecar proves actual successful business flow from unchanged SSE. No provider rerun for verifier correction.",
+  "dns_restored": true,
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "QUALITY": "DEFERRED"
+}

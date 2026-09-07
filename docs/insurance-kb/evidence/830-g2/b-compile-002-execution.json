@@ -1,0 +1,36 @@
+{
+  "contract": "830-g2-b-compile-attempt-status.v1",
+  "run_id": "g2-b-compile-002",
+  "status": "FAILED_RAW_OUTPUT_BINDING",
+  "http_status": 200,
+  "finish_reason": "stop",
+  "usage": {
+    "completion_tokens": 34442,
+    "prompt_cache_hit_tokens": 2432,
+    "prompt_cache_miss_tokens": 116862,
+    "prompt_tokens": 119294,
+    "prompt_tokens_details": {
+      "cached_tokens": 2432
+    },
+    "total_tokens": 153736
+  },
+  "failure": "RAW_OUTPUT_BINDING_MISMATCH",
+  "observed_missing_wire_field": {
+    "valid_time": 134
+  },
+  "observed_a_evidence_order_changed_fields": 2,
+  "independent_diagnosis": "IN_PROGRESS",
+  "candidate_created": false,
+  "review_started": false,
+  "published": false,
+  "b_calls_used": 2,
+  "b_calls_remaining_original_budget": 1,
+  "reserved_correction_exhausted": true,
+  "artifacts": {
+    "request-identity.json": "9a393ff740edc1192fe8831bb4c7b1bea1e1ac4f9c135fd68d80db3967812816",
+    "response-receipt.json": "88bfedfe722dc7cef5940e0eed0dce51402017497a730979b69ea738499f0ed7",
+    "raw-model-output.txt": "233d899bc99ee123f5e7d9cef3a9a52cd6d8a981a0ee0d5a6e1c07dcde493947",
+    "failure.private.json": "f3c7a0f980bdc17b96d3c65f25b7952f815ff495f358594d6aaa1a00d3884e07",
+    "runbook-review.json": "462ba2e1fe9eeca568102824b18a22d0683b49bfc3606d9f3da4340901410c62"
+  }
+}

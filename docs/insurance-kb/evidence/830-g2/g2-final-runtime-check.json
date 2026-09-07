@@ -1,0 +1,27 @@
+{
+  "contract": "830-g2-final-runtime-check.v1",
+  "status": "PASS",
+  "head": {
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+    "activation_epoch": 5
+  },
+  "restored_hosts_sha256": "58850f4ab8eab472218bd60e92f0b7c92c99a55951d7f6849339ba6a0c61a0f7",
+  "runtime": [
+    {
+      "name": "/weknora-g2-594-app",
+      "id": "7f76414e6a1593570b786caf762e6e2cd732cea2dbd0cd1b81e9bd6e4f333ddf",
+      "image": "sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19",
+      "running": true,
+      "health": null
+    },
+    {
+      "name": "/weknora-g2-594-ui",
+      "id": "030bdaf68876198e48f8235524d84703b783fa05b7cc8df70b87719e75bb5a30",
+      "image": "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+      "running": true,
+      "health": null
+    }
+  ],
+  "checked_at": "2026-09-07T03:11:40.240477+00:00",
+  "provider_calls": 0
+}

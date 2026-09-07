@@ -1,3 +1,55 @@
+## 当前终态：G2 FLOW PASS（2026-09-07）
+
+G2核心流程已完成，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION；GitHub live=NOT RUN。唯一Owner=root，G2写域在本次证据收尾后关闭；没有启动G3。
+
+当前Active release-9cb493e3-8d27-4a0f-8f29-93e2a078725b / epoch5；两次快照2/2、两个产品134字段、1共享定义4关联、1开放示例，共140成员。定义hash不变；21/21来源发布门通过，4条引用/3PDF服务端与浏览器抽查通过，原DB未变。
+
+真实Agent会话a28701d8-dcd7-47d7-a017-57cbc3648381完成wiki_search→wiki_read_page→“被保险人就是受保险合同保障的人。”，同版/成员/来源均通过，模型实际3/13。原首次fake-DNS失败外发0；一次恢复使用临时单域名公网映射，已恢复原hosts SHA58850f4a…a0f7。旧执行器把工具预告/参数闭合误计重复的失败记录保留，strict sidecar验证原raw PASS，11负例及独立审查通过；没有为此重跑模型。
+
+证据入口：docs/insurance-kb/evidence/830-g2/g2-closeout.json、current-flow-status.json、agent-final-flow-verification.json及OpenSpec128 validation-report。源码99ec069、backend d7c673/app image600a…、UI444a…；本次收尾没有改运行源码。24/24是准入协议回放，不是专家金标；129字段未知及66/81/95原始分保留。
+
+环境限制：窄面板PDF局部裁切为布局backlog；全局代理fake-DNS保持用户原配置，未来Agent使用需正常解析/新的有界验证窗口。本次已验证流程通过不代表未来网络配置持续可用。
+
+### 以下是历史执行阶段；当前结论以上述终态为准
+
+## 最新状态：G2 两次隔离发布及页面/来源验证完成，最后 Agent 待执行
+
+CURRENT=FINAL_AGENT_PLAN_INDEPENDENT_REVIEW；Owner=root；G2=IN_PROGRESS，QUALITY=DEFERRED。
+实际第二包 bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684 已完成一次 Review（来源复验通过）与一次 Activate。当前 release-9cb493e3-8d27-4a0f-8f29-93e2a078725b / epoch5；2/2计划快照，140成员、A70保持、4关联、4引用、3PDF、原DB未变均实际PASS。
+真实浏览器目录两产品、各67字段、1开放知识、4条同版定义链接与理赔PDF第15页canvas/高亮PASS。窄桌面面板部分裁切记录为布局backlog。
+
+最后Agent仍未执行；用户既有批准有效。冻结prepare plan067878b3c9001eb08519361475b437669f7105c7ab2f1109bd853e7e4f9414cc位于/private/tmp/g2-agent-smoke-execution/prepared/run-plan.private.json；g2_bundle_review审实际plan后root执行1turn、max13模型HTTP，无整轮重试。来源编译/审核已用10/10，不再调用。
+源码HEAD99ec069冻结；app d7c673/image600a…、UI444a…不变。最新证据：b-source-publication-execution.json、b-local-live-verification.json、b-ui-live-verification.json、g2-final-software-check.json（42 tests PASS/strict spec/diff）。
+NEXT=Agent实际search/read/answer与日志计数→更新OpenSpec验证矩阵/独立收尾。无生产/G3/Q0/push/merge。
+
+### 以下为历史阶段记录，当前状态以上述段落为准
+
+## 最新状态：来源修订整包已获用户批准，执行发布
+
+用户当前回复“批准”，对应完整来源修订候选 bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684；实际批准 b-source-human-explicit-approval.json SHA a53fb9b93e5d754cd05c6b99c4de0c25bc951d2f5ef70a1b5d0665c11bba83a9。140 成员实际 Draft HTTP201，preparation g2-b-draft-bdc806e2084a。新编译与独立审核已成功，原始95分，global10/10；旧81/A66保留。
+
+CURRENT=SOURCE_B_APPROVED_PUBLICATION_FINAL_REVIEW；NEXT=一次Review来源复验→一次Activate→R5 API/UI/PDF→已授权finalAgent。root新发布runner20a624…76c2，plan c39faa…0eb4。Head最后实测仍R4；B未激活，G2未完成。下文是历史阶段记录，不作为当前阻塞。
+
+## 当前执行：修订包外发已获当前用户明确批准
+
+用户对完整修订材料发送至DeepSeek、编译1次/独立审核1次明确回复“批准”；真实授权见b-source-recovery-explicit-user-authorization.json，SHAe5c8a111…42a3。自动审批已允许同一冻结compile命令启动。
+Root执行session67999，run_id g2-b-source-compile-001；新candidate仍未生成。后续只执行预留review1，无重试。旧自动审批拒绝保留为历史，不再是当前阻塞。
+
+## 最新阻塞：自动审批要求当前外发确认
+
+SOURCE_RECOVERY=LOCAL_READY_MODEL_NOT_RUN；两次自动审批均拒绝，没有进程/request/ledger effect；ledger仍8。原始授权历史已恢复，但第二次auto-review明确不接受历史日志/证明作为可信用户批准。禁止换路径执行。
+完整实际payload：docs/insurance-kb/evidence/830-g2/b-source-recovery-deepseek-request.json（3996ab…633f）；人读说明b-source-recovery-external-preview.md。待当前用户明确批准向DeepSeek发这份材料，最多compile1/review1。需记录真实回复，不将未来审批预填。
+Root新runner76222a…91f5，actualcompile runbook review29d05…56c3；输入review修正版eb66…d7c4；旧8c63错误SHA回执保留且已废弃。新assembler2a0ec…84b8 code review BLOCKER0，尚无新candidate。First oldB Review失败，Head实测R4、oldDraft仍draft且reviewdigest空。已授权finalAgent仍NOT_RUN，必须等BActive。
+
+## 当前状态更新：B 来源编号恢复（2026-09-06）
+
+CURRENT=G2_B_SOURCE_IDENTITY_RECOVERY；Owner=root；HEAD99ec069保持。
+B旧候选9edc805e已获用户整包批准，实际Draft201；实际Review503 CONCEPT_SOURCE_AUTHORITY_UNAVAILABLE，Review1/Activate0/provider0。Head实测仍R4 release-0236279f-df73-4433-bebc-cad70f95b989。
+根因：terms旧attempt1的两BlockID误配attempt3 revision；原文相同。来源准备少验attempt/deleted/完整manifest。当前目录已从只读DB快照按attempt3重建，另修正辅助产品身份BlockID。旧raw/候选/审批/Draft/失败回执不修改。
+恢复OpenSpec128-G2-SOURCE-RECOVERY已先记录，旧checker接受错误输入的RED已复现，新增5项guard检查GREEN。新输入/private/tmp/g2-b-source-recovery-prep；g2_sources复核输入；g2_bundle_review准备独立bounded runner。依据用户合理额度扩展授权，新增compile1/review1，上限全局10/B6，无自动重试。新候选须完整展示并具名整包确认，不冒充旧hash批准。
+NEXT=冻结输入及runner review→两次受控模型调用→新候选整包确认→G2发布→真实UI/source验证→已授权Agent。无新Goal/生产/G3/Q0/push/merge。
+证据：docs/insurance-kb/evidence/830-g2/b-publication-source-failure.json、b-source-recovery-budget.json、b-source-recovery-authorization.json。
+
 # HANDOFF — Enterprise LLM Wiki
 
 > 当前运行/交接状态的唯一入口。贡献规则只以 [`AGENTS.md`](AGENTS.md) 为准；
@@ -5,55 +57,21 @@
 
 ## 1. 当前结论（2026-09-06）
 
-**G2 正在按用户追加授权并行推进，尚未完成。** 用户已明确纠正阶段目标：G2先跑真实流程，66分属于60–79人工区间，不能当作全卡停工的质量门。
-当前补齐v2整包人工待审分支：v1>=80自动准入不变；v2保留真实raw PASS/66并生成NEEDS_HUMAN准入处置，
-Draft拟议成员只有具名whole-batch决定和原发布授权后才能Active。Python42项测试/ruff/mypy及独立复核PASS，
-真实A v2 candidate `70cb4b6eb57cb50cf66c4dcb5efe357c34b54d7e3a4b74311cdbb7f7f7d363c5` 已离线装配，
-1定义/67字段/2链接、70拟议成员；新增模型调用0。Go四包定向回归及独立复核PASS；代码已提交871f6e1028ebbde453cdd60b0b787f95103ad7c9。新版app单次构建及隔离升级PASS（本轮1次、累计4/4）；实际v2 Draft HTTP201/70成员PASS，Head仍epoch3。
-[A整包候选预览](docs/insurance-kb/evidence/830-g2/a-human-review-preview.md)。
-用户已明确“批准整包并在 G2 隔离环境发布”，exact候选批准记录见a-human-explicit-approval.json；该候选不再等待用户授权。
-实际 Review POST 一次 HTTP400、Activate POST0；已定位 PostgreSQL JSONB 格式变化触发 raw digest/member 校验误拒，candidate 内容未变。G2-only canonical 修复设计独立复核0，真实 PG17.9 roundtrip fixture 已冻结，修复/实际A本地回放/最终定向回归及独立代码复核0均PASS；待root提交与唯一修复构建。当前仍0/2 G2 Active；修复后创建新 preparation_id，保留旧失败 Draft，复用本次整包批准与已有两套独立签名钥匙继续流程。
+**G2 正在执行，尚未完成；两次计划发布已完成一次。** 用户已明确优先串通真实流程，原始 66 分保留，Q0 质量验收后置。用户已批准首包完整候选发布，并已回复“授权”允许 B 材料交由 DeepSeek 生成/独立审核及最后一轮 Agent 验证；必要合理的 G2 有界额度扩展已预批。无需重复申请这些授权。
 
-已提交八个代码切片：
-离线编译/独立审核合同 `e88f27fe6`（25项定向测试），固定Release页面 `5b9ddb265`
-（25项前端测试及typecheck），原文存储后端解析修复 `03a2b96aa`（RevisionSource套件通过）。
-另有 Go 发布/固定页面合同 `77f8fea05` 和 Agent 同版消费 `3c655294d`。
-原生PDF定位生产者 `b8cde87d8` 已通过真实A的Python解析及Go传输校验：
-39页、45120 code points、40657字符框；20条种子文档引文均在指定页唯一匹配。
-原文桥与专用G2查看器 `4c5aea9bf` 已提交，7个Go包集成验证、37项前端测试及typecheck通过，独立复核0阻断。
-真实A编译预检另发现多行source hashing被旧canonical拒绝，兼容修复 `f23e2d7e6` 已通过27项Python/7包Go集成及独立复核；不代表真实G2发布验收通过。
+首包 `70cb4b6e…363c5` 已正式 Active：`release-0236279f-df73-4433-bebc-cad70f95b989`，epoch 4。70 成员、原 67 字段、1 共享定义、2 关联及源 PDF 字节/身份均 PASS；原数据库 unchanged。目录、固定版本字段跳转、开放知识入口和 PDF 第 1 页定义高亮均完成真实浏览器验证，独立复核 0 阻断。
 
-Go合同/发布/页面、Agent同版消费已集成。来源校验缺失时 Review/Activate 必须拒绝，
-HTTP503具明确错误码；来源桥已集成部署，真实G2候选的发布回验尚未执行。真实G1的17条引文已逐字核对，
-迁移的旧/新hash转换与两阶段来源凭据接线已通过测试；旧封存文件未修改。
-新 G2 的 PDF 原生定位生产者已提交部署；受托来源桥与专用前端查看器已集成提交，修复真实多行输入后最终镜像构建及隔离app升级均PASS。
+当前源码 HEAD `99ec069277cf3336962e5fa2ecaafed19e8aad35` 冻结供 B 请求绑定；后端运行源码 `d7c67303916e6f608458de4980cf83d807390022`，app image `sha256:600a5a1cf93f4d2ecbe5466b7733c8d82395cdcad99fb501fb50ddf224220b19`，UI image `sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158`。隔离 app 18194 / UI 18195、数据库 `weknora_g2_594`。旧失败 Draft、JSONB 失败和静态文件权限失败均保留历史，不代表当前状态。
 
-FLOW=NOT RUN，QUALITY=DEFERRED。2026-09-06 用户已明确批准两项具体外发。
-A DeepSeek实际调用4/4次，共329829 tokens：首次编译拒绝、一次纠偏通过；review001原始响应
-缺少contract，Python默认值掩盖遗漏，实际平台Draft HTTP400，旧89分候选/预览已作废。
-登记unused seed槽转给A后，全局模型预算仍7；第4次review002 raw完整，但66分低于80准入线，
-assemble_bundle正确拒绝PAGE_ADMISSION_REQUIRED。没有合格G2 Draft/Active，不改分、不刷分。
-上段为v1自动准入路径的历史拒绝事实；当前以v2人工分支接续，不调分、不前置Q0质量优化。
-B两份PDF本地原生解析PASS（44/17页），实际Go拆块37/9。首次因顺序校验失败而外发0；
-改为精确多重集后provider5次HTTP400，明确单批最多20。第三次已按20/17/9分批，
-两份均completed（terms attempt3、brochure attempt1），共46 chunks；实际总8/20请求
-（5次HTTP400+3次HTTP200），KB/model/SSRF配置准确恢复、guard已停止、app health200。两B来源封存及完整SHA/44与17页/37与9段校验PASS；两库Head仍epoch3。
+B 已完成真实生成及独立审核：B001/B002 格式失败保留，B003 完整结构恢复 VALIDATED，review001 实际 PASS、新 free page 81 分。模型已用 B4/4 / 全局8/8，不再调用编译模型。实际候选 `9edc805e52950e5363d0d0c9d84e286015f9d47c8d662e4ee7b0f74f1ed9a5ad`，文件 SHA `a193255504f44fd163df5d96d8dc1d94da9e45e773d25c27d91d2d16e723ef2a`，140 成员；A70 全量保留、B67（2有值/65未知）+1示例、共享定义关联4。独立整包复核 BLOCKER0。
 
-当前运行源码`871f6e1028ebbde453cdd60b0b787f95103ad7c9`，镜像`sha256:73c39699dcb9298093e70aca06746f8b71889ec9d8094b9c6a896a24a699391a`。
-应用构建累计4次（3PASS、1磁盘满失败）；已按用户预批将必要JSONB修复预算登记至5，最多新增一次affected app构建。构建数据盘20→40GB已扩容；前端静态/镜像各1次PASS。
-隔离UI18195、app18194及原生docreader此前已完成健康/login/实际A PDF回读核验；原库Head epoch3/source0、
-G2 Head epoch3/source3（A+B+B精确身份集合）已核验。当前执行不代表G2发布验收完成。
-[最终隔离交付核验](docs/insurance-kb/evidence/830-g2/final-runtime-read-verification.json)，
-[A模型执行回执](docs/insurance-kb/evidence/830-g2/a-real-provider-executions.json)，
-[A已作废候选预览](docs/insurance-kb/evidence/830-g2/a-review-preview.md)，
-[A准入拒绝诊断](docs/insurance-kb/evidence/830-g2/a-admission-diagnosis.json)，
-[B实际导入](docs/insurance-kb/evidence/830-g2/b-guarded-partition-receipt.json)，
-[B来源封存回验](docs/insurance-kb/evidence/830-g2/b-source-sealing-verification.json)。
-[执行记录](docs/insurance-kb/evidence/830-g2/execution.md)，
-[外发授权状态](docs/insurance-kb/evidence/830-g2/source-upload-approval.json)。
+用户已回复“批准第二包并发布到 G2 隔离环境”。真实批准记录 `b-human-explicit-approval.json` SHA `183a49e9af0627d1eee4f7d34c1218ee1bfa970400c25f662dc8d125dc0b97dc`，完整预览 `b-human-review-preview.md` SHA `416db733cec1e15cd17faa314ead4810c94d6fee209c87cd95af409ef375fef1`。不再等待任何第二包批准；最后一轮 Agent 既有批准继续有效。
 
-用户已预批合理必要的G2有界扩展，由总控登记后推进；此前自动审批拦截的两项具体外发
-现已由用户明确批准，不再等待重复确认。G3/Q0及生产发布仍未授权。首个物理演示截止仍为2026-09-07 18:25 +08:00。
+实际 B Draft HTTP201/140 成员通过，preparation `g2-b-draft-9edc805e5295`，线上 Head 仍 A 第4版。B Review+Activate 私有执行器已准备，最终script `b0e7fb52526975f3ef3d9494d5fbaad0ee2406fc1b16b18145f8f0f346290bc3`，plan `5299d615fa0df94ebbb1bc974d78acc2d6c581db4ae612b7e5f0e931a78de0db`，identity `b64387f07914470f3e0b04a0b56cfac3707a67e10ef6fab28e4b7d383f76cb5d`，待独立review；尚未签名/POST。复用既有两把独立钥匙和相同app/config，不构建/重启。执行后读取实际R5回执，跑root只读 verifier `/private/tmp/g2_verify_b_live.py`，再进行真实浏览器和已授权最终Agent。
+
+CURRENT=B_APPROVED_DRAFT_PUBLICATION_FINAL_REVIEW；NEXT_READY=签名平台审核/来源复验→发布R5→2/2快照/4链接/来源PDF回验→最终Agent。G3/Q0/生产仍不在范围内。
+
+最新事实与证据入口：[当前流程](docs/insurance-kb/evidence/830-g2/current-flow-status.json)、[面向用户进度](docs/insurance-kb/evidence/830-g2/g2-current-status.md)、[首包线上回验](docs/insurance-kb/evidence/830-g2/a-jsonb-local-live-verification.json)、[目录浏览器回验](docs/insurance-kb/evidence/830-g2/directory-ui-browser-verification.json)、[B 首次执行](docs/insurance-kb/evidence/830-g2/b-compile-001-execution.json)、[B 格式纠正预算](docs/insurance-kb/evidence/830-g2/b-format-correction-budget.json)。历史执行事实留在各自冻结回执。
 
 **MVP-815 已完成代码交付与 C7 可见验收。** 正式代码已由
 [PR #123](https://github.com/PA-ALG/InsuranceKB-WeKnora/pull/123) 以一个

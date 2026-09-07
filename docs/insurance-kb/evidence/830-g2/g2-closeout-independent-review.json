@@ -1,0 +1,58 @@
+{
+  "agent": {
+    "actual_model_http_attempts": 3,
+    "answer": "被保险人就是受保险合同保障的人。",
+    "dns_restored": true,
+    "logical_tools": [
+      "wiki_search",
+      "wiki_read_page"
+    ],
+    "raw_sse_independent_review": "BLOCKER0"
+  },
+  "artifact_map_entries": 17,
+  "closeout_path": "docs/insurance-kb/evidence/830-g2/g2-closeout.json",
+  "closeout_sha256": "4c887d7646ed991c8cb5c5d173f32c5cb0fe0aaaf5789973ebf7cb3811c31bdb",
+  "contract": "830-g2-final-closeout-independent-review.v1",
+  "flow": "PASS",
+  "future_agent_dns_limit_explicit": true,
+  "github_live": "NOT RUN",
+  "note": "The closeout contains 17 referenced artifact hashes; together with the independently verified closeout SHA this is 18 verified file identities.",
+  "production_acceptance": "NOT_FOR_PRODUCTION",
+  "quality": "DEFERRED_TO_Q0",
+  "remaining_flow_actions": [],
+  "requirements": {
+    "G2-R1": "PASS",
+    "G2-R2": "PASS",
+    "G2-R3": "PASS",
+    "G2-R4": "PASS",
+    "G2-R5": "PASS",
+    "G2-R6": "PASS"
+  },
+  "reviewer": "g2_sources",
+  "source_gate": {
+    "distinction_preserved": true,
+    "serving_click_samples": "4 citations across 3 PDFs",
+    "unique_evidence_passed": "21/21"
+  },
+  "status": "BLOCKER0",
+  "verified_artifacts_sha256": {
+    "a-jsonb-local-live-verification.json": "c450b6b501ba12b3f5c2655828d89e404b6f66d77f7a09c58b930fd32bd4f5dc",
+    "agent-dns-restoration.json": "aa18c347b9a567ed33ecc1287bfd422d7cec1f7e669c7d35b5882a5379facfe8",
+    "agent-final-answer-ui.txt": "074d391904d7a362439e913c2edc02371e2126ccc76166bb4dd1382f86052bfb",
+    "agent-final-flow-verification.json": "b58d586395672bfb4e8eb6ba56709854f00079d69687fae4cb5ab2d9f3a2dfca",
+    "agent-final-model-attempt-audit.json": "28d247fd2c4acce782e68a135e5d27653cff74ba5b873e52b7f796c2417c5f16",
+    "agent-final-sse-independent-review.json": "b06340b15ef023dbbdfecaabb706b736bcfe87d886350d1ce4a7b194ee065627",
+    "agent-final-sse-verification.json": "cdab7741f0bf0824859d18bc923b2d24f0089da66453ec9e69d8a0cd3dc445db",
+    "b-local-live-verification.json": "cb8a4c5711f13ff5d4236dde4758278af12a659102c8cd86ad650c4ee48137cc",
+    "b-source-publication-execution.json": "b6326b2cdd269b32ca874e20510ab193a9f4e80bcbdbcf216284e99042f35038",
+    "b-ui-live-verification.json": "a54156913dbbea4dddeb56e1bb934cedba7db835c9f656818609b43f11e54f5c",
+    "g2-final-preservation-replay.json": "195caef8bb02da8ce5bd95fe4b36e418fa2b38054c65df3a426e24e48b9bc0ac",
+    "g2-final-preservation-review.json": "6200534b042d6d37cfd849a1d6b415ab09de2f5297fad47c620a9d84497d9883",
+    "g2-final-runtime-check.json": "25b2e30fa451b3fed3e7f94fd82738fc02fa2d8d11650db9ccce7bfba09a7688",
+    "g2-final-software-check.json": "47aae593a91ab374d9ff28feedf62d857885a4f9363df5271ffce5ec26b94a86",
+    "g2-rejected-active-readback.json": "3b65c9b8975dbfc7200ba165d744d9560d7696910f3ad80f64f2ea8f25f282fd",
+    "seed-admission-replay.json": "d14b2235fe865073f258af9fd24304e9168d4c90191020004b0673facd178df0",
+    "seed-admission-review.json": "6ce639421681f60df268fc267ee28de2018dfb027a080f91cb98b76a7dde9d78"
+  },
+  "verified_identity_count_including_closeout": 18
+}

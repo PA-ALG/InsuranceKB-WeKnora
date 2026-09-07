@@ -1,0 +1,26 @@
+{
+  "candidate_contract": "concept-candidate-bundle.830.g2.v1",
+  "candidate_hash": "9edc805e52950e5363d0d0c9d84e286015f9d47c8d662e4ee7b0f74f1ed9a5ad",
+  "contract": "830-g2-b-draft-create.private.v1",
+  "human_approved": false,
+  "manifest_digest": "a32d1f904076dc86e2cca8de1c099f7165275320d622ea9af782673825365b12",
+  "members": 140,
+  "post_attempts": 1,
+  "preparation_digest": "7c8fccbab968737dfda88df031c2816366b5011f1ec9af0af154f36cc0ac20f3",
+  "preparation_id": "g2-b-draft-9edc805e5295",
+  "provider_calls": 0,
+  "published": false,
+  "review_policy_id": "52e24cb2b78832acbd74ccba422093485f621841731de18e0e6b06d83ee79107",
+  "signed": false,
+  "source_authority": "FROZEN_R4_AND_B_SEALED_INPUTS_EXACT; SERVER_REVALIDATION_REMAINS_REQUIRED_AT_REVIEW_AND_ACTIVATE",
+  "status": "PASS_DRAFT_ONLY_NOT_HUMAN_APPROVED_NOT_ACTIVE",
+  "unchanged_head": {
+    "activation_epoch": 4,
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989"
+  },
+  "user_whole_batch_approval": "APPROVED_EXACT_B_CANDIDATE",
+  "approval_sha256": "183a49e9af0627d1eee4f7d34c1218ee1bfa970400c25f662dc8d125dc0b97dc",
+  "platform_signed_review": "NOT_RUN",
+  "private_receipt_sha256": "f2b840fd4f9bb6d919470aff65fe727b74e47bd07a3a23877f941469ffc0e190",
+  "raw_response_sha256": "24ae81e3bc5ef4f96f86a8e840633809f4f3d399768f81cf5ce741cde7e7b0f0"
+}

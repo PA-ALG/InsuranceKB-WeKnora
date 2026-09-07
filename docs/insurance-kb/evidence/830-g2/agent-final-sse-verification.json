@@ -1,0 +1,93 @@
+{
+  "contract": "830-g2-final-sse-lifecycle-audit.v1",
+  "status": "PASS",
+  "raw_sse_sha256": "835733e1418eee6cb387309f8a199c7072dc79242b4e9992e47b8fedc917ab22",
+  "raw_event_count": 286,
+  "logical_tool_calls": 2,
+  "preview_events": [
+    113,
+    273
+  ],
+  "old_validator_result": "tool_calls_not_exact_order",
+  "raw_file_unchanged": true,
+  "script_sha256": "712b255f0a061e68c938cb045206ae6e480d2ea6f2d13614028655bb26fac086",
+  "frozen_executor_sha256": "370dc658a26f41dd62c893fdeb4f4037d0b5b9022c5e18fe54274d3947fcc32c",
+  "plan_sha256": "738a0cd99cb4c84b8f12edab7332a2b3a80e14417fba83f784b2532435391b7a",
+  "release": {
+    "activation_epoch": 5,
+    "read_mode": "current",
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+  },
+  "result": {
+    "status": "PASS",
+    "tool_call_ids": [
+      "call_00_F1UXJGMdQ6VHqc5nkc4f8235",
+      "call_00_tFZOsb6e0bOlFi16gN7K1683"
+    ],
+    "member_id": "concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c",
+    "member_digest": "badcb24a292ca9deff0687eaa012359d66250b50d7dac40f624f4e05f27b0e17",
+    "source_identity_count": 1,
+    "final_answer": "被保险人就是受保险合同保障的人。",
+    "event_count": 284
+  },
+  "negative_checks": [
+    {
+      "name": "missing_arguments_key",
+      "status": "PASS_REJECTED",
+      "error": "tool_call_keys_invalid"
+    },
+    {
+      "name": "duplicate_complete_call",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_arguments"
+    },
+    {
+      "name": "missing_complete_arguments",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_result"
+    },
+    {
+      "name": "preview_tool_name_drift",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_arguments"
+    },
+    {
+      "name": "complete_id_drift",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_arguments"
+    },
+    {
+      "name": "result_before_arguments",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_result"
+    },
+    {
+      "name": "duplicate_result",
+      "status": "PASS_REJECTED",
+      "error": "unmatched_or_duplicate_result"
+    },
+    {
+      "name": "release_authority_drift",
+      "status": "PASS_REJECTED",
+      "error": "release_authority_drift"
+    },
+    {
+      "name": "member_digest_drift",
+      "status": "PASS_REJECTED",
+      "error": "read_page_identity_drift"
+    },
+    {
+      "name": "source_quote_hash_drift",
+      "status": "PASS_REJECTED",
+      "error": "read_sources_drift"
+    },
+    {
+      "name": "missing_answer",
+      "status": "PASS_REJECTED",
+      "error": "final_answer_empty"
+    }
+  ],
+  "provider_calls": 0,
+  "http_calls": 0,
+  "scope": "Local replay of existing raw SSE; logical tools are strict same-ID start/arguments/result lifecycles; original release/member/source/content/answer checks reused unchanged."
+}

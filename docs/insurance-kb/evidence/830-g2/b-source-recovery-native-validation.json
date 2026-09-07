@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-b-captured-native-resolver-validation.v1",
+  "status": "PASS",
+  "scope": "Local Go service resolver on previously captured real PDF native artifacts; not live publication",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "selected_sources_sha256": "0c7d42170aac119dad7afbd09bf36d276b516fe8fc54a7bb77ba768090ed061e",
+  "test_overlay_sha256": "37b0fb0c9ae1dbfad0853bc87682d48f3dbb6f5120978a790f75d98adfc5d6bc",
+  "test_log_sha256": "33e8690903f4cd00e4f3a555498c613bb9485027d3123b9ce975cba239083742",
+  "actual_quote_checks": 3,
+  "changed_quote_negative_checks": 3,
+  "provider_calls": 0,
+  "http_calls": 0,
+  "database_writes": 0,
+  "application_source_changes": 0,
+  "release_activations": 0
+}

@@ -1,0 +1,57 @@
+Browser tab: 2, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9?tab=schema".
+1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9?tab=schema
+	2 container app
+		3 container
+			4 container 搜索
+			5 text 新对话
+			6 text 知识库
+			7 text 智能体
+			8 text 共享空间
+			32 text 暂无对话
+			9 container
+				10 text G G2 Runtime Test Operator 594 g2-594-operator@example.invalid
+				11 image
+		12 container
+			13 heading 知识库 C6-ISOLATED-R1-ACCEPTANCE-WIKI 产品 Schema Wiki / 文档 / 材料 Wiki / 图谱, Value: 2
+				14 button 知识库
+				15 image
+				16 button C6-ISOLATED-R1-ACCEPTANCE-WIKI
+					17 text C6-ISOLATED-R1-ACCEPTANCE-WIKI
+					18 image
+				19 image
+				20 text 产品 Schema Wiki
+				21 text /
+				22 text 文档
+				23 text /
+				24 text 材料 Wiki
+				25 text /
+				26 text 图谱
+			27 button
+				28 image
+			29 button
+				30 image
+			31 text 支持点击或拖拽上传，多格式文档自动解析并智能分块，快速构建可检索的知识库
+			33 container
+				34 text 知识目录
+				35 heading 已发布知识, Value: 2
+					36 text 已发布知识
+				37 text 第 4 版
+			38 container 共享定义
+				39 heading 共享定义, Value: 3
+					40 text 共享定义
+				41 content list
+					42 container
+						43 link Description: 被保险人, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/concept_fa49ae2d3cc604c00743976b752f611aaaa174b8cd5da55078dbb3042e819c9c?release_id=release-0236279f-df73-4433-bebc-cad70f95b989
+						44 text 被保险人就是受保险合同保障的人。
+			45 container 产品知识
+				46 heading 产品知识, Value: 3
+					47 text 产品知识
+				48 content list
+					49 container
+						50 heading ping-an-e-sheng-bao, Value: 4
+							51 text ping-an-e-sheng-bao
+						52 text ping-an-e-sheng-bao@596-1 · 67 个字段 · 0 条开放知识
+						53 link Description: 查看字段目录, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/entity_overview_293bec89159f3d9d6cc1613425baf17cf2b3ae3713df18714ba5d8a48a841d96?release_id=release-0236279f-df73-4433-bebc-cad70f95b989
+						54 link Description: 查看开放知识, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_wiki_9f0edf7e3845ee9840ef173cffec5c6ddc41c365d30e3680d586951d019b224f?release_id=release-0236279f-df73-4433-bebc-cad70f95b989
+
+The focused UI element is 1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9?tab=schema

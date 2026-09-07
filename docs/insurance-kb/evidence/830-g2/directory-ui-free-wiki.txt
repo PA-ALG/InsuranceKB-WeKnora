@@ -1,0 +1,19 @@
+Browser tab: 2, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_wiki_9f0edf7e3845ee9840ef173cffec5c6ddc41c365d30e3680d586951d019b224f?release_id=release-0236279f-df73-4433-bebc-cad70f95b989".
+1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_wiki_9f0edf7e3845ee9840ef173cffec5c6ddc41c365d30e3680d586951d019b224f?release_id=release-0236279f-df73-4433-bebc-cad70f95b989
+	2 container app
+		3 container
+			4 container 搜索
+			5 text 新对话
+			6 text 知识库
+			7 text 智能体
+			8 text 共享空间
+			32 text 暂无对话
+			9 container
+				10 text G G2 Runtime Test Operator 594 g2-594-operator@example.invalid
+				11 image
+		33 container
+			34 text 已发布知识
+			35 heading 开放知识, Value: 1
+				36 text 开放知识
+
+The focused UI element is 1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/free_wiki_9f0edf7e3845ee9840ef173cffec5c6ddc41c365d30e3680d586951d019b224f?release_id=release-0236279f-df73-4433-bebc-cad70f95b989

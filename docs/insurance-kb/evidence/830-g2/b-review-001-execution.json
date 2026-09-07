@@ -1,0 +1,32 @@
+{
+  "contract": "830-g2-b-independent-review-execution.v1",
+  "status": "VALIDATED",
+  "b_calls_used": 4,
+  "global_calls_used": 8,
+  "run_id": "g2-b-review-001",
+  "files": {
+    "request-identity.json": "1a848c99578e01dd9029b9bf207018298e87ead336d16dad4983ae5bc7a21808",
+    "http-request.json": "9577942f73451a6d5d3280884c5a56b79c77e93a8cefe32690c7e16ef9aad42c",
+    "runbook-review.json": "002c205db5800a543858e25a659491f54a2a3e5b3f9603fa7bc90c6805b9e1dc",
+    "attempt-started.json": "41c11fb30c47ec2870925bff4cec78e8edc70beb76daa5cb2516fcf7552b3f31"
+  },
+  "candidate_created": false,
+  "published": false,
+  "http_status": 200,
+  "finish_reason": "stop",
+  "usage": {
+    "completion_tokens": 218,
+    "prompt_cache_hit_tokens": 512,
+    "prompt_cache_miss_tokens": 94216,
+    "prompt_tokens": 94728,
+    "prompt_tokens_details": {
+      "cached_tokens": 512
+    },
+    "total_tokens": 94946
+  },
+  "review_result_sha256": "0656cf05cffbcf5cdfb16ec4c74749b1b9f753df80454d702e1bed8fbea52cec",
+  "decision": "PASS",
+  "page_scores": {
+    "free_247e417ead485b16b9939409dad5a58ce306e072830b952c632a5d7f208d55d4": 81
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "contract": "830-g2-agent-smoke-data-budget-approval.v1",
+  "status": "APPROVED",
+  "decision": "APPROVE_ONE_FINAL_AGENT_TURN",
+  "approval_reference": "Current task: user replied “授权” to the pending DeepSeek material-processing approval, immediately after the first-package completion and outstanding authorization summary.",
+  "approved_at": "2026-09-06T10:58:39.743536+00:00",
+  "proposal_sha256": "05bc9826288e43f2db0ef188910e7e94dd1c781a50f957eb455959210d19d8aa",
+  "material_preview_sha256": "07924441be7ab17bec67b3bf20539d813fee750fbc45784a61571192762ae111",
+  "scope": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+  },
+  "model": {
+    "model_id": "b2034da8-942c-4a19-945d-1bc09459222e",
+    "provider": "deepseek",
+    "base_url": "https://api.deepseek.com/v1"
+  },
+  "limits": {
+    "agent_turns": 1,
+    "max_model_http_attempts": 13,
+    "script_http_retries": 0,
+    "engine_internal_retries_included_in_max": true,
+    "whole_turn_retries": 0,
+    "score_retries": 0
+  }
+}

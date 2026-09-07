@@ -1,0 +1,19 @@
+{
+  "contract": "830-g2-b-actual-source-recovery-semantic-delta.v1",
+  "status": "PASS_ACTUAL_COMPILE_RESULT",
+  "old_approved_candidate": "9edc805e52950e5363d0d0c9d84e286015f9d47c8d662e4ee7b0f74f1ed9a5ad",
+  "actual_compile_result_sha256": "e62a73243b38240a9340f99a715182f14de8887b59422afc46ea43499dbad907",
+  "all_actual_output_equal_after_two_source_id_changes_and_request_hash": true,
+  "source_id_map": {
+    "43872b4b-be30-43cf-8324-cbcd11028d7d": "cbc501f6-efe4-4ea8-af11-465da4c5f135",
+    "8bdec5c0-e7e0-4a61-bdb9-ea78e6158353": "f742c140-fd18-467b-9239-30d727013b17",
+    "cd7500ab-0090-4049-9b91-9c2ba24e5b98": "63b06a1c-dda1-465c-9261-419ab89ff9c4"
+  },
+  "factual_changes": 0,
+  "definitions": 1,
+  "fields": 134,
+  "pages": 1,
+  "prior_raw_and_candidate_preserved": true,
+  "new_candidate_created": false,
+  "published": false
+}

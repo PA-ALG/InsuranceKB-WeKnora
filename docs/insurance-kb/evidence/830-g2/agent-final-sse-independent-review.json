@@ -1,0 +1,12 @@
+{
+  "audit_result_sha256": "cdab7741f0bf0824859d18bc923b2d24f0089da66453ec9e69d8a0cd3dc445db",
+  "audit_script_sha256": "712b255f0a061e68c938cb045206ae6e480d2ea6f2d13614028655bb26fac086",
+  "blockers": 0,
+  "contract": "830-g2-final-sse-independent-review.v1",
+  "negative_checks": 11,
+  "provider_calls": 0,
+  "raw_sse_sha256": "835733e1418eee6cb387309f8a199c7072dc79242b4e9992e47b8fedc917ab22",
+  "raw_unchanged": true,
+  "reviewer": "g2_bundle_review",
+  "status": "BLOCKER0"
+}

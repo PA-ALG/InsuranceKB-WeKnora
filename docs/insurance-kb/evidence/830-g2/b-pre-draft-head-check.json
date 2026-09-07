@@ -1,0 +1,12 @@
+{
+  "contract": "830-g2-b-pre-draft-head-check.v1",
+  "status": "PASS",
+  "head": {
+    "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+    "activation_epoch": 4
+  },
+  "http_body_sha256": "a339054b9726c496ebcca787c74562bb3fb213a1b346598142d6dbb7fb4f5576",
+  "http_gets": 1,
+  "writes": 0,
+  "provider_calls": 0
+}

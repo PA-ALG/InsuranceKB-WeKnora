@@ -1,0 +1,23 @@
+{
+  "contract": "830-g2-b-source-compile-execution.v1",
+  "status": "VALIDATED",
+  "run_id": "g2-b-source-compile-001",
+  "http_status": 200,
+  "usage": {
+    "completion_tokens": 34969,
+    "prompt_cache_hit_tokens": 2432,
+    "prompt_cache_miss_tokens": 93859,
+    "prompt_tokens": 96291,
+    "prompt_tokens_details": {
+      "cached_tokens": 2432
+    },
+    "total_tokens": 131260
+  },
+  "response_receipt_sha256": "6f81e0d9e6b72c4930d031da1cef11707d29eb7c4fffd81774fe74b97d8753b1",
+  "compile_result_sha256": "e62a73243b38240a9340f99a715182f14de8887b59422afc46ea43499dbad907",
+  "provider_calls_this_recovery": 1,
+  "global_calls": 9,
+  "global_max": 10,
+  "new_candidate_created": false,
+  "published": false
+}

@@ -1,0 +1,16 @@
+{
+  "contract": "830-g2-directory-ui-mode-recovery-review.v1",
+  "status": "BLOCKER0",
+  "blockers": 0,
+  "reviewer": "g2_bundle_review",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "script_sha256": "dfea617d8f55f8d8eaed76d4ebf84a912829dc0759b9902c826464800d47882b",
+  "plan_sha256": "48c6734b12072925c7b9ae6f00a52ae3fa103141dffd39f4cf5f5016b7b31871",
+  "dist_content_sha256": "50f3c2f2cee6a4a3c9ddae3fb87d1ec0e277dd86ab0d591aadc6a6e1852da9fc",
+  "dist_file_count": 185,
+  "frontend_clean": true,
+  "script_syntax": "PASS",
+  "special_files_or_symlinks": 0,
+  "reviewed_scope": "Normalize only frozen public dist modes, perform one image-only build and one isolated UI replacement, and preserve failed artifacts and container.",
+  "runtime_pass_scope": "Runtime only; independent browser directory and PDF verification remain required."
+}

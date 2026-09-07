@@ -1,0 +1,21 @@
+{
+  "contract": "830-g2-fe-directory-freeze-review.v1",
+  "status": "BLOCKER0",
+  "reviewer": "g2_bundle_review",
+  "reviewed_freeze_path": "/private/tmp/g2-fe-directory/freeze-receipt.json",
+  "reviewed_freeze_sha256": "b0e504d5be3fa5f8490e2582452e83a6f1d4c879025c8730d0d31979301649f2",
+  "file_count": 7,
+  "patch_sha256": "c4f3848d23190a342dc8720f2c8a494d24eb0eb0bc7dcc0374af1f509eed6039",
+  "component_test_log_sha256": "daf24f22ee28217e869f8693de2fde38d93f4cbc1c63f8178820780aa85e2088",
+  "component_test_result": "4 files passed, 30 tests passed",
+  "typecheck_log_sha256": "391ce47974cc4a4fc65785cd31ed434614260f757308186a7cc50c07c993abdf",
+  "typecheck_result": "vue-tsc exit 0, diagnostics none",
+  "review_scope": [
+    "generic current and pinned search routes",
+    "G2 marker fail-closed classification and pinned root closure",
+    "strict G1 and C6 positive classification",
+    "MVP serving KB navigation",
+    "stale asynchronous load suppression"
+  ],
+  "blockers": []
+}

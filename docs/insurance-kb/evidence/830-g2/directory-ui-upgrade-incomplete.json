@@ -1,0 +1,23 @@
+{
+  "contract": "830-g2-directory-ui-upgrade-failed.v1",
+  "status": "FAILED_HTTP_403",
+  "execution_exit_code": 1,
+  "original_state_sha256": "cfa03e57af1708b8bb8b6d8ec7d4e3995d752c7f4f97c93d02e32381caa57dc1",
+  "original_state": {
+    "status": "STARTED",
+    "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+    "artifact_sha256": "4de9df077a8dc89106a19c6052e3c29c213020711a462513eee255673064a383",
+    "image_id": "sha256:a22aa7feb2ac810144aebecdfa3dfdca2af052c760615a8bf8eadf8a1ad459f1",
+    "previous_container_id": "3c67ef40d8517aee4bffdb34a41236a950692bf2a56592e30767185c3e75757a",
+    "provider_calls": 0,
+    "steps": [
+      "Old UI identity, isolated app and active release guards PASS",
+      "Frozen UI image transferred and checked",
+      "Old UI preserved for rollback",
+      "Replacement UI started on existing loopback port"
+    ]
+  },
+  "diagnosis": "nginx index.html permission denied; port binding correct; index mode0600 and assets directory0700 from inherited private build umask",
+  "blind_retry": false,
+  "recovery_plan": "directory-ui-mode-recovery-plan.json"
+}

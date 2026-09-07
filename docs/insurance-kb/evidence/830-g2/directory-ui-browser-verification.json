@@ -1,0 +1,41 @@
+{
+  "contract": "830-g2-directory-ui-browser-verification.v1",
+  "status": "PASS",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "ui_image": "sha256:444a3de28ef348317320968a0472d3823fde1598f4519a02c7ee67c6d2c2b158",
+  "release_id": "release-0236279f-df73-4433-bebc-cad70f95b989",
+  "activation_epoch": 4,
+  "browser": "CUA in-app browser tab2",
+  "observations": {
+    "main_directory": "PASS",
+    "concept_link": "PASS",
+    "entity_overview_link": "PASS",
+    "field_links_count": 67,
+    "all_field_links_exact_release": true,
+    "free_wiki_link": "PASS_EMPTY_AS_A_CONTAINS_ZERO_FREE_ITEMS",
+    "concept_two_related_fields": "PASS",
+    "pdf_page": 1,
+    "pdf_canvas_count": 1,
+    "citation_highlight": "PASS_VISIBLE_OVER_EXACT_DEFINITION_LINE",
+    "citation_error_count": 0
+  },
+  "pdf_dom_proof": {
+    "page": "1",
+    "highlightStyle": "left: 90.329px; top: 166.45px; width: 160.451px; height: 10.2518px;",
+    "canvasCount": 1,
+    "errors": 0
+  },
+  "evidence_sha256": {
+    "directory-ui-live.txt": "839357ac86f5541e9c35e490ce10510dcb526ee1f43542aae43512c05da6244f",
+    "directory-ui-overview.txt": "08a0821d5699e181a3fff45085d05219d0d0ed01a029d7773083d295d78174c6",
+    "directory-ui-overview-links.json": "692589909155064b407877cc0783226cb9234af7f13743c1a4b081b61ca04700",
+    "directory-ui-free-wiki.txt": "cb90f7349431aff71cc982cec221d326c99c606bd77cf6ad82ba330a598adf5f",
+    "directory-ui-pdf-proof.json": "2f994f14c617bed90a50f9de28b8e78d0a5f98b4a38ea74d37fc87ab051a89cf",
+    "directory-ui-live.png": "e7e28651f211061a5831dcb9f3e16b3ee3fb9bd37a4d6272bd1c0477c203fa1f",
+    "directory-ui-pdf-live.png": "87df984fda6e12a8127758db42e105b5ce9d5cc8db26ce719795a1c311d0a5af"
+  },
+  "provider_calls": 0,
+  "second_snapshot": "NOT_RUN",
+  "agent_turn": "NOT_RUN",
+  "whole_g2_flow": "NOT_RUN"
+}

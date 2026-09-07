@@ -1,0 +1,65 @@
+Browser tab: 1, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/chat/a28701d8-dcd7-47d7-a017-57cbc3648381".
+1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/chat/a28701d8-dcd7-47d7-a017-57cbc3648381
+	2 container app
+		3 container
+			4 container 搜索
+			5 text 新对话
+			6 text 知识库
+			7 text 智能体
+			8 text 共享空间
+			26 text 今天
+			27 container
+				28 text G2 release Agent smoke
+				29 pop up button (collapsed) Secondary Actions: Expand
+					30 image
+			31 container
+				32 text G2 release Agent smoke
+				33 pop up button (collapsed) Secondary Actions: Expand
+					34 image
+			9 container
+				10 text G G2 Runtime Test Operator 594 g2-594-operator@example.invalid
+				11 image
+		12 container
+			13 heading G2 release Agent smoke, Value: 1
+				14 text G2 release Agent smoke
+			15 button 更多对话操作
+				16 image
+			35 text 请先用 wiki_search 在唯一选中的 Wiki 中搜索“被保险人”，再用 wiki_read_page 读取搜索返回的 member_id，最后仅依据该页回答：被保险人是什么意思？
+			36 container
+				37 text 图片无法显示
+			38 container
+				39 image
+				40 text 预览
+			41 container
+				42 text 思考  2  轮 · 调用  2  次工具 · 耗时  10s
+				43 image
+			44 container
+				45 text 被保险人就是受保险合同保障的人。
+				46 button 复制
+					47 image
+				48 button 添加到知识库
+					49 image
+				50 button 请求信息
+					51 image
+			52 container
+				53 text 图片无法显示
+			54 container
+				55 image
+				56 text 预览
+			57 container
+				58 text 图片无法显示
+			59 container
+				60 image
+				61 text 预览
+			17 container
+				18 text entry area (settable)
+				19 container
+					62 text G2 release pin smoke
+					21 image
+				22 container
+					23 text DeepSeek V4 Flash
+					24 image
+				25 image 发送
+	63 container
+
+The focused UI element is 63 container

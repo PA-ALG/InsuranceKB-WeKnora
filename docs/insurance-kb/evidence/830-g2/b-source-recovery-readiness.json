@@ -1,0 +1,15 @@
+{
+  "contract": "830-g2-b-source-recovery-readiness.v1",
+  "status": "PASS_INPUTS_ONLY_PENDING_RUNNER",
+  "review_receipt_sha256": "eb66aca91a63650637aa883a979df4aa8dbdb40e7d8e322164f0ba34ef28d7c4",
+  "source_recovery_input_receipt_sha256": "1100a08349e2108fb3c0a59b994ae479f943ad64636da303c17c69e2beb1782d",
+  "semantic_delta_receipt_sha256": "554ecfc2db043ed0d9cff8828dfa9c567ce3414ae8c8df2726ea7dff269b7813",
+  "facts_unchanged": true,
+  "guard_tests": 5,
+  "guard_tests_status": "PASS",
+  "provider_calls": 0,
+  "candidate_created": false,
+  "previous_failed_candidate_preserved": true,
+  "superseded_review_receipt_sha256": "8c635ab37af1a416c65ec6bcdefa2d87028de201529624071104750935d4d3f1",
+  "review_binding_correction": "Original reviewer corrected one copied file hash; all eight frozen file bindings recomputed and root independently checked"
+}

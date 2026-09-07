@@ -1,0 +1,24 @@
+{
+  "contract": "830-g2-b-publication-preparation.v1",
+  "status": "FINAL_PREPARED_UNSIGNED_PENDING_INDEPENDENT_REVIEW",
+  "candidate_hash": "9edc805e52950e5363d0d0c9d84e286015f9d47c8d662e4ee7b0f74f1ed9a5ad",
+  "approval_sha256": "183a49e9af0627d1eee4f7d34c1218ee1bfa970400c25f662dc8d125dc0b97dc",
+  "files": {
+    "execute_exact_b_publication.py": "b0e7fb52526975f3ef3d9494d5fbaad0ee2406fc1b16b18145f8f0f346290bc3",
+    "prepared/publication-plan.private.json": "5299d615fa0df94ebbb1bc974d78acc2d6c581db4ae612b7e5f0e931a78de0db",
+    "prepared/preparation-identity.private.json": "b64387f07914470f3e0b04a0b56cfac3707a67e10ef6fab28e4b7d383f76cb5d",
+    "RUNBOOK.md": "d20485cce243718fa66391763f6dc84cd95efc4e52e3ade931bcb251d828c325",
+    "green.log": "a9e9a71e6793a3727aace7388b4fe4f028d057c45190705a685d0b9e940aa827"
+  },
+  "review_posts": 0,
+  "activation_posts": 0,
+  "signatures_created": 0,
+  "provider_calls": 0,
+  "superseded_unsigned_preparation_files": {
+    "execute_exact_b_publication.py": "b0e7fb52526975f3ef3d9494d5fbaad0ee2406fc1b16b18145f8f0f346290bc3",
+    "prepared/publication-plan.private.json": "5299d615fa0df94ebbb1bc974d78acc2d6c581db4ae612b7e5f0e931a78de0db",
+    "prepared/preparation-identity.private.json": "b64387f07914470f3e0b04a0b56cfac3707a67e10ef6fab28e4b7d383f76cb5d",
+    "RUNBOOK.md": "d20485cce243718fa66391763f6dc84cd95efc4e52e3ade931bcb251d828c325",
+    "green.log": "a9e9a71e6793a3727aace7388b4fe4f028d057c45190705a685d0b9e940aa827"
+  }
+}

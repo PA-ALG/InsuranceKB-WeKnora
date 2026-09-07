@@ -1,0 +1,30 @@
+{
+  "contract": "830-g2-b-bounded-recovery-execution.v1",
+  "status": "VALIDATED",
+  "run_id": "g2-b-compile-003",
+  "budget_max_b_calls": 4,
+  "budget_max_global_calls": 8,
+  "b_calls_used": 3,
+  "global_calls_used": 7,
+  "files": {
+    "request-identity.json": "420b9ba2bd0e1583ee89b74383446d8ac79a027609a378b08b7455339e822883",
+    "http-request.json": "30cc3680e08281d49fcb4f4ce95bc0021d1730f2cc221b2e5af0a0e55aec80e3",
+    "runbook-review.json": "05b849f452928de4f93a6248d0339d8456f9f1d593126cf6024ff218d2d33454",
+    "attempt-started.json": "70a55e02d4320ecb48297488f9175b033f022e62f3328dfbb45b712ce9ca5584"
+  },
+  "candidate_created": false,
+  "published": false,
+  "http_status": 200,
+  "finish_reason": "stop",
+  "usage": {
+    "completion_tokens": 42158,
+    "prompt_cache_hit_tokens": 2560,
+    "prompt_cache_miss_tokens": 147563,
+    "prompt_tokens": 150123,
+    "prompt_tokens_details": {
+      "cached_tokens": 2560
+    },
+    "total_tokens": 192281
+  },
+  "compile_result_sha256": "9dadf77c81e1c8721ab89967c37be4164fdbe8389e2477e897f41ca1475c296c"
+}

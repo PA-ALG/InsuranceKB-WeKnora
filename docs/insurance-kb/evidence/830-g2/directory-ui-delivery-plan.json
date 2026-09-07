@@ -1,0 +1,45 @@
+{
+  "contract": "830-g2-directory-ui-delivery-plan.v1",
+  "status": "REGISTERED",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "authorization": "User standing authorization: continue G2 core flow and all reasonable necessary G2 extensions",
+  "script": "/private/tmp/g2_ui_directory_delivery.py",
+  "script_sha256": "c37f2c2e4575553044462f6558c036507e3860141796b9aae8996cd53a97994b",
+  "package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+  "scope": "One frontend static build + one linux/arm64 UI image build + one isolated UI replacement",
+  "limits": {
+    "static_builds": 1,
+    "image_builds": 1,
+    "ui_replacements": 1,
+    "provider_calls": 0,
+    "backend_builds": 0,
+    "database_writes": 0
+  },
+  "target": "weknora-g2-594-ui",
+  "loopback": "127.0.0.1:18195",
+  "existing_networks": [
+    "weknora-g2-594-internal",
+    "weknora-g2-594-egress"
+  ],
+  "rollback_container": "weknora-g2-594-ui-before-directory",
+  "dependency_install": false,
+  "node_modules_mutation": false,
+  "source_freeze": "Committed frontend exact HEAD required before/after build and before replacement",
+  "actual_after_checks": [
+    "index200",
+    "proxy authenticated exact epoch4 Head",
+    "same backend container"
+  ],
+  "failure_policy": "Preserve partial state; no blind retry or further replacement",
+  "script_pass_scope": "Runtime replacement only. Script PASS does not assert browser or whole G2 flow completion.",
+  "subsequent_independent_browser_verification": {
+    "executor": "root via CUA after runtime PASS",
+    "receipt": "directory-ui-browser-verification.json",
+    "checks": [
+      "browser directory concept/entity/freewiki navigation",
+      "PDF page and highlight"
+    ],
+    "initial_status": "NOT_RUN",
+    "required_before_ui_business_completion": true
+  }
+}

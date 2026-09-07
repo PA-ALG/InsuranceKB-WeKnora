@@ -1,0 +1,224 @@
+Browser tab: 2, Title: "WeKnora", URL: "http://127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/entity_overview_293bec89159f3d9d6cc1613425baf17cf2b3ae3713df18714ba5d8a48a841d96?release_id=release-0236279f-df73-4433-bebc-cad70f95b989".
+1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/entity_overview_293bec89159f3d9d6cc1613425baf17cf2b3ae3713df18714ba5d8a48a841d96
+	2 container app
+		3 container
+			4 container 搜索
+			5 text 新对话
+			6 text 知识库
+			7 text 智能体
+			8 text 共享空间
+			32 text 暂无对话
+			9 container
+				10 text G G2 Runtime Test Operator 594 g2-594-operator@example.invalid
+				11 image
+		33 container
+			34 text 已发布知识
+			35 heading ping-an-e-sheng-bao, Value: 1
+				36 text ping-an-e-sheng-bao
+			37 container 相关知识
+				38 heading 相关知识, Value: 2
+					39 text 相关知识
+				40 content list
+					41 container
+						42 link Description: policyholder_rights, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0580915de3038513cc2e1dd61d382206006e65ef3f7f238d957a2a25a56d1bec
+						43 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					44 container
+						45 link Description: target_customer_profile, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_077ff0eb98f61b270335fe0f3fbed6bc5005624ff7d494530aa17a95cb46b142
+						46 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					47 container
+						48 link Description: tax_qualified_status, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0991b471626d24ed5e0ac90b80bf3ca71c9b6c627d999e5d1692399f5cb4f39c
+						49 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					50 container
+						51 link Description: claim_application_deadline_and_documents, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0a6de79e2522c2c8d6655d9f2789daa670658b1c70c9ee9879de4fe905e584a3
+						52 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					53 container
+						54 link Description: product_overview, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0c1ad2fcc3c32d5de70ad18e550f09fd6f2bcb3fa9b35e1d5411720889a1d0dc
+						55 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					56 container
+						57 link Description: external_publication_status, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0c4a39000ca6d0ac5cc5a8f012e8266d1a34ec3cc967eed0aa478f62b59f8383
+						58 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					59 container
+						60 link Description: exclusions, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_0e31c5a2014fa376b0a76e370441836fb25e9eef071f2e62cec6710af763f588
+						61 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					62 container
+						63 link Description: guaranteed_renewal_period, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_12736b3e5cfcd35f6a3e6c282c4dcaaf2cd478cb7649502ff91209de9f927843
+						64 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 材料明确不提供 1.8 保险期间和不保 证续保 2.我们不保什么 1.8 保险期间与不保证 续保
+					65 container
+						66 link Description: special_coverage_and_exclusion_tags, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_1fd12491000c728a1639e2848585c6dd2888f8b1c956725f5c8fd027aced029a
+						67 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					68 container
+						69 link Description: premium_grace_period, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_245c8d545ff5dafaa301c07b7099f8fe46124f029f3700f945a5cac1cb28a86e
+						70 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					71 container
+						72 link Description: deductible_rules, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_2e25a9b3f6c5efb8ffd884a5dfcfc499796f41c0b58611ea4a86325a22d7a97f
+						73 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					74 container
+						75 link Description: covered_risk_categories, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_2e93b0e08edbb64d91ec0edc757adcd5a53b3f101f3158a2b5fbf0dddc7e550f
+						76 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					77 container
+						78 link Description: insured_eligibility, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_30866b0d77bf7de64a5006c05b63dc1438c8beca312fec3016bc82abd9e5496f
+						79 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 材料已确认 您可以同时为符合我们承保条件的家庭成员投保本产品，家庭成员仅指投保 人本人、投保时与投保人具有合法婚姻关系的配偶、投保人的父母以及投保 人的子女。
+					80 container
+						81 link Description: four_step_sales_script, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_372330dd4f0ce0dbcd43f9addc52fc8ba4ec91440036f597ac088095234dbe1c
+						82 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					83 container
+						84 link Description: product_type, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_3b30055a425ed11de2665e5b80d516b902d7d8e2ca14c49bf4978b6cc4558540
+						85 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					86 container
+						87 link Description: outpatient_inpatient_scope, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_3bab33d2ca74c77378b10718b8a50bff9a7912f66e1689180d25dd9026356534
+						88 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					89 container
+						90 link Description: premium_adjustment_rules, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_48e4d606708d58a307ea00a5e5ffd9aef96fbc073c65587cbdb650b2dd84e84c
+						91 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					92 container
+						93 link Description: premium_payment_frequency, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_4c0821385d8370c676b7d62de75a88cc2226949eaa3367d6ba606be951b253da
+						94 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					95 container
+						96 link Description: reimbursement_rate_rules, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_4cf8d23bc80e3176d21a7212ea40a470dbe1e20df87aad37765b1a03fe22231f
+						97 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					98 container
+						99 link Description: tax_benefit_rules, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_58ca26e8e7717f2d3a0f4968be7c99e76a96314ecb07b12517cf5c0f735d4127
+						100 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					101 container
+						102 link Description: out_of_hospital_special_drug_coverage, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_5adb36e5667781e6da53cc8a20708e075823b9d1970684b178ed411f4864f544
+						103 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					104 container
+						105 link Description: health_declaration_requirements, Value: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/assertion_6102237700e9f5ea127389b90ca89cb2e5487f6a6ca8bc6296c6be585da98b80
+						106 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 材料已确认 订立本合同时，我们应当向您说明本合同的内容。对保险条款中免除我们责 任的条款，我们在订立合同时应当在投保单、保险单或者其他保险凭证上作 出足以引起您注意的提示，并对该条款的内容以书面或者口头形式向您作出 明确说明，未作提示或者明确说明的，该条款不成为合同的内容。 订立本合同时，我们就您和被保险人的有关情况提出询问，您应当如实告知。 如果您故意或者因重大过失未履行前款规定的如实告知义务，足以影响我们 决定是否同意承保或者提高保险费率的，我们有权解除本合同。 如果您故意不履行如实告知义务，对于本合同解除前发生的保险事故，我们 不承担保险责任，并不退还保险费。
+					107 container
+						108 link Description: product_name, Value: …
+						109 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					110 container
+						111 link Description: coverage_term_category, Value: …
+						112 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					113 container
+						114 link Description: pre_existing_condition_rules, Value: …
+						115 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					116 container
+						117 link Description: product_conversion_rules, Value: …
+						118 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					119 container
+						120 link Description: premium_medical_facility_coverage, Value: …
+						121 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					122 container
+						123 link Description: product_short_name, Value: …
+						124 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					125 container
+						126 link Description: product_bundle_rules, Value: …
+						127 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					128 container
+						129 link Description: sales_end_date, Value: …
+						130 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					131 container
+						132 link Description: age_segment_tags, Value: …
+						133 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					134 container
+						135 link Description: sales_channels, Value: …
+						136 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					137 container
+						138 link Description: eligible_service_packages, Value: …
+						139 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					140 container
+						141 link Description: coverage_period, Value: …
+						142 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：ANSWER_NOT_FOUND
+					143 container
+						144 link Description: reimbursable_expense_scope, Value: …
+						145 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					146 container
+						147 link Description: guaranteed_renewal_status, Value: …
+						148 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					149 container
+						150 link Description: insurance_category, Value: …
+						151 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					152 container
+						153 link Description: social_insurance_requirement, Value: …
+						154 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					155 container
+						156 link Description: objection_handling_scripts, Value: …
+						157 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					158 container
+						159 link Description: cooling_off_period, Value: …
+						160 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					161 container
+						162 link Description: marketing_tagline, Value: …
+						163 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					164 container
+						165 link Description: geographic_eligibility_requirements, Value: …
+						166 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					167 container
+						168 link Description: official_product_features, Value: …
+						169 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					170 container
+						171 link Description: surrender_and_cancellation_terms, Value: …
+						172 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					173 container
+						174 link Description: indemnity_principle, Value: …
+						175 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					176 container
+						177 link Description: underwriting_method, Value: …
+						178 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					179 container
+						180 link Description: waiting_period, Value: …
+						181 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					182 container
+						183 link Description: policy_role, Value: …
+						184 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					185 container
+						186 link Description: product_code, Value: …
+						187 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					188 container
+						189 link Description: eligible_hospital_scope, Value: …
+						190 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					191 container
+						192 link Description: cancer_medical_coverage, Value: …
+						193 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					194 container
+						195 link Description: sales_status, Value: …
+						196 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					197 container
+						198 link Description: coverage_and_renewal_terms, Value: …
+						199 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					200 container
+						201 link Description: coverage_responsibilities, Value: …
+						202 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：ANSWER_NOT_FOUND
+					203 container
+						204 link Description: post_discontinuation_renewal_arrangement, Value: …
+						205 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：ANSWER_NOT_FOUND
+					206 container
+						207 link Description: coverage_summary, Value: …
+						208 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					209 container
+						210 link Description: zero_deductible_flag, Value: …
+						211 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					212 container
+						213 link Description: coverage_limit_category, Value: …
+						214 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					215 container
+						216 link Description: product_faq, Value: …
+						217 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					218 container
+						219 link Description: entry_age_range, Value: …
+						220 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					221 container
+						222 link Description: sales_start_date, Value: …
+						223 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					224 container
+						225 link Description: medical_service_benefits, Value: …
+						226 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					227 container
+						228 link Description: eligible_occupation_classes, Value: …
+						229 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：live_chunk_quote_not_unique
+					230 container
+						231 link Description: premium_payment_term, Value: …
+						232 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_LOCATION_UNRESOLVED
+					233 container
+						234 link Description: sales_pitch_script, Value: …
+						235 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：SOURCE_NOT_AVAILABLE
+					236 container
+						237 link Description: direct_billing_and_advance_payment_rules, Value: …
+						238 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+					239 container
+						240 link Description: product_summary, Value: …
+						241 text ping-an-e-sheng-bao · ping-an-e-sheng-bao@596-1 · 待补充 未知：FORMATION_MODE_DEFERRED
+
+The focused UI element is 1 AXWebArea WeKnora, URL: 127.0.0.1:18195/platform/knowledge-bases/8d5695de-f255-42d5-9a41-042ba86e97b9/schema-wiki/concept-pages/entity_overview_293bec89159f3d9d6cc1613425baf17cf2b3ae3713df18714ba5d8a48a841d96

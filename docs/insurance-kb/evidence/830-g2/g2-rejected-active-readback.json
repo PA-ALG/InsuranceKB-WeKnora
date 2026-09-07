@@ -1,0 +1,204 @@
+{
+  "contract": "830-g2-rejected-active-readback.v1",
+  "status": "PASS",
+  "head": {
+    "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+    "activation_epoch": 5
+  },
+  "members": 140,
+  "seed_identities_checked": 12,
+  "checks": [
+    {
+      "case_id": "G2-SEED-07",
+      "key": "low_value_mention",
+      "disposition": "mention",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-08",
+      "key": "duplicate_insured",
+      "disposition": "duplicate",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-09",
+      "key": "advertisement",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-10",
+      "key": "ocr_noise",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-11",
+      "key": "unsupported_claim",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-12",
+      "key": "missing_identity",
+      "disposition": "pending",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-13",
+      "key": "score_60",
+      "disposition": "pending",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-14",
+      "key": "score_79",
+      "disposition": "pending",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-16",
+      "key": "score_100_without_source",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-21",
+      "key": "compression_drops_negation",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-23",
+      "key": "foreign_identity",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "case_id": "G2-SEED-24",
+      "key": "dangling_link",
+      "disposition": "reject",
+      "navigation_members": 0,
+      "search_results": 0
+    },
+    {
+      "query": "至尊守护，幸福一生！",
+      "search_results": 0
+    },
+    {
+      "query": "所有费用均无条件报销",
+      "search_results": 0
+    },
+    {
+      "query": "本合同保证续保",
+      "search_results": 0
+    }
+  ],
+  "observations": [
+    {
+      "path": "/current",
+      "http": 200,
+      "response_sha256": "283900c1d8807611a61e8f164c91df9660fe81dc5200c9ce13f66d9d665b3215"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search",
+      "http": 200,
+      "response_sha256": "3514858af60f4929fe0020986a710ba990f3e0c4d10c439bf08100d7bbcbdd92"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=low_value_mention",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=duplicate_insured",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=advertisement",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=ocr_noise",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=unsupported_claim",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=missing_identity",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=score_60",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=score_79",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=score_100_without_source",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=compression_drops_negation",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=foreign_identity",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=dangling_link",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=%E8%87%B3%E5%B0%8A%E5%AE%88%E6%8A%A4%EF%BC%8C%E5%B9%B8%E7%A6%8F%E4%B8%80%E7%94%9F%EF%BC%81",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=%E6%89%80%E6%9C%89%E8%B4%B9%E7%94%A8%E5%9D%87%E6%97%A0%E6%9D%A1%E4%BB%B6%E6%8A%A5%E9%94%80",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q=%E6%9C%AC%E5%90%88%E5%90%8C%E4%BF%9D%E8%AF%81%E7%BB%AD%E4%BF%9D",
+      "http": 200,
+      "response_sha256": "45562001ecc0a07ab2639e0e5bfc604e68d67754c2063d2802efa739f1ab7581"
+    },
+    {
+      "path": "/current",
+      "http": 200,
+      "response_sha256": "283900c1d8807611a61e8f164c91df9660fe81dc5200c9ce13f66d9d665b3215"
+    }
+  ],
+  "provider_calls": 0,
+  "mutations": 0,
+  "scope_note": "Frozen seed audit-only identities and three explicit rejected synthetic strings absent from actual R5 navigation/search. This is release-boundary verification, not semantic garbage detection or a claim that each seed underwent publication.",
+  "checked_at": "2026-09-07T02:54:37.757349+00:00"
+}

@@ -1,0 +1,24 @@
+{
+  "contract": "830-g2-directory-ui-delivery-review.v1",
+  "status": "BLOCKER0",
+  "blockers": 0,
+  "reviewer": "g2_bundle_review",
+  "source_head": "99ec069277cf3336962e5fa2ecaafed19e8aad35",
+  "script_sha256": "c37f2c2e4575553044462f6558c036507e3860141796b9aae8996cd53a97994b",
+  "plan_sha256": "95a6ee08df194b7f74759e66796c1ca4c323c3e30a6fb93b3aab922a18cfce86",
+  "package_lock_sha256": "dc2c1507f80ddf1404e94394e98c2de1ca89177e5b1373e77271f4ee88da90fb",
+  "frontend_clean": true,
+  "reviewed_file_count": 9,
+  "reviewed_files": {
+    "frontend/src/api/schema-wiki/conceptDirectory830G2.ts": "331f74ddccbbf31697dd7c5f5106b05a2d4b133bb6c5f30f84ef0c3d2892f79e",
+    "frontend/src/api/schema-wiki/conceptDirectory830G2.spec.ts": "a97eec306f6d391235d3e9a2a8c41026ea4b9f1e1d3a883e73d79aa6be73395c",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue": "d987a8fd9ca5de085f056f283b39a993071c8bc24798ca079423e9f5a68c3067",
+    "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts": "5084356dc17b62cfc8ec04750c6bb9a8b2e430731e43d3bba9ec41f01d2e8190",
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue": "fd72fd12f5de4c058a50ff1571491bee88054a6d9a43b96ca7464c62d0a0cdd0",
+    "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts": "5126ba80b857bbbeb55f68017118d27900386c0cb505c7536eec0101dad7fa11",
+    "frontend/src/views/knowledge/KnowledgeBase.vue": "0d12b862d098cc33887264fbff59427eba1c0dcd63b93fb0a12f8682e660635f",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue": "7d4f962e6a5f28bdcaad0391c1dcb153d0fd2db05fa07f7940b0a72ea31efb15",
+    "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts": "4c6ede5efe09ed133858c15450f8d4abfe2e669c9997089518c21ea13802b832"
+  },
+  "script_pass_scope": "Runtime replacement only; browser navigation, PDF page and highlight remain NOT_RUN and require the separate browser verification receipt declared by the plan."
+}
