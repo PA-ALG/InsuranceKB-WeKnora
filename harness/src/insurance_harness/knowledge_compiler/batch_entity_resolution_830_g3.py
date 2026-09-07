@@ -291,9 +291,34 @@ class SourceProvenanceV1(_FrozenModel):
         return self
 
 
+class RegisteredSourceReceipt830G3V1(_FrozenModel):
+    """Exact mirror of the current knowledge-revision-source.v1 HTTP data."""
+
+    contract: Literal["knowledge-revision-source.v1"]
+    knowledge_id: Text
+    parse_attempt: Annotated[StrictInt, Field(gt=0)]
+    revision_source_id: Hash
+    file_sha256: Hash
+    object_sha256: Hash
+    size: Annotated[StrictInt, Field(gt=0)]
+    mime_type: Text
+    page_count: Annotated[StrictInt, Field(gt=0)]
+    manifest_algorithm: Literal["weknora.chunk_manifest.v1"]
+    manifest_digest: Hash
+    chunk_count: Annotated[StrictInt, Field(gt=0)]
+    binding_digest: Hash
+    retention_state: Text
+
+
+SourceReceipt830G3 = Annotated[
+    LiveRevisionSourceReceiptV1 | RegisteredSourceReceipt830G3V1,
+    Field(discriminator="contract"),
+]
+
+
 class CorpusEntryV1(_FrozenModel):
     material_id: Text
-    receipt: LiveRevisionSourceReceiptV1
+    receipt: SourceReceipt830G3
     native_capture_sha256: Hash
     parser_identity_sha256: Hash
     blocks: tuple[SourceBlock, ...] = Field(min_length=1)
@@ -982,16 +1007,51 @@ def _exact[ModelT: BaseModel](value: object, expected: type[ModelT]) -> ModelT:
         raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID") from None
 
 
+def _receipt_parse_attempt(receipt: SourceReceipt830G3) -> int:
+    if isinstance(receipt, RegisteredSourceReceipt830G3V1):
+        return receipt.parse_attempt
+    return receipt.weknora_parse_attempt
+
+
+def _receipt_manifest_digest(receipt: SourceReceipt830G3) -> str:
+    if isinstance(receipt, RegisteredSourceReceipt830G3V1):
+        return receipt.manifest_digest
+    return receipt.weknora_manifest_digest
+
+
+def _receipt_scope(
+    receipt: SourceReceipt830G3, corpus: BatchCorpusV1
+) -> tuple[int, str, str, str]:
+    if isinstance(receipt, RegisteredSourceReceipt830G3V1):
+        return corpus.tenant_id, corpus.space_id, corpus.raw_kb_id, corpus.wiki_kb_id
+    return receipt.tenant_id, receipt.space_id, receipt.raw_kb_id, receipt.wiki_kb_id
+
+
+def _receipt_source_key(
+    receipt: SourceReceipt830G3, corpus: BatchCorpusV1
+) -> tuple[int, str, str, str, str, int, str]:
+    return (
+        *_receipt_scope(receipt, corpus),
+        receipt.knowledge_id,
+        _receipt_parse_attempt(receipt),
+        receipt.revision_source_id,
+    )
+
+
 def _entry_source_reasons(entry: CorpusEntryV1, corpus: BatchCorpusV1) -> set[ReasonCode]:
     receipt = entry.receipt
     reasons: set[ReasonCode] = set()
-    if (receipt.tenant_id, receipt.space_id, receipt.raw_kb_id, receipt.wiki_kb_id) != (
+    if _receipt_scope(receipt, corpus) != (
         corpus.tenant_id,
         corpus.space_id,
         corpus.raw_kb_id,
         corpus.wiki_kb_id,
     ):
         reasons.add("SCOPE_MISMATCH")
+    if isinstance(receipt, RegisteredSourceReceipt830G3V1) and (
+        receipt.object_sha256 != receipt.file_sha256 or receipt.retention_state != "pinned"
+    ):
+        reasons.add("SOURCE_RECEIPT_MISMATCH")
     for block in entry.blocks:
         if (block.tenant_id, block.space_id, block.raw_kb_id) != (
             corpus.tenant_id,
@@ -1001,10 +1061,10 @@ def _entry_source_reasons(entry: CorpusEntryV1, corpus: BatchCorpusV1) -> set[Re
             reasons.add("SCOPE_MISMATCH")
         if (
             block.knowledge_id != receipt.knowledge_id
-            or block.parse_attempt != receipt.weknora_parse_attempt
+            or block.parse_attempt != _receipt_parse_attempt(receipt)
             or block.revision_id != receipt.revision_source_id
             or block.source_hash != receipt.file_sha256
-            or block.parse_hash != receipt.weknora_manifest_digest
+            or block.parse_hash != _receipt_manifest_digest(receipt)
             or block.parser_identity != entry.parser_identity_sha256
             or block.page_number > receipt.page_count
         ):
@@ -1047,6 +1107,7 @@ def _valid_model_receipt(
 def _matching_rule(
     *,
     policy: BatchResolutionPolicyV1,
+    space_id: str,
     entry: CorpusEntryV1,
     proposal: MaterialProposalV1,
     evidence: ProposalEvidenceV1,
@@ -1063,7 +1124,7 @@ def _matching_rule(
             entry.provenance.kind not in rule.provenance_kinds
             or proposal.material_role not in rule.material_roles
             or evidence.purpose not in rule.purposes
-            or entry.receipt.space_id not in rule.space_ids
+            or space_id not in rule.space_ids
             or (evidence.purpose == "field" and evidence.field_key not in rule.field_keys)
             or (rule.product_version_anchors and anchor_value not in rule.product_version_anchors)
         ):
@@ -1173,6 +1234,7 @@ def _json_value(value: object) -> object:
 
 def _evidence_reasons(
     *,
+    space_id: str,
     entry: CorpusEntryV1,
     proposal: MaterialProposalV1,
     entity: EntityProposalV1,
@@ -1196,6 +1258,7 @@ def _evidence_reasons(
             reasons.add("EVIDENCE_JOIN_FAILED")
         if not _matching_rule(
             policy=policy,
+            space_id=space_id,
             entry=entry,
             proposal=proposal,
             evidence=row,
@@ -1291,6 +1354,7 @@ def _evidence_reasons(
 
 def _multi_identity_evidence_ids(
     *,
+    space_id: str,
     entry: CorpusEntryV1,
     proposal: MaterialProposalV1,
     entity: EntityProposalV1,
@@ -1324,6 +1388,7 @@ def _multi_identity_evidence_ids(
             continue
         if not _matching_rule(
             policy=policy,
+            space_id=space_id,
             entry=entry,
             proposal=proposal,
             evidence=row,
@@ -1458,6 +1523,7 @@ def _has_existing_identity_competition(
 
 def _entity_reasons(
     *,
+    space_id: str,
     entity: EntityProposalV1,
     proposal: MaterialProposalV1,
     entry: CorpusEntryV1,
@@ -1467,7 +1533,15 @@ def _entity_reasons(
     forced_reasons: set[ReasonCode],
 ) -> tuple[set[ReasonCode], ClassificationAssignmentV1]:
     reasons = set(forced_reasons)
-    reasons.update(_evidence_reasons(entry=entry, proposal=proposal, entity=entity, policy=policy))
+    reasons.update(
+        _evidence_reasons(
+            space_id=space_id,
+            entry=entry,
+            proposal=proposal,
+            entity=entity,
+            policy=policy,
+        )
+    )
     if any(value is None for value in (entity.issuer, entity.name, entity.product_code)):
         reasons.add("IDENTITY_EVIDENCE_MISSING")
     if entity.version_label is None or entity.filing_or_registration is None:
@@ -1487,6 +1561,7 @@ def _entity_reasons(
 
 def _decision(
     *,
+    space_id: str,
     entity: EntityProposalV1,
     proposal: MaterialProposalV1,
     entry: CorpusEntryV1,
@@ -1501,6 +1576,7 @@ def _decision(
 ) -> EntityDecisionV1:
     anchors = _anchors(entity)
     reasons, classification = _entity_reasons(
+        space_id=space_id,
         entity=entity,
         proposal=proposal,
         entry=entry,
@@ -1568,7 +1644,7 @@ def _decision(
         reasons.add("NEW_ENTITY_CANDIDATE")
         if candidate is None:
             candidate = _candidate(
-                space_id=entry.receipt.space_id,
+                space_id=space_id,
                 entity=entity,
                 evidence_ids=tuple(sorted(set(entity.identity_evidence_ids))),
             )
@@ -1689,15 +1765,7 @@ def resolve_batch(
         exact_existing = _exact(existing_entities, ExistingEntitySnapshotV1)
         exact_policy = _exact(policy, BatchResolutionPolicyV1)
         source_keys = tuple(
-            (
-                entry.receipt.tenant_id,
-                entry.receipt.space_id,
-                entry.receipt.raw_kb_id,
-                entry.receipt.wiki_kb_id,
-                entry.receipt.knowledge_id,
-                entry.receipt.weknora_parse_attempt,
-                entry.receipt.revision_source_id,
-            )
+            _receipt_source_key(entry.receipt, exact_corpus)
             for entry in exact_corpus.entries
         )
         if len(source_keys) != len(set(source_keys)):
@@ -1774,6 +1842,7 @@ def resolve_batch(
             for entity in proposal_row.entities:
                 row_id = (entry.material_id, entity.proposal_ref)
                 reasons, classification = _entity_reasons(
+                    space_id=exact_corpus.space_id,
                     entity=entity,
                     proposal=proposal_row,
                     entry=entry,
@@ -1786,6 +1855,7 @@ def resolve_batch(
                 row_reasons[row_id] = reasons
                 row_classification[row_id] = classification
                 row_multi_identity_evidence[row_id] = _multi_identity_evidence_ids(
+                    space_id=exact_corpus.space_id,
                     entry=entry,
                     proposal=proposal_row,
                     entity=entity,
@@ -1947,6 +2017,7 @@ def resolve_batch(
                 forced = set(material_reasons)
                 children.append(
                     _decision(
+                        space_id=exact_corpus.space_id,
                         entity=entity,
                         proposal=material_proposal,
                         entry=entry,
@@ -2049,6 +2120,8 @@ __all__ = [
     "ObservedNormalizedValueV1",
     "ProposalBatchV1",
     "ProposalEvidenceV1",
+    "RegisteredSourceReceipt830G3V1",
+    "SourceReceipt830G3",
     "SourceProvenanceV1",
     "TrustRuleV1",
     "VersionAnchorV1",

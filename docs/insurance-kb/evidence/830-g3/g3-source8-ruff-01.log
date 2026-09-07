@@ -1,0 +1,12 @@
+E501 Line too long (104 > 100)
+   --> harness/tests/test_batch_entity_resolution_830_g3.py:354:73
+    |
+352 |     reason: str,
+353 | ) -> None:
+354 |     text = "平安保险 平安安心医疗保险 产品代码 MED-BLOCK 登记编号 REG-BLOCK 版本 2026 医疗保险 官方条款"
+    |                                                                                                      ^^^
+355 |     result = _resolve(
+356 |         catalog,
+    |
+
+Found 1 error.

@@ -1,0 +1,26 @@
+{
+  "contract": "830-g3-d-resume-after-c-compatibility.v1",
+  "recorded_at": "2026-09-07T11:54:36.196764+00:00",
+  "owner": "g3_catalog_impl",
+  "status": "AUTHORIZED_RESUME_WITHIN_FROZEN_D_DOMAIN",
+  "contract_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+  "amendment7_sha256": "975ae956c2c851b8f8fffffbffd5bbbebb6b4051fa031237db3c0afb224f9380",
+  "amendment8_sha256": "0b2e924174e4ea31143f369dcf9ec2479a1f01e003b29e0f84cf188ddaf7dc66",
+  "c_source_sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+  "c_test_sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216",
+  "c_review": "c-source-registration-independent-review.json",
+  "write_paths": [
+    "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+    "harness/tests/test_batch_concept_compile_830_g3.py",
+    "internal/types/concept_free_wiki_830_g3.go",
+    "internal/types/concept_free_wiki_830_g3_test.go",
+    "harness/tests/fixtures/batch_concept_compile_830_g3/**"
+  ],
+  "next": "actual G2 epoch5 134 exact base /2 alignment/342 final fixture, exact serializer8MiB before handler/service/UI; Python-Go same canonical and both receipt tags",
+  "closed_paths": [
+    "batch_canonical_830_g3.py",
+    "batch_entity_resolution_830_g3.py",
+    "their tests"
+  ],
+  "effects_allowed": "local code/fake/static validation only; no provider/runtime/build/upload"
+}

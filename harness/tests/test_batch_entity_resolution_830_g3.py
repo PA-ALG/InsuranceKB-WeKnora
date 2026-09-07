@@ -42,6 +42,9 @@ _WORKBOOK = (
     / "【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx"
 )
 _CONFIG = _REPO / "docs/insurance-kb/evidence/830-g3/profile-mapping-config.json"
+_ACTUAL_REGISTERED_RECEIPT = (
+    _REPO / "docs/insurance-kb/evidence/830-g2/a-source-backfill-verified.json"
+)
 _HASH_COUNTER = count(1)
 
 
@@ -150,6 +153,275 @@ def _entry(*, material_id: str, text: str) -> g.CorpusEntryV1:
         blocks=(block,),
         provenance=provenance,
     )
+
+
+def _registered_entry(
+    *,
+    material_id: str,
+    text: str,
+    receipt_updates: dict[str, object] | None = None,
+    block_updates: dict[str, object] | None = None,
+) -> g.CorpusEntryV1:
+    parser = hashlib.sha256((material_id + "-parser").encode()).hexdigest()
+    receipt_data: dict[str, object] = {
+        "contract": "knowledge-revision-source.v1",
+        "knowledge_id": f"knowledge-{material_id}",
+        "parse_attempt": 2,
+        "revision_source_id": hashlib.sha256((material_id + "-source").encode()).hexdigest(),
+        "file_sha256": hashlib.sha256((material_id + "-file").encode()).hexdigest(),
+        "object_sha256": hashlib.sha256((material_id + "-file").encode()).hexdigest(),
+        "size": len(text.encode()),
+        "mime_type": "application/pdf",
+        "page_count": 1,
+        "manifest_algorithm": "weknora.chunk_manifest.v1",
+        "manifest_digest": hashlib.sha256((material_id + "-chunks").encode()).hexdigest(),
+        "chunk_count": 1,
+        "binding_digest": hashlib.sha256((material_id + "-binding").encode()).hexdigest(),
+        "retention_state": "pinned",
+    }
+    receipt_data.update(receipt_updates or {})
+    receipt = g.RegisteredSourceReceipt830G3V1.model_validate(receipt_data)
+    block_data: dict[str, object] = {
+        "tenant_id": 7,
+        "space_id": "space-g3",
+        "raw_kb_id": "raw-g3",
+        "knowledge_id": receipt.knowledge_id,
+        "parse_attempt": receipt.parse_attempt,
+        "revision_id": receipt.revision_source_id,
+        "source_hash": receipt.file_sha256,
+        "parse_hash": receipt.manifest_digest,
+        "parser_identity": parser,
+        "block_id": f"block-{material_id}",
+        "page_number": 1,
+        "text": text,
+        "source_type": "DOCUMENT",
+    }
+    block_data.update(block_updates or {})
+    block = SourceBlock.model_validate(block_data)
+    provenance = _new(
+        g.SourceProvenanceV1,
+        "source-provenance.830.g3.v1",
+        "declaration_sha256",
+        provenance_id=f"provenance-{material_id}",
+        kind="official_public_document",
+        source_uri=f"urn:fixture:{material_id}",
+        acquisition_receipt_sha256=hashlib.sha256((material_id + "-capture").encode()).hexdigest(),
+        declared_by="registered-source-fixture",
+    )
+    return _new(
+        g.CorpusEntryV1,
+        "corpus-entry.830.g3.v1",
+        "entry_sha256",
+        material_id=material_id,
+        receipt=receipt,
+        native_capture_sha256=hashlib.sha256((material_id + "-native").encode()).hexdigest(),
+        parser_identity_sha256=parser,
+        blocks=(block,),
+        provenance=provenance,
+    )
+
+
+def test_actual_registered_source_receipt_round_trips_exact_http_shape() -> None:
+    receipt = json.loads(_ACTUAL_REGISTERED_RECEIPT.read_text(encoding="utf-8"))["source"]
+    parser = hashlib.sha256(b"actual-registered-parser-fixture").hexdigest()
+    block = SourceBlock(
+        tenant_id=7,
+        space_id="space-g3",
+        raw_kb_id="raw-g3",
+        knowledge_id=receipt["knowledge_id"],
+        parse_attempt=receipt["parse_attempt"],
+        revision_id=receipt["revision_source_id"],
+        source_hash=receipt["file_sha256"],
+        parse_hash=receipt["manifest_digest"],
+        parser_identity=parser,
+        block_id="actual-http-shape-block",
+        page_number=1,
+        text="actual HTTP receipt structure fixture",
+        source_type="DOCUMENT",
+    )
+    provenance = _new(
+        g.SourceProvenanceV1,
+        "source-provenance.830.g3.v1",
+        "declaration_sha256",
+        provenance_id="actual-http-shape-provenance",
+        kind="official_public_document",
+        source_uri="urn:fixture:actual-http-receipt-shape",
+        acquisition_receipt_sha256=hashlib.sha256(b"actual-http-capture").hexdigest(),
+        declared_by="existing-g2-evidence-fixture",
+    )
+
+    entry = _new(
+        g.CorpusEntryV1,
+        "corpus-entry.830.g3.v1",
+        "entry_sha256",
+        material_id="actual-http-shape",
+        receipt=receipt,
+        native_capture_sha256=hashlib.sha256(b"actual-http-native-fixture").hexdigest(),
+        parser_identity_sha256=parser,
+        blocks=(block,),
+        provenance=provenance,
+    )
+
+    assert entry.receipt.model_dump(mode="json") == receipt
+
+
+def test_registered_source_follows_same_create_identity_as_legacy(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    text = "平安保险 平安安心医疗保险 产品代码 MED-REG 登记编号 REG-REG 版本 2026 医疗保险 官方条款"
+    entity_rows = (
+        (
+            {
+                "proposal_ref": "product-main",
+                "name": "平安安心医疗保险",
+                "product_code": "MED-REG",
+                "filing": "REG-REG",
+            },
+        ),
+    )
+    legacy = _resolve(catalog, (_entry(material_id="legacy-reg", text=text),), entity_rows)
+    registered = _resolve(
+        catalog,
+        (_registered_entry(material_id="registered-reg", text=text),),
+        entity_rows,
+    )
+
+    legacy_candidate = legacy.decisions[0].children[0].entity_candidate
+    registered_candidate = registered.decisions[0].children[0].entity_candidate
+    assert legacy.decisions[0].disposition == registered.decisions[0].disposition == "CREATE"
+    assert legacy_candidate is not None and registered_candidate is not None
+    assert registered_candidate.entity_key_sha256 == legacy_candidate.entity_key_sha256
+    assert (
+        registered_candidate.version_candidate_key_sha256
+        == legacy_candidate.version_candidate_key_sha256
+    )
+
+
+@pytest.mark.parametrize(
+    "receipt_updates",
+    (
+        {"object_sha256": "f" * 64},
+        {"retention_state": "temporary"},
+    ),
+)
+def test_registered_receipt_authority_mismatch_is_quarantined(
+    catalog: SchemaPackCatalogV1,
+    receipt_updates: dict[str, object],
+) -> None:
+    text = "平安保险 平安安心医疗保险 产品代码 MED-BAD 登记编号 REG-BAD 版本 2026 医疗保险 官方条款"
+    result = _resolve(
+        catalog,
+        (
+            _registered_entry(
+                material_id="registered-authority-bad",
+                text=text,
+                receipt_updates=receipt_updates,
+            ),
+        ),
+        (
+            (
+                {
+                    "proposal_ref": "product-main",
+                    "name": "平安安心医疗保险",
+                    "product_code": "MED-BAD",
+                    "filing": "REG-BAD",
+                },
+            ),
+        ),
+    )
+
+    assert result.decisions[0].disposition == "QUARANTINE"
+    assert "SOURCE_RECEIPT_MISMATCH" in result.decisions[0].reason_codes
+
+
+@pytest.mark.parametrize(
+    "block_updates,reason",
+    (
+        ({"space_id": "other-space"}, "SCOPE_MISMATCH"),
+        ({"parse_attempt": 3}, "SOURCE_RECEIPT_MISMATCH"),
+        ({"revision_id": "f" * 64}, "SOURCE_RECEIPT_MISMATCH"),
+        ({"source_hash": "f" * 64}, "SOURCE_RECEIPT_MISMATCH"),
+        ({"parse_hash": "f" * 64}, "SOURCE_RECEIPT_MISMATCH"),
+        ({"page_number": 2}, "SOURCE_RECEIPT_MISMATCH"),
+        ({"parser_identity": "f" * 64}, "SOURCE_RECEIPT_MISMATCH"),
+    ),
+)
+def test_registered_block_mismatch_is_quarantined(
+    catalog: SchemaPackCatalogV1,
+    block_updates: dict[str, object],
+    reason: str,
+) -> None:
+    text = (
+        "平安保险 平安安心医疗保险 产品代码 MED-BLOCK 登记编号 REG-BLOCK "
+        "版本 2026 医疗保险 官方条款"
+    )
+    result = _resolve(
+        catalog,
+        (
+            _registered_entry(
+                material_id="registered-block-bad",
+                text=text,
+                block_updates=block_updates,
+            ),
+        ),
+        (
+            (
+                {
+                    "proposal_ref": "product-main",
+                    "name": "平安安心医疗保险",
+                    "product_code": "MED-BLOCK",
+                    "filing": "REG-BLOCK",
+                },
+            ),
+        ),
+    )
+
+    assert result.decisions[0].disposition == "QUARANTINE"
+    assert reason in result.decisions[0].reason_codes
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        {"contract": "unknown-source.v1"},
+        {"extra_admission_sha256": "f" * 64},
+        {"resource_id": "invented-resource"},
+        {"evidence_parse_attempt_id": "invented-attempt"},
+    ),
+)
+def test_registered_receipt_rejects_unknown_or_mixed_wire(mutation: dict[str, object]) -> None:
+    actual = json.loads(_ACTUAL_REGISTERED_RECEIPT.read_text(encoding="utf-8"))["source"]
+    with pytest.raises(ValueError):
+        g.RegisteredSourceReceipt830G3V1.model_validate({**actual, **mutation})
+
+    missing = dict(actual)
+    missing.pop("binding_digest")
+    with pytest.raises(ValueError):
+        g.RegisteredSourceReceipt830G3V1.model_validate(missing)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        {"contract": "unknown-source.v1"},
+        {"resource_id": "legacy-only-field"},
+        {"source_receipt_sha256": "f" * 64},
+    ),
+)
+def test_corpus_receipt_union_rejects_unknown_or_mixed_shape(
+    mutation: dict[str, object],
+) -> None:
+    entry = _registered_entry(
+        material_id="registered-union",
+        text="registered source union fixture",
+    )
+    wire = entry.model_dump(mode="json")
+    wire["receipt"] = {**wire["receipt"], **mutation}
+    wire.pop("entry_sha256")
+    wire["entry_sha256"] = batch_sha256_830_g3("corpus-entry.830.g3.v1", wire)
+
+    with pytest.raises(ValueError):
+        g.CorpusEntryV1.model_validate(wire)
 
 
 def _corpus(*entries: g.CorpusEntryV1) -> g.BatchCorpusV1:
