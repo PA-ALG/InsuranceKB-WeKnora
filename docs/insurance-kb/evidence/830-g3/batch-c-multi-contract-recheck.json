@@ -1,0 +1,17 @@
+{
+  "contract": "830-g3-c-multi-contract-recheck.v1",
+  "recorded_at": "2026-09-07T08:19:44.134886+00:00",
+  "status": "BLOCKED_B2_CONTRACT_MISMATCH_CONFIRMED",
+  "source_commit": "68669f9e5",
+  "facts": [
+    "Frozen amendment B2 requires two distinct stable keys and independent valid name/code Evidence; excludes conflicting/bad evidence/missing identity clusters.",
+    "Current _multi_children_valid filters _automatic_decision_valid, additionally requiring automatic MATCH/CREATE and version/classification eligibility.",
+    "Real official source21 contains many independent name/code rows but no filing/registration anchors; it must not be edited or falsely assigned version anchors to satisfy DoD."
+  ],
+  "question": "Can parent MULTI represent independently established identities whose child versions remain NEEDS_CONFIRM with no EntityCandidate?",
+  "action": "Reviewer must adjudicate original contract and bounded counterexample. C files stay frozen; no further same-domain patch before design boundary decision.",
+  "unchanged_evidence": "39 focused and56 joint tests passed; prior review receipt historical, not erased. Overall G3 real batch not run.",
+  "reviewer": "g3_seam_audit",
+  "review_result": "B2 prior PASS withdrawn; other6 unchanged; parent MULTI with version-pending children is original contract",
+  "next": "lane-c-multi-identity-design-2.md independent design review; no patch yet"
+}

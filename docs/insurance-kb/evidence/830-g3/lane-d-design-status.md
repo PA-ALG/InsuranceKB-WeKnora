@@ -19,3 +19,7 @@
 ## 后续只读核查事实
 
 g3_catalog_ui已核实旧G2 b-complete-candidate-bundle.json就是同一候选加入新逻辑实体的真实先例；Go/Python不查InsuranceProduct/ProductVersion仓库，Existing*仅复验base，RequiredFields/EntityVersions可包含新增实体。建议CREATE由D基于已验证C key提出`entity_`+entity_key及对应版本ID，直到同一整包Review/Activate后才serving。旧G2 Active基础字段页可复用，但strict API/payload和raw实体标题不能显示CREATE/NOT_ACTIVE/pack/Profile；需G3适配与可重新打开的preparation/active directory。此为设计输入，尚未冻结DTO/派写。
+
+## Root 持久设计（待独立复核）
+
+新入口 `lane-d-contract-design.md`，SHA 415742f61d443ddeb5b00d13fcdddd8dae97ddc370bd8f61a42000f7c8924512。C B2父MULTI/子待审规则正在重新设计；D保持只消费自动MATCH/CREATE。最小fixture四类为医疗67、重疾67、两全79、意外62，共275字段；真实base保留两个医疗产品时，新增三类后5实体342字段，不能以fixture替代实际计数。用户打开完整preparation，无手填技术JSON流程。当前仍DESIGN_REVIEW_PENDING，未派D生产写域。

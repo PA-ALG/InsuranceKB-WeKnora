@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "C_CONCENTRATED_REPAIR_CLOSED_CODE_PASS; REAL_BATCH_NOT_RUN",
-  "NEXT_PHYSICAL_RESULT": "实际 Catalog 页面观察与来源上传/识别候选准备",
+  "CURRENT_RED": "C_MULTI_DESIGN2_REVIEW_PASS_NEW_BEHAVIOR_RED_PENDING",
+  "NEXT_PHYSICAL_RESULT": "修复父MULTI与子待审语义；完成新来源隔离执行准备及候选页面接线合同",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -69,7 +69,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "A_B_CODE_PASS; C_CODE_PASS_REVIEW_BLOCKER0; D_DESIGN_ONLY",
+  "parallel_implementation": "A_B_CODE_PASS; C_MULTI_DESIGN2_IMPLEMENTATION; D_DESIGN_REVIEW_PENDING",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
