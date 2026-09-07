@@ -1,0 +1,6 @@
+=== RUN   TestIndependentG3RejectsNullForNonNullableScalar
+    g3_d_go_independent_review_test.go:121: BLOCKER: explicit null accepted for nonnullable Evidence.start
+--- FAIL: TestIndependentG3RejectsNullForNonNullableScalar (2.69s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	8.225s
+FAIL

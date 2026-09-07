@@ -10,6 +10,8 @@ D最新：原三项修复经独立24 tests/8 probes/ruff/mypy全部通过，root
 
 D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff/mypy、BLOCKER0/BACKLOG0）；root独立核对actual134字段、27来源精确并集、第二正文块引用及3 raw。最新synthetic完整POST为2,254,490字节，342字段；代码/fixture冻结，见lane-d-source-coverage2-independent-review.json。Go仅两文件恢复严格镜像及跨语言验证，handler/service/UI仍关闭。真实C模型执行路径另有设计缺口，不能自动扩建通用模型平台；来源外发审批仍待用户回复，所有真实效果0。
 
+最新（2026-09-08）：Go完整镜像首次独审2项BLOCKER：strict wire字段出现性/null及3个C source Hash类型漏验；四个C重算反例、354跨语言snapshot和完整types回归独立PASS，原Go/RED快照保留，正在准备一次集中修复。UI本地并行顺序调整独立PASS，原Task4已派mock RED→实现；backend与最终UI接受/commit/整合仍等修复后Go独审PASS。结构确认单列PASS，具名元数据单列待补；来源外发原问题仍待用户回复，所有真实效果0。
+
 ---
 
 ## 当前终态：G2 FLOW PASS（2026-09-07）

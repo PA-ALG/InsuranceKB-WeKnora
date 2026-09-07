@@ -19,7 +19,7 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 
 | 维度 | 状态 | 证据与边界 |
 |---|---|---|
-| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；NOT RUN（Go完整镜像） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go镜像尚未闭合 |
+| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；BLOCKED（Go首次独审2项） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首次独审presence/null与3个source Hash类型漏验尚未修复 |
 | container health | NOT RUN（G3） | existing G2 docreader进程已只读核实用于解析预检，不是G3应用验收 |
 | provider probe | NOT RUN | 产品provider HTTP=0 |
 | provisioning | NOT RUN | 新DB/上传/SourceRevision/backfill=0 |
@@ -43,3 +43,5 @@ D Python repair1原B1/B2/B3独立PASS（24tests/8probes，ruff/mypy），root4�
 D source coverage第二次最终复审PASS：30 tests in97.68s，ruff/strict mypy及独立精确source并集/owner引用探针通过，BLOCKER0/BACKLOG0。source e8e0dbcd…、test86edf3d9…、candidate e7be83db…、POST09b64b3e…（2,254,490bytes），freeze811eb4d0…。root独立actual G2 134字段/27来源/3 raw/canonical/容量核对PASS。报告lane-d-source-coverage2-independent-review.json SHA0b21ea94…；Python两轮修复关闭，Go两文件恢复，handler/service/UI门禁不变；全部fixture为synthetic protocol，真实批次、provider、DB、部署均NOT RUN。
 
 D下游执行计划及待审对齐展示设计完成独立复审（初审2项已修，终审BLOCKER0/BACKLOG0），exact冻结见lane-d-downstream-design-freeze-1.json。已明确Create前source验证、G3-only create-draft operation和授权历史snapshot派生两行展示；不增加DTO或公开KB元数据。Go完整C重算仍有有效RED，当前实现未闭合，下游写域仍关闭；实际C/profile执行方案仅只读候选，未派新生产实现。
+
+D Go首次完整独审2项BLOCKER，原完整types/四C反例/354跨语言snapshot通过但不能替代strict wire与Hash漏验修复；报告lane-d-go-mirror-independent-review-01.json SHA f2624564…。原Go及独立有效RED已保全，首轮集中修复不重开Python/C/common。UI本地顺序调整独立PASS（lane-d-ui-local-order-amendment-review-1.json SHA dcf96bca…），仅原Task4 mock实现已派；backend、最终UI接受/commit/集成仍等修复后Go独审PASS。所有真实批次/provider/DB/build/deployment仍NOT RUN。

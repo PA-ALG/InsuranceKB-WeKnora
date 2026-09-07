@@ -16,4 +16,5 @@
 - [x] 来源执行准备：完整upload v2 runner独立复核及执行包复核PASS；具体验证窗口/预览已发用户。
 - [ ] 来源实际执行：当前11请求外发批准待回复，隔离provision/upload/source readback尚未执行。
 - [x] D Python首轮三项修复及第二轮source覆盖修复已独立通过；原始RED与旧快照保留。
-- [ ] D Go完整C复算与跨语言镜像：Owner阶段检查已通过，尚待准确身份冻结与独立复核；下游写域仍关闭。
+- [ ] D Go完整镜像：首次独审2项BLOCKER（strict wire presence/null、3个source Hash类型漏验），集中首轮修复准备；四C反例/354跨语言snapshot及原包回归已独立通过。
+- [ ] D UI本地Task4：lane-d-ui-local-order-amendment-1.md独立PASS后已派mock RED→实现；backend及最终UI接受/commit/整合仍待修复后的Go独审PASS。

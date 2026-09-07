@@ -1,0 +1,4 @@
+=== RUN   TestIndependentG3OracleFourRejectAndSnapshotsMatchPython
+--- PASS: TestIndependentG3OracleFourRejectAndSnapshotsMatchPython (5.99s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/types	9.125s
