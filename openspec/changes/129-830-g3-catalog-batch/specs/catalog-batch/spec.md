@@ -27,9 +27,11 @@
 - WHEN 批次自动身份结果进入 G3 候选编译
 - THEN 按 `docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md`（SHA-256 `75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d`）严格验证完整 Catalog、确认回执、C 输入及结果、每实体 binding、原 G2 base request、模型 delta/机械合成/独立审核记录与同一 page manifest。
 - THEN 反序列化请求必须逐一绑定 exact C child 的身份 anchors、entity/version key公式和所选证据；确认回执同时锁定真实文件及语义hash；C/base同 SourceBlock identity 不同完整内容必须拒绝，即使调用方重算全部外层hash（集中修复合同 `lane-d-python-repair-1.md`）。
+- THEN D source集合严格为全部已选C材料blocks与actual base carry证据blocks的canonical并集；owner字段校验允许其所选材料、其自身carry及实际关联concept的证据来源，拒绝跨owner借用。按 `lane-d-source-coverage-design-2.md`（SHA-256 `ec64c6b90d2504b481686fc071ce1f6ed2bcf218339efafff8119aa6f7e21716`）同时校验请求与delta，主342样例包含身份块外的保障正文块及对应字段Evidence。
 - THEN 所有既有实体必须有实际 C 自动 MATCH；新实体必须有实际 C 自动 CREATE，不增加主数据注册前置；缺失资格在编译及 Draft 前拒绝。
 - THEN 首切片正向和容量 fixture 使用 actual G2 base 两医疗实体与重疾、两全、意外三新实体，合计 342 个标准字段页；完整 POST 使用真实 serializer 测量且不得超过现有 8 MiB，容量闭合前不得实施 handler/service/UI。
 - THEN 旧 134 行 existing input 原样进入 request；132 行事实逐字继承，仅按修订6冻结的两行 exact unknown-only lineage 对齐旧单数 key 到新 Profile key，旧 Release 不变；每医疗仍恰好 67 页，禁止额外 legacy 页或删 base 压缩容量。
+- THEN Active概念页复用现有concept-page-read.830.g2.v1 envelope；G3 overview related从sections字段引用严格构造同版同owner集合，G3服务端拒绝冲突查询。按 `d-active-page-transport-clarification-1.md`（SHA-256 `26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26`）分派，旧G2行为不变，Preparation仍用独立冻结响应。
 - THEN 使用既有 Draft/Ready/Review/Activate 和唯一 Head CAS；preparation 与 active 读取分开，真实 source authority 在 Draft/Review/Activate 按原 G1/C5 链重开；fixture 不替代实际模型、来源或业务验收。
 
 ### Requirement: G3-R4 批量身份与材料采信

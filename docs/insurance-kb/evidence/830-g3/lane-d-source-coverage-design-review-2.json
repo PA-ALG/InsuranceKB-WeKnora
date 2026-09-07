@@ -1,0 +1,29 @@
+{
+  "contract": "g3-d-source-coverage-design-review-2.v1",
+  "reviewed_path": "docs/insurance-kb/evidence/830-g3/lane-d-source-coverage-design-2.md",
+  "reviewed_sha256": "36ed15f46d6696a95e7b7b2d0fe50f6551b4c0be86265be5fd0ae85647c7bc49",
+  "status": "BLOCKED_BY_ONE_MINIMAL_CONTRACT_CLARIFICATION",
+  "blockers": [
+    {
+      "id": "D-SOURCE-COVERAGE-B1",
+      "finding": "The design states that the owner allowlist continues to include selected-material blocks plus the entity's permitted base-carry Evidence range, but the bounded implementation and required-test section only explicitly repairs base_request.sources. The frozen implementation is known to derive validate_delta_output's owner allowlist from selected material blocks alone, so leaving this as 'continues' can preserve the defect after the request-level union is fixed.",
+      "required_minimal_change": "State that the same repair must update both request construction/validation and validate_delta_output's derived per-entity owner allowlist to the exact union of (a) all blocks from that binding's selected C material IDs and (b) SourceBlocks required by that same entity's actual base definitions/fields/pages carry Evidence. Add a positive test where a legitimate carried field Evidence uses the entity's base-carry block, plus rejection tests for another owner's carry block, missing carry block, and ungrounded extra block. This is the existing D v2 source-closure rule, not a new permission or source system."
+    }
+  ],
+  "backlog": [],
+  "closed_checks": [
+    "Changing 'needed selected blocks' to all SourceBlocks of exactly selected C corpus entries is within D v2 sections 2.3 and 2.4 and fixes the identity-only truncation without changing public DTOs, hashes, APIs or authorities.",
+    "The exact base_request.sources union remains canonical by revision_id/block_id, rejects missing and extra blocks, rejects same-key different full content, and inlines shared identical blocks once.",
+    "C material membership remains fixed by exact selected decision refs and entity binding source_material_ids; D does not select new materials, rewrite text, or create a source registry.",
+    "Field Evidence still passes existing verify_evidence, selected-child and per-owner checks; material co-membership alone is not treated as semantic proof.",
+    "Actual base carry closure is taken from reopened existing definitions, fields and pages. G1/C5 inheritance and later source-authority reopening remain intact.",
+    "Profile-confirmation actor, receipt file hash, receipt semantic hash, actor_display_name and queue_owner semantics are outside this change and remain covered by the prior three attack regressions.",
+    "Adding a second source block and a field Evidence to the 342-field capacity fixture does not change the 134-to-132-plus-2-alignment-plus-208-delta field equation. The design preserves historical fixture bytes/hashes and requires a newly measured complete serializer POST under 8 MiB.",
+    "Synthetic A/B material remains explicitly a protocol fixture and is not represented as actual source, model output or business acceptance."
+  ],
+  "rejected_expansions": [
+    "Do not add a source selector, lazy loader, second source store, admission layer, upload reopening, cross-owner evidence sharing, or a new API/hash domain.",
+    "Do not infer field correctness merely because a block belongs to a selected material, and do not use the fixture as the later real-request capacity receipt."
+  ],
+  "implementation_gate": "Amend only the one derived-owner-allowlist sentence and its focused tests before dispatch. After that amendment, this review has no other design blocker."
+}

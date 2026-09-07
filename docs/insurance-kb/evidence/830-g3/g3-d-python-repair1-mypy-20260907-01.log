@@ -1,0 +1,3 @@
+harness/tests/test_batch_concept_compile_830_g3.py:28: error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py:726: error: Incompatible types in assignment (expression has type "CorpusEntryV1 | None", variable has type "CorpusEntryV1")  [assignment]
+Found 2 errors in 2 files (checked 2 source files)

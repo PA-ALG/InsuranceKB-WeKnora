@@ -1,0 +1,34 @@
+{
+  "contract": "830-g3-root-scope-control.v1",
+  "recorded_at": "2026-09-07T13:03:50.392710+00:00",
+  "owner": "830-G3总控/root",
+  "goal": "G3",
+  "state": "WIP;FLOW_NOT_RUN;QUALITY_DEFERRED_TO_Q0;NOT_FOR_PRODUCTION",
+  "complexity": "YELLOW",
+  "triggers": [
+    "frozen D Python1691 lines and incomplete Go1545 lines exceed500 production-line review threshold",
+    "G3 scope spans existing Harness/WeKnora, reviewed in sequential frozen slices"
+  ],
+  "review_basis": [
+    "lane-d-consolidated-contract-v2.md",
+    "lane-d-python-independent-review-01.json",
+    "lane-d-python-repair-1.md",
+    "source-execution-package-independent-check.json"
+  ],
+  "five_control_answers": {
+    "next_physical_result": "Full342 candidate with strict Python/Go equality then existing preparation/page chain; actual15source intake waits on already-issued exact external approval question",
+    "changed_real_product_state": "No new G3 runtime/Candidate/Active effect since prior checkpoint. Real corpus15native capture persisted and Catalog11/Profile user structural confirmation are prepared; software C closed, source execution package reviewed; D fixture342 capacity verified but first review found3 blockers",
+    "single_write_domain": "Only g3_catalog_impl D Python/test/necessaryfixture during repair1. Go is frozen incomplete; C/common/G2 closed; other lanes readonly; root evidence only",
+    "recurrence_and_authority": "First concentrated D Python review repair, not second failed live edge. No actual source apply/upload/provider attempted. No new persistent service/table/Wiki/Review/Head/Evidence authority; source runtime is isolated reuse of existing stack. No threshold/result denominator change. YELLOW recorded; current limited fixes restore frozen closure requirements",
+    "reproducibility": "Pre-repair Python/test and paused Go bytes compressed and hash-verified in d-review-01-snapshots; independent attacks/raw logs/actual receipt hashes/342 fixture freeze preserved in commit bab3ef3e4"
+  },
+  "scope_decision": "Continue only the three bounded Python closure repairs; independent review before Go resume, then fullDTO gate before handler/service/UI. Keep runtime external execution waiting for actual user reply. No extra framework or mechanical module split.",
+  "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
+  "effects": {
+    "provider": 0,
+    "upload": 0,
+    "provision_apply": 0,
+    "g3_build": 0,
+    "g3_active": 0
+  }
+}

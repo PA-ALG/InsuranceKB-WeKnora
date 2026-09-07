@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "D_PYTHON_3_REHASHED_CLOSURE_ATTACKS_REPRODUCED",
-  "NEXT_PHYSICAL_RESULT": "D Python三项集中修复及复审；Go暂停；来源执行包已通过复核，等待已发出的用户外发授权",
+  "CURRENT_RED": "D_SOURCE_COVERAGE_SELECTED_MATERIAL_NON_IDENTITY_BLOCK_REJECTED",
+  "NEXT_PHYSICAL_RESULT": "D source闭包回设计：所选材料保障正文可进入编译；原三项修复通过，Go继续冻结",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -77,7 +77,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "D_PYTHON_REPAIR1_ONLY; GO_PAUSED; SOURCE_EXECUTION_USER_REPLY_PENDING",
+  "parallel_implementation": "D_PYTHON_SOURCE_COVERAGE_REPAIR2_ONLY; GO_PAUSED; SOURCE_EXECUTION_USER_REPLY_PENDING",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -318,6 +318,28 @@
     "root_bounded_tests": 110,
     "independent_bounded_tests": 11,
     "preparation_bytes": 2247500,
-    "fixture": "synthetic protocol, not actual C/model/business"
+    "fixture": "synthetic protocol, not actual C/model/business",
+    "repair1": {
+      "freeze": "lane-d-python-repair1-freeze.json",
+      "source_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+      "owner_focused": 24,
+      "root_additional_attacks": 4,
+      "fixture_changed": false,
+      "independent_status": "PASS_ORIGINAL_THREE_FINDINGS"
+    },
+    "new_source_coverage": {
+      "status": "BLOCKED",
+      "reviewer": "g3_seam_audit",
+      "fingerprint": "selected material non-identity SourceBlock rejected before compile while delta owner allowlist permits it",
+      "next": "design clarification before further implementation",
+      "go": "PAUSED",
+      "design_status": "PASS",
+      "dispatch": "lane-d-source-coverage-dispatch-2.json"
+    }
+  },
+  "d_active_transport_design": {
+    "status": "PASS_DESIGN_ONLY",
+    "sha256": "26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26",
+    "review": "d-active-page-transport-design-review-1.json"
   }
 }

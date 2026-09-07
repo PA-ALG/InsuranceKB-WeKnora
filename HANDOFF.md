@@ -6,6 +6,8 @@
 
 最新D独立复审：完整342字段及2,247,500字节容量通过；原11/root110 bounded tests通过，但三个重算hash攻击仍被接受（身份anchors、确认语义、同identity原文替换）。D软件BLOCKED，首轮集中修复已先冻结，Go暂停未GREEN；见lane-d-python-independent-review-01.json及lane-d-python-repair-dispatch-1.json。来源upload v2独立33项/9 probes通过，完整执行预览已发用户，当前授权回复未收到，apply/upload/provider仍0。
 
+D最新：原三项修复经独立24 tests/8 probes/ruff/mypy全部通过，root4补充攻击也通过；新source覆盖不一致保持BLOCKED。已回设计明确selected材料完整blocks+carry及per-owner来源并集，设计2独立0/0后派第二次且最后有界D Python修复。旧代码/fixtures快照保存于d-repair1-snapshots；Go继续冻结，来源外发仍待当前用户回复、无执行。
+
 ---
 
 ## 当前终态：G2 FLOW PASS（2026-09-07）

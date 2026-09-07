@@ -1,0 +1,22 @@
+{
+  "contract": "830-g3-active-transport-design-review.v1",
+  "reviewer": "g3_catalog_ui",
+  "reviewed_sha256": "caa6442c917bc0c682d9d3a3492b235423a57b34f00340dbc37c2e83bf4fbd4b",
+  "original_blockers": [
+    {
+      "id": "OVERVIEW_RELATED_FIELDS",
+      "finding": "G3 overview lacks G2 member_ids; related set must derive exact section field refs"
+    }
+  ],
+  "original_backlog": [
+    "Explicit G2 free_wiki root payload",
+    "overview citations empty",
+    "server G3 strict query mutual exclusion"
+  ],
+  "revision_sha256": "26189ef0159da209926d24d14b59939b0688924febd55c221b2e6b9b1536ed26",
+  "revision_status": "PASS",
+  "implementation_authority": false,
+  "blockers_after_revision": 0,
+  "backlog_after_revision": 0,
+  "reviewer_followup": "g3_catalog_ui verified exact revised bytes and all original issues closed; design only"
+}

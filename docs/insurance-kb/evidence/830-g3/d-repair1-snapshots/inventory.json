@@ -1,0 +1,36 @@
+{
+  "contract": "830-g3-d-repair1-snapshots.v1",
+  "status": "ORIGINAL_THREE_REPAIR_PASS; SOURCE_COVERAGE_BLOCKED",
+  "files": [
+    {
+      "source": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "raw_sha256": "5e472c98c4cb10929cf90689c03b105c68d02da74ca04f5fe12f554d0e6a7ef5",
+      "snapshot": "batch_concept_compile_830_g3.py.gz",
+      "snapshot_sha256": "81c1b731b1b9dd46c51cd87ed9843755bd2d4b3ce22d4f574aa2c576df985e3c"
+    },
+    {
+      "source": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/test_batch_concept_compile_830_g3.py",
+      "raw_sha256": "7f16886fbe4110082175ed5e93714fa647c30195af980c4724307c3de109183c",
+      "snapshot": "test_batch_concept_compile_830_g3.py.gz",
+      "snapshot_sha256": "f8e2af7967c9d19519d367afd6b39c4e4a2a7b573bbf58be8ad2a608382753a9"
+    },
+    {
+      "source": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "raw_sha256": "179affc52b282ea16d3aecfda091c449de3d62992c4f5b337bb97609df414de0",
+      "snapshot": "candidate.json.gz",
+      "snapshot_sha256": "0588797e6cf4c5c6b79c7631a8d7a7e0b5c484da660ee9a49044663ea5c7cb93"
+    },
+    {
+      "source": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "raw_sha256": "a23b4eeecc74fef40ac67968467b0c9e6a54ce777730272ca2588708fcaff3b0",
+      "snapshot": "preparation-request.json.gz",
+      "snapshot_sha256": "09d10bc0a03b7a4b90d8b3abf88cb3f257702ce575e0a998f7acaf4eb717c856"
+    },
+    {
+      "source": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "raw_sha256": "301a13a2f77ad4b361a85575028425e04782af5a181221fb58b5f5a5f4a52449",
+      "snapshot": "provenance.json.gz",
+      "snapshot_sha256": "20fa44174aa211c43c54e3aedbe5ff98f447d81183a8889e0fdb2e80b47be8b3"
+    }
+  ]
+}
