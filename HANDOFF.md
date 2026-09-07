@@ -1,5 +1,7 @@
 ## 当前执行：G3 已获明确启动授权（2026-09-07）
 
+当前软件门禁（2026-09-08）：UI首轮修复已独审PASS并提交b7a26b8aa；后端11文件初次独审收口为2项BLOCKER：read_sha对真实U+2028采用错误转义preimage，及preparation_id未按D Text严验/handler先trim。原11源码、31日志、独立反例及实际service→Gin→冻结UI失败证据均已保全；独审报告lane-d-backend-independent-review-01.json SHA416d80fa…，方案9ff57eb0…独审PASS，首轮修复dispatch0941c4de…仅开放G3 service/schema handler与两份G3测试。Go/Python/C/common/UI/fixtures和另外7后端文件关闭。接下来是修后独审及原前端互操作；真实SOURCE/C/provider/DB/build/deployment仍NOT RUN，原外发问题待实际回复，结构确认已接受。下述较早进度为历史，当前状态以本段和startup.json为准。
+
 唯一 Owner=830-G3总控/root；G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。已成功 fetch，base/main=075d9c38c01e48abfe7985985dc503099cf9b19a；专用工作树 `.worktrees/830-g3-implementation`，分支 `codex/830-g3-implementation`。
 
 首切片：真实 v5 工作簿已生成 11 pack/profile、801 字段；A/B独立复核BLOCKER0，总控Python17、前端17、Go接口及类型检查通过。用户已回复“结构确认”，exact Catalog确认回执保存；具名信息已非阻断询问。安佑福1828条款/说明书/版本待核费率表已保留。15原始PDF准备：4已有W1 revisions共287 chunks实际读取/hash/前后版本一致；11新PDF native预检输出保存。十一份新材料已离线生成204 embedding inputs及exact Go transport bodies，693129bytes，尚未外发。C历史B2过强问题已回设计，原评审结论撤回记录保留；设计2两文件及集中wire修复冻结，independent56/root A+C73 tests、ruff、strict mypy通过，独立复审BLOCKER0。D候选/页面合同整合复核通过后已进入DTO；actual27多行正文暴露共享canonical拒绝问题，修订7的C/common兼容代码已由root独立核验81项及正文/嵌套身份检查通过；当前来源回执兼容8代码已独立复核通过（C79/common82、root A/C/common99），D已恢复完整342候选DTO/fixture实现：actual旧医疗各含1个与新Profile不同的unknown key；68/344 legacy方案因违反卡精确67要求已撤回，改为只限两条全空unknown的具名lineage对齐设计，恢复每医疗67/整包342，旧release不动；模型delta和机械carry分别保留raw。已确认可复用G2同包新增逻辑实体，无额外主数据人工注册前置；需要真实pack/Profile与待审页面接线。新隔离环境只读核实storage本地/vector随DB、无待处理任务；Redis15已占用改独立队列。4原文件hash已读回，只有3条source custody row，第4缺口保留。11请求guard的持久化失败/并发启动问题已修复，9 tests及独立复审通过，尚未serve。复审临时安装76包后移除新建venv，覆盖日志身份已如实纠正。来源环境脚本两轮集中修复后v3独立复核BLOCKER0/BACKLOG1，第三次实际只读preflight PASS；两次只读预检失败原样保留，没有执行apply。旧01/03/04完整native原字节已无损持久化，02一次独立禁网解析补存成功，全部15capture/hash已核验；02当前source row仍缺。模型/上传/DB写/镜像构建/生产动作均0，G3 FLOW仍NOT RUN。启动记录见 `docs/insurance-kb/evidence/830-g3/startup.json`。以下G2历史状态不覆盖当前G3授权。
@@ -17,6 +19,8 @@ D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff
 UI最新独审：原8文件/17份日志身份全部匹配，独立25项页面测试、46项G2回归、actual两条历史字段对齐通过；唯一BLOCKER是结构化Text/identity误放行内部TAB/LF/CR。完整重哈希反例已复现，报告lane-d-ui-independent-review-01.json SHA c206bffc…。原代码/日志保全，按既有修订7v2只开放API及spec两文件首轮修复，保留正文TAB/LF/CR，六个Vue文件冻结；见lane-d-ui-repair-dispatch-1.json SHA d600c0cc…。PDF worker额外测试为既有依赖路径环境限制，不计PASS或产品失败。后端Tasks1/2/3仍实现中，真实SOURCE/C/provider/DB/build/deployment/业务效果仍0。
 
 UI当前软件门禁：首轮修复独立PASS，原UI-B1关闭（BLOCKER0/BACKLOG0）；source52ec691d…、spec37713e5c…、freeze6cdd98c5…，报告lane-d-ui-repair1-independent-rereview.json SHA3fb2d779…。原完整重哈希反例已拒绝，正常输入接受；独立26项页面及46项G2回归通过，正文TAB/LF/CR保留、LF/CRLF hash不同，FreeWiki投影与冻结Python/Go一致。六个Vue文件逐SHA未变，UI写域关闭。后端Tasks1/2/3仍未完成；尚无真实G3上传/模型/DB/构建/部署/发布效果。
+
+后端Task3范围补齐：真实query入口遗漏已先回设计，v1 bool分类方案因current双读TOCTOU撤回，v3独立PASS（cc80ae37…）后仅追加internal/handler/concept_free_wiki_830_g2.go，backend总写域12路径。Read/Issue原子入口同pin分类与投影/签发前校验，保留G2首值/空值行为，不增加未知query拒绝或新wire。dispatch见lane-d-backend-query-owner-dispatch-1.json；实现/最终回归及独审仍未完成，全部真实效果0。
 
 ---
 

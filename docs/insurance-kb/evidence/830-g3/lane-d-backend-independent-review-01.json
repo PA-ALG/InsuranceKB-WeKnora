@@ -1,0 +1,176 @@
+{
+  "code_quality": {
+    "backlog": [
+      {
+        "finding": "The frozen backend has no real HTTP, provider, database, model, container, build, or deployment execution. Unit tests use in-memory/fake boundaries; the actual source-only runtime and business batch remain NOT RUN and must not be inferred from fixture success.",
+        "id": "BACKEND-Q1-ACTUAL-RUNTIME-NOT-EXECUTED"
+      }
+    ],
+    "blockers": [],
+    "rejected": [
+      "The root service-to-Gin-to-UI sample is valid evidence of serialization/hash incompatibility, but it is not evidence that the production route, ACL, source authority, or database ran.",
+      "The freeze's explicitly excluded shell/cache/compile-stage/assertion-representation logs remain setup evidence, not behavior RED or GREEN.",
+      "Do not globally tighten internal/types validStructuredText830G3: it is also used by C fields whose frozen _text rule intentionally allows nonblank edge whitespace. Only the externally supplied D preparation_id is proven reachable here and needs the exact D predicate.",
+      "Do not modify shared G1/G2 canonical helpers, normalize body text, or replace JSON escape bytes globally."
+    ],
+    "verdict": "BLOCKED_BY_SPEC_FINDINGS_ONLY"
+  },
+  "contract": "830-g3-d-backend-independent-review.v1",
+  "effects": {
+    "browser": 0,
+    "build": 0,
+    "commit": 0,
+    "container": 0,
+    "database": 0,
+    "deployment": 0,
+    "live_http": 0,
+    "model": 0,
+    "provider": 0,
+    "push": 0,
+    "repo_writes_by_reviewer": 0
+  },
+  "freeze": {
+    "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-backend-freeze-1.json",
+    "sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+    "status": "FROZEN_FOR_INDEPENDENT_REVIEW"
+  },
+  "independent_verification": [
+    {
+      "command_scope": "application/service tests matching 830G3",
+      "duration": "303.020s",
+      "log": "/private/tmp/g3-d-backend-independent-service-830g3-green-01.log",
+      "result": "PASS",
+      "sha256": "c3735fdb8d0ced3d77c39b68db6d7d72720f22717a1e4823b5ae8693e2f156b1"
+    },
+    {
+      "command_scope": "internal/handler tests matching 830G3",
+      "duration": "3.103s",
+      "log": "/private/tmp/g3-d-backend-independent-handler-830g3-green-01.log",
+      "result": "PASS",
+      "sha256": "25c6d00effdfbff63ba7441be13f5cd7ca81ffca43e96f89f3c99eb5d114cb79"
+    },
+    {
+      "command_scope": "internal/router batch preparation G3 tests",
+      "duration": "3.965s",
+      "log": "/private/tmp/g3-d-backend-independent-router-830g3-green-01.log",
+      "result": "PASS",
+      "sha256": "2acfd67db879192d38b10d5a328c2a6fd03a661f1b17882c7075f510e1e61ff3"
+    },
+    {
+      "command_scope": "strict G3 preparation ID matrix overlay",
+      "duration": "25.378s",
+      "log": "/private/tmp/g3-d-backend-independent-preparation-id-matrix-red-01.log",
+      "result": "EXPECTED_RED_6_INVALID_CASES_ACCEPTED",
+      "sha256": "9d31c8f49e1538d84ac3b8c8a4381f6c9d6def56b35ebdd901e4d2d0b284b6de"
+    },
+    {
+      "command_scope": "independent preparation read hash recomputation",
+      "log": "/private/tmp/g3-d-backend-independent-read-hash-probe-01.json",
+      "result": "BLOCKER_REPRODUCED",
+      "sha256": "8cbe08a54dc1ecfb5fd940d2d7cc00a21456381a3112d29cccf42e1715ef0735"
+    }
+  ],
+  "input_files": {
+    "internal/application/service/concept_free_wiki_830_g2.go": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+    "internal/application/service/concept_free_wiki_830_g3.go": "9e1c4d50c9002f941de6c2ca99572e4f7249de569659c1a73a3c4a771652992a",
+    "internal/application/service/concept_free_wiki_830_g3_test.go": "a4b7497492a3b16173c8645a7c6ccfc799e4b9f30e73770fb06c31158b41f219",
+    "internal/application/service/concept_source_authority_830_g2.go": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+    "internal/application/service/concept_source_authority_830_g2_test.go": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+    "internal/application/service/wiki_release.go": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+    "internal/handler/concept_free_wiki_830_g2.go": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+    "internal/handler/concept_free_wiki_830_g3_test.go": "12307859c282a07f13893ec49b4df8c5059d7e06475cf13990fb4f8699784996",
+    "internal/handler/schema_wiki.go": "d48de4da18e86d424ddb69aa5c893744cf4cb8d6e4ab45904e71d6c989140192",
+    "internal/router/routes_batch_concept_830_g3_test.go": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+    "internal/router/routes_schema_wiki.go": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c"
+  },
+  "owner_history_classification": {
+    "effective_behavior_red": [
+      "/private/tmp/g3-d-backend-task1-red-20260908-03.log",
+      "/private/tmp/g3-d-backend-task2-red-20260908-01.log",
+      "/private/tmp/g3-d-backend-task3-red-20260908-02.log",
+      "/private/tmp/g3-d-backend-task3-active-red-20260908-04.log",
+      "/private/tmp/g3-d-backend-task3-query-red-20260908-08.log"
+    ],
+    "excluded_as_environment_or_test_setup": {
+      "/private/tmp/g3-d-backend-final-handler-router-green-20260908-18.log": "route test expected 503 from nil service; contract mapping for invalid preparation is 400",
+      "/private/tmp/g3-d-backend-final-service-green-20260908-14.log": "test expected three source checks but exact activation retry correctly performs a fourth fresh check",
+      "/private/tmp/g3-d-backend-task1-green-20260908-05.log": "test incorrectly compared JSON representation and rejected allowed outer whitespace",
+      "/private/tmp/g3-d-backend-task1-red-20260908-01.log": "invalid shell invocation; not behavior RED",
+      "/private/tmp/g3-d-backend-task1-red-20260908-02.log": "sandbox Go cache denial; not behavior RED",
+      "/private/tmp/g3-d-backend-task3-active-green-20260908-05.log": "test compared escaped JSON representation instead of semantic JSON",
+      "/private/tmp/g3-d-backend-task3-query-green-20260908-09.log": "test expected 503 for ErrSchemaWikiPreparationInvalid; actual contract mapping is 400",
+      "/private/tmp/g3-d-backend-task3-query-handler-green-20260908-12.log": "test replaced request without preserving sealed access context",
+      "/private/tmp/g3-d-backend-task3-red-20260908-01.log": "compile-stage missing field; not behavior RED"
+    },
+    "note": "Log filenames are not verdicts; classifications were checked against the freeze receipt."
+  },
+  "repair_proposal_review": {
+    "constraint": "Only the two frozen production files and their two existing G3 tests; no types/Python/C/common/G2/fixture/repository/router/UI/protocol changes.",
+    "path": "/private/tmp/g3-d-backend-repair-readhash-prepid-proposal-01.md",
+    "sha256": "9ff57eb0baa470c4f602e361c452e410fada49e503f5e1c7e32297222a9c0e61",
+    "verdict": "PASS_AS_BOUNDED_REPAIR_DESIGN_FOR_THE_TWO_BLOCKERS"
+  },
+  "review_order": [
+    "SPEC_COMPLIANCE",
+    "CODE_QUALITY"
+  ],
+  "spec_compliance": {
+    "blockers": [
+      {
+        "finding": "batchConceptPreparationReadHash830G3 uses canonicalJSON830G2, whose encoding leaves Go JSON escapes for U+2028/U+2029. The frozen G3 canonical contract hashes the logical Unicode strings. The actual 342 preparation contains 28 U+2028 values, so the service emits a read_sha256 that the frozen UI/Python correctly rejects.",
+        "id": "BACKEND-B1-PREPARATION-READ-HASH-UNICODE",
+        "location": "internal/application/service/concept_free_wiki_830_g3.go:305-330 (especially line 324); legacy helper internal/application/service/concept_source_authority_830_g2.go:815-832",
+        "reproduction": {
+          "actual_gin_json": "/private/tmp/g3-d-root-service-json-01/draft.json",
+          "actual_gin_json_sha256": "563649b5a751bc77e36b0f38f3c7cec2b7626a00b2b530a8809bdaa59f93c429",
+          "escaped_preimage_matches_claimed": true,
+          "frozen_logical_unicode": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+          "go_claimed": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+          "independent_recompute": "/private/tmp/g3-d-backend-independent-read-hash-probe-01.json",
+          "independent_recompute_sha256": "8cbe08a54dc1ecfb5fd940d2d7cc00a21456381a3112d29cccf42e1715ef0735",
+          "logical_unicode_matches_claimed": false,
+          "u2028_count": 28,
+          "u2029_count": 0,
+          "ui_failure_log": "/private/tmp/g3-d-root-ui-consume-draft-01.log",
+          "ui_failure_log_sha256": "8e45d24450e1ba5ac41cd10062358640febd4ea6e87fbe1c5fe0de7fa513c23b"
+        },
+        "required_bounded_repair": "Only the G3 preparation-read hash canonical step may marshal the typed payload and pass it to the existing exported types.CanonicalConceptMemberPayload830G2, preserving the existing G3 domain/preimage and response content. Do not modify the legacy G2 helper or use byte ReplaceAll. Add U+2028, U+2029, literal backslash-u, and TAB/LF/CR body vectors plus the actual full preparation interop check."
+      },
+      {
+        "finding": "The G3 service checks only preparationID != empty and the handler normalizes the G3 input with TrimSpace. Invalid D structured Text can therefore be accepted and stored or silently changed into another identity before admission.",
+        "id": "BACKEND-B2-PREPARATION-ID-NOT-STRICT-G3-TEXT",
+        "location": "internal/application/service/concept_free_wiki_830_g3.go:47,112-140,153-172; internal/handler/schema_wiki.go:876-889,969-977,980-1008",
+        "reproduction": {
+          "accepted_invalid_cases": [
+            "whitespace-only",
+            "leading-space",
+            "trailing-space",
+            "internal-tab",
+            "internal-DEL",
+            "non-NFC decomposed text"
+          ],
+          "matrix_probe": "/private/tmp/g3_d_backend_prep_id_matrix_probe_test.go",
+          "matrix_probe_sha256": "03fdfd8295e3f00f97dbeef35d3f764f137e96b5563a656c7b69310e08c72d3a",
+          "overlay": "/private/tmp/g3_d_backend_prep_id_matrix_overlay.json",
+          "overlay_sha256": "99f0a3737f3407c66889d6774acf769c66cf368c87b87d5b9843860d664e6955",
+          "positive_control": "ASCII preparation ID accepted",
+          "red_log": "/private/tmp/g3-d-backend-independent-preparation-id-matrix-red-01.log",
+          "red_log_sha256": "9d31c8f49e1538d84ac3b8c8a4381f6c9d6def56b35ebdd901e4d2d0b284b6de"
+        },
+        "required_bounded_repair": "Use one service-private exact D Text predicate for G3 preparation IDs: valid UTF-8, NFC, nonempty, exactly edge-trimmed, and no U+0000..U+001F or U+007F. There is no 512 limit. Create and Load must reject before source/repository access; reopened stored ID must be strict and equal requested ID; validateBatchConceptPreparation must reject corrupt stored IDs. The G3 handler branches must pass raw decoded IDs without TrimSpace; G1/G2 behavior remains unchanged. Positive boundaries include NFC Chinese, ordinary internal space, internal U+2028/U+2029, literal backslash-u, and >512 characters within existing transport limits."
+      }
+    ],
+    "verdict": "BLOCKER_2",
+    "verified_contract_areas": [
+      "Create performs human-admin authorization, strict candidate parse, actual G2 base reopen, SnapshotMembers, and source verification before Draft storage.",
+      "Draft/Ready preparation lookup falls back only on repository NotFound and does not consult current Head.",
+      "Review and activation reopen the full G3 preparation, reverify source authority, preserve one Head CAS, and exact activation retry rechecks source without adding release/receipt/epoch.",
+      "Registered source receipts compare all 14 server-owned fields; selected corpus blocks reopen live revision/chunk/native evidence; G1/C5 base carryover uses the existing authority chain.",
+      "Source-coverage closure includes all six selected corpus blocks inside 27 base sources and keeps 21 carry blocks; the non-identity field-evidence block is not omitted.",
+      "Active reads reopen the whole pinned G3 bundle and preserve manifest/Profile order; citation issuance uses the same immutable pin and outer candidate hash.",
+      "Atomic raw-query handling uses one pin for G3 classification and projection/issuance, rejects repeated/explicit-empty/mixed G3 forms, and preserves G2 first-value behavior.",
+      "Preparation route remains under existing human admin and dual-KB preparation guards."
+    ]
+  },
+  "status": "BLOCKED"
+}

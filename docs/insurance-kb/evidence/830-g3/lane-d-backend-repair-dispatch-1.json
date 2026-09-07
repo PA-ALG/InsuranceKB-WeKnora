@@ -1,0 +1,116 @@
+{
+  "contract": "830-g3-d-backend-repair-dispatch.v1",
+  "status": "AUTHORIZED_WITHIN_EXISTING_G3_SCOPE_AFTER_CONSOLIDATED_DESIGN_REVIEW",
+  "owner": "g3_catalog_impl",
+  "repair_round": 1,
+  "maximum_high_risk_rounds": 2,
+  "review": "lane-d-backend-independent-review-01.json",
+  "review_sha256": "416d80fa8186d56fdf116157e044a6aad6c7db385817b4e8bbc70694074207a5",
+  "design": "d-backend-repair1-design-inputs/g3-d-backend-repair-readhash-prepid-proposal-01.md",
+  "design_sha256": "9ff57eb0baa470c4f602e361c452e410fada49e503f5e1c7e32297222a9c0e61",
+  "write_paths": [
+    "internal/application/service/concept_free_wiki_830_g3.go",
+    "internal/application/service/concept_free_wiki_830_g3_test.go",
+    "internal/handler/schema_wiki.go",
+    "internal/handler/concept_free_wiki_830_g3_test.go"
+  ],
+  "original_files": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621,
+      "lines": 884
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "9e1c4d50c9002f941de6c2ca99572e4f7249de569659c1a73a3c4a771652992a",
+      "bytes": 14363,
+      "lines": 337
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "a4b7497492a3b16173c8645a7c6ccfc799e4b9f30e73770fb06c31158b41f219",
+      "bytes": 34695,
+      "lines": 771
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870,
+      "lines": 1177
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312,
+      "lines": 659
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181,
+      "lines": 2007
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363,
+      "lines": 149
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "12307859c282a07f13893ec49b4df8c5059d7e06475cf13990fb4f8699784996",
+      "bytes": 13805,
+      "lines": 335
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/schema_wiki.go",
+      "sha256": "d48de4da18e86d424ddb69aa5c893744cf4cb8d6e4ab45904e71d6c989140192",
+      "bytes": 50256,
+      "lines": 1449
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759,
+      "lines": 239
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470,
+      "lines": 73
+    }
+  ],
+  "findings": [
+    "BACKEND-B1-PREPARATION-READ-HASH-UNICODE",
+    "BACKEND-B2-PREPARATION-ID-NOT-STRICT-G3-TEXT"
+  ],
+  "required": [
+    "Effective behavioral RED before repair, original logs retained",
+    "G3-only existing exported canonical helper reuse; preserve literal backslash-u versus actual Unicode and body TAB LF CR",
+    "G3 private exact D Text ID validation at Create Load and stored preparation validation; no invented length limit",
+    "G3 handler preserves exact decoded ID; no change to old G1/G2 trimming",
+    "Focused repair and full service handler router tests, vet gofmt diff verification",
+    "Freeze four changed paths plus exact unchanged seven, raw logs and exits for independent rereview",
+    "Root reruns same producer on fresh output directory and frozen UI/Python consumers after code freeze"
+  ],
+  "closed_domains": [
+    "types",
+    "Python",
+    "C/common",
+    "fixtures",
+    "UI",
+    "repository",
+    "router",
+    "shared G1/G2 canonical helpers"
+  ],
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0,
+    "live_http": 0
+  },
+  "runtime_authorization": "NOT_GRANTED_BY_THIS_CODE_REPAIR"
+}

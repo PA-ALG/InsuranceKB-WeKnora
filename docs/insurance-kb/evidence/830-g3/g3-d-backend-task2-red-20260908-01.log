@@ -1,0 +1,74 @@
+--- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields (0.00s)
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/revision_source (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/revision_source
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/manifest_algorithm (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/manifest_algorithm
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/manifest_digest (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/manifest_digest
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/chunk_count (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/chunk_count
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/binding (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/binding
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/retention (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/retention
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/contract (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/contract
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/knowledge (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/knowledge
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/attempt (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/attempt
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/file (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/file
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/object (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/object
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/size (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/size
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/mime (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/mime
+    --- FAIL: TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/page_count (0.00s)
+        concept_source_authority_830_g2_test.go:308: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_source_authority_830_g2_test.go:308
+            	Error:      	Should be false
+            	Test:       	TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields/page_count
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/application/service	5.828s
+FAIL

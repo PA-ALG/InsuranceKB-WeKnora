@@ -1,0 +1,31 @@
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/exact
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_candidate
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_preparation
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/null_candidate
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/mixed_g2
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/extra
+=== RUN   TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/duplicate
+--- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/exact (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_candidate (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/missing_preparation (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/null_candidate (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/mixed_g2 (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/extra (0.00s)
+    --- PASS: TestDecodeBatchConceptCreateDraft830G3AcceptsOnlyExactTwoKeyBody/duplicate (0.00s)
+=== RUN   TestCreateBatchConceptDraft830G3DispatchesExactCandidate
+--- PASS: TestCreateBatchConceptDraft830G3DispatchesExactCandidate (0.00s)
+=== RUN   TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope
+=== RUN   TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope/DRAFT
+=== RUN   TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope/READY
+--- PASS: TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope (0.00s)
+    --- PASS: TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope/DRAFT (0.00s)
+    --- PASS: TestReadBatchConceptPreparation830G3ReturnsExactThirteenKeyEnvelope/READY (0.00s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/handler	5.468s
+=== RUN   TestBatchConceptPreparation830G3DeclaresSingleHumanReadRoute
+json
+--- PASS: TestBatchConceptPreparation830G3DeclaresSingleHumanReadRoute (0.00s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/router	3.752s

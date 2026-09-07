@@ -17,6 +17,6 @@
 - [ ] 来源实际执行：当前11请求外发批准待回复，隔离provision/upload/source readback尚未执行。
 - [x] D Python首轮三项修复及第二轮source覆盖修复已独立通过；原始RED与旧快照保留。
 - [x] D Go完整镜像：初审2项BLOCKER经首轮集中修复独立PASS；原失败证据保留，四C反例/354跨语言snapshot及完整types回归通过。
-- [ ] D UI本地Task4：lane-d-ui-local-order-amendment-1.md独立PASS后已派mock RED→实现；Go门禁已通过；UI独立验收及后端整合待完成。
+- [x] D UI本地Task4：首轮修复独立PASS（26页面/46 G2回归），原失败保留，8文件冻结并提交b7a26b8aa；实际后端互操作另验。
 
-- [ ] D backend Tasks1/2/3：Go独审门禁通过后已按lane-d-backend-dispatch-1.json派工，仍需各阶段RED/GREEN及最终独立复核。
+- [ ] D backend Tasks1/2/3：11文件及原始RED/GREEN已冻结，完整service/handler/router回归通过；初次独审收口两项阻断，方案已独审通过，四文件首轮集中修复已派出。

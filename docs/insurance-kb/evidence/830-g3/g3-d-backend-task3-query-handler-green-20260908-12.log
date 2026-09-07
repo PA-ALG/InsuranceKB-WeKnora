@@ -1,0 +1,11 @@
+--- FAIL: TestConceptQuery830G3AtomicEntryPreservesG2FirstValueCompatibility (0.00s)
+    concept_free_wiki_830_g3_test.go:332: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:332
+        	Error:      	Not equal: 
+        	            	expected: 503
+        	            	actual  : 403
+        	Test:       	TestConceptQuery830G3AtomicEntryPreservesG2FirstValueCompatibility
+        	Messages:   	{"error":{"message":"wiki release access denied"},"success":false}
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	2.757s
+FAIL

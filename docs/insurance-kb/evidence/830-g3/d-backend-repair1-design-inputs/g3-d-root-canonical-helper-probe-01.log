@@ -1,0 +1,5 @@
+=== RUN   TestRootExistingCanonicalHelperReadPayload830G3
+    concept_free_wiki_830_g3_test.go:827: existing exported canonical helper matches frozen Python: 3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7
+--- PASS: TestRootExistingCanonicalHelperReadPayload830G3 (0.22s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/application/service	3.181s

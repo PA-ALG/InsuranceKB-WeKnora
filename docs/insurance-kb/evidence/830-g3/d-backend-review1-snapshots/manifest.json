@@ -1,0 +1,86 @@
+{
+  "contract": "830-g3-d-backend-review1-original-snapshots.v1",
+  "freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
+  "files": [
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g2.go",
+      "sha256": "f06b245490eb59053a33c06af9351942ab7489027d10ce85f53e537500260764",
+      "bytes": 35621,
+      "archive": "internal__application__service__concept_free_wiki_830_g2.go.gz",
+      "archive_sha256": "0738b7833e2553788cad4d6481f50c36696325fcc57b231ecbb1d32f57488965"
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3.go",
+      "sha256": "9e1c4d50c9002f941de6c2ca99572e4f7249de569659c1a73a3c4a771652992a",
+      "bytes": 14363,
+      "archive": "internal__application__service__concept_free_wiki_830_g3.go.gz",
+      "archive_sha256": "8e7865016ca6fbd40ef9f9bb245fb4cf734664738360f0d4e2388f3ef9af04f5"
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3_test.go",
+      "sha256": "a4b7497492a3b16173c8645a7c6ccfc799e4b9f30e73770fb06c31158b41f219",
+      "bytes": 34695,
+      "archive": "internal__application__service__concept_free_wiki_830_g3_test.go.gz",
+      "archive_sha256": "1ed1602ccb20b36d2a3984d2568ed0ea8ad14083b4a949d0c6c696de425ce42f"
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2.go",
+      "sha256": "d1db70b985e21c5b5e97ddb98c3048a09e9df3e024f12a31c489f09ba9d41eb6",
+      "bytes": 56870,
+      "archive": "internal__application__service__concept_source_authority_830_g2.go.gz",
+      "archive_sha256": "db3eed27d849471751f87bca6d667ddb2492c8881d6e80eb5c33eab49b4fe2ab"
+    },
+    {
+      "path": "internal/application/service/concept_source_authority_830_g2_test.go",
+      "sha256": "302abd0ba6a9cb276ed12e0e1ca4185857a218c6b14ce0240f012c45493500df",
+      "bytes": 37312,
+      "archive": "internal__application__service__concept_source_authority_830_g2_test.go.gz",
+      "archive_sha256": "b562233dc7623ac7fced44c9dc81dcdf99f34e8210556091c079093434456884"
+    },
+    {
+      "path": "internal/application/service/wiki_release.go",
+      "sha256": "65266778f714b027a42dd53d6d8eaafe3ff0d7907ea668e855267b78abdd2c05",
+      "bytes": 76181,
+      "archive": "internal__application__service__wiki_release.go.gz",
+      "archive_sha256": "5522434d3bfe67350d23afe2138686bdd5a240e833e7ff22d3d8d5e0a4c0bdf1"
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g2.go",
+      "sha256": "9a634a909497a0e6ccaadc6afe9d80a0dcd3187f6f9dc2e87bf35c579575d08e",
+      "bytes": 4363,
+      "archive": "internal__handler__concept_free_wiki_830_g2.go.gz",
+      "archive_sha256": "4acfea2952ec9042622cb4a44e59bc19a1377818e4e3a7748eb6ab99a39054a8"
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g3_test.go",
+      "sha256": "12307859c282a07f13893ec49b4df8c5059d7e06475cf13990fb4f8699784996",
+      "bytes": 13805,
+      "archive": "internal__handler__concept_free_wiki_830_g3_test.go.gz",
+      "archive_sha256": "9f85499c5ba018d33ae82ad2f8bef14ee5fa80129be62a8b848b0a7589cce344"
+    },
+    {
+      "path": "internal/handler/schema_wiki.go",
+      "sha256": "d48de4da18e86d424ddb69aa5c893744cf4cb8d6e4ab45904e71d6c989140192",
+      "bytes": 50256,
+      "archive": "internal__handler__schema_wiki.go.gz",
+      "archive_sha256": "b44ed830cd9fb08f957f36df08eec458d85a6d3e529c5c34dd7ed1bfbf2c6442"
+    },
+    {
+      "path": "internal/router/routes_schema_wiki.go",
+      "sha256": "f0e02b0478528332dd62161ba65d5f493e9fc489fb37372f78e784ce91b40c5c",
+      "bytes": 8759,
+      "archive": "internal__router__routes_schema_wiki.go.gz",
+      "archive_sha256": "a42d3aafe12a6ed7909114f04a7db9c769dce85ea49a070b63e9483b1264555e"
+    },
+    {
+      "path": "internal/router/routes_batch_concept_830_g3_test.go",
+      "sha256": "8785e49a41500dd150f5697c7b54f4a7e6547e74d18399548100594b5beac100",
+      "bytes": 2470,
+      "archive": "internal__router__routes_batch_concept_830_g3_test.go.gz",
+      "archive_sha256": "9f493ddd899338e7995dccb1a21c05d2ef3386f715aa12ca5aa04c5385a67a7d"
+    }
+  ],
+  "authorized_but_unchanged": [
+    "internal/application/service/wiki_release_test.go"
+  ]
+}
