@@ -1,0 +1,135 @@
+{
+  "contract": "830-g3-d-backend-ui-interop-repair1.v1",
+  "status": "PASS_PROTOCOL_INTEROPERABILITY_ONLY",
+  "production_source_sha256": {
+    "internal/application/service/concept_free_wiki_830_g3.go": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+    "internal/handler/schema_wiki.go": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99"
+  },
+  "ui_source_sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+  "unchanged_consumer": "d-backend-ui-interop-review1/g3-d-ui-consume-go-preparation-01.ts",
+  "unchanged_consumer_sha256": "3bdafa2f5deed34109922120a01fcbacab0525b561225bac548f3ed6bc99c06a",
+  "original_failure": "d-backend-ui-interop-review1/manifest.json",
+  "producer": "Actual Create/Load over existing repository/source test doubles and real Gin renderer; production handler/route not invoked.",
+  "ready": "Synthetic Ready row, not actual human Review.",
+  "exits": {
+    "producer": 0,
+    "ui_draft": 0,
+    "ui_ready": 0,
+    "frozen_python": 0
+  },
+  "results": [
+    {
+      "status": "DRAFT",
+      "file_sha256": "26cc154568917d15ef0087cd4a624b9701cf9162250c35a6a75ae9f521f3dac8",
+      "old_read_sha256": "0e933f199d51779bb0cf14fff977f7aaf014cc51282839573dc1d0947103ca33",
+      "claimed_read_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+      "frozen_python_read_sha256": "3355a7141f3b88f2e13882713f6813122cb46917db6045c748317555c31297e7",
+      "equal": true,
+      "logical_response_changed_only_read_sha256": true,
+      "u2028_count": 28
+    },
+    {
+      "status": "READY",
+      "file_sha256": "9ee1f25d1fece0ded91fd754d7137db4fd1955104eedbe57d83f4207b3609a8d",
+      "old_read_sha256": "d2625486749a0c2107d53154eb8246473ec5e77d20cc503afae5096edb2ec52c",
+      "claimed_read_sha256": "42a28167f152d803e35f5da73821b19a1d0796f444b4feaf87bb859ba857f4dc",
+      "frozen_python_read_sha256": "42a28167f152d803e35f5da73821b19a1d0796f444b4feaf87bb859ba857f4dc",
+      "equal": true,
+      "logical_response_changed_only_read_sha256": true,
+      "u2028_count": 28
+    }
+  ],
+  "entities": 5,
+  "fields": 342,
+  "entries": [
+    {
+      "original": "/private/tmp/g3-d-root-service-json-overlay-02.go",
+      "raw_sha256": "8d3636b137c2f6d122ca1c177a13d29d9facfe94e9ae38cc576587ae27507f6a",
+      "raw_bytes": 36890,
+      "archive": "g3-d-root-service-json-overlay-02.go.gz",
+      "gzip": true,
+      "archive_sha256": "70a90ad1db7edd4cce2fbd37fc66327916430ecc63c375509457aa06fcc1226b"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-overlay-02.json",
+      "raw_sha256": "7db20e3d6ae806b9f2b3432ae6bfa7c175bbd2f51f2adb2f44daefde2182b0b0",
+      "raw_bytes": 231,
+      "archive": "g3-d-root-service-json-overlay-02.json",
+      "gzip": false,
+      "archive_sha256": "7db20e3d6ae806b9f2b3432ae6bfa7c175bbd2f51f2adb2f44daefde2182b0b0"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-producer-02.log",
+      "raw_sha256": "27e1d44b1c41dc16c8bdf0d0fef8484ed330eb913f86555b6032db0ae539cd49",
+      "raw_bytes": 1392,
+      "archive": "g3-d-root-service-json-producer-02.log",
+      "gzip": false,
+      "archive_sha256": "27e1d44b1c41dc16c8bdf0d0fef8484ed330eb913f86555b6032db0ae539cd49"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-ui-consume-draft-02.log",
+      "raw_sha256": "0e5b7858b6a6e7a522f463831f67696a3c81e29875027270bc06be93902aacbf",
+      "raw_bytes": 576,
+      "archive": "g3-d-root-ui-consume-draft-02.log",
+      "gzip": false,
+      "archive_sha256": "0e5b7858b6a6e7a522f463831f67696a3c81e29875027270bc06be93902aacbf"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-ui-consume-ready-02.log",
+      "raw_sha256": "8f8534af14b63376b7c5a5a285c0ec6cb00033ff0bfd9379a4a151167752c62d",
+      "raw_bytes": 576,
+      "archive": "g3-d-root-ui-consume-ready-02.log",
+      "gzip": false,
+      "archive_sha256": "8f8534af14b63376b7c5a5a285c0ec6cb00033ff0bfd9379a4a151167752c62d"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-02/draft.json",
+      "raw_sha256": "26cc154568917d15ef0087cd4a624b9701cf9162250c35a6a75ae9f521f3dac8",
+      "raw_bytes": 396360,
+      "archive": "draft.json.gz",
+      "gzip": true,
+      "archive_sha256": "fa1d3d6036543ee44e22622df8b9d2de002c12389bd145494214efcfda083e12"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-service-json-02/ready.json",
+      "raw_sha256": "9ee1f25d1fece0ded91fd754d7137db4fd1955104eedbe57d83f4207b3609a8d",
+      "raw_bytes": 396360,
+      "archive": "ready.json.gz",
+      "gzip": true,
+      "archive_sha256": "3e0086f2167ca07e31e4d6030b305d0c6aaa1970322abf1e3d1c8695df697ae3"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-interop-production-before-02.json",
+      "raw_sha256": "49bbcbe995d11405ba71549784e00d1ad8f71a26cde891d285658efbd7ea9669",
+      "raw_bytes": 238,
+      "archive": "g3-d-root-interop-production-before-02.json",
+      "gzip": false,
+      "archive_sha256": "49bbcbe995d11405ba71549784e00d1ad8f71a26cde891d285658efbd7ea9669"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-frozen-python-read-hash-check-02.py",
+      "raw_sha256": "ca6f4e311dc326eb7d3cb718005652377b0aaf27859576fad6e45c2d9a184a9b",
+      "raw_bytes": 1708,
+      "archive": "g3-d-root-frozen-python-read-hash-check-02.py",
+      "gzip": false,
+      "archive_sha256": "ca6f4e311dc326eb7d3cb718005652377b0aaf27859576fad6e45c2d9a184a9b"
+    },
+    {
+      "original": "/private/tmp/g3-d-root-frozen-python-read-hash-check-02.json",
+      "raw_sha256": "e67a02db5c7090873aa667d41659a49a9545db1a2fd2cbdde8e2806e82622b47",
+      "raw_bytes": 1541,
+      "archive": "g3-d-root-frozen-python-read-hash-check-02.json",
+      "gzip": false,
+      "archive_sha256": "e67a02db5c7090873aa667d41659a49a9545db1a2fd2cbdde8e2806e82622b47"
+    }
+  ],
+  "independent_backend_rereview": "PENDING_OWNER_FINAL_FREEZE",
+  "effects": {
+    "live_http": 0,
+    "provider": 0,
+    "database": 0,
+    "browser": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}

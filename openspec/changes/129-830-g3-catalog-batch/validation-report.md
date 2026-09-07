@@ -20,7 +20,7 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 
 | 维度 | 状态 | 证据与边界 |
 |---|---|---|
-| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；PASS（Go完整镜像）；PASS（UI Task4） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首轮修复独立PASS，4 C反例/354跨语言snapshot/fulltypes通过；UI首轮修复独立26/46通过；backend仍未完成 |
+| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；PASS（Go完整镜像）；PASS（UI Task4）；PASS（backend Tasks1/2/3软件） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首轮修复独立PASS，4 C反例/354跨语言snapshot/fulltypes通过；UI首轮修复独立26/46通过；backend两轮修复独立PASS，真实闭环待执行 |
 | container health | NOT RUN（G3） | existing G2 docreader进程已只读核实用于解析预检，不是G3应用验收 |
 | provider probe | NOT RUN | 产品provider HTTP=0 |
 | provisioning | NOT RUN | 新DB/上传/SourceRevision/backfill=0 |
@@ -56,3 +56,7 @@ D UI首轮修复独立PASS（BLOCKER0/BACKLOG0）：原完整重哈希parser_ide
 D Task3 query入口原owner matrix漏列，已在实施前补齐：lane-d-backend-query-owner-amendment-3.md SHA1b8ff9d0…及独审cc80ae37… PASS，仅追加现有concept_free_wiki_830_g2 handler（总12路径），测试使用已开G3 handler test。原子Read/Issue入口在同一pin下分类/读取/签发前拒绝既有3类G3 query异常；原G2 first/empty/mixed行为保留。v1 TOCTOU方案和v2文字缺口原件保留，不计代码修复轮次。此为SPEC/派工，不是backend CODE PASS；有效RED、实现、完整回归和独审仍待保存，真实效果仍NOT RUN。
 
 D backend初次独审收口：11源码身份匹配，独立service303.020s/handler3.103s/router3.965s回归PASS；Spec BLOCKER2、code quality无新增阻断。实际service→Gin响应有28个U+2028，read_sha错误绑定escaped preimage，冻结UI拒绝；prepID六类不合法值可写Draft，G3 handler还会trim重写。报告lane-d-backend-independent-review-01.json SHA416d80fa…，原始证据完整保留。方案9ff57eb0…独审PASS，首轮集中修复dispatch0941c4de…仅四文件；未改类型、UI、fixture或C边缘空白规则。此时backend仍BLOCKED，全部真实业务执行NOT RUN。
+
+D backend repair1：完整三包/vet PASS，B1已关闭；root实际Create/Load+Gin renderer→冻结UI/Python两状态PASS，5实体342字段、28个U+2028及所有逻辑正文不变。独审报告4b45e09d…仍BLOCKER1：B2 decoded Text与stored检查已通过，新增raw JSON坏UTF8/lone surrogate替换边未封闭。首轮四源码gzip及所有日志保留，repair2设计5b67f955…独审PASS、dispatch2d7300a9…仅两handler文件，剩余最后一轮预算，无新基础域或外部权限。尚不能把backend或真实G3流程记为PASS。
+
+D backend最终软件收口：repair2最终独审5e9c4f0b… PASS/BLOCKER0，final freeze2b32e49f…逐11文件一致；仅G3 raw preparation_id在typed decode前由既有canonical helper校验、不使用返回值改写原文。原bad UTF8/lone surrogate反例现400/spy0，valid UFFFD/emoji/literal backslash-u和同坏字节G1/G2原行为保留；独立原探针2.295s、wire矩阵2.628s通过。service408.944s完整回归仍对应未变源码，最终handler/router2.802s/2.768s及vet通过。root已核30冻结身份及service→Gin→原UI/Python两状态5实体342字段完整互操作。历史失败/原始日志不重写，root总回执lane-d-root-software-integration.json。全部当前代码写域关闭；此为LOCAL SOFTWARE PASS，G3 FLOW、实际SOURCE/C/model/DB/build/deployment/release均NOT RUN，QUALITY仍DEFERRED_TO_Q0。

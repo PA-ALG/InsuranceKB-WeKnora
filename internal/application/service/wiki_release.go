@@ -701,14 +701,21 @@ func (s *WikiReleaseService) ActivateReviewed(
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
 		}
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		if _, _, validationErr := validateBatchConceptPreparation830G3(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+	}
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) ||
+		conceptCandidateBundleContract830G3(manifestHeader.Contract) {
 		// Activation verifies the same current dual-KB ACL before opening any
 		// immutable source object. s.activate repeats this gate at the CAS edge.
 		if err := s.verifyAccess(ctx, principal, scope, "activate"); err != nil {
 			return nil, err
 		}
-		if err := s.verifyConceptSourceAuthority830G2(
-			ctx, principal, scope, preparation, "activate",
-		); err != nil {
+		if err := s.verifyConceptSourceAuthority830G2(ctx, principal, scope, preparation, "activate"); err != nil {
 			return nil, err
 		}
 	}
@@ -894,6 +901,10 @@ func (s *WikiReleaseService) reviewDraft(
 		_, _, validationErr = validateConceptPreparation830G2(
 			draft, types.WikiReleasePreparationDraft, scope,
 		)
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		_, _, validationErr = validateBatchConceptPreparation830G3(
+			draft, types.WikiReleasePreparationDraft, scope,
+		)
 	} else {
 		_, validationErr = validateSchemaWikiPreparation(
 			draft, types.WikiReleasePreparationDraft, scope,
@@ -924,7 +935,8 @@ func (s *WikiReleaseService) reviewDraft(
 		draft.ReviewPolicyID != decision.ReviewPolicyHash {
 		return nil, fmt.Errorf("%w: human decision draft mismatch", ErrWikiReleaseInvalidAuthorization)
 	}
-	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
+	if conceptCandidateBundleContract830G2(manifestHeader.Contract) ||
+		conceptCandidateBundleContract830G3(manifestHeader.Contract) {
 		if err := s.verifyConceptSourceAuthority830G2(
 			ctx, principal, scope, draft, "review",
 		); err != nil {
@@ -1182,6 +1194,12 @@ func (s *WikiReleaseService) activate(
 	}
 	if conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+	} else if conceptCandidateBundleContract830G3(manifestHeader.Contract) {
+		if _, _, validationErr := validateBatchConceptPreparation830G3(
 			preparation, types.WikiReleasePreparationReady, scope,
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization
@@ -1849,6 +1867,14 @@ func (s *WikiReleaseService) readMembers(
 	if json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
 		conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
+			preparation, types.WikiReleasePreparationReady, scope,
+		); validationErr != nil {
+			return nil, ErrWikiReleaseInvalidAuthorization
+		}
+		storedManifestDigest = preparation.ManifestDigest
+		conceptG2 = true
+	} else if manifestHeader.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
+		if _, _, validationErr := validateBatchConceptPreparation830G3(
 			preparation, types.WikiReleasePreparationReady, scope,
 		); validationErr != nil {
 			return nil, ErrWikiReleaseInvalidAuthorization

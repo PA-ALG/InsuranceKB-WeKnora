@@ -1,0 +1,94 @@
+--- FAIL: TestBatchConceptPreparationReadHash830G3UsesLogicalUnicodeCanonicalBytes (0.00s)
+    --- FAIL: TestBatchConceptPreparationReadHash830G3UsesLogicalUnicodeCanonicalBytes/real_U+2028 (0.00s)
+        concept_free_wiki_830_g3_test.go:255: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go:255
+            	Error:      	Not equal: 
+            	            	expected: "0ffa73ab076f8cb7f8068c2b6b00a226703b0bce85222df0a092af965ef1489f"
+            	            	actual  : "2119f23c2d62b3dc2aa97ab78d0ab416d2b3244d1906700d35633804b48db84b"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-0ffa73ab076f8cb7f8068c2b6b00a226703b0bce85222df0a092af965ef1489f
+            	            	+2119f23c2d62b3dc2aa97ab78d0ab416d2b3244d1906700d35633804b48db84b
+            	Test:       	TestBatchConceptPreparationReadHash830G3UsesLogicalUnicodeCanonicalBytes/real_U+2028
+    --- FAIL: TestBatchConceptPreparationReadHash830G3UsesLogicalUnicodeCanonicalBytes/real_U+2029 (0.00s)
+        concept_free_wiki_830_g3_test.go:255: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go:255
+            	Error:      	Not equal: 
+            	            	expected: "054de2ca6cb8eeda00ee8a1f1b52f6f7bade592f9599c54e39a59d0d3b47fa69"
+            	            	actual  : "7737fe7e943f61c4c897d5581c49dfc75771e111f8b872748c1e41dc31df04ab"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-054de2ca6cb8eeda00ee8a1f1b52f6f7bade592f9599c54e39a59d0d3b47fa69
+            	            	+7737fe7e943f61c4c897d5581c49dfc75771e111f8b872748c1e41dc31df04ab
+            	Test:       	TestBatchConceptPreparationReadHash830G3UsesLogicalUnicodeCanonicalBytes/real_U+2029
+
+2026/09/08 03:27:39 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.242ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+--- FAIL: TestBatchConceptPreparationReadHash830G3MatchesFrozenActual342Consumer (8.06s)
+    concept_free_wiki_830_g3_test.go:280: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go:280
+        	Error:      	Not equal: 
+        	            	expected: "68ed828a2c93cf077e68fc4549c912fd8620d4fdbe613cb649c7e665e78c602c"
+        	            	actual  : "5b5a6f39c07f17e1fbdf7f0dec2f1c4581bd7576da22ca1d2a8bf88e9d53a0ca"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-68ed828a2c93cf077e68fc4549c912fd8620d4fdbe613cb649c7e665e78c602c
+        	            	+5b5a6f39c07f17e1fbdf7f0dec2f1c4581bd7576da22ca1d2a8bf88e9d53a0ca
+        	Test:       	TestBatchConceptPreparationReadHash830G3MatchesFrozenActual342Consumer
+
+2026/09/08 03:27:46 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.047ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+--- FAIL: TestBatchConceptPreparationID830G3RejectsStructuredControlBeforeWrite (4.55s)
+    concept_free_wiki_830_g3_test.go:294: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/service/concept_free_wiki_830_g3_test.go:294
+        	Error:      	Expected error with "schema wiki preparation invalid" in chain but got nil.
+        	Test:       	TestBatchConceptPreparationID830G3RejectsStructuredControlBeforeWrite
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/application/service	16.006s
+--- FAIL: TestBatchConceptPreparationID830G3IsNotNormalizedByHandler (0.00s)
+    --- FAIL: TestBatchConceptPreparationID830G3IsNotNormalizedByHandler/create (0.00s)
+        concept_free_wiki_830_g3_test.go:195: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:195
+            	Error:      	Not equal: 
+            	            	expected: "  batch\npreparation  "
+            	            	actual  : "batch\npreparation"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,2 +1,2 @@
+            	            	-  batch
+            	            	-preparation  
+            	            	+batch
+            	            	+preparation
+            	Test:       	TestBatchConceptPreparationID830G3IsNotNormalizedByHandler/create
+            	Messages:   	G3 service must receive exact decoded identity
+    --- FAIL: TestBatchConceptPreparationID830G3IsNotNormalizedByHandler/read (0.00s)
+        concept_free_wiki_830_g3_test.go:216: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:216
+            	Error:      	Not equal: 
+            	            	expected: "  batch\npreparation  "
+            	            	actual  : "batch\npreparation"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,2 +1,2 @@
+            	            	-  batch
+            	            	-preparation  
+            	            	+batch
+            	            	+preparation
+            	Test:       	TestBatchConceptPreparationID830G3IsNotNormalizedByHandler/read
+            	Messages:   	G3 service must receive exact decoded route identity
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	2.324s
+FAIL

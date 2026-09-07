@@ -263,6 +263,125 @@ func TestConceptLegacyProof830G2CannotAuthorizeSameEvidenceOnNewPage(t *testing.
 	require.False(t, ok)
 }
 
+func TestRegisteredSourceReceipt830G3MatchesAllFourteenServerFields(t *testing.T) {
+	pageCount := 7
+	source := &types.KnowledgeRevisionSource{
+		TenantID: 10003, KnowledgeID: "knowledge-g3", ParseAttempt: 2,
+		RevisionSourceID: testSHA830G2("revision-source"),
+		FileSHA256:       testSHA830G2("file"), ObjectSHA256: testSHA830G2("object"),
+		Size: 1234, MimeType: "application/pdf", PageCount: &pageCount,
+		ManifestAlgorithm: types.RevisionManifestAlgorithm,
+		ManifestDigest:    testSHA830G2("manifest"), ChunkCount: 3,
+		BindingDigest: testSHA830G2("binding"), RetentionState: types.KnowledgeRevisionSourcePinned,
+	}
+	receipt := types.RegisteredSourceReceipt830G3{
+		Contract: "knowledge-revision-source.v1", KnowledgeID: source.KnowledgeID,
+		ParseAttempt: source.ParseAttempt, RevisionSourceID: source.RevisionSourceID,
+		FileSHA256: source.FileSHA256, ObjectSHA256: source.ObjectSHA256,
+		Size: source.Size, MIMEType: source.MimeType, PageCount: int64(pageCount),
+		ManifestAlgorithm: source.ManifestAlgorithm, ManifestDigest: source.ManifestDigest,
+		ChunkCount: int64(source.ChunkCount), BindingDigest: source.BindingDigest,
+		RetentionState: source.RetentionState,
+	}
+	require.True(t, registeredReceiptMatchesSource830G3(receipt, source))
+
+	tests := map[string]func(*types.RegisteredSourceReceipt830G3){
+		"contract":           func(row *types.RegisteredSourceReceipt830G3) { row.Contract = "other" },
+		"knowledge":          func(row *types.RegisteredSourceReceipt830G3) { row.KnowledgeID = "other" },
+		"attempt":            func(row *types.RegisteredSourceReceipt830G3) { row.ParseAttempt++ },
+		"revision source":    func(row *types.RegisteredSourceReceipt830G3) { row.RevisionSourceID = testSHA830G2("other") },
+		"file":               func(row *types.RegisteredSourceReceipt830G3) { row.FileSHA256 = testSHA830G2("other") },
+		"object":             func(row *types.RegisteredSourceReceipt830G3) { row.ObjectSHA256 = testSHA830G2("other") },
+		"size":               func(row *types.RegisteredSourceReceipt830G3) { row.Size++ },
+		"mime":               func(row *types.RegisteredSourceReceipt830G3) { row.MIMEType = "text/plain" },
+		"page count":         func(row *types.RegisteredSourceReceipt830G3) { row.PageCount++ },
+		"manifest algorithm": func(row *types.RegisteredSourceReceipt830G3) { row.ManifestAlgorithm = "other" },
+		"manifest digest":    func(row *types.RegisteredSourceReceipt830G3) { row.ManifestDigest = testSHA830G2("other") },
+		"chunk count":        func(row *types.RegisteredSourceReceipt830G3) { row.ChunkCount++ },
+		"binding":            func(row *types.RegisteredSourceReceipt830G3) { row.BindingDigest = testSHA830G2("other") },
+		"retention":          func(row *types.RegisteredSourceReceipt830G3) { row.RetentionState = "released" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			drifted := receipt
+			mutate(&drifted)
+			require.False(t, registeredReceiptMatchesSource830G3(drifted, source))
+		})
+	}
+}
+
+func TestBatchConceptSelectedCorpusBlock830G3ReopensExactLiveSource(t *testing.T) {
+	pdf := []byte("pdf")
+	chunk := &types.Chunk{
+		ID: "chunk-g3", TenantID: 1, KnowledgeID: "knowledge-g3", KnowledgeBaseID: "raw-g3",
+		Content: "A😀\nfield body", ChunkIndex: 0, ParseAttempt: 2,
+	}
+	manifest, err := types.ComputeRevisionManifestDigest(
+		chunk.KnowledgeID, chunk.ParseAttempt,
+		[]types.RevisionManifestChunk{{ID: chunk.ID, Index: chunk.ChunkIndex, Content: chunk.Content}},
+	)
+	require.NoError(t, err)
+	pageCount := 1
+	source := &types.KnowledgeRevisionSource{
+		TenantID: 1, KnowledgeID: chunk.KnowledgeID, ParseAttempt: chunk.ParseAttempt,
+		ResourceID: "resource-g3", ResourceHandle: "resourcehandle12345678",
+		FileSHA256: testSHA830G2(string(pdf)), ObjectSHA256: testSHA830G2(string(pdf)),
+		Size: int64(len(pdf)), MimeType: "application/pdf", PageCount: &pageCount,
+		ManifestAlgorithm: types.RevisionManifestAlgorithm, ManifestDigest: manifest, ChunkCount: 1,
+		ImmutableLocator: types.BuildResourcePath("resourcehandle12345678"),
+		RetentionState:   types.KnowledgeRevisionSourcePinned,
+	}
+	source.RevisionSourceID, err = types.ComputeKnowledgeRevisionSourceID(*source)
+	require.NoError(t, err)
+	source.BindingDigest, err = types.ComputeKnowledgeRevisionSourceBindingDigest(*source)
+	require.NoError(t, err)
+	repo := &conceptKnowledgeStub830G2{
+		knowledge: &types.Knowledge{ID: chunk.KnowledgeID, TenantID: 1, KnowledgeBaseID: chunk.KnowledgeBaseID, FileType: "pdf"},
+		revision: &types.KnowledgeRevision{
+			KnowledgeID: chunk.KnowledgeID, ParseAttempt: chunk.ParseAttempt,
+			FileSHA256: source.FileSHA256, ManifestAlgorithm: source.ManifestAlgorithm,
+			ManifestDigest: source.ManifestDigest, ChunkCount: source.ChunkCount,
+		},
+		source: source, resource: &types.StoredResource{ID: source.ResourceID, TenantID: source.TenantID},
+	}
+	bridge := &ConceptSourceAuthorityService830G2{
+		knowledge: repo, revisions: repo, chunks: conceptChunksStub830G2{chunks: []*types.Chunk{chunk}},
+	}
+	scope := types.WikiReleaseScope{TenantID: 1, SpaceID: "space-g3", RawKBID: "raw-g3", WikiKBID: "wiki-g3"}
+	entry := types.CorpusEntry830G3{
+		Receipt: types.SourceReceipt830G3{Contract: "knowledge-revision-source.v1", Registered: &types.RegisteredSourceReceipt830G3{
+			Contract: "knowledge-revision-source.v1", KnowledgeID: source.KnowledgeID,
+			ParseAttempt: source.ParseAttempt, RevisionSourceID: source.RevisionSourceID,
+			FileSHA256: source.FileSHA256, ObjectSHA256: source.ObjectSHA256,
+			Size: source.Size, MIMEType: source.MimeType, PageCount: int64(*source.PageCount),
+			ManifestAlgorithm: source.ManifestAlgorithm, ManifestDigest: source.ManifestDigest,
+			ChunkCount: int64(source.ChunkCount), BindingDigest: source.BindingDigest,
+			RetentionState: source.RetentionState,
+		}},
+		Blocks: []types.ConceptSourceBlock830G2{{
+			ConceptSourceIdentity830G2: types.ConceptSourceIdentity830G2{
+				TenantID: 1, SpaceID: scope.SpaceID, RawKBID: scope.RawKBID,
+				KnowledgeID: source.KnowledgeID, ParseAttempt: source.ParseAttempt,
+				RevisionID: source.RevisionSourceID, SourceHash: source.FileSHA256,
+				ParseHash: source.ManifestDigest, ParserIdentity: testSHA830G2("parser"),
+			},
+			BlockID: chunk.ID, PageNumber: 1, SourceType: "DOCUMENT", Text: chunk.Content,
+		}},
+	}
+	require.NoError(t, bridge.verifyCorpusEntryLive830G3(context.Background(), scope, entry))
+
+	drifted := entry
+	drifted.Blocks = append([]types.ConceptSourceBlock830G2(nil), entry.Blocks...)
+	drifted.Blocks[0].Text += " tampered"
+	require.ErrorIs(t, bridge.verifyCorpusEntryLive830G3(context.Background(), scope, drifted), ErrConceptSourceAuthorityUnavailable830G2)
+
+	drifted = entry
+	receipt := *entry.Receipt.Registered
+	receipt.Size++
+	drifted.Receipt.Registered = &receipt
+	require.ErrorIs(t, bridge.verifyCorpusEntryLive830G3(context.Background(), scope, drifted), ErrConceptSourceAuthorityUnavailable830G2)
+}
+
 func TestConceptLegacyCarryover830G2AllowsOnlyAddedConceptNavigation(t *testing.T) {
 	value := "covered"
 	migrated := types.ConceptFieldAssertion830G2{

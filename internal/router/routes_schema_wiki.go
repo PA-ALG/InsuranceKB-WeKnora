@@ -192,6 +192,10 @@ func RegisterSchemaWikiRoutes(
 	humanGET := func(path string, endpoint gin.HandlerFunc) {
 		human.GET(path, append(append([]gin.HandlerFunc(nil), humanPreparationGuards...), endpoint)...)
 	}
+	humanGET(
+		"/preparations/:preparation_id/batch-concept",
+		schemaHandler.ReadBatchConceptPreparation830G3,
+	)
 	humanGET("/preparations/:preparation_id/root", schemaHandler.ReadReviewedRoot)
 	humanGET("/preparations/:preparation_id/sections/:section_id", schemaHandler.ReadReviewedSection)
 	humanGET("/preparations/:preparation_id/fields/:field_id", schemaHandler.ReadReviewedField)

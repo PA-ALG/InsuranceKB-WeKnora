@@ -1,0 +1,48 @@
+--- FAIL: TestIndependentG3HandlerUnicodeDecodeBoundary (0.00s)
+    --- FAIL: TestIndependentG3HandlerUnicodeDecodeBoundary/invalid_UTF-8_byte (0.00s)
+        g3_d_backend_repair1_handler_unicode_decode_probe_test.go:23: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/g3_d_backend_repair1_handler_unicode_decode_probe_test.go:23
+            	Error:      	Not equal: 
+            	            	expected: 400
+            	            	actual  : 201
+            	Test:       	TestIndependentG3HandlerUnicodeDecodeBoundary/invalid_UTF-8_byte
+            	Messages:   	{"data":null,"success":true}
+        g3_d_backend_repair1_handler_unicode_decode_probe_test.go:24: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/g3_d_backend_repair1_handler_unicode_decode_probe_test.go:24
+            	Error:      	Not equal: 
+            	            	expected: ""
+            	            	actual  : "bad�id"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-
+            	            	+bad�id
+            	Test:       	TestIndependentG3HandlerUnicodeDecodeBoundary/invalid_UTF-8_byte
+            	Messages:   	wire identity must not be replaced by encoding/json
+    --- FAIL: TestIndependentG3HandlerUnicodeDecodeBoundary/unpaired_surrogate (0.00s)
+        g3_d_backend_repair1_handler_unicode_decode_probe_test.go:23: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/g3_d_backend_repair1_handler_unicode_decode_probe_test.go:23
+            	Error:      	Not equal: 
+            	            	expected: 400
+            	            	actual  : 201
+            	Test:       	TestIndependentG3HandlerUnicodeDecodeBoundary/unpaired_surrogate
+            	Messages:   	{"data":null,"success":true}
+        g3_d_backend_repair1_handler_unicode_decode_probe_test.go:24: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/g3_d_backend_repair1_handler_unicode_decode_probe_test.go:24
+            	Error:      	Not equal: 
+            	            	expected: ""
+            	            	actual  : "bad�id"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-
+            	            	+bad�id
+            	Test:       	TestIndependentG3HandlerUnicodeDecodeBoundary/unpaired_surrogate
+            	Messages:   	wire identity must not be replaced by encoding/json
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	3.813s
+FAIL

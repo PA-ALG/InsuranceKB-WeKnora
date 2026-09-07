@@ -1,0 +1,40 @@
+{
+  "contract": "830-g3-d-backend-repair-dispatch.v1",
+  "status": "AUTHORIZED_LAST_BOUNDED_REPAIR_AFTER_INDEPENDENT_DESIGN_PASS",
+  "owner": "g3_catalog_impl",
+  "repair_round": 2,
+  "maximum_high_risk_rounds": 2,
+  "review": "lane-d-backend-repair1-independent-rereview.json",
+  "review_sha256": "4b45e09d5de02dadcb16650f8e3c253d799caffe9f5b4f52eb0677c692f4c453",
+  "design": "lane-d-backend-repair2-unicode-wire-proposal-01.md",
+  "design_sha256": "5b67f955bddbfd2c77fd063de130828c3a23291335e2fdccc7fa409ffd6a037c",
+  "write_paths": [
+    "internal/handler/schema_wiki.go",
+    "internal/handler/concept_free_wiki_830_g3_test.go"
+  ],
+  "repair1_freeze_sha256": "d9c373acef21fd51e8c223ea06c6bb3af4d118e603621ace5f5b2371093fb4ff",
+  "scope_disposition": {
+    "charter": "28 section6 identifies a real blocker by frozen input, failing physical edge and error fingerprint; AGENTS allows at most two high-risk code repair rounds.",
+    "original_edge": "Decoded D Text and G3 TrimSpace identity rewrite; every original effective negative now passes.",
+    "new_edge": "Raw invalid UTF-8 or lone surrogate in the JSON preparation_id token is lossily replaced before typed service validation. The original tests supplied already decoded valid-UTF8 strings.",
+    "decision": "B2 remains open overall. This new raw-decoding fingerprint gets one bounded existing-helper check in the original handler, within remaining code repair round2. No new prerequisite, authority, service or public helper. No third repair round is authorized."
+  },
+  "required": [
+    "Validate original raw preparation_id token only after exact G3 variant selection and before second typed decode; discard canonical bytes and decode original request unchanged",
+    "Use existing types.CanonicalConceptMemberPayload830G2; no scanner/ReplaceAll/global G1-G2 rules",
+    "RED malformed rawUTF8/lone high/lone low reaches spy201 before fix; GREEN400 and spy0 afterward",
+    "Positive valid UFFFD literal/escaped, valid emoji surrogate pair, literal backslash-u, NFC strings preserved",
+    "Same malformed ID wire fixture retains original G1/G2 dispatch while G3 rejects, proving exact branch isolation",
+    "Full handler/router tests and vet/gofmt/diff; preserve raw logs and actual exits",
+    "Do not rerun unchanged service full suite or its already passing UI/Python interoperability",
+    "Freeze all11 identity inventory (only2 change); independent final review before acceptance"
+  ],
+  "effects": {
+    "provider": 0,
+    "database": 0,
+    "live_http": 0,
+    "build": 0,
+    "deployment": 0
+  },
+  "runtime_authorization": "NONE_FROM_THIS_CODE_REPAIR"
+}

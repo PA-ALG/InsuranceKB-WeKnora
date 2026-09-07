@@ -1,0 +1,40 @@
+{
+  "contract": "830-g3-d-backend-repair1-snapshots.v1",
+  "freeze_sha256": "d9c373acef21fd51e8c223ea06c6bb3af4d118e603621ace5f5b2371093fb4ff",
+  "entries": [
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3.go",
+      "raw_sha256": "5cfdd3f558662ec7ee0f22d5c3b29ccc394796665d9c65b56c10cb7f8975b2cd",
+      "raw_bytes": 15042,
+      "archive": "internal__application__service__concept_free_wiki_830_g3.go.gz",
+      "archive_sha256": "b269287339c2f6be67b05a336d3ced4137c5636f30f3d3f97cf8a9bf7d29065a"
+    },
+    {
+      "path": "internal/application/service/concept_free_wiki_830_g3_test.go",
+      "raw_sha256": "0e04690036e80ae6261df9bc53e814851dbf7616672abb16c159773453fc5a6f",
+      "raw_bytes": 39746,
+      "archive": "internal__application__service__concept_free_wiki_830_g3_test.go.gz",
+      "archive_sha256": "1e35a4ca73a7f3ad1257b0e1603711f56308c126aae284db011c182d1781e500"
+    },
+    {
+      "path": "internal/handler/concept_free_wiki_830_g3_test.go",
+      "raw_sha256": "c2b4506057ccaf5a77c19da2af711394bee123ee9bb835c3c5aadb967bd175f4",
+      "raw_bytes": 15446,
+      "archive": "internal__handler__concept_free_wiki_830_g3_test.go.gz",
+      "archive_sha256": "b2c897f5acbcc3737fa8207f0d3aa6248e165d9972499350634f27590cbce923"
+    },
+    {
+      "path": "internal/handler/schema_wiki.go",
+      "raw_sha256": "ad388e0616cd0fc4a54c2aaedad95c49334f380e4c420f0aa2bee16259490b99",
+      "raw_bytes": 50218,
+      "archive": "internal__handler__schema_wiki.go.gz",
+      "archive_sha256": "c37baae5434ebb8dc364c9197edb498250ae39e02be9bccd0ba5fe7ec762b966"
+    }
+  ],
+  "status": "PRESERVED_BEFORE_REPAIR1_FINAL_REREVIEW",
+  "effects": {
+    "production_source_writes": 0,
+    "provider": 0,
+    "database": 0
+  }
+}

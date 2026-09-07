@@ -1,5 +1,9 @@
 ## 当前执行：G3 已获明确启动授权（2026-09-07）
 
+当前收口：D backend最终repair2独立PASS（报告5e9c4f0b…，BLOCKER0），B1与B2全部关闭；final freeze2b32e49f…，11文件全部匹配。service完整回归408.944s、最终handler/router2.802s/2.768s及vet通过；原始坏UTF8/Unicode探针独立转绿，G1/G2兼容保留。root service→Gin→冻结UI/Python两状态完整互操作PASS，30项冻结输入身份匹配；根结论见lane-d-root-software-integration.json。全部当前代码写域关闭，剩余后端修复额度0。G3仍WIP、FLOW NOT RUN、QUALITY DEFERRED_TO_Q0；真实SOURCE尚待此前外发批准，后续真实C输入/策略/受控模型窗口及发布验收也未执行。用户“结构确认”和安佑福1828材料已处理，禁止重复询问结构或推定具名信息。
+
+最新：后端repair1完整三包回归PASS（408.944s/3.427s/3.799s），B1实际service→Gin→冻结UI/Python的DRAFT/READY完整5实体342字段互操作PASS、正文不变。repair1独审4b45e09d…确认B2解码后Text和stored-ID检查通过，但发现raw JSON坏UTF8/lone surrogate会被Go decoder先替换后接受；原反例保留。方案5b67f955…独审PASS，最终第2轮dispatch2d7300a9…仅G3 handler+test，既有raw canonical helper丢弃返回值、只验原字段，增加same-wire G2/G3分支回归。原9后端文件和全部UI/Go/Python/C/common冻结，不授权第三轮。G3仍WIP、FLOW NOT RUN，外发原问题待实际回复。
+
 当前软件门禁（2026-09-08）：UI首轮修复已独审PASS并提交b7a26b8aa；后端11文件初次独审收口为2项BLOCKER：read_sha对真实U+2028采用错误转义preimage，及preparation_id未按D Text严验/handler先trim。原11源码、31日志、独立反例及实际service→Gin→冻结UI失败证据均已保全；独审报告lane-d-backend-independent-review-01.json SHA416d80fa…，方案9ff57eb0…独审PASS，首轮修复dispatch0941c4de…仅开放G3 service/schema handler与两份G3测试。Go/Python/C/common/UI/fixtures和另外7后端文件关闭。接下来是修后独审及原前端互操作；真实SOURCE/C/provider/DB/build/deployment仍NOT RUN，原外发问题待实际回复，结构确认已接受。下述较早进度为历史，当前状态以本段和startup.json为准。
 
 唯一 Owner=830-G3总控/root；G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。已成功 fetch，base/main=075d9c38c01e48abfe7985985dc503099cf9b19a；专用工作树 `.worktrees/830-g3-implementation`，分支 `codex/830-g3-implementation`。

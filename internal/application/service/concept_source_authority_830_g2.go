@@ -174,7 +174,20 @@ func NewConceptSourceAuthorityService830G2(fixed *KnowledgeRevisionSourceService
 }
 
 func (s *ConceptSourceAuthorityService830G2) VerifyConceptSources830G2(ctx context.Context, request ConceptSourceAuthorityVerificationRequest830G2) error {
-	if s == nil || (request.Operation != "review" && request.Operation != "activate") || request.PreparationID == "" || !validServiceSHA256(request.CandidateHash) {
+	if s == nil || request.PreparationID == "" || !validServiceSHA256(request.CandidateHash) {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	var header struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(request.Manifest, &header) != nil {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if header.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
+		return s.verifyBatchConceptSources830G3(ctx, request)
+	}
+	if !conceptCandidateBundleContract830G2(header.Contract) ||
+		(request.Operation != "review" && request.Operation != "activate") {
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	bundle, canonicalManifest, err := types.CanonicalConceptCandidateBundle830G2(request.Manifest)
@@ -221,6 +234,253 @@ func (s *ConceptSourceAuthorityService830G2) VerifyConceptSources830G2(ctx conte
 		return ErrConceptSourceAuthorityUnavailable830G2
 	}
 	return nil
+}
+
+func registeredReceiptMatchesSource830G3(
+	receipt types.RegisteredSourceReceipt830G3,
+	source *types.KnowledgeRevisionSource,
+) bool {
+	return source != nil && source.PageCount != nil &&
+		receipt.Contract == "knowledge-revision-source.v1" &&
+		receipt.KnowledgeID == source.KnowledgeID &&
+		receipt.ParseAttempt == source.ParseAttempt &&
+		receipt.RevisionSourceID == source.RevisionSourceID &&
+		receipt.FileSHA256 == source.FileSHA256 &&
+		receipt.ObjectSHA256 == source.ObjectSHA256 &&
+		receipt.Size == source.Size && receipt.MIMEType == source.MimeType &&
+		receipt.PageCount == int64(*source.PageCount) &&
+		receipt.ManifestAlgorithm == source.ManifestAlgorithm &&
+		receipt.ManifestDigest == source.ManifestDigest &&
+		receipt.ChunkCount == int64(source.ChunkCount) &&
+		receipt.BindingDigest == source.BindingDigest &&
+		receipt.RetentionState == source.RetentionState
+}
+
+func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
+	ctx context.Context,
+	request ConceptSourceAuthorityVerificationRequest830G2,
+) error {
+	if request.Operation != "create-draft" && request.Operation != "review" && request.Operation != "activate" {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if request.Operation == "create-draft" {
+		if request.PreparationDigest != "" {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	} else if !validServiceSHA256(request.PreparationDigest) {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	bundle, canonical, err := types.CanonicalBatchConceptCandidateBundle830G3(request.Manifest)
+	if err != nil || digestWikiReleaseBytes(canonical) != request.ManifestDigest ||
+		bundle.CandidateHash != request.CandidateHash || batchConceptScope830G3(bundle) != request.Scope {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if request.Operation != "create-draft" {
+		if s.releases == nil {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		var stored *types.WikiReleasePreparation
+		if request.Operation == "review" {
+			stored, err = s.releases.GetDraftPreparation(ctx, request.Scope, request.PreparationID)
+		} else {
+			stored, err = s.releases.GetReadyPreparation(ctx, request.Scope, request.PreparationID)
+		}
+		if err != nil || stored == nil || stored.CandidateDigest != request.CandidateHash ||
+			stored.ManifestDigest != request.ManifestDigest || stored.PreparationDigest != request.PreparationDigest ||
+			!bytes.Equal(stored.Manifest, request.Manifest) {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	}
+	ctx = context.WithValue(ctx, conceptNativeCaptureCacheKey830G2{}, map[string]conceptNativeCaptureEntry830G2{})
+	selected := map[string]struct{}{}
+	for _, binding := range bundle.Request.EntityBindings {
+		for _, materialID := range binding.SourceMaterialIDs {
+			selected[materialID] = struct{}{}
+		}
+	}
+	selectedBlocks := map[string]types.ConceptSourceBlock830G2{}
+	for _, entry := range bundle.Request.ResolutionInputs.Corpus.Entries {
+		if _, ok := selected[entry.MaterialID]; !ok {
+			continue
+		}
+		if err := s.verifyCorpusEntryLive830G3(ctx, request.Scope, entry); err != nil {
+			return err
+		}
+		for _, block := range entry.Blocks {
+			selectedBlocks[block.RevisionID+"\x00"+block.BlockID] = block
+		}
+		delete(selected, entry.MaterialID)
+	}
+	if len(selected) != 0 {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+
+	baseView := types.ConceptCandidateBundle830G2{
+		Request: bundle.Request.BaseRequest, CompileResult: bundle.CompileResult,
+	}
+	legacy, err := s.verifyLegacyCarryover830G2(ctx, request.Scope, baseView)
+	if err != nil {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	seen := map[string]struct{}{}
+	verify := func(memberID string, evidence types.ConceptEvidence830G2, allowLegacy bool) error {
+		canonicalEvidence, canonicalErr := canonicalJSON830G2(evidence)
+		if canonicalErr != nil {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		if allowLegacy {
+			if _, ok := legacy[memberID+"\x00"+testSHA256Bytes830G2(canonicalEvidence)]; ok {
+				return nil
+			}
+		}
+		key := testSHA256Bytes830G2(canonicalEvidence)
+		if _, ok := seen[key]; ok {
+			return nil
+		}
+		seen[key] = struct{}{}
+		block, ok := conceptSourceBlockForEvidence830G2(baseView, evidence)
+		if !ok {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		if selectedBlock, selectedEvidence := selectedBlocks[evidence.RevisionID+"\x00"+evidence.BlockID]; selectedEvidence {
+			block = selectedBlock
+		}
+		_, _, verifyErr := s.verifyEvidence(ctx, request.Scope, evidence, &block)
+		return verifyErr
+	}
+	for _, binding := range bundle.Request.EntityBindings {
+		for _, bound := range binding.ResolutionEvidence {
+			if err := verify("", bound.Evidence, false); err != nil {
+				return err
+			}
+		}
+	}
+	for _, definition := range bundle.CompileResult.Output.Definitions {
+		memberID, idErr := definition.DefinitionID()
+		if idErr != nil {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		for _, evidence := range definition.Evidence {
+			if err := verify(memberID, evidence, false); err != nil {
+				return err
+			}
+		}
+	}
+	for _, field := range bundle.CompileResult.Output.Fields {
+		memberID, idErr := field.FieldAssertionID()
+		if idErr != nil {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		for _, evidence := range field.Evidence {
+			if err := verify(memberID, evidence, true); err != nil {
+				return err
+			}
+		}
+	}
+	for _, page := range bundle.CompileResult.Output.Pages {
+		memberID, idErr := page.FreeWikiPageID()
+		if idErr != nil {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		for _, evidence := range page.Evidence {
+			if err := verify(memberID, evidence, false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *ConceptSourceAuthorityService830G2) verifyCorpusEntryLive830G3(
+	ctx context.Context,
+	scope types.WikiReleaseScope,
+	entry types.CorpusEntry830G3,
+) error {
+	if s == nil || s.knowledge == nil || s.revisions == nil || s.chunks == nil {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	knowledgeID, attempt := "", int64(0)
+	if entry.Receipt.Registered != nil {
+		knowledgeID, attempt = entry.Receipt.Registered.KnowledgeID, entry.Receipt.Registered.ParseAttempt
+	} else if entry.Receipt.Legacy != nil {
+		knowledgeID, attempt = entry.Receipt.Legacy.KnowledgeID, entry.Receipt.Legacy.WeKnoraParseAttempt
+	} else {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	knowledge, err := s.knowledge.GetKnowledgeByID(ctx, scope.TenantID, knowledgeID)
+	if err != nil || knowledge == nil || knowledge.DeletedAt.Valid || knowledge.TenantID != scope.TenantID ||
+		knowledge.KnowledgeBaseID != scope.RawKBID {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	revision, err := s.revisions.GetRevision(ctx, knowledgeID, attempt)
+	if err != nil || revision == nil || revision.KnowledgeID != knowledgeID || revision.ParseAttempt != attempt {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	source, resource, err := s.revisions.GetRevisionSource(ctx, scope.TenantID, knowledgeID, attempt)
+	if err != nil || source == nil || resource == nil || resource.ID != source.ResourceID ||
+		resource.TenantID != scope.TenantID || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil ||
+		revision.FileSHA256 != source.FileSHA256 || revision.ManifestAlgorithm != source.ManifestAlgorithm ||
+		revision.ManifestDigest != source.ManifestDigest || revision.ChunkCount != source.ChunkCount {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	if entry.Receipt.Registered != nil {
+		if !registeredReceiptMatchesSource830G3(*entry.Receipt.Registered, source) {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	} else if !legacyReceiptMatchesSource830G3(*entry.Receipt.Legacy, scope, source, resource) {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	chunks, err := s.chunks.ListChunksByKnowledgeID(ctx, scope.TenantID, knowledgeID)
+	if err != nil {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	manifest := make([]types.RevisionManifestChunk, 0, len(chunks))
+	byID := map[string]*types.Chunk{}
+	for _, chunk := range chunks {
+		if chunk == nil || chunk.ParseAttempt != attempt {
+			continue
+		}
+		if chunk.TenantID != scope.TenantID || chunk.KnowledgeID != knowledgeID ||
+			chunk.KnowledgeBaseID != scope.RawKBID {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+		manifest = append(manifest, types.RevisionManifestChunk{ID: chunk.ID, Index: chunk.ChunkIndex, Content: chunk.Content})
+		byID[chunk.ID] = chunk
+	}
+	sort.Slice(manifest, func(i, j int) bool { return manifest[i].Index < manifest[j].Index })
+	digest, err := types.ComputeRevisionManifestDigest(knowledgeID, attempt, manifest)
+	if err != nil || len(manifest) != revision.ChunkCount || digest != revision.ManifestDigest {
+		return ErrConceptSourceAuthorityUnavailable830G2
+	}
+	for _, block := range entry.Blocks {
+		chunk := byID[block.BlockID]
+		if chunk == nil || block.TenantID != scope.TenantID || block.SpaceID != scope.SpaceID ||
+			block.RawKBID != scope.RawKBID || block.KnowledgeID != knowledgeID || block.ParseAttempt != attempt ||
+			block.RevisionID != source.RevisionSourceID || block.SourceHash != source.FileSHA256 ||
+			block.ParseHash != source.ManifestDigest || block.Text != chunk.Content {
+			return ErrConceptSourceAuthorityUnavailable830G2
+		}
+	}
+	return nil
+}
+
+func legacyReceiptMatchesSource830G3(
+	receipt types.LiveRevisionSourceReceipt830G3,
+	scope types.WikiReleaseScope,
+	source *types.KnowledgeRevisionSource,
+	resource *types.StoredResource,
+) bool {
+	return source != nil && resource != nil && source.PageCount != nil &&
+		receipt.Contract == "live-revision-source-receipt.v1" &&
+		receipt.TenantID == scope.TenantID && receipt.SpaceID == scope.SpaceID &&
+		receipt.RawKBID == scope.RawKBID && receipt.WikiKBID == scope.WikiKBID &&
+		receipt.KnowledgeID == source.KnowledgeID && receipt.WeKnoraParseAttempt == source.ParseAttempt &&
+		receipt.RevisionSourceID == source.RevisionSourceID && receipt.ResourceID == source.ResourceID &&
+		receipt.FileSHA256 == source.FileSHA256 && receipt.Size == source.Size &&
+		receipt.MIMEType == source.MimeType && receipt.PageCount == int64(*source.PageCount) &&
+		receipt.WeKnoraManifestAlgorithm == source.ManifestAlgorithm &&
+		receipt.WeKnoraManifestDigest == source.ManifestDigest &&
+		receipt.WeKnoraChunkCount == int64(source.ChunkCount) && resource.ID == source.ResourceID
 }
 
 func conceptLegacyProofForOccurrence830G2(kind, memberID string, evidence types.ConceptEvidence830G2, proofs map[string]conceptLegacyProof830G2) (conceptLegacyProof830G2, bool) {

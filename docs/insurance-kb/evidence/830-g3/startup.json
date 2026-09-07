@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "D_BACKEND_REPAIR1_DISPATCHED_TWO_CONFIRMED_BLOCKERS",
-  "NEXT_PHYSICAL_RESULT": "Consolidated independent backend review, then one bounded repair and actual service-JSON to frozen UI interoperability verification",
+  "CURRENT_RED": "ACTUAL_SOURCE_EXECUTION_AWAITING_EXISTING_EXTERNAL_SEND_AUTHORIZATION",
+  "NEXT_PHYSICAL_RESULT": "Approved source provision/upload/readback, then freeze real C inputs and its separate execution admission; local D software is complete",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -77,7 +77,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "D_BACKEND_FOUR_FILE_REPAIR1; OTHER_SEVEN_BACKEND_FILES_AND_UI_GO_PYTHON_C_COMMON_CLOSED; SOURCE_USER_REPLY_PENDING",
+  "parallel_implementation": "NONE_ALL_CURRENT_CODE_DOMAINS_CLOSED",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -135,7 +135,7 @@
     "status": "A_SPEC_CODE_PASS_BLOCKER0_WIRE_UNCHANGED",
     "classification_shape": "applicable_classifications=[mapping.classification] one-element ordered array; not a batch classifier output"
   },
-  "implementation_owner": "g3_catalog_impl (four backend repair paths per lane-d-backend-repair-dispatch-1.json)",
+  "implementation_owner": "root integration; all implementation lanes frozen and independently accepted",
   "catalog_content_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
   "profile_confirmation": "USER_CONFIRMED_EXACT_CATALOG; actor display name/queue assignee not supplied",
   "profile_confirmation_receipt": "profile-user-confirmation.json",
@@ -386,20 +386,25 @@
     "current_write_paths": []
   },
   "d_backend_progress": {
-    "status": "REPAIR1_DISPATCHED_AFTER_CONSOLIDATED_REVIEW",
+    "status": "PASS_LOCAL_SOFTWARE_CLOSED",
     "freeze": "lane-d-backend-freeze-1.json",
     "freeze_sha256": "5ce69ab74960e7467e2e9af3b40bf365d5fde99c27c623dea138ec3e25ed30f3",
     "changed_files": 11,
-    "repair_rounds_used": 1,
-    "confirmed_findings": [
-      "Preparation read hash mismatches frozen Python/UI for actual U+2028",
-      "Invalid preparation ID containing internal LF can be stored as Draft"
-    ],
-    "root_interop": "d-backend-ui-interop-review1/manifest.json",
+    "repair_rounds_used": 2,
+    "confirmed_findings": [],
+    "root_interop": "d-backend-ui-interop-repair1/manifest.json",
     "repair_design_inputs": "d-backend-repair1-design-inputs/manifest.json",
     "live_effects": 0,
-    "independent_review": "lane-d-backend-independent-review-01.json",
-    "repair_dispatch": "lane-d-backend-repair-dispatch-1.json"
+    "independent_review": "lane-d-backend-repair2-independent-review.json",
+    "repair_dispatch": "lane-d-backend-repair-dispatch-2.json",
+    "final_freeze": "lane-d-backend-repair2-final-freeze.json",
+    "root_integration": "lane-d-root-software-integration.json",
+    "current_write_paths": [],
+    "closed_findings": [
+      "B1",
+      "B2 decoded Text/storage",
+      "B2 raw JSON Unicode"
+    ]
   },
   "progress_updated_at": "2026-09-07T19:19:07+00:00"
 }

@@ -1,0 +1,12 @@
+=== RUN   TestRootBatchConceptServiceJSONInterop830G3
+
+2026/09/08 03:33:49 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:470 [35;1mrecord not found
+[0m[33m[0.141ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_heads` WHERE tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9" LIMIT 1
+    concept_free_wiki_830_g3_test.go:810: service+Gin JSON fixture root-wire-draft DRAFT bytes=396360
+
+2026/09/08 03:33:56 [31;1m/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/application/repository/wiki_release.go:149 [35;1mrecord not found
+[0m[33m[0.248ms] [34;1m[rows:0][0m SELECT * FROM `wiki_release_preparations` WHERE (tenant_id = 10003 AND space_id = "a8751a40-83ce-55c8-a160-079b283483ca" AND raw_kb_id = "b1f1764c-443d-46b8-98e3-d5aa5e55eb42" AND wiki_kb_id = "8d5695de-f255-42d5-9a41-042ba86e97b9") AND (preparation_id = "root-wire-ready" AND status = "draft") LIMIT 1
+    concept_free_wiki_830_g3_test.go:810: service+Gin JSON fixture root-wire-ready READY bytes=396360
+--- PASS: TestRootBatchConceptServiceJSONInterop830G3 (12.75s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/application/service	16.015s

@@ -1,0 +1,11 @@
+--- FAIL: TestIndependentG3HandlerRejectsInvalidUTF8PreparationIDBeforeReplacement (0.00s)
+    g3_d_backend_repair1_handler_invalid_utf8_probe_test.go:16: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/g3_d_backend_repair1_handler_invalid_utf8_probe_test.go:16
+        	Error:      	Not equal: 
+        	            	expected: 400
+        	            	actual  : 201
+        	Test:       	TestIndependentG3HandlerRejectsInvalidUTF8PreparationIDBeforeReplacement
+        	Messages:   	{"data":null,"success":true}
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	2.602s
+FAIL

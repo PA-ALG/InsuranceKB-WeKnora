@@ -1,0 +1,28 @@
+--- FAIL: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch (0.00s)
+    --- FAIL: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/invalid_UTF-8 (0.00s)
+        concept_free_wiki_830_g3_test.go:224: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:224
+            	Error:      	Not equal: 
+            	            	expected: 400
+            	            	actual  : 201
+            	Test:       	TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/invalid_UTF-8
+            	Messages:   	{"data":{"preparation_id":"must-not-be-created","tenant_id":0,"space_id":"","raw_kb_id":"","wiki_kb_id":"","candidate_digest":"","manifest_digest":"","ready_receipt_digest":"","review_decision_digest":"","review_policy_id":"","expected_release_id":"","expected_activation_epoch":0,"status":"","manifest":null,"members":null,"preparation_digest":"","created_at":"0001-01-01T00:00:00Z"},"success":true}
+    --- FAIL: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_high_surrogate (0.00s)
+        concept_free_wiki_830_g3_test.go:224: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:224
+            	Error:      	Not equal: 
+            	            	expected: 400
+            	            	actual  : 201
+            	Test:       	TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_high_surrogate
+            	Messages:   	{"data":{"preparation_id":"must-not-be-created","tenant_id":0,"space_id":"","raw_kb_id":"","wiki_kb_id":"","candidate_digest":"","manifest_digest":"","ready_receipt_digest":"","review_decision_digest":"","review_policy_id":"","expected_release_id":"","expected_activation_epoch":0,"status":"","manifest":null,"members":null,"preparation_digest":"","created_at":"0001-01-01T00:00:00Z"},"success":true}
+    --- FAIL: TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_low_surrogate (0.00s)
+        concept_free_wiki_830_g3_test.go:224: 
+            	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/handler/concept_free_wiki_830_g3_test.go:224
+            	Error:      	Not equal: 
+            	            	expected: 400
+            	            	actual  : 201
+            	Test:       	TestCreateBatchConceptDraft830G3RejectsInvalidUnicodeWireBeforeDispatch/lone_low_surrogate
+            	Messages:   	{"data":{"preparation_id":"must-not-be-created","tenant_id":0,"space_id":"","raw_kb_id":"","wiki_kb_id":"","candidate_digest":"","manifest_digest":"","ready_receipt_digest":"","review_decision_digest":"","review_policy_id":"","expected_release_id":"","expected_activation_epoch":0,"status":"","manifest":null,"members":null,"preparation_digest":"","created_at":"0001-01-01T00:00:00Z"},"success":true}
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/handler	2.510s
+FAIL
