@@ -1,0 +1,43 @@
+test_apply_parser_env_requires_exact_forced_empty_values (__main__.ProvisionReview2Tests) ... ERROR
+test_apply_source_env_requires_db_name_and_user (__main__.ProvisionReview2Tests) ... ERROR
+test_kb_expected_after_recomputes_capabilities (__main__.ProvisionReview2Tests) ... ERROR
+test_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests) ... FAIL
+
+======================================================================
+ERROR: test_apply_parser_env_requires_exact_forced_empty_values (__main__.ProvisionReview2Tests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-runtime-provision-review2_test.py", line 208, in test_apply_parser_env_requires_exact_forced_empty_values
+    module.validate_apply_parser_environment(parser_env)
+AttributeError: module 'g3provision_review2' has no attribute 'validate_apply_parser_environment'
+
+======================================================================
+ERROR: test_apply_source_env_requires_db_name_and_user (__main__.ProvisionReview2Tests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-runtime-provision-review2_test.py", line 197, in test_apply_source_env_requires_db_name_and_user
+    module.validate_apply_source_environment(
+AttributeError: module 'g3provision_review2' has no attribute 'validate_apply_source_environment'
+
+======================================================================
+ERROR: test_kb_expected_after_recomputes_capabilities (__main__.ProvisionReview2Tests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-runtime-provision-review2_test.py", line 189, in test_kb_expected_after_recomputes_capabilities
+    result = module.configure_api(AuthPath(), lambda *args: None)
+  File "/private/tmp/g3-source-runtime-provision-draft.py", line 798, in configure_api
+    raise RuntimeError("KB API full readback mismatch")
+RuntimeError: KB API full readback mismatch
+
+======================================================================
+FAIL: test_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-runtime-provision-review2_test.py", line 156, in test_put_success_is_checkpointed_before_failed_readback
+    self.assertIn("kb-api-put-succeeded", checkpoints)
+AssertionError: 'kb-api-put-succeeded' not found in ['validated-human-admin-session', 'kb-api-prewrite-validated']
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.219s
+
+FAILED (failures=1, errors=3)

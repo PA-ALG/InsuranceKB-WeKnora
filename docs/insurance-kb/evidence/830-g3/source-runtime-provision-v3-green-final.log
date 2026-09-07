@@ -1,0 +1,15 @@
+test_apply_parser_env_requires_exact_forced_empty_values (__main__.ProvisionReview2Tests) ... ok
+test_apply_source_env_requires_db_name_and_user (__main__.ProvisionReview2Tests) ... ok
+test_apply_validates_mutable_source_inputs_before_first_mutation (__main__.ProvisionReview2Tests) ... ok
+test_archive_rejects_links_and_cleanup_exception_stays_fail_closed (__main__.ProvisionReview2Tests) ... ok
+test_failure_stop_visits_and_reinspects_every_target (__main__.ProvisionReview2Tests) ... ok
+test_kb_expected_after_recomputes_capabilities (__main__.ProvisionReview2Tests) ... ok
+test_live_observed_missing_network_is_the_only_allowed_failure (__main__.ProvisionReview2Tests) ... ok
+test_model_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests) ... ok
+test_put_success_is_checkpointed_before_failed_readback (__main__.ProvisionReview2Tests) ... ok
+test_source_pg_binding_includes_database_and_user (__main__.ProvisionReview2Tests) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.765s
+
+OK

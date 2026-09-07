@@ -1,0 +1,18 @@
+{
+  "command": [
+    "colima",
+    "ssh",
+    "--profile",
+    "default",
+    "--",
+    "sudo",
+    "docker",
+    "network",
+    "inspect",
+    "weknora-g3-830-internal"
+  ],
+  "exit_code": 1,
+  "stdout": "[]\n",
+  "stderr": "Error response from daemon: network weknora-g3-830-internal not found\ntime=\"2026-09-07T17:20:05+08:00\" level=fatal msg=\"exit status 1\"\n",
+  "effects": 0
+}

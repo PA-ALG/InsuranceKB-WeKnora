@@ -1,0 +1,31 @@
+{
+  "contract": "source-runtime-script-freeze.830.g3.v2",
+  "recorded_at": "2026-09-07T09:31:03.252703+00:00",
+  "files": [
+    {
+      "path": "source_runtime_provision_v2.py",
+      "sha256": "60bf4ae89838a3e3063113d7bf98f0a709578f0910e9f269bd416bbf6b2c3695"
+    },
+    {
+      "path": "source-runtime-provision-v2-notes.md",
+      "sha256": "7e37b34844212fbcc5fa6714c313b96c06673e29245e9ed19110f4e3b2cc07ba"
+    },
+    {
+      "path": "g3-source-runtime-provision-review-repair.log",
+      "sha256": "cf7ae679de74c9d715f5252f82a29fcc1313c49e4cc56bc5fdce505f137fff21"
+    },
+    {
+      "path": "g3-source-runtime-provision-final-check-02.log",
+      "sha256": "0b3e8d81460e7bf9ccd3cb9d5b50288ee393dbb2376a24f88a93b1441e7de8b0"
+    },
+    {
+      "path": "g3-source-runtime-provision-final-check.log",
+      "sha256": "160839bd95d7387c9ca87d3104fba14b1ae3b0cec1965329400548d79e5413f4"
+    }
+  ],
+  "status": "INDEPENDENT_REVIEW_PENDING",
+  "old_856_script": "REJECTED_DO_NOT_EXECUTE",
+  "preflight": "NOT RUN_WITH_NEW_SHA",
+  "apply": "NOT RUN",
+  "effects": 0
+}

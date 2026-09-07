@@ -1,0 +1,31 @@
+21a291818662a8c859e53163a4ffab5f7f9046c0a1a338d2b4ad2a8451597293  docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract.md
+     579 docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract.md
+3:状态：`PRIVATE_CONSOLIDATION_READY_FOR_LOSSLESS_REVIEW`。本文只把已存在的 D 原设计与修订 1、2、4、5、6 合成一份可复核文本；修订 6 撤销修订 3 的 legacy/344 方案。本文不新增协议，也不授权 D 代码、真实模型、数据库、构建、Draft、Review、发布或 Active 变更。在 Root 冻结最终合同前，本文不是实施 authority。冻结 Catalog、C 合同和用户结构确认的原字节均不改变。
+72:各 C 输入只内联一次；Catalog 不进入该对象；嵌套输入的原 hash 不变。`inputs_sha256 = schema_wiki_sha256(contract, payload_without_inputs_sha256)`。Outer resolution 的 corpus/proposals/existing_snapshot/policy SHA 必须逐一匹配；scope 与 base request、route 逐项相等；C existing snapshot 的 base release/epoch 与唯一 Head 的预期值一致。Python builder 必须从这些 exact inputs 重跑完整 C 输出。
+128:binding_sha256
+153:request_sha256
+200:- 缺 ref、只有 NEEDS_CONFIRM/QUARANTINE、parent 不合格、版本不同、用 CREATE 替代、或 MATCH 指向别的 entity，均返回 `BASE_ENTITY_MATCH_REQUIRED`，不生成半包，也不删除 base entity；
+224:Base MATCH 若被分到重疾、两全或其他 pack，即使 identity/version 匹配、置信高、旧字段全保留，也必须在 delta 编译/provider/Draft 前返回 `BASE_PACK_MIGRATION_REQUIRED`。旧 base contract/schema/profile 不在唯一映射内则返回 `BASE_PACK_AUTHORITY_UNSUPPORTED`，不能现场推断第二映射。本映射只支持首切片继承的 G2 医疗 base；未来 G3 多 pack base 或 pack migration 必须另行设计。
+245:`model_compile_result.output` 是模型对本次新增成员的原始 delta 提案；其 execution raw 是实际 completion content 的逐字文本。`compile_result.output` 是固定机械组合后的最终逻辑输出；其 execution raw 是 final output 的 canonical JSON，不得伪称模型原文。两份 compile result 与 review result 全部进入 `candidate_hash = schema_wiki_sha256(contract, payload_without_candidate_hash)`。
+255:request_sha256
+290:- carry context exact keys 为 `request_sha256`、`model_compile_output_hash`、`model_compile_execution_sha256`；最后一项等于 `schema_wiki_sha256("batch-concept-model-execution.830.g3.v1", model_compile_result.execution)`；
+300:request_sha256
+343:`alignment_sha256 = schema_wiki_sha256(contract, payload_without_alignment_sha256)`。`old_member_digest` 使用 G2 `digest("concept-member", exact old PageMember)`；`new_member_digest` 使用 D `schema_wiki_sha256("batch-concept-member.830.g3.v1", exact new PageMember)`。两行进入 request hash、compiler/review context 和 candidate hash。
+345:Python 与 Go 都必须从 exact base Head 重开原 candidate/member，验证 source release/epoch/candidate、entity/version、old digest、旧 member 存在、新 key 在 base 不存在，以及上述全空资格。遗漏、伪造或漂移返回 `BASE_UNKNOWN_KEY_MIGRATION_REQUIRED`；任一 known/value/Evidence/condition/exception/concept/time 非空、unknown_reason 不符或企图清空旧值返回 `BASE_UNKNOWN_KEY_MIGRATION_INELIGIBLE`。
+412:只有 `WikiReleaseService` 能经既有 repository 写 Draft/Ready/Release/receipt，并在 activation transaction 内 CAS 唯一 Head。Harness 只生成/验证 canonical bundle bytes；handler 只 strict decode 和调用 service；source authority 只读重开；前端只维护界面状态并调用既有写 API。CREATE entity ID 不形成 repository 之外的第二 serving authority。
+440:所有键必传且无 nullable key；首切片继承非空 base Head，不定义空空间 bootstrap。`read_sha256 = schema_wiki_sha256(contract,payload_without_read_sha256)`。Scope 来自已授权 preparation；status 映射实际 DRAFT/READY。Service 按 ID 从 `GetDraftPreparation` 或 `GetReadyPreparation` 读取并重新执行完整 G3 preparation validation；不得读新 Head 替换 expected base，不得切换 candidate。响应不重复 entities 或完整 Catalog；前端从 manifest 的 overview 投影目录，所有 field refs 必须在同一 manifest 唯一命中 owner field assertion。
+446:Active 后先 generic `/current` pin 唯一 Head，再以 exact release ID 读取 `/releases/:release_id/search?q=`。字段页 transport 继续使用 scoped schema `/concept-pages/:member_id?release_id=:release_id`；服务只从该 pinned release 组装页面与引用。Generic `/pages/:logical_slug` 和 `/payloads/:logical_slug` 仍是底层 PinnedRead。G3 前端不读 Harness Candidate、不读 RAW chunk、不接受任意 release 替换。
+467:四个 pack 的字段数算术/投影统计为 `67+67+79+62=275`。它只用于验证 Catalog/Profile 投影和“删除任一 actual base MATCH 必须拒绝”的负例；不得构造为缺少一个现有医疗实体的合法当前-base Candidate，也不是容量或正向跨语言 fixture。
+469:唯一正向跨语言和 capacity fixture 使用 actual frozen base：两个既有医疗 MATCH 和三个新 CREATE（重疾、两全、意外），字段数为 `67+67+67+79+62=342`。它必须包含完整旧 134-row `base_request.existing_fields`、两行 exact unknown key alignment、对齐后的 132-row exact carry、两个仅 key/identity 变化的 unknown 占位、原 definitions/free pages、导航、base-only sources、C 输入闭包、model delta raw、final logical raw、review raw 与 page manifest。
+473:### 7.2 8 MiB 容量先行
+475:Handler 现有 8 MiB 上限保持。Handler/service/UI 实现前，必须先用真实 serializers 生成完整 actual 342 canonical POST 容量向量；保存总 bytes、各组成部分 bytes 和所有输入 SHA。向量包含 Catalog、C resolution inputs/output、model_compile_result、final compile_result、review_result、完整旧 base request及成员/source closure、两行 alignment 和 manifest。未上传 source receipt 只能作为明确 fixture，不能冒充真实来源/模型/业务结果。275 子集和历史撤销的 344 口径均不得用于容量验收。
+477:任一完整向量超过 8 MiB 时，D 状态保持 `BLOCKED`，先提出有界协议去重或明确 capacity 修订；不得删字段、C 输入、raw、来源、旧成员或 base 来压容量。未经测量不得推断可通过。先冻结 Harness strict DTO/projection、跨语言 fixture 和 Go types，使用其真实 serializer 测量；容量闭合后才派 handler/service/UI 接线。
+485:5. 现有发布界面提交同一具名 decision 与 PublishAuthorization 到 `/activations`；既有 `ActivateReviewed`、nonce、expected Head 与 CAS 原子切换唯一 Head。Activate 前再次重开全部来源。
+489:验收必须证明浏览器刷新后仍能重开 DRAFT/READY，Review 前后 Head 不变；Activate CAS 后完整实体、342 个 Profile 字段、conditions/exceptions/valid_time/Evidence 可从同一 pinned release 读取与检索，且两条 alignment lineage 可审核、历史旧页仍可按旧 release ID 读取。至少一个 CREATE 走完整链，且不存在第二次主数据注册前置。真实材料未达 C 自动资格时，该业务 DoD 保持 `NOT RUN/NEEDS_CONFIRM`。
+517:6. 删除任一 base entity proposal/ref、base只有待审 child、CREATE或错误entity/version替代 MATCH、caller少传 Existing*，返回 `BASE_ENTITY_MATCH_REQUIRED`。
+518:7. Base MATCH改为 critical/endowment pack、旧base contract/schema/profile漂移，分别返回 `BASE_PACK_MIGRATION_REQUIRED` 或 `BASE_PACK_AUTHORITY_UNSUPPORTED`；两个base MATCH使用exact医疗映射通过。
+520:9. 保留 68 个历史额外页、让新 plural key 复用旧 singular member、遗漏任一 alignment、改 source release/epoch/candidate/entity/version/key/digest/hash、或传入非冻结第三行，分别以 `BASE_UNKNOWN_KEY_MIGRATION_REQUIRED` / `BASE_UNKNOWN_KEY_MIGRATION_INELIGIBLE` 拒绝。
+543:29. 唯一正向与容量 fixture 为 actual342；275只用于四-pack投影统计和删除base负例，历史344必须拒绝作为验收口径；容量必须先于handler写入闭合。
+567:| 7 fixture/capacity | §6.1 | 8MiB前置 | 两base全覆盖 | 344被撤销 | 三结果均计容量 | actual mapping | actual342唯一正向 | 275仅投影/负例；342正向与容量；344历史拒绝 |
+570:| 10验收 | §8 | 保留 | actual MATCH未运行 | 计数被撤销 | model权限不推导 | migration非目标 | full342/每医疗67 | 保持业务状态分层和Goal页数等式 |
+579:除以上两项外，修订1、2、4、5、6对原设计的明确替换可以机械闭合：修订3的legacy DTO/额外页/344口径全部撤销；actual正向恢复342并要求每医疗67页；旧134-row existing input原样内联后机械形成132-row exact carry和两行unknown-only alignment；单一compile result变为model delta与final logical双结果；原purpose参与occurrence被删除；泛化base snapshot前置变为全base MATCH、唯一医疗pack mapping与exact alignment lineage。

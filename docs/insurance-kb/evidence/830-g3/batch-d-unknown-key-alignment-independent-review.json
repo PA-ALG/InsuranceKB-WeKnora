@@ -1,0 +1,21 @@
+{
+  "contract": "batch-d-unknown-key-alignment-independent-review.830.g3.v1",
+  "recorded_at": "2026-09-07T09:46:40.861763+00:00",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS_DESIGN_ONLY",
+  "blocker_count": 0,
+  "backlog_count": 0,
+  "design_sha256": "8673c257c493020262de418c03eb789d2569909e008b2feb0b0ccf5fd640c9dd",
+  "fixture_sha256": "89eda07c37c8e0859bc97d121bf9e5e067123afc3f1b19d04d5c96f95b1960d4",
+  "independent_recomputation": "two rows old/new member IDs/digests/alignment SHA all exact match using actual G2 bundle and confirmed Catalog",
+  "counts": {
+    "medical_per_entity": 67,
+    "actual_two_base_plus_three_new_fields": 342
+  },
+  "old132_payloads": "must remain exact",
+  "two_old_unknown_fields": "only key alignment allowed in new candidate; old releases unchanged",
+  "superseded": "amendment3 legacy DTOs and 344; earlier PASS withdrawn by Goal count recheck",
+  "next": "single consolidated contract no-loss check before implementation",
+  "migration": "NOT APPLIED",
+  "actual_model_or_runtime": "NOT RUN"
+}

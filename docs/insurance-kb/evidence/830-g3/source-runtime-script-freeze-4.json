@@ -1,0 +1,54 @@
+{
+  "status": "FROZEN_FINAL_REVIEW_PASS_ACTUAL_READONLY_PREFLIGHT_PASS",
+  "high_risk_repairs_used": 2,
+  "effects": {
+    "actual_preflight": 1,
+    "apply": 0,
+    "provider": 0
+  },
+  "files": [
+    {
+      "path": "source_runtime_provision_v3.py",
+      "sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+      "bytes": 61981
+    },
+    {
+      "path": "source_runtime_provision_v3_test.py",
+      "sha256": "a92626a0906d653b5c9301da45752e86315961a73b405ab231e4fc53dd2722e4",
+      "bytes": 13928
+    },
+    {
+      "path": "source-runtime-provision-v3-notes.md",
+      "sha256": "844bfdb4d16b5e871956b4c57f265acb137efd01948724c7344557c5e1262a13",
+      "bytes": 2309
+    },
+    {
+      "path": "source-runtime-provision-v3-red.log",
+      "sha256": "6f16bbfc6cf6c24ce04cd3715965beb1394980ee76dc6bd148dc7ab89d82bb00",
+      "bytes": 2833
+    },
+    {
+      "path": "source-runtime-provision-v3-red-02.log",
+      "sha256": "d866538478b53c740203028b2f169b815cecf24b858ea96f6fc165b828b5c45a",
+      "bytes": 1269
+    },
+    {
+      "path": "source-runtime-provision-v3-green-final.log",
+      "sha256": "51edc13c99e736b93291cf9701e946fd593e106ffb595ab3990e9e7bc5fb80d6",
+      "bytes": 1067
+    },
+    {
+      "path": "source-runtime-provision-v3-final-check.log",
+      "sha256": "4eef64baff6459501333e836889fb1b31fc138740801462828d8614bd2b44cbf",
+      "bytes": 792
+    },
+    {
+      "path": "lane-d-consolidated-contract.md",
+      "sha256": "21a291818662a8c859e53163a4ffab5f7f9046c0a1a338d2b4ad2a8451597293",
+      "bytes": 53958
+    }
+  ],
+  "review_receipt": "source-runtime-provision-independent-review-3.json",
+  "actual_preflight_receipt": "source-runtime-v3-actual-preflight-03.json",
+  "actual_preflight_sha256": "8c45741c5976d465a2c1d229046258382bd82fcbd366c82bc677a37417ca6872"
+}

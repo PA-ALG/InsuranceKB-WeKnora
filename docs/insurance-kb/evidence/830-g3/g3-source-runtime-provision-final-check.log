@@ -1,0 +1,8 @@
+FINAL_AST_PASS
+FINAL_CONSTANT_AUDIT_PASS frozen_files=5 source_rows=3 file_refs=4 physical_files=4 images=3 kb_model_ids=true
+FINAL_INSPECT_PASS exact_live_network_shape=true daemon_failure_rejected=true
+FINAL_ENV_TAR_PASS crlfnul_rejected=true exact_allowlist_static=true link_rejected=true
+FINAL_PG_BINDING_PASS exact_container_image_alias=true
+FINAL_FAKE_API_PASS calls=8 puts=2 auth_before_put=true immediate_readbacks=true checkpoints=5 omitted_zero_fields=true only_model_base_url_changed=true
+FINAL_STOP_PASS per_container=4 reinspected=true stop_incomplete_signal=true
+FINAL_STATIC_BOUNDARY_PASS proxy_disabled=true script_bound=true frozen_model_bound=true actual_preflight_apply_not_run=true provider_calls=0 network_calls=0

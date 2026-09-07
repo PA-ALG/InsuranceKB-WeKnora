@@ -1,0 +1,15 @@
+{
+  "status": "MECHANICAL_RESTORATION_PENDING_REVIEW",
+  "source_sha256": "21a291818662a8c859e53163a4ffab5f7f9046c0a1a338d2b4ad2a8451597293",
+  "repaired_path": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
+  "repaired_sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+  "restored": [
+    "binding_sha256 formula from original D",
+    "request_sha256 formula from original D",
+    "model_compile_output_hash from amendment4"
+  ],
+  "heading_count_before": 1,
+  "heading_count_after": 1,
+  "new_protocol": false,
+  "product_code_written": false
+}

@@ -1,0 +1,21 @@
+{
+  "contract": "batch-d-design-independent-review.830.g3.v1",
+  "recorded_at": "2026-09-07T09:01:50.953386+00:00",
+  "reviewer": "g3_seam_audit",
+  "design_sha256": "415742f61d443ddeb5b00d13fcdddd8dae97ddc370bd8f61a42000f7c8924512",
+  "status": "BLOCKED",
+  "blocker_count": 4,
+  "blockers": [
+    "persist exact C inputs and revalidate selected eligibility server-side",
+    "preserve complete current base members/Evidence/source closure",
+    "occurrence identity must ignore evidence id/purpose/proposal ref",
+    "freeze exact manifest/preparation response/profile-set hash DTOs"
+  ],
+  "capacity": "full 275/342-field canonical request measurement required before handler/service implementation; 8 MiB unchanged",
+  "amendment": {
+    "path": "lane-d-contract-review-amendment-1.md",
+    "sha256": "d70fc9ad4385921e018ca8c76e2ee7dc8e9cbbe9b5c2cb2b05c28c870c4eb309",
+    "status": "INDEPENDENT_REVIEW_PENDING"
+  },
+  "production_implementation": "NOT RUN"
+}

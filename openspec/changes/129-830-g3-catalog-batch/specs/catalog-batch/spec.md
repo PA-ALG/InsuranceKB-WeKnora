@@ -23,6 +23,14 @@
 - WHEN 打开 11 包目录及已选 pack 样本映射
 - THEN 可核对 pack/profile identity；未质量准入知识不得发布生产；未发布 Candidate 不进入正式搜索。
 
+#### Scenario: 多产品候选复用同一发布链
+- WHEN 批次自动身份结果进入 G3 候选编译
+- THEN 按 `docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md`（SHA-256 `75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d`）严格验证完整 Catalog、确认回执、C 输入及结果、每实体 binding、原 G2 base request、模型 delta/机械合成/独立审核记录与同一 page manifest。
+- THEN 所有既有实体必须有实际 C 自动 MATCH；新实体必须有实际 C 自动 CREATE，不增加主数据注册前置；缺失资格在编译及 Draft 前拒绝。
+- THEN 首切片正向和容量 fixture 使用 actual G2 base 两医疗实体与重疾、两全、意外三新实体，合计 342 个标准字段页；完整 POST 使用真实 serializer 测量且不得超过现有 8 MiB，容量闭合前不得实施 handler/service/UI。
+- THEN 旧 134 行 existing input 原样进入 request；132 行事实逐字继承，仅按修订6冻结的两行 exact unknown-only lineage 对齐旧单数 key 到新 Profile key，旧 Release 不变；每医疗仍恰好 67 页，禁止额外 legacy 页或删 base 压缩容量。
+- THEN 使用既有 Draft/Ready/Review/Activate 和唯一 Head CAS；preparation 与 active 读取分开，真实 source authority 在 Draft/Review/Activate 按原 G1/C5 链重开；fixture 不替代实际模型、来源或业务验收。
+
 ### Requirement: G3-R4 批量身份与材料采信
 系统 MUST 在后续同 G3 切片冻结 10–15 真实材料/revisions 和 Seed 标签来源，分别冻结 identity/classification 阈值，证明 MATCH/CREATE/MULTI/NEEDS_CONFIRM/QUARANTINE 真实场景。明确高置信自动 Candidate，歧义/版本冲突隔离；配置式 TrustPolicy 按来源、字段、版本、作用域、有效期求值，不以上传次序或模型自信提权。
 

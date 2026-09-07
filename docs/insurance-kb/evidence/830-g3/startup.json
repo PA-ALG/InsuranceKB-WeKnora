@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "C_MULTI_DESIGN2_REVIEW_PASS_NEW_BEHAVIOR_RED_PENDING",
-  "NEXT_PHYSICAL_RESULT": "修复父MULTI与子待审语义；完成新来源隔离执行准备及候选页面接线合同",
+  "CURRENT_RED": "C_DESIGN2_CODE_PASS_BLOCKER0_56_INDEPENDENT_73_ROOT",
+  "NEXT_PHYSICAL_RESULT": "D exact342 DTO/Go cross-language fixture capacity and independent review; upload runner review then concrete external approval",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -29,12 +29,13 @@
       83,
       76
     ],
-    "corpus": "corpus-files-v4.json:15rawsources;4 existing W1 revisions/chunks reopened;11 native captures preserved; actual nativeSourceRevision/Seed/policy freeze pending",
+    "corpus": "corpus-files-v4.json:15 raw sources; all15 actual native captures verified;4 existing W1 revisions/chunks reopened; actual G3 service readback and C input/Seed/Policy freeze pending",
     "labels": "PROTOCOL_SEED_NOT_EXPERT_GOLDEN",
     "corpus_raw_file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
     "inventory": "corpus-inventory-v3.json",
     "existing_readback": "existing-source-readonly-probe.json and existing-chunk-capture.json:4 currentW1 revisions/287 chunks exact hash verified; native custody source reopen still pending",
-    "native_captures": "native-capture-inventory.json:11 saved actual Docreader outputs, no reparse"
+    "native_captures": "native-capture-inventory-v2.json:15 actual captures, set70a6fe13275f7366c610abbed0d8c44b480197696b1f4a03624457f48d4cf4e5",
+    "existing_native_preservation": "01/03 historical raw digest matched;04 raw first preserved with historical canonical match;02 fresh standalone local parse PASS27pages, no WeKnora reparse"
   },
   "VALIDATION_LEVEL": "D1",
   "DOCKER_ACTION": "REUSE_EXISTING_DOCREADER_PROCESS_ONLY_FOR_LOCAL_PREFLIGHT",
@@ -54,7 +55,12 @@
       "harness/src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py",
       "harness/tests/test_schema_pack_catalog_830_g3.py",
       "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
-      "harness/tests/test_batch_entity_resolution_830_g3.py"
+      "harness/tests/test_batch_entity_resolution_830_g3.py",
+      "harness/src/insurance_harness/knowledge_compiler/batch_concept_compile_830_g3.py",
+      "harness/tests/test_batch_concept_compile_830_g3.py",
+      "internal/types/concept_free_wiki_830_g3.go",
+      "internal/types/concept_free_wiki_830_g3_test.go",
+      "harness/tests/fixtures/batch_concept_compile_830_g3/**"
     ],
     "g3_catalog_ui": [
       "internal/handler/schema_pack_catalog_830_g3.go",
@@ -69,7 +75,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "A_B_CODE_PASS; C_MULTI_DESIGN2_IMPLEMENTATION; D_DESIGN_REVIEW_PENDING",
+  "parallel_implementation": "A_B_C_CODE_PASS; D_DTO_TYPES_FIXTURE_RED_GREEN; SOURCE_UPLOAD_RUNNER_PREP",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -127,8 +133,15 @@
     "status": "A_SPEC_CODE_PASS_BLOCKER0_WIRE_UNCHANGED",
     "classification_shape": "applicable_classifications=[mapping.classification] one-element ordered array; not a batch classifier output"
   },
-  "implementation_owner": "g3_catalog_impl(C)",
+  "implementation_owner": "g3_catalog_impl(D DTO/types/fixture); C closed",
   "catalog_content_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
   "profile_confirmation": "USER_CONFIRMED_EXACT_CATALOG; actor display name/queue assignee not supplied",
-  "profile_confirmation_receipt": "profile-user-confirmation.json"
+  "profile_confirmation_receipt": "profile-user-confirmation.json",
+  "source_runtime_provision": "V3_INDEPENDENT_REVIEW_PASS_BLOCKER0_BACKLOG1; ACTUAL_READONLY_PREFLIGHT_PASS_8c45741c; apply/provider NOT RUN; complete upload execution runner before apply per frozen plan",
+  "d_contract": {
+    "path": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
+    "sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
+    "status": "FROZEN_PASS_BLOCKER0",
+    "review": "lane-d-final-contract-independent-review.json"
+  }
 }

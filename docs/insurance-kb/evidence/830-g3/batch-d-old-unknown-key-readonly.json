@@ -1,0 +1,42 @@
+{
+  "contract": "batch-d-old-unknown-key-readonly.830.g3.v1",
+  "source_bundle_sha256": "69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1",
+  "candidate_hash": "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684",
+  "old_fields": [
+    {
+      "attempted": true,
+      "concept_ids": [],
+      "conditions": [],
+      "entity_id": "ping-an-e-sheng-bao",
+      "entity_version": "ping-an-e-sheng-bao@596-1",
+      "evidence": [],
+      "exceptions": [],
+      "field_key": "social_insurance_requirement",
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "state": "unknown",
+      "unknown_reason": "FORMATION_MODE_DEFERRED",
+      "valid_time": "",
+      "value": null
+    },
+    {
+      "attempted": true,
+      "concept_ids": [],
+      "conditions": [],
+      "entity_id": "ping-an-e-sheng-bao-hui-xiang",
+      "entity_version": "ping-an-e-sheng-bao-hui-xiang@594-1",
+      "evidence": [],
+      "exceptions": [],
+      "field_key": "social_insurance_requirement",
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "state": "unknown",
+      "unknown_reason": "本次有界编译未形成该字段的可审断言",
+      "valid_time": "",
+      "value": null
+    }
+  ],
+  "fact": "two exact old fields are unknown, value null, no Evidence/conditions/exceptions/concepts/time",
+  "goal_constraint": "29-goal-cards-830.md G3: per selected pack FieldDefinition count equals independent FieldAssertion page count",
+  "legacy_68_design": "BLOCKED_GOAL_COUNT_CONFLICT; do not implement or disguise counts",
+  "proposed_recovery": "explicit old-schema-to-v5 unknown-only key alignment; historical release unchanged; pending independent design review",
+  "runtime_effects": 0
+}

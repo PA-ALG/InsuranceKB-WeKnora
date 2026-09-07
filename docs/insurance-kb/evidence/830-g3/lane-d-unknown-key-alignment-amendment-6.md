@@ -1,0 +1,57 @@
+# D 未知占位字段对齐修订6（实现前，替代legacy方案）
+
+状态：INDEPENDENT_REVIEW_PENDING。29 Goal Card §5明确要求每个选定pack的FieldDefinition数与该实体独立FieldAssertion页面数完全相等。修订3的68字段/legacy方案与此硬要求冲突，故撤销修订3实现授权；344是曾提出但未实施的方案，不能作为当前验收/容量口径。此文优先于原设计及修订1—5中的冲突句，根Goal/OpenSpec的67字段要求不改。
+
+## 事实与唯一例外
+
+actual base为release-9cb493e3-8d27-4a0f-8f29-93e2a078725b、epoch5、candidate bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684。两医疗实体的旧singular字段都为attempted=true/state=unknown/value=null，Evidence/conditions/exceptions/concept_ids=[]、valid_time=""；原unknown_reason分别保留。证据batch-d-old-unknown-key-readonly.json及原G2 bundle可逐字复算。
+
+唯一允许的对齐，是这两个exact entity/version中的 `social_insurance_requirement` → `social_insurance_requirements`，从旧medical schema/profile到修订5的exact confirmed v5 medical pack/profile。不是一般alias，不声明两个key具有已证明的事实等价，不允许有值字段迁移。旧release、旧member ID/URL/payload、历史source均不写入或重命名；新release中每医疗只保留新Profile67个字段页。
+
+两行exact局部推导原件为 `unknown-field-key-alignment-exact-fixture.json` SHA89eda07c37c8e0859bc97d121bf9e5e067123afc3f1b19d04d5c96f95b1960d4，status为EXACT_LOCAL_DERIVATION_NOT_APPLIED。其中source release/candidate/entity/version、旧member ID/digest、新member ID/digest及行hash是待实现validator的精确正向向量，不代表已执行迁移。
+
+## exact DTO与验证
+
+BatchConceptCompileRequest830G3V1新增必传 `unknown_field_key_alignments`，数组按entity_id排序，必须由builder从actual base payload和上述唯一映射机械生成，不能手填。当前base必须恰好两行、逐字等于上述向量；不增加registry/表。每行exact字段：
+
+```
+contract = unknown-field-key-alignment.830.g3.v1
+source_release_id
+source_activation_epoch
+source_candidate_sha256
+entity_id
+entity_version
+old_field_key
+new_field_key
+old_member_id
+old_member_digest
+new_member_id
+new_member_digest
+alignment_sha256
+```
+
+alignment_sha256=schema_wiki_sha256(contract,payload_without_alignment_sha256)。old_member_digest用原G2 digest("concept-member", exact old PageMember)；new_member_digest用原D schema_wiki_sha256("batch-concept-member.830.g3.v1", exact new PageMember)。所有行进入G3 request_sha256及完整compiler/review上下文，再进入candidate hash。
+
+服务端从exact base Head重开原candidate与member验证上述source identity/old digest及字段全空资格；Python读取同一冻结base输入。actual base old_member必须存在且新key原先不存在。任一known/value/Evidence/condition/exception/concept/time非空、unknown_reason不符、其它key/实体/版本/source release/candidate或遗漏/伪造行，一律拒绝BASE_UNKNOWN_KEY_MIGRATION_REQUIRED或BASE_UNKNOWN_KEY_MIGRATION_INELIGIBLE；不得用本条清空旧值以通过。
+
+## 请求、delta与最终输出
+
+撤销legacy_field_keys/legacy_fields DTO，撤销历史额外节点/当前额外页面。binding.required_fields与base_request.required_fields恢复逐项逐序等于Profile67；actual base_request.existing_fields仍逐字包含原134条（包括两个singular），由现G2 request校验允许，不改成已迁移的假base。
+
+机械组合器在并集前构造`aligned_existing_fields`：除唯一两条外全部逐字保留；对这两条只替换field_key为plural，其余payload包括unknown_reason、attempted/entity/version逐字保留。新assertion ID按原G2 field-identity公式重算，新PageMember按原D标准Profile title/content投影。此处是在新candidate创建两条unknown占位记录，不冒充旧断言hash未变。
+
+修订4的delta field coverage改为 required_fields减aligned_existing_fields keys；模型不得输出这些对齐后的unknown字段，也不得夹带singular旧key。final fields是aligned_existing_fields与delta新增字段的无碰撞并集；机械组合后以原G2 validate_output验证全部342页并执行G3约束。
+
+完整base保留规则的唯一例外仅上述两条unknown占位：其旧payload仍由immutable历史release保存、完整existing_fields及alignment lineage进入新request供审核；其余132条FieldAssertion、所有旧definition/free page/Evidence原样carry。旧页current link不能假装同ID存在于新release；历史链接必须带旧release_id并可正常读取。
+
+final audit对应新plural assertion ID为field_rule/reason="BASE_UNKNOWN_KEY_ALIGNMENT"；其余carry audit沿修订4的BASE_CARRYOVER，delta audit保持原reason。Go/Python必须重算相同alignment和composition，不只相信caller行hash。
+
+新实体overview只有原D的Profile sections，不含legacy_fields；每医疗67页，整包两医疗+重疾67+两全79+意外62=342页，另计definition/free/overview/navigation成员。分类重排不得改变字段ID/hash；该唯一key变化有明确old-schema→v5的alignment来源，不能借分类变化触发。
+
+## 首切片范围与测试
+
+本D首切片唯一接受上述actual G2 base及其两旧entity/version继承；未知base仍BASE_PACK_AUTHORITY_UNSUPPORTED，不泛化迁移。跨语言正向fixture使用actual frozen base+明确标注fixture的C/模型执行输入，完整342标准字段。275只是四类标准字段数相加的说明/投影统计，不再要求构造一个假装只有一旧实体的合法当前base Candidate；删除一个base形成275应作为拒绝向量。原344方案保留为历史被撤回证据。
+
+新增RED：按68 legacy页保留singular、新plural与旧member混绑、缺任一base/alignment、改source/candidate/entity/version/key/hash、给旧占位添加value/Evidence/任一非空条件、模型夹带aligned字段、最终输出保留singular或漏plural、对齐后改变unknown_reason/原事实均拒绝。正向必须exact342、每医疗67、132旧payload逐字不变、2个unknown只有key变、旧definition/free/source不变、历史旧release不可变。human整包预览明确列两条unknown字段对齐，不由结构确认代替最终candidate批准。
+
+模型delta/final logical双raw及各自context、全部C输入闭包、base自动MATCH和medical兼容gate、来源重开、单Head/human_batch、8MiB上限均保持。容量仅对完整342canonical实际形状测量，包含两个compile结果、review、C全输入和manifest；不得以275子集或已撤回344口径验收。所有实际执行仍NOT RUN。

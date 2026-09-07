@@ -1,0 +1,11 @@
+FAKE_RED_PASS reproduced=unexpected inspect cardinality for container/weknora-g3-830-app
+AST_PASS_CURRENT
+FAKE_GREEN_PASS {"cases": ["container_missing_none", "network_missing_none", "volume_missing_none", "daemon_rejected", "permission_rejected", "empty_stdout_rejected", "existing_singleton_pass", "success_empty_cardinality_rejected"]}
+ACTUAL_PREFLIGHT_NOT_RERUN
+ACTUAL_APPLY_NOT_RUN
+NETWORK_CALLS=0
+SCRIPT_SHA256=50d30a376e243a928a3f2fa19a8af66ee2a52e88bff325cfa32062fec25cd2ca
+NOTES_SHA256=d46316e078e20277173898c480f01af77284fcb323473f0ba27f812cc6ff6644
+FAKE_GREEN_EXACT_NAME_PASS mismatched_missing_name_rejected=true
+FINAL_SCRIPT_SHA256=8560873c4af84079a5b4e3109452f03ecbd90d4006c1d5624ea2d0ddcbafcabe
+FINAL_NOTES_SHA256=d46316e078e20277173898c480f01af77284fcb323473f0ba27f812cc6ff6644
