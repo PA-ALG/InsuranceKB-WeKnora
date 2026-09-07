@@ -15,4 +15,5 @@
 - [x] 来源准备：15实际native capture逐件校验；v3隔离脚本独立复核及本机只读preflight通过。
 - [x] 来源执行准备：完整upload v2 runner独立复核及执行包复核PASS；具体验证窗口/预览已发用户。
 - [ ] 来源实际执行：当前11请求外发批准待回复，隔离provision/upload/source readback尚未执行。
-- [ ] D首轮集中修复：身份/确认/SourceBlock三项重算hash攻击RED→修复→独立复审；Go暂停。
+- [x] D Python首轮三项修复及第二轮source覆盖修复已独立通过；原始RED与旧快照保留。
+- [ ] D Go完整C复算与跨语言镜像：Owner阶段检查已通过，尚待准确身份冻结与独立复核；下游写域仍关闭。

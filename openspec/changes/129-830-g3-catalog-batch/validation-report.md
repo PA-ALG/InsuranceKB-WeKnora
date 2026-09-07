@@ -6,7 +6,8 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 |---|---|---|---|---|
 | G3-R1 软件 | schema_pack_catalog_830_g3.py；真实11包801字段 | catalog-a-independent-review.json；catalog-root-integration-verification.json，17 checks PASS，原值/hash独立复算 | f91fc40；精确文件SHA在证据内 | PASS |
 | G3-R2 软件 | G1 Profile复用，可变节点与精确主映射 | 11包节点7/7/7/8/7/8/8/8/7/8/7；整包profile-review.md | f91fc40 | PASS |
-| G3-R2 人工 | 用户回复“结构确认”，保存 exact Catalog绑定 | profile-user-confirmation.json；姓名与人工待办负责人未提供 | f91fc40 | NOT RUN（具名元数据未齐） |
+| G3-R2 人工结构确认 | 用户已回复“结构确认”，exact Catalog确认有效；不重复询问 | profile-user-confirmation.json | f91fc40 | PASS |
+| G3-R2 具名元数据 | 结构确认人的显示姓名、后续人工待办负责人尚未提供 | 已发送非阻断询问；不推断账户名为真实姓名 | 无 | NOT RUN |
 | G3-R3 目录软件 | protected Go GET＋Vue通用目录 | 独立复核BLOCKER0；总控Go、17前端checks及类型检查通过 | f91fc40 | PASS |
 | G3-R3 实际目录/字段/来源 | 目录代码完成，真实多pack链待接 | 本地页面/隔离Release/来源/检索未执行 | 无 | NOT RUN |
 | G3-R4 来源准备 | corpus-files-v4.json选15原始PDF；15个实际native输出已保留 | native-capture-inventory-v2.json、existing-native-preservation.json、native-02-supplement-result.json；02 standalone capture PASS，当前source row仍缺；原扫描页失败回执保留，4已有W1 revisions/287 chunks实际重开；native来源custody仍待核验 | f91fc40 | PASS（准备层） |

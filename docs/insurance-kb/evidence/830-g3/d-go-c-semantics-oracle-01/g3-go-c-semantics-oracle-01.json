@@ -1,0 +1,446 @@
+{
+  "contract": "g3-go-c-semantics-independent-oracle.v1",
+  "effect": "READ_ONLY_FROZEN_FIXTURE_AND_PYTHON_ONLY",
+  "purpose": "future frozen Go mirror review; not labels, Golden, model output, or implementation authority",
+  "frozen_inputs": {
+    "commit": "e85fa570dc7b3d86c77a7fcc8682523f67b9db0d",
+    "c_source_sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+    "d_source_sha256": "e8e0dbcd8bf4cb1f2072d6fbf4ebf79f3554cbfef53c9c1f84011dbcc4357316",
+    "candidate_fixture_sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+    "candidate_hash": "e9f3fc9bec2cca609a30dce0f015a6af955e41da9d7a42399b05164efef14870",
+    "request_sha256": "40920c09c42a9b28f1b8348c34d0bd9b63dde7568fc90c11311d554b7b6e25ec",
+    "resolution_batch_sha256": "1870fac092b77b1c5c47344440a66bc328572a37137ec4d42d99ce21240bc9b7"
+  },
+  "positive_control": {
+    "validate_batch_candidate": "PASS",
+    "resolution_replay_equal": true,
+    "actual_c_replay_batch_sha256": "1870fac092b77b1c5c47344440a66bc328572a37137ec4d42d99ce21240bc9b7",
+    "dispositions": [
+      {
+        "material_id": "fixture-accident-1814",
+        "disposition": "CREATE",
+        "reason_codes": [
+          "NEW_ENTITY_CANDIDATE"
+        ],
+        "children": [
+          {
+            "proposal_ref": "product-main",
+            "disposition": "CREATE",
+            "reason_codes": [
+              "NEW_ENTITY_CANDIDATE"
+            ]
+          }
+        ]
+      },
+      {
+        "material_id": "fixture-critical-1828",
+        "disposition": "CREATE",
+        "reason_codes": [
+          "NEW_ENTITY_CANDIDATE"
+        ],
+        "children": [
+          {
+            "proposal_ref": "product-main",
+            "disposition": "CREATE",
+            "reason_codes": [
+              "NEW_ENTITY_CANDIDATE"
+            ]
+          }
+        ]
+      },
+      {
+        "material_id": "fixture-endowment-1826",
+        "disposition": "CREATE",
+        "reason_codes": [
+          "NEW_ENTITY_CANDIDATE"
+        ],
+        "children": [
+          {
+            "proposal_ref": "product-main",
+            "disposition": "CREATE",
+            "reason_codes": [
+              "NEW_ENTITY_CANDIDATE"
+            ]
+          }
+        ]
+      },
+      {
+        "material_id": "fixture-medical-594",
+        "disposition": "MATCH",
+        "reason_codes": [
+          "EXACT_EXISTING_MATCH"
+        ],
+        "children": [
+          {
+            "proposal_ref": "product-main",
+            "disposition": "MATCH",
+            "reason_codes": [
+              "EXACT_EXISTING_MATCH"
+            ]
+          }
+        ]
+      },
+      {
+        "material_id": "fixture-medical-596",
+        "disposition": "MATCH",
+        "reason_codes": [
+          "EXACT_EXISTING_MATCH"
+        ],
+        "children": [
+          {
+            "proposal_ref": "product-main",
+            "disposition": "MATCH",
+            "reason_codes": [
+              "EXACT_EXISTING_MATCH"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "coverage_note": "The frozen 342 fixture contains exactly five materials and all five are selected. A non-selected-material vector and a true multi-child positive were not fabricated.",
+  "vectors": [
+    {
+      "name": "identity_threshold_policy_drift",
+      "note": "Policy and all binding hashes are renewed, but the carried resolution still claims automatic decisions under the old threshold.",
+      "mutated_full_candidate_canonical_sha256": "166652fd9e6e3dab210e0100f710af9615797a9e151e333a0447625a694c095a",
+      "attacked_request_sha256": "14ddc4f46d9334deb83008e5b2248edb0ed44e20959b5888bfe505363097de58",
+      "attacked_resolution_batch_sha256": "ed76511b49bc8c54f1b85d83c9374f5c8ae338405db42b4e2bcc3bbf761010c7",
+      "mutated_input_hashes": {
+        "corpus_sha256": "82e66ffad05ce2483550c88d679cdec60d0896b2a2f7b0a66f257834964c89ca",
+        "proposals_sha256": "118bf1b49a7da34076bc0fd6fb2451e2156efbda6c8c62b50f6df7aa11338433",
+        "existing_snapshot_sha256": "fe8457503a4171e355613a920765cda0d5f6c93b9aa6083b5342f471c7ca6006",
+        "policy_sha256": "cffd34cf0caba574f77127d0fa2b2b70faad0e04368fe47d867c115f6b47f462",
+        "inputs_sha256": "e12c22f3f8b0f6d9b10a703b16160317b0969a8acfe9a657df253ebdc881c2ae"
+      },
+      "hash_checks": {
+        "inputs_sha256_current": true,
+        "resolution_batch_sha256_current": true,
+        "request_sha256_current": true,
+        "model_context_hash_current": true,
+        "model_raw_hash_current": true,
+        "carry_context_hash_current": true,
+        "final_raw_hash_current": true,
+        "review_context_hash_current": true,
+        "review_raw_hash_current": true,
+        "candidate_hash_current": true
+      },
+      "internal_expected_rejection": "RESOLUTION_REPLAY_MISMATCH",
+      "public_expected_rejection": "BATCH_CANDIDATE_INVALID",
+      "actual_c_replay_batch_sha256": "587290e67cc1c02996e644e99492af36bbf8e59103735cc29b8736ea3a560195",
+      "actual_c_replay": [
+        {
+          "material_id": "fixture-accident-1814",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "IDENTITY_BELOW_THRESHOLD"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-critical-1828",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "IDENTITY_BELOW_THRESHOLD"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-endowment-1826",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "IDENTITY_BELOW_THRESHOLD"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-594",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "IDENTITY_BELOW_THRESHOLD"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-596",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "IDENTITY_BELOW_THRESHOLD"
+              ]
+            }
+          ]
+        }
+      ],
+      "attacked_resolution_equals_actual_replay": false
+    },
+    {
+      "name": "classification_trust_rule_removed",
+      "note": "The exact trust policy is changed and rehashed; unchanged automatic resolution must not survive policy replay.",
+      "mutated_full_candidate_canonical_sha256": "e1193bec8f8a36717038886e9db1e6a9dd83f0082ac7e5fb5613e9829485b680",
+      "attacked_request_sha256": "fe1e065924f14106442b1b59f0b19116db82e2e20ed776767e740d98b54b0f4d",
+      "attacked_resolution_batch_sha256": "63633a446c3de0c6c2eab4ba2a69419c1d3f8b89df6b50a2330547d80cc6a10c",
+      "mutated_input_hashes": {
+        "corpus_sha256": "82e66ffad05ce2483550c88d679cdec60d0896b2a2f7b0a66f257834964c89ca",
+        "proposals_sha256": "118bf1b49a7da34076bc0fd6fb2451e2156efbda6c8c62b50f6df7aa11338433",
+        "existing_snapshot_sha256": "fe8457503a4171e355613a920765cda0d5f6c93b9aa6083b5342f471c7ca6006",
+        "policy_sha256": "24206f25e97ca8504b42a60188c5839f440539502c1d061daac5bd6fbe13f8fb",
+        "inputs_sha256": "239f9125386760aa7237bf9c31e403037ee78a1105c76795be25fe798405cffb"
+      },
+      "hash_checks": {
+        "inputs_sha256_current": true,
+        "resolution_batch_sha256_current": true,
+        "request_sha256_current": true,
+        "model_context_hash_current": true,
+        "model_raw_hash_current": true,
+        "carry_context_hash_current": true,
+        "final_raw_hash_current": true,
+        "review_context_hash_current": true,
+        "review_raw_hash_current": true,
+        "candidate_hash_current": true
+      },
+      "internal_expected_rejection": "RESOLUTION_REPLAY_MISMATCH",
+      "public_expected_rejection": "BATCH_CANDIDATE_INVALID",
+      "actual_c_replay_batch_sha256": "0755311aa3a945385895ca0a071352ea1b02ddecf0762604425e1b92e06f8594",
+      "actual_c_replay": [
+        {
+          "material_id": "fixture-accident-1814",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "TRUST_POLICY_UNRESOLVED"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-critical-1828",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "TRUST_POLICY_UNRESOLVED"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-endowment-1826",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "TRUST_POLICY_UNRESOLVED"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-594",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "TRUST_POLICY_UNRESOLVED"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-596",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "TRUST_POLICY_UNRESOLVED"
+              ]
+            }
+          ]
+        }
+      ],
+      "attacked_resolution_equals_actual_replay": false
+    },
+    {
+      "name": "selected_proposal_unsupported_classification",
+      "note": "The selected proposal remains structurally valid and fully rehashed, but its label has no Catalog pack.",
+      "mutated_full_candidate_canonical_sha256": "115ef591aaacab65ac5aa523a6d87c409ef6a8eda64147dc22bb780fb04497af",
+      "attacked_request_sha256": "4ce03194408af04d08f69c290ea2931ebbb308f1b134be984c6a0810705b1c2e",
+      "attacked_resolution_batch_sha256": "d9665a1ebe7d22ec75718f1fea04c823e2c97391f953d0e09f0cced29dd86547",
+      "mutated_input_hashes": {
+        "corpus_sha256": "82e66ffad05ce2483550c88d679cdec60d0896b2a2f7b0a66f257834964c89ca",
+        "proposals_sha256": "9f1d81276ce678046371e056637e5c1eb40dc4df7bed84251dff948eb6ad8ed5",
+        "existing_snapshot_sha256": "fe8457503a4171e355613a920765cda0d5f6c93b9aa6083b5342f471c7ca6006",
+        "policy_sha256": "22e69e6907bb891ff9577afd06e8029d1022de30dfd7e03edff589cff3bb2795",
+        "inputs_sha256": "74cff8053dcdb6289c36abd4a098acc0d883642d2e2cb6671306ebc1c1b770ea"
+      },
+      "hash_checks": {
+        "inputs_sha256_current": true,
+        "resolution_batch_sha256_current": true,
+        "request_sha256_current": true,
+        "model_context_hash_current": true,
+        "model_raw_hash_current": true,
+        "carry_context_hash_current": true,
+        "final_raw_hash_current": true,
+        "review_context_hash_current": true,
+        "review_raw_hash_current": true,
+        "candidate_hash_current": true
+      },
+      "internal_expected_rejection": "RESOLUTION_REPLAY_MISMATCH",
+      "public_expected_rejection": "BATCH_CANDIDATE_INVALID",
+      "actual_c_replay_batch_sha256": "9328a2eeeea6f026a3bf10209882f86b2fe57be1181b72014f2e44d22af0f2e5",
+      "actual_c_replay": [
+        {
+          "material_id": "fixture-accident-1814",
+          "disposition": "CREATE",
+          "reason_codes": [
+            "NEW_ENTITY_CANDIDATE"
+          ],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "CREATE",
+              "reason_codes": [
+                "NEW_ENTITY_CANDIDATE"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-critical-1828",
+          "disposition": "NEEDS_CONFIRM",
+          "reason_codes": [],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "NEEDS_CONFIRM",
+              "reason_codes": [
+                "CLASSIFICATION_UNRESOLVED"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-endowment-1826",
+          "disposition": "CREATE",
+          "reason_codes": [
+            "NEW_ENTITY_CANDIDATE"
+          ],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "CREATE",
+              "reason_codes": [
+                "NEW_ENTITY_CANDIDATE"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-594",
+          "disposition": "MATCH",
+          "reason_codes": [
+            "EXACT_EXISTING_MATCH"
+          ],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "MATCH",
+              "reason_codes": [
+                "EXACT_EXISTING_MATCH"
+              ]
+            }
+          ]
+        },
+        {
+          "material_id": "fixture-medical-596",
+          "disposition": "MATCH",
+          "reason_codes": [
+            "EXACT_EXISTING_MATCH"
+          ],
+          "children": [
+            {
+              "proposal_ref": "product-main",
+              "disposition": "MATCH",
+              "reason_codes": [
+                "EXACT_EXISTING_MATCH"
+              ]
+            }
+          ]
+        }
+      ],
+      "attacked_resolution_equals_actual_replay": false
+    },
+    {
+      "name": "single_child_false_multi_parent",
+      "note": "No extra fake child is introduced; the one-child frozen material cannot satisfy MULTI identity-cluster qualification.",
+      "mutated_full_candidate_canonical_sha256": "13da9d109f3b2d796a8ad415c7a4e00ff39d4d51fb10da34c0cf3025788694aa",
+      "attacked_request_sha256": "52c2716ec8f73a5ea518df5f539cfc2eea113d4200c1f2bb8b45710694f7cf57",
+      "attacked_resolution_batch_sha256": "28bee03ce1c79db21de8e60041858c4d87d4a90f55a7896f0f1ea36901d77d49",
+      "mutated_input_hashes": {
+        "corpus_sha256": "82e66ffad05ce2483550c88d679cdec60d0896b2a2f7b0a66f257834964c89ca",
+        "proposals_sha256": "118bf1b49a7da34076bc0fd6fb2451e2156efbda6c8c62b50f6df7aa11338433",
+        "existing_snapshot_sha256": "fe8457503a4171e355613a920765cda0d5f6c93b9aa6083b5342f471c7ca6006",
+        "policy_sha256": "22e69e6907bb891ff9577afd06e8029d1022de30dfd7e03edff589cff3bb2795",
+        "inputs_sha256": "a1019a7567d794a08ac4600d74424a7e0e4fc3361c25aa866c6634142da9a9e0"
+      },
+      "hash_checks": {
+        "inputs_sha256_current": true,
+        "resolution_batch_sha256_current": true,
+        "request_sha256_current": true,
+        "model_context_hash_current": true,
+        "model_raw_hash_current": true,
+        "carry_context_hash_current": true,
+        "final_raw_hash_current": true,
+        "review_context_hash_current": true,
+        "review_raw_hash_current": true,
+        "candidate_hash_current": true
+      },
+      "internal_expected_rejection": "material decision collections are not canonical",
+      "public_expected_rejection": "BATCH_CANDIDATE_INVALID"
+    }
+  ]
+}
