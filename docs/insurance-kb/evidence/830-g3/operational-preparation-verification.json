@@ -1,0 +1,34 @@
+{
+  "contract": "830-g3-operational-preparation-verification.v1",
+  "recorded_at": "2026-09-07T07:56:31.715771+00:00",
+  "logs": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-embedding-guard-green.log",
+      "sha256": "5ccc5b20399fc5ef3374988cc04c7707796bf432f011e727bfdcebb97c8829d2"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-embedding-guard-legacy-red.log",
+      "sha256": "5863a75b15721759c52844f9fef3a8005130258ca29897d006c84d99a7e125d4"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-batch-c-review-green.log",
+      "sha256": "c2b52261152571767123d9cc5f2a679321f3f173186a863f8888bb0418414b7c"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-batch-c-review-ruff.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g3/g3-batch-c-review-mypy.log",
+      "sha256": "5d4b6d285b77932e3d08212c3b4974d0a803f98ec60408ac6ccf6a063fa6c19e"
+    }
+  ],
+  "guard_initial_tests": "6 PASS; independent review pending, not authorized to serve",
+  "C_owner_repair_tests": "39 PASS; independent re-review pending",
+  "effects": {
+    "provider_calls": 0,
+    "uploads": 0,
+    "runtime_starts": 0
+  },
+  "raw_log_whitespace": "Original raw validation logs preserve exact bytes, including pytest trailing spaces. Prior all-file git diff --check reported these spaces; not claimed PASS. Source/doc formatting check excludes immutable *.log artifacts."
+}

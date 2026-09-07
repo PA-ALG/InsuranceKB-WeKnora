@@ -1,0 +1,7 @@
+status=302
+body_sha256=88188d6a2e6353bea79ede2f75cb8fbe4848a7250b6b3f2408b4b0bd56689189
+open_calls=1
+url=https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
+exact_body=True
+timeout=60
+authorization_forwarded_in_memory=True

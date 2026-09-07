@@ -1,0 +1,23 @@
+{
+  "contract": "830-g3-embedding-guard-independent-review-2.v1",
+  "reviewer": "g3_catalog_ui",
+  "blockers": 0,
+  "status": "PASS",
+  "source_sha256": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+  "test_sha256": "256018f977dadd12c368511e2f83a1660025625f5b80934d2ea91770e0108b6c",
+  "manifest_sha256": "75b40ece28a4219965a6a86be616bb90f17af53252afad6c2243dedb9e377225",
+  "validation": "9 fake-only tests; pre-save0/post-save1 calls and global stop; initializer reservation failure refuses restart; concurrent start exactly one succeeds",
+  "effects": {
+    "serve": 0,
+    "network": 0,
+    "provider": 0
+  },
+  "backlog": [
+    "exact row schema/material id uniqueness/hash syntax strengthening beyond actual fixed manifest"
+  ],
+  "logs": {
+    "g3-embedding-guard-independent-rereview-tests.log": "80813fea2a5c418cf207c936fb2200286c24f040ff6f1c23936712ed80c7e1bb",
+    "g3-embedding-guard-independent-rereview-probes.log": "fcfda77ec4eecc042064b198286a29edce15f4cb01a2d9c0f228b506f0f05596",
+    "g3-embedding-guard-independent-rereview-race.log": "a859e3cb096f03f03d9cebad326b46b43ea77350ec61ceef479e6543ffc0271a"
+  }
+}

@@ -1,0 +1,11 @@
+embedding_guard_sha256=c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4
+pre_statuses=(503, 409)
+pre_calls=0
+pre_stopped=True
+post_statuses=(503, 409)
+post_calls=1
+post_stopped=True
+init_failed=true
+init_reservation_exists=True
+init_reservation_bytes=0
+init_restart_refused=True

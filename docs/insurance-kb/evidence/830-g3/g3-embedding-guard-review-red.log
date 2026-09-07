@@ -1,0 +1,65 @@
+test_eleven_unique_attempts_bound_and_existing_ledger_refused (__main__.GuardTests.test_eleven_unique_attempts_bound_and_existing_ledger_refused) ... ok
+test_failure_consumes_attempt_and_stops_other_sources (__main__.GuardTests.test_failure_consumes_attempt_and_stops_other_sources) ... ok
+test_post_send_accounting_failure_stops_all_sources (__main__.GuardTests.test_post_send_accounting_failure_stops_all_sources) ... ERROR
+test_pre_send_accounting_failure_stops_all_sources (__main__.GuardTests.test_pre_send_accounting_failure_stops_all_sources) ... ERROR
+test_real_frozen_bodies_load_but_are_never_sent (__main__.GuardTests.test_real_frozen_bodies_load_but_are_never_sent) ... ok
+test_stale_exists_check_cannot_overwrite_reserved_ledger (__main__.GuardTests.test_stale_exists_check_cannot_overwrite_reserved_ledger) ... FAIL
+test_success_exact_bytes_once_and_no_credentials_persisted (__main__.GuardTests.test_success_exact_bytes_once_and_no_credentials_persisted) ... ok
+test_transport_exception_stops_run (__main__.GuardTests.test_transport_exception_stops_run) ... ok
+test_unknown_body_and_missing_bearer_do_not_count (__main__.GuardTests.test_unknown_body_and_missing_bearer_do_not_count) ... ok
+
+======================================================================
+ERROR: test_post_send_accounting_failure_stops_all_sources (__main__.GuardTests.test_post_send_accounting_failure_stops_all_sources)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard_test.py", line 102, in test_post_send_accounting_failure_stops_all_sources
+    self.assertEqual(guard.request(self.bodies[0], 'Bearer test')[0], 503)
+                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard.py", line 91, in request
+    self.save()
+    ~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1175, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1179, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1240, in _execute_mock_call
+    result = effect(*args, **kwargs)
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard_test.py", line 99, in fail_after_started
+    raise OSError('offline disk failure')
+OSError: offline disk failure
+
+======================================================================
+ERROR: test_pre_send_accounting_failure_stops_all_sources (__main__.GuardTests.test_pre_send_accounting_failure_stops_all_sources)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard_test.py", line 86, in test_pre_send_accounting_failure_stops_all_sources
+    self.assertEqual(guard.request(self.bodies[0], 'Bearer test')[0], 503)
+                     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard.py", line 82, in request
+    self.save()  # Fail closed before any upstream effect if durable accounting fails.
+    ~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1175, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1179, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 1234, in _execute_mock_call
+    raise effect
+OSError: offline disk failure
+
+======================================================================
+FAIL: test_stale_exists_check_cannot_overwrite_reserved_ledger (__main__.GuardTests.test_stale_exists_check_cannot_overwrite_reserved_ledger)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/embedding_guard_test.py", line 112, in test_stale_exists_check_cannot_overwrite_reserved_ledger
+    with self.assertRaisesRegex(RuntimeError, 'EXISTING_LEDGER'):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.275s
+
+FAILED (failures=1, errors=2)

@@ -2,7 +2,7 @@
 
 唯一 Owner=830-G3总控/root；G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。已成功 fetch，base/main=075d9c38c01e48abfe7985985dc503099cf9b19a；专用工作树 `.worktrees/830-g3-implementation`，分支 `codex/830-g3-implementation`。
 
-首切片：真实 v5 工作簿已生成 11 pack/profile、801 字段；A/B独立复核BLOCKER0，总控Python17、前端17、Go接口及类型检查通过。用户已回复“结构确认”，exact Catalog确认回执保存；具名信息已非阻断询问。安佑福1828条款/说明书/版本待核费率表已保留。15原始PDF准备：4已有W1 revisions共287 chunks实际读取/hash/前后版本一致；11新PDF native预检输出保存。十一份新材料已离线生成204 embedding inputs及exact Go transport bodies，693129bytes，尚未外发。C独立复核发现7项身份/采信/wire缺口，原Owner按冻结修订进行一轮集中修复；本轮RED15fail/21pass已保存。早前4fail/11pass原始工具日志已从自动保存journal逐字恢复并独立核验。D候选/页面连接仍DESIGN_GAPS：已确认可复用G2同包新增逻辑实体，无额外主数据人工注册前置；需要真实pack/Profile与待审页面接线。模型/上传/DB写/镜像构建/生产动作均0，G3 FLOW仍NOT RUN。启动记录见 `docs/insurance-kb/evidence/830-g3/startup.json`。以下G2历史状态不覆盖当前G3授权。
+首切片：真实 v5 工作簿已生成 11 pack/profile、801 字段；A/B独立复核BLOCKER0，总控Python17、前端17、Go接口及类型检查通过。用户已回复“结构确认”，exact Catalog确认回执保存；具名信息已非阻断询问。安佑福1828条款/说明书/版本待核费率表已保留。15原始PDF准备：4已有W1 revisions共287 chunks实际读取/hash/前后版本一致；11新PDF native预检输出保存。十一份新材料已离线生成204 embedding inputs及exact Go transport bodies，693129bytes，尚未外发。C独立复核发现的7项身份/采信/wire缺口已集中修复并复审闭合：39 tests、4组8项独立反例、ruff/strict mypy通过，BLOCKER0；本轮RED15fail/21pass保留。早前4fail/11pass原始工具日志已从自动保存journal逐字恢复并独立核验。D候选/页面连接仍DESIGN_GAPS：已确认可复用G2同包新增逻辑实体，无额外主数据人工注册前置；需要真实pack/Profile与待审页面接线。新隔离环境只读核实storage本地/vector随DB、无待处理任务；Redis15已占用改独立队列。4原文件hash已读回，只有3条source custody row，第4缺口保留。11请求guard的持久化失败/并发启动问题已修复，9 tests及独立复审通过，尚未serve。复审临时安装76包后移除新建venv，覆盖日志身份已如实纠正。模型/上传/DB写/镜像构建/生产动作均0，G3 FLOW仍NOT RUN。启动记录见 `docs/insurance-kb/evidence/830-g3/startup.json`。以下G2历史状态不覆盖当前G3授权。
 
 ---
 
