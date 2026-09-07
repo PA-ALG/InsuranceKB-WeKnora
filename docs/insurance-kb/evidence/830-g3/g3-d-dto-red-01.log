@@ -1,0 +1,15 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_unknown_alignment_rejects_changed_unknown_reason _____________
+
+    def test_unknown_alignment_rejects_changed_unknown_reason() -> None:
+        request, output, rows = _tampered_aligned_output()
+    
+>       with pytest.raises(ValueError, match="BASE_UNKNOWN_KEY_MIGRATION_INELIGIBLE"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:116: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_unknown_alignment_rejects_changed_unknown_reason
+1 failed in 2.37s

@@ -26,6 +26,7 @@
 #### Scenario: 多产品候选复用同一发布链
 - WHEN 批次自动身份结果进入 G3 候选编译
 - THEN 按 `docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md`（SHA-256 `75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d`）严格验证完整 Catalog、确认回执、C 输入及结果、每实体 binding、原 G2 base request、模型 delta/机械合成/独立审核记录与同一 page manifest。
+- THEN 反序列化请求必须逐一绑定 exact C child 的身份 anchors、entity/version key公式和所选证据；确认回执同时锁定真实文件及语义hash；C/base同 SourceBlock identity 不同完整内容必须拒绝，即使调用方重算全部外层hash（集中修复合同 `lane-d-python-repair-1.md`）。
 - THEN 所有既有实体必须有实际 C 自动 MATCH；新实体必须有实际 C 自动 CREATE，不增加主数据注册前置；缺失资格在编译及 Draft 前拒绝。
 - THEN 首切片正向和容量 fixture 使用 actual G2 base 两医疗实体与重疾、两全、意外三新实体，合计 342 个标准字段页；完整 POST 使用真实 serializer 测量且不得超过现有 8 MiB，容量闭合前不得实施 handler/service/UI。
 - THEN 旧 134 行 existing input 原样进入 request；132 行事实逐字继承，仅按修订6冻结的两行 exact unknown-only lineage 对齐旧单数 key 到新 Profile key，旧 Release 不变；每医疗仍恰好 67 页，禁止额外 legacy 页或删 base 压缩容量。

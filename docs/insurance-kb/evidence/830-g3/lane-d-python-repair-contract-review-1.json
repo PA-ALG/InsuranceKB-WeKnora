@@ -1,0 +1,18 @@
+{
+  "contract": "830-g3-d-python-repair-contract-review.v1",
+  "reviewer": "g3_seam_audit",
+  "status": "PASS_AFTER_MECHANICAL_WORDING_CORRECTION",
+  "plan_sha256": "a363c33858f184c881a215081d001c716ad22da6f7aa997b434351516b8e87d1",
+  "original_plan_sha256": "89e85c11a12dacf867c4b396070e263f3747d721c7332ace3caba817794fd313",
+  "technical_findings_covered": [
+    "D-PY-B1",
+    "D-PY-B2",
+    "D-PY-B3"
+  ],
+  "correction": "preserve existing nonempty actor; only actor_display_name and queue_owner are null",
+  "actual_receipt_file_sha256": "7f6141c63db4a77e3d13a0a8d632ea5463761bedeee7bd1aabef165d68c86863",
+  "actual_receipt_semantic_sha256": "cd40072b3c4c32c3ed9440c7ff1ff5effc502c506b4ab11c86bbe438c7649b66",
+  "method": "independent batch_sha256_830_g3(receipt.contract, receipt) on saved actual receipt",
+  "blockers_after_correction": 0,
+  "active_code_reviewed": false
+}

@@ -1,0 +1,10 @@
+=== RUN   TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+    concept_free_wiki_830_g3_test.go:19: 
+        	Error Trace:	/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go:19
+        	Error:      	Received unexpected error:
+        	            	invalid concept candidate bundle 830 g3
+        	Test:       	TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+--- FAIL: TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture (1.09s)
+FAIL
+FAIL	github.com/Tencent/WeKnora/internal/types	4.952s
+FAIL

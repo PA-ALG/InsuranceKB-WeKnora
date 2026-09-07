@@ -1,0 +1,24 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_entity_binding_rejects_control_character_in_identity ___________
+
+    def test_entity_binding_rejects_control_character_in_identity() -> None:
+        module = importlib.import_module(
+            "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+        )
+        bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+        changed = bundle.request.entity_bindings[0].model_dump(mode="json")
+        changed["product_code"] = "18\t14"
+        changed["binding_sha256"] = module._batch_sha256(
+            changed["contract"],
+            {key: value for key, value in changed.items() if key != "binding_sha256"},
+        )
+    
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+harness/tests/test_batch_concept_compile_830_g3.py:172: Failed
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_concept_compile_830_g3.py::test_entity_binding_rejects_control_character_in_identity
+1 failed in 6.09s

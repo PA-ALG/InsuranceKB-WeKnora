@@ -1,0 +1,11 @@
+# D Python 严格闭包：首轮集中修复
+
+状态：AUTHORIZED_BOUNDED_REPAIR；Owner=g3_catalog_impl；适用 OpenSpec129 G3-R3/R4。原冻结5628c9aa661cad22c61cefb3647976e029c0455c7bebdf1f3d6d08880b4ad61f与独立报告a6a14af286957755302a0cf12edc18489de00427972b93c68153f9a00f3efca3保留。这是现有D合同v2的三项遗漏实现修复，不增加协议或产品目标。
+
+1. D-PY-B1：对每个selected C child严格比较binding的display_name、issuer、product_code、version_label、version_anchor与child observed/normalized anchors；MATCH按既有公式重新计算entity_key_sha256/version_candidate_key_sha256；CREATE上述keys必须等于exact EntityCandidate。每条bound evidence必须属于其exact selected child.evidence_ids，不得引用未选择child的证据。不同ref之间也必须指向同一绑定事实。
+2. D-PY-B2：Profile确认既要求实际文件SHA 7f6141c63db4a77e3d13a0a8d632ea5463761bedeee7bd1aabef165d68c86863，也要求冻结semantic SHA cd40072b3c4c32c3ed9440c7ff1ff5effc502c506b4ab11c86bbe438c7649b66。继续校验内联receipt与semantic hash，不能仅接受调用方自报文件hash。保留真实“结构确认”及空actor/owner，不伪造姓名。
+3. D-PY-B3：建立C corpus SourceBlock唯一identity map；同(revision_id,block_id)不同完整SourceBlock拒绝；base.sources与C corpus重叠以及selected evidence使用的SourceBlock必须完整相等。保留原source集合覆盖约束及G2正文多行原字节，不以仅比较text/quote/hash子集替代完整比较。
+
+顺序：先在原冻结实现新增三个攻击的正确拒绝RED，攻击必须重算所有外层hash以实际触及闭包；保存原始日志，再集中修复。覆盖B1七字段/keys及未选child evidence，B2 actor/receipt字段替换，B3同identity不同text及其他SourceBlock内容；保留有效fixture正向。运行D focused、ruff、strict mypy；完整fixture仍为actual134→132carry+2alignment+208delta=342与三raw，8MiB以内。冻结修复后代码/测试/必要fixture与日志，再独立复审。原11和root110 PASS是bounded历史，不覆盖三项攻击。
+
+仅允许写D Python、其测试、确有必要的D fixture；不得改C/common/Catalog/G2、exact alignment fixture、handler/service/UI或Go。Go保持lane-d-go-paused-state-01.json所列未完成冻结，待Python复审通过再恢复。不得靠放宽校验使旧fixture通过。若发现超出这三项的同域基础问题，先报告，停止追加零散补丁，回设计。provider/HTTP/DB/build/upload/运行环境动作均0。

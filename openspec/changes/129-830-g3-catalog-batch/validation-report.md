@@ -34,3 +34,5 @@ C/D真实正文接缝：`cd-multiline-canonical-reproduction.log` 保存actual b
 修订7代码已在 `de38eb252979713415d8fa34946084f7f344cbc0` 冻结，root独立81项通过及完整正文/嵌套身份probe通过，精确文件与原始日志见 `cd-multiline-code-independent-review.json`。修订8设计 `0b2e9241…` 经独立复核BLOCKER0，已先冻结OpenSpec和C-only写域后进入实现，当前源码尚未闭合；见 `c-source-registration-design-independent-review.json` 与 `c-source-registration-dispatch.json`。
 
 修订8最终独立BLOCKER0，C79/common82、root A/C/common99通过；代码身份见 `c-source-registration-independent-review.json`。原C写域关闭，D按既有v2合同及修订7/8恢复五文件域，完整342/8MiB与Python-Go一致性仍NOT RUN，不开放handler/service/UI。上传v1独立7类BLOCKER，首轮集中修复中，原stub RED明确仅为脚手架时序证据。
+
+D Python首审BLOCKED（3项）：原11/root110 bounded PASS与完整342/2,247,500-byte容量PASS保留；新增重算hash攻击证明身份anchors、确认语义、同SourceBlock身份内容闭包遗漏。见lane-d-python-independent-review-01.json；首轮修复lane-d-python-repair-1.md先冻结，Go暂停未GREEN，handler/service/UI仍关闭。来源upload v2独立复核BLOCKER0（33 tests/9 probes），执行包复核PASS，用户外发批准待回复；无apply/upload/provider。

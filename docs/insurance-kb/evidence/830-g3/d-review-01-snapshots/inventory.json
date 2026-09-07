@@ -1,0 +1,30 @@
+{
+  "contract": "830-g3-d-review01-rejected-snapshots.v1",
+  "status": "PYTHON_BLOCKED_3;GO_INCOMPLETE_NOT_GREEN",
+  "files": [
+    {
+      "file": "batch_concept_compile_830_g3.py.gz",
+      "raw_sha256": "b7e39999060842d586d6d77a63115d7a86d14f5ba4054c374bfa87873e2315e7",
+      "gzip_sha256": "ae8451fb3a0550ad542a5543187e172bb0446ff3d871e7ffa2912a8fa4b707cb",
+      "bytes": 65918
+    },
+    {
+      "file": "test_batch_concept_compile_830_g3.py.gz",
+      "raw_sha256": "3fb6c9afe3ff159bcbc89e384a04d4d47c19c2b44215844f943fe11270ca5b2a",
+      "gzip_sha256": "6f91f628f02af67f6a7b375bcc616f8f87f26f94c42cfbccdca2bc65367ba9cd",
+      "bytes": 14292
+    },
+    {
+      "file": "concept_free_wiki_830_g3.go.gz",
+      "raw_sha256": "7e612547a5ee75e428cb5cdc2a1ae39df5601cf0ef1bad1a6b483b09fd0e08bc",
+      "gzip_sha256": "5ca61d91811dfffd347a392ba093da2dcf105f89700f5fd6a9e09f84197d44aa",
+      "bytes": 66501
+    },
+    {
+      "file": "concept_free_wiki_830_g3_test.go.gz",
+      "raw_sha256": "40965c4ce1b93e1da017a4f374a118df4c00172108a86839fad1846c3773fcc7",
+      "gzip_sha256": "6cd0c1ad4e317ae10ba31b0c4b8bd853589f84fa476568ac8c72a417d60dc905",
+      "bytes": 3836
+    }
+  ]
+}
