@@ -1,0 +1,58 @@
+{
+  "contract": "830-g3-d-backend-dispatch.v1",
+  "status": "ROOT_ENTRY_GATE_ACCEPTED_LOCAL_IMPLEMENTATION_AUTHORIZED",
+  "owner": "g3_catalog_impl",
+  "tasks": "Original downstream Tasks1,2,3 in order, with stage RED/GREEN and final immutable backend review before acceptance/commit.",
+  "inputs": [
+    {
+      "path": "lane-d-downstream-execution-plan-1.md",
+      "sha256": "a5cbf39c74f2bd26d52590580b7d2a059858d2951577614ad1cae3ed8727f3ab"
+    },
+    {
+      "path": "lane-d-downstream-plan-independent-review-2.md",
+      "sha256": "1dac90f0f67c0ddf84d969e2b0e6861e5f9dfd6a6365e36f868f2e951cb2e500"
+    },
+    {
+      "path": "lane-d-go-repair1-freeze.json",
+      "sha256": "ca6f6daff78c94a185455aa5b879887360b4298ff1c67de90565a3ed618b163b"
+    },
+    {
+      "path": "lane-d-go-repair1-independent-rereview.json",
+      "sha256": "17d1153f4e4de7e79fdf779459853f47efbb878ad104dffceab688852ac921c3"
+    }
+  ],
+  "entry_gates": {
+    "python_candidate_source_coverage2": "PASS",
+    "complete_serializer_capacity": "PASS_2254490_BYTES",
+    "go_full_mirror_independent": "PASS",
+    "python_go_canonical_snapshots": "PASS_354_OF_354",
+    "alignment_display_design": "PASS",
+    "root_exact_identity_check": "PASS"
+  },
+  "exclusive_paths": [
+    "internal/application/service/concept_free_wiki_830_g3.go",
+    "internal/application/service/concept_free_wiki_830_g2.go",
+    "internal/application/service/concept_source_authority_830_g2.go",
+    "internal/application/service/wiki_release.go",
+    "internal/handler/schema_wiki.go",
+    "internal/router/routes_schema_wiki.go",
+    "internal/application/service/concept_free_wiki_830_g3_test.go",
+    "internal/handler/concept_free_wiki_830_g3_test.go",
+    "internal/router/routes_batch_concept_830_g3_test.go",
+    "internal/application/service/concept_source_authority_830_g2_test.go",
+    "internal/application/service/wiki_release_test.go"
+  ],
+  "source_order_gate": "Real Task2 create-draft source branch and its fail-closed tests must be complete before Task3 HTTP dispatch code. Do not expose Task1 fake-verifier-only behavior as completion.",
+  "closed_domains": [
+    "Python",
+    "C/common",
+    "G2 types",
+    "G3 frozen types/tests",
+    "fixtures",
+    "UI",
+    "repository/table/migrations"
+  ],
+  "helper_note": "Use existing canonicalJSON830G2 with the frozen preparation-read domain in a private new-service helper; no types export reopening.",
+  "real_runtime": "No provider, HTTP call, DB, image build, Draft/review/activation or deployment is authorized by this local dispatch.",
+  "ui_final_gate": "The repaired Go independent gate is now passed; UI still needs its own exact independent review and combined backend/UI verification."
+}

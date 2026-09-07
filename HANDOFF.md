@@ -12,6 +12,8 @@ D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff
 
 最新（2026-09-08）：Go完整镜像首次独审2项BLOCKER：strict wire字段出现性/null及3个C source Hash类型漏验；四个C重算反例、354跨语言snapshot和完整types回归独立PASS，原Go/RED快照保留，正在准备一次集中修复。UI本地并行顺序调整独立PASS，原Task4已派mock RED→实现；backend与最终UI接受/commit/整合仍等修复后Go独审PASS。结构确认单列PASS，具名元数据单列待补；来源外发原问题仍待用户回复，所有真实效果0。
 
+最新软件门禁：D Go首轮修复独立PASS（原2BLOCKER关闭、4 C反例/354跨语言snapshot/fulltypes/gofmt通过），source8db0e765…、test72e2c166…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。Python与Go类型镜像写域均关闭。后端Tasks1/2/3现已派出，UI本地实现正在全量检查；两者仍需独审/整合。原外发批准仍未收到，真实SOURCE/C/model/DB/build/deployment/业务效果均0。
+
 ---
 
 ## 当前终态：G2 FLOW PASS（2026-09-07）

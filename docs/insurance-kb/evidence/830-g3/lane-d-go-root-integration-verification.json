@@ -1,0 +1,62 @@
+{
+  "contract": "830-g3-d-go-root-integration-verification.v1",
+  "status": "PASS_SOFTWARE_TYPES_ONLY",
+  "review_ref": {
+    "path": "lane-d-go-repair1-independent-rereview.json",
+    "sha256": "17d1153f4e4de7e79fdf779459853f47efbb878ad104dffceab688852ac921c3"
+  },
+  "identity_checks": [
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-go-repair1-freeze.json",
+      "sha256": "ca6f6daff78c94a185455aa5b879887360b4298ff1c67de90565a3ed618b163b",
+      "bytes": 2367
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "bytes": 160738
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "bytes": 25205
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "bytes": 2254415
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "bytes": 2254490
+    },
+    {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "bytes": 1623
+    }
+  ],
+  "independent_validation_consumed": [
+    "B1/B2 PASS",
+    "4 C semantic oracle rejections",
+    "354 exact Python-Go snapshots",
+    "Full internal/types PASS",
+    "gofmt diff empty"
+  ],
+  "root_scope_check": "Repair production delta is centralized decode/nonnull collection checks and three C Hash validators; public DTO and the unchanged Python fixture remain compatible with the original downstream plan.",
+  "not_claimed": [
+    "Backend/handler/UI complete",
+    "Actual model classification",
+    "SOURCE execution",
+    "Draft/review/activation",
+    "Deployment/live/business PASS"
+  ],
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "database": 0,
+    "image_build": 0,
+    "deployment": 0
+  }
+}

@@ -1,0 +1,14 @@
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_actor_display_name
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_queue_owner
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_candidate_id
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_entity_candidate_sha256
+=== RUN   TestIndependentG3RejectsOmittedNestedFieldsMatrix/embedded_G2_nullable_value
+--- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix (6.74s)
+    --- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_actor_display_name (0.88s)
+    --- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix/confirmation_queue_owner (0.92s)
+    --- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_candidate_id (2.93s)
+    --- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix/MATCH_entity_candidate_sha256 (1.10s)
+    --- PASS: TestIndependentG3RejectsOmittedNestedFieldsMatrix/embedded_G2_nullable_value (0.90s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/types	9.106s

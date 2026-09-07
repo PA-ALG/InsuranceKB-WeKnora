@@ -19,7 +19,7 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 
 | 维度 | 状态 | 证据与边界 |
 |---|---|---|
-| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；BLOCKED（Go首次独审2项） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首次独审presence/null与3个source Hash类型漏验尚未修复 |
+| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；PASS（Go完整镜像） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首轮修复独立PASS，4 C反例/354跨语言snapshot/fulltypes通过；backend/UI仍未完成 |
 | container health | NOT RUN（G3） | existing G2 docreader进程已只读核实用于解析预检，不是G3应用验收 |
 | provider probe | NOT RUN | 产品provider HTTP=0 |
 | provisioning | NOT RUN | 新DB/上传/SourceRevision/backfill=0 |
@@ -45,3 +45,5 @@ D source coverage第二次最终复审PASS：30 tests in97.68s，ruff/strict myp
 D下游执行计划及待审对齐展示设计完成独立复审（初审2项已修，终审BLOCKER0/BACKLOG0），exact冻结见lane-d-downstream-design-freeze-1.json。已明确Create前source验证、G3-only create-draft operation和授权历史snapshot派生两行展示；不增加DTO或公开KB元数据。Go完整C重算仍有有效RED，当前实现未闭合，下游写域仍关闭；实际C/profile执行方案仅只读候选，未派新生产实现。
 
 D Go首次完整独审2项BLOCKER，原完整types/四C反例/354跨语言snapshot通过但不能替代strict wire与Hash漏验修复；报告lane-d-go-mirror-independent-review-01.json SHA f2624564…。原Go及独立有效RED已保全，首轮集中修复不重开Python/C/common。UI本地顺序调整独立PASS（lane-d-ui-local-order-amendment-review-1.json SHA dcf96bca…），仅原Task4 mock实现已派；backend、最终UI接受/commit/集成仍等修复后Go独审PASS。所有真实批次/provider/DB/build/deployment仍NOT RUN。
+
+D Go首轮集中修复独立PASS（BLOCKER0/BACKLOG0），source8db0e765…、test72e2c166…，freeze ca6f6daf…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。原2项关闭，四C反例与354 Python-Go snapshots、完整types48.408s、gofmt通过；root复核全部准确身份与3 fixtures未变。原Go/原RED继续保留。后端Tasks1→2→3已按已审计划派出，UI mock实现并行；这不代表后端/UI完成，也不代表真实SOURCE/C/provider/DB/Draft/Review/Activate或部署已执行。

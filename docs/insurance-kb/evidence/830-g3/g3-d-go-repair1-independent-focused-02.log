@@ -1,0 +1,28 @@
+=== RUN   TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture
+--- PASS: TestParseBatchConceptCandidateBundle830G3ValidatesActual342Fixture (7.43s)
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nonnullable_evidence_start_is_null
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_actor_display_name_omitted
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_queue_owner_omitted
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_id_omitted
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_hash_omitted
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nullable_value_omitted
+--- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull (5.64s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nonnullable_evidence_start_is_null (1.61s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_actor_display_name_omitted (1.01s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/confirmation_nullable_queue_owner_omitted (0.75s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_id_omitted (0.88s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/match_nullable_candidate_hash_omitted (0.73s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsNestedOmissionAndScalarNull/embedded_G2_nullable_value_omitted (0.66s)
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsNullRequiredCollection
+--- PASS: TestBatchConceptCandidateBundle830G3RejectsNullRequiredCollection (2.44s)
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/native_capture
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/parser_identity
+=== RUN   TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/acquisition_receipt
+--- PASS: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes (6.34s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/native_capture (1.62s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/parser_identity (2.03s)
+    --- PASS: TestBatchConceptCandidateBundle830G3RejectsRehashedCorpusIdentityHashes/acquisition_receipt (2.68s)
+PASS
+ok  	github.com/Tencent/WeKnora/internal/types	24.420s

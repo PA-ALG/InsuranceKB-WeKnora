@@ -1,0 +1,152 @@
+{
+  "contract": "830-g3-d-go-repair1-independent-rereview.v1",
+  "scope": "frozen two Go files only; B1/B2 plus required regression entry gate",
+  "inputs": {
+    "freeze": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/docs/insurance-kb/evidence/830-g3/lane-d-go-repair1-freeze.json",
+      "sha256": "ca6f6daff78c94a185455aa5b879887360b4298ff1c67de90565a3ed618b163b",
+      "expected_sha256": "ca6f6daff78c94a185455aa5b879887360b4298ff1c67de90565a3ed618b163b",
+      "match": true,
+      "bytes": 2367
+    },
+    "source": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3.go",
+      "sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "expected_sha256": "8db0e765b4e24cc6e2f0e825105bc0d93c3934da02de4f4ebc17b07ad3fe3050",
+      "match": true,
+      "bytes": 160738
+    },
+    "test": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/internal/types/concept_free_wiki_830_g3_test.go",
+      "sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "expected_sha256": "72e2c16660821f22988b5ef3f9e23a2750a6f11c78248a350eca85848b8729ec",
+      "match": true,
+      "bytes": 25205
+    }
+  },
+  "unchanged_fixtures": {
+    "candidate": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "expected_sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "match": true,
+      "bytes": 2254415
+    },
+    "preparation": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "expected_sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "match": true,
+      "bytes": 2254490
+    },
+    "provenance": {
+      "path": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "expected_sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "match": true,
+      "bytes": 1623
+    }
+  },
+  "spec_compliance": {
+    "B1_strict_wire_presence_null": "PASS",
+    "B1_evidence": [
+      "omitted actor_display_name",
+      "omitted queue_owner",
+      "omitted MATCH candidate_id",
+      "omitted MATCH entity_candidate_sha256",
+      "omitted embedded G2 value",
+      "nonnull Evidence.start=null",
+      "required approved_aliases=null",
+      "registered receipt omitted binding_digest",
+      "raw decision omitted queue_id"
+    ],
+    "B1_legal_controls": "PASS: unchanged positive 342 fixture contains explicit nulls, required empty collections, and body LF/CR and is accepted; canonical typed comparison preserves body text and recursive nil closure does not reject nullable pointers.",
+    "B1_legal_shape_counts": {
+      "null_values": 1666,
+      "empty_lists": 4099,
+      "empty_maps": 1,
+      "strings_with_tab": 0,
+      "strings_with_lf": 47,
+      "strings_with_cr": 24
+    },
+    "B2_three_C_Hash_fields": "PASS",
+    "B2_fields": [
+      "CorpusEntry.native_capture_sha256",
+      "CorpusEntry.parser_identity_sha256",
+      "SourceProvenance.acquisition_receipt_sha256"
+    ],
+    "B2_note": "All three fully rehashed owner cases reject. The original parser_identity malformed case was already rejected by an earlier consistency check and remains correctly excluded from the historical RED count.",
+    "four_C_semantic_oracles": "PASS: 4/4 reject",
+    "python_snapshot_equality": "PASS: 354/354 exact scalar/content/member digest/canonical payload equality",
+    "full_internal_types": "PASS",
+    "gofmt_diff": "PASS: empty"
+  },
+  "code_quality": {
+    "status": "PASS",
+    "finding": "The 62-line production delta is centralized at decodeExactObject830G3 and exactTypedRaw830G3 with recursive collection nil validation; the only field-specific addition is the three existing C Hash validations. It does not add path-specific repair logic or alter accepted DTOs.",
+    "blockers": [],
+    "backlog": [],
+    "rejected": [
+      "The old source_guidance-null scaffold remains excluded because the frozen fixture has no such null field; it is not repair evidence."
+    ]
+  },
+  "owner_red_audit": {
+    "status": "PASS",
+    "effective_failures": 8,
+    "classification": "Five omission/scalar cases, one null collection case, and native/acquisition Hash cases failed before repair. The parser_identity case was already rejected and was not counted."
+  },
+  "independent_logs": [
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-focused-02.log",
+      "sha256": "c796811cc2bec28464d61a4c53a68c6f06df70ad7e07bedc1dc14efe718a1ba5",
+      "bytes": 2892
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-original-probes-01.log",
+      "sha256": "3b03492c2b8f2ff72c697c2ac663c10e38c809c9e5486d8424c5a224e5d6edc2",
+      "bytes": 1242
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-omitted-matrix-01.log",
+      "sha256": "ec8f7f272e6544efadc0495dd0493e2b85df9349d007f79b871a30749fc07fe9",
+      "bytes": 1113
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-fulltypes-01.log",
+      "sha256": "a3cf77e5a748e71fdb04b79f6359d9a94f8a282e548fe85b1ebdfedcd616977c",
+      "bytes": 55
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-gofmt-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-source-diff-01.log",
+      "sha256": "22e02ed12b78d21637921cd1117a9175c955bd6993d1554fa761fbc55f9dd9dc",
+      "bytes": 3069
+    },
+    {
+      "path": "/private/tmp/g3-d-go-repair1-independent-test-diff-01.log",
+      "sha256": "4625282eb87384e0fe79fd7ca23a35002df91fba2065cc41cf01519d8dfd2731",
+      "bytes": 7118
+    }
+  ],
+  "effects": {
+    "repo_writes_by_reviewer": 0,
+    "provider_calls": 0,
+    "db_calls": 0,
+    "docker_calls": 0,
+    "http_calls": 0,
+    "builds": 0,
+    "active_ui_reads": 0
+  },
+  "verdict": {
+    "spec": "PASS",
+    "code_quality": "PASS",
+    "blocker_count": 0,
+    "backlog_count": 0,
+    "rejected_count": 1,
+    "entry_gate": "OPEN_FOR_BACKEND_TASKS_1_2_3"
+  }
+}
