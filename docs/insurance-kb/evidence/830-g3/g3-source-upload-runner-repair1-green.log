@@ -1,0 +1,46 @@
+test_authorization_binds_three_exact_action_scopes_and_timestamp (__main__.RepairOneBehaviorTests) ... ok
+test_chunk_pages_bind_requested_scope_and_attempt (__main__.RepairOneBehaviorTests) ... ok
+test_docker_runtime_only_accepts_exact_colima_transport (__main__.RepairOneBehaviorTests) ... ok
+test_empty_guard_header_is_validated_before_egress_creation (__main__.RepairOneBehaviorTests) ... ERROR
+test_external_deadline_is_1440_seconds_and_clamps_http_and_sleep (__main__.RepairOneBehaviorTests) ... ok
+test_guard_launch_time_anchors_external_deadline_before_probe_delay (__main__.RepairOneBehaviorTests) ... ok
+test_guard_ledger_requires_exact_header_even_when_attempts_match (__main__.RepairOneBehaviorTests) ... ok
+test_old_descriptor_manifest_and_exact_capture_files_are_frozen (__main__.RepairOneBehaviorTests) ... ok
+test_old_source_id_is_checked_before_pass_checkpoint (__main__.RepairOneBehaviorTests) ... ok
+test_runtime_gate_binds_port_volumes_env_and_redis_password (__main__.RepairOneBehaviorTests) ... ok
+test_upload_rejects_old_or_repeated_returned_knowledge_id_immediately (__main__.RepairOneBehaviorTests) ... ok
+test_wait_and_revision_capture_bind_requested_knowledge (__main__.RepairOneBehaviorTests) ... ok
+test_descriptor_double_read_manifest_and_parser_must_match (__main__.UploadRunnerTests) ... ok
+test_exact_cloned_four_pass_readonly_scope (__main__.UploadRunnerTests) ... ok
+test_existing_dedicated_egress_is_rejected_before_creation (__main__.UploadRunnerTests) ... ok
+test_existing_descriptor_uses_frozen_legacy_identity (__main__.UploadRunnerTests) ... ok
+test_failed_runtime_stops_both_before_inspecting_either (__main__.UploadRunnerTests) ... ok
+test_frozen_local_inputs_are_exact_eleven_unique_sources (__main__.UploadRunnerTests) ... ok
+test_guard_staging_copies_exact_thirteen_regular_files (__main__.UploadRunnerTests) ... ok
+test_login_requires_active_tenant_admin_and_me_readback (__main__.UploadRunnerTests) ... ok
+test_post_response_status_is_durable_and_never_retried (__main__.UploadRunnerTests) ... ok
+test_provider_non200_ledger_stops_before_next_material (__main__.UploadRunnerTests) ... ok
+test_runtime_teardown_noops_before_guard_or_network_exist (__main__.UploadRunnerTests) ... ok
+test_scope_preflight_rejects_new_md5_before_any_write (__main__.UploadRunnerTests) ... ok
+test_secret_file_must_be_private_single_line (__main__.UploadRunnerTests) ... ok
+test_source_receipt_and_old_ids_are_exact (__main__.UploadRunnerTests) ... ok
+test_started_persist_failure_prevents_post (__main__.UploadRunnerTests) ... ok
+test_target_runtime_preflight_accepts_exact_provisioned_binding (__main__.UploadRunnerTests) ... ok
+test_target_runtime_preflight_rejects_egress_already_attached (__main__.UploadRunnerTests) ... ok
+test_teardown_failure_reports_stop_incomplete (__main__.UploadRunnerTests) ... ok
+test_timeout_is_result_unknown_and_sequence_does_not_advance (__main__.UploadRunnerTests) ... ok
+test_upload_sends_exact_process_config_and_accepts_go_readback_shape (__main__.UploadRunnerTests) ... ok
+test_wrong_external_send_authorization_is_rejected (__main__.UploadRunnerTests) ... ok
+
+======================================================================
+ERROR: test_empty_guard_header_is_validated_before_egress_creation (__main__.RepairOneBehaviorTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/private/tmp/g3-source-upload-runner-review2_test.py", line 568, in test_empty_guard_header_is_validated_before_egress_creation
+    validate = source.index("validate_guard_ledger(runtime.read_guard_ledger", launch)
+ValueError: substring not found
+
+----------------------------------------------------------------------
+Ran 33 tests in 1.661s
+
+FAILED (errors=1)

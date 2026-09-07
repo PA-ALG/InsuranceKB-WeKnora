@@ -11,7 +11,7 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "C7_C8_CODE_PASS; D_FULL342_REQUIRED; UPLOAD_V1_BLOCKER7_REPAIR1",
+  "CURRENT_RED": "D_MULTILINE_RED03_AND_FULL342_FIXTURE_VALIDATION; UPLOAD_V2_REPAIR1_REVIEW",
   "NEXT_PHYSICAL_RESULT": "完整342字段Python/Go候选DTO及容量验证；上传执行器首轮复审",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
@@ -77,7 +77,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "D_FULL342_DTO_FIXTURE_IMPLEMENTATION; UPLOAD_RUNNER_REPAIR1",
+  "parallel_implementation": "D_FIXTURE_NEGATIVES_AND_GO_MIRROR; UPLOAD_V2_INDEPENDENT_REVIEW; D_UI_READONLY_MAP",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -258,10 +258,11 @@
   "source_upload_runner": {
     "frozen_v1": "source_upload_runner_v1.py",
     "v1_status": "BLOCKED_INDEPENDENT_REVIEW_7",
-    "review": "source-upload-runner-independent-review-1.json",
-    "current": "FIRST_CONCENTRATED_REPAIR",
+    "review": "source-upload-runner-independent-review-2.json",
+    "current": "V2_CODE_REVIEW_PASS_PENDING_EXPLICIT_EXTERNAL_AUTHORIZATION",
     "dispatch": "source-upload-runner-repair-dispatch-1.json",
-    "actual_effects": 0
+    "actual_effects": 0,
+    "freeze": "source-upload-runner-freeze-2.json"
   },
   "source_registration_code_review": {
     "status": "PASS",
@@ -270,5 +271,43 @@
     "source_sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
     "test_sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216",
     "commit": "a6ca221cdc4fb500c3e38e3a4dd733091774bbad"
+  },
+  "d_fixture_progress": {
+    "contract": "830-g3-d-owner-fixture-progress.v1",
+    "recorded_at": "2026-09-07T12:11:04.414146+00:00",
+    "reported_by": "g3_catalog_impl",
+    "status": "OWNER_PROVISIONAL_NOT_INDEPENDENTLY_REVIEWED",
+    "fixture_counts": {
+      "entities": 5,
+      "existing_fields": 134,
+      "unchanged_carry": 132,
+      "unknown_key_alignments": 2,
+      "delta_fields": 208,
+      "final_fields": 342,
+      "source_blocks": 26,
+      "execution_raws": 3
+    },
+    "post_bytes_owner_reported": 2247425,
+    "limit_bytes": 8388608,
+    "existing_codes": [
+      "596",
+      "594"
+    ],
+    "existing_serving_versions": [
+      "596-1",
+      "594-1"
+    ],
+    "qualifiers": [
+      "protocol fixture, not real C/model/provider result",
+      "two synthetic MATCH decisions and three synthetic CREATE decisions",
+      "fixture/negative tests and Go mirror still in progress",
+      "handler/service/UI writes remain closed until frozen capacity and DTO validation gates pass"
+    ]
+  },
+  "source_execution_ready": "source-execution-ready.json",
+  "source_execution_package_check": {
+    "status": "PASS_PENDING_USER_AUTHORIZATION",
+    "receipt": "source-execution-package-independent-check.json",
+    "user_reply": null
   }
 }

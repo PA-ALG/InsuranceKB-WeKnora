@@ -1,0 +1,35 @@
+{
+  "contract": "830-g3-source-execution-ready.v1",
+  "recorded_at": "2026-09-07T12:22:44.590029+00:00",
+  "status": "READY_PENDING_EXPLICIT_USER_EXECUTION_AND_EXTERNAL_SEND_AUTHORIZATION",
+  "preview": "source-execution-approval-preview.md",
+  "preview_sha256": "daed68c8d4cdd9534da8db7807552174a7bbb026c108208e6804f97dfee6050e",
+  "provision_runner_sha256": "823008da91db113633a894bccd8cd88ec8559cc5ed43032728bc18639e83b2e4",
+  "upload_runner_sha256": "9dcaef873f85be4dd89e2332da718a8f77912b04aa3fb0aa383f8c45a581e323",
+  "guard_sha256": "c52cfabf9f32214923e71e2f5926cb66c259cec9e99431033c508907aa7361a4",
+  "manifest_sha256": "75b40ece28a4219965a6a86be616bb90f17af53252afad6c2243dedb9e377225",
+  "provision_preflight": "/private/tmp/g3-source-runtime-v3-preflight-03.private.json",
+  "provision_private_auth": "/private/tmp/g3-source-runtime-login.private.json",
+  "upload_email_file": "/private/tmp/g3-source-upload-email.private.txt",
+  "upload_password_file": "/private/tmp/g3-source-upload-password.private.txt",
+  "reserved_new_output_paths": [
+    "/private/tmp/g3-source-runtime-provision-authorization-01.private.json",
+    "/private/tmp/g3-source-runtime-apply-01.private.json",
+    "/private/tmp/g3-source-upload-authorization-01.private.json",
+    "/private/tmp/g3-source-upload-01.private.json",
+    "/private/tmp/g3-source-upload-artifacts-01"
+  ],
+  "run_order": [
+    "Record actual explicit user reply only after received",
+    "Create provision authorization binding plan and exact preflight; execute one reviewed v3 apply with rechecks",
+    "Only after actual provision PASS generate upload authorization with exact apply receipt SHA and action scopes11/11/15",
+    "Execute one reviewed upload v2; no retry/resume; preserve ledger/partial receipt on failure"
+  ],
+  "c5_boundary": "source-only uses reviewed empty-registry-no-mount policy; D old-base authority re-open remains a later mandatory gate",
+  "effects_to_date": {
+    "provision_apply": 0,
+    "upload": 0,
+    "provider_requests": 0,
+    "source_backfill": 0
+  }
+}
