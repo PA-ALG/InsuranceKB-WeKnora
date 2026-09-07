@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "ACTUAL_SOURCE_EXECUTION_AWAITING_EXISTING_EXTERNAL_SEND_AUTHORIZATION",
-  "NEXT_PHYSICAL_RESULT": "Approved source provision/upload/readback, then freeze real C inputs and its separate execution admission; local D software is complete",
+  "CURRENT_RED": "SOURCE_PROVISION_STOPPED_POSTGRES_PROCESS_REINITIALIZATION",
+  "NEXT_PHYSICAL_RESULT": "Independent review of isolated PostgreSQL recovery proposal; new bounded recovery scope requires approval, original source consent remains recorded",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -38,8 +38,8 @@
     "existing_native_preservation": "01/03 historical raw digest matched;04 raw first preserved with historical canonical match;02 fresh standalone local parse PASS27pages, no WeKnora reparse"
   },
   "VALIDATION_LEVEL": "D1",
-  "DOCKER_ACTION": "REUSE_EXISTING_DOCREADER_PROCESS_ONLY_FOR_LOCAL_PREFLIGHT",
-  "ARTIFACT_IDENTITY": "source subset and workbook/config hashes to freeze before run; no container consumed",
+  "DOCKER_ACTION": "ONE_SOURCE_APPLY_STOPPED_AFTER_TARGET_DB_CREATE; READONLY_DIAGNOSTICS_COMPLETE",
+  "ARTIFACT_IDENTITY": "source-runtime-apply-stop-public-01.json; source-runtime-stop-current-postgres-01.json",
   "WRITE_DOMAINS": {
     "root": [
       "HANDOFF.md",
@@ -139,7 +139,7 @@
   "catalog_content_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
   "profile_confirmation": "USER_CONFIRMED_EXACT_CATALOG; actor display name/queue assignee not supplied",
   "profile_confirmation_receipt": "profile-user-confirmation.json",
-  "source_runtime_provision": "V3_INDEPENDENT_REVIEW_PASS_BLOCKER0_BACKLOG1; ACTUAL_READONLY_PREFLIGHT_PASS_8c45741c; apply/provider NOT RUN; complete upload execution runner before apply per frozen plan",
+  "source_runtime_provision": "ACTUAL_V3_APPLY_STOPPED_CREATED_EMPTY_TARGET_DB; PostgreSQL process reinitialization observed; uploads/provider NOT RUN; no retry",
   "d_contract": {
     "path": "docs/insurance-kb/evidence/830-g3/lane-d-consolidated-contract-v2.md",
     "sha256": "75c81f582b2ace94efba6d016f0d24c00eb3e10a836f6673612bb7aaa3bfb94d",
@@ -259,7 +259,7 @@
     "frozen_v1": "source_upload_runner_v1.py",
     "v1_status": "BLOCKED_INDEPENDENT_REVIEW_7",
     "review": "source-upload-runner-independent-review-2.json",
-    "current": "V2_CODE_REVIEW_PASS_PENDING_EXPLICIT_EXTERNAL_AUTHORIZATION",
+    "current": "V2_CODE_REVIEW_PASS_USER_AUTHORIZED_EXECUTION_NOT_RUN_PROVISION_STOPPED",
     "dispatch": "source-upload-runner-repair-dispatch-1.json",
     "actual_effects": 0,
     "freeze": "source-upload-runner-freeze-2.json"
@@ -306,9 +306,9 @@
   },
   "source_execution_ready": "source-execution-ready.json",
   "source_execution_package_check": {
-    "status": "PASS_PENDING_USER_AUTHORIZATION",
+    "status": "PASS_USER_AUTHORIZATION_RECEIVED",
     "receipt": "source-execution-package-independent-check.json",
-    "user_reply": null
+    "user_reply": "授权"
   },
   "d_python_review": {
     "status": "PASS",
@@ -406,5 +406,27 @@
       "B2 raw JSON Unicode"
     ]
   },
-  "progress_updated_at": "2026-09-07T19:19:07+00:00"
+  "progress_updated_at": "2026-09-07T22:21:17.317738+00:00",
+  "source_execution_user_authorization": {
+    "status": "APPROVED",
+    "receipt": "source-execution-explicit-user-authorization-01.json",
+    "sha256": "102c4def5921673854ca994be681127db462fcfa9f5526695444e4e3e815e9a1",
+    "reply": "授权",
+    "scope": "Frozen source-only execution package;11 uploads/204 inputs/max11 embedding requests/15 source registrations",
+    "repeat_confirmation_required": false
+  },
+  "source_execution_actual": {
+    "status": "BLOCKED",
+    "public_receipt": "source-runtime-apply-stop-public-01.json",
+    "recovery_proposal": "source-runtime-isolated-recovery-proposal-01.md",
+    "provisioning": "BLOCKED",
+    "provider_probe": "NOT RUN",
+    "local_live": "NOT RUN",
+    "database_created": true,
+    "uploads": 0,
+    "provider_calls": 0,
+    "retries": 0,
+    "independent_review": "source-runtime-apply-stop-independent-review-01.json",
+    "independent_supplement": "source-runtime-apply-stop-independent-supplement-02.json"
+  }
 }

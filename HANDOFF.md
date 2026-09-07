@@ -1,5 +1,7 @@
 ## 当前执行：G3 已获明确启动授权（2026-09-07）
 
+当前 SOURCE 执行已 STOP：用户“授权”已记录并实际执行一次 v3 apply；先创建 weknora_g3_830 空库，再在 pg_restore 返回 rc=1 时停止。数据库子进程退出与整体子进程重新初始化发生在恢复窗口内，22:02:01 UTC 重新接受连接；具体触发原因尚未确定。旧环境共享该 PostgreSQL，因此不得以来源记录快照相等宣称没有可用性影响。当前源库选定快照与执行前一致；目标 0 用户表/仅 plpgsql。上传、来源补登记、provider、G3 应用启动均 NOT RUN，未重试、未删除现场。公开回执 source-runtime-apply-stop-public-01.json；原授权有效但首次失败即停止的窗口已结束。下一步是 source-runtime-isolated-recovery-proposal-01.md 的独立复核和新增故障隔离范围审批。以下较早状态为历史，不覆盖本段；软件 commit39943a247 保持，G3仍WIP/FLOW NOT RUN/QUALITY DEFERRED_TO_Q0。
+
 当前收口：D backend最终repair2独立PASS（报告5e9c4f0b…，BLOCKER0），B1与B2全部关闭；final freeze2b32e49f…，11文件全部匹配。service完整回归408.944s、最终handler/router2.802s/2.768s及vet通过；原始坏UTF8/Unicode探针独立转绿，G1/G2兼容保留。root service→Gin→冻结UI/Python两状态完整互操作PASS，30项冻结输入身份匹配；根结论见lane-d-root-software-integration.json。全部当前代码写域关闭，剩余后端修复额度0。G3仍WIP、FLOW NOT RUN、QUALITY DEFERRED_TO_Q0；真实SOURCE尚待此前外发批准，后续真实C输入/策略/受控模型窗口及发布验收也未执行。用户“结构确认”和安佑福1828材料已处理，禁止重复询问结构或推定具名信息。
 
 最新：后端repair1完整三包回归PASS（408.944s/3.427s/3.799s），B1实际service→Gin→冻结UI/Python的DRAFT/READY完整5实体342字段互操作PASS、正文不变。repair1独审4b45e09d…确认B2解码后Text和stored-ID检查通过，但发现raw JSON坏UTF8/lone surrogate会被Go decoder先替换后接受；原反例保留。方案5b67f955…独审PASS，最终第2轮dispatch2d7300a9…仅G3 handler+test，既有raw canonical helper丢弃返回值、只验原字段，增加same-wire G2/G3分支回归。原9后端文件和全部UI/Go/Python/C/common冻结，不授权第三轮。G3仍WIP、FLOW NOT RUN，外发原问题待实际回复。
