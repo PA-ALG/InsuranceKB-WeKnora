@@ -317,7 +317,7 @@ def _material_proposal(
     for row in entities:
         ref = str(row["proposal_ref"])
         values = {
-            "issuer": str(row.get("issuer", "平安保险")),
+            "issuer": row.get("issuer", "平安保险"),
             "name": row.get("name"),
             "product_code": row.get("product_code"),
             "version_label": row.get("version_label", "2026"),
@@ -502,6 +502,22 @@ def _policy() -> g.BatchResolutionPolicyV1:
     )
 
 
+def _policy_without_purpose(excluded: str) -> g.BatchResolutionPolicyV1:
+    original = _policy()
+    original_rule = original.rules[0]
+    rule = g.TrustRuleV1(
+        **original_rule.model_dump(mode="python", exclude={"purposes"}),
+        purposes=tuple(item for item in original_rule.purposes if item != excluded),
+    )
+    return _new(
+        g.BatchResolutionPolicyV1,
+        "batch-resolution-policy.830.g3.v1",
+        "policy_sha256",
+        **original.model_dump(mode="python", exclude={"rules", "policy_sha256"}),
+        rules=(rule,),
+    )
+
+
 def _interval_policy(*, valid_from: str, valid_through: str | None) -> g.BatchResolutionPolicyV1:
     rule = g.TrustRuleV1(
         rule_id="official-interval",
@@ -607,6 +623,8 @@ def test_high_confidence_exact_evidence_creates_only_not_active_candidate(
     assert child.entity_candidate.version_candidate_key_sha256 == version_key
     assert child.entity_candidate.candidate_id == "entity_candidate_" + version_key
     assert child.classification.schema_pack_id == "schemapack_medical_insurance"
+    assert child.multi_identity_name_evidence_ids == ("m1-product-main-name",)
+    assert child.multi_identity_code_evidence_ids == ("m1-product-main-product_code",)
     assert result.material_count == result.resolution_decision_count == 1
     assert result.model_attempted_count == 1
     assert result.disposition_counts.model_dump() == {
@@ -681,6 +699,8 @@ def test_exact_existing_match_preserves_serving_ids_and_issuer_vetoes_reuse(
     )
     assert conflicting.disposition == "QUARANTINE"
     assert "IDENTITY_ANCHOR_CONFLICT" in conflicting.reason_codes
+    assert conflicting.multi_identity_name_evidence_ids == ()
+    assert conflicting.multi_identity_code_evidence_ids == ()
 
 
 @pytest.mark.parametrize(
@@ -749,6 +769,313 @@ def test_multi_clusters_children_and_never_shares_identity_evidence(
     assert "MULTI_ENTITY_REVIEW" in parent.reason_codes
 
 
+def test_multi_identity_clusters_survive_missing_versions_and_shared_issuer(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="multi-missing-version",
+        text=(
+            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+            "版本 2026 医疗保险 官方条款"
+        ),
+    )
+    result = _resolve(
+        catalog,
+        (entry,),
+        (
+            (
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": None,
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": None,
+                },
+            ),
+        ),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == "MULTI"
+    assert "MULTI_ENTITY_REVIEW" in parent.reason_codes
+    assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
+    assert all(child.entity_candidate is None for child in parent.children)
+    assert all("VERSION_UNRESOLVED" in child.reason_codes for child in parent.children)
+    assert tuple(
+        child.multi_identity_name_evidence_ids for child in parent.children
+    ) == (("multi-missing-version-a-name",), ("multi-missing-version-b-name",))
+    assert tuple(
+        child.multi_identity_code_evidence_ids for child in parent.children
+    ) == (("multi-missing-version-a-product_code",), ("multi-missing-version-b-product_code",))
+
+
+def test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="multi-classification",
+        text=(
+            "产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+            "版本 2026 医疗保险 官方条款"
+        ),
+    )
+    result = _resolve(
+        catalog,
+        (entry,),
+        (
+            (
+                {
+                    "proposal_ref": "a",
+                    "issuer": None,
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": None,
+                    "classification_confidence": "0.100000",
+                },
+                {
+                    "proposal_ref": "b",
+                    "issuer": None,
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": None,
+                    "classification_confidence": "0.100000",
+                },
+            ),
+        ),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == "MULTI"
+    assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
+    assert all("CLASSIFICATION_BELOW_THRESHOLD" in child.reason_codes for child in parent.children)
+    assert all(child.multi_identity_name_evidence_ids for child in parent.children)
+    assert all(child.multi_identity_code_evidence_ids for child in parent.children)
+
+
+def test_multi_identity_clusters_survive_unmapped_classification(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="multi-unmapped-classification",
+        text=(
+            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+            "版本 2026 重大疾病保险 官方条款"
+        ),
+    )
+    result = _resolve(
+        catalog,
+        (entry,),
+        (
+            (
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": None,
+                    "label": "unmapped_classification",
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": None,
+                    "label": "unmapped_classification",
+                },
+            ),
+        ),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == "MULTI"
+    assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
+    assert all("CLASSIFICATION_UNRESOLVED" in child.reason_codes for child in parent.children)
+    assert all(child.multi_identity_name_evidence_ids for child in parent.children)
+    assert all(child.multi_identity_code_evidence_ids for child in parent.children)
+
+
+def test_multi_identity_rejects_name_evidence_whose_quote_does_not_match_anchor(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="multi-wrong-name-quote",
+        text=(
+            "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+            "版本 2026 医疗保险 官方条款"
+        ),
+    )
+    corpus = _corpus(entry)
+    receipt = _model_binding(corpus, entry)
+    proposal = _material_proposal(
+        entry,
+        receipt,
+        entities=(
+            {
+                "proposal_ref": "a",
+                "name": "产品甲",
+                "product_code": "A-CODE",
+                "filing": None,
+            },
+            {
+                "proposal_ref": "b",
+                "name": "产品乙",
+                "product_code": "B-CODE",
+                "filing": None,
+            },
+        ),
+    )
+    wrong_quote = _span(entry.blocks[0], "官方条款")
+    evidence = tuple(
+        g.ProposalEvidenceV1(
+            **item.model_dump(mode="python", exclude={"evidence"}),
+            evidence=(
+                wrong_quote
+                if item.evidence_id == "multi-wrong-name-quote-a-name"
+                else item.evidence
+            ),
+        )
+        for item in proposal.evidence
+    )
+    proposal = _new(
+        g.MaterialProposalV1,
+        "material-proposal.830.g3.v1",
+        "proposal_sha256",
+        **proposal.model_dump(mode="python", exclude={"evidence", "proposal_sha256"}),
+        evidence=evidence,
+    )
+    result = g.resolve_batch(
+        catalog=catalog,
+        corpus=corpus,
+        proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+        existing_entities=_existing(),
+        policy=_policy(),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == "NEEDS_CONFIRM"
+    first, second = parent.children
+    assert first.multi_identity_name_evidence_ids == ()
+    assert first.multi_identity_code_evidence_ids
+    assert second.multi_identity_name_evidence_ids
+    assert second.multi_identity_code_evidence_ids
+
+
+def test_multi_identity_aliases_at_one_locator_do_not_create_independent_clusters(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    entry = _entry(
+        material_id="multi-same-locator",
+        text=(
+            "平安保险 产品甲 产品乙 产品代码 A-CODE B-CODE "
+            "版本 2026 医疗保险 官方条款"
+        ),
+    )
+    corpus = _corpus(entry)
+    receipt = _model_binding(corpus, entry)
+    proposal = _material_proposal(
+        entry,
+        receipt,
+        entities=(
+            {
+                "proposal_ref": "a",
+                "name": "产品甲",
+                "product_code": "A-CODE",
+                "filing": None,
+            },
+            {
+                "proposal_ref": "b",
+                "name": "产品乙",
+                "product_code": "B-CODE",
+                "filing": None,
+            },
+        ),
+    )
+    shared = {
+        "name": _span(entry.blocks[0], "产品甲 产品乙"),
+        "product_code": _span(entry.blocks[0], "A-CODE B-CODE"),
+    }
+    evidence = tuple(
+        g.ProposalEvidenceV1(
+            **item.model_dump(mode="python", exclude={"evidence"}),
+            evidence=shared.get(item.purpose, item.evidence),
+        )
+        for item in proposal.evidence
+    )
+    proposal = _new(
+        g.MaterialProposalV1,
+        "material-proposal.830.g3.v1",
+        "proposal_sha256",
+        **proposal.model_dump(mode="python", exclude={"evidence", "proposal_sha256"}),
+        evidence=evidence,
+    )
+    result = g.resolve_batch(
+        catalog=catalog,
+        corpus=corpus,
+        proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+        existing_entities=_existing(),
+        policy=_policy(),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == "NEEDS_CONFIRM"
+    assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+    assert all(child.multi_identity_code_evidence_ids == () for child in parent.children)
+
+
+@pytest.mark.parametrize(
+    ("excluded_purpose", "expected_parent"),
+    [("name", "NEEDS_CONFIRM"), ("version", "MULTI"), ("classification", "MULTI")],
+)
+def test_multi_identity_uses_name_code_trust_independently_from_other_purposes(
+    catalog: SchemaPackCatalogV1,
+    excluded_purpose: str,
+    expected_parent: str,
+) -> None:
+    entry = _entry(
+        material_id=f"multi-trust-{excluded_purpose}",
+        text=(
+            "平安保险 产品甲 产品代码 A-CODE 登记编号 A-REG 版本 2026 "
+            "产品乙 产品代码 B-CODE 登记编号 B-REG 医疗保险 官方条款"
+        ),
+    )
+    corpus = _corpus(entry)
+    receipt = _model_binding(corpus, entry)
+    proposal = _material_proposal(
+        entry,
+        receipt,
+        entities=(
+            {
+                "proposal_ref": "a",
+                "name": "产品甲",
+                "product_code": "A-CODE",
+                "filing": "A-REG",
+            },
+            {
+                "proposal_ref": "b",
+                "name": "产品乙",
+                "product_code": "B-CODE",
+                "filing": "B-REG",
+            },
+        ),
+    )
+    result = g.resolve_batch(
+        catalog=catalog,
+        corpus=corpus,
+        proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+        existing_entities=_existing(),
+        policy=_policy_without_purpose(excluded_purpose),
+    )
+    parent = result.decisions[0]
+    assert parent.disposition == expected_parent
+    assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
+    assert all("TRUST_POLICY_UNRESOLVED" in child.reason_codes for child in parent.children)
+    if excluded_purpose == "name":
+        assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+        assert all(child.multi_identity_code_evidence_ids for child in parent.children)
+    else:
+        assert all(child.multi_identity_name_evidence_ids for child in parent.children)
+        assert all(child.multi_identity_code_evidence_ids for child in parent.children)
+
+
 def test_cross_material_evidence_and_bad_model_binding_quarantine_without_dropping_denominator(
     catalog: SchemaPackCatalogV1,
 ) -> None:
@@ -801,6 +1128,8 @@ def test_cross_material_evidence_and_bad_model_binding_quarantine_without_droppi
     assert result.model_attempted_count == 2
     assert result.decisions[1].disposition == "QUARANTINE"
     assert "EVIDENCE_JOIN_FAILED" in result.decisions[1].children[0].reason_codes
+    assert result.decisions[1].children[0].multi_identity_name_evidence_ids == ()
+    assert result.decisions[1].children[0].multi_identity_code_evidence_ids == ()
 
     denied = _resolve(
         catalog,
@@ -811,6 +1140,8 @@ def test_cross_material_evidence_and_bad_model_binding_quarantine_without_droppi
     assert denied.decisions[0].disposition == "QUARANTINE"
     assert denied.model_attempted_count == 0
     assert "MODEL_RECEIPT_INVALID" in denied.decisions[0].reason_codes
+    assert denied.decisions[0].children[0].multi_identity_name_evidence_ids == ()
+    assert denied.decisions[0].children[0].multi_identity_code_evidence_ids == ()
 
 
 def test_no_output_is_attempted_only_when_valid_execution_bound_material(
@@ -1819,6 +2150,116 @@ def _rehash_resolution_wire(wire: dict[str, Any]) -> dict[str, Any]:
     wire.pop("batch_sha256", None)
     wire["batch_sha256"] = schema_wiki_sha256("batch-entity-resolution.830.g3.v1", wire)
     return wire
+
+
+def _multi_wire_with_identity_sets(
+    catalog: SchemaPackCatalogV1,
+) -> dict[str, Any]:
+    entry = _entry(
+        material_id="wire-multi-identity",
+        text=(
+            "平安保险 产品甲 产品代码 A-CODE 登记编号 A-REG 版本 2026 "
+            "产品乙 产品代码 B-CODE 登记编号 B-REG 医疗保险 官方条款"
+        ),
+    )
+    wire = _resolve(
+        catalog,
+        (entry,),
+        (
+            (
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": "A-REG",
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": "B-REG",
+                },
+            ),
+        ),
+    ).model_dump(mode="json")
+    for child in wire["decisions"][0]["children"]:
+        prefix = f"wire-multi-identity-{child['proposal_ref']}"
+        child["multi_identity_name_evidence_ids"] = [f"{prefix}-name"]
+        child["multi_identity_code_evidence_ids"] = [f"{prefix}-product_code"]
+    return _rehash_resolution_wire(wire)
+
+
+def test_validate_batch_requires_and_accepts_multi_identity_evidence_sets(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    valid = _multi_wire_with_identity_sets(catalog)
+    parsed = g.validate_batch(json.dumps(valid, ensure_ascii=False))
+    assert parsed.decisions[0].disposition == "MULTI"
+
+    omitted = deepcopy(valid)
+    omitted["decisions"][0]["children"][0].pop("multi_identity_name_evidence_ids")
+    with pytest.raises(g.BatchEntityResolutionError) as error:
+        g.validate_batch(json.dumps(_rehash_resolution_wire(omitted), ensure_ascii=False))
+    assert error.value.reason_code == "COMPILED_BATCH_INVALID"
+
+
+def test_validate_batch_rejects_downgrading_qualified_multi_parent(
+    catalog: SchemaPackCatalogV1,
+) -> None:
+    wire = _multi_wire_with_identity_sets(catalog)
+    parent = wire["decisions"][0]
+    parent["disposition"] = "NEEDS_CONFIRM"
+    parent["reason_codes"] = [
+        reason for reason in parent["reason_codes"] if reason != "MULTI_ENTITY_REVIEW"
+    ]
+    wire["disposition_counts"]["MULTI"] = 0
+    wire["disposition_counts"]["NEEDS_CONFIRM"] = 1
+    with pytest.raises(g.BatchEntityResolutionError) as error:
+        g.validate_batch(json.dumps(_rehash_resolution_wire(wire), ensure_ascii=False))
+    assert error.value.reason_code == "COMPILED_BATCH_INVALID"
+
+
+@pytest.mark.parametrize(
+    "blocker",
+    ["SCOPE_MISMATCH", "SOURCE_RECEIPT_MISMATCH", "MODEL_RECEIPT_INVALID"],
+)
+def test_validate_batch_rejects_multi_child_with_global_trust_blocker(
+    catalog: SchemaPackCatalogV1,
+    blocker: str,
+) -> None:
+    wire = _multi_wire_with_identity_sets(catalog)
+    child = wire["decisions"][0]["children"][0]
+    child["disposition"] = "NEEDS_CONFIRM"
+    child["entity_candidate"] = None
+    child["reason_codes"] = [blocker]
+    child["queue_id"] = "queue-g3"
+    child["queue_owner"] = "product-owner-g3"
+    with pytest.raises(g.BatchEntityResolutionError) as error:
+        g.validate_batch(json.dumps(_rehash_resolution_wire(wire), ensure_ascii=False))
+    assert error.value.reason_code == "COMPILED_BATCH_INVALID"
+
+
+@pytest.mark.parametrize("tamper", ["duplicate", "unsorted", "non_subset", "cross_key"])
+def test_validate_batch_rejects_invalid_multi_identity_evidence_sets(
+    catalog: SchemaPackCatalogV1,
+    tamper: str,
+) -> None:
+    wire = _multi_wire_with_identity_sets(catalog)
+    children = wire["decisions"][0]["children"]
+    first_name = children[0]["multi_identity_name_evidence_ids"][0]
+    if tamper == "duplicate":
+        children[0]["multi_identity_name_evidence_ids"] = [first_name, first_name]
+    elif tamper == "unsorted":
+        two_ids = sorted(children[0]["evidence_ids"][:2], reverse=True)
+        children[0]["multi_identity_name_evidence_ids"] = two_ids
+    elif tamper == "non_subset":
+        children[0]["multi_identity_name_evidence_ids"] = ["not-child-evidence"]
+    else:
+        children[1]["evidence_ids"] = sorted((*children[1]["evidence_ids"], first_name))
+        children[1]["multi_identity_name_evidence_ids"] = [first_name]
+    with pytest.raises(g.BatchEntityResolutionError) as error:
+        g.validate_batch(json.dumps(_rehash_resolution_wire(wire), ensure_ascii=False))
+    assert error.value.reason_code == "COMPILED_BATCH_INVALID"
 
 
 @pytest.mark.parametrize("tamper", ["keys", "anchors", "evidence", "threshold", "pack"])

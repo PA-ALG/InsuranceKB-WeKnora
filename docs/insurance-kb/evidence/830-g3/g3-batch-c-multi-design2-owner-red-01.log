@@ -1,0 +1,470 @@
+......FFFFFF............................F.........                       [100%]
+=================================== FAILURES ===================================
+___ test_multi_identity_clusters_survive_missing_versions_and_shared_issuer ____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multi_identity_clusters_survive_missing_versions_and_shared_issuer(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="multi-missing-version",
+            text=(
+                "平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE "
+                "医疗保险 官方条款"
+            ),
+        )
+>       result = _resolve(
+            catalog,
+            (entry,),
+            (
+                (
+                    {
+                        "proposal_ref": "a",
+                        "name": "产品甲",
+                        "product_code": "A-CODE",
+                        "filing": None,
+                    },
+                    {
+                        "proposal_ref": "b",
+                        "name": "产品乙",
+                        "product_code": "B-CODE",
+                        "filing": None,
+                    },
+                ),
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:778: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:572: in _resolve
+    proposals = tuple(
+harness/tests/test_batch_entity_resolution_830_g3.py:573: in <genexpr>
+    _material_proposal(entry, receipt, entities=rows)
+harness/tests/test_batch_entity_resolution_830_g3.py:340: in _material_proposal
+    _proposal_evidence(
+harness/tests/test_batch_entity_resolution_830_g3.py:294: in _proposal_evidence
+    evidence=_span(block, quote),
+             ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+block = SourceBlock(tenant_id=7, space_id='space-g3', raw_kb_id='raw-g3', knowledge_id='knowledge-multi-missing-version', pars...k-multi-missing-version', page_number=1, text='平安保险 产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款', source_type='DOCUMENT')
+quote = '2026'
+
+    def _span(block: SourceBlock, quote: str) -> Evidence:
+>       start = block.text.index(quote)
+                ^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+harness/tests/test_batch_entity_resolution_830_g3.py:282: ValueError
+_ test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="multi-classification",
+            text="产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款",
+        )
+>       result = _resolve(
+            catalog,
+            (entry,),
+            (
+                (
+                    {
+                        "proposal_ref": "a",
+                        "issuer": None,
+                        "name": "产品甲",
+                        "product_code": "A-CODE",
+                        "filing": None,
+                        "classification_confidence": "0.100000",
+                    },
+                    {
+                        "proposal_ref": "b",
+                        "issuer": None,
+                        "name": "产品乙",
+                        "product_code": "B-CODE",
+                        "filing": None,
+                        "classification_confidence": "0.100000",
+                    },
+                ),
+            ),
+        )
+
+harness/tests/test_batch_entity_resolution_830_g3.py:819: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:572: in _resolve
+    proposals = tuple(
+harness/tests/test_batch_entity_resolution_830_g3.py:573: in <genexpr>
+    _material_proposal(entry, receipt, entities=rows)
+harness/tests/test_batch_entity_resolution_830_g3.py:340: in _material_proposal
+    _proposal_evidence(
+harness/tests/test_batch_entity_resolution_830_g3.py:294: in _proposal_evidence
+    evidence=_span(block, quote),
+             ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+block = SourceBlock(tenant_id=7, space_id='space-g3', raw_kb_id='raw-g3', knowledge_id='knowledge-multi-classification', parse...='block-multi-classification', page_number=1, text='产品甲 产品代码 A-CODE 产品乙 产品代码 B-CODE 医疗保险 官方条款', source_type='DOCUMENT')
+quote = '2026'
+
+    def _span(block: SourceBlock, quote: str) -> Evidence:
+>       start = block.text.index(quote)
+                ^^^^^^^^^^^^^^^^^^^^^^^
+E       ValueError: substring not found
+
+harness/tests/test_batch_entity_resolution_830_g3.py:282: ValueError
+_ test_multi_identity_aliases_at_one_locator_do_not_create_independent_clusters _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_multi_identity_aliases_at_one_locator_do_not_create_independent_clusters(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        entry = _entry(
+            material_id="multi-same-locator",
+            text=(
+                "平安保险 产品甲 产品乙 产品代码 A-CODE B-CODE "
+                "版本 2026 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": None,
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": None,
+                },
+            ),
+        )
+        shared = {
+            "name": _span(entry.blocks[0], "产品甲 产品乙"),
+            "product_code": _span(entry.blocks[0], "A-CODE B-CODE"),
+        }
+        evidence = tuple(
+            g.ProposalEvidenceV1(
+                **item.model_dump(mode="python", exclude={"evidence"}),
+                evidence=shared.get(item.purpose, item.evidence),
+            )
+            for item in proposal.evidence
+        )
+        proposal = _new(
+            g.MaterialProposalV1,
+            "material-proposal.830.g3.v1",
+            "proposal_sha256",
+            **proposal.model_dump(mode="python", exclude={"evidence", "proposal_sha256"}),
+            evidence=evidence,
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy(),
+        )
+        parent = result.decisions[0]
+        assert parent.disposition == "NEEDS_CONFIRM"
+>       assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:908: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:908: in <genexpr>
+    assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = EntityDecisionV1(proposal_ref='a', disposition='NEEDS_CONFIRM', matched_entity_id=None, matched_entity_version=None, e...3', queue_owner='product-owner-g3', decision_sha256='d0340677c7aadc3bacc9236430493c35eaf6771c33ee02c63d53bc7d4665398c')
+item = 'multi_identity_name_evidence_ids'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'EntityDecisionV1' object has no attribute 'multi_identity_name_evidence_ids'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+_ test_multi_identity_uses_name_code_trust_independently_from_other_purposes[name-NEEDS_CONFIRM] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+excluded_purpose = 'name', expected_parent = 'NEEDS_CONFIRM'
+
+    @pytest.mark.parametrize(
+        ("excluded_purpose", "expected_parent"),
+        [("name", "NEEDS_CONFIRM"), ("version", "MULTI"), ("classification", "MULTI")],
+    )
+    def test_multi_identity_uses_name_code_trust_independently_from_other_purposes(
+        catalog: SchemaPackCatalogV1,
+        excluded_purpose: str,
+        expected_parent: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"multi-trust-{excluded_purpose}",
+            text=(
+                "平安保险 产品甲 产品代码 A-CODE 登记编号 A-REG 版本 2026 "
+                "产品乙 产品代码 B-CODE 登记编号 B-REG 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": "A-REG",
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": "B-REG",
+                },
+            ),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy_without_purpose(excluded_purpose),
+        )
+        parent = result.decisions[0]
+        assert parent.disposition == expected_parent
+        assert all(child.disposition == "NEEDS_CONFIRM" for child in parent.children)
+        assert all("TRUST_POLICY_UNRESOLVED" in child.reason_codes for child in parent.children)
+        if excluded_purpose == "name":
+>           assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:960: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+harness/tests/test_batch_entity_resolution_830_g3.py:960: in <genexpr>
+    assert all(child.multi_identity_name_evidence_ids == () for child in parent.children)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = EntityDecisionV1(proposal_ref='a', disposition='NEEDS_CONFIRM', matched_entity_id=None, matched_entity_version=None, e...3', queue_owner='product-owner-g3', decision_sha256='c820d0446fc77d11559a532a20dc9ef4e82620066300e7a076424ab68b07f7e2')
+item = 'multi_identity_name_evidence_ids'
+
+    def __getattr__(self, item: str) -> Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+    
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+    
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+>                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'EntityDecisionV1' object has no attribute 'multi_identity_name_evidence_ids'
+
+../../harness/.venv/lib/python3.12/site-packages/pydantic/main.py:1042: AttributeError
+_ test_multi_identity_uses_name_code_trust_independently_from_other_purposes[version-MULTI] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+excluded_purpose = 'version', expected_parent = 'MULTI'
+
+    @pytest.mark.parametrize(
+        ("excluded_purpose", "expected_parent"),
+        [("name", "NEEDS_CONFIRM"), ("version", "MULTI"), ("classification", "MULTI")],
+    )
+    def test_multi_identity_uses_name_code_trust_independently_from_other_purposes(
+        catalog: SchemaPackCatalogV1,
+        excluded_purpose: str,
+        expected_parent: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"multi-trust-{excluded_purpose}",
+            text=(
+                "平安保险 产品甲 产品代码 A-CODE 登记编号 A-REG 版本 2026 "
+                "产品乙 产品代码 B-CODE 登记编号 B-REG 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": "A-REG",
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": "B-REG",
+                },
+            ),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy_without_purpose(excluded_purpose),
+        )
+        parent = result.decisions[0]
+>       assert parent.disposition == expected_parent
+E       AssertionError: assert 'NEEDS_CONFIRM' == 'MULTI'
+E         
+E         - MULTI
+E         + NEEDS_CONFIRM
+
+harness/tests/test_batch_entity_resolution_830_g3.py:956: AssertionError
+_ test_multi_identity_uses_name_code_trust_independently_from_other_purposes[classification-MULTI] _
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+excluded_purpose = 'classification', expected_parent = 'MULTI'
+
+    @pytest.mark.parametrize(
+        ("excluded_purpose", "expected_parent"),
+        [("name", "NEEDS_CONFIRM"), ("version", "MULTI"), ("classification", "MULTI")],
+    )
+    def test_multi_identity_uses_name_code_trust_independently_from_other_purposes(
+        catalog: SchemaPackCatalogV1,
+        excluded_purpose: str,
+        expected_parent: str,
+    ) -> None:
+        entry = _entry(
+            material_id=f"multi-trust-{excluded_purpose}",
+            text=(
+                "平安保险 产品甲 产品代码 A-CODE 登记编号 A-REG 版本 2026 "
+                "产品乙 产品代码 B-CODE 登记编号 B-REG 医疗保险 官方条款"
+            ),
+        )
+        corpus = _corpus(entry)
+        receipt = _model_binding(corpus, entry)
+        proposal = _material_proposal(
+            entry,
+            receipt,
+            entities=(
+                {
+                    "proposal_ref": "a",
+                    "name": "产品甲",
+                    "product_code": "A-CODE",
+                    "filing": "A-REG",
+                },
+                {
+                    "proposal_ref": "b",
+                    "name": "产品乙",
+                    "product_code": "B-CODE",
+                    "filing": "B-REG",
+                },
+            ),
+        )
+        result = g.resolve_batch(
+            catalog=catalog,
+            corpus=corpus,
+            proposals=_proposal_batch(corpus, (receipt,), (proposal,)),
+            existing_entities=_existing(),
+            policy=_policy_without_purpose(excluded_purpose),
+        )
+        parent = result.decisions[0]
+>       assert parent.disposition == expected_parent
+E       AssertionError: assert 'NEEDS_CONFIRM' == 'MULTI'
+E         
+E         - MULTI
+E         + NEEDS_CONFIRM
+
+harness/tests/test_batch_entity_resolution_830_g3.py:956: AssertionError
+____ test_validate_batch_requires_and_accepts_multi_identity_evidence_sets _____
+
+catalog = SchemaPackCatalogV1(contract='schema-pack-catalog.830.g3.v1', catalog_id='schema_catalog_insurance_product', catalog_v...4, field_name_intersection_count=47, catalog_sha256='b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd')
+
+    def test_validate_batch_requires_and_accepts_multi_identity_evidence_sets(
+        catalog: SchemaPackCatalogV1,
+    ) -> None:
+        valid = _multi_wire_with_identity_sets(catalog)
+>       parsed = g.validate_batch(json.dumps(valid, ensure_ascii=False))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+harness/tests/test_batch_entity_resolution_830_g3.py:2080: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+payload = '{"contract": "batch-entity-resolution.830.g3.v1", "compiler_version": "batch-entity-resolution-compiler.830.g3.v1", "...EDS_CONFIRM": 0, "QUARANTINE": 0}, "batch_sha256": "5edb88c464421feb2bd2873a881e8b878978c1316cd217f966ca795d8a4e1d39"}'
+
+    def validate_batch(payload: str | bytes) -> BatchEntityResolutionV1:
+        """Validate a self-contained compiled result without asserting source liveness."""
+    
+        try:
+            return BatchEntityResolutionV1.model_validate_json(payload)
+        except (TypeError, ValueError, ValidationError):
+            try:
+                json.loads(payload)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raise BatchEntityResolutionError("INPUT_CONTRACT_INVALID") from None
+>           raise BatchEntityResolutionError("COMPILED_BATCH_INVALID") from None
+E           insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3.BatchEntityResolutionError: COMPILED_BATCH_INVALID
+
+harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py:1793: BatchEntityResolutionError
+=========================== short test summary info ============================
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_clusters_survive_missing_versions_and_shared_issuer
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_clusters_ignore_classification_failure_and_missing_issuer
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_aliases_at_one_locator_do_not_create_independent_clusters
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_uses_name_code_trust_independently_from_other_purposes[name-NEEDS_CONFIRM]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_uses_name_code_trust_independently_from_other_purposes[version-MULTI]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_multi_identity_uses_name_code_trust_independently_from_other_purposes[classification-MULTI]
+FAILED harness/tests/test_batch_entity_resolution_830_g3.py::test_validate_batch_requires_and_accepts_multi_identity_evidence_sets
+7 failed, 43 passed in 23.99s

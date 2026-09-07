@@ -607,6 +607,8 @@ class EntityDecisionV1(_FrozenModel):
     identity_threshold: Confidence
     classification: ClassificationAssignmentV1
     evidence_ids: tuple[Text, ...]
+    multi_identity_name_evidence_ids: tuple[Text, ...]
+    multi_identity_code_evidence_ids: tuple[Text, ...]
     reason_codes: tuple[ReasonCode, ...]
     queue_id: Text | None
     queue_owner: Text | None
@@ -635,6 +637,12 @@ class EntityDecisionV1(_FrozenModel):
                 and (matched or self.entity_candidate is not None)
             )
             or tuple(self.evidence_ids) != tuple(sorted(set(self.evidence_ids)))
+            or tuple(self.multi_identity_name_evidence_ids)
+            != tuple(sorted(set(self.multi_identity_name_evidence_ids)))
+            or tuple(self.multi_identity_code_evidence_ids)
+            != tuple(sorted(set(self.multi_identity_code_evidence_ids)))
+            or not set(self.multi_identity_name_evidence_ids).issubset(self.evidence_ids)
+            or not set(self.multi_identity_code_evidence_ids).issubset(self.evidence_ids)
             or tuple(self.reason_codes) != tuple(sorted(set(self.reason_codes)))
             or (expected_reason is not None and expected_reason not in self.reason_codes)
             or (
@@ -718,19 +726,51 @@ def _automatic_decision_valid(decision: EntityDecisionV1) -> bool:
 
 
 def _multi_children_valid(children: Sequence[EntityDecisionV1]) -> bool:
-    automatic = tuple(child for child in children if _automatic_decision_valid(child))
-    keys = {
-        child.anchors.product_code.normalized_value
-        for child in automatic
-        if child.anchors.product_code is not None and child.anchors.name is not None
+    blockers = {
+        "SCOPE_MISMATCH",
+        "SOURCE_RECEIPT_MISMATCH",
+        "EVIDENCE_JOIN_FAILED",
+        "IDENTITY_ANCHOR_CONFLICT",
+        "MODEL_RECEIPT_INVALID",
     }
-    evidence_sets = [set(child.evidence_ids) for child in automatic]
-    independent_evidence = all(
-        evidence_sets[left].isdisjoint(evidence_sets[right])
-        for left in range(len(evidence_sets))
-        for right in range(left + 1, len(evidence_sets))
+    qualified = tuple(
+        child
+        for child in children
+        if child.disposition != "QUARANTINE"
+        and child.anchors.name is not None
+        and child.anchors.product_code is not None
+        and _confidence(child.identity_confidence) >= _confidence(child.identity_threshold)
+        and child.multi_identity_name_evidence_ids
+        and child.multi_identity_code_evidence_ids
+        and not blockers.intersection(child.reason_codes)
     )
-    return len(automatic) >= 2 and len(keys) >= 2 and independent_evidence
+    by_key: dict[str, list[EntityDecisionV1]] = defaultdict(list)
+    for child in qualified:
+        product_code = cast(ObservedNormalizedValueV1, child.anchors.product_code)
+        by_key[product_code.normalized_value].append(child)
+    clusters: list[set[str]] = []
+    for rows in by_key.values():
+        names = {
+            cast(ObservedNormalizedValueV1, child.anchors.name).normalized_value
+            for child in rows
+        }
+        if len(names) != 1:
+            continue
+        clusters.append(
+            {
+                evidence_id
+                for child in rows
+                for evidence_id in (
+                    *child.multi_identity_name_evidence_ids,
+                    *child.multi_identity_code_evidence_ids,
+                )
+            }
+        )
+    return len(clusters) >= 2 and all(
+        clusters[left].isdisjoint(clusters[right])
+        for left in range(len(clusters))
+        for right in range(left + 1, len(clusters))
+    )
 
 
 class MaterialDecisionV1(_FrozenModel):
@@ -746,18 +786,14 @@ class MaterialDecisionV1(_FrozenModel):
     @model_validator(mode="after")
     def validate_decision(self) -> Self:
         direct_child = len(self.children) == 1 and self.children[0].disposition
+        multi_valid = _multi_children_valid(self.children)
         if (
             not _sorted_unique(self.children, lambda item: item.proposal_ref)
             or tuple(self.reason_codes) != tuple(sorted(set(self.reason_codes)))
             or tuple(self.evidence_ids) != tuple(sorted(set(self.evidence_ids)))
             or (self.disposition in ("MATCH", "CREATE") and direct_child != self.disposition)
-            or (
-                self.disposition == "MULTI"
-                and (
-                    not _multi_children_valid(self.children)
-                    or "MULTI_ENTITY_REVIEW" not in self.reason_codes
-                )
-            )
+            or (self.disposition == "MULTI") != multi_valid
+            or ("MULTI_ENTITY_REVIEW" in self.reason_codes) != multi_valid
             or (not self.children and self.disposition not in ("NEEDS_CONFIRM", "QUARANTINE"))
             or (self.disposition == "MATCH" and "EXACT_EXISTING_MATCH" not in self.reason_codes)
             or (self.disposition == "CREATE" and "NEW_ENTITY_CANDIDATE" not in self.reason_codes)
@@ -1185,6 +1221,74 @@ def _evidence_reasons(
     return reasons
 
 
+def _multi_identity_evidence_ids(
+    *,
+    entry: CorpusEntryV1,
+    proposal: MaterialProposalV1,
+    entity: EntityProposalV1,
+    policy: BatchResolutionPolicyV1,
+    reasons: set[ReasonCode],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if (
+        reasons
+        & {
+            "SCOPE_MISMATCH",
+            "SOURCE_RECEIPT_MISMATCH",
+            "EVIDENCE_JOIN_FAILED",
+            "MODEL_RECEIPT_INVALID",
+        }
+        or _confidence(entity.identity_confidence) < _confidence(policy.identity_threshold)
+    ):
+        return (), ()
+    anchors = {"name": entity.name, "product_code": entity.product_code}
+    valid: dict[str, list[str]] = {"name": [], "product_code": []}
+    evidence_by_id = {item.evidence_id: item for item in proposal.evidence}
+    for evidence_id in entity.identity_evidence_ids:
+        row = evidence_by_id.get(evidence_id)
+        if row is None or row.purpose not in anchors:
+            continue
+        anchor = anchors[row.purpose]
+        if anchor is None or row.entity_proposal_ref != entity.proposal_ref:
+            continue
+        try:
+            verify_evidence(row.evidence, entry.blocks)
+        except (TypeError, ValueError, ValidationError):
+            continue
+        if not _matching_rule(
+            policy=policy,
+            entry=entry,
+            proposal=proposal,
+            evidence=row,
+            entity=entity,
+        ):
+            continue
+        if _normalized(anchor) not in _normalized(row.evidence.quote):
+            continue
+        valid[row.purpose].append(evidence_id)
+    return tuple(sorted(valid["name"])), tuple(sorted(valid["product_code"]))
+
+
+def _evidence_occurrence(evidence: Evidence) -> tuple[object, ...]:
+    return (
+        evidence.tenant_id,
+        evidence.space_id,
+        evidence.raw_kb_id,
+        evidence.knowledge_id,
+        evidence.parse_attempt,
+        evidence.revision_id,
+        evidence.source_hash,
+        evidence.parse_hash,
+        evidence.parser_identity,
+        evidence.source_type,
+        evidence.block_id,
+        evidence.page_number,
+        evidence.offset_unit,
+        evidence.start,
+        evidence.end,
+        evidence.quote_hash,
+    )
+
+
 def _identity_key(space_id: str, code: str) -> str:
     return schema_wiki_sha256(
         "entity-candidate-key.830.g3.v1",
@@ -1324,6 +1428,8 @@ def _decision(
     forced_reasons: set[ReasonCode],
     candidate: EntityCandidateV1 | None,
     version_ambiguous: bool,
+    multi_identity_name_evidence_ids: tuple[str, ...],
+    multi_identity_code_evidence_ids: tuple[str, ...],
 ) -> EntityDecisionV1:
     anchors = _anchors(entity)
     reasons, classification = _entity_reasons(
@@ -1405,6 +1511,12 @@ def _decision(
             | {value for label in entity.labels for value in label.evidence_ids}
         )
     )
+    if disposition == "QUARANTINE" or reasons & {
+        "IDENTITY_ANCHOR_CONFLICT",
+        "EVIDENCE_JOIN_FAILED",
+    }:
+        multi_identity_name_evidence_ids = ()
+        multi_identity_code_evidence_ids = ()
     payload: dict[str, object] = {
         "proposal_ref": entity.proposal_ref,
         "disposition": disposition,
@@ -1416,6 +1528,8 @@ def _decision(
         "identity_threshold": policy.identity_threshold,
         "classification": classification,
         "evidence_ids": evidence_ids,
+        "multi_identity_name_evidence_ids": multi_identity_name_evidence_ids,
+        "multi_identity_code_evidence_ids": multi_identity_code_evidence_ids,
         "reason_codes": tuple(sorted(reasons)),
         "queue_id": policy.queue_id if human else None,
         "queue_owner": policy.queue_owner if human else None,
@@ -1584,6 +1698,9 @@ def resolve_batch(
         entity_rows: list[EntityRow] = []
         row_reasons: dict[tuple[str, str], set[ReasonCode]] = {}
         row_classification: dict[tuple[str, str], ClassificationAssignmentV1] = {}
+        row_multi_identity_evidence: dict[
+            tuple[str, str], tuple[tuple[str, ...], tuple[str, ...]]
+        ] = {}
         for proposal_row in exact_proposals.proposals:
             entry = entry_by_id[proposal_row.material_id]
             for entity in proposal_row.entities:
@@ -1600,6 +1717,49 @@ def resolve_batch(
                 entity_rows.append((entry, proposal_row, entity))
                 row_reasons[row_id] = reasons
                 row_classification[row_id] = classification
+                row_multi_identity_evidence[row_id] = _multi_identity_evidence_ids(
+                    entry=entry,
+                    proposal=proposal_row,
+                    entity=entity,
+                    policy=exact_policy,
+                    reasons=reasons,
+                )
+
+        identity_rows_by_key: dict[str, list[EntityRow]] = defaultdict(list)
+        occurrence_keys: dict[tuple[object, ...], set[str]] = defaultdict(set)
+        for row in entity_rows:
+            entry, proposal_row, entity = row
+            row_id = (entry.material_id, entity.proposal_ref)
+            name_ids, code_ids = row_multi_identity_evidence[row_id]
+            if entity.name is None or entity.product_code is None or not name_ids or not code_ids:
+                continue
+            entity_key = _identity_key(exact_corpus.space_id, entity.product_code)
+            identity_rows_by_key[entity_key].append(row)
+            evidence_by_id = {item.evidence_id: item for item in proposal_row.evidence}
+            for evidence_id in (*name_ids, *code_ids):
+                occurrence_keys[_evidence_occurrence(evidence_by_id[evidence_id].evidence)].add(
+                    entity_key
+                )
+
+        invalid_identity_keys = {
+            entity_key
+            for entity_key, rows in identity_rows_by_key.items()
+            if len({_normalized(cast(str, row[2].name)) for row in rows}) != 1
+        }
+        invalid_identity_keys.update(
+            entity_key
+            for keys in occurrence_keys.values()
+            if len(keys) > 1
+            for entity_key in keys
+        )
+        if invalid_identity_keys:
+            for row in entity_rows:
+                entry, _, entity = row
+                if entity.product_code is None:
+                    continue
+                entity_key = _identity_key(exact_corpus.space_id, entity.product_code)
+                if entity_key in invalid_identity_keys:
+                    row_multi_identity_evidence[(entry.material_id, entity.proposal_ref)] = ((), ())
 
         structural_only: set[ReasonCode] = {
             "IDENTITY_EVIDENCE_MISSING",
@@ -1710,6 +1870,7 @@ def resolve_batch(
                 )
                 row_id = (entry.material_id, entity.proposal_ref)
                 ambiguous = row_id in ambiguous_rows
+                multi_name_ids, multi_code_ids = row_multi_identity_evidence[row_id]
                 candidate = (
                     None
                     if decision_entity_key is None or decision_version_key is None
@@ -1727,6 +1888,8 @@ def resolve_batch(
                         forced_reasons=forced,
                         candidate=candidate,
                         version_ambiguous=ambiguous,
+                        multi_identity_name_evidence_ids=multi_name_ids,
+                        multi_identity_code_evidence_ids=multi_code_ids,
                     )
                 )
             decisions.append(
