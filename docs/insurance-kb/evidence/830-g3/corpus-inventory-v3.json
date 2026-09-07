@@ -1,0 +1,318 @@
+{
+  "contract": "830-g3-corpus-inventory.v3",
+  "recorded_at": "2026-09-07T07:03:06.989565+00:00",
+  "status": "PROVISIONAL_INVENTORY_NOT_FROZEN_CORPUS",
+  "inspector": "g3_corpus_audit; root rehashed all15 PDF bytes",
+  "unique_file_count": 21,
+  "entries": [
+    {
+      "inventory_id": "g3-material-01",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_tiaokuan.pdf",
+      "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "size_bytes": 1047811,
+      "pages": 39,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "MATCH",
+      "identity_anchor_note": "596-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-02",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_shuomingshu.pdf",
+      "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "size_bytes": 492101,
+      "pages": 27,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "MATCH",
+      "identity_anchor_note": "596-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-03",
+      "path": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+      "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "size_bytes": 1332078,
+      "pages": 44,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "MATCH",
+      "identity_anchor_note": "594-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-04",
+      "path": "dataset/version-materials/esb_huixiang_594-1_shuomingshu.pdf",
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "size_bytes": 395696,
+      "pages": 17,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "MATCH",
+      "identity_anchor_note": "594-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-05",
+      "path": "dataset/version-materials/esb_jiaxiang_595-1_tiaokuan.pdf",
+      "file_sha256": "b72df94a33b2e4a07908f2ffda52bcf1b839b547ef2c5e229313b3fe4551ac64",
+      "size_bytes": 1714836,
+      "pages": 94,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "CREATE",
+      "identity_anchor_note": "595-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-06",
+      "path": "dataset/version-materials/esb_fujia_zunxiang_2609-1_tiaokuan.pdf",
+      "file_sha256": "a6f214f96e73807a5c031932695ada7e1b28e19bc7c283c63255a253c02e1062",
+      "size_bytes": 1721568,
+      "pages": 41,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "CREATE_OR_NEEDS_CONFIRM",
+      "identity_anchor_note": "2609-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-07",
+      "path": "dataset/version-materials/esb_changqi_1072-1_tiaokuan.pdf",
+      "file_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc",
+      "size_bytes": 1229968,
+      "pages": 35,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "CREATE",
+      "identity_anchor_note": "1072-1",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-08",
+      "path": "dataset/version-materials/esb_changqi_1072-4_tiaokuan.pdf",
+      "file_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079",
+      "size_bytes": 1394564,
+      "pages": 46,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "VERSION_DIFFERENCE",
+      "identity_anchor_note": "1072-4",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-09",
+      "path": "dataset/version-materials/esb_2016_tiaokuan.pdf",
+      "file_sha256": "734fe177e498de35ceb551eb02a770bb0de41d0e7bf03b163327e9afdc4118ec",
+      "size_bytes": 529442,
+      "pages": 10,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "NEEDS_CONFIRM",
+      "identity_anchor_note": "insurer-and-version-unresolved",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-10",
+      "path": "dataset/version-materials/esb_2017_tiaokuan.pdf",
+      "file_sha256": "74c8670612f1caacbb8fcb14d3b2bf9b8d35166a6e7680b0767f6fcb9cccea2a",
+      "size_bytes": 821648,
+      "pages": 15,
+      "pack_seed_suggestion": "medical_insurance",
+      "disposition_seed_suggestion": "QUARANTINE_POLICY_NOT_FROZEN",
+      "identity_anchor_note": "Ping-An-Health-2019-002",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-11",
+      "path": "dataset/shouxian_product/平安守护百分百（2026）两全保险/保险条款.pdf",
+      "file_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+      "size_bytes": 476226,
+      "pages": 9,
+      "pack_seed_suggestion": "endowment_insurance",
+      "disposition_seed_suggestion": "CREATE_OR_NEEDS_CONFIRM_NOT_PROVEN_MULTI",
+      "identity_anchor_note": "1826",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-12",
+      "path": "dataset/shouxian_product/平安附加（2026）失能收入损失保险/保险条款.pdf",
+      "file_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+      "size_bytes": 1100736,
+      "pages": 44,
+      "pack_seed_suggestion": "disability_income_insurance",
+      "disposition_seed_suggestion": "CREATE",
+      "identity_anchor_note": "new-disability",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-13",
+      "path": "dataset/shouxian_product/平安附加（2026）意外伤害保险/保险条款.pdf",
+      "file_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "size_bytes": 578026,
+      "pages": 12,
+      "pack_seed_suggestion": "accident_insurance",
+      "disposition_seed_suggestion": "CREATE",
+      "identity_anchor_note": "new-accident",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-14",
+      "path": "dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险/保险条款.pdf",
+      "file_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+      "size_bytes": 496516,
+      "pages": 9,
+      "pack_seed_suggestion": "whole_life_insurance",
+      "disposition_seed_suggestion": "CREATE",
+      "identity_anchor_note": "1824",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-15",
+      "path": "dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险（分红型）/保险条款.pdf",
+      "file_sha256": "d4a09a8005d03e7ce2ef122a632fb4fabf8613238e1f7ba6cca7b744a28f321d",
+      "size_bytes": 534475,
+      "pages": 15,
+      "pack_seed_suggestion": "whole_life_insurance",
+      "disposition_seed_suggestion": "CREATE_OR_NEEDS_CONFIRM",
+      "identity_anchor_note": "1837",
+      "label_origin": "g3_corpus_audit local PDF text inspection; protocol planning only, NOT classifier output or expert Golden",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-16",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1827-1-critical-illness-terms.pdf",
+      "file_sha256": "49042161ab876fdf4815f8f935ba0d4866f5631b76e6fddf05845c6ceb4306f1",
+      "size_bytes": 1163899,
+      "pages": 43,
+      "identity_anchor_note": "1827-1; 平安人寿〔2025〕疾病保险153号; local PDF page1 verified",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-17",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-terms.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/平安安佑福(全能版)重大疾病保险.pdf",
+      "file_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+      "size_bytes": 1180305,
+      "pages": 43,
+      "identity_anchor_note": "1828; 平安人寿〔2025〕疾病保险174号",
+      "identity_inspection_status": "EXACT_TITLE_CODE_AND_FILING_ON_PAGE1",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "平安人寿〔2025〕疾病保险174号\n平安安佑福（全能版）重大疾病保险\n阅读指引\n请扫描以查询验证条款\n\n平安安佑福（全能版）重大疾病保险产品提供轻度疾病、中症疾病、重大疾病及身故保障\n\n为了帮助您更好地了解产品，我们先介绍几个保险条款中常用的术语\n 被保险人就是受保险合同保障的人。\n 投保人就是购买保险并交纳保险费的人。\n 受益人就是发生保险事故"
+    },
+    {
+      "inventory_id": "g3-material-18",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-brochure.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/平安安佑福(全能版)重大疾病保险产品说明书.pdf",
+      "file_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "size_bytes": 209004,
+      "pages": 11,
+      "identity_anchor_note": "exact full title and contract reference on page1",
+      "identity_inspection_status": "EXACT_FULL_TITLE_NO_CODE_ASSUMPTION",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "平安安佑福（全能版）重大疾病保险产品说明书\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。\n产品特色\n 120 种重大疾病保障\n提供120种重大疾病保障，重大疾病保险金给付以一次为限\n 20 种中症疾病保障\n每种中症"
+    },
+    {
+      "inventory_id": "g3-material-19",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-anyoufu-unresolved-version-rate-table.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/《平安安佑福重大疾病保险》年交费率表.pdf",
+      "file_sha256": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8",
+      "size_bytes": 106347,
+      "pages": 2,
+      "identity_anchor_note": "title omits 全能版; no code/filing in two pages",
+      "identity_inspection_status": "UNRESOLVED_VERSION_DO_NOT_ATTACH_TO_1828",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "《平安安佑福重大疾病保险》年交费率表\n（每万元基本保险金额）\n男性\n单位：人民币元\n交费期间\n10年交 15年交 20年交 30年交\n投保年龄\n0 378 254 193 137\n1 385 259 196 139\n2 391 263 200 142\n3 399 268 204 144\n4 406 273 207 147\n5 414 278 211 150\n"
+    },
+    {
+      "inventory_id": "g3-material-20",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-20210915-product-service-manual-zunxiang.pdf",
+      "file_sha256": "de50dacd5fdd55ef714587e1a4725db783cbf4e96384e00f1a5539c25902eb93",
+      "size_bytes": 1664380,
+      "pages": 16,
+      "identity_anchor_note": "Official manual PDF page4 explicitly lists seven separate product names/codes:1618,1646,1649,1648,1655,1564,1580",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "native_preflight_status": "FAIL_SCANNED_PAGE7_RETAINED"
+    },
+    {
+      "inventory_id": "g3-material-21",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-20101018-official-product-list.pdf",
+      "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+      "size_bytes": 54610,
+      "pages": 5,
+      "identity_anchor_note": "Official whole historical product list with individually named/coded products; each product version still unresolved without terms anchors",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    }
+  ],
+  "existing_evidence_refs": [
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/revision-set.json",
+      "file_sha256": "ef0db0f1fc9ebd7800d94ad1f53a496115e1aaa5d7d3f1c62bd15fe9f30a6b02"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/terms.manifest.json",
+      "file_sha256": "2ec06b342f81ac10b09d9923a32d0e5e05c597a5d531e49ab50f1912c705d0b0"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/inputs/c5/brochure.manifest.json",
+      "file_sha256": "05baeea40d46c6256b6fec60c8e5389bb36f9470f9ff40a75d7a37775e90ffbc"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g1/actual-input-authority.json",
+      "file_sha256": "7b5f6ad424e62e7a8d350b9721606dde8917b4825def8727eccf05f78bbccab9"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/b-source-sealing-verification.json",
+      "file_sha256": "b8b4d88c040b1f1f8c5ee45f09d909a5415659bd8f4156c6d1bf05092068daf7"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/b-native-preflight.json",
+      "file_sha256": "e0089a90566472d957c0810a46958ae3e85dddd7acda99385511f1f40df3f0b1"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/b-source-complete-candidate-bundle.json",
+      "file_sha256": "69dd25e29ea771a512cf24c083a52e8347386def68b30d90d379f2b0dfe181d1"
+    },
+    {
+      "path": "docs/insurance-kb/evidence/830-g2/b-local-live-verification.json",
+      "file_sha256": "cb8a4c5711f13ff5d4236dde4758278af12a659102c8cd86ad650c4ee48137cc"
+    }
+  ],
+  "missing": [
+    "11 of selected15 SourceRevisions must be captured through actual WeKnora parse lifecycle",
+    "Existing4 source revisions require runtime exact reopen",
+    "Seed expected labels and independent identity/classification thresholds not yet frozen"
+  ],
+  "multi_entity_limitation": "Material11 has only generic attached-contract references and is not a confirmed MULTI positive. Material21 contains independently named/coded products; exact child versions remain unresolved. Material20 failed native preflight page7 and remains in inventory, excluded from current pre-run selection.",
+  "no_synthetic_sources": true,
+  "production_admitted": false,
+  "supplemental_discovery": {
+    "contract": "830-g3-official-source-acquisition.v1",
+    "recorded_at": "2026-09-07T05:35:52.495650+00:00",
+    "url": "https://life.pingan.com/ilife-home/product/getPlanClausePdf?attachmentType=1&planCode=1827&versionNo=1827-1",
+    "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1827-1-critical-illness-terms.pdf",
+    "file_sha256": "49042161ab876fdf4815f8f935ba0d4866f5631b76e6fddf05845c6ceb4306f1",
+    "bytes": 1163899,
+    "pages": 43,
+    "name_from_page1": "平安附加守护百分百（2026）提前给付重大疾病保险",
+    "product_code_from_page1": "1827",
+    "filing_from_page1": "平安人寿〔2025〕疾病保险153号",
+    "download_attempts": 1,
+    "download_status": "PASS",
+    "inspection": "pdfplumber local page1 text; exact PDF header and43pages opened",
+    "upstream_discovery": "g3_corpus_audit bounded2searches/3official opens; brochure1827-1 opened; initial web terms open timed out; this download succeeded",
+    "source_revision": "NOT_YET_CAPTURED",
+    "seed_only": true,
+    "external_user_material_sent": false,
+    "model_calls": 0
+  },
+  "critical_illness_material_status": "1828_USER_TERMS_AND_BROCHURE_VERIFIED; RATE_TABLE_VERSION_UNRESOLVED",
+  "supersedes": "corpus-inventory-v2.json",
+  "selected_file_set": "corpus-files-v4.json"
+}

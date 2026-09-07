@@ -1,0 +1,48 @@
+{
+  "contract": "830-g3-user-source-acquisition.v1",
+  "recorded_at": "2026-09-07T05:59:00.443952+00:00",
+  "authorization": "User supplied folder and requested continuing incorporation of 平安安佑福(全能版)重大疾病保险",
+  "entries": [
+    {
+      "inventory_id": "g3-material-17",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-terms.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/平安安佑福(全能版)重大疾病保险.pdf",
+      "file_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+      "size_bytes": 1180305,
+      "pages": 43,
+      "identity_anchor_note": "1828; 平安人寿〔2025〕疾病保险174号",
+      "identity_inspection_status": "EXACT_TITLE_CODE_AND_FILING_ON_PAGE1",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "平安人寿〔2025〕疾病保险174号\n平安安佑福（全能版）重大疾病保险\n阅读指引\n请扫描以查询验证条款\n\n平安安佑福（全能版）重大疾病保险产品提供轻度疾病、中症疾病、重大疾病及身故保障\n\n为了帮助您更好地了解产品，我们先介绍几个保险条款中常用的术语\n 被保险人就是受保险合同保障的人。\n 投保人就是购买保险并交纳保险费的人。\n 受益人就是发生保险事故"
+    },
+    {
+      "inventory_id": "g3-material-18",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-brochure.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/平安安佑福(全能版)重大疾病保险产品说明书.pdf",
+      "file_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "size_bytes": 209004,
+      "pages": 11,
+      "identity_anchor_note": "exact full title and contract reference on page1",
+      "identity_inspection_status": "EXACT_FULL_TITLE_NO_CODE_ASSUMPTION",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "平安安佑福（全能版）重大疾病保险产品说明书\n在本说明书中，“您”指投保人，“我们”、“本公司”均指中国平安人寿保险股份有限公司，“合同”指\n平安安佑福（全能版）重大疾病保险产品合同，“条款”指平安安佑福（全能版）重大疾病保险条款。\n产品特色\n 120 种重大疾病保障\n提供120种重大疾病保障，重大疾病保险金给付以一次为限\n 20 种中症疾病保障\n每种中症"
+    },
+    {
+      "inventory_id": "g3-material-19",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-anyoufu-unresolved-version-rate-table.pdf",
+      "original_path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/《平安安佑福重大疾病保险》年交费率表.pdf",
+      "file_sha256": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8",
+      "size_bytes": 106347,
+      "pages": 2,
+      "identity_anchor_note": "title omits 全能版; no code/filing in two pages",
+      "identity_inspection_status": "UNRESOLVED_VERSION_DO_NOT_ATTACH_TO_1828",
+      "source_revision_status": "NOT_YET_CAPTURED",
+      "first_page_identity_excerpt": "《平安安佑福重大疾病保险》年交费率表\n（每万元基本保险金额）\n男性\n单位：人民币元\n交费期间\n10年交 15年交 20年交 30年交\n投保年龄\n0 378 254 193 137\n1 385 259 196 139\n2 391 263 200 142\n3 399 268 204 144\n4 406 273 207 147\n5 414 278 211 150\n"
+    }
+  ],
+  "original_bytes_preserved": true,
+  "local_inspection_only": true,
+  "external_material_transfers": 0,
+  "model_calls": 0,
+  "source_revisions_captured": false
+}

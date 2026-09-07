@@ -93,6 +93,10 @@ func RegisterSchemaWikiRoutes(
 	}
 	activeGET("/domains", schemaHandler.Domains)
 	activeGET("/taxonomy/current", schemaHandler.CurrentTaxonomy)
+	activeGET(
+		"/catalogs/:catalog_id/versions/:catalog_version",
+		schemaHandler.ReadSchemaPackCatalog830G3,
+	)
 	activeGET("/entities/:entity_id/versions/:version_id/current", schemaHandler.CurrentEntityVersion)
 	conceptPages := handler.NewConceptFreeWikiHandler830G2(schemaHandler)
 	activeGET("/concept-pages/:member_id", conceptPages.ReadPage)

@@ -1,0 +1,14 @@
+{
+  "contract": "830-g3-existing-source-readonly-plan.v1",
+  "script": "/private/tmp/g3-existing-source-readonly.py",
+  "script_sha256": "25b02beac467782d953c8e0ff10c8096e04d90ec0b7fd305a70d537cba56361f",
+  "methods": [
+    "GET"
+  ],
+  "request_count_max": 8,
+  "target": "http://127.0.0.1:18195/api/v1/knowledge/{4 existing ids}[/revision]",
+  "effects": "read-only current descriptors; no source backfill, upload, model or DB mutation",
+  "no_redirects": true,
+  "auth": "existing local user token in memory; never printed",
+  "source_revision_reopen": "Not claimed from descriptor alone"
+}

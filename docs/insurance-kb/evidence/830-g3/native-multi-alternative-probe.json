@@ -1,0 +1,23 @@
+{
+  "contract": "830-g3-native-multi-alternative-probe.v1",
+  "status": "PASS",
+  "document": {
+    "material_id": "g3-material-21",
+    "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+    "pages": 5,
+    "markdown_utf8_bytes": 7266,
+    "markdown_sha256": "a8670f07aace99698d469d256126135b2efab9ee7e4a07d2b5c7d68ea067b643",
+    "native_sha256": "1e2521df8f9edb4fd53314b7dbce10df98c20185c1b553e6c980c94f8fa1f1d5",
+    "parser_identity_sha256": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+    "capture_file_sha256": "4bf31d980926b8d5a7845c865b0c3851bfac756369316678f4c736c2607cea41"
+  },
+  "original_preflight": "native-preflight-attempt1.json remains10/11; scanned manual failure retained",
+  "purpose": "Candidate source suitability check before actual SourceRevision corpus/Seed freeze; not a replacement success for failedmaterial20",
+  "existing_image": "sha256:ac944d934fcd30c77e4ff28d19f1b4d6dd147012a6553c4678274c1f0be35868",
+  "provider_calls": 0,
+  "uploads": 0,
+  "db_writes": 0,
+  "source_revisions_created": 0,
+  "partial_capture_archive_sha256": "948c931fdb3e586d8d4c7658106a7cdd112f9da71594739a13bc6a067257eeee",
+  "flow": "NOT RUN"
+}

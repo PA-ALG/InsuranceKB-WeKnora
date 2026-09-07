@@ -1,0 +1,13 @@
+{
+  "contract": "830-g3-prepared-transport-validation.v1",
+  "status": "PASS_OFFLINE_ONLY",
+  "documents": 11,
+  "inputs": 204,
+  "body_bytes_total": 693129,
+  "per_input_hashes_match_reviewed_whitelist": true,
+  "actual_http_calls": 0,
+  "actual_provider_calls": 0,
+  "log_sha256": "bcd0350706029adb178aed78492aadf10916b8d5e745b25b6128f3668816e3cb",
+  "exit_code": 0,
+  "runtime_parameters_readback": "existing-model-config-readonly.json; target G3 future readback remains required"
+}

@@ -3,9 +3,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const api = vi.hoisted(() => ({ load: vi.fn() }))
+const api = vi.hoisted(() => ({ load: vi.fn(), loadSchemaCatalog: vi.fn() }))
 vi.mock('@/api/schema-wiki/conceptDirectory830G2', () => ({ loadConceptDirectory830G2: api.load }))
+vi.mock('@/api/schema-wiki/schemaPackCatalog830G3', () => ({
+  loadSchemaPackCatalog830G3: api.loadSchemaCatalog,
+}))
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
+vi.mock('./SchemaPackCatalog830G3.vue', () => ({ default: {
+  name: 'SchemaPackCatalog830G3', props: ['catalog'], template: '<section data-testid="g3-catalog">G3 Catalog</section>',
+} }))
 vi.mock('./SchemaWikiBrowser.vue', () => ({ default: {
   name: 'SchemaWikiBrowser', props: ['knowledgeBaseId'], template: '<div data-testid="legacy">legacy</div>',
 } }))
@@ -19,6 +25,8 @@ const common = { scope: { version: 'schema-wiki-scope.v1', space_id: 'space', ra
 describe('SchemaWikiCatalogEntry830G2', () => {
   beforeEach(() => {
     api.load.mockReset()
+    api.loadSchemaCatalog.mockReset()
+    api.loadSchemaCatalog.mockResolvedValue({ catalog_id: 'schema_catalog_insurance_product', entries: [] })
     ;(window as any).__RUNTIME_CONFIG__ = { SCHEMA_WIKI_MVP_ENTRY_KB_ID: 'wiki-entry',
       SCHEMA_WIKI_MVP_SERVING_KB_ID: 'wiki-serving' }
   })
@@ -30,6 +38,8 @@ describe('SchemaWikiCatalogEntry830G2', () => {
     } } })
     await flushPromises()
     expect(api.load).toHaveBeenCalledWith('wiki-serving', expect.any(Object))
+    expect(api.loadSchemaCatalog).toHaveBeenCalledWith('wiki-serving', expect.any(Object))
+    expect(wrapper.get('[data-testid="g3-catalog"]').text()).toBe('G3 Catalog')
     expect(wrapper.get('[data-testid="g2"]').text()).toBe('G2')
     expect(wrapper.findComponent({ name: 'SchemaWikiBrowser' }).exists()).toBe(false)
   })
@@ -55,5 +65,17 @@ describe('SchemaWikiCatalogEntry830G2', () => {
     await flushPromises()
     expect(failed.get('[role="alert"]').text()).toContain('目录读取失败')
     expect(failed.findComponent({ name: 'SchemaWikiBrowser' }).exists()).toBe(false)
+  })
+
+  it('keeps the published G2 directory visible when the protected G3 catalog fails closed', async () => {
+    api.load.mockResolvedValue({ ...common, mode: 'g2', candidateHash: H, members: [], concepts: [], entities: [] })
+    api.loadSchemaCatalog.mockRejectedValue(new Error('CATALOG_TAMPERED'))
+    const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledgeBaseId: 'wiki-entry' }, global: { stubs: {
+      ConceptDirectory830G2: { props: ['catalog'], template: '<div data-testid="g2">G2</div>' },
+    } } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="g3-catalog-error"]').text()).toContain('产品结构目录读取失败')
+    expect(wrapper.get('[data-testid="g2"]').text()).toBe('G2')
   })
 })

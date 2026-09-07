@@ -1,0 +1,31 @@
+{
+  "contract": "830-g3-existing-contract-gap.v1",
+  "base": "075d9c38c01e48abfe7985985dc503099cf9b19a",
+  "existing_pack_id": "medical-schema67.v1",
+  "existing_pack_fields": [
+    "contract",
+    "schema_pack_id",
+    "schema_version",
+    "domain_id",
+    "ordered_field_ids",
+    "sections",
+    "schema_pack_sha256"
+  ],
+  "required_v5_metadata": [
+    "fields",
+    "catalog_identity",
+    "presentation_profile_ref"
+  ],
+  "actual": "SchemaPackV1 cannot carry v5 field descriptions/source guidance/knowledge roles or distinct Profile reference; only ordered IDs and embedded sections",
+  "provider_calls": 0,
+  "environment_error": false,
+  "observed_errors": [
+    {
+      "loc": [
+        "catalog_identity"
+      ],
+      "type": "extra_forbidden"
+    }
+  ],
+  "status": "RED"
+}

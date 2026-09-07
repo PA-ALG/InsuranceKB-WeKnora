@@ -1,0 +1,51 @@
+{
+  "contract": "830-g3-existing-model-config-readonly.v1",
+  "checked_at": "2026-09-07T07:32:13.421446+00:00",
+  "source_runtime": "existing G2 loopback18195; not G3 provisioning",
+  "knowledge_base": {
+    "id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "embedding_model_id": "42df7f04-f53f-42d5-909d-63b0e78a1223",
+    "summary_model_id": "b2034da8-942c-4a19-945d-1bc09459222e",
+    "wiki_enabled": null,
+    "chunking_config": {
+      "child_chunk_size": 384,
+      "chunk_overlap": 80,
+      "chunk_size": 512,
+      "enable_parent_child": true,
+      "parent_chunk_size": 4096,
+      "separators": [
+        "\n\n",
+        "\n",
+        "。",
+        "！",
+        "？",
+        ";",
+        "；"
+      ],
+      "strategy": "auto"
+    }
+  },
+  "embedding_model": {
+    "id": "42df7f04-f53f-42d5-909d-63b0e78a1223",
+    "name": "qwen3.7-text-embedding",
+    "type": "Embedding",
+    "source": "remote"
+  },
+  "embedding_parameters": {
+    "dimension": 1024,
+    "truncate_prompt_tokens": 0,
+    "supports_dimension_override": false
+  },
+  "provider": "aliyun",
+  "interface_type": "",
+  "base_url_sanitized": {
+    "scheme": "https",
+    "host": "dashscope.aliyuncs.com",
+    "port": null,
+    "path": "/compatible-mode/v1"
+  },
+  "custom_header_names": [],
+  "http_get_count": 2,
+  "provider_calls": 0,
+  "application_writes": 0
+}

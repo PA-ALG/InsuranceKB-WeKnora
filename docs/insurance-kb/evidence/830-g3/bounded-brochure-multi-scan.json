@@ -1,0 +1,192 @@
+{
+  "contract": "830-g3-bounded-brochure-scan.v1",
+  "scope": "All product brochures in user supplied Downloads/shouxian_product; local read only, no source revisions/model calls",
+  "files_scanned": 14,
+  "rows": [
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安e生保（尊享版）医疗保险/产品说明书.pdf",
+      "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "hits": [
+        {
+          "page": 2,
+          "line": "医疗保险金的给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 3,
+          "line": "平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 4,
+          "line": "（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 6,
+          "line": "平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 6,
+          "line": "金的给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 8,
+          "line": "金的给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 10,
+          "line": "外特定药品费用保险金给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 11,
+          "line": "进口药品费用保险金给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 12,
+          "line": "费用保险金给付限额内（见平安e生保（尊享版）医疗保险计划表）给付。"
+        },
+        {
+          "page": 16,
+          "line": "（3）年免赔额指一个保险期间内对应的免赔额（见平安e生保（尊享版）医疗保险计划"
+        },
+        {
+          "page": 18,
+          "line": "计划表《平安e生保（尊享版）医疗保险计划表》中约定的各项保险责任对应的给付限额为"
+        },
+        {
+          "page": 18,
+          "line": "平安e生保（尊享版）医疗保险计划表"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安e生保（悦享版）医疗保险/产品说明书.pdf",
+      "file_sha256": "658d3da18fd3cc9cb3e403cbaa7947a118c4d1e2d6da156a43881128695a0203",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安e生保（惠享版）长期医疗保险（费率可调）/产品说明书.pdf",
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "hits": [
+        {
+          "page": 2,
+          "line": "额内（见平安e生保（惠享版）长期医疗保险（费率可调）计划表）给付。"
+        },
+        {
+          "page": 4,
+          "line": "内（见平安e生保（惠享版）长期医疗保险（费率可调）计划表）给付。"
+        },
+        {
+          "page": 7,
+          "line": "（见平安 e生保（惠享版）长期医疗保险（费率可调）计划表）。当我们在保证续保期间内"
+        },
+        {
+          "page": 8,
+          "line": "平安e 生保（惠享版）长期医疗保险（费率可调）计划表"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安创享盛世金越（尊享版26）终身寿险（分红型）/产品说明书.pdf",
+      "file_sha256": "38720048d356a9c0ece11c8cf35f175d3bd98115ad76c39533e7610db1823c80",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安守护百分百（2026）两全保险/产品说明书.pdf",
+      "file_sha256": "d4c9611b7a0b0f59e9b37aef6ff0e5d12d42b00ba20daff670630f2d04e5c08a",
+      "hits": [
+        {
+          "page": 6,
+          "line": "王先生为儿子小王（0周岁）投保平安守护百分百（2026）两全保险，且未附加提前给付"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安安佑福(全能版)重大疾病保险/平安安佑福(全能版)重大疾病保险产品说明书.pdf",
+      "file_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安爱满分（2026）两全保险/产品说明书.pdf",
+      "file_sha256": "d2119896e15b0fed076db80a2f780fd08ffd2498b260eb95fc7f1957c5169208",
+      "hits": [
+        {
+          "page": 6,
+          "line": "王先生为儿子小王（0 周岁）投保平安爱满分（2026）两全保险，且未附加提前给付重"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安盛世金越养老年金保险（分红型）/产品说明书.pdf",
+      "file_sha256": "fb2e5cffee374f728fe8ea935292cff5c83091aba786fca9a8b1900d00b22007",
+      "hits": [
+        {
+          "page": 8,
+          "line": "王先生（40 周岁）为自己投保平安盛世金越养老年金保险（分红型），选择计划一，6"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安盛世金越（尊享版26）终身寿险/产品说明书.pdf",
+      "file_sha256": "a484e0757d1989ef2fd3f3700273a081b30f026547b4f965a77854c028a713f6",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安盛世金越（尊享版26）终身寿险（分红型）/产品说明书.pdf",
+      "file_sha256": "0c204b5c34746dfb77a6b2d04cbe85549bee7a2f961c5bec7723e15e88f97cc1",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安盛世金越（至尊版26）年金保险（分红型）/产品说明书.pdf",
+      "file_sha256": "7025fd26e5c6e37c3f861a46036935bbc516b747a3f9074199599deed4afd5be",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安福满分（2026）养老年金保险/产品说明书.pdf",
+      "file_sha256": "1febb7571f4249d6ea45bfb8e833cb929c96050abd473ef3a6847472d2634934",
+      "hits": []
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安附加（2026）失能收入损失保险/产品说明书.pdf",
+      "file_sha256": "c156596bb234188ec324a5a9e56efb905e91804ee5bc29fd4ece1bc62dbc7db7",
+      "hits": [
+        {
+          "page": 1,
+          "line": "平安附加（ ）失能收入损失保险产品说明书"
+        },
+        {
+          "page": 1,
+          "line": "指平安附加（2026）失能收入损失保险合同。“条款”指平安附加（2026）失能收入损失保险条款。"
+        },
+        {
+          "page": 1,
+          "line": "本说明书中所称特定疾病、重大疾病，指平安附加（2026）失能收入损失保险合同所定"
+        },
+        {
+          "page": 6,
+          "line": "王先生为自己（30周岁）投保了平安附加（2026）失能收入损失保险，基本保险金额为"
+        }
+      ]
+    },
+    {
+      "path": "/Users/houjing/Downloads/shouxian_product/平安附加（2026）意外伤害保险/产品说明书.pdf",
+      "file_sha256": "68105656802ea7ad267d9d1def1f78c1fb706a807bc75fc93ba8ef1aeae83abf",
+      "hits": [
+        {
+          "page": 1,
+          "line": "平安附加（2026）意外伤害保险产品说明书"
+        },
+        {
+          "page": 1,
+          "line": "合同”指平安附加（2026）意外伤害保险合同。“条款”指平安附加（2026）意外伤害保险条款。"
+        },
+        {
+          "page": 7,
+          "line": "除以上责任免除外，本合同中还有一些免除我们责任的条款，详见平安附加（2026）意"
+        },
+        {
+          "page": 9,
+          "line": "王先生（40周岁）为自己投保平安附加（2026）意外伤害保险，基本部分的基本保险金"
+        }
+      ]
+    }
+  ]
+}

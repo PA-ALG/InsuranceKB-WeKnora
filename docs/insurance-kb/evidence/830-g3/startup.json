@@ -1,0 +1,134 @@
+{
+  "contract": "830-g3-startup.v1",
+  "recorded_at": "2026-09-07T05:16:54.083379+00:00",
+  "GOAL_ID": "G3",
+  "CURRENT_AUTHORIZATION": "EXPLICIT_USER_G3_IMPLEMENTATION_START",
+  "authorization_text": "那开始吧，由你来启动 G3 总控",
+  "OWNER": "830-G3总控 / root",
+  "GOAL_PRODUCT_STATE": "WIP_NOT_PASSED",
+  "base": "075d9c38c01e48abfe7985985dc503099cf9b19a",
+  "base_tree": "5881aeddcf9db0543cb89ecbedfbd74d36821731",
+  "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
+  "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
+  "branch": "codex/830-g3-implementation",
+  "CURRENT_RED": "C_REVIEW_REPRODUCED_IDENTITY_TRUST_AND_WIRE_GAPS; REAL_BATCH_NOT_RUN",
+  "NEXT_PHYSICAL_RESULT": "实际 Catalog 页面观察与来源上传/识别候选准备",
+  "FROZEN_INPUT": {
+    "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
+    "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
+    "field_counts": [
+      67,
+      70,
+      62,
+      67,
+      66,
+      75,
+      79,
+      82,
+      74,
+      83,
+      76
+    ],
+    "corpus": "corpus-files-v4.json:15rawsources;4 existing W1 revisions/chunks reopened;11 native captures preserved; actual nativeSourceRevision/Seed/policy freeze pending",
+    "labels": "PROTOCOL_SEED_NOT_EXPERT_GOLDEN",
+    "corpus_raw_file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
+    "inventory": "corpus-inventory-v3.json",
+    "existing_readback": "existing-source-readonly-probe.json and existing-chunk-capture.json:4 currentW1 revisions/287 chunks exact hash verified; native custody source reopen still pending",
+    "native_captures": "native-capture-inventory.json:11 saved actual Docreader outputs, no reparse"
+  },
+  "VALIDATION_LEVEL": "D1",
+  "DOCKER_ACTION": "REUSE_EXISTING_DOCREADER_PROCESS_ONLY_FOR_LOCAL_PREFLIGHT",
+  "ARTIFACT_IDENTITY": "source subset and workbook/config hashes to freeze before run; no container consumed",
+  "WRITE_DOMAINS": {
+    "root": [
+      "HANDOFF.md",
+      "docs/insurance-kb/evidence/830-g3/**",
+      "openspec/changes/README.md",
+      "openspec/changes/129-830-g3-catalog-batch/**",
+      "docs/superpowers/plans/2026-09-07-830-g3-catalog.md",
+      "internal/handler/schema_pack_catalog_830_g3.generated.json"
+    ],
+    "g3_seam_audit": [],
+    "g3_corpus_audit": [],
+    "g3_catalog_impl": [
+      "harness/src/insurance_harness/knowledge_compiler/schema_pack_catalog_830_g3.py",
+      "harness/tests/test_schema_pack_catalog_830_g3.py",
+      "harness/src/insurance_harness/knowledge_compiler/batch_entity_resolution_830_g3.py",
+      "harness/tests/test_batch_entity_resolution_830_g3.py"
+    ],
+    "g3_catalog_ui": [
+      "internal/handler/schema_pack_catalog_830_g3.go",
+      "internal/router/routes_schema_wiki.go",
+      "frontend/src/api/schema-wiki/schemaPackCatalog830G3.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.vue",
+      "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "internal/handler/schema_pack_catalog_830_g3_test.go",
+      "internal/router/routes_schema_pack_catalog_830_g3_test.go",
+      "frontend/src/api/schema-wiki/schemaPackCatalog830G3.spec.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaPackCatalog830G3.spec.ts",
+      "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
+    ]
+  },
+  "parallel_implementation": "A_B_FROZEN_PASS; C_FROZEN_REVIEW_BLOCKERS_PENDING_ONE_CONCENTRATED_FIX; D_DESIGN_ONLY",
+  "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
+  "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
+  "budgets": {
+    "model_calls_current_slice": 0,
+    "material_external_transfers": 0,
+    "docker_builds_current_slice": 0,
+    "docker_pulls": 0,
+    "shared_db_writes": 0,
+    "external_owner": "root only; later exact plans separately frozen",
+    "model_calls_counting_scope": "product compiler/reviewer/provider HTTP calls only; does not mean zero Codex/subagent development inference",
+    "frontend_dependencies": "reuse existing G1 node_modules through ignored symlink; no install"
+  },
+  "NON_GOALS": [
+    "G4",
+    "G5",
+    "G6",
+    "Q0",
+    "production knowledge publication",
+    "new service/table/authority",
+    "historical worktree cleanup",
+    "BA0 rerun"
+  ],
+  "STOP": [
+    "28§6 repeated same blocking edge after one correction",
+    "second-level prerequisite",
+    "28§8 timebox/48h no real result",
+    "architecture red line or unowned shared file changes",
+    "G3 card wrong merge/identity drift/frozen threshold drift"
+  ],
+  "FLOW_STATUS": "NOT RUN",
+  "QUALITY_STATUS": "DEFERRED_TO_Q0",
+  "SCHEMA_CATALOG_STATUS": "11_COMPILED_NOT_RUNTIME_REGISTERED",
+  "QUALITY_ADMITTED_PACK_SET": [],
+  "baseline_verification": {
+    "tests": "test_entity_page_graph_830_g1.py + test_medical_schema_pack_596_1.py",
+    "passed": 16,
+    "skipped": 3,
+    "failed": 0,
+    "not_g3_pass": true,
+    "skip_reason": "3 historical C5 replay checks require expired /private/tmp/weknora-815-final-06e08c.sbD1nuoR/c5-bundle-v3 inputs; NOT counted toward G3",
+    "actual_c5_replay": {
+      "source": "docs/insurance-kb/evidence/830-g2/inputs/c5",
+      "passed": 3,
+      "skipped": 0,
+      "failed": 0,
+      "meaning": "same three previously skipped G1 baseline checks, persistent exact input reuse; total distinct baseline19PASS"
+    },
+    "effective_skipped": 0
+  },
+  "shared_contract": {
+    "plan": "docs/superpowers/plans/2026-09-07-830-g3-catalog.md",
+    "plan_sha256": "8c32fe0d7047b0d97b0c78a30cd4d53c0d18852536c4cfb7350b1ad628c0b266",
+    "mapping_config_sha256": "4be610b5eb9c4c665a932b0786eafc08a75982447fb14aaf1f1e32c7662fef18",
+    "spec_sha256": "c06b3d5ba8da5c17eb5ae47eeb68d62bf44c3c7928682cc8353065495132304c",
+    "status": "A_SPEC_CODE_PASS_BLOCKER0_WIRE_UNCHANGED",
+    "classification_shape": "applicable_classifications=[mapping.classification] one-element ordered array; not a batch classifier output"
+  },
+  "implementation_owner": "g3_catalog_impl(C)",
+  "catalog_content_sha256": "b4b8cd9c797442c3581c8721834abb3f6ec716057509dad4ac254f79fc0a97bd",
+  "profile_confirmation": "USER_CONFIRMED_EXACT_CATALOG; actor display name/queue assignee not supplied",
+  "profile_confirmation_receipt": "profile-user-confirmation.json"
+}

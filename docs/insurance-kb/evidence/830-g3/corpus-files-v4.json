@@ -1,0 +1,152 @@
+{
+  "contract": "830-g3-corpus-files.v4",
+  "status": "RAW_FILE_SET_FROZEN_REVISIONS_AND_SEED_POLICY_PENDING",
+  "supersedes_raw_selection": "corpus-files-v3.json",
+  "reason": "Before actual SourceRevision/Seed/policy freeze, select whole official exported-text product list after one bounded source compatibility probe. Failed scanned-page manual remains in inventory and native-preflight-attempt1.json remains10/11. No prior batch pass or denominator is rewritten.",
+  "removed_from_selected_batch": [
+    "g3-material-20"
+  ],
+  "entries": [
+    {
+      "inventory_id": "g3-material-01",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_tiaokuan.pdf",
+      "file_sha256": "88b784c61f52a2e21a2a12f96ba5d73412de95e68a4453af03a27e8ab1245edc",
+      "size_bytes": 1047811,
+      "pages": 39,
+      "identity_anchor_note": "596-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-02",
+      "path": "dataset/version-materials/esb_zunxiang_596-1_shuomingshu.pdf",
+      "file_sha256": "5e2aef32d319b5aca6d37268e99ee5252ea0c7a56885b1e4dfa1ebb0308e4279",
+      "size_bytes": 492101,
+      "pages": 27,
+      "identity_anchor_note": "596-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-03",
+      "path": "dataset/version-materials/esb_huixiang_594-1_tiaokuan.pdf",
+      "file_sha256": "7bfac182fe11866e9d4c6f2b970a3a56db79833476f51e83ddcafe127b4c9ce5",
+      "size_bytes": 1332078,
+      "pages": 44,
+      "identity_anchor_note": "594-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-04",
+      "path": "dataset/version-materials/esb_huixiang_594-1_shuomingshu.pdf",
+      "file_sha256": "3c7b24cd12e1c6bb04c714be511077f85fa6e5c820ed18dde3f025e9e71b320f",
+      "size_bytes": 395696,
+      "pages": 17,
+      "identity_anchor_note": "594-1",
+      "source_revision_status": "EXISTING_SNAPSHOT_REQUIRES_EXACT_REOPEN"
+    },
+    {
+      "inventory_id": "g3-material-07",
+      "path": "dataset/version-materials/esb_changqi_1072-1_tiaokuan.pdf",
+      "file_sha256": "53eb3b5b6c2d66c09cea593f9cb40faa596182ad82523e72bd394f49466913cc",
+      "size_bytes": 1229968,
+      "pages": 35,
+      "identity_anchor_note": "1072-1",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-08",
+      "path": "dataset/version-materials/esb_changqi_1072-4_tiaokuan.pdf",
+      "file_sha256": "f043311c2257f6f5e5cd14120c4f418ed9ef2245dda21fc1eb80d75ae21f1079",
+      "size_bytes": 1394564,
+      "pages": 46,
+      "identity_anchor_note": "1072-4",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-09",
+      "path": "dataset/version-materials/esb_2016_tiaokuan.pdf",
+      "file_sha256": "734fe177e498de35ceb551eb02a770bb0de41d0e7bf03b163327e9afdc4118ec",
+      "size_bytes": 529442,
+      "pages": 10,
+      "identity_anchor_note": "insurer-and-version-unresolved",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-11",
+      "path": "dataset/shouxian_product/平安守护百分百（2026）两全保险/保险条款.pdf",
+      "file_sha256": "829346499a67156e77e2778a4c5542e88456f8918beda055162f85ab3a30d007",
+      "size_bytes": 476226,
+      "pages": 9,
+      "identity_anchor_note": "1826",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-12",
+      "path": "dataset/shouxian_product/平安附加（2026）失能收入损失保险/保险条款.pdf",
+      "file_sha256": "5da2822c7367682d64d7f2f2b4b5564891018a0ee714a464fb45833f6c4b492f",
+      "size_bytes": 1100736,
+      "pages": 44,
+      "identity_anchor_note": "new-disability",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-13",
+      "path": "dataset/shouxian_product/平安附加（2026）意外伤害保险/保险条款.pdf",
+      "file_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "size_bytes": 578026,
+      "pages": 12,
+      "identity_anchor_note": "new-accident",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-14",
+      "path": "dataset/shouxian_product/平安盛世金越（尊享版26）终身寿险/保险条款.pdf",
+      "file_sha256": "42c9536acddd41d77e3d56e238bb47060cb36ac96a798317d875ec51cd967911",
+      "size_bytes": 496516,
+      "pages": 9,
+      "identity_anchor_note": "1824",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-17",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-terms.pdf",
+      "file_sha256": "d68c2d3f88af277b392d4c8f3f8665620b9873a31d8411ce5e1763b8e129d474",
+      "size_bytes": 1180305,
+      "pages": 43,
+      "identity_anchor_note": "1828; 平安人寿〔2025〕疾病保险174号",
+      "identity_inspection_status": "EXACT_TITLE_CODE_AND_FILING_ON_PAGE1",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-18",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-1828-anyoufu-quanneng-brochure.pdf",
+      "file_sha256": "1c3e868b8d2acbf018087af5e345f70f0a934f94e75c2dc5a09fd9c41190b933",
+      "size_bytes": 209004,
+      "pages": 11,
+      "identity_anchor_note": "exact full title and contract reference on page1",
+      "identity_inspection_status": "EXACT_FULL_TITLE_NO_CODE_ASSUMPTION",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-19",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-anyoufu-unresolved-version-rate-table.pdf",
+      "file_sha256": "62b7c75958120effcba98adc71e6236f18728d900a05f312efc405f8be1aa5b8",
+      "size_bytes": 106347,
+      "pages": 2,
+      "identity_anchor_note": "title omits 全能版; no code/filing in two pages",
+      "identity_inspection_status": "UNRESOLVED_VERSION_DO_NOT_ATTACH_TO_1828",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    },
+    {
+      "inventory_id": "g3-material-21",
+      "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-20101018-official-product-list.pdf",
+      "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+      "size_bytes": 54610,
+      "pages": 5,
+      "identity_anchor_note": "Official whole historical product list with individually named/coded products; each product version still unresolved without terms anchors",
+      "source_revision_status": "NOT_YET_CAPTURED"
+    }
+  ],
+  "file_set_sha256": "0fa401475bf868a5f0f49f406da40214b6e1af7b88cca64e65c2e2b84fc4648f",
+  "source_revision_and_seed_freeze": "PENDING; no classifier run and no accepted expected outcomes changed",
+  "quality_status": "DEFERRED_TO_Q0"
+}

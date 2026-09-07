@@ -1,0 +1,14 @@
+{
+  "contract": "830-g3-existing-chunks-readonly-plan.v1",
+  "script": "/private/tmp/g3-existing-chunks-readonly.py",
+  "script_sha256": "3952c9b45e2dc87b0feb1d6604a68f3c80285e02a25a3afe132a6d8e6b25626e",
+  "request_budget": 9,
+  "methods": [
+    "GET"
+  ],
+  "purpose": "Actual4 W1 revision chunk snapshots; exact manifest recompute and postread drift check",
+  "input": "existing-source-readonly-probe.json",
+  "provider_calls": 0,
+  "source_backfill": 0,
+  "application_writes": 0
+}

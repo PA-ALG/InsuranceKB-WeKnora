@@ -1,0 +1,9 @@
+{
+  "contract": "830-g3-lane-b-dispatch.v1",
+  "owner": "g3_catalog_ui",
+  "brief": "lane-b-brief.md",
+  "a_review": "catalog-a-independent-review.json",
+  "asset_root_integrated": true,
+  "write_domain_source": "startup.json",
+  "status": "RED_GREEN_IN_PROGRESS"
+}

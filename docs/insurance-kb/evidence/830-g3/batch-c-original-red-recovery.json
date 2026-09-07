@@ -1,0 +1,38 @@
+{
+  "contract": "830-g3-original-red-artifact-recovery.v1",
+  "recovered_at": "2026-09-07T07:30:05.176348+00:00",
+  "method": "Read original persisted Codex child task JSONL; copy exact tool-call and output records, no re-execution or reconstruction",
+  "source_journal": "/Users/houjing/.codex/sessions/2026/09/07/rollout-2026-09-07T13-24-35-01a07a53-4cc2-7502-9c10-a4a28a4d4c31.jsonl",
+  "original_agent_path": "/root/g3_catalog_impl",
+  "parent_thread_id": "01a07a47-ffa3-7490-b819-862482a61686",
+  "original_call_id": "call_Q1fBPm7wiwEaYDHGKrDekhab",
+  "records": [
+    {
+      "physical_line": 1322,
+      "timestamp": "2026-09-07T06:57:15.258Z",
+      "raw_record_sha256": "42b09eb022f180c4b70f332636d2d0db024f7ae2295ee2ae5de4ab0c543d89a5"
+    },
+    {
+      "physical_line": 1325,
+      "timestamp": "2026-09-07T06:57:28.728Z",
+      "raw_record_sha256": "bf3fd3347cb93f7272ade632e9229fc128366eadf124561f5c0a0ef87a4ab697"
+    }
+  ],
+  "tool_records_path": "batch-c-original-behavior-red-tool-records.jsonl",
+  "tool_records_sha256": "eaac2d5bd785c8cef8d99073e9e93d994efe5a997362711df6c49e83ce0352f7",
+  "log_path": "batch-c-original-behavior-red-recovered.log",
+  "log_sha256": "71c65e89ace6a6b36acd71119a7967fb6b90f6e3fd8c69a672219678bb027b02",
+  "original_result": "4 failed,11 passed in8.73s",
+  "meaning": "Original later regression RED recovered from automatically persisted task history. Initial module-missing/fixture failures remain rejected; no claim that these are initial feature RED or final fix RED.",
+  "independent_recovery_review": {
+    "reviewer": "g3_seam_audit",
+    "status": "PASS",
+    "blockers": 0,
+    "checks": [
+      "exact original command/output physical LF lines1322/1325",
+      "recovered log equals original second output text block bytes",
+      "original RED06:57:28Z precedes GREEN07:02:27Z"
+    ],
+    "scope": "Closes missing later behavior/regression RED artifact only; initial module-missing/fixture failures remain rejected; seven current review REDs still required"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "contract": "830-g3-official-multi-native-source.v1",
+  "acquisition": {
+    "inventory_id": "g3-material-21",
+    "path": "docs/insurance-kb/evidence/830-g3/inputs/pingan-20101018-official-product-list.pdf",
+    "url": "https://life.pingan.com/upload/2010101810035814.pdf",
+    "file_sha256": "fcba0b42ee84b4ee961ba49f650a82b3057fa3f5aaed5c0a7fba41dfb254685e",
+    "size_bytes": 54610,
+    "pages": 5,
+    "identity_anchor_note": "Official whole historical product list with individually named/coded products; each product version still unresolved without terms anchors",
+    "source_revision_status": "NOT_YET_CAPTURED"
+  },
+  "local_native_probe": "native-multi-alternative-probe.json",
+  "original_whole_pdf_preserved": true,
+  "provider_calls": 0,
+  "source_revisions_created": 0
+}
