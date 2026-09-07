@@ -11,8 +11,8 @@
   "origin_main_verified_by": "successful git fetch origin main 2026-09-07",
   "worktree": "/Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation",
   "branch": "codex/830-g3-implementation",
-  "CURRENT_RED": "SOURCE_RECEIPT8_OLD_DTO_REJECTION_TO_RECORD; MULTILINE7_CODE_PASS",
-  "NEXT_PHYSICAL_RESULT": "当前来源回执兼容8实现与独立复核；上传执行器独立复审；真实候选编译D完整342",
+  "CURRENT_RED": "C7_C8_CODE_PASS; D_FULL342_REQUIRED; UPLOAD_V1_BLOCKER7_REPAIR1",
+  "NEXT_PHYSICAL_RESULT": "完整342字段Python/Go候选DTO及容量验证；上传执行器首轮复审",
   "FROZEN_INPUT": {
     "workbook": "docs/insurance-kb/evidence/830-b0/inputs/【汇总】11类保险产品知识Schema_全局一致性校验更新版_20260812-v5.xlsx",
     "sha256": "8feb33a1e7dc55fad1719a151737822e62bfac815f4b0969441e38744f0204ec",
@@ -77,7 +77,7 @@
       "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts"
     ]
   },
-  "parallel_implementation": "C_SOURCE_RECEIPT8_RED_GREEN; D_FULL342_PENDING_C8; UPLOAD_RUNNER_REVIEW",
+  "parallel_implementation": "D_FULL342_DTO_FIXTURE_IMPLEMENTATION; UPLOAD_RUNNER_REPAIR1",
   "TIMEBOX": "first slice 1 workday; deadline 2026-09-08T18:00:00+08:00; full G3 5–7 workdays",
   "day2_demo_deadline": "2026-09-08T18:00:00+08:00",
   "budgets": {
@@ -254,5 +254,21 @@
       "provider": 0,
       "container": 0
     }
+  },
+  "source_upload_runner": {
+    "frozen_v1": "source_upload_runner_v1.py",
+    "v1_status": "BLOCKED_INDEPENDENT_REVIEW_7",
+    "review": "source-upload-runner-independent-review-1.json",
+    "current": "FIRST_CONCENTRATED_REPAIR",
+    "dispatch": "source-upload-runner-repair-dispatch-1.json",
+    "actual_effects": 0
+  },
+  "source_registration_code_review": {
+    "status": "PASS",
+    "review": "c-source-registration-independent-review.json",
+    "root_tests": 99,
+    "source_sha256": "050f5a0b65e8919142946e6f38a947220ec9181060b9d6ea89f3ed9778dfe2e5",
+    "test_sha256": "16b4628e3f8a258cab97a03ab6daf6585c3fdeb3cbfaa4e4beb11c68845f2216",
+    "commit": "a6ca221cdc4fb500c3e38e3a4dd733091774bbad"
   }
 }
