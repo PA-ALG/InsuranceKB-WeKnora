@@ -14,6 +14,8 @@ D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff
 
 最新软件门禁：D Go首轮修复独立PASS（原2BLOCKER关闭、4 C反例/354跨语言snapshot/fulltypes/gofmt通过），source8db0e765…、test72e2c166…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。Python与Go类型镜像写域均关闭。后端Tasks1/2/3现已派出，UI本地实现正在全量检查；两者仍需独审/整合。原外发批准仍未收到，真实SOURCE/C/model/DB/build/deployment/业务效果均0。
 
+UI最新独审：原8文件/17份日志身份全部匹配，独立25项页面测试、46项G2回归、actual两条历史字段对齐通过；唯一BLOCKER是结构化Text/identity误放行内部TAB/LF/CR。完整重哈希反例已复现，报告lane-d-ui-independent-review-01.json SHA c206bffc…。原代码/日志保全，按既有修订7v2只开放API及spec两文件首轮修复，保留正文TAB/LF/CR，六个Vue文件冻结；见lane-d-ui-repair-dispatch-1.json SHA d600c0cc…。PDF worker额外测试为既有依赖路径环境限制，不计PASS或产品失败。后端Tasks1/2/3仍实现中，真实SOURCE/C/provider/DB/build/deployment/业务效果仍0。
+
 ---
 
 ## 当前终态：G2 FLOW PASS（2026-09-07）

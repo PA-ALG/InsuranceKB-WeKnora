@@ -1,0 +1,39 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > leaves an ordinary G2 current release independent of the G3 Catalog 26ms
+   → promise rejected "Error: G3 Catalog must not gate G2" instead of resolving
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > leaves an ordinary G2 current release independent of the G3 Catalog
+AssertionError: promise rejected "Error: G3 Catalog must not gate G2" instead of resolving
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:194:72
+    192|       throw new Error(`unexpected ${path}`)
+    193|     })
+    194|     await expect(loadBatchConceptActive830G3(scope.wiki_kb_id, { get }…
+       |                                                                        ^
+    195|     expect(get.mock.calls.flat().some(path => String(path).includes('/…
+    196|   })
+
+Caused by: Error: G3 Catalog must not gate G2
+ ❯ Object.<anonymous> src/api/schema-wiki/batchConcept830G3.spec.ts:191:46
+ ❯ loadCatalog src/api/schema-wiki/batchConcept830G3.ts:499:61
+ ❯ loadBatchConceptActive830G3 src/api/schema-wiki/batchConcept830G3.ts:557:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  00:41:06
+   Duration  1.20s (transform 594ms, setup 0ms, import 719ms, tests 30ms, environment 1ms)
+

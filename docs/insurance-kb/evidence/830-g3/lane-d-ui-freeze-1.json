@@ -1,0 +1,154 @@
+{
+  "contract": "830-g3-d-ui-freeze.v1",
+  "status": "OWNER_GREEN_PENDING_INDEPENDENT_REVIEW",
+  "files": [
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+      "sha256": "fd9bd413ff9c3faeac11352af1b8c9bba4a9834d81b051b82cf275951cd51fb9",
+      "bytes": 36791
+    },
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts",
+      "sha256": "c254166c628ec803206185983f71bfa65553005f57225261829663c897f8b8b4",
+      "bytes": 14171
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "979d1d9b3081f09d7a48bcc78c4dcdba3617056618c0f6f390dba7b71957a132",
+      "bytes": 4859
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "934e83718acde69aea4ebcbb43f68895ef57b9725e44ff4700a92647965af2cf",
+      "bytes": 7573
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "9bf392988ff7b2586e5bca089373a385734a09b901194a7eef484212ba377878",
+      "bytes": 7789
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "b6f59c29d0e803190436bd7397309c075ce53571c913ae679a1d7fb3f1f9f11f",
+      "bytes": 6470
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "sha256": "073a4671c08f2348dbacb0a4e5e4b4a9de2f7a717f493cfaff9847eb87951810",
+      "bytes": 12283
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "sha256": "a8c9509e786199c766b84ec4bb3ebf13548068b2345d993a007d49d815ef00f8",
+      "bytes": 8522
+    }
+  ],
+  "logs": [
+    {
+      "path": "g3-d-ui-api-free-closure-red-20260908-01.log",
+      "sha256": "af5ad01232d2e53fbd6f67b37a992b37bab46fb8ffa1a5979deda58c9fac5c74",
+      "bytes": 1313663
+    },
+    {
+      "path": "g3-d-ui-api-g2-independent-red-20260908-01.log",
+      "sha256": "57de089bd426588e86acd8eb9bb8433f8341046c86331892a12b0c028d45ffe9",
+      "bytes": 3051
+    },
+    {
+      "path": "g3-d-ui-api-order-red-20260908-01.log",
+      "sha256": "4aafe33e77c4f3057d872eb084662c0ec0b8e4da3f5e4c8701c47d155a5916aa",
+      "bytes": 2892
+    },
+    {
+      "path": "g3-d-ui-api-red-20260908-01.log",
+      "sha256": "13688a6e39a9949edfa196c97daa859e22cfd8e7cd3430ed11a9f7677bb2e44c",
+      "bytes": 1251
+    },
+    {
+      "path": "g3-d-ui-api-red-20260908-02.log",
+      "sha256": "3aeb2180a9bda5cb78d34ed65de1be96b2526d1293a5e24a9ca2f707ef60e288",
+      "bytes": 6124
+    },
+    {
+      "path": "g3-d-ui-api-version-binding-red-20260908-01.log",
+      "sha256": "80756a73a31e83850913fc19bf6550cce629ff0473284bbcf583e61525532ccf",
+      "bytes": 1313761
+    },
+    {
+      "path": "g3-d-ui-focused-green-20260908-01.log",
+      "sha256": "c954ebca4f5313a35b5fba65bd06231e9af515b154a40a13e7316d2baf62059f",
+      "bytes": 11724
+    },
+    {
+      "path": "g3-d-ui-focused-green-20260908-02.log",
+      "sha256": "71ad00b7e6927944cab1a7c1fd55d32e404e6e541f382102fdc09f0e72a419d5",
+      "bytes": 12721
+    },
+    {
+      "path": "g3-d-ui-focused-green-20260908-03.log",
+      "sha256": "37b0dd97d6330b02cd6bada12b2dae9dd51f3f3e3451d1e47a7b251c188c5804",
+      "bytes": 12732
+    },
+    {
+      "path": "g3-d-ui-focused-green-20260908-04.log",
+      "sha256": "32d92a40763b6429bdcaa53c65d9a9957027cb211aae5f40cf9c35399a216ffa",
+      "bytes": 11732
+    },
+    {
+      "path": "g3-d-ui-g2-regression-green-20260908-01.log",
+      "sha256": "f644bc9977ee551263498b48b72d599dfae66dd2d7907e1f8e11a351d9b39c50",
+      "bytes": 8200
+    },
+    {
+      "path": "g3-d-ui-g2-regression-green-20260908-02.log",
+      "sha256": "4663b4e115aba7c25114b2479d1f5a88186bcc16ee6296293776095e06649815",
+      "bytes": 7134
+    },
+    {
+      "path": "g3-d-ui-staticcheck-green-20260908-01.log",
+      "sha256": "11e6a1809d2669a7f72a66fbea9ba2fd1d5636432595b6300f555cdef536cd46",
+      "bytes": 29
+    },
+    {
+      "path": "g3-d-ui-vue-red-20260908-01.log",
+      "sha256": "06765a01c8067ee55a8aa98f23dd2c98d78eb40f1ba66b816551ce6dfd8d9008",
+      "bytes": 24151
+    },
+    {
+      "path": "g3-d-ui-vue-tsc-green-20260908-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "g3-d-ui-vue-tsc-green-20260908-02.log",
+      "sha256": "ec98401118587751c86fa11909c8747a4dfabf189b319903f80baa4f9ab5cee8",
+      "bytes": 29
+    },
+    {
+      "path": "g3-d-ui-vue-tsc-green-20260908-03.log",
+      "sha256": "4d37bf60b781d94cb6d66ceb53e216fbb9afd83c7e8450c85bbf362557a4e662",
+      "bytes": 29
+    }
+  ],
+  "final_owner_validation": {
+    "focused": "g3-d-ui-focused-green-20260908-04.log: 4 files / 25 tests PASS",
+    "g2_page_citation_regression": "g3-d-ui-g2-regression-green-20260908-02.log: 3 files / 46 tests PASS",
+    "vue_tsc": "g3-d-ui-vue-tsc-green-20260908-03.log: PASS",
+    "static_diff": "g3-d-ui-staticcheck-green-20260908-01.log: PASS"
+  },
+  "historical_log_caution": "Names are original and are not verdicts. Earlier attempts are preserved separately; pdfJsPort extra regression encountered Vite Denied ID under existing cross-worktree node_modules symlink, not counted as PASS. Initial module/scaffold failure is not automatically a behavior RED.",
+  "go_gate": {
+    "commit": "0258e413f",
+    "review": "lane-d-go-repair1-independent-rereview.json",
+    "sha256": "17d1153f4e4de7e79fdf779459853f47efbb878ad104dffceab688852ac921c3"
+  },
+  "fixture_boundary": "Five products /342 fields are frozen synthetic protocol fixtures, not an actual G3 batch or quality result.",
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "image_build": 0,
+    "deployment": 0
+  }
+}

@@ -47,3 +47,5 @@ D下游执行计划及待审对齐展示设计完成独立复审（初审2项已
 D Go首次完整独审2项BLOCKER，原完整types/四C反例/354跨语言snapshot通过但不能替代strict wire与Hash漏验修复；报告lane-d-go-mirror-independent-review-01.json SHA f2624564…。原Go及独立有效RED已保全，首轮集中修复不重开Python/C/common。UI本地顺序调整独立PASS（lane-d-ui-local-order-amendment-review-1.json SHA dcf96bca…），仅原Task4 mock实现已派；backend、最终UI接受/commit/集成仍等修复后Go独审PASS。所有真实批次/provider/DB/build/deployment仍NOT RUN。
 
 D Go首轮集中修复独立PASS（BLOCKER0/BACKLOG0），source8db0e765…、test72e2c166…，freeze ca6f6daf…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。原2项关闭，四C反例与354 Python-Go snapshots、完整types48.408s、gofmt通过；root复核全部准确身份与3 fixtures未变。原Go/原RED继续保留。后端Tasks1→2→3已按已审计划派出，UI mock实现并行；这不代表后端/UI完成，也不代表真实SOURCE/C/provider/DB/Draft/Review/Activate或部署已执行。
+
+D UI Task4首次独立复核BLOCKED（1项、BACKLOG0）：8文件/17 owner日志身份一致；独立focused25、G2页面/citation46、actual两条空unknown历史对齐通过。结构化身份内部LF完整重哈希仍被接受，违反修订7v2；原文件/日志保存在d-ui-review1-snapshots及d-ui-review1-evidence，报告lane-d-ui-independent-review-01.json SHA c206bffc…。首轮有界修复仅开放batchConcept830G3.ts及其spec，严格结构化文本与exact typed body分离，正文TAB/LF/CR保留；dispatch d600c0cc…。六个Vue文件不变，最终UI接受尚未通过。额外pdfJsPort Denied ID为现有跨worktree依赖环境限制，不属于PASS或产品回归；真实效果仍NOT RUN。

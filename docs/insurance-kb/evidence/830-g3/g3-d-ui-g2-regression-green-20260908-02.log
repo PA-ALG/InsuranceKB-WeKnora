@@ -1,0 +1,55 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: group-extra 9ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: group-missing 9ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: group-owner 2ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: field-extra 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: field-missing 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects incomplete or foreign navigation: empty-evidence 0ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > renders the complete frozen navigation for entity_overview 3ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > renders the complete frozen navigation for free_wiki 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > renders the complete frozen navigation for field_assertion 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > renders the complete frozen navigation for free_wiki_item 0ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > reads a member from the requested release through the existing scoped route 5ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > rejects release drift without a fallback read 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > rejects scope drift without a fallback read 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > rejects member drift without a fallback read 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > rejects mode drift without a fallback read 0ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > rejects moving release aliases before making requests 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > G2 release-bound page client > binds citation requests to the loaded member and release 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects the frozen member relationship drift: concept-owner 2ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects the frozen member relationship drift: field-owner 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects the frozen member relationship drift: unrelated-field 1ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects the frozen member relationship drift: evidence-space 0ms
+ ✓ src/api/schema-wiki/conceptFreeWiki830G2.spec.ts > rejects the frozen member relationship drift: evidence-kb 1ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > consumes the persisted Go authority vector without rebuilding its digest 15ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > accepts a closed authority tied to the exact non-BMP evidence and signed digest 3ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects release drift before reading bytes 3ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects scope drift before reading bytes 0ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects source drift before reading bytes 0ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects quote drift before reading bytes 0ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects bbox drift before reading bytes 0ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects expired drift before reading bytes 1ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects extra drift before reading bytes 1ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects digest drift before reading bytes 1ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > SchemaCitationViewer exact page and bbox rendering > does not expose the former caller-supplied target, pin, or bytes props 5ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > pinned preview API > rejects the legacy direct-byte path before transport 3ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > pinned preview API > builds only the exact release/field/citation authority path 1ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > pinned preview API > routes authority by the Active tuple and bytes only by opaque token 11ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > submits only the Active release/epoch/field/citation tuple 1ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > renders exact pinned bytes and projects normalized coordinates 86ms
+ ✓ src/components/schema-wiki/conceptCitationAuthority830G2.spec.ts > G2 source authority and exact PDF viewer > rejects changed PDF bytes before the PDF parser is called 66ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > loads terms page 12 by opaque token, verifies bytes, and renders the exact page 105ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > loads brochure page 27 by opaque token, verifies bytes, and renders the exact page 74ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > keeps rate-table page 12 unavailable with token, bytes, and PdfPort calls at zero 57ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > keeps rate-table page 27 unavailable with token, bytes, and PdfPort calls at zero 56ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > rejects unavailable bbox before token bytes or PdfPort 55ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > rejects byte hash drift after token fetch and before PdfPort 55ms
+ ✓ src/components/schema-wiki/SchemaCitationViewer.spec.ts > immutable revision citation preview > returns from preview with the same Active release and epoch pin 59ms
+
+ Test Files  3 passed (3)
+      Tests  46 passed (46)
+   Start at  00:44:46
+   Duration  3.74s (transform 2.00s, setup 0ms, import 2.72s, tests 712ms, environment 3.49s)
+

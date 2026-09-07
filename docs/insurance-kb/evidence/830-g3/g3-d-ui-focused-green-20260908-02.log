@@ -1,0 +1,140 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation 408ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift 3413ms
+ ✓ src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders pinned concept and entity links through the serving Wiki 119ms
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable DRAFT preparation without loading current or Active 128ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > opens immutable READY preparation without loading current or Active 29ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > renders a complete Active G3 directory while preserving normal G2 fallback 17ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > rejects ambiguous preparation query before any directory request 11ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > uses the serving KB and renders only a complete G2 result 35ms
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+stderr | src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed
+[Vue warn]: Failed to resolve component: RouterLink
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement. 
+  at <SchemaWikiCatalogEntry830G2 knowledgeBaseId="wiki-entry" ref="VTU_COMPONENT" > 
+  at <VTUROOT>
+
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > routes frozen G1 overview and pure schema releases without treating errors as legacy 26ms
+ ✓ src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts > SchemaWikiCatalogEntry830G2 > keeps the published G2 directory visible when the protected G3 catalog fails closed 5ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly 1048ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2 480ms
+ × src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders G3 products by classification and formal name with Profile order and bounded lineage links 645ms
+   → expected 298 to be less than 82
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read 237ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search 397ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > leaves an ordinary G2 current release independent of the G3 Catalog 3ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > shows the shared definition and entity-specific tri-state fields with pinned links 116ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > opens the G2 source viewer using the release that supplied the page 33ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 shared concept page > does not show stale content after a failed fixed-release read 24ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G2 source preview under slow source verification > allows a verified source taking 35 seconds while preserving binary response handling 16ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > renders preparation evidence locally and never requests an Active token or content 14ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > uses the pinned shared page session for Active evidence 11ms
+ ✓ src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts > G3 batch concept page modes > rejects mixed preparation and release modes before reading either page 3ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope 500ms
+ ✓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order 166ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts > ConceptDirectory830G2 > renders G3 products by classification and formal name with Profile order and bounded lineage links
+AssertionError: expected 298 to be less than 82
+ ❯ src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts:79:43
+     77|     expect(wrapper.text()).toContain('已登记，尚未完成质量验收')
+     78|     expect(wrapper.text()).toContain('342 个字段')
+     79|     expect(wrapper.text().indexOf('意外险')).toBeLessThan(wrapper.text().…
+       |                                           ^
+     80|     expect(wrapper.text().indexOf('安康医疗险')).toBeLessThan(wrapper.text(…
+     81|     expect(wrapper.text().indexOf('保障内容')).toBeLessThan(wrapper.text()…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 24 passed (25)
+   Start at  00:47:26
+   Duration  7.63s (transform 6.07s, setup 0ms, import 10.51s, tests 7.92s, environment 7.64s)
+

@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "alignment_count": 2,
+  "alignments": [
+    {
+      "entityID": "ping-an-e-sheng-bao",
+      "entityVersion": "ping-an-e-sheng-bao@596-1",
+      "oldFieldKey": "social_insurance_requirement",
+      "newFieldKey": "social_insurance_requirements",
+      "oldMemberID": "assertion_96fe1043734c2274ff8fc64793e27eb53ebc8bdf1adab4b8bfcd9853ae45e4ff",
+      "newMemberID": "assertion_716ae1fd5570d160c7642d30b3d85404195b5b08dd685564ed6310fc441beefe",
+      "oldReleaseID": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+    },
+    {
+      "entityID": "ping-an-e-sheng-bao-hui-xiang",
+      "entityVersion": "ping-an-e-sheng-bao-hui-xiang@594-1",
+      "oldFieldKey": "social_insurance_requirement",
+      "newFieldKey": "social_insurance_requirements",
+      "oldMemberID": "assertion_5c9769fe70766fd9f175bfb1576158d12f20a2c05c250eadf31f7c50500ccc12",
+      "newMemberID": "assertion_76de518a60869cd4859801364b5326e8e428f82efaa8a4eb6ff911e162713f72",
+      "oldReleaseID": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+    }
+  ],
+  "calls": [
+    "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/preparations/preparation-g3/schema-scope",
+    "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/schema/catalogs/schema_catalog_insurance_product/versions/2026-08-12-v5",
+    "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/schema/preparations/preparation-g3/batch-concept",
+    "/api/v1/knowledgebase/8d5695de-f255-42d5-9a41-042ba86e97b9/wiki/release-scopes/a8751a40-83ce-55c8-a160-079b283483ca/raw/b1f1764c-443d-46b8-98e3-d5aa5e55eb42/releases/release-9cb493e3-8d27-4a0f-8f29-93e2a078725b/search?q="
+  ],
+  "called_current": false,
+  "old_payload_source_sha256": "92f61e6321286c4c5b5e3d836d7a660bc112dd86f575c0bd634d9e36e8d6f14b"
+}
