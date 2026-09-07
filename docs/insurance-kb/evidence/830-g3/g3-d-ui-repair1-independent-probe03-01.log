@@ -1,0 +1,8 @@
+{
+  "positive": "ACCEPTED",
+  "attack": "internal-LF in Evidence.parser_identity",
+  "before": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+  "result": "REJECTED:Error: BATCH_CONCEPT_830_G3_INVALID",
+  "manifest_sha256": "09df983accd0f8ebfba4c35a037d017f1f46d645f7d11f1994f4f0ed34323b57",
+  "read_sha256": "d08ac29769d82c4757e8d87892752807f912db8e29387d65613d689942f1919e"
+}

@@ -16,6 +16,8 @@ D当前软件进展：source coverage第二次最终复审PASS（30 tests、ruff
 
 UI最新独审：原8文件/17份日志身份全部匹配，独立25项页面测试、46项G2回归、actual两条历史字段对齐通过；唯一BLOCKER是结构化Text/identity误放行内部TAB/LF/CR。完整重哈希反例已复现，报告lane-d-ui-independent-review-01.json SHA c206bffc…。原代码/日志保全，按既有修订7v2只开放API及spec两文件首轮修复，保留正文TAB/LF/CR，六个Vue文件冻结；见lane-d-ui-repair-dispatch-1.json SHA d600c0cc…。PDF worker额外测试为既有依赖路径环境限制，不计PASS或产品失败。后端Tasks1/2/3仍实现中，真实SOURCE/C/provider/DB/build/deployment/业务效果仍0。
 
+UI当前软件门禁：首轮修复独立PASS，原UI-B1关闭（BLOCKER0/BACKLOG0）；source52ec691d…、spec37713e5c…、freeze6cdd98c5…，报告lane-d-ui-repair1-independent-rereview.json SHA3fb2d779…。原完整重哈希反例已拒绝，正常输入接受；独立26项页面及46项G2回归通过，正文TAB/LF/CR保留、LF/CRLF hash不同，FreeWiki投影与冻结Python/Go一致。六个Vue文件逐SHA未变，UI写域关闭。后端Tasks1/2/3仍未完成；尚无真实G3上传/模型/DB/构建/部署/发布效果。
+
 ---
 
 ## 当前终态：G2 FLOW PASS（2026-09-07）

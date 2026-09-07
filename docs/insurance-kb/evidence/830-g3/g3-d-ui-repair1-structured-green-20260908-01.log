@@ -1,0 +1,41 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > parses the exact frozen 354-member/342-field preparation and derives Profile navigation
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects scope, identity and read-hash drift and maps READY distinctly
+ × src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects ASCII controls in structured text while preserving exact typed multiline bodies 3090ms
+   → BATCH_CONCEPT_830_G3_INVALID
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > parses exact Active snapshots without casting the G3 overview to G2
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > uses preparation scope and immutable GET without current, and permits only the exact historical q-empty read
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > pins Active current then exact search
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > leaves an ordinary G2 current release independent of the G3 Catalog
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > selects preparation members locally and reads Active pages through the pinned shared envelope
+ ↓ src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept Active parser and mocked transports > accepts overview related members only in frozen manifest order
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/api/schema-wiki/batchConcept830G3.spec.ts > G3 batch concept preparation parser > rejects ASCII controls in structured text while preserving exact typed multiline bodies
+Error: BATCH_CONCEPT_830_G3_INVALID
+ ❯ invalid src/api/schema-wiki/batchConcept830G3.ts:154:72
+    152| }
+    153|
+    154| function invalid(code = 'BATCH_CONCEPT_830_G3_INVALID'): never { throw…
+       |                                                                        ^
+    155| function record(value: unknown): value is R { return typeof value === …
+    156| function exact(value: unknown, keys: readonly string[]): R {
+ ❯ pageMember src/api/schema-wiki/batchConcept830G3.ts:308:77
+ ❯ src/api/schema-wiki/batchConcept830G3.ts:358:60
+ ❯ validateMembers src/api/schema-wiki/batchConcept830G3.ts:358:48
+ ❯ parseManifest src/api/schema-wiki/batchConcept830G3.ts:444:24
+ ❯ parseBatchConceptPreparation830G3 src/api/schema-wiki/batchConcept830G3.ts:460:18
+ ❯ src/api/schema-wiki/batchConcept830G3.spec.ts:198:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  01:23:10
+   Duration  4.72s (transform 705ms, setup 0ms, import 820ms, tests 3.09s, environment 3ms)
+

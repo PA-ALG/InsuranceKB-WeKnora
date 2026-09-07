@@ -1,12 +1,19 @@
 // @vitest-environment happy-dom
 
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { reactive } from 'vue'
 
-const api = vi.hoisted(() => ({ load: vi.fn(), loadSchemaCatalog: vi.fn() }))
+const api = vi.hoisted(() => ({ load: vi.fn(), loadSchemaCatalog: vi.fn(), loadPreparation: vi.fn(), loadActive: vi.fn() }))
+const route = reactive({ query: {} as Record<string, unknown> })
+vi.mock('vue-router', () => ({ useRoute: () => route }))
 vi.mock('@/api/schema-wiki/conceptDirectory830G2', () => ({ loadConceptDirectory830G2: api.load }))
 vi.mock('@/api/schema-wiki/schemaPackCatalog830G3', () => ({
   loadSchemaPackCatalog830G3: api.loadSchemaCatalog,
+}))
+vi.mock('@/api/schema-wiki/batchConcept830G3', () => ({
+  loadBatchConceptPreparation830G3: api.loadPreparation,
+  loadBatchConceptActive830G3: api.loadActive,
 }))
 vi.mock('@/utils/request', () => ({ get: vi.fn() }))
 vi.mock('./SchemaPackCatalog830G3.vue', () => ({ default: {
@@ -17,6 +24,7 @@ vi.mock('./SchemaWikiBrowser.vue', () => ({ default: {
 } }))
 
 import SchemaWikiCatalogEntry from './SchemaWikiCatalogEntry830G2.vue'
+enableAutoUnmount(afterEach)
 
 const H = 'a'.repeat(64)
 const common = { scope: { version: 'schema-wiki-scope.v1', space_id: 'space', raw_kb_id: 'raw',
@@ -26,9 +34,53 @@ describe('SchemaWikiCatalogEntry830G2', () => {
   beforeEach(() => {
     api.load.mockReset()
     api.loadSchemaCatalog.mockReset()
+    api.loadPreparation.mockReset()
+    api.loadActive.mockReset()
+    api.loadActive.mockResolvedValue(null)
+    route.query = {}
     api.loadSchemaCatalog.mockResolvedValue({ catalog_id: 'schema_catalog_insurance_product', entries: [] })
     ;(window as any).__RUNTIME_CONFIG__ = { SCHEMA_WIKI_MVP_ENTRY_KB_ID: 'wiki-entry',
       SCHEMA_WIKI_MVP_SERVING_KB_ID: 'wiki-serving' }
+  })
+
+  it.each([['DRAFT', '待审核'], ['READY', '已审核但未发布']] as const)(
+    'opens immutable %s preparation without loading current or Active', async (status, label) => {
+      route.query = { tab: 'schema', preparation_id: 'preparation-g3' }
+      api.loadPreparation.mockResolvedValue({ ...common, mode: 'g3-preparation', preparationID: 'preparation-g3',
+        status, statusLabel: label, catalog: { catalog_id: 'schema_catalog_insurance_product', entries: [] }, entities: [] })
+      const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledgeBaseId: 'wiki-entry' }, global: { stubs: {
+        ConceptDirectory830G2: { props: ['catalog'], template: '<div data-testid="directory">{{catalog.statusLabel}}</div>' },
+      } } })
+      await flushPromises()
+      expect(api.loadPreparation).toHaveBeenCalledWith('wiki-serving', 'preparation-g3', expect.any(Object))
+      expect(api.load).not.toHaveBeenCalled()
+      expect(api.loadActive).not.toHaveBeenCalled()
+      expect(api.loadSchemaCatalog).not.toHaveBeenCalled()
+      expect(wrapper.get('[data-testid="directory"]').text()).toBe(label)
+      expect(wrapper.get('[data-testid="g3-catalog"]').exists()).toBe(true)
+    },
+  )
+
+  it('renders a complete Active G3 directory while preserving normal G2 fallback', async () => {
+    api.load.mockRejectedValue(new Error('not g2'))
+    api.loadActive.mockResolvedValue({ ...common, mode: 'g3-active', releaseID: 'release-g3', activationEpoch: 6,
+      catalog: { catalog_id: 'schema_catalog_insurance_product', entries: [] }, entities: [] })
+    const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledgeBaseId: 'wiki-entry' }, global: { stubs: {
+      ConceptDirectory830G2: { props: ['catalog'], template: '<div data-testid="directory">{{catalog.mode}}</div>' },
+    } } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="directory"]').text()).toBe('g3-active')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
+  it('rejects ambiguous preparation query before any directory request', async () => {
+    route.query = { tab: 'schema', preparation_id: ['preparation-g3', 'other'] }
+    const wrapper = mount(SchemaWikiCatalogEntry, { props: { knowledgeBaseId: 'wiki-entry' } })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('目录读取失败')
+    expect(api.loadPreparation).not.toHaveBeenCalled()
+    expect(api.load).not.toHaveBeenCalled()
+    expect(api.loadActive).not.toHaveBeenCalled()
   })
 
   it('uses the serving KB and renders only a complete G2 result', async () => {

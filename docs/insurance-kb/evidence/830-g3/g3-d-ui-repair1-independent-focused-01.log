@@ -1,0 +1,9 @@
+
+ RUN  v4.1.10 /Users/houjing/Documents/LLM_wiki/insurancekb-weknora/.worktrees/830-g3-implementation/frontend
+
+
+ Test Files  4 passed (4)
+      Tests  26 passed (26)
+   Start at  01:37:07
+   Duration  7.78s (transform 4.23s, setup 0ms, import 7.42s, tests 7.09s, environment 6.23s)
+

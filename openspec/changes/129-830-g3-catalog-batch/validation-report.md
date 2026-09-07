@@ -9,6 +9,7 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 | G3-R2 人工结构确认 | 用户已回复“结构确认”，exact Catalog确认有效；不重复询问 | profile-user-confirmation.json | f91fc40 | PASS |
 | G3-R2 具名元数据 | 结构确认人的显示姓名、后续人工待办负责人尚未提供 | 已发送非阻断询问；不推断账户名为真实姓名 | 无 | NOT RUN |
 | G3-R3 目录软件 | protected Go GET＋Vue通用目录 | 独立复核BLOCKER0；总控Go、17前端checks及类型检查通过 | f91fc40 | PASS |
+| G3-R3/R5 批次页面软件 | 严格G3解析、Preparation/Active固定版本展示、Profile及历史字段对齐 | lane-d-ui-repair1-independent-rereview.json；原UI-B1关闭，独立26页面＋46 G2回归PASS，正文逐字保留 | 本次UI集成提交；exact八文件SHA见lane-d-ui-repair1-freeze.json | PASS（本地软件） |
 | G3-R3 实际目录/字段/来源 | 目录代码完成，真实多pack链待接 | 本地页面/隔离Release/来源/检索未执行 | 无 | NOT RUN |
 | G3-R4 来源准备 | corpus-files-v4.json选15原始PDF；15个实际native输出已保留 | native-capture-inventory-v2.json、existing-native-preservation.json、native-02-supplement-result.json；02 standalone capture PASS，当前source row仍缺；原扫描页失败回执保留，4已有W1 revisions/287 chunks实际重开；native来源custody仍待核验 | f91fc40 | PASS（准备层） |
 | G3-R4 批次软件 | C设计2及修订7/8兼容切片通过；新旧来源回执接线闭合 | batch-c-design2-final-verification.json；独立56/root A+C73、ruff/strict mypy PASS；历史原日志保留 | 5efe84b5a；exact source/test SHA见receipt；新多行复现另存 | PASS（软件；真实批次NOT RUN） |
@@ -19,7 +20,7 @@ G3=WIP，FLOW=NOT RUN，QUALITY=DEFERRED_TO_Q0，NOT_FOR_PRODUCTION。以下为�
 
 | 维度 | 状态 | 证据与边界 |
 |---|---|---|
-| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；PASS（Go完整镜像） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首轮修复独立PASS，4 C反例/354跨语言snapshot/fulltypes通过；backend/UI仍未完成 |
+| software | PASS（A/B）；PASS（A/B/C）；PASS（D Python完整候选）；PASS（Go完整镜像）；PASS（UI Task4） | catalog-root-integration-verification.json；C design2独立复核通过；修订7 C/common独立81项及正文/身份probe PASS；来源回执兼容8独立79/common82与root99 PASS；D Python actual134/342及2,254,490-byte容量独立PASS；Go首轮修复独立PASS，4 C反例/354跨语言snapshot/fulltypes通过；UI首轮修复独立26/46通过；backend仍未完成 |
 | container health | NOT RUN（G3） | existing G2 docreader进程已只读核实用于解析预检，不是G3应用验收 |
 | provider probe | NOT RUN | 产品provider HTTP=0 |
 | provisioning | NOT RUN | 新DB/上传/SourceRevision/backfill=0 |
@@ -49,3 +50,5 @@ D Go首次完整独审2项BLOCKER，原完整types/四C反例/354跨语言snapsh
 D Go首轮集中修复独立PASS（BLOCKER0/BACKLOG0），source8db0e765…、test72e2c166…，freeze ca6f6daf…，报告lane-d-go-repair1-independent-rereview.json SHA17d1153f…。原2项关闭，四C反例与354 Python-Go snapshots、完整types48.408s、gofmt通过；root复核全部准确身份与3 fixtures未变。原Go/原RED继续保留。后端Tasks1→2→3已按已审计划派出，UI mock实现并行；这不代表后端/UI完成，也不代表真实SOURCE/C/provider/DB/Draft/Review/Activate或部署已执行。
 
 D UI Task4首次独立复核BLOCKED（1项、BACKLOG0）：8文件/17 owner日志身份一致；独立focused25、G2页面/citation46、actual两条空unknown历史对齐通过。结构化身份内部LF完整重哈希仍被接受，违反修订7v2；原文件/日志保存在d-ui-review1-snapshots及d-ui-review1-evidence，报告lane-d-ui-independent-review-01.json SHA c206bffc…。首轮有界修复仅开放batchConcept830G3.ts及其spec，严格结构化文本与exact typed body分离，正文TAB/LF/CR保留；dispatch d600c0cc…。六个Vue文件不变，最终UI接受尚未通过。额外pdfJsPort Denied ID为现有跨worktree依赖环境限制，不属于PASS或产品回归；真实效果仍NOT RUN。
+
+D UI首轮修复独立PASS（BLOCKER0/BACKLOG0）：原完整重哈希parser_identity LF反例现拒绝，正常输入仍接受。source52ec691d…、spec37713e5c…、freeze6cdd98c5…；报告lane-d-ui-repair1-independent-rereview.json SHA3fb2d779…。独立26页面/46 G2回归通过，所有8文件及11原始日志身份一致，六Vue文件未改。结构化字符串/对象键拒绝全部C0+DEL，exact typed body保留TAB/LF/CR，LF/CRLF hash不同；FreeWiki投影与冻结Go/Python一致。旧失败/修复RED保留，UI写域关闭。后端仍实现中，组合软件门禁和全部真实执行仍未完成；本结论不包含浏览器、上传、provider、DB、build、部署或发布。

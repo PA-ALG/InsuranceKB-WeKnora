@@ -1,0 +1,93 @@
+{
+  "contract": "830-g3-d-ui-root-integration-verification.v1",
+  "status": "PASS",
+  "scope": "Frozen UI Task4 local software and evidence; backend and actual G3 delivery remain incomplete.",
+  "files": [
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.ts",
+      "sha256": "52ec691d36c0984c60725ff9b8f6ed08de8c5f47817a1ca7f1a4b63075192b05",
+      "bytes": 37633,
+      "changed_in_repair": true
+    },
+    {
+      "path": "frontend/src/api/schema-wiki/batchConcept830G3.spec.ts",
+      "sha256": "37713e5c6627b87e3123136ddc9ba1944c782282154a47f4d500630d4eee8b67",
+      "bytes": 19384,
+      "changed_in_repair": true
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.vue",
+      "sha256": "979d1d9b3081f09d7a48bcc78c4dcdba3617056618c0f6f390dba7b71957a132",
+      "bytes": 4859,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/SchemaWikiCatalogEntry830G2.spec.ts",
+      "sha256": "934e83718acde69aea4ebcbb43f68895ef57b9725e44ff4700a92647965af2cf",
+      "bytes": 7573,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.vue",
+      "sha256": "9bf392988ff7b2586e5bca089373a385734a09b901194a7eef484212ba377878",
+      "bytes": 7789,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptDirectory830G2.spec.ts",
+      "sha256": "b6f59c29d0e803190436bd7397309c075ce53571c913ae679a1d7fb3f1f9f11f",
+      "bytes": 6470,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.vue",
+      "sha256": "073a4671c08f2348dbacb0a4e5e4b4a9de2f7a717f493cfaff9847eb87951810",
+      "bytes": 12283,
+      "changed_in_repair": false
+    },
+    {
+      "path": "frontend/src/views/knowledge/schema-wiki/ConceptFreeWiki830G2.spec.ts",
+      "sha256": "a8c9509e786199c766b84ec4bb3ebf13548068b2345d993a007d49d815ef00f8",
+      "bytes": 8522,
+      "changed_in_repair": false
+    }
+  ],
+  "owner_logs_verified": 11,
+  "independent_logs_verified": 3,
+  "shared_protocol_fixtures": [
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/candidate.json",
+      "sha256": "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783",
+      "bytes": 2254415
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json",
+      "sha256": "09b64b3e4928173a22dbd6e664abc73903cacbf7735eb0f8292d3366f50ecbc4",
+      "bytes": 2254490
+    },
+    {
+      "path": "harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json",
+      "sha256": "16fb7b6bda5d0783cece98c550aea1538cb2968cb18b7a28584b050ba67414eb",
+      "bytes": 1623
+    }
+  ],
+  "independent_review_sha256": "3fb2d779bfdbb4cbda2c44e21e7f08966ecd2944b12444522ec9e6361abe4432",
+  "validation": {
+    "independent_focused": 26,
+    "independent_g2_regression": 46,
+    "original_rehashed_attack": "REJECTED; positive accepted",
+    "body_bytes": "TAB/LF/CR preserved; LF and CRLF hashes differ",
+    "owner_vue_tsc": "PASS; exact log checked",
+    "openspec_strict_exit": 0,
+    "openspec_log": "g3-d-ui-repair1-root-openspec-01.log",
+    "openspec_log_sha256": "7e4c5408b4957f357454498d9fa5d1cc05251a878db7c30de9ecd027a6f0f9f4"
+  },
+  "effects": {
+    "provider": 0,
+    "http": 0,
+    "browser": 0,
+    "database": 0,
+    "build": 0,
+    "deployment": 0
+  }
+}
