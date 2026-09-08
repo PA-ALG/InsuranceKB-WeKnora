@@ -24,6 +24,20 @@ from insurance_harness.model_policy import (
 from insurance_harness.model_policy.admission import _issue_verified_admission
 
 from . import trust_policy
+from .g3_models import (
+    G3ArtifactRefV1,
+    G3BoundedAdmissionPlanV1,
+    G3BoundedApprovalEnvelopeV1,
+    G3CallPlanV1,
+    G3ModelProcessingAuthorizationEnvelopeV1,
+    G3ModelProcessingAuthorizationV1,
+    canonical_json,
+)
+from .g3_trust_policy import (
+    load_g3_root_trust_policy,
+    verify_delegated_stage_signature,
+    verify_parent_authorization,
+)
 from .models import (
     AdmissionDecision,
     ApprovalEnvelope,
@@ -33,6 +47,11 @@ from .models import (
     _validate_exact_raw_mvp_plan,
     canonical_model_identities_hash,
     canonical_model_plan_hash,
+)
+from .profiles.g3_bounded_execution import (
+    G3_STAGE_PROFILES,
+    validate_g3_bounded_plan,
+    validate_g3_parent_scope,
 )
 from .profiles.mvp import (
     MVP_PURPOSE,
@@ -49,6 +68,7 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _ADMISSION_STORE_ROOT = Path("/var/lib/insurancekb/run-admission")
 _DATA_ROOT_RELATIVE = Path("dataset/mvp_v0_1")
 _MAX_CURRENT_FILE_BYTES: Final = 32 * 1024 * 1024
+_MAX_G3_NATIVE_PROJECTION_BYTES: Final = 64 * 1024 * 1024
 _GIT_EXECUTABLE = "/usr/bin/git"
 _GIT_ENVIRONMENT: Final = {
     "GIT_CONFIG_NOSYSTEM": "1",
@@ -488,6 +508,375 @@ class _MvpAdmissionVerifier:
         )
 
 
+def _read_g3_parent(ref: str, expected_digest: str) -> bytes:
+    path = Path(ref)
+    expected = (
+        _ADMISSION_STORE_ROOT / "sha256" / expected_digest / "model-processing-authorization.json"
+    )
+    if path != expected:
+        raise AdmissionPolicyDenied("invalid_admission_artifact")
+    return trust_policy._read_root_protected_file(
+        path,
+        root=_ADMISSION_STORE_ROOT,
+        max_bytes=_MAX_ARTIFACT_BYTES,
+        reason_code="invalid_admission_artifact",
+    )
+
+
+def _read_g3_artifact(ref: G3ArtifactRefV1) -> bytes:
+    try:
+        path = Path(ref.artifact_ref)
+        relative = path.relative_to(_ADMISSION_STORE_ROOT)
+        if (
+            len(relative.parts) != 3
+            or relative.parts[0] != "sha256"
+            or relative.parts[1] != ref.sha256
+        ):
+            raise ValueError
+        max_bytes = (
+            _MAX_G3_NATIVE_PROJECTION_BYTES
+            if ref.contract == "g3-native-page-projections.830.v1"
+            else _MAX_CURRENT_FILE_BYTES
+        )
+        payload = trust_policy._read_root_protected_file(
+            path,
+            root=_ADMISSION_STORE_ROOT,
+            max_bytes=max_bytes,
+            reason_code="current_content_mismatch",
+        )
+        if len(payload) != ref.bytes or hashlib.sha256(payload).hexdigest() != ref.sha256:
+            raise ValueError
+        return payload
+    except AdmissionPolicyDenied:
+        raise
+    except Exception:
+        raise AdmissionPolicyDenied("current_content_mismatch") from None
+
+
+def _rerender_g3_request(
+    body: bytes,
+    plan: G3BoundedAdmissionPlanV1,
+    call: G3CallPlanV1,
+    *,
+    system: str,
+    user: str,
+) -> bytes:
+    from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
+        g3_openai_request_bytes,
+    )
+
+    try:
+        value = json.loads(body, object_pairs_hook=_reject_duplicate_keys)
+        if (
+            type(value) is not dict
+            or set(value)
+            != {
+                "enable_thinking",
+                "max_tokens",
+                "messages",
+                "model",
+                "response_format",
+                "temperature",
+            }
+            or type(value["enable_thinking"]) is not bool
+            or type(value["temperature"]) not in {int, float}
+            or type(value["max_tokens"]) is not int
+        ):
+            raise ValueError
+        expected = g3_openai_request_bytes(
+            plan=plan, call=call, system=system, user=user
+        )
+        if body != expected:
+            raise ValueError
+        return expected
+    except Exception:
+        raise AdmissionPolicyDenied("current_content_mismatch") from None
+
+
+def _verify_g3_current_content(
+    plan: G3BoundedAdmissionPlanV1, parent: object
+) -> dict[str, bytes]:
+    try:
+        from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
+            _render_g3_stage_contexts,
+            _validate_g3_prior_stage_results,
+            g3_current_schema_specs,
+        )
+
+        parent_payload = G3ModelProcessingAuthorizationV1.model_validate(parent)
+        head_before = _clean_repository_sha()
+        collections = (
+            plan.eligibility_lock.input_artifacts,
+            plan.provenance_lock.artifacts,
+            plan.rights_lock.artifacts,
+        )
+        if plan.stage != "C_CLASSIFY" and any(
+            ref.contract == "g3-native-page-projections.830.v1"
+            for refs in collections
+            for ref in refs
+        ):
+            raise ValueError("D stage cannot carry native projections")
+        all_refs = {
+            (ref.contract, ref.artifact_ref, ref.sha256, ref.bytes): ref
+            for refs in collections
+            for ref in refs
+        }
+        all_refs[
+            (
+                plan.protocol_seed_lock.seed_artifact.contract,
+                plan.protocol_seed_lock.seed_artifact.artifact_ref,
+                plan.protocol_seed_lock.seed_artifact.sha256,
+                plan.protocol_seed_lock.seed_artifact.bytes,
+            )
+        ] = plan.protocol_seed_lock.seed_artifact
+        artifact_payloads: dict[str, list[bytes]] = {}
+        for ref in all_refs.values():
+            artifact_payloads.setdefault(ref.contract, []).append(_read_g3_artifact(ref))
+        _validate_g3_prior_stage_results(plan, artifact_payloads)
+        template_bytes = _read_current_file(plan.template_lock.path)
+        if hashlib.sha256(template_bytes).hexdigest() != plan.template_lock.raw_sha256:
+            raise ValueError("template drift")
+        contexts, context_index, preview = _render_g3_stage_contexts(
+            plan=plan,
+            parent=parent_payload,
+            artifacts=artifact_payloads,
+            template_bytes=template_bytes,
+        )
+
+        def mirrored(contract: str) -> tuple[G3ArtifactRefV1, ...]:
+            groups = tuple(
+                tuple(item for item in refs if item.contract == contract)
+                for refs in collections
+            )
+            if not (groups[0] == groups[1] == groups[2]):
+                raise ValueError(f"{contract} mirrors differ")
+            return groups[0]
+
+        def exact_witness(
+            ref: G3ArtifactRefV1, payload: bytes, filename: str
+        ) -> None:
+            digest = hashlib.sha256(payload).hexdigest()
+            expected_path = _ADMISSION_STORE_ROOT / "sha256" / digest / filename
+            if (
+                ref.sha256 != digest
+                or ref.bytes != len(payload)
+                or Path(ref.artifact_ref) != expected_path
+                or _read_g3_artifact(ref) != payload
+            ):
+                raise ValueError("render witness mismatch")
+
+        context_refs = mirrored("g3-rendered-call-context.830.v1")
+        expected_contexts = {
+            call.input_context_sha256: contexts[call.call_id]
+            for call in plan.request_manifest.calls
+        }
+        if len(context_refs) != len(expected_contexts):
+            raise ValueError("rendered context refs do not match calls")
+        for ref in context_refs:
+            payload = expected_contexts.pop(ref.sha256, None)
+            if payload is None:
+                raise ValueError("unknown rendered context")
+            exact_witness(ref, payload, "call-context.json")
+        if expected_contexts:
+            raise ValueError("missing rendered context")
+        index_refs = mirrored("g3-stage-render-contexts.830.v1")
+        if len(index_refs) != 1:
+            raise ValueError("stage context index must be unique")
+        exact_witness(index_refs[0], context_index, "stage-contexts.json")
+        preview_refs = mirrored("g3-c-prompt-preview.830.v1")
+        if plan.stage == "C_CLASSIFY":
+            if preview is None or len(preview_refs) != 1:
+                raise ValueError("C prompt preview must be unique")
+            exact_witness(preview_refs[0], preview, "prompt-preview.json")
+        elif preview is not None or preview_refs:
+            raise ValueError("D stage cannot carry a C prompt preview")
+        if plan.derived_stage_receipt is not None:
+            required_contracts = {"batch-concept-compile-request.830.g3.v1"}
+            if plan.stage == "D_REVIEW":
+                required_contracts.update(
+                    {
+                        "g3-d-model-compile-result.830.v1",
+                        "g3-d-final-compile-result.830.v1",
+                    }
+                )
+            required_hashes = {
+                ref.sha256
+                for ref in all_refs.values()
+                if ref.contract in required_contracts
+            } | {call.input_context_sha256 for call in plan.request_manifest.calls}
+            if not required_hashes.issubset(
+                set(plan.derived_stage_receipt.input_artifact_sha256s)
+            ):
+                raise ValueError("derived stage input closure mismatch")
+        request_sets = tuple(
+            tuple(item for item in refs if item.contract == "g3-http-request-body.830.v1")
+            for refs in collections
+        )
+        if not (request_sets[0] == request_sets[1] == request_sets[2]):
+            raise ValueError("request body mirrors differ")
+        expected_bodies = {
+            (call.request_body_sha256, call.request_bytes) for call in plan.request_manifest.calls
+        }
+        if (
+            {(ref.sha256, ref.bytes) for ref in request_sets[0]} != expected_bodies
+            or len(request_sets[0]) != len(expected_bodies)
+        ):
+            raise ValueError("request body refs do not match calls")
+        bodies: dict[str, bytes] = {}
+        system = template_bytes.decode("utf-8")
+        calls_by_hash = {call.request_body_sha256: call for call in plan.request_manifest.calls}
+        for ref in request_sets[0]:
+            if Path(ref.artifact_ref) != (
+                _ADMISSION_STORE_ROOT / "sha256" / ref.sha256 / "request-body.json"
+            ):
+                raise ValueError("request body ref is not canonical")
+            body = _read_g3_artifact(ref)
+            call = calls_by_hash.get(ref.sha256)
+            if call is None or _rerender_g3_request(
+                body,
+                plan,
+                call,
+                system=system,
+                user=contexts[call.call_id].decode("utf-8"),
+            ) != body:
+                raise ValueError("request rendering drift")
+            bodies[ref.sha256] = body
+        expected_schema_rows = tuple(
+            (
+                plan.stage,
+                direction,
+                module,
+                hashlib.sha256(_read_current_file(module)).hexdigest(),
+                hashlib.sha256(canonical_json(schema)).hexdigest(),
+            )
+            for direction, module, schema in g3_current_schema_specs(plan.stage)
+        )
+        actual_schema_rows = tuple(
+            (
+                artifact.stage,
+                artifact.direction,
+                artifact.enforcing_module,
+                artifact.enforcing_module_sha256,
+                artifact.canonical_schema_sha256,
+            )
+            for artifact in plan.schema_lock.artifacts
+        )
+        if actual_schema_rows != expected_schema_rows:
+            raise ValueError("current schema binding drift")
+        head_after = _clean_repository_sha()
+        if head_before != head_after or head_after != plan.clean_integration_sha:
+            raise ValueError("clean integration drift")
+        return bodies
+    except AdmissionPolicyDenied:
+        raise
+    except Exception:
+        raise AdmissionPolicyDenied("current_content_mismatch") from None
+
+
+class _G3BoundedAdmissionVerifier:
+    __slots__ = ()
+
+    def verify(self, request: StrictAdmissionRequestBinding, /) -> VerifiedAdmission:
+        request = _canonical_request(request)
+        matches = tuple(
+            stage
+            for stage, profile in G3_STAGE_PROFILES.items()
+            if profile[:2] == (request.expected_purpose, request.expected_run_schema_version)
+        )
+        if len(matches) != 1:
+            raise AdmissionPolicyDenied("unknown_admission_profile")
+        stage_payload = _read_external_artifact(
+            request.expected_admission_artifact_ref,
+            request.expected_admission_artifact_digest,
+        )
+        if hashlib.sha256(stage_payload).hexdigest() != request.expected_admission_artifact_digest:
+            raise AdmissionPolicyDenied("admission_artifact_digest_mismatch")
+        try:
+            raw_stage = json.loads(stage_payload, object_pairs_hook=_reject_duplicate_keys)
+            stage_envelope = G3BoundedApprovalEnvelopeV1.model_validate(raw_stage)
+            plan = validate_g3_bounded_plan(stage_envelope.payload)
+            if stage_payload != canonical_json(
+                stage_envelope.model_dump(mode="json", round_trip=True)
+            ):
+                raise ValueError
+        except Exception:
+            raise AdmissionPolicyDenied("invalid_admission_artifact") from None
+        if plan.stage != matches[0]:
+            raise AdmissionPolicyDenied("unknown_admission_profile")
+        parent_payload = _read_g3_parent(
+            stage_envelope.parent_authorization_ref.artifact_ref,
+            stage_envelope.parent_authorization_digest,
+        )
+        if hashlib.sha256(parent_payload).hexdigest() != stage_envelope.parent_authorization_digest:
+            raise AdmissionPolicyDenied("g3_parent_digest_mismatch")
+        try:
+            raw_parent = json.loads(parent_payload, object_pairs_hook=_reject_duplicate_keys)
+            parent = G3ModelProcessingAuthorizationEnvelopeV1.model_validate(raw_parent)
+            if (
+                parent_payload != canonical_json(parent.model_dump(mode="json", round_trip=True))
+                or stage_envelope.parent_authorization_ref.contract
+                != "g3-model-processing-authorization.830.v1"
+                or stage_envelope.parent_authorization_ref.sha256
+                != stage_envelope.parent_authorization_digest
+                or stage_envelope.parent_authorization_ref.bytes != len(parent_payload)
+            ):
+                raise ValueError
+        except Exception:
+            raise AdmissionPolicyDenied("invalid_admission_artifact") from None
+        verify_parent_authorization(load_g3_root_trust_policy(), parent)
+        verify_delegated_stage_signature(parent, stage_envelope)
+        now = datetime.now(UTC)
+        if parent.payload.expires_at <= now or plan.expires_at <= now:
+            raise AdmissionPolicyDenied("admission_expired")
+        if plan.parent_authorization_digest != stage_envelope.parent_authorization_digest:
+            raise AdmissionPolicyDenied("current_content_mismatch")
+        try:
+            validate_g3_parent_scope(parent.payload, plan)
+        except ValueError:
+            raise AdmissionPolicyDenied("g3_parent_scope_mismatch") from None
+        _verify_g3_current_content(plan, parent.payload)
+        actual = {
+            "purpose": plan.purpose,
+            "run_schema_version": plan.run_schema_version,
+            "run_id": plan.run_id,
+            "run_revision": plan.run_revision,
+            "space_id": plan.space_id,
+            "admission_artifact_ref": request.expected_admission_artifact_ref,
+            "admission_artifact_digest": request.expected_admission_artifact_digest,
+            "manifest_hash": plan.manifest_hash,
+            "eligibility_hash": plan.eligibility_hash,
+            "golden_slice_hash": plan.golden_slice_hash,
+            "routing_policy_hash": plan.routing_policy_hash,
+            "schema_hash": plan.schema_hash,
+            "template_lock_hash": plan.template_lock_hash,
+            "structured_dispatch_hash": plan.structured_dispatch_hash,
+            "model_plan_hash": plan.model_plan_hash,
+            "deployment_roles_hash": plan.deployment_roles_hash,
+            "resource_caps_hash": plan.resource_caps_hash,
+            "rights_hash": plan.rights_hash,
+            "provenance_hash": plan.provenance_hash,
+            "clean_integration_sha": plan.clean_integration_sha,
+        }
+        for name, value in actual.items():
+            if getattr(request, "expected_" + name) != value:
+                raise AdmissionPolicyDenied("current_content_mismatch")
+        verified_at = datetime.now(UTC)
+        binding = AdmissionBinding(
+            **{"actual_" + name: value for name, value in actual.items()},
+            actual_state="READY",
+            actual_expires_at=plan.expires_at,
+            approved_identities=plan.approved_identities,
+            approved_template_hashes=plan.approved_template_hashes,
+        )
+        return _issue_verified_admission(
+            request,
+            binding,
+            verifier_id="insurance-harness.run-admission.g3-bounded-execution",
+            verifier_version="1",
+            verified_at=verified_at,
+        )
+
+
 def select_canonical_admission_verifier(
     purpose: str,
     run_schema_version: str,
@@ -497,9 +886,11 @@ def select_canonical_admission_verifier(
 
     if type(purpose) is not str or type(run_schema_version) is not str:
         raise AdmissionPolicyDenied("unknown_admission_profile")
-    if (purpose, run_schema_version) != (MVP_PURPOSE, MVP_RUN_SCHEMA_VERSION):
-        raise AdmissionPolicyDenied("unknown_admission_profile")
-    return _MvpAdmissionVerifier()
+    if (purpose, run_schema_version) == (MVP_PURPOSE, MVP_RUN_SCHEMA_VERSION):
+        return _MvpAdmissionVerifier()
+    if any((purpose, run_schema_version) == profile[:2] for profile in G3_STAGE_PROFILES.values()):
+        return _G3BoundedAdmissionVerifier()
+    raise AdmissionPolicyDenied("unknown_admission_profile")
 
 
 def evaluate_admission(request: StrictAdmissionRequestBinding, /) -> AdmissionDecision:

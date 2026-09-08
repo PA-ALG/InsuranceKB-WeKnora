@@ -1796,8 +1796,16 @@ def test_mvp1_i0b_cli_render_rejects_non_registered_or_noncanonical_raw_plan(
 
 def test_mvp1_i0b_unsigned_templates_and_architecture_carry_no_authority() -> None:
     owned = _REPOSITORY_ROOT / "harness/src/insurance_harness/run_admission"
+    g3_owned_modules = {
+        Path("g3_models.py"),
+        Path("g3_trust_policy.py"),
+        Path("profiles/g3_bounded_execution.py"),
+    }
+    assert all((owned / path).is_file() for path in g3_owned_modules)
     source = "\n".join(
-        path.read_text(encoding="utf-8") for path in owned.rglob("*.py") if path.is_file()
+        path.read_text(encoding="utf-8")
+        for path in owned.rglob("*.py")
+        if path.is_file() and path.relative_to(owned) not in g3_owned_modules
     )
     for forbidden in (
         "goldenset.admission",

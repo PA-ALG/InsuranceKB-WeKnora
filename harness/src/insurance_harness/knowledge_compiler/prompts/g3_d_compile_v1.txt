@@ -1,0 +1,2 @@
+G3 D concept compile v1
+Return one canonical JSON object matching the supplied CompileOutput schema. Compile only the supplied eligible automatic-child source closure and new-member fields. Do not change mechanical carry fields or create release authority.

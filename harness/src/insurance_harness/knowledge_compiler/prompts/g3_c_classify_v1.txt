@@ -1,0 +1,2 @@
+G3 C semantic classification v1
+Return one canonical JSON object matching the supplied response schema. Use only supplied opaque block references and exact Unicode code-point quote offsets. Do not infer source scope, page identity, hashes, policy receipts, or final dispositions.
