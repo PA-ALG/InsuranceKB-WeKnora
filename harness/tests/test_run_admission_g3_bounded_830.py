@@ -579,8 +579,9 @@ def test_g3_artifact_reader_keeps_other_limits_hash_and_custody(
         evaluator._read_g3_artifact(valid)
 
 
+@pytest.mark.parametrize("native_location", ("artifact_collection", "protocol_seed"))
 def test_d_rejects_native_projection_contract_before_any_artifact_read(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, native_location: str
 ) -> None:
     from insurance_harness.run_admission import evaluator
 
@@ -647,16 +648,29 @@ def test_d_rejects_native_projection_contract_before_any_artifact_read(
     )
     eligibility = base.eligibility_lock.model_construct(
         **{
-            **base.eligibility_lock.model_dump(mode="python"),
+            **base.eligibility_lock.__dict__,
             "stage": "D_COMPILE",
-            "input_artifacts": (native_ref,),
+            "input_artifacts": (
+                (native_ref,) if native_location == "artifact_collection" else ()
+            ),
+        }
+    )
+    protocol_seed = base.protocol_seed_lock.model_construct(
+        **{
+            **base.protocol_seed_lock.__dict__,
+            "seed_artifact": (
+                native_ref
+                if native_location == "protocol_seed"
+                else base.protocol_seed_lock.seed_artifact
+            ),
         }
     )
     plan = G3BoundedAdmissionPlanV1.model_construct(
         **{
-            **base.model_dump(mode="python"),
+            **base.__dict__,
             "stage": "D_COMPILE",
             "eligibility_lock": eligibility,
+            "protocol_seed_lock": protocol_seed,
         }
     )
     reads = 0

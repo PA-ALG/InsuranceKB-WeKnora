@@ -610,10 +610,14 @@ def _verify_g3_current_content(
             plan.provenance_lock.artifacts,
             plan.rights_lock.artifacts,
         )
-        if plan.stage != "C_CLASSIFY" and any(
-            ref.contract == "g3-native-page-projections.830.v1"
-            for refs in collections
-            for ref in refs
+        if plan.stage != "C_CLASSIFY" and (
+            plan.protocol_seed_lock.seed_artifact.contract
+            == "g3-native-page-projections.830.v1"
+            or any(
+                ref.contract == "g3-native-page-projections.830.v1"
+                for refs in collections
+                for ref in refs
+            )
         ):
             raise ValueError("D stage cannot carry native projections")
         all_refs = {
