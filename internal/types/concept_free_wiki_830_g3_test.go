@@ -841,3 +841,69 @@ func TestBatchConceptBusinessText830G3PythonParity(t *testing.T) {
 		}
 	}
 }
+
+func TestBatchConcept830G3DerivesFieldCountsFromRequest(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true))
+	request := bundle.Request
+	output := bundle.ModelCompileResult.Output
+	extra := output.Fields[0]
+	extra.FieldKey = "additional_required_field"
+	request.BaseRequest.RequiredFields[extra.EntityID] = append(request.BaseRequest.RequiredFields[extra.EntityID], extra.FieldKey)
+	output.RequestHash, err = compileRequestHash830G3(request.BaseRequest)
+	require.NoError(t, err)
+	output.Fields = append(output.Fields, extra)
+	id, err := conceptFieldID830G2(extra)
+	require.NoError(t, err)
+	output.Audit = append(output.Audit, ConceptAuditDisposition830G2{Key: id, Disposition: "field_rule", Reason: "request requires this field"})
+	require.NoError(t, validateDelta830G3(request, output))
+	composed, err := composeBatchOutput830G3(request, output)
+	require.NoError(t, err)
+	require.Len(t, composed.Fields, 343)
+	missing := output
+	missing.Fields = output.Fields[:len(output.Fields)-1]
+	require.Error(t, validateDelta830G3(request, missing))
+	duplicate := output
+	duplicate.Fields = append(append([]ConceptFieldAssertion830G2{}, output.Fields...), extra)
+	require.Error(t, validateDelta830G3(request, duplicate))
+	foreign := output
+	foreign.Fields = append([]ConceptFieldAssertion830G2{}, output.Fields...)
+	foreign.Fields[len(foreign.Fields)-1].FieldKey = "not_required"
+	require.Error(t, validateDelta830G3(request, foreign))
+}
+
+func TestBatchConcept830G3AcceptsProjectedNovelPageCount(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true))
+	output := bundle.CompileResult.Output
+	page := output.Pages[0]
+	page.StableKey += "-novel"
+	id, err := conceptFreePageID830G2(page)
+	require.NoError(t, err)
+	output.Pages = append(output.Pages, page)
+	output.Audit = append(output.Audit, ConceptAuditDisposition830G2{Key: id, Disposition: "new_page", Reason: "supported new page"})
+	manifest, err := projectBatchMembers830G3(bundle.Request, output)
+	require.NoError(t, err)
+	require.Len(t, manifest.Members, 355)
+	require.NoError(t, validatePageManifest830G3(bundle.Request, output, manifest))
+	manifest.Members = manifest.Members[:len(manifest.Members)-1]
+	require.Error(t, validatePageManifest830G3(bundle.Request, output, manifest))
+}
+
+func TestBatchConcept830G3PythonNovelPageCandidate(t *testing.T) {
+	path := os.Getenv("G3_NOVEL_PAGE_CANDIDATE")
+	if path == "" {
+		t.Skip("set G3_NOVEL_PAGE_CANDIDATE to the valid Python novel-page Candidate")
+	}
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	bundle, canonical, err := CanonicalBatchConceptCandidateBundle830G3(raw)
+	require.NoError(t, err)
+	require.Equal(t, raw, canonical)
+	require.Greater(t, len(bundle.ModelCompileResult.Output.Pages), 0)
+	require.Greater(t, len(bundle.PageManifest.Members), 354)
+}

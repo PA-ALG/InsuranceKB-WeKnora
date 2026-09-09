@@ -3766,7 +3766,7 @@ func validateDelta830G3(
 ) error {
 	requestHash, err := compileRequestHash830G3(request.BaseRequest)
 	if err != nil || output.Contract != "concept-compile-output.830.g2.v1" ||
-		output.RequestHash != requestHash || len(output.Fields) != 208 {
+		output.RequestHash != requestHash {
 		return ErrConceptCandidateBundle830G3
 	}
 	aligned, err := alignedFields830G3(request)
@@ -4000,7 +4000,7 @@ func composeBatchOutput830G3(
 		Definitions: definitions, Fields: fields, Pages: pages, Audit: audit,
 		Transformation: delta.Transformation,
 	}
-	if len(fields) != 342 || validateConceptOutput830G3(request.BaseRequest, result) != nil {
+	if validateConceptOutput830G3(request.BaseRequest, result) != nil {
 		return ConceptCompileOutput830G2{}, ErrConceptCandidateBundle830G3
 	}
 	return result, nil
@@ -4182,22 +4182,13 @@ func validatePageManifest830G3(
 	request BatchConceptCompileRequest830G3, output ConceptCompileOutput830G2,
 	manifest BatchConceptPageManifest830G3,
 ) error {
-	if manifest.Contract != "batch-concept-page-manifest.830.g3.v1" ||
-		!reflect.DeepEqual(manifest.Audit, output.Audit) || len(manifest.Members) != 354 ||
-		!hashEqualWithout830G3("batch-concept-page-members.830.g3.v1",
-			struct {
-				Members []ConceptPageMember830G2 `json:"members"`
-			}{manifest.Members}, "unused", manifest.MembersSHA256) {
-		// The members hash payload has no removable field, so verify it directly below.
-		membersHash, err := batchConceptHash830G3(
-			"batch-concept-page-members.830.g3.v1",
-			map[string]any{"members": manifest.Members},
-		)
-		if err != nil || membersHash != manifest.MembersSHA256 ||
-			manifest.Contract != "batch-concept-page-manifest.830.g3.v1" ||
-			!reflect.DeepEqual(manifest.Audit, output.Audit) || len(manifest.Members) != 354 {
-			return ErrConceptCandidateBundle830G3
-		}
+	membersHash, err := batchConceptHash830G3(
+		"batch-concept-page-members.830.g3.v1", map[string]any{"members": manifest.Members},
+	)
+	if err != nil || membersHash != manifest.MembersSHA256 ||
+		manifest.Contract != "batch-concept-page-manifest.830.g3.v1" ||
+		!reflect.DeepEqual(manifest.Audit, output.Audit) {
+		return ErrConceptCandidateBundle830G3
 	}
 	expected, err := projectBatchMembers830G3(request, output)
 	if err != nil || !batchConceptCanonicalEqual830G3(expected, manifest) {
