@@ -14,7 +14,7 @@ import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import (
@@ -76,6 +76,7 @@ from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
 from insurance_harness.knowledge_compiler.schema_pack_catalog_830_g3 import (
     SchemaPackCatalogV1,
 )
+from insurance_harness.model_policy import ModelIdentity
 from insurance_harness.run_admission.g3_models import (
     G3ArtifactRefV1,
     G3BoundedAdmissionPlanV1,
@@ -167,9 +168,52 @@ _G3_REQUEST_SCHEMA: dict[str, object] = {
     },
 }
 
+_G3_GEMINI_REQUEST_SCHEMA: dict[str, object] = {
+    **_G3_REQUEST_SCHEMA,
+    "required": [
+        "max_tokens",
+        "messages",
+        "model",
+        "response_format",
+        "stream",
+        "temperature",
+    ],
+    "properties": {
+        **cast(dict[str, object], _G3_REQUEST_SCHEMA["properties"]),
+        "stream": {"const": False},
+    },
+}
+cast(dict[str, object], _G3_GEMINI_REQUEST_SCHEMA["properties"]).pop(
+    "enable_thinking"
+)
+
+_G3_GEMINI_JSON_INSTRUCTION = (
+    "Return only valid JSON, without Markdown fences or explanations."
+)
+
+
+def _is_g3_gemini_identity(identity: ModelIdentity) -> bool:
+    return (
+        identity.provider,
+        identity.family,
+        identity.deployment_id,
+        identity.policy_version,
+        identity.role,
+    ) in {
+        (
+            "g3-user-gateway",
+            "gemini",
+            "gemini-3.7-flash-medium",
+            "g3-user-gemini-gateway-v1",
+            role,
+        )
+        for role in ("classify", "extract", "verify")
+    }
+
 
 def g3_current_schema_specs(
     stage: Literal["C_CLASSIFY", "D_COMPILE", "D_REVIEW"],
+    identity: ModelIdentity | None = None,
 ) -> tuple[tuple[str, str, dict[str, object]], ...]:
     """Return the only current schema producers and source modules for one stage."""
 
@@ -190,8 +234,16 @@ def g3_current_schema_specs(
             "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py"
         )
         response_schema = ReviewOutput.model_json_schema()
+    if identity is None or (
+        identity.provider == "bailian" and identity.family == "qwen"
+    ):
+        request_schema = _G3_REQUEST_SCHEMA
+    elif _is_g3_gemini_identity(identity):
+        request_schema = _G3_GEMINI_REQUEST_SCHEMA
+    else:
+        raise ValueError("unsupported G3 model identity")
     return (
-        ("request", request_module, _G3_REQUEST_SCHEMA),
+        ("request", request_module, request_schema),
         ("response", response_module, response_schema),
     )
 
@@ -207,19 +259,28 @@ def g3_openai_request_bytes(
 
     from insurance_harness.compiler.llm import openai_compat_request_bytes
 
-    if (
+    if plan.routing_lock.identity != call.identity:
+        raise ValueError("unsupported G3 model route")
+    gemini = _is_g3_gemini_identity(call.identity)
+    if gemini:
+        if (
+            call.endpoint_origin != "http://8.148.158.241:3131"
+            or call.endpoint_path != "/v1/chat/completions"
+            or plan.routing_lock.thinking is not True
+        ):
+            raise ValueError("unsupported G3 model route")
+    elif (
         call.identity.provider != "bailian"
         or call.identity.family != "qwen"
         or call.endpoint_origin != "https://dashscope.aliyuncs.com"
         or call.endpoint_path != "/compatible-mode/v1/chat/completions"
-        or plan.routing_lock.identity != call.identity
     ):
         raise ValueError("unsupported G3 model route")
     base = openai_compat_request_bytes(
         model=call.identity.deployment_id,
         temperature=plan.routing_lock.temperature_micros / 1_000_000,
         max_tokens=call.output_token_ceiling,
-        system=system,
+        system=(f"{system}\n\n{_G3_GEMINI_JSON_INSTRUCTION}" if gemini else system),
         user=user,
         thinking=None,
         response_format="json_object",
@@ -227,7 +288,10 @@ def g3_openai_request_bytes(
     value = json.loads(base, object_pairs_hook=lambda pairs: dict(pairs))
     if type(value) is not dict or "thinking" in value or "extra_body" in value:
         raise ValueError("invalid base G3 wire envelope")
-    value["enable_thinking"] = plan.routing_lock.thinking
+    if gemini:
+        value["stream"] = False
+    else:
+        value["enable_thinking"] = plan.routing_lock.thinking
     return canonical_json(value)
 
 
@@ -1330,6 +1394,8 @@ def _call_terminal(
 ) -> G3CallTerminalReceiptV1:
     from insurance_harness.model_policy import ModelIdentity, PolicyReceipt
     from insurance_harness.model_policy.g3_bounded_gateway import (
+        _is_g3_gemini_identity,
+        _parse_g3_gemini_provider_response,
         consume_g3_response_audit,
     )
     from insurance_harness.run_admission.g3_models import (
@@ -1351,6 +1417,12 @@ def _call_terminal(
     response_meta, usage = consume_g3_response_audit(reservation_capability)
     if usage is None:
         raise RuntimeError("successful provider usage is missing")
+    if _is_g3_gemini_identity(current_call.identity):
+        _content, derived_semantic, derived_usage = (
+            _parse_g3_gemini_provider_response(current_call.identity, response_bytes)
+        )
+        if derived_semantic != semantic_bytes or derived_usage != usage:
+            raise RuntimeError("Gemini response audit closure mismatch")
     ended = datetime.now(UTC)
     duration_ms = max(0, int((ended - started.started_at).total_seconds() * 1000))
     cost = G3CostAuditV1(

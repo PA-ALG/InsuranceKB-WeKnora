@@ -541,6 +541,57 @@ func TestBatchConceptTypedText830G3AllowsBodiesButRejectsStructuredControls(t *t
 	require.ErrorIs(t, validatePolicyReceipt830G3(receipt), ErrConceptCandidateBundle830G3)
 }
 
+func TestBatchPolicyReceipt830G3UserGeminiGateway(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true))
+	typed, err := decodeResolutionInputs830G3(bundle.Request.ResolutionInputs, bundle.Request.Resolution)
+	require.NoError(t, err)
+	original := typed.Proposals.ModelReceipts[0].PolicyReceipt
+	require.NoError(t, validatePolicyReceipt830G3(original))
+	require.NotNil(t, original.PermitView)
+	identity := ModelIdentity830G3{
+		Provider: "g3-user-gateway", DeploymentID: "gemini-3.7-flash-medium",
+		Family: "gemini", Role: "classify", PolicyVersion: "g3-user-gemini-gateway-v1",
+	}
+	makeReceipt := func(id ModelIdentity830G3) ModelPolicyReceipt830G3 {
+		receipt := original
+		view := *original.PermitView
+		view.Identity = id
+		receipt.PermitView = &view
+		receipt.IdentityKey = []string{id.Provider, id.DeploymentID, id.Family, id.Role, id.PolicyVersion}
+		digest, digestErr := permitDigest830G3(view)
+		require.NoError(t, digestErr)
+		receipt.PermitDigest = &digest
+		return receipt
+	}
+	t.Run("exact user gateway accepted", func(t *testing.T) {
+		require.NoError(t, validatePolicyReceipt830G3(makeReceipt(identity)))
+	})
+	for _, field := range []string{"provider", "deployment", "policy", "role"} {
+		t.Run("rehashed wrong "+field+" rejected", func(t *testing.T) {
+			changed := identity
+			switch field {
+			case "provider":
+				changed.Provider = "other-gateway"
+			case "deployment":
+				changed.DeploymentID = "gemini-3.7-flash-high"
+			case "policy":
+				changed.PolicyVersion = "other-policy"
+			case "role":
+				changed.Role = "extract"
+			}
+			require.ErrorIs(t, validatePolicyReceipt830G3(makeReceipt(changed)), ErrConceptCandidateBundle830G3)
+		})
+	}
+	t.Run("identity key drift rejected", func(t *testing.T) {
+		receipt := makeReceipt(identity)
+		receipt.IdentityKey[0] = "other-gateway"
+		require.ErrorIs(t, validatePolicyReceipt830G3(receipt), ErrConceptCandidateBundle830G3)
+	})
+}
+
 func TestBatchConceptCanonical830G3PreservesMultilineAndRejectsBadDomain(t *testing.T) {
 	payload := map[string]any{"body": "first\nsecond\tvalue\rline"}
 	digest, err := batchConceptHash830G3("batch-test.830.g3.v1", payload)

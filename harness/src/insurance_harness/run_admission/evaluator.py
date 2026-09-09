@@ -567,10 +567,14 @@ def _rerender_g3_request(
 
     try:
         value = json.loads(body, object_pairs_hook=_reject_duplicate_keys)
-        if (
-            type(value) is not dict
-            or set(value)
-            != {
+        gemini = (
+            call.identity.provider == "g3-user-gateway"
+            and call.identity.family == "gemini"
+        )
+        expected_keys = (
+            {"max_tokens", "messages", "model", "response_format", "stream", "temperature"}
+            if gemini
+            else {
                 "enable_thinking",
                 "max_tokens",
                 "messages",
@@ -578,7 +582,12 @@ def _rerender_g3_request(
                 "response_format",
                 "temperature",
             }
-            or type(value["enable_thinking"]) is not bool
+        )
+        if (
+            type(value) is not dict
+            or set(value) != expected_keys
+            or (gemini and value["stream"] is not False)
+            or (not gemini and type(value["enable_thinking"]) is not bool)
             or type(value["temperature"]) not in {int, float}
             or type(value["max_tokens"]) is not int
         ):
@@ -753,7 +762,9 @@ def _verify_g3_current_content(
                 hashlib.sha256(_read_current_file(module)).hexdigest(),
                 hashlib.sha256(canonical_json(schema)).hexdigest(),
             )
-            for direction, module, schema in g3_current_schema_specs(plan.stage)
+            for direction, module, schema in g3_current_schema_specs(
+                plan.stage, plan.approved_identities[0]
+            )
         )
         actual_schema_rows = tuple(
             (

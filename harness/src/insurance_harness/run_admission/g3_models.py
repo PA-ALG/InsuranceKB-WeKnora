@@ -306,7 +306,9 @@ class G3CallPlanV1(_G3Model):
     material_ids: tuple[NonBlankStr, ...]
     input_context_sha256: Sha256Hex
     endpoint_origin: NonBlankStr
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     identity: ModelIdentity
     response_mode: NonBlankStr
     request_body_sha256: Sha256Hex
@@ -396,7 +398,9 @@ class G3RoutingLockV1(_G3Model):
     role: Literal["classify", "extract", "verify"]
     identity: ModelIdentity
     endpoint_origin: NonBlankStr
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     temperature_micros: NonNegativeInt
     thinking: StrictBool
     response_format: NonBlankStr
@@ -497,7 +501,9 @@ class G3StageRightsLockV1(_G3Model):
     role: Literal["classify", "extract", "verify"]
     provider: NonBlankStr
     endpoint_origin: NonBlankStr
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     deployment_id: NonBlankStr
     call_ids: tuple[NonBlankStr, ...]
     window_ids: tuple[NonBlankStr, ...]
@@ -816,7 +822,9 @@ class G3CallTerminalReceiptV1(_G3Model):
     policy_receipt_sha256: Sha256Hex
     identity: ModelIdentity
     endpoint_origin: NonBlankStr
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     request_body_sha256: Sha256Hex
     request_bytes: PositiveInt
     response_meta: G3ProviderResponseMetaV1 | None

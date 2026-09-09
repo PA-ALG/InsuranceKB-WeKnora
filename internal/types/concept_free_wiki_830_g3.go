@@ -1368,7 +1368,7 @@ func validatePolicyReceipt830G3(receipt ModelPolicyReceipt830G3) error {
 	if !allowedReason[receipt.ReasonCode] {
 		return ErrConceptCandidateBundle830G3
 	}
-	if (receipt.IdentityKey[2] != "deepseek" && receipt.IdentityKey[2] != "minimax" && receipt.IdentityKey[2] != "qwen" && receipt.IdentityKey[2] != "qwen-vl") ||
+	if (receipt.IdentityKey[2] != "deepseek" && receipt.IdentityKey[2] != "minimax" && receipt.IdentityKey[2] != "qwen" && receipt.IdentityKey[2] != "qwen-vl" && receipt.IdentityKey[2] != "gemini") ||
 		(receipt.IdentityKey[3] != "classify" && receipt.IdentityKey[3] != "extract" && receipt.IdentityKey[3] != "gap" && receipt.IdentityKey[3] != "verify" && receipt.IdentityKey[3] != "consensus") {
 		return ErrConceptCandidateBundle830G3
 	}
@@ -1394,9 +1394,15 @@ func validatePolicyReceipt830G3(receipt ModelPolicyReceipt830G3) error {
 		}
 		return nil
 	}
+	// The isolated G3 user gateway is an exact identity exception, not a
+	// general Gemini provider allowance. C receipts remain classify-only.
+	userGatewayIdentity := ModelIdentity830G3{
+		Provider: "g3-user-gateway", DeploymentID: "gemini-3.7-flash-medium",
+		Family: "gemini", Role: "classify", PolicyVersion: "g3-user-gemini-gateway-v1",
+	}
 	validFamily := receipt.PermitView != nil && (receipt.PermitView.Identity.Family == "deepseek" ||
 		receipt.PermitView.Identity.Family == "minimax" || receipt.PermitView.Identity.Family == "qwen" ||
-		receipt.PermitView.Identity.Family == "qwen-vl")
+		receipt.PermitView.Identity.Family == "qwen-vl" || receipt.PermitView.Identity == userGatewayIdentity)
 	if receipt.Decision != "ALLOW" || receipt.ReasonCode != "policy_allowed" ||
 		receipt.PermitDigest == nil || receipt.PermitView == nil || !validFamily {
 		return ErrConceptCandidateBundle830G3

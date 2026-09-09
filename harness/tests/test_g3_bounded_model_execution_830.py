@@ -39,7 +39,7 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     parse_d_compile_output,
     parse_d_review_output,
 )
-from insurance_harness.model_policy import AdmissionPolicyDenied
+from insurance_harness.model_policy import AdmissionPolicyDenied, ModelIdentity
 from insurance_harness.run_admission import evaluator
 from insurance_harness.run_admission.g3_models import (
     G3AuthorizedMaterialV1,
@@ -932,9 +932,11 @@ def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("non_nfc", [False, True])
+@pytest.mark.parametrize(
+    ("non_nfc", "gemini"), ((False, False), (True, False), (False, True))
+)
 async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, non_nfc: bool
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, non_nfc: bool, gemini: bool
 ) -> None:
     import respx
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -1036,6 +1038,21 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         "g3-native-page-projections.830.v1": [canonical_json(page_set.model_dump(mode="json"))],
     }
     base = valid_c_plan().model_copy(update={"space_id": corpus.space_id})
+    if gemini:
+        identity = ModelIdentity(
+            provider="g3-user-gateway",
+            deployment_id="gemini-3.7-flash-medium",
+            family="gemini",
+            role="classify",
+            policy_version="g3-user-gemini-gateway-v1",
+        )
+        base = base.model_copy(
+            update={
+                "approved_identities": (identity,),
+                "model_plan_hash": canonical_model_plan_hash((identity,)),
+                "deployment_roles_hash": canonical_model_identities_hash((identity,)),
+            }
+        )
     template_path = Path(__file__).parents[2] / base.template_lock.path
     template = template_path.read_bytes()
     template_values = {
@@ -1064,7 +1081,9 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             enforcing_module_sha256=_sha((Path(__file__).parents[2] / module).read_bytes()),
             canonical_schema_sha256=_sha(canonical_json(schema)),
         )
-        for direction, module, schema in g3_current_schema_specs("C_CLASSIFY")
+        for direction, module, schema in g3_current_schema_specs(
+            "C_CLASSIFY", base.approved_identities[0]
+        )
     )
     schema_lock = _hashed(
         type(base.schema_lock),
@@ -1085,6 +1104,16 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             },
             "template_hash": approved_template_hash,
             "schema_hash": schema_lock.schema_hash,
+            **(
+                {
+                    "identity": base.approved_identities[0],
+                    "endpoint_origin": "http://8.148.158.241:3131",
+                    "endpoint_path": "/v1/chat/completions",
+                    "thinking": True,
+                }
+                if gemini
+                else {}
+            ),
         },
     )
     roles = sorted({role for rule in policy.rules for role in rule.material_roles})
@@ -1124,6 +1153,15 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         update={
             "material_ids": tuple(entry.material_id for entry in corpus.entries),
             "input_context_sha256": _sha(context),
+            **(
+                {
+                    "identity": base.approved_identities[0],
+                    "endpoint_origin": "http://8.148.158.241:3131",
+                    "endpoint_path": "/v1/chat/completions",
+                }
+                if gemini
+                else {}
+            ),
         }
     )
     provisional_plan = base.model_copy(update={"routing_lock": routing_lock})
@@ -1360,6 +1398,10 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             "material_or_derivation_ids": tuple(
                 entry.material_id for entry in corpus.entries
             ),
+            "provider": call.identity.provider,
+            "deployment_id": call.identity.deployment_id,
+            "endpoint_origin": call.endpoint_origin,
+            "endpoint_path": call.endpoint_path,
         },
     )
     provenance = _hashed(
@@ -1406,6 +1448,9 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             "rights_hash": rights.rights_hash,
             "provenance_lock": provenance,
             "provenance_hash": provenance.provenance_hash,
+            "approved_identities": (call.identity,),
+            "model_plan_hash": canonical_model_plan_hash((call.identity,)),
+            "deployment_roles_hash": canonical_model_identities_hash((call.identity,)),
         }
     )
     from insurance_harness.run_admission.profiles.g3_bounded_execution import (
@@ -1438,6 +1483,38 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         base64.b64encode(stage_private.private_bytes_raw()).decode(),
     )
     monkeypatch.setenv("G3_BOUNDED_MODEL_API_KEY", "fixture-provider-key")
+
+    provider_url = (
+        "http://8.148.158.241:3131/v1/chat/completions"
+        if gemini
+        else "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    )
+
+    def provider_response(content: str, *, created: int) -> dict[str, object]:
+        if not gemini:
+            return {
+                "choices": [{"finish_reason": "stop", "message": {"content": content}}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
+            }
+        return {
+            "id": f"fixture-{created}",
+            "object": "chat.completion",
+            "created": created,
+            "model": "gemini-3.7-flash-medium",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": content},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 2,
+                "completion_tokens": 1,
+                "total_tokens": 5,
+                "completion_tokens_details": {"reasoning_tokens": 2},
+            },
+        }
 
     def write_store(payload: bytes, filename: str) -> Path:
         digest = _sha(payload)
@@ -1671,15 +1748,10 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
         fixture_inputs.proposals, corpus, block_refs
     ).decode()
     with respx.mock:
-        posted = respx.post(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-        ).respond(
+        posted = respx.post(provider_url).respond(
             status_code=200,
             headers={"content-type": "application/json", "x-request-id": "fake-c"},
-            json={
-                "choices": [{"finish_reason": "stop", "message": {"content": semantic}}],
-                "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
-            },
+            json=provider_response(semantic, created=1),
         )
         terminal = await runner.run_stage(str(admission_path))
         stage_terminal_path = (
@@ -1866,7 +1938,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
                     enforcing_module_sha256=_sha((repository_root / module).read_bytes()),
                     canonical_schema_sha256=_sha(canonical_json(schema)),
                 )
-                for direction, module, schema in g3_current_schema_specs(stage)
+                for direction, module, schema in g3_current_schema_specs(stage, identity)
             ),
         )
         stage_routing = _hashed(
@@ -1879,10 +1951,10 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             run_schema_version=schema_version,
             role=role,
             identity=identity,
-            endpoint_origin="https://dashscope.aliyuncs.com",
-            endpoint_path="/compatible-mode/v1/chat/completions",
+            endpoint_origin=plan.routing_lock.endpoint_origin,
+            endpoint_path=plan.routing_lock.endpoint_path,
             temperature_micros=0,
-            thinking=False,
+            thinking=plan.routing_lock.thinking,
             response_format="json_object",
             timeout_seconds=30,
             follow_redirects=False,
@@ -1922,6 +1994,8 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
                 "window_id": None,
                 "material_ids": (),
                 "identity": identity,
+                "endpoint_origin": plan.routing_lock.endpoint_origin,
+                "endpoint_path": plan.routing_lock.endpoint_path,
                 "input_context_sha256": _sha(user_context),
                 "input_token_estimate": 3,
                 "input_token_ceiling": chain_row.input_token_ceiling,
@@ -2041,8 +2115,8 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             run_schema_version=schema_version,
             role=role,
             provider=identity.provider,
-            endpoint_origin="https://dashscope.aliyuncs.com",
-            endpoint_path="/compatible-mode/v1/chat/completions",
+            endpoint_origin=plan.routing_lock.endpoint_origin,
+            endpoint_path=plan.routing_lock.endpoint_path,
             deployment_id=identity.deployment_id,
             call_ids=(call.call_id,),
             window_ids=(),
@@ -2141,17 +2215,10 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         )
     ).decode()
     with respx.mock:
-        compile_posted = respx.post(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-        ).respond(
+        compile_posted = respx.post(provider_url).respond(
             status_code=200,
             headers={"content-type": "application/json", "x-request-id": "fake-d-compile"},
-            json={
-                "choices": [
-                    {"finish_reason": "stop", "message": {"content": compile_raw}}
-                ],
-                "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
-            },
+            json=provider_response(compile_raw, created=2),
         )
         compile_terminal = await runner.run_stage(str(compile_admission))
         compile_stage_terminal_path = (
@@ -2224,17 +2291,10 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         review_wire.model_dump(mode="json", round_trip=True)
     ).decode()
     with respx.mock:
-        review_posted = respx.post(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-        ).respond(
+        review_posted = respx.post(provider_url).respond(
             status_code=200,
             headers={"content-type": "application/json", "x-request-id": "fake-d-review"},
-            json={
-                "choices": [
-                    {"finish_reason": "stop", "message": {"content": review_raw}}
-                ],
-                "usage": {"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
-            },
+            json=provider_response(review_raw, created=3),
         )
         review_terminal = await runner.run_stage(str(review_admission))
     assert review_posted.call_count == 1
@@ -2272,9 +2332,9 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     (review_results / "candidate.json").write_bytes(b"{}")
     unexpected_post = None
     with respx.mock:
-        unexpected_post = respx.post(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-        ).respond(status_code=500, json={"error": "must not send"})
+        unexpected_post = respx.post(provider_url).respond(
+            status_code=500, json={"error": "must not send"}
+        )
         with pytest.raises(RuntimeError, match="G3 stage result conflict"):
             await runner.run_stage(str(review_admission))
     assert unexpected_post.call_count == 0

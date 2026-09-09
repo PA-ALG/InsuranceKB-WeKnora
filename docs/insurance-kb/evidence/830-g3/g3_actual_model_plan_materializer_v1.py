@@ -195,8 +195,12 @@ class StageIdentity(_Closed):
 
 
 class Route(_Closed):
-    endpoint_origin: Literal["https://dashscope.aliyuncs.com"]
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_origin: Literal[
+        "https://dashscope.aliyuncs.com", "http://8.148.158.241:3131"
+    ]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     temperature_micros: Literal[0]
     thinking: StrictBool
     response_format: Literal["json_object"]
@@ -281,10 +285,40 @@ class ExecutionOptions(_Closed):
             for x in identities
         ) or tuple(x.role for x in identities) != ("classify", "extract", "verify"):
             raise ValueError("identity projection mismatch")
-        if any(
-            x.identity.provider != "bailian" or x.identity.family != "qwen" for x in self.identities
-        ):
+        identity_key = (
+            identities[0].provider,
+            identities[0].family,
+            identities[0].deployment_id,
+            identities[0].policy_version,
+        )
+        supported = identity_key == (
+            "bailian",
+            "qwen",
+            identities[0].deployment_id,
+            identities[0].policy_version,
+        ) or identity_key == (
+            "g3-user-gateway",
+            "gemini",
+            "gemini-3.7-flash-medium",
+            "g3-user-gemini-gateway-v1",
+        )
+        if not supported:
             raise ValueError("unsupported model family")
+        expected_route = (
+            ("http://8.148.158.241:3131", "/v1/chat/completions", True)
+            if identity_key[0] == "g3-user-gateway"
+            else (
+                "https://dashscope.aliyuncs.com",
+                "/compatible-mode/v1/chat/completions",
+                self.route.thinking,
+            )
+        )
+        if (
+            self.route.endpoint_origin,
+            self.route.endpoint_path,
+            self.route.thinking,
+        ) != expected_route:
+            raise ValueError("identity route mismatch")
         for stage in stages:
             rows = [x for x in self.calls if x.stage == stage]
             if stage == "C_CLASSIFY":
@@ -503,9 +537,9 @@ def _template(stage: str):
     return lock, raw
 
 
-def _schema(stage: str):
+def _schema(stage: str, identity: ModelIdentity):
     rows = []
-    for direction, module, schema in g3_current_schema_specs(stage):
+    for direction, module, schema in g3_current_schema_specs(stage, identity):
         raw = (WORKTREE / module).read_bytes()
         rows.append(
             G3SchemaArtifactV1(
@@ -1147,7 +1181,7 @@ def _stage_fixed(
     purpose, schema_version, role = G3_STAGE_PROFILES[stage]
     identity = next(x.identity for x in options.identities if x.stage == stage)
     configured = [x for x in options.calls if x.stage == stage]
-    schema = _schema(stage)
+    schema = _schema(stage, identity)
     template, template_raw = _template(stage)
     routing = _hashed(
         G3RoutingLockV1,
@@ -2040,9 +2074,9 @@ def _parts_from_artifacts(options, parent, stage, manifest, artifact_raw):
     by_contract = {}
     for (contract, _, _), raw in artifact_raw.items():
         by_contract.setdefault(contract, []).append(raw)
-    schema = _schema(stage)
-    template, template_raw = _template(stage)
     identity = next(x.identity for x in options.identities if x.stage == stage)
+    schema = _schema(stage, identity)
+    template, template_raw = _template(stage)
     purpose, schema_version, role = G3_STAGE_PROFILES[stage]
     configured = [x for x in options.calls if x.stage == stage]
     if tuple(

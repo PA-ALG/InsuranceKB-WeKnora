@@ -56,6 +56,122 @@ _RESPONSE_AUDIT: dict[str, tuple[G3ProviderResponseMetaV1, G3ProviderUsageV1 | N
 Sha256Hex = Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
+def _is_g3_gemini_identity(identity: ModelIdentity) -> bool:
+    return (
+        identity.provider,
+        identity.family,
+        identity.deployment_id,
+        identity.policy_version,
+        identity.role,
+    ) in {
+        (
+            "g3-user-gateway",
+            "gemini",
+            "gemini-3.7-flash-medium",
+            "g3-user-gemini-gateway-v1",
+            role,
+        )
+        for role in ("classify", "extract", "verify")
+    }
+
+
+def _strict_json(raw: bytes, *, label: str) -> object:
+    def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        value: dict[str, object] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError(f"duplicate JSON key in {label}")
+            value[key] = item
+        return value
+
+    return json.loads(
+        raw,
+        object_pairs_hook=unique,
+        parse_constant=lambda _value: (_ for _ in ()).throw(
+            ValueError(f"non-finite JSON in {label}")
+        ),
+    )
+
+
+def _parse_g3_gemini_provider_response(
+    identity: ModelIdentity, raw: bytes
+) -> tuple[str, bytes, G3ProviderUsageV1]:
+    """Derive exact Gemini semantic bytes and normalized budget usage."""
+
+    try:
+        if not _is_g3_gemini_identity(identity):
+            raise ValueError
+        value = _strict_json(raw, label="Gemini response")
+        if (
+            type(value) is not dict
+            or type(value.get("choices")) is not list
+            or len(value["choices"]) != 1
+        ):
+            raise ValueError
+        choice = value["choices"][0]
+        if (
+            type(choice) is not dict
+            or type(choice.get("finish_reason")) is not str
+            or not choice["finish_reason"]
+            or choice["finish_reason"] == "length"
+        ):
+            raise ValueError
+        message = choice.get("message")
+        if (
+            type(message) is not dict
+            or type(message.get("content")) is not str
+            or not message["content"]
+        ):
+            raise ValueError
+        content = cast(str, message["content"])
+        if (
+            set(value) != {"id", "object", "created", "model", "choices", "usage"}
+            or type(value["id"]) is not str
+            or not value["id"]
+            or value["object"] != "chat.completion"
+            or type(value["created"]) is not int
+            or value["created"] < 0
+            or value["model"] != "gemini-3.7-flash-medium"
+            or set(choice) != {"index", "message", "finish_reason"}
+            or type(choice["index"]) is not int
+            or choice["index"] != 0
+            or choice["finish_reason"] != "stop"
+            or set(message) != {"role", "content"}
+            or message["role"] != "assistant"
+        ):
+            raise ValueError
+        raw_usage = value["usage"]
+        if type(raw_usage) is not dict or set(raw_usage) != {
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "completion_tokens_details",
+        }:
+            raise ValueError
+        details = raw_usage["completion_tokens_details"]
+        if type(details) is not dict or set(details) != {"reasoning_tokens"}:
+            raise ValueError
+        prompt = raw_usage["prompt_tokens"]
+        visible = raw_usage["completion_tokens"]
+        total = raw_usage["total_tokens"]
+        reasoning = details["reasoning_tokens"]
+        if any(type(item) is not int or item < 0 for item in (prompt, visible, total, reasoning)):
+            raise ValueError
+        if total != prompt + visible + reasoning:
+            raise ValueError
+        semantic_value = _strict_json(content.encode(), label="Gemini message content")
+        semantic_bytes = canonical_json(semantic_value)
+        usage = G3ProviderUsageV1(
+            prompt_tokens=prompt,
+            completion_tokens=visible + reasoning,
+            total_tokens=total,
+            usage_verified=True,
+        )
+        return semantic_bytes.decode(), semantic_bytes, usage
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE") from None
+
+
 class G3LedgerDenied(PermissionError):
     def __init__(self, reason_code: str) -> None:
         self.reason_code = reason_code
@@ -65,7 +181,9 @@ class G3LedgerDenied(PermissionError):
 class G3BoundedRouteConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     endpoint_origin: StrictStr
-    endpoint_path: Literal["/compatible-mode/v1/chat/completions"]
+    endpoint_path: Literal[
+        "/compatible-mode/v1/chat/completions", "/v1/chat/completions"
+    ]
     timeout_seconds: Annotated[StrictInt, Field(gt=0)]
     follow_redirects: Literal[False]
     call_directory: StrictStr | None = None
@@ -84,10 +202,20 @@ def validate_g3_route(route: G3BoundedRouteConfig) -> G3BoundedRouteConfig:
     try:
         current = G3BoundedRouteConfig.model_validate(route.model_dump())
         parsed = urlsplit(current.endpoint_origin)
+        route_key = (current.endpoint_origin, current.endpoint_path)
         if (
-            current.endpoint_origin != "https://dashscope.aliyuncs.com"
-            or parsed.scheme != "https"
-            or parsed.hostname != "dashscope.aliyuncs.com"
+            route_key
+            not in {
+                (
+                    "https://dashscope.aliyuncs.com",
+                    "/compatible-mode/v1/chat/completions",
+                ),
+                ("http://8.148.158.241:3131", "/v1/chat/completions"),
+            }
+            or parsed.scheme
+            != ("https" if route_key[0] == "https://dashscope.aliyuncs.com" else "http")
+            or parsed.hostname
+            != ("dashscope.aliyuncs.com" if parsed.scheme == "https" else "8.148.158.241")
             or parsed.username is not None
             or parsed.password is not None
             or parsed.query
@@ -95,7 +223,7 @@ def validate_g3_route(route: G3BoundedRouteConfig) -> G3BoundedRouteConfig:
             or parsed.path not in {"", "/"}
         ):
             raise ValueError
-        if parsed.port not in {None, 443}:
+        if parsed.port != (None if parsed.scheme == "https" else 3131):
             raise ValueError
         if current.call_directory is not None:
             call_dir = Path(current.call_directory)
@@ -662,6 +790,12 @@ def _read_completed_g3_call_leaf(
         or terminal.projection_sha256 is None
     ):
         raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+    if _is_g3_gemini_identity(call.identity):
+        _content, derived_semantic, derived_usage = _parse_g3_gemini_provider_response(
+            call.identity, response_bytes
+        )
+        if derived_semantic != semantic_bytes or derived_usage != terminal.provider_usage:
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
     return terminal, semantic_bytes, policy_bytes, str(call_dir)
 
 
@@ -970,9 +1104,19 @@ async def _fixed_openai_compatible_dispatch(
     """Single fixed POST. Unit tests never call this function against a network."""
 
     route = validate_g3_route(G3BoundedRouteConfig.model_validate_json(route_config))
+    qwen_route = (
+        identity.provider == "bailian"
+        and identity.family == "qwen"
+        and route.endpoint_origin == "https://dashscope.aliyuncs.com"
+        and route.endpoint_path == "/compatible-mode/v1/chat/completions"
+    )
+    gemini_route = (
+        _is_g3_gemini_identity(identity)
+        and route.endpoint_origin == "http://8.148.158.241:3131"
+        and route.endpoint_path == "/v1/chat/completions"
+    )
     if (
-        identity.provider != "bailian"
-        or identity.family != "qwen"
+        not (qwen_route or gemini_route)
         or route.call_directory is None
         or route.request_body_sha256 is None
         or route.prepared_receipt_sha256 is None
@@ -1098,30 +1242,36 @@ async def _fixed_openai_compatible_dispatch(
     if not received_content_type:
         raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
     response.raise_for_status()
-    value = json.loads(raw)
-    if (
-        type(value) is not dict
-        or type(value.get("choices")) is not list
-        or len(value["choices"]) != 1
-    ):
-        raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
-    choice = value["choices"][0]
-    if (
-        type(choice) is not dict
-        or type(choice.get("finish_reason")) is not str
-        or not choice["finish_reason"]
-        or choice["finish_reason"] == "length"
-    ):
-        raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
-    message = choice.get("message")
-    if (
-        type(message) is not dict
-        or type(message.get("content")) is not str
-        or not message["content"]
-    ):
-        raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
-    content = cast(str, message["content"])
-    usage = G3ProviderUsageV1.model_validate({**value.get("usage", {}), "usage_verified": True})
+    if _is_g3_gemini_identity(identity):
+        content, semantic_bytes, usage = _parse_g3_gemini_provider_response(identity, raw)
+    else:
+        value = json.loads(raw)
+        if (
+            type(value) is not dict
+            or type(value.get("choices")) is not list
+            or len(value["choices"]) != 1
+        ):
+            raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
+        choice = value["choices"][0]
+        if (
+            type(choice) is not dict
+            or type(choice.get("finish_reason")) is not str
+            or not choice["finish_reason"]
+            or choice["finish_reason"] == "length"
+        ):
+            raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
+        message = choice.get("message")
+        if (
+            type(message) is not dict
+            or type(message.get("content")) is not str
+            or not message["content"]
+        ):
+            raise G3LedgerDenied("INVALID_PROVIDER_RESPONSE")
+        content = cast(str, message["content"])
+        semantic_bytes = content.encode()
+        usage = G3ProviderUsageV1.model_validate(
+            {**value.get("usage", {}), "usage_verified": True}
+        )
     if (
         usage.prompt_tokens > route.input_token_ceiling
         or usage.completion_tokens > route.output_token_ceiling
@@ -1129,7 +1279,7 @@ async def _fixed_openai_compatible_dispatch(
         raise G3LedgerDenied("PROVIDER_USAGE_EXCEEDS_CAP")
     with _LOCK:
         _RESPONSE_AUDIT[str(call_dir)] = (response_meta, usage)
-    _write_exclusive(call_dir / "semantic-content.private.json", content.encode())
+    _write_exclusive(call_dir / "semantic-content.private.json", semantic_bytes)
     return content
 
 

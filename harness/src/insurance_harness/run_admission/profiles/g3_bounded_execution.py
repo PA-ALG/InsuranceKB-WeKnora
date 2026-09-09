@@ -21,6 +21,33 @@ G3_STAGE_PROFILES = {
 }
 
 
+def _is_supported_g3_route(plan: G3BoundedAdmissionPlanV1) -> bool:
+    identity = plan.routing_lock.identity
+    route = (plan.routing_lock.endpoint_origin, plan.routing_lock.endpoint_path)
+    if identity.provider == "bailian" and identity.family == "qwen":
+        return route == (
+            "https://dashscope.aliyuncs.com",
+            "/compatible-mode/v1/chat/completions",
+        )
+    return (
+        identity.provider,
+        identity.family,
+        identity.deployment_id,
+        identity.policy_version,
+        identity.role,
+        plan.routing_lock.thinking,
+        route,
+    ) == (
+        "g3-user-gateway",
+        "gemini",
+        "gemini-3.7-flash-medium",
+        "g3-user-gemini-gateway-v1",
+        G3_STAGE_PROFILES[plan.stage][2],
+        True,
+        ("http://8.148.158.241:3131", "/v1/chat/completions"),
+    )
+
+
 def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissionPlanV1:
     try:
         current = G3BoundedAdmissionPlanV1.model_validate(
@@ -277,12 +304,7 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
             or current.routing_lock.template_hash != current.template_lock.approved_template_hash
             or current.routing_lock.schema_hash != current.schema_hash
             or current.routing_lock.response_format != "json_object"
-            or current.routing_lock.identity.provider != "bailian"
-            or current.routing_lock.identity.family != "qwen"
-            or current.routing_lock.endpoint_origin
-            != "https://dashscope.aliyuncs.com"
-            or current.routing_lock.endpoint_path
-            != "/compatible-mode/v1/chat/completions"
+            or not _is_supported_g3_route(current)
             or any(
                 call.identity != current.routing_lock.identity
                 or call.endpoint_origin != current.routing_lock.endpoint_origin
