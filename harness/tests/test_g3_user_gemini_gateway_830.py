@@ -197,6 +197,43 @@ def test_gemini_response_normalizes_reasoning_and_canonicalizes_content() -> Non
     }
 
 
+def test_gemini_exact_complete_json_fence_preserves_semantics_usage_and_raw() -> None:
+    plain = _gemini_response(content='{ "answer": "来源```内容" }')
+    wrapped = _gemini_response(content='```json\n{ "answer": "来源```内容" }\n```')
+    raw_hash = hashlib.sha256(wrapped).hexdigest()
+    assert _parse_g3_gemini_provider_response(
+        _gemini_identity(), wrapped
+    ) == _parse_g3_gemini_provider_response(_gemini_identity(), plain)
+    assert hashlib.sha256(wrapped).hexdigest() == raw_hash
+
+
+@pytest.mark.parametrize(
+    "content",
+    (
+        'Explanation\n```json\n{}\n```',
+        '```json\n{}\n```\nExplanation',
+        ' ```json\n{}\n```',
+        '```json\n{}\n```\n',
+        '```JSON\n{}\n```',
+        '```\n{}\n```',
+        '```json\r\n{}\r\n```',
+        '```json\n{}',
+        '{}\n```',
+        '```json\n{}\n```\n```json\n{}\n```',
+        '```json\n{"key":1,"key":2}\n```',
+        '```json\n{"key":NaN}\n```',
+        '```json\n{"key":Infinity}\n```',
+        '```json\n{"key":-Infinity}\n```',
+    ),
+)
+def test_gemini_json_fence_does_not_repair_or_search_content(content: str) -> None:
+    with pytest.raises(G3LedgerDenied) as denied:
+        _parse_g3_gemini_provider_response(
+            _gemini_identity(), _gemini_response(content=content)
+        )
+    assert denied.value.reason_code == "INVALID_PROVIDER_RESPONSE"
+
+
 def test_gemini_response_accepts_exact_aggregate_usage_without_reasoning_detail() -> None:
     content, semantic, usage = _parse_g3_gemini_provider_response(
         _gemini_identity(), _gemini_aggregate_usage_response()
@@ -285,7 +322,6 @@ def test_gemini_response_rejects_nonexact_usage_and_response_shape(mutate) -> No
 @pytest.mark.parametrize(
     "content",
     (
-        "```json\n{}\n```",
         '{"x":1,"x":2}',
         '{"x":NaN}',
         "",
@@ -348,8 +384,9 @@ def test_gemini_first_terminal_recomputes_persisted_response_closure(
     assert not (call_dir / "call-terminal.json").exists()
 
 
+@pytest.mark.parametrize("fenced", (False, True))
 def test_gemini_first_terminal_accepts_exact_aggregate_usage(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fenced: bool
 ) -> None:
     import insurance_harness.model_policy.g3_bounded_gateway as gateway
 
@@ -363,7 +400,10 @@ def test_gemini_first_terminal_accepts_exact_aggregate_usage(
 
     plan = _gemini_plan()
     call = plan.request_manifest.calls[0]
-    response_bytes = _gemini_aggregate_usage_response(reasoning_content="opaque fixture")
+    response_bytes = _gemini_aggregate_usage_response(
+        content='```json\n{"answer":true}\n```' if fenced else '{"answer":true}',
+        reasoning_content="opaque fixture",
+    )
     _content, expected_semantic, expected_usage = (
         _parse_g3_gemini_provider_response(call.identity, response_bytes)
     )
@@ -388,8 +428,9 @@ def test_gemini_first_terminal_accepts_exact_aggregate_usage(
     assert terminal.provider_usage == expected_usage
 
 
+@pytest.mark.parametrize("fenced", (False, True))
 def test_gemini_successful_reopen_reparses_exact_aggregate_usage(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fenced: bool
 ) -> None:
     import insurance_harness.model_policy.g3_bounded_gateway as gateway
     import tests.test_g3_bounded_gateway_830 as bounded_tests
@@ -403,7 +444,10 @@ def test_gemini_successful_reopen_reparses_exact_aggregate_usage(
     )
     (call_dir.parents[1] / "stage-terminals" / f"{plan.stage}.json").unlink()
 
-    response_bytes = _gemini_aggregate_usage_response(reasoning_content="opaque fixture")
+    response_bytes = _gemini_aggregate_usage_response(
+        content='```json\n{"answer":true}\n```' if fenced else '{"answer":true}',
+        reasoning_content="opaque fixture",
+    )
     _content, semantic, usage = _parse_g3_gemini_provider_response(
         plan.request_manifest.calls[0].identity, response_bytes
     )

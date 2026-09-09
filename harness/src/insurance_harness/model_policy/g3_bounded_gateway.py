@@ -173,6 +173,8 @@ def _parse_g3_gemini_provider_response(
             completion += reasoning
         if total != prompt + completion:
             raise ValueError
+        if content.startswith("```json\n") and content.endswith("\n```"):
+            content = content[8:-4]
         semantic_value = _strict_json(content.encode(), label="Gemini message content")
         semantic_bytes = canonical_json(semantic_value)
         usage = G3ProviderUsageV1(
