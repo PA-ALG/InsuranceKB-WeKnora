@@ -40,6 +40,7 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     parse_d_review_output,
 )
 from insurance_harness.model_policy import AdmissionPolicyDenied
+from insurance_harness.run_admission import evaluator
 from insurance_harness.run_admission.g3_models import (
     G3AuthorizedMaterialV1,
     G3CostAuditV1,
@@ -827,6 +828,72 @@ def test_native_and_semantic_closed_wires_preserve_only_exact_body_fields() -> N
             text="NFC source",
             boxes=(),
         )
+
+
+def _large_native_projection_wire() -> bytes:
+    page = G3NativePageProjectionV1(
+        block_ref="opaque-large",
+        material_id="m-large",
+        revision_id="revision-large",
+        block_id="block-large",
+        page_number=1,
+        page_width=100.0,
+        page_height=100.0,
+        text="x" * (8 * 1024 * 1024),
+        boxes=(),
+    )
+    return bounded.canonical_native_page_projections(
+        G3NativePageProjectionSetV1(
+            contract="g3-native-page-projections.830.v1", pages=(page,)
+        )
+    )
+
+
+def test_one_artifact_uses_existing_native_capacity_only_for_exact_typed_pair() -> None:
+    raw = _large_native_projection_wire()
+    assert 8 * 1024 * 1024 < len(raw) < evaluator._MAX_G3_NATIVE_PROJECTION_BYTES
+    parsed = bounded._one_artifact(
+        {"g3-native-page-projections.830.v1": [raw]},
+        "g3-native-page-projections.830.v1",
+        G3NativePageProjectionSetV1,
+    )
+    assert bounded.canonical_native_page_projections(parsed) == raw
+
+    with pytest.raises(ValueError, match="invalid semantic response bytes"):
+        bounded._one_artifact(
+            {"not-native": [raw]}, "not-native", G3NativePageProjectionSetV1
+        )
+    with pytest.raises(ValueError, match="invalid semantic response bytes"):
+        bounded._one_artifact(
+            {"g3-native-page-projections.830.v1": [raw]},
+            "g3-native-page-projections.830.v1",
+            G3SemanticResponseV1,
+        )
+
+
+def test_native_artifact_reader_keeps_exact_wire_and_capacity_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = "g3-native-page-projections.830.v1"
+    duplicate = b'{"contract":"g3-native-page-projections.830.v1","pages":[],"pages":[]}'
+    noncanonical = b'{"pages":[],"contract":"g3-native-page-projections.830.v1"}'
+    invalid = canonical_json({"contract": contract, "pages": "invalid"})
+    for raw in (duplicate, noncanonical, invalid):
+        with pytest.raises((ValueError, ValidationError)):
+            bounded._one_artifact(
+                {contract: [raw]}, contract, G3NativePageProjectionSetV1
+            )
+
+    monkeypatch.setattr(evaluator, "_MAX_G3_NATIVE_PROJECTION_BYTES", 64)
+    over_native_limit = canonical_json({"contract": contract, "pages": []}) + b" " * 64
+    with pytest.raises(ValueError, match="invalid native projection bytes"):
+        bounded._one_artifact(
+            {contract: [over_native_limit]}, contract, G3NativePageProjectionSetV1
+        )
+
+    semantic = canonical_json({"padding": "x" * (8 * 1024 * 1024)})
+    with pytest.raises(ValueError, match="invalid semantic response bytes"):
+        bounded._unique_json_bytes(semantic)
 
 
 def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:

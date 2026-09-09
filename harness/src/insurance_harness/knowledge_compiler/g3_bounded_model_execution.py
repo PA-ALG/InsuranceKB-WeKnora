@@ -333,7 +333,7 @@ def canonical_native_page_projections(value: G3NativePageProjectionSetV1) -> byt
     return canonical_json(validated.model_dump(mode="json", round_trip=True))
 
 
-def _unique_json_bytes(raw: bytes) -> object:
+def _decode_unique_canonical_json_bytes(raw: bytes) -> object:
     def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
         value: dict[str, object] = {}
         for key, item in pairs:
@@ -342,12 +342,33 @@ def _unique_json_bytes(raw: bytes) -> object:
             value[key] = item
         return value
 
-    if type(raw) is not bytes or not raw or len(raw) > 8 * 1024 * 1024:
-        raise ValueError("invalid semantic response bytes")
     value = json.loads(raw.decode("utf-8"), object_pairs_hook=unique)
     if raw != canonical_json(value):
         raise ValueError("response must be canonical JSON")
     return value
+
+
+def _unique_json_bytes(raw: bytes) -> object:
+    if type(raw) is not bytes or not raw or len(raw) > 8 * 1024 * 1024:
+        raise ValueError("invalid semantic response bytes")
+    return _decode_unique_canonical_json_bytes(raw)
+
+
+def _parse_native_page_projection_bytes(raw: bytes) -> G3NativePageProjectionSetV1:
+    from insurance_harness.run_admission import evaluator
+
+    if (
+        type(raw) is not bytes
+        or not raw
+        or len(raw) > evaluator._MAX_G3_NATIVE_PROJECTION_BYTES
+    ):
+        raise ValueError("invalid native projection bytes")
+    projection = G3NativePageProjectionSetV1.model_validate(
+        _decode_unique_canonical_json_bytes(raw)
+    )
+    if canonical_native_page_projections(projection) != raw:
+        raise ValueError("native projection typed wire mismatch")
+    return projection
 
 
 def parse_c_semantic_response_bytes(raw: bytes) -> tuple[G3SemanticResponseV1, bytes]:
@@ -911,6 +932,11 @@ def _one_artifact[ModelT: BaseModel](
     values = artifacts.get(contract, [])
     if len(values) != 1:
         raise ValueError(f"expected one {contract} artifact")
+    if (
+        contract == "g3-native-page-projections.830.v1"
+        and model is G3NativePageProjectionSetV1
+    ):
+        return model.model_validate(_parse_native_page_projection_bytes(values[0]))
     return model.model_validate(_unique_json_bytes(values[0]))
 
 
