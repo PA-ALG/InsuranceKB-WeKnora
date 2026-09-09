@@ -71,7 +71,8 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (  # noq
 )
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (  # noqa: E402
     G3NativePageProjectionSetV1,
-    G3SemanticResponseV1,
+    _c_response_schema,
+    _is_g3_gemini_identity,
     _c_prompt_block,
     _render_g3_stage_contexts,
     canonical_native_page_projections,
@@ -1123,7 +1124,7 @@ def _authorized_materials(corpus: BatchCorpusV1, native: G3NativePageProjectionS
     return tuple(result)
 
 
-def _c_contexts(corpus, native, existing, policy, catalog, calls):
+def _c_contexts(corpus, native, existing, policy, catalog, calls, identity=None):
     entries = {x.material_id: x for x in corpus.entries}
     blocks = {
         x.material_id: {(b.revision_id, b.block_id): b for b in x.blocks} for x in corpus.entries
@@ -1149,7 +1150,9 @@ def _c_contexts(corpus, native, existing, policy, catalog, calls):
                     "material_id": mid,
                     "blocks": [
                         _c_prompt_block(
-                            p.block_ref, blocks[mid][(p.revision_id, p.block_id)].text
+                            p.block_ref, blocks[mid][(p.revision_id, p.block_id)].text,
+                            use_locator_refs=identity is not None and _is_g3_gemini_identity(identity),
+                            native_page=p, source=blocks[mid][(p.revision_id, p.block_id)],
                         )
                         for p in sorted(pages[mid], key=lambda x: x.block_ref)
                     ],
@@ -1163,7 +1166,7 @@ def _c_contexts(corpus, native, existing, policy, catalog, calls):
                 "allowed_material_roles": roles,
                 "allowed_taxonomy_labels": labels,
                 "existing_entities": [x.model_dump(mode="json") for x in existing.entities],
-                "response_schema": G3SemanticResponseV1.model_json_schema(),
+                "response_schema": _c_response_schema(identity),
             }
         )
     return out
@@ -1603,7 +1606,9 @@ def _derive_c(builder_dir: Path, options_path: Path):
                 {"call_id": x.call_id, "window_id": x.window_id, "material_ids": x.material_ids},
             )()
         )
-    contexts = _c_contexts(corpus, native, existing, policy, catalog, dummy)
+    contexts = _c_contexts(
+        corpus, native, existing, policy, catalog, dummy, options.identities[0].identity,
+    )
     catalog_runtime = canonical_json(catalog.model_dump(mode="json", round_trip=True))
     typed = [
         ("batch-corpus.830.g3.v1", "batch-corpus.json", raw["batch-corpus.json"]),

@@ -1138,7 +1138,10 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
                     "material_id": entry.material_id,
                     "blocks": [
                         bounded._c_prompt_block(
-                            block_refs[(block.revision_id, block.block_id)], block.text
+                            block_refs[(block.revision_id, block.block_id)], block.text,
+                            use_locator_refs=gemini, source=block,
+                            native_page=next(p for p in pages if p.block_ref ==
+                                             block_refs[(block.revision_id, block.block_id)]),
                         )
                         for block in entry.blocks
                     ],
@@ -1150,7 +1153,7 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             "existing_entities": [
                 entity.model_dump(mode="json") for entity in existing.entities
             ],
-            "response_schema": G3SemanticResponseV1.model_json_schema(),
+            "response_schema": bounded._c_response_schema(base.approved_identities[0]),
         }
     )
     call0 = base.request_manifest.calls[0].model_copy(
@@ -1509,7 +1512,8 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
                 {
                     "index": 0,
                     "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": content},
+                    "message": {"role": "assistant", "content": content,
+                                "reasoning_content": "synthetic optional field"},
                 }
             ],
             "usage": {
@@ -1751,6 +1755,21 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
     semantic = _semantic_from_proposals(
         fixture_inputs.proposals, corpus, block_refs
     ).decode()
+    if gemini:
+        reference_value = json.loads(semantic)
+        reference_value["contract"] = "g3-batch-resolution-semantic-references.local.v1"
+        source_map = {(entry.material_id, block.revision_id, block.block_id): block
+                      for entry in corpus.entries for block in entry.blocks}
+        page_map = {page.block_ref: page for page in pages}
+        for material in reference_value["materials"]:
+            for row in material["evidence"]:
+                old_locator = row.pop("locator")
+                page = page_map[old_locator["block_ref"]]
+                source = source_map[(material["material_id"], page.revision_id, page.block_id)]
+                eligible = bounded._c_eligible_source_locators(page, source)
+                locator = next(loc for loc in eligible if old_locator["quote"] in loc.quote)
+                row["locator_ref"] = bounded._c_locator_ref(locator)
+        semantic = canonical_json(reference_value).decode()
     with respx.mock:
         posted = respx.post(provider_url).respond(
             status_code=200,
@@ -2389,3 +2408,167 @@ def test_c_prompt_locators_are_bounded_exact_and_preserve_source(text: str) -> N
         assert locator["quote"] == text[locator["start"]:locator["end"]]
         covered.update(range(locator["start"], locator["end"]))
     assert all(index in covered for index, char in enumerate(text) if not char.isspace())
+
+
+def _reference_gemini_identity() -> ModelIdentity:
+    return ModelIdentity(provider="g3-user-gateway", family="gemini", role="classify",
+                         deployment_id="gemini-3.7-flash-medium",
+                         policy_version="g3-user-gemini-gateway-v1")
+
+
+def test_gemini_c_schema_requires_source_reference_contract() -> None:
+    schema = g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
+    assert schema["properties"]["contract"]["const"] == (
+        "g3-batch-resolution-semantic-references.local.v1"
+    )
+    assert "locator_ref" in str(schema)
+    assert "G3SemanticLocatorV1" not in str(schema)
+    legacy = g3_current_schema_specs("C_CLASSIFY")[1][2]
+    assert legacy == G3SemanticResponseV1.model_json_schema()
+
+
+def _reference_fixture():
+    text = "中国人寿保险A款分类医疗险"
+    entry = _entry(material_id="m-001", text=text)
+    source = entry.blocks[0]
+    page = G3NativePageProjectionV1(
+        block_ref="opaque-1", material_id="m-001", revision_id=source.revision_id,
+        block_id=source.block_id, page_number=source.page_number,
+        page_width=100.0, page_height=100.0, text=text,
+        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
+                    width=1.0, height=1.0) for i in range(len(text))),
+    )
+    locator = {"block_ref": "opaque-1", "start": 0, "end": len(text), "quote": text}
+    ref = "loc_" + _sha(canonical_json(locator))
+    response = json.loads(_semantic_response(text))
+    response["contract"] = "g3-batch-resolution-semantic-references.local.v1"
+    for evidence in response["materials"][0]["evidence"]:
+        del evidence["locator"]
+        evidence["locator_ref"] = ref
+    return entry, page, response
+
+
+def _assemble_reference(entry, page, response, **overrides):
+    args = dict(raw=canonical_json(response), corpus=_corpus(entry),
+                requested_material_ids=("m-001",), native_pages=(page,),
+                allowed_material_roles=("policy",), allowed_taxonomy_labels=("medical",),
+                model_request_sha256="1" * 64, use_locator_refs=True)
+    args.update(overrides)
+    return assemble_c_semantic_response(**args)
+
+
+def test_c_reference_response_assembles_exact_local_source() -> None:
+    entry, page, response = _reference_fixture()
+    result = _assemble_reference(entry, page, response)
+    assert len(result) == 1
+    assert result[0].entities[0].issuer == "中国人寿"
+    assert result[0].entities[0].name == "A款"
+
+
+@pytest.mark.parametrize("mutation", [
+    "invented", "changed_source", "wrong_material", "duplicate_page", "legacy",
+])
+def test_c_reference_response_rejects_unbound_source(mutation: str) -> None:
+    entry, page, response = _reference_fixture()
+    extra = {}
+    if mutation == "invented":
+        response["materials"][0]["evidence"][0]["locator_ref"] = "loc_" + "f" * 64
+    elif mutation == "changed_source":
+        entry = _entry(material_id="m-001", text="中国人寿保险A款分类医疗险变更")
+    elif mutation == "wrong_material":
+        page = page.model_copy(update={"material_id": "m-002"})
+    elif mutation == "duplicate_page":
+        extra["native_pages"] = (page, page)
+    else:
+        response = json.loads(_semantic_response(entry.blocks[0].text))
+    with pytest.raises(ValueError):
+        _assemble_reference(entry, page, response, **extra)
+
+
+@pytest.mark.parametrize("text", [
+    "same\r\nsame\r\n" + "字" * 600, "实际\uf99c-source\r\n", "\n \t\n",
+])
+def test_c_prompt_reference_ids_bind_exact_positions_and_text(text: str) -> None:
+    old = bounded._c_prompt_block("source-1", text)
+    entry = _entry(material_id="m-001", text="canonical fixture")
+    source = entry.blocks[0].model_copy(update={"text": text})
+    page = G3NativePageProjectionV1(
+        block_ref="source-1", material_id="m-001", revision_id=source.revision_id,
+        block_id=source.block_id, page_number=source.page_number,
+        page_width=1000.0, page_height=100.0, text=text,
+        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
+                    width=1.0, height=1.0) for i in range(len(text))),
+    )
+    new = bounded._c_prompt_block("source-1", text, use_locator_refs=True,
+                                  native_page=page, source=source)
+    assert new["text"] == text
+    assert "evidence_locators" not in new
+    assert new["evidence_locator_refs"] == [
+        {"locator_ref": "loc_" + _sha(canonical_json(loc)), "quote": loc["quote"]}
+        for loc in old["evidence_locators"]
+        if page.text.count(loc["quote"]) == 1
+    ]
+    refs = new["evidence_locator_refs"]
+    assert len({x["locator_ref"] for x in refs}) == len(refs)
+
+
+def test_c_reference_options_exclude_ambiguous_native_quotes() -> None:
+    entry, page, _ = _reference_fixture()
+    page = page.model_copy(update={"text": page.text + page.text})
+    block = bounded._c_prompt_block(
+        page.block_ref, entry.blocks[0].text, use_locator_refs=True,
+        native_page=page, source=entry.blocks[0],
+    )
+    assert block["evidence_locator_refs"] == []
+
+
+def test_c_reference_wire_order_does_not_change_proposals() -> None:
+    entry, page, response = _reference_fixture()
+    expected = _assemble_reference(entry, page, response)
+    response["materials"][0]["evidence"].reverse()
+    response["materials"][0]["entities"][0]["identity_evidence_refs"].reverse()
+    assert _assemble_reference(entry, page, response) == expected
+
+
+def test_c_reference_schema_rejects_nonfield_scope_before_expansion() -> None:
+    _, _, response = _reference_fixture()
+    response["materials"][0]["evidence"][0]["field_key"] = "classification"
+    with pytest.raises(ValidationError):
+        bounded.G3SemanticReferenceResponseV1.model_validate(response)
+
+
+@pytest.mark.parametrize("duplicate", [
+    "material", "entity", "evidence", "identity_ref", "label", "label_ref", "role_ref",
+])
+def test_c_reference_unordered_collections_never_remove_duplicates(duplicate: str) -> None:
+    entry, page, response = _reference_fixture()
+    material = response["materials"][0]
+    entity = material["entities"][0]
+    rows = {
+        "material": response["materials"], "entity": material["entities"],
+        "evidence": material["evidence"], "identity_ref": entity["identity_evidence_refs"],
+        "label": entity["labels"], "label_ref": entity["labels"][0]["evidence_refs"],
+        "role_ref": material["material_role_evidence_refs"],
+    }[duplicate]
+    rows.append(rows[0])
+    with pytest.raises(ValueError):
+        _assemble_reference(entry, page, response)
+
+
+def test_c_reference_options_recover_exact_physical_line_within_native_page() -> None:
+    text = "foreign page heading\r\n中国人寿保险A款分类医疗险\r\nother page footer"
+    entry = _entry(material_id="m-001", text=text)
+    source = entry.blocks[0]
+    native_text = "中国人寿保险A款分类医疗险"
+    page = G3NativePageProjectionV1(
+        block_ref="opaque-1", material_id="m-001", revision_id=source.revision_id,
+        block_id=source.block_id, page_number=source.page_number,
+        page_width=100.0, page_height=100.0, text=native_text,
+        boxes=tuple(G3NativeCharacterBoxV1(index=i, x=float(i), y=0.0,
+                    width=1.0, height=1.0) for i in range(len(native_text))),
+    )
+    choices = bounded._c_eligible_source_locators(page, source)
+    assert len(choices) == 1
+    assert choices[0].quote == native_text
+    assert choices[0].start == text.index(native_text)
+    assert choices[0].end == text.index(native_text) + len(native_text)

@@ -9,6 +9,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import stat
 import unicodedata
 from collections.abc import Sequence
@@ -223,7 +224,7 @@ def g3_current_schema_specs(
     response_module = request_module
     response_schema: dict[str, object]
     if stage == "C_CLASSIFY":
-        response_schema = G3SemanticResponseV1.model_json_schema()
+        response_schema = _c_response_schema(identity)
     elif stage == "D_COMPILE":
         response_module = (
             "harness/src/insurance_harness/knowledge_compiler/concept_compile_830_g2.py"
@@ -361,6 +362,55 @@ class G3SemanticMaterialV1(_SemanticModel):
 class G3SemanticResponseV1(_SemanticModel):
     contract: Literal["g3-batch-resolution-semantic-response.local.v1"]
     materials: tuple[G3SemanticMaterialV1, ...]
+
+
+class G3SemanticReferenceEvidenceV1(_SemanticModel):
+    evidence_ref: Text
+    locator_ref: Annotated[StrictStr, StringConstraints(pattern=r"^loc_[0-9a-f]{64}$")]
+
+
+class G3SemanticReferenceIdentityEvidenceV1(G3SemanticReferenceEvidenceV1):
+    entity_ref: Text
+    purpose: Literal[
+        "issuer", "product_code", "name", "version", "classification"
+    ]
+    field_key: None
+
+
+class G3SemanticReferenceRoleEvidenceV1(G3SemanticReferenceEvidenceV1):
+    entity_ref: None
+    purpose: Literal["material_role"]
+    field_key: None
+
+
+class G3SemanticReferenceFieldEvidenceV1(G3SemanticReferenceEvidenceV1):
+    entity_ref: Text
+    purpose: Literal["field"]
+    field_key: Text
+
+
+class G3SemanticReferenceMaterialV1(_SemanticModel):
+    material_id: Text
+    material_role: Text
+    material_role_evidence_refs: tuple[Text, ...]
+    entities: tuple[G3SemanticEntityV1, ...]
+    evidence: tuple[Annotated[
+        G3SemanticReferenceIdentityEvidenceV1
+        | G3SemanticReferenceRoleEvidenceV1
+        | G3SemanticReferenceFieldEvidenceV1,
+        Field(discriminator="purpose"),
+    ], ...]
+
+
+class G3SemanticReferenceResponseV1(_SemanticModel):
+    contract: Literal["g3-batch-resolution-semantic-references.local.v1"]
+    materials: tuple[G3SemanticReferenceMaterialV1, ...]
+
+
+def _c_response_schema(identity: ModelIdentity | None = None) -> dict[str, object]:
+    if identity is not None and _is_g3_gemini_identity(identity):
+        return G3SemanticReferenceResponseV1.model_json_schema()
+    return G3SemanticResponseV1.model_json_schema()
 
 
 class G3NativeCharacterBoxV1(_SemanticModel):
@@ -533,10 +583,17 @@ def assemble_c_semantic_response(
     allowed_material_roles: tuple[str, ...],
     allowed_taxonomy_labels: tuple[str, ...],
     model_request_sha256: str,
+    use_locator_refs: bool = False,
 ) -> tuple[MaterialProposalV1, ...]:
     """Build C proposals from local refs while retaining all source authority locally."""
 
-    response, _ = parse_c_semantic_response_bytes(raw)
+    if use_locator_refs:
+        response = _resolve_c_source_references(
+            raw, corpus=corpus, native_pages=native_pages,
+            requested_material_ids=requested_material_ids,
+        )
+    else:
+        response, _ = parse_c_semantic_response_bytes(raw)
     if tuple(sorted(set(requested_material_ids))) != requested_material_ids:
         raise ValueError("requested materials must be sorted unique")
     entries = {entry.material_id: entry for entry in corpus.entries}
@@ -1005,15 +1062,17 @@ def _one_artifact[ModelT: BaseModel](
 
 
 
-def _c_prompt_block(block_ref: str, text: str) -> dict[str, object]:
+def _c_source_locators(block_ref: str, text: str) -> tuple[G3SemanticLocatorV1, ...]:
     """Offer exact bounded source spans; the model never needs to count offsets."""
 
-    locators: list[dict[str, object]] = []
+    locators: list[G3SemanticLocatorV1] = []
 
     def emit(start: int, end: int) -> None:
         quote = text[start:end]
         if quote.strip():
-            locators.append({"block_ref": block_ref, "start": start, "end": end, "quote": quote})
+            locators.append(G3SemanticLocatorV1(
+                block_ref=block_ref, start=start, end=end, quote=quote,
+            ))
 
     offset = 0
     pending_start: int | None = None
@@ -1041,7 +1100,135 @@ def _c_prompt_block(block_ref: str, text: str) -> dict[str, object]:
         offset = end
     if pending_start is not None:
         emit(pending_start, pending_end)
-    return {"block_ref": block_ref, "text": text, "evidence_locators": locators}
+    return tuple(locators)
+
+
+def _c_locator_ref(locator: G3SemanticLocatorV1) -> str:
+    return "loc_" + hashlib.sha256(canonical_json(locator.model_dump(mode="json"))).hexdigest()
+
+
+def _c_eligible_source_locators(
+    page: G3NativePageProjectionV1, source: SourceBlock,
+) -> tuple[G3SemanticLocatorV1, ...]:
+    if (page.revision_id, page.block_id, page.page_number) != (
+        source.revision_id, source.block_id, source.page_number,
+    ):
+        raise ValueError("reference native/source identity mismatch")
+    eligible: list[G3SemanticLocatorV1] = []
+    covered: set[int] = set()
+
+    def admit(locator: G3SemanticLocatorV1) -> None:
+        if not locator.quote.strip():
+            return
+        try:
+            _native_page_evidence(locator=locator, page=page, source=source)
+        except ValueError:
+            return
+        eligible.append(locator)
+        covered.update(range(locator.start, locator.end))
+
+    for locator in _c_source_locators(page.block_ref, source.text):
+        admit(locator)
+    for match in re.finditer(r"[^\r\n]+", source.text):
+        physical = match.group()
+        start = match.start() + len(physical) - len(physical.lstrip())
+        end = start + len(physical.strip())
+        while start < end:
+            stop = min(start + 256, end)
+            if not all(index in covered for index in range(start, stop)):
+                admit(G3SemanticLocatorV1(
+                    block_ref=page.block_ref, start=start, end=stop,
+                    quote=source.text[start:stop],
+                ))
+            if stop == end:
+                break
+            start = stop - 64
+    return tuple(sorted(eligible, key=lambda locator: (locator.start, locator.end)))
+
+
+def _c_prompt_block(
+    block_ref: str, text: str, *, use_locator_refs: bool = False,
+    native_page: G3NativePageProjectionV1 | None = None,
+    source: SourceBlock | None = None,
+) -> dict[str, object]:
+    if use_locator_refs:
+        if (
+            native_page is None or source is None
+            or native_page.block_ref != block_ref or source.text != text
+        ):
+            raise ValueError("reference prompt requires exact native/source binding")
+        locators = _c_eligible_source_locators(native_page, source)
+        return {
+            "block_ref": block_ref, "text": text,
+            "evidence_locator_refs": [
+                {"locator_ref": _c_locator_ref(locator), "quote": locator.quote}
+                for locator in locators
+            ],
+        }
+    return {"block_ref": block_ref, "text": text, "evidence_locators": [
+        locator.model_dump(mode="json") for locator in _c_source_locators(block_ref, text)
+    ]}
+
+
+def _resolve_c_source_references(
+    raw: bytes, *, corpus: BatchCorpusV1,
+    native_pages: tuple[G3NativePageProjectionV1, ...],
+    requested_material_ids: tuple[str, ...],
+) -> G3SemanticResponseV1:
+    response = G3SemanticReferenceResponseV1.model_validate(_unique_json_bytes(raw))
+    if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
+        raise ValueError("reference response typed wire mismatch")
+    entries = {entry.material_id: entry for entry in corpus.entries}
+    if len({page.block_ref for page in native_pages}) != len(native_pages):
+        raise ValueError("opaque block refs must be unique")
+    locators: dict[tuple[str, str], G3SemanticLocatorV1] = {}
+    for page in native_pages:
+        if page.material_id not in requested_material_ids:
+            continue
+        entry = entries.get(page.material_id)
+        if entry is None:
+            raise ValueError("reference page material outside corpus")
+        sources = {(block.revision_id, block.block_id): block for block in entry.blocks}
+        source = sources.get((page.revision_id, page.block_id))
+        if source is None or source.page_number != page.page_number:
+            raise ValueError("reference page source binding mismatch")
+        for locator in _c_eligible_source_locators(page, source):
+            key = (page.material_id, _c_locator_ref(locator))
+            if key in locators:
+                raise ValueError("duplicate source locator reference")
+            locators[key] = locator
+    materials = []
+    for material in response.materials:
+        if material.material_id not in requested_material_ids:
+            raise ValueError("reference material outside call")
+        evidence = []
+        for row in material.evidence:
+            resolved_locator = locators.get((material.material_id, row.locator_ref))
+            if resolved_locator is None:
+                raise ValueError("unknown or foreign source locator reference")
+            evidence.append(G3SemanticEvidenceV1(
+                **row.model_dump(exclude={"locator_ref"}), locator=resolved_locator,
+            ))
+        entities = []
+        for entity in material.entities:
+            labels = tuple(
+                label.model_copy(update={"evidence_refs": tuple(sorted(label.evidence_refs))})
+                for label in sorted(entity.labels, key=lambda row: row.taxonomy_label)
+            )
+            entities.append(entity.model_copy(update={
+                "identity_evidence_refs": tuple(sorted(entity.identity_evidence_refs)),
+                "labels": labels,
+            }))
+        materials.append(G3SemanticMaterialV1(
+            **material.model_dump(exclude={"evidence", "entities", "material_role_evidence_refs"}),
+            evidence=tuple(sorted(evidence, key=lambda row: row.evidence_ref)),
+            entities=tuple(sorted(entities, key=lambda row: row.entity_ref)),
+            material_role_evidence_refs=tuple(sorted(material.material_role_evidence_refs)),
+        ))
+    return G3SemanticResponseV1(
+        contract="g3-batch-resolution-semantic-response.local.v1",
+        materials=tuple(sorted(materials, key=lambda row: row.material_id)),
+    )
 
 
 def _render_g3_stage_contexts(
@@ -1151,7 +1338,11 @@ def _render_g3_stage_contexts(
                 blocks: list[dict[str, object]] = []
                 for page in sorted(pages_by_material[material_id], key=lambda item: item.block_ref):
                     source = blocks_by_material[material_id][(page.revision_id, page.block_id)]
-                    blocks.append(_c_prompt_block(page.block_ref, source.text))
+                    blocks.append(_c_prompt_block(
+                        page.block_ref, source.text,
+                        use_locator_refs=_is_g3_gemini_identity(call.identity),
+                        native_page=page, source=source,
+                    ))
                 material_rows.append({"material_id": material_id, "blocks": blocks})
             context_by_call[call.call_id] = canonical_json(
                 {
@@ -1163,7 +1354,7 @@ def _render_g3_stage_contexts(
                     "existing_entities": [
                         entity.model_dump(mode="json") for entity in existing.entities
                     ],
-                    "response_schema": G3SemanticResponseV1.model_json_schema(),
+                    "response_schema": _c_response_schema(call.identity),
                 }
             )
         if tuple(sorted(call_materials)) != tuple(entries) or len(call_materials) != len(
@@ -1804,6 +1995,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     allowed_material_roles=roles,
                     allowed_taxonomy_labels=labels,
                     model_request_sha256=call.request_body_sha256,
+                    use_locator_refs=_is_g3_gemini_identity(call.identity),
                 )
                 if terminal.projection_sha256 != _batch_sha256(
                     "g3-c-call-projection.830.v1", {"proposals": proposals}
@@ -1997,6 +2189,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     allowed_material_roles=roles,
                     allowed_taxonomy_labels=labels,
                     model_request_sha256=call.request_body_sha256,
+                    use_locator_refs=_is_g3_gemini_identity(call.identity),
                 )
                 projection_hash = _batch_sha256(
                     "g3-c-call-projection.830.v1", {"proposals": proposals}

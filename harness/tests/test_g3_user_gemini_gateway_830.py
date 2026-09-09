@@ -131,7 +131,17 @@ def test_gemini_request_and_schema_are_exact_and_identity_selected() -> None:
     ]
 
 
-def _gemini_response(*, content: str = '{ "answer": true }') -> bytes:
+_MISSING = object()
+
+
+def _gemini_response(
+    *,
+    content: str = '{ "answer": true }',
+    reasoning_content: object = _MISSING,
+) -> bytes:
+    message: dict[str, object] = {"role": "assistant", "content": content}
+    if reasoning_content is not _MISSING:
+        message["reasoning_content"] = reasoning_content
     return json.dumps(
         {
             "id": "chatcmpl-fixture",
@@ -141,7 +151,7 @@ def _gemini_response(*, content: str = '{ "answer": true }') -> bytes:
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": content},
+                    "message": message,
                     "finish_reason": "stop",
                 }
             ],
@@ -157,8 +167,14 @@ def _gemini_response(*, content: str = '{ "answer": true }') -> bytes:
     ).encode()
 
 
-def _gemini_aggregate_usage_response(*, content: str = '{ "answer": true }') -> bytes:
-    value = json.loads(_gemini_response(content=content))
+def _gemini_aggregate_usage_response(
+    *,
+    content: str = '{ "answer": true }',
+    reasoning_content: object = _MISSING,
+) -> bytes:
+    value = json.loads(
+        _gemini_response(content=content, reasoning_content=reasoning_content)
+    )
     value["usage"] = {
         "prompt_tokens": 355_513,
         "completion_tokens": 12_020,
@@ -195,6 +211,32 @@ def test_gemini_response_accepts_exact_aggregate_usage_without_reasoning_detail(
     }
 
 
+@pytest.mark.parametrize("reasoning_content", ("", "opaque fixture"))
+def test_gemini_response_accepts_optional_string_reasoning_content_without_semantics(
+    reasoning_content: str,
+) -> None:
+    plain = _parse_g3_gemini_provider_response(
+        _gemini_identity(), _gemini_aggregate_usage_response()
+    )
+    with_reasoning = _parse_g3_gemini_provider_response(
+        _gemini_identity(),
+        _gemini_aggregate_usage_response(reasoning_content=reasoning_content),
+    )
+    assert with_reasoning == plain
+
+
+@pytest.mark.parametrize("reasoning_content", (None, True, 0, [], {}))
+def test_gemini_response_rejects_non_string_reasoning_content(
+    reasoning_content: object,
+) -> None:
+    with pytest.raises(G3LedgerDenied) as denied:
+        _parse_g3_gemini_provider_response(
+            _gemini_identity(),
+            _gemini_aggregate_usage_response(reasoning_content=reasoning_content),
+        )
+    assert denied.value.reason_code == "INVALID_PROVIDER_RESPONSE"
+
+
 @pytest.mark.parametrize(
     "mutate",
     (
@@ -226,6 +268,7 @@ def test_gemini_response_rejects_invalid_aggregate_usage(mutate) -> None:
         lambda value: value["choices"].append(value["choices"][0]),
         lambda value: value["choices"][0].update(finish_reason="length"),
         lambda value: value["choices"][0]["message"].update(role="tool"),
+        lambda value: value["choices"][0]["message"].update(extra="unknown"),
     ),
 )
 def test_gemini_response_rejects_nonexact_usage_and_response_shape(mutate) -> None:
@@ -320,7 +363,7 @@ def test_gemini_first_terminal_accepts_exact_aggregate_usage(
 
     plan = _gemini_plan()
     call = plan.request_manifest.calls[0]
-    response_bytes = _gemini_aggregate_usage_response()
+    response_bytes = _gemini_aggregate_usage_response(reasoning_content="opaque fixture")
     _content, expected_semantic, expected_usage = (
         _parse_g3_gemini_provider_response(call.identity, response_bytes)
     )
@@ -360,7 +403,7 @@ def test_gemini_successful_reopen_reparses_exact_aggregate_usage(
     )
     (call_dir.parents[1] / "stage-terminals" / f"{plan.stage}.json").unlink()
 
-    response_bytes = _gemini_aggregate_usage_response()
+    response_bytes = _gemini_aggregate_usage_response(reasoning_content="opaque fixture")
     _content, semantic, usage = _parse_g3_gemini_provider_response(
         plan.request_manifest.calls[0].identity, response_bytes
     )

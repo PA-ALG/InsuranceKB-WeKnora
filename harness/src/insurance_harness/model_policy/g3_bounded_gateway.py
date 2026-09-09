@@ -124,6 +124,7 @@ def _parse_g3_gemini_provider_response(
         ):
             raise ValueError
         content = cast(str, message["content"])
+        message_keys = set(message)
         if (
             set(value) != {"id", "object", "created", "model", "choices", "usage"}
             or type(value["id"]) is not str
@@ -136,8 +137,16 @@ def _parse_g3_gemini_provider_response(
             or type(choice["index"]) is not int
             or choice["index"] != 0
             or choice["finish_reason"] != "stop"
-            or set(message) != {"role", "content"}
+            or message_keys
+            not in (
+                {"role", "content"},
+                {"role", "content", "reasoning_content"},
+            )
             or message["role"] != "assistant"
+            or (
+                "reasoning_content" in message
+                and type(message["reasoning_content"]) is not str
+            )
         ):
             raise ValueError
         raw_usage = value["usage"]
