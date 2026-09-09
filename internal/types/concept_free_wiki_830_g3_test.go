@@ -613,10 +613,12 @@ func TestBatchConceptCanonical830G3PreservesExactUnicodeBodyScalars(t *testing.T
 	require.NoError(t, err)
 
 	evidence := ConceptEvidence830G2{Quote: body}
-	definition := ConceptDefinition830G2{Evidence: []ConceptEvidence830G2{evidence}}
+	definition := ConceptDefinition830G2{SpaceID: "space", CanonicalKey: "key", SenseKey: "sense", Evidence: []ConceptEvidence830G2{evidence}}
 	payload, err := json.Marshal(definition)
 	require.NoError(t, err)
-	member := ConceptPageMember830G2{Kind: "concept", Payload: payload}
+	id, err := conceptDefinitionID830G2(definition)
+	require.NoError(t, err)
+	member := ConceptPageMember830G2{Kind: "concept", MemberID: id, OwnerID: definition.SpaceID, Payload: payload}
 	_, err = batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
 	require.NoError(t, err)
 	var payloadMap map[string]any
@@ -715,4 +717,127 @@ func TestBatchConceptPreparationActual342FitsExistingEightMiBLimit(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, 2_254_490, len(raw))
 	require.Less(t, len(raw), 8*1024*1024)
+}
+
+func TestBatchConceptCanonical830G3PreservesTypedBusinessText(t *testing.T) {
+	body := "原文\uf99c\n条件"
+	values := []any{
+		ConceptDefinition830G2{Title: body, Body: body},
+		ConceptFieldAssertion830G2{Value: &body, UnknownReason: &body, Conditions: []string{body}, Exceptions: []string{body}, ValidTime: body},
+		ConceptFreeWikiPage830G2{Title: body, Body: body, Conditions: []string{body}, Exceptions: []string{body}, ValidTime: body},
+		ConceptAuditDisposition830G2{Reason: body},
+		ConceptReviewOutput830G2{Reasons: []string{body}},
+	}
+	for _, value := range values {
+		raw, err := batchConceptCanonicalJSON830G3(value)
+		require.NoError(t, err, "%T", value)
+		require.Contains(t, string(raw), "\uf99c")
+	}
+	for _, value := range []any{
+		map[string]any{"body": body}, ConceptDefinition830G2{CanonicalKey: body},
+		ConceptDefinition830G2{Aliases: []string{body}}, ConceptFieldAssertion830G2{EntityVersion: body},
+		ConceptAuditDisposition830G2{Key: body}, ConceptReviewOutput830G2{Decision: body},
+		ConceptDefinition830G2{Body: "bad\x00"}, ConceptFieldAssertion830G2{Conditions: []string{"bad\x7f"}},
+	} {
+		_, err := batchConceptCanonicalJSON830G3(value)
+		require.ErrorIs(t, err, ErrConceptCandidateBundle830G3, "%T", value)
+	}
+	type unrelatedDefinition ConceptDefinition830G2
+	_, err := batchConceptCanonicalJSON830G3(unrelatedDefinition{Body: body})
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+}
+
+func TestBatchConceptCanonical830G3BusinessMemberProjectionClosure(t *testing.T) {
+	body := "原文\uf99c"
+	for _, fixture := range []struct {
+		kind, title, content string
+		payload              any
+	}{
+		{"concept", body, body, ConceptDefinition830G2{SpaceID: "space", CanonicalKey: "key", SenseKey: "sense", Title: body, Body: body}},
+		{"field_assertion", "field", body, ConceptFieldAssertion830G2{SpaceID: "space", EntityID: "entity", FieldKey: "field", Value: &body}},
+		{"field_assertion", "field", "未知：" + body, ConceptFieldAssertion830G2{SpaceID: "space", EntityID: "entity", FieldKey: "field", UnknownReason: &body}},
+		{"free_wiki_item", body, body, ConceptFreeWikiPage830G2{SpaceID: "space", EntityID: "entity", StableKey: "page", Title: body, Body: body}},
+	} {
+		payload, err := json.Marshal(fixture.payload)
+		require.NoError(t, err)
+		member := ConceptPageMember830G2{Kind: fixture.kind, Title: fixture.title, Content: fixture.content, Payload: payload}
+		switch value := fixture.payload.(type) {
+		case ConceptDefinition830G2:
+			member.MemberID, err = conceptDefinitionID830G2(value)
+			member.OwnerID = value.SpaceID
+		case ConceptFieldAssertion830G2:
+			member.MemberID, err = conceptFieldID830G2(value)
+			member.OwnerID = value.EntityID
+		case ConceptFreeWikiPage830G2:
+			member.MemberID, err = conceptFreePageID830G2(value)
+			member.OwnerID = value.EntityID
+		}
+		require.NoError(t, err)
+		_, err = batchConceptCanonicalJSON830G3(member)
+		require.NoError(t, err, fixture.kind)
+		member.Content += "tampered"
+		_, err = batchConceptCanonicalJSON830G3(member)
+		require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+	}
+	_, err := batchConceptCanonicalJSON830G3(ConceptPageMember830G2{Kind: "entity_overview", Title: body, Payload: json.RawMessage(`{"member_ids":[]}`)})
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+}
+
+func TestBatchConceptDefinitionHash830G3RetainsBusinessText(t *testing.T) {
+	definition := ConceptDefinition830G2{SpaceID: "space", CanonicalKey: "key", SenseKey: "sense", Title: "原文\uf99c", Body: "正文\uf99c", Evidence: []ConceptEvidence830G2{}, Aliases: []string{}, Origin: "model"}
+	digest, err := conceptDefinitionHash830G3(definition)
+	require.NoError(t, err)
+	definition.Aliases = []string{"alias"}
+	again, err := conceptDefinitionHash830G3(definition)
+	require.NoError(t, err)
+	require.Equal(t, digest, again)
+	definition.Body += "changed"
+	changed, err := conceptDefinitionHash830G3(definition)
+	require.NoError(t, err)
+	require.NotEqual(t, digest, changed)
+}
+
+func TestBatchConceptBusinessText830G3PythonParity(t *testing.T) {
+	path := os.Getenv("G3_BUSINESS_TEXT_PARITY")
+	if path == "" {
+		t.Skip("set G3_BUSINESS_TEXT_PARITY to the generated typed Python parity cases")
+	}
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var rows []struct {
+		Kind           string          `json:"kind"`
+		Wire           json.RawMessage `json:"wire"`
+		SHA256         string          `json:"sha256"`
+		DefinitionHash string          `json:"definition_hash"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &rows))
+	require.GreaterOrEqual(t, len(rows), 8)
+	for _, row := range rows {
+		var target any
+		switch row.Kind {
+		case "definition":
+			target = &ConceptDefinition830G2{}
+		case "field":
+			target = &ConceptFieldAssertion830G2{}
+		case "page":
+			target = &ConceptFreeWikiPage830G2{}
+		case "audit":
+			target = &ConceptAuditDisposition830G2{}
+		case "review":
+			target = &ConceptReviewOutput830G2{}
+		case "member":
+			target = &ConceptPageMember830G2{}
+		default:
+			t.Fatalf("unexpected parity type %q", row.Kind)
+		}
+		require.NoError(t, strictConceptDecode830G2(row.Wire, target))
+		canonical, err := batchConceptCanonicalJSON830G3(target)
+		require.NoError(t, err, row.Kind)
+		require.Equal(t, row.SHA256, sha256Hex830G3(canonical), row.Kind)
+		if definition, ok := target.(*ConceptDefinition830G2); ok {
+			hash, err := conceptDefinitionHash830G3(*definition)
+			require.NoError(t, err)
+			require.Equal(t, row.DefinitionHash, hash)
+		}
+	}
 }

@@ -966,6 +966,12 @@ func batchConceptTypedValueValid830G3(value reflect.Value, derivedRaw bool) bool
 				}
 				continue
 			}
+			if batchConceptBusinessBodyField830G3(typeOf, fieldType.Name) {
+				if !batchConceptBusinessBodyValue830G3(field) {
+					return false
+				}
+				continue
+			}
 			if field.Type() == rawMessageType830G3 {
 				if !batchConceptFixedRawFieldValid830G3(typeOf, fieldType.Name, value, field.Bytes()) {
 					return false
@@ -1019,6 +1025,42 @@ func batchConceptTypedValueValid830G3(value reflect.Value, derivedRaw bool) bool
 	}
 }
 
+// Business-text exemptions are bound to exact DTO fields, never arbitrary maps.
+func batchConceptBusinessBodyField830G3(owner reflect.Type, field string) bool {
+	switch owner {
+	case reflect.TypeOf(ConceptDefinition830G2{}):
+		return field == "Title" || field == "Body"
+	case reflect.TypeOf(ConceptFieldAssertion830G2{}):
+		return field == "Value" || field == "UnknownReason" || field == "Conditions" || field == "Exceptions" || field == "ValidTime"
+	case reflect.TypeOf(ConceptFreeWikiPage830G2{}):
+		return field == "Title" || field == "Body" || field == "Conditions" || field == "Exceptions" || field == "ValidTime"
+	case reflect.TypeOf(ConceptAuditDisposition830G2{}):
+		return field == "Reason"
+	case reflect.TypeOf(ConceptReviewOutput830G2{}):
+		return field == "Reasons"
+	default:
+		return false
+	}
+}
+
+func batchConceptBusinessBodyValue830G3(value reflect.Value) bool {
+	if value.Kind() == reflect.Pointer {
+		return value.IsNil() || batchConceptBusinessBodyValue830G3(value.Elem())
+	}
+	if value.Kind() == reflect.String {
+		return batchConceptBodyString830G3(value.String())
+	}
+	if value.Kind() == reflect.Slice || value.Kind() == reflect.Array {
+		for index := 0; index < value.Len(); index++ {
+			if value.Index(index).Kind() != reflect.String || !batchConceptBodyString830G3(value.Index(index).String()) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
 func batchConceptObjectKey830G3(value string) bool {
 	if !batchConceptStructuredString830G3(value) {
 		return false
@@ -1062,7 +1104,46 @@ func batchConceptPageMemberValid830G3(member ConceptPageMember830G2) bool {
 		!canonicalRawEqualValue830G3(string(member.Payload), destination) {
 		return false
 	}
-	return batchConceptPageMemberScalarsValid830G3(member)
+	var title, content string
+	var alternateContent string
+	switch payload := destination.(type) {
+	case *ConceptDefinition830G2:
+		id, err := conceptDefinitionID830G2(*payload)
+		if err != nil || member.MemberID != id || member.OwnerID != payload.SpaceID {
+			return false
+		}
+		title, content = payload.Title, payload.Body
+	case *ConceptFieldAssertion830G2:
+		id, err := conceptFieldID830G2(*payload)
+		if err != nil || member.MemberID != id || member.OwnerID != payload.EntityID {
+			return false
+		}
+		if !batchConceptStructuredString830G3(member.Title) {
+			return false
+		}
+		title, content = member.Title, "未知："
+		alternateContent = conceptFieldContent830G3(*payload)
+		if payload.Value != nil {
+			content = *payload.Value
+		} else if payload.UnknownReason != nil {
+			content += *payload.UnknownReason
+		}
+	case *ConceptFreeWikiPage830G2:
+		id, err := conceptFreePageID830G2(*payload)
+		if err != nil || member.MemberID != id || member.OwnerID != payload.EntityID {
+			return false
+		}
+		title, content = payload.Title, payload.Body
+		alternateContent = conceptFreePageContent830G3(*payload)
+	default:
+		return false
+	}
+	contentMatches := member.Content == content || alternateContent != "" && member.Content == alternateContent
+	return member.Title == title && contentMatches &&
+		batchConceptStructuredString830G3(member.Kind) &&
+		batchConceptStructuredString830G3(member.MemberID) &&
+		batchConceptStructuredString830G3(member.OwnerID) &&
+		batchConceptBodyString830G3(member.Title) && batchConceptBodyString830G3(member.Content)
 }
 
 func batchConceptPageMemberScalarsValid830G3(member ConceptPageMember830G2) bool {
@@ -3952,7 +4033,26 @@ func validateConceptOutput830G3(request ConceptCompileRequest830G2, output Conce
 }
 
 func conceptDefinitionHash830G3(value ConceptDefinition830G2) (string, error) {
-	return batchConceptHashWithout830G3("concept-definition.830.g2.v1", value, "aliases")
+	raw, err := batchConceptCanonicalJSON830G3(value)
+	if err != nil {
+		return "", err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return "", ErrConceptCandidateBundle830G3
+	}
+	delete(fields, "aliases")
+	projected, err := json.Marshal(fields)
+	if err != nil {
+		return "", ErrConceptCandidateBundle830G3
+	}
+	canonical, err := batchConceptCanonicalWire830G3(projected)
+	if err != nil {
+		return "", err
+	}
+	preimage := append([]byte("schema-wiki-canonical.v1\x00concept-definition.830.g2.v1\x00"), canonical...)
+	sum := sha256.Sum256(preimage)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func validateConceptDispositions830G3(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
