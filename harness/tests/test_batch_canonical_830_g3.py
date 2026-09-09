@@ -8,12 +8,14 @@ import json
 import pytest
 
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (
+    AuditDisposition,
     CompileOutput,
     CompileResult,
     ExecutionRecord,
     PageMember,
     ReviewOutput,
     ReviewResult,
+    free_page_id,
 )
 from insurance_harness.knowledge_compiler.concept_free_wiki_830_g2 import (
     ConceptDefinition,
@@ -299,9 +301,9 @@ def test_page_member_dispatches_body_payload_by_fixed_kind() -> None:
             content=field.value or "",
             payload=field.model_dump(mode="json"),
         ),
-        PageMember(
-            kind="free_wiki_item",
-            member_id="free-details",
+            PageMember(
+                kind="free_wiki_item",
+                member_id=free_page_id(page),
             owner_id=page.entity_id,
             title=page.title,
             content=page.body,
@@ -346,3 +348,171 @@ def test_existing_nfc_result_and_member_bytes_stay_generic_canonical() -> None:
         separators=(",", ":"),
     ).encode()
     assert module.batch_json_bytes_830_g3(result) == expected  # type: ignore[attr-defined]
+
+
+def test_exact_business_dtos_preserve_non_nfc_without_mapping_or_subclass_bypass() -> None:
+    module = _canonical_module()
+    marker = "business-\uf99c"
+    source = _source("ordinary source")
+    evidence = evidence_for(source, 0, len(source.text))
+    definition = ConceptDefinition(
+        space_id=source.space_id,
+        canonical_key="business-concept",
+        sense_key="primary",
+        title=marker,
+        body=marker + "\r\nbody",
+        evidence=(evidence,),
+    )
+    field = FieldAssertion(
+        space_id=source.space_id,
+        entity_id="entity-1",
+        field_key="coverage",
+        state="present",
+        value=marker,
+        attempted=True,
+        evidence=(evidence,),
+        conditions=(marker,),
+        exceptions=(marker,),
+        entity_version="version-1",
+        valid_time=marker,
+    )
+    page = FreeWikiPage(
+        space_id=source.space_id,
+        entity_id="entity-1",
+        stable_key="details",
+        title=marker,
+        body=marker,
+        evidence=(evidence,),
+        conditions=(marker,),
+        exceptions=(marker,),
+        entity_version="version-1",
+        valid_time=marker,
+    )
+    output = CompileOutput(
+        request_hash="3" * 64,
+        definitions=(definition,),
+        fields=(field,),
+        pages=(page,),
+        audit=(
+            AuditDisposition(
+                key=definition.concept_id,
+                disposition="new_page",
+                reason=marker,
+            ),
+        ),
+    )
+    assert marker.encode() in module.batch_json_bytes_830_g3(output)  # type: ignore[attr-defined]
+    unknown = field.model_copy(
+        update={
+            "state": "unknown",
+            "value": None,
+            "unknown_reason": marker,
+            "evidence": (),
+        }
+    )
+    assert marker.encode() in module.batch_json_bytes_830_g3(unknown)  # type: ignore[attr-defined]
+    review = ReviewOutput(
+        request_hash="3" * 64,
+        output_hash="4" * 64,
+        decision="PASS",
+        reasons=(marker,),
+    )
+    assert marker.encode() in module.batch_json_bytes_830_g3(review)  # type: ignore[attr-defined]
+
+    for attack in (
+        output.model_dump(mode="json"),
+        {"conditions": [marker]},
+        definition.model_copy(update={"body": "bad\x00body"}),
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            module.batch_json_bytes_830_g3(attack)  # type: ignore[attr-defined]
+
+    class DerivedDefinition(ConceptDefinition):
+        pass
+
+    derived = DerivedDefinition.model_validate(definition.model_dump(mode="python"))
+    with pytest.raises((TypeError, ValueError)):
+        module.batch_json_bytes_830_g3(derived)  # type: ignore[attr-defined]
+    with pytest.raises((TypeError, ValueError)):
+        module.definition_sha256_830_g3(derived)  # type: ignore[attr-defined]
+
+    nfc = definition.model_copy(update={"title": "NFC title", "body": "NFC body"})
+    assert module.definition_sha256_830_g3(nfc) == schema_wiki_sha256(  # type: ignore[attr-defined]
+        "concept-definition.830.g2.v1",
+        nfc.model_dump(mode="json", exclude={"aliases"}),
+    )
+    assert module.definition_sha256_830_g3(definition)  # type: ignore[attr-defined]
+
+
+def test_page_member_business_text_requires_exact_payload_projection() -> None:
+    module = _canonical_module()
+    marker = "member-\uf99c"
+    source = _source("ordinary source")
+    evidence = evidence_for(source, 0, len(source.text))
+    definition = ConceptDefinition(
+        space_id=source.space_id,
+        canonical_key="member-concept",
+        sense_key="primary",
+        title=marker,
+        body=marker + " body",
+        evidence=(evidence,),
+    )
+    member = PageMember(
+        kind="concept",
+        member_id=definition.concept_id,
+        owner_id=definition.space_id,
+        title=definition.title,
+        content=definition.body,
+        payload=definition.model_dump(mode="json"),
+    )
+    assert marker.encode() in module.batch_json_bytes_830_g3(member)  # type: ignore[attr-defined]
+    field = FieldAssertion(
+        space_id=source.space_id,
+        entity_id="entity-1",
+        field_key="coverage",
+        state="present",
+        value=marker,
+        attempted=True,
+        evidence=(evidence,),
+        conditions=(marker,),
+        entity_version="version-1",
+    )
+    field_content = "值：" + marker + "\n条件：" + marker
+    field_member = PageMember(
+        kind="field_assertion",
+        member_id=field.assertion_id,
+        owner_id=field.entity_id,
+        title="Coverage",
+        content=field_content,
+        payload=field.model_dump(mode="json"),
+    )
+    page = FreeWikiPage(
+        space_id=source.space_id,
+        entity_id="entity-1",
+        stable_key="details",
+        title=marker,
+        body=marker,
+        evidence=(evidence,),
+        conditions=(marker,),
+        entity_version="version-1",
+    )
+    page_member = PageMember(
+        kind="free_wiki_item",
+        member_id=free_page_id(page),
+        owner_id=page.entity_id,
+        title=page.title,
+        content=marker + "\n条件：" + marker,
+        payload=page.model_dump(mode="json"),
+    )
+    assert marker.encode() in module.batch_json_bytes_830_g3(field_member)  # type: ignore[attr-defined]
+    assert marker.encode() in module.batch_json_bytes_830_g3(page_member)  # type: ignore[attr-defined]
+    for attack in (
+        member.model_copy(update={"title": marker + " changed"}),
+        member.model_copy(update={"content": marker + " changed"}),
+        member.model_copy(update={"member_id": "concept_wrong"}),
+        member.model_copy(update={"kind": "entity_overview", "payload": {}}),
+        field_member.model_copy(update={"content": marker + " changed"}),
+        page_member.model_copy(update={"title": marker + " changed"}),
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            module.batch_json_bytes_830_g3(attack)  # type: ignore[attr-defined]

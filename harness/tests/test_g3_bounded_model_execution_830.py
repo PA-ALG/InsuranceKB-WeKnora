@@ -38,6 +38,9 @@ from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
     g3_current_schema_specs,
     parse_d_compile_output,
     parse_d_review_output,
+    project_gemini_d_compile_response,
+    project_gemini_d_review_response,
+    render_g3_d_prompt_context,
 )
 from insurance_harness.model_policy import AdmissionPolicyDenied, ModelIdentity
 from insurance_harness.run_admission import evaluator
@@ -936,9 +939,321 @@ def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:
     assert stale.request_hash != candidate.request.base_request.request_hash
 
 
+def _gemini_identity(role: str) -> ModelIdentity:
+    return ModelIdentity(
+        provider="g3-user-gateway",
+        deployment_id="gemini-3.7-flash-medium",
+        family="gemini",
+        role=role,
+        policy_version="g3-user-gemini-gateway-v1",
+    )
+
+
+def _gemini_compile_reference_wire(candidate) -> bytes:
+    context = render_g3_d_prompt_context(
+        "D_COMPILE", _gemini_identity("extract"), candidate.request
+    )
+    _, _, by_source_key = bounded._g3_d_source_index(candidate.request)
+    audit = {item.key: item for item in candidate.model_compile_result.output.audit}
+    fields = []
+    for target in context["field_targets"]:
+        original = next(
+            item
+            for item in candidate.model_compile_result.output.fields
+            if (item.entity_id, item.field_key)
+            == (target["entity_id"], target["field_key"])
+        )
+        fields.append(
+            {
+                "field_ref": target["field_ref"],
+                "state": original.state,
+                "value": original.value,
+                "unknown_reason": original.unknown_reason,
+                "evidence": [
+                    {
+                        "source_ref": by_source_key[(item.revision_id, item.block_id)],
+                        "quote": item.quote,
+                    }
+                    for item in original.evidence
+                ],
+                "concept_refs": [],
+                "conditions": list(original.conditions),
+                "exceptions": list(original.exceptions),
+                "valid_time": original.valid_time,
+                "audit_reason": audit[original.assertion_id].reason,
+            }
+        )
+    return canonical_json(
+        {
+            "contract": "g3-d-compile-semantic-references.local.v1",
+            "transformation": candidate.model_compile_result.output.transformation,
+            "definitions": [],
+            "fields": fields,
+            "pages": [],
+        }
+    )
+
+
+def test_gemini_d_reference_context_and_projection_remove_machine_owned_fields() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    identity = _gemini_identity("extract")
+    context = render_g3_d_prompt_context("D_COMPILE", identity, candidate.request)
+    assert context["contract"] == "g3-d-compile-prompt-context.830.v1"
+    assert len(context["field_targets"]) == len(candidate.model_compile_result.output.fields)
+    assert context["source_options"]
+    assert "request_hash" not in _gemini_compile_reference_wire(candidate).decode()
+
+    projected = project_gemini_d_compile_response(
+        _gemini_compile_reference_wire(candidate), candidate.request
+    )
+    assert projected.model_copy(update={"audit": ()}) == (
+        candidate.model_compile_result.output.model_copy(update={"audit": ()})
+    )
+    assert set(projected.audit) == set(candidate.model_compile_result.output.audit)
+    specs = g3_current_schema_specs("D_COMPILE", identity)
+    assert specs[1][1].endswith("g3_bounded_model_execution.py")
+    assert specs[1][2]["properties"]["contract"]["const"] == (
+        "g3-d-compile-semantic-references.local.v1"
+    )
+
+
+def test_gemini_d_display_context_deduplicates_only_bound_business_inputs() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    request = validate_batch_candidate(fixture.read_bytes()).request
+    request_bytes = batch_json_bytes_830_g3(request)
+
+    rendered = render_g3_d_prompt_context("D_COMPILE", _gemini_identity("extract"), request)
+    display = rendered["context"]
+    assert display["contract"] == "g3-d-compile-display-context.830.v1"
+    assert display["request_sha256"] == request.request_sha256
+    assert display["base_request_hash"] == bounded.compile_request_hash_g3(
+        request.base_request
+    )
+    semantic_request = display["semantic_request"]
+    displayed_sources = semantic_request["base_request"]["sources"]
+    assert [(row["revision_id"], row["block_id"]) for row in displayed_sources] == [
+        (row.revision_id, row.block_id) for row in request.base_request.sources
+    ]
+    assert all(
+        "text" not in row and isinstance(row["source_ref"], str)
+        for row in displayed_sources
+    )
+    option_by_ref = {
+        row["source_ref"]: row["source"].text for row in rendered["source_options"]
+    }
+    assert option_by_ref == {
+        row["source_ref"]: source.text
+        for row, source in zip(displayed_sources, request.base_request.sources, strict=True)
+    }
+
+    displayed_entries = semantic_request["resolution_inputs"]["corpus"]["entries"]
+    assert all("text" not in block for entry in displayed_entries for block in entry["blocks"])
+    assert all("receipt" in entry and "provenance" in entry for entry in displayed_entries)
+    selected = {
+        (binding.schema_pack_id, binding.schema_version, binding.schema_pack_sha256)
+        for binding in request.entity_bindings
+    }
+    displayed_catalog = semantic_request["catalog"]
+    assert {
+        (
+            entry.pack.schema_pack_id,
+            entry.pack.schema_version,
+            entry.pack.schema_pack_sha256,
+        )
+        for entry in displayed_catalog["entries"]
+    } == selected
+    assert all(
+        entry.pack.fields and entry.profile.sections
+        for entry in displayed_catalog["entries"]
+    )
+    assert batch_json_bytes_830_g3(request) == request_bytes
+
+
+def test_gemini_d_review_refs_project_exact_hashes_and_scores() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    identity = _gemini_identity("verify")
+    context = render_g3_d_prompt_context(
+        "D_REVIEW", identity, candidate.request, candidate.compile_result.output
+    )
+    assert context["contract"] == "g3-d-review-prompt-context.830.v1"
+    scores = [
+        {
+            "review_ref": row["review_ref"],
+            "business_value": 20,
+            "reuse": 15,
+            "evidence_quality": 15,
+            "definability": 10,
+            "novel_identity": 5,
+            "name_stability": 5,
+        }
+        for row in context["review_targets"]
+    ]
+    semantic = canonical_json(
+        {
+            "contract": "g3-d-review-semantic-references.local.v1",
+            "decision": candidate.review_result.output.decision,
+            "reasons": list(candidate.review_result.output.reasons),
+            "scores": scores,
+        }
+    )
+    projected = project_gemini_d_review_response(
+        semantic, candidate.request, candidate.compile_result.output
+    )
+    assert projected.request_hash == candidate.review_result.output.request_hash
+    assert projected.output_hash == candidate.review_result.output.output_hash
+    assert projected.decision == candidate.review_result.output.decision
+    assert tuple(projected.page_scores) == tuple(
+        row["member_id"] for row in context["review_targets"]
+    )
+    assert g3_current_schema_specs("D_REVIEW", identity)[1][2]["properties"][
+        "contract"
+    ]["const"] == "g3-d-review-semantic-references.local.v1"
+
+
+def test_gemini_d_projection_rejects_foreign_and_duplicate_refs() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    value = json.loads(_gemini_compile_reference_wire(candidate))
+    value["fields"][0]["field_ref"] = "foreign"
+    with pytest.raises(ValueError, match="field reference"):
+        project_gemini_d_compile_response(canonical_json(value), candidate.request)
+
+
+def test_gemini_d_projection_preserves_business_text_and_derives_evidence_ids() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    context = render_g3_d_prompt_context(
+        "D_COMPILE", _gemini_identity("extract"), candidate.request
+    )
+    value = json.loads(_gemini_compile_reference_wire(candidate))
+    target = context["field_targets"][0]
+    allowed = next(
+        row for row in context["entity_source_refs"]
+        if row["entity_ref"] == target["entity_ref"]
+    )["source_refs"]
+    option = next(row for row in context["source_options"] if row["source_ref"] in allowed)
+    selected = {"source_ref": option["source_ref"], "quote": option["source"].text}
+    row = next(item for item in value["fields"] if item["field_ref"] == target["field_ref"])
+    row.update(
+        state="present",
+        value="原文\r\n业务值-\uf99c",
+        unknown_reason=None,
+        evidence=[selected],
+        concept_refs=["new-definition"],
+        conditions=["条件-\uf99c"],
+        exceptions=["例外\r\n保留"],
+        valid_time="2026-09-10 起",
+    )
+    value["definitions"] = [
+        {
+            "definition_ref": "new-definition",
+            "canonical_key": "fixture-concept",
+            "sense_key": "primary",
+            "title": "概念标题",
+            "body": "模型撰写正文-\uf99c",
+            "aliases": [],
+            "evidence": [selected],
+            "disposition": "new_page",
+            "audit_reason": "MODEL_NEW_CONCEPT",
+        }
+    ]
+    value["pages"] = [
+        {
+            "page_ref": "new-page",
+            "entity_ref": target["entity_ref"],
+            "stable_key": "fixture-page",
+            "title": "补充页",
+            "body": "模型页正文\r\n保持",
+            "evidence": [selected],
+            "concept_refs": ["new-definition"],
+            "conditions": ["页面条件"],
+            "exceptions": [],
+            "valid_time": "",
+            "audit_reason": "MODEL_NEW_PAGE",
+        }
+    ]
+    projected = project_gemini_d_compile_response(canonical_json(value), candidate.request)
+    field = next(
+        item for item in projected.fields
+        if (item.entity_id, item.field_key) == (target["entity_id"], target["field_key"])
+    )
+    assert field.value == "原文\r\n业务值-\uf99c"
+    assert field.conditions == ("条件-\uf99c",)
+    assert field.exceptions == ("例外\r\n保留",)
+    assert field.valid_time == "2026-09-10 起"
+    assert projected.definitions[0].body == "模型撰写正文-\uf99c"
+    assert projected.pages[0].body == "模型页正文\r\n保持"
+    assert field.evidence[0].quote == option["source"].text
+    assert field.evidence[0].quote_hash == _sha(option["source"].text.encode())
+
+    model_result = bounded._build_d_compile_result_from_semantic(
+        raw=canonical_json(value),
+        request=candidate.request,
+        identity=_gemini_identity("extract"),
+        run_id="gemini-d-compile-non-nfc",
+    )
+    composed = bounded.compose_batch_output(candidate.request, model_result)
+    final_result = bounded.record_composed_output(
+        candidate.request,
+        model_result,
+        composed,
+        run_id="gemini-d-carry-non-nfc",
+    )
+    review_context = render_g3_d_prompt_context(
+        "D_REVIEW", _gemini_identity("verify"), candidate.request, composed
+    )
+    review_wire = canonical_json(
+        {
+            "contract": "g3-d-review-semantic-references.local.v1",
+            "decision": "PASS",
+            "reasons": ["fixture review-\uf99c"],
+            "scores": [
+                {
+                    "review_ref": item["review_ref"],
+                    "business_value": 20,
+                    "reuse": 20,
+                    "evidence_quality": 20,
+                    "definability": 15,
+                    "novel_identity": 10,
+                    "name_stability": 10,
+                }
+                for item in review_context["review_targets"]
+            ],
+        }
+    )
+    review_output, review_result = bounded._build_d_review_result_from_semantic(
+        raw=review_wire,
+        request=candidate.request,
+        output=composed,
+        identity=_gemini_identity("verify"),
+        run_id="gemini-d-review-non-nfc",
+    )
+    admission = bounded._g3_human_admission(candidate.request, composed, review_output)
+    bundle = assemble_candidate_bundle(
+        candidate.request,
+        model_result,
+        final_result,
+        review_result,
+        admission,
+    )
+    assert any(
+        definition.body.endswith("\uf99c")
+        for definition in bundle.compile_result.output.definitions
+    )
+    assert bundle.candidate_hash
+
+    value = json.loads(_gemini_compile_reference_wire(candidate))
+    value["fields"][1]["field_ref"] = value["fields"][0]["field_ref"]
+    with pytest.raises(ValueError, match="field reference"):
+        project_gemini_d_compile_response(canonical_json(value), candidate.request)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("non_nfc", "gemini"), ((False, False), (True, False), (False, True))
+    ("non_nfc", "gemini"),
+    ((False, False), (True, False), (False, True), (True, True)),
 )
 async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, non_nfc: bool, gemini: bool
@@ -1926,6 +2241,8 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             ),
         }[stage]
         identity = base.approved_identities[0].model_copy(update={"role": role})
+        if gemini:
+            prompt_name = runner.g3_d_template_name(stage, identity)
         template_relative = (
             "harness/src/insurance_harness/knowledge_compiler/prompts/" + prompt_name
         )
@@ -1988,11 +2305,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         )
         if stage == "D_COMPILE":
             user_context = batch_json_bytes_830_g3(
-                {
-                    "contract": "g3-d-compile-prompt-context.830.v1",
-                    "context": compiler_context_g3(compile_request),
-                    "response_schema": CompileOutput.model_json_schema(),
-                }
+                runner.render_g3_d_prompt_context(stage, identity, compile_request)
             )
         else:
             final_result = __import__(
@@ -2002,11 +2315,9 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
                 typed_payloads["g3-d-final-compile-result.830.v1"]
             )
             user_context = batch_json_bytes_830_g3(
-                {
-                    "contract": "g3-d-review-prompt-context.830.v1",
-                    "context": review_context_g3(compile_request, final_result.output),
-                    "response_schema": ReviewOutput.model_json_schema(),
-                }
+                runner.render_g3_d_prompt_context(
+                    stage, identity, compile_request, final_result.output
+                )
             )
         chain_row = next(row for row in base.chain_manifest.stages if row.stage == stage)
         call0 = base.request_manifest.calls[0].model_copy(
@@ -2237,6 +2548,11 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             mode="json", round_trip=True
         )
     ).decode()
+    if gemini:
+        compile_wire_candidate = fixture_candidate.model_copy(
+            update={"request": compile_request}
+        )
+        compile_raw = _gemini_compile_reference_wire(compile_wire_candidate).decode()
     with respx.mock:
         compile_posted = respx.post(provider_url).respond(
             status_code=200,
@@ -2264,6 +2580,18 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     )
     model_compile_bytes = (compile_results / "model-compile-result.json").read_bytes()
     final_compile_bytes = (compile_results / "final-compile-result.json").read_bytes()
+    if gemini:
+        persisted_model = __import__(
+            "insurance_harness.knowledge_compiler.concept_compile_830_g2",
+            fromlist=["CompileResult"],
+        ).CompileResult.model_validate_json(model_compile_bytes)
+        assert persisted_model.execution.implementation == (
+            "g3-gemini-d-reference-projector.830.v1"
+        )
+        assert persisted_model.execution.raw_output != compile_raw
+        assert json.loads(persisted_model.execution.raw_output)["contract"] == (
+            "concept-compile-output.830.g2.v1"
+        )
     if non_nfc:
         before_read = {str(path.relative_to(ledger)): path.read_bytes()
                        for path in ledger.rglob("*") if path.is_file()}
@@ -2313,6 +2641,25 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     review_raw = canonical_json(
         review_wire.model_dump(mode="json", round_trip=True)
     ).decode()
+    if gemini:
+        review_context_value = runner.render_g3_d_prompt_context(
+            "D_REVIEW",
+            review_plan.approved_identities[0],
+            compile_request,
+            final_result.output,
+        )
+        score_value = human_score.model_dump(mode="json")
+        review_raw = canonical_json(
+            {
+                "contract": "g3-d-review-semantic-references.local.v1",
+                "decision": review_wire.decision,
+                "reasons": list(review_wire.reasons),
+                "scores": [
+                    {"review_ref": row["review_ref"], **score_value}
+                    for row in review_context_value["review_targets"]
+                ],
+            }
+        ).decode()
     with respx.mock:
         review_posted = respx.post(provider_url).respond(
             status_code=200,
@@ -2342,6 +2689,11 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     )
     assert review_terminal.stage_output_sha256 == actual_candidate.candidate_hash
     assert actual_candidate.request == compile_request
+    if gemini:
+        assert actual_review_result.execution.implementation == (
+            "g3-gemini-d-review-reference-projector.830.v1"
+        )
+        assert actual_review_result.execution.raw_output != review_raw
     assert posted.call_count + compile_posted.call_count + review_posted.call_count == 3
 
     review_stage_terminal_path = (

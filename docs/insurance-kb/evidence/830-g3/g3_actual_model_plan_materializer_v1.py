@@ -52,8 +52,6 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import ( 
     BatchConceptCompileRequest830G3V1,
     build_batch_compile_request,
     compile_output_hash_g3,
-    compiler_context_g3,
-    review_context_g3,
 )
 from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import (  # noqa: E402
     batch_json_bytes_830_g3,
@@ -517,8 +515,13 @@ def _ref(contract: str, raw: bytes, filename: str) -> G3ArtifactRefV1:
     )
 
 
-def _template(stage: str):
-    rel = f"harness/src/insurance_harness/knowledge_compiler/prompts/{TEMPLATE_NAMES[stage]}"
+def _template(stage: str, identity: ModelIdentity):
+    name = (
+        runtime.g3_d_template_name(stage, identity)
+        if stage in ("D_COMPILE", "D_REVIEW")
+        else TEMPLATE_NAMES[stage]
+    )
+    rel = f"harness/src/insurance_harness/knowledge_compiler/prompts/{name}"
     raw = (WORKTREE / rel).read_bytes()
     values = {
         "contract": "g3-stage-template-lock.830.v1",
@@ -1185,7 +1188,7 @@ def _stage_fixed(
     identity = next(x.identity for x in options.identities if x.stage == stage)
     configured = [x for x in options.calls if x.stage == stage]
     schema = _schema(stage, identity)
-    template, template_raw = _template(stage)
+    template, template_raw = _template(stage, identity)
     routing = _hashed(
         G3RoutingLockV1,
         "g3-stage-routing.830.v1",
@@ -2081,7 +2084,7 @@ def _parts_from_artifacts(options, parent, stage, manifest, artifact_raw):
         by_contract.setdefault(contract, []).append(raw)
     identity = next(x.identity for x in options.identities if x.stage == stage)
     schema = _schema(stage, identity)
-    template, template_raw = _template(stage)
+    template, template_raw = _template(stage, identity)
     purpose, schema_version, role = G3_STAGE_PROFILES[stage]
     configured = [x for x in options.calls if x.stage == stage]
     if tuple(
@@ -2530,14 +2533,7 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
         call = next(x for x in options.calls if x.stage == stage)
         contexts = {
             call.call_id: batch_json_bytes_830_g3(
-                {
-                    "contract": "g3-d-compile-prompt-context.830.v1",
-                    "context": compiler_context_g3(request),
-                    "response_schema": __import__(
-                        "insurance_harness.knowledge_compiler.concept_compile_830_g2",
-                        fromlist=["CompileOutput"],
-                    ).CompileOutput.model_json_schema(),
-                }
+                runtime.render_g3_d_prompt_context(stage, call.identity, request)
             )
         }
     else:
@@ -2558,14 +2554,9 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
         call = next(x for x in options.calls if x.stage == stage)
         contexts = {
             call.call_id: batch_json_bytes_830_g3(
-                {
-                    "contract": "g3-d-review-prompt-context.830.v1",
-                    "context": review_context_g3(request, final.output),
-                    "response_schema": __import__(
-                        "insurance_harness.knowledge_compiler.concept_compile_830_g2",
-                        fromlist=["ReviewOutput"],
-                    ).ReviewOutput.model_json_schema(),
-                }
+                runtime.render_g3_d_prompt_context(
+                    stage, call.identity, request, final.output
+                )
             )
         }
     parts = _stage_fixed(options, stage, chain, context_raws=contexts, typed=typed)

@@ -11,12 +11,14 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 from .concept_compile_830_g2 import (
+    AuditDisposition,
     CompileOutput,
     CompileResult,
     ExecutionRecord,
     PageMember,
     ReviewOutput,
     ReviewResult,
+    free_page_id,
 )
 from .concept_free_wiki_830_g2 import (
     ConceptDefinition,
@@ -97,6 +99,40 @@ def _paired_result_tree(value: CompileResult | ReviewResult) -> dict[str, object
     return {"output": output_tree, "execution": execution_tree}
 
 
+def _typed_model_tree(value: BaseModel, body_fields: frozenset[str]) -> dict[str, object]:
+    wire = value.model_dump(
+        mode="json", round_trip=True, warnings=False, exclude_computed_fields=True
+    )
+    return {
+        name: _tree(getattr(value, name), wire[name], body=name in body_fields)
+        for name in type(value).model_fields
+    }
+
+
+def _field_member_content(value: FieldAssertion) -> tuple[str, str]:
+    simple = value.value if value.value is not None else "未知：" + (value.unknown_reason or "")
+    if value.state == "present":
+        lines = ["值：" + (value.value or "")]
+    elif value.state == "absent_explicitly":
+        lines = ["明确不提供：" + (value.value or "")]
+    else:
+        lines = ["未知：" + (value.unknown_reason or "")]
+    lines.extend("条件：" + item for item in value.conditions)
+    lines.extend("例外：" + item for item in value.exceptions)
+    if value.valid_time:
+        lines.append("有效期：" + value.valid_time)
+    return simple, "\n".join(lines)
+
+
+def _page_member_content(value: FreeWikiPage) -> tuple[str, str]:
+    lines = [value.body]
+    lines.extend("条件：" + item for item in value.conditions)
+    lines.extend("例外：" + item for item in value.exceptions)
+    if value.valid_time:
+        lines.append("有效期：" + value.valid_time)
+    return value.body, "\n".join(lines)
+
+
 def _page_member_tree(value: PageMember) -> dict[str, object]:
     if type(value) is not PageMember:
         raise TypeError("page-member canonicalization requires the exact DTO")
@@ -111,12 +147,40 @@ def _page_member_tree(value: PageMember) -> dict[str, object]:
         typed_payload = None
     if typed_payload is None:
         payload_tree = _tree(checked.payload)
+        body_fields: frozenset[str] = frozenset()
     else:
         wire = typed_payload.model_dump(
             mode="json", round_trip=True, warnings=False, exclude_computed_fields=True
         )
         if _encode_tree(wire) != _encode_tree(checked.payload):
             raise ValueError("page-member payload changed during exact DTO validation")
+        if isinstance(typed_payload, ConceptDefinition):
+            if (
+                checked.member_id != typed_payload.concept_id
+                or checked.owner_id != typed_payload.space_id
+                or checked.title != typed_payload.title
+                or checked.content != typed_payload.body
+            ):
+                raise ValueError("concept page-member projection mismatch")
+            body_fields = frozenset(("title", "content"))
+        elif isinstance(typed_payload, FieldAssertion):
+            if (
+                checked.member_id != typed_payload.assertion_id
+                or checked.owner_id != typed_payload.entity_id
+                or checked.content not in _field_member_content(typed_payload)
+            ):
+                raise ValueError("field page-member projection mismatch")
+            body_fields = frozenset(("content",))
+        else:
+            assert isinstance(typed_payload, FreeWikiPage)
+            if (
+                checked.member_id != free_page_id(typed_payload)
+                or checked.owner_id != typed_payload.entity_id
+                or checked.title != typed_payload.title
+                or checked.content not in _page_member_content(typed_payload)
+            ):
+                raise ValueError("free-page member projection mismatch")
+            body_fields = frozenset(("title", "content"))
         payload_tree = _tree(typed_payload)
     wire = checked.model_dump(
         mode="json", round_trip=True, warnings=False, exclude_computed_fields=True
@@ -124,7 +188,9 @@ def _page_member_tree(value: PageMember) -> dict[str, object]:
     return {
         name: payload_tree
         if name == "payload"
-        else _tree(getattr(checked, name), wire[name])
+        else _tree(
+            getattr(checked, name), wire[name], body=name in body_fields
+        )
         for name in type(checked).model_fields
     }
 
@@ -149,6 +215,30 @@ def _tree(value: object, serialized: object = _MISSING, *, body: bool = False) -
             name: _tree(getattr(value, name), wire[name], body=name == body_field)
             for name in type(value).model_fields
         }
+    if type(value) is ConceptDefinition:
+        return _typed_model_tree(value, frozenset(("title", "body")))
+    if type(value) is FieldAssertion:
+        return _typed_model_tree(
+            value,
+            frozenset(
+                (
+                    "value",
+                    "unknown_reason",
+                    "conditions",
+                    "exceptions",
+                    "valid_time",
+                )
+            ),
+        )
+    if type(value) is FreeWikiPage:
+        return _typed_model_tree(
+            value,
+            frozenset(("title", "body", "conditions", "exceptions", "valid_time")),
+        )
+    if type(value) is AuditDisposition:
+        return _typed_model_tree(value, frozenset(("reason",)))
+    if type(value) is ReviewOutput:
+        return _typed_model_tree(value, frozenset(("reasons",)))
     if isinstance(value, BaseModel):
         wire = value.model_dump(
             mode="json", round_trip=True, warnings=False, exclude_computed_fields=True
@@ -184,7 +274,11 @@ def _tree(value: object, serialized: object = _MISSING, *, body: bool = False) -
     if isinstance(value, Sequence) and not isinstance(value, bytes | bytearray):
         wire_items = serialized if isinstance(serialized, Sequence) else ()
         return [
-            _tree(item, wire_items[index] if index < len(wire_items) else _MISSING)
+            _tree(
+                item,
+                wire_items[index] if index < len(wire_items) else _MISSING,
+                body=body,
+            )
             for index, item in enumerate(value)
         ]
     if serialized is not _MISSING and serialized is not value:
@@ -215,6 +309,19 @@ def batch_sha256_830_g3(object_type: str, payload: object) -> str:
     return hashlib.sha256(batch_canonical_bytes_830_g3(object_type, payload)).hexdigest()
 
 
+def definition_sha256_830_g3(definition: ConceptDefinition) -> str:
+    """Preserve the historical alias-excluded definition hash with typed body text."""
+
+    if type(definition) is not ConceptDefinition:
+        raise TypeError("definition hash requires the exact DTO")
+    tree = _typed_model_tree(definition, frozenset(("title", "body")))
+    del tree["aliases"]
+    object_type = "concept-definition.830.g2.v1"
+    return hashlib.sha256(
+        _PREFIX + object_type.encode("ascii") + b"\0" + _encode_tree(tree)
+    ).hexdigest()
+
+
 def paired_execution_sha256_830_g3(
     object_type: str, result: CompileResult | ReviewResult
 ) -> str:
@@ -231,5 +338,6 @@ __all__ = [
     "batch_canonical_bytes_830_g3",
     "batch_json_bytes_830_g3",
     "batch_sha256_830_g3",
+    "definition_sha256_830_g3",
     "paired_execution_sha256_830_g3",
 ]

@@ -1213,6 +1213,24 @@ def test_non_nfc_typed_output_has_raw_preserving_output_hash() -> None:
     assert module.compile_output_hash_g3(result.output) == expected
 
 
+def test_non_nfc_definition_hash_keeps_alias_excluded_domain() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    definition = module.validate_batch_candidate(
+        G3_FIXTURE.read_bytes()
+    ).compile_result.output.definitions[0]
+    changed = definition.model_copy(update={"body": definition.body + _NON_NFC_SOURCE_SCALAR})
+
+    assert module._definition_hash_g3(changed) == canonical_api.definition_sha256_830_g3(
+        changed
+    )
+    assert module._definition_hash_g3(changed) != module._definition_hash_g3(definition)
+
+
 def test_non_nfc_raw_output_binds_to_exact_typed_output() -> None:
     module = importlib.import_module(
         "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"

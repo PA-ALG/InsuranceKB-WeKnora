@@ -25,7 +25,7 @@ from .batch_canonical_830_g3 import (
 from .batch_canonical_830_g3 import (
     batch_sha256_830_g3 as _canonical_batch_sha256,
 )
-from .batch_canonical_830_g3 import paired_execution_sha256_830_g3
+from .batch_canonical_830_g3 import definition_sha256_830_g3, paired_execution_sha256_830_g3
 from .batch_entity_resolution_830_g3 import (
     BatchCorpusV1,
     BatchEntityResolutionV1,
@@ -130,16 +130,7 @@ def compile_output_hash_g3(output: CompileOutput) -> str:
 
 
 def _definition_hash_g3(definition: ConceptDefinition) -> str:
-    if type(definition) is not ConceptDefinition:
-        raise TypeError("G3 definition hash requires the exact DTO")
-    return _batch_sha256(
-        "concept-definition.830.g2.v1",
-        {
-            name: getattr(definition, name)
-            for name in type(definition).model_fields
-            if name != "aliases"
-        },
-    )
+    return definition_sha256_830_g3(definition)
 
 
 def _concept_member_hash_g3(member: PageMember) -> str:
