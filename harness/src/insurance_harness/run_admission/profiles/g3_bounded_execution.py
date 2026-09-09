@@ -342,9 +342,9 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
                 for ref in current.rights_lock.artifacts
                 if ref.contract == "g3-http-request-body.830.v1"
             )
-        ) or tuple((ref.sha256, ref.bytes) for ref in request_refs) != tuple(
+        ) or tuple(sorted((ref.sha256, ref.bytes) for ref in request_refs)) != tuple(sorted(
             (call.request_body_sha256, call.request_bytes) for call in calls
-        ):
+        )):
             raise ValueError("request artifact projection mismatch")
         return current
     except (AttributeError, KeyError, TypeError, ValueError):

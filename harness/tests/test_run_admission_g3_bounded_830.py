@@ -428,6 +428,85 @@ def test_complete_plan_closes_every_mandatory_hash_and_projection() -> None:
         )
 
 
+def _non_hash_order_c_plan() -> G3BoundedAdmissionPlanV1:
+    plan = valid_c_plan(call_count=2)
+    calls = tuple(
+        call.model_copy(update={
+            "request_body_sha256": plan.request_manifest.calls[1 - index].request_body_sha256,
+        })
+        for index, call in enumerate(plan.request_manifest.calls)
+    )
+    manifest = _hashed(
+        G3RequestManifestV1, "g3-request-manifest.830.v1", "manifest_hash",
+        **{**plan.request_manifest.model_dump(mode="python", exclude={"manifest_hash"}),
+           "calls": calls},
+    )
+    dispatch = _hashed(
+        G3StageDispatchLockV1, "g3-stage-dispatch.830.v1", "structured_dispatch_hash",
+        **{**plan.dispatch_lock.model_dump(mode="python", exclude={"structured_dispatch_hash"}),
+           "calls": calls},
+    )
+    return plan.model_copy(update={
+        "request_manifest": manifest, "manifest_hash": manifest.manifest_hash,
+        "dispatch_lock": dispatch, "structured_dispatch_hash": dispatch.structured_dispatch_hash,
+    })
+
+
+def test_request_artifact_binding_preserves_call_order_independent_of_hash_order() -> None:
+    plan = _non_hash_order_c_plan()
+    checked = validate_g3_bounded_plan(plan)
+    assert checked == plan
+    assert tuple(call.ordinal for call in checked.request_manifest.calls) == (0, 1)
+    assert tuple(call.request_body_sha256 for call in checked.request_manifest.calls) == (
+        "2" * 64, "1" * 64,
+    )
+    assert tuple(ref.sha256 for ref in checked.eligibility_lock.input_artifacts) == (
+        "1" * 64, "2" * 64,
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation", ("missing", "extra", "foreign", "size", "duplicate", "cross_lock")
+)
+def test_rehashed_request_artifact_inventory_drift_stays_rejected(mutation: str) -> None:
+    plan = _non_hash_order_c_plan()
+    refs = plan.eligibility_lock.input_artifacts
+    foreign = refs[-1].model_copy(update={
+        "sha256": "3" * 64,
+        "artifact_ref": (
+            "/var/lib/insurancekb/run-admission/sha256/" + "3" * 64 + "/request-body.json"
+        ),
+    })
+    if mutation == "missing":
+        refs = refs[:1]
+    elif mutation == "extra":
+        refs = (*refs, foreign)
+    elif mutation == "foreign":
+        refs = (refs[0], foreign)
+    elif mutation in ("size", "cross_lock"):
+        refs = (refs[0].model_copy(update={"bytes": refs[0].bytes + 1}), refs[1])
+    else:
+        refs = (refs[0], refs[0])
+    with pytest.raises((ValueError, ValidationError)):
+        updates = {}
+        for attr, artifact_field, domain, hash_field in (
+            ("eligibility_lock", "input_artifacts", "g3-stage-eligibility.830.v1",
+             "eligibility_hash"),
+            ("rights_lock", "artifacts", "g3-external-send-rights.830.v1", "rights_hash"),
+            ("provenance_lock", "artifacts", "g3-stage-provenance.830.v1", "provenance_hash"),
+        ):
+            old = getattr(plan, attr)
+            changed = _hashed(
+                type(old), domain, hash_field,
+                **{**old.model_dump(mode="python", exclude={hash_field}), artifact_field: refs},
+            )
+            updates[attr] = changed
+            updates[hash_field] = getattr(changed, hash_field)
+            if mutation == "cross_lock":
+                break
+        validate_g3_bounded_plan(plan.model_copy(update=updates))
+
+
 def test_request_body_rerender_is_byte_exact_and_model_bound() -> None:
     from insurance_harness.compiler.llm import openai_compat_request_bytes
     from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
