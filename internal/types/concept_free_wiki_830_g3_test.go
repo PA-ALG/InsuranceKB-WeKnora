@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -550,6 +551,112 @@ func TestBatchConceptCanonical830G3PreservesMultilineAndRejectsBadDomain(t *test
 		_, err := batchConceptHash830G3(domain, payload)
 		require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
 	}
+}
+
+func TestBatchConceptCanonical830G3PreservesExactUnicodeBodyScalars(t *testing.T) {
+	body := "保险\uf99c表"
+	source := ConceptSourceBlock830G2{Text: body}
+	_, err := batchConceptHash830G3("compile-request.830.g2.v1", struct {
+		Sources []ConceptSourceBlock830G2 `json:"sources"`
+	}{Sources: []ConceptSourceBlock830G2{source}})
+	require.NoError(t, err)
+
+	evidence := ConceptEvidence830G2{Quote: body}
+	definition := ConceptDefinition830G2{Evidence: []ConceptEvidence830G2{evidence}}
+	payload, err := json.Marshal(definition)
+	require.NoError(t, err)
+	member := ConceptPageMember830G2{Kind: "concept", Payload: payload}
+	_, err = batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
+	require.NoError(t, err)
+	var payloadMap map[string]any
+	require.NoError(t, json.Unmarshal(payload, &payloadMap))
+	payloadMap["unexpected"] = true
+	extraPayload, err := json.Marshal(payloadMap)
+	require.NoError(t, err)
+	member.Payload = extraPayload
+	_, err = batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+	member.Kind, member.Payload = "entity_overview", payload
+	_, err = batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+}
+
+func TestBatchConceptCanonical830G3RequiresPairedRawOutput(t *testing.T) {
+	body := "保险\uf99c表"
+	output := ConceptCompileOutput830G2{
+		Contract:    "concept-compile-output.830.g2.v1",
+		Definitions: []ConceptDefinition830G2{{Evidence: []ConceptEvidence830G2{{Quote: body}}}},
+		Fields:      []ConceptFieldAssertion830G2{}, Pages: []ConceptFreeWikiPage830G2{},
+		Audit: []ConceptAuditDisposition830G2{}, Transformation: "EXTRACT",
+	}
+	rawOutput, err := batchConceptCanonicalJSON830G3(output)
+	require.NoError(t, err)
+	result := ConceptCompileResult830G2{
+		Output: output,
+		Execution: ConceptExecutionRecord830G2{
+			RunID: "run", Implementation: "implementation", ContextHash: strings.Repeat("a", 64),
+			RawOutput: string(rawOutput), RawOutputHash: sha256Hex830G3(rawOutput),
+		},
+	}
+	digest, err := batchConceptHash830G3("paired-result-test.830.g3.v1", result)
+	require.NoError(t, err)
+	require.Regexp(t, "^[0-9a-f]{64}$", digest)
+
+	_, err = batchConceptHash830G3("batch-concept-model-execution.830.g3.v1", result.Execution)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+	tampered := result
+	tampered.Execution.RawOutput += " "
+	_, err = batchConceptHash830G3("paired-result-test.830.g3.v1", tampered)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+}
+
+func TestParseBatchConceptCandidateBundle830G3PythonUnicodeParity(t *testing.T) {
+	path := os.Getenv("G3_UNICODE_CANDIDATE")
+	if path == "" {
+		t.Skip("set G3_UNICODE_CANDIDATE to the frozen Python U+F99C candidate")
+	}
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var decoded BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &decoded, batchBundleKeys830G3, true))
+	require.NoError(t, validateBatchRequest830G3(decoded.Request))
+	require.NoError(t, validateDelta830G3(decoded.Request, decoded.ModelCompileResult.Output))
+	require.NoError(t, validateBatchConceptBundle830G3(decoded))
+	bundle, canonical, err := CanonicalBatchConceptCandidateBundle830G3(raw)
+	require.NoError(t, err)
+	require.Equal(t, raw, canonical)
+	require.Equal(t, "e18445f35088ab02888b9a8bc2d5f86f07d7e3dc2282b171d8451f1097e12a93", bundle.CandidateHash)
+	require.Equal(t, "9390bb31", bundle.Request.RequestSHA256[:8])
+	require.Len(t, bundle.PageManifest.Members, 354)
+	baseRequestHash, err := compileRequestHash830G3(bundle.Request.BaseRequest)
+	require.NoError(t, err)
+	require.Equal(t, "f079e4b96087b6d9a53adc753e277066ce15647f69b97ead92dd59e846176bf4", baseRequestHash)
+	modelOutputHash, err := compileOutputHash830G3(bundle.ModelCompileResult.Output)
+	require.NoError(t, err)
+	require.Equal(t, "59ae1ffedfee830e4d9da766c4a1351856e58d09b0a20acfdf11a7413ba14e28", modelOutputHash)
+	compileOutputHash, err := compileOutputHash830G3(bundle.CompileResult.Output)
+	require.NoError(t, err)
+	require.Equal(t, "606a21c700dff76856c629ce4e838676105b3ba4572b22327693549d60effc20", compileOutputHash)
+	modelExecutionHash, err := pairedExecutionHash830G3(
+		"batch-concept-model-execution.830.g3.v1", bundle.ModelCompileResult,
+	)
+	require.NoError(t, err)
+	require.Equal(t, "137e83c31a8c3d06dd1575f1eec80a7c6bc4b9b0afcbadef22aeee996e45edc0", modelExecutionHash)
+	reviewExecutionHash, err := pairedExecutionHash830G3(
+		"batch-concept-review-execution.830.g3.v1", bundle.ReviewResult,
+	)
+	require.NoError(t, err)
+	require.Equal(t, "5cadc4e78f3f5c000fb81595539dde2a0a5779376731240fd75422a21cbbda50", reviewExecutionHash)
+	for _, member := range bundle.PageManifest.Members {
+		if member.MemberID != "assertion_a83c62ffffec835c29eca5e46ab26c194132dfa827c3b1f148898295a19ddc62" {
+			continue
+		}
+		memberHash, hashErr := batchConceptHash830G3("batch-concept-member.830.g3.v1", member)
+		require.NoError(t, hashErr)
+		require.Equal(t, "b5760c4bad23c73c044dc305657f2b0e2d2cc9957ca4110b148689f54b04c8d7", memberHash)
+		return
+	}
+	t.Fatal("Python U+F99C candidate lacks the frozen parity member")
 }
 
 func TestBatchConceptPreparationActual342FitsExistingEightMiBLimit(t *testing.T) {

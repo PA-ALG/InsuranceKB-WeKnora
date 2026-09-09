@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.util
 import json
@@ -23,6 +24,8 @@ G3_PREPARATION = (
     ROOT / "harness/tests/fixtures/batch_concept_compile_830_g3/preparation-request.json"
 )
 G3_PROVENANCE = ROOT / "harness/tests/fixtures/batch_concept_compile_830_g3/provenance.json"
+
+_NON_NFC_SOURCE_SCALAR = "\uf99c"
 
 
 def _fixture_request_json() -> dict[str, Any]:
@@ -225,6 +228,156 @@ def _proper_expanded_request(module: ModuleType) -> tuple[Any, Any]:
     )
 
 
+def _non_nfc_expanded_request(module: ModuleType) -> tuple[Any, Any]:
+    resolution_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3"
+    )
+    (
+        original_request,
+        expanded_base,
+        expanded_corpus,
+        expanded_proposals,
+        _expanded_resolution,
+        field_block,
+        refs,
+    ) = _expanded_selected_material_inputs(module)
+    changed_block = field_block.model_copy(
+        update={"text": field_block.text + _NON_NFC_SOURCE_SCALAR}
+    )
+
+    entry_rows = []
+    changed_entry = None
+    for entry in expanded_corpus.entries:
+        if field_block not in entry.blocks:
+            entry_rows.append(entry)
+            continue
+        entry_payload = {
+            name: getattr(entry, name)
+            for name in type(entry).model_fields
+            if name != "entry_sha256"
+        }
+        entry_payload["blocks"] = tuple(
+            changed_block if block == field_block else block for block in entry.blocks
+        )
+        changed_entry = resolution_api.CorpusEntryV1.model_validate(
+            {
+                **entry_payload,
+                "entry_sha256": resolution_api._batch_sha256(
+                    "corpus-entry.830.g3.v1", entry_payload
+                ),
+            }
+        )
+        entry_rows.append(changed_entry)
+    assert changed_entry is not None
+    corpus_payload = {
+        name: getattr(expanded_corpus, name)
+        for name in type(expanded_corpus).model_fields
+        if name != "corpus_sha256"
+    }
+    corpus_payload["entries"] = tuple(entry_rows)
+    corpus = resolution_api.BatchCorpusV1.model_validate(
+        {
+            **corpus_payload,
+            "corpus_sha256": resolution_api._batch_sha256(
+                expanded_corpus.contract, corpus_payload
+            ),
+        }
+    )
+
+    proposals = []
+    for proposal in expanded_proposals.proposals:
+        if proposal.material_id != changed_entry.material_id:
+            proposals.append(proposal)
+            continue
+        proposal_payload = {
+            name: getattr(proposal, name)
+            for name in type(proposal).model_fields
+            if name != "proposal_sha256"
+        }
+        proposal_payload["corpus_entry_sha256"] = changed_entry.entry_sha256
+        proposals.append(
+            resolution_api.MaterialProposalV1.model_validate(
+                {
+                    **proposal_payload,
+                    "proposal_sha256": resolution_api._batch_sha256(
+                        "material-proposal.830.g3.v1", proposal_payload
+                    ),
+                }
+            )
+        )
+    receipts = []
+    for receipt in expanded_proposals.model_receipts:
+        bindings = tuple(
+            item.model_copy(update={"corpus_entry_sha256": changed_entry.entry_sha256})
+            if item.material_id == changed_entry.material_id
+            else item
+            for item in receipt.material_bindings
+        )
+        receipts.append(
+            receipt.model_copy(
+                update={
+                    "material_bindings": bindings,
+                    "input_sha256": resolution_api._batch_sha256(
+                        "batch-classifier-input.830.g3.v1",
+                        {
+                            "corpus_sha256": corpus.corpus_sha256,
+                            "material_bindings": bindings,
+                        },
+                    ),
+                }
+            )
+        )
+    proposals_payload = {
+        name: getattr(expanded_proposals, name)
+        for name in type(expanded_proposals).model_fields
+        if name != "proposals_sha256"
+    }
+    proposals_payload.update(
+        corpus_sha256=corpus.corpus_sha256,
+        model_receipts=tuple(receipts),
+        proposals=tuple(proposals),
+    )
+    proposal_batch = resolution_api.ProposalBatchV1.model_validate(
+        {
+            **proposals_payload,
+            "proposals_sha256": resolution_api._batch_sha256(
+                expanded_proposals.contract, proposals_payload
+            ),
+        }
+    )
+    resolution = resolution_api.resolve_batch(
+        catalog=original_request.catalog,
+        corpus=corpus,
+        proposals=proposal_batch,
+        existing_entities=original_request.resolution_inputs.existing_entities,
+        policy=original_request.resolution_inputs.policy,
+    )
+    base = expanded_base.model_copy(
+        update={
+            "sources": tuple(
+                changed_block if block == field_block else block
+                for block in expanded_base.sources
+            )
+        }
+    )
+    return (
+        module.build_batch_compile_request(
+            base_request=base,
+            catalog_json=CATALOG.read_bytes(),
+            profile_confirmation_json=(
+                ROOT / "docs/insurance-kb/evidence/830-g3/profile-user-confirmation.json"
+            ).read_bytes(),
+            corpus=corpus,
+            proposals=proposal_batch,
+            existing_entities=original_request.resolution_inputs.existing_entities,
+            policy=original_request.resolution_inputs.policy,
+            resolution=resolution,
+            selected_decision_refs=refs,
+        ),
+        changed_block,
+    )
+
+
 def _record_delta_with_page(
     module: ModuleType, request: Any, *, entity_id: str, evidence: Any
 ) -> Any:
@@ -270,6 +423,128 @@ def _record_delta_with_page(
 def _g2() -> ModuleType:
     return importlib.import_module(
         "insurance_harness.knowledge_compiler.concept_compile_830_g2"
+    )
+
+
+def _non_nfc_compile_result(module: ModuleType) -> tuple[Any, str]:
+    """Build an exact typed output/raw pair without granting a generic string exemption."""
+
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    output = bundle.model_compile_result.output
+    fields = list(output.fields)
+    for field_index, field in enumerate(fields):
+        if not field.evidence:
+            continue
+        evidence = field.evidence[0]
+        quote = evidence.quote + _NON_NFC_SOURCE_SCALAR
+        changed_evidence = evidence.model_copy(
+            update={
+                "end": evidence.end + 1,
+                "quote": quote,
+                "quote_hash": hashlib.sha256(quote.encode()).hexdigest(),
+            }
+        )
+        fields[field_index] = field.model_copy(
+            update={"evidence": (changed_evidence, *field.evidence[1:])}
+        )
+        break
+    else:  # pragma: no cover - the frozen candidate must contain grounded fields
+        raise AssertionError("fixture lacks evidence")
+    changed_output = output.model_copy(update={"fields": tuple(fields)})
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    raw = canonical_api.batch_json_bytes_830_g3(changed_output).decode("utf-8")
+    changed_execution = bundle.model_compile_result.execution.model_copy(
+        update={
+            "raw_output": raw,
+            "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest(),
+        }
+    )
+    return (
+        bundle.model_compile_result.model_copy(
+            update={"output": changed_output, "execution": changed_execution}
+        ),
+        raw,
+    )
+
+
+def build_non_nfc_candidate_fixture(module: ModuleType) -> Any:
+    concept_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.concept_free_wiki_830_g2"
+    )
+    g2 = _g2()
+    original = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    request, source = _non_nfc_expanded_request(module)
+    binding = next(
+        item
+        for item in request.entity_bindings
+        if any(
+            entry.material_id in item.source_material_ids and source in entry.blocks
+            for entry in request.resolution_inputs.corpus.entries
+        )
+    )
+    evidence = concept_api.evidence_for(source, 0, len(source.text))
+    fields = tuple(
+        item.model_copy(
+            update={
+                "state": "present",
+                "value": source.text.removesuffix(_NON_NFC_SOURCE_SCALAR),
+                "unknown_reason": None,
+                "evidence": (evidence,),
+            }
+        )
+        if (item.entity_id, item.field_key)
+        == (binding.entity_id, "coverage_responsibilities")
+        else item
+        for item in original.model_compile_result.output.fields
+    )
+    model_output = original.model_compile_result.output.model_copy(
+        update={
+            "request_hash": module.compile_request_hash_g3(request.base_request),
+            "fields": fields,
+        }
+    )
+    model_result = module.record_model_compile(
+        request,
+        model_output,
+        run_id="unicode-model-compile",
+        implementation="fixture-static-unicode-compiler",
+        raw=module._canonical_json(model_output),
+    )
+    composed_output = module.compose_batch_output(request, model_result)
+    composed_result = module.record_composed_output(
+        request,
+        model_result,
+        composed_output,
+        run_id="unicode-composed-compile",
+    )
+    review_output = g2.ReviewOutput(
+        request_hash=module.compile_request_hash_g3(request.base_request),
+        output_hash=module.compile_output_hash_g3(composed_output),
+        decision="PASS",
+        reasons=("FIXED_TYPED_UNICODE_FIXTURE",),
+    )
+    review_raw = module._canonical_json(review_output)
+    review_result = g2.ReviewResult(
+        output=review_output,
+        execution=g2.ExecutionRecord(
+            run_id="unicode-independent-review",
+            implementation="fixture-static-unicode-reviewer",
+            context_hash=module._batch_sha256(
+                "batch-concept-review-context.830.g3.v1",
+                module.review_context_g3(request, composed_output),
+            ),
+            raw_output=review_raw,
+            raw_output_hash=hashlib.sha256(review_raw.encode()).hexdigest(),
+        ),
+    )
+    return module.assemble_candidate_bundle(
+        request,
+        model_result,
+        composed_result,
+        review_result,
+        original.admission,
     )
 
 
@@ -900,3 +1175,137 @@ def test_actual342_preparation_post_capacity_receipt_matches_exact_bytes() -> No
     assert provenance["preparation_post_bytes"] == len(post) == 2_254_490
     assert provenance["serialized_bytes"]["handler_limit"] == 8 * 1024 * 1024
     assert len(post) < provenance["serialized_bytes"]["handler_limit"]
+
+
+def test_non_nfc_source_body_uses_g3_request_hash_domain() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    base = module.validate_batch_candidate(G3_FIXTURE.read_bytes()).request.base_request
+    source = base.sources[0]
+    changed = base.model_copy(
+        update={
+            "sources": (
+                source.model_copy(update={"text": source.text + _NON_NFC_SOURCE_SCALAR}),
+                *base.sources[1:],
+            )
+        }
+    )
+    expected = canonical_api.batch_sha256_830_g3("compile-request.830.g2.v1", changed)
+
+    assert module.compile_request_hash_g3(changed) == expected
+    assert expected != base.request_hash
+
+
+def test_non_nfc_typed_output_has_raw_preserving_output_hash() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    result, _raw = _non_nfc_compile_result(module)
+    expected = canonical_api.batch_sha256_830_g3("compile-output.830.g2.v1", result.output)
+
+    assert module.compile_output_hash_g3(result.output) == expected
+
+
+def test_non_nfc_raw_output_binds_to_exact_typed_output() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    result, raw = _non_nfc_compile_result(module)
+
+    module._validate_raw(raw, result.output)
+
+
+def test_non_nfc_carry_context_hashes_execution_through_paired_result() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    result, _raw = _non_nfc_compile_result(module)
+
+    context = module.carry_context_g3(bundle.request, result)
+
+    assert context["model_compile_output_hash"] == module.compile_output_hash_g3(result.output)
+    assert context[
+        "model_compile_execution_sha256"
+    ] == canonical_api.paired_execution_sha256_830_g3(
+        "batch-concept-model-execution.830.g3.v1", result
+    )
+
+
+def test_non_nfc_candidate_hash_retains_exact_paired_result_type() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    canonical_api = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_canonical_830_g3"
+    )
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    result, _raw = _non_nfc_compile_result(module)
+    changed = bundle.model_copy(update={"model_compile_result": result})
+    payload = {
+        name: getattr(changed, name)
+        for name in type(changed).model_fields
+        if name != "candidate_hash"
+    }
+    expected = canonical_api.batch_sha256_830_g3(changed.contract, payload)
+
+    assert module._batch_sha256(changed.contract, payload) == expected
+    assert expected != bundle.candidate_hash
+
+
+def test_non_nfc_source_and_evidence_complete_candidate_chain() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    candidate = build_non_nfc_candidate_fixture(module)
+    wire = module._canonical_json(candidate).encode("utf-8")
+    checked = module.validate_batch_candidate(wire)
+    evidence = next(
+        evidence
+        for field in checked.model_compile_result.output.fields
+        for evidence in field.evidence
+        if _NON_NFC_SOURCE_SCALAR in evidence.quote
+    )
+    source = next(
+        source
+        for source in checked.request.base_request.sources
+        if (source.revision_id, source.block_id)
+        == (evidence.revision_id, evidence.block_id)
+    )
+
+    assert source.text[evidence.start : evidence.end] == evidence.quote
+    assert _NON_NFC_SOURCE_SCALAR in wire.decode("utf-8")
+    assert module.validate_batch_candidate(wire) == candidate
+
+    normalized = wire.decode("utf-8").replace(_NON_NFC_SOURCE_SCALAR, "列", 1)
+    with pytest.raises(module.BatchConceptCompileError):
+        module.validate_batch_candidate(normalized.encode("utf-8"))
+
+
+def test_existing_nfc_candidate_identities_remain_frozen() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    wire = G3_FIXTURE.read_bytes()
+    candidate = module.validate_batch_candidate(wire)
+
+    assert hashlib.sha256(wire).hexdigest() == (
+        "e7be83db31d987c19a27c213e81b4d4c1f64993766a8b16921c67f90377dd783"
+    )
+    assert candidate.candidate_hash == (
+        "e9f3fc9bec2cca609a30dce0f015a6af955e41da9d7a42399b05164efef14870"
+    )
+    assert candidate.request.request_sha256 == (
+        "40920c09c42a9b28f1b8348c34d0bd9b63dde7568fc90c11311d554b7b6e25ec"
+    )
+    assert len(candidate.page_manifest.members) == 354

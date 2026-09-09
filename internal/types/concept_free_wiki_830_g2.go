@@ -742,6 +742,31 @@ func validateConceptRequest830G2(request ConceptCompileRequest830G2) error {
 }
 
 func validateConceptOutput830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
+	if validateConceptOutputShapeCoverage830G2(request, output) != nil {
+		return ErrConceptCandidateBundle830G2
+	}
+	existingDefs, linked := conceptOutputDefinitionState830G2(request, output)
+	for _, definition := range output.Definitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		old, exists := existingDefs[id]
+		if exists && (old.Origin == "SCHEMA_DEFINITION" || old.Origin == "EXPERT_REVISION_RECORD") {
+			oldHash, _ := conceptDefinitionHash830G2(old)
+			newHash, _ := conceptDefinitionHash830G2(definition)
+			if oldHash != newHash {
+				return ErrConceptCandidateBundle830G2
+			}
+		}
+		if validateConceptOutputDefinitionLink830G2(definition, linked) != nil {
+			return ErrConceptCandidateBundle830G2
+		}
+	}
+	if validateConceptOutputEvidence830G2(request, output) != nil {
+		return ErrConceptCandidateBundle830G2
+	}
+	return validateConceptDispositions830G2(request, output)
+}
+
+func validateConceptOutputShapeCoverage830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
 	if output.Contract != "concept-compile-output.830.g2.v1" ||
 		(output.Transformation != "EXTRACT" && output.Transformation != "NORMALIZE" && output.Transformation != "COMPRESS" && output.Transformation != "SYNTHESIZE") ||
 		validateConceptMembers830G2(request.SpaceID, output.Definitions, output.Fields, output.Pages) != nil {
@@ -769,6 +794,10 @@ func validateConceptOutput830G2(request ConceptCompileRequest830G2, output Conce
 			return ErrConceptCandidateBundle830G2
 		}
 	}
+	return nil
+}
+
+func conceptOutputDefinitionState830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) (map[string]ConceptDefinition830G2, map[string]bool) {
 	existingDefs := map[string]ConceptDefinition830G2{}
 	for _, definition := range request.ExistingDefinitions {
 		id, _ := conceptDefinitionID830G2(definition)
@@ -785,20 +814,18 @@ func validateConceptOutput830G2(request ConceptCompileRequest830G2, output Conce
 			linked[id] = true
 		}
 	}
-	for _, definition := range output.Definitions {
-		id, _ := conceptDefinitionID830G2(definition)
-		old, exists := existingDefs[id]
-		if exists && (old.Origin == "SCHEMA_DEFINITION" || old.Origin == "EXPERT_REVISION_RECORD") {
-			oldHash, _ := conceptDefinitionHash830G2(old)
-			newHash, _ := conceptDefinitionHash830G2(definition)
-			if oldHash != newHash {
-				return ErrConceptCandidateBundle830G2
-			}
-		}
-		if !linked[id] {
-			return ErrConceptCandidateBundle830G2
-		}
+	return existingDefs, linked
+}
+
+func validateConceptOutputDefinitionLink830G2(definition ConceptDefinition830G2, linked map[string]bool) error {
+	id, _ := conceptDefinitionID830G2(definition)
+	if !linked[id] {
+		return ErrConceptCandidateBundle830G2
 	}
+	return nil
+}
+
+func validateConceptOutputEvidence830G2(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
 	for _, definition := range output.Definitions {
 		for _, evidence := range definition.Evidence {
 			if verifyConceptEvidence830G2(evidence, request.Sources) != nil {
@@ -820,7 +847,7 @@ func validateConceptOutput830G2(request ConceptCompileRequest830G2, output Conce
 			}
 		}
 	}
-	return validateConceptDispositions830G2(request, output)
+	return nil
 }
 
 func validateConceptMembers830G2(spaceID string, definitions []ConceptDefinition830G2, fields []ConceptFieldAssertion830G2, pages []ConceptFreeWikiPage830G2) error {

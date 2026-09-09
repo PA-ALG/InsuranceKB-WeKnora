@@ -125,20 +125,15 @@ def _normalized(value: str) -> str:
 
 
 def _payload(model: BaseModel, hash_field: str) -> dict[str, object]:
-    return cast(
-        dict[str, object],
-        model.model_dump(
-            mode="json",
-            round_trip=True,
-            warnings=False,
-            exclude={hash_field},
-            exclude_computed_fields=True,
-        ),
-    )
+    return {
+        name: getattr(model, name)
+        for name in type(model).model_fields
+        if name != hash_field
+    }
 
 
 def _validate_body_text(value: str) -> None:
-    if unicodedata.normalize("NFC", value) != value or any(
+    if any(
         (ord(character) < 0x20 and character not in "\t\n\r")
         or ord(character) == 0x7F
         for character in value
@@ -156,7 +151,7 @@ def _validate_structured_text(value: str) -> None:
 def _validate_typed_batch_text(value: object) -> None:
     """Validate typed C trees before serialization; only exact G2 bodies allow line controls."""
 
-    if isinstance(value, SourceBlock):
+    if type(value) is SourceBlock:
         for name in value.__class__.model_fields:
             item = getattr(value, name)
             if name == "text":
@@ -164,7 +159,7 @@ def _validate_typed_batch_text(value: object) -> None:
             else:
                 _validate_typed_batch_text(item)
         return
-    if isinstance(value, Evidence):
+    if type(value) is Evidence:
         for name in value.__class__.model_fields:
             item = getattr(value, name)
             if name == "quote":
@@ -231,8 +226,9 @@ def _hashed[ModelT: BaseModel](
     payload: dict[str, object],
 ) -> ModelT:
     _validate_typed_batch_text(payload)
+    digest = _canonical_batch_sha256(object_type, payload)
     wire = {key: _json_value(value) for key, value in payload.items()}
-    wire[hash_field] = _canonical_batch_sha256(object_type, wire)
+    wire[hash_field] = digest
     return model_type.model_validate(wire)
 
 

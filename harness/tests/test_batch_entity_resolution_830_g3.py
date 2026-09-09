@@ -2023,6 +2023,30 @@ def test_confidence_and_strict_integer_contract_reject_float_bool_and_noncanonic
         g.VersionAnchorV1(kind="registration_number", value="A\nB")
 
 
+def test_exact_source_body_non_nfc_hashes_but_structured_text_stays_nfc() -> None:
+    source = SourceBlock(
+        tenant_id=7,
+        space_id="space-g3",
+        raw_kb_id="raw-g3",
+        knowledge_id="knowledge-g3",
+        parse_attempt=1,
+        revision_id="revision-g3",
+        source_hash="1" * 64,
+        parse_hash="2" * 64,
+        parser_identity="parser-g3",
+        block_id="block-g3",
+        page_number=1,
+        text="actual-\uf99c-source",
+        source_type="DOCUMENT",
+    )
+
+    digest = g._batch_sha256("source-block.830.g3.v1", source)
+
+    assert len(digest) == 64
+    with pytest.raises(ValueError):
+        g._batch_sha256("fixture.830.g3.v1", {"material_id": "bad-\uf99c"})
+
+
 @pytest.mark.parametrize("competition", ["name", "alias", "anchor"])
 def test_existing_identity_competition_across_different_codes_stays_human(
     catalog: SchemaPackCatalogV1,

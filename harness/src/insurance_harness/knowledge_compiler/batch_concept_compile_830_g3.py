@@ -20,11 +20,12 @@ from pydantic import (
 )
 
 from .batch_canonical_830_g3 import (
-    batch_canonical_bytes_830_g3 as _canonical_batch_bytes,
+    batch_json_bytes_830_g3 as _canonical_json_bytes,
 )
 from .batch_canonical_830_g3 import (
     batch_sha256_830_g3 as _canonical_batch_sha256,
 )
+from .batch_canonical_830_g3 import paired_execution_sha256_830_g3
 from .batch_entity_resolution_830_g3 import (
     BatchCorpusV1,
     BatchEntityResolutionV1,
@@ -44,7 +45,9 @@ from .concept_compile_830_g2 import (
     PageMember,
     ReviewResult,
     free_page_id,
-    validate_output,
+    validate_disposition_semantics,
+    validate_output_link_and_evidence_semantics,
+    validate_output_member_semantics,
 )
 from .concept_free_wiki_830_g2 import (
     ConceptDefinition,
@@ -87,32 +90,17 @@ class _FrozenModel(BaseModel):
 
 
 def _without_hash(model: BaseModel, field: str) -> dict[str, object]:
-    return model.model_dump(
-        mode="json",
-        round_trip=True,
-        warnings=False,
-        exclude={field},
-        exclude_computed_fields=True,
-    )
-
-
-def _json_value(value: object) -> object:
-    if isinstance(value, BaseModel):
-        return value.model_dump(
-            mode="json",
-            round_trip=True,
-            warnings=False,
-            exclude_computed_fields=True,
-        )
-    if isinstance(value, Mapping):
-        return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return [_json_value(item) for item in value]
-    return value
+    if field not in type(model).model_fields:
+        raise ValueError("root hash field is not declared")
+    return {
+        name: getattr(model, name)
+        for name in type(model).model_fields
+        if name != field
+    }
 
 
 def _batch_sha256(object_type: str, payload: object) -> str:
-    return _canonical_batch_sha256(object_type, _json_value(payload))
+    return _canonical_batch_sha256(object_type, payload)
 
 
 def _hashed(model_type: type[BaseModel], contract: str, hash_field: str, **payload: object) -> Any:
@@ -122,8 +110,42 @@ def _hashed(model_type: type[BaseModel], contract: str, hash_field: str, **paylo
 
 
 def _canonical_json(value: object) -> str:
-    preimage = _canonical_batch_bytes("json", _json_value(value))
-    return preimage.split(b"\x00", 2)[2].decode("utf-8")
+    return _canonical_json_bytes(value).decode("utf-8")
+
+
+def compile_request_hash_g3(request: CompileRequest) -> str:
+    """Hash an exact G2 request while preserving G3 source-body bytes."""
+
+    if type(request) is not CompileRequest:
+        raise TypeError("G3 compile request hash requires the exact DTO")
+    return _batch_sha256("compile-request.830.g2.v1", request)
+
+
+def compile_output_hash_g3(output: CompileOutput) -> str:
+    """Hash an exact G2 output while preserving G3 evidence-body bytes."""
+
+    if type(output) is not CompileOutput:
+        raise TypeError("G3 compile output hash requires the exact DTO")
+    return _batch_sha256("compile-output.830.g2.v1", output)
+
+
+def _definition_hash_g3(definition: ConceptDefinition) -> str:
+    if type(definition) is not ConceptDefinition:
+        raise TypeError("G3 definition hash requires the exact DTO")
+    return _batch_sha256(
+        "concept-definition.830.g2.v1",
+        {
+            name: getattr(definition, name)
+            for name in type(definition).model_fields
+            if name != "aliases"
+        },
+    )
+
+
+def _concept_member_hash_g3(member: PageMember) -> str:
+    if type(member) is not PageMember:
+        raise TypeError("G3 concept member hash requires the exact DTO")
+    return _batch_sha256("concept-member.830.g2.v1", member)
 
 
 class ProfileConfirmationIdentity830G3V1(_FrozenModel):
@@ -417,9 +439,7 @@ def validate_unknown_field_key_alignments(
             content=_field_content(old),
             payload=old.model_dump(mode="json"),
         )
-        if row.old_member_digest != digest(
-            "concept-member", old_member.model_dump(mode="json")
-        ):
+        if row.old_member_digest != _concept_member_hash_g3(old_member):
             raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
         eligible = (
             old.attempted
@@ -897,9 +917,7 @@ def _build_unknown_alignments(
             "old_field_key": _OLD_KEY,
             "new_field_key": _NEW_KEY,
             "old_member_id": old.assertion_id,
-            "old_member_digest": digest(
-                "concept-member", old_member.model_dump(mode="json")
-            ),
+            "old_member_digest": _concept_member_hash_g3(old_member),
             "new_member_id": new.assertion_id,
             "new_member_digest": _batch_sha256(
                 "batch-concept-member.830.g3.v1", new_member
@@ -1212,7 +1230,7 @@ def aligned_existing_fields(
             else field.model_copy(update={"field_key": row.new_field_key})
         )
     output = CompileOutput(
-        request_hash=request.base_request.request_hash,
+        request_hash=compile_request_hash_g3(request.base_request),
         definitions=request.base_request.existing_definitions,
         fields=tuple(sorted(result, key=lambda item: (item.entity_id, item.field_key))),
         pages=request.base_request.existing_pages,
@@ -1258,7 +1276,7 @@ def aligned_existing_fields(
         )
         if (
             row.source_candidate_sha256 != _BASE_CANDIDATE
-            or row.old_member_digest != digest("concept-member", old_member.model_dump(mode="json"))
+            or row.old_member_digest != _concept_member_hash_g3(old_member)
             or row.new_member_digest
             != _batch_sha256("batch-concept-member.830.g3.v1", new_member)
         ):
@@ -1280,9 +1298,10 @@ def _unique_json(raw: str | bytes) -> object:
 
 def _validate_raw(raw: str, output: BaseModel) -> None:
     try:
-        raw_hash = _batch_sha256("raw-output-object.830.g3.v1", _unique_json(raw))
-        output_hash = _batch_sha256("raw-output-object.830.g3.v1", output)
-        if raw_hash != output_hash:
+        parsed = type(output).model_validate(_unique_json(raw))
+        if type(parsed) is not type(output) or parsed != output:
+            raise ValueError
+        if raw.encode("utf-8") != _canonical_json_bytes(output):
             raise ValueError
     except (TypeError, ValueError, json.JSONDecodeError):
         raise BatchConceptCompileError("RAW_OUTPUT_BINDING_MISMATCH") from None
@@ -1290,9 +1309,9 @@ def _validate_raw(raw: str, output: BaseModel) -> None:
 
 def compiler_context_g3(request: BatchConceptCompileRequest830G3V1) -> dict[str, object]:
     return {
-        "request": request.model_dump(mode="json"),
+        "request": request,
         "request_sha256": request.request_sha256,
-        "base_request_hash": request.base_request.request_hash,
+        "base_request_hash": compile_request_hash_g3(request.base_request),
         "output_mode": "NEW_MEMBERS_ONLY",
     }
 
@@ -1302,9 +1321,9 @@ def carry_context_g3(
 ) -> dict[str, object]:
     return {
         "request_sha256": request.request_sha256,
-        "model_compile_output_hash": model_compile_result.output.output_hash,
-        "model_compile_execution_sha256": _batch_sha256(
-            "batch-concept-model-execution.830.g3.v1", model_compile_result.execution
+        "model_compile_output_hash": compile_output_hash_g3(model_compile_result.output),
+        "model_compile_execution_sha256": paired_execution_sha256_830_g3(
+            "batch-concept-model-execution.830.g3.v1", model_compile_result
         ),
     }
 
@@ -1313,11 +1332,11 @@ def review_context_g3(
     request: BatchConceptCompileRequest830G3V1, output: CompileOutput
 ) -> dict[str, object]:
     return {
-        "request": request.model_dump(mode="json"),
-        "candidate": output.model_dump(mode="json"),
+        "request": request,
+        "candidate": output,
         "request_sha256": request.request_sha256,
-        "base_request_hash": request.base_request.request_hash,
-        "output_hash": output.output_hash,
+        "base_request_hash": compile_request_hash_g3(request.base_request),
+        "output_hash": compile_output_hash_g3(output),
     }
 
 
@@ -1356,7 +1375,7 @@ def validate_delta_output(
     request: BatchConceptCompileRequest830G3V1, result: CompileResult
 ) -> None:
     output = result.output
-    if output.request_hash != request.base_request.request_hash:
+    if output.request_hash != compile_request_hash_g3(request.base_request):
         raise BatchConceptCompileError("REQUEST_IDENTITY_MISMATCH")
     context_hash = _batch_sha256(
         "batch-concept-compile-context.830.g3.v1", compiler_context_g3(request)
@@ -1452,6 +1471,37 @@ def validate_delta_output(
                 raise BatchConceptCompileError("CROSS_ENTITY_EVIDENCE")
 
 
+def _validate_output_g3(request: CompileRequest, output: CompileOutput) -> None:
+    """Run the G2 semantic phases with byte-preserving G3 identity hashes."""
+
+    request = CompileRequest.model_validate(request)
+    output = CompileOutput.model_validate(output)
+    if output.request_hash != compile_request_hash_g3(request):
+        raise ValueError("REQUEST_IDENTITY_MISMATCH")
+    validate_output_member_semantics(request, output)
+    existing_defs = {item.concept_id: item for item in request.existing_definitions}
+    for definition in output.definitions:
+        protected_old = existing_defs.get(definition.concept_id)
+        if (
+            protected_old is not None
+            and protected_old.origin in ("SCHEMA_DEFINITION", "EXPERT_REVISION_RECORD")
+            and _definition_hash_g3(protected_old) != _definition_hash_g3(definition)
+        ):
+            raise ValueError("PROTECTED_DEFINITION_REPLACED")
+    validate_output_link_and_evidence_semantics(request, output)
+    for obj, old, disposition in validate_disposition_semantics(request, output):
+        if disposition == "update" and old == obj:
+            raise ValueError("UPDATE_TARGET_MISSING_OR_DUPLICATE")
+        if disposition == "alias_link":
+            unchanged = (
+                isinstance(old, ConceptDefinition)
+                and isinstance(obj, ConceptDefinition)
+                and _definition_hash_g3(old) == _definition_hash_g3(obj)
+            ) or old == obj
+            if not unchanged:
+                raise ValueError("ALIAS_TARGET_MISMATCH")
+
+
 def compose_batch_output(
     request: BatchConceptCompileRequest830G3V1, model_compile_result: CompileResult
 ) -> CompileOutput:
@@ -1497,7 +1547,7 @@ def compose_batch_output(
     if aligned_ids.intersection(original_ids):
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
     output = CompileOutput(
-        request_hash=base.request_hash,
+        request_hash=compile_request_hash_g3(base),
         definitions=definitions,
         fields=fields,
         pages=pages,
@@ -1505,7 +1555,7 @@ def compose_batch_output(
         transformation=delta.transformation,
     )
     try:
-        validate_output(base, output)
+        _validate_output_g3(base, output)
     except ValueError as exc:
         raise BatchConceptCompileError(str(exc)) from None
     return output
@@ -1605,7 +1655,7 @@ def _directory_entry(
 def project_batch_members(
     request: BatchConceptCompileRequest830G3V1, output: CompileOutput
 ) -> BatchConceptPageManifest830G3V1:
-    validate_output(request.base_request, output)
+    _validate_output_g3(request.base_request, output)
     bindings = {item.entity_id: item for item in request.entity_bindings}
     fields = {(item.entity_id, item.field_key): item for item in output.fields}
     members: list[PageMember] = []
@@ -1732,8 +1782,8 @@ def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> Non
         ),
     )
     if (review.output.request_hash, review.output.output_hash) != (
-        request.base_request.request_hash,
-        expected.output_hash,
+        compile_request_hash_g3(request.base_request),
+        compile_output_hash_g3(expected),
     ) or review.output.decision == "REJECT":
         raise BatchConceptCompileError("REVIEW_NOT_APPROVED_OR_STALE")
     run_ids = {
@@ -1805,6 +1855,8 @@ __all__ = [
     "assemble_candidate_bundle",
     "build_batch_compile_request",
     "carry_context_g3",
+    "compile_output_hash_g3",
+    "compile_request_hash_g3",
     "compiler_context_g3",
     "compose_batch_output",
     "project_batch_members",

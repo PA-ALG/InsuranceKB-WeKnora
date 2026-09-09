@@ -10,7 +10,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
+from insurance_harness.knowledge_compiler import g3_bounded_model_execution as bounded
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     _batch_sha256,
     assemble_candidate_bundle,
@@ -399,7 +402,7 @@ def test_d_renderers_reuse_existing_compile_and_review_contexts() -> None:
             index,
         )
 
-    compile_context = canonical_json(
+    compile_context = batch_json_bytes_830_g3(
         {
             "contract": "g3-d-compile-prompt-context.830.v1",
             "context": compiler_context_g3(candidate.request),
@@ -421,7 +424,7 @@ def test_d_renderers_reuse_existing_compile_and_review_contexts() -> None:
     assert index == compile_index
     assert preview is None
 
-    review_context = canonical_json(
+    review_context = batch_json_bytes_830_g3(
         {
             "contract": "g3-d-review-prompt-context.830.v1",
             "context": review_context_g3(candidate.request, candidate.compile_result.output),
@@ -741,6 +744,91 @@ def test_c_semantic_assembler_uses_exact_source_and_native_projection() -> None:
         )
 
 
+def test_native_and_semantic_closed_wires_preserve_only_exact_body_fields() -> None:
+    raw = "actual-\uf99c-source"
+    page = G3NativePageProjectionV1(
+        block_ref="opaque-1",
+        material_id="m-001",
+        revision_id="revision-1",
+        block_id="block-1",
+        page_number=1,
+        page_width=100.0,
+        page_height=100.0,
+        text=raw,
+        boxes=(),
+    )
+    pages = G3NativePageProjectionSetV1(
+        contract="g3-native-page-projections.830.v1", pages=(page,)
+    )
+    native_wire = bounded.canonical_native_page_projections(pages)
+    assert raw.encode() in native_wire
+    with pytest.raises(TypeError):
+        bounded.canonical_native_page_projections(pages.model_dump(mode="json"))  # type: ignore[arg-type]
+
+    class NativeProjectionSubclass(G3NativePageProjectionSetV1):
+        pass
+
+    with pytest.raises(TypeError):
+        bounded.canonical_native_page_projections(
+            NativeProjectionSubclass.model_validate(pages.model_dump(mode="json"))
+        )
+
+    semantic_wire = canonical_json(
+        {
+            "contract": "g3-batch-resolution-semantic-response.local.v1",
+            "materials": [
+                {
+                    "entities": [],
+                    "evidence": [
+                        {
+                            "entity_ref": None,
+                            "evidence_ref": "e-1",
+                            "field_key": None,
+                            "locator": {
+                                "block_ref": "opaque-1",
+                                "end": len(raw),
+                                "quote": raw,
+                                "start": 0,
+                            },
+                            "purpose": "material_role",
+                        }
+                    ],
+                    "material_id": "m-001",
+                    "material_role": "policy",
+                    "material_role_evidence_refs": ["e-1"],
+                }
+            ],
+        }
+    )
+    response, echoed = bounded.parse_c_semantic_response_bytes(semantic_wire)
+    assert response.materials[0].evidence[0].locator.quote == raw
+    assert echoed == semantic_wire
+    with pytest.raises(ValidationError):
+        G3NativePageProjectionV1(
+            block_ref="bad-\uf99c",
+            material_id="m-001",
+            revision_id="revision-1",
+            block_id="block-1",
+            page_number=1,
+            page_width=100.0,
+            page_height=100.0,
+            text="NFC source",
+            boxes=(),
+        )
+    with pytest.raises(ValidationError):
+        G3NativePageProjectionV1(
+            block_ref="bad\nref",
+            material_id="m-001",
+            revision_id="revision-1",
+            block_id="block-1",
+            page_number=1,
+            page_width=100.0,
+            page_height=100.0,
+            text="NFC source",
+            boxes=(),
+        )
+
+
 def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:
     fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
     candidate = validate_batch_candidate(fixture.read_bytes())
@@ -777,8 +865,9 @@ def test_d_compile_review_and_candidate_contracts_form_one_chain() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("non_nfc", [False, True])
 async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, non_nfc: bool
 ) -> None:
     import respx
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -818,6 +907,21 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
 
     fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
     fixture_candidate = validate_batch_candidate(fixture.read_bytes())
+    if non_nfc:
+        import importlib.util
+
+        from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3
+
+        fixture_spec = importlib.util.spec_from_file_location(
+            "bounded_non_nfc_fixture",
+            Path(__file__).with_name("test_batch_concept_compile_830_g3.py"),
+        )
+        assert fixture_spec is not None and fixture_spec.loader is not None
+        fixture_module = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture_module)
+        fixture_candidate = fixture_module.build_non_nfc_candidate_fixture(
+            batch_concept_compile_830_g3
+        )
     fixture_inputs = fixture_candidate.request.resolution_inputs
     corpus = fixture_inputs.corpus
     policy = fixture_inputs.policy
@@ -1600,6 +1704,25 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         if child.disposition in ("MATCH", "CREATE")
     )
     repository_root = Path(__file__).parents[2]
+    if non_nfc:
+        materializer_spec = importlib.util.spec_from_file_location(
+            "bounded_non_nfc_materializer",
+            repository_root
+            / "docs/insurance-kb/evidence/830-g3/g3_actual_model_plan_materializer_v1.py",
+        )
+        assert materializer_spec is not None and materializer_spec.loader is not None
+        materializer_module = importlib.util.module_from_spec(materializer_spec)
+        monkeypatch.setitem(sys.modules, materializer_spec.name, materializer_module)
+        materializer_spec.loader.exec_module(materializer_module)
+        before_read = {str(path.relative_to(ledger)): path.read_bytes()
+                       for path in ledger.rglob("*") if path.is_file()}
+        c_stage, _, _, c_results = materializer_module._prior_stage(
+            parent, parent_bytes, plan.chain_manifest, "D_COMPILE"
+        )
+        assert c_stage == recovered_terminal
+        assert c_results["resolution"][1] == resolution_bytes
+        assert before_read == {str(path.relative_to(ledger)): path.read_bytes()
+                              for path in ledger.rglob("*") if path.is_file()}
     compile_request = build_batch_compile_request(
         base_request=fixture_candidate.request.base_request,
         catalog_json=(
@@ -1702,7 +1825,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             schema_hash=stage_schema.schema_hash,
         )
         if stage == "D_COMPILE":
-            user_context = canonical_json(
+            user_context = batch_json_bytes_830_g3(
                 {
                     "contract": "g3-d-compile-prompt-context.830.v1",
                     "context": compiler_context_g3(compile_request),
@@ -1716,7 +1839,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
             ).CompileResult.model_validate_json(
                 typed_payloads["g3-d-final-compile-result.830.v1"]
             )
-            user_context = canonical_json(
+            user_context = batch_json_bytes_830_g3(
                 {
                     "contract": "g3-d-review-prompt-context.830.v1",
                     "context": review_context_g3(compile_request, final_result.output),
@@ -1984,6 +2107,16 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     )
     model_compile_bytes = (compile_results / "model-compile-result.json").read_bytes()
     final_compile_bytes = (compile_results / "final-compile-result.json").read_bytes()
+    if non_nfc:
+        before_read = {str(path.relative_to(ledger)): path.read_bytes()
+                       for path in ledger.rglob("*") if path.is_file()}
+        reopened_stage, _, _, reopened_results = materializer_module._prior_stage(
+            parent, parent_bytes, compile_plan.chain_manifest, "D_REVIEW"
+        )
+        assert reopened_stage == recovered_compile_terminal
+        assert reopened_results["final"][1] == final_compile_bytes
+        assert before_read == {str(path.relative_to(ledger)): path.read_bytes()
+                              for path in ledger.rglob("*") if path.is_file()}
     review_plan, review_admission = build_d_plan(
         stage="D_REVIEW",
         prior_terminal=recovered_compile_terminal,
@@ -2013,7 +2146,7 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
     )
     review_wire = fixture_candidate.review_result.output.model_copy(
         update={
-            "output_hash": final_result.output.output_hash,
+            "output_hash": bounded.compile_output_hash_g3(final_result.output),
             "page_scores": {
                 page_id: human_score
                 for page_id in novel_page_ids(compile_request.base_request, final_result.output)

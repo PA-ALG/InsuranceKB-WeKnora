@@ -14,10 +14,11 @@ import unicodedata
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -25,13 +26,15 @@ from pydantic import (
     StrictInt,
     StrictStr,
     StringConstraints,
-    model_validator,
 )
 
+from insurance_harness.knowledge_compiler.batch_canonical_830_g3 import batch_json_bytes_830_g3
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCandidateBundle830G3V1,
     BatchConceptCompileRequest830G3V1,
     assemble_candidate_bundle,
+    compile_output_hash_g3,
+    compile_request_hash_g3,
     compiler_context_g3,
     compose_batch_output,
     record_composed_output,
@@ -90,7 +93,27 @@ from insurance_harness.run_admission.g3_models import (
     stage_approval_signed_bytes,
 )
 
-Text = Annotated[StrictStr, StringConstraints(min_length=1)]
+
+def _structured_text(value: str) -> str:
+    if unicodedata.normalize("NFC", value) != value or any(
+        ord(character) < 0x20 or ord(character) == 0x7F for character in value
+    ):
+        raise ValueError("semantic structured text must be canonical NFC")
+    return value
+
+
+def _body_text(value: str) -> str:
+    if any(
+        ord(character) == 0x7F
+        or (ord(character) < 0x20 and character not in "\t\n\r")
+        for character in value
+    ):
+        raise ValueError("semantic source body contains a forbidden control")
+    return value
+
+
+Text = Annotated[StrictStr, StringConstraints(min_length=1), AfterValidator(_structured_text)]
+BodyText = Annotated[StrictStr, StringConstraints(min_length=1), AfterValidator(_body_text)]
 
 _G3_REQUEST_SCHEMA: dict[str, object] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -208,36 +231,15 @@ def g3_openai_request_bytes(
     return canonical_json(value)
 
 
-def _validate_text_tree(value: object) -> None:
-    if type(value) is str:
-        if unicodedata.normalize("NFC", value) != value or any(
-            ord(character) == 0x7F or (ord(character) < 0x20 and character not in "\t\n\r")
-            for character in value
-        ):
-            raise ValueError("semantic text must be canonical NFC")
-    elif isinstance(value, BaseModel):
-        for item in value.__dict__.values():
-            _validate_text_tree(item)
-    elif isinstance(value, tuple):
-        for item in value:
-            _validate_text_tree(item)
-
-
 class _SemanticModel(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="always")
-
-    @model_validator(mode="after")
-    def canonical_text(self) -> Self:
-        for value in self.__dict__.values():
-            _validate_text_tree(value)
-        return self
 
 
 class G3SemanticLocatorV1(_SemanticModel):
     block_ref: Text
     start: Annotated[StrictInt, Field(ge=0)]
     end: Annotated[StrictInt, Field(gt=0)]
-    quote: Text
+    quote: BodyText
 
 
 class G3SemanticEvidenceV1(_SemanticModel):
@@ -313,13 +315,22 @@ class G3NativePageProjectionV1(_SemanticModel):
     page_number: Annotated[StrictInt, Field(gt=0)]
     page_width: StrictFloat
     page_height: StrictFloat
-    text: Text
+    text: BodyText
     boxes: tuple[G3NativeCharacterBoxV1, ...]
 
 
 class G3NativePageProjectionSetV1(_SemanticModel):
     contract: Literal["g3-native-page-projections.830.v1"]
     pages: tuple[G3NativePageProjectionV1, ...]
+
+
+def canonical_native_page_projections(value: G3NativePageProjectionSetV1) -> bytes:
+    """Serialize only the exact native projection root with source bytes intact."""
+
+    if type(value) is not G3NativePageProjectionSetV1:
+        raise TypeError("native projection serializer requires its exact root type")
+    validated = G3NativePageProjectionSetV1.model_validate(value)
+    return canonical_json(validated.model_dump(mode="json", round_trip=True))
 
 
 def _unique_json_bytes(raw: bytes) -> object:
@@ -337,6 +348,15 @@ def _unique_json_bytes(raw: bytes) -> object:
     if raw != canonical_json(value):
         raise ValueError("response must be canonical JSON")
     return value
+
+
+def parse_c_semantic_response_bytes(raw: bytes) -> tuple[G3SemanticResponseV1, bytes]:
+    """Parse the exact C response and preserve its canonical source-body bytes."""
+
+    response = G3SemanticResponseV1.model_validate(_unique_json_bytes(raw))
+    if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
+        raise ValueError("semantic response typed wire mismatch")
+    return response, raw
 
 
 def _structural_id(domain: str, material_id: str, local_ref: str) -> str:
@@ -431,7 +451,7 @@ def assemble_c_semantic_response(
 ) -> tuple[MaterialProposalV1, ...]:
     """Build C proposals from local refs while retaining all source authority locally."""
 
-    response = G3SemanticResponseV1.model_validate(_unique_json_bytes(raw))
+    response, _ = parse_c_semantic_response_bytes(raw)
     if tuple(sorted(set(requested_material_ids))) != requested_material_ids:
         raise ValueError("requested materials must be sorted unique")
     entries = {entry.material_id: entry for entry in corpus.entries}
@@ -1027,7 +1047,7 @@ def _render_g3_stage_contexts(
             BatchConceptCompileRequest830G3V1,
         )
         call = plan.request_manifest.calls[0]
-        context_by_call[call.call_id] = canonical_json(
+        context_by_call[call.call_id] = batch_json_bytes_830_g3(
             {
                 "contract": "g3-d-compile-prompt-context.830.v1",
                 "context": compiler_context_g3(request),
@@ -1050,7 +1070,7 @@ def _render_g3_stage_contexts(
         if final_result.output != expected_output:
             raise ValueError("D review final output carry closure mismatch")
         call = plan.request_manifest.calls[0]
-        context_by_call[call.call_id] = canonical_json(
+        context_by_call[call.call_id] = batch_json_bytes_830_g3(
             {
                 "contract": "g3-d-review-prompt-context.830.v1",
                 "context": review_context_g3(request, final_result.output),
@@ -1267,7 +1287,7 @@ def _validate_g3_prior_stage_results(
         or signed_model != model_result
         or signed_final != final_result
         or final_result.output != compose_batch_output(request, model_result)
-        or prior.stage_output_sha256 != final_result.output.output_hash
+        or prior.stage_output_sha256 != compile_output_hash_g3(final_result.output)
     ):
         raise RuntimeError("D compile stage result closure mismatch")
 
@@ -1696,7 +1716,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     implementation="g3-bounded-model-compile.830.v1",
                     raw=semantic.decode(),
                 )
-                if terminal.projection_sha256 != _batch_sha256(
+                if terminal.projection_sha256 != _compile_sha256(
                     "g3-d-compile-projection.830.v1", compile_result
                 ):
                     raise RuntimeError("reopened D compile projection mismatch")
@@ -1728,8 +1748,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 )
                 if (
                     review_output.request_hash
-                    != compile_request_model.base_request.request_hash
-                    or review_output.output_hash != final_compile_result.output.output_hash
+                    != compile_request_hash_g3(compile_request_model.base_request)
+                    or review_output.output_hash
+                    != compile_output_hash_g3(final_compile_result.output)
                     or review_output.decision == "REJECT"
                 ):
                     raise ValueError("review output is stale or rejected")
@@ -1858,7 +1879,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     implementation="g3-bounded-model-compile.830.v1",
                     raw=content,
                 )
-                projection_hash = _batch_sha256("g3-d-compile-projection.830.v1", compile_result)
+                projection_hash = _compile_sha256("g3-d-compile-projection.830.v1", compile_result)
             else:
                 compile_request_model = _one_artifact(
                     artifacts,
@@ -1883,8 +1904,10 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     context_hash=expected_context,
                 )
                 if (
-                    review_output.request_hash != compile_request_model.base_request.request_hash
-                    or review_output.output_hash != final_compile_result.output.output_hash
+                    review_output.request_hash
+                    != compile_request_hash_g3(compile_request_model.base_request)
+                    or review_output.output_hash
+                    != compile_output_hash_g3(final_compile_result.output)
                     or review_output.decision == "REJECT"
                 ):
                     raise ValueError("review output is stale or rejected")
@@ -1972,14 +1995,8 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
         proposals_payload: dict[str, object] = {
             "contract": "batch-identity-proposals.830.g3.v1",
             "corpus_sha256": corpus.corpus_sha256,
-            "model_receipts": [
-                item.model_dump(mode="json", round_trip=True)
-                for item in sorted(model_receipts, key=lambda item: item.request_sha256)
-            ],
-            "proposals": [
-                item.model_dump(mode="json", round_trip=True)
-                for item in sorted(c_proposals, key=lambda item: item.material_id)
-            ],
+            "model_receipts": sorted(model_receipts, key=lambda item: item.request_sha256),
+            "proposals": sorted(c_proposals, key=lambda item: item.material_id),
         }
         proposal_batch = ProposalBatchV1.model_validate(
             {
@@ -2020,7 +2037,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
         )
         _persist_stage_result(plan, "model-compile-result.json", compile_result)
         _persist_stage_result(plan, "final-compile-result.json", final_compile_result)
-        stage_output_sha = final_compile_result.output.output_hash
+        stage_output_sha = compile_output_hash_g3(final_compile_result.output)
     else:
         assert review_result is not None
         assert candidate is not None

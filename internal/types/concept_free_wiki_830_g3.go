@@ -687,7 +687,7 @@ func CanonicalBatchConceptCandidateBundle830G3(raw []byte) (
 	if err != nil {
 		return BatchConceptCandidateBundle830G3{}, nil, ErrConceptCandidateBundle830G3
 	}
-	canonical, err := canonicalConceptRawJSON830G2(raw)
+	canonical, err := batchConceptCanonicalJSON830G3(bundle)
 	if err != nil {
 		return BatchConceptCandidateBundle830G3{}, nil, ErrConceptCandidateBundle830G3
 	}
@@ -760,7 +760,7 @@ func batchConceptHash830G3(objectType string, payload any) (string, error) {
 	if objectType == "" || !isASCIIControlFree830G3(objectType) {
 		return "", ErrConceptCandidateBundle830G3
 	}
-	canonical, err := conceptCanonicalJSON830G2(payload)
+	canonical, err := batchConceptCanonicalJSON830G3(payload)
 	if err != nil {
 		return "", ErrConceptCandidateBundle830G3
 	}
@@ -772,17 +772,10 @@ func batchConceptHash830G3(objectType string, payload any) (string, error) {
 }
 
 func batchConceptHashWithout830G3(objectType string, value any, hashKey string) (string, error) {
-	raw, err := json.Marshal(value)
+	payload, err := batchConceptRootWithout830G3(reflect.ValueOf(value), hashKey)
 	if err != nil {
-		return "", err
+		return "", ErrConceptCandidateBundle830G3
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var payload map[string]any
-	if err := decoder.Decode(&payload); err != nil {
-		return "", err
-	}
-	delete(payload, hashKey)
 	return batchConceptHash830G3(objectType, payload)
 }
 
@@ -815,9 +808,382 @@ func canonicalRawEqualValue830G3(raw string, value any) bool {
 	if !conceptJSONUnicodeValid830G2([]byte(raw)) || !conceptJSONUniqueKeys830G2([]byte(raw)) {
 		return false
 	}
-	left, errLeft := canonicalConceptRawJSON830G2([]byte(raw))
-	right, errRight := conceptCanonicalJSON830G2(value)
+	left, errLeft := batchConceptCanonicalWire830G3([]byte(raw))
+	right, errRight := batchConceptCanonicalJSON830G3(value)
 	return errLeft == nil && errRight == nil && bytes.Equal(left, right)
+}
+
+var (
+	conceptSourceBlockType830G3 = reflect.TypeOf(ConceptSourceBlock830G2{})
+	conceptEvidenceType830G3    = reflect.TypeOf(ConceptEvidence830G2{})
+	compileResultType830G3      = reflect.TypeOf(ConceptCompileResult830G2{})
+	reviewResultType830G3       = reflect.TypeOf(ConceptReviewResult830G2{})
+	executionType830G3          = reflect.TypeOf(ConceptExecutionRecord830G2{})
+	pairedExecutionType830G3    = reflect.TypeOf(batchConceptPairedExecution830G3{})
+	pageMemberType830G3         = reflect.TypeOf(ConceptPageMember830G2{})
+	rawMessageType830G3         = reflect.TypeOf(json.RawMessage{})
+)
+
+type batchConceptPairedExecution830G3 ConceptExecutionRecord830G2
+
+func batchConceptCanonicalJSON830G3(payload any) ([]byte, error) {
+	if !batchConceptTypedValueValid830G3(reflect.ValueOf(payload), false) {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	return batchConceptCanonicalWire830G3(raw)
+}
+
+func batchConceptCanonicalWire830G3(raw []byte) ([]byte, error) {
+	if !utf8.Valid(raw) || !conceptJSONUnicodeValid830G2(raw) || !conceptJSONUniqueKeys830G2(raw) {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var tree any
+	if err := decoder.Decode(&tree); err != nil || !batchConceptWireTreeValid830G3(tree) {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(tree); err != nil {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	return entityPageUnescapeLineSeparators830G1(bytes.TrimSuffix(encoded.Bytes(), []byte("\n"))), nil
+}
+
+func batchConceptWireTreeValid830G3(value any) bool {
+	switch typed := value.(type) {
+	case nil, bool, string:
+		return true
+	case json.Number:
+		return !strings.ContainsAny(typed.String(), ".eE")
+	case []any:
+		for _, item := range typed {
+			if !batchConceptWireTreeValid830G3(item) {
+				return false
+			}
+		}
+		return true
+	case map[string]any:
+		for _, item := range typed {
+			if !batchConceptWireTreeValid830G3(item) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func batchConceptStructuredString830G3(value string) bool {
+	if !utf8.ValidString(value) || !norm.NFC.IsNormalString(value) {
+		return false
+	}
+	for _, character := range value {
+		if character == 0x7f || character < 0x20 && character != '\t' && character != '\n' && character != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+func batchConceptBodyString830G3(value string) bool {
+	if !utf8.ValidString(value) {
+		return false
+	}
+	for _, character := range value {
+		if character == 0x7f || character < 0x20 && character != '\t' && character != '\n' && character != '\r' {
+			return false
+		}
+	}
+	return true
+}
+
+func batchConceptTypedValueValid830G3(value reflect.Value, derivedRaw bool) bool {
+	if !value.IsValid() {
+		return true
+	}
+	for value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return true
+		}
+		value = value.Elem()
+	}
+	if value.Type() == rawMessageType830G3 {
+		return false
+	}
+	if value.Type() == compileResultType830G3 {
+		result := value.Interface().(ConceptCompileResult830G2)
+		return batchConceptPairedResultValid830G3(result.Output, result.Execution) &&
+			batchConceptTypedValueValid830G3(value.FieldByName("Output"), false) &&
+			batchConceptTypedValueValid830G3(value.FieldByName("Execution"), true)
+	}
+	if value.Type() == reviewResultType830G3 {
+		result := value.Interface().(ConceptReviewResult830G2)
+		return batchConceptPairedResultValid830G3(result.Output, result.Execution) &&
+			batchConceptTypedValueValid830G3(value.FieldByName("Output"), false) &&
+			batchConceptTypedValueValid830G3(value.FieldByName("Execution"), true)
+	}
+	if value.Type() == pageMemberType830G3 {
+		return batchConceptPageMemberValid830G3(value.Interface().(ConceptPageMember830G2))
+	}
+	if value.Type() == pairedExecutionType830G3 {
+		return batchConceptTypedValueValid830G3(
+			reflect.ValueOf(ConceptExecutionRecord830G2(value.Interface().(batchConceptPairedExecution830G3))), true,
+		)
+	}
+	switch value.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	case reflect.Float32, reflect.Float64:
+		return false
+	case reflect.String:
+		return batchConceptStructuredString830G3(value.String())
+	case reflect.Struct:
+		typeOf := value.Type()
+		for index := 0; index < value.NumField(); index++ {
+			fieldType := typeOf.Field(index)
+			if fieldType.PkgPath != "" {
+				continue
+			}
+			field := value.Field(index)
+			if typeOf == conceptSourceBlockType830G3 && fieldType.Name == "Text" ||
+				typeOf == conceptEvidenceType830G3 && fieldType.Name == "Quote" ||
+				typeOf == executionType830G3 && fieldType.Name == "RawOutput" && derivedRaw {
+				if field.Kind() != reflect.String || !batchConceptBodyString830G3(field.String()) {
+					return false
+				}
+				continue
+			}
+			if field.Type() == rawMessageType830G3 {
+				if !batchConceptFixedRawFieldValid830G3(typeOf, fieldType.Name, value, field.Bytes()) {
+					return false
+				}
+				continue
+			}
+			if typeOf == reflect.TypeOf(batchResolutionSummary830G3{}) && fieldType.Name == "Decisions" {
+				for item := 0; item < field.Len(); item++ {
+					var decision MaterialDecision830G3
+					if strictConceptDecode830G2(field.Index(item).Bytes(), &decision) != nil ||
+						!canonicalRawEqualValue830G3(string(field.Index(item).Bytes()), decision) {
+						return false
+					}
+				}
+				continue
+			}
+			if !batchConceptTypedValueValid830G3(field, false) {
+				return false
+			}
+		}
+		return true
+	case reflect.Map:
+		if value.IsNil() {
+			return true
+		}
+		if value.Type().Key().Kind() != reflect.String {
+			return false
+		}
+		iterator := value.MapRange()
+		for iterator.Next() {
+			if !batchConceptObjectKey830G3(iterator.Key().String()) ||
+				!batchConceptTypedValueValid830G3(iterator.Value(), false) {
+				return false
+			}
+		}
+		return true
+	case reflect.Slice, reflect.Array:
+		if value.Kind() == reflect.Slice && value.IsNil() {
+			return true
+		}
+		for index := 0; index < value.Len(); index++ {
+			if !batchConceptTypedValueValid830G3(value.Index(index), false) {
+				return false
+			}
+		}
+		return true
+	case reflect.Invalid:
+		return true
+	default:
+		return false
+	}
+}
+
+func batchConceptObjectKey830G3(value string) bool {
+	if !batchConceptStructuredString830G3(value) {
+		return false
+	}
+	for _, character := range value {
+		if character < 0x20 || character == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func batchConceptPairedResultValid830G3(output any, execution ConceptExecutionRecord830G2) bool {
+	canonical, err := batchConceptCanonicalJSON830G3(output)
+	if err != nil || execution.RawOutput != string(canonical) {
+		return false
+	}
+	sum := sha256.Sum256(canonical)
+	return execution.RawOutputHash == hex.EncodeToString(sum[:])
+}
+
+func batchConceptPageMemberValid830G3(member ConceptPageMember830G2) bool {
+	var destination any
+	switch member.Kind {
+	case "concept":
+		destination = &ConceptDefinition830G2{}
+	case "field_assertion":
+		destination = &ConceptFieldAssertion830G2{}
+	case "free_wiki_item":
+		destination = &ConceptFreeWikiPage830G2{}
+	case "entity_overview", "free_wiki":
+		_, err := canonicalConceptRawJSON830G2(member.Payload)
+		if err != nil {
+			return false
+		}
+		return batchConceptPageMemberScalarsValid830G3(member)
+	default:
+		return false
+	}
+	if strictConceptDecode830G2(member.Payload, destination) != nil ||
+		!canonicalRawEqualValue830G3(string(member.Payload), destination) {
+		return false
+	}
+	return batchConceptPageMemberScalarsValid830G3(member)
+}
+
+func batchConceptPageMemberScalarsValid830G3(member ConceptPageMember830G2) bool {
+	return batchConceptStructuredString830G3(member.Kind) &&
+		batchConceptStructuredString830G3(member.MemberID) &&
+		batchConceptStructuredString830G3(member.OwnerID) &&
+		batchConceptStructuredString830G3(member.Title) &&
+		batchConceptStructuredString830G3(member.Content)
+}
+
+func batchConceptFixedRawFieldValid830G3(parent reflect.Type, name string, owner reflect.Value, raw []byte) bool {
+	var destination any
+	switch {
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "Proposals":
+		destination = &ProposalBatch830G3{}
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "ExistingEntities":
+		destination = &ExistingEntitySnapshot830G3{}
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "Policy":
+		destination = &BatchResolutionPolicy830G3{}
+	case parent == reflect.TypeOf(BatchConceptCompileRequest830G3{}) && name == "Resolution":
+		destination = &BatchEntityResolution830G3{}
+	case parent == reflect.TypeOf(batchResolutionSummary830G3{}) && name == "DispositionCounts":
+		destination = &DispositionCounts830G3{}
+	default:
+		return false
+	}
+	return strictConceptDecode830G2(raw, destination) == nil &&
+		canonicalRawEqualValue830G3(string(raw), destination)
+}
+
+func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[string]any, error) {
+	for value.IsValid() && (value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer) {
+		if value.IsNil() {
+			return nil, ErrConceptCandidateBundle830G3
+		}
+		value = value.Elem()
+	}
+	result := map[string]any{}
+	found := false
+	switch value.Kind() {
+	case reflect.Struct:
+		typeOf := value.Type()
+		for index := 0; index < value.NumField(); index++ {
+			field := typeOf.Field(index)
+			if field.PkgPath != "" {
+				continue
+			}
+			name := strings.Split(field.Tag.Get("json"), ",")[0]
+			if name == "" {
+				name = field.Name
+			}
+			if name == "-" {
+				continue
+			}
+			if name == hashKey {
+				if found {
+					return nil, ErrConceptCandidateBundle830G3
+				}
+				found = true
+				continue
+			}
+			projected, err := batchConceptProjectRootField830G3(typeOf, field.Name, value.Field(index))
+			if err != nil {
+				return nil, err
+			}
+			result[name] = projected
+		}
+	case reflect.Map:
+		if value.Type().Key().Kind() != reflect.String {
+			return nil, ErrConceptCandidateBundle830G3
+		}
+		iterator := value.MapRange()
+		for iterator.Next() {
+			name := iterator.Key().String()
+			if name == hashKey {
+				found = true
+				continue
+			}
+			result[name] = iterator.Value().Interface()
+		}
+	default:
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	if !found {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	return result, nil
+}
+
+func batchConceptProjectRootField830G3(parent reflect.Type, name string, field reflect.Value) (any, error) {
+	if parent == reflect.TypeOf(batchResolutionSummary830G3{}) && name == "Decisions" {
+		result := make([]MaterialDecision830G3, field.Len())
+		for index := 0; index < field.Len(); index++ {
+			if strictConceptDecode830G2(field.Index(index).Bytes(), &result[index]) != nil {
+				return nil, ErrConceptCandidateBundle830G3
+			}
+		}
+		return result, nil
+	}
+	if field.Type() != rawMessageType830G3 {
+		return field.Interface(), nil
+	}
+	var destination any
+	switch {
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "Proposals":
+		destination = &ProposalBatch830G3{}
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "ExistingEntities":
+		destination = &ExistingEntitySnapshot830G3{}
+	case parent == reflect.TypeOf(BatchResolutionInputs830G3{}) && name == "Policy":
+		destination = &BatchResolutionPolicy830G3{}
+	case parent == reflect.TypeOf(BatchConceptCompileRequest830G3{}) && name == "Resolution":
+		destination = &BatchEntityResolution830G3{}
+	case parent == reflect.TypeOf(batchResolutionSummary830G3{}) && name == "DispositionCounts":
+		destination = &DispositionCounts830G3{}
+	default:
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	if strictConceptDecode830G2(field.Bytes(), destination) != nil {
+		return nil, ErrConceptCandidateBundle830G3
+	}
+	return reflect.ValueOf(destination).Elem().Interface(), nil
 }
 
 func nonNullCollections830G3(value reflect.Value) bool {
@@ -910,15 +1276,7 @@ func validStructuredText830G3(value string) bool {
 }
 
 func validBodyText830G3(value string) bool {
-	if !utf8.ValidString(value) || !norm.NFC.IsNormalString(value) {
-		return false
-	}
-	for _, character := range value {
-		if (character < 0x20 && character != '\t' && character != '\n' && character != '\r') || character == 0x7f {
-			return false
-		}
-	}
-	return true
+	return batchConceptBodyString830G3(value)
 }
 
 func validOptionalStructured830G3(value *string) bool {
@@ -2714,7 +3072,7 @@ func validateCorpusEntry830G3(corpus BatchCorpus830G3, entry CorpusEntry830G3) e
 	previous := ""
 	for _, block := range entry.Blocks {
 		key := block.RevisionID + "\x00" + block.BlockID
-		if key <= previous || validateConceptSource830G2(block) != nil || !validBodyText830G3(block.Text) {
+		if key <= previous || validateConceptSource830G2(block) != nil || !batchConceptBodyString830G3(block.Text) {
 			return ErrConceptCandidateBundle830G3
 		}
 		previous = key
@@ -3210,12 +3568,31 @@ func validateExecution830G3(record ConceptExecutionRecord830G2, output any, cont
 	return nil
 }
 
+func pairedExecutionHash830G3(objectType string, result any) (string, error) {
+	var execution ConceptExecutionRecord830G2
+	switch typed := result.(type) {
+	case ConceptCompileResult830G2:
+		if !batchConceptPairedResultValid830G3(typed.Output, typed.Execution) {
+			return "", ErrConceptCandidateBundle830G3
+		}
+		execution = typed.Execution
+	case ConceptReviewResult830G2:
+		if !batchConceptPairedResultValid830G3(typed.Output, typed.Execution) {
+			return "", ErrConceptCandidateBundle830G3
+		}
+		execution = typed.Execution
+	default:
+		return "", ErrConceptCandidateBundle830G3
+	}
+	return batchConceptHash830G3(objectType, batchConceptPairedExecution830G3(execution))
+}
+
 func compileRequestHash830G3(request ConceptCompileRequest830G2) (string, error) {
-	return conceptDigest830G2("compile-request", request)
+	return batchConceptHash830G3("compile-request.830.g2.v1", request)
 }
 
 func compileOutputHash830G3(output ConceptCompileOutput830G2) (string, error) {
-	return conceptDigest830G2("compile-output", output)
+	return batchConceptHash830G3("compile-output.830.g2.v1", output)
 }
 
 func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) error {
@@ -3242,12 +3619,12 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 		return ErrConceptCandidateBundle830G3
 	}
 	expected, err := composeBatchOutput830G3(bundle.Request, bundle.ModelCompileResult.Output)
-	if err != nil || !conceptCanonicalEqual830G2(expected, bundle.CompileResult.Output) ||
+	if err != nil || !batchConceptCanonicalEqual830G3(expected, bundle.CompileResult.Output) ||
 		bundle.CompileResult.Execution.Implementation != "base-carry-compiler.830.g3.v1" {
 		return ErrConceptCandidateBundle830G3
 	}
-	modelExecutionHash, err := batchConceptHash830G3(
-		"batch-concept-model-execution.830.g3.v1", bundle.ModelCompileResult.Execution,
+	modelExecutionHash, err := pairedExecutionHash830G3(
+		"batch-concept-model-execution.830.g3.v1", bundle.ModelCompileResult,
 	)
 	if err != nil {
 		return ErrConceptCandidateBundle830G3
@@ -3536,10 +3913,131 @@ func composeBatchOutput830G3(
 		Definitions: definitions, Fields: fields, Pages: pages, Audit: audit,
 		Transformation: delta.Transformation,
 	}
-	if len(fields) != 342 || validateConceptOutput830G2(request.BaseRequest, result) != nil {
+	if len(fields) != 342 || validateConceptOutput830G3(request.BaseRequest, result) != nil {
 		return ConceptCompileOutput830G2{}, ErrConceptCandidateBundle830G3
 	}
 	return result, nil
+}
+
+func validateConceptOutput830G3(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
+	if validateConceptOutputShapeCoverage830G2(request, output) != nil {
+		return ErrConceptCandidateBundle830G3
+	}
+	existingDefs, linked := conceptOutputDefinitionState830G2(request, output)
+	for _, definition := range output.Definitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		old, exists := existingDefs[id]
+		if exists && (old.Origin == "SCHEMA_DEFINITION" || old.Origin == "EXPERT_REVISION_RECORD") {
+			oldHash, oldErr := conceptDefinitionHash830G3(old)
+			newHash, newErr := conceptDefinitionHash830G3(definition)
+			if oldErr != nil || newErr != nil || oldHash != newHash {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
+		if validateConceptOutputDefinitionLink830G2(definition, linked) != nil {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	if validateConceptOutputEvidence830G2(request, output) != nil ||
+		validateConceptDispositions830G3(request, output) != nil {
+		return ErrConceptCandidateBundle830G3
+	}
+	return nil
+}
+
+func conceptDefinitionHash830G3(value ConceptDefinition830G2) (string, error) {
+	return batchConceptHashWithout830G3("concept-definition.830.g2.v1", value, "aliases")
+}
+
+func validateConceptDispositions830G3(request ConceptCompileRequest830G2, output ConceptCompileOutput830G2) error {
+	objects := map[string]string{}
+	for _, definition := range output.Definitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		objects[id] = "definition"
+	}
+	for _, field := range output.Fields {
+		id, _ := conceptFieldID830G2(field)
+		objects[id] = "field"
+	}
+	for _, page := range output.Pages {
+		id, _ := conceptFreePageID830G2(page)
+		objects[id] = "page"
+	}
+	promoted, seen := map[string]string{}, map[string]bool{}
+	for _, audit := range output.Audit {
+		if !conceptIdentity830G2(audit.Key) || audit.Reason == "" || seen[audit.Key] || !validDisposition830G2(audit.Disposition) {
+			return ErrConceptCandidateBundle830G3
+		}
+		seen[audit.Key] = true
+		if audit.Disposition == "new_page" || audit.Disposition == "update" || audit.Disposition == "sense" ||
+			audit.Disposition == "field_rule" || audit.Disposition == "alias_link" {
+			promoted[audit.Key] = audit.Disposition
+		}
+	}
+	if len(promoted) != len(objects) {
+		return ErrConceptCandidateBundle830G3
+	}
+	for id, kind := range objects {
+		if _, ok := promoted[id]; !ok || kind == "field" && promoted[id] != "field_rule" {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	existingDefs := map[string]ConceptDefinition830G2{}
+	existingPages := map[string]ConceptFreeWikiPage830G2{}
+	for _, definition := range request.ExistingDefinitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		existingDefs[id] = definition
+	}
+	for _, page := range request.ExistingPages {
+		id, _ := conceptFreePageID830G2(page)
+		existingPages[id] = page
+	}
+	for _, definition := range output.Definitions {
+		id, _ := conceptDefinitionID830G2(definition)
+		disposition := promoted[id]
+		old, exists := existingDefs[id]
+		if disposition == "new_page" && exists {
+			return ErrConceptCandidateBundle830G3
+		}
+		if disposition == "sense" {
+			found := false
+			for _, prior := range request.ExistingDefinitions {
+				if prior.CanonicalKey == definition.CanonicalKey && prior.SenseKey != definition.SenseKey {
+					found = true
+				}
+			}
+			if exists || !found {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
+		if disposition == "update" && (!exists || batchConceptCanonicalEqual830G3(old, definition)) {
+			return ErrConceptCandidateBundle830G3
+		}
+		if disposition == "alias_link" {
+			oldHash, oldErr := conceptDefinitionHash830G3(old)
+			newHash, newErr := conceptDefinitionHash830G3(definition)
+			if !exists || oldErr != nil || newErr != nil || oldHash != newHash {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
+		if disposition != "new_page" && disposition != "sense" && disposition != "update" && disposition != "alias_link" {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	for _, page := range output.Pages {
+		id, _ := conceptFreePageID830G2(page)
+		disposition := promoted[id]
+		old, exists := existingPages[id]
+		if disposition == "new_page" && exists ||
+			disposition == "update" && (!exists || batchConceptCanonicalEqual830G3(old, page)) ||
+			disposition == "alias_link" && (!exists || !batchConceptCanonicalEqual830G3(old, page)) {
+			return ErrConceptCandidateBundle830G3
+		}
+		if disposition != "new_page" && disposition != "update" && disposition != "alias_link" {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	return nil
 }
 
 type DirectoryField830G3 struct {
@@ -3596,10 +4094,16 @@ func validatePageManifest830G3(
 		}
 	}
 	expected, err := projectBatchMembers830G3(request, output)
-	if err != nil || !conceptCanonicalEqual830G2(expected, manifest) {
+	if err != nil || !batchConceptCanonicalEqual830G3(expected, manifest) {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil
+}
+
+func batchConceptCanonicalEqual830G3(left, right any) bool {
+	a, errA := batchConceptCanonicalJSON830G3(left)
+	b, errB := batchConceptCanonicalJSON830G3(right)
+	return errA == nil && errB == nil && bytes.Equal(a, b)
 }
 
 func projectBatchMembers830G3(

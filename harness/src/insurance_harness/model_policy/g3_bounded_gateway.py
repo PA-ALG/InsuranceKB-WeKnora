@@ -520,6 +520,151 @@ def _read_secure_ledger_file(path: Path) -> bytes:
         os.close(descriptor)
 
 
+def _read_completed_g3_call_leaf(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    call: G3CallPlanV1,
+    admission_artifact_digest: Sha256Hex,
+    chain_dir: Path,
+    call_dir: Path,
+) -> tuple[G3CallTerminalReceiptV1, bytes, bytes, str]:
+    """Validate one completed call leaf while the caller holds the chain lock."""
+
+    required = {
+        name: call_dir / name
+        for name in (
+            "reservation.json",
+            "prepared.json",
+            "policy-receipt.json",
+            "request-body.private.json",
+            "started.json",
+            "response-body.private.json",
+            "semantic-content.private.json",
+            "call-terminal.json",
+        )
+    }
+    if not required["started.json"].exists():
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+    if not required["call-terminal.json"].exists():
+        raise G3LedgerDenied("OUTCOME_UNKNOWN")
+    reservation_bytes = _read_secure_ledger_file(required["reservation.json"])
+    prepared_bytes = _read_secure_ledger_file(required["prepared.json"])
+    policy_bytes = _read_secure_ledger_file(required["policy-receipt.json"])
+    started_bytes = _read_secure_ledger_file(required["started.json"])
+    terminal_bytes = _read_secure_ledger_file(required["call-terminal.json"])
+    reservation = G3CallReservationV1.model_validate_json(reservation_bytes)
+    prepared = G3PreparedReceiptV1.model_validate_json(prepared_bytes)
+    policy_receipt = PolicyReceipt.model_validate_json(policy_bytes)
+    started = G3StartedReceiptV1.model_validate_json(started_bytes)
+    terminal = G3CallTerminalReceiptV1.model_validate_json(terminal_bytes)
+    binding_bytes = _read_secure_ledger_file(
+        chain_dir / "stage-bindings" / f"{plan.stage}.json"
+    )
+    binding = G3StageLedgerBindingV1.model_validate_json(binding_bytes)
+    if (
+        reservation.chain_manifest_hash != plan.chain_manifest_hash
+        or reservation.parent_authorization_digest != plan.parent_authorization_digest
+        or reservation.stage != plan.stage
+        or reservation.admission_artifact_digest != admission_artifact_digest
+        or reservation.call_id != call.call_id
+        or reservation.ordinal != call.ordinal
+        or reservation.reservation_key_sha256 != call_dir.name
+        or reservation.receipt_sha256
+        != canonical_g3_hash("g3-call-reservation.830.v1", reservation, "receipt_sha256")
+        or binding.chain_manifest_hash != plan.chain_manifest_hash
+        or binding.parent_authorization_digest != plan.parent_authorization_digest
+        or binding.stage != plan.stage
+        or binding.admission_artifact_digest != admission_artifact_digest
+        or binding.receipt_sha256
+        != canonical_g3_hash("g3-stage-ledger-binding.830.v1", binding, "receipt_sha256")
+        or reservation.stage_binding_receipt_sha256 != binding.receipt_sha256
+        or prepared.call_reservation_receipt_sha256 != reservation.receipt_sha256
+        or prepared.admission_artifact_digest != admission_artifact_digest
+        or prepared.stage != plan.stage
+        or prepared.call_id != call.call_id
+        or prepared.ordinal != call.ordinal
+        or prepared.request_body_sha256 != call.request_body_sha256
+        or prepared.request_bytes != call.request_bytes
+        or prepared.input_token_estimate != call.input_token_estimate
+        or prepared.input_token_ceiling != call.input_token_ceiling
+        or prepared.output_token_ceiling != call.output_token_ceiling
+        or prepared.timeout_seconds != call.timeout_seconds
+        or prepared.receipt_sha256
+        != canonical_g3_hash("g3-prepared-receipt.830.v1", prepared, "receipt_sha256")
+        or started.prepared_receipt_sha256 != prepared.receipt_sha256
+        or not started.call_consumed
+        or started.receipt_sha256
+        != canonical_g3_hash("g3-started-receipt.830.v1", started, "receipt_sha256")
+        or policy_receipt.decision != "ALLOW"
+        or policy_receipt.identity_key != call.identity.identity_key
+        or policy_receipt.admission_hash != admission_artifact_digest
+        or hashlib.sha256(policy_bytes).hexdigest() != terminal.policy_receipt_sha256
+        or terminal.chain_id != plan.chain_id
+        or terminal.stage != plan.stage
+        or terminal.call_id != call.call_id
+        or terminal.ordinal != call.ordinal
+        or terminal.run_id != plan.run_id
+        or terminal.run_revision != plan.run_revision
+        or terminal.admission_artifact_digest != admission_artifact_digest
+        or terminal.call_reservation_receipt_sha256 != reservation.receipt_sha256
+        or terminal.identity != call.identity
+        or terminal.endpoint_origin != call.endpoint_origin
+        or terminal.endpoint_path != call.endpoint_path
+        or terminal.request_body_sha256 != call.request_body_sha256
+        or terminal.request_bytes != call.request_bytes
+        or terminal.started_receipt_sha256 != started.receipt_sha256
+        or terminal.receipt_sha256
+        != canonical_g3_hash(
+            "g3-call-terminal-receipt.830.v1", terminal, "receipt_sha256"
+        )
+    ):
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+    if terminal.status != "SUCCESS":
+        response_path = required["response-body.private.json"]
+        if terminal.status == "FAILED":
+            if not response_path.exists():
+                raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+            failed_response = _read_secure_ledger_file(response_path)
+            if (
+                terminal.response_meta is None
+                or terminal.response_body_sha256
+                != hashlib.sha256(failed_response).hexdigest()
+                or terminal.response_bytes != len(failed_response)
+                or terminal.semantic_content_sha256 is not None
+                or terminal.projection_sha256 is not None
+            ):
+                raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+            raise G3LedgerDenied("TERMINAL_FAILED")
+        if response_path.exists() or any(
+            value is not None
+            for value in (
+                terminal.response_meta,
+                terminal.response_body_sha256,
+                terminal.response_bytes,
+                terminal.semantic_content_sha256,
+                terminal.projection_sha256,
+                terminal.provider_usage,
+            )
+        ):
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        raise G3LedgerDenied("OUTCOME_UNKNOWN")
+    request_bytes = _read_secure_ledger_file(required["request-body.private.json"])
+    response_bytes = _read_secure_ledger_file(required["response-body.private.json"])
+    semantic_bytes = _read_secure_ledger_file(required["semantic-content.private.json"])
+    if (
+        hashlib.sha256(request_bytes).hexdigest() != call.request_body_sha256
+        or len(request_bytes) != call.request_bytes
+        or terminal.response_meta is None
+        or terminal.provider_usage is None
+        or terminal.response_body_sha256 != hashlib.sha256(response_bytes).hexdigest()
+        or terminal.response_bytes != len(response_bytes)
+        or terminal.semantic_content_sha256 != hashlib.sha256(semantic_bytes).hexdigest()
+        or terminal.projection_sha256 is None
+    ):
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+    return terminal, semantic_bytes, policy_bytes, str(call_dir)
+
+
 def _reopen_completed_g3_call(
     *,
     plan: G3BoundedAdmissionPlanV1,
@@ -565,142 +710,125 @@ def _reopen_completed_g3_call(
         fcntl.flock(lock_fd, fcntl.LOCK_EX)
         if (chain_dir / "stage-terminals" / f"{plan.stage}.json").exists():
             raise G3LedgerDenied("DUPLICATE_OR_LEDGER_CONFLICT")
-        required = {
-            name: call_dir / name
-            for name in (
-                "reservation.json",
-                "prepared.json",
-                "policy-receipt.json",
-                "request-body.private.json",
-                "started.json",
-                "response-body.private.json",
-                "semantic-content.private.json",
-                "call-terminal.json",
-            )
-        }
-        if not required["started.json"].exists():
-            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-        if not required["call-terminal.json"].exists():
-            raise G3LedgerDenied("OUTCOME_UNKNOWN")
-        reservation_bytes = _read_secure_ledger_file(required["reservation.json"])
-        prepared_bytes = _read_secure_ledger_file(required["prepared.json"])
-        policy_bytes = _read_secure_ledger_file(required["policy-receipt.json"])
-        started_bytes = _read_secure_ledger_file(required["started.json"])
-        terminal_bytes = _read_secure_ledger_file(required["call-terminal.json"])
-        reservation = G3CallReservationV1.model_validate_json(reservation_bytes)
-        prepared = G3PreparedReceiptV1.model_validate_json(prepared_bytes)
-        policy_receipt = PolicyReceipt.model_validate_json(policy_bytes)
-        started = G3StartedReceiptV1.model_validate_json(started_bytes)
-        terminal = G3CallTerminalReceiptV1.model_validate_json(terminal_bytes)
-        binding_bytes = _read_secure_ledger_file(
-            chain_dir / "stage-bindings" / f"{plan.stage}.json"
+        return _read_completed_g3_call_leaf(
+            plan=plan,
+            call=call,
+            admission_artifact_digest=admission_artifact_digest,
+            chain_dir=chain_dir,
+            call_dir=call_dir,
         )
-        binding = G3StageLedgerBindingV1.model_validate_json(binding_bytes)
-        if (
-            reservation.chain_manifest_hash != plan.chain_manifest_hash
-            or reservation.parent_authorization_digest != plan.parent_authorization_digest
-            or reservation.stage != plan.stage
-            or reservation.admission_artifact_digest != admission_artifact_digest
-            or reservation.call_id != call.call_id
-            or reservation.ordinal != call.ordinal
-            or reservation.reservation_key_sha256 != call_dir.name
-            or reservation.receipt_sha256
-            != canonical_g3_hash("g3-call-reservation.830.v1", reservation, "receipt_sha256")
-            or binding.chain_manifest_hash != plan.chain_manifest_hash
-            or binding.parent_authorization_digest != plan.parent_authorization_digest
-            or binding.stage != plan.stage
-            or binding.admission_artifact_digest != admission_artifact_digest
-            or binding.receipt_sha256
-            != canonical_g3_hash("g3-stage-ledger-binding.830.v1", binding, "receipt_sha256")
-            or reservation.stage_binding_receipt_sha256 != binding.receipt_sha256
-            or prepared.call_reservation_receipt_sha256 != reservation.receipt_sha256
-            or prepared.admission_artifact_digest != admission_artifact_digest
-            or prepared.stage != plan.stage
-            or prepared.call_id != call.call_id
-            or prepared.ordinal != call.ordinal
-            or prepared.request_body_sha256 != call.request_body_sha256
-            or prepared.request_bytes != call.request_bytes
-            or prepared.input_token_estimate != call.input_token_estimate
-            or prepared.input_token_ceiling != call.input_token_ceiling
-            or prepared.output_token_ceiling != call.output_token_ceiling
-            or prepared.timeout_seconds != call.timeout_seconds
-            or prepared.receipt_sha256
-            != canonical_g3_hash("g3-prepared-receipt.830.v1", prepared, "receipt_sha256")
-            or started.prepared_receipt_sha256 != prepared.receipt_sha256
-            or not started.call_consumed
-            or started.receipt_sha256
-            != canonical_g3_hash("g3-started-receipt.830.v1", started, "receipt_sha256")
-            or policy_receipt.decision != "ALLOW"
-            or policy_receipt.identity_key != call.identity.identity_key
-            or policy_receipt.admission_hash != admission_artifact_digest
-            or hashlib.sha256(policy_bytes).hexdigest() != terminal.policy_receipt_sha256
-            or terminal.chain_id != plan.chain_id
-            or terminal.stage != plan.stage
-            or terminal.call_id != call.call_id
-            or terminal.ordinal != call.ordinal
-            or terminal.run_id != plan.run_id
-            or terminal.run_revision != plan.run_revision
-            or terminal.admission_artifact_digest != admission_artifact_digest
-            or terminal.call_reservation_receipt_sha256 != reservation.receipt_sha256
-            or terminal.identity != call.identity
-            or terminal.endpoint_origin != call.endpoint_origin
-            or terminal.endpoint_path != call.endpoint_path
-            or terminal.request_body_sha256 != call.request_body_sha256
-            or terminal.request_bytes != call.request_bytes
-            or terminal.started_receipt_sha256 != started.receipt_sha256
-            or terminal.receipt_sha256
-            != canonical_g3_hash(
-                "g3-call-terminal-receipt.830.v1", terminal, "receipt_sha256"
-            )
-        ):
-            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-        if terminal.status != "SUCCESS":
-            response_path = required["response-body.private.json"]
-            if terminal.status == "FAILED":
-                if not response_path.exists():
-                    raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-                failed_response = _read_secure_ledger_file(response_path)
-                if (
-                    terminal.response_meta is None
-                    or terminal.response_body_sha256
-                    != hashlib.sha256(failed_response).hexdigest()
-                    or terminal.response_bytes != len(failed_response)
-                    or terminal.semantic_content_sha256 is not None
-                    or terminal.projection_sha256 is not None
-                ):
-                    raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-                raise G3LedgerDenied("TERMINAL_FAILED")
-            if response_path.exists() or any(
-                value is not None
-                for value in (
-                    terminal.response_meta,
-                    terminal.response_body_sha256,
-                    terminal.response_bytes,
-                    terminal.semantic_content_sha256,
-                    terminal.projection_sha256,
-                    terminal.provider_usage,
-                )
-            ):
-                raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-            raise G3LedgerDenied("OUTCOME_UNKNOWN")
-        request_bytes = _read_secure_ledger_file(required["request-body.private.json"])
-        response_bytes = _read_secure_ledger_file(required["response-body.private.json"])
-        semantic_bytes = _read_secure_ledger_file(required["semantic-content.private.json"])
-        if (
-            hashlib.sha256(request_bytes).hexdigest() != call.request_body_sha256
-            or len(request_bytes) != call.request_bytes
-            or terminal.response_meta is None
-            or terminal.provider_usage is None
-            or terminal.response_body_sha256 != hashlib.sha256(response_bytes).hexdigest()
-            or terminal.response_bytes != len(response_bytes)
-            or terminal.semantic_content_sha256 != hashlib.sha256(semantic_bytes).hexdigest()
-            or terminal.projection_sha256 is None
-        ):
-            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
-        return terminal, semantic_bytes, policy_bytes, str(call_dir)
     except G3LedgerDenied:
         raise
     except (ValueError, OSError):
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE") from None
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+
+
+def _read_successful_g3_stage_call(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    call: G3CallPlanV1,
+    admission_artifact_digest: Sha256Hex,
+) -> tuple[G3CallTerminalReceiptV1, bytes, bytes, str]:
+    """Read one successful call already sealed by its successful stage terminal."""
+
+    from insurance_harness.run_admission.profiles.g3_bounded_execution import (
+        validate_g3_bounded_plan,
+    )
+
+    try:
+        plan = validate_g3_bounded_plan(plan)
+    except ValueError:
+        raise G3LedgerDenied("INVALID_CALL_RESERVATION") from None
+    if call not in plan.request_manifest.calls or call.stage != plan.stage:
+        raise G3LedgerDenied("INVALID_CALL_RESERVATION")
+    root = Path(G3_LEDGER_ROOT)
+    chain_dir = root / "chains" / plan.chain_manifest_hash
+    call_dir = chain_dir / "calls" / _g3_reservation_key(
+        plan, call, admission_artifact_digest
+    )
+    if not call_dir.exists():
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+    try:
+        for directory in (root, chain_dir, chain_dir / "calls", call_dir):
+            info = directory.stat(follow_symlinks=False)
+            if (
+                directory.is_symlink()
+                or not stat.S_ISDIR(info.st_mode)
+                or stat.S_IMODE(info.st_mode) != 0o700
+                or info.st_uid != os.geteuid()
+            ):
+                raise G3LedgerDenied("LEDGER_UNAVAILABLE")
+        lock_fd = os.open(
+            chain_dir / ".chain.lock",
+            os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+        )
+    except OSError:
+        raise G3LedgerDenied("LEDGER_UNAVAILABLE") from None
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        stage_path = chain_dir / "stage-terminals" / f"{plan.stage}.json"
+        if not stage_path.exists():
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        stage_bytes = _read_secure_ledger_file(stage_path)
+        stage_terminal = G3StageTerminalReceiptV1.model_validate_json(stage_bytes)
+        if stage_bytes != canonical_json(
+            stage_terminal.model_dump(mode="json", round_trip=True)
+        ):
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        if (
+            stage_terminal.contract != "g3-stage-terminal-receipt.830.v1"
+            or stage_terminal.chain_id != plan.chain_id
+            or stage_terminal.stage != plan.stage
+            or stage_terminal.parent_authorization_digest
+            != plan.parent_authorization_digest
+            or stage_terminal.admission_artifact_digest != admission_artifact_digest
+            or stage_terminal.prior_terminal_receipt_sha256
+            != plan.prior_terminal_receipt_sha256
+            or stage_terminal.receipt_sha256
+            != canonical_g3_hash(
+                "g3-stage-terminal-receipt.830.v1",
+                stage_terminal,
+                "receipt_sha256",
+            )
+        ):
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        if stage_terminal.status == "FAILED":
+            raise G3LedgerDenied("TERMINAL_FAILED")
+        if stage_terminal.status == "OUTCOME_UNKNOWN":
+            raise G3LedgerDenied("OUTCOME_UNKNOWN")
+        if stage_terminal.stage_output_sha256 is None:
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        if not (call_dir / "started.json").exists() or not (
+            call_dir / "call-terminal.json"
+        ).exists():
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        result = _read_completed_g3_call_leaf(
+            plan=plan,
+            call=call,
+            admission_artifact_digest=admission_artifact_digest,
+            chain_dir=chain_dir,
+            call_dir=call_dir,
+        )
+        call_terminal = result[0]
+        if (
+            stage_terminal.stage_binding_receipt_sha256
+            != G3CallReservationV1.model_validate_json(
+                _read_secure_ledger_file(call_dir / "reservation.json")
+            ).stage_binding_receipt_sha256
+            or stage_terminal.calls_consumed != len(plan.request_manifest.calls)
+            or len(stage_terminal.call_terminal_sha256s)
+            != len(plan.request_manifest.calls)
+            or stage_terminal.call_terminal_sha256s[call.ordinal]
+            != call_terminal.receipt_sha256
+        ):
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        return result
+    except G3LedgerDenied:
+        raise
+    except (IndexError, ValueError, OSError):
         raise G3LedgerDenied("RESERVATION_INCOMPLETE") from None
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
