@@ -135,6 +135,11 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
                                 {
                                     "block_ref": f"opaque-{index}",
                                     "text": entry.blocks[0].text,
+                                    "evidence_locators": [{
+                                        "block_ref": f"opaque-{index}",
+                                        "start": 0, "end": len(entry.blocks[0].text),
+                                        "quote": entry.blocks[0].text,
+                                    }],
                                 }
                             ],
                         }
@@ -1132,10 +1137,9 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
                 {
                     "material_id": entry.material_id,
                     "blocks": [
-                        {
-                            "block_ref": block_refs[(block.revision_id, block.block_id)],
-                            "text": block.text,
-                        }
+                        bounded._c_prompt_block(
+                            block_refs[(block.revision_id, block.block_id)], block.text
+                        )
                         for block in entry.blocks
                     ],
                 }
@@ -2338,3 +2342,50 @@ raise SystemExit(runner.main(['run-stage', '--admission', admission]))
         with pytest.raises(RuntimeError, match="G3 stage result conflict"):
             await runner.run_stage(str(review_admission))
     assert unexpected_post.call_count == 0
+
+
+def test_private_native_dispatch_validates_the_full_graph_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = "g3-native-page-projections.830.v1"
+    raw = canonical_json({"contract": contract, "pages": []})
+    validate = G3NativePageProjectionSetV1.model_validate
+    complete_graph_passes = []
+
+    def counted(cls, value, *args, **kwargs):
+        complete_graph_passes.append(type(value))
+        return validate(value, *args, **kwargs)
+
+    monkeypatch.setattr(G3NativePageProjectionSetV1, "model_validate", classmethod(counted))
+    parsed = bounded._one_artifact({contract: [raw]}, contract, G3NativePageProjectionSetV1)
+    assert parsed.model_dump(mode="json") == {"contract": contract, "pages": []}
+    assert len(complete_graph_passes) == 1
+
+
+def test_public_native_serializer_still_revalidates_constructed_instances() -> None:
+    unsafe = G3NativePageProjectionSetV1.model_construct(
+        contract="g3-native-page-projections.830.v1", pages=("invalid-page",)
+    )
+    with pytest.raises(ValidationError):
+        bounded.canonical_native_page_projections(unsafe)
+
+
+@pytest.mark.parametrize("text", [
+    "first\r\nsecond\nactual-\uf99c-source",
+    "same\nsame\n" + "long-source-" * 100,
+    "\n \t\n",
+    "甲" * 255 + "\n" + "乙" * 257,
+])
+def test_c_prompt_locators_are_bounded_exact_and_preserve_source(text: str) -> None:
+    block = bounded._c_prompt_block("opaque-source", text)
+    assert block == bounded._c_prompt_block("opaque-source", text)
+    assert block["text"] == text
+    covered: set[int] = set()
+    for locator in block["evidence_locators"]:
+        assert set(locator) == {"block_ref", "start", "end", "quote"}
+        assert locator["block_ref"] == "opaque-source"
+        assert 0 <= locator["start"] < locator["end"] <= len(text)
+        assert locator["end"] - locator["start"] <= 256
+        assert locator["quote"] == text[locator["start"]:locator["end"]]
+        covered.update(range(locator["start"], locator["end"]))
+    assert all(index in covered for index, char in enumerate(text) if not char.isspace())

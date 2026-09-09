@@ -141,29 +141,34 @@ def _parse_g3_gemini_provider_response(
         ):
             raise ValueError
         raw_usage = value["usage"]
-        if type(raw_usage) is not dict or set(raw_usage) != {
-            "prompt_tokens",
-            "completion_tokens",
-            "total_tokens",
-            "completion_tokens_details",
-        }:
+        if type(raw_usage) is not dict:
             raise ValueError
-        details = raw_usage["completion_tokens_details"]
-        if type(details) is not dict or set(details) != {"reasoning_tokens"}:
+        usage_keys = set(raw_usage)
+        aggregate_keys = {"prompt_tokens", "completion_tokens", "total_tokens"}
+        detailed_keys = aggregate_keys | {"completion_tokens_details"}
+        if usage_keys not in (aggregate_keys, detailed_keys):
             raise ValueError
         prompt = raw_usage["prompt_tokens"]
         visible = raw_usage["completion_tokens"]
         total = raw_usage["total_tokens"]
-        reasoning = details["reasoning_tokens"]
-        if any(type(item) is not int or item < 0 for item in (prompt, visible, total, reasoning)):
+        if any(type(item) is not int or item < 0 for item in (prompt, visible, total)):
             raise ValueError
-        if total != prompt + visible + reasoning:
+        completion = visible
+        if usage_keys == detailed_keys:
+            details = raw_usage["completion_tokens_details"]
+            if type(details) is not dict or set(details) != {"reasoning_tokens"}:
+                raise ValueError
+            reasoning = details["reasoning_tokens"]
+            if type(reasoning) is not int or reasoning < 0:
+                raise ValueError
+            completion += reasoning
+        if total != prompt + completion:
             raise ValueError
         semantic_value = _strict_json(content.encode(), label="Gemini message content")
         semantic_bytes = canonical_json(semantic_value)
         usage = G3ProviderUsageV1(
             prompt_tokens=prompt,
-            completion_tokens=visible + reasoning,
+            completion_tokens=completion,
             total_tokens=total,
             usage_verified=True,
         )

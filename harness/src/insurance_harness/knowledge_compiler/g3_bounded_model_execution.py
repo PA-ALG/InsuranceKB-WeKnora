@@ -430,7 +430,7 @@ def _parse_native_page_projection_bytes(raw: bytes) -> G3NativePageProjectionSet
     projection = G3NativePageProjectionSetV1.model_validate(
         _decode_unique_canonical_json_bytes(raw)
     )
-    if canonical_native_page_projections(projection) != raw:
+    if canonical_json(projection.model_dump(mode="json", round_trip=True)) != raw:
         raise ValueError("native projection typed wire mismatch")
     return projection
 
@@ -1000,8 +1000,48 @@ def _one_artifact[ModelT: BaseModel](
         contract == "g3-native-page-projections.830.v1"
         and model is G3NativePageProjectionSetV1
     ):
-        return model.model_validate(_parse_native_page_projection_bytes(values[0]))
+        return cast(ModelT, _parse_native_page_projection_bytes(values[0]))
     return model.model_validate(_unique_json_bytes(values[0]))
+
+
+
+def _c_prompt_block(block_ref: str, text: str) -> dict[str, object]:
+    """Offer exact bounded source spans; the model never needs to count offsets."""
+
+    locators: list[dict[str, object]] = []
+
+    def emit(start: int, end: int) -> None:
+        quote = text[start:end]
+        if quote.strip():
+            locators.append({"block_ref": block_ref, "start": start, "end": end, "quote": quote})
+
+    offset = 0
+    pending_start: int | None = None
+    pending_end = 0
+    for line in text.splitlines(keepends=True):
+        end = offset + len(line)
+        if len(line) > 256:
+            if pending_start is not None:
+                emit(pending_start, pending_end)
+                pending_start = None
+            start = offset
+            while start < end:
+                piece_end = min(start + 256, end)
+                emit(start, piece_end)
+                if piece_end == end:
+                    break
+                start = piece_end - 64
+        else:
+            if pending_start is not None and end - pending_start > 256:
+                emit(pending_start, pending_end)
+                pending_start = None
+            if pending_start is None:
+                pending_start = offset
+            pending_end = end
+        offset = end
+    if pending_start is not None:
+        emit(pending_start, pending_end)
+    return {"block_ref": block_ref, "text": text, "evidence_locators": locators}
 
 
 def _render_g3_stage_contexts(
@@ -1108,10 +1148,10 @@ def _render_g3_stage_contexts(
             for material_id in sorted(call.material_ids):
                 if material_id not in entries:
                     raise ValueError("call selects a foreign material")
-                blocks: list[dict[str, str]] = []
+                blocks: list[dict[str, object]] = []
                 for page in sorted(pages_by_material[material_id], key=lambda item: item.block_ref):
                     source = blocks_by_material[material_id][(page.revision_id, page.block_id)]
-                    blocks.append({"block_ref": page.block_ref, "text": source.text})
+                    blocks.append(_c_prompt_block(page.block_ref, source.text))
                 material_rows.append({"material_id": material_id, "blocks": blocks})
             context_by_call[call.call_id] = canonical_json(
                 {

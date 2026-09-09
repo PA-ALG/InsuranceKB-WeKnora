@@ -72,6 +72,7 @@ from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (  # noq
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (  # noqa: E402
     G3NativePageProjectionSetV1,
     G3SemanticResponseV1,
+    _c_prompt_block,
     _render_g3_stage_contexts,
     canonical_native_page_projections,
     g3_current_schema_specs,
@@ -1147,10 +1148,9 @@ def _c_contexts(corpus, native, existing, policy, catalog, calls):
                 {
                     "material_id": mid,
                     "blocks": [
-                        {
-                            "block_ref": p.block_ref,
-                            "text": blocks[mid][(p.revision_id, p.block_id)].text,
-                        }
+                        _c_prompt_block(
+                            p.block_ref, blocks[mid][(p.revision_id, p.block_id)].text
+                        )
                         for p in sorted(pages[mid], key=lambda x: x.block_ref)
                     ],
                 }
