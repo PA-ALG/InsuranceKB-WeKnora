@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from insurance_harness.run_admission.models import (
     canonical_model_identities_hash,
     canonical_model_plan_hash,
@@ -45,6 +47,33 @@ def _is_supported_g3_route(plan: G3BoundedAdmissionPlanV1) -> bool:
         G3_STAGE_PROFILES[plan.stage][2],
         True,
         ("http://8.148.158.241:3131", "/v1/chat/completions"),
+    )
+
+
+def _is_windowed_gemini_d(plan: G3BoundedAdmissionPlanV1) -> bool:
+    identity = plan.approved_identities[0]
+    expected_role = {
+        "D_COMPILE": "extract",
+        "D_REVIEW": "verify",
+    }.get(plan.stage)
+    exact_identity = expected_role is not None and (
+        identity.provider,
+        identity.family,
+        identity.deployment_id,
+        identity.policy_version,
+        identity.role,
+    ) == (
+        "g3-user-gateway",
+        "gemini",
+        "gemini-3.7-flash-medium",
+        "g3-user-gemini-gateway-v1",
+        expected_role,
+    )
+    return exact_identity and all(
+        call.window_id is not None
+        and re.fullmatch(r"window_[0-9a-f]{64}", call.window_id) is not None
+        and bool(call.material_ids)
+        for call in plan.request_manifest.calls
     )
 
 
@@ -240,8 +269,16 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
                 "receipt_sha256",
             ):
                 raise ValueError("derived stage receipt hash mismatch")
-        if current.stage != "C_CLASSIFY" and len(calls) != 1:
+        windowed_gemini_d = _is_windowed_gemini_d(current)
+        if current.stage != "C_CLASSIFY" and not windowed_gemini_d and len(calls) != 1:
             raise ValueError("D stages require exactly one call")
+        if windowed_gemini_d and any(
+            call.window_id is None
+            or re.fullmatch(r"window_[0-9a-f]{64}", call.window_id) is None
+            or not call.material_ids
+            for call in calls
+        ):
+            raise ValueError("Gemini D windowed call shape mismatch")
         if current.stage_caps.call_limit != len(calls):
             raise ValueError("stage call cap mismatch")
         chain_rows = tuple(
@@ -250,28 +287,37 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
         if len(chain_rows) != 1:
             raise ValueError("stage is absent from chain manifest")
         chain_row = chain_rows[0]
-        if (
+        actual_input = sum(call.input_token_ceiling for call in calls)
+        actual_output = sum(call.output_token_ceiling for call in calls)
+        actual_time = sum(call.timeout_seconds for call in calls)
+        chain_identity = (
             chain_row.purpose,
             chain_row.run_schema_version,
             chain_row.role,
+        )
+        if chain_identity != (
+            current.purpose,
+            current.run_schema_version,
+            role,
+        ):
+            raise ValueError("chain stage projection mismatch")
+        actual_caps = (len(calls), actual_input, actual_output, actual_time)
+        chain_caps = (
             chain_row.max_calls,
             chain_row.input_token_ceiling,
             chain_row.output_token_ceiling,
             chain_row.time_limit_seconds,
-        ) != (
-            current.purpose,
-            current.run_schema_version,
-            role,
-            len(calls),
-            sum(call.input_token_ceiling for call in calls),
-            sum(call.output_token_ceiling for call in calls),
-            sum(call.timeout_seconds for call in calls),
+        )
+        if (
+            any(actual > capacity for actual, capacity in zip(actual_caps, chain_caps, strict=True))
+            if windowed_gemini_d
+            else actual_caps != chain_caps
         ):
             raise ValueError("chain stage projection mismatch")
         if (
-            current.stage_caps.input_token_ceiling != chain_row.input_token_ceiling
-            or current.stage_caps.output_token_ceiling != chain_row.output_token_ceiling
-            or current.stage_caps.time_limit_seconds != chain_row.time_limit_seconds
+            current.stage_caps.input_token_ceiling != actual_input
+            or current.stage_caps.output_token_ceiling != actual_output
+            or current.stage_caps.time_limit_seconds != actual_time
             or current.rights_lock.parent_authorization_digest
             != current.parent_authorization_digest
             or current.rights_lock.stage != current.stage
@@ -279,9 +325,9 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
             or current.rights_lock.window_ids
             != tuple(sorted(call.window_id for call in calls if call.window_id is not None))
             or current.rights_lock.call_limit != len(calls)
-            or current.rights_lock.input_token_ceiling != chain_row.input_token_ceiling
-            or current.rights_lock.output_token_ceiling != chain_row.output_token_ceiling
-            or current.rights_lock.time_limit_seconds != chain_row.time_limit_seconds
+            or current.rights_lock.input_token_ceiling != actual_input
+            or current.rights_lock.output_token_ceiling != actual_output
+            or current.rights_lock.time_limit_seconds != actual_time
             or current.rights_lock.purpose != current.purpose
             or current.rights_lock.run_schema_version != current.run_schema_version
             or current.rights_lock.role != role
@@ -295,6 +341,16 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
             != current.prior_terminal_receipt_sha256
         ):
             raise ValueError("stage rights/provenance projection mismatch")
+        if windowed_gemini_d and current.rights_lock.material_or_derivation_ids != tuple(
+            sorted(
+                {
+                    material_id
+                    for call in calls
+                    for material_id in call.material_ids
+                }
+            )
+        ):
+            raise ValueError("Gemini D material rights mismatch")
         if (
             current.routing_lock.stage != current.stage
             or current.routing_lock.purpose != current.purpose

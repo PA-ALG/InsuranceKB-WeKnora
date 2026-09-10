@@ -48,6 +48,7 @@ EVIDENCE = WORKTREE / "docs/insurance-kb/evidence/830-g3"
 sys.path.insert(0, str(WORKTREE / "harness/src"))
 
 from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime  # noqa: E402
+from insurance_harness.knowledge_compiler import batch_concept_compile_830_g3 as compile_g3  # noqa: E402
 from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (  # noqa: E402
     BatchConceptCompileRequest830G3V1,
     build_batch_compile_request,
@@ -65,6 +66,7 @@ from insurance_harness.knowledge_compiler.batch_entity_resolution_830_g3 import 
 )
 from insurance_harness.knowledge_compiler.concept_compile_830_g2 import (  # noqa: E402
     CandidateBundle,
+    CompileRequest,
     CompileResult,
 )
 from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (  # noqa: E402
@@ -220,6 +222,127 @@ class CallOption(_Closed):
     timeout_seconds: Annotated[StrictInt, Field(gt=0)]
 
 
+_GEMINI_D_CAPACITY_MATERIALS = 15
+_GEMINI_D_POLICY = runtime.gemini_d_extraction_policy()
+_GEMINI_D_SLOTS_PER_MATERIAL = 1 + (
+    _GEMINI_D_POLICY["max_profile_fields"] + _GEMINI_D_POLICY["max_fields_per_call"] - 1
+) // _GEMINI_D_POLICY["max_fields_per_call"]
+_GEMINI_D_ENTITIES_PER_MATERIAL = _GEMINI_D_POLICY["max_entities_per_material"]
+
+
+def _gemini_d_capacity_slot_rows(material_ids: tuple[str, ...]) -> tuple[dict[str, Any], ...]:
+    return _gemini_d_stage_capacity_slot_rows(material_ids, "D_COMPILE")
+
+
+def _gemini_d_review_capacity_slot_rows(material_ids: tuple[str, ...]) -> tuple[dict[str, Any], ...]:
+    return _gemini_d_stage_capacity_slot_rows(material_ids, "D_REVIEW")
+
+
+def _gemini_d_stage_capacity_slot_rows(material_ids, stage):
+    if stage not in ("D_COMPILE", "D_REVIEW"):
+        raise ValueError("Gemini D capacity stage invalid")
+    if (
+        len(material_ids) != _GEMINI_D_CAPACITY_MATERIALS
+        or material_ids != tuple(sorted(set(material_ids)))
+    ):
+        raise ValueError("Gemini D capacity requires exact 15-material set")
+    rows = []
+    for material_id in material_ids:
+        for entity_slot in range(_GEMINI_D_ENTITIES_PER_MATERIAL):
+            slots = _GEMINI_D_SLOTS_PER_MATERIAL if stage == "D_COMPILE" else 1
+            for slot_index in range(slots):
+                ordinal = len(rows)
+                kind = ("ENTITY_SYNTHESIS" if slot_index == 0 else "FIELDS") if stage == "D_COMPILE" else "ENTITY_REVIEW"
+                label = "d-compile" if stage == "D_COMPILE" else "d-review"
+                slot = {
+                    "contract": f"g3-{label}-capacity-slot.830.v1",
+                    "material_id": material_id,
+                    "entity_slot": entity_slot,
+                    "kind": kind,
+                    "field_window_index": None if slot_index == 0 else slot_index - 1,
+                }
+                rows.append({
+                    **slot,
+                    "ordinal": ordinal,
+                    "call_id": f"{label}-capacity-{ordinal:03d}",
+                    "window_id": "window_" + _sha(canonical_json(slot)),
+                })
+    return tuple(rows)
+
+
+def _gemini_d_capacity_material_ids(calls: tuple[CallOption, ...]) -> tuple[str, ...]:
+    return tuple(sorted(material_id for row in calls if row.stage == "C_CLASSIFY" for material_id in row.material_ids))
+
+
+def _gemini_d_capacity_options(options: "ExecutionOptions", stage="D_COMPILE") -> tuple[CallOption, ...]:
+    material_ids = _gemini_d_capacity_material_ids(options.calls)
+    specs = _gemini_d_stage_capacity_slot_rows(material_ids, stage)
+    rows = tuple(row for row in options.calls if row.stage == stage)
+    if tuple(
+        (row.call_id, row.ordinal, row.window_id, row.material_ids)
+        for row in rows
+    ) != tuple(
+        (spec["call_id"], spec["ordinal"], spec["window_id"], (spec["material_id"],))
+        for spec in specs
+    ):
+        raise ValueError("Gemini D capacity grid drift")
+    return rows
+
+
+def _uses_gemini_d_capacity(options: "ExecutionOptions", stage="D_COMPILE") -> bool:
+    rows = tuple(row for row in options.calls if row.stage == stage)
+    slots = _GEMINI_D_SLOTS_PER_MATERIAL if stage == "D_COMPILE" else 1
+    return len(rows) == _GEMINI_D_CAPACITY_MATERIALS * _GEMINI_D_ENTITIES_PER_MATERIAL * slots
+
+
+def _active_gemini_d_compile_options(
+    options: "ExecutionOptions", request: BatchConceptCompileRequest830G3V1
+) -> tuple[CallOption, ...]:
+    return _active_gemini_d_options(options, "D_COMPILE", runtime.derive_gemini_d_compile_windows(request))
+
+
+def _active_gemini_d_review_options(options, request, output) -> tuple[CallOption, ...]:
+    return _active_gemini_d_options(options, "D_REVIEW", runtime.derive_gemini_d_review_windows(request, output))
+
+
+def _active_gemini_d_options(options, stage, windows) -> tuple[CallOption, ...]:
+    capacity = _gemini_d_capacity_options(options, stage)
+    material_ids = _gemini_d_capacity_material_ids(options.calls)
+    specs = _gemini_d_stage_capacity_slot_rows(material_ids, stage)
+    by_slot = {
+        (spec["material_id"], spec["entity_slot"], spec["kind"], spec["field_window_index"]): capacity[index]
+        for index, spec in enumerate(specs)
+    }
+    field_indexes: dict[tuple[str, int], int] = {}
+    active = []
+    for ordinal, window in enumerate(windows):
+        material_id = window["primary_material_id"]
+        bound_materials = tuple(window["material_ids"])
+        entity_slot = window["entity_slot"]
+        if (not bound_materials or bound_materials != tuple(sorted(set(bound_materials)))
+                or material_id != bound_materials[0] or not set(bound_materials) <= set(material_ids)):
+            raise ValueError("Gemini D active material binding invalid")
+        kind = str(window["kind"])
+        field_index = None
+        if kind == "FIELDS":
+            key = (material_id, entity_slot)
+            field_index = field_indexes.get(key, 0)
+            field_indexes[key] = field_index + 1
+        slot = by_slot.get((material_id, entity_slot, kind, field_index))
+        if slot is None:
+            raise ValueError("Gemini D active window exceeds signed capacity grid")
+        active.append(slot.model_copy(update={
+            "ordinal": ordinal,
+            "window_id": str(window["window_id"]),
+            "material_ids": bound_materials,
+        }))
+    if (not active or len(active) > len(capacity)
+            or len({row.call_id for row in active}) != len(active)
+            or len({row.window_id for row in active}) != len(active)):
+        raise ValueError("Gemini D active window count invalid")
+    return tuple(active)
+
+
 class Estimator(_Closed):
     version: Literal["g3-utf8-body-upper-bound.830.v1"]
     mode: Literal["UTF8_BODY_BYTES_PLUS_FRAMING_TOKENS", "PUBLISHED_MAX_RESERVATION"]
@@ -330,6 +453,21 @@ class ExecutionOptions(_Closed):
                     for x in rows
                 ) or len(mids) != len(set(mids)):
                     raise ValueError("C windows are not canonical")
+            elif stage in ("D_COMPILE", "D_REVIEW") and identity_key[:2] == (
+                "g3-user-gateway", "gemini"
+            ):
+                if len(rows) == 1:
+                    if (
+                        rows[0].ordinal != 0
+                        or rows[0].window_id is not None
+                        or rows[0].material_ids
+                    ):
+                        raise ValueError("legacy Gemini D call shape invalid")
+                else:
+                    _gemini_d_capacity_options(self, stage)
+                if len({x.timeout_seconds for x in rows}) != 1:
+                    raise ValueError("stage timeout mismatch")
+                continue
             elif (
                 len(rows) != 1
                 or rows[0].ordinal != 0
@@ -964,7 +1102,7 @@ def _validate_source_acquisition(
             or inventory["page_count"] != receipt["page_count"]
             or source_http["knowledge_id"] != receipt["knowledge_id"]
             or source_http["parse_attempt"] != receipt["parse_attempt"]
-            or revision["parser_identity_sha256"] != entry.parser_identity_sha256
+            or native_facts["parser_identity_sha256"] != entry.parser_identity_sha256
             or revision["manifest_algorithm"] != receipt["manifest_algorithm"]
             or revision["manifest_digest"] != receipt["manifest_digest"]
             or revision["chunk_count"] != receipt["chunk_count"]
@@ -976,6 +1114,10 @@ def _validate_source_acquisition(
             or context["observed_at"] != observed_at
             or {key: context[key] for key in expected_scope} != expected_scope
             or context["authenticated_user_id"] != entry.provenance.declared_by
+            or any(
+                block.parser_identity != native_facts["parser_identity_sha256"]
+                for block in entry.blocks
+            )
         ):
             raise ValueError("source acquisition facts do not match corpus")
         _validate_chunk_page_receipts(
@@ -1183,10 +1325,17 @@ def _stage_fixed(
     context_raws: dict[str, bytes],
     typed: list[tuple[str, str, bytes]],
     preview_raw: bytes | None = None,
+    configured: tuple[CallOption, ...] | None = None,
 ):
     purpose, schema_version, role = G3_STAGE_PROFILES[stage]
     identity = next(x.identity for x in options.identities if x.stage == stage)
-    configured = [x for x in options.calls if x.stage == stage]
+    configured = (
+        tuple(x for x in options.calls if x.stage == stage)
+        if configured is None
+        else configured
+    )
+    if not configured or any(row.stage != stage for row in configured):
+        raise ValueError("stage configured call set invalid")
     schema = _schema(stage, identity)
     template, template_raw = _template(stage, identity)
     routing = _hashed(
@@ -1468,6 +1617,13 @@ def _plan(options, chain, parent, parent_digest, seed, stage, parts, prior=None)
     else:
         checks = ()
         subjects = ("c-to-d-compile",) if stage == "D_COMPILE" else ("d-compile-to-review",)
+        if (
+            runtime._is_g3_gemini_d_identity(stage, parts["identity"])
+            and _uses_gemini_d_capacity(options, stage)
+        ):
+            subjects = tuple(sorted({
+                material_id for call in calls for material_id in call.material_ids
+            }))
         derivation_ids = subjects
         categories = (
             tuple(sorted(("D_AUTOMATIC_CHILD_SOURCE_CLOSURE", "D_CATALOG_PROFILE_BASE")))
@@ -1823,10 +1979,10 @@ def preview_c(builder_dir: Path, execution_options: Path, output_dir: Path):
     drows = []
     for stage in ("D_COMPILE", "D_REVIEW"):
         run = next(x for x in options.stage_runs if x.stage == stage)
-        call = next(x for x in options.calls if x.stage == stage)
+        stage_calls = tuple(x for x in options.calls if x.stage == stage)
+        call = stage_calls[0]
         identity = next(x.identity for x in options.identities if x.stage == stage)
-        drows.append(
-            {
+        row = {
                 "stage": stage,
                 "run_id": run.run_id,
                 "run_revision": run.run_revision,
@@ -1835,8 +1991,18 @@ def preview_c(builder_dir: Path, execution_options: Path, output_dir: Path):
                 "input_token_ceiling": call.input_token_ceiling,
                 "output_token_ceiling": call.output_token_ceiling,
                 "timeout_seconds": call.timeout_seconds,
+        }
+        if _uses_gemini_d_capacity(options, stage):
+            row["signed_capacity"] = {
+                "call_count": len(stage_calls),
+                "call_ids": tuple(item.call_id for item in stage_calls),
+                "window_ids": tuple(item.window_id for item in stage_calls),
+                "material_ids": tuple(item.material_ids[0] for item in stage_calls),
+                "input_token_ceiling": sum(item.input_token_ceiling for item in stage_calls),
+                "output_token_ceiling": sum(item.output_token_ceiling for item in stage_calls),
+                "time_limit_seconds": sum(item.timeout_seconds for item in stage_calls),
             }
-        )
+        drows.append(row)
     preview = canonical_json(
         {
             "contract": "g3-model-processing-preview.830.v1",
@@ -2086,7 +2252,26 @@ def _parts_from_artifacts(options, parent, stage, manifest, artifact_raw):
     schema = _schema(stage, identity)
     template, template_raw = _template(stage, identity)
     purpose, schema_version, role = G3_STAGE_PROFILES[stage]
-    configured = [x for x in options.calls if x.stage == stage]
+    configured: tuple[CallOption, ...] = tuple(
+        x for x in options.calls if x.stage == stage
+    )
+    if (
+        stage in ("D_COMPILE", "D_REVIEW")
+        and runtime._is_g3_gemini_d_identity(stage, identity)
+        and _uses_gemini_d_capacity(options, stage)
+    ):
+        request_values = by_contract.get("batch-concept-compile-request.830.g3.v1", [])
+        if len(request_values) != 1:
+            raise ValueError("review D compile request set drift")
+        request = BatchConceptCompileRequest830G3V1.model_validate_json(request_values[0])
+        if stage == "D_COMPILE":
+            configured = _active_gemini_d_compile_options(options, request)
+        else:
+            final_values = by_contract.get("g3-d-final-compile-result.830.v1", [])
+            if len(final_values) != 1:
+                raise ValueError("review D final compile result set drift")
+            final = CompileResult.model_validate_json(final_values[0])
+            configured = _active_gemini_d_review_options(options, request, final.output)
     if tuple(
         (
             x.call_id,
@@ -2459,6 +2644,91 @@ def _artifact_from_plan(plan, contract):
     return evaluator._read_g3_artifact(refs[0])
 
 
+def _d_active_base_request(*, published, catalog, corpus, proposals, resolution, selected):
+    """Project the frozen, actually published G2 output for D only."""
+    publication_sha = "b6326b2cdd269b32ca874e20510ab193a9f4e80bcbdbcf216284e99042f35038"
+    closeout_sha = "4c887d7646ed991c8cb5c5d173f32c5cb0fe0aaaf5789973ebf7cb3811c31bdb"
+    directory = G2_PATH.parent
+    publication = _strict_json(_regular(
+        directory / "b-source-publication-execution.json", expected_sha=publication_sha,
+    ), "G2 publication")
+    closeout = _strict_json(_regular(
+        directory / "g2-closeout.json", expected_sha=closeout_sha,
+    ), "G2 closeout")
+    head = {
+        "release_id": "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b",
+        "activation_epoch": 5,
+    }
+    candidate = "bdc806e2084afde6651e85c83a88e3d5395487398bea9b4b2c509473a663d684"
+    output = published.compile_result.output
+    if (
+        not isinstance(publication, dict) or not isinstance(closeout, dict)
+        or publication.get("contract") != "830-g2-b-source-publication-execution.v1"
+        or publication.get("status") != "PASS"
+        or publication.get("authority") != "SERVER_VERIFIED_HUMAN_AND_PUBLISH"
+        or publication.get("candidate_hash") != candidate
+        or published.candidate_hash != candidate
+        or any(publication.get(key) != value for key, value in head.items())
+        or publication.get("final_head") != head
+        or publication.get("expected_head") != {
+            "release_id": published.request.base_release_id,
+            "activation_epoch": published.request.base_activation_epoch,
+        }
+        or closeout.get("contract") != "830-g2-closeout.v1"
+        or closeout.get("status") != "PASS"
+        or closeout.get("active") != {**head, "candidate_hash": candidate}
+        or closeout.get("artifacts_sha256", {}).get("b-source-publication-execution.json")
+        != publication_sha
+        or closeout.get("acceptance", {}).get("field_pages") != len(output.fields)
+        or closeout.get("acceptance", {}).get("products") != len(published.request.entity_versions)
+        or (len(output.definitions), len(output.fields), len(output.pages),
+            len(published.request.entity_versions)) != (1, 134, 1, 2)
+    ):
+        raise ValueError("D published base authority mismatch")
+    bindings = compile_g3._build_entity_bindings(
+        catalog=catalog, proposals=proposals, resolution=resolution,
+        selected_decision_refs=selected,
+    )
+
+    def insert(index, block):
+        key = (block.revision_id, block.block_id)
+        if key in index and index[key] != block:
+            raise ValueError("D published base source identity conflict")
+        index[key] = block
+
+    original = {}
+    for block in published.request.sources:
+        insert(original, block)
+    required = {
+        (evidence.revision_id, evidence.block_id)
+        for member in (*output.definitions, *output.fields, *output.pages)
+        for evidence in member.evidence
+    }
+    if not required <= original.keys():
+        raise ValueError("D published evidence source missing")
+    sources = {key: original[key] for key in required}
+    material_ids = {m for binding in bindings for m in binding.source_material_ids}
+    entries = {entry.material_id: entry for entry in corpus.entries}
+    if len(entries) != len(corpus.entries) or not material_ids <= entries.keys():
+        raise ValueError("D selected material missing or duplicate")
+    for material_id in sorted(material_ids):
+        for block in entries[material_id].blocks:
+            insert(sources, block)
+    payload = published.request.model_dump(mode="json")
+    payload.update(
+        base_release_id=head["release_id"], base_activation_epoch=head["activation_epoch"],
+        existing_definitions=output.definitions, existing_fields=output.fields,
+        existing_pages=output.pages, existing_entity_versions=published.request.entity_versions,
+        entity_versions={row.entity_id: row.entity_version for row in bindings},
+        required_fields={row.entity_id: row.required_fields for row in bindings},
+        sources=tuple(sources[key] for key in sorted(sources)),
+        schema_identity=f"catalog:{catalog.catalog_id}@{catalog.catalog_version}#{catalog.catalog_sha256}",
+        profile_identity=compile_g3._profile_set_identity(bindings),
+        policy_identity="g3-resolution-policy:" + resolution.policy_sha256,
+    )
+    return CompileRequest.model_validate(payload)
+
+
 def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir: Path):
     if stage not in ("D_COMPILE", "D_REVIEW"):
         raise ValueError("invalid D stage")
@@ -2485,6 +2755,7 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
         envelope, parent_raw, chain, stage
     )
     pd = _sha(parent_raw)
+    identity = next(x.identity for x in options.identities if x.stage == stage)
     if stage == "D_COMPILE":
         cplan = prior_approval.payload
         corpus = BatchCorpusV1.model_validate_json(
@@ -2510,9 +2781,12 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
         )
         if not selected:
             raise ValueError("no automatic children for D compile")
-        g2, _, catalog_raw, profile_raw = _frozen_sources()
+        g2, catalog, catalog_raw, profile_raw = _frozen_sources()
         request = build_batch_compile_request(
-            base_request=g2.request,
+            base_request=_d_active_base_request(
+                published=g2, catalog=catalog, corpus=corpus, proposals=proposal,
+                resolution=resolution, selected=selected,
+            ),
             catalog_json=catalog_raw,
             profile_confirmation_json=profile_raw,
             corpus=corpus,
@@ -2530,12 +2804,30 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
                 request_raw,
             )
         ]
-        call = next(x for x in options.calls if x.stage == stage)
-        contexts = {
-            call.call_id: batch_json_bytes_830_g3(
-                runtime.render_g3_d_prompt_context(stage, call.identity, request)
-            )
-        }
+        if (
+            runtime._is_g3_gemini_d_identity(stage, identity)
+            and _uses_gemini_d_capacity(options)
+        ):
+            configured = _active_gemini_d_compile_options(options, request)
+            windows = runtime.derive_gemini_d_compile_windows(request)
+            if len(configured) != len(windows):
+                raise ValueError("Gemini D active call/window count mismatch")
+            contexts = {
+                call.call_id: batch_json_bytes_830_g3(
+                    runtime.render_gemini_d_compile_window_context(
+                        identity, request, window
+                    )
+                )
+                for call, window in zip(configured, windows, strict=True)
+            }
+        else:
+            configured = tuple(x for x in options.calls if x.stage == stage)
+            call = next(iter(configured))
+            contexts = {
+                call.call_id: batch_json_bytes_830_g3(
+                    runtime.render_g3_d_prompt_context(stage, identity, request)
+                )
+            }
     else:
         dplan = prior_approval.payload
         request_raw = _artifact_from_plan(dplan, "batch-concept-compile-request.830.g3.v1")
@@ -2551,15 +2843,38 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
             ("g3-d-model-compile-result.830.v1", "model-compile-result.json", model_raw),
             ("g3-d-final-compile-result.830.v1", "final-compile-result.json", final_raw),
         ]
-        call = next(x for x in options.calls if x.stage == stage)
-        contexts = {
-            call.call_id: batch_json_bytes_830_g3(
-                runtime.render_g3_d_prompt_context(
-                    stage, call.identity, request, final.output
+        if (
+            runtime._is_g3_gemini_d_identity(stage, identity)
+            and _uses_gemini_d_capacity(options, stage)
+        ):
+            configured = _active_gemini_d_review_options(options, request, final.output)
+            windows = runtime.derive_gemini_d_review_windows(request, final.output)
+            contexts = {
+                call.call_id: batch_json_bytes_830_g3(
+                    runtime.render_gemini_d_review_window_context(
+                        identity, request, final.output, window
+                    )
                 )
-            )
-        }
-    parts = _stage_fixed(options, stage, chain, context_raws=contexts, typed=typed)
+                for call, window in zip(configured, windows, strict=True)
+            }
+        else:
+            configured = tuple(x for x in options.calls if x.stage == stage)
+            call = next(iter(configured))
+            contexts = {
+                call.call_id: batch_json_bytes_830_g3(
+                    runtime.render_g3_d_prompt_context(
+                        stage, identity, request, final.output
+                    )
+                )
+            }
+    parts = _stage_fixed(
+        options,
+        stage,
+        chain,
+        context_raws=contexts,
+        typed=typed,
+        configured=configured,
+    )
     seed = prior_approval.payload.protocol_seed_lock
     plan = _plan(options, chain, parent, pd, seed, stage, parts, prior=terminal.receipt_sha256)
     by_contract = {}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, Self
@@ -324,8 +325,33 @@ class G3CallPlanV1(_G3Model):
         if self.stage == "C_CLASSIFY":
             if self.window_id is None or not self.material_ids:
                 raise ValueError("C call requires window and materials")
-        elif self.window_id is not None or self.material_ids:
-            raise ValueError("D call has no window or materials")
+        else:
+            expected_role = {
+                "D_COMPILE": "extract",
+                "D_REVIEW": "verify",
+            }[self.stage]
+            exact_windowed_identity = (
+                self.identity.provider,
+                self.identity.family,
+                self.identity.deployment_id,
+                self.identity.policy_version,
+                self.identity.role,
+            ) == (
+                "g3-user-gateway",
+                "gemini",
+                "gemini-3.7-flash-medium",
+                "g3-user-gemini-gateway-v1",
+                expected_role,
+            )
+            old_single_call_shape = self.window_id is None and not self.material_ids
+            windowed_shape = (
+                exact_windowed_identity
+                and self.window_id is not None
+                and re.fullmatch(r"window_[0-9a-f]{64}", self.window_id) is not None
+                and bool(self.material_ids)
+            )
+            if not old_single_call_shape and not windowed_shape:
+                raise ValueError("D call requires exact legacy or Gemini window shape")
         if self.input_token_estimate > self.input_token_ceiling:
             raise ValueError("input estimate exceeds ceiling")
         return self

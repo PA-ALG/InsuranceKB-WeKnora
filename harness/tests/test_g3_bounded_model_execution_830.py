@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -2978,3 +2979,710 @@ def test_c_reference_options_recover_exact_physical_line_within_native_page() ->
     assert choices[0].quote == native_text
     assert choices[0].start == text.index(native_text)
     assert choices[0].end == text.index(native_text) + len(native_text)
+
+
+def test_gemini_d_compile_windows_form_bounded_exact_partition() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    request = validate_batch_candidate(fixture.read_bytes()).request
+
+    windows = bounded.derive_gemini_d_compile_windows(request)
+
+    synth = [row for row in windows if row["kind"] == "ENTITY_SYNTHESIS"]
+    fields = [row for row in windows if row["kind"] == "FIELDS"]
+    assert len(synth) == 3
+    assert len(windows) == 25
+    assert sorted(len(row["field_refs"]) for row in fields) == [2, 7, 9] + [10] * 19
+    expected = {
+        row["field_ref"]
+        for row in bounded._g3_d_field_targets(request, bounded._g3_d_entity_refs(request))
+    }
+    actual = [field_ref for row in fields for field_ref in row["field_refs"]]
+    assert len(actual) == len(set(actual)) == 208
+    assert set(actual) == expected
+    assert all(1 <= len(row["field_refs"]) <= 10 for row in fields)
+    assert all(not row["field_refs"] for row in synth)
+    assert bounded.gemini_d_extraction_policy() == {
+        "policy_version": "g3-field-batches.830.v1",
+        "max_fields_per_call": 10,
+        "max_profile_fields": 83,
+        "max_entities_per_material": 2,
+    }
+
+
+def test_gemini_d_compile_windows_allow_two_entities_and_full_material_tuple() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    request = validate_batch_candidate(fixture.read_bytes()).request
+    bindings = list(request.entity_bindings)
+    primary = min(
+        bindings[0].source_material_ids[0], bindings[1].source_material_ids[0]
+    )
+    merged = tuple(
+        sorted({bindings[0].source_material_ids[0], bindings[1].source_material_ids[0]})
+    )
+    bindings[0] = bindings[0].model_copy(update={"source_material_ids": merged})
+    bindings[1] = bindings[1].model_copy(update={"source_material_ids": (primary,)})
+    request = request.model_copy(update={"entity_bindings": tuple(bindings)})
+
+    windows = bounded.derive_gemini_d_compile_windows(request)
+    shared = [row for row in windows if row["primary_material_id"] == primary]
+    assert {row["entity_slot"] for row in shared} == {0, 1}
+    assert {tuple(row["material_ids"]) for row in shared} == {merged, (primary,)}
+    assert len(windows) <= 300
+
+
+def test_gemini_d_compile_window_context_is_entity_scoped() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    request = validate_batch_candidate(fixture.read_bytes()).request
+    windows = bounded.derive_gemini_d_compile_windows(request)
+    window = next(row for row in windows if row["kind"] == "FIELDS")
+
+    context = bounded.render_gemini_d_compile_window_context(
+        _gemini_identity("extract"), request, window
+    )
+
+    assert context["contract"] == "g3-d-compile-window-prompt-context.830.v1"
+    assert context["window"] == window
+    assert context["extraction_policy"] == bounded.gemini_d_extraction_policy()
+    assert 1 <= len(context["field_targets"]) <= 10
+    assert {row["field_ref"] for row in context["field_targets"]} == set(window["field_refs"])
+    assert len(context["entity_bindings"]) == 1
+    allowed = set(context["entity_source_refs"][0]["source_refs"])
+    assert {row["source_ref"] for row in context["source_options"]} == allowed
+    linked = {
+        concept_id
+        for row in (
+            *context["existing_members"]["fields"],
+            *context["existing_members"]["pages"],
+        )
+        for concept_id in row.concept_ids
+    }
+    assert {
+        row.concept_id for row in context["existing_members"]["definitions"]
+    } <= linked
+    assert len(context["existing_members"]["definitions"]) < len(
+        request.base_request.existing_definitions
+    )
+    assert "resolution_inputs" not in context
+
+
+def test_gemini_d_renderer_requires_complete_ordered_window_partition() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    request = validate_batch_candidate(fixture.read_bytes()).request
+    windows = bounded.derive_gemini_d_compile_windows(request)
+    identity = _gemini_identity("extract")
+    base = valid_c_plan()
+    contexts = tuple(
+        batch_json_bytes_830_g3(
+            bounded.render_gemini_d_compile_window_context(identity, request, window)
+        )
+        for window in windows
+    )
+    calls = tuple(
+        base.request_manifest.calls[0].model_copy(update={
+            "call_id": f"d-window-{ordinal:03d}",
+            "ordinal": ordinal,
+            "stage": "D_COMPILE",
+            "window_id": window["window_id"],
+            "material_ids": window["material_ids"],
+            "identity": identity,
+            "input_context_sha256": _sha(contexts[ordinal]),
+        })
+        for ordinal, window in enumerate(windows)
+    )
+
+    def plan_for(plan_calls):
+        manifest = _hashed(
+            type(base.request_manifest),
+            "g3-request-manifest.830.v1",
+            "manifest_hash",
+            contract="g3-request-manifest.830.v1",
+            stage="D_COMPILE",
+            chain_id=base.chain_id,
+            calls=plan_calls,
+        )
+        index = canonical_json({
+            "contract": "g3-stage-render-contexts.830.v1",
+            "stage": "D_COMPILE",
+            "calls": [
+                {
+                    "call_id": call.call_id,
+                    "ordinal": call.ordinal,
+                    "input_context_sha256": call.input_context_sha256,
+                }
+                for call in plan_calls
+            ],
+        })
+        dispatch = _hashed(
+            type(base.dispatch_lock),
+            "g3-stage-dispatch.830.v1",
+            "structured_dispatch_hash",
+            contract="g3-stage-dispatch.830.v1",
+            stage="D_COMPILE",
+            calls=plan_calls,
+            opaque_block_map_sha256=None,
+            input_context_sha256=_sha(index),
+            schema_hash=base.schema_hash,
+            template_hash=base.template_lock.approved_template_hash,
+        )
+        return base.model_copy(update={
+            "stage": "D_COMPILE",
+            "request_manifest": manifest,
+            "dispatch_lock": dispatch,
+        })
+
+    rendered, _, _ = _render_g3_stage_contexts(
+        plan=plan_for(calls),
+        parent=G3ModelProcessingAuthorizationV1.model_construct(),
+        artifacts={
+            "batch-concept-compile-request.830.g3.v1": [
+                canonical_json(request.model_dump(mode="json"))
+            ]
+        },
+        template_bytes=b"fixed D system",
+    )
+    assert tuple(rendered[call.call_id] for call in calls) == contexts
+    with pytest.raises(ValueError, match="exact active window partition"):
+        _render_g3_stage_contexts(
+            plan=plan_for(calls[:-1]),
+            parent=G3ModelProcessingAuthorizationV1.model_construct(),
+            artifacts={
+                "batch-concept-compile-request.830.g3.v1": [
+                    canonical_json(request.model_dump(mode="json"))
+                ]
+            },
+            template_bytes=b"fixed D system",
+        )
+
+
+def test_gemini_c_schema_caps_entities_without_changing_legacy_schema() -> None:
+    gemini = bounded._c_response_schema(_gemini_identity("classify"))
+    legacy = bounded._c_response_schema()
+    assert gemini["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"][
+        "maxItems"
+    ] == 2
+    assert "maxItems" not in legacy["$defs"]["G3SemanticMaterialV1"]["properties"][
+        "entities"
+    ]
+    prompt = (
+        Path(__file__).parents[1]
+        / "src/insurance_harness/knowledge_compiler/prompts/g3_c_classify_v1.txt"
+    ).read_text()
+    assert "at most two entities for each material" in prompt
+    assert "own distinct source occurrence" in prompt
+    assert "do not reuse one multi-entry quote" in prompt
+
+
+def test_gemini_c_runtime_rejects_more_than_two_entities_per_material() -> None:
+    entry, page, response = _reference_fixture()
+    entity = response["materials"][0]["entities"][0]
+    response["materials"][0]["entities"] = [
+        entity,
+        {**entity, "entity_ref": "entity-002"},
+        {**entity, "entity_ref": "entity-003"},
+    ]
+    with pytest.raises(ValueError, match="entity capacity exceeded"):
+        _assemble_reference(entry, page, response)
+
+
+def test_gemini_d_review_display_keeps_every_source_and_complete_output_once() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+
+    context = bounded.render_gemini_d_review_display_context(
+        candidate.request, candidate.compile_result.output
+    )
+
+    assert context["contract"] == "g3-d-review-compact-display-context.830.v1"
+    assert context["machine_bindings"]["request_sha256"] == candidate.request.request_sha256
+    assert context["candidate"] == candidate.compile_result.output
+    assert len(context["source_options"]) == len(candidate.request.base_request.sources)
+    assert {
+        (row["source"].revision_id, row["source"].block_id): row["source"]
+        for row in context["source_options"]
+    } == {
+        (row.revision_id, row.block_id): row
+        for row in candidate.request.base_request.sources
+    }
+    assert len(context["corpus_entry_metadata"]) == len(
+        candidate.request.resolution_inputs.corpus.entries
+    )
+    assert all("blocks" not in row for row in context["corpus_entry_metadata"])
+    displayed = {
+        (row["source"].revision_id, row["source"].block_id)
+        for row in context["source_options"]
+    }
+    corpus_only = {
+        (row["source"].revision_id, row["source"].block_id)
+        for entry in context["corpus_entry_metadata"]
+        for row in entry["block_refs"]
+        if row["source_ref"] is None
+    }
+    all_corpus = {
+        (block.revision_id, block.block_id)
+        for entry in candidate.request.resolution_inputs.corpus.entries
+        for block in entry.blocks
+    }
+    assert displayed.isdisjoint(corpus_only)
+    assert (displayed & all_corpus) | corpus_only == all_corpus
+    assert "resolution_inputs" not in context
+
+
+def test_gemini_d_review_windows_are_entity_scoped_and_aggregate_exactly() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    request = candidate.request
+    output = candidate.compile_result.output
+    windows = bounded.derive_gemini_d_review_windows(request, output)
+    assert len(windows) == len(request.entity_bindings)
+    assert all(
+        len(row["window_id"]) == 71
+        and row["window_id"].startswith("window_")
+        and set(row["window_id"][7:]) <= set("0123456789abcdef")
+        for row in windows
+    )
+    projected = []
+    for window in windows:
+        context = bounded.render_gemini_d_review_window_context(
+            _gemini_identity("verify"), request, output, window
+        )
+        assert context["window"] == window
+        assert {
+            row.entity_id for row in context["candidate_partition"]["fields"]
+        } == {window["entity_id"]}
+        assert len(batch_json_bytes_830_g3(context)) < len(
+            batch_json_bytes_830_g3(
+                bounded.render_gemini_d_review_display_context(request, output)
+            )
+        )
+        raw = canonical_json(
+            {
+                "contract": "g3-d-review-semantic-references.local.v1",
+                "decision": "PASS",
+                "reasons": [f"reviewed {window['entity_id']}"],
+                "scores": [
+                    {
+                        "review_ref": review_ref,
+                        "business_value": 20,
+                        "reuse": 20,
+                        "evidence_quality": 20,
+                        "definability": 15,
+                        "novel_identity": 10,
+                        "name_stability": 10,
+                    }
+                    for review_ref in window["review_refs"]
+                ],
+            }
+        )
+        projected.append(
+            bounded.project_gemini_d_review_window_response(raw, request, output, window)
+        )
+    aggregate = bounded.aggregate_gemini_d_review_window_outputs(request, output, projected)
+    assert aggregate.decision == "PASS"
+    assert set(aggregate.page_scores) == {
+        row["member_id"] for row in bounded._g3_d_review_targets(request, output)
+    }
+    assert len(aggregate.reasons) == len(windows)
+
+
+def test_gemini_d_review_aggregate_propagates_reject_without_averaging() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    request = candidate.request
+    output = candidate.compile_result.output
+    windows = bounded.derive_gemini_d_review_windows(request, output)
+    reviews = []
+    for ordinal, window in enumerate(windows):
+        scores = {
+            row["member_id"]: bounded.ValueScore(
+                business_value=20,
+                reuse=20,
+                evidence_quality=20,
+                definability=15,
+                novel_identity=10,
+                name_stability=10,
+            )
+            for row in bounded._g3_d_review_targets(request, output)
+            if row["review_ref"] in window["review_refs"]
+        }
+        reviews.append(
+            ReviewOutput(
+                request_hash=bounded.compile_request_hash_g3(request.base_request),
+                output_hash=bounded.compile_output_hash_g3(output),
+                decision="REJECT" if ordinal == 1 else "PASS",
+                reasons=(f"window-{ordinal}",),
+                page_scores=scores,
+            )
+        )
+    aggregate = bounded.aggregate_gemini_d_review_window_outputs(request, output, reviews)
+    assert aggregate.decision == "REJECT"
+
+
+def test_gemini_d_review_finalizer_builds_candidate_and_seals_rejection(
+    tmp_path: Path,
+) -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    request = candidate.request
+    output = candidate.compile_result.output
+    windows = bounded.derive_gemini_d_review_windows(request, output)
+    targets = {
+        row["review_ref"]: row["member_id"]
+        for row in bounded._g3_d_review_targets(request, output)
+    }
+    high = bounded.ValueScore(
+        business_value=25,
+        reuse=20,
+        evidence_quality=20,
+        definability=15,
+        novel_identity=10,
+        name_stability=10,
+    )
+    reviews = tuple(
+        ReviewOutput(
+            request_hash=bounded.compile_request_hash_g3(request.base_request),
+            output_hash=bounded.compile_output_hash_g3(output),
+            decision="PASS",
+            reasons=(f"reviewed {window['entity_id']}",),
+            page_scores={targets[ref]: high for ref in window["review_refs"]},
+        )
+        for window in windows
+    )
+    from insurance_harness.run_admission.g3_models import (
+        G3StageLedgerBindingV1,
+        G3StageTerminalReceiptV1,
+    )
+
+    plan = valid_c_plan().model_copy(update={"stage": "D_REVIEW"})
+    chain_dir = tmp_path / "chains" / plan.chain_manifest_hash
+    call_dir = chain_dir / "calls" / "call-review"
+    call_dir.mkdir(parents=True)
+    (chain_dir / "stage-bindings").mkdir()
+    (chain_dir / "stage-terminals").mkdir()
+    binding = _hashed(
+        G3StageLedgerBindingV1,
+        "g3-stage-ledger-binding.830.v1",
+        "receipt_sha256",
+        contract="g3-stage-ledger-binding.830.v1",
+        chain_manifest_hash=plan.chain_manifest_hash,
+        parent_authorization_digest=plan.parent_authorization_digest,
+        stage="D_REVIEW",
+        admission_artifact_digest="a" * 64,
+        bound_at=datetime.now(UTC),
+    )
+    (chain_dir / "stage-bindings" / "D_REVIEW.json").write_bytes(
+        canonical_json(binding.model_dump(mode="json", round_trip=True))
+    )
+    cost = G3CostAuditV1(
+        status="NOT_MEASURED",
+        currency=None,
+        amount_minor_units=None,
+        rate_card_sha256=None,
+        provider_cost_receipt_sha256="c" * 64,
+        reason_code="NO_FROZEN_RATE_CARD",
+    )
+    terminals = tuple(
+        SimpleNamespace(
+            ordinal=ordinal,
+            receipt_sha256=f"{ordinal + 1:064x}",
+            cost_audit=cost,
+            provider_usage=None,
+            status="SUCCESS",
+        )
+        for ordinal in range(len(windows))
+    )
+
+    result, actual = bounded._finalize_gemini_d_review_windows(
+        request=request,
+        model_compile_result=candidate.model_compile_result,
+        final_compile_result=candidate.compile_result,
+        outputs=reviews,
+        plan=plan,
+        admission_digest="a" * 64,
+        call_dir=str(call_dir),
+        call_terminals=terminals,
+        started_at=datetime.now(UTC),
+    )
+    assert result.execution.implementation == "g3-gemini-d-review-window-aggregate.830.v1"
+    assert actual.request == request
+
+    rejected = (reviews[0].model_copy(update={"decision": "REJECT"}), *reviews[1:])
+    with pytest.raises(ValueError, match="REVIEW_NOT_APPROVED_OR_STALE"):
+        bounded._finalize_gemini_d_review_windows(
+            request=request,
+            model_compile_result=candidate.model_compile_result,
+            final_compile_result=candidate.compile_result,
+            outputs=rejected,
+            plan=plan,
+            admission_digest="a" * 64,
+            call_dir=str(call_dir),
+            call_terminals=terminals,
+            started_at=datetime.now(UTC),
+        )
+    terminal = G3StageTerminalReceiptV1.model_validate_json(
+        (chain_dir / "stage-terminals" / "D_REVIEW.json").read_bytes()
+    )
+    assert terminal.status == "FAILED"
+    assert terminal.calls_consumed == len(windows)
+    assert terminal.call_terminal_sha256s == tuple(
+        item.receipt_sha256 for item in terminals
+    )
+
+
+def test_gemini_d_window_projection_aggregates_exact_delta() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    full = json.loads(_gemini_compile_reference_wire(candidate))
+    by_ref = {row["field_ref"]: row for row in full["fields"]}
+    outputs = []
+    for window in bounded.derive_gemini_d_compile_windows(candidate.request):
+        value = {
+            "contract": "g3-d-compile-semantic-references.local.v1",
+            "transformation": "EXTRACT",
+            "definitions": [],
+            "fields": [by_ref[ref] for ref in window["field_refs"]],
+            "pages": [],
+        }
+        outputs.append(
+            bounded.project_gemini_d_compile_window_response(
+                canonical_json(value), candidate.request, window
+            )
+        )
+    aggregate = bounded.aggregate_gemini_d_compile_window_outputs(
+        candidate.request, outputs
+    )
+    assert aggregate.model_copy(update={"audit": ()}) == (
+        candidate.model_compile_result.output.model_copy(update={"audit": ()})
+    )
+    assert set(aggregate.audit) == set(candidate.model_compile_result.output.audit)
+
+    with pytest.raises(ValueError, match="window output count|window field coverage"):
+        bounded.aggregate_gemini_d_compile_window_outputs(
+            candidate.request, outputs[1:]
+        )
+
+
+def test_gemini_d_synthesis_links_new_definition_and_fields_reject_it() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    full = json.loads(_gemini_compile_reference_wire(candidate))
+    by_ref = {row["field_ref"]: row for row in full["fields"]}
+    field_window = next(
+        row
+        for row in bounded.derive_gemini_d_compile_windows(candidate.request)
+        if row["kind"] == "FIELDS"
+        and any(by_ref[ref]["evidence"] for ref in row["field_refs"])
+    )
+    synth_window = next(
+        row
+        for row in bounded.derive_gemini_d_compile_windows(candidate.request)
+        if row["kind"] == "ENTITY_SYNTHESIS"
+        and row["entity_id"] == field_window["entity_id"]
+    )
+    fields = [by_ref[ref] for ref in field_window["field_refs"]]
+    linked = next(row for row in fields if row["evidence"])
+    response = {
+        "contract": "g3-d-compile-semantic-references.local.v1",
+        "transformation": "EXTRACT",
+        "definitions": [
+            {
+                "definition_ref": "definition-local-001",
+                "canonical_key": "local-definition",
+                "sense_key": "insurance-local-definition",
+                "title": "Local definition",
+                "body": "Definition supported by the cited source.",
+                "aliases": [],
+                "evidence": [linked["evidence"][0]],
+                "disposition": "sense",
+                "audit_reason": "Needed by this product page.",
+            }
+        ],
+        "fields": [],
+        "pages": [
+            {
+                "page_ref": "page-local-001",
+                "entity_ref": synth_window["entity_ref"],
+                "stable_key": "local-product-summary",
+                "title": "Local product summary",
+                "body": "A summary supported by the cited source.",
+                "evidence": [linked["evidence"][0]],
+                "concept_refs": ["definition-local-001"],
+                "conditions": [],
+                "exceptions": [],
+                "valid_time": "",
+                "audit_reason": "Product-specific synthesis.",
+            }
+        ],
+    }
+
+    projected = bounded.project_gemini_d_compile_window_response(
+        canonical_json(response), candidate.request, synth_window
+    )
+
+    assert len(projected.definitions) == 1
+    assert projected.pages[0].concept_ids == (
+        projected.definitions[0].concept_id,
+    )
+    fields[0]["concept_refs"] = [*fields[0]["concept_refs"], "definition-local-001"]
+    with pytest.raises(ValueError, match="foreign D concept reference"):
+        bounded.project_gemini_d_compile_window_response(
+            canonical_json(
+                {
+                    "contract": "g3-d-compile-semantic-references.local.v1",
+                    "transformation": "EXTRACT",
+                    "definitions": [],
+                    "fields": fields,
+                    "pages": [],
+                }
+            ),
+            candidate.request,
+            field_window,
+        )
+    prompt_root = (
+        Path(__file__).parents[1]
+        / "src/insurance_harness/knowledge_compiler/prompts"
+    )
+    compile_prompt = (prompt_root / "g3_d_compile_references_v1.txt").read_text()
+    review_prompt = (prompt_root / "g3_d_review_references_v1.txt").read_text()
+    assert "supplied 1–10 field_ref" in compile_prompt
+    assert "pure carry entity" in compile_prompt
+    assert "only the supplied entity window" in review_prompt
+    assert "local code combines all entity windows conservatively" in review_prompt
+
+
+def test_gemini_d_aggregate_conflict_seals_failed_stage_without_failed_call(
+    tmp_path: Path,
+) -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    full = json.loads(_gemini_compile_reference_wire(candidate))
+    by_ref = {row["field_ref"]: row for row in full["fields"]}
+    windows = bounded.derive_gemini_d_compile_windows(candidate.request)
+    outputs = []
+    for window in windows:
+        value = {
+            "contract": "g3-d-compile-semantic-references.local.v1",
+            "transformation": "EXTRACT",
+            "definitions": [],
+            "fields": [by_ref[ref] for ref in window["field_refs"]],
+            "pages": [],
+        }
+        outputs.append(
+            bounded.project_gemini_d_compile_window_response(
+                canonical_json(value), candidate.request, window
+            )
+        )
+    synthesis = [
+        index for index, window in enumerate(windows) if window["kind"] == "ENTITY_SYNTHESIS"
+    ]
+    assert len(synthesis) >= 2
+    duplicate = candidate.compile_result.output.definitions[0]
+    for index in synthesis[:2]:
+        outputs[index] = outputs[index].model_copy(update={"definitions": (duplicate,)})
+
+    from insurance_harness.run_admission.g3_models import (
+        G3StageLedgerBindingV1,
+        G3StageTerminalReceiptV1,
+    )
+
+    plan = valid_c_plan().model_copy(update={"stage": "D_COMPILE"})
+    chain_dir = tmp_path / "chains" / plan.chain_manifest_hash
+    call_dir = chain_dir / "calls" / "call-002"
+    call_dir.mkdir(parents=True)
+    (chain_dir / "stage-bindings").mkdir()
+    (chain_dir / "stage-terminals").mkdir()
+    binding = _hashed(
+        G3StageLedgerBindingV1,
+        "g3-stage-ledger-binding.830.v1",
+        "receipt_sha256",
+        contract="g3-stage-ledger-binding.830.v1",
+        chain_manifest_hash=plan.chain_manifest_hash,
+        parent_authorization_digest=plan.parent_authorization_digest,
+        stage="D_COMPILE",
+        admission_artifact_digest="a" * 64,
+        bound_at=datetime.now(UTC),
+    )
+    (chain_dir / "stage-bindings" / "D_COMPILE.json").write_bytes(
+        canonical_json(binding.model_dump(mode="json", round_trip=True))
+    )
+    cost = G3CostAuditV1(
+        status="NOT_MEASURED",
+        currency=None,
+        amount_minor_units=None,
+        rate_card_sha256=None,
+        provider_cost_receipt_sha256="c" * 64,
+        reason_code="NO_FROZEN_RATE_CARD",
+    )
+    successful_call_terminals = tuple(
+        SimpleNamespace(
+            ordinal=ordinal,
+            receipt_sha256=f"{ordinal + 1}" * 64,
+            cost_audit=cost,
+            provider_usage=None,
+            status="SUCCESS",
+        )
+        for ordinal in range(2)
+    )
+    with pytest.raises(ValueError, match="duplicate D window generated member"):
+        bounded._finalize_gemini_d_compile_windows(
+            request=candidate.request,
+            outputs=outputs,
+            plan=plan,
+            admission_digest="a" * 64,
+            call_dir=str(call_dir),
+            call_terminals=successful_call_terminals,
+            started_at=datetime.now(UTC),
+        )
+    terminal = G3StageTerminalReceiptV1.model_validate_json(
+        (chain_dir / "stage-terminals" / "D_COMPILE.json").read_bytes()
+    )
+    assert terminal.status == "FAILED"
+    assert terminal.calls_consumed == 2
+    assert terminal.call_terminal_sha256s == tuple(
+        item.receipt_sha256 for item in successful_call_terminals
+    )
+    assert terminal.provider_usage_total.successful_usage_records == 0
+
+
+def test_gemini_d_window_projection_rejects_wrong_kind_and_nonoccurring_quote() -> None:
+    fixture = Path(__file__).parent / "fixtures" / "batch_concept_compile_830_g3" / "candidate.json"
+    candidate = validate_batch_candidate(fixture.read_bytes())
+    full = json.loads(_gemini_compile_reference_wire(candidate))
+    by_ref = {row["field_ref"]: row for row in full["fields"]}
+    windows = bounded.derive_gemini_d_compile_windows(candidate.request)
+    window = next(
+        row
+        for row in windows
+        if any(by_ref[ref]["state"] != "unknown" for ref in row["field_refs"])
+    )
+
+    foreign = next(
+        row
+        for row in windows
+        if row["entity_id"] != window["entity_id"] and row["field_refs"]
+    )
+    wrong = {
+        "contract": "g3-d-compile-semantic-references.local.v1",
+        "transformation": "EXTRACT",
+        "definitions": [],
+        "fields": [by_ref[foreign["field_refs"][0]]],
+        "pages": [],
+    }
+    with pytest.raises(ValueError, match="field reference coverage"):
+        bounded.project_gemini_d_compile_window_response(
+            canonical_json(wrong), candidate.request, window
+        )
+
+    field_rows = [by_ref[ref] for ref in window["field_refs"]]
+    target = next(row for row in field_rows if row["state"] != "unknown")
+    target["evidence"][0]["quote"] = "not in any selected source\r\nfragment"
+    invalid = {
+        "contract": "g3-d-compile-semantic-references.local.v1",
+        "transformation": "EXTRACT",
+        "definitions": [],
+        "fields": field_rows,
+        "pages": [],
+    }
+    with pytest.raises(ValueError, match="occur exactly once"):
+        bounded.project_gemini_d_compile_window_response(
+            canonical_json(invalid), candidate.request, window
+        )
