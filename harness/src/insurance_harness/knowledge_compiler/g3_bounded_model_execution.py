@@ -1138,7 +1138,18 @@ def project_gemini_d_review_response(
 
 def _c_response_schema(identity: ModelIdentity | None = None) -> dict[str, object]:
     if identity is not None and _is_g3_gemini_identity(identity):
-        return G3SemanticReferenceResponseV1.model_json_schema()
+        schema = G3SemanticReferenceResponseV1.model_json_schema()
+        definitions = cast(dict[str, dict[str, object]], schema["$defs"])
+        for definition, field in (
+            ("G3SemanticReferenceMaterialV1", "entities"),
+            ("G3SemanticReferenceMaterialV1", "evidence"),
+            ("G3SemanticReferenceMaterialV1", "material_role_evidence_refs"),
+            ("G3SemanticEntityV1", "labels"),
+            ("G3SemanticLabelV1", "evidence_refs"),
+        ):
+            properties = cast(dict[str, dict[str, object]], definitions[definition]["properties"])
+            properties[field]["minItems"] = 1
+        return schema
     return G3SemanticResponseV1.model_json_schema()
 
 

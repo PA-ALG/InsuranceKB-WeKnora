@@ -2779,6 +2779,60 @@ def test_gemini_c_schema_requires_source_reference_contract() -> None:
     assert legacy == G3SemanticResponseV1.model_json_schema()
 
 
+def test_gemini_c_schema_exposes_existing_nonempty_proposal_requirements() -> None:
+    schema = g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
+    definitions = schema["$defs"]
+    material = definitions["G3SemanticReferenceMaterialV1"]["properties"]
+    entity = definitions["G3SemanticEntityV1"]["properties"]
+    label = definitions["G3SemanticLabelV1"]["properties"]
+
+    assert material["entities"]["minItems"] == 1
+    assert material["evidence"]["minItems"] == 1
+    assert material["material_role_evidence_refs"]["minItems"] == 1
+    assert entity["labels"]["minItems"] == 1
+    assert label["evidence_refs"]["minItems"] == 1
+
+    legacy = g3_current_schema_specs("C_CLASSIFY")[1][2]
+    qwen = g3_current_schema_specs(
+        "C_CLASSIFY",
+        ModelIdentity(
+            provider="bailian",
+            family="qwen",
+            role="classify",
+            deployment_id="qwen3.5-plus-2026-04-20",
+            policy_version="830-g3-bounded-v1",
+        ),
+    )[1][2]
+    assert canonical_json(legacy) == canonical_json(G3SemanticResponseV1.model_json_schema())
+    assert canonical_json(qwen) == canonical_json(G3SemanticResponseV1.model_json_schema())
+
+    material["entities"]["minItems"] = 99
+    fresh = g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
+    assert fresh["$defs"]["G3SemanticReferenceMaterialV1"]["properties"]["entities"][
+        "minItems"
+    ] == 1
+    assert canonical_json(fresh) == canonical_json(
+        g3_current_schema_specs("C_CLASSIFY", _reference_gemini_identity())[1][2]
+    )
+
+
+def test_empty_gemini_c_reference_wire_reaches_existing_semantic_nonempty_gate() -> None:
+    entry, page, _ = _reference_fixture()
+    empty = {
+        "contract": "g3-batch-resolution-semantic-references.local.v1",
+        "materials": [{
+            "material_id": entry.material_id,
+            "material_role": "policy",
+            "material_role_evidence_refs": [],
+            "entities": [],
+            "evidence": [],
+        }],
+    }
+    assert bounded.G3SemanticReferenceResponseV1.model_validate(empty)
+    with pytest.raises(ValueError, match="semantic refs must be sorted unique"):
+        _assemble_reference(entry, page, empty)
+
+
 def _reference_fixture():
     text = "中国人寿保险A款分类医疗险"
     entry = _entry(material_id="m-001", text=text)
