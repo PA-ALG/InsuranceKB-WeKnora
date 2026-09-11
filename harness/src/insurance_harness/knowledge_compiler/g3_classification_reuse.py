@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, TypeAdapter, model_validator
 
 from .batch_canonical_830_g3 import batch_sha256_830_g3
 from .batch_concept_compile_830_g3 import BatchConceptCompileRequest830G3V1, Hash
@@ -22,6 +22,7 @@ from .batch_entity_resolution_830_g3 import (
     ProposalBatchV1,
     resolve_batch,
 )
+from .g3_title_routing import TitleRoutingOverlayV1, apply_title_routing_overlay
 from .schema_pack_catalog_830_g3 import SchemaPackCatalogV1
 
 
@@ -80,6 +81,23 @@ class G3ClassificationReuseV1(BaseModel):
         return self
 
 
+class G3ClassificationReuseV2(G3ClassificationReuseV1):
+    """Original C authority plus a separately reproducible deterministic overlay."""
+
+    contract: Literal["g3-classification-reuse.830.v2"]
+    title_overlay: TitleRoutingOverlayV1
+
+
+ClassificationReuse = G3ClassificationReuseV1 | G3ClassificationReuseV2
+
+
+def parse_classification_reuse(value: object) -> ClassificationReuse:
+    adapter = TypeAdapter(ClassificationReuse)
+    if isinstance(value, (bytes, str)):
+        return adapter.validate_json(value)
+    return adapter.validate_python(value)
+
+
 def _request_binding(request: BatchConceptCompileRequest830G3V1) -> dict[str, str]:
     return {
         "source_proposals_sha256": request.resolution_inputs.proposals.proposals_sha256,
@@ -99,7 +117,8 @@ def build_classification_reuse(
     source_terminal_receipt_sha256: str,
     source_admission_digest: str,
     source_resolution_sha256: str,
-) -> G3ClassificationReuseV1:
+    title_overlay: TitleRoutingOverlayV1 | None = None,
+) -> ClassificationReuse:
     payload = {
         "contract": "g3-classification-reuse.830.v1",
         "source_chain_manifest_hash": source_chain_manifest_hash,
@@ -108,21 +127,39 @@ def build_classification_reuse(
         "source_resolution_sha256": source_resolution_sha256,
         **_request_binding(request),
     }
-    return G3ClassificationReuseV1.model_validate(
+    if title_overlay is not None:
+        title_overlay = TitleRoutingOverlayV1.model_validate(title_overlay)
+        payload.update(
+            contract="g3-classification-reuse.830.v2",
+            source_proposals_sha256=title_overlay.source_proposals_sha256,
+            title_overlay=title_overlay,
+        )
+    result = parse_classification_reuse(
         {
             **payload,
             "receipt_sha256": batch_sha256_830_g3(payload["contract"], payload),
         }
     )
+    return result
 
 
 def validate_reuse_binding(
-    receipt: G3ClassificationReuseV1,
+    receipt: ClassificationReuse,
     *,
     request: BatchConceptCompileRequest830G3V1,
 ) -> None:
-    receipt = G3ClassificationReuseV1.model_validate(receipt)
-    if any(getattr(receipt, key) != value for key, value in _request_binding(request).items()):
+    receipt = parse_classification_reuse(receipt)
+    expected = _request_binding(request)
+    if isinstance(receipt, G3ClassificationReuseV2):
+        overlay = receipt.title_overlay
+        if (
+            overlay.effective_proposals_sha256 != expected["source_proposals_sha256"]
+            or overlay.corpus_sha256 != expected["source_corpus_sha256"]
+            or overlay.catalog_sha256 != expected["current_catalog_sha256"]
+        ):
+            raise ValueError("classification reuse title overlay binding mismatch")
+        expected["source_proposals_sha256"] = overlay.source_proposals_sha256
+    if any(getattr(receipt, key) != value for key, value in expected.items()):
         raise ValueError("classification reuse current request mismatch")
     inputs = request.resolution_inputs
     resolution = replay_classification(
@@ -149,7 +186,7 @@ def _verify_historical_authority(parent, approval) -> None:
 
 
 def validate_classification_reuse(
-    receipt: G3ClassificationReuseV1,
+    receipt: ClassificationReuse,
     *,
     request: BatchConceptCompileRequest830G3V1,
     ledger_root=None,
@@ -176,7 +213,7 @@ def validate_classification_reuse(
 
     from .batch_canonical_830_g3 import batch_json_bytes_830_g3
 
-    receipt = G3ClassificationReuseV1.model_validate(receipt)
+    receipt = parse_classification_reuse(receipt)
     root = Path(ledger_root if ledger_root is not None else gateway.G3_LEDGER_ROOT)
     admissions = Path(
         admission_root if admission_root is not None else evaluator._ADMISSION_STORE_ROOT
@@ -229,12 +266,20 @@ def validate_classification_reuse(
     )
     if (
         proposals.proposals_sha256 != receipt.source_proposals_sha256
-        or proposals != request.resolution_inputs.proposals
         or original_resolution.batch_sha256 != receipt.source_resolution_sha256
         or original_resolution.proposals_sha256 != proposals.proposals_sha256
         or original_resolution.corpus_sha256 != receipt.source_corpus_sha256
     ):
         raise ValueError("classification reuse original result mismatch")
+    effective = (
+        apply_title_routing_overlay(
+            receipt.title_overlay, corpus=request.resolution_inputs.corpus,
+            catalog=request.catalog, source_proposals=proposals,
+        )
+        if isinstance(receipt, G3ClassificationReuseV2) else proposals
+    )
+    if effective != request.resolution_inputs.proposals:
+        raise ValueError("classification reuse effective proposals mismatch")
     # These classification inputs are unchanged; no 55MB native parse is needed.
     for contract, value in (
         ("batch-corpus.830.g3.v1", request.resolution_inputs.corpus),

@@ -810,6 +810,15 @@ def render_gemini_d_compile_window_context(
     if not _is_g3_gemini_d_identity("D_COMPILE", identity):
         raise ValueError("D compile windows require Gemini extract identity")
     exact = _exact_gemini_d_window(request, window)
+    return _render_gemini_d_compile_window_context(identity, request, exact)
+
+
+def _render_gemini_d_compile_window_context(
+    identity: ModelIdentity,
+    request: BatchConceptCompileRequest830G3V1,
+    exact: dict[str, object],
+) -> dict[str, object]:
+    """Shared renderer; callers first validate a full or recovery window."""
     source_options, _, source_keys = _g3_d_source_index(request)
     entity_refs = _g3_d_entity_refs(request)
     entity_sources = _g3_d_entity_source_refs(request, source_keys, entity_refs)
@@ -1513,6 +1522,16 @@ def project_gemini_d_compile_response(
         if window is None
         else render_gemini_d_compile_window_context(identity, request, window)
     )
+    return _project_gemini_d_compile_response_with_context(response, request, window, context)
+
+
+def _project_gemini_d_compile_response_with_context(
+    response: G3DCompileReferenceResponseV1,
+    request: BatchConceptCompileRequest830G3V1,
+    window: dict[str, object] | None,
+    context: dict[str, object],
+) -> CompileOutput:
+    """Shared strict projector after raw parsing and caller-owned scope validation."""
     if window is not None:
         validate_routed_selections(
             tuple((selection.source_ref, selection.quote)
@@ -1545,8 +1564,11 @@ def project_gemini_d_compile_response(
         raise ValueError("D field window cannot create definitions or pages")
     if window_kind == "ENTITY_SYNTHESIS" and response.fields:
         raise ValueError("D synthesis window cannot contain fields")
-    if window is not None and response.transformation != "EXTRACT":
-        raise ValueError("D window transformation must be EXTRACT")
+    if window is not None and (
+        response.transformation not in {"EXTRACT", "SYNTHESIZE"}
+        or (window_kind == "FIELDS" and response.transformation != "EXTRACT")
+    ):
+        raise ValueError("D window transformation is invalid for its kind")
     if (
         len(definition_refs) != len(set(definition_refs))
         or set(definition_refs).intersection(concept_refs)
@@ -1713,6 +1735,15 @@ def aggregate_gemini_d_compile_window_outputs(
     """Union independently validated windows into one exact model delta."""
 
     windows = derive_gemini_d_compile_windows(request)
+    return _aggregate_gemini_d_compile_outputs(request, windows, outputs)
+
+
+def _aggregate_gemini_d_compile_outputs(
+    request: BatchConceptCompileRequest830G3V1,
+    windows: Sequence[dict[str, object]],
+    outputs: Sequence[CompileOutput],
+) -> CompileOutput:
+    """Shared complete-delta validation for fixed and explicitly recovered partitions."""
     if len(outputs) != len(windows):
         raise ValueError("D window output count mismatch")
     definitions: dict[str, ConceptDefinition] = {}
@@ -1723,7 +1754,8 @@ def aggregate_gemini_d_compile_window_outputs(
     for window, output in zip(windows, outputs, strict=True):
         if (
             output.request_hash != compile_request_hash_g3(request.base_request)
-            or output.transformation != "EXTRACT"
+            or output.transformation not in {"EXTRACT", "SYNTHESIZE"}
+            or (window["kind"] == "FIELDS" and output.transformation != "EXTRACT")
         ):
             raise ValueError("D window output identity mismatch")
         window_refs = set(cast(tuple[str, ...], window["field_refs"]))
@@ -1767,7 +1799,10 @@ def aggregate_gemini_d_compile_window_outputs(
         fields=tuple(sorted(fields.values(), key=lambda item: (item.entity_id, item.field_key))),
         pages=tuple(sorted(pages.values(), key=free_page_id)),
         audit=tuple(sorted(audits.values(), key=lambda item: item.key)),
-        transformation="EXTRACT",
+        transformation=(
+            "SYNTHESIZE" if any(row.transformation == "SYNTHESIZE" for row in outputs)
+            else "EXTRACT"
+        ),
     )
     probe = record_model_compile(
         request,
@@ -2388,6 +2423,18 @@ def _gemini_d_window_output(
     return project_gemini_d_compile_window_response(raw, request, window)
 
 
+def _prepared_gemini_d_window_output(*, raw, request, call, prepared):
+    if prepared.projection_reuse is None:
+        return _gemini_d_window_output(raw=raw, request=request, call=call)
+    from .g3_d_recovery_execution import project_recovery_response
+
+    window = next((row for row in prepared.recovery_windows
+                   if row["window_id"] == call.window_id), None)
+    if window is None or tuple(window["material_ids"]) != call.material_ids:
+        raise ValueError("recovery call/window binding mismatch")
+    return project_recovery_response(raw, request, window)
+
+
 def _gemini_d_window_projection_hash(
     window_id: str, output: CompileOutput
 ) -> str:
@@ -2711,6 +2758,9 @@ class G3StageExecutionContext:
     compile_request: BatchConceptCompileRequest830G3V1 | None = None
     model_compile_result: CompileResult | None = None
     final_compile_result: CompileResult | None = None
+    projection_reuse: Any = None
+    reused_outputs: tuple[CompileOutput, ...] = ()
+    recovery_windows: tuple[dict[str, object], ...] = ()
 
     def __post_init__(self):
         object.__setattr__(self, "context_by_call", MappingProxyType(dict(self.context_by_call)))
@@ -2745,6 +2795,22 @@ def _parse_g3_stage_artifacts(
         BatchConceptCompileRequest830G3V1,
     )
     if plan.stage == "D_COMPILE":
+        reuse_rows = artifacts.get("g3-d-projection-reuse.830.v1", [])
+        if reuse_rows:
+            from .g3_d_projection_reuse import (
+                G3DProjectionReuseManifestV1, validate_d_projection_reuse,
+            )
+            from .g3_d_recovery_execution import derive_recovery_windows
+
+            reuse = _one_artifact(
+                artifacts, "g3-d-projection-reuse.830.v1", G3DProjectionReuseManifestV1,
+            )
+            verified = validate_d_projection_reuse(reuse, current_request=request)
+            return G3StageExecutionContext(
+                **common, compile_request=request, projection_reuse=reuse,
+                reused_outputs=verified.outputs,
+                recovery_windows=derive_recovery_windows(request, reuse),
+            )
         return G3StageExecutionContext(**common, compile_request=request)
     return G3StageExecutionContext(
         **common,
@@ -3069,7 +3135,13 @@ def _render_g3_stage_contexts(
             and _is_g3_gemini_d_identity("D_COMPILE", calls[0].identity)
             and calls[0].window_id is not None
         ):
-            windows = derive_gemini_d_compile_windows(request)
+            from .g3_d_recovery_execution import render_recovery_context
+
+            recovering = prepared.projection_reuse is not None
+            windows = (prepared.recovery_windows if recovering
+                       else derive_gemini_d_compile_windows(request))
+            render = (render_recovery_context if recovering
+                      else render_gemini_d_compile_window_context)
             if tuple((call.window_id, call.material_ids) for call in calls) != tuple(
                 (cast(str, row["window_id"]), cast(tuple[str, ...], row["material_ids"]))
                 for row in windows
@@ -3077,7 +3149,7 @@ def _render_g3_stage_contexts(
                 raise ValueError("Gemini D calls are not the exact active window partition")
             for call, window in zip(calls, windows, strict=True):
                 context_by_call[call.call_id] = batch_json_bytes_830_g3(
-                    render_gemini_d_compile_window_context(call.identity, request, window)
+                    render(call.identity, request, window)
                 )
         else:
             if len(calls) != 1:
@@ -3197,6 +3269,9 @@ def prepare_g3_stage_execution_context(
         compile_request=prepared.compile_request,
         model_compile_result=prepared.model_compile_result,
         final_compile_result=prepared.final_compile_result,
+        projection_reuse=prepared.projection_reuse,
+        reused_outputs=prepared.reused_outputs,
+        recovery_windows=prepared.recovery_windows,
     )
 
 
@@ -3304,12 +3379,18 @@ def _validate_g3_prior_stage_results(
 ) -> None:
     if plan.stage == "C_CLASSIFY":
         return
-    reuse_raw = artifacts.get("g3-classification-reuse.830.v1", [])
+    reuse_raw = (
+        artifacts.get("g3-classification-reuse.830.v1", [])
+        + artifacts.get("g3-classification-reuse.830.v2", [])
+    )
     if reuse_raw:
-        from .g3_classification_reuse import G3ClassificationReuseV1, validate_classification_reuse
+        from .g3_classification_reuse import (
+            parse_classification_reuse,
+            validate_classification_reuse,
+        )
         if plan.stage != "D_COMPILE" or len(reuse_raw) != 1:
             raise ValueError("classification reuse is only an explicit D compile input")
-        reuse = G3ClassificationReuseV1.model_validate_json(reuse_raw[0])
+        reuse = parse_classification_reuse(reuse_raw[0])
         if (canonical_json(reuse.model_dump(mode="json", round_trip=True)) != reuse_raw[0]
                 or plan.prior_terminal_receipt_sha256 != reuse.source_terminal_receipt_sha256):
             raise ValueError("classification reuse prior receipt mismatch")
@@ -3679,17 +3760,29 @@ def _finalize_gemini_d_compile_windows(
     call_dir: str,
     call_terminals: tuple[G3CallTerminalReceiptV1, ...],
     started_at: datetime,
+    prepared: G3StageExecutionContext | None = None,
 ) -> CompileResult:
     """Aggregate successful window calls or seal the stage as failed."""
 
     try:
-        aggregate = aggregate_gemini_d_compile_window_outputs(request, outputs)
+        implementation = "g3-gemini-d-window-aggregate.830.v1"
+        if prepared is not None and prepared.projection_reuse is not None:
+            from .g3_field_task_recovery import aggregate_g3_recovered_compile_outputs
+
+            aggregate = aggregate_g3_recovered_compile_outputs(
+                request, (*prepared.reused_outputs, *outputs),
+            )
+            implementation = "g3-gemini-d-recovery-aggregate.830.v1"
+            raw = batch_json_bytes_830_g3(aggregate).decode()
+        else:
+            aggregate = aggregate_gemini_d_compile_window_outputs(request, outputs)
+            raw = batch_json_bytes_830_g3(aggregate).decode()
         return record_model_compile(
             request,
             aggregate,
             run_id=plan.run_id,
-            implementation="g3-gemini-d-window-aggregate.830.v1",
-            raw=batch_json_bytes_830_g3(aggregate).decode(),
+            implementation=implementation,
+            raw=raw,
         )
     except Exception:
         _failed_stage_terminal(
@@ -3945,8 +4038,8 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     _is_g3_gemini_d_identity("D_COMPILE", call.identity)
                     and call.window_id is not None
                 ):
-                    output = _gemini_d_window_output(
-                        raw=semantic, request=compile_request_model, call=call
+                    output = _prepared_gemini_d_window_output(
+                        raw=semantic, request=compile_request_model, call=call, prepared=prepared,
                     )
                     assert call.window_id is not None
                     if terminal.projection_sha256 != _gemini_d_window_projection_hash(
@@ -4115,8 +4208,8 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     _is_g3_gemini_d_identity("D_COMPILE", call.identity)
                     and call.window_id is not None
                 ):
-                    output = _gemini_d_window_output(
-                        raw=semantic, request=compile_request_model, call=call
+                    output = _prepared_gemini_d_window_output(
+                        raw=semantic, request=compile_request_model, call=call, prepared=prepared,
                     )
                     assert call.window_id is not None
                     projection_hash = _gemini_d_window_projection_hash(
@@ -4316,6 +4409,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 call_dir=last_call_dir,
                 call_terminals=tuple(call_terminals),
                 started_at=stage_started,
+                prepared=prepared,
             )
         assert compile_result is not None
         composed = compose_batch_output(compile_request_model, compile_result)
@@ -4449,7 +4543,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # The admission verifier imports the canonical module to create typed
+    # contexts. Execute its main so CLI runs use the same class identities.
+    from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
+        main as canonical_main,
+    )
+
+    raise SystemExit(canonical_main())
 
 
 __all__ = [

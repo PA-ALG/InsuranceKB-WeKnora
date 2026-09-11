@@ -139,3 +139,28 @@ def test_origin_reopen_is_mandatory_even_for_a_valid_reuse_binding(tmp_path):
         api.validate_classification_reuse(
             receipt, request=request, ledger_root=tmp_path, admission_root=tmp_path
         )
+
+
+def test_title_reuse_explicitly_binds_rule_overlay_without_relabeling_source():
+    from insurance_harness.knowledge_compiler.g3_title_routing import build_title_routing_overlay
+
+    api = _api()
+    request = validate_batch_candidate(FIXTURE.read_bytes()).request
+    inputs = request.resolution_inputs
+    overlay, effective = build_title_routing_overlay(
+        corpus=inputs.corpus, catalog=request.catalog, source_proposals=inputs.proposals,
+        material_ids=tuple(row.material_id for row in inputs.proposals.proposals),
+    )
+    assert effective == inputs.proposals
+    receipt = api.build_classification_reuse(
+        request=request, source_chain_manifest_hash="1" * 64,
+        source_terminal_receipt_sha256="2" * 64, source_admission_digest="3" * 64,
+        source_resolution_sha256=request.resolution.batch_sha256, title_overlay=overlay,
+    )
+    assert receipt.contract == "g3-classification-reuse.830.v2"
+    assert receipt.source_proposals_sha256 == inputs.proposals.proposals_sha256
+    api.validate_reuse_binding(receipt, request=request)
+    with pytest.raises(ValueError):
+        api.validate_reuse_binding(
+            receipt, request=request.model_copy(update={"request_sha256": "e" * 64})
+        )

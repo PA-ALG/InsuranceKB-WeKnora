@@ -3704,3 +3704,16 @@ def test_gemini_d_window_projection_rejects_wrong_kind_and_nonoccurring_quote() 
         bounded.project_gemini_d_compile_window_response(
             canonical_json(invalid), candidate.request, window
         )
+
+
+def test_module_cli_uses_canonical_main_context_type(monkeypatch):
+    import runpy
+    import sys
+
+    from insurance_harness.knowledge_compiler import g3_bounded_model_execution as canonical
+
+    monkeypatch.setattr(canonical, "main", lambda: 31)
+    monkeypatch.setattr(sys, "argv", ["g3-bounded-model-execution", "--help"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module(canonical.__name__, run_name="__main__")
+    assert exc.value.code == 31

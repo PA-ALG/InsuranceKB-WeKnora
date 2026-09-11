@@ -1216,6 +1216,118 @@ def _read_completed_g3_call_leaf(
     return terminal, semantic_bytes, policy_bytes, str(call_dir)
 
 
+@dataclass(frozen=True, slots=True)
+class G3RecordedCall:
+    """Original transport evidence, including failed calls; no execution authority."""
+
+    terminal: G3CallTerminalReceiptV1
+    request_bytes: bytes
+    response_bytes: bytes
+    semantic_bytes: bytes
+    policy_bytes: bytes
+    observed_usage: G3ProviderUsageV1
+    anomaly_codes: tuple[str, ...]
+
+
+def read_g3_recorded_call(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    call: G3CallPlanV1,
+    admission_artifact_digest: Sha256Hex,
+    ledger_root: Path | None = None,
+) -> G3RecordedCall:
+    """Verify and read a complete Gemini response without changing its old status.
+
+    A failed enclosing stage does not invalidate an immutable call's evidence.
+    Outcome-unknown calls and incomplete/corrupt leaves remain ineligible.
+    """
+    from insurance_harness.run_admission.profiles.g3_bounded_execution import (
+        validate_g3_bounded_plan,
+    )
+
+    plan = validate_g3_bounded_plan(plan)
+    if call not in plan.request_manifest.calls or not _is_g3_gemini_identity(call.identity):
+        raise G3LedgerDenied("INVALID_CALL_RESERVATION")
+    root = Path(G3_LEDGER_ROOT) if ledger_root is None else ledger_root
+    if not isinstance(root, Path):
+        raise G3LedgerDenied("LEDGER_UNAVAILABLE")
+    chain_dir = root / "chains" / plan.chain_manifest_hash
+    directory = chain_dir / "calls" / _g3_reservation_key(plan, call, admission_artifact_digest)
+    try:
+        for path in (root, chain_dir, chain_dir / "calls", directory):
+            info = path.lstat()
+            if (
+                not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o700
+            ):
+                raise G3LedgerDenied("LEDGER_UNAVAILABLE")
+        lock = os.open(chain_dir / ".chain.lock", os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        raise G3LedgerDenied("LEDGER_UNAVAILABLE") from None
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            _read_completed_g3_call_leaf(
+                plan=plan, call=call, admission_artifact_digest=admission_artifact_digest,
+                chain_dir=chain_dir, call_dir=directory,
+            )
+        except G3LedgerDenied as exc:
+            if exc.reason_code != "TERMINAL_FAILED":
+                raise
+        terminal_raw = _read_secure_ledger_file(directory / "call-terminal.json")
+        terminal = G3CallTerminalReceiptV1.model_validate_json(terminal_raw)
+        request = _read_secure_ledger_file(directory / "request-body.private.json")
+        response = _read_secure_ledger_file(directory / "response-body.private.json")
+        policy_raw = _read_secure_ledger_file(directory / "policy-receipt.json")
+        policy = PolicyReceipt.model_validate_json(policy_raw)
+        prepared = G3PreparedReceiptV1.model_validate_json(
+            _read_secure_ledger_file(directory / "prepared.json")
+        )
+        if (
+            terminal_raw != canonical_json(terminal.model_dump(mode="json", round_trip=True))
+            or hashlib.sha256(request).hexdigest() != call.request_body_sha256
+            or len(request) != call.request_bytes
+            or terminal.verified_binding_digest != prepared.verified_binding_digest
+            or terminal.verified_binding_digest != policy.verified_binding_digest
+            or policy.purpose != plan.purpose
+            or policy.run_schema_version != plan.run_schema_version
+            or policy.run_id != plan.run_id
+            or policy.run_revision != plan.run_revision
+            or policy.space_id != plan.space_id
+            or policy.template_hash != plan.template_lock.approved_template_hash
+            or policy.model_plan_hash != plan.model_plan_hash
+            or terminal.response_meta is None
+            or terminal.response_meta.http_status != 200
+            or terminal.response_meta.content_type.split(";", 1)[0].strip().lower()
+            != "application/json"
+        ):
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        _content, semantic, usage = _parse_g3_gemini_provider_response(call.identity, response)
+        if terminal.provider_usage is not None and terminal.provider_usage != usage:
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        semantic_path = directory / "semantic-content.private.json"
+        if semantic_path.exists() and _read_secure_ledger_file(semantic_path) != semantic:
+            raise G3LedgerDenied("RESERVATION_INCOMPLETE")
+        anomalies = []
+        if usage.prompt_tokens > call.input_token_ceiling:
+            anomalies.append("INPUT_TOKEN_CAP_EXCEEDED")
+        if usage.completion_tokens > call.output_token_ceiling:
+            anomalies.append("OUTPUT_TOKEN_CAP_EXCEEDED")
+        return G3RecordedCall(
+            terminal=terminal, request_bytes=request, response_bytes=response,
+            semantic_bytes=semantic, policy_bytes=policy_raw, observed_usage=usage,
+            anomaly_codes=tuple(sorted(anomalies)),
+        )
+    except G3LedgerDenied:
+        raise
+    except (OSError, ValueError):
+        raise G3LedgerDenied("RESERVATION_INCOMPLETE") from None
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        os.close(lock)
+
+
 def _reopen_completed_g3_call(
     *,
     plan: G3BoundedAdmissionPlanV1,

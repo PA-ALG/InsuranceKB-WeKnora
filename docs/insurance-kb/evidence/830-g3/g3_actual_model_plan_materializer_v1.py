@@ -2937,7 +2937,7 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
 def materialize_product_d_inputs(
     *, options, chain, parent, parent_digest, protocol_seed, request,
     configured, stage="D_COMPILE", reuse=None, model_result=None,
-    final_result=None, prior_terminal_sha=None,
+    final_result=None, prior_terminal_sha=None, projection_reuse=None,
 ):
     """Build a signed-admission input from an existing typed product slice.
 
@@ -2958,20 +2958,36 @@ def materialize_product_d_inputs(
     if stage == "D_COMPILE":
         if reuse is not None:
             from insurance_harness.knowledge_compiler.g3_classification_reuse import (
-                G3ClassificationReuseV1, validate_reuse_binding,
+                parse_classification_reuse, validate_reuse_binding,
             )
-            reuse = G3ClassificationReuseV1.model_validate(reuse)
+            reuse = parse_classification_reuse(reuse)
             validate_reuse_binding(reuse, request=request)
             if prior_terminal_sha not in (None, reuse.source_terminal_receipt_sha256):
                 raise ValueError("product D reuse prior mismatch")
             prior_terminal_sha = reuse.source_terminal_receipt_sha256
             typed.append((reuse.contract, "classification-reuse.json",
                           canonical_json(reuse.model_dump(mode="json", round_trip=True))))
-        windows = runtime.derive_gemini_d_compile_windows(request)
-        def render(window):
-            return runtime.render_gemini_d_compile_window_context(identity, request, window)
+        if projection_reuse is not None:
+            from insurance_harness.knowledge_compiler.g3_d_projection_reuse import (
+                G3DProjectionReuseManifestV1,
+            )
+            from insurance_harness.knowledge_compiler.g3_d_recovery_execution import (
+                derive_recovery_windows, render_recovery_context,
+            )
+            projection_reuse = G3DProjectionReuseManifestV1.model_validate(projection_reuse)
+            if projection_reuse.current_request_sha256 != request.request_sha256:
+                raise ValueError("product D projection reuse request mismatch")
+            typed.append((projection_reuse.contract, "d-projection-reuse.json",
+                          canonical_json(projection_reuse.model_dump(mode="json", round_trip=True))))
+            windows = derive_recovery_windows(request, projection_reuse)
+            def render(window):
+                return render_recovery_context(identity, request, window)
+        else:
+            windows = runtime.derive_gemini_d_compile_windows(request)
+            def render(window):
+                return runtime.render_gemini_d_compile_window_context(identity, request, window)
     else:
-        if reuse is not None or model_result is None or final_result is None:
+        if reuse is not None or projection_reuse is not None or model_result is None or final_result is None:
             raise ValueError("product review needs its actual D compile results")
         typed.extend((
             ("g3-d-model-compile-result.830.v1", "model-compile-result.json", canonical_json(model_result.model_dump(mode="json", round_trip=True))),
