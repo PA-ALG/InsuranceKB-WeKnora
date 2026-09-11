@@ -2617,7 +2617,9 @@ func expectedEntityDecision830G3(
 			}
 		}
 	}
-	nameIDs, codeIDs := append([]string(nil), row.MultiName...), append([]string(nil), row.MultiCode...)
+	// Preserve the closed wire contract's empty arrays when replaying Python
+	// decisions; nil serializes as null and changes the immutable decision hash.
+	nameIDs, codeIDs := append([]string{}, row.MultiName...), append([]string{}, row.MultiCode...)
 	var disposition string
 	var candidate *EntityCandidate830G3
 	var matchedID, matchedVersion, queueID, queueOwner *string
