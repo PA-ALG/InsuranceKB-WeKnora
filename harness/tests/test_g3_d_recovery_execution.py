@@ -30,6 +30,9 @@ def test_recovery_only_plans_fields_not_already_evidenced():
     ) for entity, keys in sorted(grouped.items()))
     windows = recovery.derive_recovery_windows(request, SimpleNamespace(entries=entries))
     assert len(windows) == 1
+    import re
+
+    assert re.fullmatch(r"window_[0-9a-f]{64}", windows[0]["window_id"])
     assert set(windows[0]["field_keys"]) == missing
     assert windows[0]["entity_id"] == target
     forged = SimpleNamespace(

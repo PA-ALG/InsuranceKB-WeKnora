@@ -76,7 +76,7 @@ def derive_g3_field_recovery_window(
     return {
         **value,
         "window_id": runtime._g3_d_ref(
-            "recovery-window",
+            "window",
             request.request_sha256,
             {"extraction_policy": runtime.gemini_d_extraction_policy(), **value},
         ),
