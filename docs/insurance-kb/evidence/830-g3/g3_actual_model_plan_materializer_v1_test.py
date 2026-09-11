@@ -1446,3 +1446,23 @@ def test_v2_options_validate_actual_product_windows_without_capacity_grid():
     wire['calls'][-1]['ordinal'] = 0
     with pytest.raises(ValueError, match='product'):
         module.ExecutionOptions.model_validate_json(canonical_json(wire))
+
+
+@pytest.mark.parametrize('review_count', [31, 300, 301])
+def test_v2_review_capacity_matches_bounded_review_runtime(review_count):
+    module = _load_module()
+    wire = _legacy_gemini_options(module).model_dump(mode='json')
+    wire['contract'] = 'g3-product-model-execution-options.830.v2'
+    compiled = next(row for row in wire['calls'] if row['stage'] == 'D_COMPILE')
+    compiled.update(window_id='window-product-a', material_ids=['material-1'])
+    review = next(row for row in wire['calls'] if row['stage'] == 'D_REVIEW')
+    wire['calls'] = [row for row in wire['calls'] if row['stage'] != 'D_REVIEW'] + [
+        {**review, 'call_id': f'product-review-{i:03d}', 'ordinal': i}
+        for i in range(review_count)
+    ]
+    if review_count > 300:
+        with pytest.raises(ValueError, match='capacity invalid'):
+            module.ExecutionOptions.model_validate_json(canonical_json(wire))
+    else:
+        value = module.ExecutionOptions.model_validate_json(canonical_json(wire))
+        assert sum(row.stage == 'D_REVIEW' for row in value.calls) == review_count

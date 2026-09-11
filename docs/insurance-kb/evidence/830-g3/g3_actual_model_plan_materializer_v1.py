@@ -462,7 +462,7 @@ class ExecutionOptions(_Closed):
                 "g3-user-gateway", "gemini"
             ):
                 if self.contract == "g3-product-model-execution-options.830.v2":
-                    if (not rows or len(rows) > (300 if stage == "D_COMPILE" else 30)
+                    if (not rows or len(rows) > 300
                             or tuple(row.ordinal for row in rows) != tuple(range(len(rows)))):
                         raise ValueError("product D call ordinals or capacity invalid")
                     bound = [row for row in rows if row.window_id is not None]

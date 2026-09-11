@@ -4056,10 +4056,25 @@ async def _run_bounded_call_tasks(calls, execute, *, worker_limit: int):
     if worker_limit not in (1, 2):
         raise ValueError("G3 worker limit must be 1 or 2")
     semaphore = asyncio.Semaphore(worker_limit)
+    gateway_unavailable = False
     async def one(call):
+        nonlocal gateway_unavailable
         async with semaphore:
+            if gateway_unavailable:
+                # Never enter execute: no reservation, started receipt or retry.
+                return None
             try:
-                return await execute(call)
+                result = await execute(call)
+                if (
+                    isinstance(result, G3CallTerminalReceiptV1)
+                    and result.status == "FAILED"
+                    and result.response_meta is not None
+                    and result.response_meta.http_status in (429, 503)
+                ):
+                    # This is shared transport exhaustion, not a field failure.
+                    # In-flight tasks finish; a later explicit run starts fresh.
+                    gateway_unavailable = True
+                return result
             except Exception as error:
                 return error
     return tuple(await asyncio.gather(*(one(call) for call in calls)))
@@ -4475,7 +4490,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
             )
             if partial:
                 failures.append((failed_call, call_dir, error))
-                return
+                return failed_call
             _failed_stage_terminal(
                 plan=plan,
                 admission_digest=admission_digest,
