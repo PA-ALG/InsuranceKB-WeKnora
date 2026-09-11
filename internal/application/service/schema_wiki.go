@@ -2587,7 +2587,7 @@ func (s *SchemaWikiService) ReadSchemaCitationContent(
 			if route.Scope != scope {
 				return nil, ErrSchemaWikiCitationUnavailable
 			}
-			pin, bundle, loadErr := s.loadExactConceptBundle830G2(ctx, principal, scope, route.ReleaseID)
+			pin, bundle, isG3, loadErr := s.loadExactConceptBundleWithKind830G3(ctx, principal, scope, route.ReleaseID)
 			if loadErr != nil || pin.ActivationEpoch() != route.ActivationEpoch {
 				return nil, ErrSchemaWikiCitationUnavailable
 			}
@@ -2600,7 +2600,8 @@ func (s *SchemaWikiService) ReadSchemaCitationContent(
 				return nil, ErrSchemaWikiCitationUnavailable
 			}
 			return s.conceptSourceAuthority.ReadConceptCitationByOpaqueToken830G2(ctx, scope, token, ConceptCitationAuthorityRequest830G2{
-				Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(), CandidateHash: bundle.CandidateHash,
+				TrustedG3: isG3,
+				Scope:     scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(), CandidateHash: bundle.CandidateHash,
 				MemberID: route.MemberID, CitationID: route.CitationID, Evidence: evidence, SourceBlock: sourceBlock, Bundle: &bundle,
 			})
 		}

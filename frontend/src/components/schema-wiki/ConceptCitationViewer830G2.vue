@@ -29,8 +29,9 @@ onMounted(async () => {
     if (!alive) return
     const opened = await props.pdfPort.open(bytes.slice())
     if (opened.pageCount !== authority.revision_source.page_count) throw new Error('PAGE_UNAVAILABLE')
-    const page = await opened.renderPage(authority.page_number)
-    if (page.pageNumber !== authority.page_number || ![page.width, page.height].every(n => Number.isFinite(n) && n > 0)) {
+    const physicalPage = authority.source_locator?.actual_page_number ?? authority.page_number
+    const page = await opened.renderPage(physicalPage)
+    if (page.pageNumber !== physicalPage || ![page.width, page.height].every(n => Number.isFinite(n) && n > 0)) {
       throw new Error('PAGE_UNAVAILABLE')
     }
     if (!alive) return
@@ -50,6 +51,7 @@ onMounted(async () => {
 </script>
 
 <template>
+  <p v-if="rendered" data-testid="citation-page-label">第 {{ rendered.pageNumber }} 页</p>
   <p v-if="error" role="status" data-testid="citation-error">原文暂不可用（{{ error }}）</p>
   <div v-else-if="rendered" class="concept-source-page" data-testid="citation-page"
     :data-page-number="rendered.pageNumber" :style="{ width: `${rendered.width}px`, height: `${rendered.height}px` }">

@@ -44,6 +44,7 @@ type ConceptCitationBBox830G2 struct {
 }
 
 type ConceptCitationContentAuthority830G2 struct {
+	SourceLocator   *ConceptSourceBlockLocator830G3     `json:"source_locator,omitempty"`
 	Contract        string                              `json:"contract"`
 	TokenKeyID      string                              `json:"token_key_id"`
 	ReleaseID       string                              `json:"release_id"`
@@ -81,6 +82,8 @@ type ConceptCitationRouteAuthority830G2 struct {
 }
 
 type ConceptCitationAuthorityRequest830G2 struct {
+	// Set only after the service validates the exact G3 manifest; never from HTTP or token claims.
+	TrustedG3       bool `json:"-"`
 	Scope           types.WikiReleaseScope
 	ReleaseID       string
 	ActivationEpoch uint64
@@ -345,7 +348,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyBatchConceptSources830G3(
 		if selectedBlock, selectedEvidence := selectedBlocks[evidence.RevisionID+"\x00"+evidence.BlockID]; selectedEvidence {
 			block = selectedBlock
 		}
-		_, _, verifyErr := s.verifyEvidence(ctx, request.Scope, evidence, &block)
+		_, _, _, verifyErr := s.verifyEvidenceLocated830G3(ctx, request.Scope, evidence, &block, true)
 		return verifyErr
 	}
 	for _, binding := range bundle.Request.EntityBindings {
@@ -496,25 +499,30 @@ func conceptLegacyProofForOccurrence830G2(kind, memberID string, evidence types.
 }
 
 func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context, scope types.WikiReleaseScope, evidence types.ConceptEvidence830G2, sourceBlock *types.ConceptSourceBlock830G2) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, error) {
+	source, bbox, _, err := s.verifyEvidenceLocated830G3(ctx, scope, evidence, sourceBlock, false)
+	return source, bbox, err
+}
+
+func (s *ConceptSourceAuthorityService830G2) verifyEvidenceLocated830G3(ctx context.Context, scope types.WikiReleaseScope, evidence types.ConceptEvidence830G2, sourceBlock *types.ConceptSourceBlock830G2, trustedG3 bool) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
 	empty := ConceptCitationBBox830G2{}
 	if s == nil || s.fixed == nil || s.knowledge == nil || s.revisions == nil || s.chunks == nil || s.docreader == nil || evidence.TenantID != scope.TenantID || evidence.SpaceID != scope.SpaceID || evidence.RawKBID != scope.RawKBID || evidence.OffsetUnit != "UNICODE_CODE_POINT" || evidence.SourceType != "DOCUMENT" || evidence.Start < 0 || evidence.End <= evidence.Start || evidence.PageNumber <= 0 || testSHA256830G2(evidence.Quote) != evidence.QuoteHash {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	knowledge, err := s.knowledge.GetKnowledgeByID(ctx, scope.TenantID, evidence.KnowledgeID)
 	if err != nil || knowledge == nil || knowledge.DeletedAt.Valid || knowledge.TenantID != scope.TenantID || knowledge.KnowledgeBaseID != scope.RawKBID || !strings.EqualFold(knowledge.FileType, "pdf") {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	revision, err := s.revisions.GetRevision(ctx, evidence.KnowledgeID, evidence.ParseAttempt)
 	if err != nil || revision == nil || revision.KnowledgeID != evidence.KnowledgeID || revision.ParseAttempt != evidence.ParseAttempt || revision.FileSHA256 != evidence.SourceHash || revision.ManifestAlgorithm != types.RevisionManifestAlgorithm || revision.ManifestDigest != evidence.ParseHash || revision.ChunkCount <= 0 {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	source, resource, err := s.revisions.GetRevisionSource(ctx, scope.TenantID, evidence.KnowledgeID, evidence.ParseAttempt)
 	if err != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != evidence.RevisionID || source.FileSHA256 != evidence.SourceHash || source.ManifestDigest != evidence.ParseHash || source.ChunkCount != revision.ChunkCount || source.PageCount == nil || evidence.PageNumber > *source.PageCount || resource.ID != source.ResourceID || resource.TenantID != scope.TenantID {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	chunks, err := s.chunks.ListChunksByKnowledgeID(ctx, scope.TenantID, evidence.KnowledgeID)
 	if err != nil {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	manifest := make([]types.RevisionManifestChunk, 0, len(chunks))
 	var block *types.Chunk
@@ -523,7 +531,7 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context,
 			continue
 		}
 		if chunk.TenantID != scope.TenantID || chunk.KnowledgeID != evidence.KnowledgeID || chunk.KnowledgeBaseID != scope.RawKBID {
-			return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		manifest = append(manifest, types.RevisionManifestChunk{ID: chunk.ID, Index: chunk.ChunkIndex, Content: chunk.Content})
 		if chunk.ID == evidence.BlockID {
@@ -533,14 +541,14 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context,
 	sort.Slice(manifest, func(i, j int) bool { return manifest[i].Index < manifest[j].Index })
 	digest, err := types.ComputeRevisionManifestDigest(evidence.KnowledgeID, evidence.ParseAttempt, manifest)
 	if err != nil || len(manifest) != revision.ChunkCount || digest != revision.ManifestDigest || block == nil {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	if sourceBlock != nil && (sourceBlock.ConceptSourceIdentity830G2 != evidence.ConceptSourceIdentity830G2 || sourceBlock.BlockID != evidence.BlockID || sourceBlock.PageNumber != evidence.PageNumber || sourceBlock.SourceType != evidence.SourceType || sourceBlock.Text != block.Content) {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	runes := []rune(block.Content)
 	if evidence.End > len(runes) || string(runes[evidence.Start:evidence.End]) != evidence.Quote {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	identityCanonical, _ := canonicalJSON830G2(evidence.ConceptSourceIdentity830G2)
 	cacheKey := testSHA256Bytes830G2(identityCanonical)
@@ -549,41 +557,50 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context,
 	if !cached {
 		pdf, readErr := s.fixed.ReadFixedRevision(ctx, evidence.KnowledgeID, evidence.ParseAttempt, source.FileSHA256, source.BindingDigest, evidence.PageNumber)
 		if readErr != nil || testSHA256Bytes830G2(pdf) != evidence.SourceHash {
-			return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		result, parseErr := s.docreader.Read(ctx, &types.ReadRequest{FileContent: pdf, FileName: knowledge.FileName, FileType: "pdf", ParserEngine: "builtin", ParserEngineOverrides: map[string]string{"pdf_native_structure_capture": conceptNativeCapture830G2}})
 		if parseErr != nil {
-			return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		index, prepareErr := prepareConceptNativeQuoteIndex830G2(result, evidence.SourceHash, evidence.ParserIdentity)
 		if prepareErr != nil {
-			return nil, empty, prepareErr
+			return nil, empty, nil, prepareErr
 		}
 		capture = conceptNativeCaptureEntry830G2{pdf: append([]byte(nil), pdf...), index: index}
 	}
 	if testSHA256Bytes830G2(capture.pdf) != evidence.SourceHash {
-		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	bbox, err := resolveConceptNativeQuoteInIndex830G2(capture.index, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
+	var bbox ConceptCitationBBox830G2
+	var locator *ConceptSourceBlockLocator830G3
+	if trustedG3 {
+		if sourceBlock == nil {
+			return nil, empty, nil, ErrConceptSourceAuthorityUnavailable830G2
+		}
+		bbox, locator, err = resolveConceptSourceBlockQuote830G3(capture.index, evidence, *sourceBlock)
+	} else {
+		bbox, err = resolveConceptNativeQuoteInIndex830G2(capture.index, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
+	}
 	if err != nil {
-		return nil, empty, err
+		return nil, empty, nil, err
 	}
 	if !cached && cache != nil {
 		cache[cacheKey] = capture
 	}
-	return source, bbox, nil
+	return source, bbox, locator, nil
 }
 
 func (s *ConceptSourceAuthorityService830G2) IssueConceptCitationAuthority830G2(ctx context.Context, request ConceptCitationAuthorityRequest830G2) (*ConceptCitationContentAuthority830G2, error) {
 	if request.ReleaseID == "" || request.ActivationEpoch == 0 || request.MemberID == "" || request.CitationID == "" || !validServiceSHA256(request.CandidateHash) || s == nil || s.codec == nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	source, bbox, err := s.resolveCitationEvidence830G2(ctx, request)
+	source, bbox, locator, err := s.resolveCitationEvidenceLocated830G3(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 	now := s.codec.now().UTC()
-	authority := conceptCitationAuthorityFromResolved830G2(request, source, bbox, s.codec.activeKeyID, now.Add(schemaWikiCitationTokenTTL).Unix())
+	authority := conceptCitationAuthorityFromLocated830G3(request, source, bbox, locator, s.codec.activeKeyID, now.Add(schemaWikiCitationTokenTTL).Unix())
 	authority.AuthorityDigest, err = computeConceptCitationAuthorityDigest830G2(authority)
 	if err != nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
@@ -617,11 +634,11 @@ func (s *ConceptSourceAuthorityService830G2) ReadConceptCitationByOpaqueToken830
 	if err != nil || claims.Scope != scope || request.Scope != scope {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	source, bbox, err := s.resolveCitationEvidence830G2(ctx, request)
+	source, bbox, locator, err := s.resolveCitationEvidenceLocated830G3(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	trusted := conceptCitationAuthorityFromResolved830G2(request, source, bbox, claims.TokenKeyID, claims.ExpiresAtUnix)
+	trusted := conceptCitationAuthorityFromLocated830G3(request, source, bbox, locator, claims.TokenKeyID, claims.ExpiresAtUnix)
 	trusted.AuthorityDigest, err = computeConceptCitationAuthorityDigest830G2(trusted)
 	if err != nil {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
@@ -631,32 +648,41 @@ func (s *ConceptSourceAuthorityService830G2) ReadConceptCitationByOpaqueToken830
 	if !conceptCanonicalEqual830G2(presented, trusted) {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	return s.fixed.ReadFixedRevision(ctx, request.Evidence.KnowledgeID, request.Evidence.ParseAttempt, trusted.RevisionSource.FileSHA256, trusted.RevisionSource.BindingDigest, request.Evidence.PageNumber)
+	page := request.Evidence.PageNumber
+	if trusted.SourceLocator != nil {
+		page = trusted.SourceLocator.ActualPageNumber
+	}
+	return s.fixed.ReadFixedRevision(ctx, request.Evidence.KnowledgeID, request.Evidence.ParseAttempt, trusted.RevisionSource.FileSHA256, trusted.RevisionSource.BindingDigest, page)
 }
 
 func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidence830G2(ctx context.Context, request ConceptCitationAuthorityRequest830G2) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, error) {
+	source, bbox, _, err := s.resolveCitationEvidenceLocated830G3(ctx, request)
+	return source, bbox, err
+}
+
+func (s *ConceptSourceAuthorityService830G2) resolveCitationEvidenceLocated830G3(ctx context.Context, request ConceptCitationAuthorityRequest830G2) (*types.KnowledgeRevisionSource, ConceptCitationBBox830G2, *ConceptSourceBlockLocator830G3, error) {
 	if request.Bundle != nil {
 		proofs, err := s.verifyLegacyCarryover830G2(ctx, request.Scope, *request.Bundle)
 		if err != nil {
-			return nil, ConceptCitationBBox830G2{}, err
+			return nil, ConceptCitationBBox830G2{}, nil, err
 		}
 		canonical, canonicalErr := canonicalJSON830G2(request.Evidence)
 		if canonicalErr != nil {
-			return nil, ConceptCitationBBox830G2{}, canonicalErr
+			return nil, ConceptCitationBBox830G2{}, nil, canonicalErr
 		}
 		if proof, ok := proofs[request.MemberID+"\x00"+testSHA256Bytes830G2(canonical)]; ok {
 			if s.revisions == nil || proof.authority == nil || proof.authority.RevisionSource.RevisionSourceID != request.Evidence.RevisionID || proof.authority.PageNumber != request.Evidence.PageNumber || proof.authority.BBox.X0 < 0 || proof.authority.BBox.Y0 < 0 || proof.authority.BBox.X0 >= proof.authority.BBox.X1 || proof.authority.BBox.Y0 >= proof.authority.BBox.Y1 {
-				return nil, ConceptCitationBBox830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			source, resource, sourceErr := s.revisions.GetRevisionSource(ctx, request.Scope.TenantID, request.Evidence.KnowledgeID, request.Evidence.ParseAttempt)
 			if sourceErr != nil || source == nil || resource == nil || types.ValidateKnowledgeRevisionSourceBinding(*source) != nil || source.RevisionSourceID != request.Evidence.RevisionID || source.FileSHA256 != request.Evidence.SourceHash || source.ManifestDigest != request.Evidence.ParseHash || resource.ID != source.ResourceID || resource.TenantID != request.Scope.TenantID {
-				return nil, ConceptCitationBBox830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+				return nil, ConceptCitationBBox830G2{}, nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			bbox := proof.authority.BBox
-			return source, ConceptCitationBBox830G2{CoordinateSpace: "normalized_0_1e6_top_left", X0: bbox.X0, Y0: bbox.Y0, X1: bbox.X1, Y1: bbox.Y1}, nil
+			return source, ConceptCitationBBox830G2{CoordinateSpace: "normalized_0_1e6_top_left", X0: bbox.X0, Y0: bbox.Y0, X1: bbox.X1, Y1: bbox.Y1}, nil, nil
 		}
 	}
-	return s.verifyEvidence(ctx, request.Scope, request.Evidence, &request.SourceBlock)
+	return s.verifyEvidenceLocated830G3(ctx, request.Scope, request.Evidence, &request.SourceBlock, request.TrustedG3)
 }
 
 func conceptCitationAuthorityFromResolved830G2(request ConceptCitationAuthorityRequest830G2, source *types.KnowledgeRevisionSource, bbox ConceptCitationBBox830G2, keyID string, expires int64) ConceptCitationContentAuthority830G2 {
@@ -666,6 +692,7 @@ func conceptCitationAuthorityFromResolved830G2(request ConceptCitationAuthorityR
 // The index owns decoded values and rune/box storage; no mutable ReadResult
 // buffers escape into the request cache. Only a complete validation creates it.
 type conceptNativeQuoteIndex830G2 struct {
+	text                         string
 	sourceSHA, parserIdentitySHA string
 	coordinateSpace              string
 	pages                        map[int]conceptNativeQuotePage830G2
@@ -750,7 +777,7 @@ func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, pa
 	if lastEnd != len(markdown) {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	return &conceptNativeQuoteIndex830G2{sourceSHA: sourceSHA, parserIdentitySHA: parserIdentitySHA,
+	return &conceptNativeQuoteIndex830G2{text: result.MarkdownContent, sourceSHA: sourceSHA, parserIdentitySHA: parserIdentitySHA,
 		coordinateSpace: projection.CoordinateSpace, pages: pages}, nil
 }
 
@@ -857,7 +884,7 @@ func canonicalJSON830G2(value any) ([]byte, error) {
 }
 
 func computeConceptCitationAuthorityDigest830G2(authority ConceptCitationContentAuthority830G2) (string, error) {
-	if authority.Contract != conceptCitationAuthorityContract830G2 {
+	if !validConceptSourceLocatorShape830G3(authority) {
 		return "", ErrConceptSourceAuthorityUnavailable830G2
 	}
 	raw, err := json.Marshal(authority)
@@ -876,7 +903,7 @@ func computeConceptCitationAuthorityDigest830G2(authority ConceptCitationContent
 	if err != nil {
 		return "", err
 	}
-	return testSHA256Bytes830G2(append([]byte(conceptCitationAuthorityContract830G2+"\n"), canonical...)), nil
+	return testSHA256Bytes830G2(append([]byte(authority.Contract+"\n"), canonical...)), nil
 }
 
 func validateConceptCitationAuthority830G2(authority ConceptCitationContentAuthority830G2) error {

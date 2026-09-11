@@ -636,11 +636,11 @@ func (s *SchemaWikiService) IssueConceptCitationAuthority830G2(
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil || s.conceptSourceAuthority == nil || releaseID == "" || memberID == "" || citationID == "" {
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	pin, bundle, err := s.loadExactConceptBundle830G2(ctx, principal, scope, releaseID)
+	pin, bundle, isG3, err := s.loadExactConceptBundleWithKind830G3(ctx, principal, scope, releaseID)
 	if err != nil {
 		return nil, err
 	}
-	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID)
+	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID, isG3)
 }
 
 // IssueConceptCitationQuery830G3 classifies the pinned immutable release and
@@ -674,7 +674,7 @@ func (s *SchemaWikiService) IssueConceptCitationQuery830G3(
 	if isG3 && (len(releaseOccurrences) != 1 || preparationPresent) {
 		return nil, ErrSchemaWikiCitationUnavailable
 	}
-	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID)
+	return s.issueConceptCitationAtPin830G2(ctx, scope, pin, bundle, memberID, citationID, isG3)
 }
 
 func (s *SchemaWikiService) issueConceptCitationAtPin830G2(
@@ -684,6 +684,7 @@ func (s *SchemaWikiService) issueConceptCitationAtPin830G2(
 	bundle types.ConceptCandidateBundle830G2,
 	memberID string,
 	citationID string,
+	trustedG3 bool,
 ) (*ConceptCitationContentAuthority830G2, error) {
 	evidence, ok := conceptEvidenceByCitationID830G2(bundle, memberID, citationID)
 	if !ok {
@@ -694,22 +695,27 @@ func (s *SchemaWikiService) issueConceptCitationAtPin830G2(
 		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	return s.conceptSourceAuthority.IssueConceptCitationAuthority830G2(ctx, ConceptCitationAuthorityRequest830G2{
-		Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(),
+		TrustedG3: trustedG3, Scope: scope, ReleaseID: pin.ReleaseID(), ActivationEpoch: pin.ActivationEpoch(),
 		CandidateHash: bundle.CandidateHash, MemberID: memberID, CitationID: citationID, Evidence: evidence, SourceBlock: sourceBlock, Bundle: &bundle,
 	})
 }
 
 func (s *SchemaWikiService) loadExactConceptBundle830G2(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, releaseID string) (WikiReleasePinnedRead, types.ConceptCandidateBundle830G2, error) {
+	pin, bundle, _, err := s.loadExactConceptBundleWithKind830G3(ctx, principal, scope, releaseID)
+	return pin, bundle, err
+}
+
+func (s *SchemaWikiService) loadExactConceptBundleWithKind830G3(ctx context.Context, principal types.WikiReleasePrincipal, scope types.WikiReleaseScope, releaseID string) (WikiReleasePinnedRead, types.ConceptCandidateBundle830G2, bool, error) {
 	empty := WikiReleasePinnedRead{}
 	if s == nil || s.releaseAuthority == nil || s.releaseAuthority.repository == nil {
-		return empty, types.ConceptCandidateBundle830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+		return empty, types.ConceptCandidateBundle830G2{}, false, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	pin, err := s.releaseAuthority.BeginExactPinnedRead(ctx, principal, scope, releaseID)
 	if err != nil {
-		return empty, types.ConceptCandidateBundle830G2{}, err
+		return empty, types.ConceptCandidateBundle830G2{}, false, err
 	}
-	bundle, _, err := s.loadConceptBundleAtPin830G2(ctx, principal, scope, pin)
-	return pin, bundle, err
+	bundle, isG3, err := s.loadConceptBundleAtPin830G2(ctx, principal, scope, pin)
+	return pin, bundle, isG3, err
 }
 
 func (s *SchemaWikiService) loadConceptBundleAtPin830G2(

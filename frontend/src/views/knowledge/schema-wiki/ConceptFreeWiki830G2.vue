@@ -151,7 +151,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         class="concept-page__sources" aria-label="原文证据">
         <h2>原文证据</h2>
         <div v-for="proof in preparationEvidence(read.member)" :key="`${proof.page_number}-${proof.quote}`">
-          <p>第 {{ proof.page_number }} 页</p><blockquote>{{ proof.quote }}</blockquote>
+          <p>来源记录：第 {{ proof.page_number }} 页</p><blockquote>{{ proof.quote }}</blockquote>
         </div>
         <p class="concept-page__meta">激活后可打开原件</p>
       </section>
@@ -159,7 +159,7 @@ watch(() => [route.params.kbId, route.params.memberId, route.query], load, { imm
         <h2>原文证据</h2>
         <button v-for="citation in read.citations" :key="citation.citation_id" type="button"
           :data-testid="batchPage ? 'g3-source' : 'g2-source'" @click="selected = citation.citation_id">
-          查看第 {{ citation.page_number }} 页原文
+          {{ batchPage ? '查看原文' : `查看第 ${citation.page_number} 页原文` }}
         </button>
       </section>
       <section v-if="batchPage && read.member.kind === 'entity_overview' && selectedEntity" aria-label="产品字段">

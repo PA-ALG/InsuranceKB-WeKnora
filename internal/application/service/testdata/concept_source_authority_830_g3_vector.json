@@ -1,0 +1,188 @@
+{
+  "authority": {
+    "source_locator": {
+      "contract": "concept-source-block-locator.830.g3.v1",
+      "source_block_sha256": "07a1ecff27a6cd15124fca8b67e3ab6d1a3422b09b39be9ab02d414e62abc6e7",
+      "source_page_number": 11,
+      "start": 1211,
+      "end": 1297,
+      "block_global_start": 13829,
+      "global_start": 15040,
+      "global_end": 15126,
+      "actual_page_number": 12
+    },
+    "contract": "concept-citation-content-authority.830.g3.v1",
+    "token_key_id": "cfg42-offline-vector",
+    "release_id": "cfg42-offline-vector-not-a-release",
+    "activation_epoch": 6,
+    "candidate_hash": "c22dee77ade903097d160b04e85e010b3f6557fd0792045e6ebfe81cae0423a8",
+    "member_id": "assertion_5889424bda3b76095ed24e9b8377069dd894421bb9c8d23d6fb456c302be615e",
+    "citation_id": "citation-635e92a05bafcc1ca199bc4b",
+    "scope": {
+      "tenant_id": 10003,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+    },
+    "source": {
+      "tenant_id": 10003,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "knowledge_id": "22b90fd1-4ac8-4002-8b3d-19597fe9b4ed",
+      "parse_attempt": 1,
+      "revision_id": "b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3",
+      "source_hash": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "parse_hash": "7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c",
+      "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6"
+    },
+    "revision_source": {
+      "binding_digest": "a46e0108d07a388bb62d40f814d2997005dabf819c47a40027e85ecd0ac32797",
+      "file_sha256": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+      "page_count": 12
+    },
+    "block_id": "a3736ffe-4732-413f-a978-7b8dae89fc21",
+    "page_number": 11,
+    "quote_hash": "a365af53ad0a36d3ae2a6627479613d57b5fa7f9492f576e0ab252a1619f3f7d",
+    "bbox": {
+      "coordinate_space": "normalized_0_1e6_top_left",
+      "x0": 314954,
+      "y0": 204482,
+      "x1": 913539,
+      "y1": 253172
+    },
+    "expires_at_unix": 1800000300,
+    "authority_digest": "74d3af050a0ff2170062c1d924d8de76a271c68fd7e53f3c9252f57cc3973ff0",
+    "opaque_token": ""
+  },
+  "authority_canonical_json": "{\"activation_epoch\":6,\"bbox\":{\"coordinate_space\":\"normalized_0_1e6_top_left\",\"x0\":314954,\"x1\":913539,\"y0\":204482,\"y1\":253172},\"block_id\":\"a3736ffe-4732-413f-a978-7b8dae89fc21\",\"candidate_hash\":\"c22dee77ade903097d160b04e85e010b3f6557fd0792045e6ebfe81cae0423a8\",\"citation_id\":\"citation-635e92a05bafcc1ca199bc4b\",\"contract\":\"concept-citation-content-authority.830.g3.v1\",\"expires_at_unix\":1800000300,\"member_id\":\"assertion_5889424bda3b76095ed24e9b8377069dd894421bb9c8d23d6fb456c302be615e\",\"page_number\":11,\"quote_hash\":\"a365af53ad0a36d3ae2a6627479613d57b5fa7f9492f576e0ab252a1619f3f7d\",\"release_id\":\"cfg42-offline-vector-not-a-release\",\"revision_source\":{\"binding_digest\":\"a46e0108d07a388bb62d40f814d2997005dabf819c47a40027e85ecd0ac32797\",\"file_sha256\":\"0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c\",\"page_count\":12},\"scope\":{\"raw_kb_id\":\"b1f1764c-443d-46b8-98e3-d5aa5e55eb42\",\"space_id\":\"a8751a40-83ce-55c8-a160-079b283483ca\",\"tenant_id\":10003,\"wiki_kb_id\":\"8d5695de-f255-42d5-9a41-042ba86e97b9\"},\"source\":{\"knowledge_id\":\"22b90fd1-4ac8-4002-8b3d-19597fe9b4ed\",\"parse_attempt\":1,\"parse_hash\":\"7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c\",\"parser_identity\":\"ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6\",\"raw_kb_id\":\"b1f1764c-443d-46b8-98e3-d5aa5e55eb42\",\"revision_id\":\"b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3\",\"source_hash\":\"0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c\",\"space_id\":\"a8751a40-83ce-55c8-a160-079b283483ca\",\"tenant_id\":10003},\"source_locator\":{\"actual_page_number\":12,\"block_global_start\":13829,\"contract\":\"concept-source-block-locator.830.g3.v1\",\"end\":1297,\"global_end\":15126,\"global_start\":15040,\"source_block_sha256\":\"07a1ecff27a6cd15124fca8b67e3ab6d1a3422b09b39be9ab02d414e62abc6e7\",\"source_page_number\":11,\"start\":1211},\"token_key_id\":\"cfg42-offline-vector\"}",
+  "authority_digest": "74d3af050a0ff2170062c1d924d8de76a271c68fd7e53f3c9252f57cc3973ff0",
+  "authority_hash_domain": "concept-citation-content-authority.830.g3.v1\n",
+  "clock_unix": 1800000000,
+  "evidence": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "knowledge_id": "22b90fd1-4ac8-4002-8b3d-19597fe9b4ed",
+    "parse_attempt": 1,
+    "revision_id": "b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3",
+    "source_hash": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+    "parse_hash": "7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c",
+    "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+    "source_type": "DOCUMENT",
+    "block_id": "a3736ffe-4732-413f-a978-7b8dae89fc21",
+    "page_number": 11,
+    "offset_unit": "UNICODE_CODE_POINT",
+    "start": 1211,
+    "end": 1297,
+    "quote": "为未成年人投保的人身保险，在被保险人成年之前，因被保险人身故给付的保\r\n险金总和不得超过国务院保险监督管理机构规定的限额，身故给付的保险金额\r\n总和约定也不得超过前述限额。",
+    "quote_hash": "a365af53ad0a36d3ae2a6627479613d57b5fa7f9492f576e0ab252a1619f3f7d"
+  },
+  "private_key_reads": 0,
+  "session": {
+    "read": {
+      "contract": "concept-page-read.830.g2.v1",
+      "read_mode": "active",
+      "release_id": "cfg42-offline-vector-not-a-release",
+      "activation_epoch": 6,
+      "candidate_hash": "c22dee77ade903097d160b04e85e010b3f6557fd0792045e6ebfe81cae0423a8",
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9",
+      "member": {
+        "kind": "field_assertion",
+        "member_id": "assertion_5889424bda3b76095ed24e9b8377069dd894421bb9c8d23d6fb456c302be615e",
+        "owner_id": "entity_573c33fa4117e67f68fc6bd3673335986556190b761e2a61a547b27938e72188",
+        "title": "基本保险金额/保额范围",
+        "content": "值：本合同基本保险金额分为基本部分的基本保险金额和可选部分各项责任的基本保险金额，由投保人和保险公司在投保时约定并在保险单上载明。为未成年人投保的，身故给付的保险金额总和约定不得超过国务院保险监督管理机构规定的限额。\n有效期：always",
+        "payload": {
+          "attempted": true,
+          "concept_ids": [],
+          "conditions": [],
+          "entity_id": "entity_573c33fa4117e67f68fc6bd3673335986556190b761e2a61a547b27938e72188",
+          "entity_version": "entity_573c33fa4117e67f68fc6bd3673335986556190b761e2a61a547b27938e72188@bded9d0ac3bd7d88aa8b488bad146f3dd830410ae344437a2969b8721870c071",
+          "evidence": [
+            {
+              "block_id": "a3736ffe-4732-413f-a978-7b8dae89fc21",
+              "end": 1297,
+              "knowledge_id": "22b90fd1-4ac8-4002-8b3d-19597fe9b4ed",
+              "offset_unit": "UNICODE_CODE_POINT",
+              "page_number": 11,
+              "parse_attempt": 1,
+              "parse_hash": "7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c",
+              "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+              "quote": "为未成年人投保的人身保险，在被保险人成年之前，因被保险人身故给付的保\r\n险金总和不得超过国务院保险监督管理机构规定的限额，身故给付的保险金额\r\n总和约定也不得超过前述限额。",
+              "quote_hash": "a365af53ad0a36d3ae2a6627479613d57b5fa7f9492f576e0ab252a1619f3f7d",
+              "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+              "revision_id": "b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3",
+              "source_hash": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+              "source_type": "DOCUMENT",
+              "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+              "start": 1211,
+              "tenant_id": 10003
+            },
+            {
+              "block_id": "c8721833-dbf3-4e31-b796-a6438138074a",
+              "end": 211,
+              "knowledge_id": "22b90fd1-4ac8-4002-8b3d-19597fe9b4ed",
+              "offset_unit": "UNICODE_CODE_POINT",
+              "page_number": 2,
+              "parse_attempt": 1,
+              "parse_hash": "7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c",
+              "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+              "quote": "本合同基本保险金额分为基本部分的基本保险金额和可选部分各项责任的基本\r\n保险金额。\r\n本合同基本保险金额由您和我们在投保时约定并在保险单上载明。若该金额发\r\n生变更，则以变更后的金额为基本保险金额。",
+              "quote_hash": "9e9d7f05b9b28bc85593be50f6f8d6255dbbf587dc105374125a77c1f984c641",
+              "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+              "revision_id": "b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3",
+              "source_hash": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+              "source_type": "DOCUMENT",
+              "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+              "start": 112,
+              "tenant_id": 10003
+            }
+          ],
+          "exceptions": [],
+          "field_key": "sum_assured_range",
+          "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+          "state": "present",
+          "unknown_reason": null,
+          "valid_time": "always",
+          "value": "本合同基本保险金额分为基本部分的基本保险金额和可选部分各项责任的基本保险金额，由投保人和保险公司在投保时约定并在保险单上载明。为未成年人投保的，身故给付的保险金额总和约定不得超过国务院保险监督管理机构规定的限额。"
+        }
+      },
+      "related_members": [],
+      "citations": [
+        {
+          "citation_id": "citation-635e92a05bafcc1ca199bc4b",
+          "page_number": 11,
+          "quote": "为未成年人投保的人身保险，在被保险人成年之前，因被保险人身故给付的保\r\n险金总和不得超过国务院保险监督管理机构规定的限额，身故给付的保险金额\r\n总和约定也不得超过前述限额。"
+        }
+      ],
+      "definition_hash": "",
+      "aggregate_hash": ""
+    },
+    "scope": {
+      "tenant_id": 10003,
+      "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+      "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+      "wiki_kb_id": "8d5695de-f255-42d5-9a41-042ba86e97b9"
+    }
+  },
+  "source": "Actual immutable Candidate/source block/native data; Go locator and digest, offline synthetic release/clock; no live serving claim.",
+  "source_block": {
+    "tenant_id": 10003,
+    "space_id": "a8751a40-83ce-55c8-a160-079b283483ca",
+    "raw_kb_id": "b1f1764c-443d-46b8-98e3-d5aa5e55eb42",
+    "knowledge_id": "22b90fd1-4ac8-4002-8b3d-19597fe9b4ed",
+    "parse_attempt": 1,
+    "revision_id": "b07bfc6768fec66e8a970244138015b06098fb670a6b1e086e9cd3a3724937c3",
+    "source_hash": "0ef33683ec95d5b0976cf6b567956333aedf32eaf5f49aeae7012b00d50b795c",
+    "parse_hash": "7cdfa8c67b06c23b02a3a52d8d321bbc151856c8c8e25fd14eb0aa128d5de83c",
+    "parser_identity": "ddb9e3bcdcd20b629ae6ea032c8474ffd87008b8a28adf8c734adaa3a45cfdb6",
+    "block_id": "a3736ffe-4732-413f-a978-7b8dae89fc21",
+    "page_number": 11,
+    "text": "5.2 您解除合同的手\r\n续及风险\r\n本合同成立后，您可以解除本合同，请填写解除合同通知书并向我们提供下列\r\n证明和资料：\r\n1.保险合同；\r\n2.您的有效身份证件。\r\n若您申请解除本合同基本部分和可选部分（如有），则自我们收到解除合同通\r\n知书时起，本合同终止。您在犹豫期后解除本合同基本部分和可选部分（如有）\r\n的，我们自收到解除合同通知书之日起 30 日内向您退还本合同的现金价值。\r\n您在犹豫期后解除合同可能会遭受一定损失。\r\n因本合同保险责任的可选部分不可单独投保，故您申请解除本合同保险责任基\r\n本部分时需同时申请解除本合同保险责任可选部分；如您仅申请解除本合同保\r\n险责任可选部分，您可申请解除可选部分的一项或多项保险责任，我们将退还\r\n您申请解除的可选部分保险责任对应的现金价值。  其他权益\r\n这部分讲的是您所拥有的其他相关权益。\r\n6.1 现金价值 指保险单所具有的价值，通常体现为解除合同时，根据精算原理计算的、由我\r\n们退还的那部分金额。保单年度\r\n28末的现金价值会在保险合同上载明，保单年度\r\n内的现金价值，您可以向我们咨询。\r\n我们的咨询电话为 95511。  需关注的其他内容\r\n这部分讲的是您应当注意的其他事项。\r\n7.1 合同构成 平安附加（2026）意外伤害保险合同（简称本合同）由本保险条款、保险单或\r\n其他保险凭证、投保单、与本合同有关的投保文件、声明、批注、批单以及与\r\n本合同有关的其他书面材料共同构成。\r\n7.2 合同成立与生效 您提出保险申请且我们同意承保，本合同成立。\r\n如果本合同与主险合同同时投保，本合同的生效日与主险合同相同。\r\n如果您在主险合同保险期间内投保本合同，本合同生效日以批注所载的日期为\r\n准。\r\n除另有约定外，我们自本合同生效时起开始承担保险责任。\r\n7.3 投保范围 本合同接受的被保险人的投保年龄范围为 0 周岁（须出生满 28 日）至 64 周岁，\r\n且须符合投保当时我们的规定。\r\n7.4 年龄错误的处理 您在申请投保时，应将与有效身份证件相符的被保险人的出生日期在投保单上\r\n填明，如果发生错误按照下列方式办理：\r\n1.您申报的被保险人年龄不真实，并且其真实年龄不符合本合同约定投保年龄\r\n限制的，我们有权解除本合同，并向您退还本合同的现金价值。对于本合同\r\n28 保单年度指从保险合同生效日或保单周年日零时起至下一年度保险合同保单周年日零时止的期间为一个保单年度。\n\n解除前发生的保险事故，我们不承担保险责任；\r\n2.您申报的被保险人年龄不真实，致使您实付保险费少于应付保险费的，我们\r\n有权更正并要求您补交保险费。如果已经发生保险事故，在给付保险金时按\r\n实付保险费和应付保险费的比例给付；\r\n3.您申报的被保险人年龄不真实，致使您实付保险费多于应付保险费的，我们\r\n向您退还多收的保险费。\r\n7.5 未成年人身故保\r\n险金限制\r\n为未成年人投保的人身保险，在被保险人成年之前，因被保险人身故给付的保\r\n险金总和不得超过国务院保险监督管理机构规定的限额，身故给付的保险金额\r\n总和约定也不得超过前述限额。\r\n7.6 合同终止 当发生下列情形之一时，本合同终止：\r\n1.主险合同效力终止，但因保险期间届满导致主险合同效力终止的除外；\r\n2.在保险期间内解除本合同的；\r\n3.我们已经履行完毕保险责任的；\r\n4.本合同被保险人身故但不符合本合同约定的任何一项保险金给付条件的，本\r\n合同效力终止，我们退还本合同的现金价值；\r\n5.若您同时投保了基本部分和可选部分保险责任：\r\n（1）被保险人身故，依据本合同约定我们仅承担基本部分保险责任、无需承担\r\n可选部分任何一项保险责任的，本合同效力终止，我们退还您投保的本合\r\n同可选部分保险责任对应的现金价值；\r\n（2）被保险人身故，依据本合同约定我们仅承担基本部分保险责任和可选部分\r\n中的其中一项保险责任，本合同效力终止，我们退还您投保的、但我们未\r\n承担责任的可选部分保险责任对应的现金价值；\r\n6.本合同保险期间届满的；\r\n7.本合同约定的其他终止事项。\r\n7.7 适用主险合同条\r\n款\r\n下列各项条款，适用主险合同条款：\r\n1.保险事故通知；\r\n2.宣告死亡处理；\r\n3.保单贷款；\r\n4.自动垫交；\r\n5.明确说明与如实告知；\r\n6.本公司合同解除权的限制；\r\n7.未还款项；\r\n8.合同内容变更；\r\n9.联系方式变更；\r\n10.争议处理。\r\n（完）",
+    "source_type": "DOCUMENT"
+  },
+  "synthetic_release_identity": true,
+  "token_issued": false
+}
