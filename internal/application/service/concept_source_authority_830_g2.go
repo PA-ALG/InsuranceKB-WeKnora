@@ -160,8 +160,8 @@ type ConceptSourceAuthorityService830G2 struct {
 
 type conceptNativeCaptureCacheKey830G2 struct{}
 type conceptNativeCaptureEntry830G2 struct {
-	pdf    []byte
-	result *types.ReadResult
+	pdf   []byte
+	index *conceptNativeQuoteIndex830G2
 }
 
 type conceptLegacyProof830G2 struct {
@@ -555,18 +555,21 @@ func (s *ConceptSourceAuthorityService830G2) verifyEvidence(ctx context.Context,
 		if parseErr != nil {
 			return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
 		}
-		capture = conceptNativeCaptureEntry830G2{pdf: append([]byte(nil), pdf...), result: result}
-		if cache != nil {
-			cache[cacheKey] = capture
+		index, prepareErr := prepareConceptNativeQuoteIndex830G2(result, evidence.SourceHash, evidence.ParserIdentity)
+		if prepareErr != nil {
+			return nil, empty, prepareErr
 		}
+		capture = conceptNativeCaptureEntry830G2{pdf: append([]byte(nil), pdf...), index: index}
 	}
 	if testSHA256Bytes830G2(capture.pdf) != evidence.SourceHash {
 		return nil, empty, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	result := capture.result
-	bbox, err := resolveConceptNativeQuote830G2(result, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
+	bbox, err := resolveConceptNativeQuoteInIndex830G2(capture.index, evidence.SourceHash, evidence.ParserIdentity, evidence.PageNumber, evidence.Quote)
 	if err != nil {
 		return nil, empty, err
+	}
+	if !cached && cache != nil {
+		cache[cacheKey] = capture
 	}
 	return source, bbox, nil
 }
@@ -660,51 +663,75 @@ func conceptCitationAuthorityFromResolved830G2(request ConceptCitationAuthorityR
 	return ConceptCitationContentAuthority830G2{Contract: conceptCitationAuthorityContract830G2, TokenKeyID: keyID, ReleaseID: request.ReleaseID, ActivationEpoch: request.ActivationEpoch, CandidateHash: request.CandidateHash, MemberID: request.MemberID, CitationID: request.CitationID, Scope: request.Scope, Source: request.Evidence.ConceptSourceIdentity830G2, RevisionSource: ConceptRevisionSourceAuthority830G2{BindingDigest: source.BindingDigest, FileSHA256: source.FileSHA256, PageCount: *source.PageCount}, BlockID: request.Evidence.BlockID, PageNumber: request.Evidence.PageNumber, QuoteHash: request.Evidence.QuoteHash, BBox: bbox, ExpiresAtUnix: expires}
 }
 
+// The index owns decoded values and rune/box storage; no mutable ReadResult
+// buffers escape into the request cache. Only a complete validation creates it.
+type conceptNativeQuoteIndex830G2 struct {
+	sourceSHA, parserIdentitySHA string
+	coordinateSpace              string
+	pages                        map[int]conceptNativeQuotePage830G2
+}
+
+type conceptNativeQuotePage830G2 struct {
+	runes       []rune
+	globalStart int
+	boxes       map[int][4]int
+}
+
 func resolveConceptNativeQuote830G2(result *types.ReadResult, sourceSHA, parserIdentitySHA string, pageNumber int, quote string) (ConceptCitationBBox830G2, error) {
-	empty := ConceptCitationBBox830G2{}
-	if result == nil || result.Error != "" || result.NativeStructure == nil || pageNumber <= 0 || quote == "" || !validServiceSHA256(sourceSHA) || !validServiceSHA256(parserIdentitySHA) {
-		return empty, ErrConceptSourceAuthorityUnavailable830G2
+	if pageNumber <= 0 || quote == "" {
+		return ConceptCitationBBox830G2{}, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	index, err := prepareConceptNativeQuoteIndex830G2(result, sourceSHA, parserIdentitySHA)
+	if err != nil {
+		return ConceptCitationBBox830G2{}, err
+	}
+	return resolveConceptNativeQuoteInIndex830G2(index, sourceSHA, parserIdentitySHA, pageNumber, quote)
+}
+
+func prepareConceptNativeQuoteIndex830G2(result *types.ReadResult, sourceSHA, parserIdentitySHA string) (*conceptNativeQuoteIndex830G2, error) {
+	if result == nil || result.Error != "" || result.NativeStructure == nil || !validServiceSHA256(sourceSHA) || !validServiceSHA256(parserIdentitySHA) {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	artifact := result.NativeStructure
 	if artifact.SchemaVersion != conceptNativeContract830G2 || artifact.SourceSHA256 != sourceSHA || artifact.RawSHA256 != artifact.SanitizedSHA256 || testSHA256Bytes830G2(artifact.SanitizedJSON) != artifact.SanitizedSHA256 {
-		return empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	var projection conceptNativeProjection830G2
 	decoder := json.NewDecoder(bytes.NewReader(artifact.SanitizedJSON))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&projection) != nil || !jsonEOF830G2(decoder) {
-		return empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	canonical, err := canonicalJSON830G2(projection)
 	identityCanonical, identityErr := canonicalJSON830G2(projection.ParserIdentity)
 	if err != nil || identityErr != nil || !bytes.Equal(canonical, artifact.SanitizedJSON) || projection.Contract != conceptNativeContract830G2 || projection.SourceSHA256 != sourceSHA || projection.MarkdownSHA256 != testSHA256830G2(result.MarkdownContent) || projection.CoordinateSpace != "normalized_0_1e6_top_left" || projection.ParserIdentity.ProducerContract != "weknora.docreader.builtin-pdfium-charbox.v1" || projection.ParserIdentity.CaptureMode != conceptNativeCapture830G2 || projection.ParserIdentity.Pypdfium2Version == "" || projection.ParserIdentity.PDFiumVersion == "" || projection.ParserIdentitySHA256 != testSHA256Bytes830G2(identityCanonical) || projection.ParserIdentitySHA256 != parserIdentitySHA || len(projection.Pages) == 0 {
-		return empty, ErrConceptSourceAuthorityUnavailable830G2
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
 	}
 	markdown := []rune(result.MarkdownContent)
-	var target *conceptNativePage830G2
+	pages := make(map[int]conceptNativeQuotePage830G2, len(projection.Pages))
 	lastEnd := 0
 	for index := range projection.Pages {
 		page := &projection.Pages[index]
 		if page.PageNumber != index+1 || (index == 0 && page.GlobalCodepointStart != 0) || page.GlobalCodepointStart < lastEnd || page.GlobalCodepointEnd < page.GlobalCodepointStart || page.GlobalCodepointEnd > len(markdown) || !validConceptDimension830G2(page.WidthPoints) || !validConceptDimension830G2(page.HeightPoints) || testSHA256830G2(string(markdown[page.GlobalCodepointStart:page.GlobalCodepointEnd])) != page.PageTextSHA256 {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		if index > 0 && (page.GlobalCodepointStart-lastEnd != 2 || string(markdown[lastEnd:page.GlobalCodepointStart]) != "\n\n") {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		pageRunes := markdown[page.GlobalCodepointStart:page.GlobalCodepointEnd]
-		boxPositions := map[int]struct{}{}
+		boxPositions := make(map[int][4]int, len(page.BBoxes))
 		for _, box := range page.BBoxes {
 			if box.GlobalCodepointEnd != box.GlobalCodepointStart+1 || box.GlobalCodepointStart < page.GlobalCodepointStart || box.GlobalCodepointEnd > page.GlobalCodepointEnd || !validConceptBBox830G2(box.BBox) {
-				return empty, ErrConceptSourceAuthorityUnavailable830G2
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			local := box.GlobalCodepointStart - page.GlobalCodepointStart
 			if unicode.IsSpace(pageRunes[local]) {
-				return empty, ErrConceptSourceAuthorityUnavailable830G2
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
 			if _, duplicate := boxPositions[box.GlobalCodepointStart]; duplicate {
-				return empty, ErrConceptSourceAuthorityUnavailable830G2
+				return nil, ErrConceptSourceAuthorityUnavailable830G2
 			}
-			boxPositions[box.GlobalCodepointStart] = struct{}{}
+			boxPositions[box.GlobalCodepointStart] = box.BBox
 		}
 		visible := 0
 		for _, character := range pageRunes {
@@ -713,20 +740,30 @@ func resolveConceptNativeQuote830G2(result *types.ReadResult, sourceSHA, parserI
 			}
 		}
 		if visible != len(boxPositions) {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
+			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		lastEnd = page.GlobalCodepointEnd
-		if page.PageNumber == pageNumber {
-			target = page
+		pages[page.PageNumber] = conceptNativeQuotePage830G2{
+			runes: pageRunes, globalStart: page.GlobalCodepointStart, boxes: boxPositions,
 		}
 	}
 	if lastEnd != len(markdown) {
+		return nil, ErrConceptSourceAuthorityUnavailable830G2
+	}
+	return &conceptNativeQuoteIndex830G2{sourceSHA: sourceSHA, parserIdentitySHA: parserIdentitySHA,
+		coordinateSpace: projection.CoordinateSpace, pages: pages}, nil
+}
+
+func resolveConceptNativeQuoteInIndex830G2(index *conceptNativeQuoteIndex830G2, sourceSHA, parserIdentitySHA string, pageNumber int, quote string) (ConceptCitationBBox830G2, error) {
+	empty := ConceptCitationBBox830G2{}
+	if index == nil || sourceSHA != index.sourceSHA || parserIdentitySHA != index.parserIdentitySHA || pageNumber <= 0 || quote == "" {
 		return empty, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	if target == nil {
+	target, ok := index.pages[pageNumber]
+	if !ok {
 		return empty, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	pageRunes := markdown[target.GlobalCodepointStart:target.GlobalCodepointEnd]
+	pageRunes := target.runes
 	quoteRunes := []rune(quote)
 	match := -1
 	for start := 0; start+len(quoteRunes) <= len(pageRunes); start++ {
@@ -740,26 +777,13 @@ func resolveConceptNativeQuote830G2(result *types.ReadResult, sourceSHA, parserI
 	if match < 0 {
 		return empty, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	boxes := map[int][4]int{}
-	for _, box := range target.BBoxes {
-		if box.GlobalCodepointEnd != box.GlobalCodepointStart+1 || box.GlobalCodepointStart < target.GlobalCodepointStart || box.GlobalCodepointEnd > target.GlobalCodepointEnd || !validConceptBBox830G2(box.BBox) {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		local := box.GlobalCodepointStart - target.GlobalCodepointStart
-		if unicode.IsSpace(pageRunes[local]) {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		if _, exists := boxes[box.GlobalCodepointStart]; exists {
-			return empty, ErrConceptSourceAuthorityUnavailable830G2
-		}
-		boxes[box.GlobalCodepointStart] = box.BBox
-	}
+	boxes := target.boxes
 	x0, y0, x1, y1 := 1_000_001, 1_000_001, -1, -1
 	for offset, char := range quoteRunes {
 		if unicode.IsSpace(char) {
 			continue
 		}
-		box, ok := boxes[target.GlobalCodepointStart+match+offset]
+		box, ok := boxes[target.globalStart+match+offset]
 		if !ok {
 			return empty, ErrConceptSourceAuthorityUnavailable830G2
 		}
@@ -779,7 +803,7 @@ func resolveConceptNativeQuote830G2(result *types.ReadResult, sourceSHA, parserI
 	if x1 <= x0 || y1 <= y0 {
 		return empty, ErrConceptSourceAuthorityUnavailable830G2
 	}
-	return ConceptCitationBBox830G2{CoordinateSpace: projection.CoordinateSpace, X0: x0, Y0: y0, X1: x1, Y1: y1}, nil
+	return ConceptCitationBBox830G2{CoordinateSpace: index.coordinateSpace, X0: x0, Y0: y0, X1: x1, Y1: y1}, nil
 }
 
 func validConceptBBox830G2(box [4]int) bool {
