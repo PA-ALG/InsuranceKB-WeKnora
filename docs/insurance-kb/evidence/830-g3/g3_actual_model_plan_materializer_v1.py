@@ -2937,7 +2937,7 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
 def materialize_product_d_inputs(
     *, options, chain, parent, parent_digest, protocol_seed, request,
     configured, stage="D_COMPILE", reuse=None, model_result=None,
-    final_result=None, prior_terminal_sha=None, projection_reuse=None, compile_reuse=None,
+    final_result=None, prior_terminal_sha=None, projection_reuse=None, compile_reuse=None, review_reuse=None,
 ):
     """Build a signed-admission input from an existing typed product slice.
 
@@ -2956,8 +2956,8 @@ def materialize_product_d_inputs(
     typed = [("batch-concept-compile-request.830.g3.v1", "batch-concept-compile-request.json",
               canonical_json(request.model_dump(mode="json", round_trip=True)))]
     if stage == "D_COMPILE":
-        if compile_reuse is not None:
-            raise ValueError("completed compile reuse is a review input")
+        if compile_reuse is not None or review_reuse is not None:
+            raise ValueError("completed compile/review reuse is a review input")
         if reuse is not None:
             from insurance_harness.knowledge_compiler.g3_classification_reuse import (
                 parse_classification_reuse, validate_reuse_binding,
@@ -3003,7 +3003,17 @@ def materialize_product_d_inputs(
             ("g3-d-model-compile-result.830.v1", "model-compile-result.json", canonical_json(model_result.model_dump(mode="json", round_trip=True))),
             ("g3-d-final-compile-result.830.v1", "final-compile-result.json", canonical_json(final_result.model_dump(mode="json", round_trip=True))),
         ))
-        windows = runtime.derive_gemini_d_review_windows(request, final_result.output)
+        if review_reuse is not None:
+            from insurance_harness.knowledge_compiler.g3_d_review_reuse import (
+                derive_remaining_review_windows, normalize_review_reuse,
+            )
+            manifests = normalize_review_reuse(review_reuse)
+            windows = derive_remaining_review_windows(request, final_result.output, manifests)
+            for manifest in manifests:
+                typed.append((manifest.contract, "review-result-reuse.json",
+                              canonical_json(manifest.model_dump(mode="json", round_trip=True))))
+        else:
+            windows = runtime.derive_gemini_d_review_windows(request, final_result.output)
         def render(window):
             return runtime.render_gemini_d_review_window_context(
                 identity, request, final_result.output, window

@@ -2015,13 +2015,18 @@ def project_gemini_d_review_window_response(
     """Project one review response against its exact entity-owned targets."""
 
     exact = _exact_gemini_d_review_window(request, output, window)
-    response = G3DReviewReferenceResponseV1.model_validate(_unique_json_bytes(raw))
-    if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
-        raise ValueError("D review semantic wire mismatch")
     all_targets = {
         cast(str, row["review_ref"]): cast(str, row["member_id"])
         for row in _g3_d_review_targets(request, output)
     }
+    return _project_g3_exact_review_response(raw, request, output, exact, all_targets)
+
+
+def _project_g3_exact_review_response(raw, request, output, exact, all_targets):
+    """Shared projector after the caller has derived and bound the exact window."""
+    response = G3DReviewReferenceResponseV1.model_validate(_unique_json_bytes(raw))
+    if canonical_json(response.model_dump(mode="json", round_trip=True)) != raw:
+        raise ValueError("D review semantic wire mismatch")
     expected_refs = set(cast(tuple[str, ...], exact["review_refs"]))
     refs = tuple(item.review_ref for item in response.scores)
     if len(refs) != len(set(refs)) or set(refs) != expected_refs:
@@ -2923,6 +2928,8 @@ class G3StageExecutionContext:
     final_compile_result: CompileResult | None = None
     projection_reuse: Any = None
     reused_outputs: tuple[CompileOutput, ...] = ()
+    review_reuse: Any = None
+    reused_reviews: tuple[tuple[str, ReviewOutput], ...] = ()
     recovery_windows: tuple[dict[str, object], ...] = ()
 
     def __post_init__(self):
@@ -2978,15 +2985,33 @@ def _parse_g3_stage_artifacts(
                 recovery_windows=windows,
             )
         return G3StageExecutionContext(**common, compile_request=request)
+    model_result = _one_artifact(artifacts, "g3-d-model-compile-result.830.v1", CompileResult)
+    final_result = _one_artifact(artifacts, "g3-d-final-compile-result.830.v1", CompileResult)
+    review_rows = artifacts.get("g3-d-review-result-reuse.830.v1", [])
+    if review_rows:
+        from .g3_d_review_reuse import (
+            derive_remaining_review_windows,
+            normalize_review_reuse,
+            validate_review_result_reuse,
+        )
+        manifests = normalize_review_reuse(tuple(_unique_json_bytes(raw) for raw in review_rows))
+        if not plan.request_manifest.calls:
+            raise ValueError("review reuse requires an explicitly bounded remaining call")
+        verified = validate_review_result_reuse(
+            manifests, current_request=request, current_output=final_result.output,
+            current_identity=plan.request_manifest.calls[0].identity,
+        )
+        return G3StageExecutionContext(
+            **common, compile_request=request, model_compile_result=model_result,
+            final_compile_result=final_result, review_reuse=manifests,
+            reused_reviews=tuple(verified.items()),
+            recovery_windows=derive_remaining_review_windows(
+                request, final_result.output, manifests,
+            ),
+        )
     return G3StageExecutionContext(
-        **common,
-        compile_request=request,
-        model_compile_result=_one_artifact(
-            artifacts, "g3-d-model-compile-result.830.v1", CompileResult
-        ),
-        final_compile_result=_one_artifact(
-            artifacts, "g3-d-final-compile-result.830.v1", CompileResult
-        ),
+        **common, compile_request=request, model_compile_result=model_result,
+        final_compile_result=final_result,
     )
 
 
@@ -3339,7 +3364,8 @@ def _render_g3_stage_contexts(
             and _is_g3_gemini_d_identity("D_REVIEW", calls[0].identity)
             and calls[0].window_id is not None
         ):
-            windows = derive_gemini_d_review_windows(request, final_result.output)
+            windows = (prepared.recovery_windows if prepared.review_reuse is not None
+                       else derive_gemini_d_review_windows(request, final_result.output))
             if tuple((call.window_id, call.material_ids) for call in calls) != tuple(
                 (cast(str, row["window_id"]), cast(tuple[str, ...], row["material_ids"]))
                 for row in windows
@@ -3437,6 +3463,8 @@ def prepare_g3_stage_execution_context(
         final_compile_result=prepared.final_compile_result,
         projection_reuse=prepared.projection_reuse,
         reused_outputs=prepared.reused_outputs,
+        review_reuse=prepared.review_reuse,
+        reused_reviews=prepared.reused_reviews,
         recovery_windows=prepared.recovery_windows,
     )
 
@@ -3999,13 +4027,21 @@ def _finalize_gemini_d_review_windows(
     call_dir: str,
     call_terminals: tuple[G3CallTerminalReceiptV1, ...],
     started_at: datetime,
+    prepared: G3StageExecutionContext | None = None,
 ) -> tuple[ReviewResult, BatchConceptCandidateBundle830G3V1]:
     """Aggregate successful review windows or seal the stage as failed."""
 
     try:
-        aggregate = aggregate_gemini_d_review_window_outputs(
-            request, final_compile_result.output, outputs
-        )
+        if prepared is not None and prepared.review_reuse is not None:
+            from .g3_d_review_reuse import aggregate_reused_review_outputs
+            aggregate = aggregate_reused_review_outputs(
+                request, final_compile_result.output, new_outputs=outputs,
+                reused=dict(prepared.reused_reviews),
+            )
+        else:
+            aggregate = aggregate_gemini_d_review_window_outputs(
+                request, final_compile_result.output, outputs
+            )
         raw = batch_json_bytes_830_g3(aggregate)
         context_hash = _compile_sha256(
             "batch-concept-review-context.830.g3.v1",
@@ -4642,6 +4678,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 call_dir=last_call_dir,
                 call_terminals=tuple(call_terminals),
                 started_at=stage_started,
+                prepared=prepared,
             )
         assert review_result is not None
         assert candidate is not None
