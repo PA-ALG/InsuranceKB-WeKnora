@@ -2937,7 +2937,7 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
 def materialize_product_d_inputs(
     *, options, chain, parent, parent_digest, protocol_seed, request,
     configured, stage="D_COMPILE", reuse=None, model_result=None,
-    final_result=None, prior_terminal_sha=None, projection_reuse=None,
+    final_result=None, prior_terminal_sha=None, projection_reuse=None, compile_reuse=None,
 ):
     """Build a signed-admission input from an existing typed product slice.
 
@@ -2956,6 +2956,8 @@ def materialize_product_d_inputs(
     typed = [("batch-concept-compile-request.830.g3.v1", "batch-concept-compile-request.json",
               canonical_json(request.model_dump(mode="json", round_trip=True)))]
     if stage == "D_COMPILE":
+        if compile_reuse is not None:
+            raise ValueError("completed compile reuse is a review input")
         if reuse is not None:
             from insurance_harness.knowledge_compiler.g3_classification_reuse import (
                 parse_classification_reuse, validate_reuse_binding,
@@ -2968,18 +2970,14 @@ def materialize_product_d_inputs(
             typed.append((reuse.contract, "classification-reuse.json",
                           canonical_json(reuse.model_dump(mode="json", round_trip=True))))
         if projection_reuse is not None:
-            from insurance_harness.knowledge_compiler.g3_d_projection_reuse import (
-                G3DProjectionReuseManifestV1,
-            )
             from insurance_harness.knowledge_compiler.g3_d_recovery_execution import (
-                derive_recovery_windows, render_recovery_context,
+                derive_recovery_windows, normalize_projection_reuse, render_recovery_context,
             )
-            projection_reuse = G3DProjectionReuseManifestV1.model_validate(projection_reuse)
-            if projection_reuse.current_request_sha256 != request.request_sha256:
-                raise ValueError("product D projection reuse request mismatch")
-            typed.append((projection_reuse.contract, "d-projection-reuse.json",
-                          canonical_json(projection_reuse.model_dump(mode="json", round_trip=True))))
-            windows = derive_recovery_windows(request, projection_reuse)
+            manifests = normalize_projection_reuse(projection_reuse)
+            windows = derive_recovery_windows(request, manifests)
+            for manifest in manifests:
+                typed.append((manifest.contract, "d-projection-reuse.json",
+                              canonical_json(manifest.model_dump(mode="json", round_trip=True))))
             def render(window):
                 return render_recovery_context(identity, request, window)
         else:
@@ -2989,6 +2987,18 @@ def materialize_product_d_inputs(
     else:
         if reuse is not None or projection_reuse is not None or model_result is None or final_result is None:
             raise ValueError("product review needs its actual D compile results")
+        if compile_reuse is not None:
+            from insurance_harness.knowledge_compiler.g3_d_compile_reuse import (
+                validate_compile_reuse_binding,
+            )
+            compile_reuse = validate_compile_reuse_binding(
+                compile_reuse, request=request, model_result=model_result, final_result=final_result,
+            )
+            if prior_terminal_sha not in (None, compile_reuse.origin_terminal_sha256):
+                raise ValueError("completed compile reuse prior mismatch")
+            prior_terminal_sha = compile_reuse.origin_terminal_sha256
+            typed.append((compile_reuse.contract, "compile-result-reuse.json",
+                          canonical_json(compile_reuse.model_dump(mode="json", round_trip=True))))
         typed.extend((
             ("g3-d-model-compile-result.830.v1", "model-compile-result.json", canonical_json(model_result.model_dump(mode="json", round_trip=True))),
             ("g3-d-final-compile-result.830.v1", "final-compile-result.json", canonical_json(final_result.model_dump(mode="json", round_trip=True))),

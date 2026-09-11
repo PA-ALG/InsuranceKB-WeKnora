@@ -195,3 +195,141 @@ def test_origin_loader_rejects_invalid_root_signature_before_using_historical_re
     with pytest.raises(ValueError, match="invalid historical root signature"):
         mod._load_origin("2" * 64, "/unused")
     assert reads == ["approval-envelope.json", "model-processing-authorization.json"]
+
+
+def _setup_recovery_origin(monkeypatch, candidate):
+    import hashlib
+    import json
+
+    from insurance_harness.knowledge_compiler.g3_d_recovery_execution import render_recovery_context
+    from insurance_harness.knowledge_compiler.g3_field_task_recovery import (
+        _identity,
+        derive_g3_field_recovery_window,
+    )
+    from insurance_harness.run_admission.g3_models import canonical_json
+
+    mod, request, fields, reads = _setup(monkeypatch, candidate)
+    plan, _ = mod._load_origin("origin")
+    call = plan.request_manifest.calls[0]
+    recorded = mod.gateway.read_g3_recorded_call()
+    reads.clear()
+    source_wire = json.loads(recorded.semantic_bytes)
+    from insurance_harness.knowledge_compiler import g3_bounded_model_execution as runtime
+
+    target_map = {
+        row["field_ref"]: row
+        for row in runtime._g3_d_field_targets(request, runtime._g3_d_entity_refs(request))
+    }
+    selected_rows = source_wire["fields"][:2]
+    selected_keys = sorted(target_map[row["field_ref"]]["field_key"] for row in selected_rows)
+    entity_id = target_map[selected_rows[0]["field_ref"]]["entity_id"]
+    window = derive_g3_field_recovery_window(request, entity_id=entity_id, field_keys=selected_keys)
+    context = json.loads(
+        runtime.batch_json_bytes_830_g3(render_recovery_context(_identity(), request, window))
+    )
+    body = {
+        "messages": [
+            {"role": "system", "content": "signed old instructions"},
+            {"role": "user", "content": canonical_json(context).decode()},
+        ]
+    }
+    recorded.request_bytes = canonical_json(body)
+    call.request_body_sha256 = hashlib.sha256(recorded.request_bytes).hexdigest()
+    call.request_bytes = len(recorded.request_bytes)
+    call.window_id = window["window_id"]
+    call.material_ids = tuple(window["material_ids"])
+    source_wire["fields"] = selected_rows
+    recorded.semantic_bytes = canonical_json(source_wire)
+    recorded.response_bytes = recorded.semantic_bytes
+    return mod, request, selected_keys, reads, call, recorded, body, context
+
+
+def test_repair_origin_reuses_signed_exact_subset_without_recursive_manifest_validation(
+    monkeypatch, request_fixture
+):
+    mod, request, keys, reads, call, recorded, body, context = _setup_recovery_origin(
+        monkeypatch, request_fixture
+    )
+    manifest = mod.build_d_projection_reuse_manifest(
+        origin_request=request,
+        current_request=request,
+        origin_admission_digest="2" * 64,
+        selections=(
+            mod.G3DProjectionSelectionV1(origin_call_id=call.call_id, field_keys=(keys[0],)),
+        ),
+    )
+    result = mod.validate_d_projection_reuse(manifest, current_request=request)
+    assert len(result.outputs[0].fields) == 1
+    assert result.outputs[0].fields[0].field_key == keys[0]
+    assert manifest.entries[0].origin_window_id == call.window_id
+    assert len(reads) == 2
+
+
+@pytest.mark.parametrize("mutation", ["window", "offered_span"])
+def test_repair_origin_rejects_forged_window_or_source_scope(
+    monkeypatch, request_fixture, mutation
+):
+    import hashlib
+
+    from insurance_harness.run_admission.g3_models import canonical_json
+
+    mod, request, keys, reads, call, recorded, body, context = _setup_recovery_origin(
+        monkeypatch, request_fixture
+    )
+    if mutation == "window":
+        context["window"]["window_id"] = call.window_id = "window_" + "9" * 64
+    else:
+        context["source_options"][0]["spans"][0]["quote"] += "forged source text"
+    body["messages"][1]["content"] = canonical_json(context).decode()
+    recorded.request_bytes = canonical_json(body)
+    call.request_body_sha256 = hashlib.sha256(recorded.request_bytes).hexdigest()
+    call.request_bytes = len(recorded.request_bytes)
+    with pytest.raises(ValueError, match="recovery"):
+        mod.build_d_projection_reuse_manifest(
+            origin_request=request,
+            current_request=request,
+            origin_admission_digest="2" * 64,
+            selections=(
+                mod.G3DProjectionSelectionV1(origin_call_id=call.call_id, field_keys=(keys[0],)),
+            ),
+        )
+
+
+def test_repair_origin_keeps_selected_quote_inside_original_offered_spans(
+    monkeypatch, request_fixture
+):
+    import json
+
+    from insurance_harness.run_admission.g3_models import canonical_json
+
+    mod, request, keys, reads, call, recorded, body, context = _setup_recovery_origin(
+        monkeypatch, request_fixture
+    )
+    wire = json.loads(recorded.semantic_bytes)
+    row = wire["fields"][0]
+    row.update(
+        state="present",
+        value="invented",
+        unknown_reason=None,
+        evidence=[
+            {
+                "source_ref": context["source_options"][0]["source_ref"],
+                "quote": "quote that was never offered",
+            }
+        ],
+    )
+    recorded.semantic_bytes = canonical_json(wire)
+    selected_key = next(
+        t["field_key"] for t in context["field_targets"] if t["field_ref"] == row["field_ref"]
+    )
+    with pytest.raises(ValueError, match="offered"):
+        mod.build_d_projection_reuse_manifest(
+            origin_request=request,
+            current_request=request,
+            origin_admission_digest="2" * 64,
+            selections=(
+                mod.G3DProjectionSelectionV1(
+                    origin_call_id=call.call_id, field_keys=(selected_key,)
+                ),
+            ),
+        )

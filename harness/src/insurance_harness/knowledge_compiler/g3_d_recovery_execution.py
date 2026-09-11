@@ -1,5 +1,6 @@
 """Plan only missing FieldTasks after custody-verified projection reuse."""
 
+from .g3_d_projection_reuse import G3DProjectionReuseManifestV1
 from .g3_field_task_recovery import (
     derive_g3_field_recovery_window,
     project_g3_field_recovery_response,
@@ -8,15 +9,31 @@ from .g3_field_task_recovery import (
 from .g3_field_tasks import adapt_catalog_field_tasks
 
 
+def normalize_projection_reuse(value) -> tuple[G3DProjectionReuseManifestV1, ...]:
+    """Normalize one or multiple manifests without granting historical custody."""
+    items = value if isinstance(value, (tuple, list)) else (value,)
+    if not items:
+        raise ValueError("projection reuse manifests must not be empty")
+    manifests = tuple(G3DProjectionReuseManifestV1.model_validate(item) for item in items)
+    if len({item.manifest_sha256 for item in manifests}) != len(manifests):
+        raise ValueError("projection reuse manifest is duplicated")
+    if len({item.current_request_sha256 for item in manifests}) != 1:
+        raise ValueError("projection reuse manifests bind different current requests")
+    return manifests
+
+
 def derive_recovery_windows(request, manifest) -> tuple[dict[str, object], ...]:
     from .g3_bounded_model_execution import derive_gemini_d_compile_windows
 
+    manifests = normalize_projection_reuse(manifest)
+    if any(row.current_request_sha256 != request.request_sha256 for row in manifests):
+        raise ValueError("projection reuse current request mismatch")
     tasks = adapt_catalog_field_tasks(request)
     required = {(task.entity_id, task.field_key) for task in tasks}
     reused = set()
     synthesis = set()
     entities = {binding.entity_id for binding in request.entity_bindings}
-    for entry in manifest.entries:
+    for entry in (entry for item in manifests for entry in item.entries):
         if entry.entity_id not in entities:
             raise ValueError("reused projection belongs to a foreign entity")
         for field_key in entry.field_keys:
@@ -34,11 +51,16 @@ def derive_recovery_windows(request, manifest) -> tuple[dict[str, object], ...]:
     windows = []
     for entity, keys in sorted(grouped.items()):
         for start in range(0, len(keys), 10):
-            windows.append(derive_g3_field_recovery_window(
-                request, entity_id=entity, field_keys=keys[start:start + 10],
-            ))
+            windows.append(
+                derive_g3_field_recovery_window(
+                    request,
+                    entity_id=entity,
+                    field_keys=keys[start : start + 10],
+                )
+            )
     windows.extend(
-        row for row in derive_gemini_d_compile_windows(request)
+        row
+        for row in derive_gemini_d_compile_windows(request)
         if row["kind"] == "ENTITY_SYNTHESIS" and row["entity_id"] not in synthesis
     )
     return tuple(windows)
@@ -49,27 +71,41 @@ def render_recovery_context(identity, request, window):
 
     if window.get("recovery_contract"):
         context = render_g3_field_recovery_context(identity, request, window)
-        context = {**context, "correction_instructions": (
-            "Only return the requested fields; previous valid fields are already retained.",
-            "Field windows must use transformation EXTRACT.",
-            "Unknown is not explicit absence. Use unknown with null value if no direct evidence "
-            "establishes a responsibility or its explicit exclusion.",
-            "Do not infer explicit absence from unrelated conditions, duration, or missing text.",
-            "Each quote must exactly preserve characters and line breaks in an offered span. "
-            "Use a longer unique quotation if the short quote occurs more than once.",
-            "Never infer a general rule from an incomplete list or fabricate a quote. "
-            "If the offered text is insufficient, record unknown.",
-        )}
+        context = {
+            **context,
+            "correction_instructions": (
+                "Only return the requested fields; previous valid fields are already retained.",
+                "Field windows must use transformation EXTRACT.",
+                "Unknown is not explicit absence. Use unknown with null value "
+                "if no direct evidence "
+                "establishes a responsibility or its explicit exclusion.",
+                "Do not infer explicit absence from unrelated conditions, duration, "
+                "or missing text.",
+                "Each quote must exactly preserve characters and line breaks in an offered span. "
+                "Use a longer unique quotation if the short quote occurs more than once.",
+                "Never infer a general rule from an incomplete list or fabricate a quote. "
+                "If the offered text is insufficient, record unknown.",
+            ),
+        }
     else:
         context = render_gemini_d_compile_window_context(identity, request, window)
     schema = context["response_schema"]
     properties = schema["properties"]
-    return {**context, "response_schema": {
-        **schema, "properties": {**properties, "transformation": {
-            **properties["transformation"],
-            "enum": ["EXTRACT"] if window["kind"] == "FIELDS" else ["EXTRACT", "SYNTHESIZE"],
-        }},
-    }}
+    return {
+        **context,
+        "response_schema": {
+            **schema,
+            "properties": {
+                **properties,
+                "transformation": {
+                    **properties["transformation"],
+                    "enum": ["EXTRACT"]
+                    if window["kind"] == "FIELDS"
+                    else ["EXTRACT", "SYNTHESIZE"],
+                },
+            },
+        },
+    }
 
 
 def project_recovery_response(raw, request, window):

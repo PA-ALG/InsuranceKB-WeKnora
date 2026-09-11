@@ -3251,7 +3251,8 @@ def test_gemini_d_review_windows_are_entity_scoped_and_aggregate_exactly() -> No
     request = candidate.request
     output = candidate.compile_result.output
     windows = bounded.derive_gemini_d_review_windows(request, output)
-    assert len(windows) == len(request.entity_bindings)
+    assert len(windows) > len(request.entity_bindings)
+    assert all(len(row["field_keys"]) <= 10 for row in windows)
     assert all(
         len(row["window_id"]) == 71
         and row["window_id"].startswith("window_")
@@ -3265,13 +3266,12 @@ def test_gemini_d_review_windows_are_entity_scoped_and_aggregate_exactly() -> No
         )
         assert context["window"] == window
         assert {
-            row.entity_id for row in context["candidate_partition"]["fields"]
-        } == {window["entity_id"]}
-        assert len(batch_json_bytes_830_g3(context)) < len(
-            batch_json_bytes_830_g3(
-                bounded.render_gemini_d_review_display_context(request, output)
-            )
-        )
+            row["entity_id"] for row in context["candidate_partition"]["fields"]
+        } <= {window["entity_id"]}
+        assert len(context["candidate_partition"]["fields"]) == len(window["field_keys"])
+        assert len(batch_json_bytes_830_g3(context)) <= 262144
+        assert sum(len(span["quote"]) for row in context["source_options"]
+                   for span in row["spans"]) <= 24000
         raw = canonical_json(
             {
                 "contract": "g3-d-review-semantic-references.local.v1",
@@ -3422,6 +3422,8 @@ def test_gemini_d_review_finalizer_builds_candidate_and_seals_rejection(
     )
     assert result.execution.implementation == "g3-gemini-d-review-window-aggregate.830.v1"
     assert actual.request == request
+    assert validate_batch_candidate(batch_json_bytes_830_g3(actual)) == actual
+    assert actual.admission == bounded._g3_human_admission(request, output, result.output)
 
     rejected = (reviews[0].model_copy(update={"decision": "REJECT"}), *reviews[1:])
     with pytest.raises(ValueError, match="REVIEW_NOT_APPROVED_OR_STALE"):

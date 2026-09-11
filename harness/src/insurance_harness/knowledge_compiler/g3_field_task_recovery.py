@@ -158,11 +158,18 @@ def project_g3_recorded_compile_subset(
     *,
     field_keys: Sequence[str] = (),
     include_synthesis: bool = False,
+    origin_context: dict[str, object] | None = None,
 ) -> CompileOutput:
     """Reproduce only explicit manifest members, using the ORIGINAL offered spans."""
     runtime = _runtime()
-    exact = runtime._exact_gemini_d_window(request, origin_window)
-    context = runtime.render_gemini_d_compile_window_context(_identity(), request, exact)
+    if origin_window.get("recovery_contract"):
+        exact = _exact_recovery_window(request, origin_window)
+        context = validate_recorded_recovery_context(request, exact, origin_context)
+    else:
+        if origin_context is not None:
+            raise ValueError("full recorded window does not accept an alternate context")
+        exact = runtime._exact_gemini_d_window(request, origin_window)
+        context = runtime.render_gemini_d_compile_window_context(_identity(), request, exact)
     response = _parse_semantic(raw)
     if include_synthesis:
         if field_keys or exact["kind"] != "ENTITY_SYNTHESIS":
@@ -190,6 +197,22 @@ def project_g3_recorded_compile_subset(
         exact,
         context,
     )
+
+
+def validate_recorded_recovery_context(request, window, origin_context):
+    """Require the captured routing scope, allowing only non-routing prompt metadata."""
+    runtime = _runtime()
+    if not isinstance(origin_context, dict):
+        raise ValueError("recorded recovery requires its original signed context")
+    expected = render_g3_field_recovery_context(_identity(), request, window)
+    ignored = {"response_schema", "correction_instructions"}
+    actual_scope = {key: value for key, value in origin_context.items() if key not in ignored}
+    expected_scope = {key: value for key, value in expected.items() if key not in ignored}
+    if runtime.batch_json_bytes_830_g3(actual_scope) != runtime.batch_json_bytes_830_g3(
+        expected_scope
+    ):
+        raise ValueError("recorded recovery context routing/source scope mismatch")
+    return origin_context
 
 
 def aggregate_g3_recovered_compile_outputs(

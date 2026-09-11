@@ -1070,204 +1070,266 @@ def _g3_d_review_definition_owners(
     return owners
 
 
-def derive_gemini_d_review_windows(
-    request: BatchConceptCompileRequest830G3V1,
-    output: CompileOutput,
-) -> tuple[dict[str, object], ...]:
-    """Derive the only admissible Gemini per-entity review partition."""
+_REVIEW_WINDOW_POLICY = {
+    "version": "g3-evidence-bounded-review.830.v2",
+    "max_fields": 10,
+    "max_source_chars": 24000,
+    "neighbor_chars": 128,
+    "max_context_bytes": 262144,
+}
 
+
+def _g3_review_field_tasks(request, fields):
+    from .g3_field_tasks import _source_scope, _task, catalog_value_constraint
+
+    tasks = {(task.entity_id, task.field_key): task for task in adapt_catalog_field_tasks(request)}
+    for key in fields.keys() - tasks.keys():
+        entity_id, field_key = key
+        binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
+        catalog = next(
+            row
+            for row in request.catalog.entries
+            if (row.pack.schema_pack_id, row.pack.schema_version, row.pack.schema_pack_sha256)
+            == (binding.schema_pack_id, binding.schema_version, binding.schema_pack_sha256)
+        )
+        definition = next(row for row in catalog.pack.fields if row.field_key == field_key)
+        tasks[key] = _task(
+            dict(
+                adapter_kind="CATALOG_SCHEMA",
+                adapter_version="g3-review-catalog-field.830.v1",
+                entity_id=entity_id,
+                entity_version=binding.entity_version,
+                field_key=field_key,
+                short_title=definition.short_title,
+                description=definition.description,
+                source_guidance=definition.source_guidance,
+                value_constraint=catalog_value_constraint(
+                    definition.value_spec,
+                    single_valued=(
+                        field_key == "product_type" and definition.short_title == "产品类型"
+                    ),
+                ),
+                material_ids=binding.source_material_ids,
+                allowed_sources=_source_scope(request, binding.source_material_ids),
+                concept_ids=(),
+                allowed_states=("present", "absent_explicitly", "unknown"),
+                max_attempts=1,
+            )
+        )
+    return tasks
+
+
+def _g3_review_scope(request, output):
+    from .batch_concept_compile_830_g3 import aligned_existing_fields
+
+    _, sources, source_keys = _g3_d_source_index(request)
     entity_rows = _g3_d_entity_slots(request)
-    _, _, source_keys = _g3_d_source_index(request)
     entity_refs = _g3_d_entity_refs(request)
     source_rows = _g3_d_entity_source_refs(request, source_keys, entity_refs)
-    entity_sources = {
-        cast(str, row["entity_id"]): set(cast(list[str], row["source_refs"]))
-        for row in source_rows
-    }
+    entity_sources = {row["entity_id"]: set(row["source_refs"]) for row in source_rows}
     owners = _g3_d_review_definition_owners(
         request, output, entity_rows, source_keys, entity_sources
     )
-    targets = _g3_d_review_targets(request, output)
-    pages = {free_page_id(page): page for page in output.pages}
-    refs_by_entity: dict[str, list[str]] = {
-        row[0].entity_id: [] for row in entity_rows
+    existing = {(row.entity_id, row.field_key): row for row in aligned_existing_fields(request)}
+    fields = {
+        (row.entity_id, row.field_key): row
+        for row in output.fields
+        if existing.get((row.entity_id, row.field_key)) != row
     }
+    targets = _g3_d_review_targets(request, output)
+    members = {row.concept_id: row for row in output.definitions}
+    members.update({free_page_id(row): row for row in output.pages})
+    target_owners = {}
     for target in targets:
-        member_id = cast(str, target["member_id"])
-        entity_id = (
-            pages[member_id].entity_id if member_id in pages else owners.get(member_id)
+        member = members[target["member_id"]]
+        owner = member.entity_id if isinstance(member, FreeWikiPage) else owners[member.concept_id]
+        target_owners[target["review_ref"]] = owner
+    return dict(
+        sources=sources,
+        source_keys=source_keys,
+        entity_rows=entity_rows,
+        entity_refs=entity_refs,
+        entity_sources=entity_sources,
+        fields=fields,
+        targets={row["review_ref"]: row for row in targets},
+        members=members,
+        target_owners=target_owners,
+        tasks=_g3_review_field_tasks(request, fields),
+        output_hash=compile_output_hash_g3(output),
+    )
+
+
+def _merge_review_intervals(rows):
+    merged = []
+    for start, end in sorted(rows):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _g3_review_source_options(scope, members, entity_id, tasks):
+    sources, keys = scope["sources"], scope["source_keys"]
+    intervals = {}
+    for member in members:
+        for evidence in member.evidence:
+            ref = keys.get((evidence.revision_id, evidence.block_id))
+            if ref is None:
+                raise ValueError("D review evidence references foreign source")
+            verify_evidence(evidence, (sources[ref],))
+            intervals.setdefault(ref, []).append((evidence.start, evidence.end))
+    intervals = {ref: _merge_review_intervals(rows) for ref, rows in intervals.items()}
+    size = sum(end - start for rows in intervals.values() for start, end in rows)
+    budget = _REVIEW_WINDOW_POLICY["max_source_chars"]
+    if size > budget:
+        raise ValueError("D review evidence exceeds source budget")
+    # Preserve every cited character before spending remaining space on neighbors.
+    for ref, rows in sorted(intervals.items()):
+        padded = []
+        for start, end in rows:
+            left = min(start, _REVIEW_WINDOW_POLICY["neighbor_chars"], budget - size)
+            right = min(
+                len(sources[ref].text) - end,
+                _REVIEW_WINDOW_POLICY["neighbor_chars"],
+                budget - size - left,
+            )
+            padded.append((start - left, end + right))
+            size += left + right
+        intervals[ref] = _merge_review_intervals(padded)
+    # Unknown assertions also require relevant source context, not merely an empty quote list.
+    unknown_tasks = [
+        task
+        for task in tasks
+        if scope["fields"][(task.entity_id, task.field_key)].state == "unknown"
+    ]
+    remaining = budget - size
+    if unknown_tasks and remaining > 0:
+        routed = route_field_task_sources(
+            unknown_tasks,
+            {ref: sources[ref] for ref in scope["entity_sources"][entity_id]},
+            max_source_chars=remaining,
+            max_span_chars=min(2000, remaining),
         )
-        if entity_id not in refs_by_entity:
-            raise ValueError("D review target has no affected entity owner")
-        refs_by_entity[entity_id].append(cast(str, target["review_ref"]))
-    rows: list[dict[str, object]] = []
-    output_hash = compile_output_hash_g3(output)
-    for binding, primary_material_id, entity_slot in entity_rows:
-        value = {
-            "kind": "ENTITY_REVIEW",
-            "primary_material_id": primary_material_id,
-            "material_ids": binding.source_material_ids,
-            "entity_slot": entity_slot,
-            "entity_id": binding.entity_id,
-            "entity_ref": entity_refs[binding.entity_id],
-            "review_refs": tuple(sorted(refs_by_entity[binding.entity_id])),
-        }
-        rows.append(
+        for row in routed:
+            intervals.setdefault(row["source_ref"], []).extend(
+                (span["start"], span["end"]) for span in row["spans"]
+            )
+    result = []
+    for ref, ranges in sorted(intervals.items()):
+        source = sources[ref]
+        result.append(
             {
-                **value,
-                "window_id": _g3_d_ref(
-                    "window",
-                    request.request_sha256,
-                    {"output_hash": output_hash, **value},
+                "source_ref": ref,
+                "source": source.model_dump(exclude={"text"}),
+                "spans": tuple(
+                    {"start": start, "end": end, "quote": source.text[start:end]}
+                    for start, end in _merge_review_intervals(ranges)
                 ),
             }
         )
-    if len(rows) > 30:
-        raise ValueError("D review window call capacity exceeded")
-    return tuple(rows)
+    if sum(len(span["quote"]) for row in result for span in row["spans"]) > budget:
+        raise ValueError("D review source budget exceeded")
+    return tuple(result)
 
 
-def _exact_gemini_d_review_window(
-    request: BatchConceptCompileRequest830G3V1,
-    output: CompileOutput,
-    window: object,
-) -> dict[str, object]:
-    expected_keys = {
-        "window_id", "kind", "primary_material_id", "material_ids", "entity_slot",
-        "entity_id", "entity_ref", "review_refs",
-    }
-    if not isinstance(window, dict) or set(window) != expected_keys:
-        raise ValueError("invalid D review window")
-    matches = [
-        row
-        for row in derive_gemini_d_review_windows(request, output)
-        if row["window_id"] == window.get("window_id")
-    ]
-    if len(matches) != 1 or matches[0] != window:
-        raise ValueError("foreign D review window")
-    return matches[0]
-
-
-def render_gemini_d_review_window_context(
-    identity: ModelIdentity,
-    request: BatchConceptCompileRequest830G3V1,
-    output: CompileOutput,
-    window: object,
-) -> dict[str, object]:
-    """Render one complete affected-product review unit."""
-
-    if not _is_g3_gemini_d_identity("D_REVIEW", identity):
-        raise ValueError("D review windows require Gemini verify identity")
-    exact = _exact_gemini_d_review_window(request, output, window)
-    entity_id = cast(str, exact["entity_id"])
-    binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
-    source_options, sources, source_keys = _g3_d_source_index(request)
-    entity_refs = _g3_d_entity_refs(request)
-    entity_source_rows = _g3_d_entity_source_refs(request, source_keys, entity_refs)
-    entity_source_row = next(
-        row for row in entity_source_rows if row["entity_id"] == entity_id
-    )
-    entity_rows = _g3_d_entity_slots(request)
-    entity_sources = {
-        cast(str, row["entity_id"]): set(cast(list[str], row["source_refs"]))
-        for row in entity_source_rows
-    }
-    owners = _g3_d_review_definition_owners(
-        request, output, entity_rows, source_keys, entity_sources
-    )
-    definitions = {row.concept_id: row for row in output.definitions}
-    fields = tuple(row for row in output.fields if row.entity_id == entity_id)
-    pages = tuple(row for row in output.pages if row.entity_id == entity_id)
-    linked_ids = {concept_id for row in (*fields, *pages) for concept_id in row.concept_ids}
-    owned = tuple(
-        row for row in output.definitions if owners.get(row.concept_id) == entity_id
-    )
-    owned_ids = {row.concept_id for row in owned}
-    background = tuple(
-        definitions[concept_id]
-        for concept_id in sorted(linked_ids - owned_ids)
-        if concept_id in definitions
-    )
-    shown_definitions = (*owned, *background)
-    allowed_source_refs = set(cast(list[str], entity_source_row["source_refs"]))
-    for definition in shown_definitions:
-        allowed_source_refs.update(
-            source_keys[(evidence.revision_id, evidence.block_id)]
-            for evidence in definition.evidence
-        )
-    shown_sources = tuple(
-        row for row in source_options if row["source_ref"] in allowed_source_refs
-    )
-    shown_source_keys = {
-        (source.revision_id, source.block_id)
-        for reference, source in sources.items()
-        if reference in allowed_source_refs
-    }
-    corpus_metadata = tuple(
-        {
-            **entry.model_dump(mode="python", exclude={"blocks"}),
-            "block_refs": tuple(
-                {
-                    "source_ref": source_keys[(block.revision_id, block.block_id)],
-                    "revision_id": block.revision_id,
-                    "block_id": block.block_id,
-                }
-                for block in entry.blocks
-                if (block.revision_id, block.block_id) in shown_source_keys
-            ),
-        }
-        for entry in request.resolution_inputs.corpus.entries
-        if entry.material_id in set(cast(tuple[str, ...], exact["material_ids"]))
-        or any(
-            (block.revision_id, block.block_id) in shown_source_keys for block in entry.blocks
-        )
-    )
-    selected_catalog = tuple(
-        row
-        for row in request.catalog.entries
-        if (row.pack.schema_pack_id, row.pack.schema_version, row.pack.schema_pack_sha256)
-        == (binding.schema_pack_id, binding.schema_version, binding.schema_pack_sha256)
-    )
-    if len(selected_catalog) != 1:
-        raise ValueError("D review window catalog binding mismatch")
-    member_ids = {
-        *(row.assertion_id for row in fields),
-        *(free_page_id(row) for row in pages),
-        *owned_ids,
-    }
-    audit = tuple(row for row in output.audit if row.key in member_ids)
-    review_ref_set = set(cast(tuple[str, ...], exact["review_refs"]))
-    review_targets = tuple(
-        row
-        for row in _g3_d_review_targets(request, output)
-        if row["review_ref"] in review_ref_set
-    )
+def _g3_review_member_view(member, scope):
+    # Candidate text appears once; evidence text lives only in the exact source spans.
     return {
-        "contract": "g3-d-review-entity-window-context.830.v1",
+        **member.model_dump(exclude={"evidence"}),
+        "evidence": tuple(
+            {
+                "source_ref": scope["source_keys"][(row.revision_id, row.block_id)],
+                "start": row.start,
+                "end": row.end,
+                "quote_hash": row.quote_hash,
+            }
+            for row in member.evidence
+        ),
+    }
+
+
+def _render_g3_bounded_review_context(request, output, exact, scope):
+    entity_id = exact["entity_id"]
+    binding = next(row for row in request.entity_bindings if row.entity_id == entity_id)
+    fields = tuple(scope["fields"][(entity_id, key)] for key in exact["field_keys"])
+    targets = tuple(scope["targets"][ref] for ref in exact["review_refs"])
+    members = tuple(scope["members"][row["member_id"]] for row in targets)
+    pages = tuple(row for row in members if isinstance(row, FreeWikiPage))
+    definitions = tuple(row for row in members if isinstance(row, ConceptDefinition))
+    tasks = tuple(scope["tasks"][(entity_id, field.field_key)] for field in fields)
+    source_options = _g3_review_source_options(scope, (*fields, *members), entity_id, tasks)
+    ids = {*(row.assertion_id for row in fields), *(row["member_id"] for row in targets)}
+    references = sorted({concept_id for row in (*fields, *pages) for concept_id in row.concept_ids})
+    result = {
+        "contract": "g3-d-review-bounded-window-context.830.v2",
         "request_sha256": request.request_sha256,
         "base_request_hash": compile_request_hash_g3(request.base_request),
-        "output_hash": compile_output_hash_g3(output),
+        "output_hash": scope["output_hash"],
         "window": exact,
-        "entity_binding": binding,
-        "catalog_entry": selected_catalog[0],
+        "review_instructions": (
+            "Review every field in candidate_partition.fields, including unknown and explicit "
+            "absence. Your decision covers all listed fields even when scores is empty.",
+            "Check values, subject, conditions, exceptions, versions, negations and citations "
+            "against the exact offered evidence and neighboring context. Unknown is not absence.",
+            "Evidence start/end select the original source substring; source text appears only "
+            "in source_options.spans. Never assume omitted text supports a candidate claim.",
+            "Score exactly review_targets. Other novel members are reviewed in separate windows; "
+            "existing unchanged members have already been reviewed and are not targets here.",
+            "Reject unsupported claims; if necessary source context is unavailable, return "
+            "NEEDS_HUMAN with the affected field keys or member refs rather than guessing.",
+        ),
+        "entity_binding": {
+            key: getattr(binding, key)
+            for key in (
+                "entity_id",
+                "entity_version",
+                "display_name",
+                "issuer",
+                "product_code",
+                "version_label",
+                "schema_pack_id",
+                "schema_version",
+                "schema_pack_sha256",
+                "profile_id",
+                "profile_version",
+                "profile_sha256",
+                "source_material_ids",
+            )
+        },
         "field_descriptors": tuple(
-            row
-            for row in _g3_d_field_targets(request, entity_refs)
-            if row["entity_id"] == entity_id
+            {
+                "field_key": task.field_key,
+                "short_title": task.short_title,
+                "description": task.description,
+                "source_guidance": task.source_guidance,
+                "value_constraint": task.value_constraint,
+            }
+            for task in tasks
         ),
         "candidate_partition": {
-            "fields": fields,
-            "pages": pages,
-            "owned_novel_definitions": owned,
-            "linked_background_definitions": background,
-            "audit": audit,
+            "fields": tuple(_g3_review_member_view(row, scope) for row in fields),
+            "pages": tuple(_g3_review_member_view(row, scope) for row in pages),
+            "owned_novel_definitions": tuple(
+                _g3_review_member_view(row, scope) for row in definitions
+            ),
+            "linked_concept_refs": tuple(
+                {
+                    "concept_id": ref,
+                    "title": scope["members"][ref].title,
+                    "canonical_key": scope["members"][ref].canonical_key,
+                    "sense_key": scope["members"][ref].sense_key,
+                    "definition_hash": _compile_definition_hash(scope["members"][ref]),
+                }
+                for ref in references
+                if ref in scope["members"]
+            ),
+            "audit": tuple(row for row in output.audit if row.key in ids),
         },
-        "source_options": shown_sources,
-        "entity_source_refs": (entity_source_row,),
-        "corpus_entry_metadata": corpus_metadata,
-        "review_targets": review_targets,
+        "source_options": source_options,
+        "review_targets": targets,
         "local_whole_candidate_binding": {
-            "output_hash": compile_output_hash_g3(output),
+            "output_hash": scope["output_hash"],
             "definition_count": len(output.definitions),
             "field_count": len(output.fields),
             "page_count": len(output.pages),
@@ -1275,6 +1337,103 @@ def render_gemini_d_review_window_context(
         },
         "response_schema": G3DReviewReferenceResponseV1.model_json_schema(),
     }
+    if len(batch_json_bytes_830_g3(result)) > _REVIEW_WINDOW_POLICY["max_context_bytes"]:
+        raise ValueError("D review window exceeds context byte budget")
+    return result
+
+
+def derive_gemini_d_review_windows(request, output) -> tuple[dict[str, object], ...]:
+    """Partition only novel members, bounding both evidence and complete context size."""
+    return _derive_g3_review_partition(request, output)
+
+
+def _derive_g3_review_partition(request, output, candidate_window=None):
+    # Exact reopening needs only the relevant fixed parent group, not every sibling.
+    scope = _g3_review_scope(request, output)
+    rows = []
+
+    def add(common, field_keys=(), review_refs=()):
+        value = {
+            **common,
+            "kind": "FIELDS_REVIEW" if field_keys else "MEMBERS_REVIEW",
+            "field_keys": tuple(field_keys),
+            "review_refs": tuple(review_refs),
+        }
+        window = {
+            **value,
+            "window_id": _g3_d_ref(
+                "window",
+                request.request_sha256,
+                {
+                    "output_hash": scope["output_hash"],
+                    "review_policy": _REVIEW_WINDOW_POLICY,
+                    **value,
+                },
+            ),
+        }
+        try:
+            _render_g3_bounded_review_context(request, output, window, scope)
+        except ValueError as exc:
+            if "budget" not in str(exc) or len(field_keys) <= 1:
+                raise
+            split = len(field_keys) // 2
+            add(common, field_keys[:split])
+            add(common, field_keys[split:])
+            return
+        rows.append(window)
+
+    for binding, primary, slot in scope["entity_rows"]:
+        if candidate_window is not None and candidate_window.get("entity_id") != binding.entity_id:
+            continue
+        common = dict(
+            primary_material_id=primary,
+            material_ids=binding.source_material_ids,
+            entity_slot=slot,
+            entity_id=binding.entity_id,
+            entity_ref=scope["entity_refs"][binding.entity_id],
+        )
+        keys = sorted(key for entity, key in scope["fields"] if entity == binding.entity_id)
+        for start in range(0, len(keys), _REVIEW_WINDOW_POLICY["max_fields"]):
+            group = keys[start : start + _REVIEW_WINDOW_POLICY["max_fields"]]
+            if candidate_window is not None and (
+                candidate_window.get("kind") != "FIELDS_REVIEW"
+                or not candidate_window.get("field_keys")
+                or candidate_window["field_keys"][0] not in group
+            ):
+                continue
+            add(common, group)
+        for ref, owner in sorted(scope["target_owners"].items()):
+            if owner == binding.entity_id and (
+                candidate_window is None
+                or (candidate_window.get("kind") == "MEMBERS_REVIEW"
+                    and ref in candidate_window.get("review_refs", ()))
+            ):
+                add(common, review_refs=(ref,))
+    if len(rows) > 300:
+        raise ValueError("D review window call capacity exceeded")
+    return tuple(rows)
+
+
+def _exact_gemini_d_review_window(request, output, window) -> dict[str, object]:
+    if not isinstance(window, dict):
+        raise ValueError("invalid D review window")
+    matches = [
+        row
+        for row in _derive_g3_review_partition(request, output, candidate_window=window)
+        if row["window_id"] == window.get("window_id")
+    ]
+    if len(matches) != 1 or batch_json_bytes_830_g3(matches[0]) != batch_json_bytes_830_g3(window):
+        raise ValueError("foreign D review window")
+    return matches[0]
+
+
+def render_gemini_d_review_window_context(identity, request, output, window) -> dict[str, object]:
+    if not _is_g3_gemini_d_identity("D_REVIEW", identity):
+        raise ValueError("D review windows require Gemini verify identity")
+    exact = _exact_gemini_d_review_window(request, output, window)
+    return _render_g3_bounded_review_context(
+        request, output, exact, _g3_review_scope(request, output)
+    )
 
 
 def _g3_novel_page_ids(
@@ -1289,9 +1448,13 @@ def _g3_novel_page_ids(
         for definition in output.definitions
         if existing.get(definition.concept_id) != _compile_definition_hash(definition)
     }
-    identifiers.update(free_page_id(page) for page in output.pages)
+    existing_pages = {free_page_id(page): page for page in request.base_request.existing_pages}
+    identifiers.update(
+        free_page_id(page)
+        for page in output.pages
+        if existing_pages.get(free_page_id(page)) != page
+    )
     return identifiers
-
 
 def _g3_human_admission(
     request: BatchConceptCompileRequest830G3V1,
@@ -2797,19 +2960,22 @@ def _parse_g3_stage_artifacts(
     if plan.stage == "D_COMPILE":
         reuse_rows = artifacts.get("g3-d-projection-reuse.830.v1", [])
         if reuse_rows:
-            from .g3_d_projection_reuse import (
-                G3DProjectionReuseManifestV1, validate_d_projection_reuse,
+            from .g3_d_projection_reuse import validate_d_projection_reuse
+            from .g3_d_recovery_execution import (
+                derive_recovery_windows,
+                normalize_projection_reuse,
             )
-            from .g3_d_recovery_execution import derive_recovery_windows
 
-            reuse = _one_artifact(
-                artifacts, "g3-d-projection-reuse.830.v1", G3DProjectionReuseManifestV1,
+            manifests = normalize_projection_reuse(
+                tuple(_unique_json_bytes(raw) for raw in reuse_rows)
             )
-            verified = validate_d_projection_reuse(reuse, current_request=request)
+            windows = derive_recovery_windows(request, manifests)
+            verified = tuple(validate_d_projection_reuse(row, current_request=request)
+                             for row in manifests)
             return G3StageExecutionContext(
-                **common, compile_request=request, projection_reuse=reuse,
-                reused_outputs=verified.outputs,
-                recovery_windows=derive_recovery_windows(request, reuse),
+                **common, compile_request=request, projection_reuse=manifests,
+                reused_outputs=tuple(output for result in verified for output in result.outputs),
+                recovery_windows=windows,
             )
         return G3StageExecutionContext(**common, compile_request=request)
     return G3StageExecutionContext(
@@ -3378,6 +3544,31 @@ def _validate_g3_prior_stage_results(
     plan: G3BoundedAdmissionPlanV1, artifacts: dict[str, list[bytes]]
 ) -> None:
     if plan.stage == "C_CLASSIFY":
+        return
+    compile_reuse_rows = artifacts.get("g3-d-compile-result-reuse.830.v1", [])
+    if compile_reuse_rows:
+        from .g3_d_compile_reuse import (
+            G3CompileResultReuseV1,
+            validate_compile_result_reuse,
+        )
+        if plan.stage != "D_REVIEW" or len(compile_reuse_rows) != 1:
+            raise ValueError("completed compile reuse requires an explicit D review input")
+        receipt = _one_artifact(
+            artifacts, "g3-d-compile-result-reuse.830.v1", G3CompileResultReuseV1,
+        )
+        if plan.prior_terminal_receipt_sha256 != receipt.origin_terminal_sha256:
+            raise ValueError("completed compile reuse prior mismatch")
+        validate_compile_result_reuse(
+            receipt,
+            request=_one_artifact(artifacts, "batch-concept-compile-request.830.g3.v1",
+                                  BatchConceptCompileRequest830G3V1),
+            model_result=_one_artifact(
+                artifacts, "g3-d-model-compile-result.830.v1", CompileResult,
+            ),
+            final_result=_one_artifact(
+                artifacts, "g3-d-final-compile-result.830.v1", CompileResult,
+            ),
+        )
         return
     reuse_raw = (
         artifacts.get("g3-classification-reuse.830.v1", [])

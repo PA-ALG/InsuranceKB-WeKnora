@@ -210,6 +210,33 @@ def _entity_scope(request, entity_id):
     )
 
 
+def _recorded_recovery_origin_window(request, call, recorded):
+    """Recover scope from the authenticated old request, never from reuse selection."""
+    from .g3_bounded_model_execution import _unique_json_bytes
+    from .g3_field_task_recovery import _exact_recovery_window
+
+    raw = recorded.request_bytes
+    if (
+        hashlib.sha256(raw).hexdigest() != call.request_body_sha256
+        or len(raw) != call.request_bytes
+    ):
+        raise ValueError("recorded recovery request body binding mismatch")
+    body = _unique_json_bytes(raw)
+    messages = body.get("messages") if isinstance(body, dict) else None
+    if not isinstance(messages, list) or any(not isinstance(row, dict) for row in messages):
+        raise ValueError("recorded recovery request messages are invalid")
+    users = [row for row in messages if row.get("role") == "user"]
+    if len(users) != 1 or not isinstance(users[0].get("content"), str):
+        raise ValueError("recorded recovery requires one original user context")
+    context = _unique_json_bytes(users[0]["content"].encode())
+    if not isinstance(context, dict) or not isinstance(context.get("window"), dict):
+        raise ValueError("recorded recovery context/window is missing")
+    window = _exact_recovery_window(request, context["window"])
+    if window["window_id"] != call.window_id or tuple(window["material_ids"]) != call.material_ids:
+        raise ValueError("recorded recovery window does not match original signed call")
+    return window, context
+
+
 def _derive(
     *, plan, origin_request, current_request, origin_admission_digest, selections, ledger_root=None
 ):
@@ -224,9 +251,22 @@ def _derive(
     for selection in selections:
         selection = G3DProjectionSelectionV1.model_validate(selection)
         call = calls.get(selection.origin_call_id)
-        if call is None or call.window_id not in windows:
+        if call is None:
             raise ValueError("projection reuse origin call/window not in signed plan")
-        window = windows[call.window_id]
+        origin_context = None
+        if call.window_id in windows:
+            window = windows[call.window_id]
+        else:
+            if call.call_id not in records:
+                records[call.call_id] = gateway.read_g3_recorded_call(
+                    plan=plan,
+                    call=call,
+                    admission_artifact_digest=origin_admission_digest,
+                    ledger_root=Path(ledger_root) if ledger_root is not None else None,
+                )
+            window, origin_context = _recorded_recovery_origin_window(
+                origin_request, call, records[call.call_id]
+            )
         entity_id = str(window["entity_id"])
         if tuple(window["material_ids"]) != call.material_ids:
             raise ValueError("projection reuse source window mismatch")
@@ -258,6 +298,7 @@ def _derive(
             window,
             field_keys=selection.field_keys,
             include_synthesis=selection.include_synthesis,
+            origin_context=origin_context,
         )
         rebound = CompileOutput.model_validate(
             {
