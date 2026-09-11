@@ -408,6 +408,86 @@ def valid_c_plan(*, call_count: int = 1) -> G3BoundedAdmissionPlanV1:
     )
 
 
+def valid_c_plan_v2(*, call_count: int = 2) -> G3BoundedAdmissionPlanV1:
+    """Build the versioned two-worker policy without changing any v1 wire field."""
+
+    base = valid_c_plan(call_count=call_count)
+    failure = G3FailurePolicyV1(
+        policy_version="g3-chain-failure-policy.830.v2",
+        retry_limit=0,
+        worker_limit=2,
+        incomplete_reservation_action="RESUME_UNSTARTED_CONTINUE_STAGE",
+        started_without_terminal_action="PRESERVE_OUTCOME_UNKNOWN_CONTINUE_STAGE",
+        call_failure_action="CONTINUE_INDEPENDENT_CALLS",
+        c_execution_failure_action="STOP_BEFORE_RESOLVE",
+        c_coverage_gap_action="MARK_DOD_GAP_CONTINUE_ELIGIBLE_AUTOMATIC_CHILDREN",
+        d_compile_failure_action="STOP_BEFORE_REVIEW",
+        d_review_failure_action="STOP_BEFORE_CANDIDATE",
+    )
+    chain = _hashed(
+        G3ChainManifestV1,
+        "g3-bounded-chain.830.v1",
+        "chain_manifest_hash",
+        **base.chain_manifest.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"failure_policy", "worker_limit", "chain_manifest_hash"},
+        ),
+        failure_policy=failure,
+        worker_limit=2,
+    )
+    caps = _hashed(
+        G3StageCapsV1,
+        "g3-stage-caps.830.v1",
+        "caps_sha256",
+        **base.stage_caps.model_dump(
+            mode="python",
+            round_trip=True,
+            exclude={"worker_limit", "caps_sha256"},
+        ),
+        worker_limit=2,
+    )
+    resource = base.resource_caps.model_copy(update={"worker_limit": 2})
+    return validate_g3_bounded_plan(
+        base.model_copy(
+            update={
+                "chain_manifest": chain,
+                "chain_manifest_hash": chain.chain_manifest_hash,
+                "stage_caps": caps,
+                "resource_caps": resource,
+                "resource_caps_hash": resource.digest,
+            }
+        )
+    )
+
+
+def test_v2_failure_policy_allows_exact_two_worker_recovery_contract() -> None:
+    plan = valid_c_plan_v2()
+    assert plan.chain_manifest.worker_limit == 2
+    assert plan.stage_caps.worker_limit == 2
+    assert plan.resource_caps.worker_limit == 2
+    assert plan.chain_manifest.failure_policy.policy_version.endswith(".v2")
+
+
+def test_failure_policy_versions_reject_mixed_v1_v2_semantics() -> None:
+    v1 = valid_c_plan(call_count=2)
+    with pytest.raises(ValidationError):
+        G3FailurePolicyV1.model_validate(
+            {
+                **v1.chain_manifest.failure_policy.model_dump(mode="json"),
+                "worker_limit": 2,
+            }
+        )
+    v2 = valid_c_plan_v2().chain_manifest.failure_policy
+    with pytest.raises(ValidationError):
+        G3FailurePolicyV1.model_validate(
+            {
+                **v2.model_dump(mode="json"),
+                "call_failure_action": "STOP_CHAIN",
+            }
+        )
+
+
 def valid_gemini_d_compile_plan(
     *,
     call_count: int = 2,

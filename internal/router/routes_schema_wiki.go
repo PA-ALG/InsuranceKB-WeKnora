@@ -93,6 +93,7 @@ func RegisterSchemaWikiRoutes(
 	}
 	activeGET("/domains", schemaHandler.Domains)
 	activeGET("/taxonomy/current", schemaHandler.CurrentTaxonomy)
+	activeGET("/product-bindings", schemaHandler.ReadCurrentProductBindings830G3)
 	activeGET(
 		"/catalogs/:catalog_id/versions/:catalog_version",
 		schemaHandler.ReadSchemaPackCatalog830G3,
@@ -195,6 +196,10 @@ func RegisterSchemaWikiRoutes(
 	humanGET(
 		"/preparations/:preparation_id/batch-concept",
 		schemaHandler.ReadBatchConceptPreparation830G3,
+	)
+	humanGET(
+		"/preparations/:preparation_id/product-bindings",
+		schemaHandler.ReadPreparationProductBindings830G3,
 	)
 	humanGET("/preparations/:preparation_id/root", schemaHandler.ReadReviewedRoot)
 	humanGET("/preparations/:preparation_id/sections/:section_id", schemaHandler.ReadReviewedSection)

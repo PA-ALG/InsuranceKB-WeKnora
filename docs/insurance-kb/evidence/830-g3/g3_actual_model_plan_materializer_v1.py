@@ -367,7 +367,10 @@ class Approver(_Closed):
 
 
 class ExecutionOptions(_Closed):
-    contract: Literal["g3-actual-model-execution-options.830.v1"]
+    contract: Literal[
+        "g3-actual-model-execution-options.830.v1",
+        "g3-product-model-execution-options.830.v2",
+    ]
     authorization_id: Text
     chain_id: Text
     clean_integration_sha: Annotated[
@@ -445,6 +448,8 @@ class ExecutionOptions(_Closed):
         for stage in stages:
             rows = [x for x in self.calls if x.stage == stage]
             if stage == "C_CLASSIFY":
+                if not rows and self.contract == "g3-product-model-execution-options.830.v2":
+                    continue
                 if not rows or tuple(x.ordinal for x in rows) != tuple(range(len(rows))):
                     raise ValueError("C ordinals are not contiguous")
                 mids = [m for x in rows for m in x.material_ids]
@@ -456,7 +461,23 @@ class ExecutionOptions(_Closed):
             elif stage in ("D_COMPILE", "D_REVIEW") and identity_key[:2] == (
                 "g3-user-gateway", "gemini"
             ):
-                if len(rows) == 1:
+                if self.contract == "g3-product-model-execution-options.830.v2":
+                    if (not rows or len(rows) > (300 if stage == "D_COMPILE" else 30)
+                            or tuple(row.ordinal for row in rows) != tuple(range(len(rows)))):
+                        raise ValueError("product D call ordinals or capacity invalid")
+                    bound = [row for row in rows if row.window_id is not None]
+                    if bound:
+                        if (len(bound) != len(rows)
+                                or len({row.window_id for row in rows}) != len(rows)
+                                or any(not row.material_ids or tuple(sorted(set(row.material_ids)))
+                                       != row.material_ids for row in rows)):
+                            raise ValueError("product D window bindings invalid")
+                    elif stage != "D_REVIEW" or any(row.material_ids for row in rows):
+                        raise ValueError("product compile needs actual windows")
+                    # Unbound review rows reserve only bounded capacity. Their
+                    # actual windows must be derived from the successful output
+                    # before materialize_product_d_inputs can produce a plan.
+                elif len(rows) == 1:
                     if (
                         rows[0].ordinal != 0
                         or rows[0].window_id is not None
@@ -784,8 +805,6 @@ def _builder(builder_dir: Path):
     if set(p.name for p in builder_dir.iterdir()) != set(BUILDER_NAMES):
         raise ValueError("builder directory set drift")
     raw = {name: _regular(builder_dir / name) for name in BUILDER_NAMES}
-    _corpus_json(raw["batch-corpus.json"], "batch-corpus.json")
-    _native_json(raw["g3-native-page-projections.json"], "g3-native-page-projections.json")
     for name in set(BUILDER_NAMES) - {
         "batch-corpus.json",
         "g3-native-page-projections.json",
@@ -793,9 +812,7 @@ def _builder(builder_dir: Path):
         value = _strict_json(raw[name], name)
         if canonical_json(value) != raw[name]:
             raise ValueError(f"noncanonical JSON: {name}")
-    result, seed = _validate_builder_proof(raw)
-    corpus = _corpus_json(raw["batch-corpus.json"], "batch-corpus.json")
-    native = _native_json(raw["g3-native-page-projections.json"], "g3-native-page-projections.json")
+    result, seed, corpus, native = _validate_builder_proof(raw)
     existing = ExistingEntitySnapshotV1.model_validate_json(raw["existing-entities.json"])
     policy = BatchResolutionPolicyV1.model_validate_json(raw["batch-resolution-policy.json"])
     return raw, result, corpus, native, existing, policy, seed
@@ -1197,7 +1214,7 @@ def _validate_builder_proof(raw: dict[str, bytes]):
         or len(raw["protocol-seed-artifact.json"]) != seed.seed_artifact.bytes
     ):
         raise ValueError("seed artifact mismatch")
-    return result, seed
+    return result, seed, corpus, native
 
 
 def _frozen_sources():
@@ -1496,7 +1513,7 @@ def _stage_fixed(
         "caps_sha256",
         contract="g3-stage-caps.830.v1",
         stage=stage,
-        worker_limit=1,
+        worker_limit=chain.worker_limit,
         call_limit=len(calls),
         attempts_per_call=1,
         retry_limit=0,
@@ -1619,7 +1636,7 @@ def _plan(options, chain, parent, parent_digest, seed, stage, parts, prior=None)
         subjects = ("c-to-d-compile",) if stage == "D_COMPILE" else ("d-compile-to-review",)
         if (
             runtime._is_g3_gemini_d_identity(stage, parts["identity"])
-            and _uses_gemini_d_capacity(options, stage)
+            and all(call.window_id is not None for call in calls)
         ):
             subjects = tuple(sorted({
                 material_id for call in calls for material_id in call.material_ids
@@ -1688,7 +1705,7 @@ def _plan(options, chain, parent, parent_digest, seed, stage, parts, prior=None)
         prior_terminal_receipt_sha256=prior,
     )
     resource = ResourceCaps(
-        worker_limit=1,
+        worker_limit=chain.worker_limit,
         attempt_limit=len(calls),
         time_limit_seconds=parts["caps"].time_limit_seconds,
         token_limit=parts["caps"].input_token_ceiling + parts["caps"].output_token_ceiling,
@@ -2200,7 +2217,12 @@ def _review_package(review_dir: Path):
         source_path = review_dir / row["source"]
         _no_symlink_ancestors(source_path, review_dir)
         raw = _regular(source_path)
-        _validate_artifact_wire(row["contract"], raw, str(source_path))
+        # These two exact artifacts are decoded and validated by the builder
+        # proof below. Keep one independent parse per review boundary.
+        if row["contract"] not in {
+            "batch-corpus.830.g3.v1", "g3-native-page-projections.830.v1",
+        }:
+            _validate_artifact_wire(row["contract"], raw, str(source_path))
         if _sha(raw) != row["sha256"] or len(raw) != row["bytes"]:
             raise ValueError("review install artifact mismatch")
         artifact_raw[(row["contract"], Path(row["destination"]).name, row["sha256"])] = raw
@@ -2910,6 +2932,74 @@ def materialize_d(stage: str, signed_parent: Path, review_dir: Path, output_dir:
         plan=plan,
         artifact_raw=artifact_raw,
     )
+
+
+def materialize_product_d_inputs(
+    *, options, chain, parent, parent_digest, protocol_seed, request,
+    configured, stage="D_COMPILE", reuse=None, model_result=None,
+    final_result=None, prior_terminal_sha=None,
+):
+    """Build a signed-admission input from an existing typed product slice.
+
+    No C preview, PDF/native-page decode, source acquisition, or provider call is
+    performed. The returned plan is still subject to normal prepare/admission
+    verification, including historical C custody when a reuse receipt is present.
+    ``configured`` holds exactly one CallOption per derived product window.
+    """
+    if stage not in ("D_COMPILE", "D_REVIEW"):
+        raise ValueError("invalid product D stage")
+    if not isinstance(request, BatchConceptCompileRequest830G3V1):
+        raise ValueError("product D requires a typed compile request")
+    identity = next(row.identity for row in options.identities if row.stage == stage)
+    if not runtime._is_g3_gemini_d_identity(stage, identity):
+        raise ValueError("product D requires the configured Gemini identity")
+    typed = [("batch-concept-compile-request.830.g3.v1", "batch-concept-compile-request.json",
+              canonical_json(request.model_dump(mode="json", round_trip=True)))]
+    if stage == "D_COMPILE":
+        if reuse is not None:
+            from insurance_harness.knowledge_compiler.g3_classification_reuse import (
+                G3ClassificationReuseV1, validate_reuse_binding,
+            )
+            reuse = G3ClassificationReuseV1.model_validate(reuse)
+            validate_reuse_binding(reuse, request=request)
+            if prior_terminal_sha not in (None, reuse.source_terminal_receipt_sha256):
+                raise ValueError("product D reuse prior mismatch")
+            prior_terminal_sha = reuse.source_terminal_receipt_sha256
+            typed.append((reuse.contract, "classification-reuse.json",
+                          canonical_json(reuse.model_dump(mode="json", round_trip=True))))
+        windows = runtime.derive_gemini_d_compile_windows(request)
+        def render(window):
+            return runtime.render_gemini_d_compile_window_context(identity, request, window)
+    else:
+        if reuse is not None or model_result is None or final_result is None:
+            raise ValueError("product review needs its actual D compile results")
+        typed.extend((
+            ("g3-d-model-compile-result.830.v1", "model-compile-result.json", canonical_json(model_result.model_dump(mode="json", round_trip=True))),
+            ("g3-d-final-compile-result.830.v1", "final-compile-result.json", canonical_json(final_result.model_dump(mode="json", round_trip=True))),
+        ))
+        windows = runtime.derive_gemini_d_review_windows(request, final_result.output)
+        def render(window):
+            return runtime.render_gemini_d_review_window_context(
+                identity, request, final_result.output, window
+            )
+    if not prior_terminal_sha or len(configured) != len(windows):
+        raise ValueError("product D prior or exact window partition missing")
+    contexts = {}
+    for ordinal, (call, window) in enumerate(zip(configured, windows, strict=True)):
+        if (call.stage != stage or call.ordinal != ordinal
+                or call.window_id != window["window_id"]
+                or tuple(call.material_ids) != tuple(window["material_ids"])):
+            raise ValueError("product D call/window binding mismatch")
+        contexts[call.call_id] = batch_json_bytes_830_g3(render(window))
+    parts = _stage_fixed(options, stage, chain, context_raws=contexts, typed=typed, configured=configured)
+    plan = _plan(options, chain, parent, parent_digest, protocol_seed, stage, parts, prior=prior_terminal_sha)
+    artifact_raw = {(contract, filename, _sha(raw)): raw for contract, filename, raw in typed}
+    if "index" in parts:
+        artifact_raw[("g3-stage-render-contexts.830.v1", "stage-contexts.json", _sha(parts["index"]))] = parts["index"]
+    for call in parts["calls"]:
+        artifact_raw[("g3-rendered-call-context.830.v1", "call-context.json", call.input_context_sha256)] = contexts[call.call_id]
+        artifact_raw[("g3-http-request-body.830.v1", "request-body.json", call.request_body_sha256)] = parts["bodies"][call.call_id]
+    return {"plan": plan, "parts": parts, "artifact_raw": artifact_raw, "contexts": contexts, "windows": windows}
 
 
 def _build_parser():

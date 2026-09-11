@@ -298,6 +298,12 @@ def test_c_renderer_partitions_materials_and_binds_parent_rows() -> None:
     assert [rendered[call.call_id] for call in calls] == contexts
     assert rendered_index == index_bytes
     assert rendered_preview == preview
+    prepared = bounded.prepare_g3_stage_execution_context(
+        plan=plan, parent=parent, artifacts=artifacts, template_bytes=template
+    )
+    assert prepared.context_by_call == rendered
+    assert prepared.corpus is not None and prepared.corpus.corpus_sha256 == corpus.corpus_sha256
+    assert prepared.native_pages is not None and prepared.native_pages.pages == pages
 
     substitute_entry = _entry(material_id="m-001", text="fully rehashed replacement")
     substituted = _corpus(substitute_entry, entries[1])
@@ -2092,7 +2098,16 @@ async def test_signed_prepare_then_fake_provider_run_reaches_c_terminal(
             headers={"content-type": "application/json", "x-request-id": "fake-c"},
             json=provider_response(semantic, created=1),
         )
-        terminal = await runner.run_stage(str(admission_path))
+        original_parse = runner._parse_g3_stage_artifacts
+        parse_count = 0
+        def counted_parse(*args, **kwargs):
+            nonlocal parse_count
+            parse_count += 1
+            return original_parse(*args, **kwargs)
+        with monkeypatch.context() as parsing:
+            parsing.setattr(runner, "_parse_g3_stage_artifacts", counted_parse)
+            terminal = await runner.run_stage(str(admission_path))
+        assert parse_count == 1, "verified typed inputs must be reused by the execution loop"
         stage_terminal_path = (
             ledger
             / "chains"
@@ -3002,7 +3017,10 @@ def test_gemini_d_compile_windows_form_bounded_exact_partition() -> None:
     assert all(1 <= len(row["field_refs"]) <= 10 for row in fields)
     assert all(not row["field_refs"] for row in synth)
     assert bounded.gemini_d_extraction_policy() == {
-        "policy_version": "g3-field-batches.830.v1",
+        "policy_version": "g3-field-batches.830.v2",
+        "source_routing_version": "g3-field-task-chapter-routing.830.v1",
+        "max_source_chars": 24000,
+        "max_source_span_chars": 2000,
         "max_fields_per_call": 10,
         "max_profile_fields": 83,
         "max_entities_per_material": 2,
@@ -3682,7 +3700,7 @@ def test_gemini_d_window_projection_rejects_wrong_kind_and_nonoccurring_quote() 
         "fields": field_rows,
         "pages": [],
     }
-    with pytest.raises(ValueError, match="occur exactly once"):
+    with pytest.raises(ValueError, match="outside offered source spans"):
         bounded.project_gemini_d_compile_window_response(
             canonical_json(invalid), candidate.request, window
         )

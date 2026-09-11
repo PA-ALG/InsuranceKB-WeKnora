@@ -52,7 +52,7 @@ from insurance_harness.run_admission.g3_models import (
     canonical_g3_hash,
     canonical_json,
 )
-from tests.test_run_admission_g3_bounded_830 import H, _hashed, valid_c_plan
+from tests.test_run_admission_g3_bounded_830 import H, _hashed, valid_c_plan, valid_c_plan_v2
 
 
 def test_route_is_https_exact_and_redirect_free() -> None:
@@ -191,9 +191,7 @@ def _plan_with_real_request(body: bytes) -> G3BoundedAdmissionPlanV1:
     base = valid_c_plan()
     old_call = base.request_manifest.calls[0]
     digest = hashlib.sha256(body).hexdigest()
-    call = old_call.model_copy(
-        update={"request_body_sha256": digest, "request_bytes": len(body)}
-    )
+    call = old_call.model_copy(update={"request_body_sha256": digest, "request_bytes": len(body)})
     manifest = _hashed(
         type(base.request_manifest),
         "g3-request-manifest.830.v1",
@@ -209,8 +207,7 @@ def _plan_with_real_request(body: bytes) -> G3BoundedAdmissionPlanV1:
             row.model_copy(
                 update={
                     "artifact_ref": (
-                        "/var/lib/insurancekb/run-admission/sha256/"
-                        f"{digest}/request-body.json"
+                        f"/var/lib/insurancekb/run-admission/sha256/{digest}/request-body.json"
                     ),
                     "sha256": digest,
                     "bytes": len(body),
@@ -283,9 +280,7 @@ def _complete_successful_stage(
     body = b'{"ok":true}\n'
     plan = _plan_with_real_request(body)
     call = plan.request_manifest.calls[0]
-    capability = reserve_g3_call(
-        plan=plan, call=call, admission_artifact_digest="8" * 64
-    )
+    capability = reserve_g3_call(plan=plan, call=call, admission_artifact_digest="8" * 64)
     snapshot = _reservation_snapshot(capability)
     assert snapshot is not None
     call_dir = Path(str(snapshot[2]))
@@ -538,6 +533,207 @@ def test_new_process_continues_only_after_trusted_success(
     assert result.returncode == 0, result.stderr
 
 
+def test_v2_reserves_two_independent_calls_before_either_finishes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    plan = valid_c_plan_v2(call_count=3)
+
+    first = reserve_g3_call(
+        plan=plan, call=plan.request_manifest.calls[0], admission_artifact_digest="8" * 64
+    )
+    second = reserve_g3_call(
+        plan=plan, call=plan.request_manifest.calls[1], admission_artifact_digest="8" * 64
+    )
+    assert _reservation_snapshot(first) is not None
+    assert _reservation_snapshot(second) is not None
+    with pytest.raises(G3LedgerDenied) as exhausted:
+        reserve_g3_call(
+            plan=plan,
+            call=plan.request_manifest.calls[2],
+            admission_artifact_digest="8" * 64,
+        )
+    assert exhausted.value.reason_code == "WORKER_LIMIT_EXHAUSTED"
+
+
+def test_v2_cross_process_budget_lock_admits_exactly_two_workers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    plan = valid_c_plan_v2(call_count=3)
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_bytes(canonical_json(plan.model_dump(mode="json", round_trip=True)))
+    script = (
+        "import sys;from pathlib import Path;"
+        "import insurance_harness.model_policy.g3_bounded_gateway as g;"
+        "from insurance_harness.run_admission.g3_models import G3BoundedAdmissionPlanV1;"
+        "g.G3_LEDGER_ROOT=sys.argv[1];"
+        "p=G3BoundedAdmissionPlanV1.model_validate_json(Path(sys.argv[2]).read_bytes());"
+        "g.reserve_g3_call(plan=p,call=p.request_manifest.calls[int(sys.argv[3])],"
+        "admission_artifact_digest='8'*64)"
+    )
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-c", script, str(root), str(plan_path), str(ordinal)],
+            cwd=Path(__file__).parents[1],
+            env={**os.environ, "PYTHONPATH": "src"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for ordinal in range(3)
+    ]
+    try:
+        results = [process.communicate(timeout=60) + (process.returncode,) for process in processes]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=5)
+    assert sum(returncode == 0 for _stdout, _stderr, returncode in results) == 2
+    assert sum("WORKER_LIMIT_EXHAUSTED" in stderr for _stdout, stderr, _code in results) == 1
+    call_dirs = tuple((root / "chains" / plan.chain_manifest_hash / "calls").iterdir())
+    assert len(call_dirs) == 2
+
+
+def test_v2_inspects_and_resumes_only_reserved_not_sent_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    plan = valid_c_plan_v2()
+    call = plan.request_manifest.calls[0]
+    assert (
+        gateway.inspect_g3_call_state(
+            plan=plan, call=call, admission_artifact_digest="8" * 64
+        ).status
+        == "NOT_RESERVED"
+    )
+
+    original = reserve_g3_call(plan=plan, call=call, admission_artifact_digest="8" * 64)
+    original_state = _reservation_snapshot(original)
+    assert original_state is not None
+    state = gateway.inspect_g3_call_state(plan=plan, call=call, admission_artifact_digest="8" * 64)
+    assert state.status == "RESERVED_NOT_SENT"
+    assert state.reservation_receipt_sha256 == original_state[4].receipt_sha256
+    assert state.prepared_receipt_sha256 is None
+
+    resumed = gateway.resume_g3_unstarted_call(
+        plan=plan, call=call, admission_artifact_digest="8" * 64
+    )
+    resumed_state = _reservation_snapshot(resumed)
+    assert resumed_state is not None
+    assert resumed_state[2:] == original_state[2:]
+    first_route = gateway.prepare_g3_reserved_call(
+        plan=plan,
+        call=call,
+        admission_artifact_digest="8" * 64,
+        verified_binding_digest="7" * 64,
+        reservation_capability=resumed,
+    )
+    # A different worker reserves another call after the first prepared receipt
+    # has recorded its historical budget. Recovery must not rewrite that receipt.
+    reserve_g3_call(
+        plan=plan, call=plan.request_manifest.calls[1], admission_artifact_digest="8" * 64
+    )
+    prepared_path = Path(str(original_state[2])) / "prepared.json"
+    prepared_before = prepared_path.read_bytes()
+    resumed_again = gateway.resume_g3_unstarted_call(
+        plan=plan, call=call, admission_artifact_digest="8" * 64
+    )
+    second_route = gateway.prepare_g3_reserved_call(
+        plan=plan,
+        call=call,
+        admission_artifact_digest="8" * 64,
+        verified_binding_digest="7" * 64,
+        reservation_capability=resumed_again,
+    )
+    assert second_route == first_route
+    assert prepared_path.read_bytes() == prepared_before
+    assert _reservation_snapshot(resumed_again)[5] == original_state[5]
+
+
+def test_v2_unknown_is_not_resendable_but_does_not_block_one_independent_call(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    plan = valid_c_plan_v2(call_count=3)
+    first = reserve_g3_call(
+        plan=plan, call=plan.request_manifest.calls[0], admission_artifact_digest="8" * 64
+    )
+    snapshot = _reservation_snapshot(first)
+    assert snapshot is not None
+    call_dir = Path(str(snapshot[2]))
+    route = gateway.prepare_g3_reserved_call(
+        plan=plan,
+        call=plan.request_manifest.calls[0],
+        admission_artifact_digest="8" * 64,
+        verified_binding_digest="7" * 64,
+        reservation_capability=first,
+    )
+    assert route.prepared_receipt_sha256 is not None
+    started0 = G3StartedReceiptV1(
+        contract="g3-started-receipt.830.v1",
+        prepared_receipt_sha256=route.prepared_receipt_sha256,
+        started_at=datetime.now(UTC),
+        monotonic_start_ns=1,
+        call_consumed=True,
+        receipt_sha256=H,
+    )
+    started = started0.model_copy(
+        update={
+            "receipt_sha256": canonical_g3_hash(
+                "g3-started-receipt.830.v1", started0, "receipt_sha256"
+            )
+        }
+    )
+    _write_exclusive(
+        call_dir / "started.json",
+        canonical_json(started.model_dump(mode="json", round_trip=True)),
+    )
+
+    assert (
+        gateway.inspect_g3_call_state(
+            plan=plan,
+            call=plan.request_manifest.calls[0],
+            admission_artifact_digest="8" * 64,
+        ).status
+        == "OUTCOME_UNKNOWN"
+    )
+    with pytest.raises(G3LedgerDenied) as unknown:
+        gateway.resume_g3_unstarted_call(
+            plan=plan,
+            call=plan.request_manifest.calls[0],
+            admission_artifact_digest="8" * 64,
+        )
+    assert unknown.value.reason_code == "OUTCOME_UNKNOWN"
+    assert (
+        _reservation_snapshot(
+            reserve_g3_call(
+                plan=plan,
+                call=plan.request_manifest.calls[1],
+                admission_artifact_digest="8" * 64,
+            )
+        )
+        is not None
+    )
+
+
 def test_started_without_terminal_is_permanently_denied_in_new_process(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -610,6 +806,27 @@ def test_completed_stage_reader_validates_leaf_without_mutating_ledger(
         admission_artifact_digest="8" * 64,
     ) == (terminal, semantic_bytes, policy_bytes, str(call_dir))
     assert _tree_snapshot(root) == before
+
+
+def test_completed_stage_reader_can_use_explicit_read_only_ledger_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "exported-ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    plan, terminal, semantic_bytes, policy_bytes, call_dir = _complete_successful_stage(root)
+    unrelated = tmp_path / "runtime-ledger"
+    unrelated.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(unrelated))
+
+    assert _read_successful_g3_stage_call(
+        plan=plan,
+        call=plan.request_manifest.calls[0],
+        admission_artifact_digest="8" * 64,
+        ledger_root=root,
+    ) == (terminal, semantic_bytes, policy_bytes, str(call_dir))
 
 
 @pytest.mark.parametrize(
@@ -860,16 +1077,14 @@ async def test_fixed_transport_posts_once_and_started_blocks_replay(
             status_code=200,
             headers={"content-type": "application/json", "x-request-id": "fixture-request"},
             json={
-                "choices": [
-                    {"finish_reason": "stop", "message": {"content": '{"ok":true}'}}
-                ],
+                "choices": [{"finish_reason": "stop", "message": {"content": '{"ok":true}'}}],
                 "usage": provider_usage,
             },
         )
 
-    posted = respx.post(
-        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    ).mock(side_effect=fake_response)
+    posted = respx.post("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").mock(
+        side_effect=fake_response
+    )
     request = ModelCallRequest(content=body, rendered_prompt=b"fixture")
     if expected_denial == "TIMEOUT":
         with pytest.raises(TimeoutError):
@@ -1076,3 +1291,53 @@ def test_failed_terminal_preserves_complete_response_metadata(
             admission_artifact_digest="8" * 64,
         )
     assert failed.value.reason_code == "TERMINAL_FAILED"
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_v2_seals_only_expired_unknown_without_retransmission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, expired: bool
+) -> None:
+    import insurance_harness.model_policy.g3_bounded_gateway as gateway
+
+    root = tmp_path / "ledger"
+    root.mkdir(mode=0o700)
+    monkeypatch.setattr(gateway, "G3_LEDGER_ROOT", str(root))
+    monkeypatch.setattr(
+        sys.modules[__name__], "valid_c_plan", lambda: valid_c_plan_v2(call_count=1)
+    )
+    plan, _terminal, _semantic, _policy, call_dir = _complete_successful_stage(root)
+    for name in (
+        "call-terminal.json",
+        "response-body.private.json",
+        "semantic-content.private.json",
+    ):
+        (call_dir / name).unlink()
+    call = plan.request_manifest.calls[0]
+    started = G3StartedReceiptV1.model_validate_json((call_dir / "started.json").read_bytes())
+    started = _hashed(
+        G3StartedReceiptV1,
+        "g3-started-receipt.830.v1",
+        "receipt_sha256",
+        **started.model_dump(mode="python", exclude={"receipt_sha256", "started_at"}),
+        started_at=datetime.now(UTC)
+        - timedelta(seconds=call.timeout_seconds + 1 if expired else 0),
+    )
+    (call_dir / "started.json").write_bytes(canonical_json(started.model_dump(mode="json")))
+    before = (call_dir / "reservation.json").read_bytes()
+    if not expired:
+        with pytest.raises(G3LedgerDenied) as denied:
+            gateway.seal_g3_unknown_call(plan=plan, call=call, admission_artifact_digest="8" * 64)
+        assert denied.value.reason_code == "CALL_STILL_WITHIN_TIMEOUT"
+        assert not (call_dir / "call-terminal.json").exists()
+        return
+    sealed = gateway.seal_g3_unknown_call(plan=plan, call=call, admission_artifact_digest="8" * 64)
+    assert sealed.status == "OUTCOME_UNKNOWN"
+    assert sealed.retry_count == 0
+    assert sealed.provider_usage is None
+    assert (call_dir / "reservation.json").read_bytes() == before
+    assert (
+        gateway.seal_g3_unknown_call(plan=plan, call=call, admission_artifact_digest="8" * 64)
+        == sealed
+    )
+    with pytest.raises(G3LedgerDenied):
+        gateway.resume_g3_unstarted_call(plan=plan, call=call, admission_artifact_digest="8" * 64)

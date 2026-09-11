@@ -12,9 +12,11 @@ import os
 import re
 import stat
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, Any, Literal, cast
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -34,7 +36,6 @@ from insurance_harness.knowledge_compiler.batch_concept_compile_830_g3 import (
     BatchConceptCandidateBundle830G3V1,
     BatchConceptCompileRequest830G3V1,
     EntityCompileBinding830G3V1,
-    aligned_existing_fields,
     assemble_candidate_bundle,
     compile_output_hash_g3,
     compile_request_hash_g3,
@@ -107,6 +108,13 @@ from insurance_harness.run_admission.g3_models import (
     canonical_json,
     stage_approval_signed_bytes,
 )
+
+from .g3_field_task_routing import (
+    ROUTING_VERSION,
+    route_field_task_sources,
+    validate_routed_selections,
+)
+from .g3_field_tasks import FieldTaskEvidenceResultV1, adapt_catalog_field_tasks
 
 
 def _structured_text(value: str) -> str:
@@ -637,67 +645,38 @@ def _g3_d_field_targets(
     request: BatchConceptCompileRequest830G3V1,
     entity_refs: dict[str, str],
 ) -> list[dict[str, object]]:
-    carried = {(item.entity_id, item.field_key) for item in aligned_existing_fields(request)}
-    binding_index = {item.entity_id: item for item in request.entity_bindings}
-    rows: list[dict[str, object]] = []
-    for entity_id, fields in request.base_request.required_fields.items():
-        binding = binding_index[entity_id]
-        catalog_entries = [
-            entry
-            for entry in request.catalog.entries
-            if (
-                entry.pack.schema_pack_id,
-                entry.pack.schema_version,
-                entry.pack.schema_pack_sha256,
-            )
-            == (binding.schema_pack_id, binding.schema_version, binding.schema_pack_sha256)
-        ]
-        if len(catalog_entries) != 1:
-            raise ValueError("D field profile binding mismatch")
-        definitions = {item.field_key: item for item in catalog_entries[0].pack.fields}
-        for field_key in fields:
-            if (entity_id, field_key) in carried:
-                continue
-            definition = definitions.get(field_key)
-            if definition is None:
-                raise ValueError("D field target is absent from bound profile")
-            field_ref = _g3_d_ref(
-                "field",
-                request.request_sha256,
-                {
-                    "entity_id": entity_id,
-                    "entity_version": binding.entity_version,
-                    "field_key": field_key,
-                    "profile_sha256": binding.profile_sha256,
-                },
-            )
-            rows.append(
-                {
-                    "field_ref": field_ref,
-                    "entity_ref": entity_refs[entity_id],
-                    "entity_id": entity_id,
-                    "entity_version": binding.entity_version,
-                    "display_name": binding.display_name,
-                    "field_key": field_key,
-                    "short_title": definition.short_title,
-                    "description": definition.description,
-                    "source_guidance": definition.source_guidance,
-                }
-            )
-    return sorted(
-        rows,
-        key=lambda item: (
-            cast(str, item["entity_id"]),
-            cast(str, item["field_key"]),
-        ),
-    )
+    bindings = {row.entity_id: row for row in request.entity_bindings}
+    rows = []
+    for task in adapt_catalog_field_tasks(request):
+        binding = bindings[task.entity_id]
+        field_ref = _g3_d_ref("field", request.request_sha256, {
+            "entity_id": task.entity_id,
+            "entity_version": task.entity_version,
+            "field_key": task.field_key,
+            "profile_sha256": binding.profile_sha256,
+        })
+        rows.append({
+            "field_ref": field_ref,
+            "entity_ref": entity_refs[task.entity_id],
+            "entity_id": task.entity_id,
+            "entity_version": task.entity_version,
+            "display_name": binding.display_name,
+            "field_key": task.field_key,
+            "short_title": task.short_title,
+            "description": task.description,
+            "source_guidance": task.source_guidance,
+        })
+    return rows
 
 
 def gemini_d_extraction_policy() -> dict[str, object]:
     """Return the bundled, source-pinned field batching policy."""
 
     value: dict[str, object] = {
-        "policy_version": "g3-field-batches.830.v1",
+        "policy_version": "g3-field-batches.830.v2",
+        "source_routing_version": ROUTING_VERSION,
+        "max_source_chars": 24000,
+        "max_source_span_chars": 2000,
         "max_fields_per_call": 10,
         "max_profile_fields": 83,
         "max_entities_per_material": 2,
@@ -884,6 +863,15 @@ def render_gemini_d_compile_window_context(
         "pages": existing_pages,
     }
     concept_rows, _ = _g3_d_existing_concept_refs(request)
+    selected_keys = {str(row["field_key"]) for row in field_targets}
+    tasks = tuple(task for task in adapt_catalog_field_tasks(request)
+                  if task.entity_id == binding.entity_id
+                  and (exact["kind"] == "ENTITY_SYNTHESIS" or task.field_key in selected_keys))
+    routed_sources = route_field_task_sources(
+        tasks, {str(row["source_ref"]): row["source"] for row in source_options
+                if row["source_ref"] in allowed},
+    )
+    source_row = {**source_row, "source_refs": [row["source_ref"] for row in routed_sources]}
     return {
         "contract": "g3-d-compile-window-prompt-context.830.v1",
         "request_sha256": request.request_sha256,
@@ -891,12 +879,21 @@ def render_gemini_d_compile_window_context(
         "extraction_policy": gemini_d_extraction_policy(),
         "window": exact,
         "entity_bindings": (binding,),
-        "catalog_entries": catalog_entries,
+        "catalog_entries": tuple({
+            "schema_pack_id": row.pack.schema_pack_id,
+            "schema_version": row.pack.schema_version,
+            "schema_pack_sha256": row.pack.schema_pack_sha256,
+        } for row in catalog_entries),
         "existing_members": existing_members,
         "field_targets": field_targets,
-        "source_options": [
-            row for row in source_options if row["source_ref"] in allowed
-        ],
+        "source_options": routed_sources,
+        "field_tasks": tuple({
+            "task_sha256": task.task_sha256,
+            "field_key": task.field_key,
+            "adapter_kind": task.adapter_kind,
+            "value_constraint": task.value_constraint,
+            "allowed_states": task.allowed_states,
+        } for task in tasks) if exact["kind"] == "FIELDS" else (),
         "entity_source_refs": (source_row,),
         "existing_concept_refs": concept_rows,
         "response_schema": G3DCompileReferenceResponseV1.model_json_schema(),
@@ -1516,7 +1513,17 @@ def project_gemini_d_compile_response(
         if window is None
         else render_gemini_d_compile_window_context(identity, request, window)
     )
+    if window is not None:
+        validate_routed_selections(
+            tuple((selection.source_ref, selection.quote)
+                  for row in (*response.definitions, *response.fields, *response.pages)
+                  for selection in row.evidence),
+            context["source_options"],
+        )
     _, sources, _ = _g3_d_source_index(request)
+    task_index = {
+        (task.entity_id, task.field_key): task for task in adapt_catalog_field_tasks(request)
+    }
     context_field_targets = cast(list[dict[str, object]], context["field_targets"])
     context_entity_sources = cast(list[dict[str, object]], context["entity_source_refs"])
     field_targets = {
@@ -1619,6 +1626,15 @@ def project_gemini_d_compile_response(
             exceptions=field_row.exceptions,
             valid_time=field_row.valid_time,
         )
+        task = task_index.get((field.entity_id, field.field_key))
+        if task is not None:
+            FieldTaskEvidenceResultV1.create(
+                task=task, state=field.state, value=field.value,
+                evidence=field.evidence, unknown_reason=field.unknown_reason,
+                concept_ids=field.concept_ids, conditions=field.conditions,
+                exceptions=field.exceptions, valid_time=field.valid_time,
+                source_blocks=tuple(sources.values()),
+            )
         fields.append(field)
         dispositions.append(
             AuditDisposition(
@@ -2679,6 +2695,69 @@ def _one_artifact[ModelT: BaseModel](
     return model.model_validate(_unique_json_bytes(values[0]))
 
 
+@dataclass(frozen=True)
+class G3StageExecutionContext:
+    """Typed immutable stage inputs parsed once and shared by every call path."""
+
+    plan: G3BoundedAdmissionPlanV1
+    context_by_call: Mapping[str, bytes]
+    context_index: bytes
+    preview: bytes | None
+    corpus: BatchCorpusV1 | None = None
+    policy: BatchResolutionPolicyV1 | None = None
+    catalog: SchemaPackCatalogV1 | None = None
+    existing: ExistingEntitySnapshotV1 | None = None
+    native_pages: G3NativePageProjectionSetV1 | None = None
+    compile_request: BatchConceptCompileRequest830G3V1 | None = None
+    model_compile_result: CompileResult | None = None
+    final_compile_result: CompileResult | None = None
+
+    def __post_init__(self):
+        object.__setattr__(self, "context_by_call", MappingProxyType(dict(self.context_by_call)))
+
+
+def _parse_g3_stage_artifacts(
+    plan: G3BoundedAdmissionPlanV1, artifacts: dict[str, list[bytes]]
+) -> G3StageExecutionContext:
+    common = {"plan": plan, "context_by_call": {}, "context_index": b"", "preview": None}
+    if plan.stage == "C_CLASSIFY":
+        return G3StageExecutionContext(
+            **common,
+            corpus=_one_artifact(artifacts, "batch-corpus.830.g3.v1", BatchCorpusV1),
+            policy=_one_artifact(
+                artifacts, "batch-resolution-policy.830.g3.v1", BatchResolutionPolicyV1
+            ),
+            catalog=_one_artifact(
+                artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1
+            ),
+            existing=_one_artifact(
+                artifacts, "existing-entities.830.g3.v1", ExistingEntitySnapshotV1
+            ),
+            native_pages=_one_artifact(
+                artifacts,
+                "g3-native-page-projections.830.v1",
+                G3NativePageProjectionSetV1,
+            ),
+        )
+    request = _one_artifact(
+        artifacts,
+        "batch-concept-compile-request.830.g3.v1",
+        BatchConceptCompileRequest830G3V1,
+    )
+    if plan.stage == "D_COMPILE":
+        return G3StageExecutionContext(**common, compile_request=request)
+    return G3StageExecutionContext(
+        **common,
+        compile_request=request,
+        model_compile_result=_one_artifact(
+            artifacts, "g3-d-model-compile-result.830.v1", CompileResult
+        ),
+        final_compile_result=_one_artifact(
+            artifacts, "g3-d-final-compile-result.830.v1", CompileResult
+        ),
+    )
+
+
 
 def _c_source_locators(block_ref: str, text: str) -> tuple[G3SemanticLocatorV1, ...]:
     """Offer exact bounded source spans; the model never needs to count offsets."""
@@ -2855,6 +2934,7 @@ def _render_g3_stage_contexts(
     parent: G3ModelProcessingAuthorizationV1,
     artifacts: dict[str, list[bytes]],
     template_bytes: bytes,
+    _prepared: G3StageExecutionContext | None = None,
 ) -> tuple[dict[str, bytes], bytes, bytes | None]:
     """Rebuild model-visible user contexts and their stage witnesses from typed inputs."""
 
@@ -2862,24 +2942,24 @@ def _render_g3_stage_contexts(
         template_bytes.decode("utf-8")
     except UnicodeDecodeError:
         raise ValueError("stage template is not UTF-8") from None
+    prepared = _prepared or _parse_g3_stage_artifacts(plan, artifacts)
+    if prepared.plan is not plan and prepared.plan != plan:
+        raise ValueError("prepared stage context plan mismatch")
     context_by_call: dict[str, bytes] = {}
     preview_bytes: bytes | None = None
     if plan.stage == "C_CLASSIFY":
-        corpus = _one_artifact(artifacts, "batch-corpus.830.g3.v1", BatchCorpusV1)
-        policy = _one_artifact(
-            artifacts, "batch-resolution-policy.830.g3.v1", BatchResolutionPolicyV1
-        )
-        catalog = _one_artifact(
-            artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1
-        )
-        existing = _one_artifact(
-            artifacts, "existing-entities.830.g3.v1", ExistingEntitySnapshotV1
-        )
-        page_set = _one_artifact(
-            artifacts,
-            "g3-native-page-projections.830.v1",
-            G3NativePageProjectionSetV1,
-        )
+        corpus = prepared.corpus
+        policy = prepared.policy
+        catalog = prepared.catalog
+        existing = prepared.existing
+        page_set = prepared.native_pages
+        if any(value is None for value in (corpus, policy, catalog, existing, page_set)):
+            raise ValueError("prepared C stage inputs are incomplete")
+        assert corpus is not None
+        assert policy is not None
+        assert catalog is not None
+        assert existing is not None
+        assert page_set is not None
         page_bytes = artifacts["g3-native-page-projections.830.v1"][0]
         if (
             plan.dispatch_lock.opaque_block_map_sha256
@@ -2980,12 +3060,9 @@ def _render_g3_stage_contexts(
         ):
             raise ValueError("C call materials are not an exact partition")
     elif plan.stage == "D_COMPILE":
-        request = _one_artifact(
-            artifacts,
-            "batch-concept-compile-request.830.g3.v1",
-            BatchConceptCompileRequest830G3V1,
-        )
-        assert isinstance(request, BatchConceptCompileRequest830G3V1)
+        request = prepared.compile_request
+        if request is None:
+            raise ValueError("prepared D compile input is incomplete")
         calls = plan.request_manifest.calls
         if (
             calls
@@ -3010,17 +3087,11 @@ def _render_g3_stage_contexts(
                 render_g3_d_prompt_context("D_COMPILE", call.identity, request)
             )
     else:
-        request = _one_artifact(
-            artifacts,
-            "batch-concept-compile-request.830.g3.v1",
-            BatchConceptCompileRequest830G3V1,
-        )
-        model_result = _one_artifact(
-            artifacts, "g3-d-model-compile-result.830.v1", CompileResult
-        )
-        final_result = _one_artifact(
-            artifacts, "g3-d-final-compile-result.830.v1", CompileResult
-        )
+        request = prepared.compile_request
+        model_result = prepared.model_compile_result
+        final_result = prepared.final_compile_result
+        if request is None or model_result is None or final_result is None:
+            raise ValueError("prepared D review inputs are incomplete")
         expected_output = compose_batch_output(request, model_result)
         if final_result.output != expected_output:
             raise ValueError("D review final output carry closure mismatch")
@@ -3094,6 +3165,39 @@ def _render_g3_stage_contexts(
         if hashlib.sha256(preview_bytes).hexdigest() != parent.c_prompt_preview_sha256:
             raise ValueError("C prompt preview hash mismatch")
     return context_by_call, index_bytes, preview_bytes
+
+
+def prepare_g3_stage_execution_context(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    parent: G3ModelProcessingAuthorizationV1,
+    artifacts: dict[str, list[bytes]],
+    template_bytes: bytes,
+) -> G3StageExecutionContext:
+    """Parse and verify all immutable stage inputs once before any call is resumed or sent."""
+
+    prepared = _parse_g3_stage_artifacts(plan, artifacts)
+    contexts, index, preview = _render_g3_stage_contexts(
+        plan=plan,
+        parent=parent,
+        artifacts=artifacts,
+        template_bytes=template_bytes,
+        _prepared=prepared,
+    )
+    return G3StageExecutionContext(
+        plan=plan,
+        context_by_call=contexts,
+        context_index=index,
+        preview=preview,
+        corpus=prepared.corpus,
+        policy=prepared.policy,
+        catalog=prepared.catalog,
+        existing=prepared.existing,
+        native_pages=prepared.native_pages,
+        compile_request=prepared.compile_request,
+        model_compile_result=prepared.model_compile_result,
+        final_compile_result=prepared.final_compile_result,
+    )
 
 
 def _g3_chain_directory(plan: G3BoundedAdmissionPlanV1) -> Path:
@@ -3199,6 +3303,20 @@ def _validate_g3_prior_stage_results(
     plan: G3BoundedAdmissionPlanV1, artifacts: dict[str, list[bytes]]
 ) -> None:
     if plan.stage == "C_CLASSIFY":
+        return
+    reuse_raw = artifacts.get("g3-classification-reuse.830.v1", [])
+    if reuse_raw:
+        from .g3_classification_reuse import G3ClassificationReuseV1, validate_classification_reuse
+        if plan.stage != "D_COMPILE" or len(reuse_raw) != 1:
+            raise ValueError("classification reuse is only an explicit D compile input")
+        reuse = G3ClassificationReuseV1.model_validate_json(reuse_raw[0])
+        if (canonical_json(reuse.model_dump(mode="json", round_trip=True)) != reuse_raw[0]
+                or plan.prior_terminal_receipt_sha256 != reuse.source_terminal_receipt_sha256):
+            raise ValueError("classification reuse prior receipt mismatch")
+        request = _one_artifact(
+            artifacts, "batch-concept-compile-request.830.g3.v1", BatchConceptCompileRequest830G3V1
+        )
+        validate_classification_reuse(reuse, request=request)
         return
     prior_stage: Literal["C_CLASSIFY", "D_COMPILE"] = (
         "C_CLASSIFY" if plan.stage == "D_COMPILE" else "D_COMPILE"
@@ -3648,6 +3766,21 @@ def _finalize_gemini_d_review_windows(
         raise
 
 
+async def _run_bounded_call_tasks(calls, execute, *, worker_limit: int):
+    """Execute independent calls with bounded concurrency and stable result order."""
+    import asyncio
+    if worker_limit not in (1, 2):
+        raise ValueError("G3 worker limit must be 1 or 2")
+    semaphore = asyncio.Semaphore(worker_limit)
+    async def one(call):
+        async with semaphore:
+            try:
+                return await execute(call)
+            except Exception as error:
+                return error
+    return tuple(await asyncio.gather(*(one(call) for call in calls)))
+
+
 async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     """Verify, reserve and execute every call once, then persist the stage terminal."""
 
@@ -3682,27 +3815,56 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     verified = evaluator.select_canonical_admission_verifier(
         plan.purpose, plan.run_schema_version
     ).verify(request)
-    parent_bytes = evaluator._read_g3_parent(
-        envelope.parent_authorization_ref.artifact_ref,
-        envelope.parent_authorization_digest,
-    )
-    parent = G3ModelProcessingAuthorizationEnvelopeV1.model_validate(
-        _unique_json_bytes(parent_bytes)
-    )
-    bodies = evaluator._verify_g3_current_content(plan, parent.payload)
-    artifacts = _artifact_payloads(plan)
-    template_bytes = evaluator._read_current_file(plan.template_lock.path)
+    content = evaluator._verified_g3_current_content(verified)
+    bodies = content
+    artifacts: dict[str, list[bytes]] = {}
+    for artifact in content.artifacts:
+        values = artifacts.setdefault(artifact.contract, [])
+        if artifact.payload not in values:
+            values.append(artifact.payload)
+    prepared = content.stage_context
+    if not isinstance(prepared, G3StageExecutionContext) or prepared.plan != plan:
+        raise ValueError("verified G3 typed context is absent or mismatched")
+    template_bytes = content.template_bytes
+    corpus = prepared.corpus
+    policy = prepared.policy
+    catalog = prepared.catalog
+    compile_request_model = prepared.compile_request
+    model_compile_result = prepared.model_compile_result
+    final_compile_result = prepared.final_compile_result
+    partial = plan.chain_manifest.failure_policy.policy_version == "g3-chain-failure-policy.830.v2"
+    failures: list[tuple[G3CallTerminalReceiptV1 | None, str, Exception]] = []
     call_terminals: list[G3CallTerminalReceiptV1] = []
     c_proposals: list[MaterialProposalV1] = []
     model_receipts: list[ModelReceiptBindingV1] = []
     compile_result: CompileResult | None = None
-    compile_window_outputs: list[CompileOutput] = []
-    review_window_outputs: list[ReviewOutput] = []
+    compile_window_by_ordinal: dict[int, CompileOutput] = {}
+    review_window_by_ordinal: dict[int, ReviewOutput] = {}
     review_result: ReviewResult | None = None
     candidate: BatchConceptCandidateBundle830G3V1 | None = None
     stage_started = datetime.now(UTC)
     last_call_dir: str | None = None
-    for call in plan.request_manifest.calls:
+    async def execute_call(call):
+        nonlocal last_call_dir, compile_result, review_result, candidate
+        from insurance_harness.model_policy.g3_bounded_gateway import (
+            inspect_g3_call_state,
+            resume_g3_unstarted_call,
+            seal_g3_unknown_call,
+        )
+        state = inspect_g3_call_state(
+            plan=plan, call=call, admission_artifact_digest=admission_digest,
+        ) if partial else None
+        if state is not None and state.status in {"FAILED", "OUTCOME_UNKNOWN"}:
+            if state.terminal is None:
+                # An unacknowledged request is never sent again. Only a timed-out
+                # request may be sealed; active requests retain their worker slot.
+                terminal = seal_g3_unknown_call(
+                    plan=plan, call=call, admission_artifact_digest=admission_digest,
+                )
+            else:
+                terminal = state.terminal
+            failures.append((terminal, "", RuntimeError("existing call " + state.status)))
+            return
         reopened = _reopen_completed_g3_call(
             plan=plan,
             call=call,
@@ -3712,18 +3874,10 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
             terminal, semantic, policy_bytes, _call_dir = reopened
             last_call_dir = _call_dir
             if plan.stage == "C_CLASSIFY":
-                corpus = _one_artifact(artifacts, "batch-corpus.830.g3.v1", BatchCorpusV1)
-                policy = _one_artifact(
-                    artifacts, "batch-resolution-policy.830.g3.v1", BatchResolutionPolicyV1
-                )
-                catalog = _one_artifact(
-                    artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1
-                )
-                page_set = _one_artifact(
-                    artifacts,
-                    "g3-native-page-projections.830.v1",
-                    G3NativePageProjectionSetV1,
-                )
+                corpus = prepared.corpus
+                policy = prepared.policy
+                catalog = prepared.catalog
+                page_set = prepared.native_pages
                 assert isinstance(corpus, BatchCorpusV1)
                 assert isinstance(policy, BatchResolutionPolicyV1)
                 assert isinstance(catalog, SchemaPackCatalogV1)
@@ -3785,11 +3939,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     )
                 )
             elif plan.stage == "D_COMPILE":
-                compile_request_model = _one_artifact(
-                    artifacts,
-                    "batch-concept-compile-request.830.g3.v1",
-                    BatchConceptCompileRequest830G3V1,
-                )
+                compile_request_model = prepared.compile_request
                 assert isinstance(compile_request_model, BatchConceptCompileRequest830G3V1)
                 if (
                     _is_g3_gemini_d_identity("D_COMPILE", call.identity)
@@ -3803,7 +3953,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                         call.window_id, output
                     ):
                         raise RuntimeError("reopened D compile window projection mismatch")
-                    compile_window_outputs.append(output)
+                    compile_window_by_ordinal[call.ordinal] = output
                 else:
                     compile_result = _build_d_compile_result_from_semantic(
                         raw=semantic,
@@ -3816,17 +3966,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     ):
                         raise RuntimeError("reopened D compile projection mismatch")
             else:
-                compile_request_model = _one_artifact(
-                    artifacts,
-                    "batch-concept-compile-request.830.g3.v1",
-                    BatchConceptCompileRequest830G3V1,
-                )
-                model_compile_result = _one_artifact(
-                    artifacts, "g3-d-model-compile-result.830.v1", CompileResult
-                )
-                final_compile_result = _one_artifact(
-                    artifacts, "g3-d-final-compile-result.830.v1", CompileResult
-                )
+                compile_request_model = prepared.compile_request
+                model_compile_result = prepared.model_compile_result
+                final_compile_result = prepared.final_compile_result
                 assert isinstance(compile_request_model, BatchConceptCompileRequest830G3V1)
                 assert isinstance(model_compile_result, CompileResult)
                 assert isinstance(final_compile_result, CompileResult)
@@ -3844,7 +3986,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                         call.window_id, review_output
                     ):
                         raise RuntimeError("reopened D review window projection mismatch")
-                    review_window_outputs.append(review_output)
+                    review_window_by_ordinal[call.ordinal] = review_output
                 else:
                     review_output, review_result = _build_d_review_result_from_semantic(
                         raw=semantic,
@@ -3876,8 +4018,13 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     if terminal.projection_sha256 != candidate.candidate_hash:
                         raise RuntimeError("reopened D review projection mismatch")
             call_terminals.append(terminal)
-            continue
-        capability = reserve_g3_call(
+            return
+        reserve = (
+            resume_g3_unstarted_call
+            if state is not None and state.status == "RESERVED_NOT_SENT"
+            else reserve_g3_call
+        )
+        capability = reserve(
             plan=plan,
             call=call,
             admission_artifact_digest=admission_digest,
@@ -3927,18 +4074,10 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
             )
             semantic = content.encode()
             if plan.stage == "C_CLASSIFY":
-                corpus = _one_artifact(artifacts, "batch-corpus.830.g3.v1", BatchCorpusV1)
-                policy = _one_artifact(
-                    artifacts, "batch-resolution-policy.830.g3.v1", BatchResolutionPolicyV1
-                )
-                catalog = _one_artifact(
-                    artifacts, "schema-pack-catalog.830.g3.v1", SchemaPackCatalogV1
-                )
-                page_set = _one_artifact(
-                    artifacts,
-                    "g3-native-page-projections.830.v1",
-                    G3NativePageProjectionSetV1,
-                )
+                corpus = prepared.corpus
+                policy = prepared.policy
+                catalog = prepared.catalog
+                page_set = prepared.native_pages
                 assert isinstance(corpus, BatchCorpusV1)
                 assert isinstance(policy, BatchResolutionPolicyV1)
                 assert isinstance(catalog, SchemaPackCatalogV1)
@@ -3970,11 +4109,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 )
                 c_proposals.extend(proposals)
             elif plan.stage == "D_COMPILE":
-                compile_request_model = _one_artifact(
-                    artifacts,
-                    "batch-concept-compile-request.830.g3.v1",
-                    BatchConceptCompileRequest830G3V1,
-                )
+                compile_request_model = prepared.compile_request
                 assert isinstance(compile_request_model, BatchConceptCompileRequest830G3V1)
                 if (
                     _is_g3_gemini_d_identity("D_COMPILE", call.identity)
@@ -3987,7 +4122,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     projection_hash = _gemini_d_window_projection_hash(
                         call.window_id, output
                     )
-                    compile_window_outputs.append(output)
+                    compile_window_by_ordinal[call.ordinal] = output
                 else:
                     compile_result = _build_d_compile_result_from_semantic(
                         raw=semantic,
@@ -3999,17 +4134,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                         "g3-d-compile-projection.830.v1", compile_result
                     )
             else:
-                compile_request_model = _one_artifact(
-                    artifacts,
-                    "batch-concept-compile-request.830.g3.v1",
-                    BatchConceptCompileRequest830G3V1,
-                )
-                model_compile_result = _one_artifact(
-                    artifacts, "g3-d-model-compile-result.830.v1", CompileResult
-                )
-                final_compile_result = _one_artifact(
-                    artifacts, "g3-d-final-compile-result.830.v1", CompileResult
-                )
+                compile_request_model = prepared.compile_request
+                model_compile_result = prepared.model_compile_result
+                final_compile_result = prepared.final_compile_result
                 if (
                     _is_g3_gemini_d_identity("D_REVIEW", call.identity)
                     and call.window_id is not None
@@ -4023,7 +4150,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     projection_hash = _gemini_d_review_window_projection_hash(
                         call.window_id, review_output
                     )
-                    review_window_outputs.append(review_output)
+                    review_window_by_ordinal[call.ordinal] = review_output
                 else:
                     review_output, review_result = _build_d_review_result_from_semantic(
                         raw=semantic,
@@ -4053,7 +4180,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                         admission_state,
                     )
                     projection_hash = candidate.candidate_hash
-        except Exception:
+        except Exception as error:
             failed_call = _failed_call_terminal(
                 plan=plan,
                 call=call,
@@ -4062,6 +4189,9 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 call_dir=call_dir,
                 reservation_capability=capability,
             )
+            if partial:
+                failures.append((failed_call, call_dir, error))
+                return
             _failed_stage_terminal(
                 plan=plan,
                 admission_digest=admission_digest,
@@ -4114,6 +4244,31 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                     execution_receipt_sha256=terminal.receipt_sha256,
                 )
             )
+    if partial:
+        outcomes = await _run_bounded_call_tasks(
+            plan.request_manifest.calls, execute_call,
+            worker_limit=plan.stage_caps.worker_limit,
+        )
+        unrecorded = [item for item in outcomes if isinstance(item, Exception)]
+        if unrecorded:
+            # Reservation/auth/state errors cannot become business unknown values.
+            raise unrecorded[0]
+    else:
+        for call in plan.request_manifest.calls:
+            await execute_call(call)
+    call_terminals.sort(key=lambda item: item.ordinal)
+    compile_window_outputs = [
+        compile_window_by_ordinal[key] for key in sorted(compile_window_by_ordinal)
+    ]
+    review_window_outputs = [
+        review_window_by_ordinal[key] for key in sorted(review_window_by_ordinal)
+    ]
+    if failures:
+        # Successful leaves stay immutable and reusable; no partial candidate is
+        # emitted and other independent calls have already had their opportunity.
+        raise RuntimeError(
+            f"{len(failures)} local G3 call(s) need correction; successful calls retained"
+        ) from failures[0][2]
     disposition_counts = None
     coverage_gaps: tuple[str, ...] = ()
     if plan.stage == "C_CLASSIFY":
@@ -4131,9 +4286,7 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 ),
             }
         )
-        existing = _one_artifact(
-            artifacts, "existing-entities.830.g3.v1", ExistingEntitySnapshotV1
-        )
+        existing = prepared.existing
         assert isinstance(existing, ExistingEntitySnapshotV1)
         resolution = resolve_batch(
             catalog=catalog,

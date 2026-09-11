@@ -1384,3 +1384,65 @@ def test_cfg39_ninth_field_batch_has_distinct_reserved_capacity():
     assert len({row.call_id for row in active}) == 10
     assert tuple(row.ordinal for row in active) == tuple(range(10))
     assert tuple(row.window_id for row in active) == tuple(row["window_id"] for row in windows)
+
+
+@pytest.mark.parametrize("boundary", ["builder", "review"])
+def test_native_and_corpus_decode_once_per_validation_boundary(
+    tmp_path: Path, full_fake_builder_artifacts: dict[str, bytes], monkeypatch,
+    boundary: str,
+) -> None:
+    module = _load_module()
+    if boundary == "builder":
+        directory = _write_full_fake_builder(tmp_path, full_fake_builder_artifacts)
+    else:
+        directory = _full_fake_review_package(module, tmp_path, full_fake_builder_artifacts)
+    counts = {"native": 0, "corpus": 0}
+    for label, function_name in (("native", "_native_json"), ("corpus", "_corpus_json")):
+        original = getattr(module, function_name)
+        def counted(*args, _label=label, _original=original, **kwargs):
+            counts[_label] += 1
+            return _original(*args, **kwargs)
+        monkeypatch.setattr(module, function_name, counted)
+    if boundary == "builder":
+        module._builder(directory)
+    else:
+        module._review_package(directory)
+    assert counts == {"native": 1, "corpus": 1}
+
+
+def test_product_d_inputs_avoid_classification_preview(monkeypatch, published_base_oracle):
+    module = _load_module()
+    assert hasattr(module, 'materialize_product_d_inputs'), 'no direct product D materializer'
+    from types import SimpleNamespace
+    from insurance_harness.model_policy import ModelIdentity
+    identity = ModelIdentity(provider='g3-user-gateway', family='gemini', deployment_id='gemini-3.7-flash-medium', role='extract', policy_version='g3-user-gemini-gateway-v1')
+    options = SimpleNamespace(identities=(SimpleNamespace(stage='D_COMPILE', identity=identity),), calls=())
+    captured = {}
+    def fixed(*args, **kwargs):
+        captured.update(kwargs)
+        return {'artifacts': (), 'calls': ()}
+    monkeypatch.setattr(module, '_stage_fixed', fixed)
+    monkeypatch.setattr(module, '_plan', lambda *args, **kwargs: 'plan')
+    monkeypatch.setattr(module, '_review_package', lambda *args: pytest.fail('old review package path'))
+    monkeypatch.setattr(module, '_derive_c', lambda *args: pytest.fail('classification rerender'))
+    windows = module.runtime.derive_gemini_d_compile_windows(published_base_oracle)
+    configured = tuple(SimpleNamespace(call_id=f'call-{i}', stage='D_COMPILE', ordinal=i, window_id=w['window_id'], material_ids=w['material_ids']) for i,w in enumerate(windows))
+    result = module.materialize_product_d_inputs(options=options, chain=None, parent=None, parent_digest='1'*64, protocol_seed=None, request=published_base_oracle, configured=configured, prior_terminal_sha='2'*64)
+    assert result['plan'] == 'plan'
+    assert len(captured['context_raws']) == len(windows)
+    assert [row[0] for row in captured['typed']] == ['batch-concept-compile-request.830.g3.v1']
+    assert all('g3-native-page-projections' not in c for c,_,_ in captured['typed'])
+
+
+def test_v2_options_validate_actual_product_windows_without_capacity_grid():
+    module = _load_module()
+    wire = _legacy_gemini_options(module).model_dump(mode='json')
+    wire['contract'] = 'g3-product-model-execution-options.830.v2'
+    compiled = next(row for row in wire['calls'] if row['stage'] == 'D_COMPILE')
+    compiled.update(window_id='window-product-a', material_ids=['material-1'])
+    wire['calls'].append({**compiled, 'call_id': 'product-second', 'ordinal': 1, 'window_id': 'window-product-b'})
+    value = module.ExecutionOptions.model_validate_json(canonical_json(wire))
+    assert len([row for row in value.calls if row.stage == 'D_COMPILE']) == 2
+    wire['calls'][-1]['ordinal'] = 0
+    with pytest.raises(ValueError, match='product'):
+        module.ExecutionOptions.model_validate_json(canonical_json(wire))

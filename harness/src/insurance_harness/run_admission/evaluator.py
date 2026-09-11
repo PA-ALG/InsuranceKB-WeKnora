@@ -7,9 +7,14 @@ import json
 import os
 import stat
 import subprocess
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from threading import RLock
+from types import MappingProxyType
 from typing import Final
+from weakref import WeakKeyDictionary
 
 import yaml
 from pydantic import ValidationError
@@ -21,7 +26,10 @@ from insurance_harness.model_policy import (
     StrictAdmissionRequestBinding,
     VerifiedAdmission,
 )
-from insurance_harness.model_policy.admission import _issue_verified_admission
+from insurance_harness.model_policy.admission import (
+    _issue_verified_admission,
+    _verified_authority_snapshot,
+)
 
 from . import trust_policy
 from .g3_models import (
@@ -77,6 +85,78 @@ _GIT_ENVIRONMENT: Final = {
     "LC_ALL": "C",
     "PATH": "/usr/bin:/bin",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class G3VerifiedArtifact:
+    contract: str
+    artifact_ref: str
+    sha256: str
+    payload: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class G3VerifiedCurrentContent(Mapping[str, bytes]):
+    """Immutable raw bytes proven by one G3 admission verification."""
+
+    artifacts: tuple[G3VerifiedArtifact, ...]
+    request_bodies: tuple[tuple[str, bytes], ...]
+    template_bytes: bytes
+    clean_integration_sha: str
+    stage_context: object | None = None
+
+    def __post_init__(self) -> None:
+        body_keys = tuple(key for key, _payload in self.request_bodies)
+        if body_keys != tuple(sorted(set(body_keys))):
+            raise ValueError("verified request bodies are not canonical")
+        for artifact in self.artifacts:
+            if hashlib.sha256(artifact.payload).hexdigest() != artifact.sha256:
+                raise ValueError("verified artifact digest mismatch")
+
+    def __getitem__(self, key: str) -> bytes:
+        return dict(self.request_bodies)[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(key for key, _payload in self.request_bodies)
+
+    def __len__(self) -> int:
+        return len(self.request_bodies)
+
+    @property
+    def artifacts_by_sha(self) -> Mapping[str, bytes]:
+        values: dict[str, bytes] = {}
+        for artifact in self.artifacts:
+            existing = values.setdefault(artifact.sha256, artifact.payload)
+            if existing != artifact.payload:
+                raise ValueError("verified artifact digest collision")
+        return MappingProxyType(values)
+
+
+_G3_VERIFIED_CONTENT: WeakKeyDictionary[
+    VerifiedAdmission, tuple[str, G3VerifiedCurrentContent]
+] = WeakKeyDictionary()
+_G3_VERIFIED_CONTENT_LOCK = RLock()
+
+
+def _bind_verified_g3_current_content(
+    verified: VerifiedAdmission, content: G3VerifiedCurrentContent
+) -> None:
+    if _verified_authority_snapshot(verified) is None:
+        raise AdmissionPolicyDenied("invalid_verified_admission")
+    with _G3_VERIFIED_CONTENT_LOCK:
+        _G3_VERIFIED_CONTENT[verified] = (verified.verified_binding_digest, content)
+
+
+def _verified_g3_current_content(
+    verified: VerifiedAdmission,
+) -> G3VerifiedCurrentContent:
+    if _verified_authority_snapshot(verified) is None:
+        raise AdmissionPolicyDenied("invalid_verified_admission")
+    with _G3_VERIFIED_CONTENT_LOCK:
+        value = _G3_VERIFIED_CONTENT.get(verified)
+    if value is None or value[0] != verified.verified_binding_digest:
+        raise AdmissionPolicyDenied("invalid_verified_admission")
+    return value[1]
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -604,12 +684,12 @@ def _rerender_g3_request(
 
 def _verify_g3_current_content(
     plan: G3BoundedAdmissionPlanV1, parent: object
-) -> dict[str, bytes]:
+) -> G3VerifiedCurrentContent:
     try:
         from insurance_harness.knowledge_compiler.g3_bounded_model_execution import (
-            _render_g3_stage_contexts,
             _validate_g3_prior_stage_results,
             g3_current_schema_specs,
+            prepare_g3_stage_execution_context,
         )
 
         parent_payload = G3ModelProcessingAuthorizationV1.model_validate(parent)
@@ -643,18 +723,31 @@ def _verify_g3_current_content(
             )
         ] = plan.protocol_seed_lock.seed_artifact
         artifact_payloads: dict[str, list[bytes]] = {}
+        verified_artifacts: list[G3VerifiedArtifact] = []
         for ref in all_refs.values():
-            artifact_payloads.setdefault(ref.contract, []).append(_read_g3_artifact(ref))
+            artifact_payload = _read_g3_artifact(ref)
+            artifact_payloads.setdefault(ref.contract, []).append(artifact_payload)
+            verified_artifacts.append(
+                G3VerifiedArtifact(
+                    contract=ref.contract,
+                    artifact_ref=ref.artifact_ref,
+                    sha256=ref.sha256,
+                    payload=artifact_payload,
+                )
+            )
         _validate_g3_prior_stage_results(plan, artifact_payloads)
         template_bytes = _read_current_file(plan.template_lock.path)
         if hashlib.sha256(template_bytes).hexdigest() != plan.template_lock.raw_sha256:
             raise ValueError("template drift")
-        contexts, context_index, preview = _render_g3_stage_contexts(
+        stage_context = prepare_g3_stage_execution_context(
             plan=plan,
             parent=parent_payload,
             artifacts=artifact_payloads,
             template_bytes=template_bytes,
         )
+        contexts = stage_context.context_by_call
+        context_index = stage_context.context_index
+        preview = stage_context.preview
 
         def mirrored(contract: str) -> tuple[G3ArtifactRefV1, ...]:
             groups = tuple(
@@ -781,7 +874,18 @@ def _verify_g3_current_content(
         head_after = _clean_repository_sha()
         if head_before != head_after or head_after != plan.clean_integration_sha:
             raise ValueError("clean integration drift")
-        return bodies
+        return G3VerifiedCurrentContent(
+            artifacts=tuple(
+                sorted(
+                    verified_artifacts,
+                    key=lambda item: (item.contract, item.artifact_ref, item.sha256),
+                )
+            ),
+            request_bodies=tuple(sorted(bodies.items())),
+            template_bytes=template_bytes,
+            clean_integration_sha=head_after,
+            stage_context=stage_context,
+        )
     except AdmissionPolicyDenied:
         raise
     except Exception:
@@ -849,7 +953,7 @@ class _G3BoundedAdmissionVerifier:
             validate_g3_parent_scope(parent.payload, plan)
         except ValueError:
             raise AdmissionPolicyDenied("g3_parent_scope_mismatch") from None
-        _verify_g3_current_content(plan, parent.payload)
+        current_content = _verify_g3_current_content(plan, parent.payload)
         actual = {
             "purpose": plan.purpose,
             "run_schema_version": plan.run_schema_version,
@@ -883,13 +987,15 @@ class _G3BoundedAdmissionVerifier:
             approved_identities=plan.approved_identities,
             approved_template_hashes=plan.approved_template_hashes,
         )
-        return _issue_verified_admission(
+        verified = _issue_verified_admission(
             request,
             binding,
             verifier_id="insurance-harness.run-admission.g3-bounded-execution",
             verifier_version="1",
             verified_at=verified_at,
         )
+        _bind_verified_g3_current_content(verified, current_content)
+        return verified
 
 
 def select_canonical_admission_verifier(

@@ -232,7 +232,7 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
         if current.resource_caps_hash != current.resource_caps.digest:
             raise ValueError("resource caps mismatch")
         expected_resource = (
-            1,
+            current.chain_manifest.worker_limit,
             len(current.request_manifest.calls),
             sum(call.timeout_seconds for call in current.request_manifest.calls),
             sum(
@@ -247,6 +247,12 @@ def validate_g3_bounded_plan(plan: G3BoundedAdmissionPlanV1) -> G3BoundedAdmissi
             current.resource_caps.token_limit,
         ) != expected_resource:
             raise ValueError("resource caps projection mismatch")
+        if (
+            current.stage_caps.worker_limit != current.chain_manifest.worker_limit
+            or current.chain_manifest.failure_policy.worker_limit
+            != current.chain_manifest.worker_limit
+        ):
+            raise ValueError("worker policy projection mismatch")
         calls = current.request_manifest.calls
         if current.stage == "C_CLASSIFY":
             if (

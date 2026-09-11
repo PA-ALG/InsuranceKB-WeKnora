@@ -145,16 +145,51 @@ class G3EligibilityCheckV1(_G3Model):
 
 
 class G3FailurePolicyV1(_G3Model):
-    policy_version: Literal["g3-chain-failure-policy.830.v1"]
+    policy_version: Literal[
+        "g3-chain-failure-policy.830.v1",
+        "g3-chain-failure-policy.830.v2",
+    ]
     retry_limit: Literal[0]
-    worker_limit: Literal[1]
-    incomplete_reservation_action: Literal["PERMANENTLY_CONSUME_AND_STOP_STAGE"]
-    started_without_terminal_action: Literal["PERMANENT_OUTCOME_UNKNOWN_STOP_CHAIN"]
-    call_failure_action: Literal["STOP_CHAIN"]
+    worker_limit: Literal[1, 2]
+    incomplete_reservation_action: Literal[
+        "PERMANENTLY_CONSUME_AND_STOP_STAGE",
+        "RESUME_UNSTARTED_CONTINUE_STAGE",
+    ]
+    started_without_terminal_action: Literal[
+        "PERMANENT_OUTCOME_UNKNOWN_STOP_CHAIN",
+        "PRESERVE_OUTCOME_UNKNOWN_CONTINUE_STAGE",
+    ]
+    call_failure_action: Literal["STOP_CHAIN", "CONTINUE_INDEPENDENT_CALLS"]
     c_execution_failure_action: Literal["STOP_BEFORE_RESOLVE"]
     c_coverage_gap_action: Literal["MARK_DOD_GAP_CONTINUE_ELIGIBLE_AUTOMATIC_CHILDREN"]
     d_compile_failure_action: Literal["STOP_BEFORE_REVIEW"]
     d_review_failure_action: Literal["STOP_BEFORE_CANDIDATE"]
+
+    @model_validator(mode="after")
+    def validate_versioned_policy(self) -> Self:
+        actual = (
+            self.worker_limit,
+            self.incomplete_reservation_action,
+            self.started_without_terminal_action,
+            self.call_failure_action,
+        )
+        expected = {
+            "g3-chain-failure-policy.830.v1": (
+                1,
+                "PERMANENTLY_CONSUME_AND_STOP_STAGE",
+                "PERMANENT_OUTCOME_UNKNOWN_STOP_CHAIN",
+                "STOP_CHAIN",
+            ),
+            "g3-chain-failure-policy.830.v2": (
+                2,
+                "RESUME_UNSTARTED_CONTINUE_STAGE",
+                "PRESERVE_OUTCOME_UNKNOWN_CONTINUE_STAGE",
+                "CONTINUE_INDEPENDENT_CALLS",
+            ),
+        }[self.policy_version]
+        if actual != expected:
+            raise ValueError("failure policy version/semantics mismatch")
+        return self
 
 
 class G3LedgerPolicyV1(_G3Model):
@@ -191,7 +226,7 @@ class G3ChainManifestV1(_G3Model):
     total_output_token_ceiling: PositiveInt
     total_time_limit_seconds: PositiveInt
     retry_limit: Literal[0]
-    worker_limit: Literal[1]
+    worker_limit: Literal[1, 2]
     derivation_rules_version: Literal["g3-c-to-d-derivation.830.v1"]
     prompt_render_rules_version: NonBlankStr
     schema_derivation_version: NonBlankStr
@@ -238,7 +273,7 @@ class G3ModelProcessingAuthorizationV1(_G3Model):
     total_output_token_ceiling: PositiveInt
     total_time_limit_seconds: PositiveInt
     retry_limit: Literal[0]
-    worker_limit: Literal[1]
+    worker_limit: Literal[1, 2]
     delegated_stage_signer: G3DelegatedStageSignerV1
     expires_at: AwareDatetime
 
@@ -503,7 +538,7 @@ class G3StageDispatchLockV1(_G3Model):
 class G3StageCapsV1(_G3Model):
     contract: NonBlankStr
     stage: Stage
-    worker_limit: Literal[1]
+    worker_limit: Literal[1, 2]
     call_limit: PositiveInt
     attempts_per_call: Literal[1]
     retry_limit: Literal[0]
