@@ -179,6 +179,21 @@ func TestCreateKnowledgeFromFileDoesNotPersistWhenStorageSaveFails(t *testing.T)
 	require.Zero(t, repo.createCalls)
 }
 
+func TestCreateKnowledgeFromFileCapacityRejectsBeforeWriting(t *testing.T) {
+	t.Setenv("DOCUMENT_STORAGE_MIN_FREE_BYTES", "18446744073709551615")
+	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
+	repo := &createKnowledgeFileRepoStub{}
+	fileSvc := &createKnowledgeFileServiceStub{}
+	svc := &knowledgeService{repo: repo, fileSvc: fileSvc,
+		kbService: &createKnowledgeFileKBServiceStub{kb: &types.KnowledgeBase{ID: "kb-1"}}}
+	knowledge, err := svc.CreateKnowledgeFromFile(newCreateKnowledgeFileContext(), "kb-1",
+		newMultipartFileHeader(t, "doc.txt", "hello"), nil, nil, "", nil, "", nil)
+	require.Error(t, err)
+	require.Nil(t, knowledge)
+	require.Zero(t, fileSvc.saveCalls)
+	require.Zero(t, repo.createCalls)
+}
+
 func TestCreateKnowledgeFromFilePersistsStoredFilePathOnCreate(t *testing.T) {
 	t.Parallel()
 

@@ -65,6 +65,8 @@ export interface BatchConceptEntity830G3 {
   readonly issuer: string
   readonly productCode: string
   readonly primaryClassification: string
+  readonly navigationPrimaryLabel?: string
+  readonly navigationLabels?: readonly string[]
   readonly schemaPackID: string
   readonly schemaVersion: string
   readonly schemaPackSHA256: string
@@ -231,6 +233,14 @@ async function schemaWikiHash(contract: string, payload: unknown): Promise<strin
 function without(value: R, key: string): R {
   return Object.fromEntries(Object.entries(value).filter(([name]) => name !== key))
 }
+function codePointOrder(left: string, right: string): number {
+  const a = [...left]; const b = [...right]
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const difference = a[i]!.codePointAt(0)! - b[i]!.codePointAt(0)!
+    if (difference) return difference
+  }
+  return a.length - b.length
+}
 function unwrap(value: unknown): unknown {
   const response = exact(value, ['success', 'data'])
   if (response.success !== true) return invalid()
@@ -317,22 +327,41 @@ async function pageMember(value: unknown, scope: SchemaWikiScopeV1, tenantID?: n
     if (!memberID.startsWith('free_wiki_') || title !== '开放知识' || content !== ''
       || refs.some((ref, index) => ref !== [...refs].sort()[index])) return invalid()
   } else {
-    overviewPayload(payload, scope, ownerID)
+    await overviewPayload(payload, scope, ownerID)
     if (!memberID.startsWith('entity_overview_') || content.length === 0 || title !== payload.display_name) return invalid()
   }
   return member as unknown as BatchConceptMember830G3
 }
 
-function overviewPayload(value: unknown, scope: SchemaWikiScopeV1, ownerID: string): R {
+async function overviewPayload(value: unknown, scope: SchemaWikiScopeV1, ownerID: string): Promise<R> {
   const p = exact(value, ['contract', 'entity_id', 'entity_version', 'display_name', 'issuer', 'product_code',
     'primary_classification', 'schema_pack_id', 'schema_version', 'schema_pack_sha256', 'schema_pack_display_name',
-    'profile_id', 'profile_version', 'profile_sha256', 'quality_status', 'release_lane', 'sections'])
+    'profile_id', 'profile_version', 'profile_sha256', 'quality_status', 'release_lane', 'sections',
+    ...(record(value) && Object.hasOwn(value, 'navigation_assignment') ? ['navigation_assignment'] : [])])
   if (p.contract !== OVERVIEW_CONTRACT || identity(p.entity_id) !== ownerID
     || !entityVersion(p.entity_version, ownerID) || !Array.isArray(p.sections)
     || p.quality_status !== 'REGISTERED_NOT_QUALITY_ADMITTED' || p.release_lane !== 'ISOLATED_NOT_FOR_PRODUCTION') return invalid()
   for (const name of ['display_name', 'issuer', 'product_code', 'primary_classification', 'schema_pack_id',
     'schema_version', 'schema_pack_display_name', 'profile_id', 'profile_version']) identity(p[name])
   hash(p.schema_pack_sha256); hash(p.profile_sha256)
+  if (Object.hasOwn(p, 'navigation_assignment')) {
+    const nav = exact(p.navigation_assignment, ['contract', 'entity_id', 'entity_version', 'assignment_version',
+      'labels', 'primary_label', 'previous_assignment_sha256', 'assignment_sha256'])
+    if (nav.contract !== 'g3-navigation-assignment.830.v1' || nav.entity_id !== ownerID
+      || nav.entity_version !== p.entity_version || !Number.isSafeInteger(nav.assignment_version)
+      || Number(nav.assignment_version) < 1 || !Array.isArray(nav.labels)
+      || nav.labels.length < 1 || nav.labels.length > 16) return invalid()
+    const labels = nav.labels.map(label => {
+      const text = identity(label)
+      if ([...text].length > 80) return invalid()
+      return text
+    })
+    if (new Set(labels).size !== labels.length || labels.some((label, i) => label !== [...labels].sort(codePointOrder)[i])
+      || !labels.includes(identity(nav.primary_label))) return invalid()
+    hash(nav.previous_assignment_sha256)
+    if (await schemaWikiHash(String(nav.contract), without(nav, 'assignment_sha256'))
+      !== hash(nav.assignment_sha256)) return invalid()
+  }
   const sectionKeys = new Set<string>(); const fieldKeys = new Set<string>(); const memberIDs = new Set<string>()
   for (const rawSection of p.sections) {
     const section = exact(rawSection, ['section_key', 'display_name', 'fields'])
@@ -409,6 +438,10 @@ async function validateMembers(rawMembers: unknown, scope: SchemaWikiScopeV1,
     freeIDs.forEach(id => referencedFreeItems.add(id))
     entities.push({ entityID: owner, entityVersion: String(p.entity_version), displayName: String(p.display_name),
       issuer: String(p.issuer), productCode: String(p.product_code), primaryClassification: String(p.primary_classification),
+      navigationPrimaryLabel: p.navigation_assignment
+        ? String((p.navigation_assignment as R).primary_label) : String(p.primary_classification),
+      navigationLabels: p.navigation_assignment
+        ? (p.navigation_assignment as R).labels as string[] : [String(p.primary_classification)],
       schemaPackID: String(p.schema_pack_id), schemaVersion: String(p.schema_version),
       schemaPackSHA256: String(p.schema_pack_sha256), schemaPackDisplayName: String(p.schema_pack_display_name),
       profileID: String(p.profile_id), profileVersion: String(p.profile_version), profileSHA256: String(p.profile_sha256),

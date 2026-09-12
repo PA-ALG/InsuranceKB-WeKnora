@@ -75,6 +75,11 @@ def _structured_text(value: str) -> str:
 
 
 Text = Annotated[StrictStr, AfterValidator(_structured_text)]
+NavigationLabel = Annotated[
+    StrictStr,
+    StringConstraints(min_length=1, max_length=80),
+    AfterValidator(_structured_text),
+]
 
 
 class BatchConceptCompileError(ValueError):
@@ -96,6 +101,10 @@ def _without_hash(model: BaseModel, field: str) -> dict[str, object]:
         name: getattr(model, name)
         for name in type(model).model_fields
         if name != field
+        and not (
+            type(model).model_fields[name].exclude_if is not None
+            and type(model).model_fields[name].exclude_if(getattr(model, name))
+        )
     }
 
 
@@ -369,6 +378,44 @@ class EntityDirectoryEntry830G3V1(_FrozenModel):
     sections: tuple[DirectorySection830G3V1, ...]
 
 
+class NavigationAssignment830G3V1(_FrozenModel):
+    contract: Literal["g3-navigation-assignment.830.v1"]
+    entity_id: Text
+    entity_version: Text
+    assignment_version: Annotated[StrictInt, Field(ge=1)]
+    labels: tuple[NavigationLabel, ...] = Field(min_length=1, max_length=16)
+    primary_label: NavigationLabel
+    previous_assignment_sha256: Hash
+    assignment_sha256: Hash
+
+    @model_validator(mode="after")
+    def validate_assignment(self) -> Self:
+        if (
+            self.labels != tuple(sorted(set(self.labels)))
+            or self.primary_label not in self.labels
+            or self.assignment_sha256
+            != _batch_sha256(
+                self.contract, _without_hash(self, "assignment_sha256")
+            )
+        ):
+            raise ValueError("NAVIGATION_ASSIGNMENT_INVALID")
+        return self
+
+
+def navigation_default_sha256_g3(binding: EntityCompileBinding830G3V1) -> str:
+    """Return the synthetic parent identity when an entity has no navigation override."""
+
+    return _batch_sha256(
+        "g3-navigation-default.830.v1",
+        {
+            "entity_id": binding.entity_id,
+            "entity_version": binding.entity_version,
+            "primary_label": binding.primary_classification,
+            "labels": (binding.primary_classification,),
+        },
+    )
+
+
 class BatchConceptCandidateBundle830G3V1(_FrozenModel):
     contract: Literal["batch-concept-candidate-bundle.830.g3.v1"]
     request: BatchConceptCompileRequest830G3V1
@@ -377,7 +424,19 @@ class BatchConceptCandidateBundle830G3V1(_FrozenModel):
     review_result: ReviewResult
     page_manifest: BatchConceptPageManifest830G3V1
     admission: HumanBatchAdmission
+    navigation_assignments: tuple[NavigationAssignment830G3V1, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
     candidate_hash: Hash
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_empty_navigation(cls, value: object) -> object:
+        if isinstance(value, Mapping) and "navigation_assignments" in value:
+            assignments = value["navigation_assignments"]
+            if assignments is None or assignments == () or assignments == []:
+                raise ValueError("NAVIGATION_ASSIGNMENTS_MUST_BE_OMITTED")
+        return value
 
     @model_validator(mode="after")
     def validate_bundle(self) -> Self:
@@ -398,6 +457,12 @@ def validate_unknown_field_key_alignments(
         exact_rows = tuple(UnknownFieldKeyAlignment830G3V1.model_validate(row) for row in rows)
     except (TypeError, ValueError):
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED") from None
+    if _base_contract_kind(exact_request) == "PUBLISHED_G3":
+        if exact_rows or tuple(exact_output.fields) != tuple(
+            sorted(exact_request.existing_fields, key=lambda item: (item.entity_id, item.field_key))
+        ):
+            raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
+        return ()
     if tuple(row.entity_id for row in exact_rows) != tuple(
         sorted({row.entity_id for row in exact_rows})
     ) or tuple(row.alignment_sha256 for row in exact_rows) != _ALIGNMENT_HASHES:
@@ -494,6 +559,42 @@ def _profile_set_identity(bindings: Sequence[EntityCompileBinding830G3V1]) -> st
     return "profile-set:" + _batch_sha256("batch-profile-bindings.830.g3.v1", rows)
 
 
+def _base_contract_kind(base: CompileRequest) -> Literal["LEGACY_G2", "PUBLISHED_G3"]:
+    members = {
+        "base_release_id": base.base_release_id,
+        "base_activation_epoch": base.base_activation_epoch,
+        "existing_definitions": base.existing_definitions,
+        "existing_fields": base.existing_fields,
+        "existing_pages": base.existing_pages,
+        "existing_entity_versions": base.existing_entity_versions,
+    }
+    identity = (
+        base.base_release_id,
+        base.base_activation_epoch,
+        len(base.existing_fields),
+        _batch_sha256("actual-base-members.830.g3.v1", members),
+    )
+    if identity == (_BASE_RELEASE, _BASE_EPOCH, 134, _BASE_MEMBERS_SHA256):
+        return "LEGACY_G2"
+    entity_ids = set(base.existing_entity_versions)
+    required = {
+        (entity_id, field_key)
+        for entity_id, fields in base.required_fields.items()
+        for field_key in fields
+    }
+    actual = {(item.entity_id, item.field_key) for item in base.existing_fields}
+    if (
+        not base.base_release_id
+        or base.base_activation_epoch <= _BASE_EPOCH
+        or entity_ids != set(base.entity_versions)
+        or entity_ids != set(base.required_fields)
+        or actual != required
+        or len(actual) != len(base.existing_fields)
+    ):
+        raise BatchConceptCompileError("BASE_SNAPSHOT_MISMATCH")
+    return "PUBLISHED_G3"
+
+
 def _catalog_entry(
     request: BatchConceptCompileRequest830G3V1,
     binding: EntityCompileBinding830G3V1,
@@ -548,6 +649,7 @@ def _validate_confirmation(request: BatchConceptCompileRequest830G3V1) -> None:
 
 def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> None:
     base = request.base_request
+    base_kind = _base_contract_kind(base)
     inputs = request.resolution_inputs
     resolution = request.resolution
     if (
@@ -778,7 +880,7 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
                 raise BatchConceptCompileError("BASE_ENTITY_MATCH_REQUIRED")
             if binding.entity_id in base_entities:
                 matched_base.add(binding.entity_id)
-                if (
+                if base_kind == "LEGACY_G2" and (
                     binding.primary_classification,
                     binding.schema_pack_id,
                     binding.schema_version,
@@ -832,25 +934,11 @@ def _validate_request_closure(request: BatchConceptCompileRequest830G3V1) -> Non
         )
     if source_keys != required_source_keys:
         raise BatchConceptCompileError("SOURCE_CLOSURE_MISMATCH")
-    if (
-        base.base_release_id,
-        base.base_activation_epoch,
-        len(base.existing_fields),
-        tuple(item.alignment_sha256 for item in request.unknown_field_key_alignments),
-    ) != (_BASE_RELEASE, _BASE_EPOCH, 134, _ALIGNMENT_HASHES):
+    expected_alignments = _ALIGNMENT_HASHES if base_kind == "LEGACY_G2" else ()
+    if tuple(
+        item.alignment_sha256 for item in request.unknown_field_key_alignments
+    ) != expected_alignments:
         raise BatchConceptCompileError("BASE_UNKNOWN_KEY_MIGRATION_REQUIRED")
-    base_members = {
-        "base_release_id": base.base_release_id,
-        "base_activation_epoch": base.base_activation_epoch,
-        "existing_definitions": base.existing_definitions,
-        "existing_fields": base.existing_fields,
-        "existing_pages": base.existing_pages,
-        "existing_entity_versions": base.existing_entity_versions,
-    }
-    if _batch_sha256("actual-base-members.830.g3.v1", base_members) != (
-        _BASE_MEMBERS_SHA256
-    ):
-        raise BatchConceptCompileError("BASE_SNAPSHOT_MISMATCH")
     aligned_existing_fields(request)
 
 
@@ -858,6 +946,8 @@ def _build_unknown_alignments(
     base: CompileRequest,
     catalog: SchemaPackCatalogV1,
 ) -> tuple[UnknownFieldKeyAlignment830G3V1, ...]:
+    if _base_contract_kind(base) == "PUBLISHED_G3":
+        return ()
     medical = next(
         (
             entry
@@ -979,7 +1069,25 @@ def _build_entity_bindings(
         if any(
             row[3].disposition != first.disposition
             or row[3].anchors != anchors
-            or (row[3].classification != first.classification and (resolution.compiler_version != "batch-entity-resolution-compiler.830.g3.v2" or (row[3].classification.primary_label,row[3].classification.schema_pack_id,row[3].classification.schema_version,row[3].classification.schema_pack_sha256) != (first.classification.primary_label,first.classification.schema_pack_id,first.classification.schema_version,first.classification.schema_pack_sha256)))
+            or (
+                row[3].classification != first.classification
+                and (
+                    resolution.compiler_version
+                    != "batch-entity-resolution-compiler.830.g3.v2"
+                    or (
+                        row[3].classification.primary_label,
+                        row[3].classification.schema_pack_id,
+                        row[3].classification.schema_version,
+                        row[3].classification.schema_pack_sha256,
+                    )
+                    != (
+                        first.classification.primary_label,
+                        first.classification.schema_pack_id,
+                        first.classification.schema_version,
+                        first.classification.schema_pack_sha256,
+                    )
+                )
+            )
             for row in rows
         ):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
@@ -992,10 +1100,19 @@ def _build_entity_bindings(
         ):
             raise BatchConceptCompileError("RESOLUTION_REFERENCE_INVALID")
         if resolution.compiler_version == "batch-entity-resolution-compiler.830.g3.v2":
-            if not any(proposal_index[row[0]].material_role == "terms" and any(
-                entity.proposal_ref == row[1] and entity.product_code == anchors.product_code.observed_value and entity.filing_or_registration is not None and entity.filing_or_registration.kind == anchors.version_anchor.kind and entity.filing_or_registration.value == anchors.version_anchor.observed_value
-                for entity in proposal_index[row[0]].entities
-            ) for row in rows):
+            if not any(
+                proposal_index[row[0]].material_role == "terms"
+                and any(
+                    entity.proposal_ref == row[1]
+                    and entity.product_code == anchors.product_code.observed_value
+                    and entity.filing_or_registration is not None
+                    and entity.filing_or_registration.kind == anchors.version_anchor.kind
+                    and entity.filing_or_registration.value
+                    == anchors.version_anchor.observed_value
+                    for entity in proposal_index[row[0]].entities
+                )
+                for row in rows
+            ):
                 raise BatchConceptCompileError("RESOLUTION_IDENTITY_SOURCE_REQUIRED")
         classification = first.classification
         entries = [
@@ -1383,6 +1500,15 @@ def validate_delta_output(
     request: BatchConceptCompileRequest830G3V1, result: CompileResult
 ) -> None:
     output = result.output
+    if result.execution.implementation == "published-content-identity-reuse.830.g3.v1" and (
+        _base_contract_kind(request.base_request) != "PUBLISHED_G3"
+        or output.definitions
+        or output.fields
+        or output.pages
+        or output.audit
+        or output.transformation != "EXTRACT"
+    ):
+        raise BatchConceptCompileError("PUBLISHED_CONTENT_REUSE_INVALID")
     if output.request_hash != compile_request_hash_g3(request.base_request):
         raise BatchConceptCompileError("REQUEST_IDENTITY_MISMATCH")
     context_hash = _batch_sha256(
@@ -1661,10 +1787,13 @@ def _directory_entry(
 
 
 def project_batch_members(
-    request: BatchConceptCompileRequest830G3V1, output: CompileOutput
+    request: BatchConceptCompileRequest830G3V1,
+    output: CompileOutput,
+    navigation_assignments: tuple[NavigationAssignment830G3V1, ...] = (),
 ) -> BatchConceptPageManifest830G3V1:
     _validate_output_g3(request.base_request, output)
     bindings = {item.entity_id: item for item in request.entity_bindings}
+    navigation = {item.entity_id: item for item in navigation_assignments}
     fields = {(item.entity_id, item.field_key): item for item in output.fields}
     members: list[PageMember] = []
     for definition in output.definitions:
@@ -1710,6 +1839,11 @@ def project_batch_members(
         binding = bindings[entity_id]
         directory = _directory_entry(request, binding, fields)
         section_names = "、".join(section.display_name for section in directory.sections)
+        directory_payload = directory.model_dump(mode="json")
+        if entity_id in navigation:
+            directory_payload["navigation_assignment"] = navigation[entity_id].model_dump(
+                mode="json"
+            )
         members.append(
             PageMember(
                 kind="entity_overview",
@@ -1724,7 +1858,7 @@ def project_batch_members(
                     f"产品：{binding.display_name}\n分类：{binding.primary_classification}\n"
                     f"SchemaPack：{directory.schema_pack_display_name}\n栏目：{section_names}"
                 ),
-                payload=directory.model_dump(mode="json"),
+                payload=directory_payload,
             )
         )
         free_ids = sorted(
@@ -1762,9 +1896,50 @@ def _validate_execution(
     _validate_raw(result.execution.raw_output, result.output)
 
 
+def _validate_published_review_reuse(
+    request: BatchConceptCompileRequest830G3V1,
+    model_compile_result: CompileResult,
+    review: ReviewResult,
+) -> None:
+    if review.execution.implementation != "published-review-context-diff-reuse.830.g3.v1":
+        return
+    if (
+        _base_contract_kind(request.base_request) != "PUBLISHED_G3"
+        or model_compile_result.execution.implementation
+        != "published-content-identity-reuse.830.g3.v1"
+        or review.output.page_scores
+        or review.output.decision != "PASS"
+    ):
+        raise BatchConceptCompileError("PUBLISHED_REVIEW_REUSE_INVALID")
+
+
+def _validate_navigation_assignments(
+    request: BatchConceptCompileRequest830G3V1,
+    model_compile_result: CompileResult,
+    assignments: tuple[NavigationAssignment830G3V1, ...],
+) -> None:
+    if not assignments:
+        return
+    keys = tuple((item.entity_id, item.entity_version) for item in assignments)
+    if keys != tuple(sorted(set(keys))):
+        raise BatchConceptCompileError("NAVIGATION_ASSIGNMENT_ORDER_INVALID")
+    bindings = {item.entity_id: item for item in request.entity_bindings}
+    if any(
+        (binding := bindings.get(item.entity_id)) is None
+        or binding.entity_version != item.entity_version
+        for item in assignments
+    ):
+        raise BatchConceptCompileError("NAVIGATION_ENTITY_INVALID")
+    if _base_contract_kind(request.base_request) != "PUBLISHED_G3":
+        raise BatchConceptCompileError("NAVIGATION_REUSE_REQUIRED")
+
+
 def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> None:
     request = bundle.request
     validate_delta_output(request, bundle.model_compile_result)
+    _validate_navigation_assignments(
+        request, bundle.model_compile_result, bundle.navigation_assignments
+    )
     expected = compose_batch_output(request, bundle.model_compile_result)
     if bundle.compile_result.output != expected:
         raise BatchConceptCompileError("COMPILED_OUTPUT_MISMATCH")
@@ -1782,6 +1957,7 @@ def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> Non
         ),
     )
     review = bundle.review_result
+    _validate_published_review_reuse(request, bundle.model_compile_result, review)
     _validate_execution(
         review,
         _batch_sha256(
@@ -1801,7 +1977,9 @@ def validate_candidate_bundle(bundle: BatchConceptCandidateBundle830G3V1) -> Non
     }
     if len(run_ids) != 3 or bundle.admission.status != "NEEDS_HUMAN":
         raise BatchConceptCompileError("EXECUTION_INDEPENDENCE_INVALID")
-    if bundle.page_manifest != project_batch_members(request, expected):
+    if bundle.page_manifest != project_batch_members(
+        request, expected, bundle.navigation_assignments
+    ):
         raise BatchConceptCompileError("PAGE_MANIFEST_MISMATCH")
     if bundle.candidate_hash != _batch_sha256(
         bundle.contract, _without_hash(bundle, "candidate_hash")
@@ -1836,6 +2014,87 @@ def assemble_candidate_bundle(
     )
 
 
+def apply_navigation_assignment_g3(
+    bundle: BatchConceptCandidateBundle830G3V1,
+    *,
+    entity_id: str,
+    labels: Sequence[str],
+    primary_label: str,
+) -> BatchConceptCandidateBundle830G3V1:
+    """Add or advance one human navigation override and rehash its full candidate."""
+
+    validate_candidate_bundle(bundle)
+    binding = next(
+        (item for item in bundle.request.entity_bindings if item.entity_id == entity_id),
+        None,
+    )
+    if binding is None:
+        raise BatchConceptCompileError("NAVIGATION_ENTITY_INVALID")
+    if (
+        _base_contract_kind(bundle.request.base_request) != "PUBLISHED_G3"
+        or bundle.model_compile_result.execution.implementation
+        != "published-content-identity-reuse.830.g3.v1"
+    ):
+        raise BatchConceptCompileError("NAVIGATION_REUSE_REQUIRED")
+    prior = next(
+        (item for item in bundle.navigation_assignments if item.entity_id == entity_id),
+        None,
+    )
+    exact_labels = tuple(labels)
+    if prior is not None and (
+        prior.labels, prior.primary_label
+    ) == (exact_labels, primary_label):
+        return bundle
+    assignment_payload: dict[str, object] = {
+        "contract": "g3-navigation-assignment.830.v1",
+        "entity_id": binding.entity_id,
+        "entity_version": binding.entity_version,
+        "assignment_version": 1 if prior is None else prior.assignment_version + 1,
+        "labels": exact_labels,
+        "primary_label": primary_label,
+        "previous_assignment_sha256": (
+            navigation_default_sha256_g3(binding)
+            if prior is None
+            else prior.assignment_sha256
+        ),
+    }
+    assignment = NavigationAssignment830G3V1.model_validate(
+        {
+            **assignment_payload,
+            "assignment_sha256": _batch_sha256(
+                cast(str, assignment_payload["contract"]), assignment_payload
+            ),
+        }
+    )
+    assignments = tuple(
+        sorted(
+            (
+                assignment,
+                *(
+                    item
+                    for item in bundle.navigation_assignments
+                    if item.entity_id != entity_id
+                ),
+            ),
+            key=lambda item: (item.entity_id, item.entity_version),
+        )
+    )
+    _validate_navigation_assignments(
+        bundle.request, bundle.model_compile_result, assignments
+    )
+    payload = _without_hash(bundle, "candidate_hash")
+    payload["navigation_assignments"] = assignments
+    payload["page_manifest"] = project_batch_members(
+        bundle.request, bundle.compile_result.output, assignments
+    )
+    return BatchConceptCandidateBundle830G3V1.model_validate(
+        {
+            **payload,
+            "candidate_hash": _batch_sha256(bundle.contract, payload),
+        }
+    )
+
+
 def validate_batch_candidate(payload: str | bytes) -> BatchConceptCandidateBundle830G3V1:
     try:
         return BatchConceptCandidateBundle830G3V1.model_validate(_unique_json(payload))
@@ -1855,6 +2114,9 @@ __all__ = [
     "CatalogProfileConfirmationBinding830G3V1",
     "CatalogProfileConfirmationReceipt830G3V1",
     "EntityCompileBinding830G3V1",
+    "NavigationAssignment830G3V1",
+    "apply_navigation_assignment_g3",
+    "navigation_default_sha256_g3",
     "EntityDirectoryEntry830G3V1",
     "ProfileConfirmationIdentity830G3V1",
     "ResolutionDecisionRef830G3V1",

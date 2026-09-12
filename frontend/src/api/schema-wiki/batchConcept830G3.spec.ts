@@ -94,6 +94,49 @@ describe('G3 batch concept preparation parser', () => {
       .some(field => field.fieldKey === 'social_insurance_requirement')).toBe(false)
   })
 
+  it('moves navigation while preserving schema, fields and evidence', async () => {
+    const original = await preparationResponse()
+    const response = structuredClone(original)
+    const overview = response.page_manifest.members.find((m: any) => m.kind === 'entity_overview')
+    const assignment: Record<string, any> = {
+      contract: 'g3-navigation-assignment.830.v1', entity_id: overview.owner_id,
+      entity_version: overview.payload.entity_version, assignment_version: 1,
+      labels: [overview.payload.primary_classification, '健康保障'].sort(), primary_label: '健康保障',
+      previous_assignment_sha256: 'a'.repeat(64),
+    }
+    assignment.assignment_sha256 = await domainHash(assignment.contract, assignment)
+    overview.payload.navigation_assignment = assignment
+    await refreshManifestHashes(response)
+    const parsed = await parseBatchConceptPreparation830G3(response, scope, await catalog(), 'preparation-g3')
+    const entity = parsed.entities.find(item => item.entityID === overview.owner_id)!
+    expect(entity.navigationPrimaryLabel).toBe('健康保障')
+    expect(entity.primaryClassification).toBe(overview.payload.primary_classification)
+    expect(entity.schemaPackSHA256).toBe(overview.payload.schema_pack_sha256)
+    expect(parsed.members.filter(item => item.kind === 'field_assertion')).toEqual(
+      original.page_manifest.members.filter((item: any) => item.kind === 'field_assertion'))
+    const unicode = structuredClone(response)
+    const unicodeAssignment = unicode.page_manifest.members.find((m: any) => m.member_id === overview.member_id)
+      .payload.navigation_assignment
+    unicodeAssignment.labels = ['\ue000', '😀']
+    unicodeAssignment.primary_label = '😀'
+    unicodeAssignment.assignment_sha256 = await domainHash(unicodeAssignment.contract, Object.fromEntries(
+      Object.entries(unicodeAssignment).filter(([key]) => key !== 'assignment_sha256')))
+    await refreshManifestHashes(unicode)
+    expect((await parseBatchConceptPreparation830G3(unicode, scope, await catalog(), 'preparation-g3'))
+      .entities.find(item => item.entityID === overview.owner_id)?.navigationPrimaryLabel).toBe('😀')
+    for (const patch of [
+      { entity_id: 'foreign-entity' }, { assignment_version: 0 },
+      { labels: ['健康保障', '健康保障'] }, { primary_label: 'unlisted' },
+      { assignment_sha256: '0'.repeat(64) }, { labels: ['x'.repeat(81)], primary_label: 'x'.repeat(81) },
+    ]) {
+      const bad = structuredClone(response)
+      Object.assign(bad.page_manifest.members.find((m: any) => m.member_id === overview.member_id)
+        .payload.navigation_assignment, patch)
+      await refreshManifestHashes(bad)
+      await expect(parseBatchConceptPreparation830G3(bad, scope, await catalog(), 'preparation-g3')).rejects.toThrow()
+    }
+  })
+
   it('rejects omitted, null, extra, non-NFC, duplicate and fully rehashed topology drift', async () => {
     const cases: Record<string, any>[] = []
     const omitted = await preparationResponse(); delete omitted.status; cases.push(omitted)

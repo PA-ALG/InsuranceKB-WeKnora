@@ -40,6 +40,39 @@ func TestConceptSourceReuse830G3PersistsAcrossServiceRestart(t *testing.T) {
 	require.Equal(t, 1, fixed.calls, "locator reads must not reopen PDF bytes")
 }
 
+func TestConceptLegacyCarryover830G3FollowsValidatedPublishedParent(t *testing.T) {
+	fixture, schema, bundle := batchConceptReleaseFixture830G3(t)
+	draft, err := schema.CreateBatchConceptDraft830G3(
+		fixture.ctx, fixture.principal1, fixture.scope,
+		"batch-g3-source-parent", batchConceptCandidateVector830G3(t),
+	)
+	require.NoError(t, err)
+	rawDecision, decision := conceptDecision830G2(t, fixture, draft, "batch-g3-source-parent")
+	ready, err := schema.ReviewSchemaDraft(
+		fixture.ctx, fixture.principal1, fixture.scope, draft.ID, rawDecision,
+	)
+	require.NoError(t, err)
+	receipt, err := fixture.service.ActivateReviewed(
+		fixture.ctx, fixture.principal1, rawDecision,
+		conceptAuthorization830G2(t, fixture, ready, decision),
+	)
+	require.NoError(t, err)
+	release, err := fixture.repo.GetRelease(fixture.ctx, fixture.scope, receipt.ReleaseID)
+	require.NoError(t, err)
+	preparation, err := fixture.repo.GetReadyPreparation(fixture.ctx, fixture.scope, release.PreparationID)
+	require.NoError(t, err)
+	members, err := fixture.repo.GetReleaseMembers(fixture.ctx, fixture.scope, release.ID)
+	require.NoError(t, err)
+
+	parent, err := conceptLegacyCarryoverParent830G3(release, preparation, members, fixture.scope)
+	require.NoError(t, err)
+	require.Equal(t, bundle.Request.BaseRequest.BaseReleaseID, parent)
+
+	members[0].MemberDigest = testSHA830G2("tampered-member")
+	_, err = conceptLegacyCarryoverParent830G3(release, preparation, members, fixture.scope)
+	require.ErrorIs(t, err, ErrConceptSourceAuthorityUnavailable830G2)
+}
+
 func TestConceptSourceReuse830G3ReadDoesNotPrepareMissingCapture(t *testing.T) {
 	t.Setenv("LOCAL_STORAGE_BASE_DIR", t.TempDir())
 	fixture, doc, scope, evidence, block := nativeIndexFixture830G2(t)

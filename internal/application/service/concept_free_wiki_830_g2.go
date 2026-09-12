@@ -545,7 +545,27 @@ func (s *SchemaWikiService) readConceptPageAtPin830G2(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, _, _, projectedG3, err := s.releaseAuthority.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
+	if err != nil {
+		return nil, mapWikiReleaseRepositoryError(err)
+	}
+	if projectedG3 {
+		if enforceG3Query && (len(releaseOccurrences) > 1 ||
+			len(releaseOccurrences) == 1 && strings.TrimSpace(releaseOccurrences[0]) == "" ||
+			preparationPresent) {
+			return nil, ErrSchemaWikiPreparationInvalid
+		}
+		members, searchErr := s.releaseAuthority.SearchPinned(ctx, principal, pin, "")
+		if searchErr != nil {
+			return nil, searchErr
+		}
+		return s.readBatchConceptPage830G3(
+			pin, members, release, preparation, scope, memberID, readMode,
+		)
+	}
+	preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
@@ -582,7 +602,7 @@ func (s *SchemaWikiService) readConceptPageAtPin830G2(
 		release.BaseActivationEpoch != bundle.Request.BaseActivationEpoch ||
 		release.BaseActivationEpoch == ^uint64(0) ||
 		pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
-		!conceptMemberSnapshotSetsEqual830G2(expected, members) {
+		!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	member, ok := conceptPageMemberByID830G2(bundle.PageManifest.Members, memberID)
@@ -733,7 +753,28 @@ func (s *SchemaWikiService) loadConceptBundleAtPin830G2(
 	if err != nil {
 		return empty, false, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, batch, expected, projectedG3, err := s.releaseAuthority.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
+	if err != nil {
+		return empty, false, mapWikiReleaseRepositoryError(err)
+	}
+	if projectedG3 {
+		bundle := batchConceptG2View830G3(batch)
+		if release.CandidateDigest != batch.CandidateHash ||
+			release.ManifestDigest != preparation.ManifestDigest ||
+			release.BaseReleaseID != preparation.ExpectedReleaseID ||
+			release.BaseActivationEpoch != preparation.ExpectedActivationEpoch ||
+			release.BaseReleaseID != batch.Request.BaseRequest.BaseReleaseID ||
+			release.BaseActivationEpoch != batch.Request.BaseRequest.BaseActivationEpoch ||
+			release.BaseActivationEpoch == ^uint64(0) ||
+			pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
+			!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
+			return empty, true, ErrSchemaWikiPreparationInvalid
+		}
+		return bundle, true, nil
+	}
+	preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
 	if err != nil {
 		return empty, false, mapWikiReleaseRepositoryError(err)
 	}
@@ -754,7 +795,7 @@ func (s *SchemaWikiService) loadConceptBundleAtPin830G2(
 			release.BaseActivationEpoch != batch.Request.BaseRequest.BaseActivationEpoch ||
 			release.BaseActivationEpoch == ^uint64(0) ||
 			pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
-			!conceptMemberSnapshotSetsEqual830G2(expected, members) {
+			!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
 			return empty, true, ErrSchemaWikiPreparationInvalid
 		}
 		return bundle, true, nil

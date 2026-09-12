@@ -3533,6 +3533,7 @@ def _write_or_verify_stage_result(
         "final-compile-result.json",
         "review-result.json",
         "candidate.json",
+        "failed-classification-quarantine.json",
     }:
         raise RuntimeError("unknown G3 result filename")
     chain_dir = _g3_chain_directory(plan)
@@ -4109,6 +4110,50 @@ async def _run_bounded_call_tasks(calls, execute, *, worker_limit: int):
     return tuple(await asyncio.gather(*(one(call) for call in calls)))
 
 
+def _failed_classification_quarantines(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    admission_digest: str,
+    corpus: BatchCorpusV1,
+    policy: BatchResolutionPolicyV1,
+    failed_terminals: tuple[G3CallTerminalReceiptV1, ...],
+):
+    from .g3_failed_classification_quarantine import (
+        build_verified_failed_classification_quarantines,
+    )
+
+    return build_verified_failed_classification_quarantines(
+        plan=plan,
+        admission_digest=admission_digest,
+        corpus=corpus,
+        policy=policy,
+        failed_terminals=failed_terminals,
+    )
+
+
+def _persist_failed_classification_quarantines(
+    *,
+    plan: G3BoundedAdmissionPlanV1,
+    admission_digest: str,
+    corpus: BatchCorpusV1,
+    policy: BatchResolutionPolicyV1,
+    failed_terminals: tuple[G3CallTerminalReceiptV1, ...],
+):
+    quarantine = _failed_classification_quarantines(
+        plan=plan,
+        admission_digest=admission_digest,
+        corpus=corpus,
+        policy=policy,
+        failed_terminals=failed_terminals,
+    )
+    _persist_stage_result(
+        plan,
+        "failed-classification-quarantine.json",
+        quarantine,
+    )
+    return quarantine
+
+
 async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     """Verify, reserve and execute every call once, then persist the stage terminal."""
 
@@ -4529,6 +4574,23 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
                 calls_reserved=len(call_terminals) + 1,
                 started_at=stage_started,
             )
+            if (
+                plan.stage == "C_CLASSIFY"
+                and failed_call is not None
+                and failed_call.status == "FAILED"
+                and failed_call.reason_code == "INVALID_PROVIDER_RESPONSE"
+                and failed_call.response_meta is not None
+                and failed_call.response_meta.http_status == 200
+                and failed_call.response_meta.content_type.split(";", 1)[0].strip().lower()
+                == "application/json"
+            ):
+                _persist_failed_classification_quarantines(
+                    plan=plan,
+                    admission_digest=admission_digest,
+                    corpus=corpus,
+                    policy=policy,
+                    failed_terminals=(failed_call,),
+                )
             raise
         terminal = _call_terminal(
             plan=plan,
@@ -4594,6 +4656,26 @@ async def run_stage(admission: str) -> G3StageTerminalReceiptV1:
     if failures:
         # Successful leaves stay immutable and reusable; no partial candidate is
         # emitted and other independent calls have already had their opportunity.
+        if plan.stage == "C_CLASSIFY":
+            failed_classifications = tuple(
+                terminal
+                for terminal, _, _ in failures
+                if terminal is not None
+                and terminal.status == "FAILED"
+                and terminal.reason_code == "INVALID_PROVIDER_RESPONSE"
+                and terminal.response_meta is not None
+                and terminal.response_meta.http_status == 200
+                and terminal.response_meta.content_type.split(";", 1)[0].strip().lower()
+                == "application/json"
+            )
+            if failed_classifications:
+                _persist_failed_classification_quarantines(
+                    plan=plan,
+                    admission_digest=admission_digest,
+                    corpus=corpus,
+                    policy=policy,
+                    failed_terminals=failed_classifications,
+                )
         raise RuntimeError(
             f"{len(failures)} local G3 call(s) need correction; successful calls retained"
         ) from failures[0][2]

@@ -20,10 +20,12 @@ import (
 var ErrConceptCandidateBundle830G3 = errors.New("invalid concept candidate bundle 830 g3")
 
 const (
-	conceptBatchContract830G3 = "batch-concept-candidate-bundle.830.g3.v1"
-	conceptBatchRequest830G3  = "batch-concept-compile-request.830.g3.v1"
-	conceptBatchBaseRelease   = "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
-	conceptBatchBaseMembers   = "260247295fb8530ca298f350d9127f21e412f8155371babc8915c86dc52c7475"
+	conceptBatchContract830G3   = "batch-concept-candidate-bundle.830.g3.v1"
+	conceptBatchRequest830G3    = "batch-concept-compile-request.830.g3.v1"
+	conceptBatchBaseRelease     = "release-9cb493e3-8d27-4a0f-8f29-93e2a078725b"
+	conceptBatchBaseMembers     = "260247295fb8530ca298f350d9127f21e412f8155371babc8915c86dc52c7475"
+	batchConceptBaseLegacyG2    = "LEGACY_G2"
+	batchConceptBasePublishedG3 = "PUBLISHED_G3"
 )
 
 type SchemaFieldDefinition830G3 struct {
@@ -613,15 +615,28 @@ type BatchConceptPageManifest830G3 struct {
 	Audit         []ConceptAuditDisposition830G2 `json:"audit"`
 }
 
+// NavigationAssignment830G3 is signed display metadata, independent of SchemaPack admission.
+type NavigationAssignment830G3 struct {
+	Contract                 string   `json:"contract"`
+	EntityID                 string   `json:"entity_id"`
+	EntityVersion            string   `json:"entity_version"`
+	AssignmentVersion        uint64   `json:"assignment_version"`
+	Labels                   []string `json:"labels"`
+	PrimaryLabel             string   `json:"primary_label"`
+	PreviousAssignmentSHA256 string   `json:"previous_assignment_sha256"`
+	AssignmentSHA256         string   `json:"assignment_sha256"`
+}
+
 type BatchConceptCandidateBundle830G3 struct {
-	Contract           string                          `json:"contract"`
-	Request            BatchConceptCompileRequest830G3 `json:"request"`
-	ModelCompileResult ConceptCompileResult830G2       `json:"model_compile_result"`
-	CompileResult      ConceptCompileResult830G2       `json:"compile_result"`
-	ReviewResult       ConceptReviewResult830G2        `json:"review_result"`
-	PageManifest       BatchConceptPageManifest830G3   `json:"page_manifest"`
-	Admission          ConceptAdmission830G2           `json:"admission"`
-	CandidateHash      string                          `json:"candidate_hash"`
+	NavigationAssignments []NavigationAssignment830G3     `json:"navigation_assignments,omitempty"`
+	Contract              string                          `json:"contract"`
+	Request               BatchConceptCompileRequest830G3 `json:"request"`
+	ModelCompileResult    ConceptCompileResult830G2       `json:"model_compile_result"`
+	CompileResult         ConceptCompileResult830G2       `json:"compile_result"`
+	ReviewResult          ConceptReviewResult830G2        `json:"review_result"`
+	PageManifest          BatchConceptPageManifest830G3   `json:"page_manifest"`
+	Admission             ConceptAdmission830G2           `json:"admission"`
+	CandidateHash         string                          `json:"candidate_hash"`
 }
 
 type batchResolutionSummary830G3 struct {
@@ -671,7 +686,14 @@ var alignmentKeys830G3 = []string{
 
 func ParseBatchConceptCandidateBundle830G3(raw []byte) (BatchConceptCandidateBundle830G3, error) {
 	var bundle BatchConceptCandidateBundle830G3
-	if decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true) != nil {
+	keys := batchBundleKeys830G3
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) == nil {
+		if _, exists := fields["navigation_assignments"]; exists {
+			keys = append(append([]string(nil), keys...), "navigation_assignments")
+		}
+	}
+	if decodeExactObject830G3(raw, &bundle, keys, true) != nil {
 		return bundle, ErrConceptCandidateBundle830G3
 	}
 	if validateBatchConceptBundle830G3(bundle) != nil {
@@ -1205,6 +1227,11 @@ func batchConceptRootWithout830G3(value reflect.Value, hashKey string) (map[stri
 				found = true
 				continue
 			}
+			// Match the one optional wire collection's omitempty representation in hash preimages.
+			if typeOf == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
+				field.Name == "NavigationAssignments" && value.Field(index).Len() == 0 {
+				continue
+			}
 			projected, err := batchConceptProjectRootField830G3(typeOf, field.Name, value.Field(index))
 			if err != nil {
 				return nil, err
@@ -1310,6 +1337,11 @@ func nonNullCollections830G3(value reflect.Value) bool {
 		return true
 	case reflect.Struct:
 		for index := 0; index < value.NumField(); index++ {
+			// Only this optional collection is omitted from the legacy wire contract.
+			if value.Type() == reflect.TypeOf(BatchConceptCandidateBundle830G3{}) &&
+				value.Type().Field(index).Name == "NavigationAssignments" && value.Field(index).IsNil() {
+				continue
+			}
 			if value.Type().Field(index).PkgPath == "" &&
 				!nonNullCollections830G3(value.Field(index)) {
 				return false
@@ -3234,6 +3266,48 @@ func validateProfileConfirmation830G3(
 	return nil
 }
 
+func batchConceptBaseKind830G3(base ConceptCompileRequest830G2) (string, error) {
+	basePayload := map[string]any{
+		"base_release_id": base.BaseReleaseID, "base_activation_epoch": base.BaseActivationEpoch,
+		"existing_definitions": base.ExistingDefinitions, "existing_fields": base.ExistingFields,
+		"existing_pages": base.ExistingPages, "existing_entity_versions": base.ExistingEntityVersions,
+	}
+	baseHash, err := batchConceptHash830G3("actual-base-members.830.g3.v1", basePayload)
+	if err != nil {
+		return "", ErrConceptCandidateBundle830G3
+	}
+	if base.BaseReleaseID == conceptBatchBaseRelease && base.BaseActivationEpoch == 5 &&
+		len(base.ExistingFields) == 134 && baseHash == conceptBatchBaseMembers {
+		return batchConceptBaseLegacyG2, nil
+	}
+	if base.BaseReleaseID == "" || base.BaseActivationEpoch <= 5 ||
+		len(base.ExistingEntityVersions) != len(base.EntityVersions) ||
+		len(base.ExistingEntityVersions) != len(base.RequiredFields) {
+		return "", ErrConceptCandidateBundle830G3
+	}
+	required := make(map[string]bool, len(base.ExistingFields))
+	for entityID, fields := range base.RequiredFields {
+		if base.ExistingEntityVersions[entityID] == "" || base.EntityVersions[entityID] == "" {
+			return "", ErrConceptCandidateBundle830G3
+		}
+		for _, fieldKey := range fields {
+			required[entityID+"\x00"+fieldKey] = true
+		}
+	}
+	actual := make(map[string]bool, len(base.ExistingFields))
+	for _, field := range base.ExistingFields {
+		key := field.EntityID + "\x00" + field.FieldKey
+		if actual[key] {
+			return "", ErrConceptCandidateBundle830G3
+		}
+		actual[key] = true
+	}
+	if !reflect.DeepEqual(required, actual) {
+		return "", ErrConceptCandidateBundle830G3
+	}
+	return batchConceptBasePublishedG3, nil
+}
+
 func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	if request.Contract != conceptBatchRequest830G3 ||
 		request.QualityStatus != "REGISTERED_NOT_QUALITY_ADMITTED" ||
@@ -3246,14 +3320,8 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 		return ErrConceptCandidateBundle830G3
 	}
 	base := request.BaseRequest
-	basePayload := map[string]any{
-		"base_release_id": base.BaseReleaseID, "base_activation_epoch": base.BaseActivationEpoch,
-		"existing_definitions": base.ExistingDefinitions, "existing_fields": base.ExistingFields,
-		"existing_pages": base.ExistingPages, "existing_entity_versions": base.ExistingEntityVersions,
-	}
-	baseHash, err := batchConceptHash830G3("actual-base-members.830.g3.v1", basePayload)
-	if err != nil || base.BaseReleaseID != conceptBatchBaseRelease || base.BaseActivationEpoch != 5 ||
-		len(base.ExistingFields) != 134 || baseHash != conceptBatchBaseMembers {
+	baseKind, err := batchConceptBaseKind830G3(base)
+	if err != nil {
 		return ErrConceptCandidateBundle830G3
 	}
 	proposalHash, existingHash, policyHash, err := validateResolutionInputs830G3(request.ResolutionInputs)
@@ -3288,8 +3356,12 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 		typedResolution.Existing.BaseActivationEpoch != base.BaseActivationEpoch {
 		return ErrConceptCandidateBundle830G3
 	}
+	expectedAlignmentCount := 2
+	if baseKind == batchConceptBasePublishedG3 {
+		expectedAlignmentCount = 0
+	}
 	if len(request.EntityBindings) != len(base.RequiredFields) ||
-		len(request.UnknownFieldKeyAlignments) != 2 {
+		len(request.UnknownFieldKeyAlignments) != expectedAlignmentCount {
 		return ErrConceptCandidateBundle830G3
 	}
 	bindings := map[string]EntityCompileBinding830G3{}
@@ -3306,14 +3378,16 @@ func validateBatchRequest830G3(request BatchConceptCompileRequest830G3) error {
 	}
 	for entityID, version := range base.ExistingEntityVersions {
 		binding, ok := bindings[entityID]
-		if !ok || binding.ResolutionDisposition != "MATCH" || binding.EntityVersion != version ||
-			binding.PrimaryClassification != "medical_insurance" ||
+		if !ok || binding.ResolutionDisposition != "MATCH" || binding.EntityVersion != version {
+			return ErrConceptCandidateBundle830G3
+		}
+		if baseKind == batchConceptBaseLegacyG2 && (binding.PrimaryClassification != "medical_insurance" ||
 			binding.SchemaPackID != "schemapack_medical_insurance" ||
 			binding.SchemaVersion != "2026-08-12-v5" ||
 			binding.SchemaPackSHA256 != "5a7938dcb86327f12dbff6e3056271e03c63842ba34904eefebb5bcdc8694079" ||
 			binding.ProfileID != "profile_medical_insurance" ||
 			binding.ProfileVersion != "1.0.0-candidate" ||
-			binding.ProfileSHA256 != "61595e9b2fec127dfca4c31ef95f161d55a9b0939211316b4508ccc4b7d21cf3" {
+			binding.ProfileSHA256 != "61595e9b2fec127dfca4c31ef95f161d55a9b0939211316b4508ccc4b7d21cf3") {
 			return ErrConceptCandidateBundle830G3
 		}
 	}
@@ -3560,6 +3634,16 @@ func sortedUniqueStrings830G3(values []string) bool {
 func validateUnknownAlignments830G3(
 	request BatchConceptCompileRequest830G3, bindings map[string]EntityCompileBinding830G3,
 ) error {
+	baseKind, err := batchConceptBaseKind830G3(request.BaseRequest)
+	if err != nil {
+		return ErrConceptCandidateBundle830G3
+	}
+	if baseKind == batchConceptBasePublishedG3 {
+		if len(request.UnknownFieldKeyAlignments) != 0 {
+			return ErrConceptCandidateBundle830G3
+		}
+		return nil
+	}
 	expectedHashes := []string{
 		"de1a8ca7a18882403fb97312531fd770e4bf5fa822b08db3c61b93bb828b22ce",
 		"fbba36cd2226893f51e6ac2333523a22d5854938a987676e1075186df834d069",
@@ -3734,12 +3818,134 @@ func compileOutputHash830G3(output ConceptCompileOutput830G2) (string, error) {
 	return batchConceptHash830G3("compile-output.830.g2.v1", output)
 }
 
+// DefaultNavigationAssignmentHash830G3 anchors the first display override to the actual parent binding.
+func DefaultNavigationAssignmentHash830G3(binding EntityCompileBinding830G3) (string, error) {
+	return batchConceptHash830G3("g3-navigation-default.830.v1", map[string]any{
+		"entity_id": binding.EntityID, "entity_version": binding.EntityVersion,
+		"primary_label": binding.PrimaryClassification, "labels": []string{binding.PrimaryClassification},
+	})
+}
+
+func navigationKey830G3(entityID, entityVersion string) string {
+	return entityID + "\x00" + entityVersion
+}
+
+func validateNavigationAssignments830G3(bundle BatchConceptCandidateBundle830G3) error {
+	if len(bundle.NavigationAssignments) == 0 {
+		return nil
+	}
+	kind, err := batchConceptBaseKind830G3(bundle.Request.BaseRequest)
+	if err != nil || kind != batchConceptBasePublishedG3 {
+		return ErrConceptCandidateBundle830G3
+	}
+	bindings := map[string]bool{}
+	for _, binding := range bundle.Request.EntityBindings {
+		bindings[navigationKey830G3(binding.EntityID, binding.EntityVersion)] = true
+	}
+	previousKey := ""
+	for _, row := range bundle.NavigationAssignments {
+		key := navigationKey830G3(row.EntityID, row.EntityVersion)
+		if row.Contract != "g3-navigation-assignment.830.v1" || !bindings[key] || key <= previousKey ||
+			row.AssignmentVersion == 0 || !validHash830G3(row.PreviousAssignmentSHA256) ||
+			!validHash830G3(row.AssignmentSHA256) || len(row.Labels) < 1 || len(row.Labels) > 16 {
+			return ErrConceptCandidateBundle830G3
+		}
+		primaryFound := false
+		for i, label := range row.Labels {
+			if !conceptIdentity830G2(label) || utf8.RuneCountInString(label) > 80 || (i > 0 && row.Labels[i-1] >= label) {
+				return ErrConceptCandidateBundle830G3
+			}
+			primaryFound = primaryFound || label == row.PrimaryLabel
+		}
+		hash, err := batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+		if !primaryFound || err != nil || hash != row.AssignmentSHA256 {
+			return ErrConceptCandidateBundle830G3
+		}
+		previousKey = key
+	}
+	return nil
+}
+
+// ValidateBatchNavigationHistory830G3 requires the fully reopened, validated published parent.
+// Display updates never authorize changing extraction classification, schema, or factual output.
+func ValidateBatchNavigationHistory830G3(parent, child BatchConceptCandidateBundle830G3) error {
+	if len(parent.NavigationAssignments) == 0 && len(child.NavigationAssignments) == 0 {
+		return nil
+	}
+	if validateNavigationAssignments830G3(child) != nil {
+		return ErrConceptCandidateBundle830G3
+	}
+	oldBindings := map[string]EntityCompileBinding830G3{}
+	for _, binding := range parent.Request.EntityBindings {
+		oldBindings[navigationKey830G3(binding.EntityID, binding.EntityVersion)] = binding
+	}
+	oldRows := map[string]NavigationAssignment830G3{}
+	for _, row := range parent.NavigationAssignments {
+		oldRows[navigationKey830G3(row.EntityID, row.EntityVersion)] = row
+	}
+	changed := false
+	for _, row := range child.NavigationAssignments {
+		key := navigationKey830G3(row.EntityID, row.EntityVersion)
+		if old, exists := oldRows[key]; exists {
+			changed = changed || !reflect.DeepEqual(old, row)
+			if !reflect.DeepEqual(old, row) && (old.AssignmentVersion == ^uint64(0) || row.AssignmentVersion != old.AssignmentVersion+1 || row.PreviousAssignmentSHA256 != old.AssignmentSHA256) {
+				return ErrConceptCandidateBundle830G3
+			}
+			delete(oldRows, key)
+		} else {
+			changed = true
+			binding, exists := oldBindings[key]
+			hash, err := DefaultNavigationAssignmentHash830G3(binding)
+			if !exists || err != nil || row.AssignmentVersion != 1 || row.PreviousAssignmentSHA256 != hash {
+				return ErrConceptCandidateBundle830G3
+			}
+		}
+	}
+	if len(oldRows) != 0 {
+		return ErrConceptCandidateBundle830G3
+	}
+	// Exact carry is display metadata only; it cannot freeze later ordinary content compilation.
+	if !changed {
+		return nil
+	}
+	delta := child.ModelCompileResult.Output
+	if child.ModelCompileResult.Execution.Implementation != "published-content-identity-reuse.830.g3.v1" ||
+		len(delta.Definitions) != 0 || len(delta.Fields) != 0 || len(delta.Pages) != 0 || len(delta.Audit) != 0 || delta.Transformation != "EXTRACT" {
+		return ErrConceptCandidateBundle830G3
+	}
+	if !reflect.DeepEqual(parent.CompileResult.Output.Definitions, child.CompileResult.Output.Definitions) ||
+		!reflect.DeepEqual(parent.CompileResult.Output.Fields, child.CompileResult.Output.Fields) ||
+		!reflect.DeepEqual(parent.CompileResult.Output.Pages, child.CompileResult.Output.Pages) {
+		return ErrConceptCandidateBundle830G3
+	}
+	if len(parent.Request.EntityBindings) != len(child.Request.EntityBindings) {
+		return ErrConceptCandidateBundle830G3
+	}
+	for _, binding := range child.Request.EntityBindings {
+		old, ok := oldBindings[navigationKey830G3(binding.EntityID, binding.EntityVersion)]
+		if !ok || !reflect.DeepEqual(old, binding) {
+			return ErrConceptCandidateBundle830G3
+		}
+	}
+	return nil
+}
+
 func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) error {
 	if bundle.Contract != conceptBatchContract830G3 || validateBatchRequest830G3(bundle.Request) != nil ||
 		bundle.Admission.Contract != "concept-admission.830.g2.v1" ||
 		bundle.Admission.Status != "NEEDS_HUMAN" ||
-		validateDelta830G3(bundle.Request, bundle.ModelCompileResult.Output) != nil {
+		validateDelta830G3(bundle.Request, bundle.ModelCompileResult.Output) != nil ||
+		validateNavigationAssignments830G3(bundle) != nil {
 		return ErrConceptCandidateBundle830G3
+	}
+	if bundle.ModelCompileResult.Execution.Implementation == "published-content-identity-reuse.830.g3.v1" {
+		baseKind, err := batchConceptBaseKind830G3(bundle.Request.BaseRequest)
+		output := bundle.ModelCompileResult.Output
+		if err != nil || baseKind != batchConceptBasePublishedG3 ||
+			len(output.Definitions) != 0 || len(output.Fields) != 0 ||
+			len(output.Pages) != 0 || len(output.Audit) != 0 || output.Transformation != "EXTRACT" {
+			return ErrConceptCandidateBundle830G3
+		}
 	}
 	baseRequestHash, err := compileRequestHash830G3(bundle.Request.BaseRequest)
 	if err != nil {
@@ -3789,6 +3995,9 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 		bundle.ReviewResult.Output.OutputHash != finalHash || bundle.ReviewResult.Output.Decision == "REJECT" {
 		return ErrConceptCandidateBundle830G3
 	}
+	if validatePublishedReviewReuse830G3(bundle) != nil {
+		return ErrConceptCandidateBundle830G3
+	}
 	reviewContextHash, err := batchConceptHash830G3(
 		"batch-concept-review-context.830.g3.v1", map[string]any{
 			"request": bundle.Request, "candidate": expected,
@@ -3806,8 +4015,21 @@ func validateBatchConceptBundle830G3(bundle BatchConceptCandidateBundle830G3) er
 		bundle.CompileResult.Execution.RunID:      true,
 		bundle.ReviewResult.Execution.RunID:       true,
 	}
-	if len(runs) != 3 || validatePageManifest830G3(bundle.Request, expected, bundle.PageManifest) != nil ||
+	if len(runs) != 3 || validatePageManifest830G3(bundle.Request, expected, bundle.PageManifest, bundle.NavigationAssignments) != nil ||
 		!hashEqualWithout830G3(bundle.Contract, bundle, "candidate_hash", bundle.CandidateHash) {
+		return ErrConceptCandidateBundle830G3
+	}
+	return nil
+}
+
+func validatePublishedReviewReuse830G3(bundle BatchConceptCandidateBundle830G3) error {
+	if bundle.ReviewResult.Execution.Implementation != "published-review-context-diff-reuse.830.g3.v1" {
+		return nil
+	}
+	baseKind, err := batchConceptBaseKind830G3(bundle.Request.BaseRequest)
+	if err != nil || baseKind != batchConceptBasePublishedG3 ||
+		bundle.ModelCompileResult.Execution.Implementation != "published-content-identity-reuse.830.g3.v1" ||
+		bundle.ReviewResult.Output.Decision != "PASS" || len(bundle.ReviewResult.Output.PageScores) != 0 {
 		return ErrConceptCandidateBundle830G3
 	}
 	return nil
@@ -4211,28 +4433,29 @@ type DirectorySection830G3 struct {
 }
 
 type EntityDirectoryEntry830G3 struct {
-	Contract              string                  `json:"contract"`
-	EntityID              string                  `json:"entity_id"`
-	EntityVersion         string                  `json:"entity_version"`
-	DisplayName           string                  `json:"display_name"`
-	Issuer                string                  `json:"issuer"`
-	ProductCode           string                  `json:"product_code"`
-	PrimaryClassification string                  `json:"primary_classification"`
-	SchemaPackID          string                  `json:"schema_pack_id"`
-	SchemaVersion         string                  `json:"schema_version"`
-	SchemaPackSHA256      string                  `json:"schema_pack_sha256"`
-	SchemaPackDisplayName string                  `json:"schema_pack_display_name"`
-	ProfileID             string                  `json:"profile_id"`
-	ProfileVersion        string                  `json:"profile_version"`
-	ProfileSHA256         string                  `json:"profile_sha256"`
-	QualityStatus         string                  `json:"quality_status"`
-	ReleaseLane           string                  `json:"release_lane"`
-	Sections              []DirectorySection830G3 `json:"sections"`
+	NavigationAssignment  *NavigationAssignment830G3 `json:"navigation_assignment,omitempty"`
+	Contract              string                     `json:"contract"`
+	EntityID              string                     `json:"entity_id"`
+	EntityVersion         string                     `json:"entity_version"`
+	DisplayName           string                     `json:"display_name"`
+	Issuer                string                     `json:"issuer"`
+	ProductCode           string                     `json:"product_code"`
+	PrimaryClassification string                     `json:"primary_classification"`
+	SchemaPackID          string                     `json:"schema_pack_id"`
+	SchemaVersion         string                     `json:"schema_version"`
+	SchemaPackSHA256      string                     `json:"schema_pack_sha256"`
+	SchemaPackDisplayName string                     `json:"schema_pack_display_name"`
+	ProfileID             string                     `json:"profile_id"`
+	ProfileVersion        string                     `json:"profile_version"`
+	ProfileSHA256         string                     `json:"profile_sha256"`
+	QualityStatus         string                     `json:"quality_status"`
+	ReleaseLane           string                     `json:"release_lane"`
+	Sections              []DirectorySection830G3    `json:"sections"`
 }
 
 func validatePageManifest830G3(
 	request BatchConceptCompileRequest830G3, output ConceptCompileOutput830G2,
-	manifest BatchConceptPageManifest830G3,
+	manifest BatchConceptPageManifest830G3, navigation ...[]NavigationAssignment830G3,
 ) error {
 	membersHash, err := batchConceptHash830G3(
 		"batch-concept-page-members.830.g3.v1", map[string]any{"members": manifest.Members},
@@ -4242,7 +4465,7 @@ func validatePageManifest830G3(
 		!reflect.DeepEqual(manifest.Audit, output.Audit) {
 		return ErrConceptCandidateBundle830G3
 	}
-	expected, err := projectBatchMembers830G3(request, output)
+	expected, err := projectBatchMembers830G3(request, output, navigation...)
 	if err != nil || !batchConceptCanonicalEqual830G3(expected, manifest) {
 		return ErrConceptCandidateBundle830G3
 	}
@@ -4256,7 +4479,7 @@ func batchConceptCanonicalEqual830G3(left, right any) bool {
 }
 
 func projectBatchMembers830G3(
-	request BatchConceptCompileRequest830G3, output ConceptCompileOutput830G2,
+	request BatchConceptCompileRequest830G3, output ConceptCompileOutput830G2, navigation ...[]NavigationAssignment830G3,
 ) (BatchConceptPageManifest830G3, error) {
 	bindings := map[string]EntityCompileBinding830G3{}
 	titles := map[string]string{}
@@ -4350,6 +4573,15 @@ func projectBatchMembers830G3(
 			ProfileID:             binding.ProfileID, ProfileVersion: binding.ProfileVersion,
 			ProfileSHA256: binding.ProfileSHA256, QualityStatus: request.QualityStatus,
 			ReleaseLane: request.ReleaseLane, Sections: sections,
+		}
+		if len(navigation) > 0 {
+			for _, assignment := range navigation[0] {
+				if assignment.EntityID == entityID && assignment.EntityVersion == binding.EntityVersion {
+					row := assignment
+					directory.NavigationAssignment = &row
+					break
+				}
+			}
 		}
 		directoryPayload, _ := json.Marshal(directory)
 		overviewID, _ := conceptDigest830G2(

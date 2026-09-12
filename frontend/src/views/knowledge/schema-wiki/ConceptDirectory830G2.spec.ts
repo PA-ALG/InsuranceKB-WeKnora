@@ -37,7 +37,7 @@ describe('ConceptDirectory830G2', () => {
       params: { kbId: 'wiki-serving', memberId: `entity_overview_${H}` }, query: { release_id: 'release-a' } })
   })
 
-  it('renders G3 products by classification and formal name with Profile order and bounded lineage links', () => {
+  it('renders G3 products by classification and formal name with Profile order and bounded lineage links', async () => {
     const member = (id: string, owner: string, key: string) => ({ kind: 'field_assertion', member_id: id,
       owner_id: owner, title: key, content: '未知：未发现', payload: { field_key: key } })
     const product = (entityID: string, displayName: string, classification: string, count: number) => {
@@ -87,5 +87,12 @@ describe('ConceptDirectory830G2', () => {
       query: { release_id: 'release-old' } })
     expect(targets).toContainEqual({ name: 'conceptPage830G2', params: { kbId: 'wiki-serving',
       memberId: 'assertion-entity-medical-a-0' }, query: { preparation_id: 'preparation-g3' } })
+    const regrouped = structuredClone(g3)
+    Object.assign(regrouped.entities[3], { navigationPrimaryLabel: '健康保障' })
+    await wrapper.setProps({ catalog: regrouped as any })
+    expect(wrapper.findAll('section > h3').map(node => node.text())).toContain('健康保障')
+    expect(wrapper.text()).toContain('长青重疾险')
+    expect(wrapper.findAll('a').map(node => JSON.parse(node.attributes('data-to')!)))
+      .toEqual(expect.arrayContaining(targets))
   })
 })

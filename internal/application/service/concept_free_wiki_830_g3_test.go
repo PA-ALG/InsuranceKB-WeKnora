@@ -496,6 +496,73 @@ func TestBatchConceptDraftReviewActivate830G3ReverifiesSourcesAndCASesHead(t *te
 	require.Equal(t, ready.PreparationDigest, verifier.requests[3].PreparationDigest)
 }
 
+func TestBatchConceptBase830G3ReopensPublishedG3Head(t *testing.T) {
+	fixture, schema, bundle := batchConceptReleaseFixture830G3(t)
+	draft, err := schema.CreateBatchConceptDraft830G3(
+		fixture.ctx, fixture.principal1, fixture.scope,
+		"batch-g3-base-reopen", batchConceptCandidateVector830G3(t),
+	)
+	require.NoError(t, err)
+	rawDecision, decision := conceptDecision830G2(t, fixture, draft, "batch-g3-base-reopen")
+	ready, err := schema.ReviewSchemaDraft(
+		fixture.ctx, fixture.principal1, fixture.scope, draft.ID, rawDecision,
+	)
+	require.NoError(t, err)
+	receipt, err := fixture.service.ActivateReviewed(
+		fixture.ctx, fixture.principal1, rawDecision,
+		conceptAuthorization830G2(t, fixture, ready, decision),
+	)
+	require.NoError(t, err)
+
+	next := bundle
+	next.Request.BaseRequest.BaseReleaseID = receipt.ReleaseID
+	next.Request.BaseRequest.BaseActivationEpoch = receipt.ActivationEpoch
+	next.Request.BaseRequest.ExistingDefinitions = bundle.CompileResult.Output.Definitions
+	next.Request.BaseRequest.ExistingFields = bundle.CompileResult.Output.Fields
+	next.Request.BaseRequest.ExistingPages = bundle.CompileResult.Output.Pages
+	next.Request.BaseRequest.ExistingEntityVersions = bundle.Request.BaseRequest.EntityVersions
+	require.NoError(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, next))
+
+	// A self-hashed display override still needs the actual published parent's history anchor.
+	navigation := next
+	navigation.ModelCompileResult.Execution.Implementation = "published-content-identity-reuse.830.g3.v1"
+	navigation.ModelCompileResult.Output.Definitions = []types.ConceptDefinition830G2{}
+	navigation.ModelCompileResult.Output.Fields = []types.ConceptFieldAssertion830G2{}
+	navigation.ModelCompileResult.Output.Pages = []types.ConceptFreeWikiPage830G2{}
+	navigation.ModelCompileResult.Output.Audit = []types.ConceptAuditDisposition830G2{}
+	binding := navigation.Request.EntityBindings[0]
+	previous, err := types.DefaultNavigationAssignmentHash830G3(binding)
+	require.NoError(t, err)
+	row := types.NavigationAssignment830G3{Contract: "g3-navigation-assignment.830.v1", EntityID: binding.EntityID,
+		EntityVersion: binding.EntityVersion, AssignmentVersion: 1, Labels: []string{binding.PrimaryClassification, "健康保障"},
+		PrimaryLabel: "健康保障", PreviousAssignmentSHA256: previous}
+	rehash := func() {
+		raw, err := json.Marshal(row)
+		require.NoError(t, err)
+		var payload map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(raw, &payload))
+		delete(payload, "assignment_sha256")
+		raw, err = json.Marshal(payload)
+		require.NoError(t, err)
+		canonical, err := types.CanonicalConceptMemberPayload830G2(raw)
+		require.NoError(t, err)
+		digest := sha256.Sum256(append([]byte("schema-wiki-canonical.v1\x00"+row.Contract+"\x00"), canonical...))
+		row.AssignmentSHA256 = hex.EncodeToString(digest[:])
+		navigation.NavigationAssignments = []types.NavigationAssignment830G3{row}
+	}
+	rehash()
+	require.NoError(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, navigation))
+	row.PreviousAssignmentSHA256 = strings.Repeat("a", 64)
+	rehash()
+	require.ErrorIs(t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, navigation), ErrSchemaWikiPreparationInvalid)
+
+	next.Request.BaseRequest.ExistingFields = next.Request.BaseRequest.ExistingFields[:len(next.Request.BaseRequest.ExistingFields)-1]
+	require.ErrorIs(
+		t, schema.validateBatchConceptBase830G3(fixture.ctx, fixture.scope, next),
+		ErrSchemaWikiPreparationInvalid,
+	)
+}
+
 func TestBatchConceptActivePage830G3ReopensWholePinnedBundle(t *testing.T) {
 	fixture, schema, bundle := batchConceptReleaseFixture830G3(t)
 	draft, err := schema.CreateBatchConceptDraft830G3(

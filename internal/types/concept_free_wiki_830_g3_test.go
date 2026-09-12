@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -255,6 +256,189 @@ func TestBatchConceptRequest830G3ValidatesFrozenComponents(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(request.Resolution, &payload))
 	require.NotEmpty(t, payload)
+}
+
+func TestBatchConceptPublishedG3BaseIdentityIsExact(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true))
+	base := bundle.Request.BaseRequest
+	base.BaseReleaseID = "release-next-g3-test"
+	base.BaseActivationEpoch = 6
+	base.ExistingDefinitions = bundle.CompileResult.Output.Definitions
+	base.ExistingFields = bundle.CompileResult.Output.Fields
+	base.ExistingPages = bundle.CompileResult.Output.Pages
+	base.ExistingEntityVersions = base.EntityVersions
+
+	kind, err := batchConceptBaseKind830G3(base)
+	require.NoError(t, err)
+	require.Equal(t, batchConceptBasePublishedG3, kind)
+
+	base.ExistingFields = base.ExistingFields[:len(base.ExistingFields)-1]
+	_, err = batchConceptBaseKind830G3(base)
+	require.ErrorIs(t, err, ErrConceptCandidateBundle830G3)
+}
+
+func navigationFixture830G3(t *testing.T) (BatchConceptCandidateBundle830G3, BatchConceptCandidateBundle830G3, NavigationAssignment830G3) {
+	t.Helper()
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	parent, err := ParseBatchConceptCandidateBundle830G3(raw)
+	require.NoError(t, err)
+	child := parent
+	child.Request.BaseRequest.BaseReleaseID = "release-navigation-test"
+	child.Request.BaseRequest.BaseActivationEpoch = 6
+	child.Request.BaseRequest.ExistingFields = parent.CompileResult.Output.Fields
+	child.Request.BaseRequest.ExistingDefinitions = parent.CompileResult.Output.Definitions
+	child.Request.BaseRequest.ExistingPages = parent.CompileResult.Output.Pages
+	child.Request.BaseRequest.ExistingEntityVersions = parent.Request.BaseRequest.EntityVersions
+	child.ModelCompileResult.Execution.Implementation = "published-content-identity-reuse.830.g3.v1"
+	child.ModelCompileResult.Output.Definitions = []ConceptDefinition830G2{}
+	child.ModelCompileResult.Output.Fields = []ConceptFieldAssertion830G2{}
+	child.ModelCompileResult.Output.Pages = []ConceptFreeWikiPage830G2{}
+	child.ModelCompileResult.Output.Audit = []ConceptAuditDisposition830G2{}
+	binding := parent.Request.EntityBindings[0]
+	previous, err := DefaultNavigationAssignmentHash830G3(binding)
+	require.NoError(t, err)
+	row := NavigationAssignment830G3{Contract: "g3-navigation-assignment.830.v1", EntityID: binding.EntityID,
+		EntityVersion: binding.EntityVersion, AssignmentVersion: 1, Labels: []string{binding.PrimaryClassification, "健康保障"},
+		PrimaryLabel: "健康保障", PreviousAssignmentSHA256: previous}
+	row.AssignmentSHA256, err = batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+	require.NoError(t, err)
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	return parent, child, row
+}
+
+func TestBatchNavigationAssignment830G3PreservesBusinessAndProjectsOverview(t *testing.T) {
+	parent, child, row := navigationFixture830G3(t)
+	require.NoError(t, validateNavigationAssignments830G3(child))
+	require.NoError(t, ValidateBatchNavigationHistory830G3(parent, child))
+	before, err := projectBatchMembers830G3(parent.Request, parent.CompileResult.Output)
+	require.NoError(t, err)
+	after, err := projectBatchMembers830G3(parent.Request, parent.CompileResult.Output, child.NavigationAssignments)
+	require.NoError(t, err)
+	for index, member := range before.Members {
+		if member.Kind != "entity_overview" || member.OwnerID != row.EntityID {
+			require.Equal(t, member, after.Members[index], "factual members and evidence remain exact")
+			continue
+		}
+		var overview EntityDirectoryEntry830G3
+		require.NoError(t, json.Unmarshal(after.Members[index].Payload, &overview))
+		require.Equal(t, &row, overview.NavigationAssignment)
+		require.Equal(t, parent.Request.EntityBindings[0].SchemaPackSHA256, overview.SchemaPackSHA256)
+	}
+}
+
+func TestBatchNavigationAssignment830G3RejectsDropStaleAndPackDrift(t *testing.T) {
+	parent, child, row := navigationFixture830G3(t)
+	row.PreviousAssignmentSHA256 = strings.Repeat("a", 64)
+	row.AssignmentSHA256, _ = batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child))
+	parent, child, row = navigationFixture830G3(t)
+	parent.NavigationAssignments = []NavigationAssignment830G3{row}
+	child.NavigationAssignments = nil
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child), "an existing assignment cannot disappear")
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	require.NoError(t, ValidateBatchNavigationHistory830G3(parent, child), "unchanged assignments carry exactly")
+	child.Request.EntityBindings = append([]EntityCompileBinding830G3(nil), child.Request.EntityBindings...)
+	child.Request.EntityBindings[0].SchemaPackSHA256 = strings.Repeat("b", 64)
+	row.AssignmentVersion++
+	row.PreviousAssignmentSHA256 = row.AssignmentSHA256
+	row.AssignmentSHA256, _ = batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child))
+}
+
+func TestBatchNavigationAssignment830G3RestorationAppendsHistory(t *testing.T) {
+	parent, child, row := navigationFixture830G3(t)
+	parent.NavigationAssignments = []NavigationAssignment830G3{row}
+	row.AssignmentVersion++
+	row.PreviousAssignmentSHA256 = row.AssignmentSHA256
+	row.PrimaryLabel = parent.Request.EntityBindings[0].PrimaryClassification
+	row.Labels = []string{row.PrimaryLabel}
+	row.AssignmentSHA256, _ = batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	require.NoError(t, validateNavigationAssignments830G3(child))
+	require.NoError(t, ValidateBatchNavigationHistory830G3(parent, child))
+	row.AssignmentVersion = 4
+	child.NavigationAssignments[0] = row
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child))
+}
+
+func TestBatchNavigationAssignment830G3RejectsInvalidDisplayMetadata(t *testing.T) {
+	_, basis, _ := navigationFixture830G3(t)
+	for name, mutate := range map[string]func(*BatchConceptCandidateBundle830G3){
+		"legacy base": func(b *BatchConceptCandidateBundle830G3) { b.Request.BaseRequest.BaseActivationEpoch = 5 },
+		"unsorted labels": func(b *BatchConceptCandidateBundle830G3) {
+			b.NavigationAssignments[0].Labels = []string{"健康保障", "critical_illness"}
+		},
+		"duplicate labels": func(b *BatchConceptCandidateBundle830G3) {
+			b.NavigationAssignments[0].Labels = []string{"健康保障", "健康保障"}
+		},
+		"too long": func(b *BatchConceptCandidateBundle830G3) {
+			b.NavigationAssignments[0].Labels = []string{strings.Repeat("保", 81)}
+		},
+		"whitespace": func(b *BatchConceptCandidateBundle830G3) {
+			b.NavigationAssignments[0].Labels = []string{" 健康保障"}
+		},
+		"unknown entity": func(b *BatchConceptCandidateBundle830G3) { b.NavigationAssignments[0].EntityID = "unbound" },
+		"zero version":   func(b *BatchConceptCandidateBundle830G3) { b.NavigationAssignments[0].AssignmentVersion = 0 },
+		"duplicate rows": func(b *BatchConceptCandidateBundle830G3) {
+			b.NavigationAssignments = append(b.NavigationAssignments, b.NavigationAssignments[0])
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			child := basis
+			child.NavigationAssignments = append([]NavigationAssignment830G3(nil), basis.NavigationAssignments...)
+			child.NavigationAssignments[0].Labels = append([]string(nil), basis.NavigationAssignments[0].Labels...)
+			mutate(&child)
+			for i := range child.NavigationAssignments {
+				row := &child.NavigationAssignments[i]
+				row.AssignmentSHA256, _ = batchConceptHashWithout830G3(row.Contract, *row, "assignment_sha256")
+			}
+			require.Error(t, validateNavigationAssignments830G3(child))
+		})
+	}
+}
+
+func TestBatchNavigationAssignment830G3OptionalWirePreservesLegacy(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	bundle, canonical, err := CanonicalBatchConceptCandidateBundle830G3(raw)
+	require.NoError(t, err)
+	require.NotContains(t, string(canonical), "navigation_assignments")
+	bundle.NavigationAssignments = []NavigationAssignment830G3{}
+	unchanged, err := batchConceptCanonicalJSON830G3(bundle)
+	require.NoError(t, err)
+	require.Equal(t, canonical, unchanged)
+	for _, injected := range []string{"null", "[]"} {
+		changed := append([]byte(`{"navigation_assignments":`+injected+`,`), canonical[1:]...)
+		_, err := ParseBatchConceptCandidateBundle830G3(changed)
+		require.Error(t, err, "explicit empty optional collections are not canonical wire")
+	}
+}
+
+func TestPublishedReviewReuse830G3RequiresPublishedContentReuse(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, decodeExactObject830G3(raw, &bundle, batchBundleKeys830G3, true))
+	base := &bundle.Request.BaseRequest
+	base.BaseReleaseID = "release-next-g3-test"
+	base.BaseActivationEpoch = 6
+	base.ExistingDefinitions = bundle.CompileResult.Output.Definitions
+	base.ExistingFields = bundle.CompileResult.Output.Fields
+	base.ExistingPages = bundle.CompileResult.Output.Pages
+	base.ExistingEntityVersions = base.EntityVersions
+	bundle.ReviewResult.Execution.Implementation = "published-review-context-diff-reuse.830.g3.v1"
+	bundle.ReviewResult.Output.Decision = "PASS"
+	bundle.ReviewResult.Output.PageScores = map[string]ConceptValueScore830G2{}
+
+	require.ErrorIs(t, validatePublishedReviewReuse830G3(bundle), ErrConceptCandidateBundle830G3)
+	bundle.ModelCompileResult.Execution.Implementation = "published-content-identity-reuse.830.g3.v1"
+	require.NoError(t, validatePublishedReviewReuse830G3(bundle))
 }
 
 func TestBatchConceptCandidateBundle830G3RejectsAmbiguousWire(t *testing.T) {
@@ -906,4 +1090,63 @@ func TestBatchConcept830G3PythonNovelPageCandidate(t *testing.T) {
 	require.Equal(t, raw, canonical)
 	require.Greater(t, len(bundle.ModelCompileResult.Output.Pages), 0)
 	require.Greater(t, len(bundle.PageManifest.Members), 354)
+}
+
+func TestBatchNavigationAssignment830G3LegacyHashProjection(t *testing.T) {
+	raw, err := os.ReadFile(batchConceptFixture830G3)
+	require.NoError(t, err)
+	var bundle BatchConceptCandidateBundle830G3
+	require.NoError(t, json.Unmarshal(raw, &bundle))
+	projected, err := batchConceptRootWithout830G3(reflect.ValueOf(bundle), "candidate_hash")
+	require.NoError(t, err)
+	require.NotContains(t, projected, "navigation_assignments", "omitted metadata must also be absent from the hash preimage")
+	expected, err := batchConceptHash830G3(bundle.Contract, projected)
+	require.NoError(t, err)
+	require.Equal(t, bundle.CandidateHash, expected)
+}
+
+func TestBatchNavigationAssignment830G3ExactCarryAllowsOrdinaryCompilation(t *testing.T) {
+	parent, child, row := navigationFixture830G3(t)
+	child.ModelCompileResult.Execution.Implementation = "ordinary-model-compiler"
+	require.NoError(t, validateNavigationAssignments830G3(child), "structural validation cannot infer parent history")
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child), "new navigation needs identity reuse")
+	parent.NavigationAssignments = []NavigationAssignment830G3{row}
+	child.CompileResult.Output.Fields = append([]ConceptFieldAssertion830G2(nil), child.CompileResult.Output.Fields...)
+	child.CompileResult.Output.Fields = child.CompileResult.Output.Fields[:len(child.CompileResult.Output.Fields)-1]
+	require.NoError(t, ValidateBatchNavigationHistory830G3(parent, child), "exact display carry leaves content eligibility to normal compilation validation")
+	row.AssignmentVersion++
+	row.PreviousAssignmentSHA256 = row.AssignmentSHA256
+	row.AssignmentSHA256, _ = batchConceptHashWithout830G3(row.Contract, row, "assignment_sha256")
+	child.NavigationAssignments = []NavigationAssignment830G3{row}
+	require.Error(t, ValidateBatchNavigationHistory830G3(parent, child), "changed navigation cannot ride ordinary compilation")
+}
+
+func TestBatchNavigationAssignment830G3RejectsCompleteBindingDrift(t *testing.T) {
+	parent, basis, _ := navigationFixture830G3(t)
+	for name, mutate := range map[string]func(*EntityCompileBinding830G3){
+		"display identity": func(binding *EntityCompileBinding830G3) { binding.DisplayName += "修订" },
+		"entity identity":  func(binding *EntityCompileBinding830G3) { binding.EntityKeySHA256 = strings.Repeat("a", 64) },
+		"resolution reference": func(binding *EntityCompileBinding830G3) {
+			binding.ResolutionRefs[0].ClassificationAssignmentSHA256 = strings.Repeat("b", 64)
+		},
+		"resolution evidence": func(binding *EntityCompileBinding830G3) { binding.ResolutionEvidence[0].Evidence.Quote += "修订" },
+		"source association": func(binding *EntityCompileBinding830G3) {
+			binding.SourceMaterialIDs = append(binding.SourceMaterialIDs, "extra-material")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			child := basis
+			raw, err := json.Marshal(basis.Request.EntityBindings)
+			require.NoError(t, err)
+			child.Request.EntityBindings = nil
+			require.NoError(t, json.Unmarshal(raw, &child.Request.EntityBindings))
+			binding := &child.Request.EntityBindings[0]
+			require.NotEmpty(t, binding.ResolutionRefs)
+			require.NotEmpty(t, binding.ResolutionEvidence)
+			mutate(binding)
+			binding.BindingSHA256, err = batchConceptHashWithout830G3(binding.Contract, *binding, "binding_sha256")
+			require.NoError(t, err)
+			require.Error(t, ValidateBatchNavigationHistory830G3(parent, child), "rehashing an altered binding cannot authorize a navigation-only update")
+		})
+	}
 }

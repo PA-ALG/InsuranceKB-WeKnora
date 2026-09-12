@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
@@ -117,13 +118,51 @@ func (s *SchemaWikiService) validateBatchConceptBase830G3(
 	if batchConceptScope830G3(bundle) != scope {
 		return ErrSchemaWikiPreparationInvalid
 	}
-	// The frozen G3 base_request is the existing G2 request shape. Reuse the
-	// G2 active-release reopening and compare against its final logical output;
-	// the G3 parser already validates MATCH bindings and the two exact key
-	// alignments across the complete outer bundle.
-	return s.validateConceptBase830G2(ctx, scope, types.ConceptCandidateBundle830G2{
-		Request: bundle.Request.BaseRequest,
-	})
+	head, err := s.releaseAuthority.repository.GetHead(ctx, scope)
+	if err != nil || head == nil || head.WikiReleaseScope != scope ||
+		bundle.Request.BaseRequest.BaseReleaseID != head.ActiveReleaseID ||
+		bundle.Request.BaseRequest.BaseActivationEpoch != head.ActivationEpoch {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	release, err := s.releaseAuthority.repository.GetRelease(ctx, scope, head.ActiveReleaseID)
+	if err != nil {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	preparation, err := s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	if err != nil {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	var header struct {
+		Contract string `json:"contract"`
+	}
+	if json.Unmarshal(preparation.Manifest, &header) != nil ||
+		header.Contract != "batch-concept-candidate-bundle.830.g3.v1" {
+		return s.validateConceptBase830G2(ctx, scope, types.ConceptCandidateBundle830G2{
+			Request: bundle.Request.BaseRequest,
+		})
+	}
+	storedMembers, err := s.releaseAuthority.repository.GetReleaseMembers(ctx, scope, release.ID)
+	base, expectedMembers, validationErr := validateBatchConceptPreparation830G3(
+		preparation, types.WikiReleasePreparationReady, scope,
+	)
+	request := bundle.Request.BaseRequest
+	if err != nil || validationErr != nil || release.ID != head.ActiveReleaseID ||
+		release.WikiReleaseScope != scope || release.PreparationID != preparation.ID ||
+		release.CandidateDigest != preparation.CandidateDigest ||
+		release.ManifestDigest != preparation.ManifestDigest ||
+		release.BaseReleaseID != base.Request.BaseRequest.BaseReleaseID ||
+		release.BaseActivationEpoch != base.Request.BaseRequest.BaseActivationEpoch ||
+		release.BaseActivationEpoch == ^uint64(0) ||
+		head.ActivationEpoch != release.BaseActivationEpoch+1 ||
+		!conceptMemberSnapshotSetsEqual830G2(expectedMembers, storedMembers) ||
+		!reflect.DeepEqual(request.ExistingDefinitions, base.CompileResult.Output.Definitions) ||
+		!reflect.DeepEqual(request.ExistingFields, base.CompileResult.Output.Fields) ||
+		!reflect.DeepEqual(request.ExistingPages, base.CompileResult.Output.Pages) ||
+		!reflect.DeepEqual(request.ExistingEntityVersions, base.Request.BaseRequest.EntityVersions) ||
+		types.ValidateBatchNavigationHistory830G3(base, bundle) != nil {
+		return ErrSchemaWikiPreparationInvalid
+	}
+	return nil
 }
 
 var batchPreparationValidations830G3 atomic.Uint64
@@ -266,7 +305,7 @@ func (s *SchemaWikiService) readBatchConceptPage830G3(
 		release.BaseActivationEpoch != bundle.Request.BaseRequest.BaseActivationEpoch ||
 		release.BaseActivationEpoch == ^uint64(0) ||
 		pin.ActivationEpoch() != release.BaseActivationEpoch+1 ||
-		!conceptMemberSnapshotSetsEqual830G2(expected, storedMembers) {
+		!publishedBatchMemberIdentitiesEqual830G3(expected, storedMembers) {
 		return nil, ErrSchemaWikiPreparationInvalid
 	}
 	member, ok := conceptPageMemberByID830G2(bundle.PageManifest.Members, memberID)

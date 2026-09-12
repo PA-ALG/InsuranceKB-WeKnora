@@ -43,6 +43,9 @@ func (s *SchemaWikiService) ReadBatchProductBindings830G3(
 	var preparation *types.WikiReleasePreparation
 	var release *types.WikiRelease
 	var members []types.WikiReleaseMemberSnapshot
+	var projectedBundle types.BatchConceptCandidateBundle830G3
+	var projectedMembers []types.WikiReleaseMemberSnapshot
+	var projectedG3 bool
 	var epoch uint64
 	var err error
 	status := types.WikiReleasePreparationDraft
@@ -77,7 +80,11 @@ func (s *SchemaWikiService) ReadBatchProductBindings830G3(
 		preparationID = release.PreparationID
 		epoch = pin.ActivationEpoch()
 		status = types.WikiReleasePreparationReady
-		preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, preparationID)
+		preparation, projectedBundle, projectedMembers, projectedG3, err =
+			s.releaseAuthority.loadPublishedBatchReadProjection830G3(ctx, scope, preparationID)
+		if err == nil && !projectedG3 {
+			preparation, err = s.releaseAuthority.repository.GetReadyPreparation(ctx, scope, preparationID)
+		}
 	}
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
@@ -88,7 +95,11 @@ func (s *SchemaWikiService) ReadBatchProductBindings830G3(
 	var bundle types.BatchConceptCandidateBundle830G3
 	var expected []types.WikiReleaseMemberSnapshot
 	if release != nil {
-		bundle, expected, err = s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(preparation, scope)
+		if projectedG3 {
+			bundle, expected = projectedBundle, projectedMembers
+		} else {
+			bundle, expected, err = s.releaseAuthority.validatePublishedBatchConceptPreparation830G3(preparation, scope)
+		}
 	} else {
 		bundle, expected, err = validateBatchConceptPreparation830G3(preparation, status, scope)
 	}
@@ -104,7 +115,7 @@ func (s *SchemaWikiService) ReadBatchProductBindings830G3(
 			release.BaseActivationEpoch != preparation.ExpectedActivationEpoch ||
 			release.BaseActivationEpoch == ^uint64(0) ||
 			epoch != release.BaseActivationEpoch+1 ||
-			!conceptMemberSnapshotSetsEqual830G2(expected, members) {
+			!publishedBatchMemberIdentitiesEqual830G3(expected, members) {
 			return nil, ErrSchemaWikiPreparationInvalid
 		}
 		state, releaseID = "PUBLISHED", release.ID

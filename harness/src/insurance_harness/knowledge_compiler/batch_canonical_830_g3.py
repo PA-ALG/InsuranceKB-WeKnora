@@ -246,6 +246,7 @@ def _tree(value: object, serialized: object = _MISSING, *, body: bool = False) -
         return {
             name: _tree(getattr(value, name), wire[name])
             for name in type(value).model_fields
+            if name in wire
         }
     if type(value) is str:
         return _body(value) if body else _structured(value)

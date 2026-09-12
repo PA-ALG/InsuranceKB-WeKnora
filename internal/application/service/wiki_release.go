@@ -615,7 +615,7 @@ func NewWikiReleaseService(
 			return kind + "-" + uuid.NewString()
 		}
 	}
-	return &WikiReleaseService{
+	service := &WikiReleaseService{
 		repository:                          repository,
 		accessVerifier:                      accessVerifier,
 		authorizationVerifier:               authorizationVerifier,
@@ -626,6 +626,10 @@ func NewWikiReleaseService(
 		newID:                               options.NewID,
 		faults:                              options.Faults,
 	}
+	if authority, ok := options.ConceptSourceAuthorityVerifier830G2.(*ConceptSourceAuthorityService830G2); ok && authority != nil {
+		service.publishedReadReuse = newPublishedBatchReadReuse830G3(authority.codec)
+	}
+	return service
 }
 
 // ActivateReviewed requires a named-human whole-batch approval before the
@@ -1861,16 +1865,27 @@ func (s *WikiReleaseService) readMembers(
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	preparation, err := s.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+	preparation, _, projectedMembers, projectedG3, err := s.loadPublishedBatchReadProjection830G3(
+		ctx, scope, release.PreparationID,
+	)
 	if err != nil {
 		return nil, mapWikiReleaseRepositoryError(err)
 	}
-	storedManifestDigest := digestWikiReleaseBytes(preparation.Manifest)
-	conceptG2 := false
+	storedManifestDigest := preparation.ManifestDigest
+	conceptG2 := projectedG3
+	if projectedG3 {
+		preparation.Members = projectedMembers
+	} else {
+		preparation, err = s.repository.GetReadyPreparation(ctx, scope, release.PreparationID)
+		if err != nil {
+			return nil, mapWikiReleaseRepositoryError(err)
+		}
+		storedManifestDigest = digestWikiReleaseBytes(preparation.Manifest)
+	}
 	var manifestHeader struct {
 		Contract string `json:"contract"`
 	}
-	if json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
+	if !projectedG3 && json.Unmarshal(preparation.Manifest, &manifestHeader) == nil &&
 		conceptCandidateBundleContract830G2(manifestHeader.Contract) {
 		if _, _, validationErr := validateConceptPreparation830G2(
 			preparation, types.WikiReleasePreparationReady, scope,
@@ -1879,7 +1894,7 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = preparation.ManifestDigest
 		conceptG2 = true
-	} else if manifestHeader.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
+	} else if !projectedG3 && manifestHeader.Contract == "batch-concept-candidate-bundle.830.g3.v1" {
 		if _, _, validationErr := s.validatePublishedBatchConceptPreparation830G3(
 			preparation, scope,
 		); validationErr != nil {
@@ -1888,7 +1903,7 @@ func (s *WikiReleaseService) readMembers(
 		storedManifestDigest = preparation.ManifestDigest
 		conceptG2 = true
 	}
-	if isSchemaWikiC6StoredManifest(preparation.Manifest) {
+	if !projectedG3 && isSchemaWikiC6StoredManifest(preparation.Manifest) {
 		c6Digest, validC6 := schemaWikiC6StoredManifestDigest(preparation.Manifest)
 		if !validC6 {
 			return nil, ErrWikiReleaseInvalidAuthorization
@@ -1904,9 +1919,13 @@ func (s *WikiReleaseService) readMembers(
 		}
 		storedManifestDigest = c6Digest
 	}
-	membersEqual := wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
-	if conceptG2 {
+	var membersEqual bool
+	if projectedG3 {
+		membersEqual = publishedBatchMemberIdentitiesEqual830G3(preparation.Members, members)
+	} else if conceptG2 {
 		membersEqual = conceptMemberSnapshotSetsEqual830G2(preparation.Members, members)
+	} else {
+		membersEqual = wikiReleaseMemberSnapshotsEqual(preparation.Members, members)
 	}
 	if preparation.WikiReleaseScope != scope || preparation.ID != release.PreparationID ||
 		preparation.Status != types.WikiReleasePreparationReady ||
@@ -1916,6 +1935,9 @@ func (s *WikiReleaseService) readMembers(
 		digestWikiReleasePreparation(preparation) != preparation.PreparationDigest ||
 		!membersEqual {
 		return nil, ErrWikiReleaseInvalidAuthorization
+	}
+	if projectedG3 {
+		return preparation.Members, nil
 	}
 	return members, nil
 }

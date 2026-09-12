@@ -1029,6 +1029,29 @@ func conceptEvidenceMatchesSourceText830G2(evidence types.ConceptEvidence830G2, 
 		testSHA256830G2(evidence.Quote) == evidence.QuoteHash
 }
 
+func conceptLegacyCarryoverParent830G3(
+	release *types.WikiRelease,
+	preparation *types.WikiReleasePreparation,
+	members []types.WikiReleaseMemberSnapshot,
+	scope types.WikiReleaseScope,
+) (string, error) {
+	if release == nil {
+		return "", ErrConceptSourceAuthorityUnavailable830G2
+	}
+	bundle, expected, err := validateBatchConceptPreparation830G3(
+		preparation, types.WikiReleasePreparationReady, scope,
+	)
+	parent := bundle.Request.BaseRequest
+	if err != nil || release.CandidateDigest != preparation.CandidateDigest ||
+		release.ManifestDigest != preparation.ManifestDigest ||
+		!conceptMemberSnapshotSetsEqual830G2(expected, members) ||
+		release.BaseReleaseID != parent.BaseReleaseID ||
+		release.BaseActivationEpoch != parent.BaseActivationEpoch {
+		return "", ErrConceptSourceAuthorityUnavailable830G2
+	}
+	return parent.BaseReleaseID, nil
+}
+
 // verifyLegacyCarryover830G2 follows the immutable G2 base chain to its G1
 // migration source and replays that source's original C5 two-stage authority.
 // Only a migrated field whose factual payload is unchanged may consume the
@@ -1065,6 +1088,14 @@ func (s *ConceptSourceAuthorityService830G2) computeLegacyCarryover830G2(ctx con
 			return nil, ErrConceptSourceAuthorityUnavailable830G2
 		}
 		switch header.Contract {
+		case "batch-concept-candidate-bundle.830.g3.v1":
+			releaseID, err = conceptLegacyCarryoverParent830G3(release, preparation, members, scope)
+			if err != nil {
+				return nil, err
+			}
+			if releaseID == "" {
+				return allowed, nil
+			}
 		case "concept-candidate-bundle.830.g2.v1", "concept-candidate-bundle.830.g2.v2":
 			base, expected, validationErr := validateConceptPreparation830G2(preparation, types.WikiReleasePreparationReady, scope)
 			if validationErr != nil || release.CandidateDigest != preparation.CandidateDigest || release.ManifestDigest != preparation.ManifestDigest || !conceptMemberSnapshotSetsEqual830G2(expected, members) || release.BaseReleaseID != base.Request.BaseReleaseID || release.BaseActivationEpoch != base.Request.BaseActivationEpoch {

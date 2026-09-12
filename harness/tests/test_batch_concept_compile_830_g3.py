@@ -681,6 +681,87 @@ def test_batch_candidate_rejects_duplicate_json_key() -> None:
         module.validate_batch_candidate(duplicate)
 
 
+def _published_g3_base(module: ModuleType) -> Any:
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    payload = bundle.request.base_request.model_dump(mode="json")
+    payload.update(
+        base_release_id="release-next-g3-test",
+        base_activation_epoch=6,
+        existing_definitions=bundle.compile_result.output.definitions,
+        existing_fields=bundle.compile_result.output.fields,
+        existing_pages=bundle.compile_result.output.pages,
+        existing_entity_versions=bundle.request.base_request.entity_versions,
+    )
+    return _g2().CompileRequest.model_validate(payload)
+
+
+def test_published_g3_base_is_exact_and_needs_no_unknown_key_alignment() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    base = _published_g3_base(module)
+    catalog = module.validate_catalog(CATALOG.read_bytes())
+
+    assert module._base_contract_kind(base) == "PUBLISHED_G3"
+    assert module._build_unknown_alignments(base, catalog) == ()
+
+
+def test_published_g3_base_rejects_member_drift() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    base = _published_g3_base(module)
+    changed = base.model_copy(update={"existing_fields": base.existing_fields[:-1]})
+    with pytest.raises(module.BatchConceptCompileError, match="BASE_SNAPSHOT_MISMATCH"):
+        module._base_contract_kind(changed)
+
+
+def test_published_content_reuse_requires_a_later_empty_delta() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    changed = bundle.model_compile_result.model_copy(
+        update={
+            "execution": bundle.model_compile_result.execution.model_copy(
+                update={
+                    "implementation": "published-content-identity-reuse.830.g3.v1"
+                }
+            )
+        }
+    )
+
+    with pytest.raises(module.BatchConceptCompileError, match="PUBLISHED_CONTENT_REUSE_INVALID"):
+        module.validate_delta_output(bundle.request, changed)
+
+
+def test_published_review_reuse_requires_published_content_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    bundle = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    review = bundle.review_result.model_copy(
+        update={
+            "output": bundle.review_result.output.model_copy(
+                update={"decision": "PASS", "page_scores": {}}
+            ),
+            "execution": bundle.review_result.execution.model_copy(
+                update={
+                    "implementation": "published-review-context-diff-reuse.830.g3.v1"
+                }
+            ),
+        }
+    )
+    monkeypatch.setattr(module, "_base_contract_kind", lambda _base: "PUBLISHED_G3")
+
+    with pytest.raises(module.BatchConceptCompileError, match="PUBLISHED_REVIEW_REUSE_INVALID"):
+        module._validate_published_review_reuse(
+            bundle.request, bundle.model_compile_result, review
+        )
+
+
 def test_entity_binding_rejects_control_character_in_identity() -> None:
     module = importlib.import_module(
         "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
@@ -1327,3 +1408,138 @@ def test_existing_nfc_candidate_identities_remain_frozen() -> None:
         "40920c09c42a9b28f1b8348c34d0bd9b63dde7568fc90c11311d554b7b6e25ec"
     )
     assert len(candidate.page_manifest.members) == 354
+
+
+def test_empty_navigation_metadata_preserves_legacy_candidate_wire() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    wire = G3_FIXTURE.read_bytes()
+    candidate = module.validate_batch_candidate(wire)
+
+    assert candidate.navigation_assignments == ()
+    assert "navigation_assignments" not in candidate.model_dump(mode="json")
+    assert module._canonical_json(candidate).encode("utf-8") == wire
+    assert candidate.candidate_hash == (
+        "e9f3fc9bec2cca609a30dce0f015a6af955e41da9d7a42399b05164efef14870"
+    )
+
+
+@pytest.mark.parametrize("explicit", (None, []))
+def test_candidate_rejects_explicit_empty_navigation_wire(explicit: Any) -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    payload = json.loads(G3_FIXTURE.read_bytes())
+    payload["navigation_assignments"] = explicit
+
+    with pytest.raises(module.BatchConceptCompileError, match="BATCH_CANDIDATE_INVALID"):
+        module.validate_batch_candidate(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        )
+
+
+def _navigation_assignment(module: ModuleType, candidate: Any, **changes: Any) -> Any:
+    binding = candidate.request.entity_bindings[0]
+    payload = {
+        "contract": "g3-navigation-assignment.830.v1",
+        "entity_id": binding.entity_id,
+        "entity_version": binding.entity_version,
+        "assignment_version": 1,
+        "labels": ("critical_illness", "健康保障"),
+        "primary_label": "健康保障",
+        "previous_assignment_sha256": module.navigation_default_sha256_g3(binding),
+    }
+    payload.update(changes)
+    return module.NavigationAssignment830G3V1.model_validate(
+        {
+            **payload,
+            "assignment_sha256": module._batch_sha256(
+                payload["contract"], payload
+            ),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    (
+        {"labels": ("健康保障", "critical_illness")},
+        {"labels": ("健康保障", "健康保障")},
+        {"labels": ("健康保障",), "primary_label": "critical_illness"},
+        {"assignment_version": 0},
+        {
+            "labels": tuple(f"label-{index:02d}" for index in range(17)),
+            "primary_label": "label-00",
+        },
+        {"labels": ("x" * 81,), "primary_label": "x" * 81},
+        {"labels": ("健康\x00保障",), "primary_label": "健康\x00保障"},
+    ),
+)
+def test_navigation_assignment_rejects_invalid_labels(changes: dict[str, Any]) -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    candidate = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+
+    with pytest.raises(ValueError):
+        _navigation_assignment(module, candidate, **changes)
+
+
+def test_navigation_assignment_rejects_hash_tamper_and_unknown_entity() -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    candidate = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    assignment = _navigation_assignment(module, candidate)
+    with pytest.raises(ValueError, match="NAVIGATION_ASSIGNMENT_INVALID"):
+        module.NavigationAssignment830G3V1.model_validate(
+            assignment.model_copy(update={"assignment_sha256": "0" * 64})
+        )
+    unknown = assignment.model_copy(update={"entity_id": "unknown-entity"})
+    unknown = unknown.model_copy(
+        update={
+            "assignment_sha256": module._batch_sha256(
+                unknown.contract,
+                unknown.model_dump(mode="python", exclude={"assignment_sha256"}),
+            )
+        }
+    )
+    with pytest.raises(module.BatchConceptCompileError, match="NAVIGATION_ENTITY_INVALID"):
+        module._validate_navigation_assignments(
+            candidate.request, candidate.model_compile_result, (unknown,)
+        )
+
+
+def test_navigation_metadata_requires_published_identity_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    candidate = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    monkeypatch.setattr(module, "_base_contract_kind", lambda _base: "PUBLISHED_G3")
+    monkeypatch.setattr(module, "validate_candidate_bundle", lambda _bundle: None)
+
+    with pytest.raises(module.BatchConceptCompileError, match="NAVIGATION_REUSE_REQUIRED"):
+        module.apply_navigation_assignment_g3(
+            candidate,
+            entity_id=candidate.request.entity_bindings[0].entity_id,
+            labels=("critical_illness", "健康保障"),
+            primary_label="健康保障",
+        )
+
+
+def test_unchanged_navigation_metadata_can_accompany_normal_compile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module(
+        "insurance_harness.knowledge_compiler.batch_concept_compile_830_g3"
+    )
+    candidate = module.validate_batch_candidate(G3_FIXTURE.read_bytes())
+    assignment = _navigation_assignment(module, candidate)
+    monkeypatch.setattr(module, "_base_contract_kind", lambda _base: "PUBLISHED_G3")
+
+    module._validate_navigation_assignments(
+        candidate.request, candidate.model_compile_result, (assignment,)
+    )

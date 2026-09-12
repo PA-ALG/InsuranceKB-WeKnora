@@ -27,17 +27,21 @@ const classificationLabels: Record<string, string> = {
   accident_insurance: '意外险', critical_illness_insurance: '重疾险',
   endowment_insurance: '两全险', medical_insurance: '医疗险',
 }
+function navigationLabel(entity: BatchConceptEntity830G3) {
+  return entity.navigationPrimaryLabel ?? entity.primaryClassification
+}
 const grouped = computed(() => {
   if (props.catalog.mode === 'g2') return []
   const entities = [...props.catalog.entities].sort((a, b) =>
-    a.primaryClassification.localeCompare(b.primaryClassification)
+    navigationLabel(a).localeCompare(navigationLabel(b))
       || a.displayName.localeCompare(b.displayName, 'zh-CN'))
   const result: { key: string, label: string, entities: BatchConceptEntity830G3[] }[] = []
   for (const entity of entities) {
     const previous = result.at(-1)
-    if (previous?.key === entity.primaryClassification) previous.entities.push(entity)
-    else result.push({ key: entity.primaryClassification,
-      label: classificationLabels[entity.primaryClassification] ?? entity.primaryClassification, entities: [entity] })
+    const label = navigationLabel(entity)
+    if (previous?.key === label) previous.entities.push(entity)
+    else result.push({ key: label,
+      label: classificationLabels[label] ?? label, entities: [entity] })
   }
   return result
 })
