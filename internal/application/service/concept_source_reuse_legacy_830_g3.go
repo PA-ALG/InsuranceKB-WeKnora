@@ -137,7 +137,21 @@ func (s *ConceptSourceAuthorityService830G2) reusableLegacySourceCurrent830G3(ct
 		return false
 	}
 	receipt := authority.RevisionSource
+	manifestDigest := receipt.WeKnoraManifestDigest
+	if manifestDigest != source.ManifestDigest {
+		reader, ok := s.formalCandidatePreview.(interface {
+			ReadOriginalRevisionManifestDigestExact(uint64, string, types.LiveRevisionSourceReceiptV1) (string, error)
+		})
+		if !ok {
+			return false
+		}
+		var err error
+		manifestDigest, err = reader.ReadOriginalRevisionManifestDigestExact(request.Scope.TenantID, authority.CandidateSHA256, receipt)
+		if err != nil {
+			return false
+		}
+	}
 	return source.TenantID == request.Scope.TenantID && source.KnowledgeID == request.Evidence.KnowledgeID && source.ParseAttempt == request.Evidence.ParseAttempt &&
 		source.RetentionState == types.KnowledgeRevisionSourcePinned && resource.Handle == source.ResourceHandle && resource.ContentHash == source.ObjectSHA256 && resource.State == types.ResourceStateActive && resource.Lifecycle == types.ResourceLifecyclePersistent &&
-		receipt.TenantID == source.TenantID && receipt.KnowledgeID == source.KnowledgeID && receipt.WeKnoraParseAttempt == source.ParseAttempt && receipt.FileSHA256 == source.FileSHA256 && receipt.ResourceID == source.ResourceID && receipt.PageCount == *source.PageCount && receipt.WeKnoraManifestAlgorithm == source.ManifestAlgorithm && receipt.WeKnoraManifestDigest == source.ManifestDigest && receipt.WeKnoraChunkCount == source.ChunkCount
+		receipt.TenantID == source.TenantID && receipt.KnowledgeID == source.KnowledgeID && receipt.WeKnoraParseAttempt == source.ParseAttempt && receipt.FileSHA256 == source.FileSHA256 && receipt.ResourceID == source.ResourceID && receipt.PageCount == *source.PageCount && receipt.WeKnoraManifestAlgorithm == source.ManifestAlgorithm && manifestDigest == source.ManifestDigest && receipt.WeKnoraChunkCount == source.ChunkCount
 }
